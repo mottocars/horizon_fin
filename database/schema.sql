@@ -286,6 +286,29 @@ CREATE TABLE construtor_vendas_reservas (
 
 CREATE INDEX idx_construtor_vendas_reservas_empresa ON construtor_vendas_reservas (empresa_id);
 
+-- Máscaras de classificação (DRE, DFC, Pacotes, Unidades de Negócio, Etapas do
+-- Centro de Custo, Tipo de Projeção), cadastro manual por empresa (sistema
+-- multiempresa). Sequência automática por ordem de criação.
+-- `grupo` só é usado pelo tipo REPASSES, para separar os itens (micro
+-- etapas) por macro etapa fixa (RESERVA, VENDA, CONTRATO, ASSINATURA,
+-- REGISTRO — ver mascaras.controller.js). Nos demais tipos fica '' e a
+-- sequência é única por (tipo, empresa_id) como sempre foi. Definida antes
+-- dos itens de Repasses CEF logo abaixo, que referenciam esta tabela por FK.
+CREATE TABLE mascara_itens (
+    id            SERIAL PRIMARY KEY,
+    empresa_id    INTEGER NOT NULL REFERENCES empresas(id) ON DELETE CASCADE,
+    tipo          VARCHAR(30) NOT NULL,
+    grupo         VARCHAR(50) NOT NULL DEFAULT '',
+    sequencia     INTEGER NOT NULL,
+    descricao     VARCHAR(255) NOT NULL DEFAULT '',
+    criado_em     TIMESTAMP DEFAULT NOW(),
+    atualizado_em TIMESTAMP DEFAULT NOW(),
+    UNIQUE (tipo, empresa_id, grupo, sequencia)
+);
+
+CREATE INDEX idx_mascara_itens_tipo ON mascara_itens (tipo);
+CREATE INDEX idx_mascara_itens_empresa ON mascara_itens (empresa_id);
+
 -- Filtros de visualização do bucket "Reserva" do Kanban de Repasses CEF
 -- ("Configurar Filtros de Visualização" — engrenagem ao lado do botão
 -- Atualizar). Um registro por empresa; array vazio = sem filtro (mostra
@@ -432,28 +455,6 @@ CREATE TABLE integracoes_prevision (
 );
 
 CREATE INDEX idx_integracoes_prevision_empresa ON integracoes_prevision (empresa_id);
-
--- Máscaras de classificação (DRE, DFC, Pacotes, Unidades de Negócio, Etapas do
--- Centro de Custo, Tipo de Projeção), cadastro manual por empresa (sistema
--- multiempresa). Sequência automática por ordem de criação.
--- `grupo` só é usado pelo tipo REPASSES, para separar os itens (micro
--- etapas) por macro etapa fixa (RESERVA, VENDA, CONTRATO, ASSINATURA,
--- REGISTRO — ver mascaras.controller.js). Nos demais tipos fica '' e a
--- sequência é única por (tipo, empresa_id) como sempre foi.
-CREATE TABLE mascara_itens (
-    id            SERIAL PRIMARY KEY,
-    empresa_id    INTEGER NOT NULL REFERENCES empresas(id) ON DELETE CASCADE,
-    tipo          VARCHAR(30) NOT NULL,
-    grupo         VARCHAR(50) NOT NULL DEFAULT '',
-    sequencia     INTEGER NOT NULL,
-    descricao     VARCHAR(255) NOT NULL DEFAULT '',
-    criado_em     TIMESTAMP DEFAULT NOW(),
-    atualizado_em TIMESTAMP DEFAULT NOW(),
-    UNIQUE (tipo, empresa_id, grupo, sequencia)
-);
-
-CREATE INDEX idx_mascara_itens_tipo ON mascara_itens (tipo);
-CREATE INDEX idx_mascara_itens_empresa ON mascara_itens (empresa_id);
 
 -- Planos de contas (payment-categories) importados do Sienge por empresa.
 -- Chave composta (sienge_id, empresa_id): reimportações fazem upsert nos campos
