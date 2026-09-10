@@ -1,0 +1,32 @@
+import http from './http';
+
+export function listContasGerados() {
+  return http.get('/contas-bancarias/sienge').then((res) => res.data);
+}
+
+export function listContas(empresaId, { page = 1, limit = 15, search = '' } = {}) {
+  return http
+    .get(`/contas-bancarias/sienge/${empresaId}/contas`, { params: { page, limit, search } })
+    .then((res) => res.data);
+}
+
+export function gerarContasBancarias(empresaId) {
+  return http
+    .post('/contas-bancarias/sienge/gerar', { empresa_id: empresaId })
+    .then((res) => res.data);
+}
+
+export function getItem(empresaId, companyId, numeroConta) {
+  return http
+    .get(`/contas-bancarias/sienge/${empresaId}/contas/${companyId}/${encodeURIComponent(numeroConta)}`)
+    .then((res) => res.data);
+}
+
+export function updateEnriquecimento(empresaId, companyId, numeroConta, data) {
+  return http
+    .put(
+      `/contas-bancarias/sienge/${empresaId}/contas/${companyId}/${encodeURIComponent(numeroConta)}`,
+      data
+    )
+    .then((res) => res.data);
+}

@@ -1,0 +1,38 @@
+services:
+  backend:
+    build:
+      context: ./backend
+    restart: unless-stopped
+    env_file:
+      - ./backend/.env.production
+    volumes:
+      - horizonfin_uploads:/app/uploads
+    # Só acessível via loopback do host — quem expõe pra internet é o Nginx
+    # do host, que já cuida do domínio do sistema que já existe na VPS.
+    ports:
+      - "127.0.0.1:3011:3001"
+    networks:
+      - default
+      # Rede do Postgres que já existe na VPS (container horizonhub-db-1,
+      # serviço "db") — conecta aqui em vez de expor a porta do Postgres,
+      # mesmo ela já estando publicada no host.
+      - horizonhub_default
+
+  frontend:
+    build:
+      context: ./frontend
+      args:
+        VITE_API_URL: ${VITE_API_URL}
+    restart: unless-stopped
+    ports:
+      - "127.0.0.1:3010:80"
+    depends_on:
+      - backend
+
+volumes:
+  horizonfin_uploads:
+
+networks:
+  default:
+  horizonhub_default:
+    external: true
