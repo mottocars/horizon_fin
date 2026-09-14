@@ -35,10 +35,6 @@ const GRUPO_POR_TIPO = {
 
 const TAMANHO_MAXIMO_ANEXO = 2 * 1024 * 1024;
 
-function hoje() {
-  return new Date().toISOString().slice(0, 10);
-}
-
 function formatarTamanho(bytes) {
   if (bytes < 1024) return `${bytes} B`;
   if (bytes < 1024 * 1024) return `${(bytes / 1024).toFixed(0)} KB`;
@@ -53,6 +49,59 @@ function formatarData(iso) {
   if (!iso) return null;
   const [ano, mes, dia] = iso.slice(0, 10).split('-');
   return `${dia}/${mes}/${ano}`;
+}
+
+// Mesmo padrão "vazio = âmbar, preenchido = azul" do Motor de Risco (ver
+// GestaoCobrancas/MotorRisco/estadoCampo.js), aplicado aqui aos campos
+// obrigatórios do formulário de Registrar Movimentação — deixa óbvio de
+// relance o que ainda falta preencher.
+function estadoCampo(preenchido) {
+  return preenchido
+    ? 'border-primary-100 bg-primary-50 text-gray-900 hover:border-primary-500'
+    : 'border-amber-300 bg-amber-50 text-gray-900 hover:border-amber-400';
+}
+
+// Converte os 8 dígitos digitados (ddmmaaaa) pra ISO só quando formam uma
+// data de calendário válida (rejeita ex.: 31/02) — incompleto ou inválido
+// vira '' (o campo conta como "vazio" pro estadoCampo acima e, por causa
+// dele, também deixa a Descrição bloqueada, ver mais abaixo).
+function digitosParaIso(digitos) {
+  if (digitos.length !== 8) return '';
+  const dia = Number(digitos.slice(0, 2));
+  const mes = Number(digitos.slice(2, 4));
+  const ano = Number(digitos.slice(4, 8));
+  const data = new Date(ano, mes - 1, dia);
+  const valida = data.getFullYear() === ano && data.getMonth() === mes - 1 && data.getDate() === dia;
+  return valida ? `${digitos.slice(4, 8)}-${digitos.slice(2, 4)}-${digitos.slice(0, 2)}` : '';
+}
+
+// Input de texto com máscara dd/mm/aaaa (em vez do <input type="date">
+// nativo, que segue o locale do SO/navegador e pode sair mm/dd/aaaa) — só
+// chama `onChange` com o ISO quando os 8 dígitos formam uma data válida;
+// enquanto isso, propaga '' (ver digitosParaIso). Sem useEffect
+// sincronizando de `value`: isso ecoaria '' de volta pro texto a cada tecla
+// digitada, apagando o que a pessoa acabou de escrever. Reset externo (abrir
+// outro card, ou depois de registrar) é feito via `key` no componente pai.
+function CampoDataMovimentacao({ value, onChange, className }) {
+  const [texto, setTexto] = useState(() => formatarData(value) || '');
+
+  function handleChange(e) {
+    const digitos = e.target.value.replace(/\D/g, '').slice(0, 8);
+    setTexto([digitos.slice(0, 2), digitos.slice(2, 4), digitos.slice(4, 8)].filter(Boolean).join('/'));
+    onChange(digitosParaIso(digitos));
+  }
+
+  return (
+    <input
+      type="text"
+      inputMode="numeric"
+      placeholder="dd/mm/aaaa"
+      maxLength={10}
+      value={texto}
+      onChange={handleChange}
+      className={className}
+    />
+  );
 }
 
 function CampoCabecalho({ label, valor }) {
@@ -190,11 +239,14 @@ export default function HistoricoEtapasModal({ open, onClose, empresaId, identif
   // Formulário "Registrar Movimentação".
   const [opcoesMicroEtapa, setOpcoesMicroEtapa] = useState([]);
   const [microEtapaId, setMicroEtapaId] = useState('');
-  const [dataMovimentacao, setDataMovimentacao] = useState(hoje());
+  const [dataMovimentacao, setDataMovimentacao] = useState('');
   const [descricaoMov, setDescricaoMov] = useState('');
   const [arquivosMov, setArquivosMov] = useState([]);
   const [registrando, setRegistrando] = useState(false);
   const [erroRegistrar, setErroRegistrar] = useState('');
+  // Força o remount de CampoDataMovimentacao (limpa o texto digitado) toda
+  // vez que o formulário é resetado de fora — ver comentário no componente.
+  const [dataFormKey, setDataFormKey] = useState(0);
 
   const ehContrato = identificador?.tipo === 'contrato';
   const grupoMicroEtapa = identificador ? GRUPO_POR_TIPO[identificador.tipo] : null;
@@ -234,7 +286,8 @@ export default function HistoricoEtapasModal({ open, onClose, empresaId, identif
   useEffect(() => {
     if (!open || !grupoMicroEtapa) return;
     setMicroEtapaId('');
-    setDataMovimentacao(hoje());
+    setDataMovimentacao('');
+    setDataFormKey((k) => k + 1);
     setDescricaoMov('');
     setArquivosMov([]);
     setErroRegistrar('');
@@ -297,7 +350,8 @@ export default function HistoricoEtapasModal({ open, onClose, empresaId, identif
         arquivos: arquivosMov,
       });
       setMicroEtapaId('');
-      setDataMovimentacao(hoje());
+      setDataMovimentacao('');
+      setDataFormKey((k) => k + 1);
       setDescricaoMov('');
       setArquivosMov([]);
       await carregarHistorico();
@@ -402,6 +456,7 @@ export default function HistoricoEtapasModal({ open, onClose, empresaId, identif
                         options={opcoesMicroEtapa.map((m) => ({ value: m.id, label: m.descricao }))}
                         placeholder="Selecione a micro etapa..."
                         emptyMessage="Nenhuma micro etapa cadastrada nesta etapa."
+                        corClasses={estadoCampo(Boolean(microEtapaId))}
                       />
                     </div>
 
@@ -409,11 +464,11 @@ export default function HistoricoEtapasModal({ open, onClose, empresaId, identif
                       <label className="mb-1 block text-[11px] font-medium uppercase tracking-wide text-gray-400">
                         Data
                       </label>
-                      <input
-                        type="date"
+                      <CampoDataMovimentacao
+                        key={dataFormKey}
                         value={dataMovimentacao}
-                        onChange={(e) => setDataMovimentacao(e.target.value)}
-                        className="w-full rounded-lg border border-gray-200 px-2 py-2 text-sm text-gray-800 focus:border-primary-400 focus:outline-none focus:ring-2 focus:ring-primary-100"
+                        onChange={setDataMovimentacao}
+                        className={`w-full rounded-lg border px-2 py-2 text-sm transition-colors focus:outline-none focus:ring-2 focus:ring-primary-100 ${estadoCampo(Boolean(dataMovimentacao))}`}
                       />
                     </div>
                   </div>
@@ -426,8 +481,9 @@ export default function HistoricoEtapasModal({ open, onClose, empresaId, identif
                       value={descricaoMov}
                       onChange={(e) => setDescricaoMov(e.target.value)}
                       rows={3}
-                      placeholder="Detalhes da movimentação (opcional)"
-                      className="w-full resize-none rounded-lg border border-gray-200 px-3 py-1.5 text-sm text-gray-800 focus:border-primary-400 focus:outline-none focus:ring-2 focus:ring-primary-100"
+                      disabled={!dataMovimentacao}
+                      placeholder={dataMovimentacao ? 'Detalhes da movimentação (opcional)' : 'Preencha a data para liberar a observação'}
+                      className="w-full resize-none rounded-lg border border-gray-200 px-3 py-1.5 text-sm text-gray-800 transition-colors focus:border-primary-400 focus:outline-none focus:ring-2 focus:ring-primary-100 disabled:bg-gray-50 disabled:text-gray-400"
                     />
                   </div>
 

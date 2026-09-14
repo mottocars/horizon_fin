@@ -29,6 +29,11 @@ export default function SearchableSelect({
   // ícone pequeno mas o painel precisa ocupar a largura de outra coisa
   // (ex.: a coluna inteira da tabela em RotinasTab.jsx, via ref do <th>).
   larguraRef,
+  // Classes de borda/fundo do gatilho padrão — substituem (não somam a)
+  // `border-gray-200`, pra evitar conflito de especificidade do Tailwind
+  // entre a cor padrão e uma cor de estado (ex.: o par âmbar/azul de
+  // "vazio"/"preenchido" usado em RepassesCef/HistoricoEtapasModal.jsx).
+  corClasses = 'border-gray-200',
 }) {
   const [open, setOpen] = useState(false);
   const [busca, setBusca] = useState('');
@@ -147,7 +152,7 @@ export default function SearchableSelect({
           type="button"
           disabled={disabled}
           onClick={() => (open ? setOpen(false) : abrir())}
-          className="flex w-full items-center justify-between rounded-lg border border-gray-200 px-3 py-2 text-left text-sm focus:outline-none focus:ring-2 focus:ring-primary-100 disabled:bg-gray-50 disabled:opacity-60"
+          className={`flex w-full items-center justify-between rounded-lg border px-3 py-2 text-left text-sm transition-colors focus:outline-none focus:ring-2 focus:ring-primary-100 disabled:bg-gray-50 disabled:opacity-60 ${corClasses}`}
         >
           <span className={`truncate ${temSelecao ? 'text-gray-900' : 'text-gray-400'}`}>{rotuloBotao}</span>
           <ChevronDown size={16} className="shrink-0 text-gray-400" />
