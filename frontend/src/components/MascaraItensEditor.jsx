@@ -2,7 +2,7 @@ import { useCallback, useEffect, useRef, useState } from 'react';
 import { Plus, ListTree, Trash2 } from 'lucide-react';
 import Button from './Button';
 import { listMascaras, createMascaraItem, updateMascaraItemDescricao, deleteMascaraItem } from '../api/mascaras.api';
-import { useConfirm } from '../confirm/ConfirmContext';
+import { useAlert, useConfirm } from '../confirm/ConfirmContext';
 
 // Lista editável de itens de uma máscara (sequência + descrição), com
 // criação/edição/exclusão inline. Usado tanto na tela de Máscaras (Cadastros)
@@ -10,6 +10,7 @@ import { useConfirm } from '../confirm/ConfirmContext';
 // lugares, pra garantir que o comportamento seja idêntico.
 export default function MascaraItensEditor({ tipo, empresaId, grupo, itemLabel }) {
   const confirm = useConfirm();
+  const alert = useAlert();
   const [itens, setItens] = useState([]);
   const [loading, setLoading] = useState(false);
   const [creating, setCreating] = useState(false);
@@ -75,6 +76,12 @@ export default function MascaraItensEditor({ tipo, empresaId, grupo, itemLabel }
     try {
       await deleteMascaraItem(item.id);
       await loadItens();
+    } catch (err) {
+      await alert({
+        title: 'Não foi possível excluir',
+        description: err.response?.data?.message || 'Tente novamente em instantes.',
+        variant: 'danger',
+      });
     } finally {
       setDeletingId(null);
     }

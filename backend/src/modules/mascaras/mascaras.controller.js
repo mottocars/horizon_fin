@@ -94,6 +94,9 @@ async function remove(req, res, next) {
     if (!removed) return res.status(404).json({ message: 'Item não encontrado.' });
     res.status(204).send();
   } catch (err) {
+    if (err.code === '23503') {
+      return next(badRequest('Não é possível excluir: este item já está em uso em outro registro do sistema.'));
+    }
     next(err);
   }
 }
