@@ -338,6 +338,10 @@ export default function HistoricoEtapasModal({ open, onClose, empresaId, identif
       setErroRegistrar('Informe a data.');
       return;
     }
+    if (!descricaoMov.trim()) {
+      setErroRegistrar('Preencha a descrição.');
+      return;
+    }
     setRegistrando(true);
     setErroRegistrar('');
     try {
@@ -482,11 +486,8 @@ export default function HistoricoEtapasModal({ open, onClose, empresaId, identif
                       value={descricaoMov}
                       onChange={(e) => setDescricaoMov(e.target.value)}
                       rows={3}
-                      disabled={!dataMovimentacao}
-                      placeholder={dataMovimentacao ? 'Detalhes da movimentação (opcional)' : 'Preencha a data para liberar a observação'}
-                      className={`w-full resize-none rounded-lg border px-3 py-1.5 text-sm transition-colors focus:outline-none focus:ring-2 focus:ring-primary-100 disabled:border-gray-200 disabled:bg-gray-50 disabled:text-gray-400 ${
-                        dataMovimentacao ? estadoCampo(Boolean(descricaoMov)) : 'border-gray-200 text-gray-800'
-                      }`}
+                      placeholder="Detalhes da movimentação"
+                      className={`w-full resize-none rounded-lg border px-3 py-1.5 text-sm transition-colors focus:outline-none focus:ring-2 focus:ring-primary-100 ${estadoCampo(Boolean(descricaoMov))}`}
                     />
                   </div>
 
@@ -534,7 +535,12 @@ export default function HistoricoEtapasModal({ open, onClose, empresaId, identif
                   {erroRegistrar && <p className="text-xs text-red-600">{erroRegistrar}</p>}
 
                   <div className="flex justify-end">
-                    <Button type="button" onClick={handleRegistrarMovimentacao} loading={registrando}>
+                    <Button
+                      type="button"
+                      onClick={handleRegistrarMovimentacao}
+                      loading={registrando}
+                      disabled={!microEtapaId || !dataMovimentacao || !descricaoMov.trim()}
+                    >
                       Registrar
                     </Button>
                   </div>
