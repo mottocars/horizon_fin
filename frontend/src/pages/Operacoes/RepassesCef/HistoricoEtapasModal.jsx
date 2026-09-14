@@ -420,6 +420,7 @@ export default function HistoricoEtapasModal({ open, onClose, empresaId, identif
                         }))}
                         placeholder="Selecione a unidade..."
                         emptyMessage="Nenhuma unidade disponível."
+                        corClasses={estadoCampo(Boolean(numeroSelecionado))}
                       />
                     </div>
                     <button
@@ -483,7 +484,9 @@ export default function HistoricoEtapasModal({ open, onClose, empresaId, identif
                       rows={3}
                       disabled={!dataMovimentacao}
                       placeholder={dataMovimentacao ? 'Detalhes da movimentação (opcional)' : 'Preencha a data para liberar a observação'}
-                      className="w-full resize-none rounded-lg border border-gray-200 px-3 py-1.5 text-sm text-gray-800 transition-colors focus:border-primary-400 focus:outline-none focus:ring-2 focus:ring-primary-100 disabled:bg-gray-50 disabled:text-gray-400"
+                      className={`w-full resize-none rounded-lg border px-3 py-1.5 text-sm transition-colors focus:outline-none focus:ring-2 focus:ring-primary-100 disabled:border-gray-200 disabled:bg-gray-50 disabled:text-gray-400 ${
+                        dataMovimentacao ? estadoCampo(Boolean(descricaoMov)) : 'border-gray-200 text-gray-800'
+                      }`}
                     />
                   </div>
 
