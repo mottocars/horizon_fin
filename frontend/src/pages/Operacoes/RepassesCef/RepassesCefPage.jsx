@@ -445,12 +445,15 @@ export default function RepassesCefPage() {
         }}
       />
 
-      {detalhamentoAberto ? (
-        // Não é uma janela flutuante: ocupa o mesmo espaço combinado da caixa
-        // de filtros + caixa do kanban logo abaixo (ver DetalhamentoInline),
-        // como se fosse a mesma tela "aprofundada" num bucket. HistoricoEtapasModal
-        // continua sendo um Modal de verdade por cima — clicar num card do
-        // detalhamento não sai dessa tela.
+      {/* Não é uma janela flutuante: ocupa o mesmo espaço combinado da caixa
+          de filtros + caixa do kanban logo abaixo (ver DetalhamentoInline),
+          como se fosse a mesma tela "aprofundada" num bucket. HistoricoEtapasModal
+          continua sendo um Modal de verdade por cima — clicar num card do
+          detalhamento não sai dessa tela.
+          Fica condicionalmente MONTADO (não escondido com `hidden`, ver bloco
+          abaixo) porque é bem mais leve que o kanban geral — só os cards de
+          UM bucket, já divididos em colunas. */}
+      {detalhamentoAberto && (
         <DetalhamentoInline
           macro={detalhamentoAberto}
           empresaId={empresaId}
@@ -460,8 +463,15 @@ export default function RepassesCefPage() {
           onVoltar={() => setDetalhamentoAberto(null)}
           onAbrirHistorico={(tipo, id) => setHistoricoAberto({ tipo, id })}
         />
-      ) : (
-        <>
+      )}
+
+      {/* Fica sempre MONTADO, só escondido com `hidden` quando o
+          detalhamento está aberto — o kanban geral chega a ter mais de mil
+          cards somados (Reserva+Contrato+Assinatura+Registro), então
+          desmontar e remontar essa árvore inteira a cada clique no bucket
+          (como era antes, com ternário) deixava a abertura do detalhamento
+          visivelmente lenta. Com `hidden` a troca é só uma classe CSS. */}
+      <div className={`flex min-h-0 flex-1 flex-col gap-4 ${detalhamentoAberto ? 'hidden' : ''}`}>
       <Card className="shrink-0">
         <div className="flex flex-col gap-4 sm:flex-row sm:items-end">
           <div className="min-w-0 flex-1 sm:max-w-xs">
@@ -626,8 +636,7 @@ export default function RepassesCefPage() {
           </Card>
         )}
       </div>
-        </>
-      )}
+      </div>
     </div>
   );
 }
@@ -858,31 +867,65 @@ function DetalhamentoInline({ macro, empresaId, cards, cores, mostrarDetalhes, o
       ) : (
         <div className="flex min-h-0 flex-1 gap-3 overflow-x-auto p-3">
           {colunas.map((coluna) => (
-            <div
+            <ColunaDetalhamento
               key={coluna.id}
-              className={`flex h-full w-72 shrink-0 flex-col rounded-lg border ${
-                coluna.id === 'sem_etapa' ? 'border-gray-200' : 'border-primary-200'
-              }`}
-            >
-              <div className="flex shrink-0 items-center gap-2 border-b border-gray-100 px-3 py-2.5">
-                <p className="min-w-0 flex-1 truncate text-xs font-semibold text-gray-900">{coluna.descricao}</p>
-                <span className="shrink-0 rounded-full bg-gray-100 px-2 py-0.5 text-xs font-medium text-gray-500">
-                  {coluna.itens.length}
-                </span>
-              </div>
-              <div className="flex min-h-0 flex-1 flex-col gap-1.5 overflow-y-auto p-2">
-                {coluna.itens.length === 0 ? (
-                  <p className="py-6 text-center text-xs text-gray-400">Nenhum cartão aqui.</p>
-                ) : (
-                  coluna.itens.map((item) =>
-                    renderCardPorMacro(macro, item, { cores, mostrarDetalhes, onAbrirHistorico })
-                  )
-                )}
-              </div>
-            </div>
+              coluna={coluna}
+              macro={macro}
+              cores={cores}
+              mostrarDetalhes={mostrarDetalhes}
+              onAbrirHistorico={onAbrirHistorico}
+            />
           ))}
         </div>
       )}
+    </div>
+  );
+}
+
+// Quantos cards de uma coluna já vêm renderizados de cara. A coluna "Sem
+// etapa registrada" concentra a maioria dos cards de um bucket grande (ex.:
+// Registro passa de 800) — renderizar todos de uma vez sem paginação deixa
+// a abertura do detalhamento visivelmente lenta (chegou a passar de 1s só
+// nessa etapa). Cada coluna pagina por conta própria, então trocar de
+// bucket sempre volta a mostrar só a primeira leva.
+const CARDS_POR_PAGINA = 60;
+
+function ColunaDetalhamento({ coluna, macro, cores, mostrarDetalhes, onAbrirHistorico }) {
+  const [visiveis, setVisiveis] = useState(CARDS_POR_PAGINA);
+  const restantes = coluna.itens.length - visiveis;
+
+  return (
+    <div
+      className={`flex h-full w-72 shrink-0 flex-col rounded-lg border ${
+        coluna.id === 'sem_etapa' ? 'border-gray-200' : 'border-primary-200'
+      }`}
+    >
+      <div className="flex shrink-0 items-center gap-2 border-b border-gray-100 px-3 py-2.5">
+        <p className="min-w-0 flex-1 truncate text-xs font-semibold text-gray-900">{coluna.descricao}</p>
+        <span className="shrink-0 rounded-full bg-gray-100 px-2 py-0.5 text-xs font-medium text-gray-500">
+          {coluna.itens.length}
+        </span>
+      </div>
+      <div className="flex min-h-0 flex-1 flex-col gap-1.5 overflow-y-auto p-2">
+        {coluna.itens.length === 0 ? (
+          <p className="py-6 text-center text-xs text-gray-400">Nenhum cartão aqui.</p>
+        ) : (
+          <>
+            {coluna.itens
+              .slice(0, visiveis)
+              .map((item) => renderCardPorMacro(macro, item, { cores, mostrarDetalhes, onAbrirHistorico }))}
+            {restantes > 0 && (
+              <button
+                type="button"
+                onClick={() => setVisiveis((v) => v + CARDS_POR_PAGINA)}
+                className="shrink-0 rounded-lg border border-dashed border-gray-300 py-2 text-xs font-medium text-gray-500 hover:border-primary-300 hover:text-primary-600"
+              >
+                Carregar mais ({restantes} restante{restantes === 1 ? '' : 's'})
+              </button>
+            )}
+          </>
+        )}
+      </div>
     </div>
   );
 }
