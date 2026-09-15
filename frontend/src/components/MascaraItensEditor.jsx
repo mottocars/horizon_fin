@@ -157,8 +157,9 @@ export default function MascaraItensEditor({ tipo, empresaId, grupo, itemLabel }
 }
 
 // Mesmo padrão "vazio = âmbar, preenchido = azul" usado nos campos do card
-// de Repasses CEF (ver estadoCampo em RepassesCefPage.jsx).
-function estadoSla(preenchido) {
+// de Repasses CEF (ver estadoCampo em RepassesCefPage.jsx) — aplicado aqui
+// tanto no SLA quanto na Descrição.
+function estadoCampo(preenchido) {
   return preenchido
     ? 'border-primary-100 bg-primary-50 text-gray-900 hover:border-primary-500'
     : 'border-amber-300 bg-amber-50 text-gray-900 hover:border-amber-400';
@@ -199,7 +200,7 @@ function MascaraRow({ item, registerRef, mostrarSla, onChange, onSave, onEnterOn
           onBlur={handleBlur}
           onKeyDown={handleKeyDown}
           title="Prazo esperado (SLA) desta etapa, em dias"
-          className={`w-24 shrink-0 rounded-md border px-2 py-1.5 text-center text-sm transition-colors focus:outline-none focus:ring-2 focus:ring-primary-100 ${estadoSla(item.sla_dias !== null && item.sla_dias !== undefined)}`}
+          className={`w-24 shrink-0 rounded-md border px-2 py-1.5 text-center text-sm transition-colors focus:outline-none focus:ring-2 focus:ring-primary-100 ${estadoCampo(item.sla_dias !== null && item.sla_dias !== undefined)}`}
         />
       )}
       <input
@@ -210,7 +211,7 @@ function MascaraRow({ item, registerRef, mostrarSla, onChange, onSave, onEnterOn
         onBlur={handleBlur}
         onKeyDown={handleKeyDown}
         placeholder="Digite a descrição..."
-        className="w-full flex-1 rounded-md border border-transparent bg-transparent px-2 py-1.5 text-sm text-gray-900 transition-colors placeholder:text-gray-300 hover:bg-gray-50 focus:border-primary-200 focus:bg-white focus:outline-none focus:ring-2 focus:ring-primary-100"
+        className={`w-full flex-1 rounded-md border px-2 py-1.5 text-sm transition-colors placeholder:text-gray-400 focus:outline-none focus:ring-2 focus:ring-primary-100 ${estadoCampo(Boolean(item.descricao))}`}
       />
       <button
         type="button"
