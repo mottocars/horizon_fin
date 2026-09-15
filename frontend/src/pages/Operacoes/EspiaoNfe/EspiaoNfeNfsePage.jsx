@@ -17,6 +17,8 @@ import {
   Archive,
   RotateCcw,
   User,
+  Inbox,
+  CheckCircle,
 } from 'lucide-react';
 import Card from '../../../components/Card';
 import Button from '../../../components/Button';
@@ -476,62 +478,56 @@ export default function EspiaoNfeNfsePage() {
   return (
     <div className="space-y-4">
       <Card>
-        <div className="flex flex-col gap-4 sm:flex-row sm:items-end">
-          <div className="min-w-0 flex-1 sm:max-w-xs">
-            <label className="mb-1 block text-sm font-medium text-gray-700">Empresa</label>
-            <SearchableSelect
-              value={empresaId}
-              onChange={handleEmpresaChange}
-              disabled={loadingEmpresas || empresaTravada}
-              options={empresas.map((empresa) => ({ value: empresa.id, label: nomeExibicaoEmpresa(empresa) }))}
-              placeholder={loadingEmpresas ? 'Carregando empresas...' : 'Selecione uma empresa'}
-              emptyMessage="Nenhuma empresa encontrada."
-            />
+        <div className="flex flex-col gap-4 lg:flex-row lg:items-end lg:justify-between">
+          <div className="flex flex-col gap-4 sm:flex-row sm:items-end">
+            <div className="min-w-0 flex-1 sm:max-w-xs">
+              <label className="mb-1 block text-sm font-medium text-gray-700">Empresa</label>
+              <SearchableSelect
+                value={empresaId}
+                onChange={handleEmpresaChange}
+                disabled={loadingEmpresas || empresaTravada}
+                options={empresas.map((empresa) => ({ value: empresa.id, label: nomeExibicaoEmpresa(empresa) }))}
+                placeholder={loadingEmpresas ? 'Carregando empresas...' : 'Selecione uma empresa'}
+                emptyMessage="Nenhuma empresa encontrada."
+              />
+            </div>
+
+            <div>
+              <label className="mb-1 block text-sm font-medium text-gray-700">Data início</label>
+              <input
+                type="date"
+                value={dataInicio}
+                onChange={(e) => setDataInicio(e.target.value)}
+                className="rounded-lg border border-gray-200 px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-primary-100"
+              />
+            </div>
+            <div>
+              <label className="mb-1 block text-sm font-medium text-gray-700">Data fim</label>
+              <input
+                type="date"
+                value={dataFim}
+                onChange={(e) => setDataFim(e.target.value)}
+                className="rounded-lg border border-gray-200 px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-primary-100"
+              />
+            </div>
           </div>
 
-          <div>
-            <label className="mb-1 block text-sm font-medium text-gray-700">Data início</label>
-            <input
-              type="date"
-              value={dataInicio}
-              onChange={(e) => setDataInicio(e.target.value)}
-              className="rounded-lg border border-gray-200 px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-primary-100"
-            />
-          </div>
-          <div>
-            <label className="mb-1 block text-sm font-medium text-gray-700">Data fim</label>
-            <input
-              type="date"
-              value={dataFim}
-              onChange={(e) => setDataFim(e.target.value)}
-              className="rounded-lg border border-gray-200 px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-primary-100"
-            />
-          </div>
-        </div>
-      </Card>
-
-      {!empresaId ? (
-        <Card>
-          <p className="py-8 text-center text-sm text-gray-400">
-            Selecione uma empresa acima para ver os certificados e as notas encontradas.
-          </p>
-        </Card>
-      ) : (
-        <>
-          <div className="flex items-center justify-between">
-            <p className="text-xs text-gray-500">
-              {modoInativas
-                ? 'Notas marcadas como inativas, agrupadas por certificado.'
-                : 'Consulta automática desta empresa (varre todos os certificados válidos quando dispara).'}
-            </p>
-            <div className="flex items-center gap-2">
+          {empresaId && (
+            <div className="flex flex-wrap items-center gap-2">
               {/* Três estados das notas — por enquanto só o visual (cor +
-                  rótulo); a ação de cada botão vem depois. */}
-              <Button variant="primary">Novas Notas</Button>
+                  ícone + rótulo); a ação de cada botão vem depois. */}
+              <Button variant="primary">
+                <Inbox size={15} />
+                Novas Notas
+              </Button>
               <Button variant="secondary" className="!border-emerald-600 !bg-emerald-600 !text-white hover:!bg-emerald-700">
+                <CheckCircle size={15} />
                 Cientes
               </Button>
-              <Button variant="danger">Inativas</Button>
+              <Button variant="danger">
+                <Archive size={15} />
+                Inativas
+              </Button>
 
               <div className="mx-1 h-6 w-px shrink-0 bg-gray-200" />
 
@@ -559,7 +555,23 @@ export default function EspiaoNfeNfsePage() {
                 </IconButton>
               )}
             </div>
-          </div>
+          )}
+        </div>
+      </Card>
+
+      {!empresaId ? (
+        <Card>
+          <p className="py-8 text-center text-sm text-gray-400">
+            Selecione uma empresa acima para ver os certificados e as notas encontradas.
+          </p>
+        </Card>
+      ) : (
+        <>
+          <p className="text-xs text-gray-500">
+            {modoInativas
+              ? 'Notas marcadas como inativas, agrupadas por certificado.'
+              : 'Consulta automática desta empresa (varre todos os certificados válidos quando dispara).'}
+          </p>
 
           {loadingCertificados ? (
             <Card>
