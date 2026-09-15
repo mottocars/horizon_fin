@@ -525,29 +525,39 @@ export default function EspiaoNfeNfsePage() {
                 : 'Consulta automática desta empresa (varre todos os certificados válidos quando dispara).'}
             </p>
             <div className="flex items-center gap-2">
-              <Button variant="secondary" onClick={() => setPainelFiltroAberto(true)}>
-                <Filter size={15} />
-                Filtros
+              {/* Três estados das notas — por enquanto só o visual (cor +
+                  rótulo); a ação de cada botão vem depois. */}
+              <Button variant="primary">Novas Notas</Button>
+              <Button variant="secondary" className="!border-emerald-600 !bg-emerald-600 !text-white hover:!bg-emerald-700">
+                Cientes
+              </Button>
+              <Button variant="danger">Inativas</Button>
+
+              <div className="mx-1 h-6 w-px shrink-0 bg-gray-200" />
+
+              <div className="relative">
+                <IconButton
+                  title="Filtros"
+                  onClick={() => setPainelFiltroAberto(true)}
+                  className="!h-9 !w-9 border border-gray-200 hover:!text-primary-600"
+                >
+                  <Filter size={17} />
+                </IconButton>
                 {totalFiltrosAtivos > 0 && (
-                  <span className="ml-0.5 inline-flex h-4 w-4 items-center justify-center rounded-full bg-primary-600 text-[10px] font-semibold text-white">
+                  <span className="absolute -right-1 -top-1 inline-flex h-4 w-4 items-center justify-center rounded-full bg-primary-600 text-[10px] font-semibold text-white">
                     {totalFiltrosAtivos}
                   </span>
                 )}
-              </Button>
+              </div>
               {!modoInativas && (
-                <Button variant="secondary" onClick={abrirAgendamento}>
-                  <CalendarClock size={15} />
-                  Consultas Automáticas
-                </Button>
+                <IconButton
+                  title="Consultas Automáticas"
+                  onClick={abrirAgendamento}
+                  className="!h-9 !w-9 border border-gray-200 hover:!text-primary-600"
+                >
+                  <CalendarClock size={17} />
+                </IconButton>
               )}
-              <Button
-                variant={modoInativas ? 'secondary' : 'danger'}
-                className={modoInativas ? '!border-emerald-600 !bg-emerald-600 !text-white hover:!bg-emerald-700' : ''}
-                onClick={toggleModoInativas}
-              >
-                <Archive size={15} />
-                {modoInativas ? 'Notas Ativas' : 'Notas Inativadas'}
-              </Button>
             </div>
           </div>
 
