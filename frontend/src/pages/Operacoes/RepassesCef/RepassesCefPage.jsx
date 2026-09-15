@@ -462,7 +462,6 @@ export default function RepassesCefPage() {
                     title="Atualizar dados desta tela"
                   >
                     <RefreshCw size={16} className={atualizando ? 'animate-spin' : ''} />
-                    Atualizar
                   </Button>
                   <button
                     type="button"
