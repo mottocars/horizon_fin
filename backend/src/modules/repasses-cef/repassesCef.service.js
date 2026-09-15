@@ -296,7 +296,7 @@ async function atualizarNumeroInstituicaoFinanceira(empresaId, siengeContractId,
 // `res.idreserva`) — por isso é interpolado como texto, não parametrizado.
 function ULTIMA_MICROETAPA_LATERAL(colEmpresaId, colIdreserva) {
   return `LEFT JOIN LATERAL (
-       SELECT m.descricao AS nome, h.data_movimentacao AS data
+       SELECT m.id AS mascara_item_id, m.descricao AS nome, h.data_movimentacao AS data
        FROM repasses_cef_historico_microetapas h
        JOIN mascara_itens m ON m.id = h.mascara_item_id
        WHERE h.empresa_id = ${colEmpresaId} AND h.idreserva = ${colIdreserva}
@@ -369,7 +369,8 @@ async function listContratos(empresaId, centroCustoIds = []) {
             c.financial_institution_number AS numero_instituicao_financeira,
             COALESCE(res.cliente, cli.name) AS titular_nome,
             res.idreserva, res.tipovenda, res.situacao,
-            um.nome AS ultima_microetapa_nome, um.data AS ultima_microetapa_data
+            um.nome AS ultima_microetapa_nome, um.data AS ultima_microetapa_data,
+            um.mascara_item_id AS ultima_microetapa_id
      FROM sie_sales_contracts c
      -- Só um fallback pra quando o contrato não linka com nenhuma reserva
      -- CVCRM (res.cliente abaixo é a fonte preferida — ver comentário na
@@ -567,7 +568,8 @@ async function listReservas(empresaId, centroCustoIds = []) {
             COALESCE(cc.name, r.empreendimento) AS empreendimento, r.unidade,
             r.cliente AS titular_nome, r.valor_contrato AS valor_venda, r.venda AS vendida,
             r.tipovenda, r.situacao, r.data_venda, r.criado_em,
-            um.nome AS ultima_microetapa_nome, um.data AS ultima_microetapa_data
+            um.nome AS ultima_microetapa_nome, um.data AS ultima_microetapa_data,
+            um.mascara_item_id AS ultima_microetapa_id
      FROM construtor_vendas_reservas r
      LEFT JOIN centros_custo_sienge cc
        ON cc.empresa_id = r.empresa_id AND cc.codigo_construtor_vendas = r.codigointerno_empreendimento
@@ -634,7 +636,8 @@ async function listUnidadesExtrato(empresaId, centroCustoIds, { comRegistro }) {
             u.data_inclusao_dados_registro_cri AS data_registro,
             COALESCE(cc.name, u.contrato_empreendimento) AS empreendimento,
             ctr.number AS numero_contrato, res.idreserva, res.tipovenda, res.situacao,
-            um.nome AS ultima_microetapa_nome, um.data AS ultima_microetapa_data
+            um.nome AS ultima_microetapa_nome, um.data AS ultima_microetapa_data,
+            um.mascara_item_id AS ultima_microetapa_id
      FROM extrato_unidades u
      LEFT JOIN centros_custo_sienge cc
        ON cc.empresa_id = u.empresa_id AND cc.codigo_contrato_caixa = u.contrato_empreendimento

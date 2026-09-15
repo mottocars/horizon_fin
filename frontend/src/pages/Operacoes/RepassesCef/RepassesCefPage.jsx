@@ -17,9 +17,11 @@ import {
   User,
 } from 'lucide-react';
 import Card from '../../../components/Card';
+import Modal from '../../../components/Modal';
 import SearchableSelect from '../../../components/SearchableSelect';
 import Tabs from '../../../components/Tabs';
 import { listEmpresas } from '../../../api/empresas.api';
+import { listMascaras } from '../../../api/mascaras.api';
 import {
   listCentrosRepassesCef,
   sincronizarReservasRepassesCef,
@@ -104,6 +106,12 @@ export default function RepassesCefPage() {
   // idreserva, sienge_contract_id ou extrato_unidades.id conforme o tipo
   // (ver HistoricoEtapasModal.jsx e getHistoricoEtapas no backend).
   const [historicoAberto, setHistoricoAberto] = useState(null);
+  // Item de MACRO_ETAPAS_REPASSES (ou null) — bucket aberto no detalhamento
+  // por micro etapa (ver DetalhamentoBucketModal). Guarda só o macro, não os
+  // cards: os cards são derivados ao vivo do estado atual (reservas/
+  // contratos/...) em cada render, pra continuar em dia se o usuário
+  // registrar uma movimentação com o detalhamento aberto.
+  const [detalhamentoAberto, setDetalhamentoAberto] = useState(null);
 
   useEffect(() => {
     listEmpresas({ ativo: true, limit: 100 })
@@ -383,6 +391,20 @@ export default function RepassesCefPage() {
     );
   }, [registros, buscaNormalizada]);
 
+  // Cards do bucket aberto no detalhamento — derivado ao vivo (não é um
+  // snapshot tirado no clique), pra continuar em dia se uma movimentação for
+  // registrada com o modal aberto (ver comentário no useState acima).
+  const cardsDetalhamento =
+    detalhamentoAberto?.value === 'VENDA'
+      ? reservasFiltradas
+      : detalhamentoAberto?.value === 'CONTRATO'
+        ? contratosFiltrados
+        : detalhamentoAberto?.value === 'ASSINATURA'
+          ? assinaturasFiltradas
+          : detalhamentoAberto?.value === 'REGISTRO'
+            ? registrosFiltrados
+            : [];
+
   return (
     <div className="flex h-full flex-col gap-4">
       <Card className="shrink-0">
@@ -507,6 +529,22 @@ export default function RepassesCefPage() {
         logs={logsAtualizacao}
       />
 
+      {/* Antes do HistoricoEtapasModal de propósito: os dois podem ficar
+          abertos ao mesmo tempo (clicar num card do detalhamento não fecha
+          o Kanban por trás), e quem vem depois no DOM fica visualmente por
+          cima com o mesmo z-50 — o histórico (mais específico) precisa
+          ganhar do detalhamento. */}
+      <DetalhamentoBucketModal
+        open={Boolean(detalhamentoAberto)}
+        onClose={() => setDetalhamentoAberto(null)}
+        macro={detalhamentoAberto}
+        empresaId={empresaId}
+        cards={cardsDetalhamento}
+        cores={cores}
+        mostrarDetalhes={mostrarDetalhes}
+        onAbrirHistorico={(tipo, id) => setHistoricoAberto({ tipo, id })}
+      />
+
       <HistoricoEtapasModal
         open={Boolean(historicoAberto)}
         onClose={() => setHistoricoAberto(null)}
@@ -565,6 +603,7 @@ export default function RepassesCefPage() {
                 mostrarDetalhes={mostrarDetalhes}
                 ultimasAtualizacoes={ultimasAtualizacoes}
                 onAbrirHistorico={(tipo, id) => setHistoricoAberto({ tipo, id })}
+                onAbrirDetalhamento={setDetalhamentoAberto}
               />
             </div>
           ))}
@@ -603,6 +642,7 @@ function KanbanRepasses({
   mostrarDetalhes,
   ultimasAtualizacoes,
   onAbrirHistorico,
+  onAbrirDetalhamento,
 }) {
   return (
     // Sem largura fixa nem overflow-x: cada bucket é `flex-1 min-w-0`, então
@@ -656,10 +696,13 @@ function KanbanRepasses({
             key={macro.value}
             className="flex min-h-0 min-w-0 flex-1 flex-col overflow-hidden rounded-lg border border-primary-200"
           >
-            {/* cursor-pointer + hover só de propósito visual por enquanto —
-                sem onClick ainda, é preparo pra uma ação futura no cabeçalho
-                (ver pedido do usuário: "só indicar que é clicável"). */}
-            <div className="flex shrink-0 cursor-pointer flex-col border-b border-primary-100 px-3 py-3 transition-colors hover:bg-primary-100">
+            {/* Clique abre o detalhamento por micro etapa desse bucket (ver
+                DetalhamentoBucketModal) — cursor/hover já preparados antes
+                especificamente pra isso. */}
+            <div
+              onClick={() => onAbrirDetalhamento(macro)}
+              className="flex shrink-0 cursor-pointer flex-col border-b border-primary-100 px-3 py-3 transition-colors hover:bg-primary-100"
+            >
               <div className="flex items-center gap-2">
                 <p className="min-w-0 flex-1 truncate text-sm font-semibold text-gray-900">{macro.label}</p>
                 <span className="shrink-0 rounded-full bg-gray-100 px-2 py-0.5 text-xs font-medium text-gray-500">
@@ -743,6 +786,126 @@ function KanbanRepasses({
       })}
     </div>
   );
+}
+
+// Kanban de detalhamento de um bucket macro: mesmos cards, agora divididos
+// em colunas por micro etapa (mascara_itens do grupo dessa macro etapa, na
+// ordem de sequência cadastrada em Máscaras). Cada card entra na coluna da
+// ÚLTIMA micro etapa registrada pra ele (ultima_microetapa_id, ver
+// ULTIMA_MICROETAPA_LATERAL no backend); sem nenhuma ainda, cai na primeira
+// coluna ("Sem etapa registrada") — é o caso da maioria dos cards hoje.
+function DetalhamentoBucketModal({ open, onClose, macro, empresaId, cards, cores, mostrarDetalhes, onAbrirHistorico }) {
+  const [microEtapas, setMicroEtapas] = useState([]);
+  const [carregando, setCarregando] = useState(false);
+
+  useEffect(() => {
+    if (!open || !macro || !empresaId) return;
+    setCarregando(true);
+    listMascaras('REPASSES', empresaId, macro.value)
+      .then(setMicroEtapas)
+      .finally(() => setCarregando(false));
+  }, [open, macro, empresaId]);
+
+  if (!macro) return null;
+
+  const porMicroEtapa = new Map();
+  for (const item of cards) {
+    const chave = item.ultima_microetapa_id ?? 'sem_etapa';
+    if (!porMicroEtapa.has(chave)) porMicroEtapa.set(chave, []);
+    porMicroEtapa.get(chave).push(item);
+  }
+
+  const colunas = [
+    { id: 'sem_etapa', descricao: 'Sem etapa registrada', itens: porMicroEtapa.get('sem_etapa') || [] },
+    ...microEtapas.map((me) => ({ id: me.id, descricao: me.descricao, itens: porMicroEtapa.get(me.id) || [] })),
+  ];
+
+  return (
+    <Modal open={open} onClose={onClose} title={`Detalhamento — ${macro.label}`} maxWidthClass="max-w-[96vw]">
+      {carregando ? (
+        <div className="flex h-[70vh] items-center justify-center text-sm text-gray-400">
+          Carregando micro etapas...
+        </div>
+      ) : (
+        <div className="flex h-[70vh] gap-3 overflow-x-auto pb-1">
+          {colunas.map((coluna) => (
+            <div
+              key={coluna.id}
+              className={`flex h-full w-72 shrink-0 flex-col rounded-lg border ${
+                coluna.id === 'sem_etapa' ? 'border-gray-200' : 'border-primary-200'
+              }`}
+            >
+              <div className="flex shrink-0 items-center gap-2 border-b border-gray-100 px-3 py-2.5">
+                <p className="min-w-0 flex-1 truncate text-xs font-semibold text-gray-900">{coluna.descricao}</p>
+                <span className="shrink-0 rounded-full bg-gray-100 px-2 py-0.5 text-xs font-medium text-gray-500">
+                  {coluna.itens.length}
+                </span>
+              </div>
+              <div className="flex min-h-0 flex-1 flex-col gap-1.5 overflow-y-auto p-2">
+                {coluna.itens.length === 0 ? (
+                  <p className="py-6 text-center text-xs text-gray-400">Nenhum cartão aqui.</p>
+                ) : (
+                  coluna.itens.map((item) =>
+                    renderCardPorMacro(macro, item, { cores, mostrarDetalhes, onAbrirHistorico })
+                  )
+                )}
+              </div>
+            </div>
+          ))}
+        </div>
+      )}
+    </Modal>
+  );
+}
+
+// Mesmo switch por tipo usado dentro de KanbanRepasses (ver ReservaCard/
+// ContratoCard/AssinaturaCard/RegistroCard abaixo), só que como função pra
+// DetalhamentoBucketModal poder desenhar o card certo sem se importar com
+// qual bucket macro está aberto.
+function renderCardPorMacro(macro, item, { cores, mostrarDetalhes, onAbrirHistorico }) {
+  if (macro.value === 'VENDA') {
+    return (
+      <ReservaCard
+        key={item.id}
+        reserva={item}
+        cores={cores}
+        mostrarDetalhes={mostrarDetalhes}
+        onClick={() => onAbrirHistorico('reserva', item.idreserva)}
+      />
+    );
+  }
+  if (macro.value === 'CONTRATO') {
+    return (
+      <ContratoCard
+        key={item.sienge_contract_id}
+        contrato={item}
+        cores={cores}
+        mostrarDetalhes={mostrarDetalhes}
+        onClick={() => onAbrirHistorico('contrato', item.sienge_contract_id)}
+      />
+    );
+  }
+  if (macro.value === 'ASSINATURA') {
+    return (
+      <AssinaturaCard
+        key={item.id}
+        assinatura={item}
+        mostrarDetalhes={mostrarDetalhes}
+        onClick={() => onAbrirHistorico('assinatura', item.id)}
+      />
+    );
+  }
+  if (macro.value === 'REGISTRO') {
+    return (
+      <RegistroCard
+        key={item.id}
+        registro={item}
+        mostrarDetalhes={mostrarDetalhes}
+        onClick={() => onAbrirHistorico('registro', item.id)}
+      />
+    );
+  }
+  return null;
 }
 
 // Preto ou branco, o que for mais legível em cima da cor de fundo escolhida
