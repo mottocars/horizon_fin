@@ -359,6 +359,10 @@ export default function HistoricoEtapasModal({ open, onClose, empresaId, identif
       setDescricaoMov('');
       setArquivosMov([]);
       await carregarHistorico();
+      // Atualiza o card por trás do modal (mostra a nova "última etapa" sem
+      // precisar fechar e recarregar a tela) — mesmo callback usado ao salvar
+      // o Nº Contrato Caixa.
+      onSalvo?.();
     } catch (err) {
       setErroRegistrar(err.response?.data?.message || 'Não foi possível registrar a movimentação.');
     } finally {

@@ -512,10 +512,14 @@ export default function RepassesCefPage() {
         empresaId={empresaId}
         identificador={historicoAberto}
         onSalvo={() => {
-          // Salvar o Nº Contrato Caixa liga o contrato a uma unidade — o
-          // card pode sair do bucket Contrato e entrar em Assinatura ou
-          // Registro (dependendo se essa unidade já tem data de registro),
-          // então os três precisam recarregar, não só Contrato.
+          // Também dispara ao registrar uma micro etapa manual (qualquer
+          // bucket, inclusive Reserva) — recarrega os quatro pra mostrar a
+          // "última etapa" nova no card sem precisar atualizar a tela.
+          // Salvar o Nº Contrato Caixa, especificamente, liga o contrato a
+          // uma unidade — o card pode sair do bucket Contrato e entrar em
+          // Assinatura ou Registro (dependendo se essa unidade já tem data
+          // de registro), então os quatro precisam recarregar mesmo aqui.
+          loadReservas();
           loadContratos();
           loadAssinaturas();
           loadRegistros();
@@ -768,7 +772,11 @@ function UltimaMicroEtapa({ nome, data }) {
         <History size={10} className="shrink-0" />
         <span className="truncate">{nome}</span>
       </span>
-      {data && <span className="shrink-0 text-gray-400">{formatarData(data)}</span>}
+      {data && (
+        <span className="shrink-0 text-gray-400" title={formatarData(data)}>
+          {formatarDiasSemNovaEtapa(data)}
+        </span>
+      )}
     </div>
   );
 }
@@ -855,6 +863,27 @@ function formatarData(iso) {
   if (!iso) return null;
   const [ano, mes, dia] = iso.slice(0, 10).split('-');
   return `${dia}/${mes}/${ano}`;
+}
+
+// Quantos dias corridos se passaram desde a data (sem hora — mesmo cuidado
+// de fuso do formatarData acima, comparando só as partes de calendário, não
+// timestamps) até hoje. Usado no card pra mostrar há quanto tempo o cliente
+// está parado na última etapa, em vez da data crua.
+function diasSemNovaEtapa(iso) {
+  if (!iso) return null;
+  const [ano, mes, dia] = iso.slice(0, 10).split('-').map(Number);
+  const dataEtapa = Date.UTC(ano, mes - 1, dia);
+  const agora = new Date();
+  const hoje = Date.UTC(agora.getFullYear(), agora.getMonth(), agora.getDate());
+  return Math.round((hoje - dataEtapa) / 86400000);
+}
+
+function formatarDiasSemNovaEtapa(iso) {
+  const dias = diasSemNovaEtapa(iso);
+  if (dias === null) return null;
+  if (dias <= 0) return 'Hoje';
+  if (dias === 1) return 'há 1 dia';
+  return `há ${dias} dias`;
 }
 
 // Aqui sim é TIMESTAMP de verdade (com hora), então dá pra usar
