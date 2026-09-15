@@ -478,91 +478,103 @@ export default function EspiaoNfeNfsePage() {
   return (
     <div className="space-y-4">
       <Card>
-        <div className="flex flex-col gap-4 sm:flex-row sm:items-end">
-          <div className="min-w-0 flex-1 sm:max-w-xs">
-            <label className="mb-1 block text-sm font-medium text-gray-700">Empresa</label>
-            <SearchableSelect
-              value={empresaId}
-              onChange={handleEmpresaChange}
-              disabled={loadingEmpresas || empresaTravada}
-              options={empresas.map((empresa) => ({ value: empresa.id, label: nomeExibicaoEmpresa(empresa) }))}
-              placeholder={loadingEmpresas ? 'Carregando empresas...' : 'Selecione uma empresa'}
-              emptyMessage="Nenhuma empresa encontrada."
-            />
-          </div>
-
-          {/* Sem outros campos flex-1 disputando espaço nessa tela (como
-              Centro de Custo/Responsável fazem em Gestão de Cobranças), esse
-              bloco sozinho engoliria toda a largura sobrando — por isso o
-              max-w explícito, calibrado pro mesmo tamanho por campo (~229px)
-              de lá, em vez de só copiar o `sm:flex-1` sem tempo. */}
-          <div className="flex min-w-0 gap-3 sm:max-w-[470px] sm:flex-1">
-            <div className="min-w-0 flex-1">
-              <label className="mb-1 block text-sm font-medium text-gray-700">Data início</label>
-              <input
-                type="date"
-                value={dataInicio}
-                onChange={(e) => setDataInicio(e.target.value)}
-                className="w-full min-w-0 rounded-lg border border-gray-200 px-3 py-2 text-sm text-gray-800 focus:border-primary-400 focus:outline-none focus:ring-2 focus:ring-primary-100"
+        {/* justify-between separa filtros (esquerda) de botões (direita) —
+            sem isso, com Empresa e Data início/fim ambos com max-w (ver
+            comentário abaixo), sobrava espaço DEPOIS dos botões em vez deles
+            ficarem colados na borda direita do card. */}
+        <div className="flex flex-col gap-4 lg:flex-row lg:items-end lg:justify-between">
+          <div className="flex min-w-0 flex-col gap-4 sm:flex-row sm:flex-1 sm:items-end">
+            <div className="min-w-0 flex-1 sm:max-w-xs">
+              <label className="mb-1 block text-sm font-medium text-gray-700">Empresa</label>
+              <SearchableSelect
+                value={empresaId}
+                onChange={handleEmpresaChange}
+                disabled={loadingEmpresas || empresaTravada}
+                options={empresas.map((empresa) => ({ value: empresa.id, label: nomeExibicaoEmpresa(empresa) }))}
+                placeholder={loadingEmpresas ? 'Carregando empresas...' : 'Selecione uma empresa'}
+                emptyMessage="Nenhuma empresa encontrada."
               />
             </div>
-            <div className="min-w-0 flex-1">
-              <label className="mb-1 block text-sm font-medium text-gray-700">Data fim</label>
-              <input
-                type="date"
-                value={dataFim}
-                onChange={(e) => setDataFim(e.target.value)}
-                className="w-full min-w-0 rounded-lg border border-gray-200 px-3 py-2 text-sm text-gray-800 focus:border-primary-400 focus:outline-none focus:ring-2 focus:ring-primary-100"
-              />
-            </div>
-          </div>
 
-          {empresaId && (
-            <div className="flex shrink-0 items-end gap-2">
-              {/* Três estados das notas — por enquanto só o visual (cor +
-                  ícone + rótulo); a ação de cada botão vem depois. */}
-              <Button variant="primary">
-                <Inbox size={15} />
-                Novas Notas
-              </Button>
-              <Button variant="secondary" className="!border-emerald-600 !bg-emerald-600 !text-white hover:!bg-emerald-700">
-                <CheckCircle size={15} />
-                Cientes
-              </Button>
-              <Button variant="danger">
-                <Archive size={15} />
-                Inativas
-              </Button>
-
-              <div className="flex shrink-0 gap-2">
-                <div className="relative">
-                  <button
-                    type="button"
-                    onClick={() => setPainelFiltroAberto(true)}
-                    title="Filtros"
-                    className="flex items-center justify-center rounded-lg border border-gray-200 p-2 text-gray-500 hover:bg-gray-50"
-                  >
-                    <Filter size={18} />
-                  </button>
-                  {totalFiltrosAtivos > 0 && (
-                    <span className="absolute -right-1 -top-1 inline-flex h-4 w-4 items-center justify-center rounded-full bg-primary-600 text-[10px] font-semibold text-white">
-                      {totalFiltrosAtivos}
-                    </span>
-                  )}
-                </div>
-                {!modoInativas && (
-                  <button
-                    type="button"
-                    onClick={abrirAgendamento}
-                    title="Consultas Automáticas"
-                    className="flex items-center justify-center rounded-lg border border-gray-200 p-2 text-gray-500 hover:bg-gray-50"
-                  >
-                    <CalendarClock size={18} />
-                  </button>
-                )}
+            {/* Sem outros campos flex-1 disputando espaço nessa tela (como
+                Centro de Custo/Responsável fazem em Gestão de Cobranças), esse
+                bloco sozinho engoliria toda a largura sobrando — por isso o
+                max-w explícito, calibrado pro mesmo tamanho por campo (~229px)
+                de lá, em vez de só copiar o `sm:flex-1` sem mais nada. */}
+            <div className="flex min-w-0 gap-3 sm:max-w-[470px] sm:flex-1">
+              <div className="min-w-0 flex-1">
+                <label className="mb-1 block text-sm font-medium text-gray-700">Data início</label>
+                <input
+                  type="date"
+                  value={dataInicio}
+                  onChange={(e) => setDataInicio(e.target.value)}
+                  className="w-full min-w-0 rounded-lg border border-gray-200 px-3 py-2 text-sm text-gray-800 focus:border-primary-400 focus:outline-none focus:ring-2 focus:ring-primary-100"
+                />
+              </div>
+              <div className="min-w-0 flex-1">
+                <label className="mb-1 block text-sm font-medium text-gray-700">Data fim</label>
+                <input
+                  type="date"
+                  value={dataFim}
+                  onChange={(e) => setDataFim(e.target.value)}
+                  className="w-full min-w-0 rounded-lg border border-gray-200 px-3 py-2 text-sm text-gray-800 focus:border-primary-400 focus:outline-none focus:ring-2 focus:ring-primary-100"
+                />
               </div>
             </div>
-          )}
+          </div>
+
+          {/* Sempre visíveis, mesmo sem empresa escolhida — só desabilitados
+              (ver `disabled` em cada um), em vez de sumirem da tela. */}
+          <div className="flex shrink-0 items-end gap-2">
+            {/* Três estados das notas — por enquanto só o visual (cor +
+                ícone + rótulo); a ação de cada botão vem depois. */}
+            <Button variant="primary" disabled={!empresaId}>
+              <Inbox size={15} />
+              Novas Notas
+            </Button>
+            <Button
+              variant="secondary"
+              disabled={!empresaId}
+              className="!border-emerald-600 !bg-emerald-600 !text-white hover:!bg-emerald-700"
+            >
+              <CheckCircle size={15} />
+              Cientes
+            </Button>
+            <Button variant="danger" disabled={!empresaId}>
+              <Archive size={15} />
+              Inativas
+            </Button>
+
+            <div className="flex shrink-0 gap-2">
+              <div className="relative">
+                <button
+                  type="button"
+                  onClick={() => setPainelFiltroAberto(true)}
+                  disabled={!empresaId}
+                  title="Filtros"
+                  className="flex items-center justify-center rounded-lg border border-gray-200 p-2 text-gray-500 hover:bg-gray-50 disabled:opacity-60 disabled:cursor-not-allowed disabled:hover:bg-transparent"
+                >
+                  <Filter size={18} />
+                </button>
+                {totalFiltrosAtivos > 0 && (
+                  <span className="absolute -right-1 -top-1 inline-flex h-4 w-4 items-center justify-center rounded-full bg-primary-600 text-[10px] font-semibold text-white">
+                    {totalFiltrosAtivos}
+                  </span>
+                )}
+              </div>
+              {!modoInativas && (
+                <button
+                  type="button"
+                  onClick={abrirAgendamento}
+                  disabled={!empresaId}
+                  title="Consultas Automáticas"
+                  className="flex items-center justify-center rounded-lg border border-gray-200 p-2 text-gray-500 hover:bg-gray-50 disabled:opacity-60 disabled:cursor-not-allowed disabled:hover:bg-transparent"
+                >
+                  <CalendarClock size={18} />
+                </button>
+              )}
+            </div>
+          </div>
         </div>
       </Card>
 
