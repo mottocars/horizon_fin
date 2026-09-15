@@ -491,7 +491,12 @@ export default function EspiaoNfeNfsePage() {
             />
           </div>
 
-          <div className="flex min-w-0 gap-3 sm:flex-1">
+          {/* Sem outros campos flex-1 disputando espaço nessa tela (como
+              Centro de Custo/Responsável fazem em Gestão de Cobranças), esse
+              bloco sozinho engoliria toda a largura sobrando — por isso o
+              max-w explícito, calibrado pro mesmo tamanho por campo (~229px)
+              de lá, em vez de só copiar o `sm:flex-1` sem tempo. */}
+          <div className="flex min-w-0 gap-3 sm:max-w-[470px] sm:flex-1">
             <div className="min-w-0 flex-1">
               <label className="mb-1 block text-sm font-medium text-gray-700">Data início</label>
               <input
