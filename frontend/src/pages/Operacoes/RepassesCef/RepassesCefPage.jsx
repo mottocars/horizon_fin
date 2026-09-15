@@ -894,6 +894,25 @@ function ColunaDetalhamento({ coluna, macro, cores, mostrarDetalhes, onAbrirHist
   const [visiveis, setVisiveis] = useState(CARDS_POR_PAGINA);
   const restantes = coluna.itens.length - visiveis;
 
+  // Coluna sem nenhum card fica "fechada" — uma faixa estreita com o nome
+  // na vertical, em vez de ocupar w-72 só pra mostrar "Nenhum cartão aqui."
+  // (num bucket com várias micro etapas sem cards, isso economiza bastante
+  // espaço horizontal e deixa claro, de cara, quais etapas têm movimento).
+  if (coluna.itens.length === 0) {
+    return (
+      <div
+        title={coluna.descricao}
+        className={`flex h-full w-9 shrink-0 flex-col items-center justify-center gap-2 rounded-lg border py-3 ${
+          coluna.id === 'sem_etapa' ? 'border-gray-200' : 'border-primary-200'
+        }`}
+      >
+        <span className="whitespace-nowrap text-xs font-semibold text-gray-400 [writing-mode:vertical-rl]">
+          {coluna.descricao}
+        </span>
+      </div>
+    );
+  }
+
   return (
     <div
       className={`flex h-full w-72 shrink-0 flex-col rounded-lg border ${
@@ -907,23 +926,17 @@ function ColunaDetalhamento({ coluna, macro, cores, mostrarDetalhes, onAbrirHist
         </span>
       </div>
       <div className="flex min-h-0 flex-1 flex-col gap-1.5 overflow-y-auto p-2">
-        {coluna.itens.length === 0 ? (
-          <p className="py-6 text-center text-xs text-gray-400">Nenhum cartão aqui.</p>
-        ) : (
-          <>
-            {coluna.itens
-              .slice(0, visiveis)
-              .map((item) => renderCardPorMacro(macro, item, { cores, mostrarDetalhes, onAbrirHistorico }))}
-            {restantes > 0 && (
-              <button
-                type="button"
-                onClick={() => setVisiveis((v) => v + CARDS_POR_PAGINA)}
-                className="shrink-0 rounded-lg border border-dashed border-gray-300 py-2 text-xs font-medium text-gray-500 hover:border-primary-300 hover:text-primary-600"
-              >
-                Carregar mais ({restantes} restante{restantes === 1 ? '' : 's'})
-              </button>
-            )}
-          </>
+        {coluna.itens
+          .slice(0, visiveis)
+          .map((item) => renderCardPorMacro(macro, item, { cores, mostrarDetalhes, onAbrirHistorico }))}
+        {restantes > 0 && (
+          <button
+            type="button"
+            onClick={() => setVisiveis((v) => v + CARDS_POR_PAGINA)}
+            className="shrink-0 rounded-lg border border-dashed border-gray-300 py-2 text-xs font-medium text-gray-500 hover:border-primary-300 hover:text-primary-600"
+          >
+            Carregar mais ({restantes} restante{restantes === 1 ? '' : 's'})
+          </button>
         )}
       </div>
     </div>
