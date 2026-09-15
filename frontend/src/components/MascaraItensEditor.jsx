@@ -156,14 +156,12 @@ export default function MascaraItensEditor({ tipo, empresaId, grupo, itemLabel }
   );
 }
 
-// Mesmo padrão "vazio chama atenção, preenchido fica discreto" usado nos
-// campos do card de Repasses CEF (ver estadoCampo em RepassesCefPage.jsx),
-// só que aqui com vermelho em vez de âmbar — pedido explícito pra SLA, que
-// é uma configuração obrigatória, não um rascunho em andamento.
+// Mesmo padrão "vazio = âmbar, preenchido = azul" usado nos campos do card
+// de Repasses CEF (ver estadoCampo em RepassesCefPage.jsx).
 function estadoSla(preenchido) {
   return preenchido
     ? 'border-primary-100 bg-primary-50 text-gray-900 hover:border-primary-500'
-    : 'border-red-300 bg-red-50 text-gray-900 hover:border-red-400';
+    : 'border-amber-300 bg-amber-50 text-gray-900 hover:border-amber-400';
 }
 
 function MascaraRow({ item, registerRef, mostrarSla, onChange, onSave, onEnterOnLastRow, onDelete, deleting, isLast }) {
@@ -200,7 +198,6 @@ function MascaraRow({ item, registerRef, mostrarSla, onChange, onSave, onEnterOn
           onChange={(e) => onChange('sla_dias', e.target.value === '' ? null : Number(e.target.value))}
           onBlur={handleBlur}
           onKeyDown={handleKeyDown}
-          placeholder="dias"
           title="Prazo esperado (SLA) desta etapa, em dias"
           className={`w-24 shrink-0 rounded-md border px-2 py-1.5 text-center text-sm transition-colors focus:outline-none focus:ring-2 focus:ring-primary-100 ${estadoSla(item.sla_dias !== null && item.sla_dias !== undefined)}`}
         />
