@@ -478,42 +478,40 @@ export default function EspiaoNfeNfsePage() {
   return (
     <div className="space-y-4">
       <Card>
-        <div className="flex flex-col gap-4 lg:flex-row lg:items-end lg:justify-between">
-          <div className="flex flex-col gap-4 sm:flex-row sm:items-end">
-            <div className="min-w-0 flex-1 sm:max-w-xs">
-              <label className="mb-1 block text-sm font-medium text-gray-700">Empresa</label>
-              <SearchableSelect
-                value={empresaId}
-                onChange={handleEmpresaChange}
-                disabled={loadingEmpresas || empresaTravada}
-                options={empresas.map((empresa) => ({ value: empresa.id, label: nomeExibicaoEmpresa(empresa) }))}
-                placeholder={loadingEmpresas ? 'Carregando empresas...' : 'Selecione uma empresa'}
-                emptyMessage="Nenhuma empresa encontrada."
-              />
-            </div>
+        <div className="flex flex-col gap-4 sm:flex-row sm:items-end">
+          <div className="min-w-0 flex-1 sm:max-w-xs">
+            <label className="mb-1 block text-sm font-medium text-gray-700">Empresa</label>
+            <SearchableSelect
+              value={empresaId}
+              onChange={handleEmpresaChange}
+              disabled={loadingEmpresas || empresaTravada}
+              options={empresas.map((empresa) => ({ value: empresa.id, label: nomeExibicaoEmpresa(empresa) }))}
+              placeholder={loadingEmpresas ? 'Carregando empresas...' : 'Selecione uma empresa'}
+              emptyMessage="Nenhuma empresa encontrada."
+            />
+          </div>
 
-            <div>
-              <label className="mb-1 block text-sm font-medium text-gray-700">Data início</label>
-              <input
-                type="date"
-                value={dataInicio}
-                onChange={(e) => setDataInicio(e.target.value)}
-                className="rounded-lg border border-gray-200 px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-primary-100"
-              />
-            </div>
-            <div>
-              <label className="mb-1 block text-sm font-medium text-gray-700">Data fim</label>
-              <input
-                type="date"
-                value={dataFim}
-                onChange={(e) => setDataFim(e.target.value)}
-                className="rounded-lg border border-gray-200 px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-primary-100"
-              />
-            </div>
+          <div className="min-w-0 flex-1">
+            <label className="mb-1 block text-sm font-medium text-gray-700">Data início</label>
+            <input
+              type="date"
+              value={dataInicio}
+              onChange={(e) => setDataInicio(e.target.value)}
+              className="w-full rounded-lg border border-gray-200 px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-primary-100"
+            />
+          </div>
+          <div className="min-w-0 flex-1">
+            <label className="mb-1 block text-sm font-medium text-gray-700">Data fim</label>
+            <input
+              type="date"
+              value={dataFim}
+              onChange={(e) => setDataFim(e.target.value)}
+              className="w-full rounded-lg border border-gray-200 px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-primary-100"
+            />
           </div>
 
           {empresaId && (
-            <div className="flex flex-wrap items-center gap-2">
+            <div className="flex shrink-0 items-end gap-2">
               {/* Três estados das notas — por enquanto só o visual (cor +
                   ícone + rótulo); a ação de cada botão vem depois. */}
               <Button variant="primary">
@@ -529,31 +527,33 @@ export default function EspiaoNfeNfsePage() {
                 Inativas
               </Button>
 
-              <div className="mx-1 h-6 w-px shrink-0 bg-gray-200" />
-
-              <div className="relative">
-                <IconButton
-                  title="Filtros"
-                  onClick={() => setPainelFiltroAberto(true)}
-                  className="!h-9 !w-9 border border-gray-200 hover:!text-primary-600"
-                >
-                  <Filter size={17} />
-                </IconButton>
-                {totalFiltrosAtivos > 0 && (
-                  <span className="absolute -right-1 -top-1 inline-flex h-4 w-4 items-center justify-center rounded-full bg-primary-600 text-[10px] font-semibold text-white">
-                    {totalFiltrosAtivos}
-                  </span>
+              <div className="flex shrink-0 gap-2">
+                <div className="relative">
+                  <button
+                    type="button"
+                    onClick={() => setPainelFiltroAberto(true)}
+                    title="Filtros"
+                    className="flex items-center justify-center rounded-lg border border-gray-200 p-2 text-gray-500 hover:bg-gray-50"
+                  >
+                    <Filter size={18} />
+                  </button>
+                  {totalFiltrosAtivos > 0 && (
+                    <span className="absolute -right-1 -top-1 inline-flex h-4 w-4 items-center justify-center rounded-full bg-primary-600 text-[10px] font-semibold text-white">
+                      {totalFiltrosAtivos}
+                    </span>
+                  )}
+                </div>
+                {!modoInativas && (
+                  <button
+                    type="button"
+                    onClick={abrirAgendamento}
+                    title="Consultas Automáticas"
+                    className="flex items-center justify-center rounded-lg border border-gray-200 p-2 text-gray-500 hover:bg-gray-50"
+                  >
+                    <CalendarClock size={18} />
+                  </button>
                 )}
               </div>
-              {!modoInativas && (
-                <IconButton
-                  title="Consultas Automáticas"
-                  onClick={abrirAgendamento}
-                  className="!h-9 !w-9 border border-gray-200 hover:!text-primary-600"
-                >
-                  <CalendarClock size={17} />
-                </IconButton>
-              )}
             </div>
           )}
         </div>
@@ -567,12 +567,6 @@ export default function EspiaoNfeNfsePage() {
         </Card>
       ) : (
         <>
-          <p className="text-xs text-gray-500">
-            {modoInativas
-              ? 'Notas marcadas como inativas, agrupadas por certificado.'
-              : 'Consulta automática desta empresa (varre todos os certificados válidos quando dispara).'}
-          </p>
-
           {loadingCertificados ? (
             <Card>
               <p className="py-8 text-center text-sm text-gray-400">Carregando certificados...</p>
