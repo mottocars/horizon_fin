@@ -120,7 +120,7 @@ export default function MascaraItensEditor({ tipo, empresaId, grupo, itemLabel }
       <div className="mb-2 flex gap-4 px-1 text-xs font-medium uppercase tracking-wide text-gray-400">
         <span className="w-9 shrink-0">Seq.</span>
         <span className="flex-1">Descrição</span>
-        {mostrarSla && <span className="w-24 shrink-0">SLA (dias)</span>}
+        {mostrarSla && <span className="w-24 shrink-0 text-center">SLA (dias)</span>}
       </div>
 
       <div className="divide-y divide-gray-50">
@@ -154,6 +154,16 @@ export default function MascaraItensEditor({ tipo, empresaId, grupo, itemLabel }
       </button>
     </div>
   );
+}
+
+// Mesmo padrão "vazio chama atenção, preenchido fica discreto" usado nos
+// campos do card de Repasses CEF (ver estadoCampo em RepassesCefPage.jsx),
+// só que aqui com vermelho em vez de âmbar — pedido explícito pra SLA, que
+// é uma configuração obrigatória, não um rascunho em andamento.
+function estadoSla(preenchido) {
+  return preenchido
+    ? 'border-primary-100 bg-primary-50 text-gray-900 hover:border-primary-500'
+    : 'border-red-300 bg-red-50 text-gray-900 hover:border-red-400';
 }
 
 function MascaraRow({ item, registerRef, mostrarSla, onChange, onSave, onEnterOnLastRow, onDelete, deleting, isLast }) {
@@ -202,7 +212,7 @@ function MascaraRow({ item, registerRef, mostrarSla, onChange, onSave, onEnterOn
           onKeyDown={handleKeyDown}
           placeholder="dias"
           title="Prazo esperado (SLA) desta etapa, em dias"
-          className="w-24 shrink-0 rounded-md border border-transparent bg-transparent px-2 py-1.5 text-sm text-gray-900 transition-colors placeholder:text-gray-300 hover:bg-gray-50 focus:border-primary-200 focus:bg-white focus:outline-none focus:ring-2 focus:ring-primary-100"
+          className={`w-24 shrink-0 rounded-md border px-2 py-1.5 text-center text-sm transition-colors focus:outline-none focus:ring-2 focus:ring-primary-100 ${estadoSla(item.sla_dias !== null && item.sla_dias !== undefined)}`}
         />
       )}
       <button
