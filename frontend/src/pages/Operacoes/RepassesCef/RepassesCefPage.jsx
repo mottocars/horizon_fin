@@ -902,10 +902,13 @@ function ColunaDetalhamento({ coluna, macro, cores, mostrarDetalhes, onAbrirHist
     return (
       <div
         title={coluna.descricao}
-        className={`flex h-full w-9 shrink-0 flex-col items-center justify-center gap-2 rounded-lg border py-3 ${
+        className={`flex h-full w-9 shrink-0 flex-col items-center gap-2 rounded-lg border py-3 ${
           coluna.id === 'sem_etapa' ? 'border-gray-200' : 'border-primary-200'
         }`}
       >
+        <span className="shrink-0 rounded-full bg-gray-100 px-2 py-0.5 text-xs font-medium text-gray-500">
+          {coluna.itens.length}
+        </span>
         <span className="whitespace-nowrap text-xs font-semibold text-gray-400 [writing-mode:vertical-rl]">
           {coluna.descricao}
         </span>
