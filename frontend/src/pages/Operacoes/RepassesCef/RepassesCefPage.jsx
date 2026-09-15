@@ -16,7 +16,6 @@ import {
   User,
 } from 'lucide-react';
 import Card from '../../../components/Card';
-import Button from '../../../components/Button';
 import SearchableSelect from '../../../components/SearchableSelect';
 import Tabs from '../../../components/Tabs';
 import { listEmpresas } from '../../../api/empresas.api';
@@ -456,13 +455,15 @@ export default function RepassesCefPage() {
                 </div>
 
                 <div className="flex shrink-0 gap-2">
-                  <Button
+                  <button
+                    type="button"
                     onClick={handleAtualizar}
                     disabled={atualizando || !empresaId}
                     title="Atualizar dados desta tela"
+                    className="flex items-center justify-center rounded-lg bg-primary-600 p-2 text-white hover:bg-primary-700 disabled:opacity-60"
                   >
-                    <RefreshCw size={16} className={atualizando ? 'animate-spin' : ''} />
-                  </Button>
+                    <RefreshCw size={18} className={atualizando ? 'animate-spin' : ''} />
+                  </button>
                   <button
                     type="button"
                     onClick={handleExportar}
