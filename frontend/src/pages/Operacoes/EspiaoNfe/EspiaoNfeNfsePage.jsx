@@ -17,6 +17,8 @@ import {
   User,
   Inbox,
   CheckCircle,
+  Plus,
+  Minus,
 } from 'lucide-react';
 import Card from '../../../components/Card';
 import Button from '../../../components/Button';
@@ -192,6 +194,21 @@ export default function EspiaoNfeNfsePage() {
   const [notasPorCertificado, setNotasPorCertificado] = useState({});
   const [loadingNotas, setLoadingNotas] = useState({});
   const [consultando, setConsultando] = useState({});
+
+  // Seções de certificado abertas na tabela única — sempre começa vazio
+  // (tudo fechado). As notas de todos os certificados já são carregadas de
+  // qualquer jeito (ver carregarNotasDeTodosCertificados), então abrir/fechar
+  // aqui é só uma questão de mostrar/esconder linhas, não de buscar dado.
+  const [abertos, setAbertos] = useState(new Set());
+
+  function toggleAberto(certificadoId) {
+    setAbertos((prev) => {
+      const next = new Set(prev);
+      if (next.has(certificadoId)) next.delete(certificadoId);
+      else next.add(certificadoId);
+      return next;
+    });
+  }
   const [reativandoLote, setReativandoLote] = useState(false);
 
   // Notas marcadas pelo usuário — pra inativar (notas ativas) ou reativar
@@ -619,39 +636,46 @@ export default function EspiaoNfeNfsePage() {
         </div>
       </Card>
 
-      {/* Três estados das notas, no estilo de aba usado em Repasses CEF (ver
-          TABS_NOTAS) — sempre visível, mesmo sem empresa (só não faz nada
-          ainda, a ação de cada aba vem depois). */}
-      <Tabs tabs={TABS_NOTAS} activeId={abaNotas} onChange={setAbaNotas} />
+      {/* Tabs + conteúdo precisam ficar juntos, sem `space-y-*` entre eles —
+          são um item SÓ dentro do space-y-4 da página (o vão vem antes desse
+          bloco, não dentro dele), senão a margem empurra a caixa de baixo
+          pra longe da barra de abas em vez dela ficar emendada (o
+          rounded-tl-none do Card só faz efeito visual quando encostado; ver
+          o mesmo padrão em GestaoCobrancasPage.jsx). */}
+      <div>
+        {/* Três estados das notas, no estilo de aba usado em Repasses CEF
+            (ver TABS_NOTAS) — sempre visível, mesmo sem empresa (só não faz
+            nada ainda, a ação de cada aba vem depois). */}
+        <Tabs tabs={TABS_NOTAS} activeId={abaNotas} onChange={setAbaNotas} />
 
-      {!empresaId ? (
-        <Card>
-          <p className="py-8 text-center text-sm text-gray-400">
-            Selecione uma empresa acima para ver os certificados e as notas encontradas.
-          </p>
-        </Card>
-      ) : (
-        <>
-          {loadingCertificados ? (
-            <Card>
-              <p className="py-8 text-center text-sm text-gray-400">Carregando certificados...</p>
-            </Card>
-          ) : certificados.length === 0 ? (
-            <Card>
-              <p className="py-8 text-center text-sm text-gray-400">
-                Esta empresa não tem nenhum certificado digital cadastrado.
-              </p>
-            </Card>
-          ) : !filtrando && filtroAtivo && certificadosFiltrados.length === 0 ? (
-            <Card>
-              <p className="py-8 text-center text-sm text-gray-400">
-                {modoInativas
-                  ? 'Nenhum certificado tem nota inativada que corresponda a esse filtro.'
-                  : 'Nenhum certificado tem nota que corresponda a esse filtro.'}
-              </p>
-            </Card>
-          ) : (
-            <Card className="!p-0 overflow-hidden">
+        {!empresaId ? (
+          <Card className="rounded-tl-none">
+            <p className="py-8 text-center text-sm text-gray-400">
+              Selecione uma empresa acima para ver os certificados e as notas encontradas.
+            </p>
+          </Card>
+        ) : (
+          <>
+            {loadingCertificados ? (
+              <Card className="rounded-tl-none">
+                <p className="py-8 text-center text-sm text-gray-400">Carregando certificados...</p>
+              </Card>
+            ) : certificados.length === 0 ? (
+              <Card className="rounded-tl-none">
+                <p className="py-8 text-center text-sm text-gray-400">
+                  Esta empresa não tem nenhum certificado digital cadastrado.
+                </p>
+              </Card>
+            ) : !filtrando && filtroAtivo && certificadosFiltrados.length === 0 ? (
+              <Card className="rounded-tl-none">
+                <p className="py-8 text-center text-sm text-gray-400">
+                  {modoInativas
+                    ? 'Nenhum certificado tem nota inativada que corresponda a esse filtro.'
+                    : 'Nenhum certificado tem nota que corresponda a esse filtro.'}
+                </p>
+              </Card>
+            ) : (
+              <Card className="rounded-tl-none !p-0 overflow-hidden">
               {/* Uma tabela única pra empresa inteira (ver conversa: nada de
                   card separado por certificado/linha de empresa, igual ao
                   drilldown de Clusters de Clientes em Gestão de Cobranças).
@@ -695,6 +719,7 @@ export default function EspiaoNfeNfsePage() {
                     const notas = notasPorCertificado[certificado.id];
                     const carregandoNotas = Boolean(loadingNotas[certificado.id]);
                     const emConsulta = Boolean(consultando[certificado.id]);
+                    const aberto = abertos.has(certificado.id);
                     // Enquanto ainda não carregou, mostra "…" em vez de um
                     // número errado.
                     const totalNfeCard = notas ? notas.produtos.length : null;
@@ -705,6 +730,18 @@ export default function EspiaoNfeNfsePage() {
                         <tr className={vencido ? 'bg-red-50' : 'bg-gray-50'}>
                           <td colSpan={totalColunas} className="px-5 py-2.5">
                             <div className="flex flex-wrap items-center gap-x-3 gap-y-1.5">
+                              {/* Fechado por padrão (ver `abertos` — começa
+                                  vazio) — as notas já estão carregadas de
+                                  qualquer jeito, abrir só mostra as linhas. */}
+                              <button
+                                type="button"
+                                onClick={() => toggleAberto(certificado.id)}
+                                title={aberto ? 'Recolher' : 'Expandir'}
+                                className="flex h-6 w-6 shrink-0 items-center justify-center rounded-md border border-gray-300 bg-white text-gray-500 hover:border-primary-300 hover:text-primary-600"
+                              >
+                                {aberto ? <Minus size={13} /> : <Plus size={13} />}
+                              </button>
+
                               <p className="text-sm font-semibold text-gray-900">{certificado.nome}</p>
 
                               <span className="inline-flex items-center gap-2.5 text-xs text-gray-500">
@@ -773,7 +810,7 @@ export default function EspiaoNfeNfsePage() {
                           </td>
                         </tr>
 
-                        {carregandoNotas ? (
+                        {!aberto ? null : carregandoNotas ? (
                           <tr>
                             <td colSpan={totalColunas} className="px-5 py-6 text-center text-sm text-gray-400">
                               Carregando notas...
@@ -851,6 +888,7 @@ export default function EspiaoNfeNfsePage() {
           )}
         </>
       )}
+      </div>
 
       <Modal
         open={modalAgendamento}
