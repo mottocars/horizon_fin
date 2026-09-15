@@ -653,9 +653,12 @@ function KanbanRepasses({
         return (
           <div
             key={macro.value}
-            className="flex min-h-0 min-w-0 flex-1 flex-col rounded-lg border border-primary-200"
+            className="flex min-h-0 min-w-0 flex-1 flex-col overflow-hidden rounded-lg border border-primary-200"
           >
-            <div className="flex shrink-0 flex-col border-b border-primary-100 px-3 py-3">
+            {/* cursor-pointer + hover só de propósito visual por enquanto —
+                sem onClick ainda, é preparo pra uma ação futura no cabeçalho
+                (ver pedido do usuário: "só indicar que é clicável"). */}
+            <div className="flex shrink-0 cursor-pointer flex-col border-b border-primary-100 px-3 py-3 transition-colors hover:bg-primary-50/60">
               <div className="flex items-center gap-2">
                 <p className="min-w-0 flex-1 truncate text-sm font-semibold text-gray-900">{macro.label}</p>
                 <span className="shrink-0 rounded-full bg-gray-100 px-2 py-0.5 text-xs font-medium text-gray-500">
