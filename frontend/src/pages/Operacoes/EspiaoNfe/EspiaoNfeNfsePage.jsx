@@ -1,6 +1,5 @@
 import { useEffect, useMemo, useState } from 'react';
 import {
-  FileSearch,
   ChevronDown,
   ChevronRight,
   Clock,
@@ -477,48 +476,36 @@ export default function EspiaoNfeNfsePage() {
   return (
     <div className="space-y-4">
       <Card>
-        <div className="flex flex-col gap-4 lg:flex-row lg:items-center lg:justify-between">
-          <div className="flex items-center gap-2">
-            <div className="flex h-10 w-10 shrink-0 items-center justify-center rounded-xl bg-primary-50 text-primary-600">
-              <FileSearch size={20} />
-            </div>
-            <div>
-              <h2 className="text-sm font-semibold text-gray-900">Espião NFe / NFSe</h2>
-              <p className="text-xs text-gray-500">Notas Fiscais de produtos e serviço na Receita Federal</p>
-            </div>
+        <div className="flex flex-col gap-4 sm:flex-row sm:items-end">
+          <div className="min-w-0 flex-1 sm:max-w-xs">
+            <label className="mb-1 block text-sm font-medium text-gray-700">Empresa</label>
+            <SearchableSelect
+              value={empresaId}
+              onChange={handleEmpresaChange}
+              disabled={loadingEmpresas || empresaTravada}
+              options={empresas.map((empresa) => ({ value: empresa.id, label: nomeExibicaoEmpresa(empresa) }))}
+              placeholder={loadingEmpresas ? 'Carregando empresas...' : 'Selecione uma empresa'}
+              emptyMessage="Nenhuma empresa encontrada."
+            />
           </div>
 
-          <div className="flex flex-col gap-3 sm:flex-row sm:items-center">
-            <div className="sm:w-80">
-              <label className="mb-1 block text-xs font-medium text-gray-500">Empresa</label>
-              <SearchableSelect
-                value={empresaId}
-                onChange={handleEmpresaChange}
-                disabled={loadingEmpresas || empresaTravada}
-                options={empresas.map((empresa) => ({ value: empresa.id, label: nomeExibicaoEmpresa(empresa) }))}
-                placeholder={loadingEmpresas ? 'Carregando empresas...' : 'Selecione uma empresa'}
-                emptyMessage="Nenhuma empresa encontrada."
-              />
-            </div>
-
-            <div>
-              <label className="mb-1 block text-xs font-medium text-gray-500">Data início</label>
-              <input
-                type="date"
-                value={dataInicio}
-                onChange={(e) => setDataInicio(e.target.value)}
-                className="rounded-lg border border-gray-200 px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-primary-100"
-              />
-            </div>
-            <div>
-              <label className="mb-1 block text-xs font-medium text-gray-500">Data fim</label>
-              <input
-                type="date"
-                value={dataFim}
-                onChange={(e) => setDataFim(e.target.value)}
-                className="rounded-lg border border-gray-200 px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-primary-100"
-              />
-            </div>
+          <div>
+            <label className="mb-1 block text-sm font-medium text-gray-700">Data início</label>
+            <input
+              type="date"
+              value={dataInicio}
+              onChange={(e) => setDataInicio(e.target.value)}
+              className="rounded-lg border border-gray-200 px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-primary-100"
+            />
+          </div>
+          <div>
+            <label className="mb-1 block text-sm font-medium text-gray-700">Data fim</label>
+            <input
+              type="date"
+              value={dataFim}
+              onChange={(e) => setDataFim(e.target.value)}
+              className="rounded-lg border border-gray-200 px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-primary-100"
+            />
           </div>
         </div>
       </Card>
