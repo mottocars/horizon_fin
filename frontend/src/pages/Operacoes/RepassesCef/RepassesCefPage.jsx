@@ -675,7 +675,7 @@ function KanbanRepasses({
               )}
             </div>
 
-            <div className="flex min-h-0 flex-1 flex-col gap-2 overflow-y-auto p-3">
+            <div className="flex min-h-0 flex-1 flex-col gap-1.5 overflow-y-auto p-3">
               {ehReserva && loadingReservas ? (
                 <p className="py-8 text-center text-xs text-gray-400">Carregando reservas...</p>
               ) : ehReserva && reservas.length > 0 ? (
@@ -751,14 +751,14 @@ function BadgeCor({ texto, cor }) {
   if (cor) {
     return (
       <span
-        className="rounded-full px-2 py-0.5 text-[10px]"
+        className="rounded-full px-2 py-0.5 text-[9px]"
         style={{ backgroundColor: cor, color: corTextoContraste(cor) }}
       >
         {texto}
       </span>
     );
   }
-  return <span className="rounded-full bg-gray-100 px-2 py-0.5 text-[10px] text-gray-600">{texto}</span>;
+  return <span className="rounded-full bg-gray-100 px-2 py-0.5 text-[9px] text-gray-600">{texto}</span>;
 }
 
 // Última micro etapa registrada manualmente (ver "Registrar Movimentação"
@@ -767,7 +767,7 @@ function BadgeCor({ texto, cor }) {
 function UltimaMicroEtapa({ nome, data }) {
   if (!nome) return null;
   return (
-    <div className="mb-1.5 flex items-center justify-between gap-1.5 border-b border-gray-100 pb-1.5 text-[10px] font-medium text-primary-600">
+    <div className="mb-1 flex items-center justify-between gap-1.5 border-b border-gray-100 pb-1 text-[9px] font-medium text-primary-600">
       <span className="flex min-w-0 items-center gap-1">
         <History size={10} className="shrink-0" />
         <span className="truncate">{nome}</span>
@@ -786,23 +786,23 @@ function ReservaCard({ reserva, cores, mostrarDetalhes, onClick }) {
     <div
       onClick={onClick}
       title="Clique para ver o histórico de etapas"
-      className="cursor-pointer rounded-lg border border-gray-200 p-3 text-xs shadow-sm transition-colors hover:border-primary-200 hover:bg-primary-50/30"
+      className="cursor-pointer rounded-lg border border-gray-200 p-2.5 text-[11px] shadow-sm transition-colors hover:border-primary-200 hover:bg-primary-50/30"
     >
       <UltimaMicroEtapa nome={reserva.ultima_microetapa_nome} data={reserva.ultima_microetapa_data} />
-      <p className="truncate text-xs font-medium text-gray-900">{reserva.empreendimento || '—'}</p>
+      <p className="truncate text-[11px] font-medium text-gray-900">{reserva.empreendimento || '—'}</p>
       {reserva.titular_nome && (
-        <p className="mt-1 flex items-center gap-1 truncate text-gray-600">
+        <p className="mt-0.5 flex items-center gap-1 truncate text-gray-600">
           <User size={12} className="shrink-0" />
           {reserva.titular_nome}
         </p>
       )}
       {mostrarDetalhes && reserva.idreserva && (
-        <p className="mt-1 flex items-center gap-1 truncate text-gray-400" title="Código da reserva (CV)">
+        <p className="mt-0.5 flex items-center gap-1 truncate text-gray-400" title="Código da reserva (CV)">
           <Hash size={12} className="shrink-0" />
           {reserva.idreserva}
         </p>
       )}
-      <div className="mt-1.5 flex flex-wrap items-center gap-1.5">
+      <div className="mt-1 flex flex-wrap items-center gap-1">
         {reserva.tipovenda && (
           <BadgeCor texto={reserva.tipovenda} cor={cores?.tipovenda?.[reserva.tipovenda]} />
         )}
@@ -822,29 +822,29 @@ function ContratoCard({ contrato, cores, mostrarDetalhes, onClick }) {
     <div
       onClick={onClick}
       title="Clique para ver o histórico de etapas"
-      className="cursor-pointer rounded-lg border border-gray-200 p-3 text-xs shadow-sm transition-colors hover:border-primary-200 hover:bg-primary-50/30"
+      className="cursor-pointer rounded-lg border border-gray-200 p-2.5 text-[11px] shadow-sm transition-colors hover:border-primary-200 hover:bg-primary-50/30"
     >
       <UltimaMicroEtapa nome={contrato.ultima_microetapa_nome} data={contrato.ultima_microetapa_data} />
-      <p className="truncate text-xs font-medium text-gray-900">{contrato.empreendimento || '—'}</p>
+      <p className="truncate text-[11px] font-medium text-gray-900">{contrato.empreendimento || '—'}</p>
       {contrato.titular_nome && (
-        <p className="mt-1 flex items-center gap-1 truncate text-gray-600">
+        <p className="mt-0.5 flex items-center gap-1 truncate text-gray-600">
           <User size={12} className="shrink-0" />
           {contrato.titular_nome}
         </p>
       )}
       {mostrarDetalhes && contrato.idreserva && (
-        <p className="mt-1 flex items-center gap-1 truncate text-gray-400" title="Código da reserva (CV) de origem">
+        <p className="mt-0.5 flex items-center gap-1 truncate text-gray-400" title="Código da reserva (CV) de origem">
           <Hash size={12} className="shrink-0" />
           {contrato.idreserva}
         </p>
       )}
       {mostrarDetalhes && contrato.number && (
-        <p className="mt-1 flex items-center gap-1 truncate text-gray-400" title="Número do contrato">
+        <p className="mt-0.5 flex items-center gap-1 truncate text-gray-400" title="Número do contrato">
           <FileText size={12} className="shrink-0" />
           {contrato.number}
         </p>
       )}
-      <div className="mt-1.5 flex flex-wrap items-center gap-1.5">
+      <div className="mt-1 flex flex-wrap items-center gap-1">
         {contrato.tipovenda && (
           <BadgeCor texto={contrato.tipovenda} cor={cores?.tipovenda?.[contrato.tipovenda]} />
         )}
@@ -936,44 +936,44 @@ function AssinaturaCard({ assinatura, mostrarDetalhes, onClick }) {
     <div
       onClick={onClick}
       title="Clique para ver o histórico de etapas"
-      className="cursor-pointer rounded-lg border border-gray-200 p-3 text-xs shadow-sm transition-colors hover:border-primary-200 hover:bg-primary-50/30"
+      className="cursor-pointer rounded-lg border border-gray-200 p-2.5 text-[11px] shadow-sm transition-colors hover:border-primary-200 hover:bg-primary-50/30"
     >
       <UltimaMicroEtapa nome={assinatura.ultima_microetapa_nome} data={assinatura.ultima_microetapa_data} />
-      <p className="truncate text-xs font-medium text-gray-900">{assinatura.empreendimento || '—'}</p>
+      <p className="truncate text-[11px] font-medium text-gray-900">{assinatura.empreendimento || '—'}</p>
       {assinatura.titular_nome && (
-        <p className="mt-1 flex items-center gap-1 truncate text-gray-600">
+        <p className="mt-0.5 flex items-center gap-1 truncate text-gray-600">
           <User size={12} className="shrink-0" />
           {assinatura.titular_nome}
         </p>
       )}
       {mostrarDetalhes && assinatura.idreserva && (
-        <p className="mt-1 flex items-center gap-1 truncate text-gray-400" title="Código da reserva (CV) de origem">
+        <p className="mt-0.5 flex items-center gap-1 truncate text-gray-400" title="Código da reserva (CV) de origem">
           <Hash size={12} className="shrink-0" />
           {assinatura.idreserva}
         </p>
       )}
       {mostrarDetalhes && assinatura.numero_contrato && (
-        <p className="mt-1 flex items-center gap-1 truncate text-gray-400" title="Número do contrato">
+        <p className="mt-0.5 flex items-center gap-1 truncate text-gray-400" title="Número do contrato">
           <FileText size={12} className="shrink-0" />
           {assinatura.numero_contrato}
         </p>
       )}
       {mostrarDetalhes && assinatura.numero_contrato_unidade && (
-        <p className="mt-1 flex items-center gap-1 truncate text-gray-400" title="Número do contrato da unidade">
+        <p className="mt-0.5 flex items-center gap-1 truncate text-gray-400" title="Número do contrato da unidade">
           <FileText size={12} className="shrink-0" />
           {assinatura.numero_contrato_unidade}
         </p>
       )}
       {mostrarDetalhes && assinatura.data_assinatura_contrato && (
-        <p className="mt-1 flex items-center gap-1 truncate text-gray-400" title="Data de assinatura do contrato">
+        <p className="mt-0.5 flex items-center gap-1 truncate text-gray-400" title="Data de assinatura do contrato">
           <Calendar size={12} className="shrink-0" />
           {formatarData(assinatura.data_assinatura_contrato)}
         </p>
       )}
       {dias !== null && (
-        <div className="mt-1.5">
+        <div className="mt-1">
           <span
-            className={`inline-flex items-center gap-1 rounded-full px-2 py-0.5 text-[10px] font-medium ${corDiasParada(dias)}`}
+            className={`inline-flex items-center gap-1 rounded-full px-2 py-0.5 text-[9px] font-medium ${corDiasParada(dias)}`}
             title="Dias parada sem registro, desde a assinatura"
           >
             <Clock size={11} className="shrink-0" />
@@ -992,42 +992,42 @@ function RegistroCard({ registro, mostrarDetalhes, onClick }) {
     <div
       onClick={onClick}
       title="Clique para ver o histórico de etapas"
-      className="cursor-pointer rounded-lg border border-gray-200 p-3 text-xs shadow-sm transition-colors hover:border-primary-200 hover:bg-primary-50/30"
+      className="cursor-pointer rounded-lg border border-gray-200 p-2.5 text-[11px] shadow-sm transition-colors hover:border-primary-200 hover:bg-primary-50/30"
     >
       <UltimaMicroEtapa nome={registro.ultima_microetapa_nome} data={registro.ultima_microetapa_data} />
-      <p className="truncate text-xs font-medium text-gray-900">{registro.empreendimento || '—'}</p>
+      <p className="truncate text-[11px] font-medium text-gray-900">{registro.empreendimento || '—'}</p>
       {registro.titular_nome && (
-        <p className="mt-1 flex items-center gap-1 truncate text-gray-600">
+        <p className="mt-0.5 flex items-center gap-1 truncate text-gray-600">
           <User size={12} className="shrink-0" />
           {registro.titular_nome}
         </p>
       )}
       {mostrarDetalhes && registro.idreserva && (
-        <p className="mt-1 flex items-center gap-1 truncate text-gray-400" title="Código da reserva (CV) de origem">
+        <p className="mt-0.5 flex items-center gap-1 truncate text-gray-400" title="Código da reserva (CV) de origem">
           <Hash size={12} className="shrink-0" />
           {registro.idreserva}
         </p>
       )}
       {mostrarDetalhes && registro.numero_contrato && (
-        <p className="mt-1 flex items-center gap-1 truncate text-gray-400" title="Número do contrato">
+        <p className="mt-0.5 flex items-center gap-1 truncate text-gray-400" title="Número do contrato">
           <FileText size={12} className="shrink-0" />
           {registro.numero_contrato}
         </p>
       )}
       {mostrarDetalhes && registro.numero_contrato_unidade && (
-        <p className="mt-1 flex items-center gap-1 truncate text-gray-400" title="Número do contrato da unidade">
+        <p className="mt-0.5 flex items-center gap-1 truncate text-gray-400" title="Número do contrato da unidade">
           <FileText size={12} className="shrink-0" />
           {registro.numero_contrato_unidade}
         </p>
       )}
       {mostrarDetalhes && registro.data_assinatura_contrato && (
-        <p className="mt-1 flex items-center gap-1 truncate text-gray-400" title="Data de assinatura do contrato">
+        <p className="mt-0.5 flex items-center gap-1 truncate text-gray-400" title="Data de assinatura do contrato">
           <Calendar size={12} className="shrink-0" />
           {formatarData(registro.data_assinatura_contrato)}
         </p>
       )}
       {mostrarDetalhes && registro.data_registro && (
-        <p className="mt-1 flex items-center gap-1 truncate text-gray-400" title="Data de registro (CRI)">
+        <p className="mt-0.5 flex items-center gap-1 truncate text-gray-400" title="Data de registro (CRI)">
           <CalendarCheck size={12} className="shrink-0" />
           {formatarData(registro.data_registro)}
         </p>
