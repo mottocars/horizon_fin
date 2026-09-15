@@ -1,7 +1,5 @@
 import { useEffect, useMemo, useState } from 'react';
 import {
-  ChevronDown,
-  ChevronRight,
   Clock,
   Download,
   FileText,
@@ -85,6 +83,88 @@ function estaVencido(validadeAte) {
   return new Date(validadeAte) < new Date();
 }
 
+// Uma linha de nota dentro da tabela única (ver bloco de render do
+// certificado) — extraída à parte porque agora é usada duas vezes seguidas
+// (produtos e serviços do mesmo certificado, um embaixo do outro), não mais
+// escolhida por uma aba.
+function LinhaNota({ nota, modoInativas, selecionada, onToggleSelecionada, onBaixarPdf, onBaixar }) {
+  const { Icon: IconeSituacao, colorClass } = infoSituacao(nota.situacao);
+  return (
+    <tr className="border-b border-gray-50 last:border-0">
+      <td className="py-2.5 pl-5 pr-3">
+        <input
+          type="checkbox"
+          checked={selecionada}
+          onChange={onToggleSelecionada}
+          className="h-4 w-4 rounded border-gray-300 text-primary-600 focus:ring-primary-100"
+        />
+      </td>
+      <td className="py-2.5 px-3 font-mono text-xs text-gray-600 whitespace-nowrap">
+        {nota.numero_nota || '—'}
+        {nota.serie_nota && <span className="text-gray-400"> / {nota.serie_nota}</span>}
+      </td>
+      <td className="py-2.5 px-3 text-gray-900">{nota.emissor || '—'}</td>
+      <td className="py-2.5 px-3 text-gray-600">{nota.destinatario || '—'}</td>
+      <td className="py-2.5 px-3 text-gray-600">{formatarData(nota.data_emissao)}</td>
+      <td className="py-2.5 px-3">
+        {!nota.situacao || nota.situacao === 'Emitida' ? (
+          <span className="text-xs text-gray-400">Emitida</span>
+        ) : (
+          <div className="group relative inline-block">
+            <IconeSituacao size={17} className={colorClass} />
+            {/* Abre pra cima e pra esquerda: a coluna fica perto da borda
+                direita da tabela, e não dá pra saber se é uma das últimas
+                linhas do certificado (a tabela inteira rola junto agora). */}
+            <div className="pointer-events-none absolute bottom-full right-0 z-30 mb-1.5 hidden w-64 rounded-lg bg-gray-900 px-3 py-2 text-xs leading-snug text-white shadow-lg group-hover:block">
+              <p className="mb-1 font-semibold">{nota.situacao}</p>
+              <p>{explicarSituacao(nota.situacao)}</p>
+            </div>
+          </div>
+        )}
+      </td>
+      {modoInativas && (
+        <td className="py-2.5 px-3">
+          {/* Hover mostra o motivo dado pelo usuário na hora da inativação. */}
+          <div className="group relative inline-block">
+            <span className="inline-flex items-center gap-1.5 rounded-full bg-red-100 px-2.5 py-0.5 text-xs font-semibold text-red-700">
+              <User size={12} />
+              {nota.inativada_por_nome || 'Usuário removido'}
+            </span>
+            <div className="pointer-events-none absolute bottom-full right-0 z-30 mb-1.5 hidden w-64 rounded-lg bg-gray-900 px-3 py-2 text-xs leading-snug text-white shadow-lg group-hover:block">
+              <p className="mb-1 flex items-center gap-1 font-semibold text-amber-300">
+                <AlertTriangle size={12} />
+                Motivo da inativação
+              </p>
+              <p>{nota.motivo_inativacao || 'Nenhum motivo informado.'}</p>
+              <p className="mt-1 text-gray-400">Inativada em {formatarDataHora(nota.inativada_em)}</p>
+            </div>
+          </div>
+        </td>
+      )}
+      <td className="py-2.5 pl-3 pr-5 text-right">
+        <div className="flex items-center justify-end gap-1">
+          <button
+            type="button"
+            title="Baixar PDF"
+            onClick={onBaixarPdf}
+            className="inline-flex h-8 w-8 items-center justify-center rounded-md text-gray-400 hover:bg-gray-100 hover:text-primary-600"
+          >
+            <FileText size={14} />
+          </button>
+          <button
+            type="button"
+            title="Baixar XML"
+            onClick={onBaixar}
+            className="inline-flex h-8 w-8 items-center justify-center rounded-md text-gray-400 hover:bg-gray-100 hover:text-primary-600"
+          >
+            <Download size={14} />
+          </button>
+        </div>
+      </td>
+    </tr>
+  );
+}
+
 export default function EspiaoNfeNfsePage() {
   const alert = useAlert();
   const confirm = useConfirm();
@@ -109,10 +189,8 @@ export default function EspiaoNfeNfsePage() {
   const [dataInicio, setDataInicio] = useState(hojeISO());
   const [dataFim, setDataFim] = useState(hojeISO());
 
-  const [expandidos, setExpandidos] = useState(new Set());
   const [notasPorCertificado, setNotasPorCertificado] = useState({});
   const [loadingNotas, setLoadingNotas] = useState({});
-  const [abaPorCertificado, setAbaPorCertificado] = useState({});
   const [consultando, setConsultando] = useState({});
   const [reativandoLote, setReativandoLote] = useState(false);
 
@@ -187,7 +265,6 @@ export default function EspiaoNfeNfsePage() {
 
   useEffect(() => {
     setCertificados([]);
-    setExpandidos(new Set());
     setNotasPorCertificado({});
     setSelecionadas(new Map());
     carregarCertificados();
@@ -199,11 +276,10 @@ export default function EspiaoNfeNfsePage() {
   }
 
   // Trocar entre notas ativas/inativadas é um dataset diferente por
-  // certificado — zera cards abertos, notas em cache e seleção, mas mantém
-  // empresa, datas e filtros exatamente como estavam.
+  // certificado — zera notas em cache e seleção, mas mantém empresa, datas e
+  // filtros exatamente como estavam.
   function toggleModoInativas() {
     setModoInativas((prev) => !prev);
-    setExpandidos(new Set());
     setNotasPorCertificado({});
     setSelecionadas(new Map());
   }
@@ -233,46 +309,24 @@ export default function EspiaoNfeNfsePage() {
       .finally(() => setLoadingNotas((prev) => ({ ...prev, [certificadoId]: false })));
   }
 
-  function toggleExpandido(certificadoId) {
-    setExpandidos((prev) => {
-      const next = new Set(prev);
-      if (next.has(certificadoId)) {
-        next.delete(certificadoId);
-      } else {
-        next.add(certificadoId);
-        // O carregamento em bloco (carregarNotasDeTodosCertificados) já
-        // busca as notas de todo mundo pra saber quem tem nota e quem não
-        // tem — se já tiver em cache, não busca de novo.
-        if (!notasPorCertificado[certificadoId]) carregarNotas(certificadoId);
-      }
-      return next;
-    });
-  }
-
-  // Busca as notas de TODOS os certificados da empresa (não só os
-  // expandidos) — necessário sempre, porque o card mostra a contagem já
-  // filtrada pelo período/busca atual mesmo fechado (é a mesma contagem que
-  // aparece ao expandir, só que "adiantada"). Com busca ativa, também serve
-  // pra abrir automaticamente só quem bate com o filtro.
-  async function carregarNotasDeTodosCertificados(autoExpandir) {
+  // Busca as notas de TODOS os certificados da empresa de uma vez — a tela
+  // não tem mais expandir/recolher por certificado (ver comentário no bloco
+  // de render), então isso é o único jeito de popular a tabela inteira.
+  async function carregarNotasDeTodosCertificados() {
     setFiltrando(true);
     try {
       const buscar = modoInativas ? listNotasInativadasPorCertificadoEspiao : listNotasPorCertificadoEspiao;
-      const resultados = await Promise.all(
+      await Promise.all(
         certificados.map(async (certificado) => {
           setLoadingNotas((prev) => ({ ...prev, [certificado.id]: true }));
           try {
             const dados = await buscar(certificado.id, { dataInicio, dataFim, ...filtros });
             setNotasPorCertificado((prev) => ({ ...prev, [certificado.id]: dados }));
-            return { id: certificado.id, temResultado: dados.produtos.length > 0 || dados.servicos.length > 0 };
           } finally {
             setLoadingNotas((prev) => ({ ...prev, [certificado.id]: false }));
           }
         })
       );
-      if (autoExpandir) {
-        setExpandidos(new Set(resultados.filter((r) => r.temResultado).map((r) => r.id)));
-      }
     } finally {
       setFiltrando(false);
     }
@@ -280,25 +334,13 @@ export default function EspiaoNfeNfsePage() {
 
   useEffect(() => {
     if (certificados.length === 0) return;
-    // autoExpandir (abrir automaticamente quem bate) só faz sentido com
-    // busca ativa — sem busca, a contagem no card só atualiza, sem mexer
-    // no que o usuário já tinha expandido/recolhido manualmente.
-    carregarNotasDeTodosCertificados(filtroAtivo);
+    carregarNotasDeTodosCertificados();
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [dataInicio, dataFim, filtros, certificados, modoInativas]);
 
   function limparFiltros() {
     setFiltroTexto(EMPTY_FILTROS);
     setFiltros(EMPTY_FILTROS);
-    setExpandidos(new Set());
-  }
-
-  function abaAtiva(certificadoId) {
-    return abaPorCertificado[certificadoId] || 'produtos';
-  }
-
-  function setAba(certificadoId, aba) {
-    setAbaPorCertificado((prev) => ({ ...prev, [certificadoId]: aba }));
   }
 
   async function handleConsultar(certificadoId) {
@@ -306,7 +348,7 @@ export default function EspiaoNfeNfsePage() {
     try {
       const resultado = await consultarCertificadoEspiao(certificadoId);
       await carregarCertificados();
-      if (expandidos.has(certificadoId)) await carregarNotas(certificadoId);
+      await carregarNotas(certificadoId);
 
       if (!resultado.ok) {
         await alert({
@@ -490,6 +532,11 @@ export default function EspiaoNfeNfsePage() {
     }
   }
 
+  // Checkbox + Nº/Série + Emissor + Destinatário + Emissão + Situação +
+  // [Inativada por] + Ações — quantas colunas a tabela única tem, pro
+  // colSpan das linhas de seção (certificado, Produtos, Serviços).
+  const totalColunas = modoInativas ? 8 : 7;
+
   return (
     <div className="space-y-4">
       <Card>
@@ -604,266 +651,203 @@ export default function EspiaoNfeNfsePage() {
               </p>
             </Card>
           ) : (
-            <div className="space-y-2">
-              {filtrando && (
-                <p className="flex items-center gap-1.5 text-xs text-gray-400">
-                  <Loader2 size={12} className="animate-spin" />
-                  Verificando notas em todos os certificados...
-                </p>
-              )}
-              {certificadosFiltrados.map((certificado) => {
-                const vencido = estaVencido(certificado.validade_ate);
-                const expandido = expandidos.has(certificado.id);
-                const notas = notasPorCertificado[certificado.id];
-                const carregandoNotas = Boolean(loadingNotas[certificado.id]);
-                const aba = abaAtiva(certificado.id);
-                const totalNotas = notas ? notas.produtos.length + notas.servicos.length : 0;
-                const emConsulta = Boolean(consultando[certificado.id]);
-                // Mesma contagem que aparece dentro do card ao expandir (já
-                // filtrada pelo período/busca atual) — só que "adiantada",
-                // direto no cabeçalho, sem precisar abrir. Enquanto ainda não
-                // carregou, mostra "…" em vez de um número errado.
-                const totalNfeCard = notas ? notas.produtos.length : null;
-                const totalNfseCard = notas ? notas.servicos.length : null;
+            <Card className="!p-0 overflow-hidden">
+              {/* Uma tabela única pra empresa inteira (ver conversa: nada de
+                  card separado por certificado/linha de empresa, igual ao
+                  drilldown de Clusters de Clientes em Gestão de Cobranças).
+                  Cada certificado vira uma linha de seção (com nome, contagem
+                  e ações — sem mais expandir/recolher, tudo fica visível de
+                  cara), seguida de uma linha "Produtos (NF-e)" e as notas,
+                  depois "Serviços (NFS-e)" e as notas — um <tbody> por
+                  certificado, um <thead> só, no topo da tabela inteira. */}
+              <div className="overflow-x-auto">
+                <table className="w-full text-left text-sm">
+                  <thead>
+                    <tr className="border-b border-gray-100 text-xs uppercase tracking-wide text-gray-400">
+                      <th className="py-2 pl-5 pr-3 font-medium">
+                        <span className="sr-only">Selecionar</span>
+                      </th>
+                      <th className="py-2 px-3 font-medium whitespace-nowrap">Nº / Série</th>
+                      <th className="py-2 px-3 font-medium">Emissor</th>
+                      <th className="py-2 px-3 font-medium">Destinatário</th>
+                      <th className="py-2 px-3 font-medium">Emissão</th>
+                      <th className="py-2 px-3 font-medium">Situação</th>
+                      {modoInativas && <th className="py-2 px-3 font-medium">Inativada por</th>}
+                      <th className="py-2 pl-3 pr-5 font-medium"></th>
+                    </tr>
+                  </thead>
 
-                return (
-                  <Card key={certificado.id} className="!p-0 overflow-hidden">
-                    <div
-                      role="button"
-                      tabIndex={0}
-                      onClick={() => toggleExpandido(certificado.id)}
-                      onKeyDown={(e) => {
-                        if (e.key === 'Enter' || e.key === ' ') toggleExpandido(certificado.id);
-                      }}
-                      className={`flex min-h-[52px] w-full cursor-pointer items-center gap-3 px-5 py-2.5 text-left hover:bg-gray-50 ${
-                        vencido ? 'border-l-4 border-l-red-500 bg-red-100' : ''
-                      }`}
-                    >
-                      {expandido ? (
-                        <ChevronDown size={18} className="shrink-0 text-gray-400" />
-                      ) : (
-                        <ChevronRight size={18} className="shrink-0 text-gray-400" />
-                      )}
-
-                      <div className="min-w-0 flex-1">
-                        <p className="truncate text-sm font-semibold text-gray-900">{certificado.nome}</p>
-                      </div>
-
-                      <div className="flex shrink-0 items-center gap-2">
-                        <div className="flex items-center gap-2.5 text-xs text-gray-500">
-                          <span className="inline-flex items-center gap-1">
-                            <Package size={12} />
-                            {totalNfeCard === null ? '…' : totalNfeCard} produto
-                            {totalNfeCard !== 1 ? 's' : ''}
-                          </span>
-                          <span className="inline-flex items-center gap-1">
-                            <Wrench size={12} />
-                            {totalNfseCard === null ? '…' : totalNfseCard} serviço
-                            {totalNfseCard !== 1 ? 's' : ''}
-                          </span>
-                        </div>
-
-                        {!modoInativas && certificado.ultima_consulta_em && (
-                          <span className="inline-flex items-center gap-1.5 rounded-full bg-gray-100 px-2.5 py-1 text-xs font-medium text-gray-600">
-                            <Clock size={12} />
-                            Última consulta: {formatarDataHora(certificado.ultima_consulta_em)}
-                          </span>
-                        )}
-
-                        {vencido ? (
-                          <span
-                            title="Certificado vencido — não é possível consultar novas notas com ele"
-                            className="inline-flex items-center gap-1.5 rounded-full bg-red-600 px-3 py-1.5 text-xs font-semibold text-white"
-                          >
-                            <AlertTriangle size={12} />
-                            Certificado vencido
-                          </span>
-                        ) : modoInativas ? null : certificado.ultima_consulta_em ? (
-                          <IconButton
-                            title="Consultar novamente"
-                            onClick={(e) => {
-                              e.stopPropagation();
-                              if (!emConsulta) handleConsultar(certificado.id);
-                            }}
-                            className="hover:text-primary-600"
-                          >
-                            {emConsulta ? (
-                              <Loader2 size={15} className="animate-spin" />
-                            ) : (
-                              <RefreshCw size={15} />
-                            )}
-                          </IconButton>
-                        ) : (
-                          <span
-                            role="button"
-                            onClick={(e) => {
-                              e.stopPropagation();
-                              if (!emConsulta) handleConsultar(certificado.id);
-                            }}
-                            className={`inline-flex items-center gap-1.5 rounded-full px-3 py-1.5 text-xs font-semibold text-white ${
-                              emConsulta ? 'bg-primary-400' : 'bg-primary-600 hover:bg-primary-700'
-                            }`}
-                          >
-                            {emConsulta ? (
-                              <Loader2 size={12} className="animate-spin" />
-                            ) : (
-                              <RefreshCw size={12} />
-                            )}
-                            Gerar 1ª Consulta
-                          </span>
-                        )}
-                      </div>
-                    </div>
-
-                    {expandido && (
-                      <div className="border-t border-gray-100 px-5 py-4">
-                        {carregandoNotas ? (
-                          <p className="py-6 text-center text-sm text-gray-400">Carregando notas...</p>
-                        ) : totalNotas === 0 ? (
-                          <p className="py-6 text-center text-sm text-gray-400">
-                            {modoInativas
-                              ? 'Nenhuma nota inativada no período selecionado.'
-                              : 'Nenhuma nota encontrada no período selecionado.'}
+                  {filtrando && (
+                    <tbody>
+                      <tr>
+                        <td colSpan={totalColunas} className="px-5 py-2.5">
+                          <p className="flex items-center gap-1.5 text-xs text-gray-400">
+                            <Loader2 size={12} className="animate-spin" />
+                            Verificando notas em todos os certificados...
                           </p>
+                        </td>
+                      </tr>
+                    </tbody>
+                  )}
+
+                  {certificadosFiltrados.map((certificado) => {
+                    const vencido = estaVencido(certificado.validade_ate);
+                    const notas = notasPorCertificado[certificado.id];
+                    const carregandoNotas = Boolean(loadingNotas[certificado.id]);
+                    const emConsulta = Boolean(consultando[certificado.id]);
+                    // Enquanto ainda não carregou, mostra "…" em vez de um
+                    // número errado.
+                    const totalNfeCard = notas ? notas.produtos.length : null;
+                    const totalNfseCard = notas ? notas.servicos.length : null;
+
+                    return (
+                      <tbody key={certificado.id} className="border-b-8 border-gray-50 last:border-0">
+                        <tr className={vencido ? 'bg-red-50' : 'bg-gray-50'}>
+                          <td colSpan={totalColunas} className="px-5 py-2.5">
+                            <div className="flex flex-wrap items-center gap-x-3 gap-y-1.5">
+                              <p className="text-sm font-semibold text-gray-900">{certificado.nome}</p>
+
+                              <span className="inline-flex items-center gap-2.5 text-xs text-gray-500">
+                                <span className="inline-flex items-center gap-1">
+                                  <Package size={12} />
+                                  {totalNfeCard === null ? '…' : totalNfeCard} produto
+                                  {totalNfeCard !== 1 ? 's' : ''}
+                                </span>
+                                <span className="inline-flex items-center gap-1">
+                                  <Wrench size={12} />
+                                  {totalNfseCard === null ? '…' : totalNfseCard} serviço
+                                  {totalNfseCard !== 1 ? 's' : ''}
+                                </span>
+                              </span>
+
+                              {!modoInativas && certificado.ultima_consulta_em && (
+                                <span className="inline-flex items-center gap-1.5 rounded-full bg-white px-2.5 py-1 text-xs font-medium text-gray-600">
+                                  <Clock size={12} />
+                                  Última consulta: {formatarDataHora(certificado.ultima_consulta_em)}
+                                </span>
+                              )}
+
+                              <div className="ml-auto flex shrink-0 items-center gap-2">
+                                {vencido ? (
+                                  <span
+                                    title="Certificado vencido — não é possível consultar novas notas com ele"
+                                    className="inline-flex items-center gap-1.5 rounded-full bg-red-600 px-3 py-1.5 text-xs font-semibold text-white"
+                                  >
+                                    <AlertTriangle size={12} />
+                                    Certificado vencido
+                                  </span>
+                                ) : modoInativas ? null : certificado.ultima_consulta_em ? (
+                                  <IconButton
+                                    title="Consultar novamente"
+                                    onClick={() => {
+                                      if (!emConsulta) handleConsultar(certificado.id);
+                                    }}
+                                    className="hover:text-primary-600"
+                                  >
+                                    {emConsulta ? (
+                                      <Loader2 size={15} className="animate-spin" />
+                                    ) : (
+                                      <RefreshCw size={15} />
+                                    )}
+                                  </IconButton>
+                                ) : (
+                                  <span
+                                    role="button"
+                                    onClick={() => {
+                                      if (!emConsulta) handleConsultar(certificado.id);
+                                    }}
+                                    className={`inline-flex items-center gap-1.5 rounded-full px-3 py-1.5 text-xs font-semibold text-white ${
+                                      emConsulta ? 'bg-primary-400' : 'bg-primary-600 hover:bg-primary-700'
+                                    }`}
+                                  >
+                                    {emConsulta ? (
+                                      <Loader2 size={12} className="animate-spin" />
+                                    ) : (
+                                      <RefreshCw size={12} />
+                                    )}
+                                    Gerar 1ª Consulta
+                                  </span>
+                                )}
+                              </div>
+                            </div>
+                          </td>
+                        </tr>
+
+                        {carregandoNotas ? (
+                          <tr>
+                            <td colSpan={totalColunas} className="px-5 py-6 text-center text-sm text-gray-400">
+                              Carregando notas...
+                            </td>
+                          </tr>
                         ) : (
                           <>
-                            <div className="mb-3 flex gap-2">
-                              <button
-                                type="button"
-                                onClick={() => setAba(certificado.id, 'produtos')}
-                                className={`inline-flex items-center gap-1.5 rounded-full px-3 py-1.5 text-xs font-medium transition-colors ${
-                                  aba === 'produtos'
-                                    ? 'bg-primary-50 text-primary-600'
-                                    : 'text-gray-500 hover:bg-gray-50'
-                                }`}
-                              >
-                                <Package size={13} />
-                                Produtos (NF-e) · {notas.produtos.length}
-                              </button>
-                              <button
-                                type="button"
-                                onClick={() => setAba(certificado.id, 'servicos')}
-                                className={`inline-flex items-center gap-1.5 rounded-full px-3 py-1.5 text-xs font-medium transition-colors ${
-                                  aba === 'servicos'
-                                    ? 'bg-primary-50 text-primary-600'
-                                    : 'text-gray-500 hover:bg-gray-50'
-                                }`}
-                              >
-                                <Wrench size={13} />
-                                Serviços (NFS-e) · {notas.servicos.length}
-                              </button>
-                            </div>
+                            <tr>
+                              <td colSpan={totalColunas} className="px-5 pb-1.5 pt-3 text-xs font-semibold text-gray-500">
+                                <span className="inline-flex items-center gap-1.5">
+                                  <Package size={13} />
+                                  Produtos (NF-e) · {notas ? notas.produtos.length : 0}
+                                </span>
+                              </td>
+                            </tr>
+                            {!notas || notas.produtos.length === 0 ? (
+                              <tr>
+                                <td colSpan={totalColunas} className="px-5 pb-2.5 text-xs text-gray-400">
+                                  {modoInativas
+                                    ? 'Nenhum produto inativado no período selecionado.'
+                                    : 'Nenhum produto encontrado no período selecionado.'}
+                                </td>
+                              </tr>
+                            ) : (
+                              notas.produtos.map((nota) => (
+                                <LinhaNota
+                                  key={nota.id}
+                                  nota={nota}
+                                  modoInativas={modoInativas}
+                                  selecionada={selecionadas.has(nota.id)}
+                                  onToggleSelecionada={() => toggleSelecionada(certificado.id, 'produtos', nota)}
+                                  onBaixarPdf={() => handleDownloadPdf(nota)}
+                                  onBaixar={() => handleDownload(nota)}
+                                />
+                              ))
+                            )}
 
-                            <table className="w-full text-left text-sm">
-                              <thead>
-                                <tr className="border-b border-gray-100 text-xs uppercase tracking-wide text-gray-400">
-                                  <th className="py-2 pr-3 font-medium">
-                                    <span className="sr-only">Selecionar</span>
-                                  </th>
-                                  <th className="py-2 px-3 font-medium whitespace-nowrap">Nº / Série</th>
-                                  <th className="py-2 px-3 font-medium">Emissor</th>
-                                  <th className="py-2 px-3 font-medium">Destinatário</th>
-                                  <th className="py-2 px-3 font-medium">Emissão</th>
-                                  <th className="py-2 px-3 font-medium">Situação</th>
-                                  {modoInativas && <th className="py-2 px-3 font-medium">Inativada por</th>}
-                                  <th className="py-2 pl-3 font-medium"></th>
-                                </tr>
-                              </thead>
-                              <tbody>
-                                {(aba === 'produtos' ? notas.produtos : notas.servicos).map((nota) => {
-                                  const { Icon: IconeSituacao, colorClass } = infoSituacao(nota.situacao);
-                                  return (
-                                    <tr key={nota.id} className="border-b border-gray-50 last:border-0">
-                                      <td className="py-2.5 pr-3">
-                                        <input
-                                          type="checkbox"
-                                          checked={selecionadas.has(nota.id)}
-                                          onChange={() => toggleSelecionada(certificado.id, aba, nota)}
-                                          className="h-4 w-4 rounded border-gray-300 text-primary-600 focus:ring-primary-100"
-                                        />
-                                      </td>
-                                      <td className="py-2.5 px-3 font-mono text-xs text-gray-600 whitespace-nowrap">
-                                        {nota.numero_nota || '—'}
-                                        {nota.serie_nota && (
-                                          <span className="text-gray-400"> / {nota.serie_nota}</span>
-                                        )}
-                                      </td>
-                                      <td className="py-2.5 px-3 text-gray-900">{nota.emissor || '—'}</td>
-                                      <td className="py-2.5 px-3 text-gray-600">{nota.destinatario || '—'}</td>
-                                      <td className="py-2.5 px-3 text-gray-600">
-                                        {formatarData(nota.data_emissao)}
-                                      </td>
-                                      <td className="py-2.5 px-3">
-                                        {!nota.situacao || nota.situacao === 'Emitida' ? (
-                                          <span className="text-xs text-gray-400">Emitida</span>
-                                        ) : (
-                                          <div className="group relative inline-block">
-                                            <IconeSituacao size={17} className={colorClass} />
-                                            {/* Abre pra cima e pra esquerda: o card tem
-                                                overflow-hidden (bordas arredondadas), a
-                                                última linha não tem espaço abaixo, e essa
-                                                coluna fica perto da borda direita da tabela. */}
-                                            <div className="pointer-events-none absolute bottom-full right-0 z-30 mb-1.5 hidden w-64 rounded-lg bg-gray-900 px-3 py-2 text-xs leading-snug text-white shadow-lg group-hover:block">
-                                              <p className="mb-1 font-semibold">{nota.situacao}</p>
-                                              <p>{explicarSituacao(nota.situacao)}</p>
-                                            </div>
-                                          </div>
-                                        )}
-                                      </td>
-                                      {modoInativas && (
-                                        <td className="py-2.5 px-3">
-                                          {/* Hover mostra o motivo dado pelo usuário na hora da inativação. */}
-                                          <div className="group relative inline-block">
-                                            <span className="inline-flex items-center gap-1.5 rounded-full bg-red-100 px-2.5 py-0.5 text-xs font-semibold text-red-700">
-                                              <User size={12} />
-                                              {nota.inativada_por_nome || 'Usuário removido'}
-                                            </span>
-                                            <div className="pointer-events-none absolute bottom-full right-0 z-30 mb-1.5 hidden w-64 rounded-lg bg-gray-900 px-3 py-2 text-xs leading-snug text-white shadow-lg group-hover:block">
-                                              <p className="mb-1 flex items-center gap-1 font-semibold text-amber-300">
-                                                <AlertTriangle size={12} />
-                                                Motivo da inativação
-                                              </p>
-                                              <p>{nota.motivo_inativacao || 'Nenhum motivo informado.'}</p>
-                                              <p className="mt-1 text-gray-400">
-                                                Inativada em {formatarDataHora(nota.inativada_em)}
-                                              </p>
-                                            </div>
-                                          </div>
-                                        </td>
-                                      )}
-                                      <td className="py-2.5 pl-3 text-right">
-                                        <div className="flex items-center justify-end gap-1">
-                                          <button
-                                            type="button"
-                                            title="Baixar PDF"
-                                            onClick={() => handleDownloadPdf(nota)}
-                                            className="inline-flex h-8 w-8 items-center justify-center rounded-md text-gray-400 hover:bg-gray-100 hover:text-primary-600"
-                                          >
-                                            <FileText size={14} />
-                                          </button>
-                                          <button
-                                            type="button"
-                                            title="Baixar XML"
-                                            onClick={() => handleDownload(nota)}
-                                            className="inline-flex h-8 w-8 items-center justify-center rounded-md text-gray-400 hover:bg-gray-100 hover:text-primary-600"
-                                          >
-                                            <Download size={14} />
-                                          </button>
-                                        </div>
-                                      </td>
-                                    </tr>
-                                  );
-                                })}
-                              </tbody>
-                            </table>
+                            <tr>
+                              <td colSpan={totalColunas} className="px-5 pb-1.5 pt-3 text-xs font-semibold text-gray-500">
+                                <span className="inline-flex items-center gap-1.5">
+                                  <Wrench size={13} />
+                                  Serviços (NFS-e) · {notas ? notas.servicos.length : 0}
+                                </span>
+                              </td>
+                            </tr>
+                            {!notas || notas.servicos.length === 0 ? (
+                              <tr>
+                                <td colSpan={totalColunas} className="px-5 pb-2.5 text-xs text-gray-400">
+                                  {modoInativas
+                                    ? 'Nenhum serviço inativado no período selecionado.'
+                                    : 'Nenhum serviço encontrado no período selecionado.'}
+                                </td>
+                              </tr>
+                            ) : (
+                              notas.servicos.map((nota) => (
+                                <LinhaNota
+                                  key={nota.id}
+                                  nota={nota}
+                                  modoInativas={modoInativas}
+                                  selecionada={selecionadas.has(nota.id)}
+                                  onToggleSelecionada={() => toggleSelecionada(certificado.id, 'servicos', nota)}
+                                  onBaixarPdf={() => handleDownloadPdf(nota)}
+                                  onBaixar={() => handleDownload(nota)}
+                                />
+                              ))
+                            )}
                           </>
                         )}
-                      </div>
-                    )}
-                  </Card>
-                );
-              })}
-            </div>
+                      </tbody>
+                    );
+                  })}
+                </table>
+              </div>
+            </Card>
           )}
         </>
       )}
