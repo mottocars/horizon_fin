@@ -1,6 +1,7 @@
 import { useCallback, useEffect, useMemo, useState } from 'react';
 import {
   AlertTriangle,
+  ArrowLeft,
   Building2,
   Calendar,
   CalendarCheck,
@@ -17,7 +18,6 @@ import {
   User,
 } from 'lucide-react';
 import Card from '../../../components/Card';
-import Modal from '../../../components/Modal';
 import SearchableSelect from '../../../components/SearchableSelect';
 import Tabs from '../../../components/Tabs';
 import { listEmpresas } from '../../../api/empresas.api';
@@ -407,6 +407,61 @@ export default function RepassesCefPage() {
 
   return (
     <div className="flex h-full flex-col gap-4">
+      <ConfigurarFiltrosModal
+        open={modalFiltrosAberto}
+        onClose={() => setModalFiltrosAberto(false)}
+        empresaId={empresaId}
+        onFiltrosSalvos={() => {
+          loadReservas();
+          loadCores();
+          loadContratos();
+        }}
+      />
+
+      <AtualizacaoLogModal
+        open={modalLogAberto}
+        onClose={() => setModalLogAberto(false)}
+        logs={logsAtualizacao}
+      />
+
+      <HistoricoEtapasModal
+        open={Boolean(historicoAberto)}
+        onClose={() => setHistoricoAberto(null)}
+        empresaId={empresaId}
+        identificador={historicoAberto}
+        onSalvo={() => {
+          // Também dispara ao registrar uma micro etapa manual (qualquer
+          // bucket, inclusive Reserva) — recarrega os quatro pra mostrar a
+          // "última etapa" nova no card sem precisar atualizar a tela.
+          // Salvar o Nº Contrato Caixa, especificamente, liga o contrato a
+          // uma unidade — o card pode sair do bucket Contrato e entrar em
+          // Assinatura ou Registro (dependendo se essa unidade já tem data
+          // de registro), então os quatro precisam recarregar mesmo aqui.
+          loadReservas();
+          loadContratos();
+          loadAssinaturas();
+          loadRegistros();
+          loadUltimasAtualizacoes();
+        }}
+      />
+
+      {detalhamentoAberto ? (
+        // Não é uma janela flutuante: ocupa o mesmo espaço combinado da caixa
+        // de filtros + caixa do kanban logo abaixo (ver DetalhamentoInline),
+        // como se fosse a mesma tela "aprofundada" num bucket. HistoricoEtapasModal
+        // continua sendo um Modal de verdade por cima — clicar num card do
+        // detalhamento não sai dessa tela.
+        <DetalhamentoInline
+          macro={detalhamentoAberto}
+          empresaId={empresaId}
+          cards={cardsDetalhamento}
+          cores={cores}
+          mostrarDetalhes={mostrarDetalhes}
+          onVoltar={() => setDetalhamentoAberto(null)}
+          onAbrirHistorico={(tipo, id) => setHistoricoAberto({ tipo, id })}
+        />
+      ) : (
+        <>
       <Card className="shrink-0">
         <div className="flex flex-col gap-4 sm:flex-row sm:items-end">
           <div className="min-w-0 flex-1 sm:max-w-xs">
@@ -512,60 +567,6 @@ export default function RepassesCefPage() {
         </div>
       </Card>
 
-      <ConfigurarFiltrosModal
-        open={modalFiltrosAberto}
-        onClose={() => setModalFiltrosAberto(false)}
-        empresaId={empresaId}
-        onFiltrosSalvos={() => {
-          loadReservas();
-          loadCores();
-          loadContratos();
-        }}
-      />
-
-      <AtualizacaoLogModal
-        open={modalLogAberto}
-        onClose={() => setModalLogAberto(false)}
-        logs={logsAtualizacao}
-      />
-
-      {/* Antes do HistoricoEtapasModal de propósito: os dois podem ficar
-          abertos ao mesmo tempo (clicar num card do detalhamento não fecha
-          o Kanban por trás), e quem vem depois no DOM fica visualmente por
-          cima com o mesmo z-50 — o histórico (mais específico) precisa
-          ganhar do detalhamento. */}
-      <DetalhamentoBucketModal
-        open={Boolean(detalhamentoAberto)}
-        onClose={() => setDetalhamentoAberto(null)}
-        macro={detalhamentoAberto}
-        empresaId={empresaId}
-        cards={cardsDetalhamento}
-        cores={cores}
-        mostrarDetalhes={mostrarDetalhes}
-        onAbrirHistorico={(tipo, id) => setHistoricoAberto({ tipo, id })}
-      />
-
-      <HistoricoEtapasModal
-        open={Boolean(historicoAberto)}
-        onClose={() => setHistoricoAberto(null)}
-        empresaId={empresaId}
-        identificador={historicoAberto}
-        onSalvo={() => {
-          // Também dispara ao registrar uma micro etapa manual (qualquer
-          // bucket, inclusive Reserva) — recarrega os quatro pra mostrar a
-          // "última etapa" nova no card sem precisar atualizar a tela.
-          // Salvar o Nº Contrato Caixa, especificamente, liga o contrato a
-          // uma unidade — o card pode sair do bucket Contrato e entrar em
-          // Assinatura ou Registro (dependendo se essa unidade já tem data
-          // de registro), então os quatro precisam recarregar mesmo aqui.
-          loadReservas();
-          loadContratos();
-          loadAssinaturas();
-          loadRegistros();
-          loadUltimasAtualizacoes();
-        }}
-      />
-
       <div className="flex min-h-0 flex-1 flex-col">
         <Tabs tabs={TABS} activeId={abaAtiva} onChange={setAbaAtiva} />
 
@@ -625,6 +626,8 @@ export default function RepassesCefPage() {
           </Card>
         )}
       </div>
+        </>
+      )}
     </div>
   );
 }
@@ -794,17 +797,23 @@ function KanbanRepasses({
 // ÚLTIMA micro etapa registrada pra ele (ultima_microetapa_id, ver
 // ULTIMA_MICROETAPA_LATERAL no backend); sem nenhuma ainda, cai na primeira
 // coluna ("Sem etapa registrada") — é o caso da maioria dos cards hoje.
-function DetalhamentoBucketModal({ open, onClose, macro, empresaId, cards, cores, mostrarDetalhes, onAbrirHistorico }) {
+//
+// Não é uma janela flutuante — substitui, na mesma tela, tanto a caixa de
+// filtros quanto a caixa do kanban geral (ver o `detalhamentoAberto ?`
+// em RepassesCefPage), como se as duas caixas fossem uma só. `h-full` +
+// `min-h-0` no wrapper faz esse painel ocupar exatamente o espaço vertical
+// que as duas caixas juntas ocupavam.
+function DetalhamentoInline({ macro, empresaId, cards, cores, mostrarDetalhes, onVoltar, onAbrirHistorico }) {
   const [microEtapas, setMicroEtapas] = useState([]);
   const [carregando, setCarregando] = useState(false);
 
   useEffect(() => {
-    if (!open || !macro || !empresaId) return;
+    if (!macro || !empresaId) return;
     setCarregando(true);
     listMascaras('REPASSES', empresaId, macro.value)
       .then(setMicroEtapas)
       .finally(() => setCarregando(false));
-  }, [open, macro, empresaId]);
+  }, [macro, empresaId]);
 
   if (!macro) return null;
 
@@ -821,13 +830,33 @@ function DetalhamentoBucketModal({ open, onClose, macro, empresaId, cards, cores
   ];
 
   return (
-    <Modal open={open} onClose={onClose} title={`Detalhamento — ${macro.label}`} maxWidthClass="max-w-[96vw]">
+    <div className="flex h-full min-h-0 flex-1 flex-col rounded-card bg-white shadow-card">
+      <div className="flex shrink-0 items-center gap-3 border-b border-gray-100 px-4 py-3">
+        <button
+          type="button"
+          onClick={onVoltar}
+          title="Voltar para o kanban"
+          className="flex shrink-0 items-center gap-1.5 rounded-lg border border-gray-200 px-3 py-2 text-sm font-medium text-gray-600 hover:bg-gray-50"
+        >
+          <ArrowLeft size={16} />
+          Voltar
+        </button>
+        <div className="h-6 w-px shrink-0 bg-gray-200" />
+        <img src={macro.logo} alt={macro.integracaoNome} title={macro.integracaoNome} className="h-6 w-6 shrink-0 object-contain" />
+        <p className="min-w-0 flex-1 truncate text-sm font-semibold text-gray-900">
+          Detalhamento — {macro.label}
+        </p>
+        <span className="shrink-0 rounded-full bg-gray-100 px-2 py-0.5 text-xs font-medium text-gray-500">
+          {cards.length}
+        </span>
+      </div>
+
       {carregando ? (
-        <div className="flex h-[70vh] items-center justify-center text-sm text-gray-400">
+        <div className="flex min-h-0 flex-1 items-center justify-center text-sm text-gray-400">
           Carregando micro etapas...
         </div>
       ) : (
-        <div className="flex h-[70vh] gap-3 overflow-x-auto pb-1">
+        <div className="flex min-h-0 flex-1 gap-3 overflow-x-auto p-3">
           {colunas.map((coluna) => (
             <div
               key={coluna.id}
@@ -854,7 +883,7 @@ function DetalhamentoBucketModal({ open, onClose, macro, empresaId, cards, cores
           ))}
         </div>
       )}
-    </Modal>
+    </div>
   );
 }
 
