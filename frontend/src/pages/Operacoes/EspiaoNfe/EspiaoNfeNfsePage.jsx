@@ -491,23 +491,25 @@ export default function EspiaoNfeNfsePage() {
             />
           </div>
 
-          <div className="min-w-0 flex-1">
-            <label className="mb-1 block text-sm font-medium text-gray-700">Data início</label>
-            <input
-              type="date"
-              value={dataInicio}
-              onChange={(e) => setDataInicio(e.target.value)}
-              className="w-full rounded-lg border border-gray-200 px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-primary-100"
-            />
-          </div>
-          <div className="min-w-0 flex-1">
-            <label className="mb-1 block text-sm font-medium text-gray-700">Data fim</label>
-            <input
-              type="date"
-              value={dataFim}
-              onChange={(e) => setDataFim(e.target.value)}
-              className="w-full rounded-lg border border-gray-200 px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-primary-100"
-            />
+          <div className="flex min-w-0 gap-3 sm:flex-1">
+            <div className="min-w-0 flex-1">
+              <label className="mb-1 block text-sm font-medium text-gray-700">Data início</label>
+              <input
+                type="date"
+                value={dataInicio}
+                onChange={(e) => setDataInicio(e.target.value)}
+                className="w-full min-w-0 rounded-lg border border-gray-200 px-3 py-2 text-sm text-gray-800 focus:border-primary-400 focus:outline-none focus:ring-2 focus:ring-primary-100"
+              />
+            </div>
+            <div className="min-w-0 flex-1">
+              <label className="mb-1 block text-sm font-medium text-gray-700">Data fim</label>
+              <input
+                type="date"
+                value={dataFim}
+                onChange={(e) => setDataFim(e.target.value)}
+                className="w-full min-w-0 rounded-lg border border-gray-200 px-3 py-2 text-sm text-gray-800 focus:border-primary-400 focus:outline-none focus:ring-2 focus:ring-primary-100"
+              />
+            </div>
           </div>
 
           {empresaId && (
