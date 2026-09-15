@@ -676,6 +676,40 @@ async function listParaExportacao(empresaId, centroCustoIds = []) {
   return { reservas, contratos, assinaturas, registros };
 }
 
+// Uma linha por movimentação manual registrada (ver registrarMovimentacaoMicroEtapa),
+// pra aba "Histórico Etapas" do Excel — diferente dos 4 buckets acima (que só
+// trazem a ÚLTIMA etapa de cada cartão), aqui é o histórico completo. Ancorado
+// direto em centro_custo_sienge_id (já gravado na própria linha), sem repetir
+// a lógica de elegibilidade de listCentrosComLancamento: uma movimentação já
+// registrada é um fato acontecido, não fica de fora só porque o centro perdeu
+// a condição de aparecer no Kanban depois.
+async function listHistoricoEtapasParaExportacao(empresaId, centroCustoIds = []) {
+  const condicoes = ['h.empresa_id = $1'];
+  const params = [empresaId];
+
+  if (Array.isArray(centroCustoIds) && centroCustoIds.length > 0) {
+    params.push(centroCustoIds);
+    condicoes.push(`h.centro_custo_sienge_id = ANY($${params.length}::int[])`);
+  }
+
+  const { rows } = await pool.query(
+    `SELECT COALESCE(cc.name, r.empreendimento) AS empreendimento,
+            r.cliente, h.idreserva, h.macro_etapa,
+            m.descricao AS micro_etapa, h.data_movimentacao,
+            h.descricao AS observacao,
+            COALESCE(u.nome, 'Usuário removido') AS usuario_nome
+     FROM repasses_cef_historico_microetapas h
+     JOIN mascara_itens m ON m.id = h.mascara_item_id
+     LEFT JOIN centros_custo_sienge cc ON cc.empresa_id = h.empresa_id AND cc.sienge_id = h.centro_custo_sienge_id
+     LEFT JOIN construtor_vendas_reservas r ON r.empresa_id = h.empresa_id AND r.idreserva = h.idreserva
+     LEFT JOIN usuarios u ON u.id = h.usuario_id
+     WHERE ${condicoes.join(' AND ')}
+     ORDER BY empreendimento ASC NULLS LAST, h.idreserva ASC, h.data_movimentacao ASC, h.id ASC`,
+    params
+  );
+  return rows;
+}
+
 // Data/hora da última atualização de cada bucket, pra mostrar discretamente
 // embaixo do título no Kanban. Reserva e Contrato vêm de `criado_em` das
 // próprias tabelas — como sincronizarReservas/sincronizarContratos sempre
@@ -1095,6 +1129,7 @@ module.exports = {
   getStatusSincronizacao,
   getUltimasAtualizacoes,
   listParaExportacao,
+  listHistoricoEtapasParaExportacao,
   atualizarNumeroInstituicaoFinanceira,
   getHistoricoEtapas,
   listUnidadesDisponiveisParaContrato,

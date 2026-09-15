@@ -202,6 +202,29 @@ const EXPORT_COLUMNS = [
   { header: 'Data de Assinatura', key: 'data_assinatura', width: 16 },
   { header: 'Data de Registro', key: 'data_registro', width: 16 },
   { header: 'Dias Parada', key: 'dias_parada', width: 12 },
+  { header: 'Última Etapa', key: 'ultima_etapa', width: 26 },
+  { header: 'Data da Última Etapa', key: 'data_ultima_etapa', width: 18 },
+];
+
+// Mesmos rótulos de macro etapa do Kanban (ver macroEtapasRepasses.js no
+// frontend) — o valor cru gravado em repasses_cef_historico_microetapas é o
+// código (VENDA/CONTRATO/ASSINATURA/REGISTRO), não o nome exibido.
+const MACRO_ETAPA_LABELS = {
+  VENDA: 'Reserva',
+  CONTRATO: 'Contrato',
+  ASSINATURA: 'Assinatura',
+  REGISTRO: 'Registro',
+};
+
+const HISTORICO_COLUMNS = [
+  { header: 'Empreendimento', key: 'empreendimento', width: 28 },
+  { header: 'Cliente', key: 'cliente', width: 32 },
+  { header: 'Código da Reserva', key: 'codigo_reserva', width: 16 },
+  { header: 'Macro Etapa', key: 'macro_etapa', width: 16 },
+  { header: 'Micro Etapa', key: 'micro_etapa', width: 30 },
+  { header: 'Data', key: 'data', width: 14 },
+  { header: 'Observação', key: 'observacao', width: 48 },
+  { header: 'Registrado por', key: 'registrado_por', width: 26 },
 ];
 
 // Dias corridos entre a data de assinatura e hoje — mesmo cálculo do
@@ -253,6 +276,8 @@ async function exportarExcel(req, res, next) {
         codigo_reserva: r.idreserva,
         tipo_venda: r.tipovenda,
         situacao: r.situacao,
+        ultima_etapa: r.ultima_microetapa_nome,
+        data_ultima_etapa: formatarDataExcel(r.ultima_microetapa_data),
       });
     }
 
@@ -265,6 +290,8 @@ async function exportarExcel(req, res, next) {
         numero_contrato: c.number,
         tipo_venda: c.tipovenda,
         situacao: c.situacao,
+        ultima_etapa: c.ultima_microetapa_nome,
+        data_ultima_etapa: formatarDataExcel(c.ultima_microetapa_data),
       });
     }
 
@@ -282,6 +309,8 @@ async function exportarExcel(req, res, next) {
         numero_contrato_unidade: a.numero_contrato_unidade,
         data_assinatura: formatarDataExcel(a.data_assinatura_contrato),
         dias_parada: diasParada(a.data_assinatura_contrato),
+        ultima_etapa: a.ultima_microetapa_nome,
+        data_ultima_etapa: formatarDataExcel(a.ultima_microetapa_data),
       });
     }
 
@@ -298,6 +327,27 @@ async function exportarExcel(req, res, next) {
         numero_contrato_unidade: re.numero_contrato_unidade,
         data_assinatura: formatarDataExcel(re.data_assinatura_contrato),
         data_registro: formatarDataExcel(re.data_registro),
+        ultima_etapa: re.ultima_microetapa_nome,
+        data_ultima_etapa: formatarDataExcel(re.ultima_microetapa_data),
+      });
+    }
+
+    const historico = await service.listHistoricoEtapasParaExportacao(empresaId, centroCustoIds);
+    const sheetHistorico = workbook.addWorksheet('Histórico Etapas');
+    sheetHistorico.columns = HISTORICO_COLUMNS;
+    sheetHistorico.getRow(1).font = { bold: true };
+    sheetHistorico.getRow(1).fill = { type: 'pattern', pattern: 'solid', fgColor: { argb: 'FFE8EEFB' } };
+
+    for (const h of historico) {
+      sheetHistorico.addRow({
+        empreendimento: h.empreendimento,
+        cliente: h.cliente,
+        codigo_reserva: h.idreserva,
+        macro_etapa: MACRO_ETAPA_LABELS[h.macro_etapa] || h.macro_etapa,
+        micro_etapa: h.micro_etapa,
+        data: formatarDataExcel(h.data_movimentacao),
+        observacao: h.observacao,
+        registrado_por: h.usuario_nome,
       });
     }
 
