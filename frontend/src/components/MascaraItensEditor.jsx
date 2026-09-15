@@ -1,7 +1,7 @@
 import { useCallback, useEffect, useRef, useState } from 'react';
 import { Plus, ListTree, Trash2 } from 'lucide-react';
 import Button from './Button';
-import { listMascaras, createMascaraItem, updateMascaraItemDescricao, deleteMascaraItem } from '../api/mascaras.api';
+import { listMascaras, createMascaraItem, updateMascaraItem, deleteMascaraItem } from '../api/mascaras.api';
 import { useAlert, useConfirm } from '../confirm/ConfirmContext';
 
 // Lista editável de itens de uma máscara (sequência + descrição), com
@@ -9,6 +9,10 @@ import { useAlert, useConfirm } from '../confirm/ConfirmContext';
 // quanto na aba "Máscaras" de Repasses CEF — mesmo componente nos dois
 // lugares, pra garantir que o comportamento seja idêntico.
 export default function MascaraItensEditor({ tipo, empresaId, grupo, itemLabel }) {
+  // Prazo (SLA) só faz sentido pra micro etapa de Repasses — nos demais
+  // tipos (DRE, DFC, PACOTES...) o item é um código de classificação, não
+  // um passo de funil com prazo esperado.
+  const mostrarSla = tipo === 'REPASSES';
   const confirm = useConfirm();
   const alert = useAlert();
   const [itens, setItens] = useState([]);
@@ -53,12 +57,12 @@ export default function MascaraItensEditor({ tipo, empresaId, grupo, itemLabel }
     }
   }
 
-  function handleDescricaoChange(id, value) {
-    setItens((prev) => prev.map((item) => (item.id === id ? { ...item, descricao: value } : item)));
+  function handleCampoChange(id, campo, valor) {
+    setItens((prev) => prev.map((item) => (item.id === id ? { ...item, [campo]: valor } : item)));
   }
 
-  async function handleDescricaoSave(id, descricao) {
-    await updateMascaraItemDescricao(id, descricao);
+  async function handleSalvar(id, dados) {
+    await updateMascaraItem(id, dados);
   }
 
   async function handleDeleteRow(item) {
@@ -115,7 +119,8 @@ export default function MascaraItensEditor({ tipo, empresaId, grupo, itemLabel }
     <div>
       <div className="mb-2 flex gap-4 px-1 text-xs font-medium uppercase tracking-wide text-gray-400">
         <span className="w-9 shrink-0">Seq.</span>
-        <span>Descrição</span>
+        <span className="flex-1">Descrição</span>
+        {mostrarSla && <span className="w-24 shrink-0">SLA (dias)</span>}
       </div>
 
       <div className="divide-y divide-gray-50">
@@ -123,12 +128,13 @@ export default function MascaraItensEditor({ tipo, empresaId, grupo, itemLabel }
           <MascaraRow
             key={item.id}
             item={item}
+            mostrarSla={mostrarSla}
             registerRef={(el) => {
               if (el) inputRefs.current.set(item.id, el);
               else inputRefs.current.delete(item.id);
             }}
-            onChange={(value) => handleDescricaoChange(item.id, value)}
-            onSave={(descricao) => handleDescricaoSave(item.id, descricao)}
+            onChange={(campo, valor) => handleCampoChange(item.id, campo, valor)}
+            onSave={(dados) => handleSalvar(item.id, dados)}
             onEnterOnLastRow={handleAddRow}
             onDelete={() => handleDeleteRow(item)}
             deleting={deletingId === item.id}
@@ -150,13 +156,16 @@ export default function MascaraItensEditor({ tipo, empresaId, grupo, itemLabel }
   );
 }
 
-function MascaraRow({ item, registerRef, onChange, onSave, onEnterOnLastRow, onDelete, deleting, isLast }) {
-  const lastSavedRef = useRef(item.descricao);
+function MascaraRow({ item, registerRef, mostrarSla, onChange, onSave, onEnterOnLastRow, onDelete, deleting, isLast }) {
+  // Um snapshot só, com os dois campos — descrição e SLA são salvos juntos
+  // (mesmo PUT), então o blur de qualquer um dos dois compara e manda os
+  // dois, não só o que mudou.
+  const lastSavedRef = useRef({ descricao: item.descricao, sla_dias: item.sla_dias });
 
   function handleBlur() {
-    if (item.descricao !== lastSavedRef.current) {
-      lastSavedRef.current = item.descricao;
-      onSave(item.descricao);
+    if (item.descricao !== lastSavedRef.current.descricao || item.sla_dias !== lastSavedRef.current.sla_dias) {
+      lastSavedRef.current = { descricao: item.descricao, sla_dias: item.sla_dias };
+      onSave({ descricao: item.descricao, sla_dias: item.sla_dias });
     }
   }
 
@@ -176,12 +185,26 @@ function MascaraRow({ item, registerRef, onChange, onSave, onEnterOnLastRow, onD
         ref={registerRef}
         type="text"
         value={item.descricao}
-        onChange={(e) => onChange(e.target.value)}
+        onChange={(e) => onChange('descricao', e.target.value)}
         onBlur={handleBlur}
         onKeyDown={handleKeyDown}
         placeholder="Digite a descrição..."
-        className="w-full rounded-md border border-transparent bg-transparent px-2 py-1.5 text-sm text-gray-900 transition-colors placeholder:text-gray-300 hover:bg-gray-50 focus:border-primary-200 focus:bg-white focus:outline-none focus:ring-2 focus:ring-primary-100"
+        className="w-full flex-1 rounded-md border border-transparent bg-transparent px-2 py-1.5 text-sm text-gray-900 transition-colors placeholder:text-gray-300 hover:bg-gray-50 focus:border-primary-200 focus:bg-white focus:outline-none focus:ring-2 focus:ring-primary-100"
       />
+      {mostrarSla && (
+        <input
+          type="number"
+          min="0"
+          max="3650"
+          value={item.sla_dias ?? ''}
+          onChange={(e) => onChange('sla_dias', e.target.value === '' ? null : Number(e.target.value))}
+          onBlur={handleBlur}
+          onKeyDown={handleKeyDown}
+          placeholder="dias"
+          title="Prazo esperado (SLA) desta etapa, em dias"
+          className="w-24 shrink-0 rounded-md border border-transparent bg-transparent px-2 py-1.5 text-sm text-gray-900 transition-colors placeholder:text-gray-300 hover:bg-gray-50 focus:border-primary-200 focus:bg-white focus:outline-none focus:ring-2 focus:ring-primary-100"
+        />
+      )}
       <button
         type="button"
         onClick={onDelete}

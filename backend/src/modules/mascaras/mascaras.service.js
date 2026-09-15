@@ -2,7 +2,7 @@ const pool = require('../../config/db');
 
 async function list(tipo, empresaId, grupo = '') {
   const { rows } = await pool.query(
-    'SELECT id, empresa_id, tipo, grupo, sequencia, descricao, criado_em, atualizado_em FROM mascara_itens WHERE tipo = $1 AND empresa_id = $2 AND grupo = $3 ORDER BY sequencia ASC',
+    'SELECT id, empresa_id, tipo, grupo, sequencia, descricao, sla_dias, criado_em, atualizado_em FROM mascara_itens WHERE tipo = $1 AND empresa_id = $2 AND grupo = $3 ORDER BY sequencia ASC',
     [tipo, empresaId, grupo]
   );
   return rows;
@@ -18,17 +18,21 @@ async function create(tipo, empresaId, grupo = '') {
   const { rows } = await pool.query(
     `INSERT INTO mascara_itens (tipo, empresa_id, grupo, sequencia, descricao)
      VALUES ($1, $2, $3, $4, '')
-     RETURNING id, empresa_id, tipo, grupo, sequencia, descricao, criado_em, atualizado_em`,
+     RETURNING id, empresa_id, tipo, grupo, sequencia, descricao, sla_dias, criado_em, atualizado_em`,
     [tipo, empresaId, grupo, nextSeq]
   );
   return rows[0];
 }
 
-async function updateDescricao(id, descricao) {
+// `slaDias` só faz sentido pra tipo='REPASSES' (micro etapa) — nos demais
+// tipos o front nem manda o campo, fica sempre NULL. Atualiza os dois campos
+// juntos (não só o que mudou) porque a linha inteira já vem do estado local
+// do componente — ver MascaraItensEditor.jsx.
+async function update(id, { descricao, slaDias }) {
   const { rows } = await pool.query(
-    `UPDATE mascara_itens SET descricao = $1 WHERE id = $2
-     RETURNING id, empresa_id, tipo, grupo, sequencia, descricao, criado_em, atualizado_em`,
-    [descricao, id]
+    `UPDATE mascara_itens SET descricao = $1, sla_dias = $2 WHERE id = $3
+     RETURNING id, empresa_id, tipo, grupo, sequencia, descricao, sla_dias, criado_em, atualizado_em`,
+    [descricao, slaDias, id]
   );
   return rows[0] || null;
 }
@@ -77,4 +81,4 @@ async function remove(id) {
   }
 }
 
-module.exports = { list, create, updateDescricao, remove };
+module.exports = { list, create, update, remove };

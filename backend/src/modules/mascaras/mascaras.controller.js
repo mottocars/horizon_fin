@@ -34,6 +34,13 @@ const createSchema = z.object({
 
 const updateSchema = z.object({
   descricao: z.string().max(255).optional().default(''),
+  // Só usado pra tipo='REPASSES' — o front nem manda esse campo nos demais
+  // tipos, então null é o padrão (sem SLA definido). z.null() precisa vir
+  // ANTES do z.coerce.number() na union — coerce faria Number(null) virar 0
+  // em vez de continuar null.
+  sla_dias: z.union([z.null(), z.coerce.number().int().min(0, 'SLA não pode ser negativo.').max(3650)])
+    .optional()
+    .default(null),
 });
 
 function badRequest(message) {
@@ -78,8 +85,8 @@ async function create(req, res, next) {
 
 async function update(req, res, next) {
   try {
-    const { descricao } = updateSchema.parse(req.body);
-    const item = await service.updateDescricao(req.params.id, descricao);
+    const { descricao, sla_dias: slaDias } = updateSchema.parse(req.body);
+    const item = await service.update(req.params.id, { descricao, slaDias });
     if (!item) return res.status(404).json({ message: 'Item não encontrado.' });
     res.json(item);
   } catch (err) {

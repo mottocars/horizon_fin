@@ -301,6 +301,10 @@ CREATE TABLE mascara_itens (
     grupo         VARCHAR(50) NOT NULL DEFAULT '',
     sequencia     INTEGER NOT NULL,
     descricao     VARCHAR(255) NOT NULL DEFAULT '',
+    -- Só usado em tipo='REPASSES' (micro etapa) — prazo esperado, em dias,
+    -- pra essa etapa. NULL nos demais tipos (DRE, DFC, PACOTES...), que não
+    -- representam um passo de funil com prazo.
+    sla_dias      INTEGER,
     criado_em     TIMESTAMP DEFAULT NOW(),
     atualizado_em TIMESTAMP DEFAULT NOW(),
     UNIQUE (tipo, empresa_id, grupo, sequencia)
