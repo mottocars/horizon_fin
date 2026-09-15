@@ -367,10 +367,15 @@ async function listContratos(empresaId, centroCustoIds = []) {
     `SELECT c.sienge_contract_id, c.enterprise_name AS empreendimento, c.number,
             c.value AS valor, c.contract_date, c.criado_em,
             c.financial_institution_number AS numero_instituicao_financeira,
-            cli.name AS titular_nome,
+            COALESCE(res.cliente, cli.name) AS titular_nome,
             res.idreserva, res.tipovenda, res.situacao,
             um.nome AS ultima_microetapa_nome, um.data AS ultima_microetapa_data
      FROM sie_sales_contracts c
+     -- Só um fallback pra quando o contrato não linka com nenhuma reserva
+     -- CVCRM (res.cliente abaixo é a fonte preferida — ver comentário na
+     -- lateral de res). Num contrato de casal, onde os dois compradores vêm
+     -- main=true no Sienge, esse desempate (id mais baixo) é arbitrário e é
+     -- exatamente por isso que res.cliente vem primeiro no COALESCE.
      LEFT JOIN LATERAL (
        SELECT name FROM sie_sales_contracts_customers
        WHERE sienge_contract_id = c.sienge_contract_id AND empresa_id = c.empresa_id
@@ -378,7 +383,7 @@ async function listContratos(empresaId, centroCustoIds = []) {
        LIMIT 1
      ) cli ON TRUE
      LEFT JOIN LATERAL (
-       SELECT r.idreserva, r.tipovenda, r.situacao
+       SELECT r.idreserva, r.tipovenda, r.situacao, r.cliente
        FROM construtor_vendas_reservas r
        WHERE r.empresa_id = c.empresa_id
          AND c.number LIKE 'CV%'
