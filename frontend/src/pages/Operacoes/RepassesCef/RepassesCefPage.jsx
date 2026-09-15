@@ -1024,31 +1024,65 @@ function BadgeCor({ texto, cor }) {
 // Última micro etapa registrada manualmente (ver "Registrar Movimentação"
 // no modal de Histórico de Etapas) pro cliente daquele card — mostrada no
 // topo, pequena, separada do resto do card por uma linha fina embaixo dela.
-function UltimaMicroEtapa({ nome, data }) {
+function UltimaMicroEtapa({ nome, data, slaDias }) {
   if (!nome) return null;
+  const atrasado = estaSlaAtrasado(data, slaDias);
   return (
-    <div className="mb-1 flex items-center justify-between gap-1.5 border-b border-gray-100 pb-1 text-[9px] font-medium text-primary-600">
-      <span className="flex min-w-0 items-center gap-1">
-        <History size={10} className="shrink-0" />
-        <span className="truncate">{nome}</span>
-      </span>
-      {data && (
-        <span className="shrink-0 text-gray-400" title={formatarData(data)}>
-          {formatarDiasSemNovaEtapa(data)}
+    <div className={`mb-1 border-b pb-1 text-[9px] font-medium ${atrasado ? 'border-red-100' : 'border-gray-100'}`}>
+      <div className={`flex items-center justify-between gap-1.5 ${atrasado ? 'text-red-600' : 'text-primary-600'}`}>
+        <span className="flex min-w-0 items-center gap-1">
+          <History size={10} className="shrink-0" />
+          <span className="truncate">{nome}</span>
         </span>
+        {data && (
+          <span className={`shrink-0 ${atrasado ? 'text-red-500' : 'text-gray-400'}`} title={formatarData(data)}>
+            {formatarDiasSemNovaEtapa(data)}
+          </span>
+        )}
+      </div>
+      {atrasado && (
+        <p className="mt-0.5 flex items-center gap-1 font-semibold text-red-600">
+          <AlertTriangle size={10} className="shrink-0" />
+          SLA Atrasado
+        </p>
       )}
     </div>
   );
 }
 
+// SLA (em dias) configurado na micro etapa atual (mascara_itens.sla_dias,
+// ver campo adicionado no editor de Máscaras) — atrasado quando já se
+// passaram mais dias do que o SLA desde a última movimentação registrada
+// pra esse card. Sem SLA configurado (null) nunca fica atrasado.
+function estaSlaAtrasado(dataUltimaEtapa, slaDias) {
+  if (slaDias === null || slaDias === undefined) return false;
+  const dias = diasSemNovaEtapa(dataUltimaEtapa);
+  if (dias === null) return false;
+  return dias > slaDias;
+}
+
+// Borda/fundo do card — vermelho quando atrasado no SLA, mesmo cinza/azul de
+// sempre quando não (usado pelos 4 tipos de card: Reserva/Contrato/
+// Assinatura/Registro).
+function corCardAtrasado(atrasado) {
+  return atrasado
+    ? 'border-red-300 bg-red-50/60 hover:border-red-400 hover:bg-red-50'
+    : 'border-gray-200 hover:border-primary-200 hover:bg-primary-50/30';
+}
+
 function ReservaCard({ reserva, cores, mostrarDetalhes, onClick }) {
+  const atrasado = estaSlaAtrasado(reserva.ultima_microetapa_data, reserva.ultima_microetapa_sla_dias);
   return (
     <div
       onClick={onClick}
       title="Clique para ver o histórico de etapas"
-      className="cursor-pointer rounded-lg border border-gray-200 p-2.5 text-[11px] shadow-sm transition-colors hover:border-primary-200 hover:bg-primary-50/30"
+      className={`cursor-pointer rounded-lg border p-2.5 text-[11px] shadow-sm transition-colors ${corCardAtrasado(atrasado)}`}
     >
-      <UltimaMicroEtapa nome={reserva.ultima_microetapa_nome} data={reserva.ultima_microetapa_data} />
+      <UltimaMicroEtapa
+        nome={reserva.ultima_microetapa_nome}
+        data={reserva.ultima_microetapa_data}
+        slaDias={reserva.ultima_microetapa_sla_dias}
+      />
       <p className="truncate text-[11px] font-medium text-gray-900">{reserva.empreendimento || '—'}</p>
       {reserva.titular_nome && (
         <p className="mt-0.5 flex items-center gap-1 truncate text-gray-600">
@@ -1078,13 +1112,18 @@ function ReservaCard({ reserva, cores, mostrarDetalhes, onClick }) {
 // idreserva embutido no `number` do contrato) — mesma cor configurada em
 // "Configurar Filtros de Visualização" pro bucket Reserva.
 function ContratoCard({ contrato, cores, mostrarDetalhes, onClick }) {
+  const atrasado = estaSlaAtrasado(contrato.ultima_microetapa_data, contrato.ultima_microetapa_sla_dias);
   return (
     <div
       onClick={onClick}
       title="Clique para ver o histórico de etapas"
-      className="cursor-pointer rounded-lg border border-gray-200 p-2.5 text-[11px] shadow-sm transition-colors hover:border-primary-200 hover:bg-primary-50/30"
+      className={`cursor-pointer rounded-lg border p-2.5 text-[11px] shadow-sm transition-colors ${corCardAtrasado(atrasado)}`}
     >
-      <UltimaMicroEtapa nome={contrato.ultima_microetapa_nome} data={contrato.ultima_microetapa_data} />
+      <UltimaMicroEtapa
+        nome={contrato.ultima_microetapa_nome}
+        data={contrato.ultima_microetapa_data}
+        slaDias={contrato.ultima_microetapa_sla_dias}
+      />
       <p className="truncate text-[11px] font-medium text-gray-900">{contrato.empreendimento || '—'}</p>
       {contrato.titular_nome && (
         <p className="mt-0.5 flex items-center gap-1 truncate text-gray-600">
@@ -1207,13 +1246,18 @@ function corDiasParada(dias) {
 // nome_mutuario do extrato, pra ficar igual ao dos cards de Reserva/Contrato.
 function AssinaturaCard({ assinatura, mostrarDetalhes, onClick }) {
   const dias = diasParada(assinatura.data_assinatura_contrato);
+  const atrasado = estaSlaAtrasado(assinatura.ultima_microetapa_data, assinatura.ultima_microetapa_sla_dias);
   return (
     <div
       onClick={onClick}
       title="Clique para ver o histórico de etapas"
-      className="cursor-pointer rounded-lg border border-gray-200 p-2.5 text-[11px] shadow-sm transition-colors hover:border-primary-200 hover:bg-primary-50/30"
+      className={`cursor-pointer rounded-lg border p-2.5 text-[11px] shadow-sm transition-colors ${corCardAtrasado(atrasado)}`}
     >
-      <UltimaMicroEtapa nome={assinatura.ultima_microetapa_nome} data={assinatura.ultima_microetapa_data} />
+      <UltimaMicroEtapa
+        nome={assinatura.ultima_microetapa_nome}
+        data={assinatura.ultima_microetapa_data}
+        slaDias={assinatura.ultima_microetapa_sla_dias}
+      />
       <p className="truncate text-[11px] font-medium text-gray-900">{assinatura.empreendimento || '—'}</p>
       {assinatura.titular_nome && (
         <p className="mt-0.5 flex items-center gap-1 truncate text-gray-600">
@@ -1263,13 +1307,18 @@ function AssinaturaCard({ assinatura, mostrarDetalhes, onClick }) {
 // Mesmo enriquecimento do AssinaturaCard (idreserva/numero_contrato/
 // titular_nome vindos da reserva de origem), mais a data de registro.
 function RegistroCard({ registro, mostrarDetalhes, onClick }) {
+  const atrasado = estaSlaAtrasado(registro.ultima_microetapa_data, registro.ultima_microetapa_sla_dias);
   return (
     <div
       onClick={onClick}
       title="Clique para ver o histórico de etapas"
-      className="cursor-pointer rounded-lg border border-gray-200 p-2.5 text-[11px] shadow-sm transition-colors hover:border-primary-200 hover:bg-primary-50/30"
+      className={`cursor-pointer rounded-lg border p-2.5 text-[11px] shadow-sm transition-colors ${corCardAtrasado(atrasado)}`}
     >
-      <UltimaMicroEtapa nome={registro.ultima_microetapa_nome} data={registro.ultima_microetapa_data} />
+      <UltimaMicroEtapa
+        nome={registro.ultima_microetapa_nome}
+        data={registro.ultima_microetapa_data}
+        slaDias={registro.ultima_microetapa_sla_dias}
+      />
       <p className="truncate text-[11px] font-medium text-gray-900">{registro.empreendimento || '—'}</p>
       {registro.titular_nome && (
         <p className="mt-0.5 flex items-center gap-1 truncate text-gray-600">
