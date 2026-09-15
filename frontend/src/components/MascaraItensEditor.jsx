@@ -118,7 +118,7 @@ export default function MascaraItensEditor({ tipo, empresaId, grupo, itemLabel }
   return (
     <div>
       <div className="mb-2 flex gap-4 px-1 text-xs font-medium uppercase tracking-wide text-gray-400">
-        <span className="w-9 shrink-0">Seq.</span>
+        <span className="w-7 shrink-0">Seq.</span>
         {mostrarSla && <span className="w-24 shrink-0 text-center">SLA (dias)</span>}
         <span className="flex-1">Descrição</span>
       </div>
