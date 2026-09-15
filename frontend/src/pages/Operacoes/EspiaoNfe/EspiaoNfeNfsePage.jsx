@@ -25,6 +25,7 @@ import Button from '../../../components/Button';
 import SearchableSelect from '../../../components/SearchableSelect';
 import IconButton from '../../../components/IconButton';
 import Modal from '../../../components/Modal';
+import Tabs from '../../../components/Tabs';
 import { listEmpresas } from '../../../api/empresas.api';
 import { nomeExibicaoEmpresa } from '../../../utils/empresa';
 import { useAlert, useConfirm } from '../../../confirm/ConfirmContext';
@@ -54,6 +55,16 @@ const INTERVALOS = [
 ];
 
 const EMPTY_FILTROS = { chave: '', numero: '', emissor: '', destinatario: '' };
+
+// Três estados das notas, no mesmo estilo de aba "navegador" usado em
+// Repasses CEF (ver componente Tabs) — cor só no ícone de cada aba (não no
+// fundo/texto), pra ficar reconhecível de relance sem virar um botão colorido
+// gigante. Por enquanto só o visual; a ação de cada aba vem depois.
+const TABS_NOTAS = [
+  { id: 'novas', label: 'Novas Notas', icon: Inbox, iconColorClass: 'text-primary-600' },
+  { id: 'cientes', label: 'Cientes', icon: CheckCircle, iconColorClass: 'text-emerald-600' },
+  { id: 'inativas', label: 'Inativas', icon: Archive, iconColorClass: 'text-red-600' },
+];
 
 function hojeISO() {
   return new Date().toISOString().slice(0, 10);
@@ -87,6 +98,10 @@ export default function EspiaoNfeNfsePage() {
   // na MESMA tela — é só um filtro a mais, não uma tela separada. Mesma
   // empresa, mesmas datas, mesmo layout de cards por certificado.
   const [modoInativas, setModoInativas] = useState(false);
+
+  // Aba de estado das notas (ver TABS_NOTAS) — sempre começa em "Novas
+  // Notas". Só o visual por enquanto, sem filtrar nada ainda.
+  const [abaNotas, setAbaNotas] = useState('novas');
 
   const [certificados, setCertificados] = useState([]);
   const [loadingCertificados, setLoadingCertificados] = useState(false);
@@ -523,60 +538,44 @@ export default function EspiaoNfeNfsePage() {
             </div>
           </div>
 
-          {/* Sempre visíveis, mesmo sem empresa escolhida — só desabilitados
-              (ver `disabled` em cada um), em vez de sumirem da tela. */}
+          {/* Sempre visíveis, mesmo sem empresa escolhida — só desabilitados,
+              em vez de sumirem da tela. */}
           <div className="flex shrink-0 items-end gap-2">
-            {/* Três estados das notas — por enquanto só o visual (cor +
-                ícone + rótulo); a ação de cada botão vem depois. */}
-            <Button variant="primary" disabled={!empresaId}>
-              <Inbox size={15} />
-              Novas Notas
-            </Button>
-            <Button
-              variant="secondary"
-              disabled={!empresaId}
-              className="!border-emerald-600 !bg-emerald-600 !text-white hover:!bg-emerald-700"
-            >
-              <CheckCircle size={15} />
-              Cientes
-            </Button>
-            <Button variant="danger" disabled={!empresaId}>
-              <Archive size={15} />
-              Inativas
-            </Button>
-
-            <div className="flex shrink-0 gap-2">
-              <div className="relative">
-                <button
-                  type="button"
-                  onClick={() => setPainelFiltroAberto(true)}
-                  disabled={!empresaId}
-                  title="Filtros"
-                  className="flex items-center justify-center rounded-lg border border-gray-200 p-2 text-gray-500 hover:bg-gray-50 disabled:opacity-60 disabled:cursor-not-allowed disabled:hover:bg-transparent"
-                >
-                  <Filter size={18} />
-                </button>
-                {totalFiltrosAtivos > 0 && (
-                  <span className="absolute -right-1 -top-1 inline-flex h-4 w-4 items-center justify-center rounded-full bg-primary-600 text-[10px] font-semibold text-white">
-                    {totalFiltrosAtivos}
-                  </span>
-                )}
-              </div>
-              {!modoInativas && (
-                <button
-                  type="button"
-                  onClick={abrirAgendamento}
-                  disabled={!empresaId}
-                  title="Consultas Automáticas"
-                  className="flex items-center justify-center rounded-lg border border-gray-200 p-2 text-gray-500 hover:bg-gray-50 disabled:opacity-60 disabled:cursor-not-allowed disabled:hover:bg-transparent"
-                >
-                  <CalendarClock size={18} />
-                </button>
+            <div className="relative">
+              <button
+                type="button"
+                onClick={() => setPainelFiltroAberto(true)}
+                disabled={!empresaId}
+                title="Filtros"
+                className="flex items-center justify-center rounded-lg border border-gray-200 p-2 text-gray-500 hover:bg-gray-50 disabled:opacity-60 disabled:cursor-not-allowed disabled:hover:bg-transparent"
+              >
+                <Filter size={18} />
+              </button>
+              {totalFiltrosAtivos > 0 && (
+                <span className="absolute -right-1 -top-1 inline-flex h-4 w-4 items-center justify-center rounded-full bg-primary-600 text-[10px] font-semibold text-white">
+                  {totalFiltrosAtivos}
+                </span>
               )}
             </div>
+            {!modoInativas && (
+              <button
+                type="button"
+                onClick={abrirAgendamento}
+                disabled={!empresaId}
+                title="Consultas Automáticas"
+                className="flex items-center justify-center rounded-lg border border-gray-200 p-2 text-gray-500 hover:bg-gray-50 disabled:opacity-60 disabled:cursor-not-allowed disabled:hover:bg-transparent"
+              >
+                <CalendarClock size={18} />
+              </button>
+            )}
           </div>
         </div>
       </Card>
+
+      {/* Três estados das notas, no estilo de aba usado em Repasses CEF (ver
+          TABS_NOTAS) — sempre visível, mesmo sem empresa (só não faz nada
+          ainda, a ação de cada aba vem depois). */}
+      <Tabs tabs={TABS_NOTAS} activeId={abaNotas} onChange={setAbaNotas} />
 
       {!empresaId ? (
         <Card>

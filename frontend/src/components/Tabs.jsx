@@ -60,7 +60,13 @@ export default function Tabs({ tabs, activeId, onChange, className = '' }) {
                 <CantoInvertido className="-right-2 bg-[radial-gradient(circle_at_100%_0,_transparent_8px,_white_8px)]" />
               </>
             )}
-            {Icon && <Icon size={15} className={active ? 'text-primary-600' : 'text-gray-400'} />}
+            {/* `iconColorClass` deixa uma aba com o ícone numa cor fixa própria
+                (ex.: cada estado de nota no Espião NFe/NFSe com sua cor),
+                em vez do padrão "azul quando ativa, cinza quando não" — a
+                cor fica só no ícone, o resto da aba continua neutro. */}
+            {Icon && (
+              <Icon size={15} className={tab.iconColorClass ?? (active ? 'text-primary-600' : 'text-gray-400')} />
+            )}
             {tab.label}
           </button>
         );
