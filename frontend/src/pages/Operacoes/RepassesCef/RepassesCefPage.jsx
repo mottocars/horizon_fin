@@ -1,5 +1,6 @@
 import { useCallback, useEffect, useMemo, useState } from 'react';
 import {
+  AlertTriangle,
   Building2,
   Calendar,
   CalendarCheck,
@@ -672,7 +673,12 @@ function KanbanRepasses({
                 />
               </div>
               {ultimaAtualizacao && (
-                <p className="-mt-0.5 truncate text-[10px] text-gray-400">
+                <p
+                  className={`-mt-0.5 flex items-center gap-1 truncate text-[10px] ${
+                    foiAtualizadoHoje(ultimaAtualizacao) ? 'text-gray-400' : 'font-medium text-red-600'
+                  }`}
+                >
+                  {!foiAtualizadoHoje(ultimaAtualizacao) && <AlertTriangle size={10} className="shrink-0" />}
                   Atualizado em {formatarDataHora(ultimaAtualizacao)}
                 </p>
               )}
@@ -900,6 +906,21 @@ function formatarDataHora(iso) {
     hour: '2-digit',
     minute: '2-digit',
   });
+}
+
+// Aqui sim compara com "agora" de verdade (fuso do navegador) — diferente
+// de formatarData/diasParada acima, que tratam coluna DATE como texto puro
+// de propósito. ultimaAtualizacao é TIMESTAMP de verdade, então dá pra usar
+// Date normalmente.
+function foiAtualizadoHoje(iso) {
+  if (!iso) return false;
+  const data = new Date(iso);
+  const hoje = new Date();
+  return (
+    data.getFullYear() === hoje.getFullYear() &&
+    data.getMonth() === hoje.getMonth() &&
+    data.getDate() === hoje.getDate()
+  );
 }
 
 // Dias corridos entre a data de assinatura e hoje — quanto tempo essa
