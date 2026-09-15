@@ -8,15 +8,19 @@ const siengeContractsApi = require('./sienge-contracts-api.client');
 const progresso = require('./progressoSincronizacao');
 
 // Centros de custo da empresa que já têm a etapa "Lançamento" (Histórico de
-// Etapas, máscara ETAPAS_CENTRO_CUSTO) com data de início informada — mesmo
-// critério usado no filtro de Curva de Vendas/Obras (ver
+// Etapas, máscara ETAPAS_CENTRO_CUSTO) com data de início informada E já
+// alcançada (data_inicio <= hoje) — um lançamento com data futura ainda não
+// começou, então o centro continua fora do filtro (e do Kanban, que reusa
+// esta mesma lista como elegibilidade) até o dia chegar. Mesmo critério
+// usado no filtro de Curva de Vendas/Obras (ver
 // backend/src/modules/curva-vendas/curva.service.js).
 async function listCentrosComLancamento(empresaId) {
   const { rows } = await pool.query(
     `SELECT DISTINCT c.sienge_id, c.name
      FROM centros_custo_sienge c
      JOIN centro_custo_etapas_historico h
-       ON h.sienge_id = c.sienge_id AND h.empresa_id = c.empresa_id AND h.data_inicio IS NOT NULL
+       ON h.sienge_id = c.sienge_id AND h.empresa_id = c.empresa_id
+       AND h.data_inicio IS NOT NULL AND h.data_inicio <= CURRENT_DATE
      JOIN mascara_itens m
        ON m.id = h.mascara_item_id AND m.tipo = 'ETAPAS_CENTRO_CUSTO' AND m.descricao = 'Lançamento'
      WHERE c.empresa_id = $1
