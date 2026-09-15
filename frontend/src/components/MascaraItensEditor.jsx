@@ -119,8 +119,8 @@ export default function MascaraItensEditor({ tipo, empresaId, grupo, itemLabel }
     <div>
       <div className="mb-2 flex gap-4 px-1 text-xs font-medium uppercase tracking-wide text-gray-400">
         <span className="w-9 shrink-0">Seq.</span>
-        <span className="flex-1">Descrição</span>
         {mostrarSla && <span className="w-24 shrink-0 text-center">SLA (dias)</span>}
+        <span className="flex-1">Descrição</span>
       </div>
 
       <div className="divide-y divide-gray-50">
@@ -191,16 +191,6 @@ function MascaraRow({ item, registerRef, mostrarSla, onChange, onSave, onEnterOn
       <span className="flex h-7 w-7 shrink-0 items-center justify-center rounded-full bg-primary-50 text-xs font-semibold text-primary-600">
         {item.sequencia}
       </span>
-      <input
-        ref={registerRef}
-        type="text"
-        value={item.descricao}
-        onChange={(e) => onChange('descricao', e.target.value)}
-        onBlur={handleBlur}
-        onKeyDown={handleKeyDown}
-        placeholder="Digite a descrição..."
-        className="w-full flex-1 rounded-md border border-transparent bg-transparent px-2 py-1.5 text-sm text-gray-900 transition-colors placeholder:text-gray-300 hover:bg-gray-50 focus:border-primary-200 focus:bg-white focus:outline-none focus:ring-2 focus:ring-primary-100"
-      />
       {mostrarSla && (
         <input
           type="number"
@@ -215,6 +205,16 @@ function MascaraRow({ item, registerRef, mostrarSla, onChange, onSave, onEnterOn
           className={`w-24 shrink-0 rounded-md border px-2 py-1.5 text-center text-sm transition-colors focus:outline-none focus:ring-2 focus:ring-primary-100 ${estadoSla(item.sla_dias !== null && item.sla_dias !== undefined)}`}
         />
       )}
+      <input
+        ref={registerRef}
+        type="text"
+        value={item.descricao}
+        onChange={(e) => onChange('descricao', e.target.value)}
+        onBlur={handleBlur}
+        onKeyDown={handleKeyDown}
+        placeholder="Digite a descrição..."
+        className="w-full flex-1 rounded-md border border-transparent bg-transparent px-2 py-1.5 text-sm text-gray-900 transition-colors placeholder:text-gray-300 hover:bg-gray-50 focus:border-primary-200 focus:bg-white focus:outline-none focus:ring-2 focus:ring-primary-100"
+      />
       <button
         type="button"
         onClick={onDelete}
