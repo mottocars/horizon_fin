@@ -85,6 +85,27 @@ function estaVencido(validadeAte) {
   return new Date(validadeAte) < new Date();
 }
 
+// Cabeçalho de coluna só do nível 3 (Nota) — não é mais um <thead> fixo no
+// topo da tabela inteira, porque essas colunas (Nº/Série, Emissor...) só
+// fazem sentido logo acima das notas, não acima do certificado/seção (que
+// usam uma única célula com colSpan, sem essas colunas). Aparece de novo a
+// cada seção de Produtos/Serviços aberta que tenha ao menos 1 nota.
+function CabecalhoNotas({ modoInativas }) {
+  return (
+    <tr className="border-b border-gray-100 text-xs uppercase tracking-wide text-gray-400">
+      <th className="py-2 pl-14 pr-3 font-medium">
+        <span className="sr-only">Selecionar</span>
+      </th>
+      <th className="py-2 px-3 font-medium whitespace-nowrap">Nº / Série</th>
+      <th className="py-2 px-3 font-medium">Emissor</th>
+      <th className="py-2 px-3 font-medium">Emissão</th>
+      <th className="py-2 px-3 font-medium">Situação</th>
+      {modoInativas && <th className="py-2 px-3 font-medium">Inativada por</th>}
+      <th className="py-2 pl-3 pr-5 font-medium"></th>
+    </tr>
+  );
+}
+
 // Uma linha de nota dentro da tabela única (ver bloco de render do
 // certificado) — extraída à parte porque agora é usada duas vezes seguidas
 // (produtos e serviços do mesmo certificado, um embaixo do outro), não mais
@@ -713,25 +734,13 @@ export default function EspiaoNfeNfsePage() {
                   (nome, contagem de produtos/serviços, última consulta e
                   botão de consultar) → Produtos/Serviços (linha de seção com
                   contagem) → Nota (checkbox à esquerda, número/série,
-                  emissor, emissão, situação e download de PDF/XML). Um
-                  <tbody> por certificado, um <thead> só no topo da tabela
-                  inteira. */}
+                  emissor, emissão, situação e download de PDF/XML). Sem
+                  <thead> fixo no topo da tabela — o cabeçalho de coluna
+                  (CabecalhoNotas) só existe logo acima das notas, único
+                  nível que de fato usa essas colunas. Um <tbody> por
+                  certificado. */}
               <div className="overflow-x-auto">
                 <table className="w-full text-left text-sm">
-                  <thead>
-                    <tr className="border-b border-gray-100 text-xs uppercase tracking-wide text-gray-400">
-                      <th className="py-2 pl-5 pr-3 font-medium">
-                        <span className="sr-only">Selecionar</span>
-                      </th>
-                      <th className="py-2 px-3 font-medium whitespace-nowrap">Nº / Série</th>
-                      <th className="py-2 px-3 font-medium">Emissor</th>
-                      <th className="py-2 px-3 font-medium">Emissão</th>
-                      <th className="py-2 px-3 font-medium">Situação</th>
-                      {modoInativas && <th className="py-2 px-3 font-medium">Inativada por</th>}
-                      <th className="py-2 pl-3 pr-5 font-medium"></th>
-                    </tr>
-                  </thead>
-
                   {filtrando && (
                     <tbody>
                       <tr>
@@ -757,23 +766,34 @@ export default function EspiaoNfeNfsePage() {
                     // número errado.
                     const totalNfeCard = notas ? notas.produtos.length : null;
                     const totalNfseCard = notas ? notas.servicos.length : null;
+                    // Sem nenhuma nota (já carregado e os dois totais deram
+                    // zero) — não faz sentido oferecer o "+", não tem nada
+                    // pra mostrar dentro.
+                    const semNotas = notas != null && totalNfeCard === 0 && totalNfseCard === 0;
 
                     return (
                       <tbody key={certificado.id} className="border-b-8 border-gray-50 last:border-0">
-                        <tr className={vencido ? 'bg-red-50' : 'bg-gray-50'}>
+                        <tr className={vencido ? 'bg-red-50' : aberto ? 'bg-gray-50' : 'bg-white'}>
                           <td colSpan={totalColunas} className="px-5 py-2.5">
                             <div className="flex flex-wrap items-center gap-x-3 gap-y-1.5">
                               {/* Fechado por padrão (ver `abertos` — começa
                                   vazio) — as notas já estão carregadas de
-                                  qualquer jeito, abrir só mostra as linhas. */}
-                              <button
-                                type="button"
-                                onClick={() => toggleAberto(certificado.id)}
-                                title={aberto ? 'Recolher' : 'Expandir'}
-                                className="flex h-6 w-6 shrink-0 items-center justify-center rounded-md border border-gray-300 bg-white text-gray-500 hover:border-primary-300 hover:text-primary-600"
-                              >
-                                {aberto ? <Minus size={13} /> : <Plus size={13} />}
-                              </button>
+                                  qualquer jeito, abrir só mostra as linhas.
+                                  Mesmo tamanho padrão do "+" de Centro de
+                                  Custo em GestaoParcelasTab.jsx (h-5 w-5,
+                                  ícone 12) — nada de botão avantajado. */}
+                              {semNotas ? (
+                                <span className="h-5 w-5 shrink-0" />
+                              ) : (
+                                <button
+                                  type="button"
+                                  onClick={() => toggleAberto(certificado.id)}
+                                  title={aberto ? 'Recolher' : 'Expandir'}
+                                  className="flex h-5 w-5 shrink-0 items-center justify-center rounded border border-gray-200 text-gray-500 hover:border-primary-300 hover:text-primary-600"
+                                >
+                                  {aberto ? <Minus size={12} /> : <Plus size={12} />}
+                                </button>
+                              )}
 
                               <p className="text-sm font-semibold text-gray-900">{certificado.nome}</p>
 
@@ -853,16 +873,18 @@ export default function EspiaoNfeNfsePage() {
                           <>
                             {/* Nível 2: linha de Produtos, com "+/−" próprio
                                 (pl-9 — mesmo recuo do Cluster em
-                                GestaoParcelasTab.jsx). Só mostra as notas
-                                (nível 3) quando esta seção está aberta. */}
+                                GestaoParcelasTab.jsx, mesmo tamanho de botão
+                                também: h-4 w-4, ícone 10). Só mostra as
+                                notas (nível 3) quando esta seção está
+                                aberta. */}
                             <tr
                               onClick={() => toggleSecao(certificado.id, 'produtos')}
-                              className="cursor-pointer border-b border-gray-50 bg-white hover:bg-gray-50"
+                              className={`cursor-pointer border-b border-gray-50 hover:bg-gray-50 ${produtosAberto ? 'bg-gray-50' : 'bg-white'}`}
                             >
                               <td colSpan={totalColunas} className="py-2 pl-9 pr-5">
-                                <span className="inline-flex items-center gap-2 text-xs font-semibold text-gray-500">
-                                  <span className="flex h-4 w-4 shrink-0 items-center justify-center rounded border border-gray-200 text-gray-400">
-                                    {produtosAberto ? <Minus size={9} /> : <Plus size={9} />}
+                                <span className="inline-flex items-center gap-2 text-sm font-semibold text-gray-500">
+                                  <span className="flex h-4 w-4 shrink-0 items-center justify-center rounded border border-gray-300 text-gray-500">
+                                    {produtosAberto ? <Minus size={10} /> : <Plus size={10} />}
                                   </span>
                                   <Package size={13} />
                                   Produtos (NF-e) · {notas ? notas.produtos.length : 0}
@@ -879,17 +901,20 @@ export default function EspiaoNfeNfsePage() {
                                   </td>
                                 </tr>
                               ) : (
-                                notas.produtos.map((nota) => (
-                                  <LinhaNota
-                                    key={nota.id}
-                                    nota={nota}
-                                    modoInativas={modoInativas}
-                                    selecionada={selecionadas.has(nota.id)}
-                                    onToggleSelecionada={() => toggleSelecionada(certificado.id, 'produtos', nota)}
-                                    onBaixarPdf={() => handleDownloadPdf(nota)}
-                                    onBaixar={() => handleDownload(nota)}
-                                  />
-                                ))
+                                <>
+                                  <CabecalhoNotas modoInativas={modoInativas} />
+                                  {notas.produtos.map((nota) => (
+                                    <LinhaNota
+                                      key={nota.id}
+                                      nota={nota}
+                                      modoInativas={modoInativas}
+                                      selecionada={selecionadas.has(nota.id)}
+                                      onToggleSelecionada={() => toggleSelecionada(certificado.id, 'produtos', nota)}
+                                      onBaixarPdf={() => handleDownloadPdf(nota)}
+                                      onBaixar={() => handleDownload(nota)}
+                                    />
+                                  ))}
+                                </>
                               ))}
 
                             {/* Nível 2: linha de Serviços, independente da de
@@ -897,12 +922,12 @@ export default function EspiaoNfeNfsePage() {
                                 estado em secoesAbertas). */}
                             <tr
                               onClick={() => toggleSecao(certificado.id, 'servicos')}
-                              className="cursor-pointer border-b border-gray-50 bg-white hover:bg-gray-50"
+                              className={`cursor-pointer border-b border-gray-50 hover:bg-gray-50 ${servicosAberto ? 'bg-gray-50' : 'bg-white'}`}
                             >
                               <td colSpan={totalColunas} className="py-2 pl-9 pr-5">
-                                <span className="inline-flex items-center gap-2 text-xs font-semibold text-gray-500">
-                                  <span className="flex h-4 w-4 shrink-0 items-center justify-center rounded border border-gray-200 text-gray-400">
-                                    {servicosAberto ? <Minus size={9} /> : <Plus size={9} />}
+                                <span className="inline-flex items-center gap-2 text-sm font-semibold text-gray-500">
+                                  <span className="flex h-4 w-4 shrink-0 items-center justify-center rounded border border-gray-300 text-gray-500">
+                                    {servicosAberto ? <Minus size={10} /> : <Plus size={10} />}
                                   </span>
                                   <Wrench size={13} />
                                   Serviços (NFS-e) · {notas ? notas.servicos.length : 0}
@@ -919,17 +944,20 @@ export default function EspiaoNfeNfsePage() {
                                   </td>
                                 </tr>
                               ) : (
-                                notas.servicos.map((nota) => (
-                                  <LinhaNota
-                                    key={nota.id}
-                                    nota={nota}
-                                    modoInativas={modoInativas}
-                                    selecionada={selecionadas.has(nota.id)}
-                                    onToggleSelecionada={() => toggleSelecionada(certificado.id, 'servicos', nota)}
-                                    onBaixarPdf={() => handleDownloadPdf(nota)}
-                                    onBaixar={() => handleDownload(nota)}
-                                  />
-                                ))
+                                <>
+                                  <CabecalhoNotas modoInativas={modoInativas} />
+                                  {notas.servicos.map((nota) => (
+                                    <LinhaNota
+                                      key={nota.id}
+                                      nota={nota}
+                                      modoInativas={modoInativas}
+                                      selecionada={selecionadas.has(nota.id)}
+                                      onToggleSelecionada={() => toggleSelecionada(certificado.id, 'servicos', nota)}
+                                      onBaixarPdf={() => handleDownloadPdf(nota)}
+                                      onBaixar={() => handleDownload(nota)}
+                                    />
+                                  ))}
+                                </>
                               ))}
                           </>
                         )}
