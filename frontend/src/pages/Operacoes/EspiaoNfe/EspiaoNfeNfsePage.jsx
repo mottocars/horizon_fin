@@ -409,6 +409,23 @@ export default function EspiaoNfeNfsePage() {
     });
   }, [certificados, notasPorCertificado, filtroAtivo]);
 
+  // Dois clusters (ver render): certificados COM nota no período primeiro,
+  // os SEM nenhuma nota depois, separados por um divisor — quem tem algo
+  // pra revisar não fica misturado/perdido entre quem não tem nada agora.
+  // Um certificado cujas notas ainda não carregaram (notas == null) conta
+  // como "com nota" até a resposta chegar, pra não pular de cluster na tela
+  // se acabar dando vazio.
+  const certificadosAgrupados = useMemo(() => {
+    const comNotas = [];
+    const semNotas = [];
+    certificadosFiltrados.forEach((certificado) => {
+      const dados = notasPorCertificado[certificado.id];
+      const vazio = dados != null && dados.produtos.length === 0 && dados.servicos.length === 0;
+      (vazio ? semNotas : comNotas).push(certificado);
+    });
+    return { comNotas, semNotas };
+  }, [certificadosFiltrados, notasPorCertificado]);
+
   // Resumo no topo da tabela (ver render) — soma só o que já carregou; os
   // certificados ainda em `loadingNotas` entram como 0 e o total sobe
   // sozinho conforme cada resposta chega (mesmo padrão de totalNfeCard/
@@ -680,6 +697,263 @@ export default function EspiaoNfeNfsePage() {
   // seção (certificado, Produtos, Serviços).
   const totalColunas = modoInativas ? 7 : 6;
 
+  // Extraído do JSX (era um .map() inline) pra poder ser chamado duas vezes
+  // — uma pro cluster "com nota", outra pro cluster "sem nota" (ver
+  // certificadosAgrupados e o render da tabela) — sem duplicar todo esse
+  // bloco.
+  function renderCertificado(certificado) {
+    const vencido = estaVencido(certificado.validade_ate);
+    const notas = notasPorCertificado[certificado.id];
+    const carregandoNotas = Boolean(loadingNotas[certificado.id]);
+    const emConsulta = Boolean(consultando[certificado.id]);
+    const aberto = abertos.has(certificado.id);
+    const produtosAberto = secoesAbertas.has(`${certificado.id}:produtos`);
+    const servicosAberto = secoesAbertas.has(`${certificado.id}:servicos`);
+    // Enquanto ainda não carregou, mostra "…" em vez de um
+    // número errado.
+    const totalNfeCard = notas ? notas.produtos.length : null;
+    const totalNfseCard = notas ? notas.servicos.length : null;
+    // Sem nenhuma nota (já carregado e os dois totais deram
+    // zero) — não faz sentido oferecer o "+", não tem nada
+    // pra mostrar dentro.
+    const semNotas = notas != null && totalNfeCard === 0 && totalNfseCard === 0;
+    // "Vence em breve" é um aviso mais cedo que o vermelho
+    // de vencido — mesma info (validade_ate) que já existe,
+    // só avisando com antecedência em vez de só quando já
+    // venceu.
+    const diasVencimento = diasParaVencer(certificado.validade_ate);
+    const vencendoEmBreve = !vencido && diasVencimento !== null && diasVencimento <= DIAS_AVISO_VENCIMENTO;
+
+    return (
+      <tbody key={certificado.id}>
+        <tr className={vencido ? 'bg-red-50' : aberto ? 'bg-gray-50' : 'bg-white'}>
+          <td colSpan={totalColunas} className="px-5 py-2.5">
+            <div className="flex flex-wrap items-center gap-x-3 gap-y-1.5">
+              {/* Fechado por padrão (ver `abertos` — começa
+                  vazio) — as notas já estão carregadas de
+                  qualquer jeito, abrir só mostra as linhas.
+                  Mesmo tamanho padrão do "+" de Centro de
+                  Custo em GestaoParcelasTab.jsx (h-5 w-5,
+                  ícone 12) — nada de botão avantajado. */}
+              {semNotas ? (
+                <span className="h-5 w-5 shrink-0" />
+              ) : (
+                <button
+                  type="button"
+                  onClick={() => toggleAberto(certificado.id)}
+                  title={aberto ? 'Recolher' : 'Expandir'}
+                  className="flex h-5 w-5 shrink-0 items-center justify-center rounded border border-gray-200 text-gray-500 hover:border-primary-300 hover:text-primary-600"
+                >
+                  {aberto ? <Minus size={12} /> : <Plus size={12} />}
+                </button>
+              )}
+
+              <p className="text-sm text-gray-900">{certificado.nome}</p>
+
+              {/* Canto direito: status de Produtos/Serviços (só ícone +
+                  número, cor distingue um do outro), última consulta
+                  (ícone de relógio + "há X min/h/dias" — a data exata
+                  fica no title) e vencimento (vence em breve/vencido),
+                  antes da ação (consultar). */}
+              <div className="ml-auto flex shrink-0 items-center gap-2">
+                <span
+                  title={`${totalNfeCard === null ? '…' : totalNfeCard} produto${totalNfeCard !== 1 ? 's' : ''} (NF-e)`}
+                  className="inline-flex items-center gap-1 rounded-full bg-primary-50 px-2.5 py-1 text-xs font-semibold text-primary-700"
+                >
+                  <Package size={12} />
+                  {totalNfeCard === null ? '…' : totalNfeCard}
+                </span>
+                <span
+                  title={`${totalNfseCard === null ? '…' : totalNfseCard} serviço${totalNfseCard !== 1 ? 's' : ''} (NFS-e)`}
+                  className="inline-flex items-center gap-1 rounded-full bg-violet-50 px-2.5 py-1 text-xs font-semibold text-violet-700"
+                >
+                  <Wrench size={12} />
+                  {totalNfseCard === null ? '…' : totalNfseCard}
+                </span>
+
+                {!modoInativas && certificado.ultima_consulta_em && (
+                  <span
+                    title={`Última consulta: ${formatarDataHora(certificado.ultima_consulta_em)}`}
+                    className="inline-flex items-center gap-1.5 rounded-full bg-white px-2.5 py-1 text-xs font-medium text-gray-600"
+                  >
+                    <Clock size={12} />
+                    {formatarTempoRelativo(certificado.ultima_consulta_em)}
+                  </span>
+                )}
+
+                {vencendoEmBreve && (
+                  <span
+                    title={`Certificado vence em ${diasVencimento} dia${diasVencimento !== 1 ? 's' : ''}`}
+                    className="inline-flex items-center gap-1.5 rounded-full bg-amber-50 px-2.5 py-1 text-xs font-semibold text-amber-700"
+                  >
+                    <Clock size={12} />
+                    Vence em {diasVencimento} dia{diasVencimento !== 1 ? 's' : ''}
+                  </span>
+                )}
+
+                {vencido ? (
+                  <span
+                    title="Certificado vencido — não é possível consultar novas notas com ele"
+                    className="inline-flex items-center gap-1.5 rounded-full bg-red-600 px-3 py-1.5 text-xs font-semibold text-white"
+                  >
+                    <AlertTriangle size={12} />
+                    Certificado vencido
+                  </span>
+                ) : modoInativas ? null : certificado.ultima_consulta_em ? (
+                  <IconButton
+                    title="Consultar novamente"
+                    onClick={() => {
+                      if (!emConsulta) handleConsultar(certificado.id);
+                    }}
+                    className="hover:text-primary-600"
+                  >
+                    {emConsulta ? (
+                      <Loader2 size={15} className="animate-spin" />
+                    ) : (
+                      <RefreshCw size={15} />
+                    )}
+                  </IconButton>
+                ) : (
+                  <span
+                    role="button"
+                    onClick={() => {
+                      if (!emConsulta) handleConsultar(certificado.id);
+                    }}
+                    className={`inline-flex items-center gap-1.5 rounded-full px-3 py-1.5 text-xs font-semibold text-white ${
+                      emConsulta ? 'bg-primary-400' : 'bg-primary-600 hover:bg-primary-700'
+                    }`}
+                  >
+                    {emConsulta ? (
+                      <Loader2 size={12} className="animate-spin" />
+                    ) : (
+                      <RefreshCw size={12} />
+                    )}
+                    Gerar 1ª Consulta
+                  </span>
+                )}
+              </div>
+            </div>
+          </td>
+        </tr>
+
+        {!aberto ? null : carregandoNotas ? (
+          <tr>
+            <td colSpan={totalColunas} className="px-5 py-6 text-center text-sm text-gray-400">
+              Carregando notas...
+            </td>
+          </tr>
+        ) : (
+          <>
+            {/* Nível 2: linha de Produtos, com "+/−" próprio
+                (pl-9 — mesmo recuo do Cluster em
+                GestaoParcelasTab.jsx, mesmo tamanho de botão
+                também: h-4 w-4, ícone 10). Só mostra as
+                notas (nível 3) quando esta seção está
+                aberta. */}
+            <tr
+              onClick={() => toggleSecao(certificado.id, 'produtos')}
+              className={`cursor-pointer border-b border-gray-50 hover:bg-gray-50 ${produtosAberto ? 'bg-gray-50' : 'bg-white'}`}
+            >
+              <td colSpan={totalColunas} className="py-2 pl-9 pr-5">
+                <span className="inline-flex items-center gap-2 text-sm font-semibold text-gray-500">
+                  <span className="flex h-4 w-4 shrink-0 items-center justify-center rounded border border-gray-300 text-gray-500">
+                    {produtosAberto ? <Minus size={10} /> : <Plus size={10} />}
+                  </span>
+                  <Package size={13} />
+                  Produtos (NF-e) · {notas ? notas.produtos.length : 0}
+                </span>
+              </td>
+            </tr>
+            {produtosAberto &&
+              (!notas || notas.produtos.length === 0 ? (
+                <tr>
+                  <td colSpan={totalColunas} className="pl-14 pr-5 pb-2.5 text-xs text-gray-400">
+                    {modoInativas
+                      ? 'Nenhum produto inativado no período selecionado.'
+                      : 'Nenhum produto encontrado no período selecionado.'}
+                  </td>
+                </tr>
+              ) : (
+                <>
+                  <CabecalhoNotas
+                    modoInativas={modoInativas}
+                    checked={notas.produtos.every((n) => selecionadas.has(n.id))}
+                    indeterminate={
+                      notas.produtos.some((n) => selecionadas.has(n.id)) &&
+                      !notas.produtos.every((n) => selecionadas.has(n.id))
+                    }
+                    onToggleTodas={() => toggleTodasNaSecao(certificado.id, 'produtos', notas.produtos)}
+                  />
+                  {notas.produtos.map((nota) => (
+                    <LinhaNota
+                      key={nota.id}
+                      nota={nota}
+                      modoInativas={modoInativas}
+                      selecionada={selecionadas.has(nota.id)}
+                      onToggleSelecionada={() => toggleSelecionada(certificado.id, 'produtos', nota)}
+                      onBaixarPdf={() => handleDownloadPdf(nota)}
+                      onBaixar={() => handleDownload(nota)}
+                    />
+                  ))}
+                </>
+              ))}
+
+            {/* Nível 2: linha de Serviços, independente da de
+                Produtos acima (cada uma com seu próprio
+                estado em secoesAbertas). */}
+            <tr
+              onClick={() => toggleSecao(certificado.id, 'servicos')}
+              className={`cursor-pointer border-b border-gray-50 hover:bg-gray-50 ${servicosAberto ? 'bg-gray-50' : 'bg-white'}`}
+            >
+              <td colSpan={totalColunas} className="py-2 pl-9 pr-5">
+                <span className="inline-flex items-center gap-2 text-sm font-semibold text-gray-500">
+                  <span className="flex h-4 w-4 shrink-0 items-center justify-center rounded border border-gray-300 text-gray-500">
+                    {servicosAberto ? <Minus size={10} /> : <Plus size={10} />}
+                  </span>
+                  <Wrench size={13} />
+                  Serviços (NFS-e) · {notas ? notas.servicos.length : 0}
+                </span>
+              </td>
+            </tr>
+            {servicosAberto &&
+              (!notas || notas.servicos.length === 0 ? (
+                <tr>
+                  <td colSpan={totalColunas} className="pl-14 pr-5 pb-2.5 text-xs text-gray-400">
+                    {modoInativas
+                      ? 'Nenhum serviço inativado no período selecionado.'
+                      : 'Nenhum serviço encontrado no período selecionado.'}
+                  </td>
+                </tr>
+              ) : (
+                <>
+                  <CabecalhoNotas
+                    modoInativas={modoInativas}
+                    checked={notas.servicos.every((n) => selecionadas.has(n.id))}
+                    indeterminate={
+                      notas.servicos.some((n) => selecionadas.has(n.id)) &&
+                      !notas.servicos.every((n) => selecionadas.has(n.id))
+                    }
+                    onToggleTodas={() => toggleTodasNaSecao(certificado.id, 'servicos', notas.servicos)}
+                  />
+                  {notas.servicos.map((nota) => (
+                    <LinhaNota
+                      key={nota.id}
+                      nota={nota}
+                      modoInativas={modoInativas}
+                      selecionada={selecionadas.has(nota.id)}
+                      onToggleSelecionada={() => toggleSelecionada(certificado.id, 'servicos', nota)}
+                      onBaixarPdf={() => handleDownloadPdf(nota)}
+                      onBaixar={() => handleDownload(nota)}
+                    />
+                  ))}
+                </>
+              ))}
+          </>
+        )}
+      </tbody>
+    );
+  }
+
   return (
     <div className="space-y-4">
       <Card>
@@ -851,256 +1125,24 @@ export default function EspiaoNfeNfsePage() {
                     </tbody>
                   )}
 
-                  {certificadosFiltrados.map((certificado) => {
-                    const vencido = estaVencido(certificado.validade_ate);
-                    const notas = notasPorCertificado[certificado.id];
-                    const carregandoNotas = Boolean(loadingNotas[certificado.id]);
-                    const emConsulta = Boolean(consultando[certificado.id]);
-                    const aberto = abertos.has(certificado.id);
-                    const produtosAberto = secoesAbertas.has(`${certificado.id}:produtos`);
-                    const servicosAberto = secoesAbertas.has(`${certificado.id}:servicos`);
-                    // Enquanto ainda não carregou, mostra "…" em vez de um
-                    // número errado.
-                    const totalNfeCard = notas ? notas.produtos.length : null;
-                    const totalNfseCard = notas ? notas.servicos.length : null;
-                    // Sem nenhuma nota (já carregado e os dois totais deram
-                    // zero) — não faz sentido oferecer o "+", não tem nada
-                    // pra mostrar dentro.
-                    const semNotas = notas != null && totalNfeCard === 0 && totalNfseCard === 0;
-                    // "Vence em breve" é um aviso mais cedo que o vermelho
-                    // de vencido — mesma info (validade_ate) que já existe,
-                    // só avisando com antecedência em vez de só quando já
-                    // venceu.
-                    const diasVencimento = diasParaVencer(certificado.validade_ate);
-                    const vencendoEmBreve = !vencido && diasVencimento !== null && diasVencimento <= DIAS_AVISO_VENCIMENTO;
+                  {/* Dois clusters (ver certificadosAgrupados): quem tem
+                      nota no período primeiro, quem não tem depois de um
+                      divisor — sem misturar quem precisa de atenção agora
+                      com quem não tem nada pra mostrar. */}
+                  {certificadosAgrupados.comNotas.map(renderCertificado)}
 
-                    return (
-                      <tbody key={certificado.id}>
-                        <tr className={vencido ? 'bg-red-50' : aberto ? 'bg-gray-50' : 'bg-white'}>
-                          <td colSpan={totalColunas} className="px-5 py-2.5">
-                            <div className="flex flex-wrap items-center gap-x-3 gap-y-1.5">
-                              {/* Fechado por padrão (ver `abertos` — começa
-                                  vazio) — as notas já estão carregadas de
-                                  qualquer jeito, abrir só mostra as linhas.
-                                  Mesmo tamanho padrão do "+" de Centro de
-                                  Custo em GestaoParcelasTab.jsx (h-5 w-5,
-                                  ícone 12) — nada de botão avantajado. */}
-                              {semNotas ? (
-                                <span className="h-5 w-5 shrink-0" />
-                              ) : (
-                                <button
-                                  type="button"
-                                  onClick={() => toggleAberto(certificado.id)}
-                                  title={aberto ? 'Recolher' : 'Expandir'}
-                                  className="flex h-5 w-5 shrink-0 items-center justify-center rounded border border-gray-200 text-gray-500 hover:border-primary-300 hover:text-primary-600"
-                                >
-                                  {aberto ? <Minus size={12} /> : <Plus size={12} />}
-                                </button>
-                              )}
+                  {certificadosAgrupados.semNotas.length > 0 && (
+                    <tbody>
+                      <tr className="border-t border-gray-100 bg-gray-50">
+                        <td colSpan={totalColunas} className="px-5 py-2 text-xs font-medium text-gray-400">
+                          Sem nota no período selecionado · {certificadosAgrupados.semNotas.length} certificado
+                          {certificadosAgrupados.semNotas.length !== 1 ? 's' : ''}
+                        </td>
+                      </tr>
+                    </tbody>
+                  )}
 
-                              <p className="text-sm text-gray-900">{certificado.nome}</p>
-
-                              {vencendoEmBreve && (
-                                <span className="inline-flex items-center gap-1 text-xs text-amber-600">
-                                  <Clock size={12} />
-                                  Vence em {diasVencimento} dia{diasVencimento !== 1 ? 's' : ''}
-                                </span>
-                              )}
-
-                              {/* Canto direito: status de Produtos/Serviços
-                                  (só ícone + número, cor distingue um do
-                                  outro) e de última consulta (ícone de
-                                  relógio + "há X min/h/dias" — a data exata
-                                  fica no title, ao passar o mouse), antes da
-                                  ação (consultar/vencido). */}
-                              <div className="ml-auto flex shrink-0 items-center gap-2">
-                                <span
-                                  title={`${totalNfeCard === null ? '…' : totalNfeCard} produto${totalNfeCard !== 1 ? 's' : ''} (NF-e)`}
-                                  className="inline-flex items-center gap-1 rounded-full bg-primary-50 px-2.5 py-1 text-xs font-semibold text-primary-700"
-                                >
-                                  <Package size={12} />
-                                  {totalNfeCard === null ? '…' : totalNfeCard}
-                                </span>
-                                <span
-                                  title={`${totalNfseCard === null ? '…' : totalNfseCard} serviço${totalNfseCard !== 1 ? 's' : ''} (NFS-e)`}
-                                  className="inline-flex items-center gap-1 rounded-full bg-violet-50 px-2.5 py-1 text-xs font-semibold text-violet-700"
-                                >
-                                  <Wrench size={12} />
-                                  {totalNfseCard === null ? '…' : totalNfseCard}
-                                </span>
-
-                                {!modoInativas && certificado.ultima_consulta_em && (
-                                  <span
-                                    title={`Última consulta: ${formatarDataHora(certificado.ultima_consulta_em)}`}
-                                    className="inline-flex items-center gap-1.5 rounded-full bg-white px-2.5 py-1 text-xs font-medium text-gray-600"
-                                  >
-                                    <Clock size={12} />
-                                    {formatarTempoRelativo(certificado.ultima_consulta_em)}
-                                  </span>
-                                )}
-
-                                {vencido ? (
-                                  <span
-                                    title="Certificado vencido — não é possível consultar novas notas com ele"
-                                    className="inline-flex items-center gap-1.5 rounded-full bg-red-600 px-3 py-1.5 text-xs font-semibold text-white"
-                                  >
-                                    <AlertTriangle size={12} />
-                                    Certificado vencido
-                                  </span>
-                                ) : modoInativas ? null : certificado.ultima_consulta_em ? (
-                                  <IconButton
-                                    title="Consultar novamente"
-                                    onClick={() => {
-                                      if (!emConsulta) handleConsultar(certificado.id);
-                                    }}
-                                    className="hover:text-primary-600"
-                                  >
-                                    {emConsulta ? (
-                                      <Loader2 size={15} className="animate-spin" />
-                                    ) : (
-                                      <RefreshCw size={15} />
-                                    )}
-                                  </IconButton>
-                                ) : (
-                                  <span
-                                    role="button"
-                                    onClick={() => {
-                                      if (!emConsulta) handleConsultar(certificado.id);
-                                    }}
-                                    className={`inline-flex items-center gap-1.5 rounded-full px-3 py-1.5 text-xs font-semibold text-white ${
-                                      emConsulta ? 'bg-primary-400' : 'bg-primary-600 hover:bg-primary-700'
-                                    }`}
-                                  >
-                                    {emConsulta ? (
-                                      <Loader2 size={12} className="animate-spin" />
-                                    ) : (
-                                      <RefreshCw size={12} />
-                                    )}
-                                    Gerar 1ª Consulta
-                                  </span>
-                                )}
-                              </div>
-                            </div>
-                          </td>
-                        </tr>
-
-                        {!aberto ? null : carregandoNotas ? (
-                          <tr>
-                            <td colSpan={totalColunas} className="px-5 py-6 text-center text-sm text-gray-400">
-                              Carregando notas...
-                            </td>
-                          </tr>
-                        ) : (
-                          <>
-                            {/* Nível 2: linha de Produtos, com "+/−" próprio
-                                (pl-9 — mesmo recuo do Cluster em
-                                GestaoParcelasTab.jsx, mesmo tamanho de botão
-                                também: h-4 w-4, ícone 10). Só mostra as
-                                notas (nível 3) quando esta seção está
-                                aberta. */}
-                            <tr
-                              onClick={() => toggleSecao(certificado.id, 'produtos')}
-                              className={`cursor-pointer border-b border-gray-50 hover:bg-gray-50 ${produtosAberto ? 'bg-gray-50' : 'bg-white'}`}
-                            >
-                              <td colSpan={totalColunas} className="py-2 pl-9 pr-5">
-                                <span className="inline-flex items-center gap-2 text-sm font-semibold text-gray-500">
-                                  <span className="flex h-4 w-4 shrink-0 items-center justify-center rounded border border-gray-300 text-gray-500">
-                                    {produtosAberto ? <Minus size={10} /> : <Plus size={10} />}
-                                  </span>
-                                  <Package size={13} />
-                                  Produtos (NF-e) · {notas ? notas.produtos.length : 0}
-                                </span>
-                              </td>
-                            </tr>
-                            {produtosAberto &&
-                              (!notas || notas.produtos.length === 0 ? (
-                                <tr>
-                                  <td colSpan={totalColunas} className="pl-14 pr-5 pb-2.5 text-xs text-gray-400">
-                                    {modoInativas
-                                      ? 'Nenhum produto inativado no período selecionado.'
-                                      : 'Nenhum produto encontrado no período selecionado.'}
-                                  </td>
-                                </tr>
-                              ) : (
-                                <>
-                                  <CabecalhoNotas
-                                    modoInativas={modoInativas}
-                                    checked={notas.produtos.every((n) => selecionadas.has(n.id))}
-                                    indeterminate={
-                                      notas.produtos.some((n) => selecionadas.has(n.id)) &&
-                                      !notas.produtos.every((n) => selecionadas.has(n.id))
-                                    }
-                                    onToggleTodas={() => toggleTodasNaSecao(certificado.id, 'produtos', notas.produtos)}
-                                  />
-                                  {notas.produtos.map((nota) => (
-                                    <LinhaNota
-                                      key={nota.id}
-                                      nota={nota}
-                                      modoInativas={modoInativas}
-                                      selecionada={selecionadas.has(nota.id)}
-                                      onToggleSelecionada={() => toggleSelecionada(certificado.id, 'produtos', nota)}
-                                      onBaixarPdf={() => handleDownloadPdf(nota)}
-                                      onBaixar={() => handleDownload(nota)}
-                                    />
-                                  ))}
-                                </>
-                              ))}
-
-                            {/* Nível 2: linha de Serviços, independente da de
-                                Produtos acima (cada uma com seu próprio
-                                estado em secoesAbertas). */}
-                            <tr
-                              onClick={() => toggleSecao(certificado.id, 'servicos')}
-                              className={`cursor-pointer border-b border-gray-50 hover:bg-gray-50 ${servicosAberto ? 'bg-gray-50' : 'bg-white'}`}
-                            >
-                              <td colSpan={totalColunas} className="py-2 pl-9 pr-5">
-                                <span className="inline-flex items-center gap-2 text-sm font-semibold text-gray-500">
-                                  <span className="flex h-4 w-4 shrink-0 items-center justify-center rounded border border-gray-300 text-gray-500">
-                                    {servicosAberto ? <Minus size={10} /> : <Plus size={10} />}
-                                  </span>
-                                  <Wrench size={13} />
-                                  Serviços (NFS-e) · {notas ? notas.servicos.length : 0}
-                                </span>
-                              </td>
-                            </tr>
-                            {servicosAberto &&
-                              (!notas || notas.servicos.length === 0 ? (
-                                <tr>
-                                  <td colSpan={totalColunas} className="pl-14 pr-5 pb-2.5 text-xs text-gray-400">
-                                    {modoInativas
-                                      ? 'Nenhum serviço inativado no período selecionado.'
-                                      : 'Nenhum serviço encontrado no período selecionado.'}
-                                  </td>
-                                </tr>
-                              ) : (
-                                <>
-                                  <CabecalhoNotas
-                                    modoInativas={modoInativas}
-                                    checked={notas.servicos.every((n) => selecionadas.has(n.id))}
-                                    indeterminate={
-                                      notas.servicos.some((n) => selecionadas.has(n.id)) &&
-                                      !notas.servicos.every((n) => selecionadas.has(n.id))
-                                    }
-                                    onToggleTodas={() => toggleTodasNaSecao(certificado.id, 'servicos', notas.servicos)}
-                                  />
-                                  {notas.servicos.map((nota) => (
-                                    <LinhaNota
-                                      key={nota.id}
-                                      nota={nota}
-                                      modoInativas={modoInativas}
-                                      selecionada={selecionadas.has(nota.id)}
-                                      onToggleSelecionada={() => toggleSelecionada(certificado.id, 'servicos', nota)}
-                                      onBaixarPdf={() => handleDownloadPdf(nota)}
-                                      onBaixar={() => handleDownload(nota)}
-                                    />
-                                  ))}
-                                </>
-                              ))}
-                          </>
-                        )}
-                      </tbody>
-                    );
-                  })}
+                  {certificadosAgrupados.semNotas.map(renderCertificado)}
                 </table>
               </div>
             </Card>
