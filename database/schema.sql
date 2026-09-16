@@ -1189,6 +1189,15 @@ CREATE TABLE espiao_notas (
     -- marcação interna de quem já revisou a nota, não muda o status fiscal.
     ciente_por           INTEGER REFERENCES usuarios(id),
     ciente_em            TIMESTAMP,
+    -- TRUE quando o XML salvo é só o resumo (resNFe) que a SEFAZ distribui
+    -- pra quem não é o emitente — sem itens/produtos, sem valor de
+    -- auditoria nenhum. Nota com apenas_resumo = TRUE fica escondida de
+    -- toda listagem (ver espiao.service.js::montarFiltrosNotas e as
+    -- funções list*) até a SEFAZ eventualmente distribuir a versão
+    -- completa (procNFe/nfeProc) da mesma chave, que sobrescreve o XML e
+    -- vira FALSE (ver salvarNota). NFS-e não tem esse conceito de resumo —
+    -- sempre chega completa, então fica FALSE.
+    apenas_resumo        BOOLEAN NOT NULL DEFAULT FALSE,
     criado_em            TIMESTAMP DEFAULT NOW(),
     UNIQUE (empresa_id, chave_acesso)
 );

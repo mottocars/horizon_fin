@@ -217,6 +217,17 @@ function extrairChaveNfe(xmlBuffer) {
   return chNFe && /^\d{44}$/.test(chNFe) ? chNFe : null;
 }
 
+// resNFe (resumo) tem <resNFe> como elemento raiz do documento — sem os
+// itens/produtos (<det>) que só existem no documento completo
+// (procNFe/nfeProc). Usado pra marcar apenas_resumo em salvarNota; essas
+// notas ficam escondidas de toda listagem até a SEFAZ eventualmente
+// distribuir a versão completa da mesma chave (ver comentário na coluna,
+// em database/schema.sql).
+function ehResumoNfe(xmlBuffer) {
+  const texto = xmlBuffer.toString('utf-8');
+  return /<resNFe[ >]/.test(texto);
+}
+
 function extrairEmitenteNfe(xmlBuffer) {
   const texto = xmlBuffer.toString('utf-8');
   // procNFe/NFe completa: <emit><xNome>. resNFe (resumo): <xNome> solto,
@@ -395,7 +406,7 @@ async function salvarNota(
   empresaId,
   certificadoId,
   tipo,
-  { raw, chave, emissor, destinatario, dataEmissao, numero, serie }
+  { raw, chave, emissor, destinatario, dataEmissao, numero, serie, apenasResumo = false }
 ) {
   if (!chave) return false;
 
@@ -404,17 +415,22 @@ async function salvarNota(
   const arquivoArmazenado = path.join(String(empresaId), `${sanitizeArquivo(chave)}.xml`);
   fs.writeFileSync(path.join(NOTAS_DIR, arquivoArmazenado), raw);
 
+  // apenas_resumo, como arquivo_armazenado, é sobrescrito sem COALESCE —
+  // precisa poder virar FALSE quando a versão completa da mesma chave
+  // chegar depois (diferente de emissor/destinatario/etc., que só
+  // preenchem o que ainda está em branco).
   const { rowCount } = await pool.query(
-    `INSERT INTO espiao_notas (empresa_id, certificado_id, tipo, chave_acesso, emissor, destinatario, data_emissao, numero_nota, serie_nota, arquivo_armazenado)
-     VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10)
+    `INSERT INTO espiao_notas (empresa_id, certificado_id, tipo, chave_acesso, emissor, destinatario, data_emissao, numero_nota, serie_nota, arquivo_armazenado, apenas_resumo)
+     VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11)
      ON CONFLICT (empresa_id, chave_acesso) DO UPDATE SET
        emissor = COALESCE(espiao_notas.emissor, EXCLUDED.emissor),
        destinatario = COALESCE(espiao_notas.destinatario, EXCLUDED.destinatario),
        data_emissao = COALESCE(espiao_notas.data_emissao, EXCLUDED.data_emissao),
        numero_nota = COALESCE(espiao_notas.numero_nota, EXCLUDED.numero_nota),
        serie_nota = COALESCE(espiao_notas.serie_nota, EXCLUDED.serie_nota),
-       arquivo_armazenado = EXCLUDED.arquivo_armazenado`,
-    [empresaId, certificadoId, tipo, chave, emissor, destinatario, dataEmissao, numero, serie, arquivoArmazenado]
+       arquivo_armazenado = EXCLUDED.arquivo_armazenado,
+       apenas_resumo = EXCLUDED.apenas_resumo`,
+    [empresaId, certificadoId, tipo, chave, emissor, destinatario, dataEmissao, numero, serie, arquivoArmazenado, apenasResumo]
   );
   return rowCount > 0;
 }
@@ -525,6 +541,7 @@ async function consultarPorCertificado(empresaId, certificado, cUFAutor) {
       dataEmissao: extrairDataEmissaoNfe(doc.raw),
       numero,
       serie,
+      apenasResumo: ehResumoNfe(doc.raw),
     });
     if (salvou) salvasNfe++;
   }
@@ -706,7 +723,10 @@ function montarFiltrosNotas(params, where, { dataInicio, dataFim, chave, numero,
 
 async function listNotas(empresaId, filtros) {
   const params = [empresaId];
-  const where = montarFiltrosNotas(params, 'empresa_id = $1 AND inativa = FALSE', filtros);
+  // apenas_resumo = FALSE: nota só-resumo (resNFe) não tem valor de
+  // auditoria nenhum (sem itens) — fica escondida até a SEFAZ distribuir a
+  // versão completa da mesma chave (ver ehResumoNfe/salvarNota).
+  const where = montarFiltrosNotas(params, 'empresa_id = $1 AND inativa = FALSE AND apenas_resumo = FALSE', filtros);
 
   const { rows } = await pool.query(
     `SELECT id, tipo, chave_acesso, numero_nota, serie_nota, emissor, destinatario, data_emissao, situacao, ciente_em
@@ -724,7 +744,11 @@ async function listNotas(empresaId, filtros) {
 
 async function listNotasPorCertificado(certificadoId, filtros) {
   const params = [certificadoId];
-  const where = montarFiltrosNotas(params, 'certificado_id = $1 AND inativa = FALSE', filtros);
+  const where = montarFiltrosNotas(
+    params,
+    'certificado_id = $1 AND inativa = FALSE AND apenas_resumo = FALSE',
+    filtros
+  );
 
   const { rows } = await pool.query(
     `SELECT id, tipo, chave_acesso, numero_nota, serie_nota, emissor, destinatario, data_emissao, situacao, ciente_em
@@ -807,7 +831,12 @@ async function desmarcarCiencia(notaIds) {
 
 async function listNotasInativadas(empresaId, filtros) {
   const params = [empresaId];
-  const where = montarFiltrosNotas(params, 'n.empresa_id = $1 AND n.inativa = TRUE', filtros, 'n.');
+  const where = montarFiltrosNotas(
+    params,
+    'n.empresa_id = $1 AND n.inativa = TRUE AND n.apenas_resumo = FALSE',
+    filtros,
+    'n.'
+  );
 
   const { rows } = await pool.query(
     `SELECT n.id, n.tipo, n.chave_acesso, n.numero_nota, n.serie_nota, n.emissor, n.destinatario, n.data_emissao, n.situacao,
@@ -828,7 +857,12 @@ async function listNotasInativadas(empresaId, filtros) {
 // pela tela de Notas Inativadas, que espelha a tela comum.
 async function listNotasInativadasPorCertificado(certificadoId, filtros) {
   const params = [certificadoId];
-  const where = montarFiltrosNotas(params, 'n.certificado_id = $1 AND n.inativa = TRUE', filtros, 'n.');
+  const where = montarFiltrosNotas(
+    params,
+    'n.certificado_id = $1 AND n.inativa = TRUE AND n.apenas_resumo = FALSE',
+    filtros,
+    'n.'
+  );
 
   const { rows } = await pool.query(
     `SELECT n.id, n.tipo, n.chave_acesso, n.numero_nota, n.serie_nota, n.emissor, n.destinatario, n.data_emissao, n.situacao,
