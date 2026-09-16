@@ -180,7 +180,7 @@ function LinhaNota({
       {/* pl-14: nível 3 do drilldown (Certificado → Produtos/Serviços →
           Nota) — mesmo recuo da etapa em GestaoParcelasTab.jsx, só a
           primeira coluna cresce, o resto mantém alinhamento normal. */}
-      <td className="py-2.5 pl-14 pr-3">
+      <td className="py-1.5 pl-14 pr-3">
         <input
           type="checkbox"
           checked={selecionada}
@@ -188,13 +188,13 @@ function LinhaNota({
           className="h-3.5 w-3.5 rounded border-gray-300 text-primary-600 focus:ring-primary-100"
         />
       </td>
-      <td className="py-2.5 px-3 font-mono text-xs text-gray-600 whitespace-nowrap">
+      <td className="py-1.5 px-3 font-mono text-xs text-gray-600 whitespace-nowrap">
         {nota.numero_nota || '—'}
         {nota.serie_nota && <span className="text-gray-400"> / {nota.serie_nota}</span>}
       </td>
-      <td className="py-2.5 px-3 text-gray-900">{nota.emissor || '—'}</td>
-      <td className="py-2.5 px-3 text-gray-600">{formatarData(nota.data_emissao)}</td>
-      <td className="py-2.5 px-3">
+      <td className="py-1.5 px-3 text-gray-900">{nota.emissor || '—'}</td>
+      <td className="py-1.5 px-3 text-gray-600">{formatarData(nota.data_emissao)}</td>
+      <td className="py-1.5 px-3">
         {!nota.situacao || nota.situacao === 'Emitida' ? (
           <span className="text-xs text-gray-400">Emitida</span>
         ) : (
@@ -211,7 +211,7 @@ function LinhaNota({
         )}
       </td>
       {modoInativas && (
-        <td className="py-2.5 px-3">
+        <td className="py-1.5 px-3">
           {/* Hover mostra o motivo dado pelo usuário na hora da inativação. */}
           <div className="group relative inline-block">
             <span className="inline-flex items-center gap-1.5 rounded-full bg-red-100 px-2.5 py-0.5 text-xs font-semibold text-red-700">
@@ -229,7 +229,7 @@ function LinhaNota({
           </div>
         </td>
       )}
-      <td className="py-2.5 pl-3 pr-5 text-right">
+      <td className="py-1.5 pl-3 pr-5 text-right">
         <div className="flex items-center justify-end gap-1">
           {/* Spinner no lugar do ícone enquanto baixa — antes não tinha
               nenhum retorno visual entre o clique e o arquivo aparecer. */}
