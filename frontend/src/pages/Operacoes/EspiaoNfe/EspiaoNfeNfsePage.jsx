@@ -974,24 +974,28 @@ export default function EspiaoNfeNfsePage() {
                 GestaoParcelasTab.jsx, mesmo tamanho de botão
                 também: h-4 w-4, ícone 10). Só existe quando tem
                 pelo menos 1 produto (sem nenhum, não precisa
-                mostrar a linha em vão). Aberta usa um azul mais
-                forte (primary-100) que o do nível 1 (primary-50)
-                — mesma família de cor pros dois níveis abertos,
-                só a intensidade diferencia; border-t marca a
-                virada de nível. */}
+                mostrar a linha em vão). Mesmo azul do nível 1
+                (primary-50) quando aberta — border-t marca a
+                virada de nível. Só o botão "+/−" abre/fecha (a
+                linha inteira não é mais clicável, igual ao
+                nível 1). */}
             {totalNfeCard > 0 && (
               <>
                 <tr
-                  onClick={() => toggleSecao(certificado.id, 'produtos')}
-                  className={`cursor-pointer border-t border-t-gray-200 border-b border-b-gray-50 hover:bg-gray-50 ${
-                    produtosAberto ? 'bg-primary-100' : 'bg-white'
+                  className={`border-t border-t-gray-200 border-b border-b-gray-50 ${
+                    produtosAberto ? 'bg-primary-50' : 'bg-white'
                   }`}
                 >
                   <td colSpan={totalColunas} className="py-2 pl-9 pr-5">
                     <span className="inline-flex items-center gap-2 text-sm font-semibold text-gray-500">
-                      <span className="flex h-4 w-4 shrink-0 items-center justify-center rounded border border-gray-300 text-gray-500">
+                      <button
+                        type="button"
+                        onClick={() => toggleSecao(certificado.id, 'produtos')}
+                        title={produtosAberto ? 'Recolher' : 'Expandir'}
+                        className="flex h-4 w-4 shrink-0 items-center justify-center rounded border border-gray-300 text-gray-500 hover:border-primary-300 hover:text-primary-600"
+                      >
                         {produtosAberto ? <Minus size={10} /> : <Plus size={10} />}
-                      </span>
+                      </button>
                       <Package size={13} />
                       Produtos (NF-e) · {totalNfeCard}
                     </span>
@@ -1033,16 +1037,20 @@ export default function EspiaoNfeNfsePage() {
             {totalNfseCard > 0 && (
               <>
                 <tr
-                  onClick={() => toggleSecao(certificado.id, 'servicos')}
-                  className={`cursor-pointer border-t border-t-gray-100 border-b border-b-gray-50 hover:bg-gray-50 ${
-                    servicosAberto ? 'bg-primary-100' : 'bg-white'
+                  className={`border-t border-t-gray-100 border-b border-b-gray-50 ${
+                    servicosAberto ? 'bg-primary-50' : 'bg-white'
                   }`}
                 >
                   <td colSpan={totalColunas} className="py-2 pl-9 pr-5">
                     <span className="inline-flex items-center gap-2 text-sm font-semibold text-gray-500">
-                      <span className="flex h-4 w-4 shrink-0 items-center justify-center rounded border border-gray-300 text-gray-500">
+                      <button
+                        type="button"
+                        onClick={() => toggleSecao(certificado.id, 'servicos')}
+                        title={servicosAberto ? 'Recolher' : 'Expandir'}
+                        className="flex h-4 w-4 shrink-0 items-center justify-center rounded border border-gray-300 text-gray-500 hover:border-primary-300 hover:text-primary-600"
+                      >
                         {servicosAberto ? <Minus size={10} /> : <Plus size={10} />}
-                      </span>
+                      </button>
                       <Wrench size={13} />
                       Serviços (NFS-e) · {totalNfseCard}
                     </span>
