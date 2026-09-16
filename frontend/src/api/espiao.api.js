@@ -58,7 +58,10 @@ export function reativarNotasEspiao(notaIds) {
 }
 
 export function declararCienciaEspiao(notaIds) {
-  return http.post('/espiao/notas/declarar-ciencia', { notaIds }).then((res) => res.data);
+  // O backend devolve { notas: [...] } (ver espiao.controller.js::declararCiencia)
+  // — desembrulha aqui pra já voltar a lista, que é o que handleDeclararCiencia
+  // espera pra montar o Map de id -> ciente_em.
+  return http.post('/espiao/notas/declarar-ciencia', { notaIds }).then((res) => res.data.notas);
 }
 
 export function listNotasInativadasEspiao(
