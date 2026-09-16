@@ -1,4 +1,4 @@
-import { useEffect, useMemo, useState } from 'react';
+import { useEffect, useMemo, useRef, useState } from 'react';
 import {
   Clock,
   Download,
@@ -85,16 +85,39 @@ function estaVencido(validadeAte) {
   return new Date(validadeAte) < new Date();
 }
 
+// Quantos dias faltam pro certificado vencer — null quando não tem data.
+// Usado só pro aviso "vence em breve" (ver DIAS_AVISO_VENCIMENTO abaixo);
+// vencido de fato continua sendo estaVencido() acima.
+function diasParaVencer(validadeAte) {
+  if (!validadeAte) return null;
+  const diffMs = new Date(validadeAte) - new Date();
+  return Math.ceil(diffMs / (1000 * 60 * 60 * 24));
+}
+
+const DIAS_AVISO_VENCIMENTO = 30;
+
 // Cabeçalho de coluna só do nível 3 (Nota) — não é mais um <thead> fixo no
 // topo da tabela inteira, porque essas colunas (Nº/Série, Emissor...) só
 // fazem sentido logo acima das notas, não acima do certificado/seção (que
 // usam uma única célula com colSpan, sem essas colunas). Aparece de novo a
 // cada seção de Produtos/Serviços aberta que tenha ao menos 1 nota.
-function CabecalhoNotas({ modoInativas }) {
+function CabecalhoNotas({ modoInativas, checked, indeterminate, onToggleTodas }) {
+  const checkboxRef = useRef(null);
+  useEffect(() => {
+    if (checkboxRef.current) checkboxRef.current.indeterminate = indeterminate;
+  }, [indeterminate]);
+
   return (
     <tr className="border-b border-gray-100 text-xs uppercase tracking-wide text-gray-400">
       <th className="py-2 pl-14 pr-3 font-medium">
-        <span className="sr-only">Selecionar</span>
+        <input
+          ref={checkboxRef}
+          type="checkbox"
+          checked={checked}
+          onChange={onToggleTodas}
+          aria-label="Selecionar todas as notas desta seção"
+          className="h-4 w-4 rounded border-gray-300 text-primary-600 focus:ring-primary-100"
+        />
       </th>
       <th className="py-2 px-3 font-medium whitespace-nowrap">Nº / Série</th>
       <th className="py-2 px-3 font-medium">Emissor</th>
@@ -111,9 +134,11 @@ function CabecalhoNotas({ modoInativas }) {
 // (produtos e serviços do mesmo certificado, um embaixo do outro), não mais
 // escolhida por uma aba.
 function LinhaNota({ nota, modoInativas, selecionada, onToggleSelecionada, onBaixarPdf, onBaixar }) {
-  const { Icon: IconeSituacao, colorClass } = infoSituacao(nota.situacao);
+  const { Icon: IconeSituacao, colorClass, borderClass } = infoSituacao(nota.situacao);
   return (
-    <tr className="border-b border-gray-50 last:border-0">
+    // border-l-2 sempre presente (mesmo transparente em "Emitida") pra não
+    // deslocar o conteúdo 2px entre uma linha e outra — só a cor muda.
+    <tr className={`border-b border-gray-50 border-l-2 last:border-0 ${borderClass}`}>
       {/* pl-14: nível 3 do drilldown (Certificado → Produtos/Serviços →
           Nota) — mesmo recuo da etapa em GestaoParcelasTab.jsx, só a
           primeira coluna cresce, o resto mantém alinhamento normal. */}
@@ -369,6 +394,24 @@ export default function EspiaoNfeNfsePage() {
     });
   }, [certificados, notasPorCertificado, filtroAtivo]);
 
+  // Resumo no topo da tabela (ver render) — soma só o que já carregou; os
+  // certificados ainda em `loadingNotas` entram como 0 e o total sobe
+  // sozinho conforme cada resposta chega (mesmo padrão de totalNfeCard/
+  // totalNfseCard por certificado, só que somado pra empresa inteira).
+  const totaisNotas = useMemo(() => {
+    return certificadosFiltrados.reduce(
+      (acc, certificado) => {
+        const dados = notasPorCertificado[certificado.id];
+        if (dados) {
+          acc.produtos += dados.produtos.length;
+          acc.servicos += dados.servicos.length;
+        }
+        return acc;
+      },
+      { produtos: 0, servicos: 0 }
+    );
+  }, [certificadosFiltrados, notasPorCertificado]);
+
   function carregarNotas(certificadoId) {
     setLoadingNotas((prev) => ({ ...prev, [certificadoId]: true }));
     const buscar = modoInativas ? listNotasInativadasPorCertificadoEspiao : listNotasPorCertificadoEspiao;
@@ -504,6 +547,23 @@ export default function EspiaoNfeNfsePage() {
       } else {
         next.set(nota.id, { certificadoId, tipo });
       }
+      return next;
+    });
+  }
+
+  // Checkbox "selecionar todas" do cabeçalho de uma seção (ver
+  // CabecalhoNotas) — se já estão todas marcadas, desmarca todas; senão,
+  // marca as que faltam. Sempre olha pro estado atual (prev), não pro
+  // `checked` que a UI calculou no último render, pra não perder cliques em
+  // sequência rápida.
+  function toggleTodasNaSecao(certificadoId, tipo, notasDaSecao) {
+    setSelecionadas((prev) => {
+      const next = new Map(prev);
+      const todasSelecionadas = notasDaSecao.length > 0 && notasDaSecao.every((n) => next.has(n.id));
+      notasDaSecao.forEach((nota) => {
+        if (todasSelecionadas) next.delete(nota.id);
+        else next.set(nota.id, { certificadoId, tipo });
+      });
       return next;
     });
   }
@@ -739,6 +799,28 @@ export default function EspiaoNfeNfsePage() {
                   (CabecalhoNotas) só existe logo acima das notas, único
                   nível que de fato usa essas colunas. Um <tbody> por
                   certificado. */}
+
+              {/* Resumo antes do detalhe: quantos certificados/produtos/
+                  serviços tem na tela, antes de entrar linha por linha —
+                  mesmo texto/tamanho já usado nas contagens por certificado
+                  abaixo (text-xs text-gray-500 + número em destaque). */}
+              <div className="flex flex-wrap items-center gap-x-5 gap-y-1 border-b border-gray-100 px-5 py-3 text-xs text-gray-500">
+                <span>
+                  <span className="font-semibold text-gray-900">{certificadosFiltrados.length}</span> certificado
+                  {certificadosFiltrados.length !== 1 ? 's' : ''}
+                </span>
+                <span className="inline-flex items-center gap-1">
+                  <Package size={12} />
+                  <span className="font-semibold text-gray-900">{totaisNotas.produtos}</span> produto
+                  {totaisNotas.produtos !== 1 ? 's' : ''} (NF-e)
+                </span>
+                <span className="inline-flex items-center gap-1">
+                  <Wrench size={12} />
+                  <span className="font-semibold text-gray-900">{totaisNotas.servicos}</span> serviço
+                  {totaisNotas.servicos !== 1 ? 's' : ''} (NFS-e)
+                </span>
+              </div>
+
               <div className="overflow-x-auto">
                 <table className="w-full text-left text-sm">
                   {filtrando && (
@@ -770,6 +852,12 @@ export default function EspiaoNfeNfsePage() {
                     // zero) — não faz sentido oferecer o "+", não tem nada
                     // pra mostrar dentro.
                     const semNotas = notas != null && totalNfeCard === 0 && totalNfseCard === 0;
+                    // "Vence em breve" é um aviso mais cedo que o vermelho
+                    // de vencido — mesma info (validade_ate) que já existe,
+                    // só avisando com antecedência em vez de só quando já
+                    // venceu.
+                    const diasVencimento = diasParaVencer(certificado.validade_ate);
+                    const vencendoEmBreve = !vencido && diasVencimento !== null && diasVencimento <= DIAS_AVISO_VENCIMENTO;
 
                     return (
                       <tbody key={certificado.id} className="border-b-8 border-gray-50 last:border-0">
@@ -808,6 +896,12 @@ export default function EspiaoNfeNfsePage() {
                                   {totalNfseCard === null ? '…' : totalNfseCard} serviço
                                   {totalNfseCard !== 1 ? 's' : ''}
                                 </span>
+                                {vencendoEmBreve && (
+                                  <span className="inline-flex items-center gap-1 text-amber-600">
+                                    <Clock size={12} />
+                                    Vence em {diasVencimento} dia{diasVencimento !== 1 ? 's' : ''}
+                                  </span>
+                                )}
                               </span>
 
                               {!modoInativas && certificado.ultima_consulta_em && (
@@ -902,7 +996,15 @@ export default function EspiaoNfeNfsePage() {
                                 </tr>
                               ) : (
                                 <>
-                                  <CabecalhoNotas modoInativas={modoInativas} />
+                                  <CabecalhoNotas
+                                    modoInativas={modoInativas}
+                                    checked={notas.produtos.every((n) => selecionadas.has(n.id))}
+                                    indeterminate={
+                                      notas.produtos.some((n) => selecionadas.has(n.id)) &&
+                                      !notas.produtos.every((n) => selecionadas.has(n.id))
+                                    }
+                                    onToggleTodas={() => toggleTodasNaSecao(certificado.id, 'produtos', notas.produtos)}
+                                  />
                                   {notas.produtos.map((nota) => (
                                     <LinhaNota
                                       key={nota.id}
@@ -945,7 +1047,15 @@ export default function EspiaoNfeNfsePage() {
                                 </tr>
                               ) : (
                                 <>
-                                  <CabecalhoNotas modoInativas={modoInativas} />
+                                  <CabecalhoNotas
+                                    modoInativas={modoInativas}
+                                    checked={notas.servicos.every((n) => selecionadas.has(n.id))}
+                                    indeterminate={
+                                      notas.servicos.some((n) => selecionadas.has(n.id)) &&
+                                      !notas.servicos.every((n) => selecionadas.has(n.id))
+                                    }
+                                    onToggleTodas={() => toggleTodasNaSecao(certificado.id, 'servicos', notas.servicos)}
+                                  />
                                   {notas.servicos.map((nota) => (
                                     <LinhaNota
                                       key={nota.id}

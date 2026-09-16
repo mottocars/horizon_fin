@@ -48,13 +48,20 @@ export function explicarSituacao(situacao) {
 
 // Ícone + cor da situação: cancelamento = vermelho, autorização = verde,
 // qualquer outro tipo de evento/notificação = amarelo (alerta). Sem evento
-// (Emitida) = ícone neutro em cinza.
+// (Emitida) = ícone neutro em cinza. borderClass é a mesma cor aplicada como
+// friso na borda esquerda da linha (ver LinhaNota em EspiaoNfeNfsePage.jsx)
+// — dá pra notar uma nota fora do normal sem precisar passar o mouse em cada
+// uma; o ícone+tooltip continua sendo quem explica o que aconteceu.
 export function infoSituacao(situacao) {
   if (!situacao || situacao === 'Emitida') {
-    return { Icon: FileCheck2, colorClass: 'text-gray-400' };
+    return { Icon: FileCheck2, colorClass: 'text-gray-400', borderClass: 'border-l-transparent' };
   }
   const s = situacao.toLowerCase();
-  if (s.includes('cancelamento')) return { Icon: XCircle, colorClass: 'text-red-600' };
-  if (s.includes('autoriza')) return { Icon: CheckCircle2, colorClass: 'text-emerald-600' };
-  return { Icon: AlertTriangle, colorClass: 'text-amber-600' };
+  if (s.includes('cancelamento')) {
+    return { Icon: XCircle, colorClass: 'text-red-600', borderClass: 'border-l-red-500' };
+  }
+  if (s.includes('autoriza')) {
+    return { Icon: CheckCircle2, colorClass: 'text-emerald-600', borderClass: 'border-l-emerald-500' };
+  }
+  return { Icon: AlertTriangle, colorClass: 'text-amber-600', borderClass: 'border-l-amber-500' };
 }
