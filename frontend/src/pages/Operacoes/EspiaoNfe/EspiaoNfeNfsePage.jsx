@@ -80,6 +80,21 @@ function formatarData(iso) {
   return new Date(iso).toLocaleDateString('pt-BR');
 }
 
+// "há 20 minutos" / "há 2 horas" / "há 3 dias" — usado no status de última
+// consulta do certificado (ver render); a data/hora exata continua
+// disponível no title (tooltip) do badge, via formatarDataHora.
+function formatarTempoRelativo(iso) {
+  if (!iso) return '—';
+  const diffMs = Date.now() - new Date(iso).getTime();
+  const minutos = Math.floor(diffMs / 60000);
+  if (minutos < 1) return 'agora mesmo';
+  if (minutos < 60) return `há ${minutos} minuto${minutos !== 1 ? 's' : ''}`;
+  const horas = Math.floor(minutos / 60);
+  if (horas < 24) return `há ${horas} hora${horas !== 1 ? 's' : ''}`;
+  const dias = Math.floor(horas / 24);
+  return `há ${dias} dia${dias !== 1 ? 's' : ''}`;
+}
+
 function estaVencido(validadeAte) {
   if (!validadeAte) return false;
   return new Date(validadeAte) < new Date();
@@ -860,7 +875,7 @@ export default function EspiaoNfeNfsePage() {
                     const vencendoEmBreve = !vencido && diasVencimento !== null && diasVencimento <= DIAS_AVISO_VENCIMENTO;
 
                     return (
-                      <tbody key={certificado.id} className="border-b-8 border-gray-50 last:border-0">
+                      <tbody key={certificado.id}>
                         <tr className={vencido ? 'bg-red-50' : aberto ? 'bg-gray-50' : 'bg-white'}>
                           <td colSpan={totalColunas} className="px-5 py-2.5">
                             <div className="flex flex-wrap items-center gap-x-3 gap-y-1.5">
@@ -883,35 +898,47 @@ export default function EspiaoNfeNfsePage() {
                                 </button>
                               )}
 
-                              <p className="text-sm font-semibold text-gray-900">{certificado.nome}</p>
+                              <p className="text-sm text-gray-900">{certificado.nome}</p>
 
-                              <span className="inline-flex items-center gap-2.5 text-xs text-gray-500">
-                                <span className="inline-flex items-center gap-1">
-                                  <Package size={12} />
-                                  {totalNfeCard === null ? '…' : totalNfeCard} produto
-                                  {totalNfeCard !== 1 ? 's' : ''}
-                                </span>
-                                <span className="inline-flex items-center gap-1">
-                                  <Wrench size={12} />
-                                  {totalNfseCard === null ? '…' : totalNfseCard} serviço
-                                  {totalNfseCard !== 1 ? 's' : ''}
-                                </span>
-                                {vencendoEmBreve && (
-                                  <span className="inline-flex items-center gap-1 text-amber-600">
-                                    <Clock size={12} />
-                                    Vence em {diasVencimento} dia{diasVencimento !== 1 ? 's' : ''}
-                                  </span>
-                                )}
-                              </span>
-
-                              {!modoInativas && certificado.ultima_consulta_em && (
-                                <span className="inline-flex items-center gap-1.5 rounded-full bg-white px-2.5 py-1 text-xs font-medium text-gray-600">
+                              {vencendoEmBreve && (
+                                <span className="inline-flex items-center gap-1 text-xs text-amber-600">
                                   <Clock size={12} />
-                                  Última consulta: {formatarDataHora(certificado.ultima_consulta_em)}
+                                  Vence em {diasVencimento} dia{diasVencimento !== 1 ? 's' : ''}
                                 </span>
                               )}
 
+                              {/* Canto direito: status de Produtos/Serviços
+                                  (só ícone + número, cor distingue um do
+                                  outro) e de última consulta (ícone de
+                                  relógio + "há X min/h/dias" — a data exata
+                                  fica no title, ao passar o mouse), antes da
+                                  ação (consultar/vencido). */}
                               <div className="ml-auto flex shrink-0 items-center gap-2">
+                                <span
+                                  title={`${totalNfeCard === null ? '…' : totalNfeCard} produto${totalNfeCard !== 1 ? 's' : ''} (NF-e)`}
+                                  className="inline-flex items-center gap-1 rounded-full bg-primary-50 px-2.5 py-1 text-xs font-semibold text-primary-700"
+                                >
+                                  <Package size={12} />
+                                  {totalNfeCard === null ? '…' : totalNfeCard}
+                                </span>
+                                <span
+                                  title={`${totalNfseCard === null ? '…' : totalNfseCard} serviço${totalNfseCard !== 1 ? 's' : ''} (NFS-e)`}
+                                  className="inline-flex items-center gap-1 rounded-full bg-violet-50 px-2.5 py-1 text-xs font-semibold text-violet-700"
+                                >
+                                  <Wrench size={12} />
+                                  {totalNfseCard === null ? '…' : totalNfseCard}
+                                </span>
+
+                                {!modoInativas && certificado.ultima_consulta_em && (
+                                  <span
+                                    title={`Última consulta: ${formatarDataHora(certificado.ultima_consulta_em)}`}
+                                    className="inline-flex items-center gap-1.5 rounded-full bg-white px-2.5 py-1 text-xs font-medium text-gray-600"
+                                  >
+                                    <Clock size={12} />
+                                    {formatarTempoRelativo(certificado.ultima_consulta_em)}
+                                  </span>
+                                )}
+
                                 {vencido ? (
                                   <span
                                     title="Certificado vencido — não é possível consultar novas notas com ele"
