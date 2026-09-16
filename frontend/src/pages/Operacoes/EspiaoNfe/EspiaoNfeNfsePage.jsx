@@ -290,28 +290,34 @@ export default function EspiaoNfeNfsePage() {
   // Nota. As notas de todos os certificados já são carregadas de qualquer
   // jeito (ver carregarNotasDeTodosCertificados), então abrir/fechar aqui é
   // só uma questão de mostrar/esconder linhas, não de buscar dado. Ambos os
-  // níveis começam sempre fechados.
+  // níveis começam sempre fechados. Chaves prefixadas com `abaNotas` (ver
+  // TABS_NOTAS) — o mesmo certificado tem estado de aberto/fechado
+  // independente em cada aba, já que Novas/Cientes/Inativas mostram um
+  // recorte diferente das notas dele.
   const [abertos, setAbertos] = useState(new Set());
-  // Nível 2 (Produtos/Serviços) — chave `${certificadoId}:produtos` ou
-  // `${certificadoId}:servicos`, independente por certificado: dá pra abrir
-  // só Produtos de um certificado e só Serviços de outro ao mesmo tempo.
+  // Nível 2 (Produtos/Serviços) — chave `${abaNotas}:${certificadoId}:produtos`
+  // ou `...:servicos`, independente por certificado E por aba: dá pra abrir
+  // só Produtos de um certificado e só Serviços de outro ao mesmo tempo, sem
+  // vazar entre abas.
   const [secoesAbertas, setSecoesAbertas] = useState(new Set());
 
   function toggleAberto(certificadoId) {
+    const chave = `${abaNotas}:${certificadoId}`;
     setAbertos((prev) => {
       const next = new Set(prev);
-      if (next.has(certificadoId)) {
-        next.delete(certificadoId);
-        // Fecha junto o nível 2 deste certificado, senão reabrir o
-        // certificado depois já viria com Produtos/Serviços expandidos.
+      if (next.has(chave)) {
+        next.delete(chave);
+        // Fecha junto o nível 2 deste certificado (nesta aba), senão
+        // reabrir o certificado depois já viria com Produtos/Serviços
+        // expandidos.
         setSecoesAbertas((prevSecoes) => {
           const nextSecoes = new Set(prevSecoes);
-          nextSecoes.delete(`${certificadoId}:produtos`);
-          nextSecoes.delete(`${certificadoId}:servicos`);
+          nextSecoes.delete(`${chave}:produtos`);
+          nextSecoes.delete(`${chave}:servicos`);
           return nextSecoes;
         });
       } else {
-        next.add(certificadoId);
+        next.add(chave);
       }
       return next;
     });
@@ -320,7 +326,7 @@ export default function EspiaoNfeNfsePage() {
   function toggleSecao(certificadoId, tipo) {
     setSecoesAbertas((prev) => {
       const next = new Set(prev);
-      const chave = `${certificadoId}:${tipo}`;
+      const chave = `${abaNotas}:${certificadoId}:${tipo}`;
       if (next.has(chave)) next.delete(chave);
       else next.add(chave);
       return next;
@@ -885,9 +891,9 @@ export default function EspiaoNfeNfsePage() {
     const servicosVisiveis = notas ? filtrarNotasPorAba(notas.servicos, abaNotas, modoInativas) : null;
     const carregandoNotas = Boolean(loadingNotas[certificado.id]);
     const emConsulta = Boolean(consultando[certificado.id]);
-    const aberto = abertos.has(certificado.id);
-    const produtosAberto = secoesAbertas.has(`${certificado.id}:produtos`);
-    const servicosAberto = secoesAbertas.has(`${certificado.id}:servicos`);
+    const aberto = abertos.has(`${abaNotas}:${certificado.id}`);
+    const produtosAberto = secoesAbertas.has(`${abaNotas}:${certificado.id}:produtos`);
+    const servicosAberto = secoesAbertas.has(`${abaNotas}:${certificado.id}:servicos`);
     // Enquanto ainda não carregou, mostra "…" em vez de um
     // número errado.
     const totalNfeCard = produtosVisiveis ? produtosVisiveis.length : null;
