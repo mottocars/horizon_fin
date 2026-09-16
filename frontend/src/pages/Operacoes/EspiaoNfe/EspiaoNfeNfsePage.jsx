@@ -148,7 +148,16 @@ function CabecalhoNotas({ modoInativas, checked, indeterminate, onToggleTodas })
 // certificado) — extraída à parte porque agora é usada duas vezes seguidas
 // (produtos e serviços do mesmo certificado, um embaixo do outro), não mais
 // escolhida por uma aba.
-function LinhaNota({ nota, modoInativas, selecionada, onToggleSelecionada, onBaixarPdf, onBaixar }) {
+function LinhaNota({
+  nota,
+  modoInativas,
+  selecionada,
+  onToggleSelecionada,
+  onBaixarPdf,
+  onBaixar,
+  baixandoPdf,
+  baixandoXml,
+}) {
   const { Icon: IconeSituacao, colorClass, borderClass } = infoSituacao(nota.situacao);
   return (
     // border-l-2 sempre presente (mesmo transparente em "Emitida") pra não
@@ -208,21 +217,25 @@ function LinhaNota({ nota, modoInativas, selecionada, onToggleSelecionada, onBai
       )}
       <td className="py-2.5 pl-3 pr-5 text-right">
         <div className="flex items-center justify-end gap-1">
+          {/* Spinner no lugar do ícone enquanto baixa — antes não tinha
+              nenhum retorno visual entre o clique e o arquivo aparecer. */}
           <button
             type="button"
             title="Baixar PDF"
             onClick={onBaixarPdf}
-            className="inline-flex h-8 w-8 items-center justify-center rounded-md text-gray-400 hover:bg-gray-100 hover:text-primary-600"
+            disabled={baixandoPdf}
+            className="inline-flex h-8 w-8 items-center justify-center rounded-md text-gray-400 hover:bg-gray-100 hover:text-primary-600 disabled:opacity-60 disabled:hover:bg-transparent"
           >
-            <FileText size={14} />
+            {baixandoPdf ? <Loader2 size={14} className="animate-spin" /> : <FileText size={14} />}
           </button>
           <button
             type="button"
             title="Baixar XML"
             onClick={onBaixar}
-            className="inline-flex h-8 w-8 items-center justify-center rounded-md text-gray-400 hover:bg-gray-100 hover:text-primary-600"
+            disabled={baixandoXml}
+            className="inline-flex h-8 w-8 items-center justify-center rounded-md text-gray-400 hover:bg-gray-100 hover:text-primary-600 disabled:opacity-60 disabled:hover:bg-transparent"
           >
-            <Download size={14} />
+            {baixandoXml ? <Loader2 size={14} className="animate-spin" /> : <Download size={14} />}
           </button>
         </div>
       </td>
@@ -426,24 +439,6 @@ export default function EspiaoNfeNfsePage() {
     return { comNotas, semNotas };
   }, [certificadosFiltrados, notasPorCertificado]);
 
-  // Resumo no topo da tabela (ver render) — soma só o que já carregou; os
-  // certificados ainda em `loadingNotas` entram como 0 e o total sobe
-  // sozinho conforme cada resposta chega (mesmo padrão de totalNfeCard/
-  // totalNfseCard por certificado, só que somado pra empresa inteira).
-  const totaisNotas = useMemo(() => {
-    return certificadosFiltrados.reduce(
-      (acc, certificado) => {
-        const dados = notasPorCertificado[certificado.id];
-        if (dados) {
-          acc.produtos += dados.produtos.length;
-          acc.servicos += dados.servicos.length;
-        }
-        return acc;
-      },
-      { produtos: 0, servicos: 0 }
-    );
-  }, [certificadosFiltrados, notasPorCertificado]);
-
   function carregarNotas(certificadoId) {
     setLoadingNotas((prev) => ({ ...prev, [certificadoId]: true }));
     const buscar = modoInativas ? listNotasInativadasPorCertificadoEspiao : listNotasPorCertificadoEspiao;
@@ -559,24 +554,64 @@ export default function EspiaoNfeNfsePage() {
     }
   }
 
+  // Baixando um arquivo por vez, por nota+tipo (`${nota.id}:xml` ou
+  // `${nota.id}:pdf`) — antes não tinha nenhum retorno visual entre o
+  // clique e o arquivo aparecer, e o usuário não sabia se o download
+  // realmente disparou (ver LinhaNota, que troca o ícone por um spinner
+  // enquanto a chave está neste Set).
+  const [baixando, setBaixando] = useState(new Set());
+
+  function marcarBaixando(chave, emAndamento) {
+    setBaixando((prev) => {
+      const next = new Set(prev);
+      if (emAndamento) next.add(chave);
+      else next.delete(chave);
+      return next;
+    });
+  }
+
   async function handleDownload(nota) {
-    const blob = await baixarNotaEspiao(nota.id);
-    const url = window.URL.createObjectURL(blob);
-    const link = document.createElement('a');
-    link.href = url;
-    link.download = `${nota.chave_acesso}.xml`;
-    link.click();
-    window.URL.revokeObjectURL(url);
+    const chave = `${nota.id}:xml`;
+    marcarBaixando(chave, true);
+    try {
+      const blob = await baixarNotaEspiao(nota.id);
+      const url = window.URL.createObjectURL(blob);
+      const link = document.createElement('a');
+      link.href = url;
+      link.download = `${nota.chave_acesso}.xml`;
+      link.click();
+      window.URL.revokeObjectURL(url);
+    } catch (err) {
+      await alert({
+        title: 'Não foi possível baixar o XML',
+        description: err.response?.data?.message || 'Não foi possível baixar o XML desta nota.',
+        variant: 'warning',
+      });
+    } finally {
+      marcarBaixando(chave, false);
+    }
   }
 
   async function handleDownloadPdf(nota) {
-    const blob = await baixarNotaPdfEspiao(nota.id);
-    const url = window.URL.createObjectURL(blob);
-    const link = document.createElement('a');
-    link.href = url;
-    link.download = `${nota.chave_acesso}.pdf`;
-    link.click();
-    window.URL.revokeObjectURL(url);
+    const chave = `${nota.id}:pdf`;
+    marcarBaixando(chave, true);
+    try {
+      const blob = await baixarNotaPdfEspiao(nota.id);
+      const url = window.URL.createObjectURL(blob);
+      const link = document.createElement('a');
+      link.href = url;
+      link.download = `${nota.chave_acesso}.pdf`;
+      link.click();
+      window.URL.revokeObjectURL(url);
+    } catch (err) {
+      await alert({
+        title: 'Não foi possível baixar o PDF',
+        description: err.response?.data?.message || 'Não foi possível baixar o PDF desta nota.',
+        variant: 'warning',
+      });
+    } finally {
+      marcarBaixando(chave, false);
+    }
   }
 
   function toggleSelecionada(certificadoId, tipo, nota) {
@@ -865,15 +900,17 @@ export default function EspiaoNfeNfsePage() {
                 GestaoParcelasTab.jsx, mesmo tamanho de botão
                 também: h-4 w-4, ícone 10). Só existe quando tem
                 pelo menos 1 produto (sem nenhum, não precisa
-                mostrar a linha em vão). Cor própria (gray-100)
-                quando aberta — diferente do primary-50 do nível
-                1 — e border-t marcando a virada de nível. */}
+                mostrar a linha em vão). Aberta usa um azul mais
+                forte (primary-100) que o do nível 1 (primary-50)
+                — mesma família de cor pros dois níveis abertos,
+                só a intensidade diferencia; border-t marca a
+                virada de nível. */}
             {totalNfeCard > 0 && (
               <>
                 <tr
                   onClick={() => toggleSecao(certificado.id, 'produtos')}
                   className={`cursor-pointer border-t border-t-gray-200 border-b border-b-gray-50 hover:bg-gray-50 ${
-                    produtosAberto ? 'bg-gray-100' : 'bg-white'
+                    produtosAberto ? 'bg-primary-100' : 'bg-white'
                   }`}
                 >
                   <td colSpan={totalColunas} className="py-2 pl-9 pr-5">
@@ -906,6 +943,8 @@ export default function EspiaoNfeNfsePage() {
                         onToggleSelecionada={() => toggleSelecionada(certificado.id, 'produtos', nota)}
                         onBaixarPdf={() => handleDownloadPdf(nota)}
                         onBaixar={() => handleDownload(nota)}
+                        baixandoPdf={baixando.has(`${nota.id}:pdf`)}
+                        baixandoXml={baixando.has(`${nota.id}:xml`)}
                       />
                     ))}
                   </>
@@ -922,7 +961,7 @@ export default function EspiaoNfeNfsePage() {
                 <tr
                   onClick={() => toggleSecao(certificado.id, 'servicos')}
                   className={`cursor-pointer border-t border-t-gray-100 border-b border-b-gray-50 hover:bg-gray-50 ${
-                    servicosAberto ? 'bg-gray-100' : 'bg-white'
+                    servicosAberto ? 'bg-primary-100' : 'bg-white'
                   }`}
                 >
                   <td colSpan={totalColunas} className="py-2 pl-9 pr-5">
@@ -955,6 +994,8 @@ export default function EspiaoNfeNfsePage() {
                         onToggleSelecionada={() => toggleSelecionada(certificado.id, 'servicos', nota)}
                         onBaixarPdf={() => handleDownloadPdf(nota)}
                         onBaixar={() => handleDownload(nota)}
+                        baixandoPdf={baixando.has(`${nota.id}:pdf`)}
+                        baixandoXml={baixando.has(`${nota.id}:xml`)}
                       />
                     ))}
                   </>
@@ -1100,28 +1141,6 @@ export default function EspiaoNfeNfsePage() {
                     senão a Caixa 2 já cobre a tela sozinha. */}
                 {certificadosAgrupados.comNotas.length > 0 && (
                   <Card className="rounded-tl-none !p-0 overflow-hidden">
-                    {/* Resumo antes do detalhe: quantos certificados/produtos/
-                        serviços tem nesta caixa, antes de entrar linha por
-                        linha — mesmo texto/tamanho já usado nas contagens
-                        por certificado abaixo (text-xs text-gray-500 +
-                        número em destaque). */}
-                    <div className="flex flex-wrap items-center gap-x-5 gap-y-1 border-b border-gray-100 px-5 py-3 text-xs text-gray-500">
-                      <span>
-                        <span className="font-semibold text-gray-900">{certificadosAgrupados.comNotas.length}</span>{' '}
-                        certificado{certificadosAgrupados.comNotas.length !== 1 ? 's' : ''}
-                      </span>
-                      <span className="inline-flex items-center gap-1">
-                        <Package size={12} />
-                        <span className="font-semibold text-gray-900">{totaisNotas.produtos}</span> produto
-                        {totaisNotas.produtos !== 1 ? 's' : ''} (NF-e)
-                      </span>
-                      <span className="inline-flex items-center gap-1">
-                        <Wrench size={12} />
-                        <span className="font-semibold text-gray-900">{totaisNotas.servicos}</span> serviço
-                        {totaisNotas.servicos !== 1 ? 's' : ''} (NFS-e)
-                      </span>
-                    </div>
-
                     <div className="overflow-x-auto">
                       <table className="w-full text-left text-sm">
                         {filtrando && (
