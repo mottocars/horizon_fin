@@ -481,6 +481,14 @@ export default function EspiaoNfeNfsePage() {
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [dataInicio, dataFim, filtros, certificados, modoInativas]);
 
+  // Filtro (data ou texto) mudou: o resultado por trás muda, então o que
+  // estava aberto não corresponde mais ao que a tela vai mostrar — fecha
+  // tudo em vez de deixar seção/certificado aberto com dado desatualizado.
+  useEffect(() => {
+    setAbertos(new Set());
+    setSecoesAbertas(new Set());
+  }, [dataInicio, dataFim, filtros]);
+
   function limparFiltros() {
     setFiltroTexto(EMPTY_FILTROS);
     setFiltros(EMPTY_FILTROS);
@@ -726,7 +734,11 @@ export default function EspiaoNfeNfsePage() {
 
     return (
       <tbody key={certificado.id}>
-        <tr className={vencido ? 'bg-red-50' : aberto ? 'bg-gray-50' : 'bg-white'}>
+        {/* Aberto usa uma cor própria (primary-50) — diferente do cinza do
+            nível 2 (produtos/serviços aberto) — pra dar pra diferenciar de
+            relance qual nível está aberto quando os dois estão ao mesmo
+            tempo. */}
+        <tr className={vencido ? 'bg-red-50' : aberto ? 'bg-primary-50' : 'bg-white'}>
           <td colSpan={totalColunas} className="px-5 py-2.5">
             <div className="flex flex-wrap items-center gap-x-3 gap-y-1.5">
               {/* Fechado por padrão (ver `abertos` — começa
@@ -752,9 +764,9 @@ export default function EspiaoNfeNfsePage() {
 
               {/* Canto direito: vencimento primeiro (extrema direita da
                   tela, mas à esquerda dos demais status), depois
-                  Produtos/Serviços (só ícone + número — quieto/cinza
-                  quando 0, cor forte quando tem alguma) e última consulta,
-                  antes da ação (consultar). */}
+                  Produtos/Serviços (só ícone + número — bem apagado, na
+                  mesma cor mas bem clarinho, quando 0; cor forte quando tem
+                  alguma) e última consulta, antes da ação (consultar). */}
               <div className="ml-auto flex shrink-0 items-center gap-2">
                 {vencendoEmBreve && (
                   <span
@@ -769,7 +781,7 @@ export default function EspiaoNfeNfsePage() {
                 <span
                   title={`${totalNfeCard === null ? '…' : totalNfeCard} produto${totalNfeCard !== 1 ? 's' : ''} (NF-e)`}
                   className={`inline-flex items-center gap-1 rounded-full px-2.5 py-1 text-xs font-semibold ${
-                    totalNfeCard ? 'bg-primary-100 text-primary-700' : 'bg-gray-50 text-gray-300'
+                    totalNfeCard ? 'bg-primary-100 text-primary-700' : 'text-primary-200'
                   }`}
                 >
                   <Package size={12} />
@@ -778,7 +790,7 @@ export default function EspiaoNfeNfsePage() {
                 <span
                   title={`${totalNfseCard === null ? '…' : totalNfseCard} serviço${totalNfseCard !== 1 ? 's' : ''} (NFS-e)`}
                   className={`inline-flex items-center gap-1 rounded-full px-2.5 py-1 text-xs font-semibold ${
-                    totalNfseCard ? 'bg-violet-100 text-violet-700' : 'bg-gray-50 text-gray-300'
+                    totalNfseCard ? 'bg-violet-100 text-violet-700' : 'text-violet-200'
                   }`}
                 >
                   <Wrench size={12} />
@@ -851,107 +863,104 @@ export default function EspiaoNfeNfsePage() {
             {/* Nível 2: linha de Produtos, com "+/−" próprio
                 (pl-9 — mesmo recuo do Cluster em
                 GestaoParcelasTab.jsx, mesmo tamanho de botão
-                também: h-4 w-4, ícone 10). Só mostra as
-                notas (nível 3) quando esta seção está
-                aberta. */}
-            <tr
-              onClick={() => toggleSecao(certificado.id, 'produtos')}
-              className={`cursor-pointer border-b border-gray-50 hover:bg-gray-50 ${produtosAberto ? 'bg-gray-50' : 'bg-white'}`}
-            >
-              <td colSpan={totalColunas} className="py-2 pl-9 pr-5">
-                <span className="inline-flex items-center gap-2 text-sm font-semibold text-gray-500">
-                  <span className="flex h-4 w-4 shrink-0 items-center justify-center rounded border border-gray-300 text-gray-500">
-                    {produtosAberto ? <Minus size={10} /> : <Plus size={10} />}
-                  </span>
-                  <Package size={13} />
-                  Produtos (NF-e) · {notas ? notas.produtos.length : 0}
-                </span>
-              </td>
-            </tr>
-            {produtosAberto &&
-              (!notas || notas.produtos.length === 0 ? (
-                <tr>
-                  <td colSpan={totalColunas} className="pl-14 pr-5 pb-2.5 text-xs text-gray-400">
-                    {modoInativas
-                      ? 'Nenhum produto inativado no período selecionado.'
-                      : 'Nenhum produto encontrado no período selecionado.'}
+                também: h-4 w-4, ícone 10). Só existe quando tem
+                pelo menos 1 produto (sem nenhum, não precisa
+                mostrar a linha em vão). Cor própria (gray-100)
+                quando aberta — diferente do primary-50 do nível
+                1 — e border-t marcando a virada de nível. */}
+            {totalNfeCard > 0 && (
+              <>
+                <tr
+                  onClick={() => toggleSecao(certificado.id, 'produtos')}
+                  className={`cursor-pointer border-t border-t-gray-200 border-b border-b-gray-50 hover:bg-gray-50 ${
+                    produtosAberto ? 'bg-gray-100' : 'bg-white'
+                  }`}
+                >
+                  <td colSpan={totalColunas} className="py-2 pl-9 pr-5">
+                    <span className="inline-flex items-center gap-2 text-sm font-semibold text-gray-500">
+                      <span className="flex h-4 w-4 shrink-0 items-center justify-center rounded border border-gray-300 text-gray-500">
+                        {produtosAberto ? <Minus size={10} /> : <Plus size={10} />}
+                      </span>
+                      <Package size={13} />
+                      Produtos (NF-e) · {totalNfeCard}
+                    </span>
                   </td>
                 </tr>
-              ) : (
-                <>
-                  <CabecalhoNotas
-                    modoInativas={modoInativas}
-                    checked={notas.produtos.every((n) => selecionadas.has(n.id))}
-                    indeterminate={
-                      notas.produtos.some((n) => selecionadas.has(n.id)) &&
-                      !notas.produtos.every((n) => selecionadas.has(n.id))
-                    }
-                    onToggleTodas={() => toggleTodasNaSecao(certificado.id, 'produtos', notas.produtos)}
-                  />
-                  {notas.produtos.map((nota) => (
-                    <LinhaNota
-                      key={nota.id}
-                      nota={nota}
+                {produtosAberto && (
+                  <>
+                    <CabecalhoNotas
                       modoInativas={modoInativas}
-                      selecionada={selecionadas.has(nota.id)}
-                      onToggleSelecionada={() => toggleSelecionada(certificado.id, 'produtos', nota)}
-                      onBaixarPdf={() => handleDownloadPdf(nota)}
-                      onBaixar={() => handleDownload(nota)}
+                      checked={notas.produtos.every((n) => selecionadas.has(n.id))}
+                      indeterminate={
+                        notas.produtos.some((n) => selecionadas.has(n.id)) &&
+                        !notas.produtos.every((n) => selecionadas.has(n.id))
+                      }
+                      onToggleTodas={() => toggleTodasNaSecao(certificado.id, 'produtos', notas.produtos)}
                     />
-                  ))}
-                </>
-              ))}
+                    {notas.produtos.map((nota) => (
+                      <LinhaNota
+                        key={nota.id}
+                        nota={nota}
+                        modoInativas={modoInativas}
+                        selecionada={selecionadas.has(nota.id)}
+                        onToggleSelecionada={() => toggleSelecionada(certificado.id, 'produtos', nota)}
+                        onBaixarPdf={() => handleDownloadPdf(nota)}
+                        onBaixar={() => handleDownload(nota)}
+                      />
+                    ))}
+                  </>
+                )}
+              </>
+            )}
 
             {/* Nível 2: linha de Serviços, independente da de
-                Produtos acima (cada uma com seu próprio
-                estado em secoesAbertas). */}
-            <tr
-              onClick={() => toggleSecao(certificado.id, 'servicos')}
-              className={`cursor-pointer border-b border-gray-50 hover:bg-gray-50 ${servicosAberto ? 'bg-gray-50' : 'bg-white'}`}
-            >
-              <td colSpan={totalColunas} className="py-2 pl-9 pr-5">
-                <span className="inline-flex items-center gap-2 text-sm font-semibold text-gray-500">
-                  <span className="flex h-4 w-4 shrink-0 items-center justify-center rounded border border-gray-300 text-gray-500">
-                    {servicosAberto ? <Minus size={10} /> : <Plus size={10} />}
-                  </span>
-                  <Wrench size={13} />
-                  Serviços (NFS-e) · {notas ? notas.servicos.length : 0}
-                </span>
-              </td>
-            </tr>
-            {servicosAberto &&
-              (!notas || notas.servicos.length === 0 ? (
-                <tr>
-                  <td colSpan={totalColunas} className="pl-14 pr-5 pb-2.5 text-xs text-gray-400">
-                    {modoInativas
-                      ? 'Nenhum serviço inativado no período selecionado.'
-                      : 'Nenhum serviço encontrado no período selecionado.'}
+                Produtos acima (cada uma com seu próprio estado
+                em secoesAbertas) — mesma regra: só existe quando
+                tem pelo menos 1 serviço. */}
+            {totalNfseCard > 0 && (
+              <>
+                <tr
+                  onClick={() => toggleSecao(certificado.id, 'servicos')}
+                  className={`cursor-pointer border-t border-t-gray-100 border-b border-b-gray-50 hover:bg-gray-50 ${
+                    servicosAberto ? 'bg-gray-100' : 'bg-white'
+                  }`}
+                >
+                  <td colSpan={totalColunas} className="py-2 pl-9 pr-5">
+                    <span className="inline-flex items-center gap-2 text-sm font-semibold text-gray-500">
+                      <span className="flex h-4 w-4 shrink-0 items-center justify-center rounded border border-gray-300 text-gray-500">
+                        {servicosAberto ? <Minus size={10} /> : <Plus size={10} />}
+                      </span>
+                      <Wrench size={13} />
+                      Serviços (NFS-e) · {totalNfseCard}
+                    </span>
                   </td>
                 </tr>
-              ) : (
-                <>
-                  <CabecalhoNotas
-                    modoInativas={modoInativas}
-                    checked={notas.servicos.every((n) => selecionadas.has(n.id))}
-                    indeterminate={
-                      notas.servicos.some((n) => selecionadas.has(n.id)) &&
-                      !notas.servicos.every((n) => selecionadas.has(n.id))
-                    }
-                    onToggleTodas={() => toggleTodasNaSecao(certificado.id, 'servicos', notas.servicos)}
-                  />
-                  {notas.servicos.map((nota) => (
-                    <LinhaNota
-                      key={nota.id}
-                      nota={nota}
+                {servicosAberto && (
+                  <>
+                    <CabecalhoNotas
                       modoInativas={modoInativas}
-                      selecionada={selecionadas.has(nota.id)}
-                      onToggleSelecionada={() => toggleSelecionada(certificado.id, 'servicos', nota)}
-                      onBaixarPdf={() => handleDownloadPdf(nota)}
-                      onBaixar={() => handleDownload(nota)}
+                      checked={notas.servicos.every((n) => selecionadas.has(n.id))}
+                      indeterminate={
+                        notas.servicos.some((n) => selecionadas.has(n.id)) &&
+                        !notas.servicos.every((n) => selecionadas.has(n.id))
+                      }
+                      onToggleTodas={() => toggleTodasNaSecao(certificado.id, 'servicos', notas.servicos)}
                     />
-                  ))}
-                </>
-              ))}
+                    {notas.servicos.map((nota) => (
+                      <LinhaNota
+                        key={nota.id}
+                        nota={nota}
+                        modoInativas={modoInativas}
+                        selecionada={selecionadas.has(nota.id)}
+                        onToggleSelecionada={() => toggleSelecionada(certificado.id, 'servicos', nota)}
+                        onBaixarPdf={() => handleDownloadPdf(nota)}
+                        onBaixar={() => handleDownload(nota)}
+                      />
+                    ))}
+                  </>
+                )}
+              </>
+            )}
           </>
         )}
       </tbody>
