@@ -709,7 +709,7 @@ async function listNotas(empresaId, filtros) {
   const where = montarFiltrosNotas(params, 'empresa_id = $1 AND inativa = FALSE', filtros);
 
   const { rows } = await pool.query(
-    `SELECT id, tipo, chave_acesso, numero_nota, serie_nota, emissor, destinatario, data_emissao, situacao
+    `SELECT id, tipo, chave_acesso, numero_nota, serie_nota, emissor, destinatario, data_emissao, situacao, ciente_em
      FROM espiao_notas
      WHERE ${where}
      ORDER BY data_emissao DESC`,
@@ -727,7 +727,7 @@ async function listNotasPorCertificado(certificadoId, filtros) {
   const where = montarFiltrosNotas(params, 'certificado_id = $1 AND inativa = FALSE', filtros);
 
   const { rows } = await pool.query(
-    `SELECT id, tipo, chave_acesso, numero_nota, serie_nota, emissor, destinatario, data_emissao, situacao
+    `SELECT id, tipo, chave_acesso, numero_nota, serie_nota, emissor, destinatario, data_emissao, situacao, ciente_em
      FROM espiao_notas
      WHERE ${where}
      ORDER BY data_emissao DESC`,
@@ -768,6 +768,22 @@ async function reativarNotas(notaIds) {
     [notaIds]
   );
   return rows.map((r) => r.id);
+}
+
+// Marca as notas escolhidas como cientes — sai da aba "Novas" e passa pra
+// aba "Cientes" (ver TABS_NOTAS no frontend). Diferente de inativar: não
+// tira a nota da tela comum, só muda em qual aba ela aparece. Idempotente
+// de propósito (sem `AND ciente_em IS NULL`) — declarar ciência de novo
+// numa nota já ciente só atualiza o carimbo, sem erro.
+async function declararCiencia(notaIds, usuarioId) {
+  const { rows } = await pool.query(
+    `UPDATE espiao_notas
+     SET ciente_por = $1, ciente_em = NOW()
+     WHERE id = ANY($2::int[]) AND inativa = FALSE
+     RETURNING id, ciente_em`,
+    [usuarioId, notaIds]
+  );
+  return rows;
 }
 
 async function listNotasInativadas(empresaId, filtros) {
@@ -884,6 +900,7 @@ module.exports = {
   marcarAgendamentoExecutado,
   inativarNotas,
   reativarNotas,
+  declararCiencia,
   listNotasInativadas,
   listNotasInativadasPorCertificado,
   extrairTagTexto,

@@ -1183,6 +1183,12 @@ CREATE TABLE espiao_notas (
     inativada_por        INTEGER REFERENCES usuarios(id),
     inativada_em         TIMESTAMP,
     motivo_inativacao    TEXT,
+    -- Ciência manual (usuário marca notas como já revisadas, sem inativar)
+    -- — controla a aba "Cientes" da tela; NULL = ainda cai na aba "Novas".
+    -- Diferente de `situacao` (evento oficial da Receita): ciência é uma
+    -- marcação interna de quem já revisou a nota, não muda o status fiscal.
+    ciente_por           INTEGER REFERENCES usuarios(id),
+    ciente_em            TIMESTAMP,
     criado_em            TIMESTAMP DEFAULT NOW(),
     UNIQUE (empresa_id, chave_acesso)
 );

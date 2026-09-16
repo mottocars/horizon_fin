@@ -19,5 +19,6 @@ router.get('/:empresaId/notas-inativadas', controller.listNotasInativadas);
 router.get('/certificados/:certificadoId/notas-inativadas', controller.listNotasInativadasPorCertificado);
 router.post('/notas/inativar', controller.inativar);
 router.post('/notas/reativar', controller.reativar);
+router.post('/notas/declarar-ciencia', controller.declararCiencia);
 
 module.exports = router;

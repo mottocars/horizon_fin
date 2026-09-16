@@ -43,6 +43,7 @@ import {
   baixarNotaPdfEspiao,
   inativarNotasEspiao,
   reativarNotasEspiao,
+  declararCienciaEspiao,
 } from '../../../api/espiao.api';
 
 const INTERVALOS = [
@@ -110,6 +111,18 @@ function diasParaVencer(validadeAte) {
 }
 
 const DIAS_AVISO_VENCIMENTO = 30;
+
+// 'novas'/'cientes' (ver TABS_NOTAS) filtram, do lado do cliente, o MESMO
+// dataset de notas ativas — o backend já manda `ciente_em` em cada nota
+// (ver espiao.service.js::listNotasPorCertificado), então não precisa de
+// outra chamada à API pra trocar de aba. 'inativas' é um dataset à parte
+// (endpoint próprio, ver carregarNotas/carregarNotasDeTodosCertificados),
+// então passa direto sem filtrar de novo.
+function filtrarNotasPorAba(lista, aba, inativas) {
+  if (inativas) return lista;
+  if (aba === 'cientes') return lista.filter((n) => n.ciente_em);
+  return lista.filter((n) => !n.ciente_em);
+}
 
 // Cabeçalho de coluna só do nível 3 (Nota) — não é mais um <thead> fixo no
 // topo da tabela inteira, porque essas colunas (Nº/Série, Emissor...) só
@@ -252,14 +265,13 @@ export default function EspiaoNfeNfsePage() {
   const [loadingEmpresas, setLoadingEmpresas] = useState(true);
   const [empresaId, setEmpresaId] = useState('');
 
-  // Alterna entre "notas ativas" (comportamento normal) e "notas inativadas"
-  // na MESMA tela — é só um filtro a mais, não uma tela separada. Mesma
-  // empresa, mesmas datas, mesmo layout de cards por certificado.
-  const [modoInativas, setModoInativas] = useState(false);
-
   // Aba de estado das notas (ver TABS_NOTAS) — sempre começa em "Novas
-  // Notas". Só o visual por enquanto, sem filtrar nada ainda.
+  // Notas". "Inativas" troca o dataset inteiro (endpoint próprio, mesmo
+  // efeito que o antigo toggle "notas ativas/inativadas"); "Novas"/
+  // "Cientes" filtram do lado do cliente o mesmo dataset de notas ativas
+  // por `ciente_em` (ver filtrarNotasPorAba).
   const [abaNotas, setAbaNotas] = useState('novas');
+  const modoInativas = abaNotas === 'inativas';
 
   const [certificados, setCertificados] = useState([]);
   const [loadingCertificados, setLoadingCertificados] = useState(false);
@@ -314,6 +326,7 @@ export default function EspiaoNfeNfsePage() {
     });
   }
   const [reativandoLote, setReativandoLote] = useState(false);
+  const [declarandoCiencia, setDeclarandoCiencia] = useState(false);
 
   // Notas marcadas pelo usuário — pra inativar (notas ativas) ou reativar
   // (notas inativadas), dependendo do modo. Guarda o objeto inteiro (não só
@@ -396,14 +409,15 @@ export default function EspiaoNfeNfsePage() {
     setEmpresaId(novoId);
   }
 
-  // Trocar entre notas ativas/inativadas é um dataset diferente por
-  // certificado — zera notas em cache e seleção, mas mantém empresa, datas e
-  // filtros exatamente como estavam.
-  function toggleModoInativas() {
-    setModoInativas((prev) => !prev);
+  // Entrar/sair da aba "Inativas" troca o dataset inteiro por certificado
+  // (endpoint próprio) — zera notas em cache e seleção, mas mantém empresa,
+  // datas e filtros exatamente como estavam. Só entre 'novas'/'cientes' não
+  // passa por aqui: é o mesmo dataset, só muda o filtro do lado do cliente.
+  useEffect(() => {
     setNotasPorCertificado({});
     setSelecionadas(new Map());
-  }
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [modoInativas]);
 
   const empresaSelecionada = useMemo(
     () => empresas.find((e) => String(e.id) === String(empresaId)),
@@ -433,11 +447,17 @@ export default function EspiaoNfeNfsePage() {
     const semNotas = [];
     certificadosFiltrados.forEach((certificado) => {
       const dados = notasPorCertificado[certificado.id];
-      const vazio = dados != null && dados.produtos.length === 0 && dados.servicos.length === 0;
+      if (dados == null) {
+        comNotas.push(certificado);
+        return;
+      }
+      const produtosVisiveis = filtrarNotasPorAba(dados.produtos, abaNotas, modoInativas);
+      const servicosVisiveis = filtrarNotasPorAba(dados.servicos, abaNotas, modoInativas);
+      const vazio = produtosVisiveis.length === 0 && servicosVisiveis.length === 0;
       (vazio ? semNotas : comNotas).push(certificado);
     });
     return { comNotas, semNotas };
-  }, [certificadosFiltrados, notasPorCertificado]);
+  }, [certificadosFiltrados, notasPorCertificado, abaNotas, modoInativas]);
 
   function carregarNotas(certificadoId) {
     setLoadingNotas((prev) => ({ ...prev, [certificadoId]: true }));
@@ -735,6 +755,55 @@ export default function EspiaoNfeNfsePage() {
     }
   }
 
+  // Marca as notas selecionadas como cientes — saem da aba "Novas" e passam
+  // a aparecer em "Cientes" (ver TABS_NOTAS/filtrarNotasPorAba). Diferente
+  // de inativar: a nota continua na tela comum, só muda de aba; por isso
+  // não some da lista local, só ganha `ciente_em`.
+  async function handleDeclararCiencia() {
+    if (selecionadas.size === 0) return;
+    const notaIds = Array.from(selecionadas.keys());
+    const confirmado = await confirm({
+      title: 'Declarar ciência das notas selecionadas',
+      description: `${notaIds.length} nota(s) vão passar da aba "Novas" para "Cientes".`,
+      confirmLabel: 'Declarar ciência',
+    });
+    if (!confirmado) return;
+
+    setDeclarandoCiencia(true);
+    try {
+      const notas = await declararCienciaEspiao(notaIds);
+      const cienteEmPorId = new Map(notas.map((n) => [n.id, n.ciente_em]));
+
+      setNotasPorCertificado((prev) => {
+        const next = { ...prev };
+        selecionadas.forEach(({ certificadoId }, notaId) => {
+          const dados = next[certificadoId];
+          if (!dados || !cienteEmPorId.has(notaId)) return;
+          const marcar = (lista) =>
+            lista.map((n) => (n.id === notaId ? { ...n, ciente_em: cienteEmPorId.get(notaId) } : n));
+          next[certificadoId] = { produtos: marcar(dados.produtos), servicos: marcar(dados.servicos) };
+        });
+        return next;
+      });
+
+      await alert({
+        title: 'Ciência declarada',
+        description: `${notaIds.length} nota(s) marcada(s) como ciente.`,
+        variant: 'default',
+      });
+
+      limparSelecao();
+    } catch (err) {
+      await alert({
+        title: 'Não foi possível declarar ciência',
+        description: err.response?.data?.message || 'Não foi possível declarar ciência das notas selecionadas.',
+        variant: 'warning',
+      });
+    } finally {
+      setDeclarandoCiencia(false);
+    }
+  }
+
   // Checkbox + Nº/Série + Emissor + Emissão + Situação + [Inativada por] +
   // Ações — quantas colunas a tabela única tem, pro colSpan das linhas de
   // seção (certificado, Produtos, Serviços).
@@ -747,6 +816,11 @@ export default function EspiaoNfeNfsePage() {
   function renderCertificado(certificado) {
     const vencido = estaVencido(certificado.validade_ate);
     const notas = notasPorCertificado[certificado.id];
+    // 'novas'/'cientes' filtram o MESMO dataset de notas ativas por
+    // ciente_em (ver filtrarNotasPorAba); 'inativas' já veio como um
+    // dataset totalmente à parte, então passa direto.
+    const produtosVisiveis = notas ? filtrarNotasPorAba(notas.produtos, abaNotas, modoInativas) : null;
+    const servicosVisiveis = notas ? filtrarNotasPorAba(notas.servicos, abaNotas, modoInativas) : null;
     const carregandoNotas = Boolean(loadingNotas[certificado.id]);
     const emConsulta = Boolean(consultando[certificado.id]);
     const aberto = abertos.has(certificado.id);
@@ -754,8 +828,8 @@ export default function EspiaoNfeNfsePage() {
     const servicosAberto = secoesAbertas.has(`${certificado.id}:servicos`);
     // Enquanto ainda não carregou, mostra "…" em vez de um
     // número errado.
-    const totalNfeCard = notas ? notas.produtos.length : null;
-    const totalNfseCard = notas ? notas.servicos.length : null;
+    const totalNfeCard = produtosVisiveis ? produtosVisiveis.length : null;
+    const totalNfseCard = servicosVisiveis ? servicosVisiveis.length : null;
     // Sem nenhuma nota (já carregado e os dois totais deram
     // zero) — não faz sentido oferecer o "+", não tem nada
     // pra mostrar dentro.
@@ -927,14 +1001,14 @@ export default function EspiaoNfeNfsePage() {
                   <>
                     <CabecalhoNotas
                       modoInativas={modoInativas}
-                      checked={notas.produtos.every((n) => selecionadas.has(n.id))}
+                      checked={produtosVisiveis.every((n) => selecionadas.has(n.id))}
                       indeterminate={
-                        notas.produtos.some((n) => selecionadas.has(n.id)) &&
-                        !notas.produtos.every((n) => selecionadas.has(n.id))
+                        produtosVisiveis.some((n) => selecionadas.has(n.id)) &&
+                        !produtosVisiveis.every((n) => selecionadas.has(n.id))
                       }
-                      onToggleTodas={() => toggleTodasNaSecao(certificado.id, 'produtos', notas.produtos)}
+                      onToggleTodas={() => toggleTodasNaSecao(certificado.id, 'produtos', produtosVisiveis)}
                     />
-                    {notas.produtos.map((nota) => (
+                    {produtosVisiveis.map((nota) => (
                       <LinhaNota
                         key={nota.id}
                         nota={nota}
@@ -978,14 +1052,14 @@ export default function EspiaoNfeNfsePage() {
                   <>
                     <CabecalhoNotas
                       modoInativas={modoInativas}
-                      checked={notas.servicos.every((n) => selecionadas.has(n.id))}
+                      checked={servicosVisiveis.every((n) => selecionadas.has(n.id))}
                       indeterminate={
-                        notas.servicos.some((n) => selecionadas.has(n.id)) &&
-                        !notas.servicos.every((n) => selecionadas.has(n.id))
+                        servicosVisiveis.some((n) => selecionadas.has(n.id)) &&
+                        !servicosVisiveis.every((n) => selecionadas.has(n.id))
                       }
-                      onToggleTodas={() => toggleTodasNaSecao(certificado.id, 'servicos', notas.servicos)}
+                      onToggleTodas={() => toggleTodasNaSecao(certificado.id, 'servicos', servicosVisiveis)}
                     />
-                    {notas.servicos.map((nota) => (
+                    {servicosVisiveis.map((nota) => (
                       <LinhaNota
                         key={nota.id}
                         nota={nota}
@@ -1328,10 +1402,20 @@ export default function EspiaoNfeNfsePage() {
                 Reativar
               </Button>
             ) : (
-              <Button variant="danger" onClick={() => setModalInativar(true)}>
-                <Ban size={15} />
-                Inativar
-              </Button>
+              <>
+                <Button
+                  className="!border-emerald-600 !bg-emerald-600 !text-white hover:!bg-emerald-700"
+                  loading={declarandoCiencia}
+                  onClick={handleDeclararCiencia}
+                >
+                  <CheckCircle size={15} />
+                  Declarar Ciência
+                </Button>
+                <Button variant="danger" onClick={() => setModalInativar(true)}>
+                  <Ban size={15} />
+                  Inativar
+                </Button>
+              </>
             )}
           </div>
         </div>

@@ -154,6 +154,21 @@ async function reativar(req, res, next) {
   }
 }
 
+const declararCienciaSchema = z.object({
+  notaIds: z.array(z.coerce.number().int().positive()).min(1, 'Selecione ao menos uma nota.'),
+});
+
+async function declararCiencia(req, res, next) {
+  try {
+    const data = declararCienciaSchema.parse(req.body);
+    const notas = await service.declararCiencia(data.notaIds, req.user.id);
+    res.json({ notas });
+  } catch (err) {
+    if (err.issues) return next(badRequest(err.issues[0].message));
+    next(err);
+  }
+}
+
 async function listNotasInativadas(req, res, next) {
   try {
     const result = await service.listNotasInativadas(req.params.empresaId, {
@@ -199,6 +214,7 @@ module.exports = {
   salvarAgendamento,
   inativar,
   reativar,
+  declararCiencia,
   listNotasInativadas,
   listNotasInativadasPorCertificado,
 };

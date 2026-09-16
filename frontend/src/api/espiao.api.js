@@ -57,6 +57,10 @@ export function reativarNotasEspiao(notaIds) {
   return http.post('/espiao/notas/reativar', { notaIds }).then((res) => res.data);
 }
 
+export function declararCienciaEspiao(notaIds) {
+  return http.post('/espiao/notas/declarar-ciencia', { notaIds }).then((res) => res.data);
+}
+
 export function listNotasInativadasEspiao(
   empresaId,
   { dataInicio, dataFim, chave, numero, emissor, destinatario } = {}
