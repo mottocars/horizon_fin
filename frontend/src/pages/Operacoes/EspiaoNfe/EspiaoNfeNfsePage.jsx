@@ -786,6 +786,10 @@ export default function EspiaoNfeNfsePage() {
         return next;
       });
 
+      // Essas notas somem da aba atual (Novas) — troca pra "Cientes" pra
+      // elas continuarem visíveis, em vez do usuário achar que sumiram.
+      setAbaNotas('cientes');
+
       await alert({
         title: 'Ciência declarada',
         description: `${notaIds.length} nota(s) marcada(s) como ciente.`,
