@@ -40,6 +40,7 @@ const comunicacaoRoutes = require('./modules/comunicacao/comunicacao.routes');
 const rotinasRoutes = require('./modules/rotinas/rotinas.routes');
 const mcpRoutes = require('./modules/integracoes-mcp/mcp.routes');
 const mcpProtocoloRoutes = require('./modules/integracoes-mcp/mcpProtocolo.routes');
+const logsAcessoRoutes = require('./modules/logs-acesso/logsAcesso.routes');
 const errorMiddleware = require('./middlewares/error.middleware');
 const pool = require('./config/db');
 
@@ -103,6 +104,7 @@ app.use('/api/comunicacao', comunicacaoRoutes);
 app.use('/api/rotinas', rotinasRoutes);
 app.use('/api/integracoes/mcp', mcpRoutes);
 app.use('/api/mcp', mcpProtocoloRoutes);
+app.use('/api/logs-acesso', logsAcessoRoutes);
 
 app.use((req, res) => {
   res.status(404).json({ message: 'Rota não encontrada.' });

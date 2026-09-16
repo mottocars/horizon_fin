@@ -43,6 +43,7 @@ import UsuarioForm from './pages/Usuarios/UsuarioForm';
 import MeuPerfil from './pages/MeuPerfil/MeuPerfil';
 import PrimeiroAcesso from './pages/PrimeiroAcesso/PrimeiroAcesso';
 import RepassesCefPage from './pages/Operacoes/RepassesCef/RepassesCefPage';
+import MetricasUsoPage from './pages/Relatorios/MetricasUso/MetricasUsoPage';
 import GestaoCobrancasPage from './pages/Operacoes/GestaoCobrancas/GestaoCobrancasPage';
 import ClusterClientesList from './pages/Operacoes/GestaoCobrancas/ClustersCobranca/ClusterClientesList';
 import ClienteClusterDetalhe from './pages/Operacoes/GestaoCobrancas/ClustersCobranca/ClienteClusterDetalhe';
@@ -181,6 +182,8 @@ export default function App() {
             <Route path="/integracoes/mcp" element={<McpList />} />
             <Route path="/integracoes/mcp/nova" element={<McpForm />} />
             <Route path="/integracoes/mcp/:id" element={<McpForm />} />
+
+            <Route path="/relatorios/metricas-de-uso" element={<MetricasUsoPage />} />
           </Route>
 
           <Route path="*" element={<Navigate to="/" replace />} />

@@ -23,6 +23,8 @@ import {
   Landmark,
   Banknote,
   ReceiptText,
+  FileBarChart,
+  Activity,
 } from 'lucide-react';
 import iconPortalConstrutoras from '../assets/integracoes/portal-construtoras.svg';
 import iconPrevision from '../assets/integracoes/prevision.svg';
@@ -83,6 +85,15 @@ const menuItems = [
       { label: 'Whatsapp Z-API', to: '/integracoes/z-api', image: iconZapi },
       { label: 'Email', to: '/integracoes/email', image: iconEmail },
       { label: 'MCP', to: '/integracoes/mcp', image: iconMcp },
+    ],
+  },
+  {
+    type: 'group',
+    label: 'Relatórios',
+    icon: FileBarChart,
+    basePath: '/relatorios',
+    children: [
+      { label: 'Métricas de Uso', to: '/relatorios/metricas-de-uso', icon: Activity },
     ],
   },
 ];

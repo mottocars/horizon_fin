@@ -2094,3 +2094,21 @@ CREATE VIEW mcp_cobranca_clientes_clusters AS
 CREATE VIEW mcp_regua_cobranca_historico_registros AS
     SELECT * FROM regua_cobranca_historico_registros
     WHERE empresa_id = current_setting('app.empresa_id', true)::int;
+
+-- Logs de acesso às telas do sistema — cada linha é uma visita a uma tela
+-- (ver frontend/src/hooks/useLogAcesso.js), usada pelo dashboard de
+-- Relatórios > Métricas de Uso. `tela` guarda o caminho canônico da tela
+-- (ex.: '/operacoes/espiao-nfe-nfse'), não a URL completa — uma rota de
+-- detalhe como /cadastros/empresas/42 é normalizada pro path da tela-mãe
+-- antes de chegar aqui, senão a métrica por tela ficaria fragmentada por
+-- registro em vez de agregada por tela.
+CREATE TABLE logs_acesso (
+    id           SERIAL PRIMARY KEY,
+    usuario_id   INTEGER NOT NULL REFERENCES usuarios(id) ON DELETE CASCADE,
+    tela         VARCHAR(120) NOT NULL,
+    criado_em    TIMESTAMP DEFAULT NOW()
+);
+
+CREATE INDEX idx_logs_acesso_usuario ON logs_acesso (usuario_id);
+CREATE INDEX idx_logs_acesso_tela ON logs_acesso (tela);
+CREATE INDEX idx_logs_acesso_criado_em ON logs_acesso (criado_em);
