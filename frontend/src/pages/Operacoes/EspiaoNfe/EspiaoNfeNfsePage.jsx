@@ -131,7 +131,7 @@ function CabecalhoNotas({ modoInativas, checked, indeterminate, onToggleTodas })
           checked={checked}
           onChange={onToggleTodas}
           aria-label="Selecionar todas as notas desta seção"
-          className="h-4 w-4 rounded border-gray-300 text-primary-600 focus:ring-primary-100"
+          className="h-3.5 w-3.5 rounded border-gray-300 text-primary-600 focus:ring-primary-100"
         />
       </th>
       <th className="py-2 px-3 font-medium whitespace-nowrap">Nº / Série</th>
@@ -162,7 +162,7 @@ function LinhaNota({ nota, modoInativas, selecionada, onToggleSelecionada, onBai
           type="checkbox"
           checked={selecionada}
           onChange={onToggleSelecionada}
-          className="h-4 w-4 rounded border-gray-300 text-primary-600 focus:ring-primary-100"
+          className="h-3.5 w-3.5 rounded border-gray-300 text-primary-600 focus:ring-primary-100"
         />
       </td>
       <td className="py-2.5 px-3 font-mono text-xs text-gray-600 whitespace-nowrap">
@@ -732,40 +732,54 @@ export default function EspiaoNfeNfsePage() {
               {/* Fechado por padrão (ver `abertos` — começa
                   vazio) — as notas já estão carregadas de
                   qualquer jeito, abrir só mostra as linhas.
-                  Mesmo tamanho padrão do "+" de Centro de
-                  Custo em GestaoParcelasTab.jsx (h-5 w-5,
-                  ícone 12) — nada de botão avantajado. */}
+                  Mesmo tamanho do "+" do nível 2 (Produtos/
+                  Serviços, h-4 w-4, ícone 10) — os dois níveis
+                  usam o mesmo padrão de botão agora. */}
               {semNotas ? (
-                <span className="h-5 w-5 shrink-0" />
+                <span className="h-4 w-4 shrink-0" />
               ) : (
                 <button
                   type="button"
                   onClick={() => toggleAberto(certificado.id)}
                   title={aberto ? 'Recolher' : 'Expandir'}
-                  className="flex h-5 w-5 shrink-0 items-center justify-center rounded border border-gray-200 text-gray-500 hover:border-primary-300 hover:text-primary-600"
+                  className="flex h-4 w-4 shrink-0 items-center justify-center rounded border border-gray-300 text-gray-500 hover:border-primary-300 hover:text-primary-600"
                 >
-                  {aberto ? <Minus size={12} /> : <Plus size={12} />}
+                  {aberto ? <Minus size={10} /> : <Plus size={10} />}
                 </button>
               )}
 
               <p className="text-sm text-gray-900">{certificado.nome}</p>
 
-              {/* Canto direito: status de Produtos/Serviços (só ícone +
-                  número, cor distingue um do outro), última consulta
-                  (ícone de relógio + "há X min/h/dias" — a data exata
-                  fica no title) e vencimento (vence em breve/vencido),
+              {/* Canto direito: vencimento primeiro (extrema direita da
+                  tela, mas à esquerda dos demais status), depois
+                  Produtos/Serviços (só ícone + número — quieto/cinza
+                  quando 0, cor forte quando tem alguma) e última consulta,
                   antes da ação (consultar). */}
               <div className="ml-auto flex shrink-0 items-center gap-2">
+                {vencendoEmBreve && (
+                  <span
+                    title={`Certificado vence em ${diasVencimento} dia${diasVencimento !== 1 ? 's' : ''}`}
+                    className="inline-flex items-center gap-1.5 rounded-full bg-amber-50 px-2.5 py-1 text-xs font-semibold text-amber-700"
+                  >
+                    <Clock size={12} />
+                    Vence em {diasVencimento} dia{diasVencimento !== 1 ? 's' : ''}
+                  </span>
+                )}
+
                 <span
                   title={`${totalNfeCard === null ? '…' : totalNfeCard} produto${totalNfeCard !== 1 ? 's' : ''} (NF-e)`}
-                  className="inline-flex items-center gap-1 rounded-full bg-primary-50 px-2.5 py-1 text-xs font-semibold text-primary-700"
+                  className={`inline-flex items-center gap-1 rounded-full px-2.5 py-1 text-xs font-semibold ${
+                    totalNfeCard ? 'bg-primary-100 text-primary-700' : 'bg-gray-50 text-gray-300'
+                  }`}
                 >
                   <Package size={12} />
                   {totalNfeCard === null ? '…' : totalNfeCard}
                 </span>
                 <span
                   title={`${totalNfseCard === null ? '…' : totalNfseCard} serviço${totalNfseCard !== 1 ? 's' : ''} (NFS-e)`}
-                  className="inline-flex items-center gap-1 rounded-full bg-violet-50 px-2.5 py-1 text-xs font-semibold text-violet-700"
+                  className={`inline-flex items-center gap-1 rounded-full px-2.5 py-1 text-xs font-semibold ${
+                    totalNfseCard ? 'bg-violet-100 text-violet-700' : 'bg-gray-50 text-gray-300'
+                  }`}
                 >
                   <Wrench size={12} />
                   {totalNfseCard === null ? '…' : totalNfseCard}
@@ -778,16 +792,6 @@ export default function EspiaoNfeNfsePage() {
                   >
                     <Clock size={12} />
                     {formatarTempoRelativo(certificado.ultima_consulta_em)}
-                  </span>
-                )}
-
-                {vencendoEmBreve && (
-                  <span
-                    title={`Certificado vence em ${diasVencimento} dia${diasVencimento !== 1 ? 's' : ''}`}
-                    className="inline-flex items-center gap-1.5 rounded-full bg-amber-50 px-2.5 py-1 text-xs font-semibold text-amber-700"
-                  >
-                    <Clock size={12} />
-                    Vence em {diasVencimento} dia{diasVencimento !== 1 ? 's' : ''}
                   </span>
                 )}
 
@@ -1075,77 +1079,84 @@ export default function EspiaoNfeNfsePage() {
                 </p>
               </Card>
             ) : (
-              <Card className="rounded-tl-none !p-0 overflow-hidden">
-              {/* Drilldown de 3 níveis numa tabela única pra empresa inteira
-                  (mesmo espírito de GestaoParcelasTab.jsx: cada nível é mais
-                  uma <tr>, só com mais recuo, nunca uma tabela aninhada à
-                  parte, e cada nível com seu próprio "+/−"): Certificado
-                  (nome, contagem de produtos/serviços, última consulta e
-                  botão de consultar) → Produtos/Serviços (linha de seção com
-                  contagem) → Nota (checkbox à esquerda, número/série,
-                  emissor, emissão, situação e download de PDF/XML). Sem
-                  <thead> fixo no topo da tabela — o cabeçalho de coluna
-                  (CabecalhoNotas) só existe logo acima das notas, único
-                  nível que de fato usa essas colunas. Um <tbody> por
-                  certificado. */}
+              <>
+                {/* Caixa 1: certificados com nota no período — o drilldown
+                    de 3 níveis de sempre (mesmo espírito de
+                    GestaoParcelasTab.jsx: cada nível é mais uma <tr>, só
+                    com mais recuo, nunca uma tabela aninhada à parte, e
+                    cada nível com seu próprio "+/−"): Certificado → Produtos/
+                    Serviços → Nota. Sem <thead> fixo — o cabeçalho de
+                    coluna (CabecalhoNotas) só existe logo acima das notas.
+                    Só aparece quando tem pelo menos 1 certificado com nota;
+                    senão a Caixa 2 já cobre a tela sozinha. */}
+                {certificadosAgrupados.comNotas.length > 0 && (
+                  <Card className="rounded-tl-none !p-0 overflow-hidden">
+                    {/* Resumo antes do detalhe: quantos certificados/produtos/
+                        serviços tem nesta caixa, antes de entrar linha por
+                        linha — mesmo texto/tamanho já usado nas contagens
+                        por certificado abaixo (text-xs text-gray-500 +
+                        número em destaque). */}
+                    <div className="flex flex-wrap items-center gap-x-5 gap-y-1 border-b border-gray-100 px-5 py-3 text-xs text-gray-500">
+                      <span>
+                        <span className="font-semibold text-gray-900">{certificadosAgrupados.comNotas.length}</span>{' '}
+                        certificado{certificadosAgrupados.comNotas.length !== 1 ? 's' : ''}
+                      </span>
+                      <span className="inline-flex items-center gap-1">
+                        <Package size={12} />
+                        <span className="font-semibold text-gray-900">{totaisNotas.produtos}</span> produto
+                        {totaisNotas.produtos !== 1 ? 's' : ''} (NF-e)
+                      </span>
+                      <span className="inline-flex items-center gap-1">
+                        <Wrench size={12} />
+                        <span className="font-semibold text-gray-900">{totaisNotas.servicos}</span> serviço
+                        {totaisNotas.servicos !== 1 ? 's' : ''} (NFS-e)
+                      </span>
+                    </div>
 
-              {/* Resumo antes do detalhe: quantos certificados/produtos/
-                  serviços tem na tela, antes de entrar linha por linha —
-                  mesmo texto/tamanho já usado nas contagens por certificado
-                  abaixo (text-xs text-gray-500 + número em destaque). */}
-              <div className="flex flex-wrap items-center gap-x-5 gap-y-1 border-b border-gray-100 px-5 py-3 text-xs text-gray-500">
-                <span>
-                  <span className="font-semibold text-gray-900">{certificadosFiltrados.length}</span> certificado
-                  {certificadosFiltrados.length !== 1 ? 's' : ''}
-                </span>
-                <span className="inline-flex items-center gap-1">
-                  <Package size={12} />
-                  <span className="font-semibold text-gray-900">{totaisNotas.produtos}</span> produto
-                  {totaisNotas.produtos !== 1 ? 's' : ''} (NF-e)
-                </span>
-                <span className="inline-flex items-center gap-1">
-                  <Wrench size={12} />
-                  <span className="font-semibold text-gray-900">{totaisNotas.servicos}</span> serviço
-                  {totaisNotas.servicos !== 1 ? 's' : ''} (NFS-e)
-                </span>
-              </div>
+                    <div className="overflow-x-auto">
+                      <table className="w-full text-left text-sm">
+                        {filtrando && (
+                          <tbody>
+                            <tr>
+                              <td colSpan={totalColunas} className="px-5 py-2.5">
+                                <p className="flex items-center gap-1.5 text-xs text-gray-400">
+                                  <Loader2 size={12} className="animate-spin" />
+                                  Verificando notas em todos os certificados...
+                                </p>
+                              </td>
+                            </tr>
+                          </tbody>
+                        )}
 
-              <div className="overflow-x-auto">
-                <table className="w-full text-left text-sm">
-                  {filtrando && (
-                    <tbody>
-                      <tr>
-                        <td colSpan={totalColunas} className="px-5 py-2.5">
-                          <p className="flex items-center gap-1.5 text-xs text-gray-400">
-                            <Loader2 size={12} className="animate-spin" />
-                            Verificando notas em todos os certificados...
-                          </p>
-                        </td>
-                      </tr>
-                    </tbody>
-                  )}
+                        {certificadosAgrupados.comNotas.map(renderCertificado)}
+                      </table>
+                    </div>
+                  </Card>
+                )}
 
-                  {/* Dois clusters (ver certificadosAgrupados): quem tem
-                      nota no período primeiro, quem não tem depois de um
-                      divisor — sem misturar quem precisa de atenção agora
-                      com quem não tem nada pra mostrar. */}
-                  {certificadosAgrupados.comNotas.map(renderCertificado)}
-
-                  {certificadosAgrupados.semNotas.length > 0 && (
-                    <tbody>
-                      <tr className="border-t border-gray-100 bg-gray-50">
-                        <td colSpan={totalColunas} className="px-5 py-2 text-xs font-medium text-gray-400">
-                          Sem nota no período selecionado · {certificadosAgrupados.semNotas.length} certificado
-                          {certificadosAgrupados.semNotas.length !== 1 ? 's' : ''}
-                        </td>
-                      </tr>
-                    </tbody>
-                  )}
-
-                  {certificadosAgrupados.semNotas.map(renderCertificado)}
-                </table>
-              </div>
-            </Card>
+                {/* Caixa 2: separada da primeira (não é mais um divisor
+                    dentro da mesma tabela) — só os certificados sem
+                    nenhuma nota no período. rounded-tl-none só quando é a
+                    única caixa na tela (Caixa 1 vazia); senão leva mt-4
+                    pra abrir vão da Caixa 1, já que o wrapper delas (ver
+                    comentário "Tabs + conteúdo" acima) não tem espaçamento
+                    automático entre os filhos. */}
+                {certificadosAgrupados.semNotas.length > 0 && (
+                  <Card
+                    className={`!p-0 overflow-hidden ${
+                      certificadosAgrupados.comNotas.length === 0 ? 'rounded-tl-none' : 'mt-4'
+                    }`}
+                  >
+                    <div className="border-b border-gray-100 px-5 py-3 text-xs font-medium text-gray-400">
+                      Sem nota no período selecionado · {certificadosAgrupados.semNotas.length} certificado
+                      {certificadosAgrupados.semNotas.length !== 1 ? 's' : ''}
+                    </div>
+                    <div className="overflow-x-auto">
+                      <table className="w-full text-left text-sm">{certificadosAgrupados.semNotas.map(renderCertificado)}</table>
+                    </div>
+                  </Card>
+                )}
+              </>
           )}
         </>
       )}
