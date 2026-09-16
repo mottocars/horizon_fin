@@ -939,91 +939,104 @@ export default function EspiaoNfeNfsePage() {
 
               <p className="text-sm text-gray-900">{certificado.nome}</p>
 
-              {/* Canto direito: vencimento primeiro (extrema direita da
-                  tela, mas à esquerda dos demais status), depois
-                  Produtos/Serviços (só ícone + número — bem apagado, na
-                  mesma cor mas bem clarinho, quando 0; cor forte quando tem
-                  alguma) e última consulta, antes da ação (consultar). */}
-              <div className="ml-auto flex shrink-0 items-center gap-2">
-                {vencendoEmBreve && (
-                  <span
-                    title={`Certificado vence em ${diasVencimento} dia${diasVencimento !== 1 ? 's' : ''}`}
-                    className="inline-flex items-center gap-1.5 rounded-full bg-amber-50 px-2.5 py-1 text-xs font-semibold text-amber-700"
-                  >
-                    <Clock size={12} />
-                    Vence em {diasVencimento} dia{diasVencimento !== 1 ? 's' : ''}
-                  </span>
-                )}
+              {/* Canto direito: 5 colunas de largura FIXA (vencimento,
+                  produtos, serviços, última consulta, ação) — cada uma
+                  sempre ocupa o mesmo espaço e centraliza o conteúdo,
+                  mesmo quando o status não se aplica (fica vazia, mas com a
+                  largura reservada) ou quando o número muda de 1 pra 2
+                  dígitos. Sem isso, produtos/serviços "andavam" pra
+                  esquerda/direita de uma linha pra outra, porque cada
+                  badge só tinha a largura do próprio conteúdo. */}
+              <div className="ml-auto grid shrink-0 grid-cols-[140px_56px_56px_130px_170px] items-center gap-2">
+                <div className="flex justify-center">
+                  {vencendoEmBreve && (
+                    <span
+                      title={`Certificado vence em ${diasVencimento} dia${diasVencimento !== 1 ? 's' : ''}`}
+                      className="inline-flex items-center gap-1.5 rounded-full bg-amber-50 px-2.5 py-1 text-xs font-semibold text-amber-700"
+                    >
+                      <Clock size={12} />
+                      Vence em {diasVencimento} dia{diasVencimento !== 1 ? 's' : ''}
+                    </span>
+                  )}
+                </div>
 
-                <span
-                  title={`${totalNfeCard === null ? '…' : totalNfeCard} produto${totalNfeCard !== 1 ? 's' : ''} (NF-e)`}
-                  className={`inline-flex items-center gap-1 rounded-full px-2.5 py-1 text-xs font-semibold ${
-                    totalNfeCard ? 'bg-primary-100 text-primary-700' : 'text-primary-200'
-                  }`}
-                >
-                  <Package size={12} />
-                  {totalNfeCard === null ? '…' : totalNfeCard}
-                </span>
-                <span
-                  title={`${totalNfseCard === null ? '…' : totalNfseCard} serviço${totalNfseCard !== 1 ? 's' : ''} (NFS-e)`}
-                  className={`inline-flex items-center gap-1 rounded-full px-2.5 py-1 text-xs font-semibold ${
-                    totalNfseCard ? 'bg-violet-100 text-violet-700' : 'text-violet-200'
-                  }`}
-                >
-                  <Wrench size={12} />
-                  {totalNfseCard === null ? '…' : totalNfseCard}
-                </span>
-
-                {!modoInativas && certificado.ultima_consulta_em && (
+                <div className="flex justify-center">
                   <span
-                    title={`Última consulta: ${formatarDataHora(certificado.ultima_consulta_em)}`}
-                    className="inline-flex items-center gap-1.5 rounded-full bg-white px-2.5 py-1 text-xs font-medium text-gray-600"
-                  >
-                    <Clock size={12} />
-                    {formatarTempoRelativo(certificado.ultima_consulta_em)}
-                  </span>
-                )}
-
-                {vencido ? (
-                  <span
-                    title="Certificado vencido — não é possível consultar novas notas com ele"
-                    className="inline-flex items-center gap-1.5 rounded-full bg-red-600 px-3 py-1.5 text-xs font-semibold text-white"
-                  >
-                    <AlertTriangle size={12} />
-                    Certificado vencido
-                  </span>
-                ) : abaNotas !== 'novas' ? null : certificado.ultima_consulta_em ? (
-                  <IconButton
-                    title="Consultar novamente"
-                    onClick={() => {
-                      if (!emConsulta) handleConsultar(certificado.id);
-                    }}
-                    className="hover:text-primary-600"
-                  >
-                    {emConsulta ? (
-                      <Loader2 size={15} className="animate-spin" />
-                    ) : (
-                      <RefreshCw size={15} />
-                    )}
-                  </IconButton>
-                ) : (
-                  <span
-                    role="button"
-                    onClick={() => {
-                      if (!emConsulta) handleConsultar(certificado.id);
-                    }}
-                    className={`inline-flex items-center gap-1.5 rounded-full px-3 py-1.5 text-xs font-semibold text-white ${
-                      emConsulta ? 'bg-primary-400' : 'bg-primary-600 hover:bg-primary-700'
+                    title={`${totalNfeCard === null ? '…' : totalNfeCard} produto${totalNfeCard !== 1 ? 's' : ''} (NF-e)`}
+                    className={`inline-flex items-center gap-1 rounded-full px-2.5 py-1 text-xs font-semibold ${
+                      totalNfeCard ? 'bg-primary-100 text-primary-700' : 'text-primary-200'
                     }`}
                   >
-                    {emConsulta ? (
-                      <Loader2 size={12} className="animate-spin" />
-                    ) : (
-                      <RefreshCw size={12} />
-                    )}
-                    Gerar 1ª Consulta
+                    <Package size={12} />
+                    {totalNfeCard === null ? '…' : totalNfeCard}
                   </span>
-                )}
+                </div>
+                <div className="flex justify-center">
+                  <span
+                    title={`${totalNfseCard === null ? '…' : totalNfseCard} serviço${totalNfseCard !== 1 ? 's' : ''} (NFS-e)`}
+                    className={`inline-flex items-center gap-1 rounded-full px-2.5 py-1 text-xs font-semibold ${
+                      totalNfseCard ? 'bg-violet-100 text-violet-700' : 'text-violet-200'
+                    }`}
+                  >
+                    <Wrench size={12} />
+                    {totalNfseCard === null ? '…' : totalNfseCard}
+                  </span>
+                </div>
+
+                <div className="flex justify-center">
+                  {!modoInativas && certificado.ultima_consulta_em && (
+                    <span
+                      title={`Última consulta: ${formatarDataHora(certificado.ultima_consulta_em)}`}
+                      className="inline-flex items-center gap-1.5 rounded-full bg-white px-2.5 py-1 text-xs font-medium text-gray-600"
+                    >
+                      <Clock size={12} />
+                      {formatarTempoRelativo(certificado.ultima_consulta_em)}
+                    </span>
+                  )}
+                </div>
+
+                <div className="flex justify-center">
+                  {vencido ? (
+                    <span
+                      title="Certificado vencido — não é possível consultar novas notas com ele"
+                      className="inline-flex items-center gap-1.5 rounded-full bg-red-600 px-3 py-1.5 text-xs font-semibold text-white"
+                    >
+                      <AlertTriangle size={12} />
+                      Certificado vencido
+                    </span>
+                  ) : abaNotas !== 'novas' ? null : certificado.ultima_consulta_em ? (
+                    <IconButton
+                      title="Consultar novamente"
+                      onClick={() => {
+                        if (!emConsulta) handleConsultar(certificado.id);
+                      }}
+                      className="hover:text-primary-600"
+                    >
+                      {emConsulta ? (
+                        <Loader2 size={15} className="animate-spin" />
+                      ) : (
+                        <RefreshCw size={15} />
+                      )}
+                    </IconButton>
+                  ) : (
+                    <span
+                      role="button"
+                      onClick={() => {
+                        if (!emConsulta) handleConsultar(certificado.id);
+                      }}
+                      className={`inline-flex items-center gap-1.5 rounded-full px-3 py-1.5 text-xs font-semibold text-white ${
+                        emConsulta ? 'bg-primary-400' : 'bg-primary-600 hover:bg-primary-700'
+                      }`}
+                    >
+                      {emConsulta ? (
+                        <Loader2 size={12} className="animate-spin" />
+                      ) : (
+                        <RefreshCw size={12} />
+                      )}
+                      Gerar 1ª Consulta
+                    </span>
+                  )}
+                </div>
               </div>
             </div>
           </td>
