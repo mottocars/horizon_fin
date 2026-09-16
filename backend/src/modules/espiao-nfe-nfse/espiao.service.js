@@ -758,16 +758,22 @@ async function inativarNotas(notaIds, motivo, usuarioId) {
   return rows.map((r) => r.id);
 }
 
-// Desfaz a inativação — a nota volta a aparecer na tela comum.
-async function reativarNotas(notaIds) {
+// Desfaz a inativação — a nota volta a aparecer na tela comum. `destino`
+// escolhe pra qual aba ela volta: 'novas' zera ciente_em, 'cientes' marca
+// ciente_em = NOW() na hora — não herda o que a nota tinha ANTES de ser
+// inativada, é uma escolha explícita de quem reativa (ver TABS_NOTAS no
+// frontend).
+async function reativarNotas(notaIds, destino, usuarioId) {
+  const marcarCiente = destino === 'cientes';
   const { rows } = await pool.query(
     `UPDATE espiao_notas
-     SET inativa = FALSE, inativada_por = NULL, inativada_em = NULL, motivo_inativacao = NULL
+     SET inativa = FALSE, inativada_por = NULL, inativada_em = NULL, motivo_inativacao = NULL,
+         ciente_por = ${marcarCiente ? '$2' : 'NULL'}, ciente_em = ${marcarCiente ? 'NOW()' : 'NULL'}
      WHERE id = ANY($1::int[]) AND inativa = TRUE
-     RETURNING id`,
-    [notaIds]
+     RETURNING id, ciente_em`,
+    marcarCiente ? [notaIds, usuarioId] : [notaIds]
   );
-  return rows.map((r) => r.id);
+  return rows;
 }
 
 // Marca as notas escolhidas como cientes — sai da aba "Novas" e passa pra
@@ -782,6 +788,19 @@ async function declararCiencia(notaIds, usuarioId) {
      WHERE id = ANY($2::int[]) AND inativa = FALSE
      RETURNING id, ciente_em`,
     [usuarioId, notaIds]
+  );
+  return rows;
+}
+
+// Desfaz a ciência — a nota volta da aba "Cientes" pra "Novas". Simétrico a
+// declararCiencia (mesma ideia, ao contrário).
+async function desmarcarCiencia(notaIds) {
+  const { rows } = await pool.query(
+    `UPDATE espiao_notas
+     SET ciente_por = NULL, ciente_em = NULL
+     WHERE id = ANY($1::int[]) AND inativa = FALSE
+     RETURNING id, ciente_em`,
+    [notaIds]
   );
   return rows;
 }
@@ -901,6 +920,7 @@ module.exports = {
   inativarNotas,
   reativarNotas,
   declararCiencia,
+  desmarcarCiencia,
   listNotasInativadas,
   listNotasInativadasPorCertificado,
   extrairTagTexto,

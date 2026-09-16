@@ -139,15 +139,19 @@ async function inativar(req, res, next) {
   }
 }
 
+// destino: pra qual aba a nota reativada vai — escolha explícita de quem
+// reativa, não herda o que a nota tinha antes de ser inativada (ver
+// service.reativarNotas).
 const reativarSchema = z.object({
   notaIds: z.array(z.coerce.number().int().positive()).min(1, 'Selecione ao menos uma nota.'),
+  destino: z.enum(['novas', 'cientes']).default('novas'),
 });
 
 async function reativar(req, res, next) {
   try {
     const data = reativarSchema.parse(req.body);
-    const ids = await service.reativarNotas(data.notaIds);
-    res.json({ reativadas: ids });
+    const notas = await service.reativarNotas(data.notaIds, data.destino, req.user.id);
+    res.json({ notas });
   } catch (err) {
     if (err.issues) return next(badRequest(err.issues[0].message));
     next(err);
@@ -162,6 +166,21 @@ async function declararCiencia(req, res, next) {
   try {
     const data = declararCienciaSchema.parse(req.body);
     const notas = await service.declararCiencia(data.notaIds, req.user.id);
+    res.json({ notas });
+  } catch (err) {
+    if (err.issues) return next(badRequest(err.issues[0].message));
+    next(err);
+  }
+}
+
+const desmarcarCienciaSchema = z.object({
+  notaIds: z.array(z.coerce.number().int().positive()).min(1, 'Selecione ao menos uma nota.'),
+});
+
+async function desmarcarCiencia(req, res, next) {
+  try {
+    const data = desmarcarCienciaSchema.parse(req.body);
+    const notas = await service.desmarcarCiencia(data.notaIds);
     res.json({ notas });
   } catch (err) {
     if (err.issues) return next(badRequest(err.issues[0].message));
@@ -215,6 +234,7 @@ module.exports = {
   inativar,
   reativar,
   declararCiencia,
+  desmarcarCiencia,
   listNotasInativadas,
   listNotasInativadasPorCertificado,
 };

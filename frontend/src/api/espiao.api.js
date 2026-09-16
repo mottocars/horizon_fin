@@ -53,8 +53,10 @@ export function inativarNotasEspiao(notaIds, motivo) {
   return http.post('/espiao/notas/inativar', { notaIds, motivo }).then((res) => res.data);
 }
 
-export function reativarNotasEspiao(notaIds) {
-  return http.post('/espiao/notas/reativar', { notaIds }).then((res) => res.data);
+// destino: 'novas' (padrão) ou 'cientes' — pra qual aba a nota reativada
+// volta (ver espiao.controller.js::reativar).
+export function reativarNotasEspiao(notaIds, destino = 'novas') {
+  return http.post('/espiao/notas/reativar', { notaIds, destino }).then((res) => res.data.notas);
 }
 
 export function declararCienciaEspiao(notaIds) {
@@ -62,6 +64,10 @@ export function declararCienciaEspiao(notaIds) {
   // — desembrulha aqui pra já voltar a lista, que é o que handleDeclararCiencia
   // espera pra montar o Map de id -> ciente_em.
   return http.post('/espiao/notas/declarar-ciencia', { notaIds }).then((res) => res.data.notas);
+}
+
+export function desmarcarCienciaEspiao(notaIds) {
+  return http.post('/espiao/notas/desmarcar-ciencia', { notaIds }).then((res) => res.data.notas);
 }
 
 export function listNotasInativadasEspiao(

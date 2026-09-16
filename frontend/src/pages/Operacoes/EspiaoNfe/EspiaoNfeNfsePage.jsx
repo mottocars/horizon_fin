@@ -44,6 +44,7 @@ import {
   inativarNotasEspiao,
   reativarNotasEspiao,
   declararCienciaEspiao,
+  desmarcarCienciaEspiao,
 } from '../../../api/espiao.api';
 
 const INTERVALOS = [
@@ -327,6 +328,7 @@ export default function EspiaoNfeNfsePage() {
   }
   const [reativandoLote, setReativandoLote] = useState(false);
   const [declarandoCiencia, setDeclarandoCiencia] = useState(false);
+  const [desmarcandoCiencia, setDesmarcandoCiencia] = useState(false);
 
   // Notas marcadas pelo usuário — pra inativar (notas ativas) ou reativar
   // (notas inativadas), dependendo do modo. Guarda o objeto inteiro (não só
@@ -709,19 +711,24 @@ export default function EspiaoNfeNfsePage() {
     }
   }
 
-  async function handleReativarSelecionadas() {
+  // destino: 'novas' ou 'cientes' — escolha explícita de pra qual aba a
+  // nota reativada vai (ver espiao.service.js::reativarNotas). Sempre some
+  // da lista local de inativadas, já que esse dataset só existe aqui
+  // enquanto a aba Inativas está aberta.
+  async function handleReativarSelecionadas(destino) {
     if (selecionadas.size === 0) return;
     const notaIds = Array.from(selecionadas.keys());
+    const nomeAba = destino === 'cientes' ? 'Cientes' : 'Novas Notas';
     const confirmado = await confirm({
-      title: 'Reativar notas selecionadas',
-      description: `${notaIds.length} nota(s) vão voltar a aparecer nas notas ativas.`,
+      title: `Reativar para ${nomeAba}`,
+      description: `${notaIds.length} nota(s) vão voltar a aparecer em "${nomeAba}".`,
       confirmLabel: 'Reativar',
     });
     if (!confirmado) return;
 
     setReativandoLote(true);
     try {
-      await reativarNotasEspiao(notaIds);
+      await reativarNotasEspiao(notaIds, destino);
 
       // Some da lista de inativadas na hora, sem precisar recarregar do zero.
       setNotasPorCertificado((prev) => {
@@ -739,7 +746,7 @@ export default function EspiaoNfeNfsePage() {
 
       await alert({
         title: 'Notas reativadas',
-        description: `${notaIds.length} nota(s) reativada(s). Elas voltaram a aparecer nas notas ativas.`,
+        description: `${notaIds.length} nota(s) reativada(s) para "${nomeAba}".`,
         variant: 'default',
       });
 
@@ -752,6 +759,52 @@ export default function EspiaoNfeNfsePage() {
       });
     } finally {
       setReativandoLote(false);
+    }
+  }
+
+  // Desfaz a ciência das notas selecionadas — voltam a aparecer em "Novas
+  // Notas". Continua na aba Cientes (não muda de aba), mesma lógica de
+  // handleDeclararCiencia: quem processa em lote quer seguir na mesma tela.
+  async function handleVoltarParaNovas() {
+    if (selecionadas.size === 0) return;
+    const notaIds = Array.from(selecionadas.keys());
+    const confirmado = await confirm({
+      title: 'Voltar para Novas Notas',
+      description: `${notaIds.length} nota(s) vão voltar a aparecer em "Novas Notas".`,
+      confirmLabel: 'Voltar',
+    });
+    if (!confirmado) return;
+
+    setDesmarcandoCiencia(true);
+    try {
+      await desmarcarCienciaEspiao(notaIds);
+
+      setNotasPorCertificado((prev) => {
+        const next = { ...prev };
+        selecionadas.forEach(({ certificadoId }, notaId) => {
+          const dados = next[certificadoId];
+          if (!dados) return;
+          const desmarcar = (lista) => lista.map((n) => (n.id === notaId ? { ...n, ciente_em: null } : n));
+          next[certificadoId] = { produtos: desmarcar(dados.produtos), servicos: desmarcar(dados.servicos) };
+        });
+        return next;
+      });
+
+      await alert({
+        title: 'Notas movidas',
+        description: `${notaIds.length} nota(s) voltaram para "Novas Notas".`,
+        variant: 'default',
+      });
+
+      limparSelecao();
+    } catch (err) {
+      await alert({
+        title: 'Não foi possível mover as notas',
+        description: err.response?.data?.message || 'Não foi possível mover as notas selecionadas para Novas Notas.',
+        variant: 'warning',
+      });
+    } finally {
+      setDesmarcandoCiencia(false);
     }
   }
 
@@ -786,10 +839,8 @@ export default function EspiaoNfeNfsePage() {
         return next;
       });
 
-      // Essas notas somem da aba atual (Novas) — troca pra "Cientes" pra
-      // elas continuarem visíveis, em vez do usuário achar que sumiram.
-      setAbaNotas('cientes');
-
+      // Fica em Novas Notas (não troca de aba) — quem está processando um
+      // lote quer continuar na mesma tela pra seguir com o resto da lista.
       await alert({
         title: 'Ciência declarada',
         description: `${notaIds.length} nota(s) marcada(s) como ciente.`,
@@ -812,6 +863,13 @@ export default function EspiaoNfeNfsePage() {
   // Ações — quantas colunas a tabela única tem, pro colSpan das linhas de
   // seção (certificado, Produtos, Serviços).
   const totalColunas = modoInativas ? 7 : 6;
+
+  // A caixa "Sem nota no período" só faz sentido em "Novas Notas" — é onde
+  // se quer saber quais certificados não têm nada de novo pra revisar. Nas
+  // outras abas, um certificado sem nenhuma nota que bata com o filtro
+  // simplesmente não aparece (nem na Caixa 1 nem numa Caixa 2).
+  const mostrarCaixaSemNotas = abaNotas === 'novas' && certificadosAgrupados.semNotas.length > 0;
+  const nadaNestaAba = certificadosAgrupados.comNotas.length === 0 && !mostrarCaixaSemNotas;
 
   // Extraído do JSX (era um .map() inline) pra poder ser chamado duas vezes
   // — uma pro cluster "com nota", outra pro cluster "sem nota" (ver
@@ -928,7 +986,7 @@ export default function EspiaoNfeNfsePage() {
                     <AlertTriangle size={12} />
                     Certificado vencido
                   </span>
-                ) : modoInativas ? null : certificado.ultima_consulta_em ? (
+                ) : abaNotas !== 'novas' ? null : certificado.ultima_consulta_em ? (
                   <IconButton
                     title="Consultar novamente"
                     onClick={() => {
@@ -1214,6 +1272,16 @@ export default function EspiaoNfeNfsePage() {
                     : 'Nenhum certificado tem nota que corresponda a esse filtro.'}
                 </p>
               </Card>
+            ) : nadaNestaAba ? (
+              <Card className="rounded-tl-none">
+                <p className="py-8 text-center text-sm text-gray-400">
+                  {modoInativas
+                    ? 'Nenhuma nota inativada no período selecionado.'
+                    : abaNotas === 'cientes'
+                    ? 'Nenhuma nota ciente no período selecionado.'
+                    : 'Nenhum certificado tem nota no período selecionado.'}
+                </p>
+              </Card>
             ) : (
               <>
                 {/* Caixa 1: certificados com nota no período — o drilldown
@@ -1224,7 +1292,8 @@ export default function EspiaoNfeNfsePage() {
                     Serviços → Nota. Sem <thead> fixo — o cabeçalho de
                     coluna (CabecalhoNotas) só existe logo acima das notas.
                     Só aparece quando tem pelo menos 1 certificado com nota;
-                    senão a Caixa 2 já cobre a tela sozinha. */}
+                    senão a Caixa 2 (só em Novas Notas, ver
+                    mostrarCaixaSemNotas) já cobre a tela sozinha. */}
                 {certificadosAgrupados.comNotas.length > 0 && (
                   <Card className="rounded-tl-none !p-0 overflow-hidden">
                     <div className="overflow-x-auto">
@@ -1248,14 +1317,14 @@ export default function EspiaoNfeNfsePage() {
                   </Card>
                 )}
 
-                {/* Caixa 2: separada da primeira (não é mais um divisor
-                    dentro da mesma tabela) — só os certificados sem
-                    nenhuma nota no período. rounded-tl-none só quando é a
-                    única caixa na tela (Caixa 1 vazia); senão leva mt-4
-                    pra abrir vão da Caixa 1, já que o wrapper delas (ver
-                    comentário "Tabs + conteúdo" acima) não tem espaçamento
-                    automático entre os filhos. */}
-                {certificadosAgrupados.semNotas.length > 0 && (
+                {/* Caixa 2: só na aba Novas Notas (ver mostrarCaixaSemNotas)
+                    — nas outras abas, um certificado sem nota que bata com
+                    o filtro simplesmente não aparece em lugar nenhum.
+                    rounded-tl-none só quando é a única caixa na tela (Caixa
+                    1 vazia); senão leva mt-4 pra abrir vão da Caixa 1, já
+                    que o wrapper delas (ver comentário "Tabs + conteúdo"
+                    acima) não tem espaçamento automático entre os filhos. */}
+                {mostrarCaixaSemNotas && (
                   <Card
                     className={`!p-0 overflow-hidden ${
                       certificadosAgrupados.comNotas.length === 0 ? 'rounded-tl-none' : 'mt-4'
@@ -1405,14 +1474,39 @@ export default function EspiaoNfeNfsePage() {
               Cancelar
             </Button>
             {modoInativas ? (
-              <Button
-                className="!border-emerald-600 !bg-emerald-600 !text-white hover:!bg-emerald-700"
-                loading={reativandoLote}
-                onClick={handleReativarSelecionadas}
-              >
-                <RotateCcw size={15} />
-                Reativar
-              </Button>
+              <>
+                <Button
+                  className="!border-primary-600 !bg-primary-600 !text-white hover:!bg-primary-700"
+                  loading={reativandoLote}
+                  onClick={() => handleReativarSelecionadas('novas')}
+                >
+                  <RotateCcw size={15} />
+                  Reativar p/ Novas
+                </Button>
+                <Button
+                  className="!border-emerald-600 !bg-emerald-600 !text-white hover:!bg-emerald-700"
+                  loading={reativandoLote}
+                  onClick={() => handleReativarSelecionadas('cientes')}
+                >
+                  <RotateCcw size={15} />
+                  Reativar p/ Cientes
+                </Button>
+              </>
+            ) : abaNotas === 'cientes' ? (
+              <>
+                <Button
+                  className="!border-primary-600 !bg-primary-600 !text-white hover:!bg-primary-700"
+                  loading={desmarcandoCiencia}
+                  onClick={handleVoltarParaNovas}
+                >
+                  <RotateCcw size={15} />
+                  Voltar p/ Novas
+                </Button>
+                <Button variant="danger" onClick={() => setModalInativar(true)}>
+                  <Ban size={15} />
+                  Inativar
+                </Button>
+              </>
             ) : (
               <>
                 <Button
