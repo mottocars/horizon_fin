@@ -167,7 +167,7 @@ export default function Sidebar() {
                       collapsed ? 'justify-center' : ''
                     } ${
                       isActiveGroup
-                        ? "bg-linear-to-b from-primary-500/10 to-primary-500/3 text-primary-700 before:absolute before:-left-2.5 before:bottom-1 before:top-1 before:w-0.75 before:rounded-r-[3px] before:bg-linear-to-b before:from-primary-500 before:to-primary-700 before:content-['']"
+                        ? "bg-linear-to-b from-primary-500/10 to-primary-500/3 text-primary-700 before:absolute before:-left-2.5 before:bottom-1 before:top-1 before:w-0.75 before:rounded-r-[3px] before:bg-primary-500 before:content-['']"
                         : 'text-gray-600 hover:bg-[#f2f6fd] hover:text-[#233047]'
                     }`}
                   >
@@ -202,7 +202,7 @@ export default function Sidebar() {
                                 className={({ isActive }) =>
                                   `flex items-center gap-2.5 rounded-[10px] px-2.5 py-1.5 text-[13px] transition-colors ${
                                     isActive
-                                      ? 'bg-linear-to-br from-primary-500 to-primary-700 font-medium text-white shadow-[0_6px_14px_-6px_rgba(29,78,216,0.55)]'
+                                      ? 'bg-primary-500 font-medium text-white shadow-[0_6px_14px_-6px_rgba(59,130,246,0.45)]'
                                       : 'text-gray-500 hover:bg-[#f2f6fd] hover:text-[#27324a]'
                                   }`
                                 }
@@ -231,11 +231,11 @@ export default function Sidebar() {
                 end={item.to === '/'}
                 title={collapsed ? item.label : undefined}
                 className={({ isActive }) =>
-                  `relative flex items-center gap-2.5 rounded-[10px] px-2.5 py-1.5 text-[13px] font-medium transition-colors ${
+                  `flex items-center gap-2.5 rounded-[10px] px-2.5 py-1.5 text-[13px] font-medium transition-colors ${
                     collapsed ? 'justify-center' : ''
                   } ${
                     isActive
-                      ? "bg-linear-to-br from-primary-500 to-primary-700 text-white shadow-[0_6px_14px_-6px_rgba(29,78,216,0.55)] before:absolute before:-left-2.5 before:bottom-1 before:top-1 before:w-0.75 before:rounded-r-[3px] before:bg-linear-to-b before:from-primary-400 before:to-primary-700 before:content-['']"
+                      ? 'bg-primary-500 text-white shadow-[0_6px_14px_-6px_rgba(59,130,246,0.45)]'
                       : 'text-gray-600 hover:bg-[#f2f6fd] hover:text-[#233047]'
                   }`
                 }
