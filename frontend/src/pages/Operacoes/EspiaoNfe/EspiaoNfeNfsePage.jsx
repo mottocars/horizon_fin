@@ -93,7 +93,10 @@ function LinhaNota({ nota, modoInativas, selecionada, onToggleSelecionada, onBai
   const { Icon: IconeSituacao, colorClass } = infoSituacao(nota.situacao);
   return (
     <tr className="border-b border-gray-50 last:border-0">
-      <td className="py-2.5 pl-5 pr-3">
+      {/* pl-14: nível 3 do drilldown (Certificado → Produtos/Serviços →
+          Nota) — mesmo recuo da etapa em GestaoParcelasTab.jsx, só a
+          primeira coluna cresce, o resto mantém alinhamento normal. */}
+      <td className="py-2.5 pl-14 pr-3">
         <input
           type="checkbox"
           checked={selecionada}
@@ -106,7 +109,6 @@ function LinhaNota({ nota, modoInativas, selecionada, onToggleSelecionada, onBai
         {nota.serie_nota && <span className="text-gray-400"> / {nota.serie_nota}</span>}
       </td>
       <td className="py-2.5 px-3 text-gray-900">{nota.emissor || '—'}</td>
-      <td className="py-2.5 px-3 text-gray-600">{nota.destinatario || '—'}</td>
       <td className="py-2.5 px-3 text-gray-600">{formatarData(nota.data_emissao)}</td>
       <td className="py-2.5 px-3">
         {!nota.situacao || nota.situacao === 'Emitida' ? (
@@ -195,17 +197,45 @@ export default function EspiaoNfeNfsePage() {
   const [loadingNotas, setLoadingNotas] = useState({});
   const [consultando, setConsultando] = useState({});
 
-  // Seções de certificado abertas na tabela única — sempre começa vazio
-  // (tudo fechado). As notas de todos os certificados já são carregadas de
-  // qualquer jeito (ver carregarNotasDeTodosCertificados), então abrir/fechar
-  // aqui é só uma questão de mostrar/esconder linhas, não de buscar dado.
+  // Drilldown de 3 níveis na mesma tabela (mesmo espírito de
+  // GestaoParcelasTab.jsx: cada nível é mais uma <tr>, só com mais recuo,
+  // nunca uma tabela aninhada à parte): Certificado → Produtos/Serviços →
+  // Nota. As notas de todos os certificados já são carregadas de qualquer
+  // jeito (ver carregarNotasDeTodosCertificados), então abrir/fechar aqui é
+  // só uma questão de mostrar/esconder linhas, não de buscar dado. Ambos os
+  // níveis começam sempre fechados.
   const [abertos, setAbertos] = useState(new Set());
+  // Nível 2 (Produtos/Serviços) — chave `${certificadoId}:produtos` ou
+  // `${certificadoId}:servicos`, independente por certificado: dá pra abrir
+  // só Produtos de um certificado e só Serviços de outro ao mesmo tempo.
+  const [secoesAbertas, setSecoesAbertas] = useState(new Set());
 
   function toggleAberto(certificadoId) {
     setAbertos((prev) => {
       const next = new Set(prev);
-      if (next.has(certificadoId)) next.delete(certificadoId);
-      else next.add(certificadoId);
+      if (next.has(certificadoId)) {
+        next.delete(certificadoId);
+        // Fecha junto o nível 2 deste certificado, senão reabrir o
+        // certificado depois já viria com Produtos/Serviços expandidos.
+        setSecoesAbertas((prevSecoes) => {
+          const nextSecoes = new Set(prevSecoes);
+          nextSecoes.delete(`${certificadoId}:produtos`);
+          nextSecoes.delete(`${certificadoId}:servicos`);
+          return nextSecoes;
+        });
+      } else {
+        next.add(certificadoId);
+      }
+      return next;
+    });
+  }
+
+  function toggleSecao(certificadoId, tipo) {
+    setSecoesAbertas((prev) => {
+      const next = new Set(prev);
+      const chave = `${certificadoId}:${tipo}`;
+      if (next.has(chave)) next.delete(chave);
+      else next.add(chave);
       return next;
     });
   }
@@ -549,10 +579,10 @@ export default function EspiaoNfeNfsePage() {
     }
   }
 
-  // Checkbox + Nº/Série + Emissor + Destinatário + Emissão + Situação +
-  // [Inativada por] + Ações — quantas colunas a tabela única tem, pro
-  // colSpan das linhas de seção (certificado, Produtos, Serviços).
-  const totalColunas = modoInativas ? 8 : 7;
+  // Checkbox + Nº/Série + Emissor + Emissão + Situação + [Inativada por] +
+  // Ações — quantas colunas a tabela única tem, pro colSpan das linhas de
+  // seção (certificado, Produtos, Serviços).
+  const totalColunas = modoInativas ? 7 : 6;
 
   return (
     <div className="space-y-4">
@@ -676,14 +706,16 @@ export default function EspiaoNfeNfsePage() {
               </Card>
             ) : (
               <Card className="rounded-tl-none !p-0 overflow-hidden">
-              {/* Uma tabela única pra empresa inteira (ver conversa: nada de
-                  card separado por certificado/linha de empresa, igual ao
-                  drilldown de Clusters de Clientes em Gestão de Cobranças).
-                  Cada certificado vira uma linha de seção (com nome, contagem
-                  e ações — sem mais expandir/recolher, tudo fica visível de
-                  cara), seguida de uma linha "Produtos (NF-e)" e as notas,
-                  depois "Serviços (NFS-e)" e as notas — um <tbody> por
-                  certificado, um <thead> só, no topo da tabela inteira. */}
+              {/* Drilldown de 3 níveis numa tabela única pra empresa inteira
+                  (mesmo espírito de GestaoParcelasTab.jsx: cada nível é mais
+                  uma <tr>, só com mais recuo, nunca uma tabela aninhada à
+                  parte, e cada nível com seu próprio "+/−"): Certificado
+                  (nome, contagem de produtos/serviços, última consulta e
+                  botão de consultar) → Produtos/Serviços (linha de seção com
+                  contagem) → Nota (checkbox à esquerda, número/série,
+                  emissor, emissão, situação e download de PDF/XML). Um
+                  <tbody> por certificado, um <thead> só no topo da tabela
+                  inteira. */}
               <div className="overflow-x-auto">
                 <table className="w-full text-left text-sm">
                   <thead>
@@ -693,7 +725,6 @@ export default function EspiaoNfeNfsePage() {
                       </th>
                       <th className="py-2 px-3 font-medium whitespace-nowrap">Nº / Série</th>
                       <th className="py-2 px-3 font-medium">Emissor</th>
-                      <th className="py-2 px-3 font-medium">Destinatário</th>
                       <th className="py-2 px-3 font-medium">Emissão</th>
                       <th className="py-2 px-3 font-medium">Situação</th>
                       {modoInativas && <th className="py-2 px-3 font-medium">Inativada por</th>}
@@ -720,6 +751,8 @@ export default function EspiaoNfeNfsePage() {
                     const carregandoNotas = Boolean(loadingNotas[certificado.id]);
                     const emConsulta = Boolean(consultando[certificado.id]);
                     const aberto = abertos.has(certificado.id);
+                    const produtosAberto = secoesAbertas.has(`${certificado.id}:produtos`);
+                    const servicosAberto = secoesAbertas.has(`${certificado.id}:servicos`);
                     // Enquanto ainda não carregou, mostra "…" em vez de um
                     // número errado.
                     const totalNfeCard = notas ? notas.produtos.length : null;
@@ -818,65 +851,86 @@ export default function EspiaoNfeNfsePage() {
                           </tr>
                         ) : (
                           <>
-                            <tr>
-                              <td colSpan={totalColunas} className="px-5 pb-1.5 pt-3 text-xs font-semibold text-gray-500">
-                                <span className="inline-flex items-center gap-1.5">
+                            {/* Nível 2: linha de Produtos, com "+/−" próprio
+                                (pl-9 — mesmo recuo do Cluster em
+                                GestaoParcelasTab.jsx). Só mostra as notas
+                                (nível 3) quando esta seção está aberta. */}
+                            <tr
+                              onClick={() => toggleSecao(certificado.id, 'produtos')}
+                              className="cursor-pointer border-b border-gray-50 bg-white hover:bg-gray-50"
+                            >
+                              <td colSpan={totalColunas} className="py-2 pl-9 pr-5">
+                                <span className="inline-flex items-center gap-2 text-xs font-semibold text-gray-500">
+                                  <span className="flex h-4 w-4 shrink-0 items-center justify-center rounded border border-gray-200 text-gray-400">
+                                    {produtosAberto ? <Minus size={9} /> : <Plus size={9} />}
+                                  </span>
                                   <Package size={13} />
                                   Produtos (NF-e) · {notas ? notas.produtos.length : 0}
                                 </span>
                               </td>
                             </tr>
-                            {!notas || notas.produtos.length === 0 ? (
-                              <tr>
-                                <td colSpan={totalColunas} className="px-5 pb-2.5 text-xs text-gray-400">
-                                  {modoInativas
-                                    ? 'Nenhum produto inativado no período selecionado.'
-                                    : 'Nenhum produto encontrado no período selecionado.'}
-                                </td>
-                              </tr>
-                            ) : (
-                              notas.produtos.map((nota) => (
-                                <LinhaNota
-                                  key={nota.id}
-                                  nota={nota}
-                                  modoInativas={modoInativas}
-                                  selecionada={selecionadas.has(nota.id)}
-                                  onToggleSelecionada={() => toggleSelecionada(certificado.id, 'produtos', nota)}
-                                  onBaixarPdf={() => handleDownloadPdf(nota)}
-                                  onBaixar={() => handleDownload(nota)}
-                                />
-                              ))
-                            )}
+                            {produtosAberto &&
+                              (!notas || notas.produtos.length === 0 ? (
+                                <tr>
+                                  <td colSpan={totalColunas} className="pl-14 pr-5 pb-2.5 text-xs text-gray-400">
+                                    {modoInativas
+                                      ? 'Nenhum produto inativado no período selecionado.'
+                                      : 'Nenhum produto encontrado no período selecionado.'}
+                                  </td>
+                                </tr>
+                              ) : (
+                                notas.produtos.map((nota) => (
+                                  <LinhaNota
+                                    key={nota.id}
+                                    nota={nota}
+                                    modoInativas={modoInativas}
+                                    selecionada={selecionadas.has(nota.id)}
+                                    onToggleSelecionada={() => toggleSelecionada(certificado.id, 'produtos', nota)}
+                                    onBaixarPdf={() => handleDownloadPdf(nota)}
+                                    onBaixar={() => handleDownload(nota)}
+                                  />
+                                ))
+                              ))}
 
-                            <tr>
-                              <td colSpan={totalColunas} className="px-5 pb-1.5 pt-3 text-xs font-semibold text-gray-500">
-                                <span className="inline-flex items-center gap-1.5">
+                            {/* Nível 2: linha de Serviços, independente da de
+                                Produtos acima (cada uma com seu próprio
+                                estado em secoesAbertas). */}
+                            <tr
+                              onClick={() => toggleSecao(certificado.id, 'servicos')}
+                              className="cursor-pointer border-b border-gray-50 bg-white hover:bg-gray-50"
+                            >
+                              <td colSpan={totalColunas} className="py-2 pl-9 pr-5">
+                                <span className="inline-flex items-center gap-2 text-xs font-semibold text-gray-500">
+                                  <span className="flex h-4 w-4 shrink-0 items-center justify-center rounded border border-gray-200 text-gray-400">
+                                    {servicosAberto ? <Minus size={9} /> : <Plus size={9} />}
+                                  </span>
                                   <Wrench size={13} />
                                   Serviços (NFS-e) · {notas ? notas.servicos.length : 0}
                                 </span>
                               </td>
                             </tr>
-                            {!notas || notas.servicos.length === 0 ? (
-                              <tr>
-                                <td colSpan={totalColunas} className="px-5 pb-2.5 text-xs text-gray-400">
-                                  {modoInativas
-                                    ? 'Nenhum serviço inativado no período selecionado.'
-                                    : 'Nenhum serviço encontrado no período selecionado.'}
-                                </td>
-                              </tr>
-                            ) : (
-                              notas.servicos.map((nota) => (
-                                <LinhaNota
-                                  key={nota.id}
-                                  nota={nota}
-                                  modoInativas={modoInativas}
-                                  selecionada={selecionadas.has(nota.id)}
-                                  onToggleSelecionada={() => toggleSelecionada(certificado.id, 'servicos', nota)}
-                                  onBaixarPdf={() => handleDownloadPdf(nota)}
-                                  onBaixar={() => handleDownload(nota)}
-                                />
-                              ))
-                            )}
+                            {servicosAberto &&
+                              (!notas || notas.servicos.length === 0 ? (
+                                <tr>
+                                  <td colSpan={totalColunas} className="pl-14 pr-5 pb-2.5 text-xs text-gray-400">
+                                    {modoInativas
+                                      ? 'Nenhum serviço inativado no período selecionado.'
+                                      : 'Nenhum serviço encontrado no período selecionado.'}
+                                  </td>
+                                </tr>
+                              ) : (
+                                notas.servicos.map((nota) => (
+                                  <LinhaNota
+                                    key={nota.id}
+                                    nota={nota}
+                                    modoInativas={modoInativas}
+                                    selecionada={selecionadas.has(nota.id)}
+                                    onToggleSelecionada={() => toggleSelecionada(certificado.id, 'servicos', nota)}
+                                    onBaixarPdf={() => handleDownloadPdf(nota)}
+                                    onBaixar={() => handleDownload(nota)}
+                                  />
+                                ))
+                              ))}
                           </>
                         )}
                       </tbody>
