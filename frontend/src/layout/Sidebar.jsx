@@ -132,11 +132,11 @@ export default function Sidebar() {
     <aside
       onMouseEnter={() => setHovering(true)}
       onMouseLeave={() => setHovering(false)}
-      className={`flex h-screen shrink-0 flex-col border-r border-gray-100 bg-white transition-all duration-200 ${
+      className={`flex h-screen shrink-0 flex-col bg-linear-to-b from-white to-[#fbfcff] shadow-[1px_0_0_rgba(15,23,42,0.05),8px_0_28px_-18px_rgba(15,23,42,0.35)] transition-all duration-200 ${
         collapsed ? 'w-[76px]' : 'w-64'
       }`}
     >
-        <div className="flex h-14 items-center justify-center gap-2 border-b border-gray-100 px-3">
+        <div className="relative z-10 flex h-14 items-center justify-center gap-2 px-3 shadow-[0_1px_0_rgba(15,23,42,0.05)]">
           {collapsed ? (
             // Recolhido: mostra só o ícone da marca, recortando a logomarca
             // completa (ícone + texto) numa janela estreita o bastante pra
@@ -163,9 +163,13 @@ export default function Sidebar() {
                     type="button"
                     title={collapsed ? item.label : undefined}
                     onClick={() => toggleGrupo(item.label)}
-                    className={`flex w-full items-center gap-2.5 rounded-lg px-2.5 py-1.5 text-[13px] font-medium transition-colors ${
+                    className={`relative flex w-full items-center gap-2.5 rounded-[10px] px-2.5 py-1.5 text-[13px] font-medium transition-colors ${
                       collapsed ? 'justify-center' : ''
-                    } ${isActiveGroup ? 'text-primary-600' : 'text-gray-600 hover:bg-gray-50'}`}
+                    } ${
+                      isActiveGroup
+                        ? "bg-linear-to-b from-primary-500/10 to-primary-500/3 text-primary-700 before:absolute before:-left-2.5 before:bottom-1 before:top-1 before:w-0.75 before:rounded-r-[3px] before:bg-linear-to-b before:from-primary-500 before:to-primary-700 before:content-['']"
+                        : 'text-gray-600 hover:bg-[#f2f6fd] hover:text-[#233047]'
+                    }`}
                   >
                     <Icon size={17} className="shrink-0" />
                     {!collapsed && (
@@ -173,7 +177,7 @@ export default function Sidebar() {
                         <span className="flex-1 text-left">{item.label}</span>
                         <ChevronDown
                           size={14}
-                          className={`shrink-0 transition-transform ${isOpen ? 'rotate-180' : ''}`}
+                          className={`shrink-0 transition-transform duration-200 ${isOpen ? 'rotate-180' : ''}`}
                         />
                       </>
                     )}
@@ -196,10 +200,10 @@ export default function Sidebar() {
                                 key={child.to}
                                 to={child.to}
                                 className={({ isActive }) =>
-                                  `flex items-center gap-2.5 rounded-lg px-2.5 py-1.5 text-[13px] transition-colors ${
+                                  `flex items-center gap-2.5 rounded-[10px] px-2.5 py-1.5 text-[13px] transition-colors ${
                                     isActive
-                                      ? 'bg-primary-50 font-medium text-primary-600'
-                                      : 'text-gray-500 hover:bg-gray-50'
+                                      ? 'bg-linear-to-br from-primary-500 to-primary-700 font-medium text-white shadow-[0_6px_14px_-6px_rgba(29,78,216,0.55)]'
+                                      : 'text-gray-500 hover:bg-[#f2f6fd] hover:text-[#27324a]'
                                   }`
                                 }
                               >
@@ -227,9 +231,13 @@ export default function Sidebar() {
                 end={item.to === '/'}
                 title={collapsed ? item.label : undefined}
                 className={({ isActive }) =>
-                  `flex items-center gap-2.5 rounded-lg px-2.5 py-1.5 text-[13px] font-medium transition-colors ${
+                  `relative flex items-center gap-2.5 rounded-[10px] px-2.5 py-1.5 text-[13px] font-medium transition-colors ${
                     collapsed ? 'justify-center' : ''
-                  } ${isActive ? 'bg-primary-50 text-primary-600' : 'text-gray-600 hover:bg-gray-50'}`
+                  } ${
+                    isActive
+                      ? "bg-linear-to-br from-primary-500 to-primary-700 text-white shadow-[0_6px_14px_-6px_rgba(29,78,216,0.55)] before:absolute before:-left-2.5 before:bottom-1 before:top-1 before:w-0.75 before:rounded-r-[3px] before:bg-linear-to-b before:from-primary-400 before:to-primary-700 before:content-['']"
+                      : 'text-gray-600 hover:bg-[#f2f6fd] hover:text-[#233047]'
+                  }`
                 }
               >
                 <Icon size={17} className="shrink-0" />
