@@ -8,7 +8,14 @@ import {
   listParcelasPorTitulo,
 } from '../../../../api/gestaoParcelas.api';
 import { listSiengeIntegracoes } from '../../../../api/sienge.api';
-import { CLUSTER_ORDEM, CLUSTER_LABEL, CLUSTER_ICON, CLUSTER_ICON_COR, formatarData } from '../ClustersCobranca/constantes';
+import {
+  CLUSTER_ORDEM,
+  CLUSTER_LABEL,
+  CLUSTER_ICON,
+  CLUSTER_ICON_COR,
+  CLUSTER_TAG_ESTILO,
+  formatarData,
+} from '../ClustersCobranca/constantes';
 
 // Nome(1) + Título(1) + Vencimento(1) + clusters/status(4) + valores(3).
 const TOTAL_COLUNAS = 3 + CLUSTER_ORDEM.length + 3;
@@ -41,15 +48,16 @@ function urlTituloSienge(tenant, billId) {
   return `https://${tenant}.sienge.com.br/sienge/CRC/editTitulo.do?entity.tituloPK.nuTitulo=${billId}`;
 }
 
-// Os 3 status possíveis de 1 parcela (Nível 3) — nunca mais que isso (ver
+// Os 4 status possíveis de 1 parcela (Nível 3) — nunca mais que isso (ver
 // gestaoParcelas.service.js::listParcelasPorTitulo): paga em dia, paga com
-// atraso, ou inadimplente (mesmo limite de dias do Motor de Risco da régua
-// de Inadimplência). Em aberto mas ainda dentro do limite não tem status —
-// célula fica em branco.
+// atraso, inadimplente (mesmo limite de dias do Motor de Risco da régua de
+// Inadimplência) ou a vencer (em aberto e ainda dentro do limite). Cada um
+// colore o retângulo inteiro do badge, não só o texto.
 const STATUS_PARCELA = {
   em_dia: { label: 'Paga em Dia', className: 'bg-emerald-50 text-emerald-700' },
   atraso: { label: 'Paga com Atraso', className: 'bg-amber-50 text-amber-700' },
   inadimplente: { label: 'Inadimplente', className: 'bg-red-50 text-red-700' },
+  a_vencer: { label: 'A vencer', className: 'bg-blue-50 text-blue-700' },
 };
 
 // Vida de um cliente (ou, mais precisamente, de 1 título dele — ver
@@ -296,8 +304,12 @@ export default function GestaoParcelasTab({ empresaId, centroCustoIds = [], busc
                           </span>
                         </td>
                         {CLUSTER_ORDEM.map((cluster) => (
-                          <td key={cluster} className={`${DIV_H} ${DIV_V} py-4 text-center font-mono tabular-nums text-gray-900`}>
-                            {centro.clusters[cluster]}
+                          <td key={cluster} className={`${DIV_H} ${DIV_V} py-4 text-center`}>
+                            <span
+                              className={`mx-auto flex h-6 w-6 items-center justify-center rounded-md font-mono text-xs font-semibold tabular-nums ${CLUSTER_TAG_ESTILO[cluster]}`}
+                            >
+                              {centro.clusters[cluster]}
+                            </span>
                           </td>
                         ))}
                         <td className={`${DIV_H} ${DIV_V} px-2 py-4 text-center`}></td>
@@ -347,9 +359,11 @@ export default function GestaoParcelasTab({ empresaId, centroCustoIds = [], busc
                                   const doCliente = cluster === cliente.cluster;
                                   return (
                                     <td key={cluster} className={`${DIV_H} ${DIV_V} py-3 text-center`}>
-                                      {Icone && (
-                                        <Icone size={15} className={`inline ${doCliente ? CLUSTER_ICON_COR[cluster] : 'text-gray-300'}`} />
-                                      )}
+                                      <span
+                                        className={`mx-auto flex h-6 w-6 items-center justify-center rounded-md ${doCliente ? CLUSTER_TAG_ESTILO[cluster] : 'text-gray-300'}`}
+                                      >
+                                        {Icone && <Icone size={14} />}
+                                      </span>
                                     </td>
                                   );
                                 })}
@@ -423,7 +437,9 @@ export default function GestaoParcelasTab({ empresaId, centroCustoIds = [], busc
                                         )}
                                       </td>
                                       <td className={`${DIV_H} ${DIV_V} px-2 py-2.5 text-center text-xs text-gray-500`}>{formatarData(parcela.due_date)}</td>
-                                      <td colSpan={3} className={`${DIV_H} ${DIV_V}`}></td>
+                                      <td className={`${DIV_H} ${DIV_V} px-2 py-2.5 text-center text-xs tabular-nums text-gray-700`}>{formatarMoedaSemCentavos(parcela.valor_pago)}</td>
+                                      <td className={`${DIV_H} ${DIV_V} px-2 py-2.5 text-center text-xs tabular-nums text-red-600`}>{formatarMoedaSemCentavos(parcela.valor_vencido)}</td>
+                                      <td className={`${DIV_H} ${DIV_V} px-2 py-2.5 text-center text-xs tabular-nums text-gray-700`}>{formatarMoedaSemCentavos(parcela.valor_a_vencer)}</td>
                                     </tr>
                                   );
                                 })}

@@ -366,7 +366,7 @@ async function listClientesPorCentroCusto(empresaId, costCenterId, filtros = {})
 
 // Nível 3 (Parcela, folha de verdade): as parcelas individuais de 1 título
 // (bill_id) dentro do centro de custo aberto, ordenadas por installment_id.
-// Status por parcela — três possíveis, nunca mais que isso (pedido do
+// Status por parcela — quatro possíveis, nunca mais que isso (pedido do
 // usuário):
 //   - paga até a data de vencimento: 'em_dia'
 //   - paga depois do vencimento (usa o último recebimento lançado, caso
@@ -375,8 +375,13 @@ async function listClientesPorCentroCusto(empresaId, costCenterId, filtros = {})
 //     define Inadimplência na régua de cobrança (ver getLimiteVigente,
 //     mesmo parâmetro de reguaCobranca.service.js/buscarLinhasClassificadas
 //     acima): 'inadimplente'
-// Em aberto mas ainda dentro do limite (nem vencida o bastante pra virar
-// inadimplente) não tem status nenhum — null — só os três pedidos existem.
+//   - em aberto e ainda dentro do limite: 'a_vencer'
+// `valor_pago`/`valor_vencido`/`valor_a_vencer`: mesmo trio de colunas dos
+// Níveis 1/2 (buscarParcelasComCluster), só que aqui é o valor de 1 parcela
+// só — sempre com só um dos três preenchido (os outros dois zerados),
+// espelhando o status desta mesma linha. Pago usa `original_amount` (o
+// valor cheio da parcela, já que o saldo em aberto dela é zero); vencido/a
+// vencer usam `corrected_balance_amount` (o que ainda falta pagar).
 async function listParcelasPorTitulo(empresaId, costCenterId, billId, filtros = {}) {
   const limite = await getLimiteVigente(empresaId);
 
@@ -388,7 +393,7 @@ async function listParcelasPorTitulo(empresaId, costCenterId, billId, filtros = 
   }
 
   const { rows } = await pool.query(
-    `SELECT si.bill_id, si.installment_id, si.due_date, si.corrected_balance_amount,
+    `SELECT si.bill_id, si.installment_id, si.due_date, si.corrected_balance_amount, si.original_amount,
             si.payment_term_description, si.installment_number,
             pg.ultimo_pagamento
      FROM sie_income si
@@ -408,12 +413,15 @@ async function listParcelasPorTitulo(empresaId, costCenterId, billId, filtros = 
   const hoje = hojeComoDataUTC();
   return rows.map((row) => {
     const paga = Number(row.corrected_balance_amount) === 0;
-    let status = null;
+    let status;
     if (paga) {
       status = row.ultimo_pagamento && new Date(row.ultimo_pagamento) > new Date(row.due_date) ? 'atraso' : 'em_dia';
     } else if (diasEntre(row.due_date, hoje) > limite) {
       status = 'inadimplente';
+    } else {
+      status = 'a_vencer';
     }
+    const saldoAberto = Number(row.corrected_balance_amount) || 0;
     return {
       bill_id: row.bill_id,
       installment_id: row.installment_id,
@@ -421,6 +429,9 @@ async function listParcelasPorTitulo(empresaId, costCenterId, billId, filtros = 
       installment_number: row.installment_number,
       payment_term_description: row.payment_term_description,
       status,
+      valor_pago: paga ? Number(row.original_amount) || 0 : 0,
+      valor_vencido: status === 'inadimplente' ? saldoAberto : 0,
+      valor_a_vencer: status === 'a_vencer' ? saldoAberto : 0,
     };
   });
 }
