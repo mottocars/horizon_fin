@@ -138,9 +138,9 @@ export default function GestaoParcelasTab({ empresaId, centroCustoIds = [], busc
                 <col className="w-10" />
                 <col className="w-10" />
                 <col className="w-20" />
-                <col className="w-36" />
-                <col className="w-36" />
-                <col className="w-36" />
+                <col className="w-44" />
+                <col className="w-44" />
+                <col className="w-44" />
               </colgroup>
               <thead>
                 <tr className="border-b border-gray-100 text-xs uppercase tracking-wide text-gray-400">
@@ -153,10 +153,10 @@ export default function GestaoParcelasTab({ empresaId, centroCustoIds = [], busc
                       </th>
                     );
                   })}
-                  <th className="py-3 pl-8 text-center font-medium">Título</th>
-                  <th className="py-3 pl-8 text-center font-medium">Pagas</th>
-                  <th className="py-3 text-center font-medium">Vencidas</th>
-                  <th className="py-3 pr-3 text-center font-medium">A vencer</th>
+                  <th className="py-3 pl-16 text-center font-medium">Título</th>
+                  <th className="py-3 pl-16 text-center font-medium">Pagas</th>
+                  <th className="py-3 pl-16 text-center font-medium">Vencidas</th>
+                  <th className="py-3 pl-16 pr-3 text-center font-medium">A vencer</th>
                 </tr>
               </thead>
               <tbody>
@@ -181,10 +181,10 @@ export default function GestaoParcelasTab({ empresaId, centroCustoIds = [], busc
                             {centro.clusters[cluster]}
                           </td>
                         ))}
-                        <td className="py-4 pl-8"></td>
-                        <td className="py-4 pl-8 text-center tabular-nums text-gray-700">{formatarMoedaSemCentavos(centro.valor_pago)}</td>
-                        <td className="py-4 text-center tabular-nums text-red-600">{formatarMoedaSemCentavos(centro.valor_vencido)}</td>
-                        <td className="py-4 pr-3 text-center tabular-nums text-gray-700">{formatarMoedaSemCentavos(centro.valor_a_vencer)}</td>
+                        <td className="py-4 pl-16"></td>
+                        <td className="py-4 pl-16 text-center tabular-nums text-gray-700">{formatarMoedaSemCentavos(centro.valor_pago)}</td>
+                        <td className="py-4 pl-16 text-center tabular-nums text-red-600">{formatarMoedaSemCentavos(centro.valor_vencido)}</td>
+                        <td className="py-4 pl-16 pr-3 text-center tabular-nums text-gray-700">{formatarMoedaSemCentavos(centro.valor_a_vencer)}</td>
                       </tr>
 
                       {centroAberto && carregandoClientes && (
@@ -231,10 +231,10 @@ export default function GestaoParcelasTab({ empresaId, centroCustoIds = [], busc
                                 </td>
                               );
                             })}
-                            <td className="py-3 pl-8 text-center text-xs text-gray-500">{cliente.bill_id}</td>
-                            <td className="py-3 pl-8 text-center tabular-nums text-gray-700">{formatarMoedaSemCentavos(cliente.valor_pago)}</td>
-                            <td className="py-3 text-center tabular-nums text-red-600">{formatarMoedaSemCentavos(cliente.valor_vencido)}</td>
-                            <td className="py-3 pr-3 text-center tabular-nums text-gray-700">{formatarMoedaSemCentavos(cliente.valor_a_vencer)}</td>
+                            <td className="py-3 pl-16 text-center text-xs text-gray-500">{cliente.bill_id}</td>
+                            <td className="py-3 pl-16 text-center tabular-nums text-gray-700">{formatarMoedaSemCentavos(cliente.valor_pago)}</td>
+                            <td className="py-3 pl-16 text-center tabular-nums text-red-600">{formatarMoedaSemCentavos(cliente.valor_vencido)}</td>
+                            <td className="py-3 pl-16 pr-3 text-center tabular-nums text-gray-700">{formatarMoedaSemCentavos(cliente.valor_a_vencer)}</td>
                           </tr>
                         ))}
                     </Fragment>
