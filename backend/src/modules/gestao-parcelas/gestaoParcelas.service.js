@@ -8,6 +8,11 @@ const {
 const CLUSTERS_VALIDOS = ['novo', 'bom', 'duvidoso', 'mau', 'inad'];
 const CLUSTERS_SCORE = ['novo', 'bom', 'duvidoso', 'mau'];
 
+// Os 4 status de parcela (paga em dia/com atraso, inadimplente, a vencer) —
+// mesmo vocabulário usado no badge do Nível 3 e no filtro "Tipo de Parcela"
+// do topo da tela (ver gestaoParcelas.controller.js::statusParcelaSchema).
+const STATUS_PARCELA_VALIDOS = ['em_dia', 'atraso', 'inadimplente', 'a_vencer'];
+
 // Só parcelas com origin_id = 'CO' são contas a receber de verdade — mesma
 // constante duplicada por módulo (de propósito, sem dependência cruzada)
 // que cobrancaClusters.service.js e customers.service.js já usam.
@@ -179,7 +184,19 @@ const CLUSTERS_ZERADOS_SCORE = { novo: 0, bom: 0, duvidoso: 0, mau: 0 };
 // usuário): aqui o cluster do cliente vem direto de cobranca_clientes_clusters
 // (mesmo dado de "Clusters de Clientes", sem a reclassificação "inad" por
 // atraso que só existia pro drilldown antigo de régua).
-async function buscarParcelasComCluster(empresaId, { costCenterIds, search } = {}) {
+//
+// `status` é o MESMO 4 estados de listParcelasPorTitulo (em_dia/atraso/
+// inadimplente/a_vencer, mesmo `limite` do Motor de Risco) — unificado aqui
+// de propósito (antes os Níveis 1/2 usavam um critério mais simples,
+// "vencida = passou do vencimento", enquanto só o Nível 3 usava o limite;
+// isso fazia o valor "Vencido" lá em cima não bater com o que aparecia como
+// "Inadimplente" ao abrir a parcela). `statusParcela` (opcional, array) é o
+// filtro "Tipo de Parcela" do topo da tela — filtra bem na origem, antes de
+// qualquer agregação, pra um Centro de Custo/cliente sem NENHUMA parcela do
+// tipo escolhido simplesmente não aparecer em nenhum nível.
+async function buscarParcelasComCluster(empresaId, { costCenterIds, search, statusParcela } = {}) {
+  const limite = await getLimiteVigente(empresaId);
+
   const params = [empresaId, ORIGIN_ID_PADRAO];
   let filtroCentro = '';
   if (Array.isArray(costCenterIds) && costCenterIds.length > 0) {
@@ -196,7 +213,7 @@ async function buscarParcelasComCluster(empresaId, { costCenterIds, search } = {
     `SELECT cat.cost_center_id, cat.cost_center_name,
             si.client_id, si.client_name, si.bill_id, si.installment_id,
             si.due_date, si.corrected_balance_amount, si.original_amount, si.installment_number,
-            COALESCE(ccc.cluster, 'novo') AS cluster
+            COALESCE(ccc.cluster, 'novo') AS cluster, pg.ultimo_pagamento
      FROM sie_income si
      JOIN sie_income_categorias cat
        ON cat.bill_id = si.bill_id AND cat.installment_id = si.installment_id AND cat.empresa_id = si.empresa_id
@@ -208,32 +225,48 @@ async function buscarParcelasComCluster(empresaId, { costCenterIds, search } = {
        ON ccc.empresa_id = si.empresa_id AND ccc.client_id = si.client_id
      LEFT JOIN sie_customers_comunicar com
        ON com.empresa_id = si.empresa_id AND com.client_id = si.client_id
+     LEFT JOIN (
+       SELECT bill_id, installment_id, MAX(payment_date) AS ultimo_pagamento
+       FROM sie_income_recebimentos
+       WHERE empresa_id = $1
+       GROUP BY bill_id, installment_id
+     ) pg ON pg.bill_id = si.bill_id AND pg.installment_id = si.installment_id
      WHERE si.empresa_id = $1 AND si.origin_id = $2
        AND COALESCE(com.comunicar, TRUE) = TRUE${filtroCentro}${filtroBusca}`,
     params
   );
 
   const hoje = hojeComoDataUTC();
-  return rows.map((row) => {
-    const saldoAberto = Number(row.corrected_balance_amount);
-    const paga = saldoAberto === 0;
-    const vencida = !paga && diasEntre(row.due_date, hoje) > 0;
-    return {
-      cost_center_id: row.cost_center_id,
-      cost_center_name: row.cost_center_name,
-      client_id: row.client_id,
-      client_name: row.client_name,
-      bill_id: row.bill_id,
-      installment_id: row.installment_id,
-      due_date: row.due_date,
-      installment_number: row.installment_number,
-      cluster: row.cluster,
-      paga,
-      vencida,
-      valor_original: Number(row.original_amount) || 0,
-      saldo_aberto: saldoAberto,
-    };
-  });
+  const filtroStatus = Array.isArray(statusParcela) && statusParcela.length > 0 ? new Set(statusParcela) : null;
+
+  return rows
+    .map((row) => {
+      const saldoAberto = Number(row.corrected_balance_amount) || 0;
+      const paga = saldoAberto === 0;
+      let status;
+      if (paga) {
+        status = row.ultimo_pagamento && new Date(row.ultimo_pagamento) > new Date(row.due_date) ? 'atraso' : 'em_dia';
+      } else if (diasEntre(row.due_date, hoje) > limite) {
+        status = 'inadimplente';
+      } else {
+        status = 'a_vencer';
+      }
+      return {
+        cost_center_id: row.cost_center_id,
+        cost_center_name: row.cost_center_name,
+        client_id: row.client_id,
+        client_name: row.client_name,
+        bill_id: row.bill_id,
+        installment_id: row.installment_id,
+        due_date: row.due_date,
+        installment_number: row.installment_number,
+        cluster: row.cluster,
+        status,
+        valor_original: Number(row.original_amount) || 0,
+        saldo_aberto: saldoAberto,
+      };
+    })
+    .filter((linha) => !filtroStatus || filtroStatus.has(linha.status));
 }
 
 // Nível 1 (Centro de Custo, versão nova): 1 linha por centro de custo do
@@ -263,8 +296,8 @@ async function getResumoPorCentroCusto(empresaId, filtros = {}) {
     const cluster = CLUSTERS_SCORE.includes(linha.cluster) ? linha.cluster : 'novo';
     centro.clientesPorCluster[cluster].add(String(linha.client_id));
 
-    if (linha.paga) centro.valor_pago += linha.valor_original;
-    else if (linha.vencida) centro.valor_vencido += linha.saldo_aberto;
+    if (linha.status === 'em_dia' || linha.status === 'atraso') centro.valor_pago += linha.valor_original;
+    else if (linha.status === 'inadimplente') centro.valor_vencido += linha.saldo_aberto;
     else centro.valor_a_vencer += linha.saldo_aberto;
   }
 
@@ -327,15 +360,15 @@ async function listClientesPorCentroCusto(empresaId, costCenterId, filtros = {})
       });
     }
     const titulo = porTitulo.get(chave);
-    if (linha.paga) titulo.valor_pago += linha.valor_original;
-    else if (linha.vencida) titulo.valor_vencido += linha.saldo_aberto;
+    if (linha.status === 'em_dia' || linha.status === 'atraso') titulo.valor_pago += linha.valor_original;
+    else if (linha.status === 'inadimplente') titulo.valor_vencido += linha.saldo_aberto;
     else titulo.valor_a_vencer += linha.saldo_aberto;
     titulo.parcelas.push(linha);
   }
 
   return [...porTitulo.values()]
     .map((titulo) => {
-      const abertas = titulo.parcelas.filter((p) => !p.paga);
+      const abertas = titulo.parcelas.filter((p) => p.status !== 'em_dia' && p.status !== 'atraso');
       const candidatas = abertas.length > 0 ? abertas : titulo.parcelas;
       const ordenadas = [...candidatas].sort((a, b) => new Date(a.due_date) - new Date(b.due_date));
       const parcelaAtual = abertas.length > 0 ? ordenadas[0] : ordenadas[ordenadas.length - 1];
@@ -411,29 +444,34 @@ async function listParcelasPorTitulo(empresaId, costCenterId, billId, filtros = 
   );
 
   const hoje = hojeComoDataUTC();
-  return rows.map((row) => {
-    const paga = Number(row.corrected_balance_amount) === 0;
-    let status;
-    if (paga) {
-      status = row.ultimo_pagamento && new Date(row.ultimo_pagamento) > new Date(row.due_date) ? 'atraso' : 'em_dia';
-    } else if (diasEntre(row.due_date, hoje) > limite) {
-      status = 'inadimplente';
-    } else {
-      status = 'a_vencer';
-    }
-    const saldoAberto = Number(row.corrected_balance_amount) || 0;
-    return {
-      bill_id: row.bill_id,
-      installment_id: row.installment_id,
-      due_date: row.due_date,
-      installment_number: row.installment_number,
-      payment_term_description: row.payment_term_description,
-      status,
-      valor_pago: paga ? Number(row.original_amount) || 0 : 0,
-      valor_vencido: status === 'inadimplente' ? saldoAberto : 0,
-      valor_a_vencer: status === 'a_vencer' ? saldoAberto : 0,
-    };
-  });
+  const filtroStatus =
+    Array.isArray(filtros.statusParcela) && filtros.statusParcela.length > 0 ? new Set(filtros.statusParcela) : null;
+
+  return rows
+    .map((row) => {
+      const paga = Number(row.corrected_balance_amount) === 0;
+      let status;
+      if (paga) {
+        status = row.ultimo_pagamento && new Date(row.ultimo_pagamento) > new Date(row.due_date) ? 'atraso' : 'em_dia';
+      } else if (diasEntre(row.due_date, hoje) > limite) {
+        status = 'inadimplente';
+      } else {
+        status = 'a_vencer';
+      }
+      const saldoAberto = Number(row.corrected_balance_amount) || 0;
+      return {
+        bill_id: row.bill_id,
+        installment_id: row.installment_id,
+        due_date: row.due_date,
+        installment_number: row.installment_number,
+        payment_term_description: row.payment_term_description,
+        status,
+        valor_pago: paga ? Number(row.original_amount) || 0 : 0,
+        valor_vencido: status === 'inadimplente' ? saldoAberto : 0,
+        valor_a_vencer: status === 'a_vencer' ? saldoAberto : 0,
+      };
+    })
+    .filter((p) => !filtroStatus || filtroStatus.has(p.status));
 }
 
 // Nível 2 do drilldown ANTIGO por régua (não usado pelo frontend hoje —
@@ -558,6 +596,7 @@ async function listParcelasCliente(empresaId, cluster, etapaId, clientId, filtro
 module.exports = {
   CLUSTERS_VALIDOS,
   CLUSTERS_SCORE,
+  STATUS_PARCELA_VALIDOS,
   getResumoPorCentroCusto,
   listClientesPorCentroCusto,
   listParcelasPorTitulo,

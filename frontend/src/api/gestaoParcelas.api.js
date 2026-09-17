@@ -1,13 +1,15 @@
 import http from './http';
 
 // Mesmo formato de `filtros` de cobrancaClusters.api.js, mais `search`
-// (nome do cliente) — os 3 níveis do drilldown aceitam esse filtro, então
-// ele já refaz a matriz inteira dinamicamente (mesmo espírito do filtro de
-// cliente da aba Clientes).
-function paramsFiltros({ costCenterIds, search } = {}) {
+// (nome do cliente) e `statusParcela` (filtro "Tipo de Parcela" do topo da
+// tela — em_dia/atraso/inadimplente/a_vencer) — os 3 níveis do drilldown
+// aceitam esses filtros, então um refaz a matriz inteira dinamicamente
+// (mesmo espírito do filtro de cliente da aba Clientes).
+function paramsFiltros({ costCenterIds, search, statusParcela } = {}) {
   const params = {};
   if (costCenterIds?.length > 0) params.cost_center_ids = costCenterIds.join(',');
   if (search) params.search = search;
+  if (statusParcela?.length > 0) params.status_parcela = statusParcela.join(',');
   return params;
 }
 

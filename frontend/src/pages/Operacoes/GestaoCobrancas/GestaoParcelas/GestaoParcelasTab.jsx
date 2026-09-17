@@ -77,7 +77,13 @@ const STATUS_PARCELA = {
 // atraso/inadimplente) e a de Título mostra bill_id/parcela, igual à aba
 // Rotinas. Etapa da régua/responsável/canais saíram da tela por enquanto
 // (retomamos depois).
-export default function GestaoParcelasTab({ empresaId, centroCustoIds = [], busca = '', refreshToken = 0 }) {
+export default function GestaoParcelasTab({
+  empresaId,
+  centroCustoIds = [],
+  busca = '',
+  statusParcela = [],
+  refreshToken = 0,
+}) {
   const [centros, setCentros] = useState([]);
   const [carregandoCentros, setCarregandoCentros] = useState(false);
   const [centroExpandidoId, setCentroExpandidoId] = useState(null);
@@ -132,23 +138,25 @@ export default function GestaoParcelasTab({ empresaId, centroCustoIds = [], busc
     }
     const minhaRequisicao = ++requisicaoCentrosRef.current;
     setCarregandoCentros(true);
-    getResumoPorCentroCustoParcelas(empresaId, { costCenterIds: centroCustoIds, search: busca })
+    getResumoPorCentroCustoParcelas(empresaId, { costCenterIds: centroCustoIds, search: busca, statusParcela })
       .then((dados) => {
         if (minhaRequisicao === requisicaoCentrosRef.current) setCentros(dados);
       })
       .finally(() => {
         if (minhaRequisicao === requisicaoCentrosRef.current) setCarregandoCentros(false);
       });
-  }, [empresaId, centroCustoIds, busca]);
+  }, [empresaId, centroCustoIds, busca, statusParcela]);
 
-  // Reset "duro" só quando empresa/Centro de Custo mudam de verdade — mesmo
-  // espírito de ClientesTab.jsx (a busca por si só não fecha o drilldown).
+  // Reset "duro" só quando empresa/Centro de Custo/Tipo de Parcela mudam de
+  // verdade — mesmo espírito de ClientesTab.jsx (a busca por si só não
+  // fecha o drilldown). Trocar o filtro de tipo pode fazer o centro/cliente
+  // aberto sumir da lista nova, então fecha o drilldown junto.
   useEffect(() => {
     setCentroExpandidoId(null);
     setClientes([]);
     setTituloAberto(null);
     setParcelas([]);
-  }, [empresaId, centroCustoIds]);
+  }, [empresaId, centroCustoIds, statusParcela]);
 
   useEffect(() => {
     carregarCentros();
@@ -158,14 +166,14 @@ export default function GestaoParcelasTab({ empresaId, centroCustoIds = [], busc
     if (!centroExpandidoId) return;
     const minhaRequisicao = ++requisicaoClientesRef.current;
     setCarregandoClientes(true);
-    listClientesPorCentroCusto(empresaId, centroExpandidoId, { search: busca })
+    listClientesPorCentroCusto(empresaId, centroExpandidoId, { search: busca, statusParcela })
       .then((dados) => {
         if (minhaRequisicao === requisicaoClientesRef.current) setClientes(dados);
       })
       .finally(() => {
         if (minhaRequisicao === requisicaoClientesRef.current) setCarregandoClientes(false);
       });
-  }, [empresaId, centroExpandidoId, busca]);
+  }, [empresaId, centroExpandidoId, busca, statusParcela]);
 
   useEffect(() => {
     carregarClientes();
@@ -175,14 +183,14 @@ export default function GestaoParcelasTab({ empresaId, centroCustoIds = [], busc
     if (!tituloAberto || !centroExpandidoId) return;
     const minhaRequisicao = ++requisicaoParcelasRef.current;
     setCarregandoParcelas(true);
-    listParcelasPorTitulo(empresaId, centroExpandidoId, tituloAberto.billId, { search: busca })
+    listParcelasPorTitulo(empresaId, centroExpandidoId, tituloAberto.billId, { search: busca, statusParcela })
       .then((dados) => {
         if (minhaRequisicao === requisicaoParcelasRef.current) setParcelas(dados);
       })
       .finally(() => {
         if (minhaRequisicao === requisicaoParcelasRef.current) setCarregandoParcelas(false);
       });
-  }, [empresaId, centroExpandidoId, tituloAberto, busca]);
+  }, [empresaId, centroExpandidoId, tituloAberto, busca, statusParcela]);
 
   useEffect(() => {
     carregarParcelas();

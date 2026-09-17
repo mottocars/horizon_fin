@@ -59,6 +59,17 @@ const TABS = [
   { id: 'clientes', label: 'Clientes', icon: Contact },
 ];
 
+// Mesmo vocabulário de GestaoParcelasTab.jsx::STATUS_PARCELA (duplicado aqui
+// de propósito) — filtro "Tipo de Parcela" do topo, só na aba Gestão das
+// Parcelas. Ordem pensada pra leitura ("o que ainda não venceu" →
+// "o problema" → "já resolvido"), não a mesma ordem das colunas da tabela.
+const OPCOES_STATUS_PARCELA = [
+  { value: 'a_vencer', label: 'A vencer' },
+  { value: 'inadimplente', label: 'Inadimplente' },
+  { value: 'atraso', label: 'Paga com Atraso' },
+  { value: 'em_dia', label: 'Paga em Dia' },
+];
+
 function formatarDataHora(data) {
   return new Date(data).toLocaleString('pt-BR', {
     day: '2-digit',
@@ -105,6 +116,13 @@ export default function GestaoCobrancasPage() {
     () => costCenterIdsParam.split(',').filter(Boolean).map(Number),
     [costCenterIdsParam]
   );
+
+  // Filtro "Tipo de Parcela" (Gestão das Parcelas) — mesma convenção do
+  // Centro de Custo acima: mora na URL, e o array só é recriado quando o
+  // parâmetro de verdade muda (senão o efeito que fecha o drilldown em
+  // GestaoParcelasTab.jsx dispararia a cada render à toa).
+  const statusParcelaParam = searchParams.get('status_parcela') || '';
+  const statusParcelaFiltro = useMemo(() => statusParcelaParam.split(',').filter(Boolean), [statusParcelaParam]);
 
   // Atualiza só as chaves passadas (mantendo as outras), sempre com
   // `replace` — nunca cria uma entrada nova no histórico do navegador só
@@ -374,6 +392,21 @@ export default function GestaoCobrancasPage() {
               </div>
             )}
 
+            {abaAtiva === 'inadimplencia' && (
+              <div className="sm:min-w-[160px] sm:max-w-xs sm:flex-1">
+                <label className="mb-1 block text-sm font-medium text-gray-700">Tipo de Parcela</label>
+                <SearchableSelect
+                  multiple
+                  value={statusParcelaFiltro}
+                  onChange={(valores) => atualizarParams({ status_parcela: valores })}
+                  disabled={!empresaId}
+                  options={OPCOES_STATUS_PARCELA}
+                  placeholder={!empresaId ? 'Selecione a empresa primeiro' : 'Todos os tipos'}
+                  emptyMessage="Nenhum tipo encontrado."
+                />
+              </div>
+            )}
+
             {abaAtiva === 'rotinas' && (
               <div className="flex min-w-0 gap-3 sm:flex-1">
                 <div className="min-w-0 flex-1">
@@ -521,6 +554,7 @@ export default function GestaoCobrancasPage() {
             empresaId={empresaId}
             centroCustoIds={centroCustoIds}
             busca={buscaClientes}
+            statusParcela={statusParcelaFiltro}
             refreshToken={refreshParcelas}
           />
         )}

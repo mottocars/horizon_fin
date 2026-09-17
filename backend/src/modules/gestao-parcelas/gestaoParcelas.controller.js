@@ -14,6 +14,16 @@ const costCenterIdsSchema = z.preprocess((val) => {
   return bruto.map((v) => Number(v)).filter((n) => Number.isInteger(n) && n > 0);
 }, z.array(z.number().int().positive()));
 
+// Mesmo preprocess acima, só que validando contra os 4 status de parcela —
+// filtro "Tipo de Parcela" do topo da tela (ver GestaoCobrancasPage.jsx).
+// Valor desconhecido/vazio é descartado em silêncio (vira "sem filtro"),
+// nunca erro 400 — mesmo critério tolerante de costCenterIdsSchema.
+const statusParcelaSchema = z.preprocess((val) => {
+  if (val === undefined || val === '') return [];
+  const bruto = Array.isArray(val) ? val : String(val).split(',');
+  return bruto.filter((v) => service.STATUS_PARCELA_VALIDOS.includes(v));
+}, z.array(z.enum(service.STATUS_PARCELA_VALIDOS)));
+
 // Etapa: sempre um id de regua_cobranca_etapas (inteiro positivo) — não
 // existe mais bucket "Sem etapa" (parcela fora do range de todas as etapas
 // configuradas nem entra na matriz, ver gestaoParcelas.service.js::
@@ -37,6 +47,7 @@ function parseFiltros(query) {
   return {
     costCenterIds: costCenterIdsSchema.parse(query.cost_center_ids),
     search: (query.search || '').toString(),
+    statusParcela: statusParcelaSchema.parse(query.status_parcela),
   };
 }
 
