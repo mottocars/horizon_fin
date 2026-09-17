@@ -27,6 +27,12 @@ const TOTAL_COLUNAS = 3 + CLUSTER_ORDEM.length + 3;
 const DIV_H = 'border-b border-gray-200';
 const DIV_V = 'border-l border-gray-200';
 
+// Borda de baixo do cabeçalho — mais grossa/escura que DIV_H de propósito
+// (pedido do usuário: "borda evidente... quando ele estiver flutuando"),
+// pra marcar bem o limite entre o cabeçalho fixo (sticky) e as linhas
+// deslizando por baixo dele durante a rolagem.
+const DIV_H_CABECALHO = 'border-b-2 border-gray-300';
+
 // Mesmo formatarMoeda de ClustersCobranca/constantes.js, sem os centavos —
 // só nesta tabela (pedido do usuário: "pode retirar os números após a
 // vírgula"), pra não mexer no formato usado no resto do módulo.
@@ -274,22 +280,22 @@ export default function GestaoParcelasTab({ empresaId, centroCustoIds = [], busc
                 <col className="w-44" />
                 <col className="w-44" />
               </colgroup>
-              <thead className="sticky top-0 z-10 bg-white">
+              <thead className="sticky top-0 z-10 bg-white shadow-sm">
                 <tr className="text-xs uppercase tracking-wide text-gray-400">
-                  <th className={`${DIV_H} py-2.5 pl-3 font-medium`}>{tituloColuna}</th>
+                  <th className={`${DIV_H_CABECALHO} py-2.5 pl-3 font-medium`}>{tituloColuna}</th>
                   {CLUSTER_ORDEM.map((cluster) => {
                     const Icone = CLUSTER_ICON[cluster];
                     return (
-                      <th key={cluster} className={`${DIV_H} ${DIV_V} py-2.5 text-center font-medium`} title={CLUSTER_LABEL[cluster]}>
+                      <th key={cluster} className={`${DIV_H_CABECALHO} ${DIV_V} py-2.5 text-center font-medium`} title={CLUSTER_LABEL[cluster]}>
                         {Icone && <Icone size={15} className={`inline ${CLUSTER_ICON_COR[cluster]}`} />}
                       </th>
                     );
                   })}
-                  <th className={`${DIV_H} ${DIV_V} px-2 py-2.5 text-center font-medium`}>Título</th>
-                  <th className={`${DIV_H} ${DIV_V} px-2 py-2.5 text-center font-medium`}>Vencimento</th>
-                  <th className={`${DIV_H} ${DIV_V} px-2 py-2.5 text-center font-medium`}>Pagas</th>
-                  <th className={`${DIV_H} ${DIV_V} px-2 py-2.5 text-center font-medium`}>Vencidas</th>
-                  <th className={`${DIV_H} ${DIV_V} px-2 py-2.5 text-center font-medium`}>A vencer</th>
+                  <th className={`${DIV_H_CABECALHO} ${DIV_V} px-2 py-2.5 text-center font-medium`}>Título</th>
+                  <th className={`${DIV_H_CABECALHO} ${DIV_V} px-2 py-2.5 text-center font-medium`}>Vencimento</th>
+                  <th className={`${DIV_H_CABECALHO} ${DIV_V} px-2 py-2.5 text-center font-medium`}>Pagas</th>
+                  <th className={`${DIV_H_CABECALHO} ${DIV_V} px-2 py-2.5 text-center font-medium`}>Vencidas</th>
+                  <th className={`${DIV_H_CABECALHO} ${DIV_V} px-2 py-2.5 text-center font-medium`}>A vencer</th>
                 </tr>
               </thead>
               <tbody>
