@@ -174,11 +174,11 @@ export default function Sidebar() {
                     type="button"
                     title={collapsed ? item.label : undefined}
                     onClick={() => toggleGrupo(item.label)}
-                    className={`relative flex w-full items-center gap-2.5 rounded-[10px] px-2.5 py-1.5 text-[13px] font-medium transition-colors ${
-                      collapsed ? 'justify-center' : ''
+                    className={`flex items-center gap-2.5 rounded-[10px] text-[13px] font-medium transition-colors ${
+                      collapsed ? 'mx-auto h-8 w-8 justify-center' : 'w-full px-2.5 py-1.5'
                     } ${
                       isActiveGroup
-                        ? "bg-linear-to-b from-primary-500/10 to-primary-500/3 text-primary-700 before:absolute before:-left-2.5 before:bottom-1 before:top-1 before:w-0.75 before:rounded-r-[3px] before:bg-primary-500 before:content-['']"
+                        ? 'bg-primary-500 text-white shadow-[0_6px_14px_-6px_rgba(59,130,246,0.45)]'
                         : 'text-gray-600 hover:bg-[#f2f6fd] hover:text-[#233047]'
                     }`}
                   >
@@ -213,7 +213,7 @@ export default function Sidebar() {
                                 className={({ isActive }) =>
                                   `flex items-center gap-2.5 rounded-[10px] px-2.5 py-1.5 text-[13px] transition-colors ${
                                     isActive
-                                      ? 'bg-primary-500 font-medium text-white shadow-[0_6px_14px_-6px_rgba(59,130,246,0.45)]'
+                                      ? 'bg-linear-to-b from-primary-500/10 to-primary-500/3 font-medium text-primary-700'
                                       : 'text-gray-500 hover:bg-[#f2f6fd] hover:text-[#27324a]'
                                   }`
                                 }
@@ -242,8 +242,8 @@ export default function Sidebar() {
                 end={item.to === '/'}
                 title={collapsed ? item.label : undefined}
                 className={({ isActive }) =>
-                  `flex items-center gap-2.5 rounded-[10px] px-2.5 py-1.5 text-[13px] font-medium transition-colors ${
-                    collapsed ? 'justify-center' : ''
+                  `flex items-center gap-2.5 rounded-[10px] text-[13px] font-medium transition-colors ${
+                    collapsed ? 'mx-auto h-8 w-8 justify-center' : 'w-full px-2.5 py-1.5'
                   } ${
                     isActive
                       ? 'bg-primary-500 text-white shadow-[0_6px_14px_-6px_rgba(59,130,246,0.45)]'
