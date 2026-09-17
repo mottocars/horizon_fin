@@ -170,49 +170,182 @@ async function buscarLinhasClassificadas(empresaId, { costCenterIds, search } = 
     .filter(Boolean);
 }
 
-// Nível 0+1 (Centro de Custo + Cluster, numa chamada só — ver
-// gestaoParcelas.controller.js e a justificativa no plano: aqui os dois
-// níveis são só contagem, sem saldo/score extra pra buscar de novo ao
-// expandir). Centros sem parcela nenhuma ainda aparecem zerados (mesmo
-// universo "Lançamento" de cobrancaClusters.service.js::getResumoPorCentroCusto).
-async function getResumoPorCentroCusto(empresaId, filtros = {}) {
-  const paramsCentros = [empresaId];
-  let filtroSelecao = '';
-  if (Array.isArray(filtros.costCenterIds) && filtros.costCenterIds.length > 0) {
-    paramsCentros.push(filtros.costCenterIds);
-    filtroSelecao = ` AND c.sienge_id = ANY($${paramsCentros.length}::bigint[])`;
+const CLUSTERS_ZERADOS_SCORE = { novo: 0, bom: 0, duvidoso: 0, mau: 0 };
+
+// Lê TODAS as parcelas do universo "Lançamento" — pagas E em aberto (ao
+// contrário de buscarLinhasClassificadas, que só lê parcela em aberto e
+// filtra pelo range da régua). É a base dos Níveis 1 e 2 da versão nova da
+// tela ("vida do cliente, das parcelas pagas até as não pagas" — pedido do
+// usuário): aqui o cluster do cliente vem direto de cobranca_clientes_clusters
+// (mesmo dado de "Clusters de Clientes", sem a reclassificação "inad" por
+// atraso que só existia pro drilldown antigo de régua).
+async function buscarParcelasComCluster(empresaId, { costCenterIds, search } = {}) {
+  const params = [empresaId, ORIGIN_ID_PADRAO];
+  let filtroCentro = '';
+  if (Array.isArray(costCenterIds) && costCenterIds.length > 0) {
+    params.push(costCenterIds);
+    filtroCentro = ` AND cat.cost_center_id = ANY($${params.length}::bigint[])`;
   }
-  const { rows: centros } = await pool.query(
-    `SELECT DISTINCT c.sienge_id, c.name
-     FROM centros_custo_sienge c
+  let filtroBusca = '';
+  if (search) {
+    params.push(`%${search}%`);
+    filtroBusca = ` AND si.client_name ILIKE $${params.length}`;
+  }
+
+  const { rows } = await pool.query(
+    `SELECT cat.cost_center_id, cat.cost_center_name,
+            si.client_id, si.client_name, si.bill_id, si.installment_id,
+            si.due_date, si.corrected_balance_amount, si.original_amount, si.installment_number,
+            COALESCE(ccc.cluster, 'novo') AS cluster
+     FROM sie_income si
+     JOIN sie_income_categorias cat
+       ON cat.bill_id = si.bill_id AND cat.installment_id = si.installment_id AND cat.empresa_id = si.empresa_id
      JOIN centro_custo_etapas_historico h
-       ON h.sienge_id = c.sienge_id AND h.empresa_id = c.empresa_id AND h.data_inicio IS NOT NULL
+       ON h.sienge_id = cat.cost_center_id AND h.empresa_id = cat.empresa_id AND h.data_inicio IS NOT NULL
      JOIN mascara_itens m
        ON m.id = h.mascara_item_id AND m.tipo = 'ETAPAS_CENTRO_CUSTO' AND m.descricao = 'Lançamento'
-     WHERE c.empresa_id = $1${filtroSelecao}
-     ORDER BY c.name ASC`,
-    paramsCentros
+     LEFT JOIN cobranca_clientes_clusters ccc
+       ON ccc.empresa_id = si.empresa_id AND ccc.client_id = si.client_id
+     LEFT JOIN sie_customers_comunicar com
+       ON com.empresa_id = si.empresa_id AND com.client_id = si.client_id
+     WHERE si.empresa_id = $1 AND si.origin_id = $2
+       AND COALESCE(com.comunicar, TRUE) = TRUE${filtroCentro}${filtroBusca}`,
+    params
   );
-  if (centros.length === 0) return [];
 
-  const linhas = await buscarLinhasClassificadas(empresaId, filtros);
-
-  const contagemPorCentro = new Map();
-  for (const linha of linhas) {
-    const chave = String(linha.cost_center_id);
-    if (!contagemPorCentro.has(chave)) contagemPorCentro.set(chave, { ...CLUSTERS_ZERADOS });
-    contagemPorCentro.get(chave)[linha.cluster] += 1;
-  }
-
-  return centros.map((c) => {
-    const clusters = contagemPorCentro.get(String(c.sienge_id)) || { ...CLUSTERS_ZERADOS };
+  const hoje = hojeComoDataUTC();
+  return rows.map((row) => {
+    const saldoAberto = Number(row.corrected_balance_amount);
+    const paga = saldoAberto === 0;
+    const vencida = !paga && diasEntre(row.due_date, hoje) > 0;
     return {
-      cost_center_id: c.sienge_id,
-      cost_center_name: c.name,
-      total_parcelas: Object.values(clusters).reduce((soma, n) => soma + n, 0),
-      clusters,
+      cost_center_id: row.cost_center_id,
+      cost_center_name: row.cost_center_name,
+      client_id: row.client_id,
+      client_name: row.client_name,
+      bill_id: row.bill_id,
+      installment_id: row.installment_id,
+      due_date: row.due_date,
+      installment_number: row.installment_number,
+      cluster: row.cluster,
+      paga,
+      vencida,
+      valor_original: Number(row.original_amount) || 0,
+      saldo_aberto: saldoAberto,
     };
   });
+}
+
+// Nível 1 (Centro de Custo, versão nova): 1 linha por centro de custo do
+// universo "Lançamento" (mesmo critério de sempre), com a contagem de
+// CLIENTES (não parcelas) por cluster — mesmos 4 clusters de "Clusters de
+// Clientes" (ver ClustersCobranca/constantes.js) — mais os 3 valores
+// agregados (pago/vencido/a vencer) e o total de clientes do centro. Centro
+// sem nenhum cliente com parcela (paga ou aberta) não aparece — mesmo
+// critério aplicado em cobrancaClusters.service.js::getResumoPorCentroCusto.
+async function getResumoPorCentroCusto(empresaId, filtros = {}) {
+  const linhas = await buscarParcelasComCluster(empresaId, filtros);
+
+  const porCentro = new Map();
+  for (const linha of linhas) {
+    const chave = String(linha.cost_center_id);
+    if (!porCentro.has(chave)) {
+      porCentro.set(chave, {
+        cost_center_id: linha.cost_center_id,
+        cost_center_name: linha.cost_center_name,
+        clientesPorCluster: { novo: new Set(), bom: new Set(), duvidoso: new Set(), mau: new Set() },
+        valor_pago: 0,
+        valor_vencido: 0,
+        valor_a_vencer: 0,
+      });
+    }
+    const centro = porCentro.get(chave);
+    const cluster = CLUSTERS_SCORE.includes(linha.cluster) ? linha.cluster : 'novo';
+    centro.clientesPorCluster[cluster].add(String(linha.client_id));
+
+    if (linha.paga) centro.valor_pago += linha.valor_original;
+    else if (linha.vencida) centro.valor_vencido += linha.saldo_aberto;
+    else centro.valor_a_vencer += linha.saldo_aberto;
+  }
+
+  return [...porCentro.values()]
+    .map((centro) => {
+      const clusters = { ...CLUSTERS_ZERADOS_SCORE };
+      let totalClientes = 0;
+      for (const cluster of CLUSTERS_SCORE) {
+        clusters[cluster] = centro.clientesPorCluster[cluster].size;
+        totalClientes += clusters[cluster];
+      }
+      return {
+        cost_center_id: centro.cost_center_id,
+        cost_center_name: centro.cost_center_name,
+        clusters,
+        total_clientes: totalClientes,
+        valor_pago: centro.valor_pago,
+        valor_vencido: centro.valor_vencido,
+        valor_a_vencer: centro.valor_a_vencer,
+      };
+    })
+    .filter((centro) => centro.total_clientes > 0)
+    .sort((a, b) => a.cost_center_name.localeCompare(b.cost_center_name, 'pt-BR'));
+}
+
+// Nível 2 (Cliente, versão nova): dentro de 1 centro de custo, 1 linha por
+// combinação cliente+título (bill_id) — não por cliente puro, porque
+// "Parcelas atual/total" (installment_number, formato "3/12" vindo direto do
+// Sienge) só faz sentido dentro de 1 título por vez; um cliente com 2
+// títulos no mesmo centro aparece em 2 linhas. "Parcela atual" é a parcela
+// em aberto mais antiga (a próxima da fila de cobrança); sem nenhuma em
+// aberto (título 100% quitado), cai na última (mais recente), pra
+// representar "chegou ao fim".
+async function listClientesPorCentroCusto(empresaId, costCenterId, filtros = {}) {
+  const linhas = (await buscarParcelasComCluster(empresaId, { ...filtros, costCenterIds: [costCenterId] })).filter(
+    (l) => String(l.cost_center_id) === String(costCenterId)
+  );
+
+  const porTitulo = new Map();
+  for (const linha of linhas) {
+    const chave = `${linha.client_id}|${linha.bill_id}`;
+    if (!porTitulo.has(chave)) {
+      porTitulo.set(chave, {
+        client_id: linha.client_id,
+        client_name: linha.client_name,
+        bill_id: linha.bill_id,
+        cluster: CLUSTERS_SCORE.includes(linha.cluster) ? linha.cluster : 'novo',
+        valor_pago: 0,
+        valor_vencido: 0,
+        valor_a_vencer: 0,
+        parcelas: [],
+      });
+    }
+    const titulo = porTitulo.get(chave);
+    if (linha.paga) titulo.valor_pago += linha.valor_original;
+    else if (linha.vencida) titulo.valor_vencido += linha.saldo_aberto;
+    else titulo.valor_a_vencer += linha.saldo_aberto;
+    titulo.parcelas.push(linha);
+  }
+
+  return [...porTitulo.values()]
+    .map((titulo) => {
+      const abertas = titulo.parcelas.filter((p) => !p.paga);
+      const candidatas = abertas.length > 0 ? abertas : titulo.parcelas;
+      const ordenadas = [...candidatas].sort((a, b) => new Date(a.due_date) - new Date(b.due_date));
+      const parcelaAtual = abertas.length > 0 ? ordenadas[0] : ordenadas[ordenadas.length - 1];
+      return {
+        client_id: titulo.client_id,
+        client_name: titulo.client_name,
+        bill_id: titulo.bill_id,
+        cluster: titulo.cluster,
+        valor_pago: titulo.valor_pago,
+        valor_vencido: titulo.valor_vencido,
+        valor_a_vencer: titulo.valor_a_vencer,
+        parcela_atual: parcelaAtual?.installment_number || null,
+        parcela_atual_installment_id: parcelaAtual?.installment_id ?? null,
+      };
+    })
+    .sort(
+      (a, b) => (a.client_name || '').localeCompare(b.client_name || '', 'pt-BR') || a.bill_id - b.bill_id
+    );
 }
 
 // Nível 2: quantas parcelas deste cluster caem em cada etapa da régua. Uma
@@ -336,6 +469,7 @@ module.exports = {
   CLUSTERS_VALIDOS,
   CLUSTERS_SCORE,
   getResumoPorCentroCusto,
+  listClientesPorCentroCusto,
   getEtapasPorCluster,
   listParcelas,
   listParcelasCliente,

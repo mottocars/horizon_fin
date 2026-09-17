@@ -21,8 +21,20 @@ export function getResumoPorCentroCustoParcelas(empresaId, filtros) {
     .then((res) => res.data);
 }
 
-// Nível 2: quantas parcelas de 1 cluster caem em cada etapa da régua de
-// cobrança.
+// Nível 2 (versão nova, por Centro de Custo): 1 linha por combinação
+// cliente+título (bill_id) daquele centro, já com os valores pago/vencido/a
+// vencer e a parcela atual (installment_number, formato "3/12" do próprio
+// Sienge) — ver GestaoParcelas/GestaoParcelasTab.jsx.
+export function listClientesPorCentroCusto(empresaId, costCenterId, filtros) {
+  return http
+    .get(`/gestao-parcelas/centros-custo/${costCenterId}/clientes`, {
+      params: { empresa_id: empresaId, ...paramsFiltros(filtros) },
+    })
+    .then((res) => res.data);
+}
+
+// Nível 2 (antigo, por etapa da régua): quantas parcelas de 1 cluster caem
+// em cada etapa da régua de cobrança.
 export function getEtapasPorCluster(empresaId, cluster, filtros) {
   return http
     .get(`/gestao-parcelas/${cluster}/etapas`, { params: { empresa_id: empresaId, ...paramsFiltros(filtros) } })
