@@ -1,4 +1,4 @@
-import { useEffect, useMemo, useRef, useState } from 'react';
+import { useEffect, useMemo, useState } from 'react';
 import {
   Clock,
   Download,
@@ -125,45 +125,65 @@ function filtrarNotasPorAba(lista, aba, inativas) {
   return lista.filter((n) => !n.ciente_em);
 }
 
-// Cabeçalho de coluna só do nível 3 (Nota) — não é mais um <thead> fixo no
-// topo da tabela inteira, porque essas colunas (Nº/Série, Emissor...) só
-// fazem sentido logo acima das notas, não acima do certificado/seção (que
-// usam uma única célula com colSpan, sem essas colunas). Aparece de novo a
-// cada seção de Produtos/Serviços aberta que tenha ao menos 1 nota.
-function CabecalhoNotas({ modoInativas, checked, indeterminate, onToggleTodas }) {
-  const checkboxRef = useRef(null);
-  useEffect(() => {
-    if (checkboxRef.current) checkboxRef.current.indeterminate = indeterminate;
-  }, [indeterminate]);
+// Tabela inteira reestruturada nos moldes de GestaoParcelasTab.jsx (pedido
+// do usuário: "estruturar melhor... igual estruturamos a gestão de
+// parcelas") — mesmos divisores de grade (DIV_H/DIV_V, mesmo tom
+// gray-200/300), mesmo <thead> sticky, mesma fonte text-xs, mesmas colunas
+// fixas via colgroup em % (table-layout:fixed + w-full, nunca px fixo — é o
+// que garante que a tabela nunca ultrapasse o card, em qualquer tela, igual
+// resolvido lá).
+const DIV_H = 'border-b border-gray-200';
+const DIV_V = 'border-l border-gray-200';
+const DIV_H_CABECALHO = 'border-b-2 border-gray-300';
 
+// Larguras do colgroup em % — sempre somando 100. "Inativada por" só existe
+// na aba Inativas, por isso os 2 conjuntos diferentes (mesma ideia de
+// totalColunas variar por aba, só que agora também define a largura de cada
+// coluna, não só a contagem pro colSpan).
+const COLUNAS_PADRAO = [24, 6, 6, 16, 8, 8, 6, 6, 10, 10];
+const COLUNAS_INATIVAS = [20, 5, 5, 13, 7, 7, 12, 5, 5, 10, 11];
+
+// Cabeçalho único da tabela inteira (não mais repetido por seção — ver
+// comentário no topo do arquivo) — sticky, mesmo padrão de
+// GestaoParcelasTab.jsx (DIV_H_CABECALHO/DIV_V, bg-white + shadow-sm pra
+// marcar bem o limite quando ele flutua sobre as linhas rolando por baixo).
+function CabecalhoTabela({ modoInativas }) {
   return (
-    <tr className="border-b border-gray-100 text-xs uppercase tracking-wide text-gray-400">
-      <th className="py-2 pl-14 pr-3 font-medium">
-        <input
-          ref={checkboxRef}
-          type="checkbox"
-          checked={checked}
-          onChange={onToggleTodas}
-          aria-label="Selecionar todas as notas desta seção"
-          className="h-3.5 w-3.5 rounded border-gray-300 text-primary-600 focus:ring-primary-100"
-        />
-      </th>
-      <th className="py-2 px-3 font-medium whitespace-nowrap">Nº / Série</th>
-      <th className="py-2 px-3 font-medium">Emissor</th>
-      <th className="py-2 px-3 font-medium">Emissão</th>
-      <th className="py-2 px-3 font-medium">Situação</th>
-      {modoInativas && <th className="py-2 px-3 font-medium">Inativada por</th>}
-      <th className="py-2 pl-3 pr-5 font-medium"></th>
-    </tr>
+    <thead className="sticky top-0 z-10 bg-white shadow-sm">
+      <tr className="text-xs uppercase tracking-wide text-gray-400">
+        <th className={`${DIV_H_CABECALHO} py-2.5 pl-3 text-left font-medium`}>Empresa / Nota</th>
+        <th className={`${DIV_H_CABECALHO} ${DIV_V} py-2.5 text-center font-medium`} title="Produto (NF-e)">
+          <Package size={14} className="inline" />
+        </th>
+        <th className={`${DIV_H_CABECALHO} ${DIV_V} py-2.5 text-center font-medium`} title="Serviço (NFS-e)">
+          <Wrench size={14} className="inline" />
+        </th>
+        <th className={`${DIV_H_CABECALHO} ${DIV_V} px-3 py-2.5 text-left font-medium`}>Emissor</th>
+        <th className={`${DIV_H_CABECALHO} ${DIV_V} px-2 py-2.5 text-center font-medium`}>Emissão</th>
+        <th className={`${DIV_H_CABECALHO} ${DIV_V} px-2 py-2.5 text-center font-medium`}>Situação</th>
+        {modoInativas && (
+          <th className={`${DIV_H_CABECALHO} ${DIV_V} px-2 py-2.5 text-center font-medium`}>Inativada por</th>
+        )}
+        <th className={`${DIV_H_CABECALHO} ${DIV_V} py-2.5 text-center font-medium`}>PDF</th>
+        <th className={`${DIV_H_CABECALHO} ${DIV_V} py-2.5 text-center font-medium`}>XML</th>
+        <th className={`${DIV_H_CABECALHO} ${DIV_V} px-2 py-2.5 text-center font-medium`}>Consulta</th>
+        <th className={`${DIV_H_CABECALHO} ${DIV_V} px-2 py-2.5 text-center font-medium`}>Atualizar</th>
+      </tr>
+    </thead>
   );
 }
 
-// Uma linha de nota dentro da tabela única (ver bloco de render do
-// certificado) — extraída à parte porque agora é usada duas vezes seguidas
-// (produtos e serviços do mesmo certificado, um embaixo do outro), não mais
-// escolhida por uma aba.
+// Uma linha de nota (nível 2, folha de verdade) — combina produtos e
+// serviços numa lista só, na ordem em que vêm (produtos primeiro, depois
+// serviços — ver renderCertificado), diferenciados pelas 2 colunas de ícone
+// (Produto/Serviço) em vez de uma seção própria pra cada um: a coluna do
+// TIPO desta nota vem colorida (mesmo fundo claro + ícone forte dos badges
+// de contagem do certificado — bg-primary-50/violet-50), a outra em cinza —
+// mesma lógica dos ícones de cluster em GestaoParcelasTab.jsx (só o cluster
+// do cliente vem colorido, os outros 3 ficam cinza).
 function LinhaNota({
   nota,
+  tipo,
   modoInativas,
   selecionada,
   onToggleSelecionada,
@@ -172,34 +192,45 @@ function LinhaNota({
   baixandoPdf,
   baixandoXml,
 }) {
-  const { Icon: IconeSituacao, colorClass, borderClass } = infoSituacao(nota.situacao);
+  const { Icon: IconeSituacao, colorClass } = infoSituacao(nota.situacao);
+  const ehProduto = tipo === 'produtos';
+  const ehServico = tipo === 'servicos';
   return (
-    // border-l-2 sempre presente (mesmo transparente em "Emitida") pra não
-    // deslocar o conteúdo 2px entre uma linha e outra — só a cor muda.
-    <tr className={`border-b border-gray-50 border-l-2 last:border-0 ${borderClass}`}>
-      {/* pl-14: nível 3 do drilldown (Certificado → Produtos/Serviços →
-          Nota) — mesmo recuo da etapa em GestaoParcelasTab.jsx, só a
-          primeira coluna cresce, o resto mantém alinhamento normal. */}
-      <td className="py-1.5 pl-14 pr-3">
-        <input
-          type="checkbox"
-          checked={selecionada}
-          onChange={onToggleSelecionada}
-          className="h-3.5 w-3.5 rounded border-gray-300 text-primary-600 focus:ring-primary-100"
-        />
+    <tr className="bg-white hover:bg-gray-50">
+      {/* pl-14: nível 2 do drilldown (Certificado → Nota) — mesmo recuo da
+          etapa em GestaoParcelasTab.jsx. */}
+      <td className={`${DIV_H} py-2 pl-14 pr-3`}>
+        <span className="flex items-center gap-2">
+          <input
+            type="checkbox"
+            checked={selecionada}
+            onChange={onToggleSelecionada}
+            className="h-3.5 w-3.5 shrink-0 rounded border-gray-300 text-primary-600 focus:ring-primary-100"
+          />
+          <span className="truncate font-mono text-gray-600">
+            {nota.numero_nota || '—'}
+            {nota.serie_nota && <span className="text-gray-400"> / {nota.serie_nota}</span>}
+          </span>
+        </span>
       </td>
-      <td className="py-1.5 px-3 font-mono text-xs text-gray-600 whitespace-nowrap">
-        {nota.numero_nota || '—'}
-        {nota.serie_nota && <span className="text-gray-400"> / {nota.serie_nota}</span>}
+      <td
+        className={`${DIV_H} ${DIV_V} py-2 text-center ${ehProduto ? 'bg-primary-50 text-primary-600' : 'text-gray-300'}`}
+      >
+        <Package size={14} className="inline" />
       </td>
-      <td className="py-1.5 px-3 text-gray-900">{nota.emissor || '—'}</td>
-      <td className="py-1.5 px-3 text-gray-600">{formatarData(nota.data_emissao)}</td>
-      <td className="py-1.5 px-3">
+      <td
+        className={`${DIV_H} ${DIV_V} py-2 text-center ${ehServico ? 'bg-violet-50 text-violet-600' : 'text-gray-300'}`}
+      >
+        <Wrench size={14} className="inline" />
+      </td>
+      <td className={`${DIV_H} ${DIV_V} truncate px-3 py-2 text-left text-gray-900`}>{nota.emissor || '—'}</td>
+      <td className={`${DIV_H} ${DIV_V} px-2 py-2 text-center text-gray-600`}>{formatarData(nota.data_emissao)}</td>
+      <td className={`${DIV_H} ${DIV_V} px-2 py-2 text-center`}>
         {!nota.situacao || nota.situacao === 'Emitida' ? (
-          <span className="text-xs text-gray-400">Emitida</span>
+          <span className="text-gray-400">Emitida</span>
         ) : (
           <div className="group relative inline-block">
-            <IconeSituacao size={17} className={colorClass} />
+            <IconeSituacao size={15} className={`inline ${colorClass}`} />
             {/* Abre pra cima e pra esquerda: a coluna fica perto da borda
                 direita da tabela, e não dá pra saber se é uma das últimas
                 linhas do certificado (a tabela inteira rola junto agora). */}
@@ -211,11 +242,11 @@ function LinhaNota({
         )}
       </td>
       {modoInativas && (
-        <td className="py-1.5 px-3">
+        <td className={`${DIV_H} ${DIV_V} px-2 py-2 text-center`}>
           {/* Hover mostra o motivo dado pelo usuário na hora da inativação. */}
           <div className="group relative inline-block">
-            <span className="inline-flex items-center gap-1.5 rounded-full bg-red-100 px-2.5 py-0.5 text-xs font-semibold text-red-700">
-              <User size={12} />
+            <span className="inline-flex items-center gap-1 rounded-full bg-red-100 px-2 py-0.5 text-[11px] font-semibold text-red-700">
+              <User size={11} />
               {nota.inativada_por_nome || 'Usuário removido'}
             </span>
             <div className="pointer-events-none absolute bottom-full right-0 z-30 mb-1.5 hidden w-64 rounded-lg bg-gray-900 px-3 py-2 text-xs leading-snug text-white shadow-lg group-hover:block">
@@ -229,30 +260,35 @@ function LinhaNota({
           </div>
         </td>
       )}
-      <td className="py-1.5 pl-3 pr-5 text-right">
-        <div className="flex items-center justify-end gap-1">
-          {/* Spinner no lugar do ícone enquanto baixa — antes não tinha
-              nenhum retorno visual entre o clique e o arquivo aparecer. */}
-          <button
-            type="button"
-            title="Baixar PDF"
-            onClick={onBaixarPdf}
-            disabled={baixandoPdf}
-            className="inline-flex h-8 w-8 items-center justify-center rounded-md text-gray-400 hover:bg-gray-100 hover:text-primary-600 disabled:opacity-60 disabled:hover:bg-transparent"
-          >
-            {baixandoPdf ? <Loader2 size={14} className="animate-spin" /> : <FileText size={14} />}
-          </button>
-          <button
-            type="button"
-            title="Baixar XML"
-            onClick={onBaixar}
-            disabled={baixandoXml}
-            className="inline-flex h-8 w-8 items-center justify-center rounded-md text-gray-400 hover:bg-gray-100 hover:text-primary-600 disabled:opacity-60 disabled:hover:bg-transparent"
-          >
-            {baixandoXml ? <Loader2 size={14} className="animate-spin" /> : <Download size={14} />}
-          </button>
-        </div>
+      <td className={`${DIV_H} ${DIV_V} text-center`}>
+        {/* Spinner no lugar do ícone enquanto baixa — antes não tinha
+            nenhum retorno visual entre o clique e o arquivo aparecer. */}
+        <button
+          type="button"
+          title="Baixar PDF"
+          onClick={onBaixarPdf}
+          disabled={baixandoPdf}
+          className="inline-flex h-7 w-7 items-center justify-center rounded-md text-gray-400 hover:bg-gray-100 hover:text-primary-600 disabled:opacity-60 disabled:hover:bg-transparent"
+        >
+          {baixandoPdf ? <Loader2 size={13} className="animate-spin" /> : <FileText size={13} />}
+        </button>
       </td>
+      <td className={`${DIV_H} ${DIV_V} text-center`}>
+        <button
+          type="button"
+          title="Baixar XML"
+          onClick={onBaixar}
+          disabled={baixandoXml}
+          className="inline-flex h-7 w-7 items-center justify-center rounded-md text-gray-400 hover:bg-gray-100 hover:text-primary-600 disabled:opacity-60 disabled:hover:bg-transparent"
+        >
+          {baixandoXml ? <Loader2 size={13} className="animate-spin" /> : <Download size={13} />}
+        </button>
+      </td>
+      {/* Consulta/Atualizar só existem no Nível 1 (certificado) — em branco
+          aqui, mesma regra de Título/Vencimento em branco no Nível 1 de
+          GestaoParcelasTab.jsx. */}
+      <td className={`${DIV_H} ${DIV_V}`}></td>
+      <td className={`${DIV_H} ${DIV_V}`}></td>
     </tr>
   );
 }
@@ -295,38 +331,11 @@ export default function EspiaoNfeNfsePage() {
   // independente em cada aba, já que Novas/Cientes/Inativas mostram um
   // recorte diferente das notas dele.
   const [abertos, setAbertos] = useState(new Set());
-  // Nível 2 (Produtos/Serviços) — chave `${abaNotas}:${certificadoId}:produtos`
-  // ou `...:servicos`, independente por certificado E por aba: dá pra abrir
-  // só Produtos de um certificado e só Serviços de outro ao mesmo tempo, sem
-  // vazar entre abas.
-  const [secoesAbertas, setSecoesAbertas] = useState(new Set());
 
   function toggleAberto(certificadoId) {
     const chave = `${abaNotas}:${certificadoId}`;
     setAbertos((prev) => {
       const next = new Set(prev);
-      if (next.has(chave)) {
-        next.delete(chave);
-        // Fecha junto o nível 2 deste certificado (nesta aba), senão
-        // reabrir o certificado depois já viria com Produtos/Serviços
-        // expandidos.
-        setSecoesAbertas((prevSecoes) => {
-          const nextSecoes = new Set(prevSecoes);
-          nextSecoes.delete(`${chave}:produtos`);
-          nextSecoes.delete(`${chave}:servicos`);
-          return nextSecoes;
-        });
-      } else {
-        next.add(chave);
-      }
-      return next;
-    });
-  }
-
-  function toggleSecao(certificadoId, tipo) {
-    setSecoesAbertas((prev) => {
-      const next = new Set(prev);
-      const chave = `${abaNotas}:${certificadoId}:${tipo}`;
       if (next.has(chave)) next.delete(chave);
       else next.add(chave);
       return next;
@@ -506,10 +515,9 @@ export default function EspiaoNfeNfsePage() {
 
   // Filtro (data ou texto) mudou: o resultado por trás muda, então o que
   // estava aberto não corresponde mais ao que a tela vai mostrar — fecha
-  // tudo em vez de deixar seção/certificado aberto com dado desatualizado.
+  // tudo em vez de deixar certificado aberto com dado desatualizado.
   useEffect(() => {
     setAbertos(new Set());
-    setSecoesAbertas(new Set());
   }, [dataInicio, dataFim, filtros]);
 
   function limparFiltros() {
@@ -650,23 +658,6 @@ export default function EspiaoNfeNfsePage() {
       } else {
         next.set(nota.id, { certificadoId, tipo });
       }
-      return next;
-    });
-  }
-
-  // Checkbox "selecionar todas" do cabeçalho de uma seção (ver
-  // CabecalhoNotas) — se já estão todas marcadas, desmarca todas; senão,
-  // marca as que faltam. Sempre olha pro estado atual (prev), não pro
-  // `checked` que a UI calculou no último render, pra não perder cliques em
-  // sequência rápida.
-  function toggleTodasNaSecao(certificadoId, tipo, notasDaSecao) {
-    setSelecionadas((prev) => {
-      const next = new Map(prev);
-      const todasSelecionadas = notasDaSecao.length > 0 && notasDaSecao.every((n) => next.has(n.id));
-      notasDaSecao.forEach((nota) => {
-        if (todasSelecionadas) next.delete(nota.id);
-        else next.set(nota.id, { certificadoId, tipo });
-      });
       return next;
     });
   }
@@ -865,10 +856,9 @@ export default function EspiaoNfeNfsePage() {
     }
   }
 
-  // Checkbox + Nº/Série + Emissor + Emissão + Situação + [Inativada por] +
-  // Ações — quantas colunas a tabela única tem, pro colSpan das linhas de
-  // seção (certificado, Produtos, Serviços).
-  const totalColunas = modoInativas ? 7 : 6;
+  // Quantas colunas a tabela tem (ver COLUNAS_PADRAO/COLUNAS_INATIVAS) — só
+  // usado pro colSpan da linha de "Carregando notas...".
+  const totalColunas = modoInativas ? COLUNAS_INATIVAS.length : COLUNAS_PADRAO.length;
 
   // A caixa "Sem nota no período" só faz sentido em "Novas Notas" — é onde
   // se quer saber quais certificados não têm nada de novo pra revisar. Nas
@@ -892,8 +882,6 @@ export default function EspiaoNfeNfsePage() {
     const carregandoNotas = Boolean(loadingNotas[certificado.id]);
     const emConsulta = Boolean(consultando[certificado.id]);
     const aberto = abertos.has(`${abaNotas}:${certificado.id}`);
-    const produtosAberto = secoesAbertas.has(`${abaNotas}:${certificado.id}:produtos`);
-    const servicosAberto = secoesAbertas.has(`${abaNotas}:${certificado.id}:servicos`);
     // Enquanto ainda não carregou, mostra "…" em vez de um
     // número errado.
     const totalNfeCard = produtosVisiveis ? produtosVisiveis.length : null;
@@ -909,6 +897,15 @@ export default function EspiaoNfeNfsePage() {
     const diasVencimento = diasParaVencer(certificado.validade_ate);
     const vencendoEmBreve = !vencido && diasVencimento !== null && diasVencimento <= DIAS_AVISO_VENCIMENTO;
 
+    // Produtos e serviços combinados numa lista só (produtos primeiro,
+    // depois serviços) — não existe mais uma linha de seção própria pra
+    // cada um; cada nota carrega seu `tipo` pra LinhaNota saber qual das 2
+    // colunas de ícone (Produto/Serviço) colorir.
+    const notasCombinadas = [
+      ...(produtosVisiveis || []).map((nota) => ({ nota, tipo: 'produtos' })),
+      ...(servicosVisiveis || []).map((nota) => ({ nota, tipo: 'servicos' })),
+    ];
+
     return (
       <tbody key={certificado.id}>
         {/* Aberto usa bg-gray-100 em qualquer aba — mesmo tom neutro do
@@ -916,14 +913,12 @@ export default function EspiaoNfeNfsePage() {
             fonte, mesmo fundo da tabela de gestão de parcelas"). `vencido`
             (certificado expirado) sempre vence, em qualquer aba. */}
         <tr className={vencido ? 'bg-red-50' : aberto ? 'bg-gray-100' : 'bg-white'}>
-          <td colSpan={totalColunas} className="px-5 py-2.5">
-            <div className="flex flex-wrap items-center gap-x-3 gap-y-1.5">
-              {/* Fechado por padrão (ver `abertos` — começa
-                  vazio) — as notas já estão carregadas de
-                  qualquer jeito, abrir só mostra as linhas.
-                  Mesmo tamanho do "+" do nível 2 (Produtos/
-                  Serviços, h-4 w-4, ícone 10) — os dois níveis
-                  usam o mesmo padrão de botão agora. */}
+          <td className={`${DIV_H} py-2.5 pl-3 pr-2`}>
+            <span className="flex items-center gap-2">
+              {/* Fechado por padrão (ver `abertos` — começa vazio) — as
+                  notas já estão carregadas de qualquer jeito, abrir só
+                  mostra as linhas. Mesmo tamanho do "+" do nível 2 — os dois
+                  níveis usam o mesmo padrão de botão. */}
               {semNotas ? (
                 <span className="h-4 w-4 shrink-0" />
               ) : (
@@ -936,236 +931,107 @@ export default function EspiaoNfeNfsePage() {
                   {aberto ? <Minus size={10} /> : <Plus size={10} />}
                 </button>
               )}
-
-              <p className="text-xs text-gray-900">{certificado.nome}</p>
-
-              {/* Canto direito: 5 colunas de largura FIXA (vencimento,
-                  produtos, serviços, última consulta, ação) — cada uma
-                  sempre ocupa o mesmo espaço e centraliza o conteúdo,
-                  mesmo quando o status não se aplica (fica vazia, mas com a
-                  largura reservada) ou quando o número muda de 1 pra 2
-                  dígitos. Sem isso, produtos/serviços "andavam" pra
-                  esquerda/direita de uma linha pra outra, porque cada
-                  badge só tinha a largura do próprio conteúdo. */}
-              <div className="ml-auto grid shrink-0 grid-cols-[140px_56px_56px_130px_170px] items-center gap-2">
-                <div className="flex justify-center">
-                  {vencendoEmBreve && (
-                    <span
-                      title={`Certificado vence em ${diasVencimento} dia${diasVencimento !== 1 ? 's' : ''}`}
-                      className="inline-flex items-center gap-1.5 rounded-full bg-amber-50 px-2.5 py-1 text-xs font-semibold text-amber-700"
-                    >
-                      <Clock size={12} />
-                      Vence em {diasVencimento} dia{diasVencimento !== 1 ? 's' : ''}
-                    </span>
-                  )}
-                </div>
-
-                <div className="flex justify-center">
-                  <span
-                    title={`${totalNfeCard === null ? '…' : totalNfeCard} produto${totalNfeCard !== 1 ? 's' : ''} (NF-e)`}
-                    className={`inline-flex items-center gap-1 rounded-full px-2.5 py-1 text-xs font-semibold ${
-                      totalNfeCard ? 'bg-primary-100 text-primary-700' : 'text-primary-200'
-                    }`}
-                  >
-                    <Package size={12} />
-                    {totalNfeCard === null ? '…' : totalNfeCard}
-                  </span>
-                </div>
-                <div className="flex justify-center">
-                  <span
-                    title={`${totalNfseCard === null ? '…' : totalNfseCard} serviço${totalNfseCard !== 1 ? 's' : ''} (NFS-e)`}
-                    className={`inline-flex items-center gap-1 rounded-full px-2.5 py-1 text-xs font-semibold ${
-                      totalNfseCard ? 'bg-violet-100 text-violet-700' : 'text-violet-200'
-                    }`}
-                  >
-                    <Wrench size={12} />
-                    {totalNfseCard === null ? '…' : totalNfseCard}
-                  </span>
-                </div>
-
-                <div className="flex justify-center">
-                  {!modoInativas && certificado.ultima_consulta_em && (
-                    <span
-                      title={`Última consulta: ${formatarDataHora(certificado.ultima_consulta_em)}`}
-                      className="inline-flex items-center gap-1.5 rounded-full bg-white px-2.5 py-1 text-xs font-medium text-gray-600"
-                    >
-                      <Clock size={12} />
-                      {formatarTempoRelativo(certificado.ultima_consulta_em)}
-                    </span>
-                  )}
-                </div>
-
-                <div className="flex justify-center">
-                  {vencido ? (
-                    <span
-                      title="Certificado vencido — não é possível consultar novas notas com ele"
-                      className="inline-flex items-center gap-1.5 rounded-full bg-red-600 px-3 py-1.5 text-xs font-semibold text-white"
-                    >
-                      <AlertTriangle size={12} />
-                      Certificado vencido
-                    </span>
-                  ) : abaNotas !== 'novas' ? null : certificado.ultima_consulta_em ? (
-                    <IconButton
-                      title="Consultar novamente"
-                      onClick={() => {
-                        if (!emConsulta) handleConsultar(certificado.id);
-                      }}
-                      className="hover:text-primary-600"
-                    >
-                      {emConsulta ? (
-                        <Loader2 size={15} className="animate-spin" />
-                      ) : (
-                        <RefreshCw size={15} />
-                      )}
-                    </IconButton>
-                  ) : (
-                    <span
-                      role="button"
-                      onClick={() => {
-                        if (!emConsulta) handleConsultar(certificado.id);
-                      }}
-                      className={`inline-flex items-center gap-1.5 rounded-full px-3 py-1.5 text-xs font-semibold text-white ${
-                        emConsulta ? 'bg-primary-400' : 'bg-primary-600 hover:bg-primary-700'
-                      }`}
-                    >
-                      {emConsulta ? (
-                        <Loader2 size={12} className="animate-spin" />
-                      ) : (
-                        <RefreshCw size={12} />
-                      )}
-                      Gerar 1ª Consulta
-                    </span>
-                  )}
-                </div>
-              </div>
-            </div>
+              <span className="truncate text-gray-900">{certificado.nome}</span>
+              {vencendoEmBreve && (
+                <span
+                  title={`Certificado vence em ${diasVencimento} dia${diasVencimento !== 1 ? 's' : ''}`}
+                  className="inline-flex shrink-0 items-center text-amber-500"
+                >
+                  <Clock size={13} />
+                </span>
+              )}
+            </span>
+          </td>
+          <td className={`${DIV_H} ${DIV_V} py-2.5 text-center`}>
+            <span
+              title={`${totalNfeCard === null ? '…' : totalNfeCard} produto${totalNfeCard !== 1 ? 's' : ''} (NF-e)`}
+              className={totalNfeCard ? 'font-semibold text-primary-700' : 'text-gray-300'}
+            >
+              {totalNfeCard === null ? '…' : totalNfeCard}
+            </span>
+          </td>
+          <td className={`${DIV_H} ${DIV_V} py-2.5 text-center`}>
+            <span
+              title={`${totalNfseCard === null ? '…' : totalNfseCard} serviço${totalNfseCard !== 1 ? 's' : ''} (NFS-e)`}
+              className={totalNfseCard ? 'font-semibold text-violet-700' : 'text-gray-300'}
+            >
+              {totalNfseCard === null ? '…' : totalNfseCard}
+            </span>
+          </td>
+          {/* Emissor, Emissão, Situação, [Inativada por], PDF, XML só
+              existem no nível 2 (a nota em si) — em branco aqui, mesma
+              regra de Título/Vencimento em branco no Nível 1 de
+              GestaoParcelasTab.jsx. */}
+          <td className={`${DIV_H} ${DIV_V}`}></td>
+          <td className={`${DIV_H} ${DIV_V}`}></td>
+          <td className={`${DIV_H} ${DIV_V}`}></td>
+          {modoInativas && <td className={`${DIV_H} ${DIV_V}`}></td>}
+          <td className={`${DIV_H} ${DIV_V}`}></td>
+          <td className={`${DIV_H} ${DIV_V}`}></td>
+          <td className={`${DIV_H} ${DIV_V} py-2.5 text-center`}>
+            {!modoInativas && certificado.ultima_consulta_em && (
+              <span title={`Última consulta: ${formatarDataHora(certificado.ultima_consulta_em)}`} className="text-gray-500">
+                {formatarTempoRelativo(certificado.ultima_consulta_em)}
+              </span>
+            )}
+          </td>
+          <td className={`${DIV_H} ${DIV_V} py-2.5 text-center`}>
+            {vencido ? (
+              <span
+                title="Certificado vencido — não é possível consultar novas notas com ele"
+                className="inline-flex items-center text-red-600"
+              >
+                <AlertTriangle size={15} />
+              </span>
+            ) : abaNotas !== 'novas' ? null : certificado.ultima_consulta_em ? (
+              <IconButton
+                title="Consultar novamente"
+                onClick={() => {
+                  if (!emConsulta) handleConsultar(certificado.id);
+                }}
+                className="hover:text-primary-600"
+              >
+                {emConsulta ? <Loader2 size={15} className="animate-spin" /> : <RefreshCw size={15} />}
+              </IconButton>
+            ) : (
+              <button
+                type="button"
+                title="Gerar 1ª consulta"
+                onClick={() => {
+                  if (!emConsulta) handleConsultar(certificado.id);
+                }}
+                disabled={emConsulta}
+                className={`inline-flex h-7 w-7 items-center justify-center rounded-md text-white ${
+                  emConsulta ? 'bg-primary-400' : 'bg-primary-600 hover:bg-primary-700'
+                }`}
+              >
+                {emConsulta ? <Loader2 size={13} className="animate-spin" /> : <RefreshCw size={13} />}
+              </button>
+            )}
           </td>
         </tr>
 
         {!aberto ? null : carregandoNotas ? (
           <tr>
-            <td colSpan={totalColunas} className="px-5 py-6 text-center text-xs text-gray-400">
+            <td colSpan={totalColunas} className={`${DIV_H} px-5 py-6 text-center text-gray-400`}>
               Carregando notas...
             </td>
           </tr>
         ) : (
-          <>
-            {/* Nível 2: linha de Produtos, com "+/−" próprio
-                (pl-9 — mesmo recuo do Cluster em
-                GestaoParcelasTab.jsx, mesmo tamanho de botão
-                também: h-4 w-4, ícone 10). Só existe quando tem
-                pelo menos 1 produto (sem nenhum, não precisa
-                mostrar a linha em vão). Mesma cor do nível 1 quando
-                aberta (bg-gray-100 — ver renderCertificado) —
-                border-t marca a virada de nível. Só o botão "+/−"
-                abre/fecha (a linha inteira não é mais clicável, igual ao
-                nível 1). */}
-            {totalNfeCard > 0 && (
-              <>
-                <tr
-                  className={`border-t border-t-gray-200 border-b border-b-gray-50 ${
-                    produtosAberto ? 'bg-gray-100' : 'bg-white'
-                  }`}
-                >
-                  <td colSpan={totalColunas} className="py-2 pl-9 pr-5">
-                    <span className="inline-flex items-center gap-2 text-xs font-semibold text-gray-500">
-                      <button
-                        type="button"
-                        onClick={() => toggleSecao(certificado.id, 'produtos')}
-                        title={produtosAberto ? 'Recolher' : 'Expandir'}
-                        className="flex h-4 w-4 shrink-0 items-center justify-center rounded bg-primary-100 text-primary-600"
-                      >
-                        {produtosAberto ? <Minus size={10} /> : <Plus size={10} />}
-                      </button>
-                      <Package size={13} />
-                      Produtos (NF-e) · {totalNfeCard}
-                    </span>
-                  </td>
-                </tr>
-                {produtosAberto && (
-                  <>
-                    <CabecalhoNotas
-                      modoInativas={modoInativas}
-                      checked={produtosVisiveis.every((n) => selecionadas.has(n.id))}
-                      indeterminate={
-                        produtosVisiveis.some((n) => selecionadas.has(n.id)) &&
-                        !produtosVisiveis.every((n) => selecionadas.has(n.id))
-                      }
-                      onToggleTodas={() => toggleTodasNaSecao(certificado.id, 'produtos', produtosVisiveis)}
-                    />
-                    {produtosVisiveis.map((nota) => (
-                      <LinhaNota
-                        key={nota.id}
-                        nota={nota}
-                        modoInativas={modoInativas}
-                        selecionada={selecionadas.has(nota.id)}
-                        onToggleSelecionada={() => toggleSelecionada(certificado.id, 'produtos', nota)}
-                        onBaixarPdf={() => handleDownloadPdf(nota)}
-                        onBaixar={() => handleDownload(nota)}
-                        baixandoPdf={baixando.has(`${nota.id}:pdf`)}
-                        baixandoXml={baixando.has(`${nota.id}:xml`)}
-                      />
-                    ))}
-                  </>
-                )}
-              </>
-            )}
-
-            {/* Nível 2: linha de Serviços, independente da de
-                Produtos acima (cada uma com seu próprio estado
-                em secoesAbertas) — mesma regra: só existe quando
-                tem pelo menos 1 serviço. */}
-            {totalNfseCard > 0 && (
-              <>
-                <tr
-                  className={`border-t border-t-gray-100 border-b border-b-gray-50 ${
-                    servicosAberto ? 'bg-gray-100' : 'bg-white'
-                  }`}
-                >
-                  <td colSpan={totalColunas} className="py-2 pl-9 pr-5">
-                    <span className="inline-flex items-center gap-2 text-xs font-semibold text-gray-500">
-                      <button
-                        type="button"
-                        onClick={() => toggleSecao(certificado.id, 'servicos')}
-                        title={servicosAberto ? 'Recolher' : 'Expandir'}
-                        className="flex h-4 w-4 shrink-0 items-center justify-center rounded bg-primary-100 text-primary-600"
-                      >
-                        {servicosAberto ? <Minus size={10} /> : <Plus size={10} />}
-                      </button>
-                      <Wrench size={13} />
-                      Serviços (NFS-e) · {totalNfseCard}
-                    </span>
-                  </td>
-                </tr>
-                {servicosAberto && (
-                  <>
-                    <CabecalhoNotas
-                      modoInativas={modoInativas}
-                      checked={servicosVisiveis.every((n) => selecionadas.has(n.id))}
-                      indeterminate={
-                        servicosVisiveis.some((n) => selecionadas.has(n.id)) &&
-                        !servicosVisiveis.every((n) => selecionadas.has(n.id))
-                      }
-                      onToggleTodas={() => toggleTodasNaSecao(certificado.id, 'servicos', servicosVisiveis)}
-                    />
-                    {servicosVisiveis.map((nota) => (
-                      <LinhaNota
-                        key={nota.id}
-                        nota={nota}
-                        modoInativas={modoInativas}
-                        selecionada={selecionadas.has(nota.id)}
-                        onToggleSelecionada={() => toggleSelecionada(certificado.id, 'servicos', nota)}
-                        onBaixarPdf={() => handleDownloadPdf(nota)}
-                        onBaixar={() => handleDownload(nota)}
-                        baixandoPdf={baixando.has(`${nota.id}:pdf`)}
-                        baixandoXml={baixando.has(`${nota.id}:xml`)}
-                      />
-                    ))}
-                  </>
-                )}
-              </>
-            )}
-          </>
+          notasCombinadas.map(({ nota, tipo }) => (
+            <LinhaNota
+              key={nota.id}
+              nota={nota}
+              tipo={tipo}
+              modoInativas={modoInativas}
+              selecionada={selecionadas.has(nota.id)}
+              onToggleSelecionada={() => toggleSelecionada(certificado.id, tipo, nota)}
+              onBaixarPdf={() => handleDownloadPdf(nota)}
+              onBaixar={() => handleDownload(nota)}
+              baixandoPdf={baixando.has(`${nota.id}:pdf`)}
+              baixandoXml={baixando.has(`${nota.id}:xml`)}
+            />
+          ))
         )}
       </tbody>
     );
@@ -1307,21 +1173,36 @@ export default function EspiaoNfeNfsePage() {
                     de 3 níveis de sempre (mesmo espírito de
                     GestaoParcelasTab.jsx: cada nível é mais uma <tr>, só
                     com mais recuo, nunca uma tabela aninhada à parte, e
-                    cada nível com seu próprio "+/−"): Certificado → Produtos/
-                    Serviços → Nota. Sem <thead> fixo — o cabeçalho de
-                    coluna (CabecalhoNotas) só existe logo acima das notas.
-                    Só aparece quando tem pelo menos 1 certificado com nota;
-                    senão a Caixa 2 (só em Novas Notas, ver
-                    mostrarCaixaSemNotas) já cobre a tela sozinha. */}
+                    cada nível com seu próprio "+/−"): Certificado → Nota.
+                    Cabeçalho único (CabecalhoTabela), sticky, igual à
+                    Gestão das Parcelas. Só aparece quando tem pelo menos 1
+                    certificado com nota; senão a Caixa 2 (só em Novas
+                    Notas, ver mostrarCaixaSemNotas) já cobre a tela
+                    sozinha. */}
                 {certificadosAgrupados.comNotas.length > 0 && (
-                  <Card className="rounded-tl-none !p-0 overflow-hidden">
-                    <div className="overflow-x-auto">
-                      <table className="w-full text-left text-xs">
+                  <Card className="rounded-tl-none">
+                    {/* Nenhum wrapper com overflow próprio aqui — mesmo
+                        motivo de GestaoParcelasTab.jsx: qualquer overflow
+                        diferente de visible neste meio de caminho vira o
+                        "teto" onde o sticky do thead passa a colar, em vez
+                        do <main> da página (que é quem de fato deve rolar,
+                        único lugar com barra de rolagem). */}
+                    <div>
+                      <table
+                        className="w-full border-separate border-spacing-0 text-left text-xs"
+                        style={{ tableLayout: 'fixed' }}
+                      >
+                        <colgroup>
+                          {(modoInativas ? COLUNAS_INATIVAS : COLUNAS_PADRAO).map((pct, i) => (
+                            <col key={i} style={{ width: `${pct}%` }} />
+                          ))}
+                        </colgroup>
+                        <CabecalhoTabela modoInativas={modoInativas} />
                         {filtrando && (
                           <tbody>
                             <tr>
-                              <td colSpan={totalColunas} className="px-5 py-2.5">
-                                <p className="flex items-center gap-1.5 text-xs text-gray-400">
+                              <td colSpan={totalColunas} className={`${DIV_H} px-3 py-2.5`}>
+                                <p className="flex items-center gap-1.5 text-gray-400">
                                   <Loader2 size={12} className="animate-spin" />
                                   Verificando notas em todos os certificados...
                                 </p>
@@ -1345,16 +1226,27 @@ export default function EspiaoNfeNfsePage() {
                     acima) não tem espaçamento automático entre os filhos. */}
                 {mostrarCaixaSemNotas && (
                   <Card
-                    className={`!p-0 overflow-hidden ${
-                      certificadosAgrupados.comNotas.length === 0 ? 'rounded-tl-none' : 'mt-4'
+                    className={`rounded-tl-none ${
+                      certificadosAgrupados.comNotas.length > 0 ? 'mt-4' : ''
                     }`}
                   >
-                    <div className="border-b border-gray-100 px-5 py-3 text-xs font-medium text-gray-400">
+                    <div className="mb-3 text-xs font-medium text-gray-400">
                       Sem nota no período selecionado · {certificadosAgrupados.semNotas.length} certificado
                       {certificadosAgrupados.semNotas.length !== 1 ? 's' : ''}
                     </div>
-                    <div className="overflow-x-auto">
-                      <table className="w-full text-left text-xs">{certificadosAgrupados.semNotas.map(renderCertificado)}</table>
+                    <div>
+                      <table
+                        className="w-full border-separate border-spacing-0 text-left text-xs"
+                        style={{ tableLayout: 'fixed' }}
+                      >
+                        <colgroup>
+                          {(modoInativas ? COLUNAS_INATIVAS : COLUNAS_PADRAO).map((pct, i) => (
+                            <col key={i} style={{ width: `${pct}%` }} />
+                          ))}
+                        </colgroup>
+                        <CabecalhoTabela modoInativas={modoInativas} />
+                        {certificadosAgrupados.semNotas.map(renderCertificado)}
+                      </table>
                     </div>
                   </Card>
                 )}
