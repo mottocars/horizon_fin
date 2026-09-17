@@ -911,11 +911,13 @@ export default function EspiaoNfeNfsePage() {
 
     return (
       <tbody key={certificado.id}>
-        {/* Aberto usa uma cor própria (primary-50) — diferente do cinza do
-            nível 2 (produtos/serviços aberto) — pra dar pra diferenciar de
-            relance qual nível está aberto quando os dois estão ao mesmo
-            tempo. */}
-        <tr className={vencido ? 'bg-red-50' : aberto ? 'bg-primary-50' : 'bg-white'}>
+        {/* Aberto usa bg-primary-50 (azul clarinho) nas abas Novas Notas/
+            Cientes; na aba Inativas usa bg-gray-100 — mesmo tom neutro do
+            nível aberto em Gestão das Parcelas (pedido do usuário: "as
+            cores quando os níveis abrem na gestão de parcelas"), já que ali
+            o cinza marca "arquivado", não "ativo". `vencido` (certificado
+            expirado) sempre vence os dois, em qualquer aba. */}
+        <tr className={vencido ? 'bg-red-50' : aberto ? (modoInativas ? 'bg-gray-100' : 'bg-primary-50') : 'bg-white'}>
           <td colSpan={totalColunas} className="px-5 py-2.5">
             <div className="flex flex-wrap items-center gap-x-3 gap-y-1.5">
               {/* Fechado por padrão (ver `abertos` — começa
@@ -931,7 +933,7 @@ export default function EspiaoNfeNfsePage() {
                   type="button"
                   onClick={() => toggleAberto(certificado.id)}
                   title={aberto ? 'Recolher' : 'Expandir'}
-                  className="flex h-4 w-4 shrink-0 items-center justify-center rounded border border-gray-300 text-gray-500 hover:border-primary-300 hover:text-primary-600"
+                  className="flex h-4 w-4 shrink-0 items-center justify-center rounded bg-primary-100 text-primary-600"
                 >
                   {aberto ? <Minus size={10} /> : <Plus size={10} />}
                 </button>
@@ -1055,8 +1057,9 @@ export default function EspiaoNfeNfsePage() {
                 GestaoParcelasTab.jsx, mesmo tamanho de botão
                 também: h-4 w-4, ícone 10). Só existe quando tem
                 pelo menos 1 produto (sem nenhum, não precisa
-                mostrar a linha em vão). Mesmo azul do nível 1
-                (primary-50) quando aberta — border-t marca a
+                mostrar a linha em vão). Mesma cor do nível 1 quando
+                aberta (primary-50 nas abas Novas/Cientes, gray-100 em
+                Inativas — ver renderCertificado) — border-t marca a
                 virada de nível. Só o botão "+/−" abre/fecha (a
                 linha inteira não é mais clicável, igual ao
                 nível 1). */}
@@ -1064,7 +1067,7 @@ export default function EspiaoNfeNfsePage() {
               <>
                 <tr
                   className={`border-t border-t-gray-200 border-b border-b-gray-50 ${
-                    produtosAberto ? 'bg-primary-50' : 'bg-white'
+                    produtosAberto ? (modoInativas ? 'bg-gray-100' : 'bg-primary-50') : 'bg-white'
                   }`}
                 >
                   <td colSpan={totalColunas} className="py-2 pl-9 pr-5">
@@ -1073,7 +1076,7 @@ export default function EspiaoNfeNfsePage() {
                         type="button"
                         onClick={() => toggleSecao(certificado.id, 'produtos')}
                         title={produtosAberto ? 'Recolher' : 'Expandir'}
-                        className="flex h-4 w-4 shrink-0 items-center justify-center rounded border border-gray-300 text-gray-500 hover:border-primary-300 hover:text-primary-600"
+                        className="flex h-4 w-4 shrink-0 items-center justify-center rounded bg-primary-100 text-primary-600"
                       >
                         {produtosAberto ? <Minus size={10} /> : <Plus size={10} />}
                       </button>
@@ -1119,7 +1122,7 @@ export default function EspiaoNfeNfsePage() {
               <>
                 <tr
                   className={`border-t border-t-gray-100 border-b border-b-gray-50 ${
-                    servicosAberto ? 'bg-primary-50' : 'bg-white'
+                    servicosAberto ? (modoInativas ? 'bg-gray-100' : 'bg-primary-50') : 'bg-white'
                   }`}
                 >
                   <td colSpan={totalColunas} className="py-2 pl-9 pr-5">
@@ -1128,7 +1131,7 @@ export default function EspiaoNfeNfsePage() {
                         type="button"
                         onClick={() => toggleSecao(certificado.id, 'servicos')}
                         title={servicosAberto ? 'Recolher' : 'Expandir'}
-                        className="flex h-4 w-4 shrink-0 items-center justify-center rounded border border-gray-300 text-gray-500 hover:border-primary-300 hover:text-primary-600"
+                        className="flex h-4 w-4 shrink-0 items-center justify-center rounded bg-primary-100 text-primary-600"
                       >
                         {servicosAberto ? <Minus size={10} /> : <Plus size={10} />}
                       </button>

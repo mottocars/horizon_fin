@@ -222,8 +222,8 @@ export default function ClientesTab({ empresaId, centroCustoIds = [], busca = ''
                     >
                       <td className="py-3 pl-3 text-gray-900">
                         <span className="flex items-center gap-2">
-                          <span className="flex h-5 w-5 shrink-0 items-center justify-center rounded border border-gray-200 text-gray-500">
-                            {expandido ? <Minus size={12} /> : <Plus size={12} />}
+                          <span className="flex h-4 w-4 shrink-0 items-center justify-center rounded bg-primary-100 text-primary-600">
+                            {expandido ? <Minus size={10} /> : <Plus size={10} />}
                           </span>
                           {centro.cost_center_name}
                         </span>
