@@ -17,8 +17,8 @@ import {
   formatarData,
 } from '../ClustersCobranca/constantes';
 
-// Nome(1) + Título(1) + Vencimento(1) + clusters/status(4) + valores(3).
-const TOTAL_COLUNAS = 3 + CLUSTER_ORDEM.length + 3;
+// Nome(1) + Título(1) + Vencimento(1) + clusters/status(4) + valores(3) + Etapa(1).
+const TOTAL_COLUNAS = 3 + CLUSTER_ORDEM.length + 3 + 1;
 
 // Divisores da grade — mesmo tom (gray-200) nos dois sentidos, de propósito
 // (pedido do usuário: "escureça também com o mesmo tom" a linha que já
@@ -75,8 +75,11 @@ const STATUS_PARCELA = {
 // dele, cinza nas outras); Nível 3, ao abrir um título, lista as parcelas
 // individuais dele — aqui a coluna de cluster vira status (paga em dia/com
 // atraso/inadimplente) e a de Título mostra bill_id/parcela, igual à aba
-// Rotinas. Etapa da régua/responsável/canais saíram da tela por enquanto
-// (retomamos depois).
+// Rotinas. A coluna Etapa (última) mostra em qual etapa da régua de
+// cobrança o título/parcela está agora (calculada no backend a partir do
+// vencimento — ver gestaoParcelas.service.js::acharEtapaAtiva); só existe
+// pra parcela em aberto (vencida ou a vencer) — paga fica em branco.
+// Responsável/canais continuam fora da tela por enquanto (retomamos depois).
 export default function GestaoParcelasTab({
   empresaId,
   centroCustoIds = [],
@@ -278,8 +281,22 @@ export default function GestaoParcelasTab({
             {/* text-xs na tabela inteira (era text-sm) — pedido do usuário:
                 fontes um pouco menores, pra abrir espaço pra próxima coluna
                 (Etapas) que ainda vai entrar. Boa parte da tabela (Nível 2/3)
-                já usava text-xs antes; agora fica uniforme em todo canto. */}
-            <table className="border-separate border-spacing-0 text-left text-xs" style={{ tableLayout: 'fixed' }}>
+                já usava text-xs antes; agora fica uniforme em todo canto.
+                width: 1440px (a SOMA exata de todas as larguras do colgroup
+                abaixo — se alguma mudar, este número precisa acompanhar):
+                sem uma largura explícita, o navegador trata a largura da
+                tabela como 'auto' (estica pra caber no card) e, ao
+                distribuir essa sobra entre as colunas de table-layout:fixed,
+                deixa de ignorar o conteúdo só pra achar a largura total —
+                foi o que fez a coluna Etapa (com um nome de etapa comprido,
+                sem quebrar linha) ficar bem mais larga que os 144px (w-36)
+                pedidos pra ela. Com a largura do total já fechada aqui, a
+                distribuição interna volta a respeitar exatamente cada
+                coluna do colgroup, conteúdo nenhum influencia mais nada. */}
+            <table
+              className="border-separate border-spacing-0 text-left text-xs"
+              style={{ tableLayout: 'fixed', width: '1440px' }}
+            >
               <colgroup>
                 <col className="w-96" />
                 <col className="w-10" />
@@ -291,6 +308,7 @@ export default function GestaoParcelasTab({
                 <col className="w-44" />
                 <col className="w-44" />
                 <col className="w-44" />
+                <col className="w-36" />
               </colgroup>
               <thead className="sticky top-0 z-10 bg-white shadow-sm">
                 <tr className="text-xs uppercase tracking-wide text-gray-400">
@@ -308,6 +326,7 @@ export default function GestaoParcelasTab({
                   <th className={`${DIV_H_CABECALHO} ${DIV_V} px-2 py-2.5 text-center font-medium`}>Pagas</th>
                   <th className={`${DIV_H_CABECALHO} ${DIV_V} px-2 py-2.5 text-center font-medium`}>Vencidas</th>
                   <th className={`${DIV_H_CABECALHO} ${DIV_V} px-2 py-2.5 text-center font-medium`}>A vencer</th>
+                  <th className={`${DIV_H_CABECALHO} ${DIV_V} px-2 py-2.5 text-center font-medium`}>Etapa</th>
                 </tr>
               </thead>
               <tbody>
@@ -337,6 +356,7 @@ export default function GestaoParcelasTab({
                         <td className={`${DIV_H} ${DIV_V} px-2 py-3 text-center tabular-nums text-gray-700`}>{formatarMoedaSemCentavos(centro.valor_pago)}</td>
                         <td className={`${DIV_H} ${DIV_V} px-2 py-3 text-center tabular-nums text-red-600`}>{formatarMoedaSemCentavos(centro.valor_vencido)}</td>
                         <td className={`${DIV_H} ${DIV_V} px-2 py-3 text-center tabular-nums text-gray-700`}>{formatarMoedaSemCentavos(centro.valor_a_vencer)}</td>
+                        <td className={`${DIV_H} ${DIV_V} px-2 py-3 text-center`}></td>
                       </tr>
 
                       {centroAberto && carregandoClientes && (
@@ -391,6 +411,12 @@ export default function GestaoParcelasTab({
                                 <td className={`${DIV_H} ${DIV_V} px-2 py-2.5 text-center tabular-nums text-gray-700`}>{formatarMoedaSemCentavos(cliente.valor_pago)}</td>
                                 <td className={`${DIV_H} ${DIV_V} px-2 py-2.5 text-center tabular-nums text-red-600`}>{formatarMoedaSemCentavos(cliente.valor_vencido)}</td>
                                 <td className={`${DIV_H} ${DIV_V} px-2 py-2.5 text-center tabular-nums text-gray-700`}>{formatarMoedaSemCentavos(cliente.valor_a_vencer)}</td>
+                                <td
+                                  className={`${DIV_H} ${DIV_V} truncate px-2 py-2.5 text-center text-gray-600`}
+                                  title={cliente.etapa_nome || ''}
+                                >
+                                  {cliente.etapa_nome || '—'}
+                                </td>
                               </tr>
 
                               {clienteAberto && carregandoParcelas && (
@@ -456,6 +482,12 @@ export default function GestaoParcelasTab({
                                       <td className={`${DIV_H} ${DIV_V} px-2 py-2 text-center text-xs tabular-nums text-gray-700`}>{formatarMoedaSemCentavos(parcela.valor_pago)}</td>
                                       <td className={`${DIV_H} ${DIV_V} px-2 py-2 text-center text-xs tabular-nums text-red-600`}>{formatarMoedaSemCentavos(parcela.valor_vencido)}</td>
                                       <td className={`${DIV_H} ${DIV_V} px-2 py-2 text-center text-xs tabular-nums text-gray-700`}>{formatarMoedaSemCentavos(parcela.valor_a_vencer)}</td>
+                                      <td
+                                        className={`${DIV_H} ${DIV_V} truncate px-2 py-2 text-center text-xs text-gray-600`}
+                                        title={parcela.etapa_nome || ''}
+                                      >
+                                        {parcela.etapa_nome || '—'}
+                                      </td>
                                     </tr>
                                   );
                                 })}

@@ -45,6 +45,39 @@ function badRequest(message) {
   return err;
 }
 
+// Etapas ativas dos 5 clusters (score + 'inad'), buscadas de uma vez só —
+// evita 1 query por parcela quando for achar a etapa de cada uma (ver
+// acharEtapaAtiva). Reaproveitado por buscarLinhasClassificadas (drilldown
+// antigo) e pela coluna "Etapa" da versão nova (buscarParcelasComCluster/
+// listParcelasPorTitulo).
+async function carregarEtapasPorCluster(empresaId) {
+  const etapasPorCluster = {};
+  await Promise.all(
+    CLUSTERS_VALIDOS.map(async (cluster) => {
+      etapasPorCluster[cluster] = await listEtapasAtivasPorCluster(empresaId, cluster);
+    })
+  );
+  return etapasPorCluster;
+}
+
+// Acha a etapa dona deste dia: a de maior `dias` ainda <= diasSigned (etapas
+// já vêm ordenadas ASC — para no primeiro `dias > diasSigned`). A última
+// etapa configurada nunca tem teto (nada com `dias` maior fecha a faixa
+// dela) — pra cluster 'inad' isso é de propósito (parcela inadimplente fica
+// presa na última etapa até ser quitada, nunca "sai" por passar dela — mesmo
+// pedido do usuário: "ficar preso na última etapa até que este título seja
+// quitado"). `null` quando o dia é anterior à 1ª etapa configurada (ou o
+// cluster não tem etapa nenhuma) — fora do range da régua ainda.
+function acharEtapaAtiva(etapasPorCluster, cluster, diasSigned) {
+  const etapas = etapasPorCluster[cluster] || [];
+  let etapa = null;
+  for (const e of etapas) {
+    if (e.dias <= diasSigned) etapa = e;
+    else break;
+  }
+  return etapa;
+}
+
 const CLUSTERS_ZERADOS = { novo: 0, bom: 0, duvidoso: 0, mau: 0, inad: 0 };
 
 // Coração do módulo: lê as parcelas em aberto direto da base crua
@@ -65,13 +98,7 @@ const CLUSTERS_ZERADOS = { novo: 0, bom: 0, duvidoso: 0, mau: 0, inad: 0 };
 // customers.service.js::getResumoPorCentroCusto).
 async function buscarLinhasClassificadas(empresaId, { costCenterIds, search } = {}) {
   const limite = await getLimiteVigente(empresaId);
-
-  const etapasPorCluster = {};
-  await Promise.all(
-    CLUSTERS_VALIDOS.map(async (cluster) => {
-      etapasPorCluster[cluster] = await listEtapasAtivasPorCluster(empresaId, cluster);
-    })
-  );
+  const etapasPorCluster = await carregarEtapasPorCluster(empresaId);
 
   const { rows: clusterRows } = await pool.query(
     'SELECT client_id, cluster FROM cobranca_clientes_clusters WHERE empresa_id = $1',
@@ -131,22 +158,7 @@ async function buscarLinhasClassificadas(empresaId, { costCenterIds, search } = 
       // usuário: "a parcela não inadimplente em mau pagador, e a parcela
       // inadimplente em inadimplência").
       const cluster = diasSigned > limite ? 'inad' : clusterCliente;
-
-      // Acha a etapa dona deste dia: a de maior `dias` ainda <= diasSigned
-      // (etapas já vêm ordenadas ASC — para no primeiro `dias > diasSigned`).
-      // Mesma semântica de faixa contígua do faixaAtiva do frontend, só que
-      // "dado o dia, ache a etapa" em vez do inverso. A última etapa
-      // configurada nunca tem teto (nada com `dias` maior fecha a faixa
-      // dela) — pra cluster 'inad' isso é de propósito (parcela inadimplente
-      // some só quando quitada, nunca por "passar" da última etapa
-      // configurada); pra cluster de score, na prática nunca chega a
-      // importar, porque `diasSigned > limite` já vira 'inad' antes disso.
-      const etapas = etapasPorCluster[cluster] || [];
-      let etapa = null;
-      for (const e of etapas) {
-        if (e.dias <= diasSigned) etapa = e;
-        else break;
-      }
+      const etapa = acharEtapaAtiva(etapasPorCluster, cluster, diasSigned);
 
       // Fora do range da régua deste cluster (antes da 1ª etapa configurada,
       // ou cluster sem etapa nenhuma): a parcela ainda não é "cobrança
@@ -196,6 +208,7 @@ const CLUSTERS_ZERADOS_SCORE = { novo: 0, bom: 0, duvidoso: 0, mau: 0 };
 // tipo escolhido simplesmente não aparecer em nenhum nível.
 async function buscarParcelasComCluster(empresaId, { costCenterIds, search, statusParcela } = {}) {
   const limite = await getLimiteVigente(empresaId);
+  const etapasPorCluster = await carregarEtapasPorCluster(empresaId);
 
   const params = [empresaId, ORIGIN_ID_PADRAO];
   let filtroCentro = '';
@@ -243,14 +256,30 @@ async function buscarParcelasComCluster(empresaId, { costCenterIds, search, stat
     .map((row) => {
       const saldoAberto = Number(row.corrected_balance_amount) || 0;
       const paga = saldoAberto === 0;
+      const diasSigned = diasEntre(row.due_date, hoje);
       let status;
       if (paga) {
         status = row.ultimo_pagamento && new Date(row.ultimo_pagamento) > new Date(row.due_date) ? 'atraso' : 'em_dia';
-      } else if (diasEntre(row.due_date, hoje) > limite) {
+      } else if (diasSigned > limite) {
         status = 'inadimplente';
       } else {
         status = 'a_vencer';
       }
+
+      // Etapa só existe pra parcela em aberto (vencida ou a vencer) — pago
+      // não tem "etapa de cobrança" nenhuma (pedido do usuário: "títulos em
+      // aberto, vencidos e a vencer"). Mesmo roteamento de cluster→régua de
+      // buscarLinhasClassificadas: inadimplente usa a régua 'inad', o resto
+      // usa a régua do cluster de score do cliente. `null` quando o dia
+      // ainda está fora do range configurado da régua (parcela futura demais
+      // pra já ter entrado em cobrança ativa).
+      let etapaNome = null;
+      if (!paga) {
+        const clusterRegua = status === 'inadimplente' ? 'inad' : row.cluster;
+        const etapa = acharEtapaAtiva(etapasPorCluster, clusterRegua, diasSigned);
+        etapaNome = etapa?.nome ?? null;
+      }
+
       return {
         cost_center_id: row.cost_center_id,
         cost_center_name: row.cost_center_name,
@@ -262,6 +291,7 @@ async function buscarParcelasComCluster(empresaId, { costCenterIds, search, stat
         installment_number: row.installment_number,
         cluster: row.cluster,
         status,
+        etapa_nome: etapaNome,
         valor_original: Number(row.original_amount) || 0,
         saldo_aberto: saldoAberto,
       };
@@ -382,6 +412,10 @@ async function listClientesPorCentroCusto(empresaId, costCenterId, filtros = {})
         valor_a_vencer: titulo.valor_a_vencer,
         parcela_atual: parcelaAtual?.installment_number || null,
         parcela_atual_installment_id: parcelaAtual?.installment_id ?? null,
+        // Etapa da "parcela atual" (a mais antiga em aberto) — título 100%
+        // quitado cai na última parcela (paga), que nunca tem etapa (ver
+        // buscarParcelasComCluster), então já sai null sozinho aqui.
+        etapa_nome: parcelaAtual?.etapa_nome ?? null,
       };
     })
     // Mesmo critério do Nível 1 (Centro de Custo): mais vencido primeiro,
@@ -417,6 +451,7 @@ async function listClientesPorCentroCusto(empresaId, costCenterId, filtros = {})
 // vencer usam `corrected_balance_amount` (o que ainda falta pagar).
 async function listParcelasPorTitulo(empresaId, costCenterId, billId, filtros = {}) {
   const limite = await getLimiteVigente(empresaId);
+  const etapasPorCluster = await carregarEtapasPorCluster(empresaId);
 
   const params = [empresaId, ORIGIN_ID_PADRAO, billId];
   let filtroCentro = '';
@@ -428,10 +463,12 @@ async function listParcelasPorTitulo(empresaId, costCenterId, billId, filtros = 
   const { rows } = await pool.query(
     `SELECT si.bill_id, si.installment_id, si.due_date, si.corrected_balance_amount, si.original_amount,
             si.payment_term_description, si.installment_number,
-            pg.ultimo_pagamento
+            pg.ultimo_pagamento, COALESCE(ccc.cluster, 'novo') AS cluster
      FROM sie_income si
      JOIN sie_income_categorias cat
        ON cat.bill_id = si.bill_id AND cat.installment_id = si.installment_id AND cat.empresa_id = si.empresa_id
+     LEFT JOIN cobranca_clientes_clusters ccc
+       ON ccc.empresa_id = si.empresa_id AND ccc.client_id = si.client_id
      LEFT JOIN (
        SELECT bill_id, installment_id, MAX(payment_date) AS ultimo_pagamento
        FROM sie_income_recebimentos
@@ -450,14 +487,26 @@ async function listParcelasPorTitulo(empresaId, costCenterId, billId, filtros = 
   return rows
     .map((row) => {
       const paga = Number(row.corrected_balance_amount) === 0;
+      const diasSigned = diasEntre(row.due_date, hoje);
       let status;
       if (paga) {
         status = row.ultimo_pagamento && new Date(row.ultimo_pagamento) > new Date(row.due_date) ? 'atraso' : 'em_dia';
-      } else if (diasEntre(row.due_date, hoje) > limite) {
+      } else if (diasSigned > limite) {
         status = 'inadimplente';
       } else {
         status = 'a_vencer';
       }
+
+      // Mesma regra de buscarParcelasComCluster: etapa só existe pra
+      // parcela em aberto, na régua do cluster do cliente (ou 'inad' se já
+      // for inadimplente), presa na última etapa até ser quitada.
+      let etapaNome = null;
+      if (!paga) {
+        const clusterRegua = status === 'inadimplente' ? 'inad' : row.cluster;
+        const etapa = acharEtapaAtiva(etapasPorCluster, clusterRegua, diasSigned);
+        etapaNome = etapa?.nome ?? null;
+      }
+
       const saldoAberto = Number(row.corrected_balance_amount) || 0;
       return {
         bill_id: row.bill_id,
@@ -466,6 +515,7 @@ async function listParcelasPorTitulo(empresaId, costCenterId, billId, filtros = 
         installment_number: row.installment_number,
         payment_term_description: row.payment_term_description,
         status,
+        etapa_nome: etapaNome,
         valor_pago: paga ? Number(row.original_amount) || 0 : 0,
         valor_vencido: status === 'inadimplente' ? saldoAberto : 0,
         valor_a_vencer: status === 'a_vencer' ? saldoAberto : 0,
