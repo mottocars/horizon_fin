@@ -92,19 +92,32 @@ async function getCentroCustoDaParcela(empresaId, billId, installmentId) {
   return rows[0]?.cost_center_name || '';
 }
 
-// Busca a parcela crua + classifica seu cluster com a MESMA regra de
-// gestao-parcelas.service.js::buscarLinhasClassificadas (duplicada aqui de
-// propósito, mesma convenção do resto do projeto): dias vencidos além do
-// limite do Motor de Risco vira Inadimplência, senão é o cluster de score
-// atual do cliente (`cobranca_clientes_clusters`, fallback 'novo'). Uma
-// parcela só pertence a 1 cluster/1 etapa por vez agora — não existe mais
-// "acumular todas as parcelas do cliente" (era o erro da versão anterior).
+// Busca a parcela crua + classifica ela com a MESMA regra de
+// gestao-parcelas.service.js: `cluster` (pra rotear qual régua/template usar
+// no envio de WhatsApp/e-mail — duplicada aqui de propósito, mesma convenção
+// do resto do projeto) segue reclassificando pra 'inad' quando os dias
+// vencidos passam do limite do Motor de Risco; `clusterCliente` é o cluster
+// de score cru do cliente (`cobranca_clientes_clusters`, fallback 'novo'),
+// sem essa reclassificação — é o que aparece no cabeçalho do modal, igual
+// já vinha marcado na tela anterior (Gestão das Parcelas). `status` é o
+// mesmo 4 estados de gestaoParcelas.service.js::listParcelasPorTitulo (em
+// paga em_dia/atraso, inadimplente ou a_vencer), com os mesmos 3 valores
+// pago/vencido/a vencer — usado tanto pro badge do cabeçalho quanto pra
+// decidir se ainda dá pra registrar observação (ver registrarObservacao).
 async function getParcelaClassificada(empresaId, billId, installmentId) {
   const { rows } = await pool.query(
-    `SELECT bill_id, installment_id, client_id, client_name, due_date, corrected_balance_amount,
-            document_identification_name, document_number, installment_number
-     FROM sie_income
-     WHERE empresa_id = $1 AND bill_id = $2 AND installment_id = $3 AND origin_id = $4`,
+    `SELECT si.bill_id, si.installment_id, si.client_id, si.client_name, si.due_date,
+            si.corrected_balance_amount, si.original_amount,
+            si.document_identification_name, si.document_number, si.installment_number,
+            pg.ultimo_pagamento
+     FROM sie_income si
+     LEFT JOIN (
+       SELECT bill_id, installment_id, MAX(payment_date) AS ultimo_pagamento
+       FROM sie_income_recebimentos
+       WHERE empresa_id = $1
+       GROUP BY bill_id, installment_id
+     ) pg ON pg.bill_id = si.bill_id AND pg.installment_id = si.installment_id
+     WHERE si.empresa_id = $1 AND si.bill_id = $2 AND si.installment_id = $3 AND si.origin_id = $4`,
     [empresaId, billId, installmentId, ORIGIN_ID_PADRAO]
   );
   const parcela = rows[0];
@@ -120,24 +133,38 @@ async function getParcelaClassificada(empresaId, billId, installmentId) {
   const diasSigned = diasEntre(parcela.due_date, hojeComoDataUTC());
   const cluster = diasSigned > limite ? 'inad' : clusterCliente;
 
-  return { parcela, cluster, diasSigned };
+  const paga = Number(parcela.corrected_balance_amount) === 0;
+  let status;
+  if (paga) {
+    status = parcela.ultimo_pagamento && new Date(parcela.ultimo_pagamento) > new Date(parcela.due_date) ? 'atraso' : 'em_dia';
+  } else if (diasSigned > limite) {
+    status = 'inadimplente';
+  } else {
+    status = 'a_vencer';
+  }
+  const saldoAberto = Number(parcela.corrected_balance_amount) || 0;
+
+  return {
+    parcela,
+    cluster,
+    clusterCliente,
+    diasSigned,
+    limite,
+    status,
+    valorPago: paga ? Number(parcela.original_amount) || 0 : 0,
+    valorVencido: status === 'inadimplente' ? saldoAberto : 0,
+    valorAVencer: status === 'a_vencer' ? saldoAberto : 0,
+  };
 }
 
-// Monta a timeline INTEIRA da régua deste cluster pra esta parcela: cada
-// etapa configurada (ordenada por `dias`), com a data em que ela foi/será
-// alcançada — `due_date + etapa.dias` dias, 100% determinístico, sem
-// precisar de nenhum estado persistido (diferente da versão anterior, que
-// tentava "detectar" a etapa atual). Etapa com data <= hoje já foi
-// alcançada (mostra a data de verdade); daí em diante é "ainda não chegou
-// lá" (mostrada apagada na tela, sem data). Os registros (observações +
-// mensagens automáticas) são encaixados na janela [data desta etapa, data
-// da próxima etapa - 1 dia] — como agora só existe 1 etapa por vez, as
-// janelas nunca se sobrepõem.
 // Pra cada etapa configurada, a data em que esta parcela a alcança
 // (`due_date + etapa.dias`) e o fim da janela dela (véspera da data em que
 // a PRÓXIMA etapa é alcançada, ou null se for a última configurada — nesse
-// caso a janela fica aberta, some só quando a parcela for quitada).
-// Etapas já vêm ordenadas por `dias` ASC (ver listEtapasComComunicacao).
+// caso a janela fica aberta, some só quando a parcela for quitada). Usada
+// hoje só pra achar o TEMPLATE certo de WhatsApp/e-mail no envio (ver
+// registrarObservacao) — a tela não mostra mais essas janelas (saiu o funil
+// de etapas, ver montarRegistrosParcela). Etapas já vêm ordenadas por `dias`
+// ASC (ver listEtapasComComunicacao).
 function calcularJanelasEtapas(etapasConfig, dueDate) {
   return etapasConfig.map((e, i) => {
     const dataAlcancada = paraIso(somarDias(dueDate, e.dias));
@@ -147,11 +174,17 @@ function calcularJanelasEtapas(etapasConfig, dueDate) {
   });
 }
 
-async function montarTimelineParcela(empresaId, parcela, cluster) {
-  const etapasConfig = await listEtapasComComunicacao(empresaId, cluster);
-  const hoje = hojeIso();
-  const comData = calcularJanelasEtapas(etapasConfig, parcela.due_date);
-
+// Lista plana (mais antigo → mais recente) de TODOS os registros desta
+// parcela — observação manual, WhatsApp, e-mail ou ligação — sem mais
+// agrupar por etapa da régua (o funil de etapas saiu da tela, mesma linha
+// de "Etapa da régua/responsável/canais saíram da tela" já aplicada em
+// Gestão das Parcelas). Cada registro carrega o retrato de como a parcela
+// estava NAQUELE momento — futura (ainda não vencida), em atraso (vencida,
+// mas ainda dentro do limite de dias do Motor de Risco) ou inadimplente (já
+// passou do limite) — usando o `limite` de HOJE (não existe um limite
+// histórico versionado no sistema) aplicado à data do próprio registro, não
+// a hoje.
+async function montarRegistrosParcela(empresaId, parcela, limite) {
   const { rows: registros } = await pool.query(
     `SELECT r.id, r.tipo, r.canal, r.descricao, r.data_registro::text AS data_registro,
             r.usuario_id, u.nome AS usuario_nome, u.avatar_url AS usuario_avatar_url
@@ -176,51 +209,42 @@ async function montarTimelineParcela(empresaId, parcela, cluster) {
     }
   }
 
-  const registrosFormatados = registros.map((r) => ({
-    id: r.id,
-    tipo: r.tipo,
-    canal: r.canal,
-    descricao: r.descricao,
-    data_registro: r.data_registro,
-    usuario_nome: r.usuario_nome,
-    usuario_avatar_url: r.usuario_avatar_url,
-    anexos: anexosPorRegistro[r.id] || [],
-  }));
-
-  return comData.map(({ etapa, dataAlcancada, dataFimJanela }) => {
-    const alcancada = dataAlcancada <= hoje;
-    const fimJanela = dataFimJanela || hoje;
+  return registros.map((r) => {
+    const diasNaData = diasEntre(parcela.due_date, r.data_registro);
+    let statusNaData;
+    if (diasNaData <= 0) statusNaData = 'futura';
+    else if (diasNaData > limite) statusNaData = 'inadimplente';
+    else statusNaData = 'em_atraso';
     return {
-      etapa_id: etapa.id,
-      etapa_nome: etapa.nome,
-      dias: etapa.dias,
-      alcancada,
-      data: alcancada ? dataAlcancada : null,
-      responsavel_nome: etapa.responsavel_nome,
-      canal_whatsapp: etapa.canal_whatsapp,
-      canal_email: etapa.canal_email,
-      canal_ligacao: etapa.canal_ligacao,
-      registros: alcancada
-        ? registrosFormatados.filter((r) => r.data_registro >= dataAlcancada && r.data_registro <= fimJanela)
-        : [],
+      id: r.id,
+      tipo: r.tipo,
+      canal: r.canal,
+      descricao: r.descricao,
+      data_registro: r.data_registro,
+      usuario_nome: r.usuario_nome,
+      usuario_avatar_url: r.usuario_avatar_url,
+      anexos: anexosPorRegistro[r.id] || [],
+      status_na_data: statusNaData,
+      dias_na_data: diasNaData > 0 ? diasNaData : 0,
     };
   });
 }
 
 // Histórico completo de 1 parcela específica: dados do cliente + a
-// classificação atual dela (cluster/dias) + a timeline inteira da régua
-// daquele cluster (ver montarTimelineParcela). Nunca agrega outras parcelas
-// do mesmo cliente — cada parcela tem sua própria história.
+// classificação atual dela (cluster do cliente, status, valor) + a lista
+// plana de registros (ver montarRegistrosParcela). Nunca agrega outras
+// parcelas do mesmo cliente — cada parcela tem sua própria história.
 async function getHistoricoParcela(empresaId, billId, installmentId) {
-  const { parcela, cluster, diasSigned } = await getParcelaClassificada(empresaId, billId, installmentId);
-  const [cliente, timeline] = await Promise.all([
+  const { parcela, clusterCliente, diasSigned, limite, status, valorPago, valorVencido, valorAVencer } =
+    await getParcelaClassificada(empresaId, billId, installmentId);
+  const [cliente, registros] = await Promise.all([
     getInfoCliente(empresaId, parcela.client_id),
-    montarTimelineParcela(empresaId, parcela, cluster),
+    montarRegistrosParcela(empresaId, parcela, limite),
   ]);
 
   return {
     cliente,
-    cluster,
+    cluster: clusterCliente,
     parcela: {
       bill_id: parcela.bill_id,
       installment_id: parcela.installment_id,
@@ -230,8 +254,12 @@ async function getHistoricoParcela(empresaId, billId, installmentId) {
       document_identification_name: parcela.document_identification_name,
       document_number: parcela.document_number,
       installment_number: parcela.installment_number,
+      status,
+      valor_pago: valorPago,
+      valor_vencido: valorVencido,
+      valor_a_vencer: valorAVencer,
     },
-    timeline,
+    registros,
   };
 }
 
@@ -254,36 +282,44 @@ async function registrarFalhaEnvio(empresaId, billId, installmentId, canal, data
 
 // Registra uma observação (manual, sempre — o automático só existirá
 // quando houver um job de disparo de verdade) pra esta parcela, na data
-// informada. Sem seleção manual de etapa: a data precisa cair na janela de
-// UMA etapa já alcançada por esta parcela (agora só existe 1 por vez) — o
-// backend acha sozinha, mesma lógica de montarTimelineParcela. `canal` é
-// opcional (NULL pra uma observação genérica) — a Rotina do dia usa isso
-// pra marcar o check de "Ligação realizada" (canal='ligacao') registrando
-// a observação de verdade da ligação direto aqui, na mesma tabela que o
-// resto do histórico (ver rotinas.service.js — não existe mais um caminho
-// à parte só pra marcar ligação sem observação).
+// informada. Parcela paga (em_dia ou atraso) nem chega a tentar — pedido do
+// usuário: sem observação nova pra parcela já quitada, só inadimplência e
+// parcela futura/em aberto continuam recebendo registro novo (o histórico
+// já registrado antes continua visível pra sempre, ver getHistoricoParcela).
+// `canal` é opcional (NULL vira "Observação Manual" na tela) — a Rotina do
+// dia usa isso pra marcar o check de "Ligação realizada" (canal='ligacao')
+// registrando a observação de verdade da ligação direto aqui, na mesma
+// tabela que o resto do histórico (ver rotinas.service.js).
 //
-// `canal='whatsapp'` é diferente dos outros: além de registrar, DISPARA a
-// mensagem de verdade pela Z-API (ver zapi.service.js::enviarMensagemTexto)
-// — a `descricao` que chega do formulário é ignorada de propósito, e a
-// `descricao` gravada é sempre a mensagem de verdade recém-montada a
-// partir do template da etapa (mesma substituição de rotinas.service.js,
-// pra nunca existir divergência entre "o que a pessoa viu antes de marcar"
-// e "o que realmente saiu") — isso trava no backend a regra de "sem
-// possibilidade de ser alterada" pedida pro campo, não só no front. Se o
-// envio falhar, nada é gravado (o check na Rotina continua vermelho).
+// `canal='whatsapp'`/`'email'` são diferentes dos outros: além de
+// registrar, DISPARAM a mensagem de verdade (Z-API/e-mail — ver blocos
+// abaixo), e o TEMPLATE de cada um vem da etapa da régua que a parcela
+// alcançou na data informada — por isso, só pra esses 2 canais, a data
+// ainda precisa cair na janela de uma etapa já alcançada (mesma régua do
+// `cluster` reclassificado, ver getParcelaClassificada). Observação manual
+// e ligação não dependem de nenhum template, então não precisam de etapa
+// nenhuma — podem ser registradas em qualquer data, inclusive antes do
+// vencimento (parcela futura).
 async function registrarObservacao(empresaId, { billId, installmentId, dataRegistro, descricao, canal, usuarioId, arquivos }) {
-  const { parcela, cluster } = await getParcelaClassificada(empresaId, billId, installmentId);
-  const etapasConfig = await listEtapasComComunicacao(empresaId, cluster);
-  const janelas = calcularJanelasEtapas(etapasConfig, parcela.due_date);
-  const hoje = hojeIso();
+  const { parcela, cluster, status } = await getParcelaClassificada(empresaId, billId, installmentId);
 
-  const janelaAlcancada = janelas.find(
-    ({ dataAlcancada, dataFimJanela }) =>
-      dataAlcancada <= hoje && dataRegistro >= dataAlcancada && dataRegistro <= (dataFimJanela || hoje)
-  );
-  if (!janelaAlcancada) {
-    throw badRequest('Nesta data a parcela ainda não estava em nenhuma etapa desta régua — ajuste a data informada.');
+  if (status === 'em_dia' || status === 'atraso') {
+    throw badRequest('Esta parcela já está paga — não é possível registrar novas observações.');
+  }
+
+  let janelaAlcancada = null;
+  if (canal === 'whatsapp' || canal === 'email') {
+    const etapasConfig = await listEtapasComComunicacao(empresaId, cluster);
+    const janelas = calcularJanelasEtapas(etapasConfig, parcela.due_date);
+    const hoje = hojeIso();
+
+    janelaAlcancada = janelas.find(
+      ({ dataAlcancada, dataFimJanela }) =>
+        dataAlcancada <= hoje && dataRegistro >= dataAlcancada && dataRegistro <= (dataFimJanela || hoje)
+    );
+    if (!janelaAlcancada) {
+      throw badRequest('Nesta data a parcela ainda não estava em nenhuma etapa desta régua — ajuste a data informada.');
+    }
   }
 
   let descricaoFinal = descricao || '';
