@@ -139,6 +139,17 @@ const DIV_H = 'border-b border-gray-200';
 const DIV_V = 'border-l border-gray-200';
 const DIV_H_CABECALHO = 'border-b-2 border-gray-300';
 
+// Larguras compartilhadas das 3 colunas de ação (Consulta/Atualizar/
+// Vencimento) — as MESMAS em COLUNAS_NOVAS e COLUNAS_SEM_NOTAS de propósito
+// (pedido do usuário: as 2 caixas ficam empilhadas uma embaixo da outra, e
+// essas colunas precisam alinhar visualmente entre elas). Atualizar em 9
+// (não 6): "ATUALIZAR" maiúsculo com tracking-wide é quase do tamanho de
+// "VENCIMENTO" — mais estreito que isso, o texto do cabeçalho vazava por
+// cima da coluna de Vencimento em telas menores.
+const LARGURA_CONSULTA = 10;
+const LARGURA_ATUALIZAR = 9;
+const LARGURA_VENCIMENTO = 10;
+
 // Larguras do colgroup em % — sempre somando 100. Consulta/Atualizar/
 // Vencimento só fazem sentido em "Novas Notas" (é a única aba de onde dá
 // pra disparar uma consulta) — em Cientes/Inativas nem a coluna nem o
@@ -149,15 +160,21 @@ const DIV_H_CABECALHO = 'border-b-2 border-gray-300';
 // estreitas de propósito. Ordem comum: Empresa/Nota, Produto, Serviço,
 // Emissor, Emissão, Situação, [Inativada por], PDF, XML, [Consulta,
 // Atualizar, Vencimento].
-const COLUNAS_NOVAS = [26, 4, 4, 16, 8, 8, 4, 4, 10, 6, 10];
+const COLUNAS_NOVAS = [23, 4, 4, 16, 8, 8, 4, 4, LARGURA_CONSULTA, LARGURA_ATUALIZAR, LARGURA_VENCIMENTO];
 const COLUNAS_CIENTES = [34, 5, 5, 22, 10, 10, 7, 7];
 const COLUNAS_INATIVAS = [30, 5, 5, 18, 8, 8, 16, 5, 5];
 
 // Colunas da caixa "Sem nota no período" (ver mostrarCaixaSemNotas) — bem
 // mais simples que a tabela principal: um certificado sem nenhuma nota não
 // tem Produto/Serviço/Emissor/Emissão/Situação/PDF/XML pra mostrar, só
-// nome, última consulta, ação de atualizar e vencimento.
-const COLUNAS_SEM_NOTAS = [58, 18, 10, 14];
+// nome, última consulta, ação de atualizar e vencimento — essas 3 últimas
+// com a MESMA largura de COLUNAS_NOVAS (ver comentário acima).
+const COLUNAS_SEM_NOTAS = [
+  100 - (LARGURA_CONSULTA + LARGURA_ATUALIZAR + LARGURA_VENCIMENTO),
+  LARGURA_CONSULTA,
+  LARGURA_ATUALIZAR,
+  LARGURA_VENCIMENTO,
+];
 
 // Cabeçalho único da tabela inteira (não mais repetido por seção — ver
 // comentário no topo do arquivo) — sticky, mesmo padrão de
