@@ -153,8 +153,8 @@ export default function GestaoParcelasTab({ empresaId, centroCustoIds = [], busc
                       </th>
                     );
                   })}
-                  <th className="py-3 pl-4 text-center font-medium">Título</th>
-                  <th className="py-3 pl-4 text-center font-medium">Pagas</th>
+                  <th className="py-3 pl-8 text-center font-medium">Título</th>
+                  <th className="py-3 pl-8 text-center font-medium">Pagas</th>
                   <th className="py-3 text-center font-medium">Vencidas</th>
                   <th className="py-3 pr-3 text-center font-medium">A vencer</th>
                 </tr>
@@ -181,8 +181,8 @@ export default function GestaoParcelasTab({ empresaId, centroCustoIds = [], busc
                             {centro.clusters[cluster]}
                           </td>
                         ))}
-                        <td className="py-4 pl-4"></td>
-                        <td className="py-4 pl-4 text-center tabular-nums text-gray-700">{formatarMoedaSemCentavos(centro.valor_pago)}</td>
+                        <td className="py-4 pl-8"></td>
+                        <td className="py-4 pl-8 text-center tabular-nums text-gray-700">{formatarMoedaSemCentavos(centro.valor_pago)}</td>
                         <td className="py-4 text-center tabular-nums text-red-600">{formatarMoedaSemCentavos(centro.valor_vencido)}</td>
                         <td className="py-4 pr-3 text-center tabular-nums text-gray-700">{formatarMoedaSemCentavos(centro.valor_a_vencer)}</td>
                       </tr>
@@ -231,8 +231,8 @@ export default function GestaoParcelasTab({ empresaId, centroCustoIds = [], busc
                                 </td>
                               );
                             })}
-                            <td className="py-3 pl-4 text-center text-xs text-gray-500">{cliente.bill_id}</td>
-                            <td className="py-3 pl-4 text-center tabular-nums text-gray-700">{formatarMoedaSemCentavos(cliente.valor_pago)}</td>
+                            <td className="py-3 pl-8 text-center text-xs text-gray-500">{cliente.bill_id}</td>
+                            <td className="py-3 pl-8 text-center tabular-nums text-gray-700">{formatarMoedaSemCentavos(cliente.valor_pago)}</td>
                             <td className="py-3 text-center tabular-nums text-red-600">{formatarMoedaSemCentavos(cliente.valor_vencido)}</td>
                             <td className="py-3 pr-3 text-center tabular-nums text-gray-700">{formatarMoedaSemCentavos(cliente.valor_a_vencer)}</td>
                           </tr>
