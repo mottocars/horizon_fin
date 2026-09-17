@@ -1,6 +1,5 @@
 import { useEffect, useMemo, useState } from 'react';
 import {
-  Clock,
   Download,
   FileText,
   CalendarClock,
@@ -103,7 +102,7 @@ function estaVencido(validadeAte) {
 }
 
 // Quantos dias faltam pro certificado vencer — null quando não tem data.
-// Usado só pro aviso "vence em breve" (ver DIAS_AVISO_VENCIMENTO abaixo);
+// Usado pela coluna "Vencimento" (ver DIAS_ALERTA_VENCIMENTO abaixo);
 // vencido de fato continua sendo estaVencido() acima.
 function diasParaVencer(validadeAte) {
   if (!validadeAte) return null;
@@ -111,7 +110,11 @@ function diasParaVencer(validadeAte) {
   return Math.ceil(diffMs / (1000 * 60 * 60 * 24));
 }
 
-const DIAS_AVISO_VENCIMENTO = 30;
+// Limiar único usado pela coluna "Vencimento" (ver renderCertificado): até
+// esse tanto de dias o quadrado da coluna fica âmbar; depois disso, verde;
+// já vencido, vermelho — sempre os 3 mesmos estados, sem outro aviso
+// duplicado em outro lugar da linha.
+const DIAS_ALERTA_VENCIMENTO = 10;
 
 // 'novas'/'cientes' (ver TABS_NOTAS) filtram, do lado do cliente, o MESMO
 // dataset de notas ativas — o backend já manda `ciente_em` em cada nota
@@ -139,24 +142,33 @@ const DIV_H_CABECALHO = 'border-b-2 border-gray-300';
 // Larguras do colgroup em % — sempre somando 100. "Inativada por" só existe
 // na aba Inativas, por isso os 2 conjuntos diferentes (mesma ideia de
 // totalColunas variar por aba, só que agora também define a largura de cada
-// coluna, não só a contagem pro colSpan).
-const COLUNAS_PADRAO = [24, 6, 6, 16, 8, 8, 6, 6, 10, 10];
-const COLUNAS_INATIVAS = [20, 5, 5, 13, 7, 7, 12, 5, 5, 10, 11];
+// coluna, não só a contagem pro colSpan). Produto/Serviço são só 1 ícone —
+// bem estreitas de propósito. Ordem: Empresa/Nota, Produto, Serviço,
+// Emissor, Emissão, Situação, [Inativada por], PDF, XML, Consulta,
+// Atualizar, Vencimento.
+const COLUNAS_PADRAO = [26, 4, 4, 16, 8, 8, 6, 6, 10, 6, 6];
+const COLUNAS_INATIVAS = [20, 4, 4, 13, 7, 7, 12, 5, 5, 9, 6, 8];
 
 // Cabeçalho único da tabela inteira (não mais repetido por seção — ver
 // comentário no topo do arquivo) — sticky, mesmo padrão de
 // GestaoParcelasTab.jsx (DIV_H_CABECALHO/DIV_V, bg-white + shadow-sm pra
 // marcar bem o limite quando ele flutua sobre as linhas rolando por baixo).
-function CabecalhoTabela({ modoInativas }) {
+// `temNivel2` diz se algum certificado desta tabela está expandido mostrando
+// nota — só faz sentido escrever "/ Nota" no cabeçalho quando isso é
+// verdade; fechado (ou na caixa "Sem nota", que nunca expande), o
+// cabeçalho fica só "Empresa".
+function CabecalhoTabela({ modoInativas, temNivel2 = false }) {
   return (
     <thead className="sticky top-0 z-10 bg-white shadow-sm">
       <tr className="text-xs uppercase tracking-wide text-gray-400">
-        <th className={`${DIV_H_CABECALHO} py-2.5 pl-3 text-left font-medium`}>Empresa / Nota</th>
+        <th className={`${DIV_H_CABECALHO} py-2.5 pl-3 text-left font-medium`}>
+          {temNivel2 ? 'Empresa / Nota' : 'Empresa'}
+        </th>
         <th className={`${DIV_H_CABECALHO} ${DIV_V} py-2.5 text-center font-medium`} title="Produto (NF-e)">
-          <Package size={14} className="inline" />
+          <Package size={14} className="inline text-primary-500" />
         </th>
         <th className={`${DIV_H_CABECALHO} ${DIV_V} py-2.5 text-center font-medium`} title="Serviço (NFS-e)">
-          <Wrench size={14} className="inline" />
+          <Wrench size={14} className="inline text-violet-500" />
         </th>
         <th className={`${DIV_H_CABECALHO} ${DIV_V} px-3 py-2.5 text-left font-medium`}>Emissor</th>
         <th className={`${DIV_H_CABECALHO} ${DIV_V} px-2 py-2.5 text-center font-medium`}>Emissão</th>
@@ -167,7 +179,8 @@ function CabecalhoTabela({ modoInativas }) {
         <th className={`${DIV_H_CABECALHO} ${DIV_V} py-2.5 text-center font-medium`}>PDF</th>
         <th className={`${DIV_H_CABECALHO} ${DIV_V} py-2.5 text-center font-medium`}>XML</th>
         <th className={`${DIV_H_CABECALHO} ${DIV_V} px-2 py-2.5 text-center font-medium`}>Consulta</th>
-        <th className={`${DIV_H_CABECALHO} ${DIV_V} px-2 py-2.5 text-center font-medium`}>Atualizar</th>
+        <th className={`${DIV_H_CABECALHO} ${DIV_V} px-1 py-2.5 text-center font-medium`}>Atualizar</th>
+        <th className={`${DIV_H_CABECALHO} ${DIV_V} px-2 py-2.5 text-center font-medium`}>Vencimento</th>
       </tr>
     </thead>
   );
@@ -284,9 +297,10 @@ function LinhaNota({
           {baixandoXml ? <Loader2 size={13} className="animate-spin" /> : <Download size={13} />}
         </button>
       </td>
-      {/* Consulta/Atualizar só existem no Nível 1 (certificado) — em branco
-          aqui, mesma regra de Título/Vencimento em branco no Nível 1 de
-          GestaoParcelasTab.jsx. */}
+      {/* Consulta/Atualizar/Vencimento só existem no Nível 1 (certificado)
+          — em branco aqui, mesma regra de Título/Vencimento em branco no
+          Nível 1 de GestaoParcelasTab.jsx. */}
+      <td className={`${DIV_H} ${DIV_V}`}></td>
       <td className={`${DIV_H} ${DIV_V}`}></td>
       <td className={`${DIV_H} ${DIV_V}`}></td>
     </tr>
@@ -860,6 +874,13 @@ export default function EspiaoNfeNfsePage() {
   // usado pro colSpan da linha de "Carregando notas...".
   const totalColunas = modoInativas ? COLUNAS_INATIVAS.length : COLUNAS_PADRAO.length;
 
+  // Só escreve "/ Nota" no cabeçalho da Caixa 1 quando pelo menos 1
+  // certificado dela está expandido mostrando nota de verdade (ver
+  // CabecalhoTabela) — a Caixa 2 nunca expande, então nem passa essa prop.
+  const algumCertificadoAberto = certificadosAgrupados.comNotas.some((c) =>
+    abertos.has(`${abaNotas}:${c.id}`)
+  );
+
   // A caixa "Sem nota no período" só faz sentido em "Novas Notas" — é onde
   // se quer saber quais certificados não têm nada de novo pra revisar. Nas
   // outras abas, um certificado sem nenhuma nota que bata com o filtro
@@ -870,8 +891,11 @@ export default function EspiaoNfeNfsePage() {
   // Extraído do JSX (era um .map() inline) pra poder ser chamado duas vezes
   // — uma pro cluster "com nota", outra pro cluster "sem nota" (ver
   // certificadosAgrupados e o render da tabela) — sem duplicar todo esse
-  // bloco.
-  function renderCertificado(certificado) {
+  // bloco. `simplificado` é só pra caixa "Sem nota no período" (ver
+  // mostrarCaixaSemNotas): um certificado sem nenhuma nota não tem o que
+  // mostrar em Produto/Serviço/Consulta/Vencimento, então essas colunas
+  // ficam em branco — só o nome e a ação de Atualizar continuam.
+  function renderCertificado(certificado, simplificado = false) {
     const vencido = estaVencido(certificado.validade_ate);
     const notas = notasPorCertificado[certificado.id];
     // 'novas'/'cientes' filtram o MESMO dataset de notas ativas por
@@ -890,12 +914,17 @@ export default function EspiaoNfeNfsePage() {
     // zero) — não faz sentido oferecer o "+", não tem nada
     // pra mostrar dentro.
     const semNotas = notas != null && totalNfeCard === 0 && totalNfseCard === 0;
-    // "Vence em breve" é um aviso mais cedo que o vermelho
-    // de vencido — mesma info (validade_ate) que já existe,
-    // só avisando com antecedência em vez de só quando já
-    // venceu.
+
+    // Estado da coluna "Vencimento" — 1 dos 3 (vencido/alerta/ok), sempre o
+    // quadrado inteiro colorido (mesmo padrão do badge de status em
+    // GestaoParcelasTab.jsx): vermelho já vencido, âmbar a até
+    // DIAS_ALERTA_VENCIMENTO dias, verde do contrário.
     const diasVencimento = diasParaVencer(certificado.validade_ate);
-    const vencendoEmBreve = !vencido && diasVencimento !== null && diasVencimento <= DIAS_AVISO_VENCIMENTO;
+    const corVencimento = vencido
+      ? 'bg-red-100 text-red-700'
+      : diasVencimento !== null && diasVencimento <= DIAS_ALERTA_VENCIMENTO
+        ? 'bg-amber-100 text-amber-700'
+        : 'bg-emerald-100 text-emerald-700';
 
     // Produtos e serviços combinados numa lista só (produtos primeiro,
     // depois serviços) — não existe mais uma linha de seção própria pra
@@ -913,7 +942,7 @@ export default function EspiaoNfeNfsePage() {
             fonte, mesmo fundo da tabela de gestão de parcelas"). `vencido`
             (certificado expirado) sempre vence, em qualquer aba. */}
         <tr className={vencido ? 'bg-red-50' : aberto ? 'bg-gray-100' : 'bg-white'}>
-          <td className={`${DIV_H} py-2.5 pl-3 pr-2`}>
+          <td className={`${DIV_H} py-2 pl-3 pr-2`}>
             <span className="flex items-center gap-2">
               {/* Fechado por padrão (ver `abertos` — começa vazio) — as
                   notas já estão carregadas de qualquer jeito, abrir só
@@ -932,31 +961,27 @@ export default function EspiaoNfeNfsePage() {
                 </button>
               )}
               <span className="truncate text-gray-900">{certificado.nome}</span>
-              {vencendoEmBreve && (
-                <span
-                  title={`Certificado vence em ${diasVencimento} dia${diasVencimento !== 1 ? 's' : ''}`}
-                  className="inline-flex shrink-0 items-center text-amber-500"
-                >
-                  <Clock size={13} />
-                </span>
-              )}
             </span>
           </td>
-          <td className={`${DIV_H} ${DIV_V} py-2.5 text-center`}>
-            <span
-              title={`${totalNfeCard === null ? '…' : totalNfeCard} produto${totalNfeCard !== 1 ? 's' : ''} (NF-e)`}
-              className={totalNfeCard ? 'font-semibold text-primary-700' : 'text-gray-300'}
-            >
-              {totalNfeCard === null ? '…' : totalNfeCard}
-            </span>
+          <td className={`${DIV_H} ${DIV_V} py-2 text-center`}>
+            {!simplificado && (
+              <span
+                title={`${totalNfeCard === null ? '…' : totalNfeCard} produto${totalNfeCard !== 1 ? 's' : ''} (NF-e)`}
+                className={totalNfeCard ? 'font-semibold text-primary-700' : 'text-gray-300'}
+              >
+                {totalNfeCard === null ? '…' : totalNfeCard}
+              </span>
+            )}
           </td>
-          <td className={`${DIV_H} ${DIV_V} py-2.5 text-center`}>
-            <span
-              title={`${totalNfseCard === null ? '…' : totalNfseCard} serviço${totalNfseCard !== 1 ? 's' : ''} (NFS-e)`}
-              className={totalNfseCard ? 'font-semibold text-violet-700' : 'text-gray-300'}
-            >
-              {totalNfseCard === null ? '…' : totalNfseCard}
-            </span>
+          <td className={`${DIV_H} ${DIV_V} py-2 text-center`}>
+            {!simplificado && (
+              <span
+                title={`${totalNfseCard === null ? '…' : totalNfseCard} serviço${totalNfseCard !== 1 ? 's' : ''} (NFS-e)`}
+                className={totalNfseCard ? 'font-semibold text-violet-700' : 'text-gray-300'}
+              >
+                {totalNfseCard === null ? '…' : totalNfseCard}
+              </span>
+            )}
           </td>
           {/* Emissor, Emissão, Situação, [Inativada por], PDF, XML só
               existem no nível 2 (a nota em si) — em branco aqui, mesma
@@ -968,20 +993,20 @@ export default function EspiaoNfeNfsePage() {
           {modoInativas && <td className={`${DIV_H} ${DIV_V}`}></td>}
           <td className={`${DIV_H} ${DIV_V}`}></td>
           <td className={`${DIV_H} ${DIV_V}`}></td>
-          <td className={`${DIV_H} ${DIV_V} py-2.5 text-center`}>
-            {!modoInativas && certificado.ultima_consulta_em && (
+          <td className={`${DIV_H} ${DIV_V} py-2 text-center`}>
+            {!simplificado && !modoInativas && certificado.ultima_consulta_em && (
               <span title={`Última consulta: ${formatarDataHora(certificado.ultima_consulta_em)}`} className="text-gray-500">
                 {formatarTempoRelativo(certificado.ultima_consulta_em)}
               </span>
             )}
           </td>
-          <td className={`${DIV_H} ${DIV_V} py-2.5 text-center`}>
+          <td className={`${DIV_H} ${DIV_V} text-center`}>
             {vencido ? (
               <span
                 title="Certificado vencido — não é possível consultar novas notas com ele"
-                className="inline-flex items-center text-red-600"
+                className="inline-flex h-7 w-7 items-center justify-center text-gray-300"
               >
-                <AlertTriangle size={15} />
+                <RefreshCw size={13} />
               </span>
             ) : abaNotas !== 'novas' ? null : certificado.ultima_consulta_em ? (
               <IconButton
@@ -1008,6 +1033,9 @@ export default function EspiaoNfeNfsePage() {
                 {emConsulta ? <Loader2 size={13} className="animate-spin" /> : <RefreshCw size={13} />}
               </button>
             )}
+          </td>
+          <td className={`${DIV_H} ${DIV_V} py-2 text-center font-medium ${simplificado ? '' : corVencimento}`}>
+            {!simplificado && formatarData(certificado.validade_ate)}
           </td>
         </tr>
 
@@ -1197,7 +1225,7 @@ export default function EspiaoNfeNfsePage() {
                             <col key={i} style={{ width: `${pct}%` }} />
                           ))}
                         </colgroup>
-                        <CabecalhoTabela modoInativas={modoInativas} />
+                        <CabecalhoTabela modoInativas={modoInativas} temNivel2={algumCertificadoAberto} />
                         {filtrando && (
                           <tbody>
                             <tr>
@@ -1211,7 +1239,7 @@ export default function EspiaoNfeNfsePage() {
                           </tbody>
                         )}
 
-                        {certificadosAgrupados.comNotas.map(renderCertificado)}
+                        {certificadosAgrupados.comNotas.map((certificado) => renderCertificado(certificado))}
                       </table>
                     </div>
                   </Card>
@@ -1245,7 +1273,7 @@ export default function EspiaoNfeNfsePage() {
                           ))}
                         </colgroup>
                         <CabecalhoTabela modoInativas={modoInativas} />
-                        {certificadosAgrupados.semNotas.map(renderCertificado)}
+                        {certificadosAgrupados.semNotas.map((certificado) => renderCertificado(certificado, true))}
                       </table>
                     </div>
                   </Card>
