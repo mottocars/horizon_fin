@@ -142,12 +142,13 @@ const DIV_H_CABECALHO = 'border-b-2 border-gray-300';
 // Larguras do colgroup em % — sempre somando 100. "Inativada por" só existe
 // na aba Inativas, por isso os 2 conjuntos diferentes (mesma ideia de
 // totalColunas variar por aba, só que agora também define a largura de cada
-// coluna, não só a contagem pro colSpan). Produto/Serviço são só 1 ícone —
-// bem estreitas de propósito. Ordem: Empresa/Nota, Produto, Serviço,
-// Emissor, Emissão, Situação, [Inativada por], PDF, XML, Consulta,
-// Atualizar, Vencimento.
-const COLUNAS_PADRAO = [26, 4, 4, 16, 8, 8, 6, 6, 10, 6, 6];
-const COLUNAS_INATIVAS = [20, 4, 4, 13, 7, 7, 12, 5, 5, 9, 6, 8];
+// coluna, não só a contagem pro colSpan). Produto/Serviço/PDF/XML são só 1
+// ícone — bem estreitas de propósito, sobrando pra Vencimento (a data não
+// pode ficar apertada, senão vaza pra fora do card por ser a última
+// coluna). Ordem: Empresa/Nota, Produto, Serviço, Emissor, Emissão,
+// Situação, [Inativada por], PDF, XML, Consulta, Atualizar, Vencimento.
+const COLUNAS_PADRAO = [26, 4, 4, 16, 8, 8, 4, 4, 10, 6, 10];
+const COLUNAS_INATIVAS = [20, 4, 4, 13, 7, 7, 12, 4, 4, 9, 6, 10];
 
 // Cabeçalho único da tabela inteira (não mais repetido por seção — ver
 // comentário no topo do arquivo) — sticky, mesmo padrão de
