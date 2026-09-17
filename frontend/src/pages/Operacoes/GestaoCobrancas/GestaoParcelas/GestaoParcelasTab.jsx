@@ -275,7 +275,11 @@ export default function GestaoParcelasTab({
                 Tailwind): é o que deixa as bordas de coluna (DIV_V) e de
                 linha (DIV_H) previsíveis célula a célula, sem o navegador
                 fundir/descartar uma borda por "conflito" com a vizinha. */}
-            <table className="border-separate border-spacing-0 text-left text-sm" style={{ tableLayout: 'fixed' }}>
+            {/* text-xs na tabela inteira (era text-sm) — pedido do usuário:
+                fontes um pouco menores, pra abrir espaço pra próxima coluna
+                (Etapas) que ainda vai entrar. Boa parte da tabela (Nível 2/3)
+                já usava text-xs antes; agora fica uniforme em todo canto. */}
+            <table className="border-separate border-spacing-0 text-left text-xs" style={{ tableLayout: 'fixed' }}>
               <colgroup>
                 <col className="w-96" />
                 <col className="w-10" />
@@ -337,7 +341,7 @@ export default function GestaoParcelasTab({
 
                       {centroAberto && carregandoClientes && (
                         <tr>
-                          <td colSpan={TOTAL_COLUNAS} className={`${DIV_H} bg-gray-50 py-6 text-center text-sm text-gray-400`}>
+                          <td colSpan={TOTAL_COLUNAS} className={`${DIV_H} bg-gray-50 py-6 text-center text-xs text-gray-400`}>
                             Carregando...
                           </td>
                         </tr>
@@ -345,7 +349,7 @@ export default function GestaoParcelasTab({
 
                       {centroAberto && !carregandoClientes && clientes.length === 0 && (
                         <tr>
-                          <td colSpan={TOTAL_COLUNAS} className={`${DIV_H} bg-gray-50 py-6 text-center text-sm text-gray-400`}>
+                          <td colSpan={TOTAL_COLUNAS} className={`${DIV_H} bg-gray-50 py-6 text-center text-xs text-gray-400`}>
                             Nenhum cliente encontrado.
                           </td>
                         </tr>
@@ -391,7 +395,7 @@ export default function GestaoParcelasTab({
 
                               {clienteAberto && carregandoParcelas && (
                                 <tr>
-                                  <td colSpan={TOTAL_COLUNAS} className={`${DIV_H} bg-white py-6 text-center text-sm text-gray-400`}>
+                                  <td colSpan={TOTAL_COLUNAS} className={`${DIV_H} bg-white py-6 text-center text-xs text-gray-400`}>
                                     Carregando...
                                   </td>
                                 </tr>
@@ -399,7 +403,7 @@ export default function GestaoParcelasTab({
 
                               {clienteAberto && !carregandoParcelas && parcelas.length === 0 && (
                                 <tr>
-                                  <td colSpan={TOTAL_COLUNAS} className={`${DIV_H} bg-white py-6 text-center text-sm text-gray-400`}>
+                                  <td colSpan={TOTAL_COLUNAS} className={`${DIV_H} bg-white py-6 text-center text-xs text-gray-400`}>
                                     Nenhuma parcela encontrada.
                                   </td>
                                 </tr>
