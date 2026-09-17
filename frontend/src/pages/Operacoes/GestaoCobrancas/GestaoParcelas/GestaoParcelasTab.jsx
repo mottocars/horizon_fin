@@ -5,18 +5,7 @@ import HistoricoParcelaModal from './HistoricoParcelaModal';
 import { getResumoPorCentroCustoParcelas, listClientesPorCentroCusto } from '../../../../api/gestaoParcelas.api';
 import { CLUSTER_ORDEM, CLUSTER_LABEL, CLUSTER_ICON, CLUSTER_ICON_COR, formatarMoeda } from '../ClustersCobranca/constantes';
 
-const TOTAL_COLUNAS = 2 + CLUSTER_ORDEM.length + 3 + 1;
-
-// Badge neutro do canto direito — "Clientes 123" no Centro de Custo,
-// "Parcelas 1/30" no Cliente. Não é status bom/ruim (por isso cinza neutro,
-// nunca verde/vermelho), só uma contagem.
-function StatusContagem({ label }) {
-  return (
-    <span className="inline-flex shrink-0 items-center rounded-full border border-gray-200 bg-gray-50 px-2.5 py-1 text-xs font-medium text-gray-600">
-      {label}
-    </span>
-  );
-}
+const TOTAL_COLUNAS = 2 + CLUSTER_ORDEM.length + 3;
 
 // Vida de um cliente (ou, mais precisamente, de 1 título dele — ver
 // listClientesPorCentroCusto) dentro do Centro de Custo: Nível 1 agrega por
@@ -123,11 +112,29 @@ export default function GestaoParcelasTab({ empresaId, centroCustoIds = [], busc
           </div>
         ) : (
           <div className="overflow-x-auto">
-            <table className="w-full text-left text-sm">
+            {/* table-layout fixed + colgroup: sem isso, a largura de cada
+                coluna é recalculada a partir do conteúdo das linhas
+                visíveis (mesmo problema e mesma solução de RotinasTab.jsx)
+                — abrir um Centro de Custo troca as linhas na tela e as
+                colunas de cima (ícones de cluster, valores) "andavam" pra
+                acomodar o conteúdo novo. Com largura fixa por coluna, elas
+                ficam sempre no mesmo lugar, aberto ou fechado. */}
+            <table className="w-full text-left text-sm" style={{ tableLayout: 'fixed' }}>
+              <colgroup>
+                <col />
+                <col className="w-27.5" />
+                <col className="w-14" />
+                <col className="w-14" />
+                <col className="w-14" />
+                <col className="w-14" />
+                <col className="w-32.5" />
+                <col className="w-32.5" />
+                <col className="w-32.5" />
+              </colgroup>
               <thead>
                 <tr className="border-b border-gray-100 text-xs uppercase tracking-wide text-gray-400">
                   <th className="py-3 pl-3 font-medium">Centro de Custo</th>
-                  <th className="py-3 text-center font-medium">Título / Parcela</th>
+                  <th className="py-3 text-center font-medium">Título</th>
                   {CLUSTER_ORDEM.map((cluster) => {
                     const Icone = CLUSTER_ICON[cluster];
                     return (
@@ -138,8 +145,7 @@ export default function GestaoParcelasTab({ empresaId, centroCustoIds = [], busc
                   })}
                   <th className="py-3 text-center font-medium">Pagas</th>
                   <th className="py-3 text-center font-medium">Vencidas</th>
-                  <th className="py-3 text-center font-medium">A vencer</th>
-                  <th className="py-3 pr-3 text-right font-medium">Status</th>
+                  <th className="py-3 pr-3 text-center font-medium">A vencer</th>
                 </tr>
               </thead>
               <tbody>
@@ -167,10 +173,7 @@ export default function GestaoParcelasTab({ empresaId, centroCustoIds = [], busc
                         ))}
                         <td className="py-3 text-center tabular-nums text-gray-700">{formatarMoeda(centro.valor_pago)}</td>
                         <td className="py-3 text-center tabular-nums text-red-600">{formatarMoeda(centro.valor_vencido)}</td>
-                        <td className="py-3 text-center tabular-nums text-gray-700">{formatarMoeda(centro.valor_a_vencer)}</td>
-                        <td className="py-3 pr-3 text-right">
-                          <StatusContagem label={`Clientes ${centro.total_clientes.toLocaleString('pt-BR')}`} />
-                        </td>
+                        <td className="py-3 pr-3 text-center tabular-nums text-gray-700">{formatarMoeda(centro.valor_a_vencer)}</td>
                       </tr>
 
                       {centroAberto && carregandoClientes && (
@@ -220,10 +223,7 @@ export default function GestaoParcelasTab({ empresaId, centroCustoIds = [], busc
                             })}
                             <td className="py-2.5 text-center tabular-nums text-gray-700">{formatarMoeda(cliente.valor_pago)}</td>
                             <td className="py-2.5 text-center tabular-nums text-red-600">{formatarMoeda(cliente.valor_vencido)}</td>
-                            <td className="py-2.5 text-center tabular-nums text-gray-700">{formatarMoeda(cliente.valor_a_vencer)}</td>
-                            <td className="py-2.5 pr-3 text-right">
-                              <StatusContagem label={`Parcelas ${cliente.parcela_atual || '—'}`} />
-                            </td>
+                            <td className="py-2.5 pr-3 text-center tabular-nums text-gray-700">{formatarMoeda(cliente.valor_a_vencer)}</td>
                           </tr>
                         ))}
                     </Fragment>
