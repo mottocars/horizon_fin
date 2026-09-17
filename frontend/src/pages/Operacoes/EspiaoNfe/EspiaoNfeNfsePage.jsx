@@ -911,13 +911,11 @@ export default function EspiaoNfeNfsePage() {
 
     return (
       <tbody key={certificado.id}>
-        {/* Aberto usa bg-primary-50 (azul clarinho) nas abas Novas Notas/
-            Cientes; na aba Inativas usa bg-gray-100 — mesmo tom neutro do
-            nível aberto em Gestão das Parcelas (pedido do usuário: "as
-            cores quando os níveis abrem na gestão de parcelas"), já que ali
-            o cinza marca "arquivado", não "ativo". `vencido` (certificado
-            expirado) sempre vence os dois, em qualquer aba. */}
-        <tr className={vencido ? 'bg-red-50' : aberto ? (modoInativas ? 'bg-gray-100' : 'bg-primary-50') : 'bg-white'}>
+        {/* Aberto usa bg-gray-100 em qualquer aba — mesmo tom neutro do
+            nível aberto em Gestão das Parcelas (pedido do usuário: "mesma
+            fonte, mesmo fundo da tabela de gestão de parcelas"). `vencido`
+            (certificado expirado) sempre vence, em qualquer aba. */}
+        <tr className={vencido ? 'bg-red-50' : aberto ? 'bg-gray-100' : 'bg-white'}>
           <td colSpan={totalColunas} className="px-5 py-2.5">
             <div className="flex flex-wrap items-center gap-x-3 gap-y-1.5">
               {/* Fechado por padrão (ver `abertos` — começa
@@ -939,7 +937,7 @@ export default function EspiaoNfeNfsePage() {
                 </button>
               )}
 
-              <p className="text-sm text-gray-900">{certificado.nome}</p>
+              <p className="text-xs text-gray-900">{certificado.nome}</p>
 
               {/* Canto direito: 5 colunas de largura FIXA (vencimento,
                   produtos, serviços, última consulta, ação) — cada uma
@@ -1046,7 +1044,7 @@ export default function EspiaoNfeNfsePage() {
 
         {!aberto ? null : carregandoNotas ? (
           <tr>
-            <td colSpan={totalColunas} className="px-5 py-6 text-center text-sm text-gray-400">
+            <td colSpan={totalColunas} className="px-5 py-6 text-center text-xs text-gray-400">
               Carregando notas...
             </td>
           </tr>
@@ -1058,20 +1056,19 @@ export default function EspiaoNfeNfsePage() {
                 também: h-4 w-4, ícone 10). Só existe quando tem
                 pelo menos 1 produto (sem nenhum, não precisa
                 mostrar a linha em vão). Mesma cor do nível 1 quando
-                aberta (primary-50 nas abas Novas/Cientes, gray-100 em
-                Inativas — ver renderCertificado) — border-t marca a
-                virada de nível. Só o botão "+/−" abre/fecha (a
-                linha inteira não é mais clicável, igual ao
+                aberta (bg-gray-100 — ver renderCertificado) —
+                border-t marca a virada de nível. Só o botão "+/−"
+                abre/fecha (a linha inteira não é mais clicável, igual ao
                 nível 1). */}
             {totalNfeCard > 0 && (
               <>
                 <tr
                   className={`border-t border-t-gray-200 border-b border-b-gray-50 ${
-                    produtosAberto ? (modoInativas ? 'bg-gray-100' : 'bg-primary-50') : 'bg-white'
+                    produtosAberto ? 'bg-gray-100' : 'bg-white'
                   }`}
                 >
                   <td colSpan={totalColunas} className="py-2 pl-9 pr-5">
-                    <span className="inline-flex items-center gap-2 text-sm font-semibold text-gray-500">
+                    <span className="inline-flex items-center gap-2 text-xs font-semibold text-gray-500">
                       <button
                         type="button"
                         onClick={() => toggleSecao(certificado.id, 'produtos')}
@@ -1122,11 +1119,11 @@ export default function EspiaoNfeNfsePage() {
               <>
                 <tr
                   className={`border-t border-t-gray-100 border-b border-b-gray-50 ${
-                    servicosAberto ? (modoInativas ? 'bg-gray-100' : 'bg-primary-50') : 'bg-white'
+                    servicosAberto ? 'bg-gray-100' : 'bg-white'
                   }`}
                 >
                   <td colSpan={totalColunas} className="py-2 pl-9 pr-5">
-                    <span className="inline-flex items-center gap-2 text-sm font-semibold text-gray-500">
+                    <span className="inline-flex items-center gap-2 text-xs font-semibold text-gray-500">
                       <button
                         type="button"
                         onClick={() => toggleSecao(certificado.id, 'servicos')}
@@ -1319,7 +1316,7 @@ export default function EspiaoNfeNfsePage() {
                 {certificadosAgrupados.comNotas.length > 0 && (
                   <Card className="rounded-tl-none !p-0 overflow-hidden">
                     <div className="overflow-x-auto">
-                      <table className="w-full text-left text-sm">
+                      <table className="w-full text-left text-xs">
                         {filtrando && (
                           <tbody>
                             <tr>
@@ -1357,7 +1354,7 @@ export default function EspiaoNfeNfsePage() {
                       {certificadosAgrupados.semNotas.length !== 1 ? 's' : ''}
                     </div>
                     <div className="overflow-x-auto">
-                      <table className="w-full text-left text-sm">{certificadosAgrupados.semNotas.map(renderCertificado)}</table>
+                      <table className="w-full text-left text-xs">{certificadosAgrupados.semNotas.map(renderCertificado)}</table>
                     </div>
                   </Card>
                 )}
