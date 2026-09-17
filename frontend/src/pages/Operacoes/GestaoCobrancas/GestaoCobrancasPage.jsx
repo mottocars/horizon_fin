@@ -458,9 +458,9 @@ export default function GestaoCobrancasPage() {
                 onClick={() => setSincronizarAberto(true)}
                 disabled={!empresaId}
                 title="Sincronizar"
-                className="flex h-10 w-10 shrink-0 items-center justify-center rounded-lg bg-primary-600 text-white transition-colors hover:bg-primary-700 disabled:cursor-not-allowed disabled:opacity-60"
+                className="flex shrink-0 items-center justify-center rounded-lg bg-primary-600 p-2 text-white transition-colors hover:bg-primary-700 disabled:cursor-not-allowed disabled:opacity-60"
               >
-                <RefreshCw size={16} />
+                <RefreshCw size={18} />
               </button>
             )}
             {abaAtiva === 'clientes' && (
@@ -468,15 +468,18 @@ export default function GestaoCobrancasPage() {
               // alinhar certinho), mas com paleta secundária (borda cinza)
               // pra não competir visualmente com ele — "Sincronizar" busca
               // dado novo do Sienge, "Exportar" só baixa o que já está na
-              // tela, são ações de peso bem diferente.
+              // tela, são ações de peso bem diferente. p-1.75 (7px, em vez
+              // do mesmo p-2 do Sincronizar) compensa a borda de 1px deste
+              // botão, que o Sincronizar não tem — sem isso ele ficava 2px
+              // maior, quebrando o alinhamento certinho do comentário acima.
               <button
                 type="button"
                 onClick={handleExportarClientes}
                 disabled={!empresaId || exportandoClientes}
                 title="Exportar em Excel"
-                className="flex h-10 w-10 shrink-0 items-center justify-center rounded-lg border border-gray-200 text-gray-600 transition-colors hover:bg-gray-50 disabled:cursor-not-allowed disabled:opacity-60"
+                className="flex shrink-0 items-center justify-center rounded-lg border border-gray-200 p-1.75 text-gray-600 transition-colors hover:bg-gray-50 disabled:cursor-not-allowed disabled:opacity-60"
               >
-                <Download size={16} className={exportandoClientes ? 'animate-pulse' : ''} />
+                <Download size={18} className={exportandoClientes ? 'animate-pulse' : ''} />
               </button>
             )}
           </div>
