@@ -287,7 +287,15 @@ async function getResumoPorCentroCusto(empresaId, filtros = {}) {
       };
     })
     .filter((centro) => centro.total_clientes > 0)
-    .sort((a, b) => a.cost_center_name.localeCompare(b.cost_center_name, 'pt-BR'));
+    // Mais vencido primeiro (é o mais urgente pra cobrança); empatado no
+    // vencido, o maior "a vencer" vem antes (mais volume batendo na porta);
+    // nome só desempata o que sobrar (ex.: os dois zerados).
+    .sort(
+      (a, b) =>
+        b.valor_vencido - a.valor_vencido ||
+        b.valor_a_vencer - a.valor_a_vencer ||
+        a.cost_center_name.localeCompare(b.cost_center_name, 'pt-BR')
+    );
 }
 
 // Nível 2 (Cliente, versão nova): dentro de 1 centro de custo, 1 linha por
@@ -343,8 +351,16 @@ async function listClientesPorCentroCusto(empresaId, costCenterId, filtros = {})
         parcela_atual_installment_id: parcelaAtual?.installment_id ?? null,
       };
     })
+    // Mesmo critério do Nível 1 (Centro de Custo): mais vencido primeiro,
+    // empate desempatado pelo maior "a vencer"; nome+título só entram se
+    // sobrar empate nos dois valores (ex.: título 100% quitado, os dois
+    // zerados).
     .sort(
-      (a, b) => (a.client_name || '').localeCompare(b.client_name || '', 'pt-BR') || a.bill_id - b.bill_id
+      (a, b) =>
+        b.valor_vencido - a.valor_vencido ||
+        b.valor_a_vencer - a.valor_a_vencer ||
+        (a.client_name || '').localeCompare(b.client_name || '', 'pt-BR') ||
+        a.bill_id - b.bill_id
     );
 }
 
