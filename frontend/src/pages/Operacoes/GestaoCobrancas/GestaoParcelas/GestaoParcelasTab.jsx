@@ -289,8 +289,8 @@ export default function GestaoParcelasTab({ empresaId, centroCustoIds = [], busc
                       >
                         <td className={`${DIV_H} py-4 pl-3 text-gray-900`}>
                           <span className="flex items-center gap-2">
-                            <span className="flex h-5 w-5 shrink-0 items-center justify-center rounded bg-primary-600 text-white">
-                              {centroAberto ? <Minus size={12} /> : <Plus size={12} />}
+                            <span className="flex h-4 w-4 shrink-0 items-center justify-center rounded bg-primary-100 text-primary-600">
+                              {centroAberto ? <Minus size={10} /> : <Plus size={10} />}
                             </span>
                             {centro.cost_center_name}
                           </span>
@@ -336,7 +336,7 @@ export default function GestaoParcelasTab({ empresaId, centroCustoIds = [], busc
                               >
                                 <td className={`${DIV_H} py-3 pl-9 text-gray-900`}>
                                   <span className="flex items-center gap-2">
-                                    <span className="flex h-4 w-4 shrink-0 items-center justify-center rounded bg-primary-600 text-white">
+                                    <span className="flex h-4 w-4 shrink-0 items-center justify-center rounded bg-primary-100 text-primary-600">
                                       {clienteAberto ? <Minus size={10} /> : <Plus size={10} />}
                                     </span>
                                     {cliente.client_name || `Cliente ${cliente.client_id}`}
