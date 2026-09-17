@@ -13,6 +13,13 @@ import { CLUSTER_ORDEM, CLUSTER_LABEL, CLUSTER_ICON, CLUSTER_ICON_COR, formatarD
 // Nome(1) + Título(1) + Vencimento(1) + clusters/status(4) + valores(3).
 const TOTAL_COLUNAS = 3 + CLUSTER_ORDEM.length + 3;
 
+// Divisores da grade — mesmo tom (gray-200) nos dois sentidos, de propósito
+// (pedido do usuário: "escureça também com o mesmo tom" a linha que já
+// existia entre as linhas). DIV_V só entra nas colunas depois da 1ª (Nome),
+// senão sobraria uma borda solta colada na lateral esquerda da tabela.
+const DIV_H = 'border-b border-gray-200';
+const DIV_V = 'border-l border-gray-200';
+
 // Mesmo formatarMoeda de ClustersCobranca/constantes.js, sem os centavos —
 // só nesta tabela (pedido do usuário: "pode retirar os números após a
 // vírgula"), pra não mexer no formato usado no resto do módulo.
@@ -220,7 +227,15 @@ export default function GestaoParcelasTab({ empresaId, centroCustoIds = [], busc
             </p>
           </div>
         ) : (
-          <div className="overflow-x-auto">
+          // max-h + overflow-auto (nos 2 sentidos, não só overflow-x) é o
+          // que faz o cabeçalho sticky funcionar de verdade — com só
+          // overflow-x-auto, o navegador força overflow-y a virar "auto"
+          // também (regra do próprio CSS), mas essa div nunca ganha altura
+          // própria pra rolar, então o `sticky` do thead gruda nela, que
+          // por sua vez rola junto com a página inteira e "foge" — mesmo
+          // truque de altura fixa já usado em Relatórios > Métricas de
+          // Uso (HeatmapUsuarioTela.jsx).
+          <div className="max-h-160 overflow-auto rounded-lg border border-gray-100">
             {/* table-layout fixed + colgroup: sem isso, a largura de cada
                 coluna é recalculada a partir do conteúdo das linhas
                 visíveis (mesmo problema e mesma solução de RotinasTab.jsx)
@@ -228,11 +243,11 @@ export default function GestaoParcelasTab({ empresaId, centroCustoIds = [], busc
                 colunas de cima (ícones de cluster, valores) "andavam" pra
                 acomodar o conteúdo novo. Com largura fixa por coluna, elas
                 ficam sempre no mesmo lugar, aberto ou fechado.
-                Sem `w-full`, de propósito: a tabela some o tanto que a
-                soma das colunas pedir, sem esticar até a borda do card —
-                é o que traz Título/clusters mais pra esquerda (colados no
-                nome) em vez de espalhados pela largura toda. */}
-            <table className="text-left text-sm" style={{ tableLayout: 'fixed' }}>
+                border-separate + spacing 0 (em vez do collapse padrão do
+                Tailwind): é o que deixa as bordas de coluna (DIV_V) e de
+                linha (DIV_H) previsíveis célula a célula, sem o navegador
+                fundir/descartar uma borda por "conflito" com a vizinha. */}
+            <table className="border-separate border-spacing-0 text-left text-sm" style={{ tableLayout: 'fixed' }}>
               <colgroup>
                 <col className="w-96" />
                 <col className="w-10" />
@@ -240,27 +255,27 @@ export default function GestaoParcelasTab({ empresaId, centroCustoIds = [], busc
                 <col className="w-10" />
                 <col className="w-10" />
                 <col className="w-28" />
-                <col className="w-24" />
+                <col className="w-28" />
                 <col className="w-44" />
                 <col className="w-44" />
                 <col className="w-44" />
               </colgroup>
-              <thead>
-                <tr className="border-b border-gray-100 text-xs uppercase tracking-wide text-gray-400">
-                  <th className="py-3 pl-3 font-medium">{tituloColuna}</th>
+              <thead className="sticky top-0 z-10 bg-white">
+                <tr className="text-xs uppercase tracking-wide text-gray-400">
+                  <th className={`${DIV_H} py-3 pl-3 font-medium`}>{tituloColuna}</th>
                   {CLUSTER_ORDEM.map((cluster) => {
                     const Icone = CLUSTER_ICON[cluster];
                     return (
-                      <th key={cluster} className="py-3 text-center font-medium" title={CLUSTER_LABEL[cluster]}>
+                      <th key={cluster} className={`${DIV_H} ${DIV_V} py-3 text-center font-medium`} title={CLUSTER_LABEL[cluster]}>
                         {Icone && <Icone size={15} className={`inline ${CLUSTER_ICON_COR[cluster]}`} />}
                       </th>
                     );
                   })}
-                  <th className="py-3 pl-16 text-center font-medium">Título</th>
-                  <th className="py-3 text-center font-medium">Vencimento</th>
-                  <th className="py-3 pl-16 text-center font-medium">Pagas</th>
-                  <th className="py-3 pl-16 text-center font-medium">Vencidas</th>
-                  <th className="py-3 pl-16 pr-3 text-center font-medium">A vencer</th>
+                  <th className={`${DIV_H} ${DIV_V} py-3 pl-16 text-center font-medium`}>Título</th>
+                  <th className={`${DIV_H} ${DIV_V} py-3 pl-8 text-center font-medium`}>Vencimento</th>
+                  <th className={`${DIV_H} ${DIV_V} py-3 pl-16 text-center font-medium`}>Pagas</th>
+                  <th className={`${DIV_H} ${DIV_V} py-3 pl-16 text-center font-medium`}>Vencidas</th>
+                  <th className={`${DIV_H} ${DIV_V} py-3 pl-16 pr-3 text-center font-medium`}>A vencer</th>
                 </tr>
               </thead>
               <tbody>
@@ -270,9 +285,9 @@ export default function GestaoParcelasTab({ empresaId, centroCustoIds = [], busc
                     <Fragment key={centro.cost_center_id}>
                       <tr
                         onClick={() => toggleCentro(centro.cost_center_id)}
-                        className={`cursor-pointer border-b border-gray-50 hover:bg-gray-100 ${centroAberto ? 'bg-gray-100 font-semibold' : ''}`}
+                        className={`cursor-pointer hover:bg-gray-100 ${centroAberto ? 'bg-gray-100 font-semibold' : ''}`}
                       >
-                        <td className="py-4 pl-3 text-gray-900">
+                        <td className={`${DIV_H} py-4 pl-3 text-gray-900`}>
                           <span className="flex items-center gap-2">
                             <span className="flex h-5 w-5 shrink-0 items-center justify-center rounded border border-gray-200 text-gray-500">
                               {centroAberto ? <Minus size={12} /> : <Plus size={12} />}
@@ -281,20 +296,20 @@ export default function GestaoParcelasTab({ empresaId, centroCustoIds = [], busc
                           </span>
                         </td>
                         {CLUSTER_ORDEM.map((cluster) => (
-                          <td key={cluster} className="py-4 text-center font-mono tabular-nums text-gray-900">
+                          <td key={cluster} className={`${DIV_H} ${DIV_V} py-4 text-center font-mono tabular-nums text-gray-900`}>
                             {centro.clusters[cluster]}
                           </td>
                         ))}
-                        <td className="py-4 pl-16"></td>
-                        <td className="py-4"></td>
-                        <td className="py-4 pl-16 text-center tabular-nums text-gray-700">{formatarMoedaSemCentavos(centro.valor_pago)}</td>
-                        <td className="py-4 pl-16 text-center tabular-nums text-red-600">{formatarMoedaSemCentavos(centro.valor_vencido)}</td>
-                        <td className="py-4 pl-16 pr-3 text-center tabular-nums text-gray-700">{formatarMoedaSemCentavos(centro.valor_a_vencer)}</td>
+                        <td className={`${DIV_H} ${DIV_V} py-4 pl-16`}></td>
+                        <td className={`${DIV_H} ${DIV_V} py-4 pl-8`}></td>
+                        <td className={`${DIV_H} ${DIV_V} py-4 pl-16 text-center tabular-nums text-gray-700`}>{formatarMoedaSemCentavos(centro.valor_pago)}</td>
+                        <td className={`${DIV_H} ${DIV_V} py-4 pl-16 text-center tabular-nums text-red-600`}>{formatarMoedaSemCentavos(centro.valor_vencido)}</td>
+                        <td className={`${DIV_H} ${DIV_V} py-4 pl-16 pr-3 text-center tabular-nums text-gray-700`}>{formatarMoedaSemCentavos(centro.valor_a_vencer)}</td>
                       </tr>
 
                       {centroAberto && carregandoClientes && (
                         <tr>
-                          <td colSpan={TOTAL_COLUNAS} className="bg-gray-50 py-6 text-center text-sm text-gray-400">
+                          <td colSpan={TOTAL_COLUNAS} className={`${DIV_H} bg-gray-50 py-6 text-center text-sm text-gray-400`}>
                             Carregando...
                           </td>
                         </tr>
@@ -302,7 +317,7 @@ export default function GestaoParcelasTab({ empresaId, centroCustoIds = [], busc
 
                       {centroAberto && !carregandoClientes && clientes.length === 0 && (
                         <tr>
-                          <td colSpan={TOTAL_COLUNAS} className="bg-gray-50 py-6 text-center text-sm text-gray-400">
+                          <td colSpan={TOTAL_COLUNAS} className={`${DIV_H} bg-gray-50 py-6 text-center text-sm text-gray-400`}>
                             Nenhum cliente encontrado.
                           </td>
                         </tr>
@@ -317,9 +332,9 @@ export default function GestaoParcelasTab({ empresaId, centroCustoIds = [], busc
                             <Fragment key={`${cliente.client_id}-${cliente.bill_id}`}>
                               <tr
                                 onClick={() => toggleTitulo(cliente.client_id, cliente.bill_id)}
-                                className={`cursor-pointer border-b border-gray-50 bg-gray-50 hover:bg-gray-100 ${clienteAberto ? 'font-semibold' : ''}`}
+                                className={`cursor-pointer bg-gray-50 hover:bg-gray-100 ${clienteAberto ? 'font-semibold' : ''}`}
                               >
-                                <td className="py-3 pl-9 text-gray-900">
+                                <td className={`${DIV_H} py-3 pl-9 text-gray-900`}>
                                   <span className="flex items-center gap-2">
                                     <span className="flex h-4 w-4 shrink-0 items-center justify-center rounded border border-gray-200 text-gray-400">
                                       {clienteAberto ? <Minus size={10} /> : <Plus size={10} />}
@@ -331,23 +346,23 @@ export default function GestaoParcelasTab({ empresaId, centroCustoIds = [], busc
                                   const Icone = CLUSTER_ICON[cluster];
                                   const doCliente = cluster === cliente.cluster;
                                   return (
-                                    <td key={cluster} className="py-3 text-center">
+                                    <td key={cluster} className={`${DIV_H} ${DIV_V} py-3 text-center`}>
                                       {Icone && (
                                         <Icone size={15} className={`inline ${doCliente ? CLUSTER_ICON_COR[cluster] : 'text-gray-300'}`} />
                                       )}
                                     </td>
                                   );
                                 })}
-                                <td className="py-3 pl-16 text-center text-xs text-gray-500">{cliente.bill_id}</td>
-                                <td className="py-3"></td>
-                                <td className="py-3 pl-16 text-center tabular-nums text-gray-700">{formatarMoedaSemCentavos(cliente.valor_pago)}</td>
-                                <td className="py-3 pl-16 text-center tabular-nums text-red-600">{formatarMoedaSemCentavos(cliente.valor_vencido)}</td>
-                                <td className="py-3 pl-16 pr-3 text-center tabular-nums text-gray-700">{formatarMoedaSemCentavos(cliente.valor_a_vencer)}</td>
+                                <td className={`${DIV_H} ${DIV_V} py-3 pl-16 text-center text-xs text-gray-500`}>{cliente.bill_id}</td>
+                                <td className={`${DIV_H} ${DIV_V} py-3 pl-8`}></td>
+                                <td className={`${DIV_H} ${DIV_V} py-3 pl-16 text-center tabular-nums text-gray-700`}>{formatarMoedaSemCentavos(cliente.valor_pago)}</td>
+                                <td className={`${DIV_H} ${DIV_V} py-3 pl-16 text-center tabular-nums text-red-600`}>{formatarMoedaSemCentavos(cliente.valor_vencido)}</td>
+                                <td className={`${DIV_H} ${DIV_V} py-3 pl-16 pr-3 text-center tabular-nums text-gray-700`}>{formatarMoedaSemCentavos(cliente.valor_a_vencer)}</td>
                               </tr>
 
                               {clienteAberto && carregandoParcelas && (
                                 <tr>
-                                  <td colSpan={TOTAL_COLUNAS} className="bg-white py-6 text-center text-sm text-gray-400">
+                                  <td colSpan={TOTAL_COLUNAS} className={`${DIV_H} bg-white py-6 text-center text-sm text-gray-400`}>
                                     Carregando...
                                   </td>
                                 </tr>
@@ -355,7 +370,7 @@ export default function GestaoParcelasTab({ empresaId, centroCustoIds = [], busc
 
                               {clienteAberto && !carregandoParcelas && parcelas.length === 0 && (
                                 <tr>
-                                  <td colSpan={TOTAL_COLUNAS} className="bg-white py-6 text-center text-sm text-gray-400">
+                                  <td colSpan={TOTAL_COLUNAS} className={`${DIV_H} bg-white py-6 text-center text-sm text-gray-400`}>
                                     Nenhuma parcela encontrada.
                                   </td>
                                 </tr>
@@ -375,12 +390,12 @@ export default function GestaoParcelasTab({ empresaId, centroCustoIds = [], busc
                                           clientName: cliente.client_name,
                                         })
                                       }
-                                      className="cursor-pointer border-b border-gray-50 bg-white hover:bg-gray-50"
+                                      className="cursor-pointer bg-white hover:bg-gray-50"
                                     >
-                                      <td className="py-2.5 pl-16 text-gray-700">
+                                      <td className={`${DIV_H} py-2.5 pl-16 text-gray-700`}>
                                         {parcela.payment_term_description || 'Parcela'} - {parcela.installment_number}
                                       </td>
-                                      <td colSpan={CLUSTER_ORDEM.length} className="px-1 py-2.5">
+                                      <td colSpan={CLUSTER_ORDEM.length} className={`${DIV_H} ${DIV_V} px-1 py-2.5`}>
                                         {status && (
                                           <span
                                             className={`mx-auto flex h-6 w-full items-center justify-center rounded-md text-xs font-medium ${status.className}`}
@@ -389,7 +404,7 @@ export default function GestaoParcelasTab({ empresaId, centroCustoIds = [], busc
                                           </span>
                                         )}
                                       </td>
-                                      <td className="whitespace-nowrap py-2.5 pl-16 text-center text-xs text-gray-500">
+                                      <td className={`${DIV_H} ${DIV_V} whitespace-nowrap py-2.5 pl-16 text-center text-xs text-gray-500`}>
                                         {siengeTenant ? (
                                           <a
                                             href={urlTituloSienge(siengeTenant, parcela.bill_id)}
@@ -407,8 +422,8 @@ export default function GestaoParcelasTab({ empresaId, centroCustoIds = [], busc
                                           </>
                                         )}
                                       </td>
-                                      <td className="py-2.5 text-center text-xs text-gray-500">{formatarData(parcela.due_date)}</td>
-                                      <td colSpan={3}></td>
+                                      <td className={`${DIV_H} ${DIV_V} py-2.5 pl-8 text-center text-xs text-gray-500`}>{formatarData(parcela.due_date)}</td>
+                                      <td colSpan={3} className={`${DIV_H} ${DIV_V}`}></td>
                                     </tr>
                                   );
                                 })}
