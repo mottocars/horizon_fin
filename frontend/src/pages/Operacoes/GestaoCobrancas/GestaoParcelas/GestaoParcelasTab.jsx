@@ -304,12 +304,11 @@ export default function GestaoParcelasTab({ empresaId, centroCustoIds = [], busc
                           </span>
                         </td>
                         {CLUSTER_ORDEM.map((cluster) => (
-                          <td key={cluster} className={`${DIV_H} ${DIV_V} py-4 text-center`}>
-                            <span
-                              className={`mx-auto flex h-6 w-6 items-center justify-center rounded-md font-mono text-xs font-semibold tabular-nums ${CLUSTER_TAG_ESTILO[cluster]}`}
-                            >
-                              {centro.clusters[cluster]}
-                            </span>
+                          <td
+                            key={cluster}
+                            className={`${DIV_H} ${DIV_V} py-4 text-center font-mono font-semibold tabular-nums ${CLUSTER_TAG_ESTILO[cluster]}`}
+                          >
+                            {centro.clusters[cluster]}
                           </td>
                         ))}
                         <td className={`${DIV_H} ${DIV_V} px-2 py-4 text-center`}></td>
@@ -358,12 +357,11 @@ export default function GestaoParcelasTab({ empresaId, centroCustoIds = [], busc
                                   const Icone = CLUSTER_ICON[cluster];
                                   const doCliente = cluster === cliente.cluster;
                                   return (
-                                    <td key={cluster} className={`${DIV_H} ${DIV_V} py-3 text-center`}>
-                                      <span
-                                        className={`mx-auto flex h-6 w-6 items-center justify-center rounded-md ${doCliente ? CLUSTER_TAG_ESTILO[cluster] : 'text-gray-300'}`}
-                                      >
-                                        {Icone && <Icone size={14} />}
-                                      </span>
+                                    <td
+                                      key={cluster}
+                                      className={`${DIV_H} ${DIV_V} py-3 text-center ${doCliente ? CLUSTER_TAG_ESTILO[cluster] : ''}`}
+                                    >
+                                      {Icone && <Icone size={14} className={`inline ${doCliente ? '' : 'text-gray-300'}`} />}
                                     </td>
                                   );
                                 })}
