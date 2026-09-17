@@ -3,9 +3,16 @@ import { Minus, Plus, Receipt } from 'lucide-react';
 import Card from '../../../../components/Card';
 import HistoricoParcelaModal from './HistoricoParcelaModal';
 import { getResumoPorCentroCustoParcelas, listClientesPorCentroCusto } from '../../../../api/gestaoParcelas.api';
-import { CLUSTER_ORDEM, CLUSTER_LABEL, CLUSTER_ICON, CLUSTER_ICON_COR, formatarMoeda } from '../ClustersCobranca/constantes';
+import { CLUSTER_ORDEM, CLUSTER_LABEL, CLUSTER_ICON, CLUSTER_ICON_COR } from '../ClustersCobranca/constantes';
 
 const TOTAL_COLUNAS = 2 + CLUSTER_ORDEM.length + 3;
+
+// Mesmo formatarMoeda de ClustersCobranca/constantes.js, sem os centavos —
+// só nesta tabela (pedido do usuário: "pode retirar os números após a
+// vírgula"), pra não mexer no formato usado no resto do módulo.
+function formatarMoedaSemCentavos(valor) {
+  return (Number(valor) || 0).toLocaleString('pt-BR', { style: 'currency', currency: 'BRL', maximumFractionDigits: 0 });
+}
 
 // Vida de um cliente (ou, mais precisamente, de 1 título dele — ver
 // listClientesPorCentroCusto) dentro do Centro de Custo: Nível 1 agrega por
@@ -118,18 +125,22 @@ export default function GestaoParcelasTab({ empresaId, centroCustoIds = [], busc
                 — abrir um Centro de Custo troca as linhas na tela e as
                 colunas de cima (ícones de cluster, valores) "andavam" pra
                 acomodar o conteúdo novo. Com largura fixa por coluna, elas
-                ficam sempre no mesmo lugar, aberto ou fechado. */}
-            <table className="w-full text-left text-sm" style={{ tableLayout: 'fixed' }}>
+                ficam sempre no mesmo lugar, aberto ou fechado.
+                Sem `w-full`, de propósito: a tabela some o tanto que a
+                soma das colunas pedir, sem esticar até a borda do card —
+                é o que traz Título/clusters mais pra esquerda (colados no
+                nome) em vez de espalhados pela largura toda. */}
+            <table className="text-left text-sm" style={{ tableLayout: 'fixed' }}>
               <colgroup>
-                <col />
-                <col className="w-27.5" />
-                <col className="w-14" />
-                <col className="w-14" />
-                <col className="w-14" />
-                <col className="w-14" />
-                <col className="w-32.5" />
-                <col className="w-32.5" />
-                <col className="w-32.5" />
+                <col className="w-70" />
+                <col className="w-20" />
+                <col className="w-10" />
+                <col className="w-10" />
+                <col className="w-10" />
+                <col className="w-10" />
+                <col className="w-36" />
+                <col className="w-36" />
+                <col className="w-36" />
               </colgroup>
               <thead>
                 <tr className="border-b border-gray-100 text-xs uppercase tracking-wide text-gray-400">
@@ -157,7 +168,7 @@ export default function GestaoParcelasTab({ empresaId, centroCustoIds = [], busc
                         onClick={() => toggleCentro(centro.cost_center_id)}
                         className={`cursor-pointer border-b border-gray-50 hover:bg-gray-100 ${centroAberto ? 'bg-gray-100 font-semibold' : ''}`}
                       >
-                        <td className="py-3 pl-3 text-gray-900">
+                        <td className="py-4 pl-3 text-gray-900">
                           <span className="flex items-center gap-2">
                             <span className="flex h-5 w-5 shrink-0 items-center justify-center rounded border border-gray-200 text-gray-500">
                               {centroAberto ? <Minus size={12} /> : <Plus size={12} />}
@@ -167,13 +178,13 @@ export default function GestaoParcelasTab({ empresaId, centroCustoIds = [], busc
                         </td>
                         <td></td>
                         {CLUSTER_ORDEM.map((cluster) => (
-                          <td key={cluster} className="py-3 text-center font-mono tabular-nums text-gray-900">
+                          <td key={cluster} className="py-4 text-center font-mono tabular-nums text-gray-900">
                             {centro.clusters[cluster]}
                           </td>
                         ))}
-                        <td className="py-3 text-center tabular-nums text-gray-700">{formatarMoeda(centro.valor_pago)}</td>
-                        <td className="py-3 text-center tabular-nums text-red-600">{formatarMoeda(centro.valor_vencido)}</td>
-                        <td className="py-3 pr-3 text-center tabular-nums text-gray-700">{formatarMoeda(centro.valor_a_vencer)}</td>
+                        <td className="py-4 text-center tabular-nums text-gray-700">{formatarMoedaSemCentavos(centro.valor_pago)}</td>
+                        <td className="py-4 text-center tabular-nums text-red-600">{formatarMoedaSemCentavos(centro.valor_vencido)}</td>
+                        <td className="py-4 pr-3 text-center tabular-nums text-gray-700">{formatarMoedaSemCentavos(centro.valor_a_vencer)}</td>
                       </tr>
 
                       {centroAberto && carregandoClientes && (
@@ -206,24 +217,24 @@ export default function GestaoParcelasTab({ empresaId, centroCustoIds = [], busc
                             }
                             className="cursor-pointer border-b border-gray-50 bg-gray-50 hover:bg-gray-100"
                           >
-                            <td className="py-2.5 pl-9 text-gray-900">
+                            <td className="py-3 pl-9 text-gray-900">
                               {cliente.client_name || `Cliente ${cliente.client_id}`}
                             </td>
-                            <td className="py-2.5 text-center text-xs text-gray-500">{cliente.bill_id}</td>
+                            <td className="py-3 text-center text-xs text-gray-500">{cliente.bill_id}</td>
                             {CLUSTER_ORDEM.map((cluster) => {
                               const Icone = CLUSTER_ICON[cluster];
                               const doCliente = cluster === cliente.cluster;
                               return (
-                                <td key={cluster} className="py-2.5 text-center">
+                                <td key={cluster} className="py-3 text-center">
                                   {Icone && (
                                     <Icone size={15} className={`inline ${doCliente ? CLUSTER_ICON_COR[cluster] : 'text-gray-300'}`} />
                                   )}
                                 </td>
                               );
                             })}
-                            <td className="py-2.5 text-center tabular-nums text-gray-700">{formatarMoeda(cliente.valor_pago)}</td>
-                            <td className="py-2.5 text-center tabular-nums text-red-600">{formatarMoeda(cliente.valor_vencido)}</td>
-                            <td className="py-2.5 pr-3 text-center tabular-nums text-gray-700">{formatarMoeda(cliente.valor_a_vencer)}</td>
+                            <td className="py-3 text-center tabular-nums text-gray-700">{formatarMoedaSemCentavos(cliente.valor_pago)}</td>
+                            <td className="py-3 text-center tabular-nums text-red-600">{formatarMoedaSemCentavos(cliente.valor_vencido)}</td>
+                            <td className="py-3 pr-3 text-center tabular-nums text-gray-700">{formatarMoedaSemCentavos(cliente.valor_a_vencer)}</td>
                           </tr>
                         ))}
                     </Fragment>
