@@ -304,10 +304,7 @@ export default function GestaoParcelasTab({ empresaId, centroCustoIds = [], busc
                           </span>
                         </td>
                         {CLUSTER_ORDEM.map((cluster) => (
-                          <td
-                            key={cluster}
-                            className={`${DIV_H} ${DIV_V} py-4 text-center font-mono font-semibold tabular-nums ${CLUSTER_TAG_ESTILO[cluster]}`}
-                          >
+                          <td key={cluster} className={`${DIV_H} ${DIV_V} py-4 text-center font-mono tabular-nums text-gray-900`}>
                             {centro.clusters[cluster]}
                           </td>
                         ))}
@@ -407,14 +404,11 @@ export default function GestaoParcelasTab({ empresaId, centroCustoIds = [], busc
                                       <td className={`${DIV_H} py-2.5 pl-16 text-gray-700`}>
                                         {parcela.payment_term_description || 'Parcela'} - {parcela.installment_number}
                                       </td>
-                                      <td colSpan={CLUSTER_ORDEM.length} className={`${DIV_H} ${DIV_V} px-1 py-2.5`}>
-                                        {status && (
-                                          <span
-                                            className={`mx-auto flex h-6 w-full items-center justify-center rounded-md text-xs font-medium ${status.className}`}
-                                          >
-                                            {status.label}
-                                          </span>
-                                        )}
+                                      <td
+                                        colSpan={CLUSTER_ORDEM.length}
+                                        className={`${DIV_H} ${DIV_V} py-2.5 text-center text-xs font-medium ${status ? status.className : ''}`}
+                                      >
+                                        {status?.label}
                                       </td>
                                       <td className={`${DIV_H} ${DIV_V} whitespace-nowrap px-2 py-2.5 text-center text-xs text-gray-500`}>
                                         {siengeTenant ? (
