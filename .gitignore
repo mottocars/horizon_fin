@@ -5,3 +5,4 @@ dist/
 build/
 *.log
 backend/uploads/
+.claude/settings.local.json
