@@ -235,15 +235,21 @@ export default function GestaoParcelasTab({ empresaId, centroCustoIds = [], busc
             </p>
           </div>
         ) : (
-          // max-h + overflow-auto (nos 2 sentidos, não só overflow-x) é o
-          // que faz o cabeçalho sticky funcionar de verdade — com só
-          // overflow-x-auto, o navegador força overflow-y a virar "auto"
-          // também (regra do próprio CSS), mas essa div nunca ganha altura
-          // própria pra rolar, então o `sticky` do thead gruda nela, que
-          // por sua vez rola junto com a página inteira e "foge" — mesmo
-          // truque de altura fixa já usado em Relatórios > Métricas de
-          // Uso (HeatmapUsuarioTela.jsx).
-          <div className="max-h-160 overflow-auto rounded-lg border border-gray-100">
+          // Nenhum wrapper com overflow-x/overflow-y próprio aqui de
+          // propósito (pedido do usuário: só a barra de rolagem da página,
+          // nunca uma 2ª barra dentro do card) — QUALQUER overflow
+          // diferente de visible neste meio de caminho vira o "teto" onde o
+          // `sticky` do thead passa a colar, e como essa div nunca teria
+          // altura própria pra rolar de verdade, o cabeçalho ficava preso
+          // nela e "fugia" junto quando a PÁGINA rolava (esse foi o bug que
+          // o truque antigo de max-h+overflow-auto contornava, trocando por
+          // uma 2ª barra de rolagem — o que o usuário não quer mais). Sem
+          // overflow aqui, quem rola (nos 2 eixos) é o <main> do AppShell —
+          // ele já tem overflow-y-auto, e o próprio CSS força overflow-x a
+          // virar "auto" também nesse caso (regra do overflow computado),
+          // então a rolagem horizontal da tabela larga continua funcionando,
+          // só que na barra da página mesmo.
+          <div>
             {/* table-layout fixed + colgroup: sem isso, a largura de cada
                 coluna é recalculada a partir do conteúdo das linhas
                 visíveis (mesmo problema e mesma solução de RotinasTab.jsx)
@@ -270,20 +276,20 @@ export default function GestaoParcelasTab({ empresaId, centroCustoIds = [], busc
               </colgroup>
               <thead className="sticky top-0 z-10 bg-white">
                 <tr className="text-xs uppercase tracking-wide text-gray-400">
-                  <th className={`${DIV_H} py-3 pl-3 font-medium`}>{tituloColuna}</th>
+                  <th className={`${DIV_H} py-2.5 pl-3 font-medium`}>{tituloColuna}</th>
                   {CLUSTER_ORDEM.map((cluster) => {
                     const Icone = CLUSTER_ICON[cluster];
                     return (
-                      <th key={cluster} className={`${DIV_H} ${DIV_V} py-3 text-center font-medium`} title={CLUSTER_LABEL[cluster]}>
+                      <th key={cluster} className={`${DIV_H} ${DIV_V} py-2.5 text-center font-medium`} title={CLUSTER_LABEL[cluster]}>
                         {Icone && <Icone size={15} className={`inline ${CLUSTER_ICON_COR[cluster]}`} />}
                       </th>
                     );
                   })}
-                  <th className={`${DIV_H} ${DIV_V} px-2 py-3 text-center font-medium`}>Título</th>
-                  <th className={`${DIV_H} ${DIV_V} px-2 py-3 text-center font-medium`}>Vencimento</th>
-                  <th className={`${DIV_H} ${DIV_V} px-2 py-3 text-center font-medium`}>Pagas</th>
-                  <th className={`${DIV_H} ${DIV_V} px-2 py-3 text-center font-medium`}>Vencidas</th>
-                  <th className={`${DIV_H} ${DIV_V} px-2 py-3 text-center font-medium`}>A vencer</th>
+                  <th className={`${DIV_H} ${DIV_V} px-2 py-2.5 text-center font-medium`}>Título</th>
+                  <th className={`${DIV_H} ${DIV_V} px-2 py-2.5 text-center font-medium`}>Vencimento</th>
+                  <th className={`${DIV_H} ${DIV_V} px-2 py-2.5 text-center font-medium`}>Pagas</th>
+                  <th className={`${DIV_H} ${DIV_V} px-2 py-2.5 text-center font-medium`}>Vencidas</th>
+                  <th className={`${DIV_H} ${DIV_V} px-2 py-2.5 text-center font-medium`}>A vencer</th>
                 </tr>
               </thead>
               <tbody>
@@ -295,7 +301,7 @@ export default function GestaoParcelasTab({ empresaId, centroCustoIds = [], busc
                         onClick={() => toggleCentro(centro.cost_center_id)}
                         className={`cursor-pointer hover:bg-gray-100 ${centroAberto ? 'bg-gray-100 font-semibold' : ''}`}
                       >
-                        <td className={`${DIV_H} py-4 pl-3 text-gray-900`}>
+                        <td className={`${DIV_H} py-3 pl-3 text-gray-900`}>
                           <span className="flex items-center gap-2">
                             <span className="flex h-4 w-4 shrink-0 items-center justify-center rounded bg-primary-100 text-primary-600">
                               {centroAberto ? <Minus size={10} /> : <Plus size={10} />}
@@ -304,15 +310,15 @@ export default function GestaoParcelasTab({ empresaId, centroCustoIds = [], busc
                           </span>
                         </td>
                         {CLUSTER_ORDEM.map((cluster) => (
-                          <td key={cluster} className={`${DIV_H} ${DIV_V} py-4 text-center font-mono tabular-nums text-gray-900`}>
+                          <td key={cluster} className={`${DIV_H} ${DIV_V} py-3 text-center font-mono tabular-nums text-gray-900`}>
                             {centro.clusters[cluster]}
                           </td>
                         ))}
-                        <td className={`${DIV_H} ${DIV_V} px-2 py-4 text-center`}></td>
-                        <td className={`${DIV_H} ${DIV_V} px-2 py-4 text-center`}></td>
-                        <td className={`${DIV_H} ${DIV_V} px-2 py-4 text-center tabular-nums text-gray-700`}>{formatarMoedaSemCentavos(centro.valor_pago)}</td>
-                        <td className={`${DIV_H} ${DIV_V} px-2 py-4 text-center tabular-nums text-red-600`}>{formatarMoedaSemCentavos(centro.valor_vencido)}</td>
-                        <td className={`${DIV_H} ${DIV_V} px-2 py-4 text-center tabular-nums text-gray-700`}>{formatarMoedaSemCentavos(centro.valor_a_vencer)}</td>
+                        <td className={`${DIV_H} ${DIV_V} px-2 py-3 text-center`}></td>
+                        <td className={`${DIV_H} ${DIV_V} px-2 py-3 text-center`}></td>
+                        <td className={`${DIV_H} ${DIV_V} px-2 py-3 text-center tabular-nums text-gray-700`}>{formatarMoedaSemCentavos(centro.valor_pago)}</td>
+                        <td className={`${DIV_H} ${DIV_V} px-2 py-3 text-center tabular-nums text-red-600`}>{formatarMoedaSemCentavos(centro.valor_vencido)}</td>
+                        <td className={`${DIV_H} ${DIV_V} px-2 py-3 text-center tabular-nums text-gray-700`}>{formatarMoedaSemCentavos(centro.valor_a_vencer)}</td>
                       </tr>
 
                       {centroAberto && carregandoClientes && (
@@ -342,7 +348,7 @@ export default function GestaoParcelasTab({ empresaId, centroCustoIds = [], busc
                                 onClick={() => toggleTitulo(cliente.client_id, cliente.bill_id)}
                                 className={`cursor-pointer bg-gray-50 hover:bg-gray-100 ${clienteAberto ? 'font-semibold' : ''}`}
                               >
-                                <td className={`${DIV_H} py-3 pl-9 text-gray-900`}>
+                                <td className={`${DIV_H} py-2.5 pl-9 text-gray-900`}>
                                   <span className="flex items-center gap-2">
                                     <span className="flex h-4 w-4 shrink-0 items-center justify-center rounded bg-primary-100 text-primary-600">
                                       {clienteAberto ? <Minus size={10} /> : <Plus size={10} />}
@@ -356,17 +362,17 @@ export default function GestaoParcelasTab({ empresaId, centroCustoIds = [], busc
                                   return (
                                     <td
                                       key={cluster}
-                                      className={`${DIV_H} ${DIV_V} py-3 text-center ${doCliente ? CLUSTER_TAG_ESTILO[cluster] : ''}`}
+                                      className={`${DIV_H} ${DIV_V} py-2.5 text-center ${doCliente ? CLUSTER_TAG_ESTILO[cluster] : ''}`}
                                     >
                                       {Icone && <Icone size={14} className={`inline ${doCliente ? '' : 'text-gray-300'}`} />}
                                     </td>
                                   );
                                 })}
-                                <td className={`${DIV_H} ${DIV_V} px-2 py-3 text-center text-xs text-gray-500`}>{cliente.bill_id}</td>
-                                <td className={`${DIV_H} ${DIV_V} px-2 py-3 text-center`}></td>
-                                <td className={`${DIV_H} ${DIV_V} px-2 py-3 text-center tabular-nums text-gray-700`}>{formatarMoedaSemCentavos(cliente.valor_pago)}</td>
-                                <td className={`${DIV_H} ${DIV_V} px-2 py-3 text-center tabular-nums text-red-600`}>{formatarMoedaSemCentavos(cliente.valor_vencido)}</td>
-                                <td className={`${DIV_H} ${DIV_V} px-2 py-3 text-center tabular-nums text-gray-700`}>{formatarMoedaSemCentavos(cliente.valor_a_vencer)}</td>
+                                <td className={`${DIV_H} ${DIV_V} px-2 py-2.5 text-center text-xs text-gray-500`}>{cliente.bill_id}</td>
+                                <td className={`${DIV_H} ${DIV_V} px-2 py-2.5 text-center`}></td>
+                                <td className={`${DIV_H} ${DIV_V} px-2 py-2.5 text-center tabular-nums text-gray-700`}>{formatarMoedaSemCentavos(cliente.valor_pago)}</td>
+                                <td className={`${DIV_H} ${DIV_V} px-2 py-2.5 text-center tabular-nums text-red-600`}>{formatarMoedaSemCentavos(cliente.valor_vencido)}</td>
+                                <td className={`${DIV_H} ${DIV_V} px-2 py-2.5 text-center tabular-nums text-gray-700`}>{formatarMoedaSemCentavos(cliente.valor_a_vencer)}</td>
                               </tr>
 
                               {clienteAberto && carregandoParcelas && (
@@ -401,16 +407,16 @@ export default function GestaoParcelasTab({ empresaId, centroCustoIds = [], busc
                                       }
                                       className="cursor-pointer bg-white hover:bg-gray-50"
                                     >
-                                      <td className={`${DIV_H} py-2.5 pl-16 text-gray-700`}>
+                                      <td className={`${DIV_H} py-2 pl-16 text-gray-700`}>
                                         {parcela.payment_term_description || 'Parcela'} - {parcela.installment_number}
                                       </td>
                                       <td
                                         colSpan={CLUSTER_ORDEM.length}
-                                        className={`${DIV_H} ${DIV_V} py-2.5 text-center text-xs font-medium ${status ? status.className : ''}`}
+                                        className={`${DIV_H} ${DIV_V} py-2 text-center text-xs font-medium ${status ? status.className : ''}`}
                                       >
                                         {status?.label}
                                       </td>
-                                      <td className={`${DIV_H} ${DIV_V} whitespace-nowrap px-2 py-2.5 text-center text-xs text-gray-500`}>
+                                      <td className={`${DIV_H} ${DIV_V} whitespace-nowrap px-2 py-2 text-center text-xs text-gray-500`}>
                                         {siengeTenant ? (
                                           <a
                                             href={urlTituloSienge(siengeTenant, parcela.bill_id)}
@@ -428,10 +434,10 @@ export default function GestaoParcelasTab({ empresaId, centroCustoIds = [], busc
                                           </>
                                         )}
                                       </td>
-                                      <td className={`${DIV_H} ${DIV_V} px-2 py-2.5 text-center text-xs text-gray-500`}>{formatarData(parcela.due_date)}</td>
-                                      <td className={`${DIV_H} ${DIV_V} px-2 py-2.5 text-center text-xs tabular-nums text-gray-700`}>{formatarMoedaSemCentavos(parcela.valor_pago)}</td>
-                                      <td className={`${DIV_H} ${DIV_V} px-2 py-2.5 text-center text-xs tabular-nums text-red-600`}>{formatarMoedaSemCentavos(parcela.valor_vencido)}</td>
-                                      <td className={`${DIV_H} ${DIV_V} px-2 py-2.5 text-center text-xs tabular-nums text-gray-700`}>{formatarMoedaSemCentavos(parcela.valor_a_vencer)}</td>
+                                      <td className={`${DIV_H} ${DIV_V} px-2 py-2 text-center text-xs text-gray-500`}>{formatarData(parcela.due_date)}</td>
+                                      <td className={`${DIV_H} ${DIV_V} px-2 py-2 text-center text-xs tabular-nums text-gray-700`}>{formatarMoedaSemCentavos(parcela.valor_pago)}</td>
+                                      <td className={`${DIV_H} ${DIV_V} px-2 py-2 text-center text-xs tabular-nums text-red-600`}>{formatarMoedaSemCentavos(parcela.valor_vencido)}</td>
+                                      <td className={`${DIV_H} ${DIV_V} px-2 py-2 text-center text-xs tabular-nums text-gray-700`}>{formatarMoedaSemCentavos(parcela.valor_a_vencer)}</td>
                                     </tr>
                                   );
                                 })}
