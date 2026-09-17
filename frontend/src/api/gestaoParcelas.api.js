@@ -33,6 +33,18 @@ export function listClientesPorCentroCusto(empresaId, costCenterId, filtros) {
     .then((res) => res.data);
 }
 
+// Nível 3 (Parcela, folha de verdade — versão nova): as parcelas
+// individuais de 1 título (bill_id) dentro do centro de custo aberto, com
+// status (em_dia/atraso/inadimplente/null) já calculado — ver
+// GestaoParcelas/GestaoParcelasTab.jsx.
+export function listParcelasPorTitulo(empresaId, costCenterId, billId, filtros) {
+  return http
+    .get(`/gestao-parcelas/centros-custo/${costCenterId}/titulos/${billId}/parcelas`, {
+      params: { empresa_id: empresaId, ...paramsFiltros(filtros) },
+    })
+    .then((res) => res.data);
+}
+
 // Nível 2 (antigo, por etapa da régua): quantas parcelas de 1 cluster caem
 // em cada etapa da régua de cobrança.
 export function getEtapasPorCluster(empresaId, cluster, filtros) {

@@ -2,10 +2,16 @@ import { Fragment, useCallback, useEffect, useRef, useState } from 'react';
 import { Minus, Plus, Receipt } from 'lucide-react';
 import Card from '../../../../components/Card';
 import HistoricoParcelaModal from './HistoricoParcelaModal';
-import { getResumoPorCentroCustoParcelas, listClientesPorCentroCusto } from '../../../../api/gestaoParcelas.api';
-import { CLUSTER_ORDEM, CLUSTER_LABEL, CLUSTER_ICON, CLUSTER_ICON_COR } from '../ClustersCobranca/constantes';
+import {
+  getResumoPorCentroCustoParcelas,
+  listClientesPorCentroCusto,
+  listParcelasPorTitulo,
+} from '../../../../api/gestaoParcelas.api';
+import { listSiengeIntegracoes } from '../../../../api/sienge.api';
+import { CLUSTER_ORDEM, CLUSTER_LABEL, CLUSTER_ICON, CLUSTER_ICON_COR, formatarData } from '../ClustersCobranca/constantes';
 
-const TOTAL_COLUNAS = 2 + CLUSTER_ORDEM.length + 3;
+// Nome(1) + Título(1) + Vencimento(1) + clusters/status(4) + valores(3).
+const TOTAL_COLUNAS = 3 + CLUSTER_ORDEM.length + 3;
 
 // Mesmo formatarMoeda de ClustersCobranca/constantes.js, sem os centavos —
 // só nesta tabela (pedido do usuário: "pode retirar os números após a
@@ -14,15 +20,42 @@ function formatarMoedaSemCentavos(valor) {
   return (Number(valor) || 0).toLocaleString('pt-BR', { style: 'currency', currency: 'BRL', maximumFractionDigits: 0 });
 }
 
+// installment_number (sie_income) vem no formato "3/12" (parcela 3 de 12) —
+// mesmo helper de RotinasTab.jsx::numeroParcela, duplicado aqui de
+// propósito (mesma convenção do módulo de não compartilhar entre abas). Só
+// o número antes da barra, pra colar com bill_id na coluna Título.
+function numeroParcela(installmentNumber) {
+  return String(installmentNumber ?? '').split('/')[0];
+}
+
+// Mesmo link de RotinasTab.jsx::urlTituloSienge — direto pro título dentro
+// do Sienge de verdade (precisa do tenant da integração desta empresa).
+function urlTituloSienge(tenant, billId) {
+  return `https://${tenant}.sienge.com.br/sienge/CRC/editTitulo.do?entity.tituloPK.nuTitulo=${billId}`;
+}
+
+// Os 3 status possíveis de 1 parcela (Nível 3) — nunca mais que isso (ver
+// gestaoParcelas.service.js::listParcelasPorTitulo): paga em dia, paga com
+// atraso, ou inadimplente (mesmo limite de dias do Motor de Risco da régua
+// de Inadimplência). Em aberto mas ainda dentro do limite não tem status —
+// célula fica em branco.
+const STATUS_PARCELA = {
+  em_dia: { label: 'Paga em Dia', className: 'bg-emerald-50 text-emerald-700' },
+  atraso: { label: 'Paga com Atraso', className: 'bg-amber-50 text-amber-700' },
+  inadimplente: { label: 'Inadimplente', className: 'bg-red-50 text-red-700' },
+};
+
 // Vida de um cliente (ou, mais precisamente, de 1 título dele — ver
-// listClientesPorCentroCusto) dentro do Centro de Custo: Nível 1 agrega por
-// Centro de Custo (quantidade de CLIENTES por cluster — mesmos 4 clusters de
-// "Clusters de Clientes" — mais os valores pago/vencido/a vencer); Nível 2,
-// ao expandir, lista os clientes desse centro, 1 linha por cliente+título,
-// com o cluster do cliente marcado (ícone aceso na coluna dele, cinza nas
-// outras) e a parcela atual (a mais antiga em aberto; sem nenhuma em
-// aberto, a última — título quitado). Etapa da régua/responsável/canais
-// saíram da tela por enquanto (retomamos depois).
+// listClientesPorCentroCusto) dentro do Centro de Custo, até a parcela:
+// Nível 1 agrega por Centro de Custo (quantidade de CLIENTES por cluster —
+// mesmos 4 clusters de "Clusters de Clientes" — mais os valores pago/
+// vencido/a vencer); Nível 2 lista os clientes desse centro, 1 linha por
+// cliente+título, com o cluster do cliente marcado (ícone aceso na coluna
+// dele, cinza nas outras); Nível 3, ao abrir um título, lista as parcelas
+// individuais dele — aqui a coluna de cluster vira status (paga em dia/com
+// atraso/inadimplente) e a de Título mostra bill_id/parcela, igual à aba
+// Rotinas. Etapa da régua/responsável/canais saíram da tela por enquanto
+// (retomamos depois).
 export default function GestaoParcelasTab({ empresaId, centroCustoIds = [], busca = '', refreshToken = 0 }) {
   const [centros, setCentros] = useState([]);
   const [carregandoCentros, setCarregandoCentros] = useState(false);
@@ -31,12 +64,45 @@ export default function GestaoParcelasTab({ empresaId, centroCustoIds = [], busc
   const [clientes, setClientes] = useState([]);
   const [carregandoClientes, setCarregandoClientes] = useState(false);
 
+  // Nível 3: qual (cliente, título) está com as parcelas abertas — só 1 por
+  // vez, mesmo acordeão exclusivo dos níveis de cima.
+  const [tituloAberto, setTituloAberto] = useState(null);
+  const [parcelas, setParcelas] = useState([]);
+  const [carregandoParcelas, setCarregandoParcelas] = useState(false);
+
   const [parcelaHistorico, setParcelaHistorico] = useState(null);
+
+  // Tenant da integração Sienge desta empresa — só pra montar o link da
+  // coluna Título no Nível 3 (mesmo padrão de RotinasTab.jsx). Sem Sienge
+  // configurado pra esta empresa, o Título continua aparecendo, só sem
+  // virar link.
+  const [siengeTenant, setSiengeTenant] = useState('');
+
+  useEffect(() => {
+    if (!empresaId) {
+      setSiengeTenant('');
+      return;
+    }
+    let ativo = true;
+    listSiengeIntegracoes({ ativo: true, limit: 100 })
+      .then((resultado) => {
+        if (!ativo) return;
+        const integracao = resultado.data.find((i) => String(i.empresa_id) === String(empresaId));
+        setSiengeTenant(integracao?.tenant || '');
+      })
+      .catch(() => {
+        if (ativo) setSiengeTenant('');
+      });
+    return () => {
+      ativo = false;
+    };
+  }, [empresaId]);
 
   // Guarda contra corrida — mesmo padrão do resto da tela de Gestão de
   // Cobranças (1 ref por nível, requisições independentes).
   const requisicaoCentrosRef = useRef(0);
   const requisicaoClientesRef = useRef(0);
+  const requisicaoParcelasRef = useRef(0);
 
   const carregarCentros = useCallback(() => {
     if (!empresaId) {
@@ -59,6 +125,8 @@ export default function GestaoParcelasTab({ empresaId, centroCustoIds = [], busc
   useEffect(() => {
     setCentroExpandidoId(null);
     setClientes([]);
+    setTituloAberto(null);
+    setParcelas([]);
   }, [empresaId, centroCustoIds]);
 
   useEffect(() => {
@@ -82,10 +150,37 @@ export default function GestaoParcelasTab({ empresaId, centroCustoIds = [], busc
     carregarClientes();
   }, [carregarClientes, refreshToken]);
 
+  const carregarParcelas = useCallback(() => {
+    if (!tituloAberto || !centroExpandidoId) return;
+    const minhaRequisicao = ++requisicaoParcelasRef.current;
+    setCarregandoParcelas(true);
+    listParcelasPorTitulo(empresaId, centroExpandidoId, tituloAberto.billId, { search: busca })
+      .then((dados) => {
+        if (minhaRequisicao === requisicaoParcelasRef.current) setParcelas(dados);
+      })
+      .finally(() => {
+        if (minhaRequisicao === requisicaoParcelasRef.current) setCarregandoParcelas(false);
+      });
+  }, [empresaId, centroExpandidoId, tituloAberto, busca]);
+
+  useEffect(() => {
+    carregarParcelas();
+  }, [carregarParcelas, refreshToken]);
+
   function toggleCentro(id) {
     setCentroExpandidoId((atual) => {
       setClientes([]);
+      setTituloAberto(null);
+      setParcelas([]);
       return atual === id ? null : id;
+    });
+  }
+
+  function toggleTitulo(clientId, billId) {
+    setTituloAberto((atual) => {
+      setParcelas([]);
+      if (atual && atual.clientId === clientId && atual.billId === billId) return null;
+      return { clientId, billId };
     });
   }
 
@@ -105,6 +200,13 @@ export default function GestaoParcelasTab({ empresaId, centroCustoIds = [], busc
   // pelo backend (mesmo critério de cobrancaClusters.service.js::
   // getResumoPorCentroCusto) — não precisa filtrar de novo aqui.
   const semDados = !carregandoCentros && centros.length === 0;
+
+  // Cabeçalho da 1ª coluna reage a quantos níveis estão abertos agora.
+  const tituloColuna = tituloAberto
+    ? 'Centro de Custo / Cliente / Parcela'
+    : centroExpandidoId
+      ? 'Centro de Custo / Cliente'
+      : 'Centro de Custo';
 
   return (
     <div className="space-y-4">
@@ -137,14 +239,15 @@ export default function GestaoParcelasTab({ empresaId, centroCustoIds = [], busc
                 <col className="w-10" />
                 <col className="w-10" />
                 <col className="w-10" />
-                <col className="w-20" />
+                <col className="w-28" />
+                <col className="w-24" />
                 <col className="w-44" />
                 <col className="w-44" />
                 <col className="w-44" />
               </colgroup>
               <thead>
                 <tr className="border-b border-gray-100 text-xs uppercase tracking-wide text-gray-400">
-                  <th className="py-3 pl-3 font-medium">{centroExpandidoId ? 'Centro de Custo / Cliente' : 'Centro de Custo'}</th>
+                  <th className="py-3 pl-3 font-medium">{tituloColuna}</th>
                   {CLUSTER_ORDEM.map((cluster) => {
                     const Icone = CLUSTER_ICON[cluster];
                     return (
@@ -154,6 +257,7 @@ export default function GestaoParcelasTab({ empresaId, centroCustoIds = [], busc
                     );
                   })}
                   <th className="py-3 pl-16 text-center font-medium">Título</th>
+                  <th className="py-3 text-center font-medium">Vencimento</th>
                   <th className="py-3 pl-16 text-center font-medium">Pagas</th>
                   <th className="py-3 pl-16 text-center font-medium">Vencidas</th>
                   <th className="py-3 pl-16 pr-3 text-center font-medium">A vencer</th>
@@ -182,6 +286,7 @@ export default function GestaoParcelasTab({ empresaId, centroCustoIds = [], busc
                           </td>
                         ))}
                         <td className="py-4 pl-16"></td>
+                        <td className="py-4"></td>
                         <td className="py-4 pl-16 text-center tabular-nums text-gray-700">{formatarMoedaSemCentavos(centro.valor_pago)}</td>
                         <td className="py-4 pl-16 text-center tabular-nums text-red-600">{formatarMoedaSemCentavos(centro.valor_vencido)}</td>
                         <td className="py-4 pl-16 pr-3 text-center tabular-nums text-gray-700">{formatarMoedaSemCentavos(centro.valor_a_vencer)}</td>
@@ -205,38 +310,111 @@ export default function GestaoParcelasTab({ empresaId, centroCustoIds = [], busc
 
                       {centroAberto &&
                         !carregandoClientes &&
-                        clientes.map((cliente) => (
-                          <tr
-                            key={`${cliente.client_id}-${cliente.bill_id}`}
-                            onClick={() =>
-                              setParcelaHistorico({
-                                billId: cliente.bill_id,
-                                installmentId: cliente.parcela_atual_installment_id,
-                                clientName: cliente.client_name,
-                              })
-                            }
-                            className="cursor-pointer border-b border-gray-50 bg-gray-50 hover:bg-gray-100"
-                          >
-                            <td className="py-3 pl-9 text-gray-900">
-                              {cliente.client_name || `Cliente ${cliente.client_id}`}
-                            </td>
-                            {CLUSTER_ORDEM.map((cluster) => {
-                              const Icone = CLUSTER_ICON[cluster];
-                              const doCliente = cluster === cliente.cluster;
-                              return (
-                                <td key={cluster} className="py-3 text-center">
-                                  {Icone && (
-                                    <Icone size={15} className={`inline ${doCliente ? CLUSTER_ICON_COR[cluster] : 'text-gray-300'}`} />
-                                  )}
+                        clientes.map((cliente) => {
+                          const clienteAberto =
+                            tituloAberto?.clientId === cliente.client_id && tituloAberto?.billId === cliente.bill_id;
+                          return (
+                            <Fragment key={`${cliente.client_id}-${cliente.bill_id}`}>
+                              <tr
+                                onClick={() => toggleTitulo(cliente.client_id, cliente.bill_id)}
+                                className={`cursor-pointer border-b border-gray-50 bg-gray-50 hover:bg-gray-100 ${clienteAberto ? 'font-semibold' : ''}`}
+                              >
+                                <td className="py-3 pl-9 text-gray-900">
+                                  <span className="flex items-center gap-2">
+                                    <span className="flex h-4 w-4 shrink-0 items-center justify-center rounded border border-gray-200 text-gray-400">
+                                      {clienteAberto ? <Minus size={10} /> : <Plus size={10} />}
+                                    </span>
+                                    {cliente.client_name || `Cliente ${cliente.client_id}`}
+                                  </span>
                                 </td>
-                              );
-                            })}
-                            <td className="py-3 pl-16 text-center text-xs text-gray-500">{cliente.bill_id}</td>
-                            <td className="py-3 pl-16 text-center tabular-nums text-gray-700">{formatarMoedaSemCentavos(cliente.valor_pago)}</td>
-                            <td className="py-3 pl-16 text-center tabular-nums text-red-600">{formatarMoedaSemCentavos(cliente.valor_vencido)}</td>
-                            <td className="py-3 pl-16 pr-3 text-center tabular-nums text-gray-700">{formatarMoedaSemCentavos(cliente.valor_a_vencer)}</td>
-                          </tr>
-                        ))}
+                                {CLUSTER_ORDEM.map((cluster) => {
+                                  const Icone = CLUSTER_ICON[cluster];
+                                  const doCliente = cluster === cliente.cluster;
+                                  return (
+                                    <td key={cluster} className="py-3 text-center">
+                                      {Icone && (
+                                        <Icone size={15} className={`inline ${doCliente ? CLUSTER_ICON_COR[cluster] : 'text-gray-300'}`} />
+                                      )}
+                                    </td>
+                                  );
+                                })}
+                                <td className="py-3 pl-16 text-center text-xs text-gray-500">{cliente.bill_id}</td>
+                                <td className="py-3"></td>
+                                <td className="py-3 pl-16 text-center tabular-nums text-gray-700">{formatarMoedaSemCentavos(cliente.valor_pago)}</td>
+                                <td className="py-3 pl-16 text-center tabular-nums text-red-600">{formatarMoedaSemCentavos(cliente.valor_vencido)}</td>
+                                <td className="py-3 pl-16 pr-3 text-center tabular-nums text-gray-700">{formatarMoedaSemCentavos(cliente.valor_a_vencer)}</td>
+                              </tr>
+
+                              {clienteAberto && carregandoParcelas && (
+                                <tr>
+                                  <td colSpan={TOTAL_COLUNAS} className="bg-white py-6 text-center text-sm text-gray-400">
+                                    Carregando...
+                                  </td>
+                                </tr>
+                              )}
+
+                              {clienteAberto && !carregandoParcelas && parcelas.length === 0 && (
+                                <tr>
+                                  <td colSpan={TOTAL_COLUNAS} className="bg-white py-6 text-center text-sm text-gray-400">
+                                    Nenhuma parcela encontrada.
+                                  </td>
+                                </tr>
+                              )}
+
+                              {clienteAberto &&
+                                !carregandoParcelas &&
+                                parcelas.map((parcela) => {
+                                  const status = parcela.status ? STATUS_PARCELA[parcela.status] : null;
+                                  return (
+                                    <tr
+                                      key={parcela.installment_id}
+                                      onClick={() =>
+                                        setParcelaHistorico({
+                                          billId: parcela.bill_id,
+                                          installmentId: parcela.installment_id,
+                                          clientName: cliente.client_name,
+                                        })
+                                      }
+                                      className="cursor-pointer border-b border-gray-50 bg-white hover:bg-gray-50"
+                                    >
+                                      <td className="py-2.5 pl-16 text-gray-700">
+                                        {parcela.payment_term_description || 'Parcela'} - {parcela.installment_number}
+                                      </td>
+                                      <td colSpan={CLUSTER_ORDEM.length} className="px-1 py-2.5">
+                                        {status && (
+                                          <span
+                                            className={`mx-auto flex h-6 w-full items-center justify-center rounded-md text-xs font-medium ${status.className}`}
+                                          >
+                                            {status.label}
+                                          </span>
+                                        )}
+                                      </td>
+                                      <td className="whitespace-nowrap py-2.5 pl-16 text-center text-xs text-gray-500">
+                                        {siengeTenant ? (
+                                          <a
+                                            href={urlTituloSienge(siengeTenant, parcela.bill_id)}
+                                            target="_blank"
+                                            rel="noopener noreferrer"
+                                            onClick={(e) => e.stopPropagation()}
+                                            title="Abrir título no Sienge"
+                                            className="text-primary-600 hover:text-primary-700 hover:underline"
+                                          >
+                                            {parcela.bill_id} / {numeroParcela(parcela.installment_number)}
+                                          </a>
+                                        ) : (
+                                          <>
+                                            {parcela.bill_id} / {numeroParcela(parcela.installment_number)}
+                                          </>
+                                        )}
+                                      </td>
+                                      <td className="py-2.5 text-center text-xs text-gray-500">{formatarData(parcela.due_date)}</td>
+                                      <td colSpan={3}></td>
+                                    </tr>
+                                  );
+                                })}
+                            </Fragment>
+                          );
+                        })}
                     </Fragment>
                   );
                 })}

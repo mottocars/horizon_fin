@@ -364,8 +364,71 @@ async function listClientesPorCentroCusto(empresaId, costCenterId, filtros = {})
     );
 }
 
-// Nível 2: quantas parcelas deste cluster caem em cada etapa da régua. Uma
-// parcela fora do range de todas as etapas configuradas já nem chega aqui
+// Nível 3 (Parcela, folha de verdade): as parcelas individuais de 1 título
+// (bill_id) dentro do centro de custo aberto, ordenadas por installment_id.
+// Status por parcela — três possíveis, nunca mais que isso (pedido do
+// usuário):
+//   - paga até a data de vencimento: 'em_dia'
+//   - paga depois do vencimento (usa o último recebimento lançado, caso
+//     tenha mais de uma baixa parcial): 'atraso'
+//   - em aberto E já passou do mesmo limite de dias do Motor de Risco que
+//     define Inadimplência na régua de cobrança (ver getLimiteVigente,
+//     mesmo parâmetro de reguaCobranca.service.js/buscarLinhasClassificadas
+//     acima): 'inadimplente'
+// Em aberto mas ainda dentro do limite (nem vencida o bastante pra virar
+// inadimplente) não tem status nenhum — null — só os três pedidos existem.
+async function listParcelasPorTitulo(empresaId, costCenterId, billId, filtros = {}) {
+  const limite = await getLimiteVigente(empresaId);
+
+  const params = [empresaId, ORIGIN_ID_PADRAO, billId];
+  let filtroCentro = '';
+  if (costCenterId) {
+    params.push(costCenterId);
+    filtroCentro = ` AND cat.cost_center_id = $${params.length}`;
+  }
+
+  const { rows } = await pool.query(
+    `SELECT si.bill_id, si.installment_id, si.due_date, si.corrected_balance_amount,
+            si.payment_term_description, si.installment_number,
+            pg.ultimo_pagamento
+     FROM sie_income si
+     JOIN sie_income_categorias cat
+       ON cat.bill_id = si.bill_id AND cat.installment_id = si.installment_id AND cat.empresa_id = si.empresa_id
+     LEFT JOIN (
+       SELECT bill_id, installment_id, MAX(payment_date) AS ultimo_pagamento
+       FROM sie_income_recebimentos
+       WHERE empresa_id = $1
+       GROUP BY bill_id, installment_id
+     ) pg ON pg.bill_id = si.bill_id AND pg.installment_id = si.installment_id
+     WHERE si.empresa_id = $1 AND si.origin_id = $2 AND si.bill_id = $3${filtroCentro}
+     ORDER BY si.installment_id ASC`,
+    params
+  );
+
+  const hoje = hojeComoDataUTC();
+  return rows.map((row) => {
+    const paga = Number(row.corrected_balance_amount) === 0;
+    let status = null;
+    if (paga) {
+      status = row.ultimo_pagamento && new Date(row.ultimo_pagamento) > new Date(row.due_date) ? 'atraso' : 'em_dia';
+    } else if (diasEntre(row.due_date, hoje) > limite) {
+      status = 'inadimplente';
+    }
+    return {
+      bill_id: row.bill_id,
+      installment_id: row.installment_id,
+      due_date: row.due_date,
+      installment_number: row.installment_number,
+      payment_term_description: row.payment_term_description,
+      status,
+    };
+  });
+}
+
+// Nível 2 do drilldown ANTIGO por régua (não usado pelo frontend hoje —
+// ver comentário no topo do módulo): quantas parcelas deste cluster caem
+// em cada etapa da régua. Uma parcela fora do range de todas as etapas
+// configuradas já nem chega aqui
 // (descartada em buscarLinhasClassificadas) — não existe mais bucket "Sem
 // etapa": só o range coberto pela régua (da 1ª etapa em diante) conta como
 // cobrança ativa. O scaffold de etapas vem sempre do cadastro (pra aparecer
@@ -486,6 +549,7 @@ module.exports = {
   CLUSTERS_SCORE,
   getResumoPorCentroCusto,
   listClientesPorCentroCusto,
+  listParcelasPorTitulo,
   getEtapasPorCluster,
   listParcelas,
   listParcelasCliente,

@@ -21,6 +21,7 @@ const costCenterIdsSchema = z.preprocess((val) => {
 const etapaIdSchema = z.coerce.number().int().positive('Etapa inválida.');
 const clientIdSchema = z.coerce.number().int().positive('Cliente inválido.');
 const costCenterIdSchema = z.coerce.number().int().positive('Centro de custo inválido.');
+const billIdSchema = z.coerce.number().int().positive('Título inválido.');
 
 function badRequest(message) {
   const err = new Error(message);
@@ -58,6 +59,20 @@ async function listClientesPorCentroCusto(req, res, next) {
     const filtros = parseFiltros(req.query);
     const clientes = await service.listClientesPorCentroCusto(empresaId, costCenterId, filtros);
     res.json(clientes);
+  } catch (err) {
+    if (err.issues) return next(badRequest(err.issues[0].message));
+    next(err);
+  }
+}
+
+async function listParcelasPorTitulo(req, res, next) {
+  try {
+    const empresaId = empresaIdSchema.parse(req.query.empresa_id);
+    const costCenterId = costCenterIdSchema.parse(req.params.costCenterId);
+    const billId = billIdSchema.parse(req.params.billId);
+    const filtros = parseFiltros(req.query);
+    const parcelas = await service.listParcelasPorTitulo(empresaId, costCenterId, billId, filtros);
+    res.json(parcelas);
   } catch (err) {
     if (err.issues) return next(badRequest(err.issues[0].message));
     next(err);
@@ -111,6 +126,7 @@ async function listParcelasCliente(req, res, next) {
 module.exports = {
   getResumoPorCentroCusto,
   listClientesPorCentroCusto,
+  listParcelasPorTitulo,
   getEtapasPorCluster,
   listParcelas,
   listParcelasCliente,
