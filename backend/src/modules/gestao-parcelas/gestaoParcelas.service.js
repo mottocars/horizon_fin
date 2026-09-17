@@ -1,9 +1,5 @@
 const pool = require('../../config/db');
-const {
-  getLimiteVigente,
-  listEtapasAtivasPorCluster,
-  listEtapasComComunicacao,
-} = require('../regua-cobranca/reguaCobranca.service');
+const { getLimiteVigente, listEtapasComComunicacao } = require('../regua-cobranca/reguaCobranca.service');
 
 const CLUSTERS_VALIDOS = ['novo', 'bom', 'duvidoso', 'mau', 'inad'];
 const CLUSTERS_SCORE = ['novo', 'bom', 'duvidoso', 'mau'];
@@ -12,6 +8,18 @@ const CLUSTERS_SCORE = ['novo', 'bom', 'duvidoso', 'mau'];
 // mesmo vocabulário usado no badge do Nível 3 e no filtro "Tipo de Parcela"
 // do topo da tela (ver gestaoParcelas.controller.js::statusParcelaSchema).
 const STATUS_PARCELA_VALIDOS = ['em_dia', 'atraso', 'inadimplente', 'a_vencer'];
+
+// Rótulos pro Excel exportado (ver listParaExportacao) — mesmo vocabulário
+// de ClustersCobranca/constantes.js e GestaoParcelasTab.jsx::STATUS_PARCELA
+// no frontend, duplicado aqui de propósito (backend não importa nada do
+// frontend).
+const CLUSTER_LABEL_EXPORT = { novo: 'Novo cliente', bom: 'Bom pagador', duvidoso: 'Pagador duvidoso', mau: 'Mau pagador' };
+const STATUS_LABEL_EXPORT = {
+  em_dia: 'Paga em Dia',
+  atraso: 'Paga com Atraso',
+  inadimplente: 'Inadimplente',
+  a_vencer: 'A vencer',
+};
 
 // Só parcelas com origin_id = 'CO' são contas a receber de verdade — mesma
 // constante duplicada por módulo (de propósito, sem dependência cruzada)
@@ -47,14 +55,18 @@ function badRequest(message) {
 
 // Etapas ativas dos 5 clusters (score + 'inad'), buscadas de uma vez só —
 // evita 1 query por parcela quando for achar a etapa de cada uma (ver
-// acharEtapaAtiva). Reaproveitado por buscarLinhasClassificadas (drilldown
-// antigo) e pela coluna "Etapa" da versão nova (buscarParcelasComCluster/
-// listParcelasPorTitulo).
+// acharEtapaAtiva). listEtapasComComunicacao (não listEtapasAtivasPorCluster,
+// mais enxuta) de propósito: já traz `responsavel_nome` junto, que a coluna
+// "Responsável" do Nível 3 precisa (ver listParcelasPorTitulo). Reaproveitado
+// por buscarLinhasClassificadas (drilldown antigo), buscarParcelasComCluster
+// (Níveis 1/2 — só pro filtro "Responsável", a coluna em si não aparece
+// nesses níveis) e listParcelasPorTitulo (Nível 3 — coluna Etapa/Responsável
+// de verdade).
 async function carregarEtapasPorCluster(empresaId) {
   const etapasPorCluster = {};
   await Promise.all(
     CLUSTERS_VALIDOS.map(async (cluster) => {
-      etapasPorCluster[cluster] = await listEtapasAtivasPorCluster(empresaId, cluster);
+      etapasPorCluster[cluster] = await listEtapasComComunicacao(empresaId, cluster);
     })
   );
   return etapasPorCluster;
@@ -205,8 +217,13 @@ const CLUSTERS_ZERADOS_SCORE = { novo: 0, bom: 0, duvidoso: 0, mau: 0 };
 // "Inadimplente" ao abrir a parcela). `statusParcela` (opcional, array) é o
 // filtro "Tipo de Parcela" do topo da tela — filtra bem na origem, antes de
 // qualquer agregação, pra um Centro de Custo/cliente sem NENHUMA parcela do
-// tipo escolhido simplesmente não aparecer em nenhum nível.
-async function buscarParcelasComCluster(empresaId, { costCenterIds, search, statusParcela } = {}) {
+// tipo escolhido simplesmente não aparecer em nenhum nível. `responsavelIds`
+// (opcional, array) é o filtro "Responsável", mesma lógica — filtra pelo
+// responsável da ETAPA atual da parcela (pedido do usuário: só o Nível 3
+// mostra a coluna Etapa/Responsável, mas o filtro precisa valer pros 3
+// níveis, então o cálculo continua aqui, só não vira coluna visível nos
+// Níveis 1/2 — ver getResumoPorCentroCusto/listClientesPorCentroCusto).
+async function buscarParcelasComCluster(empresaId, { costCenterIds, search, statusParcela, responsavelIds } = {}) {
   const limite = await getLimiteVigente(empresaId);
   const etapasPorCluster = await carregarEtapasPorCluster(empresaId);
 
@@ -226,6 +243,7 @@ async function buscarParcelasComCluster(empresaId, { costCenterIds, search, stat
     `SELECT cat.cost_center_id, cat.cost_center_name,
             si.client_id, si.client_name, si.bill_id, si.installment_id,
             si.due_date, si.corrected_balance_amount, si.original_amount, si.installment_number,
+            si.payment_term_description,
             COALESCE(ccc.cluster, 'novo') AS cluster, pg.ultimo_pagamento
      FROM sie_income si
      JOIN sie_income_categorias cat
@@ -251,6 +269,8 @@ async function buscarParcelasComCluster(empresaId, { costCenterIds, search, stat
 
   const hoje = hojeComoDataUTC();
   const filtroStatus = Array.isArray(statusParcela) && statusParcela.length > 0 ? new Set(statusParcela) : null;
+  const filtroResponsavel =
+    Array.isArray(responsavelIds) && responsavelIds.length > 0 ? new Set(responsavelIds.map(String)) : null;
 
   return rows
     .map((row) => {
@@ -274,10 +294,14 @@ async function buscarParcelasComCluster(empresaId, { costCenterIds, search, stat
       // ainda está fora do range configurado da régua (parcela futura demais
       // pra já ter entrado em cobrança ativa).
       let etapaNome = null;
+      let etapaResponsavelId = null;
+      let etapaResponsavelNome = null;
       if (!paga) {
         const clusterRegua = status === 'inadimplente' ? 'inad' : row.cluster;
         const etapa = acharEtapaAtiva(etapasPorCluster, clusterRegua, diasSigned);
         etapaNome = etapa?.nome ?? null;
+        etapaResponsavelId = etapa?.responsavel_usuario_id ?? null;
+        etapaResponsavelNome = etapa?.responsavel_nome ?? null;
       }
 
       return {
@@ -289,14 +313,18 @@ async function buscarParcelasComCluster(empresaId, { costCenterIds, search, stat
         installment_id: row.installment_id,
         due_date: row.due_date,
         installment_number: row.installment_number,
+        payment_term_description: row.payment_term_description,
         cluster: row.cluster,
         status,
         etapa_nome: etapaNome,
+        etapa_responsavel_id: etapaResponsavelId,
+        etapa_responsavel_nome: etapaResponsavelNome,
         valor_original: Number(row.original_amount) || 0,
         saldo_aberto: saldoAberto,
       };
     })
-    .filter((linha) => !filtroStatus || filtroStatus.has(linha.status));
+    .filter((linha) => !filtroStatus || filtroStatus.has(linha.status))
+    .filter((linha) => !filtroResponsavel || filtroResponsavel.has(String(linha.etapa_responsavel_id)));
 }
 
 // Nível 1 (Centro de Custo, versão nova): 1 linha por centro de custo do
@@ -412,10 +440,6 @@ async function listClientesPorCentroCusto(empresaId, costCenterId, filtros = {})
         valor_a_vencer: titulo.valor_a_vencer,
         parcela_atual: parcelaAtual?.installment_number || null,
         parcela_atual_installment_id: parcelaAtual?.installment_id ?? null,
-        // Etapa da "parcela atual" (a mais antiga em aberto) — título 100%
-        // quitado cai na última parcela (paga), que nunca tem etapa (ver
-        // buscarParcelasComCluster), então já sai null sozinho aqui.
-        etapa_nome: parcelaAtual?.etapa_nome ?? null,
       };
     })
     // Mesmo critério do Nível 1 (Centro de Custo): mais vencido primeiro,
@@ -483,6 +507,10 @@ async function listParcelasPorTitulo(empresaId, costCenterId, billId, filtros = 
   const hoje = hojeComoDataUTC();
   const filtroStatus =
     Array.isArray(filtros.statusParcela) && filtros.statusParcela.length > 0 ? new Set(filtros.statusParcela) : null;
+  const filtroResponsavel =
+    Array.isArray(filtros.responsavelIds) && filtros.responsavelIds.length > 0
+      ? new Set(filtros.responsavelIds.map(String))
+      : null;
 
   return rows
     .map((row) => {
@@ -497,14 +525,21 @@ async function listParcelasPorTitulo(empresaId, costCenterId, billId, filtros = 
         status = 'a_vencer';
       }
 
-      // Mesma regra de buscarParcelasComCluster: etapa só existe pra
-      // parcela em aberto, na régua do cluster do cliente (ou 'inad' se já
-      // for inadimplente), presa na última etapa até ser quitada.
+      // Mesma regra de buscarParcelasComCluster: etapa (e o responsável
+      // dela) só existe pra parcela em aberto, na régua do cluster do
+      // cliente (ou 'inad' se já for inadimplente), presa na última etapa
+      // até ser quitada. Único nível que de fato MOSTRA essas 2 colunas
+      // (pedido do usuário: "podem ter etapas diferentes para o mesmo
+      // cliente", então só faz sentido na folha, 1 parcela por vez).
       let etapaNome = null;
+      let etapaResponsavelId = null;
+      let etapaResponsavelNome = null;
       if (!paga) {
         const clusterRegua = status === 'inadimplente' ? 'inad' : row.cluster;
         const etapa = acharEtapaAtiva(etapasPorCluster, clusterRegua, diasSigned);
         etapaNome = etapa?.nome ?? null;
+        etapaResponsavelId = etapa?.responsavel_usuario_id ?? null;
+        etapaResponsavelNome = etapa?.responsavel_nome ?? null;
       }
 
       const saldoAberto = Number(row.corrected_balance_amount) || 0;
@@ -516,12 +551,52 @@ async function listParcelasPorTitulo(empresaId, costCenterId, billId, filtros = 
         payment_term_description: row.payment_term_description,
         status,
         etapa_nome: etapaNome,
+        etapa_responsavel_id: etapaResponsavelId,
+        responsavel_nome: etapaResponsavelNome,
         valor_pago: paga ? Number(row.original_amount) || 0 : 0,
         valor_vencido: status === 'inadimplente' ? saldoAberto : 0,
         valor_a_vencer: status === 'a_vencer' ? saldoAberto : 0,
       };
     })
-    .filter((p) => !filtroStatus || filtroStatus.has(p.status));
+    .filter((p) => !filtroStatus || filtroStatus.has(p.status))
+    .filter((p) => !filtroResponsavel || filtroResponsavel.has(String(p.etapa_responsavel_id)));
+}
+
+// Espelho "empilhado" de tudo que a tela mostraria com todo mundo
+// expandido: 1 linha por PARCELA (a folha de verdade), já com o nome do
+// Centro de Custo/Cliente/Título/Etapa/Responsável de cada uma — os mesmos
+// filtros do topo da tela (empresa, Centro de Custo, Tipo de Parcela,
+// Responsável, busca) se aplicam aqui também, direto em
+// buscarParcelasComCluster (pedido do usuário: "exportar um espelho deste
+// relatório"). Ordenado por Centro de Custo/Cliente/Título/parcela — a
+// mesma ordem de leitura de cima a baixo que a árvore teria se estivesse
+// toda aberta.
+async function listParaExportacao(empresaId, filtros = {}) {
+  const linhas = await buscarParcelasComCluster(empresaId, filtros);
+
+  return linhas
+    .map((linha) => ({
+      cost_center_name: linha.cost_center_name,
+      client_name: linha.client_name,
+      bill_id: linha.bill_id,
+      parcela: `${linha.payment_term_description || 'Parcela'} - ${linha.installment_number}`,
+      cluster_label: CLUSTER_LABEL_EXPORT[linha.cluster] || linha.cluster,
+      status_label: STATUS_LABEL_EXPORT[linha.status] || linha.status,
+      etapa_nome: linha.etapa_nome || '',
+      responsavel_nome: linha.etapa_responsavel_nome || '',
+      due_date: linha.due_date,
+      valor_pago: linha.status === 'em_dia' || linha.status === 'atraso' ? linha.valor_original : 0,
+      valor_vencido: linha.status === 'inadimplente' ? linha.saldo_aberto : 0,
+      valor_a_vencer: linha.status === 'a_vencer' ? linha.saldo_aberto : 0,
+      installment_id: linha.installment_id,
+    }))
+    .sort(
+      (a, b) =>
+        a.cost_center_name.localeCompare(b.cost_center_name, 'pt-BR') ||
+        (a.client_name || '').localeCompare(b.client_name || '', 'pt-BR') ||
+        a.bill_id - b.bill_id ||
+        a.installment_id - b.installment_id
+    );
 }
 
 // Nível 2 do drilldown ANTIGO por régua (não usado pelo frontend hoje —
@@ -650,6 +725,7 @@ module.exports = {
   getResumoPorCentroCusto,
   listClientesPorCentroCusto,
   listParcelasPorTitulo,
+  listParaExportacao,
   getEtapasPorCluster,
   listParcelas,
   listParcelasCliente,

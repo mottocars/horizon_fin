@@ -1,15 +1,18 @@
 import http from './http';
 
 // Mesmo formato de `filtros` de cobrancaClusters.api.js, mais `search`
-// (nome do cliente) e `statusParcela` (filtro "Tipo de Parcela" do topo da
-// tela — em_dia/atraso/inadimplente/a_vencer) — os 3 níveis do drilldown
-// aceitam esses filtros, então um refaz a matriz inteira dinamicamente
-// (mesmo espírito do filtro de cliente da aba Clientes).
-function paramsFiltros({ costCenterIds, search, statusParcela } = {}) {
+// (nome do cliente), `statusParcela` (filtro "Tipo de Parcela" — em_dia/
+// atraso/inadimplente/a_vencer) e `responsavelIds` (filtro "Responsável",
+// pelo responsável da etapa atual de cada parcela) do topo da tela — os 3
+// níveis do drilldown aceitam esses filtros, então um refaz a matriz
+// inteira dinamicamente (mesmo espírito do filtro de cliente da aba
+// Clientes).
+function paramsFiltros({ costCenterIds, search, statusParcela, responsavelIds } = {}) {
   const params = {};
   if (costCenterIds?.length > 0) params.cost_center_ids = costCenterIds.join(',');
   if (search) params.search = search;
   if (statusParcela?.length > 0) params.status_parcela = statusParcela.join(',');
+  if (responsavelIds?.length > 0) params.responsavel_ids = responsavelIds.join(',');
   return params;
 }
 
@@ -43,6 +46,18 @@ export function listParcelasPorTitulo(empresaId, costCenterId, billId, filtros) 
   return http
     .get(`/gestao-parcelas/centros-custo/${costCenterId}/titulos/${billId}/parcelas`, {
       params: { empresa_id: empresaId, ...paramsFiltros(filtros) },
+    })
+    .then((res) => res.data);
+}
+
+// Espelho empilhado do relatório inteiro (1 linha por parcela, com Centro
+// de Custo/Cliente/Título/Etapa/Responsável) — mesmos filtros do topo,
+// baixado como .xlsx (ver GestaoCobrancasPage.jsx::handleExportarParcelas).
+export function exportarGestaoParcelas(empresaId, filtros) {
+  return http
+    .get('/gestao-parcelas/exportar', {
+      params: { empresa_id: empresaId, ...paramsFiltros(filtros) },
+      responseType: 'blob',
     })
     .then((res) => res.data);
 }

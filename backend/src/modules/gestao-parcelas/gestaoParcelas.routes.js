@@ -6,6 +6,7 @@ const router = Router();
 
 router.use(authMiddleware);
 router.get('/resumo-centros-custo', controller.getResumoPorCentroCusto);
+router.get('/exportar', controller.exportarExcel);
 router.get('/centros-custo/:costCenterId/clientes', controller.listClientesPorCentroCusto);
 router.get('/centros-custo/:costCenterId/titulos/:billId/parcelas', controller.listParcelasPorTitulo);
 router.get('/:cluster/etapas', controller.getEtapasPorCluster);

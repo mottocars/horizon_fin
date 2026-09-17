@@ -17,8 +17,9 @@ import {
   formatarData,
 } from '../ClustersCobranca/constantes';
 
-// Nome(1) + Título(1) + Vencimento(1) + clusters/status(4) + valores(3) + Etapa(1).
-const TOTAL_COLUNAS = 3 + CLUSTER_ORDEM.length + 3 + 1;
+// Nome(1) + Título(1) + Vencimento(1) + clusters/status(4) + Etapa(1) +
+// Responsável(1) + valores(3).
+const TOTAL_COLUNAS = 3 + CLUSTER_ORDEM.length + 2 + 3;
 
 // Divisores da grade — mesmo tom (gray-200) nos dois sentidos, de propósito
 // (pedido do usuário: "escureça também com o mesmo tom" a linha que já
@@ -75,16 +76,17 @@ const STATUS_PARCELA = {
 // dele, cinza nas outras); Nível 3, ao abrir um título, lista as parcelas
 // individuais dele — aqui a coluna de cluster vira status (paga em dia/com
 // atraso/inadimplente) e a de Título mostra bill_id/parcela, igual à aba
-// Rotinas. A coluna Etapa (última) mostra em qual etapa da régua de
-// cobrança o título/parcela está agora (calculada no backend a partir do
-// vencimento — ver gestaoParcelas.service.js::acharEtapaAtiva); só existe
-// pra parcela em aberto (vencida ou a vencer) — paga fica em branco.
-// Responsável/canais continuam fora da tela por enquanto (retomamos depois).
+// Rotinas. Etapa/Responsável só aparecem no Nível 3 (pedido do usuário:
+// "podem ter etapas diferentes para o mesmo cliente", então uma única etapa
+// por Centro de Custo/título não representaria nada de verdade) — calculada
+// no backend a partir do vencimento (ver gestaoParcelas.service.js::
+// acharEtapaAtiva); só existe pra parcela em aberto, paga fica em branco.
 export default function GestaoParcelasTab({
   empresaId,
   centroCustoIds = [],
   busca = '',
   statusParcela = [],
+  responsavelIds = [],
   refreshToken = 0,
 }) {
   const [centros, setCentros] = useState([]);
@@ -141,25 +143,26 @@ export default function GestaoParcelasTab({
     }
     const minhaRequisicao = ++requisicaoCentrosRef.current;
     setCarregandoCentros(true);
-    getResumoPorCentroCustoParcelas(empresaId, { costCenterIds: centroCustoIds, search: busca, statusParcela })
+    getResumoPorCentroCustoParcelas(empresaId, { costCenterIds: centroCustoIds, search: busca, statusParcela, responsavelIds })
       .then((dados) => {
         if (minhaRequisicao === requisicaoCentrosRef.current) setCentros(dados);
       })
       .finally(() => {
         if (minhaRequisicao === requisicaoCentrosRef.current) setCarregandoCentros(false);
       });
-  }, [empresaId, centroCustoIds, busca, statusParcela]);
+  }, [empresaId, centroCustoIds, busca, statusParcela, responsavelIds]);
 
-  // Reset "duro" só quando empresa/Centro de Custo/Tipo de Parcela mudam de
-  // verdade — mesmo espírito de ClientesTab.jsx (a busca por si só não
-  // fecha o drilldown). Trocar o filtro de tipo pode fazer o centro/cliente
-  // aberto sumir da lista nova, então fecha o drilldown junto.
+  // Reset "duro" só quando empresa/Centro de Custo/Tipo de Parcela/
+  // Responsável mudam de verdade — mesmo espírito de ClientesTab.jsx (a
+  // busca por si só não fecha o drilldown). Trocar qualquer filtro pode
+  // fazer o centro/cliente aberto sumir da lista nova, então fecha o
+  // drilldown junto.
   useEffect(() => {
     setCentroExpandidoId(null);
     setClientes([]);
     setTituloAberto(null);
     setParcelas([]);
-  }, [empresaId, centroCustoIds, statusParcela]);
+  }, [empresaId, centroCustoIds, statusParcela, responsavelIds]);
 
   useEffect(() => {
     carregarCentros();
@@ -169,14 +172,14 @@ export default function GestaoParcelasTab({
     if (!centroExpandidoId) return;
     const minhaRequisicao = ++requisicaoClientesRef.current;
     setCarregandoClientes(true);
-    listClientesPorCentroCusto(empresaId, centroExpandidoId, { search: busca, statusParcela })
+    listClientesPorCentroCusto(empresaId, centroExpandidoId, { search: busca, statusParcela, responsavelIds })
       .then((dados) => {
         if (minhaRequisicao === requisicaoClientesRef.current) setClientes(dados);
       })
       .finally(() => {
         if (minhaRequisicao === requisicaoClientesRef.current) setCarregandoClientes(false);
       });
-  }, [empresaId, centroExpandidoId, busca, statusParcela]);
+  }, [empresaId, centroExpandidoId, busca, statusParcela, responsavelIds]);
 
   useEffect(() => {
     carregarClientes();
@@ -186,14 +189,14 @@ export default function GestaoParcelasTab({
     if (!tituloAberto || !centroExpandidoId) return;
     const minhaRequisicao = ++requisicaoParcelasRef.current;
     setCarregandoParcelas(true);
-    listParcelasPorTitulo(empresaId, centroExpandidoId, tituloAberto.billId, { search: busca, statusParcela })
+    listParcelasPorTitulo(empresaId, centroExpandidoId, tituloAberto.billId, { search: busca, statusParcela, responsavelIds })
       .then((dados) => {
         if (minhaRequisicao === requisicaoParcelasRef.current) setParcelas(dados);
       })
       .finally(() => {
         if (minhaRequisicao === requisicaoParcelasRef.current) setCarregandoParcelas(false);
       });
-  }, [empresaId, centroExpandidoId, tituloAberto, busca, statusParcela]);
+  }, [empresaId, centroExpandidoId, tituloAberto, busca, statusParcela, responsavelIds]);
 
   useEffect(() => {
     carregarParcelas();
@@ -277,25 +280,21 @@ export default function GestaoParcelasTab({
                 border-separate + spacing 0 (em vez do collapse padrão do
                 Tailwind): é o que deixa as bordas de coluna (DIV_V) e de
                 linha (DIV_H) previsíveis célula a célula, sem o navegador
-                fundir/descartar uma borda por "conflito" com a vizinha. */}
-            {/* text-xs na tabela inteira (era text-sm) — pedido do usuário:
-                fontes um pouco menores, pra abrir espaço pra próxima coluna
-                (Etapas) que ainda vai entrar. Boa parte da tabela (Nível 2/3)
-                já usava text-xs antes; agora fica uniforme em todo canto.
-                width: 1440px (a SOMA exata de todas as larguras do colgroup
+                fundir/descartar uma borda por "conflito" com a vizinha.
+                width: 1568px (a SOMA exata de todas as larguras do colgroup
                 abaixo — se alguma mudar, este número precisa acompanhar):
                 sem uma largura explícita, o navegador trata a largura da
                 tabela como 'auto' (estica pra caber no card) e, ao
                 distribuir essa sobra entre as colunas de table-layout:fixed,
                 deixa de ignorar o conteúdo só pra achar a largura total —
-                foi o que fez a coluna Etapa (com um nome de etapa comprido,
-                sem quebrar linha) ficar bem mais larga que os 144px (w-36)
-                pedidos pra ela. Com a largura do total já fechada aqui, a
+                uma coluna com texto comprido sem quebra de linha (Etapa,
+                Responsável) ficava bem mais larga que o combinado no
+                colgroup. Com a largura do total já fechada aqui, a
                 distribuição interna volta a respeitar exatamente cada
                 coluna do colgroup, conteúdo nenhum influencia mais nada. */}
             <table
               className="border-separate border-spacing-0 text-left text-xs"
-              style={{ tableLayout: 'fixed', width: '1440px' }}
+              style={{ tableLayout: 'fixed', width: '1568px' }}
             >
               <colgroup>
                 <col className="w-96" />
@@ -305,10 +304,11 @@ export default function GestaoParcelasTab({
                 <col className="w-10" />
                 <col className="w-28" />
                 <col className="w-28" />
-                <col className="w-44" />
-                <col className="w-44" />
-                <col className="w-44" />
                 <col className="w-36" />
+                <col className="w-32" />
+                <col className="w-44" />
+                <col className="w-44" />
+                <col className="w-44" />
               </colgroup>
               <thead className="sticky top-0 z-10 bg-white shadow-sm">
                 <tr className="text-xs uppercase tracking-wide text-gray-400">
@@ -323,10 +323,11 @@ export default function GestaoParcelasTab({
                   })}
                   <th className={`${DIV_H_CABECALHO} ${DIV_V} px-2 py-2.5 text-center font-medium`}>Título</th>
                   <th className={`${DIV_H_CABECALHO} ${DIV_V} px-2 py-2.5 text-center font-medium`}>Vencimento</th>
+                  <th className={`${DIV_H_CABECALHO} ${DIV_V} px-2 py-2.5 text-center font-medium`}>Etapa</th>
+                  <th className={`${DIV_H_CABECALHO} ${DIV_V} px-2 py-2.5 text-center font-medium`}>Responsável</th>
                   <th className={`${DIV_H_CABECALHO} ${DIV_V} px-2 py-2.5 text-center font-medium`}>Pagas</th>
                   <th className={`${DIV_H_CABECALHO} ${DIV_V} px-2 py-2.5 text-center font-medium`}>Vencidas</th>
                   <th className={`${DIV_H_CABECALHO} ${DIV_V} px-2 py-2.5 text-center font-medium`}>A vencer</th>
-                  <th className={`${DIV_H_CABECALHO} ${DIV_V} px-2 py-2.5 text-center font-medium`}>Etapa</th>
                 </tr>
               </thead>
               <tbody>
@@ -353,10 +354,11 @@ export default function GestaoParcelasTab({
                         ))}
                         <td className={`${DIV_H} ${DIV_V} px-2 py-3 text-center`}></td>
                         <td className={`${DIV_H} ${DIV_V} px-2 py-3 text-center`}></td>
+                        <td className={`${DIV_H} ${DIV_V} px-2 py-3 text-center`}></td>
+                        <td className={`${DIV_H} ${DIV_V} px-2 py-3 text-center`}></td>
                         <td className={`${DIV_H} ${DIV_V} px-2 py-3 text-center tabular-nums text-gray-700`}>{formatarMoedaSemCentavos(centro.valor_pago)}</td>
                         <td className={`${DIV_H} ${DIV_V} px-2 py-3 text-center tabular-nums text-red-600`}>{formatarMoedaSemCentavos(centro.valor_vencido)}</td>
                         <td className={`${DIV_H} ${DIV_V} px-2 py-3 text-center tabular-nums text-gray-700`}>{formatarMoedaSemCentavos(centro.valor_a_vencer)}</td>
-                        <td className={`${DIV_H} ${DIV_V} px-2 py-3 text-center`}></td>
                       </tr>
 
                       {centroAberto && carregandoClientes && (
@@ -408,15 +410,11 @@ export default function GestaoParcelasTab({
                                 })}
                                 <td className={`${DIV_H} ${DIV_V} px-2 py-2.5 text-center text-xs text-gray-500`}>{cliente.bill_id}</td>
                                 <td className={`${DIV_H} ${DIV_V} px-2 py-2.5 text-center`}></td>
+                                <td className={`${DIV_H} ${DIV_V} px-2 py-2.5 text-center`}></td>
+                                <td className={`${DIV_H} ${DIV_V} px-2 py-2.5 text-center`}></td>
                                 <td className={`${DIV_H} ${DIV_V} px-2 py-2.5 text-center tabular-nums text-gray-700`}>{formatarMoedaSemCentavos(cliente.valor_pago)}</td>
                                 <td className={`${DIV_H} ${DIV_V} px-2 py-2.5 text-center tabular-nums text-red-600`}>{formatarMoedaSemCentavos(cliente.valor_vencido)}</td>
                                 <td className={`${DIV_H} ${DIV_V} px-2 py-2.5 text-center tabular-nums text-gray-700`}>{formatarMoedaSemCentavos(cliente.valor_a_vencer)}</td>
-                                <td
-                                  className={`${DIV_H} ${DIV_V} truncate px-2 py-2.5 text-center text-gray-600`}
-                                  title={cliente.etapa_nome || ''}
-                                >
-                                  {cliente.etapa_nome || '—'}
-                                </td>
                               </tr>
 
                               {clienteAberto && carregandoParcelas && (
@@ -479,15 +477,21 @@ export default function GestaoParcelasTab({
                                         )}
                                       </td>
                                       <td className={`${DIV_H} ${DIV_V} px-2 py-2 text-center text-xs text-gray-500`}>{formatarData(parcela.due_date)}</td>
-                                      <td className={`${DIV_H} ${DIV_V} px-2 py-2 text-center text-xs tabular-nums text-gray-700`}>{formatarMoedaSemCentavos(parcela.valor_pago)}</td>
-                                      <td className={`${DIV_H} ${DIV_V} px-2 py-2 text-center text-xs tabular-nums text-red-600`}>{formatarMoedaSemCentavos(parcela.valor_vencido)}</td>
-                                      <td className={`${DIV_H} ${DIV_V} px-2 py-2 text-center text-xs tabular-nums text-gray-700`}>{formatarMoedaSemCentavos(parcela.valor_a_vencer)}</td>
                                       <td
                                         className={`${DIV_H} ${DIV_V} truncate px-2 py-2 text-center text-xs text-gray-600`}
                                         title={parcela.etapa_nome || ''}
                                       >
                                         {parcela.etapa_nome || '—'}
                                       </td>
+                                      <td
+                                        className={`${DIV_H} ${DIV_V} truncate px-2 py-2 text-center text-xs text-gray-600`}
+                                        title={parcela.responsavel_nome || ''}
+                                      >
+                                        {parcela.responsavel_nome || '—'}
+                                      </td>
+                                      <td className={`${DIV_H} ${DIV_V} px-2 py-2 text-center text-xs tabular-nums text-gray-700`}>{formatarMoedaSemCentavos(parcela.valor_pago)}</td>
+                                      <td className={`${DIV_H} ${DIV_V} px-2 py-2 text-center text-xs tabular-nums text-red-600`}>{formatarMoedaSemCentavos(parcela.valor_vencido)}</td>
+                                      <td className={`${DIV_H} ${DIV_V} px-2 py-2 text-center text-xs tabular-nums text-gray-700`}>{formatarMoedaSemCentavos(parcela.valor_a_vencer)}</td>
                                     </tr>
                                   );
                                 })}

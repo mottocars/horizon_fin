@@ -19,6 +19,7 @@ import Tabs from '../../../components/Tabs';
 import SearchableSelect from '../../../components/SearchableSelect';
 import { listEmpresas } from '../../../api/empresas.api';
 import { exportarClientesCustomersSienge } from '../../../api/customersSienge.api';
+import { exportarGestaoParcelas } from '../../../api/gestaoParcelas.api';
 import { listVersoesMotorRisco } from '../../../api/motorRisco.api';
 import { listCentrosRepassesCef } from '../../../api/repassesCef.api';
 import {
@@ -123,6 +124,17 @@ export default function GestaoCobrancasPage() {
   // GestaoParcelasTab.jsx dispararia a cada render à toa).
   const statusParcelaParam = searchParams.get('status_parcela') || '';
   const statusParcelaFiltro = useMemo(() => statusParcelaParam.split(',').filter(Boolean), [statusParcelaParam]);
+
+  // Filtro "Responsável" (Gestão das Parcelas) — mesma convenção acima, só
+  // que pelo responsável da ETAPA atual de cada parcela (diferente do
+  // "Responsável" da aba Rotinas, que é "rotina de quem" — ver
+  // responsaveisRotinas/usuarioIdRotinas mais abaixo, filtros sem relação
+  // nenhuma entre si).
+  const responsavelParcelasParam = searchParams.get('responsavel_ids') || '';
+  const responsavelParcelasFiltro = useMemo(
+    () => responsavelParcelasParam.split(',').filter(Boolean),
+    [responsavelParcelasParam]
+  );
 
   // Atualiza só as chaves passadas (mantendo as outras), sempre com
   // `replace` — nunca cria uma entrada nova no histórico do navegador só
@@ -272,6 +284,32 @@ export default function GestaoCobrancasPage() {
     }
   }
 
+  // Espelho empilhado de Gestão das Parcelas (1 linha por parcela, com
+  // Centro de Custo/Cliente/Título/Etapa/Responsável) — mesmo padrão de
+  // download via blob de handleExportarClientes, com os mesmos filtros já
+  // aplicados na tela (Centro de Custo, Tipo de Parcela, Responsável, busca).
+  const [exportandoParcelas, setExportandoParcelas] = useState(false);
+
+  async function handleExportarParcelas() {
+    setExportandoParcelas(true);
+    try {
+      const blob = await exportarGestaoParcelas(empresaId, {
+        costCenterIds: centroCustoIds,
+        search: buscaClientes,
+        statusParcela: statusParcelaFiltro,
+        responsavelIds: responsavelParcelasFiltro,
+      });
+      const url = window.URL.createObjectURL(blob);
+      const link = document.createElement('a');
+      link.href = url;
+      link.download = `gestao-parcelas-empresa-${empresaId}.xlsx`;
+      link.click();
+      window.URL.revokeObjectURL(url);
+    } finally {
+      setExportandoParcelas(false);
+    }
+  }
+
   // Período das Rotinas — início e fim, os dois nascendo na "data de hoje"
   // da empresa (real ou fictícia, mesma configuração de "Data do Sistema"
   // da Régua de Cobrança — ver ConfiguracoesGlobaisPainel.jsx), pra poder
@@ -306,6 +344,21 @@ export default function GestaoCobrancasPage() {
     }
     listResponsaveisReguaCobranca(empresaId).then(setResponsaveisRotinas);
   }, [empresaId, abaAtiva, podeFiltrarResponsavel]);
+
+  // Opções do filtro "Responsável" de Gestão das Parcelas — mesma lista de
+  // usuários elegíveis da Rotina (listResponsaveisReguaCobranca), mas sem a
+  // trava de permissão: aqui é só um filtro de dados sobre a tabela inteira
+  // (todo mundo já vê tudo nesta aba), não uma troca de "de quem é a
+  // rotina" — não faz sentido escondê-lo de ninguém.
+  const [responsaveisParcelas, setResponsaveisParcelas] = useState([]);
+
+  useEffect(() => {
+    if (!empresaId || abaAtiva !== 'inadimplencia') {
+      setResponsaveisParcelas([]);
+      return;
+    }
+    listResponsaveisReguaCobranca(empresaId).then(setResponsaveisParcelas);
+  }, [empresaId, abaAtiva]);
 
   // "Ativar Comunicação Automática" (Configurações Globais) — decide como
   // a Rotina desenha WhatsApp/E-mail: ligada, são só status de leitura
@@ -393,7 +446,12 @@ export default function GestaoCobrancasPage() {
             )}
 
             {abaAtiva === 'inadimplencia' && (
-              <div className="sm:min-w-[160px] sm:max-w-xs sm:flex-1">
+              // sm:max-w-[10rem] é a metade do sm:max-w-xs (20rem) usado nos
+              // outros filtros da barra — pedido do usuário: "diminua pela
+              // metade o filtro de tipo de parcela" (agora que a etapa saiu
+              // do fim da lista de filtros, esse aqui não precisa mais do
+              // mesmo tamanho dos outros).
+              <div className="sm:min-w-20 sm:max-w-40 sm:flex-1">
                 <label className="mb-1 block text-sm font-medium text-gray-700">Tipo de Parcela</label>
                 <SearchableSelect
                   multiple
@@ -403,6 +461,25 @@ export default function GestaoCobrancasPage() {
                   options={OPCOES_STATUS_PARCELA}
                   placeholder={!empresaId ? 'Selecione a empresa primeiro' : 'Todos os tipos'}
                   emptyMessage="Nenhum tipo encontrado."
+                />
+              </div>
+            )}
+
+            {abaAtiva === 'inadimplencia' && (
+              // À direita do Tipo de Parcela (pedido do usuário) — filtra
+              // pelo responsável da ETAPA atual de cada parcela, não "de
+              // quem é a rotina" (esse é o filtro Responsável da aba
+              // Rotinas, mais abaixo — os dois não têm relação nenhuma).
+              <div className="sm:min-w-[160px] sm:max-w-xs sm:flex-1">
+                <label className="mb-1 block text-sm font-medium text-gray-700">Responsável</label>
+                <SearchableSelect
+                  multiple
+                  value={responsavelParcelasFiltro}
+                  onChange={(valores) => atualizarParams({ responsavel_ids: valores })}
+                  disabled={!empresaId}
+                  options={responsaveisParcelas.map((usuario) => ({ value: usuario.id, label: usuario.nome }))}
+                  placeholder={!empresaId ? 'Selecione a empresa primeiro' : 'Todos os responsáveis'}
+                  emptyMessage="Nenhum usuário elegível nesta empresa."
                 />
               </div>
             )}
@@ -496,6 +573,21 @@ export default function GestaoCobrancasPage() {
                 <RefreshCw size={18} />
               </button>
             )}
+            {abaAtiva === 'inadimplencia' && (
+              // Mesmo tamanho/formato/paleta do botão "Exportar em Excel" da
+              // aba Clientes (mesmo raciocínio de peso visual: Sincronizar
+              // busca dado novo, Exportar só baixa o que já está na tela) —
+              // ao lado do Sincronizar, pedido do usuário.
+              <button
+                type="button"
+                onClick={handleExportarParcelas}
+                disabled={!empresaId || exportandoParcelas}
+                title="Exportar relatório em Excel"
+                className="flex shrink-0 items-center justify-center rounded-lg border border-gray-200 p-1.75 text-gray-600 transition-colors hover:bg-gray-50 disabled:cursor-not-allowed disabled:opacity-60"
+              >
+                <Download size={18} className={exportandoParcelas ? 'animate-pulse' : ''} />
+              </button>
+            )}
             {abaAtiva === 'clientes' && (
               // Mesmo tamanho/formato do botão "Sincronizar" ao lado (pra
               // alinhar certinho), mas com paleta secundária (borda cinza)
@@ -555,6 +647,7 @@ export default function GestaoCobrancasPage() {
             centroCustoIds={centroCustoIds}
             busca={buscaClientes}
             statusParcela={statusParcelaFiltro}
+            responsavelIds={responsavelParcelasFiltro}
             refreshToken={refreshParcelas}
           />
         )}

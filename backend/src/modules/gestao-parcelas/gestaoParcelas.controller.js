@@ -1,4 +1,5 @@
 const { z } = require('zod');
+const ExcelJS = require('exceljs');
 const service = require('./gestaoParcelas.service');
 
 const empresaIdSchema = z.coerce.number().int().positive('Selecione uma empresa.');
@@ -24,6 +25,14 @@ const statusParcelaSchema = z.preprocess((val) => {
   return bruto.filter((v) => service.STATUS_PARCELA_VALIDOS.includes(v));
 }, z.array(z.enum(service.STATUS_PARCELA_VALIDOS)));
 
+// Mesmo preprocess de costCenterIdsSchema — filtro "Responsável" do topo da
+// tela, pelo `responsavel_usuario_id` da etapa atual de cada parcela.
+const responsavelIdsSchema = z.preprocess((val) => {
+  if (val === undefined || val === '') return [];
+  const bruto = Array.isArray(val) ? val : String(val).split(',');
+  return bruto.map((v) => Number(v)).filter((n) => Number.isInteger(n) && n > 0);
+}, z.array(z.number().int().positive()));
+
 // Etapa: sempre um id de regua_cobranca_etapas (inteiro positivo) — não
 // existe mais bucket "Sem etapa" (parcela fora do range de todas as etapas
 // configuradas nem entra na matriz, ver gestaoParcelas.service.js::
@@ -48,6 +57,7 @@ function parseFiltros(query) {
     costCenterIds: costCenterIdsSchema.parse(query.cost_center_ids),
     search: (query.search || '').toString(),
     statusParcela: statusParcelaSchema.parse(query.status_parcela),
+    responsavelIds: responsavelIdsSchema.parse(query.responsavel_ids),
   };
 }
 
@@ -119,6 +129,64 @@ async function listParcelas(req, res, next) {
   }
 }
 
+// Colunas do Excel exportado — mesma ordem "empilhada" (Centro de Custo →
+// Cliente → Título → Parcela) do relatório na tela, sem os níveis 1/2
+// aparecerem à parte: 1 linha por parcela, com o Centro de Custo/Cliente
+// repetidos em cada uma (pedido do usuário: "exportar um espelho deste
+// relatório empilhado").
+const EXPORT_COLUMNS = [
+  { header: 'Centro de Custo', key: 'cost_center_name', width: 32 },
+  { header: 'Cliente', key: 'client_name', width: 32 },
+  { header: 'Título', key: 'bill_id', width: 12 },
+  { header: 'Parcela', key: 'parcela', width: 28 },
+  { header: 'Cluster', key: 'cluster_label', width: 16 },
+  { header: 'Status', key: 'status_label', width: 16 },
+  { header: 'Etapa', key: 'etapa_nome', width: 24 },
+  { header: 'Responsável', key: 'responsavel_nome', width: 22 },
+  { header: 'Vencimento', key: 'due_date_fmt', width: 14 },
+  { header: 'Valor Pago', key: 'valor_pago', width: 16 },
+  { header: 'Valor Vencido', key: 'valor_vencido', width: 16 },
+  { header: 'Valor a Vencer', key: 'valor_a_vencer', width: 16 },
+];
+
+function formatarDataExport(data) {
+  if (!data) return '';
+  const d = new Date(data);
+  return `${String(d.getUTCDate()).padStart(2, '0')}/${String(d.getUTCMonth() + 1).padStart(2, '0')}/${d.getUTCFullYear()}`;
+}
+
+async function exportarExcel(req, res, next) {
+  try {
+    const empresaId = empresaIdSchema.parse(req.query.empresa_id);
+    const filtros = parseFiltros(req.query);
+    const linhas = await service.listParaExportacao(empresaId, filtros);
+
+    const workbook = new ExcelJS.Workbook();
+    const sheet = workbook.addWorksheet('Gestão das Parcelas');
+    sheet.columns = EXPORT_COLUMNS;
+    sheet.getRow(1).font = { bold: true };
+    sheet.getRow(1).fill = { type: 'pattern', pattern: 'solid', fgColor: { argb: 'FFE8EEFB' } };
+    sheet.views = [{ state: 'frozen', ySplit: 1 }];
+    sheet.autoFilter = { from: 'A1', to: 'L1' };
+    for (const key of ['valor_pago', 'valor_vencido', 'valor_a_vencer']) {
+      sheet.getColumn(key).numFmt = '#,##0.00';
+    }
+
+    for (const linha of linhas) {
+      sheet.addRow({ ...linha, due_date_fmt: formatarDataExport(linha.due_date) });
+    }
+
+    res.setHeader('Content-Type', 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet');
+    res.setHeader('Content-Disposition', `attachment; filename="gestao-parcelas-empresa-${empresaId}.xlsx"`);
+
+    await workbook.xlsx.write(res);
+    res.end();
+  } catch (err) {
+    if (err.issues) return next(badRequest(err.issues[0].message));
+    next(err);
+  }
+}
+
 async function listParcelasCliente(req, res, next) {
   try {
     const empresaId = empresaIdSchema.parse(req.query.empresa_id);
@@ -138,6 +206,7 @@ module.exports = {
   getResumoPorCentroCusto,
   listClientesPorCentroCusto,
   listParcelasPorTitulo,
+  exportarExcel,
   getEtapasPorCluster,
   listParcelas,
   listParcelasCliente,
