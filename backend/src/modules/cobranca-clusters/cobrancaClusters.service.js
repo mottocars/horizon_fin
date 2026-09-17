@@ -575,18 +575,24 @@ async function getResumoPorCentroCusto(empresaId, { costCenterIds } = {}) {
     });
   }
 
-  return centros.map((c) => {
-    const clusters = contagemPorCentro.get(String(c.sienge_id)) || { ...CLUSTERS_ZERADOS };
-    const saldo = saldoPorCentro.get(String(c.sienge_id)) || { saldo_vencido: 0, saldo_no_mes: 0 };
-    return {
-      cost_center_id: c.sienge_id,
-      cost_center_name: c.name,
-      total_clientes: Object.values(clusters).reduce((soma, n) => soma + n, 0),
-      saldo_vencido: saldo.saldo_vencido,
-      saldo_no_mes: saldo.saldo_no_mes,
-      clusters,
-    };
-  });
+  // Só entra na lista o centro de custo que já tem cliente clusterizado —
+  // um centro com a etapa Lançamento mas 0 clientes (ainda não recalculado,
+  // ou sem movimento) só polui a listagem de Clusters de Clientes com uma
+  // linha que não leva a lugar nenhum (o drilldown dela viria vazio).
+  return centros
+    .map((c) => {
+      const clusters = contagemPorCentro.get(String(c.sienge_id)) || { ...CLUSTERS_ZERADOS };
+      const saldo = saldoPorCentro.get(String(c.sienge_id)) || { saldo_vencido: 0, saldo_no_mes: 0 };
+      return {
+        cost_center_id: c.sienge_id,
+        cost_center_name: c.name,
+        total_clientes: Object.values(clusters).reduce((soma, n) => soma + n, 0),
+        saldo_vencido: saldo.saldo_vencido,
+        saldo_no_mes: saldo.saldo_no_mes,
+        clusters,
+      };
+    })
+    .filter((centro) => centro.total_clientes > 0);
 }
 
 const CLUSTERS_VALIDOS = ['novo', 'bom', 'duvidoso', 'mau'];

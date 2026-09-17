@@ -40,18 +40,18 @@ import RotinasTab from './RotinasTab';
 
 // Lista de abas da tela. Pra adicionar uma aba nova no futuro basta incluir
 // um item aqui `{ id, label, icon }` e o caso correspondente no switch de
-// conteúdo logo abaixo. Rotinas vem primeiro de todas (só ela fica antes
-// do divisor de Clusters de Clientes, que continua sendo a visão
-// operacional principal). O `{ divider: true }` no meio é só um separador
+// conteúdo logo abaixo. Rotinas vem primeiro de todas, seguida de Gestão
+// das Parcelas (o dia a dia de cobrança) e só depois Clusters de Clientes
+// (a visão analítica). O `{ divider: true }` no meio é só um separador
 // visual (ver components/Tabs.jsx) entre as abas operacionais (Rotinas,
-// Clusters de Clientes, Gestão das Parcelas) e as de parâmetro/configuração
+// Gestão das Parcelas, Clusters de Clientes) e as de parâmetro/configuração
 // (Motor de Risco, Comunicação, Régua de Cobrança, Clientes). A aba padrão
 // ao abrir a tela é 'rotinas' (ver abaAtiva abaixo) — é a landing tab,
 // primeira coisa que o responsável pela cobrança vê.
 const TABS = [
   { id: 'rotinas', label: 'Rotinas', icon: Repeat },
-  { id: 'clusters', label: 'Clusters de Clientes', icon: Users },
   { id: 'inadimplencia', label: 'Gestão das Parcelas', icon: AlertOctagon },
+  { id: 'clusters', label: 'Clusters de Clientes', icon: Users },
   { divider: true },
   { id: 'motor-risco', label: 'Motor de Risco', icon: ShieldAlert },
   { id: 'comunicacao', label: 'Comunicação', icon: MessageCircle },
