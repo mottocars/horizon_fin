@@ -132,20 +132,19 @@ export default function GestaoParcelasTab({ empresaId, centroCustoIds = [], busc
                 nome) em vez de espalhados pela largura toda. */}
             <table className="text-left text-sm" style={{ tableLayout: 'fixed' }}>
               <colgroup>
-                <col className="w-70" />
+                <col className="w-96" />
+                <col className="w-10" />
+                <col className="w-10" />
+                <col className="w-10" />
+                <col className="w-10" />
                 <col className="w-20" />
-                <col className="w-10" />
-                <col className="w-10" />
-                <col className="w-10" />
-                <col className="w-10" />
                 <col className="w-36" />
                 <col className="w-36" />
                 <col className="w-36" />
               </colgroup>
               <thead>
                 <tr className="border-b border-gray-100 text-xs uppercase tracking-wide text-gray-400">
-                  <th className="py-3 pl-3 font-medium">Centro de Custo</th>
-                  <th className="py-3 text-center font-medium">Título</th>
+                  <th className="py-3 pl-3 font-medium">{centroExpandidoId ? 'Centro de Custo / Cliente' : 'Centro de Custo'}</th>
                   {CLUSTER_ORDEM.map((cluster) => {
                     const Icone = CLUSTER_ICON[cluster];
                     return (
@@ -154,7 +153,8 @@ export default function GestaoParcelasTab({ empresaId, centroCustoIds = [], busc
                       </th>
                     );
                   })}
-                  <th className="py-3 text-center font-medium">Pagas</th>
+                  <th className="py-3 pl-4 text-center font-medium">Título</th>
+                  <th className="py-3 pl-4 text-center font-medium">Pagas</th>
                   <th className="py-3 text-center font-medium">Vencidas</th>
                   <th className="py-3 pr-3 text-center font-medium">A vencer</th>
                 </tr>
@@ -176,13 +176,13 @@ export default function GestaoParcelasTab({ empresaId, centroCustoIds = [], busc
                             {centro.cost_center_name}
                           </span>
                         </td>
-                        <td></td>
                         {CLUSTER_ORDEM.map((cluster) => (
                           <td key={cluster} className="py-4 text-center font-mono tabular-nums text-gray-900">
                             {centro.clusters[cluster]}
                           </td>
                         ))}
-                        <td className="py-4 text-center tabular-nums text-gray-700">{formatarMoedaSemCentavos(centro.valor_pago)}</td>
+                        <td className="py-4 pl-4"></td>
+                        <td className="py-4 pl-4 text-center tabular-nums text-gray-700">{formatarMoedaSemCentavos(centro.valor_pago)}</td>
                         <td className="py-4 text-center tabular-nums text-red-600">{formatarMoedaSemCentavos(centro.valor_vencido)}</td>
                         <td className="py-4 pr-3 text-center tabular-nums text-gray-700">{formatarMoedaSemCentavos(centro.valor_a_vencer)}</td>
                       </tr>
@@ -220,7 +220,6 @@ export default function GestaoParcelasTab({ empresaId, centroCustoIds = [], busc
                             <td className="py-3 pl-9 text-gray-900">
                               {cliente.client_name || `Cliente ${cliente.client_id}`}
                             </td>
-                            <td className="py-3 text-center text-xs text-gray-500">{cliente.bill_id}</td>
                             {CLUSTER_ORDEM.map((cluster) => {
                               const Icone = CLUSTER_ICON[cluster];
                               const doCliente = cluster === cliente.cluster;
@@ -232,7 +231,8 @@ export default function GestaoParcelasTab({ empresaId, centroCustoIds = [], busc
                                 </td>
                               );
                             })}
-                            <td className="py-3 text-center tabular-nums text-gray-700">{formatarMoedaSemCentavos(cliente.valor_pago)}</td>
+                            <td className="py-3 pl-4 text-center text-xs text-gray-500">{cliente.bill_id}</td>
+                            <td className="py-3 pl-4 text-center tabular-nums text-gray-700">{formatarMoedaSemCentavos(cliente.valor_pago)}</td>
                             <td className="py-3 text-center tabular-nums text-red-600">{formatarMoedaSemCentavos(cliente.valor_vencido)}</td>
                             <td className="py-3 pr-3 text-center tabular-nums text-gray-700">{formatarMoedaSemCentavos(cliente.valor_a_vencer)}</td>
                           </tr>
