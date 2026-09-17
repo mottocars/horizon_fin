@@ -185,6 +185,7 @@ async function consultarNFe(agent, cnpj, cUFAutor, ultNsuInicial) {
     const xmlText = resposta.body.toString('utf-8');
     const { cStat, xMotivo, docs, maxNsu } = parsearRespostaNfe(xmlText);
     mensagem = xMotivo || mensagem;
+    console.log(`[espiao-nfe] cnpj=${cnpj} pagina=${paginas} cStat=${cStat} xMotivo="${xMotivo}" docs=${docs.length} maxNsu=${maxNsu}`);
 
     for (const doc of docs) {
       try {
@@ -315,6 +316,7 @@ async function consultarNFSe(agent, ultNsuInicial) {
     }
 
     if (!resposta) break;
+    console.log(`[espiao-nfse] pagina=${paginas} url=${url} status=${resposta.statusCode}`);
     if (resposta.statusCode === 204 || resposta.statusCode === 404) break;
     if (resposta.statusCode >= 400) {
       mensagem = `ADN retornou HTTP ${resposta.statusCode}.`;
@@ -330,6 +332,7 @@ async function consultarNFSe(agent, ultNsuInicial) {
     }
 
     const lote = payload.LoteDFe || payload.loteDFe || payload.lote || payload.documentos || [];
+    console.log(`[espiao-nfse] pagina=${paginas} loteSize=${lote.length} payloadKeys=${Object.keys(payload).join(',')}`);
     if (!lote.length) break;
 
     let maxNsuLote = ultNsu;
@@ -516,6 +519,12 @@ async function consultarPorCertificado(empresaId, certificado, cUFAutor) {
 
   const ultNsuNfe = estado?.ultimo_nsu_nfe || NSU_ZERADO;
   const ultNsuNfse = estado?.ultimo_nsu_nfse || 0;
+
+  // Log de diagnóstico — não persiste em lugar nenhum (o cStat/xMotivo da
+  // SEFAZ e o status HTTP da ADN nunca chegavam a ser vistos por ninguém
+  // quando a consulta roda pelo agendador, em segundo plano, sem toast).
+  // Só aparece em `docker logs`.
+  console.log(`[espiao] consultando cnpj=${cnpj} certificado=${certificado.id} ultNsuNfe=${ultNsuNfe} ultNsuNfse=${ultNsuNfse}`);
 
   const resultadoNfe = await consultarNFe(agent, cnpj, cUFAutor, ultNsuNfe);
   let salvasNfe = 0;
