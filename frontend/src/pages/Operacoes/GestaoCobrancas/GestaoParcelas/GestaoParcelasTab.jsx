@@ -281,34 +281,35 @@ export default function GestaoParcelasTab({
                 Tailwind): é o que deixa as bordas de coluna (DIV_V) e de
                 linha (DIV_H) previsíveis célula a célula, sem o navegador
                 fundir/descartar uma borda por "conflito" com a vizinha.
-                width: 1568px (a SOMA exata de todas as larguras do colgroup
-                abaixo — se alguma mudar, este número precisa acompanhar):
-                sem uma largura explícita, o navegador trata a largura da
-                tabela como 'auto' (estica pra caber no card) e, ao
-                distribuir essa sobra entre as colunas de table-layout:fixed,
-                deixa de ignorar o conteúdo só pra achar a largura total —
-                uma coluna com texto comprido sem quebra de linha (Etapa,
-                Responsável) ficava bem mais larga que o combinado no
-                colgroup. Com a largura do total já fechada aqui, a
-                distribuição interna volta a respeitar exatamente cada
-                coluna do colgroup, conteúdo nenhum influencia mais nada. */}
+                w-full (100%) na tabela + colunas do colgroup em % (não em
+                px) de propósito — pedido do usuário: a tabela não pode
+                ultrapassar o card atrás dela. Com px fixo (como era antes),
+                a tabela tinha uma largura só, igual em qualquer tela — cabia
+                num monitor largo mas estourava num notebook comum. Em %,
+                ela acompanha a largura do card sempre, em qualquer tela, sem
+                nunca ultrapassar. Continua funcionando sem o bug do texto
+                comprido de Etapa/Responsável forçando a coluna a crescer
+                (mesmo problema resolvido antes com px fixo): o que evitava
+                aquele bug não era o px em si, era a tabela ter uma largura
+                EXPLÍCITA (não 'auto') — 100% também é explícita, então a
+                distribuição das colunas continua ignorando o conteúdo. */}
             <table
-              className="border-separate border-spacing-0 text-left text-xs"
-              style={{ tableLayout: 'fixed', width: '1568px' }}
+              className="w-full border-separate border-spacing-0 text-left text-xs"
+              style={{ tableLayout: 'fixed' }}
             >
               <colgroup>
-                <col className="w-96" />
-                <col className="w-10" />
-                <col className="w-10" />
-                <col className="w-10" />
-                <col className="w-10" />
-                <col className="w-28" />
-                <col className="w-28" />
-                <col className="w-36" />
-                <col className="w-32" />
-                <col className="w-44" />
-                <col className="w-44" />
-                <col className="w-44" />
+                <col className="w-[32.68%]" />
+                <col className="w-[2.55%]" />
+                <col className="w-[2.55%]" />
+                <col className="w-[2.55%]" />
+                <col className="w-[2.55%]" />
+                <col className="w-[7.14%]" />
+                <col className="w-[7.14%]" />
+                <col className="w-[9.18%]" />
+                <col className="w-[8.16%]" />
+                <col className="w-[8.5%]" />
+                <col className="w-[8.5%]" />
+                <col className="w-[8.5%]" />
               </colgroup>
               <thead className="sticky top-0 z-10 bg-white shadow-sm">
                 <tr className="text-xs uppercase tracking-wide text-gray-400">
