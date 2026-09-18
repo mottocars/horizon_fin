@@ -86,6 +86,12 @@ function hojeISO() {
   return new Date().toISOString().slice(0, 10);
 }
 
+function ontemISO() {
+  const data = new Date();
+  data.setDate(data.getDate() - 1);
+  return data.toISOString().slice(0, 10);
+}
+
 function formatarDataHora(iso) {
   if (!iso) return '—';
   return new Date(iso).toLocaleString('pt-BR', { dateStyle: 'short', timeStyle: 'short' });
@@ -502,7 +508,9 @@ export default function EspiaoNfeNfsePage() {
   // filtro nenhum. null = ainda não carregou.
   const [contagemAbas, setContagemAbas] = useState({ novas: null, cientes: null, inativas: null });
 
-  const [dataInicio, setDataInicio] = useState(hojeISO());
+  // Padrão: ontem até hoje (pedido do usuário) — não só hoje, pra não
+  // começar a tela vazia num dia sem nenhuma nota emitida ainda.
+  const [dataInicio, setDataInicio] = useState(ontemISO());
   const [dataFim, setDataFim] = useState(hojeISO());
 
   const [notasPorCertificado, setNotasPorCertificado] = useState({});
