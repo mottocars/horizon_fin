@@ -3,6 +3,7 @@ const path = require('path');
 const https = require('https');
 const zlib = require('zlib');
 const crypto = require('crypto');
+const forge = require('node-forge');
 const pool = require('../../config/db');
 const { decrypt } = require('../../utils/crypto');
 const { codigoUf } = require('./uf');
@@ -54,8 +55,7 @@ function extrairTagDentroDe(texto, containerTag, innerTag) {
 }
 
 // ────────────────────────────────────────────────────────────────
-// Certificado → agente HTTPS com autenticação mTLS (Node aceita o
-// .pfx direto, sem precisar converter para PEM como no script Python)
+// Certificado → agente HTTPS com autenticação mTLS
 // ────────────────────────────────────────────────────────────────
 
 function extrairCnpjDoNome(nome) {
@@ -65,10 +65,44 @@ function extrairCnpjDoNome(nome) {
 
 function carregarAgente(certificado) {
   const caminho = path.join(UPLOADS_DIR, certificado.arquivo_armazenado);
-  const pfx = fs.readFileSync(caminho);
+  const buffer = fs.readFileSync(caminho);
   const senha = decrypt(certificado.senha_enc);
-  const agent = new https.Agent({ pfx, passphrase: senha, keepAlive: false });
-  return agent;
+
+  // node-forge (puro JS) em vez de passar o .pfx direto pro https.Agent
+  // (`{ pfx, passphrase }`, que usa o parser PKCS12 nativo do Node/OpenSSL):
+  // alguns certificados .pfx — sobretudo os exportados com configurações
+  // "compatíveis" por ferramentas mais antigas — criptografam o conteúdo
+  // do PKCS12 com RC2-40-CBC, um algoritmo que o OpenSSL 3 (usado pelo Node
+  // desde a v18) desativou por padrão e rejeita o arquivo inteiro com
+  // "Unsupported PKCS12 PFX data", mesmo com a senha certa. O node-forge
+  // não depende do OpenSSL do sistema — é a mesma biblioteca que já lê o
+  // certificado no upload (ver certificados.service.js::lerDadosPfx) — e
+  // abre esses arquivos igual; aqui só extraímos a chave/certificado em
+  // PEM e montamos o agente HTTPS a partir deles, funcionando pros dois
+  // formatos de PKCS12 (novo e legado).
+  const p12Asn1 = forge.asn1.fromDer(forge.util.createBuffer(buffer.toString('binary')));
+  const p12 = forge.pkcs12.pkcs12FromAsn1(p12Asn1, false, senha);
+
+  const keyBags = p12.getBags({ bagType: forge.pki.oids.pkcs8ShroudedKeyBag });
+  const keyBag =
+    (keyBags[forge.pki.oids.pkcs8ShroudedKeyBag] || [])[0] ||
+    (p12.getBags({ bagType: forge.pki.oids.keyBag })[forge.pki.oids.keyBag] || [])[0];
+  if (!keyBag) {
+    throw new Error('Chave privada não encontrada no certificado.');
+  }
+  const keyPem = forge.pki.privateKeyToPem(keyBag.key);
+
+  const certBags = p12.getBags({ bagType: forge.pki.oids.certBag });
+  const certsPem = (certBags[forge.pki.oids.certBag] || []).map((bag) => forge.pki.certificateToPem(bag.cert));
+  if (certsPem.length === 0) {
+    throw new Error('Certificado não encontrado dentro do arquivo .pfx.');
+  }
+
+  // O 1º certificado é o do titular; os demais (quando existem) são a
+  // cadeia intermediária — o handshake TLS precisa de todos.
+  const [cert, ...ca] = certsPem;
+
+  return new https.Agent({ key: keyPem, cert, ca, keepAlive: false });
 }
 
 function httpsRequest({ method, url, agent, headers, body, timeoutMs = 60000 }) {
