@@ -1174,8 +1174,16 @@ CREATE TABLE espiao_notas (
     arquivo_armazenado   VARCHAR(255),
     -- Atualizada quando chega um evento (resEvento/procEventoNFe da NF-e ou
     -- <evento> da NFS-e) referenciando esta nota — ex. "Cancelamento de
-    -- NFS-e". O evento em si nunca vira uma linha própria nesta tabela.
+    -- NFS-e". Sempre reflete só a ÚLTIMA etapa; o histórico completo (toda
+    -- etapa, uma linha cada) fica em espiao_notas_eventos.
     situacao             VARCHAR(100) NOT NULL DEFAULT 'Emitida',
+    -- Classificação da situação em 3 grupos pra exibição (badge azul/
+    -- vermelho/verde na tela): 'emitida' (nenhum evento ainda), 'cancelada'
+    -- (a nota perdeu o valor fiscal — definitivo, nunca volta pra outra
+    -- categoria mesmo com eventos posteriores, ver registrarEvento) e
+    -- 'complementada' (qualquer outro evento — autorização de CT-e,
+    -- registro de passagem, comprovante de entrega etc.).
+    situacao_categoria   VARCHAR(20) NOT NULL DEFAULT 'emitida',
     -- Inativação manual (usuário marca notas e explica o motivo). Nota
     -- inativa some da tela comum e passa a aparecer só na tela de notas
     -- inativadas, com o log de quem inativou e por quê.
@@ -1204,6 +1212,28 @@ CREATE TABLE espiao_notas (
 
 CREATE INDEX idx_espiao_notas_empresa ON espiao_notas (empresa_id, data_emissao);
 CREATE INDEX idx_espiao_notas_inativa ON espiao_notas (empresa_id, inativa);
+
+-- Histórico de etapas de cada nota do Espião — uma linha por evento
+-- recebido (nunca sobrescreve, ao contrário de espiao_notas.situacao). A
+-- 1ª linha de toda nota é sempre "Emitida" (criada junto com a nota, ver
+-- espiao.service.js::salvarNota); as seguintes vêm de eventos reais da
+-- SEFAZ/ADN (cancelamento, autorização de CT-e, registro de passagem
+-- etc. — ver registrarEvento). Alimenta a janela de "histórico de etapas"
+-- da tela.
+CREATE TABLE espiao_notas_eventos (
+    id            SERIAL PRIMARY KEY,
+    nota_id       INTEGER NOT NULL REFERENCES espiao_notas(id) ON DELETE CASCADE,
+    descricao     VARCHAR(255) NOT NULL,
+    categoria     VARCHAR(20) NOT NULL,
+    -- Data/hora do evento em si, extraída do XML da SEFAZ quando disponível
+    -- (ver extrairEventoNfe/extrairEventoNfse) — null quando o tipo de
+    -- evento não carrega essa tag; nesse caso a ordem de exibição usa `id`
+    -- (ordem de chegada), não esta coluna.
+    data_evento   TIMESTAMP,
+    criado_em     TIMESTAMP DEFAULT NOW()
+);
+
+CREATE INDEX idx_espiao_notas_eventos_nota ON espiao_notas_eventos (nota_id);
 
 -- Agendamento de consulta automática — um por empresa do sistema (não por
 -- certificado), para não criar centenas de rotinas quando a empresa tiver

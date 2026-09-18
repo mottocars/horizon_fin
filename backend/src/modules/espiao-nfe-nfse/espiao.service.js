@@ -323,6 +323,10 @@ function extrairEventoNfe(xmlBuffer) {
   return {
     chaveReferenciada: extrairTagTexto(texto, 'chNFe'),
     descricao: extrairTagTexto(texto, 'xEvento') || extrairTagTexto(texto, 'descEvento') || 'Evento',
+    // <dhEvento> no evento completo (procEventoNFe), <dhRecbto> no resumo
+    // (resEvento) — data/hora real do evento na SEFAZ, não a data em que o
+    // Espião consultou (usada no histórico de etapas da nota).
+    dataEvento: extrairTagTexto(texto, 'dhEvento') || extrairTagTexto(texto, 'dhRecbto'),
   };
 }
 
@@ -441,6 +445,9 @@ function extrairEventoNfse(xmlBuffer) {
   return {
     chaveReferenciada: extrairTagTexto(texto, 'chNFSe'),
     descricao: extrairTagTexto(texto, 'xDesc') || 'Evento',
+    // Data/hora real do evento (ver comentário equivalente em
+    // extrairEventoNfe) — fica null se a tag não existir nessa variante.
+    dataEvento: extrairTagTexto(texto, 'dhEvento'),
   };
 }
 
@@ -465,7 +472,13 @@ async function salvarNota(
   // precisa poder virar FALSE quando a versão completa da mesma chave
   // chegar depois (diferente de emissor/destinatario/etc., que só
   // preenchem o que ainda está em branco).
-  const { rowCount } = await pool.query(
+  // `(xmax = 0)` é o jeito padrão do Postgres de saber, no retorno de um
+  // INSERT ... ON CONFLICT, se a linha foi realmente inserida agora
+  // (xmax = 0) ou já existia e só foi atualizada (xmax preenchido) — usado
+  // abaixo pra criar a 1ª etapa ("Emitida") do histórico só na primeira
+  // vez que essa chave aparece, nunca de novo quando um resNFe é
+  // substituído pela versão completa da mesma nota.
+  const { rows } = await pool.query(
     `INSERT INTO espiao_notas (empresa_id, certificado_id, tipo, chave_acesso, emissor, destinatario, data_emissao, numero_nota, serie_nota, arquivo_armazenado, apenas_resumo)
      VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11)
      ON CONFLICT (empresa_id, chave_acesso) DO UPDATE SET
@@ -475,10 +488,20 @@ async function salvarNota(
        numero_nota = COALESCE(espiao_notas.numero_nota, EXCLUDED.numero_nota),
        serie_nota = COALESCE(espiao_notas.serie_nota, EXCLUDED.serie_nota),
        arquivo_armazenado = EXCLUDED.arquivo_armazenado,
-       apenas_resumo = EXCLUDED.apenas_resumo`,
+       apenas_resumo = EXCLUDED.apenas_resumo
+     RETURNING id, (xmax = 0) AS inserted`,
     [empresaId, certificadoId, tipo, chave, emissor, destinatario, dataEmissao, numero, serie, arquivoArmazenado, apenasResumo]
   );
-  return rowCount > 0;
+
+  const notaSalva = rows[0];
+  if (notaSalva?.inserted) {
+    await pool.query(
+      `INSERT INTO espiao_notas_eventos (nota_id, descricao, categoria, data_evento)
+       VALUES ($1, 'Emitida', 'emitida', $2)`,
+      [notaSalva.id, dataEmissao]
+    );
+  }
+  return Boolean(notaSalva);
 }
 
 // Documento que não bateu nem com "é fatura" nem com "é evento" — salva o
@@ -496,17 +519,56 @@ function salvarDiagnostico(empresaId, tipo, raw) {
   }
 }
 
-// Evento (cancelamento, correção, etc.) não é uma nota nova — só atualiza a
-// situação da nota já cadastrada com a mesma chave. Se a nota original ainda
-// não foi capturada, o evento é descartado (nada para atualizar).
-async function registrarEvento(empresaId, tipo, chaveReferenciada, descricao) {
+// 3 categorias de situação (pedido do usuário): 'emitida' (nenhum evento
+// ainda), 'cancelada' (a nota perdeu o valor fiscal) e 'complementada'
+// (qualquer outro evento — autorização de CT-e, registro de passagem,
+// comprovante de entrega etc.). A distinção não é só "contém a palavra
+// cancelamento": "Cancelamento Comprovante de Entrega do CT-e" cancela um
+// COMPROVANTE (documento de transporte), não a nota em si, então fica
+// complementada — daí o `!includes('comprovante')`. Mesma lógica cobre
+// "MDF-e cancelado" (cancela o manifesto, não a nota): não começa com
+// "cancelamento", então nunca cai aqui.
+function classificarEventoSituacao(descricao) {
+  const texto = String(descricao || '').trim().toLowerCase();
+  if (texto.startsWith('cancelamento') && !texto.includes('comprovante')) return 'cancelada';
+  return 'complementada';
+}
+
+// Evento (cancelamento, correção, etc.) não é uma nota nova — é uma etapa a
+// mais no histórico da nota já cadastrada com a mesma chave (histórico
+// completo em espiao_notas_eventos; espiao_notas.situacao/situacao_categoria
+// sempre refletem só a ÚLTIMA etapa, pra listar/filtrar sem precisar juntar
+// com o histórico). Se a nota original ainda não foi capturada, o evento é
+// descartado (nada pra atualizar). Cancelamento é definitivo pelas regras da
+// SEFAZ (não existe evento de "descancelar" uma NF-e/NFS-e) — por isso, uma
+// vez que a categoria vira 'cancelada', nenhum evento posterior muda isso de
+// volta, mesmo que venha um evento "neutro" depois (ex.: passagem em posto
+// fiscal registrada depois do cancelamento).
+async function registrarEvento(empresaId, tipo, chaveReferenciada, descricao, dataEvento) {
   if (!chaveReferenciada) return false;
-  const { rowCount } = await pool.query(
-    `UPDATE espiao_notas SET situacao = $1
-     WHERE empresa_id = $2 AND tipo = $3 AND chave_acesso = $4`,
-    [descricao, empresaId, tipo, chaveReferenciada]
+
+  const { rows } = await pool.query(
+    `SELECT id, situacao_categoria FROM espiao_notas
+     WHERE empresa_id = $1 AND tipo = $2 AND chave_acesso = $3`,
+    [empresaId, tipo, chaveReferenciada]
   );
-  return rowCount > 0;
+  const nota = rows[0];
+  if (!nota) return false;
+
+  const categoriaDoEvento = classificarEventoSituacao(descricao);
+  const categoriaFinal = nota.situacao_categoria === 'cancelada' ? 'cancelada' : categoriaDoEvento;
+
+  await pool.query(`UPDATE espiao_notas SET situacao = $1, situacao_categoria = $2 WHERE id = $3`, [
+    descricao,
+    categoriaFinal,
+    nota.id,
+  ]);
+  await pool.query(
+    `INSERT INTO espiao_notas_eventos (nota_id, descricao, categoria, data_evento)
+     VALUES ($1, $2, $3, $4)`,
+    [nota.id, descricao, categoriaDoEvento, dataEvento || null]
+  );
+  return true;
 }
 
 // ────────────────────────────────────────────────────────────────
@@ -574,8 +636,8 @@ async function consultarPorCertificado(empresaId, certificado, cUFAutor) {
   let naoReconhecidosNfe = 0;
   for (const doc of resultadoNfe.notas) {
     if (ehEventoNfe(doc.raw)) {
-      const { chaveReferenciada, descricao } = extrairEventoNfe(doc.raw);
-      await registrarEvento(empresaId, 'NFE', chaveReferenciada, descricao);
+      const { chaveReferenciada, descricao, dataEvento } = extrairEventoNfe(doc.raw);
+      await registrarEvento(empresaId, 'NFE', chaveReferenciada, descricao, dataEvento);
       continue;
     }
     const chave = extrairChaveNfe(doc.raw);
@@ -603,8 +665,8 @@ async function consultarPorCertificado(empresaId, certificado, cUFAutor) {
   let naoReconhecidosNfse = 0;
   for (const doc of resultadoNfse.notas) {
     if (ehEventoNfse(doc.raw)) {
-      const { chaveReferenciada, descricao } = extrairEventoNfse(doc.raw);
-      await registrarEvento(empresaId, 'NFSE', chaveReferenciada, descricao);
+      const { chaveReferenciada, descricao, dataEvento } = extrairEventoNfse(doc.raw);
+      await registrarEvento(empresaId, 'NFSE', chaveReferenciada, descricao, dataEvento);
       continue;
     }
     const info = extrairInfoNfse(doc.raw);
@@ -781,7 +843,7 @@ async function listNotas(empresaId, filtros) {
   const where = montarFiltrosNotas(params, 'empresa_id = $1 AND inativa = FALSE AND apenas_resumo = FALSE', filtros);
 
   const { rows } = await pool.query(
-    `SELECT id, tipo, chave_acesso, numero_nota, serie_nota, emissor, destinatario, data_emissao, situacao, ciente_em
+    `SELECT id, tipo, chave_acesso, numero_nota, serie_nota, emissor, destinatario, data_emissao, situacao, situacao_categoria, ciente_em
      FROM espiao_notas
      WHERE ${where}
      ORDER BY data_emissao DESC`,
@@ -803,7 +865,7 @@ async function listNotasPorCertificado(certificadoId, filtros) {
   );
 
   const { rows } = await pool.query(
-    `SELECT id, tipo, chave_acesso, numero_nota, serie_nota, emissor, destinatario, data_emissao, situacao, ciente_em
+    `SELECT id, tipo, chave_acesso, numero_nota, serie_nota, emissor, destinatario, data_emissao, situacao, situacao_categoria, ciente_em
      FROM espiao_notas
      WHERE ${where}
      ORDER BY data_emissao DESC`,
@@ -891,7 +953,7 @@ async function listNotasInativadas(empresaId, filtros) {
   );
 
   const { rows } = await pool.query(
-    `SELECT n.id, n.tipo, n.chave_acesso, n.numero_nota, n.serie_nota, n.emissor, n.destinatario, n.data_emissao, n.situacao,
+    `SELECT n.id, n.tipo, n.chave_acesso, n.numero_nota, n.serie_nota, n.emissor, n.destinatario, n.data_emissao, n.situacao, n.situacao_categoria,
             n.inativada_em, n.motivo_inativacao,
             u.nome AS inativada_por_nome
      FROM espiao_notas n
@@ -917,7 +979,7 @@ async function listNotasInativadasPorCertificado(certificadoId, filtros) {
   );
 
   const { rows } = await pool.query(
-    `SELECT n.id, n.tipo, n.chave_acesso, n.numero_nota, n.serie_nota, n.emissor, n.destinatario, n.data_emissao, n.situacao,
+    `SELECT n.id, n.tipo, n.chave_acesso, n.numero_nota, n.serie_nota, n.emissor, n.destinatario, n.data_emissao, n.situacao, n.situacao_categoria,
             n.inativada_em, n.motivo_inativacao,
             u.nome AS inativada_por_nome
      FROM espiao_notas n
@@ -941,6 +1003,24 @@ async function getArquivoNota(notaId) {
     caminhoAbsoluto: path.join(NOTAS_DIR, nota.arquivo_armazenado),
     nomeArquivo: `${nota.chave_acesso}.xml`,
   };
+}
+
+// Histórico completo de etapas de uma nota (janela flutuante da tela — ver
+// EspiaoNfeNfsePage.jsx). Ordena por `id` (ordem de chegada), não por
+// `data_evento`: a 1ª linha é sempre "Emitida" (criada junto com a nota em
+// salvarNota) e as seguintes chegam na mesma ordem em que a SEFAZ as
+// distribuiu (NSU crescente) — mais confiável do que `data_evento`, que
+// pode vir null em alguns tipos de evento (ver extrairEventoNfe) e
+// bagunçaria a ordem se usado como critério principal.
+async function listEventosPorNota(notaId) {
+  const { rows } = await pool.query(
+    `SELECT id, descricao, categoria, data_evento, criado_em
+     FROM espiao_notas_eventos
+     WHERE nota_id = $1
+     ORDER BY id ASC`,
+    [notaId]
+  );
+  return rows;
 }
 
 // Usado pelo gerador de PDF (pdf.service.js) — devolve a linha da nota
@@ -999,6 +1079,7 @@ module.exports = {
   listNotasPorCertificado,
   getArquivoNota,
   getNotaComXml,
+  listEventosPorNota,
   getAgendamento,
   salvarAgendamento,
   listAgendamentosPendentes,

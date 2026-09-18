@@ -41,6 +41,10 @@ export function salvarAgendamentoEspiao(empresaId, intervaloHoras) {
   return http.put(`/espiao/${empresaId}/agendamento`, { intervaloHoras }).then((res) => res.data);
 }
 
+export function listEventosNotaEspiao(notaId) {
+  return http.get(`/espiao/notas/${notaId}/eventos`).then((res) => res.data);
+}
+
 export function baixarNotaEspiao(notaId) {
   return http.get(`/espiao/notas/${notaId}/download`, { responseType: 'blob' }).then((res) => res.data);
 }

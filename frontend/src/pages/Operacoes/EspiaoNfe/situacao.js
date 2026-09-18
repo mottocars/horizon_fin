@@ -1,5 +1,3 @@
-import { AlertTriangle, CheckCircle2, XCircle, FileCheck2 } from 'lucide-react';
-
 // Legenda didática pra cada situação possível de uma nota — a Receita
 // devolve o texto oficial do evento (ex.: "MDF-e autorizado"), que sozinho
 // não diz muita coisa pra quem não é da área fiscal.
@@ -44,24 +42,4 @@ export function explicarSituacao(situacao) {
   if (s.includes('autoriza')) return 'Autorização relacionada a esta nota.';
   if (s.includes('passagem')) return 'Registro de passagem em posto fiscal relacionado ao transporte desta nota.';
   return 'Evento fiscal informado pela Receita relacionado a esta nota (não é uma nota nova).';
-}
-
-// Ícone + cor da situação: cancelamento = vermelho, autorização = verde,
-// qualquer outro tipo de evento/notificação = amarelo (alerta). Sem evento
-// (Emitida) = ícone neutro em cinza. borderClass é a mesma cor aplicada como
-// friso na borda esquerda da linha (ver LinhaNota em EspiaoNfeNfsePage.jsx)
-// — dá pra notar uma nota fora do normal sem precisar passar o mouse em cada
-// uma; o ícone+tooltip continua sendo quem explica o que aconteceu.
-export function infoSituacao(situacao) {
-  if (!situacao || situacao === 'Emitida') {
-    return { Icon: FileCheck2, colorClass: 'text-gray-400', borderClass: 'border-l-transparent' };
-  }
-  const s = situacao.toLowerCase();
-  if (s.includes('cancelamento')) {
-    return { Icon: XCircle, colorClass: 'text-red-600', borderClass: 'border-l-red-500' };
-  }
-  if (s.includes('autoriza')) {
-    return { Icon: CheckCircle2, colorClass: 'text-emerald-600', borderClass: 'border-l-emerald-500' };
-  }
-  return { Icon: AlertTriangle, colorClass: 'text-amber-600', borderClass: 'border-l-amber-500' };
 }

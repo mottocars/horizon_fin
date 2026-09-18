@@ -16,6 +16,8 @@ import {
   User,
   Inbox,
   CheckCircle,
+  CheckCircle2,
+  XCircle,
   Plus,
   Minus,
 } from 'lucide-react';
@@ -29,7 +31,7 @@ import { listEmpresas } from '../../../api/empresas.api';
 import { nomeExibicaoEmpresa } from '../../../utils/empresa';
 import { useAlert, useConfirm } from '../../../confirm/ConfirmContext';
 import { useSidebar } from '../../../layout/SidebarContext';
-import { explicarSituacao, infoSituacao } from './situacao';
+import { explicarSituacao } from './situacao';
 import { useEmpresaTravada } from '../../../hooks/useEmpresaTravada';
 import {
   listCertificadosEspiao,
@@ -44,6 +46,7 @@ import {
   reativarNotasEspiao,
   declararCienciaEspiao,
   desmarcarCienciaEspiao,
+  listEventosNotaEspiao,
 } from '../../../api/espiao.api';
 
 const INTERVALOS = [
@@ -254,8 +257,8 @@ function LinhaNota({
   onBaixar,
   baixandoPdf,
   baixandoXml,
+  onAbrirHistorico,
 }) {
-  const { Icon: IconeSituacao, colorClass } = infoSituacao(nota.situacao);
   const ehProduto = tipo === 'produtos';
   const ehServico = tipo === 'servicos';
   return (
@@ -289,19 +292,28 @@ function LinhaNota({
       <td className={`${DIV_H} ${DIV_V} truncate px-3 py-2 text-left text-gray-900`}>{nota.emissor || '—'}</td>
       <td className={`${DIV_H} ${DIV_V} px-2 py-2 text-center text-gray-600`}>{formatarData(nota.data_emissao)}</td>
       <td className={`${DIV_H} ${DIV_V} px-2 py-2 text-center`}>
-        {!nota.situacao || nota.situacao === 'Emitida' ? (
-          <span className="text-gray-400">Emitida</span>
+        {/* 3 categorias (pedido do usuário): emitida (neutro, sem clique —
+            nada pra mostrar num histórico de 1 etapa só), cancelada e
+            complementada (as 2 clicáveis, abrem o histórico completo de
+            etapas — ver HistoricoSituacaoModal). */}
+        {nota.situacao_categoria === 'cancelada' ? (
+          <button
+            type="button"
+            onClick={() => onAbrirHistorico(nota)}
+            className="inline-flex items-center rounded-full bg-red-100 px-2 py-0.5 text-[11px] font-semibold text-red-700 hover:bg-red-200"
+          >
+            Cancelada
+          </button>
+        ) : nota.situacao_categoria === 'complementada' ? (
+          <button
+            type="button"
+            onClick={() => onAbrirHistorico(nota)}
+            className="inline-flex items-center rounded-full bg-emerald-100 px-2 py-0.5 text-[11px] font-semibold text-emerald-700 hover:bg-emerald-200"
+          >
+            Complementada
+          </button>
         ) : (
-          <div className="group relative inline-block">
-            <IconeSituacao size={15} className={`inline ${colorClass}`} />
-            {/* Abre pra cima e pra esquerda: a coluna fica perto da borda
-                direita da tabela, e não dá pra saber se é uma das últimas
-                linhas do certificado (a tabela inteira rola junto agora). */}
-            <div className="pointer-events-none absolute bottom-full right-0 z-30 mb-1.5 hidden w-64 rounded-lg bg-gray-900 px-3 py-2 text-xs leading-snug text-white shadow-lg group-hover:block">
-              <p className="mb-1 font-semibold">{nota.situacao}</p>
-              <p>{explicarSituacao(nota.situacao)}</p>
-            </div>
-          </div>
+          <span className="font-medium text-primary-600">Emitida</span>
         )}
       </td>
       {modoInativas && (
@@ -359,6 +371,85 @@ function LinhaNota({
         </>
       )}
     </tr>
+  );
+}
+
+// Ícone + cor de cada etapa do histórico, pela mesma categoria de 3 vias
+// usada no badge da situação (ver LinhaNota) — cancelada nunca aparece
+// antes da última linha na prática (é definitiva), mas o ícone da etapa
+// em si reflete o que aquele evento específico foi, não o status atual da
+// nota inteira.
+const ICONE_ETAPA = {
+  emitida: { Icon: FileText, className: 'bg-primary-100 text-primary-600' },
+  cancelada: { Icon: XCircle, className: 'bg-red-100 text-red-600' },
+  complementada: { Icon: CheckCircle2, className: 'bg-emerald-100 text-emerald-600' },
+};
+
+// Janela flutuante com o histórico completo de etapas de uma nota (pedido
+// do usuário: além da badge Cancelada/Complementada, poder ver todas as
+// etapas que levaram até ali — ex.: "Emitida" e depois "Cancelamento" são
+// 2 etapas, não 1). Busca sob demanda, só quando abre — não guarda cache
+// entre aberturas.
+function HistoricoSituacaoModal({ nota, onClose }) {
+  const [eventos, setEventos] = useState([]);
+  const [carregando, setCarregando] = useState(true);
+
+  useEffect(() => {
+    if (!nota) return;
+    setCarregando(true);
+    listEventosNotaEspiao(nota.id)
+      .then(setEventos)
+      .finally(() => setCarregando(false));
+  }, [nota]);
+
+  return (
+    <Modal open={Boolean(nota)} onClose={onClose} title="Histórico da nota">
+      {nota && (
+        <div className="space-y-4">
+          <div className="rounded-lg bg-gray-50 px-3 py-2 text-xs">
+            <p className="font-mono text-gray-700">
+              {nota.numero_nota || '—'}
+              {nota.serie_nota && <span className="text-gray-400"> / {nota.serie_nota}</span>}
+            </p>
+            <p className="truncate text-gray-500">{nota.emissor}</p>
+          </div>
+
+          {carregando ? (
+            <p className="flex items-center justify-center gap-1.5 py-6 text-sm text-gray-400">
+              <Loader2 size={14} className="animate-spin" />
+              Carregando histórico...
+            </p>
+          ) : eventos.length === 0 ? (
+            <p className="py-6 text-center text-sm text-gray-400">Nenhuma etapa registrada.</p>
+          ) : (
+            <ol>
+              {eventos.map((evento, i) => {
+                const { Icon, className } = ICONE_ETAPA[evento.categoria] || ICONE_ETAPA.complementada;
+                return (
+                  <li key={evento.id} className="relative flex gap-3 pb-4 last:pb-0">
+                    {/* Linha vertical ligando uma etapa à próxima — some na
+                        última (não tem pra onde continuar). */}
+                    {i < eventos.length - 1 && (
+                      <span className="absolute left-[11px] top-6 h-[calc(100%-1.5rem)] w-px bg-gray-200" />
+                    )}
+                    <span className={`z-10 flex h-6 w-6 shrink-0 items-center justify-center rounded-full ${className}`}>
+                      <Icon size={13} />
+                    </span>
+                    <div className="min-w-0 flex-1 pt-0.5">
+                      <p className="text-sm font-medium text-gray-900">{evento.descricao}</p>
+                      <p className="mt-0.5 text-xs text-gray-500">{explicarSituacao(evento.descricao)}</p>
+                      <p className="mt-1 text-xs text-gray-400">
+                        {evento.data_evento ? formatarDataHora(evento.data_evento) : 'Data não registrada'}
+                      </p>
+                    </div>
+                  </li>
+                );
+              })}
+            </ol>
+          )}
+        </div>
+      )}
+    </Modal>
   );
 }
 
@@ -426,6 +517,12 @@ export default function EspiaoNfeNfsePage() {
   const [modalAgendamento, setModalAgendamento] = useState(false);
   const [intervaloSelecionado, setIntervaloSelecionado] = useState(1);
   const [salvandoAgendamento, setSalvandoAgendamento] = useState(false);
+
+  // Nota cujo histórico de etapas está aberto na janela flutuante (ver
+  // HistoricoSituacaoModal) — null = janela fechada. Guarda a nota inteira
+  // (não só o id) pra já mostrar número/situação no cabeçalho da janela
+  // sem esperar a resposta da API.
+  const [notaHistorico, setNotaHistorico] = useState(null);
 
   // filtroTexto é o que o usuário está digitando, do jeito que ele digitou
   // (minúsculo inclusive). filtros é a versão em caixa alta, com um pequeno
@@ -1118,6 +1215,7 @@ export default function EspiaoNfeNfsePage() {
               onBaixar={() => handleDownload(nota)}
               baixandoPdf={baixando.has(`${nota.id}:pdf`)}
               baixandoXml={baixando.has(`${nota.id}:xml`)}
+              onAbrirHistorico={setNotaHistorico}
             />
           ))
         )}
@@ -1636,6 +1734,8 @@ export default function EspiaoNfeNfsePage() {
           </div>
         </form>
       </Modal>
+
+      <HistoricoSituacaoModal nota={notaHistorico} onClose={() => setNotaHistorico(null)} />
     </div>
   );
 }

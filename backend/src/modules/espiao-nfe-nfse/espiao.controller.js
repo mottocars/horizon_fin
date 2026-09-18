@@ -77,6 +77,15 @@ async function listNotasPorCertificado(req, res, next) {
   }
 }
 
+async function listEventosPorNota(req, res, next) {
+  try {
+    const result = await service.listEventosPorNota(req.params.notaId);
+    res.json(result);
+  } catch (err) {
+    next(err);
+  }
+}
+
 async function download(req, res, next) {
   try {
     const arquivo = await service.getArquivoNota(req.params.notaId);
@@ -227,6 +236,7 @@ module.exports = {
   listCertificados,
   consultarCertificado,
   listNotasPorCertificado,
+  listEventosPorNota,
   download,
   downloadPdf,
   getAgendamento,

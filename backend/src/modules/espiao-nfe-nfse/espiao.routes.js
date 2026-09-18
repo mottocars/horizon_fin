@@ -13,6 +13,7 @@ router.get('/:empresaId/agendamento', controller.getAgendamento);
 router.put('/:empresaId/agendamento', controller.salvarAgendamento);
 router.post('/certificados/:certificadoId/consultar', controller.consultarCertificado);
 router.get('/certificados/:certificadoId/notas', controller.listNotasPorCertificado);
+router.get('/notas/:notaId/eventos', controller.listEventosPorNota);
 router.get('/notas/:notaId/download', controller.download);
 router.get('/notas/:notaId/download-pdf', controller.downloadPdf);
 router.get('/:empresaId/notas-inativadas', controller.listNotasInativadas);
