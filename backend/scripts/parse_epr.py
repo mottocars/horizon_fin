@@ -28,7 +28,14 @@ RE_LINHA_MUTUARIO = re.compile(
     r"(?P<tipo_und>[A-Z0-9]{0,2})\s+"
     r"(?P<gar_aut>\d+)\s+"
     r"(?P<dt_inc_ctr>\d{2}/\d{2}/\d{2})\s+"
-    r"(?P<dt_inc_reg>\d{2}/\d{2}/\d{2})\s+"
+    # DT.INC.REG (data de inclusão do REGISTRO do contrato, distinta da
+    # DT.INC.CTR) vem em branco quando o registro em cartório ainda não foi
+    # concluído — nesses casos o VR RETIDO normalmente traz um valor > 0
+    # (a retenção da CAIXA continua até o registro sair). Por isso é
+    # opcional aqui: sem essa data, a linha inteira deixava de casar com o
+    # regex e era descartada silenciosamente (`if not m: continue` em
+    # parse_mutuarios), sumindo do banco mesmo com dado de retenção válido.
+    r"(?:(?P<dt_inc_reg>\d{2}/\d{2}/\d{2})\s+)?"
     r"(?P<vr_retido>[\d.,]+)\s+"
     r"(?P<vr_amortiz>[\d.,]+)\s+"
     r"(?P<amo>SIM|NAO)\s*$"
