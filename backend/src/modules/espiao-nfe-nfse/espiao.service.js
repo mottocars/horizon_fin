@@ -911,25 +911,9 @@ async function listNotasPorCertificado(certificadoId, filtros) {
     params
   );
 
-  // Totais SEM o filtro de data/texto — o badge de contagem por
-  // certificado (ver renderCertificado no frontend) não pode "esconder"
-  // notas retroativas que uma consulta acabou de trazer só porque elas
-  // caem fora do período selecionado na tela; a lista em si (acima)
-  // continua respeitando o filtro normalmente.
-  const { rows: totais } = await pool.query(
-    `SELECT tipo, count(*)::int AS total FROM espiao_notas
-     WHERE certificado_id = $1 AND inativa = FALSE AND apenas_resumo = FALSE
-     GROUP BY tipo`,
-    [certificadoId]
-  );
-  const totalProdutos = totais.find((t) => t.tipo === 'NFE')?.total || 0;
-  const totalServicos = totais.find((t) => t.tipo === 'NFSE')?.total || 0;
-
   return {
     produtos: rows.filter((r) => r.tipo === 'NFE'),
     servicos: rows.filter((r) => r.tipo === 'NFSE'),
-    totalProdutos,
-    totalServicos,
   };
 }
 
@@ -1044,23 +1028,9 @@ async function listNotasInativadasPorCertificado(certificadoId, filtros) {
     params
   );
 
-  // Mesma ideia de listNotasPorCertificado: total independente do filtro
-  // de data/texto, só respeitando "inativa = TRUE" (o que de fato define
-  // esse conjunto).
-  const { rows: totais } = await pool.query(
-    `SELECT tipo, count(*)::int AS total FROM espiao_notas
-     WHERE certificado_id = $1 AND inativa = TRUE AND apenas_resumo = FALSE
-     GROUP BY tipo`,
-    [certificadoId]
-  );
-  const totalProdutos = totais.find((t) => t.tipo === 'NFE')?.total || 0;
-  const totalServicos = totais.find((t) => t.tipo === 'NFSE')?.total || 0;
-
   return {
     produtos: rows.filter((r) => r.tipo === 'NFE'),
     servicos: rows.filter((r) => r.tipo === 'NFSE'),
-    totalProdutos,
-    totalServicos,
   };
 }
 

@@ -1119,19 +1119,15 @@ export default function EspiaoNfeNfsePage() {
     const emConsulta = Boolean(consultando[certificado.id]);
     const aberto = abertos.has(`${abaNotas}:${certificado.id}`);
     // Enquanto ainda não carregou, mostra "…" em vez de um
-    // número errado.
-    // Total SEM o filtro de Data início/fim (pedido do usuário: o badge não
-    // pode ficar "travado" mostrando só a quantidade do período selecionado
-    // quando uma consulta acabou de trazer notas retroativas de fora dele —
-    // ver totalProdutos/totalServicos em listNotasPorCertificado). A lista
-    // que de fato abre ao expandir continua usando produtosVisiveis/
-    // servicosVisiveis (aí sim filtrados), por isso semNotas abaixo usa eles,
-    // não o total.
-    const totalNfeCard = notas ? notas.totalProdutos : null;
-    const totalNfseCard = notas ? notas.totalServicos : null;
-    // Sem nenhuma nota VISÍVEL no período/aba atual — não faz sentido
-    // oferecer o "+" se expandir não ia mostrar nada.
-    const semNotas = notas != null && produtosVisiveis.length === 0 && servicosVisiveis.length === 0;
+    // número errado. Respeita o filtro (Data início/fim, texto) igual à
+    // contagem das abas (pedido do usuário: os dois precisam contar
+    // exatamente o que bate com o filtro, de forma consistente).
+    const totalNfeCard = produtosVisiveis ? produtosVisiveis.length : null;
+    const totalNfseCard = servicosVisiveis ? servicosVisiveis.length : null;
+    // Sem nenhuma nota (já carregado e os dois totais deram
+    // zero) — não faz sentido oferecer o "+", não tem nada
+    // pra mostrar dentro.
+    const semNotas = notas != null && totalNfeCard === 0 && totalNfseCard === 0;
 
     // Estado da coluna "Vencimento" — 1 dos 3 (vencido/alerta/ok), sempre o
     // quadrado inteiro colorido (mesmo padrão do badge de status em
