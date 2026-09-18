@@ -45,7 +45,14 @@ async function listNotas(req, res, next) {
 
 async function contarNotasPorAba(req, res, next) {
   try {
-    const result = await service.contarNotasPorAba(req.params.empresaId);
+    const result = await service.contarNotasPorAba(req.params.empresaId, {
+      dataInicio: req.query.dataInicio,
+      dataFim: req.query.dataFim,
+      chave: req.query.chave,
+      numero: req.query.numero,
+      emissor: req.query.emissor,
+      destinatario: req.query.destinatario,
+    });
     res.json(result);
   } catch (err) {
     next(err);

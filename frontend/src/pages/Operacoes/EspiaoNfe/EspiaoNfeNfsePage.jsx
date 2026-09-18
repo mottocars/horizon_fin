@@ -18,6 +18,7 @@ import {
   CheckCircle,
   CheckCircle2,
   XCircle,
+  ArrowRight,
   Plus,
   Minus,
 } from 'lucide-react';
@@ -70,6 +71,16 @@ const TABS_NOTAS = [
   { id: 'cientes', label: 'Cientes', icon: CheckCircle, iconColorClass: 'text-emerald-600' },
   { id: 'inativas', label: 'Inativas', icon: Archive, iconColorClass: 'text-red-600' },
 ];
+
+// Cor de cada campo do painel de filtro (pedido do usuário): âmbar quando
+// está em branco, azul claro quando já tem algo digitado — dá pra ver de
+// relance quais dos 4 campos estão realmente filtrando, sem precisar ler
+// cada um.
+function corCampoFiltro(valor) {
+  return valor
+    ? 'border-primary-200 bg-primary-50 focus:border-primary-400 focus:ring-primary-100'
+    : 'border-amber-200 bg-amber-50 focus:border-amber-400 focus:ring-amber-100';
+}
 
 function hojeISO() {
   return new Date().toISOString().slice(0, 10);
@@ -303,15 +314,16 @@ function LinhaNota({
           type="button"
           onClick={() => onAbrirHistorico(nota)}
           title={SITUACAO_LABEL[nota.situacao_categoria] || SITUACAO_LABEL.emitida}
-          className="inline-flex h-7 w-7 items-center justify-center rounded-md hover:bg-gray-100"
+          className="inline-flex h-7 items-center justify-center gap-1 rounded-md px-1.5 hover:bg-gray-100"
         >
           {nota.situacao_categoria === 'cancelada' ? (
             <XCircle size={16} className="text-red-600" />
           ) : nota.situacao_categoria === 'complementada' ? (
-            <span className="relative inline-flex">
-              <CheckCircle2 size={16} className="text-primary-600" />
-              <RefreshCw size={10} className="absolute -bottom-1 -right-1 rounded-full bg-white text-emerald-600" />
-            </span>
+            <>
+              <CheckCircle2 size={15} className="text-primary-600" />
+              <ArrowRight size={11} className="text-gray-300" />
+              <RefreshCw size={13} className="text-emerald-600" />
+            </>
           ) : (
             <CheckCircle2 size={16} className="text-primary-600" />
           )}
@@ -483,11 +495,11 @@ export default function EspiaoNfeNfsePage() {
   const [loadingCertificados, setLoadingCertificados] = useState(false);
 
   // Contagem de notas por aba (Novas/Cientes/Inativas) — mostrada do lado
-  // do nome de cada aba (ver TABS_NOTAS). Sempre da empresa inteira e
-  // independente do filtro de Data início/fim (mesmo motivo do
-  // totalProdutos/totalServicos por certificado: não pode "sumir" quando o
-  // período selecionado não cobre notas antigas trazidas numa consulta
-  // retroativa). null = ainda não carregou.
+  // do nome de cada aba (ver TABS_NOTAS). Dinâmico: respeita todos os
+  // filtros da tela (Data início/fim, chave, número, emissor,
+  // destinatário) — diferente do total por certificado (ver
+  // renderCertificado), que é sempre o total real do certificado, sem
+  // filtro nenhum. null = ainda não carregou.
   const [contagemAbas, setContagemAbas] = useState({ novas: null, cientes: null, inativas: null });
 
   const [dataInicio, setDataInicio] = useState(hojeISO());
@@ -597,9 +609,12 @@ export default function EspiaoNfeNfsePage() {
       .finally(() => setLoadingCertificados(false));
   }
 
+  // Dinâmico de propósito (pedido do usuário): respeita TODOS os filtros da
+  // tela (data e busca por texto), diferente do total por certificado (ver
+  // renderCertificado), que é sempre o total real do certificado.
   function carregarContagemAbas() {
     if (!empresaId) return;
-    contarNotasPorAbaEspiao(empresaId).then(setContagemAbas);
+    contarNotasPorAbaEspiao(empresaId, { dataInicio, dataFim, ...filtros }).then(setContagemAbas);
   }
 
   useEffect(() => {
@@ -638,7 +653,10 @@ export default function EspiaoNfeNfsePage() {
     () =>
       TABS_NOTAS.map((tab) => ({
         ...tab,
-        label: contagemAbas[tab.id] != null ? `${tab.label} (${contagemAbas[tab.id]})` : tab.label,
+        label:
+          contagemAbas[tab.id] != null
+            ? `${tab.label} (${contagemAbas[tab.id].toLocaleString('pt-BR')})`
+            : tab.label,
       })),
     [contagemAbas]
   );
@@ -710,6 +728,7 @@ export default function EspiaoNfeNfsePage() {
   }
 
   useEffect(() => {
+    carregarContagemAbas();
     if (certificados.length === 0) return;
     carregarNotasDeTodosCertificados();
     // eslint-disable-next-line react-hooks/exhaustive-deps
@@ -1598,7 +1617,16 @@ export default function EspiaoNfeNfsePage() {
       {/* Painel lateral de filtro — sempre montado pra transição de translate
           funcionar (fechado fica fora da tela em vez de desmontar). */}
       <div className={`fixed inset-0 z-50 ${painelFiltroAberto ? '' : 'pointer-events-none'}`}>
-        <div className="absolute inset-0 cursor-pointer" onClick={() => setPainelFiltroAberto(false)} />
+        {/* Escurece só um pouco o fundo (pedido do usuário: o painel estava
+            "apagado" sem nenhum contraste contra a tela por trás) — opacity
+            junto com o mesmo duration-300 do slide do painel, em vez do
+            bg-black/40 padrão de Modal.jsx (esse aqui é bem mais sutil). */}
+        <div
+          className={`absolute inset-0 cursor-pointer bg-black/10 transition-opacity duration-300 ${
+            painelFiltroAberto ? 'opacity-100' : 'opacity-0'
+          }`}
+          onClick={() => setPainelFiltroAberto(false)}
+        />
         <div
           className={`absolute right-0 top-0 flex h-full w-full max-w-sm flex-col bg-white shadow-card transition-transform duration-300 ${
             painelFiltroAberto ? 'translate-x-0' : 'translate-x-full'
@@ -1624,8 +1652,7 @@ export default function EspiaoNfeNfsePage() {
                 type="text"
                 value={filtroTexto.numero}
                 onChange={(e) => setFiltroTexto((prev) => ({ ...prev, numero: e.target.value }))}
-                placeholder="Busca pelo número da nota"
-                className="w-full rounded-lg border border-gray-200 px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-primary-100"
+                className={`w-full rounded-lg border px-3 py-2 text-sm focus:outline-none focus:ring-2 ${corCampoFiltro(filtroTexto.numero)}`}
                 autoFocus
               />
             </div>
@@ -1636,8 +1663,7 @@ export default function EspiaoNfeNfsePage() {
                 type="text"
                 value={filtroTexto.chave}
                 onChange={(e) => setFiltroTexto((prev) => ({ ...prev, chave: e.target.value }))}
-                placeholder="Busca por parte da chave de acesso"
-                className="w-full rounded-lg border border-gray-200 px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-primary-100"
+                className={`w-full rounded-lg border px-3 py-2 text-sm focus:outline-none focus:ring-2 ${corCampoFiltro(filtroTexto.chave)}`}
               />
             </div>
 
@@ -1647,8 +1673,7 @@ export default function EspiaoNfeNfsePage() {
                 type="text"
                 value={filtroTexto.emissor}
                 onChange={(e) => setFiltroTexto((prev) => ({ ...prev, emissor: e.target.value }))}
-                placeholder="Busca por parte do nome do emissor"
-                className="w-full rounded-lg border border-gray-200 px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-primary-100"
+                className={`w-full rounded-lg border px-3 py-2 text-sm focus:outline-none focus:ring-2 ${corCampoFiltro(filtroTexto.emissor)}`}
               />
             </div>
 
@@ -1658,8 +1683,7 @@ export default function EspiaoNfeNfsePage() {
                 type="text"
                 value={filtroTexto.destinatario}
                 onChange={(e) => setFiltroTexto((prev) => ({ ...prev, destinatario: e.target.value }))}
-                placeholder="Busca por parte do nome do destinatário"
-                className="w-full rounded-lg border border-gray-200 px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-primary-100"
+                className={`w-full rounded-lg border px-3 py-2 text-sm focus:outline-none focus:ring-2 ${corCampoFiltro(filtroTexto.destinatario)}`}
               />
             </div>
           </div>

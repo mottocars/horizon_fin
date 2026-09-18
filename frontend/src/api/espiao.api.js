@@ -14,8 +14,15 @@ export function listNotasEspiao(empresaId, { dataInicio, dataFim } = {}) {
     .then((res) => res.data);
 }
 
-export function contarNotasPorAbaEspiao(empresaId) {
-  return http.get(`/espiao/${empresaId}/notas-resumo`).then((res) => res.data);
+export function contarNotasPorAbaEspiao(
+  empresaId,
+  { dataInicio, dataFim, chave, numero, emissor, destinatario } = {}
+) {
+  return http
+    .get(`/espiao/${empresaId}/notas-resumo`, {
+      params: { dataInicio, dataFim, chave, numero, emissor, destinatario },
+    })
+    .then((res) => res.data);
 }
 
 export function listCertificadosEspiao(empresaId) {

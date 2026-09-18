@@ -835,22 +835,43 @@ function montarFiltrosNotas(params, where, { dataInicio, dataFim, chave, numero,
   return where;
 }
 
-// Contagem por aba (Novas/Cientes/Inativas — ver TABS_NOTAS no frontend),
-// sempre da empresa inteira e sempre independente de qualquer filtro de
-// data/texto/certificado — é o número que aparece do lado do nome de cada
-// aba, e precisa continuar batendo mesmo quando o usuário está com um
-// período estreito selecionado na tela.
-async function contarNotasPorAba(empresaId) {
-  const { rows } = await pool.query(
-    `SELECT
-       count(*) FILTER (WHERE inativa = FALSE AND ciente_em IS NULL)::int AS novas,
-       count(*) FILTER (WHERE inativa = FALSE AND ciente_em IS NOT NULL)::int AS cientes,
-       count(*) FILTER (WHERE inativa = TRUE)::int AS inativas
-     FROM espiao_notas
-     WHERE empresa_id = $1 AND apenas_resumo = FALSE`,
-    [empresaId]
+// Contagem por aba (Novas/Cientes/Inativas — ver TABS_NOTAS no frontend) —
+// o número que aparece do lado do nome de cada aba. Diferente do total por
+// certificado (ver listNotasPorCertificado): aqui SIM respeita todos os
+// filtros da tela (data e busca por texto) — é "quantas notas batem com o
+// que estou procurando agora", não "quantas notas esse certificado tem no
+// total". 2 consultas (ativas/inativas) porque são universos com colunas
+// de filtro prefixadas diferentes (sem 'n.' vs com 'n.', ver
+// montarFiltrosNotas) e o de ativas ainda separa novas/cientes por
+// ciente_em dentro da mesma query.
+async function contarNotasPorAba(empresaId, filtros) {
+  const paramsAtivas = [empresaId];
+  const whereAtivas = montarFiltrosNotas(
+    paramsAtivas,
+    'empresa_id = $1 AND inativa = FALSE AND apenas_resumo = FALSE',
+    filtros
   );
-  return rows[0];
+  const { rows: ativas } = await pool.query(
+    `SELECT
+       count(*) FILTER (WHERE ciente_em IS NULL)::int AS novas,
+       count(*) FILTER (WHERE ciente_em IS NOT NULL)::int AS cientes
+     FROM espiao_notas
+     WHERE ${whereAtivas}`,
+    paramsAtivas
+  );
+
+  const paramsInativas = [empresaId];
+  const whereInativas = montarFiltrosNotas(
+    paramsInativas,
+    'empresa_id = $1 AND inativa = TRUE AND apenas_resumo = FALSE',
+    filtros
+  );
+  const { rows: inativas } = await pool.query(
+    `SELECT count(*)::int AS total FROM espiao_notas WHERE ${whereInativas}`,
+    paramsInativas
+  );
+
+  return { novas: ativas[0].novas, cientes: ativas[0].cientes, inativas: inativas[0].total };
 }
 
 async function listNotas(empresaId, filtros) {
