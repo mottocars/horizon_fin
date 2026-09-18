@@ -43,6 +43,15 @@ async function listNotas(req, res, next) {
   }
 }
 
+async function contarNotasPorAba(req, res, next) {
+  try {
+    const result = await service.contarNotasPorAba(req.params.empresaId);
+    res.json(result);
+  } catch (err) {
+    next(err);
+  }
+}
+
 async function listCertificados(req, res, next) {
   try {
     const result = await service.listCertificadosComEstado(req.params.empresaId);
@@ -233,6 +242,7 @@ module.exports = {
   listEmpresas,
   consultar,
   listNotas,
+  contarNotasPorAba,
   listCertificados,
   consultarCertificado,
   listNotasPorCertificado,

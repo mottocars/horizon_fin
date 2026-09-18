@@ -8,6 +8,7 @@ router.use(authMiddleware);
 router.get('/empresas', controller.listEmpresas);
 router.post('/:empresaId/consultar', controller.consultar);
 router.get('/:empresaId/notas', controller.listNotas);
+router.get('/:empresaId/notas-resumo', controller.contarNotasPorAba);
 router.get('/:empresaId/certificados', controller.listCertificados);
 router.get('/:empresaId/agendamento', controller.getAgendamento);
 router.put('/:empresaId/agendamento', controller.salvarAgendamento);

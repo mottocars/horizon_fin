@@ -35,6 +35,7 @@ import { explicarSituacao } from './situacao';
 import { useEmpresaTravada } from '../../../hooks/useEmpresaTravada';
 import {
   listCertificadosEspiao,
+  contarNotasPorAbaEspiao,
   consultarCertificadoEspiao,
   listNotasPorCertificadoEspiao,
   listNotasInativadasPorCertificadoEspiao,
@@ -291,30 +292,30 @@ function LinhaNota({
       </td>
       <td className={`${DIV_H} ${DIV_V} truncate px-3 py-2 text-left text-gray-900`}>{nota.emissor || '—'}</td>
       <td className={`${DIV_H} ${DIV_V} px-2 py-2 text-center text-gray-600`}>{formatarData(nota.data_emissao)}</td>
-      <td className={`${DIV_H} ${DIV_V} px-2 py-2 text-center`}>
-        {/* 3 categorias (pedido do usuário): emitida (neutro, sem clique —
-            nada pra mostrar num histórico de 1 etapa só), cancelada e
-            complementada (as 2 clicáveis, abrem o histórico completo de
-            etapas — ver HistoricoSituacaoModal). */}
-        {nota.situacao_categoria === 'cancelada' ? (
-          <button
-            type="button"
-            onClick={() => onAbrirHistorico(nota)}
-            className="inline-flex items-center rounded-full bg-red-100 px-2 py-0.5 text-[11px] font-semibold text-red-700 hover:bg-red-200"
-          >
-            Cancelada
-          </button>
-        ) : nota.situacao_categoria === 'complementada' ? (
-          <button
-            type="button"
-            onClick={() => onAbrirHistorico(nota)}
-            className="inline-flex items-center rounded-full bg-emerald-100 px-2 py-0.5 text-[11px] font-semibold text-emerald-700 hover:bg-emerald-200"
-          >
-            Complementada
-          </button>
-        ) : (
-          <span className="font-medium text-primary-600">Emitida</span>
-        )}
+      <td className={`${DIV_H} ${DIV_V} text-center`}>
+        {/* 3 categorias, só ícone (pedido do usuário): Emitida = check azul,
+            Atualizada (= complementada) = check azul + ícone de atualizar
+            verde, Cancelada = x vermelho. As 3 clicáveis — abrem o
+            histórico completo de etapas (ver HistoricoSituacaoModal),
+            mesmo a Emitida (só 1 etapa, mas mantém o mesmo padrão de
+            interação nos 3 estados). */}
+        <button
+          type="button"
+          onClick={() => onAbrirHistorico(nota)}
+          title={SITUACAO_LABEL[nota.situacao_categoria] || SITUACAO_LABEL.emitida}
+          className="inline-flex h-7 w-7 items-center justify-center rounded-md hover:bg-gray-100"
+        >
+          {nota.situacao_categoria === 'cancelada' ? (
+            <XCircle size={16} className="text-red-600" />
+          ) : nota.situacao_categoria === 'complementada' ? (
+            <span className="relative inline-flex">
+              <CheckCircle2 size={16} className="text-primary-600" />
+              <RefreshCw size={10} className="absolute -bottom-1 -right-1 rounded-full bg-white text-emerald-600" />
+            </span>
+          ) : (
+            <CheckCircle2 size={16} className="text-primary-600" />
+          )}
+        </button>
       </td>
       {modoInativas && (
         <td className={`${DIV_H} ${DIV_V} px-2 py-2 text-center`}>
@@ -373,6 +374,14 @@ function LinhaNota({
     </tr>
   );
 }
+
+// Texto do tooltip do botão de situação (ver LinhaNota) — só isso, sem
+// mais nenhum texto visível na coluna (pedido do usuário: só ícone).
+const SITUACAO_LABEL = {
+  emitida: 'Emitida — clique para ver o histórico',
+  cancelada: 'Cancelada — clique para ver o histórico',
+  complementada: 'Atualizada — clique para ver o histórico',
+};
 
 // Ícone + cor de cada etapa do histórico, pela mesma categoria de 3 vias
 // usada no badge da situação (ver LinhaNota) — cancelada nunca aparece
@@ -472,6 +481,14 @@ export default function EspiaoNfeNfsePage() {
 
   const [certificados, setCertificados] = useState([]);
   const [loadingCertificados, setLoadingCertificados] = useState(false);
+
+  // Contagem de notas por aba (Novas/Cientes/Inativas) — mostrada do lado
+  // do nome de cada aba (ver TABS_NOTAS). Sempre da empresa inteira e
+  // independente do filtro de Data início/fim (mesmo motivo do
+  // totalProdutos/totalServicos por certificado: não pode "sumir" quando o
+  // período selecionado não cobre notas antigas trazidas numa consulta
+  // retroativa). null = ainda não carregou.
+  const [contagemAbas, setContagemAbas] = useState({ novas: null, cientes: null, inativas: null });
 
   const [dataInicio, setDataInicio] = useState(hojeISO());
   const [dataFim, setDataFim] = useState(hojeISO());
@@ -580,11 +597,18 @@ export default function EspiaoNfeNfsePage() {
       .finally(() => setLoadingCertificados(false));
   }
 
+  function carregarContagemAbas() {
+    if (!empresaId) return;
+    contarNotasPorAbaEspiao(empresaId).then(setContagemAbas);
+  }
+
   useEffect(() => {
     setCertificados([]);
     setNotasPorCertificado({});
     setSelecionadas(new Map());
+    setContagemAbas({ novas: null, cientes: null, inativas: null });
     carregarCertificados();
+    carregarContagemAbas();
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [empresaId]);
 
@@ -605,6 +629,18 @@ export default function EspiaoNfeNfsePage() {
   const empresaSelecionada = useMemo(
     () => empresas.find((e) => String(e.id) === String(empresaId)),
     [empresas, empresaId]
+  );
+
+  // TABS_NOTAS + a contagem de cada aba, na frente do nome (pedido do
+  // usuário) — null enquanto ainda não carregou não mostra nada, pra não
+  // piscar "(0)" antes da contagem real chegar.
+  const tabsComContagem = useMemo(
+    () =>
+      TABS_NOTAS.map((tab) => ({
+        ...tab,
+        label: contagemAbas[tab.id] != null ? `${tab.label} (${contagemAbas[tab.id]})` : tab.label,
+      })),
+    [contagemAbas]
   );
 
   // Certificado sempre aparece na tela, mesmo sem nenhuma nota ainda — é
@@ -697,6 +733,7 @@ export default function EspiaoNfeNfsePage() {
       const resultado = await consultarCertificadoEspiao(certificadoId);
       await carregarCertificados();
       await carregarNotas(certificadoId);
+      carregarContagemAbas();
 
       if (!resultado.ok) {
         await alert({
@@ -1064,12 +1101,18 @@ export default function EspiaoNfeNfsePage() {
     const aberto = abertos.has(`${abaNotas}:${certificado.id}`);
     // Enquanto ainda não carregou, mostra "…" em vez de um
     // número errado.
-    const totalNfeCard = produtosVisiveis ? produtosVisiveis.length : null;
-    const totalNfseCard = servicosVisiveis ? servicosVisiveis.length : null;
-    // Sem nenhuma nota (já carregado e os dois totais deram
-    // zero) — não faz sentido oferecer o "+", não tem nada
-    // pra mostrar dentro.
-    const semNotas = notas != null && totalNfeCard === 0 && totalNfseCard === 0;
+    // Total SEM o filtro de Data início/fim (pedido do usuário: o badge não
+    // pode ficar "travado" mostrando só a quantidade do período selecionado
+    // quando uma consulta acabou de trazer notas retroativas de fora dele —
+    // ver totalProdutos/totalServicos em listNotasPorCertificado). A lista
+    // que de fato abre ao expandir continua usando produtosVisiveis/
+    // servicosVisiveis (aí sim filtrados), por isso semNotas abaixo usa eles,
+    // não o total.
+    const totalNfeCard = notas ? notas.totalProdutos : null;
+    const totalNfseCard = notas ? notas.totalServicos : null;
+    // Sem nenhuma nota VISÍVEL no período/aba atual — não faz sentido
+    // oferecer o "+" se expandir não ia mostrar nada.
+    const semNotas = notas != null && produtosVisiveis.length === 0 && servicosVisiveis.length === 0;
 
     // Estado da coluna "Vencimento" — 1 dos 3 (vencido/alerta/ok), sempre o
     // quadrado inteiro colorido (mesmo padrão do badge de status em
@@ -1382,7 +1425,7 @@ export default function EspiaoNfeNfsePage() {
         {/* Três estados das notas, no estilo de aba usado em Repasses CEF
             (ver TABS_NOTAS) — sempre visível, mesmo sem empresa (só não faz
             nada ainda, a ação de cada aba vem depois). */}
-        <Tabs tabs={TABS_NOTAS} activeId={abaNotas} onChange={setAbaNotas} />
+        <Tabs tabs={tabsComContagem} activeId={abaNotas} onChange={setAbaNotas} />
 
         {!empresaId ? (
           <Card className="rounded-tl-none">

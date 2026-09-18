@@ -835,6 +835,24 @@ function montarFiltrosNotas(params, where, { dataInicio, dataFim, chave, numero,
   return where;
 }
 
+// Contagem por aba (Novas/Cientes/Inativas — ver TABS_NOTAS no frontend),
+// sempre da empresa inteira e sempre independente de qualquer filtro de
+// data/texto/certificado — é o número que aparece do lado do nome de cada
+// aba, e precisa continuar batendo mesmo quando o usuário está com um
+// período estreito selecionado na tela.
+async function contarNotasPorAba(empresaId) {
+  const { rows } = await pool.query(
+    `SELECT
+       count(*) FILTER (WHERE inativa = FALSE AND ciente_em IS NULL)::int AS novas,
+       count(*) FILTER (WHERE inativa = FALSE AND ciente_em IS NOT NULL)::int AS cientes,
+       count(*) FILTER (WHERE inativa = TRUE)::int AS inativas
+     FROM espiao_notas
+     WHERE empresa_id = $1 AND apenas_resumo = FALSE`,
+    [empresaId]
+  );
+  return rows[0];
+}
+
 async function listNotas(empresaId, filtros) {
   const params = [empresaId];
   // apenas_resumo = FALSE: nota só-resumo (resNFe) não tem valor de
@@ -872,9 +890,25 @@ async function listNotasPorCertificado(certificadoId, filtros) {
     params
   );
 
+  // Totais SEM o filtro de data/texto — o badge de contagem por
+  // certificado (ver renderCertificado no frontend) não pode "esconder"
+  // notas retroativas que uma consulta acabou de trazer só porque elas
+  // caem fora do período selecionado na tela; a lista em si (acima)
+  // continua respeitando o filtro normalmente.
+  const { rows: totais } = await pool.query(
+    `SELECT tipo, count(*)::int AS total FROM espiao_notas
+     WHERE certificado_id = $1 AND inativa = FALSE AND apenas_resumo = FALSE
+     GROUP BY tipo`,
+    [certificadoId]
+  );
+  const totalProdutos = totais.find((t) => t.tipo === 'NFE')?.total || 0;
+  const totalServicos = totais.find((t) => t.tipo === 'NFSE')?.total || 0;
+
   return {
     produtos: rows.filter((r) => r.tipo === 'NFE'),
     servicos: rows.filter((r) => r.tipo === 'NFSE'),
+    totalProdutos,
+    totalServicos,
   };
 }
 
@@ -989,9 +1023,23 @@ async function listNotasInativadasPorCertificado(certificadoId, filtros) {
     params
   );
 
+  // Mesma ideia de listNotasPorCertificado: total independente do filtro
+  // de data/texto, só respeitando "inativa = TRUE" (o que de fato define
+  // esse conjunto).
+  const { rows: totais } = await pool.query(
+    `SELECT tipo, count(*)::int AS total FROM espiao_notas
+     WHERE certificado_id = $1 AND inativa = TRUE AND apenas_resumo = FALSE
+     GROUP BY tipo`,
+    [certificadoId]
+  );
+  const totalProdutos = totais.find((t) => t.tipo === 'NFE')?.total || 0;
+  const totalServicos = totais.find((t) => t.tipo === 'NFSE')?.total || 0;
+
   return {
     produtos: rows.filter((r) => r.tipo === 'NFE'),
     servicos: rows.filter((r) => r.tipo === 'NFSE'),
+    totalProdutos,
+    totalServicos,
   };
 }
 
@@ -1076,6 +1124,7 @@ module.exports = {
   listEmpresasComStatus,
   listCertificadosComEstado,
   listNotas,
+  contarNotasPorAba,
   listNotasPorCertificado,
   getArquivoNota,
   getNotaComXml,
