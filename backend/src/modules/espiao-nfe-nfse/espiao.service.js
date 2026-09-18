@@ -179,6 +179,7 @@ async function consultarNFe(agent, cnpj, cUFAutor, ultNsuInicial) {
       });
     } catch (err) {
       mensagem = `Erro de rede na NF-e: ${err.message}`;
+      console.error(`[espiao-nfe] cnpj=${cnpj} pagina=${paginas} erro de rede: code=${err.code} message=${err.message}`);
       break;
     }
 
@@ -304,6 +305,7 @@ async function consultarNFSe(agent, ultNsuInicial) {
         resposta = await httpsRequest({ method: 'GET', url, agent, headers: { Accept: 'application/json' } });
       } catch (err) {
         mensagem = `Erro de rede na NFS-e: ${err.message}`;
+        console.error(`[espiao-nfse] pagina=${paginas} tentativa=${tentativa} erro de rede: code=${err.code} message=${err.message}`);
         resposta = null;
         break;
       }
