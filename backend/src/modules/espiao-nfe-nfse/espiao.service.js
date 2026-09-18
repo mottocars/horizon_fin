@@ -98,11 +98,18 @@ function carregarAgente(certificado) {
     throw new Error('Certificado não encontrado dentro do arquivo .pfx.');
   }
 
-  // O 1º certificado é o do titular; os demais (quando existem) são a
-  // cadeia intermediária — o handshake TLS precisa de todos.
-  const [cert, ...ca] = certsPem;
+  // Todos os certificados (titular + cadeia intermediária, quando existe)
+  // vão concatenados em `cert` — é a cadeia que o cliente APRESENTA no
+  // handshake mTLS. NÃO usar `ca` aqui: essa opção é pra validar o
+  // certificado do SERVIDOR (SEFAZ/ADN), e se preenchida com a cadeia do
+  // certificado do CLIENTE substitui a lista de CAs confiáveis padrão do
+  // Node por ela — quebrando a verificação do lado do servidor com
+  // "unable to get local issuer certificate" (bug encontrado testando
+  // este fix). Sem `ca`, o Node usa a lista de raízes confiáveis padrão
+  // pra validar o servidor, exatamente como fazia antes com `{ pfx }`.
+  const certChainPem = certsPem.join('\n');
 
-  return new https.Agent({ key: keyPem, cert, ca, keepAlive: false });
+  return new https.Agent({ key: keyPem, cert: certChainPem, keepAlive: false });
 }
 
 function httpsRequest({ method, url, agent, headers, body, timeoutMs = 60000 }) {
