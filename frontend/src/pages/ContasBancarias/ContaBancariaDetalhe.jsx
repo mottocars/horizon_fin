@@ -89,7 +89,7 @@ export default function ContaBancariaDetalhe() {
       </button>
 
       <Card>
-        <div className="mb-4 flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
+        <div className="mb-4 flex flex-col gap-3 xl:flex-row xl:items-center xl:justify-between">
           <div className="flex shrink-0 items-center gap-2">
             <img src={iconSienge} alt="" className="h-6 w-6" />
             <div>
@@ -98,8 +98,12 @@ export default function ContaBancariaDetalhe() {
             </div>
           </div>
 
-          <div className="flex flex-col gap-3 sm:flex-row sm:flex-wrap sm:items-center sm:justify-end">
-            <div className="relative w-full sm:w-64">
+          {/* Busca, filtros e Atualizar ficam sempre numa linha só (de lg pra cima) — os
+              campos encolhem em vez de quebrar de linha e deixar o Atualizar sozinho.
+              Até xl o título fica numa linha própria acima, dando a largura toda aos
+              controles; abaixo de lg eles podem quebrar. */}
+          <div className="flex flex-col gap-3 sm:flex-row sm:flex-wrap sm:items-center sm:justify-end lg:min-w-0 lg:flex-nowrap">
+            <div className="relative w-full sm:w-64 lg:min-w-0">
               <Search
                 size={16}
                 className="pointer-events-none absolute left-3 top-1/2 -translate-y-1/2 text-gray-400"
@@ -112,7 +116,7 @@ export default function ContaBancariaDetalhe() {
                 className="w-full rounded-lg border border-gray-200 py-2 pl-9 pr-3 text-sm focus:outline-none focus:ring-2 focus:ring-primary-100"
               />
             </div>
-            <div className="w-full sm:w-44">
+            <div className="w-full sm:w-44 lg:min-w-0">
               <SearchableSelect
                 multiple
                 value={statusFiltro}
@@ -121,7 +125,7 @@ export default function ContaBancariaDetalhe() {
                 placeholder="Todos os status"
               />
             </div>
-            <div className="w-full sm:w-96">
+            <div className="w-full sm:w-96 lg:min-w-0">
               <SearchableSelect
                 multiple
                 value={empresasFiltro}
@@ -134,7 +138,7 @@ export default function ContaBancariaDetalhe() {
               <button
                 type="button"
                 onClick={limparFiltros}
-                className="whitespace-nowrap text-sm text-gray-500 hover:text-gray-700"
+                className="shrink-0 whitespace-nowrap text-sm text-gray-500 hover:text-gray-700"
               >
                 Limpar filtros
               </button>
@@ -144,7 +148,7 @@ export default function ContaBancariaDetalhe() {
               onClick={handleRefresh}
               disabled={refreshing}
               title="Atualizar a partir do Sienge"
-              className="flex items-center justify-center gap-2 rounded-lg border border-gray-200 px-3 py-2 text-sm text-gray-600 hover:bg-gray-50 disabled:opacity-60"
+              className="flex shrink-0 items-center justify-center gap-2 rounded-lg border border-gray-200 px-3 py-2 text-sm text-gray-600 hover:bg-gray-50 disabled:opacity-60"
             >
               <RefreshCw size={16} className={refreshing ? 'animate-spin' : ''} />
               Atualizar
