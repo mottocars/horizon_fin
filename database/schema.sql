@@ -786,6 +786,25 @@ CREATE TABLE contas_bancarias_sienge (
 
 CREATE INDEX idx_contas_bancarias_sienge_empresa ON contas_bancarias_sienge (empresa_id);
 
+-- Saldo de cada conta bancária em cada dia, informado à mão na tela Operações >
+-- Saldo Contas Bancárias. Uma linha por (conta, dia): limpar a célula na tela apaga
+-- a linha (dia sem linha = saldo não informado, que é diferente de saldo zero).
+CREATE TABLE saldos_contas_bancarias (
+    empresa_id     INTEGER NOT NULL,
+    company_id     INTEGER NOT NULL,
+    numero_conta   VARCHAR(20) NOT NULL,
+    data           DATE NOT NULL,
+    saldo          NUMERIC(15,2) NOT NULL,
+    atualizado_por INTEGER REFERENCES usuarios(id) ON DELETE SET NULL,
+    criado_em      TIMESTAMP DEFAULT NOW(),
+    atualizado_em  TIMESTAMP DEFAULT NOW(),
+    PRIMARY KEY (empresa_id, company_id, numero_conta, data),
+    FOREIGN KEY (numero_conta, empresa_id, company_id)
+        REFERENCES contas_bancarias_sienge (numero_conta, empresa_id, company_id) ON DELETE CASCADE
+);
+
+CREATE INDEX idx_saldos_contas_bancarias_data ON saldos_contas_bancarias (empresa_id, data);
+
 -- Portal das Construtoras — EPR (Extrato de Unidades de Empreendimento / CAIXA).
 -- Um empreendimento por (empresa_id, contrato_mestre_obra); reimportar o mesmo
 -- contrato substitui integralmente os mutuários daquele contrato (delete + insert).
@@ -2029,6 +2048,10 @@ FOR EACH ROW EXECUTE FUNCTION set_atualizado_em();
 
 CREATE TRIGGER trg_contas_bancarias_sienge_atualizado_em
 BEFORE UPDATE ON contas_bancarias_sienge
+FOR EACH ROW EXECUTE FUNCTION set_atualizado_em();
+
+CREATE TRIGGER trg_saldos_contas_bancarias_atualizado_em
+BEFORE UPDATE ON saldos_contas_bancarias
 FOR EACH ROW EXECUTE FUNCTION set_atualizado_em();
 
 CREATE TRIGGER trg_sie_sales_contracts_atualizado_em

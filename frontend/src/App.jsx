@@ -33,6 +33,7 @@ import MascarasPage from './pages/Mascaras/MascarasPage';
 import ContasBancariasList from './pages/ContasBancarias/ContasBancariasList';
 import ContaBancariaDetalhe from './pages/ContasBancarias/ContaBancariaDetalhe';
 import ContaBancariaItemDetalhe from './pages/ContasBancarias/ContaBancariaItemDetalhe';
+import SaldoContasBancariasPage from './pages/Operacoes/SaldoContasBancarias/SaldoContasBancariasPage';
 import PortalConstrutorasPage from './pages/Integracoes/PortalConstrutoras/PortalConstrutorasPage';
 import CurvaDeObrasPage from './pages/Operacoes/CurvaDeObras/CurvaDeObrasPage';
 import CurvaDeVendasPage from './pages/Operacoes/CurvaDeVendas/CurvaDeVendasPage';
@@ -87,15 +88,7 @@ export default function App() {
             <Route path="/operacoes/curva-de-vendas" element={<CurvaDeVendasPage />} />
             <Route path="/operacoes/curva-de-obras" element={<CurvaDeObrasPage />} />
             <Route path="/operacoes/espiao-nfe-nfse" element={<EspiaoNfeNfsePage />} />
-            <Route
-              path="/operacoes/saldo-contas-bancarias"
-              element={
-                <ComingSoon
-                  title="Saldo Contas Bancárias"
-                  description="Operações — Saldo Contas Bancárias — em desenvolvimento."
-                />
-              }
-            />
+            <Route path="/operacoes/saldo-contas-bancarias" element={<SaldoContasBancariasPage />} />
             <Route path="/operacoes/repasses-cef" element={<RepassesCefPage />} />
             <Route path="/operacoes/gestao-de-cobrancas" element={<GestaoCobrancasPage />} />
             <Route path="/operacoes/gestao-de-cobrancas/clusters/:cluster" element={<ClusterClientesList />} />
