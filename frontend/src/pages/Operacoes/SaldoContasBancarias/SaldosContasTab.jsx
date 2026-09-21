@@ -519,14 +519,18 @@ export default function SaldosContasTab({
           className="overflow-auto rounded-b-card border-t border-gray-200"
           style={{ maxHeight: 'calc(100vh - 22rem)', minHeight: 320 }}
         >
+          {/* Só a coluna de nomes tem largura fixa; as de dia dividem o que sobrar. Com poucos
+              dias (o padrão são 8) elas esticam pra preencher o card em vez de deixar uma
+              faixa em branco à direita; com muitos, `minWidth` garante 112px por dia e a
+              grade rola na horizontal. */}
           <table
             className="border-separate border-spacing-0 text-left text-xs"
-            style={{ tableLayout: 'fixed', width: LARGURA_PRIMEIRA + dias.length * LARGURA_DIA }}
+            style={{ tableLayout: 'fixed', width: '100%', minWidth: LARGURA_PRIMEIRA + dias.length * LARGURA_DIA }}
           >
             <colgroup>
               <col style={{ width: LARGURA_PRIMEIRA }} />
               {dias.map((d) => (
-                <col key={d.iso} style={{ width: LARGURA_DIA }} />
+                <col key={d.iso} />
               ))}
             </colgroup>
 

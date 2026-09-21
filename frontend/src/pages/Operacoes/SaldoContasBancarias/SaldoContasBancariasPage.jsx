@@ -9,7 +9,7 @@ import { getFiltrosSaldos } from '../../../api/saldoContasBancarias.api';
 import { nomeExibicaoEmpresa } from '../../../utils/empresa';
 import { useEmpresaTravada } from '../../../hooks/useEmpresaTravada';
 import SaldosContasTab from './SaldosContasTab';
-import { OPCOES_CLASSIFICACAO, deslocarMes, hojeISO, mesDe, validarPeriodo } from './constantes';
+import { OPCOES_CLASSIFICACAO, deslocarPeriodo, periodoPadrao, validarPeriodo } from './constantes';
 
 // Pra adicionar uma aba nova no futuro basta incluir um item aqui `{ id, label, icon }` e o
 // caso correspondente no bloco de conteúdo mais abaixo (mesmo esquema de GestaoCobrancasPage).
@@ -23,8 +23,9 @@ const CLASSE_BOTAO_MES =
 // Empresa, aba e filtros vivem na URL (não em useState local) pelo mesmo motivo da Gestão
 // de Cobranças: o "Voltar" do navegador devolve o usuário pro mesmo lugar, com os mesmos
 // filtros. Toda troca usa `replace`, pra escolher um filtro não empilhar histórico.
-// Datas: sem parâmetro na URL valem sempre o mês atual (dia 1 até o último dia) — o padrão
-// não é gravado na URL, então abrir a tela num mês novo já abre no mês novo.
+// Datas: sem parâmetro na URL valem sempre os últimos 7 dias até hoje (hoje − 7 dias até
+// hoje) — o padrão não é gravado na URL, então abrir a tela outro dia já abre com o "hoje"
+// certo.
 export default function SaldoContasBancariasPage() {
   const { travada: empresaTravada, empresaIdTravada } = useEmpresaTravada();
   const [searchParams, setSearchParams] = useSearchParams();
@@ -42,9 +43,9 @@ export default function SaldoContasBancariasPage() {
   const bancosParam = searchParams.get('bancos') || '';
   const bancos = useMemo(() => bancosParam.split(',').filter(Boolean), [bancosParam]);
 
-  const mesAtual = useMemo(() => mesDe(hojeISO()), []);
-  const dataInicio = searchParams.get('data_inicio') || mesAtual.inicio;
-  const dataFim = searchParams.get('data_fim') || mesAtual.fim;
+  const padrao = useMemo(() => periodoPadrao(), []);
+  const dataInicio = searchParams.get('data_inicio') || padrao.inicio;
+  const dataFim = searchParams.get('data_fim') || padrao.fim;
   const erroPeriodo = validarPeriodo(dataInicio, dataFim);
 
   const [refreshToken, setRefreshToken] = useState(0);
@@ -65,13 +66,14 @@ export default function SaldoContasBancariasPage() {
   }
 
   // Um input de data só dispara onChange com '' quando é apagado/incompleto; ignorar isso
-  // deixa o valor anterior (o padrão é sempre o mês atual, não existe "sem data").
+  // deixa o valor anterior (o padrão é sempre hoje − 7 dias até hoje, não existe "sem data").
   function handleData(chave, valor) {
     if (valor) atualizarParams({ [chave]: valor });
   }
 
-  function irParaMes(delta) {
-    const { inicio, fim } = deslocarMes(dataInicio, delta);
+  // ‹ › andam o período pelo tamanho dele (mês cheio anda de mês em mês) — ver deslocarPeriodo.
+  function irParaPeriodo(direcao) {
+    const { inicio, fim } = deslocarPeriodo(dataInicio, dataFim, direcao);
     atualizarParams({ data_inicio: inicio, data_fim: fim });
   }
 
@@ -201,7 +203,13 @@ export default function SaldoContasBancariasPage() {
                 (dd/mm/aaaa + o ícone do calendário) — abaixo disso o ano é cortado, então
                 o grupo prefere quebrar pra segunda linha a ficar mais estreito. */}
             <div className="flex min-w-0 items-end gap-1.5 sm:min-w-96 sm:max-w-md sm:flex-1">
-              <button type="button" onClick={() => irParaMes(-1)} disabled={semEmpresa} title="Mês anterior" className={CLASSE_BOTAO_MES}>
+              <button
+                type="button"
+                onClick={() => irParaPeriodo(-1)}
+                disabled={semEmpresa || Boolean(erroPeriodo)}
+                title="Período anterior"
+                className={CLASSE_BOTAO_MES}
+              >
                 <ChevronLeft size={16} />
               </button>
               <div className="min-w-0 flex-1">
@@ -224,7 +232,13 @@ export default function SaldoContasBancariasPage() {
                   className={CLASSE_DATA}
                 />
               </div>
-              <button type="button" onClick={() => irParaMes(1)} disabled={semEmpresa} title="Próximo mês" className={CLASSE_BOTAO_MES}>
+              <button
+                type="button"
+                onClick={() => irParaPeriodo(1)}
+                disabled={semEmpresa || Boolean(erroPeriodo)}
+                title="Próximo período"
+                className={CLASSE_BOTAO_MES}
+              >
                 <ChevronRight size={16} />
               </button>
             </div>

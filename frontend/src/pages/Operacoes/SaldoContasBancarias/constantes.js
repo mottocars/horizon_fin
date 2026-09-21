@@ -40,22 +40,47 @@ export function hojeISO() {
   return paraISO(new Date());
 }
 
-// Dia 1 até o último dia do mês da data informada.
-export function mesDe(iso) {
-  const d = deISO(iso);
+// Quantos dias pra trás o período padrão começa (a data fim padrão é hoje).
+export const DIAS_PADRAO_ATRAS = 7;
+
+// Período com que a tela abre: de 7 dias atrás até hoje (8 colunas). Recalculado a cada
+// abertura da tela, então "hoje" nunca fica velho.
+export function periodoPadrao() {
+  const hoje = deISO(hojeISO());
   return {
-    inicio: paraISO(new Date(d.getFullYear(), d.getMonth(), 1)),
-    fim: paraISO(new Date(d.getFullYear(), d.getMonth() + 1, 0)),
+    inicio: paraISO(new Date(hoje.getFullYear(), hoje.getMonth(), hoje.getDate() - DIAS_PADRAO_ATRAS)),
+    fim: paraISO(hoje),
   };
 }
 
-export function deslocarMes(iso, meses) {
-  const d = deISO(iso);
-  return mesDe(paraISO(new Date(d.getFullYear(), d.getMonth() + meses, 1)));
-}
-
+// Conta os dois extremos: 01 a 30 = 30 dias. (Math.round absorve a hora a mais/a menos
+// nos dias de mudança de horário de verão.)
 export function contarDias(inicio, fim) {
   return Math.round((deISO(fim) - deISO(inicio)) / 86_400_000) + 1;
+}
+
+function somarDias(iso, dias) {
+  const d = deISO(iso);
+  d.setDate(d.getDate() + dias);
+  return paraISO(d);
+}
+
+// Setas ‹ › do filtro de período. Anda a janela pelo tamanho dela (7 dias pra trás + hoje =
+// 8 dias, então cada clique pula 8) — mas, se o período é um ou mais meses cheios (dia 1 ao
+// último dia), anda de mês em mês do calendário, que é o que se espera nesse caso.
+// `direcao`: -1 = anterior, 1 = próximo.
+export function deslocarPeriodo(inicio, fim, direcao) {
+  const ini = deISO(inicio);
+  const f = deISO(fim);
+  const ultimoDiaDoMesFim = new Date(f.getFullYear(), f.getMonth() + 1, 0).getDate();
+  if (ini.getDate() === 1 && f.getDate() === ultimoDiaDoMesFim) {
+    const meses = (f.getFullYear() - ini.getFullYear()) * 12 + (f.getMonth() - ini.getMonth()) + 1;
+    const novoInicio = new Date(ini.getFullYear(), ini.getMonth() + direcao * meses, 1);
+    const novoFim = new Date(novoInicio.getFullYear(), novoInicio.getMonth() + meses, 0);
+    return { inicio: paraISO(novoInicio), fim: paraISO(novoFim) };
+  }
+  const dias = contarDias(inicio, fim);
+  return { inicio: somarDias(inicio, direcao * dias), fim: somarDias(fim, direcao * dias) };
 }
 
 // null se o período é válido; senão a mensagem pra mostrar na tela.
