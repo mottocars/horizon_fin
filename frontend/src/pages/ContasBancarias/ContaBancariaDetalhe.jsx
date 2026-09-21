@@ -90,7 +90,7 @@ export default function ContaBancariaDetalhe() {
 
       <Card>
         <div className="mb-4 flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
-          <div className="flex items-center gap-2">
+          <div className="flex shrink-0 items-center gap-2">
             <img src={iconSienge} alt="" className="h-6 w-6" />
             <div>
               <h2 className="text-sm font-semibold text-gray-900">Contas bancárias — Sienge</h2>
@@ -98,7 +98,7 @@ export default function ContaBancariaDetalhe() {
             </div>
           </div>
 
-          <div className="flex flex-col gap-3 sm:flex-row sm:items-center">
+          <div className="flex flex-col gap-3 sm:flex-row sm:flex-wrap sm:items-center sm:justify-end">
             <div className="relative w-full sm:w-64">
               <Search
                 size={16}
@@ -112,6 +112,33 @@ export default function ContaBancariaDetalhe() {
                 className="w-full rounded-lg border border-gray-200 py-2 pl-9 pr-3 text-sm focus:outline-none focus:ring-2 focus:ring-primary-100"
               />
             </div>
+            <div className="w-full sm:w-44">
+              <SearchableSelect
+                multiple
+                value={statusFiltro}
+                onChange={setStatusFiltro}
+                options={STATUS_OPCOES}
+                placeholder="Todos os status"
+              />
+            </div>
+            <div className="w-full sm:w-96">
+              <SearchableSelect
+                multiple
+                value={empresasFiltro}
+                onChange={setEmpresasFiltro}
+                options={empresasOpcoes}
+                placeholder="Todas as empresas"
+              />
+            </div>
+            {temFiltro && (
+              <button
+                type="button"
+                onClick={limparFiltros}
+                className="whitespace-nowrap text-sm text-gray-500 hover:text-gray-700"
+              >
+                Limpar filtros
+              </button>
+            )}
             <button
               type="button"
               onClick={handleRefresh}
@@ -123,36 +150,6 @@ export default function ContaBancariaDetalhe() {
               Atualizar
             </button>
           </div>
-        </div>
-
-        <div className="mb-4 flex flex-col gap-3 sm:flex-row sm:items-center">
-          <div className="w-full sm:w-64">
-            <SearchableSelect
-              multiple
-              value={statusFiltro}
-              onChange={setStatusFiltro}
-              options={STATUS_OPCOES}
-              placeholder="Todos os status"
-            />
-          </div>
-          <div className="w-full sm:w-72">
-            <SearchableSelect
-              multiple
-              value={empresasFiltro}
-              onChange={setEmpresasFiltro}
-              options={empresasOpcoes}
-              placeholder="Todas as empresas"
-            />
-          </div>
-          {temFiltro && (
-            <button
-              type="button"
-              onClick={limparFiltros}
-              className="text-sm text-gray-500 hover:text-gray-700"
-            >
-              Limpar filtros
-            </button>
-          )}
         </div>
 
         {error && (
