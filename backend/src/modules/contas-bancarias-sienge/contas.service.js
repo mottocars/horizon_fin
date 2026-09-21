@@ -15,28 +15,56 @@ async function listGerados() {
   return rows;
 }
 
-async function listContas(empresaId, { page = 1, limit = 15, search = '' }) {
+function buildContasWhere(empresaId, { search, status, companyIds }) {
+  const params = [empresaId, `%${search}%`];
+  let where = 'empresa_id = $1 AND (nome ILIKE $2 OR numero_conta ILIKE $2 OR banco_nome ILIKE $2)';
+
+  if (status?.length) {
+    params.push(status);
+    where += ` AND status = ANY($${params.length}::text[])`;
+  }
+  if (companyIds?.length) {
+    params.push(companyIds);
+    where += ` AND company_id = ANY($${params.length}::int[])`;
+  }
+
+  return { where, params };
+}
+
+async function listContas(empresaId, { page = 1, limit = 15, search = '', status = [], companyIds = [] }) {
   const offset = (page - 1) * limit;
-  const searchTerm = `%${search}%`;
+  const { where, params } = buildContasWhere(empresaId, { search, status, companyIds });
 
   const { rows } = await pool.query(
     `SELECT numero_conta, nome, tipo_id, tipo_descricao, agencia, banco_numero, banco_nome,
             company_id, company_name, status, criado_em, atualizado_em
      FROM contas_bancarias_sienge
-     WHERE empresa_id = $1 AND (nome ILIKE $2 OR numero_conta ILIKE $2 OR banco_nome ILIKE $2)
+     WHERE ${where}
      ORDER BY numero_conta ASC
-     LIMIT $3 OFFSET $4`,
-    [empresaId, searchTerm, limit, offset]
+     LIMIT $${params.length + 1} OFFSET $${params.length + 2}`,
+    [...params, limit, offset]
   );
 
   const { rows: countRows } = await pool.query(
-    `SELECT COUNT(*)::int AS total FROM contas_bancarias_sienge
-     WHERE empresa_id = $1 AND (nome ILIKE $2 OR numero_conta ILIKE $2 OR banco_nome ILIKE $2)`,
-    [empresaId, searchTerm]
+    `SELECT COUNT(*)::int AS total FROM contas_bancarias_sienge WHERE ${where}`,
+    params
+  );
+
+  // Opções do filtro de empresa: todas as empresas do Sienge que têm conta
+  // importada, independente dos filtros aplicados (senão a lista encolheria
+  // conforme o usuário filtra).
+  const { rows: empresas } = await pool.query(
+    `SELECT company_id, MAX(company_name) AS company_name
+     FROM contas_bancarias_sienge
+     WHERE empresa_id = $1
+     GROUP BY company_id
+     ORDER BY MAX(company_name) ASC NULLS LAST, company_id ASC`,
+    [empresaId]
   );
 
   return {
     data: rows,
+    empresas,
     pagination: {
       page,
       limit,

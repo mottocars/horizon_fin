@@ -2,10 +2,16 @@ import { useCallback, useEffect, useState } from 'react';
 import { useNavigate, useParams } from 'react-router-dom';
 import { ArrowLeft, Landmark, RefreshCw, Search } from 'lucide-react';
 import Card from '../../components/Card';
+import SearchableSelect from '../../components/SearchableSelect';
 import { listContas, gerarContasBancarias } from '../../api/contasBancariasSienge.api';
 import iconSienge from '../../assets/integracoes/sienge.svg';
 
 const LIMIT = 2000;
+
+const STATUS_OPCOES = [
+  { value: 'ENABLED', label: 'Ativa' },
+  { value: 'DISABLED', label: 'Inativa' },
+];
 
 export default function ContaBancariaDetalhe() {
   const { empresaId } = useParams();
@@ -14,37 +20,56 @@ export default function ContaBancariaDetalhe() {
   const [contas, setContas] = useState([]);
   const [total, setTotal] = useState(0);
   const [search, setSearch] = useState('');
+  const [statusFiltro, setStatusFiltro] = useState([]);
+  const [empresasFiltro, setEmpresasFiltro] = useState([]);
+  const [empresasOpcoes, setEmpresasOpcoes] = useState([]);
   const [loading, setLoading] = useState(true);
   const [refreshing, setRefreshing] = useState(false);
   const [error, setError] = useState('');
 
-  const loadContas = useCallback(
-    async (searchTerm) => {
-      setLoading(true);
-      try {
-        const result = await listContas(empresaId, { page: 1, limit: LIMIT, search: searchTerm });
-        setContas(result.data);
-        setTotal(result.pagination.total);
-      } finally {
-        setLoading(false);
-      }
-    },
-    [empresaId]
-  );
+  const loadContas = useCallback(async () => {
+    setLoading(true);
+    try {
+      const result = await listContas(empresaId, {
+        page: 1,
+        limit: LIMIT,
+        search,
+        status: statusFiltro,
+        companyIds: empresasFiltro,
+      });
+      setContas(result.data);
+      setTotal(result.pagination.total);
+      setEmpresasOpcoes(
+        result.empresas.map((e) => ({
+          value: String(e.company_id),
+          label: e.company_name || `Empresa ${e.company_id}`,
+        }))
+      );
+    } finally {
+      setLoading(false);
+    }
+  }, [empresaId, search, statusFiltro, empresasFiltro]);
 
   useEffect(() => {
     const timeout = setTimeout(() => {
-      loadContas(search);
+      loadContas();
     }, 300);
     return () => clearTimeout(timeout);
-  }, [search, loadContas]);
+  }, [loadContas]);
+
+  const temFiltro = statusFiltro.length > 0 || empresasFiltro.length > 0;
+
+  function limparFiltros() {
+    setStatusFiltro([]);
+    setEmpresasFiltro([]);
+  }
 
   async function handleRefresh() {
     setError('');
     setRefreshing(true);
     try {
       await gerarContasBancarias(Number(empresaId));
-      await loadContas(search);
+      await loadContas();
     } catch (err) {
       setError(err.response?.data?.message || 'Não foi possível atualizar as contas bancárias.');
     } finally {
@@ -98,6 +123,36 @@ export default function ContaBancariaDetalhe() {
               Atualizar
             </button>
           </div>
+        </div>
+
+        <div className="mb-4 flex flex-col gap-3 sm:flex-row sm:items-center">
+          <div className="w-full sm:w-64">
+            <SearchableSelect
+              multiple
+              value={statusFiltro}
+              onChange={setStatusFiltro}
+              options={STATUS_OPCOES}
+              placeholder="Todos os status"
+            />
+          </div>
+          <div className="w-full sm:w-72">
+            <SearchableSelect
+              multiple
+              value={empresasFiltro}
+              onChange={setEmpresasFiltro}
+              options={empresasOpcoes}
+              placeholder="Todas as empresas"
+            />
+          </div>
+          {temFiltro && (
+            <button
+              type="button"
+              onClick={limparFiltros}
+              className="text-sm text-gray-500 hover:text-gray-700"
+            >
+              Limpar filtros
+            </button>
+          )}
         </div>
 
         {error && (

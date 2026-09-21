@@ -7,6 +7,16 @@ const gerarSchema = z.object({
 
 const emptyToNull = (val) => (val === '' || val === undefined ? null : val);
 
+const STATUS_VALIDOS = ['ENABLED', 'DISABLED'];
+
+// Filtros multi-valor chegam na query string separados por vírgula.
+const csv = (val) =>
+  (val ?? '')
+    .toString()
+    .split(',')
+    .map((s) => s.trim())
+    .filter(Boolean);
+
 const enriquecimentoSchema = z.object({
   banco_enriquecido: z.preprocess(emptyToNull, z.string().max(120).nullable().optional()),
   agencia_enriquecida: z.preprocess(emptyToNull, z.string().max(20).nullable().optional()),
@@ -38,7 +48,9 @@ async function listContas(req, res, next) {
     const page = Math.max(1, parseInt(req.query.page, 10) || 1);
     const limit = Math.min(2000, Math.max(1, parseInt(req.query.limit, 10) || 15));
     const search = (req.query.search || '').toString();
-    const result = await service.listContas(req.params.empresaId, { page, limit, search });
+    const status = csv(req.query.status).filter((s) => STATUS_VALIDOS.includes(s));
+    const companyIds = csv(req.query.company_id).map(Number).filter(Number.isInteger);
+    const result = await service.listContas(req.params.empresaId, { page, limit, search, status, companyIds });
     res.json(result);
   } catch (err) {
     next(err);

@@ -8,7 +8,8 @@ function buildCheckingAccountsUrl(tenant) {
 
 async function fetchPage({ tenant, username, password, offset }) {
   const auth = Buffer.from(`${username}:${password}`).toString('base64');
-  const url = `${buildCheckingAccountsUrl(tenant)}?limit=${PAGE_LIMIT}&offset=${offset}`;
+  // Sem accountStatus o Sienge devolve só as ENABLED; ALL traz também as DISABLED.
+  const url = `${buildCheckingAccountsUrl(tenant)}?accountStatus=ALL&limit=${PAGE_LIMIT}&offset=${offset}`;
 
   const response = await siengeFetch(url, {
     headers: {
