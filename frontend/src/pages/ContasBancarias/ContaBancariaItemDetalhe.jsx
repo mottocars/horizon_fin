@@ -25,6 +25,31 @@ function sugerirBanco(bancoNumero, bancos) {
   return bancos.some((b) => b.codigo === codigo) ? codigo : '';
 }
 
+// Mesmo padrão dos filtros do Espião NFe/NFSe (corCampoFiltro em EspiaoNfeNfsePage.jsx):
+// âmbar quando o campo está em branco, azul claro quando já tem valor — dá pra ver de
+// relance o que ainda falta preencher na conta.
+// A borda azul é primary-100/500 (não 200/400 como no Espião): o tema (styles/index.css)
+// só define primary 50, 100, 500, 600 e 700 — classe de tom inexistente não gera CSS e a
+// borda cairia na cor padrão (preta).
+const COR_CAMPO_VAZIO = 'border-amber-200 bg-amber-50 focus:border-amber-400';
+const COR_CAMPO_PREENCHIDO = 'border-primary-100 bg-primary-50 focus:border-primary-500';
+
+function estaPreenchido(valor) {
+  return String(valor ?? '').trim() !== '';
+}
+
+function corCampo(valor) {
+  return estaPreenchido(valor)
+    ? `${COR_CAMPO_PREENCHIDO} focus:ring-primary-100`
+    : `${COR_CAMPO_VAZIO} focus:ring-amber-100`;
+}
+
+// O gatilho do SearchableSelect já traz o próprio anel de foco (primary-100), então aqui
+// vão só borda e fundo — repetir o anel geraria conflito de especificidade no Tailwind.
+function corSelect(valor) {
+  return estaPreenchido(valor) ? COR_CAMPO_PREENCHIDO : COR_CAMPO_VAZIO;
+}
+
 function parseBRNumber(value) {
   if (!value) return '';
   const cleaned = value.trim();
@@ -193,6 +218,7 @@ export default function ContaBancariaItemDetalhe() {
                 options={bancosOpcoes}
                 placeholder="Selecione o banco"
                 emptyMessage="Nenhum banco encontrado."
+                corClasses={corSelect(form.banco_enriquecido)}
               />
               {erroBancos && (
                 <p className="mt-1 text-xs text-red-500">
@@ -211,7 +237,7 @@ export default function ContaBancariaItemDetalhe() {
                 type="text"
                 value={form.agencia_enriquecida}
                 onChange={(e) => handleChange('agencia_enriquecida', e.target.value)}
-                className="w-full rounded-lg border border-gray-200 px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-primary-100"
+                className={`w-full rounded-lg border px-3 py-2 text-sm focus:outline-none focus:ring-2 ${corCampo(form.agencia_enriquecida)}`}
               />
             </Field>
 
@@ -221,7 +247,7 @@ export default function ContaBancariaItemDetalhe() {
                   type="text"
                   value={form.conta_enriquecida}
                   onChange={(e) => handleChange('conta_enriquecida', e.target.value)}
-                  className="w-full rounded-lg border border-gray-200 px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-primary-100"
+                  className={`w-full rounded-lg border px-3 py-2 text-sm focus:outline-none focus:ring-2 ${corCampo(form.conta_enriquecida)}`}
                 />
               </Field>
 
@@ -231,7 +257,7 @@ export default function ContaBancariaItemDetalhe() {
                   maxLength={1}
                   value={form.digito}
                   onChange={(e) => handleChange('digito', e.target.value)}
-                  className="w-full rounded-lg border border-gray-200 px-3 py-2 text-center text-sm focus:outline-none focus:ring-2 focus:ring-primary-100"
+                  className={`w-full rounded-lg border px-3 py-2 text-center text-sm focus:outline-none focus:ring-2 ${corCampo(form.digito)}`}
                 />
               </Field>
             </div>
@@ -242,6 +268,7 @@ export default function ContaBancariaItemDetalhe() {
                 onChange={(value) => handleChange('classificacao', value)}
                 options={CLASSIFICACOES}
                 placeholder="Selecione a classificação"
+                corClasses={corSelect(form.classificacao)}
               />
             </Field>
 
@@ -253,6 +280,7 @@ export default function ContaBancariaItemDetalhe() {
                   { value: 'true', label: 'Sim' },
                   { value: 'false', label: 'Não' },
                 ]}
+                corClasses={corSelect(form.projeta_saldo)}
               />
             </Field>
 
@@ -270,7 +298,7 @@ export default function ContaBancariaItemDetalhe() {
                     const raw = e.target.value;
                     if (/^-?[0-9.,]*$/.test(raw)) handleChange('saldo_inicial', raw);
                   }}
-                  className="w-full rounded-lg border border-gray-200 px-3 py-2 pl-9 text-sm focus:outline-none focus:ring-2 focus:ring-primary-100"
+                  className={`w-full rounded-lg border px-3 py-2 pl-9 text-sm focus:outline-none focus:ring-2 ${corCampo(form.saldo_inicial)}`}
                 />
               </div>
             </Field>
@@ -280,7 +308,7 @@ export default function ContaBancariaItemDetalhe() {
                 type="date"
                 value={form.data_saldo_inicial}
                 onChange={(e) => handleChange('data_saldo_inicial', e.target.value)}
-                className="w-full rounded-lg border border-gray-200 px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-primary-100"
+                className={`w-full rounded-lg border px-3 py-2 text-sm focus:outline-none focus:ring-2 ${corCampo(form.data_saldo_inicial)}`}
               />
             </Field>
           </div>
