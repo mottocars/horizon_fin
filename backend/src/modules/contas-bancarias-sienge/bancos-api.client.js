@@ -15,11 +15,17 @@ function erroExpose(message) {
   return e;
 }
 
+// Bancos que não existem no sistema bancário brasileiro mas precisam estar na lista de
+// escolha — contas sem banco de verdade por trás. Têm prioridade sobre a BrasilAPI se
+// algum dia o código coincidir. Pra criar outro, é só acrescentar aqui.
+const BANCOS_INTERNOS = [{ codigo: '000', nome: 'Movimento Interno', ispb: null }];
+
 // A BrasilAPI mistura bancos com sistemas do Banco Central e da B3 — entradas sem
 // código (Selic, Bacen, CIP...) ou com código 0 (Balcão/Câmara/Câmbio B3), que não
-// são bancos e não aparecem no cadastro de contas.
+// são bancos e não aparecem no cadastro de contas. (O 000 da lista é o interno acima,
+// não o da B3.)
 function normalizar(lista) {
-  const porCodigo = new Map();
+  const porCodigo = new Map(BANCOS_INTERNOS.map((b) => [b.codigo, { ...b }]));
   for (const b of lista) {
     if (!Number.isInteger(b?.code) || b.code <= 0) continue;
     const codigo = String(b.code).padStart(3, '0');
@@ -53,7 +59,8 @@ async function buscarBancos() {
   if (!Array.isArray(lista)) throw erroExpose('A API de bancos retornou um formato inesperado.');
 
   const bancos = normalizar(lista);
-  if (bancos.length === 0) throw erroExpose('A API de bancos não retornou nenhum banco.');
+  // Os internos sempre estão na lista, então só valem como "vazio" se não veio banco algum da API.
+  if (bancos.length <= BANCOS_INTERNOS.length) throw erroExpose('A API de bancos não retornou nenhum banco.');
   return bancos;
 }
 
