@@ -772,13 +772,15 @@ CREATE TABLE contas_bancarias_sienge (
     status         VARCHAR(20),
     criado_em      TIMESTAMP DEFAULT NOW(),
     atualizado_em  TIMESTAMP DEFAULT NOW(),
-    banco_enriquecido    VARCHAR(120),
+    banco_enriquecido    VARCHAR(120), -- código COMPE do banco (3 dígitos), escolhido na lista da BrasilAPI
     agencia_enriquecida  VARCHAR(20),
     conta_enriquecida    VARCHAR(20),
     digito               VARCHAR(5),
     projeta_saldo        BOOLEAN,
     saldo_inicial        NUMERIC(15,2),
     data_saldo_inicial   DATE,
+    -- APLICACAO, BLOQUEADA, CHEQUE_ESPECIAL, DEDICADA, GARANTIDA ou LIBERADA (validado na aplicação)
+    classificacao        VARCHAR(20),
     PRIMARY KEY (numero_conta, empresa_id, company_id)
 );
 

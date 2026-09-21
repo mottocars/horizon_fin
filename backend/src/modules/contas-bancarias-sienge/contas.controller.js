@@ -17,8 +17,22 @@ const csv = (val) =>
     .map((s) => s.trim())
     .filter(Boolean);
 
+const CLASSIFICACOES = [
+  'APLICACAO',
+  'BLOQUEADA',
+  'CHEQUE_ESPECIAL',
+  'DEDICADA',
+  'GARANTIDA',
+  'LIBERADA',
+];
+
 const enriquecimentoSchema = z.object({
+  // Código do banco (COMPE, 3 dígitos) escolhido na lista da BrasilAPI.
   banco_enriquecido: z.preprocess(emptyToNull, z.string().max(120).nullable().optional()),
+  classificacao: z.preprocess(
+    emptyToNull,
+    z.enum(CLASSIFICACOES, { message: 'Classificação inválida.' }).nullable().optional()
+  ),
   agencia_enriquecida: z.preprocess(emptyToNull, z.string().max(20).nullable().optional()),
   conta_enriquecida: z.preprocess(emptyToNull, z.string().max(20).nullable().optional()),
   digito: z.preprocess(emptyToNull, z.string().max(5).nullable().optional()),
@@ -52,6 +66,14 @@ async function listContas(req, res, next) {
     const companyIds = csv(req.query.company_id).map(Number).filter(Number.isInteger);
     const result = await service.listContas(req.params.empresaId, { page, limit, search, status, companyIds });
     res.json(result);
+  } catch (err) {
+    next(err);
+  }
+}
+
+async function listBancos(req, res, next) {
+  try {
+    res.json(await service.listBancos());
   } catch (err) {
     next(err);
   }
@@ -95,4 +117,4 @@ async function updateEnriquecimento(req, res, next) {
   }
 }
 
-module.exports = { listGerados, listContas, gerar, getItem, updateEnriquecimento };
+module.exports = { listGerados, listContas, listBancos, gerar, getItem, updateEnriquecimento };

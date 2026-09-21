@@ -18,6 +18,10 @@ export function listContas(empresaId, { page = 1, limit = 15, search = '', statu
     .then((res) => res.data);
 }
 
+export function listBancos() {
+  return http.get('/contas-bancarias/sienge/bancos').then((res) => res.data);
+}
+
 export function gerarContasBancarias(empresaId) {
   return http
     .post('/contas-bancarias/sienge/gerar', { empresa_id: empresaId })

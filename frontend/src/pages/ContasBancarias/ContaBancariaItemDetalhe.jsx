@@ -1,10 +1,29 @@
-import { useCallback, useEffect, useState } from 'react';
+import { useCallback, useEffect, useMemo, useState } from 'react';
 import { useNavigate, useParams } from 'react-router-dom';
 import { ArrowLeft, Landmark } from 'lucide-react';
 import Card from '../../components/Card';
 import Button from '../../components/Button';
 import SearchableSelect from '../../components/SearchableSelect';
-import { getItem, updateEnriquecimento } from '../../api/contasBancariasSienge.api';
+import { getItem, listBancos, updateEnriquecimento } from '../../api/contasBancariasSienge.api';
+
+const CLASSIFICACOES = [
+  { value: 'APLICACAO', label: 'Aplicação' },
+  { value: 'BLOQUEADA', label: 'Bloqueada' },
+  { value: 'CHEQUE_ESPECIAL', label: 'Cheque Especial' },
+  { value: 'DEDICADA', label: 'Dedicada' },
+  { value: 'GARANTIDA', label: 'Garantida' },
+  { value: 'LIBERADA', label: 'Liberada' },
+];
+
+// O Sienge guarda o código do banco em banco_numero ("104", "001", "341"...).
+// Só vira sugestão se esse código existir na lista de bancos brasileiros — códigos
+// internos do Sienge (ex.: 901 "Escritório 01") ficam sem preenchimento.
+function sugerirBanco(bancoNumero, bancos) {
+  const digitos = String(bancoNumero ?? '').replace(/\D/g, '');
+  if (!digitos) return '';
+  const codigo = digitos.padStart(3, '0');
+  return bancos.some((b) => b.codigo === codigo) ? codigo : '';
+}
 
 function parseBRNumber(value) {
   if (!value) return '';
@@ -27,6 +46,7 @@ const emptyForm = {
   agencia_enriquecida: '',
   conta_enriquecida: '',
   digito: '',
+  classificacao: '',
   projeta_saldo: '',
   saldo_inicial: '',
   data_saldo_inicial: '',
@@ -38,6 +58,9 @@ export default function ContaBancariaItemDetalhe() {
 
   const [item, setItem] = useState(null);
   const [form, setForm] = useState(emptyForm);
+  const [bancos, setBancos] = useState([]);
+  const [erroBancos, setErroBancos] = useState(false);
+  const [bancoSugerido, setBancoSugerido] = useState('');
   const [loading, setLoading] = useState(true);
   const [saving, setSaving] = useState(false);
   const [error, setError] = useState('');
@@ -46,13 +69,24 @@ export default function ContaBancariaItemDetalhe() {
   const loadItem = useCallback(async () => {
     setLoading(true);
     try {
-      const data = await getItem(empresaId, companyId, numeroConta);
+      // A lista de bancos vem de uma API externa: se ela falhar, a tela abre do mesmo
+      // jeito, só sem as opções (e o banco já salvo continua aparecendo).
+      const [data, listaBancos] = await Promise.all([
+        getItem(empresaId, companyId, numeroConta),
+        listBancos().catch(() => null),
+      ]);
+      const lista = listaBancos || [];
+      const sugerido = data.banco_enriquecido ? '' : sugerirBanco(data.banco_numero, lista);
+      setBancos(lista);
+      setErroBancos(!listaBancos);
+      setBancoSugerido(sugerido);
       setItem(data);
       setForm({
-        banco_enriquecido: data.banco_enriquecido || '',
+        banco_enriquecido: data.banco_enriquecido || sugerido,
         agencia_enriquecida: data.agencia_enriquecida || '',
         conta_enriquecida: data.conta_enriquecida || '',
         digito: data.digito || '',
+        classificacao: data.classificacao || '',
         projeta_saldo:
           data.projeta_saldo === true ? 'true' : data.projeta_saldo === false ? 'false' : '',
         saldo_inicial: formatBRNumber(data.saldo_inicial),
@@ -70,6 +104,16 @@ export default function ContaBancariaItemDetalhe() {
   function handleChange(field, value) {
     setForm((prev) => ({ ...prev, [field]: value }));
   }
+
+  const bancosOpcoes = useMemo(() => {
+    const opcoes = bancos.map((b) => ({ value: b.codigo, label: `${b.codigo} - ${b.nome}` }));
+    // Valor já salvo que não está na lista (ex.: a API de bancos falhou agora) continua
+    // selecionável, senão o campo pareceria vazio e o próximo "Salvar" apagaria o banco.
+    if (form.banco_enriquecido && !opcoes.some((o) => o.value === form.banco_enriquecido)) {
+      opcoes.unshift({ value: form.banco_enriquecido, label: form.banco_enriquecido });
+    }
+    return opcoes;
+  }, [bancos, form.banco_enriquecido]);
 
   async function handleSave(e) {
     e.preventDefault();
@@ -143,12 +187,23 @@ export default function ContaBancariaItemDetalhe() {
 
           <div className="grid grid-cols-1 gap-4 sm:grid-cols-2">
             <Field label="Banco">
-              <input
-                type="text"
+              <SearchableSelect
                 value={form.banco_enriquecido}
-                onChange={(e) => handleChange('banco_enriquecido', e.target.value)}
-                className="w-full rounded-lg border border-gray-200 px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-primary-100"
+                onChange={(value) => handleChange('banco_enriquecido', value)}
+                options={bancosOpcoes}
+                placeholder="Selecione o banco"
+                emptyMessage="Nenhum banco encontrado."
               />
+              {erroBancos && (
+                <p className="mt-1 text-xs text-red-500">
+                  Não foi possível carregar a lista de bancos. Recarregue a página para tentar de novo.
+                </p>
+              )}
+              {!item.banco_enriquecido && bancoSugerido && form.banco_enriquecido === bancoSugerido && (
+                <p className="mt-1 text-xs text-gray-400">
+                  Preenchido pelo código do banco no Sienge ({item.banco_numero}). Salve para gravar.
+                </p>
+              )}
             </Field>
 
             <Field label="Agência">
@@ -180,6 +235,15 @@ export default function ContaBancariaItemDetalhe() {
                 />
               </Field>
             </div>
+
+            <Field label="Classificação">
+              <SearchableSelect
+                value={form.classificacao}
+                onChange={(value) => handleChange('classificacao', value)}
+                options={CLASSIFICACOES}
+                placeholder="Selecione a classificação"
+              />
+            </Field>
 
             <Field label="Projeta Saldo">
               <SearchableSelect

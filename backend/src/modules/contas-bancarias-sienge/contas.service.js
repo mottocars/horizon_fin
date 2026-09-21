@@ -1,6 +1,11 @@
 const pool = require('../../config/db');
 const { decrypt } = require('../../utils/crypto');
 const siengeApi = require('./sienge-api.client');
+const bancosApi = require('./bancos-api.client');
+
+function listBancos() {
+  return bancosApi.getBancos();
+}
 
 async function listGerados() {
   const { rows } = await pool.query(
@@ -92,8 +97,9 @@ async function updateEnriquecimento(empresaId, companyId, numeroConta, data) {
        digito = $4,
        projeta_saldo = $5,
        saldo_inicial = $6,
-       data_saldo_inicial = $7
-     WHERE empresa_id = $8 AND company_id = $9 AND numero_conta = $10
+       data_saldo_inicial = $7,
+       classificacao = $8
+     WHERE empresa_id = $9 AND company_id = $10 AND numero_conta = $11
      RETURNING *`,
     [
       data.banco_enriquecido || null,
@@ -103,6 +109,7 @@ async function updateEnriquecimento(empresaId, companyId, numeroConta, data) {
       data.projeta_saldo ?? null,
       data.saldo_inicial ?? null,
       data.data_saldo_inicial || null,
+      data.classificacao || null,
       empresaId,
       companyId,
       numeroConta,
@@ -187,4 +194,4 @@ async function gerar(empresaId) {
   return { empresa_id: empresaId, total_importado: contas.length };
 }
 
-module.exports = { listGerados, listContas, gerar, getItem, updateEnriquecimento };
+module.exports = { listGerados, listContas, listBancos, gerar, getItem, updateEnriquecimento };
