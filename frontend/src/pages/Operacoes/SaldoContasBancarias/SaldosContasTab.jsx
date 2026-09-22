@@ -4,7 +4,6 @@ import { getSaldosContas, salvarSaldosContas } from '../../../api/saldoContasBan
 import LogoBanco from './LogoBanco';
 import {
   GRUPOS_CLASSIFICACAO,
-  SEM_CLASSIFICACAO,
   formatarSaldo,
   interpretarSaldo,
   listarDias,
@@ -23,6 +22,20 @@ const ALTURA_MES = 28;
 const MARGEM_ROLAGEM = 'scroll-mt-[84px] scroll-mb-14 scroll-ml-[356px] scroll-mr-4';
 
 const tomNegativo = (valor) => (valor < 0 ? 'text-red-600' : 'text-gray-900');
+
+// Sobe a árvore a partir de `el` até achar o ancestral que rola de verdade (overflow auto ou
+// scroll em algum eixo) — hoje é o <main> do AppShell, mas a função não depende de conhecer
+// essa estrutura: funciona igual se um dia a página ganhar outro wrapper. Sem nenhum, cai no
+// próprio documento (scroll da janela).
+function ancestralRolavel(el) {
+  let node = el?.parentElement;
+  while (node && node !== document.body) {
+    const estilo = getComputedStyle(node);
+    if (/(auto|scroll)/.test(estilo.overflowX + estilo.overflowY)) return node;
+    node = node.parentElement;
+  }
+  return document.scrollingElement || document.documentElement;
+}
 
 // ---------------------------------------------------------------------------
 // Célula editável de saldo (conta x dia).
@@ -166,7 +179,7 @@ export default function SaldosContasTab({
   const [erroSalvar, setErroSalvar] = useState('');
   const [aviso, setAviso] = useState('');
 
-  const scrollRef = useRef(null);
+  const tabelaRef = useRef(null);
   const inputsRef = useRef(new Map());
   const linhasVisiveisRef = useRef([]);
   const filaRef = useRef(Promise.resolve());
@@ -207,13 +220,20 @@ export default function SaldosContasTab({
   }, [carregar, refreshToken]);
 
   // ---------------------------------------------------------------- agrupamento e totais
+  // Só entram contas com classificação (pedido do usuário) — uma conta sem classificação não
+  // bate com nenhum `grupo.value` e fica de fora da matriz inteira, inclusive dos totais.
   const grupos = useMemo(() => {
     if (!contas) return [];
     return GRUPOS_CLASSIFICACAO.map((grupo) => ({
       ...grupo,
-      contas: contas.filter((c) => (c.classificacao || SEM_CLASSIFICACAO) === grupo.value),
+      contas: contas.filter((c) => c.classificacao === grupo.value),
     })).filter((grupo) => grupo.contas.length > 0);
   }, [contas]);
+
+  // Mesmo conjunto que aparece na matriz (todas as contas classificadas, achatadas) — usado
+  // no resumo do cabeçalho e no cálculo de preenchimento, pra bater com o que está na tela.
+  const contasClassificadas = useMemo(() => grupos.flatMap((g) => g.contas), [grupos]);
+  const semClassificacao = contas ? contas.length - contasClassificadas.length : 0;
 
   const { totaisPorGrupo, totalGeral } = useMemo(() => {
     const porGrupo = {};
@@ -232,14 +252,18 @@ export default function SaldosContasTab({
     };
   }, [grupos]);
 
-  // Quanto do que já deveria estar informado (dias úteis até hoje) está preenchido.
+  // Quanto do que já deveria estar informado (dias úteis até hoje) está preenchido — só conta
+  // as contas classificadas, as mesmas que aparecem na matriz.
   const preenchimento = useMemo(() => {
     if (!contas) return { feitas: 0, esperadas: 0, pct: 0 };
     const diasUteis = dias.filter((d) => d.pendente);
-    const esperadas = contas.length * diasUteis.length;
-    const feitas = contas.reduce((acc, c) => acc + diasUteis.filter((d) => c.saldos[d.iso] !== undefined).length, 0);
+    const esperadas = contasClassificadas.length * diasUteis.length;
+    const feitas = contasClassificadas.reduce(
+      (acc, c) => acc + diasUteis.filter((d) => c.saldos[d.iso] !== undefined).length,
+      0
+    );
     return { feitas, esperadas, pct: esperadas ? Math.round((feitas / esperadas) * 100) : 0 };
-  }, [contas, dias]);
+  }, [contas, contasClassificadas, dias]);
 
   const meses = useMemo(() => {
     const segmentos = [];
@@ -264,17 +288,21 @@ export default function SaldosContasTab({
     linhasVisiveisRef.current = linhasVisiveis;
   }, [linhasVisiveis]);
 
-  // Ao terminar de carregar, rola a grade pra deixar a coluna de hoje à vista (a coluna de
-  // nomes ocupa a esquerda; sem isso, num mês inteiro o dia atual ficaria fora da tela).
-  // Só uma vez por carga: `contas` muda a cada edição salva e não pode puxar a rolagem de
-  // volta pra hoje enquanto o usuário preenche outro dia.
+  // Ao terminar de carregar, rola até deixar a coluna de hoje à vista (a coluna de nomes
+  // ocupa a esquerda; sem isso, num período longo o dia atual ficaria fora da tela). Quem
+  // rola é a PÁGINA (o <main> do AppShell), não mais um `div` interno — ver o comentário
+  // grande logo abaixo, no JSX, sobre por que a grade não tem overflow próprio. Por isso o
+  // alvo é achado subindo a árvore a partir da própria tabela, em vez de um ref fixo pra um
+  // wrapper que não existe mais. Só uma vez por carga: `contas` muda a cada edição salva e
+  // não pode puxar a rolagem de volta pra hoje enquanto o usuário preenche outro dia.
   useEffect(() => {
-    if (carregando || !contas || rolouAposCargaRef.current || !scrollRef.current) return;
+    if (carregando || !contas || rolouAposCargaRef.current || !tabelaRef.current) return;
     rolouAposCargaRef.current = true;
-    const colunaHoje = scrollRef.current.querySelector('#saldo-coluna-hoje');
-    scrollRef.current.scrollLeft = colunaHoje
-      ? Math.max(0, colunaHoje.offsetLeft - LARGURA_PRIMEIRA - LARGURA_DIA * 2)
-      : 0;
+    const colunaHoje = tabelaRef.current.querySelector('#saldo-coluna-hoje');
+    if (!colunaHoje) return;
+    const scroller = ancestralRolavel(colunaHoje);
+    const desloc = colunaHoje.getBoundingClientRect().left - scroller.getBoundingClientRect().left;
+    scroller.scrollLeft += desloc - LARGURA_PRIMEIRA - LARGURA_DIA * 2;
   }, [carregando, contas]);
 
   // ---------------------------------------------------------------------------- gravação
@@ -405,6 +433,9 @@ export default function SaldosContasTab({
   }
 
   const semContas = !carregando && !erroCarga && contas && contas.length === 0;
+  // Empresa tem contas, mas nenhuma classificada — distinto de "sem contas": aqui o problema
+  // é a classificação, não o cadastro.
+  const semClassificadas = !carregando && !erroCarga && contas && contas.length > 0 && grupos.length === 0;
 
   return (
     <div className="rounded-card rounded-tl-none bg-white shadow-card">
@@ -414,10 +445,15 @@ export default function SaldosContasTab({
             <h2 className="text-sm font-semibold text-gray-900">Saldos das contas</h2>
             <p className="text-xs text-gray-500">
               {contas
-                ? `${contas.length} conta${contas.length === 1 ? '' : 's'} em ${grupos.length} classificaç${grupos.length === 1 ? 'ão' : 'ões'}`
+                ? `${contasClassificadas.length} conta${contasClassificadas.length === 1 ? '' : 's'} em ${grupos.length} classificaç${grupos.length === 1 ? 'ão' : 'ões'}`
                 : 'Carregando...'}
               {' · '}
               {dias.length} dias
+              {/* Contas sem classificação não entram na matriz — nota discreta pra não parecer
+                  que elas "sumiram" (ver Cadastros → Contas Bancárias pra classificá-las). */}
+              {contas && semClassificacao > 0 && (
+                <span className="text-gray-400"> · {semClassificacao} sem classificação (ocultas)</span>
+              )}
             </p>
           </div>
 
@@ -514,16 +550,30 @@ export default function SaldosContasTab({
             Ajuste os filtros ou, se a empresa ainda não tem contas, importe-as em Cadastros → Contas Bancárias.
           </p>
         </div>
+      ) : semClassificadas ? (
+        <div className="flex flex-col items-center gap-1 border-t border-gray-200 py-14 text-center">
+          <Landmark size={26} className="mb-1 text-gray-300" />
+          <p className="text-sm text-gray-600">Nenhuma conta classificada encontrada.</p>
+          <p className="max-w-sm text-xs text-gray-400">
+            {contas.length} conta(s) sem classificação neste filtro. Classifique-as em Cadastros → Contas
+            Bancárias para elas aparecerem aqui.
+          </p>
+        </div>
       ) : (
-        <div
-          ref={scrollRef}
-          className="overflow-auto rounded-b-card border-t border-gray-200"
-          style={{ maxHeight: 'calc(100vh - 22rem)', minHeight: 320 }}
-        >
+        // Nenhum wrapper com overflow-x/overflow-y próprio aqui de propósito (pedido do
+        // usuário: "a barra de rolagem deve ser da tela, e não do objeto" — mesmo padrão já
+        // usado em GestaoParcelasTab.jsx). Sem isso, este `div` viraria o "teto" onde o
+        // `sticky` do cabeçalho, da coluna de nomes e do rodapé passa a colar, mas ele nunca
+        // teria altura própria pra rolar de verdade — o cabeçalho ficava preso nele e "fugia"
+        // junto quando a PÁGINA rolava. Quem rola (nos 2 eixos) é o <main> do AppShell: ele já
+        // tem overflow-y-auto, e o CSS força overflow-x a virar "auto" também nesse caso
+        // (regra do overflow computado), então a rolagem horizontal da tabela larga continua
+        // funcionando, só que na barra da página mesmo.
+        <div ref={tabelaRef} className="rounded-b-card border-t border-gray-200">
           {/* Só a coluna de nomes tem largura fixa; as de dia dividem o que sobrar. Com poucos
-              dias (o padrão são 8) elas esticam pra preencher o card em vez de deixar uma
-              faixa em branco à direita; com muitos, `minWidth` garante 112px por dia e a
-              grade rola na horizontal. */}
+              dias (o padrão é a semana atual) elas esticam pra preencher o card em vez de
+              deixar uma faixa em branco à direita; com muitos, `minWidth` garante 112px por
+              dia e a grade rola (na página, ver comentário acima). */}
           <table
             className="border-separate border-spacing-0 text-left text-xs"
             style={{ tableLayout: 'fixed', width: '100%', minWidth: LARGURA_PRIMEIRA + dias.length * LARGURA_DIA }}

@@ -1,6 +1,6 @@
 import { useEffect, useMemo, useRef, useState } from 'react';
 import { useSearchParams } from 'react-router-dom';
-import { ChevronLeft, ChevronRight, RefreshCw, TriangleAlert, Wallet } from 'lucide-react';
+import { CreditCard, Landmark, RefreshCw, Settings, TriangleAlert, Wallet } from 'lucide-react';
 import Card from '../../../components/Card';
 import Tabs from '../../../components/Tabs';
 import SearchableSelect from '../../../components/SearchableSelect';
@@ -9,23 +9,31 @@ import { getFiltrosSaldos } from '../../../api/saldoContasBancarias.api';
 import { nomeExibicaoEmpresa } from '../../../utils/empresa';
 import { useEmpresaTravada } from '../../../hooks/useEmpresaTravada';
 import SaldosContasTab from './SaldosContasTab';
-import { OPCOES_CLASSIFICACAO, deslocarPeriodo, periodoPadrao, validarPeriodo } from './constantes';
+import AbaEmConstrucao from './AbaEmConstrucao';
+import { OPCOES_CLASSIFICACAO, semanaAtual, validarPeriodo } from './constantes';
 
 // Pra adicionar uma aba nova no futuro basta incluir um item aqui `{ id, label, icon }` e o
 // caso correspondente no bloco de conteúdo mais abaixo (mesmo esquema de GestaoCobrancasPage).
-const TABS = [{ id: 'saldos', label: 'Saldos das Contas', icon: Wallet }];
+// O `{ divider: true }` separa "Saldos das Contas" (a aba operacional, o dia a dia de
+// lançar saldo) das 3 de cadastro/parâmetro — mesmo padrão de GestaoCobrancasPage.jsx, que
+// separa "Clusters de Clientes" (operacional) de "Motor de Risco" e as demais (parâmetro).
+const TABS = [
+  { id: 'saldos', label: 'Saldos das Contas', icon: Wallet },
+  { divider: true },
+  { id: 'bancos', label: 'Bancos', icon: Landmark },
+  { id: 'contas', label: 'Contas Bancárias', icon: CreditCard },
+  { id: 'configuracoes', label: 'Configurações', icon: Settings },
+];
 
 const CLASSE_DATA =
   'w-full min-w-0 rounded-lg border border-gray-200 px-3 py-2 text-sm text-gray-800 focus:border-primary-400 focus:outline-none focus:ring-2 focus:ring-primary-100 disabled:bg-gray-50 disabled:text-gray-400';
-const CLASSE_BOTAO_MES =
-  'flex h-9.5 w-8 shrink-0 items-center justify-center rounded-lg border border-gray-200 text-gray-500 transition-colors hover:bg-gray-50 hover:text-gray-700 disabled:cursor-not-allowed disabled:opacity-60';
 
 // Empresa, aba e filtros vivem na URL (não em useState local) pelo mesmo motivo da Gestão
 // de Cobranças: o "Voltar" do navegador devolve o usuário pro mesmo lugar, com os mesmos
 // filtros. Toda troca usa `replace`, pra escolher um filtro não empilhar histórico.
-// Datas: sem parâmetro na URL valem sempre os últimos 7 dias até hoje (hoje − 7 dias até
-// hoje) — o padrão não é gravado na URL, então abrir a tela outro dia já abre com o "hoje"
-// certo.
+// Datas: sem parâmetro na URL valem sempre a semana atual, domingo a sábado — o padrão não é
+// gravado na URL, então abrir a tela numa semana nova já abre nela. Sem setas de navegação
+// de período (pedido do usuário) — pra ver outra semana é só digitar as datas.
 export default function SaldoContasBancariasPage() {
   const { travada: empresaTravada, empresaIdTravada } = useEmpresaTravada();
   const [searchParams, setSearchParams] = useSearchParams();
@@ -43,7 +51,7 @@ export default function SaldoContasBancariasPage() {
   const bancosParam = searchParams.get('bancos') || '';
   const bancos = useMemo(() => bancosParam.split(',').filter(Boolean), [bancosParam]);
 
-  const padrao = useMemo(() => periodoPadrao(), []);
+  const padrao = useMemo(() => semanaAtual(), []);
   const dataInicio = searchParams.get('data_inicio') || padrao.inicio;
   const dataFim = searchParams.get('data_fim') || padrao.fim;
   const erroPeriodo = validarPeriodo(dataInicio, dataFim);
@@ -73,15 +81,9 @@ export default function SaldoContasBancariasPage() {
   }
 
   // Um input de data só dispara onChange com '' quando é apagado/incompleto; ignorar isso
-  // deixa o valor anterior (o padrão é sempre hoje − 7 dias até hoje, não existe "sem data").
+  // deixa o valor anterior (o padrão é sempre a semana atual, não existe "sem data").
   function handleData(chave, valor) {
     if (valor) atualizarParams({ [chave]: valor });
-  }
-
-  // ‹ › andam o período pelo tamanho dele (mês cheio anda de mês em mês) — ver deslocarPeriodo.
-  function irParaPeriodo(direcao) {
-    const { inicio, fim } = deslocarPeriodo(dataInicio, dataFim, direcao);
-    atualizarParams({ data_inicio: inicio, data_fim: fim });
   }
 
   // Quem só tem 1 empresa já vem com ela preenchida e travada.
@@ -153,8 +155,10 @@ export default function SaldoContasBancariasPage() {
     <div className="space-y-4">
       <Card className="shrink-0">
         <div className="flex flex-col gap-4 lg:flex-row lg:items-end lg:justify-between">
-          {/* flex-wrap: são 6 controles — em telas de notebook a barra quebra numa segunda linha
-              em vez de espremer os campos até ficarem ilegíveis. */}
+          {/* flex-wrap: até 6 controles na aba Saldos das Contas — em telas de notebook a barra
+              quebra numa segunda linha em vez de espremer os campos até ficarem ilegíveis. As
+              outras abas (Bancos/Contas Bancárias/Configurações) só têm o seletor de Empresa —
+              o resto dos filtros é específico da matriz de saldos. */}
           <div className="flex min-w-0 flex-col gap-3 sm:flex-1 sm:flex-row sm:flex-wrap">
             <div className="sm:min-w-44 sm:max-w-xs sm:flex-1">
               <label className="mb-1 block text-sm font-medium text-gray-700">Empresa</label>
@@ -168,102 +172,91 @@ export default function SaldoContasBancariasPage() {
               />
             </div>
 
-            <div className="sm:min-w-44 sm:max-w-xs sm:flex-1">
-              <label className="mb-1 block text-sm font-medium text-gray-700">Empresas</label>
-              <SearchableSelect
-                multiple
-                value={companyIds}
-                onChange={(ids) => atualizarParams({ company_ids: ids })}
-                disabled={semEmpresa || loadingFiltros}
-                options={opcoesEmpresasSienge}
-                placeholder={semEmpresa ? 'Selecione a empresa primeiro' : loadingFiltros ? 'Carregando...' : 'Todas as empresas'}
-                emptyMessage="Nenhuma empresa encontrada."
-              />
-            </div>
+            {abaAtiva === 'saldos' && (
+              <>
+                <div className="sm:min-w-44 sm:max-w-xs sm:flex-1">
+                  <label className="mb-1 block text-sm font-medium text-gray-700">Empresas</label>
+                  <SearchableSelect
+                    multiple
+                    value={companyIds}
+                    onChange={(ids) => atualizarParams({ company_ids: ids })}
+                    disabled={semEmpresa || loadingFiltros}
+                    options={opcoesEmpresasSienge}
+                    placeholder={semEmpresa ? 'Selecione a empresa primeiro' : loadingFiltros ? 'Carregando...' : 'Todas as empresas'}
+                    emptyMessage="Nenhuma empresa encontrada."
+                  />
+                </div>
 
-            <div className="sm:min-w-40 sm:max-w-64 sm:flex-1">
-              <label className="mb-1 block text-sm font-medium text-gray-700">Classificação</label>
-              <SearchableSelect
-                multiple
-                value={classificacoes}
-                onChange={(valores) => atualizarParams({ classificacoes: valores })}
+                <div className="sm:min-w-40 sm:max-w-64 sm:flex-1">
+                  <label className="mb-1 block text-sm font-medium text-gray-700">Classificação</label>
+                  <SearchableSelect
+                    multiple
+                    value={classificacoes}
+                    onChange={(valores) => atualizarParams({ classificacoes: valores })}
+                    disabled={semEmpresa}
+                    options={OPCOES_CLASSIFICACAO}
+                    placeholder={semEmpresa ? 'Selecione a empresa primeiro' : 'Todas as classificações'}
+                    emptyMessage="Nenhuma classificação encontrada."
+                  />
+                </div>
+
+                <div className="sm:min-w-44 sm:max-w-xs sm:flex-1">
+                  <label className="mb-1 block text-sm font-medium text-gray-700">Banco</label>
+                  <SearchableSelect
+                    multiple
+                    value={bancos}
+                    onChange={(codigos) => atualizarParams({ bancos: codigos })}
+                    disabled={semEmpresa || loadingFiltros}
+                    options={opcoesBancos}
+                    placeholder={semEmpresa ? 'Selecione a empresa primeiro' : loadingFiltros ? 'Carregando...' : 'Todos os bancos'}
+                    emptyMessage="Nenhum banco encontrado."
+                  />
+                </div>
+
+                {/* min-w-72: cada campo de data precisa de ~140px pra mostrar o ano inteiro
+                    (dd/mm/aaaa + o ícone do calendário) — abaixo disso o ano é cortado, então
+                    o grupo prefere quebrar pra segunda linha a ficar mais estreito. Sem as
+                    setas de navegação de período (pedido do usuário), sobra só os 2 campos. */}
+                <div className="flex min-w-0 items-end gap-1.5 sm:min-w-72 sm:max-w-sm sm:flex-1">
+                  <div className="min-w-0 flex-1">
+                    <label className="mb-1 block text-sm font-medium text-gray-700">Data início</label>
+                    <input
+                      type="date"
+                      value={dataInicio}
+                      onChange={(e) => handleData('data_inicio', e.target.value)}
+                      disabled={semEmpresa}
+                      className={CLASSE_DATA}
+                    />
+                  </div>
+                  <div className="min-w-0 flex-1">
+                    <label className="mb-1 block text-sm font-medium text-gray-700">Data fim</label>
+                    <input
+                      type="date"
+                      value={dataFim}
+                      onChange={(e) => handleData('data_fim', e.target.value)}
+                      disabled={semEmpresa}
+                      className={CLASSE_DATA}
+                    />
+                  </div>
+                </div>
+              </>
+            )}
+          </div>
+
+          {abaAtiva === 'saldos' && (
+            <div className="flex shrink-0 items-center gap-2">
+              {/* Só ícone, no mesmo formato do botão Sincronizar da Gestão de Cobranças. */}
+              <button
+                type="button"
+                onClick={() => setRefreshToken((n) => n + 1)}
                 disabled={semEmpresa}
-                options={OPCOES_CLASSIFICACAO}
-                placeholder={semEmpresa ? 'Selecione a empresa primeiro' : 'Todas as classificações'}
-                emptyMessage="Nenhuma classificação encontrada."
-              />
-            </div>
-
-            <div className="sm:min-w-44 sm:max-w-xs sm:flex-1">
-              <label className="mb-1 block text-sm font-medium text-gray-700">Banco</label>
-              <SearchableSelect
-                multiple
-                value={bancos}
-                onChange={(codigos) => atualizarParams({ bancos: codigos })}
-                disabled={semEmpresa || loadingFiltros}
-                options={opcoesBancos}
-                placeholder={semEmpresa ? 'Selecione a empresa primeiro' : loadingFiltros ? 'Carregando...' : 'Todos os bancos'}
-                emptyMessage="Nenhum banco encontrado."
-              />
-            </div>
-
-            {/* min-w-96: cada campo de data precisa de ~150px pra mostrar o ano inteiro
-                (dd/mm/aaaa + o ícone do calendário) — abaixo disso o ano é cortado, então
-                o grupo prefere quebrar pra segunda linha a ficar mais estreito. */}
-            <div className="flex min-w-0 items-end gap-1.5 sm:min-w-96 sm:max-w-md sm:flex-1">
-              <button
-                type="button"
-                onClick={() => irParaPeriodo(-1)}
-                disabled={semEmpresa || Boolean(erroPeriodo)}
-                title="Período anterior"
-                className={CLASSE_BOTAO_MES}
+                title="Recarregar saldos"
+                className="flex shrink-0 items-center justify-center rounded-lg bg-primary-600 p-2 text-white transition-colors hover:bg-primary-700 disabled:cursor-not-allowed disabled:opacity-60"
               >
-                <ChevronLeft size={16} />
-              </button>
-              <div className="min-w-0 flex-1">
-                <label className="mb-1 block text-sm font-medium text-gray-700">Data início</label>
-                <input
-                  type="date"
-                  value={dataInicio}
-                  onChange={(e) => handleData('data_inicio', e.target.value)}
-                  disabled={semEmpresa}
-                  className={CLASSE_DATA}
-                />
-              </div>
-              <div className="min-w-0 flex-1">
-                <label className="mb-1 block text-sm font-medium text-gray-700">Data fim</label>
-                <input
-                  type="date"
-                  value={dataFim}
-                  onChange={(e) => handleData('data_fim', e.target.value)}
-                  disabled={semEmpresa}
-                  className={CLASSE_DATA}
-                />
-              </div>
-              <button
-                type="button"
-                onClick={() => irParaPeriodo(1)}
-                disabled={semEmpresa || Boolean(erroPeriodo)}
-                title="Próximo período"
-                className={CLASSE_BOTAO_MES}
-              >
-                <ChevronRight size={16} />
+                <RefreshCw size={18} />
               </button>
             </div>
-          </div>
-
-          <div className="flex shrink-0 items-center gap-2">
-            {/* Só ícone, no mesmo formato do botão Sincronizar da Gestão de Cobranças. */}
-            <button
-              type="button"
-              onClick={() => setRefreshToken((n) => n + 1)}
-              disabled={semEmpresa}
-              title="Recarregar saldos"
-              className="flex shrink-0 items-center justify-center rounded-lg bg-primary-600 p-2 text-white transition-colors hover:bg-primary-700 disabled:cursor-not-allowed disabled:opacity-60"
-            >
-              <RefreshCw size={18} />
-            </button>
-          </div>
+          )}
         </div>
       </Card>
 
@@ -289,6 +282,30 @@ export default function SaldoContasBancariasPage() {
               refreshToken={refreshToken}
             />
           ))}
+
+        {abaAtiva === 'bancos' && (
+          <AbaEmConstrucao
+            icon={Landmark}
+            titulo="Bancos"
+            descricao="Catálogo dos bancos usados nas contas bancárias — em desenvolvimento."
+          />
+        )}
+
+        {abaAtiva === 'contas' && (
+          <AbaEmConstrucao
+            icon={CreditCard}
+            titulo="Contas Bancárias"
+            descricao="Cadastro e edição das contas bancárias — em desenvolvimento."
+          />
+        )}
+
+        {abaAtiva === 'configuracoes' && (
+          <AbaEmConstrucao
+            icon={Settings}
+            titulo="Configurações"
+            descricao="Parâmetros da tela de Saldo Contas Bancárias — em desenvolvimento."
+          />
+        )}
       </div>
     </div>
   );
