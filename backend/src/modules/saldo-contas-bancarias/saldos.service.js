@@ -64,16 +64,18 @@ async function getFiltros(empresaId) {
 
   // Nome do banco: o da lista oficial (BrasilAPI + internos); se ela estiver fora do ar
   // ou não conhecer o código (ex.: 901 "Escritório 01" do Sienge), cai no nome que o
-  // Sienge mandou, e por último no próprio código.
-  let nomesOficiais = new Map();
+  // Sienge mandou, e por último no próprio código. A logomarca só existe pros bancos da
+  // lista oficial que têm uma (a tela mostra o código do banco no lugar quando não tem).
+  let oficiais = new Map();
   try {
-    nomesOficiais = new Map((await bancosApi.getBancos()).map((b) => [b.codigo, b.nome]));
+    oficiais = new Map((await bancosApi.getBancos()).map((b) => [b.codigo, b]));
   } catch {
     // segue só com os nomes vindos do Sienge
   }
   const bancos = usados.map((b) => ({
     codigo: b.codigo,
-    nome: nomesOficiais.get(b.codigo) || b.banco_nome || b.codigo,
+    nome: oficiais.get(b.codigo)?.nome || b.banco_nome || b.codigo,
+    logo: oficiais.get(b.codigo)?.logo || null,
   }));
 
   return { empresas, bancos };

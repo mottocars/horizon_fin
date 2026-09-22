@@ -18,7 +18,13 @@ function erroExpose(message) {
 // Bancos que não existem no sistema bancário brasileiro mas precisam estar na lista de
 // escolha — contas sem banco de verdade por trás. Têm prioridade sobre a BrasilAPI se
 // algum dia o código coincidir. Pra criar outro, é só acrescentar aqui.
-const BANCOS_INTERNOS = [{ codigo: '000', nome: 'Movimento Interno', ispb: null }];
+const BANCOS_INTERNOS = [{ codigo: '000', nome: 'Movimento Interno', ispb: null, logo: null }];
+
+// A BrasilAPI traz `logo_url` (SVG/PNG quadrado servido pelo jsDelivr) pra cerca de 1/3 dos
+// bancos. Só aceita https — a tela usa direto num <img>, então nada de esquema estranho.
+function logoDe(banco) {
+  return typeof banco?.logo_url === 'string' && banco.logo_url.startsWith('https://') ? banco.logo_url : null;
+}
 
 // A BrasilAPI mistura bancos com sistemas do Banco Central e da B3 — entradas sem
 // código (Selic, Bacen, CIP...) ou com código 0 (Balcão/Câmara/Câmbio B3), que não
@@ -34,6 +40,7 @@ function normalizar(lista) {
       codigo,
       nome: (b.fullName || b.name || '').trim(),
       ispb: b.ispb,
+      logo: logoDe(b),
     });
   }
   return [...porCodigo.values()].sort((a, b) => a.codigo.localeCompare(b.codigo));

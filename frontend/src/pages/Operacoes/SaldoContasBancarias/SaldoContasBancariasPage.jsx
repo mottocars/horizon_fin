@@ -1,4 +1,4 @@
-import { useEffect, useMemo, useState } from 'react';
+import { useEffect, useMemo, useRef, useState } from 'react';
 import { useSearchParams } from 'react-router-dom';
 import { ChevronLeft, ChevronRight, RefreshCw, TriangleAlert, Wallet } from 'lucide-react';
 import Card from '../../../components/Card';
@@ -50,13 +50,20 @@ export default function SaldoContasBancariasPage() {
 
   const [refreshToken, setRefreshToken] = useState(0);
 
+  // Duas alterações seguidas antes de o React re-renderizar (ex.: mexer nas duas datas em
+  // sequência rápida) partiriam do mesmo `searchParams` velho e a segunda apagaria a
+  // primeira. O ref guarda o que já foi pedido, então cada chamada soma à anterior.
+  const paramsRef = useRef(searchParams);
+  paramsRef.current = searchParams;
+
   function atualizarParams(patch) {
-    const next = new URLSearchParams(searchParams);
+    const next = new URLSearchParams(paramsRef.current);
     Object.entries(patch).forEach(([chave, valor]) => {
       const vazio = valor === null || valor === undefined || valor === '' || (Array.isArray(valor) && valor.length === 0);
       if (vazio) next.delete(chave);
       else next.set(chave, Array.isArray(valor) ? valor.join(',') : String(valor));
     });
+    paramsRef.current = next;
     setSearchParams(next, { replace: true });
   }
 
@@ -128,7 +135,8 @@ export default function SaldoContasBancariasPage() {
     };
   }, [empresaId, refreshToken]);
 
-  const nomesBancos = useMemo(() => new Map(filtros.bancos.map((b) => [b.codigo, b.nome])), [filtros.bancos]);
+  // código do banco -> { codigo, nome, logo } — a grade usa pra desenhar a logomarca de cada conta.
+  const infoBancos = useMemo(() => new Map(filtros.bancos.map((b) => [b.codigo, b])), [filtros.bancos]);
 
   const opcoesEmpresasSienge = useMemo(
     () => filtros.empresas.map((e) => ({ value: e.company_id, label: e.company_name || `Empresa ${e.company_id}` })),
@@ -277,7 +285,7 @@ export default function SaldoContasBancariasPage() {
               companyIds={companyIds}
               classificacoes={classificacoes}
               bancos={bancos}
-              nomesBancos={nomesBancos}
+              infoBancos={infoBancos}
               refreshToken={refreshToken}
             />
           ))}

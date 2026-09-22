@@ -1,6 +1,7 @@
 import { Fragment, memo, useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { Check, ChevronsDownUp, ChevronsUpDown, Landmark, Loader2, Minus, Plus, TriangleAlert } from 'lucide-react';
 import { getSaldosContas, salvarSaldosContas } from '../../../api/saldoContasBancarias.api';
+import LogoBanco from './LogoBanco';
 import {
   GRUPOS_CLASSIFICACAO,
   SEM_CLASSIFICACAO,
@@ -152,7 +153,7 @@ export default function SaldosContasTab({
   companyIds,
   classificacoes,
   bancos,
-  nomesBancos,
+  infoBancos,
   refreshToken = 0,
 }) {
   const [contas, setContas] = useState(null);
@@ -615,32 +616,18 @@ export default function SaldosContasTab({
 
                     {aberto &&
                       grupo.contas.map((conta) => {
-                        // Tooltip com o banco por extenso; na linha, o código vira uma etiqueta antes
-                        // do nome da empresa — o nome da empresa é longo e, se viesse depois dele,
-                        // empurraria o banco pra fora da coluna.
-                        const banco = conta.banco_codigo
-                          ? `${conta.banco_codigo} ${nomesBancos?.get(conta.banco_codigo) || ''}`.trim()
-                          : '';
-                        const subtitulo = [banco, conta.company_name].filter(Boolean).join(' · ');
                         return (
                           <tr key={`${conta.company_id}|${conta.numero_conta}`}>
-                            <td className="sticky left-0 z-10 border-b border-r border-gray-100 border-r-gray-200 bg-white py-1.5 pl-10 pr-3">
-                              <div className="flex items-center gap-2">
-                                <div className="min-w-0 flex-1">
-                                  <div className="truncate text-xs font-medium text-gray-800" title={conta.nome || conta.numero_conta}>
-                                    {conta.nome || conta.numero_conta}
-                                  </div>
-                                  {subtitulo && (
-                                    <div className="flex items-center gap-1.5 text-[11px] text-gray-400" title={subtitulo}>
-                                      {conta.banco_codigo && (
-                                        <span className="shrink-0 rounded bg-gray-100 px-1 text-[10px] font-semibold tabular-nums text-gray-500">
-                                          {conta.banco_codigo}
-                                        </span>
-                                      )}
-                                      <span className="min-w-0 truncate">{conta.company_name}</span>
-                                    </div>
-                                  )}
-                                </div>
+                            {/* pl-9: a logomarca fica alinhada com o ícone da classificação na
+                                linha de cima. Só o nome da conta — a empresa não precisa
+                                aparecer aqui (existe o filtro Empresas) — e o banco vai no
+                                tooltip da logomarca. */}
+                            <td className="sticky left-0 z-10 border-b border-r border-gray-100 border-r-gray-200 bg-white py-1.5 pl-9 pr-3">
+                              <div className="flex items-center gap-2.5">
+                                <LogoBanco codigo={conta.banco_codigo} info={infoBancos?.get(conta.banco_codigo)} />
+                                <span className="min-w-0 flex-1 truncate text-xs font-medium text-gray-800" title={conta.nome || conta.numero_conta}>
+                                  {conta.nome || conta.numero_conta}
+                                </span>
                                 {conta.status !== 'ENABLED' && (
                                   <span className="shrink-0 rounded bg-gray-100 px-1.5 py-0.5 text-[10px] font-medium text-gray-500">
                                     Inativa
