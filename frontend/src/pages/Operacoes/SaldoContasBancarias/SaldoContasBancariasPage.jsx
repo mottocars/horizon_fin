@@ -15,7 +15,8 @@ import AbaEmConstrucao from './AbaEmConstrucao';
 import BancosTab from './BancosTab';
 import ContasTab from './ContasTab';
 import AbrirPeriodoModal from './AbrirPeriodoModal';
-import { domingoDaSemana, formatarDataBR, semanaAtual, semanaDe } from './constantes';
+import SeletorSemana from './SeletorSemana';
+import { formatarDataBR, semanaAtual, semanaDe } from './constantes';
 
 // Pra adicionar uma aba nova no futuro basta incluir um item aqui `{ id, label, icon }` e o
 // caso correspondente no bloco de conteúdo mais abaixo (mesmo esquema de GestaoCobrancasPage).
@@ -29,9 +30,6 @@ const TABS = [
   { id: 'contas', label: 'Contas Bancárias', icon: CreditCard },
   { id: 'configuracoes', label: 'Configurações', icon: Settings },
 ];
-
-const CLASSE_DATA =
-  'w-full min-w-0 rounded-lg border border-gray-200 px-3 py-2 text-sm text-gray-800 focus:border-primary-400 focus:outline-none focus:ring-2 focus:ring-primary-100 disabled:bg-gray-50 disabled:text-gray-400';
 
 const STATUS_CONTAS_OPCOES = [
   { value: 'ENABLED', label: 'Ativa' },
@@ -116,12 +114,10 @@ export default function SaldoContasBancariasPage() {
     atualizarParams({ empresa_id: novoId || null, company_ids: null, bancos: null });
   }
 
-  // Um input de data só dispara onChange com '' quando é apagado/incompleto; ignorar isso
-  // deixa o valor anterior (o padrão é sempre a semana atual, não existe "sem data"). Qualquer
-  // dia escolhido vira a semana (domingo–sábado) que o contém — só se escolhe UM dia; a tela
-  // sempre resolve e mostra a semana inteira.
-  function handleSemana(valor) {
-    if (valor) atualizarParams({ semana: domingoDaSemana(valor) });
+  // SeletorSemana já entrega sempre o domingo (ISO) da semana escolhida — nada pra normalizar
+  // aqui, só gravar na URL.
+  function handleSemana(domingoIso) {
+    atualizarParams({ semana: domingoIso });
   }
 
   // Quem só tem 1 empresa já vem com ela preenchida e travada.
@@ -318,22 +314,12 @@ export default function SaldoContasBancariasPage() {
                   />
                 </div>
 
-                {/* Um dia só escolhe a semana inteira (pedido do usuário) — o campo mostra o
-                    domingo, e o texto embaixo confirma o intervalo resolvido (domingo–sábado),
-                    já que o valor bruto do input (sempre um domingo) sozinho não deixa óbvio
-                    que é uma semana inteira, não um dia avulso. */}
-                <div className="sm:min-w-44 sm:max-w-56 sm:flex-1">
+                {/* Calendário próprio (SeletorSemana): mostra o intervalo por extenso e, ao
+                    passar o mouse por cima de um dia no painel, colore a semana inteira
+                    daquela linha — prévia de qual semana seria escolhida (pedido do usuário). */}
+                <div className="sm:min-w-64 sm:max-w-72 sm:flex-1">
                   <label className="mb-1 block text-sm font-medium text-gray-700">Semana</label>
-                  <input
-                    type="date"
-                    value={dataInicio}
-                    onChange={(e) => handleSemana(e.target.value)}
-                    disabled={semEmpresa}
-                    className={CLASSE_DATA}
-                  />
-                  <p className="mt-1 truncate text-xs text-gray-400">
-                    {formatarDataBR(dataInicio)} – {formatarDataBR(dataFim)}
-                  </p>
+                  <SeletorSemana value={dataInicio} onChange={handleSemana} disabled={semEmpresa} />
                 </div>
               </>
             )}
