@@ -1,5 +1,5 @@
 import { useCallback, useEffect, useRef, useState } from 'react';
-import { Landmark, Loader2, Search, Upload, X } from 'lucide-react';
+import { Landmark, Loader2, Upload, X } from 'lucide-react';
 import { listBancosCadastro, removerLogoBanco, salvarLogoBanco } from '../../../api/bancos.api';
 import { redimensionarLogoBanco } from '../../../utils/imagemLogoBanco';
 import { useConfirm } from '../../../confirm/ConfirmContext';
@@ -38,11 +38,12 @@ function LogoCelula({ logo, nome }) {
 // bancos-api.client.js), com upload de logomarca por banco. A logo enviada aqui sobrepõe a
 // oficial em qualquer lugar do sistema que mostre a logo de um banco (ex.: a matriz da aba
 // Saldos das Contas), na hora — sem precisar de deploy nem esperar cache nenhum vencer.
-export default function BancosTab() {
+//
+// A busca mora no card do topo da página (junto do filtro de Empresa) — aqui embaixo só os
+// registros (pedido do usuário), então este componente recebe `search` pronto por prop.
+export default function BancosTab({ search = '' }) {
   const confirm = useConfirm();
   const [bancos, setBancos] = useState([]);
-  const [total, setTotal] = useState(0);
-  const [search, setSearch] = useState('');
   const [loading, setLoading] = useState(true);
   const [processandoCodigo, setProcessandoCodigo] = useState(null);
   const [erroPorCodigo, setErroPorCodigo] = useState({});
@@ -55,7 +56,6 @@ export default function BancosTab() {
     try {
       const result = await listBancosCadastro({ search: searchTerm });
       setBancos(result.data);
-      setTotal(result.pagination.total);
     } finally {
       setLoading(false);
     }
@@ -128,32 +128,11 @@ export default function BancosTab() {
 
   return (
     <div className="rounded-card rounded-tl-none bg-white shadow-card">
-      <div className="flex flex-col gap-3 p-5 pb-4 sm:flex-row sm:items-center sm:justify-between">
-        <div>
-          <h2 className="text-sm font-semibold text-gray-900">Bancos</h2>
-          <p className="text-xs text-gray-500">
-            {loading && bancos.length === 0
-              ? 'Carregando...'
-              : `${total} banco${total === 1 ? '' : 's'} brasileiro${total === 1 ? '' : 's'}`}
-          </p>
-        </div>
-        <div className="relative w-full sm:max-w-xs">
-          <Search size={15} className="pointer-events-none absolute left-3 top-1/2 -translate-y-1/2 text-gray-400" />
-          <input
-            type="text"
-            value={search}
-            onChange={(e) => setSearch(e.target.value)}
-            placeholder="Buscar por código ou nome..."
-            className="w-full rounded-lg border border-gray-200 py-2 pl-9 pr-3 text-sm focus:outline-none focus:ring-2 focus:ring-primary-100"
-          />
-        </div>
-      </div>
-
       {/* Um único input de arquivo compartilhado por todas as linhas — abrirSeletor() marca
           qual código está "no alvo" antes de disparar o clique nele. */}
       <input ref={fileInputRef} type="file" accept="image/*" onChange={handleArquivoSelecionado} className="hidden" />
 
-      <div className="border-t border-gray-100 px-5 pb-5">
+      <div className="px-5 pb-5 pt-5">
         {loading ? (
           <div className="py-12 text-center text-sm text-gray-400">Carregando...</div>
         ) : bancos.length === 0 ? (

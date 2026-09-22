@@ -1,17 +1,11 @@
 import { Fragment, useCallback, useEffect, useMemo, useState } from 'react';
 import { useNavigate } from 'react-router-dom';
-import { Landmark, Minus, Plus, RefreshCw, Search, TriangleAlert } from 'lucide-react';
-import SearchableSelect from '../../../components/SearchableSelect';
+import { Landmark, Minus, Plus, TriangleAlert } from 'lucide-react';
 import LogoBanco from './LogoBanco';
-import { listBancos, listContas, gerarContasBancarias } from '../../../api/contasBancariasSienge.api';
+import { listBancos, listContas } from '../../../api/contasBancariasSienge.api';
 import { OPCOES_CLASSIFICACAO } from './constantes';
 
 const LIMIT = 2000; // mesma estratégia de sempre carregar tudo e agrupar no navegador (ver SaldosContasTab.jsx)
-
-const STATUS_OPCOES = [
-  { value: 'ENABLED', label: 'Ativa' },
-  { value: 'DISABLED', label: 'Inativa' },
-];
 
 // "Sem classificação" precisa aparecer AQUI (diferente da matriz de Saldos das Contas, que
 // esconde essas contas de propósito): este é o cadastro, o lugar onde justamente se
@@ -25,21 +19,17 @@ const GRUPOS_CADASTRO = [...OPCOES_CLASSIFICACAO, { value: SEM_CLASSIFICACAO, la
 // Saldos das Contas (nível 1 = classificação, nível 2 = conta, cabeçalho e coluna de nomes
 // grudados rolando a página), sem as colunas de dia — aqui a linha é a própria conta, e
 // clicar nela abre a edição (banco, classificação, agência/conta/dígito, saldo inicial).
-export default function ContasTab({ empresaId }) {
+//
+// Busca, status, empresas e o botão "Atualizar" (sincronizar com o Sienge) moram no card do
+// topo da página, junto do filtro de Empresa — aqui embaixo só os registros (pedido do
+// usuário), exatamente como as outras abas desta tela.
+export default function ContasTab({ empresaId, search = '', status = [], companyIds = [], refreshToken = 0, erroAtualizar = '' }) {
   const navigate = useNavigate();
 
   const [contas, setContas] = useState(null);
   const [carregando, setCarregando] = useState(false);
   const [erroCarga, setErroCarga] = useState('');
   const [abertos, setAbertos] = useState([]);
-
-  const [search, setSearch] = useState('');
-  const [statusFiltro, setStatusFiltro] = useState([]);
-  const [empresasFiltro, setEmpresasFiltro] = useState([]);
-  const [empresasOpcoes, setEmpresasOpcoes] = useState([]);
-
-  const [atualizando, setAtualizando] = useState(false);
-  const [erroAtualizar, setErroAtualizar] = useState('');
 
   // Lista completa de bancos (oficiais + customizados) só pra desenhar a logomarca de cada
   // conta — independente do empresaId (ver bancos-api.client.js), diferente do endpoint de
@@ -58,31 +48,28 @@ export default function ContasTab({ empresaId }) {
     }
     setCarregando(true);
     setErroCarga('');
-    listContas(empresaId, { page: 1, limit: LIMIT, search, status: statusFiltro, companyIds: empresasFiltro })
-      .then((result) => {
-        setContas(result.data);
-        setEmpresasOpcoes(
-          result.empresas.map((e) => ({ value: String(e.company_id), label: e.company_name || `Empresa ${e.company_id}` }))
-        );
-      })
+    listContas(empresaId, { page: 1, limit: LIMIT, search, status, companyIds })
+      .then((result) => setContas(result.data))
       .catch((err) => {
         setContas(null);
         setErroCarga(err.response?.data?.message || 'Não foi possível carregar as contas bancárias.');
       })
       .finally(() => setCarregando(false));
-  }, [empresaId, search, statusFiltro, empresasFiltro]);
+  }, [empresaId, search, status, companyIds]);
 
+  // Debounce pra busca digitada; `refreshToken` (botão Atualizar) também passa por aqui —
+  // não precisa reagir na hora, um leve atraso não faz diferença pra uma sincronização.
   useEffect(() => {
     const timeout = setTimeout(carregar, 300);
     return () => clearTimeout(timeout);
-  }, [carregar]);
+  }, [carregar, refreshToken]);
 
   // Trocar de empresa não é possível dentro desta aba (é o seletor do topo da página) — só
-  // reseta o drilldown quando os FILTROS DESTA aba mudam, senão a conta aberta pode sumir da
-  // lista nova com o acordeão ainda "aberto" apontando pra nada.
+  // reseta o drilldown quando os FILTROS mudam, senão a conta aberta pode sumir da lista nova
+  // com o acordeão ainda "aberto" apontando pra nada.
   useEffect(() => {
     setAbertos([]);
-  }, [empresaId, statusFiltro, empresasFiltro]);
+  }, [empresaId, search, status, companyIds]);
 
   const grupos = useMemo(() => {
     if (!contas) return [];
@@ -98,26 +85,6 @@ export default function ContasTab({ empresaId }) {
 
   function abrirConta(conta) {
     navigate(`/cadastros/contas-bancarias/${empresaId}/${conta.company_id}/${encodeURIComponent(conta.numero_conta)}`);
-  }
-
-  const temFiltro = search || statusFiltro.length > 0 || empresasFiltro.length > 0;
-  function limparFiltros() {
-    setSearch('');
-    setStatusFiltro([]);
-    setEmpresasFiltro([]);
-  }
-
-  async function handleAtualizar() {
-    setErroAtualizar('');
-    setAtualizando(true);
-    try {
-      await gerarContasBancarias(Number(empresaId));
-      carregar();
-    } catch (err) {
-      setErroAtualizar(err.response?.data?.message || 'Não foi possível atualizar as contas bancárias.');
-    } finally {
-      setAtualizando(false);
-    }
   }
 
   if (!empresaId) {
@@ -136,62 +103,14 @@ export default function ContasTab({ empresaId }) {
 
   return (
     <div className="rounded-card rounded-tl-none bg-white shadow-card">
-      <div className="flex flex-col gap-3 p-5 pb-4 xl:flex-row xl:items-center xl:justify-between">
-        <h2 className="shrink-0 text-sm font-semibold text-gray-900">Contas Bancárias</h2>
-
-        <div className="flex flex-col gap-3 sm:flex-row sm:flex-wrap sm:items-center sm:justify-end">
-          <div className="relative w-full sm:w-56">
-            <Search size={15} className="pointer-events-none absolute left-3 top-1/2 -translate-y-1/2 text-gray-400" />
-            <input
-              type="text"
-              value={search}
-              onChange={(e) => setSearch(e.target.value)}
-              placeholder="Buscar por conta, nome ou banco..."
-              className="w-full rounded-lg border border-gray-200 py-2 pl-9 pr-3 text-sm focus:outline-none focus:ring-2 focus:ring-primary-100"
-            />
-          </div>
-          <div className="w-full sm:w-36">
-            <SearchableSelect
-              multiple
-              value={statusFiltro}
-              onChange={setStatusFiltro}
-              options={STATUS_OPCOES}
-              placeholder="Todos os status"
-            />
-          </div>
-          <div className="w-full sm:w-64">
-            <SearchableSelect
-              multiple
-              value={empresasFiltro}
-              onChange={setEmpresasFiltro}
-              options={empresasOpcoes}
-              placeholder="Todas as empresas"
-            />
-          </div>
-          {temFiltro && (
-            <button type="button" onClick={limparFiltros} className="shrink-0 whitespace-nowrap text-sm text-gray-500 hover:text-gray-700">
-              Limpar filtros
-            </button>
-          )}
-          <button
-            type="button"
-            onClick={handleAtualizar}
-            disabled={atualizando}
-            title="Atualizar a partir do Sienge"
-            className="flex shrink-0 items-center justify-center gap-2 rounded-lg border border-gray-200 px-3 py-2 text-sm text-gray-600 transition-colors hover:bg-gray-50 disabled:opacity-60"
-          >
-            <RefreshCw size={16} className={atualizando ? 'animate-spin' : ''} />
-            Atualizar
-          </button>
-        </div>
-      </div>
-
-      {erroAtualizar && <div className="mx-5 mb-3 rounded-lg bg-red-50 px-3 py-2 text-xs text-red-600">{erroAtualizar}</div>}
+      {erroAtualizar && (
+        <div className="mx-5 mt-4 mb-3 rounded-lg bg-red-50 px-3 py-2 text-xs text-red-600">{erroAtualizar}</div>
+      )}
 
       {carregando ? (
-        <div className="border-t border-gray-100 py-12 text-center text-sm text-gray-400">Carregando...</div>
+        <div className="py-12 text-center text-sm text-gray-400">Carregando...</div>
       ) : erroCarga ? (
-        <div className="flex flex-col items-center gap-2 border-t border-gray-100 py-14 text-center">
+        <div className="flex flex-col items-center gap-2 py-14 text-center">
           <TriangleAlert size={26} className="text-red-400" />
           <p className="text-sm text-gray-600">{erroCarga}</p>
           <button
@@ -203,7 +122,7 @@ export default function ContasTab({ empresaId }) {
           </button>
         </div>
       ) : semContas ? (
-        <div className="flex flex-col items-center gap-1 border-t border-gray-100 py-14 text-center">
+        <div className="flex flex-col items-center gap-1 py-14 text-center">
           <Landmark size={26} className="mb-1 text-gray-300" />
           <p className="text-sm text-gray-600">Nenhuma conta bancária encontrada.</p>
           <p className="max-w-sm text-xs text-gray-400">
@@ -213,7 +132,7 @@ export default function ContasTab({ empresaId }) {
       ) : (
         // Mesmo motivo de SaldosContasTab.jsx: sem overflow próprio aqui — quem rola é o
         // <main> da página, e o cabeçalho/coluna de nomes ficam grudados nele.
-        <div className="border-t border-gray-100">
+        <div className="rounded-b-card">
           <table className="w-full border-separate border-spacing-0 text-left text-xs" style={{ tableLayout: 'fixed' }}>
             <colgroup>
               <col style={{ width: '34%' }} />

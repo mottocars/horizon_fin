@@ -1,11 +1,12 @@
 import { useEffect, useMemo, useRef, useState } from 'react';
 import { useSearchParams } from 'react-router-dom';
-import { CreditCard, Landmark, RefreshCw, Settings, TriangleAlert, Wallet } from 'lucide-react';
+import { CreditCard, Landmark, RefreshCw, Search, Settings, TriangleAlert, Wallet } from 'lucide-react';
 import Card from '../../../components/Card';
 import Tabs from '../../../components/Tabs';
 import SearchableSelect from '../../../components/SearchableSelect';
 import { listEmpresas } from '../../../api/empresas.api';
 import { getFiltrosSaldos } from '../../../api/saldoContasBancarias.api';
+import { gerarContasBancarias } from '../../../api/contasBancariasSienge.api';
 import { nomeExibicaoEmpresa } from '../../../utils/empresa';
 import { useEmpresaTravada } from '../../../hooks/useEmpresaTravada';
 import SaldosContasTab from './SaldosContasTab';
@@ -29,6 +30,11 @@ const TABS = [
 
 const CLASSE_DATA =
   'w-full min-w-0 rounded-lg border border-gray-200 px-3 py-2 text-sm text-gray-800 focus:border-primary-400 focus:outline-none focus:ring-2 focus:ring-primary-100 disabled:bg-gray-50 disabled:text-gray-400';
+
+const STATUS_CONTAS_OPCOES = [
+  { value: 'ENABLED', label: 'Ativa' },
+  { value: 'DISABLED', label: 'Inativa' },
+];
 
 // Empresa, aba e filtros vivem na URL (não em useState local) pelo mesmo motivo da Gestão
 // de Cobranças: o "Voltar" do navegador devolve o usuário pro mesmo lugar, com os mesmos
@@ -59,6 +65,14 @@ export default function SaldoContasBancariasPage() {
   const erroPeriodo = validarPeriodo(dataInicio, dataFim);
 
   const [refreshToken, setRefreshToken] = useState(0);
+
+  // Filtros das abas Bancos e Contas Bancárias — não vivem na URL (diferente dos de Saldos
+  // das Contas) porque são só conveniência de busca no navegador, sem link compartilhável.
+  const [bancosSearch, setBancosSearch] = useState('');
+  const [contasSearch, setContasSearch] = useState('');
+  const [contasStatus, setContasStatus] = useState([]);
+  const [atualizandoContas, setAtualizandoContas] = useState(false);
+  const [erroAtualizarContas, setErroAtualizarContas] = useState('');
 
   // Duas alterações seguidas antes de o React re-renderizar (ex.: mexer nas duas datas em
   // sequência rápida) partiriam do mesmo `searchParams` velho e a segunda apagaria a
@@ -117,11 +131,11 @@ export default function SaldoContasBancariasPage() {
   const [filtros, setFiltros] = useState({ empresas: [], bancos: [] });
   const [loadingFiltros, setLoadingFiltros] = useState(false);
 
-  // Só busca nas abas que realmente usam isso (Saldos das Contas) — nas outras (Bancos,
-  // Contas Bancárias, Configurações) seria 2 consultas ao banco à toa, pra opções de filtro
-  // que nem aparecem na tela.
+  // Busca nas abas que usam essas opções (Saldos das Contas e Contas Bancárias — a lista de
+  // "Empresas" do Sienge é a mesma nas duas, ver contas.service.js/saldos.service.js) — nas
+  // outras (Bancos, Configurações) seria uma consulta ao banco à toa.
   useEffect(() => {
-    if (!empresaId || abaAtiva !== 'saldos') {
+    if (!empresaId || (abaAtiva !== 'saldos' && abaAtiva !== 'contas')) {
       setFiltros({ empresas: [], bancos: [] });
       return;
     }
@@ -156,14 +170,37 @@ export default function SaldoContasBancariasPage() {
 
   const semEmpresa = !empresaId;
 
+  // Sincroniza as contas bancárias a partir do Sienge e, ao terminar, reaproveita o mesmo
+  // `refreshToken` de Saldos das Contas pra recarregar tanto a tabela da aba Contas Bancárias
+  // quanto as opções de "Empresas" (podem ter mudado com a sincronização).
+  async function handleAtualizarContas() {
+    setErroAtualizarContas('');
+    setAtualizandoContas(true);
+    try {
+      await gerarContasBancarias(Number(empresaId));
+      setRefreshToken((n) => n + 1);
+    } catch (err) {
+      setErroAtualizarContas(err.response?.data?.message || 'Não foi possível atualizar as contas bancárias.');
+    } finally {
+      setAtualizandoContas(false);
+    }
+  }
+
+  const temFiltroContas = contasSearch || contasStatus.length > 0 || companyIds.length > 0;
+  function limparFiltrosContas() {
+    setContasSearch('');
+    setContasStatus([]);
+    atualizarParams({ company_ids: null });
+  }
+
   return (
     <div className="space-y-4">
       <Card className="shrink-0">
         <div className="flex flex-col gap-4 lg:flex-row lg:items-end lg:justify-between">
           {/* flex-wrap: até 6 controles na aba Saldos das Contas — em telas de notebook a barra
-              quebra numa segunda linha em vez de espremer os campos até ficarem ilegíveis. As
-              outras abas (Bancos/Contas Bancárias/Configurações) só têm o seletor de Empresa —
-              o resto dos filtros é específico da matriz de saldos. */}
+              quebra numa segunda linha em vez de espremer os campos até ficarem ilegíveis. Todo
+              filtro de cada aba mora aqui, junto do seletor de Empresa — abaixo das abas só os
+              registros (pedido do usuário). Configurações não tem filtro nenhum ainda. */}
           <div className="flex min-w-0 flex-col gap-3 sm:flex-1 sm:flex-row sm:flex-wrap">
             <div className="sm:min-w-44 sm:max-w-xs sm:flex-1">
               <label className="mb-1 block text-sm font-medium text-gray-700">Empresa</label>
@@ -246,6 +283,66 @@ export default function SaldoContasBancariasPage() {
                 </div>
               </>
             )}
+
+            {abaAtiva === 'bancos' && (
+              <div className="sm:min-w-56 sm:max-w-sm sm:flex-1">
+                <label className="mb-1 block text-sm font-medium text-gray-700">Buscar</label>
+                <div className="relative">
+                  <Search size={15} className="pointer-events-none absolute left-3 top-1/2 -translate-y-1/2 text-gray-400" />
+                  <input
+                    type="text"
+                    value={bancosSearch}
+                    onChange={(e) => setBancosSearch(e.target.value)}
+                    placeholder="Buscar por código ou nome..."
+                    className="w-full rounded-lg border border-gray-200 py-2 pl-9 pr-3 text-sm focus:outline-none focus:ring-2 focus:ring-primary-100"
+                  />
+                </div>
+              </div>
+            )}
+
+            {abaAtiva === 'contas' && (
+              <>
+                <div className="sm:min-w-56 sm:max-w-sm sm:flex-1">
+                  <label className="mb-1 block text-sm font-medium text-gray-700">Buscar</label>
+                  <div className="relative">
+                    <Search size={15} className="pointer-events-none absolute left-3 top-1/2 -translate-y-1/2 text-gray-400" />
+                    <input
+                      type="text"
+                      value={contasSearch}
+                      onChange={(e) => setContasSearch(e.target.value)}
+                      disabled={semEmpresa}
+                      placeholder="Buscar por conta, nome ou banco..."
+                      className="w-full rounded-lg border border-gray-200 py-2 pl-9 pr-3 text-sm focus:outline-none focus:ring-2 focus:ring-primary-100 disabled:bg-gray-50 disabled:text-gray-400"
+                    />
+                  </div>
+                </div>
+
+                <div className="sm:min-w-36 sm:max-w-44 sm:flex-1">
+                  <label className="mb-1 block text-sm font-medium text-gray-700">Status</label>
+                  <SearchableSelect
+                    multiple
+                    value={contasStatus}
+                    onChange={setContasStatus}
+                    disabled={semEmpresa}
+                    options={STATUS_CONTAS_OPCOES}
+                    placeholder="Todos os status"
+                  />
+                </div>
+
+                <div className="sm:min-w-44 sm:max-w-xs sm:flex-1">
+                  <label className="mb-1 block text-sm font-medium text-gray-700">Empresas</label>
+                  <SearchableSelect
+                    multiple
+                    value={companyIds}
+                    onChange={(ids) => atualizarParams({ company_ids: ids })}
+                    disabled={semEmpresa || loadingFiltros}
+                    options={opcoesEmpresasSienge}
+                    placeholder={semEmpresa ? 'Selecione a empresa primeiro' : loadingFiltros ? 'Carregando...' : 'Todas as empresas'}
+                    emptyMessage="Nenhuma empresa encontrada."
+                  />
+                </div>
+              </>
+            )}
           </div>
 
           {abaAtiva === 'saldos' && (
@@ -259,6 +356,30 @@ export default function SaldoContasBancariasPage() {
                 className="flex shrink-0 items-center justify-center rounded-lg bg-primary-600 p-2 text-white transition-colors hover:bg-primary-700 disabled:cursor-not-allowed disabled:opacity-60"
               >
                 <RefreshCw size={18} />
+              </button>
+            </div>
+          )}
+
+          {abaAtiva === 'contas' && (
+            <div className="flex shrink-0 items-center gap-2">
+              {temFiltroContas && (
+                <button
+                  type="button"
+                  onClick={limparFiltrosContas}
+                  className="shrink-0 whitespace-nowrap text-sm text-gray-500 hover:text-gray-700"
+                >
+                  Limpar filtros
+                </button>
+              )}
+              <button
+                type="button"
+                onClick={handleAtualizarContas}
+                disabled={semEmpresa || atualizandoContas}
+                title="Atualizar a partir do Sienge"
+                className="flex shrink-0 items-center justify-center gap-2 rounded-lg border border-gray-200 px-3 py-2 text-sm text-gray-600 transition-colors hover:bg-gray-50 disabled:cursor-not-allowed disabled:opacity-60"
+              >
+                <RefreshCw size={16} className={atualizandoContas ? 'animate-spin' : ''} />
+                Atualizar
               </button>
             </div>
           )}
@@ -288,9 +409,18 @@ export default function SaldoContasBancariasPage() {
             />
           ))}
 
-        {abaAtiva === 'bancos' && <BancosTab />}
+        {abaAtiva === 'bancos' && <BancosTab search={bancosSearch} />}
 
-        {abaAtiva === 'contas' && <ContasTab empresaId={empresaId} />}
+        {abaAtiva === 'contas' && (
+          <ContasTab
+            empresaId={empresaId}
+            search={contasSearch}
+            status={contasStatus}
+            companyIds={companyIds}
+            refreshToken={refreshToken}
+            erroAtualizar={erroAtualizarContas}
+          />
+        )}
 
         {abaAtiva === 'configuracoes' && (
           <AbaEmConstrucao
