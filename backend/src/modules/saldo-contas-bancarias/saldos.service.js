@@ -142,26 +142,62 @@ async function getSaldos(empresaId, { dataInicio, dataFim, companyIds = [], clas
   };
 }
 
-// Dia liberado pra lançar saldo nesta empresa. Sem linha em saldos_periodo_aberto ainda
-// (ninguém nunca abriu um período): vale o "hoje" que o PRÓPRIO NAVEGADOR manda — evita
-// qualquer divergência de fuso entre o container (UTC) e o Brasil por conta de um "hoje"
-// calculado aqui no servidor.
-async function getPeriodoAberto(empresaId, hojeCliente) {
+const brData = (iso) => iso.split('-').reverse().join('/');
+
+// Dia liberado pra lançar saldo nesta empresa AGORA — null se nenhum (cadeado trancado,
+// nada é editável até alguém abrir um período explicitamente; ver abrirPeriodo).
+async function getPeriodoAberto(empresaId) {
   const { rows } = await pool.query(
-    `SELECT TO_CHAR(data_aberta, 'YYYY-MM-DD') AS data FROM saldos_periodo_aberto WHERE empresa_id = $1`,
+    `SELECT TO_CHAR(data, 'YYYY-MM-DD') AS data FROM saldos_periodos WHERE empresa_id = $1 AND status = 'ABERTO'`,
     [empresaId]
   );
-  return { data: rows[0]?.data || hojeCliente };
+  return { data: rows[0]?.data || null };
 }
 
-async function abrirPeriodo(empresaId, usuarioId, data) {
+// Abre um período (um dia) pra lançamento. Regras do usuário: só 1 aberto por vez (precisa
+// encerrar o atual antes de abrir outro — o índice único parcial garante isso mesmo sob
+// concorrência) e reabrir um dia já ENCERRADO exige confirmação explícita (`reabrirEncerrado`)
+// — sem ela, devolve um erro com `code: 'PERIODO_ENCERRADO'` pra tela perguntar antes.
+async function abrirPeriodo(empresaId, usuarioId, data, reabrirEncerrado) {
+  const { rows: abertos } = await pool.query(
+    `SELECT TO_CHAR(data, 'YYYY-MM-DD') AS data FROM saldos_periodos WHERE empresa_id = $1 AND status = 'ABERTO'`,
+    [empresaId]
+  );
+  if (abertos[0] && abertos[0].data !== data) {
+    throw erro(409, `Já existe um período aberto (${brData(abertos[0].data)}). Encerre-o antes de abrir outro.`);
+  }
+
+  const { rows: existente } = await pool.query(
+    `SELECT status FROM saldos_periodos WHERE empresa_id = $1 AND data = $2`,
+    [empresaId, data]
+  );
+  if (existente[0]?.status === 'ENCERRADO' && !reabrirEncerrado) {
+    const err = erro(409, `Este período (${brData(data)}) já foi encerrado. Deseja reabri-lo?`);
+    err.code = 'PERIODO_ENCERRADO';
+    throw err;
+  }
+
   await pool.query(
-    `INSERT INTO saldos_periodo_aberto (empresa_id, data_aberta, atualizado_por)
-     VALUES ($1, $2, $3)
-     ON CONFLICT (empresa_id) DO UPDATE SET data_aberta = EXCLUDED.data_aberta, atualizado_por = EXCLUDED.atualizado_por, atualizado_em = NOW()`,
+    `INSERT INTO saldos_periodos (empresa_id, data, status, aberto_por, aberto_em)
+     VALUES ($1, $2, 'ABERTO', $3, NOW())
+     ON CONFLICT (empresa_id, data) DO UPDATE SET
+       status = 'ABERTO', aberto_por = EXCLUDED.aberto_por, aberto_em = NOW(),
+       encerrado_por = NULL, encerrado_em = NULL`,
     [empresaId, data, usuarioId]
   );
   return { data };
+}
+
+// Encerra o período ABERTO desta empresa (se houver) — o cadeado volta a ficar trancado.
+async function encerrarPeriodo(empresaId, usuarioId) {
+  const { rows } = await pool.query(
+    `UPDATE saldos_periodos SET status = 'ENCERRADO', encerrado_por = $2, encerrado_em = NOW()
+     WHERE empresa_id = $1 AND status = 'ABERTO'
+     RETURNING TO_CHAR(data, 'YYYY-MM-DD') AS data`,
+    [empresaId, usuarioId]
+  );
+  if (!rows[0]) throw erro(400, 'Nenhum período está aberto.');
+  return { data: null };
 }
 
 // Grava um lote de saldos numa transação só: saldo = null apaga o lançamento do dia
@@ -169,11 +205,14 @@ async function abrirPeriodo(empresaId, usuarioId, data) {
 // Só aceita lançar no dia liberado (ver getPeriodoAberto) — é a trava de verdade por trás
 // do botão de cadeado da tela: mesmo alguém batendo direto na API, sem passar pela grade
 // (que já desabilita os outros dias), o servidor recusa.
-async function salvarSaldos(empresaId, usuarioId, itens, hojeCliente) {
-  const { data: dataAberta } = await getPeriodoAberto(empresaId, hojeCliente);
+async function salvarSaldos(empresaId, usuarioId, itens) {
+  const { data: dataAberta } = await getPeriodoAberto(empresaId);
   const foraDoPeriodo = itens.some((i) => i.data !== dataAberta);
   if (foraDoPeriodo) {
-    throw erro(409, `Só é possível lançar saldo no dia liberado (${dataAberta.split('-').reverse().join('/')}). Abra o período para lançar em outro dia.`);
+    const msg = dataAberta
+      ? `Só é possível lançar saldo no dia liberado (${brData(dataAberta)}). Abra o período para lançar em outro dia.`
+      : 'Nenhum período está aberto para lançamento. Abra um período primeiro.';
+    throw erro(409, msg);
   }
 
   // Mesmo (conta, dia) duas vezes no lote faria o ON CONFLICT tentar mexer na mesma
@@ -236,5 +275,6 @@ module.exports = {
   salvarSaldos,
   getPeriodoAberto,
   abrirPeriodo,
+  encerrarPeriodo,
   SEM_CLASSIFICACAO,
 };

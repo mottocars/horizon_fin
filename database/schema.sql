@@ -805,16 +805,26 @@ CREATE TABLE saldos_contas_bancarias (
 
 CREATE INDEX idx_saldos_contas_bancarias_data ON saldos_contas_bancarias (empresa_id, data);
 
--- Dia liberado pra lançar saldo na tela Operações > Saldo Contas Bancárias — só esse dia
--- aceita gravação (fora dele, salvarSaldos recusa; ver saldos.service.js). 1 linha por
--- empresa; sem linha ainda = nenhum usuário abriu um período nesta empresa, então vale o
--- "hoje" que o próprio navegador manda (padrão antes de qualquer ação explícita).
-CREATE TABLE saldos_periodo_aberto (
-    empresa_id     INTEGER PRIMARY KEY REFERENCES empresas(id) ON DELETE CASCADE,
-    data_aberta    DATE NOT NULL,
-    atualizado_por INTEGER REFERENCES usuarios(id) ON DELETE SET NULL,
-    atualizado_em  TIMESTAMP DEFAULT NOW()
+-- Histórico dos dias liberados pra lançar saldo na tela Operações > Saldo Contas Bancárias
+-- (o cadeado) — 1 linha por dia que já foi aberto alguma vez, nunca apagada. status=ABERTO é
+-- o dia liberado AGORA (só esse aceita gravação em salvarSaldos; ver saldos.service.js); sem
+-- nenhuma linha ABERTO pra uma empresa = cadeado trancado, nada é editável. status=ENCERRADO
+-- é um dia que já foi usado e fechado — abrir de novo o mesmo dia pede confirmação na tela
+-- ("já foi encerrado, deseja reabrir?"). Índice único parcial garante no máximo 1 ABERTO por
+-- empresa de cada vez (regra do usuário: não dá pra abrir outro sem encerrar o atual).
+CREATE TABLE saldos_periodos (
+    id             SERIAL PRIMARY KEY,
+    empresa_id     INTEGER NOT NULL REFERENCES empresas(id) ON DELETE CASCADE,
+    data           DATE NOT NULL,
+    status         VARCHAR(10) NOT NULL DEFAULT 'ABERTO', -- ABERTO ou ENCERRADO
+    aberto_por     INTEGER REFERENCES usuarios(id) ON DELETE SET NULL,
+    aberto_em      TIMESTAMP DEFAULT NOW(),
+    encerrado_por  INTEGER REFERENCES usuarios(id) ON DELETE SET NULL,
+    encerrado_em   TIMESTAMP,
+    UNIQUE (empresa_id, data)
 );
+
+CREATE UNIQUE INDEX idx_saldos_periodos_aberto_unico ON saldos_periodos (empresa_id) WHERE status = 'ABERTO';
 
 -- Logomarca customizada de um banco (cadastro de Bancos, aba Bancos de Operações > Saldo
 -- Contas Bancárias) — sobrepõe a logo oficial da BrasilAPI pra aquele código enquanto

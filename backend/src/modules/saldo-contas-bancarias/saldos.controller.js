@@ -58,13 +58,13 @@ const itemSchema = z.object({
 
 const salvarSchema = z.object({
   itens: z.array(itemSchema).min(1, 'Nenhum saldo informado.').max(MAX_ITENS_POR_LOTE, 'Lote grande demais.'),
-  // "Hoje" calculado no NAVEGADOR (não no servidor) — é o fallback usado quando a empresa
-  // ainda não tem período aberto salvo; ver o comentário de getPeriodoAberto no service.
-  hoje: z.string().refine(dataValida, 'Data inválida.'),
 });
 
 const abrirPeriodoSchema = z.object({
   data: z.string().refine(dataValida, 'Data inválida.'),
+  // true quando a tela já perguntou "esse período já foi encerrado, quer reabrir?" e o
+  // usuário confirmou — ver o código PERIODO_ENCERRADO em saldos.service.js::abrirPeriodo.
+  reabrirEncerrado: z.boolean().optional().default(false),
 });
 
 async function acessoEmpresa(req) {
@@ -115,8 +115,8 @@ async function getSaldos(req, res, next) {
 async function salvarSaldos(req, res, next) {
   try {
     const empresaId = await acessoEmpresa(req);
-    const { itens, hoje } = salvarSchema.parse(req.body);
-    res.json(await service.salvarSaldos(empresaId, req.user.id, itens, hoje));
+    const { itens } = salvarSchema.parse(req.body);
+    res.json(await service.salvarSaldos(empresaId, req.user.id, itens));
   } catch (err) {
     tratarErroDeValidacao(err, next);
   }
@@ -125,9 +125,7 @@ async function salvarSaldos(req, res, next) {
 async function getPeriodoAberto(req, res, next) {
   try {
     const empresaId = await acessoEmpresa(req);
-    const hoje = (req.query.hoje || '').toString();
-    if (!dataValida(hoje)) throw badRequest('Informe a data de hoje (do navegador).');
-    res.json(await service.getPeriodoAberto(empresaId, hoje));
+    res.json(await service.getPeriodoAberto(empresaId));
   } catch (err) {
     tratarErroDeValidacao(err, next);
   }
@@ -136,11 +134,20 @@ async function getPeriodoAberto(req, res, next) {
 async function abrirPeriodo(req, res, next) {
   try {
     const empresaId = await acessoEmpresa(req);
-    const { data } = abrirPeriodoSchema.parse(req.body);
-    res.json(await service.abrirPeriodo(empresaId, req.user.id, data));
+    const { data, reabrirEncerrado } = abrirPeriodoSchema.parse(req.body);
+    res.json(await service.abrirPeriodo(empresaId, req.user.id, data, reabrirEncerrado));
   } catch (err) {
     tratarErroDeValidacao(err, next);
   }
 }
 
-module.exports = { getFiltros, getSaldos, salvarSaldos, getPeriodoAberto, abrirPeriodo };
+async function encerrarPeriodo(req, res, next) {
+  try {
+    const empresaId = await acessoEmpresa(req);
+    res.json(await service.encerrarPeriodo(empresaId, req.user.id));
+  } catch (err) {
+    tratarErroDeValidacao(err, next);
+  }
+}
+
+module.exports = { getFiltros, getSaldos, salvarSaldos, getPeriodoAberto, abrirPeriodo, encerrarPeriodo };

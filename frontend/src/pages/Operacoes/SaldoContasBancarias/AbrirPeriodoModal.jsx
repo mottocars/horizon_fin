@@ -3,12 +3,16 @@ import { Lock } from 'lucide-react';
 import Modal from '../../../components/Modal';
 import Button from '../../../components/Button';
 import { abrirPeriodoSaldos } from '../../../api/saldoContasBancarias.api';
-import { hojeISO } from './constantes';
+import { useConfirm } from '../../../confirm/ConfirmContext';
+import { formatarDataBR, hojeISO } from './constantes';
 
-// O campo de data sempre nasce em "hoje" (pedido do usuário) — não no dia atualmente
-// liberado — pra abrir a janela e só confirmar já ser o jeito rápido de voltar o
-// lançamento pro dia de hoje depois de ter corrigido algum dia passado.
+// Só o fluxo de ABRIR período (cadeado trancado -> clicar aqui). Encerrar o período aberto é
+// uma simples confirmação (useConfirm), disparada direto pela página — não precisa de modal
+// próprio. O campo de data sempre nasce em "hoje" (pedido do usuário), não no dia atualmente
+// aberto — não deveria ter nenhum aberto quando esta janela existe (o cadeado só fica azul,
+// clicável pra abrir, quando NADA está aberto).
 export default function AbrirPeriodoModal({ open, onClose, empresaId, onAberto }) {
+  const confirm = useConfirm();
   const [data, setData] = useState(hojeISO());
   const [salvando, setSalvando] = useState(false);
   const [erro, setErro] = useState('');
@@ -20,16 +24,38 @@ export default function AbrirPeriodoModal({ open, onClose, empresaId, onAberto }
     }
   }, [open]);
 
+  async function tentarAbrir(alvo, reabrirEncerrado) {
+    await abrirPeriodoSaldos(empresaId, alvo, reabrirEncerrado);
+    onAberto(alvo);
+    onClose();
+  }
+
   async function handleSubmit(e) {
     e.preventDefault();
     setErro('');
     setSalvando(true);
     try {
-      await abrirPeriodoSaldos(empresaId, data);
-      onAberto(data);
-      onClose();
+      await tentarAbrir(data, false);
     } catch (err) {
-      setErro(err.response?.data?.message || 'Não foi possível abrir o período.');
+      if (err.response?.data?.code === 'PERIODO_ENCERRADO') {
+        // Pergunta fora do modal de data (useConfirm por cima dele) — reaproveita o mesmo
+        // padrão usado em qualquer outra confirmação do sistema (ex.: remover logomarca).
+        const reabrir = await confirm({
+          title: 'Período já encerrado',
+          description: `O período de ${formatarDataBR(data)} já foi encerrado. Deseja reabri-lo?`,
+          confirmLabel: 'Reabrir período',
+          variant: 'warning',
+        });
+        if (reabrir) {
+          try {
+            await tentarAbrir(data, true);
+          } catch (err2) {
+            setErro(err2.response?.data?.message || 'Não foi possível reabrir o período.');
+          }
+        }
+      } else {
+        setErro(err.response?.data?.message || 'Não foi possível abrir o período.');
+      }
     } finally {
       setSalvando(false);
     }
@@ -40,7 +66,7 @@ export default function AbrirPeriodoModal({ open, onClose, empresaId, onAberto }
       <form onSubmit={handleSubmit} className="space-y-4">
         <p className="text-sm text-gray-500">
           Só o dia informado abaixo aceita lançamento de saldo — os demais ficam bloqueados até
-          você abrir outro período.
+          este período ser encerrado.
         </p>
 
         {erro && <div className="rounded-lg bg-red-50 px-3 py-2 text-sm text-red-600">{erro}</div>}

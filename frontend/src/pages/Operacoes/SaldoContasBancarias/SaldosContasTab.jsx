@@ -1,11 +1,10 @@
 import { Fragment, memo, useCallback, useEffect, useMemo, useRef, useState } from 'react';
-import { Check, Landmark, Loader2, LockOpen, Minus, Plus, TriangleAlert } from 'lucide-react';
+import { Check, Landmark, Loader2, Minus, Plus, TriangleAlert } from 'lucide-react';
 import { getSaldosContas, salvarSaldosContas } from '../../../api/saldoContasBancarias.api';
 import LogoBanco from './LogoBanco';
 import {
   GRUPOS_CLASSIFICACAO,
   formatarSaldo,
-  hojeISO,
   interpretarSaldo,
   listarDias,
   nomeMes,
@@ -18,9 +17,13 @@ import {
 const LARGURA_PRIMEIRA = 340;
 const LARGURA_DIA = 112;
 const ALTURA_MES = 28;
+// Cabeçalho do dia numa linha só (dia da semana + número lado a lado, pedido do usuário) —
+// bem mais baixo que o layout antigo, em duas linhas empilhadas.
+const ALTURA_DIA = 28;
 // A coluna de nomes é sticky: o que foca/rola por baixo dela precisa de margem, senão a
-// célula focada por teclado fica escondida atrás da coluna/cabeçalho fixos.
-const MARGEM_ROLAGEM = 'scroll-mt-[84px] scroll-mb-14 scroll-ml-[356px] scroll-mr-4';
+// célula focada por teclado fica escondida atrás da coluna/cabeçalho fixos. scroll-mt =
+// ALTURA_MES + ALTURA_DIA + uma folga pequena.
+const MARGEM_ROLAGEM = 'scroll-mt-[60px] scroll-mb-14 scroll-ml-[356px] scroll-mr-4';
 
 const tomNegativo = (valor) => (valor < 0 ? 'text-red-600' : 'text-gray-900');
 
@@ -332,7 +335,7 @@ export default function SaldosContasTab({
       setPendentes((n) => n + 1);
       setErroSalvar('');
       filaRef.current = filaRef.current
-        .then(() => salvarSaldosContas(empresaId, itens, hojeISO()))
+        .then(() => salvarSaldosContas(empresaId, itens))
         .then(() => setSalvoAlgumaVez(true))
         .catch((err) => {
           setErroSalvar(err.response?.data?.message || 'Não foi possível salvar. Recarregando os saldos...');
@@ -547,32 +550,38 @@ export default function SaldosContasTab({
                   </th>
                 ))}
               </tr>
-              <tr>
-                {dias.map((d) => (
-                  <th
-                    key={d.iso}
-                    id={d.hoje ? 'saldo-coluna-hoje' : undefined}
-                    className={`sticky z-20 border-b-2 border-l border-b-gray-300 border-l-gray-200 py-1.5 text-center font-medium ${
-                      d.fimDeSemana ? 'bg-gray-50' : 'bg-white'
-                    }`}
-                    style={{ top: ALTURA_MES }}
-                    title={`${d.semana}, ${String(d.dia).padStart(2, '0')}/${String(d.mes + 1).padStart(2, '0')}/${d.ano}${d.hoje ? ' (hoje)' : ''}`}
-                  >
-                    <span className={`block text-[10px] uppercase tracking-wide ${d.fimDeSemana ? 'text-gray-300' : 'text-gray-400'}`}>
-                      {d.semana}
-                    </span>
-                    <span
-                      className={`mx-auto mt-0.5 flex h-6 min-w-6 items-center justify-center rounded-full px-1 text-sm font-semibold tabular-nums ${
-                        d.hoje ? 'bg-primary-600 text-white' : d.fimDeSemana ? 'text-gray-400' : 'text-gray-800'
+              <tr style={{ height: ALTURA_DIA }}>
+                {dias.map((d) => {
+                  const aberto = d.iso === dataAberta;
+                  return (
+                    <th
+                      key={d.iso}
+                      id={d.hoje ? 'saldo-coluna-hoje' : undefined}
+                      className={`sticky z-20 border-b-2 border-l border-b-gray-300 border-l-gray-200 px-2 py-1 font-medium ${
+                        aberto ? 'bg-amber-100' : d.fimDeSemana ? 'bg-gray-50' : 'bg-white'
                       }`}
+                      style={{ top: ALTURA_MES }}
+                      title={`${d.semana}, ${String(d.dia).padStart(2, '0')}/${String(d.mes + 1).padStart(2, '0')}/${d.ano}${d.hoje ? ' (hoje)' : ''}${aberto ? ' — período aberto pra lançamento' : ''}`}
                     >
-                      {String(d.dia).padStart(2, '0')}
-                    </span>
-                    {/* Único dia com o cadeado aberto — as células dele são as únicas
-                        editáveis; as demais colunas mostram o valor só pra leitura. */}
-                    {d.iso === dataAberta && <LockOpen size={11} className="mx-auto mt-0.5 text-emerald-500" aria-label="Período aberto neste dia" />}
-                  </th>
-                ))}
+                      {/* Uma linha só (dia da semana à esquerda, número à direita) — pedido do
+                          usuário, no lugar do layout antigo em 2 linhas empilhadas. O dia
+                          liberado pro cadeado não precisa de mais nada além do fundo âmbar da
+                          própria célula (marcação "no campo inteiro") — sem ícone extra aqui. */}
+                      <span className="flex items-center justify-between gap-1">
+                        <span className={`text-[10px] uppercase tracking-wide ${aberto ? 'text-amber-700' : d.fimDeSemana ? 'text-gray-300' : 'text-gray-400'}`}>
+                          {d.semana}
+                        </span>
+                        <span
+                          className={`flex h-5 min-w-5 items-center justify-center rounded-full px-1 text-xs font-semibold tabular-nums ${
+                            d.hoje ? 'bg-primary-600 text-white' : aberto ? 'text-amber-800' : d.fimDeSemana ? 'text-gray-400' : 'text-gray-800'
+                          }`}
+                        >
+                          {String(d.dia).padStart(2, '0')}
+                        </span>
+                      </span>
+                    </th>
+                  );
+                })}
               </tr>
             </thead>
 
@@ -597,7 +606,9 @@ export default function SaldosContasTab({
                       {dias.map((d) => (
                         <td
                           key={d.iso}
-                          className="border-b border-l border-gray-200 bg-gray-50 px-3 text-right text-xs font-semibold tabular-nums text-gray-900 group-hover/grupo:bg-gray-100"
+                          className={`border-b border-l border-gray-200 px-3 text-right text-xs font-semibold tabular-nums text-gray-900 group-hover/grupo:bg-gray-100 ${
+                            d.iso === dataAberta ? 'bg-amber-50' : 'bg-gray-50'
+                          }`}
                         >
                           <ValorTotal valor={totais[d.iso]} />
                         </td>
@@ -661,7 +672,7 @@ export default function SaldosContasTab({
                   <td
                     key={d.iso}
                     className={`sticky bottom-0 z-20 border-l border-t-2 border-gray-200 border-t-gray-300 px-3 text-right text-xs font-bold tabular-nums text-gray-900 ${
-                      d.fimDeSemana ? 'bg-gray-50' : 'bg-white'
+                      d.iso === dataAberta ? 'bg-amber-50' : d.fimDeSemana ? 'bg-gray-50' : 'bg-white'
                     }`}
                   >
                     <ValorTotal valor={totalGeral[d.iso]} />

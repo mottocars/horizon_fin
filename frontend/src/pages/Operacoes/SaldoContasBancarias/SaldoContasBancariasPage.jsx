@@ -1,20 +1,21 @@
 import { useEffect, useMemo, useRef, useState } from 'react';
 import { useSearchParams } from 'react-router-dom';
-import { CreditCard, Landmark, Lock, RefreshCw, Search, Settings, TriangleAlert, Wallet } from 'lucide-react';
+import { CreditCard, Landmark, Lock, LockOpen, RefreshCw, Search, Settings, TriangleAlert, Wallet } from 'lucide-react';
 import Card from '../../../components/Card';
 import Tabs from '../../../components/Tabs';
 import SearchableSelect from '../../../components/SearchableSelect';
 import { listEmpresas } from '../../../api/empresas.api';
-import { getFiltrosSaldos, getPeriodoAberto } from '../../../api/saldoContasBancarias.api';
+import { getFiltrosSaldos, getPeriodoAberto, encerrarPeriodoSaldos } from '../../../api/saldoContasBancarias.api';
 import { gerarContasBancarias } from '../../../api/contasBancariasSienge.api';
 import { nomeExibicaoEmpresa } from '../../../utils/empresa';
 import { useEmpresaTravada } from '../../../hooks/useEmpresaTravada';
+import { useConfirm } from '../../../confirm/ConfirmContext';
 import SaldosContasTab from './SaldosContasTab';
 import AbaEmConstrucao from './AbaEmConstrucao';
 import BancosTab from './BancosTab';
 import ContasTab from './ContasTab';
 import AbrirPeriodoModal from './AbrirPeriodoModal';
-import { formatarDataBR, hojeISO, semanaAtual, validarPeriodo } from './constantes';
+import { formatarDataBR, semanaAtual, validarPeriodo } from './constantes';
 
 // Pra adicionar uma aba nova no futuro basta incluir um item aqui `{ id, label, icon }` e o
 // caso correspondente no bloco de conteúdo mais abaixo (mesmo esquema de GestaoCobrancasPage).
@@ -45,6 +46,7 @@ const STATUS_CONTAS_OPCOES = [
 // de período (pedido do usuário) — pra ver outra semana é só digitar as datas.
 export default function SaldoContasBancariasPage() {
   const { travada: empresaTravada, empresaIdTravada } = useEmpresaTravada();
+  const confirm = useConfirm();
   const [searchParams, setSearchParams] = useSearchParams();
 
   const empresaId = searchParams.get('empresa_id') || '';
@@ -172,8 +174,8 @@ export default function SaldoContasBancariasPage() {
     };
   }, [empresaId, abaAtiva, refreshToken]);
 
-  // Dia liberado pra lançar saldo — sem linha salva ainda pra essa empresa, o servidor devolve
-  // o "hoje" que a gente manda (ver getPeriodoAberto em saldos.service.js).
+  // Dia liberado pra lançar saldo — null = nenhum período aberto (cadeado trancado/azul, nada
+  // é editável até alguém abrir um explicitamente).
   useEffect(() => {
     if (!empresaId || abaAtiva !== 'saldos') {
       setDataAberta('');
@@ -181,12 +183,12 @@ export default function SaldoContasBancariasPage() {
     }
     let ativo = true;
     setCarregandoPeriodo(true);
-    getPeriodoAberto(empresaId, hojeISO())
+    getPeriodoAberto(empresaId)
       .then((r) => {
-        if (ativo) setDataAberta(r.data);
+        if (ativo) setDataAberta(r.data || '');
       })
       .catch(() => {
-        if (ativo) setDataAberta(hojeISO());
+        if (ativo) setDataAberta('');
       })
       .finally(() => {
         if (ativo) setCarregandoPeriodo(false);
@@ -223,6 +225,31 @@ export default function SaldoContasBancariasPage() {
       setErroAtualizarContas(err.response?.data?.message || 'Não foi possível atualizar as contas bancárias.');
     } finally {
       setAtualizandoContas(false);
+    }
+  }
+
+  // Cadeado trancado (azul, nada aberto): clicar abre a janela de "Abrir período". Cadeado
+  // aberto (âmbar): clicar já pergunta se quer encerrar — direto, sem janela própria, mesmo
+  // padrão usado em qualquer outra confirmação do sistema.
+  async function handleCliqueCadeado() {
+    if (!dataAberta) {
+      setModalPeriodoAberto(true);
+      return;
+    }
+    const confirmado = await confirm({
+      title: 'Encerrar período',
+      description: `O período de ${formatarDataBR(dataAberta)} está aberto pra lançamento. Depois de encerrado, será preciso reabri-lo pra lançar nesse dia de novo.`,
+      confirmLabel: 'Encerrar período',
+      variant: 'warning',
+    });
+    if (!confirmado) return;
+    try {
+      await encerrarPeriodoSaldos(empresaId);
+      setDataAberta('');
+    } catch {
+      // Se algo já mudou por fora (outra aba encerrou primeiro, etc.) o próximo carregamento
+      // do período corrige sozinho — não precisa de tratamento especial aqui.
+      setPeriodoToken((n) => n + 1);
     }
   }
 
@@ -378,18 +405,23 @@ export default function SaldoContasBancariasPage() {
 
           {abaAtiva === 'saldos' && (
             <div className="flex shrink-0 items-center gap-2">
-              {/* Cadeado no lugar do antigo botão de recarregar (pedido do usuário): abre a
-                  janela onde se escolhe qual dia fica liberado pra lançar saldo. O rótulo
-                  mostra a data liberada agora, pra dar pra ver sem precisar abrir a janela. */}
+              {/* Só o cadeado (pedido do usuário) — azul/trancado sem período aberto, âmbar/
+                  destrancado com um aberto. Clicar abre a janela de abrir (trancado) ou já
+                  pergunta se quer encerrar (aberto) — ver handleCliqueCadeado. */}
               <button
                 type="button"
-                onClick={() => setModalPeriodoAberto(true)}
-                disabled={semEmpresa}
-                title="Abrir período"
-                className="flex shrink-0 items-center gap-2 rounded-lg bg-primary-600 px-3 py-2 text-sm font-medium text-white transition-colors hover:bg-primary-700 disabled:cursor-not-allowed disabled:opacity-60"
+                onClick={handleCliqueCadeado}
+                disabled={semEmpresa || carregandoPeriodo}
+                title={
+                  dataAberta
+                    ? `Período aberto em ${formatarDataBR(dataAberta)} — clique para encerrar`
+                    : 'Nenhum período aberto — clique para abrir'
+                }
+                className={`flex shrink-0 items-center justify-center rounded-lg p-2.5 text-white transition-colors disabled:cursor-not-allowed disabled:opacity-60 ${
+                  dataAberta ? 'bg-amber-500 hover:bg-amber-600' : 'bg-primary-600 hover:bg-primary-700'
+                }`}
               >
-                <Lock size={16} />
-                {carregandoPeriodo ? '...' : dataAberta ? formatarDataBR(dataAberta) : 'Abrir período'}
+                {dataAberta ? <LockOpen size={18} /> : <Lock size={18} />}
               </button>
             </div>
           )}
