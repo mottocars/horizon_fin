@@ -180,4 +180,88 @@ async function getCredenciais(id) {
   };
 }
 
-module.exports = { list, getById, create, update, setAtivo, getCredenciais };
+// ---------------------------------------------------------------------------------------
+// Teste de conexão — chama a API de verdade da VanPix com as credenciais informadas, pra
+// confirmar que estão certas antes de contar com elas numa busca de verdade (que ainda não
+// existe nesta tela). Confirmado nos testes manuais com credenciais reais (a mesma URL do
+// script de referência):
+//   - error_code 2001 (HTTP 200) = "Não encontramos nenhum retorno" — credencial e apelido
+//     OK, só não tem retorno pra data pesquisada — não é falha.
+//   - controle:true (HTTP 200) = retorno de verdade encontrado — o sinal mais forte de sucesso.
+//   - HTTP 401 + error_code 4016 = esse apelido específico não existe/não é acessível por essa
+//     credencial — falha só DESSE apelido, os outros continuam sendo testados.
+//   - HTTP 401 + qualquer OUTRO error_code = falha de credencial (Service Key OU Client
+//     Secret errados). Vimos pelo menos 2 códigos diferentes pra isso na prática — 4011
+//     (Client Secret errado) e 4018 (Service Key errada) — por isso o critério aqui é "401 e
+//     não é 4016", não uma lista fechada de códigos: mais robusto a outros que a VanPix use e
+//     a gente ainda não tenha visto. É a mesma credencial pra qualquer apelido, não adianta
+//     insistir nos outros quando cai aqui.
+// `ignorar_download: 1` (mesmo parâmetro do script de referência) garante que testar não
+// marca nada como baixado do lado da VanPix.
+// ---------------------------------------------------------------------------------------
+const VANPIX_API_URL = 'https://qwapim.pix.com.br/APIArquivos/retornos/caixa/';
+
+function dataVanpixHoje() {
+  const hoje = new Date();
+  const pad = (n) => String(n).padStart(2, '0');
+  return `${pad(hoje.getDate())}-${pad(hoje.getMonth() + 1)}-${hoje.getFullYear()}`;
+}
+
+async function testarApelido(serviceKey, clientSecret, apelido) {
+  const params = new URLSearchParams({
+    'service-key': serviceKey,
+    action: 'BAIXAR',
+    apelido,
+    data_pesquisa: dataVanpixHoje(),
+    ignorar_download: '1',
+  });
+
+  let resposta;
+  try {
+    resposta = await fetch(`${VANPIX_API_URL}?${params.toString()}`, {
+      headers: { 'client-secret': clientSecret },
+      signal: AbortSignal.timeout(15000),
+    });
+  } catch {
+    return { apelido, status: 'erro_rede', mensagem: 'Não foi possível conectar à VanPix (rede ou tempo esgotado).' };
+  }
+
+  const corpo = await resposta.json().catch(() => null);
+  if (!corpo) return { apelido, status: 'erro_rede', mensagem: 'A VanPix respondeu algo que não é um JSON válido.' };
+
+  const codigoErro = corpo?.error?.error_code;
+  if (resposta.status === 401) {
+    if (codigoErro === 4016) return { apelido, status: 'apelido_invalido', mensagem: corpo.error.error_description };
+    return {
+      apelido,
+      status: 'credencial_invalida',
+      mensagem: corpo?.error?.error_description || `Não autorizado (HTTP 401, código ${codigoErro ?? 'desconhecido'}).`,
+    };
+  }
+  if (codigoErro === 2001) return { apelido, status: 'ok_sem_retorno', mensagem: 'Credenciais aceitas — sem retorno para hoje.' };
+  if (corpo.controle === true) {
+    const qtd = corpo?.resposta?.quantidade ?? (corpo?.resposta?.retornos || []).length;
+    return { apelido, status: 'ok_com_retorno', mensagem: `${qtd} retorno(s) encontrado(s) para hoje.` };
+  }
+  return {
+    apelido,
+    status: 'desconhecido',
+    mensagem: corpo?.error?.error_description || `Resposta em formato inesperado (HTTP ${resposta.status}).`,
+  };
+}
+
+// Testa cada apelido em sequência; para assim que encontra uma credencial inválida (é a
+// mesma Service Key/Client Secret pra todos os apelidos — não adianta repetir o mesmo erro).
+async function testarConexao({ serviceKey, clientSecret, apelidos }) {
+  const detalhes = [];
+  for (const apelido of apelidos) {
+    const resultado = await testarApelido(serviceKey, clientSecret, apelido);
+    detalhes.push(resultado);
+    if (resultado.status === 'credencial_invalida') break;
+  }
+  const credencialFalhou = detalhes.some((d) => d.status === 'credencial_invalida');
+  const algumConfirmado = detalhes.some((d) => d.status === 'ok_com_retorno' || d.status === 'ok_sem_retorno');
+  return { sucesso: algumConfirmado && !credencialFalhou, detalhes };
+}
+
+module.exports = { list, getById, create, update, setAtivo, getCredenciais, testarConexao };

@@ -1,11 +1,17 @@
 import { useEffect, useState } from 'react';
 import { useNavigate, useParams } from 'react-router-dom';
-import { ArrowLeft, Eye, EyeOff, Plus, X } from 'lucide-react';
+import { AlertTriangle, ArrowLeft, CheckCircle2, Eye, EyeOff, Plus, X, XCircle, Zap } from 'lucide-react';
 import Card from '../../../components/Card';
 import Button from '../../../components/Button';
 import SearchableSelect from '../../../components/SearchableSelect';
 import { listEmpresas } from '../../../api/empresas.api';
-import { getVanpixIntegracao, createVanpixIntegracao, updateVanpixIntegracao } from '../../../api/vanpix.api';
+import {
+  getVanpixIntegracao,
+  createVanpixIntegracao,
+  updateVanpixIntegracao,
+  testarVanpixCredenciais,
+  testarVanpixConexao,
+} from '../../../api/vanpix.api';
 import { nomeExibicaoEmpresa } from '../../../utils/empresa';
 import { useEmpresaTravada } from '../../../hooks/useEmpresaTravada';
 
@@ -13,6 +19,19 @@ import { useEmpresaTravada } from '../../../hooks/useEmpresaTravada';
 // futuro, cada um com seus próprios campos (mesma ideia de trocar Sienge/Z-API/Conta Azul,
 // só que reunidos numa única tela "Nova Conexão", pedido do usuário).
 const TIPOS_CONEXAO = [{ value: 'VANPIX', label: 'VanPix' }];
+
+// Por status devolvido pelo teste (ver vanpix.service.js::testarApelido) — os dois "ok_"
+// contam como sucesso pra esse convênio (a VanPix aceitou a credencial; só não achou retorno
+// pra hoje é normal, não é falha), "apelido_invalido" é aviso (só esse convênio, os outros
+// continuam valendo), o resto é falha de verdade.
+const STATUS_TESTE = {
+  ok_com_retorno: { Icone: CheckCircle2, cor: 'text-emerald-600' },
+  ok_sem_retorno: { Icone: CheckCircle2, cor: 'text-emerald-600' },
+  apelido_invalido: { Icone: AlertTriangle, cor: 'text-amber-600' },
+  credencial_invalida: { Icone: XCircle, cor: 'text-red-600' },
+  erro_rede: { Icone: XCircle, cor: 'text-red-600' },
+  desconhecido: { Icone: XCircle, cor: 'text-red-600' },
+};
 
 export default function ConveniosBancariosForm() {
   const { id } = useParams();
@@ -29,6 +48,9 @@ export default function ConveniosBancariosForm() {
   const [showServiceKey, setShowServiceKey] = useState(false);
   const [showClientSecret, setShowClientSecret] = useState(false);
   const [novoApelido, setNovoApelido] = useState('');
+  const [testando, setTestando] = useState(false);
+  const [erroTeste, setErroTeste] = useState('');
+  const [resultadoTeste, setResultadoTeste] = useState(null);
 
   const [form, setForm] = useState({
     empresa_id: '',
@@ -98,6 +120,44 @@ export default function ConveniosBancariosForm() {
     if (e.key === 'Enter') {
       e.preventDefault();
       adicionarApelido();
+    }
+  }
+
+  // Chama a API de verdade da VanPix (sem salvar nada) pra confirmar as credenciais antes de
+  // contar com elas. Na edição, aproveita os campos deixados em branco pra usar o que já está
+  // salvo (não precisa redigitar segredo nenhum só pra testar); na criação, Service Key e
+  // Client Secret são obrigatórios aqui, porque não existe nada salvo pra cair de volta.
+  async function handleTestarConexao() {
+    setErroTeste('');
+    setResultadoTeste(null);
+
+    if (form.apelidos.length === 0) {
+      setErroTeste('Adicione ao menos 1 convênio (apelido) antes de testar.');
+      return;
+    }
+    if (!isEdit && (!form.service_key.trim() || !form.client_secret.trim())) {
+      setErroTeste('Preencha Service Key e Client Secret antes de testar.');
+      return;
+    }
+
+    setTestando(true);
+    try {
+      const resultado = isEdit
+        ? await testarVanpixConexao(id, {
+            apelidos: form.apelidos,
+            ...(form.service_key.trim() ? { service_key: form.service_key.trim() } : {}),
+            ...(form.client_secret.trim() ? { client_secret: form.client_secret.trim() } : {}),
+          })
+        : await testarVanpixCredenciais({
+            service_key: form.service_key.trim(),
+            client_secret: form.client_secret.trim(),
+            apelidos: form.apelidos,
+          });
+      setResultadoTeste(resultado);
+    } catch (err) {
+      setErroTeste(err.response?.data?.message || 'Não foi possível testar a conexão.');
+    } finally {
+      setTestando(false);
     }
   }
 
@@ -297,6 +357,45 @@ export default function ConveniosBancariosForm() {
                   </div>
                 )}
               </div>
+            </div>
+
+            <div className="border-t border-gray-100 pt-4">
+              <Button type="button" variant="secondary" onClick={handleTestarConexao} loading={testando}>
+                <Zap size={16} />
+                Testar conexão
+              </Button>
+              <p className="mt-1.5 text-xs text-gray-400">
+                Consulta a VanPix de verdade (sem salvar nada) pra conferir se as credenciais e os convênios estão certos.
+              </p>
+
+              {erroTeste && (
+                <div className="mt-3 rounded-lg bg-red-50 px-3 py-2 text-sm text-red-600">{erroTeste}</div>
+              )}
+
+              {resultadoTeste && (
+                <div
+                  className={`mt-3 rounded-lg border p-3 ${
+                    resultadoTeste.sucesso ? 'border-emerald-200 bg-emerald-50' : 'border-red-200 bg-red-50'
+                  }`}
+                >
+                  <p className={`text-sm font-medium ${resultadoTeste.sucesso ? 'text-emerald-700' : 'text-red-700'}`}>
+                    {resultadoTeste.sucesso ? 'Conexão funcionando' : 'A conexão não foi confirmada'}
+                  </p>
+                  <ul className="mt-2 space-y-1.5">
+                    {resultadoTeste.detalhes.map((detalhe) => {
+                      const { Icone, cor } = STATUS_TESTE[detalhe.status] || STATUS_TESTE.desconhecido;
+                      return (
+                        <li key={detalhe.apelido} className="flex items-start gap-2 text-xs text-gray-700">
+                          <Icone size={14} className={`mt-0.5 shrink-0 ${cor}`} />
+                          <span>
+                            <span className="font-mono font-medium">{detalhe.apelido}</span>: {detalhe.mensagem}
+                          </span>
+                        </li>
+                      );
+                    })}
+                  </ul>
+                </div>
+              )}
             </div>
 
             <div className="flex justify-end gap-2 pt-2">
