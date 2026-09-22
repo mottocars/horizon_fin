@@ -1,15 +1,14 @@
-import { CreditCard, Lock, ShieldCheck, Target, TrendingUp, Unlock } from 'lucide-react';
-
 // Nível 1 do drilldown. Mesma ordem da lista de classificações do cadastro da conta. Contas
 // sem classificação não entram em grupo nenhum aqui (pedido do usuário: "só deverá aparecer
-// o que tem classificação") — ficam de fora da matriz até serem classificadas.
+// o que tem classificação") — ficam de fora da matriz até serem classificadas. Sem ícone por
+// grupo (pedido do usuário) — só o rótulo.
 export const GRUPOS_CLASSIFICACAO = [
-  { value: 'APLICACAO', label: 'Aplicação', icon: TrendingUp, cor: 'text-emerald-600', fundo: 'bg-emerald-50' },
-  { value: 'BLOQUEADA', label: 'Bloqueada', icon: Lock, cor: 'text-red-600', fundo: 'bg-red-50' },
-  { value: 'CHEQUE_ESPECIAL', label: 'Cheque Especial', icon: CreditCard, cor: 'text-amber-600', fundo: 'bg-amber-50' },
-  { value: 'DEDICADA', label: 'Dedicada', icon: Target, cor: 'text-violet-600', fundo: 'bg-violet-50' },
-  { value: 'GARANTIDA', label: 'Garantida', icon: ShieldCheck, cor: 'text-sky-600', fundo: 'bg-sky-50' },
-  { value: 'LIBERADA', label: 'Liberada', icon: Unlock, cor: 'text-primary-600', fundo: 'bg-primary-50' },
+  { value: 'APLICACAO', label: 'Aplicação' },
+  { value: 'BLOQUEADA', label: 'Bloqueada' },
+  { value: 'CHEQUE_ESPECIAL', label: 'Cheque Especial' },
+  { value: 'DEDICADA', label: 'Dedicada' },
+  { value: 'GARANTIDA', label: 'Garantida' },
+  { value: 'LIBERADA', label: 'Liberada' },
 ];
 
 export const OPCOES_CLASSIFICACAO = GRUPOS_CLASSIFICACAO.map(({ value, label }) => ({ value, label }));

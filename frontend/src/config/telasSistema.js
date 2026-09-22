@@ -18,7 +18,8 @@ export const TELAS_SISTEMA = [
       { codigo: '/cadastros/planos-financeiros', label: 'Planos Financeiros' },
       { codigo: '/cadastros/periodos', label: 'Períodos' },
       { codigo: '/cadastros/mapa-de-unidades', label: 'Mapa de Unidades' },
-      { codigo: '/cadastros/contas-bancarias', label: 'Contas Bancárias' },
+      // Contas Bancárias virou uma aba de "Saldo Contas Bancárias" (grupo Operações) — quem
+      // precisa cadastrar/editar contas agora usa aquela permissão.
     ],
   },
   {

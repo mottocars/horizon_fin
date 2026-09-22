@@ -11,10 +11,12 @@ function badRequest(message) {
 const codigoSchema = z.string().regex(/^\d{3}$/, 'Código de banco inválido.');
 const logoSchema = z.object({ logo: z.string().min(1, 'Envie uma imagem.') });
 
+// O cadastro veio sem paginação (pedido do usuário: "deixe tudo em uma só página") — o
+// limite só existe como teto de segurança, bem acima dos ~464 bancos de hoje.
 async function listar(req, res, next) {
   try {
     const page = Math.max(1, parseInt(req.query.page, 10) || 1);
-    const limit = Math.min(100, Math.max(1, parseInt(req.query.limit, 10) || 20));
+    const limit = Math.min(1000, Math.max(1, parseInt(req.query.limit, 10) || 1000));
     const search = (req.query.search || '').toString();
     res.json(await service.listarComPaginacao({ search, page, limit }));
   } catch (err) {

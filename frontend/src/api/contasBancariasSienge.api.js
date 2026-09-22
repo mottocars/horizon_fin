@@ -1,9 +1,5 @@
 import http from './http';
 
-export function listContasGerados() {
-  return http.get('/contas-bancarias/sienge').then((res) => res.data);
-}
-
 export function listContas(empresaId, { page = 1, limit = 15, search = '', status = [], companyIds = [] } = {}) {
   return http
     .get(`/contas-bancarias/sienge/${empresaId}/contas`, {

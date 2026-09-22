@@ -5,7 +5,6 @@ const controller = require('./contas.controller');
 const router = Router();
 
 router.use(authMiddleware);
-router.get('/', controller.listGerados);
 router.get('/bancos', controller.listBancos);
 router.get('/:empresaId/contas', controller.listContas);
 router.post('/gerar', controller.gerar);

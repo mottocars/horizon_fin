@@ -48,15 +48,6 @@ function badRequest(message) {
   return err;
 }
 
-async function listGerados(req, res, next) {
-  try {
-    const result = await service.listGerados();
-    res.json(result);
-  } catch (err) {
-    next(err);
-  }
-}
-
 async function listContas(req, res, next) {
   try {
     const page = Math.max(1, parseInt(req.query.page, 10) || 1);
@@ -117,4 +108,4 @@ async function updateEnriquecimento(req, res, next) {
   }
 }
 
-module.exports = { listGerados, listContas, listBancos, gerar, getItem, updateEnriquecimento };
+module.exports = { listContas, listBancos, gerar, getItem, updateEnriquecimento };

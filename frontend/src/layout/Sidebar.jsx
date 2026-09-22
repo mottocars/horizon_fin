@@ -51,7 +51,6 @@ const menuItems = [
       { label: 'Planos Financeiros', to: '/cadastros/planos-financeiros', icon: PieChart },
       { label: 'Períodos', to: '/cadastros/periodos', icon: CalendarRange },
       { label: 'Mapa de Unidades', to: '/cadastros/mapa-de-unidades', icon: Map },
-      { label: 'Contas Bancárias', to: '/cadastros/contas-bancarias', icon: Landmark },
     ],
   },
   {

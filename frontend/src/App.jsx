@@ -30,8 +30,6 @@ import CentrosCustoList from './pages/CentrosCusto/CentrosCustoList';
 import CentroCustoDetalhe from './pages/CentrosCusto/CentroCustoDetalhe';
 import CentroCustoItemDetalhe from './pages/CentrosCusto/CentroCustoItemDetalhe';
 import MascarasPage from './pages/Mascaras/MascarasPage';
-import ContasBancariasList from './pages/ContasBancarias/ContasBancariasList';
-import ContaBancariaDetalhe from './pages/ContasBancarias/ContaBancariaDetalhe';
 import ContaBancariaItemDetalhe from './pages/ContasBancarias/ContaBancariaItemDetalhe';
 import SaldoContasBancariasPage from './pages/Operacoes/SaldoContasBancarias/SaldoContasBancariasPage';
 import PortalConstrutorasPage from './pages/Integracoes/PortalConstrutoras/PortalConstrutorasPage';
@@ -124,8 +122,9 @@ export default function App() {
             />
             <Route path="/cadastros/periodos" element={<PeriodosPage />} />
             <Route path="/cadastros/mapa-de-unidades" element={<MapaDeUnidadesPage />} />
-            <Route path="/cadastros/contas-bancarias" element={<ContasBancariasList />} />
-            <Route path="/cadastros/contas-bancarias/:empresaId" element={<ContaBancariaDetalhe />} />
+            {/* A lista/cadastro (antes /cadastros/contas-bancarias e /:empresaId) virou a aba
+                "Contas Bancárias" de Operações > Saldo Contas Bancárias — ver ContasTab.jsx.
+                Só a edição de uma conta continua como rota própria, aberta a partir de lá. */}
             <Route
               path="/cadastros/contas-bancarias/:empresaId/:companyId/:numeroConta"
               element={<ContaBancariaItemDetalhe />}

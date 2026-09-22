@@ -1,11 +1,9 @@
 import { useCallback, useEffect, useRef, useState } from 'react';
 import { Landmark, Loader2, Search, Upload, X } from 'lucide-react';
-import Pagination from '../../../components/Pagination';
 import { listBancosCadastro, removerLogoBanco, salvarLogoBanco } from '../../../api/bancos.api';
 import { redimensionarLogoBanco } from '../../../utils/imagemLogoBanco';
 import { useConfirm } from '../../../confirm/ConfirmContext';
 
-const LIMIT = 20;
 // A imagem já é redimensionada no navegador antes de enviar (ver imagemLogoBanco.js) — este
 // limite é só pra recusar um arquivo absurdamente grande antes mesmo de tentar processar.
 const TAMANHO_MAXIMO_ARQUIVO = 8 * 1024 * 1024;
@@ -43,7 +41,7 @@ function LogoCelula({ logo, nome }) {
 export default function BancosTab() {
   const confirm = useConfirm();
   const [bancos, setBancos] = useState([]);
-  const [pagination, setPagination] = useState({ page: 1, totalPages: 1, total: 0 });
+  const [total, setTotal] = useState(0);
   const [search, setSearch] = useState('');
   const [loading, setLoading] = useState(true);
   const [processandoCodigo, setProcessandoCodigo] = useState(null);
@@ -52,19 +50,19 @@ export default function BancosTab() {
   const fileInputRef = useRef(null);
   const codigoAlvoRef = useRef(null);
 
-  const carregar = useCallback(async (page, searchTerm) => {
+  const carregar = useCallback(async (searchTerm) => {
     setLoading(true);
     try {
-      const result = await listBancosCadastro({ page, limit: LIMIT, search: searchTerm });
+      const result = await listBancosCadastro({ search: searchTerm });
       setBancos(result.data);
-      setPagination(result.pagination);
+      setTotal(result.pagination.total);
     } finally {
       setLoading(false);
     }
   }, []);
 
   useEffect(() => {
-    const timeout = setTimeout(() => carregar(1, search), 300);
+    const timeout = setTimeout(() => carregar(search), 300);
     return () => clearTimeout(timeout);
   }, [search, carregar]);
 
@@ -122,7 +120,7 @@ export default function BancosTab() {
       await removerLogoBanco(banco.codigo);
       // Recarrega em vez de só limpar localmente: se a BrasilAPI tiver uma logo oficial
       // pra esse código, ela precisa reaparecer no lugar da customizada removida.
-      await carregar(pagination.page, search);
+      await carregar(search);
     } finally {
       setProcessandoCodigo(null);
     }
@@ -136,7 +134,7 @@ export default function BancosTab() {
           <p className="text-xs text-gray-500">
             {loading && bancos.length === 0
               ? 'Carregando...'
-              : `${pagination.total} banco${pagination.total === 1 ? '' : 's'} brasileiro${pagination.total === 1 ? '' : 's'}`}
+              : `${total} banco${total === 1 ? '' : 's'} brasileiro${total === 1 ? '' : 's'}`}
           </p>
         </div>
         <div className="relative w-full sm:max-w-xs">
@@ -155,7 +153,7 @@ export default function BancosTab() {
           qual código está "no alvo" antes de disparar o clique nele. */}
       <input ref={fileInputRef} type="file" accept="image/*" onChange={handleArquivoSelecionado} className="hidden" />
 
-      <div className="border-t border-gray-100 px-5">
+      <div className="border-t border-gray-100 px-5 pb-5">
         {loading ? (
           <div className="py-12 text-center text-sm text-gray-400">Carregando...</div>
         ) : bancos.length === 0 ? (
@@ -164,13 +162,16 @@ export default function BancosTab() {
             Nenhum banco encontrado.
           </div>
         ) : (
+          // Sem paginação, a tabela pode passar de 400 linhas — cabeçalho grudado no topo
+          // (relativo ao <main>, que é quem rola a página) pra não perder as colunas de vista
+          // ao descer.
           <table className="w-full text-left text-sm">
             <thead>
-              <tr className="border-b border-gray-100 text-xs uppercase tracking-wide text-gray-400">
-                <th className="w-20 py-3 font-medium">Código</th>
-                <th className="w-16 py-3 font-medium">Logo</th>
-                <th className="py-3 font-medium">Nome</th>
-                <th className="w-44 py-3 font-medium text-right">Ação</th>
+              <tr className="text-xs uppercase tracking-wide text-gray-400">
+                <th className="sticky top-0 z-10 w-20 border-b border-gray-100 bg-white py-3 font-medium">Código</th>
+                <th className="sticky top-0 z-10 w-16 border-b border-gray-100 bg-white py-3 font-medium">Logo</th>
+                <th className="sticky top-0 z-10 border-b border-gray-100 bg-white py-3 font-medium">Nome</th>
+                <th className="sticky top-0 z-10 w-44 border-b border-gray-100 bg-white py-3 text-right font-medium">Ação</th>
               </tr>
             </thead>
             <tbody>
@@ -233,12 +234,6 @@ export default function BancosTab() {
           </table>
         )}
       </div>
-
-      {!loading && bancos.length > 0 && (
-        <div className="px-5 pb-2">
-          <Pagination page={pagination.page} totalPages={pagination.totalPages} onChange={(page) => carregar(page, search)} />
-        </div>
-      )}
     </div>
   );
 }

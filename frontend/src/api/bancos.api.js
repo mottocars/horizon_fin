@@ -1,7 +1,8 @@
 import http from './http';
 
-export function listBancosCadastro({ page = 1, limit = 20, search = '' } = {}) {
-  return http.get('/bancos', { params: { page, limit, search } }).then((res) => res.data);
+// Sem paginação (pedido do usuário) — 1000 já cobre os ~464 bancos de hoje com folga.
+export function listBancosCadastro({ search = '' } = {}) {
+  return http.get('/bancos', { params: { limit: 1000, search } }).then((res) => res.data);
 }
 
 // logo: data URI (ver utils/imagemLogoBanco.js), já redimensionada no navegador.

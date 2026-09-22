@@ -1,5 +1,5 @@
 import { Fragment, memo, useCallback, useEffect, useMemo, useRef, useState } from 'react';
-import { Check, ChevronsDownUp, ChevronsUpDown, Landmark, Loader2, Minus, Plus, TriangleAlert } from 'lucide-react';
+import { Check, Landmark, Loader2, Minus, Plus, TriangleAlert } from 'lucide-react';
 import { getSaldosContas, salvarSaldosContas } from '../../../api/saldoContasBancarias.api';
 import LogoBanco from './LogoBanco';
 import {
@@ -230,11 +230,6 @@ export default function SaldosContasTab({
     })).filter((grupo) => grupo.contas.length > 0);
   }, [contas]);
 
-  // Mesmo conjunto que aparece na matriz (todas as contas classificadas, achatadas) — usado
-  // no resumo do cabeçalho e no cálculo de preenchimento, pra bater com o que está na tela.
-  const contasClassificadas = useMemo(() => grupos.flatMap((g) => g.contas), [grupos]);
-  const semClassificacao = contas ? contas.length - contasClassificadas.length : 0;
-
   const { totaisPorGrupo, totalGeral } = useMemo(() => {
     const porGrupo = {};
     const somaGeral = {};
@@ -251,19 +246,6 @@ export default function SaldosContasTab({
       totalGeral: Object.fromEntries(Object.entries(somaGeral).map(([data, v]) => [data, somarSaldos(v)])),
     };
   }, [grupos]);
-
-  // Quanto do que já deveria estar informado (dias úteis até hoje) está preenchido — só conta
-  // as contas classificadas, as mesmas que aparecem na matriz.
-  const preenchimento = useMemo(() => {
-    if (!contas) return { feitas: 0, esperadas: 0, pct: 0 };
-    const diasUteis = dias.filter((d) => d.pendente);
-    const esperadas = contasClassificadas.length * diasUteis.length;
-    const feitas = contasClassificadas.reduce(
-      (acc, c) => acc + diasUteis.filter((d) => c.saldos[d.iso] !== undefined).length,
-      0
-    );
-    return { feitas, esperadas, pct: esperadas ? Math.round((feitas / esperadas) * 100) : 0 };
-  }, [contas, contasClassificadas, dias]);
 
   const meses = useMemo(() => {
     const segmentos = [];
@@ -417,8 +399,6 @@ export default function SaldosContasTab({
     setAbertos((atual) => (atual.includes(valor) ? atual.filter((v) => v !== valor) : [...atual, valor]));
   }
 
-  const todosAbertos = grupos.length > 0 && grupos.every((g) => abertos.includes(g.value));
-
   // -------------------------------------------------------------------------- renderização
   if (!empresaId) {
     return (
@@ -437,89 +417,34 @@ export default function SaldosContasTab({
   // é a classificação, não o cadastro.
   const semClassificadas = !carregando && !erroCarga && contas && contas.length > 0 && grupos.length === 0;
 
+  // Só o indicador de salvamento — pedido do usuário: sem contagens, sem legenda, sem botão
+  // de expandir tudo, "pode subir essa tela pra ficar com mais foco na tabela". Some por
+  // completo (nem reserva espaço) enquanto não há nada pra mostrar.
+  const statusSalvamento = pendentes > 0 ? 'salvando' : erroSalvar ? 'erro' : salvoAlgumaVez ? 'salvo' : null;
+
   return (
     <div className="rounded-card rounded-tl-none bg-white shadow-card">
-      <div className="flex flex-col gap-3 px-5 pb-3 pt-4 xl:flex-row xl:items-center xl:justify-between">
-        <div className="flex flex-wrap items-center gap-x-5 gap-y-2">
-          <div>
-            <h2 className="text-sm font-semibold text-gray-900">Saldos das contas</h2>
-            <p className="text-xs text-gray-500">
-              {contas
-                ? `${contasClassificadas.length} conta${contasClassificadas.length === 1 ? '' : 's'} em ${grupos.length} classificaç${grupos.length === 1 ? 'ão' : 'ões'}`
-                : 'Carregando...'}
-              {' · '}
-              {dias.length} dias
-              {/* Contas sem classificação não entram na matriz — nota discreta pra não parecer
-                  que elas "sumiram" (ver Cadastros → Contas Bancárias pra classificá-las). */}
-              {contas && semClassificacao > 0 && (
-                <span className="text-gray-400"> · {semClassificacao} sem classificação (ocultas)</span>
-              )}
-            </p>
-          </div>
-
-          {contas && preenchimento.esperadas > 0 && (
-            <div
-              className="flex items-center gap-2"
-              title={`${preenchimento.feitas} de ${preenchimento.esperadas} saldos de dias úteis até hoje já informados`}
-            >
-              <div className="h-1.5 w-28 overflow-hidden rounded-full bg-gray-100">
-                <div className="h-full rounded-full bg-primary-500 transition-all" style={{ width: `${preenchimento.pct}%` }} />
-              </div>
-              <span className="text-xs text-gray-500">
-                <span className="font-semibold text-gray-700">{preenchimento.pct}%</span> preenchido até hoje
-              </span>
-            </div>
+      {statusSalvamento && (
+        <div className="flex items-center justify-end border-b border-gray-100 px-5 py-2 text-xs" aria-live="polite">
+          {statusSalvamento === 'salvando' ? (
+            <span className="flex items-center gap-1.5 text-gray-500">
+              <Loader2 size={14} className="animate-spin" /> Salvando...
+            </span>
+          ) : statusSalvamento === 'erro' ? (
+            <span className="flex items-center gap-1.5 text-red-600" title={erroSalvar}>
+              <TriangleAlert size={14} /> Erro ao salvar
+            </span>
+          ) : (
+            <span className="flex items-center gap-1.5 text-emerald-600">
+              <Check size={14} /> Alterações salvas
+            </span>
           )}
         </div>
-
-        <div className="flex flex-wrap items-center gap-x-4 gap-y-2">
-          <div className="flex items-center gap-3 text-[11px] text-gray-500">
-            <span className="flex items-center gap-1.5">
-              <span className="h-3 w-3 rounded border border-primary-100 bg-primary-50" />
-              Informado
-            </span>
-            <span className="flex items-center gap-1.5">
-              <span className="h-3 w-3 rounded border border-amber-200 bg-amber-50" />
-              Pendente
-            </span>
-            <span className="flex items-center gap-1.5">
-              <span className="h-3 w-3 rounded border border-gray-200 bg-gray-100" />
-              Fim de semana
-            </span>
-          </div>
-
-          <div className="flex min-w-32.5 items-center justify-end text-xs" aria-live="polite">
-            {pendentes > 0 ? (
-              <span className="flex items-center gap-1.5 text-gray-500">
-                <Loader2 size={14} className="animate-spin" /> Salvando...
-              </span>
-            ) : erroSalvar ? (
-              <span className="flex items-center gap-1.5 text-red-600" title={erroSalvar}>
-                <TriangleAlert size={14} /> Erro ao salvar
-              </span>
-            ) : salvoAlgumaVez ? (
-              <span className="flex items-center gap-1.5 text-emerald-600">
-                <Check size={14} /> Alterações salvas
-              </span>
-            ) : null}
-          </div>
-
-          {grupos.length > 0 && (
-            <button
-              type="button"
-              onClick={() => setAbertos(todosAbertos ? [] : grupos.map((g) => g.value))}
-              className="flex items-center gap-1.5 rounded-lg border border-gray-200 px-2.5 py-1.5 text-xs font-medium text-gray-600 transition-colors hover:bg-gray-50"
-            >
-              {todosAbertos ? <ChevronsDownUp size={14} /> : <ChevronsUpDown size={14} />}
-              {todosAbertos ? 'Recolher tudo' : 'Expandir tudo'}
-            </button>
-          )}
-        </div>
-      </div>
+      )}
 
       {(erroSalvar || aviso) && (
         <div
-          className={`mx-5 mb-3 rounded-lg px-3 py-2 text-xs ${erroSalvar ? 'bg-red-50 text-red-600' : 'bg-primary-50 text-primary-700'}`}
+          className={`mx-5 mt-4 mb-3 rounded-lg px-3 py-2 text-xs ${erroSalvar ? 'bg-red-50 text-red-600' : 'bg-primary-50 text-primary-700'}`}
           role="status"
         >
           {erroSalvar || aviso}
@@ -527,11 +452,9 @@ export default function SaldosContasTab({
       )}
 
       {carregando ? (
-        <div className="border-t border-gray-200">
-          <Esqueleto />
-        </div>
+        <Esqueleto />
       ) : erroCarga ? (
-        <div className="flex flex-col items-center gap-2 border-t border-gray-200 py-14 text-center">
+        <div className="flex flex-col items-center gap-2 py-14 text-center">
           <TriangleAlert size={26} className="text-red-400" />
           <p className="text-sm text-gray-600">{erroCarga}</p>
           <button
@@ -543,7 +466,7 @@ export default function SaldosContasTab({
           </button>
         </div>
       ) : semContas ? (
-        <div className="flex flex-col items-center gap-1 border-t border-gray-200 py-14 text-center">
+        <div className="flex flex-col items-center gap-1 py-14 text-center">
           <Landmark size={26} className="mb-1 text-gray-300" />
           <p className="text-sm text-gray-600">Nenhuma conta bancária encontrada.</p>
           <p className="max-w-sm text-xs text-gray-400">
@@ -551,7 +474,7 @@ export default function SaldosContasTab({
           </p>
         </div>
       ) : semClassificadas ? (
-        <div className="flex flex-col items-center gap-1 border-t border-gray-200 py-14 text-center">
+        <div className="flex flex-col items-center gap-1 py-14 text-center">
           <Landmark size={26} className="mb-1 text-gray-300" />
           <p className="text-sm text-gray-600">Nenhuma conta classificada encontrada.</p>
           <p className="max-w-sm text-xs text-gray-400">
@@ -569,7 +492,7 @@ export default function SaldosContasTab({
         // tem overflow-y-auto, e o CSS força overflow-x a virar "auto" também nesse caso
         // (regra do overflow computado), então a rolagem horizontal da tabela larga continua
         // funcionando, só que na barra da página mesmo.
-        <div ref={tabelaRef} className="rounded-b-card border-t border-gray-200">
+        <div ref={tabelaRef} className="rounded-b-card">
           {/* Só a coluna de nomes tem largura fixa; as de dia dividem o que sobrar. Com poucos
               dias (o padrão é a semana atual) elas esticam pra preencher o card em vez de
               deixar uma faixa em branco à direita; com muitos, `minWidth` garante 112px por
@@ -635,7 +558,6 @@ export default function SaldosContasTab({
             <tbody>
               {grupos.map((grupo) => {
                 const aberto = abertos.includes(grupo.value);
-                const Icone = grupo.icon;
                 const totais = totaisPorGrupo[grupo.value] || {};
                 return (
                   <Fragment key={grupo.value}>
@@ -644,9 +566,6 @@ export default function SaldosContasTab({
                         <span className="flex items-center gap-2">
                           <span className="flex h-4 w-4 shrink-0 items-center justify-center rounded bg-primary-100 text-primary-600">
                             {aberto ? <Minus size={10} /> : <Plus size={10} />}
-                          </span>
-                          <span className={`flex h-6 w-6 shrink-0 items-center justify-center rounded-md ${grupo.fundo}`}>
-                            <Icone size={13} className={grupo.cor} />
                           </span>
                           <span className="truncate text-xs font-semibold text-gray-900">{grupo.label}</span>
                           <span className="shrink-0 rounded-full bg-white px-2 py-0.5 text-[10px] font-medium tabular-nums text-gray-500 ring-1 ring-gray-200">

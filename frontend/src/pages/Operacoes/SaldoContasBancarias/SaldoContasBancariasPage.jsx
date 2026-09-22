@@ -11,6 +11,7 @@ import { useEmpresaTravada } from '../../../hooks/useEmpresaTravada';
 import SaldosContasTab from './SaldosContasTab';
 import AbaEmConstrucao from './AbaEmConstrucao';
 import BancosTab from './BancosTab';
+import ContasTab from './ContasTab';
 import { OPCOES_CLASSIFICACAO, semanaAtual, validarPeriodo } from './constantes';
 
 // Pra adicionar uma aba nova no futuro basta incluir um item aqui `{ id, label, icon }` e o
@@ -289,13 +290,7 @@ export default function SaldoContasBancariasPage() {
 
         {abaAtiva === 'bancos' && <BancosTab />}
 
-        {abaAtiva === 'contas' && (
-          <AbaEmConstrucao
-            icon={CreditCard}
-            titulo="Contas Bancárias"
-            descricao="Cadastro e edição das contas bancárias — em desenvolvimento."
-          />
-        )}
+        {abaAtiva === 'contas' && <ContasTab empresaId={empresaId} />}
 
         {abaAtiva === 'configuracoes' && (
           <AbaEmConstrucao

@@ -80,6 +80,9 @@ const emptyForm = {
 export default function ContaBancariaItemDetalhe() {
   const { empresaId, companyId, numeroConta } = useParams();
   const navigate = useNavigate();
+  // A tela-mãe (lista/cadastro) virou a aba "Contas Bancárias" de Operações > Saldo Contas
+  // Bancárias — volta pra lá com a mesma empresa já selecionada.
+  const destinoVoltar = `/operacoes/saldo-contas-bancarias?aba=contas&empresa_id=${empresaId}`;
 
   const [item, setItem] = useState(null);
   const [form, setForm] = useState(emptyForm);
@@ -171,7 +174,7 @@ export default function ContaBancariaItemDetalhe() {
       <Card className="flex flex-col items-center gap-3 py-12 text-center">
         <Landmark size={28} className="text-gray-300" />
         <p className="text-sm text-gray-500">Conta bancária não encontrada.</p>
-        <Button variant="secondary" onClick={() => navigate(`/cadastros/contas-bancarias/${empresaId}`)}>
+        <Button variant="secondary" onClick={() => navigate(destinoVoltar)}>
           Voltar
         </Button>
       </Card>
@@ -182,7 +185,7 @@ export default function ContaBancariaItemDetalhe() {
     <div className="space-y-4">
       <button
         type="button"
-        onClick={() => navigate(`/cadastros/contas-bancarias/${empresaId}`)}
+        onClick={() => navigate(destinoVoltar)}
         className="flex items-center gap-1.5 text-sm text-gray-500 hover:text-gray-700"
       >
         <ArrowLeft size={16} />

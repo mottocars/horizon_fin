@@ -7,18 +7,17 @@ function listBancos() {
   return bancosApi.getBancos();
 }
 
-async function listGerados() {
-  const { rows } = await pool.query(
-    `SELECT e.id AS empresa_id, COALESCE(NULLIF(e.nome_fantasia, ''), e.razao_social) AS empresa_razao_social, e.cnpj AS empresa_cnpj,
-            COUNT(c.numero_conta)::int AS total_contas,
-            MAX(c.atualizado_em) AS atualizado_em
-     FROM contas_bancarias_sienge c
-     JOIN empresas e ON e.id = c.empresa_id
-     GROUP BY e.id, e.razao_social, e.nome_fantasia, e.cnpj
-     ORDER BY e.razao_social ASC`
-  );
-  return rows;
-}
+// Mesma lógica de saldo-contas-bancarias/saldos.service.js (duplicada aqui de propósito —
+// mesma convenção do resto do projeto de não compartilhar SQL entre módulos): banco "de
+// verdade" da conta é o que o usuário escolheu na edição (banco_enriquecido) ou, na falta
+// dele, o código que o Sienge traz em banco_numero.
+const DIGITOS_BANCO_SQL = `REGEXP_REPLACE(banco_numero, '[^0-9]', '', 'g')`;
+const BANCO_EFETIVO_SQL = `COALESCE(
+  NULLIF(banco_enriquecido, ''),
+  CASE WHEN banco_numero ~ '[0-9]' THEN
+    CASE WHEN LENGTH(${DIGITOS_BANCO_SQL}) <= 3 THEN LPAD(${DIGITOS_BANCO_SQL}, 3, '0') ELSE ${DIGITOS_BANCO_SQL} END
+  END
+)`;
 
 function buildContasWhere(empresaId, { search, status, companyIds }) {
   const params = [empresaId, `%${search}%`];
@@ -42,7 +41,8 @@ async function listContas(empresaId, { page = 1, limit = 15, search = '', status
 
   const { rows } = await pool.query(
     `SELECT numero_conta, nome, tipo_id, tipo_descricao, agencia, banco_numero, banco_nome,
-            company_id, company_name, status, criado_em, atualizado_em
+            company_id, company_name, status, classificacao,
+            ${BANCO_EFETIVO_SQL} AS banco_codigo, criado_em, atualizado_em
      FROM contas_bancarias_sienge
      WHERE ${where}
      ORDER BY numero_conta ASC
@@ -194,4 +194,4 @@ async function gerar(empresaId) {
   return { empresa_id: empresaId, total_importado: contas.length };
 }
 
-module.exports = { listGerados, listContas, listBancos, gerar, getItem, updateEnriquecimento };
+module.exports = { listContas, listBancos, gerar, getItem, updateEnriquecimento };
