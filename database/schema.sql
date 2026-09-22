@@ -114,6 +114,36 @@ CREATE TABLE integracoes_zapi (
 
 CREATE INDEX idx_integracoes_zapi_empresa ON integracoes_zapi (empresa_id);
 
+-- Conexão com a VanPix (tela Integrações > Convênios Bancários — hoje o único "tipo" de
+-- conexão dessa tela, mas o combobox de tipo já é pensado pra ganhar outros no futuro; cada
+-- tipo terá sua própria tabela, mesmo padrão de integracoes_sienge/integracoes_zapi). Uma
+-- conexão reúne 1+ convênios/cedentes (ver integracoes_vanpix_convenios) que compartilham a
+-- mesma Service Key/Client Secret — é o caso comum: 1 cliente VanPix com várias contas/
+-- convênios na Caixa, autenticando com as mesmas credenciais.
+CREATE TABLE integracoes_vanpix (
+    id                 SERIAL PRIMARY KEY,
+    empresa_id         INTEGER NOT NULL REFERENCES empresas(id) ON DELETE CASCADE,
+    nome_conexao       VARCHAR(150) NOT NULL,
+    service_key_enc    TEXT NOT NULL,
+    client_secret_enc  TEXT NOT NULL,
+    ativo              BOOLEAN DEFAULT TRUE,
+    criado_em          TIMESTAMP DEFAULT NOW(),
+    atualizado_em      TIMESTAMP DEFAULT NOW()
+);
+
+CREATE INDEX idx_integracoes_vanpix_empresa ON integracoes_vanpix (empresa_id);
+
+-- 1 linha por "apelido" (o identificador de convênio/cedente que a VanPix usa pra saber qual
+-- conta consultar, ex. "ABPFJR") dentro de uma conexão — uma conexão pode ter vários. Único
+-- só DENTRO da mesma conexão (não impede o mesmo apelido em conexões diferentes de propósito
+-- — não temos garantia de que o código nunca se repete entre clientes/empresas diferentes).
+CREATE TABLE integracoes_vanpix_convenios (
+    id             SERIAL PRIMARY KEY,
+    integracao_id  INTEGER NOT NULL REFERENCES integracoes_vanpix(id) ON DELETE CASCADE,
+    apelido        VARCHAR(50) NOT NULL,
+    UNIQUE (integracao_id, apelido)
+);
+
 -- Conectores MCP remotos (Model Context Protocol) — permitem que o Claude
 -- (claude.ai/Desktop, via "custom connector") consulte, só leitura, os
 -- dados de cobrança/contas a receber desta empresa (ver

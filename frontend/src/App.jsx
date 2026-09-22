@@ -13,6 +13,8 @@ import SiengeList from './pages/Integracoes/Sienge/SiengeList';
 import SiengeForm from './pages/Integracoes/Sienge/SiengeForm';
 import ZapiList from './pages/Integracoes/Zapi/ZapiList';
 import ZapiForm from './pages/Integracoes/Zapi/ZapiForm';
+import ConveniosBancariosList from './pages/Integracoes/ConveniosBancarios/ConveniosBancariosList';
+import ConveniosBancariosForm from './pages/Integracoes/ConveniosBancarios/ConveniosBancariosForm';
 import McpList from './pages/Integracoes/Mcp/McpList';
 import McpForm from './pages/Integracoes/Mcp/McpForm';
 import EmailList from './pages/Integracoes/Email/EmailList';
@@ -156,15 +158,9 @@ export default function App() {
                 />
               }
             />
-            <Route
-              path="/integracoes/contas-bancarias"
-              element={
-                <ComingSoon
-                  title="Convênios Bancários"
-                  description="Integração — Convênios Bancários — em desenvolvimento."
-                />
-              }
-            />
+            <Route path="/integracoes/contas-bancarias" element={<ConveniosBancariosList />} />
+            <Route path="/integracoes/contas-bancarias/nova" element={<ConveniosBancariosForm />} />
+            <Route path="/integracoes/contas-bancarias/:id" element={<ConveniosBancariosForm />} />
             <Route path="/integracoes/z-api" element={<ZapiList />} />
             <Route path="/integracoes/z-api/nova" element={<ZapiForm />} />
             <Route path="/integracoes/z-api/:id" element={<ZapiForm />} />
