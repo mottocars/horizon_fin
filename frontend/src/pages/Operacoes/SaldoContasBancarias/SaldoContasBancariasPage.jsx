@@ -1,6 +1,6 @@
 import { useEffect, useMemo, useRef, useState } from 'react';
 import { useSearchParams } from 'react-router-dom';
-import { CreditCard, Landmark, Lock, LockOpen, RefreshCw, Search, Settings, TriangleAlert, Wallet } from 'lucide-react';
+import { CreditCard, Landmark, Lock, LockOpen, RefreshCw, Search, Settings, Wallet } from 'lucide-react';
 import Card from '../../../components/Card';
 import Tabs from '../../../components/Tabs';
 import SearchableSelect from '../../../components/SearchableSelect';
@@ -15,7 +15,7 @@ import AbaEmConstrucao from './AbaEmConstrucao';
 import BancosTab from './BancosTab';
 import ContasTab from './ContasTab';
 import AbrirPeriodoModal from './AbrirPeriodoModal';
-import { formatarDataBR, semanaAtual, validarPeriodo } from './constantes';
+import { domingoDaSemana, formatarDataBR, semanaAtual, semanaDe } from './constantes';
 
 // Pra adicionar uma aba nova no futuro basta incluir um item aqui `{ id, label, icon }` e o
 // caso correspondente no bloco de conteúdo mais abaixo (mesmo esquema de GestaoCobrancasPage).
@@ -41,9 +41,11 @@ const STATUS_CONTAS_OPCOES = [
 // Empresa, aba e filtros vivem na URL (não em useState local) pelo mesmo motivo da Gestão
 // de Cobranças: o "Voltar" do navegador devolve o usuário pro mesmo lugar, com os mesmos
 // filtros. Toda troca usa `replace`, pra escolher um filtro não empilhar histórico.
-// Datas: sem parâmetro na URL valem sempre a semana atual, domingo a sábado — o padrão não é
-// gravado na URL, então abrir a tela numa semana nova já abre nela. Sem setas de navegação
-// de período (pedido do usuário) — pra ver outra semana é só digitar as datas.
+// A grade sempre mostra 1 semana inteira (domingo a sábado), nunca mais nem menos (pedido do
+// usuário — período livre gerava tabela larga demais, precisava rolar na horizontal e
+// "desformatava" a tela): a URL guarda só `semana` (a data do domingo), não um par de datas
+// soltas — dataInicio/dataFim vêm sempre juntos, calculados a partir dela (ver semanaDe).
+// Sem parâmetro na URL vale a semana atual, recalculada a cada abertura da tela.
 export default function SaldoContasBancariasPage() {
   const { travada: empresaTravada, empresaIdTravada } = useEmpresaTravada();
   const confirm = useConfirm();
@@ -61,9 +63,10 @@ export default function SaldoContasBancariasPage() {
   const bancos = useMemo(() => bancosParam.split(',').filter(Boolean), [bancosParam]);
 
   const padrao = useMemo(() => semanaAtual(), []);
-  const dataInicio = searchParams.get('data_inicio') || padrao.inicio;
-  const dataFim = searchParams.get('data_fim') || padrao.fim;
-  const erroPeriodo = validarPeriodo(dataInicio, dataFim);
+  const semanaParam = searchParams.get('semana') || padrao.inicio;
+  // semanaDe normaliza sozinho: mesmo se `semana` na URL não cair num domingo (editada à mão,
+  // por exemplo), a grade sempre resolve pra semana (domingo–sábado) que contém aquela data.
+  const { inicio: dataInicio, fim: dataFim } = useMemo(() => semanaDe(semanaParam), [semanaParam]);
 
   const [refreshToken, setRefreshToken] = useState(0);
 
@@ -114,9 +117,11 @@ export default function SaldoContasBancariasPage() {
   }
 
   // Um input de data só dispara onChange com '' quando é apagado/incompleto; ignorar isso
-  // deixa o valor anterior (o padrão é sempre a semana atual, não existe "sem data").
-  function handleData(chave, valor) {
-    if (valor) atualizarParams({ [chave]: valor });
+  // deixa o valor anterior (o padrão é sempre a semana atual, não existe "sem data"). Qualquer
+  // dia escolhido vira a semana (domingo–sábado) que o contém — só se escolhe UM dia; a tela
+  // sempre resolve e mostra a semana inteira.
+  function handleSemana(valor) {
+    if (valor) atualizarParams({ semana: domingoDaSemana(valor) });
   }
 
   // Quem só tem 1 empresa já vem com ela preenchida e travada.
@@ -313,31 +318,22 @@ export default function SaldoContasBancariasPage() {
                   />
                 </div>
 
-                {/* min-w-72: cada campo de data precisa de ~140px pra mostrar o ano inteiro
-                    (dd/mm/aaaa + o ícone do calendário) — abaixo disso o ano é cortado, então
-                    o grupo prefere quebrar pra segunda linha a ficar mais estreito. Sem as
-                    setas de navegação de período (pedido do usuário), sobra só os 2 campos. */}
-                <div className="flex min-w-0 items-end gap-1.5 sm:min-w-72 sm:max-w-sm sm:flex-1">
-                  <div className="min-w-0 flex-1">
-                    <label className="mb-1 block text-sm font-medium text-gray-700">Data início</label>
-                    <input
-                      type="date"
-                      value={dataInicio}
-                      onChange={(e) => handleData('data_inicio', e.target.value)}
-                      disabled={semEmpresa}
-                      className={CLASSE_DATA}
-                    />
-                  </div>
-                  <div className="min-w-0 flex-1">
-                    <label className="mb-1 block text-sm font-medium text-gray-700">Data fim</label>
-                    <input
-                      type="date"
-                      value={dataFim}
-                      onChange={(e) => handleData('data_fim', e.target.value)}
-                      disabled={semEmpresa}
-                      className={CLASSE_DATA}
-                    />
-                  </div>
+                {/* Um dia só escolhe a semana inteira (pedido do usuário) — o campo mostra o
+                    domingo, e o texto embaixo confirma o intervalo resolvido (domingo–sábado),
+                    já que o valor bruto do input (sempre um domingo) sozinho não deixa óbvio
+                    que é uma semana inteira, não um dia avulso. */}
+                <div className="sm:min-w-44 sm:max-w-56 sm:flex-1">
+                  <label className="mb-1 block text-sm font-medium text-gray-700">Semana</label>
+                  <input
+                    type="date"
+                    value={dataInicio}
+                    onChange={(e) => handleSemana(e.target.value)}
+                    disabled={semEmpresa}
+                    className={CLASSE_DATA}
+                  />
+                  <p className="mt-1 truncate text-xs text-gray-400">
+                    {formatarDataBR(dataInicio)} – {formatarDataBR(dataFim)}
+                  </p>
                 </div>
               </>
             )}
@@ -455,26 +451,19 @@ export default function SaldoContasBancariasPage() {
       <div>
         <Tabs tabs={TABS} activeId={abaAtiva} onChange={(aba) => atualizarParams({ aba })} />
 
-        {abaAtiva === 'saldos' &&
-          (erroPeriodo ? (
-            <div className="flex min-h-70 flex-col items-center justify-center rounded-card rounded-tl-none bg-white text-center shadow-card">
-              <TriangleAlert size={28} className="mb-3 text-amber-500" />
-              <h2 className="text-sm font-semibold text-gray-900">Período inválido</h2>
-              <p className="mt-1 max-w-sm text-xs text-gray-500">{erroPeriodo}</p>
-            </div>
-          ) : (
-            <SaldosContasTab
-              empresaId={empresaId}
-              dataInicio={dataInicio}
-              dataFim={dataFim}
-              companyIds={companyIds}
-              bancos={bancos}
-              infoBancos={infoBancos}
-              refreshToken={refreshToken}
-              dataAberta={dataAberta}
-              onPeriodoDessincronizado={() => setPeriodoToken((n) => n + 1)}
-            />
-          ))}
+        {abaAtiva === 'saldos' && (
+          <SaldosContasTab
+            empresaId={empresaId}
+            dataInicio={dataInicio}
+            dataFim={dataFim}
+            companyIds={companyIds}
+            bancos={bancos}
+            infoBancos={infoBancos}
+            refreshToken={refreshToken}
+            dataAberta={dataAberta}
+            onPeriodoDessincronizado={() => setPeriodoToken((n) => n + 1)}
+          />
+        )}
 
         {abaAtiva === 'bancos' && <BancosTab search={bancosSearch} />}
 

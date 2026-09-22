@@ -13,9 +13,6 @@ export const GRUPOS_CLASSIFICACAO = [
 
 export const OPCOES_CLASSIFICACAO = GRUPOS_CLASSIFICACAO.map(({ value, label }) => ({ value, label }));
 
-// Igual ao limite do backend (saldos.controller.js) — 3 meses de colunas já é bastante tabela.
-export const MAX_DIAS_PERIODO = 93;
-
 // ---------------------------------------------------------------------------
 // Datas — sempre 'YYYY-MM-DD' em horário LOCAL (toISOString() devolve UTC e, à noite,
 // já cairia no dia seguinte).
@@ -40,32 +37,26 @@ export function formatarDataBR(iso) {
   return deISO(iso).toLocaleDateString('pt-BR', { day: '2-digit', month: '2-digit', year: 'numeric' });
 }
 
-// Período com que a tela abre: a semana atual, de domingo a sábado — getDay() vale 0 no
-// domingo e 6 no sábado, então basta voltar `diaSemana` dias pro início e completar até
-// `6 - diaSemana` pro fim. Recalculado a cada abertura da tela, então nunca fica parado
-// numa semana velha. Sem setas de navegação (pedido do usuário) — pra ver outro período é
-// só digitar as datas.
+// Domingo da semana que contém `iso` — getDay() vale 0 no domingo, então basta voltar
+// `diaSemana` dias. Base de tudo que "trava" a grade numa semana só (pedido do usuário: "vamos
+// travar o calendário em apenas semanal" — em vez de Data início/Data fim livres, que podiam
+// gerar um período tão longo que a tabela ficava larga demais e precisava rolar na horizontal).
+export function domingoDaSemana(iso) {
+  const data = deISO(iso);
+  return paraISO(new Date(data.getFullYear(), data.getMonth(), data.getDate() - data.getDay()));
+}
+
+// { inicio, fim } (domingo a sábado) da semana que contém `iso`.
+export function semanaDe(iso) {
+  const inicio = domingoDaSemana(iso);
+  const d = deISO(inicio);
+  return { inicio, fim: paraISO(new Date(d.getFullYear(), d.getMonth(), d.getDate() + 6)) };
+}
+
+// Período com que a tela abre: a semana atual. Recalculado a cada abertura, então nunca fica
+// parado numa semana velha.
 export function semanaAtual() {
-  const hoje = deISO(hojeISO());
-  const diaSemana = hoje.getDay();
-  return {
-    inicio: paraISO(new Date(hoje.getFullYear(), hoje.getMonth(), hoje.getDate() - diaSemana)),
-    fim: paraISO(new Date(hoje.getFullYear(), hoje.getMonth(), hoje.getDate() + (6 - diaSemana))),
-  };
-}
-
-// Conta os dois extremos: 01 a 30 = 30 dias. (Math.round absorve a hora a mais/a menos
-// nos dias de mudança de horário de verão.)
-export function contarDias(inicio, fim) {
-  return Math.round((deISO(fim) - deISO(inicio)) / 86_400_000) + 1;
-}
-
-// null se o período é válido; senão a mensagem pra mostrar na tela.
-export function validarPeriodo(inicio, fim) {
-  if (!inicio || !fim) return 'Informe a data início e a data fim.';
-  if (fim < inicio) return 'A data fim não pode ser anterior à data início.';
-  if (contarDias(inicio, fim) > MAX_DIAS_PERIODO) return `O período pode ter no máximo ${MAX_DIAS_PERIODO} dias.`;
-  return null;
+  return semanaDe(hojeISO());
 }
 
 const SEMANA_CURTA = ['dom', 'seg', 'ter', 'qua', 'qui', 'sex', 'sáb'];

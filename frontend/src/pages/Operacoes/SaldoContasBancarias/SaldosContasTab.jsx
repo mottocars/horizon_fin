@@ -286,12 +286,11 @@ export default function SaldosContasTab({
   }, [linhasVisiveis]);
 
   // Ao terminar de carregar, rola até deixar a coluna de hoje à vista (a coluna de nomes
-  // ocupa a esquerda; sem isso, num período longo o dia atual ficaria fora da tela). Quem
-  // rola é a PÁGINA (o <main> do AppShell), não mais um `div` interno — ver o comentário
-  // grande logo abaixo, no JSX, sobre por que a grade não tem overflow próprio. Por isso o
-  // alvo é achado subindo a árvore a partir da própria tabela, em vez de um ref fixo pra um
-  // wrapper que não existe mais. Só uma vez por carga: `contas` muda a cada edição salva e
-  // não pode puxar a rolagem de volta pra hoje enquanto o usuário preenche outro dia.
+  // ocupa a esquerda — com a semana inteira normalmente cabendo na tela isso raramente faz
+  // diferença, mas sobra pra viewports estreitas). Quem rola é a PÁGINA (o <main> do
+  // AppShell) — ver o comentário grande no JSX sobre por que a grade não tem overflow
+  // próprio. Só uma vez por carga: `contas` muda a cada edição salva e não pode puxar a
+  // rolagem de volta pra hoje enquanto o usuário preenche outro dia.
   useEffect(() => {
     if (carregando || !contas || rolouAposCargaRef.current || !tabelaRef.current) return;
     rolouAposCargaRef.current = true;
@@ -506,18 +505,21 @@ export default function SaldosContasTab({
       ) : (
         // Nenhum wrapper com overflow-x/overflow-y próprio aqui de propósito (pedido do
         // usuário: "a barra de rolagem deve ser da tela, e não do objeto" — mesmo padrão já
-        // usado em GestaoParcelasTab.jsx). Sem isso, este `div` viraria o "teto" onde o
-        // `sticky` do cabeçalho, da coluna de nomes e do rodapé passa a colar, mas ele nunca
-        // teria altura própria pra rolar de verdade — o cabeçalho ficava preso nele e "fugia"
-        // junto quando a PÁGINA rolava. Quem rola (nos 2 eixos) é o <main> do AppShell: ele já
-        // tem overflow-y-auto, e o CSS força overflow-x a virar "auto" também nesse caso
-        // (regra do overflow computado), então a rolagem horizontal da tabela larga continua
-        // funcionando, só que na barra da página mesmo.
+        // usado em GestaoParcelasTab.jsx). Chegamos a testar overflow-x-auto só neste `div`
+        // pra resolver um período muito longo desformatando a tela ao rolar — mas isso quebra
+        // o `sticky` do cabeçalho/coluna de nomes (que passa a colar relativo a este `div`, e
+        // ele nunca rola de verdade na vertical, então o cabeçalho "foge" ao rolar a PÁGINA;
+        // é uma limitação real do CSS, não bug de implementação). A solução ficou noutro
+        // lugar: a grade agora está travada numa semana (7 dias) só — ver `semana` na página
+        // (SaldoContasBancariasPage.jsx) — então a tabela não fica larga o bastante pra
+        // precisar rolar na horizontal na prática, e o cabeçalho/rodapé grudam relativo ao
+        // <main> do AppShell, que já tem overflow-y-auto (o CSS força overflow-x a virar
+        // "auto" também nesse caso, então uma janela bem estreita ainda rola, só que na
+        // barra da página mesmo — caso raro o bastante pra não valer a complexidade).
         <div ref={tabelaRef} className="rounded-b-card">
-          {/* Só a coluna de nomes tem largura fixa; as de dia dividem o que sobrar. Com poucos
-              dias (o padrão é a semana atual) elas esticam pra preencher o card em vez de
-              deixar uma faixa em branco à direita; com muitos, `minWidth` garante 112px por
-              dia e a grade rola (na página, ver comentário acima). */}
+          {/* Só a coluna de nomes tem largura fixa; as de dia dividem o que sobrar — com
+              exatamente 7 dias (a grade está travada numa semana, ver comentário acima) elas
+              esticam pra preencher o card em vez de deixar uma faixa em branco à direita. */}
           <table
             className="border-separate border-spacing-0 text-left text-xs"
             style={{ tableLayout: 'fixed', width: '100%', minWidth: LARGURA_PRIMEIRA + dias.length * LARGURA_DIA }}
