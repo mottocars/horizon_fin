@@ -80,7 +80,7 @@ const menuItems = [
       { label: 'Construtor de Vendas', to: '/integracoes/construtor-de-vendas', image: iconConstrutorVendas },
       { label: 'Certificados Digitais', to: '/integracoes/certificados-digitais', image: iconCertificadosDigitais },
       { label: 'Conta Azul', to: '/integracoes/conta-azul', image: iconContaAzul },
-      { label: 'Contas Bancárias', to: '/integracoes/contas-bancarias', icon: Landmark },
+      { label: 'Convênios Bancários', to: '/integracoes/contas-bancarias', icon: Landmark },
       { label: 'Whatsapp Z-API', to: '/integracoes/z-api', image: iconZapi },
       { label: 'Email', to: '/integracoes/email', image: iconEmail },
       { label: 'MCP', to: '/integracoes/mcp', image: iconMcp },

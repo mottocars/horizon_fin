@@ -43,7 +43,7 @@ export const TELAS_SISTEMA = [
       { codigo: '/integracoes/construtor-de-vendas', label: 'Construtor de Vendas' },
       { codigo: '/integracoes/certificados-digitais', label: 'Certificados Digitais' },
       { codigo: '/integracoes/conta-azul', label: 'Conta Azul' },
-      { codigo: '/integracoes/contas-bancarias', label: 'Contas Bancárias' },
+      { codigo: '/integracoes/contas-bancarias', label: 'Convênios Bancários' },
       { codigo: '/integracoes/z-api', label: 'Whatsapp Z-API' },
       { codigo: '/integracoes/email', label: 'Email' },
       { codigo: '/integracoes/mcp', label: 'MCP' },

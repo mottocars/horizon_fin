@@ -29,7 +29,7 @@ export const TELAS_SISTEMA = {
   '/integracoes/construtor-de-vendas': { title: 'Construtor de Vendas', subtitle: 'Integrações — Construtor de Vendas' },
   '/integracoes/certificados-digitais': { title: 'Certificados Digitais', subtitle: 'Integrações — Certificados Digitais' },
   '/integracoes/conta-azul': { title: 'Conta Azul', subtitle: 'Integrações — Conta Azul' },
-  '/integracoes/contas-bancarias': { title: 'Contas Bancárias', subtitle: 'Integrações — Contas Bancárias' },
+  '/integracoes/contas-bancarias': { title: 'Convênios Bancários', subtitle: 'Integrações — Convênios Bancários' },
   '/integracoes/z-api': { title: 'Whatsapp Z-API', subtitle: 'Integrações — Whatsapp Z-API' },
   '/integracoes/email': { title: 'Email', subtitle: 'Integrações — Email' },
   '/integracoes/mcp': { title: 'MCP', subtitle: 'Integrações — MCP' },

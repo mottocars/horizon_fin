@@ -160,8 +160,8 @@ export default function App() {
               path="/integracoes/contas-bancarias"
               element={
                 <ComingSoon
-                  title="Contas Bancárias"
-                  description="Integração — Contas Bancárias — em desenvolvimento."
+                  title="Convênios Bancários"
+                  description="Integração — Convênios Bancários — em desenvolvimento."
                 />
               }
             />
