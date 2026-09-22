@@ -10,6 +10,7 @@ import { nomeExibicaoEmpresa } from '../../../utils/empresa';
 import { useEmpresaTravada } from '../../../hooks/useEmpresaTravada';
 import SaldosContasTab from './SaldosContasTab';
 import AbaEmConstrucao from './AbaEmConstrucao';
+import BancosTab from './BancosTab';
 import { OPCOES_CLASSIFICACAO, semanaAtual, validarPeriodo } from './constantes';
 
 // Pra adicionar uma aba nova no futuro basta incluir um item aqui `{ id, label, icon }` e o
@@ -115,8 +116,11 @@ export default function SaldoContasBancariasPage() {
   const [filtros, setFiltros] = useState({ empresas: [], bancos: [] });
   const [loadingFiltros, setLoadingFiltros] = useState(false);
 
+  // Só busca nas abas que realmente usam isso (Saldos das Contas) — nas outras (Bancos,
+  // Contas Bancárias, Configurações) seria 2 consultas ao banco à toa, pra opções de filtro
+  // que nem aparecem na tela.
   useEffect(() => {
-    if (!empresaId) {
+    if (!empresaId || abaAtiva !== 'saldos') {
       setFiltros({ empresas: [], bancos: [] });
       return;
     }
@@ -135,7 +139,7 @@ export default function SaldoContasBancariasPage() {
     return () => {
       ativo = false;
     };
-  }, [empresaId, refreshToken]);
+  }, [empresaId, abaAtiva, refreshToken]);
 
   // código do banco -> { codigo, nome, logo } — a grade usa pra desenhar a logomarca de cada conta.
   const infoBancos = useMemo(() => new Map(filtros.bancos.map((b) => [b.codigo, b])), [filtros.bancos]);
@@ -283,13 +287,7 @@ export default function SaldoContasBancariasPage() {
             />
           ))}
 
-        {abaAtiva === 'bancos' && (
-          <AbaEmConstrucao
-            icon={Landmark}
-            titulo="Bancos"
-            descricao="Catálogo dos bancos usados nas contas bancárias — em desenvolvimento."
-          />
-        )}
+        {abaAtiva === 'bancos' && <BancosTab />}
 
         {abaAtiva === 'contas' && (
           <AbaEmConstrucao

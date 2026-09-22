@@ -1,5 +1,5 @@
 const pool = require('../../config/db');
-const bancosApi = require('../contas-bancarias-sienge/bancos-api.client');
+const bancosService = require('../bancos/bancos.service');
 
 // Só dígitos do banco_numero que o Sienge devolve ("104", "001", "341"...).
 const DIGITOS_BANCO_SQL = `REGEXP_REPLACE(c.banco_numero, '[^0-9]', '', 'g')`;
@@ -62,13 +62,14 @@ async function getFiltros(empresaId) {
     [empresaId]
   );
 
-  // Nome do banco: o da lista oficial (BrasilAPI + internos); se ela estiver fora do ar
-  // ou não conhecer o código (ex.: 901 "Escritório 01" do Sienge), cai no nome que o
-  // Sienge mandou, e por último no próprio código. A logomarca só existe pros bancos da
-  // lista oficial que têm uma (a tela mostra o código do banco no lugar quando não tem).
+  // Nome do banco: o da lista oficial (BrasilAPI + internos, com a logomarca customizada do
+  // cadastro de Bancos por cima da oficial onde existir uma — ver bancos.service.js); se ela
+  // estiver fora do ar ou não conhecer o código (ex.: 901 "Escritório 01" do Sienge), cai no
+  // nome que o Sienge mandou, e por último no próprio código. A logomarca só existe pros
+  // bancos que têm uma (a tela mostra o código do banco no lugar quando não tem).
   let oficiais = new Map();
   try {
-    oficiais = new Map((await bancosApi.getBancos()).map((b) => [b.codigo, b]));
+    oficiais = new Map((await bancosService.listarTodosComLogo()).map((b) => [b.codigo, b]));
   } catch {
     // segue só com os nomes vindos do Sienge
   }

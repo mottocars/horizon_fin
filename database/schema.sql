@@ -805,6 +805,17 @@ CREATE TABLE saldos_contas_bancarias (
 
 CREATE INDEX idx_saldos_contas_bancarias_data ON saldos_contas_bancarias (empresa_id, data);
 
+-- Logomarca customizada de um banco (cadastro de Bancos, aba Bancos de Operações > Saldo
+-- Contas Bancárias) — sobrepõe a logo oficial da BrasilAPI pra aquele código enquanto
+-- existir uma linha aqui. Data URI (base64), já redimensionada no navegador antes de
+-- enviar; sem linha = usa a logo oficial (ou nenhuma, se a BrasilAPI também não tiver).
+CREATE TABLE bancos_logos (
+    codigo        VARCHAR(3) PRIMARY KEY,
+    logo          TEXT NOT NULL,
+    criado_em     TIMESTAMP DEFAULT NOW(),
+    atualizado_em TIMESTAMP DEFAULT NOW()
+);
+
 -- Portal das Construtoras — EPR (Extrato de Unidades de Empreendimento / CAIXA).
 -- Um empreendimento por (empresa_id, contrato_mestre_obra); reimportar o mesmo
 -- contrato substitui integralmente os mutuários daquele contrato (delete + insert).
@@ -2052,6 +2063,10 @@ FOR EACH ROW EXECUTE FUNCTION set_atualizado_em();
 
 CREATE TRIGGER trg_saldos_contas_bancarias_atualizado_em
 BEFORE UPDATE ON saldos_contas_bancarias
+FOR EACH ROW EXECUTE FUNCTION set_atualizado_em();
+
+CREATE TRIGGER trg_bancos_logos_atualizado_em
+BEFORE UPDATE ON bancos_logos
 FOR EACH ROW EXECUTE FUNCTION set_atualizado_em();
 
 CREATE TRIGGER trg_sie_sales_contracts_atualizado_em
