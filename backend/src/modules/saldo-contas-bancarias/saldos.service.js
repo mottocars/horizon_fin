@@ -39,13 +39,18 @@ async function assertAcessoEmpresa(usuarioId, empresaId) {
   }
 }
 
-// Opções dos filtros de Empresas e Banco — sempre a lista completa da empresa, não a
-// já filtrada (senão as opções encolheriam conforme o usuário filtra).
+// Opções do filtro "Empresa da conta" e de Banco — sempre a lista completa (não a já
+// filtrada, senão as opções encolheriam conforme o usuário filtra). Só entram empresas que
+// têm ao menos 1 conta CLASSIFICADA (pedido do usuário): a matriz de saldos já esconde
+// conta sem classificação, então uma empresa que só tem contas assim não teria nenhuma
+// linha pra mostrar — a opção ficaria "morta" no filtro. Isso é específico desta tela; o
+// cadastro de Contas Bancárias (contas.service.js) continua listando TODAS as empresas,
+// já que é lá que uma conta ganha a primeira classificação.
 async function getFiltros(empresaId) {
   const { rows: empresas } = await pool.query(
     `SELECT company_id, MAX(company_name) AS company_name
      FROM contas_bancarias_sienge
-     WHERE empresa_id = $1
+     WHERE empresa_id = $1 AND classificacao IS NOT NULL
      GROUP BY company_id
      ORDER BY MAX(company_name) ASC NULLS LAST, company_id ASC`,
     [empresaId]
@@ -137,9 +142,40 @@ async function getSaldos(empresaId, { dataInicio, dataFim, companyIds = [], clas
   };
 }
 
+// Dia liberado pra lançar saldo nesta empresa. Sem linha em saldos_periodo_aberto ainda
+// (ninguém nunca abriu um período): vale o "hoje" que o PRÓPRIO NAVEGADOR manda — evita
+// qualquer divergência de fuso entre o container (UTC) e o Brasil por conta de um "hoje"
+// calculado aqui no servidor.
+async function getPeriodoAberto(empresaId, hojeCliente) {
+  const { rows } = await pool.query(
+    `SELECT TO_CHAR(data_aberta, 'YYYY-MM-DD') AS data FROM saldos_periodo_aberto WHERE empresa_id = $1`,
+    [empresaId]
+  );
+  return { data: rows[0]?.data || hojeCliente };
+}
+
+async function abrirPeriodo(empresaId, usuarioId, data) {
+  await pool.query(
+    `INSERT INTO saldos_periodo_aberto (empresa_id, data_aberta, atualizado_por)
+     VALUES ($1, $2, $3)
+     ON CONFLICT (empresa_id) DO UPDATE SET data_aberta = EXCLUDED.data_aberta, atualizado_por = EXCLUDED.atualizado_por, atualizado_em = NOW()`,
+    [empresaId, data, usuarioId]
+  );
+  return { data };
+}
+
 // Grava um lote de saldos numa transação só: saldo = null apaga o lançamento do dia
 // ("não informado"), qualquer número (inclusive 0 e negativo — cheque especial) grava.
-async function salvarSaldos(empresaId, usuarioId, itens) {
+// Só aceita lançar no dia liberado (ver getPeriodoAberto) — é a trava de verdade por trás
+// do botão de cadeado da tela: mesmo alguém batendo direto na API, sem passar pela grade
+// (que já desabilita os outros dias), o servidor recusa.
+async function salvarSaldos(empresaId, usuarioId, itens, hojeCliente) {
+  const { data: dataAberta } = await getPeriodoAberto(empresaId, hojeCliente);
+  const foraDoPeriodo = itens.some((i) => i.data !== dataAberta);
+  if (foraDoPeriodo) {
+    throw erro(409, `Só é possível lançar saldo no dia liberado (${dataAberta.split('-').reverse().join('/')}). Abra o período para lançar em outro dia.`);
+  }
+
   // Mesmo (conta, dia) duas vezes no lote faria o ON CONFLICT tentar mexer na mesma
   // linha 2x e o Postgres recusa — vale o último.
   const porChave = new Map();
@@ -193,4 +229,12 @@ async function salvarSaldos(empresaId, usuarioId, itens) {
   }
 }
 
-module.exports = { assertAcessoEmpresa, getFiltros, getSaldos, salvarSaldos, SEM_CLASSIFICACAO };
+module.exports = {
+  assertAcessoEmpresa,
+  getFiltros,
+  getSaldos,
+  salvarSaldos,
+  getPeriodoAberto,
+  abrirPeriodo,
+  SEM_CLASSIFICACAO,
+};

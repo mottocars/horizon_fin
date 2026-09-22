@@ -36,6 +36,10 @@ export function hojeISO() {
   return paraISO(new Date());
 }
 
+export function formatarDataBR(iso) {
+  return deISO(iso).toLocaleDateString('pt-BR', { day: '2-digit', month: '2-digit', year: 'numeric' });
+}
+
 // Período com que a tela abre: a semana atual, de domingo a sábado — getDay() vale 0 no
 // domingo e 6 no sábado, então basta voltar `diaSemana` dias pro início e completar até
 // `6 - diaSemana` pro fim. Recalculado a cada abertura da tela, então nunca fica parado

@@ -22,8 +22,19 @@ const GRUPOS_CADASTRO = [...OPCOES_CLASSIFICACAO, { value: SEM_CLASSIFICACAO, la
 //
 // Busca, status, empresas e o botão "Atualizar" (sincronizar com o Sienge) moram no card do
 // topo da página, junto do filtro de Empresa — aqui embaixo só os registros (pedido do
-// usuário), exatamente como as outras abas desta tela.
-export default function ContasTab({ empresaId, search = '', status = [], companyIds = [], refreshToken = 0, erroAtualizar = '' }) {
+// usuário), exatamente como as outras abas desta tela. `onEmpresas` avisa a página da lista
+// de empresas (do Sienge) pra alimentar aquele filtro — TODAS as que têm conta cadastrada,
+// mesmo as que só têm conta sem classificação (diferente da aba Saldos das Contas, que só
+// mostra quem tem conta classificada — é aqui que uma conta ganha a primeira classificação).
+export default function ContasTab({
+  empresaId,
+  search = '',
+  status = [],
+  companyIds = [],
+  refreshToken = 0,
+  erroAtualizar = '',
+  onEmpresas,
+}) {
   const navigate = useNavigate();
 
   const [contas, setContas] = useState(null);
@@ -44,17 +55,23 @@ export default function ContasTab({ empresaId, search = '', status = [], company
   const carregar = useCallback(() => {
     if (!empresaId) {
       setContas(null);
+      onEmpresas?.([]);
       return;
     }
     setCarregando(true);
     setErroCarga('');
     listContas(empresaId, { page: 1, limit: LIMIT, search, status, companyIds })
-      .then((result) => setContas(result.data))
+      .then((result) => {
+        setContas(result.data);
+        onEmpresas?.(result.empresas.map((e) => ({ value: e.company_id, label: e.company_name || `Empresa ${e.company_id}` })));
+      })
       .catch((err) => {
         setContas(null);
         setErroCarga(err.response?.data?.message || 'Não foi possível carregar as contas bancárias.');
       })
       .finally(() => setCarregando(false));
+    // eslint-disable-next-line react-hooks/exhaustive-deps -- onEmpresas vem do pai como
+    // setState (referência estável); incluir causaria recarga à toa a cada render do pai.
   }, [empresaId, search, status, companyIds]);
 
   // Debounce pra busca digitada; `refreshToken` (botão Atualizar) também passa por aqui —

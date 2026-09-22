@@ -1,10 +1,11 @@
 import { Fragment, memo, useCallback, useEffect, useMemo, useRef, useState } from 'react';
-import { Check, Landmark, Loader2, Minus, Plus, TriangleAlert } from 'lucide-react';
+import { Check, Landmark, Loader2, LockOpen, Minus, Plus, TriangleAlert } from 'lucide-react';
 import { getSaldosContas, salvarSaldosContas } from '../../../api/saldoContasBancarias.api';
 import LogoBanco from './LogoBanco';
 import {
   GRUPOS_CLASSIFICACAO,
   formatarSaldo,
+  hojeISO,
   interpretarSaldo,
   listarDias,
   nomeMes,
@@ -51,6 +52,7 @@ const CelulaSaldo = memo(function CelulaSaldo({
   rotulo,
   dia,
   valor,
+  bloqueada,
   onCommit,
   onNavegar,
   onColar,
@@ -105,11 +107,15 @@ const CelulaSaldo = memo(function CelulaSaldo({
 
   const editando = texto !== null;
   const preenchido = valor !== undefined && valor !== null;
-  const tom = preenchido
-    ? 'border-primary-100 bg-primary-50 hover:border-primary-500'
-    : dia.pendente
-      ? 'border-amber-200 bg-amber-50 hover:border-amber-400'
-      : 'border-transparent bg-transparent hover:border-gray-300 hover:bg-white';
+  // Fora do dia liberado (cadeado): cinza e sem hover, igual a um campo desabilitado comum —
+  // o disabled abaixo já impede focar/digitar/colar, isso é só o reforço visual.
+  const tom = bloqueada
+    ? 'border-transparent bg-gray-50'
+    : preenchido
+      ? 'border-primary-100 bg-primary-50 hover:border-primary-500'
+      : dia.pendente
+        ? 'border-amber-200 bg-amber-50 hover:border-amber-400'
+        : 'border-transparent bg-transparent hover:border-gray-300 hover:bg-white';
 
   return (
     <input
@@ -118,7 +124,8 @@ const CelulaSaldo = memo(function CelulaSaldo({
       inputMode="decimal"
       autoComplete="off"
       spellCheck={false}
-      aria-label={`${rotulo} — saldo do dia ${dia.dia}`}
+      disabled={bloqueada}
+      aria-label={`${rotulo} — saldo do dia ${dia.dia}${bloqueada ? ' (bloqueado — fora do período aberto)' : ''}`}
       value={editando ? texto : preenchido ? formatarSaldo(valor) : ''}
       onFocus={(e) => {
         atualizarTexto(preenchido ? numeroParaEdicao(valor) : '');
@@ -131,8 +138,8 @@ const CelulaSaldo = memo(function CelulaSaldo({
       onBlur={commit}
       onKeyDown={handleKeyDown}
       onPaste={handlePaste}
-      className={`h-8 w-full rounded-md border px-2 text-right text-xs tabular-nums outline-none transition-colors focus:border-primary-500 focus:bg-white focus:ring-2 focus:ring-primary-100 ${MARGEM_ROLAGEM} ${tom} ${
-        editando ? 'text-gray-900' : preenchido ? tomNegativo(valor) : 'text-gray-900'
+      className={`h-8 w-full rounded-md border px-2 text-right text-xs tabular-nums outline-none transition-colors focus:border-primary-500 focus:bg-white focus:ring-2 focus:ring-primary-100 disabled:cursor-not-allowed ${MARGEM_ROLAGEM} ${tom} ${
+        bloqueada ? 'text-gray-400' : editando ? 'text-gray-900' : preenchido ? tomNegativo(valor) : 'text-gray-900'
       }`}
     />
   );
@@ -164,10 +171,15 @@ export default function SaldosContasTab({
   dataInicio,
   dataFim,
   companyIds,
-  classificacoes,
   bancos,
   infoBancos,
   refreshToken = 0,
+  // Dia liberado pra lançar saldo (cadeado, gerenciado na página) — só ele aceita edição;
+  // os demais ficam bloqueados. `onPeriodoDessincronizado` é chamado quando o servidor recusa
+  // uma gravação por o período liberado ter mudado nesse meio tempo (outra aba/pessoa), pra
+  // página recarregar o valor real.
+  dataAberta = '',
+  onPeriodoDessincronizado,
 }) {
   const [contas, setContas] = useState(null);
   const [carregando, setCarregando] = useState(false);
@@ -198,7 +210,7 @@ export default function SaldosContasTab({
     rolouAposCargaRef.current = false;
     setCarregando(true);
     setErroCarga('');
-    getSaldosContas(empresaId, { dataInicio, dataFim, companyIds, classificacoes, bancos })
+    getSaldosContas(empresaId, { dataInicio, dataFim, companyIds, bancos })
       .then((resposta) => {
         if (minhaRequisicao === requisicaoRef.current) setContas(resposta.contas);
       })
@@ -211,7 +223,7 @@ export default function SaldosContasTab({
       .finally(() => {
         if (minhaRequisicao === requisicaoRef.current) setCarregando(false);
       });
-  }, [empresaId, dataInicio, dataFim, companyIds, classificacoes, bancos]);
+  }, [empresaId, dataInicio, dataFim, companyIds, bancos]);
 
   carregarRef.current = carregar;
 
@@ -320,15 +332,19 @@ export default function SaldosContasTab({
       setPendentes((n) => n + 1);
       setErroSalvar('');
       filaRef.current = filaRef.current
-        .then(() => salvarSaldosContas(empresaId, itens))
+        .then(() => salvarSaldosContas(empresaId, itens, hojeISO()))
         .then(() => setSalvoAlgumaVez(true))
         .catch((err) => {
           setErroSalvar(err.response?.data?.message || 'Não foi possível salvar. Recarregando os saldos...');
+          // 409 = o período liberado mudou desde que a tela carregou (outra aba/pessoa abriu
+          // outro dia) — além de recarregar os saldos, a página precisa saber pra corrigir
+          // qual dia fica editável agora.
+          if (err.response?.status === 409) onPeriodoDessincronizado?.();
           carregarRef.current();
         })
         .finally(() => setPendentes((n) => n - 1));
     },
-    [empresaId, aplicarLocal]
+    [empresaId, aplicarLocal, onPeriodoDessincronizado]
   );
 
   const handleCommit = useCallback(
@@ -378,7 +394,9 @@ export default function SaldosContasTab({
           const dia = dias[colunaInicial + c];
           if (bruto.trim() === '') return;
           const valor = interpretarSaldo(bruto);
-          if (!conta || !dia || Number.isNaN(valor)) {
+          // dia.iso !== dataAberta: coluna fora do período liberado, mesma regra da célula
+          // sozinha (input desabilitado) — colar por cima de várias colunas não pode furar isso.
+          if (!conta || !dia || Number.isNaN(valor) || dia.iso !== dataAberta) {
             ignorados += 1;
             return;
           }
@@ -388,11 +406,11 @@ export default function SaldosContasTab({
 
       salvar(itens);
       setAviso(
-        `${itens.length} valor(es) colado(s)` + (ignorados ? ` · ${ignorados} ignorado(s) (inválido ou fora da grade)` : '')
+        `${itens.length} valor(es) colado(s)` + (ignorados ? ` · ${ignorados} ignorado(s) (inválido ou fora da grade/do período liberado)` : '')
       );
       setTimeout(() => setAviso(''), 5000);
     },
-    [dias, salvar]
+    [dias, salvar, dataAberta]
   );
 
   function alternarGrupo(valor) {
@@ -550,6 +568,9 @@ export default function SaldosContasTab({
                     >
                       {String(d.dia).padStart(2, '0')}
                     </span>
+                    {/* Único dia com o cadeado aberto — as células dele são as únicas
+                        editáveis; as demais colunas mostram o valor só pra leitura. */}
+                    {d.iso === dataAberta && <LockOpen size={11} className="mx-auto mt-0.5 text-emerald-500" aria-label="Período aberto neste dia" />}
                   </th>
                 ))}
               </tr>
@@ -589,8 +610,8 @@ export default function SaldosContasTab({
                           <tr key={`${conta.company_id}|${conta.numero_conta}`}>
                             {/* pl-9: a logomarca fica alinhada com o ícone da classificação na
                                 linha de cima. Só o nome da conta — a empresa não precisa
-                                aparecer aqui (existe o filtro Empresas) — e o banco vai no
-                                tooltip da logomarca. */}
+                                aparecer aqui (existe o filtro Empresa da conta) — e o banco vai
+                                no tooltip da logomarca. */}
                             <td className="sticky left-0 z-10 border-b border-r border-gray-100 border-r-gray-200 bg-white py-1.5 pl-9 pr-3">
                               <div className="flex items-center gap-2.5">
                                 <LogoBanco codigo={conta.banco_codigo} info={infoBancos?.get(conta.banco_codigo)} />
@@ -615,6 +636,7 @@ export default function SaldosContasTab({
                                   rotulo={conta.nome || conta.numero_conta}
                                   dia={d}
                                   valor={conta.saldos[d.iso]}
+                                  bloqueada={d.iso !== dataAberta}
                                   onCommit={handleCommit}
                                   onNavegar={handleNavegar}
                                   onColar={handleColar}

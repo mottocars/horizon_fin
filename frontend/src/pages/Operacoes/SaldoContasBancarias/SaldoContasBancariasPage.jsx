@@ -1,11 +1,11 @@
 import { useEffect, useMemo, useRef, useState } from 'react';
 import { useSearchParams } from 'react-router-dom';
-import { CreditCard, Landmark, RefreshCw, Search, Settings, TriangleAlert, Wallet } from 'lucide-react';
+import { CreditCard, Landmark, Lock, RefreshCw, Search, Settings, TriangleAlert, Wallet } from 'lucide-react';
 import Card from '../../../components/Card';
 import Tabs from '../../../components/Tabs';
 import SearchableSelect from '../../../components/SearchableSelect';
 import { listEmpresas } from '../../../api/empresas.api';
-import { getFiltrosSaldos } from '../../../api/saldoContasBancarias.api';
+import { getFiltrosSaldos, getPeriodoAberto } from '../../../api/saldoContasBancarias.api';
 import { gerarContasBancarias } from '../../../api/contasBancariasSienge.api';
 import { nomeExibicaoEmpresa } from '../../../utils/empresa';
 import { useEmpresaTravada } from '../../../hooks/useEmpresaTravada';
@@ -13,7 +13,8 @@ import SaldosContasTab from './SaldosContasTab';
 import AbaEmConstrucao from './AbaEmConstrucao';
 import BancosTab from './BancosTab';
 import ContasTab from './ContasTab';
-import { OPCOES_CLASSIFICACAO, semanaAtual, validarPeriodo } from './constantes';
+import AbrirPeriodoModal from './AbrirPeriodoModal';
+import { formatarDataBR, hojeISO, semanaAtual, validarPeriodo } from './constantes';
 
 // Pra adicionar uma aba nova no futuro basta incluir um item aqui `{ id, label, icon }` e o
 // caso correspondente no bloco de conteúdo mais abaixo (mesmo esquema de GestaoCobrancasPage).
@@ -54,8 +55,6 @@ export default function SaldoContasBancariasPage() {
   // (mesmo com o mesmo conteúdo) e a grade recarregaria à toa.
   const companyIdsParam = searchParams.get('company_ids') || '';
   const companyIds = useMemo(() => companyIdsParam.split(',').filter(Boolean).map(Number), [companyIdsParam]);
-  const classificacoesParam = searchParams.get('classificacoes') || '';
-  const classificacoes = useMemo(() => classificacoesParam.split(',').filter(Boolean), [classificacoesParam]);
   const bancosParam = searchParams.get('bancos') || '';
   const bancos = useMemo(() => bancosParam.split(',').filter(Boolean), [bancosParam]);
 
@@ -73,6 +72,22 @@ export default function SaldoContasBancariasPage() {
   const [contasStatus, setContasStatus] = useState([]);
   const [atualizandoContas, setAtualizandoContas] = useState(false);
   const [erroAtualizarContas, setErroAtualizarContas] = useState('');
+
+  // Empresas (do Sienge) pra aba Contas Bancárias — diferente da lista da aba Saldos das
+  // Contas (ver opcoesEmpresasSienge mais abaixo): aqui entram TODAS as empresas com conta
+  // cadastrada, inclusive as que só têm conta sem classificação — é justamente onde ela é
+  // classificada pela primeira vez. Vem do próprio resultado de listContas (ContasTab avisa
+  // por callback), não de uma consulta própria.
+  const [empresasOpcoesContas, setEmpresasOpcoesContas] = useState([]);
+
+  // Dia liberado pra lançar saldo (cadeado) — só existe na aba Saldos das Contas.
+  // `periodoToken` força recarregar do servidor sem esperar trocar de empresa/aba — usado
+  // quando SaldosContasTab detecta que salvou fora do período (outra aba/pessoa mudou o
+  // período liberado enquanto esta tela estava aberta).
+  const [dataAberta, setDataAberta] = useState('');
+  const [carregandoPeriodo, setCarregandoPeriodo] = useState(false);
+  const [modalPeriodoAberto, setModalPeriodoAberto] = useState(false);
+  const [periodoToken, setPeriodoToken] = useState(0);
 
   // Duas alterações seguidas antes de o React re-renderizar (ex.: mexer nas duas datas em
   // sequência rápida) partiriam do mesmo `searchParams` velho e a segunda apagaria a
@@ -131,11 +146,12 @@ export default function SaldoContasBancariasPage() {
   const [filtros, setFiltros] = useState({ empresas: [], bancos: [] });
   const [loadingFiltros, setLoadingFiltros] = useState(false);
 
-  // Busca nas abas que usam essas opções (Saldos das Contas e Contas Bancárias — a lista de
-  // "Empresas" do Sienge é a mesma nas duas, ver contas.service.js/saldos.service.js) — nas
-  // outras (Bancos, Configurações) seria uma consulta ao banco à toa.
+  // Só busca na aba que usa essas opções (Saldos das Contas) — nas outras seria uma consulta
+  // ao banco à toa. Empresa da conta aqui só traz quem TEM conta classificada (ver
+  // saldos.service.js::getFiltros) — a aba Contas Bancárias usa sua própria lista (sem esse
+  // filtro), recebida da própria ContasTab por callback (ver empresasOpcoesContas acima).
   useEffect(() => {
-    if (!empresaId || (abaAtiva !== 'saldos' && abaAtiva !== 'contas')) {
+    if (!empresaId || abaAtiva !== 'saldos') {
       setFiltros({ empresas: [], bancos: [] });
       return;
     }
@@ -155,6 +171,30 @@ export default function SaldoContasBancariasPage() {
       ativo = false;
     };
   }, [empresaId, abaAtiva, refreshToken]);
+
+  // Dia liberado pra lançar saldo — sem linha salva ainda pra essa empresa, o servidor devolve
+  // o "hoje" que a gente manda (ver getPeriodoAberto em saldos.service.js).
+  useEffect(() => {
+    if (!empresaId || abaAtiva !== 'saldos') {
+      setDataAberta('');
+      return;
+    }
+    let ativo = true;
+    setCarregandoPeriodo(true);
+    getPeriodoAberto(empresaId, hojeISO())
+      .then((r) => {
+        if (ativo) setDataAberta(r.data);
+      })
+      .catch(() => {
+        if (ativo) setDataAberta(hojeISO());
+      })
+      .finally(() => {
+        if (ativo) setCarregandoPeriodo(false);
+      });
+    return () => {
+      ativo = false;
+    };
+  }, [empresaId, abaAtiva, periodoToken]);
 
   // código do banco -> { codigo, nome, logo } — a grade usa pra desenhar a logomarca de cada conta.
   const infoBancos = useMemo(() => new Map(filtros.bancos.map((b) => [b.codigo, b])), [filtros.bancos]);
@@ -216,29 +256,20 @@ export default function SaldoContasBancariasPage() {
 
             {abaAtiva === 'saldos' && (
               <>
-                <div className="sm:min-w-44 sm:max-w-xs sm:flex-1">
-                  <label className="mb-1 block text-sm font-medium text-gray-700">Empresas</label>
+                {/* flex-[2] (cresce 2x mais rápido que os vizinhos flex-1) + max-w bem maior:
+                    ocupa o espaço que este campo dividia com o filtro de Classificação,
+                    removido a pedido do usuário — só aumentar o max-w não bastava, porque
+                    com flex-1 em todos os campos crescem em partes iguais até então. */}
+                <div className="sm:min-w-44 sm:max-w-xl sm:flex-2">
+                  <label className="mb-1 block text-sm font-medium text-gray-700">Empresa da conta</label>
                   <SearchableSelect
                     multiple
                     value={companyIds}
                     onChange={(ids) => atualizarParams({ company_ids: ids })}
                     disabled={semEmpresa || loadingFiltros}
                     options={opcoesEmpresasSienge}
-                    placeholder={semEmpresa ? 'Selecione a empresa primeiro' : loadingFiltros ? 'Carregando...' : 'Todas as empresas'}
-                    emptyMessage="Nenhuma empresa encontrada."
-                  />
-                </div>
-
-                <div className="sm:min-w-40 sm:max-w-64 sm:flex-1">
-                  <label className="mb-1 block text-sm font-medium text-gray-700">Classificação</label>
-                  <SearchableSelect
-                    multiple
-                    value={classificacoes}
-                    onChange={(valores) => atualizarParams({ classificacoes: valores })}
-                    disabled={semEmpresa}
-                    options={OPCOES_CLASSIFICACAO}
-                    placeholder={semEmpresa ? 'Selecione a empresa primeiro' : 'Todas as classificações'}
-                    emptyMessage="Nenhuma classificação encontrada."
+                    placeholder={semEmpresa ? 'Selecione a empresa primeiro' : loadingFiltros ? 'Carregando...' : 'Todas as empresas da conta'}
+                    emptyMessage="Nenhuma empresa da conta encontrada."
                   />
                 </div>
 
@@ -330,15 +361,15 @@ export default function SaldoContasBancariasPage() {
                 </div>
 
                 <div className="sm:min-w-44 sm:max-w-xs sm:flex-1">
-                  <label className="mb-1 block text-sm font-medium text-gray-700">Empresas</label>
+                  <label className="mb-1 block text-sm font-medium text-gray-700">Empresa da conta</label>
                   <SearchableSelect
                     multiple
                     value={companyIds}
                     onChange={(ids) => atualizarParams({ company_ids: ids })}
-                    disabled={semEmpresa || loadingFiltros}
-                    options={opcoesEmpresasSienge}
-                    placeholder={semEmpresa ? 'Selecione a empresa primeiro' : loadingFiltros ? 'Carregando...' : 'Todas as empresas'}
-                    emptyMessage="Nenhuma empresa encontrada."
+                    disabled={semEmpresa}
+                    options={empresasOpcoesContas}
+                    placeholder={semEmpresa ? 'Selecione a empresa primeiro' : 'Todas as empresas da conta'}
+                    emptyMessage="Nenhuma empresa da conta encontrada."
                   />
                 </div>
               </>
@@ -347,15 +378,18 @@ export default function SaldoContasBancariasPage() {
 
           {abaAtiva === 'saldos' && (
             <div className="flex shrink-0 items-center gap-2">
-              {/* Só ícone, no mesmo formato do botão Sincronizar da Gestão de Cobranças. */}
+              {/* Cadeado no lugar do antigo botão de recarregar (pedido do usuário): abre a
+                  janela onde se escolhe qual dia fica liberado pra lançar saldo. O rótulo
+                  mostra a data liberada agora, pra dar pra ver sem precisar abrir a janela. */}
               <button
                 type="button"
-                onClick={() => setRefreshToken((n) => n + 1)}
+                onClick={() => setModalPeriodoAberto(true)}
                 disabled={semEmpresa}
-                title="Recarregar saldos"
-                className="flex shrink-0 items-center justify-center rounded-lg bg-primary-600 p-2 text-white transition-colors hover:bg-primary-700 disabled:cursor-not-allowed disabled:opacity-60"
+                title="Abrir período"
+                className="flex shrink-0 items-center gap-2 rounded-lg bg-primary-600 px-3 py-2 text-sm font-medium text-white transition-colors hover:bg-primary-700 disabled:cursor-not-allowed disabled:opacity-60"
               >
-                <RefreshCw size={18} />
+                <Lock size={16} />
+                {carregandoPeriodo ? '...' : dataAberta ? formatarDataBR(dataAberta) : 'Abrir período'}
               </button>
             </div>
           )}
@@ -402,10 +436,11 @@ export default function SaldoContasBancariasPage() {
               dataInicio={dataInicio}
               dataFim={dataFim}
               companyIds={companyIds}
-              classificacoes={classificacoes}
               bancos={bancos}
               infoBancos={infoBancos}
               refreshToken={refreshToken}
+              dataAberta={dataAberta}
+              onPeriodoDessincronizado={() => setPeriodoToken((n) => n + 1)}
             />
           ))}
 
@@ -419,6 +454,7 @@ export default function SaldoContasBancariasPage() {
             companyIds={companyIds}
             refreshToken={refreshToken}
             erroAtualizar={erroAtualizarContas}
+            onEmpresas={setEmpresasOpcoesContas}
           />
         )}
 
@@ -430,6 +466,13 @@ export default function SaldoContasBancariasPage() {
           />
         )}
       </div>
+
+      <AbrirPeriodoModal
+        open={modalPeriodoAberto}
+        onClose={() => setModalPeriodoAberto(false)}
+        empresaId={empresaId}
+        onAberto={setDataAberta}
+      />
     </div>
   );
 }

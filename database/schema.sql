@@ -805,6 +805,17 @@ CREATE TABLE saldos_contas_bancarias (
 
 CREATE INDEX idx_saldos_contas_bancarias_data ON saldos_contas_bancarias (empresa_id, data);
 
+-- Dia liberado pra lançar saldo na tela Operações > Saldo Contas Bancárias — só esse dia
+-- aceita gravação (fora dele, salvarSaldos recusa; ver saldos.service.js). 1 linha por
+-- empresa; sem linha ainda = nenhum usuário abriu um período nesta empresa, então vale o
+-- "hoje" que o próprio navegador manda (padrão antes de qualquer ação explícita).
+CREATE TABLE saldos_periodo_aberto (
+    empresa_id     INTEGER PRIMARY KEY REFERENCES empresas(id) ON DELETE CASCADE,
+    data_aberta    DATE NOT NULL,
+    atualizado_por INTEGER REFERENCES usuarios(id) ON DELETE SET NULL,
+    atualizado_em  TIMESTAMP DEFAULT NOW()
+);
+
 -- Logomarca customizada de um banco (cadastro de Bancos, aba Bancos de Operações > Saldo
 -- Contas Bancárias) — sobrepõe a logo oficial da BrasilAPI pra aquele código enquanto
 -- existir uma linha aqui. Data URI (base64), já redimensionada no navegador antes de
