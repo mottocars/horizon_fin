@@ -4,16 +4,17 @@
 // manual pra quem já tem a integração configurada.
 //
 // Relação de datas (confirmada com o usuário testando ao vivo): pedir o retorno da VanPix com
-// data_pesquisa = D+1 traz o saldo FINAL do dia D (o extrato da CAIXA "fecha" o dia seguinte).
-// Por isso, pra plotar o saldo do dia `data` (o período sendo aberto), consultamos a VanPix
-// com `data + 1 dia`.
+// data_pesquisa = D traz o saldo FINAL do dia ANTERIOR (D-1) — o extrato da CAIXA de um dia só
+// fica pronto no dia seguinte. O saldo plotado no dia `data` (o período sendo aberto) é esse
+// saldo final de `data - 1 dia`, que é também o saldo inicial de `data` — por isso consultamos
+// a VanPix com a própria `data` (sem somar dia nenhum).
 const pool = require('../../config/db');
 const vanpixService = require('../integracoes-vanpix/vanpix.service');
 const saldosService = require('./saldos.service');
 
-function addDiaISO(iso) {
+function diaAnteriorISO(iso) {
   const d = new Date(`${iso}T12:00:00Z`); // meio-dia UTC evita virar o dia errado por fuso
-  d.setUTCDate(d.getUTCDate() + 1);
+  d.setUTCDate(d.getUTCDate() - 1);
   return d.toISOString().slice(0, 10);
 }
 
@@ -49,7 +50,8 @@ async function buscarContasCorrespondentes(empresaId, banco, conta, digitoConta)
 // exceção por causa de UM convênio com problema — cada um é reportado individualmente; só
 // propaga erro se a própria gravação em lote falhar (ex.: período fechado por outra aba).
 async function buscarSaldosVanpix(empresaId, usuarioId, data) {
-  const dataPesquisa = paraDDMMYYYY(addDiaISO(data));
+  const dataPesquisa = paraDDMMYYYY(data);
+  const diaAnterior = diaAnteriorISO(data);
   const integracoes = await listarVanpixAtivasDaEmpresa(empresaId);
 
   const relatorio = { convenios: [], atualizados: [], semCorrespondencia: [] };
@@ -67,7 +69,9 @@ async function buscarSaldosVanpix(empresaId, usuarioId, data) {
       if (resultado.status !== 'ok_com_retorno') continue;
 
       for (const lote of resultado.lotes) {
-        if (lote.saldoFinal.data !== data) continue; // arquivo trouxe saldo de outro dia — ignora
+        // o trailer traz a DATA do saldo final (deveria ser sempre `diaAnterior`, já que foi
+        // isso que pedimos) — se vier outra coisa, é mais seguro ignorar que gravar errado.
+        if (lote.saldoFinal.data !== diaAnterior) continue;
 
         const contas = await buscarContasCorrespondentes(empresaId, lote.banco, lote.conta, lote.digitoConta);
         if (contas.length === 0) {
