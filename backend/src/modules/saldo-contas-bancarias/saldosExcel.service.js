@@ -208,16 +208,19 @@ function escreverValorDia(sheet, linha, coluna, valor) {
   return c;
 }
 
-function escreverLinhaGrupo(sheet, linha, texto, totais, dias, { total = false } = {}) {
+// `comFundo = false` deixa a linha sem preenchimento — pedido do usuário pras linhas de
+// classificação da seção "Saldos por Classificação" não ficarem parecidas com a linha TOTAL
+// (que continua destacada, é a única que deve chamar atenção ali).
+function escreverLinhaGrupo(sheet, linha, texto, totais, dias, { total = false, comFundo = true } = {}) {
   const c1 = celula(sheet, linha, 1);
   c1.value = texto;
   c1.font = { bold: true, size: 11, color: { argb: total ? AZUL : PRETO } };
   c1.alignment = { horizontal: 'left', vertical: 'middle', indent: 1 };
-  c1.fill = { type: 'pattern', pattern: 'solid', fgColor: { argb: AZUL_CLARO } };
+  if (comFundo) c1.fill = { type: 'pattern', pattern: 'solid', fgColor: { argb: AZUL_CLARO } };
   dias.forEach((dia, i) => {
     const c = escreverValorDia(sheet, linha, 2 + i, totais[dia.iso]);
     c.font = { bold: true, size: 11 };
-    c.fill = { type: 'pattern', pattern: 'solid', fgColor: { argb: AZUL_CLARO } };
+    if (comFundo) c.fill = { type: 'pattern', pattern: 'solid', fgColor: { argb: AZUL_CLARO } };
   });
 }
 
@@ -288,7 +291,7 @@ function montarPlanilha(workbook, dados) {
   escreverCabecalhoColunas(sheet, linha, 'CLASSIFICAÇÃO', dias, meses, ultimaColuna);
   linha += 2;
   for (const grupo of grupos) {
-    escreverLinhaGrupo(sheet, linha, grupo.nome, totaisPorGrupo[grupo.nome], dias);
+    escreverLinhaGrupo(sheet, linha, grupo.nome, totaisPorGrupo[grupo.nome], dias, { comFundo: false });
     linha += 1;
   }
   escreverLinhaGrupo(sheet, linha, 'TOTAL', totalGeral, dias, { total: true });

@@ -1,6 +1,6 @@
 import { useEffect, useMemo, useRef, useState } from 'react';
 import { useSearchParams } from 'react-router-dom';
-import { CreditCard, Download, Landmark, Layers, Loader2, Lock, LockOpen, RefreshCw, Search, Settings, Wallet } from 'lucide-react';
+import { CreditCard, Download, FilterX, Landmark, Layers, Loader2, Lock, LockOpen, RefreshCw, Search, Settings, Wallet } from 'lucide-react';
 import Card from '../../../components/Card';
 import Tabs from '../../../components/Tabs';
 import SearchableSelect from '../../../components/SearchableSelect';
@@ -449,7 +449,7 @@ export default function SaldoContasBancariasPage() {
                   onClick={handleExportarRelatorio}
                   disabled={semEmpresa || exportandoRelatorio}
                   title="Exportar relatório em Excel"
-                  className="flex shrink-0 items-center justify-center rounded-lg border border-gray-200 p-2.5 text-gray-600 transition-colors hover:bg-gray-50 disabled:cursor-not-allowed disabled:opacity-60"
+                  className="flex shrink-0 items-center justify-center rounded-lg border border-gray-200 p-2 text-gray-600 transition-colors hover:bg-gray-50 disabled:cursor-not-allowed disabled:opacity-60"
                 >
                   {exportandoRelatorio ? <Loader2 size={18} className="animate-spin" /> : <Download size={18} />}
                 </button>
@@ -466,7 +466,7 @@ export default function SaldoContasBancariasPage() {
                       ? `Período aberto em ${formatarDataBR(dataAberta)} — clique para encerrar`
                       : 'Nenhum período aberto — clique para abrir'
                   }
-                  className={`flex shrink-0 items-center justify-center rounded-lg p-2.5 text-white transition-colors disabled:cursor-not-allowed disabled:opacity-60 ${
+                  className={`flex shrink-0 items-center justify-center rounded-lg p-2 text-white transition-colors disabled:cursor-not-allowed disabled:opacity-60 ${
                     dataAberta ? 'bg-amber-500 hover:bg-amber-600' : 'bg-primary-600 hover:bg-primary-700'
                   }`}
                 >
@@ -483,9 +483,10 @@ export default function SaldoContasBancariasPage() {
                 <button
                   type="button"
                   onClick={limparFiltrosContas}
-                  className="shrink-0 whitespace-nowrap text-sm text-gray-500 hover:text-gray-700"
+                  title="Limpar filtros"
+                  className="flex shrink-0 items-center justify-center rounded-lg border border-gray-200 p-2 text-gray-500 transition-colors hover:bg-gray-50"
                 >
-                  Limpar filtros
+                  <FilterX size={18} />
                 </button>
               )}
               <button
@@ -493,10 +494,9 @@ export default function SaldoContasBancariasPage() {
                 onClick={handleAtualizarContas}
                 disabled={semEmpresa || atualizandoContas}
                 title="Atualizar a partir do Sienge"
-                className="flex shrink-0 items-center justify-center gap-2 rounded-lg border border-gray-200 px-3 py-2 text-sm text-gray-600 transition-colors hover:bg-gray-50 disabled:cursor-not-allowed disabled:opacity-60"
+                className="flex shrink-0 items-center justify-center rounded-lg border border-gray-200 p-2 text-gray-600 transition-colors hover:bg-gray-50 disabled:cursor-not-allowed disabled:opacity-60"
               >
-                <RefreshCw size={16} className={atualizandoContas ? 'animate-spin' : ''} />
-                Atualizar
+                <RefreshCw size={18} className={atualizandoContas ? 'animate-spin' : ''} />
               </button>
             </div>
           )}
