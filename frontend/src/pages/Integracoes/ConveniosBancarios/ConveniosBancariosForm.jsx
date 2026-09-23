@@ -33,6 +33,35 @@ const STATUS_TESTE = {
   desconhecido: { Icone: XCircle, cor: 'text-red-600' },
 };
 
+// Mesmo padrão de ContaBancariaItemDetalhe.jsx (corCampoFiltro no Espião NFe/NFSe): âmbar
+// quando o campo está em branco, azul claro quando já tem valor — dá pra ver de relance o
+// que ainda falta preencher na conexão.
+// A borda azul é primary-100/500 (não 200/400): o tema (styles/index.css) só define primary
+// 50, 100, 500, 600 e 700 — classe de tom inexistente não gera CSS e a borda cairia na cor
+// padrão (preta).
+const COR_CAMPO_VAZIO = 'border-amber-200 bg-amber-50 focus:border-amber-400';
+const COR_CAMPO_PREENCHIDO = 'border-primary-100 bg-primary-50 focus:border-primary-500';
+
+function estaPreenchido(valor) {
+  return String(valor ?? '').trim() !== '';
+}
+
+function classesCor(preenchido) {
+  return preenchido
+    ? `${COR_CAMPO_PREENCHIDO} focus:ring-primary-100`
+    : `${COR_CAMPO_VAZIO} focus:ring-amber-100`;
+}
+
+function corCampo(valor) {
+  return classesCor(estaPreenchido(valor));
+}
+
+// O gatilho do SearchableSelect já traz o próprio anel de foco (primary-100), então aqui vão
+// só borda e fundo — repetir o anel geraria conflito de especificidade no Tailwind.
+function corSelect(valor) {
+  return estaPreenchido(valor) ? COR_CAMPO_PREENCHIDO : COR_CAMPO_VAZIO;
+}
+
 export default function ConveniosBancariosForm() {
   const { id } = useParams();
   const isEdit = Boolean(id);
@@ -121,6 +150,15 @@ export default function ConveniosBancariosForm() {
       e.preventDefault();
       adicionarApelido();
     }
+  }
+
+  // Service Key/Client Secret: em branco significa coisas diferentes conforme o modo. Na
+  // CRIAÇÃO é mesmo "falta preencher" (âmbar, cor normal). Na EDIÇÃO, em branco quer dizer
+  // "manter o segredo já salvo" — um estado completo e válido, não incompleto — então conta
+  // como preenchido (azul) mesmo com o campo vazio na tela; só volta a refletir o valor
+  // digitado de verdade se o usuário decidir trocar o segredo.
+  function corCampoSegredo(valor) {
+    return classesCor(isEdit || estaPreenchido(valor));
   }
 
   // Chama a API de verdade da VanPix (sem salvar nada) pra confirmar as credenciais antes de
@@ -234,6 +272,7 @@ export default function ConveniosBancariosForm() {
                   options={empresas.map((empresa) => ({ value: empresa.id, label: nomeExibicaoEmpresa(empresa) }))}
                   placeholder={loadingEmpresas ? 'Carregando empresas...' : 'Selecione uma empresa'}
                   emptyMessage="Nenhuma empresa encontrada."
+                  corClasses={corSelect(form.empresa_id)}
                 />
                 {fieldErrors.empresa_id && (
                   <p className="mt-1 text-xs text-red-600">{fieldErrors.empresa_id}</p>
@@ -247,6 +286,7 @@ export default function ConveniosBancariosForm() {
                   onChange={(value) => handleChange('tipo', value)}
                   options={TIPOS_CONEXAO}
                   clearable={false}
+                  corClasses={corSelect(form.tipo)}
                 />
               </div>
 
@@ -257,7 +297,7 @@ export default function ConveniosBancariosForm() {
                   value={form.nome_conexao}
                   onChange={(e) => handleChange('nome_conexao', e.target.value)}
                   placeholder="ex.: VanPix Caixa"
-                  className="w-full rounded-lg border border-gray-200 px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-primary-100"
+                  className={`w-full rounded-lg border px-3 py-2 text-sm focus:outline-none focus:ring-2 ${corCampo(form.nome_conexao)}`}
                 />
                 <p className="mt-1 text-xs text-gray-400">
                   Identifica esta conexão quando a empresa tiver mais de uma.
@@ -275,7 +315,7 @@ export default function ConveniosBancariosForm() {
                     value={form.service_key}
                     onChange={(e) => handleChange('service_key', e.target.value)}
                     placeholder={isEdit ? 'Deixe em branco para manter a chave atual' : ''}
-                    className="w-full rounded-lg border border-gray-200 px-3 py-2 pr-10 text-sm focus:outline-none focus:ring-2 focus:ring-primary-100"
+                    className={`w-full rounded-lg border px-3 py-2 pr-10 text-sm focus:outline-none focus:ring-2 ${corCampoSegredo(form.service_key)}`}
                   />
                   <button
                     type="button"
@@ -298,7 +338,7 @@ export default function ConveniosBancariosForm() {
                     value={form.client_secret}
                     onChange={(e) => handleChange('client_secret', e.target.value)}
                     placeholder={isEdit ? 'Deixe em branco para manter o segredo atual' : ''}
-                    className="w-full rounded-lg border border-gray-200 px-3 py-2 pr-10 text-sm focus:outline-none focus:ring-2 focus:ring-primary-100"
+                    className={`w-full rounded-lg border px-3 py-2 pr-10 text-sm focus:outline-none focus:ring-2 ${corCampoSegredo(form.client_secret)}`}
                   />
                   <button
                     type="button"
@@ -322,7 +362,7 @@ export default function ConveniosBancariosForm() {
                     onChange={(e) => setNovoApelido(e.target.value)}
                     onKeyDown={handleApelidoKeyDown}
                     placeholder="ex.: ABPFJR"
-                    className="w-full rounded-lg border border-gray-200 px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-primary-100"
+                    className={`w-full rounded-lg border px-3 py-2 text-sm focus:outline-none focus:ring-2 ${classesCor(form.apelidos.length > 0)}`}
                   />
                   <Button type="button" variant="secondary" onClick={adicionarApelido} className="shrink-0">
                     <Plus size={16} />
