@@ -470,22 +470,27 @@ const SaldosContasTab = forwardRef(function SaldosContasTab(
   const exportarPDF = useCallback(
     async (meta) => {
       if (!contas || contas.length === 0) throw new Error('Nenhuma conta encontrada para exportar.');
-      if (grupos.length === 0) throw new Error('Nenhuma conta classificada para exportar.');
+      // Só entra no relatório quem tem ao menos 1 saldo lançado nesta semana (pedido do
+      // usuário) — uma conta sem nenhum valor no período não agrega nada ao PDF. Um grupo que
+      // fica sem nenhuma conta depois desse filtro também não aparece.
+      const gruposComSaldo = grupos
+        .map((grupo) => ({ ...grupo, contas: grupo.contas.filter((c) => Object.keys(c.saldos).length > 0) }))
+        .filter((grupo) => grupo.contas.length > 0);
+      if (gruposComSaldo.length === 0) throw new Error('Nenhuma conta com saldo lançado nesta semana para exportar.');
       const geradoEm = new Date().toLocaleString('pt-BR', { dateStyle: 'short', timeStyle: 'short' });
       await gerarRelatorioSaldosPdf({
         ...meta,
         geradoEm,
         dias,
         meses,
-        grupos,
+        grupos: gruposComSaldo,
         totaisPorGrupo,
         totalGeral,
-        dataAberta,
         infoBancos,
         semanaArquivo: `${dataInicio}_a_${dataFim}`,
       });
     },
-    [contas, grupos, dias, meses, totaisPorGrupo, totalGeral, dataAberta, infoBancos, dataInicio, dataFim]
+    [contas, grupos, dias, meses, totaisPorGrupo, totalGeral, infoBancos, dataInicio, dataFim]
   );
 
   useImperativeHandle(ref, () => ({ exportarPDF }), [exportarPDF]);

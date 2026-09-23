@@ -112,7 +112,7 @@ export default function SeletorSemana({ value, onChange, disabled = false }) {
         type="button"
         disabled={disabled}
         onClick={() => (disabled ? null : setOpen((o) => !o))}
-        className="flex w-full items-center gap-2 rounded-lg border border-gray-200 px-3 py-2 text-left text-sm text-gray-800 transition-colors focus:outline-none focus:ring-2 focus:ring-primary-100 disabled:bg-gray-50 disabled:text-gray-400 disabled:opacity-60"
+        className="flex w-auto items-center gap-2 whitespace-nowrap rounded-lg border border-gray-200 px-3 py-2 text-left text-sm text-gray-800 transition-colors focus:outline-none focus:ring-2 focus:ring-primary-100 disabled:bg-gray-50 disabled:text-gray-400 disabled:opacity-60"
       >
         <Calendar size={15} className="shrink-0 text-gray-400" />
         <span className="truncate">

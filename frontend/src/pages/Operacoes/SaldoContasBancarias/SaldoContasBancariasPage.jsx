@@ -329,7 +329,7 @@ export default function SaldoContasBancariasPage() {
               filtro de cada aba mora aqui, junto do seletor de Empresa — abaixo das abas só os
               registros (pedido do usuário). Configurações não tem filtro nenhum ainda. */}
           <div className="flex min-w-0 flex-col gap-3 sm:flex-1 sm:flex-row sm:flex-wrap">
-            <div className="sm:min-w-44 sm:max-w-xs sm:flex-1">
+            <div className="sm:min-w-44 sm:flex-1">
               <label className="mb-1 block text-sm font-medium text-gray-700">Empresa</label>
               <SearchableSelect
                 value={empresaId}
@@ -343,7 +343,7 @@ export default function SaldoContasBancariasPage() {
 
             {abaAtiva === 'saldos' && (
               <>
-                <div className="sm:min-w-44 sm:max-w-xs sm:flex-1">
+                <div className="sm:min-w-44 sm:flex-1">
                   <label className="mb-1 block text-sm font-medium text-gray-700">Empresa da conta</label>
                   <SearchableSelect
                     multiple
@@ -356,7 +356,7 @@ export default function SaldoContasBancariasPage() {
                   />
                 </div>
 
-                <div className="sm:min-w-44 sm:max-w-xs sm:flex-1">
+                <div className="sm:min-w-44 sm:flex-1">
                   <label className="mb-1 block text-sm font-medium text-gray-700">Banco</label>
                   <SearchableSelect
                     multiple
@@ -369,7 +369,7 @@ export default function SaldoContasBancariasPage() {
                   />
                 </div>
 
-                <div className="sm:min-w-44 sm:max-w-xs sm:flex-1">
+                <div className="sm:min-w-44 sm:flex-1">
                   <label className="mb-1 block text-sm font-medium text-gray-700">Conta bancária</label>
                   <SearchableSelect
                     multiple
@@ -385,7 +385,7 @@ export default function SaldoContasBancariasPage() {
                 {/* Calendário próprio (SeletorSemana): mostra o intervalo por extenso e, ao
                     passar o mouse por cima de um dia no painel, colore a semana inteira
                     daquela linha — prévia de qual semana seria escolhida (pedido do usuário). */}
-                <div className="sm:min-w-64 sm:max-w-72 sm:flex-1">
+                <div className="sm:flex-none">
                   <label className="mb-1 block text-sm font-medium text-gray-700">Semana</label>
                   <SeletorSemana value={dataInicio} onChange={handleSemana} disabled={semEmpresa} />
                 </div>
@@ -456,17 +456,17 @@ export default function SaldoContasBancariasPage() {
           {abaAtiva === 'saldos' && (
             <div className="flex shrink-0 flex-col items-end gap-1.5">
               <div className="flex shrink-0 items-center gap-2">
-                {/* Espelha a grade inteira (grupos expandidos, logos, cores) num PDF — ver
-                    RelatorioSaldosImpressao.jsx / gerarRelatorioPdf.js. */}
+                {/* Só o ícone (pedido do usuário) — espelha a grade inteira (grupos expandidos,
+                    contas com saldo na semana) num PDF, ver RelatorioSaldosImpressao.jsx /
+                    gerarRelatorioPdf.jsx. */}
                 <button
                   type="button"
                   onClick={handleExportarRelatorio}
                   disabled={semEmpresa || exportandoRelatorio}
                   title="Exportar relatório em PDF"
-                  className="flex shrink-0 items-center justify-center gap-2 rounded-lg border border-gray-200 px-3 py-2.5 text-sm text-gray-600 transition-colors hover:bg-gray-50 disabled:cursor-not-allowed disabled:opacity-60"
+                  className="flex shrink-0 items-center justify-center rounded-lg border border-gray-200 p-2.5 text-gray-600 transition-colors hover:bg-gray-50 disabled:cursor-not-allowed disabled:opacity-60"
                 >
-                  {exportandoRelatorio ? <Loader2 size={16} className="animate-spin" /> : <Download size={16} />}
-                  {exportandoRelatorio ? 'Gerando...' : 'Exportar relatório'}
+                  {exportandoRelatorio ? <Loader2 size={18} className="animate-spin" /> : <Download size={18} />}
                 </button>
 
                 {/* Só o cadeado (pedido do usuário) — azul/trancado sem período aberto, âmbar/
