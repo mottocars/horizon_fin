@@ -5,15 +5,13 @@ import { jsPDF } from 'jspdf';
 import RelatorioSaldosImpressao from './RelatorioSaldosImpressao';
 
 const LARGURA_CONTAINER = 1160; // precisa bater com o width fixo de RelatorioSaldosImpressao.jsx
-const LARGURA_PRIMEIRA_CONTAINER = 300; // precisa bater com LARGURA_PRIMEIRA de RelatorioSaldosImpressao.jsx
 const PADDING_CONTAINER = 32; // precisa bater com o padding do container raiz de RelatorioSaldosImpressao.jsx
 const MARGEM_PT = 18;
 
 // Espera toda <img> dentro do container terminar de carregar (sucesso OU erro) — sem isso o
-// html2canvas pode fotografar a logomarca do banco ainda em branco (a imagem vem de uma CDN
-// externa, não é instantânea), ou capturar o ícone de imagem quebrada antes do fallback
-// (onError) da conta re-renderizar. 5s de limite por imagem: uma CDN fora do ar não pode travar
-// o relatório pra sempre.
+// html2canvas pode fotografar a logomarca do cabeçalho ainda em branco. As logos de banco não
+// usam mais <img> (ver MarcadorLogo/desenharLogos abaixo), então isso só cobre a logomarca fixa
+// do topo do relatório.
 function esperarImagens(container) {
   const imagens = [...container.querySelectorAll('img')];
   return Promise.all(
@@ -27,6 +25,88 @@ function esperarImagens(container) {
         })
     )
   );
+}
+
+// Esconde temporariamente todo o resto da página (a tela ao vivo por trás do relatório) durante
+// a captura — html2canvas tem um bug de renderização (reproduzido com dados reais, não
+// perfeitamente determinístico) que corrompe visualmente linhas de conta do relatório quando há
+// bastante conteúdo — chega a acontecer mesmo com a tela ao vivo TOTALMENTE fora do elemento que
+// está sendo fotografado. Junto com MarcadorLogo (evitar múltiplas <img> reais dentro do próprio
+// relatório), isso reduz bastante a chance do bug aparecer; não achamos uma causa 100%
+// determinística nem uma forma de detectar/repetir a captura quando ainda assim acontece.
+function esconderRestoDaPagina(container) {
+  const outros = [...document.body.children].filter((el) => el !== container);
+  outros.forEach((el) => { el.style.display = 'none'; });
+  return () => outros.forEach((el) => { el.style.display = ''; });
+}
+
+// Pré-carrega cada logo de banco ÚNICA usada no relatório (fora do DOM, com um Image() comum),
+// pra desenhar por cima do canvas já capturado em vez de deixar o html2canvas renderizar a
+// <img> ele mesmo — ver o comentário grande em MarcadorLogo (RelatorioSaldosImpressao.jsx) pra
+// entender por quê. Falha de rede vira `undefined` no Map — a linha correspondente fica sem
+// logo desenhada por cima (mas o quadradinho com borda já está lá, não é um buraco feio).
+function preCarregarLogos(infoBancos) {
+  const entradas = infoBancos ? [...infoBancos.entries()].filter(([, info]) => info?.logo) : [];
+  return Promise.all(
+    entradas.map(
+      ([codigo, info]) =>
+        new Promise((resolve) => {
+          const img = new Image();
+          img.crossOrigin = 'anonymous';
+          const limite = setTimeout(() => resolve([codigo, undefined]), 5000);
+          img.onload = () => { clearTimeout(limite); resolve([codigo, img]); };
+          img.onerror = () => { clearTimeout(limite); resolve([codigo, undefined]); };
+          img.src = info.logo;
+        })
+    )
+  ).then((resultados) => new Map(resultados));
+}
+
+// Acha o canto superior-esquerdo de cada marcador CIANO (MarcadorLogo, dentro do quadradinho de
+// cada linha de conta com logo) — escaneando uma faixa mais larga em x, já que precisamos da
+// posição horizontal (não só vertical) pra saber onde desenhar cada logo.
+function escanearMarcadoresLogo(canvas) {
+  const ctx = canvas.getContext('2d', { willReadFrequently: true });
+  const escalaCanvas = canvas.width / LARGURA_CONTAINER;
+  const xInicio = Math.round((PADDING_CONTAINER + 20) * escalaCanvas);
+  const largura = Math.round(40 * escalaCanvas);
+  const { data, width } = ctx.getImageData(xInicio, 0, largura, canvas.height);
+  const marcadores = [];
+  let emMarcador = false;
+  for (let y = 0; y < canvas.height; y++) {
+    let xEncontrado = -1;
+    for (let x = 0; x < width; x++) {
+      const i = (y * width + x) * 4;
+      if (data[i] < 40 && data[i + 1] > 230 && data[i + 2] > 230) { xEncontrado = x; break; }
+    }
+    const ehMarcador = xEncontrado >= 0;
+    if (ehMarcador && !emMarcador) marcadores.push({ x: xInicio + xEncontrado, y });
+    emMarcador = ehMarcador;
+  }
+  return marcadores;
+}
+
+// Desenha cada logo de banco pré-carregada em cima do canvas já capturado, na posição de cada
+// marcador ciano — na mesma ORDEM em que RelatorioSaldosImpressao.jsx desenha as linhas (grupo
+// por grupo, conta por conta), que é a mesma ordem em que os marcadores aparecem de cima pra
+// baixo no canvas. `9.5` (container px) é o centro do quadradinho de 22px (a marca fica no
+// topo, centralizada — `justifyContent:center`+`alignSelf:flex-start` do MarcadorLogo); o ajuste
+// pelo tamanho da logo centraliza os 16px dela dentro do quadradinho de 22px.
+function desenharLogos(canvas, grupos, infoBancos, logosCarregadas) {
+  const marcadores = escanearMarcadoresLogo(canvas);
+  const escalaCanvas = canvas.width / LARGURA_CONTAINER;
+  const ordemContas = grupos.flatMap((g) => g.contas).filter((c) => infoBancos?.get(c.banco_codigo)?.logo);
+  if (ordemContas.length !== marcadores.length) return; // contagem bateu errado, mais seguro não desenhar nada errado no lugar errado
+  const ctx = canvas.getContext('2d');
+  const TAMANHO_LOGO = 16;
+  ordemContas.forEach((conta, i) => {
+    const img = logosCarregadas.get(conta.banco_codigo);
+    if (!img) return;
+    const { x, y } = marcadores[i];
+    const desenhoX = x - Math.round((9.5 - (22 - TAMANHO_LOGO) / 2) * escalaCanvas);
+    const desenhoY = y + Math.round(((22 - TAMANHO_LOGO) / 2) * escalaCanvas);
+    ctx.drawImage(img, desenhoX, desenhoY, TAMANHO_LOGO * escalaCanvas, TAMANHO_LOGO * escalaCanvas);
+  });
 }
 
 // Acha, no CANVAS JÁ CAPTURADO, a linha (Y) de cada marcador magenta (ver MarcadorLinha em
@@ -59,21 +139,25 @@ function escanearMarcadores(canvas) {
   return marcadores;
 }
 
-// Apaga os marcadores do canvas depois de já saber onde eles estavam — sem isso, a listra
-// magenta apareceria de verdade no PDF final. Sempre branco: é o fundo de quase toda linha do
-// relatório (só o cabeçalho de grupo é cinza clarinho, uma diferença imperceptível numa faixa
-// desse tamanho).
-function apagarMarcadores(canvas, topos) {
-  const ctx = canvas.getContext('2d');
-  const escalaCanvas = canvas.width / LARGURA_CONTAINER;
-  const xInicio = Math.round((PADDING_CONTAINER - 4) * escalaCanvas);
-  const largura = Math.round((LARGURA_PRIMEIRA_CONTAINER + 4) * escalaCanvas);
-  const altura = Math.round(14 * escalaCanvas); // bem mais que os 3px (container) do marcador, com folga generosa
-  ctx.fillStyle = '#ffffff';
-  for (const topo of topos) {
-    const yInicioApagar = Math.max(0, topo - Math.round(2 * escalaCanvas));
-    ctx.fillRect(xInicio, yInicioApagar, largura, altura);
+// Apaga os marcadores (magenta de linha + ciano de logo) do canvas depois de já usados — sem
+// isso, as listras coloridas apareceriam de verdade no PDF final. Apaga PIXEL A PIXEL (troca
+// cada pixel marcado por branco) em vez de um retângulo do tamanho da coluna inteira, pra nunca
+// arriscar tocar conteúdo real que esteja coladinho perto do marcador.
+function apagarMarcadores(canvas) {
+  const ctx = canvas.getContext('2d', { willReadFrequently: true });
+  const imagem = ctx.getImageData(0, 0, canvas.width, canvas.height);
+  const { data } = imagem;
+  for (let i = 0; i < data.length; i += 4) {
+    const magenta = data[i] > 230 && data[i + 1] < 40 && data[i + 2] > 230;
+    const ciano = data[i] < 40 && data[i + 1] > 230 && data[i + 2] > 230;
+    if (magenta || ciano) {
+      data[i] = 255;
+      data[i + 1] = 255;
+      data[i + 2] = 255;
+      data[i + 3] = 255;
+    }
   }
+  ctx.putImageData(imagem, 0, 0);
 }
 
 // Folga de segurança (px do canvas): a página SEGUINTE começa um pouco ANTES do topo
@@ -145,6 +229,8 @@ function apagarFolgaSobreposicao(pagina, inicioPx, cortePx) {
 // uma única vez, escaneia esse canvas pelos marcadores de cada linha e recorta N páginas dele —
 // cada quebra cai exatamente numa borda de linha real (nunca no meio dela).
 export async function gerarRelatorioSaldosPdf(dados) {
+  const logosCarregadas = await preCarregarLogos(dados.infoBancos);
+
   const container = document.createElement('div');
   container.style.position = 'fixed';
   container.style.top = '0';
@@ -161,12 +247,19 @@ export async function gerarRelatorioSaldosPdf(dados) {
     // re-renderizado se alguma imagem falhou.
     await new Promise((r) => setTimeout(r, 150));
 
-    const canvasHtml2canvas = await html2canvas(container, {
-      scale: 2,
-      useCORS: true,
-      backgroundColor: '#ffffff',
-      logging: false,
-    });
+    const restaurarRestoDaPagina = esconderRestoDaPagina(container);
+    await new Promise((r) => setTimeout(r, 100));
+    let canvasHtml2canvas;
+    try {
+      canvasHtml2canvas = await html2canvas(container, {
+        scale: 2,
+        useCORS: true,
+        backgroundColor: '#ffffff',
+        logging: false,
+      });
+    } finally {
+      restaurarRestoDaPagina();
+    }
     // Copia pra um canvas criado por nós antes de desenhar mais alguma coisa em cima: o canvas
     // que o html2canvas devolve, por algum motivo, ignora silenciosamente novos fillRect nele
     // (testado e confirmado — nem um retângulo sólido gigante aparecia depois) — provavelmente
@@ -185,8 +278,9 @@ export async function gerarRelatorioSaldosPdf(dados) {
     const alturaUtilCanvasPx = ((pageHeightPt - MARGEM_PT * 2) / escalaPdf) * escalaCanvas;
 
     const topos = escanearMarcadores(canvasCheio);
-    apagarMarcadores(canvasCheio, topos);
     const paginas = calcularPaginas(topos, canvasCheio.height, alturaUtilCanvasPx);
+    desenharLogos(canvasCheio, dados.grupos, dados.infoBancos, logosCarregadas);
+    apagarMarcadores(canvasCheio);
 
     paginas.forEach(({ inicio, fim, corte }, i) => {
       const alturaRegiaoCanvasPx = fim - inicio;

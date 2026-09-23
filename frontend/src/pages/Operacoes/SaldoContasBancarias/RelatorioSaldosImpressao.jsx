@@ -1,4 +1,4 @@
-import { Fragment, useState } from 'react';
+import { Fragment } from 'react';
 import { Landmark } from 'lucide-react';
 import { formatarSaldo, nomeMes } from './constantes';
 
@@ -41,22 +41,32 @@ function CelulaValor({ valor }) {
   );
 }
 
-// Logo do banco com crossOrigin explícito — necessário pro html2canvas conseguir capturar a
-// imagem (servida por CDN externa) sem "sujar" o canvas. Cai no fallback (código do banco) se
-// a imagem falhar — mesmo comportamento do LogoBanco.jsx da tela ao vivo.
+// Cor-farol da posição da logo (ciano puro) — mesmo espírito do MarcadorLinha, mas pra achar
+// onde desenhar cada logo de banco DEPOIS da captura, em vez de deixar o html2canvas renderizar
+// a <img> ele mesmo. Reproduzido (com dados reais, embora não 100% deterministicamente): o
+// html2canvas tem um bug de renderização ligado a <img> — mais de uma <img> real dentro do que
+// está sendo capturado (ou mesmo a grade ao vivo, fora do container, mostrando suas próprias
+// logos) pode corromper visualmente as linhas de conta deste relatório. A saída: nunca pedir pro
+// html2canvas renderizar a logo — só o quadradinho (borda/fundo, sempre limpo) e este marcador
+// ciano no canto superior esquerdo; gerarRelatorioPdf.jsx escaneia o canvas JÁ CAPTURADO por
+// esses marcadores e desenha a logo de verdade por cima, com ctx.drawImage — a mesma API de
+// canvas usada pros próprios marcadores, sem esse bug. gerarRelatorioPdf.jsx também esconde
+// temporariamente o resto da página antes de capturar, pela mesma razão.
+function MarcadorLogo() {
+  return <span style={{ display: 'block', alignSelf: 'flex-start', width: 3, height: 3, marginRight: -3, background: 'rgb(0, 255, 255)' }} />;
+}
+
+// Cai no fallback (código do banco) se não houver logo cadastrada — mesmo espírito do
+// LogoBanco.jsx da tela ao vivo (lá o fallback é por erro de carregamento; aqui, como a imagem
+// nunca é pedida pelo DOM capturado, é por não ter logo — gerarRelatorioPdf.jsx que decide se a
+// imagem carrega de verdade antes de desenhar, então uma falha de rede cai automaticamente no
+// mesmo quadradinho, sem logo desenhada por cima).
 function LogoBancoImpressao({ codigo, info }) {
-  const [falhou, setFalhou] = useState(false);
   const caixa = { display: 'flex', height: 22, width: 22, flexShrink: 0, alignItems: 'center', justifyContent: 'center', borderRadius: 6 };
-  if (info?.logo && !falhou) {
+  if (info?.logo) {
     return (
       <span style={{ ...caixa, background: '#fff', border: '1px solid #e5e7eb' }}>
-        <img
-          src={info.logo}
-          alt=""
-          crossOrigin="anonymous"
-          onError={() => setFalhou(true)}
-          style={{ height: 16, width: 16, objectFit: 'contain' }}
-        />
+        <MarcadorLogo />
       </span>
     );
   }
@@ -314,6 +324,10 @@ export default function RelatorioSaldosImpressao({ empresaLabel, filtros, nomeUs
                     >
                       <MarcadorLinha />
                       <LogoBancoImpressao codigo={conta.banco_codigo} info={infoBancos?.get(conta.banco_codigo)} />
+                      {/* Sem text-overflow:ellipsis de propósito — reproduzido e confirmado (com
+                          dados reais) que overflow:hidden + text-overflow:ellipsis JUNTOS fazem o
+                          html2canvas corromper o topo desta linha inteira (logo e nome cortados),
+                          um bug real da lib, não deste código. Nome comprido só corta sem "…". */}
                       <span
                         style={{
                           flex: 1,
@@ -322,7 +336,6 @@ export default function RelatorioSaldosImpressao({ empresaLabel, filtros, nomeUs
                           fontWeight: 500,
                           color: '#1f2937',
                           overflow: 'hidden',
-                          textOverflow: 'ellipsis',
                           whiteSpace: 'nowrap',
                         }}
                       >
