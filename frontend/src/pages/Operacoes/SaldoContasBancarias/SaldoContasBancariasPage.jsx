@@ -1,6 +1,6 @@
 import { useEffect, useMemo, useRef, useState } from 'react';
 import { useSearchParams } from 'react-router-dom';
-import { CreditCard, Landmark, Layers, Lock, LockOpen, RefreshCw, Search, Settings, Wallet } from 'lucide-react';
+import { CreditCard, Download, Landmark, Layers, Loader2, Lock, LockOpen, RefreshCw, Search, Settings, Wallet } from 'lucide-react';
 import Card from '../../../components/Card';
 import Tabs from '../../../components/Tabs';
 import SearchableSelect from '../../../components/SearchableSelect';
@@ -10,6 +10,7 @@ import { gerarContasBancarias } from '../../../api/contasBancariasSienge.api';
 import { nomeExibicaoEmpresa } from '../../../utils/empresa';
 import { useEmpresaTravada } from '../../../hooks/useEmpresaTravada';
 import { useConfirm } from '../../../confirm/ConfirmContext';
+import { useAuth } from '../../../auth/AuthContext';
 import SaldosContasTab from './SaldosContasTab';
 import AbaEmConstrucao from './AbaEmConstrucao';
 import BancosTab from './BancosTab';
@@ -48,6 +49,7 @@ const STATUS_CONTAS_OPCOES = [
 // Sem parâmetro na URL vale a semana atual, recalculada a cada abertura da tela.
 export default function SaldoContasBancariasPage() {
   const { travada: empresaTravada, empresaIdTravada } = useEmpresaTravada();
+  const { user } = useAuth();
   const confirm = useConfirm();
   const [searchParams, setSearchParams] = useSearchParams();
 
@@ -95,6 +97,13 @@ export default function SaldoContasBancariasPage() {
   const [carregandoPeriodo, setCarregandoPeriodo] = useState(false);
   const [modalPeriodoAberto, setModalPeriodoAberto] = useState(false);
   const [periodoToken, setPeriodoToken] = useState(0);
+
+  // Exportar relatório em PDF — a montagem/captura de verdade acontece dentro de
+  // SaldosContasTab (é lá que os dados da grade já estão calculados); a página só junta os
+  // rótulos dos filtros aplicados e dispara via ref.
+  const saldosTabRef = useRef(null);
+  const [exportandoRelatorio, setExportandoRelatorio] = useState(false);
+  const [erroExportarRelatorio, setErroExportarRelatorio] = useState('');
 
   // Duas alterações seguidas antes de o React re-renderizar (ex.: mexer nas duas datas em
   // sequência rápida) partiriam do mesmo `searchParams` velho e a segunda apagaria a
@@ -217,6 +226,51 @@ export default function SaldoContasBancariasPage() {
   const opcoesContasFiltro = useMemo(() => filtros.contas || [], [filtros.contas]);
 
   const semEmpresa = !empresaId;
+
+  // Rótulo da empresa (a de cima, não a "da conta") e a lista de filtros ativos com nome
+  // legível — vai pro cabeçalho do relatório em PDF (pedido do usuário: "todos os filtros que
+  // estavam aplicados na tela"). Sempre inclui a semana, os demais só entram se estiverem
+  // realmente filtrando algo.
+  const empresaLabel = useMemo(() => {
+    const emp = empresas.find((e) => String(e.id) === String(empresaId));
+    return emp ? nomeExibicaoEmpresa(emp) : '';
+  }, [empresas, empresaId]);
+
+  const filtrosRelatorio = useMemo(() => {
+    const lista = [{ label: 'Semana', valor: `${formatarDataBR(dataInicio)} a ${formatarDataBR(dataFim)}` }];
+    if (companyIds.length) {
+      lista.push({
+        label: 'Empresa da conta',
+        valor: companyIds.map((id) => opcoesEmpresasSienge.find((o) => o.value === id)?.label || id).join(', '),
+      });
+    }
+    if (bancos.length) {
+      lista.push({ label: 'Banco', valor: bancos.map((b) => opcoesBancos.find((o) => o.value === b)?.label || b).join(', ') });
+    }
+    if (contasParam) {
+      lista.push({
+        label: 'Conta bancária',
+        valor: contasSelecionadas.map((c) => opcoesContasFiltro.find((o) => o.value === c)?.label || c).join(', '),
+      });
+    }
+    return lista;
+  }, [dataInicio, dataFim, companyIds, bancos, contasParam, contasSelecionadas, opcoesEmpresasSienge, opcoesBancos, opcoesContasFiltro]);
+
+  async function handleExportarRelatorio() {
+    setErroExportarRelatorio('');
+    setExportandoRelatorio(true);
+    try {
+      await saldosTabRef.current?.exportarPDF({
+        empresaLabel,
+        filtros: filtrosRelatorio,
+        nomeUsuario: user?.nome || 'Usuário',
+      });
+    } catch (err) {
+      setErroExportarRelatorio(err.message || 'Não foi possível gerar o relatório.');
+    } finally {
+      setExportandoRelatorio(false);
+    }
+  }
 
   // Sincroniza as contas bancárias a partir do Sienge e, ao terminar, reaproveita o mesmo
   // `refreshToken` de Saldos das Contas pra recarregar tanto a tabela da aba Contas Bancárias
@@ -400,25 +454,41 @@ export default function SaldoContasBancariasPage() {
           </div>
 
           {abaAtiva === 'saldos' && (
-            <div className="flex shrink-0 items-center gap-2">
-              {/* Só o cadeado (pedido do usuário) — azul/trancado sem período aberto, âmbar/
-                  destrancado com um aberto. Clicar abre a janela de abrir (trancado) ou já
-                  pergunta se quer encerrar (aberto) — ver handleCliqueCadeado. */}
-              <button
-                type="button"
-                onClick={handleCliqueCadeado}
-                disabled={semEmpresa || carregandoPeriodo}
-                title={
-                  dataAberta
-                    ? `Período aberto em ${formatarDataBR(dataAberta)} — clique para encerrar`
-                    : 'Nenhum período aberto — clique para abrir'
-                }
-                className={`flex shrink-0 items-center justify-center rounded-lg p-2.5 text-white transition-colors disabled:cursor-not-allowed disabled:opacity-60 ${
-                  dataAberta ? 'bg-amber-500 hover:bg-amber-600' : 'bg-primary-600 hover:bg-primary-700'
-                }`}
-              >
-                {dataAberta ? <LockOpen size={18} /> : <Lock size={18} />}
-              </button>
+            <div className="flex shrink-0 flex-col items-end gap-1.5">
+              <div className="flex shrink-0 items-center gap-2">
+                {/* Espelha a grade inteira (grupos expandidos, logos, cores) num PDF — ver
+                    RelatorioSaldosImpressao.jsx / gerarRelatorioPdf.js. */}
+                <button
+                  type="button"
+                  onClick={handleExportarRelatorio}
+                  disabled={semEmpresa || exportandoRelatorio}
+                  title="Exportar relatório em PDF"
+                  className="flex shrink-0 items-center justify-center gap-2 rounded-lg border border-gray-200 px-3 py-2.5 text-sm text-gray-600 transition-colors hover:bg-gray-50 disabled:cursor-not-allowed disabled:opacity-60"
+                >
+                  {exportandoRelatorio ? <Loader2 size={16} className="animate-spin" /> : <Download size={16} />}
+                  {exportandoRelatorio ? 'Gerando...' : 'Exportar relatório'}
+                </button>
+
+                {/* Só o cadeado (pedido do usuário) — azul/trancado sem período aberto, âmbar/
+                    destrancado com um aberto. Clicar abre a janela de abrir (trancado) ou já
+                    pergunta se quer encerrar (aberto) — ver handleCliqueCadeado. */}
+                <button
+                  type="button"
+                  onClick={handleCliqueCadeado}
+                  disabled={semEmpresa || carregandoPeriodo}
+                  title={
+                    dataAberta
+                      ? `Período aberto em ${formatarDataBR(dataAberta)} — clique para encerrar`
+                      : 'Nenhum período aberto — clique para abrir'
+                  }
+                  className={`flex shrink-0 items-center justify-center rounded-lg p-2.5 text-white transition-colors disabled:cursor-not-allowed disabled:opacity-60 ${
+                    dataAberta ? 'bg-amber-500 hover:bg-amber-600' : 'bg-primary-600 hover:bg-primary-700'
+                  }`}
+                >
+                  {dataAberta ? <LockOpen size={18} /> : <Lock size={18} />}
+                </button>
+              </div>
+              {erroExportarRelatorio && <span className="text-xs text-red-600">{erroExportarRelatorio}</span>}
             </div>
           )}
 
@@ -453,6 +523,7 @@ export default function SaldoContasBancariasPage() {
 
         {abaAtiva === 'saldos' && (
           <SaldosContasTab
+            ref={saldosTabRef}
             empresaId={empresaId}
             dataInicio={dataInicio}
             dataFim={dataFim}

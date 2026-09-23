@@ -1,7 +1,8 @@
-import { Fragment, memo, useCallback, useEffect, useMemo, useRef, useState } from 'react';
+import { Fragment, forwardRef, memo, useCallback, useEffect, useImperativeHandle, useMemo, useRef, useState } from 'react';
 import { Check, History, Landmark, Loader2, Minus, Pencil, Plus, TriangleAlert, Zap } from 'lucide-react';
 import { getSaldosContas, salvarSaldosContas } from '../../../api/saldoContasBancarias.api';
 import LogoBanco from './LogoBanco';
+import { gerarRelatorioSaldosPdf } from './gerarRelatorioPdf';
 import { formatarSaldo, interpretarSaldo, listarDias, nomeMes, numeroParaEdicao, somarSaldos } from './constantes';
 
 // Geometria da grade — a tabela tem largura fixa (colunas em px) e rola dentro do card:
@@ -190,22 +191,29 @@ function Esqueleto() {
 // Nível 1 = classificação (totais por dia), nível 2 = conta bancária (saldo de cada dia,
 // preenchível). Toda a matemática dos totais roda aqui no navegador em cima do que já veio
 // carregado, então editar uma célula atualiza o total da classificação na hora.
-export default function SaldosContasTab({
-  empresaId,
-  dataInicio,
-  dataFim,
-  companyIds,
-  bancos,
-  contas: contasFiltro,
-  infoBancos,
-  refreshToken = 0,
-  // Dia liberado pra lançar saldo (cadeado, gerenciado na página) — só ele aceita edição;
-  // os demais ficam bloqueados. `onPeriodoDessincronizado` é chamado quando o servidor recusa
-  // uma gravação por o período liberado ter mudado nesse meio tempo (outra aba/pessoa), pra
-  // página recarregar o valor real.
-  dataAberta = '',
-  onPeriodoDessincronizado,
-}) {
+//
+// `ref` expõe `exportarPDF(meta)` pra página-mãe (o botão "Exportar relatório" fica lá, junto
+// do cadeado) — os dados de grade (grupos/dias/totais) já estão todos calculados aqui, então é
+// mais simples expor um método do que replicar esse cálculo na página.
+const SaldosContasTab = forwardRef(function SaldosContasTab(
+  {
+    empresaId,
+    dataInicio,
+    dataFim,
+    companyIds,
+    bancos,
+    contas: contasFiltro,
+    infoBancos,
+    refreshToken = 0,
+    // Dia liberado pra lançar saldo (cadeado, gerenciado na página) — só ele aceita edição;
+    // os demais ficam bloqueados. `onPeriodoDessincronizado` é chamado quando o servidor recusa
+    // uma gravação por o período liberado ter mudado nesse meio tempo (outra aba/pessoa), pra
+    // página recarregar o valor real.
+    dataAberta = '',
+    onPeriodoDessincronizado,
+  },
+  ref
+) {
   const [contas, setContas] = useState(null);
   const [carregando, setCarregando] = useState(false);
   const [erroCarga, setErroCarga] = useState('');
@@ -453,6 +461,34 @@ export default function SaldosContasTab({
   function alternarGrupo(valor) {
     setAbertos((atual) => (atual.includes(valor) ? atual.filter((v) => v !== valor) : [...atual, valor]));
   }
+
+  // ------------------------------------------------------------------ exportar em PDF
+  // A página-mãe (botão "Exportar relatório", junto do cadeado) chama isto via ref — os dados
+  // de grade já estão todos calculados aqui (grupos/dias/totais), sem precisar recalcular na
+  // página. `meta` traz só o que a página sabe e este componente não: rótulo da empresa, dos
+  // filtros aplicados e o nome de quem está exportando.
+  const exportarPDF = useCallback(
+    async (meta) => {
+      if (!contas || contas.length === 0) throw new Error('Nenhuma conta encontrada para exportar.');
+      if (grupos.length === 0) throw new Error('Nenhuma conta classificada para exportar.');
+      const geradoEm = new Date().toLocaleString('pt-BR', { dateStyle: 'short', timeStyle: 'short' });
+      await gerarRelatorioSaldosPdf({
+        ...meta,
+        geradoEm,
+        dias,
+        meses,
+        grupos,
+        totaisPorGrupo,
+        totalGeral,
+        dataAberta,
+        infoBancos,
+        semanaArquivo: `${dataInicio}_a_${dataFim}`,
+      });
+    },
+    [contas, grupos, dias, meses, totaisPorGrupo, totalGeral, dataAberta, infoBancos, dataInicio, dataFim]
+  );
+
+  useImperativeHandle(ref, () => ({ exportarPDF }), [exportarPDF]);
 
   // -------------------------------------------------------------------------- renderização
   if (!empresaId) {
@@ -723,4 +759,8 @@ export default function SaldosContasTab({
       )}
     </div>
   );
-}
+});
+
+SaldosContasTab.displayName = 'SaldosContasTab';
+
+export default SaldosContasTab;
