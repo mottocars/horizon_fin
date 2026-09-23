@@ -11,6 +11,8 @@ router.get('/:empresaId/periodo-aberto', controller.getPeriodoAberto);
 router.put('/:empresaId/periodo-aberto', controller.abrirPeriodo);
 router.delete('/:empresaId/periodo-aberto', controller.encerrarPeriodo);
 router.post('/:empresaId/buscar-vanpix', controller.buscarVanpix);
+router.get('/:empresaId/comunicar-saldos', controller.getComunicarSaldos);
+router.put('/:empresaId/comunicar-saldos', controller.salvarComunicarSaldos);
 router.get('/:empresaId', controller.getSaldos);
 router.put('/:empresaId', controller.salvarSaldos);
 

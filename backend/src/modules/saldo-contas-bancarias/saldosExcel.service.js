@@ -4,9 +4,10 @@ const ExcelJS = require('exceljs');
 const service = require('./saldos.service');
 const empresasService = require('../empresas/empresas.service');
 
-// Mesmo ícone já usado em documentos oficiais gerados pelo sistema (ver
-// pdf.service.js::LOGO_PNG, que embute o mesmo arquivo num PDF fiscal via pdf-lib).
-const LOGO_PNG = fs.readFileSync(path.join(__dirname, '..', '..', 'assets', 'logo.png'));
+// Logomarca completa (o mesmo wordmark do topo do menu lateral expandido, ver
+// frontend/src/layout/Sidebar.jsx e frontend/public/logomarca.svg) — rasterizada em PNG porque
+// exceljs só aceita PNG/JPEG em addImage, não SVG. Proporção original 96x40 (2.4:1).
+const LOGO_PNG = fs.readFileSync(path.join(__dirname, '..', '..', 'assets', 'logomarca.png'));
 
 // Paleta de marca já usada nos documentos oficiais gerados pelo sistema (mesmo par
 // azul/cinza de pdf.service.js::AZUL/CINZA, que é o mesmo azul do cabeçalho do
@@ -93,6 +94,26 @@ function agruparContas(contas) {
   return nomes
     .map((nome) => ({ nome, contas: contas.filter((c) => c.classificacao === nome && Object.keys(c.saldos).length > 0) }))
     .filter((grupo) => grupo.contas.length > 0);
+}
+
+// Mesmo critério de agruparContas, mas por banco em vez de classificação — contas sem código de
+// banco (BANCO_EFETIVO_SQL pode devolver NULL) caem num grupo "SEM_BANCO" só pra não sumir da
+// planilha nem quebrar o sort (localeCompare não aceita null). O rótulo "Banco não identificado"
+// pra esse grupo é montado em rotuloBanco, não aqui — aqui é só a chave.
+function agruparContasPorBanco(contas) {
+  const codigos = [...new Set(contas.map((c) => c.banco_codigo || 'SEM_BANCO'))].sort((a, b) => a.localeCompare(b, 'pt-BR'));
+  return codigos
+    .map((codigo) => ({
+      nome: codigo,
+      contas: contas.filter((c) => (c.banco_codigo || 'SEM_BANCO') === codigo && Object.keys(c.saldos).length > 0),
+    }))
+    .filter((grupo) => grupo.contas.length > 0);
+}
+
+function rotuloBanco(codigo, bancoNomes) {
+  if (codigo === 'SEM_BANCO') return 'Banco não identificado';
+  const nome = bancoNomes.get(codigo);
+  return nome ? `${codigo} — ${nome}` : codigo;
 }
 
 function calcularTotais(grupos, dias) {
@@ -240,7 +261,10 @@ function escreverLinhaConta(sheet, linha, conta, dias) {
 }
 
 function montarPlanilha(workbook, dados) {
-  const { empresaLabel, filtrosDisplay, nomeUsuario, geradoEm, dias, meses, grupos, totaisPorGrupo, totalGeral } = dados;
+  const {
+    empresaLabel, filtrosDisplay, nomeUsuario, geradoEm, dias, meses,
+    grupos, totaisPorGrupo, totalGeral, gruposBanco, totaisPorBanco, bancoNomes,
+  } = dados;
   const ultimaColuna = 1 + dias.length;
   const sheet = workbook.addWorksheet('Relatório', { views: [{ showGridLines: false }] });
 
@@ -264,7 +288,7 @@ function montarPlanilha(workbook, dados) {
   cTitulo.border = { ...TODAS_BORDAS, bottom: { style: 'medium', color: { argb: AZUL } } };
 
   const imageId = workbook.addImage({ buffer: LOGO_PNG, extension: 'png' });
-  sheet.addImage(imageId, { tl: { col: 0.32, row: 0.3 }, ext: { width: 50, height: 62 } });
+  sheet.addImage(imageId, { tl: { col: 0.2, row: 0.35 }, ext: { width: 130, height: 54 } });
 
   // ------------------------------------------------------------- filtros / gerado por
   const colsFiltros = Math.max(1, ultimaColuna - 3);
@@ -284,6 +308,18 @@ function montarPlanilha(workbook, dados) {
   sheet.getRow(4).height = 20;
 
   let linha = 6;
+
+  // ------------------------------------------------------------- saldos por banco
+  escreverFaixaTitulo(sheet, linha, 'SALDOS POR BANCO', ultimaColuna);
+  linha += 1;
+  escreverCabecalhoColunas(sheet, linha, 'BANCO', dias, meses, ultimaColuna);
+  linha += 2;
+  for (const grupo of gruposBanco) {
+    escreverLinhaGrupo(sheet, linha, rotuloBanco(grupo.nome, bancoNomes), totaisPorBanco[grupo.nome], dias, { comFundo: false });
+    linha += 1;
+  }
+  escreverLinhaGrupo(sheet, linha, 'TOTAL', totalGeral, dias, { total: true });
+  linha += 2;
 
   // ------------------------------------------------------------- saldos por classificação
   escreverFaixaTitulo(sheet, linha, 'SALDOS POR CLASSIFICAÇÃO', ultimaColuna);
@@ -326,6 +362,12 @@ async function gerarRelatorioExcel(empresaId, filtrosQuery, meta) {
   if (grupos.length === 0) throw erro(400, 'Nenhuma conta com saldo lançado nesta semana para exportar.');
   const { totaisPorGrupo, totalGeral } = calcularTotais(grupos, dias);
 
+  // Mesmo universo de contas da classificação, só reagrupado — por isso reaproveita o mesmo
+  // totalGeral (não recalcula) na linha TOTAL da seção "Saldos por Banco".
+  const gruposBanco = agruparContasPorBanco(contas);
+  const { totaisPorGrupo: totaisPorBanco } = calcularTotais(gruposBanco, dias);
+  const bancoNomes = new Map(opcoes.bancos.map((b) => [b.codigo, b.nome]));
+
   const workbook = new ExcelJS.Workbook();
   workbook.creator = 'Horizon Finanças';
   workbook.created = new Date();
@@ -340,6 +382,9 @@ async function gerarRelatorioExcel(empresaId, filtrosQuery, meta) {
     grupos,
     totaisPorGrupo,
     totalGeral,
+    gruposBanco,
+    totaisPorBanco,
+    bancoNomes,
   });
 
   return workbook;

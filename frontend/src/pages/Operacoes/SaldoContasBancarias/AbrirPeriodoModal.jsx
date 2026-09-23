@@ -1,5 +1,5 @@
 import { useEffect, useState } from 'react';
-import { Lock, Loader2, CheckCircle2, AlertTriangle, History, Wifi } from 'lucide-react';
+import { Lock, Loader2, CheckCircle2, AlertTriangle, HelpCircle, Wifi } from 'lucide-react';
 import Modal from '../../../components/Modal';
 import Button from '../../../components/Button';
 import { abrirPeriodoSaldos, buscarSaldosVanpix } from '../../../api/saldoContasBancarias.api';
@@ -73,15 +73,6 @@ export default function AbrirPeriodoModal({ open, onClose, empresaId, onAberto }
     }
   }
 
-  const ROTULO_STATUS = {
-    ok_com_retorno: 'retorno encontrado',
-    ok_sem_retorno: 'sem retorno pra esse dia',
-    apelido_invalido: 'convênio não reconhecido',
-    credencial_invalida: 'credencial inválida',
-    erro_rede: 'falha de conexão',
-    desconhecido: 'resposta inesperada',
-  };
-
   return (
     <Modal open={open} onClose={etapa === 'vanpix' ? () => {} : onClose} title="Abrir período">
       {etapa === 'form' && (
@@ -129,76 +120,23 @@ export default function AbrirPeriodoModal({ open, onClose, empresaId, onAberto }
 
       {etapa === 'resultado' && (
         <div className="space-y-4">
-          {erroVanpix && (
-            <div className="flex items-start gap-2 rounded-lg bg-amber-50 px-3 py-2 text-sm text-amber-700">
-              <AlertTriangle size={16} className="mt-0.5 shrink-0" />
-              <span>
-                O período foi aberto normalmente, mas a busca automática na VanPix falhou: {erroVanpix} Lance os
-                saldos manualmente.
-              </span>
-            </div>
-          )}
-
-          {!erroVanpix && relatorioVanpix && relatorioVanpix.convenios.length === 0 && (
-            <p className="text-sm text-gray-500">
-              Nenhuma conexão VanPix ativa cadastrada para esta empresa — lance os saldos manualmente.
-            </p>
-          )}
-
-          {!erroVanpix && relatorioVanpix && relatorioVanpix.convenios.length > 0 && (
-            <>
-              <div className="space-y-1.5">
-                <p className="flex items-center gap-1.5 text-xs font-medium uppercase tracking-wide text-gray-400">
-                  <Wifi size={13} /> Convênios verificados
-                </p>
-                {relatorioVanpix.convenios.map((c, i) => (
-                  <div key={i} className="flex items-center justify-between rounded-lg bg-gray-50 px-3 py-1.5 text-sm">
-                    <span className="font-medium text-gray-700">{c.apelido}</span>
-                    <span className="text-gray-500">{ROTULO_STATUS[c.status] || c.status}</span>
-                  </div>
-                ))}
-              </div>
-
-              {relatorioVanpix.atualizados.length > 0 && (
-                <div className="flex items-start gap-2 rounded-lg bg-emerald-50 px-3 py-2 text-sm text-emerald-700">
-                  <CheckCircle2 size={16} className="mt-0.5 shrink-0" />
-                  <span>
-                    {relatorioVanpix.atualizados.length} conta(s) preenchida(s) automaticamente com o saldo da VanPix
-                    em {formatarDataBR(data)}.
-                  </span>
-                </div>
-              )}
-
-              {relatorioVanpix.herdados?.length > 0 && (
-                <div className="flex items-start gap-2 rounded-lg bg-purple-50 px-3 py-2 text-sm text-purple-700">
-                  <History size={16} className="mt-0.5 shrink-0" />
-                  <span>
-                    {relatorioVanpix.herdados.length} conta(s) sem retorno da VanPix hoje — repetiram o saldo do dia
-                    anterior (prioridade da classificação).
-                  </span>
-                </div>
-              )}
-
-              {relatorioVanpix.semCorrespondencia.length > 0 && (
-                <div className="flex items-start gap-2 rounded-lg bg-amber-50 px-3 py-2 text-sm text-amber-700">
-                  <AlertTriangle size={16} className="mt-0.5 shrink-0" />
-                  <div>
-                    <p>
-                      {relatorioVanpix.semCorrespondencia.length} conta(s) vieram da VanPix mas não têm banco, conta
-                      e dígito correspondentes no cadastro:
-                    </p>
-                    <ul className="mt-1 list-inside list-disc">
-                      {relatorioVanpix.semCorrespondencia.map((s, i) => (
-                        <li key={i}>
-                          banco {s.banco}, conta {s.conta}-{s.digito} ({s.apelido})
-                        </li>
-                      ))}
-                    </ul>
-                  </div>
-                </div>
-              )}
-            </>
-          )}
+          <LinhaIntegracao
+            nome="Conexão VanPix"
+            status={
+              erroVanpix
+                ? 'erro'
+                : !relatorioVanpix || relatorioVanpix.convenios.length === 0
+                  ? 'sem_convenio'
+                  : 'ok'
+            }
+            texto={
+              erroVanpix
+                ? 'Falha de conexão'
+                : !relatorioVanpix || relatorioVanpix.convenios.length === 0
+                  ? 'Nenhum convênio configurado'
+                  : `Ok, ${relatorioVanpix.atualizados.length} conta(s) integrada(s)`
+            }
+          />
 
           <div className="flex justify-end pt-2">
             <Button type="button" onClick={onClose}>
@@ -208,5 +146,31 @@ export default function AbrirPeriodoModal({ open, onClose, empresaId, onAberto }
         </div>
       )}
     </Modal>
+  );
+}
+
+// Uma linha só por integração (pedido do usuário: reduzir os logs da busca automática) — hoje só
+// existe VanPix, mas o componente já é genérico pra caber outras integrações no futuro sem
+// crescer a lista nem precisar de rolagem. Mesmo selo "positivo" (pill esmeralda + CheckCircle2)
+// já usado em CertificadosDigitaisPage.jsx pra status de conexão/validade.
+const STATUS_INTEGRACAO = {
+  ok: { className: 'bg-emerald-100 text-emerald-700', Icon: CheckCircle2 },
+  erro: { className: 'bg-amber-100 text-amber-700', Icon: AlertTriangle },
+  sem_convenio: { className: 'bg-gray-100 text-gray-600', Icon: HelpCircle },
+};
+
+function LinhaIntegracao({ nome, status, texto }) {
+  const { className, Icon } = STATUS_INTEGRACAO[status];
+  return (
+    <div className="flex items-center justify-between gap-3 rounded-lg border border-gray-100 px-3 py-2.5">
+      <span className="flex items-center gap-2 text-sm font-medium text-gray-700">
+        <Wifi size={16} className="text-gray-400" />
+        {nome}
+      </span>
+      <span className={`inline-flex items-center gap-1.5 rounded-full px-2.5 py-1 text-xs font-semibold ${className}`}>
+        <Icon size={13} />
+        {texto}
+      </span>
+    </div>
   );
 }

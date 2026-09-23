@@ -1,8 +1,9 @@
 import { useEffect, useMemo, useRef, useState } from 'react';
 import { useSearchParams } from 'react-router-dom';
-import { CreditCard, Download, FilterX, Landmark, Layers, Loader2, Lock, LockOpen, RefreshCw, Search, Settings, Wallet } from 'lucide-react';
+import { CreditCard, Download, FilterX, Landmark, Layers, Loader2, Lock, LockOpen, Plus, RefreshCw, Search, Settings, Wallet } from 'lucide-react';
 import Card from '../../../components/Card';
 import Tabs from '../../../components/Tabs';
+import Button from '../../../components/Button';
 import SearchableSelect from '../../../components/SearchableSelect';
 import { listEmpresas } from '../../../api/empresas.api';
 import { getFiltrosSaldos, getPeriodoAberto, encerrarPeriodoSaldos, exportarSaldosExcel } from '../../../api/saldoContasBancarias.api';
@@ -11,10 +12,10 @@ import { nomeExibicaoEmpresa } from '../../../utils/empresa';
 import { useEmpresaTravada } from '../../../hooks/useEmpresaTravada';
 import { useConfirm } from '../../../confirm/ConfirmContext';
 import SaldosContasTab from './SaldosContasTab';
-import AbaEmConstrucao from './AbaEmConstrucao';
 import BancosTab from './BancosTab';
 import ClassificacoesTab from './ClassificacoesTab';
 import ContasTab from './ContasTab';
+import ConfiguracoesTab from './ConfiguracoesTab';
 import AbrirPeriodoModal from './AbrirPeriodoModal';
 import SeletorSemana from './SeletorSemana';
 import { formatarDataBR, semanaAtual, semanaDe } from './constantes';
@@ -117,6 +118,10 @@ export default function SaldoContasBancariasPage() {
   // exportarExcel).
   const [exportandoRelatorio, setExportandoRelatorio] = useState(false);
   const [erroExportarRelatorio, setErroExportarRelatorio] = useState('');
+
+  // Botão "Nova classificação" fica aqui no topo (padrão do resto do sistema), mas o modal de
+  // criar/editar vive dentro de ClassificacoesTab — dispara por ref (ver comentário lá).
+  const classificacoesTabRef = useRef(null);
 
   // Duas alterações seguidas antes de o React re-renderizar (ex.: mexer nas duas datas em
   // sequência rápida) partiriam do mesmo `searchParams` velho e a segunda apagaria a
@@ -315,7 +320,7 @@ export default function SaldoContasBancariasPage() {
               filtro de cada aba mora aqui, junto do seletor de Empresa — abaixo das abas só os
               registros (pedido do usuário). Configurações não tem filtro nenhum ainda. */}
           <div className="flex min-w-0 flex-col gap-3 sm:flex-1 sm:flex-row sm:flex-wrap">
-            <div className="sm:min-w-44 sm:flex-1">
+            <div className="sm:min-w-44 sm:max-w-xs sm:flex-1">
               <label className="mb-1 block text-sm font-medium text-gray-700">Empresa</label>
               <SearchableSelect
                 value={empresaId}
@@ -494,10 +499,19 @@ export default function SaldoContasBancariasPage() {
                 onClick={handleAtualizarContas}
                 disabled={semEmpresa || atualizandoContas}
                 title="Atualizar a partir do Sienge"
-                className="flex shrink-0 items-center justify-center rounded-lg border border-gray-200 p-2 text-gray-600 transition-colors hover:bg-gray-50 disabled:cursor-not-allowed disabled:opacity-60"
+                className="flex shrink-0 items-center justify-center rounded-lg bg-primary-600 p-2 text-white transition-colors hover:bg-primary-700 disabled:cursor-not-allowed disabled:opacity-60"
               >
                 <RefreshCw size={18} className={atualizandoContas ? 'animate-spin' : ''} />
               </button>
+            </div>
+          )}
+
+          {abaAtiva === 'classificacao' && (
+            <div className="flex shrink-0 items-center gap-2">
+              <Button type="button" onClick={() => classificacoesTabRef.current?.abrirNova()} disabled={semEmpresa}>
+                <Plus size={16} />
+                Nova classificação
+              </Button>
             </div>
           )}
         </div>
@@ -523,7 +537,7 @@ export default function SaldoContasBancariasPage() {
 
         {abaAtiva === 'bancos' && <BancosTab search={bancosSearch} />}
 
-        {abaAtiva === 'classificacao' && <ClassificacoesTab empresaId={empresaId} />}
+        {abaAtiva === 'classificacao' && <ClassificacoesTab ref={classificacoesTabRef} empresaId={empresaId} />}
 
         {abaAtiva === 'contas' && (
           <ContasTab
@@ -537,13 +551,7 @@ export default function SaldoContasBancariasPage() {
           />
         )}
 
-        {abaAtiva === 'configuracoes' && (
-          <AbaEmConstrucao
-            icon={Settings}
-            titulo="Configurações"
-            descricao="Parâmetros da tela de Saldo Contas Bancárias — em desenvolvimento."
-          />
-        )}
+        {abaAtiva === 'configuracoes' && <ConfiguracoesTab empresaId={empresaId} />}
       </div>
 
       <AbrirPeriodoModal

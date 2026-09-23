@@ -880,6 +880,18 @@ CREATE TABLE saldos_periodos (
 
 CREATE UNIQUE INDEX idx_saldos_periodos_aberto_unico ON saldos_periodos (empresa_id) WHERE status = 'ABERTO';
 
+-- Quem recebe aviso sobre os saldos lançados de cada empresa (parâmetro "Comunicar Saldos" na
+-- aba Configurações de Operações > Saldo Contas Bancárias) — escolhido à mão dentre os usuários
+-- elegíveis (todo MASTER + ADMINISTRADOR/BASICO vinculado à empresa via usuarios_empresas, ver
+-- saldos.service.js::listUsuariosComunicarSaldos). Só guarda a lista de destinatários; o envio
+-- em si ainda não existe.
+CREATE TABLE saldos_comunicar_usuarios (
+    empresa_id     INTEGER NOT NULL REFERENCES empresas(id) ON DELETE CASCADE,
+    usuario_id     INTEGER NOT NULL REFERENCES usuarios(id) ON DELETE CASCADE,
+    criado_em      TIMESTAMP DEFAULT NOW(),
+    PRIMARY KEY (empresa_id, usuario_id)
+);
+
 -- Logomarca customizada de um banco (cadastro de Bancos, aba Bancos de Operações > Saldo
 -- Contas Bancárias) — sobrepõe a logo oficial da BrasilAPI pra aquele código enquanto
 -- existir uma linha aqui. Data URI (base64), já redimensionada no navegador antes de

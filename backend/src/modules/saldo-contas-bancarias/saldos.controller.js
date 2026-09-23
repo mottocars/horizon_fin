@@ -181,6 +181,32 @@ async function encerrarPeriodo(req, res, next) {
   }
 }
 
+const comunicarSaldosSchema = z.object({
+  usuarioIds: z.array(z.coerce.number().int().positive()).max(500, 'Lista grande demais.'),
+});
+
+// Parâmetro "Comunicar Saldos" (aba Configurações) — usuários elegíveis (todo MASTER +
+// ADMINISTRADOR/BASICO vinculado à empresa) e quem já está selecionado hoje.
+async function getComunicarSaldos(req, res, next) {
+  try {
+    const empresaId = await acessoEmpresa(req);
+    res.json(await service.listUsuariosComunicarSaldos(empresaId));
+  } catch (err) {
+    tratarErroDeValidacao(err, next);
+  }
+}
+
+async function salvarComunicarSaldos(req, res, next) {
+  try {
+    const empresaId = await acessoEmpresa(req);
+    const { usuarioIds } = comunicarSaldosSchema.parse(req.body);
+    await service.salvarComunicarSaldos(empresaId, usuarioIds);
+    res.json({ ok: true });
+  } catch (err) {
+    tratarErroDeValidacao(err, next);
+  }
+}
+
 const buscarVanpixSchema = z.object({ data: z.string().refine(dataValida, 'Data inválida.') });
 
 // Só roda pro dia que está de fato aberto agora — evita gravar saldo "automático" num dia que
@@ -197,4 +223,15 @@ async function buscarVanpix(req, res, next) {
   }
 }
 
-module.exports = { getFiltros, getSaldos, exportarExcel, salvarSaldos, getPeriodoAberto, abrirPeriodo, encerrarPeriodo, buscarVanpix };
+module.exports = {
+  getFiltros,
+  getSaldos,
+  exportarExcel,
+  salvarSaldos,
+  getPeriodoAberto,
+  abrirPeriodo,
+  encerrarPeriodo,
+  buscarVanpix,
+  getComunicarSaldos,
+  salvarComunicarSaldos,
+};

@@ -70,3 +70,15 @@ export function encerrarPeriodoSaldos(empresaId) {
 export function buscarSaldosVanpix(empresaId, data) {
   return http.post(`/saldo-contas-bancarias/${empresaId}/buscar-vanpix`, { data }).then((res) => res.data);
 }
+
+// Parâmetro "Comunicar Saldos" (aba Configurações) — quem pode ser escolhido pra receber aviso
+// sobre os saldos desta empresa e quem já está selecionado.
+// { elegiveis: [{id, nome, permissao}], selecionados: number[] }
+export function getComunicarSaldos(empresaId) {
+  return http.get(`/saldo-contas-bancarias/${empresaId}/comunicar-saldos`).then((res) => res.data);
+}
+
+// Substitui por completo a lista de quem recebe aviso.
+export function salvarComunicarSaldos(empresaId, usuarioIds) {
+  return http.put(`/saldo-contas-bancarias/${empresaId}/comunicar-saldos`, { usuarioIds }).then((res) => res.data);
+}

@@ -1,5 +1,5 @@
-import { useCallback, useEffect, useState } from 'react';
-import { Layers, Pencil, Plus, Trash2 } from 'lucide-react';
+import { forwardRef, useCallback, useEffect, useImperativeHandle, useState } from 'react';
+import { Layers, Pencil, Trash2 } from 'lucide-react';
 import Modal from '../../../components/Modal';
 import Button from '../../../components/Button';
 import SearchableSelect from '../../../components/SearchableSelect';
@@ -24,7 +24,12 @@ const formVazio = { nome: '', prioridade_sem_saldo: 'SEM_SALDO' };
 // nada pra um dia, se repete o saldo do dia anterior ou deixa sem saldo mesmo. Empresa nova
 // nasce sem nenhuma cadastrada; o combobox de Classificação no cadastro de Contas Bancárias só
 // mostra o que existir aqui.
-export default function ClassificacoesTab({ empresaId }) {
+//
+// `ref` expõe `abrirNova()` pra página-mãe (o botão "Nova classificação" fica lá, junto do
+// filtro de Empresa, seguindo o padrão do resto do sistema) — o modal de criar/editar continua
+// vivendo aqui porque é o mesmo formulário dos dois casos e a lista precisa recarregar sozinha
+// depois de criar.
+const ClassificacoesTab = forwardRef(function ClassificacoesTab({ empresaId }, ref) {
   const confirm = useConfirm();
   const [itens, setItens] = useState([]);
   const [loading, setLoading] = useState(true);
@@ -50,6 +55,8 @@ export default function ClassificacoesTab({ empresaId }) {
   useEffect(() => {
     carregar();
   }, [carregar]);
+
+  useImperativeHandle(ref, () => ({ abrirNova }), []);
 
   function abrirNova() {
     setEditando(null);
@@ -112,46 +119,43 @@ export default function ClassificacoesTab({ empresaId }) {
 
   return (
     <div className="rounded-card rounded-tl-none bg-white shadow-card">
-      <div className="flex items-center justify-between gap-3 border-b border-gray-100 px-5 py-3">
-        <p className="text-xs text-gray-400">
-          Define a prioridade quando a busca automática de saldo (VanPix) não retorna nada para o dia.
-        </p>
-        <Button type="button" onClick={abrirNova} className="shrink-0">
-          <Plus size={15} /> Nova classificação
-        </Button>
-      </div>
-
-      <div className="px-5 pb-5 pt-3">
-        {loading ? (
-          <div className="py-12 text-center text-sm text-gray-400">Carregando...</div>
-        ) : itens.length === 0 ? (
-          <div className="flex flex-col items-center gap-2 py-12 text-center text-sm text-gray-400">
-            <Layers size={28} className="text-gray-300" />
-            Nenhuma classificação cadastrada ainda.
-          </div>
-        ) : (
-          <table className="w-full text-left text-sm">
+      {loading ? (
+        <div className="py-12 text-center text-sm text-gray-400">Carregando...</div>
+      ) : itens.length === 0 ? (
+        <div className="flex flex-col items-center gap-2 py-12 text-center text-sm text-gray-400">
+          <Layers size={28} className="text-gray-300" />
+          Nenhuma classificação cadastrada ainda.
+        </div>
+      ) : (
+        <div className="rounded-b-card">
+          <table className="w-full border-separate border-spacing-0 text-left text-xs">
             <thead>
               <tr className="text-xs uppercase tracking-wide text-gray-400">
-                <th className="border-b border-gray-100 py-3 font-medium">Nome</th>
-                <th className="border-b border-gray-100 py-3 font-medium">Sem saldo na API, priorizar</th>
-                <th className="w-24 border-b border-gray-100 py-3 text-right font-medium">Ação</th>
+                <th className="border-b border-gray-200 bg-white py-2.5 pl-4 font-medium">Nome</th>
+                <th className="border-b border-l border-gray-200 bg-white px-3 py-2.5 font-medium">
+                  Sem saldo na API, priorizar
+                </th>
+                <th className="w-20 border-b border-l border-gray-200 bg-white px-3 py-2.5 text-right font-medium">
+                  Ação
+                </th>
               </tr>
             </thead>
             <tbody>
               {itens.map((item) => (
-                <tr key={item.id} className="border-b border-gray-50 last:border-0">
-                  <td className="py-2.5 font-medium text-gray-800">{item.nome}</td>
-                  <td className="py-2.5 text-gray-600">
+                <tr key={item.id} className="group">
+                  <td className="border-b border-gray-100 py-2 pl-4 font-medium text-gray-800 group-hover:bg-gray-50">
+                    {item.nome}
+                  </td>
+                  <td className="border-b border-l border-gray-100 px-3 py-2 text-gray-600 group-hover:bg-gray-50">
                     {ROTULO_PRIORIDADE[item.prioridade_sem_saldo] || item.prioridade_sem_saldo}
                   </td>
-                  <td className="py-2.5">
+                  <td className="border-b border-l border-gray-100 px-3 py-2 group-hover:bg-gray-50">
                     <div className="flex items-center justify-end gap-1">
                       <button
                         type="button"
                         onClick={() => abrirEdicao(item)}
                         title="Editar"
-                        className="flex h-7 w-7 items-center justify-center rounded-lg text-gray-400 transition-colors hover:bg-gray-50 hover:text-gray-600"
+                        className="flex h-7 w-7 items-center justify-center rounded-lg text-gray-400 transition-colors hover:bg-gray-100 hover:text-gray-600"
                       >
                         <Pencil size={14} />
                       </button>
@@ -170,8 +174,8 @@ export default function ClassificacoesTab({ empresaId }) {
               ))}
             </tbody>
           </table>
-        )}
-      </div>
+        </div>
+      )}
 
       <Modal open={modalAberto} onClose={() => setModalAberto(false)} title={editando ? 'Editar classificação' : 'Nova classificação'}>
         <form onSubmit={handleSubmit} className="space-y-4">
@@ -211,4 +215,8 @@ export default function ClassificacoesTab({ empresaId }) {
       </Modal>
     </div>
   );
-}
+});
+
+ClassificacoesTab.displayName = 'ClassificacoesTab';
+
+export default ClassificacoesTab;

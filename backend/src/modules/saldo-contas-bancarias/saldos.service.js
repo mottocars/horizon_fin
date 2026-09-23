@@ -299,6 +299,64 @@ async function salvarSaldos(empresaId, usuarioId, itens) {
   }
 }
 
+// Consulta reaproveitada por listUsuariosComunicarSaldos (pra montar a tela) e
+// salvarComunicarSaldos (pra revalidar no servidor antes de gravar) — quem pode ser escolhido
+// pra receber aviso de saldos de uma empresa: todo MASTER (acesso irrestrito, mesmo critério de
+// assertAcessoEmpresa) mais qualquer ADMINISTRADOR/BASICO vinculado a essa empresa via
+// usuarios_empresas.
+async function listUsuariosElegiveisComunicar(empresaId) {
+  const { rows } = await pool.query(
+    `SELECT u.id, u.nome, u.permissao
+     FROM usuarios u
+     WHERE u.ativo = TRUE
+       AND (u.permissao = 'MASTER' OR EXISTS (
+             SELECT 1 FROM usuarios_empresas ue WHERE ue.usuario_id = u.id AND ue.empresa_id = $1))
+     ORDER BY u.nome ASC`,
+    [empresaId]
+  );
+  return rows;
+}
+
+// Parâmetro "Comunicar Saldos" (aba Configurações) — elegíveis pra escolher + quem já está
+// selecionado hoje pra essa empresa.
+async function listUsuariosComunicarSaldos(empresaId) {
+  const [elegiveis, { rows: selecionados }] = await Promise.all([
+    listUsuariosElegiveisComunicar(empresaId),
+    pool.query('SELECT usuario_id FROM saldos_comunicar_usuarios WHERE empresa_id = $1', [empresaId]),
+  ]);
+  return { elegiveis, selecionados: selecionados.map((r) => r.usuario_id) };
+}
+
+// Substitui por completo a lista de quem recebe aviso — revalida no servidor que todo id
+// enviado está no conjunto elegível (mesmo cuidado de "não confiar só no combobox da tela" de
+// reguaCobranca.service.js::garantirResponsavelElegivel), antes de apagar e regravar em
+// transação.
+async function salvarComunicarSaldos(empresaId, usuarioIds) {
+  const elegiveis = await listUsuariosElegiveisComunicar(empresaId);
+  const idsElegiveis = new Set(elegiveis.map((u) => u.id));
+  if (usuarioIds.some((id) => !idsElegiveis.has(id))) {
+    throw erro(400, 'Um ou mais usuários selecionados não têm acesso a esta empresa.');
+  }
+
+  const client = await pool.connect();
+  try {
+    await client.query('BEGIN');
+    await client.query('DELETE FROM saldos_comunicar_usuarios WHERE empresa_id = $1', [empresaId]);
+    if (usuarioIds.length) {
+      await client.query(
+        `INSERT INTO saldos_comunicar_usuarios (empresa_id, usuario_id) SELECT $1, unnest($2::int[])`,
+        [empresaId, usuarioIds]
+      );
+    }
+    await client.query('COMMIT');
+  } catch (err) {
+    await client.query('ROLLBACK').catch(() => {});
+    throw err;
+  } finally {
+    client.release();
+  }
+}
+
 module.exports = {
   assertAcessoEmpresa,
   getFiltros,
@@ -307,5 +365,7 @@ module.exports = {
   getPeriodoAberto,
   abrirPeriodo,
   encerrarPeriodo,
+  listUsuariosComunicarSaldos,
+  salvarComunicarSaldos,
   SEM_CLASSIFICACAO,
 };
