@@ -1,6 +1,6 @@
 import { useEffect, useMemo, useRef, useState } from 'react';
 import { useSearchParams } from 'react-router-dom';
-import { CreditCard, Landmark, Lock, LockOpen, RefreshCw, Search, Settings, Wallet } from 'lucide-react';
+import { CreditCard, Landmark, Layers, Lock, LockOpen, RefreshCw, Search, Settings, Wallet } from 'lucide-react';
 import Card from '../../../components/Card';
 import Tabs from '../../../components/Tabs';
 import SearchableSelect from '../../../components/SearchableSelect';
@@ -13,6 +13,7 @@ import { useConfirm } from '../../../confirm/ConfirmContext';
 import SaldosContasTab from './SaldosContasTab';
 import AbaEmConstrucao from './AbaEmConstrucao';
 import BancosTab from './BancosTab';
+import ClassificacoesTab from './ClassificacoesTab';
 import ContasTab from './ContasTab';
 import AbrirPeriodoModal from './AbrirPeriodoModal';
 import SeletorSemana from './SeletorSemana';
@@ -27,6 +28,7 @@ const TABS = [
   { id: 'saldos', label: 'Saldos das Contas', icon: Wallet },
   { divider: true },
   { id: 'bancos', label: 'Bancos', icon: Landmark },
+  { id: 'classificacao', label: 'Classificação', icon: Layers },
   { id: 'contas', label: 'Contas Bancárias', icon: CreditCard },
   { id: 'configuracoes', label: 'Configurações', icon: Settings },
 ];
@@ -465,6 +467,8 @@ export default function SaldoContasBancariasPage() {
         )}
 
         {abaAtiva === 'bancos' && <BancosTab search={bancosSearch} />}
+
+        {abaAtiva === 'classificacao' && <ClassificacoesTab empresaId={empresaId} />}
 
         {abaAtiva === 'contas' && (
           <ContasTab

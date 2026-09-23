@@ -809,12 +809,30 @@ CREATE TABLE contas_bancarias_sienge (
     projeta_saldo        BOOLEAN,
     saldo_inicial        NUMERIC(15,2),
     data_saldo_inicial   DATE,
-    -- APLICACAO, BLOQUEADA, CHEQUE_ESPECIAL, DEDICADA, GARANTIDA ou LIBERADA (validado na aplicação)
-    classificacao        VARCHAR(20),
+    -- Texto livre, mas só pode ser um `nome` já cadastrado em classificacoes_bancarias para
+    -- esta mesma empresa (validado na aplicação, sem FK — mesmo espírito de banco_enriquecido).
+    classificacao        VARCHAR(50),
     PRIMARY KEY (numero_conta, empresa_id, company_id)
 );
 
 CREATE INDEX idx_contas_bancarias_sienge_empresa ON contas_bancarias_sienge (empresa_id);
+
+-- Classificações bancárias cadastráveis por empresa (antes era uma lista fixa de 6 valores
+-- global pro sistema inteiro) — cada uma define a prioridade a seguir quando a busca
+-- automática de saldo (VanPix) não retorna nada pra aquele dia: repetir o saldo do dia
+-- anterior (SALDO_ANTERIOR) ou deixar sem saldo nenhum (SEM_SALDO). `contas_bancarias_sienge.
+-- classificacao` referencia o `nome` daqui por texto (empresa nova nasce sem nenhuma linha —
+-- o combobox de classificação do cadastro de contas fica vazio até serem cadastradas).
+CREATE TABLE classificacoes_bancarias (
+    id                     SERIAL PRIMARY KEY,
+    empresa_id             INTEGER NOT NULL REFERENCES empresas(id) ON DELETE CASCADE,
+    nome                   VARCHAR(50) NOT NULL,
+    prioridade_sem_saldo   VARCHAR(20) NOT NULL DEFAULT 'SEM_SALDO'
+        CHECK (prioridade_sem_saldo IN ('SALDO_ANTERIOR', 'SEM_SALDO')),
+    criado_em              TIMESTAMP DEFAULT NOW(),
+    atualizado_em          TIMESTAMP DEFAULT NOW(),
+    UNIQUE (empresa_id, nome)
+);
 
 -- Saldo de cada conta bancária em cada dia, informado à mão na tela Operações >
 -- Saldo Contas Bancárias. Uma linha por (conta, dia): limpar a célula na tela apaga

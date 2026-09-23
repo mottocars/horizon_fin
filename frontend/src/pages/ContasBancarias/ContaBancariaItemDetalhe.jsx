@@ -5,15 +5,7 @@ import Card from '../../components/Card';
 import Button from '../../components/Button';
 import SearchableSelect from '../../components/SearchableSelect';
 import { getItem, listBancos, updateEnriquecimento } from '../../api/contasBancariasSienge.api';
-
-const CLASSIFICACOES = [
-  { value: 'APLICACAO', label: 'Aplicação' },
-  { value: 'BLOQUEADA', label: 'Bloqueada' },
-  { value: 'CHEQUE_ESPECIAL', label: 'Cheque Especial' },
-  { value: 'DEDICADA', label: 'Dedicada' },
-  { value: 'GARANTIDA', label: 'Garantida' },
-  { value: 'LIBERADA', label: 'Liberada' },
-];
+import { listClassificacoes } from '../../api/classificacoesBancarias.api';
 
 // O Sienge guarda o código do banco em banco_numero ("104", "001", "341"...).
 // Só vira sugestão se esse código existir na lista de bancos brasileiros — códigos
@@ -89,6 +81,9 @@ export default function ContaBancariaItemDetalhe() {
   const [bancos, setBancos] = useState([]);
   const [erroBancos, setErroBancos] = useState(false);
   const [bancoSugerido, setBancoSugerido] = useState('');
+  // Classificações cadastradas nesta empresa (Operações > Saldo Contas Bancárias > aba
+  // Classificação) — vazio até alguém cadastrar; não é mais uma lista fixa pro sistema todo.
+  const [classificacoes, setClassificacoes] = useState([]);
   const [loading, setLoading] = useState(true);
   const [saving, setSaving] = useState(false);
   const [error, setError] = useState('');
@@ -99,11 +94,13 @@ export default function ContaBancariaItemDetalhe() {
     try {
       // A lista de bancos vem de uma API externa: se ela falhar, a tela abre do mesmo
       // jeito, só sem as opções (e o banco já salvo continua aparecendo).
-      const [data, listaBancos] = await Promise.all([
+      const [data, listaBancos, listaClassificacoes] = await Promise.all([
         getItem(empresaId, companyId, numeroConta),
         listBancos().catch(() => null),
+        listClassificacoes(empresaId).catch(() => []),
       ]);
       const lista = listaBancos || [];
+      setClassificacoes(listaClassificacoes);
       const sugerido = data.banco_enriquecido ? '' : sugerirBanco(data.banco_numero, lista);
       setBancos(lista);
       setErroBancos(!listaBancos);
@@ -269,8 +266,13 @@ export default function ContaBancariaItemDetalhe() {
               <SearchableSelect
                 value={form.classificacao}
                 onChange={(value) => handleChange('classificacao', value)}
-                options={CLASSIFICACOES}
-                placeholder="Selecione a classificação"
+                options={classificacoes.map((c) => ({ value: c.nome, label: c.nome }))}
+                placeholder={
+                  classificacoes.length === 0
+                    ? 'Cadastre classificações na aba Classificação'
+                    : 'Selecione a classificação'
+                }
+                emptyMessage="Nenhuma classificação cadastrada para esta empresa ainda."
                 corClasses={corSelect(form.classificacao)}
               />
             </Field>

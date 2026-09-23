@@ -88,7 +88,22 @@ async function getItem(empresaId, companyId, numeroConta) {
   return rows[0] || null;
 }
 
+function erro(status, message) {
+  const e = new Error(message);
+  e.status = status;
+  e.expose = true;
+  return e;
+}
+
 async function updateEnriquecimento(empresaId, companyId, numeroConta, data) {
+  if (data.classificacao) {
+    const { rows: validas } = await pool.query(
+      'SELECT 1 FROM classificacoes_bancarias WHERE empresa_id = $1 AND nome = $2',
+      [empresaId, data.classificacao]
+    );
+    if (!validas[0]) throw erro(400, 'Classificação inválida — cadastre-a primeiro na aba Classificação.');
+  }
+
   const { rows } = await pool.query(
     `UPDATE contas_bancarias_sienge SET
        banco_enriquecido = $1,

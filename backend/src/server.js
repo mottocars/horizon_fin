@@ -18,6 +18,7 @@ const centrosCustoSiengeRoutes = require('./modules/centros-custo-sienge/centros
 const mascarasRoutes = require('./modules/mascaras/mascaras.routes');
 const contasBancariasSiengeRoutes = require('./modules/contas-bancarias-sienge/contas.routes');
 const saldoContasBancariasRoutes = require('./modules/saldo-contas-bancarias/saldos.routes');
+const classificacoesBancariasRoutes = require('./modules/classificacoes-bancarias/classificacoes.routes');
 const bancosRoutes = require('./modules/bancos/bancos.routes');
 const eprRoutes = require('./modules/epr/epr.routes');
 const dcdRoutes = require('./modules/dcd/dcd.routes');
@@ -86,6 +87,7 @@ app.use('/api/centros-custo/sienge', centrosCustoSiengeRoutes);
 app.use('/api/mascaras', mascarasRoutes);
 app.use('/api/contas-bancarias/sienge', contasBancariasSiengeRoutes);
 app.use('/api/saldo-contas-bancarias', saldoContasBancariasRoutes);
+app.use('/api/classificacoes-bancarias', classificacoesBancariasRoutes);
 app.use('/api/bancos', bancosRoutes);
 app.use('/api/epr', eprRoutes);
 app.use('/api/dcd', dcdRoutes);

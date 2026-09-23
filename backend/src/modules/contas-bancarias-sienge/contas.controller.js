@@ -17,22 +17,14 @@ const csv = (val) =>
     .map((s) => s.trim())
     .filter(Boolean);
 
-const CLASSIFICACOES = [
-  'APLICACAO',
-  'BLOQUEADA',
-  'CHEQUE_ESPECIAL',
-  'DEDICADA',
-  'GARANTIDA',
-  'LIBERADA',
-];
-
 const enriquecimentoSchema = z.object({
   // Código do banco (COMPE, 3 dígitos) escolhido na lista da BrasilAPI.
   banco_enriquecido: z.preprocess(emptyToNull, z.string().max(120).nullable().optional()),
-  classificacao: z.preprocess(
-    emptyToNull,
-    z.enum(CLASSIFICACOES, { message: 'Classificação inválida.' }).nullable().optional()
-  ),
+  // Não é mais uma lista fixa (era 6 valores globais) — agora vem do cadastro de
+  // Classificações da própria empresa (classificacoes_bancarias); a checagem de que o nome
+  // existe de verdade pra essa empresa é feita no service (updateEnriquecimento), que tem o
+  // empresaId à mão.
+  classificacao: z.preprocess(emptyToNull, z.string().max(50, 'Máximo de 50 caracteres.').nullable().optional()),
   agencia_enriquecida: z.preprocess(emptyToNull, z.string().max(20).nullable().optional()),
   conta_enriquecida: z.preprocess(emptyToNull, z.string().max(20).nullable().optional()),
   digito: z.preprocess(emptyToNull, z.string().max(5).nullable().optional()),
