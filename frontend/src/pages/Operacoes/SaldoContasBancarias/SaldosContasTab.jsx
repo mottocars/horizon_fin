@@ -114,27 +114,29 @@ const CelulaSaldo = memo(function CelulaSaldo({
 
   const editando = texto !== null;
   const preenchido = valor !== undefined && valor !== null;
-  // Origem só decide a cor/ícone quando tem valor E não está em edição (editar mostra texto
-  // puro, sem selo) — cai em MANUAL se por algum motivo vier sem origem (não deveria, a
-  // coluna é NOT NULL, mas evita um visual quebrado).
-  const info = preenchido && !editando && !bloqueada ? ORIGEM_INFO[origem] || ORIGEM_INFO.MANUAL : null;
+  // Origem decide o ÍCONE sempre que tem valor e não está em edição — inclusive bloqueada
+  // (período encerrado): o pedido do usuário foi "o fundo cinza continua, mas o ícone colorido
+  // precisa sempre permanecer". Já a COR DE FUNDO (tom) só reflete a origem no dia liberado;
+  // bloqueada é sempre cinza plano, como antes. Cai em MANUAL se por algum motivo vier sem
+  // origem (não deveria, a coluna é NOT NULL, mas evita um visual quebrado).
+  const infoOrigem = preenchido && !editando ? ORIGEM_INFO[origem] || ORIGEM_INFO.MANUAL : null;
   // Fora do dia liberado (cadeado): cinza e sem hover, igual a um campo desabilitado comum —
   // o disabled abaixo já impede focar/digitar/colar, isso é só o reforço visual.
   const tom = bloqueada
     ? 'border-transparent bg-gray-50'
     : preenchido
-      ? info?.tom || ORIGEM_INFO.MANUAL.tom
+      ? infoOrigem?.tom || ORIGEM_INFO.MANUAL.tom
       : dia.pendente
         ? 'border-amber-200 bg-amber-50 hover:border-amber-400'
         : 'border-transparent bg-transparent hover:border-gray-300 hover:bg-white';
-  const Icone = info?.icone;
+  const Icone = infoOrigem?.icone;
 
   return (
     <div className="relative">
       {Icone && (
         <Icone
           size={11}
-          className={`pointer-events-none absolute left-1.5 top-1/2 -translate-y-1/2 ${info.icone_cor}`}
+          className={`pointer-events-none absolute left-1.5 top-1/2 -translate-y-1/2 ${infoOrigem.icone_cor}`}
           aria-hidden="true"
         />
       )}
@@ -145,8 +147,8 @@ const CelulaSaldo = memo(function CelulaSaldo({
         autoComplete="off"
         spellCheck={false}
         disabled={bloqueada}
-        title={info?.titulo}
-        aria-label={`${rotulo} — saldo do dia ${dia.dia}${bloqueada ? ' (bloqueado — fora do período aberto)' : ''}${info ? ` (${info.titulo})` : ''}`}
+        title={infoOrigem?.titulo}
+        aria-label={`${rotulo} — saldo do dia ${dia.dia}${bloqueada ? ' (bloqueado — fora do período aberto)' : ''}${infoOrigem ? ` (${infoOrigem.titulo})` : ''}`}
         value={editando ? texto : preenchido ? formatarSaldo(valor) : ''}
         onFocus={(e) => {
           atualizarTexto(preenchido ? numeroParaEdicao(valor) : '');
