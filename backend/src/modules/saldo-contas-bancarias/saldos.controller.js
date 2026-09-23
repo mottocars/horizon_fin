@@ -1,5 +1,6 @@
 const { z } = require('zod');
 const service = require('./saldos.service');
+const vanpixSyncService = require('./vanpix-sync.service');
 
 const MAX_DIAS_PERIODO = 93;
 const MAX_ITENS_POR_LOTE = 3000;
@@ -150,4 +151,20 @@ async function encerrarPeriodo(req, res, next) {
   }
 }
 
-module.exports = { getFiltros, getSaldos, salvarSaldos, getPeriodoAberto, abrirPeriodo, encerrarPeriodo };
+const buscarVanpixSchema = z.object({ data: z.string().refine(dataValida, 'Data inválida.') });
+
+// Só roda pro dia que está de fato aberto agora — evita gravar saldo "automático" num dia que
+// não é mais o período corrente (ex.: usuário demorou pra confirmar e outra aba já encerrou).
+async function buscarVanpix(req, res, next) {
+  try {
+    const empresaId = await acessoEmpresa(req);
+    const { data } = buscarVanpixSchema.parse(req.body);
+    const { data: dataAberta } = await service.getPeriodoAberto(empresaId);
+    if (dataAberta !== data) throw badRequest('Esse dia não é o período aberto no momento.');
+    res.json(await vanpixSyncService.buscarSaldosVanpix(empresaId, req.user.id, data));
+  } catch (err) {
+    tratarErroDeValidacao(err, next);
+  }
+}
+
+module.exports = { getFiltros, getSaldos, salvarSaldos, getPeriodoAberto, abrirPeriodo, encerrarPeriodo, buscarVanpix };

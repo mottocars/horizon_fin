@@ -1,5 +1,6 @@
 const pool = require('../../config/db');
 const { encrypt, decrypt } = require('../../utils/crypto');
+const { parseRetornoCaixa } = require('../../utils/cnab240');
 
 async function list({ page = 1, limit = 10, search = '', ativo, empresaIds }) {
   const offset = (page - 1) * limit;
@@ -207,12 +208,16 @@ function dataVanpixHoje() {
   return `${pad(hoje.getDate())}-${pad(hoje.getMonth() + 1)}-${hoje.getFullYear()}`;
 }
 
-async function testarApelido(serviceKey, clientSecret, apelido) {
+// Chamada HTTP crua, compartilhada entre testarApelido (data de hoje, só classifica) e
+// buscarRetorno (data escolhida, devolve o conteúdo pra parsear). `ignorar_download: 1` nas
+// duas — mesmo a busca "de verdade" não marca nada como baixado do lado da VanPix, pra não
+// interferir em nenhum outro consumidor real desse mesmo retorno.
+async function chamarApiRetorno(serviceKey, clientSecret, apelido, dataPesquisa) {
   const params = new URLSearchParams({
     'service-key': serviceKey,
     action: 'BAIXAR',
     apelido,
-    data_pesquisa: dataVanpixHoje(),
+    data_pesquisa: dataPesquisa,
     ignorar_download: '1',
   });
 
@@ -223,14 +228,19 @@ async function testarApelido(serviceKey, clientSecret, apelido) {
       signal: AbortSignal.timeout(15000),
     });
   } catch {
-    return { apelido, status: 'erro_rede', mensagem: 'Não foi possível conectar à VanPix (rede ou tempo esgotado).' };
+    return { erroRede: true };
   }
 
   const corpo = await resposta.json().catch(() => null);
-  if (!corpo) return { apelido, status: 'erro_rede', mensagem: 'A VanPix respondeu algo que não é um JSON válido.' };
+  if (!corpo) return { erroRede: true };
+  return { erroRede: false, httpStatus: resposta.status, corpo };
+}
+
+function classificarResposta(apelido, { erroRede, httpStatus, corpo }, descricaoSemRetorno) {
+  if (erroRede) return { apelido, status: 'erro_rede', mensagem: 'Não foi possível conectar à VanPix (rede ou tempo esgotado).' };
 
   const codigoErro = corpo?.error?.error_code;
-  if (resposta.status === 401) {
+  if (httpStatus === 401) {
     if (codigoErro === 4016) return { apelido, status: 'apelido_invalido', mensagem: corpo.error.error_description };
     return {
       apelido,
@@ -238,16 +248,36 @@ async function testarApelido(serviceKey, clientSecret, apelido) {
       mensagem: corpo?.error?.error_description || `Não autorizado (HTTP 401, código ${codigoErro ?? 'desconhecido'}).`,
     };
   }
-  if (codigoErro === 2001) return { apelido, status: 'ok_sem_retorno', mensagem: 'Credenciais aceitas — sem retorno para hoje.' };
+  if (codigoErro === 2001) return { apelido, status: 'ok_sem_retorno', mensagem: descricaoSemRetorno };
   if (corpo.controle === true) {
     const qtd = corpo?.resposta?.quantidade ?? (corpo?.resposta?.retornos || []).length;
-    return { apelido, status: 'ok_com_retorno', mensagem: `${qtd} retorno(s) encontrado(s) para hoje.` };
+    return { apelido, status: 'ok_com_retorno', mensagem: `${qtd} retorno(s) encontrado(s).`, retornos: corpo.resposta.retornos || [] };
   }
   return {
     apelido,
     status: 'desconhecido',
-    mensagem: corpo?.error?.error_description || `Resposta em formato inesperado (HTTP ${resposta.status}).`,
+    mensagem: corpo?.error?.error_description || `Resposta em formato inesperado (HTTP ${httpStatus}).`,
   };
+}
+
+async function testarApelido(serviceKey, clientSecret, apelido) {
+  const resposta = await chamarApiRetorno(serviceKey, clientSecret, apelido, dataVanpixHoje());
+  const resultado = classificarResposta(apelido, resposta, 'Credenciais aceitas — sem retorno para hoje.');
+  delete resultado.retornos; // testarApelido só classifica, não expõe o conteúdo
+  return resultado;
+}
+
+// Busca de verdade: mesma API, mas com uma data escolhida e devolvendo o CNAB240 já
+// parseado (1 item por conta/lote encontrado no arquivo) em vez de só uma classificação.
+async function buscarRetorno(serviceKey, clientSecret, apelido, dataPesquisaDDMMYYYY) {
+  const resposta = await chamarApiRetorno(serviceKey, clientSecret, apelido, dataPesquisaDDMMYYYY);
+  const resultado = classificarResposta(apelido, resposta, 'Credenciais aceitas — sem retorno para essa data.');
+  if (resultado.status !== 'ok_com_retorno') return { ...resultado, lotes: [] };
+
+  const todasAsLinhas = resultado.retornos.flatMap((r) => r.texto || []);
+  const lotes = parseRetornoCaixa(todasAsLinhas);
+  delete resultado.retornos;
+  return { ...resultado, lotes };
 }
 
 // Testa cada apelido em sequência; para assim que encontra uma credencial inválida (é a
@@ -264,4 +294,4 @@ async function testarConexao({ serviceKey, clientSecret, apelidos }) {
   return { sucesso: algumConfirmado && !credencialFalhou, detalhes };
 }
 
-module.exports = { list, getById, create, update, setAtivo, getCredenciais, testarConexao };
+module.exports = { list, getById, create, update, setAtivo, getCredenciais, testarConexao, buscarRetorno };

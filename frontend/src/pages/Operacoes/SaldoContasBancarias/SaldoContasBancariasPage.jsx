@@ -476,7 +476,12 @@ export default function SaldoContasBancariasPage() {
 
       <AbrirPeriodoModal
         open={modalPeriodoAberto}
-        onClose={() => setModalPeriodoAberto(false)}
+        onClose={() => {
+          setModalPeriodoAberto(false);
+          // a busca automática na VanPix (rodada dentro do modal) pode ter gravado saldo antes
+          // de fechar — recarrega a grade pra já aparecer preenchido.
+          setRefreshToken((n) => n + 1);
+        }}
         empresaId={empresaId}
         onAberto={setDataAberta}
       />

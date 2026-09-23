@@ -44,3 +44,10 @@ export function abrirPeriodoSaldos(empresaId, data, reabrirEncerrado = false) {
 export function encerrarPeriodoSaldos(empresaId) {
   return http.delete(`/saldo-contas-bancarias/${empresaId}/periodo-aberto`).then((res) => res.data);
 }
+
+// Roda todos os convênios VanPix ativos da empresa pra `data`, casa com as contas já
+// cadastradas (banco+conta+dígito) e grava o saldo automaticamente. Devolve um relatório:
+// { convenios: [{apelido, status, mensagem}], atualizados: [{...,saldo}], semCorrespondencia: [...] }.
+export function buscarSaldosVanpix(empresaId, data) {
+  return http.post(`/saldo-contas-bancarias/${empresaId}/buscar-vanpix`, { data }).then((res) => res.data);
+}
