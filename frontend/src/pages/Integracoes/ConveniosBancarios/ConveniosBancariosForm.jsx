@@ -41,6 +41,10 @@ const STATUS_TESTE = {
 // padrão (preta).
 const COR_CAMPO_VAZIO = 'border-amber-200 bg-amber-50 focus:border-amber-400';
 const COR_CAMPO_PREENCHIDO = 'border-primary-100 bg-primary-50 focus:border-primary-500';
+// Na edição o campo fica vazio de propósito (o backend nunca manda o segredo descriptografado
+// de volta) — o placeholder simula visualmente "tem uma senha escondida aqui" em vez do campo
+// parecer em branco/sem nada.
+const PLACEHOLDER_SEGREDO = '••••••••••••••••';
 
 function estaPreenchido(valor) {
   return String(valor ?? '').trim() !== '';
@@ -314,7 +318,7 @@ export default function ConveniosBancariosForm() {
                     type={showServiceKey ? 'text' : 'password'}
                     value={form.service_key}
                     onChange={(e) => handleChange('service_key', e.target.value)}
-                    placeholder={isEdit ? 'Deixe em branco para manter a chave atual' : ''}
+                    placeholder={isEdit ? PLACEHOLDER_SEGREDO : ''}
                     className={`w-full rounded-lg border px-3 py-2 pr-10 text-sm focus:outline-none focus:ring-2 ${corCampoSegredo(form.service_key)}`}
                   />
                   <button
@@ -325,6 +329,9 @@ export default function ConveniosBancariosForm() {
                     {showServiceKey ? <EyeOff size={16} /> : <Eye size={16} />}
                   </button>
                 </div>
+                {isEdit && (
+                  <p className="mt-1 text-xs text-gray-400">Deixe em branco para manter a chave atual.</p>
+                )}
                 {fieldErrors.service_key && (
                   <p className="mt-1 text-xs text-red-600">{fieldErrors.service_key}</p>
                 )}
@@ -337,7 +344,7 @@ export default function ConveniosBancariosForm() {
                     type={showClientSecret ? 'text' : 'password'}
                     value={form.client_secret}
                     onChange={(e) => handleChange('client_secret', e.target.value)}
-                    placeholder={isEdit ? 'Deixe em branco para manter o segredo atual' : ''}
+                    placeholder={isEdit ? PLACEHOLDER_SEGREDO : ''}
                     className={`w-full rounded-lg border px-3 py-2 pr-10 text-sm focus:outline-none focus:ring-2 ${corCampoSegredo(form.client_secret)}`}
                   />
                   <button
@@ -348,6 +355,9 @@ export default function ConveniosBancariosForm() {
                     {showClientSecret ? <EyeOff size={16} /> : <Eye size={16} />}
                   </button>
                 </div>
+                {isEdit && (
+                  <p className="mt-1 text-xs text-gray-400">Deixe em branco para manter o segredo atual.</p>
+                )}
                 {fieldErrors.client_secret && (
                   <p className="mt-1 text-xs text-red-600">{fieldErrors.client_secret}</p>
                 )}
