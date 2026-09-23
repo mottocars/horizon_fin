@@ -67,6 +67,18 @@ async function getFiltros(empresaId) {
     [empresaId]
   );
 
+  // Opções do filtro "Conta bancária" — só as que realmente aparecem na grade (classificada +
+  // projetando saldo), mesmo critério de getSaldos abaixo. `value` é composto
+  // ("company_id:numero_conta") porque numero_conta sozinho não é garantidamente único entre
+  // empresas Sienge diferentes dentro da mesma empresa Horizon.
+  const { rows: contasFiltro } = await pool.query(
+    `SELECT company_id, numero_conta, COALESCE(NULLIF(nome, ''), numero_conta) AS nome
+     FROM contas_bancarias_sienge
+     WHERE empresa_id = $1 AND classificacao IS NOT NULL AND projeta_saldo = TRUE
+     ORDER BY nome ASC NULLS LAST, numero_conta ASC`,
+    [empresaId]
+  );
+
   // Nome do banco: o da lista oficial (BrasilAPI + internos, com a logomarca customizada do
   // cadastro de Bancos por cima da oficial onde existir uma — ver bancos.service.js); se ela
   // estiver fora do ar ou não conhecer o código (ex.: 901 "Escritório 01" do Sienge), cai no
@@ -84,13 +96,17 @@ async function getFiltros(empresaId) {
     logo: oficiais.get(b.codigo)?.logo || null,
   }));
 
-  return { empresas, bancos };
+  return {
+    empresas,
+    bancos,
+    contas: contasFiltro.map((c) => ({ value: `${c.company_id}:${c.numero_conta}`, label: c.nome })),
+  };
 }
 
 // Contas + o saldo informado de cada dia do período. Contas inativas (DISABLED) só
 // aparecem se tiverem algum saldo lançado no período — senão são 130 linhas de ruído —,
 // assim nenhum lançamento antigo some da tela.
-async function getSaldos(empresaId, { dataInicio, dataFim, companyIds = [], classificacoes = [], bancos = [] }) {
+async function getSaldos(empresaId, { dataInicio, dataFim, companyIds = [], classificacoes = [], bancos = [], contas: contasFiltro = [] }) {
   const params = [empresaId, dataInicio, dataFim];
   let filtros = '';
   if (companyIds.length) {
@@ -105,12 +121,19 @@ async function getSaldos(empresaId, { dataInicio, dataFim, companyIds = [], clas
     params.push(bancos);
     filtros += ` AND ${BANCO_EFETIVO_SQL} = ANY($${params.length}::text[])`;
   }
+  if (contasFiltro.length) {
+    params.push(contasFiltro);
+    filtros += ` AND (c.company_id::text || ':' || c.numero_conta) = ANY($${params.length}::text[])`;
+  }
 
+  // Só entra na grade quem está classificada E marcada pra projetar saldo (pedido do
+  // usuário) — sem os dois, a conta fica de fora mesmo tendo saldo lançado no período.
   const { rows: contas } = await pool.query(
     `SELECT c.numero_conta, c.company_id, c.company_name, c.nome, c.classificacao, c.status,
             ${BANCO_EFETIVO_SQL} AS banco_codigo
      FROM contas_bancarias_sienge c
      WHERE c.empresa_id = $1
+       AND c.classificacao IS NOT NULL AND c.projeta_saldo = TRUE
        AND (c.status = 'ENABLED' OR EXISTS (
              SELECT 1 FROM saldos_contas_bancarias s
              WHERE s.empresa_id = c.empresa_id AND s.company_id = c.company_id

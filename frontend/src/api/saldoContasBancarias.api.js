@@ -7,7 +7,7 @@ export function getFiltrosSaldos(empresaId) {
 
 const csv = (lista) => (lista && lista.length ? lista.join(',') : undefined);
 
-export function getSaldosContas(empresaId, { dataInicio, dataFim, companyIds, classificacoes, bancos } = {}) {
+export function getSaldosContas(empresaId, { dataInicio, dataFim, companyIds, classificacoes, bancos, contas } = {}) {
   return http
     .get(`/saldo-contas-bancarias/${empresaId}`, {
       params: {
@@ -16,6 +16,7 @@ export function getSaldosContas(empresaId, { dataInicio, dataFim, companyIds, cl
         company_ids: csv(companyIds),
         classificacoes: csv(classificacoes),
         bancos: csv(bancos),
+        contas: csv(contas),
       },
     })
     .then((res) => res.data);

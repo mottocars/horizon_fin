@@ -59,6 +59,8 @@ export default function SaldoContasBancariasPage() {
   const companyIds = useMemo(() => companyIdsParam.split(',').filter(Boolean).map(Number), [companyIdsParam]);
   const bancosParam = searchParams.get('bancos') || '';
   const bancos = useMemo(() => bancosParam.split(',').filter(Boolean), [bancosParam]);
+  const contasParam = searchParams.get('contas') || '';
+  const contasSelecionadas = useMemo(() => contasParam.split(',').filter(Boolean), [contasParam]);
 
   const padrao = useMemo(() => semanaAtual(), []);
   const semanaParam = searchParams.get('semana') || padrao.inicio;
@@ -111,7 +113,7 @@ export default function SaldoContasBancariasPage() {
 
   // Empresas do Sienge e bancos são da empresa escolhida — trocar de empresa zera os dois.
   function handleEmpresaChange(novoId) {
-    atualizarParams({ empresa_id: novoId || null, company_ids: null, bancos: null });
+    atualizarParams({ empresa_id: novoId || null, company_ids: null, bancos: null, contas: null });
   }
 
   // SeletorSemana já entrega sempre o domingo (ISO) da semana escolhida — nada pra normalizar
@@ -210,6 +212,7 @@ export default function SaldoContasBancariasPage() {
     () => filtros.bancos.map((b) => ({ value: b.codigo, label: `${b.codigo} - ${b.nome}` })),
     [filtros.bancos]
   );
+  const opcoesContasFiltro = useMemo(() => filtros.contas || [], [filtros.contas]);
 
   const semEmpresa = !empresaId;
 
@@ -284,11 +287,7 @@ export default function SaldoContasBancariasPage() {
 
             {abaAtiva === 'saldos' && (
               <>
-                {/* flex-[2] (cresce 2x mais rápido que os vizinhos flex-1) + max-w bem maior:
-                    ocupa o espaço que este campo dividia com o filtro de Classificação,
-                    removido a pedido do usuário — só aumentar o max-w não bastava, porque
-                    com flex-1 em todos os campos crescem em partes iguais até então. */}
-                <div className="sm:min-w-44 sm:max-w-xl sm:flex-2">
+                <div className="sm:min-w-44 sm:max-w-xs sm:flex-1">
                   <label className="mb-1 block text-sm font-medium text-gray-700">Empresa da conta</label>
                   <SearchableSelect
                     multiple
@@ -311,6 +310,19 @@ export default function SaldoContasBancariasPage() {
                     options={opcoesBancos}
                     placeholder={semEmpresa ? 'Selecione a empresa primeiro' : loadingFiltros ? 'Carregando...' : 'Todos os bancos'}
                     emptyMessage="Nenhum banco encontrado."
+                  />
+                </div>
+
+                <div className="sm:min-w-44 sm:max-w-xs sm:flex-1">
+                  <label className="mb-1 block text-sm font-medium text-gray-700">Conta bancária</label>
+                  <SearchableSelect
+                    multiple
+                    value={contasSelecionadas}
+                    onChange={(valores) => atualizarParams({ contas: valores })}
+                    disabled={semEmpresa || loadingFiltros}
+                    options={opcoesContasFiltro}
+                    placeholder={semEmpresa ? 'Selecione a empresa primeiro' : loadingFiltros ? 'Carregando...' : 'Todas as contas'}
+                    emptyMessage="Nenhuma conta encontrada."
                   />
                 </div>
 
@@ -444,6 +456,7 @@ export default function SaldoContasBancariasPage() {
             dataFim={dataFim}
             companyIds={companyIds}
             bancos={bancos}
+            contas={contasSelecionadas}
             infoBancos={infoBancos}
             refreshToken={refreshToken}
             dataAberta={dataAberta}

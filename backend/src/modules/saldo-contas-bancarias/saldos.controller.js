@@ -106,6 +106,7 @@ async function getSaldos(req, res, next) {
       companyIds: csv(req.query.company_ids).map(Number).filter(Number.isInteger),
       classificacoes: csv(req.query.classificacoes).filter((c) => CLASSIFICACOES_VALIDAS.includes(c)),
       bancos: csv(req.query.bancos).filter((b) => /^\d{1,4}$/.test(b)),
+      contas: csv(req.query.contas).filter((c) => /^\d+:.+$/.test(c)),
     });
     res.json(result);
   } catch (err) {

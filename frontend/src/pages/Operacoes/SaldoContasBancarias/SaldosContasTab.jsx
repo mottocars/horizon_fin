@@ -175,6 +175,7 @@ export default function SaldosContasTab({
   dataFim,
   companyIds,
   bancos,
+  contas: contasFiltro,
   infoBancos,
   refreshToken = 0,
   // Dia liberado pra lançar saldo (cadeado, gerenciado na página) — só ele aceita edição;
@@ -213,7 +214,7 @@ export default function SaldosContasTab({
     rolouAposCargaRef.current = false;
     setCarregando(true);
     setErroCarga('');
-    getSaldosContas(empresaId, { dataInicio, dataFim, companyIds, bancos })
+    getSaldosContas(empresaId, { dataInicio, dataFim, companyIds, bancos, contas: contasFiltro })
       .then((resposta) => {
         if (minhaRequisicao === requisicaoRef.current) setContas(resposta.contas);
       })
@@ -226,7 +227,7 @@ export default function SaldosContasTab({
       .finally(() => {
         if (minhaRequisicao === requisicaoRef.current) setCarregando(false);
       });
-  }, [empresaId, dataInicio, dataFim, companyIds, bancos]);
+  }, [empresaId, dataInicio, dataFim, companyIds, bancos, contasFiltro]);
 
   carregarRef.current = carregar;
 
