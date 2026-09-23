@@ -7,16 +7,6 @@ const MAX_ITENS_POR_LOTE = 3000;
 // NUMERIC(15,2): 13 dígitos inteiros.
 const SALDO_MAXIMO = 9_999_999_999_999.99;
 
-const CLASSIFICACOES_VALIDAS = [
-  'APLICACAO',
-  'BLOQUEADA',
-  'CHEQUE_ESPECIAL',
-  'DEDICADA',
-  'GARANTIDA',
-  'LIBERADA',
-  service.SEM_CLASSIFICACAO,
-];
-
 function badRequest(message) {
   const err = new Error(message);
   err.status = 400;
@@ -104,7 +94,9 @@ async function getSaldos(req, res, next) {
       dataInicio,
       dataFim,
       companyIds: csv(req.query.company_ids).map(Number).filter(Number.isInteger),
-      classificacoes: csv(req.query.classificacoes).filter((c) => CLASSIFICACOES_VALIDAS.includes(c)),
+      // Classificação não é mais uma lista fixa (virou cadastro por empresa) — só valida
+      // formato/tamanho aqui, igual aos outros filtros de texto livre (bancos, contas).
+      classificacoes: csv(req.query.classificacoes).filter((c) => c.length > 0 && c.length <= 50),
       bancos: csv(req.query.bancos).filter((b) => /^\d{1,4}$/.test(b)),
       contas: csv(req.query.contas).filter((c) => /^\d+:.+$/.test(c)),
     });

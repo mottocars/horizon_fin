@@ -3,7 +3,6 @@ import { useNavigate } from 'react-router-dom';
 import { Landmark, Minus, Plus, TriangleAlert } from 'lucide-react';
 import LogoBanco from './LogoBanco';
 import { listBancos, listContas } from '../../../api/contasBancariasSienge.api';
-import { OPCOES_CLASSIFICACAO } from './constantes';
 
 const LIMIT = 2000; // mesma estratégia de sempre carregar tudo e agrupar no navegador (ver SaldosContasTab.jsx)
 
@@ -11,7 +10,6 @@ const LIMIT = 2000; // mesma estratégia de sempre carregar tudo e agrupar no na
 // esconde essas contas de propósito): este é o cadastro, o lugar onde justamente se
 // classifica uma conta — escondê-las tornaria impossível achá-las pra classificar.
 const SEM_CLASSIFICACAO = 'SEM_CLASSIFICACAO';
-const GRUPOS_CADASTRO = [...OPCOES_CLASSIFICACAO, { value: SEM_CLASSIFICACAO, label: 'Sem classificação' }];
 
 // Cadastro das contas bancárias — antes uma tela própria em Cadastros → Contas Bancárias,
 // agora uma aba aqui (a Empresa já vem selecionada no topo da página, então não precisa mais
@@ -88,12 +86,20 @@ export default function ContasTab({
     setAbertos([]);
   }, [empresaId, search, status, companyIds]);
 
+  // Classificação não é mais uma lista fixa (virou cadastro por empresa — ver
+  // ClassificacoesTab.jsx) — os grupos vêm dos nomes que realmente aparecem nas contas
+  // carregadas, não de uma lista pré-definida. "Sem classificação" sempre entra por último se
+  // houver alguma conta nessa situação.
   const grupos = useMemo(() => {
     if (!contas) return [];
-    return GRUPOS_CADASTRO.map((grupo) => ({
-      ...grupo,
-      contas: contas.filter((c) => (c.classificacao || SEM_CLASSIFICACAO) === grupo.value),
-    })).filter((grupo) => grupo.contas.length > 0);
+    const nomes = [...new Set(contas.map((c) => c.classificacao).filter(Boolean))].sort((a, b) => a.localeCompare(b, 'pt-BR'));
+    const gruposCadastro = [...nomes.map((nome) => ({ value: nome, label: nome })), { value: SEM_CLASSIFICACAO, label: 'Sem classificação' }];
+    return gruposCadastro
+      .map((grupo) => ({
+        ...grupo,
+        contas: contas.filter((c) => (c.classificacao || SEM_CLASSIFICACAO) === grupo.value),
+      }))
+      .filter((grupo) => grupo.contas.length > 0);
   }, [contas]);
 
   function alternarGrupo(valor) {

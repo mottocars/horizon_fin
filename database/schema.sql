@@ -843,6 +843,12 @@ CREATE TABLE saldos_contas_bancarias (
     numero_conta   VARCHAR(20) NOT NULL,
     data           DATE NOT NULL,
     saldo          NUMERIC(15,2) NOT NULL,
+    -- De onde veio o valor: API (busca automática VanPix, achou retorno pro dia), HERDADO
+    -- (VanPix não retornou nada e a classificação da conta prioriza repetir o saldo do dia
+    -- anterior) ou MANUAL (digitado/colado na grade — inclusive quando sobrescreve um valor
+    -- que era API/HERDADO, vira MANUAL a partir daí). Só informa a cor/ícone da grade, não
+    -- afeta nada da lógica de período/gravação.
+    origem         VARCHAR(10) NOT NULL DEFAULT 'MANUAL' CHECK (origem IN ('API', 'HERDADO', 'MANUAL')),
     atualizado_por INTEGER REFERENCES usuarios(id) ON DELETE SET NULL,
     criado_em      TIMESTAMP DEFAULT NOW(),
     atualizado_em  TIMESTAMP DEFAULT NOW(),

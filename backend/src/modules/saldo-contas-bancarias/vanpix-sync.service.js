@@ -8,8 +8,14 @@
 // fica pronto no dia seguinte. O saldo plotado no dia `data` (o período sendo aberto) é esse
 // saldo final de `data - 1 dia`, que é também o saldo inicial de `data` — por isso consultamos
 // a VanPix com a própria `data` (sem somar dia nenhum).
+//
+// Pra toda conta classificada + projetando saldo (o mesmo critério de saldos.service.js::
+// getSaldos) que NÃO aparece em nenhum retorno da VanPix, olha a prioridade configurada na
+// classificação dela (classificacoes_bancarias.prioridade_sem_saldo): SALDO_ANTERIOR repete o
+// último saldo já lançado antes de `data` (origem HERDADO); SEM_SALDO deixa em branco.
 const pool = require('../../config/db');
 const vanpixService = require('../integracoes-vanpix/vanpix.service');
+const classificacoesService = require('../classificacoes-bancarias/classificacoes.service');
 const saldosService = require('./saldos.service');
 
 function diaAnteriorISO(iso) {
@@ -30,6 +36,19 @@ async function listarVanpixAtivasDaEmpresa(empresaId) {
   return rows;
 }
 
+// Mesmo critério de "conta alvo" usado em saldos.service.js::getSaldos (classificada +
+// projetando saldo) — é o universo inteiro de contas que a grade mostra, não só as que a
+// VanPix conseguir casar.
+async function listarContasAlvo(empresaId) {
+  const { rows } = await pool.query(
+    `SELECT company_id, numero_conta, classificacao
+     FROM contas_bancarias_sienge
+     WHERE empresa_id = $1 AND classificacao IS NOT NULL AND projeta_saldo = TRUE`,
+    [empresaId]
+  );
+  return rows;
+}
+
 // Mesmo critério de "banco efetivo" usado no resto do módulo de saldos (banco_enriquecido
 // prevalece sobre o código bruto do Sienge).
 async function buscarContasCorrespondentes(empresaId, banco, conta, digitoConta) {
@@ -45,19 +64,34 @@ async function buscarContasCorrespondentes(empresaId, banco, conta, digitoConta)
   return rows;
 }
 
+// Último saldo já lançado (qualquer origem) antes de `data`, pra "herdar" quando a VanPix não
+// retornou nada pra essa conta e a classificação prioriza isso.
+async function ultimoSaldoAnterior(empresaId, companyId, numeroConta, data) {
+  const { rows } = await pool.query(
+    `SELECT saldo FROM saldos_contas_bancarias
+     WHERE empresa_id = $1 AND company_id = $2 AND numero_conta = $3 AND data < $4
+     ORDER BY data DESC LIMIT 1`,
+    [empresaId, companyId, numeroConta, data]
+  );
+  return rows[0] ? Number(rows[0].saldo) : null;
+}
+
 // Roda todos os convênios VanPix ativos da empresa pra `data`, casa cada conta encontrada no
-// retorno com o cadastro (banco+conta+dígito) e grava o saldo automaticamente. Não lança
-// exceção por causa de UM convênio com problema — cada um é reportado individualmente; só
-// propaga erro se a própria gravação em lote falhar (ex.: período fechado por outra aba).
+// retorno com o cadastro (banco+conta+dígito) e grava o saldo automaticamente (origem API).
+// Toda conta-alvo que ficou de fora disso tenta herdar o saldo do dia anterior (origem
+// HERDADO), se a classificação dela priorizar isso. Não lança exceção por causa de UM
+// convênio com problema — cada um é reportado individualmente; só propaga erro se a própria
+// gravação em lote falhar (ex.: período fechado por outra aba).
 async function buscarSaldosVanpix(empresaId, usuarioId, data) {
   const dataPesquisa = paraDDMMYYYY(data);
   const diaAnterior = diaAnteriorISO(data);
   const integracoes = await listarVanpixAtivasDaEmpresa(empresaId);
 
-  const relatorio = { convenios: [], atualizados: [], semCorrespondencia: [] };
+  const relatorio = { convenios: [], atualizados: [], herdados: [], semCorrespondencia: [] };
   if (integracoes.length === 0) return relatorio;
 
   const itensParaGravar = [];
+  const casadasNaApi = new Set(); // "company_id:numero_conta" já resolvidas via API nesta rodada
 
   for (const integracao of integracoes) {
     const cred = await vanpixService.getCredenciais(integracao.id);
@@ -81,7 +115,8 @@ async function buscarSaldosVanpix(empresaId, usuarioId, data) {
 
         const valor = Math.round(lote.saldoFinal.valorCentavos * (lote.saldoFinal.situacao === 'D' ? -1 : 1)) / 100;
         for (const conta of contas) {
-          itensParaGravar.push({ company_id: conta.company_id, numero_conta: conta.numero_conta, data, saldo: valor });
+          casadasNaApi.add(`${conta.company_id}:${conta.numero_conta}`);
+          itensParaGravar.push({ company_id: conta.company_id, numero_conta: conta.numero_conta, data, saldo: valor, origem: 'API' });
           relatorio.atualizados.push({
             apelido,
             banco: lote.banco,
@@ -94,6 +129,30 @@ async function buscarSaldosVanpix(empresaId, usuarioId, data) {
         }
       }
     }
+  }
+
+  // Segunda passada: toda conta-alvo que a API não resolveu tenta herdar, conforme a
+  // prioridade cadastrada na classificação dela.
+  const [contasAlvo, prioridadePorClassificacao] = await Promise.all([
+    listarContasAlvo(empresaId),
+    classificacoesService.mapaPorNome(empresaId),
+  ]);
+
+  for (const conta of contasAlvo) {
+    const chave = `${conta.company_id}:${conta.numero_conta}`;
+    if (casadasNaApi.has(chave)) continue;
+    if (prioridadePorClassificacao.get(conta.classificacao) !== 'SALDO_ANTERIOR') continue;
+
+    const valorHerdado = await ultimoSaldoAnterior(empresaId, conta.company_id, conta.numero_conta, data);
+    if (valorHerdado === null) continue; // nada lançado antes — não tem o que herdar, fica em branco
+
+    itensParaGravar.push({ company_id: conta.company_id, numero_conta: conta.numero_conta, data, saldo: valorHerdado, origem: 'HERDADO' });
+    relatorio.herdados.push({
+      classificacao: conta.classificacao,
+      company_id: conta.company_id,
+      numero_conta: conta.numero_conta,
+      saldo: valorHerdado,
+    });
   }
 
   if (itensParaGravar.length > 0) {

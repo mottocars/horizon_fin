@@ -1,16 +1,8 @@
 import { Fragment, memo, useCallback, useEffect, useMemo, useRef, useState } from 'react';
-import { Check, Landmark, Loader2, Minus, Plus, TriangleAlert } from 'lucide-react';
+import { Check, History, Landmark, Loader2, Minus, Pencil, Plus, TriangleAlert, Zap } from 'lucide-react';
 import { getSaldosContas, salvarSaldosContas } from '../../../api/saldoContasBancarias.api';
 import LogoBanco from './LogoBanco';
-import {
-  GRUPOS_CLASSIFICACAO,
-  formatarSaldo,
-  interpretarSaldo,
-  listarDias,
-  nomeMes,
-  numeroParaEdicao,
-  somarSaldos,
-} from './constantes';
+import { formatarSaldo, interpretarSaldo, listarDias, nomeMes, numeroParaEdicao, somarSaldos } from './constantes';
 
 // Geometria da grade — a tabela tem largura fixa (colunas em px) e rola dentro do card:
 // com até 31+ colunas de valor não existe largura de tela que acomode tudo sem rolar.
@@ -26,6 +18,17 @@ const ALTURA_DIA = 28;
 const MARGEM_ROLAGEM = 'scroll-mt-[60px] scroll-mb-14 scroll-ml-[356px] scroll-mr-4';
 
 const tomNegativo = (valor) => (valor < 0 ? 'text-red-600' : 'text-gray-900');
+
+// Origem do saldo (só pra cor/ícone da célula — não afeta valor nem gravação): API = achado
+// automaticamente na VanPix; HERDADO = repetido do dia anterior (VanPix não trouxe nada pra
+// essa conta e a classificação prioriza isso); MANUAL = digitado/colado na grade (inclusive
+// quando sobrescreve um valor que era API/HERDADO). Cores discretas (tom 50/100), mesmo peso
+// visual do âmbar/azul já usados — "sutil", não um selo chamativo.
+const ORIGEM_INFO = {
+  API: { icone: Zap, tom: 'border-emerald-100 bg-emerald-50 hover:border-emerald-400', icone_cor: 'text-emerald-500', titulo: 'Saldo automático (VanPix)' },
+  HERDADO: { icone: History, tom: 'border-purple-100 bg-purple-50 hover:border-purple-400', icone_cor: 'text-purple-500', titulo: 'Saldo repetido do dia anterior' },
+  MANUAL: { icone: Pencil, tom: 'border-primary-100 bg-primary-50 hover:border-primary-500', icone_cor: 'text-primary-500', titulo: 'Saldo lançado manualmente' },
+};
 
 // Sobe a árvore a partir de `el` até achar o ancestral que rola de verdade (overflow auto ou
 // scroll em algum eixo) — hoje é o <main> do AppShell, mas a função não depende de conhecer
@@ -55,6 +58,7 @@ const CelulaSaldo = memo(function CelulaSaldo({
   rotulo,
   dia,
   valor,
+  origem,
   bloqueada,
   onCommit,
   onNavegar,
@@ -110,41 +114,56 @@ const CelulaSaldo = memo(function CelulaSaldo({
 
   const editando = texto !== null;
   const preenchido = valor !== undefined && valor !== null;
+  // Origem só decide a cor/ícone quando tem valor E não está em edição (editar mostra texto
+  // puro, sem selo) — cai em MANUAL se por algum motivo vier sem origem (não deveria, a
+  // coluna é NOT NULL, mas evita um visual quebrado).
+  const info = preenchido && !editando && !bloqueada ? ORIGEM_INFO[origem] || ORIGEM_INFO.MANUAL : null;
   // Fora do dia liberado (cadeado): cinza e sem hover, igual a um campo desabilitado comum —
   // o disabled abaixo já impede focar/digitar/colar, isso é só o reforço visual.
   const tom = bloqueada
     ? 'border-transparent bg-gray-50'
     : preenchido
-      ? 'border-primary-100 bg-primary-50 hover:border-primary-500'
+      ? info?.tom || ORIGEM_INFO.MANUAL.tom
       : dia.pendente
         ? 'border-amber-200 bg-amber-50 hover:border-amber-400'
         : 'border-transparent bg-transparent hover:border-gray-300 hover:bg-white';
+  const Icone = info?.icone;
 
   return (
-    <input
-      ref={setRef}
-      type="text"
-      inputMode="decimal"
-      autoComplete="off"
-      spellCheck={false}
-      disabled={bloqueada}
-      aria-label={`${rotulo} — saldo do dia ${dia.dia}${bloqueada ? ' (bloqueado — fora do período aberto)' : ''}`}
-      value={editando ? texto : preenchido ? formatarSaldo(valor) : ''}
-      onFocus={(e) => {
-        atualizarTexto(preenchido ? numeroParaEdicao(valor) : '');
-        const campo = e.currentTarget;
-        setTimeout(() => campo.select(), 0);
-      }}
-      onChange={(e) => {
-        if (/^[-\d.,\sR$]*$/i.test(e.target.value)) atualizarTexto(e.target.value);
-      }}
-      onBlur={commit}
-      onKeyDown={handleKeyDown}
-      onPaste={handlePaste}
-      className={`h-8 w-full rounded-md border px-2 text-right text-xs tabular-nums outline-none transition-colors focus:border-primary-500 focus:bg-white focus:ring-2 focus:ring-primary-100 disabled:cursor-not-allowed ${MARGEM_ROLAGEM} ${tom} ${
-        bloqueada ? 'text-gray-400' : editando ? 'text-gray-900' : preenchido ? tomNegativo(valor) : 'text-gray-900'
-      }`}
-    />
+    <div className="relative">
+      {Icone && (
+        <Icone
+          size={11}
+          className={`pointer-events-none absolute left-1.5 top-1/2 -translate-y-1/2 ${info.icone_cor}`}
+          aria-hidden="true"
+        />
+      )}
+      <input
+        ref={setRef}
+        type="text"
+        inputMode="decimal"
+        autoComplete="off"
+        spellCheck={false}
+        disabled={bloqueada}
+        title={info?.titulo}
+        aria-label={`${rotulo} — saldo do dia ${dia.dia}${bloqueada ? ' (bloqueado — fora do período aberto)' : ''}${info ? ` (${info.titulo})` : ''}`}
+        value={editando ? texto : preenchido ? formatarSaldo(valor) : ''}
+        onFocus={(e) => {
+          atualizarTexto(preenchido ? numeroParaEdicao(valor) : '');
+          const campo = e.currentTarget;
+          setTimeout(() => campo.select(), 0);
+        }}
+        onChange={(e) => {
+          if (/^[-\d.,\sR$]*$/i.test(e.target.value)) atualizarTexto(e.target.value);
+        }}
+        onBlur={commit}
+        onKeyDown={handleKeyDown}
+        onPaste={handlePaste}
+        className={`h-8 w-full rounded-md border text-right text-xs tabular-nums outline-none transition-colors focus:border-primary-500 focus:bg-white focus:ring-2 focus:ring-primary-100 disabled:cursor-not-allowed ${Icone ? 'pl-5 pr-2' : 'px-2'} ${MARGEM_ROLAGEM} ${tom} ${
+          bloqueada ? 'text-gray-400' : editando ? 'text-gray-900' : preenchido ? tomNegativo(valor) : 'text-gray-900'
+        }`}
+      />
+    </div>
   );
 });
 
@@ -236,14 +255,18 @@ export default function SaldosContasTab({
   }, [carregar, refreshToken]);
 
   // ---------------------------------------------------------------- agrupamento e totais
-  // Só entram contas com classificação (pedido do usuário) — uma conta sem classificação não
-  // bate com nenhum `grupo.value` e fica de fora da matriz inteira, inclusive dos totais.
+  // O backend já só devolve contas classificadas + projetando saldo (getSaldos), então todo
+  // mundo aqui tem `classificacao` preenchida. Classificação não é mais uma lista fixa (virou
+  // cadastro por empresa — ver ClassificacoesTab.jsx): os grupos vêm dos nomes que realmente
+  // aparecem nas contas carregadas, ordenados alfabeticamente.
   const grupos = useMemo(() => {
     if (!contas) return [];
-    return GRUPOS_CLASSIFICACAO.map((grupo) => ({
-      ...grupo,
-      contas: contas.filter((c) => c.classificacao === grupo.value),
-    })).filter((grupo) => grupo.contas.length > 0);
+    const nomes = [...new Set(contas.map((c) => c.classificacao))].sort((a, b) => a.localeCompare(b, 'pt-BR'));
+    return nomes.map((nome) => ({
+      value: nome,
+      label: nome,
+      contas: contas.filter((c) => c.classificacao === nome),
+    }));
   }, [contas]);
 
   const { totaisPorGrupo, totalGeral } = useMemo(() => {
@@ -319,11 +342,20 @@ export default function SaldosContasTab({
         const lista = porConta.get(`${conta.company_id}|${conta.numero_conta}`);
         if (!lista) return conta;
         const saldos = { ...conta.saldos };
+        const origens = { ...conta.origens };
         for (const item of lista) {
-          if (item.saldo === null) delete saldos[item.data];
-          else saldos[item.data] = item.saldo;
+          if (item.saldo === null) {
+            delete saldos[item.data];
+            delete origens[item.data];
+          } else {
+            saldos[item.data] = item.saldo;
+            // Toda gravação que passa por aqui é digitação/colagem na grade — sempre MANUAL,
+            // mesmo sobrescrevendo o que antes era API/HERDADO (pedido do usuário). O servidor
+            // aplica a mesma regra (ver saldos.controller.js) — isso só antecipa a cor na hora.
+            origens[item.data] = 'MANUAL';
+          }
         }
-        return { ...conta, saldos };
+        return { ...conta, saldos, origens };
       });
     });
   }, []);
@@ -650,6 +682,7 @@ export default function SaldosContasTab({
                                   rotulo={conta.nome || conta.numero_conta}
                                   dia={d}
                                   valor={conta.saldos[d.iso]}
+                                  origem={conta.origens?.[d.iso]}
                                   bloqueada={d.iso !== dataAberta}
                                   onCommit={handleCommit}
                                   onNavegar={handleNavegar}

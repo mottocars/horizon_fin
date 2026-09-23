@@ -1,5 +1,5 @@
 import { useEffect, useState } from 'react';
-import { Lock, Loader2, CheckCircle2, AlertTriangle, Wifi } from 'lucide-react';
+import { Lock, Loader2, CheckCircle2, AlertTriangle, History, Wifi } from 'lucide-react';
 import Modal from '../../../components/Modal';
 import Button from '../../../components/Button';
 import { abrirPeriodoSaldos, buscarSaldosVanpix } from '../../../api/saldoContasBancarias.api';
@@ -160,11 +160,21 @@ export default function AbrirPeriodoModal({ open, onClose, empresaId, onAberto }
               </div>
 
               {relatorioVanpix.atualizados.length > 0 && (
-                <div className="flex items-start gap-2 rounded-lg bg-primary-50 px-3 py-2 text-sm text-primary-700">
+                <div className="flex items-start gap-2 rounded-lg bg-emerald-50 px-3 py-2 text-sm text-emerald-700">
                   <CheckCircle2 size={16} className="mt-0.5 shrink-0" />
                   <span>
                     {relatorioVanpix.atualizados.length} conta(s) preenchida(s) automaticamente com o saldo da VanPix
                     em {formatarDataBR(data)}.
+                  </span>
+                </div>
+              )}
+
+              {relatorioVanpix.herdados?.length > 0 && (
+                <div className="flex items-start gap-2 rounded-lg bg-purple-50 px-3 py-2 text-sm text-purple-700">
+                  <History size={16} className="mt-0.5 shrink-0" />
+                  <span>
+                    {relatorioVanpix.herdados.length} conta(s) sem retorno da VanPix hoje — repetiram o saldo do dia
+                    anterior (prioridade da classificação).
                   </span>
                 </div>
               )}

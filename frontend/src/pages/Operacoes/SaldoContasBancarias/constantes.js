@@ -1,17 +1,7 @@
-// Nível 1 do drilldown. Mesma ordem da lista de classificações do cadastro da conta. Contas
-// sem classificação não entram em grupo nenhum aqui (pedido do usuário: "só deverá aparecer
-// o que tem classificação") — ficam de fora da matriz até serem classificadas. Sem ícone por
-// grupo (pedido do usuário) — só o rótulo.
-export const GRUPOS_CLASSIFICACAO = [
-  { value: 'APLICACAO', label: 'Aplicação' },
-  { value: 'BLOQUEADA', label: 'Bloqueada' },
-  { value: 'CHEQUE_ESPECIAL', label: 'Cheque Especial' },
-  { value: 'DEDICADA', label: 'Dedicada' },
-  { value: 'GARANTIDA', label: 'Garantida' },
-  { value: 'LIBERADA', label: 'Liberada' },
-];
-
-export const OPCOES_CLASSIFICACAO = GRUPOS_CLASSIFICACAO.map(({ value, label }) => ({ value, label }));
+// Classificação bancária não é mais uma lista fixa (virou cadastro por empresa — ver
+// ClassificacoesTab.jsx e classificacoesBancarias.api.js). O nível 1 do drilldown (aqui e em
+// ContasTab.jsx) monta os grupos a partir dos nomes que realmente aparecem nas contas
+// carregadas, não de uma constante.
 
 // ---------------------------------------------------------------------------
 // Datas — sempre 'YYYY-MM-DD' em horário LOCAL (toISOString() devolve UTC e, à noite,

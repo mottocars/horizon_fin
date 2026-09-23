@@ -144,24 +144,28 @@ async function getSaldos(empresaId, { dataInicio, dataFim, companyIds = [], clas
   );
 
   const { rows: saldos } = await pool.query(
-    `SELECT s.company_id, s.numero_conta, TO_CHAR(s.data, 'YYYY-MM-DD') AS data, s.saldo
+    `SELECT s.company_id, s.numero_conta, TO_CHAR(s.data, 'YYYY-MM-DD') AS data, s.saldo, s.origem
      FROM saldos_contas_bancarias s
      WHERE s.empresa_id = $1 AND s.data BETWEEN $2 AND $3`,
     [empresaId, dataInicio, dataFim]
   );
 
+  // `origens` é um mapa paralelo a `saldos` (mesmas chaves de data) — só pra grade colorir a
+  // célula (API/HERDADO/MANUAL); os totais/soma continuam olhando só pra `saldos` (números
+  // puros), sem precisar saber nada de origem.
   const porConta = new Map();
   for (const s of saldos) {
     const chave = `${s.company_id}|${s.numero_conta}`;
-    if (!porConta.has(chave)) porConta.set(chave, {});
-    porConta.get(chave)[s.data] = Number(s.saldo);
+    if (!porConta.has(chave)) porConta.set(chave, { saldos: {}, origens: {} });
+    porConta.get(chave).saldos[s.data] = Number(s.saldo);
+    porConta.get(chave).origens[s.data] = s.origem;
   }
 
   return {
-    contas: contas.map((c) => ({
-      ...c,
-      saldos: porConta.get(`${c.company_id}|${c.numero_conta}`) || {},
-    })),
+    contas: contas.map((c) => {
+      const dados = porConta.get(`${c.company_id}|${c.numero_conta}`);
+      return { ...c, saldos: dados?.saldos || {}, origens: dados?.origens || {} };
+    }),
   };
 }
 
@@ -253,11 +257,11 @@ async function salvarSaldos(empresaId, usuarioId, itens) {
 
     if (gravar.length) {
       await client.query(
-        `INSERT INTO saldos_contas_bancarias (empresa_id, company_id, numero_conta, data, saldo, atualizado_por)
-         SELECT $1, t.company_id, t.numero_conta, t.data, t.saldo, $2
-         FROM unnest($3::int[], $4::text[], $5::date[], $6::numeric[]) AS t(company_id, numero_conta, data, saldo)
+        `INSERT INTO saldos_contas_bancarias (empresa_id, company_id, numero_conta, data, saldo, origem, atualizado_por)
+         SELECT $1, t.company_id, t.numero_conta, t.data, t.saldo, t.origem, $2
+         FROM unnest($3::int[], $4::text[], $5::date[], $6::numeric[], $7::text[]) AS t(company_id, numero_conta, data, saldo, origem)
          ON CONFLICT (empresa_id, company_id, numero_conta, data)
-         DO UPDATE SET saldo = EXCLUDED.saldo, atualizado_por = EXCLUDED.atualizado_por`,
+         DO UPDATE SET saldo = EXCLUDED.saldo, origem = EXCLUDED.origem, atualizado_por = EXCLUDED.atualizado_por`,
         [
           empresaId,
           usuarioId,
@@ -265,6 +269,10 @@ async function salvarSaldos(empresaId, usuarioId, itens) {
           gravar.map((i) => i.numero_conta),
           gravar.map((i) => i.data),
           gravar.map((i) => i.saldo.toFixed(2)),
+          // Quem chama sem informar origem (a gravação manual da grade, via PUT público) cai
+          // em MANUAL — é o único valor que o schema HTTP aceita hoje. A busca automática
+          // VanPix (vanpix-sync.service.js) é quem informa 'API'/'HERDADO' explicitamente.
+          gravar.map((i) => i.origem || 'MANUAL'),
         ]
       );
     }
