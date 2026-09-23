@@ -28,6 +28,24 @@ export function salvarSaldosContas(empresaId, itens) {
   return http.put(`/saldo-contas-bancarias/${empresaId}`, { itens }).then((res) => res.data);
 }
 
+// Relatório em .xlsx (gerado no backend, mesmos filtros da grade) — `responseType: 'blob'` pra
+// baixar o arquivo binário direto (ver saldos.controller.js::exportarExcel).
+export function exportarSaldosExcel(empresaId, { dataInicio, dataFim, companyIds, classificacoes, bancos, contas } = {}) {
+  return http
+    .get(`/saldo-contas-bancarias/${empresaId}/exportar-excel`, {
+      params: {
+        data_inicio: dataInicio,
+        data_fim: dataFim,
+        company_ids: csv(companyIds),
+        classificacoes: csv(classificacoes),
+        bancos: csv(bancos),
+        contas: csv(contas),
+      },
+      responseType: 'blob',
+    })
+    .then((res) => res.data);
+}
+
 // Dia liberado pra lançar saldo (o cadeado da tela) — { data: 'YYYY-MM-DD' } ou
 // { data: null } se nenhum período estiver aberto (cadeado trancado).
 export function getPeriodoAberto(empresaId) {

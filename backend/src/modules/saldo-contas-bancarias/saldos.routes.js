@@ -6,6 +6,7 @@ const router = Router();
 
 router.use(authMiddleware);
 router.get('/:empresaId/filtros', controller.getFiltros);
+router.get('/:empresaId/exportar-excel', controller.exportarExcel);
 router.get('/:empresaId/periodo-aberto', controller.getPeriodoAberto);
 router.put('/:empresaId/periodo-aberto', controller.abrirPeriodo);
 router.delete('/:empresaId/periodo-aberto', controller.encerrarPeriodo);

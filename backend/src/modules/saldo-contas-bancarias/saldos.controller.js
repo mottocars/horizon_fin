@@ -1,6 +1,8 @@
 const { z } = require('zod');
 const service = require('./saldos.service');
 const vanpixSyncService = require('./vanpix-sync.service');
+const saldosExcelService = require('./saldosExcel.service');
+const usuariosService = require('../usuarios/usuarios.service');
 
 const MAX_DIAS_PERIODO = 93;
 const MAX_ITENS_POR_LOTE = 3000;
@@ -78,29 +80,64 @@ async function getFiltros(req, res, next) {
   }
 }
 
+// Valida e normaliza os filtros de data/empresa/classificação/banco/conta da query string —
+// usado tanto por getSaldos (grade) quanto por exportarExcel (mesmos filtros, mesma fonte).
+function parseFiltrosSaldos(req) {
+  const dataInicio = (req.query.data_inicio || '').toString();
+  const dataFim = (req.query.data_fim || '').toString();
+  if (!dataValida(dataInicio) || !dataValida(dataFim)) throw badRequest('Informe data início e data fim válidas.');
+  if (dataFim < dataInicio) throw badRequest('A data fim não pode ser anterior à data início.');
+  if (diasEntre(dataInicio, dataFim) > MAX_DIAS_PERIODO) {
+    throw badRequest(`O período pode ter no máximo ${MAX_DIAS_PERIODO} dias.`);
+  }
+  return {
+    dataInicio,
+    dataFim,
+    companyIds: csv(req.query.company_ids).map(Number).filter(Number.isInteger),
+    // Classificação não é mais uma lista fixa (virou cadastro por empresa) — só valida
+    // formato/tamanho aqui, igual aos outros filtros de texto livre (bancos, contas).
+    classificacoes: csv(req.query.classificacoes).filter((c) => c.length > 0 && c.length <= 50),
+    bancos: csv(req.query.bancos).filter((b) => /^\d{1,4}$/.test(b)),
+    contas: csv(req.query.contas).filter((c) => /^\d+:.+$/.test(c)),
+  };
+}
+
 async function getSaldos(req, res, next) {
   try {
     const empresaId = await acessoEmpresa(req);
-
-    const dataInicio = (req.query.data_inicio || '').toString();
-    const dataFim = (req.query.data_fim || '').toString();
-    if (!dataValida(dataInicio) || !dataValida(dataFim)) throw badRequest('Informe data início e data fim válidas.');
-    if (dataFim < dataInicio) throw badRequest('A data fim não pode ser anterior à data início.');
-    if (diasEntre(dataInicio, dataFim) > MAX_DIAS_PERIODO) {
-      throw badRequest(`O período pode ter no máximo ${MAX_DIAS_PERIODO} dias.`);
-    }
-
-    const result = await service.getSaldos(empresaId, {
-      dataInicio,
-      dataFim,
-      companyIds: csv(req.query.company_ids).map(Number).filter(Number.isInteger),
-      // Classificação não é mais uma lista fixa (virou cadastro por empresa) — só valida
-      // formato/tamanho aqui, igual aos outros filtros de texto livre (bancos, contas).
-      classificacoes: csv(req.query.classificacoes).filter((c) => c.length > 0 && c.length <= 50),
-      bancos: csv(req.query.bancos).filter((b) => /^\d{1,4}$/.test(b)),
-      contas: csv(req.query.contas).filter((c) => /^\d+:.+$/.test(c)),
-    });
+    const result = await service.getSaldos(empresaId, parseFiltrosSaldos(req));
     res.json(result);
+  } catch (err) {
+    tratarErroDeValidacao(err, next);
+  }
+}
+
+// Mesmos dados da grade (getSaldos), mas devolvidos como um .xlsx pronto pra baixar — layout
+// espelhando EXEMPLO.xlsx com a identidade visual do Horizon Finanças (pedido do usuário depois
+// que o PDF gerado via html2canvas saiu ilegível; ver saldosExcel.service.js).
+async function exportarExcel(req, res, next) {
+  try {
+    const empresaId = await acessoEmpresa(req);
+    const filtros = parseFiltrosSaldos(req);
+    const usuario = await usuariosService.getById(req.user.id);
+    const geradoEm = new Intl.DateTimeFormat('pt-BR', {
+      dateStyle: 'short',
+      timeStyle: 'short',
+      timeZone: 'America/Sao_Paulo',
+    }).format(new Date());
+
+    const workbook = await saldosExcelService.gerarRelatorioExcel(empresaId, filtros, {
+      nomeUsuario: usuario?.nome || 'Usuário',
+      geradoEm,
+    });
+
+    res.setHeader('Content-Type', 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet');
+    res.setHeader(
+      'Content-Disposition',
+      `attachment; filename="saldo-contas-bancarias_${filtros.dataInicio}_a_${filtros.dataFim}.xlsx"`
+    );
+    await workbook.xlsx.write(res);
+    res.end();
   } catch (err) {
     tratarErroDeValidacao(err, next);
   }
@@ -160,4 +197,4 @@ async function buscarVanpix(req, res, next) {
   }
 }
 
-module.exports = { getFiltros, getSaldos, salvarSaldos, getPeriodoAberto, abrirPeriodo, encerrarPeriodo, buscarVanpix };
+module.exports = { getFiltros, getSaldos, exportarExcel, salvarSaldos, getPeriodoAberto, abrirPeriodo, encerrarPeriodo, buscarVanpix };

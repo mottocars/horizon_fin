@@ -5,12 +5,11 @@ import Card from '../../../components/Card';
 import Tabs from '../../../components/Tabs';
 import SearchableSelect from '../../../components/SearchableSelect';
 import { listEmpresas } from '../../../api/empresas.api';
-import { getFiltrosSaldos, getPeriodoAberto, encerrarPeriodoSaldos } from '../../../api/saldoContasBancarias.api';
+import { getFiltrosSaldos, getPeriodoAberto, encerrarPeriodoSaldos, exportarSaldosExcel } from '../../../api/saldoContasBancarias.api';
 import { gerarContasBancarias } from '../../../api/contasBancariasSienge.api';
 import { nomeExibicaoEmpresa } from '../../../utils/empresa';
 import { useEmpresaTravada } from '../../../hooks/useEmpresaTravada';
 import { useConfirm } from '../../../confirm/ConfirmContext';
-import { useAuth } from '../../../auth/AuthContext';
 import SaldosContasTab from './SaldosContasTab';
 import AbaEmConstrucao from './AbaEmConstrucao';
 import BancosTab from './BancosTab';
@@ -47,9 +46,24 @@ const STATUS_CONTAS_OPCOES = [
 // "desformatava" a tela): a URL guarda só `semana` (a data do domingo), não um par de datas
 // soltas — dataInicio/dataFim vêm sempre juntos, calculados a partir dela (ver semanaDe).
 // Sem parâmetro na URL vale a semana atual, recalculada a cada abertura da tela.
+// Com `responseType: 'blob'`, um erro do servidor (que manda JSON) também chega como Blob em
+// `err.response.data` — sem isso, a mensagem real (ex. "Nenhuma conta com saldo lançado nesta
+// semana") nunca aparece, só o texto genérico do axios.
+async function mensagemErroExportacao(err) {
+  const dados = err.response?.data;
+  if (dados instanceof Blob) {
+    try {
+      const texto = await dados.text();
+      return JSON.parse(texto)?.message || err.message;
+    } catch {
+      return err.message || 'Não foi possível gerar o relatório.';
+    }
+  }
+  return dados?.message || err.message || 'Não foi possível gerar o relatório.';
+}
+
 export default function SaldoContasBancariasPage() {
   const { travada: empresaTravada, empresaIdTravada } = useEmpresaTravada();
-  const { user } = useAuth();
   const confirm = useConfirm();
   const [searchParams, setSearchParams] = useSearchParams();
 
@@ -98,10 +112,9 @@ export default function SaldoContasBancariasPage() {
   const [modalPeriodoAberto, setModalPeriodoAberto] = useState(false);
   const [periodoToken, setPeriodoToken] = useState(0);
 
-  // Exportar relatório em PDF — a montagem/captura de verdade acontece dentro de
-  // SaldosContasTab (é lá que os dados da grade já estão calculados); a página só junta os
-  // rótulos dos filtros aplicados e dispara via ref.
-  const saldosTabRef = useRef(null);
+  // Exportar relatório em Excel — a montagem de verdade acontece no backend (mesmos filtros
+  // da grade); a página só chama o endpoint e baixa o blob (ver saldos.controller.js::
+  // exportarExcel).
   const [exportandoRelatorio, setExportandoRelatorio] = useState(false);
   const [erroExportarRelatorio, setErroExportarRelatorio] = useState('');
 
@@ -227,46 +240,19 @@ export default function SaldoContasBancariasPage() {
 
   const semEmpresa = !empresaId;
 
-  // Rótulo da empresa (a de cima, não a "da conta") e a lista de filtros ativos com nome
-  // legível — vai pro cabeçalho do relatório em PDF (pedido do usuário: "todos os filtros que
-  // estavam aplicados na tela"). Sempre inclui a semana, os demais só entram se estiverem
-  // realmente filtrando algo.
-  const empresaLabel = useMemo(() => {
-    const emp = empresas.find((e) => String(e.id) === String(empresaId));
-    return emp ? nomeExibicaoEmpresa(emp) : '';
-  }, [empresas, empresaId]);
-
-  const filtrosRelatorio = useMemo(() => {
-    const lista = [{ label: 'Semana', valor: `${formatarDataBR(dataInicio)} a ${formatarDataBR(dataFim)}` }];
-    if (companyIds.length) {
-      lista.push({
-        label: 'Empresa da conta',
-        valor: companyIds.map((id) => opcoesEmpresasSienge.find((o) => o.value === id)?.label || id).join(', '),
-      });
-    }
-    if (bancos.length) {
-      lista.push({ label: 'Banco', valor: bancos.map((b) => opcoesBancos.find((o) => o.value === b)?.label || b).join(', ') });
-    }
-    if (contasParam) {
-      lista.push({
-        label: 'Conta bancária',
-        valor: contasSelecionadas.map((c) => opcoesContasFiltro.find((o) => o.value === c)?.label || c).join(', '),
-      });
-    }
-    return lista;
-  }, [dataInicio, dataFim, companyIds, bancos, contasParam, contasSelecionadas, opcoesEmpresasSienge, opcoesBancos, opcoesContasFiltro]);
-
   async function handleExportarRelatorio() {
     setErroExportarRelatorio('');
     setExportandoRelatorio(true);
     try {
-      await saldosTabRef.current?.exportarPDF({
-        empresaLabel,
-        filtros: filtrosRelatorio,
-        nomeUsuario: user?.nome || 'Usuário',
-      });
+      const blob = await exportarSaldosExcel(empresaId, { dataInicio, dataFim, companyIds, bancos, contas: contasSelecionadas });
+      const url = window.URL.createObjectURL(blob);
+      const link = document.createElement('a');
+      link.href = url;
+      link.download = `saldo-contas-bancarias_${dataInicio}_a_${dataFim}.xlsx`;
+      link.click();
+      window.URL.revokeObjectURL(url);
     } catch (err) {
-      setErroExportarRelatorio(err.message || 'Não foi possível gerar o relatório.');
+      setErroExportarRelatorio(await mensagemErroExportacao(err));
     } finally {
       setExportandoRelatorio(false);
     }
@@ -456,14 +442,13 @@ export default function SaldoContasBancariasPage() {
           {abaAtiva === 'saldos' && (
             <div className="flex shrink-0 flex-col items-end gap-1.5">
               <div className="flex shrink-0 items-center gap-2">
-                {/* Só o ícone (pedido do usuário) — espelha a grade inteira (grupos expandidos,
-                    contas com saldo na semana) num PDF, ver RelatorioSaldosImpressao.jsx /
-                    gerarRelatorioPdf.jsx. */}
+                {/* Só o ícone (pedido do usuário) — baixa um .xlsx gerado no backend com todas
+                    as contas com saldo na semana, ver saldosExcel.service.js. */}
                 <button
                   type="button"
                   onClick={handleExportarRelatorio}
                   disabled={semEmpresa || exportandoRelatorio}
-                  title="Exportar relatório em PDF"
+                  title="Exportar relatório em Excel"
                   className="flex shrink-0 items-center justify-center rounded-lg border border-gray-200 p-2.5 text-gray-600 transition-colors hover:bg-gray-50 disabled:cursor-not-allowed disabled:opacity-60"
                 >
                   {exportandoRelatorio ? <Loader2 size={18} className="animate-spin" /> : <Download size={18} />}
@@ -523,7 +508,6 @@ export default function SaldoContasBancariasPage() {
 
         {abaAtiva === 'saldos' && (
           <SaldosContasTab
-            ref={saldosTabRef}
             empresaId={empresaId}
             dataInicio={dataInicio}
             dataFim={dataFim}
