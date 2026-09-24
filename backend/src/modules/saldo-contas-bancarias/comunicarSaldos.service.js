@@ -106,13 +106,12 @@ async function notificarComunicarSaldos(empresaId, dataFechada, usuarioIdRespons
       timeStyle: 'short',
       timeZone: 'America/Sao_Paulo',
     }).format(new Date());
-    const workbook = await saldosExcelService.gerarRelatorioExcel(
+    const buffer = await saldosExcelService.gerarRelatorioExcelBuffer(
       empresaId,
       { dataInicio, dataFim, companyIds: [], classificacoes: [], bancos: [], contas: [] },
       { nomeUsuario: 'Horizon Finanças', geradoEm }
     );
-    const buffer = await workbook.xlsx.writeBuffer();
-    anexoBase64 = Buffer.from(buffer).toString('base64');
+    anexoBase64 = buffer.toString('base64');
     nomeArquivo = `saldo-contas-bancarias_${dataInicio}_a_${dataFim}.xlsx`;
   } catch (err) {
     console.error(`${prefixo} falha ao gerar o anexo (${err.message}) — segue só com a mensagem de texto.`);

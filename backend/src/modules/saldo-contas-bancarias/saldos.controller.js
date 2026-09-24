@@ -127,7 +127,7 @@ async function exportarExcel(req, res, next) {
       timeZone: 'America/Sao_Paulo',
     }).format(new Date());
 
-    const workbook = await saldosExcelService.gerarRelatorioExcel(empresaId, filtros, {
+    const buffer = await saldosExcelService.gerarRelatorioExcelBuffer(empresaId, filtros, {
       nomeUsuario: usuario?.nome || 'Usuário',
       geradoEm,
     });
@@ -137,8 +137,7 @@ async function exportarExcel(req, res, next) {
       'Content-Disposition',
       `attachment; filename="saldo-contas-bancarias_${filtros.dataInicio}_a_${filtros.dataFim}.xlsx"`
     );
-    await workbook.xlsx.write(res);
-    res.end();
+    res.end(buffer);
   } catch (err) {
     tratarErroDeValidacao(err, next);
   }

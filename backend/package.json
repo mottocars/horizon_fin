@@ -17,6 +17,7 @@
     "exceljs": "^4.4.0",
     "express": "^4.19.2",
     "jsonwebtoken": "^9.0.2",
+    "jszip": "^3.10.1",
     "morgan": "^1.10.0",
     "multer": "^2.2.0",
     "node-forge": "^1.4.0",

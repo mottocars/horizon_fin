@@ -1,6 +1,7 @@
 const fs = require('fs');
 const path = require('path');
 const ExcelJS = require('exceljs');
+const JSZip = require('jszip');
 const service = require('./saldos.service');
 const empresasService = require('../empresas/empresas.service');
 
@@ -390,6 +391,41 @@ async function gerarRelatorioExcel(empresaId, filtrosQuery, meta) {
   return workbook;
 }
 
+// Bug do exceljs 4.4.0 (lib/xlsx/xform/drawing/sp-pr.js): toda imagem inserida via addImage sai
+// com <xdr:spPr><a:xfrm><a:ext cx="0" cy="0"/> fixo no XML, não importa o tamanho de verdade —
+// é um template estático da lib, não depende de nada que a gente passa pro addImage. O tamanho
+// real já está certo no <xdr:ext> logo antes (irmão do <xdr:pic>), e o Excel do computador é
+// tolerante — ignora o spPr zerado e usa o xdr:ext. Mas outros leitores de OOXML (o preview de
+// documento do WhatsApp, apps de Excel/Planilhas no celular) parecem confiar no spPr, e a
+// logomarca do cabeçalho — a única imagem do relatório — some (tamanho zero). Corrige à mão
+// reabrindo o .xlsx como zip e copiando o cx/cy de cada <xdr:ext> pro <a:ext> zerado logo depois
+// dele, sem precisar mexer em mais nada.
+async function corrigirTamanhoImagemNoBuffer(buffer) {
+  const zip = await JSZip.loadAsync(buffer);
+  const caminho = 'xl/drawings/drawing1.xml';
+  const arquivo = zip.file(caminho);
+  if (!arquivo) return buffer; // relatório sem imagem nenhuma (não devia acontecer, mas não é motivo pra falhar)
+
+  const xmlOriginal = await arquivo.async('string');
+  const xmlCorrigido = xmlOriginal.replace(
+    /(<xdr:ext cx="(\d+)" cy="(\d+)"\/>[\s\S]*?)<a:ext cx="0" cy="0"\/>/g,
+    (match, antes, cx, cy) => `${antes}<a:ext cx="${cx}" cy="${cy}"/>`
+  );
+  if (xmlCorrigido === xmlOriginal) return buffer; // nada pra corrigir (ex.: se a lib já consertar isso numa versão futura)
+
+  zip.file(caminho, xmlCorrigido);
+  return zip.generateAsync({ type: 'nodebuffer' });
+}
+
+// Mesma coisa que gerarRelatorioExcel, mas já devolve os bytes prontos (Buffer) em vez do
+// Workbook do exceljs — usado por quem precisa do arquivo de verdade (streamar na resposta HTTP,
+// anexar num WhatsApp) já com a correção do tamanho da logomarca aplicada.
+async function gerarRelatorioExcelBuffer(empresaId, filtrosQuery, meta) {
+  const workbook = await gerarRelatorioExcel(empresaId, filtrosQuery, meta);
+  const buffer = await workbook.xlsx.writeBuffer();
+  return corrigirTamanhoImagemNoBuffer(buffer);
+}
+
 // agruparContas/calcularTotais também usados por comunicarSaldos.service.js pra montar o
 // resumo por classificação do dia encerrado (mesma lógica, só com `dias` de 1 elemento só).
-module.exports = { gerarRelatorioExcel, agruparContas, calcularTotais };
+module.exports = { gerarRelatorioExcel, gerarRelatorioExcelBuffer, agruparContas, calcularTotais };
