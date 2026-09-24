@@ -32,6 +32,32 @@ async function listPorCentroCusto(empresaId, siengeId) {
   return [...porData.entries()].map(([data_inicio, valores]) => ({ data_inicio, valores }));
 }
 
+// O orçamento vigente de cada centro de custo = o de `data_inicio` mais recente (o "último
+// orçamento gerado", pedido do usuário) — usado na linha-resumo (nível 0) do drilldown, sem
+// precisar expandir. Só entram centros que já têm pelo menos 1 orçamento lançado.
+async function listVigentesPorEmpresa(empresaId) {
+  const { rows } = await pool.query(
+    `WITH ultimos AS (
+       SELECT sienge_id, MAX(data_inicio) AS data_inicio
+       FROM dre_orcamento_valores
+       WHERE empresa_id = $1
+       GROUP BY sienge_id
+     )
+     SELECT v.sienge_id, TO_CHAR(v.data_inicio, 'YYYY-MM-DD') AS data_inicio, v.categoria_id, v.valor
+     FROM dre_orcamento_valores v
+     JOIN ultimos u ON u.sienge_id = v.sienge_id AND u.data_inicio = v.data_inicio
+     WHERE v.empresa_id = $1`,
+    [empresaId]
+  );
+
+  const porCentro = new Map();
+  for (const r of rows) {
+    if (!porCentro.has(r.sienge_id)) porCentro.set(r.sienge_id, { data_inicio: r.data_inicio, valores: {} });
+    porCentro.get(r.sienge_id).valores[r.categoria_id] = Number(r.valor);
+  }
+  return Object.fromEntries(porCentro);
+}
+
 // Cria (se `dataInicio` for novo) ou atualiza (se já existir) o orçamento daquele mês — grava
 // só as categorias informadas em `itens`, nunca mexe nas outras já gravadas pra esse mesmo mês.
 // Serve tanto pra "novo orçamento" (manda as 5 categorias de uma vez, mesmo que com valor 0)
@@ -63,4 +89,4 @@ async function remover(empresaId, siengeId, dataInicio) {
   return rowCount > 0;
 }
 
-module.exports = { listPorCentroCusto, salvar, remover };
+module.exports = { listPorCentroCusto, listVigentesPorEmpresa, salvar, remover };

@@ -42,6 +42,15 @@ async function list(req, res, next) {
   }
 }
 
+async function vigentes(req, res, next) {
+  try {
+    const empresaId = empresaIdSchema.parse(req.params.empresaId);
+    res.json(await service.listVigentesPorEmpresa(empresaId));
+  } catch (err) {
+    tratar(err, next);
+  }
+}
+
 async function salvar(req, res, next) {
   try {
     const empresaId = empresaIdSchema.parse(req.params.empresaId);
@@ -67,4 +76,4 @@ async function remover(req, res, next) {
   }
 }
 
-module.exports = { list, salvar, remover };
+module.exports = { list, vigentes, salvar, remover };

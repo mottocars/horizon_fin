@@ -4,6 +4,7 @@ import { listItens } from '../../../api/centrosCustoSienge.api';
 import { listCategoriasOrcamento } from '../../../api/dreCategoriasOrcamento.api';
 import {
   listOrcamentoCentroCusto,
+  listOrcamentosVigentes,
   removerOrcamentoCentroCusto,
   salvarOrcamentoCentroCusto,
 } from '../../../api/dreOrcamento.api';
@@ -81,6 +82,14 @@ function CelulaValor({ valor, onCommit }) {
       className="h-8 w-full rounded-md border border-transparent bg-transparent px-2 text-right text-xs tabular-nums text-gray-900 outline-none transition-colors hover:border-gray-300 hover:bg-white focus:border-primary-500 focus:bg-white focus:ring-2 focus:ring-primary-100"
     />
   );
+}
+
+// Valor do orçamento vigente na linha-resumo (nível 0) — negrito, não editável (mesmo peso
+// visual do "total" de SaldosContasTab.jsx::ValorTotal); traço quando não existe nenhum valor
+// pra essa categoria no orçamento vigente.
+function ValorVigente({ valor }) {
+  if (valor === undefined) return <span className="text-gray-300">—</span>;
+  return <span className="font-semibold text-gray-900">{formatarValor(valor)}</span>;
 }
 
 // Linha "+ Novo orçamento" — clicar revela um mini-formulário inline (só o mês de início) sem
@@ -179,6 +188,9 @@ export default function OrcamentoTab({ empresaId, search = '' }) {
   const confirm = useConfirm();
   const [categorias, setCategorias] = useState([]);
   const [centros, setCentros] = useState(null);
+  // Orçamento vigente (o de data_inicio mais recente) de cada centro, pra mostrar na linha-
+  // resumo (nível 0) sem precisar expandir — { [sienge_id]: { data_inicio, valores } }.
+  const [vigentes, setVigentes] = useState({});
   const [carregando, setCarregando] = useState(false);
 
   const [expandidoId, setExpandidoId] = useState(null);
@@ -190,13 +202,19 @@ export default function OrcamentoTab({ empresaId, search = '' }) {
     if (!empresaId) {
       setCategorias([]);
       setCentros(null);
+      setVigentes({});
       return;
     }
     setCarregando(true);
-    Promise.all([listCategoriasOrcamento(empresaId), listItens(empresaId, { page: 1, limit: 500 })])
-      .then(([cats, centrosResult]) => {
+    Promise.all([
+      listCategoriasOrcamento(empresaId),
+      listItens(empresaId, { page: 1, limit: 500 }),
+      listOrcamentosVigentes(empresaId),
+    ])
+      .then(([cats, centrosResult, vig]) => {
         setCategorias(cats);
         setCentros(centrosResult.data);
+        setVigentes(vig);
       })
       .finally(() => setCarregando(false));
   }, [empresaId]);
@@ -207,12 +225,26 @@ export default function OrcamentoTab({ empresaId, search = '' }) {
     carregar();
   }, [carregar]);
 
+  // O último item de `lista` (já vem ordenada por data_inicio ASC) é sempre o vigente — atualiza
+  // localmente em vez de refazer a consulta de /vigentes inteira a cada edição/criação/remoção.
+  function sincronizarVigenteLocal(siengeId, lista) {
+    setVigentes((atual) => {
+      const proximo = { ...atual };
+      if (lista.length === 0) delete proximo[siengeId];
+      else proximo[siengeId] = lista[lista.length - 1];
+      return proximo;
+    });
+  }
+
   const carregarDetalhe = useCallback(
     (siengeId) => {
       if (!siengeId) return;
       setCarregandoDetalhe(true);
       listOrcamentoCentroCusto(empresaId, siengeId)
-        .then(setOrcamentos)
+        .then((lista) => {
+          setOrcamentos(lista);
+          sincronizarVigenteLocal(siengeId, lista);
+        })
         .finally(() => setCarregandoDetalhe(false));
     },
     [empresaId]
@@ -237,6 +269,7 @@ export default function OrcamentoTab({ empresaId, search = '' }) {
     const itens = categorias.map((c) => ({ categoria_id: c.id, valor: 0 }));
     const atualizado = await salvarOrcamentoCentroCusto(empresaId, siengeId, { data_inicio: mesISO, itens });
     setOrcamentos(atualizado);
+    sincronizarVigenteLocal(siengeId, atualizado);
   }
 
   async function handleEditarCelula(siengeId, dataInicio, categoriaId, valor) {
@@ -245,6 +278,7 @@ export default function OrcamentoTab({ empresaId, search = '' }) {
       itens: [{ categoria_id: categoriaId, valor }],
     });
     setOrcamentos(atualizado);
+    sincronizarVigenteLocal(siengeId, atualizado);
   }
 
   async function handleRemoverOrcamento(siengeId, dataInicio) {
@@ -318,6 +352,7 @@ export default function OrcamentoTab({ empresaId, search = '' }) {
             <tbody>
               {centrosFiltrados.map((centro) => {
                 const expandido = expandidoId === centro.sienge_id;
+                const vigente = vigentes[centro.sienge_id];
                 return (
                   <Fragment key={centro.sienge_id}>
                     <tr onClick={() => toggleExpandir(centro.sienge_id)} className="group/grupo cursor-pointer">
@@ -330,10 +365,20 @@ export default function OrcamentoTab({ empresaId, search = '' }) {
                             {centro.name}
                           </span>
                           <span className="shrink-0 text-[11px] text-gray-400">#{centro.sienge_id}</span>
+                          {vigente && (
+                            <span className="shrink-0 text-[11px] text-gray-400">
+                              · vigente desde {nomeMesAno(vigente.data_inicio)}
+                            </span>
+                          )}
                         </span>
                       </td>
                       {categorias.map((c) => (
-                        <td key={c.id} className="border-b border-l border-gray-200 bg-gray-50 group-hover/grupo:bg-gray-100" />
+                        <td
+                          key={c.id}
+                          className="border-b border-l border-gray-200 bg-gray-50 px-3 py-2.5 text-right text-xs tabular-nums group-hover/grupo:bg-gray-100"
+                        >
+                          <ValorVigente valor={vigente?.valores?.[c.id]} />
+                        </td>
                       ))}
                       <td className="border-b border-l border-gray-200 bg-gray-50 group-hover/grupo:bg-gray-100" />
                     </tr>
