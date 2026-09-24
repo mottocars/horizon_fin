@@ -59,7 +59,9 @@ export function abrirPeriodoSaldos(empresaId, data, reabrirEncerrado = false) {
   return http.put(`/saldo-contas-bancarias/${empresaId}/periodo-aberto`, { data, reabrirEncerrado }).then((res) => res.data);
 }
 
-// Encerra o período aberto desta empresa (se houver) — o cadeado volta a ficar trancado.
+// Encerra o período aberto desta empresa (se houver) — o cadeado volta a ficar trancado. Espera
+// o "Comunicar Saldos" terminar (pode levar alguns segundos) e devolve também o resultado do
+// aviso: { data: null, notificacao: { status, enviados: [{nome}], falhas: [{nome, motivo}] } }.
 export function encerrarPeriodoSaldos(empresaId) {
   return http.delete(`/saldo-contas-bancarias/${empresaId}/periodo-aberto`).then((res) => res.data);
 }

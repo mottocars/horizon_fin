@@ -177,15 +177,17 @@ async function encerrarPeriodo(req, res, next) {
   try {
     const empresaId = await acessoEmpresa(req);
     const resultado = await service.encerrarPeriodo(empresaId, req.user.id);
-    // Dispara "Comunicar Saldos" sem esperar (gerar o Excel + mandar WhatsApp pra vários
-    // destinatários pode levar alguns segundos — não é isso que deve travar o cadeado
-    // destravando na tela). Nunca deixa passar erro pra cá: comunicarSaldos.service.js já
-    // trata tudo internamente (sem conexão/destinatário configurado = não faz nada, sem
-    // dado nesse dia = não envia, falha de 1 destinatário não afeta os outros).
-    comunicarSaldosService
+    // Espera "Comunicar Saldos" terminar (pedido do usuário: a tela mostra quem foi avisado
+    // ou o motivo de quem falhou, então precisa do resultado antes de responder — antes
+    // disso era fire-and-forget e ficava invisível pra quem estava na tela). O período já
+    // está encerrado no banco nesse ponto; uma falha aqui não desfaz isso, só é informada.
+    const notificacao = await comunicarSaldosService
       .notificarComunicarSaldos(empresaId, resultado.dataFechada, req.user.id)
-      .catch((err) => console.error('[comunicar-saldos] falha inesperada:', err));
-    res.json({ data: resultado.data });
+      .catch((err) => {
+        console.error('[comunicar-saldos] falha inesperada:', err);
+        return { status: 'erro', mensagem: err.message || 'Falha inesperada ao enviar o aviso.', enviados: [], falhas: [] };
+      });
+    res.json({ data: resultado.data, notificacao });
   } catch (err) {
     tratarErroDeValidacao(err, next);
   }

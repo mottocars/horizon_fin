@@ -33,6 +33,8 @@ function semanaDe(iso) {
 
 function montarMensagem({ nomeDestinatario, nomeEmpresa, dataBR, nomeResponsavel, linhas, total }) {
   return [
+    '*SALDO DAS CONTAS BANCÁRIAS*',
+    '',
     `Olá, ${nomeDestinatario}! Tudo bem?`,
     '',
     `Seguem os saldos bancários da empresa *${nomeEmpresa}*, referentes ao dia *${dataBR}*. O período foi encerrado por *${nomeResponsavel}*.`,
@@ -47,18 +49,22 @@ function montarMensagem({ nomeDestinatario, nomeEmpresa, dataBR, nomeResponsavel
 }
 
 // Parâmetro "Comunicar Saldos" (aba Configurações) — dispara de verdade quando um período é
-// encerrado (ver saldos.controller.js::encerrarPeriodo, que chama isto sem esperar/sem deixar
-// erro nenhum daqui travar a resposta do cadeado). Nunca lança: todo problema vira
-// console.error e, no máximo, aquele destinatário específico não recebe a mensagem.
+// encerrado. Devolve um resultado estruturado ({status, enviados, falhas}) pra
+// saldos.controller.js::encerrarPeriodo mostrar na tela (EncerrarPeriodoModal.jsx) se o aviso
+// saiu, pra quem, e o motivo de quem falhou — antes disso era só log de servidor, invisível
+// pra quem estava na tela. Nunca lança: todo problema vira `status: 'erro'` ou uma falha
+// pontual em `falhas`, nunca interrompe o encerramento do período (que já aconteceu antes
+// desta função ser chamada).
 async function notificarComunicarSaldos(empresaId, dataFechada, usuarioIdResponsavel) {
   const prefixo = `[comunicar-saldos] empresa ${empresaId}, dia ${dataFechada}:`;
+  const nada = { enviados: [], falhas: [] };
 
   const { rows: configRows } = await pool.query(
     'SELECT zapi_integracao_id FROM saldos_comunicar_config WHERE empresa_id = $1',
     [empresaId]
   );
   const zapiIntegracaoId = configRows[0]?.zapi_integracao_id;
-  if (!zapiIntegracaoId) return; // nenhuma conexão configurada — nada a fazer
+  if (!zapiIntegracaoId) return { status: 'sem_conexao', ...nada };
 
   const { rows: destinatarios } = await pool.query(
     `SELECT u.id, u.nome, u.telefone_ddd, u.telefone_numero
@@ -67,7 +73,7 @@ async function notificarComunicarSaldos(empresaId, dataFechada, usuarioIdRespons
      WHERE c.empresa_id = $1 AND u.ativo = TRUE`,
     [empresaId]
   );
-  if (destinatarios.length === 0) return;
+  if (destinatarios.length === 0) return { status: 'sem_destinatario', ...nada };
 
   const [{ contas }, empresa, responsavel] = await Promise.all([
     service.getSaldos(empresaId, { dataInicio: dataFechada, dataFim: dataFechada, companyIds: [], classificacoes: [], bancos: [], contas: [] }),
@@ -78,7 +84,7 @@ async function notificarComunicarSaldos(empresaId, dataFechada, usuarioIdRespons
   const grupos = saldosExcelService.agruparContas(contas);
   if (grupos.length === 0) {
     console.log(`${prefixo} sem saldo lançado nesse dia, notificação não enviada.`);
-    return;
+    return { status: 'sem_dados', ...nada };
   }
   const { totaisPorGrupo, totalGeral } = saldosExcelService.calcularTotais(grupos, [{ iso: dataFechada }]);
 
@@ -134,11 +140,19 @@ async function notificarComunicarSaldos(empresaId, dataFechada, usuarioIdRespons
     })
   );
 
+  const enviados = [];
+  const falhas = [];
   resultados.forEach((resultado, i) => {
     if (resultado.status === 'rejected') {
-      console.error(`${prefixo} destinatário "${destinatarios[i].nome}": ${resultado.reason?.message || resultado.reason}`);
+      const motivo = resultado.reason?.message || String(resultado.reason);
+      console.error(`${prefixo} destinatário "${destinatarios[i].nome}": ${motivo}`);
+      falhas.push({ nome: destinatarios[i].nome, motivo });
+    } else {
+      enviados.push({ nome: destinatarios[i].nome });
     }
   });
+
+  return { status: 'enviado', enviados, falhas };
 }
 
 module.exports = { notificarComunicarSaldos };

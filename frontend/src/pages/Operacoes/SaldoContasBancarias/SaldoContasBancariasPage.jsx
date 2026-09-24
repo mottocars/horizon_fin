@@ -6,17 +6,17 @@ import Tabs from '../../../components/Tabs';
 import Button from '../../../components/Button';
 import SearchableSelect from '../../../components/SearchableSelect';
 import { listEmpresas } from '../../../api/empresas.api';
-import { getFiltrosSaldos, getPeriodoAberto, encerrarPeriodoSaldos, exportarSaldosExcel } from '../../../api/saldoContasBancarias.api';
+import { getFiltrosSaldos, getPeriodoAberto, exportarSaldosExcel } from '../../../api/saldoContasBancarias.api';
 import { gerarContasBancarias } from '../../../api/contasBancariasSienge.api';
 import { nomeExibicaoEmpresa } from '../../../utils/empresa';
 import { useEmpresaTravada } from '../../../hooks/useEmpresaTravada';
-import { useConfirm } from '../../../confirm/ConfirmContext';
 import SaldosContasTab from './SaldosContasTab';
 import BancosTab from './BancosTab';
 import ClassificacoesTab from './ClassificacoesTab';
 import ContasTab from './ContasTab';
 import ConfiguracoesTab from './ConfiguracoesTab';
 import AbrirPeriodoModal from './AbrirPeriodoModal';
+import EncerrarPeriodoModal from './EncerrarPeriodoModal';
 import SeletorSemana from './SeletorSemana';
 import { formatarDataBR, semanaAtual, semanaDe } from './constantes';
 
@@ -65,7 +65,6 @@ async function mensagemErroExportacao(err) {
 
 export default function SaldoContasBancariasPage() {
   const { travada: empresaTravada, empresaIdTravada } = useEmpresaTravada();
-  const confirm = useConfirm();
   const [searchParams, setSearchParams] = useSearchParams();
 
   const empresaId = searchParams.get('empresa_id') || '';
@@ -111,6 +110,7 @@ export default function SaldoContasBancariasPage() {
   const [dataAberta, setDataAberta] = useState('');
   const [carregandoPeriodo, setCarregandoPeriodo] = useState(false);
   const [modalPeriodoAberto, setModalPeriodoAberto] = useState(false);
+  const [modalEncerrarAberto, setModalEncerrarAberto] = useState(false);
   const [periodoToken, setPeriodoToken] = useState(0);
 
   // Exportar relatório em Excel — a montagem de verdade acontece no backend (mesmos filtros
@@ -280,28 +280,15 @@ export default function SaldoContasBancariasPage() {
   }
 
   // Cadeado trancado (azul, nada aberto): clicar abre a janela de "Abrir período". Cadeado
-  // aberto (âmbar): clicar já pergunta se quer encerrar — direto, sem janela própria, mesmo
-  // padrão usado em qualquer outra confirmação do sistema.
-  async function handleCliqueCadeado() {
+  // aberto (âmbar): clicar abre a janela de "Encerrar período" — mostra quem vai ser avisado
+  // por WhatsApp (Comunicar Saldos), encerra, espera o aviso terminar e mostra o resultado
+  // (ver EncerrarPeriodoModal.jsx).
+  function handleCliqueCadeado() {
     if (!dataAberta) {
       setModalPeriodoAberto(true);
       return;
     }
-    const confirmado = await confirm({
-      title: 'Encerrar período',
-      description: `O período de ${formatarDataBR(dataAberta)} está aberto pra lançamento. Depois de encerrado, será preciso reabri-lo pra lançar nesse dia de novo.`,
-      confirmLabel: 'Encerrar período',
-      variant: 'warning',
-    });
-    if (!confirmado) return;
-    try {
-      await encerrarPeriodoSaldos(empresaId);
-      setDataAberta('');
-    } catch {
-      // Se algo já mudou por fora (outra aba encerrou primeiro, etc.) o próximo carregamento
-      // do período corrige sozinho — não precisa de tratamento especial aqui.
-      setPeriodoToken((n) => n + 1);
-    }
+    setModalEncerrarAberto(true);
   }
 
   const temFiltroContas = contasSearch || contasStatus.length > 0 || companyIds.length > 0;
@@ -564,6 +551,15 @@ export default function SaldoContasBancariasPage() {
         }}
         empresaId={empresaId}
         onAberto={setDataAberta}
+      />
+
+      <EncerrarPeriodoModal
+        open={modalEncerrarAberto}
+        onClose={() => setModalEncerrarAberto(false)}
+        empresaId={empresaId}
+        dataAberta={dataAberta}
+        onEncerrado={() => setDataAberta('')}
+        onPeriodoDessincronizado={() => setPeriodoToken((n) => n + 1)}
       />
     </div>
   );
