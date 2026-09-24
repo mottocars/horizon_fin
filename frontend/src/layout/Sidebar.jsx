@@ -13,11 +13,6 @@ import {
   SlidersHorizontal,
   Building2,
   PieChart,
-  CalendarRange,
-  Map,
-  TrendingUp,
-  AreaChart,
-  HardHat,
   Building,
   FileSearch,
   Landmark,
@@ -25,13 +20,13 @@ import {
   ReceiptText,
   FileBarChart,
   Activity,
+  BarChart3,
 } from 'lucide-react';
 import iconPortalConstrutoras from '../assets/integracoes/portal-construtoras.svg';
 import iconPrevision from '../assets/integracoes/prevision.svg';
 import iconSienge from '../assets/integracoes/sienge.svg';
 import iconConstrutorVendas from '../assets/integracoes/construtor-vendas.svg';
 import iconCertificadosDigitais from '../assets/integracoes/certificados-digitais.svg';
-import iconContaAzul from '../assets/integracoes/conta-azul.svg';
 import iconZapi from '../assets/integracoes/zapi.svg';
 import iconEmail from '../assets/integracoes/email.svg';
 import iconMcp from '../assets/integracoes/mcp.svg';
@@ -49,8 +44,6 @@ const menuItems = [
       { label: 'Máscaras', to: '/cadastros/mascaras', icon: SlidersHorizontal },
       { label: 'Centros de Custos', to: '/cadastros/centros-de-custo', icon: Building2 },
       { label: 'Planos Financeiros', to: '/cadastros/planos-financeiros', icon: PieChart },
-      { label: 'Períodos', to: '/cadastros/periodos', icon: CalendarRange },
-      { label: 'Mapa de Unidades', to: '/cadastros/mapa-de-unidades', icon: Map },
     ],
   },
   {
@@ -59,9 +52,7 @@ const menuItems = [
     icon: ArrowLeftRight,
     basePath: '/operacoes',
     children: [
-      { label: 'Projeções Financeiras', to: '/operacoes/projecoes-financeiras', icon: TrendingUp },
-      { label: 'Curva de Vendas', to: '/operacoes/curva-de-vendas', icon: AreaChart },
-      { label: 'Curva de Obras', to: '/operacoes/curva-de-obras', icon: HardHat },
+      { label: 'DRE Gerencial', to: '/operacoes/dre-gerencial', icon: BarChart3 },
       { label: 'Espião NFe / NFSe', to: '/operacoes/espiao-nfe-nfse', icon: FileSearch },
       { label: 'Saldo Contas Bancárias', to: '/operacoes/saldo-contas-bancarias', icon: Landmark },
       { label: 'Repasses CEF', to: '/operacoes/repasses-cef', icon: Banknote },
@@ -79,7 +70,6 @@ const menuItems = [
       { label: 'Sienge', to: '/integracoes/sienge', image: iconSienge },
       { label: 'Construtor de Vendas', to: '/integracoes/construtor-de-vendas', image: iconConstrutorVendas },
       { label: 'Certificados Digitais', to: '/integracoes/certificados-digitais', image: iconCertificadosDigitais },
-      { label: 'Conta Azul', to: '/integracoes/conta-azul', image: iconContaAzul },
       { label: 'Convênios Bancários', to: '/integracoes/contas-bancarias', icon: Landmark },
       { label: 'Whatsapp Z-API', to: '/integracoes/z-api', image: iconZapi },
       { label: 'Email', to: '/integracoes/email', image: iconEmail },

@@ -16,8 +16,6 @@ export const TELAS_SISTEMA = [
       { codigo: '/cadastros/mascaras', label: 'Máscaras' },
       { codigo: '/cadastros/centros-de-custo', label: 'Centros de Custos' },
       { codigo: '/cadastros/planos-financeiros', label: 'Planos Financeiros' },
-      { codigo: '/cadastros/periodos', label: 'Períodos' },
-      { codigo: '/cadastros/mapa-de-unidades', label: 'Mapa de Unidades' },
       // Contas Bancárias virou uma aba de "Saldo Contas Bancárias" (grupo Operações) — quem
       // precisa cadastrar/editar contas agora usa aquela permissão.
     ],
@@ -25,9 +23,7 @@ export const TELAS_SISTEMA = [
   {
     grupo: 'Operações',
     telas: [
-      { codigo: '/operacoes/projecoes-financeiras', label: 'Projeções Financeiras' },
-      { codigo: '/operacoes/curva-de-vendas', label: 'Curva de Vendas' },
-      { codigo: '/operacoes/curva-de-obras', label: 'Curva de Obras' },
+      { codigo: '/operacoes/dre-gerencial', label: 'DRE Gerencial' },
       { codigo: '/operacoes/espiao-nfe-nfse', label: 'Espião NFe / NFSe' },
       { codigo: '/operacoes/saldo-contas-bancarias', label: 'Saldo Contas Bancárias' },
       { codigo: '/operacoes/repasses-cef', label: 'Repasses CEF' },
@@ -42,7 +38,6 @@ export const TELAS_SISTEMA = [
       { codigo: '/integracoes/sienge', label: 'Sienge' },
       { codigo: '/integracoes/construtor-de-vendas', label: 'Construtor de Vendas' },
       { codigo: '/integracoes/certificados-digitais', label: 'Certificados Digitais' },
-      { codigo: '/integracoes/conta-azul', label: 'Conta Azul' },
       { codigo: '/integracoes/contas-bancarias', label: 'Convênios Bancários' },
       { codigo: '/integracoes/z-api', label: 'Whatsapp Z-API' },
       { codigo: '/integracoes/email', label: 'Email' },

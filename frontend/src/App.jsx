@@ -35,10 +35,6 @@ import MascarasPage from './pages/Mascaras/MascarasPage';
 import ContaBancariaItemDetalhe from './pages/ContasBancarias/ContaBancariaItemDetalhe';
 import SaldoContasBancariasPage from './pages/Operacoes/SaldoContasBancarias/SaldoContasBancariasPage';
 import PortalConstrutorasPage from './pages/Integracoes/PortalConstrutoras/PortalConstrutorasPage';
-import CurvaDeObrasPage from './pages/Operacoes/CurvaDeObras/CurvaDeObrasPage';
-import CurvaDeVendasPage from './pages/Operacoes/CurvaDeVendas/CurvaDeVendasPage';
-import PeriodosPage from './pages/Periodos/PeriodosPage';
-import MapaDeUnidadesPage from './pages/MapaDeUnidades/MapaDeUnidadesPage';
 import UsuariosList from './pages/Usuarios/UsuariosList';
 import UsuarioForm from './pages/Usuarios/UsuarioForm';
 import MeuPerfil from './pages/MeuPerfil/MeuPerfil';
@@ -77,16 +73,14 @@ export default function App() {
             <Route path="/meu-perfil" element={<MeuPerfil />} />
 
             <Route
-              path="/operacoes/projecoes-financeiras"
+              path="/operacoes/dre-gerencial"
               element={
                 <ComingSoon
-                  title="Projeções Financeiras"
-                  description="Operações — Projeções Financeiras — em desenvolvimento."
+                  title="DRE Gerencial"
+                  description="Operações — DRE Gerencial — em desenvolvimento."
                 />
               }
             />
-            <Route path="/operacoes/curva-de-vendas" element={<CurvaDeVendasPage />} />
-            <Route path="/operacoes/curva-de-obras" element={<CurvaDeObrasPage />} />
             <Route path="/operacoes/espiao-nfe-nfse" element={<EspiaoNfeNfsePage />} />
             <Route path="/operacoes/saldo-contas-bancarias" element={<SaldoContasBancariasPage />} />
             <Route path="/operacoes/repasses-cef" element={<RepassesCefPage />} />
@@ -122,8 +116,6 @@ export default function App() {
               path="/cadastros/planos-financeiros/:empresaId/:siengeId"
               element={<PlanoFinanceiroItemDetalhe />}
             />
-            <Route path="/cadastros/periodos" element={<PeriodosPage />} />
-            <Route path="/cadastros/mapa-de-unidades" element={<MapaDeUnidadesPage />} />
             {/* A lista/cadastro (antes /cadastros/contas-bancarias e /:empresaId) virou a aba
                 "Contas Bancárias" de Operações > Saldo Contas Bancárias — ver ContasTab.jsx.
                 Só a edição de uma conta continua como rota própria, aberta a partir de lá. */}
@@ -148,15 +140,6 @@ export default function App() {
             <Route
               path="/integracoes/certificados-digitais"
               element={<CertificadosDigitaisPage />}
-            />
-            <Route
-              path="/integracoes/conta-azul"
-              element={
-                <ComingSoon
-                  title="Conta Azul"
-                  description="Integração — Conta Azul — em desenvolvimento."
-                />
-              }
             />
             <Route path="/integracoes/contas-bancarias" element={<ConveniosBancariosList />} />
             <Route path="/integracoes/contas-bancarias/nova" element={<ConveniosBancariosForm />} />
