@@ -39,6 +39,17 @@ const STATUS_CONTAS_OPCOES = [
   { value: 'DISABLED', label: 'Inativa' },
 ];
 
+// Filtro "Tipo de saldo" da aba Saldos das Contas — os valores API/MANUAL/HERDADO batem com
+// `origem` (ver saldos.service.js/vanpix-sync.service.js); NAO_PREENCHIDO é calculado no
+// cliente (sem saldo lançado no dia aberto), não existe como origem de verdade no banco.
+const TIPO_SALDO_OPCOES = [
+  { value: '', label: 'Todos' },
+  { value: 'NAO_PREENCHIDO', label: 'Não Preenchido' },
+  { value: 'API', label: 'Automático (API)' },
+  { value: 'MANUAL', label: 'Manual' },
+  { value: 'HERDADO', label: 'Dia Anterior' },
+];
+
 // Empresa, aba e filtros vivem na URL (não em useState local) pelo mesmo motivo da Gestão
 // de Cobranças: o "Voltar" do navegador devolve o usuário pro mesmo lugar, com os mesmos
 // filtros. Toda troca usa `replace`, pra escolher um filtro não empilhar histórico.
@@ -75,10 +86,6 @@ export default function SaldoContasBancariasPage() {
   // (mesmo com o mesmo conteúdo) e a grade recarregaria à toa.
   const companyIdsParam = searchParams.get('company_ids') || '';
   const companyIds = useMemo(() => companyIdsParam.split(',').filter(Boolean).map(Number), [companyIdsParam]);
-  const bancosParam = searchParams.get('bancos') || '';
-  const bancos = useMemo(() => bancosParam.split(',').filter(Boolean), [bancosParam]);
-  const contasParam = searchParams.get('contas') || '';
-  const contasSelecionadas = useMemo(() => contasParam.split(',').filter(Boolean), [contasParam]);
 
   const padrao = useMemo(() => semanaAtual(), []);
   const semanaParam = searchParams.get('semana') || padrao.inicio;
@@ -93,6 +100,16 @@ export default function SaldoContasBancariasPage() {
   const [bancosSearch, setBancosSearch] = useState('');
   const [contasSearch, setContasSearch] = useState('');
   const [contasStatus, setContasStatus] = useState([]);
+
+  // Busca (nome ou banco) e Tipo de saldo — mesma convenção acima (conveniência de busca no
+  // navegador, não fica na URL): substituem os antigos filtros "Banco" e "Conta bancária"
+  // (dropdowns de opção fixa) por algo mais rápido de usar direto do teclado. A filtragem em
+  // si roda em SaldosContasTab.jsx, sobre os dados já carregados (sem ida ao servidor a cada
+  // tecla). Tipo de saldo só faz sentido no dia liberado pro cadeado (a origem é por dia) —
+  // se o período fechar com um tipo escolhido, zera sozinho (ver efeito abaixo) em vez de
+  // ficar um filtro "fantasma" aplicado sem controle visível na tela.
+  const [buscaSaldos, setBuscaSaldos] = useState('');
+  const [tipoSaldoFiltro, setTipoSaldoFiltro] = useState('');
   const [atualizandoContas, setAtualizandoContas] = useState(false);
   const [erroAtualizarContas, setErroAtualizarContas] = useState('');
 
@@ -142,7 +159,7 @@ export default function SaldoContasBancariasPage() {
 
   // Empresas do Sienge e bancos são da empresa escolhida — trocar de empresa zera os dois.
   function handleEmpresaChange(novoId) {
-    atualizarParams({ empresa_id: novoId || null, company_ids: null, bancos: null, contas: null });
+    atualizarParams({ empresa_id: novoId || null, company_ids: null });
   }
 
   // SeletorSemana já entrega sempre o domingo (ISO) da semana escolhida — nada pra normalizar
@@ -230,6 +247,13 @@ export default function SaldoContasBancariasPage() {
     };
   }, [empresaId, abaAtiva, periodoToken]);
 
+  // Tipo de saldo só filtra com um período aberto (a origem — API/Manual/Dia Anterior — é por
+  // dia, não faz sentido sem um dia de referência) — fechando o período, zera pra não deixar
+  // um filtro escolhido "preso" atrás de um combobox desabilitado.
+  useEffect(() => {
+    if (!dataAberta) setTipoSaldoFiltro('');
+  }, [dataAberta]);
+
   // código do banco -> { codigo, nome, logo } — a grade usa pra desenhar a logomarca de cada conta.
   const infoBancos = useMemo(() => new Map(filtros.bancos.map((b) => [b.codigo, b])), [filtros.bancos]);
 
@@ -237,11 +261,6 @@ export default function SaldoContasBancariasPage() {
     () => filtros.empresas.map((e) => ({ value: e.company_id, label: e.company_name || `Empresa ${e.company_id}` })),
     [filtros.empresas]
   );
-  const opcoesBancos = useMemo(
-    () => filtros.bancos.map((b) => ({ value: b.codigo, label: `${b.codigo} - ${b.nome}` })),
-    [filtros.bancos]
-  );
-  const opcoesContasFiltro = useMemo(() => filtros.contas || [], [filtros.contas]);
 
   const semEmpresa = !empresaId;
 
@@ -249,7 +268,7 @@ export default function SaldoContasBancariasPage() {
     setErroExportarRelatorio('');
     setExportandoRelatorio(true);
     try {
-      const blob = await exportarSaldosExcel(empresaId, { dataInicio, dataFim, companyIds, bancos, contas: contasSelecionadas });
+      const blob = await exportarSaldosExcel(empresaId, { dataInicio, dataFim, companyIds });
       const url = window.URL.createObjectURL(blob);
       const link = document.createElement('a');
       link.href = url;
@@ -334,29 +353,33 @@ export default function SaldoContasBancariasPage() {
                   />
                 </div>
 
-                <div className="sm:min-w-44 sm:flex-1">
-                  <label className="mb-1 block text-sm font-medium text-gray-700">Banco</label>
-                  <SearchableSelect
-                    multiple
-                    value={bancos}
-                    onChange={(codigos) => atualizarParams({ bancos: codigos })}
-                    disabled={semEmpresa || loadingFiltros}
-                    options={opcoesBancos}
-                    placeholder={semEmpresa ? 'Selecione a empresa primeiro' : loadingFiltros ? 'Carregando...' : 'Todos os bancos'}
-                    emptyMessage="Nenhum banco encontrado."
-                  />
+                <div className="sm:min-w-48 sm:flex-1">
+                  <label className="mb-1 block text-sm font-medium text-gray-700">Buscar</label>
+                  <div className="relative">
+                    <Search size={15} className="pointer-events-none absolute left-3 top-1/2 -translate-y-1/2 text-gray-400" />
+                    <input
+                      type="text"
+                      value={buscaSaldos}
+                      onChange={(e) => setBuscaSaldos(e.target.value)}
+                      disabled={semEmpresa}
+                      placeholder={semEmpresa ? 'Selecione a empresa primeiro' : 'Nome ou banco...'}
+                      className="w-full rounded-lg border border-gray-200 py-2 pl-9 pr-3 text-sm focus:outline-none focus:ring-2 focus:ring-primary-100 disabled:bg-gray-50 disabled:text-gray-400"
+                    />
+                  </div>
                 </div>
 
-                <div className="sm:min-w-44 sm:flex-1">
-                  <label className="mb-1 block text-sm font-medium text-gray-700">Conta bancária</label>
+                {/* Menor que os demais (pedido do usuário) — só entra em jogo no dia liberado
+                    pro cadeado, já que a origem do saldo (API/Manual/Dia Anterior) é por dia;
+                    sem período aberto fica desabilitado, não teria dia de referência pra filtrar. */}
+                <div className="sm:min-w-36 sm:max-w-44">
+                  <label className="mb-1 block text-sm font-medium text-gray-700">Tipo de saldo</label>
                   <SearchableSelect
-                    multiple
-                    value={contasSelecionadas}
-                    onChange={(valores) => atualizarParams({ contas: valores })}
-                    disabled={semEmpresa || loadingFiltros}
-                    options={opcoesContasFiltro}
-                    placeholder={semEmpresa ? 'Selecione a empresa primeiro' : loadingFiltros ? 'Carregando...' : 'Todas as contas'}
-                    emptyMessage="Nenhuma conta encontrada."
+                    clearable={false}
+                    value={tipoSaldoFiltro}
+                    onChange={setTipoSaldoFiltro}
+                    disabled={semEmpresa || !dataAberta}
+                    options={TIPO_SALDO_OPCOES}
+                    placeholder={semEmpresa ? 'Selecione a empresa primeiro' : !dataAberta ? 'Nenhum período aberto' : 'Todos'}
                   />
                 </div>
 
@@ -513,8 +536,8 @@ export default function SaldoContasBancariasPage() {
             dataInicio={dataInicio}
             dataFim={dataFim}
             companyIds={companyIds}
-            bancos={bancos}
-            contas={contasSelecionadas}
+            busca={buscaSaldos}
+            tipoSaldo={tipoSaldoFiltro}
             infoBancos={infoBancos}
             refreshToken={refreshToken}
             dataAberta={dataAberta}

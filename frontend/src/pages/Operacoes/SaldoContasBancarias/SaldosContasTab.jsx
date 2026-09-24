@@ -195,8 +195,11 @@ function SaldosContasTab({
   dataInicio,
   dataFim,
   companyIds,
-  bancos,
-  contas: contasFiltro,
+  // Busca (nome da conta ou banco) e Tipo de saldo (origem no dia aberto) — filtros só de
+  // navegador, aplicados aqui em cima do que já veio do servidor (ver contasFiltradas
+  // abaixo), sem gerar uma ida nova ao backend a cada tecla.
+  busca = '',
+  tipoSaldo = '',
   infoBancos,
   refreshToken = 0,
   // Dia liberado pra lançar saldo (cadeado, gerenciado na página) — só ele aceita edição;
@@ -235,7 +238,7 @@ function SaldosContasTab({
     rolouAposCargaRef.current = false;
     setCarregando(true);
     setErroCarga('');
-    getSaldosContas(empresaId, { dataInicio, dataFim, companyIds, bancos, contas: contasFiltro })
+    getSaldosContas(empresaId, { dataInicio, dataFim, companyIds })
       .then((resposta) => {
         if (minhaRequisicao === requisicaoRef.current) setContas(resposta.contas);
       })
@@ -248,7 +251,7 @@ function SaldosContasTab({
       .finally(() => {
         if (minhaRequisicao === requisicaoRef.current) setCarregando(false);
       });
-  }, [empresaId, dataInicio, dataFim, companyIds, bancos, contasFiltro]);
+  }, [empresaId, dataInicio, dataFim, companyIds]);
 
   carregarRef.current = carregar;
 
@@ -256,20 +259,47 @@ function SaldosContasTab({
     carregar();
   }, [carregar, refreshToken]);
 
+  // ------------------------------------------------------ busca + tipo de saldo (cliente)
+  // Busca por nome (da conta, ou o número quando não tem nome) ou por banco (código ou nome
+  // oficial, via infoBancos — mesmo mapa que a logomarca usa). Tipo de saldo olha a origem da
+  // conta NO DIA ABERTO especificamente (origem é por dia, não faz sentido "geral") — por
+  // isso só funciona com um período liberado (ver dataAberta); Não Preenchido é quando não
+  // existe lançamento nenhum para esse dia (nem número nem origem).
+  const contasFiltradas = useMemo(() => {
+    if (!contas) return contas;
+    const termo = busca.trim().toLowerCase();
+    return contas.filter((c) => {
+      if (termo) {
+        const nome = (c.nome || c.numero_conta || '').toLowerCase();
+        const bancoNome = (infoBancos?.get(c.banco_codigo)?.nome || '').toLowerCase();
+        const bancoCodigo = (c.banco_codigo || '').toLowerCase();
+        if (!nome.includes(termo) && !bancoNome.includes(termo) && !bancoCodigo.includes(termo)) return false;
+      }
+      if (dataAberta && tipoSaldo) {
+        if (tipoSaldo === 'NAO_PREENCHIDO') {
+          if (c.saldos[dataAberta] !== undefined && c.saldos[dataAberta] !== null) return false;
+        } else if (c.origens?.[dataAberta] !== tipoSaldo) {
+          return false;
+        }
+      }
+      return true;
+    });
+  }, [contas, busca, tipoSaldo, dataAberta, infoBancos]);
+
   // ---------------------------------------------------------------- agrupamento e totais
   // O backend já só devolve contas classificadas + projetando saldo (getSaldos), então todo
   // mundo aqui tem `classificacao` preenchida. Classificação não é mais uma lista fixa (virou
   // cadastro por empresa — ver ClassificacoesTab.jsx): os grupos vêm dos nomes que realmente
-  // aparecem nas contas carregadas, ordenados alfabeticamente.
+  // aparecem nas contas filtradas, ordenados alfabeticamente.
   const grupos = useMemo(() => {
-    if (!contas) return [];
-    const nomes = [...new Set(contas.map((c) => c.classificacao))].sort((a, b) => a.localeCompare(b, 'pt-BR'));
+    if (!contasFiltradas) return [];
+    const nomes = [...new Set(contasFiltradas.map((c) => c.classificacao))].sort((a, b) => a.localeCompare(b, 'pt-BR'));
     return nomes.map((nome) => ({
       value: nome,
       label: nome,
-      contas: contas.filter((c) => c.classificacao === nome),
+      contas: contasFiltradas.filter((c) => c.classificacao === nome),
     }));
-  }, [contas]);
+  }, [contasFiltradas]);
 
   const { totaisPorGrupo, totalGeral } = useMemo(() => {
     const porGrupo = {};
@@ -468,9 +498,14 @@ function SaldosContasTab({
   }
 
   const semContas = !carregando && !erroCarga && contas && contas.length === 0;
-  // Empresa tem contas, mas nenhuma classificada — distinto de "sem contas": aqui o problema
-  // é a classificação, não o cadastro.
-  const semClassificadas = !carregando && !erroCarga && contas && contas.length > 0 && grupos.length === 0;
+  // Tem conta, mas a Busca/Tipo de saldo não bateu com nenhuma — distinto de "sem contas":
+  // aqui o cadastro tem contas, só não sobrou nenhuma com o filtro atual.
+  const semResultadoFiltro =
+    !carregando && !erroCarga && contas && contas.length > 0 && contasFiltradas && contasFiltradas.length === 0;
+  // Empresa tem contas (passando pelo filtro), mas nenhuma classificada — distinto dos dois
+  // de cima: aqui o problema é a classificação, não o cadastro nem o filtro.
+  const semClassificadas =
+    !carregando && !erroCarga && contasFiltradas && contasFiltradas.length > 0 && grupos.length === 0;
 
   // Só o indicador de salvamento — pedido do usuário: sem contagens, sem legenda, sem botão
   // de expandir tudo, "pode subir essa tela pra ficar com mais foco na tabela". Some por
@@ -528,12 +563,18 @@ function SaldosContasTab({
             Ajuste os filtros ou, se a empresa ainda não tem contas, importe-as em Cadastros → Contas Bancárias.
           </p>
         </div>
+      ) : semResultadoFiltro ? (
+        <div className="flex flex-col items-center gap-1 py-14 text-center">
+          <Landmark size={26} className="mb-1 text-gray-300" />
+          <p className="text-sm text-gray-600">Nenhuma conta encontrada para esse filtro.</p>
+          <p className="max-w-sm text-xs text-gray-400">Ajuste a busca ou o tipo de saldo escolhido.</p>
+        </div>
       ) : semClassificadas ? (
         <div className="flex flex-col items-center gap-1 py-14 text-center">
           <Landmark size={26} className="mb-1 text-gray-300" />
           <p className="text-sm text-gray-600">Nenhuma conta classificada encontrada.</p>
           <p className="max-w-sm text-xs text-gray-400">
-            {contas.length} conta(s) sem classificação neste filtro. Classifique-as em Cadastros → Contas
+            {contasFiltradas.length} conta(s) sem classificação neste filtro. Classifique-as em Cadastros → Contas
             Bancárias para elas aparecerem aqui.
           </p>
         </div>
