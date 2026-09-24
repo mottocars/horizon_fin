@@ -22,6 +22,31 @@ const MESES = [
   { key: 'dez', label: 'Dezembro' },
 ];
 
+// Mesmo padrão de ContaBancariaItemDetalhe.jsx/ConveniosBancariosForm.jsx (corCampo/corSelect):
+// âmbar quando o campo está em branco, azul claro quando já tem valor — dá pra ver de relance
+// o que ainda falta preencher no enriquecimento desta conta do plano financeiro.
+// A borda azul é primary-100/500 (não 200/400): o tema (styles/index.css) só define primary
+// 50, 100, 500, 600 e 700 — classe de tom inexistente não gera CSS e a borda cairia na cor
+// padrão (preta).
+const COR_CAMPO_VAZIO = 'border-amber-200 bg-amber-50 focus:border-amber-400';
+const COR_CAMPO_PREENCHIDO = 'border-primary-100 bg-primary-50 focus:border-primary-500';
+
+function estaPreenchido(valor) {
+  return String(valor ?? '').trim() !== '';
+}
+
+function corCampo(valor) {
+  return estaPreenchido(valor)
+    ? `${COR_CAMPO_PREENCHIDO} focus:ring-primary-100`
+    : `${COR_CAMPO_VAZIO} focus:ring-amber-100`;
+}
+
+// O gatilho do SearchableSelect já traz o próprio anel de foco (primary-100), então aqui
+// vão só borda e fundo — repetir o anel geraria conflito de especificidade no Tailwind.
+function corSelect(valor) {
+  return estaPreenchido(valor) ? COR_CAMPO_PREENCHIDO : COR_CAMPO_VAZIO;
+}
+
 function parseBRNumber(value) {
   if (!value) return '';
   const cleaned = value.trim();
@@ -283,6 +308,7 @@ export default function PlanoFinanceiroItemDetalhe() {
                 onChange={(value) => handleChange('classificacao_dre_id', value)}
                 options={classificacoesDre.map((c) => ({ value: c.id, label: c.descricao }))}
                 emptyMessage="Nenhuma classificação encontrada."
+                corClasses={corSelect(form.classificacao_dre_id)}
               />
               {classificacoesDre.length === 0 && (
                 <p className="mt-1 text-xs text-gray-400">
@@ -297,6 +323,7 @@ export default function PlanoFinanceiroItemDetalhe() {
                 onChange={(value) => handleChange('classificacao_dfc_id', value)}
                 options={classificacoesDfc.map((c) => ({ value: c.id, label: c.descricao }))}
                 emptyMessage="Nenhuma classificação encontrada."
+                corClasses={corSelect(form.classificacao_dfc_id)}
               />
               {classificacoesDfc.length === 0 && (
                 <p className="mt-1 text-xs text-gray-400">
@@ -311,6 +338,7 @@ export default function PlanoFinanceiroItemDetalhe() {
                 onChange={(value) => handleChange('submascara_dre_id', value)}
                 options={submascarasDre.map((c) => ({ value: c.id, label: c.descricao }))}
                 emptyMessage="Nenhuma submáscara encontrada."
+                corClasses={corSelect(form.submascara_dre_id)}
               />
               {submascarasDre.length === 0 && (
                 <p className="mt-1 text-xs text-gray-400">
@@ -325,6 +353,7 @@ export default function PlanoFinanceiroItemDetalhe() {
                 onChange={(value) => handleChange('submascara_dfc_id', value)}
                 options={submascarasDfc.map((c) => ({ value: c.id, label: c.descricao }))}
                 emptyMessage="Nenhuma submáscara encontrada."
+                corClasses={corSelect(form.submascara_dfc_id)}
               />
               {submascarasDfc.length === 0 && (
                 <p className="mt-1 text-xs text-gray-400">
@@ -341,6 +370,7 @@ export default function PlanoFinanceiroItemDetalhe() {
                   { value: 'true', label: 'Sim' },
                   { value: 'false', label: 'Não' },
                 ]}
+                corClasses={corSelect(form.projeta_mes_atual_dfc)}
               />
             </Field>
 
@@ -350,6 +380,7 @@ export default function PlanoFinanceiroItemDetalhe() {
                 onChange={(value) => handleChange('pacote_id', value)}
                 options={pacotes.map((c) => ({ value: c.id, label: c.descricao }))}
                 emptyMessage="Nenhum pacote encontrado."
+                corClasses={corSelect(form.pacote_id)}
               />
               {pacotes.length === 0 && (
                 <p className="mt-1 text-xs text-gray-400">
@@ -366,6 +397,7 @@ export default function PlanoFinanceiroItemDetalhe() {
                   { value: 'true', label: 'Sim' },
                   { value: 'false', label: 'Não' },
                 ]}
+                corClasses={corSelect(form.gera_orcamento)}
               />
             </Field>
 
@@ -375,6 +407,7 @@ export default function PlanoFinanceiroItemDetalhe() {
                 onChange={(value) => handleChange('tipo_projecao', value)}
                 options={TIPO_PROJECAO_OPTIONS}
                 emptyMessage="Nenhum tipo encontrado."
+                corClasses={corSelect(form.tipo_projecao)}
               />
             </Field>
 
@@ -385,6 +418,7 @@ export default function PlanoFinanceiroItemDetalhe() {
                   onChange={(value) => handleChange('fonte_dados', value)}
                   options={FONTE_DADOS_OPTIONS}
                   emptyMessage="Nenhuma fonte encontrada."
+                  corClasses={corSelect(form.fonte_dados)}
                 />
               </Field>
             )}
@@ -397,6 +431,7 @@ export default function PlanoFinanceiroItemDetalhe() {
                   onChange={(value) => handleChange('regra_calculo', value)}
                   options={REGRAS_CALCULO_POR_FONTE[form.fonte_dados] || []}
                   emptyMessage="Nenhuma regra encontrada."
+                  corClasses={corSelect(form.regra_calculo)}
                 />
               </Field>
             )}
@@ -412,7 +447,7 @@ export default function PlanoFinanceiroItemDetalhe() {
                     const raw = e.target.value;
                     if (/^[0-9]*$/.test(raw)) handleChange('quantidade_meses', raw);
                   }}
-                  className="w-full rounded-lg border border-gray-200 px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-primary-100 disabled:bg-gray-50 disabled:opacity-60"
+                  className={`w-full rounded-lg border px-3 py-2 text-sm focus:outline-none focus:ring-2 disabled:bg-gray-50 disabled:opacity-60 ${corCampo(form.quantidade_meses)}`}
                 />
               </Field>
             )}
@@ -444,6 +479,7 @@ export default function PlanoFinanceiroItemDetalhe() {
                     <PercentInput
                       value={form[`incremento_${m.key}`]}
                       onChange={(value) => handleChange(`incremento_${m.key}`, value)}
+                      className={corCampo(form[`incremento_${m.key}`])}
                     />
                   </Field>
                 ))}
@@ -472,7 +508,7 @@ function Field({ label, children }) {
   );
 }
 
-function PercentInput({ value, onChange, className = '' }) {
+function PercentInput({ value, onChange, className = 'border-gray-200 focus:ring-primary-100' }) {
   return (
     <div className="relative">
       <input
@@ -484,7 +520,7 @@ function PercentInput({ value, onChange, className = '' }) {
           const raw = e.target.value;
           if (/^-?[0-9.,]*$/.test(raw)) onChange(raw);
         }}
-        className={`w-full rounded-lg border border-gray-200 px-3 py-2 pr-7 text-sm focus:outline-none focus:ring-2 focus:ring-primary-100 ${className}`}
+        className={`w-full rounded-lg border px-3 py-2 pr-7 text-sm focus:outline-none focus:ring-2 ${className}`}
       />
       <span className="pointer-events-none absolute right-2.5 top-1/2 -translate-y-1/2 text-xs text-gray-400">
         %
