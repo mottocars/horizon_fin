@@ -20,12 +20,12 @@ function formatarMoeda(valor) {
 }
 
 // Variação do total desde a última abertura de período (a anterior a esta que acabou de
-// encerrar) — positiva ou negativa, sempre rotulada "Crescimento de", com o emoji indicando a
-// direção (pedido do usuário: ver não usar "Queda de" como rótulo separado).
+// encerrar) — "Crescimento de" quando o total subiu, "Redução de" quando caiu, sempre com
+// valor positivo (o rótulo já diz a direção, não precisa de sinal negativo no valor).
 function formatarVariacao(delta) {
+  const rotulo = delta >= 0 ? 'Crescimento' : 'Redução';
   const emoji = delta >= 0 ? '📈' : '📉';
-  const sinal = delta < 0 ? '-' : '';
-  return `Crescimento de ${sinal}R$ ${formatarMoeda(Math.abs(delta))} ${emoji}`;
+  return `${rotulo} de R$ ${formatarMoeda(Math.abs(delta))} ${emoji}`;
 }
 
 // Domingo->sábado da semana que contém `iso` — mesmo critério de constantes.js::domingoDaSemana/
@@ -53,7 +53,7 @@ function montarMensagem({ nomeDestinatario, nomeEmpresa, dataBR, nomeResponsavel
     'Resumo por classificação:',
     linhas,
     `*Total: R$ ${total}*`,
-    ...(typeof delta === 'number' ? [formatarVariacao(delta)] : []),
+    ...(typeof delta === 'number' ? ['', formatarVariacao(delta)] : []),
     '',
     '_Comunicado automático enviado pelo Horizon Finanças._',
   ].join('\n');
