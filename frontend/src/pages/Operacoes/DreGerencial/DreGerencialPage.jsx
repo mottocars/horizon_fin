@@ -1,19 +1,23 @@
-import { useEffect, useState } from 'react';
+import { useEffect, useRef, useState } from 'react';
 import { useSearchParams } from 'react-router-dom';
-import { BarChart3, Calculator } from 'lucide-react';
+import { BarChart3, Calculator, Layers, Plus } from 'lucide-react';
 import Card from '../../../components/Card';
 import Tabs from '../../../components/Tabs';
+import Button from '../../../components/Button';
 import SearchableSelect from '../../../components/SearchableSelect';
 import { listEmpresas } from '../../../api/empresas.api';
 import { nomeExibicaoEmpresa } from '../../../utils/empresa';
 import { useEmpresaTravada } from '../../../hooks/useEmpresaTravada';
+import CategoriasOrcamentoTab from './CategoriasOrcamentoTab';
 
-// Só 2 abas por enquanto — o `{ divider: true }` separa a DRE (a demonstração em si) do
-// Orçamento (o parâmetro por trás da projeção), mesmo padrão de SaldoContasBancariasPage.jsx
-// (que separa "Saldos das Contas" de "Bancos" e as demais abas de cadastro/parâmetro).
+// O `{ divider: true }` separa a DRE (a demonstração em si) das abas de cadastro/parâmetro que
+// dão suporte a ela — Categorias Orçamento e Orçamento ficam juntas, sem divisor entre elas
+// (mesmo padrão de SaldoContasBancariasPage.jsx, que separa "Saldos das Contas" de "Bancos" e
+// as demais abas de cadastro/parâmetro).
 const TABS = [
   { id: 'dre', label: 'DRE', icon: BarChart3 },
   { divider: true },
+  { id: 'categorias-orcamento', label: 'Categorias Orçamento', icon: Layers },
   { id: 'orcamento', label: 'Orçamento', icon: Calculator },
 ];
 
@@ -64,6 +68,13 @@ export default function DreGerencialPage() {
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [loadingEmpresas, empresas, empresaId]);
 
+  // Botão "Nova categoria" fica aqui no topo (padrão do resto do sistema), mas o modal de criar
+  // continua vivendo em CategoriasOrcamentoTab.jsx — dispara por ref, mesmo esquema de
+  // ClassificacoesTab.jsx em Saldo Contas Bancárias.
+  const categoriasOrcamentoTabRef = useRef(null);
+
+  const semEmpresa = !empresaId;
+
   return (
     <div className="space-y-4">
       <Card className="shrink-0">
@@ -81,6 +92,15 @@ export default function DreGerencialPage() {
               />
             </div>
           </div>
+
+          {abaAtiva === 'categorias-orcamento' && (
+            <div className="flex shrink-0 items-center gap-2">
+              <Button type="button" onClick={() => categoriasOrcamentoTabRef.current?.abrirNova()} disabled={semEmpresa}>
+                <Plus size={16} />
+                Nova categoria
+              </Button>
+            </div>
+          )}
         </div>
       </Card>
 
@@ -89,6 +109,10 @@ export default function DreGerencialPage() {
 
         {abaAtiva === 'dre' && (
           <EmBreve icon={BarChart3} titulo="DRE" descricao="Demonstração do Resultado do Exercício — em desenvolvimento." />
+        )}
+
+        {abaAtiva === 'categorias-orcamento' && (
+          <CategoriasOrcamentoTab ref={categoriasOrcamentoTabRef} empresaId={empresaId} />
         )}
 
         {abaAtiva === 'orcamento' && (

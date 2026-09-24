@@ -2278,3 +2278,16 @@ CREATE TABLE logs_acesso (
 CREATE INDEX idx_logs_acesso_usuario ON logs_acesso (usuario_id);
 CREATE INDEX idx_logs_acesso_tela ON logs_acesso (tela);
 CREATE INDEX idx_logs_acesso_criado_em ON logs_acesso (criado_em);
+
+-- Categorias de orçamento cadastráveis por empresa (aba "Categorias Orçamento" de Operações >
+-- DRE POC Gerencial) — mesmo padrão de classificacoes_bancarias (lista simples por empresa,
+-- sem valor fixo pro sistema inteiro). Cadastro simples de propósito: só nome e exclusão, sem
+-- edição nem parâmetro extra — é a lista de categorias que a aba Orçamento vai usar pra montar
+-- o orçamento da DRE.
+CREATE TABLE dre_categorias_orcamento (
+    id           SERIAL PRIMARY KEY,
+    empresa_id   INTEGER NOT NULL REFERENCES empresas(id) ON DELETE CASCADE,
+    nome         VARCHAR(80) NOT NULL,
+    criado_em    TIMESTAMP DEFAULT NOW(),
+    UNIQUE (empresa_id, nome)
+);
