@@ -1,6 +1,6 @@
 import { Fragment, useCallback, useEffect, useMemo, useState } from 'react';
 import { useNavigate } from 'react-router-dom';
-import { Landmark, Minus, Plus, TriangleAlert } from 'lucide-react';
+import { Landmark, Minus, Plus, TriangleAlert, Zap } from 'lucide-react';
 import LogoBanco from './LogoBanco';
 import { listBancos, listContas } from '../../../api/contasBancariasSienge.api';
 
@@ -169,7 +169,7 @@ export default function ContasTab({
                   Classificação / Conta bancária
                 </th>
                 <th className="sticky top-0 z-10 border-b border-l border-gray-200 bg-white px-3 py-2.5 font-medium">Empresa</th>
-                <th className="sticky top-0 z-10 border-b border-l border-gray-200 bg-white px-3 py-2.5 font-medium">Tipo</th>
+                <th className="sticky top-0 z-10 border-b border-l border-gray-200 bg-white px-3 py-2.5 font-medium">Automação</th>
                 <th className="sticky top-0 z-10 border-b border-l border-gray-200 bg-white px-3 py-2.5 font-medium">Status</th>
               </tr>
             </thead>
@@ -222,9 +222,20 @@ export default function ContasTab({
                             {conta.company_name || '—'}
                           </td>
                           <td className="border-b border-l border-gray-100 px-3 py-2 group-hover:bg-gray-50">
-                            <span className="inline-flex items-center rounded-full bg-gray-100 px-2 py-0.5 text-[11px] font-medium text-gray-600">
-                              {conta.tipo_descricao || '—'}
-                            </span>
+                            {/* Mesma paleta/ícone de ORIGEM_INFO.API em SaldosContasTab.jsx — mesmo
+                                vocabulário visual de "isto é automático" nas duas telas. VanPix =
+                                já recebeu ao menos 1 saldo via API alguma vez (ver tem_automacao
+                                em contas.service.js), não é uma configuração, é um fato observado. */}
+                            {conta.tem_automacao ? (
+                              <span className="inline-flex items-center gap-1 rounded-full bg-emerald-50 px-2 py-0.5 text-[11px] font-medium text-emerald-600">
+                                <Zap size={11} />
+                                VanPix
+                              </span>
+                            ) : (
+                              <span className="inline-flex items-center rounded-full bg-gray-100 px-2 py-0.5 text-[11px] font-medium text-gray-600">
+                                Manual
+                              </span>
+                            )}
                           </td>
                           <td className="border-b border-l border-gray-100 px-3 py-2 group-hover:bg-gray-50">
                             <span

@@ -76,6 +76,19 @@ async function ultimoSaldoAnterior(empresaId, companyId, numeroConta, data) {
   return rows[0] ? Number(rows[0].saldo) : null;
 }
 
+// Contas que a VanPix já alimentou alguma vez (origem = 'API' em qualquer dia) — usado pra
+// herdar o saldo sem depender da prioridade da classificação (ver comentário na segunda
+// passada de buscarSaldosVanpix): segunda-feira, a VanPix devolve o saldo de sábado/domingo
+// (quando devolve algo), que não bate com `diaAnterior` esperado e é descartado — sem essa
+// garantia extra, a conta ficava em branco até alguém configurar a classificação certa.
+async function listarContasAutomatizadas(empresaId) {
+  const { rows } = await pool.query(
+    `SELECT DISTINCT company_id, numero_conta FROM saldos_contas_bancarias WHERE empresa_id = $1 AND origem = 'API'`,
+    [empresaId]
+  );
+  return new Set(rows.map((r) => `${r.company_id}:${r.numero_conta}`));
+}
+
 // Roda todos os convênios VanPix ativos da empresa pra `data`, casa cada conta encontrada no
 // retorno com o cadastro (banco+conta+dígito) e grava o saldo automaticamente (origem API).
 // Toda conta-alvo que ficou de fora disso tenta herdar o saldo do dia anterior (origem
@@ -131,17 +144,22 @@ async function buscarSaldosVanpix(empresaId, usuarioId, data) {
     }
   }
 
-  // Segunda passada: toda conta-alvo que a API não resolveu tenta herdar, conforme a
-  // prioridade cadastrada na classificação dela.
-  const [contasAlvo, prioridadePorClassificacao] = await Promise.all([
+  // Segunda passada: toda conta-alvo que a API não resolveu tenta herdar — conforme a
+  // prioridade cadastrada na classificação dela OU, sempre, se a própria conta já é
+  // automatizada (já recebeu algum saldo via VanPix antes): pra quem já é automatizado, herdar
+  // não é uma preferência configurável, é a garantia de nunca ficar em branco por causa de um
+  // dia sem movimentação bancária (fim de semana, feriado).
+  const [contasAlvo, prioridadePorClassificacao, contasAutomatizadas] = await Promise.all([
     listarContasAlvo(empresaId),
     classificacoesService.mapaPorNome(empresaId),
+    listarContasAutomatizadas(empresaId),
   ]);
 
   for (const conta of contasAlvo) {
     const chave = `${conta.company_id}:${conta.numero_conta}`;
     if (casadasNaApi.has(chave)) continue;
-    if (prioridadePorClassificacao.get(conta.classificacao) !== 'SALDO_ANTERIOR') continue;
+    const automatizada = contasAutomatizadas.has(chave);
+    if (prioridadePorClassificacao.get(conta.classificacao) !== 'SALDO_ANTERIOR' && !automatizada) continue;
 
     const valorHerdado = await ultimoSaldoAnterior(empresaId, conta.company_id, conta.numero_conta, data);
     if (valorHerdado === null) continue; // nada lançado antes — não tem o que herdar, fica em branco
