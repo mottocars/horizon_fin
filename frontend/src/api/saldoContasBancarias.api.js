@@ -72,13 +72,15 @@ export function buscarSaldosVanpix(empresaId, data) {
 }
 
 // Parâmetro "Comunicar Saldos" (aba Configurações) — quem pode ser escolhido pra receber aviso
-// sobre os saldos desta empresa e quem já está selecionado.
-// { elegiveis: [{id, nome, permissao}], selecionados: number[] }
+// sobre os saldos desta empresa, quem já está selecionado, e qual conexão Z-API foi escolhida.
+// { elegiveis: [{id, nome, permissao}], selecionados: number[], zapiIntegracaoId: number|null }
 export function getComunicarSaldos(empresaId) {
   return http.get(`/saldo-contas-bancarias/${empresaId}/comunicar-saldos`).then((res) => res.data);
 }
 
-// Substitui por completo a lista de quem recebe aviso.
-export function salvarComunicarSaldos(empresaId, usuarioIds) {
-  return http.put(`/saldo-contas-bancarias/${empresaId}/comunicar-saldos`, { usuarioIds }).then((res) => res.data);
+// Substitui por completo a lista de quem recebe aviso e a conexão Z-API escolhida.
+export function salvarComunicarSaldos(empresaId, { usuarioIds, zapiIntegracaoId }) {
+  return http
+    .put(`/saldo-contas-bancarias/${empresaId}/comunicar-saldos`, { usuarioIds, zapiIntegracaoId })
+    .then((res) => res.data);
 }

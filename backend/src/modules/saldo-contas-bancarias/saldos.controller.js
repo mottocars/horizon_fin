@@ -183,10 +183,12 @@ async function encerrarPeriodo(req, res, next) {
 
 const comunicarSaldosSchema = z.object({
   usuarioIds: z.array(z.coerce.number().int().positive()).max(500, 'Lista grande demais.'),
+  zapiIntegracaoId: z.coerce.number().int().positive().nullable().default(null),
 });
 
 // Parâmetro "Comunicar Saldos" (aba Configurações) — usuários elegíveis (todo MASTER +
-// ADMINISTRADOR/BASICO vinculado à empresa) e quem já está selecionado hoje.
+// ADMINISTRADOR/BASICO vinculado à empresa), quem já está selecionado hoje, e qual conexão
+// Z-API foi escolhida pro aviso.
 async function getComunicarSaldos(req, res, next) {
   try {
     const empresaId = await acessoEmpresa(req);
@@ -199,8 +201,8 @@ async function getComunicarSaldos(req, res, next) {
 async function salvarComunicarSaldos(req, res, next) {
   try {
     const empresaId = await acessoEmpresa(req);
-    const { usuarioIds } = comunicarSaldosSchema.parse(req.body);
-    await service.salvarComunicarSaldos(empresaId, usuarioIds);
+    const { usuarioIds, zapiIntegracaoId } = comunicarSaldosSchema.parse(req.body);
+    await service.salvarComunicarSaldos(empresaId, usuarioIds, zapiIntegracaoId);
     res.json({ ok: true });
   } catch (err) {
     tratarErroDeValidacao(err, next);

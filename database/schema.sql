@@ -892,6 +892,15 @@ CREATE TABLE saldos_comunicar_usuarios (
     PRIMARY KEY (empresa_id, usuario_id)
 );
 
+-- Qual conexão WhatsApp Z-API realiza o aviso de "Comunicar Saldos" — 1 conexão por empresa
+-- (mesmo padrão de regua_cobranca_horario_disparo.zapi_integracao_id). ON DELETE SET NULL: apagar
+-- a conexão não trava nada, só volta a ficar "nenhuma conexão selecionada".
+CREATE TABLE saldos_comunicar_config (
+    empresa_id          INTEGER PRIMARY KEY REFERENCES empresas(id) ON DELETE CASCADE,
+    zapi_integracao_id  INTEGER REFERENCES integracoes_zapi(id) ON DELETE SET NULL,
+    atualizado_em       TIMESTAMP DEFAULT NOW()
+);
+
 -- Logomarca customizada de um banco (cadastro de Bancos, aba Bancos de Operações > Saldo
 -- Contas Bancárias) — sobrepõe a logo oficial da BrasilAPI pra aquele código enquanto
 -- existir uma linha aqui. Data URI (base64), já redimensionada no navegador antes de

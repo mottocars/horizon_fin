@@ -317,25 +317,40 @@ async function listUsuariosElegiveisComunicar(empresaId) {
   return rows;
 }
 
-// Parâmetro "Comunicar Saldos" (aba Configurações) — elegíveis pra escolher + quem já está
-// selecionado hoje pra essa empresa.
+// Parâmetro "Comunicar Saldos" (aba Configurações) — elegíveis pra escolher, quem já está
+// selecionado hoje pra essa empresa, e qual conexão Z-API foi escolha pro aviso (null = nenhuma
+// ainda). O envio em si (usar essa conexão pra mandar mensagem de verdade) ainda não existe.
 async function listUsuariosComunicarSaldos(empresaId) {
-  const [elegiveis, { rows: selecionados }] = await Promise.all([
+  const [elegiveis, { rows: selecionados }, { rows: config }] = await Promise.all([
     listUsuariosElegiveisComunicar(empresaId),
     pool.query('SELECT usuario_id FROM saldos_comunicar_usuarios WHERE empresa_id = $1', [empresaId]),
+    pool.query('SELECT zapi_integracao_id FROM saldos_comunicar_config WHERE empresa_id = $1', [empresaId]),
   ]);
-  return { elegiveis, selecionados: selecionados.map((r) => r.usuario_id) };
+  return {
+    elegiveis,
+    selecionados: selecionados.map((r) => r.usuario_id),
+    zapiIntegracaoId: config[0]?.zapi_integracao_id ?? null,
+  };
 }
 
-// Substitui por completo a lista de quem recebe aviso — revalida no servidor que todo id
-// enviado está no conjunto elegível (mesmo cuidado de "não confiar só no combobox da tela" de
-// reguaCobranca.service.js::garantirResponsavelElegivel), antes de apagar e regravar em
-// transação.
-async function salvarComunicarSaldos(empresaId, usuarioIds) {
+// Substitui por completo a lista de quem recebe aviso e a conexão Z-API escolhida — revalida no
+// servidor que todo usuarioId enviado está no conjunto elegível (mesmo cuidado de "não confiar
+// só no combobox da tela" de reguaCobranca.service.js::garantirResponsavelElegivel) e que
+// zapiIntegracaoId (quando informado) é uma conexão de verdade desta empresa, antes de gravar
+// tudo numa transação só.
+async function salvarComunicarSaldos(empresaId, usuarioIds, zapiIntegracaoId) {
   const elegiveis = await listUsuariosElegiveisComunicar(empresaId);
   const idsElegiveis = new Set(elegiveis.map((u) => u.id));
   if (usuarioIds.some((id) => !idsElegiveis.has(id))) {
     throw erro(400, 'Um ou mais usuários selecionados não têm acesso a esta empresa.');
+  }
+
+  if (zapiIntegracaoId !== null) {
+    const { rows } = await pool.query(
+      'SELECT 1 FROM integracoes_zapi WHERE id = $1 AND empresa_id = $2',
+      [zapiIntegracaoId, empresaId]
+    );
+    if (!rows[0]) throw erro(400, 'Conexão Z-API inválida para esta empresa.');
   }
 
   const client = await pool.connect();
@@ -348,6 +363,12 @@ async function salvarComunicarSaldos(empresaId, usuarioIds) {
         [empresaId, usuarioIds]
       );
     }
+    await client.query(
+      `INSERT INTO saldos_comunicar_config (empresa_id, zapi_integracao_id, atualizado_em)
+       VALUES ($1, $2, NOW())
+       ON CONFLICT (empresa_id) DO UPDATE SET zapi_integracao_id = EXCLUDED.zapi_integracao_id, atualizado_em = NOW()`,
+      [empresaId, zapiIntegracaoId]
+    );
     await client.query('COMMIT');
   } catch (err) {
     await client.query('ROLLBACK').catch(() => {});
