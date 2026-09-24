@@ -28,6 +28,19 @@ async function create(empresaId, { nome }) {
   }
 }
 
+async function update(id, empresaId, { nome }) {
+  try {
+    const { rows } = await pool.query(
+      `UPDATE dre_categorias_orcamento SET nome = $3 WHERE id = $1 AND empresa_id = $2 RETURNING id, nome, criado_em`,
+      [id, empresaId, nome]
+    );
+    return rows[0] || null;
+  } catch (err) {
+    if (err.code === '23505') throw erro(409, 'Já existe uma categoria com esse nome nesta empresa.');
+    throw err;
+  }
+}
+
 async function remove(id, empresaId) {
   const { rows } = await pool.query(
     `DELETE FROM dre_categorias_orcamento WHERE id = $1 AND empresa_id = $2 RETURNING id`,
@@ -36,4 +49,4 @@ async function remove(id, empresaId) {
   return !!rows[0];
 }
 
-module.exports = { list, create, remove };
+module.exports = { list, create, update, remove };

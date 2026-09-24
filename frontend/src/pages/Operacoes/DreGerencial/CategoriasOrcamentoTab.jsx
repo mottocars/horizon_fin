@@ -1,11 +1,12 @@
 import { forwardRef, useCallback, useEffect, useImperativeHandle, useState } from 'react';
-import { Layers, Trash2 } from 'lucide-react';
+import { Layers, Pencil, Trash2 } from 'lucide-react';
 import Modal from '../../../components/Modal';
 import Button from '../../../components/Button';
 import {
   createCategoriaOrcamento,
   listCategoriasOrcamento,
   removeCategoriaOrcamento,
+  updateCategoriaOrcamento,
 } from '../../../api/dreCategoriasOrcamento.api';
 import { useConfirm } from '../../../confirm/ConfirmContext';
 
@@ -13,16 +14,18 @@ const formVazio = { nome: '' };
 
 // Cadastro das categorias de orçamento da empresa (mesmo padrão de ClassificacoesTab.jsx, em
 // Saldo Contas Bancárias) — a lista que a aba Orçamento vai usar pra montar o orçamento da
-// DRE. Simples de propósito (pedido do usuário): só nome e exclusão, sem edição nem parâmetro
-// extra (diferente de Classificação, que também tem a prioridade de saldo).
+// DRE. Nome sempre maiúsculo (pedido do usuário) — o backend já normaliza (vale mesmo batendo
+// direto na API), aqui é só pra já mostrar maiúsculo enquanto digita.
 //
 // `ref` expõe `abrirNova()` pra página-mãe (o botão "Nova categoria" fica lá, junto do filtro
-// de Empresa, seguindo o padrão do resto do sistema).
+// de Empresa, seguindo o padrão do resto do sistema) — o modal de criar/editar continua vivendo
+// aqui porque é o mesmo formulário dos dois casos e a lista precisa recarregar sozinha depois.
 const CategoriasOrcamentoTab = forwardRef(function CategoriasOrcamentoTab({ empresaId }, ref) {
   const confirm = useConfirm();
   const [itens, setItens] = useState([]);
   const [loading, setLoading] = useState(true);
   const [modalAberto, setModalAberto] = useState(false);
+  const [editando, setEditando] = useState(null); // null = criando
   const [form, setForm] = useState(formVazio);
   const [erro, setErro] = useState('');
   const [salvando, setSalvando] = useState(false);
@@ -47,7 +50,15 @@ const CategoriasOrcamentoTab = forwardRef(function CategoriasOrcamentoTab({ empr
   useImperativeHandle(ref, () => ({ abrirNova }), []);
 
   function abrirNova() {
+    setEditando(null);
     setForm(formVazio);
+    setErro('');
+    setModalAberto(true);
+  }
+
+  function abrirEdicao(item) {
+    setEditando(item);
+    setForm({ nome: item.nome });
     setErro('');
     setModalAberto(true);
   }
@@ -57,7 +68,8 @@ const CategoriasOrcamentoTab = forwardRef(function CategoriasOrcamentoTab({ empr
     setErro('');
     setSalvando(true);
     try {
-      await createCategoriaOrcamento(empresaId, form);
+      if (editando) await updateCategoriaOrcamento(empresaId, editando.id, form);
+      else await createCategoriaOrcamento(empresaId, form);
       setModalAberto(false);
       carregar();
     } catch (err) {
@@ -123,7 +135,15 @@ const CategoriasOrcamentoTab = forwardRef(function CategoriasOrcamentoTab({ empr
                     {item.nome}
                   </td>
                   <td className="border-b border-l border-gray-100 px-3 py-2 group-hover:bg-gray-50">
-                    <div className="flex items-center justify-end">
+                    <div className="flex items-center justify-end gap-1">
+                      <button
+                        type="button"
+                        onClick={() => abrirEdicao(item)}
+                        title="Editar"
+                        className="flex h-7 w-7 items-center justify-center rounded-lg text-gray-400 transition-colors hover:bg-gray-100 hover:text-gray-600"
+                      >
+                        <Pencil size={14} />
+                      </button>
                       <button
                         type="button"
                         onClick={() => handleRemover(item)}
@@ -142,7 +162,7 @@ const CategoriasOrcamentoTab = forwardRef(function CategoriasOrcamentoTab({ empr
         </div>
       )}
 
-      <Modal open={modalAberto} onClose={() => setModalAberto(false)} title="Nova categoria">
+      <Modal open={modalAberto} onClose={() => setModalAberto(false)} title={editando ? 'Editar categoria' : 'Nova categoria'}>
         <form onSubmit={handleSubmit} className="space-y-4">
           {erro && <div className="rounded-lg bg-red-50 px-3 py-2 text-sm text-red-600">{erro}</div>}
 
@@ -151,7 +171,7 @@ const CategoriasOrcamentoTab = forwardRef(function CategoriasOrcamentoTab({ empr
             <input
               type="text"
               value={form.nome}
-              onChange={(e) => setForm({ nome: e.target.value })}
+              onChange={(e) => setForm({ nome: e.target.value.toUpperCase() })}
               autoFocus
               maxLength={80}
               className="w-full rounded-lg border border-gray-200 px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-primary-100"

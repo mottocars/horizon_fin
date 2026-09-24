@@ -4,8 +4,15 @@ const service = require('./categoriasOrcamento.service');
 const empresaIdSchema = z.coerce.number().int().positive('Empresa inválida.');
 const idSchema = z.coerce.number().int().positive('Categoria inválida.');
 
+// Maiúsculo sempre (pedido do usuário) — normaliza aqui, não só no front, pra valer mesmo
+// batendo direto na API.
 const corpoSchema = z.object({
-  nome: z.string().trim().min(1, 'Informe o nome da categoria.').max(80, 'Máximo de 80 caracteres.'),
+  nome: z
+    .string()
+    .trim()
+    .min(1, 'Informe o nome da categoria.')
+    .max(80, 'Máximo de 80 caracteres.')
+    .transform((v) => v.toUpperCase()),
 });
 
 function erro(status, message) {
@@ -39,6 +46,19 @@ async function create(req, res, next) {
   }
 }
 
+async function update(req, res, next) {
+  try {
+    const empresaId = empresaIdSchema.parse(req.params.empresaId);
+    const id = idSchema.parse(req.params.id);
+    const { nome } = corpoSchema.parse(req.body);
+    const item = await service.update(id, empresaId, { nome });
+    if (!item) throw erro(404, 'Categoria não encontrada.');
+    res.json(item);
+  } catch (err) {
+    tratar(err, next);
+  }
+}
+
 async function remove(req, res, next) {
   try {
     const empresaId = empresaIdSchema.parse(req.params.empresaId);
@@ -51,4 +71,4 @@ async function remove(req, res, next) {
   }
 }
 
-module.exports = { list, create, remove };
+module.exports = { list, create, update, remove };
