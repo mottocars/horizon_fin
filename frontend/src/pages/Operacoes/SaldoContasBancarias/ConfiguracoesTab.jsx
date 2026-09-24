@@ -9,16 +9,20 @@ import { listZapiIntegracoes } from '../../../api/zapi.api';
 
 const ROTULO_PERMISSAO = { MASTER: 'Master', ADMINISTRADOR: 'Administrador', BASICO: 'Básico' };
 
+// Mesmo par âmbar (vazio)/azul (preenchido) já usado em MotorRiscoTab.jsx,
+// HistoricoEtapasModal.jsx e ConveniosBancariosForm.jsx — sinaliza de relance quais campos
+// desta configuração ainda faltam preencher.
+const COR_CAMPO_VAZIO = 'border-amber-300 bg-amber-50 hover:border-amber-400';
+const COR_CAMPO_PREENCHIDO = 'border-primary-100 bg-primary-50 hover:border-primary-500';
+const corCampo = (preenchido) => (preenchido ? COR_CAMPO_PREENCHIDO : COR_CAMPO_VAZIO);
+
 // Mesmo padrão de cabeçalho de seção usado em GestaoCobrancas/MotorRisco/MotorRiscoTab.jsx —
 // título + descrição curta, separados do conteúdo por uma linha. Cada parâmetro da tela de
 // Configurações ganha o seu próprio Card com esse cabeçalho, pra ficar claro onde uma
 // configuração termina e a próxima começa.
-function SectionHeader({ selo, titulo, texto }) {
+function SectionHeader({ titulo, texto }) {
   return (
     <div className="border-b border-gray-100 pb-3">
-      {selo && (
-        <p className="mb-1 font-mono text-[10px] font-semibold uppercase tracking-wider text-gray-400">{selo}</p>
-      )}
       <h3 className="text-sm font-semibold text-gray-900">{titulo}</h3>
       {texto && <p className="mt-1.5 max-w-2xl text-xs leading-relaxed text-gray-500">{texto}</p>}
     </div>
@@ -98,7 +102,6 @@ export default function ConfiguracoesTab({ empresaId }) {
     <div className="space-y-4">
       <Card className="rounded-tl-none">
         <SectionHeader
-          selo="Comunicar Saldos"
           titulo="Conexão de disparo"
           texto="Qual conexão de WhatsApp (Z-API) desta empresa é usada para enviar o aviso de saldos."
         />
@@ -117,6 +120,7 @@ export default function ConfiguracoesTab({ empresaId }) {
                 options={zapiOpcoes}
                 placeholder="Nenhuma conexão selecionada"
                 emptyMessage="Nenhuma conexão Z-API cadastrada para esta empresa."
+                corClasses={corCampo(Boolean(zapiIntegracaoId))}
               />
             </>
           )}
@@ -145,6 +149,7 @@ export default function ConfiguracoesTab({ empresaId }) {
               tituloSelecionados="Recebem aviso"
               vazioDisponiveisTexto="Nenhum usuário disponível."
               vazioSelecionadosTexto="Nenhum usuário selecionado."
+              corSelecionados={corCampo(selecionados.length > 0)}
             />
           )}
         </div>

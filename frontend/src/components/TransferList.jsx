@@ -18,6 +18,11 @@ export default function TransferList({
   tituloSelecionados = 'Selecionados',
   vazioDisponiveisTexto = 'Nenhum item disponível.',
   vazioSelecionadosTexto = 'Nenhum item selecionado.',
+  // Cor da borda/fundo da caixa "Selecionados" — mesmo par âmbar (vazio)/azul (preenchido) já
+  // usado nos campos de MotorRiscoTab.jsx e HistoricoEtapasModal.jsx pra sinalizar de relance
+  // se aquele campo já foi preenchido. Quem chama decide a cor (ex.: com base em
+  // `selecionados.length > 0`); por padrão fica neutro.
+  corSelecionados = 'border-gray-200',
 }) {
   const [destaqueDisponiveis, setDestaqueDisponiveis] = useState([]);
   const [destaqueSelecionados, setDestaqueSelecionados] = useState([]);
@@ -109,12 +114,13 @@ export default function TransferList({
         vazioTexto={vazioSelecionadosTexto}
         getId={getId}
         getLabel={getLabel}
+        corBorda={corSelecionados}
       />
     </div>
   );
 }
 
-function CaixaTransferencia({ titulo, itens, destacados, onToggleDestaque, disabled, vazioTexto, getId, getLabel }) {
+function CaixaTransferencia({ titulo, itens, destacados, onToggleDestaque, disabled, vazioTexto, getId, getLabel, corBorda = 'border-gray-200' }) {
   const [busca, setBusca] = useState('');
 
   const itensFiltrados = useMemo(() => {
@@ -124,7 +130,7 @@ function CaixaTransferencia({ titulo, itens, destacados, onToggleDestaque, disab
   }, [itens, busca, getLabel]);
 
   return (
-    <div className="flex-1 rounded-xl border border-gray-200">
+    <div className={`flex-1 rounded-xl border transition-colors ${corBorda}`}>
       <div className="flex items-center justify-between gap-2 border-b border-gray-100 bg-gray-50 px-3 py-2">
         <span className="shrink-0 text-xs font-medium text-gray-500">
           {titulo} ({itens.length})
