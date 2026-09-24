@@ -288,8 +288,31 @@ function montarPlanilha(workbook, dados) {
   cTitulo.alignment = { horizontal: 'center', vertical: 'middle' };
   cTitulo.border = { ...TODAS_BORDAS, bottom: { style: 'medium', color: { argb: AZUL } } };
 
+  // Centraliza a logomarca na célula mesclada (coluna 1 × linhas 1-3, 46 caracteres de largura
+  // por 3 linhas de 24pt). O `tl:{col,row}` fracionário do exceljs não serve pra centralizar:
+  // ele só desloca proporcionalmente à largura/altura da CÉLULA, sem descontar o tamanho da
+  // própria imagem — por isso a logomarca sempre ficava puxada pro canto superior esquerdo.
+  // Em vez disso, uso nativeCol/nativeColOff/nativeRow/nativeRowOff, que o exceljs grava direto
+  // em EMU no XML sem nenhuma conversão (cell-position-xform.js) — dá pra calcular o deslocamento
+  // exato que centraliza a imagem, convertendo a largura da coluna (caracteres -> pixels) com a
+  // mesma fórmula que o próprio Excel usa (fonte padrão Calibri 11, MDW=7).
+  const EMU_POR_PIXEL = 9525; // 96 DPI, ver ext-xform.js
+  const EMU_POR_PONTO = 12700;
+  const LARGURA_LOGO_PX = 130;
+  const ALTURA_LOGO_PX = 54;
+  const larguraColunaLogoPx = Math.trunc(((256 * 46 + Math.trunc(128 / 7)) / 256) * 7);
+  const alturaCelulaLogoPt = 24 * 3; // 3 linhas mescladas de 24pt, ver [1, 2, 3].forEach acima
+
   const imageId = workbook.addImage({ buffer: LOGO_PNG, extension: 'png' });
-  sheet.addImage(imageId, { tl: { col: 0.2, row: 0.35 }, ext: { width: 130, height: 54 } });
+  sheet.addImage(imageId, {
+    tl: {
+      nativeCol: 0,
+      nativeColOff: Math.round(((larguraColunaLogoPx - LARGURA_LOGO_PX) / 2) * EMU_POR_PIXEL),
+      nativeRow: 0,
+      nativeRowOff: Math.round((alturaCelulaLogoPt * EMU_POR_PONTO - ALTURA_LOGO_PX * EMU_POR_PIXEL) / 2),
+    },
+    ext: { width: LARGURA_LOGO_PX, height: ALTURA_LOGO_PX },
+  });
 
   // ------------------------------------------------------------- filtros / gerado por
   const colsFiltros = Math.max(1, ultimaColuna - 3);
