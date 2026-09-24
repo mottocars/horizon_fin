@@ -19,6 +19,15 @@ function formatarMoeda(valor) {
   return Number(valor || 0).toLocaleString('pt-BR', { minimumFractionDigits: 2, maximumFractionDigits: 2 });
 }
 
+// Variação do total desde a última abertura de período (a anterior a esta que acabou de
+// encerrar) — positiva ou negativa, sempre rotulada "Crescimento de", com o emoji indicando a
+// direção (pedido do usuário: ver não usar "Queda de" como rótulo separado).
+function formatarVariacao(delta) {
+  const emoji = delta >= 0 ? '📈' : '📉';
+  const sinal = delta < 0 ? '-' : '';
+  return `Crescimento de ${sinal}R$ ${formatarMoeda(Math.abs(delta))} ${emoji}`;
+}
+
 // Domingo->sábado da semana que contém `iso` — mesmo critério de constantes.js::domingoDaSemana/
 // semanaDe no frontend (a grade sempre trava numa semana só), portado com aritmética de Date
 // local pura (sem parsing UTC, sem risco de fuso).
@@ -31,18 +40,20 @@ function semanaDe(iso) {
   return { dataInicio: fmt(domingo), dataFim: fmt(sabado) };
 }
 
-function montarMensagem({ nomeDestinatario, nomeEmpresa, dataBR, nomeResponsavel, linhas, total }) {
+function montarMensagem({ nomeDestinatario, nomeEmpresa, dataBR, nomeResponsavel, linhas, total, delta }) {
   return [
-    '*SALDO DAS CONTAS BANCÁRIAS*',
+    '*[ SALDO DAS CONTAS ]*',
     '',
     `Olá, ${nomeDestinatario}! Tudo bem?`,
     '',
     `Seguem os saldos bancários da empresa *${nomeEmpresa}*, referentes ao dia *${dataBR}*. O período foi encerrado por *${nomeResponsavel}*.`,
     '',
-    'Os detalhes de cada conta estão no arquivo em Excel anexado. Resumo por classificação:',
+    'Os detalhes de cada conta estão no arquivo em Excel anexado.',
     '',
+    'Resumo por classificação:',
     linhas,
     `*Total: R$ ${total}*`,
+    ...(typeof delta === 'number' ? [formatarVariacao(delta)] : []),
     '',
     '_Comunicado automático enviado pelo Horizon Finanças._',
   ].join('\n');
@@ -94,6 +105,28 @@ async function notificarComunicarSaldos(empresaId, dataFechada, usuarioIdRespons
   const nomeResponsavel = responsavel?.nome || 'Usuário';
   const dataBR = brData(dataFechada);
 
+  // Variação desde a última abertura de período (a anterior a esta que acabou de encerrar) —
+  // só entra na mensagem quando dá pra comparar de verdade (existe um período anterior E ele
+  // tem saldo lançado); sem isso, `delta` fica undefined e montarMensagem só omite a linha.
+  let delta;
+  const { rows: periodoAnteriorRows } = await pool.query(
+    `SELECT TO_CHAR(data, 'YYYY-MM-DD') AS data FROM saldos_periodos
+     WHERE empresa_id = $1 AND data < $2 ORDER BY data DESC LIMIT 1`,
+    [empresaId, dataFechada]
+  );
+  const dataPeriodoAnterior = periodoAnteriorRows[0]?.data;
+  if (dataPeriodoAnterior) {
+    const { contas: contasAnteriores } = await service.getSaldos(empresaId, {
+      dataInicio: dataPeriodoAnterior, dataFim: dataPeriodoAnterior, companyIds: [], classificacoes: [], bancos: [], contas: [],
+    });
+    const gruposAnteriores = saldosExcelService.agruparContas(contasAnteriores);
+    if (gruposAnteriores.length > 0) {
+      const { totalGeral: totalGeralAnterior } = saldosExcelService.calcularTotais(gruposAnteriores, [{ iso: dataPeriodoAnterior }]);
+      const totalAnterior = totalGeralAnterior[dataPeriodoAnterior];
+      if (typeof totalAnterior === 'number') delta = totalGeral[dataFechada] - totalAnterior;
+    }
+  }
+
   // Anexo: o mesmo relatório do botão "Exportar", pra semana (domingo-sábado) inteira que
   // contém o dia encerrado — sem filtro nenhum (não existe filtro de tela ativo num disparo
   // automático, então é sempre a empresa toda).
@@ -123,7 +156,7 @@ async function notificarComunicarSaldos(empresaId, dataFechada, usuarioIdRespons
         throw new Error(`usuário "${dest.nome}" (id ${dest.id}) sem telefone cadastrado`);
       }
       const telefone = `${dest.telefone_ddd}${dest.telefone_numero}`;
-      const mensagem = montarMensagem({ nomeDestinatario: dest.nome, nomeEmpresa, dataBR, nomeResponsavel, linhas, total });
+      const mensagem = montarMensagem({ nomeDestinatario: dest.nome, nomeEmpresa, dataBR, nomeResponsavel, linhas, total, delta });
       if (anexoBase64) {
         await zapiService.enviarDocumento(zapiIntegracaoId, {
           telefone,
