@@ -221,19 +221,23 @@ async function enviarMensagemTexto(integracaoId, { telefone, mensagem }) {
   return postZapi(credenciais, 'send-text', { phone, message: mensagem }, 'A Z-API recusou o envio do WhatsApp.');
 }
 
-// Envio de 1 documento (o boleto, sempre PDF — ver
-// regua-cobranca-historico/boletoSienge.js) com a mensagem do template
-// virando a legenda (`caption`) dele — POST .../send-document/pdf. O
-// `document` vai em base64 direto no corpo (a Z-API aceita URL pública OU
-// base64; usamos base64 porque o link do Sienge não é público de verdade —
-// baixamos o arquivo antes, ver boletoSienge.js).
-async function enviarDocumento(integracaoId, { telefone, documentoBase64, legenda }) {
+// Envio de 1 documento com a mensagem do template virando a legenda
+// (`caption`) dele — POST .../send-document/{extensao} (a Z-API tem um endpoint por tipo de
+// arquivo). O `document` vai em base64 direto no corpo (a Z-API aceita URL pública OU base64;
+// usamos base64 porque nem todo arquivo de origem é público de verdade — ex.: o boleto do
+// Sienge, ver boletoSienge.js, ou o relatório de saldos gerado na hora). Padrão = PDF (o caso de
+// hoje, o boleto — ver regua-cobranca-historico/boletoSienge.js); outros chamadores informam
+// `extensao`/`mimeType`/`nomeArquivo` pro tipo de arquivo deles (ex.: xlsx).
+async function enviarDocumento(
+  integracaoId,
+  { telefone, documentoBase64, legenda, extensao = 'pdf', mimeType = 'application/pdf', nomeArquivo = 'boleto.pdf' }
+) {
   const { credenciais, phone } = await prepararEnvio(integracaoId, telefone);
   return postZapi(
     credenciais,
-    'send-document/pdf',
-    { phone, document: `data:application/pdf;base64,${documentoBase64}`, fileName: 'boleto.pdf', caption: legenda },
-    'A Z-API recusou o envio do boleto.'
+    `send-document/${extensao}`,
+    { phone, document: `data:${mimeType};base64,${documentoBase64}`, fileName: nomeArquivo, caption: legenda },
+    'A Z-API recusou o envio do documento.'
   );
 }
 

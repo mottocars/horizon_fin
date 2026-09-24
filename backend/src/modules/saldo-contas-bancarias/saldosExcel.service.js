@@ -390,4 +390,6 @@ async function gerarRelatorioExcel(empresaId, filtrosQuery, meta) {
   return workbook;
 }
 
-module.exports = { gerarRelatorioExcel };
+// agruparContas/calcularTotais também usados por comunicarSaldos.service.js pra montar o
+// resumo por classificação do dia encerrado (mesma lógica, só com `dias` de 1 elemento só).
+module.exports = { gerarRelatorioExcel, agruparContas, calcularTotais };

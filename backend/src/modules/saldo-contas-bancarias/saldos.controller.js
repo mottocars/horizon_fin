@@ -2,6 +2,7 @@ const { z } = require('zod');
 const service = require('./saldos.service');
 const vanpixSyncService = require('./vanpix-sync.service');
 const saldosExcelService = require('./saldosExcel.service');
+const comunicarSaldosService = require('./comunicarSaldos.service');
 const usuariosService = require('../usuarios/usuarios.service');
 
 const MAX_DIAS_PERIODO = 93;
@@ -175,7 +176,16 @@ async function abrirPeriodo(req, res, next) {
 async function encerrarPeriodo(req, res, next) {
   try {
     const empresaId = await acessoEmpresa(req);
-    res.json(await service.encerrarPeriodo(empresaId, req.user.id));
+    const resultado = await service.encerrarPeriodo(empresaId, req.user.id);
+    // Dispara "Comunicar Saldos" sem esperar (gerar o Excel + mandar WhatsApp pra vários
+    // destinatários pode levar alguns segundos — não é isso que deve travar o cadeado
+    // destravando na tela). Nunca deixa passar erro pra cá: comunicarSaldos.service.js já
+    // trata tudo internamente (sem conexão/destinatário configurado = não faz nada, sem
+    // dado nesse dia = não envia, falha de 1 destinatário não afeta os outros).
+    comunicarSaldosService
+      .notificarComunicarSaldos(empresaId, resultado.dataFechada, req.user.id)
+      .catch((err) => console.error('[comunicar-saldos] falha inesperada:', err));
+    res.json({ data: resultado.data });
   } catch (err) {
     tratarErroDeValidacao(err, next);
   }

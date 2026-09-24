@@ -216,6 +216,8 @@ async function abrirPeriodo(empresaId, usuarioId, data, reabrirEncerrado) {
 }
 
 // Encerra o período ABERTO desta empresa (se houver) — o cadeado volta a ficar trancado.
+// `dataFechada` vai só na resposta interna (o controller usa pra disparar "Comunicar Saldos") —
+// o contrato HTTP continua `{ data: null }`, sem mudar nada pro frontend.
 async function encerrarPeriodo(empresaId, usuarioId) {
   const { rows } = await pool.query(
     `UPDATE saldos_periodos SET status = 'ENCERRADO', encerrado_por = $2, encerrado_em = NOW()
@@ -224,7 +226,7 @@ async function encerrarPeriodo(empresaId, usuarioId) {
     [empresaId, usuarioId]
   );
   if (!rows[0]) throw erro(400, 'Nenhum período está aberto.');
-  return { data: null };
+  return { data: null, dataFechada: rows[0].data };
 }
 
 // Grava um lote de saldos numa transação só: saldo = null apaga o lançamento do dia
