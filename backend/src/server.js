@@ -20,6 +20,7 @@ const contasBancariasSiengeRoutes = require('./modules/contas-bancarias-sienge/c
 const saldoContasBancariasRoutes = require('./modules/saldo-contas-bancarias/saldos.routes');
 const classificacoesBancariasRoutes = require('./modules/classificacoes-bancarias/classificacoes.routes');
 const dreCategoriasOrcamentoRoutes = require('./modules/dre-categorias-orcamento/categoriasOrcamento.routes');
+const dreOrcamentoRoutes = require('./modules/dre-orcamento/orcamento.routes');
 const bancosRoutes = require('./modules/bancos/bancos.routes');
 const eprRoutes = require('./modules/epr/epr.routes');
 const dcdRoutes = require('./modules/dcd/dcd.routes');
@@ -90,6 +91,7 @@ app.use('/api/contas-bancarias/sienge', contasBancariasSiengeRoutes);
 app.use('/api/saldo-contas-bancarias', saldoContasBancariasRoutes);
 app.use('/api/classificacoes-bancarias', classificacoesBancariasRoutes);
 app.use('/api/dre-categorias-orcamento', dreCategoriasOrcamentoRoutes);
+app.use('/api/dre-orcamento', dreOrcamentoRoutes);
 app.use('/api/bancos', bancosRoutes);
 app.use('/api/epr', eprRoutes);
 app.use('/api/dcd', dcdRoutes);

@@ -1,6 +1,6 @@
 import { useEffect, useRef, useState } from 'react';
 import { useSearchParams } from 'react-router-dom';
-import { BarChart3, Calculator, Layers, Plus } from 'lucide-react';
+import { BarChart3, Calculator, Layers, Plus, Search } from 'lucide-react';
 import Card from '../../../components/Card';
 import Tabs from '../../../components/Tabs';
 import Button from '../../../components/Button';
@@ -9,6 +9,7 @@ import { listEmpresas } from '../../../api/empresas.api';
 import { nomeExibicaoEmpresa } from '../../../utils/empresa';
 import { useEmpresaTravada } from '../../../hooks/useEmpresaTravada';
 import CategoriasOrcamentoTab from './CategoriasOrcamentoTab';
+import OrcamentoTab from './OrcamentoTab';
 
 // O `{ divider: true }` separa a DRE (a demonstração em si) das abas de cadastro/parâmetro que
 // dão suporte a ela — Categorias Orçamento e Orçamento ficam juntas, sem divisor entre elas
@@ -73,6 +74,10 @@ export default function DreGerencialPage() {
   // ClassificacoesTab.jsx em Saldo Contas Bancárias.
   const categoriasOrcamentoTabRef = useRef(null);
 
+  // Busca (nome ou código do centro de custo) da aba Orçamento — só conveniência de navegador,
+  // não fica na URL (mesma convenção de bancosSearch/contasSearch em SaldoContasBancariasPage.jsx).
+  const [buscaOrcamento, setBuscaOrcamento] = useState('');
+
   const semEmpresa = !empresaId;
 
   return (
@@ -91,6 +96,23 @@ export default function DreGerencialPage() {
                 emptyMessage="Nenhuma empresa encontrada."
               />
             </div>
+
+            {abaAtiva === 'orcamento' && (
+              <div className="sm:min-w-56 sm:max-w-sm sm:flex-1">
+                <label className="mb-1 block text-sm font-medium text-gray-700">Buscar</label>
+                <div className="relative">
+                  <Search size={15} className="pointer-events-none absolute left-3 top-1/2 -translate-y-1/2 text-gray-400" />
+                  <input
+                    type="text"
+                    value={buscaOrcamento}
+                    onChange={(e) => setBuscaOrcamento(e.target.value)}
+                    disabled={semEmpresa}
+                    placeholder={semEmpresa ? 'Selecione a empresa primeiro' : 'Buscar por centro de custo...'}
+                    className="w-full rounded-lg border border-gray-200 py-2 pl-9 pr-3 text-sm focus:outline-none focus:ring-2 focus:ring-primary-100 disabled:bg-gray-50 disabled:text-gray-400"
+                  />
+                </div>
+              </div>
+            )}
           </div>
 
           {abaAtiva === 'categorias-orcamento' && (
@@ -115,9 +137,7 @@ export default function DreGerencialPage() {
           <CategoriasOrcamentoTab ref={categoriasOrcamentoTabRef} empresaId={empresaId} />
         )}
 
-        {abaAtiva === 'orcamento' && (
-          <EmBreve icon={Calculator} titulo="Orçamento" descricao="Parâmetros de orçamento da DRE — em desenvolvimento." />
-        )}
+        {abaAtiva === 'orcamento' && <OrcamentoTab empresaId={empresaId} search={buscaOrcamento} />}
       </div>
     </div>
   );

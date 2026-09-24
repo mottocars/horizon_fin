@@ -2291,3 +2291,25 @@ CREATE TABLE dre_categorias_orcamento (
     criado_em    TIMESTAMP DEFAULT NOW(),
     UNIQUE (empresa_id, nome)
 );
+
+-- Histórico de orçamentos por centro de custo (aba "Orçamento" de Operações > DRE POC
+-- Gerencial) — um orçamento é o conjunto de valores (1 por categoria) válido a partir de
+-- `data_inicio` (sempre normalizado pro dia 1 do mês), repetindo mensalmente até que um
+-- orçamento mais novo (data_inicio posterior) o substitua. Sem tabela de "cabeçalho" de versão
+-- separada: a versão é o conjunto de linhas que compartilha (empresa_id, sienge_id,
+-- data_inicio) — mesmo espírito "flat" de saldos_contas_bancarias. A lógica de "qual orçamento
+-- vale pro mês X" fica pra quando a aba DRE em si for construída; aqui é só o cadastro/histórico.
+CREATE TABLE dre_orcamento_valores (
+    id            SERIAL PRIMARY KEY,
+    empresa_id    INTEGER NOT NULL REFERENCES empresas(id) ON DELETE CASCADE,
+    sienge_id     INTEGER NOT NULL,
+    data_inicio   DATE NOT NULL,
+    categoria_id  INTEGER NOT NULL REFERENCES dre_categorias_orcamento(id) ON DELETE RESTRICT,
+    valor         NUMERIC(15,2) NOT NULL DEFAULT 0,
+    criado_em     TIMESTAMP DEFAULT NOW(),
+    atualizado_em TIMESTAMP DEFAULT NOW(),
+    FOREIGN KEY (sienge_id, empresa_id) REFERENCES centros_custo_sienge(sienge_id, empresa_id) ON DELETE CASCADE,
+    UNIQUE (empresa_id, sienge_id, data_inicio, categoria_id)
+);
+
+CREATE INDEX idx_dre_orcamento_valores_centro ON dre_orcamento_valores (empresa_id, sienge_id);

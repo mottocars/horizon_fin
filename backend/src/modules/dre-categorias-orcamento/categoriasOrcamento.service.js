@@ -42,11 +42,18 @@ async function update(id, empresaId, { nome }) {
 }
 
 async function remove(id, empresaId) {
-  const { rows } = await pool.query(
-    `DELETE FROM dre_categorias_orcamento WHERE id = $1 AND empresa_id = $2 RETURNING id`,
-    [id, empresaId]
-  );
-  return !!rows[0];
+  try {
+    const { rows } = await pool.query(
+      `DELETE FROM dre_categorias_orcamento WHERE id = $1 AND empresa_id = $2 RETURNING id`,
+      [id, empresaId]
+    );
+    return !!rows[0];
+  } catch (err) {
+    // 23503 = já tem orçamento lançado pra essa categoria (dre_orcamento_valores, ON DELETE
+    // RESTRICT de propósito — apagar a categoria não pode apagar histórico de orçamento junto).
+    if (err.code === '23503') throw erro(409, 'Esta categoria já tem valores de orçamento lançados e não pode ser removida.');
+    throw err;
+  }
 }
 
 module.exports = { list, create, update, remove };
