@@ -52,7 +52,7 @@ const menuItems = [
     icon: ArrowLeftRight,
     basePath: '/operacoes',
     children: [
-      { label: 'DRE Gerencial', to: '/operacoes/dre-gerencial', icon: BarChart3 },
+      { label: 'DRE POC Gerencial', to: '/operacoes/dre-gerencial', icon: BarChart3 },
       { label: 'Espião NFe / NFSe', to: '/operacoes/espiao-nfe-nfse', icon: FileSearch },
       { label: 'Saldo Contas Bancárias', to: '/operacoes/saldo-contas-bancarias', icon: Landmark },
       { label: 'Repasses CEF', to: '/operacoes/repasses-cef', icon: Banknote },

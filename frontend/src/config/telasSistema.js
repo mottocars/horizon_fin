@@ -23,7 +23,7 @@ export const TELAS_SISTEMA = [
   {
     grupo: 'Operações',
     telas: [
-      { codigo: '/operacoes/dre-gerencial', label: 'DRE Gerencial' },
+      { codigo: '/operacoes/dre-gerencial', label: 'DRE POC Gerencial' },
       { codigo: '/operacoes/espiao-nfe-nfse', label: 'Espião NFe / NFSe' },
       { codigo: '/operacoes/saldo-contas-bancarias', label: 'Saldo Contas Bancárias' },
       { codigo: '/operacoes/repasses-cef', label: 'Repasses CEF' },

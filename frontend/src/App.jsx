@@ -5,7 +5,7 @@ import ProtectedRoute from './auth/ProtectedRoute';
 import AppShell from './layout/AppShell';
 import Login from './pages/Login/Login';
 import Home from './pages/Home/Home';
-import ComingSoon from './pages/ComingSoon/ComingSoon';
+import DreGerencialPage from './pages/Operacoes/DreGerencial/DreGerencialPage';
 import EmpresasList from './pages/Empresas/EmpresasList';
 import EmpresaNova from './pages/Empresas/EmpresaNova';
 import EmpresaDetalhe from './pages/Empresas/EmpresaDetalhe';
@@ -72,15 +72,7 @@ export default function App() {
             <Route path="/" element={<Home />} />
             <Route path="/meu-perfil" element={<MeuPerfil />} />
 
-            <Route
-              path="/operacoes/dre-gerencial"
-              element={
-                <ComingSoon
-                  title="DRE Gerencial"
-                  description="Operações — DRE Gerencial — em desenvolvimento."
-                />
-              }
-            />
+            <Route path="/operacoes/dre-gerencial" element={<DreGerencialPage />} />
             <Route path="/operacoes/espiao-nfe-nfse" element={<EspiaoNfeNfsePage />} />
             <Route path="/operacoes/saldo-contas-bancarias" element={<SaldoContasBancariasPage />} />
             <Route path="/operacoes/repasses-cef" element={<RepassesCefPage />} />
