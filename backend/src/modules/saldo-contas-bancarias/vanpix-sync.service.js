@@ -9,10 +9,18 @@
 // saldo final de `data - 1 dia`, que é também o saldo inicial de `data` — por isso consultamos
 // a VanPix com a própria `data` (sem somar dia nenhum).
 //
+// Sábado e domingo não têm saldo bancário de verdade (banco não movimenta) — a função nem
+// tenta a VanPix nesses dias, não grava nada (pedido do usuário). Segunda-feira (ou qualquer
+// dia útil depois de um fim de semana/feriado) herda o saldo do último dia útil com dado —
+// como esse valor É um saldo que veio da API em algum momento, ele entra com origem 'API', não
+// 'HERDADO', pra toda conta automatizada (ver listarContasAutomatizadas): pro usuário, "o
+// saldo não mudou" e "o saldo veio automático" são a mesma coisa.
+//
 // Pra toda conta classificada + projetando saldo (o mesmo critério de saldos.service.js::
 // getSaldos) que NÃO aparece em nenhum retorno da VanPix, olha a prioridade configurada na
 // classificação dela (classificacoes_bancarias.prioridade_sem_saldo): SALDO_ANTERIOR repete o
-// último saldo já lançado antes de `data` (origem HERDADO); SEM_SALDO deixa em branco.
+// último saldo já lançado antes de `data` (origem HERDADO); SEM_SALDO deixa em branco. Essa
+// prioridade só decide quem NÃO é automatizado — quem é, sempre herda (ver acima).
 const pool = require('../../config/db');
 const vanpixService = require('../integracoes-vanpix/vanpix.service');
 const classificacoesService = require('../classificacoes-bancarias/classificacoes.service');
@@ -22,6 +30,12 @@ function diaAnteriorISO(iso) {
   const d = new Date(`${iso}T12:00:00Z`); // meio-dia UTC evita virar o dia errado por fuso
   d.setUTCDate(d.getUTCDate() - 1);
   return d.toISOString().slice(0, 10);
+}
+
+// 0 = domingo, 6 = sábado (getUTCDay, meio-dia UTC pelo mesmo motivo de diaAnteriorISO).
+function ehFimDeSemana(iso) {
+  const dia = new Date(`${iso}T12:00:00Z`).getUTCDay();
+  return dia === 0 || dia === 6;
 }
 
 function paraDDMMYYYY(iso) {
@@ -89,18 +103,21 @@ async function listarContasAutomatizadas(empresaId) {
   return new Set(rows.map((r) => `${r.company_id}:${r.numero_conta}`));
 }
 
-// Roda todos os convênios VanPix ativos da empresa pra `data`, casa cada conta encontrada no
-// retorno com o cadastro (banco+conta+dígito) e grava o saldo automaticamente (origem API).
-// Toda conta-alvo que ficou de fora disso tenta herdar o saldo do dia anterior (origem
-// HERDADO), se a classificação dela priorizar isso. Não lança exceção por causa de UM
-// convênio com problema — cada um é reportado individualmente; só propaga erro se a própria
-// gravação em lote falhar (ex.: período fechado por outra aba).
+// Roda todos os convênios VanPix ativos da empresa pra `data` (sábado/domingo: nem tenta, ver
+// ehFimDeSemana), casa cada conta encontrada no retorno com o cadastro (banco+conta+dígito) e
+// grava o saldo automaticamente (origem API). Toda conta-alvo que ficou de fora disso tenta
+// herdar o último saldo lançado — automatizada sempre (origem API, é o mesmo saldo real de
+// antes), as demais só se a classificação priorizar isso (origem HERDADO). Não lança exceção
+// por causa de UM convênio com problema — cada um é reportado individualmente; só propaga erro
+// se a própria gravação em lote falhar (ex.: período fechado por outra aba).
 async function buscarSaldosVanpix(empresaId, usuarioId, data) {
+  const relatorio = { convenios: [], atualizados: [], herdados: [], semCorrespondencia: [] };
+  if (ehFimDeSemana(data)) return relatorio; // sábado/domingo: nem consulta, nem grava nada
+
   const dataPesquisa = paraDDMMYYYY(data);
   const diaAnterior = diaAnteriorISO(data);
   const integracoes = await listarVanpixAtivasDaEmpresa(empresaId);
 
-  const relatorio = { convenios: [], atualizados: [], herdados: [], semCorrespondencia: [] };
   if (integracoes.length === 0) return relatorio;
 
   const itensParaGravar = [];
@@ -164,7 +181,11 @@ async function buscarSaldosVanpix(empresaId, usuarioId, data) {
     const valorHerdado = await ultimoSaldoAnterior(empresaId, conta.company_id, conta.numero_conta, data);
     if (valorHerdado === null) continue; // nada lançado antes — não tem o que herdar, fica em branco
 
-    itensParaGravar.push({ company_id: conta.company_id, numero_conta: conta.numero_conta, data, saldo: valorHerdado, origem: 'HERDADO' });
+    // Automatizada: o valor herdado já veio da API antes, então entra como 'API' (não
+    // 'HERDADO') — não é uma suposição, é o mesmo saldo real só sem movimentação nova. Só quem
+    // herda por causa da prioridade da classificação (não automatizada) fica como 'HERDADO'.
+    const origem = automatizada ? 'API' : 'HERDADO';
+    itensParaGravar.push({ company_id: conta.company_id, numero_conta: conta.numero_conta, data, saldo: valorHerdado, origem });
     relatorio.herdados.push({
       classificacao: conta.classificacao,
       company_id: conta.company_id,
