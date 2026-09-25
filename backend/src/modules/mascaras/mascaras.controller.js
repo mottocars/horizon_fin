@@ -12,9 +12,14 @@ const TIPOS = [
   'REPASSES',
 ];
 
-// Macro etapas fixas dos Repasses (ver MascarasPage.jsx). Só o tipo REPASSES
-// usa `grupo` — nos demais tipos ele é sempre '' (mascara "de nível único").
+// Macro etapas fixas dos Repasses (ver MascarasPage.jsx). Só REPASSES e DRE usam `grupo` — nos
+// demais tipos ele é sempre '' (mascara "de nível único").
 const GRUPOS_REPASSES = ['VENDA', 'CONTRATO', 'ASSINATURA', 'REGISTRO'];
+
+// Nível 1 fixo da estrutura de DRE (ver frontend/src/config/estruturaDre.js — os dois têm que
+// ficar em sincronia). Só os grupos que guardam itens de nível 2 entram aqui; os 4 subtotais
+// calculados (RECEITA_LIQUIDA, LUCRO_BRUTO, EBITDA, LUCRO_LIQUIDO) não têm cadastro próprio.
+const GRUPOS_DRE = ['RECEITA_BRUTA', 'IMPOSTOS_RECEITA', 'CIV', 'DESPESAS_OPERACIONAIS', 'DESPESAS_RECEITAS_NAO_OPERACIONAIS'];
 
 const tipoSchema = z.enum(TIPOS, { errorMap: () => ({ message: 'Tipo de máscara inválido.' }) });
 const empresaIdSchema = z.coerce.number().int().positive('Selecione uma empresa.');
@@ -51,11 +56,19 @@ function badRequest(message) {
 }
 
 function resolveGrupo(tipo, rawGrupo) {
-  if (tipo !== 'REPASSES') return '';
-  if (!GRUPOS_REPASSES.includes(rawGrupo)) {
-    throw badRequest('Macro etapa inválida.');
+  if (tipo === 'REPASSES') {
+    if (!GRUPOS_REPASSES.includes(rawGrupo)) {
+      throw badRequest('Macro etapa inválida.');
+    }
+    return rawGrupo;
   }
-  return rawGrupo;
+  if (tipo === 'DRE') {
+    if (!GRUPOS_DRE.includes(rawGrupo)) {
+      throw badRequest('Grupo da DRE inválido.');
+    }
+    return rawGrupo;
+  }
+  return '';
 }
 
 async function list(req, res, next) {

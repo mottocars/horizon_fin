@@ -13,6 +13,7 @@ import CategoriasOrcamentoTab from './CategoriasOrcamentoTab';
 import OrcamentoTab from './OrcamentoTab';
 import MascarasTab from './MascarasTab';
 import PlanoDeContasTab from './PlanoDeContasTab';
+import DreTab from './DreTab';
 
 // O `{ divider: true }` separa a DRE (a demonstração em si) das abas de cadastro/parâmetro que
 // dão suporte a ela — Categorias Orçamento, Orçamento, Máscaras e Plano de Contas ficam juntas,
@@ -205,9 +206,7 @@ export default function DreGerencialPage() {
       <div>
         <Tabs tabs={TABS} activeId={abaAtiva} onChange={(aba) => atualizarParams({ aba })} />
 
-        {abaAtiva === 'dre' && (
-          <EmBreve icon={BarChart3} titulo="DRE" descricao="Demonstração do Resultado do Exercício — em desenvolvimento." />
-        )}
+        {abaAtiva === 'dre' && <DreTab empresaId={empresaId} />}
 
         {abaAtiva === 'categorias-orcamento' && (
           <CategoriasOrcamentoTab ref={categoriasOrcamentoTabRef} empresaId={empresaId} />
@@ -227,18 +226,5 @@ export default function DreGerencialPage() {
         )}
       </div>
     </div>
-  );
-}
-
-function EmBreve({ icon: Icon, titulo, descricao }) {
-  return (
-    <Card className="flex min-h-70 flex-col items-center justify-center rounded-tl-none text-center">
-      <Icon size={28} className="mb-3 text-gray-300" />
-      <span className="mb-3 rounded-full bg-primary-50 px-3 py-1 text-xs font-medium uppercase tracking-wide text-primary-600">
-        Em breve
-      </span>
-      <h2 className="text-sm font-semibold text-gray-900">{titulo}</h2>
-      <p className="mt-1 max-w-sm text-xs text-gray-500">{descricao}</p>
-    </Card>
   );
 }
