@@ -13,7 +13,7 @@ const CORES = {
 export default function OperadorBadge({ operador, escuro = false }) {
   const cor = escuro ? 'bg-white/15 text-white' : CORES[operador] || 'bg-gray-100 text-gray-500';
   return (
-    <span className={`inline-flex h-7 shrink-0 items-center justify-center rounded-full px-2.5 text-xs font-bold tabular-nums ${cor}`}>
+    <span className={`inline-flex h-5 shrink-0 items-center justify-center rounded-full px-2 text-[10px] font-bold tabular-nums ${cor}`}>
       {operador}
     </span>
   );

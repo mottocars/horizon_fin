@@ -68,8 +68,8 @@ export default function DreTab({ empresaId }) {
           <table className="w-full border-separate border-spacing-0 text-left text-xs">
             <thead>
               <tr className="text-xs uppercase tracking-wide text-gray-400">
-                <th className="border-b border-gray-200 bg-white py-2.5 pl-4 font-medium">Descrição</th>
-                <th className="w-44 border-b border-l border-gray-200 bg-white px-4 py-2.5 text-right font-medium">
+                <th className="border-b border-gray-200 bg-white py-1.5 pl-4 font-medium">Descrição</th>
+                <th className="w-44 border-b border-l border-gray-200 bg-white px-4 py-1.5 text-right font-medium">
                   Valor
                 </th>
               </tr>
@@ -90,13 +90,13 @@ function LinhaGrupo({ grupo, itens }) {
   if (grupo.calculado) {
     return (
       <tr className="bg-gray-900">
-        <td className="border-b border-gray-900 py-2.5 pl-4">
-          <span className="flex items-center gap-3">
+        <td className="border-b border-gray-900 py-1 pl-4">
+          <span className="flex items-center gap-2">
             <OperadorBadge operador={grupo.operador} escuro />
             <span className="text-xs font-bold uppercase tracking-wide text-white">{grupo.label}</span>
           </span>
         </td>
-        <td className="border-b border-l border-gray-900 px-4 py-2.5 text-right text-xs font-bold tabular-nums text-white/50">
+        <td className="border-b border-l border-gray-900 px-4 py-1 text-right text-xs font-bold tabular-nums text-white/50">
           —
         </td>
       </tr>
@@ -106,28 +106,28 @@ function LinhaGrupo({ grupo, itens }) {
   return (
     <Fragment>
       <tr className={FUNDO_OPERADOR[grupo.operador]}>
-        <td className="border-b border-gray-200 py-2.5 pl-4">
-          <span className="flex items-center gap-3">
+        <td className="border-b border-gray-200 py-1 pl-4">
+          <span className="flex items-center gap-2">
             <OperadorBadge operador={grupo.operador} />
             <span className="text-xs font-bold uppercase tracking-wide text-gray-900">{grupo.label}</span>
           </span>
         </td>
-        <td className="border-b border-l border-gray-200 px-4 py-2.5 text-right text-xs font-bold tabular-nums text-gray-300">
+        <td className="border-b border-l border-gray-200 px-4 py-1 text-right text-xs font-bold tabular-nums text-gray-300">
           —
         </td>
       </tr>
 
       {!itens ? null : itens.length === 0 ? (
         <tr>
-          <td colSpan={2} className="border-b border-gray-100 py-2 pl-11 text-xs italic text-gray-300">
+          <td colSpan={2} className="border-b border-gray-100 py-1 pl-11 text-xs italic text-gray-300">
             Nenhum item cadastrado nesta linha ainda.
           </td>
         </tr>
       ) : (
         itens.map((item) => (
           <tr key={item.id} className="hover:bg-gray-50">
-            <td className="border-b border-gray-100 py-2 pl-11 text-xs text-gray-700">{item.descricao}</td>
-            <td className="border-b border-l border-gray-100 px-4 py-2 text-right text-xs tabular-nums text-gray-300">
+            <td className="border-b border-gray-100 py-0.5 pl-11 text-xs text-gray-700">{item.descricao}</td>
+            <td className="border-b border-l border-gray-100 px-4 py-0.5 text-right text-xs tabular-nums text-gray-300">
               —
             </td>
           </tr>
