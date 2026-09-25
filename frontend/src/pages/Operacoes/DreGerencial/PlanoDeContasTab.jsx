@@ -6,6 +6,12 @@ import { listMascaras } from '../../../api/mascaras.api';
 
 const LIMIT = 2000;
 
+// Mesmo padrão de PlanoFinanceiroItemDetalhe.jsx (corCampo/corSelect): âmbar quando a Máscara
+// DRE ainda não foi escolhida, azul quando já tem valor. A borda azul é primary-100/500 (não
+// 200/400): o tema (styles/index.css) só define primary 50, 100, 500, 600 e 700.
+const COR_MASCARA_VAZIA = 'border-amber-200 bg-amber-50 focus:border-amber-400';
+const COR_MASCARA_PREENCHIDA = 'border-primary-100 bg-primary-50 focus:border-primary-500';
+
 // Mesma lógica de PlanoFinanceiroDetalhe.jsx::formatarCodigoMascara (duplicada aqui de
 // propósito — módulos não importam um do outro nesse projeto).
 function formatarCodigoMascara(codigo, larguras) {
@@ -131,7 +137,7 @@ export default function PlanoDeContasTab({ empresaId, search = '', refreshToken 
               {contasFiltradas.map((conta) => {
                 const travada = conta.tp_conta === 'T';
                 return (
-                  <tr key={conta.sienge_id} className={travada ? 'bg-primary-50' : ''}>
+                  <tr key={conta.sienge_id} className={travada ? 'bg-gray-50' : ''}>
                     <td className="border-b border-gray-100 py-2.5 pl-4 text-gray-600">
                       {formatarCodigoMascara(conta.sienge_id, [
                         conta.mascara_nivel_1,
@@ -146,7 +152,7 @@ export default function PlanoDeContasTab({ empresaId, search = '', refreshToken 
                     <td className="border-b border-gray-100 px-3 py-2.5 text-gray-900">{conta.name}</td>
                     <td className="border-b border-l border-gray-100 px-3 py-1.5">
                       {travada ? (
-                        <span className="text-xs text-gray-400">Totalizadora — não classificável</span>
+                        <div className="h-9 rounded-lg border border-gray-200 bg-gray-100" />
                       ) : (
                         <SearchableSelect
                           value={conta.classificacao_dre_id || ''}
@@ -155,6 +161,7 @@ export default function PlanoDeContasTab({ empresaId, search = '', refreshToken 
                           options={opcoesMascarasDre}
                           placeholder="Selecione a Máscara DRE..."
                           emptyMessage="Nenhuma máscara DRE cadastrada."
+                          corClasses={conta.classificacao_dre_id ? COR_MASCARA_PREENCHIDA : COR_MASCARA_VAZIA}
                         />
                       )}
                     </td>
