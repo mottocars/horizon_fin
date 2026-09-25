@@ -1,6 +1,6 @@
 import { useEffect, useRef, useState } from 'react';
 import { useSearchParams } from 'react-router-dom';
-import { BarChart3, Calculator, Layers, ListTree, Plus, RefreshCw, Search } from 'lucide-react';
+import { BarChart3, Calculator, Layers, ListTree, Plus, RefreshCw, Search, Tags } from 'lucide-react';
 import Card from '../../../components/Card';
 import Tabs from '../../../components/Tabs';
 import Button from '../../../components/Button';
@@ -11,17 +11,21 @@ import { nomeExibicaoEmpresa } from '../../../utils/empresa';
 import { useEmpresaTravada } from '../../../hooks/useEmpresaTravada';
 import CategoriasOrcamentoTab from './CategoriasOrcamentoTab';
 import OrcamentoTab from './OrcamentoTab';
+import MascarasTab from './MascarasTab';
 import PlanoDeContasTab from './PlanoDeContasTab';
 
 // O `{ divider: true }` separa a DRE (a demonstração em si) das abas de cadastro/parâmetro que
-// dão suporte a ela — Categorias Orçamento, Orçamento e Plano de Contas ficam juntas, sem
-// divisor entre elas (mesmo padrão de SaldoContasBancariasPage.jsx, que separa "Saldos das
-// Contas" de "Bancos" e as demais abas de cadastro/parâmetro).
+// dão suporte a ela — Categorias Orçamento, Orçamento, Máscaras e Plano de Contas ficam juntas,
+// sem divisor entre elas (mesmo padrão de SaldoContasBancariasPage.jsx, que separa "Saldos das
+// Contas" de "Bancos" e as demais abas de cadastro/parâmetro). Máscaras fica antes de Plano de
+// Contas de propósito (pedido do usuário) — é lá que se cadastra a Máscara DRE que a combobox
+// de cada linha do Plano de Contas usa pra classificar.
 const TABS = [
   { id: 'dre', label: 'DRE', icon: BarChart3 },
   { divider: true },
   { id: 'categorias-orcamento', label: 'Categorias Orçamento', icon: Layers },
   { id: 'orcamento', label: 'Orçamento', icon: Calculator },
+  { id: 'mascaras', label: 'Máscaras', icon: Tags },
   { id: 'plano-de-contas', label: 'Plano de Contas', icon: ListTree },
 ];
 
@@ -210,6 +214,8 @@ export default function DreGerencialPage() {
         )}
 
         {abaAtiva === 'orcamento' && <OrcamentoTab empresaId={empresaId} search={buscaOrcamento} />}
+
+        {abaAtiva === 'mascaras' && <MascarasTab empresaId={empresaId} />}
 
         {abaAtiva === 'plano-de-contas' && (
           <PlanoDeContasTab
