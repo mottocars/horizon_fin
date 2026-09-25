@@ -137,7 +137,7 @@ export default function PlanoDeContasTab({ empresaId, search = '', refreshToken 
               {contasFiltradas.map((conta) => {
                 const travada = conta.tp_conta === 'T';
                 return (
-                  <tr key={conta.sienge_id} className={travada ? 'bg-gray-50' : ''}>
+                  <tr key={conta.sienge_id} className={travada ? 'bg-gray-100' : ''}>
                     <td className="border-b border-gray-100 py-2.5 pl-4 text-gray-600">
                       {formatarCodigoMascara(conta.sienge_id, [
                         conta.mascara_nivel_1,
@@ -150,7 +150,7 @@ export default function PlanoDeContasTab({ empresaId, search = '', refreshToken 
                       ])}
                     </td>
                     <td className="border-b border-gray-100 px-3 py-2.5 text-gray-900">{conta.name}</td>
-                    <td className={`border-b border-l border-gray-100 px-3 py-1.5 ${travada ? 'bg-gray-100' : ''}`}>
+                    <td className="border-b border-l border-gray-100 px-3 py-1.5">
                       {!travada && (
                         <SearchableSelect
                           value={conta.classificacao_dre_id || ''}
