@@ -1,25 +1,28 @@
 import { useEffect, useRef, useState } from 'react';
 import { useSearchParams } from 'react-router-dom';
-import { BarChart3, Calculator, Layers, Plus, Search } from 'lucide-react';
+import { BarChart3, Calculator, Layers, ListTree, Plus, RefreshCw, Search } from 'lucide-react';
 import Card from '../../../components/Card';
 import Tabs from '../../../components/Tabs';
 import Button from '../../../components/Button';
 import SearchableSelect from '../../../components/SearchableSelect';
 import { listEmpresas } from '../../../api/empresas.api';
+import { gerarPlano } from '../../../api/planosFinanceirosSienge.api';
 import { nomeExibicaoEmpresa } from '../../../utils/empresa';
 import { useEmpresaTravada } from '../../../hooks/useEmpresaTravada';
 import CategoriasOrcamentoTab from './CategoriasOrcamentoTab';
 import OrcamentoTab from './OrcamentoTab';
+import PlanoDeContasTab from './PlanoDeContasTab';
 
 // O `{ divider: true }` separa a DRE (a demonstração em si) das abas de cadastro/parâmetro que
-// dão suporte a ela — Categorias Orçamento e Orçamento ficam juntas, sem divisor entre elas
-// (mesmo padrão de SaldoContasBancariasPage.jsx, que separa "Saldos das Contas" de "Bancos" e
-// as demais abas de cadastro/parâmetro).
+// dão suporte a ela — Categorias Orçamento, Orçamento e Plano de Contas ficam juntas, sem
+// divisor entre elas (mesmo padrão de SaldoContasBancariasPage.jsx, que separa "Saldos das
+// Contas" de "Bancos" e as demais abas de cadastro/parâmetro).
 const TABS = [
   { id: 'dre', label: 'DRE', icon: BarChart3 },
   { divider: true },
   { id: 'categorias-orcamento', label: 'Categorias Orçamento', icon: Layers },
   { id: 'orcamento', label: 'Orçamento', icon: Calculator },
+  { id: 'plano-de-contas', label: 'Plano de Contas', icon: ListTree },
 ];
 
 // Empresa e aba vivem na URL (não em useState local) — mesmo motivo de todas as outras telas
@@ -44,6 +47,7 @@ export default function DreGerencialPage() {
 
   function handleEmpresaChange(novoId) {
     atualizarParams({ empresa_id: novoId || null });
+    setTotalPlanoContas(0);
   }
 
   useEffect(() => {
@@ -77,6 +81,32 @@ export default function DreGerencialPage() {
   // Busca (nome ou código do centro de custo) da aba Orçamento — só conveniência de navegador,
   // não fica na URL (mesma convenção de bancosSearch/contasSearch em SaldoContasBancariasPage.jsx).
   const [buscaOrcamento, setBuscaOrcamento] = useState('');
+
+  // Busca (nome ou código da conta) da aba Plano de Contas — mesma convenção acima.
+  const [buscaPlanoContas, setBuscaPlanoContas] = useState('');
+
+  // Geração/atualização do plano de contas (Sienge) — mesmo esquema de handleAtualizarContas
+  // em SaldoContasBancariasPage.jsx. `totalPlanoContas` (reportado pela própria aba via
+  // onTotal) decide qual ícone mostrar: "+" sem nenhuma conta gerada ainda, refresh depois de
+  // gerado pela primeira vez (pedido explícito do usuário) — mesma mecânica de ícone que muda
+  // conforme o estado do cadeado (Lock/LockOpen) da aba Saldos das Contas.
+  const [totalPlanoContas, setTotalPlanoContas] = useState(0);
+  const [gerandoPlanoContas, setGerandoPlanoContas] = useState(false);
+  const [erroPlanoContas, setErroPlanoContas] = useState('');
+  const [refreshTokenPlanoContas, setRefreshTokenPlanoContas] = useState(0);
+
+  async function handleGerarOuAtualizarPlanoContas() {
+    setErroPlanoContas('');
+    setGerandoPlanoContas(true);
+    try {
+      await gerarPlano(Number(empresaId));
+      setRefreshTokenPlanoContas((n) => n + 1);
+    } catch (err) {
+      setErroPlanoContas(err.response?.data?.message || 'Não foi possível gerar/atualizar o plano de contas.');
+    } finally {
+      setGerandoPlanoContas(false);
+    }
+  }
 
   const semEmpresa = !empresaId;
 
@@ -113,6 +143,23 @@ export default function DreGerencialPage() {
                 </div>
               </div>
             )}
+
+            {abaAtiva === 'plano-de-contas' && (
+              <div className="sm:min-w-56 sm:max-w-sm sm:flex-1">
+                <label className="mb-1 block text-sm font-medium text-gray-700">Buscar</label>
+                <div className="relative">
+                  <Search size={15} className="pointer-events-none absolute left-3 top-1/2 -translate-y-1/2 text-gray-400" />
+                  <input
+                    type="text"
+                    value={buscaPlanoContas}
+                    onChange={(e) => setBuscaPlanoContas(e.target.value)}
+                    disabled={semEmpresa}
+                    placeholder={semEmpresa ? 'Selecione a empresa primeiro' : 'Buscar por código ou descrição...'}
+                    className="w-full rounded-lg border border-gray-200 py-2 pl-9 pr-3 text-sm focus:outline-none focus:ring-2 focus:ring-primary-100 disabled:bg-gray-50 disabled:text-gray-400"
+                  />
+                </div>
+              </div>
+            )}
           </div>
 
           {abaAtiva === 'categorias-orcamento' && (
@@ -121,6 +168,31 @@ export default function DreGerencialPage() {
                 <Plus size={16} />
                 Nova categoria
               </Button>
+            </div>
+          )}
+
+          {abaAtiva === 'plano-de-contas' && (
+            <div className="flex shrink-0 flex-col items-end gap-1.5">
+              <div className="flex shrink-0 items-center gap-2">
+                {/* Só o ícone (pedido do usuário, mesmo padrão de ContasTab.jsx em Saldo Contas
+                    Bancárias): "+" gera o plano de contas pela primeira vez, refresh atualiza
+                    (traz novas contas) depois de já gerado — troca sozinho conforme
+                    totalPlanoContas, reportado pela própria aba (onTotal). */}
+                <button
+                  type="button"
+                  onClick={handleGerarOuAtualizarPlanoContas}
+                  disabled={semEmpresa || gerandoPlanoContas}
+                  title={totalPlanoContas === 0 ? 'Gerar plano de contas a partir do Sienge' : 'Atualizar a partir do Sienge'}
+                  className="flex shrink-0 items-center justify-center rounded-lg bg-primary-600 p-2 text-white transition-colors hover:bg-primary-700 disabled:cursor-not-allowed disabled:opacity-60"
+                >
+                  {totalPlanoContas === 0 ? (
+                    <Plus size={18} />
+                  ) : (
+                    <RefreshCw size={18} className={gerandoPlanoContas ? 'animate-spin' : ''} />
+                  )}
+                </button>
+              </div>
+              {erroPlanoContas && <span className="text-xs text-red-600">{erroPlanoContas}</span>}
             </div>
           )}
         </div>
@@ -138,6 +210,15 @@ export default function DreGerencialPage() {
         )}
 
         {abaAtiva === 'orcamento' && <OrcamentoTab empresaId={empresaId} search={buscaOrcamento} />}
+
+        {abaAtiva === 'plano-de-contas' && (
+          <PlanoDeContasTab
+            empresaId={empresaId}
+            search={buscaPlanoContas}
+            refreshToken={refreshTokenPlanoContas}
+            onTotal={setTotalPlanoContas}
+          />
+        )}
       </div>
     </div>
   );

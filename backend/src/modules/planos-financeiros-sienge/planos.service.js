@@ -22,7 +22,7 @@ async function listContas(empresaId, { page = 1, limit = 15, search = '' }) {
   const { rows } = await pool.query(
     `SELECT sienge_id, name, tp_conta, fl_redutora, fl_ativa, fl_adiantamento, fl_imposto,
             mascara_nivel_1, mascara_nivel_2, mascara_nivel_3, mascara_nivel_4, mascara_nivel_5,
-            mascara_nivel_6, mascara_nivel_7,
+            mascara_nivel_6, mascara_nivel_7, classificacao_dre_id,
             criado_em, atualizado_em
      FROM planos_financeiros_sienge
      WHERE empresa_id = $1 AND (name ILIKE $2 OR sienge_id::text ILIKE $2)
@@ -64,6 +64,21 @@ async function getItem(empresaId, siengeId) {
      LEFT JOIN mascara_itens pac ON pac.id = p.pacote_id
      WHERE p.empresa_id = $1 AND p.sienge_id = $2`,
     [empresaId, siengeId]
+  );
+  return rows[0] || null;
+}
+
+// Atualiza só a Máscara DRE — usado pela aba "Plano de Contas" da DRE POC Gerencial (combobox
+// direto na linha da lista, sem abrir a tela de cadastro completa). Diferente de
+// updateEnriquecimento (que reescreve TODOS os campos de enriquecimento de uma vez, pensado pra
+// vir de um formulário completo), este só toca em classificacao_dre_id — não pode zerar
+// classificação DFC, pacote, orçamento etc. já preenchidos por outro fluxo.
+async function updateClassificacaoDre(empresaId, siengeId, classificacaoDreId) {
+  const { rows } = await pool.query(
+    `UPDATE planos_financeiros_sienge SET classificacao_dre_id = $1
+     WHERE empresa_id = $2 AND sienge_id = $3 AND tp_conta != 'T'
+     RETURNING sienge_id, classificacao_dre_id`,
+    [classificacaoDreId, empresaId, siengeId]
   );
   return rows[0] || null;
 }
@@ -207,4 +222,4 @@ async function gerar(empresaId, mascaraNiveis) {
   return { empresa_id: empresaId, total_importado: contas.length };
 }
 
-module.exports = { listGerados, listContas, gerar, getItem, updateEnriquecimento };
+module.exports = { listGerados, listContas, gerar, getItem, updateEnriquecimento, updateClassificacaoDre };

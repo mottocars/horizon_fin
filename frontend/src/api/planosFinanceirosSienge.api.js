@@ -27,3 +27,11 @@ export function updateEnriquecimento(empresaId, siengeId, data) {
     .put(`/planos-financeiros/sienge/${empresaId}/contas/${siengeId}`, data)
     .then((res) => res.data);
 }
+
+export function updateClassificacaoDre(empresaId, siengeId, classificacaoDreId) {
+  return http
+    .put(`/planos-financeiros/sienge/${empresaId}/contas/${siengeId}/classificacao-dre`, {
+      classificacao_dre_id: classificacaoDreId,
+    })
+    .then((res) => res.data);
+}

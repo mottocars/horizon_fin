@@ -11,5 +11,6 @@ router.post('/gerar', controller.gerar);
 
 router.get('/:empresaId/contas/:siengeId', controller.getItem);
 router.put('/:empresaId/contas/:siengeId', controller.updateEnriquecimento);
+router.put('/:empresaId/contas/:siengeId/classificacao-dre', controller.updateClassificacaoDre);
 
 module.exports = router;
