@@ -1,4 +1,4 @@
-import { useCallback, useEffect, useState } from 'react';
+import { Fragment, useCallback, useEffect, useState } from 'react';
 import { BarChart3 } from 'lucide-react';
 import { listMascaras } from '../../../api/mascaras.api';
 import { ESTRUTURA_DRE } from '../../../config/estruturaDre';
@@ -6,21 +6,22 @@ import OperadorBadge from './OperadorBadge';
 
 const GRUPOS_COM_ITENS = ESTRUTURA_DRE.filter((g) => !g.calculado);
 
-// Wash de fundo por tipo de operador — segmenta visualmente a demonstração em blocos (receita
-// em verde, deduções em vermelho, mistas em âmbar), com as barras escuras de subtotal
-// (RECEITA LÍQUIDA, LUCRO BRUTO, EBITDA, LUCRO LÍQUIDO) fechando cada seção — mesma leitura em
-// cascata de um DRE de verdade.
+// Wash de fundo por tipo de operador na linha de nível 1 — mesma leitura em cascata da versão
+// anterior (receita em verde, deduções em vermelho, mista em âmbar), só que agora como linha de
+// tabela em vez de bloco de cartão (pedido do usuário: "segue como tabela, tipo Saldo das
+// Contas — vai ter valores à direita, pensa numa matriz").
 const FUNDO_OPERADOR = {
-  '+': 'border-emerald-200 bg-emerald-50/60',
-  '-': 'border-rose-200 bg-rose-50/60',
-  '+/-': 'border-amber-200 bg-amber-50/60',
+  '+': 'bg-emerald-50/60',
+  '-': 'bg-rose-50/60',
+  '+/-': 'bg-amber-50/60',
 };
 
-// Demonstração estrutural (nível 1 + nível 2) da DRE — busca os itens de Máscara DRE
-// cadastrados em cada grupo (aba Máscaras) e monta a mesma hierarquia num layout de
-// demonstrativo contábil, com os subtotais calculados fechando cada seção. Só estrutura por
-// enquanto (pedido do usuário foi o layout) — os valores reais (realizado/orçamento) ficam pra
-// quando essa integração existir.
+// Demonstração estrutural (nível 1 + nível 2) da DRE, em formato de tabela — mesma mecânica
+// visual de SaldosContasTab.jsx (primeira coluna com a hierarquia, valor alinhado à direita nas
+// colunas seguintes), só que aqui só existe 1 coluna de valor por enquanto (sem período — o
+// cálculo real por mês fica pra outra rodada). Busca os itens de Máscara DRE cadastrados em
+// cada grupo (aba Máscaras) e monta a hierarquia; os 4 subtotais calculados (RECEITA LÍQUIDA,
+// LUCRO BRUTO, EBITDA, LUCRO LÍQUIDO) aparecem como uma linha escura fechando cada seção.
 export default function DreTab({ empresaId }) {
   const [itensPorGrupo, setItensPorGrupo] = useState({});
   const [carregando, setCarregando] = useState(false);
@@ -63,19 +64,22 @@ export default function DreTab({ empresaId }) {
       {carregando ? (
         <div className="py-12 text-center text-sm text-gray-400">Carregando...</div>
       ) : (
-        <div className="mx-auto max-w-2xl px-6 py-8">
-          <div className="mb-6 text-center">
-            <h1 className="text-sm font-bold uppercase tracking-wide text-gray-900">
-              Demonstração do Resultado do Exercício
-            </h1>
-            <p className="mt-1 text-xs text-gray-400">Estrutura por linha — valores em breve</p>
-          </div>
-
-          <div className="space-y-3">
-            {ESTRUTURA_DRE.map((grupo) => (
-              <LinhaGrupo key={grupo.value} grupo={grupo} itens={itensPorGrupo[grupo.value]} />
-            ))}
-          </div>
+        <div className="overflow-x-auto rounded-b-card">
+          <table className="w-full border-separate border-spacing-0 text-left text-xs">
+            <thead>
+              <tr className="text-xs uppercase tracking-wide text-gray-400">
+                <th className="border-b border-gray-200 bg-white py-2.5 pl-4 font-medium">Descrição</th>
+                <th className="w-44 border-b border-l border-gray-200 bg-white px-4 py-2.5 text-right font-medium">
+                  Valor
+                </th>
+              </tr>
+            </thead>
+            <tbody>
+              {ESTRUTURA_DRE.map((grupo) => (
+                <LinhaGrupo key={grupo.value} grupo={grupo} itens={itensPorGrupo[grupo.value]} />
+              ))}
+            </tbody>
+          </table>
         </div>
       )}
     </div>
@@ -85,30 +89,50 @@ export default function DreTab({ empresaId }) {
 function LinhaGrupo({ grupo, itens }) {
   if (grupo.calculado) {
     return (
-      <div className="flex items-center gap-3 rounded-lg bg-gray-900 px-5 py-3.5 shadow-sm">
-        <OperadorBadge operador={grupo.operador} escuro />
-        <p className="flex-1 text-sm font-bold uppercase tracking-wide text-white">{grupo.label}</p>
-      </div>
+      <tr className="bg-gray-900">
+        <td className="border-b border-gray-900 py-2.5 pl-4">
+          <span className="flex items-center gap-3">
+            <OperadorBadge operador={grupo.operador} escuro />
+            <span className="text-xs font-bold uppercase tracking-wide text-white">{grupo.label}</span>
+          </span>
+        </td>
+        <td className="border-b border-l border-gray-900 px-4 py-2.5 text-right text-xs font-bold tabular-nums text-white/50">
+          —
+        </td>
+      </tr>
     );
   }
 
   return (
-    <div className={`rounded-lg border-l-4 px-5 py-4 ${FUNDO_OPERADOR[grupo.operador]}`}>
-      <div className="flex items-center gap-3">
-        <OperadorBadge operador={grupo.operador} />
-        <p className="text-sm font-bold uppercase tracking-wide text-gray-900">{grupo.label}</p>
-      </div>
-      <div className="mt-2.5 space-y-1 pl-10">
-        {!itens ? null : itens.length === 0 ? (
-          <p className="text-xs italic text-gray-400">Nenhum item cadastrado nesta linha ainda.</p>
-        ) : (
-          itens.map((item) => (
-            <p key={item.id} className="text-sm text-gray-700">
-              {item.descricao}
-            </p>
-          ))
-        )}
-      </div>
-    </div>
+    <Fragment>
+      <tr className={FUNDO_OPERADOR[grupo.operador]}>
+        <td className="border-b border-gray-200 py-2.5 pl-4">
+          <span className="flex items-center gap-3">
+            <OperadorBadge operador={grupo.operador} />
+            <span className="text-xs font-bold uppercase tracking-wide text-gray-900">{grupo.label}</span>
+          </span>
+        </td>
+        <td className="border-b border-l border-gray-200 px-4 py-2.5 text-right text-xs font-bold tabular-nums text-gray-300">
+          —
+        </td>
+      </tr>
+
+      {!itens ? null : itens.length === 0 ? (
+        <tr>
+          <td colSpan={2} className="border-b border-gray-100 py-2 pl-11 text-xs italic text-gray-300">
+            Nenhum item cadastrado nesta linha ainda.
+          </td>
+        </tr>
+      ) : (
+        itens.map((item) => (
+          <tr key={item.id} className="hover:bg-gray-50">
+            <td className="border-b border-gray-100 py-2 pl-11 text-xs text-gray-700">{item.descricao}</td>
+            <td className="border-b border-l border-gray-100 px-4 py-2 text-right text-xs tabular-nums text-gray-300">
+              —
+            </td>
+          </tr>
+        ))
+      )}
+    </Fragment>
   );
 }
