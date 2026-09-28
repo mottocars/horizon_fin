@@ -111,8 +111,8 @@ async function setAtivo(id, ativo) {
   return rows[0] || null;
 }
 
-// Só pra uso interno do teste de conexão — nunca exposto pela API pro
-// frontend (que só vê os campos de listagem/edição via getById, sem a
+// Só pra uso interno do teste de conexão/login — nunca exposto pela API
+// pro frontend (que só vê os campos de listagem/edição via getById, sem a
 // senha). Mesmo padrão de email.service.js::getCredenciais.
 async function getCredenciais(id) {
   const { rows } = await pool.query('SELECT email, senha_enc FROM integracoes_actioon WHERE id = $1', [id]);
@@ -121,29 +121,31 @@ async function getCredenciais(id) {
   return { email: row.email, senha: decrypt(row.senha_enc) };
 }
 
-// Testa o login de verdade na API da Actioon (POST /api/login), sem
-// gravar nada — pensado pra rodar ANTES de salvar (formulário de
-// Integrações > Actioon, ver ActioonForm.jsx), por isso recebe os campos
-// crus em vez de um id — quando a senha vier em branco (editando sem
-// trocar), busca a senha já salva pelo `id` informado, mesmo espírito de
-// "editar sem repreencher mantém a senha atual" usado no `update`.
-// A API responde 200 + { token } no sucesso, ou 401 + { error } quando as
-// credenciais estão erradas.
-async function testarConexao({ id, email, password }) {
-  let senhaFinal = password;
-  if (!senhaFinal) {
-    if (!id) throw badRequest('Informe a senha para testar a conexão.');
-    const credenciaisAtuais = await getCredenciais(id);
-    if (!credenciaisAtuais) throw badRequest('Conexão não encontrada.');
-    senhaFinal = credenciaisAtuais.senha;
-  }
+// A integração ATIVA da empresa — usado pelos relatórios que consomem a
+// API da Actioon (ver relatorio-empreendimentos-masa), mesmo espírito de
+// construtorVendas.service.js::getCredenciaisAtivas.
+async function getCredenciaisAtivas(empresaId) {
+  const { rows } = await pool.query(
+    'SELECT email, senha_enc FROM integracoes_actioon WHERE empresa_id = $1 AND ativo = TRUE LIMIT 1',
+    [empresaId]
+  );
+  const row = rows[0];
+  if (!row) return null;
+  return { email: row.email, senha: decrypt(row.senha_enc) };
+}
 
+// Login de verdade na API da Actioon (POST /api/login) — devolve o token
+// (usado pelos relatórios pra chamar os demais endpoints autenticados) ou
+// estoura badRequest com a mensagem da própria Actioon quando as
+// credenciais estão erradas. A API responde 200 + { token } no sucesso,
+// ou 401 + { error } quando erra a senha.
+async function login(email, password) {
   let resposta;
   try {
     resposta = await fetch(ACTIOON_LOGIN_URL, {
       method: 'POST',
       headers: { Accept: 'application/json', 'Content-Type': 'application/json' },
-      body: JSON.stringify({ email, password: senhaFinal }),
+      body: JSON.stringify({ email, password }),
     });
   } catch {
     throw badRequest('Não foi possível conectar à Actioon.');
@@ -153,7 +155,26 @@ async function testarConexao({ id, email, password }) {
   if (!resposta.ok || !corpo.token) {
     throw badRequest(corpo?.error || 'Credenciais inválidas.');
   }
+  return corpo.token;
+}
+
+// Testa o login sem gravar nada — pensado pra rodar ANTES de salvar
+// (formulário de Integrações > Actioon, ver ActioonForm.jsx), por isso
+// recebe os campos crus em vez de um id — quando a senha vier em branco
+// (editando sem trocar), busca a senha já salva pelo `id` informado,
+// mesmo espírito de "editar sem repreencher mantém a senha atual" usado
+// no `update`.
+async function testarConexao({ id, email, password }) {
+  let senhaFinal = password;
+  if (!senhaFinal) {
+    if (!id) throw badRequest('Informe a senha para testar a conexão.');
+    const credenciaisAtuais = await getCredenciais(id);
+    if (!credenciaisAtuais) throw badRequest('Conexão não encontrada.');
+    senhaFinal = credenciaisAtuais.senha;
+  }
+
+  await login(email, senhaFinal);
   return { ok: true };
 }
 
-module.exports = { list, getById, create, update, setAtivo, testarConexao };
+module.exports = { list, getById, create, update, setAtivo, testarConexao, login, getCredenciaisAtivas };
