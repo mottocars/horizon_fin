@@ -63,6 +63,9 @@ export default function EmpreendimentosMasaPage() {
                   <th className="border-b border-l border-gray-200 bg-white py-2.5 pl-4 font-medium">
                     Empreendimento
                   </th>
+                  <th className="border-b border-l border-gray-200 bg-white py-2.5 pl-4 font-medium">
+                    Micro Etapa Atual
+                  </th>
                 </tr>
               </thead>
               <tbody>
@@ -92,6 +95,9 @@ export default function EmpreendimentosMasaPage() {
                         ) : (
                           <span className="italic text-gray-400">Nenhum empreendimento nesta fase.</span>
                         )}
+                      </td>
+                      <td className="border-b border-l border-gray-100 py-1.5 pl-4 text-xs text-gray-700">
+                        {empreendimento?.microEtapaAtual || <span className="text-gray-300">—</span>}
                       </td>
                     </tr>
                   ));
