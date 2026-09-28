@@ -1,5 +1,9 @@
+const { Client } = require('pg');
 const pool = require('../../config/db');
 const actioonService = require('../integracoes-actioon/actioon.service');
+const bancoDadosService = require('../integracoes-banco-dados/bancoDados.service');
+
+const CONEXAO_TIME_TRACKER = 'Time Tracker';
 
 const ACTIOON_ACTION_TYPES_URL = 'https://api.actioon.com.br/api/action_types';
 const ACTIOON_CLIENTS_URL = 'https://api.actioon.com.br/api/clients';
@@ -85,6 +89,44 @@ async function buscarTodasActions(token) {
   return todas;
 }
 
+// "Duração" — dias corridos desde a data_assinatura de cada empreendimento (client_id) até
+// hoje, buscada num banco de terceiro (não a Actioon): a conexão Postgres "Time Tracker",
+// cadastrada em Integrações > Banco de Dados pra empresa Masa. Sem essa data (empreendimento
+// não veio na consulta) a duração fica null — mostrado como "—" no relatório.
+async function buscarDuracaoDiasPorCliente() {
+  const empresaId = await getEmpresaMasaId();
+  const credenciais = await bancoDadosService.getCredenciaisPorConexao(empresaId, CONEXAO_TIME_TRACKER);
+  if (!credenciais) throw badRequest('Nenhuma conexão "Time Tracker" ativa cadastrada para a Masa.');
+
+  const client = new Client({
+    host: credenciais.host,
+    port: credenciais.porta,
+    database: credenciais.banco,
+    user: credenciais.usuario,
+    password: credenciais.senha,
+    ssl: credenciais.ssl ? { rejectUnauthorized: false } : false,
+    connectionTimeoutMillis: 8000,
+  });
+
+  const duracaoPorCliente = new Map(); // client_id -> dias desde a data_assinatura
+  try {
+    await client.connect();
+    const { rows } = await client.query(
+      'select client_id, data_assinatura from client_details where data_assinatura is not null'
+    );
+    const hoje = new Date();
+    for (const row of rows) {
+      const dias = Math.floor((hoje - new Date(row.data_assinatura)) / (1000 * 60 * 60 * 24));
+      duracaoPorCliente.set(row.client_id, dias);
+    }
+  } catch {
+    throw badRequest('Não foi possível conectar ao banco "Time Tracker".');
+  } finally {
+    await client.end().catch(() => {});
+  }
+  return duracaoPorCliente;
+}
+
 // Pra cada empreendimento (client_id), acha o item de maior `order` entre todas as ocorrências
 // dele numa lista de "eventos" já resolvidos — mesma lógica usada tanto pra fase (a partir de
 // action.action_type_id) quanto pra micro etapa (a partir de task.task_type_id), só que o
@@ -121,11 +163,12 @@ function maisAvancadoPorCliente(eventos, ordemPorItemId, extrairClienteEItem) {
 async function listMatriz() {
   const token = await buscarToken();
 
-  const [fasesRaw, clientsRaw, taskTypesRaw, actions] = await Promise.all([
+  const [fasesRaw, clientsRaw, taskTypesRaw, actions, duracaoPorCliente] = await Promise.all([
     buscarJson(ACTIOON_ACTION_TYPES_URL, token, 'Não foi possível buscar as fases na Actioon.'),
     buscarJson(ACTIOON_CLIENTS_URL, token, 'Não foi possível buscar os empreendimentos na Actioon.'),
     buscarJson(ACTIOON_TASK_TYPES_URL, token, 'Não foi possível buscar as micro etapas na Actioon.'),
     buscarTodasActions(token),
+    buscarDuracaoDiasPorCliente(),
   ]);
 
   const ordemPorFaseId = new Map(fasesRaw.map((fase) => [fase.id, fase.order]));
@@ -216,6 +259,7 @@ async function listMatriz() {
       microEtapaAtual: microEtapa ? taskTypePorId.get(microEtapa.itemId)?.name || null : null,
       qtdTarefas: contagem ? `${contagem.fechadas}/${contagem.total}` : null,
       qtdTarefasTotais: contagemTotal ? `${contagemTotal.fechadas}/${contagemTotal.total}` : null,
+      duracaoDias: duracaoPorCliente.get(clienteId) ?? null,
       historicoMicroEtapas: microEtapa ? montarHistorico(clienteId, microEtapa.itemId) : [],
     });
   }
@@ -230,12 +274,13 @@ async function listMatriz() {
       name: fase.name,
       order: fase.order,
       empreendimentos: (empreendimentosPorFaseId.get(fase.id) || []).map(
-        ({ id, name, microEtapaAtual, qtdTarefas, qtdTarefasTotais, historicoMicroEtapas }) => ({
+        ({ id, name, microEtapaAtual, qtdTarefas, qtdTarefasTotais, duracaoDias, historicoMicroEtapas }) => ({
           id,
           name,
           microEtapaAtual,
           qtdTarefas,
           qtdTarefasTotais,
+          duracaoDias,
           historicoMicroEtapas,
         })
       ),

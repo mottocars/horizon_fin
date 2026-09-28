@@ -184,4 +184,18 @@ async function testarConexao({ id, sgbd, host, porta, banco, usuario, senha, ssl
   throw badRequest('SGBD ainda não suportado.');
 }
 
-module.exports = { list, getById, create, update, setAtivo, testarConexao };
+// Busca as credenciais decifradas de uma conexão pelo nome (em vez do id) — pra módulos que
+// consultam um banco de terceiro conhecido por nome (ex.: relatorioMasa.service.js buscando o
+// "Time Tracker" da Masa), o mesmo espírito de actioonService.getCredenciaisAtivas.
+async function getCredenciaisPorConexao(empresaId, nomeConexao) {
+  const { rows } = await pool.query(
+    `SELECT sgbd, host, porta, banco, usuario, senha_enc, ssl FROM integracoes_banco_dados
+     WHERE empresa_id = $1 AND nome_conexao = $2 AND ativo = true LIMIT 1`,
+    [empresaId, nomeConexao]
+  );
+  const row = rows[0];
+  if (!row) return null;
+  return { ...row, senha: decrypt(row.senha_enc) };
+}
+
+module.exports = { list, getById, create, update, setAtivo, testarConexao, getCredenciaisPorConexao };
