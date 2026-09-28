@@ -1,19 +1,22 @@
-import { useCallback, useEffect, useState } from 'react';
-import { Building2, RefreshCw, TriangleAlert } from 'lucide-react';
+import { Fragment, useCallback, useEffect, useState } from 'react';
+import { Building2, ChevronDown, ChevronRight, RefreshCw, TriangleAlert } from 'lucide-react';
 import Button from '../../../components/Button';
 import { getMatrizEmpreendimentosMasa } from '../../../api/relatorioMasa.api';
 
 // Matriz do relatório Empreendimentos Masa (exclusivo da empresa Masa, via a integração
 // Actioon dela). Coluna "Etapa Atual" (fase, action_types) sempre aberta — pedido do usuário —
 // e fixa: 1 célula só por fase, com `rowSpan` cobrindo todas as linhas dos empreendimentos
-// dela e centralizada verticalmente (`align-middle`), em vez do antigo "+/-" que escondia/
-// mostrava. Cada empreendimento aparece só na fase mais avançada entre todas as suas ações
-// (ver relatorioMasa.service.js::listMatriz) — nunca repetido em mais de uma linha de etapa.
+// dela (incluindo as linhas de histórico abertas) e centralizada verticalmente
+// (`align-middle`). Cada empreendimento aparece só na fase mais avançada entre todas as suas
+// ações (ver relatorioMasa.service.js::listMatriz) — nunca repetido em mais de uma linha de
+// etapa. A "Micro Etapa Atual" tem seu próprio drilldown: abre pra revelar as micro etapas
+// anteriores daquele empreendimento (a atual nunca se repete ali), em ordem decrescente.
 export default function EmpreendimentosMasaPage() {
   const [matriz, setMatriz] = useState(null);
   const [carregando, setCarregando] = useState(true);
   const [erro, setErro] = useState('');
   const [atualizando, setAtualizando] = useState(false);
+  const [expandidos, setExpandidos] = useState(() => new Set());
 
   const carregar = useCallback((comIndicadorProprio = true) => {
     if (comIndicadorProprio) setCarregando(true);
@@ -37,6 +40,15 @@ export default function EmpreendimentosMasaPage() {
     } finally {
       setAtualizando(false);
     }
+  }
+
+  function toggleExpandir(empreendimentoId) {
+    setExpandidos((atual) => {
+      const proximo = new Set(atual);
+      if (proximo.has(empreendimentoId)) proximo.delete(empreendimentoId);
+      else proximo.add(empreendimentoId);
+      return proximo;
+    });
   }
 
   return (
@@ -77,36 +89,83 @@ export default function EmpreendimentosMasaPage() {
                   // do nome) — senão ela desaparece da matriz inteira, o que esconderia que
                   // aquela etapa existe e está vazia.
                   const linhas = fase.empreendimentos.length > 0 ? fase.empreendimentos : [null];
-                  return linhas.map((empreendimento, indice) => (
-                    <tr key={`${fase.id}-${empreendimento?.id ?? 'vazia'}`}>
-                      {indice === 0 && (
-                        <td
-                          rowSpan={linhas.length}
-                          className="border-b border-r border-gray-200 bg-gray-50 px-4 py-2.5 align-middle"
-                        >
-                          <span className="flex items-center gap-2">
-                            <span className="text-xs font-semibold text-gray-900">{fase.name}</span>
-                            <span className="shrink-0 rounded-full bg-white px-2 py-0.5 text-[10px] font-medium tabular-nums text-gray-500 ring-1 ring-gray-200">
-                              {fase.empreendimentos.length}
-                            </span>
-                          </span>
-                        </td>
-                      )}
-                      <td className="border-b border-gray-100 py-1.5 pl-4 text-xs text-gray-700">
-                        {empreendimento ? (
-                          empreendimento.name
-                        ) : (
-                          <span className="italic text-gray-400">Nenhum empreendimento nesta fase.</span>
-                        )}
-                      </td>
-                      <td className="border-b border-l border-gray-100 py-1.5 pl-4 text-xs text-gray-700">
-                        {empreendimento?.microEtapaAtual || <span className="text-gray-300">—</span>}
-                      </td>
-                      <td className="border-b border-l border-gray-100 py-1.5 pl-4 text-xs tabular-nums text-gray-700">
-                        {empreendimento?.qtdTarefas || <span className="text-gray-300">—</span>}
-                      </td>
-                    </tr>
-                  ));
+                  // A célula da fase precisa cobrir também as linhas de histórico abertas —
+                  // senão o rowSpan fica curto e desalinha a tabela assim que alguém expande.
+                  const totalLinhas = linhas.reduce((soma, emp) => {
+                    const extras = emp && expandidos.has(emp.id) ? emp.historicoMicroEtapas.length : 0;
+                    return soma + 1 + extras;
+                  }, 0);
+
+                  return (
+                    <Fragment key={fase.id}>
+                      {linhas.map((empreendimento, indice) => {
+                        const aberto = Boolean(empreendimento && expandidos.has(empreendimento.id));
+                        const temHistorico = Boolean(empreendimento?.historicoMicroEtapas?.length);
+                        return (
+                          <Fragment key={`${fase.id}-${empreendimento?.id ?? 'vazia'}`}>
+                            <tr>
+                              {indice === 0 && (
+                                <td
+                                  rowSpan={totalLinhas}
+                                  className="border-b border-r border-gray-200 bg-gray-50 px-4 py-2.5 align-middle"
+                                >
+                                  <span className="flex items-center gap-2">
+                                    <span className="text-xs font-semibold text-gray-900">{fase.name}</span>
+                                    <span className="shrink-0 rounded-full bg-white px-2 py-0.5 text-[10px] font-medium tabular-nums text-gray-500 ring-1 ring-gray-200">
+                                      {fase.empreendimentos.length}
+                                    </span>
+                                  </span>
+                                </td>
+                              )}
+                              <td className="border-b border-gray-100 py-1.5 pl-4 text-xs text-gray-700">
+                                {empreendimento ? (
+                                  empreendimento.name
+                                ) : (
+                                  <span className="italic text-gray-400">Nenhum empreendimento nesta fase.</span>
+                                )}
+                              </td>
+                              <td className="border-b border-l border-gray-100 py-1.5 pl-4 text-xs text-gray-700">
+                                {!empreendimento?.microEtapaAtual ? (
+                                  <span className="text-gray-300">—</span>
+                                ) : temHistorico ? (
+                                  <button
+                                    type="button"
+                                    onClick={() => toggleExpandir(empreendimento.id)}
+                                    className="flex items-center gap-1.5 text-left text-xs text-gray-700 hover:text-primary-700"
+                                  >
+                                    {aberto ? (
+                                      <ChevronDown size={13} className="shrink-0 text-gray-400" />
+                                    ) : (
+                                      <ChevronRight size={13} className="shrink-0 text-gray-400" />
+                                    )}
+                                    {empreendimento.microEtapaAtual}
+                                  </button>
+                                ) : (
+                                  <span className="pl-4.75">{empreendimento.microEtapaAtual}</span>
+                                )}
+                              </td>
+                              <td className="border-b border-l border-gray-100 py-1.5 pl-4 text-xs tabular-nums text-gray-700">
+                                {empreendimento?.qtdTarefas || <span className="text-gray-300">—</span>}
+                              </td>
+                            </tr>
+
+                            {aberto &&
+                              empreendimento.historicoMicroEtapas.map((historico, i) => (
+                                <tr key={i} className="bg-gray-50/60">
+                                  <td className="border-b border-gray-100" />
+                                  <td className="border-b border-l border-gray-100 py-1.5 pl-9 text-xs text-gray-500">
+                                    {historico.name}
+                                  </td>
+                                  <td className="border-b border-l border-gray-100 py-1.5 pl-4 text-xs tabular-nums text-gray-500">
+                                    {historico.qtdTarefas || <span className="text-gray-300">—</span>}
+                                  </td>
+                                </tr>
+                              ))}
+                          </Fragment>
+                        );
+                      })}
+                    </Fragment>
+                  );
                 })}
               </tbody>
             </table>

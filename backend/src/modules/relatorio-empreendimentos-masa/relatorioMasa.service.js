@@ -146,9 +146,12 @@ async function listMatriz() {
 
   // Quantas tarefas tem cada (empreendimento, task_type) e quantas delas já estão encerradas —
   // "encerrada" é só `actual_end_date` preenchida, nada de olhar status_id/progress (pedido do
-  // usuário). Alimenta a coluna "Qtd Tarefas" (ex.: "9/10"), sempre contando as tarefas da MESMA
-  // micro etapa que já ganhou acima, nunca de outra.
+  // usuário). Alimenta tanto a coluna "Qtd Tarefas" da micro etapa atual quanto a de cada
+  // micro etapa do histórico (drilldown).
   const contagemPorClienteTaskType = new Map(); // "clienteId::taskTypeId" -> { total, fechadas }
+  // Todo task_type que o empreendimento já teve alguma tarefa, pra montar o histórico do
+  // drilldown (nível 2 de Micro Etapa Atual) — não só o vencedor.
+  const taskTypeIdsPorCliente = new Map(); // clienteId -> Set<taskTypeId>
   for (const task of tasks) {
     if (task.client_id == null || task.task_type_id == null) continue;
     const chave = `${task.client_id}::${task.task_type_id}`;
@@ -156,6 +159,33 @@ async function listMatriz() {
     atual.total += 1;
     if (task.actual_end_date) atual.fechadas += 1;
     contagemPorClienteTaskType.set(chave, atual);
+
+    if (!taskTypeIdsPorCliente.has(task.client_id)) taskTypeIdsPorCliente.set(task.client_id, new Set());
+    taskTypeIdsPorCliente.get(task.client_id).add(task.task_type_id);
+  }
+
+  // Histórico de micro etapas do empreendimento (drilldown da Micro Etapa Atual) — todas as
+  // OUTRAS micro etapas em que ele já teve tarefa, cada uma com seu próprio "Qtd Tarefas",
+  // ordenadas decrescente pelo prefixo major.minor (pedido do usuário: "se eu estou na 1.4,
+  // mostre abaixo a 1.3, 1.2..."). A atual (a vencedora) não entra aqui — já aparece na linha
+  // principal, repeti-la no histórico seria redundante.
+  function montarHistorico(clienteId, taskTypeIdAtual) {
+    const idsDoCliente = taskTypeIdsPorCliente.get(clienteId);
+    if (!idsDoCliente) return [];
+    return [...idsDoCliente]
+      .filter((taskTypeId) => taskTypeId !== taskTypeIdAtual)
+      .map((taskTypeId) => ({
+        taskTypeId,
+        chave: ordemPorTaskTypeId.get(taskTypeId),
+        name: taskTypePorId.get(taskTypeId)?.name || null,
+        contagem: contagemPorClienteTaskType.get(`${clienteId}::${taskTypeId}`),
+      }))
+      .filter((item) => item.chave != null && item.name)
+      .sort((a, b) => b.chave - a.chave)
+      .map((item) => ({
+        name: item.name,
+        qtdTarefas: item.contagem ? `${item.contagem.fechadas}/${item.contagem.total}` : null,
+      }));
   }
 
   // Agrupa os empreendimentos dentro da fase onde ficaram mais avançados.
@@ -172,6 +202,7 @@ async function listMatriz() {
       order: cliente.order,
       microEtapaAtual: microEtapa ? taskTypePorId.get(microEtapa.itemId)?.name || null : null,
       qtdTarefas: contagem ? `${contagem.fechadas}/${contagem.total}` : null,
+      historicoMicroEtapas: microEtapa ? montarHistorico(clienteId, microEtapa.itemId) : [],
     });
   }
   for (const lista of empreendimentosPorFaseId.values()) {
@@ -184,12 +215,15 @@ async function listMatriz() {
       id: fase.id,
       name: fase.name,
       order: fase.order,
-      empreendimentos: (empreendimentosPorFaseId.get(fase.id) || []).map(({ id, name, microEtapaAtual, qtdTarefas }) => ({
-        id,
-        name,
-        microEtapaAtual,
-        qtdTarefas,
-      })),
+      empreendimentos: (empreendimentosPorFaseId.get(fase.id) || []).map(
+        ({ id, name, microEtapaAtual, qtdTarefas, historicoMicroEtapas }) => ({
+          id,
+          name,
+          microEtapaAtual,
+          qtdTarefas,
+          historicoMicroEtapas,
+        })
+      ),
     }));
 }
 
