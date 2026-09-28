@@ -30,6 +30,7 @@ export const TELAS_SISTEMA = {
   '/integracoes/mcp': { title: 'MCP', subtitle: 'Integrações — MCP' },
   '/integracoes/actioon': { title: 'Actioon', subtitle: 'Integrações — Actioon' },
   '/relatorios/metricas-de-uso': { title: 'Métricas de Uso', subtitle: 'Relatórios — Métricas de Uso' },
+  '/relatorios/empreendimentos-masa': { title: 'Empreendimentos Masa', subtitle: 'Relatórios — Empreendimentos Masa' },
 };
 
 // Acha, entre as chaves de TELAS_SISTEMA, a mais específica (mais longa)

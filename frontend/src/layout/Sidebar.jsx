@@ -85,6 +85,7 @@ const menuItems = [
     basePath: '/relatorios',
     children: [
       { label: 'Métricas de Uso', to: '/relatorios/metricas-de-uso', icon: Activity },
+      { label: 'Empreendimentos Masa', to: '/relatorios/empreendimentos-masa', icon: Building2 },
     ],
   },
 ];

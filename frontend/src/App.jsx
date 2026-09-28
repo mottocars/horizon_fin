@@ -43,6 +43,7 @@ import MeuPerfil from './pages/MeuPerfil/MeuPerfil';
 import PrimeiroAcesso from './pages/PrimeiroAcesso/PrimeiroAcesso';
 import RepassesCefPage from './pages/Operacoes/RepassesCef/RepassesCefPage';
 import MetricasUsoPage from './pages/Relatorios/MetricasUso/MetricasUsoPage';
+import EmpreendimentosMasaPage from './pages/Relatorios/EmpreendimentosMasa/EmpreendimentosMasaPage';
 import GestaoCobrancasPage from './pages/Operacoes/GestaoCobrancas/GestaoCobrancasPage';
 import ClusterClientesList from './pages/Operacoes/GestaoCobrancas/ClustersCobranca/ClusterClientesList';
 import ClienteClusterDetalhe from './pages/Operacoes/GestaoCobrancas/ClustersCobranca/ClienteClusterDetalhe';
@@ -152,6 +153,7 @@ export default function App() {
             <Route path="/integracoes/actioon/:id" element={<ActioonForm />} />
 
             <Route path="/relatorios/metricas-de-uso" element={<MetricasUsoPage />} />
+            <Route path="/relatorios/empreendimentos-masa" element={<EmpreendimentosMasaPage />} />
           </Route>
 
           <Route path="*" element={<Navigate to="/" replace />} />
