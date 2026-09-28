@@ -42,6 +42,7 @@ export const TELAS_SISTEMA = [
       { codigo: '/integracoes/z-api', label: 'Whatsapp Z-API' },
       { codigo: '/integracoes/email', label: 'Email' },
       { codigo: '/integracoes/mcp', label: 'MCP' },
+      { codigo: '/integracoes/actioon', label: 'Actioon' },
     ],
   },
 ];

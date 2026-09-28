@@ -202,6 +202,18 @@ CREATE TABLE integracoes_construtor_vendas (
 
 CREATE INDEX idx_integracoes_construtor_vendas_empresa ON integracoes_construtor_vendas (empresa_id);
 
+CREATE TABLE integracoes_actioon (
+    id             SERIAL PRIMARY KEY,
+    empresa_id     INTEGER NOT NULL REFERENCES empresas(id) ON DELETE CASCADE,
+    email          VARCHAR(150) NOT NULL,
+    senha_enc      TEXT NOT NULL,
+    ativo          BOOLEAN DEFAULT TRUE,
+    criado_em      TIMESTAMP DEFAULT NOW(),
+    atualizado_em  TIMESTAMP DEFAULT NOW()
+);
+
+CREATE INDEX idx_integracoes_actioon_empresa ON integracoes_actioon (empresa_id);
+
 -- Reservas puxadas da API "cvdw" do Construtor de Vendas (CVCRM) — endpoint
 -- /api/v1/cvdw/reservas, que devolve um registro já achatado por reserva
 -- (sem objetos aninhados de titular/associados/comissões/contratos, ao
@@ -2119,6 +2131,10 @@ FOR EACH ROW EXECUTE FUNCTION set_atualizado_em();
 
 CREATE TRIGGER trg_integracoes_construtor_vendas_atualizado_em
 BEFORE UPDATE ON integracoes_construtor_vendas
+FOR EACH ROW EXECUTE FUNCTION set_atualizado_em();
+
+CREATE TRIGGER trg_integracoes_actioon_atualizado_em
+BEFORE UPDATE ON integracoes_actioon
 FOR EACH ROW EXECUTE FUNCTION set_atualizado_em();
 
 CREATE TRIGGER trg_planos_fin_sienge_atualizado_em

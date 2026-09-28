@@ -30,6 +30,7 @@ import iconCertificadosDigitais from '../assets/integracoes/certificados-digitai
 import iconZapi from '../assets/integracoes/zapi.svg';
 import iconEmail from '../assets/integracoes/email.svg';
 import iconMcp from '../assets/integracoes/mcp.svg';
+import iconActioon from '../assets/integracoes/actioon.svg';
 
 const menuItems = [
   { type: 'link', label: 'Home', to: '/', icon: LayoutDashboard },
@@ -74,6 +75,7 @@ const menuItems = [
       { label: 'Whatsapp Z-API', to: '/integracoes/z-api', image: iconZapi },
       { label: 'Email', to: '/integracoes/email', image: iconEmail },
       { label: 'MCP', to: '/integracoes/mcp', image: iconMcp },
+      { label: 'Actioon', to: '/integracoes/actioon', image: iconActioon },
     ],
   },
   {

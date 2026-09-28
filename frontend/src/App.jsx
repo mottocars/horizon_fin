@@ -21,6 +21,8 @@ import EmailList from './pages/Integracoes/Email/EmailList';
 import EmailForm from './pages/Integracoes/Email/EmailForm';
 import ConstrutorVendasList from './pages/Integracoes/ConstrutorVendas/ConstrutorVendasList';
 import ConstrutorVendasForm from './pages/Integracoes/ConstrutorVendas/ConstrutorVendasForm';
+import ActioonList from './pages/Integracoes/Actioon/ActioonList';
+import ActioonForm from './pages/Integracoes/Actioon/ActioonForm';
 import PrevisionList from './pages/Integracoes/Prevision/PrevisionList';
 import PrevisionForm from './pages/Integracoes/Prevision/PrevisionForm';
 import CertificadosDigitaisPage from './pages/Integracoes/CertificadosDigitais/CertificadosDigitaisPage';
@@ -145,6 +147,9 @@ export default function App() {
             <Route path="/integracoes/mcp" element={<McpList />} />
             <Route path="/integracoes/mcp/nova" element={<McpForm />} />
             <Route path="/integracoes/mcp/:id" element={<McpForm />} />
+            <Route path="/integracoes/actioon" element={<ActioonList />} />
+            <Route path="/integracoes/actioon/nova" element={<ActioonForm />} />
+            <Route path="/integracoes/actioon/:id" element={<ActioonForm />} />
 
             <Route path="/relatorios/metricas-de-uso" element={<MetricasUsoPage />} />
           </Route>

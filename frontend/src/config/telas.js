@@ -28,6 +28,7 @@ export const TELAS_SISTEMA = {
   '/integracoes/z-api': { title: 'Whatsapp Z-API', subtitle: 'Integrações — Whatsapp Z-API' },
   '/integracoes/email': { title: 'Email', subtitle: 'Integrações — Email' },
   '/integracoes/mcp': { title: 'MCP', subtitle: 'Integrações — MCP' },
+  '/integracoes/actioon': { title: 'Actioon', subtitle: 'Integrações — Actioon' },
   '/relatorios/metricas-de-uso': { title: 'Métricas de Uso', subtitle: 'Relatórios — Métricas de Uso' },
 };
 
