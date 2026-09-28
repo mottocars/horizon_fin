@@ -145,7 +145,10 @@ export default function EmpreendimentosMasaPage() {
                                     {empreendimento.microEtapaAtual}
                                   </button>
                                 ) : (
-                                  <span className="pl-6">{empreendimento.microEtapaAtual}</span>
+                                  <span className="flex items-center gap-2 text-left text-xs text-gray-700">
+                                    <span className="h-4 w-4 shrink-0" />
+                                    {empreendimento.microEtapaAtual}
+                                  </span>
                                 )}
                               </td>
                               <td className="border-b border-l border-gray-100 py-1.5 pl-4 text-xs tabular-nums text-gray-700">
@@ -156,7 +159,7 @@ export default function EmpreendimentosMasaPage() {
                               </td>
                               <td className="border-b border-l border-gray-100 py-1.5 pl-4 text-xs tabular-nums text-gray-700">
                                 {empreendimento?.duracaoDias != null ? (
-                                  `${empreendimento.duracaoDias} dias`
+                                  `${empreendimento.duracaoDias.toLocaleString('pt-BR')} dias`
                                 ) : (
                                   <span className="text-gray-300">—</span>
                                 )}

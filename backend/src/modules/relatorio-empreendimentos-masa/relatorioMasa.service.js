@@ -172,7 +172,11 @@ async function listMatriz() {
   ]);
 
   const ordemPorFaseId = new Map(fasesRaw.map((fase) => [fase.id, fase.order]));
-  const clientePorId = new Map(clientsRaw.map((cliente) => [cliente.id, cliente]));
+  // Só empreendimentos "raiz" (sem parent_id) — os com parent_id são sub-itens (ex.: lotes de
+  // um condomínio, cadastros de teste) que não devem aparecer como uma linha própria da matriz.
+  const clientePorId = new Map(
+    clientsRaw.filter((cliente) => cliente.parent_id == null).map((cliente) => [cliente.id, cliente])
+  );
   const taskTypePorId = new Map(taskTypesRaw.map((tt) => [tt.id, tt]));
   const ordemPorTaskTypeId = new Map(taskTypesRaw.map((tt) => [tt.id, chaveOrdemTaskType(tt.name)]));
 
