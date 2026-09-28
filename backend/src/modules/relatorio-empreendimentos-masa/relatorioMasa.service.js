@@ -18,6 +18,17 @@ function badRequest(message) {
   return err;
 }
 
+// O `order` que /api/task_types devolve NÃO é confiável pra comparar task_types de fases
+// diferentes — ex.: os da Fase 3 têm order 0-10, mais baixo que os da Fase 1 (27-36), mesmo a
+// Fase 3 sendo mais avançada. O nome de todo task_type começa com o padrão real "major.minor"
+// (ex.: "2.10 Anteprojeto validado..."), que é o sinal confiável de progressão — codifica como
+// major*1000+minor (minor nunca passa de 2 dígitos hoje) pra virar um número comparável.
+function chaveOrdemTaskType(nome) {
+  const match = /^(\d+)\.(\d+)/.exec(nome || '');
+  if (!match) return null;
+  return parseInt(match[1], 10) * 1000 + parseInt(match[2], 10);
+}
+
 // Relatório exclusivo da Masa (pedido do usuário) — em vez de um
 // empresa_id fixo no código, resolve pelo nome_fantasia (mais seguro
 // contra o id mudar num banco recriado do zero).
@@ -120,7 +131,7 @@ async function listMatriz() {
   const ordemPorFaseId = new Map(fasesRaw.map((fase) => [fase.id, fase.order]));
   const clientePorId = new Map(clientsRaw.map((cliente) => [cliente.id, cliente]));
   const taskTypePorId = new Map(taskTypesRaw.map((tt) => [tt.id, tt]));
-  const ordemPorTaskTypeId = new Map(taskTypesRaw.map((tt) => [tt.id, tt.order]));
+  const ordemPorTaskTypeId = new Map(taskTypesRaw.map((tt) => [tt.id, chaveOrdemTaskType(tt.name)]));
 
   const faseMaisAvancadaPorCliente = maisAvancadoPorCliente(actions, ordemPorFaseId, (action) => ({
     clienteId: action.client_id,
