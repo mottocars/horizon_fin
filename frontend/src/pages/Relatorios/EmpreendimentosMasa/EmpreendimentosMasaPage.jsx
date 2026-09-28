@@ -1,5 +1,6 @@
-import { Fragment, useEffect, useState } from 'react';
-import { Building2, Minus, Plus, TriangleAlert } from 'lucide-react';
+import { Fragment, useCallback, useEffect, useState } from 'react';
+import { Building2, Minus, Plus, RefreshCw, TriangleAlert } from 'lucide-react';
+import Button from '../../../components/Button';
 import { listFasesEmpreendimentosMasa, listEmpreendimentosMasa } from '../../../api/relatorioMasa.api';
 
 // Matriz do relatório Empreendimentos Masa (exclusivo da empresa Masa, via a integração
@@ -19,30 +20,51 @@ export default function EmpreendimentosMasaPage() {
   const [carregandoEmpreendimentos, setCarregandoEmpreendimentos] = useState(false);
   const [erroEmpreendimentos, setErroEmpreendimentos] = useState('');
 
-  useEffect(() => {
+  const [atualizando, setAtualizando] = useState(false);
+
+  const carregarFases = useCallback(() => {
     setCarregandoFases(true);
     setErroFases('');
-    listFasesEmpreendimentosMasa()
+    return listFasesEmpreendimentosMasa()
       .then(setFases)
       .catch((err) => setErroFases(err.response?.data?.message || 'Não foi possível carregar as fases da Actioon.'))
       .finally(() => setCarregandoFases(false));
   }, []);
 
+  useEffect(() => {
+    carregarFases();
+  }, [carregarFases]);
+
   function toggleExpandir(faseId) {
     setExpandidoId((atual) => (atual === faseId ? null : faseId));
   }
 
-  useEffect(() => {
-    if (!expandidoId || empreendimentos || carregandoEmpreendimentos) return;
+  const carregarEmpreendimentos = useCallback(() => {
     setCarregandoEmpreendimentos(true);
     setErroEmpreendimentos('');
-    listEmpreendimentosMasa()
+    return listEmpreendimentosMasa()
       .then(setEmpreendimentos)
       .catch((err) =>
         setErroEmpreendimentos(err.response?.data?.message || 'Não foi possível carregar os empreendimentos da Actioon.')
       )
       .finally(() => setCarregandoEmpreendimentos(false));
-  }, [expandidoId, empreendimentos, carregandoEmpreendimentos]);
+  }, []);
+
+  useEffect(() => {
+    if (!expandidoId || empreendimentos || carregandoEmpreendimentos) return;
+    carregarEmpreendimentos();
+  }, [expandidoId, empreendimentos, carregandoEmpreendimentos, carregarEmpreendimentos]);
+
+  // Busca tudo de novo direto na Actioon — fases sempre, e os empreendimentos também quando
+  // já tiverem sido carregados (senão só na próxima vez que uma fase for aberta).
+  async function handleAtualizar() {
+    setAtualizando(true);
+    try {
+      await Promise.all([carregarFases(), empreendimentos !== null ? carregarEmpreendimentos() : Promise.resolve()]);
+    } finally {
+      setAtualizando(false);
+    }
+  }
 
   return (
     <div className="space-y-4">
@@ -118,6 +140,11 @@ export default function EmpreendimentosMasaPage() {
           </div>
         )}
       </div>
+
+      <Button variant="secondary" onClick={handleAtualizar} disabled={atualizando}>
+        <RefreshCw size={16} className={atualizando ? 'animate-spin' : ''} />
+        {atualizando ? 'Atualizando...' : 'Atualizar'}
+      </Button>
     </div>
   );
 }
