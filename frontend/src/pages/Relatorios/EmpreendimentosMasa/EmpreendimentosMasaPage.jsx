@@ -66,6 +66,9 @@ export default function EmpreendimentosMasaPage() {
                   <th className="border-b border-l border-gray-200 bg-white py-2.5 pl-4 font-medium">
                     Micro Etapa Atual
                   </th>
+                  <th className="w-28 border-b border-l border-gray-200 bg-white py-2.5 pl-4 font-medium">
+                    Qtd Tarefas
+                  </th>
                 </tr>
               </thead>
               <tbody>
@@ -98,6 +101,9 @@ export default function EmpreendimentosMasaPage() {
                       </td>
                       <td className="border-b border-l border-gray-100 py-1.5 pl-4 text-xs text-gray-700">
                         {empreendimento?.microEtapaAtual || <span className="text-gray-300">—</span>}
+                      </td>
+                      <td className="border-b border-l border-gray-100 py-1.5 pl-4 text-xs tabular-nums text-gray-700">
+                        {empreendimento?.qtdTarefas || <span className="text-gray-300">—</span>}
                       </td>
                     </tr>
                   ));

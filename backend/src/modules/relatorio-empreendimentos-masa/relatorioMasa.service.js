@@ -144,18 +144,34 @@ async function listMatriz() {
     itemId: task.task_type_id,
   }));
 
+  // Quantas tarefas tem cada (empreendimento, task_type) e quantas delas já estão encerradas —
+  // "encerrada" é só `actual_end_date` preenchida, nada de olhar status_id/progress (pedido do
+  // usuário). Alimenta a coluna "Qtd Tarefas" (ex.: "9/10"), sempre contando as tarefas da MESMA
+  // micro etapa que já ganhou acima, nunca de outra.
+  const contagemPorClienteTaskType = new Map(); // "clienteId::taskTypeId" -> { total, fechadas }
+  for (const task of tasks) {
+    if (task.client_id == null || task.task_type_id == null) continue;
+    const chave = `${task.client_id}::${task.task_type_id}`;
+    const atual = contagemPorClienteTaskType.get(chave) || { total: 0, fechadas: 0 };
+    atual.total += 1;
+    if (task.actual_end_date) atual.fechadas += 1;
+    contagemPorClienteTaskType.set(chave, atual);
+  }
+
   // Agrupa os empreendimentos dentro da fase onde ficaram mais avançados.
   const empreendimentosPorFaseId = new Map();
   for (const [clienteId, { itemId: faseId }] of faseMaisAvancadaPorCliente) {
     const cliente = clientePorId.get(clienteId);
     if (!cliente) continue; // client_id de uma action que não existe (mais) em /api/clients
     const microEtapa = microEtapaMaisAvancadaPorCliente.get(clienteId);
+    const contagem = microEtapa ? contagemPorClienteTaskType.get(`${clienteId}::${microEtapa.itemId}`) : null;
     if (!empreendimentosPorFaseId.has(faseId)) empreendimentosPorFaseId.set(faseId, []);
     empreendimentosPorFaseId.get(faseId).push({
       id: cliente.id,
       name: cliente.name,
       order: cliente.order,
       microEtapaAtual: microEtapa ? taskTypePorId.get(microEtapa.itemId)?.name || null : null,
+      qtdTarefas: contagem ? `${contagem.fechadas}/${contagem.total}` : null,
     });
   }
   for (const lista of empreendimentosPorFaseId.values()) {
@@ -168,10 +184,11 @@ async function listMatriz() {
       id: fase.id,
       name: fase.name,
       order: fase.order,
-      empreendimentos: (empreendimentosPorFaseId.get(fase.id) || []).map(({ id, name, microEtapaAtual }) => ({
+      empreendimentos: (empreendimentosPorFaseId.get(fase.id) || []).map(({ id, name, microEtapaAtual, qtdTarefas }) => ({
         id,
         name,
         microEtapaAtual,
+        qtdTarefas,
       })),
     }));
 }
