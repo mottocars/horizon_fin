@@ -14,6 +14,12 @@ const updateSchema = z.object({
   password: z.string().optional(),
 });
 
+const testarConexaoSchema = z.object({
+  id: z.coerce.number().int().positive().optional(),
+  email: z.string().email('Informe um e-mail válido.'),
+  password: z.string().optional(),
+});
+
 function badRequest(message) {
   const err = new Error(message);
   err.status = 400;
@@ -74,6 +80,19 @@ async function update(req, res, next) {
   }
 }
 
+// Testa o login na Actioon antes de salvar (ou a partir de uma já salva,
+// sem reenviar a senha) — ver service.testarConexao.
+async function testarConexao(req, res, next) {
+  try {
+    const dados = testarConexaoSchema.parse(req.body);
+    const resultado = await service.testarConexao(dados);
+    res.json(resultado);
+  } catch (err) {
+    if (err.issues) return next(badRequest(err.issues[0].message));
+    next(err);
+  }
+}
+
 async function setStatus(req, res, next) {
   try {
     const ativo = Boolean(req.body.ativo);
@@ -85,4 +104,4 @@ async function setStatus(req, res, next) {
   }
 }
 
-module.exports = { list, getById, create, update, setStatus };
+module.exports = { list, getById, create, update, setStatus, testarConexao };

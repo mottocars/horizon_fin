@@ -21,3 +21,7 @@ export function updateActioonIntegracao(id, data) {
 export function setActioonStatus(id, ativo) {
   return http.patch(`/integracoes/actioon/${id}/status`, { ativo }).then((res) => res.data);
 }
+
+export function testarConexaoActioon(data) {
+  return http.post('/integracoes/actioon/testar', data).then((res) => res.data);
+}

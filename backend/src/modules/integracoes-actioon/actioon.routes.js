@@ -7,6 +7,7 @@ const router = Router();
 router.use(authMiddleware);
 router.get('/', controller.list);
 router.get('/:id', controller.getById);
+router.post('/testar', controller.testarConexao);
 router.post('/', controller.create);
 router.put('/:id', controller.update);
 router.patch('/:id/status', controller.setStatus);

@@ -1,11 +1,16 @@
 import { useEffect, useState } from 'react';
 import { useNavigate, useParams } from 'react-router-dom';
-import { ArrowLeft, Eye, EyeOff } from 'lucide-react';
+import { ArrowLeft, CheckCircle2, Eye, EyeOff, Plug, XCircle } from 'lucide-react';
 import Card from '../../../components/Card';
 import Button from '../../../components/Button';
 import SearchableSelect from '../../../components/SearchableSelect';
 import { listEmpresas } from '../../../api/empresas.api';
-import { getActioonIntegracao, createActioonIntegracao, updateActioonIntegracao } from '../../../api/actioon.api';
+import {
+  getActioonIntegracao,
+  createActioonIntegracao,
+  updateActioonIntegracao,
+  testarConexaoActioon,
+} from '../../../api/actioon.api';
 import { nomeExibicaoEmpresa } from '../../../utils/empresa';
 import { useEmpresaTravada } from '../../../hooks/useEmpresaTravada';
 
@@ -22,6 +27,8 @@ export default function ActioonForm() {
   const [error, setError] = useState('');
   const [fieldErrors, setFieldErrors] = useState({});
   const [showPassword, setShowPassword] = useState(false);
+  const [testando, setTestando] = useState(false);
+  const [resultadoTeste, setResultadoTeste] = useState(null);
 
   const [form, setForm] = useState({ empresa_id: '', email: '', password: '' });
 
@@ -60,6 +67,36 @@ export default function ActioonForm() {
 
   function handleChange(field, value) {
     setForm((prev) => ({ ...prev, [field]: value }));
+    // Qualquer mudança invalida o resultado do teste anterior — evita
+    // mostrar "Conexão OK" depois que o e-mail/senha já mudou de novo.
+    setResultadoTeste(null);
+  }
+
+  // Testa o login de verdade na Actioon (POST /api/login, ver
+  // actioon.service.js::testarConexao) com os dados que estão no
+  // formulário AGORA, antes de salvar.
+  async function handleTestarConexao() {
+    setResultadoTeste(null);
+    const errors = {};
+    if (!form.email.trim()) errors.email = 'E-mail é obrigatório.';
+    else if (!/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(form.email.trim())) errors.email = 'Informe um e-mail válido.';
+    if (!isEdit && !form.password.trim()) errors.password = 'Senha é obrigatória.';
+    setFieldErrors((prev) => ({ ...prev, ...errors }));
+    if (Object.keys(errors).length > 0) return;
+
+    setTestando(true);
+    try {
+      await testarConexaoActioon({
+        id: isEdit ? Number(id) : undefined,
+        email: form.email.trim(),
+        ...(form.password.trim() ? { password: form.password.trim() } : {}),
+      });
+      setResultadoTeste({ ok: true, mensagem: 'Login feito com sucesso na Actioon.' });
+    } catch (err) {
+      setResultadoTeste({ ok: false, mensagem: err.response?.data?.message || 'Não foi possível conectar.' });
+    } finally {
+      setTestando(false);
+    }
   }
 
   async function handleSubmit(e) {
@@ -169,6 +206,26 @@ export default function ActioonForm() {
                   <p className="mt-1 text-xs text-red-600">{fieldErrors.password}</p>
                 )}
               </div>
+            </div>
+
+            <div>
+              <button
+                type="button"
+                onClick={handleTestarConexao}
+                disabled={testando}
+                className="flex items-center gap-2 rounded-lg border border-gray-200 px-3 py-2 text-sm text-gray-600 hover:bg-gray-50 disabled:cursor-wait disabled:opacity-60"
+              >
+                <Plug size={15} className={testando ? 'animate-pulse' : ''} />
+                {testando ? 'Testando conexão...' : 'Testar conexão'}
+              </button>
+              {resultadoTeste && (
+                <p
+                  className={`mt-2 flex items-center gap-1.5 text-sm ${resultadoTeste.ok ? 'text-emerald-600' : 'text-red-600'}`}
+                >
+                  {resultadoTeste.ok ? <CheckCircle2 size={15} /> : <XCircle size={15} />}
+                  {resultadoTeste.mensagem}
+                </p>
+              )}
             </div>
 
             <div className="flex justify-end gap-2 pt-2">
