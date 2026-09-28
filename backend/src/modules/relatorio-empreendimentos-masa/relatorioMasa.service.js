@@ -164,6 +164,18 @@ async function listMatriz() {
     taskTypeIdsPorCliente.get(task.client_id).add(task.task_type_id);
   }
 
+  // "Qtd Tarefas Totais" — TODAS as tarefas do empreendimento, de toda ação, independente do
+  // task_type (inclusive sem task_type_id nenhum) — diferente de "Qtd Tarefas" (essa sim por
+  // micro etapa, ver contagemPorClienteTaskType acima). Pedido do usuário: manter as duas.
+  const contagemTotalPorCliente = new Map(); // clienteId -> { total, fechadas }
+  for (const task of tasks) {
+    if (task.client_id == null) continue;
+    const atual = contagemTotalPorCliente.get(task.client_id) || { total: 0, fechadas: 0 };
+    atual.total += 1;
+    if (task.actual_end_date) atual.fechadas += 1;
+    contagemTotalPorCliente.set(task.client_id, atual);
+  }
+
   // Histórico de micro etapas do empreendimento (drilldown da Micro Etapa Atual) — todas as
   // OUTRAS micro etapas em que ele já teve tarefa, cada uma com seu próprio "Qtd Tarefas",
   // ordenadas decrescente pelo prefixo major.minor (pedido do usuário: "se eu estou na 1.4,
@@ -195,6 +207,7 @@ async function listMatriz() {
     if (!cliente) continue; // client_id de uma action que não existe (mais) em /api/clients
     const microEtapa = microEtapaMaisAvancadaPorCliente.get(clienteId);
     const contagem = microEtapa ? contagemPorClienteTaskType.get(`${clienteId}::${microEtapa.itemId}`) : null;
+    const contagemTotal = contagemTotalPorCliente.get(clienteId);
     if (!empreendimentosPorFaseId.has(faseId)) empreendimentosPorFaseId.set(faseId, []);
     empreendimentosPorFaseId.get(faseId).push({
       id: cliente.id,
@@ -202,6 +215,7 @@ async function listMatriz() {
       order: cliente.order,
       microEtapaAtual: microEtapa ? taskTypePorId.get(microEtapa.itemId)?.name || null : null,
       qtdTarefas: contagem ? `${contagem.fechadas}/${contagem.total}` : null,
+      qtdTarefasTotais: contagemTotal ? `${contagemTotal.fechadas}/${contagemTotal.total}` : null,
       historicoMicroEtapas: microEtapa ? montarHistorico(clienteId, microEtapa.itemId) : [],
     });
   }
@@ -216,11 +230,12 @@ async function listMatriz() {
       name: fase.name,
       order: fase.order,
       empreendimentos: (empreendimentosPorFaseId.get(fase.id) || []).map(
-        ({ id, name, microEtapaAtual, qtdTarefas, historicoMicroEtapas }) => ({
+        ({ id, name, microEtapaAtual, qtdTarefas, qtdTarefasTotais, historicoMicroEtapas }) => ({
           id,
           name,
           microEtapaAtual,
           qtdTarefas,
+          qtdTarefasTotais,
           historicoMicroEtapas,
         })
       ),
