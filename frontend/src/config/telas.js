@@ -29,6 +29,7 @@ export const TELAS_SISTEMA = {
   '/integracoes/email': { title: 'Email', subtitle: 'Integrações — Email' },
   '/integracoes/mcp': { title: 'MCP', subtitle: 'Integrações — MCP' },
   '/integracoes/actioon': { title: 'Actioon', subtitle: 'Integrações — Actioon' },
+  '/integracoes/banco-dados': { title: 'Banco de Dados', subtitle: 'Integrações — Banco de Dados' },
   '/relatorios/metricas-de-uso': { title: 'Métricas de Uso', subtitle: 'Relatórios — Métricas de Uso' },
   '/relatorios/empreendimentos-masa': { title: 'Empreendimentos Masa', subtitle: 'Relatórios — Empreendimentos Masa' },
 };

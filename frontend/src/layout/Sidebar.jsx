@@ -21,6 +21,7 @@ import {
   FileBarChart,
   Activity,
   BarChart3,
+  Database,
 } from 'lucide-react';
 import iconPortalConstrutoras from '../assets/integracoes/portal-construtoras.svg';
 import iconPrevision from '../assets/integracoes/prevision.svg';
@@ -76,6 +77,7 @@ const menuItems = [
       { label: 'Email', to: '/integracoes/email', image: iconEmail },
       { label: 'MCP', to: '/integracoes/mcp', image: iconMcp },
       { label: 'Actioon', to: '/integracoes/actioon', image: iconActioon },
+      { label: 'Banco de Dados', to: '/integracoes/banco-dados', icon: Database },
     ],
   },
   {

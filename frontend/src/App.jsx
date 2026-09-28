@@ -23,6 +23,8 @@ import ConstrutorVendasList from './pages/Integracoes/ConstrutorVendas/Construto
 import ConstrutorVendasForm from './pages/Integracoes/ConstrutorVendas/ConstrutorVendasForm';
 import ActioonList from './pages/Integracoes/Actioon/ActioonList';
 import ActioonForm from './pages/Integracoes/Actioon/ActioonForm';
+import BancoDadosList from './pages/Integracoes/BancoDados/BancoDadosList';
+import BancoDadosForm from './pages/Integracoes/BancoDados/BancoDadosForm';
 import PrevisionList from './pages/Integracoes/Prevision/PrevisionList';
 import PrevisionForm from './pages/Integracoes/Prevision/PrevisionForm';
 import CertificadosDigitaisPage from './pages/Integracoes/CertificadosDigitais/CertificadosDigitaisPage';
@@ -151,6 +153,9 @@ export default function App() {
             <Route path="/integracoes/actioon" element={<ActioonList />} />
             <Route path="/integracoes/actioon/nova" element={<ActioonForm />} />
             <Route path="/integracoes/actioon/:id" element={<ActioonForm />} />
+            <Route path="/integracoes/banco-dados" element={<BancoDadosList />} />
+            <Route path="/integracoes/banco-dados/nova" element={<BancoDadosForm />} />
+            <Route path="/integracoes/banco-dados/:id" element={<BancoDadosForm />} />
 
             <Route path="/relatorios/metricas-de-uso" element={<MetricasUsoPage />} />
             <Route path="/relatorios/empreendimentos-masa" element={<EmpreendimentosMasaPage />} />

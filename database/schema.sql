@@ -214,6 +214,27 @@ CREATE TABLE integracoes_actioon (
 
 CREATE INDEX idx_integracoes_actioon_empresa ON integracoes_actioon (empresa_id);
 
+-- "sgbd" só aceita 'postgres' por enquanto (validado no controller, GRUPOS_DRE-style) — mais
+-- SGBDs (MySQL, SQL Server, Oracle...) entram como novos valores válidos quando o teste de
+-- conexão daquele SGBD for implementado, sem precisar de coluna nova.
+CREATE TABLE integracoes_banco_dados (
+    id             SERIAL PRIMARY KEY,
+    empresa_id     INTEGER NOT NULL REFERENCES empresas(id) ON DELETE CASCADE,
+    nome_conexao   VARCHAR(150) NOT NULL,
+    sgbd           VARCHAR(30) NOT NULL DEFAULT 'postgres',
+    host           VARCHAR(255) NOT NULL,
+    porta          INTEGER NOT NULL,
+    banco          VARCHAR(150) NOT NULL,
+    usuario        VARCHAR(150) NOT NULL,
+    senha_enc      TEXT NOT NULL,
+    ssl            BOOLEAN DEFAULT FALSE,
+    ativo          BOOLEAN DEFAULT TRUE,
+    criado_em      TIMESTAMP DEFAULT NOW(),
+    atualizado_em  TIMESTAMP DEFAULT NOW()
+);
+
+CREATE INDEX idx_integracoes_banco_dados_empresa ON integracoes_banco_dados (empresa_id);
+
 -- Reservas puxadas da API "cvdw" do Construtor de Vendas (CVCRM) — endpoint
 -- /api/v1/cvdw/reservas, que devolve um registro já achatado por reserva
 -- (sem objetos aninhados de titular/associados/comissões/contratos, ao
@@ -2135,6 +2156,10 @@ FOR EACH ROW EXECUTE FUNCTION set_atualizado_em();
 
 CREATE TRIGGER trg_integracoes_actioon_atualizado_em
 BEFORE UPDATE ON integracoes_actioon
+FOR EACH ROW EXECUTE FUNCTION set_atualizado_em();
+
+CREATE TRIGGER trg_integracoes_banco_dados_atualizado_em
+BEFORE UPDATE ON integracoes_banco_dados
 FOR EACH ROW EXECUTE FUNCTION set_atualizado_em();
 
 CREATE TRIGGER trg_planos_fin_sienge_atualizado_em
