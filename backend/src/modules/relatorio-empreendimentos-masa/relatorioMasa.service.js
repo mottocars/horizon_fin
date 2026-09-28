@@ -2,6 +2,7 @@ const pool = require('../../config/db');
 const actioonService = require('../integracoes-actioon/actioon.service');
 
 const ACTIOON_ACTION_TYPES_URL = 'https://api.actioon.com.br/api/action_types';
+const ACTIOON_CLIENTS_URL = 'https://api.actioon.com.br/api/clients';
 
 function badRequest(message) {
   const err = new Error(message);
@@ -26,15 +27,16 @@ async function buscarToken() {
   return actioonService.login(credenciais.email, credenciais.senha);
 }
 
-// Nível 1 da matriz (linhas) — as fases (action_types) cadastradas na
-// Actioon da Masa, ordenadas pela própria tag `order` que a API devolve
-// (não por nome nem por id — "Fase 0" pode ter id maior que "Fase 3").
-async function listFases() {
+// GET autenticado num endpoint da Actioon que devolve uma lista de itens
+// com `id`/`name`/`order` — mesmo formato usado tanto por action_types
+// (fases) quanto por clients (empreendimentos). Sempre ordena por `order`
+// (não por nome nem id) e devolve só os 3 campos que o relatório usa.
+async function buscarListaOrdenada(url, mensagemErro) {
   const token = await buscarToken();
 
   let resposta;
   try {
-    resposta = await fetch(ACTIOON_ACTION_TYPES_URL, {
+    resposta = await fetch(url, {
       headers: { Accept: 'application/json', Authorization: `Bearer ${token}` },
     });
   } catch {
@@ -42,11 +44,25 @@ async function listFases() {
   }
 
   const corpo = await resposta.json().catch(() => []);
-  if (!resposta.ok) throw badRequest('Não foi possível buscar as fases na Actioon.');
+  if (!resposta.ok) throw badRequest(mensagemErro);
 
   return [...corpo]
     .sort((a, b) => a.order - b.order)
-    .map((fase) => ({ id: fase.id, name: fase.name, order: fase.order }));
+    .map((item) => ({ id: item.id, name: item.name, order: item.order }));
 }
 
-module.exports = { listFases };
+// Nível 1 da matriz (linhas) — as fases (action_types) cadastradas na
+// Actioon da Masa.
+function listFases() {
+  return buscarListaOrdenada(ACTIOON_ACTION_TYPES_URL, 'Não foi possível buscar as fases na Actioon.');
+}
+
+// Drilldown de cada fase — os empreendimentos (clients, na terminologia da
+// Actioon) cadastrados na Masa. Por enquanto a Actioon não expõe em qual
+// fase cada empreendimento está, então a mesma lista completa aparece sob
+// qualquer fase aberta.
+function listEmpreendimentos() {
+  return buscarListaOrdenada(ACTIOON_CLIENTS_URL, 'Não foi possível buscar os empreendimentos na Actioon.');
+}
+
+module.exports = { listFases, listEmpreendimentos };

@@ -1,35 +1,58 @@
-import { useEffect, useState } from 'react';
-import { Building2, TriangleAlert } from 'lucide-react';
-import { listFasesEmpreendimentosMasa } from '../../../api/relatorioMasa.api';
+import { Fragment, useEffect, useState } from 'react';
+import { Building2, Minus, Plus, TriangleAlert } from 'lucide-react';
+import { listFasesEmpreendimentosMasa, listEmpreendimentosMasa } from '../../../api/relatorioMasa.api';
 
 // Matriz do relatório Empreendimentos Masa (exclusivo da empresa Masa, via a integração
-// Actioon dela) — 1ª coluna são as fases (action_types da Actioon), ordenadas pela tag
-// `order` que a própria API devolve, não por nome nem id. As próximas colunas (por
-// empreendimento) entram numa próxima rodada — por enquanto só a estrutura da matriz com a
-// coluna de fases já preenchida com dado real.
+// Actioon dela). Nível 1 (linhas) são as fases (action_types), ordenadas pela tag `order`
+// da própria API. Cada fase expande num drilldown com os empreendimentos (clients, na
+// terminologia da Actioon), também ordenados por `order` — mesma mecânica de "+/-" já usada
+// em Orçamento/Máscaras (aba DRE POC Gerencial). A Actioon ainda não expõe em qual fase cada
+// empreendimento está, então a mesma lista completa aparece sob qualquer fase aberta — a
+// lista só é buscada uma vez (na primeira fase aberta) e reaproveitada nas seguintes.
 export default function EmpreendimentosMasaPage() {
   const [fases, setFases] = useState(null);
-  const [carregando, setCarregando] = useState(true);
-  const [erro, setErro] = useState('');
+  const [carregandoFases, setCarregandoFases] = useState(true);
+  const [erroFases, setErroFases] = useState('');
+
+  const [expandidoId, setExpandidoId] = useState(null);
+  const [empreendimentos, setEmpreendimentos] = useState(null);
+  const [carregandoEmpreendimentos, setCarregandoEmpreendimentos] = useState(false);
+  const [erroEmpreendimentos, setErroEmpreendimentos] = useState('');
 
   useEffect(() => {
-    setCarregando(true);
-    setErro('');
+    setCarregandoFases(true);
+    setErroFases('');
     listFasesEmpreendimentosMasa()
       .then(setFases)
-      .catch((err) => setErro(err.response?.data?.message || 'Não foi possível carregar as fases da Actioon.'))
-      .finally(() => setCarregando(false));
+      .catch((err) => setErroFases(err.response?.data?.message || 'Não foi possível carregar as fases da Actioon.'))
+      .finally(() => setCarregandoFases(false));
   }, []);
+
+  function toggleExpandir(faseId) {
+    setExpandidoId((atual) => (atual === faseId ? null : faseId));
+  }
+
+  useEffect(() => {
+    if (!expandidoId || empreendimentos || carregandoEmpreendimentos) return;
+    setCarregandoEmpreendimentos(true);
+    setErroEmpreendimentos('');
+    listEmpreendimentosMasa()
+      .then(setEmpreendimentos)
+      .catch((err) =>
+        setErroEmpreendimentos(err.response?.data?.message || 'Não foi possível carregar os empreendimentos da Actioon.')
+      )
+      .finally(() => setCarregandoEmpreendimentos(false));
+  }, [expandidoId, empreendimentos, carregandoEmpreendimentos]);
 
   return (
     <div className="space-y-4">
       <div className="rounded-card bg-white shadow-card">
-        {carregando ? (
+        {carregandoFases ? (
           <div className="py-12 text-center text-sm text-gray-400">Carregando...</div>
-        ) : erro ? (
+        ) : erroFases ? (
           <div className="flex flex-col items-center gap-2 py-14 text-center">
             <TriangleAlert size={26} className="text-red-400" />
-            <p className="text-sm text-gray-600">{erro}</p>
+            <p className="text-sm text-gray-600">{erroFases}</p>
           </div>
         ) : fases.length === 0 ? (
           <div className="flex flex-col items-center gap-2 py-14 text-center">
@@ -45,11 +68,51 @@ export default function EmpreendimentosMasaPage() {
                 </tr>
               </thead>
               <tbody>
-                {fases.map((fase) => (
-                  <tr key={fase.id} className="hover:bg-gray-50">
-                    <td className="border-b border-gray-100 py-2.5 pl-4 text-sm text-gray-900">{fase.name}</td>
-                  </tr>
-                ))}
+                {fases.map((fase) => {
+                  const aberto = expandidoId === fase.id;
+                  return (
+                    <Fragment key={fase.id}>
+                      <tr onClick={() => toggleExpandir(fase.id)} className="group/fase cursor-pointer">
+                        <td className="border-b border-gray-200 bg-gray-50 py-2.5 pl-3 pr-4 group-hover/fase:bg-gray-100">
+                          <span className="flex items-center gap-2">
+                            <span className="flex h-4 w-4 shrink-0 items-center justify-center rounded bg-primary-100 text-primary-600">
+                              {aberto ? <Minus size={10} /> : <Plus size={10} />}
+                            </span>
+                            <span className="text-xs font-semibold text-gray-900">{fase.name}</span>
+                          </span>
+                        </td>
+                      </tr>
+
+                      {aberto && carregandoEmpreendimentos && (
+                        <tr>
+                          <td className="border-b border-gray-100 py-6 text-center text-xs text-gray-400">
+                            Carregando...
+                          </td>
+                        </tr>
+                      )}
+
+                      {aberto && !carregandoEmpreendimentos && erroEmpreendimentos && (
+                        <tr>
+                          <td className="border-b border-gray-100 py-4 pl-9 text-xs text-red-600">
+                            {erroEmpreendimentos}
+                          </td>
+                        </tr>
+                      )}
+
+                      {aberto &&
+                        !carregandoEmpreendimentos &&
+                        !erroEmpreendimentos &&
+                        empreendimentos &&
+                        empreendimentos.map((empreendimento) => (
+                          <tr key={empreendimento.id} className="hover:bg-gray-50">
+                            <td className="border-b border-gray-100 py-1.5 pl-9 text-xs text-gray-700">
+                              {empreendimento.name}
+                            </td>
+                          </tr>
+                        ))}
+                    </Fragment>
+                  );
+                })}
               </tbody>
             </table>
           </div>

@@ -9,4 +9,13 @@ async function getFases(req, res, next) {
   }
 }
 
-module.exports = { getFases };
+async function getEmpreendimentos(req, res, next) {
+  try {
+    const empreendimentos = await service.listEmpreendimentos();
+    res.json(empreendimentos);
+  } catch (err) {
+    next(err);
+  }
+}
+
+module.exports = { getFases, getEmpreendimentos };

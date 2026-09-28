@@ -6,5 +6,6 @@ const router = Router();
 
 router.use(authMiddleware);
 router.get('/fases', controller.getFases);
+router.get('/empreendimentos', controller.getEmpreendimentos);
 
 module.exports = router;
