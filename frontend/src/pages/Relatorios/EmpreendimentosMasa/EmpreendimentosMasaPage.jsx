@@ -1,5 +1,5 @@
 import { Fragment, useCallback, useEffect, useState } from 'react';
-import { Building2, ChevronDown, ChevronRight, RefreshCw, TriangleAlert } from 'lucide-react';
+import { Building2, Minus, Plus, RefreshCw, TriangleAlert } from 'lucide-react';
 import Button from '../../../components/Button';
 import { getMatrizEmpreendimentosMasa } from '../../../api/relatorioMasa.api';
 
@@ -131,17 +131,15 @@ export default function EmpreendimentosMasaPage() {
                                   <button
                                     type="button"
                                     onClick={() => toggleExpandir(empreendimento.id)}
-                                    className="flex items-center gap-1.5 text-left text-xs text-gray-700 hover:text-primary-700"
+                                    className="flex items-center gap-2 text-left text-xs text-gray-700"
                                   >
-                                    {aberto ? (
-                                      <ChevronDown size={13} className="shrink-0 text-gray-400" />
-                                    ) : (
-                                      <ChevronRight size={13} className="shrink-0 text-gray-400" />
-                                    )}
+                                    <span className="flex h-4 w-4 shrink-0 items-center justify-center rounded bg-primary-100 text-primary-600">
+                                      {aberto ? <Minus size={10} /> : <Plus size={10} />}
+                                    </span>
                                     {empreendimento.microEtapaAtual}
                                   </button>
                                 ) : (
-                                  <span className="pl-4.75">{empreendimento.microEtapaAtual}</span>
+                                  <span className="pl-6">{empreendimento.microEtapaAtual}</span>
                                 )}
                               </td>
                               <td className="border-b border-l border-gray-100 py-1.5 pl-4 text-xs tabular-nums text-gray-700">
