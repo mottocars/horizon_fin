@@ -1,21 +1,12 @@
 const service = require('./relatorioMasa.service');
 
-async function getFases(req, res, next) {
+async function getMatriz(req, res, next) {
   try {
-    const fases = await service.listFases();
-    res.json(fases);
+    const matriz = await service.listMatriz();
+    res.json(matriz);
   } catch (err) {
     next(err);
   }
 }
 
-async function getEmpreendimentos(req, res, next) {
-  try {
-    const empreendimentos = await service.listEmpreendimentos();
-    res.json(empreendimentos);
-  } catch (err) {
-    next(err);
-  }
-}
-
-module.exports = { getFases, getEmpreendimentos };
+module.exports = { getMatriz };

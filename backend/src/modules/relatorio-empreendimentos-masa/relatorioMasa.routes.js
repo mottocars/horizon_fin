@@ -5,7 +5,6 @@ const controller = require('./relatorioMasa.controller');
 const router = Router();
 
 router.use(authMiddleware);
-router.get('/fases', controller.getFases);
-router.get('/empreendimentos', controller.getEmpreendimentos);
+router.get('/matriz', controller.getMatriz);
 
 module.exports = router;
