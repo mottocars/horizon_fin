@@ -436,20 +436,20 @@ export default function EmpreendimentosMasaPage() {
                         // Última linha da fase — borda de baixo mais grossa/escura pra marcar
                         // bem a separação entre uma etapa e a próxima (pedido do usuário).
                         const bordaInferior = linha.ultimaDaFase
-                          ? 'border-b-2 border-b-gray-300'
-                          : 'border-b border-b-gray-100';
+                          ? 'border-b-2 border-b-gray-400'
+                          : 'border-b border-b-gray-200';
                         // Idem, mas pro fim de cada GRUPO de Micro Etapa Atual — só fica forte
                         // quando o grupo também é o último da fase (senão vira uma borda comum,
                         // já que ainda tem mais empreendimento da mesma fase abaixo).
                         const bordaGrupo = linha.grupoTerminaNaFase
-                          ? 'border-b-2 border-b-gray-300'
-                          : 'border-b border-b-gray-100';
+                          ? 'border-b-2 border-b-gray-400'
+                          : 'border-b border-b-gray-200';
                         return (
                           <tr key={`${fase.id}-${empreendimento?.id ?? 'vazia'}-${i}`}>
                             {linha.primeiraDaFase && (
                               <td
                                 rowSpan={total}
-                                className="border-b-2 border-b-gray-300 border-r border-r-gray-200 bg-gray-50 px-4 py-2.5 align-middle"
+                                className="border-b-2 border-b-gray-400 border-r border-r-gray-200 bg-white px-4 py-2.5 align-middle"
                               >
                                 <span className="flex items-center gap-2">
                                   <span className="text-xs font-semibold text-gray-900">{fase.name}</span>
@@ -462,7 +462,7 @@ export default function EmpreendimentosMasaPage() {
                             {linha.primeiraDoGrupo && (
                               <td
                                 rowSpan={linha.tamanhoGrupo}
-                                className={`${bordaGrupo} border-l border-l-gray-200 bg-gray-50 px-4 py-2.5 align-middle text-xs text-gray-700`}
+                                className={`${bordaGrupo} border-l border-l-gray-200 bg-white px-4 py-2.5 align-middle text-xs text-gray-700`}
                               >
                                 {linha.microEtapaAtual || <span className="text-gray-300">—</span>}
                               </td>
