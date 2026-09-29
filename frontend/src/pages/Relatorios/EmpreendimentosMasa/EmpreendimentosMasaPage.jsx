@@ -1,6 +1,6 @@
 import { Fragment, useCallback, useEffect, useMemo, useRef, useState } from 'react';
-import { Building2, ListFilter, RefreshCw, TriangleAlert } from 'lucide-react';
-import Button from '../../../components/Button';
+import { createPortal } from 'react-dom';
+import { Building2, FileDown, ListFilter, TriangleAlert } from 'lucide-react';
 import SearchableSelect from '../../../components/SearchableSelect';
 import { getMatrizEmpreendimentosMasa } from '../../../api/relatorioMasa.api';
 
@@ -74,7 +74,6 @@ export default function EmpreendimentosMasaPage() {
   const [matriz, setMatriz] = useState(null);
   const [carregando, setCarregando] = useState(true);
   const [erro, setErro] = useState('');
-  const [atualizando, setAtualizando] = useState(false);
 
   // Filtro de coluna (Etapa Atual/Empreendimento/Micro Etapa Atual) — mesma convenção de
   // RotinasTab.jsx: array vazio = sem filtro (mostra tudo); selecionar valores restringe só a
@@ -89,29 +88,18 @@ export default function EmpreendimentosMasaPage() {
   const thEmpreendimentoRef = useRef(null);
   const thMicroEtapaRef = useRef(null);
 
-  const carregar = useCallback((comIndicadorProprio = true) => {
-    if (comIndicadorProprio) setCarregando(true);
+  const carregar = useCallback(() => {
+    setCarregando(true);
     setErro('');
     return getMatrizEmpreendimentosMasa()
       .then(setMatriz)
       .catch((err) => setErro(err.response?.data?.message || 'Não foi possível carregar a matriz da Actioon.'))
-      .finally(() => {
-        if (comIndicadorProprio) setCarregando(false);
-      });
+      .finally(() => setCarregando(false));
   }, []);
 
   useEffect(() => {
     carregar();
   }, [carregar]);
-
-  async function handleAtualizar() {
-    setAtualizando(true);
-    try {
-      await carregar(false);
-    } finally {
-      setAtualizando(false);
-    }
-  }
 
   // Opções das comboboxes de filtro — sempre a partir da `matriz` crua (não da já filtrada),
   // pra lista de opções não encolher conforme o usuário vai filtrando por outra coluna (mesmo
@@ -177,6 +165,74 @@ export default function EmpreendimentosMasaPage() {
 
   const semResultadoFiltro = Boolean(matriz && matriz.length > 0 && matrizFiltrada.length === 0);
 
+  // Menu de contexto (botão direito em cima da tabela) — só a opção "Exportar". Fecha ao clicar
+  // em qualquer lugar ou rolar a página; abre de novo na posição do próximo botão direito.
+  const [menuContexto, setMenuContexto] = useState(null); // { x, y } | null
+
+  function handleContextMenu(e) {
+    e.preventDefault();
+    setMenuContexto({ x: e.clientX, y: e.clientY });
+  }
+
+  useEffect(() => {
+    if (!menuContexto) return;
+    function fechar() {
+      setMenuContexto(null);
+    }
+    window.addEventListener('click', fechar);
+    window.addEventListener('scroll', fechar, true);
+    window.addEventListener('contextmenu', fechar);
+    return () => {
+      window.removeEventListener('click', fechar);
+      window.removeEventListener('scroll', fechar, true);
+      window.removeEventListener('contextmenu', fechar);
+    };
+  }, [menuContexto]);
+
+  // Exporta a matriz JÁ FILTRADA pra Excel, de forma "empilhada" — 1 linha por empreendimento
+  // com todas as colunas preenchidas (Etapa Atual/Empreendimento repetidos em cada linha), bem
+  // diferente da grade visual da tela (que usa rowSpan pra não repetir). Termina com uma linha
+  // de Total igual à do rodapé. Gera o .xlsx inteiramente no navegador (a matriz já filtrada já
+  // está em memória, sem precisar buscar nada de novo no backend) — biblioteca carregada sob
+  // demanda (só quando o usuário realmente exporta) pra não pesar no carregamento da página.
+  async function handleExportar() {
+    setMenuContexto(null);
+    const XLSX = await import('xlsx');
+    const linhas = matrizFiltrada.flatMap((fase) =>
+      fase.empreendimentos.map((emp) => ({
+        'Etapa Atual': fase.name,
+        Empreendimento: emp.name,
+        'Micro Etapa Atual': emp.microEtapaAtual || '',
+        'Duração (dias)': emp.duracaoDias ?? '',
+        'M²': emp.areaM2 ?? '',
+        Unidades: emp.unidades ?? '',
+        'VGV Geral': emp.vgvGeral ?? '',
+        'VGV Masa': emp.vgvMasa ?? '',
+        'Horas Trabalhadas': emp.segundosTrabalhados != null ? Number((emp.segundosTrabalhados / 3600).toFixed(1)) : '',
+        'Contas Pagas': emp.contasPagas ?? '',
+      }))
+    );
+    // Arredonda pra 2 casas — somar dezenas de valores com centavos em ponto flutuante gera
+    // ruído tipo 13781669.180000002, que não existe nos valores de origem.
+    const arredondar = (valor) => Math.round(valor * 100) / 100;
+    linhas.push({
+      'Etapa Atual': 'Total',
+      Empreendimento: '',
+      'Micro Etapa Atual': '',
+      'Duração (dias)': '',
+      'M²': arredondar(totais.areaM2),
+      Unidades: totais.unidades,
+      'VGV Geral': arredondar(totais.vgvGeral),
+      'VGV Masa': arredondar(totais.vgvMasa),
+      'Horas Trabalhadas': Number((totais.segundosTrabalhados / 3600).toFixed(1)),
+      'Contas Pagas': arredondar(totais.contasPagas),
+    });
+    const planilha = XLSX.utils.json_to_sheet(linhas);
+    const livro = XLSX.utils.book_new();
+    XLSX.utils.book_append_sheet(livro, planilha, 'Empreendimentos Masa');
+    XLSX.writeFile(livro, `empreendimentos-masa_${new Date().toISOString().slice(0, 10)}.xlsx`);
+  }
+
   return (
     <div className="space-y-4">
       <div className="rounded-card bg-white shadow-card">
@@ -201,7 +257,7 @@ export default function EmpreendimentosMasaPage() {
           // <main>, que é quem realmente rola. Deixando sem overflow aqui, o scroll horizontal
           // (se precisar) acontece no próprio <main> (que já tem overflow-y-auto, logo o
           // browser computa overflow-x dele como auto também).
-          <div className="rounded-card">
+          <div className="rounded-card" onContextMenu={handleContextMenu}>
             <table className="w-full border-separate border-spacing-0 text-left text-xs">
               <thead>
                 <tr className="text-xs uppercase tracking-wide text-primary-700">
@@ -395,8 +451,7 @@ export default function EmpreendimentosMasaPage() {
                 })}
               </tbody>
               {/* Totalizador fixo — `sticky bottom-0` em cada <td> gruda no rodapé do container
-                  que rola (o <main> do AppShell) até o fim da tabela, onde assenta naturalmente
-                  (nada de flutuar por cima do botão "Atualizar" depois do fim da tabela).
+                  que rola (o <main> do AppShell) até o fim da tabela, onde assenta naturalmente.
                   Cabeçalho segue a mesma ideia (`sticky top-0`), pra ficar visível a rolagem
                   inteira igual ao totalizador. O offset é `-bottom-6`/`-top-6` (não 0) pra
                   cancelar o `p-6` do <main> — sem isso sobraria uma faixa de 24px do padding
@@ -438,10 +493,23 @@ export default function EmpreendimentosMasaPage() {
         )}
       </div>
 
-      <Button variant="secondary" onClick={handleAtualizar} disabled={atualizando}>
-        <RefreshCw size={16} className={atualizando ? 'animate-spin' : ''} />
-        {atualizando ? 'Atualizando...' : 'Atualizar'}
-      </Button>
+      {menuContexto &&
+        createPortal(
+          <div
+            style={{ position: 'fixed', top: menuContexto.y, left: menuContexto.x }}
+            className="z-100 min-w-40 rounded-lg border border-gray-200 bg-white py-1 shadow-lg"
+          >
+            <button
+              type="button"
+              onClick={handleExportar}
+              className="flex w-full items-center gap-2 px-3 py-2 text-left text-sm text-gray-700 hover:bg-gray-50"
+            >
+              <FileDown size={14} className="text-gray-400" />
+              Exportar
+            </button>
+          </div>,
+          document.body
+        )}
     </div>
   );
 }
