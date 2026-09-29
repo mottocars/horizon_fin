@@ -123,7 +123,10 @@ export default function EmpreendimentosMasaPage() {
                                   </span>
                                 </td>
                               )}
-                              <td className="border-b border-gray-100 py-1.5 pl-4 text-xs text-gray-700">
+                              <td
+                                rowSpan={1 + (aberto ? empreendimento.historicoMicroEtapas.length : 0)}
+                                className="border-b border-gray-100 bg-white py-1.5 pl-4 text-xs text-gray-700 align-middle"
+                              >
                                 {empreendimento ? (
                                   empreendimento.name
                                 ) : (
@@ -169,7 +172,6 @@ export default function EmpreendimentosMasaPage() {
                             {aberto &&
                               empreendimento.historicoMicroEtapas.map((historico, i) => (
                                 <tr key={i} className="bg-gray-50/60">
-                                  <td className="border-b border-gray-100" />
                                   <td className="border-b border-l border-gray-100 py-1.5 pl-10 text-xs text-gray-500">
                                     {historico.name}
                                   </td>
