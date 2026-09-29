@@ -415,7 +415,7 @@ export default function EmpreendimentosMasaPage() {
           <span>Classificação:</span>
           {Object.entries(CLASSIFICACAO_CORES).map(([nome, cor]) => (
             <span key={nome} className="inline-flex items-center gap-1.5">
-              <span className={`h-1.5 w-1.5 shrink-0 rounded-full ${cor.swatch}`} />
+              <span className={`h-2.5 w-2.5 shrink-0 rounded-full ${cor.swatch}`} />
               {nome}
             </span>
           ))}
