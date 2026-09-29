@@ -100,6 +100,11 @@ async function buscarTodasActions(token) {
 //   parceria da própria Masa (nome_parceiro contém "MASA") e só a linha do empreendimento em si
 //   (produto_relacionado_id nulo — parcerias de um produto específico ficam de fora, pedido do
 //   usuário). Também 1:1 (confirmado — sem duplicidade).
+// - "Horas Trabalhadas": time_logs liga project_id ao client_id (igual às outras consultas), mas
+//   a tarefa em si só é confiável pelo NOME (task_name) — pedido explícito do usuário, já que
+//   task_id de terceiros não bate com o task_type_id da Actioon. Soma `duration` (segundos) por
+//   (project_id, task_name); o relatório casa esse nome com o nome de cada task_type (atual ou
+//   do histórico) pra somar as horas daquele empreendimento NAQUELE tipo de tarefa específico.
 async function buscarDadosTimeTracker() {
   const empresaId = await getEmpresaMasaId();
   const credenciais = await bancoDadosService.getCredenciaisPorConexao(empresaId, CONEXAO_TIME_TRACKER);
@@ -118,6 +123,7 @@ async function buscarDadosTimeTracker() {
   const duracaoPorCliente = new Map(); // client_id -> dias desde a data_assinatura
   const produtoPorCliente = new Map(); // client_id -> { areaM2, unidades, vgvGeral }
   const vgvMasaPorCliente = new Map(); // client_id -> vgv_masa
+  const segundosPorClienteTaskName = new Map(); // "clienteId::taskName" -> segundos somados
   try {
     await client.connect();
 
@@ -153,12 +159,21 @@ async function buscarDadosTimeTracker() {
     for (const row of parcerias.rows) {
       vgvMasaPorCliente.set(row.client_id, row.vgv_masa != null ? Number(row.vgv_masa) : null);
     }
+
+    const logs = await client.query(`
+      select project_id, task_name, sum(duration)::bigint as total_segundos
+      from time_logs tl
+      group by project_id, task_name
+    `);
+    for (const row of logs.rows) {
+      segundosPorClienteTaskName.set(`${row.project_id}::${row.task_name}`, Number(row.total_segundos));
+    }
   } catch {
     throw badRequest('Não foi possível conectar ao banco "Time Tracker".');
   } finally {
     await client.end().catch(() => {});
   }
-  return { duracaoPorCliente, produtoPorCliente, vgvMasaPorCliente };
+  return { duracaoPorCliente, produtoPorCliente, vgvMasaPorCliente, segundosPorClienteTaskName };
 }
 
 // Pra cada empreendimento (client_id), acha o item de maior `order` entre todas as ocorrências
@@ -202,7 +217,7 @@ async function listMatriz() {
     clientsRaw,
     taskTypesRaw,
     actions,
-    { duracaoPorCliente, produtoPorCliente, vgvMasaPorCliente },
+    { duracaoPorCliente, produtoPorCliente, vgvMasaPorCliente, segundosPorClienteTaskName },
   ] = await Promise.all([
     buscarJson(ACTIOON_ACTION_TYPES_URL, token, 'Não foi possível buscar as fases na Actioon.'),
     buscarJson(ACTIOON_CLIENTS_URL, token, 'Não foi possível buscar os empreendimentos na Actioon.'),
@@ -263,6 +278,14 @@ async function listMatriz() {
     contagemTotalPorCliente.set(task.client_id, atual);
   }
 
+  // "Horas Trabalhadas" pra um (empreendimento, nome de task_type) específico — casa pelo NOME
+  // (pedido do usuário), não pelo id, já que o time_logs é de outro sistema e não conhece o
+  // task_type_id da Actioon. Sem nome ou sem log batendo, fica null (mostrado como "—").
+  function buscarSegundosTrabalhados(clienteId, nomeTaskType) {
+    if (!nomeTaskType) return null;
+    return segundosPorClienteTaskName.get(`${clienteId}::${nomeTaskType}`) ?? null;
+  }
+
   // Histórico de micro etapas do empreendimento (drilldown da Micro Etapa Atual) — todas as
   // OUTRAS micro etapas em que ele já teve tarefa, cada uma com seu próprio "Qtd Tarefas",
   // ordenadas decrescente pelo prefixo major.minor (pedido do usuário: "se eu estou na 1.4,
@@ -284,6 +307,7 @@ async function listMatriz() {
       .map((item) => ({
         name: item.name,
         qtdTarefas: item.contagem ? `${item.contagem.fechadas}/${item.contagem.total}` : null,
+        segundosTrabalhados: buscarSegundosTrabalhados(clienteId, item.name),
       }));
   }
 
@@ -296,12 +320,13 @@ async function listMatriz() {
     const contagem = microEtapa ? contagemPorClienteTaskType.get(`${clienteId}::${microEtapa.itemId}`) : null;
     const contagemTotal = contagemTotalPorCliente.get(clienteId);
     const produto = produtoPorCliente.get(clienteId);
+    const nomeMicroEtapaAtual = microEtapa ? taskTypePorId.get(microEtapa.itemId)?.name || null : null;
     if (!empreendimentosPorFaseId.has(faseId)) empreendimentosPorFaseId.set(faseId, []);
     empreendimentosPorFaseId.get(faseId).push({
       id: cliente.id,
       name: cliente.name,
       order: cliente.order,
-      microEtapaAtual: microEtapa ? taskTypePorId.get(microEtapa.itemId)?.name || null : null,
+      microEtapaAtual: nomeMicroEtapaAtual,
       qtdTarefas: contagem ? `${contagem.fechadas}/${contagem.total}` : null,
       qtdTarefasTotais: contagemTotal ? `${contagemTotal.fechadas}/${contagemTotal.total}` : null,
       duracaoDias: duracaoPorCliente.get(clienteId) ?? null,
@@ -309,6 +334,7 @@ async function listMatriz() {
       unidades: produto?.unidades ?? null,
       vgvGeral: produto?.vgvGeral ?? null,
       vgvMasa: vgvMasaPorCliente.get(clienteId) ?? null,
+      segundosTrabalhados: buscarSegundosTrabalhados(clienteId, nomeMicroEtapaAtual),
       historicoMicroEtapas: microEtapa ? montarHistorico(clienteId, microEtapa.itemId) : [],
     });
   }
@@ -334,6 +360,7 @@ async function listMatriz() {
           unidades,
           vgvGeral,
           vgvMasa,
+          segundosTrabalhados,
           historicoMicroEtapas,
         }) => ({
           id,
@@ -346,6 +373,7 @@ async function listMatriz() {
           unidades,
           vgvGeral,
           vgvMasa,
+          segundosTrabalhados,
           historicoMicroEtapas,
         })
       ),

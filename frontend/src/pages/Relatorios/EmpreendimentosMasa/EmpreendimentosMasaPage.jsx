@@ -12,6 +12,11 @@ function formatarMoeda(valor) {
   });
 }
 
+function formatarHoras(segundos) {
+  const horas = segundos / 3600;
+  return `${horas.toLocaleString('pt-BR', { minimumFractionDigits: 1, maximumFractionDigits: 1 })} h`;
+}
+
 // Matriz do relatório Empreendimentos Masa (exclusivo da empresa Masa, via a integração
 // Actioon dela). Coluna "Etapa Atual" (fase, action_types) sempre aberta — pedido do usuário —
 // e fixa: 1 célula só por fase, com `rowSpan` cobrindo todas as linhas dos empreendimentos
@@ -105,6 +110,9 @@ export default function EmpreendimentosMasaPage() {
                   </th>
                   <th className="w-32 border-b border-l border-gray-200 bg-white py-2.5 pl-4 font-medium">
                     VGV Masa
+                  </th>
+                  <th className="w-28 border-b border-l border-gray-200 bg-white py-2.5 pl-4 font-medium">
+                    Horas Trabalhadas
                   </th>
                 </tr>
               </thead>
@@ -214,6 +222,13 @@ export default function EmpreendimentosMasaPage() {
                                   <span className="text-gray-300">—</span>
                                 )}
                               </td>
+                              <td className="border-b border-l border-gray-100 py-1.5 pl-4 text-xs tabular-nums text-gray-700">
+                                {empreendimento?.segundosTrabalhados != null ? (
+                                  formatarHoras(empreendimento.segundosTrabalhados)
+                                ) : (
+                                  <span className="text-gray-300">—</span>
+                                )}
+                              </td>
                             </tr>
 
                             {aberto &&
@@ -230,7 +245,13 @@ export default function EmpreendimentosMasaPage() {
                                   <td className="border-b border-l border-gray-100" />
                                   <td className="border-b border-l border-gray-100" />
                                   <td className="border-b border-l border-gray-100" />
-                                  <td className="border-b border-l border-gray-100" />
+                                  <td className="border-b border-l border-gray-100 py-1.5 pl-4 text-xs tabular-nums text-gray-500">
+                                    {historico.segundosTrabalhados != null ? (
+                                      formatarHoras(historico.segundosTrabalhados)
+                                    ) : (
+                                      <span className="text-gray-300">—</span>
+                                    )}
+                                  </td>
                                 </tr>
                               ))}
                           </Fragment>
