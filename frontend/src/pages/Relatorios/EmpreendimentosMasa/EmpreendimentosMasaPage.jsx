@@ -206,10 +206,17 @@ export default function EmpreendimentosMasaPage() {
 
   // Filtro de coluna (Etapa Atual/Empreendimento/Micro Etapa Atual) — mesma convenção de
   // RotinasTab.jsx: array vazio = sem filtro (mostra tudo); selecionar valores restringe só a
-  // eles. Os 3 filtros são combinados em "E" entre si.
+  // eles. Os 4 filtros são combinados em "E" entre si.
   const [filtroEtapaAtual, setFiltroEtapaAtual] = useState([]);
   const [filtroEmpreendimento, setFiltroEmpreendimento] = useState([]);
   const [filtroMicroEtapa, setFiltroMicroEtapa] = useState([]);
+  // Clicar numa classificação da legenda alterna ela dentro deste filtro (várias podem ficar
+  // ativas ao mesmo tempo, mesma convenção multi-seleção dos outros filtros de coluna).
+  const [filtroClassificacao, setFiltroClassificacao] = useState([]);
+
+  function toggleFiltroClassificacao(nome) {
+    setFiltroClassificacao((atual) => (atual.includes(nome) ? atual.filter((n) => n !== nome) : [...atual, nome]));
+  }
 
   // Referências dos <th> — passadas pra FiltroColuna (via `colunaRef`) só pra o painel de
   // filtro nascer com a mesma largura da coluna, em vez da largura do ícone que abre ele.
@@ -259,7 +266,8 @@ export default function EmpreendimentosMasaPage() {
   // empreendimento na Actioon) quando nenhum filtro de Empreendimento/Micro Etapa está ativo,
   // já que aí o "vazio" não veio do filtro.
   const matrizFiltrada = useMemo(() => {
-    const semFiltroDeItem = filtroEmpreendimento.length === 0 && filtroMicroEtapa.length === 0;
+    const semFiltroDeItem =
+      filtroEmpreendimento.length === 0 && filtroMicroEtapa.length === 0 && filtroClassificacao.length === 0;
     return (matriz || [])
       .filter((fase) => filtroEtapaAtual.length === 0 || filtroEtapaAtual.includes(fase.name))
       .map((fase) => ({
@@ -267,11 +275,12 @@ export default function EmpreendimentosMasaPage() {
         empreendimentos: fase.empreendimentos.filter(
           (emp) =>
             (filtroEmpreendimento.length === 0 || filtroEmpreendimento.includes(emp.name)) &&
-            (filtroMicroEtapa.length === 0 || filtroMicroEtapa.includes(emp.microEtapaAtual))
+            (filtroMicroEtapa.length === 0 || filtroMicroEtapa.includes(emp.microEtapaAtual)) &&
+            (filtroClassificacao.length === 0 || filtroClassificacao.includes(emp.classificacao))
         ),
       }))
       .filter((fase) => fase.empreendimentos.length > 0 || semFiltroDeItem);
-  }, [matriz, filtroEtapaAtual, filtroEmpreendimento, filtroMicroEtapa]);
+  }, [matriz, filtroEtapaAtual, filtroEmpreendimento, filtroMicroEtapa, filtroClassificacao]);
 
   // Totalizador do rodapé — soma as 7 colunas numéricas (Duração até Contas Pagas). Sempre a
   // partir da matriz JÁ FILTRADA — os totais têm que refletir só o que está visível na tela.
@@ -411,14 +420,35 @@ export default function EmpreendimentosMasaPage() {
   return (
     <div className="space-y-4">
       {!carregando && !erro && matriz?.length > 0 && (
-        <div className="flex flex-wrap items-center gap-3 px-1 text-[11px] text-gray-400">
-          <span>Classificação:</span>
-          {Object.entries(CLASSIFICACAO_CORES).map(([nome, cor]) => (
-            <span key={nome} className="inline-flex items-center gap-1.5">
-              <span className={`h-2.5 w-2.5 shrink-0 rounded-full ${cor.swatch}`} />
-              {nome}
-            </span>
-          ))}
+        <div className="flex flex-wrap items-center gap-1.5 px-1 text-[11px] text-gray-400">
+          <span className="mr-1.5">Classificação:</span>
+          {Object.entries(CLASSIFICACAO_CORES).map(([nome, cor]) => {
+            const ativo = filtroClassificacao.includes(nome);
+            return (
+              <button
+                key={nome}
+                type="button"
+                onClick={() => toggleFiltroClassificacao(nome)}
+                title={`Filtrar por ${nome}`}
+                aria-pressed={ativo}
+                className={`inline-flex items-center gap-1.5 rounded-full px-1.5 py-0.5 transition ${
+                  ativo ? 'bg-gray-100 text-gray-600 ring-1 ring-gray-300' : 'text-gray-400 hover:bg-gray-50'
+                }`}
+              >
+                <span className={`h-2.5 w-2.5 shrink-0 rounded-full ${cor.swatch}`} />
+                {nome}
+              </button>
+            );
+          })}
+          {filtroClassificacao.length > 0 && (
+            <button
+              type="button"
+              onClick={() => setFiltroClassificacao([])}
+              className="ml-1 text-gray-400 underline decoration-dotted hover:text-gray-600"
+            >
+              Limpar
+            </button>
+          )}
         </div>
       )}
       <div className="rounded-card bg-white shadow-card">
@@ -521,7 +551,7 @@ export default function EmpreendimentosMasaPage() {
                     <td colSpan={10} className="py-12 text-center text-sm text-gray-500">
                       <p className="font-medium text-gray-700">Nenhuma linha corresponde aos filtros selecionados.</p>
                       <p className="mx-auto mt-1 max-w-sm text-xs text-gray-400">
-                        Ajuste os filtros de Etapa Atual, Empreendimento ou Micro Etapa Atual pra ver as linhas de novo.
+                        Ajuste os filtros de Etapa Atual, Empreendimento, Micro Etapa Atual ou Classificação pra ver as linhas de novo.
                       </p>
                     </td>
                   </tr>
