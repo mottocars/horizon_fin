@@ -4,7 +4,12 @@ import Button from '../../../components/Button';
 import { getMatrizEmpreendimentosMasa } from '../../../api/relatorioMasa.api';
 
 function formatarMoeda(valor) {
-  return (Number(valor) || 0).toLocaleString('pt-BR', { style: 'currency', currency: 'BRL' });
+  return (Number(valor) || 0).toLocaleString('pt-BR', {
+    style: 'currency',
+    currency: 'BRL',
+    minimumFractionDigits: 0,
+    maximumFractionDigits: 0,
+  });
 }
 
 // Matriz do relatório Empreendimentos Masa (exclusivo da empresa Masa, via a integração
@@ -97,6 +102,9 @@ export default function EmpreendimentosMasaPage() {
                   </th>
                   <th className="w-32 border-b border-l border-gray-200 bg-white py-2.5 pl-4 font-medium">
                     VGV Geral
+                  </th>
+                  <th className="w-32 border-b border-l border-gray-200 bg-white py-2.5 pl-4 font-medium">
+                    VGV Masa
                   </th>
                 </tr>
               </thead>
@@ -199,6 +207,13 @@ export default function EmpreendimentosMasaPage() {
                                   <span className="text-gray-300">—</span>
                                 )}
                               </td>
+                              <td className="border-b border-l border-gray-100 py-1.5 pl-4 text-xs tabular-nums text-gray-700">
+                                {empreendimento?.vgvMasa != null ? (
+                                  formatarMoeda(empreendimento.vgvMasa)
+                                ) : (
+                                  <span className="text-gray-300">—</span>
+                                )}
+                              </td>
                             </tr>
 
                             {aberto &&
@@ -210,6 +225,7 @@ export default function EmpreendimentosMasaPage() {
                                   <td className="border-b border-l border-gray-100 py-1.5 pl-4 text-xs tabular-nums text-gray-500">
                                     {historico.qtdTarefas || <span className="text-gray-300">—</span>}
                                   </td>
+                                  <td className="border-b border-l border-gray-100" />
                                   <td className="border-b border-l border-gray-100" />
                                   <td className="border-b border-l border-gray-100" />
                                   <td className="border-b border-l border-gray-100" />

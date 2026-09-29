@@ -91,11 +91,15 @@ async function buscarTodasActions(token) {
 
 // Dados que não vêm da Actioon, e sim de um banco de terceiro: a conexão Postgres "Time
 // Tracker", cadastrada em Integrações > Banco de Dados pra empresa Masa. Uma única conexão pras
-// duas consultas (evita abrir 2 conexões por carregamento do relatório).
+// três consultas (evita abrir várias conexões por carregamento do relatório).
 // - "Duração": dias corridos desde a data_assinatura de cada empreendimento (client_id) até
 //   hoje. Sem essa data (empreendimento não veio na consulta) a duração fica null.
 // - M²/Unidades/VGV Geral: client_related_products liga 1:1 (confirmado — sem duplicidade)
 //   product_client_id ao mesmo client_id usado em todo o resto do relatório.
+// - "VGV Masa": a fatia do VGV que cabe à Masa como parceira (client_partnerships) — só a
+//   parceria da própria Masa (nome_parceiro contém "MASA") e só a linha do empreendimento em si
+//   (produto_relacionado_id nulo — parcerias de um produto específico ficam de fora, pedido do
+//   usuário). Também 1:1 (confirmado — sem duplicidade).
 async function buscarDadosTimeTracker() {
   const empresaId = await getEmpresaMasaId();
   const credenciais = await bancoDadosService.getCredenciaisPorConexao(empresaId, CONEXAO_TIME_TRACKER);
@@ -113,6 +117,7 @@ async function buscarDadosTimeTracker() {
 
   const duracaoPorCliente = new Map(); // client_id -> dias desde a data_assinatura
   const produtoPorCliente = new Map(); // client_id -> { areaM2, unidades, vgvGeral }
+  const vgvMasaPorCliente = new Map(); // client_id -> vgv_masa
   try {
     await client.connect();
 
@@ -135,12 +140,25 @@ async function buscarDadosTimeTracker() {
         vgvGeral: row.vgv != null ? Number(row.vgv) : null,
       });
     }
+
+    const parcerias = await client.query(`
+      select
+        cp.client_id,
+        vgv * (cp.percentual_receitas_totais / 100) as vgv_masa
+      from client_partnerships cp
+      left join client_related_products crp on crp.product_client_id = cp.client_id
+      where upper(nome_parceiro) like '%MASA%'
+      and produto_relacionado_id is null
+    `);
+    for (const row of parcerias.rows) {
+      vgvMasaPorCliente.set(row.client_id, row.vgv_masa != null ? Number(row.vgv_masa) : null);
+    }
   } catch {
     throw badRequest('Não foi possível conectar ao banco "Time Tracker".');
   } finally {
     await client.end().catch(() => {});
   }
-  return { duracaoPorCliente, produtoPorCliente };
+  return { duracaoPorCliente, produtoPorCliente, vgvMasaPorCliente };
 }
 
 // Pra cada empreendimento (client_id), acha o item de maior `order` entre todas as ocorrências
@@ -179,7 +197,13 @@ function maisAvancadoPorCliente(eventos, ordemPorItemId, extrairClienteEItem) {
 async function listMatriz() {
   const token = await buscarToken();
 
-  const [fasesRaw, clientsRaw, taskTypesRaw, actions, { duracaoPorCliente, produtoPorCliente }] = await Promise.all([
+  const [
+    fasesRaw,
+    clientsRaw,
+    taskTypesRaw,
+    actions,
+    { duracaoPorCliente, produtoPorCliente, vgvMasaPorCliente },
+  ] = await Promise.all([
     buscarJson(ACTIOON_ACTION_TYPES_URL, token, 'Não foi possível buscar as fases na Actioon.'),
     buscarJson(ACTIOON_CLIENTS_URL, token, 'Não foi possível buscar os empreendimentos na Actioon.'),
     buscarJson(ACTIOON_TASK_TYPES_URL, token, 'Não foi possível buscar as micro etapas na Actioon.'),
@@ -284,6 +308,7 @@ async function listMatriz() {
       areaM2: produto?.areaM2 ?? null,
       unidades: produto?.unidades ?? null,
       vgvGeral: produto?.vgvGeral ?? null,
+      vgvMasa: vgvMasaPorCliente.get(clienteId) ?? null,
       historicoMicroEtapas: microEtapa ? montarHistorico(clienteId, microEtapa.itemId) : [],
     });
   }
@@ -308,6 +333,7 @@ async function listMatriz() {
           areaM2,
           unidades,
           vgvGeral,
+          vgvMasa,
           historicoMicroEtapas,
         }) => ({
           id,
@@ -319,6 +345,7 @@ async function listMatriz() {
           areaM2,
           unidades,
           vgvGeral,
+          vgvMasa,
           historicoMicroEtapas,
         })
       ),
