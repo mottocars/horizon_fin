@@ -46,6 +46,13 @@ export const TELAS_SISTEMA = [
       { codigo: '/integracoes/banco-dados', label: 'Banco de Dados' },
     ],
   },
+  {
+    grupo: 'Relatórios',
+    telas: [
+      { codigo: '/relatorios/metricas-de-uso', label: 'Métricas de Uso' },
+      { codigo: '/relatorios/empreendimentos-masa', label: 'Empreendimentos Masa' },
+    ],
+  },
 ];
 
 export const TODOS_CODIGOS_TELAS = TELAS_SISTEMA.flatMap((grupo) => grupo.telas.map((t) => t.codigo));
