@@ -262,10 +262,10 @@ export default function EmpreendimentosMasaPage() {
 
   // Totalizador do rodapé — soma as 7 colunas numéricas (Duração até Contas Pagas). Sempre a
   // partir da matriz JÁ FILTRADA — os totais têm que refletir só o que está visível na tela.
-  const totais = useMemo(
-    () => somarEmpreendimentos(matrizFiltrada.flatMap((fase) => fase.empreendimentos)),
-    [matrizFiltrada]
-  );
+  const totais = useMemo(() => {
+    const todosEmpreendimentos = matrizFiltrada.flatMap((fase) => fase.empreendimentos);
+    return { qtdEmpreendimentos: todosEmpreendimentos.length, ...somarEmpreendimentos(todosEmpreendimentos) };
+  }, [matrizFiltrada]);
 
   const semResultadoFiltro = Boolean(matriz && matriz.length > 0 && matrizFiltrada.length === 0);
 
@@ -369,8 +369,8 @@ export default function EmpreendimentosMasaPage() {
     linhas.push({
       'Etapa Atual': 'Total',
       'Micro Etapa Atual': '',
-      Empreendimento: '',
-      'Duração (dias)': '',
+      Empreendimento: totais.qtdEmpreendimentos,
+      'Duração (dias)': arredondar(totais.duracaoDias),
       'M²': arredondar(totais.areaM2),
       Unidades: totais.unidades,
       'VGV Geral': arredondar(totais.vgvGeral),
@@ -382,6 +382,7 @@ export default function EmpreendimentosMasaPage() {
     // Índice das colunas (0-based) na mesma ordem do objeto acima — Etapa Atual=0, Micro Etapa
     // Atual=1, Empreendimento=2, Duração=3, M²=4, Unidades=5, VGV Geral=6, VGV Masa=7, Horas
     // Trabalhadas=8, Contas Pagas=9.
+    aplicarFormatoNumerico(planilha, XLSX, 2, '#,##0');
     aplicarFormatoNumerico(planilha, XLSX, 3, '#,##0');
     aplicarFormatoNumerico(planilha, XLSX, 4, '#,##0.00');
     aplicarFormatoNumerico(planilha, XLSX, 5, '#,##0');
@@ -758,10 +759,13 @@ export default function EmpreendimentosMasaPage() {
               <tfoot>
                 <tr className="text-xs font-semibold text-primary-700">
                   <td
-                    colSpan={3}
+                    colSpan={2}
                     className="sticky -bottom-6 z-10 rounded-bl-card border-t-2 border-t-primary-500 bg-primary-50 px-4 py-2.5"
                   >
                     Total
+                  </td>
+                  <td className="sticky -bottom-6 z-10 border-t-2 border-t-primary-500 border-l border-l-primary-100 bg-primary-50 py-2.5 pl-4 text-xs tabular-nums">
+                    {totais.qtdEmpreendimentos}
                   </td>
                   <td className="sticky -bottom-6 z-10 w-28 border-t-2 border-t-primary-500 border-l border-l-primary-100 bg-primary-50 py-2.5 pl-4 text-xs tabular-nums">
                     {`${totais.duracaoDias.toLocaleString('pt-BR')} dias`}
