@@ -179,13 +179,18 @@ export default function EmpreendimentosMasaPage() {
     function fechar() {
       setMenuContexto(null);
     }
+    // Sem listener de 'contextmenu' aqui de propósito: o MESMO botão direito que abre o menu
+    // (handleContextMenu, no <div> da tabela) continua se propagando nativamente até a `window`
+    // depois de rodar — se este efeito (que só passa a existir DEPOIS que `menuContexto` vira
+    // não-nulo) também escutasse 'contextmenu', ele fechava o menu que acabou de abrir na
+    // mesma sequência de clique (a `window` recebe o evento em seguida, ainda dentro do mesmo
+    // clique). Um novo botão direito em cima da tabela já reposiciona o menu sozinho via
+    // handleContextMenu — não precisa de um listener à parte pra isso.
     window.addEventListener('click', fechar);
     window.addEventListener('scroll', fechar, true);
-    window.addEventListener('contextmenu', fechar);
     return () => {
       window.removeEventListener('click', fechar);
       window.removeEventListener('scroll', fechar, true);
-      window.removeEventListener('contextmenu', fechar);
     };
   }, [menuContexto]);
 
