@@ -1,4 +1,4 @@
-import { Fragment, useCallback, useEffect, useState } from 'react';
+import { Fragment, useCallback, useEffect, useMemo, useState } from 'react';
 import { Building2, RefreshCw, TriangleAlert } from 'lucide-react';
 import Button from '../../../components/Button';
 import { getMatrizEmpreendimentosMasa } from '../../../api/relatorioMasa.api';
@@ -52,6 +52,25 @@ export default function EmpreendimentosMasaPage() {
     }
   }
 
+  // Totalizador do rodapé — soma só as 6 colunas numéricas "de valor" que fazem sentido somar
+  // (pedido do usuário): M², Unidades, VGV Geral, VGV Masa, Horas Trabalhadas e Contas Pagas.
+  // Fica de fora Duração (não é um total que faça sentido somar entre empreendimentos).
+  const totais = useMemo(() => {
+    if (!matriz) return null;
+    const todos = matriz.flatMap((fase) => fase.empreendimentos);
+    return todos.reduce(
+      (acc, emp) => ({
+        areaM2: acc.areaM2 + (emp.areaM2 || 0),
+        unidades: acc.unidades + (emp.unidades || 0),
+        vgvGeral: acc.vgvGeral + (emp.vgvGeral || 0),
+        vgvMasa: acc.vgvMasa + (emp.vgvMasa || 0),
+        segundosTrabalhados: acc.segundosTrabalhados + (emp.segundosTrabalhados || 0),
+        contasPagas: acc.contasPagas + (emp.contasPagas || 0),
+      }),
+      { areaM2: 0, unidades: 0, vgvGeral: 0, vgvMasa: 0, segundosTrabalhados: 0, contasPagas: 0 }
+    );
+  }, [matriz]);
+
   return (
     <div className="space-y-4">
       <div className="rounded-card bg-white shadow-card">
@@ -68,11 +87,19 @@ export default function EmpreendimentosMasaPage() {
             <p className="text-sm text-gray-600">Nenhuma fase cadastrada na Actioon.</p>
           </div>
         ) : (
-          <div className="overflow-x-auto rounded-card">
+          // Sem overflow-x-auto aqui de propósito: qualquer overflow != visible num ancestral
+          // entre o totalizador e o <main> (mesmo só no eixo X) faz o CSS computar o eixo Y
+          // como "auto" também (regra do browser: se um eixo não é "visible" o outro para de
+          // ser), e isso quebra o `sticky bottom-0` — ele passa a grudar no rodapé DESTA div (que
+          // nunca chega a rolar de verdade, já que a altura é automática) em vez do <main>, que é
+          // quem realmente rola. Deixando sem overflow aqui, o scroll horizontal (se precisar)
+          // acontece no próprio <main> (que já tem overflow-y-auto, logo o browser computa
+          // overflow-x dele como auto também) — mesmo `<main>` que o sticky já usa de referência.
+          <div className="rounded-card">
             <table className="w-full border-separate border-spacing-0 text-left text-xs">
               <thead>
                 <tr className="text-xs uppercase tracking-wide text-gray-400">
-                  <th className="w-64 border-b border-gray-200 bg-white px-2 py-2.5 text-center font-medium">
+                  <th className="w-64 rounded-tl-card border-b border-gray-200 bg-white px-2 py-2.5 text-center font-medium">
                     Etapa Atual
                   </th>
                   <th className="border-b border-l border-gray-200 bg-white px-2 py-2.5 text-center font-medium">
@@ -99,7 +126,7 @@ export default function EmpreendimentosMasaPage() {
                   <th className="w-28 border-b border-l border-gray-200 bg-white px-2 py-2.5 text-center font-medium">
                     Horas Trabalhadas
                   </th>
-                  <th className="w-32 border-b border-l border-gray-200 bg-white px-2 py-2.5 text-center font-medium">
+                  <th className="w-32 rounded-tr-card border-b border-l border-gray-200 bg-white px-2 py-2.5 text-center font-medium">
                     Contas Pagas
                   </th>
                 </tr>
@@ -215,6 +242,41 @@ export default function EmpreendimentosMasaPage() {
                   );
                 })}
               </tbody>
+              {/* Totalizador fixo — `sticky bottom-0` em cada <td> gruda no rodapé do container
+                  que rola (o <main> do AppShell, não esta div, que só rola na horizontal) até o
+                  fim da tabela, onde some naturalmente da vista (nada de flutuar por cima do
+                  botão "Atualizar" depois do fim da tabela — pedido do usuário). */}
+              <tfoot>
+                <tr className="text-xs font-semibold text-gray-900">
+                  <td
+                    colSpan={3}
+                    className="sticky bottom-0 z-10 rounded-bl-card border-t-2 border-t-gray-300 bg-gray-100 px-4 py-2.5"
+                  >
+                    Total
+                  </td>
+                  <td className="sticky bottom-0 z-10 w-28 border-t-2 border-t-gray-300 border-l border-l-gray-200 bg-gray-100 py-2.5 pl-4 text-xs">
+                    <span className="text-gray-300">—</span>
+                  </td>
+                  <td className="sticky bottom-0 z-10 w-28 border-t-2 border-t-gray-300 border-l border-l-gray-200 bg-gray-100 py-2.5 pl-4 text-xs tabular-nums">
+                    {`${totais.areaM2.toLocaleString('pt-BR')} m²`}
+                  </td>
+                  <td className="sticky bottom-0 z-10 w-24 border-t-2 border-t-gray-300 border-l border-l-gray-200 bg-gray-100 py-2.5 pl-4 text-xs tabular-nums">
+                    {totais.unidades.toLocaleString('pt-BR')}
+                  </td>
+                  <td className="sticky bottom-0 z-10 w-32 border-t-2 border-t-gray-300 border-l border-l-gray-200 bg-gray-100 py-2.5 pl-4 text-xs tabular-nums">
+                    {formatarMoeda(totais.vgvGeral)}
+                  </td>
+                  <td className="sticky bottom-0 z-10 w-32 border-t-2 border-t-gray-300 border-l border-l-gray-200 bg-gray-100 py-2.5 pl-4 text-xs tabular-nums">
+                    {formatarMoeda(totais.vgvMasa)}
+                  </td>
+                  <td className="sticky bottom-0 z-10 w-28 border-t-2 border-t-gray-300 border-l border-l-gray-200 bg-gray-100 py-2.5 pl-4 text-xs tabular-nums">
+                    {formatarHoras(totais.segundosTrabalhados)}
+                  </td>
+                  <td className="sticky bottom-0 z-10 w-32 rounded-br-card border-t-2 border-t-gray-300 border-l border-l-gray-200 bg-gray-100 py-2.5 pl-4 text-xs tabular-nums">
+                    {formatarMoeda(totais.contasPagas)}
+                  </td>
+                </tr>
+              </tfoot>
             </table>
           </div>
         )}
