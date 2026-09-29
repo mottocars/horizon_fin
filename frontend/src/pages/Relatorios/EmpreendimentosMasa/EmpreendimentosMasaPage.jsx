@@ -99,6 +99,9 @@ export default function EmpreendimentosMasaPage() {
                   <th className="w-28 border-b border-l border-gray-200 bg-white px-2 py-2.5 text-center font-medium">
                     Horas Trabalhadas
                   </th>
+                  <th className="w-32 border-b border-l border-gray-200 bg-white px-2 py-2.5 text-center font-medium">
+                    Contas Pagas
+                  </th>
                 </tr>
               </thead>
               <tbody>
@@ -192,6 +195,15 @@ export default function EmpreendimentosMasaPage() {
                             >
                               {empreendimento?.segundosTrabalhados != null ? (
                                 formatarHoras(empreendimento.segundosTrabalhados)
+                              ) : (
+                                <span className="text-gray-300">—</span>
+                              )}
+                            </td>
+                            <td
+                              className={`${bordaInferior} border-l border-l-gray-100 py-1.5 pl-4 text-xs tabular-nums text-gray-700`}
+                            >
+                              {empreendimento?.contasPagas != null ? (
+                                formatarMoeda(empreendimento.contasPagas)
                               ) : (
                                 <span className="text-gray-300">—</span>
                               )}

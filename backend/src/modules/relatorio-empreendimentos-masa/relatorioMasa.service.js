@@ -4,6 +4,7 @@ const actioonService = require('../integracoes-actioon/actioon.service');
 const bancoDadosService = require('../integracoes-banco-dados/bancoDados.service');
 
 const CONEXAO_TIME_TRACKER = 'Time Tracker';
+const CONEXAO_FINANCEIRO = 'Financeiro';
 
 const ACTIOON_ACTION_TYPES_URL = 'https://api.actioon.com.br/api/action_types';
 const ACTIOON_CLIENTS_URL = 'https://api.actioon.com.br/api/clients';
@@ -165,6 +166,74 @@ async function buscarDadosTimeTracker() {
   return { duracaoPorCliente, produtoPorCliente, vgvMasaPorCliente, segundosTrabalhadosPorCliente };
 }
 
+// "Contas Pagas" — soma das despesas (cabecalho_evento_main.type = 'EXPENSE') rateadas por
+// centro de custo, ligado ao empreendimento por NOME (act_clients.name = nome do centro de
+// custo) — não é o mesmo client_id da Actioon nem do Time Tracker, act_clients é o cadastro de
+// clientes de dentro do banco "Financeiro" (conexão própria, empresa Masa). Cada evento que tem
+// rateio usa o valor rateado (val_rateio); sem rateio, usa o valor cheio do evento (val_evento).
+// Já vem agrupado por client_id na própria query.
+async function buscarContasPagasPorCliente() {
+  const empresaId = await getEmpresaMasaId();
+  const credenciais = await bancoDadosService.getCredenciaisPorConexao(empresaId, CONEXAO_FINANCEIRO);
+  if (!credenciais) throw badRequest('Nenhuma conexão "Financeiro" ativa cadastrada para a Masa.');
+
+  const client = new Client({
+    host: credenciais.host,
+    port: credenciais.porta,
+    database: credenciais.banco,
+    user: credenciais.usuario,
+    password: credenciais.senha,
+    ssl: credenciais.ssl ? { rejectUnauthorized: false } : false,
+    connectionTimeoutMillis: 8000,
+  });
+
+  const contasPagasPorCliente = new Map(); // client_id -> valor pago
+  try {
+    await client.connect();
+    const { rows } = await client.query(`
+      select
+        sum(val_rateio) as valor,
+        ac.id as client_id
+      from (
+        select
+          case
+            when qtd_rateio = 1 then val_evento
+            when qtd_rateio > 1 then val_rateio
+          end val_rateio,
+          nom_centro_custo
+        from (
+          select
+            count(*) over (partition by cem.id_original) as qtd_rateio,
+            cem.negotiator_name as nom_favorecido,
+            deccr.value as val_rateio,
+            cem.value as val_evento,
+            coalesce(coalesce(deccr.cost_center, cem.cost_center_name), 'TRANSFERÊNCIAS TRANSITÓRIAS') as nom_centro_custo
+          from cabecalho_evento_main cem
+          left join detalhe_evento_installment dei on dei.id_original = cem.installment_id
+          left join detalhe_evento_acquittance dea on dea.installment_fk = dei.id
+          left join detalhe_evento_event dee on dee.installment_fk = dei.id
+          left join detalhe_evento_categories_ratio decr on decr.event_fk = dee.id
+          left join detalhe_evento_cost_centers_ratio deccr on deccr.categories_ratio_fk = decr.id
+          where cem.type = 'EXPENSE'
+          and coalesce(deccr.cost_center, cem.cost_center_name) is not null
+        ) t1
+        where t1.nom_centro_custo <> 'TRANSFERÊNCIAS TRANSITÓRIAS'
+      ) t2
+      left join act_clients ac on ac."name" = nom_centro_custo
+      where ac.id is not null
+      group by nom_centro_custo, ac.id
+    `);
+    for (const row of rows) {
+      contasPagasPorCliente.set(Number(row.client_id), row.valor != null ? Number(row.valor) : null);
+    }
+  } catch {
+    throw badRequest('Não foi possível conectar ao banco "Financeiro".');
+  } finally {
+    await client.end().catch(() => {});
+  }
+  return contasPagasPorCliente;
+}
+
 // Pra cada empreendimento (client_id), acha o item de maior `order` entre todas as ocorrências
 // dele numa lista de "eventos" já resolvidos — mesma lógica usada tanto pra fase (a partir de
 // action.action_type_id) quanto pra micro etapa (a partir de task.task_type_id), só que o
@@ -207,12 +276,14 @@ async function listMatriz() {
     taskTypesRaw,
     actions,
     { duracaoPorCliente, produtoPorCliente, vgvMasaPorCliente, segundosTrabalhadosPorCliente },
+    contasPagasPorCliente,
   ] = await Promise.all([
     buscarJson(ACTIOON_ACTION_TYPES_URL, token, 'Não foi possível buscar as fases na Actioon.'),
     buscarJson(ACTIOON_CLIENTS_URL, token, 'Não foi possível buscar os empreendimentos na Actioon.'),
     buscarJson(ACTIOON_TASK_TYPES_URL, token, 'Não foi possível buscar as micro etapas na Actioon.'),
     buscarTodasActions(token),
     buscarDadosTimeTracker(),
+    buscarContasPagasPorCliente(),
   ]);
 
   const ordemPorFaseId = new Map(fasesRaw.map((fase) => [fase.id, fase.order]));
@@ -254,6 +325,7 @@ async function listMatriz() {
       vgvGeral: produto?.vgvGeral ?? null,
       vgvMasa: vgvMasaPorCliente.get(clienteId) ?? null,
       segundosTrabalhados: segundosTrabalhadosPorCliente.get(clienteId) ?? null,
+      contasPagas: contasPagasPorCliente.get(clienteId) ?? null,
     });
   }
   for (const lista of empreendimentosPorFaseId.values()) {
@@ -267,7 +339,7 @@ async function listMatriz() {
       name: fase.name,
       order: fase.order,
       empreendimentos: (empreendimentosPorFaseId.get(fase.id) || []).map(
-        ({ id, name, microEtapaAtual, duracaoDias, areaM2, unidades, vgvGeral, vgvMasa, segundosTrabalhados }) => ({
+        ({
           id,
           name,
           microEtapaAtual,
@@ -277,6 +349,18 @@ async function listMatriz() {
           vgvGeral,
           vgvMasa,
           segundosTrabalhados,
+          contasPagas,
+        }) => ({
+          id,
+          name,
+          microEtapaAtual,
+          duracaoDias,
+          areaM2,
+          unidades,
+          vgvGeral,
+          vgvMasa,
+          segundosTrabalhados,
+          contasPagas,
         })
       ),
     }));
