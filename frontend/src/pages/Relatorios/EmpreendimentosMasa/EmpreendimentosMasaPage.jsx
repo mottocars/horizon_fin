@@ -19,8 +19,9 @@ function formatarHoras(segundos) {
 }
 
 // Mesma ideia de relatorioMasa.service.js::chaveOrdemTaskType — só pra ordenar as opções do
-// filtro de "Micro Etapa Atual" pelo prefixo "major.minor" do nome (1.2, 1.10, 2.1...) em vez de
-// ordem alfabética de string (que colocaria "1.10" antes de "1.2").
+// filtro de "Micro Etapa Atual" (e agrupar as linhas da tabela) pelo prefixo "major.minor" do
+// nome (1.2, 1.10, 2.1...) em vez de ordem alfabética de string (que colocaria "1.10" antes de
+// "1.2").
 function chaveOrdemMicroEtapa(nome) {
   const match = /^(\d+)\.(\d+)/.exec(nome || '');
   if (!match) return null;
@@ -33,6 +34,59 @@ function compararMicroEtapas(a, b) {
   if (chaveA != null) return -1;
   if (chaveB != null) return 1;
   return a.localeCompare(b, 'pt-BR');
+}
+
+// Agrupa os empreendimentos de uma fase por Micro Etapa Atual, preservando a ordem relativa de
+// cada um dentro do grupo (a lista já chega ordenada por `order` do backend) — os grupos em si
+// saem ordenados pelo prefixo numérico da micro etapa (ver compararMicroEtapas), com quem não
+// tem micro etapa nenhuma por último.
+function agruparPorMicroEtapa(empreendimentos) {
+  const porMicroEtapa = new Map(); // nome da micro etapa (ou null) -> empreendimentos[]
+  for (const emp of empreendimentos) {
+    const chave = emp.microEtapaAtual || null;
+    if (!porMicroEtapa.has(chave)) porMicroEtapa.set(chave, []);
+    porMicroEtapa.get(chave).push(emp);
+  }
+  return [...porMicroEtapa.entries()]
+    .sort(([a], [b]) => {
+      if (a == null && b == null) return 0;
+      if (a == null) return 1;
+      if (b == null) return -1;
+      return compararMicroEtapas(a, b);
+    })
+    .map(([microEtapaAtual, itens]) => ({ microEtapaAtual, empreendimentos: itens }));
+}
+
+// Achata uma fase em linhas de tabela prontas pra renderizar, já carregando tudo que o JSX
+// precisa saber sobre rowSpan/borda de cada uma: "Etapa Atual" continua 1 célula só pra fase
+// inteira (mesmo de sempre); "Micro Etapa Atual" agora segue o MESMO perfil — 1 célula só por
+// grupo de empreendimentos com a mesma micro etapa (pedido do usuário), não mais repetida em
+// cada linha.
+function construirLinhasFase(fase) {
+  const grupos =
+    fase.empreendimentos.length > 0
+      ? agruparPorMicroEtapa(fase.empreendimentos)
+      : [{ microEtapaAtual: null, empreendimentos: [null] }];
+  const total = grupos.reduce((soma, grupo) => soma + grupo.empreendimentos.length, 0);
+
+  const linhas = [];
+  let indice = 0;
+  for (const grupo of grupos) {
+    const grupoTerminaNaFase = indice + grupo.empreendimentos.length === total;
+    grupo.empreendimentos.forEach((empreendimento, indiceNoGrupo) => {
+      linhas.push({
+        empreendimento,
+        primeiraDaFase: indice === 0,
+        ultimaDaFase: indice === total - 1,
+        primeiraDoGrupo: indiceNoGrupo === 0,
+        tamanhoGrupo: grupo.empreendimentos.length,
+        microEtapaAtual: grupo.microEtapaAtual,
+        grupoTerminaNaFase,
+      });
+      indice += 1;
+    });
+  }
+  return { linhas, total };
 }
 
 // Ícone de filtro compacto ao lado do nome da coluna — mesmo padrão de
@@ -68,8 +122,10 @@ function FiltroColuna({ valor, onChange, opcoes, label, colunaRef }) {
 // Matriz do relatório Empreendimentos Masa (exclusivo da empresa Masa, via a integração
 // Actioon dela). Coluna "Etapa Atual" (fase, action_types) fixa: 1 célula só por fase, com
 // `rowSpan` cobrindo todas as linhas dos empreendimentos dela e centralizada verticalmente
-// (`align-middle`). Cada empreendimento aparece só na fase mais avançada entre todas as suas
-// ações (ver relatorioMasa.service.js::listMatriz) — nunca repetido em mais de uma linha.
+// (`align-middle`); "Micro Etapa Atual" segue o mesmo perfil, 1 célula por grupo de
+// empreendimentos com a mesma micro etapa dentro da fase (ver construirLinhasFase). Cada
+// empreendimento aparece só na fase mais avançada entre todas as suas ações (ver
+// relatorioMasa.service.js::listMatriz) — nunca repetido em mais de uma linha.
 export default function EmpreendimentosMasaPage() {
   const [matriz, setMatriz] = useState(null);
   const [carregando, setCarregando] = useState(true);
@@ -194,20 +250,35 @@ export default function EmpreendimentosMasaPage() {
     };
   }, [menuContexto]);
 
+  // Aplica um formato de número do Excel (símbolos universais — o Excel troca "," e "." pelos
+  // separadores certos conforme o idioma de quem abrir, então NÃO dá pra cravar "." de milhar
+  // direto na string) em cada célula numérica de 1 coluna, pulando o cabeçalho (linha 0).
+  function aplicarFormatoNumerico(planilha, XLSX, colunaIndex, formato) {
+    const range = XLSX.utils.decode_range(planilha['!ref']);
+    for (let linha = range.s.r + 1; linha <= range.e.r; linha++) {
+      const endereco = XLSX.utils.encode_cell({ r: linha, c: colunaIndex });
+      const celula = planilha[endereco];
+      if (celula && celula.t === 'n') celula.z = formato;
+    }
+  }
+
   // Exporta a matriz JÁ FILTRADA pra Excel, de forma "empilhada" — 1 linha por empreendimento
-  // com todas as colunas preenchidas (Etapa Atual/Empreendimento repetidos em cada linha), bem
-  // diferente da grade visual da tela (que usa rowSpan pra não repetir). Termina com uma linha
-  // de Total igual à do rodapé. Gera o .xlsx inteiramente no navegador (a matriz já filtrada já
-  // está em memória, sem precisar buscar nada de novo no backend) — biblioteca carregada sob
-  // demanda (só quando o usuário realmente exporta) pra não pesar no carregamento da página.
+  // com todas as colunas preenchidas (Etapa Atual/Micro Etapa Atual/Empreendimento repetidos em
+  // cada linha), bem diferente da grade visual da tela (que usa rowSpan pra não repetir).
+  // Termina com uma linha de Total igual à do rodapé. Números saem como número de verdade (não
+  // string formatada) com um formato de Excel aplicado por cima — assim o arquivo mostra
+  // "1.234,56" pro usuário e ainda dá pra somar/filtrar as colunas dentro do próprio Excel. Gera
+  // o .xlsx inteiramente no navegador (a matriz já filtrada já está em memória, sem precisar
+  // buscar nada de novo no backend) — biblioteca carregada sob demanda (só quando o usuário
+  // realmente exporta) pra não pesar no carregamento da página.
   async function handleExportar() {
     setMenuContexto(null);
     const XLSX = await import('xlsx');
     const linhas = matrizFiltrada.flatMap((fase) =>
       fase.empreendimentos.map((emp) => ({
         'Etapa Atual': fase.name,
-        Empreendimento: emp.name,
         'Micro Etapa Atual': emp.microEtapaAtual || '',
+        Empreendimento: emp.name,
         'Duração (dias)': emp.duracaoDias ?? '',
         'M²': emp.areaM2 ?? '',
         Unidades: emp.unidades ?? '',
@@ -222,8 +293,8 @@ export default function EmpreendimentosMasaPage() {
     const arredondar = (valor) => Math.round(valor * 100) / 100;
     linhas.push({
       'Etapa Atual': 'Total',
-      Empreendimento: '',
       'Micro Etapa Atual': '',
+      Empreendimento: '',
       'Duração (dias)': '',
       'M²': arredondar(totais.areaM2),
       Unidades: totais.unidades,
@@ -233,6 +304,16 @@ export default function EmpreendimentosMasaPage() {
       'Contas Pagas': arredondar(totais.contasPagas),
     });
     const planilha = XLSX.utils.json_to_sheet(linhas);
+    // Índice das colunas (0-based) na mesma ordem do objeto acima — Etapa Atual=0, Micro Etapa
+    // Atual=1, Empreendimento=2, Duração=3, M²=4, Unidades=5, VGV Geral=6, VGV Masa=7, Horas
+    // Trabalhadas=8, Contas Pagas=9.
+    aplicarFormatoNumerico(planilha, XLSX, 3, '#,##0');
+    aplicarFormatoNumerico(planilha, XLSX, 4, '#,##0.00');
+    aplicarFormatoNumerico(planilha, XLSX, 5, '#,##0');
+    aplicarFormatoNumerico(planilha, XLSX, 6, '"R$" #,##0.00');
+    aplicarFormatoNumerico(planilha, XLSX, 7, '"R$" #,##0.00');
+    aplicarFormatoNumerico(planilha, XLSX, 8, '#,##0.0" h"');
+    aplicarFormatoNumerico(planilha, XLSX, 9, '"R$" #,##0.00');
     const livro = XLSX.utils.book_new();
     XLSX.utils.book_append_sheet(livro, planilha, 'Empreendimentos Masa');
     XLSX.writeFile(livro, `empreendimentos-masa_${new Date().toISOString().slice(0, 10)}.xlsx`);
@@ -282,21 +363,6 @@ export default function EmpreendimentosMasaPage() {
                     </span>
                   </th>
                   <th
-                    ref={thEmpreendimentoRef}
-                    className="sticky -top-6 z-20 border-b-2 border-b-primary-500 border-l border-l-primary-100 bg-primary-50 px-2 py-2.5 text-center font-medium"
-                  >
-                    <span className="inline-flex items-center justify-center gap-1.5">
-                      <FiltroColuna
-                        valor={filtroEmpreendimento}
-                        onChange={setFiltroEmpreendimento}
-                        opcoes={opcoesEmpreendimento}
-                        label="empreendimento"
-                        colunaRef={thEmpreendimentoRef}
-                      />
-                      Empreendimento
-                    </span>
-                  </th>
-                  <th
                     ref={thMicroEtapaRef}
                     className="sticky -top-6 z-20 border-b-2 border-b-primary-500 border-l border-l-primary-100 bg-primary-50 px-2 py-2.5 text-center font-medium"
                   >
@@ -309,6 +375,21 @@ export default function EmpreendimentosMasaPage() {
                         colunaRef={thMicroEtapaRef}
                       />
                       Micro Etapa Atual
+                    </span>
+                  </th>
+                  <th
+                    ref={thEmpreendimentoRef}
+                    className="sticky -top-6 z-20 border-b-2 border-b-primary-500 border-l border-l-primary-100 bg-primary-50 px-2 py-2.5 text-center font-medium"
+                  >
+                    <span className="inline-flex items-center justify-center gap-1.5">
+                      <FiltroColuna
+                        valor={filtroEmpreendimento}
+                        onChange={setFiltroEmpreendimento}
+                        opcoes={opcoesEmpreendimento}
+                        label="empreendimento"
+                        colunaRef={thEmpreendimentoRef}
+                      />
+                      Empreendimento
                     </span>
                   </th>
                   <th className="sticky -top-6 z-20 w-28 border-b-2 border-b-primary-500 border-l border-l-primary-100 bg-primary-50 px-2 py-2.5 text-center font-medium">
@@ -346,25 +427,28 @@ export default function EmpreendimentosMasaPage() {
                   </tr>
                 )}
                 {matrizFiltrada.map((fase) => {
-                  // Fase sem nenhum empreendimento ainda ocupa 1 linha (com um traço no lugar
-                  // do nome) — senão ela desaparece da matriz inteira, o que esconderia que
-                  // aquela etapa existe e está vazia.
-                  const linhas = fase.empreendimentos.length > 0 ? fase.empreendimentos : [null];
+                  const { linhas, total } = construirLinhasFase(fase);
 
                   return (
                     <Fragment key={fase.id}>
-                      {linhas.map((empreendimento, indice) => {
+                      {linhas.map((linha, i) => {
+                        const { empreendimento } = linha;
                         // Última linha da fase — borda de baixo mais grossa/escura pra marcar
                         // bem a separação entre uma etapa e a próxima (pedido do usuário).
-                        const ultimaLinha = indice === linhas.length - 1;
-                        const bordaInferior = ultimaLinha
+                        const bordaInferior = linha.ultimaDaFase
+                          ? 'border-b-2 border-b-gray-300'
+                          : 'border-b border-b-gray-100';
+                        // Idem, mas pro fim de cada GRUPO de Micro Etapa Atual — só fica forte
+                        // quando o grupo também é o último da fase (senão vira uma borda comum,
+                        // já que ainda tem mais empreendimento da mesma fase abaixo).
+                        const bordaGrupo = linha.grupoTerminaNaFase
                           ? 'border-b-2 border-b-gray-300'
                           : 'border-b border-b-gray-100';
                         return (
-                          <tr key={`${fase.id}-${empreendimento?.id ?? 'vazia'}`}>
-                            {indice === 0 && (
+                          <tr key={`${fase.id}-${empreendimento?.id ?? 'vazia'}-${i}`}>
+                            {linha.primeiraDaFase && (
                               <td
-                                rowSpan={linhas.length}
+                                rowSpan={total}
                                 className="border-b-2 border-b-gray-300 border-r border-r-gray-200 bg-gray-50 px-4 py-2.5 align-middle"
                               >
                                 <span className="flex items-center gap-2">
@@ -375,15 +459,20 @@ export default function EmpreendimentosMasaPage() {
                                 </span>
                               </td>
                             )}
-                            <td className={`${bordaInferior} py-1.5 pl-4 text-xs text-gray-700`}>
+                            {linha.primeiraDoGrupo && (
+                              <td
+                                rowSpan={linha.tamanhoGrupo}
+                                className={`${bordaGrupo} border-l border-l-gray-200 bg-gray-50 px-4 py-2.5 align-middle text-xs text-gray-700`}
+                              >
+                                {linha.microEtapaAtual || <span className="text-gray-300">—</span>}
+                              </td>
+                            )}
+                            <td className={`${bordaInferior} border-l border-l-gray-100 py-1.5 pl-4 text-xs text-gray-700`}>
                               {empreendimento ? (
                                 empreendimento.name
                               ) : (
                                 <span className="italic text-gray-400">Nenhum empreendimento nesta fase.</span>
                               )}
-                            </td>
-                            <td className={`${bordaInferior} border-l border-l-gray-100 py-1.5 pl-4 text-xs text-gray-700`}>
-                              {empreendimento?.microEtapaAtual || <span className="text-gray-300">—</span>}
                             </td>
                             <td
                               className={`${bordaInferior} border-l border-l-gray-100 py-1.5 pl-4 text-xs tabular-nums text-gray-700`}
