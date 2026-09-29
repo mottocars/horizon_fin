@@ -60,15 +60,6 @@ async function buscarJson(url, token, mensagemErro) {
   return resposta.json();
 }
 
-// GET autenticado num endpoint simples (action_types/clients) — mesmo formato de retorno
-// (lista de itens com id/name/order), sempre ordenado por `order` (não por nome nem id).
-async function buscarListaOrdenada(url, token, mensagemErro) {
-  const corpo = await buscarJson(url, token, mensagemErro);
-  return [...corpo]
-    .sort((a, b) => a.order - b.order)
-    .map((item) => ({ id: item.id, name: item.name, order: item.order }));
-}
-
 // /api/actions é paginado (25 por página, ~40 páginas hoje) e não aceita `per_page` maior —
 // busca a 1ª página pra saber quantas existem (`last_page`) e o resto em lotes paralelos.
 async function buscarTodasActions(token) {
@@ -91,7 +82,7 @@ async function buscarTodasActions(token) {
 
 // Dados que não vêm da Actioon, e sim de um banco de terceiro: a conexão Postgres "Time
 // Tracker", cadastrada em Integrações > Banco de Dados pra empresa Masa. Uma única conexão pras
-// três consultas (evita abrir várias conexões por carregamento do relatório).
+// quatro consultas (evita abrir várias conexões por carregamento do relatório).
 // - "Duração": dias corridos desde a data_assinatura de cada empreendimento (client_id) até
 //   hoje. Sem essa data (empreendimento não veio na consulta) a duração fica null.
 // - M²/Unidades/VGV Geral: client_related_products liga 1:1 (confirmado — sem duplicidade)
@@ -100,11 +91,9 @@ async function buscarTodasActions(token) {
 //   parceria da própria Masa (nome_parceiro contém "MASA") e só a linha do empreendimento em si
 //   (produto_relacionado_id nulo — parcerias de um produto específico ficam de fora, pedido do
 //   usuário). Também 1:1 (confirmado — sem duplicidade).
-// - "Horas Trabalhadas": time_logs liga project_id ao client_id (igual às outras consultas), mas
-//   a tarefa em si só é confiável pelo NOME (task_name) — pedido explícito do usuário, já que
-//   task_id de terceiros não bate com o task_type_id da Actioon. Soma `duration` (segundos) por
-//   (project_id, task_name); o relatório casa esse nome com o nome de cada task_type (atual ou
-//   do histórico) pra somar as horas daquele empreendimento NAQUELE tipo de tarefa específico.
+// - "Horas Trabalhadas": soma de todo `duration` (segundos) de time_logs pro project_id daquele
+//   empreendimento (client_id) — TODAS as tarefas já registradas, sem filtrar por micro etapa
+//   (pedido explícito do usuário, pra não depender de casar nome de tarefa com task_type).
 async function buscarDadosTimeTracker() {
   const empresaId = await getEmpresaMasaId();
   const credenciais = await bancoDadosService.getCredenciaisPorConexao(empresaId, CONEXAO_TIME_TRACKER);
@@ -123,7 +112,7 @@ async function buscarDadosTimeTracker() {
   const duracaoPorCliente = new Map(); // client_id -> dias desde a data_assinatura
   const produtoPorCliente = new Map(); // client_id -> { areaM2, unidades, vgvGeral }
   const vgvMasaPorCliente = new Map(); // client_id -> vgv_masa
-  const segundosPorClienteTaskName = new Map(); // "clienteId::taskName" -> segundos somados
+  const segundosTrabalhadosPorCliente = new Map(); // client_id -> segundos somados (todo o time_logs)
   try {
     await client.connect();
 
@@ -161,19 +150,19 @@ async function buscarDadosTimeTracker() {
     }
 
     const logs = await client.query(`
-      select project_id, task_name, sum(duration)::bigint as total_segundos
+      select project_id, sum(duration)::bigint as total_segundos
       from time_logs tl
-      group by project_id, task_name
+      group by project_id
     `);
     for (const row of logs.rows) {
-      segundosPorClienteTaskName.set(`${row.project_id}::${row.task_name}`, Number(row.total_segundos));
+      segundosTrabalhadosPorCliente.set(row.project_id, Number(row.total_segundos));
     }
   } catch {
     throw badRequest('Não foi possível conectar ao banco "Time Tracker".');
   } finally {
     await client.end().catch(() => {});
   }
-  return { duracaoPorCliente, produtoPorCliente, vgvMasaPorCliente, segundosPorClienteTaskName };
+  return { duracaoPorCliente, produtoPorCliente, vgvMasaPorCliente, segundosTrabalhadosPorCliente };
 }
 
 // Pra cada empreendimento (client_id), acha o item de maior `order` entre todas as ocorrências
@@ -217,7 +206,7 @@ async function listMatriz() {
     clientsRaw,
     taskTypesRaw,
     actions,
-    { duracaoPorCliente, produtoPorCliente, vgvMasaPorCliente, segundosPorClienteTaskName },
+    { duracaoPorCliente, produtoPorCliente, vgvMasaPorCliente, segundosTrabalhadosPorCliente },
   ] = await Promise.all([
     buscarJson(ACTIOON_ACTION_TYPES_URL, token, 'Não foi possível buscar as fases na Actioon.'),
     buscarJson(ACTIOON_CLIENTS_URL, token, 'Não foi possível buscar os empreendimentos na Actioon.'),
@@ -246,96 +235,25 @@ async function listMatriz() {
     itemId: task.task_type_id,
   }));
 
-  // Quantas tarefas tem cada (empreendimento, task_type) e quantas delas já estão encerradas —
-  // "encerrada" é só `actual_end_date` preenchida, nada de olhar status_id/progress (pedido do
-  // usuário). Alimenta tanto a coluna "Qtd Tarefas" da micro etapa atual quanto a de cada
-  // micro etapa do histórico (drilldown).
-  const contagemPorClienteTaskType = new Map(); // "clienteId::taskTypeId" -> { total, fechadas }
-  // Todo task_type que o empreendimento já teve alguma tarefa, pra montar o histórico do
-  // drilldown (nível 2 de Micro Etapa Atual) — não só o vencedor.
-  const taskTypeIdsPorCliente = new Map(); // clienteId -> Set<taskTypeId>
-  for (const task of tasks) {
-    if (task.client_id == null || task.task_type_id == null) continue;
-    const chave = `${task.client_id}::${task.task_type_id}`;
-    const atual = contagemPorClienteTaskType.get(chave) || { total: 0, fechadas: 0 };
-    atual.total += 1;
-    if (task.actual_end_date) atual.fechadas += 1;
-    contagemPorClienteTaskType.set(chave, atual);
-
-    if (!taskTypeIdsPorCliente.has(task.client_id)) taskTypeIdsPorCliente.set(task.client_id, new Set());
-    taskTypeIdsPorCliente.get(task.client_id).add(task.task_type_id);
-  }
-
-  // "Qtd Tarefas Totais" — TODAS as tarefas do empreendimento, de toda ação, independente do
-  // task_type (inclusive sem task_type_id nenhum) — diferente de "Qtd Tarefas" (essa sim por
-  // micro etapa, ver contagemPorClienteTaskType acima). Pedido do usuário: manter as duas.
-  const contagemTotalPorCliente = new Map(); // clienteId -> { total, fechadas }
-  for (const task of tasks) {
-    if (task.client_id == null) continue;
-    const atual = contagemTotalPorCliente.get(task.client_id) || { total: 0, fechadas: 0 };
-    atual.total += 1;
-    if (task.actual_end_date) atual.fechadas += 1;
-    contagemTotalPorCliente.set(task.client_id, atual);
-  }
-
-  // "Horas Trabalhadas" pra um (empreendimento, nome de task_type) específico — casa pelo NOME
-  // (pedido do usuário), não pelo id, já que o time_logs é de outro sistema e não conhece o
-  // task_type_id da Actioon. Sem nome ou sem log batendo, fica null (mostrado como "—").
-  function buscarSegundosTrabalhados(clienteId, nomeTaskType) {
-    if (!nomeTaskType) return null;
-    return segundosPorClienteTaskName.get(`${clienteId}::${nomeTaskType}`) ?? null;
-  }
-
-  // Histórico de micro etapas do empreendimento (drilldown da Micro Etapa Atual) — todas as
-  // OUTRAS micro etapas em que ele já teve tarefa, cada uma com seu próprio "Qtd Tarefas",
-  // ordenadas decrescente pelo prefixo major.minor (pedido do usuário: "se eu estou na 1.4,
-  // mostre abaixo a 1.3, 1.2..."). A atual (a vencedora) não entra aqui — já aparece na linha
-  // principal, repeti-la no histórico seria redundante.
-  function montarHistorico(clienteId, taskTypeIdAtual) {
-    const idsDoCliente = taskTypeIdsPorCliente.get(clienteId);
-    if (!idsDoCliente) return [];
-    return [...idsDoCliente]
-      .filter((taskTypeId) => taskTypeId !== taskTypeIdAtual)
-      .map((taskTypeId) => ({
-        taskTypeId,
-        chave: ordemPorTaskTypeId.get(taskTypeId),
-        name: taskTypePorId.get(taskTypeId)?.name || null,
-        contagem: contagemPorClienteTaskType.get(`${clienteId}::${taskTypeId}`),
-      }))
-      .filter((item) => item.chave != null && item.name)
-      .sort((a, b) => b.chave - a.chave)
-      .map((item) => ({
-        name: item.name,
-        qtdTarefas: item.contagem ? `${item.contagem.fechadas}/${item.contagem.total}` : null,
-        segundosTrabalhados: buscarSegundosTrabalhados(clienteId, item.name),
-      }));
-  }
-
   // Agrupa os empreendimentos dentro da fase onde ficaram mais avançados.
   const empreendimentosPorFaseId = new Map();
   for (const [clienteId, { itemId: faseId }] of faseMaisAvancadaPorCliente) {
     const cliente = clientePorId.get(clienteId);
     if (!cliente) continue; // client_id de uma action que não existe (mais) em /api/clients
     const microEtapa = microEtapaMaisAvancadaPorCliente.get(clienteId);
-    const contagem = microEtapa ? contagemPorClienteTaskType.get(`${clienteId}::${microEtapa.itemId}`) : null;
-    const contagemTotal = contagemTotalPorCliente.get(clienteId);
     const produto = produtoPorCliente.get(clienteId);
-    const nomeMicroEtapaAtual = microEtapa ? taskTypePorId.get(microEtapa.itemId)?.name || null : null;
     if (!empreendimentosPorFaseId.has(faseId)) empreendimentosPorFaseId.set(faseId, []);
     empreendimentosPorFaseId.get(faseId).push({
       id: cliente.id,
       name: cliente.name,
       order: cliente.order,
-      microEtapaAtual: nomeMicroEtapaAtual,
-      qtdTarefas: contagem ? `${contagem.fechadas}/${contagem.total}` : null,
-      qtdTarefasTotais: contagemTotal ? `${contagemTotal.fechadas}/${contagemTotal.total}` : null,
+      microEtapaAtual: microEtapa ? taskTypePorId.get(microEtapa.itemId)?.name || null : null,
       duracaoDias: duracaoPorCliente.get(clienteId) ?? null,
       areaM2: produto?.areaM2 ?? null,
       unidades: produto?.unidades ?? null,
       vgvGeral: produto?.vgvGeral ?? null,
       vgvMasa: vgvMasaPorCliente.get(clienteId) ?? null,
-      segundosTrabalhados: buscarSegundosTrabalhados(clienteId, nomeMicroEtapaAtual),
-      historicoMicroEtapas: microEtapa ? montarHistorico(clienteId, microEtapa.itemId) : [],
+      segundosTrabalhados: segundosTrabalhadosPorCliente.get(clienteId) ?? null,
     });
   }
   for (const lista of empreendimentosPorFaseId.values()) {
@@ -349,32 +267,16 @@ async function listMatriz() {
       name: fase.name,
       order: fase.order,
       empreendimentos: (empreendimentosPorFaseId.get(fase.id) || []).map(
-        ({
+        ({ id, name, microEtapaAtual, duracaoDias, areaM2, unidades, vgvGeral, vgvMasa, segundosTrabalhados }) => ({
           id,
           name,
           microEtapaAtual,
-          qtdTarefas,
-          qtdTarefasTotais,
           duracaoDias,
           areaM2,
           unidades,
           vgvGeral,
           vgvMasa,
           segundosTrabalhados,
-          historicoMicroEtapas,
-        }) => ({
-          id,
-          name,
-          microEtapaAtual,
-          qtdTarefas,
-          qtdTarefasTotais,
-          duracaoDias,
-          areaM2,
-          unidades,
-          vgvGeral,
-          vgvMasa,
-          segundosTrabalhados,
-          historicoMicroEtapas,
         })
       ),
     }));
