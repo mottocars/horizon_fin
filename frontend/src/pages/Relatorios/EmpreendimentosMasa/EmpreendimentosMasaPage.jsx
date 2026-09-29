@@ -72,31 +72,31 @@ export default function EmpreendimentosMasaPage() {
             <table className="w-full border-separate border-spacing-0 text-left text-xs">
               <thead>
                 <tr className="text-xs uppercase tracking-wide text-gray-400">
-                  <th className="w-64 border-b border-gray-200 bg-white py-2.5 pl-4 text-center font-medium">
+                  <th className="w-64 border-b border-gray-200 bg-white px-2 py-2.5 text-center font-medium">
                     Etapa Atual
                   </th>
-                  <th className="border-b border-l border-gray-200 bg-white py-2.5 pl-4 text-center font-medium">
+                  <th className="border-b border-l border-gray-200 bg-white px-2 py-2.5 text-center font-medium">
                     Empreendimento
                   </th>
-                  <th className="border-b border-l border-gray-200 bg-white py-2.5 pl-4 text-center font-medium">
+                  <th className="border-b border-l border-gray-200 bg-white px-2 py-2.5 text-center font-medium">
                     Micro Etapa Atual
                   </th>
-                  <th className="w-28 border-b border-l border-gray-200 bg-white py-2.5 pl-4 text-center font-medium">
+                  <th className="w-28 border-b border-l border-gray-200 bg-white px-2 py-2.5 text-center font-medium">
                     Duração
                   </th>
-                  <th className="w-28 border-b border-l border-gray-200 bg-white py-2.5 pl-4 text-center font-medium">
+                  <th className="w-28 border-b border-l border-gray-200 bg-white px-2 py-2.5 text-center font-medium">
                     M²
                   </th>
-                  <th className="w-24 border-b border-l border-gray-200 bg-white py-2.5 pl-4 text-center font-medium">
+                  <th className="w-24 border-b border-l border-gray-200 bg-white px-2 py-2.5 text-center font-medium">
                     Unidades
                   </th>
-                  <th className="w-32 border-b border-l border-gray-200 bg-white py-2.5 pl-4 text-center font-medium">
+                  <th className="w-32 border-b border-l border-gray-200 bg-white px-2 py-2.5 text-center font-medium">
                     VGV Geral
                   </th>
-                  <th className="w-32 border-b border-l border-gray-200 bg-white py-2.5 pl-4 text-center font-medium">
+                  <th className="w-32 border-b border-l border-gray-200 bg-white px-2 py-2.5 text-center font-medium">
                     VGV Masa
                   </th>
-                  <th className="w-28 border-b border-l border-gray-200 bg-white py-2.5 pl-4 text-center font-medium">
+                  <th className="w-28 border-b border-l border-gray-200 bg-white px-2 py-2.5 text-center font-medium">
                     Horas Trabalhadas
                   </th>
                 </tr>
