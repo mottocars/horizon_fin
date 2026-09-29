@@ -20,13 +20,15 @@ function formatarHoras(segundos) {
 
 // Cor por classificação do empreendimento (client_related_products.classificacao_id, join com
 // classifications, no Time Tracker — ver relatorioMasa.service.js::buscarDadosTimeTracker).
-// Ordem = severidade/prioridade, usada também como ordem da legenda. Quem não tem classificação
-// (a maioria — a base só cobre uma parte dos empreendimentos) fica sem indicador nenhum.
+// `swatch` = cor cheia (usada só na bolinha da legenda); `fundo` = versão clara, aplicada como
+// background nas células do próprio empreendimento na tabela. Ordem = severidade/prioridade,
+// usada também como ordem da legenda. Quem não tem classificação (a maioria — a base só cobre
+// uma parte dos empreendimentos) fica sem cor nenhuma.
 const CLASSIFICACAO_CORES = {
-  Críticos: 'bg-red-500',
-  Prioritários: 'bg-amber-500',
-  Especiais: 'bg-purple-500',
-  'Masa Operação': 'bg-primary-500',
+  Críticos: { swatch: 'bg-red-500', fundo: 'bg-red-50' },
+  Prioritários: { swatch: 'bg-amber-500', fundo: 'bg-amber-50' },
+  Especiais: { swatch: 'bg-purple-500', fundo: 'bg-purple-50' },
+  'Masa Operação': { swatch: 'bg-primary-500', fundo: 'bg-primary-50' },
 };
 
 // Mesma ideia de relatorioMasa.service.js::chaveOrdemTaskType — só pra ordenar as opções do
@@ -413,7 +415,7 @@ export default function EmpreendimentosMasaPage() {
           <span>Classificação:</span>
           {Object.entries(CLASSIFICACAO_CORES).map(([nome, cor]) => (
             <span key={nome} className="inline-flex items-center gap-1.5">
-              <span className={`h-1.5 w-1.5 shrink-0 rounded-full ${cor}`} />
+              <span className={`h-1.5 w-1.5 shrink-0 rounded-full ${cor.swatch}`} />
               {nome}
             </span>
           ))}
@@ -671,6 +673,16 @@ export default function EmpreendimentosMasaPage() {
                           );
                         }
 
+                        // Fundo colorido (versão clara da cor da legenda) em toda a linha do
+                        // empreendimento, de acordo com sua classificação — pedido do usuário
+                        // ("quero que o fundo dele seja colorido... de acordo com a legenda").
+                        // Só nas células do próprio empreendimento: "Etapa Atual" e "Micro Etapa
+                        // Atual" ficam de fora porque a célula é compartilhada (rowSpan) por
+                        // vários empreendimentos que podem ter classificações diferentes.
+                        const corFundo = empreendimento
+                          ? CLASSIFICACAO_CORES[empreendimento.classificacao]?.fundo || ''
+                          : '';
+
                         return (
                           <tr key={`${fase.id}-${empreendimento?.id ?? 'vazia'}-${i}`}>
                             {celulaEtapaAtual}
@@ -694,23 +706,18 @@ export default function EmpreendimentosMasaPage() {
                                 </button>
                               </td>
                             )}
-                            <td className={`${bordaInferior} border-l border-l-gray-100 py-1.5 pl-4 text-xs text-gray-700`}>
+                            <td
+                              className={`${bordaInferior} border-l border-l-gray-100 py-1.5 pl-4 text-xs text-gray-700 ${corFundo}`}
+                              title={empreendimento?.classificacao || undefined}
+                            >
                               {empreendimento ? (
-                                <span className="inline-flex items-center gap-1.5">
-                                  <span
-                                    className={`h-1.5 w-1.5 shrink-0 rounded-full ${
-                                      CLASSIFICACAO_CORES[empreendimento.classificacao] || 'bg-transparent'
-                                    }`}
-                                    title={empreendimento.classificacao || undefined}
-                                  />
-                                  {empreendimento.name}
-                                </span>
+                                empreendimento.name
                               ) : (
                                 <span className="italic text-gray-400">Nenhum empreendimento nesta fase.</span>
                               )}
                             </td>
                             <td
-                              className={`${bordaInferior} border-l border-l-gray-100 py-1.5 pl-4 text-xs tabular-nums text-gray-700`}
+                              className={`${bordaInferior} border-l border-l-gray-100 py-1.5 pl-4 text-xs tabular-nums text-gray-700 ${corFundo}`}
                             >
                               {empreendimento?.duracaoDias != null ? (
                                 `${empreendimento.duracaoDias.toLocaleString('pt-BR')} dias`
@@ -719,7 +726,7 @@ export default function EmpreendimentosMasaPage() {
                               )}
                             </td>
                             <td
-                              className={`${bordaInferior} border-l border-l-gray-100 py-1.5 pl-4 text-xs tabular-nums text-gray-700`}
+                              className={`${bordaInferior} border-l border-l-gray-100 py-1.5 pl-4 text-xs tabular-nums text-gray-700 ${corFundo}`}
                             >
                               {empreendimento?.areaM2 != null ? (
                                 empreendimento.areaM2.toLocaleString('pt-BR')
@@ -728,7 +735,7 @@ export default function EmpreendimentosMasaPage() {
                               )}
                             </td>
                             <td
-                              className={`${bordaInferior} border-l border-l-gray-100 py-1.5 pl-4 text-xs tabular-nums text-gray-700`}
+                              className={`${bordaInferior} border-l border-l-gray-100 py-1.5 pl-4 text-xs tabular-nums text-gray-700 ${corFundo}`}
                             >
                               {empreendimento?.unidades != null ? (
                                 empreendimento.unidades.toLocaleString('pt-BR')
@@ -737,7 +744,7 @@ export default function EmpreendimentosMasaPage() {
                               )}
                             </td>
                             <td
-                              className={`${bordaInferior} border-l border-l-gray-100 py-1.5 pl-4 text-xs tabular-nums text-gray-700`}
+                              className={`${bordaInferior} border-l border-l-gray-100 py-1.5 pl-4 text-xs tabular-nums text-gray-700 ${corFundo}`}
                             >
                               {empreendimento?.vgvGeral != null ? (
                                 formatarMoeda(empreendimento.vgvGeral)
@@ -746,7 +753,7 @@ export default function EmpreendimentosMasaPage() {
                               )}
                             </td>
                             <td
-                              className={`${bordaInferior} border-l border-l-gray-100 py-1.5 pl-4 text-xs tabular-nums text-gray-700`}
+                              className={`${bordaInferior} border-l border-l-gray-100 py-1.5 pl-4 text-xs tabular-nums text-gray-700 ${corFundo}`}
                             >
                               {empreendimento?.vgvMasa != null ? (
                                 formatarMoeda(empreendimento.vgvMasa)
@@ -755,7 +762,7 @@ export default function EmpreendimentosMasaPage() {
                               )}
                             </td>
                             <td
-                              className={`${bordaInferior} border-l border-l-gray-100 py-1.5 pl-4 text-xs tabular-nums text-gray-700`}
+                              className={`${bordaInferior} border-l border-l-gray-100 py-1.5 pl-4 text-xs tabular-nums text-gray-700 ${corFundo}`}
                             >
                               {empreendimento?.segundosTrabalhados != null ? (
                                 formatarHoras(empreendimento.segundosTrabalhados)
@@ -764,7 +771,7 @@ export default function EmpreendimentosMasaPage() {
                               )}
                             </td>
                             <td
-                              className={`${bordaInferior} border-l border-l-gray-100 py-1.5 pl-4 text-xs tabular-nums text-gray-700`}
+                              className={`${bordaInferior} border-l border-l-gray-100 py-1.5 pl-4 text-xs tabular-nums text-gray-700 ${corFundo}`}
                             >
                               {empreendimento?.contasPagas != null ? (
                                 formatarMoeda(empreendimento.contasPagas)
