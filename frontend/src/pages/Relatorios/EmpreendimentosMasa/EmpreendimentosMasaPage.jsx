@@ -72,27 +72,31 @@ export default function EmpreendimentosMasaPage() {
             <table className="w-full border-separate border-spacing-0 text-left text-xs">
               <thead>
                 <tr className="text-xs uppercase tracking-wide text-gray-400">
-                  <th className="w-64 border-b border-gray-200 bg-white py-2.5 pl-4 font-medium">Etapa Atual</th>
-                  <th className="border-b border-l border-gray-200 bg-white py-2.5 pl-4 font-medium">
+                  <th className="w-64 border-b border-gray-200 bg-white py-2.5 pl-4 text-center font-medium">
+                    Etapa Atual
+                  </th>
+                  <th className="border-b border-l border-gray-200 bg-white py-2.5 pl-4 text-center font-medium">
                     Empreendimento
                   </th>
-                  <th className="border-b border-l border-gray-200 bg-white py-2.5 pl-4 font-medium">
+                  <th className="border-b border-l border-gray-200 bg-white py-2.5 pl-4 text-center font-medium">
                     Micro Etapa Atual
                   </th>
-                  <th className="w-28 border-b border-l border-gray-200 bg-white py-2.5 pl-4 font-medium">
+                  <th className="w-28 border-b border-l border-gray-200 bg-white py-2.5 pl-4 text-center font-medium">
                     Duração
                   </th>
-                  <th className="w-28 border-b border-l border-gray-200 bg-white py-2.5 pl-4 font-medium">M²</th>
-                  <th className="w-24 border-b border-l border-gray-200 bg-white py-2.5 pl-4 font-medium">
+                  <th className="w-28 border-b border-l border-gray-200 bg-white py-2.5 pl-4 text-center font-medium">
+                    M²
+                  </th>
+                  <th className="w-24 border-b border-l border-gray-200 bg-white py-2.5 pl-4 text-center font-medium">
                     Unidades
                   </th>
-                  <th className="w-32 border-b border-l border-gray-200 bg-white py-2.5 pl-4 font-medium">
+                  <th className="w-32 border-b border-l border-gray-200 bg-white py-2.5 pl-4 text-center font-medium">
                     VGV Geral
                   </th>
-                  <th className="w-32 border-b border-l border-gray-200 bg-white py-2.5 pl-4 font-medium">
+                  <th className="w-32 border-b border-l border-gray-200 bg-white py-2.5 pl-4 text-center font-medium">
                     VGV Masa
                   </th>
-                  <th className="w-28 border-b border-l border-gray-200 bg-white py-2.5 pl-4 font-medium">
+                  <th className="w-28 border-b border-l border-gray-200 bg-white py-2.5 pl-4 text-center font-medium">
                     Horas Trabalhadas
                   </th>
                 </tr>
@@ -106,75 +110,95 @@ export default function EmpreendimentosMasaPage() {
 
                   return (
                     <Fragment key={fase.id}>
-                      {linhas.map((empreendimento, indice) => (
-                        <tr key={`${fase.id}-${empreendimento?.id ?? 'vazia'}`}>
-                          {indice === 0 && (
-                            <td
-                              rowSpan={linhas.length}
-                              className="border-b border-r border-gray-200 bg-gray-50 px-4 py-2.5 align-middle"
-                            >
-                              <span className="flex items-center gap-2">
-                                <span className="text-xs font-semibold text-gray-900">{fase.name}</span>
-                                <span className="shrink-0 rounded-full bg-white px-2 py-0.5 text-[10px] font-medium tabular-nums text-gray-500 ring-1 ring-gray-200">
-                                  {fase.empreendimentos.length}
+                      {linhas.map((empreendimento, indice) => {
+                        // Última linha da fase — borda de baixo mais grossa/escura pra marcar
+                        // bem a separação entre uma etapa e a próxima (pedido do usuário).
+                        const ultimaLinha = indice === linhas.length - 1;
+                        const bordaInferior = ultimaLinha
+                          ? 'border-b-2 border-b-gray-300'
+                          : 'border-b border-b-gray-100';
+                        return (
+                          <tr key={`${fase.id}-${empreendimento?.id ?? 'vazia'}`}>
+                            {indice === 0 && (
+                              <td
+                                rowSpan={linhas.length}
+                                className="border-b-2 border-b-gray-300 border-r border-r-gray-200 bg-gray-50 px-4 py-2.5 align-middle"
+                              >
+                                <span className="flex items-center gap-2">
+                                  <span className="text-xs font-semibold text-gray-900">{fase.name}</span>
+                                  <span className="shrink-0 rounded-full bg-white px-2 py-0.5 text-[10px] font-medium tabular-nums text-gray-500 ring-1 ring-gray-200">
+                                    {fase.empreendimentos.length}
+                                  </span>
                                 </span>
-                              </span>
+                              </td>
+                            )}
+                            <td className={`${bordaInferior} py-1.5 pl-4 text-xs text-gray-700`}>
+                              {empreendimento ? (
+                                empreendimento.name
+                              ) : (
+                                <span className="italic text-gray-400">Nenhum empreendimento nesta fase.</span>
+                              )}
                             </td>
-                          )}
-                          <td className="border-b border-gray-100 py-1.5 pl-4 text-xs text-gray-700">
-                            {empreendimento ? (
-                              empreendimento.name
-                            ) : (
-                              <span className="italic text-gray-400">Nenhum empreendimento nesta fase.</span>
-                            )}
-                          </td>
-                          <td className="border-b border-l border-gray-100 py-1.5 pl-4 text-xs text-gray-700">
-                            {empreendimento?.microEtapaAtual || <span className="text-gray-300">—</span>}
-                          </td>
-                          <td className="border-b border-l border-gray-100 py-1.5 pl-4 text-xs tabular-nums text-gray-700">
-                            {empreendimento?.duracaoDias != null ? (
-                              `${empreendimento.duracaoDias.toLocaleString('pt-BR')} dias`
-                            ) : (
-                              <span className="text-gray-300">—</span>
-                            )}
-                          </td>
-                          <td className="border-b border-l border-gray-100 py-1.5 pl-4 text-xs tabular-nums text-gray-700">
-                            {empreendimento?.areaM2 != null ? (
-                              `${empreendimento.areaM2.toLocaleString('pt-BR')} m²`
-                            ) : (
-                              <span className="text-gray-300">—</span>
-                            )}
-                          </td>
-                          <td className="border-b border-l border-gray-100 py-1.5 pl-4 text-xs tabular-nums text-gray-700">
-                            {empreendimento?.unidades != null ? (
-                              empreendimento.unidades.toLocaleString('pt-BR')
-                            ) : (
-                              <span className="text-gray-300">—</span>
-                            )}
-                          </td>
-                          <td className="border-b border-l border-gray-100 py-1.5 pl-4 text-xs tabular-nums text-gray-700">
-                            {empreendimento?.vgvGeral != null ? (
-                              formatarMoeda(empreendimento.vgvGeral)
-                            ) : (
-                              <span className="text-gray-300">—</span>
-                            )}
-                          </td>
-                          <td className="border-b border-l border-gray-100 py-1.5 pl-4 text-xs tabular-nums text-gray-700">
-                            {empreendimento?.vgvMasa != null ? (
-                              formatarMoeda(empreendimento.vgvMasa)
-                            ) : (
-                              <span className="text-gray-300">—</span>
-                            )}
-                          </td>
-                          <td className="border-b border-l border-gray-100 py-1.5 pl-4 text-xs tabular-nums text-gray-700">
-                            {empreendimento?.segundosTrabalhados != null ? (
-                              formatarHoras(empreendimento.segundosTrabalhados)
-                            ) : (
-                              <span className="text-gray-300">—</span>
-                            )}
-                          </td>
-                        </tr>
-                      ))}
+                            <td className={`${bordaInferior} border-l border-l-gray-100 py-1.5 pl-4 text-xs text-gray-700`}>
+                              {empreendimento?.microEtapaAtual || <span className="text-gray-300">—</span>}
+                            </td>
+                            <td
+                              className={`${bordaInferior} border-l border-l-gray-100 py-1.5 pl-4 text-xs tabular-nums text-gray-700`}
+                            >
+                              {empreendimento?.duracaoDias != null ? (
+                                `${empreendimento.duracaoDias.toLocaleString('pt-BR')} dias`
+                              ) : (
+                                <span className="text-gray-300">—</span>
+                              )}
+                            </td>
+                            <td
+                              className={`${bordaInferior} border-l border-l-gray-100 py-1.5 pl-4 text-xs tabular-nums text-gray-700`}
+                            >
+                              {empreendimento?.areaM2 != null ? (
+                                `${empreendimento.areaM2.toLocaleString('pt-BR')} m²`
+                              ) : (
+                                <span className="text-gray-300">—</span>
+                              )}
+                            </td>
+                            <td
+                              className={`${bordaInferior} border-l border-l-gray-100 py-1.5 pl-4 text-xs tabular-nums text-gray-700`}
+                            >
+                              {empreendimento?.unidades != null ? (
+                                empreendimento.unidades.toLocaleString('pt-BR')
+                              ) : (
+                                <span className="text-gray-300">—</span>
+                              )}
+                            </td>
+                            <td
+                              className={`${bordaInferior} border-l border-l-gray-100 py-1.5 pl-4 text-xs tabular-nums text-gray-700`}
+                            >
+                              {empreendimento?.vgvGeral != null ? (
+                                formatarMoeda(empreendimento.vgvGeral)
+                              ) : (
+                                <span className="text-gray-300">—</span>
+                              )}
+                            </td>
+                            <td
+                              className={`${bordaInferior} border-l border-l-gray-100 py-1.5 pl-4 text-xs tabular-nums text-gray-700`}
+                            >
+                              {empreendimento?.vgvMasa != null ? (
+                                formatarMoeda(empreendimento.vgvMasa)
+                              ) : (
+                                <span className="text-gray-300">—</span>
+                              )}
+                            </td>
+                            <td
+                              className={`${bordaInferior} border-l border-l-gray-100 py-1.5 pl-4 text-xs tabular-nums text-gray-700`}
+                            >
+                              {empreendimento?.segundosTrabalhados != null ? (
+                                formatarHoras(empreendimento.segundosTrabalhados)
+                              ) : (
+                                <span className="text-gray-300">—</span>
+                              )}
+                            </td>
+                          </tr>
+                        );
+                      })}
                     </Fragment>
                   );
                 })}
