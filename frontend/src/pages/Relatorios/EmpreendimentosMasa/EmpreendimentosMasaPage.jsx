@@ -1,6 +1,6 @@
 import { Fragment, useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { createPortal } from 'react-dom';
-import { Building2, FileDown, ListFilter, TriangleAlert } from 'lucide-react';
+import { Building2, FileDown, ListFilter, Minus, Plus, TriangleAlert } from 'lucide-react';
 import SearchableSelect from '../../../components/SearchableSelect';
 import { getMatrizEmpreendimentosMasa } from '../../../api/relatorioMasa.api';
 
@@ -87,6 +87,29 @@ function construirLinhasFase(fase) {
     });
   }
   return { linhas, total };
+}
+
+// Resumo de uma fase colapsada (pedido do usuário): Micro Etapa Atual e Empreendimento viram
+// uma CONTAGEM (quantas micro etapas distintas / quantos empreendimentos), e todas as colunas
+// de Duração até Contas Pagas somam os valores de TODOS os empreendimentos da fase.
+function calcularResumoFase(fase) {
+  const microEtapas = new Set();
+  const soma = fase.empreendimentos.reduce(
+    (acc, emp) => {
+      if (emp.microEtapaAtual) microEtapas.add(emp.microEtapaAtual);
+      return {
+        duracaoDias: acc.duracaoDias + (emp.duracaoDias || 0),
+        areaM2: acc.areaM2 + (emp.areaM2 || 0),
+        unidades: acc.unidades + (emp.unidades || 0),
+        vgvGeral: acc.vgvGeral + (emp.vgvGeral || 0),
+        vgvMasa: acc.vgvMasa + (emp.vgvMasa || 0),
+        segundosTrabalhados: acc.segundosTrabalhados + (emp.segundosTrabalhados || 0),
+        contasPagas: acc.contasPagas + (emp.contasPagas || 0),
+      };
+    },
+    { duracaoDias: 0, areaM2: 0, unidades: 0, vgvGeral: 0, vgvMasa: 0, segundosTrabalhados: 0, contasPagas: 0 }
+  );
+  return { qtdMicroEtapas: microEtapas.size, qtdEmpreendimentos: fase.empreendimentos.length, ...soma };
 }
 
 // Ícone de filtro compacto ao lado do nome da coluna — mesmo padrão de
@@ -220,6 +243,19 @@ export default function EmpreendimentosMasaPage() {
   }, [matrizFiltrada]);
 
   const semResultadoFiltro = Boolean(matriz && matriz.length > 0 && matrizFiltrada.length === 0);
+
+  // Colapsar/expandir uma etapa (fase) inteira — começa sempre expandida (conjunto vazio,
+  // pedido do usuário); clicar no "+"/"-" da coluna Etapa Atual alterna só aquela fase.
+  const [fasesColapsadas, setFasesColapsadas] = useState(() => new Set());
+
+  function toggleFase(faseId) {
+    setFasesColapsadas((atual) => {
+      const proximo = new Set(atual);
+      if (proximo.has(faseId)) proximo.delete(faseId);
+      else proximo.add(faseId);
+      return proximo;
+    });
+  }
 
   // Menu de contexto (botão direito em cima da tabela) — só a opção "Exportar". Fecha ao clicar
   // em qualquer lugar ou rolar a página; abre de novo na posição do próximo botão direito.
@@ -427,6 +463,61 @@ export default function EmpreendimentosMasaPage() {
                   </tr>
                 )}
                 {matrizFiltrada.map((fase) => {
+                  const colapsada = fasesColapsadas.has(fase.id);
+
+                  // Fase colapsada — 1 linha só de resumo: Micro Etapa Atual e Empreendimento
+                  // viram contagem, e Duração até Contas Pagas somam a fase inteira (pedido do
+                  // usuário).
+                  if (colapsada) {
+                    const resumo = calcularResumoFase(fase);
+                    return (
+                      <tr key={fase.id}>
+                        <td className="border-b-2 border-b-gray-400 border-r border-r-gray-200 bg-white px-4 py-2.5 align-middle">
+                          <button
+                            type="button"
+                            onClick={() => toggleFase(fase.id)}
+                            className="flex items-center gap-2 text-left"
+                          >
+                            <span className="flex h-4 w-4 shrink-0 items-center justify-center rounded bg-primary-100 text-primary-600">
+                              <Plus size={10} />
+                            </span>
+                            <span className="text-xs font-semibold text-gray-900">{fase.name}</span>
+                            <span className="shrink-0 rounded-full bg-white px-2 py-0.5 text-[10px] font-medium tabular-nums text-gray-500 ring-1 ring-gray-200">
+                              {fase.empreendimentos.length}
+                            </span>
+                          </button>
+                        </td>
+                        <td className="border-b-2 border-b-gray-400 border-l border-l-gray-200 py-1.5 pl-4 text-xs tabular-nums text-gray-700">
+                          {resumo.qtdMicroEtapas}
+                        </td>
+                        <td className="border-b-2 border-b-gray-400 border-l border-l-gray-100 py-1.5 pl-4 text-xs tabular-nums text-gray-700">
+                          {resumo.qtdEmpreendimentos}
+                        </td>
+                        <td className="border-b-2 border-b-gray-400 border-l border-l-gray-100 py-1.5 pl-4 text-xs tabular-nums text-gray-700">
+                          {`${resumo.duracaoDias.toLocaleString('pt-BR')} dias`}
+                        </td>
+                        <td className="border-b-2 border-b-gray-400 border-l border-l-gray-100 py-1.5 pl-4 text-xs tabular-nums text-gray-700">
+                          {resumo.areaM2.toLocaleString('pt-BR')}
+                        </td>
+                        <td className="border-b-2 border-b-gray-400 border-l border-l-gray-100 py-1.5 pl-4 text-xs tabular-nums text-gray-700">
+                          {resumo.unidades.toLocaleString('pt-BR')}
+                        </td>
+                        <td className="border-b-2 border-b-gray-400 border-l border-l-gray-100 py-1.5 pl-4 text-xs tabular-nums text-gray-700">
+                          {formatarMoeda(resumo.vgvGeral)}
+                        </td>
+                        <td className="border-b-2 border-b-gray-400 border-l border-l-gray-100 py-1.5 pl-4 text-xs tabular-nums text-gray-700">
+                          {formatarMoeda(resumo.vgvMasa)}
+                        </td>
+                        <td className="border-b-2 border-b-gray-400 border-l border-l-gray-100 py-1.5 pl-4 text-xs tabular-nums text-gray-700">
+                          {formatarHoras(resumo.segundosTrabalhados)}
+                        </td>
+                        <td className="border-b-2 border-b-gray-400 border-l border-l-gray-100 py-1.5 pl-4 text-xs tabular-nums text-gray-700">
+                          {formatarMoeda(resumo.contasPagas)}
+                        </td>
+                      </tr>
+                    );
+                  }
+
                   const { linhas, total } = construirLinhasFase(fase);
 
                   return (
@@ -451,12 +542,19 @@ export default function EmpreendimentosMasaPage() {
                                 rowSpan={total}
                                 className="border-b-2 border-b-gray-400 border-r border-r-gray-200 bg-white px-4 py-2.5 align-middle"
                               >
-                                <span className="flex items-center gap-2">
+                                <button
+                                  type="button"
+                                  onClick={() => toggleFase(fase.id)}
+                                  className="flex items-center gap-2 text-left"
+                                >
+                                  <span className="flex h-4 w-4 shrink-0 items-center justify-center rounded bg-primary-100 text-primary-600">
+                                    <Minus size={10} />
+                                  </span>
                                   <span className="text-xs font-semibold text-gray-900">{fase.name}</span>
                                   <span className="shrink-0 rounded-full bg-white px-2 py-0.5 text-[10px] font-medium tabular-nums text-gray-500 ring-1 ring-gray-200">
                                     {fase.empreendimentos.length}
                                   </span>
-                                </span>
+                                </button>
                               </td>
                             )}
                             {linha.primeiraDoGrupo && (
