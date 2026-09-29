@@ -95,6 +95,10 @@ async function buscarTodasActions(token) {
 // - "Horas Trabalhadas": soma de todo `duration` (segundos) de time_logs pro project_id daquele
 //   empreendimento (client_id) — TODAS as tarefas já registradas, sem filtrar por micro etapa
 //   (pedido explícito do usuário, pra não depender de casar nome de tarefa com task_type).
+// - "Classificação" (Prioritários/Especiais/Críticos/Masa Operação) — mesma 1:1 (confirmado —
+//   sem duplicidade) de client_related_products.product_client_id, só que juntando com
+//   classifications pelo classificacao_id; usada só pra colorir a linha do empreendimento, sem
+//   coluna própria na tabela.
 async function buscarDadosTimeTracker() {
   const empresaId = await getEmpresaMasaId();
   const credenciais = await bancoDadosService.getCredenciaisPorConexao(empresaId, CONEXAO_TIME_TRACKER);
@@ -114,6 +118,7 @@ async function buscarDadosTimeTracker() {
   const produtoPorCliente = new Map(); // client_id -> { areaM2, unidades, vgvGeral }
   const vgvMasaPorCliente = new Map(); // client_id -> vgv_masa
   const segundosTrabalhadosPorCliente = new Map(); // client_id -> segundos somados (todo o time_logs)
+  const classificacaoPorCliente = new Map(); // client_id -> nome da classificação
   try {
     await client.connect();
 
@@ -158,12 +163,24 @@ async function buscarDadosTimeTracker() {
     for (const row of logs.rows) {
       segundosTrabalhadosPorCliente.set(row.project_id, Number(row.total_segundos));
     }
+
+    const classificacoes = await client.query(`
+      select
+        crp.product_client_id,
+        c.nome
+      from client_related_products crp
+      left join classifications c on c.id = crp.classificacao_id
+      where c.nome is not null
+    `);
+    for (const row of classificacoes.rows) {
+      classificacaoPorCliente.set(row.product_client_id, row.nome);
+    }
   } catch {
     throw badRequest('Não foi possível conectar ao banco "Time Tracker".');
   } finally {
     await client.end().catch(() => {});
   }
-  return { duracaoPorCliente, produtoPorCliente, vgvMasaPorCliente, segundosTrabalhadosPorCliente };
+  return { duracaoPorCliente, produtoPorCliente, vgvMasaPorCliente, segundosTrabalhadosPorCliente, classificacaoPorCliente };
 }
 
 // "Contas Pagas" — soma das despesas (cabecalho_evento_main.type = 'EXPENSE') rateadas por
@@ -275,7 +292,7 @@ async function listMatriz() {
     clientsRaw,
     taskTypesRaw,
     actions,
-    { duracaoPorCliente, produtoPorCliente, vgvMasaPorCliente, segundosTrabalhadosPorCliente },
+    { duracaoPorCliente, produtoPorCliente, vgvMasaPorCliente, segundosTrabalhadosPorCliente, classificacaoPorCliente },
     contasPagasPorCliente,
   ] = await Promise.all([
     buscarJson(ACTIOON_ACTION_TYPES_URL, token, 'Não foi possível buscar as fases na Actioon.'),
@@ -326,6 +343,7 @@ async function listMatriz() {
       vgvMasa: vgvMasaPorCliente.get(clienteId) ?? null,
       segundosTrabalhados: segundosTrabalhadosPorCliente.get(clienteId) ?? null,
       contasPagas: contasPagasPorCliente.get(clienteId) ?? null,
+      classificacao: classificacaoPorCliente.get(clienteId) ?? null,
     });
   }
   for (const lista of empreendimentosPorFaseId.values()) {
@@ -350,6 +368,7 @@ async function listMatriz() {
           vgvMasa,
           segundosTrabalhados,
           contasPagas,
+          classificacao,
         }) => ({
           id,
           name,
@@ -361,6 +380,7 @@ async function listMatriz() {
           vgvMasa,
           segundosTrabalhados,
           contasPagas,
+          classificacao,
         })
       ),
     }));

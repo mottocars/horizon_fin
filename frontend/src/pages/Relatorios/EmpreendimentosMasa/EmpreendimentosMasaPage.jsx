@@ -18,6 +18,17 @@ function formatarHoras(segundos) {
   return `${horas.toLocaleString('pt-BR', { minimumFractionDigits: 1, maximumFractionDigits: 1 })} h`;
 }
 
+// Cor por classificação do empreendimento (client_related_products.classificacao_id, join com
+// classifications, no Time Tracker — ver relatorioMasa.service.js::buscarDadosTimeTracker).
+// Ordem = severidade/prioridade, usada também como ordem da legenda. Quem não tem classificação
+// (a maioria — a base só cobre uma parte dos empreendimentos) fica sem indicador nenhum.
+const CLASSIFICACAO_CORES = {
+  Críticos: 'bg-red-500',
+  Prioritários: 'bg-amber-500',
+  Especiais: 'bg-purple-500',
+  'Masa Operação': 'bg-primary-500',
+};
+
 // Mesma ideia de relatorioMasa.service.js::chaveOrdemTaskType — só pra ordenar as opções do
 // filtro de "Micro Etapa Atual" (e agrupar as linhas da tabela) pelo prefixo "major.minor" do
 // nome (1.2, 1.10, 2.1...) em vez de ordem alfabética de string (que colocaria "1.10" antes de
@@ -397,6 +408,17 @@ export default function EmpreendimentosMasaPage() {
 
   return (
     <div className="space-y-4">
+      {!carregando && !erro && matriz?.length > 0 && (
+        <div className="flex flex-wrap items-center gap-3 px-1 text-[11px] text-gray-400">
+          <span>Classificação:</span>
+          {Object.entries(CLASSIFICACAO_CORES).map(([nome, cor]) => (
+            <span key={nome} className="inline-flex items-center gap-1.5">
+              <span className={`h-1.5 w-1.5 shrink-0 rounded-full ${cor}`} />
+              {nome}
+            </span>
+          ))}
+        </div>
+      )}
       <div className="rounded-card bg-white shadow-card">
         {carregando ? (
           <div className="py-12 text-center text-sm text-gray-400">Carregando...</div>
@@ -674,7 +696,15 @@ export default function EmpreendimentosMasaPage() {
                             )}
                             <td className={`${bordaInferior} border-l border-l-gray-100 py-1.5 pl-4 text-xs text-gray-700`}>
                               {empreendimento ? (
-                                empreendimento.name
+                                <span className="inline-flex items-center gap-1.5">
+                                  <span
+                                    className={`h-1.5 w-1.5 shrink-0 rounded-full ${
+                                      CLASSIFICACAO_CORES[empreendimento.classificacao] || 'bg-transparent'
+                                    }`}
+                                    title={empreendimento.classificacao || undefined}
+                                  />
+                                  {empreendimento.name}
+                                </span>
                               ) : (
                                 <span className="italic text-gray-400">Nenhum empreendimento nesta fase.</span>
                               )}
