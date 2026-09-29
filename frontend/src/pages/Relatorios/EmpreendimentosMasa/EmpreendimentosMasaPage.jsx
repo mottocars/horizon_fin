@@ -3,6 +3,10 @@ import { Building2, Minus, Plus, RefreshCw, TriangleAlert } from 'lucide-react';
 import Button from '../../../components/Button';
 import { getMatrizEmpreendimentosMasa } from '../../../api/relatorioMasa.api';
 
+function formatarMoeda(valor) {
+  return (Number(valor) || 0).toLocaleString('pt-BR', { style: 'currency', currency: 'BRL' });
+}
+
 // Matriz do relatório Empreendimentos Masa (exclusivo da empresa Masa, via a integração
 // Actioon dela). Coluna "Etapa Atual" (fase, action_types) sempre aberta — pedido do usuário —
 // e fixa: 1 célula só por fase, com `rowSpan` cobrindo todas as linhas dos empreendimentos
@@ -87,6 +91,13 @@ export default function EmpreendimentosMasaPage() {
                   <th className="w-28 border-b border-l border-gray-200 bg-white py-2.5 pl-4 font-medium">
                     Duração
                   </th>
+                  <th className="w-28 border-b border-l border-gray-200 bg-white py-2.5 pl-4 font-medium">M²</th>
+                  <th className="w-24 border-b border-l border-gray-200 bg-white py-2.5 pl-4 font-medium">
+                    Unidades
+                  </th>
+                  <th className="w-32 border-b border-l border-gray-200 bg-white py-2.5 pl-4 font-medium">
+                    VGV Geral
+                  </th>
                 </tr>
               </thead>
               <tbody>
@@ -167,6 +178,27 @@ export default function EmpreendimentosMasaPage() {
                                   <span className="text-gray-300">—</span>
                                 )}
                               </td>
+                              <td className="border-b border-l border-gray-100 py-1.5 pl-4 text-xs tabular-nums text-gray-700">
+                                {empreendimento?.areaM2 != null ? (
+                                  `${empreendimento.areaM2.toLocaleString('pt-BR')} m²`
+                                ) : (
+                                  <span className="text-gray-300">—</span>
+                                )}
+                              </td>
+                              <td className="border-b border-l border-gray-100 py-1.5 pl-4 text-xs tabular-nums text-gray-700">
+                                {empreendimento?.unidades != null ? (
+                                  empreendimento.unidades.toLocaleString('pt-BR')
+                                ) : (
+                                  <span className="text-gray-300">—</span>
+                                )}
+                              </td>
+                              <td className="border-b border-l border-gray-100 py-1.5 pl-4 text-xs tabular-nums text-gray-700">
+                                {empreendimento?.vgvGeral != null ? (
+                                  formatarMoeda(empreendimento.vgvGeral)
+                                ) : (
+                                  <span className="text-gray-300">—</span>
+                                )}
+                              </td>
                             </tr>
 
                             {aberto &&
@@ -178,6 +210,9 @@ export default function EmpreendimentosMasaPage() {
                                   <td className="border-b border-l border-gray-100 py-1.5 pl-4 text-xs tabular-nums text-gray-500">
                                     {historico.qtdTarefas || <span className="text-gray-300">—</span>}
                                   </td>
+                                  <td className="border-b border-l border-gray-100" />
+                                  <td className="border-b border-l border-gray-100" />
+                                  <td className="border-b border-l border-gray-100" />
                                   <td className="border-b border-l border-gray-100" />
                                   <td className="border-b border-l border-gray-100" />
                                 </tr>

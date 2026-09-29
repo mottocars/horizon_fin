@@ -89,11 +89,14 @@ async function buscarTodasActions(token) {
   return todas;
 }
 
-// "Duração" — dias corridos desde a data_assinatura de cada empreendimento (client_id) até
-// hoje, buscada num banco de terceiro (não a Actioon): a conexão Postgres "Time Tracker",
-// cadastrada em Integrações > Banco de Dados pra empresa Masa. Sem essa data (empreendimento
-// não veio na consulta) a duração fica null — mostrado como "—" no relatório.
-async function buscarDuracaoDiasPorCliente() {
+// Dados que não vêm da Actioon, e sim de um banco de terceiro: a conexão Postgres "Time
+// Tracker", cadastrada em Integrações > Banco de Dados pra empresa Masa. Uma única conexão pras
+// duas consultas (evita abrir 2 conexões por carregamento do relatório).
+// - "Duração": dias corridos desde a data_assinatura de cada empreendimento (client_id) até
+//   hoje. Sem essa data (empreendimento não veio na consulta) a duração fica null.
+// - M²/Unidades/VGV Geral: client_related_products liga 1:1 (confirmado — sem duplicidade)
+//   product_client_id ao mesmo client_id usado em todo o resto do relatório.
+async function buscarDadosTimeTracker() {
   const empresaId = await getEmpresaMasaId();
   const credenciais = await bancoDadosService.getCredenciaisPorConexao(empresaId, CONEXAO_TIME_TRACKER);
   if (!credenciais) throw badRequest('Nenhuma conexão "Time Tracker" ativa cadastrada para a Masa.');
@@ -109,22 +112,35 @@ async function buscarDuracaoDiasPorCliente() {
   });
 
   const duracaoPorCliente = new Map(); // client_id -> dias desde a data_assinatura
+  const produtoPorCliente = new Map(); // client_id -> { areaM2, unidades, vgvGeral }
   try {
     await client.connect();
-    const { rows } = await client.query(
+
+    const assinaturas = await client.query(
       'select client_id, data_assinatura from client_details where data_assinatura is not null'
     );
     const hoje = new Date();
-    for (const row of rows) {
+    for (const row of assinaturas.rows) {
       const dias = Math.floor((hoje - new Date(row.data_assinatura)) / (1000 * 60 * 60 * 24));
       duracaoPorCliente.set(row.client_id, dias);
+    }
+
+    const produtos = await client.query(
+      'select product_client_id, tamanho_imovel_m2, numero_unidades, vgv from client_related_products crp'
+    );
+    for (const row of produtos.rows) {
+      produtoPorCliente.set(row.product_client_id, {
+        areaM2: row.tamanho_imovel_m2 != null ? Number(row.tamanho_imovel_m2) : null,
+        unidades: row.numero_unidades,
+        vgvGeral: row.vgv != null ? Number(row.vgv) : null,
+      });
     }
   } catch {
     throw badRequest('Não foi possível conectar ao banco "Time Tracker".');
   } finally {
     await client.end().catch(() => {});
   }
-  return duracaoPorCliente;
+  return { duracaoPorCliente, produtoPorCliente };
 }
 
 // Pra cada empreendimento (client_id), acha o item de maior `order` entre todas as ocorrências
@@ -163,12 +179,12 @@ function maisAvancadoPorCliente(eventos, ordemPorItemId, extrairClienteEItem) {
 async function listMatriz() {
   const token = await buscarToken();
 
-  const [fasesRaw, clientsRaw, taskTypesRaw, actions, duracaoPorCliente] = await Promise.all([
+  const [fasesRaw, clientsRaw, taskTypesRaw, actions, { duracaoPorCliente, produtoPorCliente }] = await Promise.all([
     buscarJson(ACTIOON_ACTION_TYPES_URL, token, 'Não foi possível buscar as fases na Actioon.'),
     buscarJson(ACTIOON_CLIENTS_URL, token, 'Não foi possível buscar os empreendimentos na Actioon.'),
     buscarJson(ACTIOON_TASK_TYPES_URL, token, 'Não foi possível buscar as micro etapas na Actioon.'),
     buscarTodasActions(token),
-    buscarDuracaoDiasPorCliente(),
+    buscarDadosTimeTracker(),
   ]);
 
   const ordemPorFaseId = new Map(fasesRaw.map((fase) => [fase.id, fase.order]));
@@ -255,6 +271,7 @@ async function listMatriz() {
     const microEtapa = microEtapaMaisAvancadaPorCliente.get(clienteId);
     const contagem = microEtapa ? contagemPorClienteTaskType.get(`${clienteId}::${microEtapa.itemId}`) : null;
     const contagemTotal = contagemTotalPorCliente.get(clienteId);
+    const produto = produtoPorCliente.get(clienteId);
     if (!empreendimentosPorFaseId.has(faseId)) empreendimentosPorFaseId.set(faseId, []);
     empreendimentosPorFaseId.get(faseId).push({
       id: cliente.id,
@@ -264,6 +281,9 @@ async function listMatriz() {
       qtdTarefas: contagem ? `${contagem.fechadas}/${contagem.total}` : null,
       qtdTarefasTotais: contagemTotal ? `${contagemTotal.fechadas}/${contagemTotal.total}` : null,
       duracaoDias: duracaoPorCliente.get(clienteId) ?? null,
+      areaM2: produto?.areaM2 ?? null,
+      unidades: produto?.unidades ?? null,
+      vgvGeral: produto?.vgvGeral ?? null,
       historicoMicroEtapas: microEtapa ? montarHistorico(clienteId, microEtapa.itemId) : [],
     });
   }
@@ -278,13 +298,27 @@ async function listMatriz() {
       name: fase.name,
       order: fase.order,
       empreendimentos: (empreendimentosPorFaseId.get(fase.id) || []).map(
-        ({ id, name, microEtapaAtual, qtdTarefas, qtdTarefasTotais, duracaoDias, historicoMicroEtapas }) => ({
+        ({
           id,
           name,
           microEtapaAtual,
           qtdTarefas,
           qtdTarefasTotais,
           duracaoDias,
+          areaM2,
+          unidades,
+          vgvGeral,
+          historicoMicroEtapas,
+        }) => ({
+          id,
+          name,
+          microEtapaAtual,
+          qtdTarefas,
+          qtdTarefasTotais,
+          duracaoDias,
+          areaM2,
+          unidades,
+          vgvGeral,
           historicoMicroEtapas,
         })
       ),
