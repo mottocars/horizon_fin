@@ -55,7 +55,7 @@ function FiltroColuna({ valor, onChange, opcoes, label, colunaRef }) {
           title={`Filtrar por ${label}`}
           aria-pressed={temSelecao}
           className={`inline-flex h-5 w-5 shrink-0 items-center justify-center rounded transition ${
-            temSelecao ? 'bg-primary-50 text-primary-600' : 'text-gray-400 hover:bg-gray-100 hover:text-gray-600'
+            temSelecao ? 'bg-white text-primary-700 shadow-sm' : 'text-primary-400 hover:bg-white/60 hover:text-primary-700'
           }`}
         >
           <ListFilter size={13} />
@@ -204,10 +204,10 @@ export default function EmpreendimentosMasaPage() {
           <div className="rounded-card">
             <table className="w-full border-separate border-spacing-0 text-left text-xs">
               <thead>
-                <tr className="text-xs uppercase tracking-wide text-gray-400">
+                <tr className="text-xs uppercase tracking-wide text-primary-700">
                   <th
                     ref={thEtapaAtualRef}
-                    className="sticky top-0 z-20 w-64 rounded-tl-card border-b border-gray-200 bg-white px-2 py-2.5 text-center font-medium"
+                    className="sticky -top-6 z-20 w-64 rounded-tl-card border-b-2 border-b-primary-500 bg-primary-50 px-2 py-2.5 text-center font-medium"
                   >
                     <span className="inline-flex items-center justify-center gap-1.5">
                       <FiltroColuna
@@ -222,7 +222,7 @@ export default function EmpreendimentosMasaPage() {
                   </th>
                   <th
                     ref={thEmpreendimentoRef}
-                    className="sticky top-0 z-20 border-b border-l border-gray-200 bg-white px-2 py-2.5 text-center font-medium"
+                    className="sticky -top-6 z-20 border-b-2 border-b-primary-500 border-l border-l-primary-100 bg-primary-50 px-2 py-2.5 text-center font-medium"
                   >
                     <span className="inline-flex items-center justify-center gap-1.5">
                       <FiltroColuna
@@ -237,7 +237,7 @@ export default function EmpreendimentosMasaPage() {
                   </th>
                   <th
                     ref={thMicroEtapaRef}
-                    className="sticky top-0 z-20 border-b border-l border-gray-200 bg-white px-2 py-2.5 text-center font-medium"
+                    className="sticky -top-6 z-20 border-b-2 border-b-primary-500 border-l border-l-primary-100 bg-primary-50 px-2 py-2.5 text-center font-medium"
                   >
                     <span className="inline-flex items-center justify-center gap-1.5">
                       <FiltroColuna
@@ -250,25 +250,25 @@ export default function EmpreendimentosMasaPage() {
                       Micro Etapa Atual
                     </span>
                   </th>
-                  <th className="sticky top-0 z-20 w-28 border-b border-l border-gray-200 bg-white px-2 py-2.5 text-center font-medium">
+                  <th className="sticky -top-6 z-20 w-28 border-b-2 border-b-primary-500 border-l border-l-primary-100 bg-primary-50 px-2 py-2.5 text-center font-medium">
                     Duração
                   </th>
-                  <th className="sticky top-0 z-20 w-28 border-b border-l border-gray-200 bg-white px-2 py-2.5 text-center font-medium">
+                  <th className="sticky -top-6 z-20 w-28 border-b-2 border-b-primary-500 border-l border-l-primary-100 bg-primary-50 px-2 py-2.5 text-center font-medium">
                     M²
                   </th>
-                  <th className="sticky top-0 z-20 w-24 border-b border-l border-gray-200 bg-white px-2 py-2.5 text-center font-medium">
+                  <th className="sticky -top-6 z-20 w-24 border-b-2 border-b-primary-500 border-l border-l-primary-100 bg-primary-50 px-2 py-2.5 text-center font-medium">
                     Unidades
                   </th>
-                  <th className="sticky top-0 z-20 w-32 border-b border-l border-gray-200 bg-white px-2 py-2.5 text-center font-medium">
+                  <th className="sticky -top-6 z-20 w-32 border-b-2 border-b-primary-500 border-l border-l-primary-100 bg-primary-50 px-2 py-2.5 text-center font-medium">
                     VGV Geral
                   </th>
-                  <th className="sticky top-0 z-20 w-32 border-b border-l border-gray-200 bg-white px-2 py-2.5 text-center font-medium">
+                  <th className="sticky -top-6 z-20 w-32 border-b-2 border-b-primary-500 border-l border-l-primary-100 bg-primary-50 px-2 py-2.5 text-center font-medium">
                     VGV Masa
                   </th>
-                  <th className="sticky top-0 z-20 w-28 border-b border-l border-gray-200 bg-white px-2 py-2.5 text-center font-medium">
+                  <th className="sticky -top-6 z-20 w-28 border-b-2 border-b-primary-500 border-l border-l-primary-100 bg-primary-50 px-2 py-2.5 text-center font-medium">
                     Horas Trabalhadas
                   </th>
-                  <th className="sticky top-0 z-20 w-32 rounded-tr-card border-b border-l border-gray-200 bg-white px-2 py-2.5 text-center font-medium">
+                  <th className="sticky -top-6 z-20 w-32 rounded-tr-card border-b-2 border-b-primary-500 border-l border-l-primary-100 bg-primary-50 px-2 py-2.5 text-center font-medium">
                     Contas Pagas
                   </th>
                 </tr>
@@ -398,34 +398,37 @@ export default function EmpreendimentosMasaPage() {
                   que rola (o <main> do AppShell) até o fim da tabela, onde assenta naturalmente
                   (nada de flutuar por cima do botão "Atualizar" depois do fim da tabela).
                   Cabeçalho segue a mesma ideia (`sticky top-0`), pra ficar visível a rolagem
-                  inteira igual ao totalizador — pedido do usuário. */}
+                  inteira igual ao totalizador. O offset é `-bottom-6`/`-top-6` (não 0) pra
+                  cancelar o `p-6` do <main> — sem isso sobraria uma faixa de 24px do padding
+                  entre a barra grudada e a borda de verdade da tela (pedido do usuário: "o mais
+                  encostado possível"). */}
               <tfoot>
-                <tr className="text-xs font-semibold text-gray-900">
+                <tr className="text-xs font-semibold text-primary-700">
                   <td
                     colSpan={3}
-                    className="sticky bottom-0 z-10 rounded-bl-card border-t-2 border-t-gray-300 bg-gray-100 px-4 py-2.5"
+                    className="sticky -bottom-6 z-10 rounded-bl-card border-t-2 border-t-primary-500 bg-primary-50 px-4 py-2.5"
                   >
                     Total
                   </td>
-                  <td className="sticky bottom-0 z-10 w-28 border-t-2 border-t-gray-300 border-l border-l-gray-200 bg-gray-100 py-2.5 pl-4 text-xs">
+                  <td className="sticky -bottom-6 z-10 w-28 border-t-2 border-t-primary-500 border-l border-l-primary-100 bg-primary-50 py-2.5 pl-4 text-xs">
                     <span className="text-gray-300">—</span>
                   </td>
-                  <td className="sticky bottom-0 z-10 w-28 border-t-2 border-t-gray-300 border-l border-l-gray-200 bg-gray-100 py-2.5 pl-4 text-xs tabular-nums">
+                  <td className="sticky -bottom-6 z-10 w-28 border-t-2 border-t-primary-500 border-l border-l-primary-100 bg-primary-50 py-2.5 pl-4 text-xs tabular-nums">
                     {totais.areaM2.toLocaleString('pt-BR')}
                   </td>
-                  <td className="sticky bottom-0 z-10 w-24 border-t-2 border-t-gray-300 border-l border-l-gray-200 bg-gray-100 py-2.5 pl-4 text-xs tabular-nums">
+                  <td className="sticky -bottom-6 z-10 w-24 border-t-2 border-t-primary-500 border-l border-l-primary-100 bg-primary-50 py-2.5 pl-4 text-xs tabular-nums">
                     {totais.unidades.toLocaleString('pt-BR')}
                   </td>
-                  <td className="sticky bottom-0 z-10 w-32 border-t-2 border-t-gray-300 border-l border-l-gray-200 bg-gray-100 py-2.5 pl-4 text-xs tabular-nums">
+                  <td className="sticky -bottom-6 z-10 w-32 border-t-2 border-t-primary-500 border-l border-l-primary-100 bg-primary-50 py-2.5 pl-4 text-xs tabular-nums">
                     {formatarMoeda(totais.vgvGeral)}
                   </td>
-                  <td className="sticky bottom-0 z-10 w-32 border-t-2 border-t-gray-300 border-l border-l-gray-200 bg-gray-100 py-2.5 pl-4 text-xs tabular-nums">
+                  <td className="sticky -bottom-6 z-10 w-32 border-t-2 border-t-primary-500 border-l border-l-primary-100 bg-primary-50 py-2.5 pl-4 text-xs tabular-nums">
                     {formatarMoeda(totais.vgvMasa)}
                   </td>
-                  <td className="sticky bottom-0 z-10 w-28 border-t-2 border-t-gray-300 border-l border-l-gray-200 bg-gray-100 py-2.5 pl-4 text-xs tabular-nums">
+                  <td className="sticky -bottom-6 z-10 w-28 border-t-2 border-t-primary-500 border-l border-l-primary-100 bg-primary-50 py-2.5 pl-4 text-xs tabular-nums">
                     {formatarHoras(totais.segundosTrabalhados)}
                   </td>
-                  <td className="sticky bottom-0 z-10 w-32 rounded-br-card border-t-2 border-t-gray-300 border-l border-l-gray-200 bg-gray-100 py-2.5 pl-4 text-xs tabular-nums">
+                  <td className="sticky -bottom-6 z-10 w-32 rounded-br-card border-t-2 border-t-primary-500 border-l border-l-primary-100 bg-primary-50 py-2.5 pl-4 text-xs tabular-nums">
                     {formatarMoeda(totais.contasPagas)}
                   </td>
                 </tr>
