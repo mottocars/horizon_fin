@@ -57,34 +57,79 @@ function agruparPorMicroEtapa(empreendimentos) {
     .map(([microEtapaAtual, itens]) => ({ microEtapaAtual, empreendimentos: itens }));
 }
 
+// Chave estável de um grupo de Micro Etapa Atual — usada tanto pro Set de colapsados quanto pra
+// key do React — combina a fase (o mesmo nome de micro etapa pode existir em fases diferentes)
+// com o nome da micro etapa em si (ou um marcador fixo pra quem não tem nenhuma).
+function chaveGrupoMicroEtapa(faseId, microEtapaAtual) {
+  return `${faseId}::${microEtapaAtual || '(sem micro etapa)'}`;
+}
+
+// Soma as 7 colunas numéricas (Duração até Contas Pagas) de uma lista de empreendimentos —
+// usada tanto pro resumo da fase colapsada quanto pro de um grupo de Micro Etapa Atual
+// colapsado.
+function somarEmpreendimentos(empreendimentos) {
+  return empreendimentos.reduce(
+    (acc, emp) => ({
+      duracaoDias: acc.duracaoDias + (emp.duracaoDias || 0),
+      areaM2: acc.areaM2 + (emp.areaM2 || 0),
+      unidades: acc.unidades + (emp.unidades || 0),
+      vgvGeral: acc.vgvGeral + (emp.vgvGeral || 0),
+      vgvMasa: acc.vgvMasa + (emp.vgvMasa || 0),
+      segundosTrabalhados: acc.segundosTrabalhados + (emp.segundosTrabalhados || 0),
+      contasPagas: acc.contasPagas + (emp.contasPagas || 0),
+    }),
+    { duracaoDias: 0, areaM2: 0, unidades: 0, vgvGeral: 0, vgvMasa: 0, segundosTrabalhados: 0, contasPagas: 0 }
+  );
+}
+
 // Achata uma fase em linhas de tabela prontas pra renderizar, já carregando tudo que o JSX
 // precisa saber sobre rowSpan/borda de cada uma: "Etapa Atual" continua 1 célula só pra fase
-// inteira (mesmo de sempre); "Micro Etapa Atual" agora segue o MESMO perfil — 1 célula só por
-// grupo de empreendimentos com a mesma micro etapa (pedido do usuário), não mais repetida em
-// cada linha.
-function construirLinhasFase(fase) {
-  const grupos =
+// inteira (mesmo de sempre); "Micro Etapa Atual" segue o mesmo perfil — 1 célula só por grupo de
+// empreendimentos com a mesma micro etapa — e cada grupo pode estar colapsado (`grupoColapsado`
+// em `microEtapasColapsadas`), virando 1 linha de resumo só em vez de 1 por empreendimento (o
+// rowSpan da fase e a borda de "última linha" já contam esse tamanho reduzido certinho).
+function construirLinhasFase(fase, microEtapasColapsadas) {
+  const gruposBrutos =
     fase.empreendimentos.length > 0
       ? agruparPorMicroEtapa(fase.empreendimentos)
       : [{ microEtapaAtual: null, empreendimentos: [null] }];
-  const total = grupos.reduce((soma, grupo) => soma + grupo.empreendimentos.length, 0);
+
+  const grupos = gruposBrutos.map((grupo) => {
+    const chave = chaveGrupoMicroEtapa(fase.id, grupo.microEtapaAtual);
+    const colapsado = fase.empreendimentos.length > 0 && microEtapasColapsadas.has(chave);
+    return { ...grupo, chave, colapsado, tamanhoEfetivo: colapsado ? 1 : grupo.empreendimentos.length };
+  });
+  const total = grupos.reduce((soma, grupo) => soma + grupo.tamanhoEfetivo, 0);
 
   const linhas = [];
   let indice = 0;
   for (const grupo of grupos) {
-    const grupoTerminaNaFase = indice + grupo.empreendimentos.length === total;
-    grupo.empreendimentos.forEach((empreendimento, indiceNoGrupo) => {
+    const grupoTerminaNaFase = indice + grupo.tamanhoEfetivo === total;
+    if (grupo.colapsado) {
       linhas.push({
-        empreendimento,
+        tipo: 'grupoColapsado',
+        grupo,
         primeiraDaFase: indice === 0,
         ultimaDaFase: indice === total - 1,
-        primeiraDoGrupo: indiceNoGrupo === 0,
-        tamanhoGrupo: grupo.empreendimentos.length,
-        microEtapaAtual: grupo.microEtapaAtual,
         grupoTerminaNaFase,
       });
       indice += 1;
-    });
+    } else {
+      grupo.empreendimentos.forEach((empreendimento, indiceNoGrupo) => {
+        linhas.push({
+          tipo: 'empreendimento',
+          empreendimento,
+          primeiraDaFase: indice === 0,
+          ultimaDaFase: indice === total - 1,
+          primeiraDoGrupo: indiceNoGrupo === 0,
+          tamanhoGrupo: grupo.empreendimentos.length,
+          microEtapaAtual: grupo.microEtapaAtual,
+          grupoChave: grupo.chave,
+          grupoTerminaNaFase,
+        });
+        indice += 1;
+      });
+    }
   }
   return { linhas, total };
 }
@@ -94,22 +139,14 @@ function construirLinhasFase(fase) {
 // de Duração até Contas Pagas somam os valores de TODOS os empreendimentos da fase.
 function calcularResumoFase(fase) {
   const microEtapas = new Set();
-  const soma = fase.empreendimentos.reduce(
-    (acc, emp) => {
-      if (emp.microEtapaAtual) microEtapas.add(emp.microEtapaAtual);
-      return {
-        duracaoDias: acc.duracaoDias + (emp.duracaoDias || 0),
-        areaM2: acc.areaM2 + (emp.areaM2 || 0),
-        unidades: acc.unidades + (emp.unidades || 0),
-        vgvGeral: acc.vgvGeral + (emp.vgvGeral || 0),
-        vgvMasa: acc.vgvMasa + (emp.vgvMasa || 0),
-        segundosTrabalhados: acc.segundosTrabalhados + (emp.segundosTrabalhados || 0),
-        contasPagas: acc.contasPagas + (emp.contasPagas || 0),
-      };
-    },
-    { duracaoDias: 0, areaM2: 0, unidades: 0, vgvGeral: 0, vgvMasa: 0, segundosTrabalhados: 0, contasPagas: 0 }
-  );
-  return { qtdMicroEtapas: microEtapas.size, qtdEmpreendimentos: fase.empreendimentos.length, ...soma };
+  for (const emp of fase.empreendimentos) {
+    if (emp.microEtapaAtual) microEtapas.add(emp.microEtapaAtual);
+  }
+  return {
+    qtdMicroEtapas: microEtapas.size,
+    qtdEmpreendimentos: fase.empreendimentos.length,
+    ...somarEmpreendimentos(fase.empreendimentos),
+  };
 }
 
 // Ícone de filtro compacto ao lado do nome da coluna — mesmo padrão de
@@ -223,24 +260,12 @@ export default function EmpreendimentosMasaPage() {
       .filter((fase) => fase.empreendimentos.length > 0 || semFiltroDeItem);
   }, [matriz, filtroEtapaAtual, filtroEmpreendimento, filtroMicroEtapa]);
 
-  // Totalizador do rodapé — soma só as 6 colunas numéricas "de valor" que fazem sentido somar
-  // (pedido do usuário): M², Unidades, VGV Geral, VGV Masa, Horas Trabalhadas e Contas Pagas.
-  // Fica de fora Duração (não é um total que faça sentido somar entre empreendimentos). Sempre
-  // a partir da matriz JÁ FILTRADA — os totais têm que refletir só o que está visível na tela.
-  const totais = useMemo(() => {
-    const todos = matrizFiltrada.flatMap((fase) => fase.empreendimentos);
-    return todos.reduce(
-      (acc, emp) => ({
-        areaM2: acc.areaM2 + (emp.areaM2 || 0),
-        unidades: acc.unidades + (emp.unidades || 0),
-        vgvGeral: acc.vgvGeral + (emp.vgvGeral || 0),
-        vgvMasa: acc.vgvMasa + (emp.vgvMasa || 0),
-        segundosTrabalhados: acc.segundosTrabalhados + (emp.segundosTrabalhados || 0),
-        contasPagas: acc.contasPagas + (emp.contasPagas || 0),
-      }),
-      { areaM2: 0, unidades: 0, vgvGeral: 0, vgvMasa: 0, segundosTrabalhados: 0, contasPagas: 0 }
-    );
-  }, [matrizFiltrada]);
+  // Totalizador do rodapé — soma as 7 colunas numéricas (Duração até Contas Pagas). Sempre a
+  // partir da matriz JÁ FILTRADA — os totais têm que refletir só o que está visível na tela.
+  const totais = useMemo(
+    () => somarEmpreendimentos(matrizFiltrada.flatMap((fase) => fase.empreendimentos)),
+    [matrizFiltrada]
+  );
 
   const semResultadoFiltro = Boolean(matriz && matriz.length > 0 && matrizFiltrada.length === 0);
 
@@ -253,6 +278,20 @@ export default function EmpreendimentosMasaPage() {
       const proximo = new Set(atual);
       if (proximo.has(faseId)) proximo.delete(faseId);
       else proximo.add(faseId);
+      return proximo;
+    });
+  }
+
+  // Mesmo comportamento, um nível abaixo: colapsar/expandir um grupo de Micro Etapa Atual
+  // dentro de uma fase (pedido do usuário — "mesmo comportamento do da etapa atual"). Também
+  // começa sempre expandido.
+  const [microEtapasColapsadas, setMicroEtapasColapsadas] = useState(() => new Set());
+
+  function toggleMicroEtapa(chave) {
+    setMicroEtapasColapsadas((atual) => {
+      const proximo = new Set(atual);
+      if (proximo.has(chave)) proximo.delete(chave);
+      else proximo.add(chave);
       return proximo;
     });
   }
@@ -518,12 +557,12 @@ export default function EmpreendimentosMasaPage() {
                     );
                   }
 
-                  const { linhas, total } = construirLinhasFase(fase);
+                  const { linhas, total } = construirLinhasFase(fase, microEtapasColapsadas);
 
                   return (
                     <Fragment key={fase.id}>
                       {linhas.map((linha, i) => {
-                        const { empreendimento } = linha;
+                        const empreendimento = linha.tipo === 'empreendimento' ? linha.empreendimento : null;
                         // Última linha da fase — borda de baixo mais grossa/escura pra marcar
                         // bem a separação entre uma etapa e a próxima (pedido do usuário).
                         const bordaInferior = linha.ultimaDaFase
@@ -535,39 +574,101 @@ export default function EmpreendimentosMasaPage() {
                         const bordaGrupo = linha.grupoTerminaNaFase
                           ? 'border-b-2 border-b-gray-400'
                           : 'border-b border-b-gray-200';
-                        return (
-                          <tr key={`${fase.id}-${empreendimento?.id ?? 'vazia'}-${i}`}>
-                            {linha.primeiraDaFase && (
+
+                        const celulaEtapaAtual = linha.primeiraDaFase && (
+                          <td
+                            rowSpan={total}
+                            className="border-b-2 border-b-gray-400 border-r border-r-gray-200 bg-white px-4 py-2.5 align-middle"
+                          >
+                            <button type="button" onClick={() => toggleFase(fase.id)} className="flex items-center gap-2 text-left">
+                              <span className="flex h-4 w-4 shrink-0 items-center justify-center rounded bg-primary-100 text-primary-600">
+                                <Minus size={10} />
+                              </span>
+                              <span className="text-xs font-semibold text-gray-900">{fase.name}</span>
+                              <span className="shrink-0 rounded-full bg-white px-2 py-0.5 text-[10px] font-medium tabular-nums text-gray-500 ring-1 ring-gray-200">
+                                {fase.empreendimentos.length}
+                              </span>
+                            </button>
+                          </td>
+                        );
+
+                        // Grupo de Micro Etapa Atual colapsado (pedido do usuário: "mesmo
+                        // comportamento do da etapa atual") — 1 linha de resumo só: Empreendimento
+                        // vira contagem, Duração até Contas Pagas somam só os empreendimentos
+                        // DAQUELE grupo (não a fase inteira).
+                        if (linha.tipo === 'grupoColapsado') {
+                          const resumoGrupo = somarEmpreendimentos(linha.grupo.empreendimentos);
+                          return (
+                            <tr key={`${fase.id}-grupo-${linha.grupo.chave}`}>
+                              {celulaEtapaAtual}
                               <td
-                                rowSpan={total}
-                                className="border-b-2 border-b-gray-400 border-r border-r-gray-200 bg-white px-4 py-2.5 align-middle"
+                                className={`${bordaGrupo} border-l border-l-gray-200 bg-white px-4 py-2.5 align-middle text-xs text-gray-700`}
                               >
                                 <button
                                   type="button"
-                                  onClick={() => toggleFase(fase.id)}
-                                  className="flex items-center gap-2 text-left"
+                                  onClick={() => toggleMicroEtapa(linha.grupo.chave)}
+                                  className="flex items-start gap-2 text-left"
                                 >
                                   <span className="flex h-4 w-4 shrink-0 items-center justify-center rounded bg-primary-100 text-primary-600">
-                                    <Minus size={10} />
+                                    <Plus size={10} />
                                   </span>
-                                  <span className="text-xs font-semibold text-gray-900">{fase.name}</span>
+                                  <span className="flex-1">
+                                    {linha.grupo.microEtapaAtual || <span className="text-gray-300">—</span>}
+                                  </span>
                                   <span className="shrink-0 rounded-full bg-white px-2 py-0.5 text-[10px] font-medium tabular-nums text-gray-500 ring-1 ring-gray-200">
-                                    {fase.empreendimentos.length}
+                                    {linha.grupo.empreendimentos.length}
                                   </span>
                                 </button>
                               </td>
-                            )}
+                              <td className={`${bordaInferior} border-l border-l-gray-100 py-1.5 pl-4 text-xs tabular-nums text-gray-700`}>
+                                {linha.grupo.empreendimentos.length}
+                              </td>
+                              <td className={`${bordaInferior} border-l border-l-gray-100 py-1.5 pl-4 text-xs tabular-nums text-gray-700`}>
+                                {`${resumoGrupo.duracaoDias.toLocaleString('pt-BR')} dias`}
+                              </td>
+                              <td className={`${bordaInferior} border-l border-l-gray-100 py-1.5 pl-4 text-xs tabular-nums text-gray-700`}>
+                                {resumoGrupo.areaM2.toLocaleString('pt-BR')}
+                              </td>
+                              <td className={`${bordaInferior} border-l border-l-gray-100 py-1.5 pl-4 text-xs tabular-nums text-gray-700`}>
+                                {resumoGrupo.unidades.toLocaleString('pt-BR')}
+                              </td>
+                              <td className={`${bordaInferior} border-l border-l-gray-100 py-1.5 pl-4 text-xs tabular-nums text-gray-700`}>
+                                {formatarMoeda(resumoGrupo.vgvGeral)}
+                              </td>
+                              <td className={`${bordaInferior} border-l border-l-gray-100 py-1.5 pl-4 text-xs tabular-nums text-gray-700`}>
+                                {formatarMoeda(resumoGrupo.vgvMasa)}
+                              </td>
+                              <td className={`${bordaInferior} border-l border-l-gray-100 py-1.5 pl-4 text-xs tabular-nums text-gray-700`}>
+                                {formatarHoras(resumoGrupo.segundosTrabalhados)}
+                              </td>
+                              <td className={`${bordaInferior} border-l border-l-gray-100 py-1.5 pl-4 text-xs tabular-nums text-gray-700`}>
+                                {formatarMoeda(resumoGrupo.contasPagas)}
+                              </td>
+                            </tr>
+                          );
+                        }
+
+                        return (
+                          <tr key={`${fase.id}-${empreendimento?.id ?? 'vazia'}-${i}`}>
+                            {celulaEtapaAtual}
                             {linha.primeiraDoGrupo && (
                               <td
                                 rowSpan={linha.tamanhoGrupo}
                                 className={`${bordaGrupo} border-l border-l-gray-200 bg-white px-4 py-2.5 align-middle text-xs text-gray-700`}
                               >
-                                <span className="flex items-start gap-2">
-                                  {linha.microEtapaAtual || <span className="text-gray-300">—</span>}
+                                <button
+                                  type="button"
+                                  onClick={() => toggleMicroEtapa(linha.grupoChave)}
+                                  className="flex items-start gap-2 text-left"
+                                >
+                                  <span className="flex h-4 w-4 shrink-0 items-center justify-center rounded bg-primary-100 text-primary-600">
+                                    <Minus size={10} />
+                                  </span>
+                                  <span className="flex-1">{linha.microEtapaAtual || <span className="text-gray-300">—</span>}</span>
                                   <span className="shrink-0 rounded-full bg-white px-2 py-0.5 text-[10px] font-medium tabular-nums text-gray-500 ring-1 ring-gray-200">
                                     {linha.tamanhoGrupo}
                                   </span>
-                                </span>
+                                </button>
                               </td>
                             )}
                             <td className={`${bordaInferior} border-l border-l-gray-100 py-1.5 pl-4 text-xs text-gray-700`}>
@@ -662,8 +763,8 @@ export default function EmpreendimentosMasaPage() {
                   >
                     Total
                   </td>
-                  <td className="sticky -bottom-6 z-10 w-28 border-t-2 border-t-primary-500 border-l border-l-primary-100 bg-primary-50 py-2.5 pl-4 text-xs">
-                    <span className="text-gray-300">—</span>
+                  <td className="sticky -bottom-6 z-10 w-28 border-t-2 border-t-primary-500 border-l border-l-primary-100 bg-primary-50 py-2.5 pl-4 text-xs tabular-nums">
+                    {`${totais.duracaoDias.toLocaleString('pt-BR')} dias`}
                   </td>
                   <td className="sticky -bottom-6 z-10 w-28 border-t-2 border-t-primary-500 border-l border-l-primary-100 bg-primary-50 py-2.5 pl-4 text-xs tabular-nums">
                     {totais.areaM2.toLocaleString('pt-BR')}
