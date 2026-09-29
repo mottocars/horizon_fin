@@ -562,7 +562,12 @@ export default function EmpreendimentosMasaPage() {
                                 rowSpan={linha.tamanhoGrupo}
                                 className={`${bordaGrupo} border-l border-l-gray-200 bg-white px-4 py-2.5 align-middle text-xs text-gray-700`}
                               >
-                                {linha.microEtapaAtual || <span className="text-gray-300">—</span>}
+                                <span className="flex items-start gap-2">
+                                  {linha.microEtapaAtual || <span className="text-gray-300">—</span>}
+                                  <span className="shrink-0 rounded-full bg-white px-2 py-0.5 text-[10px] font-medium tabular-nums text-gray-500 ring-1 ring-gray-200">
+                                    {linha.tamanhoGrupo}
+                                  </span>
+                                </span>
                               </td>
                             )}
                             <td className={`${bordaInferior} border-l border-l-gray-100 py-1.5 pl-4 text-xs text-gray-700`}>
