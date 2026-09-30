@@ -1453,6 +1453,20 @@ CREATE TABLE espiao_notas_vinculos (
     UNIQUE (empresa_id, sienge_titulo_id)
 );
 
+-- Varredura de vínculo automático nota ↔ título do contas a pagar, por
+-- empresa (ver espiao-nfe-nfse/vinculacaoAutomatica.js): `horario` = hora do
+-- dia (Brasília) em que a rotina diária roda (NULL = sem rotina diária);
+-- ultima_agendada_em evita rodar 2x no mesmo dia; ultima_execucao_* e
+-- ultimo_resultado = última varredura (manual ou agendada), pra tela mostrar.
+CREATE TABLE espiao_vinculacao_automatica (
+    empresa_id              INTEGER PRIMARY KEY REFERENCES empresas(id) ON DELETE CASCADE,
+    horario                 TIME,
+    ultima_agendada_em      TIMESTAMPTZ,
+    ultima_execucao_em      TIMESTAMPTZ,
+    ultima_execucao_origem  VARCHAR(10),
+    ultimo_resultado        JSONB
+);
+
 -- Cache dos credores (fornecedores) do Sienge — public/api/v1/creditors/{id}
 -- só devolve 1 credor por chamada, e a janela de vínculo do Espião precisa do
 -- nome/CPF/CNPJ de centenas deles de uma vez. Guardado por tenant; renovado

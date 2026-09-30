@@ -104,7 +104,9 @@ async function siengeGet(credenciais, caminho, descricao) {
 }
 
 // Pagina /bills (limit 200 + offset) até esgotar resultSetMetadata.count.
-async function buscarTodosTitulos(credenciais, { codigo, dataInicio, dataFim, atualizar }) {
+// `onPagina({ paginaAtual, totalPaginas })` — progresso pra log da varredura
+// automática (ver vinculacaoAutomatica.js).
+async function buscarTodosTitulos(credenciais, { codigo, dataInicio, dataFim, atualizar, onPagina }) {
   const chaveCache = `${credenciais.tenant}|${codigo}|${dataInicio}|${dataFim}`;
   const emCache = cacheTitulos.get(chaveCache);
   if (!atualizar && emCache && Date.now() - emCache.em < TTL_TITULOS_MS) return emCache.titulos;
@@ -124,6 +126,7 @@ async function buscarTodosTitulos(credenciais, { codigo, dataInicio, dataFim, at
     const resultados = Array.isArray(pagina?.results) ? pagina.results : [];
     total = Number(pagina?.resultSetMetadata?.count ?? resultados.length);
     titulos.push(...resultados);
+    onPagina?.({ paginaAtual: offset / PAGE_LIMIT + 1, totalPaginas: Math.max(1, Math.ceil(total / PAGE_LIMIT)) });
     if (resultados.length === 0) break;
     offset += PAGE_LIMIT;
   }
@@ -156,7 +159,8 @@ async function buscarCredorNoSienge(credenciais, id) {
 
 // Resolve vários credores: o que está no cache (e ainda válido) sai do banco
 // numa consulta só; o resto é buscado no Sienge, em lotes paralelos.
-async function buscarCredores(credenciais, ids) {
+// `onProgresso({ buscados, aBuscar })` — só conta os que foram ao Sienge.
+async function buscarCredores(credenciais, ids, onProgresso) {
   const unicos = [...new Set(ids.filter((id) => id != null).map(Number))];
   const porId = new Map();
   if (unicos.length === 0) return porId;
@@ -174,6 +178,7 @@ async function buscarCredores(credenciais, ids) {
     const lote = faltando.slice(i, i + CONCORRENCIA_CREDORES);
     const credores = await Promise.all(lote.map((id) => buscarCredorNoSienge(credenciais, id)));
     credores.forEach((credor, j) => porId.set(lote[j], credor));
+    onProgresso?.({ buscados: Math.min(i + CONCORRENCIA_CREDORES, faltando.length), aBuscar: faltando.length });
   }
   return porId;
 }
@@ -383,7 +388,14 @@ async function desvincular(notaId) {
 // O resto fica de fora e volta no relatório (ambíguos). `simular: true` só
 // calcula, sem gravar. Os títulos vêm do Sienge nesta mesma chamada — o
 // retrato gravado é o que o Sienge devolveu agora.
-async function vincularAutomaticamente(empresaId, { dataInicio, dataFim, usuarioId = null, simular = true }) {
+// `aoProgredir(tipo, dados)` (opcional) recebe o andamento de cada tipo de
+// nota ('NFE'/'NFSE') pro log da varredura (ver vinculacaoAutomatica.js):
+// { status: 'carregando'|'sucesso'|'ignorado'|'sem_configuracao', etapa,
+//   paginaAtual, totalPaginas, codigo, titulos, notas }.
+async function vincularAutomaticamente(
+  empresaId,
+  { dataInicio, dataFim, usuarioId = null, simular = true, aoProgredir = () => {} }
+) {
   const credenciais = await getCredenciais(empresaId);
   const { rows: notas } = await pool.query(
     `SELECT id, tipo, chave_acesso, numero_nota, emissor,
@@ -406,15 +418,39 @@ async function vincularAutomaticamente(empresaId, { dataInicio, dataFim, usuario
 
   for (const tipo of ['NFE', 'NFSE']) {
     const notasDoTipo = notas.filter((n) => n.tipo === tipo);
-    if (notasDoTipo.length === 0) continue;
+    if (notasDoTipo.length === 0) {
+      aoProgredir(tipo, { status: 'ignorado', notas: 0 });
+      continue;
+    }
     const codigo = await getCodigoDocumento(empresaId, tipo);
     if (!codigo) {
       relatorio.semConfiguracao.push(tipo);
+      aoProgredir(tipo, { status: 'sem_configuracao', notas: notasDoTipo.length });
       continue;
     }
-    const titulos = await buscarTodosTitulos(credenciais, { codigo, dataInicio, dataFim, atualizar: true });
-    const credores = await buscarCredores(credenciais, titulos.map((t) => t.creditorId));
+    aoProgredir(tipo, { status: 'carregando', etapa: 'Títulos do contas a pagar', codigo, notas: notasDoTipo.length });
+    const titulos = await buscarTodosTitulos(credenciais, {
+      codigo,
+      dataInicio,
+      dataFim,
+      atualizar: true,
+      onPagina: (p) => aoProgredir(tipo, { status: 'carregando', etapa: 'Títulos do contas a pagar', ...p }),
+    });
+    aoProgredir(tipo, { status: 'carregando', etapa: 'Fornecedores', paginaAtual: undefined, totalPaginas: undefined });
+    const credores = await buscarCredores(
+      credenciais,
+      titulos.map((t) => t.creditorId),
+      ({ buscados, aBuscar }) =>
+        aoProgredir(tipo, { status: 'carregando', etapa: 'Fornecedores', paginaAtual: buscados, totalPaginas: aBuscar })
+    );
     relatorio.porTipo[tipo] = { codigo, notas: notasDoTipo.length, titulos: titulos.length };
+    aoProgredir(tipo, {
+      status: 'sucesso',
+      etapa: undefined,
+      paginaAtual: undefined,
+      totalPaginas: undefined,
+      titulos: titulos.length,
+    });
 
     // Índice por (CNPJ do credor, data, nº) — as 3 hipóteses de uma vez.
     const chave = (doc, data, numero) => `${soDigitos(doc)}|${String(data || '').slice(0, 10)}|${numeroNormalizado(numero)}`;

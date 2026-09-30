@@ -10,12 +10,29 @@
 // consultarPorCertificado (devolve ok:false sem lançar erro quando ainda não
 // passou 1h) — então chamar consultarEmpresa aqui repetidamente é seguro,
 // mesmo que o intervalo configurado seja menor que 1h.
+//
+// Também dispara a varredura diária de vínculo automático nota ↔ título do
+// contas a pagar (horário configurado no mesmo "Agendar consulta" — ver
+// vinculacaoAutomatica.js). Essa checagem é a cada minuto, pra rodar no
+// horário escolhido e não até 15 min depois; ela só lê uma tabelinha, e a
+// varredura em si roda em segundo plano (não segura o tick).
 const service = require('./espiao.service');
+const vinculacaoAutomatica = require('./vinculacaoAutomatica');
 
 const INTERVALO_VERIFICACAO_MS = 15 * 60 * 1000; // checa a cada 15 min
+const INTERVALO_VINCULACAO_MS = 60 * 1000; // horário da vinculação: a cada 1 min
 
 let executando = false;
 let timer = null;
+let timerVinculacao = null;
+
+async function executarTickVinculacao() {
+  try {
+    await vinculacaoAutomatica.verificarAgendamentos();
+  } catch (err) {
+    console.error('[agendador-espiao] falha ao verificar a vinculação automática:', err.message);
+  }
+}
 
 async function executarTick() {
   // Evita rodar duas verificações ao mesmo tempo se uma consulta anterior
@@ -57,13 +74,17 @@ function iniciar() {
   if (timer) return; // já iniciado — evita duplicar o setInterval em hot-reload
   console.log(`[agendador-espiao] iniciado — verifica agendamentos pendentes a cada ${INTERVALO_VERIFICACAO_MS / 60000} min.`);
   timer = setInterval(executarTick, INTERVALO_VERIFICACAO_MS);
+  timerVinculacao = setInterval(executarTickVinculacao, INTERVALO_VINCULACAO_MS);
   // Roda uma vez logo na subida também, sem esperar o primeiro intervalo.
   executarTick();
+  executarTickVinculacao();
 }
 
 function parar() {
   if (timer) clearInterval(timer);
+  if (timerVinculacao) clearInterval(timerVinculacao);
   timer = null;
+  timerVinculacao = null;
 }
 
 module.exports = { iniciar, parar, executarTick };

@@ -52,6 +52,21 @@ export function salvarAgendamentoEspiao(empresaId, intervaloHoras) {
   return http.put(`/espiao/${empresaId}/agendamento`, { intervaloHoras }).then((res) => res.data);
 }
 
+// Varredura de vínculo automático (roda em segundo plano no servidor) — o
+// POST dispara (ou devolve a que já está rodando); o GET devolve o log e a
+// configuração do horário diário.
+export function getVinculacaoAutomaticaEspiao(empresaId) {
+  return http.get(`/espiao/${empresaId}/vinculacao-automatica`).then((res) => res.data);
+}
+
+export function iniciarVinculacaoAutomaticaEspiao(empresaId) {
+  return http.post(`/espiao/${empresaId}/vinculacao-automatica`).then((res) => res.data);
+}
+
+export function salvarHorarioVinculacaoEspiao(empresaId, horario) {
+  return http.put(`/espiao/${empresaId}/vinculacao-automatica/horario`, { horario }).then((res) => res.data);
+}
+
 export function getConfiguracoesEspiao(empresaId) {
   return http.get(`/espiao/${empresaId}/configuracoes`).then((res) => res.data);
 }

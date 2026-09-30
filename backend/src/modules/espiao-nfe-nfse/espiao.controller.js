@@ -2,6 +2,7 @@ const { z } = require('zod');
 const service = require('./espiao.service');
 const pdfService = require('./pdf.service');
 const vinculoService = require('./vinculo.service');
+const vinculacaoAutomatica = require('./vinculacaoAutomatica');
 
 function badRequest(message) {
   const err = new Error(message);
@@ -186,6 +187,44 @@ async function salvarConfiguracoes(req, res, next) {
   }
 }
 
+// ── Vinculação automática (ver vinculacaoAutomatica.js) ───────────────────
+
+async function getVinculacaoAutomatica(req, res, next) {
+  try {
+    res.json(await vinculacaoAutomatica.getStatus(req.params.empresaId));
+  } catch (err) {
+    next(err);
+  }
+}
+
+async function iniciarVinculacaoAutomatica(req, res, next) {
+  try {
+    vinculacaoAutomatica.iniciar(req.params.empresaId, { origem: 'manual', usuarioId: req.user.id });
+    res.status(202).json(await vinculacaoAutomatica.getStatus(req.params.empresaId));
+  } catch (err) {
+    next(err);
+  }
+}
+
+const horarioVinculacaoSchema = z.object({
+  // "HH:MM" ou null (sem rotina diária).
+  horario: z
+    .string()
+    .regex(/^([01]\d|2[0-3]):[0-5]\d$/, 'Informe um horário válido (HH:MM).')
+    .nullable(),
+});
+
+async function salvarHorarioVinculacao(req, res, next) {
+  try {
+    const { horario } = horarioVinculacaoSchema.parse(req.body);
+    await vinculacaoAutomatica.salvarHorario(req.params.empresaId, horario);
+    res.json(await vinculacaoAutomatica.getStatus(req.params.empresaId));
+  } catch (err) {
+    if (err.issues) return next(badRequest(err.issues[0].message));
+    next(err);
+  }
+}
+
 const DATA_ISO = /^\d{4}-\d{2}-\d{2}$/;
 
 const titulosSiengeSchema = z.object({
@@ -349,6 +388,9 @@ module.exports = {
   listTitulosSienge,
   vincular,
   desvincular,
+  getVinculacaoAutomatica,
+  iniciarVinculacaoAutomatica,
+  salvarHorarioVinculacao,
   inativar,
   reativar,
   declararCiencia,

@@ -38,6 +38,7 @@ import { useSidebar } from '../../../layout/SidebarContext';
 import { explicarSituacao } from './situacao';
 import ConfiguracoesTab from './ConfiguracoesTab';
 import VincularTituloModal from './VincularTituloModal';
+import VinculacaoAutomaticaModal from './VinculacaoAutomaticaModal';
 import logoSienge from '../../../assets/integracoes/sienge.svg';
 import { useEmpresaTravada } from '../../../hooks/useEmpresaTravada';
 import {
@@ -53,6 +54,8 @@ import {
   inativarNotasEspiao,
   reativarNotasEspiao,
   listEventosNotaEspiao,
+  getVinculacaoAutomaticaEspiao,
+  salvarHorarioVinculacaoEspiao,
 } from '../../../api/espiao.api';
 
 const INTERVALOS = [
@@ -634,6 +637,12 @@ export default function EspiaoNfeNfsePage() {
   const [modalAgendamento, setModalAgendamento] = useState(false);
   const [intervaloSelecionado, setIntervaloSelecionado] = useState(1);
   const [salvandoAgendamento, setSalvandoAgendamento] = useState(false);
+  // Rotina diária de vínculo automático (mesma janela de Agendar consulta):
+  // horário 'HH:MM' ('' = sem rotina) + resumo da última varredura.
+  const [horarioVinculacao, setHorarioVinculacao] = useState('');
+  const [ultimaVinculacao, setUltimaVinculacao] = useState(null);
+  // Janela de log do botão "Vincular agora" (ver VinculacaoAutomaticaModal).
+  const [modalVinculacao, setModalVinculacao] = useState(false);
 
   // Nota cujo histórico de etapas está aberto na janela flutuante (ver
   // HistoricoSituacaoModal) — null = janela fechada. Guarda a nota inteira
@@ -910,18 +919,29 @@ export default function EspiaoNfeNfsePage() {
   async function abrirAgendamento() {
     setModalAgendamento(true);
     setIntervaloSelecionado(1);
-    try {
-      const atual = await getAgendamentoEspiao(empresaId);
-      if (atual?.intervalo_horas) setIntervaloSelecionado(atual.intervalo_horas);
-    } catch {
-      // sem agendamento salvo ainda — mantém o padrão de 1h
+    setHorarioVinculacao('');
+    setUltimaVinculacao(null);
+    const [consulta, vinculacao] = await Promise.allSettled([
+      getAgendamentoEspiao(empresaId),
+      getVinculacaoAutomaticaEspiao(empresaId),
+    ]);
+    // Sem agendamento salvo ainda — mantém o padrão de 1h / sem rotina.
+    if (consulta.status === 'fulfilled' && consulta.value?.intervalo_horas) {
+      setIntervaloSelecionado(consulta.value.intervalo_horas);
+    }
+    if (vinculacao.status === 'fulfilled') {
+      setHorarioVinculacao(vinculacao.value.agendamento.horario || '');
+      setUltimaVinculacao(vinculacao.value.agendamento.ultimaExecucaoEm ? vinculacao.value.agendamento : null);
     }
   }
 
   async function handleSalvarAgendamento() {
     setSalvandoAgendamento(true);
     try {
-      await salvarAgendamentoEspiao(empresaId, intervaloSelecionado);
+      await Promise.all([
+        salvarAgendamentoEspiao(empresaId, intervaloSelecionado),
+        salvarHorarioVinculacaoEspiao(empresaId, horarioVinculacao || null),
+      ]);
       setModalAgendamento(false);
     } catch (err) {
       await alert({
@@ -1474,6 +1494,17 @@ export default function EspiaoNfeNfsePage() {
                     <CalendarClock size={18} />
                   </button>
                 )}
+                {!modoInativas && (
+                  <button
+                    type="button"
+                    onClick={() => setModalVinculacao(true)}
+                    disabled={!empresaId}
+                    title="Vincular ao contas a pagar agora — varredura desde a primeira nota sem vínculo"
+                    className="flex items-center justify-center rounded-lg border border-gray-200 p-2 text-gray-500 hover:bg-gray-50 disabled:cursor-not-allowed disabled:opacity-60 disabled:hover:bg-transparent"
+                  >
+                    <RefreshCw size={18} />
+                  </button>
+                )}
               </>
             )}
           </div>
@@ -1648,6 +1679,46 @@ export default function EspiaoNfeNfsePage() {
             />
           </div>
 
+          {/* Rotina diária de vínculo automático nota ↔ título do contas a
+              pagar (ver vinculacaoAutomatica.js no backend). */}
+          <div className="border-t border-gray-100 pt-4">
+            <p className="text-sm font-medium text-gray-700">Vínculo automático com o contas a pagar</p>
+            <p className="mt-1 text-xs leading-relaxed text-gray-500">
+              Todo dia, no horário escolhido, o sistema procura no Sienge os títulos das notas ainda sem vínculo
+              (desde a primeira delas) e vincula as que conferem em CNPJ, data e nº. Deixe em branco para não rodar.
+            </p>
+            <div className="mt-2 flex items-center gap-2">
+              <input
+                type="time"
+                value={horarioVinculacao}
+                onChange={(e) => setHorarioVinculacao(e.target.value)}
+                disabled={salvandoAgendamento}
+                className={`w-32 rounded-lg border px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-primary-100 ${
+                  horarioVinculacao ? 'border-primary-100 bg-primary-50 text-gray-900' : 'border-gray-200 text-gray-500'
+                }`}
+              />
+              {horarioVinculacao ? (
+                <button
+                  type="button"
+                  onClick={() => setHorarioVinculacao('')}
+                  className="text-xs text-gray-400 underline decoration-dotted hover:text-gray-600"
+                >
+                  Desativar rotina
+                </button>
+              ) : (
+                <span className="text-xs text-gray-400">Sem rotina diária</span>
+              )}
+            </div>
+            {ultimaVinculacao && (
+              <p className="mt-2 text-xs text-gray-400">
+                Última varredura ({ultimaVinculacao.ultimaExecucaoOrigem === 'agendada' ? 'agendada' : 'manual'}):{' '}
+                {new Date(ultimaVinculacao.ultimaExecucaoEm).toLocaleString('pt-BR', { dateStyle: 'short', timeStyle: 'short' })}
+                {ultimaVinculacao.ultimoResultado &&
+                  ` · ${ultimaVinculacao.ultimoResultado.vinculados} nota(s) vinculada(s)`}
+              </p>
+            )}
+          </div>
+
           <div className="flex justify-end gap-2 pt-2">
             <Button
               type="button"
@@ -1818,6 +1889,18 @@ export default function EspiaoNfeNfsePage() {
       </Modal>
 
       <HistoricoSituacaoModal nota={notaHistorico} onClose={() => setNotaHistorico(null)} />
+
+      <VinculacaoAutomaticaModal
+        open={modalVinculacao}
+        empresaId={empresaId}
+        nomeEmpresa={empresaSelecionada ? nomeExibicaoEmpresa(empresaSelecionada) : ''}
+        onClose={() => setModalVinculacao(false)}
+        onConcluido={() => {
+          // Notas vinculadas pela varredura mudam de aba — recarrega a lista.
+          carregarContagemAbas();
+          if (certificados.length > 0) carregarNotasDeTodosCertificados();
+        }}
+      />
 
       {/* Período da busca no Sienge = Data início/fim da tela (pedido do
           usuário). "Ir para Configurações" fecha a janela e troca de aba. */}
