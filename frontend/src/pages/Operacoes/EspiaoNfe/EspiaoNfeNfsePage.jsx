@@ -1,4 +1,4 @@
-import { useEffect, useMemo, useState } from 'react';
+import { useEffect, useMemo, useRef, useState } from 'react';
 import {
   Download,
   FileText,
@@ -514,6 +514,13 @@ export default function EspiaoNfeNfsePage() {
   const [dataFim, setDataFim] = useState(hojeISO());
 
   const [notasPorCertificado, setNotasPorCertificado] = useState({});
+  // Cada busca de notas/contagem ganha um número; só a resposta da busca mais
+  // recente é aplicada. Sem isso, digitar a data no campo (que dispara uma
+  // busca a cada tecla, passando por anos como "0002") deixava uma resposta
+  // antiga — e maior, logo mais lenta — chegar por último e sobrescrever o
+  // resultado certo com notas fora do período.
+  const buscaNotasRef = useRef(0);
+  const buscaContagemRef = useRef(0);
   const [loadingNotas, setLoadingNotas] = useState({});
   const [consultando, setConsultando] = useState({});
 
@@ -622,7 +629,10 @@ export default function EspiaoNfeNfsePage() {
   // renderCertificado), que é sempre o total real do certificado.
   function carregarContagemAbas() {
     if (!empresaId) return;
-    contarNotasPorAbaEspiao(empresaId, { dataInicio, dataFim, ...filtros }).then(setContagemAbas);
+    const busca = ++buscaContagemRef.current;
+    contarNotasPorAbaEspiao(empresaId, { dataInicio, dataFim, ...filtros }).then((contagem) => {
+      if (busca === buscaContagemRef.current) setContagemAbas(contagem);
+    });
   }
 
   useEffect(() => {
@@ -706,9 +716,13 @@ export default function EspiaoNfeNfsePage() {
 
   function carregarNotas(certificadoId) {
     setLoadingNotas((prev) => ({ ...prev, [certificadoId]: true }));
+    const busca = buscaNotasRef.current;
     const buscar = modoInativas ? listNotasInativadasPorCertificadoEspiao : listNotasPorCertificadoEspiao;
     return buscar(certificadoId, { dataInicio, dataFim, ...filtros })
-      .then((dados) => setNotasPorCertificado((prev) => ({ ...prev, [certificadoId]: dados })))
+      .then((dados) => {
+        if (busca !== buscaNotasRef.current) return;
+        setNotasPorCertificado((prev) => ({ ...prev, [certificadoId]: dados }));
+      })
       .finally(() => setLoadingNotas((prev) => ({ ...prev, [certificadoId]: false })));
   }
 
@@ -716,6 +730,7 @@ export default function EspiaoNfeNfsePage() {
   // não tem mais expandir/recolher por certificado (ver comentário no bloco
   // de render), então isso é o único jeito de popular a tabela inteira.
   async function carregarNotasDeTodosCertificados() {
+    const busca = ++buscaNotasRef.current;
     setFiltrando(true);
     try {
       const buscar = modoInativas ? listNotasInativadasPorCertificadoEspiao : listNotasPorCertificadoEspiao;
@@ -724,6 +739,7 @@ export default function EspiaoNfeNfsePage() {
           setLoadingNotas((prev) => ({ ...prev, [certificado.id]: true }));
           try {
             const dados = await buscar(certificado.id, { dataInicio, dataFim, ...filtros });
+            if (busca !== buscaNotasRef.current) return;
             setNotasPorCertificado((prev) => ({ ...prev, [certificado.id]: dados }));
           } finally {
             setLoadingNotas((prev) => ({ ...prev, [certificado.id]: false }));
@@ -731,7 +747,7 @@ export default function EspiaoNfeNfsePage() {
         })
       );
     } finally {
-      setFiltrando(false);
+      if (busca === buscaNotasRef.current) setFiltrando(false);
     }
   }
 
