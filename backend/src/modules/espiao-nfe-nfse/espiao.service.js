@@ -1130,7 +1130,42 @@ async function marcarAgendamentoExecutado(empresaId) {
   await pool.query('UPDATE espiao_agendamentos SET ultima_execucao_em = NOW() WHERE empresa_id = $1', [empresaId]);
 }
 
+// Aba "Configurações" (ver EspiaoNfe/ConfiguracoesTab.jsx) — 1 linha por
+// empresa em espiao_configuracoes. Empresa que nunca salvou devolve tudo
+// null (formulário em branco), em vez de 404.
+async function getConfiguracoes(empresaId) {
+  const { rows } = await pool.query(
+    `SELECT c.codigo_documento_nfe, c.codigo_documento_nfse, c.atualizado_em, u.nome AS atualizado_por_nome
+     FROM espiao_configuracoes c
+     LEFT JOIN usuarios u ON u.id = c.atualizado_por
+     WHERE c.empresa_id = $1`,
+    [empresaId]
+  );
+  const config = rows[0];
+  return {
+    codigoDocumentoNfe: config?.codigo_documento_nfe ?? null,
+    codigoDocumentoNfse: config?.codigo_documento_nfse ?? null,
+    atualizadoEm: config?.atualizado_em ?? null,
+    atualizadoPorNome: config?.atualizado_por_nome ?? null,
+  };
+}
+
+async function salvarConfiguracoes(empresaId, { codigoDocumentoNfe, codigoDocumentoNfse }, usuarioId) {
+  await pool.query(
+    `INSERT INTO espiao_configuracoes (empresa_id, codigo_documento_nfe, codigo_documento_nfse, atualizado_por)
+     VALUES ($1, $2, $3, $4)
+     ON CONFLICT (empresa_id) DO UPDATE SET
+       codigo_documento_nfe = EXCLUDED.codigo_documento_nfe,
+       codigo_documento_nfse = EXCLUDED.codigo_documento_nfse,
+       atualizado_por = EXCLUDED.atualizado_por`,
+    [empresaId, codigoDocumentoNfe, codigoDocumentoNfse, usuarioId]
+  );
+  return getConfiguracoes(empresaId);
+}
+
 module.exports = {
+  getConfiguracoes,
+  salvarConfiguracoes,
   consultarEmpresa,
   consultarCertificadoAvulso,
   listEmpresasComStatus,

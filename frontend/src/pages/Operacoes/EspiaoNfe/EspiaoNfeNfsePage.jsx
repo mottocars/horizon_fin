@@ -21,6 +21,8 @@ import {
   ArrowRight,
   Plus,
   Minus,
+  Save,
+  Settings,
 } from 'lucide-react';
 import Card from '../../../components/Card';
 import Button from '../../../components/Button';
@@ -33,6 +35,7 @@ import { nomeExibicaoEmpresa } from '../../../utils/empresa';
 import { useAlert, useConfirm } from '../../../confirm/ConfirmContext';
 import { useSidebar } from '../../../layout/SidebarContext';
 import { explicarSituacao } from './situacao';
+import ConfiguracoesTab from './ConfiguracoesTab';
 import { useEmpresaTravada } from '../../../hooks/useEmpresaTravada';
 import {
   listCertificadosEspiao,
@@ -62,7 +65,7 @@ const INTERVALOS = [
 
 const EMPTY_FILTROS = { chave: '', numero: '', emissor: '', destinatario: '' };
 
-// Três estados das notas, no mesmo estilo de aba "navegador" usado em
+// Estados das notas, no mesmo estilo de aba "navegador" usado em
 // Repasses CEF (ver componente Tabs) — cor só no ícone de cada aba (não no
 // fundo/texto), pra ficar reconhecível de relance sem virar um botão colorido
 // gigante. Os ids ('novas'/'cientes'/'inativas') ficaram dos nomes antigos
@@ -75,6 +78,11 @@ const TABS_NOTAS = [
 ];
 
 const NOME_ABA = Object.fromEntries(TABS_NOTAS.map((tab) => [tab.id, tab.label]));
+
+// Aba de parâmetros, separada das abas de notas por um divisor (mesmo padrão
+// de "Motor de Risco" em GestaoCobrancasPage.jsx) — não é um estado de nota,
+// não tem contagem e troca a tela inteira (ver ConfiguracoesTab.jsx).
+const TAB_CONFIGURACOES = { id: 'configuracoes', label: 'Configurações', icon: Settings };
 
 // Cor de cada campo do painel de filtro (pedido do usuário): âmbar quando
 // está em branco, azul claro quando já tem algo digitado — dá pra ver de
@@ -505,6 +513,12 @@ export default function EspiaoNfeNfsePage() {
   // por `ciente_em` (ver filtrarNotasPorAba).
   const [abaNotas, setAbaNotas] = useState('novas');
   const modoInativas = abaNotas === 'inativas';
+  const emConfiguracoes = abaNotas === 'configuracoes';
+
+  // Botão "Salvar" da aba Configurações mora na barra de filtros (mesmo
+  // padrão do "Publicar Versão" do Motor de Risco) — ver ConfiguracoesTab.jsx.
+  const configuracoesRef = useRef(null);
+  const [statusConfiguracoes, setStatusConfiguracoes] = useState({ podeSalvar: false, salvando: false });
 
   const [certificados, setCertificados] = useState([]);
   const [loadingCertificados, setLoadingCertificados] = useState(false);
@@ -677,14 +691,17 @@ export default function EspiaoNfeNfsePage() {
   // usuário) — null enquanto ainda não carregou não mostra nada, pra não
   // piscar "(0)" antes da contagem real chegar.
   const tabsComContagem = useMemo(
-    () =>
-      TABS_NOTAS.map((tab) => ({
+    () => [
+      ...TABS_NOTAS.map((tab) => ({
         ...tab,
         label:
           contagemAbas[tab.id] != null
             ? `${tab.label} (${contagemAbas[tab.id].toLocaleString('pt-BR')})`
             : tab.label,
       })),
+      { divider: true },
+      TAB_CONFIGURACOES,
+    ],
     [contagemAbas]
   );
 
@@ -1408,57 +1425,72 @@ export default function EspiaoNfeNfsePage() {
                 bloco sozinho engoliria toda a largura sobrando — por isso o
                 max-w explícito, calibrado pro mesmo tamanho por campo (~229px)
                 de lá, em vez de só copiar o `sm:flex-1` sem mais nada. */}
-            <div className="flex min-w-0 gap-3 sm:max-w-[470px] sm:flex-1">
-              <div className="min-w-0 flex-1">
-                <label className="mb-1 block text-sm font-medium text-gray-700">Data início</label>
-                <input
-                  type="date"
-                  value={dataInicio}
-                  onChange={(e) => setDataInicio(e.target.value)}
-                  className="w-full min-w-0 rounded-lg border border-gray-200 px-3 py-2 text-sm text-gray-800 focus:border-primary-400 focus:outline-none focus:ring-2 focus:ring-primary-100"
-                />
+            {!emConfiguracoes && (
+              <div className="flex min-w-0 gap-3 sm:max-w-[470px] sm:flex-1">
+                <div className="min-w-0 flex-1">
+                  <label className="mb-1 block text-sm font-medium text-gray-700">Data início</label>
+                  <input
+                    type="date"
+                    value={dataInicio}
+                    onChange={(e) => setDataInicio(e.target.value)}
+                    className="w-full min-w-0 rounded-lg border border-gray-200 px-3 py-2 text-sm text-gray-800 focus:border-primary-400 focus:outline-none focus:ring-2 focus:ring-primary-100"
+                  />
+                </div>
+                <div className="min-w-0 flex-1">
+                  <label className="mb-1 block text-sm font-medium text-gray-700">Data fim</label>
+                  <input
+                    type="date"
+                    value={dataFim}
+                    onChange={(e) => setDataFim(e.target.value)}
+                    className="w-full min-w-0 rounded-lg border border-gray-200 px-3 py-2 text-sm text-gray-800 focus:border-primary-400 focus:outline-none focus:ring-2 focus:ring-primary-100"
+                  />
+                </div>
               </div>
-              <div className="min-w-0 flex-1">
-                <label className="mb-1 block text-sm font-medium text-gray-700">Data fim</label>
-                <input
-                  type="date"
-                  value={dataFim}
-                  onChange={(e) => setDataFim(e.target.value)}
-                  className="w-full min-w-0 rounded-lg border border-gray-200 px-3 py-2 text-sm text-gray-800 focus:border-primary-400 focus:outline-none focus:ring-2 focus:ring-primary-100"
-                />
-              </div>
-            </div>
+            )}
           </div>
 
           {/* Sempre visíveis, mesmo sem empresa escolhida — só desabilitados,
               em vez de sumirem da tela. */}
           <div className="flex shrink-0 items-end gap-2">
-            <div className="relative">
-              <button
-                type="button"
-                onClick={() => setPainelFiltroAberto(true)}
-                disabled={!empresaId}
-                title="Filtros"
-                className="flex items-center justify-center rounded-lg border border-gray-200 p-2 text-gray-500 hover:bg-gray-50 disabled:opacity-60 disabled:cursor-not-allowed disabled:hover:bg-transparent"
+            {emConfiguracoes ? (
+              <Button
+                onClick={() => configuracoesRef.current?.salvar()}
+                disabled={!statusConfiguracoes.podeSalvar}
+                loading={statusConfiguracoes.salvando}
               >
-                <Filter size={18} />
-              </button>
-              {totalFiltrosAtivos > 0 && (
-                <span className="absolute -right-1 -top-1 inline-flex h-4 w-4 items-center justify-center rounded-full bg-primary-600 text-[10px] font-semibold text-white">
-                  {totalFiltrosAtivos}
-                </span>
-              )}
-            </div>
-            {!modoInativas && (
-              <button
-                type="button"
-                onClick={abrirAgendamento}
-                disabled={!empresaId}
-                title="Consultas Automáticas"
-                className="flex items-center justify-center rounded-lg border border-gray-200 p-2 text-gray-500 hover:bg-gray-50 disabled:opacity-60 disabled:cursor-not-allowed disabled:hover:bg-transparent"
-              >
-                <CalendarClock size={18} />
-              </button>
+                <Save size={16} />
+                Salvar
+              </Button>
+            ) : (
+              <>
+                <div className="relative">
+                  <button
+                    type="button"
+                    onClick={() => setPainelFiltroAberto(true)}
+                    disabled={!empresaId}
+                    title="Filtros"
+                    className="flex items-center justify-center rounded-lg border border-gray-200 p-2 text-gray-500 hover:bg-gray-50 disabled:opacity-60 disabled:cursor-not-allowed disabled:hover:bg-transparent"
+                  >
+                    <Filter size={18} />
+                  </button>
+                  {totalFiltrosAtivos > 0 && (
+                    <span className="absolute -right-1 -top-1 inline-flex h-4 w-4 items-center justify-center rounded-full bg-primary-600 text-[10px] font-semibold text-white">
+                      {totalFiltrosAtivos}
+                    </span>
+                  )}
+                </div>
+                {!modoInativas && (
+                  <button
+                    type="button"
+                    onClick={abrirAgendamento}
+                    disabled={!empresaId}
+                    title="Consultas Automáticas"
+                    className="flex items-center justify-center rounded-lg border border-gray-200 p-2 text-gray-500 hover:bg-gray-50 disabled:opacity-60 disabled:cursor-not-allowed disabled:hover:bg-transparent"
+                  >
+                    <CalendarClock size={18} />
+                  </button>
+                )}
+              </>
             )}
           </div>
         </div>
@@ -1471,12 +1503,13 @@ export default function EspiaoNfeNfsePage() {
           rounded-tl-none do Card só faz efeito visual quando encostado; ver
           o mesmo padrão em GestaoCobrancasPage.jsx). */}
       <div>
-        {/* Três estados das notas, no estilo de aba usado em Repasses CEF
-            (ver TABS_NOTAS) — sempre visível, mesmo sem empresa (só não faz
-            nada ainda, a ação de cada aba vem depois). */}
+        {/* Estados das notas (ver TABS_NOTAS) e, depois do divisor, a aba
+            Configurações — sempre visíveis, mesmo sem empresa. */}
         <Tabs tabs={tabsComContagem} activeId={abaNotas} onChange={setAbaNotas} />
 
-        {!empresaId ? (
+        {emConfiguracoes ? (
+          <ConfiguracoesTab ref={configuracoesRef} empresaId={empresaId} onStatusChange={setStatusConfiguracoes} />
+        ) : !empresaId ? (
           <Card className="rounded-tl-none">
             <p className="py-8 text-center text-sm text-gray-400">
               Selecione uma empresa acima para ver os certificados e as notas encontradas.
@@ -1731,7 +1764,7 @@ export default function EspiaoNfeNfsePage() {
         </div>
       </div>
 
-      {selecionadas.size > 0 && (
+      {selecionadas.size > 0 && !emConfiguracoes && (
         <div className="fixed inset-x-0 bottom-0 z-40 flex justify-center px-4 pb-4">
           <div className="flex items-center gap-3 rounded-full border border-gray-200 bg-white px-4 py-2.5 shadow-card">
             <span className="text-sm font-medium text-gray-700">

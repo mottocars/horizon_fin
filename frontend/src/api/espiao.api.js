@@ -52,6 +52,16 @@ export function salvarAgendamentoEspiao(empresaId, intervaloHoras) {
   return http.put(`/espiao/${empresaId}/agendamento`, { intervaloHoras }).then((res) => res.data);
 }
 
+export function getConfiguracoesEspiao(empresaId) {
+  return http.get(`/espiao/${empresaId}/configuracoes`).then((res) => res.data);
+}
+
+export function salvarConfiguracoesEspiao(empresaId, { codigoDocumentoNfe, codigoDocumentoNfse }) {
+  return http
+    .put(`/espiao/${empresaId}/configuracoes`, { codigoDocumentoNfe, codigoDocumentoNfse })
+    .then((res) => res.data);
+}
+
 export function listEventosNotaEspiao(notaId) {
   return http.get(`/espiao/notas/${notaId}/eventos`).then((res) => res.data);
 }

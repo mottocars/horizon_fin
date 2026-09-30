@@ -148,6 +148,43 @@ async function salvarAgendamento(req, res, next) {
   }
 }
 
+async function getConfiguracoes(req, res, next) {
+  try {
+    const result = await service.getConfiguracoes(req.params.empresaId);
+    res.json(result);
+  } catch (err) {
+    next(err);
+  }
+}
+
+// Código do documento do contas a pagar: sem espaços, sempre em maiúsculas.
+// Em branco vira null (= "não configurado"), em vez de gravar string vazia.
+const codigoDocumento = (rotulo) =>
+  z
+    .string()
+    .trim()
+    .max(20, `O código do documento de ${rotulo} pode ter no máximo 20 caracteres.`)
+    .regex(/^\S*$/, `O código do documento de ${rotulo} não pode ter espaços.`)
+    .transform((valor) => (valor ? valor.toUpperCase() : null))
+    .nullish()
+    .transform((valor) => valor ?? null);
+
+const configuracoesSchema = z.object({
+  codigoDocumentoNfe: codigoDocumento('notas de produto'),
+  codigoDocumentoNfse: codigoDocumento('notas de serviço'),
+});
+
+async function salvarConfiguracoes(req, res, next) {
+  try {
+    const data = configuracoesSchema.parse(req.body);
+    const result = await service.salvarConfiguracoes(req.params.empresaId, data, req.user.id);
+    res.json(result);
+  } catch (err) {
+    if (err.issues) return next(badRequest(err.issues[0].message));
+    next(err);
+  }
+}
+
 const inativarSchema = z.object({
   notaIds: z.array(z.coerce.number().int().positive()).min(1, 'Selecione ao menos uma nota.'),
   motivo: z.string().trim().min(3, 'Explique o motivo da inativação.'),
@@ -258,6 +295,8 @@ module.exports = {
   downloadPdf,
   getAgendamento,
   salvarAgendamento,
+  getConfiguracoes,
+  salvarConfiguracoes,
   inativar,
   reativar,
   declararCiencia,

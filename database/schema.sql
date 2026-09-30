@@ -1411,6 +1411,20 @@ CREATE TABLE espiao_agendamentos (
     atualizado_em      TIMESTAMP DEFAULT NOW()
 );
 
+-- Aba "Configurações" do Espião NFe/NFSe — parâmetros por empresa. Por
+-- enquanto só o código do documento do contas a pagar que identifica o
+-- título de cada tipo de nota recebida: produto (NF-e) e serviço (NFS-e).
+-- NULL = ainda não configurado. Guardado sempre em maiúsculas (ver
+-- espiao.controller.js::configuracoesSchema).
+CREATE TABLE espiao_configuracoes (
+    empresa_id             INTEGER PRIMARY KEY REFERENCES empresas(id) ON DELETE CASCADE,
+    codigo_documento_nfe   VARCHAR(20),
+    codigo_documento_nfse  VARCHAR(20),
+    atualizado_por         INTEGER REFERENCES usuarios(id) ON DELETE SET NULL,
+    criado_em              TIMESTAMP DEFAULT NOW(),
+    atualizado_em          TIMESTAMP DEFAULT NOW()
+);
+
 -- Motor de Risco (Operações — Gestão de Cobranças) — parâmetros de contagem,
 -- escalas/pesos dos indicadores e faixas de corte usados para classificar o
 -- cliente em Bom pagador / Duvidoso / Mau pagador. Sempre versionado: cada
@@ -2184,6 +2198,10 @@ FOR EACH ROW EXECUTE FUNCTION set_atualizado_em();
 
 CREATE TRIGGER trg_espiao_agendamentos_atualizado_em
 BEFORE UPDATE ON espiao_agendamentos
+FOR EACH ROW EXECUTE FUNCTION set_atualizado_em();
+
+CREATE TRIGGER trg_espiao_configuracoes_atualizado_em
+BEFORE UPDATE ON espiao_configuracoes
 FOR EACH ROW EXECUTE FUNCTION set_atualizado_em();
 
 CREATE TRIGGER trg_mascara_itens_atualizado_em
