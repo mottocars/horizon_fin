@@ -52,17 +52,6 @@ export function salvarAgendamentoEspiao(empresaId, intervaloHoras) {
   return http.put(`/espiao/${empresaId}/agendamento`, { intervaloHoras }).then((res) => res.data);
 }
 
-// Varredura de vínculo automático (executada pelo Monitor de Integrações, em
-// segundo plano no servidor) — o POST dispara (ou devolve a que já está
-// rodando); o GET devolve { job } com o log por etapa.
-export function getVinculacaoAutomaticaEspiao(empresaId) {
-  return http.get(`/espiao/${empresaId}/vinculacao-automatica`).then((res) => res.data);
-}
-
-export function iniciarVinculacaoAutomaticaEspiao(empresaId) {
-  return http.post(`/espiao/${empresaId}/vinculacao-automatica`).then((res) => res.data);
-}
-
 export function getConfiguracoesEspiao(empresaId) {
   return http.get(`/espiao/${empresaId}/configuracoes`).then((res) => res.data);
 }

@@ -1,5 +1,4 @@
 import { useEffect, useMemo, useRef, useState } from 'react';
-import { Link } from 'react-router-dom';
 import {
   Download,
   FileText,
@@ -39,7 +38,6 @@ import { useSidebar } from '../../../layout/SidebarContext';
 import { explicarSituacao } from './situacao';
 import ConfiguracoesTab from './ConfiguracoesTab';
 import VincularTituloModal from './VincularTituloModal';
-import VinculacaoAutomaticaModal from './VinculacaoAutomaticaModal';
 import logoSienge from '../../../assets/integracoes/sienge.svg';
 import { useEmpresaTravada } from '../../../hooks/useEmpresaTravada';
 import {
@@ -636,8 +634,7 @@ export default function EspiaoNfeNfsePage() {
   const [modalAgendamento, setModalAgendamento] = useState(false);
   const [intervaloSelecionado, setIntervaloSelecionado] = useState(1);
   const [salvandoAgendamento, setSalvandoAgendamento] = useState(false);
-  // Janela de log do botão "Vincular agora" (ver VinculacaoAutomaticaModal).
-  const [modalVinculacao, setModalVinculacao] = useState(false);
+
 
   // Nota cujo histórico de etapas está aberto na janela flutuante (ver
   // HistoricoSituacaoModal) — null = janela fechada. Guarda a nota inteira
@@ -1478,17 +1475,6 @@ export default function EspiaoNfeNfsePage() {
                     <CalendarClock size={18} />
                   </button>
                 )}
-                {!modoInativas && (
-                  <button
-                    type="button"
-                    onClick={() => setModalVinculacao(true)}
-                    disabled={!empresaId}
-                    title="Vincular ao contas a pagar agora — varredura desde a primeira nota sem vínculo"
-                    className="flex items-center justify-center rounded-lg border border-gray-200 p-2 text-gray-500 hover:bg-gray-50 disabled:cursor-not-allowed disabled:opacity-60 disabled:hover:bg-transparent"
-                  >
-                    <RefreshCw size={18} />
-                  </button>
-                )}
               </>
             )}
           </div>
@@ -1663,16 +1649,6 @@ export default function EspiaoNfeNfsePage() {
             />
           </div>
 
-          {/* O vínculo automático com o contas a pagar é agendado no Monitor
-              de Integrações (junto com as demais atualizações do sistema). */}
-          <p className="rounded-lg bg-gray-50 px-3 py-2 text-xs leading-relaxed text-gray-500">
-            A vinculação automática com o contas a pagar agora é agendada em{' '}
-            <Link to="/integracoes/monitor" className="font-medium text-primary-600 hover:underline">
-              Integrações › Monitor de Integrações
-            </Link>
-            , junto com as demais atualizações do sistema.
-          </p>
-
           <div className="flex justify-end gap-2 pt-2">
             <Button
               type="button"
@@ -1843,18 +1819,6 @@ export default function EspiaoNfeNfsePage() {
       </Modal>
 
       <HistoricoSituacaoModal nota={notaHistorico} onClose={() => setNotaHistorico(null)} />
-
-      <VinculacaoAutomaticaModal
-        open={modalVinculacao}
-        empresaId={empresaId}
-        nomeEmpresa={empresaSelecionada ? nomeExibicaoEmpresa(empresaSelecionada) : ''}
-        onClose={() => setModalVinculacao(false)}
-        onConcluido={() => {
-          // Notas vinculadas pela varredura mudam de aba — recarrega a lista.
-          carregarContagemAbas();
-          if (certificados.length > 0) carregarNotasDeTodosCertificados();
-        }}
-      />
 
       {/* Período da busca no Sienge = Data início/fim da tela (pedido do
           usuário). "Ir para Configurações" fecha a janela e troca de aba. */}

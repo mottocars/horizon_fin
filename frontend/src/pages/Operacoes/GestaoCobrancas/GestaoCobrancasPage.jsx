@@ -670,11 +670,6 @@ export default function GestaoCobrancasPage() {
         open={sincronizarAberto}
         onClose={() => setSincronizarAberto(false)}
         empresaId={empresaId}
-        onClustersRecalculados={() => {
-          setRefreshClusters((n) => n + 1);
-          setRefreshParcelas((n) => n + 1);
-          setRefreshRotinas((n) => n + 1);
-        }}
         onClientesAtualizados={() => {
           setRefreshClientes((n) => n + 1);
           setRefreshParcelas((n) => n + 1);

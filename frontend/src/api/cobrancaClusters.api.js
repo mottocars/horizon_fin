@@ -25,9 +25,13 @@ export function getResumoPorCentroCustoClusters(empresaId, filtros) {
     .then((res) => res.data);
 }
 
-export function recalcularClusters(empresaId) {
-  return http.post('/cobranca-clusters/recalcular', { empresa_id: empresaId }).then((res) => res.data);
+// { ultimoRecalculo: 'YYYY-MM-DDTHH:MM:SS' (Brasília) | null,
+//   proximoRecalculo: 'YYYY-MM-DD HH:MM' (Brasília) | null, agendamento } —
+// aviso do topo da aba Clusters de Clientes.
+export function getRecalculoInfoClusters(empresaId) {
+  return http.get('/cobranca-clusters/recalculo-info', { params: { empresa_id: empresaId } }).then((res) => res.data);
 }
+
 
 export function listClientesPorCluster(empresaId, cluster, { search, page, limit, ...filtros } = {}) {
   return http

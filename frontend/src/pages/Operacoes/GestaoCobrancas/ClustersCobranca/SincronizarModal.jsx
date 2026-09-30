@@ -3,19 +3,14 @@ import { AlertTriangle, CheckCircle2, Contact, Database, RefreshCw } from 'lucid
 import Modal from '../../../../components/Modal';
 import { sincronizarIncomeSienge } from '../../../../api/incomeSienge.api';
 import { sincronizarCustomersSienge } from '../../../../api/customersSienge.api';
-import { recalcularClusters } from '../../../../api/cobrancaClusters.api';
 
-// Junta as ações que antes eram botões separados (o "Sincronizar agora" da
-// extinta aba Painel Geral, e o "Recalcular clusters" desta tela) num só
-// botão "Sincronizar" — clicar abre este modal, que deixa o usuário
-// escolher qual delas rodar. `onClustersRecalculados` avisa a tela pra
-// recarregar o resumo dos clusters assim que o recálculo termina;
+// Botão "Sincronizar" da Gestão de Cobranças — deixa o usuário escolher o que
+// puxar de novo do Sienge (base do contas a receber ou clientes).
 // `onClientesAtualizados` avisa a aba Clientes pra recarregar o drilldown
-// dela assim que "Atualizar clientes" termina (o resto do módulo não
-// precisa saber — são recargas independentes, cada aba só escuta a que
-// afeta o que ela mostra).
-export default function SincronizarModal({ open, onClose, empresaId, onClustersRecalculados, onClientesAtualizados }) {
-  const [executando, setExecutando] = useState(null); // 'base' | 'clientes' | 'clusters' | null
+// dela assim que "Atualizar clientes" termina. O recálculo dos clusters saiu
+// daqui: é feito pela rotina agendada no Monitor de Integrações.
+export default function SincronizarModal({ open, onClose, empresaId, onClientesAtualizados }) {
+  const [executando, setExecutando] = useState(null); // 'base' | 'clientes' | null
   const [resultado, setResultado] = useState(null);
   const [erro, setErro] = useState('');
 
@@ -32,7 +27,7 @@ export default function SincronizarModal({ open, onClose, empresaId, onClustersR
     try {
       const r = await sincronizarIncomeSienge(empresaId);
       setResultado(
-        `${r.total_importado.toLocaleString('pt-BR')} parcelas importadas do Sienge. Os clusters ainda refletem a base anterior — rode "Recalcular clusters" para atualizá-los com os dados novos.`
+        `${r.total_importado.toLocaleString('pt-BR')} parcelas importadas do Sienge. Os clusters refletem a base nova a partir do próximo recálculo agendado no Monitor de Integrações.`
       );
     } catch (err) {
       setErro(err.response?.data?.message || 'Não foi possível atualizar a base do Sienge.');
@@ -51,23 +46,6 @@ export default function SincronizarModal({ open, onClose, empresaId, onClustersR
       onClientesAtualizados?.();
     } catch (err) {
       setErro(err.response?.data?.message || 'Não foi possível atualizar os clientes do Sienge.');
-    } finally {
-      setExecutando(null);
-    }
-  }
-
-  async function handleRecalcular() {
-    setErro('');
-    setResultado(null);
-    setExecutando('clusters');
-    try {
-      const r = await recalcularClusters(empresaId);
-      setResultado(
-        `${r.total_clientes.toLocaleString('pt-BR')} clientes recalculados com a versão ${r.versao_utilizada} do Motor de Risco.`
-      );
-      onClustersRecalculados?.();
-    } catch (err) {
-      setErro(err.response?.data?.message || 'Não foi possível recalcular os clusters.');
     } finally {
       setExecutando(null);
     }
@@ -109,24 +87,10 @@ export default function SincronizarModal({ open, onClose, empresaId, onClustersR
           </div>
           {executando === 'clientes' && <RefreshCw size={16} className="mt-0.5 shrink-0 animate-spin text-primary-600" />}
         </button>
-
-        <button
-          type="button"
-          onClick={handleRecalcular}
-          disabled={Boolean(executando)}
-          className="flex w-full items-start gap-3 rounded-lg border border-gray-200 p-4 text-left transition-colors hover:border-primary-300 hover:bg-primary-50/40 disabled:cursor-not-allowed disabled:opacity-60"
-        >
-          <RefreshCw size={18} className="mt-0.5 shrink-0 text-primary-600" />
-          <div className="min-w-0 flex-1">
-            <p className="text-sm font-medium text-gray-900">Recalcular clusters</p>
-            <p className="mt-0.5 text-xs text-gray-500">
-              Aplica a versão vigente do Motor de Risco sobre a base já sincronizada, classificando cada cliente de
-              novo.
-            </p>
-          </div>
-          {executando === 'clusters' && <RefreshCw size={16} className="mt-0.5 shrink-0 animate-spin text-primary-600" />}
-        </button>
       </div>
+      <p className="mt-3 text-xs text-gray-400">
+        O recálculo dos clusters é feito pela rotina agendada em Integrações › Monitor de Integrações.
+      </p>
 
       {erro && (
         <div className="mt-4 flex items-center gap-2 rounded-lg bg-red-50 px-3 py-2 text-sm text-red-600">

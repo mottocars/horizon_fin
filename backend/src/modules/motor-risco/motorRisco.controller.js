@@ -22,7 +22,10 @@ const criarVersaoSchema = z
     janela_observacao_meses: z.coerce.number().int().min(6).max(120),
     gatilho_reincidencia_dias: z.coerce.number().int().min(1).max(60),
     minimo_parcelas: z.coerce.number().int().min(1).max(12),
-    dia_recalculo: z.coerce.number().int().min(1).max(28),
+    // Saiu da tela (quem define quando recalcula é o agendamento no Monitor de
+    // Integrações): sem ele, 1 = o mês de referência é sempre o mês em que o
+    // recálculo roda (ver cobrancaClusters.service.js::calcularMesReferencia).
+    dia_recalculo: z.coerce.number().int().min(1).max(28).default(1),
     trava_subida_parcelas: z.coerce.number().int().min(0).max(24),
     dias_vencidos_regua_cobranca: z.coerce.number().int().min(1).max(90),
     corte_bom_pagador: z.coerce.number().int().min(1).max(99),

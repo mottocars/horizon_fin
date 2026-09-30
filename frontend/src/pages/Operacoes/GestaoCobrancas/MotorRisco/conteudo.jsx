@@ -72,22 +72,6 @@ export const PARAMETROS = [
     default: 3,
   },
   {
-    id: 'dia_recalculo',
-    label: 'Dia do recálculo mensal',
-    desc: 'Data fixa em que todos os clusters são reprocessados. Um cluster estável durante o mês evita que a régua mude de tom no meio de uma cobrança em andamento.',
-    exemplo: (
-      <>
-        Com dia <N>1</N>: o cluster apurado em <N>01/08</N> vale até <N>31/08</N>, mesmo que o cliente atrase uma
-        parcela no dia 15.
-      </>
-    ),
-    min: 1,
-    max: 28,
-    step: 1,
-    unidade: 'do mês',
-    default: 1,
-  },
-  {
     id: 'trava_subida_parcelas',
     label: 'Trava de subida de cluster',
     desc: 'Quantas parcelas seguidas em dia o cliente precisa pagar para melhorar de cluster. Piorar é imediato; melhorar é travado. Vale também para quem renegociou.',

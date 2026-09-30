@@ -1,8 +1,12 @@
 import { Fragment, useCallback, useEffect, useRef, useState } from 'react';
 import { useNavigate } from 'react-router-dom';
-import { Minus, Plus, Users } from 'lucide-react';
+import { CalendarClock, Minus, Plus, Users } from 'lucide-react';
 import Card from '../../../../components/Card';
-import { getResumoClusters, getResumoPorCentroCustoClusters } from '../../../../api/cobrancaClusters.api';
+import {
+  getRecalculoInfoClusters,
+  getResumoClusters,
+  getResumoPorCentroCustoClusters,
+} from '../../../../api/cobrancaClusters.api';
 import {
   CLUSTER_ORDEM,
   CLUSTER_LABEL,
@@ -21,6 +25,50 @@ import {
 // voltar) restaurar exatamente esse estado — sem essa distinção, voltar
 // deixava `cost_center_ids` (do centro clicado) sobrescrever o filtro
 // original da tela.
+const DIAS_SEMANA = ['domingo', 'segunda', 'terça', 'quarta', 'quinta', 'sexta', 'sábado'];
+
+// 'YYYY-MM-DD[T ]HH:MM' (já em horário de Brasília) -> 'DD/MM/YYYY às HH:MM',
+// sem passar por Date (nada de conversão de fuso).
+function formatarDataHoraBr(texto) {
+  const [data, hora] = String(texto).split(/[T ]/);
+  const [ano, mes, dia] = data.split('-');
+  return `${dia}/${mes}/${ano} às ${hora.slice(0, 5)}`;
+}
+
+function descreverAgendamento(ag) {
+  if (ag.frequencia === 'semanal') return `toda ${DIAS_SEMANA[ag.diaSemana]}`;
+  if (ag.frequencia === 'mensal') return `todo dia ${ag.diaMes}`;
+  return 'diariamente';
+}
+
+// Aviso pequeno, em vermelho, no topo da aba: quando os clusters foram
+// recalculados pela última vez e quando será o próximo recálculo, segundo o
+// agendamento da rotina "Recálculo dos clusters" no Monitor de Integrações.
+function AvisoRecalculo({ info }) {
+  if (!info) return null;
+  return (
+    <p className="mb-3 flex flex-wrap items-center gap-x-1.5 gap-y-0.5 text-xs text-red-600">
+      <CalendarClock size={13} className="shrink-0" />
+      <span>
+        Último recálculo dos clusters:{' '}
+        <strong className="font-semibold">{info.ultimoRecalculo ? formatarDataHoraBr(info.ultimoRecalculo) : 'nunca recalculado'}</strong>
+      </span>
+      <span className="text-red-300">·</span>
+      <span>
+        Próximo recálculo:{' '}
+        {info.proximoRecalculo ? (
+          <>
+            <strong className="font-semibold">{formatarDataHoraBr(info.proximoRecalculo)}</strong> (
+            {descreverAgendamento(info.agendamento)}, pelo Monitor de Integrações)
+          </>
+        ) : (
+          <strong className="font-semibold">não agendado — configure em Integrações › Monitor de Integrações</strong>
+        )}
+      </span>
+    </p>
+  );
+}
+
 function queryContexto(empresaId, filtroCentroCustoIds, voltarFiltroAnteriorIds) {
   const params = new URLSearchParams({ empresa_id: empresaId });
   if (filtroCentroCustoIds?.length > 0) params.set('cost_center_ids', filtroCentroCustoIds.join(','));
@@ -53,6 +101,19 @@ export default function CentrosCustoResumo({ empresaId, centroCustoIds = [], ref
   // pro detalhe por cluster do centro expandido (são requisições independentes).
   const requisicaoListaRef = useRef(0);
   const requisicaoDetalheRef = useRef(0);
+
+  const [recalculoInfo, setRecalculoInfo] = useState(null);
+  useEffect(() => {
+    setRecalculoInfo(null);
+    if (!empresaId) return undefined;
+    let ativo = true;
+    getRecalculoInfoClusters(empresaId)
+      .then((info) => ativo && setRecalculoInfo(info))
+      .catch(() => {});
+    return () => {
+      ativo = false;
+    };
+  }, [empresaId, refreshToken]);
 
   const carregar = useCallback(() => {
     if (!empresaId) {
@@ -125,6 +186,7 @@ export default function CentrosCustoResumo({ empresaId, centroCustoIds = [], ref
   return (
     <div className="space-y-4">
       <Card className="rounded-tl-none">
+        <AvisoRecalculo info={recalculoInfo} />
         {carregando ? (
           <div className="py-12 text-center text-sm text-gray-400">Carregando...</div>
         ) : semDados ? (

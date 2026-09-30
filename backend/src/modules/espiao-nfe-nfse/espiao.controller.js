@@ -2,7 +2,6 @@ const { z } = require('zod');
 const service = require('./espiao.service');
 const pdfService = require('./pdf.service');
 const vinculoService = require('./vinculo.service');
-const monitorExecutor = require('../monitor-integracoes/executor');
 
 function badRequest(message) {
   const err = new Error(message);
@@ -187,31 +186,6 @@ async function salvarConfiguracoes(req, res, next) {
   }
 }
 
-// ── Vinculação automática — botão da tela do Espião ────────────────────────
-// Executada pelo Monitor de Integrações (rotina 'espiao_vinculacao'), o mesmo
-// executor do agendamento — assim manual e agendada nunca rodam juntas e as
-// duas aparecem no histórico do monitor. Resposta: { job } com o log por etapa.
-
-async function getVinculacaoAutomatica(req, res, next) {
-  try {
-    res.json({ job: await monitorExecutor.getExecucaoAtualOuUltima(req.params.empresaId, 'espiao_vinculacao') });
-  } catch (err) {
-    next(err);
-  }
-}
-
-async function iniciarVinculacaoAutomatica(req, res, next) {
-  try {
-    const job = await monitorExecutor.iniciar(req.params.empresaId, 'espiao_vinculacao', {
-      origem: 'manual',
-      usuarioId: req.user.id,
-    });
-    res.status(202).json({ job });
-  } catch (err) {
-    next(err);
-  }
-}
-
 const DATA_ISO = /^\d{4}-\d{2}-\d{2}$/;
 
 const titulosSiengeSchema = z.object({
@@ -375,8 +349,6 @@ module.exports = {
   listTitulosSienge,
   vincular,
   desvincular,
-  getVinculacaoAutomatica,
-  iniciarVinculacaoAutomatica,
   inativar,
   reativar,
   declararCiencia,

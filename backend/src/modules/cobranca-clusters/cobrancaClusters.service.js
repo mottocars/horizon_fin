@@ -1,5 +1,6 @@
 const pool = require('../../config/db');
 const { calcularNotas, calcularScore, classificarCluster } = require('../motor-risco/scoreCalculo');
+const { proximaExecucao } = require('../monitor-integracoes/tempo');
 
 const UM_DIA_MS = 24 * 60 * 60 * 1000;
 
@@ -445,6 +446,35 @@ function condicoesFiltroAdicional(params, { costCenterIds } = {}) {
   return ` AND ${condicoes.join(' AND ')}`;
 }
 
+// Aviso do topo da aba Clusters de Clientes: quando foi o último recálculo e
+// quando será o próximo. O último vem dos próprios clusters gravados (cobre
+// recálculo manual e agendado); `calculado_em` é gravado com o NOW() do
+// banco, que já está no horário de Brasília (o relógio do Postgres da VPS
+// roda em hora local), por isso sai como texto sem fuso. O próximo vem do
+// agendamento da rotina 'cobranca_clusters' no Monitor de Integrações.
+async function getRecalculoInfo(empresaId) {
+  const [{ rows: ultimo }, { rows: agendamento }] = await Promise.all([
+    pool.query(
+      `SELECT to_char(MAX(calculado_em), 'YYYY-MM-DD"T"HH24:MI:SS') AS ultimo
+       FROM cobranca_clientes_clusters WHERE empresa_id = $1`,
+      [empresaId]
+    ),
+    pool.query(
+      `SELECT ativo, frequencia, to_char(horario, 'HH24:MI') AS horario, dia_semana, dia_mes, ultima_agendada_em
+       FROM monitor_integracoes_agendamentos WHERE empresa_id = $1 AND rotina = 'cobranca_clusters'`,
+      [empresaId]
+    ),
+  ]);
+  const ag = agendamento[0];
+  return {
+    ultimoRecalculo: ultimo[0]?.ultimo || null,
+    proximoRecalculo: ag ? proximaExecucao(ag) : null,
+    agendamento: ag?.ativo
+      ? { frequencia: ag.frequencia, horario: ag.horario, diaSemana: ag.dia_semana, diaMes: ag.dia_mes }
+      : null,
+  };
+}
+
 async function getResumo(empresaId, filtros = {}) {
   const params = [empresaId];
   const filtroSql = condicoesFiltroAdicional(params, filtros);
@@ -769,6 +799,7 @@ async function getClienteDetalhe(empresaId, clientId) {
 
 module.exports = {
   recalcularClusters,
+  getRecalculoInfo,
   getResumo,
   getResumoPorCentroCusto,
   listClientesPorCluster,

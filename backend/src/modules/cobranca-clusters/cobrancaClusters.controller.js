@@ -28,11 +28,10 @@ function parseFiltros(query) {
   };
 }
 
-async function recalcular(req, res, next) {
+async function getRecalculoInfo(req, res, next) {
   try {
-    const empresaId = empresaIdSchema.parse(req.body.empresa_id);
-    const resultado = await service.recalcularClusters(empresaId, req.user.id);
-    res.json(resultado);
+    const empresaId = empresaIdSchema.parse(req.query.empresa_id);
+    res.json(await service.getRecalculoInfo(empresaId));
   } catch (err) {
     if (err.issues) return next(badRequest(err.issues[0].message));
     next(err);
@@ -91,4 +90,4 @@ async function getClienteDetalhe(req, res, next) {
   }
 }
 
-module.exports = { recalcular, getResumo, getResumoPorCentroCusto, listClientes, getClienteDetalhe };
+module.exports = { getRecalculoInfo, getResumo, getResumoPorCentroCusto, listClientes, getClienteDetalhe };
