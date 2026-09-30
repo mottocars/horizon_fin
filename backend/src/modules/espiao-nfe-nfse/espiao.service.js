@@ -853,6 +853,10 @@ function montarFiltrosNotas(params, where, { dataInicio, dataFim, chave, numero,
 // de filtro prefixadas diferentes (sem 'n.' vs com 'n.', ver
 // montarFiltrosNotas) e o de ativas ainda separa novas/cientes por
 // ciente_em dentro da mesma query.
+// situacao_categoria pode ser NULL (nota sem nenhum evento ainda) — IS DISTINCT
+// FROM trata NULL como "não cancelada", diferente de <>.
+const NAO_CANCELADA = "situacao_categoria IS DISTINCT FROM 'cancelada'";
+
 async function contarNotasPorAba(empresaId, filtros) {
   const paramsAtivas = [empresaId];
   const whereAtivas = montarFiltrosNotas(
@@ -861,9 +865,12 @@ async function contarNotasPorAba(empresaId, filtros) {
     filtros
   );
   const { rows: ativas } = await pool.query(
+    // Nota cancelada conta só em "canceladas", nunca em novas/cientes — mesma
+    // regra de EspiaoNfeNfsePage.jsx::filtrarNotasPorAba.
     `SELECT
-       count(*) FILTER (WHERE ciente_em IS NULL)::int AS novas,
-       count(*) FILTER (WHERE ciente_em IS NOT NULL)::int AS cientes
+       count(*) FILTER (WHERE ciente_em IS NULL AND ${NAO_CANCELADA})::int AS novas,
+       count(*) FILTER (WHERE ciente_em IS NOT NULL AND ${NAO_CANCELADA})::int AS cientes,
+       count(*) FILTER (WHERE NOT ${NAO_CANCELADA})::int AS canceladas
      FROM espiao_notas
      WHERE ${whereAtivas}`,
     paramsAtivas
@@ -880,7 +887,12 @@ async function contarNotasPorAba(empresaId, filtros) {
     paramsInativas
   );
 
-  return { novas: ativas[0].novas, cientes: ativas[0].cientes, inativas: inativas[0].total };
+  return {
+    novas: ativas[0].novas,
+    cientes: ativas[0].cientes,
+    canceladas: ativas[0].canceladas,
+    inativas: inativas[0].total,
+  };
 }
 
 async function listNotas(empresaId, filtros) {

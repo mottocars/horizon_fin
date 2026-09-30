@@ -65,12 +65,16 @@ const EMPTY_FILTROS = { chave: '', numero: '', emissor: '', destinatario: '' };
 // Três estados das notas, no mesmo estilo de aba "navegador" usado em
 // Repasses CEF (ver componente Tabs) — cor só no ícone de cada aba (não no
 // fundo/texto), pra ficar reconhecível de relance sem virar um botão colorido
-// gigante. Por enquanto só o visual; a ação de cada aba vem depois.
+// gigante. Os ids ('novas'/'cientes'/'inativas') ficaram dos nomes antigos
+// das abas — são os mesmos usados pela API (contagem e destino ao reativar).
 const TABS_NOTAS = [
-  { id: 'novas', label: 'Novas Notas', icon: Inbox, iconColorClass: 'text-primary-600' },
-  { id: 'cientes', label: 'Cientes', icon: CheckCircle, iconColorClass: 'text-emerald-600' },
-  { id: 'inativas', label: 'Inativas', icon: Archive, iconColorClass: 'text-red-600' },
+  { id: 'novas', label: 'Recebidas', icon: Inbox, iconColorClass: 'text-primary-600' },
+  { id: 'cientes', label: 'Relacionadas', icon: CheckCircle, iconColorClass: 'text-emerald-600' },
+  { id: 'canceladas', label: 'Canceladas', icon: XCircle, iconColorClass: 'text-red-600' },
+  { id: 'inativas', label: 'Inativadas', icon: Archive, iconColorClass: 'text-yellow-500' },
 ];
+
+const NOME_ABA = Object.fromEntries(TABS_NOTAS.map((tab) => [tab.id, tab.label]));
 
 // Cor de cada campo do painel de filtro (pedido do usuário): âmbar quando
 // está em branco, azul claro quando já tem algo digitado — dá pra ver de
@@ -137,16 +141,21 @@ function diasParaVencer(validadeAte) {
 // duplicado em outro lugar da linha.
 const DIAS_ALERTA_VENCIMENTO = 10;
 
-// 'novas'/'cientes' (ver TABS_NOTAS) filtram, do lado do cliente, o MESMO
-// dataset de notas ativas — o backend já manda `ciente_em` em cada nota
-// (ver espiao.service.js::listNotasPorCertificado), então não precisa de
-// outra chamada à API pra trocar de aba. 'inativas' é um dataset à parte
-// (endpoint próprio, ver carregarNotas/carregarNotasDeTodosCertificados),
-// então passa direto sem filtrar de novo.
+// Recebidas/Relacionadas/Canceladas (ver TABS_NOTAS) filtram, do lado do
+// cliente, o MESMO dataset de notas ativas — o backend já manda `ciente_em`
+// e `situacao_categoria` em cada nota (ver
+// espiao.service.js::listNotasPorCertificado), então não precisa de outra
+// chamada à API pra trocar de aba. Nota cancelada fica SÓ em Canceladas
+// (sai de Recebidas/Relacionadas, tenha ciência ou não). 'inativas' é um
+// dataset à parte (endpoint próprio, ver carregarNotas/
+// carregarNotasDeTodosCertificados), então passa direto sem filtrar de novo
+// — nota cancelada que foi inativada continua lá.
 function filtrarNotasPorAba(lista, aba, inativas) {
   if (inativas) return lista;
-  if (aba === 'cientes') return lista.filter((n) => n.ciente_em);
-  return lista.filter((n) => !n.ciente_em);
+  const cancelada = (n) => n.situacao_categoria === 'cancelada';
+  if (aba === 'canceladas') return lista.filter(cancelada);
+  if (aba === 'cientes') return lista.filter((n) => n.ciente_em && !cancelada(n));
+  return lista.filter((n) => !n.ciente_em && !cancelada(n));
 }
 
 // Tabela inteira reestruturada nos moldes de GestaoParcelasTab.jsx (pedido
@@ -506,7 +515,7 @@ export default function EspiaoNfeNfsePage() {
   // destinatário) — diferente do total por certificado (ver
   // renderCertificado), que é sempre o total real do certificado, sem
   // filtro nenhum. null = ainda não carregou.
-  const [contagemAbas, setContagemAbas] = useState({ novas: null, cientes: null, inativas: null });
+  const [contagemAbas, setContagemAbas] = useState({ novas: null, cientes: null, canceladas: null, inativas: null });
 
   // Padrão: ontem até hoje (pedido do usuário) — não só hoje, pra não
   // começar a tela vazia num dia sem nenhuma nota emitida ainda.
@@ -639,7 +648,7 @@ export default function EspiaoNfeNfsePage() {
     setCertificados([]);
     setNotasPorCertificado({});
     setSelecionadas(new Map());
-    setContagemAbas({ novas: null, cientes: null, inativas: null });
+    setContagemAbas({ novas: null, cientes: null, canceladas: null, inativas: null });
     carregarCertificados();
     carregarContagemAbas();
     // eslint-disable-next-line react-hooks/exhaustive-deps
@@ -936,7 +945,7 @@ export default function EspiaoNfeNfsePage() {
 
       await alert({
         title: 'Notas inativadas',
-        description: `${notaIds.length} nota(s) inativada(s). Clique em "Notas Inativadas" para vê-las.`,
+        description: `${notaIds.length} nota(s) inativada(s). Clique em "${NOME_ABA.inativas}" para vê-las.`,
         variant: 'default',
       });
 
@@ -961,7 +970,7 @@ export default function EspiaoNfeNfsePage() {
   async function handleReativarSelecionadas(destino) {
     if (selecionadas.size === 0) return;
     const notaIds = Array.from(selecionadas.keys());
-    const nomeAba = destino === 'cientes' ? 'Cientes' : 'Novas Notas';
+    const nomeAba = NOME_ABA[destino];
     const confirmado = await confirm({
       title: `Reativar para ${nomeAba}`,
       description: `${notaIds.length} nota(s) vão voltar a aparecer em "${nomeAba}".`,
@@ -1012,8 +1021,8 @@ export default function EspiaoNfeNfsePage() {
     if (selecionadas.size === 0) return;
     const notaIds = Array.from(selecionadas.keys());
     const confirmado = await confirm({
-      title: 'Voltar para Novas Notas',
-      description: `${notaIds.length} nota(s) vão voltar a aparecer em "Novas Notas".`,
+      title: `Voltar para ${NOME_ABA.novas}`,
+      description: `${notaIds.length} nota(s) vão voltar a aparecer em "${NOME_ABA.novas}".`,
       confirmLabel: 'Voltar',
     });
     if (!confirmado) return;
@@ -1035,7 +1044,7 @@ export default function EspiaoNfeNfsePage() {
 
       await alert({
         title: 'Notas movidas',
-        description: `${notaIds.length} nota(s) voltaram para "Novas Notas".`,
+        description: `${notaIds.length} nota(s) voltaram para "${NOME_ABA.novas}".`,
         variant: 'default',
       });
 
@@ -1043,7 +1052,7 @@ export default function EspiaoNfeNfsePage() {
     } catch (err) {
       await alert({
         title: 'Não foi possível mover as notas',
-        description: err.response?.data?.message || 'Não foi possível mover as notas selecionadas para Novas Notas.',
+        description: err.response?.data?.message || `Não foi possível mover as notas selecionadas para ${NOME_ABA.novas}.`,
         variant: 'warning',
       });
     } finally {
@@ -1060,7 +1069,7 @@ export default function EspiaoNfeNfsePage() {
     const notaIds = Array.from(selecionadas.keys());
     const confirmado = await confirm({
       title: 'Declarar ciência das notas selecionadas',
-      description: `${notaIds.length} nota(s) vão passar da aba "Novas" para "Cientes".`,
+      description: `${notaIds.length} nota(s) vão passar da aba "${NOME_ABA.novas}" para "${NOME_ABA.cientes}".`,
       confirmLabel: 'Declarar ciência',
     });
     if (!confirmado) return;
@@ -1110,7 +1119,8 @@ export default function EspiaoNfeNfsePage() {
 
   // Quantas colunas a tabela principal tem nesta aba — só usado pro colSpan
   // da linha de "Carregando notas...".
-  const colunasAtuais = modoInativas ? COLUNAS_INATIVAS : abaNotas === 'cientes' ? COLUNAS_CIENTES : COLUNAS_NOVAS;
+  // Canceladas usa o mesmo layout de Relacionadas (sem as colunas de ação).
+  const colunasAtuais = modoInativas ? COLUNAS_INATIVAS : abaNotas === 'novas' ? COLUNAS_NOVAS : COLUNAS_CIENTES;
   const totalColunas = colunasAtuais.length;
 
   // Só escreve "/ Nota" no cabeçalho da Caixa 1 quando pelo menos 1
@@ -1498,7 +1508,9 @@ export default function EspiaoNfeNfsePage() {
                   {modoInativas
                     ? 'Nenhuma nota inativada no período selecionado.'
                     : abaNotas === 'cientes'
-                    ? 'Nenhuma nota ciente no período selecionado.'
+                    ? 'Nenhuma nota relacionada no período selecionado.'
+                    : abaNotas === 'canceladas'
+                    ? 'Nenhuma nota cancelada no período selecionado.'
                     : 'Nenhum certificado tem nota no período selecionado.'}
                 </p>
               </Card>
@@ -1736,7 +1748,7 @@ export default function EspiaoNfeNfsePage() {
                   onClick={() => handleReativarSelecionadas('novas')}
                 >
                   <RotateCcw size={15} />
-                  Reativar p/ Novas
+                  Reativar p/ {NOME_ABA.novas}
                 </Button>
                 <Button
                   className="!border-emerald-600 !bg-emerald-600 !text-white hover:!bg-emerald-700"
@@ -1744,9 +1756,14 @@ export default function EspiaoNfeNfsePage() {
                   onClick={() => handleReativarSelecionadas('cientes')}
                 >
                   <RotateCcw size={15} />
-                  Reativar p/ Cientes
+                  Reativar p/ {NOME_ABA.cientes}
                 </Button>
               </>
+            ) : abaNotas === 'canceladas' ? (
+              <Button variant="danger" onClick={() => setModalInativar(true)}>
+                <Ban size={15} />
+                Inativar
+              </Button>
             ) : abaNotas === 'cientes' ? (
               <>
                 <Button
@@ -1755,7 +1772,7 @@ export default function EspiaoNfeNfsePage() {
                   onClick={handleVoltarParaNovas}
                 >
                   <RotateCcw size={15} />
-                  Voltar p/ Novas
+                  Voltar p/ {NOME_ABA.novas}
                 </Button>
                 <Button variant="danger" onClick={() => setModalInativar(true)}>
                   <Ban size={15} />
