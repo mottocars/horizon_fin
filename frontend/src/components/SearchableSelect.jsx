@@ -34,6 +34,11 @@ export default function SearchableSelect({
   // entre a cor padrão e uma cor de estado (ex.: o par âmbar/azul de
   // "vazio"/"preenchido" usado em RepassesCef/HistoricoEtapasModal.jsx).
   corClasses = 'border-gray-200',
+  // Só com `multiple`: troca o "Limpar seleção" do topo da lista por
+  // "Selecionar todos" (marca todas as opções) — e, quando todas já estão
+  // marcadas, por "Desmarcar todos". Usado nas telas em que o filtro nasce
+  // com tudo marcado (ex.: EmpreendimentosMasaPage.jsx).
+  selecionarTodos = false,
 }) {
   const [open, setOpen] = useState(false);
   const [busca, setBusca] = useState('');
@@ -142,6 +147,8 @@ export default function SearchableSelect({
       ? selecionado.label
       : placeholder;
   const temSelecao = multiple ? valoresSelecionados.length > 0 : Boolean(selecionado);
+  const todosSelecionados =
+    multiple && options.every((o) => valoresSelecionados.some((v) => String(v) === String(o.value)));
 
   return (
     <div ref={containerRef} className="relative">
@@ -180,7 +187,16 @@ export default function SearchableSelect({
               />
             </div>
             <div className="max-h-60 overflow-auto py-1">
-              {multiple && (
+              {multiple && selecionarTodos && (
+                <button
+                  type="button"
+                  onClick={() => onChange(todosSelecionados ? [] : options.map((o) => o.value))}
+                  className="block w-full px-3 py-2 text-left text-sm font-medium text-primary-600 hover:bg-gray-50"
+                >
+                  {todosSelecionados ? 'Desmarcar todos' : 'Selecionar todos'}
+                </button>
+              )}
+              {multiple && !selecionarTodos && (
                 <button
                   type="button"
                   disabled={valoresSelecionados.length === 0}

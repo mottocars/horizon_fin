@@ -1,6 +1,6 @@
 import { Fragment, useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { createPortal } from 'react-dom';
-import { Building2, FileDown, ListFilter, Minus, Plus, TriangleAlert } from 'lucide-react';
+import { Building2, FileDown, Filter, ListFilter, Minus, Plus, TriangleAlert, X } from 'lucide-react';
 import SearchableSelect from '../../../components/SearchableSelect';
 import { getMatrizEmpreendimentosMasa } from '../../../api/relatorioMasa.api';
 
@@ -106,23 +106,63 @@ function chaveGrupoMicroEtapa(faseId, microEtapaAtual) {
   return `${faseId}::${microEtapaAtual || '(sem micro etapa)'}`;
 }
 
-// Soma as 8 colunas numéricas (Duração até Contas a Pagar) de uma lista de empreendimentos —
-// usada tanto pro resumo da fase colapsada quanto pro de um grupo de Micro Etapa Atual
-// colapsado.
+function formatarNumero(valor) {
+  return valor.toLocaleString('pt-BR');
+}
+
+// Colunas de % Masa até Contas a Pagar — as que o usuário pode mostrar/esconder pelo painel
+// lateral (Fase, Tarefa e Empreendimento são fixas). Uma definição só, usada por TODAS as
+// partes da tabela (cabeçalho, linha do empreendimento, resumo de fase/grupo colapsado,
+// totalizador) e pela exportação pro Excel, pra esconder uma coluna esconder em todas de uma vez.
+// - `somavel`: entra nos resumos/totalizador (% Masa não — percentual não é grandeza que se soma).
+// - `excel`: título da coluna, formato de número e, quando o valor exportado não é o valor cru,
+//   a conversão (Horas: segundos -> horas; Duração continua em dias, não no texto ano/mês/dia
+//   da tela, pra sobrar uma coluna numérica somável/filtrável no Excel).
+const COLUNAS = [
+  { chave: 'percentualMasa', label: '% Masa', largura: 'w-24', formatar: formatarPercentual, somavel: false, excel: { titulo: '% Masa', formato: '0.0"%"' } },
+  { chave: 'duracaoDias', label: 'Duração', largura: 'w-28', formatar: formatarDuracao, somavel: true, excel: { titulo: 'Duração (dias)', formato: '#,##0' } },
+  { chave: 'areaM2', label: 'M²', largura: 'w-28', formatar: formatarNumero, somavel: true, excel: { titulo: 'M²', formato: '#,##0.00' } },
+  { chave: 'unidades', label: 'Unidades', largura: 'w-24', formatar: formatarNumero, somavel: true, excel: { titulo: 'Unidades', formato: '#,##0' } },
+  { chave: 'vgvGeral', label: 'VGV Geral', largura: 'w-32', formatar: formatarMoeda, somavel: true, excel: { titulo: 'VGV Geral', formato: '"R$" #,##0.00' } },
+  { chave: 'vgvMasa', label: 'VGV Masa', largura: 'w-32', formatar: formatarMoeda, somavel: true, excel: { titulo: 'VGV Masa', formato: '"R$" #,##0.00' } },
+  {
+    chave: 'segundosTrabalhados',
+    label: 'Horas Trabalhadas',
+    largura: 'w-28',
+    formatar: formatarHoras,
+    somavel: true,
+    excel: { titulo: 'Horas Trabalhadas', formato: '#,##0.0" h"', converter: (segundos) => Number((segundos / 3600).toFixed(1)) },
+  },
+  { chave: 'contasPagas', label: 'Contas Pagas', largura: 'w-32', formatar: formatarMoeda, somavel: true, excel: { titulo: 'Contas Pagas', formato: '"R$" #,##0.00' } },
+  { chave: 'contasAPagar', label: 'Contas a Pagar', largura: 'w-32', formatar: formatarMoeda, somavel: true, excel: { titulo: 'Contas a Pagar', formato: '"R$" #,##0.00' } },
+];
+const COLUNAS_SOMAVEIS = COLUNAS.filter((coluna) => coluna.somavel);
+
+// Soma as colunas somáveis (Duração até Contas a Pagar) de uma lista de empreendimentos —
+// usada pro resumo da fase colapsada, pro de um grupo de Micro Etapa Atual colapsado e pro
+// totalizador do rodapé.
 function somarEmpreendimentos(empreendimentos) {
-  return empreendimentos.reduce(
-    (acc, emp) => ({
-      duracaoDias: acc.duracaoDias + (emp.duracaoDias || 0),
-      areaM2: acc.areaM2 + (emp.areaM2 || 0),
-      unidades: acc.unidades + (emp.unidades || 0),
-      vgvGeral: acc.vgvGeral + (emp.vgvGeral || 0),
-      vgvMasa: acc.vgvMasa + (emp.vgvMasa || 0),
-      segundosTrabalhados: acc.segundosTrabalhados + (emp.segundosTrabalhados || 0),
-      contasPagas: acc.contasPagas + (emp.contasPagas || 0),
-      contasAPagar: acc.contasAPagar + (emp.contasAPagar || 0),
-    }),
-    { duracaoDias: 0, areaM2: 0, unidades: 0, vgvGeral: 0, vgvMasa: 0, segundosTrabalhados: 0, contasPagas: 0, contasAPagar: 0 }
-  );
+  const soma = Object.fromEntries(COLUNAS_SOMAVEIS.map((coluna) => [coluna.chave, 0]));
+  for (const emp of empreendimentos) {
+    for (const { chave } of COLUNAS_SOMAVEIS) soma[chave] += emp[chave] || 0;
+  }
+  return soma;
+}
+
+// Filtros multi-seleção da tela (Fase, Tarefa, Empreendimento, Agrupamento) nascem com TODAS as
+// opções marcadas (pedido do usuário: "Selecionar todos" no lugar de "Limpar"). O estado guarda
+// `null` pra "todas marcadas" — ou seja, sem filtro nenhum — em vez da lista inteira: assim quem
+// não tem valor naquela dimensão (ex.: empreendimento sem agrupamento) continua aparecendo
+// enquanto o usuário não restringir nada, e uma opção nova que chegue depois já nasce marcada.
+function valoresDoFiltro(filtro, opcoes) {
+  return filtro ?? opcoes.map((opcao) => opcao.value);
+}
+function proximoFiltro(selecionados, opcoes) {
+  const todas = opcoes.every((opcao) => selecionados.some((v) => String(v) === String(opcao.value)));
+  return todas ? null : selecionados;
+}
+function passaNoFiltro(filtro, valor) {
+  return filtro == null || filtro.some((v) => String(v) === String(valor));
 }
 
 // Achata uma fase em linhas de tabela prontas pra renderizar, já carregando tudo que o JSX
@@ -194,31 +234,48 @@ function calcularResumoFase(fase) {
 
 // Ícone de filtro compacto ao lado do nome da coluna — mesmo padrão de
 // GestaoCobrancas/RotinasTab.jsx::FiltroColuna (SearchableSelect com `multiple` e
-// `renderTrigger`, painel com a largura do <th> via `colunaRef`).
-function FiltroColuna({ valor, onChange, opcoes, label, colunaRef }) {
+// `renderTrigger`, painel com a largura do <th> via `colunaRef`). `filtro` segue a convenção de
+// valoresDoFiltro (null = todas marcadas); o ícone só fica destacado quando há restrição de fato.
+function FiltroColuna({ filtro, onChange, opcoes, label, colunaRef }) {
+  const ativo = filtro != null;
   return (
     <SearchableSelect
       multiple
-      value={valor}
-      onChange={onChange}
+      selecionarTodos
+      value={valoresDoFiltro(filtro, opcoes)}
+      onChange={(selecionados) => onChange(proximoFiltro(selecionados, opcoes))}
       options={opcoes}
       placeholder="Todos"
       emptyMessage="Nenhuma opção encontrada."
       larguraRef={colunaRef}
-      renderTrigger={({ toggle, temSelecao }) => (
+      renderTrigger={({ toggle }) => (
         <button
           type="button"
           onClick={toggle}
           title={`Filtrar por ${label}`}
-          aria-pressed={temSelecao}
+          aria-pressed={ativo}
           className={`inline-flex h-5 w-5 shrink-0 items-center justify-center rounded transition ${
-            temSelecao ? 'bg-white text-primary-700 shadow-sm' : 'text-primary-400 hover:bg-white/60 hover:text-primary-700'
+            ativo ? 'bg-white text-primary-700 shadow-sm' : 'text-primary-400 hover:bg-white/60 hover:text-primary-700'
           }`}
         >
           <ListFilter size={13} />
         </button>
       )}
     />
+  );
+}
+
+// Célula de uma coluna de COLUNAS numa linha de resumo (fase ou grupo de Micro Etapa colapsado):
+// a soma da coluna, ou "—" quando ela não é somável (% Masa).
+function CelulaResumo({ coluna, resumo, borda }) {
+  return (
+    <td
+      className={`${borda} border-l border-l-gray-100 py-1.5 pl-4 text-xs tabular-nums ${
+        coluna.somavel ? 'text-gray-700' : 'text-gray-300'
+      }`}
+    >
+      {coluna.somavel ? coluna.formatar(resumo[coluna.chave]) : '—'}
+    </td>
   );
 }
 
@@ -231,15 +288,39 @@ function FiltroColuna({ valor, onChange, opcoes, label, colunaRef }) {
 // relatorioMasa.service.js::listMatriz) — nunca repetido em mais de uma linha.
 export default function EmpreendimentosMasaPage() {
   const [matriz, setMatriz] = useState(null);
+  // Agrupamentos ativos do Time Tracker (groupings) — opções do filtro de Agrupamento do painel
+  // lateral, todas elas, tenham ou não algum empreendimento ligado.
+  const [agrupamentos, setAgrupamentos] = useState([]);
   const [carregando, setCarregando] = useState(true);
   const [erro, setErro] = useState('');
 
-  // Filtro de coluna (Etapa Atual/Empreendimento/Micro Etapa Atual) — mesma convenção de
-  // RotinasTab.jsx: array vazio = sem filtro (mostra tudo); selecionar valores restringe só a
-  // eles. Os 4 filtros são combinados em "E" entre si.
-  const [filtroEtapaAtual, setFiltroEtapaAtual] = useState([]);
-  const [filtroEmpreendimento, setFiltroEmpreendimento] = useState([]);
-  const [filtroMicroEtapa, setFiltroMicroEtapa] = useState([]);
+  // Filtros de coluna (Fase/Tarefa/Empreendimento) e o de Agrupamento (painel lateral) — null =
+  // todas as opções marcadas, sem filtro (ver valoresDoFiltro); uma lista restringe só aos
+  // valores dela. Todos os filtros são combinados em "E" entre si.
+  const [filtroEtapaAtual, setFiltroEtapaAtual] = useState(null);
+  const [filtroEmpreendimento, setFiltroEmpreendimento] = useState(null);
+  const [filtroMicroEtapa, setFiltroMicroEtapa] = useState(null);
+  const [filtroAgrupamento, setFiltroAgrupamento] = useState(null);
+
+  // Painel lateral (ícone de filtro no canto direito da linha da legenda): filtro de Agrupamento
+  // e a escolha de quais colunas (de % Masa até Contas a Pagar) aparecem — todas por padrão.
+  const [painelAberto, setPainelAberto] = useState(false);
+  const [colunasVisiveis, setColunasVisiveis] = useState(() => new Set(COLUNAS.map((coluna) => coluna.chave)));
+  const colunas = useMemo(() => COLUNAS.filter((coluna) => colunasVisiveis.has(coluna.chave)), [colunasVisiveis]);
+  const todasColunasVisiveis = colunas.length === COLUNAS.length;
+
+  function toggleColuna(chave) {
+    setColunasVisiveis((atual) => {
+      const proximo = new Set(atual);
+      if (proximo.has(chave)) proximo.delete(chave);
+      else proximo.add(chave);
+      return proximo;
+    });
+  }
+
+  function toggleTodasColunas() {
+    setColunasVisiveis(todasColunasVisiveis ? new Set() : new Set(COLUNAS.map((coluna) => coluna.chave)));
+  }
   // Clicar numa classificação da legenda alterna ela dentro deste filtro (várias podem ficar
   // ativas ao mesmo tempo, mesma convenção multi-seleção dos outros filtros de coluna).
   const [filtroClassificacao, setFiltroClassificacao] = useState([]);
@@ -258,7 +339,10 @@ export default function EmpreendimentosMasaPage() {
     setCarregando(true);
     setErro('');
     return getMatrizEmpreendimentosMasa()
-      .then(setMatriz)
+      .then((dados) => {
+        setMatriz(dados.fases);
+        setAgrupamentos(dados.agrupamentos);
+      })
       .catch((err) => setErro(err.response?.data?.message || 'Não foi possível carregar a matriz da Actioon.'))
       .finally(() => setCarregando(false));
   }, []);
@@ -290,29 +374,38 @@ export default function EmpreendimentosMasaPage() {
     return [...nomes].sort(compararMicroEtapas).map((nome) => ({ value: nome, label: nome }));
   }, [matriz]);
 
-  // Aplica os 3 filtros por cima da matriz: filtra fases por nome (Etapa Atual), filtra os
-  // empreendimentos de cada fase por nome/micro etapa, e descarta fase que ficou sem nenhum
-  // empreendimento POR CAUSA do filtro — mas preserva a fase genuinamente vazia (sem nenhum
-  // empreendimento na Actioon) quando nenhum filtro de Empreendimento/Micro Etapa está ativo,
-  // já que aí o "vazio" não veio do filtro.
+  const opcoesAgrupamento = useMemo(
+    () => agrupamentos.map((agrupamento) => ({ value: agrupamento.id, label: agrupamento.nome })),
+    [agrupamentos]
+  );
+
+  // Aplica os filtros por cima da matriz: filtra fases por nome (Etapa Atual), filtra os
+  // empreendimentos de cada fase por nome/micro etapa/classificação/agrupamento, e descarta fase
+  // que ficou sem nenhum empreendimento POR CAUSA do filtro — mas preserva a fase genuinamente
+  // vazia (sem nenhum empreendimento na Actioon) quando nenhum filtro de item está ativo, já que
+  // aí o "vazio" não veio do filtro.
   const matrizFiltrada = useMemo(() => {
     const semFiltroDeItem =
-      filtroEmpreendimento.length === 0 && filtroMicroEtapa.length === 0 && filtroClassificacao.length === 0;
+      filtroEmpreendimento == null &&
+      filtroMicroEtapa == null &&
+      filtroAgrupamento == null &&
+      filtroClassificacao.length === 0;
     return (matriz || [])
-      .filter((fase) => filtroEtapaAtual.length === 0 || filtroEtapaAtual.includes(fase.name))
+      .filter((fase) => passaNoFiltro(filtroEtapaAtual, fase.name))
       .map((fase) => ({
         ...fase,
         empreendimentos: fase.empreendimentos.filter(
           (emp) =>
-            (filtroEmpreendimento.length === 0 || filtroEmpreendimento.includes(emp.name)) &&
-            (filtroMicroEtapa.length === 0 || filtroMicroEtapa.includes(emp.microEtapaAtual)) &&
+            passaNoFiltro(filtroEmpreendimento, emp.name) &&
+            passaNoFiltro(filtroMicroEtapa, emp.microEtapaAtual) &&
+            passaNoFiltro(filtroAgrupamento, emp.agrupamentoId) &&
             (filtroClassificacao.length === 0 || filtroClassificacao.includes(emp.classificacao))
         ),
       }))
       .filter((fase) => fase.empreendimentos.length > 0 || semFiltroDeItem);
-  }, [matriz, filtroEtapaAtual, filtroEmpreendimento, filtroMicroEtapa, filtroClassificacao]);
+  }, [matriz, filtroEtapaAtual, filtroEmpreendimento, filtroMicroEtapa, filtroAgrupamento, filtroClassificacao]);
 
-  // Totalizador do rodapé — soma as 8 colunas numéricas (Duração até Contas a Pagar). Sempre a
+  // Totalizador do rodapé — soma as colunas somáveis (Duração até Contas a Pagar). Sempre a
   // partir da matriz JÁ FILTRADA — os totais têm que refletir só o que está visível na tela.
   const totais = useMemo(() => {
     const todosEmpreendimentos = matrizFiltrada.flatMap((fase) => fase.empreendimentos);
@@ -394,29 +487,24 @@ export default function EmpreendimentosMasaPage() {
   // diferente da grade visual da tela (que usa rowSpan pra não repetir). Termina com uma linha de
   // Total igual à do rodapé. Números saem como número de verdade (não string formatada) com um
   // formato de Excel aplicado por cima — assim o arquivo mostra "1.234,56" pro usuário e ainda dá
-  // pra somar/filtrar as colunas dentro do próprio Excel. Duração continua em dias (não no
-  // formato ano/mês/dia da tela) de propósito, pra sobrar uma coluna numérica somável/filtrável
-  // no Excel. % Masa não entra na linha de Total (percentual não é uma grandeza que se soma).
+  // pra somar/filtrar as colunas dentro do próprio Excel. Só as colunas visíveis na tela (ver
+  // painel lateral) entram no arquivo, na mesma ordem — o formato/título de cada uma vem de
+  // COLUNAS. % Masa não entra na linha de Total (percentual não é uma grandeza que se soma).
   // Gera o .xlsx inteiramente no navegador (a matriz já filtrada já está em memória, sem precisar
   // buscar nada de novo no backend) — biblioteca carregada sob demanda (só quando o usuário
   // realmente exporta) pra não pesar no carregamento da página.
   async function handleExportar() {
     setMenuContexto(null);
     const XLSX = await import('xlsx');
+    const valorExcel = (coluna, valor) => (coluna.excel.converter ? coluna.excel.converter(valor) : valor);
     const linhas = matrizFiltrada.flatMap((fase) =>
       fase.empreendimentos.map((emp) => ({
         Fase: fase.name,
         Tarefa: emp.microEtapaAtual || '',
         Empreendimento: emp.name,
-        '% Masa': emp.percentualMasa ?? '',
-        'Duração (dias)': emp.duracaoDias ?? '',
-        'M²': emp.areaM2 ?? '',
-        Unidades: emp.unidades ?? '',
-        'VGV Geral': emp.vgvGeral ?? '',
-        'VGV Masa': emp.vgvMasa ?? '',
-        'Horas Trabalhadas': emp.segundosTrabalhados != null ? Number((emp.segundosTrabalhados / 3600).toFixed(1)) : '',
-        'Contas Pagas': emp.contasPagas ?? '',
-        'Contas a Pagar': emp.contasAPagar ?? '',
+        ...Object.fromEntries(
+          colunas.map((coluna) => [coluna.excel.titulo, emp[coluna.chave] != null ? valorExcel(coluna, emp[coluna.chave]) : ''])
+        ),
       }))
     );
     // Arredonda pra 2 casas — somar dezenas de valores com centavos em ponto flutuante gera
@@ -426,30 +514,15 @@ export default function EmpreendimentosMasaPage() {
       Fase: 'Total',
       Tarefa: '',
       Empreendimento: totais.qtdEmpreendimentos,
-      '% Masa': '',
-      'Duração (dias)': arredondar(totais.duracaoDias),
-      'M²': arredondar(totais.areaM2),
-      Unidades: totais.unidades,
-      'VGV Geral': arredondar(totais.vgvGeral),
-      'VGV Masa': arredondar(totais.vgvMasa),
-      'Horas Trabalhadas': Number((totais.segundosTrabalhados / 3600).toFixed(1)),
-      'Contas Pagas': arredondar(totais.contasPagas),
-      'Contas a Pagar': arredondar(totais.contasAPagar),
+      ...Object.fromEntries(
+        colunas.map((coluna) => [coluna.excel.titulo, coluna.somavel ? arredondar(valorExcel(coluna, totais[coluna.chave])) : ''])
+      ),
     });
     const planilha = XLSX.utils.json_to_sheet(linhas);
-    // Índice das colunas (0-based) na mesma ordem do objeto acima — Fase=0, Tarefa=1,
-    // Empreendimento=2, % Masa=3, Duração=4, M²=5, Unidades=6, VGV Geral=7, VGV Masa=8, Horas
-    // Trabalhadas=9, Contas Pagas=10, Contas a Pagar=11.
+    // Índice das colunas (0-based): Fase=0, Tarefa=1, Empreendimento=2, e as visíveis de
+    // COLUNAS a partir da 3, na mesma ordem.
     aplicarFormatoNumerico(planilha, XLSX, 2, '#,##0');
-    aplicarFormatoNumerico(planilha, XLSX, 3, '0.0"%"');
-    aplicarFormatoNumerico(planilha, XLSX, 4, '#,##0');
-    aplicarFormatoNumerico(planilha, XLSX, 5, '#,##0.00');
-    aplicarFormatoNumerico(planilha, XLSX, 6, '#,##0');
-    aplicarFormatoNumerico(planilha, XLSX, 7, '"R$" #,##0.00');
-    aplicarFormatoNumerico(planilha, XLSX, 8, '"R$" #,##0.00');
-    aplicarFormatoNumerico(planilha, XLSX, 9, '#,##0.0" h"');
-    aplicarFormatoNumerico(planilha, XLSX, 10, '"R$" #,##0.00');
-    aplicarFormatoNumerico(planilha, XLSX, 11, '"R$" #,##0.00');
+    colunas.forEach((coluna, i) => aplicarFormatoNumerico(planilha, XLSX, 3 + i, coluna.excel.formato));
     const livro = XLSX.utils.book_new();
     XLSX.utils.book_append_sheet(livro, planilha, 'Empreendimentos Masa');
     XLSX.writeFile(livro, `empreendimentos-masa_${new Date().toISOString().slice(0, 10)}.xlsx`);
@@ -487,6 +560,19 @@ export default function EmpreendimentosMasaPage() {
               Limpar
             </button>
           )}
+          <button
+            type="button"
+            onClick={() => setPainelAberto(true)}
+            title="Filtros e colunas"
+            aria-pressed={filtroAgrupamento != null || !todasColunasVisiveis}
+            className={`ml-auto inline-flex h-8 w-8 items-center justify-center rounded-lg border transition ${
+              filtroAgrupamento != null || !todasColunasVisiveis
+                ? 'border-primary-500 bg-primary-50 text-primary-600'
+                : 'border-gray-200 bg-white text-gray-500 hover:bg-gray-50 hover:text-gray-700'
+            }`}
+          >
+            <Filter size={15} />
+          </button>
         </div>
       )}
       <div className="rounded-card bg-white shadow-card">
@@ -521,7 +607,7 @@ export default function EmpreendimentosMasaPage() {
                   >
                     <span className="inline-flex items-center justify-center gap-1.5">
                       <FiltroColuna
-                        valor={filtroEtapaAtual}
+                        filtro={filtroEtapaAtual}
                         onChange={setFiltroEtapaAtual}
                         opcoes={opcoesEtapaAtual}
                         label="fase"
@@ -536,7 +622,7 @@ export default function EmpreendimentosMasaPage() {
                   >
                     <span className="inline-flex items-center justify-center gap-1.5">
                       <FiltroColuna
-                        valor={filtroMicroEtapa}
+                        filtro={filtroMicroEtapa}
                         onChange={setFiltroMicroEtapa}
                         opcoes={opcoesMicroEtapa}
                         label="tarefa"
@@ -547,11 +633,13 @@ export default function EmpreendimentosMasaPage() {
                   </th>
                   <th
                     ref={thEmpreendimentoRef}
-                    className="sticky -top-6 z-20 border-b-2 border-b-primary-500 border-l border-l-primary-100 bg-primary-50 px-2 py-2.5 text-center font-medium"
+                    className={`sticky -top-6 z-20 border-b-2 border-b-primary-500 border-l border-l-primary-100 bg-primary-50 px-2 py-2.5 text-center font-medium ${
+                      colunas.length === 0 ? 'rounded-tr-card' : ''
+                    }`}
                   >
                     <span className="inline-flex items-center justify-center gap-1.5">
                       <FiltroColuna
-                        valor={filtroEmpreendimento}
+                        filtro={filtroEmpreendimento}
                         onChange={setFiltroEmpreendimento}
                         opcoes={opcoesEmpreendimento}
                         label="empreendimento"
@@ -560,42 +648,25 @@ export default function EmpreendimentosMasaPage() {
                       Empreendimento
                     </span>
                   </th>
-                  <th className="sticky -top-6 z-20 w-24 border-b-2 border-b-primary-500 border-l border-l-primary-100 bg-primary-50 px-2 py-2.5 text-center font-medium">
-                    % Masa
-                  </th>
-                  <th className="sticky -top-6 z-20 w-28 border-b-2 border-b-primary-500 border-l border-l-primary-100 bg-primary-50 px-2 py-2.5 text-center font-medium">
-                    Duração
-                  </th>
-                  <th className="sticky -top-6 z-20 w-28 border-b-2 border-b-primary-500 border-l border-l-primary-100 bg-primary-50 px-2 py-2.5 text-center font-medium">
-                    M²
-                  </th>
-                  <th className="sticky -top-6 z-20 w-24 border-b-2 border-b-primary-500 border-l border-l-primary-100 bg-primary-50 px-2 py-2.5 text-center font-medium">
-                    Unidades
-                  </th>
-                  <th className="sticky -top-6 z-20 w-32 border-b-2 border-b-primary-500 border-l border-l-primary-100 bg-primary-50 px-2 py-2.5 text-center font-medium">
-                    VGV Geral
-                  </th>
-                  <th className="sticky -top-6 z-20 w-32 border-b-2 border-b-primary-500 border-l border-l-primary-100 bg-primary-50 px-2 py-2.5 text-center font-medium">
-                    VGV Masa
-                  </th>
-                  <th className="sticky -top-6 z-20 w-28 border-b-2 border-b-primary-500 border-l border-l-primary-100 bg-primary-50 px-2 py-2.5 text-center font-medium">
-                    Horas Trabalhadas
-                  </th>
-                  <th className="sticky -top-6 z-20 w-32 border-b-2 border-b-primary-500 border-l border-l-primary-100 bg-primary-50 px-2 py-2.5 text-center font-medium">
-                    Contas Pagas
-                  </th>
-                  <th className="sticky -top-6 z-20 w-32 rounded-tr-card border-b-2 border-b-primary-500 border-l border-l-primary-100 bg-primary-50 px-2 py-2.5 text-center font-medium">
-                    Contas a Pagar
-                  </th>
+                  {colunas.map((coluna, i) => (
+                    <th
+                      key={coluna.chave}
+                      className={`sticky -top-6 z-20 ${coluna.largura} border-b-2 border-b-primary-500 border-l border-l-primary-100 bg-primary-50 px-2 py-2.5 text-center font-medium ${
+                        i === colunas.length - 1 ? 'rounded-tr-card' : ''
+                      }`}
+                    >
+                      {coluna.label}
+                    </th>
+                  ))}
                 </tr>
               </thead>
               <tbody>
                 {semResultadoFiltro && (
                   <tr>
-                    <td colSpan={12} className="py-12 text-center text-sm text-gray-500">
+                    <td colSpan={3 + colunas.length} className="py-12 text-center text-sm text-gray-500">
                       <p className="font-medium text-gray-700">Nenhuma linha corresponde aos filtros selecionados.</p>
                       <p className="mx-auto mt-1 max-w-sm text-xs text-gray-400">
-                        Ajuste os filtros de Fase, Empreendimento, Tarefa ou Classificação pra ver as linhas de novo.
+                        Ajuste os filtros de Fase, Empreendimento, Tarefa, Classificação ou Agrupamento pra ver as linhas de novo.
                       </p>
                     </td>
                   </tr>
@@ -631,31 +702,9 @@ export default function EmpreendimentosMasaPage() {
                         <td className="border-b-2 border-b-gray-400 border-l border-l-gray-100 py-1.5 pl-4 text-xs tabular-nums text-gray-700">
                           {resumo.qtdEmpreendimentos}
                         </td>
-                        <td className="border-b-2 border-b-gray-400 border-l border-l-gray-100 py-1.5 pl-4 text-xs tabular-nums text-gray-300">—</td>
-                        <td className="border-b-2 border-b-gray-400 border-l border-l-gray-100 py-1.5 pl-4 text-xs tabular-nums text-gray-700">
-                          {formatarDuracao(resumo.duracaoDias)}
-                        </td>
-                        <td className="border-b-2 border-b-gray-400 border-l border-l-gray-100 py-1.5 pl-4 text-xs tabular-nums text-gray-700">
-                          {resumo.areaM2.toLocaleString('pt-BR')}
-                        </td>
-                        <td className="border-b-2 border-b-gray-400 border-l border-l-gray-100 py-1.5 pl-4 text-xs tabular-nums text-gray-700">
-                          {resumo.unidades.toLocaleString('pt-BR')}
-                        </td>
-                        <td className="border-b-2 border-b-gray-400 border-l border-l-gray-100 py-1.5 pl-4 text-xs tabular-nums text-gray-700">
-                          {formatarMoeda(resumo.vgvGeral)}
-                        </td>
-                        <td className="border-b-2 border-b-gray-400 border-l border-l-gray-100 py-1.5 pl-4 text-xs tabular-nums text-gray-700">
-                          {formatarMoeda(resumo.vgvMasa)}
-                        </td>
-                        <td className="border-b-2 border-b-gray-400 border-l border-l-gray-100 py-1.5 pl-4 text-xs tabular-nums text-gray-700">
-                          {formatarHoras(resumo.segundosTrabalhados)}
-                        </td>
-                        <td className="border-b-2 border-b-gray-400 border-l border-l-gray-100 py-1.5 pl-4 text-xs tabular-nums text-gray-700">
-                          {formatarMoeda(resumo.contasPagas)}
-                        </td>
-                        <td className="border-b-2 border-b-gray-400 border-l border-l-gray-100 py-1.5 pl-4 text-xs tabular-nums text-gray-700">
-                          {formatarMoeda(resumo.contasAPagar)}
-                        </td>
+                        {colunas.map((coluna) => (
+                          <CelulaResumo key={coluna.chave} coluna={coluna} resumo={resumo} borda="border-b-2 border-b-gray-400" />
+                        ))}
                       </tr>
                     );
                   }
@@ -726,31 +775,9 @@ export default function EmpreendimentosMasaPage() {
                               <td className={`${bordaInferior} border-l border-l-gray-100 py-1.5 pl-4 text-xs tabular-nums text-gray-700`}>
                                 {linha.grupo.empreendimentos.length}
                               </td>
-                              <td className={`${bordaInferior} border-l border-l-gray-100 py-1.5 pl-4 text-xs tabular-nums text-gray-300`}>—</td>
-                              <td className={`${bordaInferior} border-l border-l-gray-100 py-1.5 pl-4 text-xs tabular-nums text-gray-700`}>
-                                {formatarDuracao(resumoGrupo.duracaoDias)}
-                              </td>
-                              <td className={`${bordaInferior} border-l border-l-gray-100 py-1.5 pl-4 text-xs tabular-nums text-gray-700`}>
-                                {resumoGrupo.areaM2.toLocaleString('pt-BR')}
-                              </td>
-                              <td className={`${bordaInferior} border-l border-l-gray-100 py-1.5 pl-4 text-xs tabular-nums text-gray-700`}>
-                                {resumoGrupo.unidades.toLocaleString('pt-BR')}
-                              </td>
-                              <td className={`${bordaInferior} border-l border-l-gray-100 py-1.5 pl-4 text-xs tabular-nums text-gray-700`}>
-                                {formatarMoeda(resumoGrupo.vgvGeral)}
-                              </td>
-                              <td className={`${bordaInferior} border-l border-l-gray-100 py-1.5 pl-4 text-xs tabular-nums text-gray-700`}>
-                                {formatarMoeda(resumoGrupo.vgvMasa)}
-                              </td>
-                              <td className={`${bordaInferior} border-l border-l-gray-100 py-1.5 pl-4 text-xs tabular-nums text-gray-700`}>
-                                {formatarHoras(resumoGrupo.segundosTrabalhados)}
-                              </td>
-                              <td className={`${bordaInferior} border-l border-l-gray-100 py-1.5 pl-4 text-xs tabular-nums text-gray-700`}>
-                                {formatarMoeda(resumoGrupo.contasPagas)}
-                              </td>
-                              <td className={`${bordaInferior} border-l border-l-gray-100 py-1.5 pl-4 text-xs tabular-nums text-gray-700`}>
-                                {formatarMoeda(resumoGrupo.contasAPagar)}
-                              </td>
+                              {colunas.map((coluna) => (
+                                <CelulaResumo key={coluna.chave} coluna={coluna} resumo={resumoGrupo} borda={bordaInferior} />
+                              ))}
                             </tr>
                           );
                         }
@@ -798,87 +825,18 @@ export default function EmpreendimentosMasaPage() {
                                 <span className="italic text-gray-400">Nenhum empreendimento nesta fase.</span>
                               )}
                             </td>
-                            <td
-                              className={`${bordaInferior} border-l border-l-gray-100 py-1.5 pl-4 text-xs tabular-nums text-gray-700 ${corFundo}`}
-                            >
-                              {empreendimento?.percentualMasa != null ? (
-                                formatarPercentual(empreendimento.percentualMasa)
-                              ) : (
-                                <span className="text-gray-300">—</span>
-                              )}
-                            </td>
-                            <td
-                              className={`${bordaInferior} border-l border-l-gray-100 py-1.5 pl-4 text-xs tabular-nums text-gray-700 ${corFundo}`}
-                            >
-                              {empreendimento?.duracaoDias != null ? (
-                                formatarDuracao(empreendimento.duracaoDias)
-                              ) : (
-                                <span className="text-gray-300">—</span>
-                              )}
-                            </td>
-                            <td
-                              className={`${bordaInferior} border-l border-l-gray-100 py-1.5 pl-4 text-xs tabular-nums text-gray-700 ${corFundo}`}
-                            >
-                              {empreendimento?.areaM2 != null ? (
-                                empreendimento.areaM2.toLocaleString('pt-BR')
-                              ) : (
-                                <span className="text-gray-300">—</span>
-                              )}
-                            </td>
-                            <td
-                              className={`${bordaInferior} border-l border-l-gray-100 py-1.5 pl-4 text-xs tabular-nums text-gray-700 ${corFundo}`}
-                            >
-                              {empreendimento?.unidades != null ? (
-                                empreendimento.unidades.toLocaleString('pt-BR')
-                              ) : (
-                                <span className="text-gray-300">—</span>
-                              )}
-                            </td>
-                            <td
-                              className={`${bordaInferior} border-l border-l-gray-100 py-1.5 pl-4 text-xs tabular-nums text-gray-700 ${corFundo}`}
-                            >
-                              {empreendimento?.vgvGeral != null ? (
-                                formatarMoeda(empreendimento.vgvGeral)
-                              ) : (
-                                <span className="text-gray-300">—</span>
-                              )}
-                            </td>
-                            <td
-                              className={`${bordaInferior} border-l border-l-gray-100 py-1.5 pl-4 text-xs tabular-nums text-gray-700 ${corFundo}`}
-                            >
-                              {empreendimento?.vgvMasa != null ? (
-                                formatarMoeda(empreendimento.vgvMasa)
-                              ) : (
-                                <span className="text-gray-300">—</span>
-                              )}
-                            </td>
-                            <td
-                              className={`${bordaInferior} border-l border-l-gray-100 py-1.5 pl-4 text-xs tabular-nums text-gray-700 ${corFundo}`}
-                            >
-                              {empreendimento?.segundosTrabalhados != null ? (
-                                formatarHoras(empreendimento.segundosTrabalhados)
-                              ) : (
-                                <span className="text-gray-300">—</span>
-                              )}
-                            </td>
-                            <td
-                              className={`${bordaInferior} border-l border-l-gray-100 py-1.5 pl-4 text-xs tabular-nums text-gray-700 ${corFundo}`}
-                            >
-                              {empreendimento?.contasPagas != null ? (
-                                formatarMoeda(empreendimento.contasPagas)
-                              ) : (
-                                <span className="text-gray-300">—</span>
-                              )}
-                            </td>
-                            <td
-                              className={`${bordaInferior} border-l border-l-gray-100 py-1.5 pl-4 text-xs tabular-nums text-gray-700 ${corFundo}`}
-                            >
-                              {empreendimento?.contasAPagar != null ? (
-                                formatarMoeda(empreendimento.contasAPagar)
-                              ) : (
-                                <span className="text-gray-300">—</span>
-                              )}
-                            </td>
+                            {colunas.map((coluna) => (
+                              <td
+                                key={coluna.chave}
+                                className={`${bordaInferior} border-l border-l-gray-100 py-1.5 pl-4 text-xs tabular-nums text-gray-700 ${corFundo}`}
+                              >
+                                {empreendimento?.[coluna.chave] != null ? (
+                                  coluna.formatar(empreendimento[coluna.chave])
+                                ) : (
+                                  <span className="text-gray-300">—</span>
+                                )}
+                              </td>
+                            ))}
                           </tr>
                         );
                       })}
@@ -901,36 +859,23 @@ export default function EmpreendimentosMasaPage() {
                   >
                     Total
                   </td>
-                  <td className="sticky -bottom-6 z-10 border-t-2 border-t-primary-500 border-l border-l-primary-100 bg-primary-50 py-2.5 pl-4 text-xs tabular-nums">
+                  <td
+                    className={`sticky -bottom-6 z-10 border-t-2 border-t-primary-500 border-l border-l-primary-100 bg-primary-50 py-2.5 pl-4 text-xs tabular-nums ${
+                      colunas.length === 0 ? 'rounded-br-card' : ''
+                    }`}
+                  >
                     {totais.qtdEmpreendimentos}
                   </td>
-                  <td className="sticky -bottom-6 z-10 w-24 border-t-2 border-t-primary-500 border-l border-l-primary-100 bg-primary-50 py-2.5 pl-4 text-xs tabular-nums text-primary-300">
-                    —
-                  </td>
-                  <td className="sticky -bottom-6 z-10 w-28 border-t-2 border-t-primary-500 border-l border-l-primary-100 bg-primary-50 py-2.5 pl-4 text-xs tabular-nums">
-                    {formatarDuracao(totais.duracaoDias)}
-                  </td>
-                  <td className="sticky -bottom-6 z-10 w-28 border-t-2 border-t-primary-500 border-l border-l-primary-100 bg-primary-50 py-2.5 pl-4 text-xs tabular-nums">
-                    {totais.areaM2.toLocaleString('pt-BR')}
-                  </td>
-                  <td className="sticky -bottom-6 z-10 w-24 border-t-2 border-t-primary-500 border-l border-l-primary-100 bg-primary-50 py-2.5 pl-4 text-xs tabular-nums">
-                    {totais.unidades.toLocaleString('pt-BR')}
-                  </td>
-                  <td className="sticky -bottom-6 z-10 w-32 border-t-2 border-t-primary-500 border-l border-l-primary-100 bg-primary-50 py-2.5 pl-4 text-xs tabular-nums">
-                    {formatarMoeda(totais.vgvGeral)}
-                  </td>
-                  <td className="sticky -bottom-6 z-10 w-32 border-t-2 border-t-primary-500 border-l border-l-primary-100 bg-primary-50 py-2.5 pl-4 text-xs tabular-nums">
-                    {formatarMoeda(totais.vgvMasa)}
-                  </td>
-                  <td className="sticky -bottom-6 z-10 w-28 border-t-2 border-t-primary-500 border-l border-l-primary-100 bg-primary-50 py-2.5 pl-4 text-xs tabular-nums">
-                    {formatarHoras(totais.segundosTrabalhados)}
-                  </td>
-                  <td className="sticky -bottom-6 z-10 w-32 border-t-2 border-t-primary-500 border-l border-l-primary-100 bg-primary-50 py-2.5 pl-4 text-xs tabular-nums">
-                    {formatarMoeda(totais.contasPagas)}
-                  </td>
-                  <td className="sticky -bottom-6 z-10 w-32 rounded-br-card border-t-2 border-t-primary-500 border-l border-l-primary-100 bg-primary-50 py-2.5 pl-4 text-xs tabular-nums">
-                    {formatarMoeda(totais.contasAPagar)}
-                  </td>
+                  {colunas.map((coluna, i) => (
+                    <td
+                      key={coluna.chave}
+                      className={`sticky -bottom-6 z-10 ${coluna.largura} border-t-2 border-t-primary-500 border-l border-l-primary-100 bg-primary-50 py-2.5 pl-4 text-xs tabular-nums ${
+                        coluna.somavel ? '' : 'text-primary-300'
+                      } ${i === colunas.length - 1 ? 'rounded-br-card' : ''}`}
+                    >
+                      {coluna.somavel ? coluna.formatar(totais[coluna.chave]) : '—'}
+                    </td>
+                  ))}
                 </tr>
               </tfoot>
             </table>
@@ -955,6 +900,79 @@ export default function EmpreendimentosMasaPage() {
           </div>,
           document.body
         )}
+
+      {/* Painel lateral de filtros — mesmo padrão do Espião NFe/NFSe (EspiaoNfeNfsePage.jsx):
+          sempre montado pra transição de translate funcionar (fechado fica fora da tela em vez de
+          desmontar), com um fundo escurecido bem sutil que fecha o painel ao clicar. */}
+      <div className={`fixed inset-0 z-50 ${painelAberto ? '' : 'pointer-events-none'}`}>
+        <div
+          className={`absolute inset-0 cursor-pointer bg-black/10 transition-opacity duration-300 ${
+            painelAberto ? 'opacity-100' : 'opacity-0'
+          }`}
+          onClick={() => setPainelAberto(false)}
+        />
+        <div
+          className={`absolute right-0 top-0 flex h-full w-full max-w-sm flex-col bg-white shadow-card transition-transform duration-300 ${
+            painelAberto ? 'translate-x-0' : 'translate-x-full'
+          }`}
+        >
+          <div className="flex items-center justify-between border-b border-gray-100 px-5 py-4">
+            <h2 className="text-base font-semibold text-gray-900">Filtros</h2>
+            <button type="button" onClick={() => setPainelAberto(false)} className="text-gray-400 hover:text-gray-600">
+              <X size={20} />
+            </button>
+          </div>
+
+          <div className="flex-1 space-y-6 overflow-y-auto p-5">
+            <div>
+              <label className="mb-1 block text-sm font-medium text-gray-700">Agrupamento</label>
+              <SearchableSelect
+                multiple
+                selecionarTodos
+                value={valoresDoFiltro(filtroAgrupamento, opcoesAgrupamento)}
+                onChange={(selecionados) => setFiltroAgrupamento(proximoFiltro(selecionados, opcoesAgrupamento))}
+                options={opcoesAgrupamento}
+                placeholder="Nenhum"
+                emptyMessage="Nenhum agrupamento encontrado."
+                corClasses={filtroAgrupamento != null ? 'border-primary-500' : 'border-gray-200'}
+              />
+              {filtroAgrupamento == null && (
+                <p className="mt-1 text-xs text-gray-400">Todos os agrupamentos — inclusive empreendimentos sem agrupamento.</p>
+              )}
+            </div>
+
+            <div>
+              <div className="mb-2 flex items-center justify-between">
+                <span className="text-sm font-medium text-gray-700">Colunas</span>
+                <button
+                  type="button"
+                  onClick={toggleTodasColunas}
+                  className="text-xs font-medium text-primary-600 hover:text-primary-700"
+                >
+                  {todasColunasVisiveis ? 'Desmarcar todos' : 'Selecionar todos'}
+                </button>
+              </div>
+              <div className="divide-y divide-gray-100 rounded-lg border border-gray-200">
+                {COLUNAS.map((coluna) => (
+                  <label
+                    key={coluna.chave}
+                    className="flex cursor-pointer items-center gap-2.5 px-3 py-2 text-sm text-gray-700 hover:bg-gray-50"
+                  >
+                    <input
+                      type="checkbox"
+                      checked={colunasVisiveis.has(coluna.chave)}
+                      onChange={() => toggleColuna(coluna.chave)}
+                      className="h-4 w-4 cursor-pointer accent-primary-600"
+                    />
+                    {coluna.label}
+                  </label>
+                ))}
+              </div>
+              <p className="mt-1 text-xs text-gray-400">Fase, Tarefa e Empreendimento aparecem sempre.</p>
+            </div>
+          </div>
+        </div>
+      </div>
     </div>
   );
 }

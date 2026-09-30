@@ -100,6 +100,10 @@ async function buscarTodasActions(token) {
 //   sem duplicidade) de client_related_products.product_client_id, só que juntando com
 //   classifications pelo classificacao_id; usada só pra colorir a linha do empreendimento, sem
 //   coluna própria na tabela.
+// - "Agrupamento" (filtro do painel lateral da tela): client_details.agrupamento_id de cada
+//   empreendimento (client_id), com o nome vindo de groupings. As OPÇÕES do filtro são todos os
+//   agrupamentos ativos (groupings.active), tenham ou não empreendimento ligado (pedido do
+//   usuário) — por isso é uma consulta à parte, não derivada da primeira.
 async function buscarDadosTimeTracker() {
   const empresaId = await getEmpresaMasaId();
   const credenciais = await bancoDadosService.getCredenciaisPorConexao(empresaId, CONEXAO_TIME_TRACKER);
@@ -121,6 +125,8 @@ async function buscarDadosTimeTracker() {
   const percentualMasaPorCliente = new Map(); // client_id -> percentual_receitas_totais
   const segundosTrabalhadosPorCliente = new Map(); // client_id -> segundos somados (todo o time_logs)
   const classificacaoPorCliente = new Map(); // client_id -> nome da classificação
+  const agrupamentoPorCliente = new Map(); // client_id -> agrupamento_id
+  let agrupamentos = []; // [{ id, nome }] — todos os ativos, opções do filtro
   try {
     await client.connect();
 
@@ -182,6 +188,25 @@ async function buscarDadosTimeTracker() {
     for (const row of classificacoes.rows) {
       classificacaoPorCliente.set(row.product_client_id, row.nome);
     }
+
+    const agrupamentosPorCliente = await client.query(`
+      select
+        client_id,
+        agrupamento_id,
+        g.nome
+      from client_details cd
+      left join groupings g on g.id = cd.agrupamento_id
+    `);
+    for (const row of agrupamentosPorCliente.rows) {
+      if (row.agrupamento_id != null) agrupamentoPorCliente.set(row.client_id, row.agrupamento_id);
+    }
+
+    const agrupamentosAtivos = await client.query(`
+      select * from groupings
+      where active = true
+      order by nome
+    `);
+    agrupamentos = agrupamentosAtivos.rows.map((row) => ({ id: row.id, nome: row.nome }));
   } catch {
     throw badRequest('Não foi possível conectar ao banco "Time Tracker".');
   } finally {
@@ -194,6 +219,8 @@ async function buscarDadosTimeTracker() {
     percentualMasaPorCliente,
     segundosTrabalhadosPorCliente,
     classificacaoPorCliente,
+    agrupamentoPorCliente,
+    agrupamentos,
   };
 }
 
@@ -327,6 +354,8 @@ async function listMatriz() {
       percentualMasaPorCliente,
       segundosTrabalhadosPorCliente,
       classificacaoPorCliente,
+      agrupamentoPorCliente,
+      agrupamentos,
     },
     { contasPagasPorCliente, contasAPagarPorCliente },
   ] = await Promise.all([
@@ -381,50 +410,24 @@ async function listMatriz() {
       contasPagas: contasPagasPorCliente.get(clienteId) ?? null,
       contasAPagar: contasAPagarPorCliente.get(clienteId) ?? null,
       classificacao: classificacaoPorCliente.get(clienteId) ?? null,
+      agrupamentoId: agrupamentoPorCliente.get(clienteId) ?? null,
     });
   }
   for (const lista of empreendimentosPorFaseId.values()) {
     lista.sort((a, b) => a.order - b.order);
   }
 
-  return [...fasesRaw]
+  const fases = [...fasesRaw]
     .sort((a, b) => a.order - b.order)
     .map((fase) => ({
       id: fase.id,
       name: fase.name,
       order: fase.order,
-      empreendimentos: (empreendimentosPorFaseId.get(fase.id) || []).map(
-        ({
-          id,
-          name,
-          microEtapaAtual,
-          duracaoDias,
-          areaM2,
-          unidades,
-          vgvGeral,
-          vgvMasa,
-          percentualMasa,
-          segundosTrabalhados,
-          contasPagas,
-          contasAPagar,
-          classificacao,
-        }) => ({
-          id,
-          name,
-          microEtapaAtual,
-          duracaoDias,
-          areaM2,
-          unidades,
-          vgvGeral,
-          vgvMasa,
-          percentualMasa,
-          segundosTrabalhados,
-          contasPagas,
-          contasAPagar,
-          classificacao,
-        })
-      ),
+      // `order` do empreendimento só serve pra ordenar acima — não vai pra resposta.
+      empreendimentos: (empreendimentosPorFaseId.get(fase.id) || []).map(({ order, ...empreendimento }) => empreendimento),
     }));
+
+  return { fases, agrupamentos };
 }
 
 module.exports = { listMatriz };
