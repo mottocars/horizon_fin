@@ -373,4 +373,138 @@ async function desvincular(notaId) {
   await pool.query('DELETE FROM espiao_notas_vinculos WHERE nota_id = $1', [notaId]);
 }
 
-module.exports = { listTitulosParaNota, vincular, desvincular, documentoEmissorDaChave };
+// Varredura em lote: pra cada nota ativa da empresa ainda sem vínculo
+// (não inativada, não cancelada, no período), procura o título que confere
+// nas 3 hipóteses (CNPJ + data + nº — ver conferirTitulo) e vincula SÓ
+// quando o casamento é inequívoco:
+// - a nota tem exatamente 1 título 3/3; e
+// - esse título não é 3/3 de nenhuma outra nota; e
+// - o título ainda não está vinculado a nada.
+// O resto fica de fora e volta no relatório (ambíguos). `simular: true` só
+// calcula, sem gravar. Os títulos vêm do Sienge nesta mesma chamada — o
+// retrato gravado é o que o Sienge devolveu agora.
+async function vincularAutomaticamente(empresaId, { dataInicio, dataFim, usuarioId = null, simular = true }) {
+  const credenciais = await getCredenciais(empresaId);
+  const { rows: notas } = await pool.query(
+    `SELECT id, tipo, chave_acesso, numero_nota, emissor,
+            to_char(data_emissao, 'YYYY-MM-DD"T"HH24:MI:SS') AS data_emissao
+     FROM espiao_notas n
+     WHERE empresa_id = $1 AND inativa = FALSE AND apenas_resumo = FALSE
+       AND situacao_categoria IS DISTINCT FROM 'cancelada'
+       AND data_emissao >= $2 AND data_emissao <= $3
+       AND NOT EXISTS (SELECT 1 FROM espiao_notas_vinculos v WHERE v.nota_id = n.id)`,
+    [empresaId, dataInicio, `${dataFim} 23:59:59`]
+  );
+  const { rows: jaVinculados } = await pool.query(
+    'SELECT sienge_titulo_id FROM espiao_notas_vinculos WHERE empresa_id = $1',
+    [empresaId]
+  );
+  const titulosOcupados = new Set(jaVinculados.map((r) => r.sienge_titulo_id));
+
+  const relatorio = { notasAnalisadas: notas.length, porTipo: {}, vinculos: [], ambiguos: [], semConfiguracao: [] };
+  const propostas = []; // { nota, titulo, credor }
+
+  for (const tipo of ['NFE', 'NFSE']) {
+    const notasDoTipo = notas.filter((n) => n.tipo === tipo);
+    if (notasDoTipo.length === 0) continue;
+    const codigo = await getCodigoDocumento(empresaId, tipo);
+    if (!codigo) {
+      relatorio.semConfiguracao.push(tipo);
+      continue;
+    }
+    const titulos = await buscarTodosTitulos(credenciais, { codigo, dataInicio, dataFim, atualizar: true });
+    const credores = await buscarCredores(credenciais, titulos.map((t) => t.creditorId));
+    relatorio.porTipo[tipo] = { codigo, notas: notasDoTipo.length, titulos: titulos.length };
+
+    // Índice por (CNPJ do credor, data, nº) — as 3 hipóteses de uma vez.
+    const chave = (doc, data, numero) => `${soDigitos(doc)}|${String(data || '').slice(0, 10)}|${numeroNormalizado(numero)}`;
+    const porChave = new Map();
+    for (const titulo of titulos) {
+      if (titulosOcupados.has(titulo.id)) continue;
+      const credor = credores.get(titulo.creditorId);
+      if (!credor?.documento || !numeroNormalizado(titulo.documentNumber)) continue;
+      const k = chave(credor.documento, titulo.issueDate, titulo.documentNumber);
+      if (!porChave.has(k)) porChave.set(k, []);
+      porChave.get(k).push({ titulo, credor });
+    }
+
+    for (const nota of notasDoTipo) {
+      const documentoEmissor = documentoEmissorDaChave(nota.tipo, nota.chave_acesso);
+      if (!documentoEmissor || !numeroNormalizado(nota.numero_nota)) continue;
+      const candidatos = porChave.get(chave(documentoEmissor, nota.data_emissao, nota.numero_nota)) || [];
+      if (candidatos.length === 1) propostas.push({ nota, ...candidatos[0] });
+      else if (candidatos.length > 1) {
+        relatorio.ambiguos.push({
+          motivo: 'nota com mais de um título 3/3',
+          notaId: nota.id,
+          numero: nota.numero_nota,
+          emissor: nota.emissor,
+          titulos: candidatos.map((c) => c.titulo.id),
+        });
+      }
+    }
+  }
+
+  // Um título que casa 3/3 com mais de uma nota não é vinculado a nenhuma.
+  const notasPorTitulo = new Map();
+  propostas.forEach((p) => notasPorTitulo.set(p.titulo.id, [...(notasPorTitulo.get(p.titulo.id) || []), p]));
+  const inequivocas = [];
+  for (const [tituloId, lista] of notasPorTitulo) {
+    if (lista.length === 1) inequivocas.push(lista[0]);
+    else {
+      relatorio.ambiguos.push({
+        motivo: 'título 3/3 de mais de uma nota',
+        tituloId,
+        notas: lista.map((p) => ({ notaId: p.nota.id, numero: p.nota.numero_nota, emissor: p.nota.emissor })),
+      });
+    }
+  }
+
+  relatorio.vinculos = inequivocas.map(({ nota, titulo, credor }) => ({
+    notaId: nota.id,
+    tipo: nota.tipo,
+    numero: nota.numero_nota,
+    emissor: nota.emissor,
+    dataEmissao: nota.data_emissao.slice(0, 10),
+    tituloId: titulo.id,
+    documento: `${(titulo.documentIdentificationId || '').trim()} ${titulo.documentNumber}`,
+    valor: titulo.totalInvoiceAmount,
+    fornecedor: credor.nome,
+  }));
+  if (simular) return relatorio;
+
+  const client = await pool.connect();
+  try {
+    await client.query('BEGIN');
+    for (const { nota, titulo, credor } of inequivocas) {
+      await client.query(
+        `INSERT INTO espiao_notas_vinculos
+           (nota_id, empresa_id, sienge_titulo_id, documento_identificacao, documento_numero, data_emissao, valor,
+            credor_id, credor_nome, credor_documento, vinculado_por, vinculado_em)
+         VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, NOW())`,
+        [
+          nota.id,
+          empresaId,
+          titulo.id,
+          (titulo.documentIdentificationId || '').trim() || null,
+          titulo.documentNumber || null,
+          titulo.issueDate || null,
+          titulo.totalInvoiceAmount ?? null,
+          credor.id,
+          credor.nome,
+          credor.documento,
+          usuarioId,
+        ]
+      );
+    }
+    await client.query('COMMIT');
+  } catch (err) {
+    await client.query('ROLLBACK');
+    throw err;
+  } finally {
+    client.release();
+  }
+  return relatorio;
+}
+
+module.exports = { listTitulosParaNota, vincular, desvincular, documentoEmissorDaChave, vincularAutomaticamente };
