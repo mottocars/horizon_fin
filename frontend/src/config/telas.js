@@ -20,6 +20,7 @@ export const TELAS_SISTEMA = {
   '/cadastros/planos-financeiros': { title: 'Planos Financeiros', subtitle: 'Cadastros — Planos Financeiros' },
   '/cadastros/contas-bancarias': { title: 'Contas Bancárias', subtitle: 'Cadastros — Contas Bancárias' },
   '/integracoes/portal-das-construtoras': { title: 'Portal das Construtoras', subtitle: 'Integrações — Portal das Construtoras' },
+  '/integracoes/monitor': { title: 'Monitor de Integrações', subtitle: 'Integrações — Monitor de Integrações' },
   '/integracoes/sienge': { title: 'Sienge', subtitle: 'Integrações — Sienge' },
   '/integracoes/prevision': { title: 'Prevision', subtitle: 'Integrações — Prevision' },
   '/integracoes/construtor-de-vendas': { title: 'Construtor de Vendas', subtitle: 'Integrações — Construtor de Vendas' },

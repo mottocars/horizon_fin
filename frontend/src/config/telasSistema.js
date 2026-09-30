@@ -33,6 +33,7 @@ export const TELAS_SISTEMA = [
   {
     grupo: 'Integrações',
     telas: [
+      { codigo: '/integracoes/monitor', label: 'Monitor de Integrações' },
       { codigo: '/integracoes/portal-das-construtoras', label: 'Portal das Construtoras' },
       { codigo: '/integracoes/prevision', label: 'Prevision' },
       { codigo: '/integracoes/sienge', label: 'Sienge' },

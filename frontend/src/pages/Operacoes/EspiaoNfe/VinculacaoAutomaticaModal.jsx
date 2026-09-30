@@ -171,7 +171,7 @@ export default function VinculacaoAutomaticaModal({ open, empresaId, nomeEmpresa
               </p>
             )}
             <div className="space-y-2">
-              {job.etapas.map((etapa) => (
+              {(job.etapas || []).map((etapa) => (
                 <LinhaEtapa key={etapa.chave} {...etapa} />
               ))}
             </div>

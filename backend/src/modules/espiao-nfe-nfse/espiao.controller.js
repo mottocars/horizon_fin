@@ -2,7 +2,7 @@ const { z } = require('zod');
 const service = require('./espiao.service');
 const pdfService = require('./pdf.service');
 const vinculoService = require('./vinculo.service');
-const vinculacaoAutomatica = require('./vinculacaoAutomatica');
+const monitorExecutor = require('../monitor-integracoes/executor');
 
 function badRequest(message) {
   const err = new Error(message);
@@ -187,11 +187,14 @@ async function salvarConfiguracoes(req, res, next) {
   }
 }
 
-// ── Vinculação automática (ver vinculacaoAutomatica.js) ───────────────────
+// ── Vinculação automática — botão da tela do Espião ────────────────────────
+// Executada pelo Monitor de Integrações (rotina 'espiao_vinculacao'), o mesmo
+// executor do agendamento — assim manual e agendada nunca rodam juntas e as
+// duas aparecem no histórico do monitor. Resposta: { job } com o log por etapa.
 
 async function getVinculacaoAutomatica(req, res, next) {
   try {
-    res.json(await vinculacaoAutomatica.getStatus(req.params.empresaId));
+    res.json({ job: await monitorExecutor.getExecucaoAtualOuUltima(req.params.empresaId, 'espiao_vinculacao') });
   } catch (err) {
     next(err);
   }
@@ -199,28 +202,12 @@ async function getVinculacaoAutomatica(req, res, next) {
 
 async function iniciarVinculacaoAutomatica(req, res, next) {
   try {
-    vinculacaoAutomatica.iniciar(req.params.empresaId, { origem: 'manual', usuarioId: req.user.id });
-    res.status(202).json(await vinculacaoAutomatica.getStatus(req.params.empresaId));
+    const job = await monitorExecutor.iniciar(req.params.empresaId, 'espiao_vinculacao', {
+      origem: 'manual',
+      usuarioId: req.user.id,
+    });
+    res.status(202).json({ job });
   } catch (err) {
-    next(err);
-  }
-}
-
-const horarioVinculacaoSchema = z.object({
-  // "HH:MM" ou null (sem rotina diária).
-  horario: z
-    .string()
-    .regex(/^([01]\d|2[0-3]):[0-5]\d$/, 'Informe um horário válido (HH:MM).')
-    .nullable(),
-});
-
-async function salvarHorarioVinculacao(req, res, next) {
-  try {
-    const { horario } = horarioVinculacaoSchema.parse(req.body);
-    await vinculacaoAutomatica.salvarHorario(req.params.empresaId, horario);
-    res.json(await vinculacaoAutomatica.getStatus(req.params.empresaId));
-  } catch (err) {
-    if (err.issues) return next(badRequest(err.issues[0].message));
     next(err);
   }
 }
@@ -390,7 +377,6 @@ module.exports = {
   desvincular,
   getVinculacaoAutomatica,
   iniciarVinculacaoAutomatica,
-  salvarHorarioVinculacao,
   inativar,
   reativar,
   declararCiencia,

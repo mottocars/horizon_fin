@@ -20,6 +20,7 @@ import {
   ReceiptText,
   FileBarChart,
   FileClock,
+  MonitorCog,
   Activity,
   BarChart3,
   Database,
@@ -68,6 +69,7 @@ const menuItems = [
     icon: Plug,
     basePath: '/integracoes',
     children: [
+      { label: 'Monitor de Integrações', to: '/integracoes/monitor', icon: MonitorCog },
       { label: 'Portal das Construtoras', to: '/integracoes/portal-das-construtoras', image: iconPortalConstrutoras },
       { label: 'Prevision', to: '/integracoes/prevision', image: iconPrevision },
       { label: 'Sienge', to: '/integracoes/sienge', image: iconSienge },

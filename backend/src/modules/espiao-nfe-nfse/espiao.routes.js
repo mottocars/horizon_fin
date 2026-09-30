@@ -14,7 +14,6 @@ router.get('/:empresaId/agendamento', controller.getAgendamento);
 router.put('/:empresaId/agendamento', controller.salvarAgendamento);
 router.get('/:empresaId/vinculacao-automatica', controller.getVinculacaoAutomatica);
 router.post('/:empresaId/vinculacao-automatica', controller.iniciarVinculacaoAutomatica);
-router.put('/:empresaId/vinculacao-automatica/horario', controller.salvarHorarioVinculacao);
 router.get('/:empresaId/configuracoes', controller.getConfiguracoes);
 router.put('/:empresaId/configuracoes', controller.salvarConfiguracoes);
 router.post('/certificados/:certificadoId/consultar', controller.consultarCertificado);

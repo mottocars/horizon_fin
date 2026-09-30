@@ -1453,19 +1453,44 @@ CREATE TABLE espiao_notas_vinculos (
     UNIQUE (empresa_id, sienge_titulo_id)
 );
 
--- Varredura de vínculo automático nota ↔ título do contas a pagar, por
--- empresa (ver espiao-nfe-nfse/vinculacaoAutomatica.js): `horario` = hora do
--- dia (Brasília) em que a rotina diária roda (NULL = sem rotina diária);
--- ultima_agendada_em evita rodar 2x no mesmo dia; ultima_execucao_* e
--- ultimo_resultado = última varredura (manual ou agendada), pra tela mostrar.
-CREATE TABLE espiao_vinculacao_automatica (
-    empresa_id              INTEGER PRIMARY KEY REFERENCES empresas(id) ON DELETE CASCADE,
-    horario                 TIME,
-    ultima_agendada_em      TIMESTAMPTZ,
-    ultima_execucao_em      TIMESTAMPTZ,
-    ultima_execucao_origem  VARCHAR(10),
-    ultimo_resultado        JSONB
+-- Monitor de Integrações (Integrações > Monitor de Integrações) — agenda e
+-- executa as atualizações do sistema por empresa (ver
+-- backend/src/modules/monitor-integracoes/rotinas.js pro catálogo de rotinas:
+-- vinculação do Espião, contratos/reservas de Repasses CEF, base/clientes/
+-- clusters da Gestão de Cobranças). Horário sempre de Brasília; frequência
+-- diária, semanal (dia_semana 0=domingo..6=sábado) ou mensal (dia_mes; num
+-- mês mais curto roda no último dia). ultima_agendada_em evita disparar 2x
+-- no mesmo dia. Datas gravadas pelo relógio da aplicação (ver executor.js).
+CREATE TABLE monitor_integracoes_agendamentos (
+    empresa_id          INTEGER NOT NULL REFERENCES empresas(id) ON DELETE CASCADE,
+    rotina              VARCHAR(40) NOT NULL,
+    ativo               BOOLEAN NOT NULL DEFAULT TRUE,
+    frequencia          VARCHAR(10) NOT NULL CHECK (frequencia IN ('diaria', 'semanal', 'mensal')),
+    horario             TIME NOT NULL,
+    dia_semana          SMALLINT CHECK (dia_semana BETWEEN 0 AND 6),
+    dia_mes             SMALLINT CHECK (dia_mes BETWEEN 1 AND 31),
+    ultima_agendada_em  TIMESTAMPTZ,
+    atualizado_por      INTEGER REFERENCES usuarios(id) ON DELETE SET NULL,
+    atualizado_em       TIMESTAMPTZ,
+    PRIMARY KEY (empresa_id, rotina)
 );
+
+-- Histórico de execuções do monitor (manuais e agendadas). status:
+-- executando | sucesso | erro | interrompida (servidor reiniciado no meio).
+CREATE TABLE monitor_integracoes_execucoes (
+    id             SERIAL PRIMARY KEY,
+    empresa_id     INTEGER NOT NULL REFERENCES empresas(id) ON DELETE CASCADE,
+    rotina         VARCHAR(40) NOT NULL,
+    origem         VARCHAR(10) NOT NULL,
+    status         VARCHAR(12) NOT NULL,
+    iniciado_em    TIMESTAMPTZ NOT NULL,
+    finalizado_em  TIMESTAMPTZ,
+    resumo         TEXT,
+    erro           TEXT,
+    usuario_id     INTEGER REFERENCES usuarios(id) ON DELETE SET NULL
+);
+
+CREATE INDEX idx_monitor_execucoes_empresa_rotina ON monitor_integracoes_execucoes (empresa_id, rotina, iniciado_em DESC);
 
 -- Cache dos credores (fornecedores) do Sienge — public/api/v1/creditors/{id}
 -- só devolve 1 credor por chamada, e a janela de vínculo do Espião precisa do

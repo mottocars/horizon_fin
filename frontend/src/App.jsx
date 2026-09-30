@@ -10,6 +10,7 @@ import EmpresasList from './pages/Empresas/EmpresasList';
 import EmpresaNova from './pages/Empresas/EmpresaNova';
 import EmpresaDetalhe from './pages/Empresas/EmpresaDetalhe';
 import SiengeList from './pages/Integracoes/Sienge/SiengeList';
+import MonitorIntegracoesPage from './pages/Integracoes/MonitorIntegracoes/MonitorIntegracoesPage';
 import SiengeForm from './pages/Integracoes/Sienge/SiengeForm';
 import ZapiList from './pages/Integracoes/Zapi/ZapiList';
 import ZapiForm from './pages/Integracoes/Zapi/ZapiForm';
@@ -126,6 +127,7 @@ export default function App() {
               path="/integracoes/portal-das-construtoras"
               element={<PortalConstrutorasPage />}
             />
+            <Route path="/integracoes/monitor" element={<MonitorIntegracoesPage />} />
             <Route path="/integracoes/sienge" element={<SiengeList />} />
             <Route path="/integracoes/sienge/nova" element={<SiengeForm />} />
             <Route path="/integracoes/sienge/:id" element={<SiengeForm />} />

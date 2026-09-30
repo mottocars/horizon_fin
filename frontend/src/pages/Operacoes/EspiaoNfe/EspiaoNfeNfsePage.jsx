@@ -1,4 +1,5 @@
 import { useEffect, useMemo, useRef, useState } from 'react';
+import { Link } from 'react-router-dom';
 import {
   Download,
   FileText,
@@ -54,8 +55,6 @@ import {
   inativarNotasEspiao,
   reativarNotasEspiao,
   listEventosNotaEspiao,
-  getVinculacaoAutomaticaEspiao,
-  salvarHorarioVinculacaoEspiao,
 } from '../../../api/espiao.api';
 
 const INTERVALOS = [
@@ -637,10 +636,6 @@ export default function EspiaoNfeNfsePage() {
   const [modalAgendamento, setModalAgendamento] = useState(false);
   const [intervaloSelecionado, setIntervaloSelecionado] = useState(1);
   const [salvandoAgendamento, setSalvandoAgendamento] = useState(false);
-  // Rotina diária de vínculo automático (mesma janela de Agendar consulta):
-  // horário 'HH:MM' ('' = sem rotina) + resumo da última varredura.
-  const [horarioVinculacao, setHorarioVinculacao] = useState('');
-  const [ultimaVinculacao, setUltimaVinculacao] = useState(null);
   // Janela de log do botão "Vincular agora" (ver VinculacaoAutomaticaModal).
   const [modalVinculacao, setModalVinculacao] = useState(false);
 
@@ -919,29 +914,18 @@ export default function EspiaoNfeNfsePage() {
   async function abrirAgendamento() {
     setModalAgendamento(true);
     setIntervaloSelecionado(1);
-    setHorarioVinculacao('');
-    setUltimaVinculacao(null);
-    const [consulta, vinculacao] = await Promise.allSettled([
-      getAgendamentoEspiao(empresaId),
-      getVinculacaoAutomaticaEspiao(empresaId),
-    ]);
-    // Sem agendamento salvo ainda — mantém o padrão de 1h / sem rotina.
-    if (consulta.status === 'fulfilled' && consulta.value?.intervalo_horas) {
-      setIntervaloSelecionado(consulta.value.intervalo_horas);
-    }
-    if (vinculacao.status === 'fulfilled') {
-      setHorarioVinculacao(vinculacao.value.agendamento.horario || '');
-      setUltimaVinculacao(vinculacao.value.agendamento.ultimaExecucaoEm ? vinculacao.value.agendamento : null);
+    try {
+      const atual = await getAgendamentoEspiao(empresaId);
+      if (atual?.intervalo_horas) setIntervaloSelecionado(atual.intervalo_horas);
+    } catch {
+      // sem agendamento salvo ainda — mantém o padrão de 1h
     }
   }
 
   async function handleSalvarAgendamento() {
     setSalvandoAgendamento(true);
     try {
-      await Promise.all([
-        salvarAgendamentoEspiao(empresaId, intervaloSelecionado),
-        salvarHorarioVinculacaoEspiao(empresaId, horarioVinculacao || null),
-      ]);
+      await salvarAgendamentoEspiao(empresaId, intervaloSelecionado);
       setModalAgendamento(false);
     } catch (err) {
       await alert({
@@ -1679,45 +1663,15 @@ export default function EspiaoNfeNfsePage() {
             />
           </div>
 
-          {/* Rotina diária de vínculo automático nota ↔ título do contas a
-              pagar (ver vinculacaoAutomatica.js no backend). */}
-          <div className="border-t border-gray-100 pt-4">
-            <p className="text-sm font-medium text-gray-700">Vínculo automático com o contas a pagar</p>
-            <p className="mt-1 text-xs leading-relaxed text-gray-500">
-              Todo dia, no horário escolhido, o sistema procura no Sienge os títulos das notas ainda sem vínculo
-              (desde a primeira delas) e vincula as que conferem em CNPJ, data e nº. Deixe em branco para não rodar.
-            </p>
-            <div className="mt-2 flex items-center gap-2">
-              <input
-                type="time"
-                value={horarioVinculacao}
-                onChange={(e) => setHorarioVinculacao(e.target.value)}
-                disabled={salvandoAgendamento}
-                className={`w-32 rounded-lg border px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-primary-100 ${
-                  horarioVinculacao ? 'border-primary-100 bg-primary-50 text-gray-900' : 'border-gray-200 text-gray-500'
-                }`}
-              />
-              {horarioVinculacao ? (
-                <button
-                  type="button"
-                  onClick={() => setHorarioVinculacao('')}
-                  className="text-xs text-gray-400 underline decoration-dotted hover:text-gray-600"
-                >
-                  Desativar rotina
-                </button>
-              ) : (
-                <span className="text-xs text-gray-400">Sem rotina diária</span>
-              )}
-            </div>
-            {ultimaVinculacao && (
-              <p className="mt-2 text-xs text-gray-400">
-                Última varredura ({ultimaVinculacao.ultimaExecucaoOrigem === 'agendada' ? 'agendada' : 'manual'}):{' '}
-                {new Date(ultimaVinculacao.ultimaExecucaoEm).toLocaleString('pt-BR', { dateStyle: 'short', timeStyle: 'short' })}
-                {ultimaVinculacao.ultimoResultado &&
-                  ` · ${ultimaVinculacao.ultimoResultado.vinculados} nota(s) vinculada(s)`}
-              </p>
-            )}
-          </div>
+          {/* O vínculo automático com o contas a pagar é agendado no Monitor
+              de Integrações (junto com as demais atualizações do sistema). */}
+          <p className="rounded-lg bg-gray-50 px-3 py-2 text-xs leading-relaxed text-gray-500">
+            A vinculação automática com o contas a pagar agora é agendada em{' '}
+            <Link to="/integracoes/monitor" className="font-medium text-primary-600 hover:underline">
+              Integrações › Monitor de Integrações
+            </Link>
+            , junto com as demais atualizações do sistema.
+          </p>
 
           <div className="flex justify-end gap-2 pt-2">
             <Button

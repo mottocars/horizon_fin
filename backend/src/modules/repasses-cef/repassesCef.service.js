@@ -95,7 +95,9 @@ async function inserirReserva(client, empresaId, campos) {
 // Puxa TODAS as reservas da API do Construtor de Vendas (CVCRM) pra essa
 // empresa e substitui completamente o que já estava salvo — apaga tudo e
 // reinsere, pra nunca duplicar.
-async function sincronizarReservas(empresaId) {
+// `onProgress` (opcional) recebe o mesmo { paginaAtual, totalPaginas } — usado
+// pelo Monitor de Integrações (monitor-integracoes/rotinas.js).
+async function sincronizarReservas(empresaId, onProgress) {
   const credenciais = await construtorVendasService.getCredenciaisAtivas(empresaId);
   if (!credenciais) {
     throw badRequest('Esta empresa não possui uma integração Construtor de Vendas ativa configurada.');
@@ -107,7 +109,10 @@ async function sincronizarReservas(empresaId) {
       tenant: credenciais.tenant,
       email: credenciais.email,
       token,
-      onProgress: (p) => progresso.set(empresaId, 'cvcrm', p),
+      onProgress: (p) => {
+        progresso.set(empresaId, 'cvcrm', p);
+        onProgress?.(p);
+      },
     });
 
     const client = await pool.connect();
@@ -205,7 +210,8 @@ async function inserirContrato(client, empresaId, reg) {
 // empresa e substitui completamente o que já estava salvo — mesmo critério
 // de sincronizarReservas: apaga tudo (o CASCADE já limpa os compradores) e
 // reinsere, pra nunca duplicar.
-async function sincronizarContratos(empresaId) {
+// `onProgress` (opcional) — ver sincronizarReservas.
+async function sincronizarContratos(empresaId, onProgress) {
   const credenciais = await getCredenciaisSiengeAtivas(empresaId);
   if (!credenciais) {
     throw badRequest('Esta empresa não possui uma integração Sienge ativa configurada.');
@@ -217,7 +223,10 @@ async function sincronizarContratos(empresaId) {
       tenant: credenciais.tenant,
       username: credenciais.username,
       password,
-      onProgress: (p) => progresso.set(empresaId, 'sienge', p),
+      onProgress: (p) => {
+        progresso.set(empresaId, 'sienge', p);
+        onProgress?.(p);
+      },
     });
 
     const client = await pool.connect();
