@@ -91,7 +91,8 @@ async function buscarTodasActions(token) {
 // - "VGV Masa": a fatia do VGV que cabe à Masa como parceira (client_partnerships) — só a
 //   parceria da própria Masa (nome_parceiro contém "MASA") e só a linha do empreendimento em si
 //   (produto_relacionado_id nulo — parcerias de um produto específico ficam de fora, pedido do
-//   usuário). Também 1:1 (confirmado — sem duplicidade).
+//   usuário). Também 1:1 (confirmado — sem duplicidade). "% Masa" é o próprio
+//   percentual_receitas_totais usado nessa conta (mostrado na coluna ao lado de Empreendimento).
 // - "Horas Trabalhadas": soma de todo `duration` (segundos) de time_logs pro project_id daquele
 //   empreendimento (client_id) — TODAS as tarefas já registradas, sem filtrar por micro etapa
 //   (pedido explícito do usuário, pra não depender de casar nome de tarefa com task_type).
@@ -117,6 +118,7 @@ async function buscarDadosTimeTracker() {
   const duracaoPorCliente = new Map(); // client_id -> dias desde a data_assinatura
   const produtoPorCliente = new Map(); // client_id -> { areaM2, unidades, vgvGeral }
   const vgvMasaPorCliente = new Map(); // client_id -> vgv_masa
+  const percentualMasaPorCliente = new Map(); // client_id -> percentual_receitas_totais
   const segundosTrabalhadosPorCliente = new Map(); // client_id -> segundos somados (todo o time_logs)
   const classificacaoPorCliente = new Map(); // client_id -> nome da classificação
   try {
@@ -145,6 +147,7 @@ async function buscarDadosTimeTracker() {
     const parcerias = await client.query(`
       select
         cp.client_id,
+        cp.percentual_receitas_totais,
         vgv * (cp.percentual_receitas_totais / 100) as vgv_masa
       from client_partnerships cp
       left join client_related_products crp on crp.product_client_id = cp.client_id
@@ -153,6 +156,10 @@ async function buscarDadosTimeTracker() {
     `);
     for (const row of parcerias.rows) {
       vgvMasaPorCliente.set(row.client_id, row.vgv_masa != null ? Number(row.vgv_masa) : null);
+      percentualMasaPorCliente.set(
+        row.client_id,
+        row.percentual_receitas_totais != null ? Number(row.percentual_receitas_totais) : null
+      );
     }
 
     const logs = await client.query(`
@@ -180,7 +187,14 @@ async function buscarDadosTimeTracker() {
   } finally {
     await client.end().catch(() => {});
   }
-  return { duracaoPorCliente, produtoPorCliente, vgvMasaPorCliente, segundosTrabalhadosPorCliente, classificacaoPorCliente };
+  return {
+    duracaoPorCliente,
+    produtoPorCliente,
+    vgvMasaPorCliente,
+    percentualMasaPorCliente,
+    segundosTrabalhadosPorCliente,
+    classificacaoPorCliente,
+  };
 }
 
 // "Contas Pagas" — soma das despesas (cabecalho_evento_main.type = 'EXPENSE') rateadas por
@@ -292,7 +306,14 @@ async function listMatriz() {
     clientsRaw,
     taskTypesRaw,
     actions,
-    { duracaoPorCliente, produtoPorCliente, vgvMasaPorCliente, segundosTrabalhadosPorCliente, classificacaoPorCliente },
+    {
+      duracaoPorCliente,
+      produtoPorCliente,
+      vgvMasaPorCliente,
+      percentualMasaPorCliente,
+      segundosTrabalhadosPorCliente,
+      classificacaoPorCliente,
+    },
     contasPagasPorCliente,
   ] = await Promise.all([
     buscarJson(ACTIOON_ACTION_TYPES_URL, token, 'Não foi possível buscar as fases na Actioon.'),
@@ -341,6 +362,7 @@ async function listMatriz() {
       unidades: produto?.unidades ?? null,
       vgvGeral: produto?.vgvGeral ?? null,
       vgvMasa: vgvMasaPorCliente.get(clienteId) ?? null,
+      percentualMasa: percentualMasaPorCliente.get(clienteId) ?? null,
       segundosTrabalhados: segundosTrabalhadosPorCliente.get(clienteId) ?? null,
       contasPagas: contasPagasPorCliente.get(clienteId) ?? null,
       classificacao: classificacaoPorCliente.get(clienteId) ?? null,
@@ -366,6 +388,7 @@ async function listMatriz() {
           unidades,
           vgvGeral,
           vgvMasa,
+          percentualMasa,
           segundosTrabalhados,
           contasPagas,
           classificacao,
@@ -378,6 +401,7 @@ async function listMatriz() {
           unidades,
           vgvGeral,
           vgvMasa,
+          percentualMasa,
           segundosTrabalhados,
           contasPagas,
           classificacao,

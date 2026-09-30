@@ -18,6 +18,35 @@ function formatarHoras(segundos) {
   return `${horas.toLocaleString('pt-BR', { minimumFractionDigits: 1, maximumFractionDigits: 1 })} h`;
 }
 
+function formatarPercentual(valor) {
+  return `${(Number(valor) || 0).toLocaleString('pt-BR', { minimumFractionDigits: 1, maximumFractionDigits: 1 })}%`;
+}
+
+// Duração em texto (pedido do usuário, no lugar de só "N dias"): menos de 1 mês mostra só dias;
+// de 1 mês até 1 ano mostra mês e dia; a partir de 1 ano mostra ano e mês (sem o dia, que perde
+// relevância nessa escala). Mês/ano são aproximados (30/365 dias) — não temos a data de
+// assinatura no front, só a contagem de dias já calculada pelo backend.
+function formatarDuracao(dias) {
+  if (dias == null) return null;
+  const unidade = (valor, singular, plural) => `${valor} ${valor === 1 ? singular : plural}`;
+
+  if (dias < 30) {
+    return unidade(dias, 'dia', 'dias');
+  }
+  if (dias < 365) {
+    const meses = Math.floor(dias / 30);
+    const diasRestantes = dias % 30;
+    return diasRestantes > 0
+      ? `${unidade(meses, 'mês', 'meses')} e ${unidade(diasRestantes, 'dia', 'dias')}`
+      : unidade(meses, 'mês', 'meses');
+  }
+  const anos = Math.floor(dias / 365);
+  const mesesRestantes = Math.floor((dias % 365) / 30);
+  return mesesRestantes > 0
+    ? `${unidade(anos, 'ano', 'anos')} e ${unidade(mesesRestantes, 'mês', 'meses')}`
+    : unidade(anos, 'ano', 'anos');
+}
+
 // Cor por classificação do empreendimento (client_related_products.classificacao_id, join com
 // classifications, no Time Tracker — ver relatorioMasa.service.js::buscarDadosTimeTracker).
 // `swatch` = cor cheia (usada só na bolinha da legenda); `fundo` = versão clara, aplicada como
@@ -360,12 +389,14 @@ export default function EmpreendimentosMasaPage() {
   }
 
   // Exporta a matriz JÁ FILTRADA pra Excel, de forma "empilhada" — 1 linha por empreendimento
-  // com todas as colunas preenchidas (Etapa Atual/Micro Etapa Atual/Empreendimento repetidos em
-  // cada linha), bem diferente da grade visual da tela (que usa rowSpan pra não repetir).
-  // Termina com uma linha de Total igual à do rodapé. Números saem como número de verdade (não
-  // string formatada) com um formato de Excel aplicado por cima — assim o arquivo mostra
-  // "1.234,56" pro usuário e ainda dá pra somar/filtrar as colunas dentro do próprio Excel. Gera
-  // o .xlsx inteiramente no navegador (a matriz já filtrada já está em memória, sem precisar
+  // com todas as colunas preenchidas (Fase/Tarefa/Empreendimento repetidos em cada linha), bem
+  // diferente da grade visual da tela (que usa rowSpan pra não repetir). Termina com uma linha de
+  // Total igual à do rodapé. Números saem como número de verdade (não string formatada) com um
+  // formato de Excel aplicado por cima — assim o arquivo mostra "1.234,56" pro usuário e ainda dá
+  // pra somar/filtrar as colunas dentro do próprio Excel. Duração continua em dias (não no
+  // formato ano/mês/dia da tela) de propósito, pra sobrar uma coluna numérica somável/filtrável
+  // no Excel. % Masa não entra na linha de Total (percentual não é uma grandeza que se soma).
+  // Gera o .xlsx inteiramente no navegador (a matriz já filtrada já está em memória, sem precisar
   // buscar nada de novo no backend) — biblioteca carregada sob demanda (só quando o usuário
   // realmente exporta) pra não pesar no carregamento da página.
   async function handleExportar() {
@@ -373,9 +404,10 @@ export default function EmpreendimentosMasaPage() {
     const XLSX = await import('xlsx');
     const linhas = matrizFiltrada.flatMap((fase) =>
       fase.empreendimentos.map((emp) => ({
-        'Etapa Atual': fase.name,
-        'Micro Etapa Atual': emp.microEtapaAtual || '',
+        Fase: fase.name,
+        Tarefa: emp.microEtapaAtual || '',
         Empreendimento: emp.name,
+        '% Masa': emp.percentualMasa ?? '',
         'Duração (dias)': emp.duracaoDias ?? '',
         'M²': emp.areaM2 ?? '',
         Unidades: emp.unidades ?? '',
@@ -389,9 +421,10 @@ export default function EmpreendimentosMasaPage() {
     // ruído tipo 13781669.180000002, que não existe nos valores de origem.
     const arredondar = (valor) => Math.round(valor * 100) / 100;
     linhas.push({
-      'Etapa Atual': 'Total',
-      'Micro Etapa Atual': '',
+      Fase: 'Total',
+      Tarefa: '',
       Empreendimento: totais.qtdEmpreendimentos,
+      '% Masa': '',
       'Duração (dias)': arredondar(totais.duracaoDias),
       'M²': arredondar(totais.areaM2),
       Unidades: totais.unidades,
@@ -401,17 +434,18 @@ export default function EmpreendimentosMasaPage() {
       'Contas Pagas': arredondar(totais.contasPagas),
     });
     const planilha = XLSX.utils.json_to_sheet(linhas);
-    // Índice das colunas (0-based) na mesma ordem do objeto acima — Etapa Atual=0, Micro Etapa
-    // Atual=1, Empreendimento=2, Duração=3, M²=4, Unidades=5, VGV Geral=6, VGV Masa=7, Horas
-    // Trabalhadas=8, Contas Pagas=9.
+    // Índice das colunas (0-based) na mesma ordem do objeto acima — Fase=0, Tarefa=1,
+    // Empreendimento=2, % Masa=3, Duração=4, M²=5, Unidades=6, VGV Geral=7, VGV Masa=8, Horas
+    // Trabalhadas=9, Contas Pagas=10.
     aplicarFormatoNumerico(planilha, XLSX, 2, '#,##0');
-    aplicarFormatoNumerico(planilha, XLSX, 3, '#,##0');
-    aplicarFormatoNumerico(planilha, XLSX, 4, '#,##0.00');
-    aplicarFormatoNumerico(planilha, XLSX, 5, '#,##0');
-    aplicarFormatoNumerico(planilha, XLSX, 6, '"R$" #,##0.00');
+    aplicarFormatoNumerico(planilha, XLSX, 3, '0.0"%"');
+    aplicarFormatoNumerico(planilha, XLSX, 4, '#,##0');
+    aplicarFormatoNumerico(planilha, XLSX, 5, '#,##0.00');
+    aplicarFormatoNumerico(planilha, XLSX, 6, '#,##0');
     aplicarFormatoNumerico(planilha, XLSX, 7, '"R$" #,##0.00');
-    aplicarFormatoNumerico(planilha, XLSX, 8, '#,##0.0" h"');
-    aplicarFormatoNumerico(planilha, XLSX, 9, '"R$" #,##0.00');
+    aplicarFormatoNumerico(planilha, XLSX, 8, '"R$" #,##0.00');
+    aplicarFormatoNumerico(planilha, XLSX, 9, '#,##0.0" h"');
+    aplicarFormatoNumerico(planilha, XLSX, 10, '"R$" #,##0.00');
     const livro = XLSX.utils.book_new();
     XLSX.utils.book_append_sheet(livro, planilha, 'Empreendimentos Masa');
     XLSX.writeFile(livro, `empreendimentos-masa_${new Date().toISOString().slice(0, 10)}.xlsx`);
@@ -486,10 +520,10 @@ export default function EmpreendimentosMasaPage() {
                         valor={filtroEtapaAtual}
                         onChange={setFiltroEtapaAtual}
                         opcoes={opcoesEtapaAtual}
-                        label="etapa atual"
+                        label="fase"
                         colunaRef={thEtapaAtualRef}
                       />
-                      Etapa Atual
+                      Fase
                     </span>
                   </th>
                   <th
@@ -501,10 +535,10 @@ export default function EmpreendimentosMasaPage() {
                         valor={filtroMicroEtapa}
                         onChange={setFiltroMicroEtapa}
                         opcoes={opcoesMicroEtapa}
-                        label="micro etapa atual"
+                        label="tarefa"
                         colunaRef={thMicroEtapaRef}
                       />
-                      Micro Etapa Atual
+                      Tarefa
                     </span>
                   </th>
                   <th
@@ -521,6 +555,9 @@ export default function EmpreendimentosMasaPage() {
                       />
                       Empreendimento
                     </span>
+                  </th>
+                  <th className="sticky -top-6 z-20 w-24 border-b-2 border-b-primary-500 border-l border-l-primary-100 bg-primary-50 px-2 py-2.5 text-center font-medium">
+                    % Masa
                   </th>
                   <th className="sticky -top-6 z-20 w-28 border-b-2 border-b-primary-500 border-l border-l-primary-100 bg-primary-50 px-2 py-2.5 text-center font-medium">
                     Duração
@@ -548,10 +585,10 @@ export default function EmpreendimentosMasaPage() {
               <tbody>
                 {semResultadoFiltro && (
                   <tr>
-                    <td colSpan={10} className="py-12 text-center text-sm text-gray-500">
+                    <td colSpan={11} className="py-12 text-center text-sm text-gray-500">
                       <p className="font-medium text-gray-700">Nenhuma linha corresponde aos filtros selecionados.</p>
                       <p className="mx-auto mt-1 max-w-sm text-xs text-gray-400">
-                        Ajuste os filtros de Etapa Atual, Empreendimento, Micro Etapa Atual ou Classificação pra ver as linhas de novo.
+                        Ajuste os filtros de Fase, Empreendimento, Tarefa ou Classificação pra ver as linhas de novo.
                       </p>
                     </td>
                   </tr>
@@ -587,8 +624,9 @@ export default function EmpreendimentosMasaPage() {
                         <td className="border-b-2 border-b-gray-400 border-l border-l-gray-100 py-1.5 pl-4 text-xs tabular-nums text-gray-700">
                           {resumo.qtdEmpreendimentos}
                         </td>
+                        <td className="border-b-2 border-b-gray-400 border-l border-l-gray-100 py-1.5 pl-4 text-xs tabular-nums text-gray-300">—</td>
                         <td className="border-b-2 border-b-gray-400 border-l border-l-gray-100 py-1.5 pl-4 text-xs tabular-nums text-gray-700">
-                          {`${resumo.duracaoDias.toLocaleString('pt-BR')} dias`}
+                          {formatarDuracao(resumo.duracaoDias)}
                         </td>
                         <td className="border-b-2 border-b-gray-400 border-l border-l-gray-100 py-1.5 pl-4 text-xs tabular-nums text-gray-700">
                           {resumo.areaM2.toLocaleString('pt-BR')}
@@ -678,8 +716,9 @@ export default function EmpreendimentosMasaPage() {
                               <td className={`${bordaInferior} border-l border-l-gray-100 py-1.5 pl-4 text-xs tabular-nums text-gray-700`}>
                                 {linha.grupo.empreendimentos.length}
                               </td>
+                              <td className={`${bordaInferior} border-l border-l-gray-100 py-1.5 pl-4 text-xs tabular-nums text-gray-300`}>—</td>
                               <td className={`${bordaInferior} border-l border-l-gray-100 py-1.5 pl-4 text-xs tabular-nums text-gray-700`}>
-                                {`${resumoGrupo.duracaoDias.toLocaleString('pt-BR')} dias`}
+                                {formatarDuracao(resumoGrupo.duracaoDias)}
                               </td>
                               <td className={`${bordaInferior} border-l border-l-gray-100 py-1.5 pl-4 text-xs tabular-nums text-gray-700`}>
                                 {resumoGrupo.areaM2.toLocaleString('pt-BR')}
@@ -749,8 +788,17 @@ export default function EmpreendimentosMasaPage() {
                             <td
                               className={`${bordaInferior} border-l border-l-gray-100 py-1.5 pl-4 text-xs tabular-nums text-gray-700 ${corFundo}`}
                             >
+                              {empreendimento?.percentualMasa != null ? (
+                                formatarPercentual(empreendimento.percentualMasa)
+                              ) : (
+                                <span className="text-gray-300">—</span>
+                              )}
+                            </td>
+                            <td
+                              className={`${bordaInferior} border-l border-l-gray-100 py-1.5 pl-4 text-xs tabular-nums text-gray-700 ${corFundo}`}
+                            >
                               {empreendimento?.duracaoDias != null ? (
-                                `${empreendimento.duracaoDias.toLocaleString('pt-BR')} dias`
+                                formatarDuracao(empreendimento.duracaoDias)
                               ) : (
                                 <span className="text-gray-300">—</span>
                               )}
@@ -834,8 +882,11 @@ export default function EmpreendimentosMasaPage() {
                   <td className="sticky -bottom-6 z-10 border-t-2 border-t-primary-500 border-l border-l-primary-100 bg-primary-50 py-2.5 pl-4 text-xs tabular-nums">
                     {totais.qtdEmpreendimentos}
                   </td>
+                  <td className="sticky -bottom-6 z-10 w-24 border-t-2 border-t-primary-500 border-l border-l-primary-100 bg-primary-50 py-2.5 pl-4 text-xs tabular-nums text-primary-300">
+                    —
+                  </td>
                   <td className="sticky -bottom-6 z-10 w-28 border-t-2 border-t-primary-500 border-l border-l-primary-100 bg-primary-50 py-2.5 pl-4 text-xs tabular-nums">
-                    {`${totais.duracaoDias.toLocaleString('pt-BR')} dias`}
+                    {formatarDuracao(totais.duracaoDias)}
                   </td>
                   <td className="sticky -bottom-6 z-10 w-28 border-t-2 border-t-primary-500 border-l border-l-primary-100 bg-primary-50 py-2.5 pl-4 text-xs tabular-nums">
                     {totais.areaM2.toLocaleString('pt-BR')}
