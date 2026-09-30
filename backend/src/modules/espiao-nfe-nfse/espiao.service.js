@@ -451,6 +451,21 @@ function extrairEventoNfse(xmlBuffer) {
   };
 }
 
+// Valor da nota direto do XML (texto ou Buffer):
+// - NF-e (procNFe e também o resumo resNFe): <vNF>, o total da nota — de
+//   preferência o de <ICMSTot>, que é o total de verdade;
+// - NFS-e nacional: <vServ> (valor do serviço prestado, bruto — o "valor da
+//   nota"); na falta dele, <vLiq> (líquido, depois das retenções).
+function extrairValorNota(tipo, xml) {
+  const texto = Buffer.isBuffer(xml) ? xml.toString('utf-8') : String(xml || '');
+  const bruto =
+    tipo === 'NFSE'
+      ? extrairTagTexto(texto, 'vServ') || extrairTagTexto(texto, 'vLiq')
+      : extrairTagDentroDe(texto, 'ICMSTot', 'vNF') || extrairTagTexto(texto, 'vNF');
+  const valor = Number(bruto);
+  return bruto && Number.isFinite(valor) ? valor : null;
+}
+
 // ────────────────────────────────────────────────────────────────
 // Persistência das notas encontradas
 // ────────────────────────────────────────────────────────────────
@@ -478,9 +493,11 @@ async function salvarNota(
   // abaixo pra criar a 1ª etapa ("Emitida") do histórico só na primeira
   // vez que essa chave aparece, nunca de novo quando um resNFe é
   // substituído pela versão completa da mesma nota.
+  // valor_total: o XML que chega por último (a versão completa, depois do
+  // resumo) é o que vale — por isso EXCLUDED primeiro no COALESCE.
   const { rows } = await pool.query(
-    `INSERT INTO espiao_notas (empresa_id, certificado_id, tipo, chave_acesso, emissor, destinatario, data_emissao, numero_nota, serie_nota, arquivo_armazenado, apenas_resumo)
-     VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11)
+    `INSERT INTO espiao_notas (empresa_id, certificado_id, tipo, chave_acesso, emissor, destinatario, data_emissao, numero_nota, serie_nota, arquivo_armazenado, apenas_resumo, valor_total)
+     VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12)
      ON CONFLICT (empresa_id, chave_acesso) DO UPDATE SET
        emissor = COALESCE(espiao_notas.emissor, EXCLUDED.emissor),
        destinatario = COALESCE(espiao_notas.destinatario, EXCLUDED.destinatario),
@@ -488,9 +505,23 @@ async function salvarNota(
        numero_nota = COALESCE(espiao_notas.numero_nota, EXCLUDED.numero_nota),
        serie_nota = COALESCE(espiao_notas.serie_nota, EXCLUDED.serie_nota),
        arquivo_armazenado = EXCLUDED.arquivo_armazenado,
-       apenas_resumo = EXCLUDED.apenas_resumo
+       apenas_resumo = EXCLUDED.apenas_resumo,
+       valor_total = COALESCE(EXCLUDED.valor_total, espiao_notas.valor_total)
      RETURNING id, (xmax = 0) AS inserted`,
-    [empresaId, certificadoId, tipo, chave, emissor, destinatario, dataEmissao, numero, serie, arquivoArmazenado, apenasResumo]
+    [
+      empresaId,
+      certificadoId,
+      tipo,
+      chave,
+      emissor,
+      destinatario,
+      dataEmissao,
+      numero,
+      serie,
+      arquivoArmazenado,
+      apenasResumo,
+      extrairValorNota(tipo, raw),
+    ]
   );
 
   const notaSalva = rows[0];
@@ -1187,6 +1218,8 @@ async function salvarConfiguracoes(empresaId, { codigoDocumentoNfe, codigoDocume
 }
 
 module.exports = {
+  NOTAS_DIR,
+  extrairValorNota,
   getConfiguracoes,
   salvarConfiguracoes,
   consultarEmpresa,

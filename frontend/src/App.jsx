@@ -46,6 +46,7 @@ import PrimeiroAcesso from './pages/PrimeiroAcesso/PrimeiroAcesso';
 import RepassesCefPage from './pages/Operacoes/RepassesCef/RepassesCefPage';
 import MetricasUsoPage from './pages/Relatorios/MetricasUso/MetricasUsoPage';
 import EmpreendimentosMasaPage from './pages/Relatorios/EmpreendimentosMasa/EmpreendimentosMasaPage';
+import NotasPendentesPage from './pages/Relatorios/NotasPendentes/NotasPendentesPage';
 import GestaoCobrancasPage from './pages/Operacoes/GestaoCobrancas/GestaoCobrancasPage';
 import ClusterClientesList from './pages/Operacoes/GestaoCobrancas/ClustersCobranca/ClusterClientesList';
 import ClienteClusterDetalhe from './pages/Operacoes/GestaoCobrancas/ClustersCobranca/ClienteClusterDetalhe';
@@ -159,6 +160,7 @@ export default function App() {
 
             <Route path="/relatorios/metricas-de-uso" element={<MetricasUsoPage />} />
             <Route path="/relatorios/empreendimentos-masa" element={<EmpreendimentosMasaPage />} />
+            <Route path="/relatorios/notas-pendentes" element={<NotasPendentesPage />} />
           </Route>
 
           <Route path="*" element={<Navigate to="/" replace />} />

@@ -51,6 +51,7 @@ export const TELAS_SISTEMA = [
     telas: [
       { codigo: '/relatorios/metricas-de-uso', label: 'Métricas de Uso' },
       { codigo: '/relatorios/empreendimentos-masa', label: 'Empreendimentos Masa' },
+      { codigo: '/relatorios/notas-pendentes', label: 'NF-e / NFS-e Pendentes' },
     ],
   },
 ];

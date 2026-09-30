@@ -32,6 +32,7 @@ export const TELAS_SISTEMA = {
   '/integracoes/banco-dados': { title: 'Banco de Dados', subtitle: 'Integrações — Banco de Dados' },
   '/relatorios/metricas-de-uso': { title: 'Métricas de Uso', subtitle: 'Relatórios — Métricas de Uso' },
   '/relatorios/empreendimentos-masa': { title: 'Empreendimentos Masa', subtitle: 'Relatórios — Empreendimentos Masa' },
+  '/relatorios/notas-pendentes': { title: 'NF-e / NFS-e Pendentes', subtitle: 'Relatórios — NF-e / NFS-e Pendentes' },
 };
 
 // Acha, entre as chaves de TELAS_SISTEMA, a mais específica (mais longa)

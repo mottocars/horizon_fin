@@ -1332,6 +1332,11 @@ CREATE TABLE espiao_notas (
     -- das posições fixas da própria chave de 44 dígitos.
     numero_nota          VARCHAR(20),
     serie_nota           VARCHAR(10),
+    -- Valor da nota, tirado do XML ao salvar (ver
+    -- espiao.service.js::extrairValorNota): NF-e = <vNF>; NFS-e = <vServ>
+    -- (valor do serviço, bruto), ou <vLiq> na falta dele. Notas antigas
+    -- foram preenchidas por backend/scripts/backfill-valor-notas.js.
+    valor_total          NUMERIC(15, 2),
     arquivo_armazenado   VARCHAR(255),
     -- Atualizada quando chega um evento (resEvento/procEventoNFe da NF-e ou
     -- <evento> da NFS-e) referenciando esta nota — ex. "Cancelamento de

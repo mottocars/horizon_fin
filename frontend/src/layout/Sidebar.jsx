@@ -19,6 +19,7 @@ import {
   Banknote,
   ReceiptText,
   FileBarChart,
+  FileClock,
   Activity,
   BarChart3,
   Database,
@@ -88,6 +89,7 @@ const menuItems = [
     children: [
       { label: 'Métricas de Uso', to: '/relatorios/metricas-de-uso', icon: Activity },
       { label: 'Empreendimentos Masa', to: '/relatorios/empreendimentos-masa', icon: Building2 },
+      { label: 'NF-e / NFS-e Pendentes', to: '/relatorios/notas-pendentes', icon: FileClock },
     ],
   },
 ];

@@ -1,7 +1,8 @@
 import { Fragment, useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { createPortal } from 'react-dom';
-import { Building2, FileDown, Filter, ListFilter, Minus, Plus, TriangleAlert, X } from 'lucide-react';
+import { Building2, FileDown, Filter, Minus, Plus, TriangleAlert, X } from 'lucide-react';
 import SearchableSelect from '../../../components/SearchableSelect';
+import FiltroColuna, { passaNoFiltro, proximoFiltro, valoresDoFiltro } from '../../../components/FiltroColuna';
 import { getMatrizEmpreendimentosMasa } from '../../../api/relatorioMasa.api';
 
 function formatarMoeda(valor) {
@@ -149,25 +150,9 @@ function somarEmpreendimentos(empreendimentos) {
   return soma;
 }
 
-// Filtros multi-seleção da tela (Fase, Tarefa, Empreendimento, Agrupamento) nascem com TODAS as
-// opções marcadas (pedido do usuário: "Selecionar todos" no lugar de "Limpar"). O estado guarda
-// `null` pra "todas marcadas" — ou seja, sem filtro nenhum — em vez da lista inteira: assim quem
-// não tem valor naquela dimensão (ex.: empreendimento sem agrupamento) continua aparecendo
-// enquanto o usuário não restringir nada, e uma opção nova que chegue depois já nasce marcada.
-function valoresDoFiltro(filtro, opcoes) {
-  return filtro ?? opcoes.map((opcao) => opcao.value);
-}
-function proximoFiltro(selecionados, opcoes) {
-  const todas = opcoes.every((opcao) => selecionados.some((v) => String(v) === String(opcao.value)));
-  return todas ? null : selecionados;
-}
 // Valor da opção "Sem Agrupamento" do filtro de Agrupamento — casa com o empreendimento que não
 // tem agrupamento_id (null). Texto fixo, que nunca colide com um id numérico de groupings.
 const SEM_AGRUPAMENTO = 'sem-agrupamento';
-
-function passaNoFiltro(filtro, valor) {
-  return filtro == null || filtro.some((v) => String(v) === String(valor));
-}
 
 // Achata uma fase em linhas de tabela prontas pra renderizar, já carregando tudo que o JSX
 // precisa saber sobre rowSpan/borda de cada uma: "Etapa Atual" continua 1 célula só pra fase
@@ -234,39 +219,6 @@ function calcularResumoFase(fase) {
     qtdEmpreendimentos: fase.empreendimentos.length,
     ...somarEmpreendimentos(fase.empreendimentos),
   };
-}
-
-// Ícone de filtro compacto ao lado do nome da coluna — mesmo padrão de
-// GestaoCobrancas/RotinasTab.jsx::FiltroColuna (SearchableSelect com `multiple` e
-// `renderTrigger`, painel com a largura do <th> via `colunaRef`). `filtro` segue a convenção de
-// valoresDoFiltro (null = todas marcadas); o ícone só fica destacado quando há restrição de fato.
-function FiltroColuna({ filtro, onChange, opcoes, label, colunaRef }) {
-  const ativo = filtro != null;
-  return (
-    <SearchableSelect
-      multiple
-      selecionarTodos
-      value={valoresDoFiltro(filtro, opcoes)}
-      onChange={(selecionados) => onChange(proximoFiltro(selecionados, opcoes))}
-      options={opcoes}
-      placeholder="Todos"
-      emptyMessage="Nenhuma opção encontrada."
-      larguraRef={colunaRef}
-      renderTrigger={({ toggle }) => (
-        <button
-          type="button"
-          onClick={toggle}
-          title={`Filtrar por ${label}`}
-          aria-pressed={ativo}
-          className={`inline-flex h-5 w-5 shrink-0 items-center justify-center rounded transition ${
-            ativo ? 'bg-white text-primary-700 shadow-sm' : 'text-primary-400 hover:bg-white/60 hover:text-primary-700'
-          }`}
-        >
-          <ListFilter size={13} />
-        </button>
-      )}
-    />
-  );
 }
 
 // Célula de uma coluna de COLUNAS numa linha de resumo (fase ou grupo de Micro Etapa colapsado):
