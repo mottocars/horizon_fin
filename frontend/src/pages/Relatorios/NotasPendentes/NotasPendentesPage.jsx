@@ -124,6 +124,24 @@ export default function NotasPendentesPage() {
   const thEmissorRef = useRef(null);
   const thDiasRef = useRef(null);
 
+  // Altura real do cabeçalho fixo (muda quando um título quebra em 2 linhas)
+  // — o nome da empresa do certificado gruda logo abaixo dele ao rolar. O
+  // cabeçalho gruda em -24px (-top-6, cancelando o p-6 do <main>), por isso
+  // o desconto; +8px de respiro.
+  const theadRef = useRef(null);
+  const [alturaCabecalho, setAlturaCabecalho] = useState(48);
+  useEffect(() => {
+    const el = theadRef.current;
+    if (!el) return;
+    const medir = () => setAlturaCabecalho(el.getBoundingClientRect().height);
+    medir();
+    const observador = new ResizeObserver(medir);
+    observador.observe(el);
+    return () => observador.disconnect();
+    // O <thead> só existe depois que as notas chegam — mede de novo a cada carga.
+  }, [notas]);
+  const topoNomeCertificado = alturaCabecalho - 24 + 8;
+
   useEffect(() => {
     listEmpresas({ ativo: true, limit: 100 })
       .then((result) => setEmpresas(result.data))
@@ -318,7 +336,7 @@ export default function NotasPendentesPage() {
               emptyMessage="Nenhuma empresa encontrada."
             />
           </div>
-          <div className="flex min-w-0 gap-3 lg:w-[360px]">
+          <div className="flex min-w-0 gap-3 lg:w-90">
             <div className="min-w-0 flex-1">
               <label className="mb-1 block text-sm font-medium text-gray-700">Mês/Ano inicial</label>
               <input type="month" value={mesInicio} max={mesFim} onChange={(e) => setMesInicio(e.target.value)} className={campoMes} />
@@ -398,7 +416,7 @@ export default function NotasPendentesPage() {
             }}
           >
             <table className="w-full border-separate border-spacing-0 text-left text-xs">
-              <thead>
+              <thead ref={theadRef}>
                 <tr className="text-xs uppercase tracking-wide text-primary-700">
                   <th ref={thCertificadoRef} className={`${TH} w-72 rounded-tl-card`}>
                     <span className="inline-flex items-center justify-center gap-1.5">
@@ -459,9 +477,18 @@ export default function NotasPendentesPage() {
                 {grupos.map((grupo) => {
                   const cert = separarCertificado(grupo.nome);
                   const recolhido = recolhidos.has(grupo.id);
+                  // Nome no topo da célula (align-top) e `sticky` logo abaixo do
+                  // cabeçalho fixo: ao rolar, acompanha a tela até a última nota
+                  // da empresa — a célula (rowSpan) é o limite do sticky, então
+                  // ele para sozinho no fim do grupo.
                   const celulaCertificado = (rowSpan) => (
-                    <td rowSpan={rowSpan} className="border-b-2 border-b-gray-400 border-r border-r-gray-200 bg-white px-4 py-2.5 align-middle">
-                      <button type="button" onClick={() => toggleGrupo(grupo.id)} className="flex w-full items-start gap-2 text-left">
+                    <td rowSpan={rowSpan} className="border-b-2 border-b-gray-400 border-r border-r-gray-200 bg-white px-4 py-2.5 align-top">
+                      <button
+                        type="button"
+                        onClick={() => toggleGrupo(grupo.id)}
+                        style={{ top: topoNomeCertificado }}
+                        className="sticky flex w-full items-start gap-2 text-left"
+                      >
                         <span className="mt-0.5 flex h-4 w-4 shrink-0 items-center justify-center rounded bg-primary-100 text-primary-600">
                           {recolhido ? <Plus size={10} /> : <Minus size={10} />}
                         </span>
