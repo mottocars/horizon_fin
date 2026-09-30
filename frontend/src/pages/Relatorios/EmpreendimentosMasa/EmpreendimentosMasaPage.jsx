@@ -820,7 +820,18 @@ export default function EmpreendimentosMasaPage() {
                               title={empreendimento?.classificacao || undefined}
                             >
                               {empreendimento ? (
-                                empreendimento.name
+                                // Bolinha na cor cheia da legenda (além do fundo claro da
+                                // linha) só pra quem tem classificação — o mt alinha com a
+                                // 1ª linha do nome quando ele quebra.
+                                <span className="flex items-start gap-1.5">
+                                  {CLASSIFICACAO_CORES[empreendimento.classificacao] && (
+                                    <span
+                                      aria-hidden="true"
+                                      className={`mt-0.75 h-2.5 w-2.5 shrink-0 rounded-full ${CLASSIFICACAO_CORES[empreendimento.classificacao].swatch}`}
+                                    />
+                                  )}
+                                  <span>{empreendimento.name}</span>
+                                </span>
                               ) : (
                                 <span className="italic text-gray-400">Nenhum empreendimento nesta fase.</span>
                               )}
