@@ -221,12 +221,44 @@ function calcularResumoFase(fase) {
   };
 }
 
+// Rótulo das células agrupadas de Fase e Tarefa: botão de abrir/recolher,
+// nome e contagem. Em tela grande, tudo numa linha (como sempre foi); em tela
+// menor (Fase/Tarefa estreitas pra tabela caber — ver o <thead>), ícone e
+// contagem sobem pra uma linha própria e o nome ganha a largura inteira da
+// célula embaixo, quebrando entre palavras (com hifenização) em vez de
+// letra a letra. `grudado` = nome acompanha a rolagem (sticky) — só nas
+// células que agrupam várias linhas.
+function RotuloAgrupador({ aberto, nome, contagem, onClick, negrito = false, topoGrudado }) {
+  return (
+    <button
+      type="button"
+      onClick={onClick}
+      style={topoGrudado != null ? { top: topoGrudado } : undefined}
+      className={`${topoGrudado != null ? 'sticky ' : ''}flex w-full flex-wrap items-center gap-x-2 gap-y-1 text-left 2xl:flex-nowrap 2xl:items-start`}
+    >
+      <span className="order-1 flex h-4 w-4 shrink-0 items-center justify-center rounded bg-primary-100 text-primary-600">
+        {aberto ? <Minus size={10} /> : <Plus size={10} />}
+      </span>
+      <span className="order-2 ml-auto shrink-0 rounded-full bg-white px-2 py-0.5 text-[10px] font-medium tabular-nums text-gray-500 ring-1 ring-gray-200 2xl:order-3 2xl:ml-0">
+        {contagem}
+      </span>
+      <span
+        className={`order-3 basis-full hyphens-auto break-words text-xs 2xl:order-2 2xl:basis-auto 2xl:flex-1 ${
+          negrito ? 'font-semibold text-gray-900' : 'text-gray-700'
+        }`}
+      >
+        {nome || <span className="text-gray-300">—</span>}
+      </span>
+    </button>
+  );
+}
+
 // Célula de uma coluna de COLUNAS numa linha de resumo (fase ou grupo de Micro Etapa colapsado):
 // a soma da coluna, ou "—" quando ela não é somável (% Masa).
 function CelulaResumo({ coluna, resumo, borda }) {
   return (
     <td
-      className={`${borda} border-l border-l-gray-100 py-1.5 pl-4 text-xs tabular-nums ${
+      className={`${borda} border-l border-l-gray-100 py-1.5 pl-2 text-xs tabular-nums 2xl:pl-4 ${
         coluna.somavel ? 'text-gray-700' : 'text-gray-300'
       }`}
     >
@@ -290,6 +322,13 @@ export default function EmpreendimentosMasaPage() {
   const thEtapaAtualRef = useRef(null);
   const thEmpreendimentoRef = useRef(null);
   const thMicroEtapaRef = useRef(null);
+
+  // Altura real do cabeçalho fixo (muda com títulos em 2 linhas / largura da
+  // tela) — os nomes de Fase e Tarefa grudam logo abaixo dele ao rolar. O
+  // cabeçalho gruda em -24px (-top-6, cancelando o p-6 do <main>), por isso
+  // o desconto; +8px de respiro.
+  const theadRef = useRef(null);
+  const [alturaCabecalho, setAlturaCabecalho] = useState(48);
 
   const carregar = useCallback(() => {
     setCarregando(true);
@@ -488,6 +527,19 @@ export default function EmpreendimentosMasaPage() {
     XLSX.writeFile(livro, `empreendimentos-masa_${new Date().toISOString().slice(0, 10)}.xlsx`);
   }
 
+  // Mede o cabeçalho de novo quando a tabela aparece e quando muda de forma
+  // (colunas escondidas/mostradas mudam quantos títulos quebram de linha).
+  useEffect(() => {
+    const el = theadRef.current;
+    if (!el) return;
+    const medir = () => setAlturaCabecalho(el.getBoundingClientRect().height);
+    medir();
+    const observador = new ResizeObserver(medir);
+    observador.observe(el);
+    return () => observador.disconnect();
+  }, [matriz, colunas]);
+  const topoRotuloGrudado = alturaCabecalho - 24 + 8;
+
   return (
     <div className="space-y-4">
       {!carregando && !erro && matriz?.length > 0 && (
@@ -559,11 +611,17 @@ export default function EmpreendimentosMasaPage() {
           // browser computa overflow-x dele como auto também).
           <div className="rounded-card" onContextMenu={handleContextMenu}>
             <table className="w-full border-separate border-spacing-0 text-left text-xs">
-              <thead>
+              {/* Fase e Tarefa encolhem em telas menores (notebook de 14" ~1366px):
+                  estreitas até 1535px, médias até 1799px, cheias daí pra cima —
+                  pra tabela inteira caber no card sem a última coluna vazar. O
+                  texto delas (e do Empreendimento) quebra em qualquer ponto
+                  quando não cabe, e as células numéricas perdem um pouco do
+                  recuo em telas menores. */}
+              <thead ref={theadRef}>
                 <tr className="text-xs uppercase tracking-wide text-primary-700">
                   <th
                     ref={thEtapaAtualRef}
-                    className="sticky -top-6 z-20 w-64 rounded-tl-card border-b-2 border-b-primary-500 bg-primary-50 px-2 py-2.5 text-center font-medium"
+                    className="sticky -top-6 z-20 w-28 rounded-tl-card border-b-2 border-b-primary-500 bg-primary-50 px-2 py-2.5 text-center font-medium 2xl:w-48 min-[1800px]:w-64"
                   >
                     <span className="inline-flex items-center justify-center gap-1.5">
                       <FiltroColuna
@@ -578,7 +636,7 @@ export default function EmpreendimentosMasaPage() {
                   </th>
                   <th
                     ref={thMicroEtapaRef}
-                    className="sticky -top-6 z-20 border-b-2 border-b-primary-500 border-l border-l-primary-100 bg-primary-50 px-2 py-2.5 text-center font-medium"
+                    className="sticky -top-6 z-20 w-32 border-b-2 border-b-primary-500 border-l border-l-primary-100 bg-primary-50 px-2 py-2.5 text-center font-medium 2xl:w-56 min-[1800px]:w-72"
                   >
                     <span className="inline-flex items-center justify-center gap-1.5">
                       <FiltroColuna
@@ -611,7 +669,7 @@ export default function EmpreendimentosMasaPage() {
                   {colunas.map((coluna, i) => (
                     <th
                       key={coluna.chave}
-                      className={`sticky -top-6 z-20 ${coluna.largura} border-b-2 border-b-primary-500 border-l border-l-primary-100 bg-primary-50 px-2 py-2.5 text-center font-medium ${
+                      className={`sticky -top-6 z-20 ${coluna.largura} border-b-2 border-b-primary-500 border-l border-l-primary-100 bg-primary-50 px-1 py-2.5 text-center font-medium 2xl:px-2 ${
                         i === colunas.length - 1 ? 'rounded-tr-card' : ''
                       }`}
                     >
@@ -641,25 +699,19 @@ export default function EmpreendimentosMasaPage() {
                     const resumo = calcularResumoFase(fase);
                     return (
                       <tr key={fase.id}>
-                        <td className="border-b-2 border-b-gray-400 border-r border-r-gray-200 bg-white px-4 py-2.5 align-middle">
-                          <button
-                            type="button"
+                        <td className="border-b-2 border-b-gray-400 border-r border-r-gray-200 bg-white px-2 py-2.5 align-middle 2xl:px-4">
+                          <RotuloAgrupador
+                            aberto={false}
+                            negrito
+                            nome={fase.name}
+                            contagem={fase.empreendimentos.length}
                             onClick={() => toggleFase(fase.id)}
-                            className="flex items-center gap-2 text-left"
-                          >
-                            <span className="flex h-4 w-4 shrink-0 items-center justify-center rounded bg-primary-100 text-primary-600">
-                              <Plus size={10} />
-                            </span>
-                            <span className="text-xs font-semibold text-gray-900">{fase.name}</span>
-                            <span className="shrink-0 rounded-full bg-white px-2 py-0.5 text-[10px] font-medium tabular-nums text-gray-500 ring-1 ring-gray-200">
-                              {fase.empreendimentos.length}
-                            </span>
-                          </button>
+                          />
                         </td>
-                        <td className="border-b-2 border-b-gray-400 border-l border-l-gray-200 py-1.5 pl-4 text-xs tabular-nums text-gray-700">
+                        <td className="border-b-2 border-b-gray-400 border-l border-l-gray-200 py-1.5 pl-2 text-xs tabular-nums 2xl:pl-4 text-gray-700">
                           {resumo.qtdMicroEtapas}
                         </td>
-                        <td className="border-b-2 border-b-gray-400 border-l border-l-gray-100 py-1.5 pl-4 text-xs tabular-nums text-gray-700">
+                        <td className="border-b-2 border-b-gray-400 border-l border-l-gray-100 py-1.5 pl-2 text-xs tabular-nums 2xl:pl-4 text-gray-700">
                           {resumo.qtdEmpreendimentos}
                         </td>
                         {colunas.map((coluna) => (
@@ -690,17 +742,19 @@ export default function EmpreendimentosMasaPage() {
                         const celulaEtapaAtual = linha.primeiraDaFase && (
                           <td
                             rowSpan={total}
-                            className="border-b-2 border-b-gray-400 border-r border-r-gray-200 bg-white px-4 py-2.5 align-middle"
+                            className="border-b-2 border-b-gray-400 border-r border-r-gray-200 bg-white px-2 py-2.5 align-top 2xl:px-4"
                           >
-                            <button type="button" onClick={() => toggleFase(fase.id)} className="flex items-center gap-2 text-left">
-                              <span className="flex h-4 w-4 shrink-0 items-center justify-center rounded bg-primary-100 text-primary-600">
-                                <Minus size={10} />
-                              </span>
-                              <span className="text-xs font-semibold text-gray-900">{fase.name}</span>
-                              <span className="shrink-0 rounded-full bg-white px-2 py-0.5 text-[10px] font-medium tabular-nums text-gray-500 ring-1 ring-gray-200">
-                                {fase.empreendimentos.length}
-                              </span>
-                            </button>
+                            {/* Nome no topo e `sticky` logo abaixo do cabeçalho fixo:
+                                desce junto ao rolar e para no fim da fase (a célula
+                                com rowSpan é o limite do sticky). */}
+                            <RotuloAgrupador
+                              aberto
+                              negrito
+                              nome={fase.name}
+                              contagem={fase.empreendimentos.length}
+                              onClick={() => toggleFase(fase.id)}
+                              topoGrudado={topoRotuloGrudado}
+                            />
                           </td>
                         );
 
@@ -714,25 +768,16 @@ export default function EmpreendimentosMasaPage() {
                             <tr key={`${fase.id}-grupo-${linha.grupo.chave}`}>
                               {celulaEtapaAtual}
                               <td
-                                className={`${bordaGrupo} border-l border-l-gray-200 bg-white px-4 py-2.5 align-middle text-xs text-gray-700`}
+                                className={`${bordaGrupo} border-l border-l-gray-200 bg-white px-2 py-2.5 align-middle 2xl:px-4`}
                               >
-                                <button
-                                  type="button"
+                                <RotuloAgrupador
+                                  aberto={false}
+                                  nome={linha.grupo.microEtapaAtual}
+                                  contagem={linha.grupo.empreendimentos.length}
                                   onClick={() => toggleMicroEtapa(linha.grupo.chave)}
-                                  className="flex items-start gap-2 text-left"
-                                >
-                                  <span className="flex h-4 w-4 shrink-0 items-center justify-center rounded bg-primary-100 text-primary-600">
-                                    <Plus size={10} />
-                                  </span>
-                                  <span className="flex-1">
-                                    {linha.grupo.microEtapaAtual || <span className="text-gray-300">—</span>}
-                                  </span>
-                                  <span className="shrink-0 rounded-full bg-white px-2 py-0.5 text-[10px] font-medium tabular-nums text-gray-500 ring-1 ring-gray-200">
-                                    {linha.grupo.empreendimentos.length}
-                                  </span>
-                                </button>
+                                />
                               </td>
-                              <td className={`${bordaInferior} border-l border-l-gray-100 py-1.5 pl-4 text-xs tabular-nums text-gray-700`}>
+                              <td className={`${bordaInferior} border-l border-l-gray-100 py-1.5 pl-2 text-xs tabular-nums 2xl:pl-4 text-gray-700`}>
                                 {linha.grupo.empreendimentos.length}
                               </td>
                               {colunas.map((coluna) => (
@@ -758,25 +803,20 @@ export default function EmpreendimentosMasaPage() {
                             {linha.primeiraDoGrupo && (
                               <td
                                 rowSpan={linha.tamanhoGrupo}
-                                className={`${bordaGrupo} border-l border-l-gray-200 bg-white px-4 py-2.5 align-middle text-xs text-gray-700`}
+                                className={`${bordaGrupo} border-l border-l-gray-200 bg-white px-2 py-2.5 align-top 2xl:px-4`}
                               >
-                                <button
-                                  type="button"
+                                {/* Mesmo comportamento do nome da fase: topo + sticky. */}
+                                <RotuloAgrupador
+                                  aberto
+                                  nome={linha.microEtapaAtual}
+                                  contagem={linha.tamanhoGrupo}
                                   onClick={() => toggleMicroEtapa(linha.grupoChave)}
-                                  className="flex items-start gap-2 text-left"
-                                >
-                                  <span className="flex h-4 w-4 shrink-0 items-center justify-center rounded bg-primary-100 text-primary-600">
-                                    <Minus size={10} />
-                                  </span>
-                                  <span className="flex-1">{linha.microEtapaAtual || <span className="text-gray-300">—</span>}</span>
-                                  <span className="shrink-0 rounded-full bg-white px-2 py-0.5 text-[10px] font-medium tabular-nums text-gray-500 ring-1 ring-gray-200">
-                                    {linha.tamanhoGrupo}
-                                  </span>
-                                </button>
+                                  topoGrudado={topoRotuloGrudado}
+                                />
                               </td>
                             )}
                             <td
-                              className={`${bordaInferior} border-l border-l-gray-100 py-1.5 pl-4 text-xs text-gray-700 ${corFundo}`}
+                              className={`${bordaInferior} border-l border-l-gray-100 py-1.5 pl-2 pr-1 text-xs text-gray-700 [overflow-wrap:anywhere] 2xl:pl-4 ${corFundo}`}
                               title={empreendimento?.classificacao || undefined}
                             >
                               {empreendimento ? (
@@ -788,7 +828,7 @@ export default function EmpreendimentosMasaPage() {
                             {colunas.map((coluna) => (
                               <td
                                 key={coluna.chave}
-                                className={`${bordaInferior} border-l border-l-gray-100 py-1.5 pl-4 text-xs tabular-nums text-gray-700 ${corFundo}`}
+                                className={`${bordaInferior} border-l border-l-gray-100 py-1.5 pl-2 text-xs tabular-nums 2xl:pl-4 text-gray-700 ${corFundo}`}
                               >
                                 {empreendimento?.[coluna.chave] != null ? (
                                   coluna.formatar(empreendimento[coluna.chave])
@@ -820,7 +860,7 @@ export default function EmpreendimentosMasaPage() {
                     Total
                   </td>
                   <td
-                    className={`sticky -bottom-6 z-10 border-t-2 border-t-primary-500 border-l border-l-primary-100 bg-primary-50 py-2.5 pl-4 text-xs tabular-nums ${
+                    className={`sticky -bottom-6 z-10 border-t-2 border-t-primary-500 border-l border-l-primary-100 bg-primary-50 py-2.5 pl-2 text-xs tabular-nums 2xl:pl-4 ${
                       colunas.length === 0 ? 'rounded-br-card' : ''
                     }`}
                   >
@@ -829,7 +869,7 @@ export default function EmpreendimentosMasaPage() {
                   {colunas.map((coluna, i) => (
                     <td
                       key={coluna.chave}
-                      className={`sticky -bottom-6 z-10 ${coluna.largura} border-t-2 border-t-primary-500 border-l border-l-primary-100 bg-primary-50 py-2.5 pl-4 text-xs tabular-nums ${
+                      className={`sticky -bottom-6 z-10 ${coluna.largura} border-t-2 border-t-primary-500 border-l border-l-primary-100 bg-primary-50 py-2.5 pl-2 text-xs tabular-nums 2xl:pl-4 ${
                         coluna.somavel ? '' : 'text-primary-300'
                       } ${i === colunas.length - 1 ? 'rounded-br-card' : ''}`}
                     >
