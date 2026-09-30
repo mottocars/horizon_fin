@@ -1,6 +1,7 @@
 const { z } = require('zod');
 const service = require('./espiao.service');
 const pdfService = require('./pdf.service');
+const vinculoService = require('./vinculo.service');
 
 function badRequest(message) {
   const err = new Error(message);
@@ -185,6 +186,54 @@ async function salvarConfiguracoes(req, res, next) {
   }
 }
 
+const DATA_ISO = /^\d{4}-\d{2}-\d{2}$/;
+
+const titulosSiengeSchema = z.object({
+  dataInicio: z.string().regex(DATA_ISO, 'Informe a data início do período.'),
+  dataFim: z.string().regex(DATA_ISO, 'Informe a data fim do período.'),
+  atualizar: z.enum(['1', 'true']).optional(),
+});
+
+async function listTitulosSienge(req, res, next) {
+  try {
+    const query = titulosSiengeSchema.parse(req.query);
+    if (query.dataInicio > query.dataFim) throw badRequest('A data início não pode ser depois da data fim.');
+    const result = await vinculoService.listTitulosParaNota(req.params.notaId, {
+      dataInicio: query.dataInicio,
+      dataFim: query.dataFim,
+      atualizar: Boolean(query.atualizar),
+    });
+    res.json(result);
+  } catch (err) {
+    if (err.issues) return next(badRequest(err.issues[0].message));
+    next(err);
+  }
+}
+
+const vincularSchema = z.object({
+  tituloId: z.coerce.number().int().positive('Escolha um título para vincular.'),
+});
+
+async function vincular(req, res, next) {
+  try {
+    const data = vincularSchema.parse(req.body);
+    const result = await vinculoService.vincular(req.params.notaId, data.tituloId, req.user.id);
+    res.json(result);
+  } catch (err) {
+    if (err.issues) return next(badRequest(err.issues[0].message));
+    next(err);
+  }
+}
+
+async function desvincular(req, res, next) {
+  try {
+    await vinculoService.desvincular(req.params.notaId);
+    res.status(204).end();
+  } catch (err) {
+    next(err);
+  }
+}
+
 const inativarSchema = z.object({
   notaIds: z.array(z.coerce.number().int().positive()).min(1, 'Selecione ao menos uma nota.'),
   motivo: z.string().trim().min(3, 'Explique o motivo da inativação.'),
@@ -297,6 +346,9 @@ module.exports = {
   salvarAgendamento,
   getConfiguracoes,
   salvarConfiguracoes,
+  listTitulosSienge,
+  vincular,
+  desvincular,
   inativar,
   reativar,
   declararCiencia,

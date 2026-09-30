@@ -62,6 +62,22 @@ export function salvarConfiguracoesEspiao(empresaId, { codigoDocumentoNfe, codig
     .then((res) => res.data);
 }
 
+export function listTitulosSiengeParaNota(notaId, { dataInicio, dataFim, atualizar = false }) {
+  return http
+    .get(`/espiao/notas/${notaId}/titulos-sienge`, {
+      params: { dataInicio, dataFim, ...(atualizar ? { atualizar: 1 } : {}) },
+    })
+    .then((res) => res.data);
+}
+
+export function vincularTituloSiengeNota(notaId, tituloId) {
+  return http.post(`/espiao/notas/${notaId}/vinculo`, { tituloId }).then((res) => res.data);
+}
+
+export function desvincularTituloSiengeNota(notaId) {
+  return http.delete(`/espiao/notas/${notaId}/vinculo`);
+}
+
 export function listEventosNotaEspiao(notaId) {
   return http.get(`/espiao/notas/${notaId}/eventos`).then((res) => res.data);
 }

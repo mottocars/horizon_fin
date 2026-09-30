@@ -23,6 +23,7 @@ import {
   Minus,
   Save,
   Settings,
+  Check,
 } from 'lucide-react';
 import Card from '../../../components/Card';
 import Button from '../../../components/Button';
@@ -36,6 +37,8 @@ import { useAlert, useConfirm } from '../../../confirm/ConfirmContext';
 import { useSidebar } from '../../../layout/SidebarContext';
 import { explicarSituacao } from './situacao';
 import ConfiguracoesTab from './ConfiguracoesTab';
+import VincularTituloModal from './VincularTituloModal';
+import logoSienge from '../../../assets/integracoes/sienge.svg';
 import { useEmpresaTravada } from '../../../hooks/useEmpresaTravada';
 import {
   listCertificadosEspiao,
@@ -183,10 +186,14 @@ const DIV_H_CABECALHO = 'border-b-2 border-gray-300';
 // essas colunas precisam alinhar visualmente entre elas). Atualizar em 9
 // (não 6): "ATUALIZAR" maiúsculo com tracking-wide é quase do tamanho de
 // "VENCIMENTO" — mais estreito que isso, o texto do cabeçalho vazava por
-// cima da coluna de Vencimento em telas menores.
+// cima da coluna de Vencimento em telas menores; 8 (pedido do usuário, pra
+// abrir espaço pra coluna Vincular) ainda cabe.
 const LARGURA_CONSULTA = 10;
-const LARGURA_ATUALIZAR = 9;
+const LARGURA_ATUALIZAR = 8;
 const LARGURA_VENCIMENTO = 10;
+// Vincular (logo do Sienge, ver LinhaNota) — só em Recebidas, entre XML e
+// Consulta.
+const LARGURA_VINCULAR = 6;
 
 // Larguras do colgroup em % — sempre somando 100. Consulta/Atualizar/
 // Vencimento só fazem sentido em "Novas Notas" (é a única aba de onde dá
@@ -196,9 +203,11 @@ const LARGURA_VENCIMENTO = 10;
 // por aba, só que agora também define a largura de cada coluna, não só a
 // contagem pro colSpan). Produto/Serviço/PDF/XML são só 1 ícone — bem
 // estreitas de propósito. Ordem comum: Empresa/Nota, Produto, Serviço,
-// Emissor, Emissão, Situação, [Inativada por], PDF, XML, [Consulta,
-// Atualizar, Vencimento].
-const COLUNAS_NOVAS = [23, 4, 4, 16, 8, 8, 4, 4, LARGURA_CONSULTA, LARGURA_ATUALIZAR, LARGURA_VENCIMENTO];
+// Emissor, Emissão, Situação, [Inativada por], PDF, XML, [Vincular,
+// Consulta, Atualizar, Vencimento].
+const COLUNAS_NOVAS = [
+  20, 4, 4, 14, 8, 8, 4, 4, LARGURA_VINCULAR, LARGURA_CONSULTA, LARGURA_ATUALIZAR, LARGURA_VENCIMENTO,
+];
 const COLUNAS_CIENTES = [34, 5, 5, 22, 10, 10, 7, 7];
 const COLUNAS_INATIVAS = [30, 5, 5, 18, 8, 8, 16, 5, 5];
 
@@ -248,6 +257,7 @@ function CabecalhoTabela({ modoInativas, mostrarAcoes, temNivel2 = false }) {
         <th className={`${DIV_H_CABECALHO} ${DIV_V} py-2.5 text-center font-medium`}>XML</th>
         {mostrarAcoes && (
           <>
+            <th className={`${DIV_H_CABECALHO} ${DIV_V} px-1 py-2.5 text-center font-medium`}>Vincular</th>
             <th className={`${DIV_H_CABECALHO} ${DIV_V} px-2 py-2.5 text-center font-medium`}>Consulta</th>
             <th className={`${DIV_H_CABECALHO} ${DIV_V} px-1 py-2.5 text-center font-medium`}>Atualizar</th>
             <th className={`${DIV_H_CABECALHO} ${DIV_V} px-2 py-2.5 text-center font-medium`}>Vencimento</th>
@@ -293,6 +303,7 @@ function LinhaNota({
   baixandoPdf,
   baixandoXml,
   onAbrirHistorico,
+  onAbrirVinculo,
 }) {
   const ehProduto = tipo === 'produtos';
   const ehServico = tipo === 'servicos';
@@ -401,12 +412,47 @@ function LinhaNota({
           GestaoParcelasTab.jsx. */}
       {mostrarAcoes && (
         <>
+          <td className={`${DIV_H} ${DIV_V} text-center`}>
+            <BotaoVincular vinculo={nota.vinculo} onClick={() => onAbrirVinculo(nota)} />
+          </td>
           <td className={`${DIV_H} ${DIV_V}`}></td>
           <td className={`${DIV_H} ${DIV_V}`}></td>
           <td className={`${DIV_H} ${DIV_V}`}></td>
         </>
       )}
     </tr>
+  );
+}
+
+// Coluna VINCULAR — logo do Sienge (o mesmo da integração). Sem vínculo, a
+// logo fica esmaecida (a ação ainda está pendente); vinculada, a logo em cor
+// cheia + um selo verde, e o tooltip diz a qual título. Os dois abrem a
+// janela de vínculo (ver VincularTituloModal) — vinculada, pra ver/trocar/
+// desvincular.
+function BotaoVincular({ vinculo, onClick }) {
+  const titulo = vinculo
+    ? `Vinculada ao título ${vinculo.tituloId}${vinculo.documentoNumero ? ` (${vinculo.documentoIdentificacao || ''} ${vinculo.documentoNumero})` : ''}${vinculo.credorNome ? ` — ${vinculo.credorNome}` : ''}. Clique para ver ou trocar.`
+    : 'Vincular a um título do contas a pagar (Sienge)';
+  return (
+    <button
+      type="button"
+      onClick={onClick}
+      title={titulo}
+      className={`group relative inline-flex h-7 w-7 items-center justify-center rounded-md transition ${
+        vinculo ? 'bg-emerald-50 hover:bg-emerald-100' : 'hover:bg-gray-100'
+      }`}
+    >
+      <img
+        src={logoSienge}
+        alt="Sienge"
+        className={`h-4 w-4 transition ${vinculo ? '' : 'opacity-40 grayscale group-hover:opacity-100 group-hover:grayscale-0'}`}
+      />
+      {vinculo && (
+        <span className="absolute -right-0.5 -top-0.5 flex h-3 w-3 items-center justify-center rounded-full bg-emerald-500 ring-2 ring-white">
+          <Check size={8} strokeWidth={4} className="text-white" />
+        </span>
+      )}
+    </button>
   );
 }
 
@@ -590,6 +636,25 @@ export default function EspiaoNfeNfsePage() {
   // (não só o id) pra já mostrar número/situação no cabeçalho da janela
   // sem esperar a resposta da API.
   const [notaHistorico, setNotaHistorico] = useState(null);
+
+  // Nota com a janela de vínculo ao contas a pagar (Sienge) aberta — ver
+  // VincularTituloModal. null = janela fechada.
+  const [notaVinculo, setNotaVinculo] = useState(null);
+
+  // Depois de vincular/trocar/desvincular na janela, atualiza só aquela nota
+  // na lista já carregada — sem recarregar a tabela inteira.
+  function handleVinculoAlterado(nota, vinculo) {
+    setNotasPorCertificado((prev) => {
+      const next = { ...prev };
+      Object.keys(next).forEach((certificadoId) => {
+        const dados = next[certificadoId];
+        if (!dados) return;
+        const atualizar = (lista) => lista.map((n) => (n.id === nota.id ? { ...n, vinculo } : n));
+        next[certificadoId] = { ...dados, produtos: atualizar(dados.produtos), servicos: atualizar(dados.servicos) };
+      });
+      return next;
+    });
+  }
 
   // filtroTexto é o que o usuário está digitando, do jeito que ele digitou
   // (minúsculo inclusive). filtros é a versão em caixa alta, com um pequeno
@@ -1256,6 +1321,7 @@ export default function EspiaoNfeNfsePage() {
           <td className={`${DIV_H} ${DIV_V}`}></td>
           {mostrarAcoes && (
             <>
+              <td className={`${DIV_H} ${DIV_V}`}></td>
               <td className={`${DIV_H} ${DIV_V} py-2 text-center`}>
                 {certificado.ultima_consulta_em && (
                   <span title={`Última consulta: ${formatarDataHora(certificado.ultima_consulta_em)}`} className="text-gray-500">
@@ -1325,6 +1391,7 @@ export default function EspiaoNfeNfsePage() {
               baixandoPdf={baixando.has(`${nota.id}:pdf`)}
               baixandoXml={baixando.has(`${nota.id}:xml`)}
               onAbrirHistorico={setNotaHistorico}
+              onAbrirVinculo={setNotaVinculo}
             />
           ))
         )}
@@ -1873,6 +1940,20 @@ export default function EspiaoNfeNfsePage() {
       </Modal>
 
       <HistoricoSituacaoModal nota={notaHistorico} onClose={() => setNotaHistorico(null)} />
+
+      {/* Período da busca no Sienge = Data início/fim da tela (pedido do
+          usuário). "Ir para Configurações" fecha a janela e troca de aba. */}
+      <VincularTituloModal
+        nota={notaVinculo}
+        dataInicio={dataInicio}
+        dataFim={dataFim}
+        onClose={() => setNotaVinculo(null)}
+        onVinculoAlterado={handleVinculoAlterado}
+        onIrParaConfiguracoes={() => {
+          setNotaVinculo(null);
+          setAbaNotas('configuracoes');
+        }}
+      />
     </div>
   );
 }

@@ -1425,6 +1425,42 @@ CREATE TABLE espiao_configuracoes (
     atualizado_em          TIMESTAMP DEFAULT NOW()
 );
 
+-- Vínculo entre uma nota recebida (Espião NFe/NFSe) e o título do contas a
+-- pagar no Sienge (public/api/v1/bills) que corresponde a ela — 1 título por
+-- nota (nota_id é a PK) e 1 nota por título dentro da empresa (UNIQUE), pra
+-- ninguém conciliar o mesmo título com duas notas. Guarda um retrato do
+-- título e do credor no momento do vínculo, pra listagem da tela não
+-- depender de uma chamada ao Sienge a cada linha (ver
+-- espiao-nfe-nfse/vinculo.service.js).
+CREATE TABLE espiao_notas_vinculos (
+    nota_id                  INTEGER PRIMARY KEY REFERENCES espiao_notas(id) ON DELETE CASCADE,
+    empresa_id               INTEGER NOT NULL REFERENCES empresas(id) ON DELETE CASCADE,
+    sienge_titulo_id         INTEGER NOT NULL,
+    documento_identificacao  VARCHAR(10),
+    documento_numero         VARCHAR(50),
+    data_emissao             DATE,
+    valor                    NUMERIC(15, 2),
+    credor_id                INTEGER,
+    credor_nome              VARCHAR(255),
+    credor_documento         VARCHAR(20),
+    vinculado_por            INTEGER REFERENCES usuarios(id) ON DELETE SET NULL,
+    vinculado_em             TIMESTAMP DEFAULT NOW(),
+    UNIQUE (empresa_id, sienge_titulo_id)
+);
+
+-- Cache dos credores (fornecedores) do Sienge — public/api/v1/creditors/{id}
+-- só devolve 1 credor por chamada, e a janela de vínculo do Espião precisa do
+-- nome/CPF/CNPJ de centenas deles de uma vez. Guardado por tenant; renovado
+-- quando fica velho (ver vinculo.service.js::DIAS_VALIDADE_CREDOR).
+CREATE TABLE sienge_credores_cache (
+    tenant         VARCHAR(100) NOT NULL,
+    credor_id      INTEGER NOT NULL,
+    nome           VARCHAR(255),
+    documento      VARCHAR(20),
+    atualizado_em  TIMESTAMP DEFAULT NOW(),
+    PRIMARY KEY (tenant, credor_id)
+);
+
 -- Motor de Risco (Operações — Gestão de Cobranças) — parâmetros de contagem,
 -- escalas/pesos dos indicadores e faixas de corte usados para classificar o
 -- cliente em Bom pagador / Duvidoso / Mau pagador. Sempre versionado: cada

@@ -19,6 +19,9 @@ router.get('/certificados/:certificadoId/notas', controller.listNotasPorCertific
 router.get('/notas/:notaId/eventos', controller.listEventosPorNota);
 router.get('/notas/:notaId/download', controller.download);
 router.get('/notas/:notaId/download-pdf', controller.downloadPdf);
+router.get('/notas/:notaId/titulos-sienge', controller.listTitulosSienge);
+router.post('/notas/:notaId/vinculo', controller.vincular);
+router.delete('/notas/:notaId/vinculo', controller.desvincular);
 router.get('/:empresaId/notas-inativadas', controller.listNotasInativadas);
 router.get('/certificados/:certificadoId/notas-inativadas', controller.listNotasInativadasPorCertificado);
 router.post('/notas/inativar', controller.inativar);

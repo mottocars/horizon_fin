@@ -816,6 +816,25 @@ function colunaHoraLocal(coluna, alias) {
   return `to_char(${coluna}, 'YYYY-MM-DD"T"HH24:MI:SS') AS ${alias}`;
 }
 
+// Título do contas a pagar (Sienge) vinculado à nota, se houver — ver
+// vinculo.service.js. Subselect (não JOIN) pra não deixar ambíguas as colunas
+// sem prefixo que montarFiltrosNotas usa (empresa_id, data_emissao...).
+// vinculadoEm sai em UTC com "Z" (NOW() do banco, que roda em UTC).
+const SUBSELECT_VINCULO = `(
+  SELECT json_build_object(
+    'tituloId', v.sienge_titulo_id,
+    'documentoIdentificacao', v.documento_identificacao,
+    'documentoNumero', v.documento_numero,
+    'dataEmissao', v.data_emissao,
+    'valor', v.valor,
+    'credorNome', v.credor_nome,
+    'credorDocumento', v.credor_documento,
+    'vinculadoEm', to_char(v.vinculado_em, 'YYYY-MM-DD"T"HH24:MI:SS"Z"')
+  )
+  FROM espiao_notas_vinculos v
+  WHERE v.nota_id = espiao_notas.id
+) AS vinculo`;
+
 function montarFiltrosNotas(params, where, { dataInicio, dataFim, chave, numero, emissor, destinatario }, prefixo = '') {
   if (dataInicio) {
     params.push(dataInicio);
@@ -903,7 +922,8 @@ async function listNotas(empresaId, filtros) {
   const where = montarFiltrosNotas(params, 'empresa_id = $1 AND inativa = FALSE AND apenas_resumo = FALSE', filtros);
 
   const { rows } = await pool.query(
-    `SELECT id, tipo, chave_acesso, numero_nota, serie_nota, emissor, destinatario, ${colunaHoraLocal('data_emissao', 'data_emissao')}, situacao, situacao_categoria, ciente_em
+    `SELECT id, tipo, chave_acesso, numero_nota, serie_nota, emissor, destinatario, ${colunaHoraLocal('data_emissao', 'data_emissao')}, situacao, situacao_categoria, ciente_em,
+            ${SUBSELECT_VINCULO}
      FROM espiao_notas
      WHERE ${where}
      ORDER BY espiao_notas.data_emissao DESC`,
@@ -925,7 +945,8 @@ async function listNotasPorCertificado(certificadoId, filtros) {
   );
 
   const { rows } = await pool.query(
-    `SELECT id, tipo, chave_acesso, numero_nota, serie_nota, emissor, destinatario, ${colunaHoraLocal('data_emissao', 'data_emissao')}, situacao, situacao_categoria, ciente_em
+    `SELECT id, tipo, chave_acesso, numero_nota, serie_nota, emissor, destinatario, ${colunaHoraLocal('data_emissao', 'data_emissao')}, situacao, situacao_categoria, ciente_em,
+            ${SUBSELECT_VINCULO}
      FROM espiao_notas
      WHERE ${where}
      ORDER BY espiao_notas.data_emissao DESC`,
