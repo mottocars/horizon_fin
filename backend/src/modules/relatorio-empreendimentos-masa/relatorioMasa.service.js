@@ -197,7 +197,8 @@ async function buscarDadosTimeTracker() {
   };
 }
 
-// "Contas Pagas" — soma das despesas (cabecalho_evento_main.type = 'EXPENSE') rateadas por
+// "Contas Pagas" — soma das despesas já pagas (cabecalho_evento_main.type = 'EXPENSE' com
+// status ACQUITTED/CONCILIATED — baixada ou conciliada; em aberto fica de fora) rateadas por
 // centro de custo, ligado ao empreendimento por NOME (act_clients.name = nome do centro de
 // custo) — não é o mesmo client_id da Actioon nem do Time Tracker, act_clients é o cadastro de
 // clientes de dentro do banco "Financeiro" (conexão própria, empresa Masa). Cada evento que tem
@@ -247,6 +248,7 @@ async function buscarContasPagasPorCliente() {
           left join detalhe_evento_cost_centers_ratio deccr on deccr.categories_ratio_fk = decr.id
           where cem.type = 'EXPENSE'
           and coalesce(deccr.cost_center, cem.cost_center_name) is not null
+          and cem.status in ('ACQUITTED', 'CONCILIATED')
         ) t1
         where t1.nom_centro_custo <> 'TRANSFERÊNCIAS TRANSITÓRIAS'
       ) t2
