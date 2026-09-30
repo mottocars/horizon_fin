@@ -7,31 +7,74 @@ import IconButton from '../../../components/IconButton';
 import Pagination from '../../../components/Pagination';
 import SearchableSelect from '../../../components/SearchableSelect';
 import { listVanpixIntegracoes, setVanpixStatus } from '../../../api/vanpix.api';
+import { listItauIntegracoes, setItauStatus } from '../../../api/itau.api';
 import { formatCnpj } from '../../Empresas/format';
 import { useConfirm } from '../../../confirm/ConfirmContext';
 
 const LIMIT = 8;
+const LIMITE_POR_TIPO = 100;
 
-// Mesmo padrão de ZapiList.jsx (lista + busca + filtro de status + paginação). Hoje só existe
-// 1 tipo de conexão (VanPix) — a coluna "Tipo" já fica pronta pra quando outro for cadastrado,
-// e a listagem passar a juntar mais de uma tabela (ver vanpix.service.js).
+// Cada tipo de conexão tem tabela/API própria (VanPix, API Itaú).
+const TIPOS = {
+  VANPIX: {
+    rotulo: 'VanPix',
+    classes: 'bg-primary-50 text-primary-600',
+    setStatus: setVanpixStatus,
+    rota: (id) => `/integracoes/contas-bancarias/${id}`,
+  },
+  ITAU: {
+    rotulo: 'API Itaú',
+    classes: 'bg-orange-50 text-orange-600',
+    setStatus: setItauStatus,
+    rota: (id) => `/integracoes/contas-bancarias/itau/${id}`,
+  },
+};
+
+// Situação do certificado Itaú (itau.service.js::statusCertificado) que merece destaque na lista.
+const AVISO_CERTIFICADO = {
+  SEM_CERTIFICADO: { rotulo: 'Sem certificado', classes: 'bg-gray-100 text-gray-500' },
+  ERRO: { rotulo: 'Erro no certificado', classes: 'bg-red-50 text-red-600' },
+  RENOVAVEL: { rotulo: 'Renovar certificado', classes: 'bg-amber-50 text-amber-600' },
+  VENCIDO: { rotulo: 'Certificado vencido', classes: 'bg-red-50 text-red-600' },
+};
+
+function descricaoItens(item) {
+  if (item.tipo === 'ITAU') {
+    const n = item.contas.length;
+    return {
+      texto: `${n} conta${n === 1 ? '' : 's'}`,
+      titulo: item.contas.map((c) => `${c.agencia}/${c.conta}-${c.dac}`).join(', '),
+    };
+  }
+  const n = item.apelidos.length;
+  return { texto: `${n} convênio${n === 1 ? '' : 's'}`, titulo: item.apelidos.join(', ') };
+}
+
+// Mesmo padrão de ZapiList.jsx (lista + busca + filtro de status + paginação). Busca os dois
+// tipos de conexão (são poucas por empresa, então vem tudo de uma vez), junta, ordena pela
+// criação e pagina aqui no navegador.
 export default function ConveniosBancariosList() {
   const navigate = useNavigate();
   const confirm = useConfirm();
-  const [items, setItems] = useState([]);
-  const [pagination, setPagination] = useState({ page: 1, totalPages: 1 });
+  const [todos, setTodos] = useState([]);
+  const [page, setPage] = useState(1);
   const [search, setSearch] = useState('');
   const [statusFilter, setStatusFilter] = useState('todas');
   const [loading, setLoading] = useState(false);
   const [togglingId, setTogglingId] = useState(null);
 
-  const loadItems = useCallback(async (page, searchTerm, status) => {
+  const loadItems = useCallback(async (searchTerm, status) => {
     setLoading(true);
     try {
       const ativo = status === 'ativas' ? true : status === 'inativas' ? false : undefined;
-      const result = await listVanpixIntegracoes({ page, limit: LIMIT, search: searchTerm, ativo });
-      setItems(result.data);
-      setPagination(result.pagination);
+      const filtros = { page: 1, limit: LIMITE_POR_TIPO, search: searchTerm, ativo };
+      const [vanpix, itau] = await Promise.all([listVanpixIntegracoes(filtros), listItauIntegracoes(filtros)]);
+      const juntos = [
+        ...vanpix.data.map((i) => ({ ...i, tipo: 'VANPIX' })),
+        ...itau.data.map((i) => ({ ...i, tipo: 'ITAU' })),
+      ].sort((a, b) => new Date(b.criado_em) - new Date(a.criado_em));
+      setTodos(juntos);
+      setPage((atual) => Math.min(atual, Math.max(1, Math.ceil(juntos.length / LIMIT))));
     } finally {
       setLoading(false);
     }
@@ -39,7 +82,8 @@ export default function ConveniosBancariosList() {
 
   useEffect(() => {
     const timeout = setTimeout(() => {
-      loadItems(1, search, statusFilter);
+      setPage(1);
+      loadItems(search, statusFilter);
     }, 300);
     return () => clearTimeout(timeout);
   }, [search, statusFilter, loadItems]);
@@ -55,14 +99,17 @@ export default function ConveniosBancariosList() {
     });
     if (!confirmado) return;
 
-    setTogglingId(item.id);
+    setTogglingId(`${item.tipo}-${item.id}`);
     try {
-      await setVanpixStatus(item.id, novoStatus);
-      loadItems(pagination.page, search, statusFilter);
+      await TIPOS[item.tipo].setStatus(item.id, novoStatus);
+      loadItems(search, statusFilter);
     } finally {
       setTogglingId(null);
     }
   }
+
+  const totalPages = Math.max(1, Math.ceil(todos.length / LIMIT));
+  const items = todos.slice((page - 1) * LIMIT, page * LIMIT);
 
   return (
     <div className="space-y-4">
@@ -114,62 +161,69 @@ export default function ConveniosBancariosList() {
                   <th className="py-3 font-medium">CNPJ</th>
                   <th className="py-3 font-medium">Nome da conexão</th>
                   <th className="py-3 font-medium">Tipo</th>
-                  <th className="py-3 font-medium">Convênios</th>
+                  <th className="py-3 font-medium">Convênios / Contas</th>
                   <th className="py-3 font-medium">Status</th>
                   <th className="py-3 font-medium text-right">Ações</th>
                 </tr>
               </thead>
               <tbody>
-                {items.map((item) => (
-                  <tr key={item.id} className="border-b border-gray-50 last:border-0">
-                    <td className="py-3 text-gray-900">{item.empresa_razao_social}</td>
-                    <td className="py-3 text-gray-600">{formatCnpj(item.empresa_cnpj)}</td>
-                    <td className="py-3 text-gray-600">{item.nome_conexao}</td>
-                    <td className="py-3">
-                      <span className="inline-flex items-center rounded-full bg-primary-50 px-2.5 py-1 text-xs font-medium text-primary-600">
-                        VanPix
-                      </span>
-                    </td>
-                    <td className="py-3 text-gray-600">
-                      <span title={item.apelidos.join(', ')}>
-                        {item.apelidos.length} convênio{item.apelidos.length === 1 ? '' : 's'}
-                      </span>
-                    </td>
-                    <td className="py-3">
-                      <span
-                        className={`inline-flex items-center rounded-full px-2.5 py-1 text-xs font-medium ${
-                          item.ativo ? 'bg-emerald-50 text-emerald-600' : 'bg-gray-100 text-gray-500'
-                        }`}
-                      >
-                        {item.ativo ? 'Ativa' : 'Inativa'}
-                      </span>
-                    </td>
-                    <td className="py-3">
-                      <div className="flex justify-end gap-1">
-                        <IconButton title="Editar" onClick={() => navigate(`/integracoes/contas-bancarias/${item.id}`)}>
-                          <Pencil size={16} />
-                        </IconButton>
-                        <IconButton
-                          title={item.ativo ? 'Desativar' : 'Reativar'}
-                          onClick={() => handleToggleStatus(item)}
-                          disabled={togglingId === item.id}
-                          className={
-                            item.ativo ? 'hover:bg-red-50 hover:text-red-600' : 'hover:bg-emerald-50 hover:text-emerald-600'
-                          }
-                        >
-                          {item.ativo ? <Ban size={16} /> : <CheckCircle2 size={16} />}
-                        </IconButton>
-                      </div>
-                    </td>
-                  </tr>
-                ))}
+                {items.map((item) => {
+                  const tipo = TIPOS[item.tipo];
+                  const chave = `${item.tipo}-${item.id}`;
+                  const itens = descricaoItens(item);
+                  const avisoCert = item.tipo === 'ITAU' ? AVISO_CERTIFICADO[item.certificado_status] : null;
+                  return (
+                    <tr key={chave} className="border-b border-gray-50 last:border-0">
+                      <td className="py-3 text-gray-900">{item.empresa_razao_social}</td>
+                      <td className="py-3 text-gray-600">{formatCnpj(item.empresa_cnpj)}</td>
+                      <td className="py-3 text-gray-600">{item.nome_conexao}</td>
+                      <td className="py-3">
+                        <span className={`inline-flex items-center rounded-full px-2.5 py-1 text-xs font-medium ${tipo.classes}`}>
+                          {tipo.rotulo}
+                        </span>
+                      </td>
+                      <td className="py-3 text-gray-600">
+                        <span title={itens.titulo}>{itens.texto}</span>
+                      </td>
+                      <td className="py-3">
+                        <div className="flex flex-wrap items-center gap-1.5">
+                          <span
+                            className={`inline-flex items-center rounded-full px-2.5 py-1 text-xs font-medium ${
+                              item.ativo ? 'bg-emerald-50 text-emerald-600' : 'bg-gray-100 text-gray-500'
+                            }`}
+                          >
+                            {item.ativo ? 'Ativa' : 'Inativa'}
+                          </span>
+                          {avisoCert && (
+                            <span className={`inline-flex items-center rounded-full px-2.5 py-1 text-xs font-medium ${avisoCert.classes}`}>
+                              {avisoCert.rotulo}
+                            </span>
+                          )}
+                        </div>
+                      </td>
+                      <td className="py-3">
+                        <div className="flex justify-end gap-1">
+                          <IconButton title="Editar" onClick={() => navigate(tipo.rota(item.id))}>
+                            <Pencil size={16} />
+                          </IconButton>
+                          <IconButton
+                            title={item.ativo ? 'Desativar' : 'Reativar'}
+                            onClick={() => handleToggleStatus(item)}
+                            disabled={togglingId === chave}
+                            className={
+                              item.ativo ? 'hover:bg-red-50 hover:text-red-600' : 'hover:bg-emerald-50 hover:text-emerald-600'
+                            }
+                          >
+                            {item.ativo ? <Ban size={16} /> : <CheckCircle2 size={16} />}
+                          </IconButton>
+                        </div>
+                      </td>
+                    </tr>
+                  );
+                })}
               </tbody>
             </table>
-            <Pagination
-              page={pagination.page}
-              totalPages={pagination.totalPages}
-              onChange={(page) => loadItems(page, search, statusFilter)}
-            />
+            <Pagination page={page} totalPages={totalPages} onChange={setPage} />
           </>
         )}
       </Card>

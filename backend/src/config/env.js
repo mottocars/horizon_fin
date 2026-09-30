@@ -15,6 +15,11 @@ module.exports = {
     // conectar de fora.
     publicBaseUrl: process.env.MCP_PUBLIC_BASE_URL || `http://localhost:${process.env.PORT || 3001}`,
   },
+  itau: {
+    // Endereço da API de Extrato Conta Corrente do Itaú (ver integracoes-itau/itau.sts.js) —
+    // vazio usa o padrão do código. Placeholders: {statementId}, {dataInicio}, {dataFim}.
+    extratoUrl: process.env.ITAU_EXTRATO_URL || '',
+  },
   db: {
     host: process.env.DB_HOST,
     port: Number(process.env.DB_PORT || 5432),

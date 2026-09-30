@@ -6,6 +6,7 @@ const crypto = require('crypto');
 const forge = require('node-forge');
 const pool = require('../../config/db');
 const { decrypt } = require('../../utils/crypto');
+const { httpsRequest } = require('../../utils/httpsRequest');
 const { codigoUf } = require('./uf');
 
 const UPLOADS_DIR = path.join(__dirname, '..', '..', '..', 'uploads', 'certificados');
@@ -110,38 +111,6 @@ function carregarAgente(certificado) {
   const certChainPem = certsPem.join('\n');
 
   return new https.Agent({ key: keyPem, cert: certChainPem, keepAlive: false });
-}
-
-function httpsRequest({ method, url, agent, headers, body, timeoutMs = 60000 }) {
-  return new Promise((resolve, reject) => {
-    const target = new URL(url);
-    const req = https.request(
-      {
-        method,
-        hostname: target.hostname,
-        path: `${target.pathname}${target.search}`,
-        port: 443,
-        agent,
-        headers,
-        timeout: timeoutMs,
-      },
-      (res) => {
-        const chunks = [];
-        res.on('data', (c) => chunks.push(c));
-        res.on('end', () => {
-          resolve({
-            statusCode: res.statusCode,
-            headers: res.headers,
-            body: Buffer.concat(chunks),
-          });
-        });
-      }
-    );
-    req.on('timeout', () => req.destroy(new Error('Tempo limite excedido.')));
-    req.on('error', reject);
-    if (body) req.write(body);
-    req.end();
-  });
 }
 
 // ────────────────────────────────────────────────────────────────

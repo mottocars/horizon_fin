@@ -4,6 +4,7 @@ const repassesCef = require('../repasses-cef/repassesCef.service');
 const income = require('../income-sienge/income.service');
 const customers = require('../customers-sienge/customers.service');
 const clusters = require('../cobranca-clusters/cobrancaClusters.service');
+const itau = require('../integracoes-itau/itau.service');
 
 // Catálogo das atualizações que o Monitor de Integrações agenda e executa.
 // Cada uma é a MESMA função que o botão da tela de origem já chamava — o
@@ -127,6 +128,25 @@ const ROTINAS = [
       progresso({ texto: 'Recalculando os clusters dos clientes' });
       const r = await clusters.recalcularClusters(empresaId, usuarioId);
       return `${n(r.total_clientes)} cliente(s) recalculado(s) com a versão ${r.versao_utilizada} do Motor de Risco.`;
+    },
+  },
+  {
+    chave: 'itau_certificado',
+    modulo: 'Contas Bancárias',
+    nome: 'Renovação do certificado (API Itaú)',
+    descricao:
+      'Renova o certificado dinâmico das conexões API Itaú quando faltam 30 dias ou menos para vencer (o Itaú só aceita a renovação nessa janela). Fora dela, só confere a validade.',
+    integracao: 'itau',
+    async disponibilidade(empresaId) {
+      const { rowCount } = await pool.query(
+        'SELECT 1 FROM integracoes_itau WHERE empresa_id = $1 AND ativo = TRUE AND certificado_pem IS NOT NULL',
+        [empresaId]
+      );
+      return rowCount ? null : 'Esta empresa não tem uma conexão API Itaú ativa com certificado gerado (Integrações > Contas Bancárias).';
+    },
+    async executar({ empresaId, progresso }) {
+      progresso({ texto: 'Conferindo a validade dos certificados do Itaú' });
+      return itau.renovarCertificadosDaEmpresa(empresaId);
     },
   },
 ];

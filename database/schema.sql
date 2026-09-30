@@ -144,6 +144,51 @@ CREATE TABLE integracoes_vanpix_convenios (
     UNIQUE (integracao_id, apelido)
 );
 
+-- Conexão "API Itaú" (Extrato Conta Corrente) em Integrações > Contas Bancárias — mesma tela
+-- da VanPix, tabela própria (1 por tipo de conexão). O Itaú manda por CNPJ uma CREDENCIAL
+-- (client_id) e um TOKEN temporário (7 dias) que serve UMA vez: pra emitir o certificado
+-- dinâmico (mTLS, 1 ano). A chave privada é gerada aqui (nunca sai do sistema) e gravada
+-- ANTES de chamar o Itaú; a resposta crua da emissão (client_secret + certificado) é gravada
+-- assim que chega (resposta_emissao_enc) — perder essa resposta obrigaria pedir outro token
+-- ao banco. Ver backend/src/modules/integracoes-itau/itau.sts.js.
+CREATE TABLE integracoes_itau (
+    id                        SERIAL PRIMARY KEY,
+    empresa_id                INTEGER NOT NULL REFERENCES empresas(id) ON DELETE CASCADE,
+    nome_conexao              VARCHAR(150) NOT NULL,
+    client_id                 VARCHAR(100) NOT NULL,
+    token_temporario_enc      TEXT,          -- limpo depois que o certificado é emitido
+    token_temporario_validade DATE,
+    -- Subject do CSR (o CN é sempre o client_id): OU = nome da aplicação, L = cidade, ST = UF.
+    cert_ou                   VARCHAR(100) NOT NULL,
+    cert_cidade               VARCHAR(120) NOT NULL,
+    cert_uf                   VARCHAR(2) NOT NULL,
+    chave_privada_enc         TEXT,          -- PEM da chave RSA do CSR atual
+    csr_pem                   TEXT,
+    certificado_pem           TEXT,
+    chave_certificado_enc     TEXT,          -- PEM da chave que casa com certificado_pem
+    client_secret_enc         TEXT,
+    certificado_validade      TIMESTAMP,
+    certificado_emitido_em    TIMESTAMP,
+    resposta_emissao_enc      TEXT,
+    ultimo_erro               TEXT,
+    ativo                     BOOLEAN DEFAULT TRUE,
+    criado_em                 TIMESTAMP DEFAULT NOW(),
+    atualizado_em             TIMESTAMP DEFAULT NOW()
+);
+
+CREATE INDEX idx_integracoes_itau_empresa ON integracoes_itau (empresa_id);
+
+-- Contas consultadas por uma conexão Itaú — o statementId da API é agência(4) + "00" +
+-- conta(5) + DAC(1). A conta tem que ser do mesmo CNPJ da credencial.
+CREATE TABLE integracoes_itau_contas (
+    id             SERIAL PRIMARY KEY,
+    integracao_id  INTEGER NOT NULL REFERENCES integracoes_itau(id) ON DELETE CASCADE,
+    agencia        VARCHAR(4) NOT NULL,
+    conta          VARCHAR(5) NOT NULL,
+    dac            VARCHAR(1) NOT NULL,
+    UNIQUE (integracao_id, agencia, conta, dac)
+);
+
 -- Conectores MCP remotos (Model Context Protocol) — permitem que o Claude
 -- (claude.ai/Desktop, via "custom connector") consulte, só leitura, os
 -- dados de cobrança/contas a receber desta empresa (ver
