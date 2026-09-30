@@ -195,11 +195,7 @@ async function getStatus(empresaId) {
       finalizadoEm: job.finalizadoEm,
       etapas: job.etapas,
       erro: job.erro,
-      resultado: job.resultado && {
-        ...resumoDoResultado(job.resultado),
-        // Amostra dos vínculos criados, pra janela mostrar o que foi feito.
-        vinculos: job.resultado.vinculos.slice(0, 200),
-      },
+      resultado: job.resultado && resumoDoResultado(job.resultado),
     },
   };
 }

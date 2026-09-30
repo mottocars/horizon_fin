@@ -1,7 +1,6 @@
 import { useEffect, useRef, useState } from 'react';
 import {
   AlertTriangle,
-  ArrowRight,
   CheckCircle2,
   Clock,
   Inbox,
@@ -139,7 +138,6 @@ export default function VinculacaoAutomaticaModal({ open, empresaId, nomeEmpresa
   }, [open, empresaId]);
 
   const executando = job?.status === 'executando';
-  const vinculos = job?.resultado?.vinculos || [];
 
   return (
     <Modal open={open} onClose={onClose} title="Log de Vinculação" maxWidthClass="max-w-lg">
@@ -179,33 +177,10 @@ export default function VinculacaoAutomaticaModal({ open, empresaId, nomeEmpresa
             </div>
 
             {!executando && (
-              <div className="border-t border-gray-100 pt-3">
-                <p className="text-center text-xs text-gray-400">
-                  {job.status === 'erro' ? 'A varredura parou com erro.' : 'Vinculação concluída'}
-                  {job.finalizadoEm && ` · ${formatarDataHora(job.finalizadoEm)}`}
-                </p>
-                {vinculos.length > 0 && (
-                  <div className="mt-3">
-                    <p className="mb-1.5 text-xs font-medium text-gray-700">
-                      Notas vinculadas agora{job.resultado.vinculados > vinculos.length ? ` (primeiras ${vinculos.length})` : ''}
-                    </p>
-                    <ul className="max-h-56 divide-y divide-gray-100 overflow-y-auto rounded-lg border border-gray-100 text-xs">
-                      {vinculos.map((v) => (
-                        <li key={v.notaId} className="flex items-center gap-2 px-3 py-1.5">
-                          <span className="font-mono text-gray-700">{v.numero}</span>
-                          <span className="min-w-0 flex-1 truncate text-gray-500" title={v.emissor}>
-                            {v.emissor}
-                          </span>
-                          <ArrowRight size={11} className="shrink-0 text-gray-300" />
-                          <span className="shrink-0 font-mono text-emerald-700" title={v.fornecedor}>
-                            {v.tituloId}
-                          </span>
-                        </li>
-                      ))}
-                    </ul>
-                  </div>
-                )}
-              </div>
+              <p className="border-t border-gray-100 pt-3 text-center text-xs text-gray-400">
+                {job.status === 'erro' ? 'A varredura parou com erro.' : 'Vinculação concluída'}
+                {job.finalizadoEm && ` · ${formatarDataHora(job.finalizadoEm)}`}
+              </p>
             )}
           </>
         )}
