@@ -106,7 +106,7 @@ function chaveGrupoMicroEtapa(faseId, microEtapaAtual) {
   return `${faseId}::${microEtapaAtual || '(sem micro etapa)'}`;
 }
 
-// Soma as 7 colunas numéricas (Duração até Contas Pagas) de uma lista de empreendimentos —
+// Soma as 8 colunas numéricas (Duração até Contas a Pagar) de uma lista de empreendimentos —
 // usada tanto pro resumo da fase colapsada quanto pro de um grupo de Micro Etapa Atual
 // colapsado.
 function somarEmpreendimentos(empreendimentos) {
@@ -119,8 +119,9 @@ function somarEmpreendimentos(empreendimentos) {
       vgvMasa: acc.vgvMasa + (emp.vgvMasa || 0),
       segundosTrabalhados: acc.segundosTrabalhados + (emp.segundosTrabalhados || 0),
       contasPagas: acc.contasPagas + (emp.contasPagas || 0),
+      contasAPagar: acc.contasAPagar + (emp.contasAPagar || 0),
     }),
-    { duracaoDias: 0, areaM2: 0, unidades: 0, vgvGeral: 0, vgvMasa: 0, segundosTrabalhados: 0, contasPagas: 0 }
+    { duracaoDias: 0, areaM2: 0, unidades: 0, vgvGeral: 0, vgvMasa: 0, segundosTrabalhados: 0, contasPagas: 0, contasAPagar: 0 }
   );
 }
 
@@ -178,7 +179,7 @@ function construirLinhasFase(fase, microEtapasColapsadas) {
 
 // Resumo de uma fase colapsada (pedido do usuário): Micro Etapa Atual e Empreendimento viram
 // uma CONTAGEM (quantas micro etapas distintas / quantos empreendimentos), e todas as colunas
-// de Duração até Contas Pagas somam os valores de TODOS os empreendimentos da fase.
+// de Duração até Contas a Pagar somam os valores de TODOS os empreendimentos da fase.
 function calcularResumoFase(fase) {
   const microEtapas = new Set();
   for (const emp of fase.empreendimentos) {
@@ -311,7 +312,7 @@ export default function EmpreendimentosMasaPage() {
       .filter((fase) => fase.empreendimentos.length > 0 || semFiltroDeItem);
   }, [matriz, filtroEtapaAtual, filtroEmpreendimento, filtroMicroEtapa, filtroClassificacao]);
 
-  // Totalizador do rodapé — soma as 7 colunas numéricas (Duração até Contas Pagas). Sempre a
+  // Totalizador do rodapé — soma as 8 colunas numéricas (Duração até Contas a Pagar). Sempre a
   // partir da matriz JÁ FILTRADA — os totais têm que refletir só o que está visível na tela.
   const totais = useMemo(() => {
     const todosEmpreendimentos = matrizFiltrada.flatMap((fase) => fase.empreendimentos);
@@ -415,6 +416,7 @@ export default function EmpreendimentosMasaPage() {
         'VGV Masa': emp.vgvMasa ?? '',
         'Horas Trabalhadas': emp.segundosTrabalhados != null ? Number((emp.segundosTrabalhados / 3600).toFixed(1)) : '',
         'Contas Pagas': emp.contasPagas ?? '',
+        'Contas a Pagar': emp.contasAPagar ?? '',
       }))
     );
     // Arredonda pra 2 casas — somar dezenas de valores com centavos em ponto flutuante gera
@@ -432,11 +434,12 @@ export default function EmpreendimentosMasaPage() {
       'VGV Masa': arredondar(totais.vgvMasa),
       'Horas Trabalhadas': Number((totais.segundosTrabalhados / 3600).toFixed(1)),
       'Contas Pagas': arredondar(totais.contasPagas),
+      'Contas a Pagar': arredondar(totais.contasAPagar),
     });
     const planilha = XLSX.utils.json_to_sheet(linhas);
     // Índice das colunas (0-based) na mesma ordem do objeto acima — Fase=0, Tarefa=1,
     // Empreendimento=2, % Masa=3, Duração=4, M²=5, Unidades=6, VGV Geral=7, VGV Masa=8, Horas
-    // Trabalhadas=9, Contas Pagas=10.
+    // Trabalhadas=9, Contas Pagas=10, Contas a Pagar=11.
     aplicarFormatoNumerico(planilha, XLSX, 2, '#,##0');
     aplicarFormatoNumerico(planilha, XLSX, 3, '0.0"%"');
     aplicarFormatoNumerico(planilha, XLSX, 4, '#,##0');
@@ -446,6 +449,7 @@ export default function EmpreendimentosMasaPage() {
     aplicarFormatoNumerico(planilha, XLSX, 8, '"R$" #,##0.00');
     aplicarFormatoNumerico(planilha, XLSX, 9, '#,##0.0" h"');
     aplicarFormatoNumerico(planilha, XLSX, 10, '"R$" #,##0.00');
+    aplicarFormatoNumerico(planilha, XLSX, 11, '"R$" #,##0.00');
     const livro = XLSX.utils.book_new();
     XLSX.utils.book_append_sheet(livro, planilha, 'Empreendimentos Masa');
     XLSX.writeFile(livro, `empreendimentos-masa_${new Date().toISOString().slice(0, 10)}.xlsx`);
@@ -577,15 +581,18 @@ export default function EmpreendimentosMasaPage() {
                   <th className="sticky -top-6 z-20 w-28 border-b-2 border-b-primary-500 border-l border-l-primary-100 bg-primary-50 px-2 py-2.5 text-center font-medium">
                     Horas Trabalhadas
                   </th>
-                  <th className="sticky -top-6 z-20 w-32 rounded-tr-card border-b-2 border-b-primary-500 border-l border-l-primary-100 bg-primary-50 px-2 py-2.5 text-center font-medium">
+                  <th className="sticky -top-6 z-20 w-32 border-b-2 border-b-primary-500 border-l border-l-primary-100 bg-primary-50 px-2 py-2.5 text-center font-medium">
                     Contas Pagas
+                  </th>
+                  <th className="sticky -top-6 z-20 w-32 rounded-tr-card border-b-2 border-b-primary-500 border-l border-l-primary-100 bg-primary-50 px-2 py-2.5 text-center font-medium">
+                    Contas a Pagar
                   </th>
                 </tr>
               </thead>
               <tbody>
                 {semResultadoFiltro && (
                   <tr>
-                    <td colSpan={11} className="py-12 text-center text-sm text-gray-500">
+                    <td colSpan={12} className="py-12 text-center text-sm text-gray-500">
                       <p className="font-medium text-gray-700">Nenhuma linha corresponde aos filtros selecionados.</p>
                       <p className="mx-auto mt-1 max-w-sm text-xs text-gray-400">
                         Ajuste os filtros de Fase, Empreendimento, Tarefa ou Classificação pra ver as linhas de novo.
@@ -597,7 +604,7 @@ export default function EmpreendimentosMasaPage() {
                   const colapsada = fasesColapsadas.has(fase.id);
 
                   // Fase colapsada — 1 linha só de resumo: Micro Etapa Atual e Empreendimento
-                  // viram contagem, e Duração até Contas Pagas somam a fase inteira (pedido do
+                  // viram contagem, e Duração até Contas a Pagar somam a fase inteira (pedido do
                   // usuário).
                   if (colapsada) {
                     const resumo = calcularResumoFase(fase);
@@ -646,6 +653,9 @@ export default function EmpreendimentosMasaPage() {
                         <td className="border-b-2 border-b-gray-400 border-l border-l-gray-100 py-1.5 pl-4 text-xs tabular-nums text-gray-700">
                           {formatarMoeda(resumo.contasPagas)}
                         </td>
+                        <td className="border-b-2 border-b-gray-400 border-l border-l-gray-100 py-1.5 pl-4 text-xs tabular-nums text-gray-700">
+                          {formatarMoeda(resumo.contasAPagar)}
+                        </td>
                       </tr>
                     );
                   }
@@ -687,7 +697,7 @@ export default function EmpreendimentosMasaPage() {
 
                         // Grupo de Micro Etapa Atual colapsado (pedido do usuário: "mesmo
                         // comportamento do da etapa atual") — 1 linha de resumo só: Empreendimento
-                        // vira contagem, Duração até Contas Pagas somam só os empreendimentos
+                        // vira contagem, Duração até Contas a Pagar somam só os empreendimentos
                         // DAQUELE grupo (não a fase inteira).
                         if (linha.tipo === 'grupoColapsado') {
                           const resumoGrupo = somarEmpreendimentos(linha.grupo.empreendimentos);
@@ -737,6 +747,9 @@ export default function EmpreendimentosMasaPage() {
                               </td>
                               <td className={`${bordaInferior} border-l border-l-gray-100 py-1.5 pl-4 text-xs tabular-nums text-gray-700`}>
                                 {formatarMoeda(resumoGrupo.contasPagas)}
+                              </td>
+                              <td className={`${bordaInferior} border-l border-l-gray-100 py-1.5 pl-4 text-xs tabular-nums text-gray-700`}>
+                                {formatarMoeda(resumoGrupo.contasAPagar)}
                               </td>
                             </tr>
                           );
@@ -857,6 +870,15 @@ export default function EmpreendimentosMasaPage() {
                                 <span className="text-gray-300">—</span>
                               )}
                             </td>
+                            <td
+                              className={`${bordaInferior} border-l border-l-gray-100 py-1.5 pl-4 text-xs tabular-nums text-gray-700 ${corFundo}`}
+                            >
+                              {empreendimento?.contasAPagar != null ? (
+                                formatarMoeda(empreendimento.contasAPagar)
+                              ) : (
+                                <span className="text-gray-300">—</span>
+                              )}
+                            </td>
                           </tr>
                         );
                       })}
@@ -903,8 +925,11 @@ export default function EmpreendimentosMasaPage() {
                   <td className="sticky -bottom-6 z-10 w-28 border-t-2 border-t-primary-500 border-l border-l-primary-100 bg-primary-50 py-2.5 pl-4 text-xs tabular-nums">
                     {formatarHoras(totais.segundosTrabalhados)}
                   </td>
-                  <td className="sticky -bottom-6 z-10 w-32 rounded-br-card border-t-2 border-t-primary-500 border-l border-l-primary-100 bg-primary-50 py-2.5 pl-4 text-xs tabular-nums">
+                  <td className="sticky -bottom-6 z-10 w-32 border-t-2 border-t-primary-500 border-l border-l-primary-100 bg-primary-50 py-2.5 pl-4 text-xs tabular-nums">
                     {formatarMoeda(totais.contasPagas)}
+                  </td>
+                  <td className="sticky -bottom-6 z-10 w-32 rounded-br-card border-t-2 border-t-primary-500 border-l border-l-primary-100 bg-primary-50 py-2.5 pl-4 text-xs tabular-nums">
+                    {formatarMoeda(totais.contasAPagar)}
                   </td>
                 </tr>
               </tfoot>

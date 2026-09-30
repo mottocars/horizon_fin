@@ -197,32 +197,16 @@ async function buscarDadosTimeTracker() {
   };
 }
 
-// "Contas Pagas" — soma das despesas já pagas (cabecalho_evento_main.type = 'EXPENSE' com
-// status ACQUITTED/CONCILIATED — baixada ou conciliada; em aberto fica de fora) rateadas por
-// centro de custo, ligado ao empreendimento por NOME (act_clients.name = nome do centro de
-// custo) — não é o mesmo client_id da Actioon nem do Time Tracker, act_clients é o cadastro de
-// clientes de dentro do banco "Financeiro" (conexão própria, empresa Masa). Cada evento que tem
-// rateio usa o valor rateado (val_rateio); sem rateio, usa o valor cheio do evento (val_evento).
-// Já vem agrupado por client_id na própria query.
-async function buscarContasPagasPorCliente() {
-  const empresaId = await getEmpresaMasaId();
-  const credenciais = await bancoDadosService.getCredenciaisPorConexao(empresaId, CONEXAO_FINANCEIRO);
-  if (!credenciais) throw badRequest('Nenhuma conexão "Financeiro" ativa cadastrada para a Masa.');
-
-  const client = new Client({
-    host: credenciais.host,
-    port: credenciais.porta,
-    database: credenciais.banco,
-    user: credenciais.usuario,
-    password: credenciais.senha,
-    ssl: credenciais.ssl ? { rejectUnauthorized: false } : false,
-    connectionTimeoutMillis: 8000,
-  });
-
-  const contasPagasPorCliente = new Map(); // client_id -> valor pago
-  try {
-    await client.connect();
-    const { rows } = await client.query(`
+// "Contas Pagas" e "Contas a Pagar" — soma das despesas (cabecalho_evento_main.type = 'EXPENSE')
+// rateadas por centro de custo, ligado ao empreendimento por NOME (act_clients.name = nome do
+// centro de custo) — não é o mesmo client_id da Actioon nem do Time Tracker, act_clients é o
+// cadastro de clientes de dentro do banco "Financeiro" (conexão própria, empresa Masa). Cada
+// evento que tem rateio usa o valor rateado (val_rateio); sem rateio, usa o valor cheio do evento
+// (val_evento). Já vem agrupado por client_id na própria query. As duas colunas usam a MESMA
+// query, só muda o status do evento:
+// - Contas Pagas: ACQUITTED/CONCILIATED (baixada ou conciliada).
+// - Contas a Pagar: PENDING/OVERDUE (em aberto, vencida ou não).
+const SQL_CONTAS_POR_CLIENTE = `
       select
         sum(val_rateio) as valor,
         ac.id as client_id
@@ -248,23 +232,51 @@ async function buscarContasPagasPorCliente() {
           left join detalhe_evento_cost_centers_ratio deccr on deccr.categories_ratio_fk = decr.id
           where cem.type = 'EXPENSE'
           and coalesce(deccr.cost_center, cem.cost_center_name) is not null
-          and cem.status in ('ACQUITTED', 'CONCILIATED')
+          and cem.status = any($1)
         ) t1
         where t1.nom_centro_custo <> 'TRANSFERÊNCIAS TRANSITÓRIAS'
       ) t2
       left join act_clients ac on ac."name" = nom_centro_custo
       where ac.id is not null
       group by nom_centro_custo, ac.id
-    `);
+    `;
+const STATUS_CONTAS_PAGAS = ['ACQUITTED', 'CONCILIATED'];
+const STATUS_CONTAS_A_PAGAR = ['OVERDUE', 'PENDING'];
+
+async function buscarContasPorCliente() {
+  const empresaId = await getEmpresaMasaId();
+  const credenciais = await bancoDadosService.getCredenciaisPorConexao(empresaId, CONEXAO_FINANCEIRO);
+  if (!credenciais) throw badRequest('Nenhuma conexão "Financeiro" ativa cadastrada para a Masa.');
+
+  const client = new Client({
+    host: credenciais.host,
+    port: credenciais.porta,
+    database: credenciais.banco,
+    user: credenciais.usuario,
+    password: credenciais.senha,
+    ssl: credenciais.ssl ? { rejectUnauthorized: false } : false,
+    connectionTimeoutMillis: 8000,
+  });
+
+  const somarPorStatus = async (status) => {
+    const { rows } = await client.query(SQL_CONTAS_POR_CLIENTE, [status]);
+    const porCliente = new Map(); // client_id -> valor
     for (const row of rows) {
-      contasPagasPorCliente.set(Number(row.client_id), row.valor != null ? Number(row.valor) : null);
+      porCliente.set(Number(row.client_id), row.valor != null ? Number(row.valor) : null);
     }
+    return porCliente;
+  };
+
+  try {
+    await client.connect();
+    const contasPagasPorCliente = await somarPorStatus(STATUS_CONTAS_PAGAS);
+    const contasAPagarPorCliente = await somarPorStatus(STATUS_CONTAS_A_PAGAR);
+    return { contasPagasPorCliente, contasAPagarPorCliente };
   } catch {
     throw badRequest('Não foi possível conectar ao banco "Financeiro".');
   } finally {
     await client.end().catch(() => {});
   }
-  return contasPagasPorCliente;
 }
 
 // Pra cada empreendimento (client_id), acha o item de maior `order` entre todas as ocorrências
@@ -316,14 +328,14 @@ async function listMatriz() {
       segundosTrabalhadosPorCliente,
       classificacaoPorCliente,
     },
-    contasPagasPorCliente,
+    { contasPagasPorCliente, contasAPagarPorCliente },
   ] = await Promise.all([
     buscarJson(ACTIOON_ACTION_TYPES_URL, token, 'Não foi possível buscar as fases na Actioon.'),
     buscarJson(ACTIOON_CLIENTS_URL, token, 'Não foi possível buscar os empreendimentos na Actioon.'),
     buscarJson(ACTIOON_TASK_TYPES_URL, token, 'Não foi possível buscar as micro etapas na Actioon.'),
     buscarTodasActions(token),
     buscarDadosTimeTracker(),
-    buscarContasPagasPorCliente(),
+    buscarContasPorCliente(),
   ]);
 
   const ordemPorFaseId = new Map(fasesRaw.map((fase) => [fase.id, fase.order]));
@@ -367,6 +379,7 @@ async function listMatriz() {
       percentualMasa: percentualMasaPorCliente.get(clienteId) ?? null,
       segundosTrabalhados: segundosTrabalhadosPorCliente.get(clienteId) ?? null,
       contasPagas: contasPagasPorCliente.get(clienteId) ?? null,
+      contasAPagar: contasAPagarPorCliente.get(clienteId) ?? null,
       classificacao: classificacaoPorCliente.get(clienteId) ?? null,
     });
   }
@@ -393,6 +406,7 @@ async function listMatriz() {
           percentualMasa,
           segundosTrabalhados,
           contasPagas,
+          contasAPagar,
           classificacao,
         }) => ({
           id,
@@ -406,6 +420,7 @@ async function listMatriz() {
           percentualMasa,
           segundosTrabalhados,
           contasPagas,
+          contasAPagar,
           classificacao,
         })
       ),
