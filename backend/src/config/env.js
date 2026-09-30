@@ -16,6 +16,13 @@ module.exports = {
     publicBaseUrl: process.env.MCP_PUBLIC_BASE_URL || `http://localhost:${process.env.PORT || 3001}`,
   },
   itau: {
+    // Chave AES-256-GCM (32 bytes, em hex de 64 caracteres ou base64) que criptografa a chave
+    // privada, o client_secret e a resposta bruta das conexões API Itaú. Só existe aqui (env) —
+    // nunca no código nem no banco. Perdê-la torna os certificados gravados inutilizáveis.
+    // Lida na hora (getter) pra os testes poderem definir a variável depois do require.
+    get encryptionKey() {
+      return process.env.ITAU_ENCRYPTION_KEY || '';
+    },
     // Endereço da API de Extrato Conta Corrente do Itaú (ver integracoes-itau/itau.sts.js) —
     // vazio usa o padrão do código. Placeholders: {statementId}, {dataInicio}, {dataFim}.
     extratoUrl: process.env.ITAU_EXTRATO_URL || '',

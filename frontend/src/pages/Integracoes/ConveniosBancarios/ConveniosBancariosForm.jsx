@@ -14,7 +14,7 @@ import {
 } from '../../../api/vanpix.api';
 import { nomeExibicaoEmpresa } from '../../../utils/empresa';
 import { useEmpresaTravada } from '../../../hooks/useEmpresaTravada';
-import ItauConexaoForm from './ItauConexaoForm';
+import ItauNovaConexao from './ItauNovaConexao';
 import { TIPOS_CONEXAO, PLACEHOLDER_SEGREDO, estaPreenchido, classesCor, corCampo, corSelect } from './camposConexao';
 
 // Por status devolvido pelo teste (ver vanpix.service.js::testarApelido) — os dois "ok_"
@@ -51,7 +51,7 @@ export default function ConveniosBancariosForm() {
 
   const [form, setForm] = useState({
     empresa_id: '',
-    tipo: 'VANPIX',
+    tipo: isEdit ? 'VANPIX' : '',
     nome_conexao: '',
     service_key: '',
     client_secret: '',
@@ -203,18 +203,9 @@ export default function ConveniosBancariosForm() {
     }
   }
 
-  // API Itaú tem formulário próprio (certificado dinâmico, contas) — o combobox Conexão
-  // só troca entre eles na criação; a edição de uma conexão Itaú tem rota própria (/itau/:id).
-  if (!isEdit && form.tipo === 'ITAU') {
-    return (
-      <ItauConexaoForm
-        onTrocarTipo={(tipo) => handleChange('tipo', tipo)}
-        empresaIdInicial={form.empresa_id}
-        nomeInicial={form.nome_conexao}
-      />
-    );
-  }
-
+  // Nova conexão começa só com Empresa + Conexão (tipo em branco). VanPix mostra os campos de
+  // sempre; API Itaú abre o fluxo de geração do certificado (ItauNovaConexao). A edição de
+  // uma conexão Itaú tem tela própria (/itau/:id, ItauConexaoDetalhe).
   return (
     <div className="space-y-4">
       <button
@@ -231,7 +222,9 @@ export default function ConveniosBancariosForm() {
           {isEdit ? 'Editar conexão' : 'Nova conexão'}
         </h2>
         <p className="mb-4 text-sm text-gray-500">
-          Informe aqui os dados de autenticação usados para buscar os retornos bancários (extratos) junto ao provedor.
+          {form.tipo === 'ITAU'
+            ? 'API de Extrato Conta Corrente do Itaú: use a credencial e o token temporário enviados pelo Itaú para este CNPJ.'
+            : 'Informe aqui os dados de autenticação usados para buscar os retornos bancários (extratos) junto ao provedor.'}
         </p>
 
         {error && (
@@ -241,7 +234,7 @@ export default function ConveniosBancariosForm() {
         {loading ? (
           <div className="py-8 text-center text-sm text-gray-400">Carregando...</div>
         ) : (
-          <form onSubmit={handleSubmit} className="space-y-4">
+          <div className="space-y-5">
             <div className="grid grid-cols-1 gap-4 sm:grid-cols-2">
               <div>
                 <label className="mb-1 block text-sm font-medium text-gray-700">Empresa</label>
@@ -263,14 +256,32 @@ export default function ConveniosBancariosForm() {
                 <label className="mb-1 block text-sm font-medium text-gray-700">Conexão</label>
                 <SearchableSelect
                   value={form.tipo}
-                  onChange={(value) => handleChange('tipo', value)}
+                  onChange={(value) => handleChange('tipo', value || '')}
                   options={TIPOS_CONEXAO}
                   clearable={false}
                   disabled={isEdit}
+                  placeholder="Selecione o tipo de conexão"
                   corClasses={corSelect(form.tipo)}
                 />
               </div>
+            </div>
 
+            {!form.tipo && (
+              <div className="flex flex-col gap-3 border-t border-gray-100 pt-4 sm:flex-row sm:items-center sm:justify-between">
+                <p className="text-sm text-gray-400">Escolha a empresa e o tipo de conexão para continuar.</p>
+                <Button type="button" variant="secondary" onClick={() => navigate('/integracoes/contas-bancarias')}>
+                  Cancelar
+                </Button>
+              </div>
+            )}
+
+            {form.tipo === 'ITAU' && (
+              <ItauNovaConexao empresa={empresas.find((e) => String(e.id) === String(form.empresa_id)) || null} />
+            )}
+
+            {form.tipo === 'VANPIX' && (
+          <form onSubmit={handleSubmit} className="space-y-4 border-t border-gray-100 pt-4">
+            <div className="grid grid-cols-1 gap-4 sm:grid-cols-2">
               <div className="sm:col-span-2">
                 <label className="mb-1 block text-sm font-medium text-gray-700">Nome da conexão</label>
                 <input
@@ -434,6 +445,8 @@ export default function ConveniosBancariosForm() {
               </Button>
             </div>
           </form>
+            )}
+          </div>
         )}
       </Card>
     </div>

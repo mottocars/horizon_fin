@@ -10,6 +10,7 @@ import { listVanpixIntegracoes, setVanpixStatus } from '../../../api/vanpix.api'
 import { listItauIntegracoes, setItauStatus } from '../../../api/itau.api';
 import { formatCnpj } from '../../Empresas/format';
 import { useConfirm } from '../../../confirm/ConfirmContext';
+import { STATUS_ITAU } from './camposConexao';
 
 const LIMIT = 8;
 const LIMITE_POR_TIPO = 100;
@@ -30,21 +31,18 @@ const TIPOS = {
   },
 };
 
-// Situação do certificado Itaú (itau.service.js::statusCertificado) que merece destaque na lista.
-const AVISO_CERTIFICADO = {
-  SEM_CERTIFICADO: { rotulo: 'Sem certificado', classes: 'bg-gray-100 text-gray-500' },
-  ERRO: { rotulo: 'Erro no certificado', classes: 'bg-red-50 text-red-600' },
-  RENOVAVEL: { rotulo: 'Renovar certificado', classes: 'bg-amber-50 text-amber-600' },
-  VENCIDO: { rotulo: 'Certificado vencido', classes: 'bg-red-50 text-red-600' },
-};
+// Selo extra da conexão Itaú: a situação (conexoes_itau.status) e, com certificado, o vencimento.
+function avisoItau(item) {
+  if (item.certificado_vencido) return { rotulo: 'Certificado vencido', classes: 'bg-red-50 text-red-700' };
+  if (item.pode_renovar) return { rotulo: 'Renovar certificado', classes: 'bg-amber-50 text-amber-700' };
+  return STATUS_ITAU[item.status] || null;
+}
 
 function descricaoItens(item) {
   if (item.tipo === 'ITAU') {
-    const n = item.contas.length;
-    return {
-      texto: `${n} conta${n === 1 ? '' : 's'}`,
-      titulo: item.contas.map((c) => `${c.agencia}/${c.conta}-${c.dac}`).join(', '),
-    };
+    return item.identificador_conta
+      ? { texto: `Ag. ${item.agencia} · CC ${item.conta}-${item.dac}`, titulo: `Identificador: ${item.identificador_conta}` }
+      : { texto: 'Sem conta', titulo: 'Cadastre a conta na tela da conexão.' };
   }
   const n = item.apelidos.length;
   return { texto: `${n} convênio${n === 1 ? '' : 's'}`, titulo: item.apelidos.join(', ') };
@@ -71,7 +69,7 @@ export default function ConveniosBancariosList() {
       const [vanpix, itau] = await Promise.all([listVanpixIntegracoes(filtros), listItauIntegracoes(filtros)]);
       const juntos = [
         ...vanpix.data.map((i) => ({ ...i, tipo: 'VANPIX' })),
-        ...itau.data.map((i) => ({ ...i, tipo: 'ITAU' })),
+        ...itau.data.map((i) => ({ ...i, nome_conexao: i.nome, tipo: 'ITAU' })),
       ].sort((a, b) => new Date(b.criado_em) - new Date(a.criado_em));
       setTodos(juntos);
       setPage((atual) => Math.min(atual, Math.max(1, Math.ceil(juntos.length / LIMIT))));
@@ -171,7 +169,7 @@ export default function ConveniosBancariosList() {
                   const tipo = TIPOS[item.tipo];
                   const chave = `${item.tipo}-${item.id}`;
                   const itens = descricaoItens(item);
-                  const avisoCert = item.tipo === 'ITAU' ? AVISO_CERTIFICADO[item.certificado_status] : null;
+                  const avisoCert = item.tipo === 'ITAU' ? avisoItau(item) : null;
                   return (
                     <tr key={chave} className="border-b border-gray-50 last:border-0">
                       <td className="py-3 text-gray-900">{item.empresa_razao_social}</td>

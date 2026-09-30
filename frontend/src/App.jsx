@@ -16,7 +16,7 @@ import ZapiList from './pages/Integracoes/Zapi/ZapiList';
 import ZapiForm from './pages/Integracoes/Zapi/ZapiForm';
 import ConveniosBancariosList from './pages/Integracoes/ConveniosBancarios/ConveniosBancariosList';
 import ConveniosBancariosForm from './pages/Integracoes/ConveniosBancarios/ConveniosBancariosForm';
-import ItauConexaoForm from './pages/Integracoes/ConveniosBancarios/ItauConexaoForm';
+import ItauConexaoDetalhe from './pages/Integracoes/ConveniosBancarios/ItauConexaoDetalhe';
 import McpList from './pages/Integracoes/Mcp/McpList';
 import McpForm from './pages/Integracoes/Mcp/McpForm';
 import EmailList from './pages/Integracoes/Email/EmailList';
@@ -144,7 +144,7 @@ export default function App() {
             />
             <Route path="/integracoes/contas-bancarias" element={<ConveniosBancariosList />} />
             <Route path="/integracoes/contas-bancarias/nova" element={<ConveniosBancariosForm />} />
-            <Route path="/integracoes/contas-bancarias/itau/:id" element={<ItauConexaoForm />} />
+            <Route path="/integracoes/contas-bancarias/itau/:id" element={<ItauConexaoDetalhe />} />
             <Route path="/integracoes/contas-bancarias/:id" element={<ConveniosBancariosForm />} />
             <Route path="/integracoes/z-api" element={<ZapiList />} />
             <Route path="/integracoes/z-api/nova" element={<ZapiForm />} />

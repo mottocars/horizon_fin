@@ -7,6 +7,18 @@ export const TIPOS_CONEXAO = [
   { value: 'ITAU', label: 'API Itaú' },
 ];
 
+// Situações de uma conexão API Itaú (coluna conexoes_itau.status) — rótulo e cor do selo,
+// usados na lista e na tela da conexão.
+export const STATUS_ITAU = {
+  GERANDO: { rotulo: 'Gerando certificado', classes: 'bg-sky-50 text-sky-700' },
+  CERTIFICADO_ATIVO: { rotulo: 'Certificado ativo', classes: 'bg-emerald-50 text-emerald-700' },
+  AGUARDANDO_ESCOPOS: { rotulo: 'Aguardando liberação', classes: 'bg-amber-50 text-amber-700' },
+  ATIVA: { rotulo: 'Extrato liberado', classes: 'bg-emerald-50 text-emerald-700' },
+  ERRO_ITAU: { rotulo: 'Recusado pelo Itaú', classes: 'bg-red-50 text-red-700' },
+  ERRO_PROCESSAMENTO: { rotulo: 'Erro ao processar', classes: 'bg-red-50 text-red-700' },
+  ERRO_TOKEN: { rotulo: 'Erro no token', classes: 'bg-red-50 text-red-700' },
+};
+
 // Mesmo padrão de ContaBancariaItemDetalhe.jsx (corCampoFiltro no Espião NFe/NFSe): âmbar
 // quando o campo está em branco, azul claro quando já tem valor — dá pra ver de relance o
 // que ainda falta preencher na conexão.
