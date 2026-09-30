@@ -161,6 +161,10 @@ function proximoFiltro(selecionados, opcoes) {
   const todas = opcoes.every((opcao) => selecionados.some((v) => String(v) === String(opcao.value)));
   return todas ? null : selecionados;
 }
+// Valor da opção "Sem Agrupamento" do filtro de Agrupamento — casa com o empreendimento que não
+// tem agrupamento_id (null). Texto fixo, que nunca colide com um id numérico de groupings.
+const SEM_AGRUPAMENTO = 'sem-agrupamento';
+
 function passaNoFiltro(filtro, valor) {
   return filtro == null || filtro.some((v) => String(v) === String(valor));
 }
@@ -374,8 +378,12 @@ export default function EmpreendimentosMasaPage() {
     return [...nomes].sort(compararMicroEtapas).map((nome) => ({ value: nome, label: nome }));
   }, [matriz]);
 
+  // + "Sem Agrupamento" no fim, pra quem não tem agrupamento_id nenhum (ver SEM_AGRUPAMENTO).
   const opcoesAgrupamento = useMemo(
-    () => agrupamentos.map((agrupamento) => ({ value: agrupamento.id, label: agrupamento.nome })),
+    () => [
+      ...agrupamentos.map((agrupamento) => ({ value: agrupamento.id, label: agrupamento.nome })),
+      { value: SEM_AGRUPAMENTO, label: 'Sem Agrupamento' },
+    ],
     [agrupamentos]
   );
 
@@ -398,7 +406,7 @@ export default function EmpreendimentosMasaPage() {
           (emp) =>
             passaNoFiltro(filtroEmpreendimento, emp.name) &&
             passaNoFiltro(filtroMicroEtapa, emp.microEtapaAtual) &&
-            passaNoFiltro(filtroAgrupamento, emp.agrupamentoId) &&
+            passaNoFiltro(filtroAgrupamento, emp.agrupamentoId ?? SEM_AGRUPAMENTO) &&
             (filtroClassificacao.length === 0 || filtroClassificacao.includes(emp.classificacao))
         ),
       }))
@@ -936,9 +944,6 @@ export default function EmpreendimentosMasaPage() {
                 emptyMessage="Nenhum agrupamento encontrado."
                 corClasses={filtroAgrupamento != null ? 'border-primary-500' : 'border-gray-200'}
               />
-              {filtroAgrupamento == null && (
-                <p className="mt-1 text-xs text-gray-400">Todos os agrupamentos — inclusive empreendimentos sem agrupamento.</p>
-              )}
             </div>
 
             <div>
