@@ -5,6 +5,7 @@ import {
   Check,
   CheckCircle2,
   Copy,
+  Download,
   FileText,
   Info,
   Link2,
@@ -139,7 +140,22 @@ function Rotulo({ children }) {
   return <p className="text-[10px] font-semibold uppercase tracking-wider text-gray-400">{children}</p>;
 }
 
-function CartaoNota({ nota }) {
+function BotaoArquivo({ rotulo, Icon, onClick, baixando }) {
+  return (
+    <button
+      type="button"
+      onClick={onClick}
+      disabled={baixando}
+      title={`Baixar ${rotulo}`}
+      className="inline-flex items-center gap-1 rounded-md border border-gray-200 px-2 py-1 text-xs font-medium text-gray-600 transition hover:border-primary-200 hover:bg-primary-50 hover:text-primary-700 disabled:opacity-60"
+    >
+      {baixando ? <Loader2 size={12} className="animate-spin" /> : <Icon size={12} />}
+      {rotulo}
+    </button>
+  );
+}
+
+function CartaoNota({ nota, onBaixarPdf, onBaixarXml, baixandoPdf, baixandoXml }) {
   const [copiado, setCopiado] = useState(false);
   const ehServico = nota.tipo === 'NFSE';
   const TipoIcon = ehServico ? Wrench : Package;
@@ -168,7 +184,7 @@ function CartaoNota({ nota }) {
         {nota.emissor || 'Emissor não informado'}
       </p>
       <p className="font-mono text-xs text-gray-500">{formatarDocumento(nota.documentoEmissor)}</p>
-      <div className="mt-3 grid grid-cols-2 gap-3">
+      <div className="mt-3 grid grid-cols-3 gap-3">
         <div>
           <Rotulo>Número</Rotulo>
           <p className="mt-0.5 font-mono text-sm text-gray-800">
@@ -179,6 +195,15 @@ function CartaoNota({ nota }) {
         <div>
           <Rotulo>Emissão</Rotulo>
           <p className="mt-0.5 text-sm text-gray-800">{formatarDataIso(nota.dataEmissao)}</p>
+        </div>
+        {/* Mesmos downloads das colunas PDF/XML da tabela — pra conferir a
+            nota contra o título sem sair da janela. */}
+        <div>
+          <Rotulo>Arquivos</Rotulo>
+          <div className="mt-0.5 flex gap-1.5">
+            <BotaoArquivo rotulo="PDF" Icon={FileText} onClick={onBaixarPdf} baixando={baixandoPdf} />
+            <BotaoArquivo rotulo="XML" Icon={Download} onClick={onBaixarXml} baixando={baixandoXml} />
+          </div>
         </div>
       </div>
       <div className="mt-3">
@@ -344,7 +369,18 @@ const FILTROS = [
 // - nota já vinculada (aba Vinculadas): abre direto no vínculo, sem consultar
 //   o Sienge, com Desvincular e "Trocar título" (que carrega a lista).
 // O vínculo gravado é 1 título por nota, e um título não pode estar em duas notas.
-export default function VincularTituloModal({ nota, dataInicio, dataFim, onClose, onVinculoAlterado, onIrParaConfiguracoes }) {
+export default function VincularTituloModal({
+  nota,
+  dataInicio,
+  dataFim,
+  onClose,
+  onVinculoAlterado,
+  onIrParaConfiguracoes,
+  onBaixarPdf,
+  onBaixarXml,
+  baixandoPdf,
+  baixandoXml,
+}) {
   const confirm = useConfirm();
   const [dados, setDados] = useState(null);
   const [carregando, setCarregando] = useState(false);
@@ -646,12 +682,18 @@ export default function VincularTituloModal({ nota, dataInicio, dataFim, onClose
   }
 
   const podeInteragir = dados?.configurado && titulos.length > 0;
+  const propsArquivos = {
+    onBaixarPdf: () => onBaixarPdf(nota),
+    onBaixarXml: () => onBaixarXml(nota),
+    baixandoPdf,
+    baixandoXml,
+  };
 
   return (
     <Modal open={Boolean(nota)} onClose={onClose} title={titulo} maxWidthClass="max-w-6xl">
       {nota && !modoLista && (
         <div className="flex flex-col gap-4">
-          <CartaoNota nota={resumoDaNota(nota)} />
+          <CartaoNota nota={resumoDaNota(nota)} {...propsArquivos} />
           {vinculoAtual && (
             <BannerVinculoAtual
               vinculo={vinculoAtual}
@@ -660,7 +702,7 @@ export default function VincularTituloModal({ nota, dataInicio, dataFim, onClose
               onTrocar={handleTrocar}
             />
           )}
-          <div className="flex flex-col gap-3 border-t border-gray-100 pt-4 sm:flex-row sm:items-center">
+          <div className="flex shrink-0 flex-col gap-3 border-t border-gray-100 pt-4 sm:flex-row sm:items-center">
             <div className="min-w-0 flex-1 text-sm">
               {erroAcao && (
                 <p className="flex items-center gap-1.5 text-red-600">
@@ -676,19 +718,27 @@ export default function VincularTituloModal({ nota, dataInicio, dataFim, onClose
         </div>
       )}
       {nota && modoLista && (
-        <div className="flex min-h-0 flex-col gap-4">
-          <div className="grid grid-cols-1 gap-3 md:grid-cols-[minmax(0,1fr)_300px]">
-            <CartaoNota nota={dados?.nota || resumoDaNota(nota)} />
+        // Layout em coluna que cabe inteiro na altura da janela (Modal limita
+        // em 90vh): cartões, banner e rodapé ficam com a altura deles
+        // (shrink-0) e SÓ a lista de títulos estica/encolhe (flex-1 +
+        // min-h-0), rolando por dentro. Antes a lista tinha altura própria
+        // (max-h-[46vh]) dentro de uma caixa que encolhia com overflow
+        // escondido — em tela mais baixa, o fim da lista ficava cortado.
+        <div className="flex min-h-0 flex-1 flex-col gap-4">
+          <div className="grid shrink-0 grid-cols-1 gap-3 md:grid-cols-[minmax(0,1fr)_300px]">
+            <CartaoNota nota={dados?.nota || resumoDaNota(nota)} {...propsArquivos} />
             <CartaoConsulta dados={dados} carregando={carregando} onAtualizar={() => carregar({ atualizar: true })} />
           </div>
 
           {vinculoAtual && (
-            <BannerVinculoAtual vinculo={vinculoAtual} onDesvincular={handleDesvincular} desvinculando={desvinculando} />
+            <div className="shrink-0">
+              <BannerVinculoAtual vinculo={vinculoAtual} onDesvincular={handleDesvincular} desvinculando={desvinculando} />
+            </div>
           )}
 
-          <div className="flex min-h-0 flex-col overflow-hidden rounded-xl border border-gray-200">
+          <div className="flex min-h-60 flex-1 flex-col overflow-hidden rounded-xl border border-gray-200">
             {podeInteragir && (
-              <div className="flex flex-col gap-2 border-b border-gray-200 bg-white px-3 py-2.5 sm:flex-row sm:items-center">
+              <div className="flex shrink-0 flex-col gap-2 border-b border-gray-200 bg-white px-3 py-2.5 sm:flex-row sm:items-center">
                 <div className="relative flex-1">
                   <Search size={14} className="pointer-events-none absolute left-3 top-1/2 -translate-y-1/2 text-gray-400" />
                   <input
@@ -718,11 +768,11 @@ export default function VincularTituloModal({ nota, dataInicio, dataFim, onClose
                 </div>
               </div>
             )}
-            <div className="max-h-[46vh] min-h-60 overflow-y-auto">{corpoLista}</div>
+            <div className="min-h-0 flex-1 overflow-y-auto">{corpoLista}</div>
           </div>
 
           {/* Rodapé — resumo do que vai ser gravado + ações. */}
-          <div className="flex flex-col gap-3 border-t border-gray-100 pt-4 sm:flex-row sm:items-center">
+          <div className="flex shrink-0 flex-col gap-3 border-t border-gray-100 pt-4 sm:flex-row sm:items-center">
             <div className="min-w-0 flex-1 text-sm">
               {erroAcao ? (
                 <p className="flex items-center gap-1.5 text-red-600">

@@ -1827,6 +1827,10 @@ export default function EspiaoNfeNfsePage() {
         dataFim={dataFim}
         onClose={() => setNotaVinculo(null)}
         onVinculoAlterado={handleVinculoAlterado}
+        onBaixarPdf={handleDownloadPdf}
+        onBaixarXml={handleDownload}
+        baixandoPdf={notaVinculo ? baixando.has(`${notaVinculo.id}:pdf`) : false}
+        baixandoXml={notaVinculo ? baixando.has(`${notaVinculo.id}:xml`) : false}
         onIrParaConfiguracoes={() => {
           setNotaVinculo(null);
           setAbaNotas('configuracoes');
