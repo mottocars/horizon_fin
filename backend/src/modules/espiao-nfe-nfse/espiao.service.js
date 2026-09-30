@@ -807,6 +807,15 @@ async function listEmpresasComStatus() {
   return rows;
 }
 
+// data_emissao/data_evento são TIMESTAMP sem fuso e guardam o horário local
+// que veio no XML (o Postgres descarta o "-03:00" do dhEmi). Se saíssem como
+// Date, o pg (container em UTC) as leria como UTC e o navegador recuaria 3h —
+// nota emitida às 00:00 do dia 25 aparecia como dia 24. Devolvidas como texto
+// sem fuso, o navegador as interpreta como horário local, igual ao da nota.
+function colunaHoraLocal(coluna, alias) {
+  return `to_char(${coluna}, 'YYYY-MM-DD"T"HH24:MI:SS') AS ${alias}`;
+}
+
 function montarFiltrosNotas(params, where, { dataInicio, dataFim, chave, numero, emissor, destinatario }, prefixo = '') {
   if (dataInicio) {
     params.push(dataInicio);
@@ -882,10 +891,10 @@ async function listNotas(empresaId, filtros) {
   const where = montarFiltrosNotas(params, 'empresa_id = $1 AND inativa = FALSE AND apenas_resumo = FALSE', filtros);
 
   const { rows } = await pool.query(
-    `SELECT id, tipo, chave_acesso, numero_nota, serie_nota, emissor, destinatario, data_emissao, situacao, situacao_categoria, ciente_em
+    `SELECT id, tipo, chave_acesso, numero_nota, serie_nota, emissor, destinatario, ${colunaHoraLocal('data_emissao', 'data_emissao')}, situacao, situacao_categoria, ciente_em
      FROM espiao_notas
      WHERE ${where}
-     ORDER BY data_emissao DESC`,
+     ORDER BY espiao_notas.data_emissao DESC`,
     params
   );
 
@@ -904,10 +913,10 @@ async function listNotasPorCertificado(certificadoId, filtros) {
   );
 
   const { rows } = await pool.query(
-    `SELECT id, tipo, chave_acesso, numero_nota, serie_nota, emissor, destinatario, data_emissao, situacao, situacao_categoria, ciente_em
+    `SELECT id, tipo, chave_acesso, numero_nota, serie_nota, emissor, destinatario, ${colunaHoraLocal('data_emissao', 'data_emissao')}, situacao, situacao_categoria, ciente_em
      FROM espiao_notas
      WHERE ${where}
-     ORDER BY data_emissao DESC`,
+     ORDER BY espiao_notas.data_emissao DESC`,
     params
   );
 
@@ -992,7 +1001,7 @@ async function listNotasInativadas(empresaId, filtros) {
   );
 
   const { rows } = await pool.query(
-    `SELECT n.id, n.tipo, n.chave_acesso, n.numero_nota, n.serie_nota, n.emissor, n.destinatario, n.data_emissao, n.situacao, n.situacao_categoria,
+    `SELECT n.id, n.tipo, n.chave_acesso, n.numero_nota, n.serie_nota, n.emissor, n.destinatario, ${colunaHoraLocal('n.data_emissao', 'data_emissao')}, n.situacao, n.situacao_categoria,
             n.inativada_em, n.motivo_inativacao,
             u.nome AS inativada_por_nome
      FROM espiao_notas n
@@ -1018,7 +1027,7 @@ async function listNotasInativadasPorCertificado(certificadoId, filtros) {
   );
 
   const { rows } = await pool.query(
-    `SELECT n.id, n.tipo, n.chave_acesso, n.numero_nota, n.serie_nota, n.emissor, n.destinatario, n.data_emissao, n.situacao, n.situacao_categoria,
+    `SELECT n.id, n.tipo, n.chave_acesso, n.numero_nota, n.serie_nota, n.emissor, n.destinatario, ${colunaHoraLocal('n.data_emissao', 'data_emissao')}, n.situacao, n.situacao_categoria,
             n.inativada_em, n.motivo_inativacao,
             u.nome AS inativada_por_nome
      FROM espiao_notas n
@@ -1053,7 +1062,7 @@ async function getArquivoNota(notaId) {
 // bagunçaria a ordem se usado como critério principal.
 async function listEventosPorNota(notaId) {
   const { rows } = await pool.query(
-    `SELECT id, descricao, categoria, data_evento, criado_em
+    `SELECT id, descricao, categoria, ${colunaHoraLocal('data_evento', 'data_evento')}, criado_em
      FROM espiao_notas_eventos
      WHERE nota_id = $1
      ORDER BY id ASC`,
