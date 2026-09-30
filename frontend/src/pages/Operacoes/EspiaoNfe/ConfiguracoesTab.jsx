@@ -29,7 +29,6 @@ const CODIGOS_DOCUMENTO = [
         documento <Cod>NFE</Cod>.
       </>
     ),
-    placeholder: 'Ex.: NFE',
   },
   {
     chave: 'codigoDocumentoNfse',
@@ -45,7 +44,6 @@ const CODIGOS_DOCUMENTO = [
         título com documento <Cod>NFS</Cod>.
       </>
     ),
-    placeholder: 'Ex.: NFS',
   },
 ];
 
@@ -103,12 +101,11 @@ function CampoCodigo({ campo, value, onChange, disabled, primeiro }) {
         value={value}
         maxLength={20}
         disabled={disabled}
-        placeholder={campo.placeholder}
         spellCheck={false}
         autoComplete="off"
         aria-label={campo.label}
         onChange={(e) => onChange(campo.chave, e.target.value.replace(/\s/g, '').toUpperCase())}
-        className={`w-full rounded-lg border px-3 py-2 text-center font-mono text-sm uppercase tracking-wide transition-colors placeholder:normal-case placeholder:tracking-normal placeholder:text-gray-400 focus:outline-none focus:ring-2 focus:ring-primary-100 ${estadoCampo(
+        className={`w-full rounded-lg border px-3 py-2 text-center font-mono text-sm uppercase tracking-wide transition-colors focus:outline-none focus:ring-2 focus:ring-primary-100 ${estadoCampo(
           value,
           disabled
         )}`}
@@ -150,7 +147,7 @@ function ResumoConfiguracao({ codigos }) {
               </div>
               <ArrowRight size={14} className="shrink-0 text-gray-300" />
               {codigo ? (
-                <span className="max-w-[96px] truncate rounded-md bg-primary-50 px-2 py-1 font-mono text-xs font-semibold text-primary-700">
+                <span className="max-w-24 truncate rounded-md bg-primary-50 px-2 py-1 font-mono text-xs font-semibold text-primary-700">
                   {codigo}
                 </span>
               ) : (
