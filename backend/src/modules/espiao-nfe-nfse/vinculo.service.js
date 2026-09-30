@@ -178,21 +178,29 @@ async function buscarCredores(credenciais, ids) {
   return porId;
 }
 
-// Quão provável é o título ser o desta nota — o que um conciliador olharia
-// primeiro: mesmo número de documento e mesmo fornecedor (CNPJ/CPF do
-// credor = emissor da nota, tirado da chave de acesso).
-function avaliarSugestao(titulo, credor, nota, documentoEmissor) {
-  const numeroConfere =
-    Boolean(numeroNormalizado(nota.numero_nota)) &&
-    numeroNormalizado(titulo.documentNumber) === numeroNormalizado(nota.numero_nota);
-  const fornecedorConfere = Boolean(documentoEmissor) && soDigitos(credor?.documento) === documentoEmissor;
-  if (numeroConfere && fornecedorConfere) return 'forte';
-  if (fornecedorConfere) return 'fornecedor';
-  if (numeroConfere) return 'numero';
-  return null;
+// Confere o título contra a nota nas 3 hipóteses (pedido do usuário):
+// - cnpj: CPF/CNPJ do credor = emissor da nota (tirado da chave de acesso);
+// - data: data de emissão do título = data de emissão da nota;
+// - numero: nº do documento do título = nº da nota (sem zeros à esquerda).
+// Sugerido = pelo menos 1 das 3; `pontuacao` (0-3) = quantas conferem.
+function conferirTitulo(titulo, credor, nota, documentoEmissor) {
+  const numeroNota = numeroNormalizado(nota.numero_nota);
+  const dataNota = String(nota.data_emissao || '').slice(0, 10);
+  const conferencia = {
+    cnpj: Boolean(documentoEmissor) && soDigitos(credor?.documento) === documentoEmissor,
+    data: Boolean(dataNota) && String(titulo.issueDate || '').slice(0, 10) === dataNota,
+    numero: Boolean(numeroNota) && numeroNormalizado(titulo.documentNumber) === numeroNota,
+  };
+  const pontuacao = Object.values(conferencia).filter(Boolean).length;
+  return { conferencia, pontuacao };
 }
 
-const ORDEM_SUGESTAO = { forte: 0, numero: 1, fornecedor: 2 };
+// Desempate entre títulos com a mesma pontuação — qual hipótese sozinha diz
+// mais: nº do documento é quase uma identidade; CNPJ restringe ao
+// fornecedor; data igual é a mais fraca (vários títulos no mesmo dia).
+const PESO_HIPOTESE = { numero: 4, cnpj: 2, data: 1 };
+const pesoConferencia = (conferencia) =>
+  Object.entries(conferencia).reduce((soma, [hipotese, confere]) => soma + (confere ? PESO_HIPOTESE[hipotese] : 0), 0);
 
 async function getVinculo(notaId) {
   const { rows } = await pool.query(
@@ -270,18 +278,21 @@ async function listTitulosParaNota(notaId, { dataInicio, dataFim, atualizar = fa
         observacao: titulo.notes || null,
         cadastradoPor: titulo.registeredBy || null,
         fornecedor: credor,
-        sugestao: avaliarSugestao(titulo, credor, nota, documentoEmissor),
+        ...conferirTitulo(titulo, credor, nota, documentoEmissor),
         vinculadoAOutraNota: outraNota
           ? { notaId: outraNota.nota_id, numero: outraNota.numero_nota, emissor: outraNota.emissor }
           : null,
       };
     })
-    .sort((a, b) => {
-      const sa = ORDEM_SUGESTAO[a.sugestao] ?? 9;
-      const sb = ORDEM_SUGESTAO[b.sugestao] ?? 9;
-      if (sa !== sb) return sa - sb;
-      return String(b.dataEmissao).localeCompare(String(a.dataEmissao)) || b.id - a.id;
-    });
+    // Mais chances primeiro: quantas hipóteses conferem (3 → 0), depois o
+    // peso de cada uma, depois o mais recente.
+    .sort(
+      (a, b) =>
+        b.pontuacao - a.pontuacao ||
+        pesoConferencia(b.conferencia) - pesoConferencia(a.conferencia) ||
+        String(b.dataEmissao).localeCompare(String(a.dataEmissao)) ||
+        b.id - a.id
+    );
 
   return {
     configurado: true,

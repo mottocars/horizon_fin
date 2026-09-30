@@ -52,8 +52,6 @@ import {
   baixarNotaPdfEspiao,
   inativarNotasEspiao,
   reativarNotasEspiao,
-  declararCienciaEspiao,
-  desmarcarCienciaEspiao,
   listEventosNotaEspiao,
 } from '../../../api/espiao.api';
 
@@ -71,13 +69,15 @@ const EMPTY_FILTROS = { chave: '', numero: '', emissor: '', destinatario: '' };
 // Estados das notas, no mesmo estilo de aba "navegador" usado em
 // Repasses CEF (ver componente Tabs) — cor só no ícone de cada aba (não no
 // fundo/texto), pra ficar reconhecível de relance sem virar um botão colorido
-// gigante. Os ids ('novas'/'cientes'/'inativas') ficaram dos nomes antigos
-// das abas — são os mesmos usados pela API (contagem e destino ao reativar).
+// gigante. Os ids batem com as chaves da contagem da API (notas-resumo).
+// Recebidas × Vinculadas é decidido só pelo vínculo com o contas a pagar do
+// Sienge (ver VincularTituloModal): vinculou, a nota passa sozinha pra
+// Vinculadas; desvinculou, volta pra Recebidas.
 const TABS_NOTAS = [
   { id: 'novas', label: 'Recebidas', icon: Inbox, iconColorClass: 'text-primary-600' },
-  { id: 'cientes', label: 'Relacionadas', icon: CheckCircle, iconColorClass: 'text-emerald-600' },
-  { id: 'canceladas', label: 'Canceladas', icon: XCircle, iconColorClass: 'text-red-600' },
+  { id: 'vinculadas', label: 'Vinculadas', icon: CheckCircle, iconColorClass: 'text-emerald-600' },
   { id: 'inativas', label: 'Inativadas', icon: Archive, iconColorClass: 'text-yellow-500' },
+  { id: 'canceladas', label: 'Canceladas', icon: XCircle, iconColorClass: 'text-red-600' },
 ];
 
 const NOME_ABA = Object.fromEntries(TABS_NOTAS.map((tab) => [tab.id, tab.label]));
@@ -152,21 +152,20 @@ function diasParaVencer(validadeAte) {
 // duplicado em outro lugar da linha.
 const DIAS_ALERTA_VENCIMENTO = 10;
 
-// Recebidas/Relacionadas/Canceladas (ver TABS_NOTAS) filtram, do lado do
-// cliente, o MESMO dataset de notas ativas — o backend já manda `ciente_em`
-// e `situacao_categoria` em cada nota (ver
+// Recebidas/Vinculadas/Canceladas (ver TABS_NOTAS) filtram, do lado do
+// cliente, o MESMO dataset de notas ativas — o backend já manda `vinculo` e
+// `situacao_categoria` em cada nota (ver
 // espiao.service.js::listNotasPorCertificado), então não precisa de outra
 // chamada à API pra trocar de aba. Nota cancelada fica SÓ em Canceladas
-// (sai de Recebidas/Relacionadas, tenha ciência ou não). 'inativas' é um
-// dataset à parte (endpoint próprio, ver carregarNotas/
-// carregarNotasDeTodosCertificados), então passa direto sem filtrar de novo
-// — nota cancelada que foi inativada continua lá.
+// (vinculada ou não). 'inativas' é um dataset à parte (endpoint próprio,
+// ver carregarNotas/carregarNotasDeTodosCertificados), então passa direto
+// sem filtrar de novo — nota cancelada que foi inativada continua lá.
 function filtrarNotasPorAba(lista, aba, inativas) {
   if (inativas) return lista;
   const cancelada = (n) => n.situacao_categoria === 'cancelada';
   if (aba === 'canceladas') return lista.filter(cancelada);
-  if (aba === 'cientes') return lista.filter((n) => n.ciente_em && !cancelada(n));
-  return lista.filter((n) => !n.ciente_em && !cancelada(n));
+  if (aba === 'vinculadas') return lista.filter((n) => n.vinculo && !cancelada(n));
+  return lista.filter((n) => !n.vinculo && !cancelada(n));
 }
 
 // Tabela inteira reestruturada nos moldes de GestaoParcelasTab.jsx (pedido
@@ -208,7 +207,9 @@ const LARGURA_VINCULAR = 6;
 const COLUNAS_NOVAS = [
   20, 4, 4, 14, 8, 8, 4, 4, LARGURA_VINCULAR, LARGURA_CONSULTA, LARGURA_ATUALIZAR, LARGURA_VENCIMENTO,
 ];
-const COLUNAS_CIENTES = [34, 5, 5, 22, 10, 10, 7, 7];
+// Vinculadas: mesmas colunas de Canceladas + Vincular (ver/desvincular).
+const COLUNAS_VINCULADAS = [31, 5, 5, 20, 10, 10, 6, 6, 7];
+const COLUNAS_CANCELADAS = [34, 5, 5, 22, 10, 10, 7, 7];
 const COLUNAS_INATIVAS = [30, 5, 5, 18, 8, 8, 16, 5, 5];
 
 // Colunas da caixa "Sem nota no período" (ver mostrarCaixaSemNotas) — bem
@@ -230,11 +231,11 @@ const COLUNAS_SEM_NOTAS = [
 // `temNivel2` diz se algum certificado desta tabela está expandido mostrando
 // nota — só faz sentido escrever "/ Nota" no cabeçalho quando isso é
 // verdade; fechado (ou na caixa "Sem nota", que nunca expande), o
-// cabeçalho fica só "Empresa". `mostrarAcoes` (só true em "Novas Notas") diz
+// cabeçalho fica só "Empresa". `mostrarAcoes` (só true em Recebidas) diz
 // se as 3 últimas colunas (Consulta/Atualizar/Vencimento) aparecem — nas
-// outras abas nem o cabeçalho delas existe (ver COLUNAS_CIENTES/
-// COLUNAS_INATIVAS).
-function CabecalhoTabela({ modoInativas, mostrarAcoes, temNivel2 = false }) {
+// outras abas nem o cabeçalho delas existe. `mostrarVincular` (Recebidas e
+// Vinculadas) faz o mesmo pra coluna Vincular.
+function CabecalhoTabela({ modoInativas, mostrarAcoes, mostrarVincular, temNivel2 = false }) {
   return (
     <thead className="sticky top-0 z-10 bg-white shadow-sm">
       <tr className="text-xs uppercase tracking-wide text-gray-400">
@@ -255,9 +256,11 @@ function CabecalhoTabela({ modoInativas, mostrarAcoes, temNivel2 = false }) {
         )}
         <th className={`${DIV_H_CABECALHO} ${DIV_V} py-2.5 text-center font-medium`}>PDF</th>
         <th className={`${DIV_H_CABECALHO} ${DIV_V} py-2.5 text-center font-medium`}>XML</th>
+        {mostrarVincular && (
+          <th className={`${DIV_H_CABECALHO} ${DIV_V} px-1 py-2.5 text-center font-medium`}>Vincular</th>
+        )}
         {mostrarAcoes && (
           <>
-            <th className={`${DIV_H_CABECALHO} ${DIV_V} px-1 py-2.5 text-center font-medium`}>Vincular</th>
             <th className={`${DIV_H_CABECALHO} ${DIV_V} px-2 py-2.5 text-center font-medium`}>Consulta</th>
             <th className={`${DIV_H_CABECALHO} ${DIV_V} px-1 py-2.5 text-center font-medium`}>Atualizar</th>
             <th className={`${DIV_H_CABECALHO} ${DIV_V} px-2 py-2.5 text-center font-medium`}>Vencimento</th>
@@ -296,6 +299,7 @@ function LinhaNota({
   tipo,
   modoInativas,
   mostrarAcoes,
+  mostrarVincular,
   selecionada,
   onToggleSelecionada,
   onBaixarPdf,
@@ -410,11 +414,13 @@ function LinhaNota({
           e só em "Novas Notas" (ver mostrarAcoes) — em branco aqui, mesma
           regra de Título/Vencimento em branco no Nível 1 de
           GestaoParcelasTab.jsx. */}
+      {mostrarVincular && (
+        <td className={`${DIV_H} ${DIV_V} text-center`}>
+          <BotaoVincular vinculo={nota.vinculo} onClick={() => onAbrirVinculo(nota)} />
+        </td>
+      )}
       {mostrarAcoes && (
         <>
-          <td className={`${DIV_H} ${DIV_V} text-center`}>
-            <BotaoVincular vinculo={nota.vinculo} onClick={() => onAbrirVinculo(nota)} />
-          </td>
           <td className={`${DIV_H} ${DIV_V}`}></td>
           <td className={`${DIV_H} ${DIV_V}`}></td>
           <td className={`${DIV_H} ${DIV_V}`}></td>
@@ -431,7 +437,7 @@ function LinhaNota({
 // desvincular.
 function BotaoVincular({ vinculo, onClick }) {
   const titulo = vinculo
-    ? `Vinculada ao título ${vinculo.tituloId}${vinculo.documentoNumero ? ` (${vinculo.documentoIdentificacao || ''} ${vinculo.documentoNumero})` : ''}${vinculo.credorNome ? ` — ${vinculo.credorNome}` : ''}. Clique para ver ou trocar.`
+    ? `Vinculada ao título ${vinculo.tituloId}${vinculo.documentoNumero ? ` (${vinculo.documentoIdentificacao || ''} ${vinculo.documentoNumero})` : ''}${vinculo.credorNome ? ` — ${vinculo.credorNome}` : ''}. Clique para ver ou desvincular.`
     : 'Vincular a um título do contas a pagar (Sienge)';
   return (
     <button
@@ -575,7 +581,7 @@ export default function EspiaoNfeNfsePage() {
   // destinatário) — diferente do total por certificado (ver
   // renderCertificado), que é sempre o total real do certificado, sem
   // filtro nenhum. null = ainda não carregou.
-  const [contagemAbas, setContagemAbas] = useState({ novas: null, cientes: null, canceladas: null, inativas: null });
+  const [contagemAbas, setContagemAbas] = useState({ novas: null, vinculadas: null, inativas: null, canceladas: null });
 
   // Padrão: ontem até hoje (pedido do usuário) — não só hoje, pra não
   // começar a tela vazia num dia sem nenhuma nota emitida ainda.
@@ -615,8 +621,6 @@ export default function EspiaoNfeNfsePage() {
     });
   }
   const [reativandoLote, setReativandoLote] = useState(false);
-  const [declarandoCiencia, setDeclarandoCiencia] = useState(false);
-  const [desmarcandoCiencia, setDesmarcandoCiencia] = useState(false);
 
   // Notas marcadas pelo usuário — pra inativar (notas ativas) ou reativar
   // (notas inativadas), dependendo do modo. Guarda o objeto inteiro (não só
@@ -654,6 +658,8 @@ export default function EspiaoNfeNfsePage() {
       });
       return next;
     });
+    // Vincular/desvincular muda a nota de aba (Recebidas <-> Vinculadas).
+    carregarContagemAbas();
   }
 
   // filtroTexto é o que o usuário está digitando, do jeito que ele digitou
@@ -727,7 +733,7 @@ export default function EspiaoNfeNfsePage() {
     setCertificados([]);
     setNotasPorCertificado({});
     setSelecionadas(new Map());
-    setContagemAbas({ novas: null, cientes: null, canceladas: null, inativas: null });
+    setContagemAbas({ novas: null, vinculadas: null, inativas: null, canceladas: null });
     carregarCertificados();
     carregarContagemAbas();
     // eslint-disable-next-line react-hooks/exhaustive-deps
@@ -739,8 +745,9 @@ export default function EspiaoNfeNfsePage() {
 
   // Entrar/sair da aba "Inativas" troca o dataset inteiro por certificado
   // (endpoint próprio) — zera notas em cache e seleção, mas mantém empresa,
-  // datas e filtros exatamente como estavam. Só entre 'novas'/'cientes' não
-  // passa por aqui: é o mesmo dataset, só muda o filtro do lado do cliente.
+  // datas e filtros exatamente como estavam. Entre Recebidas/Vinculadas/
+  // Canceladas não passa por aqui: é o mesmo dataset, só muda o filtro do
+  // lado do cliente.
   useEffect(() => {
     setNotasPorCertificado({});
     setSelecionadas(new Map());
@@ -1045,24 +1052,23 @@ export default function EspiaoNfeNfsePage() {
     }
   }
 
-  // destino: 'novas' ou 'cientes' — escolha explícita de pra qual aba a
-  // nota reativada vai (ver espiao.service.js::reativarNotas). Sempre some
-  // da lista local de inativadas, já que esse dataset só existe aqui
-  // enquanto a aba Inativas está aberta.
-  async function handleReativarSelecionadas(destino) {
+  // Reativa as notas selecionadas — cada uma volta pra Recebidas ou
+  // Vinculadas conforme tenha vínculo com o Sienge (ver filtrarNotasPorAba).
+  // Sempre some da lista local de inativadas, já que esse dataset só existe
+  // aqui enquanto a aba Inativadas está aberta.
+  async function handleReativarSelecionadas() {
     if (selecionadas.size === 0) return;
     const notaIds = Array.from(selecionadas.keys());
-    const nomeAba = NOME_ABA[destino];
     const confirmado = await confirm({
-      title: `Reativar para ${nomeAba}`,
-      description: `${notaIds.length} nota(s) vão voltar a aparecer em "${nomeAba}".`,
+      title: 'Reativar notas',
+      description: `${notaIds.length} nota(s) vão voltar para "${NOME_ABA.novas}" (ou "${NOME_ABA.vinculadas}", se já estiverem vinculadas a um título).`,
       confirmLabel: 'Reativar',
     });
     if (!confirmado) return;
 
     setReativandoLote(true);
     try {
-      await reativarNotasEspiao(notaIds, destino);
+      await reativarNotasEspiao(notaIds, 'novas');
 
       // Some da lista de inativadas na hora, sem precisar recarregar do zero.
       setNotasPorCertificado((prev) => {
@@ -1077,10 +1083,11 @@ export default function EspiaoNfeNfsePage() {
         });
         return next;
       });
+      carregarContagemAbas();
 
       await alert({
         title: 'Notas reativadas',
-        description: `${notaIds.length} nota(s) reativada(s) para "${nomeAba}".`,
+        description: `${notaIds.length} nota(s) reativada(s).`,
         variant: 'default',
       });
 
@@ -1096,113 +1103,22 @@ export default function EspiaoNfeNfsePage() {
     }
   }
 
-  // Desfaz a ciência das notas selecionadas — voltam a aparecer em "Novas
-  // Notas". Continua na aba Cientes (não muda de aba), mesma lógica de
-  // handleDeclararCiencia: quem processa em lote quer seguir na mesma tela.
-  async function handleVoltarParaNovas() {
-    if (selecionadas.size === 0) return;
-    const notaIds = Array.from(selecionadas.keys());
-    const confirmado = await confirm({
-      title: `Voltar para ${NOME_ABA.novas}`,
-      description: `${notaIds.length} nota(s) vão voltar a aparecer em "${NOME_ABA.novas}".`,
-      confirmLabel: 'Voltar',
-    });
-    if (!confirmado) return;
-
-    setDesmarcandoCiencia(true);
-    try {
-      await desmarcarCienciaEspiao(notaIds);
-
-      setNotasPorCertificado((prev) => {
-        const next = { ...prev };
-        selecionadas.forEach(({ certificadoId }, notaId) => {
-          const dados = next[certificadoId];
-          if (!dados) return;
-          const desmarcar = (lista) => lista.map((n) => (n.id === notaId ? { ...n, ciente_em: null } : n));
-          next[certificadoId] = { produtos: desmarcar(dados.produtos), servicos: desmarcar(dados.servicos) };
-        });
-        return next;
-      });
-
-      await alert({
-        title: 'Notas movidas',
-        description: `${notaIds.length} nota(s) voltaram para "${NOME_ABA.novas}".`,
-        variant: 'default',
-      });
-
-      limparSelecao();
-    } catch (err) {
-      await alert({
-        title: 'Não foi possível mover as notas',
-        description: err.response?.data?.message || `Não foi possível mover as notas selecionadas para ${NOME_ABA.novas}.`,
-        variant: 'warning',
-      });
-    } finally {
-      setDesmarcandoCiencia(false);
-    }
-  }
-
-  // Marca as notas selecionadas como cientes — saem da aba "Novas" e passam
-  // a aparecer em "Cientes" (ver TABS_NOTAS/filtrarNotasPorAba). Diferente
-  // de inativar: a nota continua na tela comum, só muda de aba; por isso
-  // não some da lista local, só ganha `ciente_em`.
-  async function handleDeclararCiencia() {
-    if (selecionadas.size === 0) return;
-    const notaIds = Array.from(selecionadas.keys());
-    const confirmado = await confirm({
-      title: 'Declarar ciência das notas selecionadas',
-      description: `${notaIds.length} nota(s) vão passar da aba "${NOME_ABA.novas}" para "${NOME_ABA.cientes}".`,
-      confirmLabel: 'Declarar ciência',
-    });
-    if (!confirmado) return;
-
-    setDeclarandoCiencia(true);
-    try {
-      const notas = await declararCienciaEspiao(notaIds);
-      const cienteEmPorId = new Map(notas.map((n) => [n.id, n.ciente_em]));
-
-      setNotasPorCertificado((prev) => {
-        const next = { ...prev };
-        selecionadas.forEach(({ certificadoId }, notaId) => {
-          const dados = next[certificadoId];
-          if (!dados || !cienteEmPorId.has(notaId)) return;
-          const marcar = (lista) =>
-            lista.map((n) => (n.id === notaId ? { ...n, ciente_em: cienteEmPorId.get(notaId) } : n));
-          next[certificadoId] = { produtos: marcar(dados.produtos), servicos: marcar(dados.servicos) };
-        });
-        return next;
-      });
-
-      // Fica em Novas Notas (não troca de aba) — quem está processando um
-      // lote quer continuar na mesma tela pra seguir com o resto da lista.
-      await alert({
-        title: 'Ciência declarada',
-        description: `${notaIds.length} nota(s) marcada(s) como ciente.`,
-        variant: 'default',
-      });
-
-      limparSelecao();
-    } catch (err) {
-      await alert({
-        title: 'Não foi possível declarar ciência',
-        description: err.response?.data?.message || 'Não foi possível declarar ciência das notas selecionadas.',
-        variant: 'warning',
-      });
-    } finally {
-      setDeclarandoCiencia(false);
-    }
-  }
-
-  // Só "Novas Notas" mostra Consulta/Atualizar/Vencimento (é a única aba de
-  // onde dá pra disparar uma consulta) — em Cientes/Inativas nem a coluna
-  // nem o cabeçalho aparecem (ver CabecalhoTabela/COLUNAS_CIENTES/
-  // COLUNAS_INATIVAS).
+  // Só Recebidas mostra Consulta/Atualizar/Vencimento (é a única aba de
+  // onde dá pra disparar uma consulta) — nas outras nem a coluna nem o
+  // cabeçalho aparecem (ver CabecalhoTabela).
   const mostrarAcoes = abaNotas === 'novas';
+  // Coluna Vincular: em Recebidas (vincular) e em Vinculadas (ver/desvincular).
+  const mostrarVincular = abaNotas === 'novas' || abaNotas === 'vinculadas';
 
   // Quantas colunas a tabela principal tem nesta aba — só usado pro colSpan
   // da linha de "Carregando notas...".
-  // Canceladas usa o mesmo layout de Relacionadas (sem as colunas de ação).
-  const colunasAtuais = modoInativas ? COLUNAS_INATIVAS : abaNotas === 'novas' ? COLUNAS_NOVAS : COLUNAS_CIENTES;
+  const colunasAtuais = modoInativas
+    ? COLUNAS_INATIVAS
+    : abaNotas === 'novas'
+      ? COLUNAS_NOVAS
+      : abaNotas === 'vinculadas'
+        ? COLUNAS_VINCULADAS
+        : COLUNAS_CANCELADAS;
   const totalColunas = colunasAtuais.length;
 
   // Só escreve "/ Nota" no cabeçalho da Caixa 1 quando pelo menos 1
@@ -1226,9 +1142,9 @@ export default function EspiaoNfeNfsePage() {
   function renderCertificado(certificado) {
     const vencido = estaVencido(certificado.validade_ate);
     const notas = notasPorCertificado[certificado.id];
-    // 'novas'/'cientes' filtram o MESMO dataset de notas ativas por
-    // ciente_em (ver filtrarNotasPorAba); 'inativas' já veio como um
-    // dataset totalmente à parte, então passa direto.
+    // Recebidas/Vinculadas/Canceladas filtram o MESMO dataset de notas
+    // ativas (ver filtrarNotasPorAba); 'inativas' já veio como um dataset
+    // totalmente à parte, então passa direto.
     const produtosVisiveis = notas ? filtrarNotasPorAba(notas.produtos, abaNotas, modoInativas) : null;
     const servicosVisiveis = notas ? filtrarNotasPorAba(notas.servicos, abaNotas, modoInativas) : null;
     const carregandoNotas = Boolean(loadingNotas[certificado.id]);
@@ -1319,9 +1235,9 @@ export default function EspiaoNfeNfsePage() {
           {modoInativas && <td className={`${DIV_H} ${DIV_V}`}></td>}
           <td className={`${DIV_H} ${DIV_V}`}></td>
           <td className={`${DIV_H} ${DIV_V}`}></td>
+          {mostrarVincular && <td className={`${DIV_H} ${DIV_V}`}></td>}
           {mostrarAcoes && (
             <>
-              <td className={`${DIV_H} ${DIV_V}`}></td>
               <td className={`${DIV_H} ${DIV_V} py-2 text-center`}>
                 {certificado.ultima_consulta_em && (
                   <span title={`Última consulta: ${formatarDataHora(certificado.ultima_consulta_em)}`} className="text-gray-500">
@@ -1384,6 +1300,7 @@ export default function EspiaoNfeNfsePage() {
               tipo={tipo}
               modoInativas={modoInativas}
               mostrarAcoes={mostrarAcoes}
+              mostrarVincular={mostrarVincular}
               selecionada={selecionadas.has(nota.id)}
               onToggleSelecionada={() => toggleSelecionada(certificado.id, tipo, nota)}
               onBaixarPdf={() => handleDownloadPdf(nota)}
@@ -1607,8 +1524,8 @@ export default function EspiaoNfeNfsePage() {
                 <p className="py-8 text-center text-sm text-gray-400">
                   {modoInativas
                     ? 'Nenhuma nota inativada no período selecionado.'
-                    : abaNotas === 'cientes'
-                    ? 'Nenhuma nota relacionada no período selecionado.'
+                    : abaNotas === 'vinculadas'
+                    ? 'Nenhuma nota vinculada no período selecionado.'
                     : abaNotas === 'canceladas'
                     ? 'Nenhuma nota cancelada no período selecionado.'
                     : 'Nenhum certificado tem nota no período selecionado.'}
@@ -1647,6 +1564,7 @@ export default function EspiaoNfeNfsePage() {
                         <CabecalhoTabela
                           modoInativas={modoInativas}
                           mostrarAcoes={mostrarAcoes}
+                          mostrarVincular={mostrarVincular}
                           temNivel2={algumCertificadoAberto}
                         />
                         {filtrando && (
@@ -1841,59 +1759,19 @@ export default function EspiaoNfeNfsePage() {
               Cancelar
             </Button>
             {modoInativas ? (
-              <>
-                <Button
-                  className="!border-primary-600 !bg-primary-600 !text-white hover:!bg-primary-700"
-                  loading={reativandoLote}
-                  onClick={() => handleReativarSelecionadas('novas')}
-                >
-                  <RotateCcw size={15} />
-                  Reativar p/ {NOME_ABA.novas}
-                </Button>
-                <Button
-                  className="!border-emerald-600 !bg-emerald-600 !text-white hover:!bg-emerald-700"
-                  loading={reativandoLote}
-                  onClick={() => handleReativarSelecionadas('cientes')}
-                >
-                  <RotateCcw size={15} />
-                  Reativar p/ {NOME_ABA.cientes}
-                </Button>
-              </>
-            ) : abaNotas === 'canceladas' ? (
+              <Button
+                className="!border-primary-600 !bg-primary-600 !text-white hover:!bg-primary-700"
+                loading={reativandoLote}
+                onClick={handleReativarSelecionadas}
+              >
+                <RotateCcw size={15} />
+                Reativar
+              </Button>
+            ) : (
               <Button variant="danger" onClick={() => setModalInativar(true)}>
                 <Ban size={15} />
                 Inativar
               </Button>
-            ) : abaNotas === 'cientes' ? (
-              <>
-                <Button
-                  className="!border-primary-600 !bg-primary-600 !text-white hover:!bg-primary-700"
-                  loading={desmarcandoCiencia}
-                  onClick={handleVoltarParaNovas}
-                >
-                  <RotateCcw size={15} />
-                  Voltar p/ {NOME_ABA.novas}
-                </Button>
-                <Button variant="danger" onClick={() => setModalInativar(true)}>
-                  <Ban size={15} />
-                  Inativar
-                </Button>
-              </>
-            ) : (
-              <>
-                <Button
-                  className="!border-emerald-600 !bg-emerald-600 !text-white hover:!bg-emerald-700"
-                  loading={declarandoCiencia}
-                  onClick={handleDeclararCiencia}
-                >
-                  <CheckCircle size={15} />
-                  Declarar Ciência
-                </Button>
-                <Button variant="danger" onClick={() => setModalInativar(true)}>
-                  <Ban size={15} />
-                  Inativar
-                </Button>
-              </>
             )}
           </div>
         </div>

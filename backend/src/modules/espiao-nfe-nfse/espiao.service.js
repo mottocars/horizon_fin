@@ -875,6 +875,7 @@ function montarFiltrosNotas(params, where, { dataInicio, dataFim, chave, numero,
 // situacao_categoria pode ser NULL (nota sem nenhum evento ainda) — IS DISTINCT
 // FROM trata NULL como "não cancelada", diferente de <>.
 const NAO_CANCELADA = "situacao_categoria IS DISTINCT FROM 'cancelada'";
+const TEM_VINCULO = 'EXISTS (SELECT 1 FROM espiao_notas_vinculos v WHERE v.nota_id = espiao_notas.id)';
 
 async function contarNotasPorAba(empresaId, filtros) {
   const paramsAtivas = [empresaId];
@@ -884,11 +885,12 @@ async function contarNotasPorAba(empresaId, filtros) {
     filtros
   );
   const { rows: ativas } = await pool.query(
-    // Nota cancelada conta só em "canceladas", nunca em novas/cientes — mesma
-    // regra de EspiaoNfeNfsePage.jsx::filtrarNotasPorAba.
+    // Recebidas (novas) × Vinculadas = tem ou não vínculo com um título do
+    // Sienge (espiao_notas_vinculos); cancelada conta só em "canceladas" —
+    // mesma regra de EspiaoNfeNfsePage.jsx::filtrarNotasPorAba.
     `SELECT
-       count(*) FILTER (WHERE ciente_em IS NULL AND ${NAO_CANCELADA})::int AS novas,
-       count(*) FILTER (WHERE ciente_em IS NOT NULL AND ${NAO_CANCELADA})::int AS cientes,
+       count(*) FILTER (WHERE NOT ${TEM_VINCULO} AND ${NAO_CANCELADA})::int AS novas,
+       count(*) FILTER (WHERE ${TEM_VINCULO} AND ${NAO_CANCELADA})::int AS vinculadas,
        count(*) FILTER (WHERE NOT ${NAO_CANCELADA})::int AS canceladas
      FROM espiao_notas
      WHERE ${whereAtivas}`,
@@ -908,7 +910,7 @@ async function contarNotasPorAba(empresaId, filtros) {
 
   return {
     novas: ativas[0].novas,
-    cientes: ativas[0].cientes,
+    vinculadas: ativas[0].vinculadas,
     canceladas: ativas[0].canceladas,
     inativas: inativas[0].total,
   };

@@ -15,7 +15,6 @@ import {
   RefreshCw,
   Search,
   Settings,
-  Sparkles,
   Wrench,
 } from 'lucide-react';
 import Modal from '../../../components/Modal';
@@ -56,24 +55,83 @@ function formatarDocumento(doc) {
 }
 
 const soDigitos = (v) => String(v ?? '').replace(/\D/g, '');
+
+// Mesmo recorte de vinculo.service.js::documentoEmissorDaChave — CNPJ/CPF do
+// emissor direto da chave de acesso (NF-e: posições 6-19; NFS-e: 9-22).
+function documentoEmissorDaChave(tipo, chave) {
+  const d = soDigitos(chave);
+  if (tipo === 'NFE' && d.length === 44) return d.slice(6, 20);
+  if (tipo === 'NFSE' && d.length === 50) return d.slice(9, 23);
+  return null;
+}
+
+// Nota como vem na listagem da tela -> formato do CartaoNota (o mesmo `nota`
+// que o backend devolve junto com os títulos) — pra mostrar o cartão já na
+// abertura, sem esperar a consulta ao Sienge.
+function resumoDaNota(nota) {
+  return {
+    tipo: nota.tipo,
+    numero: nota.numero_nota,
+    serie: nota.serie_nota,
+    emissor: nota.emissor,
+    documentoEmissor: documentoEmissorDaChave(nota.tipo, nota.chave_acesso),
+    dataEmissao: nota.data_emissao,
+    chaveAcesso: nota.chave_acesso,
+  };
+}
 const semAcento = (v) =>
   String(v ?? '')
     .normalize('NFD')
     .replace(/[̀-ͯ]/g, '')
     .toLowerCase();
 
-// ─── sugestão ──────────────────────────────────────────────────────────────
+// ─── conferência ───────────────────────────────────────────────────────────
 
-// Como o backend avaliou cada título contra a nota (ver
-// vinculo.service.js::avaliarSugestao).
-const SUGESTAO = {
-  forte: { rotulo: 'Nº e fornecedor conferem', classe: 'bg-emerald-50 text-emerald-700 ring-emerald-200' },
-  numero: { rotulo: 'Nº confere', classe: 'bg-primary-50 text-primary-700 ring-primary-100' },
-  fornecedor: { rotulo: 'Fornecedor confere', classe: 'bg-amber-50 text-amber-700 ring-amber-200' },
+// As 3 hipóteses que o backend confere em cada título (ver
+// vinculo.service.js::conferirTitulo). Sugerido = pelo menos 1 confere;
+// `pontuacao` = quantas conferem (0-3), já usada na ordenação do backend.
+const HIPOTESES = [
+  { id: 'cnpj', rotulo: 'CNPJ', descricao: 'CPF/CNPJ do fornecedor igual ao do emissor da nota' },
+  { id: 'data', rotulo: 'Data', descricao: 'Data de emissão igual à da nota' },
+  { id: 'numero', rotulo: 'Nº', descricao: 'Nº do documento igual ao nº da nota' },
+];
+
+const COR_PONTUACAO = {
+  3: 'bg-emerald-500 text-white',
+  2: 'bg-primary-500 text-white',
+  1: 'bg-amber-400 text-white',
 };
 
-const numeroConfere = (sugestao) => sugestao === 'forte' || sugestao === 'numero';
-const fornecedorConfere = (sugestao) => sugestao === 'forte' || sugestao === 'fornecedor';
+const destaque = (confere) => (confere ? 'font-semibold text-emerald-700' : '');
+
+function Conferencia({ titulo }) {
+  if (!titulo.pontuacao) return <span className="text-[11px] text-gray-300">Sem conferência</span>;
+  return (
+    <div className="flex items-center gap-1.5">
+      <span
+        title={`${titulo.pontuacao} de 3 hipóteses conferem`}
+        className={`inline-flex h-5 min-w-8 items-center justify-center rounded-full px-1.5 text-[10px] font-bold tabular-nums ${COR_PONTUACAO[titulo.pontuacao]}`}
+      >
+        {titulo.pontuacao}/3
+      </span>
+      {HIPOTESES.map((h) => {
+        const confere = titulo.conferencia?.[h.id];
+        return (
+          <span
+            key={h.id}
+            title={`${h.descricao}: ${confere ? 'confere' : 'não confere'}`}
+            className={`inline-flex items-center gap-0.5 rounded px-1 py-px text-[10px] font-semibold ${
+              confere ? 'bg-emerald-50 text-emerald-700 ring-1 ring-emerald-200' : 'text-gray-300'
+            }`}
+          >
+            {confere && <Check size={9} strokeWidth={3} />}
+            {h.rotulo}
+          </span>
+        );
+      })}
+    </div>
+  );
+}
 
 // ─── peças visuais ─────────────────────────────────────────────────────────
 
@@ -201,7 +259,7 @@ function CartaoConsulta({ dados, carregando, onAtualizar }) {
   );
 }
 
-function BannerVinculoAtual({ vinculo, onDesvincular, desvinculando }) {
+function BannerVinculoAtual({ vinculo, onDesvincular, desvinculando, onTrocar }) {
   return (
     <div className="flex flex-col gap-3 rounded-xl border border-emerald-200 bg-emerald-50 px-4 py-3 sm:flex-row sm:items-center">
       <span className="flex h-8 w-8 shrink-0 items-center justify-center rounded-full bg-emerald-100 text-emerald-600">
@@ -225,10 +283,18 @@ function BannerVinculoAtual({ vinculo, onDesvincular, desvinculando }) {
             ` · vinculado em ${formatarDataHora(vinculo.vinculadoEm)}${vinculo.vinculadoPorNome ? ` por ${vinculo.vinculadoPorNome}` : ''}`}
         </p>
       </div>
-      <Button variant="secondary" onClick={onDesvincular} loading={desvinculando} className="shrink-0">
-        <Link2Off size={15} />
-        Desvincular
-      </Button>
+      <div className="flex shrink-0 gap-2">
+        {onTrocar && (
+          <Button variant="secondary" onClick={onTrocar}>
+            <RefreshCw size={15} />
+            Trocar título
+          </Button>
+        )}
+        <Button variant="secondary" onClick={onDesvincular} loading={desvinculando}>
+          <Link2Off size={15} />
+          Desvincular
+        </Button>
+      </div>
     </div>
   );
 }
@@ -269,13 +335,15 @@ const FILTROS = [
   { id: 'disponiveis', rotulo: 'Disponíveis' },
 ];
 
-// Janela de vinculação de uma nota recebida a um título do contas a pagar do
-// Sienge (coluna VINCULAR da aba Recebidas). Lista todos os títulos do
-// período da tela com o código de documento configurado pro tipo da nota
-// (aba Configurações), já ordenados pelos que mais parecem ser desta nota
-// (mesmo nº de documento e/ou mesmo fornecedor — ver
-// vinculo.service.js::avaliarSugestao). O vínculo gravado é 1 título por
-// nota, e um título não pode estar em duas notas.
+// Janela de vinculação de uma nota a um título do contas a pagar do Sienge
+// (coluna VINCULAR). Dois modos:
+// - nota sem vínculo (aba Recebidas): lista todos os títulos do período da
+//   tela com o código de documento configurado pro tipo da nota (aba
+//   Configurações), ordenados pelos que mais conferem com ela (CNPJ, data e
+//   nº — ver vinculo.service.js::conferirTitulo);
+// - nota já vinculada (aba Vinculadas): abre direto no vínculo, sem consultar
+//   o Sienge, com Desvincular e "Trocar título" (que carrega a lista).
+// O vínculo gravado é 1 título por nota, e um título não pode estar em duas notas.
 export default function VincularTituloModal({ nota, dataInicio, dataFim, onClose, onVinculoAlterado, onIrParaConfiguracoes }) {
   const confirm = useConfirm();
   const [dados, setDados] = useState(null);
@@ -287,6 +355,8 @@ export default function VincularTituloModal({ nota, dataInicio, dataFim, onClose
   const [gravando, setGravando] = useState(false);
   const [desvinculando, setDesvinculando] = useState(false);
   const [erroAcao, setErroAcao] = useState('');
+  // false = nota já vinculada, mostrando só o vínculo (até "Trocar título").
+  const [modoLista, setModoLista] = useState(true);
 
   function carregar({ atualizar = false } = {}) {
     if (!nota) return;
@@ -296,11 +366,12 @@ export default function VincularTituloModal({ nota, dataInicio, dataFim, onClose
     listTitulosSiengeParaNota(nota.id, { dataInicio, dataFim, atualizar })
       .then((resposta) => {
         setDados(resposta);
-        // Já deixa marcado o título atual; sem vínculo, pré-seleciona a
-        // sugestão forte quando ela é única e livre (o usuário só confirma).
+        // Já deixa marcado o título atual; sem vínculo, pré-seleciona o
+        // título que confere nas 3 hipóteses quando ele é único e livre (o
+        // usuário só confirma).
         const atual = resposta.vinculoAtual?.tituloId ?? null;
-        const fortes = resposta.titulos.filter((t) => t.sugestao === 'forte' && !t.vinculadoAOutraNota);
-        setSelecionadoId(atual ?? (fortes.length === 1 ? fortes[0].id : null));
+        const completos = resposta.titulos.filter((t) => t.pontuacao === 3 && !t.vinculadoAOutraNota);
+        setSelecionadoId(atual ?? (completos.length === 1 ? completos[0].id : null));
       })
       .catch((err) => setErro(err.response?.data?.message || 'Não foi possível consultar os títulos no Sienge.'))
       .finally(() => setCarregando(false));
@@ -311,15 +382,23 @@ export default function VincularTituloModal({ nota, dataInicio, dataFim, onClose
     setBusca('');
     setFiltro('todos');
     setSelecionadoId(null);
-    carregar();
+    setErroAcao('');
+    const jaVinculada = Boolean(nota?.vinculo);
+    setModoLista(!jaVinculada);
+    if (!jaVinculada) carregar();
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [nota?.id]);
+
+  function handleTrocar() {
+    setModoLista(true);
+    carregar();
+  }
 
   const titulos = useMemo(() => dados?.titulos || [], [dados]);
   const contagem = useMemo(
     () => ({
       todos: titulos.length,
-      sugeridos: titulos.filter((t) => t.sugestao).length,
+      sugeridos: titulos.filter((t) => t.pontuacao > 0).length,
       disponiveis: titulos.filter((t) => !t.vinculadoAOutraNota).length,
     }),
     [titulos]
@@ -329,7 +408,7 @@ export default function VincularTituloModal({ nota, dataInicio, dataFim, onClose
     const termo = semAcento(busca.trim());
     const termoDigitos = soDigitos(busca);
     return titulos.filter((t) => {
-      if (filtro === 'sugeridos' && !t.sugestao) return false;
+      if (filtro === 'sugeridos' && !t.pontuacao) return false;
       if (filtro === 'disponiveis' && t.vinculadoAOutraNota) return false;
       if (!termo) return true;
       if (semAcento(t.fornecedor?.nome).includes(termo)) return true;
@@ -339,7 +418,9 @@ export default function VincularTituloModal({ nota, dataInicio, dataFim, onClose
   }, [titulos, busca, filtro]);
 
   const selecionado = titulos.find((t) => t.id === selecionadoId) || null;
-  const vinculoAtual = dados?.vinculoAtual || null;
+  // Antes da consulta ao Sienge (modo só-vínculo), o vínculo vem da própria
+  // nota da listagem.
+  const vinculoAtual = dados ? dados.vinculoAtual : nota?.vinculo || null;
   const mesmoDoAtual = Boolean(vinculoAtual && selecionadoId === vinculoAtual.tituloId);
 
   async function handleVincular() {
@@ -378,6 +459,10 @@ export default function VincularTituloModal({ nota, dataInicio, dataFim, onClose
     try {
       await desvincularTituloSiengeNota(nota.id);
       onVinculoAlterado(nota, null);
+      if (!modoLista) {
+        onClose();
+        return;
+      }
       setDados((prev) => ({ ...prev, vinculoAtual: null }));
       setSelecionadoId(null);
     } catch (err) {
@@ -393,8 +478,10 @@ export default function VincularTituloModal({ nota, dataInicio, dataFim, onClose
         <img src={logoSienge} alt="" className="h-5 w-5" />
       </span>
       <span>
-        <span className="block leading-tight">Vincular ao contas a pagar</span>
-        <span className="block text-xs font-normal text-gray-500">Escolha o título do Sienge que corresponde a esta nota</span>
+        <span className="block leading-tight">{modoLista ? 'Vincular ao contas a pagar' : 'Nota vinculada ao contas a pagar'}</span>
+        <span className="block text-xs font-normal text-gray-500">
+          {modoLista ? 'Escolha o título do Sienge que corresponde a esta nota' : 'Título do Sienge ao qual esta nota está vinculada'}
+        </span>
       </span>
     </span>
   );
@@ -459,8 +546,8 @@ export default function VincularTituloModal({ nota, dataInicio, dataFim, onClose
           <col style={{ width: '11%' }} />
           <col style={{ width: '10%' }} />
           <col />
-          <col style={{ width: '13%' }} />
-          <col style={{ width: '18%' }} />
+          <col style={{ width: '12%' }} />
+          <col style={{ width: '21%' }} />
         </colgroup>
         <thead className="sticky top-0 z-10 bg-white">
           <tr className="text-[11px] uppercase tracking-wide text-gray-400">
@@ -478,7 +565,7 @@ export default function VincularTituloModal({ nota, dataInicio, dataFim, onClose
             const bloqueado = Boolean(t.vinculadoAOutraNota);
             const marcado = t.id === selecionadoId;
             const atual = vinculoAtual?.tituloId === t.id;
-            const sugestao = SUGESTAO[t.sugestao];
+            const conf = t.conferencia || {};
             return (
               <tr
                 key={t.id}
@@ -512,18 +599,16 @@ export default function VincularTituloModal({ nota, dataInicio, dataFim, onClose
                     </span>
                   )}
                 </td>
-                <td
-                  className={`border-b border-gray-100 px-2 py-2.5 font-mono ${
-                    numeroConfere(t.sugestao) ? 'font-semibold text-emerald-700' : 'text-gray-700'
-                  }`}
-                >
+                <td className={`border-b border-gray-100 px-2 py-2.5 font-mono text-gray-700 ${destaque(conf.numero)}`}>
                   {t.documentoNumero || '—'}
                 </td>
-                <td className="border-b border-gray-100 px-2 py-2.5 text-gray-600">{formatarDataIso(t.dataEmissao)}</td>
+                <td className={`border-b border-gray-100 px-2 py-2.5 text-gray-600 ${destaque(conf.data)}`}>
+                  {formatarDataIso(t.dataEmissao)}
+                </td>
                 <td className="border-b border-gray-100 px-2 py-2.5">
                   <div className="flex items-center gap-1.5">
                     <p
-                      className={`truncate ${fornecedorConfere(t.sugestao) ? 'font-semibold text-emerald-700' : bloqueado ? '' : 'text-gray-900'}`}
+                      className={`truncate ${bloqueado ? '' : 'text-gray-900'}`}
                       title={t.fornecedor?.nome || ''}
                     >
                       {t.fornecedor?.nome || 'Fornecedor não encontrado'}
@@ -534,7 +619,7 @@ export default function VincularTituloModal({ nota, dataInicio, dataFim, onClose
                       </span>
                     )}
                   </div>
-                  <p className="font-mono text-[11px] text-gray-400">{t.fornecedor?.documento || '—'}</p>
+                  <p className={`font-mono text-[11px] text-gray-400 ${destaque(conf.cnpj)}`}>{t.fornecedor?.documento || '—'}</p>
                 </td>
                 <td className="border-b border-gray-100 px-2 py-2.5 text-right tabular-nums text-gray-800">
                   {formatarMoeda(t.valor)}
@@ -548,14 +633,9 @@ export default function VincularTituloModal({ nota, dataInicio, dataFim, onClose
                       <Lock size={10} className="shrink-0" />
                       Nota {t.vinculadoAOutraNota.numero || '—'}
                     </span>
-                  ) : sugestao ? (
-                    <span
-                      className={`inline-flex max-w-full items-center gap-1 truncate rounded-full px-2 py-0.5 text-[11px] font-medium ring-1 ${sugestao.classe}`}
-                    >
-                      {t.sugestao === 'forte' && <Sparkles size={10} className="shrink-0" />}
-                      {sugestao.rotulo}
-                    </span>
-                  ) : null}
+                  ) : (
+                    <Conferencia titulo={t} />
+                  )}
                 </td>
               </tr>
             );
@@ -569,10 +649,36 @@ export default function VincularTituloModal({ nota, dataInicio, dataFim, onClose
 
   return (
     <Modal open={Boolean(nota)} onClose={onClose} title={titulo} maxWidthClass="max-w-6xl">
-      {nota && (
+      {nota && !modoLista && (
+        <div className="flex flex-col gap-4">
+          <CartaoNota nota={resumoDaNota(nota)} />
+          {vinculoAtual && (
+            <BannerVinculoAtual
+              vinculo={vinculoAtual}
+              onDesvincular={handleDesvincular}
+              desvinculando={desvinculando}
+              onTrocar={handleTrocar}
+            />
+          )}
+          <div className="flex flex-col gap-3 border-t border-gray-100 pt-4 sm:flex-row sm:items-center">
+            <div className="min-w-0 flex-1 text-sm">
+              {erroAcao && (
+                <p className="flex items-center gap-1.5 text-red-600">
+                  <AlertTriangle size={15} className="shrink-0" />
+                  {erroAcao}
+                </p>
+              )}
+            </div>
+            <Button variant="secondary" onClick={onClose}>
+              Fechar
+            </Button>
+          </div>
+        </div>
+      )}
+      {nota && modoLista && (
         <div className="flex min-h-0 flex-col gap-4">
           <div className="grid grid-cols-1 gap-3 md:grid-cols-[minmax(0,1fr)_300px]">
-            <CartaoNota nota={dados?.nota || nota} />
+            <CartaoNota nota={dados?.nota || resumoDaNota(nota)} />
             <CartaoConsulta dados={dados} carregando={carregando} onAtualizar={() => carregar({ atualizar: true })} />
           </div>
 
