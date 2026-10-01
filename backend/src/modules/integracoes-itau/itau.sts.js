@@ -20,10 +20,11 @@ const URL_RENOVACAO = `${STS_BASE_URL}/seguranca/v2/certificado/renovacao`;
 const URL_TOKEN = `${STS_BASE_URL}/api/oauth/token`;
 
 // Extrato de conta corrente (confirmado com o fluxo usado pelo usuário): statementId =
-// agência + "00" + conta + DAC, type=current_account e start-date no formato AAAA-MM-DD.
+// agência + "00" + conta + DAC, type=current_account e start_date (com sublinhado — "start-date" dá 400 "Missing required
+// request parameters: [start_date]") no formato AAAA-MM-DD.
 // Ajustável pela env ITAU_EXTRATO_URL. Placeholders: {statementId}, {dataInicio}, {dataFim}.
 const EXTRATO_URL_PADRAO =
-  'https://account-statement.api.itau.com/account-statement/v1/statements/{statementId}?type=current_account&start-date={dataInicio}';
+  'https://account-statement.api.itau.com/account-statement/v1/statements/{statementId}?type=current_account&start_date={dataInicio}';
 
 const TIMEOUT_SOLICITACAO_MS = 60000;
 
@@ -168,7 +169,17 @@ async function consultarExtrato({ agente, accessToken, clientId, conta, dataInic
       },
       timeoutMs: 30000,
     });
-    return { statusCode: resposta.statusCode };
+    // Sucesso: nada do corpo sai daqui. Erro: só o campo "message" do JSON (ex.: "ClientID not
+    // enable", "Missing required request parameters") — sem dados bancários, ajuda a diagnosticar.
+    if (resposta.statusCode >= 200 && resposta.statusCode < 300) return { statusCode: resposta.statusCode };
+    let mensagemErro = null;
+    try {
+      const msg = JSON.parse(resposta.body.toString('utf8'))?.message;
+      if (typeof msg === 'string') mensagemErro = msg.slice(0, 200);
+    } catch {
+      // corpo não-JSON — fica só o status
+    }
+    return { statusCode: resposta.statusCode, mensagemErro };
   } catch (err) {
     return { falhaRede: codigoFalhaRede(err) };
   }

@@ -393,16 +393,20 @@ async function testarExtrato(id) {
 
   let mensagem;
   let novoStatus = null;
+  const doItau = r.mensagemErro ? ` Itaú: "${r.mensagemErro}".` : '';
+  // "ClientID not enable" (HTTP 401) = credencial ainda não habilitada na API de extrato — é a
+  // liberação de escopos de até 2 dias úteis, não falha do token.
+  const naoHabilitado = /not enable/i.test(r.mensagemErro || '');
   if (r.falhaRede) mensagem = 'Sem resposta da API de extrato do Itaú (rede ou tempo esgotado). Tente de novo.';
   else if (r.statusCode >= 200 && r.statusCode < 300) {
     novoStatus = 'ATIVA';
     mensagem = mensagemStatus('ATIVA');
-  } else if (r.statusCode === 403) {
+  } else if (r.statusCode === 403 || naoHabilitado) {
     novoStatus = 'AGUARDANDO_ESCOPOS';
-    mensagem = mensagemStatus('AGUARDANDO_ESCOPOS');
-  } else if (r.statusCode === 401) mensagem = 'A API de extrato recusou o token (HTTP 401).';
-  else if (r.statusCode === 404) mensagem = 'Extrato não encontrado (HTTP 404): confira a conta ou o endereço da API (ITAU_EXTRATO_URL).';
-  else mensagem = `A API de extrato respondeu HTTP ${r.statusCode}.`;
+    mensagem = `${mensagemStatus('AGUARDANDO_ESCOPOS')}${doItau}`;
+  } else if (r.statusCode === 401) mensagem = `A API de extrato recusou o acesso (HTTP 401).${doItau}`;
+  else if (r.statusCode === 404) mensagem = `Extrato não encontrado (HTTP 404): confira a agência, a conta e o DAC.${doItau}`;
+  else mensagem = `A API de extrato respondeu HTTP ${r.statusCode}.${doItau}`;
 
   if (novoStatus) {
     await pool.query('UPDATE conexoes_itau SET status = $1, ultimo_erro_codigo = NULL, atualizado_em = NOW() WHERE id = $2', [novoStatus, id]);
