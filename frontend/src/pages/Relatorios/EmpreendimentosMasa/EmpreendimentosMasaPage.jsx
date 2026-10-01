@@ -413,17 +413,24 @@ export default function EmpreendimentosMasaPage() {
 
   const semResultadoFiltro = Boolean(matriz && matriz.length > 0 && matrizFiltrada.length === 0);
 
-  // Colapsar/expandir uma etapa (fase) inteira — começa sempre expandida (conjunto vazio,
-  // pedido do usuário); clicar no "+"/"-" da coluna Etapa Atual alterna só aquela fase.
-  const [fasesColapsadas, setFasesColapsadas] = useState(() => new Set());
+  // Colapsar/expandir uma etapa (fase) inteira — começa sempre recolhida (conjunto de expandidas
+  // vazio, pedido do usuário); clicar no "+"/"-" da coluna Fase alterna só aquela fase, e o botão
+  // "Expandir"/"Recolher" ao lado do filtro abre ou fecha todas as fases visíveis de uma vez.
+  const [fasesExpandidas, setFasesExpandidas] = useState(() => new Set());
+  const todasFasesExpandidas =
+    matrizFiltrada.length > 0 && matrizFiltrada.every((fase) => fasesExpandidas.has(fase.id));
 
   function toggleFase(faseId) {
-    setFasesColapsadas((atual) => {
+    setFasesExpandidas((atual) => {
       const proximo = new Set(atual);
       if (proximo.has(faseId)) proximo.delete(faseId);
       else proximo.add(faseId);
       return proximo;
     });
+  }
+
+  function toggleTodasFases() {
+    setFasesExpandidas(todasFasesExpandidas ? new Set() : new Set(matrizFiltrada.map((fase) => fase.id)));
   }
 
   // Mesmo comportamento, um nível abaixo: colapsar/expandir um grupo de Micro Etapa Atual
@@ -574,10 +581,19 @@ export default function EmpreendimentosMasaPage() {
           )}
           <button
             type="button"
+            onClick={toggleTodasFases}
+            disabled={matrizFiltrada.length === 0}
+            className="ml-auto inline-flex h-8 items-center gap-1.5 rounded-lg border border-gray-200 bg-white px-3 text-xs font-medium text-gray-600 transition hover:bg-gray-50 hover:text-gray-800 disabled:opacity-50"
+          >
+            {todasFasesExpandidas ? <Minus size={13} /> : <Plus size={13} />}
+            {todasFasesExpandidas ? 'Recolher' : 'Expandir'}
+          </button>
+          <button
+            type="button"
             onClick={() => setPainelAberto(true)}
             title="Filtros e colunas"
             aria-pressed={filtroAgrupamento != null || !todasColunasVisiveis}
-            className={`ml-auto inline-flex h-8 w-8 items-center justify-center rounded-lg border transition ${
+            className={`inline-flex h-8 w-8 items-center justify-center rounded-lg border transition ${
               filtroAgrupamento != null || !todasColunasVisiveis
                 ? 'border-primary-500 bg-primary-50 text-primary-600'
                 : 'border-gray-200 bg-white text-gray-500 hover:bg-gray-50 hover:text-gray-700'
@@ -690,7 +706,7 @@ export default function EmpreendimentosMasaPage() {
                   </tr>
                 )}
                 {matrizFiltrada.map((fase) => {
-                  const colapsada = fasesColapsadas.has(fase.id);
+                  const colapsada = !fasesExpandidas.has(fase.id);
 
                   // Fase colapsada — 1 linha só de resumo: Micro Etapa Atual e Empreendimento
                   // viram contagem, e Duração até Contas a Pagar somam a fase inteira (pedido do
