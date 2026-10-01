@@ -149,3 +149,11 @@ test('criptografia AES-256-GCM com ITAU_ENCRYPTION_KEY', () => {
     else process.env.ITAU_ENCRYPTION_KEY = anterior;
   }
 });
+
+test('URL do extrato: statementId com "00", type=current_account e start-date', () => {
+  const url = sts.montarUrlExtrato({ agencia: '1234', conta: '56789', dac: '0' }, { dataInicio: '2026-10-01', dataFim: '2026-10-01' });
+  assert.strictEqual(
+    url,
+    'https://account-statement.api.itau.com/account-statement/v1/statements/123400567890?type=current_account&start-date=2026-10-01'
+  );
+});

@@ -19,9 +19,11 @@ const URL_SOLICITACAO = `${STS_BASE_URL}/seguranca/v1/certificado/solicitacao`;
 const URL_RENOVACAO = `${STS_BASE_URL}/seguranca/v2/certificado/renovacao`;
 const URL_TOKEN = `${STS_BASE_URL}/api/oauth/token`;
 
-// A especificação da API de Extrato fica atrás do login do devportal — endereço provisório,
-// ajustável pela env ITAU_EXTRATO_URL. Placeholders: {statementId}, {dataInicio}, {dataFim}.
-const EXTRATO_URL_PADRAO = 'https://account-statement.api.itau.com/account-statement/v1/statements/{statementId}';
+// Extrato de conta corrente (confirmado com o fluxo usado pelo usuário): statementId =
+// agência + "00" + conta + DAC, type=current_account e start-date no formato AAAA-MM-DD.
+// Ajustável pela env ITAU_EXTRATO_URL. Placeholders: {statementId}, {dataInicio}, {dataFim}.
+const EXTRATO_URL_PADRAO =
+  'https://account-statement.api.itau.com/account-statement/v1/statements/{statementId}?type=current_account&start-date={dataInicio}';
 
 const TIMEOUT_SOLICITACAO_MS = 60000;
 
@@ -180,4 +182,5 @@ module.exports = {
   pedirAccessToken,
   renovarCertificado,
   consultarExtrato,
+  montarUrlExtrato,
 };
