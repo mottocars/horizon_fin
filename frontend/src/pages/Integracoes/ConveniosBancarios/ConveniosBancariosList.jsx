@@ -4,7 +4,6 @@ import { Plus, Search, Boxes, Pencil, Ban, CheckCircle2 } from 'lucide-react';
 import Card from '../../../components/Card';
 import Button from '../../../components/Button';
 import IconButton from '../../../components/IconButton';
-import Pagination from '../../../components/Pagination';
 import SearchableSelect from '../../../components/SearchableSelect';
 import { listVanpixIntegracoes, setVanpixStatus } from '../../../api/vanpix.api';
 import { listItauIntegracoes, setItauStatus } from '../../../api/itau.api';
@@ -12,7 +11,6 @@ import { formatCnpj } from '../../Empresas/format';
 import { useConfirm } from '../../../confirm/ConfirmContext';
 import { STATUS_ITAU } from './camposConexao';
 
-const LIMIT = 8;
 const LIMITE_POR_TIPO = 100;
 
 // Cada tipo de conexão tem tabela/API própria (VanPix, API Itaú).
@@ -48,14 +46,13 @@ function descricaoItens(item) {
   return { texto: `${n} convênio${n === 1 ? '' : 's'}`, titulo: item.apelidos.join(', ') };
 }
 
-// Mesmo padrão de ZapiList.jsx (lista + busca + filtro de status + paginação). Busca os dois
+// Mesmo padrão de ZapiList.jsx (lista + busca + filtro de status), mas sem paginação: busca os dois
 // tipos de conexão (são poucas por empresa, então vem tudo de uma vez), junta, ordena pela
-// criação e pagina aqui no navegador.
+// criação e mostra tudo numa lista só.
 export default function ConveniosBancariosList() {
   const navigate = useNavigate();
   const confirm = useConfirm();
   const [todos, setTodos] = useState([]);
-  const [page, setPage] = useState(1);
   const [search, setSearch] = useState('');
   const [statusFilter, setStatusFilter] = useState('todas');
   const [loading, setLoading] = useState(false);
@@ -72,7 +69,6 @@ export default function ConveniosBancariosList() {
         ...itau.data.map((i) => ({ ...i, nome_conexao: i.nome, tipo: 'ITAU' })),
       ].sort((a, b) => new Date(b.criado_em) - new Date(a.criado_em));
       setTodos(juntos);
-      setPage((atual) => Math.min(atual, Math.max(1, Math.ceil(juntos.length / LIMIT))));
     } finally {
       setLoading(false);
     }
@@ -80,7 +76,6 @@ export default function ConveniosBancariosList() {
 
   useEffect(() => {
     const timeout = setTimeout(() => {
-      setPage(1);
       loadItems(search, statusFilter);
     }, 300);
     return () => clearTimeout(timeout);
@@ -106,8 +101,7 @@ export default function ConveniosBancariosList() {
     }
   }
 
-  const totalPages = Math.max(1, Math.ceil(todos.length / LIMIT));
-  const items = todos.slice((page - 1) * LIMIT, page * LIMIT);
+  const items = todos;
 
   return (
     <div className="space-y-4">
@@ -221,7 +215,6 @@ export default function ConveniosBancariosList() {
                 })}
               </tbody>
             </table>
-            <Pagination page={page} totalPages={totalPages} onChange={setPage} />
           </>
         )}
       </Card>
