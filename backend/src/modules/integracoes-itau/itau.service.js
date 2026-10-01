@@ -1,5 +1,4 @@
 const pool = require('../../config/db');
-const empresasService = require('../empresas/empresas.service');
 const { agoraSP } = require('../monitor-integracoes/tempo');
 const { criptografar, descriptografar, garantirChave } = require('./itau.crypto');
 const v = require('./itau.validacao');
@@ -141,23 +140,63 @@ function validarCredencial({ nome, client_id: clientId, cnpj }) {
   return erros;
 }
 
-// Valida os campos e consulta o CNPJ (BrasilAPI, a mesma do cadastro de empresas). Se a
-// consulta falhar, devolve consulta_ok=false pra tela liberar o preenchimento manual.
+// Fontes públicas de CNPJ (consultadas em paralelo, ver conferirDados). A BrasilAPI (a mesma do
+// cadastro de empresas) às vezes devolve 500 pra CNPJs específicos (falha do provedor dela)
+// — por isso as alternativas. Cada uma devolve { razao_social, cidade, uf } ou lança.
+const TIMEOUT_CNPJ_MS = 8000;
+
+async function buscarJson(url) {
+  const resposta = await fetch(url, {
+    headers: { 'User-Agent': 'HorizonFin/1.0 (+https://horizonfin.local)', Accept: 'application/json' },
+    signal: AbortSignal.timeout(TIMEOUT_CNPJ_MS),
+  });
+  if (!resposta.ok) throw new Error(`HTTP ${resposta.status}`);
+  return resposta.json();
+}
+
+const FONTES_CNPJ = [
+  async (cnpj) => {
+    const d = await buscarJson(`https://brasilapi.com.br/api/cnpj/v1/${cnpj}`);
+    return { razao_social: d.razao_social, cidade: d.municipio, uf: d.uf };
+  },
+  async (cnpj) => {
+    const d = await buscarJson(`https://publica.cnpj.ws/cnpj/${cnpj}`);
+    return { razao_social: d.razao_social, cidade: d.estabelecimento?.cidade?.nome, uf: d.estabelecimento?.estado?.sigla };
+  },
+  async (cnpj) => {
+    const d = await buscarJson(`https://receitaws.com.br/v1/cnpj/${cnpj}`);
+    if (d.status === 'ERROR') throw new Error(d.message || 'erro');
+    return { razao_social: d.nome, cidade: d.municipio, uf: d.uf };
+  },
+];
+
+// Valida os campos e consulta o CNPJ. Se nenhuma fonte responder, devolve consulta_ok=false
+// pra tela liberar o preenchimento manual.
 async function conferirDados(dados) {
   const erros = validarCredencial(dados);
   if (erros.length) throw erro(erros[0]);
+  const cnpj = v.somenteDigitos(dados.cnpj);
+  // As fontes são consultadas ao mesmo tempo e vale a primeira resposta com razão social —
+  // uma fonte lenta/fora do ar não segura a tela.
   try {
-    const r = await empresasService.consultarCnpj(v.somenteDigitos(dados.cnpj));
-    return { consulta_ok: true, razao_social: r.razao_social, cidade: r.cidade, uf: r.estado };
-  } catch (err) {
-    return {
-      consulta_ok: false,
-      razao_social: '',
-      cidade: '',
-      uf: '',
-      aviso: `${err.expose ? err.message : 'Não foi possível consultar o CNPJ.'} Preencha os dados manualmente.`,
-    };
+    const r = await Promise.any(
+      FONTES_CNPJ.map(async (fonte) => {
+        const dadosFonte = await fonte(cnpj);
+        if (!dadosFonte.razao_social) throw new Error('sem razão social');
+        return dadosFonte;
+      })
+    );
+    return { consulta_ok: true, razao_social: r.razao_social, cidade: r.cidade || '', uf: (r.uf || '').toUpperCase() };
+  } catch {
+    // nenhuma fonte respondeu
   }
+  return {
+    consulta_ok: false,
+    razao_social: '',
+    cidade: '',
+    uf: '',
+    aviso: 'Não foi possível consultar o CNPJ agora (nenhuma das fontes públicas respondeu). Preencha os dados manualmente.',
+  };
 }
 
 // ─── emissão do certificado (passos 1 a 9) ──────────────────────────────────────────────
