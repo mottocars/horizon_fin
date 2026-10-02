@@ -1,14 +1,29 @@
-import { Fragment, useEffect, useMemo, useRef, useState } from 'react';
+import { Fragment, useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { createPortal } from 'react-dom';
-import { FileCheck2, FileDown, FileText, Loader2, Minus, Package, Plus, TriangleAlert, Wrench } from 'lucide-react';
+import {
+  Archive,
+  CheckCircle,
+  FileCheck2,
+  FileDown,
+  FileText,
+  Inbox,
+  Loader2,
+  Minus,
+  Package,
+  Plus,
+  TriangleAlert,
+  Wrench,
+  XCircle,
+} from 'lucide-react';
 import Card from '../../../components/Card';
 import SearchableSelect from '../../../components/SearchableSelect';
+import Tabs from '../../../components/Tabs';
 import FiltroColuna, { passaNoFiltro, proximoFiltro, valoresDoFiltro } from '../../../components/FiltroColuna';
 import { useAlert } from '../../../confirm/ConfirmContext';
 import { useEmpresaTravada } from '../../../hooks/useEmpresaTravada';
 import { listEmpresas } from '../../../api/empresas.api';
 import { listCertificadosEspiao, baixarNotaPdfEspiao } from '../../../api/espiao.api';
-import { listNotasPendentes } from '../../../api/relatorioNotasPendentes.api';
+import { listAcervoNotas } from '../../../api/relatorioNotasPendentes.api';
 import { nomeExibicaoEmpresa } from '../../../utils/empresa';
 
 // ─── formatação ────────────────────────────────────────────────────────────
@@ -22,6 +37,11 @@ function formatarData(iso) {
   if (!iso) return '—';
   const [ano, mes, dia] = String(iso).slice(0, 10).split('-');
   return `${dia}/${mes}/${ano}`;
+}
+
+function formatarDataHora(iso) {
+  if (!iso) return '—';
+  return new Date(iso).toLocaleString('pt-BR', { dateStyle: 'short', timeStyle: 'short' });
 }
 
 function formatarDocumento(doc) {
@@ -69,6 +89,78 @@ const TIPOS = [
   { value: 'NFSE', label: 'NFS-e (serviço)' },
 ];
 
+// Abas — mesmas do Espião NFe/NFSe (mesmos ícones/cores; "Recebidas" lá é
+// "Pendentes" aqui). A aba de cada nota já vem calculada do backend (ver
+// notasPendentes.service.js). `tema` pinta o cabeçalho e o totalizador da
+// tabela na cor da aba (pedido do usuário): azul, verde, amarelo e vermelho.
+// Classes escritas por extenso pra ferramenta de build do Tailwind achar.
+const ABAS = [
+  {
+    id: 'pendentes',
+    label: 'Pendentes',
+    icon: Inbox,
+    iconColorClass: 'text-primary-600',
+    vazio: 'Nenhuma nota pendente no período',
+    tema: {
+      th: 'border-b-blue-500 bg-blue-50',
+      tf: 'border-t-blue-500 bg-blue-50',
+      texto: 'text-blue-700',
+      divisor: 'border-l-blue-100',
+      fraco: 'text-blue-300',
+      medio: 'text-blue-400',
+      botao: 'bg-blue-100 text-blue-600',
+    },
+  },
+  {
+    id: 'vinculadas',
+    label: 'Vinculadas',
+    icon: CheckCircle,
+    iconColorClass: 'text-emerald-600',
+    vazio: 'Nenhuma nota vinculada no período',
+    tema: {
+      th: 'border-b-emerald-500 bg-emerald-50',
+      tf: 'border-t-emerald-500 bg-emerald-50',
+      texto: 'text-emerald-700',
+      divisor: 'border-l-emerald-100',
+      fraco: 'text-emerald-300',
+      medio: 'text-emerald-400',
+      botao: 'bg-emerald-100 text-emerald-600',
+    },
+  },
+  {
+    id: 'inativadas',
+    label: 'Inativadas',
+    icon: Archive,
+    iconColorClass: 'text-yellow-500',
+    vazio: 'Nenhuma nota inativada no período',
+    tema: {
+      th: 'border-b-yellow-500 bg-yellow-50',
+      tf: 'border-t-yellow-500 bg-yellow-50',
+      texto: 'text-yellow-700',
+      divisor: 'border-l-yellow-100',
+      fraco: 'text-yellow-300',
+      medio: 'text-yellow-500',
+      botao: 'bg-yellow-100 text-yellow-600',
+    },
+  },
+  {
+    id: 'canceladas',
+    label: 'Canceladas',
+    icon: XCircle,
+    iconColorClass: 'text-red-600',
+    vazio: 'Nenhuma nota cancelada no período',
+    tema: {
+      th: 'border-b-red-500 bg-red-50',
+      tf: 'border-t-red-500 bg-red-50',
+      texto: 'text-red-700',
+      divisor: 'border-l-red-100',
+      fraco: 'text-red-300',
+      medio: 'text-red-400',
+      botao: 'bg-red-100 text-red-600',
+    },
+  },
+];
+
 // Resumo de uma lista de notas — rodapé (todas as visíveis) e linha de um
 // certificado recolhido (só as dele).
 function resumir(notas) {
@@ -82,17 +174,20 @@ function resumir(notas) {
 const plural = (n, singular, pluralTexto) => `${n.toLocaleString('pt-BR')} ${n === 1 ? singular : pluralTexto}`;
 
 // Classe de cabeçalho igual à de Empreendimentos Masa (título fixo que gruda
-// no topo do <main> ao rolar — offset -top-6 cancela o p-6 do <main>).
-const TH = 'sticky -top-6 z-20 border-b-2 border-b-primary-500 bg-primary-50 px-2 py-2.5 text-center font-medium';
-const TF = 'sticky -bottom-6 z-10 border-t-2 border-t-primary-500 bg-primary-50 py-2.5 text-xs tabular-nums';
+// no topo do <main> ao rolar — offset -top-6 cancela o p-6 do <main>). A cor
+// vem do tema da aba.
+const TH = 'sticky -top-6 z-20 border-b-2 px-2 py-2.5 text-center font-medium';
+const TF = 'sticky -bottom-6 z-10 border-t-2 py-2.5 text-xs tabular-nums';
 
-// Relatório "NF-e / NFS-e Pendentes" — as notas recebidas que ainda não
-// foram vinculadas a um título do contas a pagar no Sienge (o mesmo recorte
-// da aba Recebidas do Espião NFe/NFSe), agrupadas pela empresa do
-// certificado que as capturou. Mesma construção de tabela de
-// Empreendimentos Masa: títulos fixos ao rolar, filtro no título da coluna,
-// agrupamento com rowSpan recolhível e totalizador fixo no rodapé; botão
-// direito na tabela exporta pra Excel.
+// Relatório "Acervo NF-e / NFS-e" — as notas recebidas pela empresa,
+// separadas nas mesmas abas do Espião NFe/NFSe (Pendentes = ainda sem
+// vínculo com um título do contas a pagar no Sienge, Vinculadas, Inativadas
+// e Canceladas) e agrupadas pela empresa do certificado que as capturou.
+// Mesma construção de tabela de Empreendimentos Masa: títulos fixos ao rolar,
+// filtro no título da coluna, agrupamento com rowSpan recolhível e
+// totalizador fixo no rodapé; botão direito na tabela exporta pra Excel.
+// "Dias Pendentes" só existe na aba Pendentes; Inativadas ganha Motivo e
+// Responsável pela inativação.
 export default function NotasPendentesPage() {
   const alert = useAlert();
   const { travada: empresaTravada, empresaIdTravada, empresaIds } = useEmpresaTravada();
@@ -104,17 +199,25 @@ export default function NotasPendentesPage() {
   const [mesFim, setMesFim] = useState(() => mesIso(0));
   const [certificados, setCertificados] = useState([]);
 
+  const [aba, setAba] = useState('pendentes');
+  const abaAtual = ABAS.find((a) => a.id === aba);
+  const tema = abaAtual.tema;
+  const ehPendentes = aba === 'pendentes';
+  const ehInativadas = aba === 'inativadas';
+
   const [notas, setNotas] = useState(null);
   const [carregando, setCarregando] = useState(false);
   const [erro, setErro] = useState('');
 
   // Filtros (null = tudo marcado — ver components/FiltroColuna.jsx). O de
   // certificado é o MESMO estado no filtro do topo e no título da coluna.
+  // Valem pra todas as abas, menos o de faixa de dias (só em Pendentes).
   const [filtroCertificado, setFiltroCertificado] = useState(null);
   const [filtroTipo, setFiltroTipo] = useState(null);
   const [filtroEmissor, setFiltroEmissor] = useState(null);
   const [filtroFaixa, setFiltroFaixa] = useState(null);
 
+  // Chaves `${aba}:${certificadoId}` — cada aba recolhe os seus grupos.
   const [recolhidos, setRecolhidos] = useState(() => new Set());
   const [baixando, setBaixando] = useState(() => new Set());
   const [menuContexto, setMenuContexto] = useState(null);
@@ -138,8 +241,9 @@ export default function NotasPendentesPage() {
     const observador = new ResizeObserver(medir);
     observador.observe(el);
     return () => observador.disconnect();
-    // O <thead> só existe depois que as notas chegam — mede de novo a cada carga.
-  }, [notas]);
+    // O <thead> só existe depois que as notas chegam (e muda de colunas por
+    // aba) — mede de novo a cada carga/troca de aba.
+  }, [notas, aba]);
   const topoNomeCertificado = alturaCabecalho - 24 + 8;
 
   useEffect(() => {
@@ -171,6 +275,8 @@ export default function NotasPendentesPage() {
   }, [empresaId]);
 
   // Só a última busca pode preencher a tabela (troca rápida de mês/empresa).
+  // Uma busca só traz as notas de todas as abas — trocar de aba não vai ao
+  // backend.
   const buscaRef = useRef(0);
   useEffect(() => {
     if (!empresaId || !mesInicio || !mesFim) {
@@ -185,14 +291,14 @@ export default function NotasPendentesPage() {
     const busca = ++buscaRef.current;
     setCarregando(true);
     setErro('');
-    listNotasPendentes({ empresaId, mesInicio, mesFim })
+    listAcervoNotas({ empresaId, mesInicio, mesFim })
       .then((dados) => {
         if (busca !== buscaRef.current) return;
         setNotas(dados.map((n) => ({ ...n, dias: diasDesde(n.dataEmissao) })));
       })
       .catch((err) => {
         if (busca !== buscaRef.current) return;
-        setErro(err.response?.data?.message || 'Não foi possível carregar as notas pendentes.');
+        setErro(err.response?.data?.message || 'Não foi possível carregar as notas.');
         setNotas(null);
       })
       .finally(() => busca === buscaRef.current && setCarregando(false));
@@ -203,28 +309,51 @@ export default function NotasPendentesPage() {
     [certificados]
   );
 
+  // Opções de emissor só da aba aberta — não faz sentido oferecer um emissor
+  // que não tem nenhuma nota ali.
   const opcoesEmissor = useMemo(() => {
     const porChave = new Map();
     for (const n of notas || []) {
+      if (n.aba !== aba) continue;
       const chave = n.documentoEmissor || n.emissor;
       if (!porChave.has(chave)) porChave.set(chave, n.emissor || formatarDocumento(n.documentoEmissor));
     }
     return [...porChave.entries()]
       .sort((a, b) => a[1].localeCompare(b[1], 'pt-BR'))
       .map(([value, label]) => ({ value, label }));
-  }, [notas]);
+  }, [notas, aba]);
 
-  const visiveis = useMemo(
-    () =>
-      (notas || []).filter(
-        (n) =>
-          passaNoFiltro(filtroCertificado, n.certificado.id) &&
-          passaNoFiltro(filtroTipo, n.tipo) &&
-          passaNoFiltro(filtroEmissor, n.documentoEmissor || n.emissor) &&
-          passaNoFiltro(filtroFaixa, faixaDe(n.dias).value)
-      ),
-    [notas, filtroCertificado, filtroTipo, filtroEmissor, filtroFaixa]
+  // Filtros aplicados a uma nota, de qualquer aba — usado tanto na tabela
+  // quanto na contagem ao lado do nome de cada aba.
+  const passaNosFiltros = useCallback(
+    (n) =>
+      passaNoFiltro(filtroCertificado, n.certificado.id) &&
+      passaNoFiltro(filtroTipo, n.tipo) &&
+      passaNoFiltro(filtroEmissor, n.documentoEmissor || n.emissor) &&
+      (n.aba !== 'pendentes' || passaNoFiltro(filtroFaixa, faixaDe(n.dias).value)),
+    [filtroCertificado, filtroTipo, filtroEmissor, filtroFaixa]
   );
+
+  const contagemAbas = useMemo(() => {
+    const contagem = Object.fromEntries(ABAS.map((a) => [a.id, 0]));
+    for (const n of notas || []) if (passaNosFiltros(n)) contagem[n.aba] += 1;
+    return contagem;
+  }, [notas, passaNosFiltros]);
+
+  const tabs = useMemo(
+    () =>
+      ABAS.map((a) => ({
+        id: a.id,
+        label: notas ? `${a.label} (${contagemAbas[a.id].toLocaleString('pt-BR')})` : a.label,
+        icon: a.icon,
+        iconColorClass: a.iconColorClass,
+      })),
+    [notas, contagemAbas]
+  );
+
+  const notasDaAba = useMemo(() => (notas || []).filter((n) => n.aba === aba), [notas, aba]);
+
+  const visiveis = useMemo(() => notasDaAba.filter(passaNosFiltros), [notasDaAba, passaNosFiltros]);
 
   // Agrupa por certificado, na ordem que o backend já mandou (nome, emissão).
   const grupos = useMemo(() => {
@@ -240,12 +369,15 @@ export default function NotasPendentesPage() {
   const totais = useMemo(() => resumir(visiveis), [visiveis]);
   const semValor = visiveis.filter((n) => n.valor == null).length;
   const filtroAtivo = [filtroCertificado, filtroTipo, filtroEmissor, filtroFaixa].some((f) => f != null);
+  // Certificado, Número, Emissor, Emissão, Valor, PDF + as colunas da aba.
+  const totalColunas = 6 + (ehPendentes ? 1 : 0) + (ehInativadas ? 2 : 0);
 
   function toggleGrupo(id) {
+    const chave = `${aba}:${id}`;
     setRecolhidos((atual) => {
       const proximo = new Set(atual);
-      if (proximo.has(id)) proximo.delete(id);
-      else proximo.add(id);
+      if (proximo.has(chave)) proximo.delete(chave);
+      else proximo.add(chave);
       return proximo;
     });
   }
@@ -288,6 +420,7 @@ export default function NotasPendentesPage() {
     };
   }, [menuContexto]);
 
+  // Exporta só a aba aberta, com as colunas dela.
   async function exportar() {
     setMenuContexto(null);
     const XLSX = await import('xlsx');
@@ -303,23 +436,34 @@ export default function NotasPendentesPage() {
         'CNPJ do emissor': formatarDocumento(n.documentoEmissor),
         Emissão: formatarData(n.dataEmissao),
         Valor: n.valor ?? '',
-        'Dias pendentes': n.dias,
+        ...(ehPendentes && { 'Dias pendentes': n.dias }),
+        ...(ehInativadas && {
+          'Motivo da inativação': n.motivoInativacao || '',
+          'Inativada por': n.inativadaPor || '',
+          'Inativada em': n.inativadaEm ? formatarDataHora(n.inativadaEm) : '',
+        }),
       };
     });
     linhas.push({ 'Empresa do certificado': 'Total', Número: totais.quantidade, Emissor: `${totais.emissores} emissores`, Valor: Math.round(totais.total * 100) / 100 });
     const planilha = XLSX.utils.json_to_sheet(linhas);
+    const colunaValor = Object.keys(linhas[0]).indexOf('Valor');
     const range = XLSX.utils.decode_range(planilha['!ref']);
     for (let r = range.s.r + 1; r <= range.e.r; r++) {
-      const celula = planilha[XLSX.utils.encode_cell({ r, c: 8 })];
+      const celula = planilha[XLSX.utils.encode_cell({ r, c: colunaValor })];
       if (celula && celula.t === 'n') celula.z = '"R$" #,##0.00';
     }
     const livro = XLSX.utils.book_new();
-    XLSX.utils.book_append_sheet(livro, planilha, 'Pendentes');
-    XLSX.writeFile(livro, `notas-pendentes_${mesInicio}_a_${mesFim}.xlsx`);
+    XLSX.utils.book_append_sheet(livro, planilha, abaAtual.label);
+    XLSX.writeFile(livro, `acervo-notas-${aba}_${mesInicio}_a_${mesFim}.xlsx`);
   }
 
   const campoMes =
     'w-full min-w-0 rounded-lg border border-gray-200 px-3 py-2 text-sm text-gray-800 focus:border-primary-400 focus:outline-none focus:ring-2 focus:ring-primary-100';
+
+  const th = `${TH} ${tema.th}`;
+  const thDivisor = `${th} border-l ${tema.divisor}`;
+  const tf = `${TF} ${tema.tf}`;
+  const tfDivisor = `${tf} border-l ${tema.divisor}`;
 
   return (
     <div className="space-y-4">
@@ -376,238 +520,284 @@ export default function NotasPendentesPage() {
         </div>
       </Card>
 
-      <div className="rounded-card bg-white shadow-card">
-        {!empresaId ? (
-          <div className="flex flex-col items-center gap-2 py-16 text-center">
-            <FileText size={26} className="text-gray-300" />
-            <p className="text-sm font-medium text-gray-700">Selecione uma empresa</p>
-            <p className="max-w-sm text-xs text-gray-400">
-              O relatório mostra as notas recebidas que ainda não foram vinculadas a um título do contas a pagar.
-            </p>
-          </div>
-        ) : carregando && !notas ? (
-          <div className="flex items-center justify-center gap-2 py-16 text-sm text-gray-400">
-            <Loader2 size={16} className="animate-spin" />
-            Carregando notas pendentes...
-          </div>
-        ) : erro ? (
-          <div className="flex flex-col items-center gap-2 py-14 text-center">
-            <TriangleAlert size={26} className="text-red-400" />
-            <p className="text-sm text-gray-600">{erro}</p>
-          </div>
-        ) : notas && notas.length === 0 ? (
-          <div className="flex flex-col items-center gap-2 py-16 text-center">
-            <FileCheck2 size={28} className="text-emerald-400" />
-            <p className="text-sm font-medium text-gray-700">Nenhuma nota pendente no período</p>
-            <p className="max-w-sm text-xs text-gray-400">
-              Todas as notas recebidas entre {mesInicio.split('-').reverse().join('/')} e {mesFim.split('-').reverse().join('/')} já
-              estão vinculadas ao contas a pagar.
-            </p>
-          </div>
-        ) : notas ? (
-          // Sem overflow aqui de propósito — mesmo motivo de Empreendimentos
-          // Masa: qualquer overflow num ancestral quebra o `sticky` do
-          // cabeçalho/totalizador contra o <main>, que é quem rola.
-          <div
-            className={`rounded-card transition-opacity ${carregando ? 'opacity-60' : ''}`}
-            onContextMenu={(e) => {
-              e.preventDefault();
-              setMenuContexto({ x: e.clientX, y: e.clientY });
-            }}
-          >
-            <table className="w-full border-separate border-spacing-0 text-left text-xs">
-              <thead ref={theadRef}>
-                <tr className="text-xs uppercase tracking-wide text-primary-700">
-                  <th ref={thCertificadoRef} className={`${TH} w-72 rounded-tl-card`}>
-                    <span className="inline-flex items-center justify-center gap-1.5">
-                      <FiltroColuna
-                        filtro={filtroCertificado}
-                        onChange={setFiltroCertificado}
-                        opcoes={opcoesCertificado}
-                        label="empresa do certificado"
-                        colunaRef={thCertificadoRef}
-                      />
-                      Empresa do Certificado
-                    </span>
-                  </th>
-                  <th ref={thNumeroRef} className={`${TH} w-40 border-l border-l-primary-100`}>
-                    <span className="inline-flex items-center justify-center gap-1.5">
-                      <FiltroColuna filtro={filtroTipo} onChange={setFiltroTipo} opcoes={TIPOS} label="tipo de nota" colunaRef={thNumeroRef} />
-                      Número / Série
-                    </span>
-                  </th>
-                  <th ref={thEmissorRef} className={`${TH} border-l border-l-primary-100`}>
-                    <span className="inline-flex items-center justify-center gap-1.5">
-                      <FiltroColuna
-                        filtro={filtroEmissor}
-                        onChange={setFiltroEmissor}
-                        opcoes={opcoesEmissor}
-                        label="emissor"
-                        colunaRef={thEmissorRef}
-                      />
-                      Emissor
-                    </span>
-                  </th>
-                  <th className={`${TH} w-28 border-l border-l-primary-100`}>Emissão</th>
-                  <th className={`${TH} w-36 border-l border-l-primary-100`}>Valor da Nota</th>
-                  <th ref={thDiasRef} className={`${TH} w-36 border-l border-l-primary-100`}>
-                    <span className="inline-flex items-center justify-center gap-1.5">
-                      <FiltroColuna
-                        filtro={filtroFaixa}
-                        onChange={setFiltroFaixa}
-                        opcoes={FAIXAS_DIAS}
-                        label="dias pendentes"
-                        colunaRef={thDiasRef}
-                      />
-                      Dias Pendentes
-                    </span>
-                  </th>
-                  <th className={`${TH} w-16 rounded-tr-card border-l border-l-primary-100`}>PDF</th>
-                </tr>
-              </thead>
-              <tbody>
-                {grupos.length === 0 && (
-                  <tr>
-                    <td colSpan={7} className="py-12 text-center text-sm text-gray-500">
-                      <p className="font-medium text-gray-700">Nenhuma nota corresponde aos filtros selecionados.</p>
-                      <p className="mt-1 text-xs text-gray-400">Ajuste os filtros dos títulos ou clique em "Mostrar tudo".</p>
-                    </td>
-                  </tr>
-                )}
-                {grupos.map((grupo) => {
-                  const cert = separarCertificado(grupo.nome);
-                  const recolhido = recolhidos.has(grupo.id);
-                  // Nome no topo da célula (align-top) e `sticky` logo abaixo do
-                  // cabeçalho fixo: ao rolar, acompanha a tela até a última nota
-                  // da empresa — a célula (rowSpan) é o limite do sticky, então
-                  // ele para sozinho no fim do grupo.
-                  const celulaCertificado = (rowSpan) => (
-                    <td rowSpan={rowSpan} className="border-b-2 border-b-gray-400 border-r border-r-gray-200 bg-white px-4 py-2.5 align-top">
-                      <button
-                        type="button"
-                        onClick={() => toggleGrupo(grupo.id)}
-                        style={{ top: topoNomeCertificado }}
-                        className="sticky flex w-full items-start gap-2 text-left"
-                      >
-                        <span className="mt-0.5 flex h-4 w-4 shrink-0 items-center justify-center rounded bg-primary-100 text-primary-600">
-                          {recolhido ? <Plus size={10} /> : <Minus size={10} />}
-                        </span>
-                        <span className="min-w-0 flex-1">
-                          <span className="block text-xs font-semibold text-gray-900">{cert.razao}</span>
-                          {cert.cnpj && <span className="block font-mono text-[11px] text-gray-400">{formatarDocumento(cert.cnpj)}</span>}
-                        </span>
-                        <span className="shrink-0 rounded-full bg-white px-2 py-0.5 text-[10px] font-medium tabular-nums text-gray-500 ring-1 ring-gray-200">
-                          {grupo.notas.length}
-                        </span>
-                      </button>
-                    </td>
-                  );
+      {/* Abas + painel são um item só dentro do space-y-4 (mesmo padrão do
+          Espião NFe/NFSe) — o canto superior esquerdo do painel fica reto pra
+          encaixar na primeira aba. */}
+      <div>
+        <Tabs tabs={tabs} activeId={aba} onChange={setAba} />
 
-                  if (recolhido) {
-                    const r = resumir(grupo.notas);
-                    const celula = 'border-b-2 border-b-gray-400 border-l border-l-gray-100 px-3 py-2 text-xs tabular-nums text-gray-700';
-                    return (
-                      <tr key={grupo.id}>
-                        {celulaCertificado(1)}
-                        <td className={celula}>{plural(r.quantidade, 'nota', 'notas')}</td>
-                        <td className={celula}>{plural(r.emissores, 'emissor', 'emissores')}</td>
-                        <td className={`${celula} text-center text-gray-300`}>—</td>
-                        <td className={`${celula} text-right font-medium`}>{formatarMoeda(r.total)}</td>
-                        <td className={`${celula} text-center`}>até {plural(r.maiorAtraso, 'dia', 'dias')}</td>
-                        <td className={celula} />
-                      </tr>
-                    );
-                  }
-
-                  return (
-                    <Fragment key={grupo.id}>
-                      {grupo.notas.map((nota, i) => {
-                        const ultima = i === grupo.notas.length - 1;
-                        const borda = ultima ? 'border-b-2 border-b-gray-400' : 'border-b border-b-gray-200';
-                        const celula = `${borda} border-l border-l-gray-100 px-3 py-2 text-xs`;
-                        const faixa = faixaDe(nota.dias);
-                        const ehServico = nota.tipo === 'NFSE';
-                        const TipoIcon = ehServico ? Wrench : Package;
-                        return (
-                          <tr key={nota.id} className="hover:bg-gray-50/70">
-                            {i === 0 && celulaCertificado(grupo.notas.length)}
-                            <td className={celula}>
-                              <span className="flex items-center gap-2">
-                                <span
-                                  title={ehServico ? 'NFS-e (serviço)' : 'NF-e (produto)'}
-                                  className={`flex h-5 w-5 shrink-0 items-center justify-center rounded ${
-                                    ehServico ? 'bg-violet-50 text-violet-600' : 'bg-primary-50 text-primary-600'
-                                  }`}
-                                >
-                                  <TipoIcon size={11} />
-                                </span>
-                                <span className="font-mono text-gray-800">
-                                  {nota.numero || '—'}
-                                  {nota.serie && <span className="text-gray-400"> / {nota.serie}</span>}
-                                </span>
-                              </span>
-                            </td>
-                            <td className={celula}>
-                              <p className="truncate text-gray-900" title={nota.emissor || ''}>
-                                {nota.emissor || '—'}
-                              </p>
-                              <p className="font-mono text-[11px] text-gray-400">{formatarDocumento(nota.documentoEmissor)}</p>
-                            </td>
-                            <td className={`${celula} text-center text-gray-600`}>{formatarData(nota.dataEmissao)}</td>
-                            <td className={`${celula} text-right tabular-nums text-gray-800`}>
-                              {nota.valor != null ? formatarMoeda(nota.valor) : <span className="text-gray-300">—</span>}
-                            </td>
-                            <td className={`${celula} text-center`}>
-                              <span
-                                title={faixa.label}
-                                className={`inline-flex min-w-16 items-center justify-center rounded-full px-2 py-0.5 text-[11px] font-semibold tabular-nums ring-1 ${faixa.cor}`}
-                              >
-                                {plural(nota.dias, 'dia', 'dias')}
-                              </span>
-                            </td>
-                            <td className={`${celula} text-center`}>
-                              <button
-                                type="button"
-                                title="Baixar PDF"
-                                onClick={() => baixarPdf(nota)}
-                                disabled={baixando.has(nota.id)}
-                                className="inline-flex h-7 w-7 items-center justify-center rounded-md text-gray-400 transition hover:bg-primary-50 hover:text-primary-600 disabled:opacity-60"
-                              >
-                                {baixando.has(nota.id) ? <Loader2 size={14} className="animate-spin" /> : <FileText size={14} />}
-                              </button>
-                            </td>
-                          </tr>
-                        );
-                      })}
-                    </Fragment>
-                  );
-                })}
-              </tbody>
-              {/* Totalizador fixo no rodapé (mesmo padrão de Empreendimentos
-                  Masa) — sempre sobre o que está visível com os filtros. */}
-              <tfoot>
-                <tr className="font-semibold text-primary-700">
-                  <td className={`${TF} rounded-bl-card px-4`}>Total</td>
-                  <td className={`${TF} border-l border-l-primary-100 px-3`}>{plural(totais.quantidade, 'nota', 'notas')}</td>
-                  <td className={`${TF} border-l border-l-primary-100 px-3`}>{plural(totais.emissores, 'emissor', 'emissores')}</td>
-                  <td className={`${TF} border-l border-l-primary-100 px-3 text-center text-primary-300`}>—</td>
-                  <td className={`${TF} border-l border-l-primary-100 px-3 text-right`}>
-                    {formatarMoeda(totais.total)}
-                    {semValor > 0 && (
-                      <span className="block text-[10px] font-normal text-primary-400" title="Notas sem valor lido do XML">
-                        {plural(semValor, 'nota sem valor', 'notas sem valor')}
+        <div className="rounded-card rounded-tl-none bg-white shadow-card">
+          {!empresaId ? (
+            <div className="flex flex-col items-center gap-2 py-16 text-center">
+              <FileText size={26} className="text-gray-300" />
+              <p className="text-sm font-medium text-gray-700">Selecione uma empresa</p>
+              <p className="max-w-sm text-xs text-gray-400">
+                O relatório mostra as notas recebidas, separadas em pendentes, vinculadas, inativadas e canceladas.
+              </p>
+            </div>
+          ) : carregando && !notas ? (
+            <div className="flex items-center justify-center gap-2 py-16 text-sm text-gray-400">
+              <Loader2 size={16} className="animate-spin" />
+              Carregando notas...
+            </div>
+          ) : erro ? (
+            <div className="flex flex-col items-center gap-2 py-14 text-center">
+              <TriangleAlert size={26} className="text-red-400" />
+              <p className="text-sm text-gray-600">{erro}</p>
+            </div>
+          ) : notas && notasDaAba.length === 0 ? (
+            <div className="flex flex-col items-center gap-2 py-16 text-center">
+              {ehPendentes ? <FileCheck2 size={28} className="text-emerald-400" /> : <FileText size={26} className="text-gray-300" />}
+              <p className="text-sm font-medium text-gray-700">{abaAtual.vazio}</p>
+              {ehPendentes && notas.length > 0 && (
+                <p className="max-w-sm text-xs text-gray-400">
+                  Todas as notas recebidas entre {mesInicio.split('-').reverse().join('/')} e {mesFim.split('-').reverse().join('/')}{' '}
+                  já estão vinculadas ao contas a pagar, inativadas ou canceladas.
+                </p>
+              )}
+            </div>
+          ) : notas ? (
+            // Sem overflow aqui de propósito — mesmo motivo de Empreendimentos
+            // Masa: qualquer overflow num ancestral quebra o `sticky` do
+            // cabeçalho/totalizador contra o <main>, que é quem rola.
+            <div
+              className={`rounded-card rounded-tl-none transition-opacity ${carregando ? 'opacity-60' : ''}`}
+              onContextMenu={(e) => {
+                e.preventDefault();
+                setMenuContexto({ x: e.clientX, y: e.clientY });
+              }}
+            >
+              <table className="w-full border-separate border-spacing-0 text-left text-xs">
+                <thead ref={theadRef}>
+                  <tr className={`text-xs uppercase tracking-wide ${tema.texto}`}>
+                    <th ref={thCertificadoRef} className={`${th} w-72`}>
+                      <span className="inline-flex items-center justify-center gap-1.5">
+                        <FiltroColuna
+                          filtro={filtroCertificado}
+                          onChange={setFiltroCertificado}
+                          opcoes={opcoesCertificado}
+                          label="empresa do certificado"
+                          colunaRef={thCertificadoRef}
+                        />
+                        Empresa do Certificado
                       </span>
+                    </th>
+                    <th ref={thNumeroRef} className={`${thDivisor} w-40`}>
+                      <span className="inline-flex items-center justify-center gap-1.5">
+                        <FiltroColuna filtro={filtroTipo} onChange={setFiltroTipo} opcoes={TIPOS} label="tipo de nota" colunaRef={thNumeroRef} />
+                        Número / Série
+                      </span>
+                    </th>
+                    <th ref={thEmissorRef} className={thDivisor}>
+                      <span className="inline-flex items-center justify-center gap-1.5">
+                        <FiltroColuna
+                          filtro={filtroEmissor}
+                          onChange={setFiltroEmissor}
+                          opcoes={opcoesEmissor}
+                          label="emissor"
+                          colunaRef={thEmissorRef}
+                        />
+                        Emissor
+                      </span>
+                    </th>
+                    <th className={`${thDivisor} w-28`}>Emissão</th>
+                    <th className={`${thDivisor} w-36`}>Valor da Nota</th>
+                    {ehPendentes && (
+                      <th ref={thDiasRef} className={`${thDivisor} w-36`}>
+                        <span className="inline-flex items-center justify-center gap-1.5">
+                          <FiltroColuna
+                            filtro={filtroFaixa}
+                            onChange={setFiltroFaixa}
+                            opcoes={FAIXAS_DIAS}
+                            label="dias pendentes"
+                            colunaRef={thDiasRef}
+                          />
+                          Dias Pendentes
+                        </span>
+                      </th>
                     )}
-                  </td>
-                  <td className={`${TF} border-l border-l-primary-100 px-3 text-center`}>
-                    {totais.quantidade > 0 ? `média ${plural(totais.mediaDias, 'dia', 'dias')}` : '—'}
-                  </td>
-                  <td className={`${TF} rounded-br-card border-l border-l-primary-100`} />
-                </tr>
-              </tfoot>
-            </table>
-          </div>
-        ) : null}
+                    {ehInativadas && (
+                      <>
+                        <th className={`${thDivisor} w-64`}>Motivo</th>
+                        <th className={`${thDivisor} w-44`}>Responsável</th>
+                      </>
+                    )}
+                    <th className={`${thDivisor} w-16 rounded-tr-card`}>PDF</th>
+                  </tr>
+                </thead>
+                <tbody>
+                  {grupos.length === 0 && (
+                    <tr>
+                      <td colSpan={totalColunas} className="py-12 text-center text-sm text-gray-500">
+                        <p className="font-medium text-gray-700">Nenhuma nota corresponde aos filtros selecionados.</p>
+                        <p className="mt-1 text-xs text-gray-400">Ajuste os filtros dos títulos ou clique em "Mostrar tudo".</p>
+                      </td>
+                    </tr>
+                  )}
+                  {grupos.map((grupo) => {
+                    const cert = separarCertificado(grupo.nome);
+                    const recolhido = recolhidos.has(`${aba}:${grupo.id}`);
+                    // Nome no topo da célula (align-top) e `sticky` logo abaixo do
+                    // cabeçalho fixo: ao rolar, acompanha a tela até a última nota
+                    // da empresa — a célula (rowSpan) é o limite do sticky, então
+                    // ele para sozinho no fim do grupo.
+                    const celulaCertificado = (rowSpan) => (
+                      <td rowSpan={rowSpan} className="border-b-2 border-b-gray-400 border-r border-r-gray-200 bg-white px-4 py-2.5 align-top">
+                        <button
+                          type="button"
+                          onClick={() => toggleGrupo(grupo.id)}
+                          style={{ top: topoNomeCertificado }}
+                          className="sticky flex w-full items-start gap-2 text-left"
+                        >
+                          <span className={`mt-0.5 flex h-4 w-4 shrink-0 items-center justify-center rounded ${tema.botao}`}>
+                            {recolhido ? <Plus size={10} /> : <Minus size={10} />}
+                          </span>
+                          <span className="min-w-0 flex-1">
+                            <span className="block text-xs font-semibold text-gray-900">{cert.razao}</span>
+                            {cert.cnpj && <span className="block font-mono text-[11px] text-gray-400">{formatarDocumento(cert.cnpj)}</span>}
+                          </span>
+                          <span className="shrink-0 rounded-full bg-white px-2 py-0.5 text-[10px] font-medium tabular-nums text-gray-500 ring-1 ring-gray-200">
+                            {grupo.notas.length}
+                          </span>
+                        </button>
+                      </td>
+                    );
+
+                    if (recolhido) {
+                      const r = resumir(grupo.notas);
+                      const celula = 'border-b-2 border-b-gray-400 border-l border-l-gray-100 px-3 py-2 text-xs tabular-nums text-gray-700';
+                      return (
+                        <tr key={grupo.id}>
+                          {celulaCertificado(1)}
+                          <td className={celula}>{plural(r.quantidade, 'nota', 'notas')}</td>
+                          <td className={celula}>{plural(r.emissores, 'emissor', 'emissores')}</td>
+                          <td className={`${celula} text-center text-gray-300`}>—</td>
+                          <td className={`${celula} text-right font-medium`}>{formatarMoeda(r.total)}</td>
+                          {ehPendentes && <td className={`${celula} text-center`}>até {plural(r.maiorAtraso, 'dia', 'dias')}</td>}
+                          {ehInativadas && (
+                            <>
+                              <td className={`${celula} text-center text-gray-300`}>—</td>
+                              <td className={`${celula} text-center text-gray-300`}>—</td>
+                            </>
+                          )}
+                          <td className={celula} />
+                        </tr>
+                      );
+                    }
+
+                    return (
+                      <Fragment key={grupo.id}>
+                        {grupo.notas.map((nota, i) => {
+                          const ultima = i === grupo.notas.length - 1;
+                          const borda = ultima ? 'border-b-2 border-b-gray-400' : 'border-b border-b-gray-200';
+                          const celula = `${borda} border-l border-l-gray-100 px-3 py-2 text-xs`;
+                          const faixa = faixaDe(nota.dias);
+                          const ehServico = nota.tipo === 'NFSE';
+                          const TipoIcon = ehServico ? Wrench : Package;
+                          return (
+                            <tr key={nota.id} className="hover:bg-gray-50/70">
+                              {i === 0 && celulaCertificado(grupo.notas.length)}
+                              <td className={celula}>
+                                <span className="flex items-center gap-2">
+                                  <span
+                                    title={ehServico ? 'NFS-e (serviço)' : 'NF-e (produto)'}
+                                    className={`flex h-5 w-5 shrink-0 items-center justify-center rounded ${
+                                      ehServico ? 'bg-violet-50 text-violet-600' : 'bg-primary-50 text-primary-600'
+                                    }`}
+                                  >
+                                    <TipoIcon size={11} />
+                                  </span>
+                                  <span className="font-mono text-gray-800">
+                                    {nota.numero || '—'}
+                                    {nota.serie && <span className="text-gray-400"> / {nota.serie}</span>}
+                                  </span>
+                                </span>
+                              </td>
+                              <td className={celula}>
+                                <p className="truncate text-gray-900" title={nota.emissor || ''}>
+                                  {nota.emissor || '—'}
+                                </p>
+                                <p className="font-mono text-[11px] text-gray-400">{formatarDocumento(nota.documentoEmissor)}</p>
+                              </td>
+                              <td className={`${celula} text-center text-gray-600`}>{formatarData(nota.dataEmissao)}</td>
+                              <td className={`${celula} text-right tabular-nums text-gray-800`}>
+                                {nota.valor != null ? formatarMoeda(nota.valor) : <span className="text-gray-300">—</span>}
+                              </td>
+                              {ehPendentes && (
+                                <td className={`${celula} text-center`}>
+                                  <span
+                                    title={faixa.label}
+                                    className={`inline-flex min-w-16 items-center justify-center rounded-full px-2 py-0.5 text-[11px] font-semibold tabular-nums ring-1 ${faixa.cor}`}
+                                  >
+                                    {plural(nota.dias, 'dia', 'dias')}
+                                  </span>
+                                </td>
+                              )}
+                              {ehInativadas && (
+                                <>
+                                  <td className={`${celula} text-gray-700`}>
+                                    <p className="line-clamp-2" title={nota.motivoInativacao || ''}>
+                                      {nota.motivoInativacao || <span className="italic text-gray-400">Nenhum motivo informado.</span>}
+                                    </p>
+                                  </td>
+                                  <td className={celula}>
+                                    <p className="truncate text-gray-900">{nota.inativadaPor || 'Usuário removido'}</p>
+                                    <p className="text-[11px] text-gray-400">{formatarDataHora(nota.inativadaEm)}</p>
+                                  </td>
+                                </>
+                              )}
+                              <td className={`${celula} text-center`}>
+                                <button
+                                  type="button"
+                                  title="Baixar PDF"
+                                  onClick={() => baixarPdf(nota)}
+                                  disabled={baixando.has(nota.id)}
+                                  className="inline-flex h-7 w-7 items-center justify-center rounded-md text-gray-400 transition hover:bg-primary-50 hover:text-primary-600 disabled:opacity-60"
+                                >
+                                  {baixando.has(nota.id) ? <Loader2 size={14} className="animate-spin" /> : <FileText size={14} />}
+                                </button>
+                              </td>
+                            </tr>
+                          );
+                        })}
+                      </Fragment>
+                    );
+                  })}
+                </tbody>
+                {/* Totalizador fixo no rodapé (mesmo padrão de Empreendimentos
+                    Masa) — sempre sobre o que está visível com os filtros. */}
+                <tfoot>
+                  <tr className={`font-semibold ${tema.texto}`}>
+                    <td className={`${tf} rounded-bl-card px-4`}>Total</td>
+                    <td className={`${tfDivisor} px-3`}>{plural(totais.quantidade, 'nota', 'notas')}</td>
+                    <td className={`${tfDivisor} px-3`}>{plural(totais.emissores, 'emissor', 'emissores')}</td>
+                    <td className={`${tfDivisor} px-3 text-center ${tema.fraco}`}>—</td>
+                    <td className={`${tfDivisor} px-3 text-right`}>
+                      {formatarMoeda(totais.total)}
+                      {semValor > 0 && (
+                        <span className={`block text-[10px] font-normal ${tema.medio}`} title="Notas sem valor lido do XML">
+                          {plural(semValor, 'nota sem valor', 'notas sem valor')}
+                        </span>
+                      )}
+                    </td>
+                    {ehPendentes && (
+                      <td className={`${tfDivisor} px-3 text-center`}>
+                        {totais.quantidade > 0 ? `média ${plural(totais.mediaDias, 'dia', 'dias')}` : '—'}
+                      </td>
+                    )}
+                    {ehInativadas && (
+                      <>
+                        <td className={`${tfDivisor} px-3 text-center ${tema.fraco}`}>—</td>
+                        <td className={`${tfDivisor} px-3 text-center ${tema.fraco}`}>—</td>
+                      </>
+                    )}
+                    <td className={`${tfDivisor} rounded-br-card`} />
+                  </tr>
+                </tfoot>
+              </table>
+            </div>
+          ) : null}
+        </div>
       </div>
 
       {menuContexto &&

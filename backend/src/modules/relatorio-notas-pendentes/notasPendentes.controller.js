@@ -25,7 +25,7 @@ async function listar(req, res, next) {
   try {
     const query = querySchema.parse(req.query);
     if (query.mesInicio > query.mesFim) throw badRequest('O mês/ano inicial não pode ser depois do final.');
-    const result = await service.listNotasPendentes(query.empresaId, query);
+    const result = await service.listAcervoNotas(query.empresaId, query);
     res.json(result);
   } catch (err) {
     if (err.issues) return next(badRequest(err.issues[0].message));
