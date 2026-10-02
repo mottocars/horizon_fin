@@ -607,11 +607,15 @@ function SaldosContasTab({
               ))}
             </colgroup>
 
+            {/* Cabeçalho e Total geral em azul (mesmo tom do cabeçalho da aba Recebidas do
+                Espião NFe/NFSe) e grudados nas bordas do <main> ao rolar: -top-6/-bottom-6 (e
+                ALTURA_MES - 24 na 2ª linha) cancelam o p-6 do <main>, senão sobrava uma faixa de
+                24px entre eles e a borda da tela. O dia liberado pro lançamento continua âmbar. */}
             <thead>
               <tr style={{ height: ALTURA_MES }}>
                 <th
                   rowSpan={2}
-                  className="sticky left-0 top-0 z-30 border-b-2 border-r border-gray-300 border-r-gray-200 bg-white pl-4 text-xs font-medium uppercase tracking-wide text-gray-400"
+                  className="sticky -top-6 left-0 z-30 border-b-2 border-r border-b-blue-500 border-r-blue-100 bg-blue-50 pl-4 text-xs font-medium uppercase tracking-wide text-blue-700"
                 >
                   Classificação / Conta bancária
                 </th>
@@ -619,7 +623,7 @@ function SaldosContasTab({
                   <th
                     key={`${m.ano}-${m.mes}`}
                     colSpan={m.dias}
-                    className="sticky top-0 z-20 border-b border-l border-gray-200 bg-white px-3 text-left text-xs font-semibold text-gray-700"
+                    className="sticky -top-6 z-20 border-b border-l border-blue-100 bg-blue-50 px-3 text-left text-xs font-semibold text-blue-700"
                     style={{ height: ALTURA_MES }}
                   >
                     <span className="sticky inline-block" style={{ left: LARGURA_PRIMEIRA + 12 }}>
@@ -635,10 +639,10 @@ function SaldosContasTab({
                     <th
                       key={d.iso}
                       id={d.hoje ? 'saldo-coluna-hoje' : undefined}
-                      className={`sticky z-20 border-b-2 border-l border-b-gray-300 border-l-gray-200 px-2 py-1 font-medium ${
-                        aberto ? 'bg-amber-100' : d.fimDeSemana ? 'bg-gray-50' : 'bg-white'
+                      className={`sticky z-20 border-b-2 border-l border-b-blue-500 border-l-blue-100 px-2 py-1 font-medium ${
+                        aberto ? 'bg-amber-100' : 'bg-blue-50'
                       }`}
-                      style={{ top: ALTURA_MES }}
+                      style={{ top: ALTURA_MES - 24 }}
                       title={`${d.semana}, ${String(d.dia).padStart(2, '0')}/${String(d.mes + 1).padStart(2, '0')}/${d.ano}${d.hoje ? ' (hoje)' : ''}${aberto ? ' — período aberto pra lançamento' : ''}`}
                     >
                       {/* Uma linha só (dia da semana à esquerda, número à direita) — pedido do
@@ -646,12 +650,12 @@ function SaldosContasTab({
                           liberado pro cadeado não precisa de mais nada além do fundo âmbar da
                           própria célula (marcação "no campo inteiro") — sem ícone extra aqui. */}
                       <span className="flex items-center justify-between gap-1">
-                        <span className={`text-[10px] uppercase tracking-wide ${aberto ? 'text-amber-700' : d.fimDeSemana ? 'text-gray-300' : 'text-gray-400'}`}>
+                        <span className={`text-[10px] uppercase tracking-wide ${aberto ? 'text-amber-700' : d.fimDeSemana ? 'text-blue-300' : 'text-blue-500'}`}>
                           {d.semana}
                         </span>
                         <span
                           className={`flex h-5 min-w-5 items-center justify-center rounded-full px-1 text-xs font-semibold tabular-nums ${
-                            d.hoje ? 'bg-primary-600 text-white' : aberto ? 'text-amber-800' : d.fimDeSemana ? 'text-gray-400' : 'text-gray-800'
+                            d.hoje ? 'bg-primary-600 text-white' : aberto ? 'text-amber-800' : d.fimDeSemana ? 'text-blue-400' : 'text-blue-700'
                           }`}
                         >
                           {String(d.dia).padStart(2, '0')}
@@ -744,14 +748,14 @@ function SaldosContasTab({
 
             <tfoot>
               <tr>
-                <td className="sticky bottom-0 left-0 z-30 border-r border-t-2 border-gray-200 border-t-gray-300 bg-white py-3 pl-4 text-xs font-semibold uppercase tracking-wide text-gray-700">
+                <td className="sticky -bottom-6 left-0 z-30 border-r border-t-2 border-r-blue-100 border-t-blue-500 bg-blue-50 py-3 pl-4 text-xs font-semibold uppercase tracking-wide text-blue-700">
                   Total geral
                 </td>
                 {dias.map((d) => (
                   <td
                     key={d.iso}
-                    className={`sticky bottom-0 z-20 border-l border-t-2 border-gray-200 border-t-gray-300 px-3 text-right text-xs font-bold tabular-nums text-gray-900 ${
-                      d.iso === dataAberta ? 'bg-amber-50' : d.fimDeSemana ? 'bg-gray-50' : 'bg-white'
+                    className={`sticky -bottom-6 z-20 border-l border-t-2 border-l-blue-100 border-t-blue-500 px-3 text-right text-xs font-bold tabular-nums text-blue-700 ${
+                      d.iso === dataAberta ? 'bg-amber-50' : 'bg-blue-50'
                     }`}
                   >
                     <ValorTotal valor={totalGeral[d.iso]} />
