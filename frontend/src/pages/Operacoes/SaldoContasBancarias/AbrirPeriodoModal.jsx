@@ -108,13 +108,13 @@ export default function AbrirPeriodoModal({ open, onClose, empresaId, onAberto }
       )}
 
       {etapa === 'vanpix' && (
-        <div className="flex flex-col items-center gap-3 py-6 text-center">
-          <Loader2 size={28} className="animate-spin text-primary-600" />
-          <p className="text-sm font-medium text-gray-700">Buscando saldos automaticamente (VanPix e API Itaú)…</p>
-          <p className="text-xs text-gray-400">
-            Período de {formatarDataBR(data)} já está aberto. Confira aqui as contas que já têm
-            integração cadastrada.
+        <div className="space-y-4">
+          <p className="text-sm text-gray-500">
+            Período de {formatarDataBR(data)} aberto. Buscando os saldos automaticamente nas contas que
+            já têm integração cadastrada…
           </p>
+          <LinhaIntegracao nome="Conexão VanPix" status="carregando" texto="Conectando…" />
+          <LinhaIntegracao nome="Conexão API Itaú" status="carregando" texto="Conectando…" />
         </div>
       )}
 
@@ -158,6 +158,7 @@ const STATUS_INTEGRACAO = {
   ok: { className: 'bg-emerald-100 text-emerald-700', Icon: CheckCircle2 },
   erro: { className: 'bg-amber-100 text-amber-700', Icon: AlertTriangle },
   sem_convenio: { className: 'bg-gray-100 text-gray-600', Icon: HelpCircle },
+  carregando: { className: 'bg-sky-50 text-sky-700', Icon: Loader2, girar: true },
 };
 
 // API Itaú: uma linha de resumo + a lista das contas que não trouxeram saldo (com o motivo),
@@ -197,7 +198,7 @@ function LinhaItau({ relatorio, erro }) {
 }
 
 function LinhaIntegracao({ nome, status, texto }) {
-  const { className, Icon } = STATUS_INTEGRACAO[status];
+  const { className, Icon, girar } = STATUS_INTEGRACAO[status];
   return (
     <div className="flex items-center justify-between gap-3 rounded-lg border border-gray-100 px-3 py-2.5">
       <span className="flex items-center gap-2 text-sm font-medium text-gray-700">
@@ -205,7 +206,7 @@ function LinhaIntegracao({ nome, status, texto }) {
         {nome}
       </span>
       <span className={`inline-flex items-center gap-1.5 rounded-full px-2.5 py-1 text-xs font-semibold ${className}`}>
-        <Icon size={13} />
+        <Icon size={13} className={girar ? 'animate-spin' : ''} />
         {texto}
       </span>
     </div>
