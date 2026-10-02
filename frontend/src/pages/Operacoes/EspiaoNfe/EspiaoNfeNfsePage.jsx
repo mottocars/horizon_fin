@@ -177,7 +177,6 @@ function filtrarNotasPorAba(lista, aba, inativas) {
 // resolvido lá).
 const DIV_H = 'border-b border-gray-200';
 const DIV_V = 'border-l border-gray-200';
-const DIV_H_CABECALHO = 'border-b-2 border-gray-300';
 
 // Larguras compartilhadas das 3 colunas de ação (Consulta/Atualizar/
 // Vencimento) — as MESMAS em COLUNAS_NOVAS e COLUNAS_SEM_NOTAS de propósito
@@ -224,10 +223,22 @@ const COLUNAS_SEM_NOTAS = [
   LARGURA_VENCIMENTO,
 ];
 
+// Cor do cabeçalho da tabela por aba (pedido do usuário, mesmas cores do
+// relatório Acervo NF-e / NFS-e): azul em Recebidas, verde em Vinculadas,
+// amarelo em Inativadas e vermelho em Canceladas. O cabeçalho gruda no topo
+// do <main> ao rolar — -top-6 cancela o p-6 dele, senão sobrava uma faixa de
+// 24px entre o cabeçalho e o topo da tela.
+const TEMA_CABECALHO = {
+  novas: { th: 'border-b-2 border-b-blue-500 bg-blue-50', divisor: 'border-l border-l-blue-100', texto: 'text-blue-700' },
+  vinculadas: { th: 'border-b-2 border-b-emerald-500 bg-emerald-50', divisor: 'border-l border-l-emerald-100', texto: 'text-emerald-700' },
+  inativas: { th: 'border-b-2 border-b-yellow-500 bg-yellow-50', divisor: 'border-l border-l-yellow-100', texto: 'text-yellow-700' },
+  canceladas: { th: 'border-b-2 border-b-red-500 bg-red-50', divisor: 'border-l border-l-red-100', texto: 'text-red-700' },
+};
+
 // Cabeçalho único da tabela inteira (não mais repetido por seção — ver
 // comentário no topo do arquivo) — sticky, mesmo padrão de
-// GestaoParcelasTab.jsx (DIV_H_CABECALHO/DIV_V, bg-white + shadow-sm pra
-// marcar bem o limite quando ele flutua sobre as linhas rolando por baixo).
+// GestaoParcelasTab.jsx, na cor da aba (TEMA_CABECALHO) — fundo cheio pra
+// marcar bem o limite quando ele flutua sobre as linhas rolando por baixo.
 // `temNivel2` diz se algum certificado desta tabela está expandido mostrando
 // nota — só faz sentido escrever "/ Nota" no cabeçalho quando isso é
 // verdade; fechado (ou na caixa "Sem nota", que nunca expande), o
@@ -235,35 +246,36 @@ const COLUNAS_SEM_NOTAS = [
 // se as 3 últimas colunas (Consulta/Atualizar/Vencimento) aparecem — nas
 // outras abas nem o cabeçalho delas existe. `mostrarVincular` (Recebidas e
 // Vinculadas) faz o mesmo pra coluna Vincular.
-function CabecalhoTabela({ modoInativas, mostrarAcoes, mostrarVincular, temNivel2 = false }) {
+function CabecalhoTabela({ aba, modoInativas, mostrarAcoes, mostrarVincular, temNivel2 = false }) {
+  const t = TEMA_CABECALHO[aba] || TEMA_CABECALHO.novas;
   return (
-    <thead className="sticky top-0 z-10 bg-white shadow-sm">
-      <tr className="text-xs uppercase tracking-wide text-gray-400">
-        <th className={`${DIV_H_CABECALHO} py-2.5 pl-3 text-left font-medium`}>
+    <thead className="sticky -top-6 z-10">
+      <tr className={`text-xs uppercase tracking-wide ${t.texto} [&>th:first-child]:rounded-tl-lg [&>th:last-child]:rounded-tr-lg`}>
+        <th className={`${t.th} py-2.5 pl-3 text-left font-medium`}>
           {temNivel2 ? 'Empresa / Nota' : 'Empresa'}
         </th>
-        <th className={`${DIV_H_CABECALHO} ${DIV_V} py-2.5 text-center font-medium`} title="Produto (NF-e)">
+        <th className={`${t.th} ${t.divisor} py-2.5 text-center font-medium`} title="Produto (NF-e)">
           <Package size={14} className="inline text-primary-500" />
         </th>
-        <th className={`${DIV_H_CABECALHO} ${DIV_V} py-2.5 text-center font-medium`} title="Serviço (NFS-e)">
+        <th className={`${t.th} ${t.divisor} py-2.5 text-center font-medium`} title="Serviço (NFS-e)">
           <Wrench size={14} className="inline text-violet-500" />
         </th>
-        <th className={`${DIV_H_CABECALHO} ${DIV_V} px-3 py-2.5 text-left font-medium`}>Emissor</th>
-        <th className={`${DIV_H_CABECALHO} ${DIV_V} px-2 py-2.5 text-center font-medium`}>Emissão</th>
-        <th className={`${DIV_H_CABECALHO} ${DIV_V} px-2 py-2.5 text-center font-medium`}>Situação</th>
+        <th className={`${t.th} ${t.divisor} px-3 py-2.5 text-left font-medium`}>Emissor</th>
+        <th className={`${t.th} ${t.divisor} px-2 py-2.5 text-center font-medium`}>Emissão</th>
+        <th className={`${t.th} ${t.divisor} px-2 py-2.5 text-center font-medium`}>Situação</th>
         {modoInativas && (
-          <th className={`${DIV_H_CABECALHO} ${DIV_V} px-2 py-2.5 text-center font-medium`}>Inativada por</th>
+          <th className={`${t.th} ${t.divisor} px-2 py-2.5 text-center font-medium`}>Inativada por</th>
         )}
-        <th className={`${DIV_H_CABECALHO} ${DIV_V} py-2.5 text-center font-medium`}>PDF</th>
-        <th className={`${DIV_H_CABECALHO} ${DIV_V} py-2.5 text-center font-medium`}>XML</th>
+        <th className={`${t.th} ${t.divisor} py-2.5 text-center font-medium`}>PDF</th>
+        <th className={`${t.th} ${t.divisor} py-2.5 text-center font-medium`}>XML</th>
         {mostrarVincular && (
-          <th className={`${DIV_H_CABECALHO} ${DIV_V} px-1 py-2.5 text-center font-medium`}>Vincular</th>
+          <th className={`${t.th} ${t.divisor} px-1 py-2.5 text-center font-medium`}>Vincular</th>
         )}
         {mostrarAcoes && (
           <>
-            <th className={`${DIV_H_CABECALHO} ${DIV_V} px-2 py-2.5 text-center font-medium`}>Consulta</th>
-            <th className={`${DIV_H_CABECALHO} ${DIV_V} px-1 py-2.5 text-center font-medium`}>Atualizar</th>
-            <th className={`${DIV_H_CABECALHO} ${DIV_V} px-2 py-2.5 text-center font-medium`}>Vencimento</th>
+            <th className={`${t.th} ${t.divisor} px-2 py-2.5 text-center font-medium`}>Consulta</th>
+            <th className={`${t.th} ${t.divisor} px-1 py-2.5 text-center font-medium`}>Atualizar</th>
+            <th className={`${t.th} ${t.divisor} px-2 py-2.5 text-center font-medium`}>Vencimento</th>
           </>
         )}
       </tr>
@@ -274,13 +286,14 @@ function CabecalhoTabela({ modoInativas, mostrarAcoes, mostrarVincular, temNivel
 // Cabeçalho enxuto da caixa "Sem nota no período" (ver COLUNAS_SEM_NOTAS) —
 // só as 4 colunas que fazem sentido pra um certificado sem nenhuma nota.
 function CabecalhoSemNotas() {
+  const t = TEMA_CABECALHO.novas;
   return (
-    <thead className="sticky top-0 z-10 bg-white shadow-sm">
-      <tr className="text-xs uppercase tracking-wide text-gray-400">
-        <th className={`${DIV_H_CABECALHO} py-2.5 pl-3 text-left font-medium`}>Empresa</th>
-        <th className={`${DIV_H_CABECALHO} ${DIV_V} px-2 py-2.5 text-center font-medium`}>Consulta</th>
-        <th className={`${DIV_H_CABECALHO} ${DIV_V} px-1 py-2.5 text-center font-medium`}>Atualizar</th>
-        <th className={`${DIV_H_CABECALHO} ${DIV_V} px-2 py-2.5 text-center font-medium`}>Vencimento</th>
+    <thead className="sticky -top-6 z-10">
+      <tr className={`text-xs uppercase tracking-wide ${t.texto} [&>th:first-child]:rounded-tl-lg [&>th:last-child]:rounded-tr-lg`}>
+        <th className={`${t.th} py-2.5 pl-3 text-left font-medium`}>Empresa</th>
+        <th className={`${t.th} ${t.divisor} px-2 py-2.5 text-center font-medium`}>Consulta</th>
+        <th className={`${t.th} ${t.divisor} px-1 py-2.5 text-center font-medium`}>Atualizar</th>
+        <th className={`${t.th} ${t.divisor} px-2 py-2.5 text-center font-medium`}>Vencimento</th>
       </tr>
     </thead>
   );
@@ -1563,6 +1576,7 @@ export default function EspiaoNfeNfsePage() {
                           ))}
                         </colgroup>
                         <CabecalhoTabela
+                          aba={abaNotas}
                           modoInativas={modoInativas}
                           mostrarAcoes={mostrarAcoes}
                           mostrarVincular={mostrarVincular}
