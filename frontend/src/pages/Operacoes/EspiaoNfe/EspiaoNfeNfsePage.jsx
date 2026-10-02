@@ -315,6 +315,8 @@ function LinhaNota({
   mostrarVincular,
   selecionada,
   onToggleSelecionada,
+  onIniciarArraste,
+  onContinuarArraste,
   onBaixarPdf,
   onBaixar,
   baixandoPdf,
@@ -325,16 +327,24 @@ function LinhaNota({
   const ehProduto = tipo === 'produtos';
   const ehServico = tipo === 'servicos';
   return (
-    <tr className="bg-white hover:bg-gray-50">
+    <tr className={selecionada ? 'bg-primary-50/60' : 'bg-white hover:bg-gray-50'} onMouseEnter={onContinuarArraste}>
       {/* pl-14: nível 2 do drilldown (Certificado → Nota) — mesmo recuo da
-          etapa em GestaoParcelasTab.jsx. */}
-      <td className={`${DIV_H} py-2 pl-14 pr-3`}>
+          etapa em GestaoParcelasTab.jsx. Clicar em qualquer ponto desta
+          célula marca/desmarca a nota; segurar e arrastar por cima de outras
+          notas aplica o mesmo a todas (ver iniciarArraste). O checkbox não
+          recebe o clique do mouse (pointer-events-none) pra não alternar duas
+          vezes — pelo teclado (espaço) ele continua funcionando. */}
+      <td
+        className={`${DIV_H} cursor-pointer select-none py-2 pl-14 pr-3`}
+        onMouseDown={onIniciarArraste}
+        title="Clique para selecionar. Segure e arraste para selecionar várias notas."
+      >
         <span className="flex items-center gap-2">
           <input
             type="checkbox"
             checked={selecionada}
             onChange={onToggleSelecionada}
-            className="h-3.5 w-3.5 shrink-0 rounded border-gray-300 text-primary-600 focus:ring-primary-100"
+            className="pointer-events-none h-3.5 w-3.5 shrink-0 rounded border-gray-300 text-primary-600 focus:ring-primary-100"
           />
           <span className="truncate font-mono text-gray-600">
             {nota.numero_nota || '—'}
@@ -1020,6 +1030,66 @@ export default function EspiaoNfeNfsePage() {
     });
   }
 
+  // Seleção por arraste (pedido do usuário): apertar o botão na célula do
+  // número de uma nota marca/desmarca ela e, enquanto o botão continua
+  // apertado, toda nota por cima da qual o mouse passar recebe a MESMA ação
+  // (se a primeira estava desmarcada, o arraste marca; se estava marcada,
+  // desmarca) — mesmo comportamento de arrastar sobre checkboxes no Gmail.
+  // Ref, não state: não precisa redesenhar nada só por estar arrastando.
+  const arrasteRef = useRef(null); // { marcar: boolean } | null
+
+  function aplicarSelecao(certificadoId, tipo, nota, marcar) {
+    setSelecionadas((prev) => {
+      if (prev.has(nota.id) === marcar) return prev;
+      const next = new Map(prev);
+      if (marcar) next.set(nota.id, { certificadoId, tipo });
+      else next.delete(nota.id);
+      return next;
+    });
+  }
+
+  function iniciarArraste(certificadoId, tipo, nota, e) {
+    if (e.button !== 0) return;
+    // Sem isso o navegador começa a selecionar texto ao arrastar.
+    e.preventDefault();
+    const marcar = !selecionadas.has(nota.id);
+    arrasteRef.current = { marcar };
+    aplicarSelecao(certificadoId, tipo, nota, marcar);
+  }
+
+  function continuarArraste(certificadoId, tipo, nota) {
+    if (!arrasteRef.current) return;
+    aplicarSelecao(certificadoId, tipo, nota, arrasteRef.current.marcar);
+  }
+
+  // Solta o botão em qualquer lugar = fim do arraste. Enquanto arrasta,
+  // chegar perto da borda de cima/baixo do <main> (quem rola a página) rola
+  // a tela sozinho, pra dar pra selecionar mais notas do que cabem na tela.
+  useEffect(() => {
+    let posicaoY = null;
+    const main = document.querySelector('main');
+    function aoMover(e) {
+      posicaoY = arrasteRef.current ? e.clientY : null;
+    }
+    function aoSoltar() {
+      arrasteRef.current = null;
+      posicaoY = null;
+    }
+    const intervalo = setInterval(() => {
+      if (posicaoY == null || !main) return;
+      const { top, bottom } = main.getBoundingClientRect();
+      if (posicaoY > bottom - 48) main.scrollBy(0, 14);
+      else if (posicaoY < top + 48) main.scrollBy(0, -14);
+    }, 16);
+    window.addEventListener('mousemove', aoMover);
+    window.addEventListener('mouseup', aoSoltar);
+    return () => {
+      clearInterval(intervalo);
+      window.removeEventListener('mousemove', aoMover);
+      window.removeEventListener('mouseup', aoSoltar);
+    };
+  }, []);
+
   function limparSelecao() {
     setSelecionadas(new Map());
   }
@@ -1317,6 +1387,8 @@ export default function EspiaoNfeNfsePage() {
               mostrarVincular={mostrarVincular}
               selecionada={selecionadas.has(nota.id)}
               onToggleSelecionada={() => toggleSelecionada(certificado.id, tipo, nota)}
+              onIniciarArraste={(e) => iniciarArraste(certificado.id, tipo, nota, e)}
+              onContinuarArraste={() => continuarArraste(certificado.id, tipo, nota)}
               onBaixarPdf={() => handleDownloadPdf(nota)}
               onBaixar={() => handleDownload(nota)}
               baixandoPdf={baixando.has(`${nota.id}:pdf`)}
