@@ -8,7 +8,7 @@
 export const TELAS_SISTEMA = {
   '/': { title: 'Home', subtitle: 'Visão geral das suas atividades' },
   '/meu-perfil': { title: 'Meu Perfil', subtitle: 'Altere seus dados de acesso' },
-  '/operacoes/dre-gerencial': { title: 'DRE POC Gerencial', subtitle: 'Operações — DRE POC Gerencial' },
+  '/operacoes/dre-gerencial': { title: 'DRE Construtoras', subtitle: 'Operações — DRE Construtoras' },
   '/operacoes/espiao-nfe-nfse': { title: 'Espião NFe / NFSe', subtitle: 'Operações — Espião NFe / NFSe' },
   '/operacoes/saldo-contas-bancarias': { title: 'Saldo Contas Bancárias', subtitle: 'Operações — Saldo Contas Bancárias' },
   '/operacoes/repasses-cef': { title: 'Repasses CEF', subtitle: 'Operações — Repasses CEF' },
