@@ -414,6 +414,32 @@ async function testarExtrato(id) {
   return { conexao: await getById(id), sucesso: novoStatus === 'ATIVA', mensagem };
 }
 
+// Saldo do momento (SALDO EM CONTA) da conta cadastrada na conexão, pelo extrato de `data`
+// (AAAA-MM-DD) — usado na abertura do período de Saldo Contas Bancárias. Nunca lança por
+// causa do Itaú: { ok: true, valor, posicao } | { ok: false, mensagem }.
+async function consultarSaldoEmConta(conexaoId, data) {
+  try {
+    const t = await obterToken(conexaoId);
+    if (!t.ok) return { ok: false, mensagem: `Access token recusado (${t.codigo}).` };
+    const r = await sts.buscarExtratoJson({
+      agente: t.ctx.agente,
+      accessToken: t.accessToken,
+      clientId: t.ctx.row.client_id,
+      conta: t.ctx.row,
+      data,
+    });
+    if (!r.ok) {
+      if (r.falhaRede) return { ok: false, mensagem: 'Sem resposta da API de extrato do Itaú.' };
+      return { ok: false, mensagem: `Extrato: HTTP ${r.statusCode}${r.mensagemErro ? ` (${r.mensagemErro})` : ''}.` };
+    }
+    const saldo = v.extrairSaldoEmConta(r.json);
+    if (!saldo) return { ok: false, mensagem: 'O extrato não trouxe o SALDO EM CONTA.' };
+    return { ok: true, ...saldo };
+  } catch (err) {
+    return { ok: false, mensagem: err.expose ? err.message : 'Erro interno ao consultar o saldo.' };
+  }
+}
+
 // ─── renovação anual ────────────────────────────────────────────────────────────────────
 
 async function renovarCertificado(id, { apenasSeNaJanela = false } = {}) {
@@ -493,6 +519,7 @@ module.exports = {
   getAccessToken,
   testarToken,
   testarExtrato,
+  consultarSaldoEmConta,
   renovarCertificado,
   renovarCertificadosDaEmpresa,
   mensagemStatus,

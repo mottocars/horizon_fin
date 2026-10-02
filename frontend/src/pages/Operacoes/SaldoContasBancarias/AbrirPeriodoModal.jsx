@@ -36,7 +36,7 @@ export default function AbrirPeriodoModal({ open, onClose, empresaId, onAberto }
     try {
       setRelatorioVanpix(await buscarSaldosVanpix(empresaId, alvo));
     } catch (err) {
-      setErroVanpix(err.response?.data?.message || 'Não foi possível buscar os saldos automaticamente na VanPix.');
+      setErroVanpix(err.response?.data?.message || 'Não foi possível buscar os saldos automaticamente.');
     } finally {
       setEtapa('resultado');
     }
@@ -110,10 +110,10 @@ export default function AbrirPeriodoModal({ open, onClose, empresaId, onAberto }
       {etapa === 'vanpix' && (
         <div className="flex flex-col items-center gap-3 py-6 text-center">
           <Loader2 size={28} className="animate-spin text-primary-600" />
-          <p className="text-sm font-medium text-gray-700">Buscando saldos automaticamente na VanPix…</p>
+          <p className="text-sm font-medium text-gray-700">Buscando saldos automaticamente (VanPix e API Itaú)…</p>
           <p className="text-xs text-gray-400">
-            Período de {formatarDataBR(data)} já está aberto. Confira aqui as contas que já têm a
-            integração VanPix cadastrada.
+            Período de {formatarDataBR(data)} já está aberto. Confira aqui as contas que já têm
+            integração cadastrada.
           </p>
         </div>
       )}
@@ -137,6 +137,7 @@ export default function AbrirPeriodoModal({ open, onClose, empresaId, onAberto }
                   : `Ok, ${relatorioVanpix.atualizados.length} conta(s) integrada(s)`
             }
           />
+          <LinhaItau relatorio={relatorioVanpix?.itau} erro={erroVanpix} />
 
           <div className="flex justify-end pt-2">
             <Button type="button" onClick={onClose}>
@@ -149,8 +150,8 @@ export default function AbrirPeriodoModal({ open, onClose, empresaId, onAberto }
   );
 }
 
-// Uma linha só por integração (pedido do usuário: reduzir os logs da busca automática) — hoje só
-// existe VanPix, mas o componente já é genérico pra caber outras integrações no futuro sem
+// Uma linha só por integração (pedido do usuário: reduzir os logs da busca automática) — VanPix e
+// API Itaú (LinhaItau acima), genérico pra caber outras integrações no futuro sem
 // crescer a lista nem precisar de rolagem. Mesmo selo "positivo" (pill esmeralda + CheckCircle2)
 // já usado em CertificadosDigitaisPage.jsx pra status de conexão/validade.
 const STATUS_INTEGRACAO = {
@@ -158,6 +159,42 @@ const STATUS_INTEGRACAO = {
   erro: { className: 'bg-amber-100 text-amber-700', Icon: AlertTriangle },
   sem_convenio: { className: 'bg-gray-100 text-gray-600', Icon: HelpCircle },
 };
+
+// API Itaú: uma linha de resumo + a lista das contas que não trouxeram saldo (com o motivo),
+// pra saber na hora qual lançar à mão.
+function LinhaItau({ relatorio, erro }) {
+  const atualizadas = relatorio?.atualizados.length || 0;
+  const problemas = [
+    ...(relatorio?.falhas || []).map((f) => ({ ...f, motivo: f.mensagem })),
+    ...(relatorio?.semCorrespondencia || []).map((s) => ({ ...s, motivo: 'conta não encontrada no cadastro de contas bancárias' })),
+  ];
+  let status = 'ok';
+  let texto = `Ok, ${atualizadas} conta(s) integrada(s)`;
+  if (erro) {
+    status = 'erro';
+    texto = 'Falha de conexão';
+  } else if (!relatorio || relatorio.conexoes === 0) {
+    status = 'sem_convenio';
+    texto = 'Nenhuma conta Itaú configurada';
+  } else if (problemas.length) {
+    status = 'erro';
+    texto = `${atualizadas} de ${relatorio.conexoes} conta(s) integrada(s)`;
+  }
+  return (
+    <div className="space-y-1.5">
+      <LinhaIntegracao nome="Conexão API Itaú" status={status} texto={texto} />
+      {problemas.length > 0 && (
+        <ul className="space-y-1 rounded-lg bg-amber-50 px-3 py-2 text-xs text-amber-800">
+          {problemas.map((p) => (
+            <li key={`${p.conexao}-${p.conta}`}>
+              <span className="font-medium">{p.conexao}</span> ({p.conta}): {p.motivo}
+            </li>
+          ))}
+        </ul>
+      )}
+    </div>
+  );
+}
 
 function LinhaIntegracao({ nome, status, texto }) {
   const { className, Icon } = STATUS_INTEGRACAO[status];

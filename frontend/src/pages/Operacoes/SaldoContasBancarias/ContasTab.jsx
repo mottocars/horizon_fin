@@ -223,13 +223,14 @@ export default function ContasTab({
                           </td>
                           <td className="border-b border-l border-gray-100 px-3 py-2 group-hover:bg-gray-50">
                             {/* Mesma paleta/ícone de ORIGEM_INFO.API em SaldosContasTab.jsx — mesmo
-                                vocabulário visual de "isto é automático" nas duas telas. VanPix =
-                                já recebeu ao menos 1 saldo via API alguma vez (ver tem_automacao
-                                em contas.service.js), não é uma configuração, é um fato observado. */}
-                            {conta.tem_automacao ? (
+                                vocabulário visual de "isto é automático" nas duas telas. A
+                                integração do saldo automático mais recente da conta (ver automacao
+                                em contas.service.js) — não é uma configuração, é um fato observado:
+                                vira "API Itaú" na primeira vez que o Itaú alimenta a conta. */}
+                            {conta.automacao ? (
                               <span className="inline-flex items-center gap-1 rounded-full bg-emerald-50 px-2 py-0.5 text-[11px] font-medium text-emerald-600">
                                 <Zap size={11} />
-                                VanPix
+                                {conta.automacao === 'ITAU' ? 'API Itaú' : 'VanPix'}
                               </span>
                             ) : (
                               <span className="inline-flex items-center rounded-full bg-gray-100 px-2 py-0.5 text-[11px] font-medium text-gray-600">

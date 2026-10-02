@@ -259,11 +259,11 @@ async function salvarSaldos(empresaId, usuarioId, itens) {
 
     if (gravar.length) {
       await client.query(
-        `INSERT INTO saldos_contas_bancarias (empresa_id, company_id, numero_conta, data, saldo, origem, atualizado_por)
-         SELECT $1, t.company_id, t.numero_conta, t.data, t.saldo, t.origem, $2
-         FROM unnest($3::int[], $4::text[], $5::date[], $6::numeric[], $7::text[]) AS t(company_id, numero_conta, data, saldo, origem)
+        `INSERT INTO saldos_contas_bancarias (empresa_id, company_id, numero_conta, data, saldo, origem, fonte, atualizado_por)
+         SELECT $1, t.company_id, t.numero_conta, t.data, t.saldo, t.origem, t.fonte, $2
+         FROM unnest($3::int[], $4::text[], $5::date[], $6::numeric[], $7::text[], $8::text[]) AS t(company_id, numero_conta, data, saldo, origem, fonte)
          ON CONFLICT (empresa_id, company_id, numero_conta, data)
-         DO UPDATE SET saldo = EXCLUDED.saldo, origem = EXCLUDED.origem, atualizado_por = EXCLUDED.atualizado_por`,
+         DO UPDATE SET saldo = EXCLUDED.saldo, origem = EXCLUDED.origem, fonte = EXCLUDED.fonte, atualizado_por = EXCLUDED.atualizado_por`,
         [
           empresaId,
           usuarioId,
@@ -275,6 +275,8 @@ async function salvarSaldos(empresaId, usuarioId, itens) {
           // em MANUAL — é o único valor que o schema HTTP aceita hoje. A busca automática
           // VanPix (vanpix-sync.service.js) é quem informa 'API'/'HERDADO' explicitamente.
           gravar.map((i) => i.origem || 'MANUAL'),
+          // Integração que trouxe o saldo automático (VANPIX/ITAU) — vazio nos manuais.
+          gravar.map((i) => i.fonte || null),
         ]
       );
     }

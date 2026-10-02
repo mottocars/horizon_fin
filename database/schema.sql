@@ -926,6 +926,10 @@ CREATE TABLE saldos_contas_bancarias (
     -- que era API/HERDADO, vira MANUAL a partir daí). Só informa a cor/ícone da grade, não
     -- afeta nada da lógica de período/gravação.
     origem         VARCHAR(10) NOT NULL DEFAULT 'MANUAL' CHECK (origem IN ('API', 'HERDADO', 'MANUAL')),
+    -- Qual integração trouxe o saldo automático (origem API): VANPIX ou ITAU. NULL nos
+    -- manuais/herdados por classificação e nas linhas API anteriores a esta coluna (que eram
+    -- todas da VanPix). Alimenta a coluna Automação da aba Contas bancárias.
+    fonte          VARCHAR(10) CHECK (fonte IN ('VANPIX', 'ITAU')),
     atualizado_por INTEGER REFERENCES usuarios(id) ON DELETE SET NULL,
     criado_em      TIMESTAMP DEFAULT NOW(),
     atualizado_em  TIMESTAMP DEFAULT NOW(),

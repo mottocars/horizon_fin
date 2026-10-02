@@ -185,7 +185,40 @@ async function consultarExtrato({ agente, accessToken, clientId, conta, dataInic
   }
 }
 
+// Extrato completo (JSON já interpretado) — pra quem precisa dos dados (ex.: saldo do dia na
+// abertura do período). O conteúdo fica só em memória: nunca vai pra log nem pra erro.
+// { ok: true, json } | { ok: false, statusCode?, falhaRede?, mensagemErro? }
+async function buscarExtratoJson({ agente, accessToken, clientId, conta, data }) {
+  let resposta;
+  try {
+    resposta = await httpsRequest({
+      method: 'GET',
+      url: montarUrlExtrato(conta, { dataInicio: data, dataFim: data }),
+      agent: agente,
+      headers: {
+        Authorization: `Bearer ${accessToken}`,
+        'x-itau-apikey': clientId,
+        'x-itau-correlationID': crypto.randomUUID(),
+        Accept: 'application/json',
+      },
+      timeoutMs: 30000,
+    });
+  } catch (err) {
+    return { ok: false, falhaRede: codigoFalhaRede(err) };
+  }
+  let json = null;
+  try {
+    json = JSON.parse(resposta.body.toString('utf8'));
+  } catch {
+    // tratado abaixo
+  }
+  if (resposta.statusCode >= 200 && resposta.statusCode < 300 && json) return { ok: true, json };
+  const msg = json?.message;
+  return { ok: false, statusCode: resposta.statusCode, mensagemErro: typeof msg === 'string' ? msg.slice(0, 200) : null };
+}
+
 module.exports = {
+  buscarExtratoJson,
   gerarChaveECsr,
   lerCertificado,
   criarAgente,

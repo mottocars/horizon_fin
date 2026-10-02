@@ -157,3 +157,25 @@ test('URL do extrato: statementId com "00", type=current_account e start_date', 
     'https://account-statement.api.itau.com/account-statement/v1/statements/123400567890?type=current_account&start_date=2026-10-01'
   );
 });
+
+test('saldo do momento: SALDO EM CONTA (saldo_disponivel), nunca o SALDO ANTERIOR', () => {
+  const saldo = (type, literal, value, event) => ({ type, literal: { complete: literal }, amount: { value, currency: 'BRL' }, date: { event } });
+  const json = {
+    data: [
+      {
+        balances: [
+          saldo('saldo_disponivel', 'SALDO ANTERIOR', 401.91, '2026-10-01T23:59:59.999-03:00'),
+          saldo('saldo_disponivel', 'SALDO EM CONTA', -316.64, '2026-10-02T04:33:41-03:00'),
+          saldo('saldo_total', 'SALDO TOTAL', -316.64, '2026-10-02T04:33:41-03:00'),
+          saldo('saldo_aplic_aut', 'SALDO APLIC. AUT.', 400.91, '2026-10-02T04:33:41-03:00'),
+        ],
+      },
+    ],
+  };
+  assert.deepStrictEqual(v.extrairSaldoEmConta(json), { valor: -316.64, posicao: '2026-10-02T04:33:41-03:00' });
+  // ordem invertida e literal diferente: pega o saldo_disponivel mais recente que não é o anterior
+  const semLiteral = { data: [{ balances: [saldo('saldo_disponivel', 'DISPONIVEL', 10.005, '2026-10-02T10:00:00Z'), saldo('saldo_disponivel', 'SALDO ANTERIOR', 5, '2026-10-01T23:59:59Z')] }] };
+  assert.strictEqual(v.extrairSaldoEmConta(semLiteral).valor, 10.01);
+  assert.strictEqual(v.extrairSaldoEmConta({ data: [{ balances: [saldo('saldo_disponivel', 'SALDO ANTERIOR', 5, 'x')] }] }), null);
+  assert.strictEqual(v.extrairSaldoEmConta({}), null);
+});

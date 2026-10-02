@@ -23,6 +23,7 @@
 // prioridade só decide quem NÃO é automatizado — quem é, sempre herda (ver acima).
 const pool = require('../../config/db');
 const vanpixService = require('../integracoes-vanpix/vanpix.service');
+const itauService = require('../integracoes-itau/itau.service');
 const classificacoesService = require('../classificacoes-bancarias/classificacoes.service');
 const saldosService = require('./saldos.service');
 
@@ -95,12 +96,76 @@ async function ultimoSaldoAnterior(empresaId, companyId, numeroConta, data) {
 // passada de buscarSaldosVanpix): segunda-feira, a VanPix devolve o saldo de sábado/domingo
 // (quando devolve algo), que não bate com `diaAnterior` esperado e é descartado — sem essa
 // garantia extra, a conta ficava em branco até alguém configurar a classificação certa.
+// Devolve "company_id:numero_conta" → fonte do saldo API mais recente (VANPIX/ITAU; linhas
+// antigas sem fonte eram todas VanPix), pra o saldo herdado manter a mesma fonte.
 async function listarContasAutomatizadas(empresaId) {
   const { rows } = await pool.query(
-    `SELECT DISTINCT company_id, numero_conta FROM saldos_contas_bancarias WHERE empresa_id = $1 AND origem = 'API'`,
+    `SELECT DISTINCT ON (company_id, numero_conta) company_id, numero_conta, COALESCE(fonte, 'VANPIX') AS fonte
+     FROM saldos_contas_bancarias WHERE empresa_id = $1 AND origem = 'API'
+     ORDER BY company_id, numero_conta, data DESC`,
     [empresaId]
   );
-  return new Set(rows.map((r) => `${r.company_id}:${r.numero_conta}`));
+  return new Map(rows.map((r) => [`${r.company_id}:${r.numero_conta}`, r.fonte]));
+}
+
+// Contas Itaú com agência + conta + dígito no cadastro casadas com a conexão API Itaú da mesma
+// conta (agência/conta/DAC iguais). Só conexões ativas com certificado válido.
+async function listarContasItau(empresaId) {
+  const { rows } = await pool.query(
+    `SELECT c.id AS conexao_id, c.nome AS conexao, c.agencia, c.conta, c.dac, s.company_id, s.numero_conta
+     FROM conexoes_itau c
+     LEFT JOIN contas_bancarias_sienge s
+       ON s.empresa_id = c.empresa_id
+      AND LTRIM(s.agencia_enriquecida, '0') = LTRIM(c.agencia, '0')
+      AND LTRIM(s.conta_enriquecida, '0') = LTRIM(c.conta, '0')
+      AND s.digito = c.dac
+      AND COALESCE(NULLIF(s.banco_enriquecido, ''), REGEXP_REPLACE(s.banco_numero, '[^0-9]', '', 'g')) IN ('341', '0341')
+     WHERE c.empresa_id = $1 AND c.ativo = TRUE
+       AND c.agencia IS NOT NULL AND c.conta IS NOT NULL AND c.dac IS NOT NULL
+       AND c.certificado_pem IS NOT NULL AND c.data_validade_certificado > $2
+     ORDER BY c.id`,
+    [empresaId, new Date()]
+  );
+  return rows;
+}
+
+const ITAU_CONSULTAS_SIMULTANEAS = 4;
+
+// Consulta o SALDO EM CONTA de cada conta Itaú (até 4 conexões ao mesmo tempo) e acrescenta
+// os itens a gravar (origem API, fonte ITAU). Falha de UMA conexão vai pro relatório, não
+// derruba as outras nem a VanPix.
+async function buscarSaldosItau(empresaId, data, relatorio, itensParaGravar, casadasNaApi) {
+  const linhas = await listarContasItau(empresaId);
+  const porConexao = new Map();
+  for (const l of linhas) {
+    if (!porConexao.has(l.conexao_id)) porConexao.set(l.conexao_id, { ...l, contas: [] });
+    if (l.company_id !== null) porConexao.get(l.conexao_id).contas.push({ company_id: l.company_id, numero_conta: l.numero_conta });
+  }
+  const conexoes = [...porConexao.values()];
+  relatorio.conexoes = conexoes.length;
+
+  const fila = [...conexoes];
+  async function trabalhar() {
+    while (fila.length) {
+      const c = fila.shift();
+      const contaTexto = `${c.agencia} / ${c.conta}-${c.dac}`;
+      if (c.contas.length === 0) {
+        relatorio.semCorrespondencia.push({ conexao: c.conexao, conta: contaTexto });
+        continue;
+      }
+      const r = await itauService.consultarSaldoEmConta(c.conexao_id, data);
+      if (!r.ok) {
+        relatorio.falhas.push({ conexao: c.conexao, conta: contaTexto, mensagem: r.mensagem });
+        continue;
+      }
+      for (const conta of c.contas) {
+        casadasNaApi.add(`${conta.company_id}:${conta.numero_conta}`);
+        itensParaGravar.push({ ...conta, data, saldo: r.valor, origem: 'API', fonte: 'ITAU' });
+        relatorio.atualizados.push({ conexao: c.conexao, conta: contaTexto, ...conta, saldo: r.valor, posicao: r.posicao });
+      }
+    }
+  }
+  await Promise.all(Array.from({ length: Math.min(ITAU_CONSULTAS_SIMULTANEAS, conexoes.length) }, trabalhar));
 }
 
 // Roda todos os convênios VanPix ativos da empresa pra `data` (sábado/domingo: nem tenta, ver
@@ -111,14 +176,18 @@ async function listarContasAutomatizadas(empresaId) {
 // por causa de UM convênio com problema — cada um é reportado individualmente; só propaga erro
 // se a própria gravação em lote falhar (ex.: período fechado por outra aba).
 async function buscarSaldosVanpix(empresaId, usuarioId, data) {
-  const relatorio = { convenios: [], atualizados: [], herdados: [], semCorrespondencia: [] };
+  const relatorio = {
+    convenios: [],
+    atualizados: [],
+    herdados: [],
+    semCorrespondencia: [],
+    itau: { conexoes: 0, atualizados: [], falhas: [], semCorrespondencia: [] },
+  };
   if (ehFimDeSemana(data)) return relatorio; // sábado/domingo: nem consulta, nem grava nada
 
   const dataPesquisa = paraDDMMYYYY(data);
   const diaAnterior = diaAnteriorISO(data);
   const integracoes = await listarVanpixAtivasDaEmpresa(empresaId);
-
-  if (integracoes.length === 0) return relatorio;
 
   const itensParaGravar = [];
   const casadasNaApi = new Set(); // "company_id:numero_conta" já resolvidas via API nesta rodada
@@ -146,7 +215,7 @@ async function buscarSaldosVanpix(empresaId, usuarioId, data) {
         const valor = Math.round(lote.saldoFinal.valorCentavos * (lote.saldoFinal.situacao === 'D' ? -1 : 1)) / 100;
         for (const conta of contas) {
           casadasNaApi.add(`${conta.company_id}:${conta.numero_conta}`);
-          itensParaGravar.push({ company_id: conta.company_id, numero_conta: conta.numero_conta, data, saldo: valor, origem: 'API' });
+          itensParaGravar.push({ company_id: conta.company_id, numero_conta: conta.numero_conta, data, saldo: valor, origem: 'API', fonte: 'VANPIX' });
           relatorio.atualizados.push({
             apelido,
             banco: lote.banco,
@@ -160,6 +229,10 @@ async function buscarSaldosVanpix(empresaId, usuarioId, data) {
       }
     }
   }
+
+  // API Itaú: o saldo do momento (SALDO EM CONTA) de cada conta Itaú que tem agência, conta e
+  // dígito no cadastro e uma conexão ativa com essa mesma conta (ver buscarSaldosItau).
+  await buscarSaldosItau(empresaId, data, relatorio.itau, itensParaGravar, casadasNaApi);
 
   // Segunda passada: toda conta-alvo que a API não resolveu tenta herdar — conforme a
   // prioridade cadastrada na classificação dela OU, sempre, se a própria conta já é
@@ -175,7 +248,8 @@ async function buscarSaldosVanpix(empresaId, usuarioId, data) {
   for (const conta of contasAlvo) {
     const chave = `${conta.company_id}:${conta.numero_conta}`;
     if (casadasNaApi.has(chave)) continue;
-    const automatizada = contasAutomatizadas.has(chave);
+    const fonteAutomatica = contasAutomatizadas.get(chave); // VANPIX/ITAU, ou undefined
+    const automatizada = Boolean(fonteAutomatica);
     if (prioridadePorClassificacao.get(conta.classificacao) !== 'SALDO_ANTERIOR' && !automatizada) continue;
 
     const valorHerdado = await ultimoSaldoAnterior(empresaId, conta.company_id, conta.numero_conta, data);
@@ -185,7 +259,14 @@ async function buscarSaldosVanpix(empresaId, usuarioId, data) {
     // 'HERDADO') — não é uma suposição, é o mesmo saldo real só sem movimentação nova. Só quem
     // herda por causa da prioridade da classificação (não automatizada) fica como 'HERDADO'.
     const origem = automatizada ? 'API' : 'HERDADO';
-    itensParaGravar.push({ company_id: conta.company_id, numero_conta: conta.numero_conta, data, saldo: valorHerdado, origem });
+    itensParaGravar.push({
+      company_id: conta.company_id,
+      numero_conta: conta.numero_conta,
+      data,
+      saldo: valorHerdado,
+      origem,
+      fonte: automatizada ? fonteAutomatica : null,
+    });
     relatorio.herdados.push({
       classificacao: conta.classificacao,
       company_id: conta.company_id,
@@ -201,4 +282,4 @@ async function buscarSaldosVanpix(empresaId, usuarioId, data) {
   return relatorio;
 }
 
-module.exports = { buscarSaldosVanpix };
+module.exports = { buscarSaldosVanpix, buscarSaldosItau };

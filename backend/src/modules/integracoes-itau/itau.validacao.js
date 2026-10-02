@@ -113,7 +113,26 @@ function identificadorConta({ agencia, conta, dac }) {
   return `${a}00${c}${d}`;
 }
 
+// Saldo do momento na resposta do extrato: o "SALDO EM CONTA" (type saldo_disponivel). A
+// lista também traz outro saldo_disponivel, o "SALDO ANTERIOR" (fechamento do dia anterior),
+// que não serve. Sem o literal esperado, vale o saldo_disponivel mais recente que não seja o
+// anterior. { valor, posicao } ou null.
+function extrairSaldoEmConta(json) {
+  const saldos = (json?.data || []).flatMap((d) => d?.balances || []);
+  const disponiveis = saldos.filter((b) => b?.type === 'saldo_disponivel' && typeof b?.amount?.value === 'number');
+  const texto = (b) => `${b.literal?.complete || ''} ${b.literal?.shortened || ''}`;
+  let escolhido = disponiveis.find((b) => /em\s+conta/i.test(texto(b)));
+  if (!escolhido) {
+    escolhido = disponiveis
+      .filter((b) => !/anterior/i.test(texto(b)))
+      .sort((a, b) => new Date(b.date?.event || 0) - new Date(a.date?.event || 0))[0];
+  }
+  if (!escolhido) return null;
+  return { valor: Math.round(escolhido.amount.value * 100) / 100, posicao: escolhido.date?.event || null };
+}
+
 module.exports = {
+  extrairSaldoEmConta,
   validarUuid,
   validarCnpj,
   somenteDigitos,

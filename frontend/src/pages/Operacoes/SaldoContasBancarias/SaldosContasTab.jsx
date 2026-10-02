@@ -20,12 +20,12 @@ const MARGEM_ROLAGEM = 'scroll-mt-[60px] scroll-mb-14 scroll-ml-[356px] scroll-m
 const tomNegativo = (valor) => (valor < 0 ? 'text-red-600' : 'text-gray-900');
 
 // Origem do saldo (só pra cor/ícone da célula — não afeta valor nem gravação): API = achado
-// automaticamente na VanPix; HERDADO = repetido do dia anterior (VanPix não trouxe nada pra
+// automaticamente (VanPix ou API Itaú); HERDADO = repetido do dia anterior (VanPix não trouxe nada pra
 // essa conta e a classificação prioriza isso); MANUAL = digitado/colado na grade (inclusive
 // quando sobrescreve um valor que era API/HERDADO). Cores discretas (tom 50/100), mesmo peso
 // visual do âmbar/azul já usados — "sutil", não um selo chamativo.
 const ORIGEM_INFO = {
-  API: { icone: Zap, tom: 'border-emerald-100 bg-emerald-50 hover:border-emerald-400', icone_cor: 'text-emerald-500', titulo: 'Saldo automático (VanPix)' },
+  API: { icone: Zap, tom: 'border-emerald-100 bg-emerald-50 hover:border-emerald-400', icone_cor: 'text-emerald-500', titulo: 'Saldo automático (VanPix ou API Itaú)' },
   HERDADO: { icone: History, tom: 'border-purple-100 bg-purple-50 hover:border-purple-400', icone_cor: 'text-purple-500', titulo: 'Saldo repetido do dia anterior' },
   MANUAL: { icone: Pencil, tom: 'border-primary-100 bg-primary-50 hover:border-primary-500', icone_cor: 'text-primary-500', titulo: 'Saldo lançado manualmente' },
 };

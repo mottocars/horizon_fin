@@ -43,13 +43,17 @@ async function listContas(empresaId, { page = 1, limit = 15, search = '', status
     `SELECT numero_conta, nome, tipo_id, tipo_descricao, agencia, banco_numero, banco_nome,
             company_id, company_name, status, classificacao,
             ${BANCO_EFETIVO_SQL} AS banco_codigo, criado_em, atualizado_em,
-            EXISTS (
-              SELECT 1 FROM saldos_contas_bancarias s
+            -- Automação = integração do saldo automático (origem API) mais recente da conta:
+            -- VANPIX ou ITAU (linhas API antigas, sem fonte, eram todas VanPix); NULL = manual.
+            -- Muda sozinha na primeira vez que o Itaú alimentar a conta.
+            (
+              SELECT COALESCE(s.fonte, 'VANPIX') FROM saldos_contas_bancarias s
               WHERE s.empresa_id = contas_bancarias_sienge.empresa_id
                 AND s.company_id = contas_bancarias_sienge.company_id
                 AND s.numero_conta = contas_bancarias_sienge.numero_conta
                 AND s.origem = 'API'
-            ) AS tem_automacao
+              ORDER BY s.data DESC LIMIT 1
+            ) AS automacao
      FROM contas_bancarias_sienge
      WHERE ${where}
      ORDER BY numero_conta ASC
