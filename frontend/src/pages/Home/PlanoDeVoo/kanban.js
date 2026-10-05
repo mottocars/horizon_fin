@@ -9,6 +9,7 @@ export const BUCKETS = [
     titulo: 'Aguardando',
     Icone: CircleDashed,
     iconeCor: 'text-slate-400',
+    borda: 'border-slate-400', // borda da coluna no Kanban (cor forte)
     barra: 'bg-slate-400', // barra do Gantt (mesma cor do ícone do bucket)
     fundo: 'bg-slate-100/70',
     contador: 'bg-slate-200/80 text-slate-600',
@@ -20,6 +21,7 @@ export const BUCKETS = [
     titulo: 'Progresso',
     Icone: Loader,
     iconeCor: 'text-violet-500',
+    borda: 'border-violet-500', // borda da coluna no Kanban (cor forte)
     barra: 'bg-violet-500', // barra do Gantt (mesma cor do ícone do bucket)
     fundo: 'bg-violet-50/70',
     contador: 'bg-violet-100 text-violet-600',
@@ -31,6 +33,7 @@ export const BUCKETS = [
     titulo: 'Atrasado',
     Icone: Clock3,
     iconeCor: 'text-red-500',
+    borda: 'border-red-500', // borda da coluna no Kanban (cor forte)
     barra: 'bg-red-500', // barra do Gantt (mesma cor do ícone do bucket)
     fundo: 'bg-red-50/60',
     contador: 'bg-red-100 text-red-600',
@@ -42,6 +45,7 @@ export const BUCKETS = [
     titulo: 'Concluído',
     Icone: BadgeCheck,
     iconeCor: 'text-primary-500',
+    borda: 'border-primary-500', // borda da coluna no Kanban (cor forte)
     barra: 'bg-primary-500', // barra do Gantt (mesma cor do ícone do bucket)
     fundo: 'bg-primary-50/70',
     contador: 'bg-primary-100 text-primary-600',
@@ -53,6 +57,7 @@ export const BUCKETS = [
     titulo: 'Finalizado',
     Icone: CheckCircle2,
     iconeCor: 'text-emerald-500',
+    borda: 'border-emerald-500', // borda da coluna no Kanban (cor forte)
     barra: 'bg-emerald-500', // barra do Gantt (mesma cor do ícone do bucket)
     fundo: 'bg-emerald-50/70',
     contador: 'bg-emerald-100 text-emerald-600',
