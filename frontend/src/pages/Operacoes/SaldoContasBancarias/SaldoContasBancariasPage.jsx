@@ -515,16 +515,6 @@ export default function SaldoContasBancariasPage() {
           {abaAtiva === 'saldos' && (
             <div className="flex shrink-0 flex-col items-end gap-1.5">
               <div className="flex shrink-0 items-center gap-2">
-                {/* Tutorial didático de como deixar os saldos automáticos (VanPix e Itaú). */}
-                <button
-                  type="button"
-                  onClick={() => setTutorialAberto(true)}
-                  className="flex shrink-0 items-center gap-1.5 rounded-lg border border-gray-200 px-3 py-2 text-sm font-medium text-gray-600 transition-colors hover:bg-gray-50"
-                >
-                  <CircleHelp size={18} className="text-primary-600" />
-                  Dúvidas
-                </button>
-
                 {/* Só o ícone (pedido do usuário) — baixa um .xlsx gerado no backend com todas
                     as contas com saldo na semana, ver saldosExcel.service.js. */}
                 <button
@@ -596,7 +586,20 @@ export default function SaldoContasBancariasPage() {
       </Card>
 
       <div>
-        <Tabs tabs={tabs} activeId={abaAtiva} onChange={(aba) => atualizarParams({ aba })} />
+        {/* Botão Dúvidas (só o ícone, pedido do usuário) na mesma linha das abas, à direita:
+            tutorial de configuração dos saldos automáticos (VanPix e Itaú). */}
+        <div className="relative">
+          <Tabs tabs={tabs} activeId={abaAtiva} onChange={(aba) => atualizarParams({ aba })} />
+          <button
+            type="button"
+            onClick={() => setTutorialAberto(true)}
+            title="Dúvidas — configuração dos saldos automáticos"
+            aria-label="Dúvidas"
+            className="absolute bottom-1.5 right-0 rounded-lg p-1.5 text-gray-400 transition-colors hover:bg-white hover:text-primary-600"
+          >
+            <CircleHelp size={20} />
+          </button>
+        </div>
 
         {abaAtiva === '' && (
           <Card className="rounded-tl-none">
