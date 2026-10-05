@@ -4,11 +4,16 @@
 // backend/test/extratos.test.js.
 //
 // Saldos que a API manda num período (confirmado em produção, set/out 2026):
-//   - "SALDO MOVIMENTAÇÃO CONTA" (type saldo_conta, 23:59 de cada dia útil fechado): é o que
-//     FECHA com os lançamentos — fechamento(D-1) + lançamentos(D) = fechamento(D). É a base.
-//   - "SALDO TOTAL DISPONÍVEL DIA" / "SALDO ANTERIOR" (saldo_disponivel): incluem a aplicação
-//     automática, não batem lançamento a lançamento — não servem pra reconstruir o dia.
+//   - "SALDO TOTAL DISPONÍVEL DIA" (saldo_disponivel, 23:59 de cada dia útil fechado) = conta
+//     corrente + aplicação automática. É a BASE: nas contas com aplicação automática o Itaú
+//     deixa R$ 1,00 na conta toda noite e aplica o resto, então "SALDO MOVIMENTAÇÃO CONTA"
+//     (saldo_conta) fica em 1 e não é o saldo de verdade.
+//   - "SALDO ANTERIOR" (saldo_disponivel): o mesmo total, do último dia útil antes da janela.
+//   - Sem o total do dia: saldo_conta + "SALDO APLIC. AUT." do mesmo dia.
 //   - "SALDO EM CONTA" (saldo_disponivel, agora): posição atual; só usado como último recurso.
+// As aplicações/resgates automáticos ("APL APLIC AUT MAIS", "RES APLIC AUT MAIS") só trocam o
+// dinheiro de lugar entre a conta e a aplicação — ficam fora do extrato. O rendimento ("REND
+// PAGO APLIC AUT") é dinheiro novo e continua. Assim: total(D-1) + lançamentos(D) = total(D).
 // Saldo final do dia D = fechamento de D; sem fechamento (hoje, dia ainda aberto) = fechamento
 // anterior + lançamentos até D; sem nenhum fechamento antes, volta do próximo fechamento.
 // Saldo inicial = final − lançamentos do dia. Tudo em centavos (inteiros) pra não acumular erro.
@@ -57,19 +62,37 @@ function ordenarCronologico(eventos) {
   });
 }
 
-function montarExtrato({ eventos = [], saldos = [], dataInicio, dataFim }) {
-  const fechamentos = new Map();
+const MOVIMENTO_APLICACAO_AUTOMATICA = /^(APL|RES)\s+APLIC\s+AUT/i;
+
+function fechamentosDiarios(saldos) {
+  const porDia = new Map(); // dia → { total, anterior, conta, aplicacao }
   for (const b of saldos) {
-    if (b?.type === 'saldo_conta' && b.date?.event && typeof b.amount?.value === 'number') {
-      fechamentos.set(b.date.event.slice(0, 10), cent(b.amount.value));
-    }
+    if (!b?.date?.event || typeof b.amount?.value !== 'number' || /T(?!23:59)/.test(b.date.event)) continue;
+    const dia = b.date.event.slice(0, 10);
+    const d = porDia.get(dia) || {};
+    const v = cent(b.amount.value);
+    if (b.type === 'saldo_disponivel' && /total\s+dispon/i.test(literal(b))) d.total = v;
+    else if (b.type === 'saldo_disponivel' && /anterior/i.test(literal(b))) d.anterior = v;
+    else if (b.type === 'saldo_conta') d.conta = v;
+    else if (b.type === 'saldo_aplic_aut') d.aplicacao = v;
+    porDia.set(dia, d);
   }
+  const fechamentos = new Map();
+  for (const [dia, d] of porDia) {
+    const valor = d.total ?? d.anterior ?? (d.conta !== undefined ? d.conta + (d.aplicacao || 0) : undefined);
+    if (valor !== undefined) fechamentos.set(dia, valor);
+  }
+  return fechamentos;
+}
+
+function montarExtrato({ eventos = [], saldos = [], dataInicio, dataFim }) {
+  const fechamentos = fechamentosDiarios(saldos);
   const emConta = saldos.find((b) => b?.type === 'saldo_disponivel' && /em\s+conta/i.test(literal(b)));
   const aplicacao = saldos
     .filter((b) => b?.type === 'saldo_aplic_aut' && typeof b.amount?.value === 'number')
     .sort((a, b) => Date.parse(b.date?.event || 0) - Date.parse(a.date?.event || 0))[0];
 
-  const lancamentos = ordenarCronologico(eventos.map(normalizarEvento));
+  const lancamentos = ordenarCronologico(eventos.map(normalizarEvento).filter((l) => !MOVIMENTO_APLICACAO_AUTOMATICA.test(l.historico)));
   const somaDia = new Map();
   for (const l of lancamentos) somaDia.set(l.dataContabil, (somaDia.get(l.dataContabil) || 0) + l.valorCent);
   const somaEntre = (de, ate) => {
