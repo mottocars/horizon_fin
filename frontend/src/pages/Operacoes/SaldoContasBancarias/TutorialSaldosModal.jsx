@@ -2,9 +2,9 @@ import { useState } from 'react';
 import { BadgeCheck, BookOpen, Landmark, Lightbulb, Lock, ReceiptText, Zap } from 'lucide-react';
 import Modal from '../../../components/Modal';
 
-// Botão "Dúvidas" da aba Saldos: tutorial bem didático (pedido do usuário: "como se estivesse
-// ensinando uma criança") de como deixar os saldos automáticos — VanPix Extrato, VanPix
-// Cobrança e API Itaú. As regras descritas aqui são as de vanpix-sync.service.js.
+// Botão "Dúvidas" da aba Saldos: tutorial passo a passo, em linguagem direta, de como configurar
+// os saldos automáticos — VanPix Extrato, VanPix Cobrança e API Itaú. As regras descritas aqui
+// são as de vanpix-sync.service.js.
 
 function Passo({ numero, titulo, children }) {
   return (
@@ -34,48 +34,46 @@ const Caminho = ({ children }) => <span className="rounded bg-gray-100 px-1.5 py
 const Campo = ({ children }) => <span className="font-semibold text-gray-800">{children}</span>;
 
 const ABAS = [
-  { id: 'inicio', rotulo: 'Comece aqui', Icone: BookOpen },
+  { id: 'inicio', rotulo: 'Visão geral', Icone: BookOpen },
   { id: 'extrato', rotulo: 'VanPix Extrato', Icone: Landmark },
   { id: 'cobranca', rotulo: 'VanPix Cobrança', Icone: ReceiptText },
   { id: 'itau', rotulo: 'API Itaú', Icone: Zap },
-  { id: 'abrir', rotulo: 'Abrir o dia', Icone: Lock },
+  { id: 'abrir', rotulo: 'Abertura do período', Icone: Lock },
 ];
 
 function Inicio() {
   return (
     <div className="space-y-4">
       <p className="text-sm leading-relaxed text-gray-700">
-        Imagine que cada conta bancária é um <Campo>cofrinho</Campo>. Todo dia a gente precisa anotar quanto dinheiro tem em
-        cada cofrinho. Em vez de anotar tudo à mão, o sistema pode <Campo>perguntar sozinho para o banco</Campo> — é isso que
-        chamamos de saldo automático.
+        O saldo diário de cada conta pode ser preenchido <Campo>automaticamente</Campo> na abertura do período, a partir das
+        integrações bancárias. Contas sem integração configurada são preenchidas manualmente.
       </p>
-      <p className="text-sm leading-relaxed text-gray-700">Existem 3 jeitos de o sistema perguntar para o banco:</p>
+      <p className="text-sm leading-relaxed text-gray-700">Integrações disponíveis:</p>
       <ul className="space-y-2 text-sm text-gray-700">
         <li className="flex gap-2">
           <Landmark size={16} className="mt-0.5 shrink-0 text-primary-600" />
           <span>
-            <Campo>VanPix Extrato</Campo> — traz o saldo das contas da Caixa. Ele procura até <Campo>90 dias para trás</Campo> até
-            achar o último saldo.
+            <Campo>VanPix Extrato</Campo> — saldo final das contas Caixa, com busca retroativa de até{' '}
+            <Campo>90 dias</Campo> até localizar o último fechamento.
           </span>
         </li>
         <li className="flex gap-2">
           <ReceiptText size={16} className="mt-0.5 shrink-0 text-primary-600" />
           <span>
-            <Campo>VanPix Cobrança</Campo> — soma os boletos pagos pelos clientes que caem na conta no dia. Olha os{' '}
-            <Campo>últimos 5 dias</Campo>.
+            <Campo>VanPix Cobrança</Campo> — soma ao saldo os boletos liquidados com crédito no dia, consultando os{' '}
+            <Campo>últimos 5 dias</Campo> de retorno.
           </span>
         </li>
         <li className="flex gap-2">
           <Zap size={16} className="mt-0.5 shrink-0 text-primary-600" />
           <span>
-            <Campo>API Itaú</Campo> — pergunta direto para o Itaú e traz o saldo <Campo>na hora</Campo> (tempo real).
+            <Campo>API Itaú</Campo> — saldo em conta consultado em <Campo>tempo real</Campo>.
           </span>
         </li>
       </ul>
       <Dica>
-        Para <Campo>qualquer</Campo> conta aparecer na tabela de saldos, ela precisa de 2 coisas no cadastro (aba{' '}
-        <Caminho>Contas Bancárias</Caminho> → lápis da conta): uma <Campo>Classificação</Campo> escolhida e{' '}
-        <Campo>Projeta Saldo = Sim</Campo>.
+        Requisito para qualquer conta aparecer na tabela: no cadastro (aba <Caminho>Contas Bancárias</Caminho>), ter uma{' '}
+        <Campo>Classificação</Campo> definida e <Campo>Projeta Saldo = Sim</Campo>.
       </Dica>
     </div>
   );
@@ -84,38 +82,34 @@ function Inicio() {
 function Extrato() {
   return (
     <ol className="space-y-4">
-      <Passo numero={1} titulo="Tenha a conexão VanPix de Extrato">
+      <Passo numero={1} titulo="Conexão VanPix de Extrato Bancário">
         <p>
-          Vá em <Caminho>Integrações → Convênios Bancários</Caminho>. Ali precisa existir uma conexão do tipo{' '}
-          <Campo>VanPix</Campo> com a finalidade <Campo>Extrato Bancário</Campo>.
-        </p>
-        <p>
-          Dentro dela ficam os <Campo>apelidos</Campo> (convênios), como <Campo>ABPFJA</Campo>. Pense no apelido como o “nome
-          da gaveta” onde a Caixa guarda os extratos.
+          Em <Caminho>Integrações → Convênios Bancários</Caminho>, deve existir uma conexão <Campo>VanPix</Campo> com
+          finalidade <Campo>Extrato Bancário</Campo>, contendo os convênios (apelidos) da empresa — por exemplo,{' '}
+          <Campo>ABPFJA</Campo>.
         </p>
       </Passo>
-      <Passo numero={2} titulo="Diga para a conta qual é a gaveta dela">
+      <Passo numero={2} titulo="Código cedente na conta">
         <p>
-          Abra a conta em <Caminho>Contas Bancárias</Caminho> (lápis) e preencha o{' '}
-          <Campo>Código cedente extrato bancário</Campo> com o apelido. Exemplo: <Campo>ABPFJC</Campo>.
+          No cadastro da conta (aba <Caminho>Contas Bancárias</Caminho>), informe o convênio em{' '}
+          <Campo>Código cedente extrato bancário</Campo> — por exemplo, <Campo>ABPFJC</Campo>.
         </p>
       </Passo>
-      <Passo numero={3} titulo="Confira banco, conta e dígito">
+      <Passo numero={3} titulo="Banco, conta e dígito">
         <p>
-          A VanPix manda o saldo com o número da conta. O sistema só entende que é aquela conta se <Campo>Banco</Campo>,{' '}
-          <Campo>Conta</Campo> e <Campo>Dígito</Campo> estiverem iguais aos do banco. Exemplo: banco <Campo>104</Campo>, conta{' '}
+          O retorno da VanPix identifica a conta pelo número. <Campo>Banco</Campo>, <Campo>Conta</Campo> e{' '}
+          <Campo>Dígito</Campo> do cadastro devem ser idênticos aos do banco — por exemplo, banco <Campo>104</Campo>, conta{' '}
           <Campo>577057641</Campo>, dígito <Campo>0</Campo>.
         </p>
       </Passo>
-      <Passo numero={4} titulo="Pronto! Agora é só abrir o dia">
+      <Passo numero={4} titulo="Abertura do período">
         <p>
-          Quando você abrir o período, o sistema vai à gaveta, procura o último saldo (até 90 dias para trás) e coloca na
-          tabela sozinho.
+          Na abertura, o sistema consulta o convênio a partir da data do período, retrocedendo até 90 dias, e grava o
+          fechamento mais recente encontrado.
         </p>
       </Passo>
       <Dica tom="amarelo">
-        Sem o <Campo>Código cedente extrato bancário</Campo>, o sistema <Campo>não</Campo> busca o saldo dessa conta na
-        VanPix.
+        Contas sem <Campo>Código cedente extrato bancário</Campo> não são consultadas na VanPix.
       </Dica>
     </ol>
   );
@@ -124,33 +118,33 @@ function Extrato() {
 function Cobranca() {
   return (
     <ol className="space-y-4">
-      <Passo numero={1} titulo="Tenha a conexão VanPix de Cobrança">
+      <Passo numero={1} titulo="Conexão VanPix de Cobrança">
         <p>
-          Em <Caminho>Integrações → Convênios Bancários</Caminho>, crie (ou confira) uma conexão <Campo>VanPix</Campo> com a
-          finalidade <Campo>Cobrança</Campo> e o apelido do convênio de boletos. Exemplo: <Campo>C3U1Y8</Campo>.
+          Em <Caminho>Integrações → Convênios Bancários</Caminho>, cadastre uma conexão <Campo>VanPix</Campo> com finalidade{' '}
+          <Campo>Cobrança</Campo> e o convênio de boletos — por exemplo, <Campo>C3U1Y8</Campo>.
         </p>
       </Passo>
-      <Passo numero={2} titulo="Diga para a conta que ela recebe os boletos">
+      <Passo numero={2} titulo="Código cedente na conta">
         <p>
-          Na conta onde o dinheiro dos boletos cai, preencha o <Campo>Código cedente cobrança</Campo> com esse apelido.
+          Na conta que recebe o crédito dos boletos, informe o convênio em <Campo>Código cedente cobrança</Campo>.
         </p>
       </Passo>
-      <Passo numero={3} titulo="Entenda a conta de somar">
+      <Passo numero={3} titulo="Composição do saldo">
         <p>
-          Quando um cliente paga um boleto, o banco avisa antes e o dinheiro cai na conta num dia certinho (a{' '}
-          <Campo>data do crédito</Campo>). O extrato do banco ainda não tem esse dinheiro, então o sistema{' '}
-          <Campo>soma</Campo>:
+          Os boletos liquidados são creditados na <Campo>data do crédito</Campo>, que ainda não consta no extrato do dia
+          anterior. Por isso, o sistema soma:
         </p>
         <div className="rounded-lg bg-gray-50 px-3 py-2 font-mono text-xs text-gray-700">
-          saldo do extrato + boletos com data do crédito no dia = saldo do dia
+          saldo do extrato + boletos com crédito no dia = saldo do dia
         </div>
         <p>
-          Exemplo: extrato <Campo>R$ 10.731,61</Campo> + 3 boletos que caem hoje <Campo>R$ 5.559,80</Campo> ={' '}
+          Exemplo: extrato <Campo>R$ 10.731,61</Campo> + 3 boletos creditados no dia <Campo>R$ 5.559,80</Campo> ={' '}
           <Campo>R$ 16.291,41</Campo>.
         </p>
       </Passo>
       <Dica>
-        Na tabela, passe o mouse sobre o saldo: aparece “inclui R$ X de cobrança”, mostrando quanto veio dos boletos.
+        Ao posicionar o cursor sobre o saldo na tabela, é exibido o valor correspondente à cobrança (“inclui R$ X de
+        cobrança”).
       </Dica>
     </ol>
   );
@@ -159,34 +153,33 @@ function Cobranca() {
 function Itau() {
   return (
     <ol className="space-y-4">
-      <Passo numero={1} titulo="Crie a conexão API Itaú">
+      <Passo numero={1} titulo="Conexão API Itaú">
         <p>
-          Em <Caminho>Integrações → Convênios Bancários → Nova Conexão</Caminho>, escolha <Campo>API Itaú</Campo>. Preencha a{' '}
-          <Campo>Credencial (client_id)</Campo>, o <Campo>CNPJ</Campo> e o <Campo>Token temporário</Campo> que o Itaú mandou
-          na planilha.
+          Em <Caminho>Integrações → Convênios Bancários → Nova Conexão</Caminho>, selecione <Campo>API Itaú</Campo> e informe
+          a <Campo>Credencial (client_id)</Campo>, o <Campo>CNPJ</Campo> e o <Campo>Token temporário</Campo> enviados pelo
+          Itaú.
         </p>
       </Passo>
-      <Passo numero={2} titulo="Gere o certificado">
+      <Passo numero={2} titulo="Certificado">
         <p>
-          Clique em <Campo>Gerar certificado</Campo>. É como fazer a “chave da porta” do Itaú: ela vale 1 ano e o sistema
-          renova sozinho.
+          Clique em <Campo>Gerar certificado</Campo>. O certificado tem validade de 1 ano e é renovado automaticamente.
         </p>
-        <Dica tom="amarelo">O token temporário só funciona uma vez. Se der erro, peça um novo ao Itaú.</Dica>
+        <Dica tom="amarelo">O token temporário é de uso único. Em caso de erro, solicite um novo token ao Itaú.</Dica>
       </Passo>
-      <Passo numero={3} titulo="Informe a conta Itaú da conexão">
+      <Passo numero={3} titulo="Conta Itaú da conexão">
         <p>
           Na conexão, preencha a <Campo>Conta Itaú</Campo>: agência, conta e dígito.
         </p>
       </Passo>
-      <Passo numero={4} titulo="Deixe o cadastro da conta igualzinho">
+      <Passo numero={4} titulo="Cadastro da conta">
         <p>
-          Na conta em <Caminho>Contas Bancárias</Caminho>, o <Campo>Banco</Campo> tem que ser <Campo>341</Campo> e a{' '}
-          <Campo>Agência</Campo>, a <Campo>Conta</Campo> e o <Campo>Dígito</Campo> iguais aos da conexão. É assim que o
-          sistema sabe que é a mesma conta.
+          No cadastro da conta (aba <Caminho>Contas Bancárias</Caminho>), o <Campo>Banco</Campo> deve ser{' '}
+          <Campo>341</Campo>, com <Campo>Agência</Campo>, <Campo>Conta</Campo> e <Campo>Dígito</Campo> idênticos aos da
+          conexão.
         </p>
       </Passo>
-      <Passo numero={5} titulo="Pronto!">
-        <p>Ao abrir o dia, o sistema pergunta ao Itaú e traz o saldo da conta naquele momento.</p>
+      <Passo numero={5} titulo="Abertura do período">
+        <p>Na abertura, o sistema consulta o saldo em conta no Itaú naquele momento.</p>
       </Passo>
     </ol>
   );
@@ -195,34 +188,34 @@ function Itau() {
 function Abrir() {
   return (
     <ol className="space-y-4">
-      <Passo numero={1} titulo="Clique no cadeado azul">
+      <Passo numero={1} titulo="Abrir o período">
         <p>
-          No canto de cima, o cadeado <Campo>azul</Campo> quer dizer “nenhum dia aberto”. Clique nele, escolha a data e
-          confirme.
+          Clique no cadeado <Campo>azul</Campo> (nenhum período aberto), selecione a data e confirme.
         </p>
       </Passo>
-      <Passo numero={2} titulo="Espere o sistema buscar">
+      <Passo numero={2} titulo="Busca automática">
         <p>
-          Ele vai perguntar para a VanPix (extrato e cobrança) e para o Itaú. No final aparece um resumo com o que deu certo e
-          os avisos.
+          O sistema consulta VanPix Extrato, VanPix Cobrança e API Itaú. Ao final, é exibido um resumo com as contas
+          atualizadas e eventuais avisos.
         </p>
       </Passo>
-      <Passo numero={3} titulo="Veja as cores da tabela">
+      <Passo numero={3} titulo="Identificação na tabela">
         <p className="flex items-center gap-1.5">
-          <Zap size={14} className="text-emerald-500" /> Verde com raio: o saldo veio <Campo>automático</Campo>.
+          <Zap size={14} className="text-emerald-500" /> Ícone verde: saldo obtido automaticamente.
         </p>
-        <p>Em branco: nenhuma integração achou saldo — digite à mão.</p>
+        <p>Célula em branco: nenhuma integração retornou saldo — preenchimento manual.</p>
       </Passo>
-      <Passo numero={4} titulo="Quando a conta fica em branco?">
+      <Passo numero={4} titulo="Contas sem saldo">
         <p>
-          Se nenhuma integração achar saldo, a conta só repete o saldo do dia anterior se a classificação dela estiver como{' '}
-          <Campo>Buscar saldo anterior</Campo> (aba <Caminho>Classificação</Caminho>). Se não, fica em branco para você
-          preencher.
+          Quando nenhuma integração retorna saldo, a conta só repete o saldo anterior se a classificação estiver configurada
+          como <Campo>Buscar saldo anterior</Campo> (aba <Caminho>Classificação</Caminho>). Caso contrário, permanece em
+          branco.
         </p>
       </Passo>
-      <Passo numero={5} titulo="Terminou? Feche o cadeado">
+      <Passo numero={5} titulo="Encerrar o período">
         <p className="flex items-center gap-1.5">
-          <BadgeCheck size={14} className="text-emerald-500" /> Clique no cadeado <Campo>amarelo</Campo> para encerrar o dia.
+          <BadgeCheck size={14} className="text-emerald-500" /> Após a conferência, clique no cadeado{' '}
+          <Campo>amarelo</Campo> para encerrar.
         </p>
       </Passo>
     </ol>
@@ -237,7 +230,7 @@ export default function TutorialSaldosModal({ open, onClose }) {
   const indice = ABAS.findIndex((a) => a.id === aba);
 
   return (
-    <Modal open={open} onClose={onClose} title="Dúvidas — como deixar os saldos automáticos" maxWidthClass="max-w-3xl">
+    <Modal open={open} onClose={onClose} title="Dúvidas — configuração dos saldos automáticos" maxWidthClass="max-w-3xl">
       <div className="space-y-5">
         <div className="flex flex-wrap gap-1.5">
           {ABAS.map(({ id, rotulo, Icone }, i) => (
@@ -281,7 +274,7 @@ export default function TutorialSaldosModal({ open, onClose }) {
               onClick={onClose}
               className="rounded-lg bg-primary-600 px-4 py-1.5 text-sm font-semibold text-white hover:bg-primary-700"
             >
-              Entendi!
+              Concluir
             </button>
           )}
         </div>
