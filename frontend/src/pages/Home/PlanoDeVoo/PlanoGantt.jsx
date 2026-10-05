@@ -130,8 +130,9 @@ function BarraMicro({ card, ini, px, usuarios, onAbrir }) {
       >
         {!curta && <span className="truncate">{card.assunto}</span>}
       </span>
-      {/* foto do responsável no fim da barra */}
-      <span className="-ml-4 shrink-0 rounded-full shadow-sm">
+      {/* foto do responsável no fim da barra — camada própria, sempre à frente da barra (o
+          brilho do hover cria uma camada nova na barra, que passaria por cima da foto) */}
+      <span className="relative z-10 -ml-4 shrink-0 rounded-full shadow-sm">
         <Avatar usuario={responsavel} tamanho="sm" titulo={`Responsável: ${responsavel?.nome || ''}`} />
       </span>
       {curta && <span className="ml-1.5 max-w-56 truncate text-[11px] font-medium text-gray-600">{card.assunto}</span>}
