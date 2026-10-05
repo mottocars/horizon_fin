@@ -91,7 +91,7 @@ function Indicador({ icone: Icone, rotulo, valor, detalhe, cor = 'text-gray-900'
         <Icone size={14} className="text-gray-400" />
         {rotulo}
       </p>
-      <p className={`mt-1 truncate text-lg font-semibold tabular-nums ${cor}`}>{valor}</p>
+      <p className={`mt-1 truncate text-base font-semibold tabular-nums xl:text-lg ${cor}`}>{valor}</p>
       {detalhe && <p className="truncate text-[11px] text-gray-400">{detalhe}</p>}
     </div>
   );
@@ -377,8 +377,8 @@ export default function ExtratosBancariosPage() {
   return (
     <div className="space-y-4">
       <Card>
-        <div className="flex flex-col gap-4 xl:flex-row xl:items-end">
-          <div className="min-w-0 flex-1 xl:max-w-64">
+        <div className="flex flex-col gap-4 lg:flex-row lg:flex-wrap lg:items-end">
+          <div className="min-w-0 flex-1 lg:max-w-64 lg:min-w-48">
             <label className="mb-1 block text-sm font-medium text-gray-700">Empresa</label>
             <SearchableSelect
               value={empresaId}
@@ -389,14 +389,14 @@ export default function ExtratosBancariosPage() {
               emptyMessage="Nenhuma empresa encontrada."
             />
           </div>
-          <div className="min-w-0 xl:w-36">
+          <div className="min-w-0 lg:w-36">
             <label className="mb-1 block text-sm font-medium text-gray-700">Banco</label>
             <div className="flex h-[38px] items-center gap-2 rounded-lg border border-gray-200 bg-gray-50 px-3 text-sm text-gray-700">
               <img src={logoItau} alt="" className="h-5 w-5 rounded" />
               API Itaú
             </div>
           </div>
-          <div className="min-w-0 flex-1">
+          <div className="min-w-0 flex-1 lg:min-w-64">
             <label className="mb-1 block text-sm font-medium text-gray-700">Conexões</label>
             <SearchableSelect
               multiple
@@ -417,7 +417,7 @@ export default function ExtratosBancariosPage() {
               emptyMessage="Nenhuma conexão encontrada."
             />
           </div>
-          <div className="flex min-w-0 gap-3 xl:w-80">
+          <div className="flex min-w-0 gap-3 lg:w-80">
             <div className="min-w-0 flex-1">
               <label className="mb-1 block text-sm font-medium text-gray-700">Data inicial</label>
               <input type="date" value={dataInicio} max={dataFim} onChange={(e) => e.target.value && setDataInicio(e.target.value)} className={campoData} />
@@ -427,7 +427,7 @@ export default function ExtratosBancariosPage() {
               <input type="date" value={dataFim} min={dataInicio} max={hojeSP()} onChange={(e) => e.target.value && setDataFim(e.target.value)} className={campoData} />
             </div>
           </div>
-          <Button type="button" onClick={gerar} loading={gerando} disabled={!podeGerar} className="xl:mb-px">
+          <Button type="button" onClick={gerar} loading={gerando} disabled={!podeGerar} className="lg:mb-px">
             <ScrollText size={16} />
             Gerar
           </Button>
@@ -621,7 +621,10 @@ function CelulaConta({ conta, rowSpan, recolhido, onAlternar, topo, detalhe }) {
         <img src={logoItau} alt="Itaú" className="mt-0.5 h-6 w-6 shrink-0 rounded" />
         <span className="min-w-0 flex-1">
           <span className="block text-xs font-semibold text-gray-900">{conta.conexao}</span>
-          <span className="block text-[11px] text-gray-500">{contaTexto(conta)}</span>
+          <span className="block text-[11px] text-gray-500">
+            <span className="whitespace-nowrap">Ag. {conta.agencia}</span> ·{' '}
+            <span className="whitespace-nowrap">CC {conta.conta}-{conta.dac}</span>
+          </span>
           {conta.nomeCadastro && <span className="block truncate font-mono text-[10px] text-gray-400">{conta.nomeCadastro}</span>}
           {detalhe}
         </span>
@@ -648,26 +651,26 @@ function TabelaLancamentos({
 }) {
   const celula = 'border-b border-b-gray-100 border-l border-l-gray-100 px-3 py-1.5 text-xs';
   return (
-    <table className="w-full border-separate border-spacing-0 text-left text-xs">
+    <table className="w-full table-fixed border-separate border-spacing-0 text-left text-xs">
       <thead ref={theadRef}>
         <tr className="text-xs uppercase tracking-wide text-blue-700">
-          <th ref={thContaRef} className={`${TH} w-72 rounded-tl-none`}>
+          <th ref={thContaRef} className={`${TH} w-40 xl:w-52 rounded-tl-none`}>
             <span className="inline-flex items-center justify-center gap-1.5">
               <FiltroColuna filtro={filtroConta} onChange={setFiltroConta} opcoes={opcoesConta} label="conta" colunaRef={thContaRef} />
               Conta bancária
             </span>
           </th>
-          <th className={`${THD} w-32`}>Data / Hora</th>
+          <th className={`${THD} w-24 xl:w-28`}>Data / Hora</th>
           <th ref={thHistoricoRef} className={THD}>
             <span className="inline-flex items-center justify-center gap-1.5">
               <FiltroColuna filtro={filtroTipo} onChange={setFiltroTipo} opcoes={TIPOS} label="tipo de lançamento" colunaRef={thHistoricoRef} />
               Histórico
             </span>
           </th>
-          <th className={`${THD} w-56`}>Contraparte</th>
-          <th className={`${THD} w-32`}>Entrada</th>
-          <th className={`${THD} w-32`}>Saída</th>
-          <th className={`${THD} w-36 rounded-tr-card`}>Saldo</th>
+          <th className={`${THD} w-32 xl:w-40`}>Contraparte</th>
+          <th className={`${THD} w-28 xl:w-32`}>Entrada</th>
+          <th className={`${THD} w-28 xl:w-32`}>Saída</th>
+          <th className={`${THD} w-32 xl:w-36 rounded-tr-card`}>Saldo</th>
         </tr>
       </thead>
       <tbody>
@@ -746,7 +749,7 @@ function TabelaLancamentos({
                       Saldo inicial do dia
                       {d.lancamentos.length === 0 && <span className="ml-2 text-gray-400">· sem lançamentos</span>}
                     </td>
-                    <td className={`${celula} text-right font-semibold tabular-nums ${tom(d.saldoInicial)}`}>{moeda(d.saldoInicial)}</td>
+                    <td className={`${celula} text-right whitespace-nowrap font-semibold tabular-nums ${tom(d.saldoInicial)}`}>{moeda(d.saldoInicial)}</td>
                   </tr>
                 );
                 for (const l of d.visiveis) {
@@ -754,25 +757,25 @@ function TabelaLancamentos({
                     <tr key={l.id} className="hover:bg-gray-50/70">
                       <td className={`${celula} tabular-nums text-gray-500`}>{horaSP(l.dataHora)}</td>
                       <td className={celula}>
-                        <p className="truncate text-gray-900" title={l.historico}>
+                        <p className="break-words text-gray-900" title={l.historico}>
                           {l.historico || '—'}
                           {l.estorno && <span className="ml-1.5 rounded bg-amber-50 px-1 text-[10px] font-medium text-amber-700">estorno</span>}
                         </p>
                         {(l.complemento || l.canal) && (
-                          <p className="truncate text-[11px] text-gray-400" title={[l.complemento, l.canal].filter(Boolean).join(' · ')}>
+                          <p className="break-words text-[11px] text-gray-400" title={[l.complemento, l.canal].filter(Boolean).join(' · ')}>
                             {[l.complemento, l.canal].filter(Boolean).join(' · ')}
                           </p>
                         )}
                       </td>
                       <td className={celula}>
-                        <p className="truncate text-gray-800" title={l.contraparte.nome}>
+                        <p className="break-words leading-snug text-gray-800" title={l.contraparte.nome}>
                           {l.contraparte.nome || <span className="text-gray-300">—</span>}
                         </p>
-                        {l.contraparte.documento && <p className="font-mono text-[11px] text-gray-400">{documento(l.contraparte.documento)}</p>}
+                        {l.contraparte.documento && <p className="break-all font-mono text-[11px] text-gray-400">{documento(l.contraparte.documento)}</p>}
                       </td>
-                      <td className={`${celula} text-right tabular-nums text-emerald-600`}>{l.valor > 0 ? moeda(l.valor) : ''}</td>
-                      <td className={`${celula} text-right tabular-nums text-red-600`}>{l.valor < 0 ? moeda(l.valor) : ''}</td>
-                      <td className={`${celula} text-right tabular-nums ${tom(l.saldoApos)}`}>{moeda(l.saldoApos)}</td>
+                      <td className={`${celula} text-right whitespace-nowrap tabular-nums text-emerald-600`}>{l.valor > 0 ? moeda(l.valor) : ''}</td>
+                      <td className={`${celula} text-right whitespace-nowrap tabular-nums text-red-600`}>{l.valor < 0 ? moeda(l.valor) : ''}</td>
+                      <td className={`${celula} text-right whitespace-nowrap tabular-nums ${tom(l.saldoApos)}`}>{moeda(l.saldoApos)}</td>
                     </tr>
                   );
                 }
@@ -790,9 +793,9 @@ function TabelaLancamentos({
                       )}
                     </td>
                     <td className={`${celFim} text-gray-500`}>{plural(d.lancamentos.length, 'lançamento', 'lançamentos')}</td>
-                    <td className={`${celFim} text-right font-medium tabular-nums text-emerald-600`}>{d.entradas ? moeda(d.entradas) : ''}</td>
-                    <td className={`${celFim} text-right font-medium tabular-nums text-red-600`}>{d.saidas ? moeda(d.saidas) : ''}</td>
-                    <td className={`${celFim} text-right font-bold tabular-nums ${tom(d.saldoFinal)}`}>{moeda(d.saldoFinal)}</td>
+                    <td className={`${celFim} text-right whitespace-nowrap font-medium tabular-nums text-emerald-600`}>{d.entradas ? moeda(d.entradas) : ''}</td>
+                    <td className={`${celFim} text-right whitespace-nowrap font-medium tabular-nums text-red-600`}>{d.saidas ? moeda(d.saidas) : ''}</td>
+                    <td className={`${celFim} text-right whitespace-nowrap font-bold tabular-nums ${tom(d.saldoFinal)}`}>{moeda(d.saldoFinal)}</td>
                   </tr>
                 );
                 return linhas;
@@ -821,10 +824,10 @@ function TabelaLancamentos({
 function TabelaSaldos({ contas, totais, recolhidos, alternar, topoConta, theadRef, thContaRef, filtroConta, setFiltroConta, opcoesConta, dataFim }) {
   const celula = 'border-b border-b-gray-100 border-l border-l-gray-100 px-3 py-2 text-xs tabular-nums';
   return (
-    <table className="w-full border-separate border-spacing-0 text-left text-xs">
+    <table className="w-full table-fixed border-separate border-spacing-0 text-left text-xs">
       <thead ref={theadRef}>
         <tr className="text-xs uppercase tracking-wide text-blue-700">
-          <th ref={thContaRef} className={`${TH} w-72`}>
+          <th ref={thContaRef} className={`${TH} w-40 xl:w-52`}>
             <span className="inline-flex items-center justify-center gap-1.5">
               <FiltroColuna filtro={filtroConta} onChange={setFiltroConta} opcoes={opcoesConta} label="conta" colunaRef={thContaRef} />
               Conta bancária
@@ -835,7 +838,7 @@ function TabelaSaldos({ contas, totais, recolhidos, alternar, topoConta, theadRe
           <th className={THD}>Entradas</th>
           <th className={THD}>Saídas</th>
           <th className={THD}>Saldo final</th>
-          <th className={`${THD} w-36 rounded-tr-card`}>Origem do saldo</th>
+          <th className={`${THD} w-32 rounded-tr-card`}>Origem do saldo</th>
         </tr>
       </thead>
       <tbody>
