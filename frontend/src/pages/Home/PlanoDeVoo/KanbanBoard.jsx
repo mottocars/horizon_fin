@@ -134,7 +134,7 @@ export default function KanbanBoard({
               encerrarArraste();
               if (card && podeSoltar) onMover(card, b.id);
             }}
-            className={`rounded-xl bg-gray-50 p-2 transition duration-150 ${sobre ? `ring-2 ${b.alvo} bg-white` : podeSoltar ? 'ring-1 ring-gray-300' : ''} ${
+            className={`rounded-xl ${b.fundo} p-2 transition duration-150 ${sobre ? `ring-2 ${b.alvo} bg-white` : podeSoltar ? 'ring-1 ring-gray-300' : ''} ${
               proibido ? 'opacity-40' : ''
             }`}
           >
