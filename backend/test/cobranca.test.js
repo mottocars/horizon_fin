@@ -4,7 +4,7 @@
 const test = require('node:test');
 const assert = require('node:assert');
 const { parseRetornoCobrancaCaixa } = require('../src/utils/cnab240');
-const { somaCreditosDoDia } = require('../src/modules/saldo-contas-bancarias/cobranca.calculo');
+const { somaCreditos } = require('../src/modules/saldo-contas-bancarias/cobranca.calculo');
 
 // Linha de 240 posições com cada texto na sua posição (1-based, como no manual).
 function linha(campos) {
@@ -75,14 +75,19 @@ test('título não pago (entrada/baixa) vem com datas zeradas: ficam null, sem q
   assert.strictEqual(titulos[0].dataOcorrencia, '2026-10-05');
 });
 
-test('soma da cobrança do dia: só liquidação com Dt Crédito = data, em centavos exatos', () => {
+test('soma da cobrança: créditos depois do fechamento do extrato até o dia, só liquidação', () => {
   const titulos = [
+    { cod_movimento: '06', valor_pago: '5231.61', data_credito: '2026-10-02' }, // sexta: já está no fechamento de sexta
     { cod_movimento: '06', valor_pago: '2776.79', data_credito: '2026-10-05' },
     { cod_movimento: '06', valor_pago: '1783.01', data_credito: '2026-10-05' },
     { cod_movimento: '06', valor_pago: '1000.00', data_credito: '2026-10-05' },
-    { cod_movimento: '06', valor_pago: '500.00', data_credito: '2026-10-06' }, // outro dia
+    { cod_movimento: '06', valor_pago: '500.00', data_credito: '2026-10-06' }, // depois do dia
     { cod_movimento: '02', valor_pago: '0', data_credito: '2026-10-05' }, // entrada, não é pagamento
+    { cod_movimento: '02', valor_pago: '0', data_credito: null },
   ];
-  assert.deepStrictEqual(somaCreditosDoDia(titulos, '2026-10-05'), { titulos: 3, valor: 5559.8 });
-  assert.deepStrictEqual(somaCreditosDoDia(titulos, '2026-10-07'), { titulos: 0, valor: 0 });
+  // segunda 05/10 com o fechamento de sexta 02/10: entra de sábado até segunda
+  assert.deepStrictEqual(somaCreditos(titulos, '2026-10-02', '2026-10-05'), { titulos: 3, valor: 5559.8 });
+  // fechamento mais antigo (quinta 01/10): a sexta também entra
+  assert.deepStrictEqual(somaCreditos(titulos, '2026-10-01', '2026-10-05'), { titulos: 4, valor: 10791.41 });
+  assert.deepStrictEqual(somaCreditos(titulos, '2026-10-06', '2026-10-07'), { titulos: 0, valor: 0 });
 });
