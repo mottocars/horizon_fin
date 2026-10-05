@@ -141,6 +141,12 @@ app.use(errorMiddleware);
 
 app.listen(env.port, () => {
   console.log(`Horizon Fin API rodando em http://localhost:${env.port}`);
+  // Ambiente de desenvolvimento (cópia do banco de produção): sem agendadores, senão o dev
+  // consultaria SEFAZ/Sienge/Itaú e renovaria certificados em duplicidade com a VPS.
+  if (!env.agendadoresAtivos) {
+    console.log('[agendadores] desativados (AGENDADORES_ATIVOS=false) — nenhuma rotina automática vai rodar.');
+    return;
+  }
   espiaoAgendador.iniciar();
   monitorIntegracoesAgendador.iniciar();
 });

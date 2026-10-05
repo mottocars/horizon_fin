@@ -7,6 +7,9 @@ module.exports = {
   // defina PYTHON_BIN=python no .env se o comando 'python3' não existir na máquina.
   pythonBin: process.env.PYTHON_BIN || 'python3',
   frontendUrl: process.env.FRONTEND_URL || 'http://localhost:5173',
+  // false no ambiente de desenvolvimento local: não sobe os agendadores (Espião NF-e e Monitor
+  // de Integrações). Sem a variável (produção), continuam ligados.
+  agendadoresAtivos: process.env.AGENDADORES_ATIVOS !== 'false',
   mcp: {
     // Domínio público de verdade do backend (quem expõe é o Nginx do host
     // na VPS — ver docker-compose.yml) — usado só pra montar a URL completa
