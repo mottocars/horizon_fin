@@ -44,8 +44,9 @@ function paraDDMMYYYY(iso) {
   return `${dia}-${mes}-${ano}`;
 }
 
+// Só as conexões de Extrato Bancário — as de Cobrança não trazem saldo de conta.
 async function listarVanpixAtivasDaEmpresa(empresaId) {
-  const { rows } = await pool.query('SELECT id FROM integracoes_vanpix WHERE empresa_id = $1 AND ativo = TRUE', [
+  const { rows } = await pool.query("SELECT id FROM integracoes_vanpix WHERE empresa_id = $1 AND ativo = TRUE AND finalidade = 'EXTRATO'", [
     empresaId,
   ]);
   return rows;

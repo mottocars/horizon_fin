@@ -15,7 +15,7 @@ import {
 import { nomeExibicaoEmpresa } from '../../../utils/empresa';
 import { useEmpresaTravada } from '../../../hooks/useEmpresaTravada';
 import ItauNovaConexao from './ItauNovaConexao';
-import { TIPOS_CONEXAO, PLACEHOLDER_SEGREDO, estaPreenchido, classesCor, corCampo, corSelect } from './camposConexao';
+import { TIPOS_CONEXAO, FINALIDADES_VANPIX, PLACEHOLDER_SEGREDO, estaPreenchido, classesCor, corCampo, corSelect } from './camposConexao';
 
 // Por status devolvido pelo teste (ver vanpix.service.js::testarApelido) — os dois "ok_"
 // contam como sucesso pra esse convênio (a VanPix aceitou a credencial; só não achou retorno
@@ -53,6 +53,7 @@ export default function ConveniosBancariosForm() {
     empresa_id: '',
     tipo: isEdit ? 'VANPIX' : '',
     nome_conexao: '',
+    finalidade: '',
     service_key: '',
     client_secret: '',
     apelidos: [],
@@ -74,6 +75,7 @@ export default function ConveniosBancariosForm() {
           empresa_id: String(data.empresa_id),
           tipo: 'VANPIX',
           nome_conexao: data.nome_conexao,
+          finalidade: data.finalidade,
           service_key: '',
           client_secret: '',
           apelidos: data.apelidos,
@@ -173,6 +175,7 @@ export default function ConveniosBancariosForm() {
 
     const errors = {};
     if (!form.empresa_id) errors.empresa_id = 'Selecione uma empresa.';
+    if (!form.finalidade) errors.finalidade = 'Informe se a conexão é de Extrato Bancário ou de Cobrança.';
     if (!form.nome_conexao.trim()) errors.nome_conexao = 'Nome da conexão é obrigatório.';
     if (!isEdit && !form.service_key.trim()) errors.service_key = 'Service Key é obrigatória.';
     if (!isEdit && !form.client_secret.trim()) errors.client_secret = 'Client Secret é obrigatório.';
@@ -185,6 +188,7 @@ export default function ConveniosBancariosForm() {
       const payload = {
         empresa_id: Number(form.empresa_id),
         nome_conexao: form.nome_conexao.trim(),
+        finalidade: form.finalidade,
         apelidos: form.apelidos,
         ...(form.service_key.trim() ? { service_key: form.service_key.trim() } : {}),
         ...(form.client_secret.trim() ? { client_secret: form.client_secret.trim() } : {}),
@@ -224,7 +228,7 @@ export default function ConveniosBancariosForm() {
         <p className="mb-4 text-sm text-gray-500">
           {form.tipo === 'ITAU'
             ? 'API de Extrato Conta Corrente do Itaú: use a credencial e o token temporário enviados pelo Itaú para este CNPJ.'
-            : 'Informe aqui os dados de autenticação usados para buscar os retornos bancários (extratos) junto ao provedor.'}
+            : 'Informe aqui os dados de autenticação usados para buscar os retornos bancários (extrato ou cobrança) junto ao provedor.'}
         </p>
 
         {error && (
@@ -282,7 +286,23 @@ export default function ConveniosBancariosForm() {
             {form.tipo === 'VANPIX' && (
           <form onSubmit={handleSubmit} className="space-y-4 border-t border-gray-100 pt-4">
             <div className="grid grid-cols-1 gap-4 sm:grid-cols-2">
-              <div className="sm:col-span-2">
+              <div>
+                <label className="mb-1 block text-sm font-medium text-gray-700">Finalidade</label>
+                <SearchableSelect
+                  value={form.finalidade}
+                  onChange={(value) => handleChange('finalidade', value || '')}
+                  options={FINALIDADES_VANPIX}
+                  clearable={false}
+                  placeholder="Extrato Bancário ou Cobrança"
+                  corClasses={corSelect(form.finalidade)}
+                />
+                <p className="mt-1 text-xs text-gray-400">
+                  Extrato Bancário alimenta o saldo das contas; Cobrança traz os retornos de boletos.
+                </p>
+                {fieldErrors.finalidade && <p className="mt-1 text-xs text-red-600">{fieldErrors.finalidade}</p>}
+              </div>
+
+              <div>
                 <label className="mb-1 block text-sm font-medium text-gray-700">Nome da conexão</label>
                 <input
                   type="text"

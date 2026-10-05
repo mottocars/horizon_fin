@@ -9,7 +9,7 @@ import { listVanpixIntegracoes, setVanpixStatus } from '../../../api/vanpix.api'
 import { listItauIntegracoes, setItauStatus } from '../../../api/itau.api';
 import { formatCnpj } from '../../Empresas/format';
 import { useConfirm } from '../../../confirm/ConfirmContext';
-import { STATUS_ITAU } from './camposConexao';
+import { FINALIDADES_VANPIX, STATUS_ITAU } from './camposConexao';
 
 const LIMITE_POR_TIPO = 100;
 
@@ -34,6 +34,12 @@ function avisoItau(item) {
   if (item.certificado_vencido) return { rotulo: 'Certificado vencido', classes: 'bg-red-50 text-red-700' };
   if (item.pode_renovar) return { rotulo: 'Renovar certificado', classes: 'bg-amber-50 text-amber-700' };
   return STATUS_ITAU[item.status] || null;
+}
+
+// A API Itaú é sempre de extrato; a VanPix pode ser de extrato ou de cobrança.
+function finalidadeDe(item) {
+  const valor = item.tipo === 'ITAU' ? 'EXTRATO' : item.finalidade;
+  return FINALIDADES_VANPIX.find((f) => f.value === valor)?.label || '';
 }
 
 function descricaoItens(item) {
@@ -173,6 +179,7 @@ export default function ConveniosBancariosList() {
                         <span className={`inline-flex items-center rounded-full px-2.5 py-1 text-xs font-medium ${tipo.classes}`}>
                           {tipo.rotulo}
                         </span>
+                        <span className="ml-2 text-xs text-gray-500">{finalidadeDe(item)}</span>
                       </td>
                       <td className="py-3 text-gray-600">
                         <span title={itens.titulo}>{itens.texto}</span>

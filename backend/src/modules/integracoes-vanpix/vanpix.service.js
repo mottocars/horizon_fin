@@ -22,7 +22,7 @@ async function list({ page = 1, limit = 10, search = '', ativo, empresaIds }) {
   // apelidos via subconsulta correlacionada (array_agg) — evita duplicar 1 linha por
   // convênio na listagem (que teria N linhas repetidas pra uma conexão com N apelidos).
   const { rows } = await pool.query(
-    `SELECT v.id, v.nome_conexao, v.ativo, v.criado_em, v.atualizado_em,
+    `SELECT v.id, v.nome_conexao, v.finalidade, v.ativo, v.criado_em, v.atualizado_em,
             e.id AS empresa_id, COALESCE(NULLIF(e.nome_fantasia, ''), e.razao_social) AS empresa_razao_social,
             e.cnpj AS empresa_cnpj,
             COALESCE(
@@ -55,7 +55,7 @@ async function list({ page = 1, limit = 10, search = '', ativo, empresaIds }) {
 
 async function getById(id) {
   const { rows } = await pool.query(
-    `SELECT v.id, v.nome_conexao, v.ativo, v.criado_em, v.atualizado_em,
+    `SELECT v.id, v.nome_conexao, v.finalidade, v.ativo, v.criado_em, v.atualizado_em,
             e.id AS empresa_id, COALESCE(NULLIF(e.nome_fantasia, ''), e.razao_social) AS empresa_razao_social,
             e.cnpj AS empresa_cnpj
      FROM integracoes_vanpix v
@@ -85,15 +85,15 @@ async function substituirConvenios(client, integracaoId, apelidos) {
   );
 }
 
-async function create({ empresa_id, nome_conexao, service_key, client_secret, apelidos }) {
+async function create({ empresa_id, nome_conexao, finalidade, service_key, client_secret, apelidos }) {
   const client = await pool.connect();
   try {
     await client.query('BEGIN');
     const { rows } = await client.query(
-      `INSERT INTO integracoes_vanpix (empresa_id, nome_conexao, service_key_enc, client_secret_enc)
-       VALUES ($1, $2, $3, $4)
-       RETURNING id, empresa_id, nome_conexao, ativo, criado_em, atualizado_em`,
-      [empresa_id, nome_conexao, encrypt(service_key), encrypt(client_secret)]
+      `INSERT INTO integracoes_vanpix (empresa_id, nome_conexao, finalidade, service_key_enc, client_secret_enc)
+       VALUES ($1, $2, $3, $4, $5)
+       RETURNING id, empresa_id, nome_conexao, finalidade, ativo, criado_em, atualizado_em`,
+      [empresa_id, nome_conexao, finalidade, encrypt(service_key), encrypt(client_secret)]
     );
     const item = rows[0];
     await substituirConvenios(client, item.id, apelidos);
@@ -110,12 +110,12 @@ async function create({ empresa_id, nome_conexao, service_key, client_secret, ap
 // `service_key`/`client_secret` só entram no UPDATE quando informados de novo — mesmo
 // espírito de sienge.service.js::update com `password` (editar sem preencher de novo mantém
 // o segredo já salvo).
-async function update(id, { empresa_id, nome_conexao, service_key, client_secret, apelidos }) {
+async function update(id, { empresa_id, nome_conexao, finalidade, service_key, client_secret, apelidos }) {
   const client = await pool.connect();
   try {
     await client.query('BEGIN');
-    const campos = ['empresa_id = $1', 'nome_conexao = $2', 'atualizado_em = NOW()'];
-    const params = [empresa_id, nome_conexao];
+    const campos = ['empresa_id = $1', 'nome_conexao = $2', 'finalidade = $3', 'atualizado_em = NOW()'];
+    const params = [empresa_id, nome_conexao, finalidade];
 
     if (service_key) {
       params.push(encrypt(service_key));
@@ -129,7 +129,7 @@ async function update(id, { empresa_id, nome_conexao, service_key, client_secret
     params.push(id);
     const { rows } = await client.query(
       `UPDATE integracoes_vanpix SET ${campos.join(', ')} WHERE id = $${params.length}
-       RETURNING id, empresa_id, nome_conexao, ativo, criado_em, atualizado_em`,
+       RETURNING id, empresa_id, nome_conexao, finalidade, ativo, criado_em, atualizado_em`,
       params
     );
     const item = rows[0];
@@ -151,7 +151,7 @@ async function update(id, { empresa_id, nome_conexao, service_key, client_secret
 async function setAtivo(id, ativo) {
   const { rows } = await pool.query(
     `UPDATE integracoes_vanpix SET ativo = $1 WHERE id = $2
-     RETURNING id, empresa_id, nome_conexao, ativo, criado_em, atualizado_em`,
+     RETURNING id, empresa_id, nome_conexao, finalidade, ativo, criado_em, atualizado_em`,
     [ativo, id]
   );
   return rows[0] || null;

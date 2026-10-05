@@ -4,9 +4,13 @@ const usuariosService = require('../usuarios/usuarios.service');
 
 const apelidoSchema = z.string().trim().min(1, 'Apelido do convênio não pode ser vazio.').max(50, 'Apelido do convênio muito longo.');
 
+// Finalidade da conexão: Extrato Bancário (alimenta o saldo das contas) ou Cobrança.
+const finalidadeSchema = z.enum(['EXTRATO', 'COBRANCA'], { message: 'Informe se a conexão é de Extrato Bancário ou de Cobrança.' });
+
 const createSchema = z.object({
   empresa_id: z.coerce.number().int().positive('Selecione uma empresa.'),
   nome_conexao: z.string().min(1, 'Nome da conexão é obrigatório.'),
+  finalidade: finalidadeSchema,
   service_key: z.string().min(1, 'Service Key é obrigatória.'),
   client_secret: z.string().min(1, 'Client Secret é obrigatório.'),
   apelidos: z.array(apelidoSchema).min(1, 'Informe ao menos 1 convênio (apelido).'),
@@ -15,6 +19,7 @@ const createSchema = z.object({
 const updateSchema = z.object({
   empresa_id: z.coerce.number().int().positive('Selecione uma empresa.'),
   nome_conexao: z.string().min(1, 'Nome da conexão é obrigatório.'),
+  finalidade: finalidadeSchema,
   service_key: z.string().optional(),
   client_secret: z.string().optional(),
   apelidos: z.array(apelidoSchema).min(1, 'Informe ao menos 1 convênio (apelido).'),

@@ -124,6 +124,8 @@ CREATE TABLE integracoes_vanpix (
     id                 SERIAL PRIMARY KEY,
     empresa_id         INTEGER NOT NULL REFERENCES empresas(id) ON DELETE CASCADE,
     nome_conexao       VARCHAR(150) NOT NULL,
+    -- EXTRATO = retornos de extrato (saldo das contas); COBRANCA = retornos de cobrança
+    finalidade         VARCHAR(20) NOT NULL DEFAULT 'EXTRATO' CHECK (finalidade IN ('EXTRATO', 'COBRANCA')),
     service_key_enc    TEXT NOT NULL,
     client_secret_enc  TEXT NOT NULL,
     ativo              BOOLEAN DEFAULT TRUE,

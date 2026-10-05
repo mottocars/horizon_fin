@@ -7,6 +7,12 @@ export const TIPOS_CONEXAO = [
   { value: 'ITAU', label: 'API Itaú' },
 ];
 
+// Finalidade de uma conexão VanPix (coluna integracoes_vanpix.finalidade).
+export const FINALIDADES_VANPIX = [
+  { value: 'EXTRATO', label: 'Extrato Bancário' },
+  { value: 'COBRANCA', label: 'Cobrança' },
+];
+
 // Situações de uma conexão API Itaú (coluna conexoes_itau.status) — rótulo e cor do selo,
 // usados na lista e na tela da conexão.
 export const STATUS_ITAU = {
