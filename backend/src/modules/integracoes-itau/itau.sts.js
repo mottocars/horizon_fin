@@ -188,12 +188,22 @@ async function consultarExtrato({ agente, accessToken, clientId, conta, dataInic
 // Extrato completo (JSON já interpretado) — pra quem precisa dos dados (ex.: saldo do dia na
 // abertura do período). O conteúdo fica só em memória: nunca vai pra log nem pra erro.
 // { ok: true, json } | { ok: false, statusCode?, falhaRede?, mensagemErro? }
-async function buscarExtratoJson({ agente, accessToken, clientId, conta, data }) {
+// Período (dataFim) e paginação são opcionais: sem eles, só o dia `data` (uso da abertura de
+// período). A API pagina em 10 itens por padrão e o link "next" que ela devolve vem sem o
+// número da página — quem chama avança com `pagina` (parâmetro `page`) e pode pedir até 500
+// por página (`page_size`), confirmado em produção.
+async function buscarExtratoJson({ agente, accessToken, clientId, conta, data, dataFim, pagina, porPagina }) {
+  let url = montarUrlExtrato(conta, { dataInicio: data, dataFim: dataFim || data });
+  const extras = new URLSearchParams();
+  if (dataFim) extras.set('end_date', dataFim);
+  if (porPagina) extras.set('page_size', String(porPagina));
+  if (pagina) extras.set('page', String(pagina));
+  if ([...extras.keys()].length) url += `${url.includes('?') ? '&' : '?'}${extras.toString()}`;
   let resposta;
   try {
     resposta = await httpsRequest({
       method: 'GET',
-      url: montarUrlExtrato(conta, { dataInicio: data, dataFim: data }),
+      url,
       agent: agente,
       headers: {
         Authorization: `Bearer ${accessToken}`,

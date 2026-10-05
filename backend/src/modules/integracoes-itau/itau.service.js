@@ -440,6 +440,49 @@ async function consultarSaldoEmConta(conexaoId, data) {
   }
 }
 
+const POR_PAGINA_EXTRATO = 500;
+const MAX_PAGINAS_EXTRATO = 20;
+
+// Extrato completo de um período (todas as páginas), só em memória — relatório Extratos
+// Bancários. Nunca lança por causa do Itaú:
+// { ok: true, eventos, saldos, conta: {agencia, conta, dac} } | { ok: false, mensagem }.
+async function buscarExtratoPeriodo(conexaoId, dataInicio, dataFim) {
+  try {
+    const t = await obterToken(conexaoId);
+    if (!t.ok) return { ok: false, mensagem: `O Itaú recusou o access token (${t.codigo}).` };
+    const row = t.ctx.row;
+    if (!row.agencia || !row.conta || !row.dac) return { ok: false, mensagem: 'Conexão sem agência/conta/DAC cadastrados.' };
+
+    const eventos = [];
+    const saldos = [];
+    for (let pagina = 1; pagina <= MAX_PAGINAS_EXTRATO; pagina += 1) {
+      const r = await sts.buscarExtratoJson({
+        agente: t.ctx.agente,
+        accessToken: t.accessToken,
+        clientId: row.client_id,
+        conta: row,
+        data: dataInicio,
+        dataFim,
+        pagina,
+        porPagina: POR_PAGINA_EXTRATO,
+      });
+      if (!r.ok) {
+        if (r.falhaRede) return { ok: false, mensagem: 'Sem resposta da API de extrato do Itaú.' };
+        return { ok: false, mensagem: `HTTP ${r.statusCode}${r.mensagemErro ? ` (${r.mensagemErro})` : ''}.` };
+      }
+      for (const d of r.json.data || []) {
+        eventos.push(...(d.events || []));
+        saldos.push(...(d.balances || []));
+      }
+      const totalPaginas = Number(r.json.pagination?.total_pages) || 1;
+      if (pagina >= totalPaginas) break;
+    }
+    return { ok: true, eventos, saldos, conta: { agencia: row.agencia, conta: row.conta, dac: row.dac } };
+  } catch (err) {
+    return { ok: false, mensagem: err.expose ? err.message : 'Erro interno ao consultar o extrato.' };
+  }
+}
+
 // ─── renovação anual ────────────────────────────────────────────────────────────────────
 
 async function renovarCertificado(id, { apenasSeNaJanela = false } = {}) {
@@ -520,6 +563,7 @@ module.exports = {
   testarToken,
   testarExtrato,
   consultarSaldoEmConta,
+  buscarExtratoPeriodo,
   renovarCertificado,
   renovarCertificadosDaEmpresa,
   mensagemStatus,

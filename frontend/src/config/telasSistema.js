@@ -53,6 +53,7 @@ export const TELAS_SISTEMA = [
       { codigo: '/relatorios/metricas-de-uso', label: 'Métricas de Uso' },
       { codigo: '/relatorios/empreendimentos-masa', label: 'Empreendimentos Masa' },
       { codigo: '/relatorios/notas-pendentes', label: 'Acervo NF-e / NFS-e' },
+      { codigo: '/relatorios/extratos-bancarios', label: 'Extratos Bancários' },
     ],
   },
 ];

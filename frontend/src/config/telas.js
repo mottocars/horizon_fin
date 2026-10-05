@@ -34,6 +34,7 @@ export const TELAS_SISTEMA = {
   '/relatorios/metricas-de-uso': { title: 'Métricas de Uso', subtitle: 'Relatórios — Métricas de Uso' },
   '/relatorios/empreendimentos-masa': { title: 'Empreendimentos Masa', subtitle: 'Relatórios — Empreendimentos Masa' },
   '/relatorios/notas-pendentes': { title: 'Acervo NF-e / NFS-e', subtitle: 'Relatórios — Acervo NF-e / NFS-e' },
+  '/relatorios/extratos-bancarios': { title: 'Extratos Bancários', subtitle: 'Relatórios — Extratos Bancários' },
 };
 
 // Acha, entre as chaves de TELAS_SISTEMA, a mais específica (mais longa)
