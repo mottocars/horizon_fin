@@ -2595,7 +2595,8 @@ CREATE INDEX idx_dre_orcamento_valores_centro ON dre_orcamento_valores (empresa_
 -- ─── Home > Plano de Voo (Kanban de atividades) — ver database/migrations/2026-10-05-projetos-kanban.sql ───
 -- Card do Kanban. O bucket "Atrasado" NÃO é gravado: é calculado na hora (data_fim já passou e
 -- o card não foi finalizado) — assim vira atrasado sozinho, sem rotina agendada. `status` guarda
--- só o que o responsável escolheu: AGUARDANDO, PROGRESSO ou FINALIZADO.
+-- o bucket escolhido: AGUARDANDO, PROGRESSO ou CONCLUIDO (pelo responsável) ou FINALIZADO (só pelo
+-- criador, a partir de Concluído). Concluído e Finalizado nunca ficam atrasados.
 CREATE TABLE projetos_cards (
     id              SERIAL PRIMARY KEY,
     empresa_id      INTEGER NOT NULL REFERENCES empresas(id) ON DELETE CASCADE,
@@ -2605,7 +2606,8 @@ CREATE TABLE projetos_cards (
     data_fim        DATE NOT NULL,
     responsavel_id  INTEGER NOT NULL REFERENCES usuarios(id),
     criador_id      INTEGER NOT NULL REFERENCES usuarios(id),
-    status          VARCHAR(12) NOT NULL DEFAULT 'AGUARDANDO' CHECK (status IN ('AGUARDANDO', 'PROGRESSO', 'FINALIZADO')),
+    status          VARCHAR(12) NOT NULL DEFAULT 'AGUARDANDO' CHECK (status IN ('AGUARDANDO', 'PROGRESSO', 'CONCLUIDO', 'FINALIZADO')),
+    concluido_em    TIMESTAMP,
     finalizado_em   TIMESTAMP,
     criado_em       TIMESTAMP NOT NULL,
     atualizado_em   TIMESTAMP NOT NULL,

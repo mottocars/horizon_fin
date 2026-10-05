@@ -54,3 +54,8 @@ export function baixarAnexo(id, anexoId) {
 export function excluirAnexo(id, anexoId) {
   return http.delete(`/projetos/cards/${id}/anexos/${anexoId}`).then((r) => r.data);
 }
+
+// Só o criador, e só a partir de Concluído.
+export function finalizarCard(id) {
+  return http.post(`/projetos/cards/${id}/finalizar`).then((r) => r.data);
+}

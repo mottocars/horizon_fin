@@ -1,9 +1,11 @@
 import { useEffect, useRef, useState } from 'react';
 import {
   ArrowRight,
+  BadgeCheck,
   CalendarCheck,
   CalendarClock,
   CalendarPlus,
+  CheckCircle2,
   Download,
   FileText,
   Loader2,
@@ -30,6 +32,7 @@ import {
   excluirComentario,
   listarResponsaveis,
   moverCard,
+  finalizarCard,
   obterCard,
 } from '../../../api/projetos.api';
 import Avatar from './Avatar';
@@ -187,6 +190,7 @@ export default function CardModal({ aberto, cardId, onFechar, onAlterado, empres
   const [enviandoAnexo, setEnviandoAnexo] = useState(false);
   const [arrastandoArquivo, setArrastandoArquivo] = useState(false);
   const [movendo, setMovendo] = useState(null);
+  const [finalizando, setFinalizando] = useState(false);
   const inputArquivoRef = useRef(null);
 
   const novo = !cardId;
@@ -306,6 +310,12 @@ export default function CardModal({ aberto, cardId, onFechar, onAlterado, empres
     setMovendo(destino);
     await executar(() => moverCard(cardId, destino), 'Não foi possível mover a atividade.');
     setMovendo(null);
+  }
+
+  async function finalizar() {
+    setFinalizando(true);
+    await executar(() => finalizarCard(cardId), 'Não foi possível finalizar a atividade.');
+    setFinalizando(false);
   }
 
   // ─── nova atividade ──────────────────────────────────────────────────────
@@ -551,10 +561,36 @@ export default function CardModal({ aberto, cardId, onFechar, onAlterado, empres
                 <LinhaDetalhe icone={CalendarClock} rotulo="Fim esperado">
                   {dataBR(card.data_fim)} <span className={`ml-1 text-xs ${prazo(card, hoje).tom}`}>{prazo(card, hoje).texto}</span>
                 </LinhaDetalhe>
+                {card.concluido_em && (
+                  <LinhaDetalhe icone={BadgeCheck} rotulo="Concluída em">
+                    {dataHora(card.concluido_em)}
+                  </LinhaDetalhe>
+                )}
                 {card.finalizado_em && (
                   <LinhaDetalhe icone={CalendarCheck} rotulo="Finalizada em">
                     {dataHora(card.finalizado_em)}
                   </LinhaDetalhe>
+                )}
+
+                {/* Concluído: quem criou finaliza (verde); o responsável vê que está aguardando. */}
+                {card.bucket === 'CONCLUIDO' && (
+                  <div className="mt-3 border-t border-gray-200 pt-3">
+                    {perm.finalizar ? (
+                      <button
+                        type="button"
+                        onClick={finalizar}
+                        disabled={finalizando}
+                        className="flex w-full items-center justify-center gap-1.5 rounded-lg bg-emerald-600 py-2 text-sm font-semibold text-white transition hover:bg-emerald-700 disabled:opacity-60"
+                      >
+                        {finalizando ? <Loader2 size={15} className="animate-spin" /> : <CheckCircle2 size={15} />}
+                        Finalizar
+                      </button>
+                    ) : (
+                      <p className="text-xs text-gray-500">
+                        Concluída. Aguardando {usuarios[card.criador_id]?.nome || 'quem criou'} finalizar.
+                      </p>
+                    )}
+                  </div>
                 )}
 
                 {destinos.length > 0 && (
@@ -580,7 +616,7 @@ export default function CardModal({ aberto, cardId, onFechar, onAlterado, empres
                   </div>
                 )}
                 {card.bucket === 'ATRASADO' && !perm.mover && (
-                  <p className="mt-3 border-t border-gray-200 pt-3 text-xs text-red-600">Passou da data fim esperada sem ser finalizada.</p>
+                  <p className="mt-3 border-t border-gray-200 pt-3 text-xs text-red-600">Passou da data fim esperada sem ser concluída.</p>
                 )}
 
                 {(perm.editar || perm.excluir) && (

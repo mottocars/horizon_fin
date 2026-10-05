@@ -5,7 +5,7 @@ import Tabs from '../../../components/Tabs';
 import { useAuth } from '../../../auth/AuthContext';
 import { useEmpresaTravada } from '../../../hooks/useEmpresaTravada';
 import { listEmpresas } from '../../../api/empresas.api';
-import { listarCards, moverCard } from '../../../api/projetos.api';
+import { finalizarCard, listarCards, moverCard } from '../../../api/projetos.api';
 import { nomeExibicaoEmpresa } from '../../../utils/empresa';
 import KanbanBoard from './KanbanBoard';
 import CardModal from './CardModal';
@@ -34,6 +34,8 @@ export default function PlanoDeVoo() {
   const [erro, setErro] = useState('');
   const [aviso, setAviso] = useState('');
   const [movendoId, setMovendoId] = useState(null);
+  const [finalizandoId, setFinalizandoId] = useState(null);
+  const [mostrarFinalizados, setMostrarFinalizados] = useState(false);
   const [modal, setModal] = useState({ aberto: false, cardId: null });
 
   useEffect(() => {
@@ -74,7 +76,7 @@ export default function PlanoDeVoo() {
     setDados((d) => ({
       ...d,
       cards: d.cards.map((c) =>
-        c.id === card.id ? { ...c, bucket: destino, status: destino, finalizado_em: destino === 'FINALIZADO' ? new Date().toISOString() : null } : c
+        c.id === card.id ? { ...c, bucket: destino, status: destino, concluido_em: destino === 'CONCLUIDO' ? new Date().toISOString() : null } : c
       ),
     }));
     try {
@@ -89,13 +91,56 @@ export default function PlanoDeVoo() {
     }
   }
 
+  // Finalizar (só o criador, a partir de Concluído): botão verde no card.
+  async function finalizar(card) {
+    setAviso('');
+    setFinalizandoId(card.id);
+    try {
+      await finalizarCard(card.id);
+      await carregar(true);
+    } catch (e) {
+      setAviso(e.response?.data?.message || 'Não foi possível finalizar a atividade.');
+      setTimeout(() => setAviso(''), 6000);
+    } finally {
+      setFinalizandoId(null);
+    }
+  }
+
   function fecharModal(idCriado) {
     setModal(idCriado ? { aberto: true, cardId: idCriado } : { aberto: false, cardId: null });
   }
 
   return (
-    <div>
+    <div className="relative">
       <Tabs tabs={TABS} activeId={aba} onChange={(id) => setSearchParams({ aba: id }, { replace: true })} />
+
+      {/* Canto superior direito: mostrar a coluna Finalizado (padrão: não). */}
+      {ehQuadro && (
+        <div className="absolute right-0 top-1 flex items-center gap-2">
+          <span className="text-xs font-medium text-gray-500">Finalizados</span>
+          <div className="inline-flex rounded-lg border border-gray-200 bg-white p-0.5">
+            {[
+              { valor: false, rotulo: 'Não' },
+              { valor: true, rotulo: 'Sim' },
+            ].map((o) => (
+              <button
+                key={o.rotulo}
+                type="button"
+                onClick={() => setMostrarFinalizados(o.valor)}
+                className={`rounded-md px-2.5 py-1 text-xs font-medium transition-colors ${
+                  mostrarFinalizados === o.valor
+                    ? o.valor
+                      ? 'bg-emerald-50 text-emerald-700'
+                      : 'bg-gray-100 text-gray-700'
+                    : 'text-gray-400 hover:text-gray-600'
+                }`}
+              >
+                {o.rotulo}
+              </button>
+            ))}
+          </div>
+        </div>
+      )}
 
       <div className="rounded-card rounded-tl-none bg-white p-4 shadow-card">
         {!ehQuadro ? (
@@ -115,8 +160,8 @@ export default function PlanoDeVoo() {
             {erro ? (
               <p className="py-12 text-center text-sm text-red-600">{erro}</p>
             ) : carregando && !dados ? (
-              <div className="grid grid-cols-1 gap-4 md:grid-cols-2 xl:grid-cols-4">
-                {BUCKETS.map((b) => (
+              <div className="grid grid-cols-1 gap-3 md:grid-cols-2 xl:grid-cols-4">
+                {BUCKETS.slice(0, 4).map((b) => (
                   <div key={b.id} className="h-56 animate-pulse rounded-xl bg-gray-50" />
                 ))}
               </div>
@@ -128,6 +173,9 @@ export default function PlanoDeVoo() {
                 visao={visao}
                 usuarioAtualId={user?.id}
                 movendoId={movendoId}
+                finalizandoId={finalizandoId}
+                mostrarFinalizados={mostrarFinalizados}
+                onFinalizar={finalizar}
                 onAbrir={(id) => setModal({ aberto: true, cardId: id })}
                 onMover={mover}
                 onAdicionar={() => setModal({ aberto: true, cardId: null })}

@@ -27,6 +27,7 @@ router.get('/cards/:id', controller.obter);
 router.put('/cards/:id', controller.atualizar);
 router.delete('/cards/:id', controller.excluir);
 router.patch('/cards/:id/status', controller.mover);
+router.post('/cards/:id/finalizar', controller.finalizar);
 router.post('/cards/:id/comentarios', controller.comentar);
 router.delete('/cards/:id/comentarios/:comentarioId', controller.excluirComentario);
 router.post('/cards/:id/anexos', upload.array('arquivos', 10), tratarLimiteUpload, controller.anexar);

@@ -1,9 +1,9 @@
 import { useState } from 'react';
-import { CalendarDays, MessageSquare, Paperclip, Plus } from 'lucide-react';
+import { CalendarDays, CheckCircle2, Loader2, MessageSquare, Paperclip, Plus } from 'lucide-react';
 import Avatar from './Avatar';
 import { BUCKETS, dataBR, destinosPermitidos, prazo } from './kanban';
 
-function CardKanban({ card, hoje, usuarios, visao, usuarioAtualId, arrastavel, arrastando, onAbrir, onDragStart, onDragEnd }) {
+function CardKanban({ card, hoje, usuarios, visao, usuarioAtualId, arrastavel, arrastando, finalizando, onAbrir, onFinalizar, onDragStart, onDragEnd }) {
   const responsavel = usuarios[card.responsavel_id];
   const criador = usuarios[card.criador_id];
   const p = prazo(card, hoje);
@@ -48,18 +48,54 @@ function CardKanban({ card, hoje, usuarios, visao, usuarioAtualId, arrastavel, a
           <Avatar usuario={responsavel} tamanho="xs" titulo={`Responsável: ${responsavel?.nome || ''}`} />
         </div>
       </div>
+
+      {/* Concluído: só quem criou finaliza — o botão verde aparece só pra ele. */}
+      {card.bucket === 'CONCLUIDO' &&
+        (card.criador_id === usuarioAtualId ? (
+          <button
+            type="button"
+            onClick={(e) => {
+              e.stopPropagation();
+              onFinalizar(card);
+            }}
+            disabled={finalizando}
+            className="mt-3 flex w-full items-center justify-center gap-1.5 rounded-md bg-emerald-600 py-1.5 text-xs font-semibold text-white transition hover:bg-emerald-700 disabled:opacity-60"
+          >
+            {finalizando ? <Loader2 size={13} className="animate-spin" /> : <CheckCircle2 size={13} />}
+            Finalizar
+          </button>
+        ) : (
+          <p className="mt-3 border-t border-gray-100 pt-2 text-[11px] text-gray-400">
+            Aguardando {criador?.nome.split(' ')[0] || 'o criador'} finalizar
+          </p>
+        ))}
     </div>
   );
 }
 
-// Quadro com as 4 colunas. Arrastar usa o drag-and-drop nativo do navegador: enquanto um card
-// é arrastado, as colunas permitidas ganham contorno e as proibidas ficam esmaecidas. Só o
+// Quadro com as colunas (Finalizado só aparece com a chave "Finalizados" ligada). Arrastar usa
+// o drag-and-drop nativo do navegador: enquanto um card é arrastado, as colunas permitidas
+// ganham contorno e as proibidas ficam esmaecidas. Só o
 // responsável arrasta os próprios cards.
-export default function KanbanBoard({ cards, hoje, usuarios, visao, usuarioAtualId, onAbrir, onMover, onAdicionar, movendoId }) {
+export default function KanbanBoard({
+  cards,
+  hoje,
+  usuarios,
+  visao,
+  usuarioAtualId,
+  mostrarFinalizados,
+  onAbrir,
+  onMover,
+  onAdicionar,
+  onFinalizar,
+  movendoId,
+  finalizandoId,
+}) {
   const [arrastado, setArrastado] = useState(null);
   const [colunaSobre, setColunaSobre] = useState(null);
 
   const permitidos = arrastado ? destinosPermitidos(arrastado, hoje) : [];
+  const colunas = mostrarFinalizados ? BUCKETS : BUCKETS.filter((b) => b.id !== 'FINALIZADO');
 
   function iniciarArraste(e, card) {
     e.dataTransfer.effectAllowed = 'move';
@@ -74,8 +110,8 @@ export default function KanbanBoard({ cards, hoje, usuarios, visao, usuarioAtual
   }
 
   return (
-    <div className="grid grid-cols-1 items-start gap-4 md:grid-cols-2 xl:grid-cols-4">
-      {BUCKETS.map((b) => {
+    <div className={`grid grid-cols-1 items-start gap-3 md:grid-cols-2 ${mostrarFinalizados ? 'xl:grid-cols-5' : 'xl:grid-cols-4'}`}>
+      {colunas.map((b) => {
         const doBucket = cards.filter((c) => c.bucket === b.id);
         const podeSoltar = arrastado && permitidos.includes(b.id);
         const proibido = arrastado && !podeSoltar && arrastado.bucket !== b.id;
@@ -130,6 +166,8 @@ export default function KanbanBoard({ cards, hoje, usuarios, visao, usuarioAtual
                   usuarioAtualId={usuarioAtualId}
                   arrastavel={card.responsavel_id === usuarioAtualId && destinosPermitidos(card, hoje).length > 0 && movendoId !== card.id}
                   arrastando={arrastado?.id === card.id || movendoId === card.id}
+                  finalizando={finalizandoId === card.id}
+                  onFinalizar={onFinalizar}
                   onAbrir={onAbrir}
                   onDragStart={iniciarArraste}
                   onDragEnd={encerrarArraste}

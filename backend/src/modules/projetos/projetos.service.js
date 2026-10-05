@@ -7,21 +7,24 @@ const saldosService = require('../saldo-contas-bancarias/saldos.service');
 
 // ---------------------------------------------------------------------------------------
 // Home > Plano de Voo — Kanban de atividades.
-//   Buckets: AGUARDANDO, PROGRESSO, ATRASADO, FINALIZADO. "Atrasado" não é gravado: um card
-//   não finalizado cuja data fim esperada já passou (calendário de Brasília) está atrasado —
-//   calculado em toda leitura, então "vai sozinho" pra lá sem rotina agendada.
+//   Buckets: AGUARDANDO, PROGRESSO, ATRASADO, CONCLUIDO, FINALIZADO. "Atrasado" não é gravado:
+//   um card em Aguardando/Progresso cuja data fim esperada já passou (calendário de Brasília)
+//   está atrasado — calculado em toda leitura, então "vai sozinho" pra lá sem rotina agendada.
+//   Concluído (entregue pelo responsável, aguardando o criador) e Finalizado nunca atrasam.
 //   Regras (pedido do usuário):
 //   - só o CRIADOR edita o card (campos) e exclui;
 //   - criador e responsável comentam e anexam;
-//   - só o RESPONSÁVEL move entre buckets; de Atrasado só sai pra Finalizado; ninguém arrasta
-//     pra Atrasado (é automático).
+//   - só o RESPONSÁVEL move (Aguardando, Progresso, Concluído); de Atrasado só sai pra
+//     Concluído; ninguém arrasta pra Atrasado (é automático);
+//   - só o CRIADOR finaliza, a partir de Concluído.
 //   Visões: "minhas" = cards em que sou o responsável (criados por mim pra mim ou por outros
 //   pra mim); "equipe" = cards que eu criei pra outras pessoas.
 // ---------------------------------------------------------------------------------------
 
 const UPLOADS_DIR = path.join(__dirname, '..', '..', '..', 'uploads', 'projetos');
-const STATUS_GRAVADOS = ['AGUARDANDO', 'PROGRESSO', 'FINALIZADO'];
-const ROTULO = { AGUARDANDO: 'Aguardando', PROGRESSO: 'Progresso', ATRASADO: 'Atrasado', FINALIZADO: 'Finalizado' };
+// O que o responsável pode escolher arrastando (Finalizado é só pelo criador, via finalizar).
+const MOVIMENTO_RESPONSAVEL = ['AGUARDANDO', 'PROGRESSO', 'CONCLUIDO'];
+const ROTULO = { AGUARDANDO: 'Aguardando', PROGRESSO: 'Progresso', ATRASADO: 'Atrasado', CONCLUIDO: 'Concluído', FINALIZADO: 'Finalizado' };
 
 function erro(status, message) {
   const e = new Error(message);
@@ -33,7 +36,8 @@ function erro(status, message) {
 const hoje = () => agoraSP().data;
 
 function bucketDe(card, dataHoje = hoje()) {
-  if (card.status === 'FINALIZADO') return 'FINALIZADO';
+  // Concluído e Finalizado nunca atrasam: o trabalho já foi entregue.
+  if (card.status === 'FINALIZADO' || card.status === 'CONCLUIDO') return card.status;
   if (card.data_fim < dataHoje) return 'ATRASADO';
   return card.status;
 }
@@ -62,7 +66,7 @@ async function responsaveisElegiveis(empresaId) {
 const CAMPOS_CARD = `
   c.id, c.empresa_id, COALESCE(NULLIF(e.nome_fantasia, ''), e.razao_social) AS empresa_nome,
   c.assunto, c.descricao, TO_CHAR(c.data_inicio, 'YYYY-MM-DD') AS data_inicio, TO_CHAR(c.data_fim, 'YYYY-MM-DD') AS data_fim,
-  c.responsavel_id, c.criador_id, c.status, c.finalizado_em, c.criado_em, c.atualizado_em`;
+  c.responsavel_id, c.criador_id, c.status, c.concluido_em, c.finalizado_em, c.criado_em, c.atualizado_em`;
 
 async function usuariosDe(ids) {
   const unicos = [...new Set(ids.filter(Boolean))];
@@ -110,7 +114,14 @@ async function carregarVisivel(id, usuarioId) {
 function permissoes(card, usuarioId) {
   const criador = card.criador_id === usuarioId;
   const responsavel = card.responsavel_id === usuarioId;
-  return { editar: criador, excluir: criador, mover: responsavel, comentar: criador || responsavel, anexar: criador || responsavel };
+  return {
+    editar: criador,
+    excluir: criador,
+    mover: responsavel && card.status !== 'FINALIZADO',
+    finalizar: criador && card.status === 'CONCLUIDO',
+    comentar: criador || responsavel,
+    anexar: criador || responsavel,
+  };
 }
 
 async function obter(id, usuarioId) {
@@ -195,30 +206,44 @@ async function excluir(id, usuarioId) {
   fs.rm(path.join(UPLOADS_DIR, String(id)), { recursive: true, force: true }, () => {});
 }
 
-// Movimentação entre buckets (arrastar no quadro). Só o responsável.
+// Movimentação entre buckets (arrastar no quadro). Só o responsável, e só entre Aguardando,
+// Progresso e Concluído — Finalizado é decisão do criador (finalizar). De Atrasado só sai pra
+// Concluído; fora de Concluído, com a data fim vencida, a atividade voltaria a atrasar.
 async function mover(id, usuarioId, destino) {
   const atual = await carregarVisivel(id, usuarioId);
   if (atual.responsavel_id !== usuarioId) throw erro(403, 'Só o responsável pela atividade pode movê-la.');
   if (destino === 'ATRASADO') throw erro(400, 'Atrasado é automático: a atividade vai pra lá sozinha quando passa da data fim esperada.');
-  if (!STATUS_GRAVADOS.includes(destino)) throw erro(400, 'Bucket inválido.');
+  if (destino === 'FINALIZADO') throw erro(403, 'Só quem criou a atividade pode finalizá-la (a partir de Concluído).');
+  if (!MOVIMENTO_RESPONSAVEL.includes(destino)) throw erro(400, 'Bucket inválido.');
 
   const dataHoje = hoje();
   const origem = bucketDe(atual, dataHoje);
   if (origem === destino) return obter(id, usuarioId);
-  if (origem === 'ATRASADO' && destino !== 'FINALIZADO') {
-    throw erro(400, 'Uma atividade atrasada só pode ir para Finalizado.');
+  if (origem === 'FINALIZADO') throw erro(400, 'Esta atividade já foi finalizada.');
+  if (origem === 'ATRASADO' && destino !== 'CONCLUIDO') {
+    throw erro(400, 'Uma atividade atrasada só pode ir para Concluído.');
   }
-  if (destino !== 'FINALIZADO' && atual.data_fim < dataHoje) {
-    throw erro(400, 'A data fim esperada já passou — fora de Finalizado, a atividade fica em Atrasado.');
+  if (destino !== 'CONCLUIDO' && atual.data_fim < dataHoje) {
+    throw erro(400, 'A data fim esperada já passou — fora de Concluído, a atividade fica em Atrasado.');
   }
 
-  await pool.query('UPDATE projetos_cards SET status = $1, finalizado_em = $2, atualizado_em = $3 WHERE id = $4', [
+  await pool.query('UPDATE projetos_cards SET status = $1, concluido_em = $2, atualizado_em = $3 WHERE id = $4', [
     destino,
-    destino === 'FINALIZADO' ? new Date() : null,
+    destino === 'CONCLUIDO' ? new Date() : null,
     new Date(),
     id,
   ]);
   await registrar(id, usuarioId, 'MOVEU', `${ROTULO[origem]} → ${ROTULO[destino]}`);
+  return obter(id, usuarioId);
+}
+
+// Finalizar: só o criador, e só o que o responsável já concluiu.
+async function finalizar(id, usuarioId) {
+  const atual = await carregarVisivel(id, usuarioId);
+  if (atual.criador_id !== usuarioId) throw erro(403, 'Só quem criou a atividade pode finalizá-la.');
+  if (atual.status !== 'CONCLUIDO') throw erro(400, 'Só dá pra finalizar uma atividade que está em Concluído.');
+  await pool.query("UPDATE projetos_cards SET status = 'FINALIZADO', finalizado_em = $1, atualizado_em = $1 WHERE id = $2", [new Date(), id]);
+  await registrar(id, usuarioId, 'MOVEU', 'Concluído → Finalizado');
   return obter(id, usuarioId);
 }
 
@@ -290,6 +315,7 @@ async function excluirAnexo(id, anexoId, usuarioId) {
 }
 
 module.exports = {
+  finalizar,
   listar,
   obter,
   criar,

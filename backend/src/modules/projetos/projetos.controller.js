@@ -80,6 +80,8 @@ const comentar = tratar(async (req, res) => {
   res.status(201).json(await service.comentar(idSchema.parse(req.params.id), req.user.id, texto));
 });
 
+const finalizar = tratar(async (req, res) => res.json(await service.finalizar(idSchema.parse(req.params.id), req.user.id)));
+
 const excluirComentario = tratar(async (req, res) =>
   res.json(await service.excluirComentario(idSchema.parse(req.params.id), idSchema.parse(req.params.comentarioId), req.user.id))
 );
@@ -97,4 +99,4 @@ const excluirAnexo = tratar(async (req, res) =>
   res.json(await service.excluirAnexo(idSchema.parse(req.params.id), idSchema.parse(req.params.anexoId), req.user.id))
 );
 
-module.exports = { listar, responsaveis, obter, criar, atualizar, excluir, mover, comentar, excluirComentario, anexar, baixarAnexo, excluirAnexo };
+module.exports = { listar, responsaveis, obter, criar, atualizar, excluir, mover, finalizar, comentar, excluirComentario, anexar, baixarAnexo, excluirAnexo };
