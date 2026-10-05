@@ -1,8 +1,7 @@
 import { useCallback, useEffect, useMemo, useState } from 'react';
 import { useSearchParams } from 'react-router-dom';
-import { Plane, Plus, TriangleAlert, UserRound, Users } from 'lucide-react';
+import { Plane, TriangleAlert, UserRound, Users } from 'lucide-react';
 import Tabs from '../../../components/Tabs';
-import Button from '../../../components/Button';
 import { useAuth } from '../../../auth/AuthContext';
 import { useEmpresaTravada } from '../../../hooks/useEmpresaTravada';
 import { listEmpresas } from '../../../api/empresas.api';
@@ -107,19 +106,11 @@ export default function PlanoDeVoo() {
           </div>
         ) : (
           <>
-            <div className="mb-4 flex items-center justify-between gap-3">
-              {aviso ? (
-                <p className="flex items-center gap-1.5 text-xs text-amber-700">
-                  <TriangleAlert size={14} className="shrink-0" /> {aviso}
-                </p>
-              ) : (
-                <span />
-              )}
-              <Button type="button" onClick={() => setModal({ aberto: true, cardId: null })} className="shrink-0">
-                <Plus size={16} />
-                Nova atividade
-              </Button>
-            </div>
+            {aviso && (
+              <p className="mb-3 flex items-center gap-1.5 text-xs text-amber-700">
+                <TriangleAlert size={14} className="shrink-0" /> {aviso}
+              </p>
+            )}
 
             {erro ? (
               <p className="py-12 text-center text-sm text-red-600">{erro}</p>
@@ -139,6 +130,7 @@ export default function PlanoDeVoo() {
                 movendoId={movendoId}
                 onAbrir={(id) => setModal({ aberto: true, cardId: id })}
                 onMover={mover}
+                onAdicionar={() => setModal({ aberto: true, cardId: null })}
               />
             )}
           </>

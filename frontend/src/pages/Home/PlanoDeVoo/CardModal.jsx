@@ -6,7 +6,6 @@ import {
   CalendarPlus,
   Download,
   FileText,
-  History,
   Loader2,
   MessageSquare,
   Paperclip,
@@ -38,14 +37,6 @@ import { BUCKET_POR_ID, dataBR, dataHora, destinosPermitidos, prazo, tamanhoArqu
 
 const INPUT =
   'w-full rounded-lg border border-gray-200 px-3 py-2 text-sm text-gray-800 focus:border-primary-500 focus:outline-none focus:ring-2 focus:ring-primary-100';
-
-const ACOES_HISTORICO = {
-  CRIOU: 'criou a atividade',
-  EDITOU: 'editou',
-  MOVEU: 'moveu',
-  ANEXOU: 'anexou',
-  REMOVEU_ANEXO: 'removeu o anexo',
-};
 
 function hojeSP() {
   return new Intl.DateTimeFormat('en-CA', { timeZone: 'America/Sao_Paulo' }).format(new Date());
@@ -342,6 +333,31 @@ export default function CardModal({ aberto, cardId, onFechar, onAlterado, empres
     );
   }
 
+  // ─── editar: mesmo formulário da criação, já preenchido ──────────────────
+  if (editando && dados?.card) {
+    const c = dados.card;
+    return (
+      <Modal open={aberto} onClose={() => setEditando(false)} title="Editar atividade" maxWidthClass="max-w-2xl">
+        <FormularioCard
+          inicial={{
+            empresa_id: c.empresa_id,
+            responsavel_id: c.responsavel_id,
+            assunto: c.assunto,
+            descricao: c.descricao || '',
+            data_inicio: c.data_inicio,
+            data_fim: c.data_fim,
+          }}
+          empresas={empresas}
+          salvando={salvando}
+          erro={erro}
+          onSalvar={salvarEdicao}
+          onCancelar={() => setEditando(false)}
+          rotuloSalvar="Salvar alterações"
+        />
+      </Modal>
+    );
+  }
+
   // ─── atividade existente ─────────────────────────────────────────────────
   const card = dados?.card;
   const usuarios = dados?.usuarios || {};
@@ -367,7 +383,7 @@ export default function CardModal({ aberto, cardId, onFechar, onAlterado, empres
                 {card.empresa_nome}
               </span>
             </div>
-            {!editando && <h2 className="text-xl font-semibold leading-snug text-gray-900">{card.assunto}</h2>}
+            <h2 className="text-xl font-semibold leading-snug text-gray-900">{card.assunto}</h2>
           </div>
 
           {erroAcao && <div className="rounded-lg bg-red-50 px-3 py-2 text-sm text-red-600">{erroAcao}</div>}
@@ -375,24 +391,6 @@ export default function CardModal({ aberto, cardId, onFechar, onAlterado, empres
           <div className="grid grid-cols-1 gap-6 lg:grid-cols-3">
             {/* coluna principal */}
             <div className="space-y-6 lg:col-span-2">
-              {editando ? (
-                <FormularioCard
-                  inicial={{
-                    empresa_id: card.empresa_id,
-                    responsavel_id: card.responsavel_id,
-                    assunto: card.assunto,
-                    descricao: card.descricao || '',
-                    data_inicio: card.data_inicio,
-                    data_fim: card.data_fim,
-                  }}
-                  empresas={empresas}
-                  salvando={salvando}
-                  erro={erro}
-                  onSalvar={salvarEdicao}
-                  onCancelar={() => setEditando(false)}
-                  rotuloSalvar="Salvar alterações"
-                />
-              ) : (
                 <Secao icone={FileText} titulo="Descrição">
                   {card.descricao ? (
                     <p className="whitespace-pre-wrap rounded-xl bg-gray-50 px-4 py-3 text-sm leading-relaxed text-gray-700">{card.descricao}</p>
@@ -400,7 +398,6 @@ export default function CardModal({ aberto, cardId, onFechar, onAlterado, empres
                     <p className="text-sm italic text-gray-400">Sem descrição.</p>
                   )}
                 </Secao>
-              )}
 
               <Secao
                 icone={Paperclip}
@@ -586,7 +583,7 @@ export default function CardModal({ aberto, cardId, onFechar, onAlterado, empres
                   <p className="mt-3 border-t border-gray-200 pt-3 text-xs text-red-600">Passou da data fim esperada sem ser finalizada.</p>
                 )}
 
-                {(perm.editar || perm.excluir) && !editando && (
+                {(perm.editar || perm.excluir) && (
                   <div className="mt-3 flex gap-2 border-t border-gray-200 pt-3">
                     {perm.editar && (
                       <Button type="button" variant="secondary" onClick={() => setEditando(true)} className="flex-1">
@@ -608,20 +605,6 @@ export default function CardModal({ aberto, cardId, onFechar, onAlterado, empres
                 )}
               </div>
 
-              <Secao icone={History} titulo="Histórico">
-                <ol className="relative space-y-3 border-l border-gray-200 pl-4">
-                  {dados.historico.map((h) => (
-                    <li key={h.id} className="relative">
-                      <span className="absolute -left-[21px] top-1 h-2.5 w-2.5 rounded-full border-2 border-white bg-gray-300" />
-                      <p className="text-xs text-gray-700">
-                        <span className="font-semibold">{usuarios[h.usuario_id]?.nome || 'Usuário'}</span> {ACOES_HISTORICO[h.acao] || h.acao}
-                        {h.detalhe && <span className="text-gray-500"> · {h.detalhe}</span>}
-                      </p>
-                      <p className="text-[11px] text-gray-400">{dataHora(h.criado_em)}</p>
-                    </li>
-                  ))}
-                </ol>
-              </Secao>
             </aside>
           </div>
         </div>

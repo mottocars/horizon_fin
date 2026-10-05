@@ -1,5 +1,5 @@
 import { useState } from 'react';
-import { CalendarDays, MessageSquare, Paperclip } from 'lucide-react';
+import { CalendarDays, MessageSquare, Paperclip, Plus } from 'lucide-react';
 import Avatar from './Avatar';
 import { BUCKETS, dataBR, destinosPermitidos, prazo } from './kanban';
 
@@ -23,6 +23,7 @@ function CardKanban({ card, hoje, usuarios, visao, usuarioAtualId, arrastavel, a
     >
       <p className="truncate text-[11px] text-gray-400">{card.empresa_nome}</p>
       <p className="mt-0.5 line-clamp-2 text-[13px] font-medium leading-snug text-gray-900">{card.assunto}</p>
+      {card.descricao && <p className="mt-1 line-clamp-2 text-xs leading-relaxed text-gray-500">{card.descricao}</p>}
 
       <div className="mt-3 flex items-center justify-between gap-2">
         <div className="flex min-w-0 items-center gap-2.5 text-[11px]">
@@ -54,7 +55,7 @@ function CardKanban({ card, hoje, usuarios, visao, usuarioAtualId, arrastavel, a
 // Quadro com as 4 colunas. Arrastar usa o drag-and-drop nativo do navegador: enquanto um card
 // é arrastado, as colunas permitidas ganham contorno e as proibidas ficam esmaecidas. Só o
 // responsável arrasta os próprios cards.
-export default function KanbanBoard({ cards, hoje, usuarios, visao, usuarioAtualId, onAbrir, onMover, movendoId }) {
+export default function KanbanBoard({ cards, hoje, usuarios, visao, usuarioAtualId, onAbrir, onMover, onAdicionar, movendoId }) {
   const [arrastado, setArrastado] = useState(null);
   const [colunaSobre, setColunaSobre] = useState(null);
 
@@ -108,6 +109,17 @@ export default function KanbanBoard({ cards, hoje, usuarios, visao, usuarioAtual
             </header>
 
             <div className="flex min-h-20 flex-col gap-2">
+              {/* Sempre o primeiro de Aguardando: cria uma atividade nova. */}
+              {b.id === 'AGUARDANDO' && (
+                <button
+                  type="button"
+                  onClick={onAdicionar}
+                  className="flex items-center gap-2 rounded-lg border border-dashed border-gray-300 bg-white/60 px-3 py-2.5 text-[13px] font-medium text-gray-500 transition hover:border-primary-500 hover:bg-white hover:text-primary-600"
+                >
+                  <Plus size={15} />
+                  Adicionar card
+                </button>
+              )}
               {doBucket.map((card) => (
                 <CardKanban
                   key={card.id}
