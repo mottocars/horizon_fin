@@ -1,26 +1,14 @@
-// Ao abrir um período de saldo, busca automaticamente na VanPix o saldo final das contas
-// que já têm banco/conta/dígito cadastrados (contas_bancarias_sienge.banco_enriquecido +
-// conta_enriquecida + digito) e grava direto em saldos_contas_bancarias — sem exigir digitação
-// manual pra quem já tem a integração configurada.
-//
-// Relação de datas (confirmada com o usuário testando ao vivo): pedir o retorno da VanPix com
-// data_pesquisa = D traz o saldo FINAL do dia ANTERIOR (D-1) — o extrato da CAIXA de um dia só
-// fica pronto no dia seguinte. O saldo plotado no dia `data` (o período sendo aberto) é esse
-// saldo final de `data - 1 dia`, que é também o saldo inicial de `data` — por isso consultamos
-// a VanPix com a própria `data` (sem somar dia nenhum).
-//
-// Sábado e domingo não têm saldo bancário de verdade (banco não movimenta) — a função nem
-// tenta a VanPix nesses dias, não grava nada (pedido do usuário). Segunda-feira (ou qualquer
-// dia útil depois de um fim de semana/feriado) herda o saldo do último dia útil com dado —
-// como esse valor É um saldo que veio da API em algum momento, ele entra com origem 'API', não
-// 'HERDADO', pra toda conta automatizada (ver listarContasAutomatizadas): pro usuário, "o
-// saldo não mudou" e "o saldo veio automático" são a mesma coisa.
-//
-// Pra toda conta classificada + projetando saldo (o mesmo critério de saldos.service.js::
-// getSaldos) que NÃO aparece em nenhum retorno da VanPix, olha a prioridade configurada na
-// classificação dela (classificacoes_bancarias.prioridade_sem_saldo): SALDO_ANTERIOR repete o
-// último saldo já lançado antes de `data` (origem HERDADO); SEM_SALDO deixa em branco. Essa
-// prioridade só decide quem NÃO é automatizado — quem é, sempre herda (ver acima).
+// Ao abrir um período de saldo (dia D), busca o saldo das contas automaticamente e grava em
+// saldos_contas_bancarias. Regra do usuário (out/2026):
+//   - VanPix Extrato Bancário: retroativo até 30 dias — usa o fechamento mais recente antes de D
+//     (pesquisa de D traz o saldo final de D-1; numa segunda, a de sábado traz o de sexta).
+//   - VanPix Cobrança: últimos 5 dias — soma ao saldo o Vl Pago dos boletos com Dt Crédito
+//     depois do fechamento usado até D (conta com código cedente cobrança).
+//   - API Itaú: tempo real (SALDO EM CONTA).
+//   - Sem saldo por nenhuma delas: só herda o último saldo se a classificação da conta estiver
+//     como "Buscar saldo anterior" (SALDO_ANTERIOR, origem HERDADO); senão fica em branco pra
+//     ser informado à mão.
+// Sábado e domingo: não consulta nem grava nada.
 const pool = require('../../config/db');
 const vanpixService = require('../integracoes-vanpix/vanpix.service');
 const itauService = require('../integracoes-itau/itau.service');
@@ -87,21 +75,15 @@ async function ultimoSaldoAnterior(empresaId, companyId, numeroConta, data) {
   return rows[0] ? Number(rows[0].saldo) : null;
 }
 
-// Contas que a VanPix já alimentou alguma vez (origem = 'API' em qualquer dia) — usado pra
-// herdar o saldo sem depender da prioridade da classificação (ver comentário na segunda
-// passada de buscarSaldosVanpix): segunda-feira, a VanPix devolve o saldo de sábado/domingo
-// (quando devolve algo), que não bate com `diaAnterior` esperado e é descartado — sem essa
-// garantia extra, a conta ficava em branco até alguém configurar a classificação certa.
-// Devolve "company_id:numero_conta" → fonte do saldo API mais recente (VANPIX/ITAU; linhas
-// antigas sem fonte eram todas VanPix), pra o saldo herdado manter a mesma fonte.
-async function listarContasAutomatizadas(empresaId) {
+// Contas com saldo AUTOMÁTICO (API/HERDADO, não manual) já gravado em `data` — de uma abertura
+// anterior do mesmo dia. Se agora a conta ficar sem saldo, esse valor é apagado.
+async function listarSaldosAutomaticosDoDia(empresaId, data) {
   const { rows } = await pool.query(
-    `SELECT DISTINCT ON (company_id, numero_conta) company_id, numero_conta, COALESCE(fonte, 'VANPIX') AS fonte
-     FROM saldos_contas_bancarias WHERE empresa_id = $1 AND origem = 'API'
-     ORDER BY company_id, numero_conta, data DESC`,
-    [empresaId]
+    `SELECT company_id, numero_conta FROM saldos_contas_bancarias
+     WHERE empresa_id = $1 AND data = $2 AND origem <> 'MANUAL'`,
+    [empresaId, data]
   );
-  return new Map(rows.map((r) => [`${r.company_id}:${r.numero_conta}`, r.fonte]));
+  return new Set(rows.map((r) => `${r.company_id}:${r.numero_conta}`));
 }
 
 // Contas Itaú com agência + conta + dígito no cadastro casadas com a conexão API Itaú da mesma
@@ -282,7 +264,8 @@ async function varrerCobranca(empresaId, integracaoId, apelido, inicio, data) {
 
 // Saldo da conta já montado nesta rodada (o último vale, como em salvarSaldos).
 function itemDaConta(itensParaGravar, conta) {
-  return [...itensParaGravar].reverse().find((i) => i.company_id === conta.company_id && i.numero_conta === conta.numero_conta);
+  const item = [...itensParaGravar].reverse().find((i) => i.company_id === conta.company_id && i.numero_conta === conta.numero_conta);
+  return item && item.saldo !== null ? item : null;
 }
 
 async function somarCobranca(empresaId, data, itensParaGravar, relatorio) {
@@ -305,10 +288,8 @@ async function somarCobranca(empresaId, data, itensParaGravar, relatorio) {
       relatorio.falhas.push({ apelido, mensagem: 'Nenhuma conexão VanPix de Cobrança ativa com este convênio (apelido).' });
       continue;
     }
-    // últimos 5 dias — ou desde o fechamento mais antigo, se ele for anterior a isso
-    const fechamentos = contas.filter((c) => c.apelido === apelido).map((c) => c.depoisDe);
-    const inicio = [menosDiasISO(data, COBRANCA_DIAS_VARREDURA), ...fechamentos].sort()[0];
-    const falha = await varrerCobranca(empresaId, integracaoId, apelido, inicio, data);
+    // VanPix Cobrança: sempre os últimos 5 dias
+    const falha = await varrerCobranca(empresaId, integracaoId, apelido, menosDiasISO(data, COBRANCA_DIAS_VARREDURA), data);
     if (falha) relatorio.falhas.push({ apelido, mensagem: falha });
     apelidosVarridos.add(apelido); // mesmo com falha num dia, soma o que já está gravado
   }
@@ -352,9 +333,8 @@ async function somarCobranca(empresaId, data, itensParaGravar, relatorio) {
 
 // Roda todos os convênios VanPix ativos da empresa pra `data` (sábado/domingo: nem tenta, ver
 // ehFimDeSemana), casa cada conta encontrada no retorno com o cadastro (banco+conta+dígito) e
-// grava o saldo automaticamente (origem API). Toda conta-alvo que ficou de fora disso tenta
-// herdar o último saldo lançado — automatizada sempre (origem API, é o mesmo saldo real de
-// antes), as demais só se a classificação priorizar isso (origem HERDADO). Não lança exceção
+// grava o saldo automaticamente (origem API). Conta-alvo que ficou de fora disso só herda o
+// último saldo se a classificação pedir (origem HERDADO); senão fica em branco. Não lança exceção
 // por causa de UM convênio com problema — cada um é reportado individualmente; só propaga erro
 // se a própria gravação em lote falhar (ex.: período fechado por outra aba).
 async function buscarSaldosVanpix(empresaId, usuarioId, data) {
@@ -362,6 +342,7 @@ async function buscarSaldosVanpix(empresaId, usuarioId, data) {
     convenios: [],
     atualizados: [],
     herdados: [],
+    semSaldo: [],
     semCorrespondencia: [],
     itau: { conexoes: 0, atualizados: [], falhas: [], semCorrespondencia: [] },
     cobranca: { contas: [], falhas: [] },
@@ -422,39 +403,32 @@ async function buscarSaldosVanpix(empresaId, usuarioId, data) {
   // dígito no cadastro e uma conexão ativa com essa mesma conta (ver buscarSaldosItau).
   await buscarSaldosItau(empresaId, data, relatorio.itau, itensParaGravar, casadasNaApi);
 
-  // Segunda passada: toda conta-alvo que a API não resolveu tenta herdar — conforme a
-  // prioridade cadastrada na classificação dela OU, sempre, se a própria conta já é
-  // automatizada (já recebeu algum saldo via VanPix antes): pra quem já é automatizado, herdar
-  // não é uma preferência configurável, é a garantia de nunca ficar em branco por causa de um
-  // dia sem movimentação bancária (fim de semana, feriado).
-  const [contasAlvo, prioridadePorClassificacao, contasAutomatizadas] = await Promise.all([
+  // Segunda passada (regra do usuário): conta que nenhuma integração resolveu — VanPix
+  // Extrato (últimos 30 dias) ou API Itaú (tempo real) — SÓ herda o último saldo se a
+  // classificação dela estiver como "Buscar saldo anterior" (SALDO_ANTERIOR). Qualquer outra
+  // fica em branco pra ser informada à mão; se uma abertura anterior deste mesmo dia tinha
+  // gravado saldo automático nela, ele é apagado (saldo digitado à mão nunca é apagado).
+  const [contasAlvo, prioridadePorClassificacao, automaticosDoDia] = await Promise.all([
     listarContasAlvo(empresaId),
     classificacoesService.mapaPorNome(empresaId),
-    listarContasAutomatizadas(empresaId),
+    listarSaldosAutomaticosDoDia(empresaId, data),
   ]);
 
   for (const conta of contasAlvo) {
     const chave = `${conta.company_id}:${conta.numero_conta}`;
     if (casadasNaApi.has(chave)) continue;
-    const fonteAutomatica = contasAutomatizadas.get(chave); // VANPIX/ITAU, ou undefined
-    const automatizada = Boolean(fonteAutomatica);
-    if (prioridadePorClassificacao.get(conta.classificacao) !== 'SALDO_ANTERIOR' && !automatizada) continue;
+    const herda = prioridadePorClassificacao.get(conta.classificacao) === 'SALDO_ANTERIOR';
+    const valorHerdado = herda ? await ultimoSaldoAnterior(empresaId, conta.company_id, conta.numero_conta, data) : null;
 
-    const valorHerdado = await ultimoSaldoAnterior(empresaId, conta.company_id, conta.numero_conta, data);
-    if (valorHerdado === null) continue; // nada lançado antes — não tem o que herdar, fica em branco
-
-    // Automatizada: o valor herdado já veio da API antes, então entra como 'API' (não
-    // 'HERDADO') — não é uma suposição, é o mesmo saldo real só sem movimentação nova. Só quem
-    // herda por causa da prioridade da classificação (não automatizada) fica como 'HERDADO'.
-    const origem = automatizada ? 'API' : 'HERDADO';
-    itensParaGravar.push({
-      company_id: conta.company_id,
-      numero_conta: conta.numero_conta,
-      data,
-      saldo: valorHerdado,
-      origem,
-      fonte: automatizada ? fonteAutomatica : null,
-    });
+    if (valorHerdado === null) {
+      // em branco — tira o automático de uma abertura anterior deste dia, se houver
+      if (automaticosDoDia.has(chave)) {
+        itensParaGravar.push({ company_id: conta.company_id, numero_conta: conta.numero_conta, data, saldo: null });
+      }
+      relatorio.semSaldo.push({ classificacao: conta.classificacao, company_id: conta.company_id, numero_conta: conta.numero_conta });
+      continue;
+    }
+    itensParaGravar.push({ company_id: conta.company_id, numero_conta: conta.numero_conta, data, saldo: valorHerdado, origem: 'HERDADO', fonte: null });
     relatorio.herdados.push({
       classificacao: conta.classificacao,
       company_id: conta.company_id,

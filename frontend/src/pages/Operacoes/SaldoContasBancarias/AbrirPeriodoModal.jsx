@@ -140,6 +140,12 @@ export default function AbrirPeriodoModal({ open, onClose, empresaId, onAberto }
           />
           <LinhaItau relatorio={relatorioVanpix?.itau} erro={erroVanpix} />
           <LinhaCobranca relatorio={relatorioVanpix?.cobranca} erro={erroVanpix} />
+          {relatorioVanpix?.semSaldo?.length > 0 && (
+            <p className="rounded-lg bg-gray-50 px-3 py-2 text-xs text-gray-600">
+              {relatorioVanpix.semSaldo.length} conta(s) sem saldo nas integrações ficaram em branco para informar
+              manualmente. Só herdam o saldo anterior as classificações com &quot;Buscar saldo anterior&quot;.
+            </p>
+          )}
 
           <div className="flex justify-end pt-2">
             <Button type="button" onClick={onClose}>
