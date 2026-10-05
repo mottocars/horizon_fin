@@ -113,7 +113,7 @@ export default function AbrirPeriodoModal({ open, onClose, empresaId, onAberto }
             Período de {formatarDataBR(data)} aberto. Buscando os saldos automaticamente nas contas que
             já têm integração cadastrada…
           </p>
-          <LinhaIntegracao nome="Conexão VanPix" status="carregando" texto="Conectando…" />
+          <LinhaIntegracao nome="Conexão VanPix · Extrato Bancário" status="carregando" texto="Conectando…" />
           <LinhaIntegracao nome="Conexão API Itaú" status="carregando" texto="Conectando…" />
         </div>
       )}
@@ -121,7 +121,7 @@ export default function AbrirPeriodoModal({ open, onClose, empresaId, onAberto }
       {etapa === 'resultado' && (
         <div className="space-y-4">
           <LinhaIntegracao
-            nome="Conexão VanPix"
+            nome="Conexão VanPix · Extrato Bancário"
             status={
               erroVanpix
                 ? 'erro'
