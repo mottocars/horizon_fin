@@ -1,5 +1,6 @@
 const { z } = require('zod');
 const service = require('./projetos.service');
+const planos = require('./planos.service');
 const saldosService = require('../saldo-contas-bancarias/saldos.service');
 
 function badRequest(message) {
@@ -25,7 +26,18 @@ const cardSchema = z.object({
   data_inicio: z.string().refine(dataValida, 'Informe a data de início.'),
   data_fim: z.string().refine(dataValida, 'Informe a data fim esperada.'),
   responsavel_id: z.coerce.number().int().positive('Selecione o responsável.'),
+  // Micro tarefa de um plano de voo (opcional): a macro tarefa.
+  macro_id: z.preprocess((v) => (v === '' || v === undefined ? null : v), z.coerce.number().int().positive().nullable()).default(null),
 });
+
+const texto = (rotulo, max) => z.string().trim().min(1, `Informe ${rotulo}.`).max(max, `${rotulo[0].toUpperCase()}${rotulo.slice(1)} muito longo.`);
+
+const planoSchema = z.object({
+  nome: texto('o nome do plano de voo', 150),
+  membros: z.array(z.coerce.number().int().positive()).default([]),
+});
+const planoNovoSchema = planoSchema.extend({ empresa_id: z.coerce.number().int().positive('Selecione a empresa.') });
+const macroSchema = z.object({ nome: texto('o nome da macro tarefa', 150) });
 
 const listarSchema = z.object({
   visao: z.enum(['minhas', 'equipe']).default('minhas'),
@@ -101,4 +113,49 @@ const excluirAnexo = tratar(async (req, res) =>
   res.json(await service.excluirAnexo(idSchema.parse(req.params.id), idSchema.parse(req.params.anexoId), req.user.id))
 );
 
-module.exports = { listar, responsaveis, obter, criar, atualizar, excluir, mover, finalizar, devolver, comentar, excluirComentario, anexar, baixarAnexo, excluirAnexo };
+// ─── Planos de voo ───
+const listarPlanos = tratar(async (req, res) => {
+  const { empresa_id } = listarSchema.pick({ empresa_id: true }).parse(req.query);
+  if (empresa_id) await saldosService.assertAcessoEmpresa(req.user.id, empresa_id);
+  res.json(await planos.listar(req.user.id, { empresaId: empresa_id }));
+});
+const opcoesPlanos = tratar(async (req, res) => {
+  const empresaId = idSchema.parse(req.query.empresa_id);
+  await saldosService.assertAcessoEmpresa(req.user.id, empresaId);
+  res.json(await planos.opcoes(req.user.id, empresaId));
+});
+const obterPlano = tratar(async (req, res) => res.json(await planos.obter(idSchema.parse(req.params.id), req.user.id)));
+const criarPlano = tratar(async (req, res) => res.status(201).json(await planos.criar(req.user.id, planoNovoSchema.parse(req.body))));
+const atualizarPlano = tratar(async (req, res) =>
+  res.json(await planos.atualizar(idSchema.parse(req.params.id), req.user.id, planoSchema.parse(req.body)))
+);
+const excluirPlano = tratar(async (req, res) => {
+  await planos.excluir(idSchema.parse(req.params.id), req.user.id);
+  res.status(204).end();
+});
+const criarMacro = tratar(async (req, res) =>
+  res.status(201).json(await planos.criarMacro(idSchema.parse(req.params.id), req.user.id, macroSchema.parse(req.body).nome))
+);
+const renomearMacro = tratar(async (req, res) =>
+  res.json(await planos.renomearMacro(idSchema.parse(req.params.id), idSchema.parse(req.params.macroId), req.user.id, macroSchema.parse(req.body).nome))
+);
+const excluirMacro = tratar(async (req, res) =>
+  res.json(await planos.excluirMacro(idSchema.parse(req.params.id), idSchema.parse(req.params.macroId), req.user.id))
+);
+const ordenarMacros = tratar(async (req, res) => {
+  const { ids } = z.object({ ids: z.array(z.coerce.number().int().positive()) }).parse(req.body);
+  res.json(await planos.ordenarMacros(idSchema.parse(req.params.id), req.user.id, ids));
+});
+
+module.exports = {
+  listarPlanos,
+  opcoesPlanos,
+  obterPlano,
+  criarPlano,
+  atualizarPlano,
+  excluirPlano,
+  criarMacro,
+  renomearMacro,
+  excluirMacro,
+  ordenarMacros,
+  listar, responsaveis, obter, criar, atualizar, excluir, mover, finalizar, devolver, comentar, excluirComentario, anexar, baixarAnexo, excluirAnexo };

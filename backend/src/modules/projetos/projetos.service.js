@@ -4,6 +4,7 @@ const crypto = require('crypto');
 const pool = require('../../config/db');
 const { agoraSP } = require('../monitor-integracoes/tempo');
 const saldosService = require('../saldo-contas-bancarias/saldos.service');
+const planosService = require('./planos.service');
 
 // ---------------------------------------------------------------------------------------
 // Home > Plano de Voo — Kanban de atividades.
@@ -19,6 +20,8 @@ const saldosService = require('../saldo-contas-bancarias/saldos.service');
 //   - só o CRIADOR finaliza, a partir de Concluído.
 //   Visões: "minhas" = cards em que sou o responsável (criados por mim pra mim ou por outros
 //   pra mim); "equipe" = cards que eu criei pra outras pessoas.
+//   Plano de voo: o card pode ser uma micro tarefa de uma macro tarefa (macro_id, opcional).
+//   Quem enxerga o plano enxerga o card (só leitura) — ver planos.service.js.
 // ---------------------------------------------------------------------------------------
 
 const UPLOADS_DIR = path.join(__dirname, '..', '..', '..', 'uploads', 'projetos');
@@ -66,7 +69,11 @@ async function responsaveisElegiveis(empresaId) {
 const CAMPOS_CARD = `
   c.id, c.empresa_id, COALESCE(NULLIF(e.nome_fantasia, ''), e.razao_social) AS empresa_nome,
   c.assunto, c.descricao, TO_CHAR(c.data_inicio, 'YYYY-MM-DD') AS data_inicio, TO_CHAR(c.data_fim, 'YYYY-MM-DD') AS data_fim,
-  c.responsavel_id, c.criador_id, c.status, c.concluido_em, c.finalizado_em, c.criado_em, c.atualizado_em`;
+  c.responsavel_id, c.criador_id, c.status, c.concluido_em, c.finalizado_em, c.criado_em, c.atualizado_em,
+  c.macro_id, mc.nome AS macro_nome, mc.plano_id, pl.nome AS plano_nome`;
+
+const DE_CARDS = `projetos_cards c JOIN empresas e ON e.id = c.empresa_id
+  LEFT JOIN projetos_macros mc ON mc.id = c.macro_id LEFT JOIN projetos_planos pl ON pl.id = mc.plano_id`;
 
 async function usuariosDe(ids) {
   const unicos = [...new Set(ids.filter(Boolean))];
@@ -86,7 +93,7 @@ async function listar(usuarioId, { visao, empresaId }) {
     `SELECT ${CAMPOS_CARD},
             (SELECT COUNT(*)::int FROM projetos_comentarios m WHERE m.card_id = c.id) AS comentarios,
             (SELECT COUNT(*)::int FROM projetos_anexos a WHERE a.card_id = c.id) AS anexos
-     FROM projetos_cards c JOIN empresas e ON e.id = c.empresa_id
+     FROM ${DE_CARDS}
      WHERE ${filtro}
      ORDER BY c.data_fim, c.id`,
     params
@@ -98,17 +105,18 @@ async function listar(usuarioId, { visao, empresaId }) {
 }
 
 async function carregar(id) {
-  const { rows } = await pool.query(`SELECT ${CAMPOS_CARD} FROM projetos_cards c JOIN empresas e ON e.id = c.empresa_id WHERE c.id = $1`, [
-    id,
-  ]);
+  const { rows } = await pool.query(`SELECT ${CAMPOS_CARD} FROM ${DE_CARDS} WHERE c.id = $1`, [id]);
   return rows[0] || null;
 }
 
-// Só criador e responsável enxergam o card (404 pros demais — não revela que existe).
+// Enxergam o card: criador, responsável e quem enxerga o plano de voo dele (só leitura). Para
+// os demais, 404 — não revela que existe.
 async function carregarVisivel(id, usuarioId) {
   const card = await carregar(id);
-  if (!card || (card.criador_id !== usuarioId && card.responsavel_id !== usuarioId)) throw erro(404, 'Atividade não encontrada.');
-  return card;
+  if (!card) throw erro(404, 'Atividade não encontrada.');
+  if (card.criador_id === usuarioId || card.responsavel_id === usuarioId) return card;
+  if (card.plano_id && (await planosService.podeVer(card.plano_id, usuarioId))) return card;
+  throw erro(404, 'Atividade não encontrada.');
 }
 
 function permissoes(card, usuarioId) {
@@ -152,20 +160,23 @@ async function obter(id, usuarioId) {
   };
 }
 
-async function validarDados(usuarioId, dados) {
+async function validarDados(usuarioId, dados, atual = null) {
   await saldosService.assertAcessoEmpresa(usuarioId, dados.empresa_id);
   if (dados.data_fim < dados.data_inicio) throw erro(400, 'A data fim esperada não pode ser antes da data de início.');
   const elegiveis = await responsaveisElegiveis(dados.empresa_id);
   if (!elegiveis.some((u) => u.id === dados.responsavel_id)) throw erro(400, 'O responsável escolhido não tem acesso a esta empresa.');
+  // macro nova (ou empresa trocada): confere se o plano é visível e da mesma empresa
+  const macroMudou = dados.macro_id && (dados.macro_id !== atual?.macro_id || dados.empresa_id !== atual?.empresa_id);
+  if (macroMudou) await planosService.validarMacro(usuarioId, dados.macro_id, dados.empresa_id);
 }
 
 async function criar(usuarioId, dados) {
   await validarDados(usuarioId, dados);
   const agora = new Date();
   const { rows } = await pool.query(
-    `INSERT INTO projetos_cards (empresa_id, assunto, descricao, data_inicio, data_fim, responsavel_id, criador_id, status, criado_em, atualizado_em)
-     VALUES ($1, $2, $3, $4, $5, $6, $7, 'AGUARDANDO', $8, $8) RETURNING id`,
-    [dados.empresa_id, dados.assunto, dados.descricao || null, dados.data_inicio, dados.data_fim, dados.responsavel_id, usuarioId, agora]
+    `INSERT INTO projetos_cards (empresa_id, assunto, descricao, data_inicio, data_fim, responsavel_id, criador_id, status, criado_em, atualizado_em, macro_id)
+     VALUES ($1, $2, $3, $4, $5, $6, $7, 'AGUARDANDO', $8, $8, $9) RETURNING id`,
+    [dados.empresa_id, dados.assunto, dados.descricao || null, dados.data_inicio, dados.data_fim, dados.responsavel_id, usuarioId, agora, dados.macro_id || null]
   );
   await registrar(rows[0].id, usuarioId, 'CRIOU');
   return obter(rows[0].id, usuarioId);
@@ -176,7 +187,7 @@ const brData = (iso) => iso.split('-').reverse().join('/');
 async function atualizar(id, usuarioId, dados) {
   const atual = await carregarVisivel(id, usuarioId);
   if (atual.criador_id !== usuarioId) throw erro(403, 'Só quem criou a atividade pode editá-la.');
-  await validarDados(usuarioId, dados);
+  await validarDados(usuarioId, dados, atual);
 
   const mudancas = [];
   if (dados.assunto !== atual.assunto) mudancas.push('assunto');
@@ -188,12 +199,13 @@ async function atualizar(id, usuarioId, dados) {
     const nomes = await usuariosDe([dados.responsavel_id]);
     mudancas.push(`responsável para ${nomes[dados.responsavel_id]?.nome || 'outro usuário'}`);
   }
+  if ((dados.macro_id || null) !== (atual.macro_id || null)) mudancas.push('plano de voo');
   if (!mudancas.length) return obter(id, usuarioId);
 
   await pool.query(
     `UPDATE projetos_cards SET empresa_id = $1, assunto = $2, descricao = $3, data_inicio = $4, data_fim = $5,
-       responsavel_id = $6, atualizado_em = $7 WHERE id = $8`,
-    [dados.empresa_id, dados.assunto, dados.descricao || null, dados.data_inicio, dados.data_fim, dados.responsavel_id, new Date(), id]
+       responsavel_id = $6, atualizado_em = $7, macro_id = $9 WHERE id = $8`,
+    [dados.empresa_id, dados.assunto, dados.descricao || null, dados.data_inicio, dados.data_fim, dados.responsavel_id, new Date(), id, dados.macro_id || null]
   );
   await registrar(id, usuarioId, 'EDITOU', `Alterou ${mudancas.join(', ')}`);
   // Trocou o responsável e o editor deixou de enxergar? Ele é o criador — sempre enxerga.
@@ -343,4 +355,6 @@ module.exports = {
   excluirAnexo,
   responsaveisElegiveis,
   bucketDe,
+  hoje,
+  usuariosDe,
 };

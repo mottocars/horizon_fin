@@ -5,10 +5,13 @@ import Tabs from '../../../components/Tabs';
 import { useAuth } from '../../../auth/AuthContext';
 import { useEmpresaTravada } from '../../../hooks/useEmpresaTravada';
 import { listEmpresas } from '../../../api/empresas.api';
-import { finalizarCard, listarCards, moverCard } from '../../../api/projetos.api';
+import { finalizarCard, listarCards, listarPlanos, moverCard } from '../../../api/projetos.api';
 import { nomeExibicaoEmpresa } from '../../../utils/empresa';
 import KanbanBoard from './KanbanBoard';
 import CardModal from './CardModal';
+import PlanosLista from './PlanosLista';
+import PlanoGantt from './PlanoGantt';
+import PlanoFormModal from './PlanoFormModal';
 import { BUCKETS } from './kanban';
 
 // Mesmo padrão de abas da DRE Gerencial (abas no estilo navegador encaixadas num painel).
@@ -27,6 +30,7 @@ export default function PlanoDeVoo() {
   const aba = TABS.some((t) => t.id === searchParams.get('aba')) ? searchParams.get('aba') : 'minhas';
   const visao = aba === 'equipe' ? 'equipe' : 'minhas';
   const ehQuadro = aba !== 'plano-de-voo';
+  const planoAberto = !ehQuadro && Number(searchParams.get('plano')) ? Number(searchParams.get('plano')) : null;
 
   const [empresas, setEmpresas] = useState([]);
   const [dados, setDados] = useState(null);
@@ -36,7 +40,12 @@ export default function PlanoDeVoo() {
   const [movendoId, setMovendoId] = useState(null);
   const [finalizandoId, setFinalizandoId] = useState(null);
   const [mostrarFinalizados, setMostrarFinalizados] = useState(false);
-  const [modal, setModal] = useState({ aberto: false, cardId: null });
+  const [modal, setModal] = useState({ aberto: false, cardId: null, inicialPlano: null });
+  // aba "Plano de voo"
+  const [planos, setPlanos] = useState(null);
+  const [erroPlanos, setErroPlanos] = useState('');
+  const [planoForm, setPlanoForm] = useState({ aberto: false, plano: null });
+  const [ganttToken, setGanttToken] = useState(0);
 
   useEffect(() => {
     listEmpresas({ ativo: true, limit: 100 }).then((r) => setEmpresas(r.data));
@@ -67,6 +76,26 @@ export default function PlanoDeVoo() {
     setDados(null);
     carregar();
   }, [carregar]);
+
+  const carregarPlanos = useCallback(() => {
+    setErroPlanos('');
+    return listarPlanos()
+      .then(setPlanos)
+      .catch((e) => setErroPlanos(e.response?.data?.message || 'Não foi possível carregar os planos de voo.'));
+  }, []);
+
+  useEffect(() => {
+    if (!ehQuadro && !planoAberto) carregarPlanos();
+  }, [ehQuadro, planoAberto, carregarPlanos]);
+
+  const abrirPlano = (id) => setSearchParams(id ? { aba: 'plano-de-voo', plano: String(id) } : { aba: 'plano-de-voo' });
+
+  // Card mudou (criado/editado/movido): atualiza o que estiver na tela.
+  function cardAlterado() {
+    if (ehQuadro) carregar(true);
+    else if (planoAberto) setGanttToken((n) => n + 1);
+    else carregarPlanos();
+  }
 
   // Arrastar: atualiza na hora (otimista) e confirma no servidor; se recusar, volta.
   async function mover(card, destino) {
@@ -107,7 +136,7 @@ export default function PlanoDeVoo() {
   }
 
   function fecharModal(idCriado) {
-    setModal(idCriado ? { aberto: true, cardId: idCriado } : { aberto: false, cardId: null });
+    setModal(idCriado ? { aberto: true, cardId: idCriado, inicialPlano: null } : { aberto: false, cardId: null, inicialPlano: null });
   }
 
   return (
@@ -144,11 +173,31 @@ export default function PlanoDeVoo() {
 
       <div className="rounded-card rounded-tl-none bg-white p-4 shadow-card">
         {!ehQuadro ? (
-          <div className="flex min-h-80 flex-col items-center justify-center gap-2 text-center">
-            <Plane size={26} className="-rotate-12 text-gray-300" />
-            <p className="text-sm font-medium text-gray-700">Plano de voo</p>
-            <p className="max-w-sm text-xs text-gray-400">Em construção.</p>
-          </div>
+          planoAberto ? (
+            <PlanoGantt
+              planoId={planoAberto}
+              recarregarToken={ganttToken}
+              onVoltar={() => abrirPlano(null)}
+              onEditar={(plano) => setPlanoForm({ aberto: true, plano })}
+              onAbrirCard={(id) => setModal({ aberto: true, cardId: id, inicialPlano: null })}
+              onNovoCard={(inicialPlano) => setModal({ aberto: true, cardId: null, inicialPlano })}
+            />
+          ) : erroPlanos ? (
+            <p className="py-12 text-center text-sm text-red-600">{erroPlanos}</p>
+          ) : !planos ? (
+            <div className="grid grid-cols-1 gap-3 md:grid-cols-2 xl:grid-cols-3 2xl:grid-cols-4">
+              {[0, 1, 2].map((i) => (
+                <div key={i} className="h-48 animate-pulse rounded-xl bg-gray-50" />
+              ))}
+            </div>
+          ) : (
+            <PlanosLista
+              planos={planos.planos}
+              usuarios={planos.usuarios}
+              onAbrir={abrirPlano}
+              onNovo={() => setPlanoForm({ aberto: true, plano: null })}
+            />
+          )
         ) : (
           <>
             {aviso && (
@@ -176,9 +225,9 @@ export default function PlanoDeVoo() {
                 finalizandoId={finalizandoId}
                 mostrarFinalizados={mostrarFinalizados}
                 onFinalizar={finalizar}
-                onAbrir={(id) => setModal({ aberto: true, cardId: id })}
+                onAbrir={(id) => setModal({ aberto: true, cardId: id, inicialPlano: null })}
                 onMover={mover}
-                onAdicionar={() => setModal({ aberto: true, cardId: null })}
+                onAdicionar={() => setModal({ aberto: true, cardId: null, inicialPlano: null })}
               />
             )}
           </>
@@ -189,10 +238,29 @@ export default function PlanoDeVoo() {
         aberto={modal.aberto}
         cardId={modal.cardId}
         onFechar={fecharModal}
-        onAlterado={() => carregar(true)}
+        onAlterado={cardAlterado}
+        inicialPlano={modal.inicialPlano}
         empresas={opcoesEmpresa}
         visao={visao}
         usuarioAtualId={user?.id}
+      />
+
+      <PlanoFormModal
+        aberto={planoForm.aberto}
+        plano={planoForm.plano}
+        empresas={opcoesEmpresa}
+        usuarioAtualId={user?.id}
+        onFechar={() => setPlanoForm({ aberto: false, plano: null })}
+        onSalvo={(r) => {
+          setPlanoForm({ aberto: false, plano: null });
+          // criado: já abre o Gantt para cadastrar as macro tarefas
+          if (planoAberto === r.plano.id) setGanttToken((n) => n + 1);
+          else abrirPlano(r.plano.id);
+        }}
+        onExcluido={() => {
+          setPlanoForm({ aberto: false, plano: null });
+          abrirPlano(null);
+        }}
       />
     </div>
   );

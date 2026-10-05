@@ -10,6 +10,7 @@ import {
   Loader2,
   MessageSquare,
   Paperclip,
+  Plane,
   Pencil,
   Send,
   Trash2,
@@ -31,6 +32,7 @@ import {
   excluirCard,
   excluirComentario,
   listarResponsaveis,
+  opcoesPlanos,
   devolverCard,
   finalizarCard,
   obterCard,
@@ -83,6 +85,8 @@ function FormularioCard({ inicial, empresas, salvando, erro, onSalvar, onCancela
   const [form, setForm] = useState(inicial);
   const [responsaveis, setResponsaveis] = useState([]);
   const [carregandoResp, setCarregandoResp] = useState(false);
+  const [planos, setPlanos] = useState([]);
+  const [erroLocal, setErroLocal] = useState('');
 
   useEffect(() => {
     if (!form.empresa_id) {
@@ -98,7 +102,16 @@ function FormularioCard({ inicial, empresas, salvando, erro, onSalvar, onCancela
       })
       .catch(() => setResponsaveis([]))
       .finally(() => setCarregandoResp(false));
+    // planos de voo que eu enxergo nesta empresa (com as macro tarefas)
+    opcoesPlanos(form.empresa_id)
+      .then((lista) => {
+        setPlanos(lista);
+        setForm((f) => (f.plano_id && !lista.some((p) => String(p.id) === String(f.plano_id)) ? { ...f, plano_id: '', macro_id: '' } : f));
+      })
+      .catch(() => setPlanos([]));
   }, [form.empresa_id]);
+
+  const macrosDoPlano = planos.find((p) => String(p.id) === String(form.plano_id))?.macros || [];
 
   const set = (campo) => (valor) => setForm((f) => ({ ...f, [campo]: valor }));
 
@@ -106,10 +119,17 @@ function FormularioCard({ inicial, empresas, salvando, erro, onSalvar, onCancela
     <form
       onSubmit={(e) => {
         e.preventDefault();
+        // plano de voo é opcional; se escolhido, a macro tarefa é obrigatória
+        if (form.plano_id && !form.macro_id) {
+          setErroLocal('Informe a macro tarefa do plano de voo.');
+          return;
+        }
+        setErroLocal('');
         onSalvar({
           ...form,
           empresa_id: Number(form.empresa_id),
           responsavel_id: Number(form.responsavel_id),
+          macro_id: form.plano_id ? Number(form.macro_id) : null,
         });
       }}
       className="space-y-4"
@@ -141,6 +161,35 @@ function FormularioCard({ inicial, empresas, salvando, erro, onSalvar, onCancela
         <label className="mb-1 block text-sm font-medium text-gray-700">Assunto</label>
         <input type="text" value={form.assunto} onChange={(e) => set('assunto')(e.target.value)} maxLength={200} className={INPUT} placeholder="O que precisa ser feito" />
       </div>
+      <div className="grid grid-cols-1 gap-4 rounded-xl border border-gray-100 bg-gray-50/60 p-3 sm:grid-cols-2">
+        <div>
+          <label className="mb-1 flex items-center gap-1.5 text-sm font-medium text-gray-700">
+            <Plane size={14} className="-rotate-12 text-primary-600" /> Atribuir ao Plano de Voo
+          </label>
+          <SearchableSelect
+            value={form.plano_id}
+            onChange={(v) => setForm((f) => ({ ...f, plano_id: v || '', macro_id: '' }))}
+            options={planos.map((p) => ({ value: p.id, label: p.nome }))}
+            disabled={!form.empresa_id}
+            placeholder={planos.length ? 'Opcional' : 'Nenhum plano de voo nesta empresa'}
+            emptyMessage="Nenhum plano de voo nesta empresa."
+          />
+        </div>
+        <div>
+          <label className="mb-1 block text-sm font-medium text-gray-700">
+            Macro tarefa {form.plano_id && <span className="text-red-500">*</span>}
+          </label>
+          <SearchableSelect
+            value={form.macro_id}
+            onChange={(v) => set('macro_id')(v || '')}
+            options={macrosDoPlano.map((m) => ({ value: m.id, label: m.nome }))}
+            disabled={!form.plano_id}
+            clearable={false}
+            placeholder={!form.plano_id ? 'Escolha o plano primeiro' : macrosDoPlano.length ? 'Selecione a macro tarefa' : 'O plano não tem macro tarefas'}
+            emptyMessage="Este plano ainda não tem macro tarefas."
+          />
+        </div>
+      </div>
       <div className="grid grid-cols-2 gap-4">
         <div>
           <label className="mb-1 block text-sm font-medium text-gray-700">Data de início</label>
@@ -161,7 +210,7 @@ function FormularioCard({ inicial, empresas, salvando, erro, onSalvar, onCancela
           placeholder="Contexto, passo a passo, critérios de pronto..."
         />
       </div>
-      {erro && <div className="rounded-lg bg-red-50 px-3 py-2 text-sm text-red-600">{erro}</div>}
+      {(erroLocal || erro) && <div className="rounded-lg bg-red-50 px-3 py-2 text-sm text-red-600">{erroLocal || erro}</div>}
       <div className="flex justify-end gap-2">
         {onCancelar && (
           <Button type="button" variant="secondary" onClick={onCancelar} disabled={salvando}>
@@ -177,7 +226,8 @@ function FormularioCard({ inicial, empresas, salvando, erro, onSalvar, onCancela
 }
 
 // Modal da atividade. cardId null = nova atividade.
-export default function CardModal({ aberto, cardId, onFechar, onAlterado, empresas, empresaPadrao, visao, usuarioAtualId }) {
+// `inicialPlano` (nova atividade vinda do Gantt): { empresa_id, plano_id, macro_id } já preenchidos.
+export default function CardModal({ aberto, cardId, onFechar, onAlterado, empresas, empresaPadrao, inicialPlano, visao, usuarioAtualId }) {
   const confirm = useConfirm();
   const [dados, setDados] = useState(null);
   const [carregando, setCarregando] = useState(false);
@@ -326,7 +376,9 @@ export default function CardModal({ aberto, cardId, onFechar, onAlterado, empres
       <Modal open={aberto} onClose={() => onFechar()} title="Nova atividade" maxWidthClass="max-w-2xl">
         <FormularioCard
           inicial={{
-            empresa_id: empresaPadrao || empresas[0]?.value || '',
+            empresa_id: inicialPlano?.empresa_id || empresaPadrao || empresas[0]?.value || '',
+            plano_id: inicialPlano?.plano_id || '',
+            macro_id: inicialPlano?.macro_id || '',
             responsavel_id: visao === 'minhas' ? usuarioAtualId : '',
             assunto: '',
             descricao: '',
@@ -357,6 +409,8 @@ export default function CardModal({ aberto, cardId, onFechar, onAlterado, empres
             descricao: c.descricao || '',
             data_inicio: c.data_inicio,
             data_fim: c.data_fim,
+            plano_id: c.plano_id || '',
+            macro_id: c.macro_id || '',
           }}
           empresas={empresas}
           salvando={salvando}
@@ -443,6 +497,11 @@ export default function CardModal({ aberto, cardId, onFechar, onAlterado, empres
               <span className="rounded-md bg-gray-100 px-2 py-1 text-[11px] font-semibold uppercase tracking-wide text-gray-600">
                 {card.empresa_nome}
               </span>
+              {card.plano_nome && (
+                <span className="inline-flex items-center gap-1 rounded-md bg-primary-50 px-2 py-1 text-[11px] font-semibold text-primary-700">
+                  <Plane size={12} className="-rotate-12" /> {card.plano_nome} · {card.macro_nome}
+                </span>
+              )}
             </div>
             <h2 className="text-xl font-semibold leading-snug text-gray-900">{card.assunto}</h2>
           </div>

@@ -2593,6 +2593,34 @@ CREATE TABLE dre_orcamento_valores (
 CREATE INDEX idx_dre_orcamento_valores_centro ON dre_orcamento_valores (empresa_id, sienge_id);
 
 -- ─── Home > Plano de Voo (Kanban de atividades) — ver database/migrations/2026-10-05-projetos-kanban.sql ───
+-- Planos de voo (aba "Plano de voo", Gantt) e macro tarefas — ver 2026-10-06-planos-de-voo.sql.
+CREATE TABLE projetos_planos (
+    id             SERIAL PRIMARY KEY,
+    empresa_id     INTEGER NOT NULL REFERENCES empresas(id) ON DELETE CASCADE,
+    nome           VARCHAR(150) NOT NULL,
+    criador_id     INTEGER NOT NULL REFERENCES usuarios(id),
+    criado_em      TIMESTAMP NOT NULL,
+    atualizado_em  TIMESTAMP NOT NULL
+);
+CREATE INDEX idx_projetos_planos_empresa ON projetos_planos (empresa_id);
+
+-- Quem enxerga o plano (além de quem criou).
+CREATE TABLE projetos_planos_membros (
+    plano_id    INTEGER NOT NULL REFERENCES projetos_planos(id) ON DELETE CASCADE,
+    usuario_id  INTEGER NOT NULL REFERENCES usuarios(id) ON DELETE CASCADE,
+    PRIMARY KEY (plano_id, usuario_id)
+);
+CREATE INDEX idx_projetos_planos_membros_usuario ON projetos_planos_membros (usuario_id);
+
+CREATE TABLE projetos_macros (
+    id         SERIAL PRIMARY KEY,
+    plano_id   INTEGER NOT NULL REFERENCES projetos_planos(id) ON DELETE CASCADE,
+    nome       VARCHAR(150) NOT NULL,
+    ordem      INTEGER NOT NULL DEFAULT 0,
+    criado_em  TIMESTAMP NOT NULL
+);
+CREATE INDEX idx_projetos_macros_plano ON projetos_macros (plano_id);
+
 -- Card do Kanban. O bucket "Atrasado" NÃO é gravado: é calculado na hora (data_fim já passou e
 -- o card não foi finalizado) — assim vira atrasado sozinho, sem rotina agendada. `status` guarda
 -- o bucket escolhido: AGUARDANDO, PROGRESSO ou CONCLUIDO (pelo responsável) ou FINALIZADO (só pelo
@@ -2611,8 +2639,11 @@ CREATE TABLE projetos_cards (
     finalizado_em   TIMESTAMP,
     criado_em       TIMESTAMP NOT NULL,
     atualizado_em   TIMESTAMP NOT NULL,
+    -- Micro tarefa de um plano de voo (opcional): a macro tarefa; o plano sai da macro.
+    macro_id        INTEGER REFERENCES projetos_macros(id) ON DELETE SET NULL,
     CHECK (data_fim >= data_inicio)
 );
+CREATE INDEX idx_projetos_cards_macro ON projetos_cards (macro_id);
 CREATE INDEX idx_projetos_cards_responsavel ON projetos_cards (responsavel_id);
 CREATE INDEX idx_projetos_cards_criador ON projetos_cards (criador_id);
 

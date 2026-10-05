@@ -63,3 +63,47 @@ export function finalizarCard(id) {
 export function devolverCard(id) {
   return http.post(`/projetos/cards/${id}/devolver`).then((r) => r.data);
 }
+
+// ─── Planos de voo (aba "Plano de voo", Gantt) ───
+// { hoje, planos: [{ ..., total, porBucket, progresso, inicio, fim, macros }], usuarios }
+export function listarPlanos(empresaId) {
+  return http.get('/projetos/planos', { params: { empresa_id: empresaId || undefined } }).then((r) => r.data);
+}
+
+// Para o formulário do card: [{ id, nome, macros: [{ id, nome }] }]
+export function opcoesPlanos(empresaId) {
+  return http.get('/projetos/planos/opcoes', { params: { empresa_id: empresaId } }).then((r) => r.data);
+}
+
+// { hoje, plano, macros, cards, usuarios, permissoes }
+export function obterPlano(id) {
+  return http.get(`/projetos/planos/${id}`).then((r) => r.data);
+}
+
+export function criarPlano(dados) {
+  return http.post('/projetos/planos', dados).then((r) => r.data);
+}
+
+export function atualizarPlano(id, dados) {
+  return http.put(`/projetos/planos/${id}`, dados).then((r) => r.data);
+}
+
+export function excluirPlano(id) {
+  return http.delete(`/projetos/planos/${id}`);
+}
+
+export function criarMacro(id, nome) {
+  return http.post(`/projetos/planos/${id}/macros`, { nome }).then((r) => r.data);
+}
+
+export function renomearMacro(id, macroId, nome) {
+  return http.put(`/projetos/planos/${id}/macros/${macroId}`, { nome }).then((r) => r.data);
+}
+
+export function excluirMacro(id, macroId) {
+  return http.delete(`/projetos/planos/${id}/macros/${macroId}`).then((r) => r.data);
+}
+
+export function ordenarMacros(id, ids) {
+  return http.put(`/projetos/planos/${id}/macros/ordem`, { ids }).then((r) => r.data);
+}

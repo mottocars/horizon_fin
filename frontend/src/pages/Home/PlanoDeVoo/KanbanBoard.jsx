@@ -1,5 +1,5 @@
 import { useState } from 'react';
-import { CalendarDays, CheckCircle2, Loader2, MessageSquare, Paperclip, Plus } from 'lucide-react';
+import { CalendarDays, CheckCircle2, Loader2, MessageSquare, Paperclip, Plane, Plus } from 'lucide-react';
 import Avatar from './Avatar';
 import { BUCKETS, dataBR, destinosPermitidos, prazo } from './kanban';
 
@@ -24,6 +24,12 @@ function CardKanban({ card, hoje, usuarios, visao, usuarioAtualId, arrastavel, a
       <p className="truncate text-[11px] text-gray-400">{card.empresa_nome}</p>
       <p className="mt-0.5 line-clamp-2 text-[13px] font-medium leading-snug text-gray-900">{card.assunto}</p>
       {card.descricao && <p className="mt-1 line-clamp-2 text-xs leading-relaxed text-gray-500">{card.descricao}</p>}
+      {card.plano_nome && (
+        <p className="mt-2 flex min-w-0 items-center gap-1 text-[11px] font-medium text-primary-600" title={`Plano de voo: ${card.plano_nome} · ${card.macro_nome}`}>
+          <Plane size={11} className="shrink-0 -rotate-12" />
+          <span className="truncate">{card.macro_nome}</span>
+        </p>
+      )}
 
       <div className="mt-3 flex items-center justify-between gap-2">
         <div className="flex min-w-0 items-center gap-2.5 text-[11px]">

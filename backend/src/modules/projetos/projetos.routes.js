@@ -35,4 +35,16 @@ router.post('/cards/:id/anexos', upload.array('arquivos', 10), tratarLimiteUploa
 router.get('/cards/:id/anexos/:anexoId', controller.baixarAnexo);
 router.delete('/cards/:id/anexos/:anexoId', controller.excluirAnexo);
 
+// Planos de voo (Gantt) e macro tarefas
+router.get('/planos', controller.listarPlanos);
+router.get('/planos/opcoes', controller.opcoesPlanos);
+router.post('/planos', controller.criarPlano);
+router.get('/planos/:id', controller.obterPlano);
+router.put('/planos/:id', controller.atualizarPlano);
+router.delete('/planos/:id', controller.excluirPlano);
+router.post('/planos/:id/macros', controller.criarMacro);
+router.put('/planos/:id/macros/ordem', controller.ordenarMacros);
+router.put('/planos/:id/macros/:macroId', controller.renomearMacro);
+router.delete('/planos/:id/macros/:macroId', controller.excluirMacro);
+
 module.exports = router;
