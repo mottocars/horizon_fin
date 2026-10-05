@@ -59,3 +59,7 @@ export function excluirAnexo(id, anexoId) {
 export function finalizarCard(id) {
   return http.post(`/projetos/cards/${id}/finalizar`).then((r) => r.data);
 }
+
+export function devolverCard(id) {
+  return http.post(`/projetos/cards/${id}/devolver`).then((r) => r.data);
+}

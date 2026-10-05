@@ -1,6 +1,7 @@
 import { X } from 'lucide-react';
 
-export default function Modal({ open, title, onClose, children, maxWidthClass = 'max-w-md' }) {
+// acoes: botões opcionais no cabeçalho, na linha do título (antes do X).
+export default function Modal({ open, title, onClose, children, maxWidthClass = 'max-w-md', acoes }) {
   if (!open) return null;
 
   return (
@@ -8,13 +9,16 @@ export default function Modal({ open, title, onClose, children, maxWidthClass = 
       <div className={`flex max-h-[90vh] w-full ${maxWidthClass} flex-col rounded-card bg-white shadow-card`}>
         <div className="flex items-center justify-between border-b border-gray-100 px-5 py-4">
           <h2 className="text-base font-semibold text-gray-900">{title}</h2>
-          <button
-            type="button"
-            onClick={onClose}
-            className="text-gray-400 hover:text-gray-600"
-          >
-            <X size={20} />
-          </button>
+          <div className="flex items-center gap-2">
+            {acoes}
+            <button
+              type="button"
+              onClick={onClose}
+              className="text-gray-400 hover:text-gray-600"
+            >
+              <X size={20} />
+            </button>
+          </div>
         </div>
         {/* flex flex-col + min-h-0: sem isso, um `height: 100%` (ou
             `flex-1`) usado por um filho — pra fazer só uma parte do

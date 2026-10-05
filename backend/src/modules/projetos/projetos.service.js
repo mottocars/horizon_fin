@@ -119,6 +119,7 @@ function permissoes(card, usuarioId) {
     excluir: criador,
     mover: responsavel && card.status !== 'FINALIZADO',
     finalizar: criador && card.status === 'CONCLUIDO',
+    devolver: criador && card.status === 'CONCLUIDO',
     comentar: criador || responsavel,
     anexar: criador || responsavel,
   };
@@ -237,6 +238,18 @@ async function mover(id, usuarioId, destino) {
   return obter(id, usuarioId);
 }
 
+// Devolver: o criador não aprova o que foi concluído e manda de volta pro responsável. Volta
+// pra Progresso — e, se a data fim já passou, cai sozinho em Atrasado (bucket calculado).
+async function devolver(id, usuarioId) {
+  const atual = await carregarVisivel(id, usuarioId);
+  if (atual.criador_id !== usuarioId) throw erro(403, 'Só quem criou a atividade pode devolvê-la.');
+  if (atual.status !== 'CONCLUIDO') throw erro(400, 'Só dá pra devolver uma atividade que está em Concluído.');
+  await pool.query("UPDATE projetos_cards SET status = 'PROGRESSO', concluido_em = NULL, atualizado_em = $1 WHERE id = $2", [new Date(), id]);
+  const destino = bucketDe({ ...atual, status: 'PROGRESSO' });
+  await registrar(id, usuarioId, 'DEVOLVEU', `Concluído → ${ROTULO[destino]}`);
+  return obter(id, usuarioId);
+}
+
 // Finalizar: só o criador, e só o que o responsável já concluiu.
 async function finalizar(id, usuarioId) {
   const atual = await carregarVisivel(id, usuarioId);
@@ -315,6 +328,7 @@ async function excluirAnexo(id, anexoId, usuarioId) {
 }
 
 module.exports = {
+  devolver,
   finalizar,
   listar,
   obter,

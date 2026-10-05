@@ -1,6 +1,5 @@
 import { useEffect, useRef, useState } from 'react';
 import {
-  ArrowRight,
   BadgeCheck,
   CalendarCheck,
   CalendarClock,
@@ -14,6 +13,7 @@ import {
   Pencil,
   Send,
   Trash2,
+  Undo2,
   Upload,
   UserRound,
 } from 'lucide-react';
@@ -31,12 +31,12 @@ import {
   excluirCard,
   excluirComentario,
   listarResponsaveis,
-  moverCard,
+  devolverCard,
   finalizarCard,
   obterCard,
 } from '../../../api/projetos.api';
 import Avatar from './Avatar';
-import { BUCKET_POR_ID, dataBR, dataHora, destinosPermitidos, prazo, tamanhoArquivo } from './kanban';
+import { BUCKET_POR_ID, dataBR, dataHora, prazo, tamanhoArquivo } from './kanban';
 
 const INPUT =
   'w-full rounded-lg border border-gray-200 px-3 py-2 text-sm text-gray-800 focus:border-primary-500 focus:outline-none focus:ring-2 focus:ring-primary-100';
@@ -189,8 +189,8 @@ export default function CardModal({ aberto, cardId, onFechar, onAlterado, empres
   const [enviandoComentario, setEnviandoComentario] = useState(false);
   const [enviandoAnexo, setEnviandoAnexo] = useState(false);
   const [arrastandoArquivo, setArrastandoArquivo] = useState(false);
-  const [movendo, setMovendo] = useState(null);
   const [finalizando, setFinalizando] = useState(false);
+  const [devolvendo, setDevolvendo] = useState(false);
   const inputArquivoRef = useRef(null);
 
   const novo = !cardId;
@@ -306,10 +306,11 @@ export default function CardModal({ aberto, cardId, onFechar, onAlterado, empres
     }
   }
 
-  async function mover(destino) {
-    setMovendo(destino);
-    await executar(() => moverCard(cardId, destino), 'Não foi possível mover a atividade.');
-    setMovendo(null);
+  // Devolver: quem criou não aprova o concluído e manda de volta (Progresso, ou Atrasado se já venceu).
+  async function devolver() {
+    setDevolvendo(true);
+    await executar(() => devolverCard(cardId), 'Não foi possível devolver a atividade.');
+    setDevolvendo(false);
   }
 
   async function finalizar() {
@@ -374,10 +375,60 @@ export default function CardModal({ aberto, cardId, onFechar, onAlterado, empres
   const perm = dados?.permissoes || {};
   const bucket = card ? BUCKET_POR_ID[card.bucket] : null;
   const hoje = hojeSP();
-  const destinos = card && perm.mover ? destinosPermitidos(card, hoje) : [];
+  const ocupado = finalizando || devolvendo;
+
+  // Ações na linha do título "Atividade": Devolver / Finalizar (Concluído, só quem criou), Editar e Excluir.
+  const acoes = card && (perm.devolver || perm.finalizar || perm.editar || perm.excluir) && (
+    <div className="mr-1 flex items-center gap-1.5">
+      {perm.devolver && (
+        <button
+          type="button"
+          onClick={devolver}
+          disabled={ocupado}
+          title="Devolver para o responsável"
+          className="flex items-center gap-1.5 rounded-lg border border-amber-200 bg-amber-50 px-3 py-1.5 text-xs font-semibold text-amber-700 transition hover:bg-amber-100 disabled:opacity-60"
+        >
+          {devolvendo ? <Loader2 size={14} className="animate-spin" /> : <Undo2 size={14} />}
+          Devolver
+        </button>
+      )}
+      {perm.finalizar && (
+        <button
+          type="button"
+          onClick={finalizar}
+          disabled={ocupado}
+          className="flex items-center gap-1.5 rounded-lg bg-emerald-600 px-3 py-1.5 text-xs font-semibold text-white transition hover:bg-emerald-700 disabled:opacity-60"
+        >
+          {finalizando ? <Loader2 size={14} className="animate-spin" /> : <CheckCircle2 size={14} />}
+          Finalizar
+        </button>
+      )}
+      {perm.editar && (
+        <button
+          type="button"
+          onClick={() => setEditando(true)}
+          title="Editar atividade"
+          className="rounded-lg p-1.5 text-gray-400 transition hover:bg-gray-100 hover:text-gray-700"
+        >
+          <Pencil size={16} />
+        </button>
+      )}
+      {perm.excluir && (
+        <button
+          type="button"
+          onClick={excluir}
+          title="Excluir atividade"
+          className="rounded-lg p-1.5 text-gray-400 transition hover:bg-red-50 hover:text-red-600"
+        >
+          <Trash2 size={16} />
+        </button>
+      )}
+      <span className="ml-1 h-5 w-px bg-gray-200" />
+    </div>
+  );
 
   return (
-    <Modal open={aberto} onClose={() => onFechar()} title="Atividade" maxWidthClass="max-w-5xl">
+    <Modal open={aberto} onClose={() => onFechar()} title="Atividade" maxWidthClass="max-w-5xl" acoes={acoes}>
       {carregando || !card ? (
         <div className="flex items-center justify-center gap-2 py-16 text-sm text-gray-400">
           {erro ? <span className="text-red-600">{erro}</span> : <><Loader2 size={16} className="animate-spin" /> Carregando...</>}
@@ -572,73 +623,15 @@ export default function CardModal({ aberto, cardId, onFechar, onAlterado, empres
                   </LinhaDetalhe>
                 )}
 
-                {/* Concluído: quem criou finaliza (verde); o responsável vê que está aguardando. */}
-                {card.bucket === 'CONCLUIDO' && (
-                  <div className="mt-3 border-t border-gray-200 pt-3">
-                    {perm.finalizar ? (
-                      <button
-                        type="button"
-                        onClick={finalizar}
-                        disabled={finalizando}
-                        className="flex w-full items-center justify-center gap-1.5 rounded-lg bg-emerald-600 py-2 text-sm font-semibold text-white transition hover:bg-emerald-700 disabled:opacity-60"
-                      >
-                        {finalizando ? <Loader2 size={15} className="animate-spin" /> : <CheckCircle2 size={15} />}
-                        Finalizar
-                      </button>
-                    ) : (
-                      <p className="text-xs text-gray-500">
-                        Concluída. Aguardando {usuarios[card.criador_id]?.nome || 'quem criou'} finalizar.
-                      </p>
-                    )}
-                  </div>
-                )}
-
-                {destinos.length > 0 && (
-                  <div className="mt-3 border-t border-gray-200 pt-3">
-                    <p className="mb-2 text-[11px] uppercase tracking-wide text-gray-400">Mover para</p>
-                    <div className="flex flex-wrap gap-1.5">
-                      {destinos.map((d) => {
-                        const b = BUCKET_POR_ID[d];
-                        return (
-                          <button
-                            key={d}
-                            type="button"
-                            onClick={() => mover(d)}
-                            disabled={Boolean(movendo)}
-                            className={`inline-flex items-center gap-1 rounded-lg px-2.5 py-1.5 text-xs font-semibold transition hover:brightness-95 disabled:opacity-60 ${b.chip}`}
-                          >
-                            {movendo === d ? <Loader2 size={12} className="animate-spin" /> : <ArrowRight size={12} />}
-                            {b.titulo}
-                          </button>
-                        );
-                      })}
-                    </div>
-                  </div>
+                {card.bucket === 'CONCLUIDO' && !perm.finalizar && (
+                  <p className="mt-3 border-t border-gray-200 pt-3 text-xs text-gray-500">
+                    Concluída. Aguardando {usuarios[card.criador_id]?.nome || 'quem criou'} finalizar.
+                  </p>
                 )}
                 {card.bucket === 'ATRASADO' && !perm.mover && (
                   <p className="mt-3 border-t border-gray-200 pt-3 text-xs text-red-600">Passou da data fim esperada sem ser concluída.</p>
                 )}
 
-                {(perm.editar || perm.excluir) && (
-                  <div className="mt-3 flex gap-2 border-t border-gray-200 pt-3">
-                    {perm.editar && (
-                      <Button type="button" variant="secondary" onClick={() => setEditando(true)} className="flex-1">
-                        <Pencil size={14} />
-                        Editar
-                      </Button>
-                    )}
-                    {perm.excluir && (
-                      <button
-                        type="button"
-                        onClick={excluir}
-                        title="Excluir atividade"
-                        className="flex items-center justify-center rounded-lg border border-gray-200 px-3 text-gray-400 hover:border-red-200 hover:bg-red-50 hover:text-red-600"
-                      >
-                        <Trash2 size={15} />
-                      </button>
-                    )}
-                  </div>
-                )}
               </div>
 
             </aside>
