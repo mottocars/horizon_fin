@@ -205,8 +205,9 @@ function FormularioCard({ inicial, empresas, salvando, erro, onSalvar, onCancela
         <textarea
           value={form.descricao}
           onChange={(e) => set('descricao')(e.target.value)}
-          rows={7}
-          className={`${INPUT} resize-y leading-relaxed`}
+          // Altura acompanha a tela: o que sobra da janela (até 90% da tela) depois dos outros
+          // campos (~33rem), entre 3,5rem e 14rem — assim a janela não ganha barra de rolagem.
+          className={`${INPUT} h-[clamp(3.5rem,calc(90vh-33rem),14rem)] resize-y leading-relaxed`}
           placeholder="Contexto, passo a passo, critérios de pronto..."
         />
       </div>
