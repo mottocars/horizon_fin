@@ -1,6 +1,6 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { useSearchParams } from 'react-router-dom';
-import { CreditCard, Download, FilterX, Landmark, Layers, ListChecks, Loader2, Lock, LockOpen, Plus, RefreshCw, Search, Settings, Wallet } from 'lucide-react';
+import { CircleHelp, CreditCard, Download, FilterX, Landmark, Layers, ListChecks, Loader2, Lock, LockOpen, Plus, RefreshCw, Search, Settings, Wallet } from 'lucide-react';
 import Card from '../../../components/Card';
 import Tabs from '../../../components/Tabs';
 import Button from '../../../components/Button';
@@ -20,6 +20,7 @@ import ConfiguracoesTab from './ConfiguracoesTab';
 import AbrirPeriodoModal from './AbrirPeriodoModal';
 import EncerrarPeriodoModal from './EncerrarPeriodoModal';
 import SeletorSemana from './SeletorSemana';
+import TutorialSaldosModal from './TutorialSaldosModal';
 import { formatarDataBR, semanaAtual, semanaDe } from './constantes';
 
 // Pra adicionar uma aba nova no futuro basta incluir um item aqui `{ id, label, icon }` e o
@@ -148,6 +149,7 @@ export default function SaldoContasBancariasPage() {
   const [carregandoPeriodo, setCarregandoPeriodo] = useState(false);
   const [modalPeriodoAberto, setModalPeriodoAberto] = useState(false);
   const [modalEncerrarAberto, setModalEncerrarAberto] = useState(false);
+  const [tutorialAberto, setTutorialAberto] = useState(false);
   const [periodoToken, setPeriodoToken] = useState(0);
 
   // Exportar relatório em Excel — a montagem de verdade acontece no backend (mesmos filtros
@@ -513,6 +515,16 @@ export default function SaldoContasBancariasPage() {
           {abaAtiva === 'saldos' && (
             <div className="flex shrink-0 flex-col items-end gap-1.5">
               <div className="flex shrink-0 items-center gap-2">
+                {/* Tutorial didático de como deixar os saldos automáticos (VanPix e Itaú). */}
+                <button
+                  type="button"
+                  onClick={() => setTutorialAberto(true)}
+                  className="flex shrink-0 items-center gap-1.5 rounded-lg border border-gray-200 px-3 py-2 text-sm font-medium text-gray-600 transition-colors hover:bg-gray-50"
+                >
+                  <CircleHelp size={18} className="text-primary-600" />
+                  Dúvidas
+                </button>
+
                 {/* Só o ícone (pedido do usuário) — baixa um .xlsx gerado no backend com todas
                     as contas com saldo na semana, ver saldosExcel.service.js. */}
                 <button
@@ -656,6 +668,8 @@ export default function SaldoContasBancariasPage() {
         empresaId={empresaId}
         onAberto={setDataAberta}
       />
+
+      <TutorialSaldosModal open={tutorialAberto} onClose={() => setTutorialAberto(false)} />
 
       <EncerrarPeriodoModal
         open={modalEncerrarAberto}
