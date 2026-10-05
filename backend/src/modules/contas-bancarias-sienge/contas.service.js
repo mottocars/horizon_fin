@@ -124,7 +124,8 @@ async function updateEnriquecimento(empresaId, companyId, numeroConta, data) {
        projeta_saldo = $5,
        saldo_inicial = $6,
        data_saldo_inicial = $7,
-       classificacao = $8
+       classificacao = $8,
+       codigo_cedente_cobranca = $12
      WHERE empresa_id = $9 AND company_id = $10 AND numero_conta = $11
      RETURNING *`,
     [
@@ -139,6 +140,7 @@ async function updateEnriquecimento(empresaId, companyId, numeroConta, data) {
       empresaId,
       companyId,
       numeroConta,
+      data.codigo_cedente_cobranca || null,
     ]
   );
   return rows[0] || null;

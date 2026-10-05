@@ -1,6 +1,6 @@
 const pool = require('../../config/db');
 const { encrypt, decrypt } = require('../../utils/crypto');
-const { parseRetornoCaixa } = require('../../utils/cnab240');
+const { parseRetornoCaixa, parseRetornoCobrancaCaixa } = require('../../utils/cnab240');
 
 async function list({ page = 1, limit = 10, search = '', ativo, empresaIds }) {
   const offset = (page - 1) * limit;
@@ -280,6 +280,32 @@ async function buscarRetorno(serviceKey, clientSecret, apelido, dataPesquisaDDMM
   return { ...resultado, lotes };
 }
 
+// Retorno de COBRANÇA (conexão com finalidade COBRANCA): mesma API, mas cada arquivo é parseado
+// no layout de cobrança (títulos liquidados, segmentos T+U) — 1 item por arquivo encontrado.
+async function buscarRetornoCobranca(serviceKey, clientSecret, apelido, dataPesquisaDDMMYYYY) {
+  const resposta = await chamarApiRetorno(serviceKey, clientSecret, apelido, dataPesquisaDDMMYYYY);
+  const resultado = classificarResposta(apelido, resposta, 'Credenciais aceitas — sem retorno para essa data.');
+  if (resultado.status !== 'ok_com_retorno') return { ...resultado, arquivos: [] };
+
+  const arquivos = resultado.retornos.map((r) => parseRetornoCobrancaCaixa(r.texto || []));
+  delete resultado.retornos;
+  return { ...resultado, arquivos };
+}
+
+// Conexões VanPix de COBRANÇA ativas da empresa, por apelido: apelido -> id da conexão.
+async function conexoesCobrancaPorApelido(empresaId) {
+  const { rows } = await pool.query(
+    `SELECT c.apelido, v.id FROM integracoes_vanpix v
+     JOIN integracoes_vanpix_convenios c ON c.integracao_id = v.id
+     WHERE v.empresa_id = $1 AND v.ativo = TRUE AND v.finalidade = 'COBRANCA'
+     ORDER BY v.id`,
+    [empresaId]
+  );
+  const mapa = new Map();
+  for (const r of rows) if (!mapa.has(r.apelido)) mapa.set(r.apelido, r.id);
+  return mapa;
+}
+
 // Testa cada apelido em sequência; para assim que encontra uma credencial inválida (é a
 // mesma Service Key/Client Secret pra todos os apelidos — não adianta repetir o mesmo erro).
 async function testarConexao({ serviceKey, clientSecret, apelidos }) {
@@ -294,4 +320,4 @@ async function testarConexao({ serviceKey, clientSecret, apelidos }) {
   return { sucesso: algumConfirmado && !credencialFalhou, detalhes };
 }
 
-module.exports = { list, getById, create, update, setAtivo, getCredenciais, testarConexao, buscarRetorno };
+module.exports = { list, getById, create, update, setAtivo, getCredenciais, testarConexao, buscarRetorno, buscarRetornoCobranca, conexoesCobrancaPorApelido };

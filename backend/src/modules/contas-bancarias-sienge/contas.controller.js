@@ -31,6 +31,11 @@ const enriquecimentoSchema = z.object({
   projeta_saldo: z.preprocess(emptyToNull, z.coerce.boolean().nullable().optional()),
   saldo_inicial: z.preprocess(emptyToNull, z.coerce.number().nullable().optional()),
   data_saldo_inicial: z.preprocess(emptyToNull, z.string().nullable().optional()),
+  // Apelido VanPix do convênio de cobrança (conexão com finalidade Cobrança), ex.: C3U1Y8.
+  codigo_cedente_cobranca: z.preprocess(
+    (v) => (typeof v === 'string' ? v.replace(/\s+/g, '').toUpperCase() || null : v),
+    z.string().max(50, 'Máximo de 50 caracteres.').nullable().optional()
+  ),
 });
 
 function badRequest(message) {

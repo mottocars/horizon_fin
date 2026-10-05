@@ -59,6 +59,7 @@ const CelulaSaldo = memo(function CelulaSaldo({
   dia,
   valor,
   origem,
+  cobranca,
   bloqueada,
   onCommit,
   onNavegar,
@@ -147,7 +148,8 @@ const CelulaSaldo = memo(function CelulaSaldo({
         autoComplete="off"
         spellCheck={false}
         disabled={bloqueada}
-        title={infoOrigem?.titulo}
+        // `cobranca`: parte do saldo que veio dos boletos com Dt Crédito no dia (abertura do período)
+        title={infoOrigem ? `${infoOrigem.titulo}${cobranca ? ` — inclui ${formatarSaldo(cobranca)} de cobrança` : ''}` : undefined}
         aria-label={`${rotulo} — saldo do dia ${dia.dia}${bloqueada ? ' (bloqueado — fora do período aberto)' : ''}${infoOrigem ? ` (${infoOrigem.titulo})` : ''}`}
         value={editando ? texto : preenchido ? formatarSaldo(valor) : ''}
         onFocus={(e) => {
@@ -389,7 +391,9 @@ function SaldosContasTab({
         if (!lista) return conta;
         const saldos = { ...conta.saldos };
         const origens = { ...conta.origens };
+        const cobrancas = { ...conta.cobrancas };
         for (const item of lista) {
+          delete cobrancas[item.data]; // digitado à mão: deixa de ser "extrato + cobrança"
           if (item.saldo === null) {
             delete saldos[item.data];
             delete origens[item.data];
@@ -401,7 +405,7 @@ function SaldosContasTab({
             origens[item.data] = 'MANUAL';
           }
         }
-        return { ...conta, saldos, origens };
+        return { ...conta, saldos, origens, cobrancas };
       });
     });
   }, []);
@@ -748,6 +752,7 @@ function SaldosContasTab({
                                   dia={d}
                                   valor={conta.saldos[d.iso]}
                                   origem={conta.origens?.[d.iso]}
+                                  cobranca={conta.cobrancas?.[d.iso]}
                                   bloqueada={somenteLeitura || d.iso !== dataAberta}
                                   onCommit={handleCommit}
                                   onNavegar={handleNavegar}

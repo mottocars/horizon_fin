@@ -891,6 +891,9 @@ CREATE TABLE contas_bancarias_sienge (
     -- Texto livre, mas só pode ser um `nome` já cadastrado em classificacoes_bancarias para
     -- esta mesma empresa (validado na aplicação, sem FK — mesmo espírito de banco_enriquecido).
     classificacao        VARCHAR(50),
+    -- Apelido VanPix do convênio de cobrança (conexão VanPix com finalidade COBRANCA): os
+    -- títulos com Dt Crédito = dia somam no saldo na abertura do período.
+    codigo_cedente_cobranca VARCHAR(50),
     PRIMARY KEY (numero_conta, empresa_id, company_id)
 );
 
@@ -932,6 +935,8 @@ CREATE TABLE saldos_contas_bancarias (
     -- manuais/herdados por classificação e nas linhas API anteriores a esta coluna (que eram
     -- todas da VanPix). Alimenta a coluna Automação da aba Contas bancárias.
     fonte          VARCHAR(10) CHECK (fonte IN ('VANPIX', 'ITAU')),
+    -- Parte do saldo que veio da cobrança (títulos com Dt Crédito = data); `saldo` é o total.
+    saldo_cobranca NUMERIC(15,2),
     atualizado_por INTEGER REFERENCES usuarios(id) ON DELETE SET NULL,
     criado_em      TIMESTAMP DEFAULT NOW(),
     atualizado_em  TIMESTAMP DEFAULT NOW(),
@@ -941,6 +946,53 @@ CREATE TABLE saldos_contas_bancarias (
 );
 
 CREATE INDEX idx_saldos_contas_bancarias_data ON saldos_contas_bancarias (empresa_id, data);
+
+-- Retorno de cobrança CAIXA (CNAB 240/SIGCB) buscado na VanPix.
+-- 1 linha por título do retorno (par de segmentos T + U), com todos os campos e as linhas cruas.
+-- A varredura dos últimos dias repete arquivos: o UNIQUE + upsert evita duplicar.
+CREATE TABLE cobranca_titulos (
+    id                   SERIAL PRIMARY KEY,
+    empresa_id           INTEGER NOT NULL REFERENCES empresas(id) ON DELETE CASCADE,
+    integracao_id        INTEGER REFERENCES integracoes_vanpix(id) ON DELETE SET NULL,
+    apelido              VARCHAR(50) NOT NULL,
+    beneficiario_codigo  VARCHAR(10),
+    arquivo_nsa          VARCHAR(10),
+    arquivo_gerado_em    TIMESTAMP,
+    cod_movimento        VARCHAR(2) NOT NULL,
+    nosso_numero         VARCHAR(20) NOT NULL,
+    nosso_numero_dv      VARCHAR(1),
+    carteira             VARCHAR(1),
+    numero_documento     VARCHAR(15),
+    ident_titulo_empresa VARCHAR(25),
+    vencimento           DATE,
+    valor_titulo         NUMERIC(15,2),
+    banco_cobrador       VARCHAR(3),
+    agencia_cobradora    VARCHAR(6),
+    pagador_tipo         VARCHAR(1),
+    pagador_documento    VARCHAR(15),
+    pagador_nome         VARCHAR(40),
+    valor_tarifa         NUMERIC(15,2),
+    canal                VARCHAR(2),
+    motivo_ocorrencia    VARCHAR(10),
+    juros_multa          NUMERIC(15,2),
+    desconto             NUMERIC(15,2),
+    abatimento           NUMERIC(15,2),
+    iof                  NUMERIC(15,2),
+    valor_pago           NUMERIC(15,2),
+    valor_creditado      NUMERIC(15,2),
+    outras_despesas      NUMERIC(15,2),
+    outros_creditos      NUMERIC(15,2),
+    data_ocorrencia      DATE NOT NULL,
+    data_credito         DATE,
+    data_debito_tarifa   DATE,
+    pagador_efetivo      VARCHAR(15),
+    linha_t              VARCHAR(240) NOT NULL,
+    linha_u              VARCHAR(240) NOT NULL,
+    buscado_em           TIMESTAMP NOT NULL,
+    UNIQUE (apelido, nosso_numero, cod_movimento, data_ocorrencia)
+);
+CREATE INDEX idx_cobranca_titulos_credito ON cobranca_titulos (apelido, data_credito);
+
 
 -- Histórico dos dias liberados pra lançar saldo na tela Operações > Saldo Contas Bancárias
 -- (o cadeado) — 1 linha por dia que já foi aberto alguma vez, nunca apagada. status=ABERTO é

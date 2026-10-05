@@ -115,6 +115,7 @@ export default function AbrirPeriodoModal({ open, onClose, empresaId, onAberto }
           </p>
           <LinhaIntegracao nome="Conexão VanPix · Extrato Bancário" status="carregando" texto="Conectando…" />
           <LinhaIntegracao nome="Conexão API Itaú" status="carregando" texto="Conectando…" />
+          <LinhaIntegracao nome="Conexão VanPix · Cobrança" status="carregando" texto="Conectando…" />
         </div>
       )}
 
@@ -138,6 +139,7 @@ export default function AbrirPeriodoModal({ open, onClose, empresaId, onAberto }
             }
           />
           <LinhaItau relatorio={relatorioVanpix?.itau} erro={erroVanpix} />
+          <LinhaCobranca relatorio={relatorioVanpix?.cobranca} erro={erroVanpix} />
 
           <div className="flex justify-end pt-2">
             <Button type="button" onClick={onClose}>
@@ -189,6 +191,45 @@ function LinhaItau({ relatorio, erro }) {
           {problemas.map((p) => (
             <li key={`${p.conexao}-${p.conta}`}>
               <span className="font-medium">{p.conexao}</span> ({p.conta}): {p.motivo}
+            </li>
+          ))}
+        </ul>
+      )}
+    </div>
+  );
+}
+
+const brl = (v) => v.toLocaleString('pt-BR', { style: 'currency', currency: 'BRL' });
+
+// Cobrança: boletos liquidados com Dt Crédito no dia, somados no saldo das contas que têm
+// código cedente cobrança — resumo + o que não deu pra somar (com o motivo).
+function LinhaCobranca({ relatorio, erro }) {
+  const contas = relatorio?.contas || [];
+  const falhas = relatorio?.falhas || [];
+  const somadas = contas.filter((c) => c.titulos > 0);
+  const valor = somadas.reduce((s, c) => s + c.valor, 0);
+  const titulos = somadas.reduce((s, c) => s + c.titulos, 0);
+  let status = 'ok';
+  let texto = titulos ? `Ok, ${brl(valor)} em ${titulos} título(s), ${somadas.length} conta(s)` : 'Ok, nenhum crédito no dia';
+  if (erro) {
+    status = 'erro';
+    texto = 'Falha de conexão';
+  } else if (contas.length === 0 && falhas.length === 0) {
+    status = 'sem_convenio';
+    texto = 'Nenhuma conta com cedente de cobrança';
+  } else if (falhas.length) {
+    status = 'erro';
+    texto = titulos ? `${brl(valor)} em ${titulos} título(s), com avisos` : 'Não foi possível buscar';
+  }
+  return (
+    <div className="space-y-1.5">
+      <LinhaIntegracao nome="Conexão VanPix · Cobrança" status={status} texto={texto} />
+      {falhas.length > 0 && (
+        <ul className="space-y-1 rounded-lg bg-amber-50 px-3 py-2 text-xs text-amber-800">
+          {falhas.map((f, i) => (
+            <li key={i}>
+              <span className="font-medium">{f.apelido}</span>
+              {f.conta ? ` (${f.conta})` : ''}: {f.mensagem}
             </li>
           ))}
         </ul>

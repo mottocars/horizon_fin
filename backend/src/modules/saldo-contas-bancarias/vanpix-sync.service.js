@@ -26,6 +26,7 @@ const vanpixService = require('../integracoes-vanpix/vanpix.service');
 const itauService = require('../integracoes-itau/itau.service');
 const classificacoesService = require('../classificacoes-bancarias/classificacoes.service');
 const saldosService = require('./saldos.service');
+const { somaCreditosDoDia } = require('./cobranca.calculo');
 
 function diaAnteriorISO(iso) {
   const d = new Date(`${iso}T12:00:00Z`); // meio-dia UTC evita virar o dia errado por fuso
@@ -169,6 +170,133 @@ async function buscarSaldosItau(empresaId, data, relatorio, itensParaGravar, cas
   await Promise.all(Array.from({ length: Math.min(ITAU_CONSULTAS_SIMULTANEAS, conexoes.length) }, trabalhar));
 }
 
+// ---------------------------------------------------------------------------------------
+// COBRANÇA: conta com `codigo_cedente_cobranca` (apelido VanPix de uma conexão de Cobrança)
+// soma ao saldo do dia `data` o Vl Pago dos títulos liquidados com Dt Crédito = `data`. O
+// extrato da VanPix traz o saldo final do dia anterior, então esses créditos ainda não estão
+// nele. A Caixa manda o retorno dias antes do crédito (ex.: arquivo de 02/10, crédito 05/10),
+// por isso a varredura olha os arquivos de `data` - 5 até `data` (todo dia do calendário — a
+// VanPix tem arquivo até de sábado). Todos os títulos lidos ficam gravados em cobranca_titulos
+// (upsert: varrer de novo não duplica) e a soma sai da tabela (ver somaCreditosDoDia).
+// ---------------------------------------------------------------------------------------
+const COBRANCA_DIAS_VARREDURA = 5;
+
+function menosDiasISO(iso, dias) {
+  const d = new Date(`${iso}T12:00:00Z`);
+  d.setUTCDate(d.getUTCDate() - dias);
+  return d.toISOString().slice(0, 10);
+}
+
+async function listarContasComCedente(empresaId) {
+  const { rows } = await pool.query(
+    `SELECT company_id, numero_conta, nome, codigo_cedente_cobranca AS apelido
+     FROM contas_bancarias_sienge
+     WHERE empresa_id = $1 AND NULLIF(codigo_cedente_cobranca, '') IS NOT NULL`,
+    [empresaId]
+  );
+  return rows;
+}
+
+const real = (centavos) => centavos / 100;
+
+async function gravarTitulos(empresaId, integracaoId, apelido, { arquivo, titulos }) {
+  const agora = new Date();
+  for (const t of titulos) {
+    if (!t.nossoNumero || !t.dataOcorrencia) continue;
+    await pool.query(
+      `INSERT INTO cobranca_titulos (
+         empresa_id, integracao_id, apelido, beneficiario_codigo, arquivo_nsa, arquivo_gerado_em,
+         cod_movimento, nosso_numero, nosso_numero_dv, carteira, numero_documento, ident_titulo_empresa,
+         vencimento, valor_titulo, banco_cobrador, agencia_cobradora, pagador_tipo, pagador_documento,
+         pagador_nome, valor_tarifa, canal, motivo_ocorrencia, juros_multa, desconto, abatimento, iof,
+         valor_pago, valor_creditado, outras_despesas, outros_creditos, data_ocorrencia, data_credito,
+         data_debito_tarifa, pagador_efetivo, linha_t, linha_u, buscado_em)
+       VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13, $14, $15, $16, $17, $18, $19, $20,
+               $21, $22, $23, $24, $25, $26, $27, $28, $29, $30, $31, $32, $33, $34, $35, $36, $37)
+       ON CONFLICT (apelido, nosso_numero, cod_movimento, data_ocorrencia) DO UPDATE SET
+         integracao_id = EXCLUDED.integracao_id, arquivo_nsa = EXCLUDED.arquivo_nsa,
+         arquivo_gerado_em = EXCLUDED.arquivo_gerado_em, valor_pago = EXCLUDED.valor_pago,
+         valor_creditado = EXCLUDED.valor_creditado, data_credito = EXCLUDED.data_credito,
+         linha_t = EXCLUDED.linha_t, linha_u = EXCLUDED.linha_u, buscado_em = EXCLUDED.buscado_em`,
+      [
+        empresaId, integracaoId, apelido, arquivo.beneficiarioCodigo, arquivo.nsa, arquivo.geradoEm,
+        t.codMovimento, t.nossoNumero, t.nossoNumeroDv || null, t.carteira || null, t.numeroDocumento || null,
+        t.identTituloEmpresa || null, t.vencimento, real(t.valorTitulo), t.bancoCobrador || null,
+        t.agenciaCobradora || null, t.pagadorTipo || null, t.pagadorDocumento || null, t.pagadorNome || null,
+        real(t.valorTarifa), t.canal || null, t.motivoOcorrencia || null, real(t.jurosMulta), real(t.desconto),
+        real(t.abatimento), real(t.iof), real(t.valorPago), real(t.valorCreditado), real(t.outrasDespesas),
+        real(t.outrosCreditos), t.dataOcorrencia, t.dataCredito, t.dataDebitoTarifa, t.pagadorEfetivo,
+        t.linhaT.slice(0, 240), t.linhaU.slice(0, 240), agora,
+      ]
+    );
+  }
+}
+
+// Varre os retornos de cobrança de um apelido (data - 5 até data) e grava os títulos. Devolve
+// a mensagem de falha (credencial, rede...) ou null.
+async function varrerCobranca(empresaId, integracaoId, apelido, data) {
+  const cred = await vanpixService.getCredenciais(integracaoId);
+  if (!cred) return 'Conexão VanPix de Cobrança não encontrada.';
+  let falha = null;
+  for (let i = COBRANCA_DIAS_VARREDURA; i >= 0; i--) {
+    const dia = paraDDMMYYYY(menosDiasISO(data, i));
+    const r = await vanpixService.buscarRetornoCobranca(cred.serviceKey, cred.clientSecret, apelido, dia);
+    if (r.status === 'ok_com_retorno') {
+      for (const arquivo of r.arquivos) await gravarTitulos(empresaId, integracaoId, apelido, arquivo);
+    } else if (r.status !== 'ok_sem_retorno') {
+      falha = r.mensagem;
+      if (r.status === 'credencial_invalida' || r.status === 'apelido_invalido') break; // não adianta repetir
+    }
+  }
+  return falha;
+}
+
+async function somarCobranca(empresaId, data, itensParaGravar, relatorio) {
+  const contas = await listarContasComCedente(empresaId);
+  if (contas.length === 0) return;
+  const conexoes = await vanpixService.conexoesCobrancaPorApelido(empresaId);
+
+  const apelidosVarridos = new Set();
+  for (const apelido of new Set(contas.map((c) => c.apelido))) {
+    const integracaoId = conexoes.get(apelido);
+    if (!integracaoId) {
+      relatorio.falhas.push({ apelido, mensagem: 'Nenhuma conexão VanPix de Cobrança ativa com este convênio (apelido).' });
+      continue;
+    }
+    const falha = await varrerCobranca(empresaId, integracaoId, apelido, data);
+    if (falha) relatorio.falhas.push({ apelido, mensagem: falha });
+    apelidosVarridos.add(apelido); // mesmo com falha num dia, soma o que já está gravado
+  }
+
+  for (const conta of contas) {
+    if (!apelidosVarridos.has(conta.apelido)) continue;
+    const { rows: titulos } = await pool.query(
+      `SELECT cod_movimento, valor_pago, TO_CHAR(data_credito, 'YYYY-MM-DD') AS data_credito
+       FROM cobranca_titulos WHERE empresa_id = $1 AND apelido = $2 AND data_credito = $3`,
+      [empresaId, conta.apelido, data]
+    );
+    const soma = somaCreditosDoDia(titulos, data);
+    const base = { apelido: conta.apelido, company_id: conta.company_id, numero_conta: conta.numero_conta, nome: conta.nome, ...soma };
+    if (soma.titulos === 0) {
+      relatorio.contas.push(base);
+      continue;
+    }
+    // soma no saldo automático que a conta já recebeu neste dia (extrato VanPix/Itaú ou herdado)
+    const item = [...itensParaGravar].reverse().find((i) => i.company_id === conta.company_id && i.numero_conta === conta.numero_conta);
+    if (!item) {
+      relatorio.falhas.push({
+        apelido: conta.apelido,
+        conta: conta.nome || conta.numero_conta,
+        mensagem: `Sem saldo do extrato no dia para somar R$ ${soma.valor.toFixed(2)} de cobrança.`,
+      });
+      continue;
+    }
+    item.saldo = Math.round((item.saldo + soma.valor) * 100) / 100;
+    item.saldoCobranca = soma.valor;
+    relatorio.contas.push(base);
+  }
+}
+
 // Roda todos os convênios VanPix ativos da empresa pra `data` (sábado/domingo: nem tenta, ver
 // ehFimDeSemana), casa cada conta encontrada no retorno com o cadastro (banco+conta+dígito) e
 // grava o saldo automaticamente (origem API). Toda conta-alvo que ficou de fora disso tenta
@@ -183,6 +311,7 @@ async function buscarSaldosVanpix(empresaId, usuarioId, data) {
     herdados: [],
     semCorrespondencia: [],
     itau: { conexoes: 0, atualizados: [], falhas: [], semCorrespondencia: [] },
+    cobranca: { contas: [], falhas: [] },
   };
   if (ehFimDeSemana(data)) return relatorio; // sábado/domingo: nem consulta, nem grava nada
 
@@ -275,6 +404,9 @@ async function buscarSaldosVanpix(empresaId, usuarioId, data) {
       saldo: valorHerdado,
     });
   }
+
+  // Cobrança: soma os títulos com Dt Crédito = data no saldo de quem tem código cedente.
+  await somarCobranca(empresaId, data, itensParaGravar, relatorio.cobranca);
 
   if (itensParaGravar.length > 0) {
     await saldosService.salvarSaldos(empresaId, usuarioId, itensParaGravar);

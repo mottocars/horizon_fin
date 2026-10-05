@@ -57,4 +57,77 @@ function parseRetornoCaixa(linhas) {
   return [...lotes.values()].filter((l) => l.saldoFinal);
 }
 
-module.exports = { parseRetornoCaixa };
+// ---------------------------------------------------------------------------------------
+// Retorno de COBRANÇA CAIXA (CNAB 240, SIGCB — arquivos "GCB.<apelido>.RETORNO...").
+// Posições conferidas campo a campo contra o CSV do mesmo arquivo (out/2026). Cada título
+// vem em 2 registros: segmento T (dados do título) seguido do U (valores e datas).
+// Valores em centavos; datas em YYYY-MM-DD.
+// ---------------------------------------------------------------------------------------
+const centavos = (linha, de, ate) => Number(campo(linha, de, ate) || 0);
+
+function segmentoT(l) {
+  return {
+    codMovimento: campo(l, 16, 17),
+    beneficiarioCodigo: campo(l, 24, 29),
+    nossoNumero: campo(l, 40, 56),
+    nossoNumeroDv: campo(l, 57, 57), // provável DV do nosso número (não vai pro CSV da Caixa)
+    carteira: campo(l, 58, 58), // 1 = Simples
+    numeroDocumento: campo(l, 59, 69),
+    vencimento: converterData(campo(l, 74, 81)),
+    valorTitulo: centavos(l, 82, 96),
+    bancoCobrador: campo(l, 97, 99),
+    agenciaCobradora: campo(l, 100, 105), // agência (5) + DV (1)
+    identTituloEmpresa: campo(l, 106, 130),
+    pagadorTipo: campo(l, 133, 133), // 1 = CPF, 2 = CNPJ
+    pagadorDocumento: campo(l, 134, 148),
+    pagadorNome: campo(l, 149, 188),
+    valorTarifa: centavos(l, 199, 213),
+    canal: campo(l, 214, 215), // 04 = compensação eletrônica, 06 = internet banking...
+    motivoOcorrencia: campo(l, 214, 223),
+  };
+}
+
+function segmentoU(l) {
+  return {
+    jurosMulta: centavos(l, 18, 32),
+    desconto: centavos(l, 33, 47),
+    abatimento: centavos(l, 48, 62),
+    iof: centavos(l, 63, 77),
+    valorPago: centavos(l, 78, 92),
+    valorCreditado: centavos(l, 93, 107),
+    outrasDespesas: centavos(l, 108, 122),
+    outrosCreditos: centavos(l, 123, 137),
+    dataOcorrencia: converterData(campo(l, 138, 145)),
+    dataCredito: converterData(campo(l, 146, 153)),
+    dataDebitoTarifa: converterData(campo(l, 158, 165)),
+    pagadorEfetivo: /^0*$/.test(campo(l, 181, 195)) ? null : campo(l, 181, 195), // provável (tipo + CPF/CNPJ)
+  };
+}
+
+function parseRetornoCobrancaCaixa(linhas) {
+  const arquivo = { beneficiarioCodigo: null, nsa: null, geradoEm: null };
+  const titulos = [];
+  let pendenteT = null;
+
+  for (const linha of linhas) {
+    if (!linha || linha.length < 17) continue; // a API pode cortar os espaços do fim da linha
+    const tipoRegistro = linha[7];
+    if (tipoRegistro === '0') {
+      const data = converterData(campo(linha, 144, 151));
+      const hora = campo(linha, 152, 157);
+      arquivo.beneficiarioCodigo = campo(linha, 59, 64);
+      arquivo.nsa = campo(linha, 158, 163);
+      arquivo.geradoEm = data && /^\d{6}$/.test(hora) ? `${data}T${hora.slice(0, 2)}:${hora.slice(2, 4)}:${hora.slice(4, 6)}` : data;
+    } else if (tipoRegistro === '3') {
+      const segmento = linha[13];
+      if (segmento === 'T') pendenteT = linha;
+      else if (segmento === 'U' && pendenteT) {
+        titulos.push({ ...segmentoT(pendenteT), ...segmentoU(linha), linhaT: pendenteT, linhaU: linha });
+        pendenteT = null;
+      }
+    }
+  }
+  return { arquivo, titulos };
+}
+
+module.exports = { parseRetornoCaixa, parseRetornoCobrancaCaixa };

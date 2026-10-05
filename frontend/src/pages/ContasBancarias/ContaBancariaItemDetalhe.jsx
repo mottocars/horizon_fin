@@ -67,6 +67,7 @@ const emptyForm = {
   projeta_saldo: '',
   saldo_inicial: '',
   data_saldo_inicial: '',
+  codigo_cedente_cobranca: '',
 };
 
 export default function ContaBancariaItemDetalhe() {
@@ -116,6 +117,7 @@ export default function ContaBancariaItemDetalhe() {
           data.projeta_saldo === true ? 'true' : data.projeta_saldo === false ? 'false' : '',
         saldo_inicial: formatBRNumber(data.saldo_inicial),
         data_saldo_inicial: data.data_saldo_inicial ? data.data_saldo_inicial.slice(0, 10) : '',
+        codigo_cedente_cobranca: data.codigo_cedente_cobranca || '',
       });
     } finally {
       setLoading(false);
@@ -152,7 +154,11 @@ export default function ContaBancariaItemDetalhe() {
         saldo_inicial: parseBRNumber(form.saldo_inicial),
       });
       setItem(updated);
-      setForm((prev) => ({ ...prev, saldo_inicial: formatBRNumber(updated.saldo_inicial) }));
+      setForm((prev) => ({
+        ...prev,
+        saldo_inicial: formatBRNumber(updated.saldo_inicial),
+        codigo_cedente_cobranca: updated.codigo_cedente_cobranca || '',
+      }));
       setSuccess(true);
       setTimeout(() => setSuccess(false), 3000);
     } catch (err) {
@@ -315,6 +321,23 @@ export default function ContaBancariaItemDetalhe() {
                 onChange={(e) => handleChange('data_saldo_inicial', e.target.value)}
                 className={`w-full rounded-lg border px-3 py-2 text-sm focus:outline-none focus:ring-2 ${corCampo(form.data_saldo_inicial)}`}
               />
+            </Field>
+
+            {/* Apelido do convênio de cobrança na VanPix: na abertura do período, os boletos
+                liquidados com Dt Crédito no dia somam no saldo desta conta. */}
+            <Field label="Código cedente cobrança">
+              <input
+                type="text"
+                value={form.codigo_cedente_cobranca}
+                onChange={(e) => handleChange('codigo_cedente_cobranca', e.target.value.toUpperCase().replace(/\s+/g, ''))}
+                maxLength={50}
+                placeholder="ex.: C3U1Y8"
+                className={`w-full rounded-lg border px-3 py-2 text-sm focus:outline-none focus:ring-2 ${corCampo(form.codigo_cedente_cobranca)}`}
+              />
+              <p className="mt-1 text-xs text-gray-400">
+                Apelido do convênio na conexão VanPix de Cobrança. Na abertura do período, o valor pago dos boletos com
+                data de crédito no dia soma no saldo desta conta.
+              </p>
             </Field>
           </div>
 
