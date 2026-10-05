@@ -122,11 +122,10 @@ async function updateEnriquecimento(empresaId, companyId, numeroConta, data) {
        conta_enriquecida = $3,
        digito = $4,
        projeta_saldo = $5,
-       saldo_inicial = $6,
-       data_saldo_inicial = $7,
-       classificacao = $8,
-       codigo_cedente_cobranca = $12
-     WHERE empresa_id = $9 AND company_id = $10 AND numero_conta = $11
+       classificacao = $6,
+       codigo_cedente_cobranca = $10,
+       codigo_cedente_extrato = $11
+     WHERE empresa_id = $7 AND company_id = $8 AND numero_conta = $9
      RETURNING *`,
     [
       data.banco_enriquecido || null,
@@ -134,13 +133,12 @@ async function updateEnriquecimento(empresaId, companyId, numeroConta, data) {
       data.conta_enriquecida || null,
       data.digito || null,
       data.projeta_saldo ?? null,
-      data.saldo_inicial ?? null,
-      data.data_saldo_inicial || null,
       data.classificacao || null,
       empresaId,
       companyId,
       numeroConta,
       data.codigo_cedente_cobranca || null,
+      data.codigo_cedente_extrato || null,
     ]
   );
   return rows[0] || null;

@@ -5,6 +5,10 @@
 -- numa conexão VanPix com finalidade COBRANCA.
 ALTER TABLE contas_bancarias_sienge ADD COLUMN IF NOT EXISTS codigo_cedente_cobranca VARCHAR(50);
 
+-- Apelido VanPix do convênio de EXTRATO da conta — a VanPix Extrato só é consultada para os
+-- apelidos informados aqui (conexão VanPix com finalidade EXTRATO).
+ALTER TABLE contas_bancarias_sienge ADD COLUMN IF NOT EXISTS codigo_cedente_extrato VARCHAR(50);
+
 -- Parte do saldo do dia que veio da cobrança (títulos com Dt Crédito = data). `saldo` é o total.
 ALTER TABLE saldos_contas_bancarias ADD COLUMN IF NOT EXISTS saldo_cobranca NUMERIC(15,2);
 

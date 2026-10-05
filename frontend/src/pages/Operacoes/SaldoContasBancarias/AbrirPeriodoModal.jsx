@@ -121,23 +121,7 @@ export default function AbrirPeriodoModal({ open, onClose, empresaId, onAberto }
 
       {etapa === 'resultado' && (
         <div className="space-y-4">
-          <LinhaIntegracao
-            nome="Conexão VanPix · Extrato Bancário"
-            status={
-              erroVanpix
-                ? 'erro'
-                : !relatorioVanpix || relatorioVanpix.convenios.length === 0
-                  ? 'sem_convenio'
-                  : 'ok'
-            }
-            texto={
-              erroVanpix
-                ? 'Falha de conexão'
-                : !relatorioVanpix || relatorioVanpix.convenios.length === 0
-                  ? 'Nenhum convênio configurado'
-                  : `Ok, ${relatorioVanpix.atualizados.length} conta(s) integrada(s)`
-            }
-          />
+          <LinhaExtrato relatorio={relatorioVanpix} erro={erroVanpix} />
           <LinhaItau relatorio={relatorioVanpix?.itau} erro={erroVanpix} />
           <LinhaCobranca relatorio={relatorioVanpix?.cobranca} erro={erroVanpix} />
           {relatorioVanpix?.semSaldo?.length > 0 && (
@@ -197,6 +181,39 @@ function LinhaItau({ relatorio, erro }) {
           {problemas.map((p) => (
             <li key={`${p.conexao}-${p.conta}`}>
               <span className="font-medium">{p.conexao}</span> ({p.conta}): {p.motivo}
+            </li>
+          ))}
+        </ul>
+      )}
+    </div>
+  );
+}
+
+// VanPix Extrato: resumo + os convênios (códigos cedente das contas) que não trouxeram tudo.
+function LinhaExtrato({ relatorio, erro }) {
+  const convenios = relatorio?.convenios || [];
+  const problemas = convenios.filter((c) => c.status !== 'ok_com_retorno' || /Sem saldo em/.test(c.mensagem || ''));
+  const atualizadas = relatorio?.atualizados.length || 0;
+  let status = 'ok';
+  let texto = `Ok, ${atualizadas} conta(s) integrada(s)`;
+  if (erro) {
+    status = 'erro';
+    texto = 'Falha de conexão';
+  } else if (convenios.length === 0) {
+    status = 'sem_convenio';
+    texto = 'Nenhuma conta com código cedente extrato';
+  } else if (problemas.length) {
+    status = 'erro';
+    texto = `${atualizadas} conta(s) integrada(s), com avisos`;
+  }
+  return (
+    <div className="space-y-1.5">
+      <LinhaIntegracao nome="Conexão VanPix · Extrato Bancário" status={status} texto={texto} />
+      {problemas.length > 0 && (
+        <ul className="space-y-1 rounded-lg bg-amber-50 px-3 py-2 text-xs text-amber-800">
+          {problemas.map((p) => (
+            <li key={p.apelido}>
+              <span className="font-medium">{p.apelido}</span>: {p.mensagem}
             </li>
           ))}
         </ul>

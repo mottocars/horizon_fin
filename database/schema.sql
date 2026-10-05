@@ -894,6 +894,9 @@ CREATE TABLE contas_bancarias_sienge (
     -- Apelido VanPix do convênio de cobrança (conexão VanPix com finalidade COBRANCA): os
     -- títulos com Dt Crédito = dia somam no saldo na abertura do período.
     codigo_cedente_cobranca VARCHAR(50),
+    -- Apelido VanPix do convênio de extrato (conexão com finalidade EXTRATO): a VanPix Extrato
+    -- só é consultada para os apelidos informados nas contas.
+    codigo_cedente_extrato  VARCHAR(50),
     PRIMARY KEY (numero_conta, empresa_id, company_id)
 );
 

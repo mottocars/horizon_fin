@@ -292,14 +292,15 @@ async function buscarRetornoCobranca(serviceKey, clientSecret, apelido, dataPesq
   return { ...resultado, arquivos };
 }
 
-// Conexões VanPix de COBRANÇA ativas da empresa, por apelido: apelido -> id da conexão.
-async function conexoesCobrancaPorApelido(empresaId) {
+// Conexões VanPix ativas da empresa de uma finalidade (EXTRATO/COBRANCA), por apelido:
+// apelido -> id da conexão.
+async function conexoesPorApelido(empresaId, finalidade) {
   const { rows } = await pool.query(
     `SELECT c.apelido, v.id FROM integracoes_vanpix v
      JOIN integracoes_vanpix_convenios c ON c.integracao_id = v.id
-     WHERE v.empresa_id = $1 AND v.ativo = TRUE AND v.finalidade = 'COBRANCA'
+     WHERE v.empresa_id = $1 AND v.ativo = TRUE AND v.finalidade = $2
      ORDER BY v.id`,
-    [empresaId]
+    [empresaId, finalidade]
   );
   const mapa = new Map();
   for (const r of rows) if (!mapa.has(r.apelido)) mapa.set(r.apelido, r.id);
@@ -320,4 +321,4 @@ async function testarConexao({ serviceKey, clientSecret, apelidos }) {
   return { sucesso: algumConfirmado && !credencialFalhou, detalhes };
 }
 
-module.exports = { list, getById, create, update, setAtivo, getCredenciais, testarConexao, buscarRetorno, buscarRetornoCobranca, conexoesCobrancaPorApelido };
+module.exports = { list, getById, create, update, setAtivo, getCredenciais, testarConexao, buscarRetorno, buscarRetornoCobranca, conexoesPorApelido };

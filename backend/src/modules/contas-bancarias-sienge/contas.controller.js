@@ -17,6 +17,12 @@ const csv = (val) =>
     .map((s) => s.trim())
     .filter(Boolean);
 
+// Código cedente (apelido VanPix): maiúsculo e sem espaços; vazio = null.
+const codigoCedenteSchema = z.preprocess(
+  (v) => (typeof v === 'string' ? v.replace(/\s+/g, '').toUpperCase() || null : v),
+  z.string().max(50, 'Máximo de 50 caracteres.').nullable().optional()
+);
+
 const enriquecimentoSchema = z.object({
   // Código do banco (COMPE, 3 dígitos) escolhido na lista da BrasilAPI.
   banco_enriquecido: z.preprocess(emptyToNull, z.string().max(120).nullable().optional()),
@@ -29,13 +35,10 @@ const enriquecimentoSchema = z.object({
   conta_enriquecida: z.preprocess(emptyToNull, z.string().max(20).nullable().optional()),
   digito: z.preprocess(emptyToNull, z.string().max(5).nullable().optional()),
   projeta_saldo: z.preprocess(emptyToNull, z.coerce.boolean().nullable().optional()),
-  saldo_inicial: z.preprocess(emptyToNull, z.coerce.number().nullable().optional()),
-  data_saldo_inicial: z.preprocess(emptyToNull, z.string().nullable().optional()),
   // Apelido VanPix do convênio de cobrança (conexão com finalidade Cobrança), ex.: C3U1Y8.
-  codigo_cedente_cobranca: z.preprocess(
-    (v) => (typeof v === 'string' ? v.replace(/\s+/g, '').toUpperCase() || null : v),
-    z.string().max(50, 'Máximo de 50 caracteres.').nullable().optional()
-  ),
+  codigo_cedente_cobranca: codigoCedenteSchema,
+  // Apelido VanPix do convênio de extrato (conexão com finalidade Extrato Bancário).
+  codigo_cedente_extrato: codigoCedenteSchema,
 });
 
 function badRequest(message) {

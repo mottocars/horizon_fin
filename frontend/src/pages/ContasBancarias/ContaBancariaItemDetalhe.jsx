@@ -42,22 +42,6 @@ function corSelect(valor) {
   return estaPreenchido(valor) ? COR_CAMPO_PREENCHIDO : COR_CAMPO_VAZIO;
 }
 
-function parseBRNumber(value) {
-  if (!value) return '';
-  const cleaned = value.trim();
-  if (cleaned.includes(',')) {
-    return cleaned.replace(/\./g, '').replace(',', '.');
-  }
-  return cleaned;
-}
-
-function formatBRNumber(value) {
-  if (value === null || value === undefined || value === '') return '';
-  const num = Number(value);
-  if (Number.isNaN(num)) return '';
-  return num.toLocaleString('pt-BR', { minimumFractionDigits: 2, maximumFractionDigits: 2 });
-}
-
 const emptyForm = {
   banco_enriquecido: '',
   agencia_enriquecida: '',
@@ -65,8 +49,7 @@ const emptyForm = {
   digito: '',
   classificacao: '',
   projeta_saldo: '',
-  saldo_inicial: '',
-  data_saldo_inicial: '',
+  codigo_cedente_extrato: '',
   codigo_cedente_cobranca: '',
 };
 
@@ -115,8 +98,7 @@ export default function ContaBancariaItemDetalhe() {
         classificacao: data.classificacao || '',
         projeta_saldo:
           data.projeta_saldo === true ? 'true' : data.projeta_saldo === false ? 'false' : '',
-        saldo_inicial: formatBRNumber(data.saldo_inicial),
-        data_saldo_inicial: data.data_saldo_inicial ? data.data_saldo_inicial.slice(0, 10) : '',
+        codigo_cedente_extrato: data.codigo_cedente_extrato || '',
         codigo_cedente_cobranca: data.codigo_cedente_cobranca || '',
       });
     } finally {
@@ -151,12 +133,11 @@ export default function ContaBancariaItemDetalhe() {
       const updated = await updateEnriquecimento(empresaId, companyId, numeroConta, {
         ...form,
         projeta_saldo: form.projeta_saldo === '' ? '' : form.projeta_saldo === 'true',
-        saldo_inicial: parseBRNumber(form.saldo_inicial),
       });
       setItem(updated);
       setForm((prev) => ({
         ...prev,
-        saldo_inicial: formatBRNumber(updated.saldo_inicial),
+        codigo_cedente_extrato: updated.codigo_cedente_extrato || '',
         codigo_cedente_cobranca: updated.codigo_cedente_cobranca || '',
       }));
       setSuccess(true);
@@ -295,36 +276,20 @@ export default function ContaBancariaItemDetalhe() {
               />
             </Field>
 
-            <Field label="R$ Saldo Inicial">
-              <div className="relative">
-                <span className="pointer-events-none absolute left-3 top-1/2 -translate-y-1/2 text-sm text-gray-400">
-                  R$
-                </span>
-                <input
-                  type="text"
-                  inputMode="decimal"
-                  placeholder="0,00"
-                  value={form.saldo_inicial}
-                  onChange={(e) => {
-                    const raw = e.target.value;
-                    if (/^-?[0-9.,]*$/.test(raw)) handleChange('saldo_inicial', raw);
-                  }}
-                  className={`w-full rounded-lg border px-3 py-2 pl-9 text-sm focus:outline-none focus:ring-2 ${corCampo(form.saldo_inicial)}`}
-                />
-              </div>
-            </Field>
-
-            <Field label="Data Saldo Inicial">
+            {/* Códigos cedente = apelidos dos convênios na VanPix. Na abertura do período, a VanPix
+                Extrato só é consultada pra quem tem o código de extrato; o de cobrança soma no saldo
+                os boletos com Dt Crédito no dia. */}
+            <Field label="Código cedente extrato bancário">
               <input
-                type="date"
-                value={form.data_saldo_inicial}
-                onChange={(e) => handleChange('data_saldo_inicial', e.target.value)}
-                className={`w-full rounded-lg border px-3 py-2 text-sm focus:outline-none focus:ring-2 ${corCampo(form.data_saldo_inicial)}`}
+                type="text"
+                value={form.codigo_cedente_extrato}
+                onChange={(e) => handleChange('codigo_cedente_extrato', e.target.value.toUpperCase().replace(/\s+/g, ''))}
+                maxLength={50}
+                placeholder="ex.: ABPFJA"
+                className={`w-full rounded-lg border px-3 py-2 text-sm focus:outline-none focus:ring-2 ${corCampo(form.codigo_cedente_extrato)}`}
               />
             </Field>
 
-            {/* Apelido do convênio de cobrança na VanPix: na abertura do período, os boletos
-                liquidados com Dt Crédito no dia somam no saldo desta conta. */}
             <Field label="Código cedente cobrança">
               <input
                 type="text"
@@ -334,10 +299,6 @@ export default function ContaBancariaItemDetalhe() {
                 placeholder="ex.: C3U1Y8"
                 className={`w-full rounded-lg border px-3 py-2 text-sm focus:outline-none focus:ring-2 ${corCampo(form.codigo_cedente_cobranca)}`}
               />
-              <p className="mt-1 text-xs text-gray-400">
-                Apelido do convênio na conexão VanPix de Cobrança. Na abertura do período, o valor pago dos boletos com
-                data de crédito no dia soma no saldo desta conta.
-              </p>
             </Field>
           </div>
 
