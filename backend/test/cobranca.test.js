@@ -67,6 +67,14 @@ test('retorno sem espaços no fim da linha (como pode vir da API) continua lendo
   assert.strictEqual(titulos[1].valorPago, 178301);
 });
 
+test('título não pago (entrada/baixa) vem com datas zeradas: ficam null, sem quebrar a gravação', () => {
+  const [t, u] = titulo({ seq: 1, nossoNumero: '14000000000009999', doc: '70000', venc: '20112026', valor: 50000, banco: '000', cpf: 44444444444, nome: 'PAGADOR QUATRO', canal: '00', pago: 0, ocorrencia: '05102026', credito: '00000000' });
+  const { titulos } = parseRetornoCobrancaCaixa([t, u]);
+  assert.strictEqual(titulos[0].dataCredito, null);
+  assert.strictEqual(titulos[0].dataDebitoTarifa, null);
+  assert.strictEqual(titulos[0].dataOcorrencia, '2026-10-05');
+});
+
 test('soma da cobrança do dia: só liquidação com Dt Crédito = data, em centavos exatos', () => {
   const titulos = [
     { cod_movimento: '06', valor_pago: '2776.79', data_credito: '2026-10-05' },

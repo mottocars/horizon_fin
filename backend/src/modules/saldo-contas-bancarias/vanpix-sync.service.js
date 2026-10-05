@@ -405,8 +405,14 @@ async function buscarSaldosVanpix(empresaId, usuarioId, data) {
     });
   }
 
-  // Cobrança: soma os títulos com Dt Crédito = data no saldo de quem tem código cedente.
-  await somarCobranca(empresaId, data, itensParaGravar, relatorio.cobranca);
+  // Cobrança: soma os títulos com Dt Crédito = data no saldo de quem tem código cedente. Um
+  // problema aqui vira aviso no relatório — nunca derruba o saldo do extrato.
+  try {
+    await somarCobranca(empresaId, data, itensParaGravar, relatorio.cobranca);
+  } catch (err) {
+    console.error('[saldos] cobrança:', err.message);
+    relatorio.cobranca.falhas.push({ apelido: 'Cobrança', mensagem: `Erro ao processar a cobrança: ${err.message}` });
+  }
 
   if (itensParaGravar.length > 0) {
     await saldosService.salvarSaldos(empresaId, usuarioId, itensParaGravar);

@@ -22,8 +22,12 @@ function parseSaldo(linha, deData, deValor) {
 }
 
 // DDMMAAAA -> YYYY-MM-DD (mesmo formato usado em toda a aplicação).
+// Data zerada ("00000000", comum na cobrança em títulos que não foram pagos) ou impossível = null.
 function converterData(ddmmaaaa) {
   if (!/^\d{8}$/.test(ddmmaaaa)) return null;
+  const dia = Number(ddmmaaaa.slice(0, 2));
+  const mes = Number(ddmmaaaa.slice(2, 4));
+  if (dia < 1 || dia > 31 || mes < 1 || mes > 12 || Number(ddmmaaaa.slice(4, 8)) < 1900) return null;
   return `${ddmmaaaa.slice(4, 8)}-${ddmmaaaa.slice(2, 4)}-${ddmmaaaa.slice(0, 2)}`;
 }
 
