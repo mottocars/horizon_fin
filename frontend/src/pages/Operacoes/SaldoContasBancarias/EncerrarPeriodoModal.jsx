@@ -1,8 +1,8 @@
 import { useEffect, useState } from 'react';
-import { Lock, Loader2, CheckCircle2, AlertTriangle, HelpCircle, Users } from 'lucide-react';
+import { Lock, Loader2, CheckCircle2, AlertTriangle, HelpCircle, Users, Clock, ListChecks } from 'lucide-react';
 import Modal from '../../../components/Modal';
 import Button from '../../../components/Button';
-import { getComunicarSaldos, encerrarPeriodoSaldos } from '../../../api/saldoContasBancarias.api';
+import { getComunicarSaldos, encerrarPeriodoSaldos, getRotinasStatus } from '../../../api/saldoContasBancarias.api';
 import { formatarDataBR } from './constantes';
 
 // Fluxo: 'confirmar' (mostra o aviso de sempre + quem vai ser avisado por WhatsApp, se houver
@@ -17,6 +17,8 @@ export default function EncerrarPeriodoModal({ open, onClose, empresaId, dataAbe
   const [encerrando, setEncerrando] = useState(false);
   const [erro, setErro] = useState('');
   const [notificacao, setNotificacao] = useState(null);
+  // Andamento das rotinas (parâmetro Gerar Rotinas): com alguma pendente, o período não encerra.
+  const [rotinas, setRotinas] = useState(null);
 
   useEffect(() => {
     if (!open) return;
@@ -24,6 +26,10 @@ export default function EncerrarPeriodoModal({ open, onClose, empresaId, dataAbe
     setErro('');
     setNotificacao(null);
     setCarregandoDestinatarios(true);
+    setRotinas(null);
+    getRotinasStatus(empresaId)
+      .then(setRotinas)
+      .catch(() => setRotinas(null));
     getComunicarSaldos(empresaId)
       .then((dados) => {
         const selecionados = new Set(dados.selecionados);
@@ -64,6 +70,8 @@ export default function EncerrarPeriodoModal({ open, onClose, empresaId, dataAbe
 
           {erro && <div className="rounded-lg bg-red-50 px-3 py-2 text-sm text-red-600">{erro}</div>}
 
+          <StatusRotinas rotinas={rotinas} />
+
           {carregandoDestinatarios ? (
             <div className="text-sm text-gray-400">Verificando quem será avisado...</div>
           ) : (
@@ -85,7 +93,13 @@ export default function EncerrarPeriodoModal({ open, onClose, empresaId, dataAbe
             <Button type="button" variant="secondary" onClick={onClose}>
               Cancelar
             </Button>
-            <Button type="button" onClick={handleEncerrar} loading={encerrando}>
+            <Button
+              type="button"
+              onClick={handleEncerrar}
+              loading={encerrando}
+              disabled={rotinasPendentes(rotinas).length > 0}
+              title={rotinasPendentes(rotinas).length > 0 ? 'Aguardando o encerramento de todas as rotinas' : undefined}
+            >
               <Lock size={15} />
               Encerrar período
             </Button>
@@ -117,6 +131,46 @@ export default function EncerrarPeriodoModal({ open, onClose, empresaId, dataAbe
         </div>
       )}
     </Modal>
+  );
+}
+
+function rotinasPendentes(rotinas) {
+  return rotinas?.gerar ? rotinas.responsaveis.filter((r) => !r.encerrada) : [];
+}
+
+// Com "Gerar Rotinas" ligado: quem já encerrou a rotina e quem falta — o botão Encerrar
+// período só libera com todas encerradas (o backend também recusa, ROTINAS_PENDENTES).
+function StatusRotinas({ rotinas }) {
+  if (!rotinas?.gerar || rotinas.responsaveis.length === 0) return null;
+  const pendentes = rotinasPendentes(rotinas);
+  return (
+    <div className={`rounded-lg border px-3 py-2.5 ${pendentes.length ? 'border-amber-200 bg-amber-50' : 'border-emerald-200 bg-emerald-50'}`}>
+      <p className={`flex items-center gap-2 text-sm font-medium ${pendentes.length ? 'text-amber-800' : 'text-emerald-700'}`}>
+        <ListChecks size={16} className="shrink-0" />
+        {pendentes.length
+          ? `Aguardando ${pendentes.length} rotina(s) — o período só pode ser encerrado depois que todos encerrarem.`
+          : 'Todas as rotinas foram encerradas.'}
+      </p>
+      <ul className="mt-2 space-y-1">
+        {rotinas.responsaveis.map((r) => (
+          <li key={r.usuarioId} className="flex items-center justify-between gap-3 text-xs">
+            <span className="truncate text-gray-700">
+              <span className="font-medium">{r.nome}</span>
+              <span className="text-gray-400"> · {r.preenchidas}/{r.contas} conta(s) com saldo</span>
+            </span>
+            {r.encerrada ? (
+              <span className="flex shrink-0 items-center gap-1 font-medium text-emerald-600">
+                <CheckCircle2 size={13} /> Encerrada
+              </span>
+            ) : (
+              <span className="flex shrink-0 items-center gap-1 font-medium text-amber-700">
+                <Clock size={13} /> Pendente
+              </span>
+            )}
+          </li>
+        ))}
+      </ul>
+    </div>
   );
 }
 

@@ -6,6 +6,7 @@ import SearchableSelect from '../../../components/SearchableSelect';
 import TransferList from '../../../components/TransferList';
 import { getComunicarSaldos, salvarComunicarSaldos } from '../../../api/saldoContasBancarias.api';
 import { listZapiIntegracoes } from '../../../api/zapi.api';
+import RotinasConfig from './RotinasConfig';
 
 const ROTULO_PERMISSAO = { MASTER: 'Master', ADMINISTRADOR: 'Administrador', BASICO: 'Básico' };
 
@@ -37,7 +38,7 @@ function SectionHeader({ titulo, texto }) {
 // zapi.api.js::listZapiIntegracoes. Só guarda a configuração; o disparo em si (mandar a
 // mensagem de verdade ao encerrar o período) ainda não existe, fica pra quando o conteúdo da
 // mensagem for definido.
-export default function ConfiguracoesTab({ empresaId }) {
+export default function ConfiguracoesTab({ empresaId, onRotinasAlteradas }) {
   const [carregando, setCarregando] = useState(true);
   const [elegiveis, setElegiveis] = useState([]);
   const [selecionados, setSelecionados] = useState([]);
@@ -100,7 +101,9 @@ export default function ConfiguracoesTab({ empresaId }) {
 
   return (
     <div className="space-y-4">
-      <Card className="rounded-tl-none">
+      <RotinasConfig empresaId={empresaId} onSalvo={onRotinasAlteradas} />
+
+      <Card>
         <SectionHeader
           titulo="Conexão de disparo"
           texto="Qual conexão de WhatsApp (Z-API) desta empresa é usada para enviar o aviso de saldos."

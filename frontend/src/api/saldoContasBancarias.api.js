@@ -86,3 +86,43 @@ export function salvarComunicarSaldos(empresaId, { usuarioIds, zapiIntegracaoId 
     .put(`/saldo-contas-bancarias/${empresaId}/comunicar-saldos`, { usuarioIds, zapiIntegracaoId })
     .then((res) => res.data);
 }
+
+// ─── Rotinas (parâmetro "Gerar Rotinas") ─────────────────────────────────────────────────
+
+// { gerar, dividirPor: 'CLASSIFICACAO'|'BANCO', elegiveis: [{id, nome, permissao}],
+//   classificacoes: [{chave, nome, contas, usuarioId}], bancos: [{chave, nome, logo, contas, usuarioId}] }
+export function getRotinasConfig(empresaId) {
+  return http.get(`/saldo-contas-bancarias/${empresaId}/rotinas/config`).then((res) => res.data);
+}
+
+// responsaveis: { CLASSIFICACAO: [{chave, usuarioId|null}], BANCO: [...] } — substitui tudo.
+export function salvarRotinasConfig(empresaId, { gerar, dividirPor, responsaveis }) {
+  return http
+    .put(`/saldo-contas-bancarias/${empresaId}/rotinas/config`, { gerar, dividirPor, responsaveis })
+    .then((res) => res.data);
+}
+
+// Andamento no período aberto: { gerar, dividirPor, periodo, semResponsavel,
+//   responsaveis: [{usuarioId, nome, itens, contas, preenchidas, encerrada, encerradoEm}], minha }
+export function getRotinasStatus(empresaId) {
+  return http.get(`/saldo-contas-bancarias/${empresaId}/rotinas/status`).then((res) => res.data);
+}
+
+// Mesma forma de getSaldosContas, só com as contas do usuário logado.
+export function getSaldosRotina(empresaId, { dataInicio, dataFim } = {}) {
+  return http
+    .get(`/saldo-contas-bancarias/${empresaId}/rotinas/saldos`, { params: { data_inicio: dataInicio, data_fim: dataFim } })
+    .then((res) => res.data);
+}
+
+export function salvarSaldosRotina(empresaId, itens) {
+  return http.put(`/saldo-contas-bancarias/${empresaId}/rotinas/saldos`, { itens }).then((res) => res.data);
+}
+
+export function encerrarRotina(empresaId) {
+  return http.post(`/saldo-contas-bancarias/${empresaId}/rotinas/encerrar`).then((res) => res.data);
+}
+
+export function reabrirRotina(empresaId) {
+  return http.delete(`/saldo-contas-bancarias/${empresaId}/rotinas/encerrar`).then((res) => res.data);
+}

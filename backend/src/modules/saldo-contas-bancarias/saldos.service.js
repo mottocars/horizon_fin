@@ -212,6 +212,15 @@ async function abrirPeriodo(empresaId, usuarioId, data, reabrirEncerrado) {
        encerrado_por = NULL, encerrado_em = NULL`,
     [empresaId, data, usuarioId]
   );
+  // Reabrir um dia já encerrado recomeça as rotinas dele do zero: quem tinha encerrado a
+  // própria rotina na rodada anterior precisa encerrar de novo (ver rotinas.service.js).
+  if (existente[0]?.status === 'ENCERRADO') {
+    await pool.query(
+      `DELETE FROM saldos_rotinas_encerramentos
+       WHERE periodo_id = (SELECT id FROM saldos_periodos WHERE empresa_id = $1 AND data = $2)`,
+      [empresaId, data]
+    );
+  }
   return { data };
 }
 
@@ -392,5 +401,7 @@ module.exports = {
   encerrarPeriodo,
   listUsuariosComunicarSaldos,
   salvarComunicarSaldos,
+  listUsuariosElegiveisComunicar,
+  BANCO_EFETIVO_SQL,
   SEM_CLASSIFICACAO,
 };

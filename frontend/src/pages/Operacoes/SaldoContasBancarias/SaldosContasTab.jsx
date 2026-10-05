@@ -208,6 +208,18 @@ function SaldosContasTab({
   // página recarregar o valor real.
   dataAberta = '',
   onPeriodoDessincronizado,
+  // Reuso pela aba Rotinas (RotinasTab.jsx): de onde vêm e pra onde vão os saldos (só as contas
+  // do responsável), grade toda só leitura (rotina encerrada / sem período) e grupos já
+  // abertos (são poucas contas). Sem esses props, é a aba Saldos das Contas de sempre.
+  buscarSaldos = getSaldosContas,
+  gravarSaldos = salvarSaldosContas,
+  somenteLeitura = false,
+  expandirGrupos = false,
+  onSalvo,
+  textoSemContas,
+  // Canto superior esquerdo reto pra encaixar direto embaixo da aba (padrão); a Rotinas põe um
+  // painel de status entre a aba e a grade, então desliga.
+  encaixadoNaAba = true,
 }) {
   const [contas, setContas] = useState(null);
   const [carregando, setCarregando] = useState(false);
@@ -238,9 +250,11 @@ function SaldosContasTab({
     rolouAposCargaRef.current = false;
     setCarregando(true);
     setErroCarga('');
-    getSaldosContas(empresaId, { dataInicio, dataFim, companyIds })
+    buscarSaldos(empresaId, { dataInicio, dataFim, companyIds })
       .then((resposta) => {
-        if (minhaRequisicao === requisicaoRef.current) setContas(resposta.contas);
+        if (minhaRequisicao !== requisicaoRef.current) return;
+        setContas(resposta.contas);
+        if (expandirGrupos) setAbertos([...new Set(resposta.contas.map((c) => c.classificacao))]);
       })
       .catch((err) => {
         if (minhaRequisicao === requisicaoRef.current) {
@@ -251,7 +265,7 @@ function SaldosContasTab({
       .finally(() => {
         if (minhaRequisicao === requisicaoRef.current) setCarregando(false);
       });
-  }, [empresaId, dataInicio, dataFim, companyIds]);
+  }, [empresaId, dataInicio, dataFim, companyIds, buscarSaldos, expandirGrupos]);
 
   carregarRef.current = carregar;
 
@@ -399,8 +413,11 @@ function SaldosContasTab({
       setPendentes((n) => n + 1);
       setErroSalvar('');
       filaRef.current = filaRef.current
-        .then(() => salvarSaldosContas(empresaId, itens))
-        .then(() => setSalvoAlgumaVez(true))
+        .then(() => gravarSaldos(empresaId, itens))
+        .then(() => {
+          setSalvoAlgumaVez(true);
+          onSalvo?.();
+        })
         .catch((err) => {
           setErroSalvar(err.response?.data?.message || 'Não foi possível salvar. Recarregando os saldos...');
           // 409 = o período liberado mudou desde que a tela carregou (outra aba/pessoa abriu
@@ -411,7 +428,7 @@ function SaldosContasTab({
         })
         .finally(() => setPendentes((n) => n - 1));
     },
-    [empresaId, aplicarLocal, onPeriodoDessincronizado]
+    [empresaId, aplicarLocal, onPeriodoDessincronizado, gravarSaldos, onSalvo]
   );
 
   const handleCommit = useCallback(
@@ -463,7 +480,7 @@ function SaldosContasTab({
           const valor = interpretarSaldo(bruto);
           // dia.iso !== dataAberta: coluna fora do período liberado, mesma regra da célula
           // sozinha (input desabilitado) — colar por cima de várias colunas não pode furar isso.
-          if (!conta || !dia || Number.isNaN(valor) || dia.iso !== dataAberta) {
+          if (!conta || !dia || Number.isNaN(valor) || dia.iso !== dataAberta || somenteLeitura) {
             ignorados += 1;
             return;
           }
@@ -477,7 +494,7 @@ function SaldosContasTab({
       );
       setTimeout(() => setAviso(''), 5000);
     },
-    [dias, salvar, dataAberta]
+    [dias, salvar, dataAberta, somenteLeitura]
   );
 
   function alternarGrupo(valor) {
@@ -513,7 +530,7 @@ function SaldosContasTab({
   const statusSalvamento = pendentes > 0 ? 'salvando' : erroSalvar ? 'erro' : salvoAlgumaVez ? 'salvo' : null;
 
   return (
-    <div className="rounded-card rounded-tl-none bg-white shadow-card">
+    <div className={`rounded-card bg-white shadow-card ${encaixadoNaAba ? 'rounded-tl-none' : ''}`}>
       {statusSalvamento && (
         <div className="flex items-center justify-end border-b border-gray-100 px-5 py-2 text-xs" aria-live="polite">
           {statusSalvamento === 'salvando' ? (
@@ -560,7 +577,8 @@ function SaldosContasTab({
           <Landmark size={26} className="mb-1 text-gray-300" />
           <p className="text-sm text-gray-600">Nenhuma conta bancária encontrada.</p>
           <p className="max-w-sm text-xs text-gray-400">
-            Ajuste os filtros ou, se a empresa ainda não tem contas, importe-as em Cadastros → Contas Bancárias.
+            {textoSemContas ||
+              'Ajuste os filtros ou, se a empresa ainda não tem contas, importe-as em Cadastros → Contas Bancárias.'}
           </p>
         </div>
       ) : semResultadoFiltro ? (
@@ -730,7 +748,7 @@ function SaldosContasTab({
                                   dia={d}
                                   valor={conta.saldos[d.iso]}
                                   origem={conta.origens?.[d.iso]}
-                                  bloqueada={d.iso !== dataAberta}
+                                  bloqueada={somenteLeitura || d.iso !== dataAberta}
                                   onCommit={handleCommit}
                                   onNavegar={handleNavegar}
                                   onColar={handleColar}

@@ -3,6 +3,7 @@ const service = require('./saldos.service');
 const vanpixSyncService = require('./vanpix-sync.service');
 const saldosExcelService = require('./saldosExcel.service');
 const comunicarSaldosService = require('./comunicarSaldos.service');
+const rotinasService = require('./rotinas.service');
 const usuariosService = require('../usuarios/usuarios.service');
 
 const MAX_DIAS_PERIODO = 93;
@@ -175,6 +176,9 @@ async function abrirPeriodo(req, res, next) {
 async function encerrarPeriodo(req, res, next) {
   try {
     const empresaId = await acessoEmpresa(req);
+    // Com "Gerar Rotinas" ligado, só encerra depois que todos os responsáveis encerraram a
+    // própria rotina (409 ROTINAS_PENDENTES com os nomes de quem falta).
+    await rotinasService.assertPodeEncerrarPeriodo(empresaId, req.user.id);
     const resultado = await service.encerrarPeriodo(empresaId, req.user.id);
     // Espera "Comunicar Saldos" terminar (pedido do usuário: a tela mostra quem foi avisado
     // ou o motivo de quem falhou, então precisa do resultado antes de responder — antes
@@ -236,7 +240,96 @@ async function buscarVanpix(req, res, next) {
   }
 }
 
+// ─── Rotinas (parâmetro "Gerar Rotinas") ────────────────────────────────────────────────
+
+const responsavelSchema = z.object({
+  chave: z.string().trim().min(1).max(50),
+  usuarioId: z.coerce.number().int().positive().nullable(),
+});
+
+const rotinasConfigSchema = z.object({
+  gerar: z.boolean(),
+  dividirPor: z.enum(['CLASSIFICACAO', 'BANCO']),
+  responsaveis: z.object({
+    CLASSIFICACAO: z.array(responsavelSchema).max(500).default([]),
+    BANCO: z.array(responsavelSchema).max(500).default([]),
+  }),
+});
+
+async function getRotinasConfig(req, res, next) {
+  try {
+    const empresaId = await acessoEmpresa(req);
+    res.json(await rotinasService.getConfigCompleta(empresaId));
+  } catch (err) {
+    tratarErroDeValidacao(err, next);
+  }
+}
+
+async function salvarRotinasConfig(req, res, next) {
+  try {
+    const empresaId = await acessoEmpresa(req);
+    const dados = rotinasConfigSchema.parse(req.body);
+    res.json(await rotinasService.salvarConfig(empresaId, req.user.id, dados));
+  } catch (err) {
+    tratarErroDeValidacao(err, next);
+  }
+}
+
+async function getRotinasStatus(req, res, next) {
+  try {
+    const empresaId = await acessoEmpresa(req);
+    res.json(await rotinasService.getStatus(empresaId, req.user.id));
+  } catch (err) {
+    tratarErroDeValidacao(err, next);
+  }
+}
+
+async function getSaldosRotina(req, res, next) {
+  try {
+    const empresaId = await acessoEmpresa(req);
+    const { dataInicio, dataFim } = parseFiltrosSaldos(req);
+    res.json(await rotinasService.getSaldosRotina(empresaId, req.user.id, { dataInicio, dataFim }));
+  } catch (err) {
+    tratarErroDeValidacao(err, next);
+  }
+}
+
+async function salvarSaldosRotina(req, res, next) {
+  try {
+    const empresaId = await acessoEmpresa(req);
+    const { itens } = salvarSchema.parse(req.body);
+    res.json(await rotinasService.salvarSaldosRotina(empresaId, req.user.id, itens));
+  } catch (err) {
+    tratarErroDeValidacao(err, next);
+  }
+}
+
+async function encerrarRotina(req, res, next) {
+  try {
+    const empresaId = await acessoEmpresa(req);
+    res.json(await rotinasService.encerrarRotina(empresaId, req.user.id));
+  } catch (err) {
+    tratarErroDeValidacao(err, next);
+  }
+}
+
+async function reabrirRotina(req, res, next) {
+  try {
+    const empresaId = await acessoEmpresa(req);
+    res.json(await rotinasService.reabrirRotina(empresaId, req.user.id));
+  } catch (err) {
+    tratarErroDeValidacao(err, next);
+  }
+}
+
 module.exports = {
+  getRotinasConfig,
+  salvarRotinasConfig,
+  getRotinasStatus,
+  getSaldosRotina,
+  salvarSaldosRotina,
+  encerrarRotina,
+  reabrirRotina,
   getFiltros,
   getSaldos,
   exportarExcel,

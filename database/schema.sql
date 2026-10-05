@@ -982,6 +982,40 @@ CREATE TABLE saldos_comunicar_config (
     atualizado_em       TIMESTAMP DEFAULT NOW()
 );
 
+-- Parâmetro "Gerar Rotinas" (aba Configurações de Saldo Contas Bancárias): com ele ligado, as
+-- contas da grade são divididas entre responsáveis — por classificação ou por banco — e surge a
+-- aba "Rotinas", onde cada responsável lança só os saldos das suas contas no período aberto e
+-- encerra a própria rotina. O período só pode ser encerrado depois que todos os envolvidos
+-- encerraram (ver saldo-contas-bancarias/rotinas.service.js).
+CREATE TABLE saldos_rotinas_config (
+    empresa_id      INTEGER PRIMARY KEY REFERENCES empresas(id) ON DELETE CASCADE,
+    gerar_rotinas   BOOLEAN NOT NULL DEFAULT FALSE,
+    dividir_por     VARCHAR(15) NOT NULL DEFAULT 'CLASSIFICACAO' CHECK (dividir_por IN ('CLASSIFICACAO', 'BANCO')),
+    atualizado_por  INTEGER REFERENCES usuarios(id) ON DELETE SET NULL,
+    atualizado_em   TIMESTAMP DEFAULT NOW()
+);
+
+-- Responsável de cada classificação (chave = nome da classificação, o mesmo texto gravado em
+-- contas_bancarias_sienge.classificacao) ou de cada banco (chave = código COMPE efetivo da
+-- conta). As duas divisões ficam guardadas: trocar "Dividir por" não perde a outra.
+CREATE TABLE saldos_rotinas_responsaveis (
+    empresa_id  INTEGER NOT NULL REFERENCES empresas(id) ON DELETE CASCADE,
+    tipo        VARCHAR(15) NOT NULL CHECK (tipo IN ('CLASSIFICACAO', 'BANCO')),
+    chave       VARCHAR(50) NOT NULL,
+    usuario_id  INTEGER NOT NULL REFERENCES usuarios(id) ON DELETE CASCADE,
+    PRIMARY KEY (empresa_id, tipo, chave)
+);
+
+-- Quem já encerrou a própria rotina em cada período (1 linha por responsável). Apagada quando
+-- o responsável reabre a rotina; reabrir um período já encerrado zera a lista do período.
+-- encerrado_em vem do relógio da aplicação (o do Postgres da VPS é deslocado).
+CREATE TABLE saldos_rotinas_encerramentos (
+    periodo_id    INTEGER NOT NULL REFERENCES saldos_periodos(id) ON DELETE CASCADE,
+    usuario_id    INTEGER NOT NULL REFERENCES usuarios(id) ON DELETE CASCADE,
+    encerrado_em  TIMESTAMP NOT NULL,
+    PRIMARY KEY (periodo_id, usuario_id)
+);
+
 -- Logomarca customizada de um banco (cadastro de Bancos, aba Bancos de Operações > Saldo
 -- Contas Bancárias) — sobrepõe a logo oficial da BrasilAPI pra aquele código enquanto
 -- existir uma linha aqui. Data URI (base64), já redimensionada no navegador antes de

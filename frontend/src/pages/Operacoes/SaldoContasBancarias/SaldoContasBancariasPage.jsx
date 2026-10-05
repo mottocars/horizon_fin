@@ -1,12 +1,14 @@
-import { useEffect, useMemo, useRef, useState } from 'react';
+import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { useSearchParams } from 'react-router-dom';
-import { CreditCard, Download, FilterX, Landmark, Layers, Loader2, Lock, LockOpen, Plus, RefreshCw, Search, Settings, Wallet } from 'lucide-react';
+import { CreditCard, Download, FilterX, Landmark, Layers, ListChecks, Loader2, Lock, LockOpen, Plus, RefreshCw, Search, Settings, Wallet } from 'lucide-react';
 import Card from '../../../components/Card';
 import Tabs from '../../../components/Tabs';
 import Button from '../../../components/Button';
 import SearchableSelect from '../../../components/SearchableSelect';
 import { listEmpresas } from '../../../api/empresas.api';
-import { getFiltrosSaldos, getPeriodoAberto, exportarSaldosExcel } from '../../../api/saldoContasBancarias.api';
+import { getFiltrosSaldos, getPeriodoAberto, exportarSaldosExcel, getRotinasStatus } from '../../../api/saldoContasBancarias.api';
+import { useAuth } from '../../../auth/AuthContext';
+import RotinasTab from './RotinasTab';
 import { gerarContasBancarias } from '../../../api/contasBancariasSienge.api';
 import { nomeExibicaoEmpresa } from '../../../utils/empresa';
 import { useEmpresaTravada } from '../../../hooks/useEmpresaTravada';
@@ -25,6 +27,11 @@ import { formatarDataBR, semanaAtual, semanaDe } from './constantes';
 // O `{ divider: true }` separa "Saldos das Contas" (a aba operacional, o dia a dia de
 // lançar saldo) das 3 de cadastro/parâmetro — mesmo padrão de GestaoCobrancasPage.jsx, que
 // separa "Clusters de Clientes" (operacional) de "Motor de Risco" e as demais (parâmetro).
+// Com o parâmetro "Gerar Rotinas" ligado (aba Configurações), "Rotinas" entra como a primeira
+// aba — e passa a ser a aba padrão da tela (ver abaAtiva).
+const ABA_ROTINAS = { id: 'rotinas', label: 'Rotinas', icon: ListChecks };
+const ABAS_COM_GRADE = ['saldos', 'rotinas'];
+
 const TABS = [
   { id: 'saldos', label: 'Saldos das Contas', icon: Wallet },
   { divider: true },
@@ -78,8 +85,21 @@ export default function SaldoContasBancariasPage() {
   const { travada: empresaTravada, empresaIdTravada } = useEmpresaTravada();
   const [searchParams, setSearchParams] = useSearchParams();
 
+  const { user } = useAuth();
   const empresaId = searchParams.get('empresa_id') || '';
-  const abaAtiva = searchParams.get('aba') || 'saldos';
+
+  // Andamento das rotinas (null = ainda carregando). Também decide se a aba Rotinas existe.
+  const [rotinasStatus, setRotinasStatus] = useState(null);
+  const [rotinasToken, setRotinasToken] = useState(0);
+  const rotinasAtivas = Boolean(rotinasStatus?.gerar);
+  const abaParam = searchParams.get('aba');
+  // Sem aba na URL: Rotinas quando ligada (é a primeira aba), senão Saldos das Contas. Enquanto
+  // o parâmetro carrega, nenhuma aba (evita piscar Saldos e pular pra Rotinas). Rotinas na URL
+  // com o parâmetro desligado cai em Saldos.
+  let abaAtiva = abaParam || (rotinasAtivas ? 'rotinas' : empresaId && rotinasStatus === null ? '' : 'saldos');
+  if (abaAtiva === 'rotinas' && rotinasStatus && !rotinasAtivas) abaAtiva = 'saldos';
+  const abaComGrade = ABAS_COM_GRADE.includes(abaAtiva);
+  const tabs = useMemo(() => (rotinasAtivas ? [ABA_ROTINAS, ...TABS] : TABS), [rotinasAtivas]);
 
   // Arrays com `useMemo` sobre a string crua da URL: o grid recebe estes arrays como
   // dependência de `useCallback`/`useEffect` — sem isso, cada render criaria um array novo
@@ -202,7 +222,7 @@ export default function SaldoContasBancariasPage() {
   // saldos.service.js::getFiltros) — a aba Contas Bancárias usa sua própria lista (sem esse
   // filtro), recebida da própria ContasTab por callback (ver empresasOpcoesContas acima).
   useEffect(() => {
-    if (!empresaId || abaAtiva !== 'saldos') {
+    if (!empresaId || !abaComGrade) {
       setFiltros({ empresas: [], bancos: [] });
       return;
     }
@@ -221,12 +241,13 @@ export default function SaldoContasBancariasPage() {
     return () => {
       ativo = false;
     };
-  }, [empresaId, abaAtiva, refreshToken]);
+  }, [empresaId, abaComGrade, refreshToken]);
 
   // Dia liberado pra lançar saldo — null = nenhum período aberto (cadeado trancado/azul, nada
-  // é editável até alguém abrir um explicitamente).
+  // é editável até alguém abrir um explicitamente). A aba Rotinas usa o mesmo dia (não abre
+  // período próprio).
   useEffect(() => {
-    if (!empresaId || abaAtiva !== 'saldos') {
+    if (!empresaId || !abaComGrade) {
       setDataAberta('');
       return;
     }
@@ -245,7 +266,38 @@ export default function SaldoContasBancariasPage() {
     return () => {
       ativo = false;
     };
-  }, [empresaId, abaAtiva, periodoToken]);
+  }, [empresaId, abaComGrade, periodoToken]);
+
+  // Outra empresa: esquece o status da anterior antes de buscar (senão a aba padrão seria
+  // decidida com o parâmetro da empresa errada).
+  useEffect(() => {
+    setRotinasStatus(null);
+  }, [empresaId]);
+
+  // Andamento das rotinas: recarrega ao trocar de empresa, ao abrir/encerrar o período (muda o
+  // dia de referência) e quando a configuração muda (rotinasToken).
+  useEffect(() => {
+    if (!empresaId) {
+      setRotinasStatus(null);
+      return;
+    }
+    let ativo = true;
+    getRotinasStatus(empresaId)
+      .then((s) => ativo && setRotinasStatus(s))
+      .catch(() => ativo && setRotinasStatus({ gerar: false, responsaveis: [], minha: null, periodo: null }));
+    return () => {
+      ativo = false;
+    };
+  }, [empresaId, dataAberta, rotinasToken]);
+
+  // Recarga leve depois de cada saldo gravado na rotina (barra de progresso) — sem zerar o
+  // status atual na tela enquanto busca.
+  const recarregarRotinas = useCallback(() => {
+    if (!empresaId) return;
+    getRotinasStatus(empresaId)
+      .then(setRotinasStatus)
+      .catch(() => {});
+  }, [empresaId]);
 
   // Tipo de saldo só filtra com um período aberto (a origem — API/Manual/Dia Anterior — é por
   // dia, não faz sentido sem um dia de referência) — fechando o período, zera pra não deixar
@@ -338,20 +390,24 @@ export default function SaldoContasBancariasPage() {
               />
             </div>
 
-            {abaAtiva === 'saldos' && (
+            {/* Rotinas usa os mesmos filtros da grade, menos "Empresa da conta" (o recorte da
+                rotina já vem do responsável). */}
+            {abaComGrade && (
               <>
-                <div className="sm:min-w-44 sm:flex-1">
-                  <label className="mb-1 block text-sm font-medium text-gray-700">Empresa da conta</label>
-                  <SearchableSelect
-                    multiple
-                    value={companyIds}
-                    onChange={(ids) => atualizarParams({ company_ids: ids })}
-                    disabled={semEmpresa || loadingFiltros}
-                    options={opcoesEmpresasSienge}
-                    placeholder={semEmpresa ? 'Selecione a empresa primeiro' : loadingFiltros ? 'Carregando...' : 'Todas as empresas da conta'}
-                    emptyMessage="Nenhuma empresa da conta encontrada."
-                  />
-                </div>
+                {abaAtiva === 'saldos' && (
+                  <div className="sm:min-w-44 sm:flex-1">
+                    <label className="mb-1 block text-sm font-medium text-gray-700">Empresa da conta</label>
+                    <SearchableSelect
+                      multiple
+                      value={companyIds}
+                      onChange={(ids) => atualizarParams({ company_ids: ids })}
+                      disabled={semEmpresa || loadingFiltros}
+                      options={opcoesEmpresasSienge}
+                      placeholder={semEmpresa ? 'Selecione a empresa primeiro' : loadingFiltros ? 'Carregando...' : 'Todas as empresas da conta'}
+                      emptyMessage="Nenhuma empresa da conta encontrada."
+                    />
+                  </div>
+                )}
 
                 <div className="sm:min-w-48 sm:flex-1">
                   <label className="mb-1 block text-sm font-medium text-gray-700">Buscar</label>
@@ -528,7 +584,30 @@ export default function SaldoContasBancariasPage() {
       </Card>
 
       <div>
-        <Tabs tabs={TABS} activeId={abaAtiva} onChange={(aba) => atualizarParams({ aba })} />
+        <Tabs tabs={tabs} activeId={abaAtiva} onChange={(aba) => atualizarParams({ aba })} />
+
+        {abaAtiva === '' && (
+          <Card className="rounded-tl-none">
+            <p className="py-8 text-center text-sm text-gray-400">Carregando...</p>
+          </Card>
+        )}
+
+        {abaAtiva === 'rotinas' && (
+          <RotinasTab
+            empresaId={empresaId}
+            usuarioAtualId={user?.id}
+            status={rotinasStatus}
+            onStatus={setRotinasStatus}
+            recarregarStatus={recarregarRotinas}
+            dataInicio={dataInicio}
+            dataFim={dataFim}
+            busca={buscaSaldos}
+            tipoSaldo={tipoSaldoFiltro}
+            infoBancos={infoBancos}
+            refreshToken={refreshToken}
+            onPeriodoDessincronizado={() => setPeriodoToken((n) => n + 1)}
+          />
+        )}
 
         {abaAtiva === 'saldos' && (
           <SaldosContasTab
@@ -561,7 +640,9 @@ export default function SaldoContasBancariasPage() {
           />
         )}
 
-        {abaAtiva === 'configuracoes' && <ConfiguracoesTab empresaId={empresaId} />}
+        {abaAtiva === 'configuracoes' && (
+          <ConfiguracoesTab empresaId={empresaId} onRotinasAlteradas={() => setRotinasToken((n) => n + 1)} />
+        )}
       </div>
 
       <AbrirPeriodoModal
