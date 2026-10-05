@@ -17,6 +17,7 @@ const bancoDadosRoutes = require('./modules/integracoes-banco-dados/bancoDados.r
 const relatorioMasaRoutes = require('./modules/relatorio-empreendimentos-masa/relatorioMasa.routes');
 const relatorioNotasPendentesRoutes = require('./modules/relatorio-notas-pendentes/notasPendentes.routes');
 const relatorioExtratosRoutes = require('./modules/relatorio-extratos-bancarios/extratos.routes');
+const projetosRoutes = require('./modules/projetos/projetos.routes');
 const previsionRoutes = require('./modules/integracoes-prevision/prevision.routes');
 const previsionDashboardsRoutes = require('./modules/prevision-dashboards/prevision.routes');
 const planosFinanceirosSiengeRoutes = require('./modules/planos-financeiros-sienge/planos.routes');
@@ -96,6 +97,7 @@ app.use('/api/integracoes/banco-dados', bancoDadosRoutes);
 app.use('/api/relatorios/empreendimentos-masa', relatorioMasaRoutes);
 app.use('/api/relatorios/notas-pendentes', relatorioNotasPendentesRoutes);
 app.use('/api/relatorios/extratos-bancarios', relatorioExtratosRoutes);
+app.use('/api/projetos', projetosRoutes);
 app.use('/api/integracoes/prevision', previsionRoutes);
 app.use('/api/prevision-dashboards', previsionDashboardsRoutes);
 app.use('/api/planos-financeiros/sienge', planosFinanceirosSiengeRoutes);
