@@ -12,7 +12,6 @@ import {
   Minus,
   Plus,
   ScrollText,
-  Search,
   TriangleAlert,
   Wallet,
 } from 'lucide-react';
@@ -74,10 +73,18 @@ const ABAS = [
   { id: 'saldos', label: 'Saldos diários', icon: CalendarDays, iconColorClass: 'text-emerald-600' },
 ];
 
-const TIPOS = [
-  { value: 'C', label: 'Entradas' },
-  { value: 'D', label: 'Saídas' },
-];
+// Chaves dos filtros de título (Histórico e Contraparte) — vazio vira um rótulo próprio pra
+// também poder ser filtrado.
+const SEM_HISTORICO = '(sem histórico)';
+const SEM_CONTRAPARTE = '(sem contraparte)';
+const chaveHistorico = (l) => l.historico || SEM_HISTORICO;
+const chaveContraparte = (l) => l.contraparte?.nome || SEM_CONTRAPARTE;
+
+function opcoesDistintas(contas, chave) {
+  const valores = new Set();
+  for (const c of contas) for (const d of c.dias || []) for (const l of d.lancamentos) valores.add(chave(l));
+  return [...valores].sort((a, b) => a.localeCompare(b, 'pt-BR')).map((v) => ({ value: v, label: v }));
+}
 
 const TH = 'sticky -top-6 z-20 border-b-2 border-b-blue-500 bg-blue-50 px-3 py-2.5 text-center font-medium';
 const THD = `${TH} border-l border-l-blue-100`;
@@ -120,14 +127,15 @@ export default function ExtratosBancariosPage() {
   const [erro, setErro] = useState('');
 
   const [aba, setAba] = useState('lancamentos');
-  const [busca, setBusca] = useState('');
   const [filtroConta, setFiltroConta] = useState(null);
-  const [filtroTipo, setFiltroTipo] = useState(null);
+  const [filtroHistorico, setFiltroHistorico] = useState(null);
+  const [filtroContraparte, setFiltroContraparte] = useState(null);
   const [recolhidos, setRecolhidos] = useState(() => new Set());
   const [menuContexto, setMenuContexto] = useState(null);
 
   const thContaRef = useRef(null);
   const thHistoricoRef = useRef(null);
+  const thContraparteRef = useRef(null);
   const theadRef = useRef(null);
   const [alturaCabecalho, setAlturaCabecalho] = useState(44);
 
@@ -182,8 +190,8 @@ export default function ExtratosBancariosPage() {
       const r = await gerarExtratosBancarios({ empresaId, conexaoIds: conexaoIds.map(Number), dataInicio, dataFim });
       setRelatorio(r);
       setFiltroConta(null);
-      setFiltroTipo(null);
-      setBusca('');
+      setFiltroHistorico(null);
+      setFiltroContraparte(null);
       setRecolhidos(new Set());
     } catch (err) {
       setErro(err.response?.data?.message || 'Não foi possível gerar o relatório.');
@@ -199,15 +207,14 @@ export default function ExtratosBancariosPage() {
     () => contas.map((c) => ({ value: String(c.conexaoId), label: `${c.conexao} (${contaTexto(c)})` })),
     [contas]
   );
-  const termo = busca.trim().toLowerCase();
+  // Filtros no título das colunas Histórico e Contraparte (mesmo componente do Acervo): as
+  // opções são os valores que aparecem nos lançamentos das contas geradas.
+  const opcoesHistorico = useMemo(() => opcoesDistintas(contas, chaveHistorico), [contas]);
+  const opcoesContraparte = useMemo(() => opcoesDistintas(contas, chaveContraparte), [contas]);
 
-  const passaLancamento = (l) => {
-    if (!passaNoFiltro(filtroTipo, l.operacao)) return false;
-    if (!termo) return true;
-    const alvo = `${l.historico} ${l.complemento} ${l.contraparte.nome} ${l.contraparte.documento} ${l.canal} ${moeda(Math.abs(l.valor))}`.toLowerCase();
-    return alvo.includes(termo);
-  };
-  const filtroLancamentoAtivo = Boolean(termo) || filtroTipo != null;
+  const passaLancamento = (l) =>
+    passaNoFiltro(filtroHistorico, chaveHistorico(l)) && passaNoFiltro(filtroContraparte, chaveContraparte(l));
+  const filtroLancamentoAtivo = filtroHistorico != null || filtroContraparte != null;
 
   // Contas visíveis com os dias/lançamentos que passam nos filtros.
   const visiveis = useMemo(
@@ -221,7 +228,7 @@ export default function ExtratosBancariosPage() {
           return { ...c, diasVisiveis: dias };
         }),
     // eslint-disable-next-line react-hooks/exhaustive-deps
-    [contas, filtroConta, filtroTipo, termo]
+    [contas, filtroConta, filtroHistorico, filtroContraparte]
   );
 
   const totais = useMemo(() => {
@@ -474,39 +481,19 @@ export default function ExtratosBancariosPage() {
                 )}{' '}
                 · consultado às {horaSP(relatorio.geradoEm)}
               </p>
-              <div className="flex items-center gap-2">
-                <div className="relative">
-                  <Search size={14} className="pointer-events-none absolute left-2.5 top-1/2 -translate-y-1/2 text-gray-400" />
-                  <input
-                    type="text"
-                    value={busca}
-                    onChange={(e) => setBusca(e.target.value)}
-                    placeholder="Buscar lançamento..."
-                    className="w-56 rounded-lg border border-gray-200 py-1.5 pl-8 pr-3 text-xs focus:outline-none focus:ring-2 focus:ring-primary-100"
-                  />
-                </div>
-                {filtroAtivo && (
-                  <button
-                    type="button"
-                    onClick={() => {
-                      setFiltroConta(null);
-                      setFiltroTipo(null);
-                      setBusca('');
-                    }}
-                    className="text-xs text-gray-400 underline decoration-dotted hover:text-gray-600"
-                  >
-                    Mostrar tudo
-                  </button>
-                )}
+              {filtroAtivo && (
                 <button
                   type="button"
-                  onClick={exportar}
-                  title="Exportar para Excel"
-                  className="flex items-center gap-1.5 rounded-lg border border-gray-200 px-2.5 py-1.5 text-xs font-medium text-gray-600 hover:bg-gray-50"
+                  onClick={() => {
+                    setFiltroConta(null);
+                    setFiltroHistorico(null);
+                    setFiltroContraparte(null);
+                  }}
+                  className="text-xs text-gray-400 underline decoration-dotted hover:text-gray-600"
                 >
-                  <FileDown size={14} /> Excel
+                  Mostrar tudo
                 </button>
-              </div>
+              )}
             </div>
             <div className="grid grid-cols-2 gap-3 lg:grid-cols-5">
               <Indicador
@@ -562,11 +549,16 @@ export default function ExtratosBancariosPage() {
                   theadRef={theadRef}
                   thContaRef={thContaRef}
                   thHistoricoRef={thHistoricoRef}
+                  thContraparteRef={thContraparteRef}
                   filtroConta={filtroConta}
                   setFiltroConta={setFiltroConta}
                   opcoesConta={opcoesConta}
-                  filtroTipo={filtroTipo}
-                  setFiltroTipo={setFiltroTipo}
+                  filtroHistorico={filtroHistorico}
+                  setFiltroHistorico={setFiltroHistorico}
+                  opcoesHistorico={opcoesHistorico}
+                  filtroContraparte={filtroContraparte}
+                  setFiltroContraparte={setFiltroContraparte}
+                  opcoesContraparte={opcoesContraparte}
                   filtroLancamentoAtivo={filtroLancamentoAtivo}
                 />
               ) : (
@@ -642,11 +634,16 @@ function TabelaLancamentos({
   theadRef,
   thContaRef,
   thHistoricoRef,
+  thContraparteRef,
   filtroConta,
   setFiltroConta,
   opcoesConta,
-  filtroTipo,
-  setFiltroTipo,
+  filtroHistorico,
+  setFiltroHistorico,
+  opcoesHistorico,
+  filtroContraparte,
+  setFiltroContraparte,
+  opcoesContraparte,
   filtroLancamentoAtivo,
 }) {
   const celula = 'border-b border-b-gray-100 border-l border-l-gray-100 px-3 py-1.5 text-xs';
@@ -663,11 +660,29 @@ function TabelaLancamentos({
           <th className={`${THD} w-24 xl:w-28`}>Data / Hora</th>
           <th ref={thHistoricoRef} className={THD}>
             <span className="inline-flex items-center justify-center gap-1.5">
-              <FiltroColuna filtro={filtroTipo} onChange={setFiltroTipo} opcoes={TIPOS} label="tipo de lançamento" colunaRef={thHistoricoRef} />
+              <FiltroColuna
+                filtro={filtroHistorico}
+                onChange={setFiltroHistorico}
+                opcoes={opcoesHistorico}
+                label="histórico"
+                colunaRef={thHistoricoRef}
+              />
               Histórico
             </span>
           </th>
-          <th className={`${THD} w-32 xl:w-40`}>Contraparte</th>
+          {/* Sem largura: Histórico e Contraparte dividem igualmente o que sobra (table-fixed). */}
+          <th ref={thContraparteRef} className={THD}>
+            <span className="inline-flex items-center justify-center gap-1.5">
+              <FiltroColuna
+                filtro={filtroContraparte}
+                onChange={setFiltroContraparte}
+                opcoes={opcoesContraparte}
+                label="contraparte"
+                colunaRef={thContraparteRef}
+              />
+              Contraparte
+            </span>
+          </th>
           <th className={`${THD} w-28 xl:w-32`}>Entrada</th>
           <th className={`${THD} w-28 xl:w-32`}>Saída</th>
           <th className={`${THD} w-32 xl:w-36 rounded-tr-card`}>Saldo</th>
