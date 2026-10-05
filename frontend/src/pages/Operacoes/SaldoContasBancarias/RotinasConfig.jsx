@@ -1,7 +1,6 @@
-import { useCallback, useEffect, useMemo, useState } from 'react';
-import { AlertTriangle, CheckCircle2, Landmark, Layers, ListChecks, UserRound } from 'lucide-react';
+import { forwardRef, useCallback, useEffect, useImperativeHandle, useMemo, useState } from 'react';
+import { AlertTriangle, Landmark, Layers, ListChecks, UserRound } from 'lucide-react';
 import Card from '../../../components/Card';
-import Button from '../../../components/Button';
 import SearchableSelect from '../../../components/SearchableSelect';
 import { getRotinasConfig, salvarRotinasConfig } from '../../../api/saldoContasBancarias.api';
 import LogoBanco from './LogoBanco';
@@ -27,14 +26,15 @@ function mapaInicial(lista) {
 // Parâmetro "Gerar Rotinas": liga a aba Rotinas e define quem é responsável por lançar os
 // saldos de cada classificação (ou de cada banco). As duas divisões ficam guardadas — trocar
 // "Dividir por" não perde a outra. Ver backend saldo-contas-bancarias/rotinas.service.js.
-export default function RotinasConfig({ empresaId, onSalvo }) {
+// Sem botão próprio: o "Salvar" do fim da aba Configurações grava tudo da tela, chamando
+// salvar() daqui pela ref (ver ConfiguracoesTab.jsx). onAlterado avisa a tela de qualquer
+// mudança (pra apagar o "Salvo").
+const RotinasConfig = forwardRef(function RotinasConfig({ empresaId, onAlterado }, ref) {
   const [carregando, setCarregando] = useState(true);
   const [dados, setDados] = useState(null);
   const [gerar, setGerar] = useState(false);
   const [dividirPor, setDividirPor] = useState('CLASSIFICACAO');
   const [responsaveis, setResponsaveis] = useState({ CLASSIFICACAO: {}, BANCO: {} });
-  const [salvando, setSalvando] = useState(false);
-  const [salvo, setSalvo] = useState(false);
   const [erro, setErro] = useState('');
 
   const aplicar = useCallback((d) => {
@@ -92,14 +92,14 @@ export default function RotinasConfig({ empresaId, onSalvo }) {
 
   function definirResponsavel(chave, valor) {
     setResponsaveis((prev) => ({ ...prev, [dividirPor]: { ...prev[dividirPor], [chave]: valor ? Number(valor) : null } }));
-    setSalvo(false);
+    onAlterado?.();
   }
 
-  async function handleSalvar() {
-    setErro('');
-    setSalvo(false);
-    setSalvando(true);
-    try {
+  // Chamado pelo Salvar da aba Configurações. Lança em caso de erro (a tela mostra a mensagem).
+  // Sem a configuração carregada, não grava nada (evitaria apagar responsáveis por engano).
+  useImperativeHandle(ref, () => ({
+    async salvar() {
+      if (!dados) return;
       const paraLista = (tipo) => Object.entries(responsaveis[tipo]).map(([chave, usuarioId]) => ({ chave, usuarioId }));
       const atualizado = await salvarRotinasConfig(empresaId, {
         gerar,
@@ -107,14 +107,8 @@ export default function RotinasConfig({ empresaId, onSalvo }) {
         responsaveis: { CLASSIFICACAO: paraLista('CLASSIFICACAO'), BANCO: paraLista('BANCO') },
       });
       aplicar(atualizado);
-      setSalvo(true);
-      onSalvo?.();
-    } catch (err) {
-      setErro(err.response?.data?.message || 'Não foi possível salvar.');
-    } finally {
-      setSalvando(false);
-    }
-  }
+    },
+  }));
 
   return (
     <Card className="rounded-tl-none">
@@ -139,7 +133,7 @@ export default function RotinasConfig({ empresaId, onSalvo }) {
           disabled={carregando}
           onClick={() => {
             setGerar((v) => !v);
-            setSalvo(false);
+            onAlterado?.();
           }}
           className="flex shrink-0 items-center gap-2.5 self-start rounded-full border border-gray-200 py-1 pl-1 pr-3 text-sm font-medium transition-colors hover:bg-gray-50 disabled:opacity-60"
         >
@@ -169,7 +163,7 @@ export default function RotinasConfig({ empresaId, onSalvo }) {
                       type="button"
                       onClick={() => {
                         setDividirPor(id);
-                        setSalvo(false);
+                        onAlterado?.();
                       }}
                       className={`flex items-center gap-1.5 rounded-md px-3 py-1.5 text-sm font-medium transition-colors ${
                         dividirPor === id ? 'bg-white text-primary-700 shadow-sm' : 'text-gray-500 hover:text-gray-700'
@@ -266,23 +260,10 @@ export default function RotinasConfig({ empresaId, onSalvo }) {
             </div>
           )}
 
-          <div className="mt-4 flex items-center gap-3 border-t border-gray-100 pt-4">
-            <Button type="button" onClick={handleSalvar} loading={salvando}>
-              Salvar
-            </Button>
-            {salvo && (
-              <span className="flex items-center gap-1.5 text-sm text-emerald-600">
-                <CheckCircle2 size={15} /> Salvo
-              </span>
-            )}
-            {erro && (
-              <span className="flex items-center gap-1.5 text-sm text-red-600">
-                <AlertTriangle size={15} className="shrink-0" /> {erro}
-              </span>
-            )}
-          </div>
         </>
       )}
     </Card>
   );
-}
+});
+
+export default RotinasConfig;

@@ -1,4 +1,4 @@
-import { useCallback, useEffect, useState } from 'react';
+import { useCallback, useEffect, useRef, useState } from 'react';
 import { AlertTriangle, CheckCircle2, Settings } from 'lucide-react';
 import Card from '../../../components/Card';
 import Button from '../../../components/Button';
@@ -47,6 +47,8 @@ export default function ConfiguracoesTab({ empresaId, onRotinasAlteradas }) {
   const [erro, setErro] = useState('');
   const [salvando, setSalvando] = useState(false);
   const [salvo, setSalvo] = useState(false);
+  // Card Gerar Rotinas: não tem botão próprio, o Salvar do fim da tela grava ele também.
+  const rotinasRef = useRef(null);
 
   const carregar = useCallback(() => {
     if (!empresaId) {
@@ -75,6 +77,9 @@ export default function ConfiguracoesTab({ empresaId, onRotinasAlteradas }) {
     setSalvo(false);
     setSalvando(true);
     try {
+      // Um Salvar só pra tela toda (pedido do usuário): Gerar Rotinas e Comunicar Saldos.
+      await rotinasRef.current?.salvar();
+      onRotinasAlteradas?.();
       await salvarComunicarSaldos(empresaId, {
         usuarioIds: selecionados.map(Number),
         zapiIntegracaoId,
@@ -101,7 +106,7 @@ export default function ConfiguracoesTab({ empresaId, onRotinasAlteradas }) {
 
   return (
     <div className="space-y-4">
-      <RotinasConfig empresaId={empresaId} onSalvo={onRotinasAlteradas} />
+      <RotinasConfig ref={rotinasRef} empresaId={empresaId} onAlterado={() => setSalvo(false)} />
 
       <Card>
         <SectionHeader
@@ -156,14 +161,18 @@ export default function ConfiguracoesTab({ empresaId, onRotinasAlteradas }) {
             />
           )}
         </div>
+      </Card>
 
-        <div className="mt-4 flex items-center gap-3 border-t border-gray-100 pt-4">
+      {/* Um Salvar só, no fim da página, pra todas as configurações desta tela (Gerar Rotinas,
+          conexão de disparo e destinatários). */}
+      <Card>
+        <div className="flex flex-wrap items-center gap-3">
           <Button type="button" onClick={handleSalvar} loading={salvando} disabled={carregando}>
-            Salvar
+            Salvar configurações
           </Button>
           {salvo && (
             <span className="flex items-center gap-1.5 text-sm text-emerald-600">
-              <CheckCircle2 size={15} /> Salvo
+              <CheckCircle2 size={15} /> Configurações salvas
             </span>
           )}
           {erro && (
