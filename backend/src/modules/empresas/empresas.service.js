@@ -72,7 +72,7 @@ async function list({ page = 1, limit = 10, search = '', ativo, empresaIds }) {
   const whereClause = `WHERE ${conditions.join(' AND ')}`;
 
   const { rows } = await pool.query(
-    `SELECT id, cnpj, razao_social, nome_fantasia, cidade, estado, situacao_cadastral, ativo, criado_em
+    `SELECT id, cnpj, razao_social, nome_fantasia, cidade, estado, situacao_cadastral, ativo, criado_em, logo
      FROM empresas
      ${whereClause}
      ORDER BY razao_social ASC

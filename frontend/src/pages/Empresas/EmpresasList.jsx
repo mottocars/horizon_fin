@@ -1,6 +1,6 @@
 import { useCallback, useEffect, useState } from 'react';
 import { useNavigate } from 'react-router-dom';
-import { Plus, Search, Building } from 'lucide-react';
+import { Plus, Search, Building, Building2 } from 'lucide-react';
 import Card from '../../components/Card';
 import Button from '../../components/Button';
 import Pagination from '../../components/Pagination';
@@ -107,10 +107,23 @@ export default function EmpresasList() {
                     className="cursor-pointer border-b border-gray-50 last:border-0 hover:bg-gray-50"
                   >
                     <td className="py-3">
-                      <div className="text-gray-900">{empresa.razao_social}</div>
-                      {empresa.nome_fantasia && (
-                        <div className="text-xs text-gray-400">{empresa.nome_fantasia}</div>
-                      )}
+                      <div className="flex items-center gap-3">
+                        {empresa.logo ? (
+                          <span className="flex h-9 w-9 shrink-0 items-center justify-center overflow-hidden rounded-lg border border-gray-200 bg-white">
+                            <img src={empresa.logo} alt="" className="h-full w-full object-contain p-0.5" />
+                          </span>
+                        ) : (
+                          <span className="flex h-9 w-9 shrink-0 items-center justify-center rounded-lg bg-primary-50 text-primary-600">
+                            <Building2 size={17} />
+                          </span>
+                        )}
+                        <div className="min-w-0">
+                          <div className="text-gray-900">{empresa.razao_social}</div>
+                          {empresa.nome_fantasia && (
+                            <div className="text-xs text-gray-400">{empresa.nome_fantasia}</div>
+                          )}
+                        </div>
+                      </div>
                     </td>
                     <td className="py-3 text-gray-600">{formatCnpj(empresa.cnpj)}</td>
                     <td className="py-3 text-gray-600">
