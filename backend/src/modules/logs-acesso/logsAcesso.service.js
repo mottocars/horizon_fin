@@ -1,4 +1,5 @@
 const pool = require('../../config/db');
+const { paisDoIp } = require('../../utils/paisDoIp');
 
 function paraISODate(data) {
   return data.toISOString().slice(0, 10);
@@ -89,7 +90,12 @@ async function metricas({ dataInicio, dataFim }, empresaIds = null) {
     },
     porTela: porTelaResult.rows,
     matriz: matrizResult.rows,
-    clientes: clientesResult.rows,
+    // País calculado na hora (não gravado) — assim os acessos antigos também
+    // ganham país. `ips` vira [{ ip, pais }]; `paises` = países distintos.
+    clientes: clientesResult.rows.map((c) => {
+      const ips = (c.ips || []).map((ip) => ({ ip, pais: paisDoIp(ip) }));
+      return { ...c, ips, paises: [...new Set(ips.map((i) => i.pais).filter(Boolean))] };
+    }),
   };
 }
 
