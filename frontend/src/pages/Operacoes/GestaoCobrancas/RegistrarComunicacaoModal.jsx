@@ -1,5 +1,5 @@
 import { useEffect, useState } from 'react';
-import { Download, FileText, Paperclip, UploadCloud, X } from 'lucide-react';
+import { Copy, Download, FileText, Paperclip, UploadCloud, X } from 'lucide-react';
 import Modal from '../../../components/Modal';
 import Button from '../../../components/Button';
 import { baixarBoletoParcela, registrarObservacaoHistoricoRegua } from '../../../api/reguaCobrancaHistorico.api';
@@ -31,6 +31,28 @@ const TEXTO_POR_CANAL = {
   },
 };
 
+// Tipo de Comunicação = 'copiar' (Configurações Globais): o botão Enviar
+// vira Copiar — o responsável manda pelo próprio WhatsApp/e-mail.
+const TITULO_COPIAR = { whatsapp: 'Copiar WhatsApp', email: 'Copiar E-mail' };
+
+// navigator.clipboard só existe em https/localhost; fora disso cai no
+// execCommand antigo, que ainda funciona dentro de um clique.
+async function copiarTexto(texto) {
+  if (navigator.clipboard?.writeText) {
+    await navigator.clipboard.writeText(texto);
+    return;
+  }
+  const area = document.createElement('textarea');
+  area.value = texto;
+  area.style.position = 'fixed';
+  area.style.opacity = '0';
+  document.body.appendChild(area);
+  area.select();
+  const ok = document.execCommand('copy');
+  document.body.removeChild(area);
+  if (!ok) throw new Error('copy');
+}
+
 function formatarTamanho(bytes) {
   if (bytes < 1024) return `${bytes} B`;
   if (bytes < 1024 * 1024) return `${(bytes / 1024).toFixed(0)} KB`;
@@ -51,7 +73,7 @@ function formatarTamanho(bytes) {
 // Em qualquer canal, registra no Histórico de Etapas desta parcela (mesma
 // tabela regua_cobranca_historico_registros), na data em que a própria
 // etapa foi alcançada (a mesma já mostrada na linha da Rotina).
-export default function RegistrarComunicacaoModal({ open, onClose, empresaId, item, canal, clientName, onRegistrado }) {
+export default function RegistrarComunicacaoModal({ open, onClose, empresaId, item, canal, clientName, modoCopiar = false, onRegistrado }) {
   const [descricao, setDescricao] = useState('');
   const [arquivos, setArquivos] = useState([]);
   const [registrando, setRegistrando] = useState(false);
@@ -67,6 +89,7 @@ export default function RegistrarComunicacaoModal({ open, onClose, empresaId, it
   const mensagemTemplate = ehWhatsapp ? item?.mensagem_whatsapp : ehEmail ? item?.mensagem_email : null;
   const assuntoTemplate = ehEmail ? item?.assunto_email : null;
   const semTemplate = canalAutomatizado && !mensagemTemplate;
+  const copiar = modoCopiar && canalAutomatizado;
   const comBoleto = canalAutomatizado && !semTemplate && Boolean(item?.enviar_boleto);
   const [baixandoBoleto, setBaixandoBoleto] = useState(false);
   const [erroBoleto, setErroBoleto] = useState('');
@@ -123,9 +146,21 @@ export default function RegistrarComunicacaoModal({ open, onClose, empresaId, it
     }
   }
 
+  // No modo copiar: copia a mensagem e já registra o envio (o check da
+  // Rotina acende) — o backend só grava, não dispara nada (ver
+  // historicoCliente.service.js::registrarObservacao, `envioManual`).
   async function handleRegistrar() {
     setRegistrando(true);
     setErro('');
+    if (copiar) {
+      try {
+        await copiarTexto(descricao);
+      } catch {
+        setErro('Não foi possível copiar a mensagem — selecione o texto e copie manualmente.');
+        setRegistrando(false);
+        return;
+      }
+    }
     try {
       await registrarObservacaoHistoricoRegua(empresaId, {
         billId: item.bill_id,
@@ -145,7 +180,7 @@ export default function RegistrarComunicacaoModal({ open, onClose, empresaId, it
   }
 
   return (
-    <Modal open={open} onClose={onClose} title={texto.titulo} maxWidthClass="max-w-lg">
+    <Modal open={open} onClose={onClose} title={copiar ? TITULO_COPIAR[canal] : texto.titulo} maxWidthClass="max-w-lg">
       {item && (
         <div className="space-y-4">
           <div className="rounded-lg border-2 border-gray-200 p-3">
@@ -178,7 +213,7 @@ export default function RegistrarComunicacaoModal({ open, onClose, empresaId, it
 
               <div>
                 <label className="mb-1 block text-[11px] font-medium uppercase tracking-wide text-gray-400">
-                  {texto.rotuloObservacao}
+                  {copiar ? 'Mensagem para enviar (modelo da etapa)' : texto.rotuloObservacao}
                 </label>
                 <textarea
                   value={descricao}
@@ -198,7 +233,7 @@ export default function RegistrarComunicacaoModal({ open, onClose, empresaId, it
               {comBoleto && (
                 <div>
                   <label className="mb-1 block text-[11px] font-medium uppercase tracking-wide text-gray-400">
-                    Anexo (enviado junto com a mensagem)
+                    {copiar ? 'Anexo (baixe e envie junto com a mensagem)' : 'Anexo (enviado junto com a mensagem)'}
                   </label>
                   <div className="flex items-center justify-between gap-2 rounded-lg border border-gray-200 bg-gray-50 px-3 py-2">
                     <span className="flex min-w-0 items-center gap-2 text-sm text-gray-700">
@@ -269,6 +304,13 @@ export default function RegistrarComunicacaoModal({ open, onClose, empresaId, it
             </div>
           )}
 
+          {copiar && !semTemplate && (
+            <p className="text-xs text-gray-500">
+              Ao clicar em Copiar, a mensagem vai para a área de transferência e o envio fica registrado na Rotina.
+              Cole no {ehWhatsapp ? 'WhatsApp' : 'e-mail'} do cliente{comBoleto ? ' e anexe o boleto' : ''}.
+            </p>
+          )}
+
           {erro && <p className="text-xs text-red-600">{erro}</p>}
 
           <div className="flex justify-end gap-2">
@@ -276,7 +318,16 @@ export default function RegistrarComunicacaoModal({ open, onClose, empresaId, it
               Cancelar
             </Button>
             <Button type="button" onClick={handleRegistrar} loading={registrando} disabled={semTemplate}>
-              {canalAutomatizado ? 'Enviar' : 'Registrar'}
+              {copiar ? (
+                <span className="flex items-center gap-1.5">
+                  <Copy size={14} />
+                  Copiar
+                </span>
+              ) : canalAutomatizado ? (
+                'Enviar'
+              ) : (
+                'Registrar'
+              )}
             </Button>
           </div>
         </div>

@@ -202,6 +202,7 @@ export default function RotinasTab({
   usuarioId = '',
   refreshToken = 0,
   comunicacaoAutomaticaAtiva = true,
+  tipoComunicacao = 'automatica',
 }) {
   const [centros, setCentros] = useState([]);
   const [carregando, setCarregando] = useState(false);
@@ -662,6 +663,7 @@ export default function RotinasTab({
         item={comunicacaoParaRegistrar?.item}
         canal={comunicacaoParaRegistrar?.canal}
         clientName={comunicacaoParaRegistrar?.clientName}
+        modoCopiar={tipoComunicacao === 'copiar'}
         onRegistrado={carregar}
       />
 

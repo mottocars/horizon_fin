@@ -367,11 +367,13 @@ export default function GestaoCobrancasPage() {
   // RotinasTab.jsx). Nasce `true` no estado local só pra não piscar
   // checkbox antes da 1ª resposta chegar — o valor de verdade sempre vem
   // do backend assim que a empresa muda.
-  const [comunicacaoAutomaticaAtiva, setComunicacaoAutomaticaAtiva] = useState(true);
+  // Agora é o "Tipo de Comunicação" (automatica/visualizar/copiar) — nasce
+  // 'automatica' pelo mesmo motivo de não piscar checkbox.
+  const [tipoComunicacao, setTipoComunicacao] = useState('automatica');
 
   useEffect(() => {
     if (!empresaId || abaAtiva !== 'rotinas') return;
-    getComunicacaoAutomaticaReguaCobranca(empresaId).then((r) => setComunicacaoAutomaticaAtiva(r.ativa));
+    getComunicacaoAutomaticaReguaCobranca(empresaId).then((r) => setTipoComunicacao(r.tipo));
   }, [empresaId, abaAtiva]);
 
   return (
@@ -633,7 +635,8 @@ export default function GestaoCobrancasPage() {
             dataFim={dataFimRotinas}
             usuarioId={podeFiltrarResponsavel ? usuarioIdRotinas : ''}
             refreshToken={refreshRotinas}
-            comunicacaoAutomaticaAtiva={comunicacaoAutomaticaAtiva}
+            comunicacaoAutomaticaAtiva={tipoComunicacao === 'automatica'}
+            tipoComunicacao={tipoComunicacao}
           />
         )}
 

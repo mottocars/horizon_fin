@@ -2360,6 +2360,8 @@ CREATE TABLE regua_cobranca_data_sistema (
 CREATE TABLE regua_cobranca_comunicacao_automatica (
     empresa_id      INTEGER PRIMARY KEY REFERENCES empresas(id) ON DELETE CASCADE,
     ativa           BOOLEAN NOT NULL DEFAULT FALSE,
+    -- 'automatica' | 'visualizar' | 'copiar' (Tipo de Comunicação) — `ativa` ficou só por compatibilidade
+    tipo            VARCHAR(20) NOT NULL DEFAULT 'visualizar' CHECK (tipo IN ('automatica', 'visualizar', 'copiar')),
     atualizado_em   TIMESTAMP DEFAULT NOW()
 );
 

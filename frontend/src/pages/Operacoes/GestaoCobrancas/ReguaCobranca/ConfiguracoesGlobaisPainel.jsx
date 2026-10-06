@@ -13,6 +13,27 @@ import {
 import { listZapiIntegracoes } from '../../../../api/zapi.api';
 import { listEmailIntegracoes } from '../../../../api/emailIntegracao.api';
 
+// Opções do "Tipo de Comunicação" (ver reguaCobranca.service.js::
+// getComunicacaoAutomatica) — decide como WhatsApp/E-mail aparecem na
+// Rotina do dia (RotinasTab.jsx/RegistrarComunicacaoModal.jsx).
+const TIPOS_COMUNICACAO = [
+  {
+    valor: 'automatica',
+    titulo: 'Comunicação Automática',
+    descricao: 'O sistema envia o WhatsApp e o e-mail nos horários agendados. Na Rotina, só aparece o status do envio.',
+  },
+  {
+    valor: 'visualizar',
+    titulo: 'Visualizar antes de enviar',
+    descricao: 'Na Rotina, o responsável abre a mensagem, confere e clica em Enviar.',
+  },
+  {
+    valor: 'copiar',
+    titulo: 'Copiar conteúdo para envio manual',
+    descricao: 'Na Rotina, o responsável copia a mensagem (e baixa o boleto) e envia pelo próprio WhatsApp ou e-mail.',
+  },
+];
+
 // Mesmo buffer local de EtapasTabela.jsx::CampoBuffer — só grava no blur,
 // não a cada tecla/seleção do seletor nativo.
 function CampoHorario({ valor, onCommit }) {
@@ -126,8 +147,9 @@ export default function ConfiguracoesGlobaisPainel({ empresaId }) {
     setDataSistema(atualizado);
   }
 
-  async function handleToggleComunicacaoAutomatica() {
-    const atualizado = await salvarComunicacaoAutomaticaReguaCobranca(empresaId, !comunicacaoAutomatica.ativa);
+  async function handleSalvarTipoComunicacao(tipo) {
+    if (tipo === comunicacaoAutomatica.tipo) return;
+    const atualizado = await salvarComunicacaoAutomaticaReguaCobranca(empresaId, tipo);
     setComunicacaoAutomatica(atualizado);
   }
 
@@ -211,21 +233,37 @@ export default function ConfiguracoesGlobaisPainel({ empresaId }) {
           </section>
 
           <section>
-            <h3 className="mb-3 text-xs font-semibold uppercase tracking-wide text-gray-400">Comunicação automática</h3>
-            <div className="flex items-start gap-3 rounded-lg border border-gray-200 p-3">
-              <Switch
-                ativo={comunicacaoAutomatica.ativa}
-                label="Ativar Comunicação Automática"
-                onClick={handleToggleComunicacaoAutomatica}
-              />
-              <div>
-                <p className="text-sm font-medium text-gray-700">Ativar Comunicação Automática</p>
-                <p className="mt-0.5 max-w-xl text-xs text-gray-500">
-                  {comunicacaoAutomatica.ativa
-                    ? 'Ligada: o sistema deverá realizar diariamente o envio das comunicações de WhatsApp e e-mail das etapas liberadas para rotina.'
-                    : 'Desligada: na Rotina do dia, o responsável precisa marcar manualmente que enviou o WhatsApp e o e-mail — o mesmo funcionamento já usado para a Ligação.'}
-                </p>
-              </div>
+            <h3 className="mb-3 text-xs font-semibold uppercase tracking-wide text-gray-400">Tipo de Comunicação</h3>
+            <div className="grid gap-2 sm:grid-cols-3" role="radiogroup" aria-label="Tipo de Comunicação">
+              {TIPOS_COMUNICACAO.map((opcao) => {
+                const selecionado = comunicacaoAutomatica.tipo === opcao.valor;
+                return (
+                  <button
+                    key={opcao.valor}
+                    type="button"
+                    role="radio"
+                    aria-checked={selecionado}
+                    onClick={() => handleSalvarTipoComunicacao(opcao.valor)}
+                    className={`flex items-start gap-2.5 rounded-lg border p-3 text-left transition-colors ${
+                      selecionado
+                        ? 'border-primary-400 bg-primary-50 ring-1 ring-primary-200'
+                        : 'border-gray-200 hover:border-gray-300 hover:bg-gray-50'
+                    }`}
+                  >
+                    <span
+                      className={`mt-0.5 flex h-4 w-4 shrink-0 items-center justify-center rounded-full border ${
+                        selecionado ? 'border-primary-600' : 'border-gray-300'
+                      }`}
+                    >
+                      {selecionado && <span className="h-2 w-2 rounded-full bg-primary-600" />}
+                    </span>
+                    <span>
+                      <span className="block text-sm font-medium text-gray-700">{opcao.titulo}</span>
+                      <span className="mt-0.5 block text-xs text-gray-500">{opcao.descricao}</span>
+                    </span>
+                  </button>
+                );
+              })}
             </div>
           </section>
         </div>

@@ -173,7 +173,9 @@ async function salvarDataSistema(req, res, next) {
   }
 }
 
-const comunicacaoAutomaticaSchema = z.object({ ativa: z.boolean() });
+const comunicacaoAutomaticaSchema = z.object({
+  tipo: z.enum(service.TIPOS_COMUNICACAO, { errorMap: () => ({ message: 'Tipo de comunicação inválido.' }) }),
+});
 
 async function getComunicacaoAutomatica(req, res, next) {
   try {
@@ -189,8 +191,8 @@ async function getComunicacaoAutomatica(req, res, next) {
 async function salvarComunicacaoAutomatica(req, res, next) {
   try {
     const empresaId = empresaIdSchema.parse(req.query.empresa_id);
-    const { ativa } = comunicacaoAutomaticaSchema.parse(req.body);
-    const resultado = await service.salvarComunicacaoAutomatica(empresaId, ativa);
+    const { tipo } = comunicacaoAutomaticaSchema.parse(req.body);
+    const resultado = await service.salvarComunicacaoAutomatica(empresaId, tipo);
     res.json(resultado);
   } catch (err) {
     if (err.issues) return next(badRequest(err.issues[0].message));

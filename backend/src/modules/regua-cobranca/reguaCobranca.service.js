@@ -365,26 +365,31 @@ async function salvarDataSistema(empresaId, dados) {
   return getDataSistema(empresaId);
 }
 
-// Flag "Ativar Comunicação Automática" (Configurações Globais) — 1 por
-// empresa. Sem linha = desligada (nasce desligada, mesmo critério de
-// `rotina_habilitada`). Enquanto desligada, a Rotina do dia trata
-// WhatsApp/E-mail como checkbox manual do responsável, igual à Ligação
-// (ver rotinas.service.js::listRotinas — o flag em si não filtra nada lá,
-// é lido direto pelo frontend pra decidir COMO desenhar as 2 colunas).
+// "Tipo de Comunicação" (Configurações Globais) — 1 por empresa:
+//   automatica = envio nos horários agendados (Rotina só mostra o status);
+//   visualizar = na Rotina, o responsável abre a mensagem e clica Enviar;
+//   copiar     = na Rotina, o responsável copia o conteúdo e manda pelo
+//                próprio WhatsApp (nada sai pela Z-API/SMTP — ver
+//                historicoCliente.service.js::registrarObservacao).
+// Sem linha = 'visualizar'. `ativa` continua na resposta (= automatica) só
+// por compatibilidade com quem ainda lê o formato antigo.
+const TIPOS_COMUNICACAO = ['automatica', 'visualizar', 'copiar'];
+
 async function getComunicacaoAutomatica(empresaId) {
   const { rows } = await pool.query(
-    'SELECT ativa FROM regua_cobranca_comunicacao_automatica WHERE empresa_id = $1',
+    'SELECT tipo FROM regua_cobranca_comunicacao_automatica WHERE empresa_id = $1',
     [empresaId]
   );
-  return { ativa: rows[0]?.ativa ?? false };
+  const tipo = rows[0]?.tipo ?? 'visualizar';
+  return { tipo, ativa: tipo === 'automatica' };
 }
 
-async function salvarComunicacaoAutomatica(empresaId, ativa) {
+async function salvarComunicacaoAutomatica(empresaId, tipo) {
   await pool.query(
-    `INSERT INTO regua_cobranca_comunicacao_automatica (empresa_id, ativa)
-     VALUES ($1, $2)
-     ON CONFLICT (empresa_id) DO UPDATE SET ativa = EXCLUDED.ativa, atualizado_em = NOW()`,
-    [empresaId, ativa]
+    `INSERT INTO regua_cobranca_comunicacao_automatica (empresa_id, tipo, ativa)
+     VALUES ($1, $2, $3)
+     ON CONFLICT (empresa_id) DO UPDATE SET tipo = EXCLUDED.tipo, ativa = EXCLUDED.ativa, atualizado_em = NOW()`,
+    [empresaId, tipo, tipo === 'automatica']
   );
   return getComunicacaoAutomatica(empresaId);
 }
@@ -455,6 +460,7 @@ module.exports = {
   salvarParametroDisparo,
   getDataSistema,
   salvarDataSistema,
+  TIPOS_COMUNICACAO,
   getComunicacaoAutomatica,
   salvarComunicacaoAutomatica,
   getZapiIntegracaoDoCluster,

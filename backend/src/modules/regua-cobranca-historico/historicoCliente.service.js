@@ -5,6 +5,7 @@ const {
   getLimiteVigente,
   listEtapasComComunicacao,
   getZapiIntegracaoDoCluster,
+  getComunicacaoAutomatica,
   getEmailIntegracaoDoCluster,
   substituirVariaveisTemplate,
 } = require('../regua-cobranca/reguaCobranca.service');
@@ -322,8 +323,26 @@ async function registrarObservacao(empresaId, { billId, installmentId, dataRegis
     }
   }
 
+  // Tipo de Comunicação = 'copiar': o responsável copiou o texto na Rotina
+  // e mandou pelo próprio WhatsApp/e-mail — aqui só registra (com o texto
+  // do template, igual ao envio de verdade), sem disparar nada.
+  const envioManual =
+    (canal === 'whatsapp' || canal === 'email') && (await getComunicacaoAutomatica(empresaId)).tipo === 'copiar';
+
   let descricaoFinal = descricao || '';
-  if (canal === 'whatsapp') {
+  if (envioManual) {
+    const { etapa } = janelaAlcancada;
+    if (!etapa.template_corpo) {
+      throw badRequest('Esta etapa não tem um template configurado na Régua de Cobrança.');
+    }
+    const centroCusto = await getCentroCustoDaParcela(empresaId, billId, installmentId);
+    descricaoFinal = substituirVariaveisTemplate(etapa.template_corpo, {
+      nomeCliente: parcela.client_name,
+      centroCusto,
+      vencimento: parcela.due_date,
+      valor: parcela.corrected_balance_amount,
+    });
+  } else if (canal === 'whatsapp') {
     const { etapa } = janelaAlcancada;
     if (!etapa.template_corpo) {
       throw badRequest('Esta etapa não tem um template de WhatsApp configurado na Régua de Cobrança.');

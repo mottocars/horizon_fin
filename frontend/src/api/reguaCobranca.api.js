@@ -53,18 +53,17 @@ export function salvarDataSistemaReguaCobranca(empresaId, dados) {
   return http.put('/regua-cobranca/data-sistema', dados, { params: { empresa_id: empresaId } }).then((res) => res.data);
 }
 
-// Flag "Ativar Comunicação Automática" (Configurações Globais) — 1 por
-// empresa, ver reguaCobranca.service.js::getComunicacaoAutomatica/
-// salvarComunicacaoAutomatica. Ligada = WhatsApp/E-mail na Rotina do dia
-// são só status de leitura (esperando o disparo automático). Desligada
-// (padrão, hoje ainda sem disparo de verdade) = viram checkbox manual do
-// responsável, igual à Ligação.
+// "Tipo de Comunicação" (Configurações Globais) — 1 por empresa, ver
+// reguaCobranca.service.js::getComunicacaoAutomatica. Devolve { tipo }:
+// 'automatica' (Rotina só mostra o status), 'visualizar' (responsável abre
+// a mensagem e clica Enviar) ou 'copiar' (responsável copia e envia pelo
+// próprio WhatsApp).
 export function getComunicacaoAutomaticaReguaCobranca(empresaId) {
   return http.get('/regua-cobranca/comunicacao-automatica', { params: { empresa_id: empresaId } }).then((res) => res.data);
 }
 
-export function salvarComunicacaoAutomaticaReguaCobranca(empresaId, ativa) {
+export function salvarComunicacaoAutomaticaReguaCobranca(empresaId, tipo) {
   return http
-    .put('/regua-cobranca/comunicacao-automatica', { ativa }, { params: { empresa_id: empresaId } })
+    .put('/regua-cobranca/comunicacao-automatica', { tipo }, { params: { empresa_id: empresaId } })
     .then((res) => res.data);
 }
