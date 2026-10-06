@@ -222,18 +222,16 @@ function LinhaExtrato({ relatorio, erro }) {
   );
 }
 
-const brl = (v) => v.toLocaleString('pt-BR', { style: 'currency', currency: 'BRL' });
 
 // Cobrança: boletos liquidados com Dt Crédito no dia, somados no saldo das contas que têm
 // código cedente cobrança — resumo + o que não deu pra somar (com o motivo).
 function LinhaCobranca({ relatorio, erro }) {
   const contas = relatorio?.contas || [];
   const falhas = relatorio?.falhas || [];
-  const somadas = contas.filter((c) => c.titulos > 0);
-  const valor = somadas.reduce((s, c) => s + c.valor, 0);
-  const titulos = somadas.reduce((s, c) => s + c.titulos, 0);
+  // Só a quantidade de contas que receberam cobrança (pedido do usuário) — sem valores.
+  const integradas = contas.filter((c) => c.titulos > 0).length;
   let status = 'ok';
-  let texto = titulos ? `Ok, ${brl(valor)} em ${titulos} título(s), ${somadas.length} conta(s)` : 'Ok, nenhum crédito no dia';
+  let texto = `Ok, ${integradas} conta(s) integrada(s)`;
   if (erro) {
     status = 'erro';
     texto = 'Falha de conexão';
@@ -242,7 +240,7 @@ function LinhaCobranca({ relatorio, erro }) {
     texto = 'Nenhuma conta com cedente de cobrança';
   } else if (falhas.length) {
     status = 'erro';
-    texto = titulos ? `${brl(valor)} em ${titulos} título(s), com avisos` : 'Não foi possível buscar';
+    texto = `${integradas} conta(s) integrada(s)`;
   }
   return (
     <div className="space-y-1.5">
