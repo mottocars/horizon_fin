@@ -35,6 +35,7 @@ export const TELAS_SISTEMA = {
   '/relatorios/empreendimentos-masa': { title: 'Empreendimentos Masa', subtitle: 'Relatórios — Empreendimentos Masa' },
   '/relatorios/notas-pendentes': { title: 'Acervo NF-e / NFS-e', subtitle: 'Relatórios — Acervo NF-e / NFS-e' },
   '/relatorios/extratos-bancarios': { title: 'Extratos Bancários', subtitle: 'Relatórios — Extratos Bancários' },
+  '/relatorios/etapas-dos-empreendimentos': { title: 'Etapas dos Empreendimentos', subtitle: 'Relatórios — Etapas dos Empreendimentos' },
 };
 
 // Acha, entre as chaves de TELAS_SISTEMA, a mais específica (mais longa)

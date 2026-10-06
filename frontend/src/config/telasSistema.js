@@ -54,6 +54,7 @@ export const TELAS_SISTEMA = [
       { codigo: '/relatorios/empreendimentos-masa', label: 'Empreendimentos Masa' },
       { codigo: '/relatorios/notas-pendentes', label: 'Acervo NF-e / NFS-e' },
       { codigo: '/relatorios/extratos-bancarios', label: 'Extratos Bancários' },
+      { codigo: '/relatorios/etapas-dos-empreendimentos', label: 'Etapas dos Empreendimentos' },
     ],
   },
 ];
