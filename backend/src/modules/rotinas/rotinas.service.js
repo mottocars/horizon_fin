@@ -83,7 +83,7 @@ async function listRotinas(empresaId, usuarioId, { dataInicio, dataFim, costCent
   // verdade que seria enviado.
   const { rows: etapasRows } = await pool.query(
     `SELECT e.id, e.cluster, e.nome, e.dias, e.canal_whatsapp, e.canal_email, e.canal_ligacao,
-            t.corpo AS template_corpo, t.assunto AS template_assunto
+            t.corpo AS template_corpo, t.assunto AS template_assunto, t.enviar_boleto AS template_enviar_boleto
      FROM regua_cobranca_etapas e
      LEFT JOIN comunicacao_templates t ON t.id = e.template_id
      WHERE e.empresa_id = $1 AND e.ativa = true AND e.rotina_habilitada = true AND e.dias IS NOT NULL
@@ -211,6 +211,9 @@ async function listRotinas(empresaId, usuarioId, { dataInicio, dataFim, costCent
         mensagem_whatsapp: mensagemWhatsapp,
         mensagem_email: mensagemEmail,
         assunto_email: assuntoEmail,
+        // Template da etapa manda o boleto junto: o modal de envio mostra o
+        // boleto pra baixar (ver RegistrarComunicacaoModal.jsx).
+        enviar_boleto: Boolean(etapa.template_corpo && etapa.template_enviar_boleto),
         data,
       });
     }
@@ -289,6 +292,7 @@ async function listRotinas(empresaId, usuarioId, { dataInicio, dataFim, costCent
       mensagem_whatsapp: item.mensagem_whatsapp,
       mensagem_email: item.mensagem_email,
       assunto_email: item.assunto_email,
+      enviar_boleto: item.enviar_boleto,
       data: item.data,
       canal_whatsapp: item.canal_whatsapp,
       canal_email: item.canal_email,

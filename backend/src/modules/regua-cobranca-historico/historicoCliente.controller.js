@@ -1,5 +1,6 @@
 const { z } = require('zod');
 const service = require('./historicoCliente.service');
+const { buscarBoletoParaEnvio } = require('./boletoSienge');
 
 const empresaIdSchema = z.coerce.number().int().positive('Selecione uma empresa.');
 const billIdSchema = z.coerce.number().int().positive('Parcela inválida.');
@@ -74,4 +75,22 @@ async function downloadAnexo(req, res, next) {
   }
 }
 
-module.exports = { getHistorico, registrarObservacao, downloadAnexo };
+// Mesmo boleto que sai anexado no WhatsApp/e-mail (ver boletoSienge.js),
+// só que devolvido como PDF pra baixar — usado pelo modal de envio da
+// Rotina do dia (RegistrarComunicacaoModal.jsx).
+async function downloadBoleto(req, res, next) {
+  try {
+    const empresaId = empresaIdSchema.parse(req.query.empresa_id);
+    const billId = billIdSchema.parse(req.params.billId);
+    const installmentId = installmentIdSchema.parse(req.params.installmentId);
+    const { base64 } = await buscarBoletoParaEnvio(empresaId, { billId, installmentId });
+    res.setHeader('Content-Type', 'application/pdf');
+    res.setHeader('Content-Disposition', `attachment; filename="boleto-${billId}-${installmentId}.pdf"`);
+    res.send(Buffer.from(base64, 'base64'));
+  } catch (err) {
+    if (err.issues) return next(badRequest(err.issues[0].message));
+    next(err);
+  }
+}
+
+module.exports = { getHistorico, registrarObservacao, downloadAnexo, downloadBoleto };

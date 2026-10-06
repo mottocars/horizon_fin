@@ -1,8 +1,8 @@
 import { useEffect, useState } from 'react';
-import { Paperclip, UploadCloud, X } from 'lucide-react';
+import { Download, FileText, Paperclip, UploadCloud, X } from 'lucide-react';
 import Modal from '../../../components/Modal';
 import Button from '../../../components/Button';
-import { registrarObservacaoHistoricoRegua } from '../../../api/reguaCobrancaHistorico.api';
+import { baixarBoletoParcela, registrarObservacaoHistoricoRegua } from '../../../api/reguaCobrancaHistorico.api';
 import { formatarData } from './GestaoParcelas/constantes';
 
 const TAMANHO_MAXIMO_ANEXO = 2 * 1024 * 1024;
@@ -67,12 +67,16 @@ export default function RegistrarComunicacaoModal({ open, onClose, empresaId, it
   const mensagemTemplate = ehWhatsapp ? item?.mensagem_whatsapp : ehEmail ? item?.mensagem_email : null;
   const assuntoTemplate = ehEmail ? item?.assunto_email : null;
   const semTemplate = canalAutomatizado && !mensagemTemplate;
+  const comBoleto = canalAutomatizado && !semTemplate && Boolean(item?.enviar_boleto);
+  const [baixandoBoleto, setBaixandoBoleto] = useState(false);
+  const [erroBoleto, setErroBoleto] = useState('');
 
   useEffect(() => {
     if (!open) return;
     setDescricao(canalAutomatizado ? mensagemTemplate || '' : '');
     setArquivos([]);
     setErro('');
+    setErroBoleto('');
   }, [open, item, canal, canalAutomatizado, mensagemTemplate]);
 
   function handleEscolherArquivos(e) {
@@ -89,6 +93,34 @@ export default function RegistrarComunicacaoModal({ open, onClose, empresaId, it
 
   function handleRemoverArquivo(nome) {
     setArquivos((prev) => prev.filter((f) => f.name !== nome));
+  }
+
+  // Baixa o mesmo boleto que vai anexado na mensagem (buscado na hora no
+  // Sienge) — pra quem envia conferir antes, ou mandar por fora. Como a
+  // resposta é blob, o erro do backend vem em JSON dentro do blob.
+  async function handleBaixarBoleto() {
+    setBaixandoBoleto(true);
+    setErroBoleto('');
+    try {
+      const blob = await baixarBoletoParcela(empresaId, item.bill_id, item.installment_id);
+      const url = window.URL.createObjectURL(blob);
+      const link = document.createElement('a');
+      link.href = url;
+      link.download = `boleto-${item.bill_id}-${item.installment_id}.pdf`;
+      link.click();
+      window.URL.revokeObjectURL(url);
+    } catch (err) {
+      let mensagem = 'Não foi possível baixar o boleto.';
+      try {
+        const corpo = JSON.parse(await err.response?.data?.text());
+        if (corpo?.message) mensagem = corpo.message;
+      } catch {
+        // corpo sem JSON legível — fica a mensagem genérica
+      }
+      setErroBoleto(mensagem);
+    } finally {
+      setBaixandoBoleto(false);
+    }
   }
 
   async function handleRegistrar() {
@@ -162,6 +194,30 @@ export default function RegistrarComunicacaoModal({ open, onClose, empresaId, it
                   }`}
                 />
               </div>
+
+              {comBoleto && (
+                <div>
+                  <label className="mb-1 block text-[11px] font-medium uppercase tracking-wide text-gray-400">
+                    Anexo (enviado junto com a mensagem)
+                  </label>
+                  <div className="flex items-center justify-between gap-2 rounded-lg border border-gray-200 bg-gray-50 px-3 py-2">
+                    <span className="flex min-w-0 items-center gap-2 text-sm text-gray-700">
+                      <FileText size={16} className="shrink-0 text-red-500" />
+                      <span className="truncate">boleto.pdf</span>
+                    </span>
+                    <button
+                      type="button"
+                      onClick={handleBaixarBoleto}
+                      disabled={baixandoBoleto}
+                      className="flex shrink-0 items-center gap-1 rounded-md px-2 py-1 text-xs font-medium text-primary-600 hover:bg-primary-50 disabled:cursor-wait disabled:opacity-60"
+                    >
+                      <Download size={13} />
+                      {baixandoBoleto ? 'Baixando...' : 'Baixar'}
+                    </button>
+                  </div>
+                  {erroBoleto && <p className="mt-1 text-xs text-red-600">{erroBoleto}</p>}
+                </div>
+              )}
             </>
           )}
 

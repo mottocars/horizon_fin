@@ -17,5 +17,6 @@ router.use(authMiddleware);
 router.get('/parcelas/:billId/:installmentId', controller.getHistorico);
 router.post('/registros', uploadAnexo.array('arquivos'), controller.registrarObservacao);
 router.get('/anexos/:anexoId/download', controller.downloadAnexo);
+router.get('/boletos/:billId/:installmentId', controller.downloadBoleto);
 
 module.exports = router;

@@ -39,3 +39,14 @@ export function baixarAnexoHistoricoRegua(empresaId, anexoId) {
     })
     .then((res) => res.data);
 }
+
+// Boleto da parcela, buscado na hora no Sienge (o mesmo que sai anexado no
+// WhatsApp/e-mail quando o template da etapa pede — ver boletoSienge.js).
+export function baixarBoletoParcela(empresaId, billId, installmentId) {
+  return http
+    .get(`/regua-cobranca-historico/boletos/${billId}/${installmentId}`, {
+      params: { empresa_id: empresaId },
+      responseType: 'blob',
+    })
+    .then((res) => res.data);
+}
