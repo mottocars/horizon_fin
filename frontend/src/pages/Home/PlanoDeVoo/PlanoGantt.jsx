@@ -307,9 +307,15 @@ export default function PlanoGantt({ planoId, recarregarToken, onVoltar, onEdita
           <button type="button" onClick={onVoltar} title="Voltar aos planos" className="rounded-lg p-2 text-gray-500 hover:bg-gray-100">
             <ArrowLeft size={18} />
           </button>
-          <span className="flex h-10 w-10 shrink-0 items-center justify-center rounded-xl bg-primary-600 text-white shadow-sm">
-            <Plane size={19} className="-rotate-12" />
-          </span>
+          {plano.empresa_logo ? (
+            <span className="flex h-10 w-10 shrink-0 items-center justify-center overflow-hidden rounded-xl border border-gray-200 bg-white shadow-sm">
+              <img src={plano.empresa_logo} alt={plano.empresa_nome} className="h-full w-full object-contain p-0.5" />
+            </span>
+          ) : (
+            <span className="flex h-10 w-10 shrink-0 items-center justify-center rounded-xl bg-primary-600 text-white shadow-sm">
+              <Plane size={19} className="-rotate-12" />
+            </span>
+          )}
           <div className="min-w-0">
             <p className="truncate text-[11px] uppercase tracking-wide text-gray-400">{plano.empresa_nome}</p>
             <h2 className="flex items-center gap-2 truncate text-lg font-semibold text-gray-900">

@@ -20,6 +20,14 @@ const empresaSchema = z.object({
 
 const updateSchema = empresaSchema.omit({ cnpj: true });
 
+// Data URI PNG, já redimensionada no navegador (lado máximo 256px).
+const logoSchema = z.object({
+  logo: z
+    .string()
+    .regex(/^data:image\/(png|jpeg|webp);base64,/, 'Envie uma imagem PNG, JPG ou WEBP.')
+    .max(1_000_000, 'A imagem é grande demais.'),
+});
+
 function badRequest(message) {
   const err = new Error(message);
   err.status = 400;
@@ -122,6 +130,30 @@ async function setStatus(req, res, next) {
   }
 }
 
+async function salvarLogo(req, res, next) {
+  try {
+    const { logo } = logoSchema.parse(req.body);
+    await garantirEmpresaPermitida(req, req.params.id);
+    const empresa = await service.setLogo(req.params.id, logo);
+    if (!empresa) return res.status(404).json({ message: 'Empresa não encontrada.' });
+    res.json(empresa);
+  } catch (err) {
+    if (err.issues) return next(badRequest(err.issues[0].message));
+    next(err);
+  }
+}
+
+async function removerLogo(req, res, next) {
+  try {
+    await garantirEmpresaPermitida(req, req.params.id);
+    const empresa = await service.setLogo(req.params.id, null);
+    if (!empresa) return res.status(404).json({ message: 'Empresa não encontrada.' });
+    res.json(empresa);
+  } catch (err) {
+    next(err);
+  }
+}
+
 async function remove(req, res, next) {
   try {
     await garantirEmpresaPermitida(req, req.params.id);
@@ -133,4 +165,4 @@ async function remove(req, res, next) {
   }
 }
 
-module.exports = { consultarCnpj, list, getById, create, update, setStatus, remove };
+module.exports = { consultarCnpj, list, getById, create, update, setStatus, salvarLogo, removerLogo, remove };

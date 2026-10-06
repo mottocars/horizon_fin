@@ -28,9 +28,15 @@ function CardPlano({ plano, usuarios, onAbrir }) {
       className="group flex flex-col rounded-xl border border-gray-200/80 bg-white p-4 text-left shadow-[0_1px_2px_rgba(16,24,40,0.04)] transition hover:border-primary-200 hover:shadow-card focus:outline-none focus:ring-2 focus:ring-primary-100"
     >
       <div className="flex items-start gap-3">
-        <span className="flex h-9 w-9 shrink-0 items-center justify-center rounded-lg bg-primary-50 text-primary-600 transition group-hover:bg-primary-600 group-hover:text-white">
-          <Plane size={17} className="-rotate-12" />
-        </span>
+        {plano.empresa_logo ? (
+          <span className="flex h-9 w-9 shrink-0 items-center justify-center overflow-hidden rounded-lg border border-gray-200 bg-white">
+            <img src={plano.empresa_logo} alt={plano.empresa_nome} className="h-full w-full object-contain p-0.5" />
+          </span>
+        ) : (
+          <span className="flex h-9 w-9 shrink-0 items-center justify-center rounded-lg bg-primary-50 text-primary-600 transition group-hover:bg-primary-600 group-hover:text-white">
+            <Plane size={17} className="-rotate-12" />
+          </span>
+        )}
         <div className="min-w-0 flex-1">
           <p className="truncate text-[11px] text-gray-400">{plano.empresa_nome}</p>
           <p className="line-clamp-2 text-sm font-semibold leading-snug text-gray-900">{plano.nome}</p>

@@ -28,6 +28,14 @@ export function setEmpresaStatus(id, ativo) {
   return http.patch(`/empresas/${id}/status`, { ativo }).then((res) => res.data);
 }
 
+export function salvarLogoEmpresa(id, logo) {
+  return http.put(`/empresas/${id}/logo`, { logo }).then((res) => res.data);
+}
+
+export function removerLogoEmpresa(id) {
+  return http.delete(`/empresas/${id}/logo`).then((res) => res.data);
+}
+
 export function deleteEmpresa(id) {
   return http.delete(`/empresas/${id}`).then((res) => res.data);
 }

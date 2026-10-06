@@ -168,9 +168,18 @@ async function setAtivo(id, ativo) {
   return rows[0] || null;
 }
 
+// logo = data URI PNG (já redimensionada no navegador) ou null pra remover.
+async function setLogo(id, logo) {
+  const { rows } = await pool.query(
+    `UPDATE empresas SET logo = $1 WHERE id = $2 RETURNING *`,
+    [logo, id]
+  );
+  return rows[0] || null;
+}
+
 async function remove(id) {
   const { rowCount } = await pool.query('DELETE FROM empresas WHERE id = $1', [id]);
   return rowCount > 0;
 }
 
-module.exports = { consultarCnpj, list, getById, create, update, setAtivo, remove };
+module.exports = { consultarCnpj, list, getById, create, update, setAtivo, setLogo, remove };

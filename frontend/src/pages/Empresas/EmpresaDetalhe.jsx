@@ -1,9 +1,17 @@
-import { useEffect, useState } from 'react';
+import { useEffect, useRef, useState } from 'react';
 import { useNavigate, useParams } from 'react-router-dom';
-import { ArrowLeft, Building2, Ban, CheckCircle2, Trash2 } from 'lucide-react';
+import { ArrowLeft, Building2, Ban, Camera, CheckCircle2, Loader2, Trash2, X } from 'lucide-react';
 import Card from '../../components/Card';
 import Button from '../../components/Button';
-import { getEmpresa, updateEmpresa, setEmpresaStatus, deleteEmpresa } from '../../api/empresas.api';
+import {
+  getEmpresa,
+  updateEmpresa,
+  setEmpresaStatus,
+  deleteEmpresa,
+  salvarLogoEmpresa,
+  removerLogoEmpresa,
+} from '../../api/empresas.api';
+import { redimensionarLogoBanco } from '../../utils/imagemLogoBanco';
 import { formatCnpj, formatCep } from './format';
 import { useConfirm } from '../../confirm/ConfirmContext';
 import { useAuth } from '../../auth/AuthContext';
@@ -25,6 +33,8 @@ export default function EmpresaDetalhe() {
   const [success, setSuccess] = useState(false);
   const [fieldErrors, setFieldErrors] = useState({});
   const [notFound, setNotFound] = useState(false);
+  const [salvandoLogo, setSalvandoLogo] = useState(false);
+  const inputLogoRef = useRef(null);
 
   useEffect(() => {
     let active = true;
@@ -74,6 +84,46 @@ export default function EmpresaDetalhe() {
       setError(err.response?.data?.message || 'Não foi possível salvar as alterações.');
     } finally {
       setSaving(false);
+    }
+  }
+
+  // A logo é salva na hora (não depende do botão "Salvar alterações"), igual à logo de banco.
+  async function handleLogoSelecionada(e) {
+    const file = e.target.files?.[0];
+    e.target.value = '';
+    if (!file) return;
+    setError('');
+    setSalvandoLogo(true);
+    try {
+      const logo = await redimensionarLogoBanco(file, { ladoMaximo: 256 });
+      const updated = await salvarLogoEmpresa(id, logo);
+      setEmpresa(updated);
+      setForm((prev) => ({ ...prev, logo: updated.logo }));
+    } catch (err) {
+      setError(err.response?.data?.message || err.message || 'Não foi possível salvar a logomarca.');
+    } finally {
+      setSalvandoLogo(false);
+    }
+  }
+
+  async function handleRemoverLogo() {
+    const confirmado = await confirm({
+      title: 'Remover logomarca',
+      description: `Remover a logomarca de "${empresa.razao_social}"?`,
+      confirmLabel: 'Remover',
+      variant: 'danger',
+    });
+    if (!confirmado) return;
+    setError('');
+    setSalvandoLogo(true);
+    try {
+      const updated = await removerLogoEmpresa(id);
+      setEmpresa(updated);
+      setForm((prev) => ({ ...prev, logo: updated.logo }));
+    } catch (err) {
+      setError(err.response?.data?.message || 'Não foi possível remover a logomarca.');
+    } finally {
+      setSalvandoLogo(false);
     }
   }
 
@@ -147,8 +197,47 @@ export default function EmpresaDetalhe() {
       <Card>
         <div className="mb-4 flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
           <div className="flex items-center gap-3">
-            <div className="flex h-10 w-10 items-center justify-center rounded-xl bg-primary-100 text-primary-600">
-              <Building2 size={20} />
+            <div className="group relative shrink-0">
+              <button
+                type="button"
+                onClick={() => inputLogoRef.current?.click()}
+                disabled={salvandoLogo}
+                title={empresa.logo ? 'Trocar logomarca' : 'Enviar logomarca'}
+                className={`relative flex h-12 w-12 items-center justify-center overflow-hidden rounded-xl focus:outline-none focus:ring-2 focus:ring-primary-200 ${
+                  empresa.logo ? 'border border-gray-200 bg-white' : 'bg-primary-100 text-primary-600'
+                }`}
+              >
+                {empresa.logo ? (
+                  <img src={empresa.logo} alt="Logomarca" className="h-full w-full object-contain p-1" />
+                ) : (
+                  <Building2 size={22} />
+                )}
+                <span className="absolute inset-0 flex items-center justify-center bg-black/45 text-white opacity-0 transition group-hover:opacity-100">
+                  <Camera size={16} />
+                </span>
+                {salvandoLogo && (
+                  <span className="absolute inset-0 flex items-center justify-center bg-black/45 text-white">
+                    <Loader2 size={16} className="animate-spin" />
+                  </span>
+                )}
+              </button>
+              {empresa.logo && !salvandoLogo && (
+                <button
+                  type="button"
+                  onClick={handleRemoverLogo}
+                  title="Remover logomarca"
+                  className="absolute -right-1.5 -top-1.5 hidden h-5 w-5 items-center justify-center rounded-full border border-gray-200 bg-white text-gray-500 shadow-sm hover:text-red-600 group-hover:flex"
+                >
+                  <X size={12} />
+                </button>
+              )}
+              <input
+                ref={inputLogoRef}
+                type="file"
+                accept="image/png,image/jpeg,image/webp,image/svg+xml"
+                className="hidden"
+                onChange={handleLogoSelecionada}
+              />
             </div>
             <div>
               <h2 className="text-base font-semibold text-gray-900">{empresa.razao_social}</h2>

@@ -67,6 +67,7 @@ CREATE TABLE empresas (
     telefone               VARCHAR(20),
     situacao_cadastral     VARCHAR(50),
     data_inicio_atividade  DATE,
+    logo                   TEXT,  -- data URI PNG da logomarca (opcional)
     ativo                  BOOLEAN DEFAULT TRUE,
     criado_em              TIMESTAMP DEFAULT NOW(),
     atualizado_em          TIMESTAMP DEFAULT NOW()

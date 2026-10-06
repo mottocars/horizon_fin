@@ -29,7 +29,7 @@ async function podeVer(planoId, usuarioId) {
   return rows.length > 0;
 }
 
-const CAMPOS_PLANO = `p.id, p.empresa_id, COALESCE(NULLIF(e.nome_fantasia, ''), e.razao_social) AS empresa_nome,
+const CAMPOS_PLANO = `p.id, p.empresa_id, COALESCE(NULLIF(e.nome_fantasia, ''), e.razao_social) AS empresa_nome, e.logo AS empresa_logo,
   p.nome, p.criador_id, p.criado_em, p.atualizado_em,
   COALESCE((SELECT array_agg(pm.usuario_id ORDER BY pm.usuario_id) FROM projetos_planos_membros pm WHERE pm.plano_id = p.id), '{}') AS membros`;
 
