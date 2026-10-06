@@ -326,43 +326,19 @@ async function salvarParametroDisparo(empresaId, cluster, dados) {
   return parametros.find((p) => p.cluster === cluster);
 }
 
-// "Hoje" no fuso horário brasileiro, sem depender do fuso do servidor —
-// usado como fallback (usar_data_real) e como valor de teste quando a
-// empresa não desligou a opção (ver getDataSistema abaixo).
+// "Hoje" no fuso horário brasileiro, sem depender do fuso do servidor.
 function dataAtualBrasil() {
   return new Intl.DateTimeFormat('en-CA', { timeZone: 'America/Sao_Paulo' }).format(new Date());
 }
 
-// Parametrização da "data de hoje" usada pelos disparos — 1 por empresa.
-// Sem linha = usar_data_real true. `data_efetiva` é a data que os disparos
-// devem de fato considerar como hoje: a real (fuso BR) ou a fictícia
-// configurada, conforme a flag.
+// "Data de hoje" usada pela régua/Rotina. O parâmetro "Data do sistema"
+// (data fictícia pra testes) foi retirado das Configurações Globais — é
+// sempre a data real no fuso BR. A tabela regua_cobranca_data_sistema
+// ficou no banco, mas não é mais lida. Mantém o formato antigo
+// ({ data_efetiva }) pra não mexer em quem já usa.
 async function getDataSistema(empresaId) {
-  const { rows } = await pool.query(
-    'SELECT usar_data_real, data_ficticia::text AS data_ficticia FROM regua_cobranca_data_sistema WHERE empresa_id = $1',
-    [empresaId]
-  );
-  const row = rows[0];
-  const usarDataReal = row ? row.usar_data_real : true;
-  const dataFicticia = row?.data_ficticia || null;
-  return {
-    usar_data_real: usarDataReal,
-    data_ficticia: dataFicticia,
-    data_efetiva: usarDataReal ? dataAtualBrasil() : dataFicticia || dataAtualBrasil(),
-  };
-}
-
-async function salvarDataSistema(empresaId, dados) {
-  await pool.query(
-    `INSERT INTO regua_cobranca_data_sistema (empresa_id, usar_data_real, data_ficticia)
-     VALUES ($1, $2, $3)
-     ON CONFLICT (empresa_id) DO UPDATE SET
-       usar_data_real = EXCLUDED.usar_data_real,
-       data_ficticia = EXCLUDED.data_ficticia,
-       atualizado_em = NOW()`,
-    [empresaId, dados.usar_data_real, dados.data_ficticia || null]
-  );
-  return getDataSistema(empresaId);
+  const hoje = dataAtualBrasil();
+  return { usar_data_real: true, data_ficticia: null, data_efetiva: hoje };
 }
 
 // "Tipo de Comunicação" (Configurações Globais) — 1 por empresa:
@@ -459,7 +435,6 @@ module.exports = {
   listParametrosDisparo,
   salvarParametroDisparo,
   getDataSistema,
-  salvarDataSistema,
   TIPOS_COMUNICACAO,
   getComunicacaoAutomatica,
   salvarComunicacaoAutomatica,

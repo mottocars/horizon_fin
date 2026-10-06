@@ -5,8 +5,6 @@ import { CLUSTERS, CLUSTER_ICON, CLUSTER_ICON_COR } from './constantes';
 import {
   listParametrosDisparoReguaCobranca,
   salvarParametroDisparoReguaCobranca,
-  getDataSistemaReguaCobranca,
-  salvarDataSistemaReguaCobranca,
   getComunicacaoAutomaticaReguaCobranca,
   salvarComunicacaoAutomaticaReguaCobranca,
 } from '../../../../api/reguaCobranca.api';
@@ -52,62 +50,22 @@ function CampoHorario({ valor, onCommit }) {
   );
 }
 
-function CampoData({ valor, onCommit }) {
-  const [local, setLocal] = useState(valor);
-  useEffect(() => setLocal(valor), [valor]);
-  return (
-    <input
-      type="date"
-      value={local ?? ''}
-      onChange={(e) => setLocal(e.target.value)}
-      onBlur={() => {
-        if (local && local !== valor) onCommit(local);
-      }}
-      className="rounded-lg border border-gray-200 px-2.5 py-1.5 text-sm font-mono focus:outline-none focus:ring-1 focus:ring-primary-100"
-    />
-  );
-}
-
-function Switch({ ativo, onClick, label }) {
-  return (
-    <button
-      type="button"
-      onClick={onClick}
-      aria-label={label}
-      aria-pressed={ativo}
-      className={`relative h-[19px] w-[34px] shrink-0 rounded-full border transition-colors ${
-        ativo ? 'border-primary-600 bg-primary-600' : 'border-gray-300 bg-gray-100'
-      }`}
-    >
-      <span
-        className={`absolute top-[2px] h-[13px] w-[13px] rounded-full bg-white shadow transition-all ${
-          ativo ? 'left-[17px]' : 'left-[2px]'
-        }`}
-      />
-    </button>
-  );
-}
-
 // Parâmetros da régua como um todo, fora dos 5 clusters — aparece no mesmo
 // lugar do conteúdo de um cluster (troca de conteúdo pela seleção na barra
 // de abas, ver ReguaCobrancaTab.jsx), não numa janela separada. 2 módulos
 // bem separados: quem/quando dispara cada cluster (conexões Z-API/Email +
-// horário) e a data que o sistema considera "hoje" pros disparos (real, no
-// fuso brasileiro, ou uma data fictícia pra testes).
+// horário) e o Tipo de Comunicação.
 export default function ConfiguracoesGlobaisPainel({ empresaId }) {
   const [parametros, setParametros] = useState(null);
   const [zapiOptions, setZapiOptions] = useState([]);
   const [emailOptions, setEmailOptions] = useState([]);
-  const [dataSistema, setDataSistema] = useState(null);
   const [comunicacaoAutomatica, setComunicacaoAutomatica] = useState(null);
 
   useEffect(() => {
     if (!empresaId) return;
     setParametros(null);
-    setDataSistema(null);
     setComunicacaoAutomatica(null);
     listParametrosDisparoReguaCobranca(empresaId).then(setParametros);
-    getDataSistemaReguaCobranca(empresaId).then(setDataSistema);
     getComunicacaoAutomaticaReguaCobranca(empresaId).then(setComunicacaoAutomatica);
     listZapiIntegracoes({ empresa_id: empresaId, ativo: true, limit: 100 }).then((res) =>
       setZapiOptions(res.data.map((i) => ({ value: i.id, label: i.nome_conexao })))
@@ -129,31 +87,13 @@ export default function ConfiguracoesGlobaisPainel({ empresaId }) {
     setParametros((prev) => prev.map((p) => (p.cluster === cluster ? atualizado : p)));
   }
 
-  async function handleToggleDataReal() {
-    const usarDataReal = !dataSistema.usar_data_real;
-    const payload = {
-      usar_data_real: usarDataReal,
-      data_ficticia: usarDataReal ? dataSistema.data_ficticia : dataSistema.data_ficticia || dataSistema.data_efetiva,
-    };
-    const atualizado = await salvarDataSistemaReguaCobranca(empresaId, payload);
-    setDataSistema(atualizado);
-  }
-
-  async function handleSalvarDataFicticia(data) {
-    const atualizado = await salvarDataSistemaReguaCobranca(empresaId, {
-      usar_data_real: false,
-      data_ficticia: data,
-    });
-    setDataSistema(atualizado);
-  }
-
   async function handleSalvarTipoComunicacao(tipo) {
     if (tipo === comunicacaoAutomatica.tipo) return;
     const atualizado = await salvarComunicacaoAutomaticaReguaCobranca(empresaId, tipo);
     setComunicacaoAutomatica(atualizado);
   }
 
-  const carregando = !parametros || !dataSistema || !comunicacaoAutomatica;
+  const carregando = !parametros || !comunicacaoAutomatica;
 
   return (
     <Card>
@@ -218,17 +158,6 @@ export default function ConfiguracoesGlobaisPainel({ empresaId }) {
                   })}
                 </tbody>
               </table>
-            </div>
-          </section>
-
-          <section>
-            <h3 className="mb-3 text-xs font-semibold uppercase tracking-wide text-gray-400">Data do sistema</h3>
-            <div className="flex items-center gap-3 rounded-lg border border-gray-200 p-3">
-              <Switch ativo={dataSistema.usar_data_real} label="Usar data real" onClick={handleToggleDataReal} />
-              <span className="text-sm font-medium text-gray-700">Usar data real</span>
-              {!dataSistema.usar_data_real && (
-                <CampoData valor={dataSistema.data_ficticia} onCommit={handleSalvarDataFicticia} />
-              )}
             </div>
           </section>
 

@@ -38,20 +38,6 @@ const parametroDisparoSchema = z.object({
   email_integracao_id: z.coerce.number().int().positive().nullable().optional(),
 });
 
-const dataSistemaSchema = z
-  .object({
-    usar_data_real: z.boolean(),
-    data_ficticia: z
-      .string()
-      .regex(/^\d{4}-\d{2}-\d{2}$/, 'Data inválida.')
-      .nullable()
-      .optional(),
-  })
-  .refine((d) => d.usar_data_real || d.data_ficticia, {
-    message: 'Informe a data fictícia.',
-    path: ['data_ficticia'],
-  });
-
 function badRequest(message) {
   const err = new Error(message);
   err.status = 400;
@@ -161,18 +147,6 @@ async function getDataSistema(req, res, next) {
   }
 }
 
-async function salvarDataSistema(req, res, next) {
-  try {
-    const empresaId = empresaIdSchema.parse(req.query.empresa_id);
-    const dados = dataSistemaSchema.parse(req.body);
-    const resultado = await service.salvarDataSistema(empresaId, dados);
-    res.json(resultado);
-  } catch (err) {
-    if (err.issues) return next(badRequest(err.issues[0].message));
-    next(err);
-  }
-}
-
 const comunicacaoAutomaticaSchema = z.object({
   tipo: z.enum(service.TIPOS_COMUNICACAO, { errorMap: () => ({ message: 'Tipo de comunicação inválido.' }) }),
 });
@@ -210,7 +184,6 @@ module.exports = {
   listParametrosDisparo,
   salvarParametroDisparo,
   getDataSistema,
-  salvarDataSistema,
   getComunicacaoAutomatica,
   salvarComunicacaoAutomatica,
 };

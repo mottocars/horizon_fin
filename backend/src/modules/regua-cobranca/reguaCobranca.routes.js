@@ -14,7 +14,6 @@ router.delete('/etapas/:id', controller.removerEtapa);
 router.get('/parametros-disparo', controller.listParametrosDisparo);
 router.put('/parametros-disparo', controller.salvarParametroDisparo);
 router.get('/data-sistema', controller.getDataSistema);
-router.put('/data-sistema', controller.salvarDataSistema);
 router.get('/comunicacao-automatica', controller.getComunicacaoAutomatica);
 router.put('/comunicacao-automatica', controller.salvarComunicacaoAutomatica);
 

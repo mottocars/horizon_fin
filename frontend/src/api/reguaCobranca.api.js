@@ -42,15 +42,10 @@ export function salvarParametroDisparoReguaCobranca(empresaId, cluster, dados) {
     .then((res) => res.data);
 }
 
-// Parametrização da "data de hoje" usada pelos disparos (fuso BR ou uma
-// data fictícia pra testes) — 1 por empresa, ver
-// reguaCobranca.service.js::getDataSistema/salvarDataSistema.
+// "Data de hoje" da régua (sempre a real, fuso BR — ver
+// reguaCobranca.service.js::getDataSistema).
 export function getDataSistemaReguaCobranca(empresaId) {
   return http.get('/regua-cobranca/data-sistema', { params: { empresa_id: empresaId } }).then((res) => res.data);
-}
-
-export function salvarDataSistemaReguaCobranca(empresaId, dados) {
-  return http.put('/regua-cobranca/data-sistema', dados, { params: { empresa_id: empresaId } }).then((res) => res.data);
 }
 
 // "Tipo de Comunicação" (Configurações Globais) — 1 por empresa, ver
