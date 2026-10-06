@@ -1,5 +1,5 @@
 import { useEffect, useState } from 'react';
-import { Copy, Download, FileText, Paperclip, UploadCloud, X } from 'lucide-react';
+import { Check, Copy, Download, FileText, Paperclip, UploadCloud, X } from 'lucide-react';
 import Modal from '../../../components/Modal';
 import Button from '../../../components/Button';
 import { baixarBoletoParcela, registrarObservacaoHistoricoRegua } from '../../../api/reguaCobrancaHistorico.api';
@@ -93,6 +93,10 @@ export default function RegistrarComunicacaoModal({ open, onClose, empresaId, it
   const comBoleto = canalAutomatizado && !semTemplate && Boolean(item?.enviar_boleto);
   const [baixandoBoleto, setBaixandoBoleto] = useState(false);
   const [erroBoleto, setErroBoleto] = useState('');
+  // Modo copiar: depois do 1º Copiar o envio já está registrado — o modal
+  // fica aberto e os cliques seguintes só copiam de novo (sem duplicar o
+  // registro no histórico).
+  const [copiado, setCopiado] = useState(false);
 
   useEffect(() => {
     if (!open) return;
@@ -100,6 +104,7 @@ export default function RegistrarComunicacaoModal({ open, onClose, empresaId, it
     setArquivos([]);
     setErro('');
     setErroBoleto('');
+    setCopiado(false);
   }, [open, item, canal, canalAutomatizado, mensagemTemplate]);
 
   function handleEscolherArquivos(e) {
@@ -160,6 +165,10 @@ export default function RegistrarComunicacaoModal({ open, onClose, empresaId, it
         setRegistrando(false);
         return;
       }
+      if (copiado) {
+        setRegistrando(false);
+        return;
+      }
     }
     try {
       await registrarObservacaoHistoricoRegua(empresaId, {
@@ -171,7 +180,8 @@ export default function RegistrarComunicacaoModal({ open, onClose, empresaId, it
         arquivos,
       });
       onRegistrado?.();
-      onClose();
+      if (copiar) setCopiado(true);
+      else onClose();
     } catch (err) {
       setErro(err.response?.data?.message || texto.erro);
     } finally {
@@ -311,17 +321,24 @@ export default function RegistrarComunicacaoModal({ open, onClose, empresaId, it
             </p>
           )}
 
+          {copiado && (
+            <p className="flex items-center gap-1.5 rounded-lg border border-emerald-200 bg-emerald-50 px-3 py-2 text-xs text-emerald-700">
+              <Check size={14} className="shrink-0" />
+              Mensagem copiada! Cole no {ehWhatsapp ? 'WhatsApp' : 'e-mail'} do cliente.
+            </p>
+          )}
+
           {erro && <p className="text-xs text-red-600">{erro}</p>}
 
           <div className="flex justify-end gap-2">
             <Button type="button" variant="secondary" onClick={onClose} disabled={registrando}>
-              Cancelar
+              {copiado ? 'Fechar' : 'Cancelar'}
             </Button>
             <Button type="button" onClick={handleRegistrar} loading={registrando} disabled={semTemplate}>
               {copiar ? (
                 <span className="flex items-center gap-1.5">
                   <Copy size={14} />
-                  Copiar
+                  {copiado ? 'Copiar de novo' : 'Copiar'}
                 </span>
               ) : canalAutomatizado ? (
                 'Enviar'
