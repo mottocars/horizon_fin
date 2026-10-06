@@ -3,7 +3,7 @@ import { CalendarDays, CheckCircle2, Loader2, MessageSquare, Paperclip, Plane, P
 import Avatar from './Avatar';
 import { BUCKETS, dataBR, destinosPermitidos, prazo } from './kanban';
 
-function CardKanban({ card, hoje, usuarios, visao, usuarioAtualId, arrastavel, arrastando, finalizando, onAbrir, onFinalizar, onDragStart, onDragEnd }) {
+function CardKanban({ card, hoje, usuarios, logo, visao, usuarioAtualId, arrastavel, arrastando, finalizando, onAbrir, onFinalizar, onDragStart, onDragEnd }) {
   const responsavel = usuarios[card.responsavel_id];
   const criador = usuarios[card.criador_id];
   const p = prazo(card, hoje);
@@ -21,7 +21,10 @@ function CardKanban({ card, hoje, usuarios, visao, usuarioAtualId, arrastavel, a
         arrastavel ? 'cursor-grab active:cursor-grabbing' : 'cursor-pointer'
       } ${arrastando ? 'opacity-40' : ''}`}
     >
-      <p className="truncate text-[11px] text-gray-400">{card.empresa_nome}</p>
+      <div className="flex items-start justify-between gap-2">
+        <p className="truncate text-[11px] text-gray-400">{card.empresa_nome}</p>
+        {logo && <img src={logo} alt="" title={card.empresa_nome} className="h-5 max-w-[56px] shrink-0 object-contain" />}
+      </div>
       <p className="mt-0.5 line-clamp-2 text-[13px] font-medium leading-snug text-gray-900">{card.assunto}</p>
       {card.descricao && <p className="mt-1 line-clamp-2 text-xs leading-relaxed text-gray-500">{card.descricao}</p>}
       {card.plano_nome && (
@@ -87,6 +90,7 @@ export default function KanbanBoard({
   cards,
   hoje,
   usuarios,
+  empresasLogos = {},
   visao,
   usuarioAtualId,
   mostrarFinalizados,
@@ -168,6 +172,7 @@ export default function KanbanBoard({
                   card={card}
                   hoje={hoje}
                   usuarios={usuarios}
+                  logo={empresasLogos[card.empresa_id]}
                   visao={visao}
                   usuarioAtualId={usuarioAtualId}
                   arrastavel={card.responsavel_id === usuarioAtualId && destinosPermitidos(card, hoje).length > 0 && movendoId !== card.id}

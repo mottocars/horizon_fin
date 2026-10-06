@@ -101,7 +101,13 @@ async function listar(usuarioId, { visao, empresaId }) {
   const dataHoje = hoje();
   const cards = rows.map((c) => ({ ...c, bucket: bucketDe(c, dataHoje) }));
   const usuarios = await usuariosDe(cards.flatMap((c) => [c.responsavel_id, c.criador_id]));
-  return { hoje: dataHoje, cards, usuarios };
+  // Logomarca uma vez por empresa (e não repetida em cada card): { empresa_id: data URI }.
+  const empresaIds = [...new Set(cards.map((c) => c.empresa_id))];
+  const { rows: logos } = empresaIds.length
+    ? await pool.query('SELECT id, logo FROM empresas WHERE id = ANY($1::int[]) AND logo IS NOT NULL', [empresaIds])
+    : { rows: [] };
+  const empresasLogos = Object.fromEntries(logos.map((e) => [e.id, e.logo]));
+  return { hoje: dataHoje, cards, usuarios, empresasLogos };
 }
 
 async function carregar(id) {

@@ -219,6 +219,7 @@ export default function PlanoDeVoo() {
                 cards={dados?.cards || []}
                 hoje={dados?.hoje}
                 usuarios={dados?.usuarios || {}}
+                empresasLogos={dados?.empresasLogos}
                 visao={visao}
                 usuarioAtualId={user?.id}
                 movendoId={movendoId}
