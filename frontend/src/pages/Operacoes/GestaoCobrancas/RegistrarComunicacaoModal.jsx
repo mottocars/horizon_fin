@@ -53,6 +53,13 @@ async function copiarTexto(texto) {
   if (!ok) throw new Error('copy');
 }
 
+// "BOLETO_JOAO.pdf" — primeiro nome do cliente em maiúsculas, sem
+// caracteres que o Windows não aceita em nome de arquivo.
+function nomeArquivoBoleto(nomeCliente) {
+  const primeiroNome = (nomeCliente || '').trim().split(/\s+/)[0].replace(/[\\/:*?"<>|]/g, '').toUpperCase();
+  return primeiroNome ? `BOLETO_${primeiroNome}.pdf` : 'BOLETO.pdf';
+}
+
 function formatarTamanho(bytes) {
   if (bytes < 1024) return `${bytes} B`;
   if (bytes < 1024 * 1024) return `${(bytes / 1024).toFixed(0)} KB`;
@@ -91,6 +98,7 @@ export default function RegistrarComunicacaoModal({ open, onClose, empresaId, it
   const semTemplate = canalAutomatizado && !mensagemTemplate;
   const copiar = modoCopiar && canalAutomatizado;
   const comBoleto = canalAutomatizado && !semTemplate && Boolean(item?.enviar_boleto);
+  const nomeBoleto = nomeArquivoBoleto(clientName || item?.client_name);
   const [baixandoBoleto, setBaixandoBoleto] = useState(false);
   const [erroBoleto, setErroBoleto] = useState('');
   // Modo copiar: depois do 1º Copiar o envio já está registrado — o modal
@@ -134,7 +142,7 @@ export default function RegistrarComunicacaoModal({ open, onClose, empresaId, it
       const url = window.URL.createObjectURL(blob);
       const link = document.createElement('a');
       link.href = url;
-      link.download = `boleto-${item.bill_id}-${item.installment_id}.pdf`;
+      link.download = nomeBoleto;
       link.click();
       window.URL.revokeObjectURL(url);
     } catch (err) {
@@ -248,7 +256,7 @@ export default function RegistrarComunicacaoModal({ open, onClose, empresaId, it
                   <div className="flex items-center justify-between gap-2 rounded-lg border border-gray-200 bg-gray-50 px-3 py-2">
                     <span className="flex min-w-0 items-center gap-2 text-sm text-gray-700">
                       <FileText size={16} className="shrink-0 text-red-500" />
-                      <span className="truncate">boleto.pdf</span>
+                      <span className="truncate">{nomeBoleto}</span>
                     </span>
                     <button
                       type="button"
