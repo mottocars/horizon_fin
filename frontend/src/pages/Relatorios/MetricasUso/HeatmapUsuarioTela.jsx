@@ -2,7 +2,8 @@ import { useMemo } from 'react';
 import Card from '../../../components/Card';
 import { TELAS_SISTEMA } from '../../../config/telas';
 
-const LIMITE_TELAS = 12;
+// Com a largura toda da página dá pra mostrar praticamente todas as telas.
+const LIMITE_TELAS = 24;
 
 // Rampa sequencial num hue só (azul da marca), clara -> escura — os mesmos
 // tons de primary-50 a primary-700 já usados no resto do app (ver

@@ -20,42 +20,27 @@ async function registrar(usuarioId, tela) {
   return rows[0];
 }
 
-// Agrega tudo que o dashboard de Métricas de Uso precisa numa chamada só —
-// resumo, série diária (tendência), ranking por tela e a matriz usuário x
-// tela (heatmap). As 4 consultas não dependem uma da outra, então rodam em
-// paralelo em vez de sequenciais.
 // Quem não é Master só enxerga o uso dos usuários das próprias empresas
 // ($3 = empresas de quem consulta; NULL = Master, sem filtro).
 const FILTRO_USUARIOS = (coluna) =>
   `($3::int[] IS NULL OR ${coluna} IN (SELECT ue.usuario_id FROM usuarios_empresas ue WHERE ue.empresa_id = ANY($3::int[])))`;
 
+// Agrega tudo que o dashboard de Métricas de Uso precisa numa chamada só —
+// resumo, ranking por tela (ordem das colunas do heatmap), a matriz
+// usuário x tela (heatmap) e "como cada usuário acessa" (navegador,
+// celular, Postman, script... — ver utils/clienteHttp.js). As consultas
+// não dependem uma da outra, então rodam em paralelo.
 async function metricas({ dataInicio, dataFim }, empresaIds = null) {
   const periodo = dataInicio && dataFim ? { dataInicio, dataFim } : periodoPadrao();
   const params = [periodo.dataInicio, periodo.dataFim, empresaIds];
 
-  const [resumoResult, porDiaResult, porTelaResult, matrizResult] = await Promise.all([
+  const [resumoResult, porTelaResult, matrizResult, clientesResult] = await Promise.all([
     pool.query(
       `SELECT COUNT(*)::int AS total_acessos,
               COUNT(DISTINCT usuario_id)::int AS usuarios_ativos,
               COUNT(DISTINCT tela)::int AS telas_acessadas
        FROM logs_acesso
        WHERE criado_em::date BETWEEN $1 AND $2 AND ${FILTRO_USUARIOS('usuario_id')}`,
-      params
-    ),
-    // generate_series preenche os dias sem nenhum acesso com 0 — sem isso a
-    // linha do gráfico de tendência "pula" direto de uma quinta pra uma
-    // segunda quando não houve acesso no fim de semana, como se os dias
-    // fossem consecutivos.
-    pool.query(
-      `SELECT gs.dia::text AS data, COALESCE(t.total, 0)::int AS total
-       FROM generate_series($1::date, $2::date, interval '1 day') AS gs(dia)
-       LEFT JOIN (
-         SELECT criado_em::date AS dia, COUNT(*) AS total
-         FROM logs_acesso
-         WHERE criado_em::date BETWEEN $1 AND $2 AND ${FILTRO_USUARIOS('usuario_id')}
-         GROUP BY criado_em::date
-       ) t ON t.dia = gs.dia
-       ORDER BY gs.dia`,
       params
     ),
     pool.query(
@@ -75,6 +60,23 @@ async function metricas({ dataInicio, dataFim }, empresaIds = null) {
        ORDER BY u.nome ASC, la.tela ASC`,
       params
     ),
+    // 1 linha por usuário + tipo de cliente + detalhe (ex.: "Chrome ·
+    // Windows", "PostmanRuntime/7.43.0"), somando os dias do período.
+    pool.query(
+      `SELECT c.usuario_id, u.nome AS usuario_nome, c.tipo, c.detalhe,
+              SUM(c.total)::int AS requisicoes,
+              COUNT(DISTINCT c.dia)::int AS dias,
+              ARRAY_AGG(DISTINCT c.ip) FILTER (WHERE c.ip IS NOT NULL AND c.ip <> '') AS ips,
+              (ARRAY_AGG(c.user_agent ORDER BY c.ultimo_em DESC))[1] AS user_agent,
+              MIN(c.primeiro_em) AS primeiro_em,
+              MAX(c.ultimo_em) AS ultimo_em
+       FROM logs_acesso_clientes c
+       JOIN usuarios u ON u.id = c.usuario_id
+       WHERE c.dia BETWEEN $1 AND $2 AND ${FILTRO_USUARIOS('c.usuario_id')}
+       GROUP BY c.usuario_id, u.nome, c.tipo, c.detalhe
+       ORDER BY u.nome ASC, requisicoes DESC`,
+      params
+    ),
   ]);
 
   return {
@@ -85,9 +87,9 @@ async function metricas({ dataInicio, dataFim }, empresaIds = null) {
       telasAcessadas: resumoResult.rows[0].telas_acessadas,
       telaMaisAcessada: porTelaResult.rows[0] || null,
     },
-    porDia: porDiaResult.rows,
     porTela: porTelaResult.rows,
     matriz: matrizResult.rows,
+    clientes: clientesResult.rows,
   };
 }
 

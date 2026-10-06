@@ -2563,6 +2563,27 @@ CREATE INDEX idx_logs_acesso_usuario ON logs_acesso (usuario_id);
 CREATE INDEX idx_logs_acesso_tela ON logs_acesso (tela);
 CREATE INDEX idx_logs_acesso_criado_em ON logs_acesso (criado_em);
 
+-- De onde vêm as chamadas autenticadas à API (navegador, celular, Postman,
+-- script Python...) — Métricas de Uso > "Como cada usuário acessa". Gravado
+-- pelo auth.middleware.js (ver utils/clienteHttp.js), agregado por usuário +
+-- dia + User-Agent + IP. `assinatura` = md5(user_agent|ip), pro UNIQUE.
+CREATE TABLE logs_acesso_clientes (
+    id            SERIAL PRIMARY KEY,
+    usuario_id    INTEGER NOT NULL REFERENCES usuarios(id) ON DELETE CASCADE,
+    dia           DATE NOT NULL,
+    tipo          VARCHAR(30) NOT NULL,
+    detalhe       VARCHAR(120),
+    user_agent    TEXT NOT NULL DEFAULT '',
+    ip            VARCHAR(64),
+    assinatura    CHAR(32) NOT NULL,
+    total         INTEGER NOT NULL DEFAULT 0,
+    primeiro_em   TIMESTAMP NOT NULL DEFAULT NOW(),
+    ultimo_em     TIMESTAMP NOT NULL DEFAULT NOW(),
+    UNIQUE (usuario_id, dia, assinatura)
+);
+
+CREATE INDEX idx_logs_acesso_clientes_dia ON logs_acesso_clientes (dia);
+
 -- Categorias de orçamento cadastráveis por empresa (aba "Categorias Orçamento" de Operações >
 -- DRE POC Gerencial) — mesmo padrão de classificacoes_bancarias (lista simples por empresa,
 -- sem valor fixo pro sistema inteiro). Cadastro simples de propósito: só nome e exclusão, sem

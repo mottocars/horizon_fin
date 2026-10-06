@@ -3,9 +3,8 @@ import { Activity, AlertTriangle, LayoutGrid, Trophy, Users } from 'lucide-react
 import Card from '../../../components/Card';
 import { getMetricasUso } from '../../../api/logsAcesso.api';
 import { TELAS_SISTEMA } from '../../../config/telas';
-import TendenciaAcessosChart from './TendenciaAcessosChart';
-import RankingTelasChart from './RankingTelasChart';
 import HeatmapUsuarioTela from './HeatmapUsuarioTela';
+import ComoAcessaTabela from './ComoAcessaTabela';
 
 const PRESETS = [
   { id: '7', label: '7 dias', dias: 7 },
@@ -169,17 +168,9 @@ export default function MetricasUsoPage() {
             />
           </div>
 
-          <TendenciaAcessosChart porDia={dados.porDia} />
+          <HeatmapUsuarioTela matriz={dados.matriz} porTela={dados.porTela} />
 
-          {/* minmax(0, ...) em vez de 1fr/1.4fr puro — sem isso a coluna do
-              heatmap (tabela larga, com scroll próprio) "estoura" pro
-              tamanho do seu conteúdo e espreme a do ranking até quase
-              sumir, já que uma track fr sozinha tem mínimo automático
-              baseado no maior min-content dos filhos. */}
-          <div className="grid grid-cols-1 gap-4 xl:grid-cols-[minmax(0,1fr)_minmax(0,1.4fr)]">
-            <RankingTelasChart porTela={dados.porTela} />
-            <HeatmapUsuarioTela matriz={dados.matriz} porTela={dados.porTela} />
-          </div>
+          <ComoAcessaTabela clientes={dados.clientes || []} />
         </div>
       )}
     </div>

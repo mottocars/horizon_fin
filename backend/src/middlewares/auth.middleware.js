@@ -1,6 +1,7 @@
 const jwt = require('jsonwebtoken');
 const env = require('../config/env');
 const pool = require('../config/db');
+const { registrarCliente } = require('../utils/clienteHttp');
 
 // Autenticação + contexto de acesso do usuário. Toda rota protegida passa
 // por aqui (router.use(authMiddleware) em cada módulo, e também pelo
@@ -109,6 +110,8 @@ async function autenticar(req, res) {
     return false;
   }
   req.user = { id: usuario.id, permissao: usuario.permissao, telas: usuario.telas, empresaIds: usuario.empresaIds };
+  // De onde veio a chamada (navegador, Postman, script...) — Métricas de Uso.
+  registrarCliente(req, usuario.id);
   return true;
 }
 
