@@ -940,6 +940,9 @@ CREATE TABLE saldos_contas_bancarias (
     fonte          VARCHAR(10) CHECK (fonte IN ('VANPIX', 'ITAU')),
     -- Parte do saldo que veio da cobrança (títulos com Dt Crédito = data); `saldo` é o total.
     saldo_cobranca NUMERIC(15,2),
+    -- Composição do saldo automático (extrato/Itaú/herdado + cobrança com os boletos) — dica da
+    -- célula na grade. NULL nos digitados à mão.
+    composicao     JSONB,
     atualizado_por INTEGER REFERENCES usuarios(id) ON DELETE SET NULL,
     criado_em      TIMESTAMP DEFAULT NOW(),
     atualizado_em  TIMESTAMP DEFAULT NOW(),

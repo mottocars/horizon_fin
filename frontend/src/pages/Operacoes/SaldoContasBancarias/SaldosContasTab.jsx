@@ -2,6 +2,7 @@ import { Fragment, memo, useCallback, useEffect, useMemo, useRef, useState } fro
 import { Check, History, Landmark, Loader2, Minus, Pencil, Plus, TriangleAlert, Zap } from 'lucide-react';
 import { getSaldosContas, salvarSaldosContas } from '../../../api/saldoContasBancarias.api';
 import LogoBanco from './LogoBanco';
+import ComposicaoSaldo from './ComposicaoSaldo';
 import { formatarSaldo, interpretarSaldo, listarDias, nomeMes, numeroParaEdicao, somarSaldos } from './constantes';
 
 // Geometria da grade — a tabela tem largura fixa (colunas em px) e rola dentro do card:
@@ -60,6 +61,7 @@ const CelulaSaldo = memo(function CelulaSaldo({
   valor,
   origem,
   cobranca,
+  composicao,
   bloqueada,
   onCommit,
   onNavegar,
@@ -67,6 +69,9 @@ const CelulaSaldo = memo(function CelulaSaldo({
   registrar,
 }) {
   const [texto, setTexto] = useState(null); // null = fora de edição
+  // Dica com a composição do saldo automático: abre com um pequeno atraso ao passar o mouse.
+  const [ancoraDica, setAncoraDica] = useState(null);
+  const timerDica = useRef(null);
   // O texto também vive num ref: o Enter faz commit e em seguida move o foco, o que dispara
   // o blur DESTA célula ainda com o state antigo — sem o ref gravaria duas vezes.
   const textoRef = useRef(null);
@@ -132,8 +137,27 @@ const CelulaSaldo = memo(function CelulaSaldo({
         : 'border-transparent bg-transparent hover:border-gray-300 hover:bg-white';
   const Icone = infoOrigem?.icone;
 
+  const temDica = Boolean(composicao) && preenchido && !editando;
+
+  function mostrarDica(e) {
+    if (!temDica) return;
+    const alvo = e.currentTarget;
+    clearTimeout(timerDica.current);
+    timerDica.current = setTimeout(() => setAncoraDica(alvo.getBoundingClientRect()), 220);
+  }
+
+  function esconderDica() {
+    clearTimeout(timerDica.current);
+    setAncoraDica(null);
+  }
+
+  useEffect(() => () => clearTimeout(timerDica.current), []);
+
   return (
-    <div className="relative">
+    <div className="relative" onMouseEnter={mostrarDica} onMouseLeave={esconderDica} onMouseDown={esconderDica}>
+      {ancoraDica && temDica && (
+        <ComposicaoSaldo ancora={ancoraDica} composicao={composicao} valor={valor} data={dia.iso} rotulo={rotulo} />
+      )}
       {Icone && (
         <Icone
           size={11}
@@ -149,7 +173,7 @@ const CelulaSaldo = memo(function CelulaSaldo({
         spellCheck={false}
         disabled={bloqueada}
         // `cobranca`: parte do saldo que veio dos boletos com Dt Crédito no dia (abertura do período)
-        title={infoOrigem ? `${infoOrigem.titulo}${cobranca ? ` — inclui ${formatarSaldo(cobranca)} de cobrança` : ''}` : undefined}
+        title={!composicao && infoOrigem ? `${infoOrigem.titulo}${cobranca ? ` — inclui ${formatarSaldo(cobranca)} de cobrança` : ''}` : undefined}
         aria-label={`${rotulo} — saldo do dia ${dia.dia}${bloqueada ? ' (bloqueado — fora do período aberto)' : ''}${infoOrigem ? ` (${infoOrigem.titulo})` : ''}`}
         value={editando ? texto : preenchido ? formatarSaldo(valor) : ''}
         onFocus={(e) => {
@@ -392,8 +416,10 @@ function SaldosContasTab({
         const saldos = { ...conta.saldos };
         const origens = { ...conta.origens };
         const cobrancas = { ...conta.cobrancas };
+        const composicoes = { ...conta.composicoes };
         for (const item of lista) {
           delete cobrancas[item.data]; // digitado à mão: deixa de ser "extrato + cobrança"
+          delete composicoes[item.data];
           if (item.saldo === null) {
             delete saldos[item.data];
             delete origens[item.data];
@@ -405,7 +431,7 @@ function SaldosContasTab({
             origens[item.data] = 'MANUAL';
           }
         }
-        return { ...conta, saldos, origens, cobrancas };
+        return { ...conta, saldos, origens, cobrancas, composicoes };
       });
     });
   }, []);
@@ -753,6 +779,7 @@ function SaldosContasTab({
                                   valor={conta.saldos[d.iso]}
                                   origem={conta.origens?.[d.iso]}
                                   cobranca={conta.cobrancas?.[d.iso]}
+                                  composicao={conta.composicoes?.[d.iso]}
                                   bloqueada={somenteLeitura || d.iso !== dataAberta}
                                   onCommit={handleCommit}
                                   onNavegar={handleNavegar}

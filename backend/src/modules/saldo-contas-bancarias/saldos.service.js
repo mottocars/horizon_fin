@@ -144,7 +144,7 @@ async function getSaldos(empresaId, { dataInicio, dataFim, companyIds = [], clas
   );
 
   const { rows: saldos } = await pool.query(
-    `SELECT s.company_id, s.numero_conta, TO_CHAR(s.data, 'YYYY-MM-DD') AS data, s.saldo, s.origem, s.saldo_cobranca
+    `SELECT s.company_id, s.numero_conta, TO_CHAR(s.data, 'YYYY-MM-DD') AS data, s.saldo, s.origem, s.fonte, s.saldo_cobranca, s.composicao
      FROM saldos_contas_bancarias s
      WHERE s.empresa_id = $1 AND s.data BETWEEN $2 AND $3`,
     [empresaId, dataInicio, dataFim]
@@ -156,17 +156,25 @@ async function getSaldos(empresaId, { dataInicio, dataFim, companyIds = [], clas
   const porConta = new Map();
   for (const s of saldos) {
     const chave = `${s.company_id}|${s.numero_conta}`;
-    if (!porConta.has(chave)) porConta.set(chave, { saldos: {}, origens: {}, cobrancas: {} });
+    if (!porConta.has(chave)) porConta.set(chave, { saldos: {}, origens: {}, cobrancas: {}, composicoes: {} });
     porConta.get(chave).saldos[s.data] = Number(s.saldo);
     porConta.get(chave).origens[s.data] = s.origem;
     // parte do saldo que veio da cobrança (títulos com Dt Crédito no dia) — só pra dica da célula
     if (s.saldo_cobranca !== null) porConta.get(chave).cobrancas[s.data] = Number(s.saldo_cobranca);
+    // composição do automático (dica da célula); linhas antigas sem ela levam ao menos a fonte
+    if (s.origem !== 'MANUAL') porConta.get(chave).composicoes[s.data] = s.composicao || { fonte: s.fonte || null };
   }
 
   return {
     contas: contas.map((c) => {
       const dados = porConta.get(`${c.company_id}|${c.numero_conta}`);
-      return { ...c, saldos: dados?.saldos || {}, origens: dados?.origens || {}, cobrancas: dados?.cobrancas || {} };
+      return {
+        ...c,
+        saldos: dados?.saldos || {},
+        origens: dados?.origens || {},
+        cobrancas: dados?.cobrancas || {},
+        composicoes: dados?.composicoes || {},
+      };
     }),
   };
 }
@@ -270,13 +278,14 @@ async function salvarSaldos(empresaId, usuarioId, itens) {
 
     if (gravar.length) {
       await client.query(
-        `INSERT INTO saldos_contas_bancarias (empresa_id, company_id, numero_conta, data, saldo, origem, fonte, saldo_cobranca, atualizado_por)
-         SELECT $1, t.company_id, t.numero_conta, t.data, t.saldo, t.origem, t.fonte, t.saldo_cobranca, $2
-         FROM unnest($3::int[], $4::text[], $5::date[], $6::numeric[], $7::text[], $8::text[], $9::numeric[])
-           AS t(company_id, numero_conta, data, saldo, origem, fonte, saldo_cobranca)
+        `INSERT INTO saldos_contas_bancarias (empresa_id, company_id, numero_conta, data, saldo, origem, fonte, saldo_cobranca, composicao, atualizado_por)
+         SELECT $1, t.company_id, t.numero_conta, t.data, t.saldo, t.origem, t.fonte, t.saldo_cobranca, t.composicao, $2
+         FROM unnest($3::int[], $4::text[], $5::date[], $6::numeric[], $7::text[], $8::text[], $9::numeric[], $10::jsonb[])
+           AS t(company_id, numero_conta, data, saldo, origem, fonte, saldo_cobranca, composicao)
          ON CONFLICT (empresa_id, company_id, numero_conta, data)
          DO UPDATE SET saldo = EXCLUDED.saldo, origem = EXCLUDED.origem, fonte = EXCLUDED.fonte,
-                       saldo_cobranca = EXCLUDED.saldo_cobranca, atualizado_por = EXCLUDED.atualizado_por`,
+                       saldo_cobranca = EXCLUDED.saldo_cobranca, composicao = EXCLUDED.composicao,
+                       atualizado_por = EXCLUDED.atualizado_por`,
         [
           empresaId,
           usuarioId,
@@ -292,6 +301,8 @@ async function salvarSaldos(empresaId, usuarioId, itens) {
           gravar.map((i) => i.fonte || null),
           // Parte que veio da cobrança (só a busca automática informa) — o manual zera.
           gravar.map((i) => (i.saldoCobranca ? i.saldoCobranca.toFixed(2) : null)),
+          // Composição do saldo automático (dica da célula) — o manual zera.
+          gravar.map((i) => (i.composicao ? JSON.stringify(i.composicao) : null)),
         ]
       );
     }

@@ -14,7 +14,7 @@ const vanpixService = require('../integracoes-vanpix/vanpix.service');
 const itauService = require('../integracoes-itau/itau.service');
 const classificacoesService = require('../classificacoes-bancarias/classificacoes.service');
 const saldosService = require('./saldos.service');
-const { somaCreditos } = require('./cobranca.calculo');
+const { MOVIMENTOS_LIQUIDACAO, somaCreditos } = require('./cobranca.calculo');
 
 // 0 = domingo, 6 = sábado (getUTCDay, meio-dia UTC evita virar o dia errado por fuso).
 function ehFimDeSemana(iso) {
@@ -42,14 +42,15 @@ async function listarContasAlvo(empresaId) {
 
 // Último saldo já lançado (qualquer origem) antes de `data`, pra "herdar" quando a VanPix não
 // retornou nada pra essa conta e a classificação prioriza isso.
+// Devolve { valor, data, origem } (de qual dia veio — vai pra composição do saldo) ou null.
 async function ultimoSaldoAnterior(empresaId, companyId, numeroConta, data) {
   const { rows } = await pool.query(
-    `SELECT saldo FROM saldos_contas_bancarias
+    `SELECT saldo, TO_CHAR(data, 'YYYY-MM-DD') AS data, origem FROM saldos_contas_bancarias
      WHERE empresa_id = $1 AND company_id = $2 AND numero_conta = $3 AND data < $4
      ORDER BY data DESC LIMIT 1`,
     [empresaId, companyId, numeroConta, data]
   );
-  return rows[0] ? Number(rows[0].saldo) : null;
+  return rows[0] ? { valor: Number(rows[0].saldo), data: rows[0].data, origem: rows[0].origem } : null;
 }
 
 // Contas com saldo AUTOMÁTICO (API/HERDADO, não manual) já gravado em `data` — de uma abertura
@@ -115,7 +116,14 @@ async function buscarSaldosItau(empresaId, data, relatorio, itensParaGravar, cas
       }
       for (const conta of c.contas) {
         casadasNaApi.add(`${conta.company_id}:${conta.numero_conta}`);
-        itensParaGravar.push({ ...conta, data, saldo: r.valor, origem: 'API', fonte: 'ITAU' });
+        itensParaGravar.push({
+          ...conta,
+          data,
+          saldo: r.valor,
+          origem: 'API',
+          fonte: 'ITAU',
+          composicao: { extrato: { fonte: 'ITAU', conexao: c.conexao, conta: contaTexto, posicao: r.posicao || null, valor: r.valor } },
+        });
         relatorio.atualizados.push({ conexao: c.conexao, conta: contaTexto, ...conta, saldo: r.valor, posicao: r.posicao });
       }
     }
@@ -294,8 +302,11 @@ async function somarCobranca(empresaId, data, itensParaGravar, relatorio) {
   for (const conta of contas) {
     if (!apelidosVarridos.has(conta.apelido)) continue;
     const { rows: titulos } = await pool.query(
-      `SELECT cod_movimento, valor_pago, TO_CHAR(data_credito, 'YYYY-MM-DD') AS data_credito
-       FROM cobranca_titulos WHERE empresa_id = $1 AND apelido = $2 AND data_credito > $3 AND data_credito <= $4`,
+      `SELECT cod_movimento, valor_pago, TO_CHAR(data_credito, 'YYYY-MM-DD') AS data_credito,
+              nosso_numero, numero_documento, pagador_nome, valor_titulo, juros_multa,
+              TO_CHAR(data_ocorrencia, 'YYYY-MM-DD') AS data_ocorrencia, banco_cobrador, canal
+       FROM cobranca_titulos WHERE empresa_id = $1 AND apelido = $2 AND data_credito > $3 AND data_credito <= $4
+       ORDER BY data_credito, valor_pago DESC`,
       [empresaId, conta.apelido, conta.depoisDe, data]
     );
     const soma = somaCreditos(titulos, conta.depoisDe, data);
@@ -324,6 +335,29 @@ async function somarCobranca(empresaId, data, itensParaGravar, relatorio) {
     }
     item.saldo = Math.round((item.saldo + soma.valor) * 100) / 100;
     item.saldoCobranca = soma.valor;
+    // composição: cada boleto somado (só liquidação — mesma regra de somaCreditos)
+    const somados = titulos.filter((t) => MOVIMENTOS_LIQUIDACAO.includes(t.cod_movimento));
+    item.composicao = {
+      ...(item.composicao || {}),
+      cobranca: {
+        apelido: conta.apelido,
+        de: base.creditosDe,
+        ate: data,
+        valor: soma.valor,
+        titulos: somados.map((t) => ({
+          nossoNumero: t.nosso_numero,
+          documento: t.numero_documento,
+          pagador: t.pagador_nome,
+          valorTitulo: Number(t.valor_titulo),
+          juros: Number(t.juros_multa),
+          valorPago: Number(t.valor_pago),
+          dataOcorrencia: t.data_ocorrencia,
+          dataCredito: t.data_credito,
+          banco: t.banco_cobrador,
+          canal: t.canal,
+        })),
+      },
+    };
     relatorio.contas.push(base);
   }
 }
@@ -376,6 +410,9 @@ async function buscarSaldosVanpix(empresaId, usuarioId, data) {
         origem: 'API',
         fonte: 'VANPIX',
         dataFechamento: lote.saldoFinal.data,
+        composicao: {
+          extrato: { fonte: 'VANPIX', apelido, conta: `${lote.conta}-${lote.digitoConta}`, dataFechamento: lote.saldoFinal.data, valor },
+        },
       });
       relatorio.atualizados.push({
         apelido,
@@ -409,7 +446,8 @@ async function buscarSaldosVanpix(empresaId, usuarioId, data) {
     const chave = `${conta.company_id}:${conta.numero_conta}`;
     if (casadasNaApi.has(chave)) continue;
     const herda = prioridadePorClassificacao.get(conta.classificacao) === 'SALDO_ANTERIOR';
-    const valorHerdado = herda ? await ultimoSaldoAnterior(empresaId, conta.company_id, conta.numero_conta, data) : null;
+    const anterior = herda ? await ultimoSaldoAnterior(empresaId, conta.company_id, conta.numero_conta, data) : null;
+    const valorHerdado = anterior ? anterior.valor : null;
 
     if (valorHerdado === null) {
       // em branco — tira o automático de uma abertura anterior deste dia, se houver
@@ -419,7 +457,15 @@ async function buscarSaldosVanpix(empresaId, usuarioId, data) {
       relatorio.semSaldo.push({ classificacao: conta.classificacao, company_id: conta.company_id, numero_conta: conta.numero_conta });
       continue;
     }
-    itensParaGravar.push({ company_id: conta.company_id, numero_conta: conta.numero_conta, data, saldo: valorHerdado, origem: 'HERDADO', fonte: null });
+    itensParaGravar.push({
+      company_id: conta.company_id,
+      numero_conta: conta.numero_conta,
+      data,
+      saldo: valorHerdado,
+      origem: 'HERDADO',
+      fonte: null,
+      composicao: { herdado: { de: anterior.data, origem: anterior.origem, valor: valorHerdado, classificacao: conta.classificacao } },
+    });
     relatorio.herdados.push({
       classificacao: conta.classificacao,
       company_id: conta.company_id,
