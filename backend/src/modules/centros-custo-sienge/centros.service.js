@@ -2,15 +2,18 @@ const pool = require('../../config/db');
 const { decrypt } = require('../../utils/crypto');
 const siengeApi = require('./sienge-api.client');
 
-async function listGerados() {
+// `empresaIds` null = todas (Master); senão só as empresas do usuário.
+async function listGerados(empresaIds = null) {
   const { rows } = await pool.query(
     `SELECT e.id AS empresa_id, COALESCE(NULLIF(e.nome_fantasia, ''), e.razao_social) AS empresa_razao_social, e.cnpj AS empresa_cnpj,
             COUNT(c.sienge_id)::int AS total_itens,
             MAX(c.atualizado_em) AS atualizado_em
      FROM centros_custo_sienge c
      JOIN empresas e ON e.id = c.empresa_id
+     WHERE $1::int[] IS NULL OR e.id = ANY($1::int[])
      GROUP BY e.id, e.razao_social, e.nome_fantasia, e.cnpj
-     ORDER BY e.razao_social ASC`
+     ORDER BY e.razao_social ASC`,
+    [empresaIds]
   );
   return rows;
 }

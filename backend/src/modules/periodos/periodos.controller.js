@@ -35,7 +35,7 @@ function badRequest(message) {
 
 async function list(req, res, next) {
   try {
-    const result = await service.list(req.query.empresaId);
+    const result = await service.list(req.query.empresaId, req.user.empresaIds ? [...req.user.empresaIds] : null);
     res.json(result);
   } catch (err) {
     next(err);

@@ -24,9 +24,14 @@ async function registrar(usuarioId, tela) {
 // resumo, série diária (tendência), ranking por tela e a matriz usuário x
 // tela (heatmap). As 4 consultas não dependem uma da outra, então rodam em
 // paralelo em vez de sequenciais.
-async function metricas({ dataInicio, dataFim }) {
+// Quem não é Master só enxerga o uso dos usuários das próprias empresas
+// ($3 = empresas de quem consulta; NULL = Master, sem filtro).
+const FILTRO_USUARIOS = (coluna) =>
+  `($3::int[] IS NULL OR ${coluna} IN (SELECT ue.usuario_id FROM usuarios_empresas ue WHERE ue.empresa_id = ANY($3::int[])))`;
+
+async function metricas({ dataInicio, dataFim }, empresaIds = null) {
   const periodo = dataInicio && dataFim ? { dataInicio, dataFim } : periodoPadrao();
-  const params = [periodo.dataInicio, periodo.dataFim];
+  const params = [periodo.dataInicio, periodo.dataFim, empresaIds];
 
   const [resumoResult, porDiaResult, porTelaResult, matrizResult] = await Promise.all([
     pool.query(
@@ -34,7 +39,7 @@ async function metricas({ dataInicio, dataFim }) {
               COUNT(DISTINCT usuario_id)::int AS usuarios_ativos,
               COUNT(DISTINCT tela)::int AS telas_acessadas
        FROM logs_acesso
-       WHERE criado_em::date BETWEEN $1 AND $2`,
+       WHERE criado_em::date BETWEEN $1 AND $2 AND ${FILTRO_USUARIOS('usuario_id')}`,
       params
     ),
     // generate_series preenche os dias sem nenhum acesso com 0 — sem isso a
@@ -47,7 +52,7 @@ async function metricas({ dataInicio, dataFim }) {
        LEFT JOIN (
          SELECT criado_em::date AS dia, COUNT(*) AS total
          FROM logs_acesso
-         WHERE criado_em::date BETWEEN $1 AND $2
+         WHERE criado_em::date BETWEEN $1 AND $2 AND ${FILTRO_USUARIOS('usuario_id')}
          GROUP BY criado_em::date
        ) t ON t.dia = gs.dia
        ORDER BY gs.dia`,
@@ -56,7 +61,7 @@ async function metricas({ dataInicio, dataFim }) {
     pool.query(
       `SELECT tela, COUNT(*)::int AS total
        FROM logs_acesso
-       WHERE criado_em::date BETWEEN $1 AND $2
+       WHERE criado_em::date BETWEEN $1 AND $2 AND ${FILTRO_USUARIOS('usuario_id')}
        GROUP BY tela
        ORDER BY total DESC, tela ASC`,
       params
@@ -65,7 +70,7 @@ async function metricas({ dataInicio, dataFim }) {
       `SELECT la.usuario_id, u.nome AS usuario_nome, la.tela, COUNT(*)::int AS total
        FROM logs_acesso la
        JOIN usuarios u ON u.id = la.usuario_id
-       WHERE la.criado_em::date BETWEEN $1 AND $2
+       WHERE la.criado_em::date BETWEEN $1 AND $2 AND ${FILTRO_USUARIOS('la.usuario_id')}
        GROUP BY la.usuario_id, u.nome, la.tela
        ORDER BY u.nome ASC, la.tela ASC`,
       params

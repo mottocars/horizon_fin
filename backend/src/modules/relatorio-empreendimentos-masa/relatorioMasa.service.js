@@ -430,4 +430,4 @@ async function listMatriz() {
   return { fases, agrupamentos };
 }
 
-module.exports = { listMatriz };
+module.exports = { getEmpresaMasaId, listMatriz };

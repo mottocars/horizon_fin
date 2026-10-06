@@ -3,6 +3,7 @@ const multer = require('multer');
 const os = require('os');
 const path = require('path');
 const authMiddleware = require('../../middlewares/auth.middleware');
+const { paramEmpresa } = require('../../middlewares/acesso.middleware');
 const controller = require('./extrato.controller');
 
 const EXTENSOES_ACEITAS = ['.xls', '.xlsx'];
@@ -25,6 +26,7 @@ const upload = multer({
 const router = Router();
 
 router.use(authMiddleware);
+router.param('empresaId', paramEmpresa);
 router.get('/:empresaId', controller.listEmpreendimentos);
 router.post('/:empresaId/importar', upload.single('arquivo'), controller.importar);
 router.get('/:empresaId/exportar', controller.exportExcelTodos);

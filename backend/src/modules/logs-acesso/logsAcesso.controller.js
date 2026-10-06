@@ -35,7 +35,7 @@ async function registrar(req, res, next) {
 async function metricas(req, res, next) {
   try {
     const query = metricasQuerySchema.parse(req.query);
-    const result = await service.metricas(query);
+    const result = await service.metricas(query, req.user.empresaIds ? [...req.user.empresaIds] : null);
     res.json(result);
   } catch (err) {
     if (err.issues) return next(badRequest(err.issues[0].message));

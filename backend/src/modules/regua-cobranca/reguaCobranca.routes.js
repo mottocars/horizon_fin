@@ -1,10 +1,12 @@
 const { Router } = require('express');
 const authMiddleware = require('../../middlewares/auth.middleware');
+const { paramRecurso } = require('../../middlewares/acesso.middleware');
 const controller = require('./reguaCobranca.controller');
 
 const router = Router();
 
 router.use(authMiddleware);
+router.param('id', paramRecurso('SELECT empresa_id FROM regua_cobranca_etapas WHERE id = $1'));
 router.get('/resumo', controller.getResumo);
 router.get('/responsaveis', controller.listResponsaveis);
 router.get('/etapas', controller.listEtapas);

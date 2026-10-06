@@ -77,7 +77,7 @@ function badRequest(message) {
 
 async function listGerados(req, res, next) {
   try {
-    const result = await service.listGerados();
+    const result = await service.listGerados(req.user.empresaIds ? [...req.user.empresaIds] : null);
     res.json(result);
   } catch (err) {
     next(err);

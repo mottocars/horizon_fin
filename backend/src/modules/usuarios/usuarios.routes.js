@@ -5,6 +5,7 @@ const controller = require('./usuarios.controller');
 const router = Router();
 
 router.use(authMiddleware);
+router.param('id', controller.paramUsuarioAcessivel);
 router.get('/', controller.list);
 router.get('/:id', controller.getById);
 router.post('/', controller.create);

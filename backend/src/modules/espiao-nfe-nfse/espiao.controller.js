@@ -12,7 +12,7 @@ function badRequest(message) {
 
 async function listEmpresas(req, res, next) {
   try {
-    const result = await service.listEmpresasComStatus();
+    const result = await service.listEmpresasComStatus(req.user.empresaIds ? [...req.user.empresaIds] : null);
     res.json(result);
   } catch (err) {
     next(err);

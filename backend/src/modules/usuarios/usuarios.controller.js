@@ -1,5 +1,6 @@
 const { z } = require('zod');
 const service = require('./usuarios.service');
+const { limparCacheUsuario } = require('../../middlewares/auth.middleware');
 
 function badRequest(message) {
   const err = new Error(message);
@@ -157,10 +158,44 @@ async function getById(req, res, next) {
   }
 }
 
+// router.param('id'): usuário alvo precisa ter ao menos uma empresa em
+// comum com quem pede (Master vê todos). Fora disso responde 404 — mesmo
+// tratamento do Master oculto, pra não confirmar que o id existe.
+async function paramUsuarioAcessivel(req, res, next, id) {
+  try {
+    if (req.user.empresaIds === null) return next();
+    const alvo = await service.getById(id);
+    const emComum = (alvo?.empresa_ids || []).some((e) => req.user.empresaIds.has(Number(e)));
+    if (!alvo || alvo.permissao === 'MASTER' || !emComum) {
+      return res.status(404).json({ message: 'Usuário não encontrado.' });
+    }
+    next();
+  } catch (err) {
+    if (err.code === '22P02') return res.status(404).json({ message: 'Usuário não encontrado.' });
+    next(err);
+  }
+}
+
+// Ninguém concede mais acesso do que tem: Administrador não cria Master
+// (ver garantirPodeDefinirMaster); Básico com a tela de Usuários só cria/
+// edita Básico, e só com telas que ele mesmo tem — senão bastaria criar
+// um Administrador pra si mesmo.
+function garantirNivelConcedivel(req, data) {
+  if (req.user.permissao !== 'BASICO') return;
+  if (data.permissao !== 'BASICO') {
+    throw forbidden('Você só pode cadastrar usuários com perfil Básico.');
+  }
+  const proprias = new Set(req.user.telas);
+  if ((data.telas_permitidas || []).some((t) => !proprias.has(t))) {
+    throw forbidden('Você só pode liberar telas às quais você mesmo tem acesso.');
+  }
+}
+
 async function create(req, res, next) {
   try {
     const data = createSchema.parse(req.body);
     await garantirPodeDefinirMaster(req, data.permissao);
+    garantirNivelConcedivel(req, data);
     await garantirEmpresaPermitida(req, data.empresa_ids);
     const usuario = await service.create(data);
     res.status(201).json(usuario);
@@ -176,9 +211,11 @@ async function update(req, res, next) {
     const data = updateSchema.parse(req.body);
     await garantirAlvoNaoEhMasterOculto(req, req.params.id);
     await garantirPodeDefinirMaster(req, data.permissao);
+    garantirNivelConcedivel(req, data);
     await garantirEmpresaPermitida(req, data.empresa_ids);
     const usuario = await service.update(req.params.id, data);
     if (!usuario) return res.status(404).json({ message: 'Usuário não encontrado.' });
+    limparCacheUsuario(req.params.id);
     res.json(usuario);
   } catch (err) {
     if (err.issues) return next(badRequest(err.issues[0].message));
@@ -193,10 +230,11 @@ async function setStatus(req, res, next) {
     await garantirAlvoNaoEhMasterOculto(req, req.params.id);
     const usuario = await service.setAtivo(req.params.id, ativo);
     if (!usuario) return res.status(404).json({ message: 'Usuário não encontrado.' });
+    limparCacheUsuario(req.params.id);
     res.json(usuario);
   } catch (err) {
     next(err);
   }
 }
 
-module.exports = { list, getById, create, update, setStatus };
+module.exports = { list, getById, create, update, setStatus, paramUsuarioAcessivel };

@@ -1,10 +1,12 @@
 const { Router } = require('express');
 const authMiddleware = require('../../middlewares/auth.middleware');
+const { paramEmpresa } = require('../../middlewares/acesso.middleware');
 const controller = require('./centros.controller');
 
 const router = Router();
 
 router.use(authMiddleware);
+router.param('empresaId', paramEmpresa);
 router.get('/', controller.listGerados);
 router.get('/:empresaId/itens', controller.listItens);
 router.get('/:empresaId/export', controller.exportExcel);

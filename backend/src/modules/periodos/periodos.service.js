@@ -1,11 +1,16 @@
 const pool = require('../../config/db');
 
-async function list(empresaId) {
+// `empresaIdsPermitidas` null = todas (Master); senão a lista sempre fica
+// restrita às empresas do usuário, mesmo sem filtro de empresa.
+async function list(empresaId, empresaIdsPermitidas = null) {
   const params = [];
   let where = '';
   if (empresaId) {
     params.push(empresaId);
     where = 'WHERE p.empresa_id = $1';
+  } else if (empresaIdsPermitidas) {
+    params.push(empresaIdsPermitidas);
+    where = 'WHERE p.empresa_id = ANY($1::int[])';
   }
 
   const { rows } = await pool.query(

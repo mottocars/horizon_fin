@@ -1,10 +1,12 @@
 const { Router } = require('express');
 const authMiddleware = require('../../middlewares/auth.middleware');
+const { paramRecurso } = require('../../middlewares/acesso.middleware');
 const controller = require('./vanpix.controller');
 
 const router = Router();
 
 router.use(authMiddleware);
+router.param('id', paramRecurso('SELECT empresa_id FROM integracoes_vanpix WHERE id = $1'));
 router.get('/', controller.list);
 router.post('/testar', controller.testar);
 router.get('/:id', controller.getById);

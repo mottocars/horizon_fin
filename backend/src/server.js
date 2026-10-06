@@ -57,6 +57,8 @@ const mcpRoutes = require('./modules/integracoes-mcp/mcp.routes');
 const mcpProtocoloRoutes = require('./modules/integracoes-mcp/mcpProtocolo.routes');
 const logsAcessoRoutes = require('./modules/logs-acesso/logsAcesso.routes');
 const errorMiddleware = require('./middlewares/error.middleware');
+const { QUALQUER_TELA, exigirTela, exigirMaster } = require('./middlewares/acesso.middleware');
+const T = require('./config/telas');
 const { limiteGeral, limiteDownloadsSeAplicavel, limiteLogin, limiteMcp } = require('./middlewares/rateLimit.middleware');
 const pool = require('./config/db');
 
@@ -96,57 +98,64 @@ app.get('/api/health', async (req, res) => {
   }
 });
 
+// Acesso por tela (perfil Básico) — o mesmo cadastro de "Telas que possui
+// acesso" do usuário, aplicado aqui no backend: sem a tela, a API responde
+// 403 mesmo que alguém chame direto pelo navegador. A 2ª lista de cada
+// exigirTela libera só leitura (GET) pra telas que apenas consultam aquela
+// API. A empresa é conferida dentro de cada módulo (auth.middleware.js e
+// router.param, ver acesso.middleware.js).
 app.use('/api/auth', authRoutes);
 app.use('/api', usersRoutes);
-app.use('/api/clientes', clientesRoutes);
-app.use('/api/empresas', empresasRoutes);
-app.use('/api/integracoes/sienge', siengeRoutes);
-app.use('/api/integracoes/zapi', zapiRoutes);
-app.use('/api/integracoes/convenios-bancarios/vanpix', vanpixRoutes);
-app.use('/api/integracoes/convenios-bancarios/itau', itauRoutes);
-app.use('/api/integracoes/email', emailIntegracaoRoutes);
-app.use('/api/integracoes/construtor-de-vendas', construtorVendasRoutes);
-app.use('/api/integracoes/actioon', actioonRoutes);
-app.use('/api/integracoes/banco-dados', bancoDadosRoutes);
-app.use('/api/relatorios/empreendimentos-masa', relatorioMasaRoutes);
-app.use('/api/relatorios/notas-pendentes', relatorioNotasPendentesRoutes);
-app.use('/api/relatorios/extratos-bancarios', relatorioExtratosRoutes);
-app.use('/api/projetos', projetosRoutes);
-app.use('/api/integracoes/prevision', previsionRoutes);
-app.use('/api/prevision-dashboards', previsionDashboardsRoutes);
-app.use('/api/planos-financeiros/sienge', planosFinanceirosSiengeRoutes);
-app.use('/api/centros-custo/sienge', centrosCustoSiengeRoutes);
-app.use('/api/mascaras', mascarasRoutes);
-app.use('/api/contas-bancarias/sienge', contasBancariasSiengeRoutes);
-app.use('/api/saldo-contas-bancarias', saldoContasBancariasRoutes);
-app.use('/api/classificacoes-bancarias', classificacoesBancariasRoutes);
-app.use('/api/dre-categorias-orcamento', dreCategoriasOrcamentoRoutes);
-app.use('/api/dre-orcamento', dreOrcamentoRoutes);
-app.use('/api/bancos', bancosRoutes);
-app.use('/api/epr', eprRoutes);
-app.use('/api/dcd', dcdRoutes);
-app.use('/api/extrato', extratoRoutes);
-app.use('/api/curva-obras', curvaObrasRoutes);
-app.use('/api/cep', cepRoutes);
-app.use('/api/periodos', periodosRoutes);
-app.use('/api/unidades/sienge', unidadesSiengeRoutes);
-app.use('/api/curva-vendas', curvaVendasRoutes);
-app.use('/api/certificados', certificadosRoutes);
-app.use('/api/espiao', espiaoRoutes);
-app.use('/api/monitor-integracoes', monitorIntegracoesRoutes);
-app.use('/api/usuarios', usuariosRoutes);
-app.use('/api/repasses-cef', repassesCefRoutes);
-app.use('/api/motor-risco', motorRiscoRoutes);
-app.use('/api/income-sienge', incomeSiengeRoutes);
-app.use('/api/customers-sienge', customersSiengeRoutes);
-app.use('/api/cobranca-clusters', cobrancaClustersRoutes);
-app.use('/api/gestao-parcelas', gestaoParcelasRoutes);
-app.use('/api/regua-cobranca', reguaCobrancaRoutes);
-app.use('/api/regua-cobranca-historico', historicoClienteRoutes);
-app.use('/api/comunicacao', comunicacaoRoutes);
-app.use('/api/rotinas', rotinasRoutes);
-app.use('/api/integracoes/mcp', mcpRoutes);
+app.use('/api/clientes', exigirTela([]), exigirMaster, clientesRoutes);
+app.use('/api/empresas', exigirTela([T.EMPRESAS], [QUALQUER_TELA]), empresasRoutes);
+app.use('/api/integracoes/sienge', exigirTela([T.SIENGE], [T.COBRANCAS]), siengeRoutes);
+app.use('/api/integracoes/zapi', exigirTela([T.ZAPI], [T.COBRANCAS, T.SALDOS]), zapiRoutes);
+app.use('/api/integracoes/convenios-bancarios/vanpix', exigirTela([T.CONVENIOS]), vanpixRoutes);
+app.use('/api/integracoes/convenios-bancarios/itau', exigirTela([T.CONVENIOS], [T.EXTRATOS]), itauRoutes);
+app.use('/api/integracoes/email', exigirTela([T.EMAIL], [T.COBRANCAS]), emailIntegracaoRoutes);
+app.use('/api/integracoes/construtor-de-vendas', exigirTela([T.CONSTRUTOR_VENDAS]), construtorVendasRoutes);
+app.use('/api/integracoes/actioon', exigirTela([T.ACTIOON]), actioonRoutes);
+app.use('/api/integracoes/banco-dados', exigirTela([T.BANCO_DADOS]), bancoDadosRoutes);
+app.use('/api/relatorios/empreendimentos-masa', exigirTela([T.MASA]), relatorioMasaRoutes);
+app.use('/api/relatorios/notas-pendentes', exigirTela([T.ACERVO_NOTAS]), relatorioNotasPendentesRoutes);
+app.use('/api/relatorios/extratos-bancarios', exigirTela([T.EXTRATOS]), relatorioExtratosRoutes);
+app.use('/api/projetos', exigirTela([QUALQUER_TELA]), projetosRoutes);
+app.use('/api/integracoes/prevision', exigirTela([T.PREVISION], [T.CENTROS_CUSTO]), previsionRoutes);
+app.use('/api/prevision-dashboards', exigirTela([T.PREVISION, T.CENTROS_CUSTO]), previsionDashboardsRoutes);
+app.use('/api/planos-financeiros/sienge', exigirTela([T.PLANOS_FINANCEIROS, T.SIENGE, T.DRE]), planosFinanceirosSiengeRoutes);
+app.use('/api/centros-custo/sienge', exigirTela([T.CENTROS_CUSTO, T.SIENGE], [T.DRE]), centrosCustoSiengeRoutes);
+app.use('/api/mascaras', exigirTela([T.MASCARAS, T.DRE, T.REPASSES], [T.CENTROS_CUSTO, T.PLANOS_FINANCEIROS]), mascarasRoutes);
+app.use('/api/contas-bancarias/sienge', exigirTela([T.SALDOS]), contasBancariasSiengeRoutes);
+app.use('/api/saldo-contas-bancarias', exigirTela([T.SALDOS]), saldoContasBancariasRoutes);
+app.use('/api/classificacoes-bancarias', exigirTela([T.SALDOS]), classificacoesBancariasRoutes);
+app.use('/api/dre-categorias-orcamento', exigirTela([T.DRE]), dreCategoriasOrcamentoRoutes);
+app.use('/api/dre-orcamento', exigirTela([T.DRE]), dreOrcamentoRoutes);
+app.use('/api/bancos', exigirTela([T.SALDOS]), bancosRoutes);
+app.use('/api/epr', exigirTela([T.PORTAL]), eprRoutes);
+app.use('/api/dcd', exigirTela([T.PORTAL]), dcdRoutes);
+app.use('/api/extrato', exigirTela([T.PORTAL]), extratoRoutes);
+app.use('/api/curva-obras', exigirTela([]), curvaObrasRoutes);
+app.use('/api/cep', exigirTela([QUALQUER_TELA]), cepRoutes);
+app.use('/api/periodos', exigirTela([]), periodosRoutes);
+app.use('/api/unidades/sienge', exigirTela([T.SIENGE]), unidadesSiengeRoutes);
+app.use('/api/curva-vendas', exigirTela([]), curvaVendasRoutes);
+app.use('/api/certificados', exigirTela([T.CERTIFICADOS]), certificadosRoutes);
+app.use('/api/espiao', exigirTela([T.ESPIAO], [T.ACERVO_NOTAS]), espiaoRoutes);
+app.use('/api/monitor-integracoes', exigirTela([T.MONITOR]), monitorIntegracoesRoutes);
+app.use('/api/usuarios', exigirTela([T.USUARIOS]), usuariosRoutes);
+app.use('/api/repasses-cef', exigirTela([T.REPASSES], [T.COBRANCAS]), repassesCefRoutes);
+app.use('/api/motor-risco', exigirTela([T.COBRANCAS]), motorRiscoRoutes);
+app.use('/api/income-sienge', exigirTela([T.COBRANCAS]), incomeSiengeRoutes);
+app.use('/api/customers-sienge', exigirTela([T.COBRANCAS]), customersSiengeRoutes);
+app.use('/api/cobranca-clusters', exigirTela([T.COBRANCAS]), cobrancaClustersRoutes);
+app.use('/api/gestao-parcelas', exigirTela([T.COBRANCAS]), gestaoParcelasRoutes);
+app.use('/api/regua-cobranca', exigirTela([T.COBRANCAS]), reguaCobrancaRoutes);
+app.use('/api/regua-cobranca-historico', exigirTela([T.COBRANCAS]), historicoClienteRoutes);
+app.use('/api/comunicacao', exigirTela([T.COBRANCAS]), comunicacaoRoutes);
+app.use('/api/rotinas', exigirTela([T.COBRANCAS]), rotinasRoutes);
+app.use('/api/integracoes/mcp', exigirTela([T.MCP]), mcpRoutes);
 app.use('/api/mcp', mcpProtocoloRoutes);
+app.use('/api/logs-acesso/metricas', exigirTela([T.METRICAS]));
 app.use('/api/logs-acesso', logsAcessoRoutes);
 
 app.use((req, res) => {

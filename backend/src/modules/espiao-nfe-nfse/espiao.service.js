@@ -793,7 +793,8 @@ async function listCertificadosComEstado(empresaId) {
   return rows;
 }
 
-async function listEmpresasComStatus() {
+// `empresaIds` null = todas (Master); senão só as empresas do usuário.
+async function listEmpresasComStatus(empresaIds = null) {
   const { rows } = await pool.query(
     `SELECT e.id, COALESCE(NULLIF(e.nome_fantasia, ''), e.razao_social) AS razao_social, e.cnpj,
             COUNT(c.id)::int AS total_certificados,
@@ -801,8 +802,10 @@ async function listEmpresasComStatus() {
      FROM empresas e
      JOIN certificados_digitais c ON c.empresa_id = e.id
      LEFT JOIN espiao_certificado_estado ce ON ce.certificado_id = c.id
+     WHERE $1::int[] IS NULL OR e.id = ANY($1::int[])
      GROUP BY e.id, e.nome_fantasia, e.razao_social, e.cnpj
-     ORDER BY e.razao_social ASC`
+     ORDER BY e.razao_social ASC`,
+    [empresaIds]
   );
   return rows;
 }
