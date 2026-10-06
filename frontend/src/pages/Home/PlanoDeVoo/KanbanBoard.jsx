@@ -21,9 +21,9 @@ function CardKanban({ card, hoje, usuarios, logo, visao, usuarioAtualId, arrasta
         arrastavel ? 'cursor-grab active:cursor-grabbing' : 'cursor-pointer'
       } ${arrastando ? 'opacity-40' : ''}`}
     >
-      <div className="flex items-start justify-between gap-2">
+      <div className="flex min-w-0 items-center gap-1.5">
+        {logo && <img src={logo} alt="" className="h-4 max-w-[48px] shrink-0 object-contain" />}
         <p className="truncate text-[11px] text-gray-400">{card.empresa_nome}</p>
-        {logo && <img src={logo} alt="" title={card.empresa_nome} className="h-5 max-w-[56px] shrink-0 object-contain" />}
       </div>
       <p className="mt-0.5 line-clamp-2 text-[13px] font-medium leading-snug text-gray-900">{card.assunto}</p>
       {card.descricao && <p className="mt-1 line-clamp-2 text-xs leading-relaxed text-gray-500">{card.descricao}</p>}
