@@ -57,9 +57,14 @@ const mcpRoutes = require('./modules/integracoes-mcp/mcp.routes');
 const mcpProtocoloRoutes = require('./modules/integracoes-mcp/mcpProtocolo.routes');
 const logsAcessoRoutes = require('./modules/logs-acesso/logsAcesso.routes');
 const errorMiddleware = require('./middlewares/error.middleware');
+const { limiteGeral, limiteDownloadsSeAplicavel, limiteLogin, limiteMcp } = require('./middlewares/rateLimit.middleware');
 const pool = require('./config/db');
 
 const app = express();
+// Em produção a API fica atrás do Nginx do host (1 salto) — sem isso o IP
+// de todo mundo seria o do Nginx e o limite por IP valeria pro sistema
+// inteiro de uma vez só.
+app.set('trust proxy', 1);
 
 const allowedOrigins = [env.frontendUrl, env.frontendUrl.replace('localhost', '127.0.0.1')];
 app.use(cors({ origin: allowedOrigins, credentials: true }));
@@ -70,6 +75,15 @@ app.use(express.json({ limit: '5mb' }));
 // exceção, todo request do Claude apareceria com o segredo em texto puro no
 // log do Morgan/stdout do container.
 app.use(morgan('dev', { skip: (req) => req.path.startsWith('/api/mcp/') }));
+
+// Limite de chamadas (ver rateLimit.middleware.js). O /api/health fica de
+// fora (monitoramento), o MCP tem o limite próprio, por token.
+app.use('/api/mcp', limiteMcp);
+app.use('/api/auth/login', limiteLogin);
+app.use('/api', (req, res, next) => {
+  if (req.path === '/health' || req.path.startsWith('/mcp/')) return next();
+  return limiteGeral(req, res, () => limiteDownloadsSeAplicavel(req, res, next));
+});
 
 // Sem autenticação de propósito — usado por monitoramento/deploy pra
 // confirmar que o processo está de pé e consegue falar com o banco.
