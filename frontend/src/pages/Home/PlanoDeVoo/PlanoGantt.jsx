@@ -435,9 +435,9 @@ export default function PlanoGantt({ planoId, recarregarToken, onVoltar, onEdita
             return (
               <Fragment key={macro.id}>
                 {/* linha da macro tarefa */}
-                <div className="group relative flex h-12 border-b border-gray-100 bg-gray-50/40">
+                <div className="group relative flex min-h-12 border-b border-gray-100 bg-gray-50/40">
                   <div
-                    className="sticky left-0 z-20 flex shrink-0 items-center gap-1.5 border-r border-gray-200 bg-white pl-2 pr-2"
+                    className="sticky left-0 z-20 flex shrink-0 items-center gap-1.5 border-r border-gray-200 bg-white py-1.5 pl-2 pr-2"
                     style={{ width: LARGURA_ESQUERDA }}
                   >
                     <button
@@ -466,7 +466,7 @@ export default function PlanoGantt({ planoId, recarregarToken, onVoltar, onEdita
                     ) : (
                       <>
                         <div className="min-w-0 flex-1">
-                          <p className="truncate text-[13px] font-semibold text-gray-900" title={macro.nome}>
+                          <p className="break-words text-[13px] font-semibold leading-snug text-gray-900">
                             {macro.nome}
                           </p>
                           <p className="text-[10px] text-gray-400">
@@ -518,16 +518,16 @@ export default function PlanoGantt({ planoId, recarregarToken, onVoltar, onEdita
                   micros.map((card) => {
                     const b = BUCKET_POR_ID[card.bucket];
                     return (
-                      <div key={card.id} className="relative flex h-11 border-b border-gray-100 hover:bg-primary-50/30">
+                      <div key={card.id} className="relative flex min-h-11 border-b border-gray-100 hover:bg-primary-50/30">
                         <button
                           type="button"
                           onClick={() => onAbrirCard(card.id)}
-                          className="sticky left-0 z-20 flex shrink-0 items-center gap-2 border-r border-gray-200 bg-white pl-9 pr-3 text-left hover:bg-gray-50"
+                          className="sticky left-0 z-20 flex shrink-0 items-center gap-2 border-r border-gray-200 bg-white py-1.5 pl-9 pr-3 text-left hover:bg-gray-50"
                           style={{ width: LARGURA_ESQUERDA }}
                         >
                           <span className={`h-2 w-2 shrink-0 rounded-full ${b.barra}`} title={b.titulo} />
                           <span className="min-w-0 flex-1">
-                            <span className="block truncate text-xs font-medium text-gray-700">{card.assunto}</span>
+                            <span className="block break-words text-xs font-medium leading-snug text-gray-700">{card.assunto}</span>
                             <span className="block text-[10px] tabular-nums text-gray-400">
                               {dataBR(card.data_inicio, false)} → {dataBR(card.data_fim, false)}
                             </span>
