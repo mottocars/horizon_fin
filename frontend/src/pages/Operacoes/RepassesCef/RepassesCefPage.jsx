@@ -1024,12 +1024,13 @@ function BadgeCor({ texto, cor }) {
 // Última micro etapa registrada manualmente (ver "Registrar Movimentação"
 // no modal de Histórico de Etapas) pro cliente daquele card — mostrada no
 // topo, pequena, separada do resto do card por uma linha fina embaixo dela.
+// O SLA da micro etapa só pinta o selo de dias dela — quem deixa o card
+// vermelho é o SLA da macro etapa (ver estaSlaAtrasado nos cards).
 function UltimaMicroEtapa({ nome, data, slaDias }) {
   if (!nome) return null;
-  const atrasado = estaSlaAtrasado(data, slaDias);
   return (
-    <div className={`mb-1 border-b pb-1 text-[9px] font-medium ${atrasado ? 'border-red-100' : 'border-gray-100'}`}>
-      <div className={`flex items-center justify-between gap-1.5 ${atrasado ? 'text-red-600' : 'text-primary-600'}`}>
+    <div className="mb-1 border-b border-gray-100 pb-1 text-[9px] font-medium">
+      <div className="flex items-center justify-between gap-1.5 text-primary-600">
         <span className="flex min-w-0 items-center gap-1">
           <History size={10} className="shrink-0" />
           <span className="truncate">{nome}</span>
@@ -1045,20 +1046,14 @@ function UltimaMicroEtapa({ nome, data, slaDias }) {
           />
         )}
       </div>
-      {atrasado && (
-        <p className="mt-0.5 flex items-center gap-1 font-semibold text-red-600">
-          <AlertTriangle size={10} className="shrink-0" />
-          SLA Atrasado
-        </p>
-      )}
     </div>
   );
 }
 
-// SLA (em dias) configurado na micro etapa atual (mascara_itens.sla_dias,
-// ver campo adicionado no editor de Máscaras) — atrasado quando já se
-// passaram mais dias do que o SLA desde a última movimentação registrada
-// pra esse card. Sem SLA configurado (null) nunca fica atrasado.
+// Atrasado quando já se passaram mais dias do que o SLA desde a data. Nos
+// cards é usado com o SLA da MACRO etapa (aba Máscaras) e a data de entrada
+// na etapa — reserva, emissão do contrato ou assinatura. Sem SLA configurado
+// (null) nunca fica atrasado.
 function estaSlaAtrasado(dataUltimaEtapa, slaDias) {
   if (slaDias === null || slaDias === undefined) return false;
   const dias = diasSemNovaEtapa(dataUltimaEtapa);
@@ -1066,9 +1061,10 @@ function estaSlaAtrasado(dataUltimaEtapa, slaDias) {
   return dias > slaDias;
 }
 
-// Borda/fundo do card — vermelho quando atrasado no SLA, mesmo cinza/azul de
-// sempre quando não (usado pelos 4 tipos de card: Reserva/Contrato/
-// Assinatura/Registro).
+// Borda/fundo do card — vermelho quando passou do SLA da macro etapa, mesmo
+// cinza/azul de sempre quando não (Reserva/Contrato/Assinatura; Registro é a
+// etapa final e não tem SLA). Vale no Kanban geral e no detalhamento por
+// micro etapa, que usam os mesmos cards.
 function corCardAtrasado(atrasado) {
   return atrasado
     ? 'border-red-300 bg-red-50/60 hover:border-red-400 hover:bg-red-50'
@@ -1076,7 +1072,7 @@ function corCardAtrasado(atrasado) {
 }
 
 function ReservaCard({ reserva, cores, mostrarDetalhes, onClick }) {
-  const atrasado = estaSlaAtrasado(reserva.ultima_microetapa_data, reserva.ultima_microetapa_sla_dias);
+  const atrasado = estaSlaAtrasado(reserva.data_entrada_etapa, reserva.sla_macro_dias);
   return (
     <div
       onClick={onClick}
@@ -1123,7 +1119,7 @@ function ReservaCard({ reserva, cores, mostrarDetalhes, onClick }) {
 // idreserva embutido no `number` do contrato) — mesma cor configurada em
 // "Configurar Filtros de Visualização" pro bucket Reserva.
 function ContratoCard({ contrato, cores, mostrarDetalhes, onClick }) {
-  const atrasado = estaSlaAtrasado(contrato.ultima_microetapa_data, contrato.ultima_microetapa_sla_dias);
+  const atrasado = estaSlaAtrasado(contrato.data_entrada_etapa, contrato.sla_macro_dias);
   return (
     <div
       onClick={onClick}
@@ -1282,7 +1278,7 @@ function SeloDiasParado({ dias, slaDias, rotulo, descricao }) {
 // nome_mutuario do extrato, pra ficar igual ao dos cards de Reserva/Contrato.
 function AssinaturaCard({ assinatura, mostrarDetalhes, onClick }) {
   const dias = diasParada(assinatura.data_assinatura_contrato);
-  const atrasado = estaSlaAtrasado(assinatura.ultima_microetapa_data, assinatura.ultima_microetapa_sla_dias);
+  const atrasado = estaSlaAtrasado(assinatura.data_assinatura_contrato, assinatura.sla_macro_dias);
   return (
     <div
       onClick={onClick}
@@ -1342,7 +1338,8 @@ function AssinaturaCard({ assinatura, mostrarDetalhes, onClick }) {
 // Mesmo enriquecimento do AssinaturaCard (idreserva/numero_contrato/
 // titular_nome vindos da reserva de origem), mais a data de registro.
 function RegistroCard({ registro, mostrarDetalhes, onClick }) {
-  const atrasado = estaSlaAtrasado(registro.ultima_microetapa_data, registro.ultima_microetapa_sla_dias);
+  // Registro é a etapa final — sem SLA de macro, o card nunca fica vermelho.
+  const atrasado = false;
   return (
     <div
       onClick={onClick}
