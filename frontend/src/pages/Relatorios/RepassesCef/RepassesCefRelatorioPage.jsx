@@ -272,13 +272,13 @@ function RotuloMacro({ value }) {
   );
 }
 
-function CelulaContagem({ valor, borda }) {
-  return <td className={`${borda} border-l border-l-gray-100 py-1.5 pl-2 text-xs tabular-nums text-gray-700 2xl:pl-4`}>{valor}</td>;
+function CelulaContagem({ valor, borda, fundo = '' }) {
+  return <td className={`${borda} border-l border-l-gray-100 py-1.5 pl-2 text-xs tabular-nums text-gray-700 2xl:pl-4 ${fundo}`}>{valor}</td>;
 }
 
-function CelulasResumo({ colunas, clientes, borda }) {
+function CelulasResumo({ colunas, clientes, borda, fundo = '' }) {
   return colunas.map((coluna) => (
-    <td key={coluna.chave} className={`${borda} border-l border-l-gray-100 py-1.5 pl-2 text-xs tabular-nums text-gray-700 2xl:pl-4`}>
+    <td key={coluna.chave} className={`${borda} border-l border-l-gray-100 py-1.5 pl-2 text-xs tabular-nums text-gray-700 2xl:pl-4 ${fundo}`}>
       {coluna.resumo(clientes)}
     </td>
   ));
@@ -725,12 +725,16 @@ export default function RepassesCefRelatorioPage() {
                           </td>
                         );
 
+                        // Micro etapa 0 ("Sem etapa registrada") fica vermelha aberta ou recolhida.
+                        const fundoMicro = linha.micro?.id === 0 ? 'bg-red-50' : 'bg-white';
+
                         if (linha.tipo === 'microColapsada') {
+                          const fundoResumo = linha.micro.id === 0 ? 'bg-red-50' : '';
                           return (
                             <tr key={`${linha.micro.chave}-resumo`}>
                               {celulaCentro}
                               {celulaMacro}
-                              <td className={`${bordaMicro} border-l border-l-gray-200 bg-white px-2 py-2.5 align-middle 2xl:px-4`}>
+                              <td className={`${bordaMicro} border-l border-l-gray-200 ${fundoMicro} px-2 py-2.5 align-middle 2xl:px-4`}>
                                 <RotuloAgrupador
                                   aberto={false}
                                   nome={linha.micro.rotulo}
@@ -738,8 +742,8 @@ export default function RepassesCefRelatorioPage() {
                                   onClick={() => alternar(setMicrosColapsadas, linha.micro.chave)}
                                 />
                               </td>
-                              <CelulaContagem valor={linha.micro.clientes.length} borda={borda} />
-                              <CelulasResumo colunas={colunas} clientes={linha.micro.clientes} borda={borda} />
+                              <CelulaContagem valor={linha.micro.clientes.length} borda={borda} fundo={fundoResumo} />
+                              <CelulasResumo colunas={colunas} clientes={linha.micro.clientes} borda={borda} fundo={fundoResumo} />
                             </tr>
                           );
                         }
@@ -755,7 +759,7 @@ export default function RepassesCefRelatorioPage() {
                             {linha.primeiraDaMicro && (
                               <td
                                 rowSpan={linha.micro.tamanho}
-                                className={`${bordaMicro} border-l border-l-gray-200 bg-white px-2 py-2.5 align-top 2xl:px-4`}
+                                className={`${bordaMicro} border-l border-l-gray-200 ${fundoMicro} px-2 py-2.5 align-top 2xl:px-4`}
                               >
                                 <RotuloAgrupador
                                   aberto
