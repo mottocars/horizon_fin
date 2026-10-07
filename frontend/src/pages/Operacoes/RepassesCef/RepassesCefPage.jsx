@@ -1036,8 +1036,9 @@ function UltimaMicroEtapa({ nome, data, slaDias }) {
           <span className="truncate">{nome}</span>
         </span>
         {/* Mesmo selo de "dias parado" da macro etapa, aqui contando desde a última
-            movimentação registrada e colorido pelo SLA da micro etapa. */}
-        {data && (
+            movimentação registrada e colorido pelo SLA da micro etapa. Micro etapa
+            sem SLA cadastrado em Máscaras não mostra o selo. */}
+        {data && slaDias !== null && slaDias !== undefined && (
           <SeloDiasParado
             dias={diasSemNovaEtapa(data)}
             slaDias={slaDias}
