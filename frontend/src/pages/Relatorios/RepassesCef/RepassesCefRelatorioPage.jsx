@@ -163,9 +163,10 @@ const B_MACRO = 'border-b border-b-gray-300';
 const B_LINHA = 'border-b border-b-gray-200';
 
 // Monta a árvore Centro de Custo → Macro Etapa → Micro Etapa → Clientes a partir da lista
-// plana (já filtrada). Centros em ordem alfabética, macros na ordem do funil (Reserva →
-// Registro), micros na sequência cadastrada em Máscaras com a 0 ("Sem etapa registrada")
-// primeiro, e clientes do mais parado na etapa pro mais recente.
+// plana (já filtrada). Centros da maior média de Dias Etapa pra menor (Registro não conta
+// dias, então fica fora da média), macros na ordem do funil (Reserva → Registro), micros na
+// sequência cadastrada em Máscaras com a 0 ("Sem etapa registrada") primeiro, e clientes de
+// quem está há mais tempo na etapa (data da etapa mais antiga) pro mais recente.
 function construirArvore(clientes) {
   const centros = new Map();
   for (const c of clientes) {
@@ -191,7 +192,8 @@ function construirArvore(clientes) {
 
   const ordemMacro = (v) => MACRO_POR_VALOR[v]?.numero ?? 99;
   return [...centros.values()]
-    .sort((a, b) => a.nome.localeCompare(b.nome, 'pt-BR'))
+    .map((centro) => ({ ...centro, mediaDiasEtapa: media(centro.clientes, 'diasEtapa') }))
+    .sort((a, b) => (b.mediaDiasEtapa ?? -1) - (a.mediaDiasEtapa ?? -1) || a.nome.localeCompare(b.nome, 'pt-BR'))
     .map((centro) => ({
       ...centro,
       macros: [...centro.macros.values()]
@@ -202,8 +204,12 @@ function construirArvore(clientes) {
             .sort((a, b) => a.sequencia - b.sequencia)
             .map((micro) => ({
               ...micro,
+              // Pela data da etapa (e não por Dias Etapa) pra valer também no Registro, que não
+              // conta dias; sem data vai pro fim.
               clientes: [...micro.clientes].sort(
-                (a, b) => (b.diasEtapa ?? -1) - (a.diasEtapa ?? -1) || a.rotuloCliente.localeCompare(b.rotuloCliente, 'pt-BR')
+                (a, b) =>
+                  (a.dataEtapa || '9999').localeCompare(b.dataEtapa || '9999') ||
+                  a.rotuloCliente.localeCompare(b.rotuloCliente, 'pt-BR')
               ),
             })),
         })),
