@@ -3,7 +3,7 @@ import { createPortal } from 'react-dom';
 import { Banknote, FileDown, Minus, Plus, TriangleAlert } from 'lucide-react';
 import Card from '../../../components/Card';
 import SearchableSelect from '../../../components/SearchableSelect';
-import FiltroColuna, { passaNoFiltro, proximoFiltro, valoresDoFiltro } from '../../../components/FiltroColuna';
+import FiltroColuna, { passaNoFiltro } from '../../../components/FiltroColuna';
 import RotuloAgrupador from '../../../components/RotuloAgrupador';
 import { useEmpresaTravada } from '../../../hooks/useEmpresaTravada';
 import { listEmpresas } from '../../../api/empresas.api';
@@ -309,7 +309,6 @@ export default function RepassesCefRelatorioPage() {
   const [filtroMacro, setFiltroMacro] = useState(null);
   const [filtroMicro, setFiltroMicro] = useState(null);
   const [filtroCliente, setFiltroCliente] = useState(null);
-  const [filtroSla, setFiltroSla] = useState(null);
   const colunas = COLUNAS;
 
   const thCentroRef = useRef(null);
@@ -360,7 +359,6 @@ export default function RepassesCefRelatorioPage() {
     setFiltroMacro(null);
     setFiltroMicro(null);
     setFiltroCliente(null);
-    setFiltroSla(null);
     carregar();
   }, [carregar]);
 
@@ -412,32 +410,20 @@ export default function RepassesCefRelatorioPage() {
           passaNoFiltro(filtroCentro, c.centroNome) &&
           passaNoFiltro(filtroMacro, c.macro) &&
           passaNoFiltro(filtroMicro, c.rotuloMicro) &&
-          passaNoFiltro(filtroCliente, c.rotuloCliente) &&
-          passaNoFiltro(filtroSla, c.situacaoSla)
+          passaNoFiltro(filtroCliente, c.rotuloCliente)
       ),
-    [clientes, filtroCentro, filtroMacro, filtroMicro, filtroCliente, filtroSla]
+    [clientes, filtroCentro, filtroMacro, filtroMicro, filtroCliente]
   );
 
   const arvore = useMemo(() => construirArvore(clientesFiltrados), [clientesFiltrados]);
 
-  // Opções do filtro de SLA do cabeçalho, com quantos clientes há em cada situação.
-  const opcoesSla = useMemo(() => {
-    const contagem = { atrasado: 0, no_prazo: 0, sem_sla: 0 };
-    for (const c of clientes) contagem[c.situacaoSla] += 1;
-    return Object.entries(SITUACOES_SLA).map(([value, s]) => ({
-      value,
-      label: `${s.label} (${contagem[value].toLocaleString('pt-BR')})`,
-    }));
-  }, [clientes]);
-
-  const filtroAtivo = [filtroCentro, filtroMacro, filtroMicro, filtroCliente, filtroSla].some((f) => f != null);
+  const filtroAtivo = [filtroCentro, filtroMacro, filtroMicro, filtroCliente].some((f) => f != null);
 
   function limparFiltros() {
     setFiltroCentro(null);
     setFiltroMacro(null);
     setFiltroMicro(null);
     setFiltroCliente(null);
-    setFiltroSla(null);
   }
 
   // Centros começam recolhidos (como as fases do Masa); Macro e Micro começam abertas dentro
@@ -564,9 +550,8 @@ export default function RepassesCefRelatorioPage() {
 
   return (
     <div className="space-y-4">
-      {/* Cabeçalho no mesmo padrão do Acervo NF-e / NFS-e. Centro de Custo e SLA usam o mesmo
-          estado dos filtros de coluna — mexer num reflete no outro. Exportar fica só no botão
-          direito em cima da tabela. */}
+      {/* Cabeçalho no mesmo padrão do Acervo NF-e / NFS-e. Exportar fica só no botão direito em
+          cima da tabela. */}
       <Card>
         <div className="flex flex-col gap-4 lg:flex-row lg:items-end">
           <div className="min-w-0 flex-1 lg:max-w-xs">
@@ -578,32 +563,6 @@ export default function RepassesCefRelatorioPage() {
               options={opcoesEmpresa}
               placeholder={carregandoEmpresas ? 'Carregando empresas...' : 'Selecione uma empresa'}
               emptyMessage="Nenhuma empresa encontrada."
-            />
-          </div>
-          <div className="min-w-0 flex-1 lg:max-w-xs">
-            <label className="mb-1 block text-sm font-medium text-gray-700">Centro de Custo</label>
-            <SearchableSelect
-              multiple
-              selecionarTodos
-              value={valoresDoFiltro(filtroCentro, opcoesCentro)}
-              onChange={(sel) => setFiltroCentro(proximoFiltro(sel, opcoesCentro))}
-              options={opcoesCentro}
-              disabled={!empresaId || opcoesCentro.length === 0}
-              placeholder={!empresaId ? 'Selecione a empresa primeiro' : 'Nenhum centro de custo'}
-              emptyMessage="Nenhum centro de custo encontrado."
-            />
-          </div>
-          <div className="min-w-0 flex-1 lg:max-w-xs">
-            <label className="mb-1 block text-sm font-medium text-gray-700">SLA da Micro Etapa</label>
-            <SearchableSelect
-              multiple
-              selecionarTodos
-              value={valoresDoFiltro(filtroSla, opcoesSla)}
-              onChange={(sel) => setFiltroSla(proximoFiltro(sel, opcoesSla))}
-              options={opcoesSla}
-              disabled={!empresaId || clientes.length === 0}
-              placeholder={!empresaId ? 'Selecione a empresa primeiro' : 'Nenhuma situação'}
-              emptyMessage="Nenhuma situação encontrada."
             />
           </div>
           {filtroAtivo && (
@@ -688,7 +647,7 @@ export default function RepassesCefRelatorioPage() {
                     <td colSpan={COLUNAS_FIXAS + colunas.length} className="py-12 text-center text-sm text-gray-500">
                       <p className="font-medium text-gray-700">Nenhum cliente corresponde aos filtros selecionados.</p>
                       <p className="mx-auto mt-1 max-w-sm text-xs text-gray-400">
-                        Ajuste os filtros de Centro de Custo, Macro Etapa, Micro Etapa, Cliente ou SLA pra ver as linhas de novo.
+                        Ajuste os filtros de Centro de Custo, Macro Etapa, Micro Etapa ou Cliente pra ver as linhas de novo.
                       </p>
                     </td>
                   </tr>
