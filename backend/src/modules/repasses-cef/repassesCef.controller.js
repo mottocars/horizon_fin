@@ -500,6 +500,35 @@ async function vincularContrato(req, res, next) {
   }
 }
 
+const macroEtapaSchema = z.enum(['VENDA', 'CONTRATO', 'ASSINATURA', 'REGISTRO'], {
+  errorMap: () => ({ message: 'Macro etapa inválida.' }),
+});
+const slaMacroSchema = z.object({
+  sla_dias: z.coerce.number().int().min(0, 'SLA inválido.').max(3650, 'SLA inválido.').nullable(),
+});
+
+async function getSlaMacroEtapas(req, res, next) {
+  try {
+    const empresaId = empresaIdSchema.parse(req.params.empresaId);
+    res.json(await service.getSlaMacroEtapas(empresaId));
+  } catch (err) {
+    if (err.issues) return next(badRequest(err.issues[0].message));
+    next(err);
+  }
+}
+
+async function salvarSlaMacroEtapa(req, res, next) {
+  try {
+    const empresaId = empresaIdSchema.parse(req.params.empresaId);
+    const macroEtapa = macroEtapaSchema.parse(req.params.macroEtapa);
+    const { sla_dias } = slaMacroSchema.parse({ sla_dias: req.body?.sla_dias ?? null });
+    res.json(await service.salvarSlaMacroEtapa(empresaId, macroEtapa, sla_dias));
+  } catch (err) {
+    if (err.issues) return next(badRequest(err.issues[0].message));
+    next(err);
+  }
+}
+
 module.exports = {
   listCentros,
   sincronizarReservas,
@@ -521,6 +550,8 @@ module.exports = {
   listUnidadesDisponiveis,
   listContratosDisponiveis,
   vincularContrato,
+  getSlaMacroEtapas,
+  salvarSlaMacroEtapa,
   registrarMovimentacaoMicroEtapa,
   downloadAnexoMicroEtapa,
 };

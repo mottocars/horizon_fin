@@ -132,3 +132,12 @@ export function vincularContratoReservaRepassesCef(empresaId, idreserva, siengeC
     .post(`/repasses-cef/${empresaId}/reservas/${idreserva}/vincular-contrato`, { sienge_contract_id: siengeContractId })
     .then((res) => res.data);
 }
+
+// SLA (dias) de cada macro etapa — preenchido na aba Máscaras.
+export function getSlaMacroRepassesCef(empresaId) {
+  return http.get(`/repasses-cef/${empresaId}/sla-macro`).then((res) => res.data);
+}
+
+export function salvarSlaMacroRepassesCef(empresaId, macroEtapa, slaDias) {
+  return http.put(`/repasses-cef/${empresaId}/sla-macro/${macroEtapa}`, { sla_dias: slaDias }).then((res) => res.data);
+}

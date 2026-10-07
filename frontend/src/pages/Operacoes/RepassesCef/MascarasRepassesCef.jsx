@@ -2,6 +2,68 @@ import { useEffect, useRef, useState } from 'react';
 import { ChevronDown, ChevronRight } from 'lucide-react';
 import MascaraItensEditor from '../../../components/MascaraItensEditor';
 import { MACRO_ETAPAS_REPASSES } from '../../../config/macroEtapasRepasses';
+import { getSlaMacroRepassesCef, salvarSlaMacroRepassesCef } from '../../../api/repassesCef.api';
+
+// Mesmo realce dos campos do MascaraItensEditor: amarelo = falta preencher.
+function estadoCampo(preenchido) {
+  return preenchido
+    ? 'border-primary-100 bg-primary-50 text-gray-900 hover:border-primary-500'
+    : 'border-amber-300 bg-amber-50 text-gray-900 hover:border-amber-400';
+}
+
+// SLA (dias) da macro etapa inteira — o tempo que o cliente pode ficar nela antes de
+// passar pra próxima. Fica no cabeçalho do card da macro; clicar/digitar aqui não
+// abre/fecha o card. Salva ao sair do campo (ou Enter), só se o valor mudou.
+function CampoSlaMacro({ empresaId, macro, valorSalvo, onSalvo }) {
+  const [valor, setValor] = useState(valorSalvo ?? '');
+  const [salvando, setSalvando] = useState(false);
+  const [erro, setErro] = useState('');
+
+  useEffect(() => {
+    setValor(valorSalvo ?? '');
+  }, [valorSalvo]);
+
+  async function salvar() {
+    const novo = valor === '' ? null : Number(valor);
+    if (novo === (valorSalvo ?? null)) return;
+    setSalvando(true);
+    setErro('');
+    try {
+      onSalvo(await salvarSlaMacroRepassesCef(empresaId, macro.value, novo));
+    } catch (err) {
+      setErro(err.response?.data?.message || 'Não foi possível salvar o SLA.');
+      setValor(valorSalvo ?? '');
+    } finally {
+      setSalvando(false);
+    }
+  }
+
+  return (
+    <label
+      className="flex shrink-0 items-center gap-2"
+      onClick={(e) => e.stopPropagation()}
+      onKeyDown={(e) => e.stopPropagation()}
+      title={erro || `Prazo esperado (SLA) da macro etapa ${macro.label}, em dias`}
+    >
+      <span className="text-xs font-medium uppercase tracking-wide text-gray-400">SLA (dias)</span>
+      <input
+        type="number"
+        min="0"
+        max="3650"
+        value={valor}
+        disabled={salvando}
+        onChange={(e) => setValor(e.target.value)}
+        onBlur={salvar}
+        onKeyDown={(e) => {
+          if (e.key === 'Enter') e.currentTarget.blur();
+        }}
+        className={`w-20 rounded-md border px-2 py-1.5 text-center text-sm transition-colors focus:outline-none focus:ring-2 focus:ring-primary-100 disabled:opacity-60 ${
+          erro ? 'border-red-400 bg-red-50' : estadoCampo(valor !== '')
+        }`}
+      />
+    </label>
+  );
+}
 
 // Cadastro das micro etapas de cada macro etapa do Kanban (máscara tipo
 // REPASSES) — migrado de Cadastros/Máscaras pra cá de propósito, igualzinho
@@ -12,6 +74,12 @@ export default function MascarasRepassesCef({ empresaId }) {
   const [expandidos, setExpandidos] = useState(new Set());
   const macroCardRefs = useRef(new Map());
   const macroAbertaRef = useRef(null);
+  const [slaMacro, setSlaMacro] = useState({});
+
+  useEffect(() => {
+    if (!empresaId) return;
+    getSlaMacroRepassesCef(empresaId).then(setSlaMacro).catch(() => setSlaMacro({}));
+  }, [empresaId]);
 
   function toggleExpandido(value) {
     setExpandidos((prev) => {
@@ -81,6 +149,8 @@ export default function MascarasRepassesCef({ empresaId }) {
               </span>
 
               <p className="min-w-0 flex-1 truncate text-sm font-semibold text-gray-900">{macro.label}</p>
+
+              <CampoSlaMacro empresaId={empresaId} macro={macro} valorSalvo={slaMacro[macro.value]} onSalvo={setSlaMacro} />
 
               <img
                 src={macro.logo}

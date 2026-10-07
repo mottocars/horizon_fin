@@ -477,6 +477,19 @@ CREATE TABLE repasses_cef_historico_microetapas (
 CREATE INDEX idx_repasses_hist_micro_reserva
     ON repasses_cef_historico_microetapas (empresa_id, idreserva);
 
+-- SLA (prazo esperado, em dias) de cada MACRO etapa do Kanban de Repasses
+-- CEF (VENDA/CONTRATO/ASSINATURA/REGISTRO — mesmo código de mascara_itens.grupo),
+-- preenchido na aba Máscaras da tela. Diferente do SLA da micro etapa
+-- (mascara_itens.sla_dias): aqui é o tempo total que o cliente pode ficar
+-- naquela macro etapa antes de passar pra próxima.
+CREATE TABLE repasses_cef_sla_macro (
+    empresa_id    INTEGER NOT NULL REFERENCES empresas(id) ON DELETE CASCADE,
+    macro_etapa   VARCHAR(20) NOT NULL,
+    sla_dias      INTEGER,
+    atualizado_em TIMESTAMP DEFAULT NOW(),
+    PRIMARY KEY (empresa_id, macro_etapa)
+);
+
 -- Vínculo manual reserva (Construtor de Vendas) ↔ contrato (Sienge), feito no
 -- Histórico de Etapas do card de Reserva ("Nº Contrato Sienge"). Só pra
 -- contratos gerados à mão no Sienge, sem a ligação automática (number "CV..."

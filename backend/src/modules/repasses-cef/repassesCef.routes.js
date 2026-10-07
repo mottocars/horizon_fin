@@ -39,6 +39,8 @@ router.get('/:empresaId/historico', controller.getHistoricoEtapas);
 router.get('/:empresaId/contratos/:siengeContractId/unidades-disponiveis', controller.listUnidadesDisponiveis);
 router.get('/:empresaId/reservas/:idreserva/contratos-disponiveis', controller.listContratosDisponiveis);
 router.post('/:empresaId/reservas/:idreserva/vincular-contrato', controller.vincularContrato);
+router.get('/:empresaId/sla-macro', controller.getSlaMacroEtapas);
+router.put('/:empresaId/sla-macro/:macroEtapa', controller.salvarSlaMacroEtapa);
 router.post(
   '/:empresaId/historico-microetapas',
   uploadMicroEtapa.array('arquivos'),

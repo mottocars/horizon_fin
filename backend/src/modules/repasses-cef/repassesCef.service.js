@@ -1133,6 +1133,30 @@ async function getAnexoMicroEtapa(empresaId, anexoId) {
   return { caminhoAbsoluto, nomeOriginal: anexo.nome_original || 'anexo' };
 }
 
+// SLA de cada macro etapa (aba Máscaras) — { VENDA: 10, CONTRATO: null, ... },
+// sempre com as 4 chaves (null = não preenchido).
+const MACRO_ETAPAS = ['VENDA', 'CONTRATO', 'ASSINATURA', 'REGISTRO'];
+
+async function getSlaMacroEtapas(empresaId) {
+  const { rows } = await pool.query(
+    'SELECT macro_etapa, sla_dias FROM repasses_cef_sla_macro WHERE empresa_id = $1',
+    [empresaId]
+  );
+  const sla = Object.fromEntries(MACRO_ETAPAS.map((m) => [m, null]));
+  for (const r of rows) sla[r.macro_etapa] = r.sla_dias;
+  return sla;
+}
+
+async function salvarSlaMacroEtapa(empresaId, macroEtapa, slaDias) {
+  await pool.query(
+    `INSERT INTO repasses_cef_sla_macro (empresa_id, macro_etapa, sla_dias)
+     VALUES ($1, $2, $3)
+     ON CONFLICT (empresa_id, macro_etapa) DO UPDATE SET sla_dias = $3, atualizado_em = NOW()`,
+    [empresaId, macroEtapa, slaDias]
+  );
+  return getSlaMacroEtapas(empresaId);
+}
+
 // "Nº Contrato Sienge" do Histórico de Etapas de um card de Reserva: contratos
 // do mesmo empreendimento (centro de custo da reserva = enterprise_id do
 // contrato) que ainda não estão ligados a nenhuma reserva existente — nem
@@ -1256,6 +1280,8 @@ module.exports = {
   listUnidadesDisponiveisParaContrato,
   listContratosDisponiveisParaReserva,
   vincularContratoReserva,
+  getSlaMacroEtapas,
+  salvarSlaMacroEtapa,
   registrarMovimentacaoMicroEtapa,
   getAnexoMicroEtapa,
 };
