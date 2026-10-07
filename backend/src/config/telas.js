@@ -32,4 +32,5 @@ module.exports = {
   MASA: '/relatorios/empreendimentos-masa',
   ACERVO_NOTAS: '/relatorios/notas-pendentes',
   EXTRATOS: '/relatorios/extratos-bancarios',
+  REL_REPASSES: '/relatorios/repasses-cef',
 };

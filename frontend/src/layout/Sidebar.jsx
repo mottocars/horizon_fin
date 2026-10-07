@@ -95,6 +95,7 @@ const menuItems = [
       { label: 'Empreendimentos Masa', to: '/relatorios/empreendimentos-masa', icon: Building2 },
       { label: 'Acervo NF-e / NFS-e', to: '/relatorios/notas-pendentes', icon: FileClock },
       { label: 'Extratos Bancários', to: '/relatorios/extratos-bancarios', icon: ScrollText },
+      { label: 'Repasses CEF', to: '/relatorios/repasses-cef', icon: Banknote },
       { label: 'Etapas Empreendimentos', to: '/relatorios/etapas-dos-empreendimentos', icon: Milestone },
     ],
   },

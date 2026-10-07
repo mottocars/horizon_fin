@@ -35,6 +35,7 @@ export const TELAS_SISTEMA = {
   '/relatorios/empreendimentos-masa': { title: 'Empreendimentos Masa', subtitle: 'Relatórios — Empreendimentos Masa' },
   '/relatorios/notas-pendentes': { title: 'Acervo NF-e / NFS-e', subtitle: 'Relatórios — Acervo NF-e / NFS-e' },
   '/relatorios/extratos-bancarios': { title: 'Extratos Bancários', subtitle: 'Relatórios — Extratos Bancários' },
+  '/relatorios/repasses-cef': { title: 'Repasses CEF', subtitle: 'Relatórios — Repasses CEF' },
   '/relatorios/etapas-dos-empreendimentos': { title: 'Etapas Empreendimentos', subtitle: 'Relatórios — Etapas Empreendimentos' },
 };
 

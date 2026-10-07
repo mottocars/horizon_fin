@@ -378,6 +378,7 @@ async function listContratos(empresaId, centroCustoIds = []) {
 
   const { rows } = await pool.query(
     `SELECT c.sienge_contract_id, c.enterprise_name AS empreendimento, c.number,
+            c.enterprise_id AS centro_custo_sienge_id,
             c.value AS valor, c.contract_date, c.criado_em,
             c.financial_institution_number AS numero_instituicao_financeira,
             COALESCE(res.cliente, cli.name) AS titular_nome,
@@ -580,7 +581,8 @@ async function listReservas(empresaId, centroCustoIds = []) {
     `SELECT r.id, r.idreserva,
             COALESCE(cc.name, r.empreendimento) AS empreendimento, r.unidade,
             r.cliente AS titular_nome, r.valor_contrato AS valor_venda, r.venda AS vendida,
-            r.tipovenda, r.situacao, r.data_venda, r.criado_em,
+            r.tipovenda, r.situacao, r.data_venda, r.data_cad, r.criado_em,
+            cc.sienge_id AS centro_custo_sienge_id,
             um.nome AS ultima_microetapa_nome, um.data AS ultima_microetapa_data,
             um.mascara_item_id AS ultima_microetapa_id, um.sla_dias AS ultima_microetapa_sla_dias
      FROM construtor_vendas_reservas r
@@ -648,6 +650,7 @@ async function listUnidadesExtrato(empresaId, centroCustoIds, { comRegistro }) {
             COALESCE(res.cliente, u.nome_mutuario) AS titular_nome, u.data_assinatura_contrato,
             u.data_inclusao_dados_registro_cri AS data_registro,
             COALESCE(cc.name, u.contrato_empreendimento) AS empreendimento,
+            cc.sienge_id AS centro_custo_sienge_id,
             ctr.number AS numero_contrato, res.idreserva, res.tipovenda, res.situacao,
             um.nome AS ultima_microetapa_nome, um.data AS ultima_microetapa_data,
             um.mascara_item_id AS ultima_microetapa_id, um.sla_dias AS ultima_microetapa_sla_dias

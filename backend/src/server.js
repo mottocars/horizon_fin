@@ -15,6 +15,7 @@ const construtorVendasRoutes = require('./modules/integracoes-construtor-vendas/
 const actioonRoutes = require('./modules/integracoes-actioon/actioon.routes');
 const bancoDadosRoutes = require('./modules/integracoes-banco-dados/bancoDados.routes');
 const relatorioMasaRoutes = require('./modules/relatorio-empreendimentos-masa/relatorioMasa.routes');
+const relatorioRepassesCefRoutes = require('./modules/relatorio-repasses-cef/relatorioRepassesCef.routes');
 const relatorioNotasPendentesRoutes = require('./modules/relatorio-notas-pendentes/notasPendentes.routes');
 const relatorioExtratosRoutes = require('./modules/relatorio-extratos-bancarios/extratos.routes');
 const projetosRoutes = require('./modules/projetos/projetos.routes');
@@ -119,6 +120,7 @@ app.use('/api/integracoes/banco-dados', exigirTela([T.BANCO_DADOS]), bancoDadosR
 app.use('/api/relatorios/empreendimentos-masa', exigirTela([T.MASA]), relatorioMasaRoutes);
 app.use('/api/relatorios/notas-pendentes', exigirTela([T.ACERVO_NOTAS]), relatorioNotasPendentesRoutes);
 app.use('/api/relatorios/extratos-bancarios', exigirTela([T.EXTRATOS]), relatorioExtratosRoutes);
+app.use('/api/relatorios/repasses-cef', exigirTela([T.REL_REPASSES]), relatorioRepassesCefRoutes);
 app.use('/api/projetos', exigirTela([QUALQUER_TELA]), projetosRoutes);
 app.use('/api/integracoes/prevision', exigirTela([T.PREVISION], [T.CENTROS_CUSTO]), previsionRoutes);
 app.use('/api/prevision-dashboards', exigirTela([T.PREVISION, T.CENTROS_CUSTO]), previsionDashboardsRoutes);
