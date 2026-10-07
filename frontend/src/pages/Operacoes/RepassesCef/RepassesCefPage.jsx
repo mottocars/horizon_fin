@@ -1097,6 +1097,12 @@ function ReservaCard({ reserva, cores, mostrarDetalhes, onClick }) {
         </p>
       )}
       <div className="mt-1 flex flex-wrap items-center gap-1">
+        <SeloDiasParado
+          dias={diasParada(reserva.data_entrada_etapa)}
+          slaDias={reserva.sla_macro_dias}
+          rotulo="parada"
+          descricao="Dias parada sem contrato, desde a data da reserva"
+        />
         {reserva.tipovenda && (
           <BadgeCor texto={reserva.tipovenda} cor={cores?.tipovenda?.[reserva.tipovenda]} />
         )}
@@ -1104,12 +1110,6 @@ function ReservaCard({ reserva, cores, mostrarDetalhes, onClick }) {
           <BadgeCor texto={reserva.situacao} cor={cores?.situacao?.[reserva.situacao]} />
         )}
       </div>
-      <SeloDiasParado
-        dias={diasParada(reserva.data_entrada_etapa)}
-        slaDias={reserva.sla_macro_dias}
-        rotulo="parada"
-        descricao="Dias parada sem contrato, desde a data da reserva"
-      />
     </div>
   );
 }
@@ -1150,6 +1150,12 @@ function ContratoCard({ contrato, cores, mostrarDetalhes, onClick }) {
         </p>
       )}
       <div className="mt-1 flex flex-wrap items-center gap-1">
+        <SeloDiasParado
+          dias={diasParada(contrato.data_entrada_etapa)}
+          slaDias={contrato.sla_macro_dias}
+          rotulo="parado"
+          descricao="Dias parado sem assinatura, desde a emissão do contrato no Sienge"
+        />
         {contrato.tipovenda && (
           <BadgeCor texto={contrato.tipovenda} cor={cores?.tipovenda?.[contrato.tipovenda]} />
         )}
@@ -1157,12 +1163,6 @@ function ContratoCard({ contrato, cores, mostrarDetalhes, onClick }) {
           <BadgeCor texto={contrato.situacao} cor={cores?.situacao?.[contrato.situacao]} />
         )}
       </div>
-      <SeloDiasParado
-        dias={diasParada(contrato.data_entrada_etapa)}
-        slaDias={contrato.sla_macro_dias}
-        rotulo="parado"
-        descricao="Dias parado sem assinatura, desde a emissão do contrato no Sienge"
-      />
     </div>
   );
 }
@@ -1257,20 +1257,19 @@ function corDiasEtapa(dias, slaDias) {
 }
 
 // Selo de há quantos dias o cliente está parado na macro etapa atual — mesmo
-// visual nos cards de Reserva, Contrato e Assinatura.
+// visual nos cards de Reserva, Contrato e Assinatura. Em Reserva/Contrato fica
+// na mesma linha dos selos de tipo de venda/situação, antes deles.
 function SeloDiasParado({ dias, slaDias, rotulo, descricao }) {
   if (dias === null) return null;
-  const sla = slaDias === null || slaDias === undefined ? '' : ` · SLA da etapa: ${slaDias} ${slaDias === 1 ? 'dia' : 'dias'}`;
+  const sla = slaDias === null || slaDias === undefined ? '' : ` · SLA da etapa: ${slaDias.toLocaleString('pt-BR')} ${slaDias === 1 ? 'dia' : 'dias'}`;
   return (
-    <div className="mt-1">
-      <span
-        className={`inline-flex items-center gap-1 rounded-full px-2 py-0.5 text-[9px] font-medium ${corDiasEtapa(dias, slaDias)}`}
-        title={`${descricao}${sla}`}
-      >
-        <Clock size={11} className="shrink-0" />
-        {dias} {dias === 1 ? 'dia' : 'dias'} {rotulo}
-      </span>
-    </div>
+    <span
+      className={`inline-flex items-center gap-1 rounded-full px-2 py-0.5 text-[9px] font-medium ${corDiasEtapa(dias, slaDias)}`}
+      title={`${descricao}${sla}`}
+    >
+      <Clock size={11} className="shrink-0" />
+      {dias.toLocaleString('pt-BR')} {dias === 1 ? 'dia' : 'dias'} {rotulo}
+    </span>
   );
 }
 
@@ -1329,12 +1328,16 @@ function AssinaturaCard({ assinatura, mostrarDetalhes, onClick }) {
           {formatarData(assinatura.data_assinatura_contrato)}
         </p>
       )}
-      <SeloDiasParado
-        dias={dias}
-        slaDias={assinatura.sla_macro_dias}
-        rotulo="parada"
-        descricao="Dias parada sem registro, desde a assinatura"
-      />
+      {dias !== null && (
+        <div className="mt-1">
+          <SeloDiasParado
+            dias={dias}
+            slaDias={assinatura.sla_macro_dias}
+            rotulo="parada"
+            descricao="Dias parada sem registro, desde a assinatura"
+          />
+        </div>
+      )}
     </div>
   );
 }
