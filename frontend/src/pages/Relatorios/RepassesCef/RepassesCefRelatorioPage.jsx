@@ -13,14 +13,14 @@ import { nomeExibicaoEmpresa } from '../../../utils/empresa';
 
 const MACRO_POR_VALOR = Object.fromEntries(MACRO_ETAPAS_REPASSES.map((m) => [m.value, m]));
 
-// O que a coluna "Documento"/"Data Etapa" representa em cada macro etapa — a tela usa duas
-// colunas genéricas (o tipo aparece como etiqueta na própria célula); o Excel abre uma coluna
-// pra cada um (ver handleExportar).
+// O número que acompanha o nome do cliente e o que a "Data Etapa" representa em cada macro
+// etapa: código da reserva na Reserva, contrato Sienge no Contrato e contrato Caixa na
+// Assinatura/Registro. O Excel abre uma coluna pra cada um (ver handleExportar).
 const DOCUMENTO_POR_MACRO = {
-  VENDA: { etiqueta: 'Reserva', titulo: 'Código da reserva', tituloData: 'Data da reserva' },
-  CONTRATO: { etiqueta: 'Sienge', titulo: 'Contrato Sienge', tituloData: 'Data do contrato Sienge' },
-  ASSINATURA: { etiqueta: 'CEF', titulo: 'Contrato CEF', tituloData: 'Data da assinatura' },
-  REGISTRO: { etiqueta: 'CEF', titulo: 'Contrato CEF', tituloData: 'Data do registro' },
+  VENDA: { titulo: 'Código da reserva', tituloData: 'Data da reserva' },
+  CONTRATO: { titulo: 'Contrato Sienge', tituloData: 'Data do contrato Sienge' },
+  ASSINATURA: { titulo: 'Contrato Caixa', tituloData: 'Data da assinatura' },
+  REGISTRO: { titulo: 'Contrato Caixa', tituloData: 'Data do registro' },
 };
 
 const MICRO_SEM_ETAPA = 'Sem etapa registrada';
@@ -49,6 +49,11 @@ function formatarDias(dias) {
   return `${dias.toLocaleString('pt-BR')} ${dias === 1 ? 'dia' : 'dias'}`;
 }
 
+// Dias Etapa / Dias Micro Etapa mostram só o número — o título da coluna já diz que é dia.
+function formatarNumero(valor) {
+  return valor.toLocaleString('pt-BR');
+}
+
 function media(clientes, campo) {
   const valores = clientes.map((c) => c[campo]).filter((v) => v != null);
   if (valores.length === 0) return null;
@@ -65,7 +70,7 @@ function ResumoMedia({ clientes, campo }) {
   return (
     <span title="Média dos clientes do grupo">
       <span className="text-[10px] uppercase tracking-wide text-gray-400">média </span>
-      {formatarDias(valor)}
+      {formatarNumero(valor)}
     </span>
   );
 }
@@ -86,24 +91,6 @@ function ResumoAtrasados({ clientes }) {
 // cliente; `resumo` o de um grupo recolhido e do totalizador.
 const COLUNAS = [
   {
-    chave: 'documento',
-    label: 'Documento',
-    largura: 'w-36 2xl:w-48',
-    celula: (c) => {
-      const doc = DOCUMENTO_POR_MACRO[c.macro];
-      if (!c.documento) return <Vazio />;
-      return (
-        <span className="inline-flex items-center gap-1.5" title={doc.titulo}>
-          <span className="rounded bg-gray-100 px-1 py-px text-[9px] font-semibold uppercase tracking-wide text-gray-500">
-            {doc.etiqueta}
-          </span>
-          <span className="[overflow-wrap:anywhere]">{c.documento}</span>
-        </span>
-      );
-    },
-    resumo: () => <Vazio />,
-  },
-  {
     chave: 'dataEtapa',
     label: 'Data Etapa',
     largura: 'w-24 2xl:w-28',
@@ -114,17 +101,17 @@ const COLUNAS = [
   {
     chave: 'diasEtapa',
     label: 'Dias Etapa',
-    largura: 'w-28 2xl:w-32',
-    celula: (c) => (c.diasEtapa != null ? formatarDias(c.diasEtapa) : <Vazio />),
+    largura: 'w-24 2xl:w-28',
+    celula: (c) => (c.diasEtapa != null ? formatarNumero(c.diasEtapa) : <Vazio />),
     resumo: (clientes) => <ResumoMedia clientes={clientes} campo="diasEtapa" />,
   },
   {
     chave: 'diasMicroEtapa',
     label: 'Dias Micro Etapa',
-    largura: 'w-28 2xl:w-32',
+    largura: 'w-24 2xl:w-28',
     celula: (c) =>
       c.diasMicroEtapa != null ? (
-        <span className={c.situacaoSla === 'atrasado' ? 'font-semibold text-red-600' : ''}>{formatarDias(c.diasMicroEtapa)}</span>
+        <span className={c.situacaoSla === 'atrasado' ? 'font-semibold text-red-600' : ''}>{formatarNumero(c.diasMicroEtapa)}</span>
       ) : (
         <Vazio />
       ),
@@ -300,7 +287,8 @@ function CelulasResumo({ colunas, clientes, borda }) {
 // Relatório Repasses CEF: os mesmos clientes do Kanban de Repasses CEF (mesmos buckets e
 // filtros — ver relatorioRepassesCef.service.js no backend), no layout em matriz do relatório
 // Empreendimentos Masa, com drilldown Centro de Custo → Macro Etapa → Micro Etapa → Cliente.
-// Cliente = código da reserva + nome, pra um mesmo nome com duas reservas não se juntar.
+// Cliente = número da etapa (reserva, contrato Sienge ou contrato Caixa) + nome, pra um mesmo nome
+// em duas linhas não se juntar.
 export default function RepassesCefRelatorioPage() {
   const { travada: empresaTravada, empresaIdTravada, empresaIds } = useEmpresaTravada();
   const [empresas, setEmpresas] = useState([]);
@@ -376,7 +364,9 @@ export default function RepassesCefRelatorioPage() {
       const micro = microPorId.get(c.microId);
       return {
         ...c,
-        rotuloCliente: `${c.codigo} - ${c.cliente || 'Cliente não informado'}`,
+        // Reserva: código da reserva; Contrato: contrato Sienge; Assinatura/Registro: contrato
+        // Caixa — sempre único, então o mesmo nome em duas linhas não se junta.
+        rotuloCliente: `${c.documento || c.codigo} - ${c.cliente || 'Cliente não informado'}`,
         rotuloMicro: micro ? `${micro.sequencia} - ${micro.descricao || 'Sem descrição'}` : `0 - ${MICRO_SEM_ETAPA}`,
         sequenciaMicro: micro ? micro.sequencia : 0,
         situacaoSla: situacaoSla(c),
@@ -782,7 +772,9 @@ export default function RepassesCefRelatorioPage() {
                                   <span aria-hidden="true" className="mt-0.75 h-2.5 w-2.5 shrink-0 rounded-full bg-red-500" />
                                 )}
                                 <span>
-                                  <span className="tabular-nums text-gray-400">{cliente.codigo}</span>
+                                  <span className="tabular-nums text-gray-400" title={DOCUMENTO_POR_MACRO[cliente.macro].titulo}>
+                                    {cliente.documento || cliente.codigo}
+                                  </span>
                                   <span className="text-gray-300"> - </span>
                                   {cliente.cliente || <span className="italic text-gray-400">Cliente não informado</span>}
                                 </span>
