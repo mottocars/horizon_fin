@@ -150,7 +150,10 @@ export default function MascarasRepassesCef({ empresaId }) {
 
               <p className="min-w-0 flex-1 truncate text-sm font-semibold text-gray-900">{macro.label}</p>
 
-              <CampoSlaMacro empresaId={empresaId} macro={macro} valorSalvo={slaMacro[macro.value]} onSalvo={setSlaMacro} />
+              {/* Registro é a etapa final do repasse — não tem SLA. */}
+              {macro.value !== 'REGISTRO' && (
+                <CampoSlaMacro empresaId={empresaId} macro={macro} valorSalvo={slaMacro[macro.value]} onSalvo={setSlaMacro} />
+              )}
 
               <img
                 src={macro.logo}

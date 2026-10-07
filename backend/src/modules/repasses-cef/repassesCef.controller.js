@@ -500,7 +500,8 @@ async function vincularContrato(req, res, next) {
   }
 }
 
-const macroEtapaSchema = z.enum(['VENDA', 'CONTRATO', 'ASSINATURA', 'REGISTRO'], {
+// Registro fica de fora — é a etapa final, não tem SLA.
+const macroEtapaSchema = z.enum(['VENDA', 'CONTRATO', 'ASSINATURA'], {
   errorMap: () => ({ message: 'Macro etapa inválida.' }),
 });
 const slaMacroSchema = z.object({

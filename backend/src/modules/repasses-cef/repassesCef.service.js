@@ -1134,16 +1134,17 @@ async function getAnexoMicroEtapa(empresaId, anexoId) {
 }
 
 // SLA de cada macro etapa (aba Máscaras) — { VENDA: 10, CONTRATO: null, ... },
-// sempre com as 4 chaves (null = não preenchido).
-const MACRO_ETAPAS = ['VENDA', 'CONTRATO', 'ASSINATURA', 'REGISTRO'];
+// sempre com as 3 chaves (null = não preenchido). Registro não tem SLA: é a
+// etapa final do repasse, não há próxima etapa pra cumprir prazo.
+const MACRO_ETAPAS_COM_SLA = ['VENDA', 'CONTRATO', 'ASSINATURA'];
 
 async function getSlaMacroEtapas(empresaId) {
   const { rows } = await pool.query(
     'SELECT macro_etapa, sla_dias FROM repasses_cef_sla_macro WHERE empresa_id = $1',
     [empresaId]
   );
-  const sla = Object.fromEntries(MACRO_ETAPAS.map((m) => [m, null]));
-  for (const r of rows) sla[r.macro_etapa] = r.sla_dias;
+  const sla = Object.fromEntries(MACRO_ETAPAS_COM_SLA.map((m) => [m, null]));
+  for (const r of rows) if (r.macro_etapa in sla) sla[r.macro_etapa] = r.sla_dias;
   return sla;
 }
 
