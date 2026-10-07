@@ -346,6 +346,9 @@ async function listContratos(empresaId, centroCustoIds = []) {
       AND u.numero_contrato_unidade = c.financial_institution_number
   )`);
 
+  // Contrato cancelado no Sienge não está mais no fluxo de repasse.
+  condicoes.push(`c.situation IS DISTINCT FROM 'Cancelado'`);
+
   // Filtros "Tipo de Venda" e "Situação da Reserva" (os mesmos configurados
   // em "Configurar Filtros de Visualização" pro bucket Reserva) também se
   // aplicam ao bucket Contrato — via uma ligação indireta: quando `number`
