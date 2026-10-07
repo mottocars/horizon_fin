@@ -1,8 +1,9 @@
 import { Fragment, useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { createPortal } from 'react-dom';
-import { Banknote, FileDown, Filter, Minus, Plus, TriangleAlert, X } from 'lucide-react';
+import { Banknote, FileDown, Minus, Plus, TriangleAlert } from 'lucide-react';
+import Card from '../../../components/Card';
 import SearchableSelect from '../../../components/SearchableSelect';
-import FiltroColuna, { passaNoFiltro } from '../../../components/FiltroColuna';
+import FiltroColuna, { passaNoFiltro, proximoFiltro, valoresDoFiltro } from '../../../components/FiltroColuna';
 import RotuloAgrupador from '../../../components/RotuloAgrupador';
 import { useEmpresaTravada } from '../../../hooks/useEmpresaTravada';
 import { listEmpresas } from '../../../api/empresas.api';
@@ -308,13 +309,8 @@ export default function RepassesCefRelatorioPage() {
   const [filtroMacro, setFiltroMacro] = useState(null);
   const [filtroMicro, setFiltroMicro] = useState(null);
   const [filtroCliente, setFiltroCliente] = useState(null);
-  // Legenda de SLA: clicar alterna a situação no filtro (várias ao mesmo tempo); vazio = todas.
-  const [filtroSla, setFiltroSla] = useState([]);
-
-  const [painelAberto, setPainelAberto] = useState(false);
-  const [colunasVisiveis, setColunasVisiveis] = useState(() => new Set(COLUNAS.map((c) => c.chave)));
-  const colunas = useMemo(() => COLUNAS.filter((c) => colunasVisiveis.has(c.chave)), [colunasVisiveis]);
-  const todasColunasVisiveis = colunas.length === COLUNAS.length;
+  const [filtroSla, setFiltroSla] = useState(null);
+  const colunas = COLUNAS;
 
   const thCentroRef = useRef(null);
   const thMacroRef = useRef(null);
@@ -364,7 +360,7 @@ export default function RepassesCefRelatorioPage() {
     setFiltroMacro(null);
     setFiltroMicro(null);
     setFiltroCliente(null);
-    setFiltroSla([]);
+    setFiltroSla(null);
     carregar();
   }, [carregar]);
 
@@ -417,18 +413,32 @@ export default function RepassesCefRelatorioPage() {
           passaNoFiltro(filtroMacro, c.macro) &&
           passaNoFiltro(filtroMicro, c.rotuloMicro) &&
           passaNoFiltro(filtroCliente, c.rotuloCliente) &&
-          (filtroSla.length === 0 || filtroSla.includes(c.situacaoSla))
+          passaNoFiltro(filtroSla, c.situacaoSla)
       ),
     [clientes, filtroCentro, filtroMacro, filtroMicro, filtroCliente, filtroSla]
   );
 
   const arvore = useMemo(() => construirArvore(clientesFiltrados), [clientesFiltrados]);
 
-  const contagemSla = useMemo(() => {
+  // Opções do filtro de SLA do cabeçalho, com quantos clientes há em cada situação.
+  const opcoesSla = useMemo(() => {
     const contagem = { atrasado: 0, no_prazo: 0, sem_sla: 0 };
     for (const c of clientes) contagem[c.situacaoSla] += 1;
-    return contagem;
+    return Object.entries(SITUACOES_SLA).map(([value, s]) => ({
+      value,
+      label: `${s.label} (${contagem[value].toLocaleString('pt-BR')})`,
+    }));
   }, [clientes]);
+
+  const filtroAtivo = [filtroCentro, filtroMacro, filtroMicro, filtroCliente, filtroSla].some((f) => f != null);
+
+  function limparFiltros() {
+    setFiltroCentro(null);
+    setFiltroMacro(null);
+    setFiltroMicro(null);
+    setFiltroCliente(null);
+    setFiltroSla(null);
+  }
 
   // Centros começam recolhidos (como as fases do Masa); Macro e Micro começam abertas dentro
   // de um centro aberto.
@@ -454,14 +464,6 @@ export default function RepassesCefRelatorioPage() {
       setMacrosColapsadas(new Set());
       setMicrosColapsadas(new Set());
     }
-  }
-
-  function toggleColuna(chave) {
-    alternar(setColunasVisiveis, chave);
-  }
-
-  function toggleFiltroSla(situacao) {
-    setFiltroSla((atual) => (atual.includes(situacao) ? atual.filter((s) => s !== situacao) : [...atual, situacao]));
   }
 
   // Menu de contexto (botão direito na tabela) com "Exportar" — mesmo comportamento do Masa.
@@ -544,7 +546,6 @@ export default function RepassesCefRelatorioPage() {
 
   const semResultadoFiltro = clientes.length > 0 && clientesFiltrados.length === 0;
   const temDados = !carregando && !erro && clientes.length > 0;
-  const filtroLateralAtivo = !todasColunasVisiveis;
   const COLUNAS_FIXAS = 4;
 
   function cabecalho(ref, filtro, setFiltro, opcoes, labelFiltro, titulo, classes) {
@@ -563,86 +564,70 @@ export default function RepassesCefRelatorioPage() {
 
   return (
     <div className="space-y-4">
-      <div className="flex flex-wrap items-center gap-1.5 px-1 text-[11px] text-gray-400">
-        <div className="mr-3 w-full sm:w-64">
-          <SearchableSelect
-            value={empresaId}
-            onChange={(v) => setEmpresaId(v || '')}
-            disabled={carregandoEmpresas || empresaTravada}
-            options={opcoesEmpresa}
-            clearable={false}
-            placeholder={carregandoEmpresas ? 'Carregando empresas...' : 'Selecione uma empresa'}
-            emptyMessage="Nenhuma empresa encontrada."
-          />
+      {/* Cabeçalho no mesmo padrão do Acervo NF-e / NFS-e. Centro de Custo e SLA usam o mesmo
+          estado dos filtros de coluna — mexer num reflete no outro. Exportar fica só no botão
+          direito em cima da tabela. */}
+      <Card>
+        <div className="flex flex-col gap-4 lg:flex-row lg:items-end">
+          <div className="min-w-0 flex-1 lg:max-w-xs">
+            <label className="mb-1 block text-sm font-medium text-gray-700">Empresa</label>
+            <SearchableSelect
+              value={empresaId}
+              onChange={(v) => setEmpresaId(v || '')}
+              disabled={carregandoEmpresas || empresaTravada}
+              options={opcoesEmpresa}
+              placeholder={carregandoEmpresas ? 'Carregando empresas...' : 'Selecione uma empresa'}
+              emptyMessage="Nenhuma empresa encontrada."
+            />
+          </div>
+          <div className="min-w-0 flex-1 lg:max-w-xs">
+            <label className="mb-1 block text-sm font-medium text-gray-700">Centro de Custo</label>
+            <SearchableSelect
+              multiple
+              selecionarTodos
+              value={valoresDoFiltro(filtroCentro, opcoesCentro)}
+              onChange={(sel) => setFiltroCentro(proximoFiltro(sel, opcoesCentro))}
+              options={opcoesCentro}
+              disabled={!empresaId || opcoesCentro.length === 0}
+              placeholder={!empresaId ? 'Selecione a empresa primeiro' : 'Nenhum centro de custo'}
+              emptyMessage="Nenhum centro de custo encontrado."
+            />
+          </div>
+          <div className="min-w-0 flex-1 lg:max-w-xs">
+            <label className="mb-1 block text-sm font-medium text-gray-700">SLA da Micro Etapa</label>
+            <SearchableSelect
+              multiple
+              selecionarTodos
+              value={valoresDoFiltro(filtroSla, opcoesSla)}
+              onChange={(sel) => setFiltroSla(proximoFiltro(sel, opcoesSla))}
+              options={opcoesSla}
+              disabled={!empresaId || clientes.length === 0}
+              placeholder={!empresaId ? 'Selecione a empresa primeiro' : 'Nenhuma situação'}
+              emptyMessage="Nenhuma situação encontrada."
+            />
+          </div>
+          {filtroAtivo && (
+            <button
+              type="button"
+              onClick={limparFiltros}
+              className="self-start text-xs text-gray-400 underline decoration-dotted hover:text-gray-600 lg:mb-2.5 lg:self-end"
+            >
+              Mostrar tudo
+            </button>
+          )}
+          {temDados && (
+            <button
+              type="button"
+              onClick={toggleTudo}
+              disabled={arvore.length === 0}
+              className="inline-flex items-center gap-1.5 self-start py-2 rounded-lg border border-gray-200 bg-white px-3 text-sm font-medium text-gray-600 transition hover:bg-gray-50 hover:text-gray-800 disabled:opacity-50 lg:ml-auto lg:self-end"
+            >
+              {tudoExpandido ? <Minus size={14} /> : <Plus size={14} />}
+              {tudoExpandido ? 'Recolher' : 'Expandir'}
+            </button>
+          )}
         </div>
-        {temDados && (
-          <>
-            <span className="mr-1.5">SLA da micro etapa:</span>
-            {Object.entries(SITUACOES_SLA).map(([chave, situacao]) => {
-              const ativo = filtroSla.includes(chave);
-              return (
-                <button
-                  key={chave}
-                  type="button"
-                  onClick={() => toggleFiltroSla(chave)}
-                  title={`Filtrar por ${situacao.label}`}
-                  aria-pressed={ativo}
-                  className={`inline-flex items-center gap-1.5 rounded-full px-1.5 py-0.5 transition ${
-                    ativo ? 'bg-gray-100 text-gray-600 ring-1 ring-gray-300' : 'text-gray-400 hover:bg-gray-50'
-                  }`}
-                >
-                  <span className={`h-2.5 w-2.5 shrink-0 rounded-full ${situacao.swatch}`} />
-                  {situacao.label}
-                  <span className="tabular-nums text-gray-300">{contagemSla[chave].toLocaleString('pt-BR')}</span>
-                </button>
-              );
-            })}
-            {filtroSla.length > 0 && (
-              <button
-                type="button"
-                onClick={() => setFiltroSla([])}
-                className="ml-1 text-gray-400 underline decoration-dotted hover:text-gray-600"
-              >
-                Limpar
-              </button>
-            )}
-            <div className="ml-auto flex items-center gap-1.5">
-              <button
-                type="button"
-                onClick={toggleTudo}
-                disabled={arvore.length === 0}
-                className="inline-flex h-8 items-center gap-1.5 rounded-lg border border-gray-200 bg-white px-3 text-xs font-medium text-gray-600 transition hover:bg-gray-50 hover:text-gray-800 disabled:opacity-50"
-              >
-                {tudoExpandido ? <Minus size={13} /> : <Plus size={13} />}
-                {tudoExpandido ? 'Recolher' : 'Expandir'}
-              </button>
-              <button
-                type="button"
-                onClick={handleExportar}
-                disabled={clientesFiltrados.length === 0}
-                title="Exportar para Excel (também pelo botão direito na tabela)"
-                className="inline-flex h-8 items-center gap-1.5 rounded-lg border border-gray-200 bg-white px-3 text-xs font-medium text-gray-600 transition hover:bg-gray-50 hover:text-gray-800 disabled:opacity-50"
-              >
-                <FileDown size={13} />
-                Exportar
-              </button>
-              <button
-                type="button"
-                onClick={() => setPainelAberto(true)}
-                title="Colunas"
-                aria-pressed={filtroLateralAtivo}
-                className={`inline-flex h-8 w-8 items-center justify-center rounded-lg border transition ${
-                  filtroLateralAtivo
-                    ? 'border-primary-500 bg-primary-50 text-primary-600'
-                    : 'border-gray-200 bg-white text-gray-500 hover:bg-gray-50 hover:text-gray-700'
-                }`}
-              >
-                <Filter size={15} />
-              </button>
-            </div>
-          </>
-        )}
-      </div>
+      </Card>
 
       <div className="rounded-card bg-white shadow-card">
         {!empresaId ? (
@@ -903,78 +888,6 @@ export default function RepassesCefRelatorioPage() {
           document.body
         )}
 
-      {/* Painel lateral — mesmo padrão do Masa: sempre montado pra transição funcionar. */}
-      <div className={`fixed inset-0 z-50 ${painelAberto ? '' : 'pointer-events-none'}`}>
-        <div
-          className={`absolute inset-0 cursor-pointer bg-black/10 transition-opacity duration-300 ${
-            painelAberto ? 'opacity-100' : 'opacity-0'
-          }`}
-          onClick={() => setPainelAberto(false)}
-        />
-        <div
-          className={`absolute right-0 top-0 flex h-full w-full max-w-sm flex-col bg-white shadow-card transition-transform duration-300 ${
-            painelAberto ? 'translate-x-0' : 'translate-x-full'
-          }`}
-        >
-          <div className="flex items-center justify-between border-b border-gray-100 px-5 py-4">
-            <h2 className="text-base font-semibold text-gray-900">Colunas</h2>
-            <button type="button" onClick={() => setPainelAberto(false)} className="text-gray-400 hover:text-gray-600">
-              <X size={20} />
-            </button>
-          </div>
-
-          <div className="flex-1 space-y-6 overflow-y-auto p-5">
-            <div>
-              <div className="mb-2 flex items-center justify-between">
-                <span className="text-sm font-medium text-gray-700">Colunas analíticas</span>
-                <button
-                  type="button"
-                  onClick={() => setColunasVisiveis(todasColunasVisiveis ? new Set() : new Set(COLUNAS.map((c) => c.chave)))}
-                  className="text-xs font-medium text-primary-600 hover:text-primary-700"
-                >
-                  {todasColunasVisiveis ? 'Desmarcar todos' : 'Selecionar todos'}
-                </button>
-              </div>
-              <div className="divide-y divide-gray-100 rounded-lg border border-gray-200">
-                {COLUNAS.map((coluna) => (
-                  <label
-                    key={coluna.chave}
-                    className="flex cursor-pointer items-center gap-2.5 px-3 py-2 text-sm text-gray-700 hover:bg-gray-50"
-                  >
-                    <input
-                      type="checkbox"
-                      checked={colunasVisiveis.has(coluna.chave)}
-                      onChange={() => toggleColuna(coluna.chave)}
-                      className="h-4 w-4 cursor-pointer accent-primary-600"
-                    />
-                    {coluna.label}
-                  </label>
-                ))}
-              </div>
-              <p className="mt-1 text-xs text-gray-400">Centro de Custo, Macro Etapa, Micro Etapa e Cliente aparecem sempre.</p>
-            </div>
-
-            <div className="space-y-2 rounded-lg bg-gray-50 p-3 text-xs text-gray-500">
-              <p className="font-medium text-gray-600">Como ler</p>
-              <p>
-                <strong className="font-medium text-gray-600">Documento / Data Etapa:</strong> código e data da reserva na Reserva,
-                contrato e data do Sienge no Contrato, contrato CEF e data de assinatura na Assinatura, contrato CEF e data de
-                registro no Registro.
-              </p>
-              <p>
-                <strong className="font-medium text-gray-600">Dias Etapa:</strong> dias desde a Data Etapa.{' '}
-                <strong className="font-medium text-gray-600">Dias Micro Etapa:</strong> dias desde a última movimentação
-                registrada nesta macro etapa.
-              </p>
-              <p>
-                <strong className="font-medium text-gray-600">SLA:</strong> prazo da micro etapa (Máscaras). Passou do prazo, a
-                linha fica vermelha e mostra quantos dias excedeu.
-              </p>
-              <p>Grupos recolhidos mostram a média de dias e quantos clientes estão atrasados.</p>
-            </div>
-          </div>
-        </div>
-      </div>
     </div>
   );
 }
