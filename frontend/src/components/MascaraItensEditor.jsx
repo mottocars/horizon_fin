@@ -119,8 +119,11 @@ export default function MascaraItensEditor({ tipo, empresaId, grupo, itemLabel }
     <div>
       <div className="mb-2 flex gap-4 px-1 text-xs font-medium uppercase tracking-wide text-gray-400">
         <span className="w-7 shrink-0">Seq.</span>
-        {mostrarSla && <span className="w-24 shrink-0 text-center">SLA (dias)</span>}
         <span className="flex-1">Descrição</span>
+        {/* SLA no canto direito, alinhado ao SLA da macro etapa (Repasses CEF) — o
+            espaço w-7 no fim é o do botão de excluir da linha. */}
+        {mostrarSla && <span className="w-20 shrink-0 text-center">SLA (dias)</span>}
+        {mostrarSla && <span className="w-7 shrink-0" />}
       </div>
 
       <div className="divide-y divide-gray-50">
@@ -190,19 +193,6 @@ function MascaraRow({ item, registerRef, mostrarSla, onChange, onSave, onEnterOn
       <span className="flex h-7 w-7 shrink-0 items-center justify-center rounded-full bg-primary-50 text-xs font-semibold text-primary-600">
         {item.sequencia}
       </span>
-      {mostrarSla && (
-        <input
-          type="number"
-          min="0"
-          max="3650"
-          value={item.sla_dias ?? ''}
-          onChange={(e) => onChange('sla_dias', e.target.value === '' ? null : Number(e.target.value))}
-          onBlur={handleBlur}
-          onKeyDown={handleKeyDown}
-          title="Prazo esperado (SLA) desta etapa, em dias"
-          className={`w-24 shrink-0 rounded-md border px-2 py-1.5 text-center text-sm transition-colors focus:outline-none focus:ring-2 focus:ring-primary-100 ${estadoCampo(item.sla_dias !== null && item.sla_dias !== undefined)}`}
-        />
-      )}
       <input
         ref={registerRef}
         type="text"
@@ -213,6 +203,19 @@ function MascaraRow({ item, registerRef, mostrarSla, onChange, onSave, onEnterOn
         placeholder="Digite a descrição..."
         className={`w-full flex-1 rounded-md border px-2 py-1.5 text-sm transition-colors placeholder:text-gray-400 focus:outline-none focus:ring-2 focus:ring-primary-100 ${estadoCampo(Boolean(item.descricao))}`}
       />
+      {mostrarSla && (
+        <input
+          type="number"
+          min="0"
+          max="3650"
+          value={item.sla_dias ?? ''}
+          onChange={(e) => onChange('sla_dias', e.target.value === '' ? null : Number(e.target.value))}
+          onBlur={handleBlur}
+          onKeyDown={handleKeyDown}
+          title="Prazo esperado (SLA) desta etapa, em dias"
+          className={`w-20 shrink-0 rounded-md border px-2 py-1.5 text-center text-sm transition-colors focus:outline-none focus:ring-2 focus:ring-primary-100 ${estadoCampo(item.sla_dias !== null && item.sla_dias !== undefined)}`}
+        />
+      )}
       <button
         type="button"
         onClick={onDelete}
