@@ -98,7 +98,8 @@ async function getMatriz(empresaId) {
       cliente: (item.titular_nome || '').trim() || null,
       documento,
       dataEtapa: dataIsoEtapa,
-      diasEtapa: diasDesde(dataIsoEtapa),
+      // Registro é a etapa final do repasse — não há prazo correndo, então não conta dias.
+      diasEtapa: macro === 'REGISTRO' ? null : diasDesde(dataIsoEtapa),
       dataMicroEtapa: micro ? ultima.data : null,
       diasMicroEtapa: micro ? diasDesde(ultima.data) : null,
       slaMicroEtapa: micro ? micro.sla_dias : null,
