@@ -43,6 +43,14 @@ function IDRESERVA_DO_CONTRATO(alias) {
      )`;
 }
 
+// SLA (dias) da macro etapa, cadastrado na aba Máscaras (repasses_cef_sla_macro)
+// — vem junto com cada card pra ele pintar o selo de "dias parado" sem outra
+// chamada. NULL quando não preenchido.
+function SLA_MACRO(colEmpresaId, macroEtapa) {
+  return `(SELECT s.sla_dias FROM repasses_cef_sla_macro s
+           WHERE s.empresa_id = ${colEmpresaId} AND s.macro_etapa = '${macroEtapa}')`;
+}
+
 function badRequest(message) {
   const err = new Error(message);
   err.status = 400;
@@ -392,6 +400,10 @@ async function listContratos(empresaId, centroCustoIds = []) {
   const { rows } = await pool.query(
     `SELECT c.sienge_contract_id, c.enterprise_name AS empreendimento, c.number,
             c.enterprise_id AS centro_custo_sienge_id,
+            -- Entrada no bucket Contrato = emissão do contrato no Sienge. O
+            -- contract_date não serve: o Sienge copia nele a data da reserva.
+            COALESCE(c.issue_date, c.contract_date)::date AS data_entrada_etapa,
+            ${SLA_MACRO('c.empresa_id', 'CONTRATO')} AS sla_macro_dias,
             c.value AS valor, c.contract_date, c.criado_em,
             c.financial_institution_number AS numero_instituicao_financeira,
             COALESCE(res.cliente, cli.name) AS titular_nome,
@@ -419,7 +431,8 @@ async function listContratos(empresaId, centroCustoIds = []) {
      ) res ON TRUE
      ${ULTIMA_MICROETAPA_LATERAL('c.empresa_id', 'res.idreserva')}
      WHERE ${condicoes.join(' AND ')}
-     ORDER BY c.contract_date ASC NULLS LAST, c.sienge_contract_id ASC`,
+     -- Mais tempo parado no Contrato primeiro.
+     ORDER BY COALESCE(c.issue_date, c.contract_date) ASC NULLS LAST, c.sienge_contract_id ASC`,
     params
   );
   return rows;
@@ -599,6 +612,8 @@ async function listReservas(empresaId, centroCustoIds = []) {
             COALESCE(cc.name, r.empreendimento) AS empreendimento, r.unidade,
             r.cliente AS titular_nome, r.valor_contrato AS valor_venda, r.venda AS vendida,
             r.tipovenda, r.situacao, r.data_venda, r.data_cad, r.criado_em,
+            r.data_cad::date AS data_entrada_etapa,
+            ${SLA_MACRO('r.empresa_id', 'VENDA')} AS sla_macro_dias,
             cc.sienge_id AS centro_custo_sienge_id,
             um.nome AS ultima_microetapa_nome, um.data AS ultima_microetapa_data,
             um.mascara_item_id AS ultima_microetapa_id, um.sla_dias AS ultima_microetapa_sla_dias
@@ -666,6 +681,7 @@ async function listUnidadesExtrato(empresaId, centroCustoIds, { comRegistro }) {
     `SELECT u.id, u.contrato_empreendimento, u.numero_contrato_unidade,
             COALESCE(res.cliente, u.nome_mutuario) AS titular_nome, u.data_assinatura_contrato,
             u.data_inclusao_dados_registro_cri AS data_registro,
+            ${comRegistro ? 'NULL' : SLA_MACRO('u.empresa_id', 'ASSINATURA')} AS sla_macro_dias,
             COALESCE(cc.name, u.contrato_empreendimento) AS empreendimento,
             cc.sienge_id AS centro_custo_sienge_id,
             ctr.number AS numero_contrato, res.idreserva, res.tipovenda, res.situacao,

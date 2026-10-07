@@ -1104,6 +1104,12 @@ function ReservaCard({ reserva, cores, mostrarDetalhes, onClick }) {
           <BadgeCor texto={reserva.situacao} cor={cores?.situacao?.[reserva.situacao]} />
         )}
       </div>
+      <SeloDiasParado
+        dias={diasParada(reserva.data_entrada_etapa)}
+        slaDias={reserva.sla_macro_dias}
+        rotulo="parada"
+        descricao="Dias parada sem contrato, desde a data da reserva"
+      />
     </div>
   );
 }
@@ -1151,6 +1157,12 @@ function ContratoCard({ contrato, cores, mostrarDetalhes, onClick }) {
           <BadgeCor texto={contrato.situacao} cor={cores?.situacao?.[contrato.situacao]} />
         )}
       </div>
+      <SeloDiasParado
+        dias={diasParada(contrato.data_entrada_etapa)}
+        slaDias={contrato.sla_macro_dias}
+        rotulo="parado"
+        descricao="Dias parado sem assinatura, desde a emissão do contrato no Sienge"
+      />
     </div>
   );
 }
@@ -1234,6 +1246,34 @@ function corDiasParada(dias) {
   return 'bg-blue-50 text-blue-600';
 }
 
+// Cor do selo "dias parado": com SLA da macro etapa preenchido (aba Máscaras),
+// vermelho quando passou do SLA e amarelo a partir de 80% dele; sem SLA, a
+// régua fixa de sempre (corDiasParada).
+function corDiasEtapa(dias, slaDias) {
+  if (slaDias === null || slaDias === undefined) return corDiasParada(dias);
+  if (dias > slaDias) return 'bg-red-50 text-red-600';
+  if (dias >= slaDias * 0.8) return 'bg-amber-50 text-amber-600';
+  return 'bg-blue-50 text-blue-600';
+}
+
+// Selo de há quantos dias o cliente está parado na macro etapa atual — mesmo
+// visual nos cards de Reserva, Contrato e Assinatura.
+function SeloDiasParado({ dias, slaDias, rotulo, descricao }) {
+  if (dias === null) return null;
+  const sla = slaDias === null || slaDias === undefined ? '' : ` · SLA da etapa: ${slaDias} ${slaDias === 1 ? 'dia' : 'dias'}`;
+  return (
+    <div className="mt-1">
+      <span
+        className={`inline-flex items-center gap-1 rounded-full px-2 py-0.5 text-[9px] font-medium ${corDiasEtapa(dias, slaDias)}`}
+        title={`${descricao}${sla}`}
+      >
+        <Clock size={11} className="shrink-0" />
+        {dias} {dias === 1 ? 'dia' : 'dias'} {rotulo}
+      </span>
+    </div>
+  );
+}
+
 // Todos os campos essenciais de extrato_unidades (importada manualmente na
 // tela Extrato, arquivo da Caixa): empreendimento (nome do Horizon, ligado
 // via codigo_contrato_caixa), número do contrato da unidade, mutuário e
@@ -1289,17 +1329,12 @@ function AssinaturaCard({ assinatura, mostrarDetalhes, onClick }) {
           {formatarData(assinatura.data_assinatura_contrato)}
         </p>
       )}
-      {dias !== null && (
-        <div className="mt-1">
-          <span
-            className={`inline-flex items-center gap-1 rounded-full px-2 py-0.5 text-[9px] font-medium ${corDiasParada(dias)}`}
-            title="Dias parada sem registro, desde a assinatura"
-          >
-            <Clock size={11} className="shrink-0" />
-            {dias} {dias === 1 ? 'dia' : 'dias'} parada
-          </span>
-        </div>
-      )}
+      <SeloDiasParado
+        dias={dias}
+        slaDias={assinatura.sla_macro_dias}
+        rotulo="parada"
+        descricao="Dias parada sem registro, desde a assinatura"
+      />
     </div>
   );
 }
