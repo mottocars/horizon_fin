@@ -469,6 +469,37 @@ async function downloadAnexoMicroEtapa(req, res, next) {
   }
 }
 
+// "Nº Contrato Sienge" do Histórico de Etapas (card de Reserva) — contratos
+// gerados à mão no Sienge, sem a ligação automática "CV", que podem ser
+// ligados à reserva.
+const idreservaSchema = z.coerce.number().int().positive('Reserva inválida.');
+const vincularContratoSchema = z.object({
+  sienge_contract_id: z.coerce.number().int().positive('Selecione o contrato.'),
+});
+
+async function listContratosDisponiveis(req, res, next) {
+  try {
+    const empresaId = empresaIdSchema.parse(req.params.empresaId);
+    const idreserva = idreservaSchema.parse(req.params.idreserva);
+    res.json(await service.listContratosDisponiveisParaReserva(empresaId, idreserva));
+  } catch (err) {
+    if (err.issues) return next(badRequest(err.issues[0].message));
+    next(err);
+  }
+}
+
+async function vincularContrato(req, res, next) {
+  try {
+    const empresaId = empresaIdSchema.parse(req.params.empresaId);
+    const idreserva = idreservaSchema.parse(req.params.idreserva);
+    const { sienge_contract_id } = vincularContratoSchema.parse(req.body);
+    res.json(await service.vincularContratoReserva(empresaId, idreserva, sienge_contract_id, req.user?.id));
+  } catch (err) {
+    if (err.issues) return next(badRequest(err.issues[0].message));
+    next(err);
+  }
+}
+
 module.exports = {
   listCentros,
   sincronizarReservas,
@@ -488,6 +519,8 @@ module.exports = {
   atualizarNumeroInstituicaoFinanceira,
   getHistoricoEtapas,
   listUnidadesDisponiveis,
+  listContratosDisponiveis,
+  vincularContrato,
   registrarMovimentacaoMicroEtapa,
   downloadAnexoMicroEtapa,
 };

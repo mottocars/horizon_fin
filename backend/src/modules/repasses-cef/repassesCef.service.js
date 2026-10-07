@@ -30,6 +30,19 @@ async function listCentrosComLancamento(empresaId) {
   return rows;
 }
 
+// idreserva de origem de um contrato (`alias` = linha de sie_sales_contracts
+// na query): o vínculo manual feito no Histórico de Etapas
+// (repasses_cef_vinculos_contrato — contrato gerado à mão no Sienge) ou, sem
+// ele, a ligação automática do Construtor de Vendas — `number` começando com
+// "CV" e `external_id` = idreserva. NULL quando nenhuma das duas existe.
+function IDRESERVA_DO_CONTRATO(alias) {
+  return `COALESCE(
+       (SELECT v.idreserva FROM repasses_cef_vinculos_contrato v
+        WHERE v.empresa_id = ${alias}.empresa_id AND v.sienge_contract_id = ${alias}.sienge_contract_id),
+       CASE WHEN ${alias}.number LIKE 'CV%' AND ${alias}.external_id ~ '^[0-9]+$' THEN ${alias}.external_id::int END
+     )`;
+}
+
 function badRequest(message) {
   const err = new Error(message);
   err.status = 400;
@@ -401,9 +414,7 @@ async function listContratos(empresaId, centroCustoIds = []) {
        SELECT r.idreserva, r.tipovenda, r.situacao, r.cliente
        FROM construtor_vendas_reservas r
        WHERE r.empresa_id = c.empresa_id
-         AND c.number LIKE 'CV%'
-         AND c.external_id ~ '^[0-9]+$'
-         AND r.idreserva = c.external_id::int
+         AND r.idreserva = ${IDRESERVA_DO_CONTRATO('c')}
        LIMIT 1
      ) res ON TRUE
      ${ULTIMA_MICROETAPA_LATERAL('c.empresa_id', 'res.idreserva')}
@@ -564,12 +575,18 @@ async function listReservas(empresaId, centroCustoIds = []) {
   // com `number` começando com "CV" e `external_id` igual ao idreserva) não
   // aparece mais aqui, só no bucket Contrato. Sobra em Reserva só quem ainda
   // não tem contrato nenhum.
+  // Vale também o vínculo manual (contrato gerado à mão no Sienge, ligado no
+  // Histórico de Etapas — ver vincularContratoReserva).
   condicoes.push(`NOT EXISTS (
     SELECT 1 FROM sie_sales_contracts c
     WHERE c.empresa_id = r.empresa_id
       AND c.number LIKE 'CV%'
       AND c.external_id ~ '^[0-9]+$'
       AND c.external_id::int = r.idreserva
+  )`);
+  condicoes.push(`NOT EXISTS (
+    SELECT 1 FROM repasses_cef_vinculos_contrato v
+    WHERE v.empresa_id = r.empresa_id AND v.idreserva = r.idreserva
   )`);
 
   // O nome do empreendimento mostrado é sempre o cadastrado no Horizon (o
@@ -658,7 +675,7 @@ async function listUnidadesExtrato(empresaId, centroCustoIds, { comRegistro }) {
      LEFT JOIN centros_custo_sienge cc
        ON cc.empresa_id = u.empresa_id AND cc.codigo_contrato_caixa = u.contrato_empreendimento
      LEFT JOIN LATERAL (
-       SELECT c.number, c.external_id
+       SELECT c.number, c.external_id, c.empresa_id, c.sienge_contract_id
        FROM sie_sales_contracts c
        WHERE c.empresa_id = u.empresa_id AND c.financial_institution_number = u.numero_contrato_unidade
        LIMIT 1
@@ -667,9 +684,7 @@ async function listUnidadesExtrato(empresaId, centroCustoIds, { comRegistro }) {
        SELECT r.idreserva, r.tipovenda, r.situacao, r.cliente
        FROM construtor_vendas_reservas r
        WHERE r.empresa_id = u.empresa_id
-         AND ctr.number LIKE 'CV%'
-         AND ctr.external_id ~ '^[0-9]+$'
-         AND r.idreserva = ctr.external_id::int
+         AND r.idreserva = ${IDRESERVA_DO_CONTRATO('ctr')}
        LIMIT 1
      ) res ON TRUE
      ${ULTIMA_MICROETAPA_LATERAL('u.empresa_id', 'res.idreserva')}
@@ -846,11 +861,28 @@ async function buscarContratoPorIdreserva(empresaId, idreserva) {
             COALESCE(cc.name, c.enterprise_name) AS empreendimento
      FROM sie_sales_contracts c
      LEFT JOIN centros_custo_sienge cc ON cc.empresa_id = c.empresa_id AND cc.sienge_id = c.enterprise_id
-     WHERE c.empresa_id = $1 AND c.number LIKE 'CV%' AND c.external_id = $2::text
+     WHERE c.empresa_id = $1
+       AND (
+         (c.number LIKE 'CV%' AND c.external_id = $2::text)
+         OR EXISTS (
+           SELECT 1 FROM repasses_cef_vinculos_contrato v
+           WHERE v.empresa_id = c.empresa_id AND v.sienge_contract_id = c.sienge_contract_id AND v.idreserva = $3
+         )
+       )
      LIMIT 1`,
-    [empresaId, String(idreserva)]
+    [empresaId, String(idreserva), idreserva]
   );
   return rows[0] || null;
+}
+
+async function buscarIdreservaDoContrato(empresaId, siengeContractId) {
+  const { rows } = await pool.query(
+    `SELECT ${IDRESERVA_DO_CONTRATO('c')} AS idreserva
+     FROM sie_sales_contracts c
+     WHERE c.empresa_id = $1 AND c.sienge_contract_id = $2`,
+    [empresaId, siengeContractId]
+  );
+  return rows[0]?.idreserva ?? null;
 }
 
 async function buscarContratoPorFinancialInstitutionNumber(empresaId, numero) {
@@ -907,8 +939,9 @@ async function getHistoricoEtapas(empresaId, { idreserva, siengeContractId, extr
     else if (unidade) contrato = await buscarContratoPorFinancialInstitutionNumber(empresaId, unidade.numero_contrato_unidade);
   }
 
-  if (!reserva && contrato && contrato.number?.startsWith('CV') && /^[0-9]+$/.test(contrato.external_id || '')) {
-    reserva = await buscarReservaPorIdreserva(empresaId, Number(contrato.external_id));
+  if (!reserva && contrato) {
+    const idreservaDoContrato = await buscarIdreservaDoContrato(empresaId, contrato.sienge_contract_id);
+    if (idreservaDoContrato) reserva = await buscarReservaPorIdreserva(empresaId, idreservaDoContrato);
   }
 
   if (!unidade && contrato) {
@@ -1100,6 +1133,66 @@ async function getAnexoMicroEtapa(empresaId, anexoId) {
   return { caminhoAbsoluto, nomeOriginal: anexo.nome_original || 'anexo' };
 }
 
+// "Nº Contrato Sienge" do Histórico de Etapas de um card de Reserva: contratos
+// do mesmo empreendimento (centro de custo da reserva = enterprise_id do
+// contrato) que ainda não estão ligados a nenhuma reserva existente — nem
+// pela ligação automática "CV" nem por um vínculo manual — e não cancelados.
+// É o caso dos contratos gerados à mão no Sienge.
+async function listContratosDisponiveisParaReserva(empresaId, idreserva) {
+  const centroId = await resolverCentroCustoDaReserva(empresaId, idreserva);
+  if (!centroId) {
+    throw badRequest('Reserva sem centro de custo configurado (código Construtor de Vendas).');
+  }
+  const { rows } = await pool.query(
+    `SELECT c.sienge_contract_id, c.number, c.contract_date, cli.name AS cliente
+     FROM sie_sales_contracts c
+     LEFT JOIN LATERAL (
+       SELECT name FROM sie_sales_contracts_customers
+       WHERE sienge_contract_id = c.sienge_contract_id AND empresa_id = c.empresa_id
+       ORDER BY main DESC NULLS LAST, id ASC
+       LIMIT 1
+     ) cli ON TRUE
+     WHERE c.empresa_id = $1 AND c.enterprise_id = $2
+       AND c.situation IS DISTINCT FROM 'Cancelado'
+       AND NOT EXISTS (
+         SELECT 1 FROM construtor_vendas_reservas r
+         WHERE r.empresa_id = c.empresa_id AND r.idreserva = ${IDRESERVA_DO_CONTRATO('c')}
+       )
+     ORDER BY cli.name NULLS LAST, c.number`,
+    [empresaId, centroId]
+  );
+  return rows;
+}
+
+// Liga manualmente uma reserva a um contrato do Sienge que não tem a ligação
+// automática "CV" — a reserva sai do bucket Reserva e o contrato passa a
+// carregar o cliente, o tipo de venda/situação e as micro etapas dela (ver
+// IDRESERVA_DO_CONTRATO). Só aceita um contrato da lista de disponíveis, e só
+// se a reserva ainda não tiver contrato nenhum.
+async function vincularContratoReserva(empresaId, idreserva, siengeContractId, usuarioId) {
+  if (!(await buscarReservaPorIdreserva(empresaId, idreserva))) {
+    throw badRequest('Reserva não encontrada para essa empresa.');
+  }
+  if (await buscarContratoPorIdreserva(empresaId, idreserva)) {
+    throw badRequest('Esta reserva já está ligada a um contrato.');
+  }
+  const disponiveis = await listContratosDisponiveisParaReserva(empresaId, idreserva);
+  if (!disponiveis.some((c) => String(c.sienge_contract_id) === String(siengeContractId))) {
+    throw badRequest('Contrato indisponível: não é do empreendimento da reserva, está cancelado ou já está ligado a outra reserva.');
+  }
+  try {
+    await pool.query(
+      `INSERT INTO repasses_cef_vinculos_contrato (empresa_id, idreserva, sienge_contract_id, usuario_id)
+       VALUES ($1, $2, $3, $4)`,
+      [empresaId, idreserva, siengeContractId, usuarioId || null]
+    );
+  } catch (err) {
+    if (err.code === '23505') throw badRequest('Esta reserva ou este contrato já foi vinculado.');
+    throw err;
+  }
+  return { idreserva, sienge_contract_id: siengeContractId };
+}
+
 // Opções pro combobox de "Número da Instituição Financeira" (edição no
 // bucket Contrato) — toda unidade da empresa que ainda não está vinculada a
 // NENHUM contrato, mais o valor já vinculado ao contrato em edição (senão
@@ -1161,6 +1254,8 @@ module.exports = {
   atualizarNumeroInstituicaoFinanceira,
   getHistoricoEtapas,
   listUnidadesDisponiveisParaContrato,
+  listContratosDisponiveisParaReserva,
+  vincularContratoReserva,
   registrarMovimentacaoMicroEtapa,
   getAnexoMicroEtapa,
 };

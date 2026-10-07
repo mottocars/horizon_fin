@@ -477,6 +477,23 @@ CREATE TABLE repasses_cef_historico_microetapas (
 CREATE INDEX idx_repasses_hist_micro_reserva
     ON repasses_cef_historico_microetapas (empresa_id, idreserva);
 
+-- Vínculo manual reserva (Construtor de Vendas) ↔ contrato (Sienge), feito no
+-- Histórico de Etapas do card de Reserva ("Nº Contrato Sienge"). Só pra
+-- contratos gerados à mão no Sienge, sem a ligação automática (number "CV..."
+-- + external_id = idreserva). Fica fora de sie_sales_contracts de propósito:
+-- a sincronização dos contratos apaga e reinsere tudo, e o vínculo não pode
+-- se perder. Uma reserva tem no máximo 1 contrato e vice-versa.
+CREATE TABLE repasses_cef_vinculos_contrato (
+    id                 SERIAL PRIMARY KEY,
+    empresa_id         INTEGER NOT NULL REFERENCES empresas(id) ON DELETE CASCADE,
+    idreserva          INTEGER NOT NULL,
+    sienge_contract_id BIGINT NOT NULL,
+    usuario_id         INTEGER REFERENCES usuarios(id) ON DELETE SET NULL,
+    criado_em          TIMESTAMP DEFAULT NOW(),
+    UNIQUE (empresa_id, idreserva),
+    UNIQUE (empresa_id, sienge_contract_id)
+);
+
 -- Anexos de cada movimentação — tabela filha própria (não coluna JSON),
 -- pra permitir vários arquivos por movimentação.
 CREATE TABLE repasses_cef_historico_microetapas_anexos (

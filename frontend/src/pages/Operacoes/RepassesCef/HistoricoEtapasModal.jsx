@@ -6,6 +6,8 @@ import SearchableSelect from '../../../components/SearchableSelect';
 import {
   getHistoricoEtapasRepassesCef,
   listUnidadesDisponiveisRepassesCef,
+  listContratosDisponiveisRepassesCef,
+  vincularContratoReservaRepassesCef,
   atualizarNumeroInstituicaoFinanceiraRepassesCef,
   registrarMovimentacaoMicroEtapaRepassesCef,
   baixarAnexoMicroEtapaRepassesCef,
@@ -248,7 +250,15 @@ export default function HistoricoEtapasModal({ open, onClose, empresaId, identif
   // vez que o formulário é resetado de fora — ver comentário no componente.
   const [dataFormKey, setDataFormKey] = useState(0);
 
+  // Card de Reserva: "Nº Contrato Sienge" — liga a reserva a um contrato gerado à mão no
+  // Sienge (sem o padrão "CV"). Ao salvar, o card sai de Reserva e vai pra Contrato.
+  const [opcoesContrato, setOpcoesContrato] = useState([]);
+  const [contratoSelecionado, setContratoSelecionado] = useState('');
+  const [vinculando, setVinculando] = useState(false);
+  const [erroVincular, setErroVincular] = useState('');
+
   const ehContrato = identificador?.tipo === 'contrato';
+  const ehReserva = identificador?.tipo === 'reserva';
   const grupoMicroEtapa = identificador ? GRUPO_POR_TIPO[identificador.tipo] : null;
 
   function carregarHistorico() {
@@ -279,6 +289,34 @@ export default function HistoricoEtapasModal({ open, onClose, empresaId, identif
   useEffect(() => {
     if (dados) setNumeroSelecionado(dados.cabecalho.numero_contrato_caixa || '');
   }, [dados]);
+
+  useEffect(() => {
+    if (!open || !ehReserva) return;
+    setErroVincular('');
+    setContratoSelecionado('');
+    setOpcoesContrato([]);
+    listContratosDisponiveisRepassesCef(empresaId, identificador.id)
+      .then(setOpcoesContrato)
+      .catch((err) => setErroVincular(err.response?.data?.message || 'Não foi possível carregar os contratos.'));
+  }, [open, ehReserva, empresaId, identificador]);
+
+  async function handleVincularContrato() {
+    if (!contratoSelecionado) {
+      setErroVincular('Selecione o contrato.');
+      return;
+    }
+    setVinculando(true);
+    setErroVincular('');
+    try {
+      await vincularContratoReservaRepassesCef(empresaId, identificador.id, contratoSelecionado);
+      onSalvo?.();
+      onClose();
+    } catch (err) {
+      setErroVincular(err.response?.data?.message || 'Não foi possível vincular o contrato.');
+    } finally {
+      setVinculando(false);
+    }
+  }
 
   // Reseta o formulário de movimentação e recarrega as opções de micro
   // etapa toda vez que o modal abre um card diferente — só as micro etapas
@@ -413,7 +451,41 @@ export default function HistoricoEtapasModal({ open, onClose, empresaId, identif
 
             <div className="grid grid-cols-2 gap-x-4 gap-y-3 rounded-lg border-2 border-gray-200 p-3">
               <CampoCabecalho label="Nº Reserva" valor={dados.cabecalho.numero_reserva} />
-              <CampoCabecalho label="Nº Contrato" valor={dados.cabecalho.numero_contrato} />
+              {ehReserva && !dados.cabecalho.numero_contrato ? (
+                <CampoCabecalho label="Nº Contrato Caixa" valor={dados.cabecalho.numero_contrato_caixa} />
+              ) : (
+                <CampoCabecalho label="Nº Contrato" valor={dados.cabecalho.numero_contrato} />
+              )}
+              {ehReserva && !dados.cabecalho.numero_contrato && (
+                <div className="col-span-2">
+                  <p className="text-[11px] font-medium uppercase tracking-wide text-gray-400">Nº Contrato Sienge</p>
+                  <div className="mt-0.5 flex items-center gap-2">
+                    <div className="flex-1">
+                      <SearchableSelect
+                        value={contratoSelecionado}
+                        onChange={setContratoSelecionado}
+                        options={opcoesContrato.map((c) => ({
+                          value: c.sienge_contract_id,
+                          label: `${c.number} - ${c.cliente || 'Sem nome'}`,
+                        }))}
+                        placeholder="Selecione o contrato..."
+                        emptyMessage="Nenhum contrato sem reserva neste empreendimento."
+                        corClasses={estadoCampo(Boolean(contratoSelecionado))}
+                      />
+                    </div>
+                    <button
+                      type="button"
+                      onClick={handleVincularContrato}
+                      disabled={vinculando}
+                      title="Vincular o contrato a esta reserva"
+                      className="flex h-9 w-9 shrink-0 items-center justify-center rounded-lg bg-primary-600 text-white hover:bg-primary-700 disabled:opacity-60"
+                    >
+                      <Save size={15} />
+                    </button>
+                  </div>
+                  {erroVincular && <p className="mt-1 text-xs text-red-600">{erroVincular}</p>}
+                </div>
+              )}
               {ehContrato ? (
                 <div className="col-span-2">
                   <p className="text-[11px] font-medium uppercase tracking-wide text-gray-400">Nº Contrato Caixa</p>
@@ -444,7 +516,9 @@ export default function HistoricoEtapasModal({ open, onClose, empresaId, identif
                   {erroSalvar && <p className="mt-1 text-xs text-red-600">{erroSalvar}</p>}
                 </div>
               ) : (
-                <CampoCabecalho label="Nº Contrato Caixa" valor={dados.cabecalho.numero_contrato_caixa} />
+                !(ehReserva && !dados.cabecalho.numero_contrato) && (
+                  <CampoCabecalho label="Nº Contrato Caixa" valor={dados.cabecalho.numero_contrato_caixa} />
+                )
               )}
               <CampoCabecalho label="Data de Assinatura" valor={formatarData(dados.cabecalho.data_assinatura)} />
               <CampoCabecalho label="Data de Registro" valor={formatarData(dados.cabecalho.data_registro)} />

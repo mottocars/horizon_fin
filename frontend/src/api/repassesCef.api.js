@@ -120,3 +120,15 @@ export function baixarAnexoMicroEtapaRepassesCef(empresaId, anexoId) {
     })
     .then((res) => res.data);
 }
+
+// "Nº Contrato Sienge" do Histórico de Etapas (card de Reserva): contratos do
+// empreendimento sem reserva ligada (gerados à mão no Sienge) e o vínculo manual.
+export function listContratosDisponiveisRepassesCef(empresaId, idreserva) {
+  return http.get(`/repasses-cef/${empresaId}/reservas/${idreserva}/contratos-disponiveis`).then((res) => res.data);
+}
+
+export function vincularContratoReservaRepassesCef(empresaId, idreserva, siengeContractId) {
+  return http
+    .post(`/repasses-cef/${empresaId}/reservas/${idreserva}/vincular-contrato`, { sienge_contract_id: siengeContractId })
+    .then((res) => res.data);
+}
