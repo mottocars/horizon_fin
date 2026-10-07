@@ -745,7 +745,9 @@ export default function RepassesCefRelatorioPage() {
                         }
 
                         const { cliente } = linha;
-                        const fundo = cliente.situacaoSla === 'atrasado' ? 'bg-red-50' : '';
+                        // Fundo vermelho do Cliente até o SLA quando o SLA estourou ou quando
+                        // ainda não há nenhuma micro etapa registrada nesta macro (micro 0).
+                        const fundo = cliente.situacaoSla === 'atrasado' || cliente.microId === 0 ? 'bg-red-50' : '';
                         return (
                           <tr key={`${linha.micro.chave}-${cliente.codigo}-${cliente.documento}-${i}`}>
                             {celulaCentro}
