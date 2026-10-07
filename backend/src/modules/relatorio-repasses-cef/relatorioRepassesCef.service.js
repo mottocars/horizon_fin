@@ -52,6 +52,18 @@ async function ultimasMicroEtapasPorMacro(empresaId) {
   return mapa;
 }
 
+// Nome exibido de cada centro de custo no relatório: o apelido do cadastro (Cadastros →
+// Centros de Custo) e, sem apelido, o nome que vem do Sienge.
+async function listNomesCentros(empresaId) {
+  const { rows } = await pool.query(
+    `SELECT sienge_id, COALESCE(NULLIF(TRIM(apelido), ''), TRIM(name)) AS nome
+     FROM centros_custo_sienge
+     WHERE empresa_id = $1`,
+    [empresaId]
+  );
+  return new Map(rows.map((r) => [String(r.sienge_id), r.nome]));
+}
+
 async function listMicroEtapas(empresaId) {
   const { rows } = await pool.query(
     `SELECT id, grupo AS macro, sequencia, descricao, sla_dias
@@ -70,8 +82,8 @@ async function listMicroEtapas(empresaId) {
 // micro etapa e o SLA da micro etapa. O agrupamento Centro de Custo → Macro → Micro é
 // montado no frontend.
 async function getMatriz(empresaId) {
-  const [centros, reservas, contratos, assinaturas, registros, ultimas, microEtapas] = await Promise.all([
-    repassesCef.listCentrosComLancamento(empresaId),
+  const [nomeCentro, reservas, contratos, assinaturas, registros, ultimas, microEtapas] = await Promise.all([
+    listNomesCentros(empresaId),
     repassesCef.listReservas(empresaId),
     repassesCef.listContratos(empresaId),
     repassesCef.listAssinaturas(empresaId),
@@ -80,7 +92,6 @@ async function getMatriz(empresaId) {
     listMicroEtapas(empresaId),
   ]);
 
-  const nomeCentro = new Map(centros.map((c) => [String(c.sienge_id), c.name.trim()]));
   const microPorId = new Map(microEtapas.map((m) => [m.id, m]));
 
   function montar(macro, item, { codigo, documento, dataEtapa }) {
