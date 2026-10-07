@@ -613,7 +613,7 @@ export default function RepassesCefRelatorioPage() {
             <table className="w-full border-separate border-spacing-0 text-left text-xs">
               <thead ref={theadRef}>
                 <tr className="text-xs uppercase tracking-wide text-primary-700">
-                  {cabecalho(thCentroRef, filtroCentro, setFiltroCentro, opcoesCentro, 'centro de custo', 'Centro de Custo', 'w-28 rounded-tl-card 2xl:w-44 min-[1800px]:w-52')}
+                  {cabecalho(thCentroRef, filtroCentro, setFiltroCentro, opcoesCentro, 'centro de custo', 'Centro de Custo', 'w-36 rounded-tl-card 2xl:w-64 min-[1800px]:w-72')}
                   {cabecalho(thMacroRef, filtroMacro, setFiltroMacro, opcoesMacro, 'macro etapa', 'Macro Etapa', 'w-28 border-l border-l-primary-100 2xl:w-36')}
                   {cabecalho(thMicroRef, filtroMicro, setFiltroMicro, opcoesMicro, 'micro etapa', 'Micro Etapa', 'w-32 border-l border-l-primary-100 2xl:w-48 min-[1800px]:w-64')}
                   {cabecalho(
