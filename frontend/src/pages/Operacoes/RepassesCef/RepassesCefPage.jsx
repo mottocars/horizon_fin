@@ -1034,10 +1034,15 @@ function UltimaMicroEtapa({ nome, data, slaDias }) {
           <History size={10} className="shrink-0" />
           <span className="truncate">{nome}</span>
         </span>
+        {/* Mesmo selo de "dias parado" da macro etapa, aqui contando desde a última
+            movimentação registrada e colorido pelo SLA da micro etapa. */}
         {data && (
-          <span className={`shrink-0 ${atrasado ? 'text-red-500' : 'text-gray-400'}`} title={formatarData(data)}>
-            {formatarDiasSemNovaEtapa(data)}
-          </span>
+          <SeloDiasParado
+            dias={diasSemNovaEtapa(data)}
+            slaDias={slaDias}
+            rotulo="parado"
+            descricao={`Dias parado nesta micro etapa, desde a última movimentação (${formatarData(data)})`}
+          />
         )}
       </div>
       {atrasado && (
@@ -1187,14 +1192,6 @@ function diasSemNovaEtapa(iso) {
   const agora = new Date();
   const hoje = Date.UTC(agora.getFullYear(), agora.getMonth(), agora.getDate());
   return Math.round((hoje - dataEtapa) / 86400000);
-}
-
-function formatarDiasSemNovaEtapa(iso) {
-  const dias = diasSemNovaEtapa(iso);
-  if (dias === null) return null;
-  if (dias <= 0) return 'Hoje';
-  if (dias === 1) return 'há 1 dia';
-  return `há ${dias} dias`;
 }
 
 // Aqui sim é TIMESTAMP de verdade (com hora), então dá pra usar
