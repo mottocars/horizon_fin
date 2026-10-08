@@ -55,9 +55,9 @@ function CampoHorario({ valor, onCommit }) {
 // lugar do conteúdo de um cluster (troca de conteúdo pela seleção na barra
 // de abas, ver ReguaCobrancaTab.jsx), não numa janela separada. 3 módulos
 // bem separados: a Distribuição da Rotina (responsável por etapa ou
-// distribuição automática — DistribuicaoRotinaSecao.jsx), quem/quando
-// dispara cada cluster (conexões Z-API/Email + horário) e o Tipo de
-// Comunicação.
+// distribuição automática — DistribuicaoRotinaSecao.jsx), o Tipo de
+// Comunicação e, só quando ele é a Comunicação Automática, quem/quando
+// dispara cada cluster (conexões Z-API/Email + horário).
 export default function ConfiguracoesGlobaisPainel({ empresaId }) {
   const [parametros, setParametros] = useState(null);
   const [zapiOptions, setZapiOptions] = useState([]);
@@ -107,66 +107,6 @@ export default function ConfiguracoesGlobaisPainel({ empresaId }) {
           <DistribuicaoRotinaSecao empresaId={empresaId} />
 
           <section>
-            <h3 className="mb-3 text-xs font-semibold uppercase tracking-wide text-gray-400">Disparo por cluster</h3>
-            <div className="overflow-x-auto rounded-lg border border-gray-200">
-              <table className="w-full text-left text-sm">
-                <thead>
-                  <tr className="border-b border-gray-100 bg-gray-50 text-xs uppercase tracking-wide text-gray-400">
-                    <th className="px-3 py-2 font-medium">Cluster</th>
-                    <th className="px-3 py-2 font-medium">Horário</th>
-                    <th className="px-3 py-2 font-medium">Whatsapp Z-API</th>
-                    <th className="px-3 py-2 font-medium">Email</th>
-                  </tr>
-                </thead>
-                <tbody>
-                  {CLUSTERS.map((cluster) => {
-                    const parametro = parametros.find((p) => p.cluster === cluster.id);
-                    const Icone = CLUSTER_ICON[cluster.id];
-                    return (
-                      <tr key={cluster.id} className="border-b border-gray-50 last:border-0">
-                        <td className="whitespace-nowrap px-3 py-2">
-                          <span className="flex items-center gap-1.5 font-medium text-gray-700">
-                            <Icone size={14} className={CLUSTER_ICON_COR[cluster.id]} />
-                            {cluster.nome}
-                          </span>
-                        </td>
-                        <td className="px-3 py-2">
-                          <CampoHorario
-                            valor={parametro.horario}
-                            onCommit={(horario) => handleAtualizarParametro(cluster.id, { horario })}
-                          />
-                        </td>
-                        <td className="min-w-[160px] px-3 py-2">
-                          <SearchableSelect
-                            value={parametro.zapi_integracao_id ?? ''}
-                            onChange={(value) =>
-                              handleAtualizarParametro(cluster.id, { zapi_integracao_id: value === '' ? null : value })
-                            }
-                            options={zapiOptions}
-                            placeholder="Nenhuma conexão"
-                            emptyMessage="Nenhuma conexão cadastrada."
-                          />
-                        </td>
-                        <td className="min-w-[160px] px-3 py-2">
-                          <SearchableSelect
-                            value={parametro.email_integracao_id ?? ''}
-                            onChange={(value) =>
-                              handleAtualizarParametro(cluster.id, { email_integracao_id: value === '' ? null : value })
-                            }
-                            options={emailOptions}
-                            placeholder="Nenhuma conexão"
-                            emptyMessage="Nenhuma conexão cadastrada."
-                          />
-                        </td>
-                      </tr>
-                    );
-                  })}
-                </tbody>
-              </table>
-            </div>
-          </section>
-
-          <section>
             <h3 className="mb-3 text-xs font-semibold uppercase tracking-wide text-gray-400">Tipo de Comunicação</h3>
             <div className="grid gap-2 sm:grid-cols-3" role="radiogroup" aria-label="Tipo de Comunicação">
               {TIPOS_COMUNICACAO.map((opcao) => {
@@ -180,7 +120,7 @@ export default function ConfiguracoesGlobaisPainel({ empresaId }) {
                     onClick={() => handleSalvarTipoComunicacao(opcao.valor)}
                     className={`flex items-start gap-2.5 rounded-lg border p-3 text-left transition-colors ${
                       selecionado
-                        ? 'border-primary-400 bg-primary-50 ring-1 ring-primary-200'
+                        ? 'border-primary-500 bg-primary-50 ring-1 ring-primary-100'
                         : 'border-gray-200 hover:border-gray-300 hover:bg-gray-50'
                     }`}
                   >
@@ -200,6 +140,72 @@ export default function ConfiguracoesGlobaisPainel({ empresaId }) {
               })}
             </div>
           </section>
+
+          {/* Horário e conexões de cada cluster só existem pro envio
+              automático — nos outros tipos a seção fica escondida (os
+              valores continuam gravados, voltam a aparecer se o tipo voltar
+              pra Automática). */}
+          {comunicacaoAutomatica.tipo === 'automatica' && (
+            <section>
+              <h3 className="mb-3 text-xs font-semibold uppercase tracking-wide text-gray-400">Disparo por cluster</h3>
+              <div className="overflow-x-auto rounded-lg border border-gray-200">
+                <table className="w-full text-left text-sm">
+                  <thead>
+                    <tr className="border-b border-gray-100 bg-gray-50 text-xs uppercase tracking-wide text-gray-400">
+                      <th className="px-3 py-2 font-medium">Cluster</th>
+                      <th className="px-3 py-2 font-medium">Horário</th>
+                      <th className="px-3 py-2 font-medium">Whatsapp Z-API</th>
+                      <th className="px-3 py-2 font-medium">Email</th>
+                    </tr>
+                  </thead>
+                  <tbody>
+                    {CLUSTERS.map((cluster) => {
+                      const parametro = parametros.find((p) => p.cluster === cluster.id);
+                      const Icone = CLUSTER_ICON[cluster.id];
+                      return (
+                        <tr key={cluster.id} className="border-b border-gray-50 last:border-0">
+                          <td className="whitespace-nowrap px-3 py-2">
+                            <span className="flex items-center gap-1.5 font-medium text-gray-700">
+                              <Icone size={14} className={CLUSTER_ICON_COR[cluster.id]} />
+                              {cluster.nome}
+                            </span>
+                          </td>
+                          <td className="px-3 py-2">
+                            <CampoHorario
+                              valor={parametro.horario}
+                              onCommit={(horario) => handleAtualizarParametro(cluster.id, { horario })}
+                            />
+                          </td>
+                          <td className="min-w-[160px] px-3 py-2">
+                            <SearchableSelect
+                              value={parametro.zapi_integracao_id ?? ''}
+                              onChange={(value) =>
+                                handleAtualizarParametro(cluster.id, { zapi_integracao_id: value === '' ? null : value })
+                              }
+                              options={zapiOptions}
+                              placeholder="Nenhuma conexão"
+                              emptyMessage="Nenhuma conexão cadastrada."
+                            />
+                          </td>
+                          <td className="min-w-[160px] px-3 py-2">
+                            <SearchableSelect
+                              value={parametro.email_integracao_id ?? ''}
+                              onChange={(value) =>
+                                handleAtualizarParametro(cluster.id, { email_integracao_id: value === '' ? null : value })
+                              }
+                              options={emailOptions}
+                              placeholder="Nenhuma conexão"
+                              emptyMessage="Nenhuma conexão cadastrada."
+                            />
+                          </td>
+                        </tr>
+                      );
+                    })}
+                  </tbody>
+                </table>
+              </div>
+            </section>
+          )}
         </div>
       )}
     </Card>
