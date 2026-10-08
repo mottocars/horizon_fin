@@ -18,5 +18,13 @@ router.put('/parametros-disparo', controller.salvarParametroDisparo);
 router.get('/data-sistema', controller.getDataSistema);
 router.get('/comunicacao-automatica', controller.getComunicacaoAutomatica);
 router.put('/comunicacao-automatica', controller.salvarComunicacaoAutomatica);
+router.get('/distribuicao', controller.getDistribuicao);
+router.get('/distribuicao/config', controller.getConfigDistribuicao);
+router.put('/distribuicao/config', controller.salvarConfigDistribuicao);
+router.post('/distribuicao/participantes', controller.adicionarParticipante);
+router.delete('/distribuicao/participantes/:usuarioId', controller.removerParticipante);
+router.put('/distribuicao/participantes/:usuarioId/pausa', controller.pausarParticipante);
+router.post('/distribuicao/participantes/:usuarioId/substituir', controller.substituirParticipante);
+router.post('/distribuicao/distribuir', controller.distribuirHoje);
 
 module.exports = router;

@@ -5,6 +5,7 @@ const income = require('../income-sienge/income.service');
 const customers = require('../customers-sienge/customers.service');
 const clusters = require('../cobranca-clusters/cobrancaClusters.service');
 const itau = require('../integracoes-itau/itau.service');
+const distribuicao = require('../regua-cobranca/distribuicao.service');
 
 // Catálogo das atualizações que o Monitor de Integrações agenda e executa.
 // Cada uma é a MESMA função que o botão da tela de origem já chamava — o
@@ -128,6 +129,20 @@ const ROTINAS = [
       progresso({ texto: 'Recalculando os clusters dos clientes' });
       const r = await clusters.recalcularClusters(empresaId, usuarioId);
       return `${n(r.total_clientes)} cliente(s) recalculado(s) com a versão ${r.versao_utilizada} do Motor de Risco.`;
+    },
+  },
+  {
+    chave: distribuicao.ROTINA_MONITOR,
+    modulo: 'Gestão de Cobranças',
+    nome: 'Distribuição da Rotina de Cobrança',
+    descricao:
+      'Distribui os clientes da Rotina do dia entre os atendentes (Distribuição automática da Régua de Cobrança): continuidade da carteira, faixas de atraso, quantidade e valor equilibrados. Agende depois da atualização da base e dos clusters.',
+    integracao: 'horizon',
+    disponibilidade: (empresaId) => distribuicao.motivoIndisponivel(empresaId),
+    async executar({ empresaId, usuarioId, progresso }) {
+      progresso({ texto: 'Distribuindo os clientes da Rotina de hoje' });
+      const { resumo } = await distribuicao.distribuirDia(empresaId, { usuarioId });
+      return resumo;
     },
   },
   {

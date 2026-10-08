@@ -5,7 +5,11 @@ const empresaIdSchema = z.coerce.number().int().positive('Selecione uma empresa.
 const dataSchema = z.string().regex(/^\d{4}-\d{2}-\d{2}$/, 'Data inválida.');
 const billIdSchema = z.coerce.number().int().positive('Parcela inválida.');
 const installmentIdSchema = z.coerce.number().int().positive('Parcela inválida.');
-const usuarioIdSchema = z.coerce.number().int().positive('Usuário inválido.').optional();
+// Um usuário, ou 'todos' (Master/Administrador — ver
+// rotinas.service.js::resolverUsuarioAlvo).
+const usuarioIdSchema = z
+  .union([z.literal('todos'), z.coerce.number().int().positive('Usuário inválido.')])
+  .optional();
 
 // Mesmo preprocess de gestaoParcelas.controller.js::costCenterIdsSchema —
 // aceita `?cost_center_ids=1,2,3` ou repetido.
@@ -32,8 +36,8 @@ async function listRotinas(req, res, next) {
     const usuarioIdFiltro = usuarioIdSchema.parse(req.query.usuario_id);
 
     const usuarioAlvoId = await service.resolverUsuarioAlvo(empresaId, req.user.id, usuarioIdFiltro);
-    const centros = await service.listRotinas(empresaId, usuarioAlvoId, { dataInicio, dataFim, costCenterIds });
-    res.json({ centros, usuario_id: usuarioAlvoId });
+    const { modo, responsaveis } = await service.listRotinas(empresaId, usuarioAlvoId, { dataInicio, dataFim, costCenterIds });
+    res.json({ modo, responsaveis, usuario_id: usuarioAlvoId });
   } catch (err) {
     if (err.issues) return next(badRequest(err.issues[0].message));
     next(err);

@@ -65,3 +65,57 @@ export function salvarComunicacaoAutomaticaReguaCobranca(empresaId, tipo) {
     .put('/regua-cobranca/comunicacao-automatica', { tipo }, { params: { empresa_id: empresaId } })
     .then((res) => res.data);
 }
+
+// ─── Distribuição da Rotina (Configurações Globais) ────────────────────────
+// Ver regua-cobranca/distribuicao.service.js. Toda escrita devolve o painel
+// inteiro atualizado (mesmo formato de getDistribuicaoReguaCobranca).
+
+export function getConfigDistribuicaoReguaCobranca(empresaId) {
+  return http.get('/regua-cobranca/distribuicao/config', { params: { empresa_id: empresaId } }).then((res) => res.data);
+}
+
+export function getDistribuicaoReguaCobranca(empresaId) {
+  return http.get('/regua-cobranca/distribuicao', { params: { empresa_id: empresaId } }).then((res) => res.data);
+}
+
+export function salvarConfigDistribuicaoReguaCobranca(empresaId, dados) {
+  return http.put('/regua-cobranca/distribuicao/config', dados, { params: { empresa_id: empresaId } }).then((res) => res.data);
+}
+
+export function adicionarAtendenteDistribuicao(empresaId, usuarioId) {
+  return http
+    .post('/regua-cobranca/distribuicao/participantes', { usuario_id: usuarioId }, { params: { empresa_id: empresaId } })
+    .then((res) => res.data);
+}
+
+export function removerAtendenteDistribuicao(empresaId, usuarioId) {
+  return http
+    .delete(`/regua-cobranca/distribuicao/participantes/${usuarioId}`, { params: { empresa_id: empresaId } })
+    .then((res) => res.data);
+}
+
+// `ate` = 'YYYY-MM-DD' (último dia fora, inclusive) ou null pra retomar.
+export function pausarAtendenteDistribuicao(empresaId, usuarioId, ate) {
+  return http
+    .put(`/regua-cobranca/distribuicao/participantes/${usuarioId}/pausa`, { ate }, { params: { empresa_id: empresaId } })
+    .then((res) => res.data);
+}
+
+export function substituirAtendenteDistribuicao(empresaId, usuarioId, paraUsuarioId) {
+  return http
+    .post(
+      `/regua-cobranca/distribuicao/participantes/${usuarioId}/substituir`,
+      { para_usuario_id: paraUsuarioId },
+      { params: { empresa_id: empresaId } }
+    )
+    .then((res) => res.data);
+}
+
+// redistribuir=false: "Distribuir agora" (só quem ainda não tem dono hoje);
+// redistribuir=true: "Redistribuir hoje" (refaz o dia; `equilibrar` repassa
+// parte das carteiras maiores pras menores). A resposta traz `resultado`.
+export function distribuirHojeReguaCobranca(empresaId, { redistribuir = false, equilibrar = false } = {}) {
+  return http
+    .post('/regua-cobranca/distribuicao/distribuir', { redistribuir, equilibrar }, { params: { empresa_id: empresaId } })
+    .then((res) => res.data);
+}

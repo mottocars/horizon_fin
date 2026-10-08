@@ -1,5 +1,6 @@
 const pool = require('../../config/db');
 const { getLimiteVigente, listEtapasComComunicacao } = require('../regua-cobranca/reguaCobranca.service');
+const { mapaDonosCarteira } = require('../regua-cobranca/distribuicao.service');
 
 const CLUSTERS_VALIDOS = ['novo', 'bom', 'duvidoso', 'mau', 'inad'];
 const CLUSTERS_SCORE = ['novo', 'bom', 'duvidoso', 'mau'];
@@ -88,6 +89,19 @@ function acharEtapaAtiva(etapasPorCluster, cluster, diasSigned) {
     else break;
   }
   return etapa;
+}
+
+// Responsável de uma parcela em aberto: no modo "Responsável por etapa", o
+// da etapa atual dela; na Distribuição automática, o dono do cliente na
+// carteira (a mesma pessoa que atende o cliente na Rotina) — `donos` vem de
+// distribuicao.service.js::mapaDonosCarteira (null no modo por etapa).
+function responsavelDaParcela(etapa, clientId, donos) {
+  if (!etapa) return { id: null, nome: null };
+  if (donos) {
+    const dono = donos.get(String(clientId));
+    return { id: dono?.usuario_id ?? null, nome: dono?.nome ?? null };
+  }
+  return { id: etapa.responsavel_usuario_id ?? null, nome: etapa.responsavel_nome ?? null };
 }
 
 const CLUSTERS_ZERADOS = { novo: 0, bom: 0, duvidoso: 0, mau: 0, inad: 0 };
@@ -226,6 +240,7 @@ const CLUSTERS_ZERADOS_SCORE = { novo: 0, bom: 0, duvidoso: 0, mau: 0 };
 async function buscarParcelasComCluster(empresaId, { costCenterIds, search, statusParcela, responsavelIds } = {}) {
   const limite = await getLimiteVigente(empresaId);
   const etapasPorCluster = await carregarEtapasPorCluster(empresaId);
+  const donos = await mapaDonosCarteira(empresaId);
 
   const params = [empresaId, ORIGIN_ID_PADRAO];
   let filtroCentro = '';
@@ -300,8 +315,9 @@ async function buscarParcelasComCluster(empresaId, { costCenterIds, search, stat
         const clusterRegua = status === 'inadimplente' ? 'inad' : row.cluster;
         const etapa = acharEtapaAtiva(etapasPorCluster, clusterRegua, diasSigned);
         etapaNome = etapa?.nome ?? null;
-        etapaResponsavelId = etapa?.responsavel_usuario_id ?? null;
-        etapaResponsavelNome = etapa?.responsavel_nome ?? null;
+        const responsavel = responsavelDaParcela(etapa, row.client_id, donos);
+        etapaResponsavelId = responsavel.id;
+        etapaResponsavelNome = responsavel.nome;
       }
 
       return {
@@ -476,6 +492,7 @@ async function listClientesPorCentroCusto(empresaId, costCenterId, filtros = {})
 async function listParcelasPorTitulo(empresaId, costCenterId, billId, filtros = {}) {
   const limite = await getLimiteVigente(empresaId);
   const etapasPorCluster = await carregarEtapasPorCluster(empresaId);
+  const donos = await mapaDonosCarteira(empresaId);
 
   const params = [empresaId, ORIGIN_ID_PADRAO, billId];
   let filtroCentro = '';
@@ -485,7 +502,7 @@ async function listParcelasPorTitulo(empresaId, costCenterId, billId, filtros = 
   }
 
   const { rows } = await pool.query(
-    `SELECT si.bill_id, si.installment_id, si.due_date, si.corrected_balance_amount, si.original_amount,
+    `SELECT si.bill_id, si.installment_id, si.client_id, si.due_date, si.corrected_balance_amount, si.original_amount,
             si.payment_term_description, si.installment_number,
             pg.ultimo_pagamento, COALESCE(ccc.cluster, 'novo') AS cluster
      FROM sie_income si
@@ -538,8 +555,9 @@ async function listParcelasPorTitulo(empresaId, costCenterId, billId, filtros = 
         const clusterRegua = status === 'inadimplente' ? 'inad' : row.cluster;
         const etapa = acharEtapaAtiva(etapasPorCluster, clusterRegua, diasSigned);
         etapaNome = etapa?.nome ?? null;
-        etapaResponsavelId = etapa?.responsavel_usuario_id ?? null;
-        etapaResponsavelNome = etapa?.responsavel_nome ?? null;
+        const responsavel = responsavelDaParcela(etapa, row.client_id, donos);
+        etapaResponsavelId = responsavel.id;
+        etapaResponsavelNome = responsavel.nome;
       }
 
       const saldoAberto = Number(row.corrected_balance_amount) || 0;

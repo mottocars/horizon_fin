@@ -55,6 +55,7 @@ import EtapasEmpreendimentosPage from './pages/Relatorios/EtapasEmpreendimentos/
 import GestaoCobrancasPage from './pages/Operacoes/GestaoCobrancas/GestaoCobrancasPage';
 import ClusterClientesList from './pages/Operacoes/GestaoCobrancas/ClustersCobranca/ClusterClientesList';
 import ClienteClusterDetalhe from './pages/Operacoes/GestaoCobrancas/ClustersCobranca/ClienteClusterDetalhe';
+import DistribuicaoExplicacaoPage from './pages/Operacoes/GestaoCobrancas/ReguaCobranca/DistribuicaoExplicacaoPage';
 
 export default function App() {
   return (
@@ -88,6 +89,10 @@ export default function App() {
             <Route path="/operacoes/saldo-contas-bancarias" element={<SaldoContasBancariasPage />} />
             <Route path="/operacoes/repasses-cef" element={<RepassesCefPage />} />
             <Route path="/operacoes/gestao-de-cobrancas" element={<GestaoCobrancasPage />} />
+            <Route
+              path="/operacoes/gestao-de-cobrancas/distribuicao-automatica"
+              element={<DistribuicaoExplicacaoPage />}
+            />
             <Route path="/operacoes/gestao-de-cobrancas/clusters/:cluster" element={<ClusterClientesList />} />
             <Route
               path="/operacoes/gestao-de-cobrancas/clusters/:cluster/:clientId"

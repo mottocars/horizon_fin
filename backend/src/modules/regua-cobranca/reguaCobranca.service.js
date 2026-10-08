@@ -168,18 +168,23 @@ async function garantirTemplateElegivel(empresaId, cluster, templateId) {
 // Usuários elegíveis pra serem responsáveis por uma etapa desta empresa —
 // mesma regra de garantirResponsavelElegivel acima, usada pra popular o
 // combobox "Responsável".
-// `apenasAtribuidos` restringe a quem já está registrado como responsável
-// em alguma etapa da régua desta empresa — é o filtro "Responsável" da aba
-// Rotinas (Gestão de Cobranças): quem não responde por etapa nenhuma não
-// tem rotina pra mostrar.
+// `apenasAtribuidos` restringe a quem tem de fato uma rotina pra mostrar —
+// é o filtro "Responsável" da aba Rotinas (Gestão de Cobranças): no modo
+// "Responsável por etapa", quem está registrado como responsável em alguma
+// etapa; na "Distribuição automática", quem é atendente da distribuição ou
+// já recebeu clientes nela (pra continuar dando pra ver o histórico de quem
+// saiu). Ver distribuicao.service.js.
 async function listResponsaveis(empresaId, { apenasAtribuidos = false } = {}) {
   const { rows } = await pool.query(
     `SELECT u.id, u.nome FROM usuarios u
      JOIN usuarios_empresas ue ON ue.usuario_id = u.id
      WHERE ue.empresa_id = $1 AND u.permissao <> 'MASTER' AND u.ativo = TRUE
-       AND ($2::boolean = FALSE OR EXISTS (
-         SELECT 1 FROM regua_cobranca_etapas e
-         WHERE e.empresa_id = $1 AND e.responsavel_usuario_id = u.id
+       AND ($2::boolean = FALSE OR (
+         CASE WHEN COALESCE((SELECT modo FROM regua_cobranca_distribuicao_config WHERE empresa_id = $1), 'etapa') = 'automatica'
+         THEN EXISTS (SELECT 1 FROM regua_cobranca_distribuicao_participantes p WHERE p.empresa_id = $1 AND p.usuario_id = u.id)
+           OR EXISTS (SELECT 1 FROM regua_cobranca_distribuicao_itens d WHERE d.empresa_id = $1 AND d.usuario_id = u.id)
+         ELSE EXISTS (SELECT 1 FROM regua_cobranca_etapas e WHERE e.empresa_id = $1 AND e.responsavel_usuario_id = u.id)
+         END
        ))
      ORDER BY u.nome ASC`,
     [empresaId, apenasAtribuidos]

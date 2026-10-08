@@ -10,6 +10,9 @@ import { useLogAcesso } from '../hooks/useLogAcesso';
 
 function resolveMeta(pathname) {
   if (TELAS_SISTEMA[pathname]) return TELAS_SISTEMA[pathname];
+  if (pathname === '/operacoes/gestao-de-cobrancas/distribuicao-automatica') {
+    return { title: 'Distribuição da Rotina', subtitle: 'Operações — Gestão de Cobranças — Régua de Cobrança' };
+  }
 
   if (pathname === '/cadastros/empresas/nova') {
     return { title: 'Nova Empresa', subtitle: 'Cadastros — Empresas — Nova' };

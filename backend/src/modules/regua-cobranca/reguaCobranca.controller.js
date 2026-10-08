@@ -1,5 +1,6 @@
 const { z } = require('zod');
 const service = require('./reguaCobranca.service');
+const distribuicao = require('./distribuicao.service');
 
 const empresaIdSchema = z.coerce.number().int().positive('Selecione uma empresa.');
 const clusterSchema = z.enum(service.CLUSTERS_VALIDOS, {
@@ -175,6 +176,98 @@ async function salvarComunicacaoAutomatica(req, res, next) {
   }
 }
 
+// ─── Distribuição da Rotina (Configurações Globais) ────────────────────────
+// Ler é livre pra quem tem a tela; mexer na equipe, no modo ou redistribuir
+// muda o trabalho de todo mundo — só Master e Administrador.
+function exigirGestor(req) {
+  if (req.user?.permissao !== 'MASTER' && req.user?.permissao !== 'ADMINISTRADOR') {
+    const err = new Error('Só Master e Administrador podem alterar a distribuição da Rotina.');
+    err.status = 403;
+    err.expose = true;
+    throw err;
+  }
+}
+
+const usuarioIdParamSchema = z.coerce.number().int().positive('Usuário inválido.');
+const dataSchema = z.string().regex(/^\d{4}-\d{2}-\d{2}$/, 'Data inválida.');
+
+const configDistribuicaoSchema = z.object({
+  modo: z.enum(distribuicao.MODOS, { errorMap: () => ({ message: 'Tipo de distribuição inválido.' }) }).optional(),
+  dias_liberacao: z.coerce
+    .number({ invalid_type_error: 'Informe os dias de liberação.' })
+    .int('Use um número inteiro de dias.')
+    .min(1, 'A liberação precisa ser de pelo menos 1 dia.')
+    .max(365, 'A liberação pode ser de no máximo 365 dias.')
+    .optional(),
+});
+
+// Envolve os handlers da distribuição: valida empresa, converte erro do zod
+// em 400 e devolve o painel atualizado (a tela sempre redesenha a partir dele).
+function rotaDistribuicao(fn, { escrita = true } = {}) {
+  return async (req, res, next) => {
+    try {
+      const empresaId = empresaIdSchema.parse(req.query.empresa_id);
+      if (escrita) exigirGestor(req);
+      const extra = await fn(req, empresaId);
+      res.json({ ...(await distribuicao.getPainel(empresaId)), ...(extra || {}) });
+    } catch (err) {
+      if (err.issues) return next(badRequest(err.issues[0].message));
+      next(err);
+    }
+  };
+}
+
+const getDistribuicao = rotaDistribuicao(async () => null, { escrita: false });
+
+// Só o modo/liberação — leve, pra quem só precisa saber se a régua está em
+// "Responsável por etapa" ou "Distribuição automática" (tabela de etapas,
+// aba Rotinas), sem montar o painel inteiro.
+async function getConfigDistribuicao(req, res, next) {
+  try {
+    const empresaId = empresaIdSchema.parse(req.query.empresa_id);
+    res.json(await distribuicao.getConfig(empresaId));
+  } catch (err) {
+    if (err.issues) return next(badRequest(err.issues[0].message));
+    next(err);
+  }
+}
+
+const salvarConfigDistribuicao = rotaDistribuicao(async (req, empresaId) => {
+  const dados = configDistribuicaoSchema.parse(req.body);
+  await distribuicao.salvarConfig(empresaId, { modo: dados.modo, diasLiberacao: dados.dias_liberacao }, req.user.id);
+});
+
+const adicionarParticipante = rotaDistribuicao(async (req, empresaId) => {
+  const usuarioId = usuarioIdParamSchema.parse(req.body?.usuario_id);
+  await distribuicao.adicionarParticipante(empresaId, usuarioId, req.user.id);
+});
+
+const removerParticipante = rotaDistribuicao(async (req, empresaId) => {
+  await distribuicao.removerParticipante(empresaId, usuarioIdParamSchema.parse(req.params.usuarioId), req.user.id);
+});
+
+const pausarParticipante = rotaDistribuicao(async (req, empresaId) => {
+  const ate = req.body?.ate ? dataSchema.parse(req.body.ate) : null;
+  await distribuicao.pausarParticipante(empresaId, usuarioIdParamSchema.parse(req.params.usuarioId), ate, req.user.id);
+});
+
+const substituirParticipante = rotaDistribuicao(async (req, empresaId) => {
+  const para = usuarioIdParamSchema.parse(req.body?.para_usuario_id);
+  await distribuicao.substituirParticipante(empresaId, usuarioIdParamSchema.parse(req.params.usuarioId), para, req.user.id);
+});
+
+// "Distribuir agora" (incremental, igual à execução do Monitor) ou
+// "Redistribuir hoje" (refaz o dia; `equilibrar` repassa parte das carteiras).
+const distribuirHoje = rotaDistribuicao(async (req, empresaId) => {
+  const redistribuir = Boolean(req.body?.redistribuir);
+  const { resumo } = await distribuicao.distribuirDia(empresaId, {
+    redistribuir,
+    equilibrar: redistribuir && Boolean(req.body?.equilibrar),
+    usuarioId: req.user.id,
+  });
+  return { resultado: resumo };
+});
+
 module.exports = {
   getResumo,
   listResponsaveis,
@@ -187,4 +280,12 @@ module.exports = {
   getDataSistema,
   getComunicacaoAutomatica,
   salvarComunicacaoAutomatica,
+  getDistribuicao,
+  getConfigDistribuicao,
+  salvarConfigDistribuicao,
+  adicionarParticipante,
+  removerParticipante,
+  pausarParticipante,
+  substituirParticipante,
+  distribuirHoje,
 };

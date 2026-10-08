@@ -99,6 +99,10 @@ export default function GestaoCobrancasPage() {
   // o filtro de qualquer jeito pra quem não é um dos dois, então isto aqui é
   // só pra não nem mostrar o combobox nesse caso).
   const podeFiltrarResponsavel = user?.permissao === 'MASTER' || user?.permissao === 'ADMINISTRADOR';
+  // Quem pode filtrar já abre vendo TODOS os responsáveis, agrupados (ver
+  // RotinasTab.jsx — o nível de Responsável mostra o valor e os títulos da
+  // carteira de cada um); limpar o filtro volta pra "Minha rotina".
+  const USUARIO_ROTINA_PADRAO = podeFiltrarResponsavel ? 'todos' : '';
   const [searchParams, setSearchParams] = useSearchParams();
 
   const empresaId = searchParams.get('empresa_id') || '';
@@ -156,7 +160,7 @@ export default function GestaoCobrancasPage() {
     atualizarParams({ empresa_id: novoId || null, cost_center_ids: null });
     setDataInicioRotinas('');
     setDataFimRotinas('');
-    setUsuarioIdRotinas('');
+    setUsuarioIdRotinas(USUARIO_ROTINA_PADRAO);
   }
 
   // Administrador é restrito à própria empresa — o seletor já vem
@@ -330,12 +334,21 @@ export default function GestaoCobrancasPage() {
   }, [empresaId, abaAtiva]);
 
   // Filtro de "rotina de quem" — só existe pra Master/Administrador (ver
-  // podeFiltrarResponsavel acima). Só quem já está registrado como
-  // responsável em alguma etapa da régua desta empresa — é literalmente quem
-  // tem uma rotina pra mostrar (ver reguaCobranca.service.js::listResponsaveis,
-  // opção apenasAtribuidos).
+  // podeFiltrarResponsavel acima). Só quem tem de fato uma rotina pra
+  // mostrar: no modo "Responsável por etapa", quem está registrado como
+  // responsável em alguma etapa; na Distribuição automática, os atendentes
+  // da distribuição (ver reguaCobranca.service.js::listResponsaveis, opção
+  // apenasAtribuidos). "Todos os responsáveis" mostra a Rotina de todo mundo,
+  // agrupada por responsável.
   const [responsaveisRotinas, setResponsaveisRotinas] = useState([]);
-  const [usuarioIdRotinas, setUsuarioIdRotinas] = useState('');
+  const [usuarioIdRotinas, setUsuarioIdRotinas] = useState(USUARIO_ROTINA_PADRAO);
+  const opcoesResponsavelRotinas = useMemo(
+    () => [
+      { value: 'todos', label: 'Todos os responsáveis' },
+      ...responsaveisRotinas.map((usuario) => ({ value: usuario.id, label: usuario.nome })),
+    ],
+    [responsaveisRotinas]
+  );
 
   useEffect(() => {
     if (!empresaId || abaAtiva !== 'rotinas' || !podeFiltrarResponsavel) {
@@ -518,9 +531,9 @@ export default function GestaoCobrancasPage() {
                   value={usuarioIdRotinas}
                   onChange={setUsuarioIdRotinas}
                   disabled={!empresaId}
-                  options={responsaveisRotinas.map((usuario) => ({ value: usuario.id, label: usuario.nome }))}
+                  options={opcoesResponsavelRotinas}
                   placeholder={!empresaId ? 'Selecione a empresa primeiro' : 'Minha rotina'}
-                  emptyMessage="Nenhum responsável registrado nas etapas da régua."
+                  emptyMessage="Nenhum responsável com rotina nesta empresa."
                 />
               </div>
             )}

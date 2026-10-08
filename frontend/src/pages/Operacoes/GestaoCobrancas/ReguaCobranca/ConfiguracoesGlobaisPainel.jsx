@@ -10,6 +10,7 @@ import {
 } from '../../../../api/reguaCobranca.api';
 import { listZapiIntegracoes } from '../../../../api/zapi.api';
 import { listEmailIntegracoes } from '../../../../api/emailIntegracao.api';
+import DistribuicaoRotinaSecao from './DistribuicaoRotinaSecao';
 
 // Opções do "Tipo de Comunicação" (ver reguaCobranca.service.js::
 // getComunicacaoAutomatica) — decide como WhatsApp/E-mail aparecem na
@@ -52,9 +53,11 @@ function CampoHorario({ valor, onCommit }) {
 
 // Parâmetros da régua como um todo, fora dos 5 clusters — aparece no mesmo
 // lugar do conteúdo de um cluster (troca de conteúdo pela seleção na barra
-// de abas, ver ReguaCobrancaTab.jsx), não numa janela separada. 2 módulos
-// bem separados: quem/quando dispara cada cluster (conexões Z-API/Email +
-// horário) e o Tipo de Comunicação.
+// de abas, ver ReguaCobrancaTab.jsx), não numa janela separada. 3 módulos
+// bem separados: a Distribuição da Rotina (responsável por etapa ou
+// distribuição automática — DistribuicaoRotinaSecao.jsx), quem/quando
+// dispara cada cluster (conexões Z-API/Email + horário) e o Tipo de
+// Comunicação.
 export default function ConfiguracoesGlobaisPainel({ empresaId }) {
   const [parametros, setParametros] = useState(null);
   const [zapiOptions, setZapiOptions] = useState([]);
@@ -101,6 +104,8 @@ export default function ConfiguracoesGlobaisPainel({ empresaId }) {
         <div className="py-8 text-center text-sm text-gray-400">Carregando...</div>
       ) : (
         <div className="space-y-6">
+          <DistribuicaoRotinaSecao empresaId={empresaId} />
+
           <section>
             <h3 className="mb-3 text-xs font-semibold uppercase tracking-wide text-gray-400">Disparo por cluster</h3>
             <div className="overflow-x-auto rounded-lg border border-gray-200">

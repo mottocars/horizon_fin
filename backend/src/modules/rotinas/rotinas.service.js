@@ -3,6 +3,7 @@ const path = require('path');
 const pool = require('../../config/db');
 const { getLimiteVigente, getDataSistema, substituirVariaveisTemplate } = require('../regua-cobranca/reguaCobranca.service');
 const usuariosService = require('../usuarios/usuarios.service');
+const distribuicao = require('../regua-cobranca/distribuicao.service');
 
 const CLUSTERS_VALIDOS = ['novo', 'bom', 'duvidoso', 'mau', 'inad'];
 const ORIGIN_ID_PADRAO = 'CO';
@@ -44,10 +45,12 @@ function paraIso(data) {
 
 // Master e Administrador enxergam a rotina de qualquer usuário (Administrador
 // OU Básico) desta empresa — pra Master acompanhar o time, ou pra um
-// Administrador ver a rotina de um Básico que ele supervisiona. Básico só
-// vê a própria: `usuarioIdFiltro` é ignorado pra ele, nunca um jeito de
-// espiar a rotina de outra pessoa. O alvo escolhido precisa realmente ter
-// esta empresa vinculada e não ser Master (mesma regra de
+// Administrador ver a rotina de um Básico que ele supervisiona — e também a
+// de TODOS de uma vez (`'todos'`, agrupada por responsável, pra ver a carteira
+// e os títulos de cada atendente lado a lado). Básico só vê a própria:
+// `usuarioIdFiltro` é ignorado pra ele, nunca um jeito de espiar a rotina de
+// outra pessoa. O alvo escolhido precisa realmente ter esta empresa
+// vinculada e não ser Master (mesma regra de
 // reguaCobranca.service.js::garantirResponsavelElegivel — Master nunca é
 // atribuível como responsável de etapa nenhuma, então nunca teria rotina
 // própria de verdade).
@@ -55,6 +58,7 @@ async function resolverUsuarioAlvo(empresaId, solicitanteId, usuarioIdFiltro) {
   const solicitante = await usuariosService.getById(solicitanteId);
   const podeFiltrar = solicitante?.permissao === 'MASTER' || solicitante?.permissao === 'ADMINISTRADOR';
   if (!podeFiltrar || !usuarioIdFiltro) return solicitanteId;
+  if (usuarioIdFiltro === 'todos') return 'todos';
 
   const { rows } = await pool.query(
     `SELECT 1 FROM usuarios u
@@ -68,29 +72,44 @@ async function resolverUsuarioAlvo(empresaId, solicitanteId, usuarioIdFiltro) {
   return usuarioIdFiltro;
 }
 
-// Rotina diária de 1 responsável: pra cada etapa ATIVA, LIBERADA PRA ROTINA
-// (`rotina_habilitada`) e atribuída a ELE (`responsavel_usuario_id`), acha
-// as parcelas que ENTRARAM nela (due_date + etapa.dias) dentro do intervalo
-// [dataInicio, dataFim] — o dia em que uma etapa é alcançada é o dia em que
-// o disparo dela aconteceria (ver historicoCliente.service.js::
-// montarTimelineParcela, mesma conta). Sem responsável nenhuma etapa
-// aparece — "Rotinas" é a lista pessoal de quem está logado, não uma visão
-// geral de todo mundo.
-async function listRotinas(empresaId, usuarioId, { dataInicio, dataFim, costCenterIds } = {}) {
+// Etapas que entram na Rotina: ATIVAS, LIBERADAS PRA ROTINA
+// (`rotina_habilitada`) e com `dias` preenchido. `responsavelId` restringe
+// às etapas atribuídas a uma pessoa (modo "Responsável por etapa" olhando a
+// rotina de alguém); `null` = todas (visão "Todos" e Distribuição
+// automática, onde o dono vem da distribuição do dia, não da etapa).
+async function carregarEtapasRotina(empresaId, responsavelId = null) {
   // `template_corpo`/`template_assunto` só entram aqui pra montar a prévia
   // de WhatsApp/e-mail de cada item (ver mensagemWhatsapp/mensagemEmail
   // abaixo) — a mesma etapa que decide o canal já carrega o texto de
   // verdade que seria enviado.
-  const { rows: etapasRows } = await pool.query(
+  const params = [empresaId];
+  let filtroResponsavel = '';
+  if (responsavelId) {
+    params.push(responsavelId);
+    filtroResponsavel = ' AND e.responsavel_usuario_id = $2';
+  }
+  const { rows } = await pool.query(
     `SELECT e.id, e.cluster, e.nome, e.dias, e.canal_whatsapp, e.canal_email, e.canal_ligacao,
+            e.responsavel_usuario_id,
             t.corpo AS template_corpo, t.assunto AS template_assunto, t.enviar_boleto AS template_enviar_boleto
      FROM regua_cobranca_etapas e
      LEFT JOIN comunicacao_templates t ON t.id = e.template_id
-     WHERE e.empresa_id = $1 AND e.ativa = true AND e.rotina_habilitada = true AND e.dias IS NOT NULL
-       AND e.responsavel_usuario_id = $2
+     WHERE e.empresa_id = $1 AND e.ativa = true AND e.rotina_habilitada = true AND e.dias IS NOT NULL${filtroResponsavel}
      ORDER BY e.cluster, e.dias ASC`,
-    [empresaId, usuarioId]
+    params
   );
+  return rows;
+}
+
+// Pra cada etapa recebida, acha as parcelas que ENTRARAM nela (due_date +
+// etapa.dias) dentro do intervalo [dataInicio, dataFim] — o dia em que uma
+// etapa é alcançada é o dia em que o disparo dela aconteceria (ver
+// historicoCliente.service.js::montarTimelineParcela, mesma conta). Devolve
+// a lista crua de itens (1 por parcela × centro de custo × etapa), sem
+// agrupar nem ordenar — é a mesma base da tela da Rotina e da Distribuição
+// automática (regua-cobranca/distribuicao.service.js::distribuirDia), pra
+// as duas nunca divergirem sobre "o que está na Rotina de um dia".
+async function calcularItens(empresaId, etapasRows, { dataInicio, dataFim, costCenterIds } = {}) {
   if (etapasRows.length === 0) return [];
 
   const etapasPorCluster = {};
@@ -155,7 +174,7 @@ async function listRotinas(empresaId, usuarioId, { dataInicio, dataFim, costCent
     const cluster = diasSigned > limite ? 'inad' : clusterCliente;
 
     const etapas = etapasPorCluster[cluster];
-    if (!etapas) continue; // nenhuma etapa deste cluster é deste responsável
+    if (!etapas) continue; // nenhuma etapa deste cluster entra nesta Rotina
 
     for (const etapa of etapas) {
       const data = paraIso(somarDias(row.due_date, etapa.dias));
@@ -200,6 +219,7 @@ async function listRotinas(empresaId, usuarioId, { dataInicio, dataFim, costCent
         etapa_id: etapa.id,
         etapa_nome: etapa.nome,
         etapa_dias: etapa.dias,
+        etapa_responsavel_id: etapa.responsavel_usuario_id,
         canal_whatsapp: etapa.canal_whatsapp,
         canal_email: etapa.canal_email,
         canal_ligacao: etapa.canal_ligacao,
@@ -219,7 +239,46 @@ async function listRotinas(empresaId, usuarioId, { dataInicio, dataFim, costCent
     }
   }
 
-  if (itens.length === 0) return [];
+  return itens;
+}
+
+// Rotina de um período: os itens de calcularItens, cada um com o seu
+// responsável — no modo "Responsável por etapa", o responsável da etapa;
+// na "Distribuição automática", quem recebeu o cliente na distribuição
+// daquele dia (ou, pra um dia ainda não distribuído — futuro, ou hoje antes
+// do horário do Monitor —, o dono atual da carteira, marcado como
+// previsão; sem dono, "A distribuir"). `usuarioId` = 1 pessoa ou 'todos'.
+// Agrupado em Responsável → Centro de Custo → itens.
+async function listRotinas(empresaId, usuarioId, { dataInicio, dataFim, costCenterIds } = {}) {
+  const { modo } = await distribuicao.getConfig(empresaId);
+  const automatica = modo === 'automatica';
+  const todos = usuarioId === 'todos';
+
+  const etapasRows = await carregarEtapasRotina(empresaId, automatica || todos ? null : usuarioId);
+  const itens = await calcularItens(empresaId, etapasRows, { dataInicio, dataFim, costCenterIds });
+  if (itens.length === 0) return { modo, responsaveis: [] };
+
+  // Dono de cada item.
+  if (automatica) {
+    const donos = await distribuicao.donosNoPeriodo(empresaId, dataInicio, dataFim);
+    for (const item of itens) {
+      const gravado = donos.porDia.get(`${item.data}|${item.client_id}`);
+      if (gravado) {
+        item.responsavel_id = gravado.usuario_id;
+        item.distribuicao_motivo = gravado.motivo;
+        item.distribuicao_prevista = false;
+      } else {
+        item.responsavel_id = donos.previsto(item.client_id, item.data);
+        item.distribuicao_motivo = null;
+        item.distribuicao_prevista = true;
+      }
+    }
+  } else {
+    for (const item of itens) item.responsavel_id = item.etapa_responsavel_id ?? null;
+  }
+
+  const visiveis = todos ? itens : itens.filter((item) => String(item.responsavel_id) === String(usuarioId));
+  if (visiveis.length === 0) return { modo, responsaveis: [] };
 
   // Ordem pedida pro usuário: dentro de um mesmo centro de custo, etapa mais
   // crítica primeiro (etapa.dias mais alto = mais dias de atraso desde o
@@ -230,7 +289,7 @@ async function listRotinas(empresaId, usuarioId, { dataInicio, dataFim, costCent
   // maior valor em aberto primeiro. Sem cliente como critério de
   // ordenação — a tela não tem cabeçalho por cliente (é só uma coluna),
   // então itens de clientes diferentes podem ficar intercalados livremente.
-  itens.sort(
+  visiveis.sort(
     (a, b) =>
       b.etapa_dias - a.etapa_dias ||
       CLUSTERS_VALIDOS.indexOf(b.cluster) - CLUSTERS_VALIDOS.indexOf(a.cluster) ||
@@ -266,12 +325,26 @@ async function listRotinas(empresaId, usuarioId, { dataInicio, dataFim, costCent
   );
   const mensagemFalha = (item, canal) => falhasPorChave.get(`${item.bill_id}|${item.installment_id}|${canal}|${item.data}`);
 
-  // Agrupa só por Centro de Custo — a lista de itens de cada um já sai na
-  // ordem definida acima (etapa mais crítica, depois maior valor), com o
-  // cliente de cada linha embutido no próprio item (a tela nunca teve um
-  // cabeçalho por cliente, só uma coluna).
-  const centros = new Map();
-  for (const item of itens) {
+  const { rows: usuarios } = await pool.query('SELECT id, nome FROM usuarios WHERE id = ANY($1::int[])', [
+    [...new Set(visiveis.map((i) => i.responsavel_id).filter(Boolean))],
+  ]);
+  const nomePorUsuario = new Map(usuarios.map((u) => [String(u.id), u.nome]));
+
+  // Agrupa em Responsável → Centro de Custo — a lista de itens de cada
+  // centro já sai na ordem definida acima (etapa mais crítica, depois maior
+  // valor), com o cliente de cada linha embutido no próprio item (a tela
+  // nunca teve um cabeçalho por cliente, só uma coluna).
+  const responsaveis = new Map();
+  for (const item of visiveis) {
+    const chaveResp = String(item.responsavel_id ?? 'sem');
+    if (!responsaveis.has(chaveResp)) {
+      responsaveis.set(chaveResp, {
+        usuario_id: item.responsavel_id ?? null,
+        nome: item.responsavel_id ? nomePorUsuario.get(String(item.responsavel_id)) || 'Usuário removido' : null,
+        centros: new Map(),
+      });
+    }
+    const centros = responsaveis.get(chaveResp).centros;
     const chaveCentro = String(item.cost_center_id);
     if (!centros.has(chaveCentro)) {
       centros.set(chaveCentro, { cost_center_id: item.cost_center_id, cost_center_name: item.cost_center_name, itens: [] });
@@ -304,20 +377,34 @@ async function listRotinas(empresaId, usuarioId, { dataInicio, dataFim, costCent
       whatsapp_erro_mensagem: item.canal_whatsapp ? mensagemFalha(item, 'whatsapp') || null : null,
       email_erro: Boolean(item.canal_email && !feito(item, 'email') && mensagemFalha(item, 'email')),
       email_erro_mensagem: item.canal_email ? mensagemFalha(item, 'email') || null : null,
+      // Só na Distribuição automática: por que este cliente está com esta
+      // pessoa (continuidade/novo/liberado/cobertura/transferido) e se é
+      // só a previsão pela carteira (dia ainda não distribuído).
+      distribuicao_motivo: item.distribuicao_motivo ?? null,
+      distribuicao_prevista: Boolean(item.distribuicao_prevista),
     });
   }
 
   // Centro de custo com mais títulos a verificar primeiro (critério 1 do
   // usuário) — dentro de cada centro, a ordem dos itens já vem certa desde
-  // o sort acima, então não precisa reordenar de novo aqui.
-  return [...centros.values()]
-    .map((centro) => ({
-      cost_center_id: centro.cost_center_id,
-      cost_center_name: centro.cost_center_name,
-      total_itens: centro.itens.length,
-      itens: centro.itens,
+  // o sort acima, então não precisa reordenar de novo aqui. Responsáveis em
+  // ordem alfabética, com "A distribuir"/"Sem responsável" (null) no fim.
+  const lista = [...responsaveis.values()]
+    .map((resp) => ({
+      usuario_id: resp.usuario_id,
+      nome: resp.nome,
+      centros: [...resp.centros.values()]
+        .map((centro) => ({
+          cost_center_id: centro.cost_center_id,
+          cost_center_name: centro.cost_center_name,
+          total_itens: centro.itens.length,
+          itens: centro.itens,
+        }))
+        .sort((a, b) => b.total_itens - a.total_itens || (a.cost_center_name || '').localeCompare(b.cost_center_name || '', 'pt-BR')),
     }))
-    .sort((a, b) => b.total_itens - a.total_itens || (a.cost_center_name || '').localeCompare(b.cost_center_name || '', 'pt-BR'));
+    .sort((a, b) => (a.nome === null) - (b.nome === null) || (a.nome || '').localeCompare(b.nome || '', 'pt-BR'));
+
+  return { modo, responsaveis: lista };
 }
 
 // Marcar (o check virar verde) não é responsabilidade deste módulo: a
@@ -356,6 +443,8 @@ async function desmarcarCanal(empresaId, { billId, installmentId, data, canal })
 module.exports = {
   CLUSTERS_VALIDOS,
   resolverUsuarioAlvo,
+  carregarEtapasRotina,
+  calcularItens,
   listRotinas,
   desmarcarCanal,
 };

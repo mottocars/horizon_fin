@@ -93,6 +93,9 @@ export default function EtapasTabela({
   limite,
   etapas,
   usuarios,
+  // false na Distribuição automática (Configurações Globais): quem atende
+  // vem da distribuição do dia, não da etapa — a coluna nem aparece.
+  mostrarResponsavel = true,
   templates,
   onAtualizar,
   onRemover,
@@ -143,7 +146,9 @@ export default function EtapasTabela({
               <th className="py-2.5 pr-2 font-medium" style={{ width: 78 }}>Dias</th>
               <th className="py-2.5 pr-2 font-medium" style={{ width: 108 }}>Faixa ativa</th>
               <th className="py-2.5 pr-2 font-medium" style={{ width: '17%' }}>Template</th>
-              <th className="py-2.5 pr-2 font-medium" style={{ width: '16%' }}>Responsável</th>
+              {mostrarResponsavel && (
+                <th className="py-2.5 pr-2 font-medium" style={{ width: '16%' }}>Responsável</th>
+              )}
               {/* As 3 flags de canal (zap/e-mail/ligação) formam 1 coluna só,
                   "Comunicação" — sem título de propósito (os ícones já
                   falam por si), mas com um respiro maior à esquerda (pl-5
@@ -160,7 +165,7 @@ export default function EtapasTabela({
           <tbody>
             {etapas.length === 0 ? (
               <tr>
-                <td colSpan={9} className="py-4 text-xs text-gray-400">
+                <td colSpan={mostrarResponsavel ? 9 : 8} className="py-4 text-xs text-gray-400">
                   Nenhuma etapa configurada. Use "+ Nova etapa" para começar.
                 </td>
               </tr>
@@ -212,25 +217,27 @@ export default function EtapasTabela({
                       ))}
                     </select>
                   </td>
-                  <td className="py-2 pr-2">
-                    <select
-                      value={e.responsavel_usuario_id || ''}
-                      onChange={(ev) => onAtualizar(e.id, { responsavel_usuario_id: ev.target.value ? Number(ev.target.value) : null })}
-                      className={`w-full rounded border px-1.5 py-1 text-xs focus:outline-none focus:ring-1 focus:ring-primary-100 ${estadoCampo(!e.responsavel_usuario_id)}`}
-                    >
-                      <option value="">—</option>
-                      {/* Se o responsável já atribuído não estiver mais na lista de
-                          elegíveis (desativado, perdeu a empresa, virou Master), mostra
-                          ele mesmo assim — só pra não sumir a seleção; salvar de novo
-                          exige escolher outro alguém elegível. */}
-                      {e.responsavel_usuario_id && !usuarios.some((u) => u.id === e.responsavel_usuario_id) && (
-                        <option value={e.responsavel_usuario_id}>{e.responsavel_nome || 'Usuário indisponível'}</option>
-                      )}
-                      {usuarios.map((u) => (
-                        <option key={u.id} value={u.id}>{u.nome}</option>
-                      ))}
-                    </select>
-                  </td>
+                  {mostrarResponsavel && (
+                    <td className="py-2 pr-2">
+                      <select
+                        value={e.responsavel_usuario_id || ''}
+                        onChange={(ev) => onAtualizar(e.id, { responsavel_usuario_id: ev.target.value ? Number(ev.target.value) : null })}
+                        className={`w-full rounded border px-1.5 py-1 text-xs focus:outline-none focus:ring-1 focus:ring-primary-100 ${estadoCampo(!e.responsavel_usuario_id)}`}
+                      >
+                        <option value="">—</option>
+                        {/* Se o responsável já atribuído não estiver mais na lista de
+                            elegíveis (desativado, perdeu a empresa, virou Master), mostra
+                            ele mesmo assim — só pra não sumir a seleção; salvar de novo
+                            exige escolher outro alguém elegível. */}
+                        {e.responsavel_usuario_id && !usuarios.some((u) => u.id === e.responsavel_usuario_id) && (
+                          <option value={e.responsavel_usuario_id}>{e.responsavel_nome || 'Usuário indisponível'}</option>
+                        )}
+                        {usuarios.map((u) => (
+                          <option key={u.id} value={u.id}>{u.nome}</option>
+                        ))}
+                      </select>
+                    </td>
+                  )}
                   {/* Comunicação: as 3 flags juntas num grupo só (gap pequeno
                       entre elas), com respiro maior (pl-5) separando de
                       Responsável — pra ficar claro que são uma coisa só,

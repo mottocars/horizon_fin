@@ -1,4 +1,5 @@
 import { Fragment, useCallback, useEffect, useMemo, useRef, useState } from 'react';
+import { useSearchParams } from 'react-router-dom';
 import {
   AlertTriangle,
   CalendarClock,
@@ -382,7 +383,10 @@ export default function MonitorIntegracoesPage() {
   const { travada: empresaTravada, empresaIdTravada, empresaIds } = useEmpresaTravada();
   const [empresas, setEmpresas] = useState([]);
   const [carregandoEmpresas, setCarregandoEmpresas] = useState(true);
-  const [empresaId, setEmpresaId] = useState('');
+  // `?empresa_id=` abre já na empresa — usado pelo link "alterar horário" da
+  // Distribuição da Rotina (Régua de Cobrança > Configurações Globais).
+  const [searchParams] = useSearchParams();
+  const [empresaId, setEmpresaId] = useState(() => searchParams.get('empresa_id') || '');
 
   const [rotinas, setRotinas] = useState(null);
   const [carregando, setCarregando] = useState(false);

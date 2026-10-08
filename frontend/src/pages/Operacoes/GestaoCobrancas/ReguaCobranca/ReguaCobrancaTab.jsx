@@ -5,6 +5,7 @@ import Card from '../../../../components/Card';
 import {
   atualizarEtapaReguaCobranca,
   criarEtapaReguaCobranca,
+  getConfigDistribuicaoReguaCobranca,
   getResumoReguaCobranca,
   listEtapasReguaCobranca,
   listResponsaveisReguaCobranca,
@@ -84,6 +85,17 @@ export default function ReguaCobrancaTab({ empresaId }) {
     setEtapas([]);
     carregarEtapas();
   }, [carregarEtapas]);
+
+  // "Distribuição da Rotina" (Configurações Globais): na Distribuição
+  // automática não existe responsável por etapa — a coluna some da tabela
+  // (os valores ficam guardados no banco caso a empresa volte pro modo por
+  // etapa). Recarrega ao voltar das Configurações Globais, onde o modo muda.
+  const [distribuicaoAutomatica, setDistribuicaoAutomatica] = useState(false);
+
+  useEffect(() => {
+    if (!empresaId || mostrandoConfigGlobais) return;
+    getConfigDistribuicaoReguaCobranca(empresaId).then((cfg) => setDistribuicaoAutomatica(cfg.modo === 'automatica'));
+  }, [empresaId, mostrandoConfigGlobais]);
 
   useEffect(() => {
     if (!empresaId || mostrandoConfigGlobais) {
@@ -240,6 +252,7 @@ export default function ReguaCobrancaTab({ empresaId }) {
                 limite={resumo.limite}
                 etapas={etapas}
                 usuarios={usuarios}
+                mostrarResponsavel={!distribuicaoAutomatica}
                 templates={templates}
                 onAtualizar={handleAtualizar}
                 onRemover={handleRemover}

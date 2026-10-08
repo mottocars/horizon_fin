@@ -1,5 +1,5 @@
 import { Fragment, useCallback, useEffect, useMemo, useRef, useState } from 'react';
-import { Check, CheckCircle2, Clock, ListFilter, Mail, MessageCircle, Minus, Phone, Plus, Repeat, X } from 'lucide-react';
+import { Check, CheckCircle2, Clock, ListFilter, Mail, MessageCircle, Minus, Phone, Plus, Repeat, UserRound, X } from 'lucide-react';
 import Card from '../../../components/Card';
 import SearchableSelect from '../../../components/SearchableSelect';
 import RegistrarComunicacaoModal from './RegistrarComunicacaoModal';
@@ -73,6 +73,48 @@ function FiltroColuna({ valor, onChange, opcoes, label, colunaRef }) {
       )}
     />
   );
+}
+
+// Totais da linha do Responsável: valor e quantidade de títulos da carteira
+// dele no período. Cada parcela conta 1 vez só, mesmo aparecendo em mais de
+// uma linha (rateio em 2 centros de custo, ou 2 etapas dentro do período).
+function totaisDoResponsavel(centros) {
+  const parcelas = new Map();
+  let itens = 0;
+  for (const centro of centros) {
+    for (const item of centro.itens) {
+      itens++;
+      parcelas.set(`${item.bill_id}|${item.installment_id}`, Number(item.valor) || 0);
+    }
+  }
+  return { itens, titulos: parcelas.size, valor: [...parcelas.values()].reduce((s, v) => s + v, 0) };
+}
+
+// Selo pequeno ao lado do nome do cliente, só na Distribuição automática:
+// "cobertura" (cliente da carteira de alguém de férias) e "previsão" (dia
+// ainda não distribuído — o dono vem da carteira atual).
+function SeloDistribuicao({ item }) {
+  if (item.distribuicao_prevista) {
+    return (
+      <span
+        title="Este dia ainda não foi distribuído. O responsável mostrado é uma previsão pela carteira atual."
+        className="ml-2 rounded border border-gray-200 px-1.5 py-px text-[10px] font-medium uppercase tracking-wide text-gray-400"
+      >
+        previsão
+      </span>
+    );
+  }
+  if (item.distribuicao_motivo === 'cobertura') {
+    return (
+      <span
+        title="Cliente da carteira de um atendente que está fora (férias). Volta para ele no retorno."
+        className="ml-2 rounded border border-amber-200 bg-amber-50 px-1.5 py-px text-[10px] font-medium uppercase tracking-wide text-amber-700"
+      >
+        cobertura
+      </span>
+    );
+  }
+  return null;
 }
 
 // Estado "realizado" de cada canal do item — nomes de campo inconsistentes
@@ -182,7 +224,12 @@ function BotaoFiltroCanal({ canal, ativo, onClick, Icone, label }) {
   );
 }
 
-// A lista pessoal de tarefas do dia: Centro de Custo → 1 linha por parcela
+// A lista de tarefas do dia: Responsável → Centro de Custo → 1 linha por
+// parcela. O nível de Responsável mostra, nas colunas Valor e Título, o
+// total da carteira dele no período (pra comparar os atendentes lado a lado
+// na visão "Todos os responsáveis" — Master/Administrador); as demais
+// colunas ficam em branco nesse nível. Abaixo, o desenho de sempre:
+// Centro de Custo → 1 linha por parcela
 // que entrou numa etapa sob responsabilidade do usuário logado dentro do
 // período selecionado (ver rotinas.service.js::listRotinas — só etapas
 // ativas, liberadas pra rotina e atribuídas a ele aparecem aqui). Sem nível
@@ -204,10 +251,14 @@ export default function RotinasTab({
   comunicacaoAutomaticaAtiva = true,
   tipoComunicacao = 'automatica',
 }) {
-  const [centros, setCentros] = useState([]);
+  const [responsaveis, setResponsaveis] = useState([]);
+  const [modo, setModo] = useState('etapa');
   const [carregando, setCarregando] = useState(false);
   const [erro, setErro] = useState('');
-  const [centrosFechados, setCentrosFechados] = useState(new Set());
+  // Linhas recolhidas — chave `r:<responsável>` (nível 1) ou
+  // `c:<responsável>|<centro>` (nível 2). Tudo nasce aberto: é uma lista de
+  // ação do dia, não uma matriz pra explorar aos poucos.
+  const [fechados, setFechados] = useState(new Set());
   const [alternando, setAlternando] = useState(null);
 
   // Tenant da integração Sienge desta empresa — só pra montar o link do
@@ -272,24 +323,22 @@ export default function RotinasTab({
   const [filtroCliente, setFiltroCliente] = useState([]);
   const [filtroEtapa, setFiltroEtapa] = useState([]);
 
-  // Opções das comboboxes acima — sempre a partir de `centros` cru (não do
+  // Opções das comboboxes acima — sempre a partir de `responsaveis` cru (não do
   // já filtrado), pra lista de opções não encolher conforme o usuário vai
   // filtrando por outra coluna/canal.
+  const todosItens = useMemo(() => responsaveis.flatMap((r) => r.centros.flatMap((c) => c.itens)), [responsaveis]);
+
   const opcoesClientes = useMemo(() => {
     const nomes = new Set();
-    for (const centro of centros) {
-      for (const item of centro.itens) nomes.add(nomeCliente(item));
-    }
+    for (const item of todosItens) nomes.add(nomeCliente(item));
     return [...nomes].sort((a, b) => a.localeCompare(b, 'pt-BR')).map((nome) => ({ value: nome, label: nome }));
-  }, [centros]);
+  }, [todosItens]);
 
   const opcoesEtapas = useMemo(() => {
     const nomes = new Set();
-    for (const centro of centros) {
-      for (const item of centro.itens) nomes.add(item.etapa_nome);
-    }
+    for (const item of todosItens) nomes.add(item.etapa_nome);
     return [...nomes].sort(compararEtapas).map((nome) => ({ value: nome, label: nome }));
-  }, [centros]);
+  }, [todosItens]);
 
   // Item + canal cujo modal de "Registrar" está aberto — guarda o item, o
   // canal (whatsapp/email/ligacao) e o nome do cliente (a linha não
@@ -315,7 +364,7 @@ export default function RotinasTab({
 
   const carregar = useCallback(() => {
     if (!empresaId || !dataInicio || !dataFim) {
-      setCentros([]);
+      setResponsaveis([]);
       return;
     }
     const minhaRequisicao = ++requisicaoRef.current;
@@ -324,7 +373,8 @@ export default function RotinasTab({
     listRotinas(empresaId, { dataInicio, dataFim, costCenterIds: centroCustoIds, usuarioId })
       .then((resultado) => {
         if (minhaRequisicao !== requisicaoRef.current) return;
-        setCentros(resultado.centros);
+        setResponsaveis(resultado.responsaveis);
+        setModo(resultado.modo);
       })
       .catch((err) => {
         if (minhaRequisicao === requisicaoRef.current) {
@@ -344,8 +394,8 @@ export default function RotinasTab({
     carregar();
   }, [carregar, refreshToken]);
 
-  function toggleCentro(id) {
-    setCentrosFechados((atual) => {
+  function alternar(id) {
+    setFechados((atual) => {
       const novo = new Set(atual);
       if (novo.has(id)) novo.delete(id);
       else novo.add(id);
@@ -384,25 +434,31 @@ export default function RotinasTab({
   }
 
   // Aplica os 3 filtros (canal, Cliente, Etapa — todos em "E" entre si) por
-  // cima do que veio do backend: filtra os itens do centro por
-  // Cliente+Etapa+canal, descarta centro de custo sem nenhum item sobrando,
-  // e recalcula o total do badge do centro pelo que sobrou (senão o número
-  // do badge ficaria maior que a quantidade de linhas visíveis). A ordem
-  // dos itens que sobram é a mesma que veio do backend (filter preserva
-  // ordem) — já vem certa (etapa mais crítica, depois maior valor).
-  const centrosFiltrados = useMemo(() => {
-    return centros
-      .map((centro) => {
-        const itens = centro.itens.filter(
-          (item) =>
-            itemVisivel(item) &&
-            (filtroCliente.length === 0 || filtroCliente.includes(nomeCliente(item))) &&
-            (filtroEtapa.length === 0 || filtroEtapa.includes(item.etapa_nome))
-        );
-        return { ...centro, itens, total_itens: itens.length };
+  // cima do que veio do backend: filtra os itens de cada centro por
+  // Cliente+Etapa+canal, descarta centro de custo (e responsável) sem nenhum
+  // item sobrando, e recalcula o badge do centro e os totais do responsável
+  // pelo que sobrou (senão os números ficariam maiores que as linhas
+  // visíveis). A ordem dos itens que sobram é a mesma que veio do backend
+  // (filter preserva ordem) — já vem certa (etapa mais crítica, depois maior
+  // valor).
+  const responsaveisFiltrados = useMemo(() => {
+    return responsaveis
+      .map((resp) => {
+        const centrosResp = resp.centros
+          .map((centro) => {
+            const itens = centro.itens.filter(
+              (item) =>
+                itemVisivel(item) &&
+                (filtroCliente.length === 0 || filtroCliente.includes(nomeCliente(item))) &&
+                (filtroEtapa.length === 0 || filtroEtapa.includes(item.etapa_nome))
+            );
+            return { ...centro, itens, total_itens: itens.length };
+          })
+          .filter((centro) => centro.itens.length > 0);
+        return { ...resp, centros: centrosResp, totais: totaisDoResponsavel(centrosResp) };
       })
-      .filter((centro) => centro.itens.length > 0);
-  }, [centros, itemVisivel, filtroCliente, filtroEtapa]);
+      .filter((resp) => resp.centros.length > 0);
+  }, [responsaveis, itemVisivel, filtroCliente, filtroEtapa]);
 
   if (!empresaId) {
     return (
@@ -422,10 +478,11 @@ export default function RotinasTab({
   // a página desabava pra ~50px de altura a cada atualização e a barra de
   // rolagem voltava pro topo sozinha (o navegador não tem como preservar
   // uma posição de scroll que não existe mais no documento encolhido).
-  const primeiraCarga = carregando && centros.length === 0;
-  const atualizandoEmSegundoPlano = carregando && centros.length > 0;
-  const semDados = !carregando && !erro && centros.length === 0;
-  const semResultadoFiltro = !carregando && !erro && !semDados && centrosFiltrados.length === 0;
+  const primeiraCarga = carregando && responsaveis.length === 0;
+  const atualizandoEmSegundoPlano = carregando && responsaveis.length > 0;
+  const semDados = !carregando && !erro && responsaveis.length === 0;
+  const semResultadoFiltro = !carregando && !erro && !semDados && responsaveisFiltrados.length === 0;
+  const nomeSemResponsavel = modo === 'automatica' ? 'A distribuir' : 'Sem responsável';
 
   return (
     <>
@@ -439,7 +496,9 @@ export default function RotinasTab({
             <CheckCircle2 size={28} className="mb-3 text-emerald-300" />
             <p className="text-sm font-medium text-gray-700">Tudo em dia por aqui.</p>
             <p className="mt-1 max-w-sm text-xs text-gray-500">
-              Nenhuma etapa sob sua responsabilidade tem parcela entrando no período selecionado.
+              {modo === 'automatica'
+                ? 'Nenhum cliente distribuído para este responsável no período selecionado.'
+                : 'Nenhuma etapa sob sua responsabilidade tem parcela entrando no período selecionado.'}
             </p>
           </div>
         ) : (
@@ -533,119 +592,155 @@ export default function RotinasTab({
                     </td>
                   </tr>
                 )}
-                {centrosFiltrados.map((centro) => {
-                  const aberto = !centrosFechados.has(centro.cost_center_id);
+                {responsaveisFiltrados.map((resp) => {
+                  const chaveResp = `r:${resp.usuario_id ?? 'sem'}`;
+                  const respAberto = !fechados.has(chaveResp);
                   return (
-                    <Fragment key={centro.cost_center_id}>
+                    <Fragment key={chaveResp}>
+                      {/* Nível 1 — Responsável: só Valor e Título preenchidos
+                          (total da carteira dele no período), o resto em branco. */}
                       <tr
-                        onClick={() => toggleCentro(centro.cost_center_id)}
-                        className={`cursor-pointer border-b border-gray-50 hover:bg-gray-100 ${aberto ? 'bg-gray-100 font-semibold' : ''}`}
+                        onClick={() => alternar(chaveResp)}
+                        className="cursor-pointer border-b border-primary-100 bg-primary-50 hover:bg-primary-100"
                       >
-                        <td className="py-3 pl-3 text-gray-900">
+                        <td className="py-3 pl-3 font-semibold text-gray-900" colSpan={2}>
                           <span className="flex items-center gap-2">
-                            <span className="flex h-4 w-4 shrink-0 items-center justify-center rounded bg-primary-100 text-primary-600">
-                              {aberto ? <Minus size={10} /> : <Plus size={10} />}
+                            <span className="flex h-4 w-4 shrink-0 items-center justify-center rounded bg-primary-600 text-white">
+                              {respAberto ? <Minus size={10} /> : <Plus size={10} />}
                             </span>
-                            {centro.cost_center_name}
-                            <span className="rounded-full bg-gray-200 px-2 py-0.5 text-[11px] font-medium text-gray-600">
-                              {centro.total_itens}
+                            <UserRound size={15} className={resp.nome ? 'text-primary-600' : 'text-amber-500'} />
+                            <span className={resp.nome ? '' : 'text-amber-700'}>{resp.nome || nomeSemResponsavel}</span>
+                            <span className="rounded-full bg-white px-2 py-0.5 text-[11px] font-medium text-primary-700 ring-1 ring-primary-100">
+                              {resp.totais.itens}
                             </span>
                           </span>
                         </td>
-                        <td colSpan={8}></td>
+                        <td className="py-3 text-center text-xs font-semibold text-gray-900">{formatarMoeda(resp.totais.valor)}</td>
+                        <td className="py-3 text-center text-xs font-semibold text-gray-900">
+                          {resp.totais.titulos} {resp.totais.titulos === 1 ? 'título' : 'títulos'}
+                        </td>
+                        <td colSpan={5}></td>
                       </tr>
 
-                      {aberto &&
-                        centro.itens.map((item) => {
-                            const Icone = CLUSTER_ICON[item.cluster];
-                            const chave = `${item.bill_id}-${item.installment_id}-${item.data}`;
-                            return (
+                      {respAberto &&
+                        resp.centros.map((centro) => {
+                          const chaveCentro = `c:${resp.usuario_id ?? 'sem'}|${centro.cost_center_id}`;
+                          const centroAberto = !fechados.has(chaveCentro);
+                          return (
+                            <Fragment key={chaveCentro}>
                               <tr
-                                key={`${item.bill_id}-${item.installment_id}-${item.etapa_id}-${item.data}`}
-                                className="border-b border-gray-50 hover:bg-gray-50"
+                                onClick={() => alternar(chaveCentro)}
+                                className={`cursor-pointer border-b border-gray-50 hover:bg-gray-100 ${centroAberto ? 'bg-gray-100 font-semibold' : ''}`}
                               >
-                                <td
-                                  onClick={() => handleCliqueCliente(item, item.client_name)}
-                                  className="cursor-pointer py-2 pl-9 text-gray-900 hover:text-primary-700 hover:underline"
-                                  title="Ver histórico de etapas"
-                                >
-                                  {item.client_name || `Cliente ${item.client_id}`}
-                                </td>
-                                <td className="py-2 pl-4 text-gray-700">
+                                <td className="py-3 pl-9 text-gray-900">
                                   <span className="flex items-center gap-2">
-                                    <span
-                                      className={`flex h-5 w-5 shrink-0 items-center justify-center rounded-md ${CLUSTER_TAG_ESTILO[item.cluster]}`}
-                                      title={item.cluster}
-                                    >
-                                      {Icone && <Icone size={11} className={CLUSTER_ICON_COR[item.cluster]} />}
+                                    <span className="flex h-4 w-4 shrink-0 items-center justify-center rounded bg-primary-100 text-primary-600">
+                                      {centroAberto ? <Minus size={10} /> : <Plus size={10} />}
                                     </span>
-                                    {item.etapa_nome}
+                                    {centro.cost_center_name}
+                                    <span className="rounded-full bg-gray-200 px-2 py-0.5 text-[11px] font-medium text-gray-600">
+                                      {centro.total_itens}
+                                    </span>
                                   </span>
                                 </td>
-                                <td className="py-2 text-center text-xs font-medium text-gray-700">
-                                  {formatarMoeda(item.valor)}
-                                </td>
-                                <td className="py-2 text-center text-xs text-gray-500">
-                                  {siengeTenant ? (
-                                    <a
-                                      href={urlTituloSienge(siengeTenant, item.bill_id)}
-                                      target="_blank"
-                                      rel="noopener noreferrer"
-                                      onClick={(e) => e.stopPropagation()}
-                                      title="Abrir título no Sienge"
-                                      className="text-primary-600 hover:text-primary-700 hover:underline"
-                                    >
-                                      {item.bill_id} / {numeroParcela(item.installment_number)}
-                                    </a>
-                                  ) : (
-                                    <>
-                                      {item.bill_id} / {numeroParcela(item.installment_number)}
-                                    </>
-                                  )}
-                                </td>
-                                <td className="py-2 text-center text-xs text-gray-500">{formatarData(item.due_date)}</td>
-                                <td className="py-2 text-center text-xs text-gray-500">{formatarData(item.data)}</td>
-                                <td className="py-2 text-center">
-                                  {comunicacaoAutomaticaAtiva ? (
-                                    <FlagCanal ativo={item.canal_whatsapp} realizado={item.whatsapp_enviado} />
-                                  ) : (
-                                    <CheckboxCanal
-                                      ativo={item.canal_whatsapp}
-                                      realizado={item.whatsapp_enviado}
-                                      erro={item.whatsapp_erro}
-                                      mensagemErro={item.whatsapp_erro_mensagem}
-                                      carregando={alternando === `${chave}-whatsapp`}
-                                      titulo={item.whatsapp_enviado ? 'WhatsApp registrado — clique para desmarcar' : 'Marcar WhatsApp como enviado'}
-                                      onClick={() => handleCliqueCanal(item, 'whatsapp', item.client_name)}
-                                    />
-                                  )}
-                                </td>
-                                <td className="py-2 text-center">
-                                  {comunicacaoAutomaticaAtiva ? (
-                                    <FlagCanal ativo={item.canal_email} realizado={item.email_enviado} />
-                                  ) : (
-                                    <CheckboxCanal
-                                      ativo={item.canal_email}
-                                      realizado={item.email_enviado}
-                                      erro={item.email_erro}
-                                      mensagemErro={item.email_erro_mensagem}
-                                      carregando={alternando === `${chave}-email`}
-                                      titulo={item.email_enviado ? 'E-mail registrado — clique para desmarcar' : 'Marcar e-mail como enviado'}
-                                      onClick={() => handleCliqueCanal(item, 'email', item.client_name)}
-                                    />
-                                  )}
-                                </td>
-                                <td className="py-2 text-center">
-                                  <CheckboxCanal
-                                    ativo={item.canal_ligacao}
-                                    realizado={item.ligacao_realizada}
-                                    carregando={alternando === `${chave}-ligacao`}
-                                    titulo={item.ligacao_realizada ? 'Ligação registrada — clique para desmarcar' : 'Marcar ligação como realizada'}
-                                    onClick={() => handleCliqueCanal(item, 'ligacao', item.client_name)}
-                                  />
-                                </td>
+                                <td colSpan={8}></td>
                               </tr>
-                            );
+
+                            {centroAberto &&
+                              centro.itens.map((item) => {
+                                  const Icone = CLUSTER_ICON[item.cluster];
+                                  const chave = `${item.bill_id}-${item.installment_id}-${item.data}`;
+                                  return (
+                                    <tr
+                                      key={`${item.bill_id}-${item.installment_id}-${item.etapa_id}-${item.data}`}
+                                      className="border-b border-gray-50 hover:bg-gray-50"
+                                    >
+                                      <td
+                                        onClick={() => handleCliqueCliente(item, item.client_name)}
+                                        className="cursor-pointer py-2 pl-[3.75rem] text-gray-900 hover:text-primary-700 hover:underline"
+                                        title="Ver histórico de etapas"
+                                      >
+                                        {item.client_name || `Cliente ${item.client_id}`}
+                                        <SeloDistribuicao item={item} />
+                                      </td>
+                                      <td className="py-2 pl-4 text-gray-700">
+                                        <span className="flex items-center gap-2">
+                                          <span
+                                            className={`flex h-5 w-5 shrink-0 items-center justify-center rounded-md ${CLUSTER_TAG_ESTILO[item.cluster]}`}
+                                            title={item.cluster}
+                                          >
+                                            {Icone && <Icone size={11} className={CLUSTER_ICON_COR[item.cluster]} />}
+                                          </span>
+                                          {item.etapa_nome}
+                                        </span>
+                                      </td>
+                                      <td className="py-2 text-center text-xs font-medium text-gray-700">
+                                        {formatarMoeda(item.valor)}
+                                      </td>
+                                      <td className="py-2 text-center text-xs text-gray-500">
+                                        {siengeTenant ? (
+                                          <a
+                                            href={urlTituloSienge(siengeTenant, item.bill_id)}
+                                            target="_blank"
+                                            rel="noopener noreferrer"
+                                            onClick={(e) => e.stopPropagation()}
+                                            title="Abrir título no Sienge"
+                                            className="text-primary-600 hover:text-primary-700 hover:underline"
+                                          >
+                                            {item.bill_id} / {numeroParcela(item.installment_number)}
+                                          </a>
+                                        ) : (
+                                          <>
+                                            {item.bill_id} / {numeroParcela(item.installment_number)}
+                                          </>
+                                        )}
+                                      </td>
+                                      <td className="py-2 text-center text-xs text-gray-500">{formatarData(item.due_date)}</td>
+                                      <td className="py-2 text-center text-xs text-gray-500">{formatarData(item.data)}</td>
+                                      <td className="py-2 text-center">
+                                        {comunicacaoAutomaticaAtiva ? (
+                                          <FlagCanal ativo={item.canal_whatsapp} realizado={item.whatsapp_enviado} />
+                                        ) : (
+                                          <CheckboxCanal
+                                            ativo={item.canal_whatsapp}
+                                            realizado={item.whatsapp_enviado}
+                                            erro={item.whatsapp_erro}
+                                            mensagemErro={item.whatsapp_erro_mensagem}
+                                            carregando={alternando === `${chave}-whatsapp`}
+                                            titulo={item.whatsapp_enviado ? 'WhatsApp registrado — clique para desmarcar' : 'Marcar WhatsApp como enviado'}
+                                            onClick={() => handleCliqueCanal(item, 'whatsapp', item.client_name)}
+                                          />
+                                        )}
+                                      </td>
+                                      <td className="py-2 text-center">
+                                        {comunicacaoAutomaticaAtiva ? (
+                                          <FlagCanal ativo={item.canal_email} realizado={item.email_enviado} />
+                                        ) : (
+                                          <CheckboxCanal
+                                            ativo={item.canal_email}
+                                            realizado={item.email_enviado}
+                                            erro={item.email_erro}
+                                            mensagemErro={item.email_erro_mensagem}
+                                            carregando={alternando === `${chave}-email`}
+                                            titulo={item.email_enviado ? 'E-mail registrado — clique para desmarcar' : 'Marcar e-mail como enviado'}
+                                            onClick={() => handleCliqueCanal(item, 'email', item.client_name)}
+                                          />
+                                        )}
+                                      </td>
+                                      <td className="py-2 text-center">
+                                        <CheckboxCanal
+                                          ativo={item.canal_ligacao}
+                                          realizado={item.ligacao_realizada}
+                                          carregando={alternando === `${chave}-ligacao`}
+                                          titulo={item.ligacao_realizada ? 'Ligação registrada — clique para desmarcar' : 'Marcar ligação como realizada'}
+                                          onClick={() => handleCliqueCanal(item, 'ligacao', item.client_name)}
+                                        />
+                                      </td>
+                                    </tr>
+                                  );
+                              })}
+                            </Fragment>
+                          );
                         })}
                     </Fragment>
                   );
