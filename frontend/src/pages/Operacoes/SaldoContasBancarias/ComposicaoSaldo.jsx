@@ -4,7 +4,8 @@ import { formatarSaldo } from './constantes';
 
 // Dica (tooltip) da célula de saldo automático: de onde veio o valor. A composição é gravada
 // pela abertura do período (vanpix-sync.service.js) na coluna saldos_contas_bancarias.composicao:
-//   extrato  { fonte: VANPIX|ITAU, apelido|conexao, conta, dataFechamento|posicao, valor }
+//   extrato  { fonte: VANPIX|ITAU, apelido|conexao, conta, dataFechamento|posicao, valor, repetidoDe? }
+//            (repetidoDe: conta sem movimento na VanPix — repetiu o saldo desse dia)
 //   herdado  { de, origem, classificacao, valor }
 //   cobranca { apelido, de, ate, valor, titulos: [{ pagador, documento, valorPago, dataCredito, ... }] }
 // Saldos gravados antes desta coluna trazem só { fonte }.
@@ -69,7 +70,11 @@ function Conteudo({ composicao, valor, data, rotulo }) {
             Icone={Landmark}
             cor="bg-emerald-50 text-emerald-600"
             titulo={`VanPix Extrato · convênio ${extrato.apelido}`}
-            detalhe={`Saldo final de ${dataBR(extrato.dataFechamento)} · conta ${conta(extrato.conta)}`}
+            detalhe={
+              extrato.repetidoDe
+                ? `Sem movimento nos últimos dias · repetido o saldo de ${dataBR(extrato.repetidoDe)} · conta ${conta(extrato.conta)}`
+                : `Saldo final de ${dataBR(extrato.dataFechamento)} · conta ${conta(extrato.conta)}`
+            }
             valor={extrato.valor}
           />
         )}

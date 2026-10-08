@@ -949,6 +949,10 @@ CREATE TABLE contas_bancarias_sienge (
     -- Apelido VanPix do convênio de extrato (conexão com finalidade EXTRATO): a VanPix Extrato
     -- só é consultada para os apelidos informados nas contas.
     codigo_cedente_extrato  VARCHAR(50),
+    -- Carga inicial da VanPix Extrato (1 ano para trás) já feita com este apelido — a partir
+    -- daí a abertura do período olha só 10 dias e repete o último saldo de quem não aparecer.
+    extrato_carga_inicial_apelido VARCHAR(50),
+    extrato_carga_inicial_em      TIMESTAMP,
     PRIMARY KEY (numero_conta, empresa_id, company_id)
 );
 

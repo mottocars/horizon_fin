@@ -1,5 +1,5 @@
 import { useEffect, useState } from 'react';
-import { Lock, Loader2, CheckCircle2, AlertTriangle, HelpCircle, Wifi } from 'lucide-react';
+import { Lock, Loader2, CheckCircle2, AlertTriangle, HelpCircle, Wifi, Download } from 'lucide-react';
 import Modal from '../../../components/Modal';
 import Button from '../../../components/Button';
 import { abrirPeriodoSaldos, buscarSaldosVanpix } from '../../../api/saldoContasBancarias.api';
@@ -73,6 +73,8 @@ export default function AbrirPeriodoModal({ open, onClose, empresaId, onAberto }
     }
   }
 
+  const log = etapa === 'resultado' ? montarLog(data, relatorioVanpix, erroVanpix) : null;
+
   return (
     <Modal open={open} onClose={etapa === 'vanpix' ? () => {} : onClose} title="Abrir período">
       {etapa === 'form' && (
@@ -131,7 +133,13 @@ export default function AbrirPeriodoModal({ open, onClose, empresaId, onAberto }
             </p>
           )}
 
-          <div className="flex justify-end pt-2">
+          <div className="flex justify-end gap-2 pt-2">
+            {log && (
+              <Button type="button" variant="secondary" onClick={() => baixarLog(data, log)}>
+                <Download size={15} />
+                Baixar log (.txt)
+              </Button>
+            )}
             <Button type="button" onClick={onClose}>
               Concluir
             </Button>
@@ -143,9 +151,10 @@ export default function AbrirPeriodoModal({ open, onClose, empresaId, onAberto }
 }
 
 // Uma linha só por integração (pedido do usuário: reduzir os logs da busca automática) — VanPix e
-// API Itaú (LinhaItau acima), genérico pra caber outras integrações no futuro sem
-// crescer a lista nem precisar de rolagem. Mesmo selo "positivo" (pill esmeralda + CheckCircle2)
-// já usado em CertificadosDigitaisPage.jsx pra status de conexão/validade.
+// API Itaú, genérico pra caber outras integrações no futuro sem crescer a lista nem precisar de
+// rolagem. Os detalhes dos avisos não aparecem na tela: a linha só diz "com avisos" e o botão
+// "Baixar log" (ver montarLog) gera um .txt com tudo. Mesmo selo "positivo" (pill esmeralda +
+// CheckCircle2) já usado em CertificadosDigitaisPage.jsx pra status de conexão/validade.
 const STATUS_INTEGRACAO = {
   ok: { className: 'bg-emerald-100 text-emerald-700', Icon: CheckCircle2 },
   erro: { className: 'bg-amber-100 text-amber-700', Icon: AlertTriangle },
@@ -153,14 +162,24 @@ const STATUS_INTEGRACAO = {
   carregando: { className: 'bg-sky-50 text-sky-700', Icon: Loader2, girar: true },
 };
 
-// API Itaú: uma linha de resumo + a lista das contas que não trouxeram saldo (com o motivo),
-// pra saber na hora qual lançar à mão.
+const COM_AVISOS = ' · com avisos';
+
+// Avisos de cada integração (o que vai pro log) — mesmo critério que pinta a linha de âmbar.
+function avisosExtrato(relatorio) {
+  return (relatorio?.convenios || []).filter((c) => c.aviso).map((c) => `${c.apelido}: ${c.mensagem}`);
+}
+function avisosItau(relatorio) {
+  return [
+    ...(relatorio?.falhas || []).map((f) => `${f.conexao} (${f.conta}): ${f.mensagem}`),
+    ...(relatorio?.semCorrespondencia || []).map((s) => `${s.conexao} (${s.conta}): conta não encontrada no cadastro de contas bancárias`),
+  ];
+}
+function avisosCobranca(relatorio) {
+  return (relatorio?.falhas || []).map((f) => `${f.apelido}${f.conta ? ` (${f.conta})` : ''}: ${f.mensagem}`);
+}
+
 function LinhaItau({ relatorio, erro }) {
   const atualizadas = relatorio?.atualizados.length || 0;
-  const problemas = [
-    ...(relatorio?.falhas || []).map((f) => ({ ...f, motivo: f.mensagem })),
-    ...(relatorio?.semCorrespondencia || []).map((s) => ({ ...s, motivo: 'conta não encontrada no cadastro de contas bancárias' })),
-  ];
   let status = 'ok';
   let texto = `Ok, ${atualizadas} conta(s) integrada(s)`;
   if (erro) {
@@ -169,30 +188,15 @@ function LinhaItau({ relatorio, erro }) {
   } else if (!relatorio || relatorio.conexoes === 0) {
     status = 'sem_convenio';
     texto = 'Nenhuma conta Itaú configurada';
-  } else if (problemas.length) {
+  } else if (avisosItau(relatorio).length) {
     status = 'erro';
-    texto = `${atualizadas} de ${relatorio.conexoes} conta(s) integrada(s)`;
+    texto = `${atualizadas} de ${relatorio.conexoes} conta(s) integrada(s)${COM_AVISOS}`;
   }
-  return (
-    <div className="space-y-1.5">
-      <LinhaIntegracao nome="Conexão API Itaú" status={status} texto={texto} />
-      {problemas.length > 0 && (
-        <ul className="space-y-1 rounded-lg bg-amber-50 px-3 py-2 text-xs text-amber-800">
-          {problemas.map((p) => (
-            <li key={`${p.conexao}-${p.conta}`}>
-              <span className="font-medium">{p.conexao}</span> ({p.conta}): {p.motivo}
-            </li>
-          ))}
-        </ul>
-      )}
-    </div>
-  );
+  return <LinhaIntegracao nome="Conexão API Itaú" status={status} texto={texto} />;
 }
 
-// VanPix Extrato: resumo + os convênios (códigos cedente das contas) que não trouxeram tudo.
 function LinhaExtrato({ relatorio, erro }) {
   const convenios = relatorio?.convenios || [];
-  const problemas = convenios.filter((c) => c.status !== 'ok_com_retorno' || /Sem saldo em/.test(c.mensagem || ''));
   const atualizadas = relatorio?.atualizados.length || 0;
   let status = 'ok';
   let texto = `Ok, ${atualizadas} conta(s) integrada(s)`;
@@ -202,29 +206,15 @@ function LinhaExtrato({ relatorio, erro }) {
   } else if (convenios.length === 0) {
     status = 'sem_convenio';
     texto = 'Nenhuma conta com código cedente extrato';
-  } else if (problemas.length) {
+  } else if (avisosExtrato(relatorio).length) {
     status = 'erro';
-    texto = `${atualizadas} conta(s) integrada(s), com avisos`;
+    texto = `${atualizadas} conta(s) integrada(s)${COM_AVISOS}`;
   }
-  return (
-    <div className="space-y-1.5">
-      <LinhaIntegracao nome="Conexão VanPix · Extrato Bancário" status={status} texto={texto} />
-      {problemas.length > 0 && (
-        <ul className="space-y-1 rounded-lg bg-amber-50 px-3 py-2 text-xs text-amber-800">
-          {problemas.map((p) => (
-            <li key={p.apelido}>
-              <span className="font-medium">{p.apelido}</span>: {p.mensagem}
-            </li>
-          ))}
-        </ul>
-      )}
-    </div>
-  );
+  return <LinhaIntegracao nome="Conexão VanPix · Extrato Bancário" status={status} texto={texto} />;
 }
 
-
 // Cobrança: boletos liquidados com Dt Crédito no dia, somados no saldo das contas que têm
-// código cedente cobrança — resumo + o que não deu pra somar (com o motivo).
+// código cedente cobrança.
 function LinhaCobranca({ relatorio, erro }) {
   const contas = relatorio?.contas || [];
   const falhas = relatorio?.falhas || [];
@@ -240,23 +230,45 @@ function LinhaCobranca({ relatorio, erro }) {
     texto = 'Nenhuma conta com cedente de cobrança';
   } else if (falhas.length) {
     status = 'erro';
-    texto = `${integradas} conta(s) integrada(s)`;
+    texto = `${integradas} conta(s) integrada(s)${COM_AVISOS}`;
   }
-  return (
-    <div className="space-y-1.5">
-      <LinhaIntegracao nome="Conexão VanPix · Cobrança" status={status} texto={texto} />
-      {falhas.length > 0 && (
-        <ul className="space-y-1 rounded-lg bg-amber-50 px-3 py-2 text-xs text-amber-800">
-          {falhas.map((f, i) => (
-            <li key={i}>
-              <span className="font-medium">{f.apelido}</span>
-              {f.conta ? ` (${f.conta})` : ''}: {f.mensagem}
-            </li>
-          ))}
-        </ul>
-      )}
-    </div>
-  );
+  return <LinhaIntegracao nome="Conexão VanPix · Cobrança" status={status} texto={texto} />;
+}
+
+// Conteúdo do .txt: um bloco por integração com aviso + as contas que ficaram em branco.
+// Devolve null quando não há nada a registrar (o botão nem aparece).
+function montarLog(data, relatorio, erro) {
+  const blocos = erro
+    ? [['Busca automática', [erro]]]
+    : [
+        ['Conexão VanPix · Extrato Bancário', avisosExtrato(relatorio)],
+        ['Conexão API Itaú', avisosItau(relatorio?.itau)],
+        ['Conexão VanPix · Cobrança', avisosCobranca(relatorio?.cobranca)],
+        [
+          'Contas sem saldo nas integrações (informar manualmente)',
+          (relatorio?.semSaldo || []).map((c) => `${c.nome || c.numero_conta} (conta ${c.numero_conta}) · classificação ${c.classificacao}`),
+        ],
+      ];
+  const comItens = blocos.filter(([, itens]) => itens.length);
+  if (!comItens.length) return null;
+  const agora = new Date().toLocaleString('pt-BR', { dateStyle: 'short', timeStyle: 'short' });
+  const linhas = [`Abertura do período de ${formatarDataBR(data)} - avisos das conexões`, `Gerado em ${agora}`];
+  for (const [titulo, itens] of comItens) {
+    linhas.push('', `== ${titulo} (${itens.length}) ==`, ...itens.map((i) => `- ${i}`));
+  }
+  return linhas.join('\r\n') + '\r\n';
+}
+
+function baixarLog(data, conteudo) {
+  // BOM: acentos corretos no Bloco de Notas
+  const url = URL.createObjectURL(new Blob(['﻿', conteudo], { type: 'text/plain;charset=utf-8' }));
+  const a = document.createElement('a');
+  a.href = url;
+  a.download = `Avisos abertura de período - ${formatarDataBR(data).replace(/\//g, '-')}.txt`;
+  document.body.appendChild(a);
+  a.click();
+  a.remove();
+  URL.revokeObjectURL(url);
 }
 
 function LinhaIntegracao({ nome, status, texto }) {

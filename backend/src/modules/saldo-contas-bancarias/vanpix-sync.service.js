@@ -1,7 +1,9 @@
 // Ao abrir um período de saldo (dia D), busca o saldo das contas automaticamente e grava em
 // saldos_contas_bancarias. Regra do usuário (out/2026):
-//   - VanPix Extrato Bancário: retroativo até 30 dias — usa o fechamento mais recente antes de D
-//     (pesquisa de D traz o saldo final de D-1; numa segunda, a de sábado traz o de sexta).
+//   - VanPix Extrato Bancário: usa o fechamento mais recente antes de D (pesquisa de D traz o
+//     saldo final de D-1; numa segunda, a de sábado traz o de sexta). Na primeira abertura de
+//     cada conta, olha até 1 ano para trás; depois, só 10 dias — e a conta que não aparecer
+//     nesses 10 dias repete o último saldo (sem movimento = saldo igual).
 //   - VanPix Cobrança: últimos 5 dias — soma ao saldo o Vl Pago dos boletos com Dt Crédito
 //     depois do fechamento usado até D (conta com código cedente cobrança).
 //   - API Itaú: tempo real (SALDO EM CONTA).
@@ -22,6 +24,8 @@ function ehFimDeSemana(iso) {
   return dia === 0 || dia === 6;
 }
 
+const brData = (iso) => iso.split('-').reverse().join('/');
+
 function paraDDMMYYYY(iso) {
   const [ano, mes, dia] = iso.split('-');
   return `${dia}-${mes}-${ano}`;
@@ -32,7 +36,7 @@ function paraDDMMYYYY(iso) {
 // VanPix conseguir casar.
 async function listarContasAlvo(empresaId) {
   const { rows } = await pool.query(
-    `SELECT company_id, numero_conta, classificacao
+    `SELECT company_id, numero_conta, nome, classificacao
      FROM contas_bancarias_sienge
      WHERE empresa_id = $1 AND classificacao IS NOT NULL AND projeta_saldo = TRUE`,
     [empresaId]
@@ -133,22 +137,48 @@ async function buscarSaldosItau(empresaId, data, relatorio, itensParaGravar, cas
 
 // ---------------------------------------------------------------------------------------
 // EXTRATO (regra do usuário): a VanPix Extrato só é consultada para os apelidos informados no
-// "Código cedente extrato bancário" das contas. Para cada apelido, começa em `data` e volta 1 dia
-// por vez, até 90 dias, até achar o saldo final de TODAS as contas com esse cedente (casadas
+// "Código cedente extrato bancário" das contas. Para cada apelido, começa em `data` e volta
+// (vários dias por vez) até achar o saldo final de TODAS as contas com esse cedente (casadas
 // pelo banco + conta + dígito do lote). Vale o fechamento mais recente de um dia ANTERIOR a
-// `data` (numa segunda, a pesquisa de sábado traz o de sexta).
+// `data` (numa segunda, a pesquisa de sábado traz o de sexta). Até onde voltar depende da conta:
+//   - carga inicial (primeira abertura da conta com esse apelido): até 1 ano; o que achar, grava;
+//   - depois disso: só 10 dias. A carga inicial já varreu a base, então conta que não aparece
+//     em 10 dias não teve movimento — repete o último saldo como se tivesse sido encontrado.
+// A marca da carga inicial fica em contas_bancarias_sienge.extrato_carga_inicial_apelido
+// (trocar o código cedente da conta faz a carga inicial de novo).
 // ---------------------------------------------------------------------------------------
-const EXTRATO_DIAS_RETROATIVOS = 90;
+const EXTRATO_DIAS_CARGA_INICIAL = 365;
+const EXTRATO_DIAS_ROTINA = 10;
+const EXTRATO_CONSULTAS_SIMULTANEAS = 10;
 
 async function listarContasComCedenteExtrato(empresaId) {
   const { rows } = await pool.query(
     `SELECT company_id, numero_conta, nome, codigo_cedente_extrato AS apelido, conta_enriquecida, digito,
-            COALESCE(NULLIF(banco_enriquecido, ''), REGEXP_REPLACE(banco_numero, '[^0-9]', '', 'g')) AS banco
+            COALESCE(NULLIF(banco_enriquecido, ''), REGEXP_REPLACE(banco_numero, '[^0-9]', '', 'g')) AS banco,
+            extrato_carga_inicial_apelido IS NOT DISTINCT FROM codigo_cedente_extrato AS carga_inicial_feita
      FROM contas_bancarias_sienge
      WHERE empresa_id = $1 AND NULLIF(codigo_cedente_extrato, '') IS NOT NULL`,
     [empresaId]
   );
-  return rows;
+  return rows.map((c) => ({ ...c, diasRetroativos: c.carga_inicial_feita ? EXTRATO_DIAS_ROTINA : EXTRATO_DIAS_CARGA_INICIAL }));
+}
+
+// Marca a carga inicial (1 ano) como feita, pra próxima abertura olhar só 10 dias.
+async function marcarCargaInicialExtrato(empresaId, contas) {
+  for (const c of contas) {
+    await pool.query(
+      `UPDATE contas_bancarias_sienge SET extrato_carga_inicial_apelido = $4, extrato_carga_inicial_em = NOW()
+       WHERE empresa_id = $1 AND company_id = $2 AND numero_conta = $3`,
+      [empresaId, c.company_id, c.numero_conta, c.apelido]
+    );
+  }
+}
+
+// Dia útil (seg–sex) anterior a `iso` — o "fechamento" de uma conta sem movimento.
+function diaUtilAnterior(iso) {
+  let dia = menosDiasISO(iso, 1);
+  while (ehFimDeSemana(dia)) dia = menosDiasISO(dia, 1);
+  return dia;
 }
 
 const semZeros = (v) => String(v ?? '').replace(/^0+/, '');
@@ -157,34 +187,37 @@ const loteDaConta = (lote, conta) =>
   lote.digitoConta === conta.digito &&
   semZeros(lote.banco) === semZeros(conta.banco);
 
-// Devolve { encontrados: Map(conta -> lote), status, mensagem } de um apelido.
+// Varre os retornos de um apelido de `data` para trás, cada conta até os seus `diasRetroativos`
+// (até EXTRATO_CONSULTAS_SIMULTANEAS dias consultados ao mesmo tempo, mas lidos do mais recente
+// para o mais antigo). Devolve { encontrados: Map(conta -> lote), falha: {status, mensagem} | null }
+// — `falha` é credencial/apelido inválido ou rede: a varredura para e não dá pra afirmar que as
+// contas não encontradas estão sem movimento.
 async function buscarExtratoRetroativo(cred, apelido, contas, data) {
   const encontrados = new Map();
-  for (let i = 0; i <= EXTRATO_DIAS_RETROATIVOS && encontrados.size < contas.length; i++) {
-    const r = await vanpixService.buscarRetorno(cred.serviceKey, cred.clientSecret, apelido, paraDDMMYYYY(menosDiasISO(data, i)));
-    if (r.status === 'credencial_invalida' || r.status === 'apelido_invalido' || r.status === 'erro_rede') {
-      return { encontrados, status: r.status, mensagem: r.mensagem };
-    }
-    if (r.status !== 'ok_com_retorno') continue;
-    for (const conta of contas) {
-      if (encontrados.has(conta)) continue;
-      const lotes = r.lotes.filter((l) => l.saldoFinal?.data && l.saldoFinal.data < data && loteDaConta(l, conta));
-      const maisRecente = lotes.sort((x, y) => (x.saldoFinal.data < y.saldoFinal.data ? 1 : -1))[0];
-      if (maisRecente) encontrados.set(conta, maisRecente);
+  const maxDias = Math.max(...contas.map((c) => c.diasRetroativos));
+  const pendente = (i) => contas.some((c) => !encontrados.has(c) && i <= c.diasRetroativos);
+
+  for (let inicio = 0; inicio <= maxDias && pendente(inicio); inicio += EXTRATO_CONSULTAS_SIMULTANEAS) {
+    const dias = [];
+    for (let i = inicio; i <= Math.min(inicio + EXTRATO_CONSULTAS_SIMULTANEAS - 1, maxDias); i++) dias.push(i);
+    const respostas = await Promise.all(
+      dias.map((i) => vanpixService.buscarRetorno(cred.serviceKey, cred.clientSecret, apelido, paraDDMMYYYY(menosDiasISO(data, i))))
+    );
+    for (let k = 0; k < dias.length; k++) {
+      const r = respostas[k];
+      if (r.status === 'credencial_invalida' || r.status === 'apelido_invalido' || r.status === 'erro_rede') {
+        return { encontrados, falha: { status: r.status, mensagem: r.mensagem } };
+      }
+      if (r.status !== 'ok_com_retorno') continue;
+      for (const conta of contas) {
+        if (encontrados.has(conta) || dias[k] > conta.diasRetroativos) continue;
+        const lotes = r.lotes.filter((l) => l.saldoFinal?.data && l.saldoFinal.data < data && loteDaConta(l, conta));
+        const maisRecente = lotes.sort((x, y) => (x.saldoFinal.data < y.saldoFinal.data ? 1 : -1))[0];
+        if (maisRecente) encontrados.set(conta, maisRecente);
+      }
     }
   }
-  const faltam = contas.filter((c) => !encontrados.has(c));
-  if (encontrados.size === 0) {
-    return { encontrados, status: 'ok_sem_retorno', mensagem: `Nenhum saldo nos últimos ${EXTRATO_DIAS_RETROATIVOS} dias.` };
-  }
-  const fechamentos = [...new Set([...encontrados.values()].map((l) => l.saldoFinal.data.split('-').reverse().join('/')))];
-  return {
-    encontrados,
-    status: 'ok_com_retorno',
-    mensagem:
-      `Saldo final de ${fechamentos.join(', ')}.` +
-      (faltam.length ? ` Sem saldo em ${EXTRATO_DIAS_RETROATIVOS} dias: ${faltam.map((c) => c.nome || c.numero_conta).join(', ')}.` : ''),
-  };
+  return { encontrados, falha: null };
 }
 
 // ---------------------------------------------------------------------------------------
@@ -386,18 +419,26 @@ async function buscarSaldosVanpix(empresaId, usuarioId, data) {
   // VanPix Extrato: só os apelidos informados nas contas (Código cedente extrato bancário).
   const contasExtrato = await listarContasComCedenteExtrato(empresaId);
   const conexoesExtrato = await vanpixService.conexoesPorApelido(empresaId, 'EXTRATO');
+  const cargaInicialFeita = []; // contas que fizeram a varredura de 1 ano agora (marcadas no fim)
   for (const apelido of new Set(contasExtrato.map((c) => c.apelido))) {
     const contas = contasExtrato.filter((c) => c.apelido === apelido);
     const integracaoId = conexoesExtrato.get(apelido);
     const cred = integracaoId ? await vanpixService.getCredenciais(integracaoId) : null;
     if (!cred) {
-      relatorio.convenios.push({ apelido, status: 'sem_conexao', mensagem: 'Nenhuma conexão VanPix de Extrato Bancário ativa com este convênio (apelido).' });
+      relatorio.convenios.push({
+        apelido,
+        status: 'sem_conexao',
+        aviso: true,
+        mensagem: 'Nenhuma conexão VanPix de Extrato Bancário ativa com este convênio (apelido).',
+      });
       continue;
     }
-    const resultado = await buscarExtratoRetroativo(cred, apelido, contas, data);
-    relatorio.convenios.push({ apelido, status: resultado.status, mensagem: resultado.mensagem });
+    const { encontrados, falha } = await buscarExtratoRetroativo(cred, apelido, contas, data);
+    const nomeConta = (c) => c.nome || c.numero_conta;
+    const repetidas = [];
+    const semSaldo = [];
 
-    for (const [conta, lote] of resultado.encontrados) {
+    for (const [conta, lote] of encontrados) {
       const valor = Math.round(lote.saldoFinal.valorCentavos * (lote.saldoFinal.situacao === 'D' ? -1 : 1)) / 100;
       casadasNaApi.add(`${conta.company_id}:${conta.numero_conta}`);
       // dataFechamento: dia do saldo final usado (D-1 num dia normal; sexta numa segunda) —
@@ -425,6 +466,71 @@ async function buscarSaldosVanpix(empresaId, usuarioId, data) {
         dataFechamento: lote.saldoFinal.data,
       });
     }
+
+    for (const conta of contas) {
+      if (encontrados.has(conta)) continue;
+      // Já passou pela carga inicial e a varredura de 10 dias foi até o fim: sem movimento,
+      // repete o último saldo como se o extrato tivesse trazido. Fechamento = último dia útil
+      // antes de `data` (a cobrança soma os créditos depois dele, como num fechamento real).
+      const anterior = conta.carga_inicial_feita && !falha
+        ? await ultimoSaldoAnterior(empresaId, conta.company_id, conta.numero_conta, data)
+        : null;
+      if (!anterior) {
+        semSaldo.push(conta);
+        continue;
+      }
+      const dataFechamento = diaUtilAnterior(data);
+      const contaTexto = `${conta.conta_enriquecida || ''}-${conta.digito || ''}`;
+      casadasNaApi.add(`${conta.company_id}:${conta.numero_conta}`);
+      itensParaGravar.push({
+        company_id: conta.company_id,
+        numero_conta: conta.numero_conta,
+        data,
+        saldo: anterior.valor,
+        origem: 'API',
+        fonte: 'VANPIX',
+        dataFechamento,
+        composicao: {
+          extrato: { fonte: 'VANPIX', apelido, conta: contaTexto, dataFechamento, valor: anterior.valor, repetidoDe: anterior.data },
+        },
+      });
+      relatorio.atualizados.push({
+        apelido,
+        banco: conta.banco,
+        conta: conta.conta_enriquecida,
+        digito: conta.digito,
+        company_id: conta.company_id,
+        numero_conta: conta.numero_conta,
+        saldo: anterior.valor,
+        dataFechamento,
+        repetidoDe: anterior.data,
+      });
+      repetidas.push(conta);
+    }
+
+    if (!falha) cargaInicialFeita.push(...contas.filter((c) => !c.carga_inicial_feita));
+
+    const fechamentos = [...new Set([...encontrados.values()].map((l) => brData(l.saldoFinal.data)))];
+    const partes = [];
+    if (falha) partes.push(falha.mensagem);
+    if (fechamentos.length) partes.push(`Saldo final de ${fechamentos.join(', ')}.`);
+    if (repetidas.length) {
+      partes.push(`Sem movimento em ${EXTRATO_DIAS_ROTINA} dias, repetido o último saldo: ${repetidas.map(nomeConta).join(', ')}.`);
+    }
+    if (semSaldo.length) {
+      const motivo = falha
+        ? 'Sem saldo (varredura interrompida)'
+        : semSaldo.some((c) => c.carga_inicial_feita)
+          ? 'Sem saldo encontrado nem saldo anterior para repetir'
+          : `Sem saldo em ${EXTRATO_DIAS_CARGA_INICIAL} dias (carga inicial)`;
+      partes.push(`${motivo}: ${semSaldo.map(nomeConta).join(', ')}.`);
+    }
+    relatorio.convenios.push({
+      apelido,
+      status: falha ? falha.status : encontrados.size || repetidas.length ? 'ok_com_retorno' : 'ok_sem_retorno',
+      aviso: Boolean(falha) || semSaldo.length > 0,
+      mensagem: partes.join(' '),
+    });
   }
 
   // API Itaú: o saldo do momento (SALDO EM CONTA) de cada conta Itaú que tem agência, conta e
@@ -432,7 +538,7 @@ async function buscarSaldosVanpix(empresaId, usuarioId, data) {
   await buscarSaldosItau(empresaId, data, relatorio.itau, itensParaGravar, casadasNaApi);
 
   // Segunda passada (regra do usuário): conta que nenhuma integração resolveu — VanPix
-  // Extrato (últimos 30 dias) ou API Itaú (tempo real) — SÓ herda o último saldo se a
+  // Extrato (encontrado ou repetido) ou API Itaú (tempo real) — SÓ herda o último saldo se a
   // classificação dela estiver como "Buscar saldo anterior" (SALDO_ANTERIOR). Qualquer outra
   // fica em branco pra ser informada à mão; se uma abertura anterior deste mesmo dia tinha
   // gravado saldo automático nela, ele é apagado (saldo digitado à mão nunca é apagado).
@@ -454,7 +560,7 @@ async function buscarSaldosVanpix(empresaId, usuarioId, data) {
       if (automaticosDoDia.has(chave)) {
         itensParaGravar.push({ company_id: conta.company_id, numero_conta: conta.numero_conta, data, saldo: null });
       }
-      relatorio.semSaldo.push({ classificacao: conta.classificacao, company_id: conta.company_id, numero_conta: conta.numero_conta });
+      relatorio.semSaldo.push({ classificacao: conta.classificacao, nome: conta.nome, company_id: conta.company_id, numero_conta: conta.numero_conta });
       continue;
     }
     itensParaGravar.push({
@@ -486,6 +592,9 @@ async function buscarSaldosVanpix(empresaId, usuarioId, data) {
   if (itensParaGravar.length > 0) {
     await saldosService.salvarSaldos(empresaId, usuarioId, itensParaGravar);
   }
+  // Só depois de gravar: se a gravação falhar (ex.: período fechado), a próxima abertura
+  // refaz a carga inicial.
+  await marcarCargaInicialExtrato(empresaId, cargaInicialFeita);
 
   return relatorio;
 }
