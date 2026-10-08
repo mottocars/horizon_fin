@@ -13,12 +13,12 @@ const zapiService = require('../integracoes-zapi/zapi.service');
 
 const MIME_XLSX = 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet';
 
-// Faixas de tempo dos contratos retidos em assinatura.
+// Faixas de tempo dos contratos retidos em assinatura — 60+ dias ganham bolinha de alerta.
 const FAIXAS_ASSINATURA = [
-  { rotulo: 'Até 29 dias', min: 0, max: 29 },
-  { rotulo: '30 a 59 dias', min: 30, max: 59 },
-  { rotulo: '60 a 89 dias', min: 60, max: 89 },
-  { rotulo: '90 dias ou mais', min: 90, max: Infinity },
+  { rotulo: 'Até 29 dias', min: 0, max: 29, marcador: '' },
+  { rotulo: '30 a 59 dias', min: 30, max: 59, marcador: '' },
+  { rotulo: '60 a 89 dias', min: 60, max: 89, marcador: '🟡 ' },
+  { rotulo: '90 dias ou mais', min: 90, max: Infinity, marcador: '🔴 ' },
 ];
 
 function nomeExibicaoEmpresa(empresa) {
@@ -193,7 +193,7 @@ function montarMensagem(resumo, nomeDestinatario) {
   ];
   for (const faixa of FAIXAS_ASSINATURA) {
     const daFaixa = assinatura.filter((c) => c.dias != null && c.dias >= faixa.min && c.dias <= faixa.max);
-    linhas.push(`* ${faixa.rotulo}: ${moeda(soma(daFaixa, 'valorRetido'))} | qtd ${numero(daFaixa.length)}`);
+    linhas.push(`* ${faixa.marcador}${faixa.rotulo}: ${moeda(soma(daFaixa, 'valorRetido'))} | qtd ${numero(daFaixa.length)}`);
   }
   linhas.push('', '📎 Detalhe por cliente na planilha anexa', '', '_Comunicado automático enviado pelo Horizon Finanças._');
   return linhas.join('\n');
