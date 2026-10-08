@@ -294,9 +294,11 @@ async function gerarExcel(resumo) {
   return workbook.xlsx.writeBuffer();
 }
 
+// Sem extensão de propósito: a Z-API já acrescenta ".xlsx" pelo endpoint send-document/xlsx
+// (com a extensão aqui o arquivo chegava como "...xlsx.xlsx").
 function nomeArquivo() {
   const hoje = new Intl.DateTimeFormat('pt-BR', { dateStyle: 'short', timeZone: 'America/Sao_Paulo' }).format(new Date());
-  return `Repasses CEF - ${hoje}.xlsx`;
+  return `Repasses CEF - ${hoje}`;
 }
 
 // Envia pra 1 telefone numa mensagem só: a planilha com o texto do comunicado como legenda.
