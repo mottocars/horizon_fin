@@ -137,7 +137,7 @@ async function notificarComunicarSaldos(empresaId, dataFechada) {
     );
     anexoBase64 = buffer.toString('base64');
     // Sem extensão: a Z-API já acrescenta ".xlsx" (send-document/xlsx).
-    nomeArquivo = `saldo-contas-bancarias_${dataInicio}_a_${dataFim}`;
+    nomeArquivo = `Saldo das Contas - ${dataFechada.split('-').reverse().join('-')}`;
   } catch (err) {
     console.error(`${prefixo} falha ao gerar o anexo (${err.message}) — segue só com a mensagem de texto.`);
   }
