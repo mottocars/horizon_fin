@@ -75,9 +75,10 @@ function FiltroColuna({ valor, onChange, opcoes, label, colunaRef }) {
   );
 }
 
-// Totais da linha do Responsável: valor e quantidade de títulos da carteira
-// dele no período. Cada parcela conta 1 vez só, mesmo aparecendo em mais de
-// uma linha (rateio em 2 centros de custo, ou 2 etapas dentro do período).
+// Totais das linhas de Responsável e de Centro de Custo: valor e quantidade
+// de títulos no período. Cada parcela conta 1 vez só, mesmo aparecendo em
+// mais de uma linha (rateio em 2 centros de custo, ou 2 etapas dentro do
+// período).
 function totaisDoResponsavel(centros) {
   const parcelas = new Map();
   let itens = 0;
@@ -115,6 +116,39 @@ function SeloDistribuicao({ item }) {
     );
   }
   return null;
+}
+
+// Percentual concluído de um canal num conjunto de itens — só conta os itens
+// que têm aquele canal na etapa (os que aparecem como "—" ficam de fora).
+// `null` quando nenhum item do conjunto usa o canal.
+function progressoDoCanal(itens, canal) {
+  const aplicaveis = itens.filter((item) =>
+    canal === 'whatsapp' ? item.canal_whatsapp : canal === 'email' ? item.canal_email : item.canal_ligacao
+  );
+  if (aplicaveis.length === 0) return null;
+  const feitos = aplicaveis.filter((item) => realizadoDoCanal(item, canal)).length;
+  return { feitos, total: aplicaveis.length, pct: Math.round((feitos / aplicaveis.length) * 100) };
+}
+
+// Selo de % concluído na linha do Centro de Custo, na mesma coluna do canal:
+// verde quando tudo foi feito, âmbar no meio do caminho, cinza em 0%.
+function ProgressoCanal({ progresso, label }) {
+  if (!progresso) return <span className="text-gray-300">—</span>;
+  const { feitos, total, pct } = progresso;
+  const cor =
+    pct === 100
+      ? 'bg-emerald-50 text-emerald-700 ring-emerald-200'
+      : pct > 0
+        ? 'bg-amber-50 text-amber-700 ring-amber-200'
+        : 'bg-gray-50 text-gray-500 ring-gray-200';
+  return (
+    <span
+      title={`${label}: ${feitos} de ${total} concluído(s)`}
+      className={`inline-flex min-w-[2.75rem] justify-center rounded-full px-1.5 py-0.5 text-[11px] font-semibold tabular-nums ring-1 ${cor}`}
+    >
+      {pct}%
+    </span>
+  );
 }
 
 // Estado "realizado" de cada canal do item — nomes de campo inconsistentes
@@ -452,7 +486,7 @@ export default function RotinasTab({
                 (filtroCliente.length === 0 || filtroCliente.includes(nomeCliente(item))) &&
                 (filtroEtapa.length === 0 || filtroEtapa.includes(item.etapa_nome))
             );
-            return { ...centro, itens, total_itens: itens.length };
+            return { ...centro, itens, total_itens: itens.length, totais: totaisDoResponsavel([{ itens }]) };
           })
           .filter((centro) => centro.itens.length > 0);
         return { ...resp, centros: centrosResp, totais: totaisDoResponsavel(centrosResp) };
@@ -643,7 +677,23 @@ export default function RotinasTab({
                                     </span>
                                   </span>
                                 </td>
-                                <td colSpan={8}></td>
+                                <td></td>
+                                <td className="py-3 text-center text-xs font-semibold text-gray-800">
+                                  {formatarMoeda(centro.totais.valor)}
+                                </td>
+                                <td className="py-3 text-center text-xs font-semibold text-gray-800">
+                                  {centro.totais.titulos} {centro.totais.titulos === 1 ? 'título' : 'títulos'}
+                                </td>
+                                <td colSpan={2}></td>
+                                <td className="py-3 text-center">
+                                  <ProgressoCanal progresso={progressoDoCanal(centro.itens, 'whatsapp')} label="WhatsApp" />
+                                </td>
+                                <td className="py-3 text-center">
+                                  <ProgressoCanal progresso={progressoDoCanal(centro.itens, 'email')} label="E-mail" />
+                                </td>
+                                <td className="py-3 text-center">
+                                  <ProgressoCanal progresso={progressoDoCanal(centro.itens, 'ligacao')} label="Ligação" />
+                                </td>
                               </tr>
 
                             {centroAberto &&
