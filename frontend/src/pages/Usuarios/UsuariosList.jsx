@@ -1,6 +1,6 @@
 import { useCallback, useEffect, useState } from 'react';
 import { useNavigate } from 'react-router-dom';
-import { Plus, Search, Users as UsersIcon, Crown, ShieldCheck, User as UserIcon } from 'lucide-react';
+import { Plus, Search, Users as UsersIcon, Crown, User as UserIcon } from 'lucide-react';
 import Card from '../../components/Card';
 import Button from '../../components/Button';
 import Pagination from '../../components/Pagination';
@@ -13,7 +13,6 @@ const LIMIT = 8;
 
 const PERMISSAO_INFO = {
   MASTER: { label: 'Master', className: 'bg-purple-50 text-purple-600', Icon: Crown },
-  ADMINISTRADOR: { label: 'Administrador', className: 'bg-blue-50 text-blue-600', Icon: ShieldCheck },
   BASICO: { label: 'Básico', className: 'bg-gray-100 text-gray-600', Icon: UserIcon },
 };
 
@@ -21,7 +20,7 @@ export default function UsuariosList() {
   const navigate = useNavigate();
   const { user } = useAuth();
   const podeCriar = podeCriarUsuario(user);
-  // Só Master vê usuários de todas as empresas — Administrador e Básico só
+  // Só Master vê usuários de todas as empresas — Básico só
   // enxergam quem é da própria empresa, e nem faz sentido mostrar a coluna
   // Empresa pra eles (é sempre a mesma).
   const isMaster = user?.permissao === 'MASTER';

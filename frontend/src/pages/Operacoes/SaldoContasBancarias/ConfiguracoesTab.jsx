@@ -8,7 +8,7 @@ import { getComunicarSaldos, salvarComunicarSaldos } from '../../../api/saldoCon
 import { listZapiIntegracoes } from '../../../api/zapi.api';
 import RotinasConfig from './RotinasConfig';
 
-const ROTULO_PERMISSAO = { MASTER: 'Master', ADMINISTRADOR: 'Administrador', BASICO: 'Básico' };
+const ROTULO_PERMISSAO = { MASTER: 'Master', BASICO: 'Básico' };
 
 // Mesmo par âmbar (vazio)/azul (preenchido) já usado em MotorRiscoTab.jsx,
 // HistoricoEtapasModal.jsx e ConveniosBancariosForm.jsx — sinaliza de relance quais campos
@@ -33,7 +33,7 @@ function SectionHeader({ titulo, texto }) {
 // Parâmetros da tela de Saldo Contas Bancárias — por enquanto só "Comunicar Saldos": qual
 // conexão WhatsApp (Z-API) e quais usuários recebem aviso sobre os saldos lançados desta
 // empresa, no momento em que o período for encerrado. A lista de usuários elegíveis (todo
-// MASTER + ADMINISTRADOR/BASICO vinculado a esta empresa) e as conexões Z-API ativas da
+// MASTER + BASICO vinculado a esta empresa) e as conexões Z-API ativas da
 // empresa vêm prontas do backend — ver saldos.service.js::listUsuariosComunicarSaldos e
 // zapi.api.js::listZapiIntegracoes. Só guarda a configuração; o disparo em si (mandar a
 // mensagem de verdade ao encerrar o período) ainda não existe, fica pra quando o conteúdo da

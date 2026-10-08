@@ -15,7 +15,7 @@ const { registrarCliente } = require('../utils/clienteHttp');
 // anexo...) são conferidos pelos router.param de cada módulo (ver
 // acesso.middleware.js).
 //
-// req.user = { id, permissao, telas: string[], empresaIds: Set<number> | null }
+// req.user = { id, permissao, telas: string[], telasAdministrador: string[], empresaIds: Set<number> | null }
 // empresaIds null = MASTER (todas as empresas).
 
 const CACHE_MS = 10 * 1000;
@@ -26,7 +26,7 @@ async function carregarUsuario(id) {
   if (emCache && emCache.expira > Date.now()) return emCache.valor;
 
   const { rows } = await pool.query(
-    `SELECT u.id, u.permissao, u.ativo, u.telas_permitidas,
+    `SELECT u.id, u.permissao, u.ativo, u.telas_permitidas, u.telas_administrador,
             COALESCE(array_agg(ue.empresa_id) FILTER (WHERE ue.empresa_id IS NOT NULL), '{}') AS empresa_ids
      FROM usuarios u
      LEFT JOIN usuarios_empresas ue ON ue.usuario_id = u.id
@@ -41,6 +41,7 @@ async function carregarUsuario(id) {
         permissao: row.permissao,
         ativo: row.ativo,
         telas: row.telas_permitidas || [],
+        telasAdministrador: row.telas_administrador || [],
         empresaIds: row.permissao === 'MASTER' ? null : new Set(row.empresa_ids.map(Number)),
       }
     : null;
@@ -109,7 +110,13 @@ async function autenticar(req, res) {
     res.status(401).json({ message: 'Usuário inativo ou inexistente.' });
     return false;
   }
-  req.user = { id: usuario.id, permissao: usuario.permissao, telas: usuario.telas, empresaIds: usuario.empresaIds };
+  req.user = {
+    id: usuario.id,
+    permissao: usuario.permissao,
+    telas: usuario.telas,
+    telasAdministrador: usuario.telasAdministrador,
+    empresaIds: usuario.empresaIds,
+  };
   // De onde veio a chamada (navegador, Postman, script...) — Métricas de Uso.
   registrarCliente(req, usuario.id);
   return true;

@@ -275,7 +275,7 @@ function BotaoFiltroCanal({ canal, ativo, onClick, Icone, label }) {
 // A lista de tarefas do dia: Responsável → Centro de Custo → 1 linha por
 // parcela. O nível de Responsável mostra, nas colunas Valor e Título, o
 // total da carteira dele no período (pra comparar os atendentes lado a lado
-// na visão "Todos os responsáveis" — Master/Administrador); as demais
+// na visão "Todos os responsáveis" — Master/Administrador da tela); as demais
 // colunas ficam em branco nesse nível. Abaixo, o desenho de sempre:
 // Centro de Custo → 1 linha por parcela
 // que entrou numa etapa sob responsabilidade do usuário logado dentro do

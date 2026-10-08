@@ -476,7 +476,7 @@ export default function DistribuicaoExplicacaoPage() {
         <ul className="space-y-2">
           <li>
             <b className="font-medium text-gray-800">Responsável no primeiro nível.</b> Acima de Centro de Custo e Cliente, cada
-            atendente tem uma linha com o valor total e a quantidade de títulos da carteira dele no período. Master e Administrador veem
+            atendente tem uma linha com o valor total e a quantidade de títulos da carteira dele no período. Master e Administrador da tela veem
             todos os atendentes lado a lado ou filtram um só.
           </li>
           <li>

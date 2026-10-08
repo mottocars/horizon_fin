@@ -202,7 +202,7 @@ const comunicarSaldosSchema = z.object({
 });
 
 // Parâmetro "Comunicar Saldos" (aba Configurações) — usuários elegíveis (todo MASTER +
-// ADMINISTRADOR/BASICO vinculado à empresa), quem já está selecionado hoje, e qual conexão
+// BASICO vinculado à empresa), quem já está selecionado hoje, e qual conexão
 // Z-API foi escolhida pro aviso.
 async function getComunicarSaldos(req, res, next) {
   try {

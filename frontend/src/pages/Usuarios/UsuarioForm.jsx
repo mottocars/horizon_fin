@@ -15,6 +15,7 @@ import {
   Camera,
   Trash2,
   ChevronRight,
+  ChevronDown,
   ChevronsRight,
   ChevronLeft,
   ChevronsLeft,
@@ -42,6 +43,7 @@ const emptyForm = {
   empresa_ids: [],
   permissao: 'BASICO',
   telas_permitidas: [],
+  telas_administrador: [],
   avatar_url: null,
 };
 
@@ -55,18 +57,10 @@ const PERMISSOES = [
     corIcone: 'bg-purple-100 text-purple-600',
   },
   {
-    value: 'ADMINISTRADOR',
-    label: 'Administrador',
-    Icon: ShieldCheck,
-    descricao: 'Acesso a todas as telas, porém restrito apenas às empresas selecionadas.',
-    corAtivo: 'border-blue-500 bg-blue-50 text-blue-700',
-    corIcone: 'bg-blue-100 text-blue-600',
-  },
-  {
     value: 'BASICO',
     label: 'Básico',
     Icon: UserIcon,
-    descricao: 'Acesso só às telas marcadas abaixo, dentro das empresas selecionadas.',
+    descricao: 'Acesso só às telas marcadas abaixo — como Comum ou Administrador em cada uma —, dentro das empresas selecionadas.',
     corAtivo: 'border-gray-500 bg-gray-100 text-gray-700',
     corIcone: 'bg-gray-200 text-gray-600',
   },
@@ -79,13 +73,13 @@ export default function UsuarioForm() {
   const confirm = useConfirm();
   const { user: usuarioLogado } = useAuth();
 
-  // Só Master pode criar/deixar outro usuário como Master — Administrador e
-  // Básico nem veem essa opção no seletor de permissão.
+  // Só Master pode criar/deixar outro usuário como Master — Básico nem vê
+  // essa opção no seletor de permissão.
   const permissoesDisponiveis =
     usuarioLogado?.permissao === 'MASTER' ? PERMISSOES : PERMISSOES.filter((p) => p.value !== 'MASTER');
 
   // Nesta tela em especial, a trava de empresa vale pra qualquer criador que
-  // não seja Master (Administrador OU Básico) — ninguém abaixo de Master
+  // não seja Master — ninguém abaixo de Master
   // pode cadastrar usuário em empresa que não seja uma das suas próprias. O
   // backend já devolve só as empresas do criador em /empresas (quando ele
   // não é Master), então a lista de opções abaixo já vem restrita sozinha.
@@ -112,6 +106,8 @@ export default function UsuarioForm() {
   // antes de apertar a seta.
   const [destaqueDisponiveis, setDestaqueDisponiveis] = useState([]);
   const [destaqueSelecionadas, setDestaqueSelecionadas] = useState([]);
+  // Menus (grupos) abertos no drilldown de "Telas que possui acesso".
+  const [gruposAbertos, setGruposAbertos] = useState([]);
   const [avatarTouched, setAvatarTouched] = useState(false);
   const [avatarError, setAvatarError] = useState('');
   const [processandoFoto, setProcessandoFoto] = useState(false);
@@ -154,6 +150,7 @@ export default function UsuarioForm() {
           empresa_ids: (data.empresa_ids || []).map(String),
           permissao: data.permissao,
           telas_permitidas: data.telas_permitidas || [],
+          telas_administrador: data.telas_administrador || [],
           avatar_url: data.avatar_url || null,
         });
         setDestaqueDisponiveis([]);
@@ -209,6 +206,27 @@ export default function UsuarioForm() {
     setDestaqueSelecionadas([]);
   }
 
+  // Quem não é Master só concede o que tem: libera só telas que ele mesmo
+  // acessa e marca Administrador só onde ele mesmo é Administrador — o que o
+  // usuário editado JÁ tinha continua podendo ficar (o backend confere a
+  // mesma regra em usuarios.controller.js::garantirNivelConcedivel).
+  const criadorEhMaster = usuarioLogado?.permissao === 'MASTER';
+  function podeLiberarTela(codigo) {
+    return (
+      criadorEhMaster ||
+      (usuarioLogado?.telas_permitidas || []).includes(codigo) ||
+      (usuario?.telas_permitidas || []).includes(codigo)
+    );
+  }
+  function podeMarcarAdministrador(codigo) {
+    return (
+      criadorEhMaster ||
+      (usuarioLogado?.telas_administrador || []).includes(codigo) ||
+      (usuario?.telas_administrador || []).includes(codigo)
+    );
+  }
+
+  // Desmarcar a tela tira também o nível Administrador dela.
   function toggleTela(codigo) {
     setForm((prev) => {
       const has = prev.telas_permitidas.includes(codigo);
@@ -217,22 +235,48 @@ export default function UsuarioForm() {
         telas_permitidas: has
           ? prev.telas_permitidas.filter((c) => c !== codigo)
           : [...prev.telas_permitidas, codigo],
+        telas_administrador: has
+          ? prev.telas_administrador.filter((c) => c !== codigo)
+          : prev.telas_administrador,
       };
     });
   }
 
-  function toggleGrupo(telasDoGrupo, marcarTodas) {
+  // Escolher Comum/Administrador numa tela ainda não marcada já libera a
+  // tela com esse nível — um clique só.
+  function definirNivel(codigo, administrador) {
     setForm((prev) => {
-      const codigosGrupo = telasDoGrupo.map((t) => t.codigo);
+      const semTela = prev.telas_administrador.filter((c) => c !== codigo);
+      return {
+        ...prev,
+        telas_permitidas: prev.telas_permitidas.includes(codigo)
+          ? prev.telas_permitidas
+          : [...prev.telas_permitidas, codigo],
+        telas_administrador: administrador ? [...semTela, codigo] : semTela,
+      };
+    });
+  }
+
+  function toggleGrupo(codigosGrupo, marcarTodas) {
+    setForm((prev) => {
       const semGrupo = prev.telas_permitidas.filter((c) => !codigosGrupo.includes(c));
       return {
         ...prev,
         telas_permitidas: marcarTodas ? [...semGrupo, ...codigosGrupo] : semGrupo,
+        telas_administrador: marcarTodas
+          ? prev.telas_administrador
+          : prev.telas_administrador.filter((c) => !codigosGrupo.includes(c)),
       };
     });
   }
 
+  function toggleGrupoAberto(grupo) {
+    setGruposAbertos((prev) => (prev.includes(grupo) ? prev.filter((g) => g !== grupo) : [...prev, grupo]));
+  }
+
   const totalTelasMarcadas = form.telas_permitidas.length;
+  const totalTelasAdministrador = form.telas_administrador.filter((c) => form.telas_permitidas.includes(c)).length;
+  const todosGruposAbertos = gruposAbertos.length === TELAS_SISTEMA.length;
 
   async function handleFotoSelecionada(e) {
     const file = e.target.files?.[0];
@@ -297,6 +341,10 @@ export default function UsuarioForm() {
         empresa_ids: form.permissao === 'MASTER' ? [] : form.empresa_ids.map(Number),
         permissao: form.permissao,
         telas_permitidas: form.permissao === 'BASICO' ? form.telas_permitidas : [],
+        telas_administrador:
+          form.permissao === 'BASICO'
+            ? form.telas_administrador.filter((c) => form.telas_permitidas.includes(c))
+            : [],
         ...(form.senha.trim() ? { senha: form.senha.trim() } : {}),
         // Em edição, só manda a foto se o usuário de fato mexeu nela — senão
         // o backend mantém a atual. Em criação, sempre manda (mesmo vazia).
@@ -343,10 +391,6 @@ export default function UsuarioForm() {
   const empresasDisponiveis = useMemo(
     () => empresas.filter((e) => !form.empresa_ids.includes(String(e.id))),
     [empresas, form.empresa_ids]
-  );
-  const nomesEmpresasSelecionadas = useMemo(
-    () => empresasSelecionadas.map((e) => nomeExibicaoEmpresa(e)),
-    [empresasSelecionadas]
   );
 
   if (loading) {
@@ -618,7 +662,7 @@ export default function UsuarioForm() {
           {/* Permissão do usuário */}
           <div>
             <label className="mb-2 block text-sm font-medium text-gray-700">Permissão do usuário</label>
-            <div className="grid grid-cols-1 gap-3 sm:grid-cols-3">
+            <div className="grid grid-cols-1 gap-3 sm:grid-cols-2">
               {permissoesDisponiveis.map((permissao) => {
                 const { Icon } = permissao;
                 const ativo = form.permissao === permissao.value;
@@ -664,59 +708,106 @@ export default function UsuarioForm() {
               </div>
             )}
 
-            {form.permissao === 'ADMINISTRADOR' && (
-              <div className="flex items-center gap-3 rounded-xl border border-blue-200 bg-blue-50 px-4 py-3 text-sm text-blue-700">
-                <ShieldCheck size={18} className="shrink-0" />
-                Administrador tem acesso a todas as telas do sistema, restrito às empresas selecionadas
-                acima{nomesEmpresasSelecionadas.length ? ` (${nomesEmpresasSelecionadas.join(', ')})` : ''}.
-              </div>
-            )}
-
             {form.permissao === 'BASICO' && (
               <div className="rounded-xl border border-gray-200">
-                <div className="flex items-center justify-between border-b border-gray-100 bg-gray-50 px-4 py-2.5">
+                <div className="flex flex-wrap items-center justify-between gap-2 border-b border-gray-100 bg-gray-50 px-4 py-2.5">
                   <span className="flex items-center gap-1.5 text-xs font-medium text-gray-500">
                     <LayoutGrid size={13} />
                     {totalTelasMarcadas} tela{totalTelasMarcadas !== 1 ? 's' : ''} selecionada
                     {totalTelasMarcadas !== 1 ? 's' : ''}
+                    {totalTelasAdministrador > 0 && (
+                      <span className="text-blue-600">· {totalTelasAdministrador} como Administrador</span>
+                    )}
                   </span>
+                  <button
+                    type="button"
+                    onClick={() => setGruposAbertos(todosGruposAbertos ? [] : TELAS_SISTEMA.map((g) => g.grupo))}
+                    className="text-xs font-medium text-primary-600 hover:text-primary-700"
+                  >
+                    {todosGruposAbertos ? 'Recolher tudo' : 'Expandir tudo'}
+                  </button>
                 </div>
 
-                <div className="space-y-4 p-4">
+                <div className="divide-y divide-gray-100">
                   {TELAS_SISTEMA.map((grupo) => {
-                    const codigosGrupo = grupo.telas.map((t) => t.codigo);
-                    const todasMarcadas = codigosGrupo.every((c) => form.telas_permitidas.includes(c));
+                    const codigosLiberaveis = grupo.telas.map((t) => t.codigo).filter(podeLiberarTela);
+                    const marcadasNoGrupo = grupo.telas.filter((t) => form.telas_permitidas.includes(t.codigo));
+                    const adminNoGrupo = marcadasNoGrupo.filter((t) => form.telas_administrador.includes(t.codigo));
+                    const todasMarcadas =
+                      codigosLiberaveis.length > 0 && codigosLiberaveis.every((c) => form.telas_permitidas.includes(c));
+                    const aberto = gruposAbertos.includes(grupo.grupo);
                     return (
                       <div key={grupo.grupo}>
-                        <div className="mb-2 flex items-center justify-between">
-                          <p className="text-xs font-semibold uppercase tracking-wide text-gray-400">
-                            {grupo.grupo}
-                          </p>
+                        <div className="flex items-center gap-2 px-4 py-2.5">
                           <button
                             type="button"
-                            onClick={() => toggleGrupo(grupo.telas, !todasMarcadas)}
-                            className="flex items-center gap-1 text-xs font-medium text-primary-600 hover:text-primary-700"
+                            onClick={() => toggleGrupoAberto(grupo.grupo)}
+                            aria-expanded={aberto}
+                            className="flex min-w-0 flex-1 items-center gap-2 text-left"
                           >
-                            {todasMarcadas ? <CheckSquare size={13} /> : <Square size={13} />}
-                            {todasMarcadas ? 'Limpar' : 'Marcar todas'}
+                            {aberto ? (
+                              <ChevronDown size={16} className="shrink-0 text-gray-400" />
+                            ) : (
+                              <ChevronRight size={16} className="shrink-0 text-gray-400" />
+                            )}
+                            <span className="text-sm font-semibold text-gray-800">{grupo.grupo}</span>
+                            <span className="truncate text-xs text-gray-400">
+                              {marcadasNoGrupo.length} de {grupo.telas.length}
+                              {adminNoGrupo.length > 0 && (
+                                <span className="text-blue-600"> · {adminNoGrupo.length} Administrador</span>
+                              )}
+                            </span>
                           </button>
-                        </div>
-                        <div className="grid grid-cols-1 gap-2 sm:grid-cols-2 lg:grid-cols-3">
-                          {grupo.telas.map((tela) => (
-                            <label
-                              key={tela.codigo}
-                              className="flex cursor-pointer items-center gap-2 rounded-lg px-2 py-1.5 text-sm text-gray-700 hover:bg-gray-50"
+                          {codigosLiberaveis.length > 0 && (
+                            <button
+                              type="button"
+                              onClick={() => toggleGrupo(codigosLiberaveis, !todasMarcadas)}
+                              className="flex shrink-0 items-center gap-1 text-xs font-medium text-primary-600 hover:text-primary-700"
                             >
-                              <input
-                                type="checkbox"
-                                checked={form.telas_permitidas.includes(tela.codigo)}
-                                onChange={() => toggleTela(tela.codigo)}
-                                className="h-4 w-4 rounded border-gray-300 text-primary-600 focus:ring-primary-100"
-                              />
-                              {tela.label}
-                            </label>
-                          ))}
+                              {todasMarcadas ? <CheckSquare size={13} /> : <Square size={13} />}
+                              {todasMarcadas ? 'Limpar' : 'Marcar todas'}
+                            </button>
+                          )}
                         </div>
+
+                        {aberto && (
+                          <div className="space-y-1 border-t border-gray-100 bg-gray-50/50 px-4 py-2 sm:pl-10">
+                            {grupo.telas.map((tela) => {
+                              const marcada = form.telas_permitidas.includes(tela.codigo);
+                              const administrador = marcada && form.telas_administrador.includes(tela.codigo);
+                              const liberavel = podeLiberarTela(tela.codigo);
+                              return (
+                                <div
+                                  key={tela.codigo}
+                                  className="flex flex-wrap items-center justify-between gap-x-3 gap-y-1.5 rounded-lg px-2 py-1.5 hover:bg-white"
+                                >
+                                  <label
+                                    className={`flex min-w-0 items-center gap-2 text-sm ${
+                                      liberavel ? 'cursor-pointer text-gray-700' : 'cursor-not-allowed text-gray-400'
+                                    }`}
+                                    title={liberavel ? undefined : 'Você não tem acesso a esta tela.'}
+                                  >
+                                    <input
+                                      type="checkbox"
+                                      checked={marcada}
+                                      disabled={!liberavel}
+                                      onChange={() => toggleTela(tela.codigo)}
+                                      className="h-4 w-4 rounded border-gray-300 text-primary-600 focus:ring-primary-100"
+                                    />
+                                    {tela.label}
+                                  </label>
+                                  <NivelDaTela
+                                    marcada={marcada}
+                                    administrador={administrador}
+                                    disabled={!liberavel}
+                                    adminDisabled={!podeMarcarAdministrador(tela.codigo)}
+                                    onChange={(admin) => definirNivel(tela.codigo, admin)}
+                                  />
+                                </div>
+                              );
+                            })}
+                          </div>
+                        )}
                       </div>
                     );
                   })}
@@ -795,6 +886,46 @@ function CaixaDeEmpresas({ titulo, empresas, destacadas, onToggleDestaque, disab
           })
         )}
       </div>
+    </div>
+  );
+}
+
+// Seletor Comum | Administrador de cada tela no drilldown de telas. Com a
+// tela desmarcada fica apagado, mas clicar num dos lados já libera a tela
+// com aquele nível.
+function NivelDaTela({ marcada, administrador, disabled, adminDisabled, onChange }) {
+  const opcoes = [
+    { admin: false, label: 'Comum', Icon: UserIcon, ativoCls: 'bg-white text-gray-800 shadow-sm', bloqueado: disabled },
+    {
+      admin: true,
+      label: 'Administrador',
+      Icon: ShieldCheck,
+      ativoCls: 'bg-blue-600 text-white shadow-sm',
+      bloqueado: disabled || adminDisabled,
+    },
+  ];
+  return (
+    <div role="radiogroup" className={`inline-flex shrink-0 rounded-lg bg-gray-100 p-0.5 ${marcada ? '' : 'opacity-60'}`}>
+      {opcoes.map(({ admin, label, Icon, ativoCls, bloqueado }) => {
+        const ativo = marcada && administrador === admin;
+        return (
+          <button
+            key={label}
+            type="button"
+            role="radio"
+            aria-checked={ativo}
+            disabled={bloqueado}
+            onClick={() => onChange(admin)}
+            title={bloqueado && admin && !disabled ? 'Você não é Administrador desta tela.' : undefined}
+            className={`flex items-center gap-1 rounded-md px-2.5 py-1 text-xs font-medium transition-colors disabled:cursor-not-allowed disabled:opacity-40 ${
+              ativo ? ativoCls : 'text-gray-500 hover:text-gray-700'
+            }`}
+          >
+            <Icon size={12} />
+            {label}
+          </button>
+        );
+      })}
     </div>
   );
 }

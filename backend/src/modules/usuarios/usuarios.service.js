@@ -7,7 +7,7 @@ const SALT_ROUNDS = 10;
 // nenhuma empresa vinculada (ex.: Master) — vira '{}' mesmo.
 const SELECT_BASE = `
   SELECT u.id, u.nome, u.email, u.username, u.telefone_ddd, u.telefone_numero, u.avatar_url,
-         u.permissao, u.telas_permitidas, u.ativo, u.primeiro_acesso, u.criado_em, u.atualizado_em,
+         u.permissao, u.telas_permitidas, u.telas_administrador, u.ativo, u.primeiro_acesso, u.criado_em, u.atualizado_em,
          COALESCE(
            array_agg(ue.empresa_id ORDER BY e.razao_social) FILTER (WHERE ue.empresa_id IS NOT NULL),
            '{}'
@@ -80,6 +80,15 @@ async function getById(id) {
   return rows[0] || null;
 }
 
+// Master não guarda lista de telas (tem todas). Administrador só vale em
+// tela liberada — o que vier fora de telas_permitidas é descartado.
+function telasDoUsuario(data) {
+  if (data.permissao !== 'BASICO') return { telas: [], telasAdmin: [] };
+  const telas = [...new Set(data.telas_permitidas || [])];
+  const telasAdmin = [...new Set(data.telas_administrador || [])].filter((t) => telas.includes(t));
+  return { telas, telasAdmin };
+}
+
 async function vincularEmpresas(client, usuarioId, empresaIds, permissao) {
   await client.query('DELETE FROM usuarios_empresas WHERE usuario_id = $1', [usuarioId]);
   // Master não tem vínculo de empresa — acesso é total, sem lista.
@@ -94,13 +103,15 @@ async function vincularEmpresas(client, usuarioId, empresaIds, permissao) {
 
 async function create(data) {
   const senhaHash = await bcrypt.hash(data.senha, SALT_ROUNDS);
+  const { telas, telasAdmin } = telasDoUsuario(data);
   const client = await pool.connect();
   try {
     await client.query('BEGIN');
     const { rows } = await client.query(
       `INSERT INTO usuarios
-        (nome, email, username, senha_hash, telefone_ddd, telefone_numero, permissao, telas_permitidas, avatar_url)
-       VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9)
+        (nome, email, username, senha_hash, telefone_ddd, telefone_numero, permissao, telas_permitidas,
+         telas_administrador, avatar_url)
+       VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10)
        RETURNING id`,
       [
         data.nome,
@@ -110,7 +121,8 @@ async function create(data) {
         data.telefone_ddd || null,
         data.telefone_numero || null,
         data.permissao,
-        data.permissao === 'BASICO' ? data.telas_permitidas : [],
+        telas,
+        telasAdmin,
         data.avatar_url || null,
       ]
     );
@@ -127,6 +139,7 @@ async function create(data) {
 }
 
 async function update(id, data) {
+  const { telas, telasAdmin } = telasDoUsuario(data);
   const campos = [
     'nome = $1',
     'email = $2',
@@ -135,6 +148,7 @@ async function update(id, data) {
     'telefone_numero = $5',
     'permissao = $6',
     'telas_permitidas = $7',
+    'telas_administrador = $8',
   ];
   const params = [
     data.nome,
@@ -143,7 +157,8 @@ async function update(id, data) {
     data.telefone_ddd || null,
     data.telefone_numero || null,
     data.permissao,
-    data.permissao === 'BASICO' ? data.telas_permitidas : [],
+    telas,
+    telasAdmin,
   ];
 
   if (data.senha) {

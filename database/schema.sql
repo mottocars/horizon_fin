@@ -19,18 +19,22 @@ CREATE TABLE usuarios (
     telefone_ddd      VARCHAR(3),
     telefone_numero   VARCHAR(20),
     -- MASTER: acesso total, todas as telas, sem restrição nem de empresa.
-    -- ADMINISTRADOR: acesso a todas as telas, restrito à empresa vinculada.
     -- BASICO: acesso só às telas listadas em telas_permitidas, dentro da
     -- empresa vinculada.
     permissao         VARCHAR(20) NOT NULL DEFAULT 'BASICO'
-                        CHECK (permissao IN ('MASTER', 'ADMINISTRADOR', 'BASICO')),
+                        CHECK (permissao IN ('MASTER', 'BASICO')),
     -- As empresas do usuário (um usuário pode pertencer a mais de uma) ficam
     -- na tabela usuarios_empresas, criada mais abaixo — não existe mais um
     -- único empresa_id aqui. MASTER não tem vínculo nenhum (acesso total).
     -- Só usado quando permissao = 'BASICO' — lista de rotas/telas liberadas
-    -- (ex.: '/cadastros/empresas'). Vazio para MASTER/ADMINISTRADOR, que já
-    -- têm acesso implícito a tudo.
+    -- (ex.: '/cadastros/empresas'). Vazio para MASTER, que já tem acesso
+    -- implícito a tudo.
     telas_permitidas  TEXT[] NOT NULL DEFAULT '{}',
+    -- Telas (subconjunto de telas_permitidas) em que o Básico é
+    -- Administrador; as demais liberadas são nível Comum. O que o
+    -- Administrador pode a mais é decidido em cada tela (ex.: Gestão de
+    -- Cobranças). Vazio para MASTER, que é Administrador de tudo.
+    telas_administrador TEXT[] NOT NULL DEFAULT '{}',
     -- TRUE até o usuário completar a tela obrigatória de primeiro acesso
     -- (confirmar e-mail, confirmar celular, trocar senha e enviar foto).
     -- Usuários criados pelo cadastro de usuários já nascem com TRUE — o

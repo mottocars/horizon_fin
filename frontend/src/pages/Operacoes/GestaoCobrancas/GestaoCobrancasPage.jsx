@@ -38,6 +38,7 @@ import ComunicacaoTab from './Comunicacao/ComunicacaoTab';
 import ReguaCobrancaTab from './ReguaCobranca/ReguaCobrancaTab';
 import ClientesTab from './ClientesTab';
 import RotinasTab from './RotinasTab';
+import { ehAdministradorDaTela } from '../../../utils/permissoes';
 
 // Lista de abas da tela. Pra adicionar uma aba nova no futuro basta incluir
 // um item aqui `{ id, label, icon }` e o caso correspondente no switch de
@@ -94,11 +95,12 @@ function formatarDataHora(data) {
 export default function GestaoCobrancasPage() {
   const { travada: empresaTravada, empresaIdTravada } = useEmpresaTravada();
   const { user } = useAuth();
-  // Só Master e Administrador enxergam a rotina de outra pessoa — Básico só
-  // tem a própria (ver rotinas.service.js::resolverUsuarioAlvo, que ignora
-  // o filtro de qualquer jeito pra quem não é um dos dois, então isto aqui é
+  // Só Master e Administrador desta tela (nível marcado no cadastro do
+  // usuário) enxergam a rotina de outra pessoa — o nível Comum só tem a
+  // própria (ver rotinas.service.js::resolverUsuarioAlvo, que ignora o
+  // filtro de qualquer jeito pra quem não é um dos dois, então isto aqui é
   // só pra não nem mostrar o combobox nesse caso).
-  const podeFiltrarResponsavel = user?.permissao === 'MASTER' || user?.permissao === 'ADMINISTRADOR';
+  const podeFiltrarResponsavel = ehAdministradorDaTela(user, '/operacoes/gestao-de-cobrancas');
   // Quem pode filtrar já abre vendo TODOS os responsáveis, agrupados (ver
   // RotinasTab.jsx — o nível de Responsável mostra o valor e os títulos da
   // carteira de cada um); limpar o filtro volta pra "Minha rotina".
@@ -163,7 +165,7 @@ export default function GestaoCobrancasPage() {
     setUsuarioIdRotinas(USUARIO_ROTINA_PADRAO);
   }
 
-  // Administrador é restrito à própria empresa — o seletor já vem
+  // Quem não é Master e tem uma empresa só fica restrito a ela — o seletor já vem
   // preenchido com ela e travado.
   useEffect(() => {
     if (empresaTravada && empresaIdTravada && empresaId !== String(empresaIdTravada)) {
@@ -333,7 +335,7 @@ export default function GestaoCobrancasPage() {
     });
   }, [empresaId, abaAtiva]);
 
-  // Filtro de "rotina de quem" — só existe pra Master/Administrador (ver
+  // Filtro de "rotina de quem" — só existe pra Master/Administrador da tela (ver
   // podeFiltrarResponsavel acima). Só quem tem de fato uma rotina pra
   // mostrar: no modo "Responsável por etapa", quem está registrado como
   // responsável em alguma etapa; na Distribuição automática, os atendentes

@@ -1,6 +1,8 @@
 const { z } = require('zod');
 const service = require('./reguaCobranca.service');
 const distribuicao = require('./distribuicao.service');
+const { ehAdministradorDaTela } = require('../../middlewares/acesso.middleware');
+const T = require('../../config/telas');
 
 const empresaIdSchema = z.coerce.number().int().positive('Selecione uma empresa.');
 const clusterSchema = z.enum(service.CLUSTERS_VALIDOS, {
@@ -178,10 +180,11 @@ async function salvarComunicacaoAutomatica(req, res, next) {
 
 // ─── Distribuição da Rotina (Configurações Globais) ────────────────────────
 // Ler é livre pra quem tem a tela; mexer na equipe, no modo ou redistribuir
-// muda o trabalho de todo mundo — só Master e Administrador.
+// muda o trabalho de todo mundo — só Master e Administrador da tela Gestão
+// de Cobranças (nível marcado no cadastro do usuário).
 function exigirGestor(req) {
-  if (req.user?.permissao !== 'MASTER' && req.user?.permissao !== 'ADMINISTRADOR') {
-    const err = new Error('Só Master e Administrador podem alterar a distribuição da Rotina.');
+  if (!ehAdministradorDaTela(req.user, T.COBRANCAS)) {
+    const err = new Error('Só Master e Administrador da Gestão de Cobranças podem alterar a distribuição da Rotina.');
     err.status = 403;
     err.expose = true;
     throw err;

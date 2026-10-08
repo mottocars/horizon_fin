@@ -6,7 +6,7 @@ const env = require('../../config/env');
 async function login(username, senha) {
   const { rows } = await pool.query(
     `SELECT u.id, u.nome, u.email, u.username, u.senha_hash, u.avatar_url, u.ativo, u.permissao,
-            u.telas_permitidas, u.primeiro_acesso,
+            u.telas_permitidas, u.telas_administrador, u.primeiro_acesso,
             COALESCE(array_agg(ue.empresa_id) FILTER (WHERE ue.empresa_id IS NOT NULL), '{}') AS empresa_ids
      FROM usuarios u
      LEFT JOIN usuarios_empresas ue ON ue.usuario_id = u.id
@@ -50,6 +50,7 @@ async function login(username, senha) {
       permissao: usuario.permissao,
       empresa_ids: usuario.empresa_ids,
       telas_permitidas: usuario.telas_permitidas,
+      telas_administrador: usuario.telas_administrador,
       primeiro_acesso: usuario.primeiro_acesso,
     },
   };

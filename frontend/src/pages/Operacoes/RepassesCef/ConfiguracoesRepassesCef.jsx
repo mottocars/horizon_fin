@@ -7,7 +7,7 @@ import TransferList from '../../../components/TransferList';
 import { getComunicarConfigRepassesCef, salvarComunicarConfigRepassesCef } from '../../../api/repassesCef.api';
 import { listZapiIntegracoes } from '../../../api/zapi.api';
 
-const ROTULO_PERMISSAO = { MASTER: 'Master', ADMINISTRADOR: 'Administrador', BASICO: 'Básico' };
+const ROTULO_PERMISSAO = { MASTER: 'Master', BASICO: 'Básico' };
 
 const DIAS_SEMANA = [
   { value: 1, label: 'Segunda-feira' },

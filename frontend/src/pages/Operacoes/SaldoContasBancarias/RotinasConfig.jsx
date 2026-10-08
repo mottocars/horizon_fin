@@ -5,7 +5,7 @@ import SearchableSelect from '../../../components/SearchableSelect';
 import { getRotinasConfig, salvarRotinasConfig } from '../../../api/saldoContasBancarias.api';
 import LogoBanco from './LogoBanco';
 
-const ROTULO_PERMISSAO = { MASTER: 'Master', ADMINISTRADOR: 'Administrador', BASICO: 'Básico' };
+const ROTULO_PERMISSAO = { MASTER: 'Master', BASICO: 'Básico' };
 
 const DIVISOES = [
   { id: 'CLASSIFICACAO', rotulo: 'Classificação', Icone: Layers, lista: 'classificacoes' },

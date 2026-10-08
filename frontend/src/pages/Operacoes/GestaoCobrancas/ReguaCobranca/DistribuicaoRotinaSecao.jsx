@@ -20,6 +20,7 @@ import Modal from '../../../../components/Modal';
 import SearchableSelect from '../../../../components/SearchableSelect';
 import { useAuth } from '../../../../auth/AuthContext';
 import { useConfirm } from '../../../../confirm/ConfirmContext';
+import { ehAdministradorDaTela } from '../../../../utils/permissoes';
 import {
   adicionarAtendenteDistribuicao,
   distribuirHojeReguaCobranca,
@@ -288,7 +289,7 @@ function CampoLiberacao({ valor, disabled, onCommit }) {
 export default function DistribuicaoRotinaSecao({ empresaId }) {
   const { user } = useAuth();
   const confirm = useConfirm();
-  const podeEditar = user?.permissao === 'MASTER' || user?.permissao === 'ADMINISTRADOR';
+  const podeEditar = ehAdministradorDaTela(user, '/operacoes/gestao-de-cobrancas');
 
   const [painel, setPainel] = useState(null);
   const [erro, setErro] = useState('');
@@ -474,7 +475,7 @@ export default function DistribuicaoRotinaSecao({ empresaId }) {
         })}
       </div>
 
-        {!podeEditar && <p className="text-xs text-gray-400">Só Master e Administrador podem alterar a distribuição.</p>}
+        {!podeEditar && <p className="text-xs text-gray-400">Só Master e Administrador da Gestão de Cobranças podem alterar a distribuição.</p>}
       </ParametroLinha>
 
       {automatica && (

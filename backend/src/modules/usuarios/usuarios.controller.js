@@ -74,10 +74,14 @@ const baseSchema = {
   telefone_ddd: z.string().trim().regex(/^\d{2,3}$/, 'DDD inválido.').optional().or(z.literal('')),
   telefone_numero: z.string().trim().optional().or(z.literal('')),
   empresa_ids: z.array(z.coerce.number().int().positive()).optional().default([]),
-  permissao: z.enum(['MASTER', 'ADMINISTRADOR', 'BASICO'], {
+  permissao: z.enum(['MASTER', 'BASICO'], {
     errorMap: () => ({ message: 'Selecione a permissão do usuário.' }),
   }),
   telas_permitidas: z.array(z.string()).optional().default([]),
+  // Telas (dentre as liberadas) em que o usuário é Administrador; as demais
+  // são nível Comum. O que não estiver em telas_permitidas é descartado no
+  // service.
+  telas_administrador: z.array(z.string()).optional().default([]),
   // Data URI (base64) da foto, já redimensionada/comprimida no navegador.
   // '' explicitamente = removeu a foto; undefined = não mexeu nela.
   avatar_url: z
@@ -176,18 +180,28 @@ async function paramUsuarioAcessivel(req, res, next, id) {
   }
 }
 
-// Ninguém concede mais acesso do que tem: Administrador não cria Master
-// (ver garantirPodeDefinirMaster); Básico com a tela de Usuários só cria/
-// edita Básico, e só com telas que ele mesmo tem — senão bastaria criar
-// um Administrador pra si mesmo.
-function garantirNivelConcedivel(req, data) {
-  if (req.user.permissao !== 'BASICO') return;
+// Ninguém concede mais acesso do que tem: só Master cria Master (ver
+// garantirPodeDefinirMaster); Básico com a tela de Usuários só libera telas
+// que ele mesmo tem, e só marca como Administrador as telas em que ele mesmo
+// é Administrador — senão bastaria se dar o acesso por meio de outro
+// usuário. Na edição, o que o alvo JÁ tinha pode continuar (quem edita não
+// precisa ter tudo o que o alvo tem pra mexer no resto do cadastro); a
+// checagem é só sobre o que está sendo acrescentado.
+async function garantirNivelConcedivel(req, data, idAlvo) {
+  if (req.user.permissao === 'MASTER') return;
   if (data.permissao !== 'BASICO') {
     throw forbidden('Você só pode cadastrar usuários com perfil Básico.');
   }
+  const atual = idAlvo ? await service.getById(idAlvo) : null;
+  const jaTinha = new Set(atual?.telas_permitidas || []);
+  const jaEraAdmin = new Set(atual?.telas_administrador || []);
   const proprias = new Set(req.user.telas);
-  if ((data.telas_permitidas || []).some((t) => !proprias.has(t))) {
+  const propriasAdmin = new Set(req.user.telasAdministrador || []);
+  if ((data.telas_permitidas || []).some((t) => !jaTinha.has(t) && !proprias.has(t))) {
     throw forbidden('Você só pode liberar telas às quais você mesmo tem acesso.');
+  }
+  if ((data.telas_administrador || []).some((t) => !jaEraAdmin.has(t) && !propriasAdmin.has(t))) {
+    throw forbidden('Você só pode marcar como Administrador as telas em que você mesmo é Administrador.');
   }
 }
 
@@ -195,7 +209,7 @@ async function create(req, res, next) {
   try {
     const data = createSchema.parse(req.body);
     await garantirPodeDefinirMaster(req, data.permissao);
-    garantirNivelConcedivel(req, data);
+    await garantirNivelConcedivel(req, data);
     await garantirEmpresaPermitida(req, data.empresa_ids);
     const usuario = await service.create(data);
     res.status(201).json(usuario);
@@ -211,7 +225,7 @@ async function update(req, res, next) {
     const data = updateSchema.parse(req.body);
     await garantirAlvoNaoEhMasterOculto(req, req.params.id);
     await garantirPodeDefinirMaster(req, data.permissao);
-    garantirNivelConcedivel(req, data);
+    await garantirNivelConcedivel(req, data, req.params.id);
     await garantirEmpresaPermitida(req, data.empresa_ids);
     const usuario = await service.update(req.params.id, data);
     if (!usuario) return res.status(404).json({ message: 'Usuário não encontrado.' });

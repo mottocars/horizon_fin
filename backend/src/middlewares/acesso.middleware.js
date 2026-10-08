@@ -3,9 +3,10 @@ const { autenticar, podeAcessarEmpresa, extrairIds } = require('./auth.middlewar
 
 // Regras de acesso aplicadas no BACKEND (o menu/tela do frontend é só
 // conveniência — quem decide o que pode é aqui):
-//   MASTER        → todas as telas, todas as empresas;
-//   ADMINISTRADOR → todas as telas, só as empresas vinculadas;
-//   BASICO        → só as telas em telas_permitidas, só as empresas vinculadas.
+//   MASTER → todas as telas, todas as empresas;
+//   BASICO → só as telas em telas_permitidas, só as empresas vinculadas.
+//            Em cada tela liberada ele é Comum ou Administrador
+//            (telas_administrador) — ver ehAdministradorDaTela.
 // A empresa é conferida em auth.middleware.js (query/body) e nos
 // router.param abaixo (URL e IDs de recursos).
 
@@ -13,7 +14,7 @@ const { autenticar, podeAcessarEmpresa, extrairIds } = require('./auth.middlewar
 const QUALQUER_TELA = Symbol('qualquer-tela');
 
 function temAlgumaTela(user, telas) {
-  if (user.permissao === 'MASTER' || user.permissao === 'ADMINISTRADOR') return true;
+  if (user.permissao === 'MASTER') return true;
   if (telas.includes(QUALQUER_TELA)) return true;
   return telas.some((t) => user.telas.includes(t));
 }
@@ -22,7 +23,7 @@ function temAlgumaTela(user, telas) {
 // `telasDaApi` liberadas; as `telasSoLeitura` liberam só GET (telas que
 // apenas consultam essa API — ex.: a Régua de Cobrança lista as conexões
 // Z-API pra escolher uma, mas não cadastra conexão). Lista vazia = só
-// Master/Administrador (APIs sem tela no menu).
+// Master (APIs sem tela no menu).
 function exigirTela(telasDaApi, telasSoLeitura = []) {
   return async (req, res, next) => {
     try {
@@ -34,6 +35,14 @@ function exigirTela(telasDaApi, telasSoLeitura = []) {
       next(err);
     }
   };
+}
+
+// O que o Administrador de uma tela pode a mais (em relação ao Comum) é
+// decidido em cada tela, chamando isto. Master é Administrador de tudo.
+function ehAdministradorDaTela(user, tela) {
+  if (!user) return false;
+  if (user.permissao === 'MASTER') return true;
+  return (user.telasAdministrador || []).includes(tela);
 }
 
 function exigirMaster(req, res, next) {
@@ -106,6 +115,7 @@ module.exports = {
   QUALQUER_TELA,
   exigirTela,
   exigirMaster,
+  ehAdministradorDaTela,
   paramEmpresa,
   paramRecurso,
   exigirRecursosDoCorpo,

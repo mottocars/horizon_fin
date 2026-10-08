@@ -332,7 +332,7 @@ async function salvarSaldos(empresaId, usuarioId, itens) {
 // Consulta reaproveitada por listUsuariosComunicarSaldos (pra montar a tela) e
 // salvarComunicarSaldos (pra revalidar no servidor antes de gravar) — quem pode ser escolhido
 // pra receber aviso de saldos de uma empresa: todo MASTER (acesso irrestrito, mesmo critério de
-// assertAcessoEmpresa) mais qualquer ADMINISTRADOR/BASICO vinculado a essa empresa via
+// assertAcessoEmpresa) mais qualquer BASICO vinculado a essa empresa via
 // usuarios_empresas.
 async function listUsuariosElegiveisComunicar(empresaId) {
   const { rows } = await pool.query(

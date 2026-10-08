@@ -1,5 +1,5 @@
 // Códigos das telas do sistema — os mesmos gravados em
-// usuarios.telas_permitidas (perfil Básico) e listados no cadastro de
+// usuarios.telas_permitidas / telas_administrador (perfil Básico) e listados no cadastro de
 // usuário (frontend/src/config/telasSistema.js). Usados pelo exigirTela
 // de server.js. Tela nova no menu: adicionar aqui e lá.
 module.exports = {
@@ -34,4 +34,5 @@ module.exports = {
   EXTRATOS: '/relatorios/extratos-bancarios',
   REL_REPASSES: '/relatorios/repasses-cef',
   REL_DESEMPENHO_COBRANCA: '/relatorios/desempenho-cobranca',
+  REL_ETAPAS_EMPREENDIMENTOS: '/relatorios/etapas-dos-empreendimentos',
 };

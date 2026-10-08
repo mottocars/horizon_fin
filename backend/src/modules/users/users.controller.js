@@ -6,7 +6,7 @@ async function me(req, res, next) {
   try {
     const { rows } = await pool.query(
       `SELECT u.id, u.nome, u.email, u.username, u.telefone_ddd, u.telefone_numero, u.avatar_url,
-              u.permissao, u.telas_permitidas, u.primeiro_acesso,
+              u.permissao, u.telas_permitidas, u.telas_administrador, u.primeiro_acesso,
               COALESCE(array_agg(ue.empresa_id) FILTER (WHERE ue.empresa_id IS NOT NULL), '{}') AS empresa_ids
        FROM usuarios u
        LEFT JOIN usuarios_empresas ue ON ue.usuario_id = u.id
