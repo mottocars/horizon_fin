@@ -1,15 +1,9 @@
 const pool = require('../../config/db');
 const service = require('./saldos.service');
 const saldosExcelService = require('./saldosExcel.service');
-const empresasService = require('../empresas/empresas.service');
-const usuariosService = require('../usuarios/usuarios.service');
 const zapiService = require('../integracoes-zapi/zapi.service');
 
 const MIME_XLSX = 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet';
-
-function nomeExibicaoEmpresa(empresa) {
-  return empresa?.nome_fantasia?.trim() || empresa?.razao_social || '';
-}
 
 function brData(iso) {
   return iso.split('-').reverse().join('/');
@@ -40,20 +34,21 @@ function semanaDe(iso) {
   return { dataInicio: fmt(domingo), dataFim: fmt(sabado) };
 }
 
-function montarMensagem({ nomeDestinatario, nomeEmpresa, dataBR, nomeResponsavel, linhas, total, delta }) {
+// Mesmo formato do comunicado de Repasses CEF (repasses-cef/comunicarRepasses.service.js).
+function montarMensagem({ nomeDestinatario, dataBR, linhas, total, delta }) {
+  const primeiroNome = String(nomeDestinatario || '').trim().split(/\s+/)[0];
   return [
     '*[ SALDO DAS CONTAS ]*',
+    `_Posição de ${dataBR}_`,
     '',
-    `Olá, ${nomeDestinatario}! Tudo bem?`,
-    '',
-    `Seguem os saldos bancários da empresa *${nomeEmpresa}*, referentes ao dia *${dataBR}*. O período foi encerrado por *${nomeResponsavel}*.`,
-    '',
-    'Os detalhes de cada conta estão no arquivo em Excel anexado.',
+    `Olá${primeiroNome ? `, ${primeiroNome}` : ''}! Segue os saldos das contas bancárias.`,
     '',
     'Resumo por classificação:',
     linhas,
     `*Total: R$ ${total}*`,
     ...(typeof delta === 'number' ? ['', formatarVariacao(delta)] : []),
+    '',
+    '📎 Detalhe por conta na planilha anexa',
     '',
     '_Comunicado automático enviado pelo Horizon Finanças._',
   ].join('\n');
@@ -66,7 +61,7 @@ function montarMensagem({ nomeDestinatario, nomeEmpresa, dataBR, nomeResponsavel
 // pra quem estava na tela. Nunca lança: todo problema vira `status: 'erro'` ou uma falha
 // pontual em `falhas`, nunca interrompe o encerramento do período (que já aconteceu antes
 // desta função ser chamada).
-async function notificarComunicarSaldos(empresaId, dataFechada, usuarioIdResponsavel) {
+async function notificarComunicarSaldos(empresaId, dataFechada) {
   const prefixo = `[comunicar-saldos] empresa ${empresaId}, dia ${dataFechada}:`;
   const nada = { enviados: [], falhas: [] };
 
@@ -86,11 +81,9 @@ async function notificarComunicarSaldos(empresaId, dataFechada, usuarioIdRespons
   );
   if (destinatarios.length === 0) return { status: 'sem_destinatario', ...nada };
 
-  const [{ contas }, empresa, responsavel] = await Promise.all([
-    service.getSaldos(empresaId, { dataInicio: dataFechada, dataFim: dataFechada, companyIds: [], classificacoes: [], bancos: [], contas: [] }),
-    empresasService.getById(empresaId),
-    usuariosService.getById(usuarioIdResponsavel),
-  ]);
+  const { contas } = await service.getSaldos(empresaId, {
+    dataInicio: dataFechada, dataFim: dataFechada, companyIds: [], classificacoes: [], bancos: [], contas: [],
+  });
 
   const grupos = saldosExcelService.agruparContas(contas);
   if (grupos.length === 0) {
@@ -99,10 +92,8 @@ async function notificarComunicarSaldos(empresaId, dataFechada, usuarioIdRespons
   }
   const { totaisPorGrupo, totalGeral } = saldosExcelService.calcularTotais(grupos, [{ iso: dataFechada }]);
 
-  const linhas = grupos.map((g) => `• ${g.nome}: R$ ${formatarMoeda(totaisPorGrupo[g.nome][dataFechada])}`).join('\n');
+  const linhas = grupos.map((g) => `* ${g.nome}: R$ ${formatarMoeda(totaisPorGrupo[g.nome][dataFechada])}`).join('\n');
   const total = formatarMoeda(totalGeral[dataFechada]);
-  const nomeEmpresa = nomeExibicaoEmpresa(empresa);
-  const nomeResponsavel = responsavel?.nome || 'Usuário';
   const dataBR = brData(dataFechada);
 
   // Variação desde a última abertura de período (a anterior a esta que acabou de encerrar) —
@@ -145,7 +136,8 @@ async function notificarComunicarSaldos(empresaId, dataFechada, usuarioIdRespons
       { nomeUsuario: 'Horizon Finanças', geradoEm }
     );
     anexoBase64 = buffer.toString('base64');
-    nomeArquivo = `saldo-contas-bancarias_${dataInicio}_a_${dataFim}.xlsx`;
+    // Sem extensão: a Z-API já acrescenta ".xlsx" (send-document/xlsx).
+    nomeArquivo = `saldo-contas-bancarias_${dataInicio}_a_${dataFim}`;
   } catch (err) {
     console.error(`${prefixo} falha ao gerar o anexo (${err.message}) — segue só com a mensagem de texto.`);
   }
@@ -156,7 +148,7 @@ async function notificarComunicarSaldos(empresaId, dataFechada, usuarioIdRespons
         throw new Error(`usuário "${dest.nome}" (id ${dest.id}) sem telefone cadastrado`);
       }
       const telefone = `${dest.telefone_ddd}${dest.telefone_numero}`;
-      const mensagem = montarMensagem({ nomeDestinatario: dest.nome, nomeEmpresa, dataBR, nomeResponsavel, linhas, total, delta });
+      const mensagem = montarMensagem({ nomeDestinatario: dest.nome, dataBR, linhas, total, delta });
       if (anexoBase64) {
         await zapiService.enviarDocumento(zapiIntegracaoId, {
           telefone,
