@@ -68,23 +68,10 @@ function corCumprimento(feitas, devidas) {
   return feitas > 0 ? 'text-amber-700' : 'text-red-600';
 }
 
-function SeloPercentual({ feitas, devidas }) {
-  if (!devidas) return null;
-  const pct = Math.round((feitas / devidas) * 100);
-  const cor =
-    pct >= 100
-      ? 'bg-emerald-50 text-emerald-700 ring-emerald-200'
-      : pct > 0
-        ? 'bg-amber-50 text-amber-700 ring-amber-200'
-        : 'bg-red-50 text-red-700 ring-red-200';
-  return <span className={`ml-1.5 rounded-full px-1.5 py-px text-[10px] font-semibold ring-1 ${cor}`}>{pct}%</span>;
-}
-
 // Resumo de um conjunto de linhas (grupo recolhido, linha de grupo, total).
 function resumir(linhas) {
   const pagas = linhas.filter((p) => p.status === 'pago');
   const abertas = linhas.filter((p) => p.status === 'aberto');
-  const dias = linhas.map((p) => p.diasUltimaInteracao).filter((d) => d != null);
   return {
     parcelas: linhas.length,
     clientes: new Set(linhas.map((p) => p.clientId)).size,
@@ -94,7 +81,6 @@ function resumir(linhas) {
     valorAberto: abertas.reduce((s, p) => s + p.valor, 0),
     feitas: linhas.reduce((s, p) => s + p.interacoesFeitas, 0),
     devidas: linhas.reduce((s, p) => s + p.interacoesDevidas, 0),
-    maisRecente: dias.length ? Math.min(...dias) : null,
   };
 }
 
@@ -134,14 +120,7 @@ const COLUNAS = [
       ),
     resumo: (r) =>
       r.valorRecebido || r.valorAberto ? (
-        <span className="block leading-tight">
-          <span className="block font-semibold text-emerald-700" title="Valor recebido">
-            {formatarMoeda(r.valorRecebido)}
-          </span>
-          <span className="block text-[11px] text-amber-700" title="Saldo em aberto">
-            {formatarMoeda(r.valorAberto)} em aberto
-          </span>
-        </span>
+        <span className="font-semibold text-gray-800">{formatarMoeda(r.valorRecebido + r.valorAberto)}</span>
       ) : (
         <Vazio />
       ),
@@ -150,6 +129,7 @@ const COLUNAS = [
     chave: 'interacoes',
     label: 'Interações',
     largura: 'w-32',
+    centro: true,
     celula: (p) =>
       p.interacoesDevidas ? (
         <span
@@ -172,7 +152,6 @@ const COLUNAS = [
           <span className={`font-semibold ${corCumprimento(r.feitas, r.devidas)}`}>
             {r.feitas.toLocaleString('pt-BR')} / {r.devidas.toLocaleString('pt-BR')}
           </span>
-          <SeloPercentual feitas={r.feitas} devidas={r.devidas} />
         </span>
       ) : (
         <Vazio />
@@ -188,74 +167,57 @@ const COLUNAS = [
       ) : (
         <span className="text-gray-400">nenhuma</span>
       ),
-    resumo: (r) =>
-      r.maisRecente != null ? (
-        <span title="Interação mais recente do grupo">
-          <span className="text-[10px] uppercase tracking-wide text-gray-400">última </span>
-          {textoDias(r.maisRecente)}
-        </span>
-      ) : (
-        <span className="text-gray-400">nenhuma</span>
-      ),
+    resumo: () => null,
   },
   {
     chave: 'status',
     label: 'Status',
     largura: 'w-44',
+    centro: true,
     celula: (p) => (
       <span title={tituloStatus(p)} className={`inline-block rounded-full px-2 py-0.5 text-[11px] font-medium ring-1 ${STATUS[p.status].classe}`}>
         {textoStatus(p)}
       </span>
     ),
-    resumo: (r) => (
-      <span>
-        <b className="font-semibold text-emerald-700">{r.pagas}</b> {r.pagas === 1 ? 'paga' : 'pagas'}
-        <span className="text-gray-300"> · </span>
-        <b className="font-semibold text-amber-700">{r.abertas}</b> em aberto
-      </span>
-    ),
+    resumo: () => null,
   },
 ];
 
 const B_GRUPO = 'border-b-2 border-b-gray-400';
 const B_LINHA = 'border-b border-b-gray-200';
-const B_CLIENTE = 'border-b border-b-gray-300';
 
-function CelulaResumo({ children, borda }) {
-  return <td className={`${borda} border-l border-l-gray-100 py-1.5 pl-2 text-xs tabular-nums text-gray-700 2xl:pl-4`}>{children}</td>;
+function CelulaResumo({ children, borda, centro = false }) {
+  return (
+    <td className={`${borda} border-l border-l-gray-100 py-1.5 text-xs tabular-nums text-gray-700 ${centro ? 'px-1 text-center' : 'pl-2 2xl:pl-4'}`}>
+      {children}
+    </td>
+  );
 }
 
 function CelulasResumo({ resumo, borda }) {
   return COLUNAS.map((coluna) => (
-    <CelulaResumo key={coluna.chave} borda={borda}>
+    <CelulaResumo key={coluna.chave} borda={borda} centro={coluna.centro}>
       {coluna.resumo(resumo)}
     </CelulaResumo>
   ));
 }
 
-// Atendente → Cliente → Parcela. Atendentes do maior valor recebido pro
-// menor; clientes idem; parcelas pelo vencimento.
+// Atendente → parcelas (sem agrupar por cliente: um cliente com mais de uma
+// parcela ou título aparece em mais de uma linha). Atendentes do maior valor
+// recebido pro menor; linhas por cliente e vencimento.
 function construirArvore(linhas) {
   const atendentes = new Map();
   for (const p of linhas) {
-    if (!atendentes.has(p.usuarioId)) atendentes.set(p.usuarioId, { id: p.usuarioId, nome: p.atendente, linhas: [], clientes: new Map() });
-    const a = atendentes.get(p.usuarioId);
-    a.linhas.push(p);
-    const chaveCliente = `${p.usuarioId}::${p.clientId}`;
-    if (!a.clientes.has(chaveCliente)) a.clientes.set(chaveCliente, { chave: chaveCliente, nome: p.cliente, linhas: [] });
-    a.clientes.get(chaveCliente).linhas.push(p);
+    if (!atendentes.has(p.usuarioId)) atendentes.set(p.usuarioId, { id: p.usuarioId, nome: p.atendente, linhas: [] });
+    atendentes.get(p.usuarioId).linhas.push(p);
   }
   return [...atendentes.values()]
     .map((a) => ({
       ...a,
       resumo: resumir(a.linhas),
-      clientes: [...a.clientes.values()]
-        .map((c) => ({
-          ...c,
-          resumo: resumir(c.linhas),
-          linhas: [...c.linhas].sort((x, y) => (x.vencimento || '').localeCompare(y.vencimento || '')),
-        }))
-        .sort((x, y) => y.resumo.valorRecebido - x.resumo.valorRecebido || x.nome.localeCompare(y.nome, 'pt-BR')),
+      linhas: [...a.linhas].sort(
+        (x, y) => x.cliente.localeCompare(y.cliente, 'pt-BR') || (x.vencimento || '').localeCompare(y.vencimento || '')
+      ),
     }))
     .sort((x, y) => y.resumo.valorRecebido - x.resumo.valorRecebido || x.nome.localeCompare(y.nome, 'pt-BR'));
 }
@@ -378,9 +340,8 @@ export default function DesempenhoCobrancaPage() {
     setFiltroStatus(null);
   }
 
-  // Atendentes começam recolhidas; clientes abertos dentro de uma atendente aberta.
+  // Atendentes começam recolhidas.
   const [atendentesAbertas, setAtendentesAbertas] = useState(() => new Set());
-  const [clientesRecolhidos, setClientesRecolhidos] = useState(() => new Set());
   const tudoExpandido = arvore.length > 0 && arvore.every((a) => atendentesAbertas.has(a.id));
 
   function alternar(setter, chave) {
@@ -394,10 +355,7 @@ export default function DesempenhoCobrancaPage() {
 
   function toggleTudo() {
     if (tudoExpandido) setAtendentesAbertas(new Set());
-    else {
-      setAtendentesAbertas(new Set(arvore.map((a) => a.id)));
-      setClientesRecolhidos(new Set());
-    }
+    else setAtendentesAbertas(new Set(arvore.map((a) => a.id)));
   }
 
   // Menu de contexto com "Exportar" — mesmo comportamento do Repasses CEF.
@@ -425,27 +383,25 @@ export default function DesempenhoCobrancaPage() {
     };
     const saida = [];
     for (const a of arvore) {
-      for (const c of a.clientes) {
-        for (const p of c.linhas) {
-          saida.push({
-            Atendente: a.nome,
-            Cliente: p.cliente,
-            'Centro de Custo': p.centroCusto || '',
-            Título: Number(p.billId),
-            Parcela: p.parcela,
-            Condição: p.condicao || '',
-            Vencimento: data(p.vencimento),
-            Pagamento: data(p.dataPagamento),
-            Status: textoStatus(p),
-            'Valor recebido': p.status === 'pago' ? p.valor : '',
-            'Saldo em aberto': p.status === 'aberto' ? p.valor : '',
-            'Interações feitas': p.interacoesFeitas,
-            'Interações devidas': p.interacoesDevidas,
-            'Cumprimento (%)': p.interacoesDevidas ? Math.round((p.interacoesFeitas / p.interacoesDevidas) * 100) : '',
-            'Última interação': data(p.ultimaInteracao),
-            'Dias desde a última interação': p.diasUltimaInteracao ?? '',
-          });
-        }
+      for (const p of a.linhas) {
+        saida.push({
+          Atendente: a.nome,
+          Cliente: p.cliente,
+          'Centro de Custo': p.centroCusto || '',
+          Título: Number(p.billId),
+          Parcela: p.parcela,
+          Condição: p.condicao || '',
+          Vencimento: data(p.vencimento),
+          Pagamento: data(p.dataPagamento),
+          Status: textoStatus(p),
+          'Valor recebido': p.status === 'pago' ? p.valor : '',
+          'Saldo em aberto': p.status === 'aberto' ? p.valor : '',
+          'Interações feitas': p.interacoesFeitas,
+          'Interações devidas': p.interacoesDevidas,
+          'Cumprimento (%)': p.interacoesDevidas ? Math.round((p.interacoesFeitas / p.interacoesDevidas) * 100) : '',
+          'Última interação': data(p.ultimaInteracao),
+          'Dias desde a última interação': p.diasUltimaInteracao ?? '',
+        });
       }
     }
     const planilha = XLSX.utils.json_to_sheet(saida, { cellDates: true, dateNF: 'dd/mm/yyyy' });
@@ -505,9 +461,6 @@ export default function DesempenhoCobrancaPage() {
             {rotulo}
           </span>
         )}
-        {/* Condição (ATO, Parcela mensal, Desconto...) — sem ela, "19078 / 1"
-            do ATO e do Desconto pareciam a mesma parcela repetida. */}
-        {p.condicao && <span className="block truncate text-[10px] uppercase tracking-wide text-gray-400">{p.condicao.toLowerCase()}</span>}
       </td>
     );
   }
@@ -651,7 +604,7 @@ export default function DesempenhoCobrancaPage() {
                     return (
                       <tr key={a.id}>
                         <td className={`${B_GRUPO} border-r border-r-gray-200 bg-white px-2 py-2.5 align-middle 2xl:px-4`}>
-                          <RotuloAgrupador aberto={false} negrito nome={a.nome} contagem={a.clientes.length} onClick={() => alternar(setAtendentesAbertas, a.id)} />
+                          <RotuloAgrupador aberto={false} negrito nome={a.nome} contagem={a.resumo.clientes} onClick={() => alternar(setAtendentesAbertas, a.id)} />
                         </td>
                         <CelulaResumo borda={B_GRUPO}>
                           {a.resumo.clientes} {a.resumo.clientes === 1 ? 'cliente' : 'clientes'}
@@ -664,68 +617,36 @@ export default function DesempenhoCobrancaPage() {
                     );
                   }
 
-                  const blocos = a.clientes.map((c) => ({ ...c, recolhido: clientesRecolhidos.has(c.chave) }));
-                  const totalLinhas = blocos.reduce((s, c) => s + (c.recolhido ? 1 : c.linhas.length), 0);
-                  let primeiraLinha = true;
                   return (
                     <Fragment key={a.id}>
-                      {blocos.map((c, iCliente) => {
-                        const ultimoCliente = iCliente === blocos.length - 1;
-                        const celulaAtendente = primeiraLinha && (
-                          <td rowSpan={totalLinhas} className={`${B_GRUPO} border-r border-r-gray-200 bg-white px-2 py-2.5 align-top 2xl:px-4`}>
-                            <RotuloAgrupador
-                              aberto
-                              negrito
-                              nome={a.nome}
-                              contagem={a.clientes.length}
-                              onClick={() => alternar(setAtendentesAbertas, a.id)}
-                              topoGrudado={topoRotuloGrudado}
-                            />
-                          </td>
-                        );
-                        primeiraLinha = false;
-                        const bordaCliente = ultimoCliente ? B_GRUPO : B_CLIENTE;
-
-                        if (c.recolhido) {
-                          return (
-                            <tr key={c.chave}>
-                              {celulaAtendente}
-                              <td className={`${bordaCliente} border-l border-l-gray-200 bg-white px-2 py-2.5 align-middle 2xl:px-4`}>
-                                <RotuloAgrupador aberto={false} nome={c.nome} contagem={c.linhas.length} onClick={() => alternar(setClientesRecolhidos, c.chave)} />
+                      {a.linhas.map((p, i) => {
+                        const borda = i === a.linhas.length - 1 ? B_GRUPO : B_LINHA;
+                        return (
+                          <tr key={`${a.id}-${p.billId}-${p.installmentId}`}>
+                            {i === 0 && (
+                              <td rowSpan={a.linhas.length} className={`${B_GRUPO} border-r border-r-gray-200 bg-white px-2 py-2.5 align-top 2xl:px-4`}>
+                                <RotuloAgrupador
+                                  aberto
+                                  negrito
+                                  nome={a.nome}
+                                  contagem={a.resumo.clientes}
+                                  onClick={() => alternar(setAtendentesAbertas, a.id)}
+                                  topoGrudado={topoRotuloGrudado}
+                                />
                               </td>
-                              <CelulaResumo borda={bordaCliente}>
-                                {c.linhas.length} {c.linhas.length === 1 ? 'parcela' : 'parcelas'}
-                              </CelulaResumo>
-                              <CelulasResumo resumo={c.resumo} borda={bordaCliente} />
-                            </tr>
-                          );
-                        }
-
-                        return c.linhas.map((p, iLinha) => {
-                          const borda = iLinha === c.linhas.length - 1 ? bordaCliente : B_LINHA;
-                          return (
-                            <tr key={`${c.chave}-${p.billId}-${p.installmentId}`}>
-                              {iLinha === 0 && celulaAtendente}
-                              {iLinha === 0 && (
-                                <td rowSpan={c.linhas.length} className={`${bordaCliente} border-l border-l-gray-200 bg-white px-2 py-2.5 align-top 2xl:px-4`}>
-                                  <RotuloAgrupador
-                                    aberto
-                                    nome={c.nome}
-                                    contagem={c.linhas.length}
-                                    onClick={() => alternar(setClientesRecolhidos, c.chave)}
-                                    topoGrudado={topoRotuloGrudado}
-                                  />
-                                </td>
-                              )}
-                              {celulaParcela(p, borda)}
-                              {COLUNAS.map((coluna) => (
-                                <td key={coluna.chave} className={`${borda} border-l border-l-gray-100 py-1.5 pl-2 text-xs tabular-nums text-gray-700 2xl:pl-4`}>
-                                  {coluna.celula(p)}
-                                </td>
-                              ))}
-                            </tr>
-                          );
-                        });
+                            )}
+                            <td className={`${borda} border-l border-l-gray-100 py-1.5 pl-2 pr-1 text-xs text-gray-800 2xl:pl-4`}>{p.cliente}</td>
+                            {celulaParcela(p, borda)}
+                            {COLUNAS.map((coluna) => (
+                              <td
+                                key={coluna.chave}
+                                className={`${borda} border-l border-l-gray-100 py-1.5 text-xs tabular-nums text-gray-700 ${coluna.centro ? 'px-1 text-center' : 'pl-2 2xl:pl-4'}`}
+                              >
+                                {coluna.celula(p)}
+                              </td>
+                            ))}
+                          </tr>
+                        );
                       })}
                     </Fragment>
                   );
@@ -745,9 +666,9 @@ export default function DesempenhoCobrancaPage() {
                   {COLUNAS.map((coluna, i) => (
                     <td
                       key={coluna.chave}
-                      className={`sticky -bottom-6 z-10 border-t-2 border-t-primary-500 border-l border-l-primary-100 bg-primary-50 py-2.5 pl-2 tabular-nums 2xl:pl-4 ${
-                        i === COLUNAS.length - 1 ? 'rounded-br-card' : ''
-                      }`}
+                      className={`sticky -bottom-6 z-10 border-t-2 border-t-primary-500 border-l border-l-primary-100 bg-primary-50 py-2.5 tabular-nums ${
+                        coluna.centro ? 'px-1 text-center' : 'pl-2 2xl:pl-4'
+                      } ${i === COLUNAS.length - 1 ? 'rounded-br-card' : ''}`}
                     >
                       {coluna.resumo(total)}
                     </td>
