@@ -75,11 +75,12 @@ async function nomesDosCentros(empresaId) {
   return new Map(rows.map((r) => [r.id, r.nome]));
 }
 
-// Rastreio dos documentos: datas da reserva e dados do contrato Sienge (data de emissão —
-// o contract_date do Sienge só repete a data da reserva — e valor), pra preencher as colunas
-// das etapas anteriores em cada aba.
+// Rastreio dos documentos: datas da reserva, dados do contrato Sienge (data de emissão —
+// o contract_date do Sienge só repete a data da reserva — e valor) e o valor retido pela
+// Caixa, que vem do EPR importado no Portal das Construtoras (epr_mutuarios.valor_retido,
+// coluna "VR RETIDO"), ligado pelo Nº Contrato Caixa (contrato_mutuario).
 async function rastreio(empresaId) {
-  const [{ rows: reservas }, { rows: contratos }] = await Promise.all([
+  const [{ rows: reservas }, { rows: contratos }, { rows: epr }] = await Promise.all([
     pool.query('SELECT idreserva, data_cad FROM construtor_vendas_reservas WHERE empresa_id = $1', [empresaId]),
     pool.query(
       `SELECT number, financial_institution_number, COALESCE(issue_date, contract_date) AS data_contrato, value
@@ -87,12 +88,14 @@ async function rastreio(empresaId) {
        WHERE empresa_id = $1 AND situation IS DISTINCT FROM 'Cancelado'`,
       [empresaId]
     ),
+    pool.query('SELECT contrato_mutuario, valor_retido FROM epr_mutuarios WHERE empresa_id = $1', [empresaId]),
   ]);
+  const valorRetido = new Map(epr.map((m) => [m.contrato_mutuario, m.valor_retido != null ? Number(m.valor_retido) : null]));
   const dataReserva = new Map(reservas.map((r) => [String(r.idreserva), dataIso(r.data_cad)]));
   const contratoPorCaixa = new Map(
     contratos.filter((c) => c.financial_institution_number).map((c) => [c.financial_institution_number, c])
   );
-  return { dataReserva, contratoPorCaixa };
+  return { dataReserva, contratoPorCaixa, valorRetido };
 }
 
 // Uma linha por cliente em cada etapa, já com o rastreio acumulado e a situação do SLA.
@@ -135,6 +138,8 @@ async function montarResumo(empresaId) {
       numeroContrato: u.numero_contrato || ctr?.number || null,
       dataContrato: dataIso(ctr?.data_contrato),
       valor: ctr?.value != null ? Number(ctr.value) : null,
+      // undefined = contrato Caixa sem EPR importado (diferente de retido zero).
+      valorRetido: trilha.valorRetido.has(u.numero_contrato_unidade) ? trilha.valorRetido.get(u.numero_contrato_unidade) : undefined,
       contratoCaixa: u.numero_contrato_unidade,
       dataAssinatura: dataIso(u.data_assinatura_contrato),
       dataRegistro: dataIso(u.data_registro),
@@ -183,13 +188,17 @@ function montarMensagem(resumo, nomeDestinatario) {
     `⏱️ Tempo médio: ${numero(media(contrato.map((c) => c.dias)))} dias`,
     '',
     '✍️ *Contratos retidos (em assinatura)*',
-    `💰 ${moeda(soma(assinatura, 'valor'))} · ${numero(assinatura.length)} contratos`,
+    `💰 ${moeda(soma(assinatura, 'valorRetido'))} retidos · ${numero(assinatura.length)} contratos`,
     blocoSla(assinatura, sla.ASSINATURA),
     `⏱️ Tempo médio: ${numero(media(assinatura.map((c) => c.dias)))} dias`,
   ];
   for (const faixa of FAIXAS_ASSINATURA) {
     const daFaixa = assinatura.filter((c) => c.dias != null && c.dias >= faixa.min && c.dias <= faixa.max);
-    linhas.push(`• ${faixa.rotulo}: ${moeda(soma(daFaixa, 'valor'))} · ${numero(daFaixa.length)}`);
+    linhas.push(`• ${faixa.rotulo}: ${moeda(soma(daFaixa, 'valorRetido'))} · ${numero(daFaixa.length)}`);
+  }
+  const semEpr = assinatura.filter((c) => c.valorRetido === undefined).length;
+  if (semEpr > 0) {
+    linhas.push(`_${numero(semEpr)} ${semEpr === 1 ? 'contrato ainda sem EPR importado' : 'contratos ainda sem EPR importado'} (valor retido não somado)_`);
   }
   linhas.push('', '📎 Detalhe por cliente na planilha anexa', `🔗 ${LINK_RELATORIO}`);
   return linhas.join('\n');
@@ -204,7 +213,9 @@ const COL = {
   dataReserva: { header: 'Data da Reserva', key: 'dataReserva', width: 15, data: true },
   numeroContrato: { header: 'Nº Contrato Sienge', key: 'numeroContrato', width: 22 },
   dataContrato: { header: 'Data do Contrato', key: 'dataContrato', width: 15, data: true },
-  valor: { header: 'Valor', key: 'valor', width: 16, moeda: true },
+  valorVenda: { header: 'Valor da Venda', key: 'valor', width: 16, moeda: true },
+  valor: { header: 'Valor do Contrato', key: 'valor', width: 16, moeda: true },
+  valorRetido: { header: 'Valor Retido (EPR)', key: 'valorRetido', width: 17, moeda: true },
   contratoCaixa: { header: 'Nº Contrato Caixa', key: 'contratoCaixa', width: 17 },
   dataAssinatura: { header: 'Data da Assinatura', key: 'dataAssinatura', width: 17, data: true },
   dataRegistro: { header: 'Data do Registro', key: 'dataRegistro', width: 15, data: true },
@@ -219,7 +230,7 @@ const ABAS = [
   {
     nome: 'Reserva',
     chave: 'reserva',
-    colunas: ['centro', 'cliente', 'idreserva', 'dataReserva', 'valor', 'dias', 'sla', 'situacao', 'microEtapa', 'diasMicroEtapa'],
+    colunas: ['centro', 'cliente', 'idreserva', 'dataReserva', 'valorVenda', 'dias', 'sla', 'situacao', 'microEtapa', 'diasMicroEtapa'],
   },
   {
     nome: 'Contrato',
@@ -233,7 +244,7 @@ const ABAS = [
     nome: 'Assinatura',
     chave: 'assinatura',
     colunas: [
-      'centro', 'cliente', 'idreserva', 'dataReserva', 'numeroContrato', 'dataContrato', 'valor',
+      'centro', 'cliente', 'idreserva', 'dataReserva', 'numeroContrato', 'dataContrato', 'valor', 'valorRetido',
       'contratoCaixa', 'dataAssinatura', 'dias', 'sla', 'situacao', 'microEtapa', 'diasMicroEtapa',
     ],
   },
@@ -241,7 +252,7 @@ const ABAS = [
     nome: 'Registro',
     chave: 'registro',
     colunas: [
-      'centro', 'cliente', 'idreserva', 'dataReserva', 'numeroContrato', 'dataContrato', 'valor',
+      'centro', 'cliente', 'idreserva', 'dataReserva', 'numeroContrato', 'dataContrato', 'valor', 'valorRetido',
       'contratoCaixa', 'dataAssinatura', 'dataRegistro', 'microEtapa', 'diasMicroEtapa',
     ],
   },
