@@ -50,9 +50,9 @@ const ABAS = [
     label: 'Parcelas em Aberto',
     icon: Clock,
     iconColorClass: 'text-amber-600',
-    vazio: 'Nenhuma parcela em aberto com tarefa da régua no período.',
-    rotuloInicio: 'Data início',
-    rotuloFim: 'Data fim',
+    vazio: 'Nenhuma parcela em aberto com vencimento no período.',
+    rotuloInicio: 'Vencimento de',
+    rotuloFim: 'Vencimento até',
     tema: { th: 'border-b-amber-500 bg-amber-50', tf: 'border-t-amber-500 bg-amber-50', texto: 'text-amber-700', divisor: 'border-l-amber-100' },
   },
 ];
@@ -197,7 +197,7 @@ function construirArvore(linhas) {
 
 // Relatório "Desempenho da Cobrança": por atendente, as parcelas que eram
 // dela — em 2 abas: Parcelas Pagas (pela data do pagamento, com os dias de
-// atraso no pagamento) e Parcelas em Aberto (com tarefa da régua no período).
+// atraso no pagamento) e Parcelas em Aberto (pela data de vencimento).
 // Em ambas, as interações feitas de quantas deveriam em toda a vida da
 // parcela e a data da última. Regras no backend
 // (relatorio-desempenho-cobranca/desempenhoCobranca.service.js). Mesmo

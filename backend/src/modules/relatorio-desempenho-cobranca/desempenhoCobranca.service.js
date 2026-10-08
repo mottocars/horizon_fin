@@ -30,7 +30,7 @@ const { getDataSistema, getLimiteVigente, getComunicacaoAutomatica } = require('
 // Abas (campo `aba`):
 //   pagas   = paga (Recebimento) com data de pagamento DENTRO do período;
 //             valor = soma dos Recebimentos.
-//   abertas = em aberto no fim do período e com tarefa no período;
+//   abertas = em aberto no fim do período, com VENCIMENTO dentro do período;
 //             valor = o que faltava pagar no fim do período.
 // Parcela encerrada sem pagamento (desconto, reparcelamento, distrato) não
 // entra em nenhuma das duas.
@@ -179,7 +179,7 @@ async function getDesempenho(empresaId, { dataInicio, dataFim }) {
       if (dataPagamento < dataInicio || dataPagamento > corte) continue;
       aba = 'pagas';
     } else {
-      if (!tarefas.some((t) => t.data >= dataInicio && t.data <= corte)) continue;
+      if (p.vencimento < dataInicio || p.vencimento > dataFim) continue;
       aba = 'abertas';
     }
 
