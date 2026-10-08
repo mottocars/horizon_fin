@@ -1,6 +1,7 @@
 const { z } = require('zod');
 const ExcelJS = require('exceljs');
 const service = require('./repassesCef.service');
+const comunicarService = require('./comunicarRepasses.service');
 
 const empresaIdSchema = z.coerce.number().int().positive('Empresa inválida.');
 
@@ -530,6 +531,39 @@ async function salvarSlaMacroEtapa(req, res, next) {
   }
 }
 
+// Aba Configurações — comunicado semanal por WhatsApp.
+const comunicarConfigSchema = z.object({
+  usuarioIds: z.array(z.coerce.number().int().positive()).default([]),
+  zapiIntegracaoId: z.coerce.number().int().positive().nullable().default(null),
+  diaSemana: z.coerce.number().int().min(0, 'Dia da semana inválido.').max(6, 'Dia da semana inválido.').nullable().default(null),
+  horario: z
+    .string()
+    .regex(/^([01]\d|2[0-3]):[0-5]\d$/, 'Horário inválido.')
+    .nullable()
+    .default(null),
+});
+
+async function getComunicarConfig(req, res, next) {
+  try {
+    const empresaId = empresaIdSchema.parse(req.params.empresaId);
+    res.json(await comunicarService.getConfig(empresaId));
+  } catch (err) {
+    if (err.issues) return next(badRequest(err.issues[0].message));
+    next(err);
+  }
+}
+
+async function salvarComunicarConfig(req, res, next) {
+  try {
+    const empresaId = empresaIdSchema.parse(req.params.empresaId);
+    const dados = comunicarConfigSchema.parse(req.body || {});
+    res.json(await comunicarService.salvarConfig(empresaId, dados));
+  } catch (err) {
+    if (err.issues) return next(badRequest(err.issues[0].message));
+    next(err);
+  }
+}
+
 module.exports = {
   listCentros,
   sincronizarReservas,
@@ -553,6 +587,8 @@ module.exports = {
   vincularContrato,
   getSlaMacroEtapas,
   salvarSlaMacroEtapa,
+  getComunicarConfig,
+  salvarComunicarConfig,
   registrarMovimentacaoMicroEtapa,
   downloadAnexoMicroEtapa,
 };

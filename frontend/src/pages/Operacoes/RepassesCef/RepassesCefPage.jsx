@@ -42,6 +42,7 @@ import ConfigurarFiltrosModal from './ConfigurarFiltrosModal';
 import AtualizacaoLogModal from './AtualizacaoLogModal';
 import HistoricoEtapasModal from './HistoricoEtapasModal';
 import MascarasRepassesCef from './MascarasRepassesCef';
+import ConfiguracoesRepassesCef from './ConfiguracoesRepassesCef';
 
 // Lista de abas da tela. Pra adicionar uma aba nova no futuro basta incluir
 // um item aqui `{ id, label, icon }` e o caso correspondente no bloco de
@@ -49,6 +50,7 @@ import MascarasRepassesCef from './MascarasRepassesCef';
 const TABS = [
   { id: 'kanban', label: 'Kanban', icon: LayoutGrid },
   { id: 'mascaras', label: 'Máscaras', icon: SlidersHorizontal },
+  { id: 'configuracoes', label: 'Configurações', icon: Settings },
 ];
 
 const LOGO_SIENGE = MACRO_ETAPAS_REPASSES.find((m) => m.value === 'CONTRATO').logo;
@@ -635,6 +637,8 @@ export default function RepassesCefPage() {
             )}
           </Card>
         )}
+
+        {abaAtiva === 'configuracoes' && <ConfiguracoesRepassesCef empresaId={empresaId} />}
       </div>
       </div>
     </div>

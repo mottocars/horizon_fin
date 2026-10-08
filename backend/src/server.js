@@ -110,7 +110,7 @@ app.use('/api', usersRoutes);
 app.use('/api/clientes', exigirTela([]), exigirMaster, clientesRoutes);
 app.use('/api/empresas', exigirTela([T.EMPRESAS], [QUALQUER_TELA]), empresasRoutes);
 app.use('/api/integracoes/sienge', exigirTela([T.SIENGE], [T.COBRANCAS]), siengeRoutes);
-app.use('/api/integracoes/zapi', exigirTela([T.ZAPI], [T.COBRANCAS, T.SALDOS]), zapiRoutes);
+app.use('/api/integracoes/zapi', exigirTela([T.ZAPI], [T.COBRANCAS, T.SALDOS, T.REPASSES]), zapiRoutes);
 app.use('/api/integracoes/convenios-bancarios/vanpix', exigirTela([T.CONVENIOS]), vanpixRoutes);
 app.use('/api/integracoes/convenios-bancarios/itau', exigirTela([T.CONVENIOS], [T.EXTRATOS]), itauRoutes);
 app.use('/api/integracoes/email', exigirTela([T.EMAIL], [T.COBRANCAS]), emailIntegracaoRoutes);

@@ -477,6 +477,27 @@ CREATE TABLE repasses_cef_historico_microetapas (
 CREATE INDEX idx_repasses_hist_micro_reserva
     ON repasses_cef_historico_microetapas (empresa_id, idreserva);
 
+-- Comunicado semanal de Repasses CEF por WhatsApp (aba Configurações da tela
+-- Repasses CEF): conexão Z-API que dispara, dia da semana (0=domingo..6=sábado)
+-- e horário (Brasília) do envio — 1 envio por semana. `ultimo_envio_em` evita
+-- disparar 2× no mesmo dia (mesma lógica do Monitor de Integrações).
+CREATE TABLE repasses_cef_comunicar_config (
+    empresa_id          INTEGER PRIMARY KEY REFERENCES empresas(id) ON DELETE CASCADE,
+    zapi_integracao_id  INTEGER REFERENCES integracoes_zapi(id) ON DELETE SET NULL,
+    dia_semana          SMALLINT CHECK (dia_semana BETWEEN 0 AND 6),
+    horario             TIME,
+    ultimo_envio_em     TIMESTAMP,
+    atualizado_em       TIMESTAMP DEFAULT NOW()
+);
+
+-- Quem recebe o comunicado semanal de Repasses CEF de cada empresa.
+CREATE TABLE repasses_cef_comunicar_usuarios (
+    empresa_id  INTEGER NOT NULL REFERENCES empresas(id) ON DELETE CASCADE,
+    usuario_id  INTEGER NOT NULL REFERENCES usuarios(id) ON DELETE CASCADE,
+    criado_em   TIMESTAMP DEFAULT NOW(),
+    PRIMARY KEY (empresa_id, usuario_id)
+);
+
 -- SLA (prazo esperado, em dias) de cada MACRO etapa do Kanban de Repasses
 -- CEF (VENDA/CONTRATO/ASSINATURA/REGISTRO — mesmo código de mascara_itens.grupo),
 -- preenchido na aba Máscaras da tela. Diferente do SLA da micro etapa

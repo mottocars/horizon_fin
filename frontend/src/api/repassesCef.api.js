@@ -141,3 +141,12 @@ export function getSlaMacroRepassesCef(empresaId) {
 export function salvarSlaMacroRepassesCef(empresaId, macroEtapa, slaDias) {
   return http.put(`/repasses-cef/${empresaId}/sla-macro/${macroEtapa}`, { sla_dias: slaDias }).then((res) => res.data);
 }
+
+// Aba Configurações: comunicado semanal por WhatsApp (conexão, destinatários, dia e horário).
+export function getComunicarConfigRepassesCef(empresaId) {
+  return http.get(`/repasses-cef/${empresaId}/comunicar-config`).then((res) => res.data);
+}
+
+export function salvarComunicarConfigRepassesCef(empresaId, dados) {
+  return http.put(`/repasses-cef/${empresaId}/comunicar-config`, dados).then((res) => res.data);
+}

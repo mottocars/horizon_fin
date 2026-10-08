@@ -4,6 +4,7 @@
 // tick nunca fica preso esperando uma sincronização longa.
 const service = require('./monitor.service');
 const executor = require('./executor');
+const comunicarRepasses = require('../repasses-cef/comunicarRepasses.service');
 
 const INTERVALO_MS = 60 * 1000;
 
@@ -17,6 +18,12 @@ async function tick() {
     await service.verificarAgendamentos();
   } catch (err) {
     console.error('[monitor-integracoes] falha ao verificar os agendamentos:', err.message);
+  }
+  // Comunicado semanal de Repasses CEF (aba Configurações da tela) — mesmo relógio de 1 min.
+  try {
+    await comunicarRepasses.verificarAgendamentos();
+  } catch (err) {
+    console.error('[comunicar-repasses] falha ao verificar os envios agendados:', err.message);
   } finally {
     verificando = false;
   }

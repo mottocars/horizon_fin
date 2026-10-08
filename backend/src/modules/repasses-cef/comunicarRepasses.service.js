@@ -3,6 +3,8 @@ const pool = require('../../config/db');
 const repassesCef = require('./repassesCef.service');
 const empresasService = require('../empresas/empresas.service');
 const zapiService = require('../integracoes-zapi/zapi.service');
+const saldosService = require('../saldo-contas-bancarias/saldos.service');
+const { estaNaHora, proximaExecucao } = require('../monitor-integracoes/tempo');
 
 // Comunicado "Repasses CEF" por WhatsApp — mesmo padrão do comunicado de saldos
 // (comunicarSaldos.service.js): texto curto com os números que importam + Excel anexo.
@@ -292,12 +294,17 @@ async function gerarExcel(resumo) {
   return workbook.xlsx.writeBuffer();
 }
 
+function nomeArquivo() {
+  const hoje = new Intl.DateTimeFormat('pt-BR', { dateStyle: 'short', timeZone: 'America/Sao_Paulo' }).format(new Date());
+  return `Repasses CEF - ${hoje}.xlsx`;
+}
+
 // Envia pra 1 telefone numa mensagem só: a planilha com o texto do comunicado como legenda.
-async function enviarComunicado(empresaId, zapiIntegracaoId, { nome, telefone }) {
-  const resumo = await montarResumo(empresaId);
+// `resumo`/`buffer` podem vir prontos (disparo pra vários destinatários monta 1 vez só).
+async function enviarComunicado(empresaId, zapiIntegracaoId, { nome, telefone }, pronto = {}) {
+  const resumo = pronto.resumo || (await montarResumo(empresaId));
+  const buffer = pronto.buffer || (await gerarExcel(resumo));
   const mensagem = montarMensagem(resumo, nome);
-  const buffer = await gerarExcel(resumo);
-  const hoje = new Intl.DateTimeFormat('en-CA', { timeZone: 'America/Sao_Paulo' }).format(new Date());
 
   await zapiService.enviarDocumento(zapiIntegracaoId, {
     telefone,
@@ -305,7 +312,7 @@ async function enviarComunicado(empresaId, zapiIntegracaoId, { nome, telefone })
     legenda: mensagem,
     extensao: 'xlsx',
     mimeType: MIME_XLSX,
-    nomeArquivo: `repasses-cef_${hoje}.xlsx`,
+    nomeArquivo: nomeArquivo(),
   });
   return {
     mensagem,
@@ -313,4 +320,172 @@ async function enviarComunicado(empresaId, zapiIntegracaoId, { nome, telefone })
   };
 }
 
-module.exports = { montarResumo, montarMensagem, gerarExcel, enviarComunicado };
+// ---------------------------------------------------------------------
+// Configuração do envio (aba Configurações da tela Repasses CEF) — mesmo padrão do
+// "Comunicar Saldos": conexão Z-API + destinatários, e aqui também o dia da semana e o
+// horário do envio semanal.
+// ---------------------------------------------------------------------
+
+function erro(status, message) {
+  const err = new Error(message);
+  err.status = status;
+  err.expose = true;
+  return err;
+}
+
+const formatoAgendamento = (config) => ({
+  frequencia: 'semanal',
+  ativo: config.zapi_integracao_id != null && config.dia_semana != null && config.horario != null,
+  dia_semana: config.dia_semana,
+  horario: config.horario,
+  ultima_agendada_em: config.ultimo_envio_em,
+});
+
+async function getConfig(empresaId) {
+  const [elegiveis, { rows: selecionados }, { rows: config }] = await Promise.all([
+    saldosService.listUsuariosElegiveisComunicar(empresaId),
+    pool.query('SELECT usuario_id FROM repasses_cef_comunicar_usuarios WHERE empresa_id = $1', [empresaId]),
+    pool.query(
+      `SELECT zapi_integracao_id, dia_semana, to_char(horario, 'HH24:MI') AS horario, ultimo_envio_em
+       FROM repasses_cef_comunicar_config WHERE empresa_id = $1`,
+      [empresaId]
+    ),
+  ]);
+  const c = config[0] || {};
+  const agendamento = formatoAgendamento(c);
+  return {
+    elegiveis,
+    selecionados: selecionados.map((r) => r.usuario_id),
+    zapiIntegracaoId: c.zapi_integracao_id ?? null,
+    diaSemana: c.dia_semana ?? null,
+    horario: c.horario ?? null,
+    ultimoEnvioEm: c.ultimo_envio_em ?? null,
+    // 'YYYY-MM-DD HH:MM' (Brasília) — só quando conexão, dia e horário estão preenchidos.
+    proximoEnvio: agendamento.ativo && selecionados.length > 0 ? proximaExecucao(agendamento) : null,
+  };
+}
+
+async function salvarConfig(empresaId, { usuarioIds, zapiIntegracaoId, diaSemana, horario }) {
+  const elegiveis = await saldosService.listUsuariosElegiveisComunicar(empresaId);
+  const idsElegiveis = new Set(elegiveis.map((u) => u.id));
+  if (usuarioIds.some((id) => !idsElegiveis.has(id))) {
+    throw erro(400, 'Um ou mais usuários selecionados não têm acesso a esta empresa.');
+  }
+  if (zapiIntegracaoId !== null) {
+    const { rows } = await pool.query('SELECT 1 FROM integracoes_zapi WHERE id = $1 AND empresa_id = $2', [
+      zapiIntegracaoId,
+      empresaId,
+    ]);
+    if (!rows[0]) throw erro(400, 'Conexão Z-API inválida para esta empresa.');
+  }
+
+  const client = await pool.connect();
+  try {
+    await client.query('BEGIN');
+    await client.query('DELETE FROM repasses_cef_comunicar_usuarios WHERE empresa_id = $1', [empresaId]);
+    if (usuarioIds.length) {
+      await client.query(
+        'INSERT INTO repasses_cef_comunicar_usuarios (empresa_id, usuario_id) SELECT $1, unnest($2::int[])',
+        [empresaId, usuarioIds]
+      );
+    }
+    // Ao mudar dia/horário, um envio que já aconteceu hoje continua contando (não reenvia).
+    await client.query(
+      `INSERT INTO repasses_cef_comunicar_config (empresa_id, zapi_integracao_id, dia_semana, horario, atualizado_em)
+       VALUES ($1, $2, $3, $4, NOW())
+       ON CONFLICT (empresa_id) DO UPDATE SET
+         zapi_integracao_id = EXCLUDED.zapi_integracao_id,
+         dia_semana = EXCLUDED.dia_semana,
+         horario = EXCLUDED.horario,
+         atualizado_em = NOW()`,
+      [empresaId, zapiIntegracaoId, diaSemana, horario]
+    );
+    await client.query('COMMIT');
+  } catch (err) {
+    await client.query('ROLLBACK').catch(() => {});
+    throw err;
+  } finally {
+    client.release();
+  }
+  return getConfig(empresaId);
+}
+
+// Dispara o comunicado pra todos os destinatários da empresa (monta números e planilha
+// 1 vez só). Nunca lança — cada falha vira um item em `falhas`, como no Comunicar Saldos.
+async function dispararParaDestinatarios(empresaId) {
+  const prefixo = `[comunicar-repasses] empresa ${empresaId}:`;
+  const { rows: config } = await pool.query(
+    'SELECT zapi_integracao_id FROM repasses_cef_comunicar_config WHERE empresa_id = $1',
+    [empresaId]
+  );
+  const zapiIntegracaoId = config[0]?.zapi_integracao_id;
+  if (!zapiIntegracaoId) return { status: 'sem_conexao', enviados: [], falhas: [] };
+
+  const { rows: destinatarios } = await pool.query(
+    `SELECT u.id, u.nome, u.telefone_ddd, u.telefone_numero
+     FROM usuarios u
+     JOIN repasses_cef_comunicar_usuarios c ON c.usuario_id = u.id
+     WHERE c.empresa_id = $1 AND u.ativo = TRUE`,
+    [empresaId]
+  );
+  if (destinatarios.length === 0) return { status: 'sem_destinatario', enviados: [], falhas: [] };
+
+  const resumo = await montarResumo(empresaId);
+  const buffer = await gerarExcel(resumo);
+
+  const enviados = [];
+  const falhas = [];
+  for (const dest of destinatarios) {
+    try {
+      if (!dest.telefone_ddd || !dest.telefone_numero) {
+        throw new Error(`usuário "${dest.nome}" (id ${dest.id}) sem telefone cadastrado`);
+      }
+      await enviarComunicado(
+        empresaId,
+        zapiIntegracaoId,
+        { nome: dest.nome, telefone: `${dest.telefone_ddd}${dest.telefone_numero}` },
+        { resumo, buffer }
+      );
+      enviados.push({ nome: dest.nome });
+    } catch (err) {
+      console.error(`${prefixo} destinatário "${dest.nome}": ${err.message}`);
+      falhas.push({ nome: dest.nome, motivo: err.message });
+    }
+  }
+  console.log(`${prefixo} comunicado enviado para ${enviados.length} de ${destinatarios.length} destinatário(s).`);
+  return { status: 'enviado', enviados, falhas };
+}
+
+// Chamado a cada minuto pelo agendador do Monitor de Integrações: dispara o comunicado das
+// empresas cujo dia da semana/horário já chegou e que ainda não receberam hoje. Marca o
+// envio ANTES de disparar, pra um tick seguinte nunca repetir o mesmo dia.
+async function verificarAgendamentos() {
+  const { rows } = await pool.query(
+    `SELECT empresa_id, zapi_integracao_id, dia_semana, to_char(horario, 'HH24:MI') AS horario, ultimo_envio_em
+     FROM repasses_cef_comunicar_config
+     WHERE zapi_integracao_id IS NOT NULL AND dia_semana IS NOT NULL AND horario IS NOT NULL`
+  );
+  for (const config of rows) {
+    if (!estaNaHora(formatoAgendamento(config))) continue;
+    await pool.query('UPDATE repasses_cef_comunicar_config SET ultimo_envio_em = $2 WHERE empresa_id = $1', [
+      config.empresa_id,
+      new Date().toISOString(),
+    ]);
+    try {
+      await dispararParaDestinatarios(config.empresa_id);
+    } catch (err) {
+      console.error(`[comunicar-repasses] empresa ${config.empresa_id}: falha no envio agendado:`, err.message);
+    }
+  }
+}
+
+module.exports = {
+  montarResumo,
+  montarMensagem,
+  gerarExcel,
+  enviarComunicado,
+  getConfig,
+  salvarConfig,
+  dispararParaDestinatarios,
+  verificarAgendamentos,
+};
