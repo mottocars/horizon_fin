@@ -1,12 +1,25 @@
 import { Fragment, useCallback, useEffect, useMemo, useRef, useState } from 'react';
-import { Check, CheckCircle2, Clock, ListFilter, Mail, MessageCircle, Minus, Phone, Plus, Repeat, UserRound, X } from 'lucide-react';
+import { Check, CheckCircle2, Clock, ListFilter, Mail, MessageCircle, Minus, Phone, Plus, Repeat, X } from 'lucide-react';
 import Card from '../../../components/Card';
 import SearchableSelect from '../../../components/SearchableSelect';
 import RegistrarComunicacaoModal from './RegistrarComunicacaoModal';
 import HistoricoParcelaModal from './GestaoParcelas/HistoricoParcelaModal';
 import { listRotinas, desmarcarCanalRotina } from '../../../api/rotinas.api';
 import { listSiengeIntegracoes } from '../../../api/sienge.api';
-import { CLUSTER_ICON, CLUSTER_ICON_COR, CLUSTER_TAG_ESTILO, formatarData, formatarMoeda } from './GestaoParcelas/constantes';
+import { CLUSTER_ICON, CLUSTER_ICON_COR, CLUSTER_TAG_ESTILO, formatarData } from './GestaoParcelas/constantes';
+
+// Mesma grade da tabela da Gestão das Parcelas (GestaoParcelasTab.jsx):
+// divisores de linha e de coluna no mesmo tom, e a borda de baixo do
+// cabeçalho fixo mais grossa pra marcar o limite durante a rolagem.
+const DIV_H = 'border-b border-gray-200';
+const DIV_V = 'border-l border-gray-200';
+const DIV_H_CABECALHO = 'border-b-2 border-gray-300';
+const TOTAL_COLUNAS = 9;
+
+// Valores sem centavos — mesmo formato da Gestão das Parcelas.
+function formatarMoedaSemCentavos(valor) {
+  return (Number(valor) || 0).toLocaleString('pt-BR', { style: 'currency', currency: 'BRL', maximumFractionDigits: 0 });
+}
 
 // Nome de exibição do cliente — mesmo fallback usado na célula da tabela
 // (linha 434 aprox.) — centralizado aqui porque o filtro de coluna precisa
@@ -524,6 +537,15 @@ export default function RotinasTab({
   const semResultadoFiltro = !carregando && !erro && !semDados && responsaveisFiltrados.length === 0;
   const nomeSemResponsavel = modo === 'automatica' ? 'A distribuir' : 'Sem responsável';
 
+  // Cabeçalho da 1ª coluna reage a quantos níveis estão abertos agora —
+  // mesmo comportamento da Gestão das Parcelas.
+  const chavesAbertas = [...abertos];
+  const tituloColuna = chavesAbertas.some((k) => k.startsWith('c:'))
+    ? 'Responsável / Centro de Custo / Cliente'
+    : chavesAbertas.some((k) => k.startsWith('r:'))
+      ? 'Responsável / Centro de Custo'
+      : 'Responsável';
+
   return (
     <>
       <Card className="rounded-tl-none">
@@ -542,28 +564,30 @@ export default function RotinasTab({
             </p>
           </div>
         ) : (
-          <div className={`overflow-x-auto transition-opacity ${atualizandoEmSegundoPlano ? 'opacity-60' : ''}`}>
-            {/* table-layout fixed + colgroup: sem isso, a largura de cada
-                coluna é recalculada a partir do conteúdo das linhas
-                visíveis — com o filtro de canal escondendo linhas (ou
-                deixando 0), as colunas "encolhiam"/reposicionavam sozinhas.
-                Com largura fixa por coluna, elas ficam do mesmo jeito
-                sempre, com ou sem linha nenhuma na tela. */}
-            <table className="w-full text-left text-sm" style={{ tableLayout: 'fixed' }}>
+          // Sem wrapper com overflow próprio (mesmo motivo de
+          // GestaoParcelasTab.jsx): qualquer overflow aqui viraria o "teto"
+          // do cabeçalho sticky. Quem rola é a página.
+          <div className={`transition-opacity ${atualizandoEmSegundoPlano ? 'opacity-60' : ''}`}>
+            {/* Mesmo desenho da tabela da Gestão das Parcelas: layout fixo
+                com colunas em % (acompanha a largura do card, sem estourar),
+                border-separate pras grades de linha (DIV_H) e coluna (DIV_V)
+                ficarem previsíveis célula a célula, cabeçalho fixo com a
+                borda de baixo mais grossa, fonte xs e valores sem centavos. */}
+            <table className="w-full border-separate border-spacing-0 text-left text-xs" style={{ tableLayout: 'fixed' }}>
               <colgroup>
-                <col className="w-[26%]" />
-                <col />
-                <col className="w-[110px]" />
-                <col className="w-[100px]" />
-                <col className="w-[110px]" />
-                <col className="w-[110px]" />
-                <col className="w-14" />
-                <col className="w-14" />
-                <col className="w-14" />
+                <col className="w-[30%]" />
+                <col className="w-[14%]" />
+                <col className="w-[9%]" />
+                <col className="w-[9%]" />
+                <col className="w-[8.5%]" />
+                <col className="w-[8.5%]" />
+                <col className="w-[7%]" />
+                <col className="w-[7%]" />
+                <col className="w-[7%]" />
               </colgroup>
-              <thead>
-                <tr className="border-b border-gray-100 text-xs uppercase tracking-wide text-gray-400">
-                  <th ref={thClienteRef} className="py-3 pl-3 font-medium">
+              <thead className="sticky top-0 z-10 bg-white shadow-sm">
+                <tr className="text-xs uppercase tracking-wide text-gray-400">
+                  <th ref={thClienteRef} className={`${DIV_H_CABECALHO} py-2.5 pl-3 font-medium`}>
                     <span className="inline-flex items-center gap-1.5">
                       <FiltroColuna
                         valor={filtroCliente}
@@ -572,10 +596,10 @@ export default function RotinasTab({
                         label="cliente"
                         colunaRef={thClienteRef}
                       />
-                      Cliente
+                      {tituloColuna}
                     </span>
                   </th>
-                  <th ref={thEtapaRef} className="py-3 pl-4 font-medium">
+                  <th ref={thEtapaRef} className={`${DIV_H_CABECALHO} ${DIV_V} px-2 py-2.5 font-medium`}>
                     <span className="inline-flex items-center gap-1.5">
                       <FiltroColuna
                         valor={filtroEtapa}
@@ -587,11 +611,11 @@ export default function RotinasTab({
                       Etapa
                     </span>
                   </th>
-                  <th className="whitespace-nowrap py-3 text-center font-medium">Valor</th>
-                  <th className="whitespace-nowrap py-3 text-center font-medium">Título</th>
-                  <th className="py-3 text-center font-medium">Vencimento</th>
-                  <th className="py-3 text-center font-medium">Data</th>
-                  <th className="py-3 text-center font-medium">
+                  <th className={`${DIV_H_CABECALHO} ${DIV_V} px-2 py-2.5 text-center font-medium`}>Valor</th>
+                  <th className={`${DIV_H_CABECALHO} ${DIV_V} px-2 py-2.5 text-center font-medium`}>Título</th>
+                  <th className={`${DIV_H_CABECALHO} ${DIV_V} px-2 py-2.5 text-center font-medium`}>Vencimento</th>
+                  <th className={`${DIV_H_CABECALHO} ${DIV_V} px-2 py-2.5 text-center font-medium`}>Data</th>
+                  <th className={`${DIV_H_CABECALHO} ${DIV_V} py-2 text-center font-medium`}>
                     <BotaoFiltroCanal
                       canal="whatsapp"
                       ativo={canaisFiltro.whatsapp}
@@ -600,7 +624,7 @@ export default function RotinasTab({
                       label="WhatsApp"
                     />
                   </th>
-                  <th className="py-3 text-center font-medium">
+                  <th className={`${DIV_H_CABECALHO} ${DIV_V} py-2 text-center font-medium`}>
                     <BotaoFiltroCanal
                       canal="email"
                       ativo={canaisFiltro.email}
@@ -609,7 +633,7 @@ export default function RotinasTab({
                       label="E-mail"
                     />
                   </th>
-                  <th className="py-3 text-center font-medium">
+                  <th className={`${DIV_H_CABECALHO} ${DIV_V} py-2 text-center font-medium`}>
                     <BotaoFiltroCanal
                       canal="ligacao"
                       ativo={canaisFiltro.ligacao}
@@ -623,7 +647,7 @@ export default function RotinasTab({
               <tbody>
                 {semResultadoFiltro && (
                   <tr>
-                    <td colSpan={9} className="py-12 text-center text-sm text-gray-500">
+                    <td colSpan={TOTAL_COLUNAS} className={`${DIV_H} py-12 text-center text-sm text-gray-500`}>
                       <p className="font-medium text-gray-700">Nenhuma linha corresponde aos filtros selecionados.</p>
                       <p className="mx-auto mt-1 max-w-sm text-xs text-gray-400">
                         Ajuste os filtros de Cliente/Etapa ou ligue de novo o WhatsApp, o e-mail ou a ligação nos
@@ -637,39 +661,37 @@ export default function RotinasTab({
                   const respAberto = abertos.has(chaveResp);
                   return (
                     <Fragment key={chaveResp}>
-                      {/* Nível 1 — Responsável: Valor/Título com o total do
-                          período e o % concluído de cada canal. Mesmo padrão de
-                          cores do drilldown da Gestão das Parcelas: branco
-                          recolhido, cinza (e negrito) aberto; o nível de baixo
-                          num cinza mais claro, e as parcelas em branco. */}
+                      {/* Nível 1 — Responsável: total do período (valor,
+                          títulos) e % concluído de cada canal. Branco
+                          recolhido, cinza e negrito aberto. */}
                       <tr
                         onClick={() => alternar(chaveResp)}
-                        className={`cursor-pointer border-b border-gray-50 hover:bg-gray-100 ${respAberto ? 'bg-gray-100 font-semibold' : ''}`}
+                        className={`cursor-pointer hover:bg-gray-100 ${respAberto ? 'bg-gray-100 font-semibold' : ''}`}
                       >
-                        <td className="py-3 pl-3 text-gray-900" colSpan={2}>
+                        <td className={`${DIV_H} py-3 pl-3 text-gray-900`}>
                           <span className="flex items-center gap-2">
                             <span className="flex h-4 w-4 shrink-0 items-center justify-center rounded bg-primary-100 text-primary-600">
                               {respAberto ? <Minus size={10} /> : <Plus size={10} />}
                             </span>
-                            <UserRound size={15} className={resp.nome ? 'text-primary-600' : 'text-amber-500'} />
                             <span className={resp.nome ? '' : 'text-amber-700'}>{resp.nome || nomeSemResponsavel}</span>
-                            <span className="rounded-full bg-gray-200 px-2 py-0.5 text-[11px] font-medium text-gray-600">
-                              {resp.totais.itens}
-                            </span>
                           </span>
                         </td>
-                        <td className="py-3 text-center text-xs font-semibold text-gray-800">{formatarMoeda(resp.totais.valor)}</td>
-                        <td className="py-3 text-center text-xs font-semibold text-gray-800">
+                        <td className={`${DIV_H} ${DIV_V} px-2 py-3`}></td>
+                        <td className={`${DIV_H} ${DIV_V} px-2 py-3 text-center tabular-nums text-gray-700`}>
+                          {formatarMoedaSemCentavos(resp.totais.valor)}
+                        </td>
+                        <td className={`${DIV_H} ${DIV_V} px-2 py-3 text-center tabular-nums text-gray-700`}>
                           {resp.totais.titulos} {resp.totais.titulos === 1 ? 'título' : 'títulos'}
                         </td>
-                        <td colSpan={2}></td>
-                        <td className="py-3 text-center">
+                        <td className={`${DIV_H} ${DIV_V} px-2 py-3`}></td>
+                        <td className={`${DIV_H} ${DIV_V} px-2 py-3`}></td>
+                        <td className={`${DIV_H} ${DIV_V} py-3 text-center`}>
                           <ProgressoCanal progresso={progressoDoCanal(resp.itens, 'whatsapp')} label="WhatsApp" />
                         </td>
-                        <td className="py-3 text-center">
+                        <td className={`${DIV_H} ${DIV_V} py-3 text-center`}>
                           <ProgressoCanal progresso={progressoDoCanal(resp.itens, 'email')} label="E-mail" />
                         </td>
-                        <td className="py-3 text-center">
+                        <td className={`${DIV_H} ${DIV_V} py-3 text-center`}>
                           <ProgressoCanal progresso={progressoDoCanal(resp.itens, 'ligacao')} label="Ligação" />
                         </td>
                       </tr>
@@ -680,72 +702,74 @@ export default function RotinasTab({
                           const centroAberto = abertos.has(chaveCentro);
                           return (
                             <Fragment key={chaveCentro}>
+                              {/* Nível 2 — Centro de Custo: cinza claro, negrito aberto. */}
                               <tr
                                 onClick={() => alternar(chaveCentro)}
-                                className={`cursor-pointer border-b border-gray-100 bg-gray-50 hover:bg-gray-100 ${centroAberto ? 'font-semibold' : ''}`}
+                                className={`cursor-pointer bg-gray-50 hover:bg-gray-100 ${centroAberto ? 'font-semibold' : ''}`}
                               >
-                                <td className="py-3 pl-9 text-gray-900">
+                                <td className={`${DIV_H} py-2.5 pl-9 text-gray-900`}>
                                   <span className="flex items-center gap-2">
                                     <span className="flex h-4 w-4 shrink-0 items-center justify-center rounded bg-primary-100 text-primary-600">
                                       {centroAberto ? <Minus size={10} /> : <Plus size={10} />}
                                     </span>
                                     {centro.cost_center_name}
-                                    <span className="rounded-full bg-gray-200 px-2 py-0.5 text-[11px] font-medium text-gray-600">
-                                      {centro.total_itens}
-                                    </span>
                                   </span>
                                 </td>
-                                <td></td>
-                                <td className="py-3 text-center text-xs font-semibold text-gray-800">
-                                  {formatarMoeda(centro.totais.valor)}
+                                <td className={`${DIV_H} ${DIV_V} px-2 py-2.5`}></td>
+                                <td className={`${DIV_H} ${DIV_V} px-2 py-2.5 text-center tabular-nums text-gray-700`}>
+                                  {formatarMoedaSemCentavos(centro.totais.valor)}
                                 </td>
-                                <td className="py-3 text-center text-xs font-semibold text-gray-800">
+                                <td className={`${DIV_H} ${DIV_V} px-2 py-2.5 text-center tabular-nums text-gray-700`}>
                                   {centro.totais.titulos} {centro.totais.titulos === 1 ? 'título' : 'títulos'}
                                 </td>
-                                <td colSpan={2}></td>
-                                <td className="py-3 text-center">
+                                <td className={`${DIV_H} ${DIV_V} px-2 py-2.5`}></td>
+                                <td className={`${DIV_H} ${DIV_V} px-2 py-2.5`}></td>
+                                <td className={`${DIV_H} ${DIV_V} py-2.5 text-center`}>
                                   <ProgressoCanal progresso={progressoDoCanal(centro.itens, 'whatsapp')} label="WhatsApp" />
                                 </td>
-                                <td className="py-3 text-center">
+                                <td className={`${DIV_H} ${DIV_V} py-2.5 text-center`}>
                                   <ProgressoCanal progresso={progressoDoCanal(centro.itens, 'email')} label="E-mail" />
                                 </td>
-                                <td className="py-3 text-center">
+                                <td className={`${DIV_H} ${DIV_V} py-2.5 text-center`}>
                                   <ProgressoCanal progresso={progressoDoCanal(centro.itens, 'ligacao')} label="Ligação" />
                                 </td>
                               </tr>
 
-                            {centroAberto &&
-                              centro.itens.map((item) => {
+                              {centroAberto &&
+                                centro.itens.map((item) => {
                                   const Icone = CLUSTER_ICON[item.cluster];
                                   const chave = `${item.bill_id}-${item.installment_id}-${item.data}`;
                                   return (
+                                    // Nível 3 — parcela: fundo branco.
                                     <tr
                                       key={`${item.bill_id}-${item.installment_id}-${item.etapa_id}-${item.data}`}
-                                      className="border-b border-gray-50 bg-white hover:bg-gray-50"
+                                      className="bg-white hover:bg-gray-50"
                                     >
                                       <td
                                         onClick={() => handleCliqueCliente(item, item.client_name)}
-                                        className="cursor-pointer py-2 pl-[3.75rem] text-gray-900 hover:text-primary-700 hover:underline"
+                                        className={`${DIV_H} cursor-pointer py-2 pl-16 text-gray-700 hover:text-primary-700 hover:underline`}
                                         title="Ver histórico de etapas"
                                       >
                                         {item.client_name || `Cliente ${item.client_id}`}
                                         <SeloDistribuicao item={item} />
                                       </td>
-                                      <td className="py-2 pl-4 text-gray-700">
-                                        <span className="flex items-center gap-2">
+                                      <td className={`${DIV_H} ${DIV_V} px-2 py-2 text-gray-600`}>
+                                        <span className="flex items-center gap-1.5">
                                           <span
                                             className={`flex h-5 w-5 shrink-0 items-center justify-center rounded-md ${CLUSTER_TAG_ESTILO[item.cluster]}`}
                                             title={item.cluster}
                                           >
                                             {Icone && <Icone size={11} className={CLUSTER_ICON_COR[item.cluster]} />}
                                           </span>
-                                          {item.etapa_nome}
+                                          <span className="truncate" title={item.etapa_nome}>
+                                            {item.etapa_nome}
+                                          </span>
                                         </span>
                                       </td>
-                                      <td className="py-2 text-center text-xs font-medium text-gray-700">
-                                        {formatarMoeda(item.valor)}
+                                      <td className={`${DIV_H} ${DIV_V} px-2 py-2 text-center tabular-nums text-gray-700`}>
+                                        {formatarMoedaSemCentavos(item.valor)}
                                       </td>
-                                      <td className="py-2 text-center text-xs text-gray-500">
+                                      <td className={`${DIV_H} ${DIV_V} whitespace-nowrap px-2 py-2 text-center text-gray-500`}>
                                         {siengeTenant ? (
                                           <a
                                             href={urlTituloSienge(siengeTenant, item.bill_id)}
@@ -763,9 +787,9 @@ export default function RotinasTab({
                                           </>
                                         )}
                                       </td>
-                                      <td className="py-2 text-center text-xs text-gray-500">{formatarData(item.due_date)}</td>
-                                      <td className="py-2 text-center text-xs text-gray-500">{formatarData(item.data)}</td>
-                                      <td className="py-2 text-center">
+                                      <td className={`${DIV_H} ${DIV_V} px-2 py-2 text-center text-gray-500`}>{formatarData(item.due_date)}</td>
+                                      <td className={`${DIV_H} ${DIV_V} px-2 py-2 text-center text-gray-500`}>{formatarData(item.data)}</td>
+                                      <td className={`${DIV_H} ${DIV_V} py-2 text-center`}>
                                         {comunicacaoAutomaticaAtiva ? (
                                           <FlagCanal ativo={item.canal_whatsapp} realizado={item.whatsapp_enviado} />
                                         ) : (
@@ -780,7 +804,7 @@ export default function RotinasTab({
                                           />
                                         )}
                                       </td>
-                                      <td className="py-2 text-center">
+                                      <td className={`${DIV_H} ${DIV_V} py-2 text-center`}>
                                         {comunicacaoAutomaticaAtiva ? (
                                           <FlagCanal ativo={item.canal_email} realizado={item.email_enviado} />
                                         ) : (
@@ -795,7 +819,7 @@ export default function RotinasTab({
                                           />
                                         )}
                                       </td>
-                                      <td className="py-2 text-center">
+                                      <td className={`${DIV_H} ${DIV_V} py-2 text-center`}>
                                         <CheckboxCanal
                                           ativo={item.canal_ligacao}
                                           realizado={item.ligacao_realizada}
@@ -806,7 +830,7 @@ export default function RotinasTab({
                                       </td>
                                     </tr>
                                   );
-                              })}
+                                })}
                             </Fragment>
                           );
                         })}
