@@ -51,6 +51,7 @@ import EmpreendimentosMasaPage from './pages/Relatorios/EmpreendimentosMasa/Empr
 import NotasPendentesPage from './pages/Relatorios/NotasPendentes/NotasPendentesPage';
 import ExtratosBancariosPage from './pages/Relatorios/ExtratosBancarios/ExtratosBancariosPage';
 import RepassesCefRelatorioPage from './pages/Relatorios/RepassesCef/RepassesCefRelatorioPage';
+import DesempenhoCobrancaPage from './pages/Relatorios/DesempenhoCobranca/DesempenhoCobrancaPage';
 import EtapasEmpreendimentosPage from './pages/Relatorios/EtapasEmpreendimentos/EtapasEmpreendimentosPage';
 import GestaoCobrancasPage from './pages/Operacoes/GestaoCobrancas/GestaoCobrancasPage';
 import ClusterClientesList from './pages/Operacoes/GestaoCobrancas/ClustersCobranca/ClusterClientesList';
@@ -175,6 +176,7 @@ export default function App() {
             <Route path="/relatorios/notas-pendentes" element={<NotasPendentesPage />} />
             <Route path="/relatorios/extratos-bancarios" element={<ExtratosBancariosPage />} />
             <Route path="/relatorios/repasses-cef" element={<RepassesCefRelatorioPage />} />
+            <Route path="/relatorios/desempenho-cobranca" element={<DesempenhoCobrancaPage />} />
             <Route path="/relatorios/etapas-dos-empreendimentos" element={<EtapasEmpreendimentosPage />} />
           </Route>
 

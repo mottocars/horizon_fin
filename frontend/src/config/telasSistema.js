@@ -55,6 +55,7 @@ export const TELAS_SISTEMA = [
       { codigo: '/relatorios/notas-pendentes', label: 'Acervo NF-e / NFS-e' },
       { codigo: '/relatorios/extratos-bancarios', label: 'Extratos Bancários' },
       { codigo: '/relatorios/repasses-cef', label: 'Repasses CEF' },
+      { codigo: '/relatorios/desempenho-cobranca', label: 'Desempenho da Cobrança' },
       { codigo: '/relatorios/etapas-dos-empreendimentos', label: 'Etapas Empreendimentos' },
     ],
   },

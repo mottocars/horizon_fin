@@ -33,4 +33,5 @@ module.exports = {
   ACERVO_NOTAS: '/relatorios/notas-pendentes',
   EXTRATOS: '/relatorios/extratos-bancarios',
   REL_REPASSES: '/relatorios/repasses-cef',
+  REL_DESEMPENHO_COBRANCA: '/relatorios/desempenho-cobranca',
 };
