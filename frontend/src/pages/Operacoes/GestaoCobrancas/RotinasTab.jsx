@@ -237,10 +237,9 @@ function BotaoFiltroCanal({ canal, ativo, onClick, Icone, label }) {
 // (mesmo quando o mesmo cliente aparece em mais de 1 linha seguida, por ter
 // mais de uma etapa/parcela no período — omitir o nome nas linhas seguintes
 // dava a falsa impressão de "cliente sem nome"). Centro de Custo continua
-// sendo o agrupador de sempre, e os itens já nascem visíveis embaixo dele
-// (sem precisar clicar) — diferente do accordion fechado por padrão de
-// Gestão das Parcelas, porque aqui é uma lista de ação do dia, não uma
-// matriz pra explorar aos poucos.
+// sendo o agrupador abaixo do Responsável. O drilldown nasce recolhido
+// (pedido do usuário), igual ao accordion de Gestão das Parcelas: primeiro
+// se vê o resumo de cada responsável, e abre-se só o que interessa.
 export default function RotinasTab({
   empresaId,
   centroCustoIds = [],
@@ -255,10 +254,11 @@ export default function RotinasTab({
   const [modo, setModo] = useState('etapa');
   const [carregando, setCarregando] = useState(false);
   const [erro, setErro] = useState('');
-  // Linhas recolhidas — chave `r:<responsável>` (nível 1) ou
-  // `c:<responsável>|<centro>` (nível 2). Tudo nasce aberto: é uma lista de
-  // ação do dia, não uma matriz pra explorar aos poucos.
-  const [fechados, setFechados] = useState(new Set());
+  // Linhas abertas — chave `r:<responsável>` (nível 1) ou
+  // `c:<responsável>|<centro>` (nível 2). Tudo nasce recolhido; as chaves
+  // não dependem dos dados, então o que foi aberto continua aberto quando a
+  // lista recarrega (ex.: depois de confirmar um WhatsApp).
+  const [abertos, setAbertos] = useState(new Set());
   const [alternando, setAlternando] = useState(null);
 
   // Tenant da integração Sienge desta empresa — só pra montar o link do
@@ -395,7 +395,7 @@ export default function RotinasTab({
   }, [carregar, refreshToken]);
 
   function alternar(id) {
-    setFechados((atual) => {
+    setAbertos((atual) => {
       const novo = new Set(atual);
       if (novo.has(id)) novo.delete(id);
       else novo.add(id);
@@ -594,7 +594,7 @@ export default function RotinasTab({
                 )}
                 {responsaveisFiltrados.map((resp) => {
                   const chaveResp = `r:${resp.usuario_id ?? 'sem'}`;
-                  const respAberto = !fechados.has(chaveResp);
+                  const respAberto = abertos.has(chaveResp);
                   return (
                     <Fragment key={chaveResp}>
                       {/* Nível 1 — Responsável: só Valor e Título preenchidos
@@ -625,7 +625,7 @@ export default function RotinasTab({
                       {respAberto &&
                         resp.centros.map((centro) => {
                           const chaveCentro = `c:${resp.usuario_id ?? 'sem'}|${centro.cost_center_id}`;
-                          const centroAberto = !fechados.has(chaveCentro);
+                          const centroAberto = abertos.has(chaveCentro);
                           return (
                             <Fragment key={chaveCentro}>
                               <tr
