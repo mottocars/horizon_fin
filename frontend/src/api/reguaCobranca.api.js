@@ -7,9 +7,12 @@ export function getResumoReguaCobranca(empresaId) {
 // Usuários elegíveis pra "Responsável": só quem tem esta empresa registrada
 // no cadastro e não é Master (ver reguaCobranca.service.js::listResponsaveis) —
 // não é o /usuarios genérico, que é escopado por quem está logado, não pela
-// empresa da régua sendo configurada.
-export function listResponsaveisReguaCobranca(empresaId) {
-  return http.get('/regua-cobranca/responsaveis', { params: { empresa_id: empresaId } }).then((res) => res.data);
+// empresa da régua sendo configurada. `apenasAtribuidos` devolve só quem já
+// é responsável por alguma etapa da régua (filtro da aba Rotinas).
+export function listResponsaveisReguaCobranca(empresaId, { apenasAtribuidos = false } = {}) {
+  const params = { empresa_id: empresaId };
+  if (apenasAtribuidos) params.apenas_atribuidos = true;
+  return http.get('/regua-cobranca/responsaveis', { params }).then((res) => res.data);
 }
 
 export function listEtapasReguaCobranca(empresaId, cluster) {

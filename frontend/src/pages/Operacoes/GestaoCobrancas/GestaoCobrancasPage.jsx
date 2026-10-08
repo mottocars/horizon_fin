@@ -330,10 +330,10 @@ export default function GestaoCobrancasPage() {
   }, [empresaId, abaAtiva]);
 
   // Filtro de "rotina de quem" — só existe pra Master/Administrador (ver
-  // podeFiltrarResponsavel acima). Mesma lista de usuários elegíveis a
-  // responsável de etapa da régua (Administrador ou Básico, com esta
-  // empresa vinculada) — é literalmente quem pode ter uma rotina pra
-  // mostrar (ver reguaCobranca.service.js::listResponsaveis).
+  // podeFiltrarResponsavel acima). Só quem já está registrado como
+  // responsável em alguma etapa da régua desta empresa — é literalmente quem
+  // tem uma rotina pra mostrar (ver reguaCobranca.service.js::listResponsaveis,
+  // opção apenasAtribuidos).
   const [responsaveisRotinas, setResponsaveisRotinas] = useState([]);
   const [usuarioIdRotinas, setUsuarioIdRotinas] = useState('');
 
@@ -342,7 +342,7 @@ export default function GestaoCobrancasPage() {
       setResponsaveisRotinas([]);
       return;
     }
-    listResponsaveisReguaCobranca(empresaId).then(setResponsaveisRotinas);
+    listResponsaveisReguaCobranca(empresaId, { apenasAtribuidos: true }).then(setResponsaveisRotinas);
   }, [empresaId, abaAtiva, podeFiltrarResponsavel]);
 
   // Opções do filtro "Responsável" de Gestão das Parcelas — mesma lista de
@@ -520,7 +520,7 @@ export default function GestaoCobrancasPage() {
                   disabled={!empresaId}
                   options={responsaveisRotinas.map((usuario) => ({ value: usuario.id, label: usuario.nome }))}
                   placeholder={!empresaId ? 'Selecione a empresa primeiro' : 'Minha rotina'}
-                  emptyMessage="Nenhum usuário elegível nesta empresa."
+                  emptyMessage="Nenhum responsável registrado nas etapas da régua."
                 />
               </div>
             )}

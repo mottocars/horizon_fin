@@ -59,7 +59,8 @@ async function getResumo(req, res, next) {
 async function listResponsaveis(req, res, next) {
   try {
     const empresaId = empresaIdSchema.parse(req.query.empresa_id);
-    const responsaveis = await service.listResponsaveis(empresaId);
+    const apenasAtribuidos = req.query.apenas_atribuidos === 'true';
+    const responsaveis = await service.listResponsaveis(empresaId, { apenasAtribuidos });
     res.json(responsaveis);
   } catch (err) {
     if (err.issues) return next(badRequest(err.issues[0].message));

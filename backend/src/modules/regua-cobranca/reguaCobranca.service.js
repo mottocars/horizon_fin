@@ -168,13 +168,21 @@ async function garantirTemplateElegivel(empresaId, cluster, templateId) {
 // Usuários elegíveis pra serem responsáveis por uma etapa desta empresa —
 // mesma regra de garantirResponsavelElegivel acima, usada pra popular o
 // combobox "Responsável".
-async function listResponsaveis(empresaId) {
+// `apenasAtribuidos` restringe a quem já está registrado como responsável
+// em alguma etapa da régua desta empresa — é o filtro "Responsável" da aba
+// Rotinas (Gestão de Cobranças): quem não responde por etapa nenhuma não
+// tem rotina pra mostrar.
+async function listResponsaveis(empresaId, { apenasAtribuidos = false } = {}) {
   const { rows } = await pool.query(
     `SELECT u.id, u.nome FROM usuarios u
      JOIN usuarios_empresas ue ON ue.usuario_id = u.id
      WHERE ue.empresa_id = $1 AND u.permissao <> 'MASTER' AND u.ativo = TRUE
+       AND ($2::boolean = FALSE OR EXISTS (
+         SELECT 1 FROM regua_cobranca_etapas e
+         WHERE e.empresa_id = $1 AND e.responsavel_usuario_id = u.id
+       ))
      ORDER BY u.nome ASC`,
-    [empresaId]
+    [empresaId, apenasAtribuidos]
   );
   return rows;
 }
