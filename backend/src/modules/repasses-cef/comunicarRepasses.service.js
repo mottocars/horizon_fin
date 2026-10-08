@@ -12,7 +12,6 @@ const zapiService = require('../integracoes-zapi/zapi.service');
 // Clientes = os mesmos dos buckets do Kanban (mesmas consultas e filtros).
 
 const MIME_XLSX = 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet';
-const LINK_RELATORIO = 'financas.horizonhub.com.br/relatorios/repasses-cef';
 
 // Faixas de tempo dos contratos retidos em assinatura.
 const FAIXAS_ASSINATURA = [
@@ -166,9 +165,9 @@ async function montarResumo(empresaId) {
 }
 
 function blocoSla(lista, sla) {
-  if (sla == null) return '_SLA da etapa não cadastrado (aba Máscaras)_';
+  if (sla == null) return ['_SLA da etapa não cadastrado (aba Máscaras)_'];
   const vencidos = lista.filter((c) => c.vencido).length;
-  return `🟢 ${numero(lista.length - vencidos)} no SLA · 🔴 ${numero(vencidos)} com SLA vencido _(SLA ${numero(sla)} dias)_`;
+  return [`🟢 ${numero(lista.length - vencidos)} no SLA`, `🔴 ${numero(vencidos)} com SLA vencido _(SLA ${numero(sla)} dias)_`];
 }
 
 function montarMensagem(resumo, nomeDestinatario) {
@@ -183,24 +182,20 @@ function montarMensagem(resumo, nomeDestinatario) {
     `Olá${primeiroNome ? `, ${primeiroNome}` : ''}! Segue o resumo do repasse.`,
     '',
     '📝 *Contratos que não viraram assinatura*',
-    `💰 ${moeda(soma(contrato, 'valor'))} · ${numero(contrato.length)} contratos`,
-    blocoSla(contrato, sla.CONTRATO),
+    `💰 ${moeda(soma(contrato, 'valor'))} | ${numero(contrato.length)} contratos`,
+    ...blocoSla(contrato, sla.CONTRATO),
     `⏱️ Tempo médio: ${numero(media(contrato.map((c) => c.dias)))} dias`,
     '',
     '✍️ *Contratos retidos (em assinatura)*',
-    `💰 ${moeda(soma(assinatura, 'valorRetido'))} retidos · ${numero(assinatura.length)} contratos`,
-    blocoSla(assinatura, sla.ASSINATURA),
+    `💰 ${moeda(soma(assinatura, 'valorRetido'))} retidos | ${numero(assinatura.length)} contratos`,
+    ...blocoSla(assinatura, sla.ASSINATURA),
     `⏱️ Tempo médio: ${numero(media(assinatura.map((c) => c.dias)))} dias`,
   ];
   for (const faixa of FAIXAS_ASSINATURA) {
     const daFaixa = assinatura.filter((c) => c.dias != null && c.dias >= faixa.min && c.dias <= faixa.max);
-    linhas.push(`• ${faixa.rotulo}: ${moeda(soma(daFaixa, 'valorRetido'))} · ${numero(daFaixa.length)}`);
+    linhas.push(`* ${faixa.rotulo}: ${moeda(soma(daFaixa, 'valorRetido'))} | qtd ${numero(daFaixa.length)}`);
   }
-  const semEpr = assinatura.filter((c) => c.valorRetido === undefined).length;
-  if (semEpr > 0) {
-    linhas.push(`_${numero(semEpr)} ${semEpr === 1 ? 'contrato ainda sem EPR importado' : 'contratos ainda sem EPR importado'} (valor retido não somado)_`);
-  }
-  linhas.push('', '📎 Detalhe por cliente na planilha anexa', `🔗 ${LINK_RELATORIO}`);
+  linhas.push('', '📎 Detalhe por cliente na planilha anexa', '', '_Comunicado automático enviado pelo Horizon Finanças._');
   return linhas.join('\n');
 }
 
@@ -297,19 +292,17 @@ async function gerarExcel(resumo) {
   return workbook.xlsx.writeBuffer();
 }
 
-// Envia pra 1 telefone: o texto e, em seguida, a planilha (legenda curta — a do documento
-// no WhatsApp não comporta o texto inteiro).
+// Envia pra 1 telefone numa mensagem só: a planilha com o texto do comunicado como legenda.
 async function enviarComunicado(empresaId, zapiIntegracaoId, { nome, telefone }) {
   const resumo = await montarResumo(empresaId);
   const mensagem = montarMensagem(resumo, nome);
   const buffer = await gerarExcel(resumo);
   const hoje = new Intl.DateTimeFormat('en-CA', { timeZone: 'America/Sao_Paulo' }).format(new Date());
 
-  await zapiService.enviarMensagemTexto(zapiIntegracaoId, { telefone, mensagem });
   await zapiService.enviarDocumento(zapiIntegracaoId, {
     telefone,
     documentoBase64: Buffer.from(buffer).toString('base64'),
-    legenda: `📎 Repasses CEF · ${resumo.empresa} · detalhe por cliente`,
+    legenda: mensagem,
     extensao: 'xlsx',
     mimeType: MIME_XLSX,
     nomeArquivo: `repasses-cef_${hoje}.xlsx`,
