@@ -11,6 +11,7 @@ import {
 import { listZapiIntegracoes } from '../../../../api/zapi.api';
 import { listEmailIntegracoes } from '../../../../api/emailIntegracao.api';
 import DistribuicaoRotinaSecao from './DistribuicaoRotinaSecao';
+import { ParametroLinha, SectionHeader } from './ParametrosLayout';
 
 // Opções do "Tipo de Comunicação" (ver reguaCobranca.service.js::
 // getComunicacaoAutomatica) — decide como WhatsApp/E-mail aparecem na
@@ -53,8 +54,8 @@ function CampoHorario({ valor, onCommit }) {
 
 // Parâmetros da régua como um todo, fora dos 5 clusters — aparece no mesmo
 // lugar do conteúdo de um cluster (troca de conteúdo pela seleção na barra
-// de abas, ver ReguaCobrancaTab.jsx), não numa janela separada. 3 módulos
-// bem separados: a Distribuição da Rotina (responsável por etapa ou
+// de abas, ver ReguaCobrancaTab.jsx), não numa janela separada. Sessões
+// separadas no desenho do Motor de Risco: a Distribuição da Rotina (responsável por etapa ou
 // distribuição automática — DistribuicaoRotinaSecao.jsx), o Tipo de
 // Comunicação e, só quando ele é a Comunicação Automática, quem/quando
 // dispara cada cluster (conexões Z-API/Email + horário).
@@ -98,16 +99,35 @@ export default function ConfiguracoesGlobaisPainel({ empresaId }) {
 
   const carregando = !parametros || !comunicacaoAutomatica;
 
+  // Sessões no mesmo desenho do Motor de Risco: cada uma num cartão, com
+  // selo/título/explicação, e cada parâmetro numa linha com explicação e
+  // exemplo (ver ParametrosLayout.jsx).
   return (
-    <Card>
-      {carregando ? (
-        <div className="py-8 text-center text-sm text-gray-400">Carregando...</div>
-      ) : (
-        <div className="space-y-6">
-          <DistribuicaoRotinaSecao empresaId={empresaId} />
+    <div className="space-y-4">
+      <DistribuicaoRotinaSecao empresaId={empresaId} />
 
-          <section>
-            <h3 className="mb-3 text-xs font-semibold uppercase tracking-wide text-gray-400">Tipo de Comunicação</h3>
+      <Card>
+        <SectionHeader
+          selo="Sessão 2"
+          titulo="Comunicação"
+          texto="Como o WhatsApp e o e-mail de cada etapa da régua chegam ao cliente."
+        />
+        {carregando ? (
+          <div className="py-8 text-center text-sm text-gray-400">Carregando...</div>
+        ) : (
+          <>
+          <ParametroLinha
+            primeiro
+            largo
+            label="Tipo de Comunicação"
+            desc="Quem envia a mensagem: o sistema, sozinho, nos horários agendados; o atendente, pela Rotina, depois de conferir; ou o atendente pelo próprio WhatsApp ou e-mail, copiando o texto pronto."
+            exemplo={
+              <>
+                Com <b className="font-semibold">Visualizar antes de enviar</b>: na Rotina, o atendente abre a mensagem pronta do D+5,
+                confere e clica em Enviar.
+              </>
+            }
+          >
             <div className="grid gap-2 sm:grid-cols-3" role="radiogroup" aria-label="Tipo de Comunicação">
               {TIPOS_COMUNICACAO.map((opcao) => {
                 const selecionado = comunicacaoAutomatica.tipo === opcao.valor;
@@ -139,15 +159,24 @@ export default function ConfiguracoesGlobaisPainel({ empresaId }) {
                 );
               })}
             </div>
-          </section>
+          </ParametroLinha>
 
           {/* Horário e conexões de cada cluster só existem pro envio
               automático — nos outros tipos a seção fica escondida (os
               valores continuam gravados, voltam a aparecer se o tipo voltar
               pra Automática). */}
           {comunicacaoAutomatica.tipo === 'automatica' && (
-            <section>
-              <h3 className="mb-3 text-xs font-semibold uppercase tracking-wide text-gray-400">Disparo por cluster</h3>
+            <ParametroLinha
+              largo
+              label="Disparo por cluster"
+              desc="Horário do envio automático e por qual conexão Z-API e de e-mail saem as mensagens de cada cluster."
+              exemplo={
+                <>
+                  Com <b className="font-semibold">Bom pagador às 09:00</b> e a conexão <b className="font-semibold">Comunicação</b>: as
+                  mensagens das etapas de Bom pagador que vencem no dia saem às 09:00 por esse número.
+                </>
+              }
+            >
               <div className="overflow-x-auto rounded-lg border border-gray-200">
                 <table className="w-full text-left text-sm">
                   <thead>
@@ -204,10 +233,11 @@ export default function ConfiguracoesGlobaisPainel({ empresaId }) {
                   </tbody>
                 </table>
               </div>
-            </section>
+            </ParametroLinha>
           )}
-        </div>
-      )}
-    </Card>
+          </>
+        )}
+      </Card>
+    </div>
   );
 }

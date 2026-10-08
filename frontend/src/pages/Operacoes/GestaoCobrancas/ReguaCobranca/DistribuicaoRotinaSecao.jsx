@@ -15,6 +15,7 @@ import {
   UserPlus,
 } from 'lucide-react';
 import Button from '../../../../components/Button';
+import Card from '../../../../components/Card';
 import Modal from '../../../../components/Modal';
 import SearchableSelect from '../../../../components/SearchableSelect';
 import { useAuth } from '../../../../auth/AuthContext';
@@ -28,6 +29,7 @@ import {
   salvarConfigDistribuicaoReguaCobranca,
   substituirAtendenteDistribuicao,
 } from '../../../../api/reguaCobranca.api';
+import { ParametroLinha, SectionHeader } from './ParametrosLayout';
 
 // Opções de "Distribuição da Rotina" (ver backend regua-cobranca/
 // distribuicao.service.js). Mesmo visual de cartão-rádio do "Tipo de
@@ -272,7 +274,7 @@ function CampoLiberacao({ valor, disabled, onCommit }) {
         if (local !== String(valor) && local !== '') onCommit(Number(local));
         else setLocal(String(valor));
       }}
-      className="w-16 rounded-lg border border-gray-200 px-2 py-1 text-center font-mono text-sm focus:outline-none focus:ring-2 focus:ring-primary-100 disabled:bg-gray-50"
+      className="w-full rounded-lg border border-primary-100 bg-primary-50 px-3 py-2 text-right font-mono text-sm tabular-nums transition-colors hover:border-primary-500 focus:outline-none focus:ring-2 focus:ring-primary-100 disabled:border-gray-200 disabled:bg-gray-50"
     />
   );
 }
@@ -345,10 +347,10 @@ export default function DistribuicaoRotinaSecao({ empresaId }) {
 
   if (!painel) {
     return (
-      <section>
-        <h3 className="mb-3 text-xs font-semibold uppercase tracking-wide text-gray-400">Distribuição da Rotina</h3>
+      <Card>
+        <SectionHeader selo="Sessão 1" titulo="Rotina e atendentes" />
         <div className="py-6 text-center text-sm text-gray-400">{erro || 'Carregando...'}</div>
-      </section>
+      </Card>
     );
   }
 
@@ -407,21 +409,40 @@ export default function DistribuicaoRotinaSecao({ empresaId }) {
   }
 
   return (
-    <section>
-      <div className="mb-3 flex flex-wrap items-center gap-2">
-        <h3 className="text-xs font-semibold uppercase tracking-wide text-gray-400">Distribuição da Rotina</h3>
-        {automatica && (
-          <Link
-            to={`/operacoes/gestao-de-cobrancas/distribuicao-automatica?empresa_id=${empresaId}`}
-            className="inline-flex items-center gap-1 rounded-full border border-primary-100 bg-primary-50 px-2 py-0.5 text-[11px] font-medium text-primary-700 hover:bg-primary-100"
-            title="Como funciona a distribuição automática"
-          >
-            <HelpCircle size={12} />
-            Como funciona a distribuição?
-          </Link>
-        )}
-      </div>
+    <Card>
+      <SectionHeader
+        selo="Sessão 1"
+        titulo="Rotina e atendentes"
+        texto="Quem recebe, na aba Rotinas, os clientes que entram na régua a cada dia: o responsável de cada etapa ou uma distribuição automática entre atendentes."
+        acao={
+          automatica && (
+            <Link
+              to={`/operacoes/gestao-de-cobrancas/distribuicao-automatica?empresa_id=${empresaId}`}
+              className="inline-flex items-center gap-1 rounded-full border border-primary-100 bg-primary-50 px-2.5 py-1 text-[11px] font-medium text-primary-700 hover:bg-primary-100"
+              title="Como funciona a distribuição automática"
+            >
+              <HelpCircle size={12} />
+              Como funciona a distribuição?
+            </Link>
+          )
+        }
+      />
+      {erro && <p className="mt-3 rounded-lg bg-red-50 px-3 py-2 text-sm text-red-600">{erro}</p>}
+      {aviso && <p className="mt-3 rounded-lg bg-emerald-50 px-3 py-2 text-sm text-emerald-700">{aviso}</p>}
 
+      <ParametroLinha
+        primeiro
+        largo
+        label="Distribuição da Rotina"
+        desc="Define de onde vem o responsável de cada cliente da Rotina. Na distribuição automática, a régua deixa de ter responsável por etapa."
+        exemplo={
+          <>
+            Com <b className="font-semibold">Responsável por etapa</b>: tudo que entra em D+5 vai para quem responde pelo D+5. Com{' '}
+            <b className="font-semibold">Distribuição automática</b>: 40 clientes no dia entre 2 atendentes viram 20 para cada uma,
+            com a mesma mistura de atraso e valores parecidos.
+          </>
+        }
+      >
       <div className="grid gap-2 sm:grid-cols-2" role="radiogroup" aria-label="Distribuição da Rotina">
         {MODOS.map((opcao) => {
           const selecionado = painel.config.modo === opcao.valor;
@@ -453,14 +474,39 @@ export default function DistribuicaoRotinaSecao({ empresaId }) {
         })}
       </div>
 
-      {!podeEditar && (
-        <p className="mt-2 text-xs text-gray-400">Só Master e Administrador podem alterar a distribuição.</p>
-      )}
-      {erro && <p className="mt-3 rounded-lg bg-red-50 px-3 py-2 text-sm text-red-600">{erro}</p>}
-      {aviso && <p className="mt-3 rounded-lg bg-emerald-50 px-3 py-2 text-sm text-emerald-700">{aviso}</p>}
+        {!podeEditar && <p className="text-xs text-gray-400">Só Master e Administrador podem alterar a distribuição.</p>}
+      </ParametroLinha>
 
       {automatica && (
-        <div className="mt-4 space-y-4">
+        <ParametroLinha
+          label="Liberar o cliente da carteira com"
+          desc="Dias sem aparecer na Rotina até o cliente deixar de ser da carteira do atendente. Enquanto está na carteira, o cliente sempre volta para a mesma pessoa."
+          exemplo={
+            <>
+              Com <b className="font-semibold">{painel.config.dias_liberacao}</b> dias: o cliente pagou a parcela de setembro e só voltou
+              à Rotina 25 dias depois, com a de outubro → é distribuído de novo, como cliente novo. Se tivesse voltado em 6 dias,
+              continuaria com a mesma atendente.
+            </>
+          }
+        >
+          <CampoLiberacao
+            valor={painel.config.dias_liberacao}
+            disabled={!podeEditar}
+            onCommit={(dias) =>
+              executar('liberacao', () => salvarConfigDistribuicaoReguaCobranca(empresaId, { dias_liberacao: dias })).catch(() => {})
+            }
+          />
+          <span className="w-16 shrink-0 text-xs text-gray-400">dias</span>
+        </ParametroLinha>
+      )}
+
+      {automatica && (
+        <ParametroLinha
+          largo
+          label="Atendentes"
+          desc="Quem recebe os clientes da Rotina. Pause em férias (os clientes dela ficam em cobertura com os outros), substitua mantendo a carteira e o placar do mês, ou tire da distribuição."
+        >
+          <div className="space-y-4">
           {/* Situação de hoje + ações do dia */}
           <div className="flex flex-col gap-3 rounded-lg border border-gray-200 bg-gray-50 p-3 lg:flex-row lg:items-center lg:justify-between">
             <div className="space-y-1 text-sm">
@@ -675,21 +721,14 @@ export default function DistribuicaoRotinaSecao({ empresaId }) {
             ) : (
               <span />
             )}
-            <label className="flex items-center gap-2 text-sm text-gray-600">
-              Liberar o cliente da carteira com
-              <CampoLiberacao
-                valor={painel.config.dias_liberacao}
-                disabled={!podeEditar}
-                onCommit={(dias) =>
-                  executar('liberacao', () => salvarConfigDistribuicaoReguaCobranca(empresaId, { dias_liberacao: dias })).catch(() => {})
-                }
-              />
-              dias sem aparecer na Rotina
-            </label>
           </div>
+          </div>
+        </ParametroLinha>
+      )}
 
-          {/* Últimas mudanças */}
-          {painel.log.length > 0 && (
+      {/* Últimas mudanças */}
+      {automatica && painel.log.length > 0 && (
+        <ParametroLinha largo label="Últimas mudanças" desc="Distribuições, redistribuições e mudanças na equipe, com quem fez e quando.">
             <div className="rounded-lg border border-gray-200">
               <button
                 type="button"
@@ -716,8 +755,7 @@ export default function DistribuicaoRotinaSecao({ empresaId }) {
                 </ul>
               )}
             </div>
-          )}
-        </div>
+        </ParametroLinha>
       )}
 
       <ModalPausa
@@ -749,6 +787,6 @@ export default function DistribuicaoRotinaSecao({ empresaId }) {
           setRedistribuindo(false);
         }}
       />
-    </section>
+    </Card>
   );
 }
