@@ -130,7 +130,8 @@ function progressoDoCanal(itens, canal) {
   return { feitos, total: aplicaveis.length, pct: Math.round((feitos / aplicaveis.length) * 100) };
 }
 
-// Selo de % concluído na linha do Centro de Custo, na mesma coluna do canal:
+// Selo de % concluído nas linhas de Responsável e de Centro de Custo, na
+// mesma coluna do canal:
 // verde quando tudo foi feito, âmbar no meio do caminho, cinza em 0%.
 function ProgressoCanal({ progresso, label }) {
   if (!progresso) return <span className="text-gray-300">—</span>;
@@ -489,7 +490,12 @@ export default function RotinasTab({
             return { ...centro, itens, total_itens: itens.length, totais: totaisDoResponsavel([{ itens }]) };
           })
           .filter((centro) => centro.itens.length > 0);
-        return { ...resp, centros: centrosResp, totais: totaisDoResponsavel(centrosResp) };
+        return {
+          ...resp,
+          centros: centrosResp,
+          itens: centrosResp.flatMap((centro) => centro.itens),
+          totais: totaisDoResponsavel(centrosResp),
+        };
       })
       .filter((resp) => resp.centros.length > 0);
   }, [responsaveis, itemVisivel, filtroCliente, filtroEtapa]);
@@ -649,11 +655,20 @@ export default function RotinasTab({
                             </span>
                           </span>
                         </td>
-                        <td className="py-3 text-center text-xs font-semibold text-gray-900">{formatarMoeda(resp.totais.valor)}</td>
-                        <td className="py-3 text-center text-xs font-semibold text-gray-900">
+                        <td className="py-3 text-center text-xs font-semibold text-gray-800">{formatarMoeda(resp.totais.valor)}</td>
+                        <td className="py-3 text-center text-xs font-semibold text-gray-800">
                           {resp.totais.titulos} {resp.totais.titulos === 1 ? 'título' : 'títulos'}
                         </td>
-                        <td colSpan={5}></td>
+                        <td colSpan={2}></td>
+                        <td className="py-3 text-center">
+                          <ProgressoCanal progresso={progressoDoCanal(resp.itens, 'whatsapp')} label="WhatsApp" />
+                        </td>
+                        <td className="py-3 text-center">
+                          <ProgressoCanal progresso={progressoDoCanal(resp.itens, 'email')} label="E-mail" />
+                        </td>
+                        <td className="py-3 text-center">
+                          <ProgressoCanal progresso={progressoDoCanal(resp.itens, 'ligacao')} label="Ligação" />
+                        </td>
                       </tr>
 
                       {respAberto &&
