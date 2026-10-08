@@ -58,13 +58,6 @@ const ABAS = [
   },
 ];
 
-// Cor do "feitas / devidas": tudo feito = verde; parte = âmbar; nada = vermelho.
-function corCumprimento(feitas, devidas) {
-  if (!devidas) return 'text-gray-400';
-  if (feitas >= devidas) return 'text-emerald-700';
-  return feitas > 0 ? 'text-amber-700' : 'text-red-600';
-}
-
 const NOME_CANAL = { whatsapp: 'WhatsApp', email: 'E-mail', ligacao: 'Ligação' };
 
 function resumir(linhas) {
@@ -145,9 +138,7 @@ const COLUNAS = [
           type="button"
           onClick={() => acoes.abrirHistorico(p)}
           title={`${detalhe ? `${detalhe} — ` : ''}clique para ver o histórico da parcela`}
-          className={`rounded px-1.5 py-0.5 font-medium hover:bg-gray-100 hover:underline ${
-            p.interacoesDevidas ? corCumprimento(p.interacoesFeitas, p.interacoesDevidas) : 'text-gray-400'
-          }`}
+          className="tabular-nums text-primary-600 hover:text-primary-700 hover:underline"
         >
           {p.interacoesDevidas ? `${p.interacoesFeitas} / ${p.interacoesDevidas}` : '—'}
         </button>
@@ -155,7 +146,7 @@ const COLUNAS = [
     },
     resumo: (r) =>
       r.devidas ? (
-        <span className={`font-semibold ${corCumprimento(r.feitas, r.devidas)}`} title="Interações feitas ÷ interações que deveriam ter sido feitas">
+        <span className="font-semibold text-gray-800" title="Interações feitas ÷ interações que deveriam ter sido feitas">
           {r.feitas.toLocaleString('pt-BR')} / {r.devidas.toLocaleString('pt-BR')}
         </span>
       ) : null,
