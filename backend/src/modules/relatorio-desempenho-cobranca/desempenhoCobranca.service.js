@@ -23,11 +23,17 @@ const { getDataSistema, getLimiteVigente, getComunicacaoAutomatica } = require('
 //                  Reparcelamento, Distrato etc. e o "Recebimento" de valor
 //                  zero das parcelas de DESCONTO CONCEDIDO zeram o saldo sem
 //                  entrar dinheiro e não contam como pago.
-//   Status/Valor = ficam na linha do último responsável antes do pagamento
-//                  (ou do atual, se em aberto); quem teve a parcela antes vê
-//                  "Transferida" — o valor nunca conta 2 vezes.
+//   Dono         = cada parcela aparece 1 vez só, na linha de quem era o
+//                  responsável na última tarefa (antes do pagamento, ou a
+//                  atual) — as interações são as dela.
 //
-// Período: entram as parcelas com tarefa no período ou pagas no período.
+// Abas (campo `aba`):
+//   pagas   = paga (Recebimento) com data de pagamento DENTRO do período;
+//             valor = soma dos Recebimentos.
+//   abertas = em aberto no fim do período e com tarefa no período;
+//             valor = o que faltava pagar no fim do período.
+// Parcela encerrada sem pagamento (desconto, reparcelamento, distrato) não
+// entra em nenhuma das duas.
 
 const ORIGIN_ID_PADRAO = 'CO';
 const CANAIS = ['whatsapp', 'email', 'ligacao'];
@@ -100,7 +106,7 @@ async function getDesempenho(empresaId, { dataInicio, dataFim }) {
          FROM sie_income_recebimentos
          WHERE empresa_id = $1 AND bill_id = ANY($2::bigint[]) AND payment_date IS NOT NULL AND payment_date <= $3
          ORDER BY payment_date`,
-        [empresaId, billIds, corte]
+        [empresaId, billIds, hoje]
       ),
       pool.query(
         `SELECT bill_id::text AS bill_id, installment_id::text AS installment_id, usuario_id, canal, data_registro::text AS data
@@ -137,14 +143,18 @@ async function getDesempenho(empresaId, { dataInicio, dataFim }) {
   const parcelas = [];
   for (const p of parcelasSie) {
     const k = chaveParcela(p.bill_id, p.installment_id);
-    const pagamentos = (recebimentosPor.get(k) || []).filter((r) => r.operacao === 'Recebimento' && r.valor > 0);
-    const quitada = Number(p.saldo) === 0;
+    const operacoes = recebimentosPor.get(k) || [];
+    const operacoesAteCorte = operacoes.filter((r) => r.data <= corte);
+    // Situação no fim do período: saldo zerado só se a última operação do
+    // Sienge (pagamento, desconto, reparcelamento...) já tinha acontecido.
+    const ultimaOperacao = operacoes.at(-1)?.data ?? null;
+    const quitada = Number(p.saldo) === 0 && ultimaOperacao != null && ultimaOperacao <= corte;
+    const pagamentos = operacoesAteCorte.filter((r) => r.operacao === 'Recebimento' && r.valor > 0);
     const paga = quitada && pagamentos.length > 0;
-    const dataPagamento = paga ? pagamentos[pagamentos.length - 1].data : null;
-    // Saldo zerado (pagamento, desconto, reparcelamento...) tira a parcela da
-    // Rotina: não há tarefa depois da última operação.
-    const ultimaOperacao = quitada ? (recebimentosPor.get(k) || []).at(-1)?.data : null;
-    const fimTarefas = ultimaOperacao && ultimaOperacao < corte ? ultimaOperacao : corte;
+    if (quitada && !paga) continue; // encerrada sem pagamento — fora das 2 abas
+    const dataPagamento = paga ? pagamentos.at(-1).data : null;
+    // Saldo zerado tira a parcela da Rotina: não há tarefa depois disso.
+    const fimTarefas = quitada ? ultimaOperacao : corte;
 
     // Linha do tempo de tarefas: cada etapa alcançada, na régua do cluster
     // que a parcela tinha naquele dia (passou do limite = Inadimplência).
@@ -161,75 +171,71 @@ async function getDesempenho(empresaId, { dataInicio, dataFim }) {
       tarefas.push({ data, dono, canais });
     }
     tarefas.sort((a, b) => a.data.localeCompare(b.data));
-    if (tarefas.length === 0) continue;
+    const dono = [...tarefas].reverse().find((t) => t.dono)?.dono ?? null;
+    if (!dono) continue;
 
-    // Responsáveis da parcela e o "dono final" (último responsável antes do
-    // pagamento, ou o atual) — é quem carrega status e valor.
-    const donos = [...new Set(tarefas.map((t) => t.dono).filter(Boolean))];
-    const donoFinal = [...tarefas].reverse().find((t) => t.dono)?.dono ?? null;
-    const temTarefaNoPeriodo = tarefas.some((t) => t.data >= dataInicio && t.data <= corte);
-    const pagaNoPeriodo = paga && dataPagamento >= dataInicio && dataPagamento <= corte;
-    if (!temTarefaNoPeriodo && !pagaNoPeriodo) continue;
+    let aba;
+    if (paga) {
+      if (dataPagamento < dataInicio || dataPagamento > corte) continue;
+      aba = 'pagas';
+    } else {
+      if (!tarefas.some((t) => t.data >= dataInicio && t.data <= corte)) continue;
+      aba = 'abertas';
+    }
 
-    const regs = registrosPor.get(k) || [];
-    for (const dono of donos) {
-      const minhas = tarefas.map((t, i) => ({ ...t, ate: tarefas[i + 1] ? somarDias(tarefas[i + 1].data, -1) : fimTarefas })).filter((t) => t.dono === dono);
-      const noPeriodo = minhas.some((t) => t.data >= dataInicio && t.data <= corte);
-      if (!noPeriodo && !(pagaNoPeriodo && dono === donoFinal)) continue;
-
-      // Feitas: cada registro do canal, dela, dentro da janela da etapa —
-      // 1 registro cumpre 1 tarefa só.
-      const meusRegistros = regs.filter((r) => r.usuario_id === dono);
-      const usados = new Set();
-      let devidas = 0;
-      let feitas = 0;
-      const porCanal = { whatsapp: [0, 0], email: [0, 0], ligacao: [0, 0] };
-      for (const t of minhas) {
-        for (const canal of t.canais) {
-          devidas++;
-          porCanal[canal][1]++;
-          const idx = meusRegistros.findIndex((r, i) => !usados.has(i) && r.canal === canal && r.data >= t.data && r.data <= t.ate);
-          if (idx >= 0) {
-            usados.add(idx);
-            feitas++;
-            porCanal[canal][0]++;
-          }
+    // Feitas: cada registro do canal, da dona, dentro da janela da etapa —
+    // 1 registro cumpre 1 tarefa só.
+    const minhas = tarefas
+      .map((t, i) => ({ ...t, ate: tarefas[i + 1] ? somarDias(tarefas[i + 1].data, -1) : fimTarefas }))
+      .filter((t) => t.dono === dono);
+    const meusRegistros = (registrosPor.get(k) || []).filter((r) => r.usuario_id === dono);
+    const usados = new Set();
+    let devidas = 0;
+    let feitas = 0;
+    const porCanal = { whatsapp: [0, 0], email: [0, 0], ligacao: [0, 0] };
+    for (const t of minhas) {
+      for (const canal of t.canais) {
+        devidas++;
+        porCanal[canal][1]++;
+        const idx = meusRegistros.findIndex((r, i) => !usados.has(i) && r.canal === canal && r.data >= t.data && r.data <= t.ate);
+        if (idx >= 0) {
+          usados.add(idx);
+          feitas++;
+          porCanal[canal][0]++;
         }
       }
-      const ultimaInteracao = meusRegistros.length ? meusRegistros[meusRegistros.length - 1].data : null;
-
-      let status;
-      if (dono !== donoFinal) status = 'transferida';
-      else if (paga) status = 'pago';
-      else if (quitada) status = 'encerrada';
-      else status = 'aberto';
-      const operacaoFinal = (recebimentosPor.get(k) || []).at(-1);
-      const operacaoEncerramento =
-        status !== 'encerrada' ? null : operacaoFinal?.operacao === 'Recebimento' ? 'Desconto concedido' : operacaoFinal?.operacao || null;
-
-      parcelas.push({
-        usuarioId: dono,
-        atendente: nomeUsuario.get(dono) || 'Usuário removido',
-        clientId: p.client_id,
-        cliente: p.client_name || `Cliente ${p.client_id}`,
-        centroCusto: p.centro_custo,
-        billId: p.bill_id,
-        installmentId: p.installment_id,
-        parcela: String(p.installment_number ?? p.installment_id).split('/')[0],
-        condicao: (p.condicao || '').trim() || null,
-        vencimento: p.vencimento,
-        dataPagamento: status === 'pago' ? dataPagamento : null,
-        valor: status === 'pago' ? pagamentos.reduce((s, r) => s + r.valor, 0) : status === 'aberto' ? Number(p.saldo) : null,
-        interacoesFeitas: feitas,
-        interacoesDevidas: devidas,
-        interacoesPorCanal: porCanal,
-        ultimaInteracao,
-        diasUltimaInteracao: ultimaInteracao ? diasEntre(ultimaInteracao, hoje) : null,
-        status,
-        operacaoEncerramento,
-        transferidaPara: status === 'transferida' ? nomeUsuario.get(donoFinal) || null : null,
-      });
     }
+    const ultimaInteracao = meusRegistros.length ? meusRegistros.at(-1).data : null;
+
+    // Em aberto: saldo de hoje + o que foi pago depois do fim do período.
+    const valor =
+      aba === 'pagas'
+        ? pagamentos.reduce((s2, r) => s2 + r.valor, 0)
+        : Number(p.saldo) + operacoes.filter((r) => r.data > corte).reduce((s2, r) => s2 + r.valor, 0);
+    // Dias de atraso: no pagamento (pagas) ou no fim do período (em aberto).
+    const diasAtraso = diasEntre(p.vencimento, aba === 'pagas' ? dataPagamento : corte);
+
+    parcelas.push({
+      aba,
+      usuarioId: dono,
+      atendente: nomeUsuario.get(dono) || 'Usuário removido',
+      clientId: p.client_id,
+      cliente: p.client_name || `Cliente ${p.client_id}`,
+      centroCusto: p.centro_custo,
+      billId: p.bill_id,
+      installmentId: p.installment_id,
+      parcela: String(p.installment_number ?? p.installment_id).split('/')[0],
+      condicao: (p.condicao || '').trim() || null,
+      vencimento: p.vencimento,
+      dataPagamento,
+      diasAtraso,
+      valor,
+      interacoesFeitas: feitas,
+      interacoesDevidas: devidas,
+      interacoesPorCanal: porCanal,
+      ultimaInteracao,
+      diasUltimaInteracao: ultimaInteracao ? diasEntre(ultimaInteracao, hoje) : null,
+    });
   }
   return { hoje, parcelas };
 }

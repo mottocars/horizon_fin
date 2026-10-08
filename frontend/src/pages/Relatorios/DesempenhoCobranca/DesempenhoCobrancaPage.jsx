@@ -1,7 +1,8 @@
 import { Fragment, useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { createPortal } from 'react-dom';
-import { FileDown, HandCoins, Minus, Plus, TriangleAlert } from 'lucide-react';
+import { CircleCheck, Clock, FileDown, HandCoins, Minus, Plus, TriangleAlert } from 'lucide-react';
 import Card from '../../../components/Card';
+import Tabs from '../../../components/Tabs';
 import SearchableSelect from '../../../components/SearchableSelect';
 import FiltroColuna, { passaNoFiltro } from '../../../components/FiltroColuna';
 import RotuloAgrupador from '../../../components/RotuloAgrupador';
@@ -23,43 +24,38 @@ function formatarMoeda(valor) {
   return Number(valor || 0).toLocaleString('pt-BR', { style: 'currency', currency: 'BRL' });
 }
 
-function Vazio() {
-  return <span className="text-gray-300">—</span>;
-}
-
 function hojeIso() {
   const d = new Date();
   return `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}-${String(d.getDate()).padStart(2, '0')}`;
 }
 
 const inicioDoMes = (iso) => `${iso.slice(0, 8)}01`;
+const textoDias = (n) => `${n} ${n === 1 ? 'dia' : 'dias'}`;
 
-function textoDias(dias) {
-  if (dias == null) return null;
-  if (dias === 0) return 'hoje';
-  return `${dias} ${dias === 1 ? 'dia' : 'dias'}`;
-}
-
-// Status da parcela PARA A ATENDENTE da linha (ver backend
-// relatorio-desempenho-cobranca/desempenhoCobranca.service.js).
-const STATUS = {
-  pago: { label: 'Pago', classe: 'bg-emerald-50 text-emerald-700 ring-emerald-200' },
-  aberto: { label: 'Em aberto', classe: 'bg-amber-50 text-amber-700 ring-amber-200' },
-  encerrada: { label: 'Encerrada sem pagamento', classe: 'bg-violet-50 text-violet-700 ring-violet-200' },
-  transferida: { label: 'Transferida', classe: 'bg-gray-50 text-gray-500 ring-gray-200' },
-};
-
-function textoStatus(p) {
-  if (p.status === 'encerrada' && p.operacaoEncerramento) return `Encerrada · ${p.operacaoEncerramento}`;
-  if (p.status === 'transferida' && p.transferidaPara) return `Transferida · ${p.transferidaPara}`;
-  return STATUS[p.status].label;
-}
-
-function tituloStatus(p) {
-  if (p.status === 'encerrada') return 'Saldo zerado no Sienge sem Recebimento (reparcelamento, distrato, substituição). Não conta como pago.';
-  if (p.status === 'transferida') return 'O cliente passou para outra atendente. Pagamento e saldo aparecem na linha dela.';
-  return undefined;
-}
+// Abas no mesmo padrão do Acervo NF-e / NFS-e: cada uma pinta o cabeçalho e o
+// totalizador da tabela com a sua cor. Classes por extenso pro Tailwind achar.
+const ABAS = [
+  {
+    id: 'pagas',
+    label: 'Parcelas Pagas',
+    icon: CircleCheck,
+    iconColorClass: 'text-emerald-600',
+    vazio: 'Nenhuma parcela paga no período.',
+    rotuloInicio: 'Pago de',
+    rotuloFim: 'Pago até',
+    tema: { th: 'border-b-emerald-500 bg-emerald-50', tf: 'border-t-emerald-500 bg-emerald-50', texto: 'text-emerald-700', divisor: 'border-l-emerald-100' },
+  },
+  {
+    id: 'abertas',
+    label: 'Parcelas em Aberto',
+    icon: Clock,
+    iconColorClass: 'text-amber-600',
+    vazio: 'Nenhuma parcela em aberto com tarefa da régua no período.',
+    rotuloInicio: 'Data início',
+    rotuloFim: 'Data fim',
+    tema: { th: 'border-b-amber-500 bg-amber-50', tf: 'border-t-amber-500 bg-amber-50', texto: 'text-amber-700', divisor: 'border-l-amber-100' },
+  },
+];
 
 // Cor do "feitas / devidas": tudo feito = verde; parte = âmbar; nada = vermelho.
 function corCumprimento(feitas, devidas) {
@@ -68,67 +64,72 @@ function corCumprimento(feitas, devidas) {
   return feitas > 0 ? 'text-amber-700' : 'text-red-600';
 }
 
-// Resumo de um conjunto de linhas (grupo recolhido, linha de grupo, total).
+const NOME_CANAL = { whatsapp: 'WhatsApp', email: 'E-mail', ligacao: 'Ligação' };
+
 function resumir(linhas) {
-  const pagas = linhas.filter((p) => p.status === 'pago');
-  const abertas = linhas.filter((p) => p.status === 'aberto');
   return {
     parcelas: linhas.length,
     clientes: new Set(linhas.map((p) => p.clientId)).size,
-    pagas: pagas.length,
-    abertas: abertas.length,
-    valorRecebido: pagas.reduce((s, p) => s + p.valor, 0),
-    valorAberto: abertas.reduce((s, p) => s + p.valor, 0),
+    valor: linhas.reduce((s, p) => s + p.valor, 0),
     feitas: linhas.reduce((s, p) => s + p.interacoesFeitas, 0),
     devidas: linhas.reduce((s, p) => s + p.interacoesDevidas, 0),
   };
 }
 
-const NOME_CANAL = { whatsapp: 'WhatsApp', email: 'E-mail', ligacao: 'Ligação' };
-
-// Colunas analíticas. `celula` desenha 1 parcela; `resumo` um grupo/total.
+// Colunas analíticas — `abas` diz em quais abas a coluna aparece; `celula`
+// desenha 1 parcela; `resumo` a linha da atendente e o total (null = vazio).
 const COLUNAS = [
   {
     chave: 'vencimento',
     label: 'Vencimento',
     largura: 'w-24',
-    celula: (p) => formatarData(p.vencimento) || <Vazio />,
-    resumo: () => <Vazio />,
+    celula: (p) => formatarData(p.vencimento),
+    resumo: () => null,
   },
   {
     chave: 'pagamento',
     label: 'Pagamento',
     largura: 'w-24',
-    celula: (p) => formatarData(p.dataPagamento) || <Vazio />,
-    resumo: () => <Vazio />,
+    abas: ['pagas'],
+    celula: (p) => formatarData(p.dataPagamento),
+    resumo: () => null,
+  },
+  {
+    chave: 'diasAtraso',
+    label: 'Dias Atraso',
+    largura: 'w-24',
+    centro: true,
+    celula: (p) => {
+      if (p.diasAtraso > 0) {
+        return (
+          <span className="font-medium text-red-600" title={p.aba === 'pagas' ? 'Dias entre o vencimento e o pagamento' : 'Dias desde o vencimento'}>
+            {textoDias(p.diasAtraso)}
+          </span>
+        );
+      }
+      if (p.aba === 'pagas') return <span className="text-emerald-700">em dia</span>;
+      return <span className="text-gray-400">{p.diasAtraso === 0 ? 'vence hoje' : 'a vencer'}</span>;
+    },
+    resumo: () => null,
   },
   {
     chave: 'valor',
     label: 'Valor',
-    largura: 'w-36',
-    celula: (p) =>
-      p.status === 'pago' ? (
-        <span className="font-medium text-emerald-700" title="Valor recebido">
-          {formatarMoeda(p.valor)}
-        </span>
-      ) : p.status === 'aberto' ? (
-        <span className="text-amber-700" title="Saldo em aberto">
-          {formatarMoeda(p.valor)}
-        </span>
-      ) : (
-        <Vazio />
-      ),
-    resumo: (r) =>
-      r.valorRecebido || r.valorAberto ? (
-        <span className="font-semibold text-gray-800">{formatarMoeda(r.valorRecebido + r.valorAberto)}</span>
-      ) : (
-        <Vazio />
-      ),
+    largura: 'w-32',
+    celula: (p) => (
+      <span
+        className={p.aba === 'pagas' ? 'font-medium text-emerald-700' : 'text-amber-700'}
+        title={p.aba === 'pagas' ? 'Valor recebido' : 'Saldo em aberto'}
+      >
+        {formatarMoeda(p.valor)}
+      </span>
+    ),
+    resumo: (r) => <span className="font-semibold text-gray-800">{formatarMoeda(r.valor)}</span>,
   },
   {
     chave: 'interacoes',
     label: 'Interações',
-    largura: 'w-32',
+    largura: 'w-28',
     centro: true,
     celula: (p) =>
       p.interacoesDevidas ? (
@@ -148,37 +149,21 @@ const COLUNAS = [
       ),
     resumo: (r) =>
       r.devidas ? (
-        <span title="Interações feitas ÷ interações que deveriam ter sido feitas">
-          <span className={`font-semibold ${corCumprimento(r.feitas, r.devidas)}`}>
-            {r.feitas.toLocaleString('pt-BR')} / {r.devidas.toLocaleString('pt-BR')}
-          </span>
+        <span className={`font-semibold ${corCumprimento(r.feitas, r.devidas)}`} title="Interações feitas ÷ interações que deveriam ter sido feitas">
+          {r.feitas.toLocaleString('pt-BR')} / {r.devidas.toLocaleString('pt-BR')}
         </span>
-      ) : (
-        <Vazio />
-      ),
+      ) : null,
   },
   {
-    chave: 'diasUltimaInteracao',
-    label: 'Dias última interação',
+    chave: 'ultimaInteracao',
+    label: 'Última interação',
     largura: 'w-24',
     celula: (p) =>
-      p.diasUltimaInteracao != null ? (
-        <span title={`Última interação em ${formatarData(p.ultimaInteracao)}`}>{textoDias(p.diasUltimaInteracao)}</span>
+      p.ultimaInteracao ? (
+        <span title={p.diasUltimaInteracao ? `Há ${textoDias(p.diasUltimaInteracao)}` : 'Hoje'}>{formatarData(p.ultimaInteracao)}</span>
       ) : (
         <span className="text-gray-400">nenhuma</span>
       ),
-    resumo: () => null,
-  },
-  {
-    chave: 'status',
-    label: 'Status',
-    largura: 'w-44',
-    centro: true,
-    celula: (p) => (
-      <span title={tituloStatus(p)} className={`inline-block rounded-full px-2 py-0.5 text-[11px] font-medium ring-1 ${STATUS[p.status].classe}`}>
-        {textoStatus(p)}
-      </span>
-    ),
     resumo: () => null,
   },
 ];
@@ -186,25 +171,13 @@ const COLUNAS = [
 const B_GRUPO = 'border-b-2 border-b-gray-400';
 const B_LINHA = 'border-b border-b-gray-200';
 
-function CelulaResumo({ children, borda, centro = false }) {
-  return (
-    <td className={`${borda} border-l border-l-gray-100 py-1.5 text-xs tabular-nums text-gray-700 ${centro ? 'px-1 text-center' : 'pl-2 2xl:pl-4'}`}>
-      {children}
-    </td>
-  );
-}
-
-function CelulasResumo({ resumo, borda }) {
-  return COLUNAS.map((coluna) => (
-    <CelulaResumo key={coluna.chave} borda={borda} centro={coluna.centro}>
-      {coluna.resumo(resumo)}
-    </CelulaResumo>
-  ));
+function classeCelula(borda, centro) {
+  return `${borda} border-l border-l-gray-100 py-1.5 text-xs tabular-nums text-gray-700 ${centro ? 'px-1 text-center' : 'pl-2 2xl:pl-4'}`;
 }
 
 // Atendente → parcelas (sem agrupar por cliente: um cliente com mais de uma
 // parcela ou título aparece em mais de uma linha). Atendentes do maior valor
-// recebido pro menor; linhas por cliente e vencimento.
+// pro menor; linhas por cliente e vencimento.
 function construirArvore(linhas) {
   const atendentes = new Map();
   for (const p of linhas) {
@@ -219,15 +192,17 @@ function construirArvore(linhas) {
         (x, y) => x.cliente.localeCompare(y.cliente, 'pt-BR') || (x.vencimento || '').localeCompare(y.vencimento || '')
       ),
     }))
-    .sort((x, y) => y.resumo.valorRecebido - x.resumo.valorRecebido || x.nome.localeCompare(y.nome, 'pt-BR'));
+    .sort((x, y) => y.resumo.valor - x.resumo.valor || x.nome.localeCompare(y.nome, 'pt-BR'));
 }
 
-// Relatório "Desempenho da Cobrança": por atendente, cada parcela que ela teve
-// sob responsabilidade — interações feitas de quantas deveria ter feito em
-// toda a vida da parcela, dias desde a última, e se foi paga (data e valor
-// recebido) ou continua em aberto (saldo). Mesmo desenho do relatório de
-// Repasses CEF (matriz com agrupadores, cabeçalho e total fixos, filtros por
-// coluna e Exportar no botão direito).
+// Relatório "Desempenho da Cobrança": por atendente, as parcelas que eram
+// dela — em 2 abas: Parcelas Pagas (pela data do pagamento, com os dias de
+// atraso no pagamento) e Parcelas em Aberto (com tarefa da régua no período).
+// Em ambas, as interações feitas de quantas deveriam em toda a vida da
+// parcela e a data da última. Regras no backend
+// (relatorio-desempenho-cobranca/desempenhoCobranca.service.js). Mesmo
+// desenho do relatório de Repasses CEF (matriz, cabeçalho e total fixos,
+// filtros por coluna, Exportar no botão direito) com as abas do Acervo NF-e.
 export default function DesempenhoCobrancaPage() {
   const { travada: empresaTravada, empresaIdTravada, empresaIds } = useEmpresaTravada();
   const [empresas, setEmpresas] = useState([]);
@@ -235,6 +210,10 @@ export default function DesempenhoCobrancaPage() {
   const [empresaId, setEmpresaId] = useState('');
   const [dataInicio, setDataInicio] = useState(() => inicioDoMes(hojeIso()));
   const [dataFim, setDataFim] = useState(() => hojeIso());
+  const [aba, setAba] = useState('pagas');
+  const abaAtual = ABAS.find((a) => a.id === aba);
+  const tema = abaAtual.tema;
+  const colunas = useMemo(() => COLUNAS.filter((c) => !c.abas || c.abas.includes(aba)), [aba]);
 
   const [dados, setDados] = useState(null);
   const [carregando, setCarregando] = useState(false);
@@ -242,10 +221,8 @@ export default function DesempenhoCobrancaPage() {
 
   const [filtroAtendente, setFiltroAtendente] = useState(null);
   const [filtroCliente, setFiltroCliente] = useState(null);
-  const [filtroStatus, setFiltroStatus] = useState(null);
   const thAtendenteRef = useRef(null);
   const thClienteRef = useRef(null);
-  const thStatusRef = useRef(null);
   const theadRef = useRef(null);
   const [alturaCabecalho, setAlturaCabecalho] = useState(48);
 
@@ -283,6 +260,7 @@ export default function DesempenhoCobrancaPage() {
 
   // Só a resposta da última busca vale — trocar a data rápido dispara várias
   // buscas, e uma mais antiga que chegue depois não pode sobrescrever a atual.
+  // Uma busca traz as 2 abas; trocar de aba não vai ao servidor.
   const requisicaoRef = useRef(0);
   const carregar = useCallback(() => {
     if (!empresaId || !dataInicio || !dataFim) {
@@ -302,8 +280,10 @@ export default function DesempenhoCobrancaPage() {
     carregar();
   }, [carregar]);
 
-  const linhas = useMemo(() => dados?.parcelas ?? [], [dados]);
+  const todas = useMemo(() => dados?.parcelas ?? [], [dados]);
+  const linhas = useMemo(() => todas.filter((p) => p.aba === aba), [todas, aba]);
 
+  // Opções dos filtros a partir da aba aberta (sem encolher com o próprio filtro).
   const opcoesAtendente = useMemo(
     () =>
       [...new Map(linhas.map((p) => [p.usuarioId, p.atendente])).entries()]
@@ -315,47 +295,48 @@ export default function DesempenhoCobrancaPage() {
     () => [...new Set(linhas.map((p) => p.cliente))].sort((a, b) => a.localeCompare(b, 'pt-BR')).map((n) => ({ value: n, label: n })),
     [linhas]
   );
-  const opcoesStatus = useMemo(() => {
-    const presentes = new Set(linhas.map((p) => p.status));
-    return Object.entries(STATUS)
-      .filter(([k]) => presentes.has(k))
-      .map(([k, s]) => ({ value: k, label: s.label }));
-  }, [linhas]);
 
-  const linhasFiltradas = useMemo(
-    () =>
-      linhas.filter(
-        (p) => passaNoFiltro(filtroAtendente, p.usuarioId) && passaNoFiltro(filtroCliente, p.cliente) && passaNoFiltro(filtroStatus, p.status)
-      ),
-    [linhas, filtroAtendente, filtroCliente, filtroStatus]
+  const passaNosFiltros = useCallback(
+    (p) => passaNoFiltro(filtroAtendente, p.usuarioId) && passaNoFiltro(filtroCliente, p.cliente),
+    [filtroAtendente, filtroCliente]
   );
-
+  const linhasFiltradas = useMemo(() => linhas.filter(passaNosFiltros), [linhas, passaNosFiltros]);
   const arvore = useMemo(() => construirArvore(linhasFiltradas), [linhasFiltradas]);
   const total = useMemo(() => resumir(linhasFiltradas), [linhasFiltradas]);
-  const filtroAtivo = [filtroAtendente, filtroCliente, filtroStatus].some((f) => f != null);
+  const filtroAtivo = filtroAtendente != null || filtroCliente != null;
 
-  function limparFiltros() {
-    setFiltroAtendente(null);
-    setFiltroCliente(null);
-    setFiltroStatus(null);
-  }
+  const tabs = useMemo(
+    () =>
+      ABAS.map((a) => {
+        const n = todas.filter((p) => p.aba === a.id && passaNosFiltros(p)).length;
+        return { id: a.id, label: dados ? `${a.label} (${n.toLocaleString('pt-BR')})` : a.label, icon: a.icon, iconColorClass: a.iconColorClass };
+      }),
+    [todas, dados, passaNosFiltros]
+  );
 
-  // Atendentes começam recolhidas.
-  const [atendentesAbertas, setAtendentesAbertas] = useState(() => new Set());
-  const tudoExpandido = arvore.length > 0 && arvore.every((a) => atendentesAbertas.has(a.id));
+  // Atendentes começam recolhidas; cada aba guarda as suas abertas.
+  const [abertas, setAbertas] = useState(() => new Set());
+  const chave = (id) => `${aba}:${id}`;
+  const tudoExpandido = arvore.length > 0 && arvore.every((a) => abertas.has(chave(a.id)));
 
-  function alternar(setter, chave) {
-    setter((atual) => {
+  function alternar(id) {
+    setAbertas((atual) => {
       const proximo = new Set(atual);
-      if (proximo.has(chave)) proximo.delete(chave);
-      else proximo.add(chave);
+      if (proximo.has(chave(id))) proximo.delete(chave(id));
+      else proximo.add(chave(id));
       return proximo;
     });
   }
 
   function toggleTudo() {
-    if (tudoExpandido) setAtendentesAbertas(new Set());
-    else setAtendentesAbertas(new Set(arvore.map((a) => a.id)));
+    setAbertas((atual) => {
+      const proximo = new Set(atual);
+      for (const a of arvore) {
+        if (tudoExpandido) proximo.delete(chave(a.id));
+        else proximo.add(chave(a.id));
+      }
+      return proximo;
+    });
   }
 
   // Menu de contexto com "Exportar" — mesmo comportamento do Repasses CEF.
@@ -371,8 +352,8 @@ export default function DesempenhoCobrancaPage() {
     };
   }, [menuContexto]);
 
-  // 1 linha por atendente × parcela, já filtrada — datas como data e valores
-  // como número, pra somar e filtrar no Excel.
+  // Exporta só a aba aberta, já filtrada: 1 linha por parcela, datas como
+  // data e valores como número, pra somar e filtrar no Excel.
   async function handleExportar() {
     setMenuContexto(null);
     const XLSX = await import('xlsx');
@@ -381,6 +362,7 @@ export default function DesempenhoCobrancaPage() {
       const [ano, mes, dia] = iso.split('-').map(Number);
       return new Date(ano, mes - 1, dia);
     };
+    const pagas = aba === 'pagas';
     const saida = [];
     for (const a of arvore) {
       for (const p of a.linhas) {
@@ -392,31 +374,27 @@ export default function DesempenhoCobrancaPage() {
           Parcela: p.parcela,
           Condição: p.condicao || '',
           Vencimento: data(p.vencimento),
-          Pagamento: data(p.dataPagamento),
-          Status: textoStatus(p),
-          'Valor recebido': p.status === 'pago' ? p.valor : '',
-          'Saldo em aberto': p.status === 'aberto' ? p.valor : '',
+          ...(pagas ? { Pagamento: data(p.dataPagamento) } : {}),
+          'Dias Atraso': Math.max(p.diasAtraso, 0),
+          [pagas ? 'Valor recebido' : 'Saldo em aberto']: p.valor,
           'Interações feitas': p.interacoesFeitas,
           'Interações devidas': p.interacoesDevidas,
-          'Cumprimento (%)': p.interacoesDevidas ? Math.round((p.interacoesFeitas / p.interacoesDevidas) * 100) : '',
           'Última interação': data(p.ultimaInteracao),
-          'Dias desde a última interação': p.diasUltimaInteracao ?? '',
         });
       }
     }
     const planilha = XLSX.utils.json_to_sheet(saida, { cellDates: true, dateNF: 'dd/mm/yyyy' });
-    planilha['!cols'] = [24, 36, 26, 10, 8, 20, 12, 12, 26, 15, 15, 10, 10, 12, 14, 12].map((wch) => ({ wch }));
+    planilha['!cols'] = (pagas ? [24, 36, 26, 10, 8, 20, 12, 12, 10, 15, 10, 10, 14] : [24, 36, 26, 10, 8, 20, 12, 10, 15, 10, 10, 14]).map((wch) => ({ wch }));
+    const colunaValor = pagas ? 9 : 8;
     const range = XLSX.utils.decode_range(planilha['!ref']);
     for (let r = range.s.r + 1; r <= range.e.r; r++) {
-      for (const col of [9, 10]) {
-        const celula = planilha[XLSX.utils.encode_cell({ r, c: col })];
-        if (celula && celula.t === 'n') celula.z = '"R$" #,##0.00';
-      }
+      const celula = planilha[XLSX.utils.encode_cell({ r, c: colunaValor })];
+      if (celula && celula.t === 'n') celula.z = '"R$" #,##0.00';
     }
     planilha['!autofilter'] = { ref: planilha['!ref'] };
     const livro = XLSX.utils.book_new();
-    XLSX.utils.book_append_sheet(livro, planilha, 'Desempenho');
-    XLSX.writeFile(livro, `desempenho-cobranca_${dataInicio}_a_${dataFim}.xlsx`);
+    XLSX.utils.book_append_sheet(livro, planilha, pagas ? 'Parcelas Pagas' : 'Parcelas em Aberto');
+    XLSX.writeFile(livro, `desempenho-cobranca-${aba}_${dataInicio}_a_${dataFim}.xlsx`);
   }
 
   useEffect(() => {
@@ -427,14 +405,16 @@ export default function DesempenhoCobrancaPage() {
     const observador = new ResizeObserver(medir);
     observador.observe(el);
     return () => observador.disconnect();
-  }, [dados]);
+  }, [dados, aba]);
   const topoRotuloGrudado = alturaCabecalho - 24 + 8;
 
-  function cabecalho(ref, filtro, setFiltro, opcoes, labelFiltro, titulo, classes) {
+  const thBase = `sticky -top-6 z-20 border-b-2 ${tema.th} py-2.5 text-center font-medium`;
+
+  function cabecalhoComFiltro(ref, filtro, setFiltro, opcoes, labelFiltro, titulo, classes) {
     return (
-      <th ref={ref} className={`sticky -top-6 z-20 border-b-2 border-b-primary-500 bg-primary-50 px-2 py-2.5 text-center font-medium ${classes}`}>
+      <th ref={ref} className={`${thBase} px-2 ${classes}`}>
         <span className="inline-flex items-center justify-center gap-1.5">
-          {opcoes && <FiltroColuna filtro={filtro} onChange={setFiltro} opcoes={opcoes} label={labelFiltro} colunaRef={ref} />}
+          <FiltroColuna filtro={filtro} onChange={setFiltro} opcoes={opcoes} label={labelFiltro} colunaRef={ref} />
           {titulo}
         </span>
       </th>
@@ -467,7 +447,7 @@ export default function DesempenhoCobrancaPage() {
 
   const semResultadoFiltro = linhas.length > 0 && linhasFiltradas.length === 0;
   const temDados = !carregando && !erro && linhas.length > 0;
-  const TOTAL_COLUNAS = 3 + COLUNAS.length;
+  const TOTAL_COLUNAS = 3 + colunas.length;
 
   return (
     <div className="space-y-4">
@@ -487,7 +467,7 @@ export default function DesempenhoCobrancaPage() {
           <div className="flex gap-3">
             <div>
               <label htmlFor="desempenho-inicio" className="mb-1 block text-sm font-medium text-gray-700">
-                Data início
+                {abaAtual.rotuloInicio}
               </label>
               <input
                 id="desempenho-inicio"
@@ -499,7 +479,7 @@ export default function DesempenhoCobrancaPage() {
             </div>
             <div>
               <label htmlFor="desempenho-fim" className="mb-1 block text-sm font-medium text-gray-700">
-                Data fim
+                {abaAtual.rotuloFim}
               </label>
               <input
                 id="desempenho-fim"
@@ -513,7 +493,10 @@ export default function DesempenhoCobrancaPage() {
           {filtroAtivo && (
             <button
               type="button"
-              onClick={limparFiltros}
+              onClick={() => {
+                setFiltroAtendente(null);
+                setFiltroCliente(null);
+              }}
               className="self-start text-xs text-gray-400 underline decoration-dotted hover:text-gray-600 lg:mb-2.5 lg:self-end"
             >
               Mostrar tudo
@@ -533,151 +516,142 @@ export default function DesempenhoCobrancaPage() {
         </div>
       </Card>
 
-      <div className="rounded-card bg-white shadow-card">
-        {!empresaId ? (
-          <div className="flex flex-col items-center gap-2 py-14 text-center">
-            <HandCoins size={26} className="text-gray-300" />
-            <p className="text-sm text-gray-600">Selecione uma empresa para ver o relatório.</p>
-          </div>
-        ) : carregando ? (
-          <div className="py-12 text-center text-sm text-gray-400">Carregando...</div>
-        ) : erro ? (
-          <div className="flex flex-col items-center gap-2 py-14 text-center">
-            <TriangleAlert size={26} className="text-red-400" />
-            <p className="text-sm text-gray-600">{erro}</p>
-          </div>
-        ) : linhas.length === 0 ? (
-          <div className="flex flex-col items-center gap-2 py-14 text-center">
-            <HandCoins size={26} className="text-gray-300" />
-            <p className="text-sm text-gray-600">Nenhuma parcela na Rotina nem paga no período.</p>
-          </div>
-        ) : (
-          <div
-            className="rounded-card"
-            onContextMenu={(e) => {
-              e.preventDefault();
-              setMenuContexto({ x: e.clientX, y: e.clientY });
-            }}
-          >
-            <table className="w-full border-separate border-spacing-0 text-left text-xs">
-              <thead ref={theadRef}>
-                <tr className="text-xs uppercase tracking-wide text-primary-700">
-                  {cabecalho(thAtendenteRef, filtroAtendente, setFiltroAtendente, opcoesAtendente, 'atendente', 'Atendente', 'w-36 rounded-tl-card 2xl:w-48')}
-                  {cabecalho(thClienteRef, filtroCliente, setFiltroCliente, opcoesCliente, 'cliente', 'Cliente', 'w-56 border-l border-l-primary-100 2xl:w-72')}
-                  {cabecalho(null, null, null, null, null, 'Título / Parcela', 'w-28 border-l border-l-primary-100')}
-                  {COLUNAS.map((coluna, i) =>
-                    coluna.chave === 'status' ? (
-                      <Fragment key={coluna.chave}>
-                        {cabecalho(
-                          thStatusRef,
-                          filtroStatus,
-                          setFiltroStatus,
-                          opcoesStatus,
-                          'status',
-                          coluna.label,
-                          `${coluna.largura} border-l border-l-primary-100 ${i === COLUNAS.length - 1 ? 'rounded-tr-card' : ''}`
-                        )}
-                      </Fragment>
-                    ) : (
+      {/* Abas + painel num item só (mesmo padrão do Acervo NF-e / NFS-e):
+          o canto superior esquerdo do painel fica reto pra encaixar na
+          primeira aba. */}
+      <div>
+        <Tabs tabs={tabs} activeId={aba} onChange={setAba} />
+
+        <div className="rounded-card rounded-tl-none bg-white shadow-card">
+          {!empresaId ? (
+            <div className="flex flex-col items-center gap-2 py-14 text-center">
+              <HandCoins size={26} className="text-gray-300" />
+              <p className="text-sm text-gray-600">Selecione uma empresa para ver o relatório.</p>
+            </div>
+          ) : carregando && !dados ? (
+            <div className="py-12 text-center text-sm text-gray-400">Carregando...</div>
+          ) : erro ? (
+            <div className="flex flex-col items-center gap-2 py-14 text-center">
+              <TriangleAlert size={26} className="text-red-400" />
+              <p className="text-sm text-gray-600">{erro}</p>
+            </div>
+          ) : linhas.length === 0 ? (
+            <div className="flex flex-col items-center gap-2 py-14 text-center">
+              <HandCoins size={26} className="text-gray-300" />
+              <p className="text-sm text-gray-600">{abaAtual.vazio}</p>
+            </div>
+          ) : (
+            <div
+              className={`rounded-card rounded-tl-none transition-opacity ${carregando ? 'opacity-60' : ''}`}
+              onContextMenu={(e) => {
+                e.preventDefault();
+                setMenuContexto({ x: e.clientX, y: e.clientY });
+              }}
+            >
+              <table className="w-full border-separate border-spacing-0 text-left text-xs">
+                <thead ref={theadRef}>
+                  <tr className={`text-xs uppercase tracking-wide ${tema.texto}`}>
+                    {cabecalhoComFiltro(thAtendenteRef, filtroAtendente, setFiltroAtendente, opcoesAtendente, 'atendente', 'Atendente', 'w-36 2xl:w-48')}
+                    {cabecalhoComFiltro(thClienteRef, filtroCliente, setFiltroCliente, opcoesCliente, 'cliente', 'Cliente', `w-60 border-l ${tema.divisor} 2xl:w-80`)}
+                    <th className={`${thBase} w-28 border-l ${tema.divisor} px-2`}>Título / Parcela</th>
+                    {colunas.map((coluna, i) => (
                       <th
                         key={coluna.chave}
-                        className={`sticky -top-6 z-20 ${coluna.largura} border-b-2 border-b-primary-500 border-l border-l-primary-100 bg-primary-50 px-1 py-2.5 text-center font-medium 2xl:px-2 ${
-                          i === COLUNAS.length - 1 ? 'rounded-tr-card' : ''
-                        }`}
+                        className={`${thBase} ${coluna.largura} border-l ${tema.divisor} px-1 2xl:px-2 ${i === colunas.length - 1 ? 'rounded-tr-card' : ''}`}
                       >
                         {coluna.label}
                       </th>
-                    )
-                  )}
-                </tr>
-              </thead>
-              <tbody>
-                {semResultadoFiltro && (
-                  <tr>
-                    <td colSpan={TOTAL_COLUNAS} className="py-12 text-center text-sm text-gray-500">
-                      <p className="font-medium text-gray-700">Nenhuma parcela corresponde aos filtros selecionados.</p>
-                    </td>
+                    ))}
                   </tr>
-                )}
-                {arvore.map((a) => {
-                  if (!atendentesAbertas.has(a.id)) {
+                </thead>
+                <tbody>
+                  {semResultadoFiltro && (
+                    <tr>
+                      <td colSpan={TOTAL_COLUNAS} className="py-12 text-center text-sm text-gray-500">
+                        <p className="font-medium text-gray-700">Nenhuma parcela corresponde aos filtros selecionados.</p>
+                      </td>
+                    </tr>
+                  )}
+                  {arvore.map((a) => {
+                    if (!abertas.has(chave(a.id))) {
+                      return (
+                        <tr key={a.id}>
+                          <td className={`${B_GRUPO} border-r border-r-gray-200 bg-white px-2 py-2.5 align-middle 2xl:px-4`}>
+                            <RotuloAgrupador aberto={false} negrito nome={a.nome} contagem={a.resumo.clientes} onClick={() => alternar(a.id)} />
+                          </td>
+                          <td className={classeCelula(B_GRUPO)}>
+                            {a.resumo.clientes} {a.resumo.clientes === 1 ? 'cliente' : 'clientes'}
+                          </td>
+                          <td className={classeCelula(B_GRUPO)}>
+                            {a.resumo.parcelas} {a.resumo.parcelas === 1 ? 'parcela' : 'parcelas'}
+                          </td>
+                          {colunas.map((coluna) => (
+                            <td key={coluna.chave} className={classeCelula(B_GRUPO, coluna.centro)}>
+                              {coluna.resumo(a.resumo)}
+                            </td>
+                          ))}
+                        </tr>
+                      );
+                    }
                     return (
-                      <tr key={a.id}>
-                        <td className={`${B_GRUPO} border-r border-r-gray-200 bg-white px-2 py-2.5 align-middle 2xl:px-4`}>
-                          <RotuloAgrupador aberto={false} negrito nome={a.nome} contagem={a.resumo.clientes} onClick={() => alternar(setAtendentesAbertas, a.id)} />
-                        </td>
-                        <CelulaResumo borda={B_GRUPO}>
-                          {a.resumo.clientes} {a.resumo.clientes === 1 ? 'cliente' : 'clientes'}
-                        </CelulaResumo>
-                        <CelulaResumo borda={B_GRUPO}>
-                          {a.resumo.parcelas} {a.resumo.parcelas === 1 ? 'parcela' : 'parcelas'}
-                        </CelulaResumo>
-                        <CelulasResumo resumo={a.resumo} borda={B_GRUPO} />
-                      </tr>
+                      <Fragment key={a.id}>
+                        {a.linhas.map((p, i) => {
+                          const borda = i === a.linhas.length - 1 ? B_GRUPO : B_LINHA;
+                          return (
+                            <tr key={`${a.id}-${p.billId}-${p.installmentId}`}>
+                              {i === 0 && (
+                                <td rowSpan={a.linhas.length} className={`${B_GRUPO} border-r border-r-gray-200 bg-white px-2 py-2.5 align-top 2xl:px-4`}>
+                                  <RotuloAgrupador
+                                    aberto
+                                    negrito
+                                    nome={a.nome}
+                                    contagem={a.resumo.clientes}
+                                    onClick={() => alternar(a.id)}
+                                    topoGrudado={topoRotuloGrudado}
+                                  />
+                                </td>
+                              )}
+                              <td className={`${borda} border-l border-l-gray-100 py-1.5 pl-2 pr-1 text-xs text-gray-800 2xl:pl-4`}>{p.cliente}</td>
+                              {celulaParcela(p, borda)}
+                              {colunas.map((coluna) => (
+                                <td key={coluna.chave} className={classeCelula(borda, coluna.centro)}>
+                                  {coluna.celula(p)}
+                                </td>
+                              ))}
+                            </tr>
+                          );
+                        })}
+                      </Fragment>
                     );
-                  }
-
-                  return (
-                    <Fragment key={a.id}>
-                      {a.linhas.map((p, i) => {
-                        const borda = i === a.linhas.length - 1 ? B_GRUPO : B_LINHA;
-                        return (
-                          <tr key={`${a.id}-${p.billId}-${p.installmentId}`}>
-                            {i === 0 && (
-                              <td rowSpan={a.linhas.length} className={`${B_GRUPO} border-r border-r-gray-200 bg-white px-2 py-2.5 align-top 2xl:px-4`}>
-                                <RotuloAgrupador
-                                  aberto
-                                  negrito
-                                  nome={a.nome}
-                                  contagem={a.resumo.clientes}
-                                  onClick={() => alternar(setAtendentesAbertas, a.id)}
-                                  topoGrudado={topoRotuloGrudado}
-                                />
-                              </td>
-                            )}
-                            <td className={`${borda} border-l border-l-gray-100 py-1.5 pl-2 pr-1 text-xs text-gray-800 2xl:pl-4`}>{p.cliente}</td>
-                            {celulaParcela(p, borda)}
-                            {COLUNAS.map((coluna) => (
-                              <td
-                                key={coluna.chave}
-                                className={`${borda} border-l border-l-gray-100 py-1.5 text-xs tabular-nums text-gray-700 ${coluna.centro ? 'px-1 text-center' : 'pl-2 2xl:pl-4'}`}
-                              >
-                                {coluna.celula(p)}
-                              </td>
-                            ))}
-                          </tr>
-                        );
-                      })}
-                    </Fragment>
-                  );
-                })}
-              </tbody>
-              <tfoot>
-                <tr className="text-xs font-semibold text-primary-700">
-                  <td className="sticky -bottom-6 z-10 rounded-bl-card border-t-2 border-t-primary-500 bg-primary-50 px-4 py-2.5">
-                    Total · {arvore.length} {arvore.length === 1 ? 'atendente' : 'atendentes'}
-                  </td>
-                  <td className="sticky -bottom-6 z-10 border-t-2 border-t-primary-500 border-l border-l-primary-100 bg-primary-50 py-2.5 pl-2 tabular-nums 2xl:pl-4">
-                    {total.clientes.toLocaleString('pt-BR')} {total.clientes === 1 ? 'cliente' : 'clientes'}
-                  </td>
-                  <td className="sticky -bottom-6 z-10 border-t-2 border-t-primary-500 border-l border-l-primary-100 bg-primary-50 py-2.5 pl-2 tabular-nums 2xl:pl-4">
-                    {total.parcelas.toLocaleString('pt-BR')} {total.parcelas === 1 ? 'parcela' : 'parcelas'}
-                  </td>
-                  {COLUNAS.map((coluna, i) => (
-                    <td
-                      key={coluna.chave}
-                      className={`sticky -bottom-6 z-10 border-t-2 border-t-primary-500 border-l border-l-primary-100 bg-primary-50 py-2.5 tabular-nums ${
-                        coluna.centro ? 'px-1 text-center' : 'pl-2 2xl:pl-4'
-                      } ${i === COLUNAS.length - 1 ? 'rounded-br-card' : ''}`}
-                    >
-                      {coluna.resumo(total)}
+                  })}
+                </tbody>
+                <tfoot>
+                  <tr className={`text-xs font-semibold ${tema.texto}`}>
+                    <td className={`sticky -bottom-6 z-10 rounded-bl-card border-t-2 ${tema.tf} px-4 py-2.5`}>
+                      Total · {arvore.length} {arvore.length === 1 ? 'atendente' : 'atendentes'}
                     </td>
-                  ))}
-                </tr>
-              </tfoot>
-            </table>
-          </div>
-        )}
+                    <td className={`sticky -bottom-6 z-10 border-t-2 ${tema.tf} border-l ${tema.divisor} py-2.5 pl-2 tabular-nums 2xl:pl-4`}>
+                      {total.clientes.toLocaleString('pt-BR')} {total.clientes === 1 ? 'cliente' : 'clientes'}
+                    </td>
+                    <td className={`sticky -bottom-6 z-10 border-t-2 ${tema.tf} border-l ${tema.divisor} py-2.5 pl-2 tabular-nums 2xl:pl-4`}>
+                      {total.parcelas.toLocaleString('pt-BR')} {total.parcelas === 1 ? 'parcela' : 'parcelas'}
+                    </td>
+                    {colunas.map((coluna, i) => (
+                      <td
+                        key={coluna.chave}
+                        className={`sticky -bottom-6 z-10 border-t-2 ${tema.tf} border-l ${tema.divisor} py-2.5 tabular-nums ${
+                          coluna.centro ? 'px-1 text-center' : 'pl-2 2xl:pl-4'
+                        } ${i === colunas.length - 1 ? 'rounded-br-card' : ''}`}
+                      >
+                        {coluna.resumo(total)}
+                      </td>
+                    ))}
+                  </tr>
+                </tfoot>
+              </table>
+            </div>
+          )}
+        </div>
       </div>
 
       {menuContexto &&
