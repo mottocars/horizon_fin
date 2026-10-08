@@ -637,20 +637,23 @@ export default function RotinasTab({
                   const respAberto = abertos.has(chaveResp);
                   return (
                     <Fragment key={chaveResp}>
-                      {/* Nível 1 — Responsável: só Valor e Título preenchidos
-                          (total da carteira dele no período), o resto em branco. */}
+                      {/* Nível 1 — Responsável: Valor/Título com o total do
+                          período e o % concluído de cada canal. Mesmo padrão de
+                          cores do drilldown da Gestão das Parcelas: branco
+                          recolhido, cinza (e negrito) aberto; o nível de baixo
+                          num cinza mais claro, e as parcelas em branco. */}
                       <tr
                         onClick={() => alternar(chaveResp)}
-                        className="cursor-pointer border-b border-primary-100 bg-primary-50 hover:bg-primary-100"
+                        className={`cursor-pointer border-b border-gray-50 hover:bg-gray-100 ${respAberto ? 'bg-gray-100 font-semibold' : ''}`}
                       >
-                        <td className="py-3 pl-3 font-semibold text-gray-900" colSpan={2}>
+                        <td className="py-3 pl-3 text-gray-900" colSpan={2}>
                           <span className="flex items-center gap-2">
-                            <span className="flex h-4 w-4 shrink-0 items-center justify-center rounded bg-primary-600 text-white">
+                            <span className="flex h-4 w-4 shrink-0 items-center justify-center rounded bg-primary-100 text-primary-600">
                               {respAberto ? <Minus size={10} /> : <Plus size={10} />}
                             </span>
                             <UserRound size={15} className={resp.nome ? 'text-primary-600' : 'text-amber-500'} />
                             <span className={resp.nome ? '' : 'text-amber-700'}>{resp.nome || nomeSemResponsavel}</span>
-                            <span className="rounded-full bg-white px-2 py-0.5 text-[11px] font-medium text-primary-700 ring-1 ring-primary-100">
+                            <span className="rounded-full bg-gray-200 px-2 py-0.5 text-[11px] font-medium text-gray-600">
                               {resp.totais.itens}
                             </span>
                           </span>
@@ -679,7 +682,7 @@ export default function RotinasTab({
                             <Fragment key={chaveCentro}>
                               <tr
                                 onClick={() => alternar(chaveCentro)}
-                                className={`cursor-pointer border-b border-gray-50 hover:bg-gray-100 ${centroAberto ? 'bg-gray-100 font-semibold' : ''}`}
+                                className={`cursor-pointer border-b border-gray-100 bg-gray-50 hover:bg-gray-100 ${centroAberto ? 'font-semibold' : ''}`}
                               >
                                 <td className="py-3 pl-9 text-gray-900">
                                   <span className="flex items-center gap-2">
@@ -718,7 +721,7 @@ export default function RotinasTab({
                                   return (
                                     <tr
                                       key={`${item.bill_id}-${item.installment_id}-${item.etapa_id}-${item.data}`}
-                                      className="border-b border-gray-50 hover:bg-gray-50"
+                                      className="border-b border-gray-50 bg-white hover:bg-gray-50"
                                     >
                                       <td
                                         onClick={() => handleCliqueCliente(item, item.client_name)}
