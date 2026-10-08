@@ -64,6 +64,25 @@ async function listNomesCentros(empresaId) {
   return new Map(rows.map((r) => [String(r.sienge_id), r.nome]));
 }
 
+// Valores do relatório: valor do contrato no Sienge (por Nº Contrato Caixa, pra achar o
+// contrato das unidades em Assinatura/Registro) e o valor retido pela Caixa, que vem do EPR
+// importado no Portal das Construtoras (epr_mutuarios.valor_retido = "VR RETIDO"), ligado pelo
+// Nº Contrato Caixa (contrato_mutuario). Mesma fonte do comunicado por WhatsApp.
+async function listValores(empresaId) {
+  const [{ rows: contratos }, { rows: epr }] = await Promise.all([
+    pool.query(
+      `SELECT financial_institution_number, value FROM sie_sales_contracts
+       WHERE empresa_id = $1 AND situation IS DISTINCT FROM 'Cancelado' AND financial_institution_number IS NOT NULL`,
+      [empresaId]
+    ),
+    pool.query('SELECT contrato_mutuario, valor_retido FROM epr_mutuarios WHERE empresa_id = $1', [empresaId]),
+  ]);
+  return {
+    valorPorCaixa: new Map(contratos.map((c) => [c.financial_institution_number, c.value != null ? Number(c.value) : null])),
+    retidoPorCaixa: new Map(epr.map((m) => [m.contrato_mutuario, m.valor_retido != null ? Number(m.valor_retido) : null])),
+  };
+}
+
 async function listMicroEtapas(empresaId) {
   const { rows } = await pool.query(
     `SELECT id, grupo AS macro, sequencia, descricao, sla_dias
@@ -82,7 +101,7 @@ async function listMicroEtapas(empresaId) {
 // micro etapa e o SLA da micro etapa. O agrupamento Centro de Custo → Macro → Micro é
 // montado no frontend.
 async function getMatriz(empresaId) {
-  const [nomeCentro, reservas, contratos, assinaturas, registros, ultimas, microEtapas] = await Promise.all([
+  const [nomeCentro, reservas, contratos, assinaturas, registros, ultimas, microEtapas, valores] = await Promise.all([
     listNomesCentros(empresaId),
     repassesCef.listReservas(empresaId),
     repassesCef.listContratos(empresaId),
@@ -90,11 +109,12 @@ async function getMatriz(empresaId) {
     repassesCef.listRegistros(empresaId),
     ultimasMicroEtapasPorMacro(empresaId),
     listMicroEtapas(empresaId),
+    listValores(empresaId),
   ]);
 
   const microPorId = new Map(microEtapas.map((m) => [m.id, m]));
 
-  function montar(macro, item, { codigo, documento, dataEtapa }) {
+  function montar(macro, item, { codigo, documento, dataEtapa, valorContrato = null, valorRetido = null }) {
     const centroId = item.centro_custo_sienge_id != null ? String(item.centro_custo_sienge_id) : null;
     const ultima = item.idreserva != null ? ultimas.get(`${item.idreserva}|${macro}`) : null;
     const micro = ultima ? microPorId.get(ultima.id) : null;
@@ -114,6 +134,9 @@ async function getMatriz(empresaId) {
       dataMicroEtapa: micro ? ultima.data : null,
       diasMicroEtapa: micro ? diasDesde(ultima.data) : null,
       slaMicroEtapa: micro ? micro.sla_dias : null,
+      valorContrato,
+      // Só na Assinatura: o que a Caixa ainda retém até o registro.
+      valorRetido,
     };
   }
 
@@ -128,6 +151,7 @@ async function getMatriz(empresaId) {
         codigo: c.idreserva != null ? String(c.idreserva) : c.number,
         documento: c.number,
         dataEtapa: c.contract_date,
+        valorContrato: c.valor != null ? Number(c.valor) : null,
       })
     ),
     ...assinaturas.map((u) =>
@@ -135,6 +159,8 @@ async function getMatriz(empresaId) {
         codigo: String(u.idreserva),
         documento: u.numero_contrato_unidade,
         dataEtapa: u.data_assinatura_contrato,
+        valorContrato: valores.valorPorCaixa.get(u.numero_contrato_unidade) ?? null,
+        valorRetido: valores.retidoPorCaixa.get(u.numero_contrato_unidade) ?? null,
       })
     ),
     ...registros.map((u) =>
@@ -142,6 +168,7 @@ async function getMatriz(empresaId) {
         codigo: String(u.idreserva),
         documento: u.numero_contrato_unidade,
         dataEtapa: u.data_registro,
+        valorContrato: valores.valorPorCaixa.get(u.numero_contrato_unidade) ?? null,
       })
     ),
   ];

@@ -54,6 +54,17 @@ function formatarNumero(valor) {
   return valor.toLocaleString('pt-BR');
 }
 
+function formatarMoeda(valor) {
+  return Number(valor).toLocaleString('pt-BR', { style: 'currency', currency: 'BRL' });
+}
+
+// Soma de um campo de valor nos grupos recolhidos e no totalizador ("—" quando ninguém tem).
+function ResumoSoma({ clientes, campo }) {
+  const valores = clientes.map((c) => c[campo]).filter((v) => v != null);
+  if (valores.length === 0) return <Vazio />;
+  return <span title="Soma dos clientes do grupo">{formatarMoeda(valores.reduce((s, v) => s + v, 0))}</span>;
+}
+
 function media(clientes, campo) {
   const valores = clientes.map((c) => c[campo]).filter((v) => v != null);
   if (valores.length === 0) return null;
@@ -91,9 +102,33 @@ function ResumoAtrasados({ clientes }) {
 // cliente; `resumo` o de um grupo recolhido e do totalizador.
 const COLUNAS = [
   {
+    // Valor do contrato no Sienge (Contrato, Assinatura e Registro — a Reserva ainda não tem).
+    chave: 'valorContrato',
+    label: 'Valor do Contrato',
+    largura: 'w-28 2xl:w-32',
+    celula: (c) => (c.valorContrato != null ? formatarMoeda(c.valorContrato) : <Vazio />),
+    resumo: (clientes) => <ResumoSoma clientes={clientes} campo="valorContrato" />,
+  },
+  {
+    // "VR RETIDO" do EPR (Portal das Construtoras), só na Assinatura — o que a Caixa ainda
+    // retém até o registro.
+    chave: 'valorRetido',
+    label: 'Valor Retido',
+    largura: 'w-28 2xl:w-32',
+    celula: (c) =>
+      c.macro !== 'ASSINATURA' ? (
+        <Vazio />
+      ) : c.valorRetido != null ? (
+        <span title="VR RETIDO do EPR importado no Portal das Construtoras">{formatarMoeda(c.valorRetido)}</span>
+      ) : (
+        <span className="text-gray-400" title="Contrato Caixa sem EPR importado no Portal das Construtoras">sem EPR</span>
+      ),
+    resumo: (clientes) => <ResumoSoma clientes={clientes} campo="valorRetido" />,
+  },
+  {
     chave: 'dataEtapa',
     label: 'Data Etapa',
-    largura: 'w-24 2xl:w-28',
+    largura: 'w-24',
     celula: (c) =>
       c.dataEtapa ? <span title={DOCUMENTO_POR_MACRO[c.macro].tituloData}>{formatarData(c.dataEtapa)}</span> : <Vazio />,
     resumo: () => <Vazio />,
@@ -101,14 +136,14 @@ const COLUNAS = [
   {
     chave: 'diasEtapa',
     label: 'Dias Etapa',
-    largura: 'w-24 2xl:w-28',
+    largura: 'w-20 2xl:w-24',
     celula: (c) => (c.diasEtapa != null ? formatarNumero(c.diasEtapa) : <Vazio />),
     resumo: (clientes) => <ResumoMedia clientes={clientes} campo="diasEtapa" />,
   },
   {
     chave: 'diasMicroEtapa',
     label: 'Dias Micro Etapa',
-    largura: 'w-24 2xl:w-28',
+    largura: 'w-20 2xl:w-24',
     celula: (c) =>
       c.diasMicroEtapa != null ? (
         <span className={c.situacaoSla === 'atrasado' ? 'font-semibold text-red-600' : ''}>{formatarNumero(c.diasMicroEtapa)}</span>
@@ -120,7 +155,7 @@ const COLUNAS = [
   {
     chave: 'slaMicroEtapa',
     label: 'SLA Micro Etapa',
-    largura: 'w-32 2xl:w-40',
+    largura: 'w-28 2xl:w-32',
     celula: (c) => {
       if (c.microId === 0) return <Vazio />;
       if (c.slaMicroEtapa == null) return <span className="text-gray-400" title="Micro etapa sem SLA configurado em Máscaras">sem SLA</span>;
@@ -491,6 +526,8 @@ export default function RepassesCefRelatorioPage() {
               'Macro Etapa': MACRO_POR_VALOR[c.macro]?.label || c.macro,
               'Micro Etapa': c.rotuloMicro,
               Cliente: c.rotuloCliente,
+              'Valor do Contrato': c.valorContrato ?? '',
+              'Valor Retido (EPR)': c.macro === 'ASSINATURA' ? c.valorRetido ?? '' : '',
               'Código Reserva': c.idreserva ?? '',
               'Data Reserva': c.macro === 'VENDA' ? data(c.dataEtapa) : '',
               'Contrato Sienge': c.macro === 'CONTRATO' ? c.documento || '' : '',
@@ -508,7 +545,15 @@ export default function RepassesCefRelatorioPage() {
       }
     }
     const planilha = XLSX.utils.json_to_sheet(linhas, { cellDates: true, dateNF: 'dd/mm/yyyy' });
-    planilha['!cols'] = [28, 12, 34, 44, 14, 13, 18, 18, 16, 15, 14, 11, 15, 20, 14].map((wch) => ({ wch }));
+    planilha['!cols'] = [28, 12, 34, 44, 17, 17, 14, 13, 18, 18, 16, 15, 14, 11, 15, 20, 14].map((wch) => ({ wch }));
+    // Colunas de valor (E e F) em R$ — número de verdade, pra somar/filtrar no Excel.
+    const range = XLSX.utils.decode_range(planilha['!ref']);
+    for (let r = range.s.r + 1; r <= range.e.r; r++) {
+      for (const col of [4, 5]) {
+        const celula = planilha[XLSX.utils.encode_cell({ r, c: col })];
+        if (celula && celula.t === 'n') celula.z = '"R$" #,##0.00';
+      }
+    }
     planilha['!autofilter'] = { ref: planilha['!ref'] };
     const livro = XLSX.utils.book_new();
     XLSX.utils.book_append_sheet(livro, planilha, 'Repasses CEF');
@@ -613,9 +658,9 @@ export default function RepassesCefRelatorioPage() {
             <table className="w-full border-separate border-spacing-0 text-left text-xs">
               <thead ref={theadRef}>
                 <tr className="text-xs uppercase tracking-wide text-primary-700">
-                  {cabecalho(thCentroRef, filtroCentro, setFiltroCentro, opcoesCentro, 'centro de custo', 'Centro de Custo', 'w-36 rounded-tl-card 2xl:w-64 min-[1800px]:w-72')}
+                  {cabecalho(thCentroRef, filtroCentro, setFiltroCentro, opcoesCentro, 'centro de custo', 'Centro de Custo', 'w-32 rounded-tl-card 2xl:w-48 min-[1800px]:w-64')}
                   {cabecalho(thMacroRef, filtroMacro, setFiltroMacro, opcoesMacro, 'macro etapa', 'Macro Etapa', 'w-28 border-l border-l-primary-100 2xl:w-36')}
-                  {cabecalho(thMicroRef, filtroMicro, setFiltroMicro, opcoesMicro, 'micro etapa', 'Micro Etapa', 'w-32 border-l border-l-primary-100 2xl:w-48 min-[1800px]:w-64')}
+                  {cabecalho(thMicroRef, filtroMicro, setFiltroMicro, opcoesMicro, 'micro etapa', 'Micro Etapa', 'w-32 border-l border-l-primary-100 2xl:w-40 min-[1800px]:w-56')}
                   {cabecalho(
                     thClienteRef,
                     filtroCliente,
