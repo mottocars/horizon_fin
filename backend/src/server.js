@@ -154,7 +154,9 @@ app.use('/api/customers-sienge', exigirTela([T.COBRANCAS]), customersSiengeRoute
 app.use('/api/cobranca-clusters', exigirTela([T.COBRANCAS]), cobrancaClustersRoutes);
 app.use('/api/gestao-parcelas', exigirTela([T.COBRANCAS]), gestaoParcelasRoutes);
 app.use('/api/regua-cobranca', exigirTela([T.COBRANCAS]), reguaCobrancaRoutes);
-app.use('/api/regua-cobranca-historico', exigirTela([T.COBRANCAS]), historicoClienteRoutes);
+// Leitura liberada também pro relatório Desempenho da Cobrança (o clique em
+// Interações abre o Histórico da Parcela); registrar continua só na Cobrança.
+app.use('/api/regua-cobranca-historico', exigirTela([T.COBRANCAS], [T.REL_DESEMPENHO_COBRANCA]), historicoClienteRoutes);
 app.use('/api/comunicacao', exigirTela([T.COBRANCAS]), comunicacaoRoutes);
 app.use('/api/rotinas', exigirTela([T.COBRANCAS]), rotinasRoutes);
 app.use('/api/integracoes/mcp', exigirTela([T.MCP]), mcpRoutes);

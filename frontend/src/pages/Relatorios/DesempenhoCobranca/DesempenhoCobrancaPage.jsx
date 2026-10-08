@@ -11,6 +11,7 @@ import { listEmpresas } from '../../../api/empresas.api';
 import { listSiengeIntegracoes } from '../../../api/sienge.api';
 import { getDesempenhoCobranca } from '../../../api/relatorioDesempenhoCobranca.api';
 import { nomeExibicaoEmpresa } from '../../../utils/empresa';
+import HistoricoParcelaModal from '../../Operacoes/GestaoCobrancas/GestaoParcelas/HistoricoParcelaModal';
 
 // ─── formatação ────────────────────────────────────────────────────────────
 
@@ -77,7 +78,8 @@ function resumir(linhas) {
 }
 
 // Colunas analíticas — `abas` diz em quais abas a coluna aparece; `celula`
-// desenha 1 parcela; `resumo` a linha da atendente e o total (null = vazio).
+// desenha 1 parcela (recebe também `acoes`, ex.: abrir o histórico);
+// `resumo` a linha da atendente e o total (null = vazio).
 const COLUNAS = [
   {
     chave: 'vencimento',
@@ -131,22 +133,26 @@ const COLUNAS = [
     label: 'Interações',
     largura: 'w-28',
     centro: true,
-    celula: (p) =>
-      p.interacoesDevidas ? (
-        <span
-          className={`font-medium ${corCumprimento(p.interacoesFeitas, p.interacoesDevidas)}`}
-          title={Object.keys(NOME_CANAL)
-            .filter((c) => p.interacoesPorCanal[c][1])
-            .map((c) => `${NOME_CANAL[c]}: ${p.interacoesPorCanal[c][0]} de ${p.interacoesPorCanal[c][1]}`)
-            .join(' · ')}
+    // Clicar abre o Histórico da Parcela — o mesmo modal da Rotina e da
+    // Gestão das Parcelas (HistoricoParcelaModal.jsx).
+    celula: (p, acoes) => {
+      const detalhe = Object.keys(NOME_CANAL)
+        .filter((c) => p.interacoesPorCanal[c][1])
+        .map((c) => `${NOME_CANAL[c]}: ${p.interacoesPorCanal[c][0]} de ${p.interacoesPorCanal[c][1]}`)
+        .join(' · ');
+      return (
+        <button
+          type="button"
+          onClick={() => acoes.abrirHistorico(p)}
+          title={`${detalhe ? `${detalhe} — ` : ''}clique para ver o histórico da parcela`}
+          className={`rounded px-1.5 py-0.5 font-medium hover:bg-gray-100 hover:underline ${
+            p.interacoesDevidas ? corCumprimento(p.interacoesFeitas, p.interacoesDevidas) : 'text-gray-400'
+          }`}
         >
-          {p.interacoesFeitas} / {p.interacoesDevidas}
-        </span>
-      ) : (
-        <span className="text-gray-400" title="Nenhuma tarefa da atendente nesta parcela (os envios são automáticos)">
-          —
-        </span>
-      ),
+          {p.interacoesDevidas ? `${p.interacoesFeitas} / ${p.interacoesDevidas}` : '—'}
+        </button>
+      );
+    },
     resumo: (r) =>
       r.devidas ? (
         <span className={`font-semibold ${corCumprimento(r.feitas, r.devidas)}`} title="Interações feitas ÷ interações que deveriam ter sido feitas">
@@ -218,6 +224,10 @@ export default function DesempenhoCobrancaPage() {
   const [dados, setDados] = useState(null);
   const [carregando, setCarregando] = useState(false);
   const [erro, setErro] = useState('');
+
+  // Parcela com o Histórico aberto (clique na coluna Interações).
+  const [parcelaHistorico, setParcelaHistorico] = useState(null);
+  const acoes = { abrirHistorico: setParcelaHistorico };
 
   const [filtroAtendente, setFiltroAtendente] = useState(null);
   const [filtroCliente, setFiltroCliente] = useState(null);
@@ -615,7 +625,7 @@ export default function DesempenhoCobrancaPage() {
                               {celulaParcela(p, borda)}
                               {colunas.map((coluna) => (
                                 <td key={coluna.chave} className={classeCelula(borda, coluna.centro)}>
-                                  {coluna.celula(p)}
+                                  {coluna.celula(p, acoes)}
                                 </td>
                               ))}
                             </tr>
@@ -653,6 +663,15 @@ export default function DesempenhoCobrancaPage() {
           )}
         </div>
       </div>
+
+      <HistoricoParcelaModal
+        open={Boolean(parcelaHistorico)}
+        onClose={() => setParcelaHistorico(null)}
+        empresaId={empresaId}
+        billId={parcelaHistorico?.billId}
+        installmentId={parcelaHistorico?.installmentId}
+        clientName={parcelaHistorico?.cliente}
+      />
 
       {menuContexto &&
         createPortal(
