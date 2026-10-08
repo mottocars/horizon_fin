@@ -38,7 +38,7 @@ import ComunicacaoTab from './Comunicacao/ComunicacaoTab';
 import ReguaCobrancaTab from './ReguaCobranca/ReguaCobrancaTab';
 import ClientesTab from './ClientesTab';
 import RotinasTab from './RotinasTab';
-import { ehAdministradorDaTela } from '../../../utils/permissoes';
+import { ehAdministradorDaTela, filtrarAbas, podeVerAba } from '../../../utils/permissoes';
 
 // Lista de abas da tela. Pra adicionar uma aba nova no futuro basta incluir
 // um item aqui `{ id, label, icon }` e o caso correspondente no switch de
@@ -49,15 +49,18 @@ import { ehAdministradorDaTela } from '../../../utils/permissoes';
 // Gestão das Parcelas, Clusters de Clientes) e as de parâmetro/configuração
 // (Motor de Risco, Comunicação, Régua de Cobrança, Clientes). A aba padrão
 // ao abrir a tela é 'rotinas' (ver abaAtiva abaixo) — é a landing tab,
-// primeira coisa que o responsável pela cobrança vê.
+// primeira coisa que o responsável pela cobrança vê. `nivel: 'ADMINISTRADOR'`
+// = só o Administrador da tela (nível no cadastro do usuário) ou Master vê
+// (ver utils/permissoes.js::filtrarAbas).
+const TELA = '/operacoes/gestao-de-cobrancas';
 const TABS = [
   { id: 'rotinas', label: 'Rotinas', icon: Repeat },
   { id: 'inadimplencia', label: 'Gestão das Parcelas', icon: AlertOctagon },
   { id: 'clusters', label: 'Clusters de Clientes', icon: Users },
   { divider: true },
-  { id: 'motor-risco', label: 'Motor de Risco', icon: ShieldAlert },
-  { id: 'comunicacao', label: 'Comunicação', icon: MessageCircle },
-  { id: 'mascaras', label: 'Régua de Cobrança', icon: SlidersHorizontal },
+  { id: 'motor-risco', label: 'Motor de Risco', icon: ShieldAlert, nivel: 'ADMINISTRADOR' },
+  { id: 'comunicacao', label: 'Comunicação', icon: MessageCircle, nivel: 'ADMINISTRADOR' },
+  { id: 'mascaras', label: 'Régua de Cobrança', icon: SlidersHorizontal, nivel: 'ADMINISTRADOR' },
   { id: 'clientes', label: 'Clientes', icon: Contact },
 ];
 
@@ -100,7 +103,7 @@ export default function GestaoCobrancasPage() {
   // própria (ver rotinas.service.js::resolverUsuarioAlvo, que ignora o
   // filtro de qualquer jeito pra quem não é um dos dois, então isto aqui é
   // só pra não nem mostrar o combobox nesse caso).
-  const podeFiltrarResponsavel = ehAdministradorDaTela(user, '/operacoes/gestao-de-cobrancas');
+  const podeFiltrarResponsavel = ehAdministradorDaTela(user, TELA);
   // Quem pode filtrar já abre vendo TODOS os responsáveis, agrupados (ver
   // RotinasTab.jsx — o nível de Responsável mostra o valor e os títulos da
   // carteira de cada um); limpar o filtro volta pra "Minha rotina".
@@ -108,7 +111,10 @@ export default function GestaoCobrancasPage() {
   const [searchParams, setSearchParams] = useSearchParams();
 
   const empresaId = searchParams.get('empresa_id') || '';
-  const abaAtiva = searchParams.get('aba') || 'rotinas';
+  // Aba restrita na URL (link antigo/compartilhado) pra quem não pode vê-la cai em Rotinas.
+  const abaParam = searchParams.get('aba') || 'rotinas';
+  const abaAtiva = TABS.some((t) => t.id === abaParam && !podeVerAba(user, TELA, t.nivel)) ? 'rotinas' : abaParam;
+  const abas = useMemo(() => filtrarAbas(user, TELA, TABS), [user]);
   // `useMemo` (não só derivar direto) de propósito: CentrosCustoResumo.jsx e
   // ClientesTab.jsx recebem este array como prop e o usam como dependência
   // de `useCallback`/`useEffect` próprios — sem o useMemo, cada render desta
@@ -203,13 +209,14 @@ export default function GestaoCobrancasPage() {
 
   // Versões salvas do Motor de Risco da empresa selecionada — o combobox
   // "Versão" só faz sentido ali do lado de Empresa quando essa aba está
-  // ativa (as demais ainda não têm nada versionado).
+  // ativa (as demais ainda não têm nada versionado). Só carrega pra quem vê
+  // a aba (Administrador da tela ou Master) — pros demais a API responde 403.
   const [versoes, setVersoes] = useState([]);
   const [loadingVersoes, setLoadingVersoes] = useState(false);
   const [versaoId, setVersaoId] = useState('');
 
   function carregarVersoes(empresa) {
-    if (!empresa) {
+    if (!empresa || !ehAdministradorDaTela(user, TELA)) {
       setVersoes([]);
       setVersaoId('');
       return;
@@ -629,7 +636,7 @@ export default function GestaoCobrancasPage() {
       </Card>
 
       <div>
-        <Tabs tabs={TABS} activeId={abaAtiva} onChange={(aba) => atualizarParams({ aba })} />
+        <Tabs tabs={abas} activeId={abaAtiva} onChange={(aba) => atualizarParams({ aba })} />
 
         {abaAtiva === 'motor-risco' && (
           <MotorRiscoTab

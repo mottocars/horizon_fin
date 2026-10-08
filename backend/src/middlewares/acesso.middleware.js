@@ -45,6 +45,15 @@ function ehAdministradorDaTela(user, tela) {
   return (user.telasAdministrador || []).includes(tela);
 }
 
+// Pras partes de uma tela restritas ao Administrador dela (abas de
+// configuração/cadastro). Usado nas rotas, depois do exigirTela do mount.
+function exigirAdministradorDaTela(tela) {
+  return (req, res, next) => {
+    if (ehAdministradorDaTela(req.user, tela)) return next();
+    return res.status(403).json({ message: 'Só o Administrador desta tela pode fazer isso.' });
+  };
+}
+
 function exigirMaster(req, res, next) {
   if (req.user?.permissao === 'MASTER') return next();
   return res.status(403).json({ message: 'Apenas usuários Master podem fazer isso.' });
@@ -116,6 +125,7 @@ module.exports = {
   exigirTela,
   exigirMaster,
   ehAdministradorDaTela,
+  exigirAdministradorDaTela,
   paramEmpresa,
   paramRecurso,
   exigirRecursosDoCorpo,

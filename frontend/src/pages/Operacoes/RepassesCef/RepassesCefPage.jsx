@@ -37,6 +37,8 @@ import {
 } from '../../../api/repassesCef.api';
 import { nomeExibicaoEmpresa } from '../../../utils/empresa';
 import { useEmpresaTravada } from '../../../hooks/useEmpresaTravada';
+import { useAuth } from '../../../auth/AuthContext';
+import { filtrarAbas } from '../../../utils/permissoes';
 import { MACRO_ETAPAS_REPASSES } from '../../../config/macroEtapasRepasses';
 import ConfigurarFiltrosModal from './ConfigurarFiltrosModal';
 import AtualizacaoLogModal from './AtualizacaoLogModal';
@@ -46,11 +48,12 @@ import ConfiguracoesRepassesCef from './ConfiguracoesRepassesCef';
 
 // Lista de abas da tela. Pra adicionar uma aba nova no futuro basta incluir
 // um item aqui `{ id, label, icon }` e o caso correspondente no bloco de
-// conteúdo do return.
+// conteúdo do return. `nivel: 'ADMINISTRADOR'` = só o Administrador da tela
+// (nível no cadastro do usuário) ou Master vê (ver utils/permissoes.js).
 const TABS = [
   { id: 'kanban', label: 'Kanban', icon: LayoutGrid },
-  { id: 'mascaras', label: 'Máscaras', icon: SlidersHorizontal },
-  { id: 'configuracoes', label: 'Configurações', icon: Settings },
+  { id: 'mascaras', label: 'Máscaras', icon: SlidersHorizontal, nivel: 'ADMINISTRADOR' },
+  { id: 'configuracoes', label: 'Configurações', icon: Settings, nivel: 'ADMINISTRADOR' },
 ];
 
 const LOGO_SIENGE = MACRO_ETAPAS_REPASSES.find((m) => m.value === 'CONTRATO').logo;
@@ -66,6 +69,8 @@ function ehErroDeIntegracaoAusente(mensagem) {
 
 export default function RepassesCefPage() {
   const { travada: empresaTravada, empresaIdTravada } = useEmpresaTravada();
+  const { user } = useAuth();
+  const abas = useMemo(() => filtrarAbas(user, '/operacoes/repasses-cef', TABS), [user]);
   const [empresas, setEmpresas] = useState([]);
   const [loadingEmpresas, setLoadingEmpresas] = useState(true);
   const [empresaId, setEmpresaId] = useState('');
@@ -580,7 +585,7 @@ export default function RepassesCefPage() {
       </Card>
 
       <div className="flex min-h-0 flex-1 flex-col">
-        <Tabs tabs={TABS} activeId={abaAtiva} onChange={setAbaAtiva} />
+        <Tabs tabs={abas} activeId={abaAtiva} onChange={setAbaAtiva} />
 
         {abaAtiva === 'kanban' &&
           (!empresaId ? (

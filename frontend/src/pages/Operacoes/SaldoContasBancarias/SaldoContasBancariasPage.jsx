@@ -8,6 +8,7 @@ import SearchableSelect from '../../../components/SearchableSelect';
 import { listEmpresas } from '../../../api/empresas.api';
 import { getFiltrosSaldos, getPeriodoAberto, exportarSaldosExcel, getRotinasStatus } from '../../../api/saldoContasBancarias.api';
 import { useAuth } from '../../../auth/AuthContext';
+import { filtrarAbas, podeVerAba } from '../../../utils/permissoes';
 import RotinasTab from './RotinasTab';
 import { gerarContasBancarias } from '../../../api/contasBancariasSienge.api';
 import { nomeExibicaoEmpresa } from '../../../utils/empresa';
@@ -33,13 +34,16 @@ import { formatarDataBR, semanaAtual, semanaDe } from './constantes';
 const ABA_ROTINAS = { id: 'rotinas', label: 'Rotinas', icon: ListChecks };
 const ABAS_COM_GRADE = ['saldos', 'rotinas'];
 
+// `nivel`: quem vê a aba (ver utils/permissoes.js::filtrarAbas) — Bancos só Master; as demais
+// de cadastro/parâmetro só o Administrador da tela (nível no cadastro do usuário) ou Master.
+const TELA = '/operacoes/saldo-contas-bancarias';
 const TABS = [
   { id: 'saldos', label: 'Saldos das Contas', icon: Wallet },
   { divider: true },
-  { id: 'bancos', label: 'Bancos', icon: Landmark },
-  { id: 'classificacao', label: 'Classificação', icon: Layers },
-  { id: 'contas', label: 'Contas Bancárias', icon: CreditCard },
-  { id: 'configuracoes', label: 'Configurações', icon: Settings },
+  { id: 'bancos', label: 'Bancos', icon: Landmark, nivel: 'MASTER' },
+  { id: 'classificacao', label: 'Classificação', icon: Layers, nivel: 'ADMINISTRADOR' },
+  { id: 'contas', label: 'Contas Bancárias', icon: CreditCard, nivel: 'ADMINISTRADOR' },
+  { id: 'configuracoes', label: 'Configurações', icon: Settings, nivel: 'ADMINISTRADOR' },
 ];
 
 const STATUS_CONTAS_OPCOES = [
@@ -99,8 +103,14 @@ export default function SaldoContasBancariasPage() {
   // com o parâmetro desligado cai em Saldos.
   let abaAtiva = abaParam || (rotinasAtivas ? 'rotinas' : empresaId && rotinasStatus === null ? '' : 'saldos');
   if (abaAtiva === 'rotinas' && rotinasStatus && !rotinasAtivas) abaAtiva = 'saldos';
+  // Aba restrita na URL (link antigo/compartilhado) pra quem não pode vê-la cai em Saldos.
+  const abaRestrita = TABS.find((t) => t.id === abaAtiva && !podeVerAba(user, TELA, t.nivel));
+  if (abaRestrita) abaAtiva = 'saldos';
   const abaComGrade = ABAS_COM_GRADE.includes(abaAtiva);
-  const tabs = useMemo(() => (rotinasAtivas ? [ABA_ROTINAS, ...TABS] : TABS), [rotinasAtivas]);
+  const tabs = useMemo(
+    () => filtrarAbas(user, TELA, rotinasAtivas ? [ABA_ROTINAS, ...TABS] : TABS),
+    [rotinasAtivas, user]
+  );
 
   // Arrays com `useMemo` sobre a string crua da URL: o grid recebe estes arrays como
   // dependência de `useCallback`/`useEffect` — sem isso, cada render criaria um array novo

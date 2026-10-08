@@ -2,7 +2,8 @@ const { Router } = require('express');
 const multer = require('multer');
 const os = require('os');
 const authMiddleware = require('../../middlewares/auth.middleware');
-const { paramEmpresa } = require('../../middlewares/acesso.middleware');
+const { paramEmpresa, exigirAdministradorDaTela } = require('../../middlewares/acesso.middleware');
+const T = require('../../config/telas');
 const controller = require('./repassesCef.controller');
 
 // Anexos de micro etapa: até 2MB cada, qualquer extensão (sem fileFilter),
@@ -39,10 +40,13 @@ router.get('/:empresaId/historico', controller.getHistoricoEtapas);
 router.get('/:empresaId/contratos/:siengeContractId/unidades-disponiveis', controller.listUnidadesDisponiveis);
 router.get('/:empresaId/reservas/:idreserva/contratos-disponiveis', controller.listContratosDisponiveis);
 router.post('/:empresaId/reservas/:idreserva/vincular-contrato', controller.vincularContrato);
-router.get('/:empresaId/sla-macro', controller.getSlaMacroEtapas);
-router.put('/:empresaId/sla-macro/:macroEtapa', controller.salvarSlaMacroEtapa);
-router.get('/:empresaId/comunicar-config', controller.getComunicarConfig);
-router.put('/:empresaId/comunicar-config', controller.salvarComunicarConfig);
+// Abas Máscaras (SLA da macro etapa) e Configurações: só o Administrador da
+// tela (ou Master). O Kanban recebe o SLA já embutido nas próprias listas.
+const soAdministrador = exigirAdministradorDaTela(T.REPASSES);
+router.get('/:empresaId/sla-macro', soAdministrador, controller.getSlaMacroEtapas);
+router.put('/:empresaId/sla-macro/:macroEtapa', soAdministrador, controller.salvarSlaMacroEtapa);
+router.get('/:empresaId/comunicar-config', soAdministrador, controller.getComunicarConfig);
+router.put('/:empresaId/comunicar-config', soAdministrador, controller.salvarComunicarConfig);
 router.post(
   '/:empresaId/historico-microetapas',
   uploadMicroEtapa.array('arquivos'),

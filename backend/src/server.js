@@ -59,7 +59,7 @@ const mcpRoutes = require('./modules/integracoes-mcp/mcp.routes');
 const mcpProtocoloRoutes = require('./modules/integracoes-mcp/mcpProtocolo.routes');
 const logsAcessoRoutes = require('./modules/logs-acesso/logsAcesso.routes');
 const errorMiddleware = require('./middlewares/error.middleware');
-const { QUALQUER_TELA, exigirTela, exigirMaster } = require('./middlewares/acesso.middleware');
+const { QUALQUER_TELA, exigirTela, exigirMaster, exigirAdministradorDaTela } = require('./middlewares/acesso.middleware');
 const T = require('./config/telas');
 const { limiteGeral, limiteDownloadsSeAplicavel, limiteLogin, limiteMcp } = require('./middlewares/rateLimit.middleware');
 const pool = require('./config/db');
@@ -129,12 +129,14 @@ app.use('/api/prevision-dashboards', exigirTela([T.PREVISION, T.CENTROS_CUSTO]),
 app.use('/api/planos-financeiros/sienge', exigirTela([T.PLANOS_FINANCEIROS, T.SIENGE, T.DRE]), planosFinanceirosSiengeRoutes);
 app.use('/api/centros-custo/sienge', exigirTela([T.CENTROS_CUSTO, T.SIENGE], [T.DRE]), centrosCustoSiengeRoutes);
 app.use('/api/mascaras', exigirTela([T.MASCARAS, T.DRE, T.REPASSES], [T.CENTROS_CUSTO, T.PLANOS_FINANCEIROS]), mascarasRoutes);
-app.use('/api/contas-bancarias/sienge', exigirTela([T.SALDOS]), contasBancariasSiengeRoutes);
+// Abas de cadastro do Saldo Contas Bancárias: Contas Bancárias e Classificação
+// só pro Administrador da tela; Bancos só Master.
+app.use('/api/contas-bancarias/sienge', exigirTela([T.SALDOS]), exigirAdministradorDaTela(T.SALDOS), contasBancariasSiengeRoutes);
 app.use('/api/saldo-contas-bancarias', exigirTela([T.SALDOS]), saldoContasBancariasRoutes);
-app.use('/api/classificacoes-bancarias', exigirTela([T.SALDOS]), classificacoesBancariasRoutes);
+app.use('/api/classificacoes-bancarias', exigirTela([T.SALDOS]), exigirAdministradorDaTela(T.SALDOS), classificacoesBancariasRoutes);
 app.use('/api/dre-categorias-orcamento', exigirTela([T.DRE]), dreCategoriasOrcamentoRoutes);
 app.use('/api/dre-orcamento', exigirTela([T.DRE]), dreOrcamentoRoutes);
-app.use('/api/bancos', exigirTela([T.SALDOS]), bancosRoutes);
+app.use('/api/bancos', exigirTela([T.SALDOS]), exigirMaster, bancosRoutes);
 app.use('/api/epr', exigirTela([T.PORTAL]), eprRoutes);
 app.use('/api/dcd', exigirTela([T.PORTAL]), dcdRoutes);
 app.use('/api/extrato', exigirTela([T.PORTAL]), extratoRoutes);

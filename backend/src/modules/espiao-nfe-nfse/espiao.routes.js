@@ -1,6 +1,12 @@
 const { Router } = require('express');
 const authMiddleware = require('../../middlewares/auth.middleware');
-const { paramEmpresa, paramRecurso, exigirRecursosDoCorpo } = require('../../middlewares/acesso.middleware');
+const {
+  paramEmpresa,
+  paramRecurso,
+  exigirRecursosDoCorpo,
+  exigirAdministradorDaTela,
+} = require('../../middlewares/acesso.middleware');
+const T = require('../../config/telas');
 const controller = require('./espiao.controller');
 
 const router = Router();
@@ -17,8 +23,9 @@ router.get('/:empresaId/notas-resumo', controller.contarNotasPorAba);
 router.get('/:empresaId/certificados', controller.listCertificados);
 router.get('/:empresaId/agendamento', controller.getAgendamento);
 router.put('/:empresaId/agendamento', controller.salvarAgendamento);
-router.get('/:empresaId/configuracoes', controller.getConfiguracoes);
-router.put('/:empresaId/configuracoes', controller.salvarConfiguracoes);
+// Aba Configurações: só o Administrador da tela (ou Master).
+router.get('/:empresaId/configuracoes', exigirAdministradorDaTela(T.ESPIAO), controller.getConfiguracoes);
+router.put('/:empresaId/configuracoes', exigirAdministradorDaTela(T.ESPIAO), controller.salvarConfiguracoes);
 router.post('/certificados/:certificadoId/consultar', controller.consultarCertificado);
 router.get('/certificados/:certificadoId/notas', controller.listNotasPorCertificado);
 router.get('/notas/:notaId/eventos', controller.listEventosPorNota);

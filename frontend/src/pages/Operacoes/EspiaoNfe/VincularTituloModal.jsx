@@ -554,12 +554,18 @@ export default function VincularTituloModal({
         Icon={Settings}
         tom="text-amber-400"
         titulo={`Falta configurar o código do documento de notas de ${nota.tipo === 'NFSE' ? 'serviço' : 'produto'}`}
-        texto="É por esse código que os títulos são buscados no contas a pagar do Sienge. Informe-o na aba Configurações desta tela."
+        texto={
+          onIrParaConfiguracoes
+            ? 'É por esse código que os títulos são buscados no contas a pagar do Sienge. Informe-o na aba Configurações desta tela.'
+            : 'É por esse código que os títulos são buscados no contas a pagar do Sienge. Peça a um Administrador desta tela pra informá-lo na aba Configurações.'
+        }
         acao={
-          <Button onClick={onIrParaConfiguracoes}>
-            <Settings size={15} />
-            Ir para Configurações
-          </Button>
+          onIrParaConfiguracoes && (
+            <Button onClick={onIrParaConfiguracoes}>
+              <Settings size={15} />
+              Ir para Configurações
+            </Button>
+          )
         }
       />
     );

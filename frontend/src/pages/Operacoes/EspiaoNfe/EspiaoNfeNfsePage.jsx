@@ -40,6 +40,8 @@ import ConfiguracoesTab from './ConfiguracoesTab';
 import VincularTituloModal from './VincularTituloModal';
 import logoSienge from '../../../assets/integracoes/sienge.svg';
 import { useEmpresaTravada } from '../../../hooks/useEmpresaTravada';
+import { useAuth } from '../../../auth/AuthContext';
+import { ehAdministradorDaTela } from '../../../utils/permissoes';
 import {
   listCertificadosEspiao,
   contarNotasPorAbaEspiao,
@@ -84,7 +86,8 @@ const NOME_ABA = Object.fromEntries(TABS_NOTAS.map((tab) => [tab.id, tab.label])
 
 // Aba de parâmetros, separada das abas de notas por um divisor (mesmo padrão
 // de "Motor de Risco" em GestaoCobrancasPage.jsx) — não é um estado de nota,
-// não tem contagem e troca a tela inteira (ver ConfiguracoesTab.jsx).
+// não tem contagem e troca a tela inteira (ver ConfiguracoesTab.jsx). Só
+// pro Administrador da tela (nível no cadastro do usuário) ou Master.
 const TAB_CONFIGURACOES = { id: 'configuracoes', label: 'Configurações', icon: Settings };
 
 // Cor de cada campo do painel de filtro (pedido do usuário): âmbar quando
@@ -577,6 +580,8 @@ export default function EspiaoNfeNfsePage() {
   const confirm = useConfirm();
   const { collapseTemporarily, restoreCollapse } = useSidebar();
   const { travada: empresaTravada, empresaIdTravada } = useEmpresaTravada();
+  const { user } = useAuth();
+  const podeConfigurar = ehAdministradorDaTela(user, '/operacoes/espiao-nfe-nfse');
   const [empresas, setEmpresas] = useState([]);
   const [loadingEmpresas, setLoadingEmpresas] = useState(true);
   const [empresaId, setEmpresaId] = useState('');
@@ -795,10 +800,9 @@ export default function EspiaoNfeNfsePage() {
             ? `${tab.label} (${contagemAbas[tab.id].toLocaleString('pt-BR')})`
             : tab.label,
       })),
-      { divider: true },
-      TAB_CONFIGURACOES,
+      ...(podeConfigurar ? [{ divider: true }, TAB_CONFIGURACOES] : []),
     ],
-    [contagemAbas]
+    [contagemAbas, podeConfigurar]
   );
 
   // Certificado sempre aparece na tela, mesmo sem nenhuma nota ainda — é
@@ -1918,10 +1922,14 @@ export default function EspiaoNfeNfsePage() {
         onBaixarXml={handleDownload}
         baixandoPdf={notaVinculo ? baixando.has(`${notaVinculo.id}:pdf`) : false}
         baixandoXml={notaVinculo ? baixando.has(`${notaVinculo.id}:xml`) : false}
-        onIrParaConfiguracoes={() => {
-          setNotaVinculo(null);
-          setAbaNotas('configuracoes');
-        }}
+        onIrParaConfiguracoes={
+          podeConfigurar
+            ? () => {
+                setNotaVinculo(null);
+                setAbaNotas('configuracoes');
+              }
+            : undefined
+        }
       />
     </div>
   );
