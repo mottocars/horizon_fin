@@ -66,6 +66,20 @@ export function salvarComunicacaoAutomaticaReguaCobranca(empresaId, tipo) {
     .then((res) => res.data);
 }
 
+// "Tipos de Pagamentos para Cobrança" (Configurações Globais) — ver
+// reguaCobranca.service.js::getTiposPagamento. Devolve { tipos: [{ descricao,
+// parcelas, abertas }], selecionados: [descricao] }; salvar recebe o lado
+// direito inteiro e devolve o mesmo formato.
+export function getTiposPagamentoReguaCobranca(empresaId) {
+  return http.get('/regua-cobranca/tipos-pagamento', { params: { empresa_id: empresaId } }).then((res) => res.data);
+}
+
+export function salvarTiposPagamentoReguaCobranca(empresaId, descricoes) {
+  return http
+    .put('/regua-cobranca/tipos-pagamento', { descricoes }, { params: { empresa_id: empresaId } })
+    .then((res) => res.data);
+}
+
 // ─── Distribuição da Rotina (Configurações Globais) ────────────────────────
 // Ver regua-cobranca/distribuicao.service.js. Toda escrita devolve o painel
 // inteiro atualizado (mesmo formato de getDistribuicaoReguaCobranca).

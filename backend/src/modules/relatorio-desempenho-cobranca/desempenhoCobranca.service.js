@@ -1,5 +1,10 @@
 const pool = require('../../config/db');
-const { getDataSistema, getLimiteVigente, getComunicacaoAutomatica } = require('../regua-cobranca/reguaCobranca.service');
+const {
+  getDataSistema,
+  getLimiteVigente,
+  getComunicacaoAutomatica,
+  CONDICAO_TIPO_PAGAMENTO,
+} = require('../regua-cobranca/reguaCobranca.service');
 
 // Relatório "Desempenho da Cobrança": por atendente, cada parcela que ela teve
 // sob responsabilidade — quantas interações fez de quantas deveria ter feito
@@ -83,6 +88,7 @@ async function getDesempenho(empresaId, { dataInicio, dataFim }) {
        ON m.id = h.mascara_item_id AND m.tipo = 'ETAPAS_CENTRO_CUSTO' AND m.descricao = 'Lançamento'
      LEFT JOIN sie_customers_comunicar com ON com.empresa_id = si.empresa_id AND com.client_id = si.client_id
      WHERE si.empresa_id = $1 AND si.origin_id = $2 AND COALESCE(com.comunicar, TRUE) = TRUE
+       AND ${CONDICAO_TIPO_PAGAMENTO}
        AND (
          si.due_date BETWEEN ($3::date - $6::int) AND ($4::date - $5::int)
          OR EXISTS (

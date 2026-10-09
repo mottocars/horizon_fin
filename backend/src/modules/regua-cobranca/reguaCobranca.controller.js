@@ -178,6 +178,33 @@ async function salvarComunicacaoAutomatica(req, res, next) {
   }
 }
 
+// "Tipos de Pagamentos para Cobrança" (Configurações Globais): a tela manda
+// sempre a lista inteira do lado direito.
+const tiposPagamentoSchema = z.object({
+  descricoes: z.array(z.string().trim().min(1).max(255)).max(500),
+});
+
+async function getTiposPagamento(req, res, next) {
+  try {
+    const empresaId = empresaIdSchema.parse(req.query.empresa_id);
+    res.json(await service.getTiposPagamento(empresaId));
+  } catch (err) {
+    if (err.issues) return next(badRequest(err.issues[0].message));
+    next(err);
+  }
+}
+
+async function salvarTiposPagamento(req, res, next) {
+  try {
+    const empresaId = empresaIdSchema.parse(req.query.empresa_id);
+    const { descricoes } = tiposPagamentoSchema.parse(req.body);
+    res.json(await service.salvarTiposPagamento(empresaId, descricoes, req.user.id));
+  } catch (err) {
+    if (err.issues) return next(badRequest(err.issues[0].message));
+    next(err);
+  }
+}
+
 // ─── Distribuição da Rotina (Configurações Globais) ────────────────────────
 // Ler é livre pra quem tem a tela; mexer na equipe, no modo ou redistribuir
 // muda o trabalho de todo mundo — só Master e Administrador da tela Gestão
@@ -283,6 +310,8 @@ module.exports = {
   getDataSistema,
   getComunicacaoAutomatica,
   salvarComunicacaoAutomatica,
+  getTiposPagamento,
+  salvarTiposPagamento,
   getDistribuicao,
   getConfigDistribuicao,
   salvarConfigDistribuicao,

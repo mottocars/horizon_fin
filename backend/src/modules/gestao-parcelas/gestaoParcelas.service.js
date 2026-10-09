@@ -1,5 +1,9 @@
 const pool = require('../../config/db');
-const { getLimiteVigente, listEtapasComComunicacao } = require('../regua-cobranca/reguaCobranca.service');
+const {
+  getLimiteVigente,
+  listEtapasComComunicacao,
+  CONDICAO_TIPO_PAGAMENTO,
+} = require('../regua-cobranca/reguaCobranca.service');
 const { mapaDonosCarteira } = require('../regua-cobranca/distribuicao.service');
 
 const CLUSTERS_VALIDOS = ['novo', 'bom', 'duvidoso', 'mau', 'inad'];
@@ -165,7 +169,8 @@ async function buscarLinhasClassificadas(empresaId, { costCenterIds, search } = 
      LEFT JOIN sie_customers_comunicar com
        ON com.empresa_id = si.empresa_id AND com.client_id = si.client_id
      WHERE si.empresa_id = $1 AND si.origin_id = $2 AND si.corrected_balance_amount <> 0
-       AND COALESCE(com.comunicar, TRUE) = TRUE${filtroCentro}`,
+       AND COALESCE(com.comunicar, TRUE) = TRUE
+       AND ${CONDICAO_TIPO_PAGAMENTO}${filtroCentro}`,
     params
   );
 
@@ -278,7 +283,8 @@ async function buscarParcelasComCluster(empresaId, { costCenterIds, search, stat
        GROUP BY bill_id, installment_id
      ) pg ON pg.bill_id = si.bill_id AND pg.installment_id = si.installment_id
      WHERE si.empresa_id = $1 AND si.origin_id = $2
-       AND COALESCE(com.comunicar, TRUE) = TRUE${filtroCentro}${filtroBusca}`,
+       AND COALESCE(com.comunicar, TRUE) = TRUE
+       AND ${CONDICAO_TIPO_PAGAMENTO}${filtroCentro}${filtroBusca}`,
     params
   );
 
@@ -516,7 +522,8 @@ async function listParcelasPorTitulo(empresaId, costCenterId, billId, filtros = 
        WHERE empresa_id = $1
        GROUP BY bill_id, installment_id
      ) pg ON pg.bill_id = si.bill_id AND pg.installment_id = si.installment_id
-     WHERE si.empresa_id = $1 AND si.origin_id = $2 AND si.bill_id = $3${filtroCentro}
+     WHERE si.empresa_id = $1 AND si.origin_id = $2 AND si.bill_id = $3
+       AND ${CONDICAO_TIPO_PAGAMENTO}${filtroCentro}
      ORDER BY si.installment_id ASC`,
     params
   );

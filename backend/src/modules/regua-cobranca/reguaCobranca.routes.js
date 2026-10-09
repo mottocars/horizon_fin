@@ -25,6 +25,8 @@ router.put('/parametros-disparo', soAdministrador, controller.salvarParametroDis
 router.get('/data-sistema', controller.getDataSistema);
 router.get('/comunicacao-automatica', controller.getComunicacaoAutomatica);
 router.put('/comunicacao-automatica', soAdministrador, controller.salvarComunicacaoAutomatica);
+router.get('/tipos-pagamento', soAdministrador, controller.getTiposPagamento);
+router.put('/tipos-pagamento', soAdministrador, controller.salvarTiposPagamento);
 router.get('/distribuicao', soAdministrador, controller.getDistribuicao);
 router.get('/distribuicao/config', soAdministrador, controller.getConfigDistribuicao);
 router.put('/distribuicao/config', soAdministrador, controller.salvarConfigDistribuicao);

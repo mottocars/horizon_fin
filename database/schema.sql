@@ -2424,6 +2424,20 @@ CREATE TABLE regua_cobranca_comunicacao_automatica (
     atualizado_em   TIMESTAMP DEFAULT NOW()
 );
 
+-- "Tipos de Pagamentos para Cobrança" (Configurações Globais da Régua): os
+-- tipos de pagamento (sie_income.payment_term_description, com TRIM) cujas
+-- parcelas entram na Gestão das Parcelas, na Rotina e no relatório
+-- Desempenho da Cobrança. Sem linha = nenhuma parcela na cobrança; tipo novo
+-- vindo do Sienge fica de fora até ser incluído — ver
+-- regua-cobranca/reguaCobranca.service.js::condicaoTipoPagamento.
+CREATE TABLE regua_cobranca_tipos_pagamento (
+    empresa_id      INTEGER NOT NULL REFERENCES empresas(id) ON DELETE CASCADE,
+    descricao       VARCHAR(255) NOT NULL,
+    criado_por      INTEGER REFERENCES usuarios(id) ON DELETE SET NULL,
+    criado_em       TIMESTAMPTZ DEFAULT NOW(),
+    PRIMARY KEY (empresa_id, descricao)
+);
+
 -- Distribuição da Rotina (Configurações Globais da Régua): "Responsável por
 -- etapa" ou "Distribuição automática" entre atendentes — ver
 -- regua-cobranca/distribuicao.service.js.

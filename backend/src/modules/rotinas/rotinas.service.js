@@ -1,7 +1,12 @@
 const fs = require('fs');
 const path = require('path');
 const pool = require('../../config/db');
-const { getLimiteVigente, getDataSistema, substituirVariaveisTemplate } = require('../regua-cobranca/reguaCobranca.service');
+const {
+  getLimiteVigente,
+  getDataSistema,
+  substituirVariaveisTemplate,
+  CONDICAO_TIPO_PAGAMENTO,
+} = require('../regua-cobranca/reguaCobranca.service');
 const usuariosService = require('../usuarios/usuarios.service');
 const distribuicao = require('../regua-cobranca/distribuicao.service');
 const T = require('../../config/telas');
@@ -159,7 +164,8 @@ async function calcularItens(empresaId, etapasRows, { dataInicio, dataFim, costC
      LEFT JOIN sie_customers_comunicar com
        ON com.empresa_id = si.empresa_id AND com.client_id = si.client_id
      WHERE si.empresa_id = $1 AND si.origin_id = $2 AND si.corrected_balance_amount <> 0
-       AND COALESCE(com.comunicar, TRUE) = TRUE${filtroCentro}
+       AND COALESCE(com.comunicar, TRUE) = TRUE
+       AND ${CONDICAO_TIPO_PAGAMENTO}${filtroCentro}
      ORDER BY cat.cost_center_name, si.client_name, si.bill_id, si.installment_id`,
     params
   );

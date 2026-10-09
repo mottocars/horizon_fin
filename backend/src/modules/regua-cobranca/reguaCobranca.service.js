@@ -383,6 +383,71 @@ async function salvarComunicacaoAutomatica(empresaId, tipo) {
   return getComunicacaoAutomatica(empresaId);
 }
 
+// "Tipos de Pagamentos para Cobrança" (Configurações Globais): só parcelas
+// cujo tipo de pagamento do Sienge (sie_income.payment_term_description)
+// está na lista da empresa entram na cobrança — Gestão das Parcelas, Rotina
+// e relatório Desempenho da Cobrança usam esta mesma condição no WHERE (o
+// alias da sie_income precisa ser `si`). Sem nenhum tipo escolhido, nenhuma
+// parcela entra (pedido do usuário: começa tudo à esquerda, e tipo novo que
+// aparecer no Sienge fica de fora até alguém incluir). TRIM dos dois lados
+// da comparação: o Sienge manda alguns tipos com espaço sobrando ('ATO  ').
+const CONDICAO_TIPO_PAGAMENTO = `EXISTS (
+       SELECT 1 FROM regua_cobranca_tipos_pagamento tp
+       WHERE tp.empresa_id = si.empresa_id AND tp.descricao = TRIM(si.payment_term_description)
+     )`;
+
+// Todos os tipos que existem na base da empresa (mais os já escolhidos que
+// sumiram da base, pra continuarem visíveis e poderem ser tirados), com a
+// quantidade de parcelas e de parcelas em aberto de cada um — o número
+// ajuda a decidir o que mover. `selecionados` = os que estão à direita.
+async function getTiposPagamento(empresaId) {
+  const [{ rows: tipos }, { rows: escolhidos }] = await Promise.all([
+    pool.query(
+      `SELECT TRIM(payment_term_description) AS descricao,
+              COUNT(*)::int AS parcelas,
+              COUNT(*) FILTER (WHERE corrected_balance_amount <> 0)::int AS abertas
+       FROM sie_income
+       WHERE empresa_id = $1 AND origin_id = 'CO' AND NULLIF(TRIM(payment_term_description), '') IS NOT NULL
+       GROUP BY 1`,
+      [empresaId]
+    ),
+    pool.query('SELECT descricao FROM regua_cobranca_tipos_pagamento WHERE empresa_id = $1', [empresaId]),
+  ]);
+  const porDescricao = new Map(tipos.map((t) => [t.descricao, t]));
+  for (const { descricao } of escolhidos) {
+    if (!porDescricao.has(descricao)) porDescricao.set(descricao, { descricao, parcelas: 0, abertas: 0 });
+  }
+  return {
+    tipos: [...porDescricao.values()].sort((a, b) => a.descricao.localeCompare(b.descricao, 'pt-BR')),
+    selecionados: escolhidos.map((e) => e.descricao),
+  };
+}
+
+// Grava a lista inteira de uma vez (a tela manda o lado direito completo a
+// cada movimento) — apaga e regrava numa transação só.
+async function salvarTiposPagamento(empresaId, descricoes, usuarioId) {
+  const unicas = [...new Set(descricoes.map((d) => String(d).trim()).filter(Boolean))];
+  const client = await pool.connect();
+  try {
+    await client.query('BEGIN');
+    await client.query('DELETE FROM regua_cobranca_tipos_pagamento WHERE empresa_id = $1', [empresaId]);
+    if (unicas.length > 0) {
+      await client.query(
+        `INSERT INTO regua_cobranca_tipos_pagamento (empresa_id, descricao, criado_por)
+         SELECT $1, d, $3 FROM UNNEST($2::text[]) AS d`,
+        [empresaId, unicas, usuarioId ?? null]
+      );
+    }
+    await client.query('COMMIT');
+  } catch (err) {
+    await client.query('ROLLBACK');
+    throw err;
+  } finally {
+    client.release();
+  }
+  return getTiposPagamento(empresaId);
+}
+
 // Qual conexão Z-API dispara este cluster — configurada em Configurações
 // Globais (ver ConfiguracoesGlobaisPainel.jsx). Sem linha (cluster nunca
 // configurado) ou zapi_integracao_id NULL = nenhuma conexão escolhida.
@@ -451,6 +516,9 @@ module.exports = {
   TIPOS_COMUNICACAO,
   getComunicacaoAutomatica,
   salvarComunicacaoAutomatica,
+  CONDICAO_TIPO_PAGAMENTO,
+  getTiposPagamento,
+  salvarTiposPagamento,
   getZapiIntegracaoDoCluster,
   getEmailIntegracaoDoCluster,
   substituirVariaveisTemplate,

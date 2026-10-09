@@ -11,6 +11,7 @@ import {
 import { listZapiIntegracoes } from '../../../../api/zapi.api';
 import { listEmailIntegracoes } from '../../../../api/emailIntegracao.api';
 import DistribuicaoRotinaSecao from './DistribuicaoRotinaSecao';
+import TiposPagamentoSecao from './TiposPagamentoSecao';
 import { ParametroLinha, SectionHeader } from './ParametrosLayout';
 
 // Opções do "Tipo de Comunicação" (ver reguaCobranca.service.js::
@@ -238,6 +239,8 @@ export default function ConfiguracoesGlobaisPainel({ empresaId }) {
           </>
         )}
       </Card>
+
+      <TiposPagamentoSecao empresaId={empresaId} />
     </div>
   );
 }
