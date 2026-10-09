@@ -53,6 +53,12 @@ async function buscar(empresaId, { limite, apenas_com_saldo_vencido }) {
     params
   );
 
+  // ultimo_contato é MAX de uma coluna DATE: chega como texto 'AAAA-MM-DD' (ver config/db.js).
+  // Dias sem contato = dias de calendário entre ele e hoje, os dois na meia-noite UTC — não o
+  // instante atual, que em UTC−3 somaria 1 dia entre 21h e meia-noite.
+  const agora = new Date();
+  const hoje = Date.UTC(agora.getFullYear(), agora.getMonth(), agora.getDate());
+
   return rows.map((r) => ({
     client_id: r.client_id,
     client_name: r.client_name,
@@ -61,7 +67,7 @@ async function buscar(empresaId, { limite, apenas_com_saldo_vencido }) {
     saldo_vencido: Number(r.saldo_vencido),
     ultimo_contato: r.ultimo_contato,
     dias_sem_contato: r.ultimo_contato
-      ? Math.floor((Date.now() - new Date(r.ultimo_contato).getTime()) / 86400000)
+      ? Math.round((hoje - Date.parse(`${r.ultimo_contato}T00:00:00Z`)) / 86400000)
       : null,
   }));
 }

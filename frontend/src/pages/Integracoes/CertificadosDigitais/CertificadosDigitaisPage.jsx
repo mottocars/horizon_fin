@@ -8,16 +8,20 @@ import SearchableSelect from '../../../components/SearchableSelect';
 import { listEmpresas } from '../../../api/empresas.api';
 import { listCertificados, criarCertificado, substituirCertificado } from '../../../api/certificados.api';
 import { nomeExibicaoEmpresa } from '../../../utils/empresa';
+import { formatarDataISO, hojeISO } from '../../../utils/datas';
 import { useEmpresaTravada } from '../../../hooks/useEmpresaTravada';
 
+// validade_ate é DATE ('YYYY-MM-DD') e vale o dia inteiro (o Espião filtra
+// com `validade_ate >= CURRENT_DATE`). Comparar com `new Date()` marcava
+// vencido já às 21h da véspera (meia-noite UTC); texto com hoje local, não.
 function estaVencido(validadeAte) {
   if (!validadeAte) return false;
-  return new Date(validadeAte) < new Date();
+  return String(validadeAte).slice(0, 10) < hojeISO();
 }
 
+// Data pura, formatada só pelo texto (utils/datas) — sem fuso nenhum.
 function formatarData(data) {
-  if (!data) return '—';
-  return new Date(data).toLocaleDateString('pt-BR', { timeZone: 'UTC' });
+  return formatarDataISO(data);
 }
 
 const emptyForm = { senha: '', arquivo: null };

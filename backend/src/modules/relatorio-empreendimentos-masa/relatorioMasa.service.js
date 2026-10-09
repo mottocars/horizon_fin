@@ -133,9 +133,18 @@ async function buscarDadosTimeTracker() {
     const assinaturas = await client.query(
       'select client_id, data_assinatura from client_details where data_assinatura is not null'
     );
+    // Coluna DATE chega como texto 'AAAA-MM-DD' (o type parser de config/db.js vale pra
+    // qualquer Client do `pg`, inclusive este): aí conta dias de calendário entre ela e hoje,
+    // os dois na meia-noite UTC — não o instante atual, que em UTC−3 somaria 1 dia entre 21h e
+    // meia-noite. Se for TIMESTAMP (Date), segue o tempo corrido de antes.
     const hoje = new Date();
+    const hojeUTC = Date.UTC(hoje.getFullYear(), hoje.getMonth(), hoje.getDate());
     for (const row of assinaturas.rows) {
-      const dias = Math.floor((hoje - new Date(row.data_assinatura)) / (1000 * 60 * 60 * 24));
+      const valor = row.data_assinatura;
+      const dias =
+        typeof valor === 'string' && /^\d{4}-\d{2}-\d{2}$/.test(valor)
+          ? Math.round((hojeUTC - Date.parse(`${valor}T00:00:00Z`)) / (1000 * 60 * 60 * 24))
+          : Math.floor((hoje - new Date(valor)) / (1000 * 60 * 60 * 24));
       duracaoPorCliente.set(row.client_id, dias);
     }
 

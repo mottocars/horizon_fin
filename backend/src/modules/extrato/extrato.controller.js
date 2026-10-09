@@ -1,6 +1,7 @@
 const fs = require('fs');
 const ExcelJS = require('exceljs');
 const service = require('./extrato.service');
+const { datasParaExcel } = require('../../utils/dataExcel');
 
 const COLS_UNIDADES = [
   { header: 'Nome Empreendimento', key: 'nome_empreendimento', width: 28 },
@@ -91,7 +92,8 @@ function montarWorkbook(unidades, cronograma, proximosEventos) {
   const sheetUnidades = workbook.addWorksheet('Unidades');
   sheetUnidades.columns = COLS_UNIDADES;
   for (const u of unidades) {
-    sheetUnidades.addRow(numerizar(u, COLS_NUM_UNIDADES));
+    // Datas (DATE, texto 'AAAA-MM-DD') viram célula de data de verdade — ver utils/dataExcel.js.
+    sheetUnidades.addRow(datasParaExcel(numerizar(u, COLS_NUM_UNIDADES), COLS_DATA_UNIDADES));
   }
   for (const col of COLS_DATA_UNIDADES) {
     sheetUnidades.getColumn(col).numFmt = 'DD/MM/YYYY';
@@ -104,7 +106,7 @@ function montarWorkbook(unidades, cronograma, proximosEventos) {
   const sheetCronograma = workbook.addWorksheet('Cronograma');
   sheetCronograma.columns = COLS_EVENTOS;
   for (const ev of cronograma) {
-    sheetCronograma.addRow(numerizar(ev, ['valor']));
+    sheetCronograma.addRow(datasParaExcel(numerizar(ev, ['valor']), ['data_evento']));
   }
   sheetCronograma.getColumn('data_evento').numFmt = 'DD/MM/YYYY';
   sheetCronograma.getColumn('valor').numFmt = '#,##0.00';
@@ -113,7 +115,7 @@ function montarWorkbook(unidades, cronograma, proximosEventos) {
   const sheetProximos = workbook.addWorksheet('Proximos Eventos');
   sheetProximos.columns = COLS_EVENTOS;
   for (const ev of proximosEventos) {
-    sheetProximos.addRow(numerizar(ev, ['valor']));
+    sheetProximos.addRow(datasParaExcel(numerizar(ev, ['valor']), ['data_evento']));
   }
   sheetProximos.getColumn('data_evento').numFmt = 'DD/MM/YYYY';
   sheetProximos.getColumn('valor').numFmt = '#,##0.00';

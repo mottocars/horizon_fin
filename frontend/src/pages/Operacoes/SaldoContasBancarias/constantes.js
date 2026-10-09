@@ -1,3 +1,5 @@
+import { formatarDataISO } from '../../../utils/datas';
+
 // Classificação bancária não é mais uma lista fixa (virou cadastro por empresa — ver
 // ClassificacoesTab.jsx e classificacoesBancarias.api.js). O nível 1 do drilldown (aqui e em
 // ContasTab.jsx) monta os grupos a partir dos nomes que realmente aparecem nas contas
@@ -23,8 +25,10 @@ export function hojeISO() {
   return paraISO(new Date());
 }
 
+// Só pelo texto (utils/datas): a data exibida é exatamente a gravada no banco,
+// sem passar por Date/fuso.
 export function formatarDataBR(iso) {
-  return deISO(iso).toLocaleDateString('pt-BR', { day: '2-digit', month: '2-digit', year: 'numeric' });
+  return formatarDataISO(iso);
 }
 
 // Domingo da semana que contém `iso` — getDay() vale 0 no domingo, então basta voltar

@@ -15,6 +15,7 @@ import { gerarContasBancarias } from '../../api/contasBancariasSienge.api';
 import { importarDcd } from '../../api/dcd.api';
 import { importarExtrato } from '../../api/extrato.api';
 import { nomeExibicaoEmpresa } from '../../utils/empresa';
+import { formatarDataISO } from '../../utils/datas';
 
 const OPERACOES = [
   { value: 'CURVA_OBRAS', label: 'Curva de Obras' },
@@ -430,8 +431,8 @@ export default function PeriodosPage() {
                   <tr key={p.id} className="border-b border-gray-50 last:border-0">
                     <td className="px-5 py-3 text-gray-900">{p.empresa_razao_social}</td>
                     <td className="px-5 py-3 text-gray-600">
-                      {new Date(`${p.data_inicio.slice(0, 10)}T00:00:00`).toLocaleDateString('pt-BR')} –{' '}
-                      {new Date(`${p.data_fim.slice(0, 10)}T00:00:00`).toLocaleDateString('pt-BR')}
+                      {/* data_inicio/data_fim são DATE: formatados só pelo texto, sem fuso */}
+                      {formatarDataISO(p.data_inicio)} – {formatarDataISO(p.data_fim)}
                     </td>
                     <td className="px-5 py-3 text-gray-600">
                       {p.operacoes.map((o) => OPERACAO_LABELS[o] || o).join(', ')}

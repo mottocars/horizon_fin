@@ -1,6 +1,7 @@
 const fs = require('fs');
 const ExcelJS = require('exceljs');
 const service = require('./dcd.service');
+const { datasParaExcel } = require('../../utils/dataExcel');
 
 const COLS_CONTRATO = [
   { header: 'Arquivo', key: 'arquivo_original', width: 28 },
@@ -211,7 +212,8 @@ function montarWorkbook(contratos, cronogramaFF, cronogramaLib) {
   const sheetContrato = workbook.addWorksheet('Cabecalho Contrato');
   sheetContrato.columns = COLS_CONTRATO;
   for (const c of contratos) {
-    sheetContrato.addRow(numerizar(c, COLS_NUM_CONTRATO));
+    // Datas (DATE, texto 'AAAA-MM-DD') viram célula de data de verdade — ver utils/dataExcel.js.
+    sheetContrato.addRow(datasParaExcel(numerizar(c, COLS_NUM_CONTRATO), COLS_DATA_CONTRATO));
   }
   for (const col of COLS_DATA_CONTRATO) {
     sheetContrato.getColumn(col).numFmt = 'DD/MM/YYYY';
@@ -224,7 +226,7 @@ function montarWorkbook(contratos, cronogramaFF, cronogramaLib) {
   const sheetFF = workbook.addWorksheet('Cronograma Fisico Financeiro');
   sheetFF.columns = COLS_CRONO_FF;
   for (const p of cronogramaFF) {
-    sheetFF.addRow(numerizar(p, COLS_NUM_CRONO_FF));
+    sheetFF.addRow(datasParaExcel(numerizar(p, COLS_NUM_CRONO_FF), ['data_parcela']));
   }
   sheetFF.getColumn('data_parcela').numFmt = 'DD/MM/YYYY';
   for (const col of COLS_NUM_CRONO_FF) {
@@ -235,7 +237,7 @@ function montarWorkbook(contratos, cronogramaFF, cronogramaLib) {
   const sheetLib = workbook.addWorksheet('Cronograma de Liberacao');
   sheetLib.columns = COLS_CRONO_LIB;
   for (const p of cronogramaLib) {
-    sheetLib.addRow(numerizar(p, COLS_NUM_CRONO_LIB));
+    sheetLib.addRow(datasParaExcel(numerizar(p, COLS_NUM_CRONO_LIB), ['data_parcela']));
   }
   sheetLib.getColumn('data_parcela').numFmt = 'DD/MM/YYYY';
   for (const col of COLS_NUM_CRONO_LIB) {

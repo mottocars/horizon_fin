@@ -12,8 +12,11 @@ const PRESETS = [
   { id: '90', label: '90 dias', dias: 90 },
 ];
 
+// Dia LOCAL 'YYYY-MM-DD' — toISOString() dava o dia em UTC, que a partir das
+// 21h no Brasil já é amanhã (o filtro "até hoje" pulava pro dia seguinte).
 function toISODate(data) {
-  return data.toISOString().slice(0, 10);
+  const pad = (n) => String(n).padStart(2, '0');
+  return `${data.getFullYear()}-${pad(data.getMonth() + 1)}-${pad(data.getDate())}`;
 }
 
 function calcularPeriodo(dias) {

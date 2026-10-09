@@ -1,4 +1,5 @@
 import { Frown, Meh, Smile, UserPlus } from 'lucide-react';
+import { formatarDataISO } from '../../../../utils/datas';
 
 // Vocabulário e estilos compartilhados entre as telas de clusterização
 // (nível 1, nível 2 e detalhe do cliente) — mesmo `tom`/rótulo usados pelo
@@ -60,22 +61,11 @@ export function formatarDataHora(data) {
   });
 }
 
-// "YYYY-MM-DD" puro (sem hora — é como due_date/data_registro/etapa.data
-// voltam do backend em vários lugares da Gestão de Cobranças, sempre que
-// já são strings de dia de calendário, não timestamps) precisa ser tratado
-// à parte: `new Date('YYYY-MM-DD')` é interpretado pela spec como meia-noite
-// EM UTC, e o `toLocaleDateString` logo depois reconverte pro fuso local do
-// navegador — em fusos atrás de UTC (Brasil, UTC-3), isso empurra a data
-// pro dia anterior (ex.: "2026-09-07" virava "06/09/2026"). Construindo a
-// data a partir dos componentes (ano/mês/dia) direto no fuso local, esse
-// dia de calendário nunca muda de fuso nenhum — é só isso que ele é.
-// Quando `data` já vem com hora (timestamp completo, tipo `criado_em`) ou
-// já é um objeto Date, o comportamento de sempre continua valendo.
+// Todos os chamadores (due_date, data_pagamento, mes_referencia,
+// data_registro, etapa.data...) passam DATA PURA 'YYYY-MM-DD' — coluna DATE
+// ou dia montado no backend. Formata só pelo texto (utils/datas): passar por
+// `new Date('YYYY-MM-DD')` lê meia-noite UTC e, no Brasil (UTC-3), mostrava
+// o dia anterior. Não usar com timestamp — pra isso, formatarDataHora acima.
 export function formatarData(data) {
-  if (!data) return '—';
-  if (typeof data === 'string' && /^\d{4}-\d{2}-\d{2}$/.test(data)) {
-    const [ano, mes, dia] = data.split('-').map(Number);
-    return new Date(ano, mes - 1, dia).toLocaleDateString('pt-BR', { day: '2-digit', month: '2-digit', year: 'numeric' });
-  }
-  return new Date(data).toLocaleDateString('pt-BR', { day: '2-digit', month: '2-digit', year: 'numeric' });
+  return formatarDataISO(data);
 }

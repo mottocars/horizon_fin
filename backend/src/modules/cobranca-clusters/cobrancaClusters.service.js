@@ -17,13 +17,11 @@ function badRequest(message) {
   return err;
 }
 
-// Colunas DATE do Postgres voltam do driver `pg` como Date em meia-noite
-// LOCAL do processo Node (ex.: 2026-08-15 vira 2026-08-15T00:00:00-03:00 em
-// America/Sao_Paulo, ou seja 2026-08-15T03:00:00Z). Ancorar tudo numa
-// meia-noite UTC (em vez de comparar os Date crus) garante que due_date,
-// payment_date e "hoje" fiquem numa base só, imune a mudança de fuso do
-// servidor e a horário de verão — bug sutil, mas fatal num cálculo de dias
-// de atraso.
+// Colunas DATE do Postgres voltam do driver `pg` como texto 'AAAA-MM-DD'
+// (ver config/db.js), que new Date() lê como meia-noite UTC. Ancorar tudo
+// numa meia-noite UTC garante que due_date, payment_date e "hoje" fiquem
+// numa base só, imune ao fuso do servidor e a horário de verão — bug sutil,
+// mas fatal num cálculo de dias de atraso. Continua aceitando Date também.
 function inicioDoDiaUTC(data) {
   const d = new Date(data);
   return new Date(Date.UTC(d.getUTCFullYear(), d.getUTCMonth(), d.getUTCDate()));

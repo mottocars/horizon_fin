@@ -35,9 +35,13 @@ function moeda(valor) {
   return `R$ ${Number(valor || 0).toLocaleString('pt-BR', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}`;
 }
 
-// DATE/TIMESTAMP do pg chegam como Date no fuso do servidor — só o calendário importa.
+// DATE chega do pg como texto 'AAAA-MM-DD' (ver config/db.js) e já é o dia gravado — passa
+// direto, sem virar Date (new Date('AAAA-MM-DD') é meia-noite UTC e os getters locais abaixo
+// voltariam um dia em UTC−3). TIMESTAMP chega como Date no fuso do servidor — só o calendário
+// importa.
 function dataIso(valor) {
   if (!valor) return null;
+  if (typeof valor === 'string' && /^\d{4}-\d{2}-\d{2}$/.test(valor)) return valor;
   const d = valor instanceof Date ? valor : new Date(valor);
   if (Number.isNaN(d.getTime())) return null;
   return `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}-${String(d.getDate()).padStart(2, '0')}`;

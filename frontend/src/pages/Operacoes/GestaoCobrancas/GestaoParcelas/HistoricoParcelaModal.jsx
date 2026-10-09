@@ -9,6 +9,7 @@ import {
 } from '../../../../api/reguaCobrancaHistorico.api';
 import { listSiengeIntegracoes } from '../../../../api/sienge.api';
 import { CLUSTER_LABEL, CLUSTER_TAG_ESTILO, CLUSTER_ICON, CLUSTER_ICON_COR, formatarData, formatarMoeda } from './constantes';
+import { hojeISO } from '../../../../utils/datas';
 
 const TAMANHO_MAXIMO_ANEXO = 2 * 1024 * 1024;
 
@@ -66,8 +67,10 @@ function urlTituloSienge(tenant, billId) {
   return `https://${tenant}.sienge.com.br/sienge/CRC/editTitulo.do?entity.tituloPK.nuTitulo=${billId}`;
 }
 
+// Padrão do campo "data do registro" (vai pra data_registro, DATE): dia
+// LOCAL — toISOString() dava o dia em UTC, que a partir das 21h já é amanhã.
 function hoje() {
-  return new Date().toISOString().slice(0, 10);
+  return hojeISO();
 }
 
 function formatarTamanho(bytes) {

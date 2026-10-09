@@ -42,6 +42,7 @@ import logoSienge from '../../../assets/integracoes/sienge.svg';
 import { useEmpresaTravada } from '../../../hooks/useEmpresaTravada';
 import { useAuth } from '../../../auth/AuthContext';
 import { ehAdministradorDaTela } from '../../../utils/permissoes';
+import { formatarDataISO, hojeISO, diasEntreISO } from '../../../utils/datas';
 import {
   listCertificadosEspiao,
   contarNotasPorAbaEspiao,
@@ -100,14 +101,10 @@ function corCampoFiltro(valor) {
     : 'border-amber-200 bg-amber-50 focus:border-amber-400 focus:ring-amber-100';
 }
 
-function hojeISO() {
-  return new Date().toISOString().slice(0, 10);
-}
-
+// Dia LOCAL (utils/datas) — toISOString() dava o dia em UTC, que a partir
+// das 21h no Brasil já é amanhã e deslocava o filtro padrão de emissão.
 function ontemISO() {
-  const data = new Date();
-  data.setDate(data.getDate() - 1);
-  return data.toISOString().slice(0, 10);
+  return hojeISO(-1);
 }
 
 function formatarDataHora(iso) {
@@ -115,9 +112,13 @@ function formatarDataHora(iso) {
   return new Date(iso).toLocaleString('pt-BR', { dateStyle: 'short', timeStyle: 'short' });
 }
 
+// Só o dia, direto do texto (utils/datas): validade_ate é DATE ('YYYY-MM-DD')
+// e data_emissao já vem como horário local sem fuso ('YYYY-MM-DDTHH:MM:SS',
+// ver colunaHoraLocal no backend) — nos dois casos os 10 primeiros
+// caracteres são o dia gravado. `new Date('YYYY-MM-DD')` lia meia-noite UTC
+// e, no Brasil, mostrava a validade um dia antes.
 function formatarData(iso) {
-  if (!iso) return '—';
-  return new Date(iso).toLocaleDateString('pt-BR');
+  return formatarDataISO(iso);
 }
 
 // "há 20 minutos" / "há 2 horas" / "há 3 dias" — usado no status de última
@@ -135,9 +136,12 @@ function formatarTempoRelativo(iso) {
   return `há ${dias} dia${dias !== 1 ? 's' : ''}`;
 }
 
+// validade_ate é DATE e vale o dia inteiro (o backend filtra com
+// `validade_ate >= CURRENT_DATE`): vencido só a partir do dia seguinte.
+// Comparação de texto 'YYYY-MM-DD' com hoje local — sem Date/fuso.
 function estaVencido(validadeAte) {
   if (!validadeAte) return false;
-  return new Date(validadeAte) < new Date();
+  return String(validadeAte).slice(0, 10) < hojeISO();
 }
 
 // Quantos dias faltam pro certificado vencer — null quando não tem data.
@@ -145,8 +149,7 @@ function estaVencido(validadeAte) {
 // vencido de fato continua sendo estaVencido() acima.
 function diasParaVencer(validadeAte) {
   if (!validadeAte) return null;
-  const diffMs = new Date(validadeAte) - new Date();
-  return Math.ceil(diffMs / (1000 * 60 * 60 * 24));
+  return diasEntreISO(hojeISO(), validadeAte);
 }
 
 // Limiar único usado pela coluna "Vencimento" (ver renderCertificado): até

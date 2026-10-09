@@ -1,6 +1,7 @@
 const fs = require('fs');
 const ExcelJS = require('exceljs');
 const service = require('./epr.service');
+const { datasParaExcel } = require('../../utils/dataExcel');
 
 const COLS_EMPREENDIMENTOS = [
   { header: 'Arquivo', key: 'arquivo_original', width: 28 },
@@ -71,7 +72,8 @@ function montarWorkbook(empreendimentos, mutuarios) {
   const sheetEmpreendimentos = workbook.addWorksheet('empreendimentos');
   sheetEmpreendimentos.columns = COLS_EMPREENDIMENTOS;
   for (const emp of empreendimentos) {
-    sheetEmpreendimentos.addRow(emp);
+    // Datas (DATE, texto 'AAAA-MM-DD') viram célula de data de verdade — ver utils/dataExcel.js.
+    sheetEmpreendimentos.addRow(datasParaExcel(emp, COLS_DATA_EMPREENDIMENTO));
   }
   for (const col of COLS_DATA_EMPREENDIMENTO) {
     sheetEmpreendimentos.getColumn(col).numFmt = 'DD/MM/YYYY';
@@ -82,7 +84,7 @@ function montarWorkbook(empreendimentos, mutuarios) {
   sheetMutuarios.columns = COLS_MUTUARIOS;
   for (const m of mutuarios) {
     sheetMutuarios.addRow({
-      ...m,
+      ...datasParaExcel(m, COLS_DATA_MUTUARIO),
       valor_retido: m.valor_retido !== null ? Number(m.valor_retido) : null,
       valor_amortizado: m.valor_amortizado !== null ? Number(m.valor_amortizado) : null,
       amortizado_label: m.amortizado ? 'SIM' : 'NAO',
