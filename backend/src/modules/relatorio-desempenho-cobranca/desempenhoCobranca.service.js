@@ -33,12 +33,20 @@ const {
 //                  atual) — as interações são as dela.
 //
 // Abas (campo `aba`):
-//   pagas   = paga (Recebimento) com data de pagamento DENTRO do período;
-//             valor = soma dos Recebimentos.
-//   abertas = em aberto no fim do período, com VENCIMENTO dentro do período;
-//             valor = o que faltava pagar no fim do período.
+//   pagas        = paga (Recebimento) com data de pagamento DENTRO do período;
+//                  valor = soma dos Recebimentos.
+//   abertas      = em aberto no fim do período, com VENCIMENTO dentro do
+//                  período; valor = o que faltava pagar no fim do período.
+//   distribuidas = só a Distribuição automática, pela DATA DA DISTRIBUIÇÃO:
+//                  1 linha por tarefa (parcela × dia) de cliente distribuído
+//                  naquele dia, dentro do período — a mesma parcela pode
+//                  aparecer em mais de um dia. Atendente = quem recebeu o
+//                  cliente no dia (nunca o responsável da etapa); interações
+//                  = as da etapa daquele dia, feitas por ela; valor = saldo
+//                  da parcela no dia da distribuição.
 // Parcela encerrada sem pagamento (desconto, reparcelamento, distrato) não
-// entra em nenhuma das duas.
+// entra em pagas nem abertas (mas entra em distribuidas, se foi distribuída
+// antes de encerrar).
 
 const ORIGIN_ID_PADRAO = 'CO';
 const CANAIS = ['whatsapp', 'email', 'ligacao'];
@@ -52,6 +60,29 @@ const somarDias = (iso, n) => {
 };
 const chaveParcela = (billId, installmentId) => `${billId}|${installmentId}`;
 
+// Feitas: cada registro do canal, da própria responsável, dentro da janela
+// da tarefa (`data` até `ate`) — 1 registro cumpre 1 tarefa só. `registros`
+// já vem filtrado pela responsável.
+function contarInteracoes(tarefas, registros) {
+  const usados = new Set();
+  let devidas = 0;
+  let feitas = 0;
+  const porCanal = { whatsapp: [0, 0], email: [0, 0], ligacao: [0, 0] };
+  for (const t of tarefas) {
+    for (const canal of t.canais) {
+      devidas++;
+      porCanal[canal][1]++;
+      const idx = registros.findIndex((r, i) => !usados.has(i) && r.canal === canal && r.data >= t.data && r.data <= t.ate);
+      if (idx >= 0) {
+        usados.add(idx);
+        feitas++;
+        porCanal[canal][0]++;
+      }
+    }
+  }
+  return { interacoesFeitas: feitas, interacoesDevidas: devidas, interacoesPorCanal: porCanal };
+}
+
 async function getDesempenho(empresaId, { dataInicio, dataFim }) {
   const { data_efetiva: hoje } = await getDataSistema(empresaId);
   const corte = dataFim < hoje ? dataFim : hoje; // nada depois do fim do período nem de hoje
@@ -59,7 +90,7 @@ async function getDesempenho(empresaId, { dataInicio, dataFim }) {
   const canaisDaAtendente = tipoComunicacao === 'automatica' ? ['ligacao'] : CANAIS;
 
   const { rows: etapas } = await pool.query(
-    `SELECT id, cluster, dias, canal_whatsapp, canal_email, canal_ligacao, responsavel_usuario_id
+    `SELECT id, cluster, nome, dias, canal_whatsapp, canal_email, canal_ligacao, responsavel_usuario_id
      FROM regua_cobranca_etapas
      WHERE empresa_id = $1 AND ativa = TRUE AND rotina_habilitada = TRUE AND dias IS NOT NULL
      ORDER BY dias`,
@@ -157,13 +188,14 @@ async function getDesempenho(empresaId, { dataInicio, dataFim }) {
     const quitada = Number(p.saldo) === 0 && ultimaOperacao != null && ultimaOperacao <= corte;
     const pagamentos = operacoesAteCorte.filter((r) => r.operacao === 'Recebimento' && r.valor > 0);
     const paga = quitada && pagamentos.length > 0;
-    if (quitada && !paga) continue; // encerrada sem pagamento — fora das 2 abas
     const dataPagamento = paga ? pagamentos.at(-1).data : null;
     // Saldo zerado tira a parcela da Rotina: não há tarefa depois disso.
     const fimTarefas = quitada ? ultimaOperacao : corte;
 
     // Linha do tempo de tarefas: cada etapa alcançada, na régua do cluster
     // que a parcela tinha naquele dia (passou do limite = Inadimplência).
+    // `distribuida` = o cliente estava na Distribuição automática daquele
+    // dia (o dono veio dela, não do responsável da etapa).
     const cluster = clusterCliente.get(p.client_id) || 'novo';
     const tarefas = [];
     for (const e of [...(etapasPorCluster[cluster] || []), ...(etapasPorCluster.inad || [])]) {
@@ -172,11 +204,52 @@ async function getDesempenho(empresaId, { dataInicio, dataFim }) {
       if (!ehInad && e.cluster !== cluster) continue;
       const data = somarDias(p.vencimento, e.dias);
       if (data > fimTarefas) continue;
-      const dono = donoNoDia.get(`${data}|${p.client_id}`) ?? e.responsavel_usuario_id ?? null;
+      const donoDistribuicao = donoNoDia.get(`${data}|${p.client_id}`) ?? null;
+      const dono = donoDistribuicao ?? e.responsavel_usuario_id ?? null;
       const canais = canaisDaAtendente.filter((c) => e[`canal_${c}`]);
-      tarefas.push({ data, dono, canais });
+      tarefas.push({ data, dono, canais, distribuida: donoDistribuicao != null, etapa: e.nome || `D${e.dias >= 0 ? '+' : ''}${e.dias}` });
     }
     tarefas.sort((a, b) => a.data.localeCompare(b.data));
+    // Janela de cada tarefa: do dia da etapa até a véspera da próxima.
+    for (let i = 0; i < tarefas.length; i++) {
+      tarefas[i].ate = tarefas[i + 1] ? somarDias(tarefas[i + 1].data, -1) : fimTarefas;
+    }
+    const registrosDaParcela = registrosPor.get(k) || [];
+    const base = {
+      clientId: p.client_id,
+      cliente: p.client_name || `Cliente ${p.client_id}`,
+      centroCusto: p.centro_custo,
+      billId: p.bill_id,
+      installmentId: p.installment_id,
+      parcela: String(p.installment_number ?? p.installment_id).split('/')[0],
+      condicao: (p.condicao || '').trim() || null,
+      vencimento: p.vencimento,
+    };
+
+    // Aba "Parcelas Distribuídas": cada dia de distribuição no período.
+    for (const t of tarefas) {
+      if (!t.distribuida || t.data < dataInicio || t.data > corte) continue;
+      const cumprimento = contarInteracoes([t], registrosDaParcela.filter((r) => r.usuario_id === t.dono));
+      const ultimaInteracao = registrosDaParcela.filter((r) => r.usuario_id === t.dono).at(-1)?.data ?? null;
+      parcelas.push({
+        ...base,
+        aba: 'distribuidas',
+        usuarioId: t.dono,
+        atendente: nomeUsuario.get(t.dono) || 'Usuário removido',
+        dataDistribuicao: t.data,
+        etapa: t.etapa,
+        // Pagamento só conta se veio depois da distribuição (é o resultado dela).
+        dataPagamento: dataPagamento && dataPagamento >= t.data ? dataPagamento : null,
+        diasAtraso: diasEntre(p.vencimento, t.data),
+        // Saldo no dia: o de hoje + tudo que o Sienge baixou depois daquele dia.
+        valor: Number(p.saldo) + operacoes.filter((r) => r.data >= t.data).reduce((s2, r) => s2 + r.valor, 0),
+        ...cumprimento,
+        ultimaInteracao,
+        diasUltimaInteracao: ultimaInteracao ? diasEntre(ultimaInteracao, hoje) : null,
+      });
+    }
+
+    if (quitada && !paga) continue; // encerrada sem pagamento — fora de pagas/abertas
     const dono = [...tarefas].reverse().find((t) => t.dono)?.dono ?? null;
     if (!dono) continue;
 
@@ -189,28 +262,11 @@ async function getDesempenho(empresaId, { dataInicio, dataFim }) {
       aba = 'abertas';
     }
 
-    // Feitas: cada registro do canal, da dona, dentro da janela da etapa —
-    // 1 registro cumpre 1 tarefa só.
-    const minhas = tarefas
-      .map((t, i) => ({ ...t, ate: tarefas[i + 1] ? somarDias(tarefas[i + 1].data, -1) : fimTarefas }))
-      .filter((t) => t.dono === dono);
-    const meusRegistros = (registrosPor.get(k) || []).filter((r) => r.usuario_id === dono);
-    const usados = new Set();
-    let devidas = 0;
-    let feitas = 0;
-    const porCanal = { whatsapp: [0, 0], email: [0, 0], ligacao: [0, 0] };
-    for (const t of minhas) {
-      for (const canal of t.canais) {
-        devidas++;
-        porCanal[canal][1]++;
-        const idx = meusRegistros.findIndex((r, i) => !usados.has(i) && r.canal === canal && r.data >= t.data && r.data <= t.ate);
-        if (idx >= 0) {
-          usados.add(idx);
-          feitas++;
-          porCanal[canal][0]++;
-        }
-      }
-    }
+    const meusRegistros = registrosDaParcela.filter((r) => r.usuario_id === dono);
+    const cumprimento = contarInteracoes(
+      tarefas.filter((t) => t.dono === dono),
+      meusRegistros
+    );
     const ultimaInteracao = meusRegistros.length ? meusRegistros.at(-1).data : null;
 
     // Em aberto: saldo de hoje + o que foi pago depois do fim do período.
@@ -222,23 +278,14 @@ async function getDesempenho(empresaId, { dataInicio, dataFim }) {
     const diasAtraso = diasEntre(p.vencimento, aba === 'pagas' ? dataPagamento : corte);
 
     parcelas.push({
+      ...base,
       aba,
       usuarioId: dono,
       atendente: nomeUsuario.get(dono) || 'Usuário removido',
-      clientId: p.client_id,
-      cliente: p.client_name || `Cliente ${p.client_id}`,
-      centroCusto: p.centro_custo,
-      billId: p.bill_id,
-      installmentId: p.installment_id,
-      parcela: String(p.installment_number ?? p.installment_id).split('/')[0],
-      condicao: (p.condicao || '').trim() || null,
-      vencimento: p.vencimento,
       dataPagamento,
       diasAtraso,
       valor,
-      interacoesFeitas: feitas,
-      interacoesDevidas: devidas,
-      interacoesPorCanal: porCanal,
+      ...cumprimento,
       ultimaInteracao,
       diasUltimaInteracao: ultimaInteracao ? diasEntre(ultimaInteracao, hoje) : null,
     });

@@ -1,6 +1,6 @@
 import { Fragment, useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { createPortal } from 'react-dom';
-import { CircleCheck, Clock, FileDown, HandCoins, Minus, Plus, TriangleAlert } from 'lucide-react';
+import { CircleCheck, Clock, FileDown, HandCoins, Minus, Plus, Shuffle, TriangleAlert } from 'lucide-react';
 import Card from '../../../components/Card';
 import Tabs from '../../../components/Tabs';
 import SearchableSelect from '../../../components/SearchableSelect';
@@ -56,6 +56,16 @@ const ABAS = [
     rotuloFim: 'Vencimento até',
     tema: { th: 'border-b-amber-500 bg-amber-50', tf: 'border-t-amber-500 bg-amber-50', texto: 'text-amber-700', divisor: 'border-l-amber-100' },
   },
+  {
+    id: 'distribuidas',
+    label: 'Parcelas Distribuídas',
+    icon: Shuffle,
+    iconColorClass: 'text-sky-600',
+    vazio: 'Nenhuma parcela distribuída no período (só a Distribuição automática entra aqui).',
+    rotuloInicio: 'Distribuída de',
+    rotuloFim: 'Distribuída até',
+    tema: { th: 'border-b-sky-500 bg-sky-50', tf: 'border-t-sky-500 bg-sky-50', texto: 'text-sky-700', divisor: 'border-l-sky-100' },
+  },
 ];
 
 const NOME_CANAL = { whatsapp: 'WhatsApp', email: 'E-mail', ligacao: 'Ligação' };
@@ -75,6 +85,23 @@ function resumir(linhas) {
 // `resumo` a linha da atendente e o total (null = vazio).
 const COLUNAS = [
   {
+    chave: 'distribuicao',
+    label: 'Distribuição',
+    largura: 'w-24',
+    abas: ['distribuidas'],
+    celula: (p) => <span className="font-medium text-sky-700">{formatarData(p.dataDistribuicao)}</span>,
+    resumo: () => null,
+  },
+  {
+    chave: 'etapa',
+    label: 'Etapa',
+    largura: 'w-20',
+    centro: true,
+    abas: ['distribuidas'],
+    celula: (p) => p.etapa,
+    resumo: () => null,
+  },
+  {
     chave: 'vencimento',
     label: 'Vencimento',
     largura: 'w-24',
@@ -85,8 +112,9 @@ const COLUNAS = [
     chave: 'pagamento',
     label: 'Pagamento',
     largura: 'w-24',
-    abas: ['pagas'],
-    celula: (p) => formatarData(p.dataPagamento),
+    abas: ['pagas', 'distribuidas'],
+    // Na aba Distribuídas: só pagamento que veio depois da distribuição.
+    celula: (p) => formatarData(p.dataPagamento) ?? <span className="text-gray-400">—</span>,
     resumo: () => null,
   },
   {
@@ -96,14 +124,20 @@ const COLUNAS = [
     centro: true,
     celula: (p) => {
       if (p.diasAtraso > 0) {
+        const dica = {
+          pagas: 'Dias entre o vencimento e o pagamento',
+          abertas: 'Dias desde o vencimento',
+          distribuidas: 'Dias de atraso no dia da distribuição',
+        }[p.aba];
         return (
-          <span className="font-medium text-red-600" title={p.aba === 'pagas' ? 'Dias entre o vencimento e o pagamento' : 'Dias desde o vencimento'}>
+          <span className="font-medium text-red-600" title={dica}>
             {textoDias(p.diasAtraso)}
           </span>
         );
       }
       if (p.aba === 'pagas') return <span className="text-emerald-700">em dia</span>;
-      return <span className="text-gray-400">{p.diasAtraso === 0 ? 'vence hoje' : 'a vencer'}</span>;
+      if (p.diasAtraso === 0) return <span className="text-gray-400">{p.aba === 'distribuidas' ? 'no vencimento' : 'vence hoje'}</span>;
+      return <span className="text-gray-400">a vencer</span>;
     },
     resumo: () => null,
   },
@@ -113,8 +147,8 @@ const COLUNAS = [
     largura: 'w-32',
     celula: (p) => (
       <span
-        className={p.aba === 'pagas' ? 'font-medium text-emerald-700' : 'text-amber-700'}
-        title={p.aba === 'pagas' ? 'Valor recebido' : 'Saldo em aberto'}
+        className={{ pagas: 'font-medium text-emerald-700', abertas: 'text-amber-700', distribuidas: 'text-sky-700' }[p.aba]}
+        title={{ pagas: 'Valor recebido', abertas: 'Saldo em aberto', distribuidas: 'Saldo da parcela no dia da distribuição' }[p.aba]}
       >
         {formatarMoeda(p.valor)}
       </span>
@@ -174,7 +208,8 @@ function classeCelula(borda, centro) {
 
 // Atendente → parcelas (sem agrupar por cliente: um cliente com mais de uma
 // parcela ou título aparece em mais de uma linha). Atendentes do maior valor
-// pro menor; linhas por cliente e vencimento.
+// pro menor; linhas por cliente e vencimento — na aba Distribuídas, primeiro
+// pela data da distribuição (nas outras abas ela não existe e não interfere).
 function construirArvore(linhas) {
   const atendentes = new Map();
   for (const p of linhas) {
@@ -186,17 +221,22 @@ function construirArvore(linhas) {
       ...a,
       resumo: resumir(a.linhas),
       linhas: [...a.linhas].sort(
-        (x, y) => x.cliente.localeCompare(y.cliente, 'pt-BR') || (x.vencimento || '').localeCompare(y.vencimento || '')
+        (x, y) =>
+          (x.dataDistribuicao || '').localeCompare(y.dataDistribuicao || '') ||
+          x.cliente.localeCompare(y.cliente, 'pt-BR') ||
+          (x.vencimento || '').localeCompare(y.vencimento || '')
       ),
     }))
     .sort((x, y) => y.resumo.valor - x.resumo.valor || x.nome.localeCompare(y.nome, 'pt-BR'));
 }
 
 // Relatório "Desempenho da Cobrança": por atendente, as parcelas que eram
-// dela — em 2 abas: Parcelas Pagas (pela data do pagamento, com os dias de
-// atraso no pagamento) e Parcelas em Aberto (pela data de vencimento).
-// Em ambas, as interações feitas de quantas deveriam em toda a vida da
-// parcela e a data da última. Regras no backend
+// dela — em 3 abas: Parcelas Pagas (pela data do pagamento, com os dias de
+// atraso no pagamento), Parcelas em Aberto (pela data de vencimento) e
+// Parcelas Distribuídas (só a Distribuição automática, pela data da
+// distribuição: 1 linha por parcela × dia, com as interações da etapa
+// daquele dia). Nas 2 primeiras, as interações feitas de quantas deveriam em
+// toda a vida da parcela e a data da última. Regras no backend
 // (relatorio-desempenho-cobranca/desempenhoCobranca.service.js). Mesmo
 // desenho do relatório de Repasses CEF (matriz, cabeçalho e total fixos,
 // filtros por coluna, Exportar no botão direito) com as abas do Acervo NF-e.
@@ -363,21 +403,24 @@ export default function DesempenhoCobrancaPage() {
       const [ano, mes, dia] = iso.split('-').map(Number);
       return new Date(ano, mes - 1, dia);
     };
-    const pagas = aba === 'pagas';
+    const distribuidas = aba === 'distribuidas';
+    const comPagamento = aba !== 'abertas';
+    const rotuloValor = { pagas: 'Valor recebido', abertas: 'Saldo em aberto', distribuidas: 'Saldo na distribuição' }[aba];
     const saida = [];
     for (const a of arvore) {
       for (const p of a.linhas) {
         saida.push({
           Atendente: a.nome,
+          ...(distribuidas ? { Distribuição: data(p.dataDistribuicao), Etapa: p.etapa } : {}),
           Cliente: p.cliente,
           'Centro de Custo': p.centroCusto || '',
           Título: Number(p.billId),
           Parcela: p.parcela,
           Condição: p.condicao || '',
           Vencimento: data(p.vencimento),
-          ...(pagas ? { Pagamento: data(p.dataPagamento) } : {}),
+          ...(comPagamento ? { Pagamento: data(p.dataPagamento) } : {}),
           'Dias Atraso': Math.max(p.diasAtraso, 0),
-          [pagas ? 'Valor recebido' : 'Saldo em aberto']: p.valor,
+          [rotuloValor]: p.valor,
           'Interações feitas': p.interacoesFeitas,
           'Interações devidas': p.interacoesDevidas,
           'Última interação': data(p.ultimaInteracao),
@@ -385,8 +428,10 @@ export default function DesempenhoCobrancaPage() {
       }
     }
     const planilha = XLSX.utils.json_to_sheet(saida, { cellDates: true, dateNF: 'dd/mm/yyyy' });
-    planilha['!cols'] = (pagas ? [24, 36, 26, 10, 8, 20, 12, 12, 10, 15, 10, 10, 14] : [24, 36, 26, 10, 8, 20, 12, 10, 15, 10, 10, 14]).map((wch) => ({ wch }));
-    const colunaValor = pagas ? 9 : 8;
+    const largura = { Atendente: 24, Distribuição: 12, Etapa: 10, Cliente: 36, 'Centro de Custo': 26, Título: 10, Parcela: 8, Condição: 20 };
+    const cabecalhos = Object.keys(saida[0] || {});
+    planilha['!cols'] = cabecalhos.map((h) => ({ wch: largura[h] ?? (h === rotuloValor ? 15 : 12) }));
+    const colunaValor = cabecalhos.indexOf(rotuloValor);
     const range = XLSX.utils.decode_range(planilha['!ref']);
     for (let r = range.s.r + 1; r <= range.e.r; r++) {
       const celula = planilha[XLSX.utils.encode_cell({ r, c: colunaValor })];
@@ -394,7 +439,7 @@ export default function DesempenhoCobrancaPage() {
     }
     planilha['!autofilter'] = { ref: planilha['!ref'] };
     const livro = XLSX.utils.book_new();
-    XLSX.utils.book_append_sheet(livro, planilha, pagas ? 'Parcelas Pagas' : 'Parcelas em Aberto');
+    XLSX.utils.book_append_sheet(livro, planilha, ABAS.find((a) => a.id === aba).label);
     XLSX.writeFile(livro, `desempenho-cobranca-${aba}_${dataInicio}_a_${dataFim}.xlsx`);
   }
 
@@ -599,7 +644,7 @@ export default function DesempenhoCobrancaPage() {
                         {a.linhas.map((p, i) => {
                           const borda = i === a.linhas.length - 1 ? B_GRUPO : B_LINHA;
                           return (
-                            <tr key={`${a.id}-${p.billId}-${p.installmentId}`}>
+                            <tr key={`${a.id}-${p.billId}-${p.installmentId}-${p.dataDistribuicao || ''}`}>
                               {i === 0 && (
                                 <td rowSpan={a.linhas.length} className={`${B_GRUPO} border-r border-r-gray-200 bg-white px-2 py-2.5 align-top 2xl:px-4`}>
                                   <RotuloAgrupador
