@@ -197,7 +197,7 @@ export default function PeriodosPage() {
       { nome: 'Sienge', status: 'pendente', mensagem: '' },
     ];
     if (dcdFiles.length > 0) etapasIniciais.push({ nome: 'DCD', status: 'pendente', mensagem: '' });
-    if (extratoFiles.length > 0) etapasIniciais.push({ nome: 'Extrato', status: 'pendente', mensagem: '' });
+    if (extratoFiles.length > 0) etapasIniciais.push({ nome: 'Geral', status: 'pendente', mensagem: '' });
     setEtapas(etapasIniciais);
 
     try {
@@ -242,7 +242,7 @@ export default function PeriodosPage() {
       }
 
       if (extratoFiles.length > 0) {
-        await importarArquivosEmLote('Extrato', extratoFiles, form.empresa_id, importarExtrato);
+        await importarArquivosEmLote('Geral', extratoFiles, form.empresa_id, importarExtrato);
       }
 
       setForm(emptyForm);
@@ -346,7 +346,7 @@ export default function PeriodosPage() {
             </div>
 
             <div>
-              <label className="mb-2 block text-sm font-medium text-gray-700">Extratos</label>
+              <label className="mb-2 block text-sm font-medium text-gray-700">Geral dos Empreendimentos</label>
               <label className="flex w-full cursor-pointer items-center gap-2 rounded-lg border border-dashed border-gray-300 px-3 py-2 text-sm text-gray-500 hover:bg-gray-50">
                 <UploadCloud size={16} />
                 Selecionar arquivos Excel

@@ -23,7 +23,7 @@ function corCampo(valor) {
 }
 
 // Opções de uma combobox garantindo que o valor já gravado apareça mesmo se não estiver mais na
-// lista (contrato que saiu do extrato, projeto apagado no Prevision) — mesmo cuidado da
+// lista (contrato que saiu do Geral, projeto apagado no Prevision) — mesmo cuidado da
 // combobox "Código Prevision" de CentroCustoItemDetalhe.jsx.
 function opcoesComValorAtual(opcoes, valor) {
   if (!valor || opcoes.some((o) => String(o.value) === String(valor))) return opcoes;
@@ -222,7 +222,7 @@ export default function DfcCentrosTab({ empresaId, search }) {
                     onChange={(v) => alterar(centro, { codigo_contrato_caixa: v || null })}
                     options={opcoesComValorAtual(opcoesContrato, centro.codigo_contrato_caixa)}
                     placeholder="Selecione o contrato"
-                    emptyMessage="Nenhum contrato no extrato do Portal das Construtoras."
+                    emptyMessage="Nenhum contrato no Geral dos Empreendimentos do Portal das Construtoras."
                     corClasses={corCampo(centro.codigo_contrato_caixa)}
                   />
                 ) : (

@@ -1,60 +1,55 @@
 import { forwardRef, useCallback, useEffect, useImperativeHandle, useMemo, useRef, useState } from 'react';
-import { Download, FileText, Globe, Sheet, Trash2, TriangleAlert } from 'lucide-react';
-import {
-  baixarDcd,
-  excluirDcd,
-  exportarDcd,
-  exportarDcdTodos,
-  importarDcd,
-  listDcdContratos,
-} from '../../../api/dcd.api';
+import { CalendarClock, Download, FileBarChart, Globe, Sheet, Trash2, TriangleAlert, UploadCloud } from 'lucide-react';
+import Modal from '../../../components/Modal';
+import Button from '../../../components/Button';
+import { baixarDcd, excluirDcd, exportarDcd, importarDcd, listDcdContratos } from '../../../api/dcd.api';
 import {
   baixarExtrato,
   excluirExtrato,
   exportarExtrato,
-  exportarExtratoTodos,
   importarExtrato,
   listExtratoEmpreendimentos,
 } from '../../../api/extrato.api';
 import { useAlert, useConfirm } from '../../../confirm/ConfirmContext';
 
 // Mesmas APIs e regras da tela Integrações > Portal das Construtoras (PortalConstrutorasPage.jsx)
-// — esta aba é um espelho dela, só com DCD e Extrato: os dados são os mesmos (importar aqui
-// aparece lá, e vice-versa).
+// — esta aba é um espelho dela, só com DCD e Geral (o antigo "Extrato dos Empreendimentos";
+// por baixo, a API e as tabelas continuam com o nome extrato): os dados são os mesmos
+// (importar aqui aparece lá, e vice-versa).
 const TIPOS_CIWEB = {
   DCD: {
     label: 'DCD',
     labelLongo: 'DCD',
+    descricao: 'Demonstrativo de Cronograma de Desembolso',
+    formato: 'PDF',
+    icone: CalendarClock,
     cor: 'bg-emerald-50 text-emerald-600',
+    prefixoArquivo: 'DCD',
     listar: listDcdContratos,
     importar: importarDcd,
     baixar: baixarDcd,
     exportar: exportarDcd,
-    exportarTodos: exportarDcdTodos,
     excluir: excluirDcd,
     idField: 'numero_contrato',
     extensaoArquivo: 'pdf',
     aceita: '.pdf,application/pdf',
-    resumoImportacao: (r) =>
-      `${r.nome_empreendimento || r.numero_contrato} — ${r.quantidade_parcelas_ff} parcela(s) no cronograma físico-financeiro, ${r.quantidade_parcelas_liberacao} na liberação.`,
   },
   EXTRATO: {
-    label: 'Extrato',
-    labelLongo: 'Extrato Empreendimentos',
+    label: 'Geral',
+    labelLongo: 'Geral dos Empreendimentos',
+    descricao: 'Geral completo por empreendimento',
+    formato: 'Excel (.xls / .xlsx)',
+    icone: FileBarChart,
     cor: 'bg-orange-50 text-orange-600',
+    prefixoArquivo: 'GERAL',
     listar: listExtratoEmpreendimentos,
     importar: importarExtrato,
     baixar: baixarExtrato,
     exportar: exportarExtrato,
-    exportarTodos: exportarExtratoTodos,
     excluir: excluirExtrato,
     idField: 'contrato_empreendimento',
     extensaoArquivo: 'xls',
     aceita: '.xls,.xlsx,application/vnd.ms-excel,application/vnd.openxmlformats-officedocument.spreadsheetml.sheet',
-    resumoImportacao: (r) =>
-      `${r.quantidade_empreendimentos} empreendimento(s) importado(s): ${r.empreendimentos
-        .map((e) => `${e.nome_empreendimento} (${e.quantidade_unidades} unidade(s))`)
-        .join(', ')}`,
   },
 };
 
@@ -96,20 +91,160 @@ function BotaoIcone({ title, onClick, disabled, hover, children }) {
   );
 }
 
-// Operações > DFC Construtoras > CIWEB: os DCDs e Extratos importados do portal da Caixa, na
-// mesma tabela (cabeçalho azul, linhas compactas) das outras abas da DFC. Os botões de importar
-// e "Exportar Tudo" ficam na barra de filtros da página (padrão do sistema) — esta aba expõe
-// `importar(tipo)` e `exportarTudo(tipo)` via ref.
+// Janela de importação: escolhe o tipo (DCD ou Geral), seleciona um ou mais arquivos e importa.
+// Mostra o progresso ali mesmo; no fim só avisa que deu certo (sem log detalhado — pedido do
+// usuário), listando apenas os arquivos que falharam, se algum falhar.
+function ImportarModal({ open, onClose, empresaId, onImportado }) {
+  const alert = useAlert();
+  const inputRef = useRef(null);
+  const [tipo, setTipo] = useState('DCD');
+  const [arquivos, setArquivos] = useState([]);
+  const [importando, setImportando] = useState(false);
+  const [progresso, setProgresso] = useState({ atual: 0, total: 0, arquivo: '' });
+
+  useEffect(() => {
+    if (!open) return;
+    setTipo('DCD');
+    setArquivos([]);
+    setProgresso({ atual: 0, total: 0, arquivo: '' });
+  }, [open]);
+
+  function escolherTipo(t) {
+    if (t === tipo) return;
+    setTipo(t);
+    setArquivos([]); // os aceitos mudam de PDF pra Excel
+  }
+
+  async function importar() {
+    const api = TIPOS_CIWEB[tipo];
+    setImportando(true);
+    const falhas = [];
+    try {
+      for (let i = 0; i < arquivos.length; i += 1) {
+        setProgresso({ atual: i + 1, total: arquivos.length, arquivo: arquivos[i].name });
+        try {
+          await api.importar(empresaId, arquivos[i]);
+        } catch (err) {
+          falhas.push(`• ${arquivos[i].name}: ${err.response?.data?.message || 'erro ao processar o arquivo.'}`);
+        }
+      }
+      await onImportado(tipo);
+    } finally {
+      setImportando(false);
+    }
+    onClose();
+    const ok = arquivos.length - falhas.length;
+    if (falhas.length === 0) {
+      await alert({
+        title: 'Importação concluída com sucesso',
+        description: `${ok} arquivo(s) ${api.labelLongo} importado(s).`,
+        variant: 'default',
+      });
+    } else {
+      await alert({
+        title: ok > 0 ? `Importação concluída: ${ok} de ${arquivos.length} arquivo(s)` : 'Não foi possível importar',
+        description: `Não importado(s):\n${falhas.join('\n')}`,
+        variant: 'warning',
+      });
+    }
+  }
+
+  return (
+    <Modal open={open} onClose={importando ? () => {} : onClose} title="Importar">
+      <div className="space-y-4">
+        <div>
+          <p className="mb-2 text-sm font-medium text-gray-700">O que vai importar?</p>
+          <div className="grid grid-cols-2 gap-2">
+            {Object.entries(TIPOS_CIWEB).map(([t, info]) => {
+              const Icone = info.icone;
+              const ativo = tipo === t;
+              return (
+                <button
+                  key={t}
+                  type="button"
+                  disabled={importando}
+                  onClick={() => escolherTipo(t)}
+                  className={`flex flex-col items-start gap-2 rounded-lg border p-3 text-left transition-colors disabled:opacity-60 ${
+                    ativo ? 'border-primary-500 bg-primary-50 ring-2 ring-primary-100' : 'border-gray-200 hover:bg-gray-50'
+                  }`}
+                >
+                  <span className={`flex h-8 w-8 items-center justify-center rounded-lg ${info.cor}`}>
+                    <Icone size={16} />
+                  </span>
+                  <span>
+                    <span className="block text-sm font-semibold text-gray-900">{info.label}</span>
+                    <span className="block text-xs text-gray-500">{info.descricao}</span>
+                  </span>
+                </button>
+              );
+            })}
+          </div>
+        </div>
+
+        <div>
+          <input
+            ref={inputRef}
+            type="file"
+            accept={TIPOS_CIWEB[tipo].aceita}
+            multiple
+            className="hidden"
+            onChange={(e) => {
+              setArquivos(Array.from(e.target.files || []));
+              e.target.value = '';
+            }}
+          />
+          <button
+            type="button"
+            disabled={importando}
+            onClick={() => inputRef.current?.click()}
+            className="flex w-full items-center gap-2 rounded-lg border border-dashed border-gray-300 px-3 py-3 text-sm text-gray-500 hover:bg-gray-50 disabled:opacity-60"
+          >
+            <UploadCloud size={16} className="shrink-0" />
+            {arquivos.length === 0
+              ? `Selecionar arquivo(s) — ${TIPOS_CIWEB[tipo].formato}`
+              : `${arquivos.length} arquivo(s) selecionado(s) — clique para trocar`}
+          </button>
+        </div>
+
+        {importando && (
+          <div>
+            <p className="truncate text-xs text-gray-500">{progresso.arquivo}</p>
+            <div className="mt-1.5 h-2 w-full overflow-hidden rounded-full bg-gray-100">
+              <div
+                className="h-full rounded-full bg-primary-600 transition-all duration-300"
+                style={{ width: `${progresso.total ? (progresso.atual / progresso.total) * 100 : 0}%` }}
+              />
+            </div>
+            <p className="mt-1 text-right text-xs text-gray-400">
+              {progresso.atual} de {progresso.total}
+            </p>
+          </div>
+        )}
+
+        <div className="flex justify-end gap-2 pt-1">
+          <Button type="button" variant="secondary" onClick={onClose} disabled={importando}>
+            Cancelar
+          </Button>
+          <Button type="button" onClick={importar} disabled={arquivos.length === 0} loading={importando}>
+            Importar
+          </Button>
+        </div>
+      </div>
+    </Modal>
+  );
+}
+
+// Operações > DFC Construtoras > CIWEB: os DCDs e Gerais importados do portal da Caixa, na
+// mesma tabela (cabeçalho azul, linhas compactas) das outras abas da DFC. O botão de importar
+// fica na barra de filtros da página (padrão do sistema) — esta aba expõe `abrirImportacao()`
+// via ref; a janela de importação vive aqui.
 const DfcCiwebTab = forwardRef(function DfcCiwebTab({ empresaId, search, tipo }, ref) {
   const alert = useAlert();
   const confirm = useConfirm();
-  const fileInputRef = useRef(null);
-  const [tipoArquivo, setTipoArquivo] = useState('DCD');
   const [importados, setImportados] = useState({ DCD: [], EXTRATO: [] });
   const [carregando, setCarregando] = useState(true);
   const [erroCarga, setErroCarga] = useState('');
-  const [importando, setImportando] = useState(false);
-  const [progresso, setProgresso] = useState({ atual: 0, total: 0, arquivo: '', tipo: '' });
+  const [modalAberto, setModalAberto] = useState(false);
   const [ocupado, setOcupado] = useState(''); // `${acao}|${tipo}|${contrato}` em andamento
 
   const carregar = useCallback(
@@ -134,80 +269,13 @@ const DfcCiwebTab = forwardRef(function DfcCiwebTab({ empresaId, search, tipo },
     carregar();
   }, [carregar]);
 
-  function abrirSeletor(t) {
-    setTipoArquivo(t);
-    // adia o clique pro `accept` do input já estar com o tipo novo
-    requestAnimationFrame(() => fileInputRef.current?.click());
-  }
-
-  async function exportarTudo(t) {
-    const api = TIPOS_CIWEB[t];
-    if (importados[t].length === 0) {
-      await alert({
-        title: `Nenhum ${api.labelLongo} importado`,
-        description: `Importe pelo menos um ${api.labelLongo} antes de exportar tudo.`,
-        variant: 'default',
-      });
-      return;
-    }
-    try {
-      baixarBlob(await api.exportarTodos(empresaId), `${t}-empresa-${empresaId}-todos.xlsx`);
-    } catch {
-      await alert({ title: 'Não foi possível exportar o Excel', description: 'Tente novamente em instantes.', variant: 'warning' });
-    }
-  }
-
-  useImperativeHandle(ref, () => ({ importar: abrirSeletor, exportarTudo }));
-
-  // Mesmo fluxo de PortalConstrutorasPage.jsx::handleFileSelected: vários arquivos, um por vez,
-  // com barra de progresso e um resumo no final.
-  async function handleArquivos(e) {
-    const arquivos = Array.from(e.target.files || []);
-    e.target.value = '';
-    if (arquivos.length === 0) return;
-    const t = tipoArquivo;
-    const api = TIPOS_CIWEB[t];
-
-    setImportando(true);
-    setProgresso({ atual: 0, total: arquivos.length, arquivo: '', tipo: t });
-    const sucessos = [];
-    const falhas = [];
-    try {
-      for (let i = 0; i < arquivos.length; i += 1) {
-        setProgresso({ atual: i + 1, total: arquivos.length, arquivo: arquivos[i].name, tipo: t });
-        try {
-          sucessos.push(await api.importar(empresaId, arquivos[i]));
-        } catch (err) {
-          falhas.push({ arquivo: arquivos[i], message: err.response?.data?.message || 'Erro ao processar o arquivo.' });
-        }
-      }
-      await carregar([t]);
-
-      if (arquivos.length === 1 && sucessos.length === 1) {
-        await alert({ title: `${api.labelLongo} importado com sucesso`, description: api.resumoImportacao(sucessos[0]), variant: 'default' });
-      } else if (arquivos.length === 1 && falhas.length === 1) {
-        await alert({ title: `Não foi possível importar o ${api.labelLongo}`, description: falhas[0].message, variant: 'warning' });
-      } else {
-        const linhas = [
-          ...sucessos.map((r) => `• ${api.resumoImportacao(r)}`),
-          ...falhas.map((f) => `• ${f.arquivo.name}: ${f.message}`),
-        ];
-        await alert({
-          title: `Importação concluída: ${sucessos.length} de ${arquivos.length} arquivo(s)`,
-          description: linhas.join('\n') || 'Nenhum arquivo processado.',
-          variant: falhas.length > 0 ? 'warning' : 'default',
-        });
-      }
-    } finally {
-      setImportando(false);
-    }
-  }
+  useImperativeHandle(ref, () => ({ abrirImportacao: () => setModalAberto(true) }));
 
   async function handleBaixar(envio) {
     const api = TIPOS_CIWEB[envio.tipo];
     setOcupado(`baixar|${envio.tipo}|${envio.contrato}`);
     try {
-      baixarBlob(await api.baixar(empresaId, envio.contrato), `${envio.tipo}-${envio.contrato}.${api.extensaoArquivo}`);
+      baixarBlob(await api.baixar(empresaId, envio.contrato), `${api.prefixoArquivo}-${envio.contrato}.${api.extensaoArquivo}`);
     } catch {
       await alert({ title: 'Não foi possível baixar o arquivo', description: 'Tente novamente em instantes.', variant: 'warning' });
     } finally {
@@ -219,7 +287,7 @@ const DfcCiwebTab = forwardRef(function DfcCiwebTab({ empresaId, search, tipo },
     const api = TIPOS_CIWEB[envio.tipo];
     setOcupado(`exportar|${envio.tipo}|${envio.contrato}`);
     try {
-      baixarBlob(await api.exportar(empresaId, envio.contrato), `${envio.tipo}-${envio.contrato}.xlsx`);
+      baixarBlob(await api.exportar(empresaId, envio.contrato), `${api.prefixoArquivo}-${envio.contrato}.xlsx`);
     } catch {
       await alert({ title: 'Não foi possível exportar o Excel', description: 'Tente novamente em instantes.', variant: 'warning' });
     } finally {
@@ -271,22 +339,13 @@ const DfcCiwebTab = forwardRef(function DfcCiwebTab({ empresaId, search, tipo },
       <div className="flex min-h-70 flex-col items-center justify-center rounded-card rounded-tl-none bg-white text-center shadow-card">
         <Globe size={28} className="mb-3 text-gray-300" />
         <h2 className="text-sm font-semibold text-gray-900">Selecione uma empresa</h2>
-        <p className="mt-1 max-w-sm text-xs text-gray-500">Escolha a empresa no filtro acima para ver e importar os DCDs e Extratos.</p>
+        <p className="mt-1 max-w-sm text-xs text-gray-500">Escolha a empresa no filtro acima para ver e importar os DCDs e Gerais.</p>
       </div>
     );
   }
 
   return (
     <div className="rounded-card rounded-tl-none bg-white shadow-card">
-      <input
-        ref={fileInputRef}
-        type="file"
-        accept={TIPOS_CIWEB[tipoArquivo].aceita}
-        multiple
-        className="hidden"
-        onChange={handleArquivos}
-      />
-
       {carregando ? (
         <div className="py-12 text-center text-sm text-gray-400">Carregando...</div>
       ) : erroCarga ? (
@@ -306,10 +365,10 @@ const DfcCiwebTab = forwardRef(function DfcCiwebTab({ empresaId, search, tipo },
           <Globe size={26} className="mb-1 text-gray-300" />
           <p className="text-sm text-gray-600">
             {importados.DCD.length + importados.EXTRATO.length === 0
-              ? 'Nenhum DCD ou Extrato importado ainda.'
+              ? 'Nenhum DCD ou Geral importado ainda.'
               : 'Nenhuma importação encontrada para esse filtro.'}
           </p>
-          <p className="max-w-sm text-xs text-gray-400">Use os botões Importar DCD / Importar Extrato acima.</p>
+          <p className="max-w-sm text-xs text-gray-400">Use o botão de importar no canto direito, acima.</p>
         </div>
       ) : (
         <div className="rounded-b-card pb-1">
@@ -371,28 +430,12 @@ const DfcCiwebTab = forwardRef(function DfcCiwebTab({ empresaId, search, tipo },
         </div>
       )}
 
-      {importando && (
-        <div className="fixed inset-0 z-50 flex items-center justify-center bg-gray-900/50 p-4">
-          <div className="w-full max-w-sm rounded-card bg-white p-6 shadow-card">
-            <div className="mb-4 flex h-11 w-11 items-center justify-center rounded-xl bg-blue-50 text-blue-600">
-              <FileText size={22} />
-            </div>
-            <h2 className="text-base font-semibold text-gray-900">
-              Importando arquivos {TIPOS_CIWEB[progresso.tipo]?.labelLongo || ''}
-            </h2>
-            <p className="mt-1.5 truncate text-sm text-gray-500">{progresso.arquivo || 'Preparando...'}</p>
-            <div className="mt-4 h-2 w-full overflow-hidden rounded-full bg-gray-100">
-              <div
-                className="h-full rounded-full bg-blue-600 transition-all duration-300"
-                style={{ width: `${progresso.total ? (progresso.atual / progresso.total) * 100 : 0}%` }}
-              />
-            </div>
-            <p className="mt-2 text-right text-xs text-gray-400">
-              {progresso.atual} de {progresso.total}
-            </p>
-          </div>
-        </div>
-      )}
+      <ImportarModal
+        open={modalAberto}
+        onClose={() => setModalAberto(false)}
+        empresaId={empresaId}
+        onImportado={(t) => carregar([t])}
+      />
     </div>
   );
 });

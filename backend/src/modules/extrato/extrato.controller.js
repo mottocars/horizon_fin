@@ -186,7 +186,7 @@ async function exportExcel(req, res, next) {
     res.setHeader('Content-Type', 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet');
     res.setHeader(
       'Content-Disposition',
-      `attachment; filename="Extrato-${req.params.contratoEmpreendimento}.xlsx"`
+      `attachment; filename="Geral-${req.params.contratoEmpreendimento}.xlsx"`
     );
 
     await workbook.xlsx.write(res);
@@ -202,7 +202,7 @@ async function exportExcelTodos(req, res, next) {
       req.params.empresaId
     );
     if (empreendimentos.length === 0) {
-      return res.status(404).json({ message: 'Nenhum extrato importado para esta empresa ainda.' });
+      return res.status(404).json({ message: 'Nenhum Geral dos Empreendimentos importado para esta empresa ainda.' });
     }
 
     const workbook = montarWorkbook(unidades, cronograma, proximosEventos);
@@ -210,7 +210,7 @@ async function exportExcelTodos(req, res, next) {
     res.setHeader('Content-Type', 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet');
     res.setHeader(
       'Content-Disposition',
-      `attachment; filename="Extrato-empresa-${req.params.empresaId}-todos.xlsx"`
+      `attachment; filename="Geral-empresa-${req.params.empresaId}-todos.xlsx"`
     );
 
     await workbook.xlsx.write(res);

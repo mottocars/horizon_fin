@@ -68,8 +68,8 @@ const IMPORT_CARDS = [
   },
   {
     key: 'EXTRATO',
-    title: 'Extrato dos Empreendimentos',
-    subtitle: 'Extrato completo por empreendimento',
+    title: 'Geral dos Empreendimentos',
+    subtitle: 'Geral completo por empreendimento',
     icon: FileBarChart,
   },
 ];
@@ -77,17 +77,20 @@ const IMPORT_CARDS = [
 const TIPO_LABELS = {
   EPR: 'EPR',
   DCD: 'DCD',
-  EXTRATO: 'Extrato Empreendimentos',
+  EXTRATO: 'Geral dos Empreendimentos',
 };
 
 const TABS = [
   { key: 'TODOS', label: 'Todos' },
   { key: 'EPR', label: 'EPR' },
   { key: 'DCD', label: 'DCD' },
-  { key: 'EXTRATO', label: 'Extrato' },
+  { key: 'EXTRATO', label: 'Geral' },
 ];
 
 // API por tipo — permite tratar EPR, DCD e EXTRATO de forma genérica nos handlers abaixo.
+// EXTRATO aparece pro usuário como "Geral" / "Geral dos Empreendimentos" (pedido do usuário);
+// por baixo a API e as tabelas continuam com o nome extrato. `prefixoArquivo` é o começo do
+// nome do arquivo baixado/exportado.
 const TIPO_API = {
   EPR: {
     listar: listEprEmpreendimentos,
@@ -122,6 +125,7 @@ const TIPO_API = {
     excluir: excluirExtrato,
     idField: 'contrato_empreendimento',
     extensaoArquivo: 'xls',
+    prefixoArquivo: 'GERAL',
     resumoImportacao: (r) =>
       `${r.quantidade_empreendimentos} empreendimento(s) importado(s): ${r.empreendimentos
         .map((e) => `${e.nome_empreendimento} (${e.quantidade_unidades} unidade(s))`)
@@ -266,7 +270,7 @@ export default function PortalConstrutorasPage() {
       const url = window.URL.createObjectURL(blob);
       const link = document.createElement('a');
       link.href = url;
-      link.download = `${envio.tipo}-${envio.numero_contrato}.${TIPO_API[envio.tipo].extensaoArquivo}`;
+      link.download = `${TIPO_API[envio.tipo].prefixoArquivo || envio.tipo}-${envio.numero_contrato}.${TIPO_API[envio.tipo].extensaoArquivo}`;
       document.body.appendChild(link);
       link.click();
       link.remove();
@@ -297,7 +301,7 @@ export default function PortalConstrutorasPage() {
       const url = window.URL.createObjectURL(blob);
       const link = document.createElement('a');
       link.href = url;
-      link.download = `${envio.tipo}-${envio.numero_contrato}.xlsx`;
+      link.download = `${TIPO_API[envio.tipo].prefixoArquivo || envio.tipo}-${envio.numero_contrato}.xlsx`;
       document.body.appendChild(link);
       link.click();
       link.remove();
@@ -357,7 +361,7 @@ export default function PortalConstrutorasPage() {
       const url = window.URL.createObjectURL(blob);
       const link = document.createElement('a');
       link.href = url;
-      link.download = `${tipoExportarTudo}-empresa-${empresaId}-todos.xlsx`;
+      link.download = `${TIPO_API[tipoExportarTudo].prefixoArquivo || tipoExportarTudo}-empresa-${empresaId}-todos.xlsx`;
       document.body.appendChild(link);
       link.click();
       link.remove();

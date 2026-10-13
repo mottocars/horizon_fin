@@ -4,7 +4,6 @@ import {
   Banknote,
   Building2,
   Calculator,
-  Download,
   Globe,
   HandCoins,
   HardHat,
@@ -12,7 +11,7 @@ import {
   Plus,
   Save,
   Search,
-  Sheet,
+  Upload,
   SlidersHorizontal,
   Tags,
   Wallet,
@@ -167,8 +166,8 @@ export default function DfcConstrutorasPage() {
   // na URL (mesma convenção das buscas da DRE).
   const [buscaCentros, setBuscaCentros] = useState('');
 
-  // Aba CIWEB: busca e filtro de tipo (só conveniência de navegador, fora da URL); os botões de
-  // importar/exportar chamam a aba por ref (o seletor de arquivo e o progresso vivem lá).
+  // Aba CIWEB: busca e filtro de tipo (só conveniência de navegador, fora da URL); o botão de
+  // importar chama a aba por ref (a janela de importação vive lá).
   const [buscaCiweb, setBuscaCiweb] = useState('');
   const [tipoCiweb, setTipoCiweb] = useState('');
   const ciwebTabRef = useRef(null);
@@ -219,7 +218,7 @@ export default function DfcConstrutorasPage() {
                     disabled={!empresaId}
                     options={[
                       { value: 'DCD', label: 'DCD' },
-                      { value: 'EXTRATO', label: 'Extrato' },
+                      { value: 'EXTRATO', label: 'Geral' },
                     ]}
                     placeholder="Todos"
                   />
@@ -287,26 +286,18 @@ export default function DfcConstrutorasPage() {
           </div>
 
           {abaAtiva === 'ciweb' && (
-            <div className="flex shrink-0 flex-wrap items-center gap-2">
-              {tipoCiweb && (
-                <Button
-                  type="button"
-                  variant="secondary"
-                  onClick={() => ciwebTabRef.current?.exportarTudo(tipoCiweb)}
-                  disabled={!empresaId}
-                >
-                  <Sheet size={16} className="text-emerald-600" />
-                  Exportar Tudo
-                </Button>
-              )}
-              <Button type="button" onClick={() => ciwebTabRef.current?.importar('DCD')} disabled={!empresaId}>
-                <Download size={16} />
-                Importar DCD
-              </Button>
-              <Button type="button" onClick={() => ciwebTabRef.current?.importar('EXTRATO')} disabled={!empresaId}>
-                <Download size={16} />
-                Importar Extrato
-              </Button>
+            <div className="flex shrink-0 items-center gap-2">
+              {/* Só o ícone (mesmo botão do "gerar plano de contas" da DRE); abre a janela onde se
+                  escolhe DCD ou Geral e os arquivos. */}
+              <button
+                type="button"
+                onClick={() => ciwebTabRef.current?.abrirImportacao()}
+                disabled={!empresaId}
+                title="Importar DCD ou Geral"
+                className="flex shrink-0 items-center justify-center rounded-lg bg-primary-600 p-2 text-white transition-colors hover:bg-primary-700 disabled:cursor-not-allowed disabled:opacity-60"
+              >
+                <Upload size={18} />
+              </button>
             </div>
           )}
 
