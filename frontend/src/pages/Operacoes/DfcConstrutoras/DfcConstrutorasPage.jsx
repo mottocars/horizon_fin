@@ -1,4 +1,4 @@
-import { useEffect, useState } from 'react';
+import { useEffect, useRef, useState } from 'react';
 import { useSearchParams } from 'react-router-dom';
 import {
   Banknote,
@@ -7,17 +7,20 @@ import {
   HandCoins,
   HardHat,
   ListTree,
+  Plus,
   SlidersHorizontal,
   Tags,
   Wallet,
 } from 'lucide-react';
 import Card from '../../../components/Card';
 import Tabs from '../../../components/Tabs';
+import Button from '../../../components/Button';
 import SearchableSelect from '../../../components/SearchableSelect';
 import { listEmpresas } from '../../../api/empresas.api';
 import { nomeExibicaoEmpresa } from '../../../utils/empresa';
 import { useEmpresaTravada } from '../../../hooks/useEmpresaTravada';
 import AbaEmConstrucao from './AbaEmConstrucao';
+import DfcMascarasTab from './DfcMascarasTab';
 
 // Mesmo padrão de DreGerencialPage.jsx: o `{ divider: true }` separa a DFC (a demonstração em
 // si) das abas de cadastro/parâmetro que dão suporte a ela, que ficam juntas, sem divisor entre
@@ -78,6 +81,10 @@ export default function DfcConstrutorasPage() {
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [loadingEmpresas, empresas, empresaId]);
 
+  // Botão "Nova máscara" fica no topo (padrão do resto do sistema, igual "Nova categoria" na
+  // DRE), mas o campo de criar vive em DfcMascarasTab.jsx — dispara por ref.
+  const mascarasTabRef = useRef(null);
+
   return (
     <div className="space-y-4">
       <Card className="shrink-0">
@@ -95,13 +102,26 @@ export default function DfcConstrutorasPage() {
               />
             </div>
           </div>
+
+          {abaAtiva === 'mascaras' && (
+            <div className="flex shrink-0 items-center gap-2">
+              <Button type="button" onClick={() => mascarasTabRef.current?.abrirNova()} disabled={!empresaId}>
+                <Plus size={16} />
+                Nova máscara
+              </Button>
+            </div>
+          )}
         </div>
       </Card>
 
       <div>
         <Tabs tabs={TABS} activeId={tabAtiva.id} onChange={(aba) => atualizarParams({ aba })} />
 
-        <AbaEmConstrucao key={tabAtiva.id} empresaId={empresaId} icon={tabAtiva.icon} titulo={tabAtiva.label} />
+        {tabAtiva.id === 'mascaras' ? (
+          <DfcMascarasTab ref={mascarasTabRef} empresaId={empresaId} />
+        ) : (
+          <AbaEmConstrucao key={tabAtiva.id} empresaId={empresaId} icon={tabAtiva.icon} titulo={tabAtiva.label} />
+        )}
       </div>
     </div>
   );

@@ -2862,3 +2862,23 @@ CREATE TABLE projetos_historico (
 );
 CREATE INDEX idx_projetos_historico_card ON projetos_historico (card_id);
 
+
+-- ─── Operações > DFC Construtoras > Máscaras — ver database/migrations/2026-10-13-dfc-mascaras.sql ───
+-- Estrutura da DFC por empresa em 2 níveis: parent_id NULL = nível 1. Reordenável arrastando
+-- (inclusive trocando de nível/grupo); o limite de 2 níveis é garantido no backend.
+CREATE TABLE dfc_mascaras (
+    id            SERIAL PRIMARY KEY,
+    empresa_id    INTEGER NOT NULL REFERENCES empresas(id) ON DELETE CASCADE,
+    parent_id     INTEGER REFERENCES dfc_mascaras(id) ON DELETE CASCADE,
+    ordem         INTEGER NOT NULL,
+    descricao     VARCHAR(150) NOT NULL,
+    criado_em     TIMESTAMP DEFAULT NOW(),
+    atualizado_em TIMESTAMP DEFAULT NOW(),
+    CHECK (parent_id IS NULL OR parent_id <> id)
+);
+
+CREATE INDEX idx_dfc_mascaras_empresa ON dfc_mascaras (empresa_id, parent_id, ordem);
+
+CREATE TRIGGER trg_dfc_mascaras_atualizado_em
+    BEFORE UPDATE ON dfc_mascaras
+    FOR EACH ROW EXECUTE FUNCTION set_atualizado_em();
