@@ -254,6 +254,7 @@ export default function DfcConstrutorasPage() {
             centro={centroSelecionado}
             versaoSelecionada={versaoSelecionada}
             versaoMaisRecenteId={versoes[0]?.id ?? null}
+            versaoVigenteNumero={versoes[0]?.versao ?? null}
             onVersaoCriada={carregarVersoes}
             onStatusChange={setStatusParametros}
           />

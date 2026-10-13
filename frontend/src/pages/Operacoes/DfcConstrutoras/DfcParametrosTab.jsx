@@ -33,7 +33,7 @@ function SectionHeader({ selo, titulo, texto }) {
 // de filtros da página (DfcConstrutorasPage.jsx): esta aba expõe `salvar()` via ref e avisa o
 // estado (`podeSalvar`/`salvando`) via `onStatusChange`.
 const DfcParametrosTab = forwardRef(function DfcParametrosTab(
-  { empresaId, centro, versaoSelecionada, versaoMaisRecenteId, onVersaoCriada, onStatusChange },
+  { empresaId, centro, versaoSelecionada, versaoMaisRecenteId, versaoVigenteNumero, onVersaoCriada, onStatusChange },
   ref
 ) {
   const siengeId = centro?.sienge_id ?? null;
@@ -42,6 +42,9 @@ const DfcParametrosTab = forwardRef(function DfcParametrosTab(
   const [salvando, setSalvando] = useState(false);
   const [erro, setErro] = useState('');
   const [sucesso, setSucesso] = useState('');
+  // Valores da versão vigente (a mais recente) — publicar só libera se algo estiver diferente
+  // dela. null = empreendimento ainda sem nenhuma versão.
+  const [valoresVigentes, setValoresVigentes] = useState(null);
 
   const versaoNumero = versaoSelecionada?.versao ?? null;
 
@@ -69,19 +72,38 @@ const DfcParametrosTab = forwardRef(function DfcParametrosTab(
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [empresaId, siengeId, versaoNumero]);
 
+  useEffect(() => {
+    if (!empresaId || !siengeId || !versaoVigenteNumero) {
+      setValoresVigentes(null);
+      return;
+    }
+    setValoresVigentes(null);
+    getVersaoParametrosDfc(empresaId, siengeId, versaoVigenteNumero)
+      .then((detalhe) => setValoresVigentes(valoresDaVersao(detalhe)))
+      .catch(() => setValoresVigentes(null));
+  }, [empresaId, siengeId, versaoVigenteNumero]);
+
   function alterar(id, valor) {
     setValores((prev) => ({ ...prev, [id]: valor }));
   }
 
-  // Pendência, uma por vez, na ordem dos campos na tela (mesma ideia do Motor de Risco).
-  const faltando = CAMPOS_EDITAVEIS.find((c) => valores[c.id] === '' || valores[c.id] === null);
-  let avisoPendencia = '';
-  if (faltando) avisoPendencia = `Preencha "${faltando.label}" antes de publicar.`;
-  else if (valores.data_fim_ciclo <= valores.data_inicio_ciclo) {
-    avisoPendencia = 'A Data Fim do Ciclo precisa ser depois da Data Início do Ciclo.';
-  }
+  // "Publicar Versão" só libera com todos os parâmetros preenchidos e algum diferente da versão
+  // vigente (pedido do usuário: sem aviso de "preencha X" — os campos em branco já ficam em
+  // âmbar). A única mensagem que sobra é a das datas do ciclo invertidas, que senão travaria o
+  // botão sem explicação.
+  const todosPreenchidos = CAMPOS_EDITAVEIS.every((c) => valores[c.id] !== '' && valores[c.id] !== null);
+  const datasInvertidas = todosPreenchidos && valores.data_fim_ciclo <= valores.data_inicio_ciclo;
+  const alterado = !valoresVigentes || CAMPOS_EDITAVEIS.some((c) => valores[c.id] !== valoresVigentes[c.id]);
+  const aguardandoVigente = Boolean(versaoVigenteNumero) && !valoresVigentes;
 
-  const podeSalvar = Boolean(empresaId && siengeId) && !carregando && !salvando && !avisoPendencia;
+  const podeSalvar =
+    Boolean(empresaId && siengeId) &&
+    !carregando &&
+    !salvando &&
+    !aguardandoVigente &&
+    todosPreenchidos &&
+    !datasInvertidas &&
+    alterado;
 
   async function handleSalvar() {
     setErro('');
@@ -141,7 +163,7 @@ const DfcParametrosTab = forwardRef(function DfcParametrosTab(
         <p className="mt-0.5 text-xs text-gray-500">
           {editandoVersaoAntiga
             ? 'Você está olhando uma versão antiga. Ajustar e publicar cria uma versão nova — o histórico nunca é sobrescrito.'
-            : 'Preencha os parâmetros abaixo e publique quando terminar. Cada publicação cria uma versão nova.'}
+            : 'Preencha os parâmetros abaixo e publique quando terminar. Só gera versão nova se algum parâmetro mudar.'}
         </p>
 
         {erro && (
@@ -156,10 +178,10 @@ const DfcParametrosTab = forwardRef(function DfcParametrosTab(
             {sucesso}
           </div>
         )}
-        {!erro && !sucesso && avisoPendencia && (
+        {!erro && !sucesso && datasInvertidas && (
           <div className="mt-3 flex items-center gap-2 rounded-lg bg-amber-50 px-3 py-2 text-sm text-amber-600">
             <AlertTriangle size={15} className="shrink-0" />
-            {avisoPendencia}
+            A Data Fim do Ciclo precisa ser depois da Data Início do Ciclo.
           </div>
         )}
       </Card>

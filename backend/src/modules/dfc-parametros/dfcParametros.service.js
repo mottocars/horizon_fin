@@ -59,9 +59,9 @@ async function getVersao(empresaId, siengeId, versao, db = pool) {
   return rows[0] || null;
 }
 
-// Cria a próxima versão do empreendimento (MAX(versao) + 1 — nunca sobrescreve), mesmo que os
-// valores sejam iguais aos da anterior: é assim que o histórico fica completo (mesmo esquema de
-// motorRisco.service.js::criarVersao).
+// Cria a próxima versão do empreendimento (MAX(versao) + 1 — nunca sobrescreve), mesmo esquema
+// de motorRisco.service.js::criarVersao — mas, diferente de lá, recusa uma versão idêntica à
+// vigente.
 async function criarVersao(empresaId, siengeId, usuarioId, dados) {
   const client = await pool.connect();
   try {
@@ -80,6 +80,16 @@ async function criarVersao(empresaId, siengeId, usuarioId, dados) {
       [empresaId, siengeId]
     );
     const proxima = maxRows[0].proxima;
+
+    // Só gera versão nova se algum parâmetro mudou em relação à vigente (pedido do usuário).
+    // NUMERIC chega como texto ("1234.50") — compara como número; DATE já é 'AAAA-MM-DD'.
+    if (proxima > 1) {
+      const vigente = await getVersao(empresaId, siengeId, proxima - 1, client);
+      const igual = CAMPOS.every((c) =>
+        typeof dados[c] === 'string' ? dados[c] === vigente[c] : Number(dados[c]) === Number(vigente[c])
+      );
+      if (igual) throw erro(409, 'Nenhum parâmetro foi alterado em relação à versão vigente.');
+    }
 
     await client.query(
       `INSERT INTO dfc_parametros_versoes (empresa_id, sienge_id, versao, ${CAMPOS.join(', ')}, criado_por_usuario_id)
