@@ -1,4 +1,4 @@
-import { useEffect, useLayoutEffect, useMemo, useRef, useState } from 'react';
+import { Fragment, useEffect, useLayoutEffect, useMemo, useRef, useState } from 'react';
 import { createPortal } from 'react-dom';
 import { Check, ChevronDown, Search } from 'lucide-react';
 
@@ -39,6 +39,11 @@ export default function SearchableSelect({
   // marcadas, por "Desmarcar todos". Usado nas telas em que o filtro nasce
   // com tudo marcado (ex.: EmpreendimentosMasaPage.jsx).
   selecionarTodos = false,
+  // Largura mínima do painel de opções, em px — o gatilho (campo) continua do tamanho dele, só o
+  // painel que abre fica mais largo (ex.: Máscara DFC no Plano Contas da DFC Construtoras).
+  larguraPainel = 0,
+  // Classe de altura máxima da lista de opções (padrão max-h-60).
+  alturaLista = 'max-h-60',
 }) {
   const [open, setOpen] = useState(false);
   const [busca, setBusca] = useState('');
@@ -65,7 +70,7 @@ export default function SearchableSelect({
     const el = larguraRef?.current || containerRef.current;
     if (!el) return;
     const rect = el.getBoundingClientRect();
-    const width = Math.max(rect.width, LARGURA_MINIMA_PAINEL);
+    const width = Math.min(Math.max(rect.width, LARGURA_MINIMA_PAINEL, larguraPainel), window.innerWidth - 16);
     // Não deixa o painel vazar pela borda direita da viewport quando o
     // gatilho está perto dela (ex.: filtro de coluna no fim de uma tabela).
     const left = Math.min(rect.left, window.innerWidth - width - 8);
@@ -111,10 +116,14 @@ export default function SearchableSelect({
     return () => document.removeEventListener('mousedown', handleClickFora);
   }, []);
 
+  // Opção com `grupo` (texto): a lista mostra um título não clicável com o nome do grupo antes da
+  // primeira opção dele (as opções vêm já ordenadas por grupo). A busca também acha pelo grupo.
   const filtrados = useMemo(() => {
     const termo = busca.trim().toLowerCase();
     if (!termo) return options;
-    return options.filter((o) => o.label.toLowerCase().includes(termo));
+    return options.filter(
+      (o) => o.label.toLowerCase().includes(termo) || (o.grupo || '').toLowerCase().includes(termo)
+    );
   }, [busca, options]);
 
   function abrir() {
@@ -186,7 +195,7 @@ export default function SearchableSelect({
                 className="w-full rounded-md border border-gray-200 py-1.5 pl-7 pr-2 text-sm focus:outline-none focus:ring-2 focus:ring-primary-100"
               />
             </div>
-            <div className="max-h-60 overflow-auto py-1">
+            <div className={`${alturaLista} overflow-auto py-1`}>
               {multiple && selecionarTodos && (
                 <button
                   type="button"
@@ -218,30 +227,37 @@ export default function SearchableSelect({
               {filtrados.length === 0 ? (
                 <p className="px-3 py-2 text-sm text-gray-400">{emptyMessage}</p>
               ) : (
-                filtrados.map((opcao) => {
+                filtrados.map((opcao, i) => {
                   const ativo = multiple
                     ? valoresSelecionados.some((v) => String(v) === String(opcao.value))
                     : String(opcao.value) === String(value);
+                  const abreGrupo = opcao.grupo && opcao.grupo !== filtrados[i - 1]?.grupo;
                   return (
-                    <button
-                      key={opcao.value}
-                      type="button"
-                      onClick={() => selecionar(opcao)}
-                      className={`flex w-full items-center gap-2 px-3 py-2 text-left text-sm hover:bg-primary-50 ${
-                        ativo ? 'bg-primary-50 text-primary-600' : 'text-gray-900'
-                      }`}
-                    >
-                      {multiple && (
-                        <span
-                          className={`flex h-4 w-4 shrink-0 items-center justify-center rounded border ${
-                            ativo ? 'border-primary-600 bg-primary-600 text-white' : 'border-gray-300'
-                          }`}
-                        >
-                          {ativo && <Check size={11} strokeWidth={3} />}
-                        </span>
+                    <Fragment key={opcao.value}>
+                      {abreGrupo && (
+                        <p className="px-3 pb-1 pt-2.5 text-[11px] font-semibold uppercase tracking-wide text-gray-500">
+                          {opcao.grupo}
+                        </p>
                       )}
-                      <span className="truncate">{opcao.label}</span>
-                    </button>
+                      <button
+                        type="button"
+                        onClick={() => selecionar(opcao)}
+                        className={`flex w-full items-center gap-2 py-2 pr-3 text-left text-sm hover:bg-primary-50 ${
+                          opcao.grupo ? 'pl-6' : 'pl-3'
+                        } ${ativo ? 'bg-primary-50 text-primary-600' : 'text-gray-900'}`}
+                      >
+                        {multiple && (
+                          <span
+                            className={`flex h-4 w-4 shrink-0 items-center justify-center rounded border ${
+                              ativo ? 'border-primary-600 bg-primary-600 text-white' : 'border-gray-300'
+                            }`}
+                          >
+                            {ativo && <Check size={11} strokeWidth={3} />}
+                          </span>
+                        )}
+                        <span className="truncate">{opcao.label}</span>
+                      </button>
+                    </Fragment>
                   );
                 })
               )}

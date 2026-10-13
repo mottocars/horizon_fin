@@ -132,9 +132,10 @@ export default function DfcPlanoContasTab({ empresaId, search = '', refreshToken
     setSalvoAlgumaVez(false);
   }, [empresaId]);
 
-  // Só as máscaras de nível 2, na ordem da aba Máscaras.
+  // Só as máscaras de nível 2 são escolhíveis, na ordem da aba Máscaras — agrupadas pelo nível 1
+  // (título no painel da combobox, pedido do usuário).
   const opcoesMascara = useMemo(
-    () => mascaras.flatMap((g) => g.filhos.map((f) => ({ value: f.id, label: f.descricao }))),
+    () => mascaras.flatMap((g) => g.filhos.map((f) => ({ value: f.id, label: f.descricao, grupo: g.descricao }))),
     [mascaras]
   );
 
@@ -319,6 +320,8 @@ export default function DfcPlanoContasTab({ empresaId, search = '', refreshToken
                       placeholder="Selecione a máscara"
                       emptyMessage="Nenhuma máscara de nível 2. Cadastre na aba Máscaras."
                       corClasses={corCampo(classificacao.mascara_id)}
+                      larguraPainel={460}
+                      alturaLista="max-h-96"
                     />
                     <SearchableSelect
                       value={classificacao.origem_projecao ?? ''}
