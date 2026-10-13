@@ -321,7 +321,7 @@ export default function DfcPlanoContasTab({ empresaId, search = '', refreshToken
                       emptyMessage="Nenhuma máscara de nível 2. Cadastre na aba Máscaras."
                       corClasses={corCampo(classificacao.mascara_id)}
                       larguraPainel={460}
-                      alturaLista="max-h-96"
+                      alturaLista="max-h-64"
                     />
                     <SearchableSelect
                       value={classificacao.origem_projecao ?? ''}

@@ -51,6 +51,7 @@ export default function SearchableSelect({
   const containerRef = useRef(null);
   const dropdownRef = useRef(null);
   const inputRef = useRef(null);
+  const listaRef = useRef(null);
 
   const valoresSelecionados = multiple ? (Array.isArray(value) ? value : []) : null;
   const selecionado = multiple ? null : options.find((o) => String(o.value) === String(value));
@@ -92,14 +93,28 @@ export default function SearchableSelect({
   }, [open]);
 
   // Depois de medido e renderizado, se não couber abaixo do gatilho até o
-  // fim da viewport, vira pra cima dele.
+  // fim da viewport, vira pra cima dele. Se não couber nem embaixo nem em
+  // cima, fica do lado com mais espaço e a lista encolhe (com rolagem) até
+  // caber — o painel nunca passa da tela.
   useLayoutEffect(() => {
-    if (!open || !coords || !dropdownRef.current) return;
+    if (!open || !coords || !dropdownRef.current || coords.viradoParaCima !== undefined) return;
     const alturaPainel = dropdownRef.current.offsetHeight;
-    const cabeAbaixo = coords.top + alturaPainel <= window.innerHeight - 8;
-    if (!cabeAbaixo && coords.gatilhoTop - alturaPainel - 4 > 0 && coords.viradoParaCima === undefined) {
+    const espacoAbaixo = window.innerHeight - 8 - coords.top;
+    const espacoAcima = coords.gatilhoTop - 4 - 8;
+    if (alturaPainel <= espacoAbaixo) return;
+    if (alturaPainel <= espacoAcima) {
       setCoords((prev) => ({ ...prev, top: prev.gatilhoTop - alturaPainel - 4, viradoParaCima: true }));
+      return;
     }
+    const resto = alturaPainel - (listaRef.current?.offsetHeight || 0);
+    const paraCima = espacoAcima > espacoAbaixo;
+    const maxLista = Math.max(80, (paraCima ? espacoAcima : espacoAbaixo) - resto);
+    setCoords((prev) => ({
+      ...prev,
+      maxLista,
+      top: paraCima ? prev.gatilhoTop - (resto + maxLista) - 4 : prev.top,
+      viradoParaCima: paraCima,
+    }));
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [open, coords?.top, coords?.left]);
 
@@ -195,7 +210,11 @@ export default function SearchableSelect({
                 className="w-full rounded-md border border-gray-200 py-1.5 pl-7 pr-2 text-sm focus:outline-none focus:ring-2 focus:ring-primary-100"
               />
             </div>
-            <div className={`${alturaLista} overflow-auto py-1`}>
+            <div
+              ref={listaRef}
+              className={`${alturaLista} overflow-auto py-1`}
+              style={coords.maxLista ? { maxHeight: coords.maxLista } : undefined}
+            >
               {multiple && selecionarTodos && (
                 <button
                   type="button"
