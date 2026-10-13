@@ -1,6 +1,6 @@
 const pool = require('../../config/db');
 
-const COLUNAS = `sienge_id, name, apelido, status, natureza, codigo_contrato_caixa, codigo_prevision`;
+const COLUNAS = `sienge_id, name, apelido, status, natureza, projeta_dfc, codigo_contrato_caixa, codigo_prevision`;
 
 // Todos os centros de custo da empresa (ativos e inativos), na mesma ordem da listagem de
 // Cadastros > Centros de Custos (centros.service.js::listItens).
@@ -27,13 +27,17 @@ async function listContratosCaixa(empresaId) {
   return rows;
 }
 
-async function update(empresaId, siengeId, { natureza, codigo_contrato_caixa: contrato, codigo_prevision: prevision }) {
+async function update(
+  empresaId,
+  siengeId,
+  { natureza, projeta_dfc: projetaDfc, codigo_contrato_caixa: contrato, codigo_prevision: prevision }
+) {
   const { rows } = await pool.query(
     `UPDATE centros_custo_sienge
-        SET natureza = $3, codigo_contrato_caixa = $4, codigo_prevision = $5
+        SET natureza = $3, projeta_dfc = $4, codigo_contrato_caixa = $5, codigo_prevision = $6
       WHERE empresa_id = $1 AND sienge_id = $2
       RETURNING ${COLUNAS}`,
-    [empresaId, siengeId, natureza, contrato, prevision]
+    [empresaId, siengeId, natureza, projetaDfc, contrato, prevision]
   );
   return rows[0] || null;
 }

@@ -722,6 +722,8 @@ CREATE TABLE centros_custo_sienge (
     faixa                      VARCHAR(10),
     -- OBRA | ADMINISTRATIVO (NULL = não classificado) — aba Centros Custos da DFC Construtoras.
     natureza                   VARCHAR(15) CHECK (natureza IN ('OBRA', 'ADMINISTRATIVO')),
+    -- Flag "Projeta DFC" (aba Centros Custos) — só os marcados aparecem nos Parâmetros da DFC.
+    projeta_dfc                BOOLEAN NOT NULL DEFAULT FALSE,
     PRIMARY KEY (sienge_id, empresa_id)
 );
 

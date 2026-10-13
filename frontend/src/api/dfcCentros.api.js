@@ -14,8 +14,8 @@ export function listProjetosPrevisionDfc(empresaId) {
   return http.get(`/dfc-centros/${empresaId}/projetos-prevision`).then((res) => res.data);
 }
 
-export function updateCentroCustoDfc(empresaId, siengeId, { natureza, codigo_contrato_caixa, codigo_prevision }) {
+export function updateCentroCustoDfc(empresaId, siengeId, { natureza, projeta_dfc, codigo_contrato_caixa, codigo_prevision }) {
   return http
-    .put(`/dfc-centros/${empresaId}/${siengeId}`, { natureza, codigo_contrato_caixa, codigo_prevision })
+    .put(`/dfc-centros/${empresaId}/${siengeId}`, { natureza, projeta_dfc, codigo_contrato_caixa, codigo_prevision })
     .then((res) => res.data);
 }

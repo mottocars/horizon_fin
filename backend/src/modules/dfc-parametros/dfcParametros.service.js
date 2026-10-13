@@ -22,7 +22,8 @@ function erro(status, message) {
   return e;
 }
 
-// Obras da empresa (centros de custo com Tipo = Obra na aba Centros Custos — pedido do usuário),
+// Obras da empresa que projetam DFC (na aba Centros Custos: Tipo = Obra e "Projeta DFC" marcado —
+// pedido do usuário),
 // pro filtro "Centro de Custo" e pro resumo da aba Parâmetros, com a versão vigente dos
 // parâmetros de cada uma (null = nenhum parâmetro registrado ainda). `numero_unidades` do
 // cadastro do centro serve de sugestão no primeiro preenchimento.
@@ -37,7 +38,7 @@ async function listCentros(empresaId) {
           ORDER BY p.versao DESC
           LIMIT 1
        ) v ON TRUE
-      WHERE c.empresa_id = $1 AND c.natureza = 'OBRA'
+      WHERE c.empresa_id = $1 AND c.natureza = 'OBRA' AND c.projeta_dfc
       ORDER BY c.sienge_id::text ASC`,
     [empresaId]
   );
@@ -80,12 +81,12 @@ async function criarVersao(empresaId, siengeId, usuarioId, dados) {
     // Trava o centro de custo: confere que ele é da empresa e serializa duas gravações
     // simultâneas do mesmo empreendimento (nunca duas linhas com o mesmo número de versão).
     const { rows: centro } = await client.query(
-      'SELECT natureza FROM centros_custo_sienge WHERE empresa_id = $1 AND sienge_id = $2 FOR UPDATE',
+      'SELECT natureza, projeta_dfc FROM centros_custo_sienge WHERE empresa_id = $1 AND sienge_id = $2 FOR UPDATE',
       [empresaId, siengeId]
     );
     if (!centro[0]) throw erro(404, 'Centro de custo não encontrado nesta empresa.');
-    if (centro[0].natureza !== 'OBRA') {
-      throw erro(400, 'Parâmetros só para centros de custo do tipo Obra (aba Centros Custos).');
+    if (centro[0].natureza !== 'OBRA' || !centro[0].projeta_dfc) {
+      throw erro(400, 'Parâmetros só para centros de custo do tipo Obra com "Projeta DFC" marcado (aba Centros Custos).');
     }
 
     const { rows: maxRows } = await client.query(

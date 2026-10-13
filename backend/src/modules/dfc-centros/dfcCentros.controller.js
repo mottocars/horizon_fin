@@ -7,7 +7,7 @@ const siengeIdSchema = z.coerce.number().int().positive('Centro de custo inváli
 
 const emptyToNull = (v) => (v === '' || v === undefined ? null : v);
 
-// Os 3 campos da aba, sempre juntos (a linha inteira vem do estado da tela). Contrato Caixa e
+// Os campos da aba, sempre juntos (a linha inteira vem do estado da tela). Contrato Caixa e
 // Código Prevision são as MESMAS colunas do cadastro do centro de custo (Cadastros > Centros de
 // Custos > Código Contrato Caixa / Código Prevision) — gravar aqui muda lá também.
 const updateSchema = z.object({
@@ -15,6 +15,7 @@ const updateSchema = z.object({
     emptyToNull,
     z.enum(['OBRA', 'ADMINISTRATIVO'], { errorMap: () => ({ message: 'Escolha Obra ou Administrativo.' }) }).nullable()
   ),
+  projeta_dfc: z.boolean({ invalid_type_error: 'Projeta DFC inválido.' }).default(false),
   codigo_contrato_caixa: z.preprocess(emptyToNull, z.coerce.string().max(50).nullable()),
   codigo_prevision: z.preprocess(emptyToNull, z.coerce.string().max(50).nullable()),
 });

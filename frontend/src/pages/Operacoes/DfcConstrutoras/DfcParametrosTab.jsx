@@ -31,7 +31,8 @@ function formatarData(data) {
   return new Date(data).toLocaleDateString('pt-BR');
 }
 
-// Resumo (lado direito): todas as obras da empresa (Tipo = Obra na aba Centros Custos), se já
+// Resumo (lado direito): todas as obras da empresa que projetam DFC (Tipo = Obra e "Projeta DFC"
+// marcado na aba Centros Custos), se já
 // têm parâmetros e qual a versão vigente. Clicar numa obra seleciona ela no filtro do topo.
 function ResumoObras({ centros, carregando, siengeIdSelecionado, onSelecionar }) {
   const comParametros = centros.filter((c) => c.versao_vigente).length;
@@ -47,7 +48,7 @@ function ResumoObras({ centros, carregando, siengeIdSelecionado, onSelecionar })
       />
       {!carregando && centros.length === 0 ? (
         <p className="py-6 text-center text-xs text-gray-400">
-          Nenhum centro de custo do tipo Obra. Classifique na aba Centros Custos.
+          Nenhuma obra com "Projeta DFC" marcado. Marque na aba Centros Custos.
         </p>
       ) : (
         <div className="-mx-2 mt-2 max-h-[70vh] overflow-y-auto">

@@ -14,7 +14,7 @@ const NATUREZAS = [
 ];
 
 // Mesma grade no cabeçalho e nas linhas, pra as comboboxes ficarem em coluna.
-const GRADE = 'grid grid-cols-[minmax(0,1fr)_190px_300px_300px] items-center gap-3';
+const GRADE = 'grid grid-cols-[minmax(0,1fr)_190px_100px_300px_300px] items-center gap-3';
 
 // Mesmo par de cores dos campos obrigatórios do resto da DFC (CampoParametro.jsx): em branco
 // fica âmbar, pra achar de relance o que falta classificar; preenchido fica azul claro.
@@ -181,6 +181,7 @@ export default function DfcCentrosTab({ empresaId, search }) {
           >
             <span>Centro de custo</span>
             <span>Tipo</span>
+            <span className="text-center">Projeta DFC</span>
             <span>Contrato Caixa</span>
             <span>
               Código Prevision
@@ -218,6 +219,16 @@ export default function DfcCentrosTab({ empresaId, search }) {
                   placeholder="Selecione"
                   corClasses={corCampo(centro.natureza)}
                 />
+                {/* Só os marcados (e do tipo Obra) aparecem na aba Parâmetros. */}
+                <span className="flex justify-center">
+                  <input
+                    type="checkbox"
+                    checked={Boolean(centro.projeta_dfc)}
+                    onChange={(e) => alterar(centro, { projeta_dfc: e.target.checked })}
+                    title="Projeta DFC"
+                    className="h-4 w-4 cursor-pointer rounded border-gray-300 text-primary-600 focus:ring-primary-100"
+                  />
+                </span>
                 {obra ? (
                   <SearchableSelect
                     value={centro.codigo_contrato_caixa || ''}
