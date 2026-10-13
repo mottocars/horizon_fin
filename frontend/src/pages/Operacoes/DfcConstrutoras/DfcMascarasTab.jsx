@@ -198,21 +198,17 @@ const DfcMascarasTab = forwardRef(function DfcMascarasTab({ empresaId }, ref) {
   const [arrastado, setArrastado] = useState(null);
   const [alvo, setAlvo] = useState(null);
 
-  const carregar = useCallback(
-    (expandirTudo = false) => {
-      if (!empresaId) return;
-      setCarregando(true);
-      setErroCarga('');
-      listDfcMascaras(empresaId)
-        .then((dados) => {
-          setArvore(dados);
-          if (expandirTudo) setAbertos(dados.map((g) => g.id));
-        })
-        .catch((err) => setErroCarga(err.response?.data?.message || 'Não foi possível carregar as máscaras.'))
-        .finally(() => setCarregando(false));
-    },
-    [empresaId]
-  );
+  // Os grupos começam fechados (pedido do usuário) — só abrem sozinhos quando o usuário está
+  // trabalhando neles: grupo novo, item novo, ou item solto dentro de um grupo.
+  const carregar = useCallback(() => {
+    if (!empresaId) return;
+    setCarregando(true);
+    setErroCarga('');
+    listDfcMascaras(empresaId)
+      .then(setArvore)
+      .catch((err) => setErroCarga(err.response?.data?.message || 'Não foi possível carregar as máscaras.'))
+      .finally(() => setCarregando(false));
+  }, [empresaId]);
 
   useEffect(() => {
     setArvore([]);
@@ -220,7 +216,8 @@ const DfcMascarasTab = forwardRef(function DfcMascarasTab({ empresaId }, ref) {
     setEditandoId(null);
     setErroSalvar('');
     setSalvoAlgumaVez(false);
-    carregar(true);
+    setAbertos([]);
+    carregar();
   }, [carregar]);
 
   useImperativeHandle(ref, () => ({ abrirNova: () => setCriando({ parentId: null }) }), []);
@@ -307,7 +304,7 @@ const DfcMascarasTab = forwardRef(function DfcMascarasTab({ empresaId }, ref) {
         await createDfcMascaras(empresaId, { parentId: grupos[i].id, descricoes: MODELO_SUGERIDO[i].filhos });
       }
     });
-    carregar(true);
+    carregar();
   }
 
   // ------------------------------------------------------------------ arrastar e soltar
