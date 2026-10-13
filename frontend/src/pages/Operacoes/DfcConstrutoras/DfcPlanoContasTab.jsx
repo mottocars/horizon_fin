@@ -198,7 +198,12 @@ export default function DfcPlanoContasTab({ empresaId, search = '', refreshToken
   // busca (código com ou sem pontos, ou descrição) vale pra qualquer conta; os filtros de coluna
   // valem pras analíticas — com eles ativos, as totalizadoras aparecem só como caminho até elas.
   const termo = search.trim().toLowerCase();
-  const filtrosAtivos = filtroConta != null || filtroMascara != null || filtroOrigem != null;
+  // Filtro com nada marcado vale como sem filtro — mostra tudo (pedido do usuário).
+  const efetivo = (f) => (f && f.length === 0 ? null : f);
+  const fConta = efetivo(filtroConta);
+  const fMascara = efetivo(filtroMascara);
+  const fOrigem = efetivo(filtroOrigem);
+  const filtrosAtivos = fConta != null || fMascara != null || fOrigem != null;
   const visivel = useMemo(() => {
     if (!termo && !filtrosAtivos) return null;
     const ids = new Set();
@@ -211,11 +216,11 @@ export default function DfcPlanoContasTab({ empresaId, search = '', refreshToken
       const cl = classificacoes[c.sienge_id] || {};
       const pendente = !cl.mascara_id || !cl.origem_projecao;
       const passaConta =
-        filtroConta == null || passaNoFiltro(filtroConta, c.sienge_id) || (pendente && passaNoFiltro(filtroConta, NAO_INFORMADO));
+        fConta == null || passaNoFiltro(fConta, c.sienge_id) || (pendente && passaNoFiltro(fConta, NAO_INFORMADO));
       return (
         passaConta &&
-        passaNoFiltro(filtroMascara, cl.mascara_id ?? NAO_INFORMADO) &&
-        passaNoFiltro(filtroOrigem, cl.origem_projecao ?? NAO_INFORMADO)
+        passaNoFiltro(fMascara, cl.mascara_id ?? NAO_INFORMADO) &&
+        passaNoFiltro(fOrigem, cl.origem_projecao ?? NAO_INFORMADO)
       );
     };
     const marcar = (no) => {
@@ -230,6 +235,7 @@ export default function DfcPlanoContasTab({ empresaId, search = '', refreshToken
     };
     arvore.forEach(marcar);
     return ids;
+    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [arvore, termo, filtrosAtivos, filtroConta, filtroMascara, filtroOrigem, classificacoes]);
 
   function alternar(id) {
