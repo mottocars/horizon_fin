@@ -101,12 +101,14 @@ export default function DfcConstrutorasPage() {
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [loadingEmpresas, empresas, empresaId]);
 
-  // Empreendimentos (centros de custo) da empresa — os Parâmetros são de cada um deles. Fica na
-  // URL como a empresa (`centro_id`); trocar de empresa limpa o centro.
+  // Obras (centros de custo com Tipo = Obra na aba Centros Custos) da empresa, com a versão
+  // vigente dos parâmetros de cada uma — os Parâmetros são de cada obra. O centro escolhido fica
+  // na URL como a empresa (`centro_id`); trocar de empresa limpa o centro. Recarrega ao entrar na
+  // aba Parâmetros (o Tipo pode ter mudado na aba Centros Custos) e depois de publicar.
   const [centros, setCentros] = useState([]);
   const [loadingCentros, setLoadingCentros] = useState(false);
 
-  useEffect(() => {
+  function carregarCentros() {
     if (!empresaId) {
       setCentros([]);
       return;
@@ -116,7 +118,12 @@ export default function DfcConstrutorasPage() {
       .then(setCentros)
       .catch(() => setCentros([]))
       .finally(() => setLoadingCentros(false));
-  }, [empresaId]);
+  }
+
+  useEffect(() => {
+    if (abaAtiva === 'parametros') carregarCentros();
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [empresaId, abaAtiva]);
 
   const centroSelecionado = centros.find((c) => String(c.sienge_id) === String(centroId)) || null;
 
@@ -338,10 +345,16 @@ export default function DfcConstrutorasPage() {
             ref={parametrosTabRef}
             empresaId={empresaId}
             centro={centroSelecionado}
+            centros={centros}
+            carregandoCentros={loadingCentros}
+            onSelecionarCentro={(id) => atualizarParams({ centro_id: id })}
             versaoSelecionada={versaoSelecionada}
             versaoMaisRecenteId={versoes[0]?.id ?? null}
             versaoVigenteNumero={versoes[0]?.versao ?? null}
-            onVersaoCriada={carregarVersoes}
+            onVersaoCriada={() => {
+              carregarVersoes();
+              carregarCentros();
+            }}
             onStatusChange={setStatusParametros}
           />
         ) : tabAtiva.id === 'mascaras' ? (

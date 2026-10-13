@@ -22,13 +22,23 @@ function erro(status, message) {
   return e;
 }
 
-// Empreendimentos (centros de custo ativos do Sienge) da empresa, pro filtro "Centro de Custo".
-// `numero_unidades` do cadastro do centro serve de sugestão no primeiro preenchimento.
+// Obras da empresa (centros de custo com Tipo = Obra na aba Centros Custos — pedido do usuário),
+// pro filtro "Centro de Custo" e pro resumo da aba Parâmetros, com a versão vigente dos
+// parâmetros de cada uma (null = nenhum parâmetro registrado ainda). `numero_unidades` do
+// cadastro do centro serve de sugestão no primeiro preenchimento.
 async function listCentros(empresaId) {
   const { rows } = await pool.query(
-    `SELECT sienge_id, name, numero_unidades FROM centros_custo_sienge
-      WHERE empresa_id = $1 AND status = 'ATIVO'
-      ORDER BY name ASC`,
+    `SELECT c.sienge_id, c.name, c.numero_unidades,
+            v.versao AS versao_vigente, v.criado_em AS versao_criada_em
+       FROM centros_custo_sienge c
+       LEFT JOIN LATERAL (
+         SELECT p.versao, p.criado_em FROM dfc_parametros_versoes p
+          WHERE p.empresa_id = c.empresa_id AND p.sienge_id = c.sienge_id
+          ORDER BY p.versao DESC
+          LIMIT 1
+       ) v ON TRUE
+      WHERE c.empresa_id = $1 AND c.natureza = 'OBRA'
+      ORDER BY c.sienge_id::text ASC`,
     [empresaId]
   );
   return rows;
@@ -70,10 +80,13 @@ async function criarVersao(empresaId, siengeId, usuarioId, dados) {
     // Trava o centro de custo: confere que ele é da empresa e serializa duas gravações
     // simultâneas do mesmo empreendimento (nunca duas linhas com o mesmo número de versão).
     const { rows: centro } = await client.query(
-      'SELECT sienge_id FROM centros_custo_sienge WHERE empresa_id = $1 AND sienge_id = $2 FOR UPDATE',
+      'SELECT natureza FROM centros_custo_sienge WHERE empresa_id = $1 AND sienge_id = $2 FOR UPDATE',
       [empresaId, siengeId]
     );
     if (!centro[0]) throw erro(404, 'Centro de custo não encontrado nesta empresa.');
+    if (centro[0].natureza !== 'OBRA') {
+      throw erro(400, 'Parâmetros só para centros de custo do tipo Obra (aba Centros Custos).');
+    }
 
     const { rows: maxRows } = await client.query(
       'SELECT COALESCE(MAX(versao), 0) + 1 AS proxima FROM dfc_parametros_versoes WHERE empresa_id = $1 AND sienge_id = $2',

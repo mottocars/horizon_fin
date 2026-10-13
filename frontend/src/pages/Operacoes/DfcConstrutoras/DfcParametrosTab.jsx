@@ -1,5 +1,5 @@
 import { forwardRef, useEffect, useImperativeHandle, useState } from 'react';
-import { AlertTriangle, Building2, CheckCircle2, SlidersHorizontal } from 'lucide-react';
+import { AlertTriangle, Building2, CheckCircle2, HardHat, SlidersHorizontal } from 'lucide-react';
 import Card from '../../../components/Card';
 import { getVersaoParametrosDfc, salvarVersaoParametrosDfc } from '../../../api/dfcParametros.api';
 import { CAMPOS_EDITAVEIS, PARAMETROS_VAZIOS, SESSOES_PARAMETROS } from './parametrosDfc';
@@ -27,13 +27,86 @@ function SectionHeader({ selo, titulo, texto }) {
   );
 }
 
+function formatarData(data) {
+  return new Date(data).toLocaleDateString('pt-BR');
+}
+
+// Resumo (lado esquerdo): todas as obras da empresa (Tipo = Obra na aba Centros Custos), se já
+// têm parâmetros e qual a versão vigente. Clicar numa obra seleciona ela no filtro do topo.
+function ResumoObras({ centros, carregando, siengeIdSelecionado, onSelecionar }) {
+  const comParametros = centros.filter((c) => c.versao_vigente).length;
+  return (
+    <Card className="rounded-tl-none xl:sticky xl:top-4">
+      <SectionHeader
+        titulo="Resumo"
+        texto={
+          carregando
+            ? 'Carregando obras...'
+            : `${comParametros} de ${centros.length} obra(s) com parâmetros registrados.`
+        }
+      />
+      {!carregando && centros.length === 0 ? (
+        <p className="py-6 text-center text-xs text-gray-400">
+          Nenhum centro de custo do tipo Obra. Classifique na aba Centros Custos.
+        </p>
+      ) : (
+        <div className="-mx-2 mt-2 max-h-[70vh] overflow-y-auto">
+          {centros.map((c) => {
+            const ativo = String(c.sienge_id) === String(siengeIdSelecionado);
+            return (
+              <button
+                key={c.sienge_id}
+                type="button"
+                onClick={() => onSelecionar(c.sienge_id)}
+                className={`flex w-full items-center gap-2 rounded-lg px-2 py-2 text-left transition-colors ${
+                  ativo ? 'bg-primary-50 ring-1 ring-inset ring-primary-200' : 'hover:bg-gray-50'
+                }`}
+              >
+                <span className="min-w-0 flex-1">
+                  <span className="block truncate text-xs font-medium text-gray-800" title={c.name}>
+                    {c.name}
+                  </span>
+                  <span className="block text-[11px] tabular-nums text-gray-400">
+                    {c.sienge_id}
+                    {c.versao_criada_em ? ` · ${formatarData(c.versao_criada_em)}` : ''}
+                  </span>
+                </span>
+                {c.versao_vigente ? (
+                  <span className="shrink-0 rounded-full bg-emerald-50 px-2 py-0.5 text-[11px] font-medium text-emerald-600">
+                    Versão {c.versao_vigente}
+                  </span>
+                ) : (
+                  <span className="shrink-0 rounded-full bg-amber-50 px-2 py-0.5 text-[11px] font-medium text-amber-600">
+                    Sem parâmetros
+                  </span>
+                )}
+              </button>
+            );
+          })}
+        </div>
+      )}
+    </Card>
+  );
+}
+
 // Operações > DFC Construtoras > Parâmetros: os parâmetros fixos da DFC de cada empreendimento,
 // no mesmo modelo do Motor de Risco da Gestão de Cobranças (MotorRiscoTab.jsx) — versionado:
 // cada "Publicar Versão" grava uma versão nova, nunca sobrescreve. Como lá, o botão mora na barra
 // de filtros da página (DfcConstrutorasPage.jsx): esta aba expõe `salvar()` via ref e avisa o
 // estado (`podeSalvar`/`salvando`) via `onStatusChange`.
 const DfcParametrosTab = forwardRef(function DfcParametrosTab(
-  { empresaId, centro, versaoSelecionada, versaoMaisRecenteId, versaoVigenteNumero, onVersaoCriada, onStatusChange },
+  {
+    empresaId,
+    centro,
+    centros,
+    carregandoCentros,
+    onSelecionarCentro,
+    versaoSelecionada,
+    versaoMaisRecenteId,
+    versaoVigenteNumero,
+    onVersaoCriada,
+    onStatusChange,
+  },
   ref
 ) {
   const siengeId = centro?.sienge_id ?? null;
@@ -128,20 +201,43 @@ const DfcParametrosTab = forwardRef(function DfcParametrosTab(
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [podeSalvar, salvando]);
 
-  if (!empresaId || !siengeId) {
-    const Icone = empresaId ? Building2 : SlidersHorizontal;
+  if (!empresaId) {
     return (
       <Card className="flex min-h-[280px] flex-col items-center justify-center rounded-tl-none text-center">
-        <Icone size={28} className="mb-3 text-gray-300" />
-        <h2 className="text-sm font-semibold text-gray-900">
-          {empresaId ? 'Selecione um centro de custo' : 'Selecione uma empresa'}
-        </h2>
+        <SlidersHorizontal size={28} className="mb-3 text-gray-300" />
+        <h2 className="text-sm font-semibold text-gray-900">Selecione uma empresa</h2>
         <p className="mt-1 max-w-sm text-xs text-gray-500">
-          {empresaId
-            ? 'Os parâmetros da DFC são de cada empreendimento. Escolha o centro de custo no filtro acima.'
-            : 'Escolha a empresa e o centro de custo no filtro acima para preencher os parâmetros da DFC.'}
+          Escolha a empresa e o centro de custo no filtro acima para preencher os parâmetros da DFC.
         </p>
       </Card>
+    );
+  }
+
+  const resumo = (
+    <ResumoObras
+      centros={centros}
+      carregando={carregandoCentros}
+      siengeIdSelecionado={siengeId}
+      onSelecionar={onSelecionarCentro}
+    />
+  );
+
+  if (!siengeId) {
+    return (
+      <div className="grid grid-cols-1 gap-4 xl:grid-cols-[320px_minmax(0,1fr)] xl:items-start">
+        {resumo}
+        <Card className="flex min-h-[280px] flex-col items-center justify-center text-center">
+          {centros.length === 0 && !carregandoCentros ? (
+            <HardHat size={28} className="mb-3 text-gray-300" />
+          ) : (
+            <Building2 size={28} className="mb-3 text-gray-300" />
+          )}
+          <h2 className="text-sm font-semibold text-gray-900">Selecione um centro de custo</h2>
+          <p className="mt-1 max-w-sm text-xs text-gray-500">
+            Os parâmetros da DFC são de cada obra. Escolha no resumo ao lado ou no filtro acima.
+          </p>
+        </Card>
+      </div>
     );
   }
 
@@ -154,55 +250,58 @@ const DfcParametrosTab = forwardRef(function DfcParametrosTab(
   );
 
   return (
-    <div className="space-y-4">
-      <Card className="rounded-tl-none">
-        <p className="text-sm font-medium text-gray-800">
-          {versaoNumero ? `Editando a partir da versão ${versaoNumero}` : 'Nenhuma versão salva ainda'}
-          <span className="font-normal text-gray-400"> · {centro.name}</span>
-        </p>
-        <p className="mt-0.5 text-xs text-gray-500">
-          {editandoVersaoAntiga
-            ? 'Você está olhando uma versão antiga. Ajustar e publicar cria uma versão nova — o histórico nunca é sobrescrito.'
-            : 'Preencha os parâmetros abaixo e publique quando terminar. Só gera versão nova se algum parâmetro mudar.'}
-        </p>
+    <div className="grid grid-cols-1 gap-4 xl:grid-cols-[320px_minmax(0,1fr)] xl:items-start">
+      {resumo}
+      <div className="space-y-4">
+        <Card>
+          <p className="text-sm font-medium text-gray-800">
+            {versaoNumero ? `Editando a partir da versão ${versaoNumero}` : 'Nenhuma versão salva ainda'}
+            <span className="font-normal text-gray-400"> · {centro.name}</span>
+          </p>
+          <p className="mt-0.5 text-xs text-gray-500">
+            {editandoVersaoAntiga
+              ? 'Você está olhando uma versão antiga. Ajustar e publicar cria uma versão nova — o histórico nunca é sobrescrito.'
+              : 'Preencha os parâmetros abaixo e publique quando terminar. Só gera versão nova se algum parâmetro mudar.'}
+          </p>
 
-        {erro && (
-          <div className="mt-3 flex items-center gap-2 rounded-lg bg-red-50 px-3 py-2 text-sm text-red-600">
-            <AlertTriangle size={15} className="shrink-0" />
-            {erro}
-          </div>
-        )}
-        {sucesso && (
-          <div className="mt-3 flex items-center gap-2 rounded-lg bg-emerald-50 px-3 py-2 text-sm text-emerald-600">
-            <CheckCircle2 size={15} className="shrink-0" />
-            {sucesso}
-          </div>
-        )}
-        {!erro && !sucesso && datasInvertidas && (
-          <div className="mt-3 flex items-center gap-2 rounded-lg bg-amber-50 px-3 py-2 text-sm text-amber-600">
-            <AlertTriangle size={15} className="shrink-0" />
-            A Data Fim do Ciclo precisa ser depois da Data Início do Ciclo.
-          </div>
-        )}
-      </Card>
-
-      {SESSOES_PARAMETROS.map((sessao) => (
-        <Card key={sessao.titulo}>
-          <SectionHeader selo={sessao.selo} titulo={sessao.titulo} texto={sessao.texto} />
-          <div>
-            {sessao.campos.map((campo, i) => (
-              <CampoParametro
-                key={campo.id}
-                campo={campo}
-                valor={valoresComCalculados[campo.id]}
-                onChange={alterar}
-                disabled={carregando}
-                primeiro={i === 0}
-              />
-            ))}
-          </div>
+          {erro && (
+            <div className="mt-3 flex items-center gap-2 rounded-lg bg-red-50 px-3 py-2 text-sm text-red-600">
+              <AlertTriangle size={15} className="shrink-0" />
+              {erro}
+            </div>
+          )}
+          {sucesso && (
+            <div className="mt-3 flex items-center gap-2 rounded-lg bg-emerald-50 px-3 py-2 text-sm text-emerald-600">
+              <CheckCircle2 size={15} className="shrink-0" />
+              {sucesso}
+            </div>
+          )}
+          {!erro && !sucesso && datasInvertidas && (
+            <div className="mt-3 flex items-center gap-2 rounded-lg bg-amber-50 px-3 py-2 text-sm text-amber-600">
+              <AlertTriangle size={15} className="shrink-0" />
+              A Data Fim do Ciclo precisa ser depois da Data Início do Ciclo.
+            </div>
+          )}
         </Card>
-      ))}
+
+        {SESSOES_PARAMETROS.map((sessao) => (
+          <Card key={sessao.titulo}>
+            <SectionHeader selo={sessao.selo} titulo={sessao.titulo} texto={sessao.texto} />
+            <div>
+              {sessao.campos.map((campo, i) => (
+                <CampoParametro
+                  key={campo.id}
+                  campo={campo}
+                  valor={valoresComCalculados[campo.id]}
+                  onChange={alterar}
+                  disabled={carregando}
+                  primeiro={i === 0}
+                />
+              ))}
+            </div>
+          </Card>
+        ))}
+      </div>
     </div>
   );
 });

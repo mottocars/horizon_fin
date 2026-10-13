@@ -178,7 +178,7 @@ export default function DfcCentrosTab({ empresaId, search }) {
             className={`${GRADE} border-b-2 border-blue-500 bg-blue-50 py-2.5 pl-4 pr-4 text-xs font-medium uppercase tracking-wide text-blue-700`}
           >
             <span>Centro de custo</span>
-            <span>Obra ou Administrativo</span>
+            <span>Tipo</span>
             <span>Contrato Caixa</span>
             <span>
               Código Prevision
