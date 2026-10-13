@@ -31,10 +31,10 @@ import DfcParametrosTab from './DfcParametrosTab';
 const TABS = [
   { id: 'dfc', label: 'DFC', icon: Wallet },
   { divider: true },
+  { id: 'centros-custos', label: 'Centros Custos', icon: Building2 },
   { id: 'parametros', label: 'Parâmetros', icon: SlidersHorizontal },
   { id: 'mascaras', label: 'Máscaras', icon: Tags },
   { id: 'plano-contas', label: 'Plano Contas', icon: ListTree },
-  { id: 'centros-custos', label: 'Centros Custos', icon: Building2 },
   { id: 'avancos-obras', label: 'Avanços Obras', icon: HardHat },
   { id: 'repasses', label: 'Repasses', icon: Banknote },
   { id: 'vendas', label: 'Vendas', icon: HandCoins },
