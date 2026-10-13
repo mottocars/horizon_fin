@@ -32,6 +32,7 @@ import DfcParametrosTab from './DfcParametrosTab';
 import DfcCentrosTab from './DfcCentrosTab';
 import DfcCiwebTab from './DfcCiwebTab';
 import DfcPlanoContasTab from './DfcPlanoContasTab';
+import DfcAvancosTab from './DfcAvancosTab';
 
 // Mesmo padrão de DreGerencialPage.jsx: o `{ divider: true }` separa a DFC (a demonstração em
 // si) das abas de cadastro/parâmetro que dão suporte a ela, que ficam juntas, sem divisor entre
@@ -207,6 +208,12 @@ export default function DfcConstrutorasPage() {
     }
   }
 
+  // Aba Avanços Obras: período (Data início / Data fim) — padrão sempre o ano atual inteiro
+  // (pedido do usuário). Só conveniência de navegador, fora da URL.
+  const anoAtual = new Date().getFullYear();
+  const [inicioAvancos, setInicioAvancos] = useState(`${anoAtual}-01-01`);
+  const [fimAvancos, setFimAvancos] = useState(`${anoAtual}-12-31`);
+
   // Botão "Nova máscara" fica no topo (padrão do resto do sistema, igual "Nova categoria" na
   // DRE), mas o campo de criar vive em DfcMascarasTab.jsx — dispara por ref.
   const mascarasTabRef = useRef(null);
@@ -256,6 +263,31 @@ export default function DfcConstrutorasPage() {
                       { value: 'EXTRATO', label: 'Geral' },
                     ]}
                     placeholder="Todos"
+                  />
+                </div>
+              </>
+            )}
+
+            {abaAtiva === 'avancos-obras' && (
+              <>
+                <div className="sm:w-44">
+                  <label className="mb-1 block text-sm font-medium text-gray-700">Data início</label>
+                  <input
+                    type="date"
+                    value={inicioAvancos}
+                    onChange={(e) => setInicioAvancos(e.target.value)}
+                    disabled={!empresaId}
+                    className="w-full rounded-lg border border-gray-200 px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-primary-100 disabled:bg-gray-50 disabled:text-gray-400"
+                  />
+                </div>
+                <div className="sm:w-44">
+                  <label className="mb-1 block text-sm font-medium text-gray-700">Data fim</label>
+                  <input
+                    type="date"
+                    value={fimAvancos}
+                    onChange={(e) => setFimAvancos(e.target.value)}
+                    disabled={!empresaId}
+                    className="w-full rounded-lg border border-gray-200 px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-primary-100 disabled:bg-gray-50 disabled:text-gray-400"
                   />
                 </div>
               </>
@@ -396,7 +428,9 @@ export default function DfcConstrutorasPage() {
       <div>
         <Tabs tabs={TABS} activeId={tabAtiva.id} onChange={(aba) => atualizarParams({ aba })} />
 
-        {tabAtiva.id === 'plano-contas' ? (
+        {tabAtiva.id === 'avancos-obras' ? (
+          <DfcAvancosTab empresaId={empresaId} inicio={inicioAvancos} fim={fimAvancos} />
+        ) : tabAtiva.id === 'plano-contas' ? (
           <DfcPlanoContasTab
             empresaId={empresaId}
             search={buscaPlano}
