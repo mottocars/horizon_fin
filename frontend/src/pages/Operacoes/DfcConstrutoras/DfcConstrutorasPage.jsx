@@ -258,7 +258,7 @@ export default function DfcConstrutorasPage() {
                     value={centroId}
                     onChange={(id) => atualizarParams({ centro_id: id || null })}
                     disabled={!empresaId || loadingCentros}
-                    options={centros.map((c) => ({ value: c.sienge_id, label: `${c.sienge_id} - ${c.name}` }))}
+                    options={centros.map((c) => ({ value: c.sienge_id, label: c.name }))}
                     placeholder={
                       !empresaId
                         ? 'Selecione a empresa primeiro'

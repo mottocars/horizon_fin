@@ -66,10 +66,11 @@ function ResumoObras({ centros, carregando, siengeIdSelecionado, onSelecionar })
                   <span className="block truncate text-xs font-medium text-gray-800" title={c.name}>
                     {c.name}
                   </span>
-                  <span className="block text-[11px] tabular-nums text-gray-400">
-                    {c.sienge_id}
-                    {c.versao_criada_em ? ` · ${formatarData(c.versao_criada_em)}` : ''}
-                  </span>
+                  {c.versao_criada_em && (
+                    <span className="block text-[11px] tabular-nums text-gray-400">
+                      Publicada em {formatarData(c.versao_criada_em)}
+                    </span>
+                  )}
                 </span>
                 {c.versao_vigente ? (
                   <span className="shrink-0 rounded-full bg-emerald-50 px-2 py-0.5 text-[11px] font-medium text-emerald-600">
