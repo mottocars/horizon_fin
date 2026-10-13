@@ -10,6 +10,7 @@ module.exports = {
   PLANOS_FINANCEIROS: '/cadastros/planos-financeiros',
 
   DRE: '/operacoes/dre-gerencial',
+  DFC: '/operacoes/dfc-construtoras',
   ESPIAO: '/operacoes/espiao-nfe-nfse',
   SALDOS: '/operacoes/saldo-contas-bancarias',
   REPASSES: '/operacoes/repasses-cef',

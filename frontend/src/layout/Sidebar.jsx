@@ -27,6 +27,7 @@ import {
   Activity,
   BarChart3,
   Database,
+  Wallet,
 } from 'lucide-react';
 import iconPortalConstrutoras from '../assets/integracoes/portal-construtoras.svg';
 import iconPrevision from '../assets/integracoes/prevision.svg';
@@ -60,6 +61,7 @@ const menuItems = [
     basePath: '/operacoes',
     children: [
       { label: 'DRE Construtoras', to: '/operacoes/dre-gerencial', icon: BarChart3 },
+      { label: 'DFC Construtoras', to: '/operacoes/dfc-construtoras', icon: Wallet },
       { label: 'Espião NFe / NFSe', to: '/operacoes/espiao-nfe-nfse', icon: FileSearch },
       { label: 'Saldo Contas Bancárias', to: '/operacoes/saldo-contas-bancarias', icon: Landmark },
       { label: 'Repasses CEF', to: '/operacoes/repasses-cef', icon: Banknote },
