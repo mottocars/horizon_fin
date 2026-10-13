@@ -144,8 +144,10 @@ app.use('/api/dfc-parametros', exigirTela([T.DFC]), dfcParametrosRoutes);
 app.use('/api/dfc-centros', exigirTela([T.DFC]), dfcCentrosRoutes);
 app.use('/api/bancos', exigirTela([T.SALDOS]), exigirMaster, bancosRoutes);
 app.use('/api/epr', exigirTela([T.PORTAL]), eprRoutes);
-app.use('/api/dcd', exigirTela([T.PORTAL]), dcdRoutes);
-app.use('/api/extrato', exigirTela([T.PORTAL]), extratoRoutes);
+// DCD e Extrato também na aba CIWEB da DFC Construtoras (espelho do Portal das Construtoras,
+// inclusive importando por lá).
+app.use('/api/dcd', exigirTela([T.PORTAL, T.DFC]), dcdRoutes);
+app.use('/api/extrato', exigirTela([T.PORTAL, T.DFC]), extratoRoutes);
 app.use('/api/curva-obras', exigirTela([]), curvaObrasRoutes);
 app.use('/api/cep', exigirTela([QUALQUER_TELA]), cepRoutes);
 app.use('/api/periodos', exigirTela([]), periodosRoutes);

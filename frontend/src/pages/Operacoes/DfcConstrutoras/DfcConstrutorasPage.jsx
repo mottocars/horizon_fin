@@ -4,12 +4,15 @@ import {
   Banknote,
   Building2,
   Calculator,
+  Download,
+  Globe,
   HandCoins,
   HardHat,
   ListTree,
   Plus,
   Save,
   Search,
+  Sheet,
   SlidersHorizontal,
   Tags,
   Wallet,
@@ -26,6 +29,7 @@ import AbaEmConstrucao from './AbaEmConstrucao';
 import DfcMascarasTab from './DfcMascarasTab';
 import DfcParametrosTab from './DfcParametrosTab';
 import DfcCentrosTab from './DfcCentrosTab';
+import DfcCiwebTab from './DfcCiwebTab';
 
 // Mesmo padrão de DreGerencialPage.jsx: o `{ divider: true }` separa a DFC (a demonstração em
 // si) das abas de cadastro/parâmetro que dão suporte a ela, que ficam juntas, sem divisor entre
@@ -33,6 +37,7 @@ import DfcCentrosTab from './DfcCentrosTab';
 const TABS = [
   { id: 'dfc', label: 'DFC', icon: Wallet },
   { divider: true },
+  { id: 'ciweb', label: 'CIWEB', icon: Globe },
   { id: 'centros-custos', label: 'Centros Custos', icon: Building2 },
   { id: 'parametros', label: 'Parâmetros', icon: SlidersHorizontal },
   { id: 'mascaras', label: 'Máscaras', icon: Tags },
@@ -162,6 +167,12 @@ export default function DfcConstrutorasPage() {
   // na URL (mesma convenção das buscas da DRE).
   const [buscaCentros, setBuscaCentros] = useState('');
 
+  // Aba CIWEB: busca e filtro de tipo (só conveniência de navegador, fora da URL); os botões de
+  // importar/exportar chamam a aba por ref (o seletor de arquivo e o progresso vivem lá).
+  const [buscaCiweb, setBuscaCiweb] = useState('');
+  const [tipoCiweb, setTipoCiweb] = useState('');
+  const ciwebTabRef = useRef(null);
+
   // Botão "Nova máscara" fica no topo (padrão do resto do sistema, igual "Nova categoria" na
   // DRE), mas o campo de criar vive em DfcMascarasTab.jsx — dispara por ref.
   const mascarasTabRef = useRef(null);
@@ -182,6 +193,39 @@ export default function DfcConstrutorasPage() {
                 emptyMessage="Nenhuma empresa encontrada."
               />
             </div>
+
+            {abaAtiva === 'ciweb' && (
+              <>
+                <div className="sm:min-w-56 sm:max-w-sm sm:flex-1">
+                  <label className="mb-1 block text-sm font-medium text-gray-700">Buscar</label>
+                  <div className="relative">
+                    <Search size={15} className="pointer-events-none absolute left-3 top-1/2 -translate-y-1/2 text-gray-400" />
+                    <input
+                      type="text"
+                      value={buscaCiweb}
+                      onChange={(e) => setBuscaCiweb(e.target.value)}
+                      disabled={!empresaId}
+                      placeholder={!empresaId ? 'Selecione a empresa primeiro' : 'Buscar por contrato ou empreendimento...'}
+                      className="w-full rounded-lg border border-gray-200 py-2 pl-9 pr-3 text-sm focus:outline-none focus:ring-2 focus:ring-primary-100 disabled:bg-gray-50 disabled:text-gray-400"
+                    />
+                  </div>
+                </div>
+
+                <div className="sm:min-w-[140px] sm:max-w-[12rem] sm:flex-1">
+                  <label className="mb-1 block text-sm font-medium text-gray-700">Tipo</label>
+                  <SearchableSelect
+                    value={tipoCiweb}
+                    onChange={(v) => setTipoCiweb(v || '')}
+                    disabled={!empresaId}
+                    options={[
+                      { value: 'DCD', label: 'DCD' },
+                      { value: 'EXTRATO', label: 'Extrato' },
+                    ]}
+                    placeholder="Todos"
+                  />
+                </div>
+              </>
+            )}
 
             {abaAtiva === 'centros-custos' && (
               <div className="sm:min-w-56 sm:max-w-sm sm:flex-1">
@@ -242,6 +286,30 @@ export default function DfcConstrutorasPage() {
             )}
           </div>
 
+          {abaAtiva === 'ciweb' && (
+            <div className="flex shrink-0 flex-wrap items-center gap-2">
+              {tipoCiweb && (
+                <Button
+                  type="button"
+                  variant="secondary"
+                  onClick={() => ciwebTabRef.current?.exportarTudo(tipoCiweb)}
+                  disabled={!empresaId}
+                >
+                  <Sheet size={16} className="text-emerald-600" />
+                  Exportar Tudo
+                </Button>
+              )}
+              <Button type="button" onClick={() => ciwebTabRef.current?.importar('DCD')} disabled={!empresaId}>
+                <Download size={16} />
+                Importar DCD
+              </Button>
+              <Button type="button" onClick={() => ciwebTabRef.current?.importar('EXTRATO')} disabled={!empresaId}>
+                <Download size={16} />
+                Importar Extrato
+              </Button>
+            </div>
+          )}
+
           {abaAtiva === 'parametros' && (
             <div className="flex shrink-0 items-center gap-2">
               <Button
@@ -270,7 +338,9 @@ export default function DfcConstrutorasPage() {
       <div>
         <Tabs tabs={TABS} activeId={tabAtiva.id} onChange={(aba) => atualizarParams({ aba })} />
 
-        {tabAtiva.id === 'centros-custos' ? (
+        {tabAtiva.id === 'ciweb' ? (
+          <DfcCiwebTab ref={ciwebTabRef} empresaId={empresaId} search={buscaCiweb} tipo={tipoCiweb} />
+        ) : tabAtiva.id === 'centros-custos' ? (
           <DfcCentrosTab empresaId={empresaId} search={buscaCentros} />
         ) : tabAtiva.id === 'parametros' ? (
           <DfcParametrosTab
