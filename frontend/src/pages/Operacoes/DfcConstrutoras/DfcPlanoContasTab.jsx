@@ -23,8 +23,8 @@ const ORIGENS_PROJECAO = [
   { value: 'HORIZON_ORCAMENTO_INFORMADO', label: 'Horizon - Orçamento Informado' },
 ];
 
-// Primeira opção dos filtros de coluna (pedido do usuário): acha as contas que ainda não foram
-// informadas. No filtro Conta, "não informada" = Máscara DFC ou Origem Projeção em branco.
+// Primeira opção dos filtros Máscara DFC e Origem Projeção (pedido do usuário): acha as contas
+// com aquele campo em branco. O filtro Conta não tem essa opção.
 const NAO_INFORMADO = '__nao_informado__';
 const OPCAO_NAO_INFORMADO = { value: NAO_INFORMADO, label: 'NÃO INFORMADO' };
 
@@ -180,15 +180,13 @@ export default function DfcPlanoContasTab({ empresaId, search = '', refreshToken
 
   const arvore = useMemo(() => montarArvore(contas), [contas]);
 
-  // Opções dos filtros de coluna — sempre com "NÃO INFORMADO" em primeiro.
+  // Opções dos filtros de coluna — Máscara DFC e Origem Projeção com "NÃO INFORMADO" em primeiro.
   const opcoesFiltroConta = useMemo(
-    () => [
-      OPCAO_NAO_INFORMADO,
-      ...[...contas]
+    () =>
+      [...contas]
         .filter((c) => c.tp_conta !== 'T')
         .sort((a, b) => String(a.sienge_id).localeCompare(String(b.sienge_id)))
         .map((c) => ({ value: c.sienge_id, label: `${codigoFormatado(c)} ${c.name}` })),
-    ],
     [contas]
   );
   const opcoesFiltroMascara = useMemo(() => [OPCAO_NAO_INFORMADO, ...opcoesMascara], [opcoesMascara]);
@@ -214,11 +212,8 @@ export default function DfcPlanoContasTab({ empresaId, search = '', refreshToken
       (c.name || '').toLowerCase().includes(termo);
     const passaFiltros = (c) => {
       const cl = classificacoes[c.sienge_id] || {};
-      const pendente = !cl.mascara_id || !cl.origem_projecao;
-      const passaConta =
-        fConta == null || passaNoFiltro(fConta, c.sienge_id) || (pendente && passaNoFiltro(fConta, NAO_INFORMADO));
       return (
-        passaConta &&
+        passaNoFiltro(fConta, c.sienge_id) &&
         passaNoFiltro(fMascara, cl.mascara_id ?? NAO_INFORMADO) &&
         passaNoFiltro(fOrigem, cl.origem_projecao ?? NAO_INFORMADO)
       );
