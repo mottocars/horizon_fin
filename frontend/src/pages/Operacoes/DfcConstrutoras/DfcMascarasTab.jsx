@@ -385,7 +385,9 @@ const DfcMascarasTab = forwardRef(function DfcMascarasTab({ empresaId }, ref) {
   const vazio = !carregando && !erroCarga && arvore.length === 0;
 
   return (
-    <div className="rounded-card rounded-tl-none bg-white shadow-card">
+    // overflow-hidden: o cabeçalho azul e as linhas encostam nas bordas — sem isso cobrem os
+    // cantos arredondados do quadro (as comboboxes abrem num portal, não são cortadas).
+    <div className="overflow-hidden rounded-card rounded-tl-none bg-white shadow-card">
       {statusSalvamento && (
         <div className="flex items-center justify-end border-b border-gray-100 px-5 py-2 text-xs" aria-live="polite">
           {statusSalvamento === 'salvando' ? (

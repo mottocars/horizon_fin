@@ -345,7 +345,9 @@ const DfcCiwebTab = forwardRef(function DfcCiwebTab({ empresaId, search, tipo },
   }
 
   return (
-    <div className="rounded-card rounded-tl-none bg-white shadow-card">
+    // overflow-hidden: o cabeçalho azul e as linhas encostam nas bordas — sem isso cobrem os
+    // cantos arredondados do quadro (as comboboxes abrem num portal, não são cortadas).
+    <div className="overflow-hidden rounded-card rounded-tl-none bg-white shadow-card">
       {carregando ? (
         <div className="py-12 text-center text-sm text-gray-400">Carregando...</div>
       ) : erroCarga ? (

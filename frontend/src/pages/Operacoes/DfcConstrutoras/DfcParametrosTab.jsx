@@ -31,12 +31,12 @@ function formatarData(data) {
   return new Date(data).toLocaleDateString('pt-BR');
 }
 
-// Resumo (lado esquerdo): todas as obras da empresa (Tipo = Obra na aba Centros Custos), se já
+// Resumo (lado direito): todas as obras da empresa (Tipo = Obra na aba Centros Custos), se já
 // têm parâmetros e qual a versão vigente. Clicar numa obra seleciona ela no filtro do topo.
 function ResumoObras({ centros, carregando, siengeIdSelecionado, onSelecionar }) {
   const comParametros = centros.filter((c) => c.versao_vigente).length;
   return (
-    <Card className="rounded-tl-none xl:sticky xl:top-4">
+    <Card className="xl:sticky xl:top-4">
       <SectionHeader
         titulo="Resumo"
         texto={
@@ -225,9 +225,8 @@ const DfcParametrosTab = forwardRef(function DfcParametrosTab(
 
   if (!siengeId) {
     return (
-      <div className="grid grid-cols-1 gap-4 xl:grid-cols-[320px_minmax(0,1fr)] xl:items-start">
-        {resumo}
-        <Card className="flex min-h-[280px] flex-col items-center justify-center text-center">
+      <div className="grid grid-cols-1 gap-4 xl:grid-cols-[minmax(0,1fr)_320px] xl:items-start">
+        <Card className="flex min-h-[280px] flex-col items-center justify-center rounded-tl-none text-center">
           {centros.length === 0 && !carregandoCentros ? (
             <HardHat size={28} className="mb-3 text-gray-300" />
           ) : (
@@ -238,6 +237,7 @@ const DfcParametrosTab = forwardRef(function DfcParametrosTab(
             Os parâmetros da DFC são de cada obra. Escolha no resumo ao lado ou no filtro acima.
           </p>
         </Card>
+        {resumo}
       </div>
     );
   }
@@ -251,10 +251,9 @@ const DfcParametrosTab = forwardRef(function DfcParametrosTab(
   );
 
   return (
-    <div className="grid grid-cols-1 gap-4 xl:grid-cols-[320px_minmax(0,1fr)] xl:items-start">
-      {resumo}
+    <div className="grid grid-cols-1 gap-4 xl:grid-cols-[minmax(0,1fr)_320px] xl:items-start">
       <div className="space-y-4">
-        <Card>
+        <Card className="rounded-tl-none">
           <p className="text-sm font-medium text-gray-800">
             {versaoNumero ? `Editando a partir da versão ${versaoNumero}` : 'Nenhuma versão salva ainda'}
             <span className="font-normal text-gray-400"> · {centro.name}</span>
@@ -303,6 +302,7 @@ const DfcParametrosTab = forwardRef(function DfcParametrosTab(
           </Card>
         ))}
       </div>
+      {resumo}
     </div>
   );
 });
