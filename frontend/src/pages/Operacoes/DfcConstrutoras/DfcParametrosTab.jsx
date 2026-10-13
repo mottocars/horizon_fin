@@ -2,8 +2,7 @@ import { forwardRef, useEffect, useImperativeHandle, useState } from 'react';
 import { AlertTriangle, Building2, CheckCircle2, SlidersHorizontal } from 'lucide-react';
 import Card from '../../../components/Card';
 import { getVersaoParametrosDfc, salvarVersaoParametrosDfc } from '../../../api/dfcParametros.api';
-import { diasEntreISO } from '../../../utils/datas';
-import { CAMPOS_EDITAVEIS, PARAMETROS_VAZIOS, SESSOES_PARAMETROS, formatarNumero } from './parametrosDfc';
+import { CAMPOS_EDITAVEIS, PARAMETROS_VAZIOS, SESSOES_PARAMETROS } from './parametrosDfc';
 import CampoParametro from './CampoParametro';
 
 // NUMERIC chega do banco como texto ("1234.50") e DATE como 'AAAA-MM-DD' — normaliza pra número
@@ -24,18 +23,6 @@ function SectionHeader({ selo, titulo, texto }) {
       {selo && <p className="mb-1 font-mono text-[10px] font-semibold uppercase tracking-wider text-gray-400">{selo}</p>}
       <h3 className="text-sm font-semibold text-gray-900">{titulo}</h3>
       {texto && <p className="mt-1.5 max-w-2xl text-xs leading-relaxed text-gray-500">{texto}</p>}
-    </div>
-  );
-}
-
-function LinhaResumo({ rotulo, valor, formula }) {
-  return (
-    <div className="border-t border-gray-100 py-3 first:border-t-0">
-      <div className="flex items-baseline justify-between gap-3">
-        <p className="text-xs font-medium text-gray-600">{rotulo}</p>
-        <p className="shrink-0 font-mono text-sm font-semibold tabular-nums text-gray-900">{valor}</p>
-      </div>
-      <p className="mt-0.5 text-[11px] text-gray-400">{formula}</p>
     </div>
   );
 }
@@ -144,16 +131,6 @@ const DfcParametrosTab = forwardRef(function DfcParametrosTab(
     })
   );
 
-  // Resumo (lado direito, no lugar do simulador do Motor de Risco): só contas diretas com os
-  // próprios parâmetros, cada uma com a fórmula embaixo.
-  const n = (id) => (valores[id] === '' ? null : Number(valores[id]));
-  const avaliacaoTotal = n('numero_unidades') !== null && n('ticket_medio_avaliacao_pf') !== null
-    ? n('numero_unidades') * n('ticket_medio_avaliacao_pf')
-    : null;
-  const finSobreCto = n('valor_financiamento_pj') !== null && n('cto') ? (n('valor_financiamento_pj') / n('cto')) * 100 : null;
-  const diasCiclo = diasEntreISO(valores.data_inicio_ciclo, valores.data_fim_ciclo);
-  const mesesParaVender = n('numero_unidades') !== null && n('qtd_vendas_mes') ? n('numero_unidades') / n('qtd_vendas_mes') : null;
-
   return (
     <div className="space-y-4">
       <Card className="rounded-tl-none">
@@ -187,55 +164,23 @@ const DfcParametrosTab = forwardRef(function DfcParametrosTab(
         )}
       </Card>
 
-      <div className="grid grid-cols-1 gap-4 xl:grid-cols-[minmax(0,1fr)_320px] xl:items-start">
-        <div className="space-y-4">
-          {SESSOES_PARAMETROS.map((sessao) => (
-            <Card key={sessao.titulo}>
-              <SectionHeader selo={sessao.selo} titulo={sessao.titulo} texto={sessao.texto} />
-              <div>
-                {sessao.campos.map((campo, i) => (
-                  <CampoParametro
-                    key={campo.id}
-                    campo={campo}
-                    valor={valoresComCalculados[campo.id]}
-                    onChange={alterar}
-                    disabled={carregando}
-                    primeiro={i === 0}
-                  />
-                ))}
-              </div>
-            </Card>
-          ))}
-        </div>
-
-        <div className="xl:sticky xl:top-4">
-          <Card>
-            <SectionHeader titulo="Resumo" texto="Contas diretas com os parâmetros ao lado, atualizadas enquanto você digita." />
-            <div>
-              <LinhaResumo
-                rotulo="Avaliação total PF"
-                valor={avaliacaoTotal === null ? '—' : `R$ ${formatarNumero(avaliacaoTotal, 2)}`}
-                formula="Número Total de Unidades × Ticket Médio da Avaliação PF"
+      {SESSOES_PARAMETROS.map((sessao) => (
+        <Card key={sessao.titulo}>
+          <SectionHeader selo={sessao.selo} titulo={sessao.titulo} texto={sessao.texto} />
+          <div>
+            {sessao.campos.map((campo, i) => (
+              <CampoParametro
+                key={campo.id}
+                campo={campo}
+                valor={valoresComCalculados[campo.id]}
+                onChange={alterar}
+                disabled={carregando}
+                primeiro={i === 0}
               />
-              <LinhaResumo
-                rotulo="Financiamento PJ sobre o CTO"
-                valor={finSobreCto === null ? '—' : `${formatarNumero(finSobreCto, 2)}%`}
-                formula="Valor do Financiamento PJ ÷ CTO"
-              />
-              <LinhaResumo
-                rotulo="Duração do ciclo"
-                valor={diasCiclo === null || diasCiclo <= 0 ? '—' : `${formatarNumero(diasCiclo / 30.4375, 1)} meses`}
-                formula="Data Fim do Ciclo − Data Início do Ciclo"
-              />
-              <LinhaResumo
-                rotulo="Meses para vender todas as unidades"
-                valor={mesesParaVender === null ? '—' : `${formatarNumero(mesesParaVender, 1)} meses`}
-                formula="Número Total de Unidades ÷ Quantidade de Vendas no Mês"
-              />
-            </div>
-          </Card>
-        </div>
-      </div>
+            ))}
+          </div>
+        </Card>
+      ))}
     </div>
   );
 });
