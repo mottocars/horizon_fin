@@ -9,6 +9,7 @@ import {
   ListTree,
   Plus,
   Save,
+  Search,
   SlidersHorizontal,
   Tags,
   Wallet,
@@ -24,6 +25,7 @@ import { useEmpresaTravada } from '../../../hooks/useEmpresaTravada';
 import AbaEmConstrucao from './AbaEmConstrucao';
 import DfcMascarasTab from './DfcMascarasTab';
 import DfcParametrosTab from './DfcParametrosTab';
+import DfcCentrosTab from './DfcCentrosTab';
 
 // Mesmo padrão de DreGerencialPage.jsx: o `{ divider: true }` separa a DFC (a demonstração em
 // si) das abas de cadastro/parâmetro que dão suporte a ela, que ficam juntas, sem divisor entre
@@ -156,6 +158,10 @@ export default function DfcConstrutorasPage() {
   const parametrosTabRef = useRef(null);
   const [statusParametros, setStatusParametros] = useState({ podeSalvar: false, salvando: false });
 
+  // Busca (código ou descrição) da aba Centros Custos — só conveniência de navegador, não fica
+  // na URL (mesma convenção das buscas da DRE).
+  const [buscaCentros, setBuscaCentros] = useState('');
+
   // Botão "Nova máscara" fica no topo (padrão do resto do sistema, igual "Nova categoria" na
   // DRE), mas o campo de criar vive em DfcMascarasTab.jsx — dispara por ref.
   const mascarasTabRef = useRef(null);
@@ -176,6 +182,23 @@ export default function DfcConstrutorasPage() {
                 emptyMessage="Nenhuma empresa encontrada."
               />
             </div>
+
+            {abaAtiva === 'centros-custos' && (
+              <div className="sm:min-w-56 sm:max-w-sm sm:flex-1">
+                <label className="mb-1 block text-sm font-medium text-gray-700">Buscar</label>
+                <div className="relative">
+                  <Search size={15} className="pointer-events-none absolute left-3 top-1/2 -translate-y-1/2 text-gray-400" />
+                  <input
+                    type="text"
+                    value={buscaCentros}
+                    onChange={(e) => setBuscaCentros(e.target.value)}
+                    disabled={!empresaId}
+                    placeholder={!empresaId ? 'Selecione a empresa primeiro' : 'Buscar por código ou descrição...'}
+                    className="w-full rounded-lg border border-gray-200 py-2 pl-9 pr-3 text-sm focus:outline-none focus:ring-2 focus:ring-primary-100 disabled:bg-gray-50 disabled:text-gray-400"
+                  />
+                </div>
+              </div>
+            )}
 
             {abaAtiva === 'parametros' && (
               <>
@@ -247,7 +270,9 @@ export default function DfcConstrutorasPage() {
       <div>
         <Tabs tabs={TABS} activeId={tabAtiva.id} onChange={(aba) => atualizarParams({ aba })} />
 
-        {tabAtiva.id === 'parametros' ? (
+        {tabAtiva.id === 'centros-custos' ? (
+          <DfcCentrosTab empresaId={empresaId} search={buscaCentros} />
+        ) : tabAtiva.id === 'parametros' ? (
           <DfcParametrosTab
             ref={parametrosTabRef}
             empresaId={empresaId}

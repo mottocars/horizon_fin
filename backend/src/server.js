@@ -32,6 +32,7 @@ const dreCategoriasOrcamentoRoutes = require('./modules/dre-categorias-orcamento
 const dreOrcamentoRoutes = require('./modules/dre-orcamento/orcamento.routes');
 const dfcMascarasRoutes = require('./modules/dfc-mascaras/dfcMascaras.routes');
 const dfcParametrosRoutes = require('./modules/dfc-parametros/dfcParametros.routes');
+const dfcCentrosRoutes = require('./modules/dfc-centros/dfcCentros.routes');
 const bancosRoutes = require('./modules/bancos/bancos.routes');
 const eprRoutes = require('./modules/epr/epr.routes');
 const dcdRoutes = require('./modules/dcd/dcd.routes');
@@ -140,6 +141,7 @@ app.use('/api/dre-categorias-orcamento', exigirTela([T.DRE]), dreCategoriasOrcam
 app.use('/api/dre-orcamento', exigirTela([T.DRE]), dreOrcamentoRoutes);
 app.use('/api/dfc-mascaras', exigirTela([T.DFC]), dfcMascarasRoutes);
 app.use('/api/dfc-parametros', exigirTela([T.DFC]), dfcParametrosRoutes);
+app.use('/api/dfc-centros', exigirTela([T.DFC]), dfcCentrosRoutes);
 app.use('/api/bancos', exigirTela([T.SALDOS]), exigirMaster, bancosRoutes);
 app.use('/api/epr', exigirTela([T.PORTAL]), eprRoutes);
 app.use('/api/dcd', exigirTela([T.PORTAL]), dcdRoutes);

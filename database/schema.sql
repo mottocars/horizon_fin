@@ -720,6 +720,8 @@ CREATE TABLE centros_custo_sienge (
     estado_enriquecido         VARCHAR(2),
     valor_geral_vendas         NUMERIC(14,2),
     faixa                      VARCHAR(10),
+    -- OBRA | ADMINISTRATIVO (NULL = não classificado) — aba Centros Custos da DFC Construtoras.
+    natureza                   VARCHAR(15) CHECK (natureza IN ('OBRA', 'ADMINISTRATIVO')),
     PRIMARY KEY (sienge_id, empresa_id)
 );
 
