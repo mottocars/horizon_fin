@@ -2882,3 +2882,31 @@ CREATE INDEX idx_dfc_mascaras_empresa ON dfc_mascaras (empresa_id, parent_id, or
 CREATE TRIGGER trg_dfc_mascaras_atualizado_em
     BEFORE UPDATE ON dfc_mascaras
     FOR EACH ROW EXECUTE FUNCTION set_atualizado_em();
+
+-- ─── Operações > DFC Construtoras > Parâmetros — ver database/migrations/2026-10-13-dfc-parametros.sql ───
+-- Parâmetros da DFC por empreendimento (centro de custo), versionados como o Motor de Risco:
+-- cada gravação é uma versão nova; a vigente é a de maior número. % Repasse Construtor não é
+-- coluna (sempre 100 − pct_amortizacao_pj).
+CREATE TABLE dfc_parametros_versoes (
+    id                              SERIAL PRIMARY KEY,
+    empresa_id                      INTEGER NOT NULL,
+    sienge_id                       INTEGER NOT NULL,
+    versao                          INTEGER NOT NULL,
+    cto                             NUMERIC(15,2) NOT NULL,
+    valor_financiamento_pj          NUMERIC(15,2) NOT NULL,
+    numero_unidades                 INTEGER NOT NULL,
+    ticket_medio_avaliacao_pf       NUMERIC(15,2) NOT NULL,
+    pct_coeficiente_garantia        NUMERIC(7,2) NOT NULL,
+    pct_amortizacao_pj              NUMERIC(5,2) NOT NULL CHECK (pct_amortizacao_pj BETWEEN 0 AND 100),
+    data_demanda_minima             DATE NOT NULL,
+    taxa_juros_mes                  NUMERIC(8,4) NOT NULL,
+    data_inicio_ciclo               DATE NOT NULL,
+    data_fim_ciclo                  DATE NOT NULL,
+    qtd_vendas_mes                  INTEGER NOT NULL,
+    tempo_assinatura_registro_meses INTEGER NOT NULL,
+    criado_por_usuario_id           INTEGER REFERENCES usuarios(id) ON DELETE SET NULL,
+    criado_em                       TIMESTAMP DEFAULT NOW(),
+    FOREIGN KEY (sienge_id, empresa_id) REFERENCES centros_custo_sienge(sienge_id, empresa_id) ON DELETE CASCADE,
+    UNIQUE (empresa_id, sienge_id, versao),
+    CHECK (data_fim_ciclo > data_inicio_ciclo)
+);
