@@ -128,11 +128,11 @@ export default function DfcCentrosTab({ empresaId, search }) {
   const statusSalvamento = pendentes > 0 ? 'salvando' : erroSalvar ? 'erro' : salvoAlgumaVez ? 'salvo' : null;
 
   return (
-    // overflow-hidden: o cabeçalho azul e as linhas encostam nas bordas — sem isso cobrem os
-    // cantos arredondados do quadro (as comboboxes abrem num portal, não são cortadas).
-    <div className="overflow-hidden rounded-card rounded-tl-none bg-white shadow-card">
+    // Tabela dentro do quadro branco, com margem em volta (p-5) e cabeçalho de cantos de cima
+    // arredondados — mesmo padrão da tabela do Espião NFe / NFSe (pedido do usuário).
+    <div className="rounded-card rounded-tl-none bg-white p-5 shadow-card">
       {statusSalvamento && (
-        <div className="flex items-center justify-end border-b border-gray-100 px-5 py-2 text-xs" aria-live="polite">
+        <div className="-mt-1 mb-3 flex items-center justify-end text-xs" aria-live="polite">
           {statusSalvamento === 'salvando' ? (
             <span className="flex items-center gap-1.5 text-gray-500">
               <Loader2 size={14} className="animate-spin" /> Salvando...
@@ -150,7 +150,7 @@ export default function DfcCentrosTab({ empresaId, search }) {
       )}
 
       {erroSalvar && (
-        <div className="mx-5 mb-3 mt-4 rounded-lg bg-red-50 px-3 py-2 text-xs text-red-600" role="status">
+        <div className="mb-3 rounded-lg bg-red-50 px-3 py-2 text-xs text-red-600" role="status">
           {erroSalvar}
         </div>
       )}
@@ -174,10 +174,10 @@ export default function DfcCentrosTab({ empresaId, search }) {
           {centros.length === 0 ? 'Nenhum centro de custo nesta empresa.' : 'Nenhum centro de custo encontrado para essa busca.'}
         </div>
       ) : (
-        <div className="rounded-b-card pb-1">
+        <div>
           {/* Cabeçalho azul, mesmo da aba Máscaras, com os títulos das colunas dos campos. */}
           <div
-            className={`${GRADE} border-b-2 border-blue-500 bg-blue-50 py-2.5 pl-4 pr-4 text-xs font-medium uppercase tracking-wide text-blue-700`}
+            className={`${GRADE} rounded-t-lg border-b-2 border-blue-500 bg-blue-50 py-2.5 pl-4 pr-4 text-xs font-medium uppercase tracking-wide text-blue-700`}
           >
             <span>Centro de custo</span>
             <span>Tipo</span>

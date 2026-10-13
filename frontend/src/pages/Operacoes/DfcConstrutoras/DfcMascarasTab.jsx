@@ -385,11 +385,11 @@ const DfcMascarasTab = forwardRef(function DfcMascarasTab({ empresaId }, ref) {
   const vazio = !carregando && !erroCarga && arvore.length === 0;
 
   return (
-    // overflow-hidden: o cabeçalho azul e as linhas encostam nas bordas — sem isso cobrem os
-    // cantos arredondados do quadro (as comboboxes abrem num portal, não são cortadas).
-    <div className="overflow-hidden rounded-card rounded-tl-none bg-white shadow-card">
+    // Tabela dentro do quadro branco, com margem em volta (p-5) e cabeçalho de cantos de cima
+    // arredondados — mesmo padrão da tabela do Espião NFe / NFSe (pedido do usuário).
+    <div className="rounded-card rounded-tl-none bg-white p-5 shadow-card">
       {statusSalvamento && (
-        <div className="flex items-center justify-end border-b border-gray-100 px-5 py-2 text-xs" aria-live="polite">
+        <div className="-mt-1 mb-3 flex items-center justify-end text-xs" aria-live="polite">
           {statusSalvamento === 'salvando' ? (
             <span className="flex items-center gap-1.5 text-gray-500">
               <Loader2 size={14} className="animate-spin" /> Salvando...
@@ -407,7 +407,7 @@ const DfcMascarasTab = forwardRef(function DfcMascarasTab({ empresaId }, ref) {
       )}
 
       {erroSalvar && (
-        <div className="mx-5 mb-3 mt-4 rounded-lg bg-red-50 px-3 py-2 text-xs text-red-600" role="status">
+        <div className="mb-3 rounded-lg bg-red-50 px-3 py-2 text-xs text-red-600" role="status">
           {erroSalvar}
         </div>
       )}
@@ -447,14 +447,13 @@ const DfcMascarasTab = forwardRef(function DfcMascarasTab({ empresaId }, ref) {
         </div>
       ) : (
         <div
-          className="rounded-b-card pb-1"
           onDragOver={(e) => arrastado && e.preventDefault()}
           onDrop={soltar}
           onDragLeave={(e) => {
             if (!e.currentTarget.contains(e.relatedTarget)) setAlvo(null);
           }}
         >
-          <div className="flex items-center justify-between border-b-2 border-blue-500 bg-blue-50 py-2.5 pl-4 pr-4 text-xs font-medium uppercase tracking-wide text-blue-700">
+          <div className="flex items-center justify-between rounded-t-lg border-b-2 border-blue-500 bg-blue-50 py-2.5 pl-4 pr-4 text-xs font-medium uppercase tracking-wide text-blue-700">
             <span>Nível 1 / Nível 2</span>
             <span className="hidden normal-case tracking-normal text-blue-500 sm:inline">
               Arraste pelas linhas para reordenar ou mudar de grupo · duplo clique renomeia

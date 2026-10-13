@@ -345,9 +345,9 @@ const DfcCiwebTab = forwardRef(function DfcCiwebTab({ empresaId, search, tipo },
   }
 
   return (
-    // overflow-hidden: o cabeçalho azul e as linhas encostam nas bordas — sem isso cobrem os
-    // cantos arredondados do quadro (as comboboxes abrem num portal, não são cortadas).
-    <div className="overflow-hidden rounded-card rounded-tl-none bg-white shadow-card">
+    // Tabela dentro do quadro branco, com margem em volta (p-5) e cabeçalho de cantos de cima
+    // arredondados — mesmo padrão da tabela do Espião NFe / NFSe (pedido do usuário).
+    <div className="rounded-card rounded-tl-none bg-white p-5 shadow-card">
       {carregando ? (
         <div className="py-12 text-center text-sm text-gray-400">Carregando...</div>
       ) : erroCarga ? (
@@ -373,9 +373,9 @@ const DfcCiwebTab = forwardRef(function DfcCiwebTab({ empresaId, search, tipo },
           <p className="max-w-sm text-xs text-gray-400">Use o botão de importar no canto direito, acima.</p>
         </div>
       ) : (
-        <div className="rounded-b-card pb-1">
+        <div>
           <div
-            className={`${GRADE} border-b-2 border-blue-500 bg-blue-50 py-2.5 pl-4 pr-4 text-xs font-medium uppercase tracking-wide text-blue-700`}
+            className={`${GRADE} rounded-t-lg border-b-2 border-blue-500 bg-blue-50 py-2.5 pl-4 pr-4 text-xs font-medium uppercase tracking-wide text-blue-700`}
           >
             <span>Número Contrato</span>
             <span>Empreendimento</span>
