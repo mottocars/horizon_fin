@@ -163,7 +163,7 @@ function Indicador({ recuo = false, embaixo = false }) {
   return (
     <span
       aria-hidden="true"
-      className={`pointer-events-none absolute right-2 z-10 h-0.5 rounded-full bg-primary-500 ${recuo ? 'left-9' : 'left-2'} ${
+      className={`pointer-events-none absolute right-2 z-10 h-0.5 rounded-full bg-primary-500 ${recuo ? 'left-20' : 'left-2'} ${
         embaixo ? '-bottom-px' : '-top-px'
       }`}
     />
@@ -527,7 +527,7 @@ const DfcMascarasTab = forwardRef(function DfcMascarasTab({ empresaId }, ref) {
                       onDragEnd={encerrarArraste}
                       onDragOver={(e) => mirarFilho(e, grupo, i, j)}
                       onDoubleClick={() => setEditandoId(filho.id)}
-                      className={`group/linha relative flex items-center gap-2 border-b border-gray-100 bg-white py-1.5 pl-9 pr-2 hover:bg-gray-50 ${
+                      className={`group/linha relative flex items-center gap-2 border-b border-gray-100 bg-white py-1.5 pl-20 pr-2 hover:bg-gray-50 ${
                         arrastado?.id === filho.id ? 'opacity-40' : ''
                       }`}
                     >
@@ -561,7 +561,7 @@ const DfcMascarasTab = forwardRef(function DfcMascarasTab({ empresaId }, ref) {
                     onDragOver={(e) =>
                       mirar(e, podeSerFilho ? { parentId: grupo.id, index: grupo.filhos.length } : { parentId: null, index: i + 1 })
                     }
-                    className="relative border-b border-gray-100 bg-white py-1.5 pl-9 pr-2"
+                    className="relative border-b border-gray-100 bg-white py-1.5 pl-20 pr-2"
                   >
                     {marca(grupo.id, grupo.filhos.length) && <Indicador recuo />}
                     {criandoAqui ? (
