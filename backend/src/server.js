@@ -129,7 +129,8 @@ app.use('/api/relatorios/desempenho-cobranca', exigirTela([T.REL_DESEMPENHO_COBR
 app.use('/api/projetos', exigirTela([QUALQUER_TELA]), projetosRoutes);
 app.use('/api/integracoes/prevision', exigirTela([T.PREVISION], [T.CENTROS_CUSTO]), previsionRoutes);
 app.use('/api/prevision-dashboards', exigirTela([T.PREVISION, T.CENTROS_CUSTO]), previsionDashboardsRoutes);
-app.use('/api/planos-financeiros/sienge', exigirTela([T.PLANOS_FINANCEIROS, T.SIENGE, T.DRE]), planosFinanceirosSiengeRoutes);
+// Também na aba Plano Contas da DFC Construtoras (espelho do cadastro de Planos Financeiros).
+app.use('/api/planos-financeiros/sienge', exigirTela([T.PLANOS_FINANCEIROS, T.SIENGE, T.DRE, T.DFC]), planosFinanceirosSiengeRoutes);
 app.use('/api/centros-custo/sienge', exigirTela([T.CENTROS_CUSTO, T.SIENGE], [T.DRE]), centrosCustoSiengeRoutes);
 app.use('/api/mascaras', exigirTela([T.MASCARAS, T.DRE, T.REPASSES], [T.CENTROS_CUSTO, T.PLANOS_FINANCEIROS]), mascarasRoutes);
 // Abas de cadastro do Saldo Contas Bancárias: Contas Bancárias e Classificação

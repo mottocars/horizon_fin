@@ -9,6 +9,7 @@ import {
   HardHat,
   ListTree,
   Plus,
+  RefreshCw,
   Save,
   Search,
   Upload,
@@ -22,6 +23,7 @@ import Button from '../../../components/Button';
 import SearchableSelect from '../../../components/SearchableSelect';
 import { listEmpresas } from '../../../api/empresas.api';
 import { listCentrosDfc, listVersoesParametrosDfc } from '../../../api/dfcParametros.api';
+import { gerarPlano } from '../../../api/planosFinanceirosSienge.api';
 import { nomeExibicaoEmpresa } from '../../../utils/empresa';
 import { useEmpresaTravada } from '../../../hooks/useEmpresaTravada';
 import AbaEmConstrucao from './AbaEmConstrucao';
@@ -29,6 +31,7 @@ import DfcMascarasTab from './DfcMascarasTab';
 import DfcParametrosTab from './DfcParametrosTab';
 import DfcCentrosTab from './DfcCentrosTab';
 import DfcCiwebTab from './DfcCiwebTab';
+import DfcPlanoContasTab from './DfcPlanoContasTab';
 
 // Mesmo padrão de DreGerencialPage.jsx: o `{ divider: true }` separa a DFC (a demonstração em
 // si) das abas de cadastro/parâmetro que dão suporte a ela, que ficam juntas, sem divisor entre
@@ -182,6 +185,28 @@ export default function DfcConstrutorasPage() {
   const [tipoCiweb, setTipoCiweb] = useState('');
   const ciwebTabRef = useRef(null);
 
+  // Aba Plano Contas: busca (só conveniência de navegador) e o ícone de gerar/atualizar o plano a
+  // partir do Sienge — mesmo esquema da aba Plano de Contas da DRE (DreGerencialPage.jsx): "+"
+  // quando ainda não há nenhuma conta, refresh depois de gerado.
+  const [buscaPlano, setBuscaPlano] = useState('');
+  const [totalPlano, setTotalPlano] = useState(0);
+  const [gerandoPlano, setGerandoPlano] = useState(false);
+  const [erroPlano, setErroPlano] = useState('');
+  const [refreshTokenPlano, setRefreshTokenPlano] = useState(0);
+
+  async function handleGerarOuAtualizarPlano() {
+    setErroPlano('');
+    setGerandoPlano(true);
+    try {
+      await gerarPlano(Number(empresaId));
+      setRefreshTokenPlano((n) => n + 1);
+    } catch (err) {
+      setErroPlano(err.response?.data?.message || 'Não foi possível gerar/atualizar o plano de contas.');
+    } finally {
+      setGerandoPlano(false);
+    }
+  }
+
   // Botão "Nova máscara" fica no topo (padrão do resto do sistema, igual "Nova categoria" na
   // DRE), mas o campo de criar vive em DfcMascarasTab.jsx — dispara por ref.
   const mascarasTabRef = useRef(null);
@@ -234,6 +259,23 @@ export default function DfcConstrutorasPage() {
                   />
                 </div>
               </>
+            )}
+
+            {abaAtiva === 'plano-contas' && (
+              <div className="sm:min-w-56 sm:max-w-sm sm:flex-1">
+                <label className="mb-1 block text-sm font-medium text-gray-700">Buscar</label>
+                <div className="relative">
+                  <Search size={15} className="pointer-events-none absolute left-3 top-1/2 -translate-y-1/2 text-gray-400" />
+                  <input
+                    type="text"
+                    value={buscaPlano}
+                    onChange={(e) => setBuscaPlano(e.target.value)}
+                    disabled={!empresaId}
+                    placeholder={!empresaId ? 'Selecione a empresa primeiro' : 'Buscar por código ou descrição...'}
+                    className="w-full rounded-lg border border-gray-200 py-2 pl-9 pr-3 text-sm focus:outline-none focus:ring-2 focus:ring-primary-100 disabled:bg-gray-50 disabled:text-gray-400"
+                  />
+                </div>
+              </div>
             )}
 
             {abaAtiva === 'centros-custos' && (
@@ -295,6 +337,21 @@ export default function DfcConstrutorasPage() {
             )}
           </div>
 
+          {abaAtiva === 'plano-contas' && (
+            <div className="flex shrink-0 flex-col items-end gap-1.5">
+              <button
+                type="button"
+                onClick={handleGerarOuAtualizarPlano}
+                disabled={!empresaId || gerandoPlano}
+                title={totalPlano === 0 ? 'Gerar plano de contas a partir do Sienge' : 'Atualizar a partir do Sienge'}
+                className="flex shrink-0 items-center justify-center rounded-lg bg-primary-600 p-2 text-white transition-colors hover:bg-primary-700 disabled:cursor-not-allowed disabled:opacity-60"
+              >
+                {totalPlano === 0 ? <Plus size={18} /> : <RefreshCw size={18} className={gerandoPlano ? 'animate-spin' : ''} />}
+              </button>
+              {erroPlano && <span className="text-xs text-red-600">{erroPlano}</span>}
+            </div>
+          )}
+
           {abaAtiva === 'ciweb' && (
             <div className="flex shrink-0 items-center gap-2">
               {/* Só o ícone (mesmo botão do "gerar plano de contas" da DRE); abre a janela onde se
@@ -339,7 +396,14 @@ export default function DfcConstrutorasPage() {
       <div>
         <Tabs tabs={TABS} activeId={tabAtiva.id} onChange={(aba) => atualizarParams({ aba })} />
 
-        {tabAtiva.id === 'ciweb' ? (
+        {tabAtiva.id === 'plano-contas' ? (
+          <DfcPlanoContasTab
+            empresaId={empresaId}
+            search={buscaPlano}
+            refreshToken={refreshTokenPlano}
+            onTotal={setTotalPlano}
+          />
+        ) : tabAtiva.id === 'ciweb' ? (
           <DfcCiwebTab ref={ciwebTabRef} empresaId={empresaId} search={buscaCiweb} tipo={tipoCiweb} />
         ) : tabAtiva.id === 'centros-custos' ? (
           <DfcCentrosTab empresaId={empresaId} search={buscaCentros} />
