@@ -25,7 +25,7 @@ export function passaNoFiltro(filtro, valor) {
 // GestaoCobrancas/RotinasTab.jsx::FiltroColuna (SearchableSelect com `multiple` e
 // `renderTrigger`, painel com a largura do <th> via `colunaRef`). O ícone só fica
 // destacado quando há restrição de fato (filtro != null).
-export default function FiltroColuna({ filtro, onChange, opcoes, label, colunaRef }) {
+export default function FiltroColuna({ filtro, onChange, opcoes, label, colunaRef, larguraPainel = 0 }) {
   const ativo = filtro != null;
   return (
     <SearchableSelect
@@ -37,6 +37,7 @@ export default function FiltroColuna({ filtro, onChange, opcoes, label, colunaRe
       placeholder="Todos"
       emptyMessage="Nenhuma opção encontrada."
       larguraRef={colunaRef}
+      larguraPainel={larguraPainel}
       renderTrigger={({ toggle }) => (
         <button
           type="button"

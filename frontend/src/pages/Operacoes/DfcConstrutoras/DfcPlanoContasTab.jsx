@@ -1,6 +1,7 @@
-import { useCallback, useEffect, useMemo, useState } from 'react';
+import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { Check, ListTree, Loader2, Minus, Plus, TriangleAlert } from 'lucide-react';
 import SearchableSelect from '../../../components/SearchableSelect';
+import FiltroColuna, { passaNoFiltro } from '../../../components/FiltroColuna';
 import { listContas } from '../../../api/planosFinanceirosSienge.api';
 import { listDfcMascaras } from '../../../api/dfcMascaras.api';
 import { listClassificacoesPlanoDfc, updateClassificacaoPlanoDfc } from '../../../api/dfcPlanoContas.api';
@@ -21,6 +22,11 @@ const ORIGENS_PROJECAO = [
   { value: 'SIENGE_AGING', label: 'Sienge - Aging' },
   { value: 'HORIZON_ORCAMENTO_INFORMADO', label: 'Horizon - Orçamento Informado' },
 ];
+
+// Primeira opção dos filtros de coluna (pedido do usuário): acha as contas que ainda não foram
+// informadas. No filtro Conta, "não informada" = Máscara DFC ou Origem Projeção em branco.
+const NAO_INFORMADO = '__nao_informado__';
+const OPCAO_NAO_INFORMADO = { value: NAO_INFORMADO, label: 'NÃO INFORMADO' };
 
 // Mesmo par de cores das outras abas da DFC: vazio em âmbar, preenchido em azul claro.
 function corCampo(valor) {
@@ -98,6 +104,13 @@ export default function DfcPlanoContasTab({ empresaId, search = '', refreshToken
   // sienge_id -> { mascara_id, origem_projecao }
   const [classificacoes, setClassificacoes] = useState({});
   const [mascaras, setMascaras] = useState([]);
+  // Filtros de coluna (FiltroColuna): null = sem filtro (tudo marcado).
+  const [filtroConta, setFiltroConta] = useState(null);
+  const [filtroMascara, setFiltroMascara] = useState(null);
+  const [filtroOrigem, setFiltroOrigem] = useState(null);
+  const colunaContaRef = useRef(null);
+  const colunaMascaraRef = useRef(null);
+  const colunaOrigemRef = useRef(null);
   const [pendentes, setPendentes] = useState(0);
   const [erroSalvar, setErroSalvar] = useState('');
   const [salvoAlgumaVez, setSalvoAlgumaVez] = useState(false);
@@ -128,6 +141,9 @@ export default function DfcPlanoContasTab({ empresaId, search = '', refreshToken
 
   useEffect(() => {
     setFechados([]);
+    setFiltroConta(null);
+    setFiltroMascara(null);
+    setFiltroOrigem(null);
     setErroSalvar('');
     setSalvoAlgumaVez(false);
   }, [empresaId]);
@@ -164,19 +180,49 @@ export default function DfcPlanoContasTab({ empresaId, search = '', refreshToken
 
   const arvore = useMemo(() => montarArvore(contas), [contas]);
 
-  // Com busca: só os ramos com alguma conta que bate (pelo código, com ou sem pontos, ou pela
-  // descrição), e tudo aberto.
+  // Opções dos filtros de coluna — sempre com "NÃO INFORMADO" em primeiro.
+  const opcoesFiltroConta = useMemo(
+    () => [
+      OPCAO_NAO_INFORMADO,
+      ...[...contas]
+        .filter((c) => c.tp_conta !== 'T')
+        .sort((a, b) => String(a.sienge_id).localeCompare(String(b.sienge_id)))
+        .map((c) => ({ value: c.sienge_id, label: `${codigoFormatado(c)} ${c.name}` })),
+    ],
+    [contas]
+  );
+  const opcoesFiltroMascara = useMemo(() => [OPCAO_NAO_INFORMADO, ...opcoesMascara], [opcoesMascara]);
+  const opcoesFiltroOrigem = useMemo(() => [OPCAO_NAO_INFORMADO, ...ORIGENS_PROJECAO], []);
+
+  // Com busca e/ou filtros de coluna: só os ramos com alguma conta que passa, e tudo aberto. A
+  // busca (código com ou sem pontos, ou descrição) vale pra qualquer conta; os filtros de coluna
+  // valem pras analíticas — com eles ativos, as totalizadoras aparecem só como caminho até elas.
   const termo = search.trim().toLowerCase();
+  const filtrosAtivos = filtroConta != null || filtroMascara != null || filtroOrigem != null;
   const visivel = useMemo(() => {
-    if (!termo) return null;
+    if (!termo && !filtrosAtivos) return null;
     const ids = new Set();
-    const bate = (c) =>
+    const bateBusca = (c) =>
+      !termo ||
       String(c.sienge_id).includes(termo.replace(/\./g, '')) ||
       codigoFormatado(c).includes(termo) ||
       (c.name || '').toLowerCase().includes(termo);
+    const passaFiltros = (c) => {
+      const cl = classificacoes[c.sienge_id] || {};
+      const pendente = !cl.mascara_id || !cl.origem_projecao;
+      const passaConta =
+        filtroConta == null || passaNoFiltro(filtroConta, c.sienge_id) || (pendente && passaNoFiltro(filtroConta, NAO_INFORMADO));
+      return (
+        passaConta &&
+        passaNoFiltro(filtroMascara, cl.mascara_id ?? NAO_INFORMADO) &&
+        passaNoFiltro(filtroOrigem, cl.origem_projecao ?? NAO_INFORMADO)
+      );
+    };
     const marcar = (no) => {
       const algumFilho = no.filhos.map(marcar).some(Boolean);
-      if (algumFilho || bate(no)) {
+      const proprio =
+        no.tp_conta === 'T' ? !filtrosAtivos && termo && bateBusca(no) : passaFiltros(no) && bateBusca(no);
+      if (algumFilho || proprio) {
         ids.add(no.sienge_id);
         return true;
       }
@@ -184,7 +230,7 @@ export default function DfcPlanoContasTab({ empresaId, search = '', refreshToken
     };
     arvore.forEach(marcar);
     return ids;
-  }, [arvore, termo]);
+  }, [arvore, termo, filtrosAtivos, filtroConta, filtroMascara, filtroOrigem, classificacoes]);
 
   function alternar(id) {
     setFechados((atual) => (atual.includes(id) ? atual.filter((v) => v !== id) : [...atual, id]));
@@ -263,15 +309,59 @@ export default function DfcPlanoContasTab({ empresaId, search = '', refreshToken
           <p className="max-w-sm text-xs text-gray-400">Use o ícone no canto direito, acima, para gerar a partir do Sienge.</p>
         </div>
       ) : linhas.length === 0 ? (
-        <div className="py-12 text-center text-sm text-gray-400">Nenhuma conta encontrada para essa busca.</div>
+        <div className="py-12 text-center text-sm text-gray-400">
+          Nenhuma conta encontrada para essa busca/filtro.
+          {filtrosAtivos && (
+            <button
+              type="button"
+              onClick={() => {
+                setFiltroConta(null);
+                setFiltroMascara(null);
+                setFiltroOrigem(null);
+              }}
+              className="ml-2 font-medium text-primary-600 hover:text-primary-700"
+            >
+              Limpar filtros
+            </button>
+          )}
+        </div>
       ) : (
         <div>
           <div
             className={`${GRADE} rounded-t-lg border-b-2 border-blue-500 bg-blue-50 py-2.5 pl-4 pr-4 text-xs font-medium uppercase tracking-wide text-blue-700`}
           >
-            <span>Conta</span>
-            <span>Máscara DFC</span>
-            <span>Origem Projeção</span>
+            <span ref={colunaContaRef} className="flex items-center gap-1.5">
+              Conta
+              <FiltroColuna
+                filtro={filtroConta}
+                onChange={setFiltroConta}
+                opcoes={opcoesFiltroConta}
+                label="Conta"
+                colunaRef={colunaContaRef}
+              />
+            </span>
+            <span ref={colunaMascaraRef} className="flex items-center gap-1.5">
+              Máscara DFC
+              <FiltroColuna
+                filtro={filtroMascara}
+                onChange={setFiltroMascara}
+                opcoes={opcoesFiltroMascara}
+                label="Máscara DFC"
+                colunaRef={colunaMascaraRef}
+                larguraPainel={460}
+              />
+            </span>
+            <span ref={colunaOrigemRef} className="flex items-center gap-1.5">
+              Origem Projeção
+              <FiltroColuna
+                filtro={filtroOrigem}
+                onChange={setFiltroOrigem}
+                opcoes={opcoesFiltroOrigem}
+                label="Origem Projeção"
+                colunaRef={colunaOrigemRef}
+                larguraPainel={320}
+              />
+            </span>
             <span>Status</span>
           </div>
 
