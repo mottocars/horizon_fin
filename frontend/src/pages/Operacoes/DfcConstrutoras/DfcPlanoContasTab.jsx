@@ -339,7 +339,7 @@ export default function DfcPlanoContasTab({ empresaId, search = '', refreshToken
                 opcoes={opcoesFiltroOrigem}
                 label="Origem Projeção"
                 colunaRef={colunaOrigemRef}
-                larguraPainel={320}
+                larguraPainel={360}
               />
             </span>
             <span>Status</span>
@@ -429,6 +429,7 @@ export default function DfcPlanoContasTab({ empresaId, search = '', refreshToken
                       options={ORIGENS_PROJECAO}
                       placeholder="Selecione a origem"
                       corClasses={corCampo(classificacao.origem_projecao)}
+                      larguraPainel={360}
                     />
                   </>
                 )}
