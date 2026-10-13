@@ -423,25 +423,6 @@ const DfcMascarasTab = forwardRef(function DfcMascarasTab({ empresaId }, ref) {
             Tentar de novo
           </button>
         </div>
-      ) : vazio && !criando ? (
-        <div className="flex flex-col items-center gap-1 py-14 text-center">
-          <Tags size={26} className="mb-1 text-gray-300" />
-          <p className="text-sm text-gray-600">Nenhuma máscara da DFC cadastrada ainda.</p>
-          <p className="max-w-md text-xs text-gray-400">
-            Crie as máscaras de nível 1 (ex.: Fluxo de Caixa Operacional) e, dentro de cada uma, as de nível 2. Ou comece pelo
-            modelo sugerido e ajuste depois.
-          </p>
-          <div className="mt-4 flex flex-wrap justify-center gap-2">
-            <Button type="button" onClick={() => setCriando({ parentId: null })}>
-              <Plus size={16} />
-              Criar a primeira máscara
-            </Button>
-            <Button type="button" variant="secondary" onClick={usarModelo} loading={pendentes > 0}>
-              <Wand2 size={16} />
-              Usar modelo sugerido
-            </Button>
-          </div>
-        </div>
       ) : (
         <div
           onDragOver={(e) => arrastado && e.preventDefault()}
@@ -456,6 +437,28 @@ const DfcMascarasTab = forwardRef(function DfcMascarasTab({ empresaId }, ref) {
               Arraste pelas linhas para reordenar ou mudar de grupo · duplo clique renomeia
             </span>
           </div>
+
+          {/* Cabeçalho sempre visível, mesmo sem nenhuma máscara (pedido do usuário). */}
+          {vazio && !criando && (
+            <div className="flex flex-col items-center gap-1 border-b border-gray-100 py-12 text-center">
+              <Tags size={26} className="mb-1 text-gray-300" />
+              <p className="text-sm text-gray-600">Nenhuma máscara da DFC cadastrada ainda.</p>
+              <p className="max-w-md text-xs text-gray-400">
+                Crie as máscaras de nível 1 (ex.: Fluxo de Caixa Operacional) e, dentro de cada uma, as de nível 2. Ou comece pelo
+                modelo sugerido e ajuste depois.
+              </p>
+              <div className="mt-4 flex flex-wrap justify-center gap-2">
+                <Button type="button" onClick={() => setCriando({ parentId: null })}>
+                  <Plus size={16} />
+                  Criar a primeira máscara
+                </Button>
+                <Button type="button" variant="secondary" onClick={usarModelo} loading={pendentes > 0}>
+                  <Wand2 size={16} />
+                  Usar modelo sugerido
+                </Button>
+              </div>
+            </div>
+          )}
 
           {arvore.map((grupo, i) => {
             const aberto = abertos.includes(grupo.id);
@@ -587,6 +590,7 @@ const DfcMascarasTab = forwardRef(function DfcMascarasTab({ empresaId }, ref) {
           })}
 
           {/* Fim da lista: novo nível 1 (e alvo pra soltar no fim, como nível 1) */}
+          {!(vazio && !criando) && (
           <div
             onDragOver={(e) => mirar(e, { parentId: null, index: arvore.length })}
             className="relative px-2 py-2"
@@ -612,6 +616,7 @@ const DfcMascarasTab = forwardRef(function DfcMascarasTab({ empresaId }, ref) {
               </button>
             )}
           </div>
+          )}
         </div>
       )}
     </div>

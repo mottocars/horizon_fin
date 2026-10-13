@@ -308,29 +308,6 @@ export default function DfcPlanoContasTab({ empresaId, search = '', refreshToken
             Tentar de novo
           </button>
         </div>
-      ) : contas.length === 0 ? (
-        <div className="flex flex-col items-center gap-1 py-14 text-center">
-          <ListTree size={26} className="mb-1 text-gray-300" />
-          <p className="text-sm text-gray-600">Nenhuma conta no plano de contas desta empresa.</p>
-          <p className="max-w-sm text-xs text-gray-400">Use o ícone no canto direito, acima, para gerar a partir do Sienge.</p>
-        </div>
-      ) : linhas.length === 0 ? (
-        <div className="py-12 text-center text-sm text-gray-400">
-          Nenhuma conta encontrada para essa busca/filtro.
-          {filtrosAtivos && (
-            <button
-              type="button"
-              onClick={() => {
-                setFiltroConta(null);
-                setFiltroMascara(null);
-                setFiltroOrigem(null);
-              }}
-              className="ml-2 font-medium text-primary-600 hover:text-primary-700"
-            >
-              Limpar filtros
-            </button>
-          )}
-        </div>
       ) : (
         <div>
           <div
@@ -371,7 +348,37 @@ export default function DfcPlanoContasTab({ empresaId, search = '', refreshToken
             <span>Status</span>
           </div>
 
-          {linhas.map(({ conta, nivel }) => {
+          {/* Cabeçalho sempre visível (pedido do usuário) — inclusive pra desfazer um filtro de
+              coluna que não achou nada. */}
+          {linhas.length === 0 ? (
+            contas.length === 0 ? (
+              <div className="flex flex-col items-center gap-1 border-b border-gray-100 py-12 text-center">
+                <ListTree size={26} className="mb-1 text-gray-300" />
+                <p className="text-sm text-gray-600">Nenhuma conta no plano de contas desta empresa.</p>
+                <p className="max-w-sm text-xs text-gray-400">
+                  Use o ícone no canto direito, acima, para gerar a partir do Sienge.
+                </p>
+              </div>
+            ) : (
+              <div className="border-b border-gray-100 py-10 text-center text-sm text-gray-400">
+                Nenhuma conta encontrada para essa busca/filtro.
+                {filtrosAtivos && (
+                  <button
+                    type="button"
+                    onClick={() => {
+                      setFiltroConta(null);
+                      setFiltroMascara(null);
+                      setFiltroOrigem(null);
+                    }}
+                    className="ml-2 font-medium text-primary-600 hover:text-primary-700"
+                  >
+                    Limpar filtros
+                  </button>
+                )}
+              </div>
+            )
+          ) : (
+            linhas.map(({ conta, nivel }) => {
             const totalizadora = conta.tp_conta === 'T';
             const temFilhos = conta.filhos.length > 0;
             const aberto = visivel ? true : !fechados.includes(conta.sienge_id);
@@ -460,7 +467,8 @@ export default function DfcPlanoContasTab({ empresaId, search = '', refreshToken
                 {conteudo}
               </div>
             );
-          })}
+          })
+          )}
         </div>
       )}
     </div>

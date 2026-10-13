@@ -362,16 +362,6 @@ const DfcCiwebTab = forwardRef(function DfcCiwebTab({ empresaId, search, tipo },
             Tentar de novo
           </button>
         </div>
-      ) : envios.length === 0 ? (
-        <div className="flex flex-col items-center gap-1 py-14 text-center">
-          <Globe size={26} className="mb-1 text-gray-300" />
-          <p className="text-sm text-gray-600">
-            {importados.DCD.length + importados.EXTRATO.length === 0
-              ? 'Nenhum DCD ou Geral importado ainda.'
-              : 'Nenhuma importação encontrada para esse filtro.'}
-          </p>
-          <p className="max-w-sm text-xs text-gray-400">Use o botão de importar no canto direito, acima.</p>
-        </div>
       ) : (
         <div>
           <div
@@ -385,7 +375,19 @@ const DfcCiwebTab = forwardRef(function DfcCiwebTab({ empresaId, search, tipo },
             <span className="text-right">Ações</span>
           </div>
 
-          {envios.map((envio) => {
+          {/* Cabeçalho sempre visível, mesmo sem nenhum registro (pedido do usuário). */}
+          {envios.length === 0 ? (
+            <div className="flex flex-col items-center gap-1 border-b border-gray-100 py-10 text-center">
+              <Globe size={26} className="mb-1 text-gray-300" />
+              <p className="text-sm text-gray-600">
+                {importados.DCD.length + importados.EXTRATO.length === 0
+                  ? 'Nenhum DCD ou Geral importado ainda.'
+                  : 'Nenhuma importação encontrada para esse filtro.'}
+              </p>
+              <p className="max-w-sm text-xs text-gray-400">Use o botão de importar no canto direito, acima.</p>
+            </div>
+          ) : (
+            envios.map((envio) => {
             const chave = `${envio.tipo}|${envio.contrato}`;
             return (
               <div key={chave} className={`${GRADE} border-b border-gray-100 bg-white py-1.5 pl-4 pr-4 hover:bg-gray-50`}>
@@ -428,7 +430,8 @@ const DfcCiwebTab = forwardRef(function DfcCiwebTab({ empresaId, search, tipo },
                 </span>
               </div>
             );
-          })}
+          })
+          )}
         </div>
       )}
 

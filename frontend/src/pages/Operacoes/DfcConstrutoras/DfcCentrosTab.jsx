@@ -169,10 +169,6 @@ export default function DfcCentrosTab({ empresaId, search }) {
             Tentar de novo
           </button>
         </div>
-      ) : filtrados.length === 0 ? (
-        <div className="py-12 text-center text-sm text-gray-400">
-          {centros.length === 0 ? 'Nenhum centro de custo nesta empresa.' : 'Nenhum centro de custo encontrado para essa busca.'}
-        </div>
       ) : (
         <div>
           {/* Cabeçalho azul, mesmo da aba Máscaras, com os títulos das colunas dos campos. */}
@@ -193,7 +189,13 @@ export default function DfcCentrosTab({ empresaId, search }) {
             </span>
           </div>
 
-          {filtrados.map((centro) => {
+          {/* Cabeçalho sempre visível, mesmo sem nenhum registro (pedido do usuário). */}
+          {filtrados.length === 0 ? (
+            <div className="border-b border-gray-100 py-10 text-center text-sm text-gray-400">
+              {centros.length === 0 ? 'Nenhum centro de custo nesta empresa.' : 'Nenhum centro de custo encontrado para essa busca.'}
+            </div>
+          ) : (
+            filtrados.map((centro) => {
             const obra = centro.natureza === 'OBRA';
             return (
               <div
@@ -255,7 +257,8 @@ export default function DfcCentrosTab({ empresaId, search }) {
                 )}
               </div>
             );
-          })}
+          })
+          )}
         </div>
       )}
     </div>
