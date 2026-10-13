@@ -63,14 +63,15 @@ function montarArvore(contas) {
 // Operações > DFC Construtoras > Plano Contas: espelho do cadastro Cadastros > Planos Financeiros
 // da empresa (mesma fonte, mesmas colunas — código, descrição e status), no drilldown da aba
 // Máscaras (pedido do usuário): as contas totalizadoras são as linhas cinza com +/- e contador, e
-// cada nível abaixo vem mais recuado. Tudo começa fechado; com busca, mostra as contas que batem
+// cada nível abaixo vem mais recuado. Tudo começa aberto (pedido do usuário); com busca, mostra as contas que batem
 // junto com as totalizadoras acima delas, já abertas. A atualização a partir do Sienge mora no
 // topo da página (DfcConstrutorasPage.jsx).
 export default function DfcPlanoContasTab({ empresaId, search = '', refreshToken = 0, onTotal }) {
   const [contas, setContas] = useState([]);
   const [carregando, setCarregando] = useState(true);
   const [erroCarga, setErroCarga] = useState('');
-  const [abertos, setAbertos] = useState([]);
+  // Guarda as FECHADAS (não as abertas): vazio = árvore inteira aberta, que é o padrão.
+  const [fechados, setFechados] = useState([]);
 
   const carregar = useCallback(() => {
     if (!empresaId) {
@@ -91,7 +92,7 @@ export default function DfcPlanoContasTab({ empresaId, search = '', refreshToken
   }, [empresaId]);
 
   useEffect(() => {
-    setAbertos([]);
+    setFechados([]);
   }, [empresaId]);
 
   useEffect(() => {
@@ -123,7 +124,7 @@ export default function DfcPlanoContasTab({ empresaId, search = '', refreshToken
   }, [arvore, termo]);
 
   function alternar(id) {
-    setAbertos((atual) => (atual.includes(id) ? atual.filter((v) => v !== id) : [...atual, id]));
+    setFechados((atual) => (atual.includes(id) ? atual.filter((v) => v !== id) : [...atual, id]));
   }
 
   // Lista achatada das linhas visíveis, com a profundidade de cada uma (pro recuo).
@@ -132,7 +133,7 @@ export default function DfcPlanoContasTab({ empresaId, search = '', refreshToken
     nos.forEach((no) => {
       if (visivel && !visivel.has(no.sienge_id)) return;
       linhas.push({ conta: no, nivel });
-      const aberto = visivel ? true : abertos.includes(no.sienge_id);
+      const aberto = visivel ? true : !fechados.includes(no.sienge_id);
       if (aberto && no.filhos.length) percorrer(no.filhos, nivel + 1);
     });
   };
@@ -186,7 +187,7 @@ export default function DfcPlanoContasTab({ empresaId, search = '', refreshToken
           {linhas.map(({ conta, nivel }) => {
             const totalizadora = conta.tp_conta === 'T';
             const temFilhos = conta.filhos.length > 0;
-            const aberto = visivel ? true : abertos.includes(conta.sienge_id);
+            const aberto = visivel ? true : !fechados.includes(conta.sienge_id);
             const recuo = { paddingLeft: 16 + nivel * 28 };
             const conteudo = (
               <>
