@@ -71,6 +71,17 @@ async function listCentros(req, res, next) {
   }
 }
 
+// Valores fixos (vindos do DCD / Geral do Contrato Caixa da obra) que a tela mostra travados.
+async function getFonte(req, res, next) {
+  try {
+    const empresaId = empresaIdSchema.parse(req.params.empresaId);
+    const siengeId = siengeIdSchema.parse(req.params.siengeId);
+    res.json(await service.fonteFixos(empresaId, siengeId));
+  } catch (err) {
+    tratar(err, next);
+  }
+}
+
 async function listVersoes(req, res, next) {
   try {
     const empresaId = empresaIdSchema.parse(req.params.empresaId);
@@ -105,4 +116,4 @@ async function criarVersao(req, res, next) {
   }
 }
 
-module.exports = { listCentros, listVersoes, getVersao, criarVersao };
+module.exports = { listCentros, getFonte, listVersoes, getVersao, criarVersao };

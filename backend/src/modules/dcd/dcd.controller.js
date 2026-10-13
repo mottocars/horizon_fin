@@ -1,6 +1,7 @@
 const fs = require('fs');
 const ExcelJS = require('exceljs');
 const service = require('./dcd.service');
+const dfcParametros = require('../dfc-parametros/dfcParametros.service');
 const { datasParaExcel } = require('../../utils/dataExcel');
 
 const COLS_CONTRATO = [
@@ -262,6 +263,14 @@ async function importar(req, res, next) {
       req.file.path,
       req.file.originalname,
       req.user.id
+    );
+    // DCD novo de um contrato → versão nova dos Parâmetros da DFC das obras desse contrato
+    // (os parâmetros fixos vêm do DCD — ver dfcParametros.service.js). Nunca derruba a importação.
+    result.versoes_dfc = await dfcParametros.versionarPorImportacao(
+      Number(req.params.empresaId),
+      [result.numero_contrato],
+      req.user.id,
+      'DCD'
     );
     res.status(201).json(result);
   } catch (err) {

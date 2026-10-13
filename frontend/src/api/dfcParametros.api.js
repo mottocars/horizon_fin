@@ -5,6 +5,12 @@ export function listCentrosDfc(empresaId) {
   return http.get(`/dfc-parametros/${empresaId}/centros`).then((res) => res.data);
 }
 
+// Valores fixos da obra (vindos do DCD / Geral do Contrato Caixa dela):
+// { contrato, dcd, geral, fixos: { campo: valor }, origens: { campo: 'DCD' | 'GERAL' } }.
+export function getFonteParametrosDfc(empresaId, siengeId) {
+  return http.get(`/dfc-parametros/${empresaId}/centros/${siengeId}/fonte`).then((res) => res.data);
+}
+
 export function listVersoesParametrosDfc(empresaId, siengeId) {
   return http.get(`/dfc-parametros/${empresaId}/centros/${siengeId}/versoes`).then((res) => res.data);
 }

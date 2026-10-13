@@ -8,6 +8,7 @@ const router = Router();
 router.use(authMiddleware);
 router.param('empresaId', paramEmpresa);
 router.get('/:empresaId/centros', controller.listCentros);
+router.get('/:empresaId/centros/:siengeId/fonte', controller.getFonte);
 router.get('/:empresaId/centros/:siengeId/versoes', controller.listVersoes);
 router.get('/:empresaId/centros/:siengeId/versoes/:versao', controller.getVersao);
 router.post('/:empresaId/centros/:siengeId/versoes', controller.criarVersao);

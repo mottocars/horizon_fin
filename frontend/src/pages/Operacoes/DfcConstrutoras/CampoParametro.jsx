@@ -1,6 +1,7 @@
 import { useState } from 'react';
 import { Lock } from 'lucide-react';
 import { formatarNumero } from './parametrosDfc';
+import { formatarDataISO } from '../../../utils/datas';
 
 // Mesmo destaque dos campos do Motor de Risco (GestaoCobrancas/MotorRisco/estadoCampo.js —
 // duplicado aqui de propósito, telas não importam umas das outras): em branco fica âmbar, pra
@@ -72,11 +73,22 @@ function CampoNumeroBR({ valor, casas, max, disabled, onChange }) {
 
 const UNIDADE_PADRAO = { moeda: 'R$', percentual: '%', inteiro: '', data: '' };
 
+const ROTULO_ORIGEM = { DCD: 'Vem do DCD importado', GERAL: 'Vem do Geral dos Empreendimentos importado' };
+
+function valorFormatado(campo, valor) {
+  if (valor === '' || valor === null || valor === undefined) return '—';
+  if (campo.tipo === 'data') return formatarDataISO(valor);
+  const casas = campo.tipo === 'moeda' ? 2 : campo.tipo === 'inteiro' ? 0 : (campo.casas ?? 2);
+  return formatarNumero(valor, casas);
+}
+
 // Um parâmetro: rótulo e explicação à esquerda, campo à direita — mesmo par "descrição + campo"
-// de MotorRisco/CampoNumerico.jsx. O tipo 'calculado' aparece travado (cadeado), no estilo das
-// "Regras fixas do sistema" do Motor de Risco.
-export default function CampoParametro({ campo, valor, onChange, disabled = false, primeiro = false }) {
+// de MotorRisco/CampoNumerico.jsx. O tipo 'calculado' e os campos fixos (`origemFixo` = 'DCD' |
+// 'GERAL': o valor vem do arquivo importado do Contrato Caixa da obra) aparecem travados
+// (cadeado), no estilo das "Regras fixas do sistema" do Motor de Risco.
+export default function CampoParametro({ campo, valor, onChange, disabled = false, primeiro = false, origemFixo = null }) {
   const unidade = campo.unidade ?? UNIDADE_PADRAO[campo.tipo] ?? '';
+  const travado = campo.tipo === 'calculado' || Boolean(origemFixo);
 
   return (
     <div
@@ -87,14 +99,18 @@ export default function CampoParametro({ campo, valor, onChange, disabled = fals
       <div>
         <p className="text-sm font-medium text-gray-800">{campo.label}</p>
         <p className="mt-1 text-xs leading-relaxed text-gray-500">{campo.desc}</p>
+        {origemFixo && (
+          <p className="mt-2 inline-flex items-center gap-1 rounded-md bg-gray-100 px-1.5 py-0.5 text-[11px] font-medium text-gray-500">
+            <Lock size={10} />
+            {ROTULO_ORIGEM[origemFixo] || 'Valor fixo'} — não editável
+          </p>
+        )}
       </div>
       <div className="flex items-center gap-2">
-        {campo.tipo === 'calculado' ? (
+        {travado ? (
           <div className="flex w-full items-center justify-between gap-2 rounded-lg border border-gray-100 bg-gray-50 px-3 py-2 text-sm">
             <Lock size={13} className="shrink-0 text-gray-400" />
-            <span className="font-mono tabular-nums text-gray-600">
-              {valor === '' ? '—' : formatarNumero(valor, campo.casas ?? 2)}
-            </span>
+            <span className="font-mono tabular-nums text-gray-600">{valorFormatado(campo, valor)}</span>
           </div>
         ) : campo.tipo === 'data' ? (
           <input

@@ -1,7 +1,7 @@
 import { forwardRef, useEffect, useImperativeHandle, useState } from 'react';
-import { AlertTriangle, Building2, CheckCircle2, HardHat, SlidersHorizontal } from 'lucide-react';
+import { AlertTriangle, Building2, CheckCircle2, HardHat, Lock, SlidersHorizontal } from 'lucide-react';
 import Card from '../../../components/Card';
-import { getVersaoParametrosDfc, salvarVersaoParametrosDfc } from '../../../api/dfcParametros.api';
+import { getFonteParametrosDfc, getVersaoParametrosDfc, salvarVersaoParametrosDfc } from '../../../api/dfcParametros.api';
 import { CAMPOS_EDITAVEIS, PARAMETROS_VAZIOS, SESSOES_PARAMETROS } from './parametrosDfc';
 import CampoParametro from './CampoParametro';
 
@@ -120,6 +120,9 @@ const DfcParametrosTab = forwardRef(function DfcParametrosTab(
   // Valores da versão vigente (a mais recente) — publicar só libera se algo estiver diferente
   // dela. null = empreendimento ainda sem nenhuma versão.
   const [valoresVigentes, setValoresVigentes] = useState(null);
+  // Valores fixos da obra (DCD / Geral do Contrato Caixa — ver dfcParametros.service.js::fonteFixos):
+  // aparecem travados e sempre valem no lugar do que estiver na versão. null = carregando.
+  const [fonte, setFonte] = useState(null);
 
   const versaoNumero = versaoSelecionada?.versao ?? null;
 
@@ -158,6 +161,22 @@ const DfcParametrosTab = forwardRef(function DfcParametrosTab(
       .catch(() => setValoresVigentes(null));
   }, [empresaId, siengeId, versaoVigenteNumero]);
 
+  // Recarrega também quando a versão vigente muda: importar um DCD/Geral novo cria versão sozinho.
+  useEffect(() => {
+    if (!empresaId || !siengeId) {
+      setFonte(null);
+      return;
+    }
+    setFonte(null);
+    getFonteParametrosDfc(empresaId, siengeId)
+      .then(setFonte)
+      .catch(() => setFonte({ contrato: null, fixos: {}, origens: {} }));
+  }, [empresaId, siengeId, versaoVigenteNumero]);
+
+  // O que vale de fato: o digitado/carregado da versão, com os fixos por cima.
+  const efetivos = { ...valores, ...(fonte?.fixos || {}) };
+  const origens = fonte?.origens || {};
+
   function alterar(id, valor) {
     setValores((prev) => ({ ...prev, [id]: valor }));
   }
@@ -166,9 +185,9 @@ const DfcParametrosTab = forwardRef(function DfcParametrosTab(
   // vigente (pedido do usuário: sem aviso de "preencha X" — os campos em branco já ficam em
   // âmbar). A única mensagem que sobra é a das datas do ciclo invertidas, que senão travaria o
   // botão sem explicação.
-  const todosPreenchidos = CAMPOS_EDITAVEIS.every((c) => valores[c.id] !== '' && valores[c.id] !== null);
-  const datasInvertidas = todosPreenchidos && valores.data_fim_ciclo <= valores.data_inicio_ciclo;
-  const alterado = !valoresVigentes || CAMPOS_EDITAVEIS.some((c) => valores[c.id] !== valoresVigentes[c.id]);
+  const todosPreenchidos = CAMPOS_EDITAVEIS.every((c) => efetivos[c.id] !== '' && efetivos[c.id] !== null);
+  const datasInvertidas = todosPreenchidos && efetivos.data_fim_ciclo <= efetivos.data_inicio_ciclo;
+  const alterado = !valoresVigentes || CAMPOS_EDITAVEIS.some((c) => efetivos[c.id] !== valoresVigentes[c.id]);
   const aguardandoVigente = Boolean(versaoVigenteNumero) && !valoresVigentes;
 
   const podeSalvar =
@@ -176,6 +195,7 @@ const DfcParametrosTab = forwardRef(function DfcParametrosTab(
     !carregando &&
     !salvando &&
     !aguardandoVigente &&
+    Boolean(fonte) &&
     todosPreenchidos &&
     !datasInvertidas &&
     alterado;
@@ -185,7 +205,7 @@ const DfcParametrosTab = forwardRef(function DfcParametrosTab(
     setSucesso('');
     setSalvando(true);
     try {
-      const criada = await salvarVersaoParametrosDfc(empresaId, siengeId, valores);
+      const criada = await salvarVersaoParametrosDfc(empresaId, siengeId, efetivos);
       setSucesso(`Versão ${criada.versao} gravada com sucesso — já é a versão vigente deste empreendimento.`);
       onVersaoCriada(criada);
     } catch (err) {
@@ -244,12 +264,13 @@ const DfcParametrosTab = forwardRef(function DfcParametrosTab(
   }
 
   const editandoVersaoAntiga = versaoSelecionada && versaoSelecionada.id !== versaoMaisRecenteId;
-  const valoresComCalculados = { ...valores };
+  const valoresComCalculados = { ...efetivos };
   SESSOES_PARAMETROS.forEach((s) =>
     s.campos.forEach((c) => {
-      if (c.tipo === 'calculado') valoresComCalculados[c.id] = c.calcular(valores);
+      if (c.tipo === 'calculado') valoresComCalculados[c.id] = c.calcular(efetivos);
     })
   );
+  const temFixos = Object.keys(origens).length > 0;
 
   return (
     <div className="grid grid-cols-1 gap-4 xl:grid-cols-[minmax(0,1fr)_320px] xl:items-start">
@@ -264,6 +285,16 @@ const DfcParametrosTab = forwardRef(function DfcParametrosTab(
               ? 'Você está olhando uma versão antiga. Ajustar e publicar cria uma versão nova — o histórico nunca é sobrescrito.'
               : 'Preencha os parâmetros abaixo e publique quando terminar. Só gera versão nova se algum parâmetro mudar.'}
           </p>
+
+          {temFixos && (
+            <p className="mt-2 flex items-start gap-1.5 text-xs text-gray-500">
+              <Lock size={12} className="mt-0.5 shrink-0 text-gray-400" />
+              <span>
+                Os campos com cadeado vêm do DCD / Geral importados do contrato Caixa {fonte.contrato} e não podem
+                ser editados. Cada DCD ou Geral novo desse contrato gera uma versão nova sozinho.
+              </span>
+            </p>
+          )}
 
           {erro && (
             <div className="mt-3 flex items-center gap-2 rounded-lg bg-red-50 px-3 py-2 text-sm text-red-600">
@@ -297,6 +328,7 @@ const DfcParametrosTab = forwardRef(function DfcParametrosTab(
                   onChange={alterar}
                   disabled={carregando}
                   primeiro={i === 0}
+                  origemFixo={origens[campo.id] || null}
                 />
               ))}
             </div>

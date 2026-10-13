@@ -1,6 +1,7 @@
 const fs = require('fs');
 const ExcelJS = require('exceljs');
 const service = require('./extrato.service');
+const dfcParametros = require('../dfc-parametros/dfcParametros.service');
 const { datasParaExcel } = require('../../utils/dataExcel');
 
 const COLS_UNIDADES = [
@@ -138,6 +139,14 @@ async function importar(req, res, next) {
       req.file.path,
       req.file.originalname,
       req.user.id
+    );
+    // Geral novo → versão nova dos Parâmetros da DFC das obras desses contratos (o ticket médio
+    // vem do Geral — ver dfcParametros.service.js). Nunca derruba a importação.
+    result.versoes_dfc = await dfcParametros.versionarPorImportacao(
+      Number(req.params.empresaId),
+      (result.empreendimentos || []).map((e) => e.contrato_empreendimento),
+      req.user.id,
+      'GERAL'
     );
     res.status(201).json(result);
   } catch (err) {

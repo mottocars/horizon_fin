@@ -161,7 +161,10 @@ export default function DfcConstrutorasPage() {
   const versaoSelecionada = versoes.find((v) => v.id === versaoId) || null;
   const opcoesVersao = versoes.map((v, i) => ({
     value: v.id,
-    label: `Versão ${v.versao}${i === 0 ? ' (atual)' : ''} — ${formatarDataHora(v.criado_em)}`,
+    // Versões criadas sozinhas ao importar DCD / Geral levam a origem no rótulo.
+    label: `Versão ${v.versao}${i === 0 ? ' (atual)' : ''} — ${formatarDataHora(v.criado_em)}${
+      v.origem === 'DCD' ? ' · DCD importado' : v.origem === 'GERAL' ? ' · Geral importado' : ''
+    }`,
   }));
 
   // "Publicar Versão" fica na barra de filtros (padrão do Motor de Risco); a aba expõe salvar()
