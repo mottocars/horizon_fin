@@ -2916,3 +2916,21 @@ CREATE TABLE dfc_parametros_versoes (
     UNIQUE (empresa_id, sienge_id, versao),
     CHECK (data_fim_ciclo > data_inicio_ciclo)
 );
+
+-- ─── Operações > DFC Construtoras > Plano Contas — ver database/migrations/2026-10-13-dfc-plano-contas.sql ───
+-- Máscara DFC (nível 2) e Origem da Projeção de cada conta analítica do plano de contas Sienge.
+CREATE TABLE dfc_plano_contas (
+    empresa_id       INTEGER NOT NULL,
+    sienge_id        INTEGER NOT NULL,
+    mascara_id       INTEGER REFERENCES dfc_mascaras(id) ON DELETE SET NULL,
+    origem_projecao  VARCHAR(40) CHECK (origem_projecao IN (
+                         'CEF_NOVO_REGISTRO', 'CEF_MEDICAO', 'CEF_CREDITO_PJ', 'CEF_JUROS', 'CEF_AMORTIZACAO',
+                         'SIENGE_ORCAMENTO_EMPRESARIAL', 'SIENGE_AGING', 'HORIZON_ORCAMENTO_INFORMADO')),
+    atualizado_em    TIMESTAMP DEFAULT NOW(),
+    PRIMARY KEY (empresa_id, sienge_id),
+    FOREIGN KEY (sienge_id, empresa_id) REFERENCES planos_financeiros_sienge(sienge_id, empresa_id) ON DELETE CASCADE
+);
+
+CREATE TRIGGER trg_dfc_plano_contas_atualizado_em
+    BEFORE UPDATE ON dfc_plano_contas
+    FOR EACH ROW EXECUTE FUNCTION set_atualizado_em();

@@ -1,10 +1,31 @@
 import { useCallback, useEffect, useMemo, useState } from 'react';
-import { ListTree, Minus, Plus, TriangleAlert } from 'lucide-react';
+import { Check, ListTree, Loader2, Minus, Plus, TriangleAlert } from 'lucide-react';
+import SearchableSelect from '../../../components/SearchableSelect';
 import { listContas } from '../../../api/planosFinanceirosSienge.api';
+import { listDfcMascaras } from '../../../api/dfcMascaras.api';
+import { listClassificacoesPlanoDfc, updateClassificacaoPlanoDfc } from '../../../api/dfcPlanoContas.api';
 
 const LIMIT = 2000;
 
-const GRADE = 'grid grid-cols-[minmax(0,1fr)_100px] items-center gap-3';
+const GRADE = 'grid grid-cols-[minmax(0,1fr)_240px_260px_80px] items-center gap-3';
+
+// Opções fixas da "Origem Projeção" (pedido do usuário) — mesma lista do backend
+// (dfcPlanoContas.controller.js) e do CHECK da tabela dfc_plano_contas.
+const ORIGENS_PROJECAO = [
+  { value: 'CEF_NOVO_REGISTRO', label: 'CEF - Novo Registro' },
+  { value: 'CEF_MEDICAO', label: 'CEF - Medição' },
+  { value: 'CEF_CREDITO_PJ', label: 'CEF - Crédito PJ' },
+  { value: 'CEF_JUROS', label: 'CEF - Juros' },
+  { value: 'CEF_AMORTIZACAO', label: 'CEF - Amortização' },
+  { value: 'SIENGE_ORCAMENTO_EMPRESARIAL', label: 'Sienge - Orçamento Empresarial (desembolso)' },
+  { value: 'SIENGE_AGING', label: 'Sienge - Aging' },
+  { value: 'HORIZON_ORCAMENTO_INFORMADO', label: 'Horizon - Orçamento Informado' },
+];
+
+// Mesmo par de cores das outras abas da DFC: vazio em âmbar, preenchido em azul claro.
+function corCampo(valor) {
+  return valor ? 'border-primary-100 bg-primary-50' : 'border-amber-300 bg-amber-50';
+}
 
 // Mesma lógica de PlanoFinanceiroDetalhe.jsx::formatarCodigoMascara (duplicada aqui de
 // propósito — telas não importam umas das outras nesse projeto).
@@ -65,13 +86,21 @@ function montarArvore(contas) {
 // Máscaras (pedido do usuário): as contas totalizadoras são as linhas cinza com +/- e contador, e
 // cada nível abaixo vem mais recuado. Tudo começa aberto (pedido do usuário); com busca, mostra as contas que batem
 // junto com as totalizadoras acima delas, já abertas. A atualização a partir do Sienge mora no
-// topo da página (DfcConstrutorasPage.jsx).
+// topo da página (DfcConstrutorasPage.jsx). No último nível (contas analíticas, tp_conta diferente
+// de 'T') ficam as comboboxes Máscara DFC (só as de nível 2 da aba Máscaras) e Origem Projeção —
+// cada mudança salva na hora, com o mesmo indicador de salvamento das outras abas.
 export default function DfcPlanoContasTab({ empresaId, search = '', refreshToken = 0, onTotal }) {
   const [contas, setContas] = useState([]);
   const [carregando, setCarregando] = useState(true);
   const [erroCarga, setErroCarga] = useState('');
   // Guarda as FECHADAS (não as abertas): vazio = árvore inteira aberta, que é o padrão.
   const [fechados, setFechados] = useState([]);
+  // sienge_id -> { mascara_id, origem_projecao }
+  const [classificacoes, setClassificacoes] = useState({});
+  const [mascaras, setMascaras] = useState([]);
+  const [pendentes, setPendentes] = useState(0);
+  const [erroSalvar, setErroSalvar] = useState('');
+  const [salvoAlgumaVez, setSalvoAlgumaVez] = useState(false);
 
   const carregar = useCallback(() => {
     if (!empresaId) {
@@ -81,9 +110,15 @@ export default function DfcPlanoContasTab({ empresaId, search = '', refreshToken
     }
     setCarregando(true);
     setErroCarga('');
-    listContas(empresaId, { page: 1, limit: LIMIT, search: '' })
-      .then((result) => {
+    Promise.all([
+      listContas(empresaId, { page: 1, limit: LIMIT, search: '' }),
+      listClassificacoesPlanoDfc(empresaId),
+      listDfcMascaras(empresaId),
+    ])
+      .then(([result, lista, arvoreMascaras]) => {
         setContas(result.data);
+        setClassificacoes(Object.fromEntries(lista.map((c) => [c.sienge_id, c])));
+        setMascaras(arvoreMascaras);
         onTotal?.(result.pagination.total);
       })
       .catch((err) => setErroCarga(err.response?.data?.message || 'Não foi possível carregar o plano de contas.'))
@@ -93,7 +128,34 @@ export default function DfcPlanoContasTab({ empresaId, search = '', refreshToken
 
   useEffect(() => {
     setFechados([]);
+    setErroSalvar('');
+    setSalvoAlgumaVez(false);
   }, [empresaId]);
+
+  // Só as máscaras de nível 2, na ordem da aba Máscaras.
+  const opcoesMascara = useMemo(
+    () => mascaras.flatMap((g) => g.filhos.map((f) => ({ value: f.id, label: f.descricao }))),
+    [mascaras]
+  );
+
+  // Atualiza na hora e grava; se falhar, volta o que estava.
+  async function classificar(siengeId, patch) {
+    const anterior = classificacoes[siengeId] || { sienge_id: siengeId, mascara_id: null, origem_projecao: null };
+    const novo = { ...anterior, ...patch };
+    setClassificacoes((atual) => ({ ...atual, [siengeId]: novo }));
+    setErroSalvar('');
+    setPendentes((n) => n + 1);
+    try {
+      const salvo = await updateClassificacaoPlanoDfc(empresaId, siengeId, novo);
+      setClassificacoes((atual) => ({ ...atual, [siengeId]: salvo }));
+      setSalvoAlgumaVez(true);
+    } catch (err) {
+      setClassificacoes((atual) => ({ ...atual, [siengeId]: anterior }));
+      setErroSalvar(err.response?.data?.message || 'Não foi possível salvar.');
+    } finally {
+      setPendentes((n) => n - 1);
+    }
+  }
 
   useEffect(() => {
     carregar();
@@ -149,10 +211,36 @@ export default function DfcPlanoContasTab({ empresaId, search = '', refreshToken
     );
   }
 
+  const statusSalvamento = pendentes > 0 ? 'salvando' : erroSalvar ? 'erro' : salvoAlgumaVez ? 'salvo' : null;
+
   return (
     // Tabela dentro do quadro branco, com margem em volta (p-5) e cabeçalho de cantos de cima
     // arredondados — mesmo padrão das abas Máscaras e Centros Custos.
     <div className="rounded-card rounded-tl-none bg-white p-5 shadow-card">
+      {statusSalvamento && (
+        <div className="-mt-1 mb-3 flex items-center justify-end text-xs" aria-live="polite">
+          {statusSalvamento === 'salvando' ? (
+            <span className="flex items-center gap-1.5 text-gray-500">
+              <Loader2 size={14} className="animate-spin" /> Salvando...
+            </span>
+          ) : statusSalvamento === 'erro' ? (
+            <span className="flex items-center gap-1.5 text-red-600" title={erroSalvar}>
+              <TriangleAlert size={14} /> Erro ao salvar
+            </span>
+          ) : (
+            <span className="flex items-center gap-1.5 text-emerald-600">
+              <Check size={14} /> Alterações salvas
+            </span>
+          )}
+        </div>
+      )}
+
+      {erroSalvar && (
+        <div className="mb-3 rounded-lg bg-red-50 px-3 py-2 text-xs text-red-600" role="status">
+          {erroSalvar}
+        </div>
+      )}
+
       {carregando && contas.length === 0 ? (
         <div className="py-12 text-center text-sm text-gray-400">Carregando...</div>
       ) : erroCarga ? (
@@ -181,6 +269,8 @@ export default function DfcPlanoContasTab({ empresaId, search = '', refreshToken
             className={`${GRADE} rounded-t-lg border-b-2 border-blue-500 bg-blue-50 py-2.5 pl-4 pr-4 text-xs font-medium uppercase tracking-wide text-blue-700`}
           >
             <span>Conta</span>
+            <span>Máscara DFC</span>
+            <span>Origem Projeção</span>
             <span>Status</span>
           </div>
 
@@ -189,6 +279,7 @@ export default function DfcPlanoContasTab({ empresaId, search = '', refreshToken
             const temFilhos = conta.filhos.length > 0;
             const aberto = visivel ? true : !fechados.includes(conta.sienge_id);
             const recuo = { paddingLeft: 16 + nivel * 28 };
+            const classificacao = classificacoes[conta.sienge_id] || {};
             const conteudo = (
               <>
                 <span className="flex min-w-0 items-center gap-2" style={recuo}>
@@ -214,6 +305,30 @@ export default function DfcPlanoContasTab({ empresaId, search = '', refreshToken
                     </span>
                   )}
                 </span>
+                {totalizadora ? (
+                  <>
+                    <span />
+                    <span />
+                  </>
+                ) : (
+                  <>
+                    <SearchableSelect
+                      value={classificacao.mascara_id ?? ''}
+                      onChange={(v) => classificar(conta.sienge_id, { mascara_id: v ? Number(v) : null })}
+                      options={opcoesMascara}
+                      placeholder="Selecione a máscara"
+                      emptyMessage="Nenhuma máscara de nível 2. Cadastre na aba Máscaras."
+                      corClasses={corCampo(classificacao.mascara_id)}
+                    />
+                    <SearchableSelect
+                      value={classificacao.origem_projecao ?? ''}
+                      onChange={(v) => classificar(conta.sienge_id, { origem_projecao: v || null })}
+                      options={ORIGENS_PROJECAO}
+                      placeholder="Selecione a origem"
+                      corClasses={corCampo(classificacao.origem_projecao)}
+                    />
+                  </>
+                )}
                 <span>
                   <span
                     className={`inline-flex items-center rounded-full px-2 py-0.5 text-[11px] font-medium ${
