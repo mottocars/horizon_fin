@@ -12,15 +12,17 @@ const GRADE = 'grid grid-cols-[minmax(0,1fr)_240px_260px_80px] items-center gap-
 
 // Opções fixas da "Origem Projeção" (pedido do usuário) — mesma lista do backend
 // (dfcPlanoContas.controller.js) e do CHECK da tabela dfc_plano_contas.
+// Rótulos em maiúsculo (pedido do usuário). Os códigos (value) são os gravados no banco — não
+// mudaram quando os rótulos mudaram.
 const ORIGENS_PROJECAO = [
-  { value: 'CEF_NOVO_REGISTRO', label: 'CEF - Novo Registro' },
-  { value: 'CEF_MEDICAO', label: 'CEF - Medição' },
-  { value: 'CEF_CREDITO_PJ', label: 'CEF - Crédito PJ' },
-  { value: 'CEF_JUROS', label: 'CEF - Juros' },
-  { value: 'CEF_AMORTIZACAO', label: 'CEF - Amortização' },
-  { value: 'SIENGE_ORCAMENTO_EMPRESARIAL', label: 'Sienge - Orçamento Empresarial (desembolso)' },
-  { value: 'SIENGE_AGING', label: 'Sienge - Aging' },
-  { value: 'HORIZON_ORCAMENTO_INFORMADO', label: 'Horizon - Orçamento Informado' },
+  { value: 'CEF_NOVO_REGISTRO', label: 'CEF - NOVO REGISTRO' },
+  { value: 'CEF_MEDICAO', label: 'CEF - MEDIÇÃO' },
+  { value: 'CEF_CREDITO_PJ', label: 'CEF - CRÉDITO PJ' },
+  { value: 'CEF_JUROS', label: 'CEF - JUROS' },
+  { value: 'CEF_AMORTIZACAO', label: 'CEF - AMORTIZAÇÃO' },
+  { value: 'SIENGE_ORCAMENTO_EMPRESARIAL', label: 'SIENGE - EMPRESARIAL DESEMBOLSO' },
+  { value: 'SIENGE_AGING', label: 'SIENGE - AGING' },
+  { value: 'HORIZON_ORCAMENTO_INFORMADO', label: 'HORIZON - INFORMADO' },
 ];
 
 // Primeira opção dos filtros Máscara DFC e Origem Projeção (pedido do usuário): acha as contas
