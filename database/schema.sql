@@ -2244,6 +2244,25 @@ CREATE TABLE sie_extrato_contas_sincronizacoes (
         REFERENCES contas_bancarias_sienge (numero_conta, empresa_id, company_id) ON DELETE CASCADE
 );
 
+-- Extrato das contas achatado por rateio (centro × natureza) — base do Realizado do fluxo de caixa.
+-- Ver database/migrations/2026-10-14-sie-extrato-contas-rateio.sql.
+CREATE TABLE sie_extrato_contas_rateio (
+    id             BIGSERIAL PRIMARY KEY,
+    empresa_id     INTEGER NOT NULL,
+    registro_id    INTEGER NOT NULL REFERENCES sie_extrato_contas(registro_id) ON DELETE CASCADE,
+    company_id     INTEGER NOT NULL,
+    numero_conta   VARCHAR(20) NOT NULL,
+    data           DATE,
+    mes            DATE,                    -- 1º dia do mês do lançamento
+    centro_id      INTEGER,                 -- centro de custo (null = sem rateio)
+    natureza_id    INTEGER,                 -- natureza financeira = conta do plano (null = sem natureza)
+    percentual     NUMERIC(12,8) NOT NULL,
+    valor          NUMERIC(20,6) NOT NULL   -- com sinal: entrada (Income) +, saída (Expense) −; 6 casas pra a soma do rateio bater com o lançamento
+);
+
+CREATE INDEX idx_sie_extrato_contas_rateio_mes ON sie_extrato_contas_rateio (empresa_id, mes);
+CREATE INDEX idx_sie_extrato_contas_rateio_conta ON sie_extrato_contas_rateio (empresa_id, company_id, numero_conta);
+
 -- Clientes (customers) do Sienge — public/api/v1/customers, diferente da
 -- bulk-data do income (essa aqui pagina de verdade por limit/offset, ver
 -- customersSienge-api.client.js). Mesmo padrão de sie_income: grava o

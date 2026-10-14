@@ -66,6 +66,62 @@ async function gravarConta(empresaId, conta, lancamentos, dataAte) {
   }
 }
 
+// Monta o extrato achatado por rateio (sie_extrato_contas_rateio) da empresa inteira — base do
+// REALIZADO do fluxo de caixa. Mesma regra da query do usuário:
+// - uma linha por categoria do lançamento (budget_categories): percentual, centro de custo e natureza
+//   tirados do fim dos links "cost-center" e "payment-categories";
+// - lançamento sem categoria entra com 100% (centro e natureza nulos);
+// - lançamento de título (bill_id) sem centro/natureza herda o de outro lançamento do mesmo título na
+//   mesma data (partição por origem + título + data — CP e CR têm numeração própria de título);
+// - valor com sinal (Expense negativo), com 6 casas pra a soma das partes bater com o lançamento.
+// Roda uma vez por sincronização (não a cada abertura da tela) — a tela só soma.
+async function montarRateio(empresaId, db = pool) {
+  await db.query('DELETE FROM sie_extrato_contas_rateio WHERE empresa_id = $1', [empresaId]);
+  const { rowCount } = await db.query(
+    `WITH categorias AS (
+       SELECT e.registro_id, e.empresa_id, e.company_id, e.numero_conta, e.date, e.bill_id, e.statement_origin,
+              CASE WHEN e.type = 'Expense' THEN -1 ELSE 1 END AS sinal, COALESCE(e.value, 0) AS value, c.cat
+         FROM sie_extrato_contas e
+         LEFT JOIN LATERAL jsonb_array_elements(
+                CASE WHEN jsonb_typeof(e.budget_categories) = 'array' THEN e.budget_categories ELSE '[]'::jsonb END
+              ) AS c(cat) ON TRUE
+        WHERE e.empresa_id = $1
+     ),
+     base AS (
+       SELECT categorias.*,
+              COALESCE((cat->>'percentage')::numeric, 100) AS pct,
+              (SELECT NULLIF(regexp_replace(l->>'href', '^.*/', ''), '')
+                 FROM jsonb_array_elements(COALESCE(cat->'links', '[]'::jsonb)) l
+                WHERE l->>'rel' = 'cost-center' LIMIT 1) AS centro_txt,
+              (SELECT NULLIF(regexp_replace(l->>'href', '^.*/', ''), '')
+                 FROM jsonb_array_elements(COALESCE(cat->'links', '[]'::jsonb)) l
+                WHERE l->>'rel' = 'payment-categories' LIMIT 1) AS natureza_txt
+         FROM categorias
+     ),
+     tipado AS (
+       SELECT base.*,
+              CASE WHEN centro_txt ~ '^[0-9]+$' THEN centro_txt::int END AS centro,
+              CASE WHEN natureza_txt ~ '^[0-9]+$' THEN natureza_txt::int END AS natureza
+         FROM base
+     )
+     INSERT INTO sie_extrato_contas_rateio
+       (empresa_id, registro_id, company_id, numero_conta, data, mes, centro_id, natureza_id, percentual, valor)
+     SELECT empresa_id, registro_id, company_id, numero_conta, date, date_trunc('month', date)::date,
+            CASE WHEN bill_id IS NOT NULL
+                 THEN COALESCE(centro, MAX(centro) OVER (PARTITION BY statement_origin, bill_id, date))
+                 ELSE centro END,
+            CASE WHEN bill_id IS NOT NULL
+                 THEN COALESCE(natureza, MAX(natureza) OVER (PARTITION BY statement_origin, bill_id, date))
+                 ELSE natureza END,
+            pct,
+            sinal * value * pct / 100
+       FROM tipado
+      WHERE date IS NOT NULL`,
+    [empresaId]
+  );
+  return rowCount;
+}
+
 // Todas as contas com "Projeta DFC", uma a uma. `onProgress({ texto, paginaAtual, totalPaginas })`.
 async function sincronizar(empresaId, onProgress) {
   const integracao = await getIntegracaoAtiva(empresaId);
@@ -103,7 +159,9 @@ async function sincronizar(empresaId, onProgress) {
     await gravarConta(empresaId, conta, lista, endDate);
     lancamentos += lista.length;
   }
+  onProgress?.({ texto: 'Classificando os lançamentos por centro de custo e natureza' });
+  await montarRateio(empresaId);
   return { contas: contas.length, lancamentos, ate: endDate };
 }
 
-module.exports = { sincronizar, gravarConta };
+module.exports = { sincronizar, gravarConta, montarRateio };

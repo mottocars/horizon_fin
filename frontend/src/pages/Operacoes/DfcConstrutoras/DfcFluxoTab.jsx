@@ -4,22 +4,25 @@ import { listDfcMascaras } from '../../../api/dfcMascaras.api';
 import { listContas } from '../../../api/planosFinanceirosSienge.api';
 import { listTodasClassificacoesPlanoDfc } from '../../../api/dfcPlanoContas.api';
 import { getOrcamentoDfc } from '../../../api/dfcOrcamento.api';
-import { getSaldosContasDfc } from '../../../api/dfcSaldos.api';
+import { getRealizadoDfc, getSaldosContasDfc } from '../../../api/dfcSaldos.api';
 import { mesesEntre } from './orcamentoValores';
 
 const LARGURA_PRIMEIRA = 340;
-const LARGURA_MES = 104;
+const LARGURA_COLUNA = 104;
 const FOLGA = 36;
 const ALTURA_MINIMA_GRADE = 320;
+const ALTURA_CAB_MES = 40; // 1ª linha do cabeçalho (mês/ano) — a 2ª (Realizado/Projetado) gruda logo abaixo
 const RECUO = [16, 40, 64]; // máscara 1, máscara 2, conta
 const SOMBRA_COLUNA_FIXA = '[&_tr>*:first-child]:shadow-[6px_0_8px_-6px_rgba(16,24,40,0.18)]';
 const MESES_CAB = ['JAN', 'FEV', 'MAR', 'ABR', 'MAI', 'JUN', 'JUL', 'AGO', 'SET', 'OUT', 'NOV', 'DEZ'];
 const SEM_MASCARA = 'sem';
+const SEM_NATUREZA = 'semnat';
+const R = 'R'; // realizado
+const P = 'P'; // projetado
 
 function dinheiro(v) {
   return v.toLocaleString('pt-BR', { minimumFractionDigits: 2, maximumFractionDigits: 2 });
 }
-
 
 // Largura (px) do texto no corpo da grade — text-xs semibold. Canvas reaproveitado.
 let contextoMedida;
@@ -53,22 +56,35 @@ function codigoFormatado(conta) {
 
 const r2 = (v) => Math.round(v * 100) / 100;
 
-// Operações > DFC Construtoras > DFC: o fluxo de caixa (pedido do usuário). Linhas:
-// 1) SALDO INICIAL — no 1º mês, o saldo das contas bancárias com "Projeta DFC" (aba Contas Correntes)
-//    na abertura do mês, a partir do extrato do Sienge (backend dfc-saldos); abre conta por conta.
-//    Nos demais meses, o Saldo Final do mês anterior;
-// 2) as Máscaras de nível 1 da aba Máscaras (drilldown › nível 2 › conta), com os valores PROJETADOS:
-//    a última versão salva do Orçamento (todas as origens), somando os centros de custo (`centros`:
-//    filtro do topo; vazio = todos). A máscara de cada conta é a do plano que o centro usa (o próprio
-//    ou o Global); conta sem máscara vai pra "SEM MÁSCARA DFC";
-// 3) RESULTADO — entradas − saídas (os valores já vêm com sinal: saída negativa);
-// 4) SALDO FINAL — Saldo Inicial + Resultado, que vira o Saldo Inicial do mês seguinte.
-// Período = o mesmo da aba Orçamentos (filtros do topo). Visual de demonstrativo (é o fluxo de caixa
-// oficial — pedido do usuário): sem coluna de total, sem linhas verticais, zero em branco, saldos em
-// faixas discretas; rolagem própria com a primeira coluna congelada, como no Orçamentos.
-// `telaCheia`: a grade ocupa a tela inteira (e a tela cheia do navegador, quando ele deixa); sai pelo
-// botão "Sair da tela cheia" ou com Esc (`onSairTelaCheia`) — mesmo comportamento do Orçamentos.
-// `refreshToken`: recarrega tudo (depois do "Gerar fluxo").
+// 'AAAA-MM' + k meses.
+function somarMeses(anoMes, k) {
+  const [a, m] = anoMes.split('-').map(Number);
+  const t = a * 12 + (m - 1) + k;
+  return `${Math.floor(t / 12)}-${String((t % 12) + 1).padStart(2, '0')}`;
+}
+
+function mesDeHoje() {
+  const d = new Date();
+  return `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}`;
+}
+
+// Operações > DFC Construtoras > DFC: o fluxo de caixa (pedido do usuário).
+// Colunas: até o mês atual, cada mês tem REALIZADO e PROJETADO; depois dele, só PROJETADO.
+// - Projetado: a última versão salva do Orçamento (todas as origens).
+// - Realizado: o extrato das contas bancárias com "Projeta DFC" (aba Contas Correntes), já achatado
+//   por rateio centro × natureza na sincronização (backend dfc-saldos / sie_extrato_contas_rateio);
+//   lançamento sem natureza vai pra "SEM MÁSCARA DFC › Sem natureza".
+// Ambos somando os centros do filtro do topo (`centros`; vazio = todos); a máscara de cada natureza é
+// a do plano que o centro usa (o próprio ou o Global). Linhas:
+// 1) SALDO INICIAL e 4) SALDO FINAL (= inicial + resultado):
+//    - meses anteriores ao atual: só no Realizado — o saldo real das contas (abertura do mês / do
+//      mês seguinte);
+//    - mês atual: nos dois — os dois partem do saldo real de abertura;
+//    - meses seguintes: só no Projetado, encadeando o saldo final projetado mês a mês.
+//    O Saldo inicial abre conta por conta no 1º mês (quando ele é realizado).
+// 2) Máscaras de nível 1 (drilldown › nível 2 › conta); 3) RESULTADO — entradas − saídas.
+// Período = o mesmo da aba Orçamentos (filtros do topo). Visual de demonstrativo, rolagem própria com a
+// primeira coluna congelada. `telaCheia` / `onSairTelaCheia`: tela cheia. `refreshToken`: recarrega.
 export default function DfcFluxoTab({
   empresaId,
   inicio,
@@ -82,10 +98,23 @@ export default function DfcFluxoTab({
   const [carregando, setCarregando] = useState(false);
   const [erro, setErro] = useState('');
   const [abertos, setAbertos] = useState([]);
-  const [saldos, setSaldos] = useState(null); // saldo das contas na abertura do 1º mês
+  const [realizado, setRealizado] = useState(null);
+  const [saldosContas, setSaldosContas] = useState(null); // saldo de cada conta na abertura do 1º mês
   const gradeRef = useRef(null);
   const [alturaGrade, setAlturaGrade] = useState(null);
   const [rolouX, setRolouX] = useState(false);
+
+  const mesAtual = mesDeHoje();
+  const periodoValido = Boolean(inicio && fim && fim >= inicio);
+  const meses = useMemo(() => (periodoValido ? mesesEntre(inicio, fim) : []), [inicio, fim, periodoValido]);
+  const primeiro = meses[0] || null;
+  const ultimo = meses[meses.length - 1] || null;
+
+  // Colunas da grade: { mes, tipo } — R e P até o mês atual, só P depois.
+  const colunas = useMemo(
+    () => meses.flatMap((m) => (m <= mesAtual ? [{ mes: m, tipo: R }, { mes: m, tipo: P }] : [{ mes: m, tipo: P }])),
+    [meses, mesAtual]
+  );
 
   const carregar = useCallback(() => {
     if (!empresaId) return;
@@ -104,6 +133,7 @@ export default function DfcFluxoTab({
 
   useEffect(() => {
     setDados(null);
+    setRealizado(null);
     setAbertos([]);
   }, [empresaId]);
 
@@ -111,21 +141,30 @@ export default function DfcFluxoTab({
     carregar();
   }, [carregar, refreshToken]);
 
-  // Saldo inicial: abertura do 1º mês do período.
-  const aberturaPeriodo = inicio ? `${inicio.slice(0, 7)}-01` : null;
+  // Realizado: do 1º mês (ou do atual, se o período começar depois) até o mês atual — sempre traz o
+  // saldo real de abertura do mês atual, de onde a projeção parte.
+  const deRealizado = primeiro && primeiro < mesAtual ? primeiro : mesAtual;
   useEffect(() => {
-    if (!empresaId || !aberturaPeriodo) return;
-    getSaldosContasDfc(empresaId, aberturaPeriodo)
-      .then(setSaldos)
-      .catch(() => setSaldos(null));
-  }, [empresaId, aberturaPeriodo, refreshToken]);
+    if (!empresaId || !primeiro) return;
+    getRealizadoDfc(empresaId, deRealizado, mesAtual)
+      .then(setRealizado)
+      .catch(() => setRealizado(null));
+  }, [empresaId, deRealizado, mesAtual, primeiro, refreshToken]);
 
-  const periodoValido = Boolean(inicio && fim && fim >= inicio);
-  const meses = useMemo(() => (periodoValido ? mesesEntre(inicio, fim) : []), [inicio, fim, periodoValido]);
+  // Saldo conta a conta na abertura do 1º mês (drilldown do Saldo inicial, quando ele é realizado).
+  useEffect(() => {
+    if (!empresaId || !primeiro || primeiro > mesAtual) {
+      setSaldosContas(null);
+      return;
+    }
+    getSaldosContasDfc(empresaId, `${primeiro}-01`)
+      .then(setSaldosContas)
+      .catch(() => setSaldosContas(null));
+  }, [empresaId, primeiro, mesAtual, refreshToken]);
 
-  // Árvore máscara 1 › máscara 2 › conta com os valores por mês (somando os centros do filtro).
-  const { estrutura, porMes } = useMemo(() => {
-    if (!dados) return { estrutura: [], porMes: {} };
+  // Árvore máscara 1 › máscara 2 › conta; cada nó com valores por 'AAAA-MM|R' / 'AAAA-MM|P'.
+  const { estrutura, porColuna } = useMemo(() => {
+    if (!dados) return { estrutura: [], porColuna: {} };
     const filtro = centrosFiltro.length ? new Set(centrosFiltro.map(Number)) : null;
     const mapaDe = (lista) => Object.fromEntries(lista.map((c) => [c.sienge_id, c.mascara_id]));
     const planoGlobal = mapaDe(dados.classificacoes.global);
@@ -133,28 +172,39 @@ export default function DfcFluxoTab({
     const pai = {}; // máscara 2 -> máscara 1
     dados.mascaras.forEach((g) => g.filhos.forEach((f) => (pai[f.id] = g.id)));
     const contaPorId = Object.fromEntries(dados.contas.map((c) => [c.sienge_id, c]));
-    const mesesSet = new Set(meses);
+    // Projeção do mês atual em diante entra no encadeamento do saldo mesmo fora do período na tela.
+    const mesesP = new Set([...meses, ...(ultimo && mesAtual <= ultimo ? mesesEntre(`${mesAtual}-01`, `${ultimo}-01`) : [])]);
+    const mesesR = new Set(meses.filter((m) => m <= mesAtual));
 
-    // n1 -> n2 -> conta -> mês -> valor
+    // n1 -> n2 -> conta -> 'mes|tipo' -> valor
     const arvore = new Map();
-    (dados.orcamento?.valores || []).forEach((v) => {
-      if (!mesesSet.has(v.mes)) return;
-      if (filtro && !filtro.has(v.centro_id)) return;
-      const m2 = (planosCentro[v.centro_id] || planoGlobal)[v.sienge_id];
-      const n2 = m2 && pai[m2] ? m2 : SEM_MASCARA;
-      const n1 = n2 === SEM_MASCARA ? SEM_MASCARA : pai[m2];
+    const lancar = (centroId, natureza, mes, tipo, valor) => {
+      if (filtro && !filtro.has(centroId)) return;
+      let n1;
+      let n2;
+      let conta = natureza;
+      if (natureza === null || natureza === undefined) {
+        [n1, n2, conta] = [SEM_MASCARA, SEM_NATUREZA, SEM_NATUREZA];
+      } else {
+        const m2 = (planosCentro[centroId] || planoGlobal)[natureza];
+        n2 = m2 && pai[m2] ? m2 : SEM_MASCARA;
+        n1 = n2 === SEM_MASCARA ? SEM_MASCARA : pai[m2];
+      }
       if (!arvore.has(n1)) arvore.set(n1, new Map());
       const nivel2 = arvore.get(n1);
       if (!nivel2.has(n2)) nivel2.set(n2, new Map());
       const contas = nivel2.get(n2);
-      if (!contas.has(v.sienge_id)) contas.set(v.sienge_id, {});
-      const porMesConta = contas.get(v.sienge_id);
-      porMesConta[v.mes] = r2((porMesConta[v.mes] || 0) + v.valor);
-    });
+      if (!contas.has(conta)) contas.set(conta, {});
+      const pc = contas.get(conta);
+      const k = `${mes}|${tipo}`;
+      pc[k] = r2((pc[k] || 0) + valor);
+    };
+    (dados.orcamento?.valores || []).forEach((v) => mesesP.has(v.mes) && lancar(v.centro_id, v.sienge_id, v.mes, P, v.valor));
+    (realizado?.valores || []).forEach((v) => mesesR.has(v.mes) && lancar(v.centro_id, v.sienge_id, v.mes, R, v.valor));
 
-    const somaMeses = (listas) => {
+    const somar = (listas) => {
       const total = {};
-      listas.forEach((pm) => Object.entries(pm).forEach(([m, val]) => (total[m] = r2((total[m] || 0) + val))));
+      listas.forEach((pc) => Object.entries(pc).forEach(([k, val]) => (total[k] = r2((total[k] || 0) + val))));
       return total;
     };
     const grupos = [];
@@ -165,41 +215,65 @@ export default function DfcFluxoTab({
         .filter(([fid]) => nivel2.has(fid))
         .map(([fid, fdesc]) => {
           const contas = [...nivel2.get(fid).entries()]
-            .map(([cid, pm]) => ({ conta: contaPorId[cid] || { sienge_id: cid, name: `Conta ${cid}` }, porMes: pm }))
+            .map(([cid, pc]) => ({
+              conta:
+                cid === SEM_NATUREZA
+                  ? { sienge_id: SEM_NATUREZA, name: 'Lançamentos sem rateio no Sienge' }
+                  : contaPorId[cid] || { sienge_id: cid, name: `Natureza ${cid}` },
+              porColuna: pc,
+            }))
             .sort((a, b) => String(a.conta.sienge_id).localeCompare(String(b.conta.sienge_id)));
-          return { chave: `m${fid}`, descricao: fdesc, contas, porMes: somaMeses(contas.map((c) => c.porMes)) };
+          return { chave: `m${fid}`, descricao: fdesc, contas, porColuna: somar(contas.map((c) => c.porColuna)) };
         });
-      grupos.push({ chave: `m${id}`, descricao, filhos, semMascara: id === SEM_MASCARA, porMes: somaMeses(filhos.map((f) => f.porMes)) });
+      grupos.push({ chave: `m${id}`, descricao, filhos, semMascara: id === SEM_MASCARA, porColuna: somar(filhos.map((f) => f.porColuna)) });
     };
     dados.mascaras.forEach((g) => montarN1(g.id, g.descricao, g.filhos.map((f) => [f.id, f.descricao])));
-    montarN1(SEM_MASCARA, 'SEM MÁSCARA DFC', [[SEM_MASCARA, 'Contas sem Máscara DFC na aba Plano Contas']]);
+    montarN1(SEM_MASCARA, 'SEM MÁSCARA DFC', [
+      [SEM_MASCARA, 'Contas sem Máscara DFC na aba Plano Contas'],
+      [SEM_NATUREZA, 'Sem natureza (extrato)'],
+    ]);
 
-    // Resultado e saldos, mês a mês. Saldo inicial do 1º mês: o das contas bancárias com Projeta DFC.
-    const resultado = somaMeses(grupos.map((g) => g.porMes));
+    // Resultado e saldos.
+    const resultado = somar(grupos.map((g) => g.porColuna));
+    const saldoReal = realizado?.saldos || {};
     const saldoInicial = {};
     const saldoFinal = {};
-    let saldo = saldos?.total || 0;
-    meses.forEach((m) => {
-      saldoInicial[m] = r2(saldo);
-      saldo = r2(saldo + (resultado[m] || 0));
-      saldoFinal[m] = saldo;
-    });
-    return { estrutura: grupos, porMes: { resultado, saldoInicial, saldoFinal } };
-  }, [dados, meses, centrosFiltro, saldos]);
+    // Realizado: meses até o atual — saldo real de abertura; final = abertura do mês seguinte (meses
+    // fechados) ou abertura + resultado realizado (mês atual, ainda aberto).
+    meses
+      .filter((m) => m <= mesAtual)
+      .forEach((m) => {
+        const ini = saldoReal[m] ?? 0;
+        saldoInicial[`${m}|${R}`] = ini;
+        saldoFinal[`${m}|${R}`] = m < mesAtual ? (saldoReal[somarMeses(m, 1)] ?? r2(ini + (resultado[`${m}|${R}`] || 0))) : r2(ini + (resultado[`${m}|${R}`] || 0));
+      });
+    // Projetado: do mês atual em diante, partindo do saldo real de abertura do mês atual.
+    if (ultimo && mesAtual <= ultimo) {
+      let saldo = saldoReal[mesAtual] ?? 0;
+      mesesEntre(`${mesAtual}-01`, `${ultimo}-01`).forEach((m) => {
+        saldoInicial[`${m}|${P}`] = r2(saldo);
+        saldo = r2(saldo + (resultado[`${m}|${P}`] || 0));
+        saldoFinal[`${m}|${P}`] = saldo;
+      });
+    }
+    return { estrutura: grupos, porColuna: { resultado, saldoInicial, saldoFinal } };
+  }, [dados, realizado, meses, ultimo, mesAtual, centrosFiltro]);
 
-  // Larguras: o bastante pro maior valor de cada mês.
-  const largurasMes = useMemo(() => {
-    const linhas = [porMes.saldoInicial || {}, porMes.resultado || {}, porMes.saldoFinal || {}];
+  // Larguras: o bastante pro maior valor de cada coluna.
+  const larguras = useMemo(() => {
+    const linhas = [porColuna.saldoInicial || {}, porColuna.resultado || {}, porColuna.saldoFinal || {}];
     estrutura.forEach((g) => {
-      linhas.push(g.porMes);
+      linhas.push(g.porColuna);
       g.filhos.forEach((f) => {
-        linhas.push(f.porMes);
-        f.contas.forEach((c) => linhas.push(c.porMes));
+        linhas.push(f.porColuna);
+        f.contas.forEach((c) => linhas.push(c.porColuna));
       });
     });
     const largura = (v) => (v ? larguraTexto(dinheiro(v)) : 0);
-    return meses.map((m) => Math.max(LARGURA_MES, Math.ceil(Math.max(0, ...linhas.map((pm) => largura(pm[m])))) + FOLGA));
-  }, [estrutura, porMes, meses]);
+    return colunas.map(
+      (c) => Math.max(LARGURA_COLUNA, Math.ceil(Math.max(0, ...linhas.map((pc) => largura(pc[`${c.mes}|${c.tipo}`])))) + FOLGA)
+    );
+  }, [estrutura, porColuna, colunas]);
 
   // Tela cheia: pede também a do navegador; o Esc dele sai e o `fullscreenchange` fecha a nossa
   // junto. Sem a do navegador, o Esc é tratado aqui.
@@ -256,11 +330,9 @@ export default function DfcFluxoTab({
   const versao = dados?.orcamento?.versao || null;
   const MESES_LONGOS = ['jan', 'fev', 'mar', 'abr', 'mai', 'jun', 'jul', 'ago', 'set', 'out', 'nov', 'dez'];
   const rotulo = (m) => `${MESES_LONGOS[Number(m.slice(5, 7)) - 1]}/${m.slice(2, 4)}`;
-  const larguraTabela = LARGURA_PRIMEIRA + largurasMes.reduce((t, l) => t + l, 0);
-  const mesAtual = (() => {
-    const d = new Date();
-    return `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}`;
-  })();
+  const larguraTabela = LARGURA_PRIMEIRA + larguras.reduce((t, l) => t + l, 0);
+  // Primeira coluna de cada mês ganha a divisória à esquerda (separa os meses).
+  const inicioDeMes = (i) => i === 0 || colunas[i - 1].mes !== colunas[i].mes;
 
   // Estilo de cada tipo de linha (a primeira coluna é congelada, então o fundo é sempre sólido).
   const ESTILO = {
@@ -272,8 +344,9 @@ export default function DfcFluxoTab({
   };
   const corValor = (v) => (v < 0 ? 'text-rose-600' : 'text-gray-900');
 
-  // Uma linha da grade. `tipo`: 'saldo' | 'resultado' | 'n1' | 'n2' | 'conta'.
-  function linha({ chave, tipo, rotulo, sub, pm, nivel = 0, podeAbrir = false, cinza = false, dica, separar = false }) {
+  // Uma linha da grade. `tipo`: 'saldo' | 'resultado' | 'n1' | 'n2' | 'conta'. `pc`: valores por
+  // 'AAAA-MM|R' / 'AAAA-MM|P'.
+  function linha({ chave, tipo, rotulo: texto, sub, pc, nivel = 0, podeAbrir = false, cinza = false, dica, separar = false }) {
     const aberto = abertos.includes(chave);
     const e = ESTILO[tipo];
     const numeros = tipo === 'saldo' || tipo === 'resultado' || tipo === 'n1' ? 'font-semibold' : tipo === 'conta' ? 'text-gray-600' : '';
@@ -297,7 +370,7 @@ export default function DfcFluxoTab({
               />
             )}
             {sub && <span className="shrink-0 font-mono text-[11px] text-gray-400">{sub}</span>}
-            <span className={`min-w-0 truncate ${e.texto} ${cinza ? 'italic text-gray-400' : ''}`}>{rotulo}</span>
+            <span className={`min-w-0 truncate ${e.texto} ${cinza ? 'italic text-gray-400' : ''}`}>{texto}</span>
             {dica && (
               <span title={dica} className="shrink-0 text-slate-400">
                 <Info size={13} />
@@ -305,15 +378,17 @@ export default function DfcFluxoTab({
             )}
           </span>
         </td>
-        {meses.map((m) => {
-          const v = pm[m];
+        {colunas.map((c, i) => {
+          const v = pc[`${c.mes}|${c.tipo}`];
           const vazio = v === undefined || v === null || v === 0;
           return (
             <td
-              key={m}
+              key={`${c.mes}|${c.tipo}`}
               className={`border-b px-3 text-center tabular-nums transition-colors ${e.borda} ${e.fundo} ${e.py} ${
-                tipo === 'saldo' ? '' : 'group-hover/linha:bg-gray-50'
-              } ${tipo === 'saldo' || tipo === 'resultado' ? 'text-[13px]' : 'text-xs'} ${numeros} ${vazio ? '' : corValor(v)}`}
+                inicioDeMes(i) ? 'border-l border-l-gray-200' : ''
+              } ${tipo === 'saldo' ? '' : 'group-hover/linha:bg-gray-50'} ${
+                tipo === 'saldo' || tipo === 'resultado' ? 'text-[13px]' : 'text-xs'
+              } ${numeros} ${vazio ? '' : corValor(v)}`}
             >
               {vazio ? '' : dinheiro(v)}
             </td>
@@ -322,6 +397,13 @@ export default function DfcFluxoTab({
       </tr>
     );
   }
+
+  const contasSaldo = saldosContas?.contas || [];
+  const dicaSaldoInicial = contasSaldo.length
+    ? `Realizado: saldo real das ${contasSaldo.length} conta(s) com Projeta DFC na abertura do mês, pelo extrato do Sienge${
+        saldosContas.sem_extrato ? ` (${saldosContas.sem_extrato} ainda sem extrato — use "Gerar fluxo")` : ''
+      }. Projetado: a partir do mês atual, parte do saldo real de abertura dele e segue o Saldo Final projetado do mês anterior.`
+    : 'Saldo real das contas com Projeta DFC (aba Contas Correntes) — nenhuma marcada ou ainda sem extrato.';
 
   return (
     <div
@@ -383,13 +465,16 @@ export default function DfcFluxoTab({
           >
             <colgroup>
               <col style={{ width: LARGURA_PRIMEIRA }} />
-              {meses.map((m, i) => (
-                <col key={m} style={{ width: largurasMes[i] }} />
+              {colunas.map((c, i) => (
+                <col key={`${c.mes}|${c.tipo}`} style={{ width: larguras[i] }} />
               ))}
             </colgroup>
             <thead>
               <tr>
-                <th className="sticky left-0 top-0 z-30 border-b border-gray-200 bg-white py-3 pl-5 pr-3 align-bottom text-[11px] font-semibold uppercase tracking-wider text-gray-500">
+                <th
+                  rowSpan={2}
+                  className="sticky left-0 top-0 z-30 border-b border-gray-200 bg-white py-3 pl-5 pr-3 align-bottom text-[11px] font-semibold uppercase tracking-wider text-gray-500"
+                >
                   Fluxo de caixa
                 </th>
                 {meses.map((m) => {
@@ -397,15 +482,35 @@ export default function DfcFluxoTab({
                   return (
                     <th
                       key={m}
+                      colSpan={m <= mesAtual ? 2 : 1}
                       title={atual ? 'Mês atual' : undefined}
-                      className={`sticky top-0 z-20 border-b bg-white px-3 py-2 text-center align-bottom ${
-                        atual ? 'border-b-2 border-b-primary-500' : 'border-gray-200'
+                      className={`sticky top-0 z-20 border-l border-l-gray-200 bg-white px-3 pt-2 text-center align-bottom ${
+                        atual ? 'bg-primary-50/60' : ''
                       }`}
+                      style={{ height: ALTURA_CAB_MES }}
                     >
                       <span className={`block text-[11px] font-semibold tracking-wider ${atual ? 'text-primary-700' : 'text-gray-600'}`}>
                         {MESES_CAB[Number(m.slice(5, 7)) - 1]}
                       </span>
                       <span className="block text-[10px] font-medium text-gray-400">{m.slice(0, 4)}</span>
+                    </th>
+                  );
+                })}
+              </tr>
+              <tr>
+                {colunas.map((c, i) => {
+                  const atual = c.mes === mesAtual;
+                  return (
+                    <th
+                      key={`${c.mes}|${c.tipo}`}
+                      className={`sticky z-20 border-b px-2 py-1.5 text-center text-[10px] font-semibold uppercase tracking-wider ${
+                        inicioDeMes(i) ? 'border-l border-l-gray-200' : ''
+                      } ${atual ? 'border-b-2 border-b-primary-500 bg-primary-50/60' : 'border-gray-200 bg-white'} ${
+                        c.tipo === R ? 'text-teal-700' : 'text-gray-400'
+                      }`}
+                      style={{ top: ALTURA_CAB_MES }}
+                    >
+                      {c.tipo === R ? 'Realizado' : 'Projetado'}
                     </th>
                   );
                 })}
@@ -416,29 +521,25 @@ export default function DfcFluxoTab({
                 chave: 'saldo-inicial',
                 tipo: 'saldo',
                 rotulo: 'Saldo inicial',
-                pm: porMes.saldoInicial || {},
-                podeAbrir: Boolean(saldos?.contas?.length),
-                dica: saldos?.contas?.length
-                  ? `No 1º mês: saldo das ${saldos.contas.length} conta(s) com Projeta DFC na abertura do mês, pelo extrato do Sienge${
-                      saldos.sem_extrato ? ` (${saldos.sem_extrato} ainda sem extrato — use "Gerar fluxo")` : ''
-                    }. Nos demais, o Saldo Final do mês anterior.`
-                  : 'Nenhuma conta com Projeta DFC (aba Contas Correntes) — o 1º mês começa em 0. Nos demais, o Saldo Final do mês anterior.',
+                pc: porColuna.saldoInicial || {},
+                podeAbrir: contasSaldo.length > 0,
+                dica: dicaSaldoInicial,
               })}
               {abertos.includes('saldo-inicial') &&
-                (saldos?.contas || []).map((c) =>
+                contasSaldo.map((c) =>
                   linha({
                     chave: `saldo|${c.company_id}|${c.numero_conta}`,
                     tipo: 'conta',
                     nivel: 1,
                     sub: c.numero_conta,
                     rotulo: `${c.nome || ''}${c.sincronizado_em ? '' : ' · sem extrato'}`,
-                    pm: meses.length ? { [meses[0]]: c.saldo } : {},
+                    pc: primeiro ? { [`${primeiro}|${R}`]: c.saldo } : {},
                   })
                 )}
               {estrutura.length === 0 && (
                 <tr>
-                  <td colSpan={meses.length + 1} className="border-b border-gray-100 py-10 text-center text-sm text-gray-400">
-                    {versao ? 'Nenhum valor no período.' : 'Sem valores — nenhuma versão salva do Orçamento.'}
+                  <td colSpan={colunas.length + 1} className="border-b border-gray-100 py-10 text-center text-sm text-gray-400">
+                    {versao ? 'Nenhum valor no período.' : 'Sem valores projetados — nenhuma versão salva do Orçamento.'}
                   </td>
                 </tr>
               )}
@@ -450,7 +551,7 @@ export default function DfcFluxoTab({
                       chave: chaveN1,
                       tipo: 'n1',
                       rotulo: n1.descricao,
-                      pm: n1.porMes,
+                      pc: n1.porColuna,
                       podeAbrir: n1.filhos.length > 0,
                       cinza: n1.semMascara,
                     })}
@@ -464,7 +565,7 @@ export default function DfcFluxoTab({
                               tipo: 'n2',
                               nivel: 1,
                               rotulo: n2.descricao,
-                              pm: n2.porMes,
+                              pc: n2.porColuna,
                               podeAbrir: n2.contas.length > 0,
                               cinza: n1.semMascara,
                             })}
@@ -474,9 +575,14 @@ export default function DfcFluxoTab({
                                   chave: `${chaveN2}|${c.conta.sienge_id}`,
                                   tipo: 'conta',
                                   nivel: 2,
-                                  sub: c.conta.mascara_nivel_1 ? codigoFormatado(c.conta) : c.conta.sienge_id,
+                                  sub:
+                                    c.conta.sienge_id === SEM_NATUREZA
+                                      ? null
+                                      : c.conta.mascara_nivel_1
+                                        ? codigoFormatado(c.conta)
+                                        : c.conta.sienge_id,
                                   rotulo: c.conta.name,
-                                  pm: c.porMes,
+                                  pc: c.porColuna,
                                 })
                               )}
                           </Fragment>
@@ -489,15 +595,15 @@ export default function DfcFluxoTab({
                 chave: 'resultado',
                 tipo: 'resultado',
                 rotulo: 'Resultado do mês',
-                pm: porMes.resultado || {},
+                pc: porColuna.resultado || {},
                 separar: true,
               })}
               {linha({
                 chave: 'saldo-final',
                 tipo: 'saldo',
                 rotulo: 'Saldo final',
-                pm: porMes.saldoFinal || {},
-                dica: 'Saldo Inicial + Resultado — vira o Saldo Inicial do mês seguinte.',
+                pc: porColuna.saldoFinal || {},
+                dica: 'Saldo Inicial + Resultado — vira o Saldo Inicial do mês seguinte. Meses fechados: o saldo real das contas no início do mês seguinte.',
               })}
             </tbody>
           </table>
