@@ -4,7 +4,7 @@ import { listDfcMascaras } from '../../../api/dfcMascaras.api';
 import { listContas } from '../../../api/planosFinanceirosSienge.api';
 import { listTodasClassificacoesPlanoDfc } from '../../../api/dfcPlanoContas.api';
 import { getOrcamentoDfc } from '../../../api/dfcOrcamento.api';
-import { getRealizadoDfc, getSaldosContasDfc } from '../../../api/dfcSaldos.api';
+import { getRealizadoDfc } from '../../../api/dfcSaldos.api';
 import { mesesEntre } from './orcamentoValores';
 
 const LARGURA_PRIMEIRA = 340;
@@ -20,8 +20,9 @@ const SEM_NATUREZA = 'semnat';
 const R = 'R'; // realizado
 const P = 'P'; // projetado
 
+// Sem casas decimais (pedido do usuário) — o cálculo continua em centavos, só a exibição arredonda.
 function dinheiro(v) {
-  return v.toLocaleString('pt-BR', { minimumFractionDigits: 2, maximumFractionDigits: 2 });
+  return v.toLocaleString('pt-BR', { maximumFractionDigits: 0 });
 }
 
 // Largura (px) do texto no corpo da grade — text-xs semibold. Canvas reaproveitado.
@@ -81,7 +82,6 @@ function mesDeHoje() {
 //      mês seguinte);
 //    - mês atual: nos dois — os dois partem do saldo real de abertura;
 //    - meses seguintes: só no Projetado, encadeando o saldo final projetado mês a mês.
-//    O Saldo inicial abre conta por conta no 1º mês (quando ele é realizado).
 // 2) Máscaras de nível 1 (drilldown › nível 2 › conta); 3) RESULTADO — entradas − saídas.
 // Período = o mesmo da aba Orçamentos (filtros do topo). Visual de demonstrativo, rolagem própria com a
 // primeira coluna congelada. `telaCheia` / `onSairTelaCheia`: tela cheia. `refreshToken`: recarrega.
@@ -99,7 +99,6 @@ export default function DfcFluxoTab({
   const [erro, setErro] = useState('');
   const [abertos, setAbertos] = useState([]);
   const [realizado, setRealizado] = useState(null);
-  const [saldosContas, setSaldosContas] = useState(null); // saldo de cada conta na abertura do 1º mês
   const gradeRef = useRef(null);
   const [alturaGrade, setAlturaGrade] = useState(null);
   const [rolouX, setRolouX] = useState(false);
@@ -150,17 +149,6 @@ export default function DfcFluxoTab({
       .then(setRealizado)
       .catch(() => setRealizado(null));
   }, [empresaId, deRealizado, mesAtual, primeiro, refreshToken]);
-
-  // Saldo conta a conta na abertura do 1º mês (drilldown do Saldo inicial, quando ele é realizado).
-  useEffect(() => {
-    if (!empresaId || !primeiro || primeiro > mesAtual) {
-      setSaldosContas(null);
-      return;
-    }
-    getSaldosContasDfc(empresaId, `${primeiro}-01`)
-      .then(setSaldosContas)
-      .catch(() => setSaldosContas(null));
-  }, [empresaId, primeiro, mesAtual, refreshToken]);
 
   // Árvore máscara 1 › máscara 2 › conta; cada nó com valores por 'AAAA-MM|R' / 'AAAA-MM|P'.
   const { estrutura, porColuna } = useMemo(() => {
@@ -363,7 +351,7 @@ export default function DfcFluxoTab({
           style={{ paddingLeft: tipo === 'saldo' || tipo === 'resultado' ? 20 : RECUO[nivel] }}
         >
           <span className="flex min-w-0 items-center gap-1.5">
-            {(tipo === 'n1' || tipo === 'n2' || (tipo === 'saldo' && podeAbrir)) && (
+            {(tipo === 'n1' || tipo === 'n2') && (
               <ChevronRight
                 size={14}
                 className={`shrink-0 transition-transform ${aberto ? 'rotate-90' : ''} ${podeAbrir ? 'text-gray-400' : 'text-gray-200'}`}
@@ -398,12 +386,8 @@ export default function DfcFluxoTab({
     );
   }
 
-  const contasSaldo = saldosContas?.contas || [];
-  const dicaSaldoInicial = contasSaldo.length
-    ? `Realizado: saldo real das ${contasSaldo.length} conta(s) com Projeta DFC na abertura do mês, pelo extrato do Sienge${
-        saldosContas.sem_extrato ? ` (${saldosContas.sem_extrato} ainda sem extrato — use "Gerar fluxo")` : ''
-      }. Projetado: a partir do mês atual, parte do saldo real de abertura dele e segue o Saldo Final projetado do mês anterior.`
-    : 'Saldo real das contas com Projeta DFC (aba Contas Correntes) — nenhuma marcada ou ainda sem extrato.';
+  const dicaSaldoInicial =
+    'Realizado: saldo real das contas com Projeta DFC (aba Contas Correntes) na abertura do mês, pelo extrato do Sienge. Projetado: a partir do mês atual, parte do saldo real de abertura dele e segue o Saldo Final projetado do mês anterior.';
 
   return (
     <div
@@ -522,20 +506,8 @@ export default function DfcFluxoTab({
                 tipo: 'saldo',
                 rotulo: 'Saldo inicial',
                 pc: porColuna.saldoInicial || {},
-                podeAbrir: contasSaldo.length > 0,
                 dica: dicaSaldoInicial,
               })}
-              {abertos.includes('saldo-inicial') &&
-                contasSaldo.map((c) =>
-                  linha({
-                    chave: `saldo|${c.company_id}|${c.numero_conta}`,
-                    tipo: 'conta',
-                    nivel: 1,
-                    sub: c.numero_conta,
-                    rotulo: `${c.nome || ''}${c.sincronizado_em ? '' : ' · sem extrato'}`,
-                    pc: primeiro ? { [`${primeiro}|${R}`]: c.saldo } : {},
-                  })
-                )}
               {estrutura.length === 0 && (
                 <tr>
                   <td colSpan={colunas.length + 1} className="border-b border-gray-100 py-10 text-center text-sm text-gray-400">
