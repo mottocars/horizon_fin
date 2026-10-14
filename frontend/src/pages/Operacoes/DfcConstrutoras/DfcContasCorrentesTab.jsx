@@ -1,12 +1,17 @@
-import { forwardRef, useCallback, useEffect, useImperativeHandle, useMemo, useState } from 'react';
+import { forwardRef, useCallback, useEffect, useImperativeHandle, useMemo, useRef, useState } from 'react';
 import { Check, Landmark, Loader2, TriangleAlert } from 'lucide-react';
 import { listContasCorrentesDfc, sincronizarContasCorrentesDfc, updateContaCorrenteDfc } from '../../../api/dfcContas.api';
 import { useAlert } from '../../../confirm/ConfirmContext';
+import FiltroColuna, { passaNoFiltro } from '../../../components/FiltroColuna';
 
 // Mesma grade no cabeçalho e nas linhas.
-const GRADE = 'grid grid-cols-[minmax(0,1fr)_220px_90px_minmax(0,0.8fr)_110px_100px] items-center gap-3';
+const GRADE = 'grid grid-cols-[minmax(0,1fr)_130px_220px_90px_minmax(0,0.8fr)_110px_100px] items-center gap-3';
 
 const chave = (c) => `${c.company_id}|${c.numero_conta}`;
+const SEM_TIPO = '__sem_tipo__';
+const tipoDe = (c) => c.tipo_descricao || SEM_TIPO;
+// Filtro com nada marcado vale como sem filtro — mostra tudo (mesma regra da aba Plano Contas).
+const efetivo = (f) => (f && f.length === 0 ? null : f);
 
 // Operações > DFC Construtoras > Contas Correntes: as contas bancárias da empresa no Sienge
 // (endpoint v1/checking-accounts — mesma tabela e mesma sincronização da tela Saldo de Contas
@@ -21,6 +26,11 @@ const DfcContasCorrentesTab = forwardRef(function DfcContasCorrentesTab({ empres
   const [pendentes, setPendentes] = useState(0);
   const [erroSalvar, setErroSalvar] = useState('');
   const [salvoAlgumaVez, setSalvoAlgumaVez] = useState(false);
+  // Filtros de coluna (FiltroColuna): null = sem filtro.
+  const [filtroConta, setFiltroConta] = useState(null);
+  const [filtroTipo, setFiltroTipo] = useState(null);
+  const colunaContaRef = useRef(null);
+  const colunaTipoRef = useRef(null);
 
   const carregar = useCallback(() => {
     if (!empresaId) return Promise.resolve();
@@ -34,6 +44,8 @@ const DfcContasCorrentesTab = forwardRef(function DfcContasCorrentesTab({ empres
 
   useEffect(() => {
     setContas([]);
+    setFiltroConta(null);
+    setFiltroTipo(null);
     setErroSalvar('');
     setSalvoAlgumaVez(false);
     carregar();
@@ -61,15 +73,29 @@ const DfcContasCorrentesTab = forwardRef(function DfcContasCorrentesTab({ empres
 
   useImperativeHandle(ref, () => ({ sincronizar }));
 
+  const opcoesConta = useMemo(
+    () => contas.map((c) => ({ value: chave(c), label: `${c.numero_conta} · ${c.nome || '—'} · ${c.company_name || ''}` })),
+    [contas]
+  );
+  const opcoesTipo = useMemo(() => {
+    const tipos = [...new Set(contas.map(tipoDe))].sort((a, b) => (a === SEM_TIPO ? 1 : b === SEM_TIPO ? -1 : a.localeCompare(b, 'pt-BR')));
+    return tipos.map((t) => ({ value: t, label: t === SEM_TIPO ? 'SEM TIPO' : t.toUpperCase() }));
+  }, [contas]);
+
   const filtradas = useMemo(() => {
     const termo = search.trim().toLowerCase();
-    if (!termo) return contas;
-    return contas.filter((c) =>
-      [c.numero_conta, c.nome, c.agencia, c.banco_nome, c.banco_numero, c.company_name]
-        .filter(Boolean)
-        .some((v) => String(v).toLowerCase().includes(termo))
+    const fConta = efetivo(filtroConta);
+    const fTipo = efetivo(filtroTipo);
+    return contas.filter(
+      (c) =>
+        passaNoFiltro(fConta, chave(c)) &&
+        passaNoFiltro(fTipo, tipoDe(c)) &&
+        (!termo ||
+          [c.numero_conta, c.nome, c.agencia, c.banco_nome, c.banco_numero, c.company_name, c.tipo_descricao]
+            .filter(Boolean)
+            .some((v) => String(v).toLowerCase().includes(termo)))
     );
-  }, [contas, search]);
+  }, [contas, search, filtroConta, filtroTipo]);
 
   // Atualiza a linha na hora e grava; se falhar, volta o que estava.
   async function alterar(conta, projetaDfc) {
@@ -152,7 +178,28 @@ const DfcContasCorrentesTab = forwardRef(function DfcContasCorrentesTab({ empres
           <div
             className={`${GRADE} sticky -top-6 z-20 rounded-t-lg border-b-2 border-blue-500 bg-blue-50 py-2.5 pl-4 pr-4 text-xs font-medium uppercase tracking-wide text-blue-700`}
           >
-            <span>Conta</span>
+            <span ref={colunaContaRef} className="flex items-center gap-1.5">
+              Conta
+              <FiltroColuna
+                filtro={filtroConta}
+                onChange={setFiltroConta}
+                opcoes={opcoesConta}
+                label="Conta"
+                colunaRef={colunaContaRef}
+                larguraPainel={420}
+              />
+            </span>
+            <span ref={colunaTipoRef} className="flex items-center gap-1.5">
+              Tipo
+              <FiltroColuna
+                filtro={filtroTipo}
+                onChange={setFiltroTipo}
+                opcoes={opcoesTipo}
+                label="Tipo"
+                colunaRef={colunaTipoRef}
+                larguraPainel={220}
+              />
+            </span>
             <span>Banco</span>
             <span>Agência</span>
             <span>Empresa</span>
@@ -164,7 +211,7 @@ const DfcContasCorrentesTab = forwardRef(function DfcContasCorrentesTab({ empres
             <div className="border-b border-gray-100 py-10 text-center text-sm text-gray-400">
               {contas.length === 0
                 ? 'Nenhuma conta bancária desta empresa. Use o ícone no canto direito, acima, para buscar no Sienge.'
-                : 'Nenhuma conta encontrada para essa busca.'}
+                : 'Nenhuma conta encontrada para essa busca/filtro.'}
             </div>
           ) : (
             filtradas.map((conta) => {
@@ -176,12 +223,8 @@ const DfcContasCorrentesTab = forwardRef(function DfcContasCorrentesTab({ empres
                     <span className="min-w-0 truncate text-xs font-medium text-gray-800" title={conta.nome}>
                       {conta.nome || '—'}
                     </span>
-                    {conta.tipo_descricao && conta.tipo_id !== 'B' && (
-                      <span className="shrink-0 rounded bg-gray-100 px-1.5 py-0.5 text-[10px] font-medium text-gray-500">
-                        {conta.tipo_descricao}
-                      </span>
-                    )}
                   </div>
+                  <span className="min-w-0 truncate text-xs text-gray-700">{conta.tipo_descricao || '—'}</span>
                   <span className="min-w-0 truncate text-xs text-gray-700" title={conta.banco_nome}>
                     {conta.banco_numero && <span className="tabular-nums text-gray-400">{conta.banco_numero} · </span>}
                     {conta.banco_nome || '—'}
