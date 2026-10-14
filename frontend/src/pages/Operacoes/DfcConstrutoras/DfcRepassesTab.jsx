@@ -300,14 +300,9 @@ export default function DfcRepassesTab({ empresaId, search = '' }) {
                                 {e.unidades.length}
                               </span>
                             </span>
-                            <span className="block truncate text-[10px] text-gray-400">
-                              Contrato {e.contrato}
-                              {!temUnidades && ' · Geral não importado'}
-                              {e.data_demanda_minima &&
-                                ` · Demanda mínima ${formatarDataISO(e.data_demanda_minima)} (${
-                                  e.origem_demanda_minima === 'PARAMETROS' ? 'Parâmetros' : 'DCD'
-                                })`}
-                            </span>
+                            {!temUnidades && (
+                              <span className="block truncate text-[10px] text-gray-400">Geral não importado</span>
+                            )}
                           </span>
                         </span>
                       </td>
