@@ -42,3 +42,10 @@ export function excluirVersaoPlanoDfc(empresaId, centroId) {
 export function listTodasClassificacoesPlanoDfc(empresaId) {
   return http.get(`/dfc-plano-contas/${empresaId}/todas`).then((res) => res.data);
 }
+
+// Resumo pros cards da aba Plano Contas: { analiticas, global: { com_mascara, com_origem,
+// centros_seguindo, atualizado_em }, versoes: [{ centro_id, name, natureza, criado_em, criado_por,
+// com_mascara, com_origem, atualizado_em }] }.
+export function resumoPlanosDfc(empresaId) {
+  return http.get(`/dfc-plano-contas/${empresaId}/resumo`).then((res) => res.data);
+}

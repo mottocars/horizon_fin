@@ -215,4 +215,43 @@ async function listTodas(empresaId) {
   return { global, centros };
 }
 
-module.exports = { list, update, listVersoes, criarVersao, excluirVersao, listTodas };
+// Resumo pros cards da aba Plano Contas: o Global e cada versão de centro, com quantas contas
+// analíticas têm Máscara DFC / Origem Projeção. O Global diz também quantos centros com "Projeta
+// DFC" seguem ele (os que não têm versão própria).
+async function resumo(empresaId) {
+  const { rows: tot } = await pool.query(
+    "SELECT count(*)::int AS analiticas FROM planos_financeiros_sienge WHERE empresa_id = $1 AND tp_conta <> 'T'",
+    [empresaId]
+  );
+  const { rows: g } = await pool.query(
+    `SELECT count(mascara_id)::int AS com_mascara, count(origem_projecao)::int AS com_origem, MAX(atualizado_em) AS atualizado_em
+       FROM dfc_plano_contas WHERE empresa_id = $1`,
+    [empresaId]
+  );
+  const { rows: seguem } = await pool.query(
+    `SELECT count(*)::int AS n FROM centros_custo_sienge c
+      WHERE c.empresa_id = $1 AND c.projeta_dfc
+        AND NOT EXISTS (SELECT 1 FROM dfc_plano_contas_versoes v WHERE v.empresa_id = c.empresa_id AND v.centro_id = c.sienge_id)`,
+    [empresaId]
+  );
+  const { rows: versoes } = await pool.query(
+    `SELECT v.centro_id, c.name, c.natureza, v.criado_em, u.nome AS criado_por,
+            count(d.mascara_id)::int AS com_mascara, count(d.origem_projecao)::int AS com_origem,
+            MAX(d.atualizado_em) AS atualizado_em
+       FROM dfc_plano_contas_versoes v
+       JOIN centros_custo_sienge c ON c.empresa_id = v.empresa_id AND c.sienge_id = v.centro_id
+       LEFT JOIN usuarios u ON u.id = v.usuario_id
+       LEFT JOIN dfc_plano_contas_centro d ON d.empresa_id = v.empresa_id AND d.centro_id = v.centro_id
+      WHERE v.empresa_id = $1
+      GROUP BY v.centro_id, c.name, c.natureza, v.criado_em, u.nome
+      ORDER BY c.name ASC`,
+    [empresaId]
+  );
+  return {
+    analiticas: tot[0].analiticas,
+    global: { ...g[0], centros_seguindo: seguem[0].n },
+    versoes,
+  };
+}
+
+module.exports = { list, update, listVersoes, criarVersao, excluirVersao, listTodas, resumo };

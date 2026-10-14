@@ -108,4 +108,12 @@ async function listTodas(req, res, next) {
   }
 }
 
-module.exports = { list, update, listVersoes, criarVersao, excluirVersao, listTodas };
+async function resumo(req, res, next) {
+  try {
+    res.json(await service.resumo(empresaIdSchema.parse(req.params.empresaId)));
+  } catch (err) {
+    tratar(err, next);
+  }
+}
+
+module.exports = { list, update, listVersoes, criarVersao, excluirVersao, listTodas, resumo };

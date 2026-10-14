@@ -13,7 +13,6 @@ import {
   Save,
   Search,
   Upload,
-  CopyPlus,
   Trash2,
   TrendingUp,
   SlidersHorizontal,
@@ -42,6 +41,7 @@ import DfcRepassesTab from './DfcRepassesTab';
 import DfcOrcamentosTab from './DfcOrcamentosTab';
 import ProjecoesModal from './ProjecoesModal';
 import NovaVersaoPlanoModal from './NovaVersaoPlanoModal';
+import PlanosContasLista from './PlanosContasLista';
 
 // Mesmo padrão de DreGerencialPage.jsx: o `{ divider: true }` separa a DFC (a demonstração em
 // si) das abas de cadastro/parâmetro que dão suporte a ela, que ficam juntas, sem divisor entre
@@ -240,12 +240,16 @@ export default function DfcConstrutorasPage() {
     return `${fim.getFullYear()}-${String(fim.getMonth() + 1).padStart(2, '0')}-${String(fim.getDate()).padStart(2, '0')}`;
   });
 
-  // Aba Plano Contas: qual plano está sendo editado — '' = Global (vale pra todos os centros) ou o
-  // id do centro de custo com versão própria (tem prioridade no Orçamento / Projeção CEF dele).
+  // Aba Plano Contas: abre nos cards dos planos (PlanosContasLista); clicar num card abre o plano
+  // pra edição. Qual plano está aberto vai na URL (`plano`: 'global' ou o id do centro com plano
+  // próprio — tem prioridade no Orçamento / Projeção CEF dele), pra o "Voltar" do navegador
+  // funcionar. Sem `plano` = os cards.
   const confirm = useConfirm();
   const [versoesPlano, setVersoesPlano] = useState([]);
-  const [versaoPlano, setVersaoPlano] = useState('');
+  const versaoPlano = searchParams.get('plano') || '';
   const [novaVersaoAberta, setNovaVersaoAberta] = useState(false);
+  const [refreshTokenCardsPlano, setRefreshTokenCardsPlano] = useState(0);
+  const abrirPlano = (plano) => atualizarParams({ plano: plano || null });
 
   function carregarVersoesPlano() {
     if (!empresaId) {
@@ -261,10 +265,13 @@ export default function DfcConstrutorasPage() {
   }
 
   useEffect(() => {
-    setVersaoPlano('');
     if (abaAtiva === 'plano-contas') carregarVersoesPlano();
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [empresaId, abaAtiva]);
+
+  // Plano de centro que não existe mais (excluído, ou link antigo): volta pros cards.
+  const planoCentro = versaoPlano && versaoPlano !== 'global' ? versoesPlano.find((v) => String(v.centro_id) === versaoPlano) : null;
+  const planoAberto = versaoPlano === 'global' || Boolean(planoCentro);
 
   async function excluirVersaoPlano() {
     const versao = versoesPlano.find((v) => String(v.centro_id) === String(versaoPlano));
@@ -278,8 +285,9 @@ export default function DfcConstrutorasPage() {
     if (!ok) return;
     try {
       await excluirVersaoPlanoDfc(empresaId, versao.centro_id);
-      setVersaoPlano('');
+      abrirPlano(null);
       carregarVersoesPlano();
+      setRefreshTokenCardsPlano((n) => n + 1);
     } catch (e) {
       setErroPlano(e.response?.data?.message || 'Não foi possível excluir a versão.');
     }
@@ -303,7 +311,7 @@ export default function DfcConstrutorasPage() {
               <label className="mb-1 block text-sm font-medium text-gray-700">Empresa</label>
               <SearchableSelect
                 value={empresaId}
-                onChange={(novoId) => atualizarParams({ empresa_id: novoId || null, centro_id: null })}
+                onChange={(novoId) => atualizarParams({ empresa_id: novoId || null, centro_id: null, plano: null })}
                 disabled={loadingEmpresas || empresaTravada}
                 options={empresas.map((empresa) => ({ value: empresa.id, label: nomeExibicaoEmpresa(empresa) }))}
                 placeholder={loadingEmpresas ? 'Carregando empresas...' : 'Selecione uma empresa'}
@@ -411,24 +419,7 @@ export default function DfcConstrutorasPage() {
               </>
             )}
 
-            {abaAtiva === 'plano-contas' && (
-              <div className="sm:min-w-56 sm:max-w-xs sm:flex-1">
-                <label className="mb-1 block text-sm font-medium text-gray-700">Versão do plano</label>
-                <SearchableSelect
-                  value={versaoPlano}
-                  onChange={(v) => setVersaoPlano(v ? String(v) : '')}
-                  disabled={!empresaId}
-                  clearable={false}
-                  options={[
-                    { value: '', label: 'Global (todos os centros)' },
-                    ...versoesPlano.map((v) => ({ value: String(v.centro_id), label: v.name })),
-                  ]}
-                  placeholder="Global (todos os centros)"
-                />
-              </div>
-            )}
-
-            {abaAtiva === 'plano-contas' && (
+            {abaAtiva === 'plano-contas' && planoAberto && (
               <div className="sm:min-w-56 sm:max-w-sm sm:flex-1">
                 <label className="mb-1 block text-sm font-medium text-gray-700">Buscar</label>
                 <div className="relative">
@@ -513,18 +504,14 @@ export default function DfcConstrutorasPage() {
             </div>
           )}
 
-          {abaAtiva === 'plano-contas' && (
+          {abaAtiva === 'plano-contas' && planoAberto && (
             <div className="flex shrink-0 flex-col items-end gap-1.5">
               <div className="flex items-center gap-2">
-                <Button type="button" variant="secondary" onClick={() => setNovaVersaoAberta(true)} disabled={!empresaId}>
-                  <CopyPlus size={16} />
-                  Versão por centro
-                </Button>
-                {versaoPlano && (
+                {planoCentro && (
                   <button
                     type="button"
                     onClick={excluirVersaoPlano}
-                    title="Excluir a versão deste centro (ele volta a seguir o Global)"
+                    title="Excluir o plano deste centro (ele volta a seguir o Global)"
                     className="flex shrink-0 items-center justify-center rounded-lg border border-gray-200 p-2 text-gray-500 transition-colors hover:bg-red-50 hover:text-red-600"
                   >
                     <Trash2 size={18} />
@@ -600,13 +587,27 @@ export default function DfcConstrutorasPage() {
         ) : tabAtiva.id === 'avancos-obras' ? (
           <DfcAvancosTab empresaId={empresaId} inicio={inicioAvancos} fim={fimAvancos} />
         ) : tabAtiva.id === 'plano-contas' ? (
-          <DfcPlanoContasTab
-            empresaId={empresaId}
-            search={buscaPlano}
-            refreshToken={refreshTokenPlano}
-            onTotal={setTotalPlano}
-            centroVersao={versaoPlano ? Number(versaoPlano) : null}
-          />
+          planoAberto ? (
+            <DfcPlanoContasTab
+              empresaId={empresaId}
+              search={buscaPlano}
+              refreshToken={refreshTokenPlano}
+              onTotal={setTotalPlano}
+              centroVersao={planoCentro ? planoCentro.centro_id : null}
+              tituloPlano={planoCentro ? planoCentro.name : 'Global'}
+              onVoltar={() => {
+                abrirPlano(null);
+                setRefreshTokenCardsPlano((n) => n + 1);
+              }}
+            />
+          ) : (
+            <PlanosContasLista
+              empresaId={empresaId}
+              onAbrir={abrirPlano}
+              onNovo={() => setNovaVersaoAberta(true)}
+              refreshToken={refreshTokenCardsPlano}
+            />
+          )
         ) : tabAtiva.id === 'ciweb' ? (
           <DfcCiwebTab ref={ciwebTabRef} empresaId={empresaId} search={buscaCiweb} tipo={tipoCiweb} />
         ) : tabAtiva.id === 'centros-custos' ? (
@@ -642,7 +643,8 @@ export default function DfcConstrutorasPage() {
         versoes={versoesPlano}
         onCriada={(criada) => {
           setNovaVersaoAberta(false);
-          carregarVersoesPlano().then(() => setVersaoPlano(String(criada.centro_id)));
+          setRefreshTokenCardsPlano((n) => n + 1);
+          carregarVersoesPlano().then(() => abrirPlano(String(criada.centro_id)));
         }}
       />
 

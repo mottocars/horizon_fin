@@ -1,5 +1,5 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
-import { Check, ListTree, Loader2, Minus, Plus, TriangleAlert } from 'lucide-react';
+import { ArrowLeft, Check, Globe2, Building2, ListTree, Loader2, Minus, Plus, TriangleAlert } from 'lucide-react';
 import SearchableSelect from '../../../components/SearchableSelect';
 import FiltroColuna, { passaNoFiltro } from '../../../components/FiltroColuna';
 import { listContas } from '../../../api/planosFinanceirosSienge.api';
@@ -100,7 +100,16 @@ function montarArvore(contas) {
 // cada mudança salva na hora, com o mesmo indicador de salvamento das outras abas.
 // `centroVersao`: id do centro cuja versão própria do plano está sendo editada (null = plano Global,
 // que vale pra todos os centros sem versão própria) — escolhido no topo da página.
-export default function DfcPlanoContasTab({ empresaId, search = '', refreshToken = 0, onTotal, centroVersao = null }) {
+// `tituloPlano` / `onVoltar`: cabeçalho do editor (nome do plano aberto e volta pros cards).
+export default function DfcPlanoContasTab({
+  empresaId,
+  search = '',
+  refreshToken = 0,
+  onTotal,
+  centroVersao = null,
+  tituloPlano = '',
+  onVoltar,
+}) {
   const confirm = useConfirm();
   const [contas, setContas] = useState([]);
   const [carregando, setCarregando] = useState(true);
@@ -320,6 +329,26 @@ export default function DfcPlanoContasTab({ empresaId, search = '', refreshToken
     // Tabela dentro do quadro branco, com margem em volta (p-5) e cabeçalho de cantos de cima
     // arredondados — mesmo padrão das abas Máscaras e Centros Custos.
     <div className="rounded-card rounded-tl-none bg-white p-5 shadow-card">
+      {onVoltar && (
+        <div className="-mt-1 mb-4 flex items-center gap-3 border-b border-gray-100 pb-3">
+          <button
+            type="button"
+            onClick={onVoltar}
+            className="flex items-center gap-1.5 text-sm text-gray-500 transition-colors hover:text-gray-800"
+          >
+            <ArrowLeft size={16} />
+            Planos de contas
+          </button>
+          <span className="text-gray-300">/</span>
+          <span className="flex min-w-0 items-center gap-1.5 text-sm font-semibold text-gray-900">
+            {centroVersao ? <Building2 size={15} className="shrink-0 text-primary-600" /> : <Globe2 size={15} className="shrink-0 text-primary-600" />}
+            <span className="truncate">{tituloPlano}</span>
+          </span>
+          <span className="ml-auto shrink-0 text-xs text-gray-400">
+            {centroVersao ? 'Vale só para este centro de custo' : 'Vale para todos os centros sem plano próprio'}
+          </span>
+        </div>
+      )}
       {statusSalvamento && (
         <div className="-mt-1 mb-3 flex items-center justify-end text-xs" aria-live="polite">
           {statusSalvamento === 'salvando' ? (

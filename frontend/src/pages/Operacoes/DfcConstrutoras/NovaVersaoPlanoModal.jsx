@@ -37,18 +37,18 @@ export default function NovaVersaoPlanoModal({ open, onClose, empresaId, versoes
       const criada = await criarVersaoPlanoDfc(empresaId, Number(centroId));
       onCriada(criada);
     } catch (e) {
-      setErro(e.response?.data?.message || 'Não foi possível criar a versão.');
+      setErro(e.response?.data?.message || 'Não foi possível criar o plano.');
     } finally {
       setSalvando(false);
     }
   }
 
   return (
-    <Modal open={open} onClose={salvando ? () => {} : onClose} title="Nova versão do plano de contas">
+    <Modal open={open} onClose={salvando ? () => {} : onClose} title="Novo plano por centro de custo">
       <div className="space-y-4">
         <p className="text-xs leading-relaxed text-gray-500">
-          A versão começa como uma <strong className="font-medium text-gray-700">cópia do plano Global</strong> de hoje
-          (Máscara DFC e Origem Projeção de cada conta). Depois é editada à parte e passa a valer só para o centro
+          O plano começa como uma <strong className="font-medium text-gray-700">cópia do plano Global</strong> de hoje
+          (Máscara DFC e Origem Projeção de cada conta). Depois é editado à parte e passa a valer só para o centro
           escolhido — no Orçamento e na Projeção CEF. Os demais centros continuam seguindo o Global.
         </p>
         {erro && <div className="rounded-lg bg-red-50 px-3 py-2 text-sm text-red-600">{erro}</div>}
@@ -59,7 +59,7 @@ export default function NovaVersaoPlanoModal({ open, onClose, empresaId, versoes
             onChange={(v) => setCentroId(v || '')}
             options={centros.map((c) => ({ value: c.sienge_id, label: c.name }))}
             placeholder={centros.length ? 'Selecione o centro de custo' : 'Nenhum centro disponível'}
-            emptyMessage="Todos os centros com Projeta DFC já têm versão própria."
+            emptyMessage="Todos os centros com Projeta DFC já têm plano próprio."
             clearable={false}
           />
         </div>
@@ -68,7 +68,7 @@ export default function NovaVersaoPlanoModal({ open, onClose, empresaId, versoes
             Cancelar
           </Button>
           <Button type="button" onClick={criar} disabled={!centroId} loading={salvando}>
-            Criar versão
+            Criar plano
           </Button>
         </div>
       </div>
