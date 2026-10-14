@@ -374,7 +374,7 @@ export default function DfcFluxoTab({ empresaId, inicio, fim, centros: centrosFi
                     <th
                       key={m}
                       title={atual ? 'Mês atual' : undefined}
-                      className={`sticky top-0 z-20 border-b bg-white px-3 py-2 text-right align-bottom ${
+                      className={`sticky top-0 z-20 border-b bg-white px-3 py-2 text-center align-bottom ${
                         atual ? 'border-b-2 border-b-primary-500' : 'border-gray-200'
                       }`}
                     >
