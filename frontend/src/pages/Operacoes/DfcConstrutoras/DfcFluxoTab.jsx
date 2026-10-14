@@ -6,6 +6,7 @@ import { listTodasClassificacoesPlanoDfc } from '../../../api/dfcPlanoContas.api
 import { getOrcamentoDfc } from '../../../api/dfcOrcamento.api';
 import { getRealizadoDfc } from '../../../api/dfcSaldos.api';
 import { mesesEntre } from './orcamentoValores';
+import DetalhamentoModal from './DetalhamentoModal';
 
 const LARGURA_PRIMEIRA = 340;
 const LARGURA_COLUNA = 104;
@@ -109,6 +110,8 @@ export default function DfcFluxoTab({
   const gradeRef = useRef(null);
   const [alturaGrade, setAlturaGrade] = useState(null);
   const [rolouX, setRolouX] = useState(false);
+  const [detalhe, setDetalhe] = useState(null); // pedido da janela Detalhamento
+  const fecharDetalhe = useCallback(() => setDetalhe(null), []);
 
   const mesAtual = mesDeHoje();
   const periodoValido = Boolean(inicio && fim && fim >= inicio);
@@ -173,6 +176,8 @@ export default function DfcFluxoTab({
 
     // n1 -> lado (E/S) -> n2 -> conta -> 'mes|tipo' -> valor
     const arvore = new Map();
+    // Centros que somam em cada célula de conta (pro Detalhamento): 'n1|lado|n2|conta' -> 'mes|tipo' -> Set.
+    const centrosCelula = new Map();
     const lancar = (centroId, natureza, mes, tipo, valor) => {
       if (filtro && !filtro.has(centroId)) return;
       if (!valor) return;
@@ -197,6 +202,10 @@ export default function DfcFluxoTab({
       const pc = contas.get(conta);
       const k = `${mes}|${tipo}`;
       pc[k] = r2((pc[k] || 0) + valor);
+      const chaveCelula = `${n1}|${lado}|${n2}|${conta}`;
+      if (!centrosCelula.has(chaveCelula)) centrosCelula.set(chaveCelula, {});
+      const porCol = centrosCelula.get(chaveCelula);
+      (porCol[k] = porCol[k] || new Set()).add(centroId ?? null);
     };
     (dados.orcamento?.valores || []).forEach((v) => mesesP.has(v.mes) && lancar(v.centro_id, v.sienge_id, v.mes, P, v.valor));
     (realizado?.valores || []).forEach((v) => mesesR.has(v.mes) && lancar(v.centro_id, v.sienge_id, v.mes, R, v.valor));
@@ -210,7 +219,7 @@ export default function DfcFluxoTab({
     const montarN1 = (id, descricao, filhosOrdem) => {
       const lados = arvore.get(id);
       if (!lados) return;
-      const montarLado = (nivel2) =>
+      const montarLado = (nivel2, lado) =>
         filhosOrdem
         .filter(([fid]) => nivel2.has(fid))
         .map(([fid, fdesc]) => {
@@ -221,12 +230,14 @@ export default function DfcFluxoTab({
                   ? { sienge_id: SEM_NATUREZA, name: 'Lançamentos sem rateio no Sienge' }
                   : contaPorId[cid] || { sienge_id: cid, name: `Natureza ${cid}` },
               porColuna: pc,
+              lado,
+              centros: centrosCelula.get(`${id}|${lado}|${fid}|${cid}`) || {},
             }))
             .sort((a, b) => String(a.conta.sienge_id).localeCompare(String(b.conta.sienge_id)));
           return { chave: `m${fid}`, descricao: fdesc, contas, porColuna: somar(contas.map((c) => c.porColuna)) };
         });
       const ladosMontados = LADOS.filter(([k]) => lados.has(k)).map(([k, rot]) => {
-        const filhos = montarLado(lados.get(k));
+        const filhos = montarLado(lados.get(k), k);
         return { chave: k, descricao: rot, filhos, porColuna: somar(filhos.map((f) => f.porColuna)) };
       });
       grupos.push({
@@ -360,7 +371,21 @@ export default function DfcFluxoTab({
 
   // Uma linha da grade. `tipo`: 'saldo' | 'resultado' | 'n1' | 'lado' | 'n2' | 'conta'. `pc`: valores por
   // 'AAAA-MM|R' / 'AAAA-MM|P'.
-  function linha({ chave, tipo, rotulo: texto, sub, pc, nivel = 0, podeAbrir = false, cinza = false, dica, separar = false }) {
+  // Clique no valor de uma conta (último nível): abre o Detalhamento daquela célula.
+  function abrirDetalhe(c, coluna, codigo) {
+    const centros = [...(c.centros[`${coluna.mes}|${coluna.tipo}`] || [])].map((id) => (id === null ? 'sem' : id));
+    setDetalhe({
+      tipo: coluna.tipo,
+      mes: coluna.mes,
+      lado: c.lado,
+      natureza: c.conta.sienge_id === SEM_NATUREZA ? 'sem' : c.conta.sienge_id,
+      centros,
+      codigo,
+      contaNome: c.conta.name,
+    });
+  }
+
+  function linha({ chave, tipo, rotulo: texto, sub, pc, nivel = 0, podeAbrir = false, cinza = false, dica, separar = false, onValor }) {
     const aberto = abertos.includes(chave);
     const e = ESTILO[tipo];
     const numeros = tipo === 'saldo' || tipo === 'resultado' || tipo === 'n1' ? 'font-semibold' : tipo === 'conta' ? 'text-gray-600' : '';
@@ -404,7 +429,20 @@ export default function DfcFluxoTab({
                 tipo === 'saldo' || tipo === 'resultado' ? 'text-[13px]' : 'text-xs'
               } ${numeros} ${vazio ? '' : corValor(v)}`}
             >
-              {vazio ? '' : dinheiro(v)}
+              {vazio ? (
+                ''
+              ) : onValor ? (
+                <button
+                  type="button"
+                  onClick={() => onValor(c)}
+                  title="Detalhamento"
+                  className="-mx-1.5 rounded px-1.5 py-0.5 tabular-nums underline-offset-2 transition-colors hover:bg-primary-50 hover:text-primary-700 hover:underline"
+                >
+                  {dinheiro(v)}
+                </button>
+              ) : (
+                dinheiro(v)
+              )}
             </td>
           );
         })}
@@ -584,21 +622,23 @@ export default function DfcFluxoTab({
                                       cinza: n1.semMascara,
                                     })}
                                     {abertos.includes(chaveN2) &&
-                                      n2.contas.map((c) =>
-                                        linha({
+                                      n2.contas.map((c) => {
+                                        const codigo =
+                                          c.conta.sienge_id === SEM_NATUREZA
+                                            ? null
+                                            : c.conta.mascara_nivel_1
+                                              ? codigoFormatado(c.conta)
+                                              : String(c.conta.sienge_id);
+                                        return linha({
                                           chave: `${chaveN2}|${c.conta.sienge_id}`,
                                           tipo: 'conta',
                                           nivel: 3,
-                                          sub:
-                                            c.conta.sienge_id === SEM_NATUREZA
-                                              ? null
-                                              : c.conta.mascara_nivel_1
-                                                ? codigoFormatado(c.conta)
-                                                : c.conta.sienge_id,
+                                          sub: codigo,
                                           rotulo: c.conta.name,
                                           pc: c.porColuna,
-                                        })
-                                      )}
+                                          onValor: (coluna) => abrirDetalhe(c, coluna, codigo),
+                                        });
+                                      })}
                                   </Fragment>
                                 );
                               })}
@@ -626,6 +666,7 @@ export default function DfcFluxoTab({
           </table>
         </div>
       )}
+      <DetalhamentoModal empresaId={empresaId} pedido={detalhe} onClose={fecharDetalhe} />
     </div>
   );
 }

@@ -142,4 +142,4 @@ async function execucao(empresaId) {
   return executor.getExecucaoAtualOuUltima(empresaId, ROTINA);
 }
 
-module.exports = { ROTINA, ORIGEM, valores, base, atualizarBase, execucao, espalhar, cronogramaDe, somarMeses };
+module.exports = { ROTINA, ORIGEM, SQL_ULTIMA_VERSAO, valores, base, atualizarBase, execucao, espalhar, cronogramaDe, somarMeses };

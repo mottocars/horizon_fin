@@ -175,4 +175,4 @@ function projetar(p, unidades, obraAcumulado) {
   return linhas;
 }
 
-module.exports = { projetar, mesesEntre, mesDe, somarMeses };
+module.exports = { projetar, calcularUnidades, mesesEntre, mesDe, somarMeses };

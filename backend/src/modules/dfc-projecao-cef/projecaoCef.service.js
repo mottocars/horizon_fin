@@ -90,13 +90,16 @@ async function elegiveis(empresaId) {
 // % de obra acumulado (0 a 1) de cada mês do ciclo — a mesma regra da linha da obra em Avanços
 // Obras (DfcAvancosTab.jsx::consolidado): Caixa (DCD) até o mês anterior ao atual e, do mês atual
 // em diante, Prevision (com Prevision) ou o avanço manual (sem). Mês sem valor repete o anterior.
+// `fontes`: de onde veio o % de cada mês ({ fonte: 'CAIXA' | 'PREVISION' | 'MANUAL', repetido }) —
+// usado no rastreio do Detalhamento (aba DFC).
 async function obraAcumulado(empresaId, siengeId, inicio, fim) {
   const dados = await avancosService.avancos(empresaId, inicio, fim);
   const obra = dados.obras.find((o) => o.sienge_id === siengeId);
   const mapa = new Map();
+  const fontes = new Map();
   if (!obra) {
     dados.meses.forEach((m) => mapa.set(m, 0));
-    return { mapa, cenario: 'SEM_DADOS' };
+    return { mapa, cenario: 'SEM_DADOS', fontes };
   }
   const caixa = Boolean(obra.pls);
   const prevision = Boolean(obra.prevision);
@@ -104,23 +107,28 @@ async function obraAcumulado(empresaId, siengeId, inicio, fim) {
   let ultimo = 0;
   dados.meses.forEach((m) => {
     let v;
-    if (cenario === 'CAIXA_PREVISION') v = m < dados.mes_atual ? obra.pls[m] : obra.prevision[m];
-    else if (cenario === 'CAIXA') v = m < dados.mes_atual ? obra.pls[m] : obra.manual?.[m];
-    else if (cenario === 'PREVISION') v = obra.prevision[m];
-    else v = obra.manual?.[m];
-    if (v !== null && v !== undefined) ultimo = Math.min(Math.max(Number(v) / 100, 0), 1);
+    let fonte;
+    if (cenario === 'CAIXA_PREVISION') [v, fonte] = m < dados.mes_atual ? [obra.pls[m], 'CAIXA'] : [obra.prevision[m], 'PREVISION'];
+    else if (cenario === 'CAIXA') [v, fonte] = m < dados.mes_atual ? [obra.pls[m], 'CAIXA'] : [obra.manual?.[m], 'MANUAL'];
+    else if (cenario === 'PREVISION') [v, fonte] = [obra.prevision[m], 'PREVISION'];
+    else [v, fonte] = [obra.manual?.[m], 'MANUAL'];
+    const repetido = v === null || v === undefined;
+    if (!repetido) ultimo = Math.min(Math.max(Number(v) / 100, 0), 1);
     mapa.set(m, ultimo);
+    fontes.set(m, { fonte, repetido });
   });
-  return { mapa, cenario };
+  return { mapa, cenario, fontes };
 }
 
 // Unidades do Geral do contrato, sem o primeiro contrato por data de assinatura (o da construtora)
-// — mesma regra da aba Repasses.
+// — mesma regra da aba Repasses. Contrato e mutuário vão junto só pra identificar a unidade no
+// rastreio do Detalhamento (o motor não usa).
 async function unidadesGeral(empresaId, contrato) {
   const { rows } = await pool.query(
     `SELECT data_assinatura_contrato AS data_assinatura, data_inclusao_dados_registro_cri AS data_registro,
             valor_financiamento, valor_financiamento_terreno AS valor_terreno,
-            valor_desconto_subsidio_complementar AS valor_subsidio, valor_fgts
+            valor_desconto_subsidio_complementar AS valor_subsidio, valor_fgts,
+            numero_contrato_unidade AS contrato_unidade, nome_mutuario
        FROM (SELECT u.*, ROW_NUMBER() OVER (ORDER BY u.data_assinatura_contrato ASC NULLS LAST, u.id ASC) AS ordem
                FROM extrato_unidades u
               WHERE u.empresa_id = $1 AND u.contrato_empreendimento = $2) x
@@ -128,6 +136,21 @@ async function unidadesGeral(empresaId, contrato) {
     [empresaId, contrato]
   );
   return rows;
+}
+
+// Percentuais dos Parâmetros vêm em % (130 = 130%) — o motor trabalha em fração, como a planilha.
+function parametrosMotor(versao) {
+  return {
+    cto: Number(versao.cto),
+    tetoPj: Number(versao.valor_financiamento_pj),
+    coefGarantia: Number(versao.pct_coeficiente_garantia) / 100,
+    amortPj: Number(versao.pct_amortizacao_pj) / 100,
+    taxaJuros: Number(versao.taxa_juros_mes) / 100,
+    dataDemandaMinima: versao.data_demanda_minima,
+    dataInicio: versao.data_inicio_ciclo,
+    dataFim: versao.data_fim_ciclo,
+    prazoRegistro: Number(versao.tempo_assinatura_registro_meses || 0),
+  };
 }
 
 function round2(v) {
@@ -153,19 +176,7 @@ async function atualizar(empresaId, siengeId, usuarioId) {
   const faltando = OBRIGATORIOS.filter(([c]) => versao[c] === null || versao[c] === undefined).map(([, r]) => r);
   if (faltando.length) throw erro(400, `${obra.name}: Parâmetros sem ${faltando.join(', ')}.`);
 
-  // Percentuais dos Parâmetros vêm em % (130 = 130%) — o motor trabalha em fração, como a planilha.
-  const p = {
-    cto: Number(versao.cto),
-    tetoPj: Number(versao.valor_financiamento_pj),
-    coefGarantia: Number(versao.pct_coeficiente_garantia) / 100,
-    amortPj: Number(versao.pct_amortizacao_pj) / 100,
-    taxaJuros: Number(versao.taxa_juros_mes) / 100,
-    dataDemandaMinima: versao.data_demanda_minima,
-    dataInicio: versao.data_inicio_ciclo,
-    dataFim: versao.data_fim_ciclo,
-    prazoRegistro: Number(versao.tempo_assinatura_registro_meses || 0),
-  };
-
+  const p = parametrosMotor(versao);
   const { mapa, cenario } = await obraAcumulado(empresaId, siengeId, p.dataInicio, p.dataFim);
   const unidades = await unidadesGeral(empresaId, obra.contrato);
   const linhas = projetar(p, unidades, mapa);
@@ -289,4 +300,4 @@ async function orcamento(empresaId) {
   return { valores, execucoes, avisos };
 }
 
-module.exports = { SAIDAS, elegiveis, atualizar, orcamento, obraAcumulado, mesDe };
+module.exports = { SAIDAS, elegiveis, atualizar, orcamento, obraAcumulado, mesDe, unidadesGeral, parametrosMotor };
