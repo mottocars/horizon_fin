@@ -3,7 +3,7 @@ import { Calculator, Minus, Plus, TriangleAlert } from 'lucide-react';
 import { listCentrosCustoDfc } from '../../../api/dfcCentros.api';
 import { listDfcMascaras } from '../../../api/dfcMascaras.api';
 import { listContas } from '../../../api/planosFinanceirosSienge.api';
-import { listClassificacoesPlanoDfc } from '../../../api/dfcPlanoContas.api';
+import { listTodasClassificacoesPlanoDfc } from '../../../api/dfcPlanoContas.api';
 import { getOrcamentoProjecaoCef } from '../../../api/dfcProjecaoCef.api';
 
 const MESES = ['jan', 'fev', 'mar', 'abr', 'mai', 'jun', 'jul', 'ago', 'set', 'out', 'nov', 'dez'];
@@ -80,7 +80,7 @@ export default function DfcOrcamentosTab({ empresaId, inicio, fim, refreshToken 
       listCentrosCustoDfc(empresaId),
       listDfcMascaras(empresaId),
       listContas(empresaId, { page: 1, limit: 2000, search: '' }),
-      listClassificacoesPlanoDfc(empresaId),
+      listTodasClassificacoesPlanoDfc(empresaId),
       getOrcamentoProjecaoCef(empresaId),
     ])
       .then(([centros, mascaras, contas, classificacoes, projecao]) =>
@@ -103,39 +103,47 @@ export default function DfcOrcamentosTab({ empresaId, inicio, fim, refreshToken 
   const periodoValido = Boolean(inicio && fim && fim >= inicio);
   const meses = useMemo(() => (periodoValido ? mesesEntre(inicio, fim) : []), [inicio, fim, periodoValido]);
 
-  // A mesma estrutura de máscaras vale pra todos os centros (o plano de contas é da empresa).
-  const { centros, estrutura, todasContas } = useMemo(() => {
-    if (!dados) return { centros: [], estrutura: [], todasContas: [] };
-    const mascaraDaConta = Object.fromEntries(dados.classificacoes.map((c) => [c.sienge_id, c.mascara_id]));
+  // Estrutura (máscara 1 > máscara 2 > contas) de cada plano: o Global e a versão própria de cada
+  // centro que tem uma (aba Plano Contas) — o centro com versão própria usa a dele, os demais o Global.
+  const { centros, planoGlobal, planosCentro } = useMemo(() => {
+    if (!dados) return { centros: [], planoGlobal: { estrutura: [], todasContas: [] }, planosCentro: {} };
     const analiticas = [...dados.contas]
       .filter((c) => c.tp_conta !== 'T')
       .sort((a, b) => String(a.sienge_id).localeCompare(String(b.sienge_id)));
     const idsNivel2 = new Set(dados.mascaras.flatMap((g) => g.filhos.map((f) => f.id)));
-    const grupos = dados.mascaras.map((g) => ({
-      chave: `m${g.id}`,
-      descricao: g.descricao,
-      filhos: g.filhos.map((f) => ({
-        chave: `m${f.id}`,
-        descricao: f.descricao,
-        contas: analiticas.filter((c) => mascaraDaConta[c.sienge_id] === f.id),
-      })),
-    }));
-    const semMascara = analiticas.filter((c) => !idsNivel2.has(mascaraDaConta[c.sienge_id]));
-    if (semMascara.length) {
-      grupos.push({
-        chave: 'sem',
-        descricao: 'SEM MÁSCARA DFC',
-        semMascara: true,
-        filhos: [{ chave: 'sem2', descricao: 'Contas sem Máscara DFC na aba Plano Contas', contas: semMascara }],
+
+    function montar(classificacoes) {
+      const mascaraDaConta = Object.fromEntries(classificacoes.map((c) => [c.sienge_id, c.mascara_id]));
+      const grupos = dados.mascaras.map((g) => ({
+        chave: `m${g.id}`,
+        descricao: g.descricao,
+        filhos: g.filhos.map((f) => ({
+          chave: `m${f.id}`,
+          descricao: f.descricao,
+          contas: analiticas.filter((c) => mascaraDaConta[c.sienge_id] === f.id),
+        })),
+      }));
+      const semMascara = analiticas.filter((c) => !idsNivel2.has(mascaraDaConta[c.sienge_id]));
+      if (semMascara.length) {
+        grupos.push({
+          chave: 'sem',
+          descricao: 'SEM MÁSCARA DFC',
+          semMascara: true,
+          filhos: [{ chave: 'sem2', descricao: 'Contas sem Máscara DFC na aba Plano Contas', contas: semMascara }],
+        });
+      }
+      grupos.forEach((g) => {
+        g.contas = g.filhos.flatMap((f) => f.contas);
       });
+      return { estrutura: grupos, todasContas: grupos.flatMap((g) => g.contas) };
     }
-    grupos.forEach((g) => {
-      g.contas = g.filhos.flatMap((f) => f.contas);
-    });
+
     return {
       centros: dados.centros.filter((c) => c.projeta_dfc).sort((a, b) => a.name.localeCompare(b.name, 'pt-BR')),
-      estrutura: grupos,
-      todasContas: grupos.flatMap((g) => g.contas),
+      planoGlobal: montar(dados.classificacoes.global),
+      planosCentro: Object.fromEntries(
+        Object.entries(dados.classificacoes.centros).map(([id, lista]) => [id, { ...montar(lista), propria: true }])
+      ),
     };
   }, [dados]);
 
@@ -303,12 +311,13 @@ export default function DfcOrcamentosTab({ empresaId, inicio, fim, refreshToken 
               )}
               {centros.map((centro) => {
                 const chaveCentro = `c${centro.sienge_id}`;
+                const { estrutura, todasContas, propria } = planosCentro[centro.sienge_id] || planoGlobal;
                 return (
                   <Fragment key={chaveCentro}>
                     {linhaGrupo({
                       chave: chaveCentro,
                       nivel: 0,
-                      rotulo: `${centro.name}${centro.natureza === 'ADMINISTRATIVO' ? ' (Administrativo)' : ''}`,
+                      rotulo: `${centro.name}${centro.natureza === 'ADMINISTRATIVO' ? ' (Administrativo)' : ''}${propria ? ' · plano próprio' : ''}`,
                       podeAbrir: estrutura.length > 0,
                       destaque: true,
                       valorMes: (m) => somaContas(centro.sienge_id, todasContas, m),

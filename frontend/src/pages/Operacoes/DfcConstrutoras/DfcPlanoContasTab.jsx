@@ -98,7 +98,9 @@ function montarArvore(contas) {
 // topo da página (DfcConstrutorasPage.jsx). No último nível (contas analíticas, tp_conta diferente
 // de 'T') ficam as comboboxes Máscara DFC (só as de nível 2 da aba Máscaras) e Origem Projeção —
 // cada mudança salva na hora, com o mesmo indicador de salvamento das outras abas.
-export default function DfcPlanoContasTab({ empresaId, search = '', refreshToken = 0, onTotal }) {
+// `centroVersao`: id do centro cuja versão própria do plano está sendo editada (null = plano Global,
+// que vale pra todos os centros sem versão própria) — escolhido no topo da página.
+export default function DfcPlanoContasTab({ empresaId, search = '', refreshToken = 0, onTotal, centroVersao = null }) {
   const confirm = useConfirm();
   const [contas, setContas] = useState([]);
   const [carregando, setCarregando] = useState(true);
@@ -129,7 +131,7 @@ export default function DfcPlanoContasTab({ empresaId, search = '', refreshToken
     setErroCarga('');
     Promise.all([
       listContas(empresaId, { page: 1, limit: LIMIT, search: '' }),
-      listClassificacoesPlanoDfc(empresaId),
+      listClassificacoesPlanoDfc(empresaId, centroVersao),
       listDfcMascaras(empresaId),
     ])
       .then(([result, lista, arvoreMascaras]) => {
@@ -141,7 +143,7 @@ export default function DfcPlanoContasTab({ empresaId, search = '', refreshToken
       .catch((err) => setErroCarga(err.response?.data?.message || 'Não foi possível carregar o plano de contas.'))
       .finally(() => setCarregando(false));
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [empresaId]);
+  }, [empresaId, centroVersao]);
 
   useEffect(() => {
     setFechados([]);
@@ -150,7 +152,7 @@ export default function DfcPlanoContasTab({ empresaId, search = '', refreshToken
     setFiltroOrigem(null);
     setErroSalvar('');
     setSalvoAlgumaVez(false);
-  }, [empresaId]);
+  }, [empresaId, centroVersao]);
 
   // Só as máscaras de nível 2 são escolhíveis, na ordem da aba Máscaras — agrupadas pelo nível 1
   // (título no painel da combobox, pedido do usuário).
@@ -200,6 +202,7 @@ export default function DfcPlanoContasTab({ empresaId, search = '', refreshToken
     try {
       const { origem_retirada_de: retiradaDe, ...salvo } = await updateClassificacaoPlanoDfc(empresaId, siengeId, novo, {
         transferir,
+        centroId: centroVersao,
       });
       setClassificacoes((atual) => {
         const proximo = { ...atual, [siengeId]: salvo };

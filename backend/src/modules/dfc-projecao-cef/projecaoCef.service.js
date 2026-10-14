@@ -223,21 +223,33 @@ async function atualizar(empresaId, siengeId, usuarioId) {
 }
 
 // Valores da projeção pro Orçamento: cada saída cai na conta analítica com a Origem Projeção
-// correspondente (aba Plano Contas). Mais de uma conta com a mesma origem: vai na primeira pelo
-// código (e volta um aviso).
+// correspondente (aba Plano Contas) — do plano do próprio centro, se ele tiver versão própria, senão
+// do Global. Cada origem CEF fica em uma conta só (índice único em cada plano).
 async function orcamento(empresaId) {
   const { rows: contas } = await pool.query(
-    `SELECT origem_projecao, sienge_id FROM dfc_plano_contas
+    `SELECT NULL::int AS centro_id, origem_projecao, sienge_id FROM dfc_plano_contas
       WHERE empresa_id = $1 AND origem_projecao = ANY($2::text[])
-      ORDER BY origem_projecao, sienge_id::text`,
+     UNION ALL
+     SELECT centro_id, origem_projecao, sienge_id FROM dfc_plano_contas_centro
+      WHERE empresa_id = $1 AND origem_projecao = ANY($2::text[])`,
     [empresaId, Object.keys(SAIDAS)]
   );
-  const contaPorOrigem = {};
-  const avisos = [];
-  contas.forEach((c) => {
-    if (contaPorOrigem[c.origem_projecao] === undefined) contaPorOrigem[c.origem_projecao] = c.sienge_id;
-    else avisos.push(`Mais de uma conta com a origem ${c.origem_projecao}: o valor vai só na conta ${contaPorOrigem[c.origem_projecao]}.`);
+  const { rows: versoes } = await pool.query(
+    `SELECT v.centro_id, c.name FROM dfc_plano_contas_versoes v
+       JOIN centros_custo_sienge c ON c.empresa_id = v.empresa_id AND c.sienge_id = v.centro_id
+      WHERE v.empresa_id = $1`,
+    [empresaId]
+  );
+  // plano -> origem -> conta. Chave 'global' ou o id do centro com versão própria.
+  const planos = { global: {} };
+  versoes.forEach((v) => {
+    planos[v.centro_id] = {};
   });
+  contas.forEach((c) => {
+    const plano = planos[c.centro_id ?? 'global'];
+    if (plano) plano[c.origem_projecao] = c.sienge_id;
+  });
+  const planoDoCentro = (sid) => planos[sid] || planos.global;
 
   const { rows } = await pool.query(
     `SELECT sienge_id, to_char(mes, 'YYYY-MM') AS mes, novo_registro, medicao, credito_pj, juros, amortizacao
@@ -246,14 +258,24 @@ async function orcamento(empresaId) {
   );
   const valores = [];
   rows.forEach((r) => {
+    const plano = planoDoCentro(r.sienge_id);
     Object.entries(SAIDAS).forEach(([origem, { coluna, sinal }]) => {
-      const conta = contaPorOrigem[origem];
+      const conta = plano[origem];
       const v = Number(r[coluna]);
       if (conta !== undefined && v !== 0) valores.push({ sienge_id: r.sienge_id, conta, mes: r.mes, valor: round2(v * sinal) });
     });
   });
-  Object.keys(SAIDAS).forEach((origem) => {
-    if (contaPorOrigem[origem] === undefined) avisos.push(`Nenhuma conta com a Origem Projeção ${origem} na aba Plano Contas.`);
+
+  // Aviso de origem sem conta — só nos planos usados por alguma obra projetada.
+  const avisos = [];
+  const projetados = [...new Set(rows.map((r) => r.sienge_id))];
+  const nomeVersao = Object.fromEntries(versoes.map((v) => [v.centro_id, v.name]));
+  const planosUsados = new Set(projetados.map((sid) => (planos[sid] ? sid : 'global')));
+  planosUsados.forEach((chave) => {
+    const onde = chave === 'global' ? 'no plano Global' : `na versão do plano de ${nomeVersao[chave]}`;
+    Object.keys(SAIDAS).forEach((origem) => {
+      if (planos[chave][origem] === undefined) avisos.push(`Nenhuma conta com a Origem Projeção ${origem} ${onde} (aba Plano Contas).`);
+    });
   });
 
   const { rows: execucoes } = await pool.query(

@@ -36,6 +36,12 @@ function erro(status, message) {
   return e;
 }
 
+// `centro` (query ou corpo): versão própria do centro de custo; sem ele, o plano Global.
+const centroSchema = z.preprocess(
+  (v) => (v === '' || v === undefined || v === null ? null : v),
+  z.coerce.number().int().positive('Centro de custo inválido.').nullable()
+);
+
 function tratar(err, next) {
   if (err.issues) return next(erro(400, err.issues[0].message));
   return next(err);
@@ -44,7 +50,7 @@ function tratar(err, next) {
 async function list(req, res, next) {
   try {
     const empresaId = empresaIdSchema.parse(req.params.empresaId);
-    res.json(await service.list(empresaId));
+    res.json(await service.list(empresaId, centroSchema.parse(req.query.centro)));
   } catch (err) {
     tratar(err, next);
   }
@@ -55,7 +61,8 @@ async function update(req, res, next) {
     const empresaId = empresaIdSchema.parse(req.params.empresaId);
     const siengeId = siengeIdSchema.parse(req.params.siengeId);
     const { transferir, ...dados } = updateSchema.parse(req.body);
-    res.json(await service.update(empresaId, siengeId, dados, { transferir }));
+    const centroId = centroSchema.parse(req.body?.centro);
+    res.json(await service.update(empresaId, siengeId, dados, { transferir, centroId }));
   } catch (err) {
     // Origem CEF em uso em outra conta: devolve qual é, pra tela perguntar se transfere.
     if (err.codigo === 'ORIGEM_CEF_EM_USO') {
@@ -65,4 +72,40 @@ async function update(req, res, next) {
   }
 }
 
-module.exports = { list, update };
+async function listVersoes(req, res, next) {
+  try {
+    res.json(await service.listVersoes(empresaIdSchema.parse(req.params.empresaId)));
+  } catch (err) {
+    tratar(err, next);
+  }
+}
+
+async function criarVersao(req, res, next) {
+  try {
+    const empresaId = empresaIdSchema.parse(req.params.empresaId);
+    const centroId = z.coerce.number().int().positive('Escolha o centro de custo.').parse(req.body?.centro_id);
+    res.status(201).json(await service.criarVersao(empresaId, centroId, req.user.id));
+  } catch (err) {
+    tratar(err, next);
+  }
+}
+
+async function excluirVersao(req, res, next) {
+  try {
+    const empresaId = empresaIdSchema.parse(req.params.empresaId);
+    const centroId = z.coerce.number().int().positive('Centro de custo inválido.').parse(req.params.centroId);
+    res.json(await service.excluirVersao(empresaId, centroId));
+  } catch (err) {
+    tratar(err, next);
+  }
+}
+
+async function listTodas(req, res, next) {
+  try {
+    res.json(await service.listTodas(empresaIdSchema.parse(req.params.empresaId)));
+  } catch (err) {
+    tratar(err, next);
+  }
+}
+
+module.exports = { list, update, listVersoes, criarVersao, excluirVersao, listTodas };
