@@ -8,8 +8,7 @@ import { formatarDataISO } from '../../../utils/datas';
 // a calculadora — as colunas calculadas não ficam na grade (pedido do usuário: ficava grande
 // demais), aparecem por cliente na janela da calculadora. `soma`: entra no total do empreendimento.
 const COLUNAS = [
-  { id: 'contrato_mutuario', label: 'Cód. Contrato Mutuário', tipo: 'texto', largura: 140 },
-  { id: 'mutuario', label: 'Mutuário', tipo: 'texto', largura: 240 },
+  { id: 'mutuario', label: 'Mutuário', tipo: 'texto', largura: 320 },
   { id: 'data_assinatura', label: 'Data Assinatura', tipo: 'data', largura: 105 },
   { id: 'data_registro', label: 'Data Registro', tipo: 'data', largura: 105 },
   { id: 'valor_financiamento', label: 'Valor Financiamento', tipo: 'moeda', soma: true },
@@ -29,8 +28,7 @@ const COLUNAS = [
 const LARGURA_PADRAO = 125;
 const largura = (c) => c.largura || LARGURA_PADRAO;
 const LARGURA_TOTAL = COLUNAS.reduce((s, c) => s + largura(c), 0);
-// As duas primeiras colunas ficam presas à esquerda ao rolar na horizontal.
-const ESQUERDA_MUTUARIO = largura(COLUNAS[0]);
+// A primeira coluna (Mutuário / empreendimento) fica presa à esquerda ao rolar na horizontal.
 
 function vazio(v) {
   return v === null || v === undefined;
@@ -247,10 +245,9 @@ export default function DfcRepassesTab({ empresaId, search = '' }) {
                   <th
                     key={c.id}
                     title={c.titulo}
-                    style={i === 1 ? { left: ESQUERDA_MUTUARIO } : undefined}
                     className={`border-b-2 border-b-blue-500 bg-blue-50 px-2 py-2.5 text-[11px] font-medium uppercase tracking-wide text-blue-700 ${
-                      i === 0 ? 'sticky left-0 z-20 pl-4' : 'border-l border-l-blue-100'
-                    } ${i === 1 ? 'sticky z-20 border-r border-r-blue-100' : ''} ${alinhamento(c)}`}
+                      i === 0 ? 'sticky left-0 z-20 border-r border-r-blue-100 pl-4' : 'border-l border-l-blue-100'
+                    } ${alinhamento(c)}`}
                   >
                     {c.label}
                   </th>
@@ -279,7 +276,6 @@ export default function DfcRepassesTab({ empresaId, search = '' }) {
                       className={`group/emp ${temUnidades && !termo ? 'cursor-pointer' : ''}`}
                     >
                       <td
-                        colSpan={2}
                         className="sticky left-0 z-10 border-b border-r border-gray-200 bg-gray-50 py-2 pl-3 pr-2 group-hover/emp:bg-gray-100"
                       >
                         <span className="flex items-center gap-2">
@@ -310,7 +306,7 @@ export default function DfcRepassesTab({ empresaId, search = '' }) {
                           </span>
                         </span>
                       </td>
-                      {COLUNAS.slice(2).map((c) => {
+                      {COLUNAS.slice(1).map((c) => {
                         let conteudo = '';
                         if (c.soma && temUnidades) {
                           const valores = e.unidades.map((u) => u[c.id]).filter((v) => !vazio(v));
@@ -336,11 +332,12 @@ export default function DfcRepassesTab({ empresaId, search = '' }) {
                           {COLUNAS.map((c, i) => (
                             <td
                               key={c.id}
-                              style={i === 1 ? { left: ESQUERDA_MUTUARIO } : undefined}
                               title={c.tipo === 'texto' ? u[c.id] || undefined : undefined}
                               className={`border-b border-gray-100 bg-white px-2 py-1.5 tabular-nums group-hover/un:bg-gray-50 ${
-                                i === 0 ? 'sticky left-0 z-10 pl-9' : 'border-l'
-                              } ${i === 1 ? 'sticky z-10 truncate border-r border-r-gray-200 font-medium text-gray-800' : 'text-gray-700'} ${alinhamento(c)} ${
+                                i === 0
+                                  ? 'sticky left-0 z-10 truncate border-r border-r-gray-200 pl-9 font-medium text-gray-800'
+                                  : 'border-l text-gray-700'
+                              } ${alinhamento(c)} ${
                                 c.tipo !== 'calculo' && vazio(u[c.id]) ? 'text-gray-300' : ''
                               }`}
                             >
