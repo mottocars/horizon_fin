@@ -132,12 +132,13 @@ function CelulaManual({ valor, onCommit }) {
 // topo) com o avanço ACUMULADO de cada obra, em drilldown: nível 1 = a obra (o avanço consolidado,
 // conforme o cenário — ver `cenario`), nível 2 = as fontes (PLS da Caixa, Prevision, Manual) e o
 // Desvio. PLS e Prevision: mesma conta da antiga Curva de Obras — ver backend
-// dfc-avancos/dfcAvancos.service.js. Tudo começa aberto; o manual salva na hora.
+// dfc-avancos/dfcAvancos.service.js. As obras começam sempre fechadas (pedido do usuário); o manual
+// salva na hora.
 export default function DfcAvancosTab({ empresaId, inicio, fim }) {
   const [dados, setDados] = useState(null);
   const [carregando, setCarregando] = useState(false);
   const [erroCarga, setErroCarga] = useState('');
-  const [fechados, setFechados] = useState([]);
+  const [abertos, setAbertos] = useState([]);
   const [pendentes, setPendentes] = useState(0);
   const [erroSalvar, setErroSalvar] = useState('');
   const [salvoAlgumaVez, setSalvoAlgumaVez] = useState(false);
@@ -156,7 +157,7 @@ export default function DfcAvancosTab({ empresaId, inicio, fim }) {
 
   useEffect(() => {
     setDados(null);
-    setFechados([]);
+    setAbertos([]);
     setErroSalvar('');
     setSalvoAlgumaVez(false);
   }, [empresaId]);
@@ -166,7 +167,7 @@ export default function DfcAvancosTab({ empresaId, inicio, fim }) {
   }, [carregar]);
 
   function alternar(id) {
-    setFechados((atual) => (atual.includes(id) ? atual.filter((v) => v !== id) : [...atual, id]));
+    setAbertos((atual) => (atual.includes(id) ? atual.filter((v) => v !== id) : [...atual, id]));
   }
 
   function trocarManual(siengeId, mes, percentual) {
@@ -298,7 +299,7 @@ export default function DfcAvancosTab({ empresaId, inicio, fim }) {
                 </tr>
               )}
               {obras.map((obra) => {
-                const aberto = !fechados.includes(obra.sienge_id);
+                const aberto = abertos.includes(obra.sienge_id);
                 const cen = cenario(obra);
                 const linhas = [];
                 if (cen === 'CAIXA_PREVISION' || cen === 'CAIXA') {
