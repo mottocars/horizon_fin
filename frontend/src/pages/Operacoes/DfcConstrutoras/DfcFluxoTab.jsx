@@ -12,7 +12,12 @@ const LARGURA_COLUNA = 104;
 const FOLGA = 36;
 const ALTURA_MINIMA_GRADE = 320;
 const ALTURA_CAB_MES = 40; // 1ª linha do cabeçalho (mês/ano) — a 2ª (Realizado/Projetado) gruda logo abaixo
-const RECUO = [16, 40, 64]; // máscara 1, máscara 2, conta
+const RECUO = [16, 36, 58, 80]; // máscara 1, entradas/saídas, máscara 2, conta
+// Nível entre a máscara 1 e a 2 (pedido do usuário): valor positivo = ENTRADAS, negativo = SAÍDAS.
+const LADOS = [
+  ['E', 'ENTRADAS'],
+  ['S', 'SAÍDAS'],
+];
 const SOMBRA_COLUNA_FIXA = '[&_tr>*:first-child]:shadow-[6px_0_8px_-6px_rgba(16,24,40,0.18)]';
 const MESES_CAB = ['JAN', 'FEV', 'MAR', 'ABR', 'MAI', 'JUN', 'JUL', 'AGO', 'SET', 'OUT', 'NOV', 'DEZ'];
 const SEM_MASCARA = 'sem';
@@ -82,7 +87,9 @@ function mesDeHoje() {
 //      mês seguinte);
 //    - mês atual: nos dois — os dois partem do saldo real de abertura;
 //    - meses seguintes: só no Projetado, encadeando o saldo final projetado mês a mês.
-// 2) Máscaras de nível 1 (drilldown › nível 2 › conta); 3) RESULTADO — entradas − saídas.
+// 2) Máscaras de nível 1 › ENTRADAS / SAÍDAS (pelo sinal do valor — no realizado, lançamento a
+//    lançamento; no projetado, o valor do orçamento por conta e mês) › nível 2 › conta;
+// 3) RESULTADO — entradas − saídas.
 // Período = o mesmo da aba Orçamentos (filtros do topo). Visual de demonstrativo, rolagem própria com a
 // primeira coluna congelada. `telaCheia` / `onSairTelaCheia`: tela cheia. `refreshToken`: recarrega.
 export default function DfcFluxoTab({
@@ -164,10 +171,12 @@ export default function DfcFluxoTab({
     const mesesP = new Set([...meses, ...(ultimo && mesAtual <= ultimo ? mesesEntre(`${mesAtual}-01`, `${ultimo}-01`) : [])]);
     const mesesR = new Set(meses.filter((m) => m <= mesAtual));
 
-    // n1 -> n2 -> conta -> 'mes|tipo' -> valor
+    // n1 -> lado (E/S) -> n2 -> conta -> 'mes|tipo' -> valor
     const arvore = new Map();
     const lancar = (centroId, natureza, mes, tipo, valor) => {
       if (filtro && !filtro.has(centroId)) return;
+      if (!valor) return;
+      const lado = valor > 0 ? 'E' : 'S';
       let n1;
       let n2;
       let conta = natureza;
@@ -179,7 +188,9 @@ export default function DfcFluxoTab({
         n1 = n2 === SEM_MASCARA ? SEM_MASCARA : pai[m2];
       }
       if (!arvore.has(n1)) arvore.set(n1, new Map());
-      const nivel2 = arvore.get(n1);
+      const lados = arvore.get(n1);
+      if (!lados.has(lado)) lados.set(lado, new Map());
+      const nivel2 = lados.get(lado);
       if (!nivel2.has(n2)) nivel2.set(n2, new Map());
       const contas = nivel2.get(n2);
       if (!contas.has(conta)) contas.set(conta, {});
@@ -197,9 +208,10 @@ export default function DfcFluxoTab({
     };
     const grupos = [];
     const montarN1 = (id, descricao, filhosOrdem) => {
-      const nivel2 = arvore.get(id);
-      if (!nivel2) return;
-      const filhos = filhosOrdem
+      const lados = arvore.get(id);
+      if (!lados) return;
+      const montarLado = (nivel2) =>
+        filhosOrdem
         .filter(([fid]) => nivel2.has(fid))
         .map(([fid, fdesc]) => {
           const contas = [...nivel2.get(fid).entries()]
@@ -213,7 +225,17 @@ export default function DfcFluxoTab({
             .sort((a, b) => String(a.conta.sienge_id).localeCompare(String(b.conta.sienge_id)));
           return { chave: `m${fid}`, descricao: fdesc, contas, porColuna: somar(contas.map((c) => c.porColuna)) };
         });
-      grupos.push({ chave: `m${id}`, descricao, filhos, semMascara: id === SEM_MASCARA, porColuna: somar(filhos.map((f) => f.porColuna)) });
+      const ladosMontados = LADOS.filter(([k]) => lados.has(k)).map(([k, rot]) => {
+        const filhos = montarLado(lados.get(k));
+        return { chave: k, descricao: rot, filhos, porColuna: somar(filhos.map((f) => f.porColuna)) };
+      });
+      grupos.push({
+        chave: `m${id}`,
+        descricao,
+        lados: ladosMontados,
+        semMascara: id === SEM_MASCARA,
+        porColuna: somar(ladosMontados.map((l) => l.porColuna)),
+      });
     };
     dados.mascaras.forEach((g) => montarN1(g.id, g.descricao, g.filhos.map((f) => [f.id, f.descricao])));
     montarN1(SEM_MASCARA, 'SEM MÁSCARA DFC', [
@@ -252,9 +274,12 @@ export default function DfcFluxoTab({
     const linhas = [porColuna.saldoInicial || {}, porColuna.resultado || {}, porColuna.saldoFinal || {}];
     estrutura.forEach((g) => {
       linhas.push(g.porColuna);
-      g.filhos.forEach((f) => {
-        linhas.push(f.porColuna);
-        f.contas.forEach((c) => linhas.push(c.porColuna));
+      g.lados.forEach((l) => {
+        linhas.push(l.porColuna);
+        l.filhos.forEach((f) => {
+          linhas.push(f.porColuna);
+          f.contas.forEach((c) => linhas.push(c.porColuna));
+        });
       });
     });
     const largura = (v) => (v ? larguraTexto(dinheiro(v)) : 0);
@@ -327,12 +352,13 @@ export default function DfcFluxoTab({
     saldo: { fundo: 'bg-slate-50', texto: 'text-[13px] font-semibold text-slate-900', py: 'py-3', borda: 'border-slate-200' },
     resultado: { fundo: 'bg-white', texto: 'text-[13px] font-semibold text-gray-900', py: 'py-3', borda: 'border-gray-200' },
     n1: { fundo: 'bg-white', texto: 'text-[13px] font-semibold text-gray-900', py: 'py-2.5', borda: 'border-gray-100' },
+    lado: { fundo: 'bg-white', texto: 'text-[11px] font-semibold uppercase tracking-wider text-gray-500', py: 'py-2', borda: 'border-gray-100' },
     n2: { fundo: 'bg-white', texto: 'text-xs text-gray-700', py: 'py-2', borda: 'border-gray-100' },
     conta: { fundo: 'bg-white', texto: 'text-xs text-gray-500', py: 'py-1.5', borda: 'border-gray-100' },
   };
   const corValor = (v) => (v < 0 ? 'text-rose-600' : 'text-gray-900');
 
-  // Uma linha da grade. `tipo`: 'saldo' | 'resultado' | 'n1' | 'n2' | 'conta'. `pc`: valores por
+  // Uma linha da grade. `tipo`: 'saldo' | 'resultado' | 'n1' | 'lado' | 'n2' | 'conta'. `pc`: valores por
   // 'AAAA-MM|R' / 'AAAA-MM|P'.
   function linha({ chave, tipo, rotulo: texto, sub, pc, nivel = 0, podeAbrir = false, cinza = false, dica, separar = false }) {
     const aberto = abertos.includes(chave);
@@ -351,7 +377,7 @@ export default function DfcFluxoTab({
           style={{ paddingLeft: tipo === 'saldo' || tipo === 'resultado' ? 20 : RECUO[nivel] }}
         >
           <span className="flex min-w-0 items-center gap-1.5">
-            {(tipo === 'n1' || tipo === 'n2') && (
+            {(tipo === 'n1' || tipo === 'lado' || tipo === 'n2') && (
               <ChevronRight
                 size={14}
                 className={`shrink-0 transition-transform ${aberto ? 'rotate-90' : ''} ${podeAbrir ? 'text-gray-400' : 'text-gray-200'}`}
@@ -524,39 +550,55 @@ export default function DfcFluxoTab({
                       tipo: 'n1',
                       rotulo: n1.descricao,
                       pc: n1.porColuna,
-                      podeAbrir: n1.filhos.length > 0,
+                      podeAbrir: n1.lados.length > 0,
                       cinza: n1.semMascara,
                     })}
                     {abertos.includes(chaveN1) &&
-                      n1.filhos.map((n2) => {
-                        const chaveN2 = `${chaveN1}|${n2.chave}`;
+                      n1.lados.map((lado) => {
+                        const chaveLado = `${chaveN1}|${lado.chave}`;
                         return (
-                          <Fragment key={chaveN2}>
+                          <Fragment key={chaveLado}>
                             {linha({
-                              chave: chaveN2,
-                              tipo: 'n2',
+                              chave: chaveLado,
+                              tipo: 'lado',
                               nivel: 1,
-                              rotulo: n2.descricao,
-                              pc: n2.porColuna,
-                              podeAbrir: n2.contas.length > 0,
-                              cinza: n1.semMascara,
+                              rotulo: lado.descricao,
+                              pc: lado.porColuna,
+                              podeAbrir: lado.filhos.length > 0,
                             })}
-                            {abertos.includes(chaveN2) &&
-                              n2.contas.map((c) =>
-                                linha({
-                                  chave: `${chaveN2}|${c.conta.sienge_id}`,
-                                  tipo: 'conta',
-                                  nivel: 2,
-                                  sub:
-                                    c.conta.sienge_id === SEM_NATUREZA
-                                      ? null
-                                      : c.conta.mascara_nivel_1
-                                        ? codigoFormatado(c.conta)
-                                        : c.conta.sienge_id,
-                                  rotulo: c.conta.name,
-                                  pc: c.porColuna,
-                                })
-                              )}
+                            {abertos.includes(chaveLado) &&
+                              lado.filhos.map((n2) => {
+                                const chaveN2 = `${chaveLado}|${n2.chave}`;
+                                return (
+                                  <Fragment key={chaveN2}>
+                                    {linha({
+                                      chave: chaveN2,
+                                      tipo: 'n2',
+                                      nivel: 2,
+                                      rotulo: n2.descricao,
+                                      pc: n2.porColuna,
+                                      podeAbrir: n2.contas.length > 0,
+                                      cinza: n1.semMascara,
+                                    })}
+                                    {abertos.includes(chaveN2) &&
+                                      n2.contas.map((c) =>
+                                        linha({
+                                          chave: `${chaveN2}|${c.conta.sienge_id}`,
+                                          tipo: 'conta',
+                                          nivel: 3,
+                                          sub:
+                                            c.conta.sienge_id === SEM_NATUREZA
+                                              ? null
+                                              : c.conta.mascara_nivel_1
+                                                ? codigoFormatado(c.conta)
+                                                : c.conta.sienge_id,
+                                          rotulo: c.conta.name,
+                                          pc: c.porColuna,
+                                        })
+                                      )}
+                                  </Fragment>
+                                );
+                              })}
                           </Fragment>
                         );
                       })}
