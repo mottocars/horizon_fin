@@ -216,7 +216,7 @@ function dataHora(v) {
     : '';
 }
 
-const LARGURA_PRIMEIRA = 360;
+const LARGURA_PRIMEIRA = 470; // nome + total do período (em azul, à direita)
 const LARGURA_MES = 92; // largura mínima de um mês; cresce pra caber o maior valor da coluna
 const FOLGA_MES = 30; // padding da célula + borda + campo de digitação
 const ALTURA_MINIMA_GRADE = 320;
@@ -735,6 +735,30 @@ const DfcOrcamentosTab = forwardRef(function DfcOrcamentosTab(
       );
     });
 
+  // Total da linha no período da tela (soma dos meses), em azul na primeira coluna (pedido do
+  // usuário). null quando nenhum mês tem valor.
+  function totalPeriodo(valorMes) {
+    let total = null;
+    meses.forEach((m) => {
+      const v = valorMes(m);
+      if (v !== null && v !== undefined) total = (total || 0) + v;
+    });
+    return total === null ? null : Math.round(total * 100) / 100;
+  }
+  const totalLinha = (valorMes, forte = false) => {
+    const t = totalPeriodo(valorMes);
+    return (
+      <span
+        className={`ml-auto shrink-0 pl-2 text-xs tabular-nums ${forte ? 'font-semibold' : 'font-medium'} ${
+          t === null || t === 0 ? 'text-blue-300' : 'text-blue-700'
+        }`}
+        title="Total do período"
+      >
+        {t === null || t === 0 ? '—' : dinheiro(t)}
+      </span>
+    );
+  };
+
   // Linha de agrupamento (centro, máscara 1, máscara 2) — função comum, não componente, pra não
   // ser recriada a cada render.
   function linhaGrupo({ chave, nivel, rotulo, contagem, podeAbrir, destaque = false, cinza = false, valorMes, valorMesVersao, dica }) {
@@ -770,6 +794,7 @@ const DfcOrcamentosTab = forwardRef(function DfcOrcamentosTab(
                 {contagem}
               </span>
             )}
+            {totalLinha(valorMes, nivel <= 1)}
           </span>
         </td>
         {celulas(nivel, valorMes, undefined, valorMesVersao)}
@@ -943,7 +968,10 @@ const DfcOrcamentosTab = forwardRef(function DfcOrcamentosTab(
               <thead>
                 <tr className="[&>th:first-child]:rounded-tl-lg [&>th:last-child]:rounded-tr-lg">
                   <th className="sticky left-0 top-0 z-30 border-b-2 border-r border-b-blue-500 border-r-blue-100 bg-blue-50 py-2.5 pl-4 pr-3 text-xs font-medium uppercase tracking-wide text-blue-700">
-                    Centro de custo / Máscara / Conta
+                    <span className="flex items-center justify-between gap-2">
+                      <span>Centro de custo / Máscara / Conta</span>
+                      <span className="shrink-0">Total do período</span>
+                    </span>
                   </th>
                   {meses.map((m) => (
                     <th
@@ -1033,6 +1061,7 @@ const DfcOrcamentosTab = forwardRef(function DfcOrcamentosTab(
                                                   <span className="min-w-0 truncate text-xs text-gray-700" title={conta.name}>
                                                     {conta.name}
                                                   </span>
+                                                  {totalLinha((m) => valorConta(centro.sienge_id, conta.sienge_id, m))}
                                                 </span>
                                               </td>
                                               {informada
