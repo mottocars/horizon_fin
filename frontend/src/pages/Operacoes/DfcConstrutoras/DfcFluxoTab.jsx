@@ -21,8 +21,6 @@ const LADOS = [
 ];
 const SOMBRA_COLUNA_FIXA = '[&_tr>*:first-child]:shadow-[6px_0_8px_-6px_rgba(16,24,40,0.18)]';
 const MESES_CAB = ['JAN', 'FEV', 'MAR', 'ABR', 'MAI', 'JUN', 'JUL', 'AGO', 'SET', 'OUT', 'NOV', 'DEZ'];
-const SEM_MASCARA = 'sem';
-const SEM_NATUREZA = 'semnat';
 const R = 'R'; // realizado
 const P = 'P'; // projetado
 
@@ -79,8 +77,9 @@ function mesDeHoje() {
 // Colunas: até o mês atual, cada mês tem REALIZADO e PROJETADO; depois dele, só PROJETADO.
 // - Projetado: a última versão salva do Orçamento (todas as origens).
 // - Realizado: o extrato das contas bancárias com "Projeta DFC" (aba Contas Correntes), já achatado
-//   por rateio centro × natureza na sincronização (backend dfc-saldos / sie_extrato_contas_rateio);
-//   lançamento sem natureza vai pra "SEM MÁSCARA DFC › Sem natureza".
+//   por rateio centro × natureza na sincronização (backend dfc-saldos / sie_extrato_contas_rateio).
+// Lançamento sem natureza ou em conta sem Máscara DFC (aba Plano Contas) fica de fora do fluxo
+// (pedido do usuário — antes ia pra "SEM MÁSCARA DFC").
 // Ambos somando os centros do filtro do topo (`centros`; vazio = todos); a máscara de cada natureza é
 // a do plano que o centro usa (o próprio ou o Global). Linhas:
 // 1) SALDO INICIAL e 4) SALDO FINAL (= inicial + resultado):
@@ -182,16 +181,11 @@ export default function DfcFluxoTab({
       if (filtro && !filtro.has(centroId)) return;
       if (!valor) return;
       const lado = valor > 0 ? 'E' : 'S';
-      let n1;
-      let n2;
-      let conta = natureza;
-      if (natureza === null || natureza === undefined) {
-        [n1, n2, conta] = [SEM_MASCARA, SEM_NATUREZA, SEM_NATUREZA];
-      } else {
-        const m2 = (planosCentro[centroId] || planoGlobal)[natureza];
-        n2 = m2 && pai[m2] ? m2 : SEM_MASCARA;
-        n1 = n2 === SEM_MASCARA ? SEM_MASCARA : pai[m2];
-      }
+      if (natureza === null || natureza === undefined) return;
+      const n2 = (planosCentro[centroId] || planoGlobal)[natureza];
+      if (!n2 || !pai[n2]) return;
+      const n1 = pai[n2];
+      const conta = natureza;
       if (!arvore.has(n1)) arvore.set(n1, new Map());
       const lados = arvore.get(n1);
       if (!lados.has(lado)) lados.set(lado, new Map());
@@ -225,10 +219,7 @@ export default function DfcFluxoTab({
         .map(([fid, fdesc]) => {
           const contas = [...nivel2.get(fid).entries()]
             .map(([cid, pc]) => ({
-              conta:
-                cid === SEM_NATUREZA
-                  ? { sienge_id: SEM_NATUREZA, name: 'Lançamentos sem rateio no Sienge' }
-                  : contaPorId[cid] || { sienge_id: cid, name: `Natureza ${cid}` },
+              conta: contaPorId[cid] || { sienge_id: cid, name: `Natureza ${cid}` },
               porColuna: pc,
               lado,
               centros: centrosCelula.get(`${id}|${lado}|${fid}|${cid}`) || {},
@@ -244,15 +235,10 @@ export default function DfcFluxoTab({
         chave: `m${id}`,
         descricao,
         lados: ladosMontados,
-        semMascara: id === SEM_MASCARA,
         porColuna: somar(ladosMontados.map((l) => l.porColuna)),
       });
     };
     dados.mascaras.forEach((g) => montarN1(g.id, g.descricao, g.filhos.map((f) => [f.id, f.descricao])));
-    montarN1(SEM_MASCARA, 'SEM MÁSCARA DFC', [
-      [SEM_MASCARA, 'Contas sem Máscara DFC na aba Plano Contas'],
-      [SEM_NATUREZA, 'Sem natureza (extrato)'],
-    ]);
 
     // Resultado e saldos.
     const resultado = somar(grupos.map((g) => g.porColuna));
@@ -378,14 +364,14 @@ export default function DfcFluxoTab({
       tipo: coluna.tipo,
       mes: coluna.mes,
       lado: c.lado,
-      natureza: c.conta.sienge_id === SEM_NATUREZA ? 'sem' : c.conta.sienge_id,
+      natureza: c.conta.sienge_id,
       centros,
       codigo,
       contaNome: c.conta.name,
     });
   }
 
-  function linha({ chave, tipo, rotulo: texto, sub, pc, nivel = 0, podeAbrir = false, cinza = false, dica, separar = false, onValor }) {
+  function linha({ chave, tipo, rotulo: texto, sub, pc, nivel = 0, podeAbrir = false, dica, separar = false, onValor }) {
     const aberto = abertos.includes(chave);
     const e = ESTILO[tipo];
     const numeros = tipo === 'saldo' || tipo === 'resultado' || tipo === 'n1' ? 'font-semibold' : tipo === 'conta' ? 'text-gray-600' : '';
@@ -409,7 +395,7 @@ export default function DfcFluxoTab({
               />
             )}
             {sub && <span className="shrink-0 font-mono text-[11px] text-gray-400">{sub}</span>}
-            <span className={`min-w-0 truncate ${e.texto} ${cinza ? 'italic text-gray-400' : ''}`}>{texto}</span>
+            <span className={`min-w-0 truncate ${e.texto}`}>{texto}</span>
             {dica && (
               <span title={dica} className="shrink-0 text-slate-400">
                 <Info size={13} />
@@ -592,7 +578,6 @@ export default function DfcFluxoTab({
                       rotulo: n1.descricao,
                       pc: n1.porColuna,
                       podeAbrir: n1.lados.length > 0,
-                      cinza: n1.semMascara,
                     })}
                     {abertos.includes(chaveN1) &&
                       n1.lados.map((lado) => {
@@ -619,16 +604,10 @@ export default function DfcFluxoTab({
                                       rotulo: n2.descricao,
                                       pc: n2.porColuna,
                                       podeAbrir: n2.contas.length > 0,
-                                      cinza: n1.semMascara,
                                     })}
                                     {abertos.includes(chaveN2) &&
                                       n2.contas.map((c) => {
-                                        const codigo =
-                                          c.conta.sienge_id === SEM_NATUREZA
-                                            ? null
-                                            : c.conta.mascara_nivel_1
-                                              ? codigoFormatado(c.conta)
-                                              : String(c.conta.sienge_id);
+                                        const codigo = c.conta.mascara_nivel_1 ? codigoFormatado(c.conta) : String(c.conta.sienge_id);
                                         return linha({
                                           chave: `${chaveN2}|${c.conta.sienge_id}`,
                                           tipo: 'conta',
