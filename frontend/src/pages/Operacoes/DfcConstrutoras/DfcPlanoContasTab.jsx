@@ -9,7 +9,7 @@ import { useConfirm } from '../../../confirm/ConfirmContext';
 
 const LIMIT = 2000;
 
-const GRADE = 'grid grid-cols-[minmax(0,1fr)_110px_240px_260px_80px] items-center gap-3';
+const GRADE = 'grid grid-cols-[minmax(0,1fr)_130px_240px_260px_80px] items-center gap-3';
 
 // Opções fixas da "Origem Projeção" (pedido do usuário) — mesma lista do backend
 // (dfcPlanoContas.controller.js) e do CHECK da tabela dfc_plano_contas.
@@ -420,15 +420,20 @@ export default function DfcPlanoContasTab({
                 colunaRef={colunaContaRef}
               />
             </span>
-            <span ref={colunaProjetaRef} className="flex items-center justify-center gap-1.5">
-              Projeta DFC
-              <FiltroColuna
-                filtro={filtroProjeta}
-                onChange={setFiltroProjeta}
-                opcoes={OPCOES_FILTRO_PROJETA}
-                label="Projeta DFC"
-                colunaRef={colunaProjetaRef}
-              />
+            {/* Texto centralizado sobre o checkbox; o ícone do filtro fica fora do centro, à direita. */}
+            <span ref={colunaProjetaRef} className="flex justify-center">
+              <span className="relative whitespace-nowrap">
+                Projeta DFC
+                <span className="absolute left-full top-1/2 ml-1.5 flex -translate-y-1/2 items-center">
+                  <FiltroColuna
+                    filtro={filtroProjeta}
+                    onChange={setFiltroProjeta}
+                    opcoes={OPCOES_FILTRO_PROJETA}
+                    label="Projeta DFC"
+                    colunaRef={colunaProjetaRef}
+                  />
+                </span>
+              </span>
             </span>
             <span ref={colunaMascaraRef} className="flex items-center gap-1.5">
               Máscara DFC
