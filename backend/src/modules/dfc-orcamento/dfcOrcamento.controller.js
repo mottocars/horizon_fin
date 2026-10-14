@@ -20,9 +20,22 @@ function tratar(err, next) {
   return next(err);
 }
 
+// `?versao=N`: uma versão salva; sem ele, a última.
 async function orcamento(req, res, next) {
   try {
-    res.json(await service.orcamento(empresaIdSchema.parse(req.params.empresaId)));
+    const empresaId = empresaIdSchema.parse(req.params.empresaId);
+    const numero = z
+      .preprocess((v) => (v === '' || v === undefined ? null : v), z.coerce.number().int().positive('Versão inválida.').nullable())
+      .parse(req.query.versao);
+    res.json(await service.orcamento(empresaId, numero));
+  } catch (err) {
+    tratar(err, next);
+  }
+}
+
+async function rascunho(req, res, next) {
+  try {
+    res.json(await service.rascunho(empresaIdSchema.parse(req.params.empresaId)));
   } catch (err) {
     tratar(err, next);
   }
@@ -46,4 +59,4 @@ async function log(req, res, next) {
   }
 }
 
-module.exports = { orcamento, salvarVersao, log };
+module.exports = { orcamento, rascunho, salvarVersao, log };

@@ -14,7 +14,7 @@ import {
   Search,
   Upload,
   Trash2,
-  TrendingUp,
+  FilePlus2,
   Maximize2,
   SlidersHorizontal,
   Tags,
@@ -40,7 +40,7 @@ import DfcPlanoContasTab from './DfcPlanoContasTab';
 import DfcAvancosTab from './DfcAvancosTab';
 import DfcRepassesTab from './DfcRepassesTab';
 import DfcOrcamentosTab from './DfcOrcamentosTab';
-import ProjecoesModal from './ProjecoesModal';
+import NovaVersaoOrcamentoModal from './NovaVersaoOrcamentoModal';
 import NovaVersaoPlanoModal from './NovaVersaoPlanoModal';
 import { ORIGENS_PROJECAO, ORIGEM_NAO_INFORMADA } from './orcamentoValores';
 import PlanosContasLista from './PlanosContasLista';
@@ -299,12 +299,16 @@ export default function DfcConstrutorasPage() {
     }
   }
 
-  // Janela "Projeções" (botão no topo da aba Orçamentos) — ao terminar uma atualização, o
-  // orçamento recarrega (refreshTokenOrcamento).
-  const [projecoesAberto, setProjecoesAberto] = useState(false);
-  const [refreshTokenOrcamento, setRefreshTokenOrcamento] = useState(0);
-  // "Tela cheia" da grade do Orçamento (botão ao lado de "Projeções"); sai pelo botão da própria
-  // tela cheia ou com Esc — ver DfcOrcamentosTab.
+  // Aba Orçamentos — versões (ver DfcOrcamentosTab): o filtro "Versão" começa sempre na última
+  // (null); 'nova' = a nova versão montada pelo ícone "Nova versão" (janela NovaVersaoOrcamentoModal,
+  // que atualiza as bases e monta a versão — `novaVersaoToken`). Salva, ela vira a última.
+  const [versaoOrcamento, setVersaoOrcamento] = useState(null);
+  const [versoesOrcamento, setVersoesOrcamento] = useState({ lista: [], temNova: false });
+  const [novaVersaoToken, setNovaVersaoToken] = useState(0);
+  const [novaVersaoOrcamentoAberta, setNovaVersaoOrcamentoAberta] = useState(false);
+  const orcamentoEmNova = versaoOrcamento === 'nova';
+  // "Tela cheia" da grade do Orçamento (ícone no topo); sai pelo botão da própria tela cheia ou com
+  // Esc — ver DfcOrcamentosTab.
   const [orcamentoTelaCheia, setOrcamentoTelaCheia] = useState(false);
 
   // Botão "Nova máscara" fica no topo (padrão do resto do sistema, igual "Nova categoria" na
@@ -321,7 +325,11 @@ export default function DfcConstrutorasPage() {
               <label className="mb-1 block text-sm font-medium text-gray-700">Empresa</label>
               <SearchableSelect
                 value={empresaId}
-                onChange={(novoId) => atualizarParams({ empresa_id: novoId || null, centro_id: null, plano: null })}
+                onChange={(novoId) => {
+                  setVersaoOrcamento(null);
+                  setVersoesOrcamento({ lista: [], temNova: false });
+                  atualizarParams({ empresa_id: novoId || null, centro_id: null, plano: null });
+                }}
                 disabled={loadingEmpresas || empresaTravada}
                 options={empresas.map((empresa) => ({ value: empresa.id, label: nomeExibicaoEmpresa(empresa) }))}
                 placeholder={loadingEmpresas ? 'Carregando empresas...' : 'Selecione uma empresa'}
@@ -364,7 +372,7 @@ export default function DfcConstrutorasPage() {
 
             {abaAtiva === 'orcamentos' && (
               <>
-                <div className="sm:w-44">
+                <div className="sm:w-36">
                   <label className="mb-1 block text-sm font-medium text-gray-700">Data início</label>
                   <input
                     type="date"
@@ -374,7 +382,7 @@ export default function DfcConstrutorasPage() {
                     className="w-full rounded-lg border border-gray-200 px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-primary-100 disabled:bg-gray-50 disabled:text-gray-400"
                   />
                 </div>
-                <div className="sm:w-44">
+                <div className="sm:w-36">
                   <label className="mb-1 block text-sm font-medium text-gray-700">Data fim</label>
                   <input
                     type="date"
@@ -394,6 +402,31 @@ export default function DfcConstrutorasPage() {
                     options={[{ value: ORIGEM_NAO_INFORMADA, label: 'NÃO INFORMADO' }, ...ORIGENS_PROJECAO]}
                     placeholder="Todas as origens"
                     larguraPainel={320}
+                  />
+                </div>
+                <div className="sm:min-w-48 sm:max-w-60 sm:flex-1">
+                  <label className="mb-1 block text-sm font-medium text-gray-700">Versão</label>
+                  <SearchableSelect
+                    value={versaoOrcamento === 'nova' ? 'nova' : (versaoOrcamento ?? versoesOrcamento.lista[0]?.numero ?? '')}
+                    onChange={(v) => {
+                      if (!v) return;
+                      setVersaoOrcamento(v === 'nova' ? 'nova' : Number(v));
+                    }}
+                    disabled={!empresaId || (!versoesOrcamento.lista.length && !versoesOrcamento.temNova)}
+                    options={[
+                      ...(versoesOrcamento.temNova ? [{ value: 'nova', label: 'Nova versão (não salva)' }] : []),
+                      ...versoesOrcamento.lista.map((v, i) => ({
+                        value: v.numero,
+                        label: `Versão ${v.numero}${i === 0 ? ' (última)' : ''} · ${new Date(v.criado_em).toLocaleDateString('pt-BR', {
+                          day: '2-digit',
+                          month: '2-digit',
+                          year: '2-digit',
+                        })}`,
+                      })),
+                    ]}
+                    placeholder="Nenhuma versão salva"
+                    clearable={false}
+                    larguraPainel={280}
                   />
                 </div>
               </>
@@ -518,19 +551,39 @@ export default function DfcConstrutorasPage() {
           </div>
 
           {abaAtiva === 'orcamentos' && (
+            // Só ícones (dica no title): nova versão, salvar a nova versão e tela cheia.
             <div className="flex shrink-0 items-center gap-2">
-              <Button type="button" variant="secondary" onClick={() => setOrcamentoTelaCheia(true)} disabled={!empresaId}>
-                <Maximize2 size={16} />
-                Tela cheia
+              <Button
+                type="button"
+                variant="secondary"
+                className="!px-2.5"
+                onClick={() => setNovaVersaoOrcamentoAberta(true)}
+                disabled={!empresaId}
+                title="Nova versão"
+                aria-label="Nova versão"
+              >
+                <FilePlus2 size={18} />
               </Button>
-              <Button type="button" variant="secondary" onClick={() => setProjecoesAberto(true)} disabled={!empresaId}>
-                <TrendingUp size={16} />
-                Projeções
+              <Button
+                type="button"
+                className="!px-2.5"
+                onClick={() => orcamentosTabRef.current?.salvarVersao()}
+                disabled={!empresaId || !orcamentoEmNova}
+                title={orcamentoEmNova ? 'Salvar versão' : 'Monte uma nova versão pra poder salvar'}
+                aria-label="Salvar versão"
+              >
+                <Save size={18} />
               </Button>
-              {/* Consolida as fontes numa versão nova — só então as mudanças aparecem no Orçamento. */}
-              <Button type="button" onClick={() => orcamentosTabRef.current?.salvarVersao()} disabled={!empresaId}>
-                <Save size={16} />
-                Salvar Versão
+              <Button
+                type="button"
+                variant="secondary"
+                className="!px-2.5"
+                onClick={() => setOrcamentoTelaCheia(true)}
+                disabled={!empresaId}
+                title="Tela cheia"
+                aria-label="Tela cheia"
+              >
+                <Maximize2 size={18} />
               </Button>
             </div>
           )}
@@ -613,7 +666,10 @@ export default function DfcConstrutorasPage() {
             inicio={inicioOrcamento}
             fim={fimOrcamento}
             origens={origensOrcamento}
-            refreshToken={refreshTokenOrcamento}
+            versao={versaoOrcamento}
+            novaVersaoToken={novaVersaoToken}
+            onVersoes={(lista, temNova) => setVersoesOrcamento({ lista, temNova })}
+            onVersaoSalva={() => setVersaoOrcamento(null)}
             telaCheia={orcamentoTelaCheia}
             onSairTelaCheia={() => setOrcamentoTelaCheia(false)}
           />
@@ -683,11 +739,15 @@ export default function DfcConstrutorasPage() {
         }}
       />
 
-      <ProjecoesModal
-        open={projecoesAberto}
-        onClose={() => setProjecoesAberto(false)}
+      <NovaVersaoOrcamentoModal
+        open={novaVersaoOrcamentoAberta}
+        onClose={() => setNovaVersaoOrcamentoAberta(false)}
         empresaId={empresaId}
-        onConcluido={() => setRefreshTokenOrcamento((n) => n + 1)}
+        onGerar={() => {
+          setNovaVersaoOrcamentoAberta(false);
+          setVersaoOrcamento('nova');
+          setNovaVersaoToken((n) => n + 1);
+        }}
       />
     </div>
   );

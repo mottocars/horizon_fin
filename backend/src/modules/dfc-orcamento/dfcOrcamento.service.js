@@ -275,10 +275,55 @@ async function ultimaVersao(db, empresaId) {
   return rows[0] || null;
 }
 
-// O que a aba mostra: a última versão, os valores consolidados, os valores de hoje das fontes (a
-// "Prévia" do que a próxima versão vai gravar) e o que está pendente (mudou nas fontes e ainda não
-// foi salvo numa versão).
-async function orcamento(empresaId) {
+const semChave = ({ centro_id, sienge_id, mes, valor }) => ({ centro_id, sienge_id, mes, valor });
+
+async function listarVersoes(empresaId) {
+  const { rows } = await pool.query(
+    `SELECT v.numero, v.criado_em, v.valores, v.inclusoes, v.alteracoes, v.exclusoes, u.nome AS usuario
+       FROM dfc_orcamento_versoes v LEFT JOIN usuarios u ON u.id = v.usuario_id
+      WHERE v.empresa_id = $1 ORDER BY v.numero DESC`,
+    [empresaId]
+  );
+  return rows;
+}
+
+// Valores de uma versão salva antiga, remontados pelo log: pra cada valor, o último registro até
+// aquela versão (EXCLUSAO = não estava mais lá).
+async function valoresDaVersao(empresaId, numero) {
+  const { rows } = await pool.query(
+    `SELECT * FROM (
+       SELECT DISTINCT ON (l.centro_id, l.sienge_id, l.mes)
+              l.centro_id, l.sienge_id, to_char(l.mes, 'YYYY-MM') AS mes, l.tipo, l.valor_novo AS valor
+         FROM dfc_orcamento_log l
+         JOIN dfc_orcamento_versoes v ON v.id = l.versao_id
+        WHERE l.empresa_id = $1 AND v.numero <= $2
+        ORDER BY l.centro_id, l.sienge_id, l.mes, v.numero DESC, l.id DESC
+     ) x WHERE tipo <> 'EXCLUSAO'`,
+    [empresaId, numero]
+  );
+  return rows.map((r) => ({ centro_id: r.centro_id, sienge_id: r.sienge_id, mes: r.mes, valor: Number(r.valor) }));
+}
+
+// Uma versão salva (filtro "Versão" da aba): `numero` ou, sem ele, a última. Devolve também a lista
+// de versões pro filtro.
+async function orcamento(empresaId, numero = null) {
+  const versoes = await listarVersoes(empresaId);
+  const versao = numero ? versoes.find((v) => v.numero === numero) : versoes[0];
+  if (numero && !versao) throw erro(404, `A versão ${numero} não existe.`);
+  let valores = [];
+  if (versao) {
+    valores =
+      versao.numero === versoes[0].numero
+        ? [...(await consolidado(pool, empresaId)).values()].map(semChave)
+        : await valoresDaVersao(empresaId, versao.numero);
+  }
+  return { versoes, versao: versao || null, valores };
+}
+
+// "Nova versão": os valores de hoje de todas as bases (Projeção CEF, Aging do Sienge, digitados em
+// HORIZON - INFORMADO) — o que "Salvar Versão" vai gravar —, os da última versão (pra comparar) e o
+// que muda em relação a ela.
+async function rascunho(empresaId) {
   const [{ valores: atual, contexto }, cons, versao] = await Promise.all([
     valoresAtuais(pool, empresaId),
     consolidado(pool, empresaId),
@@ -288,12 +333,13 @@ async function orcamento(empresaId) {
     .filter(([, base]) => !base.parcelas)
     .map(
       ([tipo]) =>
-        `A base do contas a ${tipo} do Sienge ainda não foi carregada — o Aging a ${tipo} fica sem valores. Atualize em Projeções.`
+        `A base do contas a ${tipo} do Sienge ainda não foi carregada — o Aging a ${tipo} fica sem valores. Atualize em Nova versão.`
     );
   return {
-    versao,
-    valores: [...cons.values()].map(({ centro_id, sienge_id, mes, valor }) => ({ centro_id, sienge_id, mes, valor })),
-    atuais: [...atual.values()].map(({ centro_id, sienge_id, mes, valor }) => ({ centro_id, sienge_id, mes, valor })),
+    gerado_em: new Date(),
+    versao_base: versao ? versao.numero : null,
+    valores: [...atual.values()].map(semChave),
+    valores_versao: [...cons.values()].map(semChave),
     pendencias: contar(diferencas(atual, cons, contexto)),
     avisos,
   };
@@ -428,4 +474,4 @@ async function log(empresaId, centroId, siengeId, mes) {
   return { historico, pendente };
 }
 
-module.exports = { orcamento, salvarVersao, log };
+module.exports = { orcamento, rascunho, salvarVersao, log };

@@ -1,11 +1,15 @@
 import http from './http';
 
-// Orçamento consolidado (última versão salva): { versao: { numero, criado_em, usuario, ... } | null,
-// valores: [{ centro_id, sienge_id, mes, valor }] (da versão), atuais: [mesmo formato] (valores de
-// hoje das fontes — a prévia da próxima versão), pendencias: { total, inclusoes, alteracoes,
-// exclusoes, manuais, integracao, plano }, avisos: [texto] }.
-export function getOrcamentoDfc(empresaId) {
-  return http.get(`/dfc-orcamento/${empresaId}`).then((res) => res.data);
+// Uma versão salva (`numero`; sem ele, a última): { versoes: [{ numero, criado_em, usuario, valores,
+// inclusoes, alteracoes, exclusoes }], versao: {...} | null, valores: [{ centro_id, sienge_id, mes, valor }] }.
+export function getOrcamentoDfc(empresaId, numero = null) {
+  return http.get(`/dfc-orcamento/${empresaId}`, { params: numero ? { versao: numero } : {} }).then((res) => res.data);
+}
+
+// "Nova versão": valores de hoje das bases (o que "Salvar Versão" vai gravar) — { gerado_em,
+// versao_base, valores, valores_versao (os da última versão), pendencias, avisos }.
+export function getRascunhoOrcamentoDfc(empresaId) {
+  return http.get(`/dfc-orcamento/${empresaId}/rascunho`).then((res) => res.data);
 }
 
 // "Salvar Versão": consolida as fontes de hoje. Devolve { numero, criado_em, valores, inclusoes,

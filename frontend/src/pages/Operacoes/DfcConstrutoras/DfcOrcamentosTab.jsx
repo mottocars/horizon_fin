@@ -9,13 +9,25 @@ import {
   useRef,
   useState,
 } from 'react';
-import { Calculator, Check, CopyPlus, History, Loader2, Minimize2, Minus, Plus, Save, TriangleAlert } from 'lucide-react';
+import {
+  Calculator,
+  Check,
+  CopyPlus,
+  FilePlus2,
+  History,
+  Loader2,
+  Minimize2,
+  Minus,
+  Plus,
+  Save,
+  TriangleAlert,
+} from 'lucide-react';
 import { listCentrosCustoDfc } from '../../../api/dfcCentros.api';
 import { listDfcMascaras } from '../../../api/dfcMascaras.api';
 import { listContas } from '../../../api/planosFinanceirosSienge.api';
 import { listTodasClassificacoesPlanoDfc } from '../../../api/dfcPlanoContas.api';
 import { getOrcamentoProjecaoCef } from '../../../api/dfcProjecaoCef.api';
-import { getOrcamentoDfc, salvarVersaoOrcamentoDfc } from '../../../api/dfcOrcamento.api';
+import { getOrcamentoDfc, getRascunhoOrcamentoDfc, salvarVersaoOrcamentoDfc } from '../../../api/dfcOrcamento.api';
 import { useAlert, useConfirm } from '../../../confirm/ConfirmContext';
 import {
   listOrcamentoInformadoDfc,
@@ -241,19 +253,31 @@ const RECUO = [12, 32, 52, 76]; // padding-left de cada nível (centro, máscara
 // Contas com Origem Projeção "HORIZON - INFORMADO" no plano do centro: o valor é digitado na própria
 // célula, e o botão direito abre o menu "Replicar valor até" / "Log de alterações" (nas demais
 // contas, só o log).
-// VERSÕES (pedido do usuário): a grade mostra o CONSOLIDADO — os valores da última versão salva
-// (backend dfc-orcamento). O que muda nas fontes (valor digitado, Projeção CEF, Aging do Sienge,
-// plano de contas) só aparece depois de "Salvar Versão" (botão no topo — `ref.salvarVersao`); até
-// lá fica como pendência (contagem acima da grade; célula digitada com borda tracejada laranja).
-// "Prévia" (seletor acima da grade): mostra os valores de hoje das fontes — exatamente o que a
-// próxima versão vai gravar —, com o que difere da versão salva em laranja. Sem versão nenhuma, a
-// aba abre na prévia (pedido do usuário: só dá pra salvar o que se enxerga).
+// VERSÕES (pedido do usuário; backend dfc-orcamento): a grade mostra uma versão salva — `versao`
+// (filtro "Versão" do topo): null = a última, ou o número. Ícone "Nova versão" do topo (janela
+// NovaVersaoOrcamentoModal): atualiza as bases e monta a nova versão a partir do que está no banco
+// (`versao` = 'nova', a cada `novaVersaoToken`) — os valores de hoje de todas as bases, com o que
+// difere da última versão em laranja. Só nela as contas "HORIZON - INFORMADO" são editáveis e o
+// "Salvar Versão" funciona (`ref.salvarVersao`); salva, ela vira a última versão (`onVersaoSalva`).
+// `onVersoes(lista, temNova)`: lista das versões salvas pro filtro do topo.
 // `telaCheia`: a grade ocupa a tela inteira (por cima do menu e do topo, e em tela cheia de verdade
 // no navegador quando ele deixa); sai pelo botão "Sair da tela cheia" ou com Esc (`onSairTelaCheia`).
 // `origens`: filtro "Origem DFC" do topo — só as contas com essas Origens Projeção no plano do centro
 // (ORIGEM_NAO_INFORMADA = sem origem); vazio = todas. Máscara e centro sem conta nenhuma somem.
 const DfcOrcamentosTab = forwardRef(function DfcOrcamentosTab(
-  { empresaId, inicio, fim, origens = [], refreshToken = 0, telaCheia = false, onSairTelaCheia },
+  {
+    empresaId,
+    inicio,
+    fim,
+    origens = [],
+    versao: versaoEscolhida = null,
+    novaVersaoToken = 0,
+    onVersoes,
+    onVersaoSalva,
+    refreshToken = 0,
+    telaCheia = false,
+    onSairTelaCheia,
+  },
   ref
 ) {
   const confirm = useConfirm();
@@ -263,9 +287,11 @@ const DfcOrcamentosTab = forwardRef(function DfcOrcamentosTab(
   const [menu, setMenu] = useState(null); // { x, y, opcoes }
   const [logDe, setLogDe] = useState(null); // alvo do "Log de alterações"
   const fecharMenu = useCallback(() => setMenu(null), []);
-  // 'versao' (última versão salva) ou 'previa' (valores de hoje das fontes); null = automático
-  // (prévia enquanto não há versão nenhuma).
-  const [modoEscolhido, setModoEscolhido] = useState(null);
+  // Versão salva na tela ({ versoes, versao, valores }) e a nova versão montada ({ gerado_em,
+  // versao_base, valores, valores_versao, avisos }).
+  const [salva, setSalva] = useState(null);
+  const [nova, setNova] = useState(null);
+  const [carregandoValores, setCarregandoValores] = useState(false);
   const [carregando, setCarregando] = useState(false);
   const [erroCarga, setErroCarga] = useState('');
   const [abertos, setAbertos] = useState([]);
@@ -291,10 +317,9 @@ const DfcOrcamentosTab = forwardRef(function DfcOrcamentosTab(
       listTodasClassificacoesPlanoDfc(empresaId),
       getOrcamentoProjecaoCef(empresaId),
       listOrcamentoInformadoDfc(empresaId),
-      getOrcamentoDfc(empresaId),
     ])
-      .then(([centros, mascaras, contas, classificacoes, projecao, valoresInformados, consolidado]) => {
-        setDados({ centros, mascaras, contas: contas.data, classificacoes, projecao, consolidado });
+      .then(([centros, mascaras, contas, classificacoes, projecao, valoresInformados]) => {
+        setDados({ centros, mascaras, contas: contas.data, classificacoes, projecao });
         setInformados(Object.fromEntries(valoresInformados.map((v) => [`${v.centro_id}|${v.sienge_id}|${v.mes}`, v.valor])));
       })
       .catch((err) => setErroCarga(err.response?.data?.message || 'Não foi possível carregar o orçamento.'))
@@ -303,17 +328,50 @@ const DfcOrcamentosTab = forwardRef(function DfcOrcamentosTab(
 
   useEffect(() => {
     setDados(null);
+    setSalva(null);
+    setNova(null);
     setAbertos([]);
-    setModoEscolhido(null);
     setInformados({});
     setErroSalvar('');
     setSalvoAlgumaVez(false);
   }, [empresaId]);
 
-  // Recarrega também depois de "Atualizar Projeção CEF" (refreshToken), mantendo o que está aberto.
+  // Recarrega também com `refreshToken`, mantendo o que está aberto.
   useEffect(() => {
     carregar();
   }, [carregar, refreshToken]);
+
+  const emNova = versaoEscolhida === 'nova';
+
+  // Versão salva escolhida no filtro (null = a última). Com a nova versão na tela, carrega a última
+  // só pra manter a lista de versões do filtro.
+  const carregarSalva = useCallback(() => {
+    if (!empresaId) return;
+    setCarregandoValores(true);
+    getOrcamentoDfc(empresaId, typeof versaoEscolhida === 'number' ? versaoEscolhida : null)
+      .then(setSalva)
+      .catch((err) => setErroCarga(err.response?.data?.message || 'Não foi possível carregar a versão.'))
+      .finally(() => setCarregandoValores(false));
+  }, [empresaId, versaoEscolhida]);
+  useEffect(() => {
+    carregarSalva();
+  }, [carregarSalva, refreshToken]);
+
+  // "Nova versão": monta a partir das bases a cada pedido (`novaVersaoToken`).
+  useEffect(() => {
+    if (!empresaId || !novaVersaoToken) return;
+    setCarregandoValores(true);
+    getRascunhoOrcamentoDfc(empresaId)
+      .then(setNova)
+      .catch((err) => setErroCarga(err.response?.data?.message || 'Não foi possível montar a nova versão.'))
+      .finally(() => setCarregandoValores(false));
+  }, [empresaId, novaVersaoToken]);
+
+  // Lista de versões pro filtro do topo.
+  useEffect(() => {
+    if (salva) onVersoes?.(salva.versoes, Boolean(nova));
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [salva, nova]);
 
   const periodoValido = Boolean(inicio && fim && fim >= inicio);
   const meses = useMemo(() => (periodoValido ? mesesEntre(inicio, fim) : []), [inicio, fim, periodoValido]);
@@ -388,29 +446,35 @@ const DfcOrcamentosTab = forwardRef(function DfcOrcamentosTab(
     [planosCentro, planoGlobal]
   );
 
-  const temVersao = Boolean(dados?.consolidado?.versao);
-  const modo = modoEscolhido ?? (temVersao || !dados ? 'versao' : 'previa');
-  const previa = modo === 'previa';
+  // Nova versão na tela (montada a partir das bases) ou uma versão salva.
+  const previa = emNova && Boolean(nova);
+  const temVersao = previa ? nova.versao_base !== null : Boolean(salva?.versao);
 
-  // Valores: centro -> conta -> mês -> valor. `valorVersao` = CONSOLIDADO (última versão salva);
-  // `valorConta` = o que a grade mostra — a versão ou, na prévia, os valores de hoje das fontes
-  // (Projeção CEF, Aging do Sienge, digitados). E quando cada obra foi projetada.
+  // Valor digitado (rascunho) de uma conta "HORIZON - INFORMADO" — o que aparece no campo.
+  const rascunho = useCallback((sid, conta, mes) => informados[`${sid}|${conta}|${mes}`] ?? null, [informados]);
+
+  // Valores: centro -> conta -> mês -> valor. `valorConta` = o que a grade mostra — a versão salva
+  // escolhida ou, na nova versão, os valores das bases (nas contas digitadas, o que está no campo);
+  // `valorVersao` = a última versão salva (pra comparar na nova versão). E quando cada obra foi
+  // projetada.
   const { valorConta, valorVersao, execucaoPorCentro } = useMemo(() => {
     const mapaDe = (lista) => {
       const mapa = new Map();
       (lista || []).forEach((v) => mapa.set(`${v.centro_id}|${v.sienge_id}|${v.mes}`, v.valor));
       return (sid, conta, mes) => mapa.get(`${sid}|${conta}|${mes}`) ?? null;
     };
-    const daVersao = mapaDe(dados?.consolidado?.valores);
-    return {
-      valorVersao: daVersao,
-      valorConta: previa ? mapaDe(dados?.consolidado?.atuais) : daVersao,
-      execucaoPorCentro: Object.fromEntries((dados?.projecao?.execucoes || []).map((e) => [e.sienge_id, e])),
-    };
-  }, [dados, previa]);
-
-  // Valor digitado (rascunho) de uma conta "HORIZON - INFORMADO" — o que aparece no campo.
-  const rascunho = (sid, conta, mes) => informados[`${sid}|${conta}|${mes}`] ?? null;
+    const execucoes = Object.fromEntries((dados?.projecao?.execucoes || []).map((e) => [e.sienge_id, e]));
+    if (previa) {
+      const dasBases = mapaDe(nova.valores);
+      return {
+        valorConta: (sid, conta, mes) => (contaInformada(sid, conta) ? rascunho(sid, conta, mes) : dasBases(sid, conta, mes)),
+        valorVersao: mapaDe(nova.valores_versao),
+        execucaoPorCentro: execucoes,
+      };
+    }
+    const daVersao = mapaDe(salva?.valores);
+    return { valorConta: daVersao, valorVersao: daVersao, execucaoPorCentro: execucoes };
+  }, [dados, salva, nova, previa, contaInformada, rascunho]);
   const centavos = (v) => (v === null || v === undefined ? null : Math.round(v * 100));
 
   function trocarInformados(centroId, contaId, valoresPorMes) {
@@ -470,19 +534,14 @@ const DfcOrcamentosTab = forwardRef(function DfcOrcamentosTab(
   // "Salvar Versão": consolida as fontes de hoje (backend compara com a versão anterior e grava o log
   // do que mudou). Espera as digitações em andamento terminarem antes.
   async function salvarVersao() {
-    if (!empresaId || salvandoVersao) return;
+    if (!empresaId || salvandoVersao || !previa) return;
     for (let i = 0; i < 50 && gravacoesRef.current > 0; i += 1) {
       await new Promise((r) => setTimeout(r, 100));
     }
-    const p = dados?.consolidado?.pendencias;
-    const versao = dados?.consolidado?.versao;
+    const proxima = (salva?.versoes?.[0]?.numero || 0) + 1;
     const ok = await confirm({
       title: 'Salvar versão do orçamento',
-      description: `Consolida os valores de hoje — digitados, Projeção CEF e Aging do Sienge — na versão ${
-        (versao?.numero || 0) + 1
-      }. Só depois disso as mudanças aparecem no Orçamento.${
-        p ? ` Pendências agora: ${p.total} (${p.inclusoes} inclusão(ões), ${p.alteracoes} alteração(ões), ${p.exclusoes} exclusão(ões)).` : ''
-      }`,
+      description: `A nova versão vira a versão ${proxima} — a última, que o Orçamento passa a mostrar. Cada valor que entrou, mudou ou saiu fica registrado no log de alterações.`,
       confirmLabel: 'Salvar versão',
     });
     if (!ok) return;
@@ -493,7 +552,8 @@ const DfcOrcamentosTab = forwardRef(function DfcOrcamentosTab(
         title: `Versão ${r.numero} salva`,
         description: `${r.inclusoes} inclusão(ões), ${r.alteracoes} alteração(ões) e ${r.exclusoes} exclusão(ões) — cada uma registrada no log de alterações do valor.`,
       });
-      carregar();
+      setNova(null);
+      onVersaoSalva?.(r.numero);
     } catch (err) {
       await alert({
         title: 'Versão não salva',
@@ -505,6 +565,8 @@ const DfcOrcamentosTab = forwardRef(function DfcOrcamentosTab(
   }
 
   useImperativeHandle(ref, () => ({ salvarVersao }));
+
+  // Saiu da nova versão pelo filtro sem salvar: ela continua montada até a próxima "Nova versão".
 
   // Botão direito numa célula de conta: menu com "Log de alterações" (e "Replicar valor até" nas
   // contas digitadas). `valorDigitado`: o que está no campo (contas "HORIZON - INFORMADO").
@@ -717,9 +779,8 @@ const DfcOrcamentosTab = forwardRef(function DfcOrcamentosTab(
 
   const mesAtual = mesDeHoje();
   // Avisos da Projeção CEF + base do contas a receber / a pagar nunca carregada (o Aging fica zerado).
-  const avisos = [...(dados?.projecao?.avisos || []), ...(dados?.consolidado?.avisos || [])];
-  const versao = dados?.consolidado?.versao || null;
-  const pendencias = dados?.consolidado?.pendencias || null;
+  const avisos = [...(dados?.projecao?.avisos || []), ...(previa ? nova.avisos : [])];
+  const versao = salva?.versao || null;
   const larguraTabela = LARGURA_PRIMEIRA + largurasMes.reduce((t, l) => t + l, 0);
 
   return (
@@ -747,11 +808,12 @@ const DfcOrcamentosTab = forwardRef(function DfcOrcamentosTab(
           <button
             type="button"
             onClick={salvarVersao}
-            disabled={salvandoVersao}
-            className="flex items-center gap-1.5 rounded-lg bg-primary-600 px-3 py-1.5 text-sm font-medium text-white transition-colors hover:bg-primary-700 disabled:opacity-60"
+            disabled={salvandoVersao || !previa}
+            title={previa ? 'Salvar versão' : 'Monte uma nova versão pra poder salvar'}
+            aria-label="Salvar versão"
+            className="flex items-center rounded-lg bg-primary-600 p-2 text-white transition-colors hover:bg-primary-700 disabled:cursor-not-allowed disabled:opacity-50"
           >
-            {salvandoVersao ? <Loader2 size={15} className="animate-spin" /> : <Save size={15} />}
-            Salvar Versão
+            {salvandoVersao ? <Loader2 size={16} className="animate-spin" /> : <Save size={16} />}
           </button>
           <button
             type="button"
@@ -765,44 +827,33 @@ const DfcOrcamentosTab = forwardRef(function DfcOrcamentosTab(
       )}
       {dados && (
         <div className="-mt-1 mb-3 flex flex-wrap items-center gap-x-3 gap-y-1.5 text-xs">
-          <span className="flex items-center gap-1.5 text-gray-500">
-            <History size={14} className="shrink-0 text-gray-400" />
-            {versao
-              ? `Versão ${versao.numero} · salva em ${dataHora(versao.criado_em)}${versao.usuario ? ` por ${versao.usuario}` : ''}`
-              : 'Nenhuma versão salva ainda — confira a prévia e clique em "Salvar Versão".'}
-          </span>
-          <div className="ml-auto flex items-center rounded-lg bg-gray-100 p-0.5" role="group" aria-label="O que a tabela mostra">
-            {[
-              ['versao', 'Versão salva', !temVersao],
-              ['previa', `Prévia da próxima versão${pendencias?.total ? ` (${pendencias.total.toLocaleString('pt-BR')})` : ''}`, false],
-            ].map(([valor, rotulo, desabilitado]) => (
-              <button
-                key={valor}
-                type="button"
-                disabled={desabilitado}
-                onClick={() => setModoEscolhido(valor)}
-                title={desabilitado ? 'Nenhuma versão salva ainda' : undefined}
-                className={`rounded-md px-2.5 py-1 font-medium transition-colors disabled:cursor-not-allowed disabled:text-gray-300 ${
-                  modo === valor ? 'bg-white text-gray-900 shadow-sm' : 'text-gray-500 hover:text-gray-700'
-                }`}
-              >
-                {rotulo}
-              </button>
-            ))}
-          </div>
-          {pendencias?.total > 0 && (
-            <span
-              className="flex items-center gap-1.5 rounded-full bg-orange-50 px-2.5 py-0.5 font-medium text-orange-700 ring-1 ring-orange-200"
-              title={`${pendencias.inclusoes} inclusão(ões), ${pendencias.alteracoes} alteração(ões), ${pendencias.exclusoes} exclusão(ões) — ${pendencias.manuais} manual(is), ${pendencias.integracao} de integração, ${pendencias.plano} do plano de contas`}
-            >
-              {pendencias.total.toLocaleString('pt-BR')} alteração(ões) pendente(s) — só entram no Orçamento ao Salvar Versão
+          {previa ? (
+            <>
+              <span className="flex items-center gap-1.5 rounded-full bg-orange-50 px-2.5 py-0.5 font-medium text-orange-700 ring-1 ring-orange-200">
+                <FilePlus2 size={13} className="shrink-0" />
+                Nova versão (não salva) · montada em {dataHora(nova.gerado_em)}
+              </span>
+              <span className="text-gray-500">
+                {temVersao
+                  ? `Em laranja, o que difere da versão ${nova.versao_base} (passe o mouse pra ver o valor dela). Confira e salve pra virar a última versão.`
+                  : 'Confira e salve pra virar a versão 1.'}
+              </span>
+            </>
+          ) : emNova ? (
+            <span className="flex items-center gap-1.5 text-gray-500">
+              <Loader2 size={14} className="animate-spin" /> Montando a nova versão a partir das bases...
             </span>
-          )}
-          {previa && (
-            <p className="w-full text-[11px] text-gray-400">
-              Prévia: valores de hoje das fontes, ainda não salvos — é isso que a próxima versão vai gravar.
-              {temVersao ? ' Em laranja, o que difere da versão salva (passe o mouse pra ver o valor dela).' : ''}
-            </p>
+          ) : (
+            <span className="flex items-center gap-1.5 text-gray-500">
+              <History size={14} className="shrink-0 text-gray-400" />
+              {versao
+                ? `Versão ${versao.numero}${versao.numero === salva.versoes[0]?.numero ? ' (última)' : ''} · salva em ${dataHora(
+                    versao.criado_em
+                  )}${versao.usuario ? ` por ${versao.usuario}` : ''}`
+                : carregandoValores
+                  ? 'Carregando...'
+                  : 'Nenhuma versão salva ainda — use o ícone "Nova versão", no topo, pra montar a primeira.'}
+            </span>
           )}
         </div>
       )}
@@ -967,7 +1018,8 @@ const DfcOrcamentosTab = forwardRef(function DfcOrcamentosTab(
                                       })}
                                       {abertos.includes(chaveN2) &&
                                         n2.contas.map((conta) => {
-                                          const informada = contaInformada(centro.sienge_id, conta.sienge_id);
+                                          // Digitável só na nova versão; numa versão salva, só leitura.
+                                          const informada = previa && contaInformada(centro.sienge_id, conta.sienge_id);
                                           return (
                                             <tr key={`${chaveN2}|${conta.sienge_id}`} className="group/linha">
                                               <td
