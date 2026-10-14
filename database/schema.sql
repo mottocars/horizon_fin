@@ -3000,6 +3000,20 @@ CREATE TABLE dfc_projecao_cef_execucao (
     FOREIGN KEY (sienge_id, empresa_id) REFERENCES centros_custo_sienge(sienge_id, empresa_id) ON DELETE CASCADE
 );
 
+-- ─── Operações > DFC Construtoras > Orçamentos: valor informado — ver database/migrations/2026-10-14-dfc-orcamento-informado.sql ───
+-- Por centro, conta e mês, nas contas com Origem Projeção HORIZON_ORCAMENTO_INFORMADO.
+CREATE TABLE dfc_orcamento_informado (
+    empresa_id     INTEGER NOT NULL,
+    centro_id      INTEGER NOT NULL,
+    sienge_id      INTEGER NOT NULL,
+    mes            DATE NOT NULL CHECK (EXTRACT(DAY FROM mes) = 1),
+    valor          NUMERIC(18,2) NOT NULL,
+    usuario_id     INTEGER REFERENCES usuarios(id) ON DELETE SET NULL,
+    atualizado_em  TIMESTAMP DEFAULT NOW(),
+    PRIMARY KEY (empresa_id, centro_id, sienge_id, mes),
+    FOREIGN KEY (centro_id, empresa_id) REFERENCES centros_custo_sienge(sienge_id, empresa_id) ON DELETE CASCADE
+);
+
 -- ─── Operações > DFC Construtoras > Plano Contas: versão por centro de custo — ver database/migrations/2026-10-14-dfc-plano-contas-versoes.sql ───
 -- Quais centros têm versão própria.
 CREATE TABLE dfc_plano_contas_versoes (

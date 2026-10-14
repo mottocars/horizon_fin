@@ -1,10 +1,17 @@
 import { Fragment, useCallback, useEffect, useMemo, useState } from 'react';
-import { Calculator, Minus, Plus, TriangleAlert } from 'lucide-react';
+import { Calculator, Check, Loader2, Minus, Plus, TriangleAlert } from 'lucide-react';
 import { listCentrosCustoDfc } from '../../../api/dfcCentros.api';
 import { listDfcMascaras } from '../../../api/dfcMascaras.api';
 import { listContas } from '../../../api/planosFinanceirosSienge.api';
 import { listTodasClassificacoesPlanoDfc } from '../../../api/dfcPlanoContas.api';
 import { getOrcamentoProjecaoCef } from '../../../api/dfcProjecaoCef.api';
+import {
+  listOrcamentoInformadoDfc,
+  replicarOrcamentoInformadoDfc,
+  salvarOrcamentoInformadoDfc,
+} from '../../../api/dfcOrcamentoInformado.api';
+import ReplicarValorModal from './ReplicarValorModal';
+import { ORIGEM_INFORMADO, interpretarValor } from './orcamentoValores';
 
 const MESES = ['jan', 'fev', 'mar', 'abr', 'mai', 'jun', 'jul', 'ago', 'set', 'out', 'nov', 'dez'];
 
@@ -54,6 +61,67 @@ function dinheiro(v) {
   return v.toLocaleString('pt-BR', { minimumFractionDigits: 2, maximumFractionDigits: 2 });
 }
 
+// Célula do valor informado (contas "HORIZON - INFORMADO"): fora de edição mostra "1.234,56"; ao
+// focar vira o número puro; grava ao sair (Enter também). Vazio apaga; texto inválido descarta a
+// edição. Botão direito abre o "Replicar valor até" — com o que estiver digitado, se houver.
+// Mesmo par de cores das outras abas: âmbar sem valor, azul claro com valor.
+function CelulaInformada({ valor, onCommit, onReplicar }) {
+  const [texto, setTexto] = useState(null);
+  const editando = texto !== null;
+  const vazio = valor === null || valor === undefined;
+
+  // Valor que vale agora: o digitado (se válido) ou o gravado.
+  function valorAtual() {
+    if (texto === null) return vazio ? null : valor;
+    const novo = interpretarValor(texto);
+    return Number.isNaN(novo) ? (vazio ? null : valor) : novo === 0 ? null : novo;
+  }
+
+  function commit() {
+    if (texto === null) return;
+    const novo = valorAtual();
+    setTexto(null);
+    if (novo === (vazio ? null : valor)) return;
+    onCommit(novo);
+  }
+
+  return (
+    <input
+      type="text"
+      inputMode="decimal"
+      autoComplete="off"
+      value={editando ? texto : vazio ? '' : dinheiro(valor)}
+      placeholder="—"
+      title="Botão direito: replicar valor até"
+      onFocus={(e) => {
+        setTexto(vazio ? '' : String(valor).replace('.', ','));
+        const campo = e.currentTarget;
+        setTimeout(() => campo.select(), 0);
+      }}
+      onChange={(e) => {
+        if (/^[-\d.,\s]*$/.test(e.target.value)) setTexto(e.target.value);
+      }}
+      onBlur={commit}
+      onKeyDown={(e) => {
+        if (e.key === 'Enter') e.currentTarget.blur();
+        else if (e.key === 'Escape') {
+          setTexto(null);
+          e.currentTarget.blur();
+        }
+      }}
+      onContextMenu={(e) => {
+        e.preventDefault();
+        const atual = valorAtual();
+        commit();
+        onReplicar(atual);
+      }}
+      className={`h-7 w-full rounded-md border px-1.5 text-right text-xs tabular-nums outline-none transition-colors placeholder:text-gray-300 focus:border-primary-500 focus:bg-white focus:ring-2 focus:ring-primary-100 ${
+        vazio ? 'border-amber-200 bg-amber-50' : 'border-primary-100 bg-primary-50'
+      } ${!editando && !vazio && valor < 0 ? 'text-red-600' : 'text-gray-900'}`}
+    />
+  );
+}
+
 const LARGURA_PRIMEIRA = 360;
 const LARGURA_MES = 92;
 const RECUO = [12, 32, 52, 76]; // padding-left de cada nível (centro, máscara 1, máscara 2, conta)
@@ -67,11 +135,19 @@ const RECUO = [12, 32, 52, 76]; // padding-left de cada nível (centro, máscara
 // Centros = todos com "Projeta DFC" (obras e administrativos). Contas analíticas sem Máscara DFC
 // entram num grupo "SEM MÁSCARA DFC" pra não sumirem; as com "Projeta DFC" desmarcado no plano do
 // centro não entram (pedido do usuário). Começa tudo fechado.
+// Contas com Origem Projeção "HORIZON - INFORMADO" no plano do centro: o valor é digitado na própria
+// célula (backend dfc-orcamento-informado), e o botão direito abre o "Replicar valor até".
 export default function DfcOrcamentosTab({ empresaId, inicio, fim, refreshToken = 0 }) {
   const [dados, setDados] = useState(null);
   const [carregando, setCarregando] = useState(false);
   const [erroCarga, setErroCarga] = useState('');
   const [abertos, setAbertos] = useState([]);
+  // 'centro|conta|mês' -> valor informado.
+  const [informados, setInformados] = useState({});
+  const [replicando, setReplicando] = useState(null);
+  const [pendentes, setPendentes] = useState(0);
+  const [erroSalvar, setErroSalvar] = useState('');
+  const [salvoAlgumaVez, setSalvoAlgumaVez] = useState(false);
 
   const carregar = useCallback(() => {
     if (!empresaId) return;
@@ -83,10 +159,12 @@ export default function DfcOrcamentosTab({ empresaId, inicio, fim, refreshToken 
       listContas(empresaId, { page: 1, limit: 2000, search: '' }),
       listTodasClassificacoesPlanoDfc(empresaId),
       getOrcamentoProjecaoCef(empresaId),
+      listOrcamentoInformadoDfc(empresaId),
     ])
-      .then(([centros, mascaras, contas, classificacoes, projecao]) =>
-        setDados({ centros, mascaras, contas: contas.data, classificacoes, projecao })
-      )
+      .then(([centros, mascaras, contas, classificacoes, projecao, valoresInformados]) => {
+        setDados({ centros, mascaras, contas: contas.data, classificacoes, projecao });
+        setInformados(Object.fromEntries(valoresInformados.map((v) => [`${v.centro_id}|${v.sienge_id}|${v.mes}`, v.valor])));
+      })
       .catch((err) => setErroCarga(err.response?.data?.message || 'Não foi possível carregar o orçamento.'))
       .finally(() => setCarregando(false));
   }, [empresaId]);
@@ -94,6 +172,9 @@ export default function DfcOrcamentosTab({ empresaId, inicio, fim, refreshToken 
   useEffect(() => {
     setDados(null);
     setAbertos([]);
+    setInformados({});
+    setErroSalvar('');
+    setSalvoAlgumaVez(false);
   }, [empresaId]);
 
   // Recarrega também depois de "Atualizar Projeção CEF" (refreshToken), mantendo o que está aberto.
@@ -107,7 +188,7 @@ export default function DfcOrcamentosTab({ empresaId, inicio, fim, refreshToken 
   // Estrutura (máscara 1 > máscara 2 > contas) de cada plano: o Global e a versão própria de cada
   // centro que tem uma (aba Plano Contas) — o centro com versão própria usa a dele, os demais o Global.
   const { centros, planoGlobal, planosCentro } = useMemo(() => {
-    if (!dados) return { centros: [], planoGlobal: { estrutura: [], todasContas: [] }, planosCentro: {} };
+    if (!dados) return { centros: [], planoGlobal: { estrutura: [], todasContas: [], origemDaConta: {} }, planosCentro: {} };
     const analiticas = [...dados.contas]
       .filter((c) => c.tp_conta !== 'T')
       .sort((a, b) => String(a.sienge_id).localeCompare(String(b.sienge_id)));
@@ -115,6 +196,7 @@ export default function DfcOrcamentosTab({ empresaId, inicio, fim, refreshToken 
 
     function montar(classificacoes) {
       const mascaraDaConta = Object.fromEntries(classificacoes.map((c) => [c.sienge_id, c.mascara_id]));
+      const origemDaConta = Object.fromEntries(classificacoes.map((c) => [c.sienge_id, c.origem_projecao]));
       // "Projeta DFC" desmarcado no plano: a conta fica fora do Orçamento. Sem linha = marcado.
       const foraDoDfc = new Set(classificacoes.filter((c) => c.projeta_dfc === false).map((c) => c.sienge_id));
       const contasDoPlano = analiticas.filter((c) => !foraDoDfc.has(c.sienge_id));
@@ -139,7 +221,7 @@ export default function DfcOrcamentosTab({ empresaId, inicio, fim, refreshToken 
       grupos.forEach((g) => {
         g.contas = g.filhos.flatMap((f) => f.contas);
       });
-      return { estrutura: grupos, todasContas: grupos.flatMap((g) => g.contas) };
+      return { estrutura: grupos, todasContas: grupos.flatMap((g) => g.contas), origemDaConta };
     }
 
     return {
@@ -151,15 +233,75 @@ export default function DfcOrcamentosTab({ empresaId, inicio, fim, refreshToken 
     };
   }, [dados]);
 
-  // Valores da projeção: centro -> conta -> mês -> valor; e quando cada obra foi projetada.
+  // A conta é "HORIZON - INFORMADO" no plano que o centro usa? (o valor vem da digitação)
+  const contaInformada = useCallback(
+    (sid, conta) => ((planosCentro[sid] || planoGlobal).origemDaConta[conta] ?? null) === ORIGEM_INFORMADO,
+    [planosCentro, planoGlobal]
+  );
+
+  // Valores: centro -> conta -> mês -> valor — os informados nas contas "HORIZON - INFORMADO" e a
+  // Projeção CEF nas demais; e quando cada obra foi projetada.
   const { valorConta, execucaoPorCentro } = useMemo(() => {
     const mapa = new Map();
     (dados?.projecao?.valores || []).forEach((v) => mapa.set(`${v.sienge_id}|${v.conta}|${v.mes}`, v.valor));
     return {
-      valorConta: (sid, conta, mes) => mapa.get(`${sid}|${conta}|${mes}`) ?? null,
+      valorConta: (sid, conta, mes) =>
+        contaInformada(sid, conta)
+          ? (informados[`${sid}|${conta}|${mes}`] ?? null)
+          : (mapa.get(`${sid}|${conta}|${mes}`) ?? null),
       execucaoPorCentro: Object.fromEntries((dados?.projecao?.execucoes || []).map((e) => [e.sienge_id, e])),
     };
-  }, [dados]);
+  }, [dados, informados, contaInformada]);
+
+  function trocarInformados(centroId, contaId, valoresPorMes) {
+    setInformados((atual) => {
+      const proximo = { ...atual };
+      Object.entries(valoresPorMes).forEach(([mes, valor]) => {
+        const chave = `${centroId}|${contaId}|${mes}`;
+        if (valor === null) delete proximo[chave];
+        else proximo[chave] = valor;
+      });
+      return proximo;
+    });
+  }
+
+  // Atualiza na hora e grava; se falhar, volta o que estava.
+  async function salvarInformado(centroId, contaId, mes, valor) {
+    const anterior = informados[`${centroId}|${contaId}|${mes}`] ?? null;
+    trocarInformados(centroId, contaId, { [mes]: valor });
+    setErroSalvar('');
+    setPendentes((n) => n + 1);
+    try {
+      await salvarOrcamentoInformadoDfc(empresaId, { centroId, siengeId: contaId, mes, valor });
+      setSalvoAlgumaVez(true);
+    } catch (err) {
+      trocarInformados(centroId, contaId, { [mes]: anterior });
+      setErroSalvar(err.response?.data?.message || 'Não foi possível salvar.');
+    } finally {
+      setPendentes((n) => n - 1);
+    }
+  }
+
+  // "Replicar valor até" confirmado: grava no backend e põe o valor em cada mês na tela.
+  async function replicar(ate) {
+    const { centroId, contaId, mes, valor } = replicando;
+    setPendentes((n) => n + 1);
+    try {
+      const { meses: gravados } = await replicarOrcamentoInformadoDfc(empresaId, {
+        centroId,
+        siengeId: contaId,
+        de: mes,
+        ate,
+        valor,
+      });
+      trocarInformados(centroId, contaId, Object.fromEntries(gravados.map((m) => [m, valor])));
+      setErroSalvar('');
+      setSalvoAlgumaVez(true);
+      setReplicando(null);
+    } finally {
+      setPendentes((n) => n - 1);
+    }
+  }
 
   // Soma de várias contas num mês (null quando nenhuma tem valor).
   function somaContas(sid, contas, mes) {
@@ -184,6 +326,8 @@ export default function DfcOrcamentosTab({ empresaId, inicio, fim, refreshToken 
       </div>
     );
   }
+
+  const statusSalvamento = pendentes > 0 ? 'salvando' : erroSalvar ? 'erro' : salvoAlgumaVez ? 'salvo' : null;
 
   // Células de valor do mês (`valorMes(m)` -> número ou null). Saída (negativo) em vermelho.
   const celulas = (nivel, valorMes) =>
@@ -248,6 +392,38 @@ export default function DfcOrcamentosTab({ empresaId, inicio, fim, refreshToken 
     // min-w-fit: com tabela mais larga que a tela, o quadro branco cresce junto (e a página rola na
     // horizontal) em vez de a tabela vazar pra fora dele.
     <div className="min-w-fit rounded-card rounded-tl-none bg-white p-5 shadow-card">
+      {statusSalvamento && (
+        <div className="-mt-1 mb-3 flex items-center justify-end text-xs" aria-live="polite">
+          {statusSalvamento === 'salvando' ? (
+            <span className="flex items-center gap-1.5 text-gray-500">
+              <Loader2 size={14} className="animate-spin" /> Salvando...
+            </span>
+          ) : statusSalvamento === 'erro' ? (
+            <span className="flex items-center gap-1.5 text-red-600" title={erroSalvar}>
+              <TriangleAlert size={14} /> Erro ao salvar
+            </span>
+          ) : (
+            <span className="flex items-center gap-1.5 text-emerald-600">
+              <Check size={14} /> Alterações salvas
+            </span>
+          )}
+        </div>
+      )}
+
+      {erroSalvar && (
+        <div className="mb-3 rounded-lg bg-red-50 px-3 py-2 text-xs text-red-600" role="status">
+          {erroSalvar}
+        </div>
+      )}
+
+      <ReplicarValorModal
+        open={Boolean(replicando)}
+        alvo={replicando}
+        sugestaoAte={fim ? fim.slice(0, 7) : ''}
+        onClose={() => setReplicando(null)}
+        onConfirmar={replicar}
+      />
+
       {!periodoValido ? (
         <div className="flex items-center gap-2 rounded-lg bg-amber-50 px-3 py-2 text-sm text-amber-700">
           <TriangleAlert size={15} className="shrink-0" />A Data fim precisa ser igual ou depois da Data início.
@@ -359,24 +535,49 @@ export default function DfcOrcamentosTab({ empresaId, inicio, fim, refreshToken 
                                       valorMes: (m) => somaContas(centro.sienge_id, n2.contas, m),
                                     })}
                                     {abertos.includes(chaveN2) &&
-                                      n2.contas.map((conta) => (
-                                        <tr key={`${chaveN2}|${conta.sienge_id}`} className="group/linha">
-                                          <td
-                                            className="sticky left-0 z-10 border-b border-r border-gray-100 border-r-gray-200 bg-white py-1.5 pr-3 group-hover/linha:bg-gray-50"
-                                            style={{ paddingLeft: RECUO[3] }}
-                                          >
-                                            <span className="flex min-w-0 items-center gap-2">
-                                              <span className="shrink-0 text-[11px] tabular-nums text-gray-400">
-                                                {codigoFormatado(conta)}
+                                      n2.contas.map((conta) => {
+                                        const informada = contaInformada(centro.sienge_id, conta.sienge_id);
+                                        return (
+                                          <tr key={`${chaveN2}|${conta.sienge_id}`} className="group/linha">
+                                            <td
+                                              className="sticky left-0 z-10 border-b border-r border-gray-100 border-r-gray-200 bg-white py-1.5 pr-3 group-hover/linha:bg-gray-50"
+                                              style={{ paddingLeft: RECUO[3] }}
+                                            >
+                                              <span className="flex min-w-0 items-center gap-2">
+                                                <span className="shrink-0 text-[11px] tabular-nums text-gray-400">
+                                                  {codigoFormatado(conta)}
+                                                </span>
+                                                <span className="min-w-0 truncate text-xs text-gray-700" title={conta.name}>
+                                                  {conta.name}
+                                                </span>
                                               </span>
-                                              <span className="min-w-0 truncate text-xs text-gray-700" title={conta.name}>
-                                                {conta.name}
-                                              </span>
-                                            </span>
-                                          </td>
-                                          {celulas(3, (m) => valorConta(centro.sienge_id, conta.sienge_id, m))}
-                                        </tr>
-                                      ))}
+                                            </td>
+                                            {informada
+                                              ? meses.map((m) => (
+                                                  <td
+                                                    key={m}
+                                                    className="border-b border-l border-gray-100 bg-white px-1 py-1 group-hover/linha:bg-gray-50"
+                                                  >
+                                                    <CelulaInformada
+                                                      valor={valorConta(centro.sienge_id, conta.sienge_id, m)}
+                                                      onCommit={(novo) => salvarInformado(centro.sienge_id, conta.sienge_id, m, novo)}
+                                                      onReplicar={(valor) =>
+                                                        setReplicando({
+                                                          centroId: centro.sienge_id,
+                                                          contaId: conta.sienge_id,
+                                                          centroNome: centro.name,
+                                                          contaRotulo: `${codigoFormatado(conta)} ${conta.name}`,
+                                                          mes: m,
+                                                          valor,
+                                                        })
+                                                      }
+                                                    />
+                                                  </td>
+                                                ))
+                                              : celulas(3, (m) => valorConta(centro.sienge_id, conta.sienge_id, m))}
+                                          </tr>
+                                        );
+                                      })}
                                   </Fragment>
                                 );
                               })}
