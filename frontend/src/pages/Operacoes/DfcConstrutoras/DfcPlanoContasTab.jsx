@@ -1,5 +1,5 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
-import { ArrowLeft, Check, Globe2, Building2, ListTree, Loader2, Minus, Plus, TriangleAlert } from 'lucide-react';
+import { ArrowLeft, Calculator, Check, Globe2, Building2, ListTree, Loader2, Minus, Plus, TriangleAlert } from 'lucide-react';
 import SearchableSelect from '../../../components/SearchableSelect';
 import FiltroColuna, { passaNoFiltro } from '../../../components/FiltroColuna';
 import { listContas } from '../../../api/planosFinanceirosSienge.api';
@@ -7,10 +7,15 @@ import { listDfcMascaras } from '../../../api/dfcMascaras.api';
 import { listClassificacoesPlanoDfc, updateClassificacaoPlanoDfc } from '../../../api/dfcPlanoContas.api';
 import { useConfirm } from '../../../confirm/ConfirmContext';
 import { ORIGENS_PROJECAO } from './orcamentoValores';
+import { listDesembolsoDfc } from '../../../api/dfcDesembolso.api';
+import FichaDesembolsoModal from './FichaDesembolsoModal';
+
+// Origem cujas naturezas têm ficha de desembolso (coluna "Prazo Desemb." + calculadora).
+const ORIGEM_DESEMBOLSO = 'SIENGE_ORCAMENTO_EMPRESARIAL';
 
 const LIMIT = 2000;
 
-const GRADE = 'grid grid-cols-[minmax(0,1fr)_130px_240px_260px_80px] items-center gap-3';
+const GRADE = 'grid grid-cols-[minmax(0,1fr)_110px_240px_260px_96px_36px_72px] items-center gap-3';
 
 // Primeira opção dos filtros Máscara DFC e Origem Projeção (pedido do usuário): acha as contas
 // com aquele campo em branco. O filtro Conta não tem essa opção.
@@ -91,7 +96,9 @@ function montarArvore(contas) {
 // de 'T') ficam as comboboxes Máscara DFC (só as de nível 2 da aba Máscaras) e Origem Projeção —
 // cada mudança salva na hora, com o mesmo indicador de salvamento das outras abas. Antes delas, o
 // "Projeta DFC" (pedido do usuário): desmarcado, a conta não aparece no Orçamento dos centros que
-// usam este plano. Começa marcado.
+// usam este plano. Começa marcado. Nas naturezas "SIENGE - EMPRESARIAL DESEMBOLSO": o "Prazo
+// Desemb." (prazo médio da ficha de desembolso) e a calculadora que abre a ficha
+// (FichaDesembolsoModal) — a ficha é calculada e guardada quando a conta recebe essa origem.
 // `centroVersao`: id do centro cuja versão própria do plano está sendo editada (null = plano Global,
 // que vale pra todos os centros sem versão própria) — escolhido no topo da página.
 // `tituloPlano` / `onVoltar`: cabeçalho do editor (nome do plano aberto e volta pros cards).
@@ -113,6 +120,10 @@ export default function DfcPlanoContasTab({
   // sienge_id -> { mascara_id, origem_projecao, projeta_dfc } (conta sem linha = Projeta DFC marcado)
   const [classificacoes, setClassificacoes] = useState({});
   const [mascaras, setMascaras] = useState([]);
+  // Ficha de desembolso (naturezas "SIENGE - EMPRESARIAL DESEMBOLSO"): sienge_id -> { prazo_medio,
+  // prazo_mediano, sem_historico }, e a natureza com a ficha aberta.
+  const [desembolso, setDesembolso] = useState({});
+  const [fichaDe, setFichaDe] = useState(null);
   // Filtros de coluna (FiltroColuna): null = sem filtro (tudo marcado).
   const [filtroConta, setFiltroConta] = useState(null);
   const [filtroMascara, setFiltroMascara] = useState(null);
@@ -138,11 +149,13 @@ export default function DfcPlanoContasTab({
       listContas(empresaId, { page: 1, limit: LIMIT, search: '' }),
       listClassificacoesPlanoDfc(empresaId, centroVersao),
       listDfcMascaras(empresaId),
+      listDesembolsoDfc(empresaId),
     ])
-      .then(([result, lista, arvoreMascaras]) => {
+      .then(([result, lista, arvoreMascaras, prazos]) => {
         setContas(result.data);
         setClassificacoes(Object.fromEntries(lista.map((c) => [c.sienge_id, c])));
         setMascaras(arvoreMascaras);
+        setDesembolso(Object.fromEntries(prazos.map((d) => [d.sienge_id, d])));
         onTotal?.(result.pagination.total);
       })
       .catch((err) => setErroCarga(err.response?.data?.message || 'Não foi possível carregar o plano de contas.'))
@@ -211,10 +224,16 @@ export default function DfcPlanoContasTab({
     setErroSalvar('');
     setPendentes((n) => n + 1);
     try {
-      const { origem_retirada_de: retiradaDe, ...salvo } = await updateClassificacaoPlanoDfc(empresaId, siengeId, novo, {
+      const {
+        origem_retirada_de: retiradaDe,
+        desembolso: prazoDesembolso,
+        ...salvo
+      } = await updateClassificacaoPlanoDfc(empresaId, siengeId, novo, {
         transferir,
         centroId: centroVersao,
       });
+      // Virou "EMPRESARIAL DESEMBOLSO": o backend já calculou e guardou a ficha.
+      if (prazoDesembolso) setDesembolso((atual) => ({ ...atual, [siengeId]: prazoDesembolso }));
       setClassificacoes((atual) => {
         const proximo = { ...atual, [siengeId]: salvo };
         if (retiradaDe && proximo[retiradaDe]) proximo[retiradaDe] = { ...proximo[retiradaDe], origem_projecao: null };
@@ -371,6 +390,19 @@ export default function DfcPlanoContasTab({
         </div>
       )}
 
+      <FichaDesembolsoModal
+        open={Boolean(fichaDe)}
+        conta={fichaDe}
+        empresaId={empresaId}
+        onClose={() => setFichaDe(null)}
+        onRecalculada={(f) =>
+          setDesembolso((atual) => ({
+            ...atual,
+            [f.sienge_id]: { prazo_medio: f.prazo_medio, prazo_mediano: f.prazo_mediano, sem_historico: Boolean(f.sem_historico) },
+          }))
+        }
+      />
+
       {erroSalvar && (
         <div className="mb-3 rounded-lg bg-red-50 px-3 py-2 text-xs text-red-600" role="status">
           {erroSalvar}
@@ -443,6 +475,10 @@ export default function DfcPlanoContasTab({
                 larguraPainel={360}
               />
             </span>
+            <span className="text-right" title="Prazo médio de desembolso (emissão até vencimento, ponderado pelo valor)">
+              Prazo Desemb.
+            </span>
+            <span className="sr-only">Ficha de desembolso</span>
             <span>Status</span>
           </div>
 
@@ -513,6 +549,8 @@ export default function DfcPlanoContasTab({
                     <span />
                     <span />
                     <span />
+                    <span />
+                    <span />
                   </>
                 ) : (
                   <>
@@ -544,6 +582,35 @@ export default function DfcPlanoContasTab({
                       corClasses={corCampo(classificacao.origem_projecao)}
                       larguraPainel={360}
                     />
+                    {classificacao.origem_projecao === ORIGEM_DESEMBOLSO ? (
+                      <>
+                        <span className="text-right text-xs tabular-nums text-gray-700">
+                          {!desembolso[conta.sienge_id] ? (
+                            <span className="text-gray-300">...</span>
+                          ) : desembolso[conta.sienge_id].sem_historico || desembolso[conta.sienge_id].prazo_medio === null ? (
+                            <span className="text-gray-400" title="Nenhum título desta natureza nos últimos 12 meses">
+                              sem histórico
+                            </span>
+                          ) : (
+                            `${Math.round(desembolso[conta.sienge_id].prazo_medio)} dias`
+                          )}
+                        </span>
+                        <button
+                          type="button"
+                          onClick={() => setFichaDe({ sienge_id: conta.sienge_id, codigo: codigoFormatado(conta), name: conta.name })}
+                          title="Ficha de desembolso"
+                          aria-label={`Ficha de desembolso de ${conta.name}`}
+                          className="flex h-7 w-7 items-center justify-center rounded-md text-primary-600 transition-colors hover:bg-primary-50"
+                        >
+                          <Calculator size={16} />
+                        </button>
+                      </>
+                    ) : (
+                      <>
+                        <span />
+                        <span />
+                      </>
+                    )}
                   </>
                 )}
                 <span>

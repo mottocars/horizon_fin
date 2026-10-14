@@ -64,7 +64,7 @@ async function update(req, res, next) {
     const siengeId = siengeIdSchema.parse(req.params.siengeId);
     const { transferir, ...dados } = updateSchema.parse(req.body);
     const centroId = centroSchema.parse(req.body?.centro);
-    res.json(await service.update(empresaId, siengeId, dados, { transferir, centroId }));
+    res.json(await service.update(empresaId, siengeId, dados, { transferir, centroId, usuarioId: req.user.id }));
   } catch (err) {
     // Origem CEF em uso em outra conta: devolve qual é, pra tela perguntar se transfere.
     if (err.codigo === 'ORIGEM_CEF_EM_USO') {

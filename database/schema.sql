@@ -3263,6 +3263,23 @@ CREATE TABLE dfc_orcamento_log (
 
 CREATE INDEX idx_dfc_orcamento_log_valor ON dfc_orcamento_log (empresa_id, centro_id, sienge_id, mes);
 
+-- ─── Operações > DFC Construtoras > Plano Contas: ficha de desembolso (EMPRESARIAL DESEMBOLSO) — ver database/migrations/2026-10-14-dfc-desembolso-fichas.sql ───
+CREATE TABLE dfc_desembolso_fichas (
+    empresa_id     INTEGER NOT NULL REFERENCES empresas(id) ON DELETE CASCADE,
+    sienge_id      INTEGER NOT NULL,             -- a natureza (conta do plano)
+    periodo_de     DATE NOT NULL,                -- emissão dos títulos considerados
+    periodo_ate    DATE NOT NULL,
+    titulos        INTEGER NOT NULL,
+    parcelas       INTEGER NOT NULL,
+    valor          NUMERIC(18,2) NOT NULL,
+    prazo_medio    NUMERIC(8,1),                 -- dias emissão -> vencimento, ponderado pelo valor ("Prazo Desembolso")
+    prazo_mediano  INTEGER,
+    ficha          JSONB NOT NULL,               -- o resto da ficha (distribuições, padrões, credores, curva)
+    usuario_id     INTEGER REFERENCES usuarios(id) ON DELETE SET NULL,
+    calculado_em   TIMESTAMPTZ NOT NULL,
+    PRIMARY KEY (empresa_id, sienge_id)
+);
+
 -- ─── Operações > DFC Construtoras > Plano Contas: versão por centro de custo — ver database/migrations/2026-10-14-dfc-plano-contas-versoes.sql ───
 -- Quais centros têm versão própria.
 CREATE TABLE dfc_plano_contas_versoes (

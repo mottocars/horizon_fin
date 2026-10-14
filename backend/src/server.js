@@ -40,6 +40,7 @@ const dfcProjecaoCefRoutes = require('./modules/dfc-projecao-cef/projecaoCef.rou
 const dfcOrcamentoInformadoRoutes = require('./modules/dfc-orcamento-informado/orcamentoInformado.routes');
 const dfcAgingRoutes = require('./modules/dfc-aging/dfcAging.routes');
 const dfcOrcamentoRoutes = require('./modules/dfc-orcamento/dfcOrcamento.routes');
+const dfcDesembolsoRoutes = require('./modules/dfc-desembolso/desembolso.routes');
 const bancosRoutes = require('./modules/bancos/bancos.routes');
 const eprRoutes = require('./modules/epr/epr.routes');
 const dcdRoutes = require('./modules/dcd/dcd.routes');
@@ -158,6 +159,7 @@ app.use('/api/dfc-projecao-cef', exigirTela([T.DFC]), dfcProjecaoCefRoutes);
 app.use('/api/dfc-orcamento-informado', exigirTela([T.DFC]), dfcOrcamentoInformadoRoutes);
 app.use('/api/dfc-aging', exigirTela([T.DFC]), dfcAgingRoutes);
 app.use('/api/dfc-orcamento', exigirTela([T.DFC]), dfcOrcamentoRoutes);
+app.use('/api/dfc-desembolso', exigirTela([T.DFC]), dfcDesembolsoRoutes);
 app.use('/api/bancos', exigirTela([T.SALDOS]), exigirMaster, bancosRoutes);
 app.use('/api/epr', exigirTela([T.PORTAL]), eprRoutes);
 // DCD e Extrato também na aba CIWEB da DFC Construtoras (espelho do Portal das Construtoras,

@@ -1,4 +1,5 @@
 const pool = require('../../config/db');
+const desembolso = require('../dfc-desembolso/desembolso.service');
 
 function erro(status, message) {
   const e = new Error(message);
@@ -53,7 +54,7 @@ async function update(
   empresaId,
   siengeId,
   { mascara_id: mascaraId, origem_projecao: origem, projeta_dfc: projeta = true },
-  { transferir = false, centroId = null } = {}
+  { transferir = false, centroId = null, usuarioId = null } = {}
 ) {
   const { rows: conta } = await pool.query(
     'SELECT tp_conta FROM planos_financeiros_sienge WHERE empresa_id = $1 AND sienge_id = $2',
@@ -130,7 +131,19 @@ async function update(
       salvo = rows[0];
     }
     await client.query('COMMIT');
-    return { ...salvo, origem_retirada_de: liberada };
+    // Conta virou "SIENGE - EMPRESARIAL DESEMBOLSO": já calcula e guarda a ficha de desembolso dela
+    // (aba Plano Contas, coluna da calculadora). Falha aqui não desfaz a classificação.
+    let prazoDesembolso;
+    if (origem === desembolso.ORIGEM) {
+      prazoDesembolso = await desembolso
+        .gravar(empresaId, siengeId, usuarioId)
+        .then((f) => ({ prazo_medio: f.prazo_medio, prazo_mediano: f.prazo_mediano, sem_historico: Boolean(f.sem_historico) }))
+        .catch((e) => {
+          console.error('[dfc-desembolso] ficha não calculada:', e.message);
+          return null;
+        });
+    }
+    return { ...salvo, origem_retirada_de: liberada, ...(prazoDesembolso !== undefined ? { desembolso: prazoDesembolso } : {}) };
   } catch (e) {
     await client.query('ROLLBACK');
     // Corrida entre duas gravações: o índice único segura e vira a mesma resposta de "em uso".
