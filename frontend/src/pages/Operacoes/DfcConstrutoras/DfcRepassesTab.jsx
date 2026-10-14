@@ -22,7 +22,7 @@ const COLUNAS = [
     label: 'Demanda Mínima',
     tipo: 'status',
     largura: 115,
-    titulo: 'SIM quando a data de assinatura é anterior à Data da Demanda Mínima',
+    titulo: 'SIM quando a data de assinatura é igual ou anterior à Data da Demanda Mínima',
   },
   { id: 'calculo', label: '', tipo: 'calculo', largura: 48 },
 ];
@@ -145,7 +145,7 @@ function CalculoModal({ unidade, empreendimento, onClose }) {
           formula={
             !demanda
               ? 'Sem Data da Demanda Mínima (Parâmetros ou DCD) — não dá pra classificar.'
-              : `Assinatura ${formatarDataISO(u.data_assinatura)} ${u.demanda_minima ? 'anterior' : 'igual ou posterior'} à Data da Demanda Mínima ${formatarDataISO(demanda)} (${
+              : `Assinatura ${formatarDataISO(u.data_assinatura)} ${u.demanda_minima ? 'igual ou anterior' : 'posterior'} à Data da Demanda Mínima ${formatarDataISO(demanda)} (${
                   empreendimento.origem_demanda_minima === 'PARAMETROS' ? 'Parâmetros' : 'DCD'
                 })`
           }

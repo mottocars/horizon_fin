@@ -19,7 +19,7 @@ function num(v) {
 //   Novo Registro       = terreno + subsídio
 //   Medição             = Medição Total × % Obra Acumulado
 //   Novo Registro Total = Novo Registro + Medição
-//   Demanda Mínima      = data de assinatura antes da "Data da Demanda Mínima" (versão vigente dos
+//   Demanda Mínima      = data de assinatura igual ou anterior à "Data da Demanda Mínima" (versão vigente dos
 //                         Parâmetros da obra; sem versão, a Dt Término Suspensiva do DCD)
 async function repasses(empresaId) {
   const { rows: centros } = await pool.query(
@@ -133,7 +133,7 @@ async function repasses(empresaId) {
             novo_registro: novoRegistro,
             medicao,
             novo_registro_total: medicao === null ? null : round2(novoRegistro + medicao),
-            demanda_minima: demanda && u.data_assinatura_contrato ? u.data_assinatura_contrato < demanda : null,
+            demanda_minima: demanda && u.data_assinatura_contrato ? u.data_assinatura_contrato <= demanda : null,
           };
         }),
     };
