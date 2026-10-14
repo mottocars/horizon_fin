@@ -1,17 +1,29 @@
-import { Fragment, useCallback, useEffect, useLayoutEffect, useMemo, useRef, useState } from 'react';
-import { Calculator, Check, Loader2, Minimize2, Minus, Plus, TriangleAlert } from 'lucide-react';
+import {
+  Fragment,
+  forwardRef,
+  useCallback,
+  useEffect,
+  useImperativeHandle,
+  useLayoutEffect,
+  useMemo,
+  useRef,
+  useState,
+} from 'react';
+import { Calculator, Check, CopyPlus, History, Loader2, Minimize2, Minus, Plus, Save, TriangleAlert } from 'lucide-react';
 import { listCentrosCustoDfc } from '../../../api/dfcCentros.api';
 import { listDfcMascaras } from '../../../api/dfcMascaras.api';
 import { listContas } from '../../../api/planosFinanceirosSienge.api';
 import { listTodasClassificacoesPlanoDfc } from '../../../api/dfcPlanoContas.api';
 import { getOrcamentoProjecaoCef } from '../../../api/dfcProjecaoCef.api';
-import { getAgingDfc } from '../../../api/dfcAging.api';
+import { getOrcamentoDfc, salvarVersaoOrcamentoDfc } from '../../../api/dfcOrcamento.api';
+import { useAlert, useConfirm } from '../../../confirm/ConfirmContext';
 import {
   listOrcamentoInformadoDfc,
   replicarOrcamentoInformadoDfc,
   salvarOrcamentoInformadoDfc,
 } from '../../../api/dfcOrcamentoInformado.api';
 import ReplicarValorModal from './ReplicarValorModal';
+import LogAlteracoesModal from './LogAlteracoesModal';
 import { ORIGEM_INFORMADO, ORIGEM_NAO_INFORMADA, interpretarValor } from './orcamentoValores';
 
 const MESES = ['jan', 'fev', 'mar', 'abr', 'mai', 'jun', 'jul', 'ago', 'set', 'out', 'nov', 'dez'];
@@ -64,9 +76,11 @@ function dinheiro(v) {
 
 // Célula do valor informado (contas "HORIZON - INFORMADO"): fora de edição mostra "1.234,56"; ao
 // focar vira o número puro; grava ao sair (Enter também). Vazio apaga; texto inválido descarta a
-// edição. Botão direito abre o "Replicar valor até" — com o que estiver digitado, se houver.
-// Mesmo par de cores das outras abas: âmbar sem valor, azul claro com valor.
-function CelulaInformada({ valor, onCommit, onReplicar }) {
+// edição. Botão direito abre o menu (Replicar valor até / Log de alterações) — com o que estiver
+// digitado, se houver. Mesmo par de cores das outras abas: âmbar sem valor, azul claro com valor.
+// `valor` é o digitado (rascunho); `pendente` = difere da versão salva (`valorVersao`) — borda
+// tracejada laranja, só entra no Orçamento ao "Salvar Versão".
+function CelulaInformada({ valor, pendente, valorVersao, onCommit, onMenu }) {
   const [texto, setTexto] = useState(null);
   const editando = texto !== null;
   const vazio = valor === null || valor === undefined;
@@ -93,7 +107,13 @@ function CelulaInformada({ valor, onCommit, onReplicar }) {
       autoComplete="off"
       value={editando ? texto : vazio ? '' : dinheiro(valor)}
       placeholder="—"
-      title="Botão direito: replicar valor até"
+      title={
+        pendente
+          ? `Pendente: só entra no Orçamento ao Salvar Versão. Na versão salva: ${
+              valorVersao === null || valorVersao === undefined ? 'sem valor' : dinheiro(valorVersao)
+            }`
+          : 'Botão direito: replicar valor até / log de alterações'
+      }
       onFocus={(e) => {
         setTexto(vazio ? '' : String(valor).replace('.', ','));
         const campo = e.currentTarget;
@@ -114,13 +134,74 @@ function CelulaInformada({ valor, onCommit, onReplicar }) {
         e.preventDefault();
         const atual = valorAtual();
         commit();
-        onReplicar(atual);
+        onMenu(e, atual);
       }}
       className={`h-7 w-full rounded-md border px-1.5 text-right text-xs tabular-nums outline-none transition-colors placeholder:text-gray-300 focus:border-primary-500 focus:bg-white focus:ring-2 focus:ring-primary-100 ${
-        vazio ? 'border-amber-200 bg-amber-50' : 'border-primary-100 bg-primary-50'
+        pendente
+          ? 'border-dashed border-orange-400 bg-orange-50'
+          : vazio
+            ? 'border-amber-200 bg-amber-50'
+            : 'border-primary-100 bg-primary-50'
       } ${!editando && !vazio && valor < 0 ? 'text-red-600' : 'text-gray-900'}`}
     />
   );
+}
+
+// Menu do botão direito numa célula de conta: fixo na posição do clique, fecha ao clicar fora,
+// rolar ou com Esc. `opcoes`: [{ rotulo, icone, onClick }].
+function MenuCelula({ menu, onFechar }) {
+  useEffect(() => {
+    if (!menu) return undefined;
+    const fechar = () => onFechar();
+    const aoTeclar = (e) => {
+      if (e.key === 'Escape') onFechar();
+    };
+    window.addEventListener('mousedown', fechar);
+    window.addEventListener('scroll', fechar, true);
+    window.addEventListener('resize', fechar);
+    window.addEventListener('keydown', aoTeclar);
+    return () => {
+      window.removeEventListener('mousedown', fechar);
+      window.removeEventListener('scroll', fechar, true);
+      window.removeEventListener('resize', fechar);
+      window.removeEventListener('keydown', aoTeclar);
+    };
+  }, [menu, onFechar]);
+
+  if (!menu) return null;
+  const largura = 210;
+  const x = Math.min(menu.x, window.innerWidth - largura - 8);
+  const y = Math.min(menu.y, window.innerHeight - menu.opcoes.length * 36 - 16);
+  return (
+    <div
+      role="menu"
+      className="fixed z-[60] rounded-lg border border-gray-100 bg-white py-1 shadow-card"
+      style={{ left: x, top: y, width: largura }}
+      onMouseDown={(e) => e.stopPropagation()}
+    >
+      {menu.opcoes.map(({ rotulo, icone: Icone, onClick }) => (
+        <button
+          key={rotulo}
+          type="button"
+          role="menuitem"
+          onClick={() => {
+            onFechar();
+            onClick();
+          }}
+          className="flex w-full items-center gap-2 px-3 py-2 text-left text-sm text-gray-700 hover:bg-gray-50"
+        >
+          <Icone size={15} className="shrink-0 text-gray-400" />
+          {rotulo}
+        </button>
+      ))}
+    </div>
+  );
+}
+
+function dataHora(v) {
+  return v
+    ? new Date(v).toLocaleString('pt-BR', { day: '2-digit', month: '2-digit', year: 'numeric', hour: '2-digit', minute: '2-digit' })
+    : '';
 }
 
 const LARGURA_PRIMEIRA = 360;
@@ -158,21 +239,27 @@ const RECUO = [12, 32, 52, 76]; // padding-left de cada nível (centro, máscara
 // entram num grupo "SEM MÁSCARA DFC" pra não sumirem; as com "Projeta DFC" desmarcado no plano do
 // centro não entram (pedido do usuário), e máscara que fica sem conta nenhuma some. Começa tudo fechado.
 // Contas com Origem Projeção "HORIZON - INFORMADO" no plano do centro: o valor é digitado na própria
-// célula, e o botão direito abre o "Replicar valor até".
+// célula, e o botão direito abre o menu "Replicar valor até" / "Log de alterações" (nas demais
+// contas, só o log).
+// VERSÕES (pedido do usuário): a grade mostra o CONSOLIDADO — os valores da última versão salva
+// (backend dfc-orcamento). O que muda nas fontes (valor digitado, Projeção CEF, Aging do Sienge,
+// plano de contas) só aparece depois de "Salvar Versão" (botão no topo — `ref.salvarVersao`); até
+// lá fica como pendência (contagem acima da grade; célula digitada com borda tracejada laranja).
 // `telaCheia`: a grade ocupa a tela inteira (por cima do menu e do topo, e em tela cheia de verdade
 // no navegador quando ele deixa); sai pelo botão "Sair da tela cheia" ou com Esc (`onSairTelaCheia`).
 // `origens`: filtro "Origem DFC" do topo — só as contas com essas Origens Projeção no plano do centro
 // (ORIGEM_NAO_INFORMADA = sem origem); vazio = todas. Máscara e centro sem conta nenhuma somem.
-export default function DfcOrcamentosTab({
-  empresaId,
-  inicio,
-  fim,
-  origens = [],
-  refreshToken = 0,
-  telaCheia = false,
-  onSairTelaCheia,
-}) {
+const DfcOrcamentosTab = forwardRef(function DfcOrcamentosTab(
+  { empresaId, inicio, fim, origens = [], refreshToken = 0, telaCheia = false, onSairTelaCheia },
+  ref
+) {
+  const confirm = useConfirm();
+  const alert = useAlert();
   const [dados, setDados] = useState(null);
+  const [salvandoVersao, setSalvandoVersao] = useState(false);
+  const [menu, setMenu] = useState(null); // { x, y, opcoes }
+  const [logDe, setLogDe] = useState(null); // alvo do "Log de alterações"
+  const fecharMenu = useCallback(() => setMenu(null), []);
   const [carregando, setCarregando] = useState(false);
   const [erroCarga, setErroCarga] = useState('');
   const [abertos, setAbertos] = useState([]);
@@ -198,11 +285,10 @@ export default function DfcOrcamentosTab({
       listTodasClassificacoesPlanoDfc(empresaId),
       getOrcamentoProjecaoCef(empresaId),
       listOrcamentoInformadoDfc(empresaId),
-      getAgingDfc(empresaId, 'receber'),
-      getAgingDfc(empresaId, 'pagar'),
+      getOrcamentoDfc(empresaId),
     ])
-      .then(([centros, mascaras, contas, classificacoes, projecao, valoresInformados, agingReceber, agingPagar]) => {
-        setDados({ centros, mascaras, contas: contas.data, classificacoes, projecao, agingReceber, agingPagar });
+      .then(([centros, mascaras, contas, classificacoes, projecao, valoresInformados, consolidado]) => {
+        setDados({ centros, mascaras, contas: contas.data, classificacoes, projecao, consolidado });
         setInformados(Object.fromEntries(valoresInformados.map((v) => [`${v.centro_id}|${v.sienge_id}|${v.mes}`, v.valor])));
       })
       .catch((err) => setErroCarga(err.response?.data?.message || 'Não foi possível carregar o orçamento.'))
@@ -295,25 +381,20 @@ export default function DfcOrcamentosTab({
     [planosCentro, planoGlobal]
   );
 
-  // Valores: centro -> conta -> mês -> valor — os informados nas contas "HORIZON - INFORMADO"; nas
-  // demais, a Projeção CEF (contas CEF_*) e o Aging do Sienge (contas "SIENGE - AGING": a receber e
-  // a pagar, somados — o pagar já vem negativo). Cada conta tem uma origem só, então todos dividem o
-  // mesmo mapa. E quando cada obra foi projetada.
+  // Valores da grade: centro -> conta -> mês -> valor, do CONSOLIDADO (última versão salva) — todas
+  // as origens (Projeção CEF, Aging do Sienge, digitados). E quando cada obra foi projetada.
   const { valorConta, execucaoPorCentro } = useMemo(() => {
     const mapa = new Map();
-    (dados?.projecao?.valores || []).forEach((v) => mapa.set(`${v.sienge_id}|${v.conta}|${v.mes}`, v.valor));
-    [...(dados?.agingReceber?.valores || []), ...(dados?.agingPagar?.valores || [])].forEach((v) => {
-      const chave = `${v.centro_id}|${v.conta}|${v.mes}`;
-      mapa.set(chave, Math.round(((mapa.get(chave) || 0) + v.valor) * 100) / 100);
-    });
+    (dados?.consolidado?.valores || []).forEach((v) => mapa.set(`${v.centro_id}|${v.sienge_id}|${v.mes}`, v.valor));
     return {
-      valorConta: (sid, conta, mes) =>
-        contaInformada(sid, conta)
-          ? (informados[`${sid}|${conta}|${mes}`] ?? null)
-          : (mapa.get(`${sid}|${conta}|${mes}`) ?? null),
+      valorConta: (sid, conta, mes) => mapa.get(`${sid}|${conta}|${mes}`) ?? null,
       execucaoPorCentro: Object.fromEntries((dados?.projecao?.execucoes || []).map((e) => [e.sienge_id, e])),
     };
-  }, [dados, informados, contaInformada]);
+  }, [dados]);
+
+  // Valor digitado (rascunho) de uma conta "HORIZON - INFORMADO" — o que aparece no campo.
+  const rascunho = (sid, conta, mes) => informados[`${sid}|${conta}|${mes}`] ?? null;
+  const centavos = (v) => (v === null || v === undefined ? null : Math.round(v * 100));
 
   function trocarInformados(centroId, contaId, valoresPorMes) {
     setInformados((atual) => {
@@ -365,6 +446,73 @@ export default function DfcOrcamentosTab({
     }
   }
 
+  // Digitações ainda gravando (o clique em "Salvar Versão" tira o foco do campo e dispara a última).
+  const gravacoesRef = useRef(0);
+  gravacoesRef.current = pendentes;
+
+  // "Salvar Versão": consolida as fontes de hoje (backend compara com a versão anterior e grava o log
+  // do que mudou). Espera as digitações em andamento terminarem antes.
+  async function salvarVersao() {
+    if (!empresaId || salvandoVersao) return;
+    for (let i = 0; i < 50 && gravacoesRef.current > 0; i += 1) {
+      await new Promise((r) => setTimeout(r, 100));
+    }
+    const p = dados?.consolidado?.pendencias;
+    const versao = dados?.consolidado?.versao;
+    const ok = await confirm({
+      title: 'Salvar versão do orçamento',
+      description: `Consolida os valores de hoje — digitados, Projeção CEF e Aging do Sienge — na versão ${
+        (versao?.numero || 0) + 1
+      }. Só depois disso as mudanças aparecem no Orçamento.${
+        p ? ` Pendências agora: ${p.total} (${p.inclusoes} inclusão(ões), ${p.alteracoes} alteração(ões), ${p.exclusoes} exclusão(ões)).` : ''
+      }`,
+      confirmLabel: 'Salvar versão',
+    });
+    if (!ok) return;
+    setSalvandoVersao(true);
+    try {
+      const r = await salvarVersaoOrcamentoDfc(empresaId);
+      await alert({
+        title: `Versão ${r.numero} salva`,
+        description: `${r.inclusoes} inclusão(ões), ${r.alteracoes} alteração(ões) e ${r.exclusoes} exclusão(ões) — cada uma registrada no log de alterações do valor.`,
+      });
+      carregar();
+    } catch (err) {
+      await alert({
+        title: 'Versão não salva',
+        description: err.response?.data?.message || 'Não foi possível salvar a versão.',
+      });
+    } finally {
+      setSalvandoVersao(false);
+    }
+  }
+
+  useImperativeHandle(ref, () => ({ salvarVersao }));
+
+  // Botão direito numa célula de conta: menu com "Log de alterações" (e "Replicar valor até" nas
+  // contas digitadas). `valorDigitado`: o que está no campo (contas "HORIZON - INFORMADO").
+  function abrirMenu(e, { centro, conta, mes, informada, valorDigitado }) {
+    e.preventDefault();
+    const alvo = {
+      centroId: centro.sienge_id,
+      contaId: conta.sienge_id,
+      centroNome: centro.name,
+      contaRotulo: `${codigoFormatado(conta)} ${conta.name}`,
+      mes,
+      valor: valorConta(centro.sienge_id, conta.sienge_id, mes),
+    };
+    const opcoes = [];
+    if (informada) {
+      opcoes.push({
+        rotulo: 'Replicar valor até',
+        icone: CopyPlus,
+        onClick: () => setReplicando({ ...alvo, valor: valorDigitado }),
+      });
+    }
+    opcoes.push({ rotulo: 'Log de alterações', icone: History, onClick: () => setLogDe(alvo) });
+    setMenu({ x: e.clientX, y: e.clientY, opcoes });
+  }
+
   // Soma de várias contas num mês (null quando nenhuma tem valor).
   function somaContas(sid, contas, mes) {
     let total = null;
@@ -413,6 +561,8 @@ export default function DfcOrcamentosTab({
 
   const replicandoRef = useRef(null);
   replicandoRef.current = replicando;
+  const logDeRef = useRef(null);
+  logDeRef.current = logDe;
 
   // Tela cheia: pede também a tela cheia do navegador (some a barra de endereço e as abas). Esc ali
   // é do navegador — ele sai da tela cheia e o `fullscreenchange` fecha a nossa junto. Sem a do
@@ -427,9 +577,13 @@ export default function DfcOrcamentosTab({
     };
     const aoTeclar = (e) => {
       if (e.key !== 'Escape' || e.target.tagName === 'INPUT') return;
-      // Com o "Replicar valor até" aberto, o Esc fecha só ele.
+      // Com o "Replicar valor até" ou o log aberto, o Esc fecha só ele.
       if (replicandoRef.current) {
         setReplicando(null);
+        return;
+      }
+      if (logDeRef.current) {
+        setLogDe(null);
         return;
       }
       onSairTelaCheia?.();
@@ -476,13 +630,15 @@ export default function DfcOrcamentosTab({
   const statusSalvamento = pendentes > 0 ? 'salvando' : erroSalvar ? 'erro' : salvoAlgumaVez ? 'salvo' : null;
 
   // Células de valor do mês (`valorMes(m)` -> número ou null). Saída (negativo) em vermelho.
-  const celulas = (nivel, valorMes) =>
+  // `aoMenu(e, mes)`: botão direito (só nas linhas de conta).
+  const celulas = (nivel, valorMes, aoMenu) =>
     meses.map((m) => {
       const v = valorMes ? valorMes(m) : null;
       const vazio = v === null || v === 0;
       return (
         <td
           key={m}
+          onContextMenu={aoMenu ? (e) => aoMenu(e, m) : undefined}
           className={`border-b border-l px-2 text-right tabular-nums ${
             nivel === 0 ? 'border-gray-200 bg-gray-50 py-2 group-hover/linha:bg-gray-100' : 'border-gray-100 bg-white py-1.5 group-hover/linha:bg-gray-50'
           } ${vazio ? 'text-gray-300' : v < 0 ? 'text-red-600' : 'text-gray-800'} ${nivel <= 1 && !vazio ? 'font-semibold' : ''}`}
@@ -536,18 +692,9 @@ export default function DfcOrcamentosTab({
 
   const mesAtual = mesDeHoje();
   // Avisos da Projeção CEF + base do contas a receber / a pagar nunca carregada (o Aging fica zerado).
-  const avisos = [
-    ...(dados?.projecao?.avisos || []),
-    ...[
-      ['agingReceber', 'receber'],
-      ['agingPagar', 'pagar'],
-    ]
-      .filter(([chave]) => dados?.[chave] && !dados[chave].base?.parcelas)
-      .map(
-        ([, tipo]) =>
-          `A base do contas a ${tipo} do Sienge ainda não foi carregada — o Aging a ${tipo} fica sem valores. Atualize em Projeções.`
-      ),
-  ];
+  const avisos = [...(dados?.projecao?.avisos || []), ...(dados?.consolidado?.avisos || [])];
+  const versao = dados?.consolidado?.versao || null;
+  const pendencias = dados?.consolidado?.pendencias || null;
   const larguraTabela = LARGURA_PRIMEIRA + largurasMes.reduce((t, l) => t + l, 0);
 
   return (
@@ -574,12 +721,39 @@ export default function DfcOrcamentosTab({
           <span className="ml-auto hidden text-xs text-gray-400 sm:inline">Esc para sair</span>
           <button
             type="button"
+            onClick={salvarVersao}
+            disabled={salvandoVersao}
+            className="flex items-center gap-1.5 rounded-lg bg-primary-600 px-3 py-1.5 text-sm font-medium text-white transition-colors hover:bg-primary-700 disabled:opacity-60"
+          >
+            {salvandoVersao ? <Loader2 size={15} className="animate-spin" /> : <Save size={15} />}
+            Salvar Versão
+          </button>
+          <button
+            type="button"
             onClick={onSairTelaCheia}
             className="flex items-center gap-1.5 rounded-lg border border-gray-200 px-3 py-1.5 text-sm font-medium text-gray-700 transition-colors hover:bg-gray-50"
           >
             <Minimize2 size={15} />
             Sair da tela cheia
           </button>
+        </div>
+      )}
+      {dados && (
+        <div className="-mt-1 mb-3 flex flex-wrap items-center gap-x-3 gap-y-1.5 text-xs">
+          <span className="flex items-center gap-1.5 text-gray-500">
+            <History size={14} className="shrink-0 text-gray-400" />
+            {versao
+              ? `Versão ${versao.numero} · salva em ${dataHora(versao.criado_em)}${versao.usuario ? ` por ${versao.usuario}` : ''}`
+              : 'Nenhuma versão salva ainda — o Orçamento fica vazio até a primeira "Salvar Versão".'}
+          </span>
+          {pendencias?.total > 0 && (
+            <span
+              className="flex items-center gap-1.5 rounded-full bg-orange-50 px-2.5 py-0.5 font-medium text-orange-700 ring-1 ring-orange-200"
+              title={`${pendencias.inclusoes} inclusão(ões), ${pendencias.alteracoes} alteração(ões), ${pendencias.exclusoes} exclusão(ões) — ${pendencias.manuais} manual(is), ${pendencias.integracao} de integração, ${pendencias.plano} do plano de contas`}
+            >
+              {pendencias.total.toLocaleString('pt-BR')} alteração(ões) pendente(s) — só entram no Orçamento ao Salvar Versão
+            </span>
+          )}
         </div>
       )}
       {statusSalvamento && (
@@ -606,6 +780,8 @@ export default function DfcOrcamentosTab({
         </div>
       )}
 
+      <MenuCelula menu={menu} onFechar={fecharMenu} />
+      <LogAlteracoesModal open={Boolean(logDe)} alvo={logDe} empresaId={empresaId} onClose={() => setLogDe(null)} />
       <ReplicarValorModal
         open={Boolean(replicando)}
         alvo={replicando}
@@ -761,22 +937,24 @@ export default function DfcOrcamentosTab({
                                                       className="border-b border-l border-gray-100 bg-white px-1 py-1 group-hover/linha:bg-gray-50"
                                                     >
                                                       <CelulaInformada
-                                                        valor={valorConta(centro.sienge_id, conta.sienge_id, m)}
+                                                        valor={rascunho(centro.sienge_id, conta.sienge_id, m)}
+                                                        valorVersao={valorConta(centro.sienge_id, conta.sienge_id, m)}
+                                                        pendente={
+                                                          centavos(rascunho(centro.sienge_id, conta.sienge_id, m)) !==
+                                                          centavos(valorConta(centro.sienge_id, conta.sienge_id, m))
+                                                        }
                                                         onCommit={(novo) => salvarInformado(centro.sienge_id, conta.sienge_id, m, novo)}
-                                                        onReplicar={(valor) =>
-                                                          setReplicando({
-                                                            centroId: centro.sienge_id,
-                                                            contaId: conta.sienge_id,
-                                                            centroNome: centro.name,
-                                                            contaRotulo: `${codigoFormatado(conta)} ${conta.name}`,
-                                                            mes: m,
-                                                            valor,
-                                                          })
+                                                        onMenu={(e, valorDigitado) =>
+                                                          abrirMenu(e, { centro, conta, mes: m, informada: true, valorDigitado })
                                                         }
                                                       />
                                                     </td>
                                                   ))
-                                                : celulas(3, (m) => valorConta(centro.sienge_id, conta.sienge_id, m))}
+                                                : celulas(
+                                                    3,
+                                                    (m) => valorConta(centro.sienge_id, conta.sienge_id, m),
+                                                    (e, m) => abrirMenu(e, { centro, conta, mes: m, informada: false })
+                                                  )}
                                             </tr>
                                           );
                                         })}
@@ -796,4 +974,6 @@ export default function DfcOrcamentosTab({
       )}
     </div>
   );
-}
+});
+
+export default DfcOrcamentosTab;

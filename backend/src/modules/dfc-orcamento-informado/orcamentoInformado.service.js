@@ -26,11 +26,12 @@ function mesesEntre(de, ate) {
   return meses;
 }
 
-// Valores informados da empresa: [{ centro_id, sienge_id, mes: 'AAAA-MM', valor }].
+// Valores informados da empresa: [{ centro_id, sienge_id, mes: 'AAAA-MM', valor }]. Linha com valor
+// NULL = valor limpo (fica guardada só pra o log saber quem limpou) — não entra.
 async function list(empresaId) {
   const { rows } = await pool.query(
     `SELECT centro_id, sienge_id, to_char(mes, 'YYYY-MM') AS mes, valor
-       FROM dfc_orcamento_informado WHERE empresa_id = $1`,
+       FROM dfc_orcamento_informado WHERE empresa_id = $1 AND valor IS NOT NULL`,
     [empresaId]
   );
   return rows.map((r) => ({ ...r, valor: Number(r.valor) }));
@@ -65,24 +66,20 @@ async function exigirContaInformada(empresaId, centroId, siengeId) {
   }
 }
 
-// Grava (ou apaga, com valor null / 0) o valor de um mês.
+// Grava (ou limpa, com valor null / 0) o valor de um mês. Limpar grava NULL com quem limpou e quando
+// (pro log de alterações da versão). Data do relógio da aplicação (o do Postgres da VPS é deslocado).
+// Só vale no Orçamento depois de "Salvar Versão" (dfc-orcamento).
 async function salvar(empresaId, { centro_id: centroId, sienge_id: siengeId, mes, valor }, usuarioId) {
   await exigirContaInformada(empresaId, centroId, siengeId);
-  if (valor === null || valor === 0) {
-    await pool.query(
-      'DELETE FROM dfc_orcamento_informado WHERE empresa_id = $1 AND centro_id = $2 AND sienge_id = $3 AND mes = $4',
-      [empresaId, centroId, siengeId, `${mes}-01`]
-    );
-    return { centro_id: centroId, sienge_id: siengeId, mes, valor: null };
-  }
+  const gravado = valor === 0 ? null : valor;
   await pool.query(
-    `INSERT INTO dfc_orcamento_informado (empresa_id, centro_id, sienge_id, mes, valor, usuario_id)
-     VALUES ($1, $2, $3, $4, $5, $6)
+    `INSERT INTO dfc_orcamento_informado (empresa_id, centro_id, sienge_id, mes, valor, usuario_id, atualizado_em)
+     VALUES ($1, $2, $3, $4, $5, $6, $7)
      ON CONFLICT (empresa_id, centro_id, sienge_id, mes)
-     DO UPDATE SET valor = EXCLUDED.valor, usuario_id = EXCLUDED.usuario_id, atualizado_em = NOW()`,
-    [empresaId, centroId, siengeId, `${mes}-01`, valor, usuarioId]
+     DO UPDATE SET valor = EXCLUDED.valor, usuario_id = EXCLUDED.usuario_id, atualizado_em = EXCLUDED.atualizado_em`,
+    [empresaId, centroId, siengeId, `${mes}-01`, gravado, usuarioId, new Date()]
   );
-  return { centro_id: centroId, sienge_id: siengeId, mes, valor };
+  return { centro_id: centroId, sienge_id: siengeId, mes, valor: gravado };
 }
 
 // "Replicar valor até": grava `valor` em cada mês de `de` até `ate` (inclusive), por cima do que
@@ -93,11 +90,11 @@ async function replicar(empresaId, { centro_id: centroId, sienge_id: siengeId, d
   if (meses.length > MAX_MESES) throw erro(400, `Replique no máximo ${MAX_MESES} meses de uma vez.`);
   await exigirContaInformada(empresaId, centroId, siengeId);
   await pool.query(
-    `INSERT INTO dfc_orcamento_informado (empresa_id, centro_id, sienge_id, mes, valor, usuario_id)
-     SELECT $1, $2, $3, (m || '-01')::date, $5, $6 FROM unnest($4::text[]) AS m
+    `INSERT INTO dfc_orcamento_informado (empresa_id, centro_id, sienge_id, mes, valor, usuario_id, atualizado_em)
+     SELECT $1, $2, $3, (m || '-01')::date, $5, $6, $7 FROM unnest($4::text[]) AS m
      ON CONFLICT (empresa_id, centro_id, sienge_id, mes)
-     DO UPDATE SET valor = EXCLUDED.valor, usuario_id = EXCLUDED.usuario_id, atualizado_em = NOW()`,
-    [empresaId, centroId, siengeId, meses, valor, usuarioId]
+     DO UPDATE SET valor = EXCLUDED.valor, usuario_id = EXCLUDED.usuario_id, atualizado_em = EXCLUDED.atualizado_em`,
+    [empresaId, centroId, siengeId, meses, valor, usuarioId, new Date()]
   );
   return { centro_id: centroId, sienge_id: siengeId, meses, valor };
 }

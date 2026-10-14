@@ -189,10 +189,12 @@ async function atualizar(empresaId, siengeId, usuarioId) {
     }
     await client.query(
       `INSERT INTO dfc_projecao_cef_execucao (empresa_id, sienge_id, versao_parametros, unidades, meses, usuario_id, atualizado_em)
-       VALUES ($1, $2, $3, $4, $5, $6, NOW())
+       VALUES ($1, $2, $3, $4, $5, $6, $7)
        ON CONFLICT (empresa_id, sienge_id) DO UPDATE SET versao_parametros = EXCLUDED.versao_parametros,
-         unidades = EXCLUDED.unidades, meses = EXCLUDED.meses, usuario_id = EXCLUDED.usuario_id, atualizado_em = NOW()`,
-      [empresaId, siengeId, versao.versao, unidades.length, linhas.length, usuarioId]
+         unidades = EXCLUDED.unidades, meses = EXCLUDED.meses, usuario_id = EXCLUDED.usuario_id,
+         atualizado_em = EXCLUDED.atualizado_em`,
+      // Relógio da aplicação (o do Postgres da VPS é deslocado) — aparece no log do Orçamento.
+      [empresaId, siengeId, versao.versao, unidades.length, linhas.length, usuarioId, new Date()]
     );
     await client.query('COMMIT');
   } catch (e) {
@@ -287,4 +289,4 @@ async function orcamento(empresaId) {
   return { valores, execucoes, avisos };
 }
 
-module.exports = { elegiveis, atualizar, orcamento, obraAcumulado, mesDe };
+module.exports = { SAIDAS, elegiveis, atualizar, orcamento, obraAcumulado, mesDe };

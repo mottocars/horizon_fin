@@ -310,6 +310,7 @@ export default function DfcConstrutorasPage() {
   // Botão "Nova máscara" fica no topo (padrão do resto do sistema, igual "Nova categoria" na
   // DRE), mas o campo de criar vive em DfcMascarasTab.jsx — dispara por ref.
   const mascarasTabRef = useRef(null);
+  const orcamentosTabRef = useRef(null);
 
   return (
     <div className="space-y-4">
@@ -522,9 +523,14 @@ export default function DfcConstrutorasPage() {
                 <Maximize2 size={16} />
                 Tela cheia
               </Button>
-              <Button type="button" onClick={() => setProjecoesAberto(true)} disabled={!empresaId}>
+              <Button type="button" variant="secondary" onClick={() => setProjecoesAberto(true)} disabled={!empresaId}>
                 <TrendingUp size={16} />
                 Projeções
+              </Button>
+              {/* Consolida as fontes numa versão nova — só então as mudanças aparecem no Orçamento. */}
+              <Button type="button" onClick={() => orcamentosTabRef.current?.salvarVersao()} disabled={!empresaId}>
+                <Save size={16} />
+                Salvar Versão
               </Button>
             </div>
           )}
@@ -602,6 +608,7 @@ export default function DfcConstrutorasPage() {
 
         {tabAtiva.id === 'orcamentos' ? (
           <DfcOrcamentosTab
+            ref={orcamentosTabRef}
             empresaId={empresaId}
             inicio={inicioOrcamento}
             fim={fimOrcamento}
