@@ -11,6 +11,14 @@ const querySchema = z
     message: 'Período de no máximo 10 anos.',
   });
 
+const manualSchema = z.object({
+  mes: z.string().regex(/^\d{4}-(0[1-9]|1[0-2])$/, 'Mês inválido.'),
+  percentual: z.union([
+    z.null(),
+    z.coerce.number().min(0, 'O avanço não pode ser negativo.').max(100, 'O avanço não pode passar de 100%.'),
+  ]),
+});
+
 function erro(status, message) {
   const e = new Error(message);
   e.status = status;
@@ -29,4 +37,16 @@ async function list(req, res, next) {
   }
 }
 
-module.exports = { list };
+async function salvarManual(req, res, next) {
+  try {
+    const empresaId = empresaIdSchema.parse(req.params.empresaId);
+    const siengeId = z.coerce.number().int().positive('Centro de custo inválido.').parse(req.params.siengeId);
+    const { mes, percentual } = manualSchema.parse(req.body);
+    res.json(await service.salvarManual(empresaId, siengeId, mes, percentual === null ? null : Math.round(percentual * 100) / 100, req.user.id));
+  } catch (err) {
+    if (err.issues) return next(erro(400, err.issues[0].message));
+    next(err);
+  }
+}
+
+module.exports = { list, salvarManual };

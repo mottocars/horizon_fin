@@ -36,6 +36,8 @@ function acumulado(porMes, meses) {
 //   'LP' no cronograma de liberação) e fica parado nesse acumulado depois dele; mês futuro = null.
 // - Prevision: % previsto por mês (prevision_dashboard_monthly_progress.expected, na visão
 //   primária/secundária escolhida no cadastro do centro de custo).
+// - Manual: % acumulado informado à mão por mês (dfc_avanco_manual) — a tela usa quando a obra
+//   não tem Prevision (ver os cenários em DfcAvancosTab.jsx).
 // Obras = centros com Tipo = Obra e "Projeta DFC" marcado (aba Centros Custos).
 async function avancos(empresaId, inicio, fim) {
   const meses = mesesEntre(inicio, fim);
@@ -72,6 +74,13 @@ async function avancos(empresaId, inicio, fim) {
     [empresaId]
   );
 
+  const { rows: manual } = await pool.query(
+    `SELECT sienge_id, to_char(mes, 'YYYY-MM') AS mes, percentual
+       FROM dfc_avanco_manual
+      WHERE empresa_id = $1 AND to_char(mes, 'YYYY-MM') BETWEEN $2 AND $3`,
+    [empresaId, meses[0], meses[meses.length - 1]]
+  );
+
   const plsPorContrato = {};
   pls.forEach((r) => {
     plsPorContrato[r.numero_contrato] = plsPorContrato[r.numero_contrato] || {};
@@ -81,6 +90,7 @@ async function avancos(empresaId, inicio, fim) {
 
   return {
     meses,
+    mes_atual: mesAtual,
     obras: obras.map((o) => {
       const contrato = o.codigo_contrato_caixa || null;
       const porMesPls = contrato ? plsPorContrato[contrato] : null;
@@ -112,9 +122,48 @@ async function avancos(empresaId, inicio, fim) {
         ultimo_mes_liberado: ultimoMes,
         pls: plsAcumulado,
         prevision: previsionAcumulado,
+        manual: Object.fromEntries(
+          manual.filter((r) => r.sienge_id === o.sienge_id).map((r) => [r.mes, Number(r.percentual)])
+        ),
       };
     }),
   };
 }
 
-module.exports = { avancos };
+function erro(status, message) {
+  const e = new Error(message);
+  e.status = status;
+  e.expose = true;
+  return e;
+}
+
+// Grava (ou apaga, com percentual null) o avanço acumulado manual de uma obra num mês 'AAAA-MM'.
+async function salvarManual(empresaId, siengeId, mes, percentual, usuarioId) {
+  const { rows: centro } = await pool.query(
+    'SELECT natureza, projeta_dfc FROM centros_custo_sienge WHERE empresa_id = $1 AND sienge_id = $2',
+    [empresaId, siengeId]
+  );
+  if (!centro[0]) throw erro(404, 'Centro de custo não encontrado nesta empresa.');
+  if (centro[0].natureza !== 'OBRA' || !centro[0].projeta_dfc) {
+    throw erro(400, 'Avanço só para obras com "Projeta DFC" marcado (aba Centros Custos).');
+  }
+  const dia1 = `${mes}-01`;
+  if (percentual === null) {
+    await pool.query('DELETE FROM dfc_avanco_manual WHERE empresa_id = $1 AND sienge_id = $2 AND mes = $3', [
+      empresaId,
+      siengeId,
+      dia1,
+    ]);
+    return { mes, percentual: null };
+  }
+  await pool.query(
+    `INSERT INTO dfc_avanco_manual (empresa_id, sienge_id, mes, percentual, usuario_id)
+     VALUES ($1, $2, $3, $4, $5)
+     ON CONFLICT (empresa_id, sienge_id, mes)
+     DO UPDATE SET percentual = EXCLUDED.percentual, usuario_id = EXCLUDED.usuario_id, atualizado_em = NOW()`,
+    [empresaId, siengeId, dia1, percentual, usuarioId]
+  );
+  return { mes, percentual };
+}
+
+module.exports = { avancos, salvarManual };
