@@ -1,31 +1,31 @@
 import { Fragment, useCallback, useEffect, useMemo, useState } from 'react';
-import { Banknote, Minus, Plus, TriangleAlert } from 'lucide-react';
+import { Banknote, Calculator, Minus, Plus, TriangleAlert } from 'lucide-react';
+import Modal from '../../../components/Modal';
 import { listRepassesDfc } from '../../../api/dfcRepasses.api';
 import { formatarDataISO } from '../../../utils/datas';
 
-// Colunas na ordem pedida pelo usuário: as do Geral dos Empreendimentos e as calculadas (fórmulas
-// no backend — dfc-repasses/dfcRepasses.service.js). `soma`: entra no total do empreendimento.
-const COLUNAS_GERAL = [
+// Colunas da tabela: as do Geral dos Empreendimentos (sem cálculo) e, no fim, a Demanda Mínima e
+// a calculadora — as colunas calculadas não ficam na grade (pedido do usuário: ficava grande
+// demais), aparecem por cliente na janela da calculadora. `soma`: entra no total do empreendimento.
+const COLUNAS = [
   { id: 'contrato_mutuario', label: 'Cód. Contrato Mutuário', tipo: 'texto', largura: 140 },
-  { id: 'mutuario', label: 'Mutuário', tipo: 'texto', largura: 230 },
-  { id: 'data_assinatura', label: 'Data Assinatura', tipo: 'data', largura: 100 },
-  { id: 'data_registro', label: 'Data Registro', tipo: 'data', largura: 100 },
+  { id: 'mutuario', label: 'Mutuário', tipo: 'texto', largura: 240 },
+  { id: 'data_assinatura', label: 'Data Assinatura', tipo: 'data', largura: 105 },
+  { id: 'data_registro', label: 'Data Registro', tipo: 'data', largura: 105 },
   { id: 'valor_financiamento', label: 'Valor Financiamento', tipo: 'moeda', soma: true },
   { id: 'valor_terreno', label: 'Valor Terreno', tipo: 'moeda', soma: true },
   { id: 'valor_subsidio', label: 'Valor Subsídio', tipo: 'moeda', soma: true },
   { id: 'valor_fgts', label: 'Valor FGTS', tipo: 'moeda', soma: true },
   { id: 'valor_avaliacao', label: 'Valor Avaliação', tipo: 'moeda', soma: true },
+  {
+    id: 'demanda_minima',
+    label: 'Demanda Mínima',
+    tipo: 'status',
+    largura: 115,
+    titulo: 'SIM quando a data de assinatura é anterior à Data da Demanda Mínima',
+  },
+  { id: 'calculo', label: '', tipo: 'calculo', largura: 48 },
 ];
-const COLUNAS_CALCULADAS = [
-  { id: 'pct_obra_acumulado', label: '% Obra Acumulado', tipo: 'pct', largura: 100, titulo: 'Avanço PLS (DCD) acumulado no mês da data de registro' },
-  { id: 'vgf', label: 'VGF', tipo: 'moeda', soma: true, titulo: 'Financiamento + Subsídio + FGTS' },
-  { id: 'medicao_total', label: 'Medição Total', tipo: 'moeda', soma: true, titulo: '(Financiamento − Terreno) + Subsídio' },
-  { id: 'novo_registro', label: 'Novo Registro', tipo: 'moeda', soma: true, titulo: 'Terreno + Subsídio' },
-  { id: 'medicao', label: 'Medição', tipo: 'moeda', soma: true, titulo: 'Medição Total × % Obra Acumulado' },
-  { id: 'novo_registro_total', label: 'Novo Registro Total', tipo: 'moeda', soma: true, titulo: 'Novo Registro + Medição' },
-  { id: 'demanda_minima', label: 'Demanda Mínima', tipo: 'status', largura: 110, titulo: 'Data de assinatura antes da Data da Demanda Mínima' },
-];
-const COLUNAS = [...COLUNAS_GERAL, ...COLUNAS_CALCULADAS];
 const LARGURA_PADRAO = 125;
 const largura = (c) => c.largura || LARGURA_PADRAO;
 const LARGURA_TOTAL = COLUNAS.reduce((s, c) => s + largura(c), 0);
@@ -36,12 +36,21 @@ function vazio(v) {
   return v === null || v === undefined;
 }
 
+function dinheiro(v) {
+  return vazio(v) ? '—' : Number(v).toLocaleString('pt-BR', { minimumFractionDigits: 2, maximumFractionDigits: 2 });
+}
+
 function formatar(coluna, v) {
   if (vazio(v) || v === '') return '—';
   if (coluna.tipo === 'data') return formatarDataISO(v);
-  if (coluna.tipo === 'moeda') return Number(v).toLocaleString('pt-BR', { minimumFractionDigits: 2, maximumFractionDigits: 2 });
-  if (coluna.tipo === 'pct') return `${Number(v).toLocaleString('pt-BR', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}%`;
+  if (coluna.tipo === 'moeda') return dinheiro(v);
   return String(v);
+}
+
+function rotuloMes(data) {
+  const MESES = ['jan', 'fev', 'mar', 'abr', 'mai', 'jun', 'jul', 'ago', 'set', 'out', 'nov', 'dez'];
+  const [ano, mes] = String(data).slice(0, 7).split('-');
+  return `${MESES[Number(mes) - 1]}/${ano}`;
 }
 
 function StatusDemanda({ valor }) {
@@ -57,16 +66,107 @@ function StatusDemanda({ valor }) {
   );
 }
 
+// Uma linha da janela da calculadora: nome, fórmula com os números do cliente e o resultado.
+function LinhaCalculo({ nome, formula, resultado, destaque = false }) {
+  return (
+    <div className="grid grid-cols-[150px_minmax(0,1fr)_120px] items-baseline gap-3 border-t border-gray-100 py-2.5 first:border-t-0">
+      <p className={`text-xs ${destaque ? 'font-semibold text-gray-900' : 'font-medium text-gray-700'}`}>{nome}</p>
+      <p className="text-xs leading-relaxed text-gray-500">{formula}</p>
+      <p className={`text-right text-sm tabular-nums ${destaque ? 'font-semibold text-gray-900' : 'text-gray-800'}`}>{resultado}</p>
+    </div>
+  );
+}
+
+// Janela com as colunas calculadas do cliente (fórmulas do backend — dfc-repasses), cada uma com
+// os números dele aplicados na fórmula.
+function CalculoModal({ unidade, empreendimento, onClose }) {
+  if (!unidade) return null;
+  const u = unidade;
+  const pct = u.pct_obra_acumulado;
+  const demanda = empreendimento.data_demanda_minima;
+  return (
+    <Modal open onClose={onClose} title="Cálculo do repasse" maxWidthClass="max-w-2xl">
+      <div className="mb-4 rounded-lg bg-gray-50 px-3 py-2.5">
+        <p className="text-sm font-semibold text-gray-900">{u.mutuario || '—'}</p>
+        <p className="mt-0.5 text-xs text-gray-500">
+          Contrato {u.contrato_mutuario} · {empreendimento.name} · Assinatura {formatarDataISO(u.data_assinatura)} · Registro{' '}
+          {formatarDataISO(u.data_registro)}
+        </p>
+      </div>
+
+      <div>
+        <LinhaCalculo
+          nome="% Obra Acumulado"
+          formula={
+            vazio(pct)
+              ? !u.data_registro
+                ? 'Sem data de registro — não há % de obra a considerar.'
+                : 'Sem DCD liberado do contrato — não há avanço PLS.'
+              : `Avanço PLS (DCD) acumulado em ${rotuloMes(u.data_registro)}, mês da data de registro.`
+          }
+          resultado={vazio(pct) ? '—' : `${dinheiro(pct)}%`}
+        />
+        <LinhaCalculo
+          nome="VGF"
+          formula={`Financiamento ${dinheiro(u.valor_financiamento)} + Subsídio ${dinheiro(u.valor_subsidio)} + FGTS ${dinheiro(u.valor_fgts)}`}
+          resultado={dinheiro(u.vgf)}
+        />
+        <LinhaCalculo
+          nome="Medição Total"
+          formula={`(Financiamento ${dinheiro(u.valor_financiamento)} − Terreno ${dinheiro(u.valor_terreno)}) + Subsídio ${dinheiro(u.valor_subsidio)}`}
+          resultado={dinheiro(u.medicao_total)}
+        />
+        <LinhaCalculo
+          nome="Novo Registro"
+          formula={`Terreno ${dinheiro(u.valor_terreno)} + Subsídio ${dinheiro(u.valor_subsidio)}`}
+          resultado={dinheiro(u.novo_registro)}
+        />
+        <LinhaCalculo
+          nome="Medição"
+          formula={
+            vazio(pct)
+              ? 'Medição Total × % Obra Acumulado — sem % de obra, não calculada.'
+              : `Medição Total ${dinheiro(u.medicao_total)} × % Obra Acumulado ${dinheiro(pct)}%`
+          }
+          resultado={dinheiro(u.medicao)}
+        />
+        <LinhaCalculo
+          nome="Novo Registro Total"
+          formula={
+            vazio(u.medicao)
+              ? 'Novo Registro + Medição — sem Medição, não calculado.'
+              : `Novo Registro ${dinheiro(u.novo_registro)} + Medição ${dinheiro(u.medicao)}`
+          }
+          resultado={dinheiro(u.novo_registro_total)}
+          destaque
+        />
+        <LinhaCalculo
+          nome="Demanda Mínima"
+          formula={
+            !demanda
+              ? 'Sem Data da Demanda Mínima (Parâmetros ou DCD) — não dá pra classificar.'
+              : `Assinatura ${formatarDataISO(u.data_assinatura)} ${u.demanda_minima ? 'anterior' : 'igual ou posterior'} à Data da Demanda Mínima ${formatarDataISO(demanda)} (${
+                  empreendimento.origem_demanda_minima === 'PARAMETROS' ? 'Parâmetros' : 'DCD'
+                })`
+          }
+          resultado={<StatusDemanda valor={u.demanda_minima} />}
+        />
+      </div>
+    </Modal>
+  );
+}
+
 // Operações > DFC Construtoras > Repasses: as unidades do Geral dos Empreendimentos de cada
 // empreendimento (centro de custo com Código Contrato Caixa), sem o primeiro contrato por data de
-// assinatura (o da construtora), com colunas calculadas. Drilldown igual ao da aba Avanços Obras:
-// nível 1 = empreendimento (com os totais), nível 2 = cada unidade. Começa tudo fechado; com
-// busca, abre os empreendimentos que têm unidade encontrada.
+// assinatura (o da construtora). Drilldown igual ao da aba Avanços Obras: nível 1 = empreendimento
+// (com os totais), nível 2 = cada unidade. As colunas calculadas ficam na janela da calculadora
+// (fim da linha). Começa tudo fechado; com busca, abre os empreendimentos que têm unidade encontrada.
 export default function DfcRepassesTab({ empresaId, search = '' }) {
   const [dados, setDados] = useState(null);
   const [carregando, setCarregando] = useState(false);
   const [erroCarga, setErroCarga] = useState('');
   const [abertos, setAbertos] = useState([]);
+  const [calculo, setCalculo] = useState(null); // { unidade, empreendimento }
 
   const carregar = useCallback(() => {
     if (!empresaId) return;
@@ -112,7 +212,7 @@ export default function DfcRepassesTab({ empresaId, search = '' }) {
     );
   }
 
-  const thBase = 'border-b-2 border-l border-b-blue-500 border-l-blue-100 bg-blue-50 px-2 py-2 text-[11px] font-medium uppercase tracking-wide text-blue-700';
+  const alinhamento = (c) => (c.tipo === 'moeda' ? 'text-right' : c.tipo === 'texto' ? '' : 'text-center');
 
   return (
     <div className="rounded-card rounded-tl-none bg-white p-5 shadow-card">
@@ -143,34 +243,14 @@ export default function DfcRepassesTab({ empresaId, search = '' }) {
             </colgroup>
             <thead>
               <tr>
-                <th
-                  colSpan={2}
-                  className="sticky left-0 z-20 border-b border-r border-blue-100 bg-blue-50 px-3 py-1.5 text-[10px] font-semibold uppercase tracking-wider text-blue-600"
-                >
-                  Empreendimento / Unidade
-                </th>
-                <th
-                  colSpan={COLUNAS_GERAL.length - 2}
-                  className="border-b border-l border-blue-100 bg-blue-50 px-3 py-1.5 text-[10px] font-semibold uppercase tracking-wider text-blue-600"
-                >
-                  Geral dos Empreendimentos
-                </th>
-                <th
-                  colSpan={COLUNAS_CALCULADAS.length}
-                  className="border-b border-l border-blue-100 bg-blue-100 px-3 py-1.5 text-[10px] font-semibold uppercase tracking-wider text-blue-700"
-                >
-                  Calculado
-                </th>
-              </tr>
-              <tr>
                 {COLUNAS.map((c, i) => (
                   <th
                     key={c.id}
                     title={c.titulo}
                     style={i === 1 ? { left: ESQUERDA_MUTUARIO } : undefined}
-                    className={`${thBase} ${i === 0 ? 'sticky left-0 z-20 border-l-0' : ''} ${i === 1 ? 'sticky z-20 border-r border-r-blue-100' : ''} ${
-                      c.tipo === 'moeda' || c.tipo === 'pct' ? 'text-right' : c.tipo === 'status' || c.tipo === 'data' ? 'text-center' : ''
-                    } ${COLUNAS_CALCULADAS.includes(c) ? 'bg-blue-100' : ''}`}
+                    className={`border-b-2 border-b-blue-500 bg-blue-50 px-2 py-2.5 text-[11px] font-medium uppercase tracking-wide text-blue-700 ${
+                      i === 0 ? 'sticky left-0 z-20 pl-4' : 'border-l border-l-blue-100'
+                    } ${i === 1 ? 'sticky z-20 border-r border-r-blue-100' : ''} ${alinhamento(c)}`}
                   >
                     {c.label}
                   </th>
@@ -234,16 +314,14 @@ export default function DfcRepassesTab({ empresaId, search = '' }) {
                         let conteudo = '';
                         if (c.soma && temUnidades) {
                           const valores = e.unidades.map((u) => u[c.id]).filter((v) => !vazio(v));
-                          conteudo = valores.length ? formatar(c, valores.reduce((s, v) => s + Number(v), 0)) : '—';
+                          conteudo = valores.length ? dinheiro(valores.reduce((s, v) => s + Number(v), 0)) : '—';
                         } else if (c.tipo === 'status' && temUnidades) {
                           conteudo = `${qtdDemanda} sim`;
                         }
                         return (
                           <td
                             key={c.id}
-                            className={`border-b border-l border-gray-200 bg-gray-50 px-2 text-xs font-semibold tabular-nums text-gray-900 group-hover/emp:bg-gray-100 ${
-                              c.tipo === 'status' ? 'text-center' : 'text-right'
-                            }`}
+                            className={`border-b border-l border-gray-200 bg-gray-50 px-2 text-xs font-semibold tabular-nums text-gray-900 group-hover/emp:bg-gray-100 ${alinhamento(c)}`}
                           >
                             {conteudo}
                           </td>
@@ -262,11 +340,24 @@ export default function DfcRepassesTab({ empresaId, search = '' }) {
                               title={c.tipo === 'texto' ? u[c.id] || undefined : undefined}
                               className={`border-b border-gray-100 bg-white px-2 py-1.5 tabular-nums group-hover/un:bg-gray-50 ${
                                 i === 0 ? 'sticky left-0 z-10 pl-9' : 'border-l'
-                              } ${i === 1 ? 'sticky z-10 truncate border-r border-r-gray-200 font-medium text-gray-800' : 'text-gray-700'} ${
-                                c.tipo === 'moeda' || c.tipo === 'pct' ? 'text-right' : c.tipo === 'status' || c.tipo === 'data' ? 'text-center' : ''
-                              } ${vazio(u[c.id]) ? 'text-gray-300' : ''}`}
+                              } ${i === 1 ? 'sticky z-10 truncate border-r border-r-gray-200 font-medium text-gray-800' : 'text-gray-700'} ${alinhamento(c)} ${
+                                c.tipo !== 'calculo' && vazio(u[c.id]) ? 'text-gray-300' : ''
+                              }`}
                             >
-                              {c.tipo === 'status' ? <StatusDemanda valor={u[c.id]} /> : formatar(c, u[c.id])}
+                              {c.tipo === 'status' ? (
+                                <StatusDemanda valor={u[c.id]} />
+                              ) : c.tipo === 'calculo' ? (
+                                <button
+                                  type="button"
+                                  onClick={() => setCalculo({ unidade: u, empreendimento: e })}
+                                  title="Ver o cálculo deste cliente"
+                                  className="inline-flex h-6 w-6 items-center justify-center rounded-md text-gray-400 transition-colors hover:bg-primary-50 hover:text-primary-600"
+                                >
+                                  <Calculator size={14} />
+                                </button>
+                              ) : (
+                                formatar(c, u[c.id])
+                              )}
                             </td>
                           ))}
                         </tr>
@@ -278,6 +369,12 @@ export default function DfcRepassesTab({ empresaId, search = '' }) {
           </table>
         </div>
       )}
+
+      <CalculoModal
+        unidade={calculo?.unidade}
+        empreendimento={calculo?.empreendimento}
+        onClose={() => setCalculo(null)}
+      />
     </div>
   );
 }
