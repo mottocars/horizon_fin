@@ -58,7 +58,7 @@ const TABS = [
   { id: 'parametros', label: 'Parâmetros', icon: SlidersHorizontal },
   { id: 'mascaras', label: 'Máscaras', icon: Tags },
   { id: 'plano-contas', label: 'Plano Contas', icon: ListTree },
-  { id: 'avancos-obras', label: 'Avanços Obras', icon: HardHat },
+  { id: 'avancos-obras', label: 'Avanços', icon: HardHat },
   { id: 'repasses', label: 'Repasses', icon: Banknote },
   // Inativa por enquanto (pedido do usuário) — aparece cinza, sem clique.
   { id: 'vendas', label: 'Vendas', icon: HandCoins, disabled: true, title: 'Em breve' },
@@ -222,7 +222,7 @@ export default function DfcConstrutorasPage() {
     }
   }
 
-  // Aba Avanços Obras: período (Data início / Data fim) — padrão sempre o ano atual inteiro
+  // Aba Avanços: período (Data início / Data fim) — padrão sempre o ano atual inteiro
   // (pedido do usuário). Só conveniência de navegador, fora da URL.
   const anoAtual = new Date().getFullYear();
   const [inicioAvancos, setInicioAvancos] = useState(`${anoAtual}-01-01`);

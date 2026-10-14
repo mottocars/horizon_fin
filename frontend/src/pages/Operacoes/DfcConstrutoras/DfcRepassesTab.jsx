@@ -156,7 +156,7 @@ function CalculoModal({ unidade, empreendimento, onClose }) {
 
 // Operações > DFC Construtoras > Repasses: as unidades do Geral dos Empreendimentos de cada
 // empreendimento (centro de custo com Código Contrato Caixa), sem o primeiro contrato por data de
-// assinatura (o da construtora). Drilldown igual ao da aba Avanços Obras: nível 1 = empreendimento
+// assinatura (o da construtora). Drilldown igual ao da aba Avanços: nível 1 = empreendimento
 // (com os totais), nível 2 = cada unidade. As colunas calculadas ficam na janela da calculadora
 // (fim da linha). Começa tudo fechado; com busca, abre os empreendimentos que têm unidade encontrada.
 export default function DfcRepassesTab({ empresaId, search = '' }) {

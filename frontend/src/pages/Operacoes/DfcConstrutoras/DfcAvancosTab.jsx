@@ -128,7 +128,7 @@ function CelulaManual({ valor, onCommit }) {
   );
 }
 
-// Operações > DFC Construtoras > Avanços Obras: matriz mês a mês (colunas = meses do período do
+// Operações > DFC Construtoras > Avanços: matriz mês a mês (colunas = meses do período do
 // topo) com o avanço ACUMULADO de cada obra, em drilldown: nível 1 = a obra (o avanço consolidado,
 // conforme o cenário — ver `cenario`), nível 2 = as fontes (PLS da Caixa, Prevision, Manual) e o
 // Desvio. PLS e Prevision: mesma conta da antiga Curva de Obras — ver backend
