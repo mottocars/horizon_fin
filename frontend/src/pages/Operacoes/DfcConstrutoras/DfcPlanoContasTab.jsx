@@ -308,7 +308,7 @@ export default function DfcPlanoContasTab({ empresaId, search = '', refreshToken
       ) : (
         <div>
           <div
-            className={`${GRADE} rounded-t-lg border-b-2 border-blue-500 bg-blue-50 py-2.5 pl-4 pr-4 text-xs font-medium uppercase tracking-wide text-blue-700`}
+            className={`${GRADE} sticky -top-6 z-20 rounded-t-lg border-b-2 border-blue-500 bg-blue-50 py-2.5 pl-4 pr-4 text-xs font-medium uppercase tracking-wide text-blue-700`}
           >
             <span ref={colunaContaRef} className="flex items-center gap-1.5">
               Conta

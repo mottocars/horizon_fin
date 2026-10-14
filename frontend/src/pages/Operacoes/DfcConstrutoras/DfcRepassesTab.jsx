@@ -213,7 +213,9 @@ export default function DfcRepassesTab({ empresaId, search = '' }) {
   const alinhamento = (c) => (c.tipo === 'moeda' ? 'text-right' : c.tipo === 'texto' ? '' : 'text-center');
 
   return (
-    <div className="rounded-card rounded-tl-none bg-white p-5 shadow-card">
+    // min-w-fit: com tabela mais larga que a tela, o quadro branco cresce junto (e a página rola na
+    // horizontal) em vez de a tabela vazar pra fora dele.
+    <div className="min-w-fit rounded-card rounded-tl-none bg-white p-5 shadow-card">
       {carregando && !dados ? (
         <div className="py-12 text-center text-sm text-gray-400">Carregando...</div>
       ) : erroCarga ? (
@@ -229,7 +231,10 @@ export default function DfcRepassesTab({ empresaId, search = '' }) {
           </button>
         </div>
       ) : (
-        <div className="overflow-x-auto rounded-t-lg">
+        // Sem wrapper com overflow próprio (mesmo motivo do Espião NFe / NFSe): qualquer overflow aqui
+        // vira o "teto" do sticky e o cabeçalho deixaria de grudar no topo da página ao rolar. -top-6
+        // cancela o p-6 do <main>. Tela estreita rola na barra da própria página.
+        <div>
           <table
             className="border-separate border-spacing-0 text-left text-xs"
             style={{ tableLayout: 'fixed', width: '100%', minWidth: LARGURA_TOTAL }}
@@ -240,13 +245,13 @@ export default function DfcRepassesTab({ empresaId, search = '' }) {
               ))}
             </colgroup>
             <thead>
-              <tr>
+              <tr className="[&>th:first-child]:rounded-tl-lg [&>th:last-child]:rounded-tr-lg">
                 {COLUNAS.map((c, i) => (
                   <th
                     key={c.id}
                     title={c.titulo}
-                    className={`border-b-2 border-b-blue-500 bg-blue-50 px-2 py-2.5 text-[11px] font-medium uppercase tracking-wide text-blue-700 ${
-                      i === 0 ? 'sticky left-0 z-20 border-r border-r-blue-100 pl-4' : 'border-l border-l-blue-100'
+                    className={`sticky -top-6 border-b-2 border-b-blue-500 bg-blue-50 px-2 py-2.5 text-[11px] font-medium uppercase tracking-wide text-blue-700 ${
+                      i === 0 ? 'left-0 z-30 border-r border-r-blue-100 pl-4' : 'z-20 border-l border-l-blue-100'
                     } ${alinhamento(c)}`}
                   >
                     {c.label}

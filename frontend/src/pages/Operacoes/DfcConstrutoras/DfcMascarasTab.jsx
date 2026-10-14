@@ -431,7 +431,7 @@ const DfcMascarasTab = forwardRef(function DfcMascarasTab({ empresaId }, ref) {
             if (!e.currentTarget.contains(e.relatedTarget)) setAlvo(null);
           }}
         >
-          <div className="flex items-center justify-between rounded-t-lg border-b-2 border-blue-500 bg-blue-50 py-2.5 pl-4 pr-4 text-xs font-medium uppercase tracking-wide text-blue-700">
+          <div className="sticky -top-6 z-20 flex items-center justify-between rounded-t-lg border-b-2 border-blue-500 bg-blue-50 py-2.5 pl-4 pr-4 text-xs font-medium uppercase tracking-wide text-blue-700">
             <span>Nível 1 / Nível 2</span>
             <span className="hidden normal-case tracking-normal text-blue-500 sm:inline">
               Arraste pelas linhas para reordenar ou mudar de grupo · duplo clique renomeia

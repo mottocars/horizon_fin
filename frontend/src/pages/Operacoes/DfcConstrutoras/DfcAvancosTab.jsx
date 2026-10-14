@@ -216,7 +216,9 @@ export default function DfcAvancosTab({ empresaId, inicio, fim }) {
   const statusSalvamento = pendentes > 0 ? 'salvando' : erroSalvar ? 'erro' : salvoAlgumaVez ? 'salvo' : null;
 
   return (
-    <div className="rounded-card rounded-tl-none bg-white p-5 shadow-card">
+    // min-w-fit: com tabela mais larga que a tela, o quadro branco cresce junto (e a página rola na
+    // horizontal) em vez de a tabela vazar pra fora dele.
+    <div className="min-w-fit rounded-card rounded-tl-none bg-white p-5 shadow-card">
       {statusSalvamento && (
         <div className="-mt-1 mb-3 flex items-center justify-end text-xs" aria-live="polite">
           {statusSalvamento === 'salvando' ? (
@@ -260,8 +262,10 @@ export default function DfcAvancosTab({ empresaId, inicio, fim }) {
           </button>
         </div>
       ) : (
-        // Rola na horizontal quando o período tem muitos meses; a 1ª coluna fica presa à esquerda.
-        <div className="overflow-x-auto rounded-t-lg">
+        // Sem wrapper com overflow próprio (mesmo motivo do Espião NFe / NFSe): qualquer overflow aqui
+        // vira o "teto" do sticky e o cabeçalho deixaria de grudar no topo da página ao rolar. -top-6
+        // cancela o p-6 do <main>. Tela estreita rola na barra da própria página.
+        <div>
           <table
             className="border-separate border-spacing-0 text-left text-xs"
             style={{ tableLayout: 'fixed', width: '100%', minWidth: LARGURA_PRIMEIRA + meses.length * LARGURA_MES }}
@@ -273,14 +277,14 @@ export default function DfcAvancosTab({ empresaId, inicio, fim }) {
               ))}
             </colgroup>
             <thead>
-              <tr>
-                <th className="sticky left-0 z-10 border-b-2 border-r border-b-blue-500 border-r-blue-100 bg-blue-50 py-2.5 pl-4 pr-3 text-xs font-medium uppercase tracking-wide text-blue-700">
+              <tr className="[&>th:first-child]:rounded-tl-lg [&>th:last-child]:rounded-tr-lg">
+                <th className="sticky -top-6 left-0 z-30 border-b-2 border-r border-b-blue-500 border-r-blue-100 bg-blue-50 py-2.5 pl-4 pr-3 text-xs font-medium uppercase tracking-wide text-blue-700">
                   Centro de custo / Avanço acumulado
                 </th>
                 {meses.map((m) => (
                   <th
                     key={m}
-                    className={`border-b-2 border-l border-b-blue-500 border-l-blue-100 px-2 py-2.5 text-right text-xs font-medium uppercase tracking-wide text-blue-700 ${
+                    className={`sticky -top-6 z-20 border-b-2 border-l border-b-blue-500 border-l-blue-100 px-2 py-2.5 text-right text-xs font-medium uppercase tracking-wide text-blue-700 ${
                       m === mesAtual ? 'bg-blue-100' : 'bg-blue-50'
                     }`}
                     title={m === mesAtual ? 'Mês atual' : undefined}
