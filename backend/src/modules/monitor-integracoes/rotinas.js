@@ -2,6 +2,7 @@ const pool = require('../../config/db');
 const { executarVarredura } = require('../espiao-nfe-nfse/vinculacaoAutomatica');
 const repassesCef = require('../repasses-cef/repassesCef.service');
 const income = require('../income-sienge/income.service');
+const outcome = require('../outcome-sienge/outcome.service');
 const customers = require('../customers-sienge/customers.service');
 const clusters = require('../cobranca-clusters/cobrancaClusters.service');
 const itau = require('../integracoes-itau/itau.service');
@@ -162,6 +163,20 @@ const ROTINAS = [
     async executar({ empresaId, progresso }) {
       progresso({ texto: 'Conferindo a validade dos certificados do Itaú' });
       return itau.renovarCertificadosDaEmpresa(empresaId);
+    },
+  },
+  {
+    chave: 'dfc_contas_pagar_base',
+    modulo: 'DFC Construtoras',
+    nome: 'Base do contas a pagar (Sienge)',
+    descricao:
+      'Recarrega parcelas, rateios e pagamentos do contas a pagar do Sienge — a base do Aging a pagar nos Orçamentos do DFC Construtoras.',
+    integracao: 'sienge',
+    disponibilidade: semSienge,
+    async executar({ empresaId, progresso }) {
+      progresso({ texto: 'Buscando o contas a pagar no Sienge (pode levar alguns minutos)' });
+      const r = await outcome.sincronizar(empresaId, porPagina(progresso, 'Buscando o contas a pagar no Sienge'));
+      return `${n(r.total_importado)} parcela(s) importada(s).`;
     },
   },
 ];

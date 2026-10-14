@@ -374,7 +374,7 @@ function CartaoRotina({ rotina, edicao, onEditar, onSalvar, salvando, erroSalvar
 // Monitor de Integrações (1ª opção do menu Integrações): uma tela pra agendar
 // e acompanhar TODAS as atualizações automáticas do sistema, por empresa —
 // vinculação do Espião, contratos/reservas de Repasses CEF, base/clientes/
-// clusters da Gestão de Cobranças (catálogo em backend
+// clusters da Gestão de Cobranças, contas a pagar do DFC Construtoras (catálogo em backend
 // monitor-integracoes/rotinas.js). Cada rotina: agendamento diário/semanal/
 // mensal (horário de Brasília), execução manual ("Atualizar agora"), status
 // ao vivo e histórico. As execuções rodam em segundo plano no servidor; a
@@ -560,7 +560,7 @@ export default function MonitorIntegracoesPage() {
           <p className="text-sm font-semibold text-gray-900">Selecione uma empresa</p>
           <p className="mt-1 max-w-md text-xs text-gray-500">
             Escolha a empresa para ver, agendar e executar as atualizações automáticas do sistema — vinculação do Espião,
-            dados do Repasses CEF e da Gestão de Cobranças.
+            dados do Repasses CEF, da Gestão de Cobranças e do DFC Construtoras.
           </p>
         </Card>
       ) : erro && !rotinas ? (

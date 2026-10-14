@@ -5,7 +5,7 @@ import { listDfcMascaras } from '../../../api/dfcMascaras.api';
 import { listContas } from '../../../api/planosFinanceirosSienge.api';
 import { listTodasClassificacoesPlanoDfc } from '../../../api/dfcPlanoContas.api';
 import { getOrcamentoProjecaoCef } from '../../../api/dfcProjecaoCef.api';
-import { getAgingReceberDfc } from '../../../api/dfcAging.api';
+import { getAgingDfc } from '../../../api/dfcAging.api';
 import {
   listOrcamentoInformadoDfc,
   replicarOrcamentoInformadoDfc,
@@ -188,10 +188,11 @@ export default function DfcOrcamentosTab({ empresaId, inicio, fim, refreshToken 
       listTodasClassificacoesPlanoDfc(empresaId),
       getOrcamentoProjecaoCef(empresaId),
       listOrcamentoInformadoDfc(empresaId),
-      getAgingReceberDfc(empresaId),
+      getAgingDfc(empresaId, 'receber'),
+      getAgingDfc(empresaId, 'pagar'),
     ])
-      .then(([centros, mascaras, contas, classificacoes, projecao, valoresInformados, aging]) => {
-        setDados({ centros, mascaras, contas: contas.data, classificacoes, projecao, aging });
+      .then(([centros, mascaras, contas, classificacoes, projecao, valoresInformados, agingReceber, agingPagar]) => {
+        setDados({ centros, mascaras, contas: contas.data, classificacoes, projecao, agingReceber, agingPagar });
         setInformados(Object.fromEntries(valoresInformados.map((v) => [`${v.centro_id}|${v.sienge_id}|${v.mes}`, v.valor])));
       })
       .catch((err) => setErroCarga(err.response?.data?.message || 'Não foi possível carregar o orçamento.'))
@@ -275,12 +276,16 @@ export default function DfcOrcamentosTab({ empresaId, inicio, fim, refreshToken 
   );
 
   // Valores: centro -> conta -> mês -> valor — os informados nas contas "HORIZON - INFORMADO"; nas
-  // demais, a Projeção CEF (contas CEF_*) e o Aging a receber do Sienge (contas "SIENGE - AGING" —
-  // cada conta tem uma origem só, então os dois dividem o mesmo mapa); e quando cada obra foi projetada.
+  // demais, a Projeção CEF (contas CEF_*) e o Aging do Sienge (contas "SIENGE - AGING": a receber e
+  // a pagar, somados — o pagar já vem negativo). Cada conta tem uma origem só, então todos dividem o
+  // mesmo mapa. E quando cada obra foi projetada.
   const { valorConta, execucaoPorCentro } = useMemo(() => {
     const mapa = new Map();
     (dados?.projecao?.valores || []).forEach((v) => mapa.set(`${v.sienge_id}|${v.conta}|${v.mes}`, v.valor));
-    (dados?.aging?.valores || []).forEach((v) => mapa.set(`${v.centro_id}|${v.conta}|${v.mes}`, v.valor));
+    [...(dados?.agingReceber?.valores || []), ...(dados?.agingPagar?.valores || [])].forEach((v) => {
+      const chave = `${v.centro_id}|${v.conta}|${v.mes}`;
+      mapa.set(chave, Math.round(((mapa.get(chave) || 0) + v.valor) * 100) / 100);
+    });
     return {
       valorConta: (sid, conta, mes) =>
         contaInformada(sid, conta)
@@ -510,12 +515,18 @@ export default function DfcOrcamentosTab({ empresaId, inicio, fim, refreshToken 
   }
 
   const mesAtual = mesDeHoje();
-  // Avisos da Projeção CEF + base do contas a receber nunca carregada (o Aging fica zerado).
+  // Avisos da Projeção CEF + base do contas a receber / a pagar nunca carregada (o Aging fica zerado).
   const avisos = [
     ...(dados?.projecao?.avisos || []),
-    ...(dados?.aging && !dados.aging.base?.parcelas
-      ? ['A base do contas a receber do Sienge ainda não foi carregada — o Aging a receber fica sem valores. Atualize em Projeções.']
-      : []),
+    ...[
+      ['agingReceber', 'receber'],
+      ['agingPagar', 'pagar'],
+    ]
+      .filter(([chave]) => dados?.[chave] && !dados[chave].base?.parcelas)
+      .map(
+        ([, tipo]) =>
+          `A base do contas a ${tipo} do Sienge ainda não foi carregada — o Aging a ${tipo} fica sem valores. Atualize em Projeções.`
+      ),
   ];
   const larguraTabela = LARGURA_PRIMEIRA + largurasMes.reduce((t, l) => t + l, 0);
 

@@ -2,6 +2,8 @@ const { z } = require('zod');
 const service = require('./dfcAging.service');
 
 const empresaIdSchema = z.coerce.number().int().positive('Empresa inválida.');
+// 'receber' (contas a receber) ou 'pagar' (contas a pagar).
+const tipoSchema = z.enum(Object.keys(service.TIPOS), { errorMap: () => ({ message: 'Tipo de aging inválido.' }) });
 
 function erro(status, message) {
   const e = new Error(message);
@@ -15,9 +17,9 @@ function tratar(err, next) {
   return next(err);
 }
 
-async function receber(req, res, next) {
+async function aging(req, res, next) {
   try {
-    res.json(await service.receber(empresaIdSchema.parse(req.params.empresaId)));
+    res.json(await service.aging(empresaIdSchema.parse(req.params.empresaId), tipoSchema.parse(req.params.tipo)));
   } catch (err) {
     tratar(err, next);
   }
@@ -25,7 +27,8 @@ async function receber(req, res, next) {
 
 async function atualizarBase(req, res, next) {
   try {
-    res.status(202).json(await service.atualizarBase(empresaIdSchema.parse(req.params.empresaId), req.user.id));
+    const empresaId = empresaIdSchema.parse(req.params.empresaId);
+    res.status(202).json(await service.atualizarBase(empresaId, tipoSchema.parse(req.params.tipo), req.user.id));
   } catch (err) {
     tratar(err, next);
   }
@@ -33,10 +36,10 @@ async function atualizarBase(req, res, next) {
 
 async function execucao(req, res, next) {
   try {
-    res.json(await service.execucao(empresaIdSchema.parse(req.params.empresaId)));
+    res.json(await service.execucao(empresaIdSchema.parse(req.params.empresaId), tipoSchema.parse(req.params.tipo)));
   } catch (err) {
     tratar(err, next);
   }
 }
 
-module.exports = { receber, atualizarBase, execucao };
+module.exports = { aging, atualizarBase, execucao };

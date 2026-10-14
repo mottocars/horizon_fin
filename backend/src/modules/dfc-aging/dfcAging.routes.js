@@ -7,8 +7,9 @@ const router = Router();
 
 router.use(authMiddleware);
 router.param('empresaId', paramEmpresa);
-router.get('/:empresaId/receber', controller.receber);
-router.get('/:empresaId/receber/execucao', controller.execucao);
-router.post('/:empresaId/receber/atualizar', controller.atualizarBase);
+// :tipo = receber | pagar
+router.get('/:empresaId/:tipo', controller.aging);
+router.get('/:empresaId/:tipo/execucao', controller.execucao);
+router.post('/:empresaId/:tipo/atualizar', controller.atualizarBase);
 
 module.exports = router;
