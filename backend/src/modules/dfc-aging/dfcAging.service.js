@@ -9,7 +9,7 @@ const executor = require('../monitor-integracoes/executor');
 //   (Sienge)". Valor = original + desconto − taxas, lançado NEGATIVO (saída, mesma convenção da
 //   Projeção CEF).
 // Cada parcela cai no mês do vencimento (due_date), rateada pela natureza financeira e pelo centro
-// de custo (financial_category_rate %).
+// de custo (financial_category_rate %). `filtro`: condição extra nas parcelas (alias `i`).
 const TIPOS = {
   receber: {
     rotina: 'cobranca_base',
@@ -17,6 +17,7 @@ const TIPOS = {
     categorias: 'sie_income_categorias',
     valor: '(COALESCE(i.original_amount, 0) - COALESCE(i.discount_amount, 0) + COALESCE(i.tax_amount, 0))',
     sinal: 1,
+    filtro: 'TRUE',
   },
   pagar: {
     rotina: 'dfc_contas_pagar_base',
@@ -24,6 +25,9 @@ const TIPOS = {
     categorias: 'sie_outcome_categorias',
     valor: '(COALESCE(i.original_amount, 0) + COALESCE(i.discount_amount, 0) - COALESCE(i.tax_amount, 0))',
     sinal: -1,
+    // Previsões financeiras não entram (pedido do usuário): o documento real que a substitui já
+    // está no contas a pagar — contar as duas duplicava o valor.
+    filtro: "COALESCE(i.document_identification_name, '') NOT ILIKE '%PREVISÃO%'",
   },
 };
 
@@ -58,7 +62,7 @@ async function aging(empresaId, tipo) {
          ON cat.empresa_id = $1 AND cat.cost_center_id = ct.centro_id AND cat.financial_category_id = ct.sienge_id::text
        JOIN ${t.parcelas} i
          ON i.empresa_id = cat.empresa_id AND i.bill_id = cat.bill_id AND i.installment_id = cat.installment_id
-      WHERE i.due_date IS NOT NULL
+      WHERE i.due_date IS NOT NULL AND ${t.filtro}
       GROUP BY 1, 2, 3`,
     [empresaId]
   );
