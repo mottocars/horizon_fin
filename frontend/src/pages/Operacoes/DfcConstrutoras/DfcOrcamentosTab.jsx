@@ -216,13 +216,14 @@ function dataHora(v) {
     : '';
 }
 
-const LARGURA_PRIMEIRA = 470; // nome + total do período (em azul, à direita)
+const LARGURA_PRIMEIRA = 360;
+const LARGURA_TOTAL_MIN = 112; // coluna "Total" (fixa, logo depois da primeira); cresce pra caber o maior total
 const LARGURA_MES = 92; // largura mínima de um mês; cresce pra caber o maior valor da coluna
 const FOLGA_MES = 30; // padding da célula + borda + campo de digitação
 const ALTURA_MINIMA_GRADE = 320;
-// Sombra na borda da coluna congelada quando os meses rolaram pra esquerda (indica que há conteúdo
-// por baixo dela, como nas planilhas).
-const SOMBRA_COLUNA_FIXA = '[&_tr>*:first-child]:shadow-[6px_0_8px_-6px_rgba(16,24,40,0.25)]';
+// Sombra na borda das colunas congeladas (nome + Total) quando os meses rolaram pra esquerda (indica
+// que há conteúdo por baixo delas, como nas planilhas).
+const SOMBRA_COLUNA_FIXA = '[&_tr>*:nth-child(2)]:shadow-[6px_0_8px_-6px_rgba(16,24,40,0.25)]';
 
 // Largura (px) do texto no corpo da grade — text-xs semibold, a fonte da página. Canvas reaproveitado.
 let contextoMedida;
@@ -638,6 +639,29 @@ const DfcOrcamentosTab = forwardRef(function DfcOrcamentosTab(
     });
   }, [meses, centros, planosCentro, planoGlobal, valorConta]);
 
+  // Largura da coluna Total: o bastante pro maior total do período, em qualquer nível.
+  const larguraTotal = useMemo(() => {
+    let maior = 0;
+    const considerar = (contas, sid) => {
+      let t = 0;
+      meses.forEach((m) => contas.forEach((c) => (t += valorConta(sid, c.sienge_id, m) || 0)));
+      if (t) maior = Math.max(maior, larguraTexto(dinheiro(Math.round(t * 100) / 100)));
+    };
+    centros.forEach((centro) => {
+      const sid = centro.sienge_id;
+      const { estrutura, todasContas } = planosCentro[sid] || planoGlobal;
+      considerar(todasContas, sid);
+      estrutura.forEach((n1) => {
+        considerar(n1.contas, sid);
+        n1.filhos.forEach((n2) => {
+          considerar(n2.contas, sid);
+          n2.contas.forEach((c) => considerar([c], sid));
+        });
+      });
+    });
+    return Math.max(LARGURA_TOTAL_MIN, Math.ceil(maior) + FOLGA_MES);
+  }, [meses, centros, planosCentro, planoGlobal, valorConta]);
+
   const replicandoRef = useRef(null);
   replicandoRef.current = replicando;
   const logDeRef = useRef(null);
@@ -735,8 +759,8 @@ const DfcOrcamentosTab = forwardRef(function DfcOrcamentosTab(
       );
     });
 
-  // Total da linha no período da tela (soma dos meses), em azul na primeira coluna (pedido do
-  // usuário). null quando nenhum mês tem valor.
+  // Total da linha no período da tela (soma dos meses) — coluna "Total", fixa logo depois da
+  // primeira, com o fundo azul do cabeçalho (pedido do usuário). null quando nenhum mês tem valor.
   function totalPeriodo(valorMes) {
     let total = null;
     meses.forEach((m) => {
@@ -745,17 +769,26 @@ const DfcOrcamentosTab = forwardRef(function DfcOrcamentosTab(
     });
     return total === null ? null : Math.round(total * 100) / 100;
   }
-  const totalLinha = (valorMes, forte = false) => {
+  // Negativo em vermelho, positivo em preto (como as outras células); na nova versão, laranja
+  // embaixo quando o total muda em relação à versão salva.
+  const celulaTotal = (nivel, valorMes, valorMesVersao) => {
     const t = totalPeriodo(valorMes);
+    const vazio = t === null || t === 0;
+    const compara = previa && temVersao && valorMesVersao;
+    const tVersao = compara ? totalPeriodo(valorMesVersao) : null;
+    const muda = compara && centavos(t || null) !== centavos(tVersao || null);
     return (
-      <span
-        className={`ml-auto shrink-0 pl-2 text-xs tabular-nums ${forte ? 'font-semibold' : 'font-medium'} ${
-          t === null || t === 0 ? 'text-blue-300' : 'text-blue-700'
+      <td
+        title={muda ? `Na versão salva: ${tVersao ? dinheiro(tVersao) : 'sem valor'}` : 'Total do período'}
+        className={`sticky z-10 border-b border-r border-b-blue-100 border-r-blue-200 bg-blue-50 px-2 text-right tabular-nums group-hover/linha:bg-blue-100 ${
+          nivel === 0 ? 'py-2' : 'py-1.5'
+        } ${vazio ? 'text-gray-300' : t < 0 ? 'text-red-600' : 'text-gray-900'} ${nivel <= 1 && !vazio ? 'font-semibold' : ''} ${
+          muda ? 'shadow-[inset_0_-2px_0_0_rgb(251,146,60)]' : ''
         }`}
-        title="Total do período"
+        style={{ left: LARGURA_PRIMEIRA }}
       >
-        {t === null || t === 0 ? '—' : dinheiro(t)}
-      </span>
+        {vazio ? '—' : dinheiro(t)}
+      </td>
     );
   };
 
@@ -794,9 +827,9 @@ const DfcOrcamentosTab = forwardRef(function DfcOrcamentosTab(
                 {contagem}
               </span>
             )}
-            {totalLinha(valorMes, nivel <= 1)}
           </span>
         </td>
+        {celulaTotal(nivel, valorMes, valorMesVersao)}
         {celulas(nivel, valorMes, undefined, valorMesVersao)}
       </tr>
     );
@@ -806,7 +839,7 @@ const DfcOrcamentosTab = forwardRef(function DfcOrcamentosTab(
   // Avisos da Projeção CEF + base do contas a receber / a pagar nunca carregada (o Aging fica zerado).
   const avisos = [...(dados?.projecao?.avisos || []), ...(previa ? nova.avisos : [])];
   const versao = salva?.versao || null;
-  const larguraTabela = LARGURA_PRIMEIRA + largurasMes.reduce((t, l) => t + l, 0);
+  const larguraTabela = LARGURA_PRIMEIRA + larguraTotal + largurasMes.reduce((t, l) => t + l, 0);
 
   return (
     // O quadro branco fica na largura da página; quem rola pro lado é só a grade (abaixo). Em tela
@@ -961,6 +994,7 @@ const DfcOrcamentosTab = forwardRef(function DfcOrcamentosTab(
             >
               <colgroup>
                 <col style={{ width: LARGURA_PRIMEIRA }} />
+                <col style={{ width: larguraTotal }} />
                 {meses.map((m, i) => (
                   <col key={m} style={{ width: largurasMes[i] }} />
                 ))}
@@ -968,10 +1002,14 @@ const DfcOrcamentosTab = forwardRef(function DfcOrcamentosTab(
               <thead>
                 <tr className="[&>th:first-child]:rounded-tl-lg [&>th:last-child]:rounded-tr-lg">
                   <th className="sticky left-0 top-0 z-30 border-b-2 border-r border-b-blue-500 border-r-blue-100 bg-blue-50 py-2.5 pl-4 pr-3 text-xs font-medium uppercase tracking-wide text-blue-700">
-                    <span className="flex items-center justify-between gap-2">
-                      <span>Centro de custo / Máscara / Conta</span>
-                      <span className="shrink-0">Total do período</span>
-                    </span>
+                    Centro de custo / Máscara / Conta
+                  </th>
+                  <th
+                    className="sticky top-0 z-30 border-b-2 border-r border-b-blue-500 border-r-blue-200 bg-blue-100 px-2 py-2.5 text-right text-xs font-semibold uppercase tracking-wide text-blue-800"
+                    style={{ left: LARGURA_PRIMEIRA }}
+                    title="Soma dos meses do período"
+                  >
+                    Total
                   </th>
                   {meses.map((m) => (
                     <th
@@ -989,7 +1027,7 @@ const DfcOrcamentosTab = forwardRef(function DfcOrcamentosTab(
               <tbody>
                 {centros.length === 0 && (
                   <tr>
-                    <td colSpan={meses.length + 1} className="border-b border-gray-100 py-10 text-center text-sm text-gray-400">
+                    <td colSpan={meses.length + 2} className="border-b border-gray-100 py-10 text-center text-sm text-gray-400">
                       {filtroOrigens
                         ? 'Nenhuma conta com essa Origem DFC nos centros de custo.'
                         : 'Nenhum centro de custo com "Projeta DFC" marcado. Marque na aba Centros Custos.'}
@@ -1061,9 +1099,13 @@ const DfcOrcamentosTab = forwardRef(function DfcOrcamentosTab(
                                                   <span className="min-w-0 truncate text-xs text-gray-700" title={conta.name}>
                                                     {conta.name}
                                                   </span>
-                                                  {totalLinha((m) => valorConta(centro.sienge_id, conta.sienge_id, m))}
                                                 </span>
                                               </td>
+                                              {celulaTotal(
+                                                3,
+                                                (m) => valorConta(centro.sienge_id, conta.sienge_id, m),
+                                                (m) => valorVersao(centro.sienge_id, conta.sienge_id, m)
+                                              )}
                                               {informada
                                                 ? meses.map((m) => (
                                                     <td
