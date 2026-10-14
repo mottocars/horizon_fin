@@ -85,7 +85,8 @@ const Titulo = ({ children }) => <h4 className="mb-2 text-[11px] font-semibold u
 
 // Aba Plano Contas, ícone da calculadora numa natureza "SIENGE - EMPRESARIAL DESEMBOLSO": a ficha de
 // desembolso dela (a mesma "Ficha de cada natureza" do relatório Prazos de Desembolso), guardada no
-// banco (backend dfc-desembolso). "Recalcular" refaz com os títulos dos últimos 12 meses.
+// banco (backend dfc-desembolso). "Recalcular" refaz com os títulos dos últimos 12 meses. A curva
+// é o cronograma que espalha o Orçamento Empresarial do Sienge no Orçamento do DFC (dfc-empresarial).
 // `conta`: { sienge_id, codigo, name }. `onRecalculada(ficha)`: atualiza o Prazo Desembolso na grade.
 export default function FichaDesembolsoModal({ open, onClose, empresaId, conta, onRecalculada }) {
   const [ficha, setFicha] = useState(null);
@@ -165,7 +166,9 @@ export default function FichaDesembolsoModal({ open, onClose, empresaId, conta, 
             </div>
 
             <div className="space-y-1.5 rounded-r-lg border-l-[3px] border-primary-600 bg-gray-50 px-3 py-2.5">
-              <p className="text-[11px] font-semibold uppercase tracking-wide text-primary-600">Sugestão pra projetar</p>
+              <p className="text-[11px] font-semibold uppercase tracking-wide text-primary-600">
+                Cronograma de desembolso · usado no Orçamento Empresarial
+              </p>
               <p className="text-sm font-semibold text-gray-900">{ficha.sugestao}</p>
               <Curva curva={ficha.curva} />
             </div>

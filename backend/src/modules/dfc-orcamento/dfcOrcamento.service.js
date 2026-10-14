@@ -1,6 +1,7 @@
 const pool = require('../../config/db');
 const dfcAging = require('../dfc-aging/dfcAging.service');
 const { SAIDAS } = require('../dfc-projecao-cef/projecaoCef.service');
+const dfcEmpresarial = require('../dfc-empresarial/dfcEmpresarial.service');
 
 // DFC Construtoras > Orçamentos: versões, consolidado e log (pedido do usuário).
 //
@@ -14,6 +15,7 @@ const { SAIDAS } = require('../dfc-projecao-cef/projecaoCef.service');
 const ORIGEM_INFORMADO = 'HORIZON_ORCAMENTO_INFORMADO';
 const ORIGEM_AGING = 'SIENGE_AGING';
 const ROTULO_AGING = { receber: 'Aging a receber (Sienge)', pagar: 'Aging a pagar (Sienge)' };
+const ORIGEM_EMPRESARIAL = dfcEmpresarial.ORIGEM;
 
 function erro(status, message) {
   const e = new Error(message);
@@ -172,9 +174,35 @@ async function valoresAtuais(db, empresaId) {
     });
   }
 
+  // 4) Orçamento Empresarial do Sienge (última versão), espalhado pelo cronograma de desembolso de
+  //    cada natureza — já filtrado pelo plano em dfc-empresarial.
+  const [empresarial, execEmpresarial] = await Promise.all([
+    dfcEmpresarial.valores(empresaId),
+    ultimaExecucao(db, empresaId, dfcEmpresarial.ROTINA),
+  ]);
+  const versoesEmpresarial = [...new Set(empresarial.versoes.map((v) => v.version_number))].filter((v) => v !== null);
+  empresarial.valores.forEach((v) => {
+    somar(v.centro_id, v.conta, v.mes, v.valor, {
+      origem: ORIGEM_EMPRESARIAL,
+      fonte: 'INTEGRACAO',
+      fonte_descricao: `Orçamento Empresarial (Sienge)${
+        versoesEmpresarial.length === 1 ? ` v${versoesEmpresarial[0]}` : ''
+      } no cronograma de desembolso da natureza${execEmpresarial?.origem === 'agendada' ? ' — atualização agendada' : ''}`,
+      responsavel_id: execEmpresarial?.usuario_id ?? null,
+      responsavel_em: execEmpresarial?.finalizado_em ?? empresarial.base.atualizado_em ?? null,
+    });
+  });
+
   return {
     valores,
-    contexto: { contaDoCentro, informadosLimpos, execucoesCef, execucoesAging, bases },
+    contexto: {
+      contaDoCentro,
+      informadosLimpos,
+      execucoesCef,
+      execucoesAging,
+      bases,
+      empresarial: { base: empresarial.base, semCronograma: empresarial.sem_cronograma, execucao: execEmpresarial },
+    },
   };
 }
 
@@ -220,6 +248,16 @@ function responsavelExclusao(anterior, contexto, salvoPor, agora) {
       fonte_descricao: 'Projeção CEF',
       responsavel_id: exec?.usuario_id ?? salvoPor,
       responsavel_em: exec?.atualizado_em ?? agora,
+    };
+  }
+  if (origem === ORIGEM_EMPRESARIAL) {
+    const exec = contexto.empresarial?.execucao;
+    return {
+      origem,
+      fonte: 'INTEGRACAO',
+      fonte_descricao: 'Orçamento Empresarial (Sienge)',
+      responsavel_id: exec?.usuario_id ?? null,
+      responsavel_em: exec?.finalizado_em ?? agora,
     };
   }
   if (origem === ORIGEM_AGING) {
@@ -335,6 +373,22 @@ async function rascunho(empresaId) {
       ([tipo]) =>
         `A base do contas a ${tipo} do Sienge ainda não foi carregada — o Aging a ${tipo} fica sem valores. Atualize em Nova versão.`
     );
+  if (!contexto.empresarial.base.registros) {
+    avisos.push(
+      'A base do Orçamento Empresarial do Sienge ainda não foi carregada — as naturezas EMPRESARIAL DESEMBOLSO ficam sem valores. Atualize em Nova versão.'
+    );
+  }
+  if (contexto.empresarial.semCronograma.length) {
+    const { rows } = await pool.query(
+      'SELECT sienge_id, name FROM planos_financeiros_sienge WHERE empresa_id = $1 AND sienge_id = ANY($2::int[]) ORDER BY sienge_id',
+      [empresaId, contexto.empresarial.semCronograma]
+    );
+    avisos.push(
+      `Sem cronograma de desembolso (natureza sem títulos nos últimos 12 meses) — o Orçamento Empresarial sai inteiro no próprio mês: ${rows
+        .map((r) => `${r.sienge_id} ${r.name}`)
+        .join(', ')}.`
+    );
+  }
   return {
     gerado_em: new Date(),
     versao_base: versao ? versao.numero : null,

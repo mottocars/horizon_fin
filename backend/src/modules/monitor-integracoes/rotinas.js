@@ -3,6 +3,7 @@ const { executarVarredura } = require('../espiao-nfe-nfse/vinculacaoAutomatica')
 const repassesCef = require('../repasses-cef/repassesCef.service');
 const income = require('../income-sienge/income.service');
 const outcome = require('../outcome-sienge/outcome.service');
+const businessBudget = require('../business-budget-sienge/businessBudget.service');
 const customers = require('../customers-sienge/customers.service');
 const clusters = require('../cobranca-clusters/cobrancaClusters.service');
 const itau = require('../integracoes-itau/itau.service');
@@ -177,6 +178,20 @@ const ROTINAS = [
       progresso({ texto: 'Buscando o contas a pagar no Sienge (pode levar alguns minutos)' });
       const r = await outcome.sincronizar(empresaId, porPagina(progresso, 'Buscando o contas a pagar no Sienge'));
       return `${n(r.total_importado)} parcela(s) importada(s).`;
+    },
+  },
+  {
+    chave: 'dfc_orcamento_empresarial_base',
+    modulo: 'DFC Construtoras',
+    nome: 'Base do orçamento empresarial (Sienge)',
+    descricao:
+      'Recarrega o Orçamento Empresarial do Sienge (todas as versões) — a base das naturezas EMPRESARIAL DESEMBOLSO nos Orçamentos do DFC Construtoras, espalhadas pelo cronograma de desembolso de cada natureza.',
+    integracao: 'sienge',
+    disponibilidade: semSienge,
+    async executar({ empresaId, progresso }) {
+      progresso({ texto: 'Buscando o orçamento empresarial no Sienge (pode levar alguns minutos)' });
+      const r = await businessBudget.sincronizar(empresaId, porPagina(progresso, 'Buscando o orçamento empresarial no Sienge'));
+      return `${n(r.total_importado)} orçamento(s) importado(s), ${n(r.valores)} valor(es) mensal(is).`;
     },
   },
 ];

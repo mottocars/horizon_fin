@@ -41,6 +41,7 @@ const dfcOrcamentoInformadoRoutes = require('./modules/dfc-orcamento-informado/o
 const dfcAgingRoutes = require('./modules/dfc-aging/dfcAging.routes');
 const dfcOrcamentoRoutes = require('./modules/dfc-orcamento/dfcOrcamento.routes');
 const dfcDesembolsoRoutes = require('./modules/dfc-desembolso/desembolso.routes');
+const dfcEmpresarialRoutes = require('./modules/dfc-empresarial/dfcEmpresarial.routes');
 const bancosRoutes = require('./modules/bancos/bancos.routes');
 const eprRoutes = require('./modules/epr/epr.routes');
 const dcdRoutes = require('./modules/dcd/dcd.routes');
@@ -60,6 +61,7 @@ const repassesCefRoutes = require('./modules/repasses-cef/repassesCef.routes');
 const motorRiscoRoutes = require('./modules/motor-risco/motorRisco.routes');
 const incomeSiengeRoutes = require('./modules/income-sienge/income.routes');
 const outcomeSiengeRoutes = require('./modules/outcome-sienge/outcome.routes');
+const businessBudgetSiengeRoutes = require('./modules/business-budget-sienge/businessBudget.routes');
 const customersSiengeRoutes = require('./modules/customers-sienge/customers.routes');
 const cobrancaClustersRoutes = require('./modules/cobranca-clusters/cobrancaClusters.routes');
 const gestaoParcelasRoutes = require('./modules/gestao-parcelas/gestaoParcelas.routes');
@@ -160,6 +162,7 @@ app.use('/api/dfc-orcamento-informado', exigirTela([T.DFC]), dfcOrcamentoInforma
 app.use('/api/dfc-aging', exigirTela([T.DFC]), dfcAgingRoutes);
 app.use('/api/dfc-orcamento', exigirTela([T.DFC]), dfcOrcamentoRoutes);
 app.use('/api/dfc-desembolso', exigirTela([T.DFC]), dfcDesembolsoRoutes);
+app.use('/api/dfc-empresarial', exigirTela([T.DFC]), dfcEmpresarialRoutes);
 app.use('/api/bancos', exigirTela([T.SALDOS]), exigirMaster, bancosRoutes);
 app.use('/api/epr', exigirTela([T.PORTAL]), eprRoutes);
 // DCD e Extrato também na aba CIWEB da DFC Construtoras (espelho do Portal das Construtoras,
@@ -179,6 +182,7 @@ app.use('/api/repasses-cef', exigirTela([T.REPASSES], [T.COBRANCAS]), repassesCe
 app.use('/api/motor-risco', exigirTela([T.COBRANCAS]), motorRiscoRoutes);
 app.use('/api/income-sienge', exigirTela([T.COBRANCAS]), incomeSiengeRoutes);
 app.use('/api/outcome-sienge', exigirTela([T.DFC]), outcomeSiengeRoutes);
+app.use('/api/business-budget-sienge', exigirTela([T.DFC]), businessBudgetSiengeRoutes);
 app.use('/api/customers-sienge', exigirTela([T.COBRANCAS]), customersSiengeRoutes);
 app.use('/api/cobranca-clusters', exigirTela([T.COBRANCAS]), cobrancaClustersRoutes);
 app.use('/api/gestao-parcelas', exigirTela([T.COBRANCAS]), gestaoParcelasRoutes);

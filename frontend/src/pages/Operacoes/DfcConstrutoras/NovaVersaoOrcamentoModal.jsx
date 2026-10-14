@@ -1,9 +1,29 @@
 import { useEffect, useState } from 'react';
-import { CheckCircle2, FilePlus2, HandCoins, Landmark, Receipt, XCircle } from 'lucide-react';
+import { BriefcaseBusiness, CheckCircle2, FilePlus2, HandCoins, Landmark, Receipt, XCircle } from 'lucide-react';
 import Modal from '../../../components/Modal';
 import Button from '../../../components/Button';
 import { atualizarProjecaoCef, listElegiveisProjecaoCef } from '../../../api/dfcProjecaoCef.api';
 import { atualizarBaseAgingDfc, getAgingDfc, getExecucaoBaseAgingDfc } from '../../../api/dfcAging.api';
+import {
+  atualizarBaseEmpresarialDfc,
+  getBaseEmpresarialDfc,
+  getExecucaoEmpresarialDfc,
+} from '../../../api/dfcEmpresarial.api';
+
+// Bases que rodam pela rotina do Monitor de Integrações: como ler a situação, disparar e acompanhar.
+const BASES = {
+  receber: {
+    base: (e) => getAgingDfc(e, 'receber'),
+    atualizar: (e) => atualizarBaseAgingDfc(e, 'receber'),
+    execucao: (e) => getExecucaoBaseAgingDfc(e, 'receber'),
+  },
+  pagar: {
+    base: (e) => getAgingDfc(e, 'pagar'),
+    atualizar: (e) => atualizarBaseAgingDfc(e, 'pagar'),
+    execucao: (e) => getExecucaoBaseAgingDfc(e, 'pagar'),
+  },
+  empresarial: { base: getBaseEmpresarialDfc, atualizar: atualizarBaseEmpresarialDfc, execucao: getExecucaoEmpresarialDfc },
+};
 
 function dataHora(v) {
   return v
@@ -40,15 +60,18 @@ function LinhaBase({ icone: Icone, cor, titulo, situacao, erro, rodando, pct, bl
   );
 }
 
-// Aging a receber / a pagar: dispara a rotina do Monitor de Integrações e acompanha por polling.
-function useAging(open, empresaId, tipo) {
+// Base que roda pela rotina do Monitor (Aging a receber / a pagar, Orçamento Empresarial): dispara
+// e acompanha por polling.
+function useBase(open, empresaId, tipo) {
+  const api = BASES[tipo];
   const [base, setBase] = useState(null);
   const [exec, setExec] = useState(null);
   const [erro, setErro] = useState('');
   const rodando = exec?.status === 'executando';
 
   const carregarBase = () =>
-    getAgingDfc(empresaId, tipo)
+    api
+      .base(empresaId)
       .then((r) => setBase(r.base))
       .catch(() => setBase(null));
 
@@ -56,7 +79,8 @@ function useAging(open, empresaId, tipo) {
     if (!open || !empresaId) return;
     setErro('');
     carregarBase();
-    getExecucaoBaseAgingDfc(empresaId, tipo)
+    api
+      .execucao(empresaId)
       .then(setExec)
       .catch(() => setExec(null));
     // eslint-disable-next-line react-hooks/exhaustive-deps
@@ -65,7 +89,8 @@ function useAging(open, empresaId, tipo) {
   useEffect(() => {
     if (!open || !rodando) return undefined;
     const timer = setInterval(() => {
-      getExecucaoBaseAgingDfc(empresaId, tipo)
+      api
+        .execucao(empresaId)
         .then((atual) => {
           setExec(atual);
           if (atual?.status !== 'executando') carregarBase();
@@ -79,7 +104,7 @@ function useAging(open, empresaId, tipo) {
   async function atualizar() {
     setErro('');
     try {
-      setExec(await atualizarBaseAgingDfc(empresaId, tipo));
+      setExec(await api.atualizar(empresaId));
     } catch (e) {
       setErro(e.response?.data?.message || 'Não foi possível iniciar a atualização.');
     }
@@ -96,13 +121,14 @@ function useAging(open, empresaId, tipo) {
 }
 
 // Ícone "Nova versão" da aba Orçamentos (pedido do usuário): as bases que alimentam o orçamento,
-// cada uma com o botão de atualizar (Aging a receber e a pagar do Sienge — rotinas do Monitor de
-// Integrações; Projeção CEF — obra a obra), e embaixo "Nova versão", que monta na grade a versão
+// cada uma com o botão de atualizar (Aging a receber e a pagar e Orçamento Empresarial do Sienge —
+// rotinas do Monitor de Integrações; Projeção CEF — obra a obra), e embaixo "Nova versão", que monta na grade a versão
 // nova a partir do que está no banco agora (`onGerar`) — com ou sem atualizar alguma base antes,
 // incluindo o que foi digitado em HORIZON - INFORMADO. Ela só vira a última versão ao ser salva.
 export default function NovaVersaoOrcamentoModal({ open, onClose, empresaId, onGerar }) {
-  const receber = useAging(open, empresaId, 'receber');
-  const pagar = useAging(open, empresaId, 'pagar');
+  const receber = useBase(open, empresaId, 'receber');
+  const pagar = useBase(open, empresaId, 'pagar');
+  const empresarial = useBase(open, empresaId, 'empresarial');
 
   const [obras, setObras] = useState([]);
   const [cefRodando, setCefRodando] = useState(false);
@@ -162,7 +188,7 @@ export default function NovaVersaoOrcamentoModal({ open, onClose, empresaId, onG
             ? `Atualizada em ${dataHora(ultimaCef)}`
             : 'Ainda não projetada';
 
-  const ocupado = receber.rodando || pagar.rodando || cefRodando;
+  const ocupado = receber.rodando || pagar.rodando || empresarial.rodando || cefRodando;
 
   return (
     <Modal open={open} onClose={cefRodando ? () => {} : onClose} title="Nova versão" maxWidthClass="max-w-lg">
@@ -188,6 +214,17 @@ export default function NovaVersaoOrcamentoModal({ open, onClose, empresaId, onG
           pct={null}
           bloqueado={cefRodando}
           onAtualizar={pagar.atualizar}
+        />
+        <LinhaBase
+          icone={BriefcaseBusiness}
+          cor="bg-violet-50 text-violet-600"
+          titulo="Orçamento Empresarial (Sienge)"
+          situacao={empresarial.situacao}
+          erro={empresarial.falhou}
+          rodando={empresarial.rodando}
+          pct={null}
+          bloqueado={cefRodando}
+          onAtualizar={empresarial.atualizar}
         />
         <LinhaBase
           icone={Landmark}

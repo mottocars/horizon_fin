@@ -2145,6 +2145,61 @@ CREATE TABLE sie_outcome_autorizacoes (
 
 CREATE INDEX idx_sie_outcome_autorizacoes_parcela ON sie_outcome_autorizacoes (bill_id, installment_id, empresa_id);
 
+-- Orçamento Empresarial (endpoint bulk-data/v1/business-budget do Sienge) — base do cronograma
+-- de desembolso das naturezas "SIENGE - EMPRESARIAL DESEMBOLSO" no DFC Construtoras. Mesmo padrão
+-- do sie_income / sie_outcome — ver database/migrations/2026-10-14-sie-business-budget.sql.
+-- Um orçamento (uma versão dele). A mesma `id` pode vir em várias versões — por isso a linha tem
+-- id próprio (registro_id). As datas vêm como texto solto na API — guardadas como vieram.
+CREATE TABLE sie_business_budget (
+    registro_id          SERIAL PRIMARY KEY,
+    empresa_id           INTEGER NOT NULL REFERENCES empresas(id) ON DELETE CASCADE,
+    id                   BIGINT,
+    start_date           VARCHAR(30),
+    end_date             VARCHAR(30),
+    base_date            VARCHAR(30),
+    description          VARCHAR(500),
+    budget_type          VARCHAR(100),
+    vision               VARCHAR(100),
+    company_id           BIGINT,
+    company_name         VARCHAR(255),
+    cost_center_id       BIGINT,
+    cost_center_name     VARCHAR(255),
+    department_id        BIGINT,
+    department_name      VARCHAR(255),
+    version_number       INTEGER,
+    version_description  VARCHAR(500),
+    api_error            TEXT,             -- campo "api-error" da API
+    criado_em            TIMESTAMP DEFAULT NOW(),
+    atualizado_em        TIMESTAMP DEFAULT NOW()
+);
+
+CREATE INDEX idx_sie_business_budget_empresa ON sie_business_budget (empresa_id, cost_center_id);
+CREATE INDEX idx_sie_business_budget_versao ON sie_business_budget (empresa_id, id, version_number);
+
+-- Naturezas financeiras orçadas (paymentCategories) de cada orçamento.
+CREATE TABLE sie_business_budget_categorias (
+    categoria_id   SERIAL PRIMARY KEY,
+    registro_id    INTEGER NOT NULL REFERENCES sie_business_budget(registro_id) ON DELETE CASCADE,
+    id             VARCHAR(50),       -- a natureza (código do plano financeiro)
+    description    VARCHAR(255),
+    type           VARCHAR(50),
+    notes          TEXT
+);
+
+CREATE INDEX idx_sie_business_budget_categorias_registro ON sie_business_budget_categorias (registro_id);
+
+-- Valor orçado mês a mês (interval) de cada natureza. `month_year` como veio da API; `mes` é o
+-- primeiro dia daquele mês, lido dele na gravação (null se o formato não for reconhecido).
+CREATE TABLE sie_business_budget_valores (
+    valor_id       SERIAL PRIMARY KEY,
+    categoria_id   INTEGER NOT NULL REFERENCES sie_business_budget_categorias(categoria_id) ON DELETE CASCADE,
+    month_year     VARCHAR(20),
+    mes            DATE,
+    total_price    NUMERIC(18,2)
+);
+
+CREATE INDEX idx_sie_business_budget_valores_categoria ON sie_business_budget_valores (categoria_id);
+
 -- Clientes (customers) do Sienge — public/api/v1/customers, diferente da
 -- bulk-data do income (essa aqui pagina de verdade por limit/offset, ver
 -- customersSienge-api.client.js). Mesmo padrão de sie_income: grava o
