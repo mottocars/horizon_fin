@@ -65,7 +65,8 @@ const RECUO = [12, 32, 52, 76]; // padding-left de cada nível (centro, máscara
 // drilldown Centro de Custo › Máscara Nível 1 › Máscara Nível 2 › Conta analítica (a do plano de
 // contas classificada com aquela máscara na aba Plano Contas), colunas = meses do período do topo.
 // Centros = todos com "Projeta DFC" (obras e administrativos). Contas analíticas sem Máscara DFC
-// entram num grupo "SEM MÁSCARA DFC" pra não sumirem. Começa tudo fechado.
+// entram num grupo "SEM MÁSCARA DFC" pra não sumirem; as com "Projeta DFC" desmarcado no plano do
+// centro não entram (pedido do usuário). Começa tudo fechado.
 export default function DfcOrcamentosTab({ empresaId, inicio, fim, refreshToken = 0 }) {
   const [dados, setDados] = useState(null);
   const [carregando, setCarregando] = useState(false);
@@ -114,16 +115,19 @@ export default function DfcOrcamentosTab({ empresaId, inicio, fim, refreshToken 
 
     function montar(classificacoes) {
       const mascaraDaConta = Object.fromEntries(classificacoes.map((c) => [c.sienge_id, c.mascara_id]));
+      // "Projeta DFC" desmarcado no plano: a conta fica fora do Orçamento. Sem linha = marcado.
+      const foraDoDfc = new Set(classificacoes.filter((c) => c.projeta_dfc === false).map((c) => c.sienge_id));
+      const contasDoPlano = analiticas.filter((c) => !foraDoDfc.has(c.sienge_id));
       const grupos = dados.mascaras.map((g) => ({
         chave: `m${g.id}`,
         descricao: g.descricao,
         filhos: g.filhos.map((f) => ({
           chave: `m${f.id}`,
           descricao: f.descricao,
-          contas: analiticas.filter((c) => mascaraDaConta[c.sienge_id] === f.id),
+          contas: contasDoPlano.filter((c) => mascaraDaConta[c.sienge_id] === f.id),
         })),
       }));
-      const semMascara = analiticas.filter((c) => !idsNivel2.has(mascaraDaConta[c.sienge_id]));
+      const semMascara = contasDoPlano.filter((c) => !idsNivel2.has(mascaraDaConta[c.sienge_id]));
       if (semMascara.length) {
         grupos.push({
           chave: 'sem',
@@ -317,7 +321,7 @@ export default function DfcOrcamentosTab({ empresaId, inicio, fim, refreshToken 
                     {linhaGrupo({
                       chave: chaveCentro,
                       nivel: 0,
-                      rotulo: `${centro.name}${centro.natureza === 'ADMINISTRATIVO' ? ' (Administrativo)' : ''}${propria ? ' · plano próprio' : ''}`,
+                      rotulo: `${centro.name}${propria ? ' · plano próprio' : ''}`,
                       podeAbrir: estrutura.length > 0,
                       destaque: true,
                       valorMes: (m) => somaContas(centro.sienge_id, todasContas, m),

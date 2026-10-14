@@ -9,7 +9,7 @@ import { useConfirm } from '../../../confirm/ConfirmContext';
 
 const LIMIT = 2000;
 
-const GRADE = 'grid grid-cols-[minmax(0,1fr)_240px_260px_80px] items-center gap-3';
+const GRADE = 'grid grid-cols-[minmax(0,1fr)_110px_240px_260px_80px] items-center gap-3';
 
 // Opções fixas da "Origem Projeção" (pedido do usuário) — mesma lista do backend
 // (dfcPlanoContas.controller.js) e do CHECK da tabela dfc_plano_contas.
@@ -30,6 +30,12 @@ const ORIGENS_PROJECAO = [
 // com aquele campo em branco. O filtro Conta não tem essa opção.
 const NAO_INFORMADO = '__nao_informado__';
 const OPCAO_NAO_INFORMADO = { value: NAO_INFORMADO, label: 'NÃO INFORMADO' };
+
+// Filtro da coluna Projeta DFC (marcada / desmarcada).
+const OPCOES_FILTRO_PROJETA = [
+  { value: 'S', label: 'SIM' },
+  { value: 'N', label: 'NÃO' },
+];
 
 // Mesmo par de cores das outras abas da DFC: vazio em âmbar, preenchido em azul claro.
 function corCampo(valor) {
@@ -97,7 +103,9 @@ function montarArvore(contas) {
 // junto com as totalizadoras acima delas, já abertas. A atualização a partir do Sienge mora no
 // topo da página (DfcConstrutorasPage.jsx). No último nível (contas analíticas, tp_conta diferente
 // de 'T') ficam as comboboxes Máscara DFC (só as de nível 2 da aba Máscaras) e Origem Projeção —
-// cada mudança salva na hora, com o mesmo indicador de salvamento das outras abas.
+// cada mudança salva na hora, com o mesmo indicador de salvamento das outras abas. Antes delas, o
+// "Projeta DFC" (pedido do usuário): desmarcado, a conta não aparece no Orçamento dos centros que
+// usam este plano. Começa marcado.
 // `centroVersao`: id do centro cuja versão própria do plano está sendo editada (null = plano Global,
 // que vale pra todos os centros sem versão própria) — escolhido no topo da página.
 // `tituloPlano` / `onVoltar`: cabeçalho do editor (nome do plano aberto e volta pros cards).
@@ -116,14 +124,16 @@ export default function DfcPlanoContasTab({
   const [erroCarga, setErroCarga] = useState('');
   // Guarda as FECHADAS (não as abertas): vazio = árvore inteira aberta, que é o padrão.
   const [fechados, setFechados] = useState([]);
-  // sienge_id -> { mascara_id, origem_projecao }
+  // sienge_id -> { mascara_id, origem_projecao, projeta_dfc } (conta sem linha = Projeta DFC marcado)
   const [classificacoes, setClassificacoes] = useState({});
   const [mascaras, setMascaras] = useState([]);
   // Filtros de coluna (FiltroColuna): null = sem filtro (tudo marcado).
   const [filtroConta, setFiltroConta] = useState(null);
   const [filtroMascara, setFiltroMascara] = useState(null);
   const [filtroOrigem, setFiltroOrigem] = useState(null);
+  const [filtroProjeta, setFiltroProjeta] = useState(null);
   const colunaContaRef = useRef(null);
+  const colunaProjetaRef = useRef(null);
   const colunaMascaraRef = useRef(null);
   const colunaOrigemRef = useRef(null);
   const [pendentes, setPendentes] = useState(0);
@@ -159,6 +169,7 @@ export default function DfcPlanoContasTab({
     setFiltroConta(null);
     setFiltroMascara(null);
     setFiltroOrigem(null);
+    setFiltroProjeta(null);
     setErroSalvar('');
     setSalvoAlgumaVez(false);
   }, [empresaId, centroVersao]);
@@ -184,7 +195,12 @@ export default function DfcPlanoContasTab({
   }
 
   async function classificar(siengeId, patch) {
-    const anterior = classificacoes[siengeId] || { sienge_id: siengeId, mascara_id: null, origem_projecao: null };
+    const anterior = classificacoes[siengeId] || {
+      sienge_id: siengeId,
+      mascara_id: null,
+      origem_projecao: null,
+      projeta_dfc: true,
+    };
     const novo = { ...anterior, ...patch };
     let transferir = false;
     if (patch.origem_projecao && patch.origem_projecao.startsWith('CEF_')) {
@@ -265,7 +281,8 @@ export default function DfcPlanoContasTab({
   const fConta = efetivo(filtroConta);
   const fMascara = efetivo(filtroMascara);
   const fOrigem = efetivo(filtroOrigem);
-  const filtrosAtivos = fConta != null || fMascara != null || fOrigem != null;
+  const fProjeta = efetivo(filtroProjeta);
+  const filtrosAtivos = fConta != null || fMascara != null || fOrigem != null || fProjeta != null;
   const visivel = useMemo(() => {
     if (!termo && !filtrosAtivos) return null;
     const ids = new Set();
@@ -278,6 +295,7 @@ export default function DfcPlanoContasTab({
       const cl = classificacoes[c.sienge_id] || {};
       return (
         passaNoFiltro(fConta, c.sienge_id) &&
+        passaNoFiltro(fProjeta, cl.projeta_dfc === false ? 'N' : 'S') &&
         passaNoFiltro(fMascara, cl.mascara_id ?? NAO_INFORMADO) &&
         passaNoFiltro(fOrigem, cl.origem_projecao ?? NAO_INFORMADO)
       );
@@ -295,7 +313,7 @@ export default function DfcPlanoContasTab({
     arvore.forEach(marcar);
     return ids;
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [arvore, termo, filtrosAtivos, filtroConta, filtroMascara, filtroOrigem, classificacoes]);
+  }, [arvore, termo, filtrosAtivos, filtroConta, filtroMascara, filtroOrigem, filtroProjeta, classificacoes]);
 
   function alternar(id) {
     setFechados((atual) => (atual.includes(id) ? atual.filter((v) => v !== id) : [...atual, id]));
@@ -402,6 +420,16 @@ export default function DfcPlanoContasTab({
                 colunaRef={colunaContaRef}
               />
             </span>
+            <span ref={colunaProjetaRef} className="flex items-center justify-center gap-1.5">
+              Projeta DFC
+              <FiltroColuna
+                filtro={filtroProjeta}
+                onChange={setFiltroProjeta}
+                opcoes={OPCOES_FILTRO_PROJETA}
+                label="Projeta DFC"
+                colunaRef={colunaProjetaRef}
+              />
+            </span>
             <span ref={colunaMascaraRef} className="flex items-center gap-1.5">
               Máscara DFC
               <FiltroColuna
@@ -448,6 +476,7 @@ export default function DfcPlanoContasTab({
                       setFiltroConta(null);
                       setFiltroMascara(null);
                       setFiltroOrigem(null);
+                      setFiltroProjeta(null);
                     }}
                     className="ml-2 font-medium text-primary-600 hover:text-primary-700"
                   >
@@ -492,9 +521,20 @@ export default function DfcPlanoContasTab({
                   <>
                     <span />
                     <span />
+                    <span />
                   </>
                 ) : (
                   <>
+                    {/* Desmarcada, a conta não aparece no Orçamento dos centros que usam este plano. */}
+                    <span className="flex justify-center">
+                      <input
+                        type="checkbox"
+                        checked={classificacao.projeta_dfc !== false}
+                        onChange={(e) => classificar(conta.sienge_id, { projeta_dfc: e.target.checked })}
+                        title="Projeta DFC"
+                        className="h-4 w-4 cursor-pointer rounded border-gray-300 text-primary-600 focus:ring-primary-100"
+                      />
+                    </span>
                     <SearchableSelect
                       value={classificacao.mascara_id ?? ''}
                       onChange={(v) => classificar(conta.sienge_id, { mascara_id: v ? Number(v) : null })}

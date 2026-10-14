@@ -3,7 +3,8 @@ import http from './http';
 // `centroId` (opcional) em todas: a versão própria do plano daquele centro de custo; sem ele, o
 // plano Global (vale pra todos os centros que não têm versão própria).
 
-// Máscara DFC e Origem da Projeção já escolhidas nas contas: [{ sienge_id, mascara_id, origem_projecao }].
+// Máscara DFC, Origem da Projeção e "Projeta DFC" das contas que têm algo fora do padrão:
+// [{ sienge_id, mascara_id, origem_projecao, projeta_dfc }]. Conta ausente = Projeta DFC marcado.
 export function listClassificacoesPlanoDfc(empresaId, centroId = null) {
   return http
     .get(`/dfc-plano-contas/${empresaId}`, { params: centroId ? { centro: centroId } : {} })
@@ -15,11 +16,17 @@ export function listClassificacoesPlanoDfc(empresaId, centroId = null) {
 export function updateClassificacaoPlanoDfc(
   empresaId,
   siengeId,
-  { mascara_id, origem_projecao },
+  { mascara_id, origem_projecao, projeta_dfc = true },
   { transferir = false, centroId = null } = {}
 ) {
   return http
-    .put(`/dfc-plano-contas/${empresaId}/${siengeId}`, { mascara_id, origem_projecao, transferir, centro: centroId })
+    .put(`/dfc-plano-contas/${empresaId}/${siengeId}`, {
+      mascara_id,
+      origem_projecao,
+      projeta_dfc,
+      transferir,
+      centro: centroId,
+    })
     .then((res) => res.data);
 }
 

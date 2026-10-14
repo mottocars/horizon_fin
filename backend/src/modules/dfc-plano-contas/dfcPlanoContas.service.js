@@ -30,28 +30,29 @@ async function exigirVersao(db, empresaId, centroId) {
   if (!rows[0]) throw erro(404, 'Este centro de custo não tem versão própria do plano de contas.');
 }
 
-// Máscara DFC e Origem da Projeção já escolhidas nas contas (só as que têm algo), no Global ou na
-// versão do centro.
+// Máscara DFC, Origem da Projeção e "Projeta DFC" das contas (só as que têm algo fora do padrão),
+// no Global ou na versão do centro. Conta sem linha = sem máscara, sem origem e Projeta DFC marcado.
 async function list(empresaId, centroId = null) {
   await exigirVersao(pool, empresaId, centroId);
   const a = alvo(centroId);
   const { rows } = await pool.query(
-    `SELECT sienge_id, mascara_id, origem_projecao FROM ${a.tabela} WHERE ${a.filtro()}`,
+    `SELECT sienge_id, mascara_id, origem_projecao, projeta_dfc FROM ${a.tabela} WHERE ${a.filtro()}`,
     a.chave(empresaId)
   );
   return rows;
 }
 
-// Grava (ou limpa) os dois campos de uma conta, no Global ou na versão do centro. Só conta
-// analítica (o último nível — tp_conta diferente de 'T') e só máscara de nível 2 da mesma empresa.
-// Os dois vazios = apaga a linha. Origem "CEF - ..." só pode estar em UMA conta de cada versão (a
+// Grava (ou limpa) os campos de uma conta, no Global ou na versão do centro. Só conta analítica (o
+// último nível — tp_conta diferente de 'T') e só máscara de nível 2 da mesma empresa. Tudo no padrão
+// (sem máscara, sem origem e Projeta DFC marcado) = apaga a linha. Projeta DFC desmarcado = a conta
+// não aparece no Orçamento dos centros que usam este plano. Origem "CEF - ..." só pode estar em UMA conta de cada versão (a
 // Projeção CEF lança nela): se já estiver em outra, recusa com 409 (`codigo: 'ORIGEM_CEF_EM_USO'` e
 // a conta atual) — a tela avisa e, confirmando, manda `transferir: true`, que tira a origem da
 // outra conta na mesma transação.
 async function update(
   empresaId,
   siengeId,
-  { mascara_id: mascaraId, origem_projecao: origem },
+  { mascara_id: mascaraId, origem_projecao: origem, projeta_dfc: projeta = true },
   { transferir = false, centroId = null } = {}
 ) {
   const { rows: conta } = await pool.query(
@@ -99,9 +100,10 @@ async function update(
           ...base,
           outra[0].sienge_id,
         ]);
-        // Sem máscara também, a linha fica vazia — apaga.
+        // Sem máscara e com Projeta DFC marcado, a linha volta ao padrão — apaga.
         await client.query(
-          `DELETE FROM ${a.tabela} WHERE ${a.filtro()} AND sienge_id = ${pConta} AND mascara_id IS NULL AND origem_projecao IS NULL`,
+          `DELETE FROM ${a.tabela} WHERE ${a.filtro()} AND sienge_id = ${pConta}
+              AND mascara_id IS NULL AND origem_projecao IS NULL AND projeta_dfc`,
           [...base, outra[0].sienge_id]
         );
         liberada = outra[0].sienge_id;
@@ -109,20 +111,21 @@ async function update(
     }
 
     let salvo;
-    if (mascaraId === null && origem === null) {
+    if (mascaraId === null && origem === null && projeta) {
       await client.query(`DELETE FROM ${a.tabela} WHERE ${a.filtro()} AND sienge_id = ${pConta}`, [...base, siengeId]);
-      salvo = { sienge_id: siengeId, mascara_id: null, origem_projecao: null };
+      salvo = { sienge_id: siengeId, mascara_id: null, origem_projecao: null, projeta_dfc: true };
     } else {
       const colunas = centroId ? 'empresa_id, centro_id, sienge_id' : 'empresa_id, sienge_id';
       const conflito = centroId ? '(empresa_id, centro_id, sienge_id)' : '(empresa_id, sienge_id)';
       const n = base.length;
       const { rows } = await client.query(
-        `INSERT INTO ${a.tabela} (${colunas}, mascara_id, origem_projecao)
-         VALUES (${[...base.map((_, i) => `$${i + 1}`), `$${n + 1}`, `$${n + 2}`, `$${n + 3}`].join(', ')})
+        `INSERT INTO ${a.tabela} (${colunas}, mascara_id, origem_projecao, projeta_dfc)
+         VALUES (${[...base.map((_, i) => `$${i + 1}`), `$${n + 1}`, `$${n + 2}`, `$${n + 3}`, `$${n + 4}`].join(', ')})
          ON CONFLICT ${conflito}
-         DO UPDATE SET mascara_id = EXCLUDED.mascara_id, origem_projecao = EXCLUDED.origem_projecao
-         RETURNING sienge_id, mascara_id, origem_projecao`,
-        [...base, siengeId, mascaraId, origem]
+         DO UPDATE SET mascara_id = EXCLUDED.mascara_id, origem_projecao = EXCLUDED.origem_projecao,
+                       projeta_dfc = EXCLUDED.projeta_dfc
+         RETURNING sienge_id, mascara_id, origem_projecao, projeta_dfc`,
+        [...base, siengeId, mascaraId, origem, projeta]
       );
       salvo = rows[0];
     }
@@ -184,14 +187,14 @@ async function criarVersao(empresaId, centroId, usuarioId, copiarDe = 'global') 
     let rowCount = 0;
     if (copiarDe === 'global') {
       ({ rowCount } = await client.query(
-        `INSERT INTO dfc_plano_contas_centro (empresa_id, centro_id, sienge_id, mascara_id, origem_projecao)
-         SELECT empresa_id, $2, sienge_id, mascara_id, origem_projecao FROM dfc_plano_contas WHERE empresa_id = $1`,
+        `INSERT INTO dfc_plano_contas_centro (empresa_id, centro_id, sienge_id, mascara_id, origem_projecao, projeta_dfc)
+         SELECT empresa_id, $2, sienge_id, mascara_id, origem_projecao, projeta_dfc FROM dfc_plano_contas WHERE empresa_id = $1`,
         [empresaId, centroId]
       ));
     } else if (copiarDe !== 'branco') {
       ({ rowCount } = await client.query(
-        `INSERT INTO dfc_plano_contas_centro (empresa_id, centro_id, sienge_id, mascara_id, origem_projecao)
-         SELECT empresa_id, $2, sienge_id, mascara_id, origem_projecao FROM dfc_plano_contas_centro
+        `INSERT INTO dfc_plano_contas_centro (empresa_id, centro_id, sienge_id, mascara_id, origem_projecao, projeta_dfc)
+         SELECT empresa_id, $2, sienge_id, mascara_id, origem_projecao, projeta_dfc FROM dfc_plano_contas_centro
           WHERE empresa_id = $1 AND centro_id = $3`,
         [empresaId, centroId, copiarDe]
       ));
@@ -219,17 +222,22 @@ async function excluirVersao(empresaId, centroId) {
 // Tudo de uma vez, pro Orçamento: o Global e a versão de cada centro que tem uma.
 async function listTodas(empresaId) {
   const { rows: global } = await pool.query(
-    'SELECT sienge_id, mascara_id, origem_projecao FROM dfc_plano_contas WHERE empresa_id = $1',
+    'SELECT sienge_id, mascara_id, origem_projecao, projeta_dfc FROM dfc_plano_contas WHERE empresa_id = $1',
     [empresaId]
   );
   const { rows: porCentro } = await pool.query(
-    'SELECT centro_id, sienge_id, mascara_id, origem_projecao FROM dfc_plano_contas_centro WHERE empresa_id = $1',
+    'SELECT centro_id, sienge_id, mascara_id, origem_projecao, projeta_dfc FROM dfc_plano_contas_centro WHERE empresa_id = $1',
     [empresaId]
   );
   const versoes = await listVersoes(empresaId);
   const centros = Object.fromEntries(versoes.map((v) => [v.centro_id, []]));
   porCentro.forEach((r) => {
-    centros[r.centro_id]?.push({ sienge_id: r.sienge_id, mascara_id: r.mascara_id, origem_projecao: r.origem_projecao });
+    centros[r.centro_id]?.push({
+      sienge_id: r.sienge_id,
+      mascara_id: r.mascara_id,
+      origem_projecao: r.origem_projecao,
+      projeta_dfc: r.projeta_dfc,
+    });
   });
   return { global, centros };
 }

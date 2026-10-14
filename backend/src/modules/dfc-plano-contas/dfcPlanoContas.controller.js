@@ -18,13 +18,15 @@ const empresaIdSchema = z.coerce.number().int().positive('Empresa inválida.');
 const siengeIdSchema = z.coerce.number().int().positive('Conta inválida.');
 const emptyToNull = (v) => (v === '' || v === undefined ? null : v);
 
-// Os dois campos sempre juntos (a linha inteira vem do estado da tela).
+// Os campos sempre juntos (a linha inteira vem do estado da tela).
 const updateSchema = z.object({
   mascara_id: z.preprocess(emptyToNull, z.coerce.number().int().positive().nullable()),
   origem_projecao: z.preprocess(
     emptyToNull,
     z.enum(ORIGENS, { errorMap: () => ({ message: 'Origem da projeção inválida.' }) }).nullable()
   ),
+  // "Projeta DFC": desmarcada, a conta some do Orçamento dos centros que usam o plano.
+  projeta_dfc: z.boolean().optional().default(true),
   // true = a origem CEF já estava em outra conta e o usuário confirmou transferir pra esta.
   transferir: z.boolean().optional().default(false),
 });

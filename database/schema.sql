@@ -2925,6 +2925,8 @@ CREATE TABLE dfc_parametros_versoes (
 CREATE TABLE dfc_plano_contas (
     empresa_id       INTEGER NOT NULL,
     sienge_id        INTEGER NOT NULL,
+    -- "Projeta DFC": desmarcada, a conta não aparece no Orçamento (migration 2026-10-14-dfc-plano-contas-projeta.sql).
+    projeta_dfc      BOOLEAN NOT NULL DEFAULT TRUE,
     mascara_id       INTEGER REFERENCES dfc_mascaras(id) ON DELETE SET NULL,
     origem_projecao  VARCHAR(40) CHECK (origem_projecao IN (
                          'CEF_NOVO_REGISTRO', 'CEF_MEDICAO', 'CEF_CREDITO_PJ', 'CEF_JUROS', 'CEF_AMORTIZACAO',
@@ -3014,6 +3016,8 @@ CREATE TABLE dfc_plano_contas_centro (
     empresa_id       INTEGER NOT NULL,
     centro_id        INTEGER NOT NULL,
     sienge_id        INTEGER NOT NULL,
+    -- "Projeta DFC": desmarcada, a conta não aparece no Orçamento (migration 2026-10-14-dfc-plano-contas-projeta.sql).
+    projeta_dfc      BOOLEAN NOT NULL DEFAULT TRUE,
     mascara_id       INTEGER REFERENCES dfc_mascaras(id) ON DELETE SET NULL,
     origem_projecao  VARCHAR(40) CHECK (origem_projecao IN (
                          'CEF_NOVO_REGISTRO', 'CEF_MEDICAO', 'CEF_CREDITO_PJ', 'CEF_JUROS', 'CEF_AMORTIZACAO',
