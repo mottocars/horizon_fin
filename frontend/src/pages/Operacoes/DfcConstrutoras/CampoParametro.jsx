@@ -1,5 +1,6 @@
 import { useState } from 'react';
 import { Lock } from 'lucide-react';
+import SearchableSelect from '../../../components/SearchableSelect';
 import { formatarNumero } from './parametrosDfc';
 import { formatarDataISO } from '../../../utils/datas';
 
@@ -71,7 +72,12 @@ function CampoNumeroBR({ valor, casas, max, disabled, onChange }) {
   );
 }
 
-const UNIDADE_PADRAO = { moeda: 'R$', percentual: '%', inteiro: '', data: '' };
+const UNIDADE_PADRAO = { moeda: 'R$', percentual: '%', inteiro: '', data: '', simnao: '' };
+
+const OPCOES_SIM_NAO = [
+  { value: 'SIM', label: 'Sim' },
+  { value: 'NAO', label: 'Não' },
+];
 
 const ROTULO_ORIGEM = { DCD: 'Vem do DCD importado', GERAL: 'Vem do Geral dos Empreendimentos importado' };
 
@@ -111,6 +117,18 @@ export default function CampoParametro({ campo, valor, onChange, disabled = fals
           <div className="flex w-full items-center justify-between gap-2 rounded-lg border border-gray-100 bg-gray-50 px-3 py-2 text-sm">
             <Lock size={13} className="shrink-0 text-gray-400" />
             <span className="font-mono tabular-nums text-gray-600">{valorFormatado(campo, valor)}</span>
+          </div>
+        ) : campo.tipo === 'simnao' ? (
+          <div className="w-full">
+            <SearchableSelect
+              value={valor === true ? 'SIM' : valor === false ? 'NAO' : ''}
+              onChange={(v) => onChange(campo.id, v === 'SIM' ? true : v === 'NAO' ? false : '')}
+              options={OPCOES_SIM_NAO}
+              placeholder="Selecione"
+              disabled={disabled}
+              clearable={false}
+              corClasses={estadoCampo(valor, disabled)}
+            />
           </div>
         ) : campo.tipo === 'data' ? (
           <input

@@ -12,6 +12,7 @@ function valoresDaVersao(detalhe) {
     CAMPOS_EDITAVEIS.map((c) => {
       const v = detalhe?.[c.id];
       if (v === null || v === undefined || v === '') return [c.id, ''];
+      if (c.tipo === 'simnao') return [c.id, Boolean(v)];
       return [c.id, c.tipo === 'data' ? String(v).slice(0, 10) : Number(v)];
     })
   );

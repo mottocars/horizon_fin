@@ -11,6 +11,7 @@ const CAMPOS = [
   'taxa_juros_mes',
   'data_inicio_ciclo',
   'data_fim_ciclo',
+  'projeta_vendas_futuras',
   'qtd_vendas_mes',
   'tempo_assinatura_registro_meses',
 ];
@@ -36,9 +37,11 @@ function erro(status, message) {
 }
 
 // NUMERIC chega do pg como texto ("1234.50"); DATE como 'AAAA-MM-DD' (ver config/db.js).
+// Booleano (Sim/Não) fica booleano.
 function normalizar(campo, valor) {
   if (valor === null || valor === undefined) return null;
   if (CAMPOS_DATA.includes(campo)) return String(valor).slice(0, 10);
+  if (typeof valor === 'boolean') return valor;
   return Number(valor);
 }
 

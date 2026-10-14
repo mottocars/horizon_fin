@@ -41,6 +41,10 @@ const versaoBodySchema = z
     taxa_juros_mes: percentual('Taxa de Juros ao Mês', 100),
     data_inicio_ciclo: data('Data Início do Ciclo'),
     data_fim_ciclo: data('Data Fim do Ciclo'),
+    projeta_vendas_futuras: z.boolean({
+      required_error: 'Informe "Projeta Vendas Futuras".',
+      invalid_type_error: 'Informe "Projeta Vendas Futuras".',
+    }),
     qtd_vendas_mes: inteiro('Quantidade de Vendas no Mês', 100000),
     tempo_assinatura_registro_meses: inteiro('Tempo Entre Assinatura e Registro', 600),
   })

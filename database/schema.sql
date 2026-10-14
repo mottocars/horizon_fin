@@ -2906,6 +2906,8 @@ CREATE TABLE dfc_parametros_versoes (
     taxa_juros_mes                  NUMERIC(8,4) NOT NULL,
     data_inicio_ciclo               DATE NOT NULL,
     data_fim_ciclo                  DATE NOT NULL,
+    -- Sim/Não; NULL só nas versões publicadas antes do parâmetro existir.
+    projeta_vendas_futuras          BOOLEAN,
     qtd_vendas_mes                  INTEGER NOT NULL,
     tempo_assinatura_registro_meses INTEGER NOT NULL,
     -- MANUAL = publicada na tela; DCD / GERAL = criada sozinha ao importar o arquivo do contrato Caixa.

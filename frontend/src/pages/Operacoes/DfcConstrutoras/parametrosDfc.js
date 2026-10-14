@@ -5,6 +5,7 @@
 // sincronia.
 //
 // tipo: 'moeda' (R$, 2 casas) | 'percentual' (casas definidas no campo) | 'inteiro' | 'data' |
+// 'simnao' (true / false) |
 // 'calculado' (não é digitado nem gravado — ver `calcular`).
 export const SESSOES_PARAMETROS = [
   {
@@ -103,6 +104,12 @@ export const SESSOES_PARAMETROS = [
         label: 'Data Fim do Ciclo',
         tipo: 'data',
         desc: 'Último dia do ciclo. Precisa ser depois da Data Início do Ciclo.',
+      },
+      {
+        id: 'projeta_vendas_futuras',
+        label: 'Projeta Vendas Futuras',
+        tipo: 'simnao',
+        desc: 'Indica se a DFC deste empreendimento projeta vendas futuras.',
       },
       {
         id: 'qtd_vendas_mes',
