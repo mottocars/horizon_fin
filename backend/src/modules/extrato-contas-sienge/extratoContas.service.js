@@ -2,9 +2,11 @@ const pool = require('../../config/db');
 const { decrypt } = require('../../utils/crypto');
 const { fetchAllStatements, inicioDoMesAtual } = require('./extratoContas-api.client');
 
-// Sincroniza o extrato (v1/accounts-statements) das contas com "Projeta DFC" (aba Contas Correntes
-// do DFC Construtoras), conta a conta: busca a base completa da conta (01/01/2000 até o início do mês
-// atual) e substitui a que estava gravada pra ela, numa transação por conta.
+// Sincroniza o extrato (v1/accounts-statements) de TODAS as contas da empresa (aba Contas Correntes do
+// DFC Construtoras), conta a conta: busca a base completa da conta (01/01/2000 até o início do mês
+// atual) e substitui a que estava gravada pra ela, numa transação por conta. Só as contas com
+// "Projeta DFC" somam no fluxo de caixa e nos saldos (dfc-saldos filtra); as demais estão aqui pra
+// herança da natureza — no mútuo, a perna com a natureza fica na conta de mútuo (pedido do usuário).
 
 async function getIntegracaoAtiva(empresaId) {
   const { rows } = await pool.query(
@@ -72,7 +74,8 @@ async function gravarConta(empresaId, conta, lancamentos, dataAte) {
 //   tirados do fim dos links "cost-center" e "payment-categories";
 // - lançamento sem categoria entra com 100% (centro e natureza nulos);
 // - lançamento de título (bill_id) sem centro/natureza herda o de outro lançamento do mesmo título na
-//   mesma data (partição por origem + título + data — CP e CR têm numeração própria de título);
+//   mesma data — partição por título + data, exatamente como a query do usuário (no mútuo, a natureza
+//   está na outra perna, que fica em outra conta/empresa);
 // - valor com sinal (Expense negativo), com 6 casas pra a soma das partes bater com o lançamento.
 // Roda uma vez por sincronização (não a cada abertura da tela) — a tela só soma.
 async function montarRateio(empresaId, db = pool) {
@@ -108,10 +111,10 @@ async function montarRateio(empresaId, db = pool) {
        (empresa_id, registro_id, company_id, numero_conta, data, mes, centro_id, natureza_id, percentual, valor)
      SELECT empresa_id, registro_id, company_id, numero_conta, date, date_trunc('month', date)::date,
             CASE WHEN bill_id IS NOT NULL
-                 THEN COALESCE(centro, MAX(centro) OVER (PARTITION BY statement_origin, bill_id, date))
+                 THEN COALESCE(centro, MAX(centro) OVER (PARTITION BY bill_id, date))
                  ELSE centro END,
             CASE WHEN bill_id IS NOT NULL
-                 THEN COALESCE(natureza, MAX(natureza) OVER (PARTITION BY statement_origin, bill_id, date))
+                 THEN COALESCE(natureza, MAX(natureza) OVER (PARTITION BY bill_id, date))
                  ELSE natureza END,
             pct,
             sinal * value * pct / 100
@@ -122,7 +125,8 @@ async function montarRateio(empresaId, db = pool) {
   return rowCount;
 }
 
-// Todas as contas com "Projeta DFC", uma a uma. `onProgress({ texto, paginaAtual, totalPaginas })`.
+// Todas as contas da empresa, uma a uma (precisa de ao menos uma com "Projeta DFC" — senão não há
+// fluxo pra montar). `onProgress({ texto, paginaAtual, totalPaginas })`.
 async function sincronizar(empresaId, onProgress) {
   const integracao = await getIntegracaoAtiva(empresaId);
   if (!integracao) {
@@ -132,11 +136,11 @@ async function sincronizar(empresaId, onProgress) {
     throw e;
   }
   const { rows: contas } = await pool.query(
-    `SELECT company_id, numero_conta, nome FROM contas_bancarias_sienge
-      WHERE empresa_id = $1 AND projeta_dfc ORDER BY company_id, numero_conta`,
+    `SELECT company_id, numero_conta, nome, projeta_dfc FROM contas_bancarias_sienge
+      WHERE empresa_id = $1 ORDER BY projeta_dfc DESC, company_id, numero_conta`,
     [empresaId]
   );
-  if (!contas.length) {
+  if (!contas.some((c) => c.projeta_dfc)) {
     const e = new Error('Nenhuma conta com "Projeta DFC" marcado (DFC Construtoras > Contas Correntes).');
     e.status = 400;
     e.expose = true;
