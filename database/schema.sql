@@ -2938,6 +2938,11 @@ CREATE TRIGGER trg_dfc_plano_contas_atualizado_em
     BEFORE UPDATE ON dfc_plano_contas
     FOR EACH ROW EXECUTE FUNCTION set_atualizado_em();
 
+-- Cada origem CEF_* só em uma conta por empresa (ver migration 2026-10-14-dfc-plano-contas-cef-unica.sql).
+CREATE UNIQUE INDEX uq_dfc_plano_contas_origem_cef
+    ON dfc_plano_contas (empresa_id, origem_projecao)
+    WHERE origem_projecao LIKE 'CEF\_%';
+
 -- ─── Operações > DFC Construtoras > Avanços Obras — ver database/migrations/2026-10-14-dfc-avanco-manual.sql ───
 -- Avanço acumulado (%) informado à mão por obra e mês (obras sem Prevision).
 CREATE TABLE dfc_avanco_manual (

@@ -5,6 +5,7 @@ import FiltroColuna, { passaNoFiltro } from '../../../components/FiltroColuna';
 import { listContas } from '../../../api/planosFinanceirosSienge.api';
 import { listDfcMascaras } from '../../../api/dfcMascaras.api';
 import { listClassificacoesPlanoDfc, updateClassificacaoPlanoDfc } from '../../../api/dfcPlanoContas.api';
+import { useConfirm } from '../../../confirm/ConfirmContext';
 
 const LIMIT = 2000;
 
@@ -98,6 +99,7 @@ function montarArvore(contas) {
 // de 'T') ficam as comboboxes Máscara DFC (só as de nível 2 da aba Máscaras) e Origem Projeção —
 // cada mudança salva na hora, com o mesmo indicador de salvamento das outras abas.
 export default function DfcPlanoContasTab({ empresaId, search = '', refreshToken = 0, onTotal }) {
+  const confirm = useConfirm();
   const [contas, setContas] = useState([]);
   const [carregando, setCarregando] = useState(true);
   const [erroCarga, setErroCarga] = useState('');
@@ -158,19 +160,67 @@ export default function DfcPlanoContasTab({ empresaId, search = '', refreshToken
   );
 
   // Atualiza na hora e grava; se falhar, volta o que estava.
+  // Origem "CEF - ..." só pode estar em UMA conta (a Projeção CEF lança nela). Se já estiver em
+  // outra, avisa antes e só grava se o usuário confirmar a transferência.
+  function confirmarTransferencia(origem, contaAtual) {
+    const rotulo = ORIGENS_PROJECAO.find((o) => o.value === origem)?.label || origem;
+    return confirm({
+      title: 'Origem já informada em outra conta',
+      description: `"${rotulo}" já está na conta ${contaAtual.codigo} - ${contaAtual.name}. Cada origem CEF só pode estar em uma conta. Transferir para esta conta? A conta ${contaAtual.codigo} fica sem Origem Projeção.`,
+      confirmLabel: 'Transferir',
+      variant: 'warning',
+    });
+  }
+
   async function classificar(siengeId, patch) {
     const anterior = classificacoes[siengeId] || { sienge_id: siengeId, mascara_id: null, origem_projecao: null };
     const novo = { ...anterior, ...patch };
+    let transferir = false;
+    if (patch.origem_projecao && patch.origem_projecao.startsWith('CEF_')) {
+      const outra = Object.values(classificacoes).find(
+        (c) => c.sienge_id !== siengeId && c.origem_projecao === patch.origem_projecao
+      );
+      if (outra) {
+        const conta = contas.find((c) => c.sienge_id === outra.sienge_id);
+        const ok = await confirmarTransferencia(patch.origem_projecao, {
+          codigo: conta ? codigoFormatado(conta) : outra.sienge_id,
+          name: conta?.name || '',
+        });
+        if (!ok) return;
+        transferir = true;
+      }
+    }
+    await gravar(siengeId, anterior, novo, transferir);
+  }
+
+  async function gravar(siengeId, anterior, novo, transferir) {
     setClassificacoes((atual) => ({ ...atual, [siengeId]: novo }));
     setErroSalvar('');
     setPendentes((n) => n + 1);
     try {
-      const salvo = await updateClassificacaoPlanoDfc(empresaId, siengeId, novo);
-      setClassificacoes((atual) => ({ ...atual, [siengeId]: salvo }));
+      const { origem_retirada_de: retiradaDe, ...salvo } = await updateClassificacaoPlanoDfc(empresaId, siengeId, novo, {
+        transferir,
+      });
+      setClassificacoes((atual) => {
+        const proximo = { ...atual, [siengeId]: salvo };
+        if (retiradaDe && proximo[retiradaDe]) proximo[retiradaDe] = { ...proximo[retiradaDe], origem_projecao: null };
+        return proximo;
+      });
       setSalvoAlgumaVez(true);
     } catch (err) {
       setClassificacoes((atual) => ({ ...atual, [siengeId]: anterior }));
-      setErroSalvar(err.response?.data?.message || 'Não foi possível salvar.');
+      const dados = err.response?.data;
+      // Outra pessoa pôs a origem em outra conta depois que a tela carregou: pergunta agora.
+      if (dados?.codigo === 'ORIGEM_CEF_EM_USO' && !transferir) {
+        const conta = contas.find((c) => c.sienge_id === dados.conta?.sienge_id);
+        const ok = await confirmarTransferencia(novo.origem_projecao, {
+          codigo: conta ? codigoFormatado(conta) : dados.conta?.sienge_id,
+          name: dados.conta?.name || '',
+        });
+        if (ok) await gravar(siengeId, anterior, novo, true);
+      } else {
+        setErroSalvar(dados?.message || 'Não foi possível salvar.');
+      }
     } finally {
       setPendentes((n) => n - 1);
     }
