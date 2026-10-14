@@ -293,86 +293,68 @@ async function aging(empresaId, centroId, conta, mes) {
   };
 }
 
-// SIENGE - EMPRESARIAL DESEMBOLSO: o valor orçado de cada mês (última versão de cada orçamento) é
-// espalhado pela curva da ficha de desembolso da natureza — o que cai neste mês vem de vários meses
-// orçados. Refaz o espalhamento de dfc-empresarial::valores (mesmo arredondamento).
+// SIENGE - EMPRESARIAL DESEMBOLSO: o valor orçado de cada mês (última versão de cada orçamento) sai
+// inteiro depois do prazo médio de desembolso da natureza — o que cai neste mês é o orçado de
+// (mês − deslocamento). Refaz dfc-empresarial::valores.
 async function empresarial(empresaId, centroId, conta, mes) {
-  const { rows } = await pool.query(
-    `WITH ultima AS (${dfcEmpresarial.SQL_ULTIMA_VERSAO})
-     SELECT to_char(v.mes, 'YYYY-MM') AS mes, u.id AS orcamento, u.description, u.version_number, SUM(v.total_price) AS valor
-       FROM ultima u
-       JOIN sie_business_budget_categorias c ON c.registro_id = u.registro_id
-       JOIN sie_business_budget_valores v ON v.categoria_id = c.categoria_id
-      WHERE u.cost_center_id = $2 AND c.id = $3::text
-        AND v.mes IS NOT NULL AND COALESCE(v.total_price, 0) <> 0 AND COALESCE(c.type, '') <> 'T'
-      GROUP BY 1, 2, 3, 4 ORDER BY 1, 2`,
-    [empresaId, centroId, String(conta)]
-  );
   const { rows: fichas } = await pool.query(
     `SELECT prazo_medio, titulos, periodo_de, periodo_ate, calculado_em, ficha FROM dfc_desembolso_fichas
       WHERE empresa_id = $1 AND sienge_id = $2`,
     [empresaId, conta]
   );
   const ficha = fichas[0] || null;
-  const cronograma = dfcEmpresarial.cronogramaDe(ficha?.ficha);
-  const curva = cronograma || [[0, 1]];
-
-  // Agrupa por mês orçado (o espalhamento é por centro × conta × mês, somando os orçamentos).
-  const porMes = new Map();
-  rows.forEach((r) => {
-    if (!porMes.has(r.mes)) porMes.set(r.mes, { valor: 0, orcamentos: [] });
-    const m = porMes.get(r.mes);
-    m.valor += Number(r.valor);
-    m.orcamentos.push(`${r.orcamento}${r.version_number !== null ? ` v${r.version_number}` : ''}${r.description ? ` — ${r.description}` : ''}`);
-  });
-  const linhas = [];
-  let totalCentavos = 0;
-  porMes.forEach((m, mesOrcado) => {
-    const centavos = -Math.round(m.valor * 100);
-    dfcEmpresarial.espalhar(centavos, curva).forEach(([k, c]) => {
-      if (!c || dfcEmpresarial.somarMeses(mesOrcado, k) !== mes) return;
-      totalCentavos += c;
-      linhas.push({
-        mes_orcado: mesOrcado,
-        orcamentos: m.orcamentos.join(' · '),
-        valor_orcado: r2(m.valor),
-        deslocamento: k === 0 ? 'M0 (no mês)' : `M+${k}`,
-        fracao: curva.find(([kk]) => kk === k)[1],
-        valor: c / 100,
-      });
-    });
-  });
-  const valor = totalCentavos / 100;
-  const ROTULOS_CURVA = ['M0', 'M+1', 'M+2', 'M+3', 'M+4', 'M+5', 'M+6 ou mais'];
+  const deslocamento = dfcEmpresarial.deslocamentoDe(ficha);
+  const k = deslocamento ?? 0;
+  const mesOrcado = dfcEmpresarial.somarMeses(mes, -k);
+  const { rows } = await pool.query(
+    `WITH ultima AS (${dfcEmpresarial.SQL_ULTIMA_VERSAO})
+     SELECT u.id AS orcamento, u.description, u.version_number, SUM(v.total_price) AS valor
+       FROM ultima u
+       JOIN sie_business_budget_categorias c ON c.registro_id = u.registro_id
+       JOIN sie_business_budget_valores v ON v.categoria_id = c.categoria_id
+      WHERE u.cost_center_id = $2 AND c.id = $3::text AND v.mes = $4::date
+        AND COALESCE(v.total_price, 0) <> 0 AND COALESCE(c.type, '') <> 'T'
+      GROUP BY 1, 2, 3 ORDER BY 1`,
+    [empresaId, centroId, String(conta), `${mesOrcado}-01`]
+  );
+  const linhas = rows.map((r) => ({
+    orcamento: `${r.orcamento}${r.description ? ` — ${r.description}` : ''}`,
+    versao: r.version_number,
+    valor_orcado: r2(r.valor),
+    valor: -r2(r.valor),
+  }));
+  const orcado = r2(rows.reduce((t, r) => t + Number(r.valor), 0));
+  const valor = -orcado;
+  const prazo = ficha?.prazo_medio === null || ficha?.prazo_medio === undefined ? null : Number(ficha.prazo_medio);
   const blocos = [
     {
-      tipo: 'tabela',
-      titulo: `O que cai em ${rotuloMes(mes)}`,
-      vazio: 'Nenhum mês orçado cai neste mês pela curva de desembolso.',
-      colunas: [
-        col('mes_orcado', 'Mês orçado', 'mes'),
-        col('orcamentos', 'Orçamento (id, versão)'),
-        col('valor_orcado', 'Orçado no mês', 'moeda'),
-        col('deslocamento', 'Sai em'),
-        col('fracao', '% da curva', 'pct'),
-        col('valor', `Em ${rotuloMes(mes)}`, 'moeda'),
+      tipo: 'passos',
+      titulo: 'Como chegou no valor',
+      itens: [
+        passo(null, 'Prazo médio de desembolso da natureza', deslocamento === null ? 'sem prazo médio' : `${prazo.toLocaleString('pt-BR')} dias`, 'texto', {
+          nota: deslocamento === null ? 'natureza sem ficha ou sem títulos nos últimos 12 meses' : `÷ 30, arredondado = ${k} ${k === 1 ? 'mês' : 'meses'}`,
+        }),
+        passo(null, `Orçado em ${rotuloMes(mesOrcado)}`, orcado, 'moeda', {
+          nota: k === 0 ? 'sai no próprio mês' : `sai ${k} ${k === 1 ? 'mês' : 'meses'} depois, em ${rotuloMes(mes)}`,
+        }),
+        passo('=', `Saída em ${rotuloMes(mes)}`, valor, 'moeda', { destaque: true }),
       ],
+    },
+    {
+      tipo: 'tabela',
+      titulo: `Orçamento Empresarial de ${rotuloMes(mesOrcado)}`,
+      vazio: `Nada orçado em ${rotuloMes(mesOrcado)}.`,
+      colunas: [col('orcamento', 'Orçamento'), col('versao', 'Versão', 'int'), col('valor_orcado', 'Orçado', 'moeda'), col('valor', 'No DFC', 'moeda')],
       linhas,
-      total: { valor },
+      total: { valor_orcado: orcado, valor },
     },
   ];
-  if (cronograma) {
-    blocos.push({
-      tipo: 'tabela',
-      titulo: 'Curva de desembolso da natureza (ficha)',
-      colunas: [col('mes', 'Mês'), col('fracao', '% do valor', 'pct')],
-      linhas: ROTULOS_CURVA.map((rot, k) => ({ mes: rot, fracao: cronograma.find(([kk]) => kk === k)?.[1] || 0 })),
-      horizontal: true,
-    });
+  if (ficha) {
     blocos.push({
       tipo: 'campos',
+      titulo: 'Ficha de desembolso',
       itens: [
-        campo('Prazo médio de desembolso', ficha.prazo_medio === null ? null : `${Number(ficha.prazo_medio).toLocaleString('pt-BR')} dias`),
+        campo('Prazo médio', prazo === null ? null : `${prazo.toLocaleString('pt-BR')} dias`),
         campo('Títulos analisados', ficha.titulos, 'int'),
         campo('Período dos títulos', `${dataBr(ficha.periodo_de)} a ${dataBr(ficha.periodo_ate)}`),
         campo('Ficha calculada em', ficha.calculado_em ? new Date(ficha.calculado_em).toISOString() : null, 'datahora'),
@@ -381,15 +363,14 @@ async function empresarial(empresaId, centroId, conta, mes) {
   }
   blocos.push({
     tipo: 'nota',
-    texto: cronograma
-      ? 'O valor orçado no Orçamento Empresarial do Sienge (última versão de cada orçamento) não sai inteiro no mês orçado: é espalhado pela curva da ficha de desembolso da natureza (títulos do contas a pagar dos últimos 12 meses). Saída de caixa — valor negativo.'
-      : 'A natureza não tem ficha de desembolso (sem títulos nos últimos 12 meses) — o valor orçado sai inteiro no próprio mês. Saída de caixa — valor negativo.',
+    texto:
+      'O valor orçado no Orçamento Empresarial do Sienge (última versão de cada orçamento) sai inteiro depois do prazo médio de desembolso da natureza (dias da emissão ao vencimento dos títulos do contas a pagar dos últimos 12 meses), em meses: prazo ÷ 30, arredondado. Saída de caixa — valor negativo.',
   });
   return {
     valor,
-    resumo: `${linhas.length} ${linhas.length === 1 ? 'mês orçado' : 'meses orçados'} caem em ${rotuloMes(mes)}.`,
+    resumo: `Orçado em ${rotuloMes(mesOrcado)}${k ? ` + ${k} ${k === 1 ? 'mês' : 'meses'} de prazo médio` : ''}.`,
     blocos,
-    avisos: cronograma ? [] : ['Natureza sem ficha de desembolso: o orçado sai inteiro no próprio mês.'],
+    avisos: deslocamento === null ? ['Natureza sem prazo médio de desembolso: o orçado sai no próprio mês.'] : [],
   };
 }
 

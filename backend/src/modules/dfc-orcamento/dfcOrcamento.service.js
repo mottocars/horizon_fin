@@ -174,7 +174,7 @@ async function valoresAtuais(db, empresaId) {
     });
   }
 
-  // 4) Orçamento Empresarial do Sienge (última versão), espalhado pelo cronograma de desembolso de
+  // 4) Orçamento Empresarial do Sienge (última versão), deslocado pelo prazo médio de desembolso de
   //    cada natureza — já filtrado pelo plano em dfc-empresarial.
   const [empresarial, execEmpresarial] = await Promise.all([
     dfcEmpresarial.valores(empresaId),
@@ -187,7 +187,7 @@ async function valoresAtuais(db, empresaId) {
       fonte: 'INTEGRACAO',
       fonte_descricao: `Orçamento Empresarial (Sienge)${
         versoesEmpresarial.length === 1 ? ` v${versoesEmpresarial[0]}` : ''
-      } no cronograma de desembolso da natureza${execEmpresarial?.origem === 'agendada' ? ' — atualização agendada' : ''}`,
+      } no prazo médio de desembolso da natureza${execEmpresarial?.origem === 'agendada' ? ' — atualização agendada' : ''}`,
       responsavel_id: execEmpresarial?.usuario_id ?? null,
       responsavel_em: execEmpresarial?.finalizado_em ?? empresarial.base.atualizado_em ?? null,
     });
@@ -384,7 +384,7 @@ async function rascunho(empresaId) {
       [empresaId, contexto.empresarial.semCronograma]
     );
     avisos.push(
-      `Sem cronograma de desembolso (natureza sem títulos nos últimos 12 meses) — o Orçamento Empresarial sai inteiro no próprio mês: ${rows
+      `Sem prazo médio de desembolso (natureza sem títulos nos últimos 12 meses) — o Orçamento Empresarial sai no próprio mês orçado: ${rows
         .map((r) => `${r.sienge_id} ${r.name}`)
         .join(', ')}.`
     );

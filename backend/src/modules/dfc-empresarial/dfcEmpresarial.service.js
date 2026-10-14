@@ -7,15 +7,15 @@ const executor = require('../monitor-integracoes/executor');
 // - cada natureza orçada (paymentCategories.id) cai no seu centro de custo (costCenterId), só nas
 //   contas com Origem Projeção "SIENGE - EMPRESARIAL DESEMBOLSO" e "Projeta DFC" marcado no plano que
 //   o centro usa (o próprio, se tiver, senão o Global), e só em centros com "Projeta DFC";
-// - o valor orçado num mês NÃO sai inteiro nesse mês: é espalhado pelo cronograma de desembolso da
-//   natureza — a curva da ficha de desembolso (dfc_desembolso_fichas: % do valor que sai em M0, M+1,
-//   ... M+6 ou mais, a partir dos títulos do contas a pagar). Natureza sem ficha ou sem histórico:
-//   sai inteiro no próprio mês (e avisa);
+// - o valor orçado num mês sai INTEIRO depois do prazo médio de desembolso da natureza ("Prazo
+//   Desemb." da ficha — dfc_desembolso_fichas.prazo_medio, dias da emissão ao vencimento dos títulos
+//   do contas a pagar), em meses: arredondamento de prazo ÷ 30 (contando do meio do mês orçado — 36
+//   dias = mês seguinte). Pedido do usuário: só a média, sem espalhar pela curva. Natureza sem ficha,
+//   sem histórico ou sem prazo médio: sai no próprio mês (e avisa);
 // - saída de caixa: valor negativo.
 
 const ROTINA = 'dfc_orcamento_empresarial_base';
 const ORIGEM = 'SIENGE_ORCAMENTO_EMPRESARIAL';
-const MESES_CURVA = ['M0', 'M+1', 'M+2', 'M+3', 'M+4', 'M+5', 'M+6 ou mais'];
 
 // 'AAAA-MM' + k meses.
 function somarMeses(anoMes, k) {
@@ -24,28 +24,10 @@ function somarMeses(anoMes, k) {
   return `${Math.floor(t / 12)}-${String((t % 12) + 1).padStart(2, '0')}`;
 }
 
-// Cronograma da natureza: [[deslocamento em meses, fração]], somando 1. A partir da curva da ficha
-// (percentuais com 1 casa, então normaliza). Sem curva: tudo no próprio mês.
-function cronogramaDe(ficha) {
-  const curva = ficha?.curva;
-  if (!curva || ficha.sem_historico) return null;
-  const pares = MESES_CURVA.map((mes, k) => [k, Number(curva.find((c) => c.mes === mes)?.pct_valor || 0)]).filter(
-    ([, p]) => p > 0
-  );
-  const total = pares.reduce((t, [, p]) => t + p, 0);
-  return total > 0 ? pares.map(([k, p]) => [k, p / total]) : null;
-}
-
-// Espalha `valor` (em centavos, pra o total bater exato) pelo cronograma: o arredondamento fica na
-// maior parcela.
-function espalhar(centavos, cronograma) {
-  const partes = cronograma.map(([k, f]) => [k, Math.round(centavos * f)]);
-  const diferenca = centavos - partes.reduce((t, [, c]) => t + c, 0);
-  if (diferenca) {
-    const maior = partes.reduce((a, b, i, arr) => (Math.abs(b[1]) > Math.abs(arr[a][1]) ? i : a), 0);
-    partes[maior][1] += diferenca;
-  }
-  return partes;
+// Meses entre o mês orçado e o da saída de caixa, pelo prazo médio da ficha. Sem prazo: null.
+function deslocamentoDe(ficha) {
+  if (!ficha || ficha.prazo_medio === null || ficha.prazo_medio === undefined || ficha.ficha?.sem_historico) return null;
+  return Math.max(0, Math.round(Number(ficha.prazo_medio) / 30));
 }
 
 // Orçamentos da última versão: cada orçamento (`id`, um por centro de custo) pode vir em várias
@@ -98,22 +80,20 @@ async function valores(empresaId) {
     [empresaId]
   );
   const { rows: fichas } = await pool.query(
-    'SELECT sienge_id, ficha FROM dfc_desembolso_fichas WHERE empresa_id = $1',
+    'SELECT sienge_id, prazo_medio, ficha FROM dfc_desembolso_fichas WHERE empresa_id = $1',
     [empresaId]
   );
-  const cronogramas = new Map(fichas.map((f) => [f.sienge_id, cronogramaDe(f.ficha)]));
+  const deslocamentos = new Map(fichas.map((f) => [f.sienge_id, deslocamentoDe(f)]));
 
   const saida = new Map(); // 'centro|conta|mes' -> centavos
   const semCronograma = new Set();
   rows.forEach((r) => {
-    const cronograma = cronogramas.get(r.conta);
-    if (!cronograma) semCronograma.add(r.conta);
+    const k = deslocamentos.get(r.conta);
+    if (k === null || k === undefined) semCronograma.add(r.conta);
     const centavos = -Math.round(Number(r.valor) * 100); // saída de caixa
-    espalhar(centavos, cronograma || [[0, 1]]).forEach(([k, c]) => {
-      if (!c) return;
-      const chave = `${r.centro_id}|${r.conta}|${somarMeses(r.mes, k)}`;
-      saida.set(chave, (saida.get(chave) || 0) + c);
-    });
+    if (!centavos) return;
+    const chave = `${r.centro_id}|${r.conta}|${somarMeses(r.mes, k ?? 0)}`;
+    saida.set(chave, (saida.get(chave) || 0) + centavos);
   });
 
   const { rows: versoes } = await pool.query(
@@ -142,4 +122,4 @@ async function execucao(empresaId) {
   return executor.getExecucaoAtualOuUltima(empresaId, ROTINA);
 }
 
-module.exports = { ROTINA, ORIGEM, SQL_ULTIMA_VERSAO, valores, base, atualizarBase, execucao, espalhar, cronogramaDe, somarMeses };
+module.exports = { ROTINA, ORIGEM, SQL_ULTIMA_VERSAO, valores, base, atualizarBase, execucao, deslocamentoDe, somarMeses };
