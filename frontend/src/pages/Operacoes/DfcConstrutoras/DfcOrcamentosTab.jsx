@@ -1,5 +1,5 @@
 import { Fragment, useCallback, useEffect, useLayoutEffect, useMemo, useRef, useState } from 'react';
-import { Calculator, Check, Loader2, Minus, Plus, TriangleAlert } from 'lucide-react';
+import { Calculator, Check, Loader2, Minimize2, Minus, Plus, TriangleAlert } from 'lucide-react';
 import { listCentrosCustoDfc } from '../../../api/dfcCentros.api';
 import { listDfcMascaras } from '../../../api/dfcMascaras.api';
 import { listContas } from '../../../api/planosFinanceirosSienge.api';
@@ -157,8 +157,10 @@ const RECUO = [12, 32, 52, 76]; // padding-left de cada nível (centro, máscara
 // entram num grupo "SEM MÁSCARA DFC" pra não sumirem; as com "Projeta DFC" desmarcado no plano do
 // centro não entram (pedido do usuário), e máscara que fica sem conta nenhuma some. Começa tudo fechado.
 // Contas com Origem Projeção "HORIZON - INFORMADO" no plano do centro: o valor é digitado na própria
-// célula (backend dfc-orcamento-informado), e o botão direito abre o "Replicar valor até".
-export default function DfcOrcamentosTab({ empresaId, inicio, fim, refreshToken = 0 }) {
+// célula, e o botão direito abre o "Replicar valor até".
+// `telaCheia`: a grade ocupa a tela inteira (por cima do menu e do topo, e em tela cheia de verdade
+// no navegador quando ele deixa); sai pelo botão "Sair da tela cheia" ou com Esc (`onSairTelaCheia`).
+export default function DfcOrcamentosTab({ empresaId, inicio, fim, refreshToken = 0, telaCheia = false, onSairTelaCheia }) {
   const [dados, setDados] = useState(null);
   const [carregando, setCarregando] = useState(false);
   const [erroCarga, setErroCarga] = useState('');
@@ -380,6 +382,39 @@ export default function DfcOrcamentosTab({ empresaId, inicio, fim, refreshToken 
     });
   }, [meses, centros, planosCentro, planoGlobal, valorConta]);
 
+  const replicandoRef = useRef(null);
+  replicandoRef.current = replicando;
+
+  // Tela cheia: pede também a tela cheia do navegador (some a barra de endereço e as abas). Esc ali
+  // é do navegador — ele sai da tela cheia e o `fullscreenchange` fecha a nossa junto. Sem a do
+  // navegador (recusada ou indisponível), o Esc é tratado aqui (fora de um campo em edição: lá o
+  // primeiro Esc só cancela a digitação).
+  useEffect(() => {
+    if (!telaCheia) return undefined;
+    const doc = document.documentElement;
+    if (!document.fullscreenElement && doc.requestFullscreen) doc.requestFullscreen().catch(() => {});
+    const aoTrocar = () => {
+      if (!document.fullscreenElement) onSairTelaCheia?.();
+    };
+    const aoTeclar = (e) => {
+      if (e.key !== 'Escape' || e.target.tagName === 'INPUT') return;
+      // Com o "Replicar valor até" aberto, o Esc fecha só ele.
+      if (replicandoRef.current) {
+        setReplicando(null);
+        return;
+      }
+      onSairTelaCheia?.();
+    };
+    document.addEventListener('fullscreenchange', aoTrocar);
+    window.addEventListener('keydown', aoTeclar);
+    return () => {
+      document.removeEventListener('fullscreenchange', aoTrocar);
+      window.removeEventListener('keydown', aoTeclar);
+      if (document.fullscreenElement) document.exitFullscreen?.().catch(() => {});
+    };
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [telaCheia]);
+
   // A grade ocupa a altura que sobra na tela (do topo dela até o fim da janela), com a barra de
   // rolagem horizontal sempre à vista no rodapé — sem precisar descer até a última linha pra rolar
   // os meses. Mede a cada render (avisos e mensagens acima dela mudam a posição) e no resize.
@@ -388,9 +423,10 @@ export default function DfcOrcamentosTab({ empresaId, inicio, fim, refreshToken 
     if (!el) return undefined;
     const medir = () => {
       const main = el.closest('main');
-      const topo = el.getBoundingClientRect().top + (main ? main.scrollTop : 0);
-      // 24 = p-6 do <main>; 20 = p-5 do quadro branco.
-      const altura = Math.max(ALTURA_MINIMA_GRADE, Math.floor(window.innerHeight - topo - 44));
+      // Em tela cheia o quadro é fixo na janela (não rola com o <main>).
+      const topo = el.getBoundingClientRect().top + (main && !telaCheia ? main.scrollTop : 0);
+      // Normal: 24 = p-6 do <main> + 20 = p-5 do quadro branco. Tela cheia: só o p-5 do quadro.
+      const altura = Math.max(ALTURA_MINIMA_GRADE, Math.floor(window.innerHeight - topo - (telaCheia ? 20 : 44)));
       setAlturaGrade((atual) => (atual === altura ? atual : altura));
     };
     medir();
@@ -473,8 +509,37 @@ export default function DfcOrcamentosTab({ empresaId, inicio, fim, refreshToken 
   const larguraTabela = LARGURA_PRIMEIRA + largurasMes.reduce((t, l) => t + l, 0);
 
   return (
-    // O quadro branco fica na largura da página; quem rola pro lado é só a grade (abaixo).
-    <div className="min-w-0 rounded-card rounded-tl-none bg-white p-5 shadow-card">
+    // O quadro branco fica na largura da página; quem rola pro lado é só a grade (abaixo). Em tela
+    // cheia ele vira uma camada fixa por cima de tudo, com a barra de título e o botão de sair.
+    <div
+      className={
+        telaCheia
+          ? 'fixed inset-0 z-40 flex flex-col bg-white p-5'
+          : 'min-w-0 rounded-card rounded-tl-none bg-white p-5 shadow-card'
+      }
+    >
+      {telaCheia && (
+        <div className="-mt-1 mb-4 flex items-center gap-3 border-b border-gray-100 pb-3">
+          <Calculator size={18} className="shrink-0 text-primary-600" />
+          <div className="min-w-0">
+            <h2 className="text-sm font-semibold text-gray-900">Orçamentos</h2>
+            {periodoValido && (
+              <p className="text-xs text-gray-500">
+                {rotuloMes(meses[0])} a {rotuloMes(meses[meses.length - 1])}
+              </p>
+            )}
+          </div>
+          <span className="ml-auto hidden text-xs text-gray-400 sm:inline">Esc para sair</span>
+          <button
+            type="button"
+            onClick={onSairTelaCheia}
+            className="flex items-center gap-1.5 rounded-lg border border-gray-200 px-3 py-1.5 text-sm font-medium text-gray-700 transition-colors hover:bg-gray-50"
+          >
+            <Minimize2 size={15} />
+            Sair da tela cheia
+          </button>
+        </div>
+      )}
       {statusSalvamento && (
         <div className="-mt-1 mb-3 flex items-center justify-end text-xs" aria-live="polite">
           {statusSalvamento === 'salvando' ? (

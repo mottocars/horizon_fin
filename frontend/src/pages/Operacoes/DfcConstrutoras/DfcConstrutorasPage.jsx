@@ -15,6 +15,7 @@ import {
   Upload,
   Trash2,
   TrendingUp,
+  Maximize2,
   SlidersHorizontal,
   Tags,
   Wallet,
@@ -297,6 +298,9 @@ export default function DfcConstrutorasPage() {
   // orçamento recarrega (refreshTokenOrcamento).
   const [projecoesAberto, setProjecoesAberto] = useState(false);
   const [refreshTokenOrcamento, setRefreshTokenOrcamento] = useState(0);
+  // "Tela cheia" da grade do Orçamento (botão ao lado de "Projeções"); sai pelo botão da própria
+  // tela cheia ou com Esc — ver DfcOrcamentosTab.
+  const [orcamentoTelaCheia, setOrcamentoTelaCheia] = useState(false);
 
   // Botão "Nova máscara" fica no topo (padrão do resto do sistema, igual "Nova categoria" na
   // DRE), mas o campo de criar vive em DfcMascarasTab.jsx — dispara por ref.
@@ -497,6 +501,10 @@ export default function DfcConstrutorasPage() {
 
           {abaAtiva === 'orcamentos' && (
             <div className="flex shrink-0 items-center gap-2">
+              <Button type="button" variant="secondary" onClick={() => setOrcamentoTelaCheia(true)} disabled={!empresaId}>
+                <Maximize2 size={16} />
+                Tela cheia
+              </Button>
               <Button type="button" onClick={() => setProjecoesAberto(true)} disabled={!empresaId}>
                 <TrendingUp size={16} />
                 Projeções
@@ -581,6 +589,8 @@ export default function DfcConstrutorasPage() {
             inicio={inicioOrcamento}
             fim={fimOrcamento}
             refreshToken={refreshTokenOrcamento}
+            telaCheia={orcamentoTelaCheia}
+            onSairTelaCheia={() => setOrcamentoTelaCheia(false)}
           />
         ) : tabAtiva.id === 'repasses' ? (
           <DfcRepassesTab empresaId={empresaId} search={buscaRepasses} />
