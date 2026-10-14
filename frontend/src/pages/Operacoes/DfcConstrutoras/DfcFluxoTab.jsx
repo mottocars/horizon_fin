@@ -287,7 +287,7 @@ export default function DfcFluxoTab({ empresaId, inicio, fim, centros: centrosFi
           return (
             <td
               key={m}
-              className={`border-b px-3 text-right tabular-nums transition-colors ${e.borda} ${e.fundo} ${e.py} ${
+              className={`border-b px-3 text-center tabular-nums transition-colors ${e.borda} ${e.fundo} ${e.py} ${
                 tipo === 'saldo' ? '' : 'group-hover/linha:bg-gray-50'
               } ${tipo === 'saldo' || tipo === 'resultado' ? 'text-[13px]' : 'text-xs'} ${numeros} ${vazio ? '' : corValor(v)}`}
             >
