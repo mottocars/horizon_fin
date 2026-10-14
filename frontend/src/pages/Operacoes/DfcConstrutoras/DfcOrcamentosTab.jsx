@@ -5,6 +5,7 @@ import { listDfcMascaras } from '../../../api/dfcMascaras.api';
 import { listContas } from '../../../api/planosFinanceirosSienge.api';
 import { listTodasClassificacoesPlanoDfc } from '../../../api/dfcPlanoContas.api';
 import { getOrcamentoProjecaoCef } from '../../../api/dfcProjecaoCef.api';
+import { getAgingReceberDfc } from '../../../api/dfcAging.api';
 import {
   listOrcamentoInformadoDfc,
   replicarOrcamentoInformadoDfc,
@@ -187,9 +188,10 @@ export default function DfcOrcamentosTab({ empresaId, inicio, fim, refreshToken 
       listTodasClassificacoesPlanoDfc(empresaId),
       getOrcamentoProjecaoCef(empresaId),
       listOrcamentoInformadoDfc(empresaId),
+      getAgingReceberDfc(empresaId),
     ])
-      .then(([centros, mascaras, contas, classificacoes, projecao, valoresInformados]) => {
-        setDados({ centros, mascaras, contas: contas.data, classificacoes, projecao });
+      .then(([centros, mascaras, contas, classificacoes, projecao, valoresInformados, aging]) => {
+        setDados({ centros, mascaras, contas: contas.data, classificacoes, projecao, aging });
         setInformados(Object.fromEntries(valoresInformados.map((v) => [`${v.centro_id}|${v.sienge_id}|${v.mes}`, v.valor])));
       })
       .catch((err) => setErroCarga(err.response?.data?.message || 'Não foi possível carregar o orçamento.'))
@@ -272,11 +274,13 @@ export default function DfcOrcamentosTab({ empresaId, inicio, fim, refreshToken 
     [planosCentro, planoGlobal]
   );
 
-  // Valores: centro -> conta -> mês -> valor — os informados nas contas "HORIZON - INFORMADO" e a
-  // Projeção CEF nas demais; e quando cada obra foi projetada.
+  // Valores: centro -> conta -> mês -> valor — os informados nas contas "HORIZON - INFORMADO"; nas
+  // demais, a Projeção CEF (contas CEF_*) e o Aging a receber do Sienge (contas "SIENGE - AGING" —
+  // cada conta tem uma origem só, então os dois dividem o mesmo mapa); e quando cada obra foi projetada.
   const { valorConta, execucaoPorCentro } = useMemo(() => {
     const mapa = new Map();
     (dados?.projecao?.valores || []).forEach((v) => mapa.set(`${v.sienge_id}|${v.conta}|${v.mes}`, v.valor));
+    (dados?.aging?.valores || []).forEach((v) => mapa.set(`${v.centro_id}|${v.conta}|${v.mes}`, v.valor));
     return {
       valorConta: (sid, conta, mes) =>
         contaInformada(sid, conta)
@@ -506,6 +510,13 @@ export default function DfcOrcamentosTab({ empresaId, inicio, fim, refreshToken 
   }
 
   const mesAtual = mesDeHoje();
+  // Avisos da Projeção CEF + base do contas a receber nunca carregada (o Aging fica zerado).
+  const avisos = [
+    ...(dados?.projecao?.avisos || []),
+    ...(dados?.aging && !dados.aging.base?.parcelas
+      ? ['A base do contas a receber do Sienge ainda não foi carregada — o Aging a receber fica sem valores. Atualize em Projeções.']
+      : []),
+  ];
   const larguraTabela = LARGURA_PRIMEIRA + largurasMes.reduce((t, l) => t + l, 0);
 
   return (
@@ -595,9 +606,9 @@ export default function DfcOrcamentosTab({ empresaId, inicio, fim, refreshToken 
         // (centro / máscara / conta) e o cabeçalho dos meses congelados. Rolando pro lado, só os
         // meses andam; a página (filtros, abas) fica parada.
         <div>
-          {(dados?.projecao?.avisos || []).length > 0 && (
+          {avisos.length > 0 && (
             <div className="mb-3 space-y-1 rounded-lg bg-amber-50 px-3 py-2 text-xs text-amber-700">
-              {dados.projecao.avisos.map((a) => (
+              {avisos.map((a) => (
                 <p key={a} className="flex items-start gap-1.5">
                   <TriangleAlert size={13} className="mt-0.5 shrink-0" />
                   {a}

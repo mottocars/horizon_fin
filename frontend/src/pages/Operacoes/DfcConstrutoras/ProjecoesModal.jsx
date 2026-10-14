@@ -1,8 +1,9 @@
 import { useEffect, useState } from 'react';
-import { AlertTriangle, CheckCircle2, CircleDashed, Landmark, Loader2, XCircle } from 'lucide-react';
+import { AlertTriangle, CheckCircle2, CircleDashed, HandCoins, Landmark, Loader2, XCircle } from 'lucide-react';
 import Modal from '../../../components/Modal';
 import Button from '../../../components/Button';
 import { atualizarProjecaoCef, listElegiveisProjecaoCef } from '../../../api/dfcProjecaoCef.api';
+import { atualizarBaseReceberDfc, getAgingReceberDfc, getExecucaoBaseReceberDfc } from '../../../api/dfcAging.api';
 
 function dinheiro(v) {
   return Number(v || 0).toLocaleString('pt-BR', { minimumFractionDigits: 2, maximumFractionDigits: 2 });
@@ -14,10 +15,15 @@ function dataHora(v) {
     : null;
 }
 
-// Janela "Projeções" da aba Orçamentos (botão no topo da página). Por enquanto uma opção:
-// "Atualizar Projeção CEF" — recalcula, obra a obra, Novo Registro, Medição, Crédito PJ, Juros e
-// Amortização (motor em backend/src/modules/dfc-projecao-cef). Uma chamada por obra, em
-// sequência, pra a barra de progresso ser real. `onConcluido` recarrega o orçamento.
+// Janela "Projeções" da aba Orçamentos (botão no topo da página). Duas opções (o Aging em cima, o
+// CEF embaixo junto da lista de obras dele):
+// - "Atualizar Projeção CEF" — recalcula, obra a obra, Novo Registro, Medição, Crédito PJ, Juros e
+//   Amortização (motor em backend/src/modules/dfc-projecao-cef). Uma chamada por obra, em
+//   sequência, pra a barra de progresso ser real.
+// - "Atualizar Aging a Receber (Sienge)" — recarrega a base do contas a receber do Sienge pela
+//   mesma rotina da Gestão de Cobranças (Monitor de Integrações); roda em segundo plano no
+//   servidor e a janela acompanha por polling (dá pra fechar e voltar).
+// `onConcluido` recarrega o orçamento.
 export default function ProjecoesModal({ open, onClose, empresaId, onConcluido }) {
   const [obras, setObras] = useState([]);
   const [carregando, setCarregando] = useState(false);
@@ -26,6 +32,11 @@ export default function ProjecoesModal({ open, onClose, empresaId, onConcluido }
   const [progresso, setProgresso] = useState({ atual: 0, total: 0, nome: '' });
   const [resultados, setResultados] = useState({}); // sienge_id -> { ok, resumo | erro }
   const [concluido, setConcluido] = useState(false);
+  // Aging a receber: base carregada ({ parcelas, atualizado_em }) e execução da rotina.
+  const [baseReceber, setBaseReceber] = useState(null);
+  const [execAging, setExecAging] = useState(null);
+  const [erroAging, setErroAging] = useState('');
+  const agingRodando = execAging?.status === 'executando';
 
   function carregar() {
     setCarregando(true);
@@ -36,14 +47,52 @@ export default function ProjecoesModal({ open, onClose, empresaId, onConcluido }
       .finally(() => setCarregando(false));
   }
 
+  function carregarAging() {
+    getAgingReceberDfc(empresaId)
+      .then((r) => setBaseReceber(r.base))
+      .catch(() => setBaseReceber(null));
+  }
+
   useEffect(() => {
     if (!open || !empresaId) return;
     setResultados({});
     setConcluido(false);
     setProgresso({ atual: 0, total: 0, nome: '' });
+    setErroAging('');
     carregar();
+    carregarAging();
+    getExecucaoBaseReceberDfc(empresaId)
+      .then(setExecAging)
+      .catch(() => setExecAging(null));
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [open, empresaId]);
+
+  // Acompanha a rotina enquanto roda; ao terminar com sucesso, recarrega a base e o orçamento.
+  useEffect(() => {
+    if (!open || !agingRodando) return undefined;
+    const timer = setInterval(() => {
+      getExecucaoBaseReceberDfc(empresaId)
+        .then((exec) => {
+          setExecAging(exec);
+          if (exec?.status !== 'executando') {
+            carregarAging();
+            if (exec?.status === 'sucesso') onConcluido?.();
+          }
+        })
+        .catch(() => {});
+    }, 2000);
+    return () => clearInterval(timer);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [open, agingRodando, empresaId]);
+
+  async function atualizarAging() {
+    setErroAging('');
+    try {
+      setExecAging(await atualizarBaseReceberDfc(empresaId));
+    } catch (e) {
+      setErroAging(e.response?.data?.message || 'Não foi possível iniciar a atualização.');
+    }
+  }
 
   const elegiveis = obras.filter((o) => o.elegivel);
 
@@ -78,6 +127,60 @@ export default function ProjecoesModal({ open, onClose, empresaId, onConcluido }
   return (
     <Modal open={open} onClose={rodando ? () => {} : onClose} title="Projeções" maxWidthClass="max-w-2xl">
       <div className="space-y-4">
+        {/* Opção: Atualizar Aging a Receber (Sienge) */}
+        <div className="rounded-lg border border-gray-200 p-4">
+          <div className="flex items-start gap-3">
+            <span className="flex h-9 w-9 shrink-0 items-center justify-center rounded-lg bg-emerald-50 text-emerald-600">
+              <HandCoins size={18} />
+            </span>
+            <div className="min-w-0 flex-1">
+              <p className="text-sm font-semibold text-gray-900">Atualizar Aging a Receber (Sienge)</p>
+              <p className="mt-0.5 text-xs leading-relaxed text-gray-500">
+                Recarrega o contas a receber do Sienge (a mesma base da Gestão de Cobranças). Cada parcela entra no mês do
+                vencimento, com valor original − desconto + taxas, rateado por centro de custo e natureza — nas contas com
+                Origem Projeção SIENGE - AGING.
+              </p>
+              <p className="mt-1.5 text-[11px] text-gray-400">
+                {baseReceber?.parcelas
+                  ? `Base atual: ${baseReceber.parcelas.toLocaleString('pt-BR')} parcela(s), atualizada em ${dataHora(baseReceber.atualizado_em)}.`
+                  : 'Base ainda não carregada para esta empresa.'}
+              </p>
+            </div>
+            <Button type="button" onClick={atualizarAging} loading={agingRodando} disabled={agingRodando || rodando}>
+              Atualizar
+            </Button>
+          </div>
+
+          {execAging && (agingRodando || execAging.finalizadoEm) && (
+            <div className="mt-4">
+              {agingRodando ? (
+                <>
+                  <div className="mb-1 flex items-center justify-between text-xs text-gray-500">
+                    <span className="truncate">
+                      {execAging.progresso?.texto || 'Buscando o contas a receber no Sienge (pode levar alguns minutos)'} — dá
+                      pra fechar a janela, a atualização continua.
+                    </span>
+                  </div>
+                  <div className="h-2 w-full overflow-hidden rounded-full bg-gray-100">
+                    <div className="h-full w-1/3 animate-pulse rounded-full bg-primary-600" />
+                  </div>
+                </>
+              ) : execAging.status === 'sucesso' ? (
+                <p className="flex items-center gap-1.5 text-xs text-emerald-600">
+                  <CheckCircle2 size={14} className="shrink-0" />
+                  Última atualização em {dataHora(execAging.finalizadoEm)}: {execAging.resumo}
+                </p>
+              ) : (
+                <p className="flex items-center gap-1.5 text-xs text-red-600">
+                  <XCircle size={14} className="shrink-0" />
+                  {execAging.status === 'interrompida' ? 'A última atualização foi interrompida.' : execAging.erro || 'A última atualização falhou.'}
+                </p>
+              )}
+            </div>
+          )}
+          {erroAging && <p className="mt-3 rounded-lg bg-red-50 px-3 py-2 text-xs text-red-600">{erroAging}</p>}
+        </div>
+
         {/* Opção: Atualizar Projeção CEF */}
         <div className="rounded-lg border border-gray-200 p-4">
           <div className="flex items-start gap-3">
