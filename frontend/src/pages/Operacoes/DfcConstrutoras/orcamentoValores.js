@@ -15,6 +15,24 @@ const MESES_LONGOS = [
   'dezembro',
 ];
 
+// Opções fixas da "Origem Projeção" (pedido do usuário) — mesma lista do backend
+// (dfcPlanoContas.controller.js) e do CHECK da tabela dfc_plano_contas. Rótulos em maiúsculo (pedido
+// do usuário); os códigos (value) são os gravados no banco. Usada na aba Plano Contas e no filtro
+// "Origem DFC" da aba Orçamentos.
+export const ORIGENS_PROJECAO = [
+  { value: 'CEF_NOVO_REGISTRO', label: 'CEF - NOVO REGISTRO' },
+  { value: 'CEF_MEDICAO', label: 'CEF - MEDIÇÃO' },
+  { value: 'CEF_CREDITO_PJ', label: 'CEF - CRÉDITO PJ' },
+  { value: 'CEF_JUROS', label: 'CEF - JUROS' },
+  { value: 'CEF_AMORTIZACAO', label: 'CEF - AMORTIZAÇÃO' },
+  { value: 'SIENGE_ORCAMENTO_EMPRESARIAL', label: 'SIENGE - EMPRESARIAL DESEMBOLSO' },
+  { value: 'SIENGE_AGING', label: 'SIENGE - AGING' },
+  { value: 'HORIZON_ORCAMENTO_INFORMADO', label: 'HORIZON - INFORMADO' },
+];
+
+// Conta sem Origem Projeção, nos filtros ("NÃO INFORMADO", primeira opção).
+export const ORIGEM_NAO_INFORMADA = '__nao_informado__';
+
 // Origem Projeção cujos valores são digitados na própria aba Orçamentos.
 export const ORIGEM_INFORMADO = 'HORIZON_ORCAMENTO_INFORMADO';
 

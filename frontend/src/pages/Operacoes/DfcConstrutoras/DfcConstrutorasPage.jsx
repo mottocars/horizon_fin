@@ -42,6 +42,7 @@ import DfcRepassesTab from './DfcRepassesTab';
 import DfcOrcamentosTab from './DfcOrcamentosTab';
 import ProjecoesModal from './ProjecoesModal';
 import NovaVersaoPlanoModal from './NovaVersaoPlanoModal';
+import { ORIGENS_PROJECAO, ORIGEM_NAO_INFORMADA } from './orcamentoValores';
 import PlanosContasLista from './PlanosContasLista';
 
 // Mesmo padrão de DreGerencialPage.jsx: o `{ divider: true }` separa a DFC (a demonstração em
@@ -241,6 +242,10 @@ export default function DfcConstrutorasPage() {
     return `${fim.getFullYear()}-${String(fim.getMonth() + 1).padStart(2, '0')}-${String(fim.getDate()).padStart(2, '0')}`;
   });
 
+  // Aba Orçamentos: filtro "Origem DFC" (Origem Projeção das contas no plano do centro); vazio =
+  // todas.
+  const [origensOrcamento, setOrigensOrcamento] = useState([]);
+
   // Aba Plano Contas: abre nos cards dos planos (PlanosContasLista); clicar num card abre o plano
   // pra edição. Qual plano está aberto vai na URL (`plano`: 'global' ou o id do centro com plano
   // próprio — tem prioridade no Orçamento / Projeção CEF dele), pra o "Voltar" do navegador
@@ -376,6 +381,18 @@ export default function DfcConstrutorasPage() {
                     onChange={(e) => setFimOrcamento(e.target.value)}
                     disabled={!empresaId}
                     className="w-full rounded-lg border border-gray-200 px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-primary-100 disabled:bg-gray-50 disabled:text-gray-400"
+                  />
+                </div>
+                <div className="sm:min-w-56 sm:max-w-xs sm:flex-1">
+                  <label className="mb-1 block text-sm font-medium text-gray-700">Origem DFC</label>
+                  <SearchableSelect
+                    multiple
+                    value={origensOrcamento}
+                    onChange={(lista) => setOrigensOrcamento(lista || [])}
+                    disabled={!empresaId}
+                    options={[{ value: ORIGEM_NAO_INFORMADA, label: 'NÃO INFORMADO' }, ...ORIGENS_PROJECAO]}
+                    placeholder="Todas as origens"
+                    larguraPainel={320}
                   />
                 </div>
               </>
@@ -588,6 +605,7 @@ export default function DfcConstrutorasPage() {
             empresaId={empresaId}
             inicio={inicioOrcamento}
             fim={fimOrcamento}
+            origens={origensOrcamento}
             refreshToken={refreshTokenOrcamento}
             telaCheia={orcamentoTelaCheia}
             onSairTelaCheia={() => setOrcamentoTelaCheia(false)}

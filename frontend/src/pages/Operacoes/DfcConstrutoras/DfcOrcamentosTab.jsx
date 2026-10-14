@@ -12,7 +12,7 @@ import {
   salvarOrcamentoInformadoDfc,
 } from '../../../api/dfcOrcamentoInformado.api';
 import ReplicarValorModal from './ReplicarValorModal';
-import { ORIGEM_INFORMADO, interpretarValor } from './orcamentoValores';
+import { ORIGEM_INFORMADO, ORIGEM_NAO_INFORMADA, interpretarValor } from './orcamentoValores';
 
 const MESES = ['jan', 'fev', 'mar', 'abr', 'mai', 'jun', 'jul', 'ago', 'set', 'out', 'nov', 'dez'];
 
@@ -161,7 +161,17 @@ const RECUO = [12, 32, 52, 76]; // padding-left de cada nível (centro, máscara
 // célula, e o botão direito abre o "Replicar valor até".
 // `telaCheia`: a grade ocupa a tela inteira (por cima do menu e do topo, e em tela cheia de verdade
 // no navegador quando ele deixa); sai pelo botão "Sair da tela cheia" ou com Esc (`onSairTelaCheia`).
-export default function DfcOrcamentosTab({ empresaId, inicio, fim, refreshToken = 0, telaCheia = false, onSairTelaCheia }) {
+// `origens`: filtro "Origem DFC" do topo — só as contas com essas Origens Projeção no plano do centro
+// (ORIGEM_NAO_INFORMADA = sem origem); vazio = todas. Máscara e centro sem conta nenhuma somem.
+export default function DfcOrcamentosTab({
+  empresaId,
+  inicio,
+  fim,
+  origens = [],
+  refreshToken = 0,
+  telaCheia = false,
+  onSairTelaCheia,
+}) {
   const [dados, setDados] = useState(null);
   const [carregando, setCarregando] = useState(false);
   const [erroCarga, setErroCarga] = useState('');
@@ -217,6 +227,7 @@ export default function DfcOrcamentosTab({ empresaId, inicio, fim, refreshToken 
 
   // Estrutura (máscara 1 > máscara 2 > contas) de cada plano: o Global e a versão própria de cada
   // centro que tem uma (aba Plano Contas) — o centro com versão própria usa a dele, os demais o Global.
+  const filtroOrigens = useMemo(() => (origens.length ? new Set(origens) : null), [origens]);
   const { centros, planoGlobal, planosCentro } = useMemo(() => {
     if (!dados) return { centros: [], planoGlobal: { estrutura: [], todasContas: [], origemDaConta: {} }, planosCentro: {} };
     const analiticas = [...dados.contas]
@@ -229,7 +240,11 @@ export default function DfcOrcamentosTab({ empresaId, inicio, fim, refreshToken 
       const origemDaConta = Object.fromEntries(classificacoes.map((c) => [c.sienge_id, c.origem_projecao]));
       // "Projeta DFC" desmarcado no plano: a conta fica fora do Orçamento. Sem linha = marcado.
       const foraDoDfc = new Set(classificacoes.filter((c) => c.projeta_dfc === false).map((c) => c.sienge_id));
-      const contasDoPlano = analiticas.filter((c) => !foraDoDfc.has(c.sienge_id));
+      const contasDoPlano = analiticas.filter(
+        (c) =>
+          !foraDoDfc.has(c.sienge_id) &&
+          (!filtroOrigens || filtroOrigens.has(origemDaConta[c.sienge_id] ?? ORIGEM_NAO_INFORMADA))
+      );
       // Máscara sem nenhuma conta com "Projeta DFC" nesse plano não aparece (pedido do usuário) —
       // tanto a de nível 2 quanto a de nível 1 que ficar sem nenhuma de nível 2.
       const grupos = dados.mascaras
@@ -260,14 +275,19 @@ export default function DfcOrcamentosTab({ empresaId, inicio, fim, refreshToken 
       return { estrutura: grupos, todasContas: grupos.flatMap((g) => g.contas), origemDaConta };
     }
 
+    const global = montar(dados.classificacoes.global);
+    const porCentro = Object.fromEntries(
+      Object.entries(dados.classificacoes.centros).map(([id, lista]) => [id, { ...montar(lista), propria: true }])
+    );
     return {
-      centros: dados.centros.filter((c) => c.projeta_dfc).sort((a, b) => a.name.localeCompare(b.name, 'pt-BR')),
-      planoGlobal: montar(dados.classificacoes.global),
-      planosCentro: Object.fromEntries(
-        Object.entries(dados.classificacoes.centros).map(([id, lista]) => [id, { ...montar(lista), propria: true }])
-      ),
+      // Com o filtro "Origem DFC", centro sem nenhuma conta daquelas origens some.
+      centros: dados.centros
+        .filter((c) => c.projeta_dfc && (!filtroOrigens || (porCentro[c.sienge_id] || global).estrutura.length > 0))
+        .sort((a, b) => a.name.localeCompare(b.name, 'pt-BR')),
+      planoGlobal: global,
+      planosCentro: porCentro,
     };
-  }, [dados]);
+  }, [dados, filtroOrigens]);
 
   // A conta é "HORIZON - INFORMADO" no plano que o centro usa? (o valor vem da digitação)
   const contaInformada = useCallback(
@@ -665,7 +685,9 @@ export default function DfcOrcamentosTab({ empresaId, inicio, fim, refreshToken 
                 {centros.length === 0 && (
                   <tr>
                     <td colSpan={meses.length + 1} className="border-b border-gray-100 py-10 text-center text-sm text-gray-400">
-                      Nenhum centro de custo com &quot;Projeta DFC&quot; marcado. Marque na aba Centros Custos.
+                      {filtroOrigens
+                        ? 'Nenhuma conta com essa Origem DFC nos centros de custo.'
+                        : 'Nenhum centro de custo com "Projeta DFC" marcado. Marque na aba Centros Custos.'}
                     </td>
                   </tr>
                 )}

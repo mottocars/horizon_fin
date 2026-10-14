@@ -6,25 +6,11 @@ import { listContas } from '../../../api/planosFinanceirosSienge.api';
 import { listDfcMascaras } from '../../../api/dfcMascaras.api';
 import { listClassificacoesPlanoDfc, updateClassificacaoPlanoDfc } from '../../../api/dfcPlanoContas.api';
 import { useConfirm } from '../../../confirm/ConfirmContext';
+import { ORIGENS_PROJECAO } from './orcamentoValores';
 
 const LIMIT = 2000;
 
 const GRADE = 'grid grid-cols-[minmax(0,1fr)_130px_240px_260px_80px] items-center gap-3';
-
-// Opções fixas da "Origem Projeção" (pedido do usuário) — mesma lista do backend
-// (dfcPlanoContas.controller.js) e do CHECK da tabela dfc_plano_contas.
-// Rótulos em maiúsculo (pedido do usuário). Os códigos (value) são os gravados no banco — não
-// mudaram quando os rótulos mudaram.
-const ORIGENS_PROJECAO = [
-  { value: 'CEF_NOVO_REGISTRO', label: 'CEF - NOVO REGISTRO' },
-  { value: 'CEF_MEDICAO', label: 'CEF - MEDIÇÃO' },
-  { value: 'CEF_CREDITO_PJ', label: 'CEF - CRÉDITO PJ' },
-  { value: 'CEF_JUROS', label: 'CEF - JUROS' },
-  { value: 'CEF_AMORTIZACAO', label: 'CEF - AMORTIZAÇÃO' },
-  { value: 'SIENGE_ORCAMENTO_EMPRESARIAL', label: 'SIENGE - EMPRESARIAL DESEMBOLSO' },
-  { value: 'SIENGE_AGING', label: 'SIENGE - AGING' },
-  { value: 'HORIZON_ORCAMENTO_INFORMADO', label: 'HORIZON - INFORMADO' },
-];
 
 // Primeira opção dos filtros Máscara DFC e Origem Projeção (pedido do usuário): acha as contas
 // com aquele campo em branco. O filtro Conta não tem essa opção.
