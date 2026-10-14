@@ -26,6 +26,7 @@ import Button from '../../../components/Button';
 import SearchableSelect from '../../../components/SearchableSelect';
 import { listEmpresas } from '../../../api/empresas.api';
 import { listCentrosDfc, listVersoesParametrosDfc } from '../../../api/dfcParametros.api';
+import { listCentrosCustoDfc } from '../../../api/dfcCentros.api';
 import { gerarPlano } from '../../../api/planosFinanceirosSienge.api';
 import { excluirVersaoPlanoDfc, listVersoesPlanoDfc } from '../../../api/dfcPlanoContas.api';
 import { useConfirm } from '../../../confirm/ConfirmContext';
@@ -41,6 +42,7 @@ import DfcAvancosTab from './DfcAvancosTab';
 import DfcRepassesTab from './DfcRepassesTab';
 import DfcOrcamentosTab from './DfcOrcamentosTab';
 import NovaVersaoOrcamentoModal from './NovaVersaoOrcamentoModal';
+import DfcFluxoTab from './DfcFluxoTab';
 import NovaVersaoPlanoModal from './NovaVersaoPlanoModal';
 import { ORIGENS_PROJECAO, ORIGEM_NAO_INFORMADA } from './orcamentoValores';
 import PlanosContasLista from './PlanosContasLista';
@@ -242,6 +244,28 @@ export default function DfcConstrutorasPage() {
     return `${fim.getFullYear()}-${String(fim.getMonth() + 1).padStart(2, '0')}-${String(fim.getDate()).padStart(2, '0')}`;
   });
 
+  // Aba DFC (fluxo de caixa): mesmo período do Orçamentos e filtro de centros de custo (os com
+  // "Projeta DFC"; vazio = todos).
+  const [centrosFluxo, setCentrosFluxo] = useState([]);
+  const [centrosFluxoOpcoes, setCentrosFluxoOpcoes] = useState([]);
+  useEffect(() => {
+    setCentrosFluxo([]);
+    if (!empresaId) {
+      setCentrosFluxoOpcoes([]);
+      return;
+    }
+    listCentrosCustoDfc(empresaId)
+      .then((lista) =>
+        setCentrosFluxoOpcoes(
+          lista
+            .filter((c) => c.projeta_dfc)
+            .sort((a, b) => a.name.localeCompare(b.name, 'pt-BR'))
+            .map((c) => ({ value: c.sienge_id, label: c.name }))
+        )
+      )
+      .catch(() => setCentrosFluxoOpcoes([]));
+  }, [empresaId]);
+
   // Aba Orçamentos: filtro "Origem DFC" (Origem Projeção das contas no plano do centro); vazio =
   // todas.
   const [origensOrcamento, setOrigensOrcamento] = useState([]);
@@ -370,7 +394,7 @@ export default function DfcConstrutorasPage() {
               </>
             )}
 
-            {abaAtiva === 'orcamentos' && (
+            {(abaAtiva === 'orcamentos' || abaAtiva === 'dfc') && (
               <>
                 <div className="sm:w-36">
                   <label className="mb-1 block text-sm font-medium text-gray-700">Data início</label>
@@ -392,6 +416,22 @@ export default function DfcConstrutorasPage() {
                     className="w-full rounded-lg border border-gray-200 px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-primary-100 disabled:bg-gray-50 disabled:text-gray-400"
                   />
                 </div>
+                {abaAtiva === 'dfc' && (
+                  <div className="sm:min-w-56 sm:max-w-xs sm:flex-1">
+                    <label className="mb-1 block text-sm font-medium text-gray-700">Centro de custo</label>
+                    <SearchableSelect
+                      multiple
+                      value={centrosFluxo}
+                      onChange={(lista) => setCentrosFluxo(lista || [])}
+                      disabled={!empresaId}
+                      options={centrosFluxoOpcoes}
+                      placeholder="Todos os centros"
+                      larguraPainel={320}
+                    />
+                  </div>
+                )}
+                {abaAtiva === 'orcamentos' && (
+                <>
                 <div className="sm:min-w-56 sm:max-w-xs sm:flex-1">
                   <label className="mb-1 block text-sm font-medium text-gray-700">Origem DFC</label>
                   <SearchableSelect
@@ -429,6 +469,8 @@ export default function DfcConstrutorasPage() {
                     larguraPainel={280}
                   />
                 </div>
+                </>
+                )}
               </>
             )}
 
@@ -722,6 +764,8 @@ export default function DfcConstrutorasPage() {
           />
         ) : tabAtiva.id === 'mascaras' ? (
           <DfcMascarasTab ref={mascarasTabRef} empresaId={empresaId} />
+        ) : tabAtiva.id === 'dfc' ? (
+          <DfcFluxoTab empresaId={empresaId} inicio={inicioOrcamento} fim={fimOrcamento} centros={centrosFluxo} />
         ) : (
           <AbaEmConstrucao key={tabAtiva.id} empresaId={empresaId} icon={tabAtiva.icon} titulo={tabAtiva.label} />
         )}

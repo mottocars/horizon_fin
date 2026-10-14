@@ -63,3 +63,27 @@ export function interpretarValor(texto) {
   if (!/^-?\d+(\.\d+)?$/.test(t)) return NaN;
   return Math.round(parseFloat(t) * 100) / 100;
 }
+
+const MESES_CURTOS = ['jan', 'fev', 'mar', 'abr', 'mai', 'jun', 'jul', 'ago', 'set', 'out', 'nov', 'dez'];
+
+// '2026-10' -> 'out/26'.
+export function rotuloMesCurto(anoMes) {
+  const [ano, mes] = anoMes.split('-');
+  return `${MESES_CURTOS[Number(mes) - 1]}/${ano.slice(2)}`;
+}
+
+// 'AAAA-MM' de cada mês entre as duas datas ('AAAA-MM-DD'), inclusive (no máximo 240).
+export function mesesEntre(inicio, fim) {
+  const meses = [];
+  let [ano, mes] = inicio.slice(0, 7).split('-').map(Number);
+  const [anoFim, mesFim] = fim.slice(0, 7).split('-').map(Number);
+  while ((ano < anoFim || (ano === anoFim && mes <= mesFim)) && meses.length < 240) {
+    meses.push(`${ano}-${String(mes).padStart(2, '0')}`);
+    mes += 1;
+    if (mes > 12) {
+      mes = 1;
+      ano += 1;
+    }
+  }
+  return meses;
+}
