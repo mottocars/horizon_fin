@@ -33,6 +33,7 @@ import DfcCentrosTab from './DfcCentrosTab';
 import DfcCiwebTab from './DfcCiwebTab';
 import DfcPlanoContasTab from './DfcPlanoContasTab';
 import DfcAvancosTab from './DfcAvancosTab';
+import DfcRepassesTab from './DfcRepassesTab';
 
 // Mesmo padrão de DreGerencialPage.jsx: o `{ divider: true }` separa a DFC (a demonstração em
 // si) das abas de cadastro/parâmetro que dão suporte a ela, que ficam juntas, sem divisor entre
@@ -214,6 +215,9 @@ export default function DfcConstrutorasPage() {
   const [inicioAvancos, setInicioAvancos] = useState(`${anoAtual}-01-01`);
   const [fimAvancos, setFimAvancos] = useState(`${anoAtual}-12-31`);
 
+  // Aba Repasses: busca por mutuário ou contrato (só conveniência de navegador, fora da URL).
+  const [buscaRepasses, setBuscaRepasses] = useState('');
+
   // Botão "Nova máscara" fica no topo (padrão do resto do sistema, igual "Nova categoria" na
   // DRE), mas o campo de criar vive em DfcMascarasTab.jsx — dispara por ref.
   const mascarasTabRef = useRef(null);
@@ -266,6 +270,23 @@ export default function DfcConstrutorasPage() {
                   />
                 </div>
               </>
+            )}
+
+            {abaAtiva === 'repasses' && (
+              <div className="sm:min-w-56 sm:max-w-sm sm:flex-1">
+                <label className="mb-1 block text-sm font-medium text-gray-700">Buscar</label>
+                <div className="relative">
+                  <Search size={15} className="pointer-events-none absolute left-3 top-1/2 -translate-y-1/2 text-gray-400" />
+                  <input
+                    type="text"
+                    value={buscaRepasses}
+                    onChange={(e) => setBuscaRepasses(e.target.value)}
+                    disabled={!empresaId}
+                    placeholder={!empresaId ? 'Selecione a empresa primeiro' : 'Buscar por mutuário ou contrato...'}
+                    className="w-full rounded-lg border border-gray-200 py-2 pl-9 pr-3 text-sm focus:outline-none focus:ring-2 focus:ring-primary-100 disabled:bg-gray-50 disabled:text-gray-400"
+                  />
+                </div>
+              </div>
             )}
 
             {abaAtiva === 'avancos-obras' && (
@@ -428,7 +449,9 @@ export default function DfcConstrutorasPage() {
       <div>
         <Tabs tabs={TABS} activeId={tabAtiva.id} onChange={(aba) => atualizarParams({ aba })} />
 
-        {tabAtiva.id === 'avancos-obras' ? (
+        {tabAtiva.id === 'repasses' ? (
+          <DfcRepassesTab empresaId={empresaId} search={buscaRepasses} />
+        ) : tabAtiva.id === 'avancos-obras' ? (
           <DfcAvancosTab empresaId={empresaId} inicio={inicioAvancos} fim={fimAvancos} />
         ) : tabAtiva.id === 'plano-contas' ? (
           <DfcPlanoContasTab

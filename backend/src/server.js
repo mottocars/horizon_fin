@@ -35,6 +35,7 @@ const dfcParametrosRoutes = require('./modules/dfc-parametros/dfcParametros.rout
 const dfcCentrosRoutes = require('./modules/dfc-centros/dfcCentros.routes');
 const dfcPlanoContasRoutes = require('./modules/dfc-plano-contas/dfcPlanoContas.routes');
 const dfcAvancosRoutes = require('./modules/dfc-avancos/dfcAvancos.routes');
+const dfcRepassesRoutes = require('./modules/dfc-repasses/dfcRepasses.routes');
 const bancosRoutes = require('./modules/bancos/bancos.routes');
 const eprRoutes = require('./modules/epr/epr.routes');
 const dcdRoutes = require('./modules/dcd/dcd.routes');
@@ -147,6 +148,7 @@ app.use('/api/dfc-parametros', exigirTela([T.DFC]), dfcParametrosRoutes);
 app.use('/api/dfc-centros', exigirTela([T.DFC]), dfcCentrosRoutes);
 app.use('/api/dfc-plano-contas', exigirTela([T.DFC]), dfcPlanoContasRoutes);
 app.use('/api/dfc-avancos', exigirTela([T.DFC]), dfcAvancosRoutes);
+app.use('/api/dfc-repasses', exigirTela([T.DFC]), dfcRepassesRoutes);
 app.use('/api/bancos', exigirTela([T.SALDOS]), exigirMaster, bancosRoutes);
 app.use('/api/epr', exigirTela([T.PORTAL]), eprRoutes);
 // DCD e Extrato também na aba CIWEB da DFC Construtoras (espelho do Portal das Construtoras,
