@@ -1,18 +1,18 @@
 import { Fragment, useCallback, useEffect, useLayoutEffect, useMemo, useRef, useState } from 'react';
-import { History, Minus, Plus, TriangleAlert, Wallet } from 'lucide-react';
+import { ChevronRight, History, Info, TriangleAlert, Wallet } from 'lucide-react';
 import { listDfcMascaras } from '../../../api/dfcMascaras.api';
 import { listContas } from '../../../api/planosFinanceirosSienge.api';
 import { listTodasClassificacoesPlanoDfc } from '../../../api/dfcPlanoContas.api';
 import { getOrcamentoDfc } from '../../../api/dfcOrcamento.api';
-import { mesesEntre, rotuloMesCurto } from './orcamentoValores';
+import { mesesEntre } from './orcamentoValores';
 
-const LARGURA_PRIMEIRA = 360;
-const LARGURA_MES = 96;
-const LARGURA_TOTAL_MIN = 112;
-const FOLGA = 30;
+const LARGURA_PRIMEIRA = 340;
+const LARGURA_MES = 104;
+const FOLGA = 36;
 const ALTURA_MINIMA_GRADE = 320;
-const RECUO = [12, 32, 56]; // máscara 1, máscara 2, conta
-const SOMBRA_COLUNA_FIXA = '[&_tr>*:nth-child(2)]:shadow-[6px_0_8px_-6px_rgba(16,24,40,0.25)]';
+const RECUO = [16, 40, 64]; // máscara 1, máscara 2, conta
+const SOMBRA_COLUNA_FIXA = '[&_tr>*:first-child]:shadow-[6px_0_8px_-6px_rgba(16,24,40,0.18)]';
+const MESES_CAB = ['JAN', 'FEV', 'MAR', 'ABR', 'MAI', 'JUN', 'JUL', 'AGO', 'SET', 'OUT', 'NOV', 'DEZ'];
 const SEM_MASCARA = 'sem';
 
 function dinheiro(v) {
@@ -66,9 +66,9 @@ const r2 = (v) => Math.round(v * 100) / 100;
 //    ou o Global); conta sem máscara vai pra "SEM MÁSCARA DFC";
 // 3) RESULTADO — entradas − saídas (os valores já vêm com sinal: saída negativa);
 // 4) SALDO FINAL — Saldo Inicial + Resultado, que vira o Saldo Inicial do mês seguinte.
-// Período = o mesmo da aba Orçamentos (filtros do topo). Coluna Total: soma do período nas máscaras
-// e no Resultado; Saldo Inicial do 1º mês e Saldo Final do último. Mesma grade do Orçamentos (rolagem
-// própria, nome e Total congelados).
+// Período = o mesmo da aba Orçamentos (filtros do topo). Visual de demonstrativo (é o fluxo de caixa
+// oficial — pedido do usuário): sem coluna de total, sem linhas verticais, zero em branco, saldos em
+// faixas discretas; rolagem própria com a primeira coluna congelada, como no Orçamentos.
 export default function DfcFluxoTab({ empresaId, inicio, fim, centros: centrosFiltro = [] }) {
   const [dados, setDados] = useState(null);
   const [carregando, setCarregando] = useState(false);
@@ -166,16 +166,8 @@ export default function DfcFluxoTab({ empresaId, inicio, fim, centros: centrosFi
     return { estrutura: grupos, porMes: { resultado, saldoInicial, saldoFinal } };
   }, [dados, meses, centrosFiltro]);
 
-  const totalPeriodo = (pm) => {
-    let t = null;
-    meses.forEach((m) => {
-      if (pm[m] !== undefined) t = (t || 0) + pm[m];
-    });
-    return t === null ? null : r2(t);
-  };
-
-  // Larguras: o bastante pro maior valor de cada mês / do Total.
-  const { largurasMes, larguraTotal } = useMemo(() => {
+  // Larguras: o bastante pro maior valor de cada mês.
+  const largurasMes = useMemo(() => {
     const linhas = [porMes.saldoInicial || {}, porMes.resultado || {}, porMes.saldoFinal || {}];
     estrutura.forEach((g) => {
       linhas.push(g.porMes);
@@ -185,14 +177,7 @@ export default function DfcFluxoTab({ empresaId, inicio, fim, centros: centrosFi
       });
     });
     const largura = (v) => (v ? larguraTexto(dinheiro(v)) : 0);
-    const porMesLarg = meses.map((m) => Math.max(LARGURA_MES, Math.ceil(Math.max(0, ...linhas.map((pm) => largura(pm[m])))) + FOLGA));
-    let maiorTotal = 0;
-    linhas.forEach((pm) => {
-      let t = 0;
-      meses.forEach((m) => (t += pm[m] || 0));
-      maiorTotal = Math.max(maiorTotal, largura(r2(t)));
-    });
-    return { largurasMes: porMesLarg, larguraTotal: Math.max(LARGURA_TOTAL_MIN, Math.ceil(maiorTotal) + FOLGA) };
+    return meses.map((m) => Math.max(LARGURA_MES, Math.ceil(Math.max(0, ...linhas.map((pm) => largura(pm[m])))) + FOLGA));
   }, [estrutura, porMes, meses]);
 
   // A grade ocupa a altura que sobra na tela (mesma regra do Orçamentos).
@@ -225,69 +210,66 @@ export default function DfcFluxoTab({ empresaId, inicio, fim, centros: centrosFi
   }
 
   const versao = dados?.orcamento?.versao || null;
-  const larguraTabela = LARGURA_PRIMEIRA + larguraTotal + largurasMes.reduce((t, l) => t + l, 0);
-  const corValor = (v, forte) =>
-    `${v === null || v === undefined || v === 0 ? 'text-gray-300' : v < 0 ? 'text-red-600' : 'text-gray-900'} ${forte ? 'font-semibold' : ''}`;
+  const larguraTabela = LARGURA_PRIMEIRA + largurasMes.reduce((t, l) => t + l, 0);
+  const mesAtual = (() => {
+    const d = new Date();
+    return `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}`;
+  })();
 
-  // Uma linha da grade. `tipo`: 'saldo' | 'resultado' | 'n1' | 'n2' | 'conta'. `total`: o valor da
-  // coluna Total (cada tipo tem a sua regra).
-  function linha({ chave, tipo, rotulo, sub, pm, total, nivel = 0, podeAbrir = false, cinza = false, dica }) {
+  // Estilo de cada tipo de linha (a primeira coluna é congelada, então o fundo é sempre sólido).
+  const ESTILO = {
+    saldo: { fundo: 'bg-slate-50', texto: 'text-[13px] font-semibold text-slate-900', py: 'py-3', borda: 'border-slate-200' },
+    resultado: { fundo: 'bg-white', texto: 'text-[13px] font-semibold text-gray-900', py: 'py-3', borda: 'border-gray-200' },
+    n1: { fundo: 'bg-white', texto: 'text-[13px] font-semibold text-gray-900', py: 'py-2.5', borda: 'border-gray-100' },
+    n2: { fundo: 'bg-white', texto: 'text-xs text-gray-700', py: 'py-2', borda: 'border-gray-100' },
+    conta: { fundo: 'bg-white', texto: 'text-xs text-gray-500', py: 'py-1.5', borda: 'border-gray-100' },
+  };
+  const corValor = (v) => (v < 0 ? 'text-rose-600' : 'text-gray-900');
+
+  // Uma linha da grade. `tipo`: 'saldo' | 'resultado' | 'n1' | 'n2' | 'conta'.
+  function linha({ chave, tipo, rotulo, sub, pm, nivel = 0, podeAbrir = false, cinza = false, dica, separar = false }) {
     const aberto = abertos.includes(chave);
-    const destaque = tipo === 'saldo' || tipo === 'resultado';
-    const fundo =
-      tipo === 'saldo'
-        ? 'bg-slate-100 group-hover/linha:bg-slate-200'
-        : tipo === 'resultado'
-          ? 'bg-gray-50 group-hover/linha:bg-gray-100'
-          : tipo === 'n1'
-            ? 'bg-gray-50 group-hover/linha:bg-gray-100'
-            : 'bg-white group-hover/linha:bg-gray-50';
-    const borda = destaque ? 'border-gray-300' : tipo === 'n1' ? 'border-gray-200' : 'border-gray-100';
-    const forte = destaque || tipo === 'n1';
+    const e = ESTILO[tipo];
+    const numeros = tipo === 'saldo' || tipo === 'resultado' || tipo === 'n1' ? 'font-semibold' : tipo === 'conta' ? 'text-gray-600' : '';
     return (
       <tr
         key={chave}
         onClick={() => podeAbrir && alternar(chave)}
-        className={`group/linha ${podeAbrir ? 'cursor-pointer' : ''} ${tipo === 'resultado' ? '[&>td]:border-t-2 [&>td]:border-t-gray-300' : ''}`}
+        className={`group/linha ${podeAbrir ? 'cursor-pointer' : ''} ${separar ? '[&>td]:border-t [&>td]:border-t-gray-300' : ''}`}
       >
         <td
-          className={`sticky left-0 z-10 border-b border-r border-r-gray-200 ${borda} ${fundo} ${destaque ? 'py-2.5' : tipo === 'conta' ? 'py-1.5' : 'py-2'} pr-2`}
-          style={{ paddingLeft: destaque ? 16 : RECUO[nivel] }}
-          title={dica}
+          className={`sticky left-0 z-10 border-b ${e.borda} ${e.fundo} ${e.py} pr-3 transition-colors ${
+            tipo === 'saldo' ? '' : 'group-hover/linha:bg-gray-50'
+          }`}
+          style={{ paddingLeft: tipo === 'saldo' || tipo === 'resultado' ? 20 : RECUO[nivel] }}
         >
-          <span className="flex min-w-0 items-center gap-2">
+          <span className="flex min-w-0 items-center gap-1.5">
             {(tipo === 'n1' || tipo === 'n2') && (
-              <span
-                className={`flex h-4 w-4 shrink-0 items-center justify-center rounded ${
-                  podeAbrir ? 'bg-primary-100 text-primary-600' : 'bg-gray-100 text-gray-300'
-                }`}
-              >
-                {aberto ? <Minus size={10} /> : <Plus size={10} />}
+              <ChevronRight
+                size={14}
+                className={`shrink-0 transition-transform ${aberto ? 'rotate-90' : ''} ${podeAbrir ? 'text-gray-400' : 'text-gray-200'}`}
+              />
+            )}
+            {sub && <span className="shrink-0 font-mono text-[11px] text-gray-400">{sub}</span>}
+            <span className={`min-w-0 truncate ${e.texto} ${cinza ? 'italic text-gray-400' : ''}`}>{rotulo}</span>
+            {dica && (
+              <span title={dica} className="shrink-0 text-slate-400">
+                <Info size={13} />
               </span>
             )}
-            {sub && <span className="shrink-0 text-[11px] tabular-nums text-gray-400">{sub}</span>}
-            <span
-              className={`min-w-0 truncate ${destaque ? 'text-xs font-bold uppercase tracking-wide text-gray-900' : forte ? 'text-xs font-semibold text-gray-900' : tipo === 'n2' ? 'text-xs font-medium text-gray-800' : 'text-xs text-gray-700'} ${
-                cinza ? 'italic text-gray-500' : ''
-              }`}
-            >
-              {rotulo}
-            </span>
           </span>
-        </td>
-        <td
-          className={`sticky z-10 border-b border-r border-b-blue-100 border-r-blue-200 bg-blue-50 px-2 text-right tabular-nums group-hover/linha:bg-blue-100 ${
-            destaque ? 'py-2.5' : 'py-1.5'
-          } ${corValor(total, forte)}`}
-          style={{ left: LARGURA_PRIMEIRA }}
-        >
-          {total === null || total === undefined || total === 0 ? '—' : dinheiro(total)}
         </td>
         {meses.map((m) => {
           const v = pm[m];
+          const vazio = v === undefined || v === null || v === 0;
           return (
-            <td key={m} className={`border-b border-l px-2 text-right tabular-nums ${borda} ${fundo} ${destaque ? 'py-2.5' : 'py-1.5'} ${corValor(v, forte)}`}>
-              {v === undefined || v === null || v === 0 ? '—' : dinheiro(v)}
+            <td
+              key={m}
+              className={`border-b px-3 text-right tabular-nums transition-colors ${e.borda} ${e.fundo} ${e.py} ${
+                tipo === 'saldo' ? '' : 'group-hover/linha:bg-gray-50'
+              } ${tipo === 'saldo' || tipo === 'resultado' ? 'text-[13px]' : 'text-xs'} ${numeros} ${vazio ? '' : corValor(v)}`}
+            >
+              {vazio ? '' : dinheiro(v)}
             </td>
           );
         })}
@@ -295,23 +277,20 @@ export default function DfcFluxoTab({ empresaId, inicio, fim, centros: centrosFi
     );
   }
 
-  const mesAtual = (() => {
-    const d = new Date();
-    return `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}`;
-  })();
-
   return (
     <div className="min-w-0 rounded-card rounded-tl-none bg-white p-5 shadow-card">
       {dados && (
-        <div className="-mt-1 mb-3 flex flex-wrap items-center gap-x-3 gap-y-1.5 text-xs text-gray-500">
-          <span className="rounded-full bg-primary-50 px-2.5 py-0.5 font-medium text-primary-700 ring-1 ring-primary-100">Projetado</span>
+        <div className="-mt-1 mb-4 flex flex-wrap items-center gap-x-3 gap-y-1.5 text-xs text-gray-500">
+          <span className="inline-flex items-center gap-1.5 rounded-full bg-primary-50 px-2.5 py-0.5 font-medium text-primary-700">
+            <span className="h-1.5 w-1.5 rounded-full bg-primary-500" />
+            Projetado
+          </span>
           <span className="flex items-center gap-1.5">
-            <History size={14} className="shrink-0 text-gray-400" />
+            <History size={13} className="shrink-0 text-gray-400" />
             {versao
-              ? `Orçamento versão ${versao.numero} (última) · salva em ${dataHora(versao.criado_em)}${versao.usuario ? ` por ${versao.usuario}` : ''}`
+              ? `Orçamento versão ${versao.numero} · ${dataHora(versao.criado_em)}${versao.usuario ? ` · ${versao.usuario}` : ''}`
               : 'Nenhuma versão salva do Orçamento — salve uma na aba Orçamentos pra ver o fluxo.'}
           </span>
-          <span className="text-gray-400">Saldo inicial do primeiro mês: do sistema, num próximo passo (por ora, 0).</span>
         </div>
       )}
 
@@ -337,43 +316,41 @@ export default function DfcFluxoTab({ empresaId, inicio, fim, centros: centrosFi
         <div
           ref={gradeRef}
           onScroll={(e) => setRolouX(e.currentTarget.scrollLeft > 0)}
-          className={`overflow-auto overscroll-x-contain rounded-lg ${rolouX ? SOMBRA_COLUNA_FIXA : ''}`}
+          className={`overflow-auto overscroll-x-contain rounded-lg border border-gray-200 ${rolouX ? SOMBRA_COLUNA_FIXA : ''}`}
           style={{ maxHeight: alturaGrade ?? undefined }}
         >
           <table
-            className="border-separate border-spacing-0 text-left text-xs"
+            className="border-separate border-spacing-0 text-left"
             style={{ tableLayout: 'fixed', width: larguraTabela, minWidth: '100%' }}
           >
             <colgroup>
               <col style={{ width: LARGURA_PRIMEIRA }} />
-              <col style={{ width: larguraTotal }} />
               {meses.map((m, i) => (
                 <col key={m} style={{ width: largurasMes[i] }} />
               ))}
             </colgroup>
             <thead>
-              <tr className="[&>th:first-child]:rounded-tl-lg [&>th:last-child]:rounded-tr-lg">
-                <th className="sticky left-0 top-0 z-30 border-b-2 border-r border-b-blue-500 border-r-blue-100 bg-blue-50 py-2.5 pl-4 pr-3 text-xs font-medium uppercase tracking-wide text-blue-700">
+              <tr>
+                <th className="sticky left-0 top-0 z-30 border-b border-gray-200 bg-white py-3 pl-5 pr-3 align-bottom text-[11px] font-semibold uppercase tracking-wider text-gray-500">
                   Fluxo de caixa
                 </th>
-                <th
-                  className="sticky top-0 z-30 border-b-2 border-r border-b-blue-500 border-r-blue-200 bg-blue-100 px-2 py-2.5 text-right text-xs font-semibold uppercase tracking-wide text-blue-800"
-                  style={{ left: LARGURA_PRIMEIRA }}
-                  title="Máscaras e Resultado: soma do período. Saldo Inicial: o do 1º mês. Saldo Final: o do último."
-                >
-                  Total
-                </th>
-                {meses.map((m) => (
-                  <th
-                    key={m}
-                    title={m === mesAtual ? 'Mês atual' : undefined}
-                    className={`sticky top-0 z-20 border-b-2 border-l border-b-blue-500 border-l-blue-100 px-2 py-2.5 text-right text-xs font-medium uppercase tracking-wide ${
-                      m === mesAtual ? 'bg-blue-100 font-semibold text-blue-800' : 'bg-blue-50 text-blue-700'
-                    }`}
-                  >
-                    {rotuloMesCurto(m)}
-                  </th>
-                ))}
+                {meses.map((m) => {
+                  const atual = m === mesAtual;
+                  return (
+                    <th
+                      key={m}
+                      title={atual ? 'Mês atual' : undefined}
+                      className={`sticky top-0 z-20 border-b bg-white px-3 py-2 text-right align-bottom ${
+                        atual ? 'border-b-2 border-b-primary-500' : 'border-gray-200'
+                      }`}
+                    >
+                      <span className={`block text-[11px] font-semibold tracking-wider ${atual ? 'text-primary-700' : 'text-gray-600'}`}>
+                        {MESES_CAB[Number(m.slice(5, 7)) - 1]}
+                      </span>
+                      <span className="block text-[10px] font-medium text-gray-400">{m.slice(0, 4)}</span>
+                    </th>
+                  );
+                })}
               </tr>
             </thead>
             <tbody>
@@ -382,12 +359,11 @@ export default function DfcFluxoTab({ empresaId, inicio, fim, centros: centrosFi
                 tipo: 'saldo',
                 rotulo: 'Saldo inicial',
                 pm: porMes.saldoInicial || {},
-                total: (porMes.saldoInicial || {})[meses[0]] ?? null,
-                dica: 'No 1º mês: do sistema (próximo passo — por ora 0). Nos demais: o Saldo Final do mês anterior.',
+                dica: 'No 1º mês virá do sistema (próximo passo — por ora, 0). Nos demais, é o Saldo Final do mês anterior.',
               })}
               {estrutura.length === 0 && (
                 <tr>
-                  <td colSpan={meses.length + 2} className="border-b border-gray-100 py-8 text-center text-sm text-gray-400">
+                  <td colSpan={meses.length + 1} className="border-b border-gray-100 py-10 text-center text-sm text-gray-400">
                     {versao ? 'Nenhum valor no período.' : 'Sem valores — nenhuma versão salva do Orçamento.'}
                   </td>
                 </tr>
@@ -401,7 +377,6 @@ export default function DfcFluxoTab({ empresaId, inicio, fim, centros: centrosFi
                       tipo: 'n1',
                       rotulo: n1.descricao,
                       pm: n1.porMes,
-                      total: totalPeriodo(n1.porMes),
                       podeAbrir: n1.filhos.length > 0,
                       cinza: n1.semMascara,
                     })}
@@ -416,7 +391,6 @@ export default function DfcFluxoTab({ empresaId, inicio, fim, centros: centrosFi
                               nivel: 1,
                               rotulo: n2.descricao,
                               pm: n2.porMes,
-                              total: totalPeriodo(n2.porMes),
                               podeAbrir: n2.contas.length > 0,
                               cinza: n1.semMascara,
                             })}
@@ -429,7 +403,6 @@ export default function DfcFluxoTab({ empresaId, inicio, fim, centros: centrosFi
                                   sub: c.conta.mascara_nivel_1 ? codigoFormatado(c.conta) : c.conta.sienge_id,
                                   rotulo: c.conta.name,
                                   pm: c.porMes,
-                                  total: totalPeriodo(c.porMes),
                                 })
                               )}
                           </Fragment>
@@ -441,17 +414,15 @@ export default function DfcFluxoTab({ empresaId, inicio, fim, centros: centrosFi
               {linha({
                 chave: 'resultado',
                 tipo: 'resultado',
-                rotulo: 'Resultado',
+                rotulo: 'Resultado do mês',
                 pm: porMes.resultado || {},
-                total: totalPeriodo(porMes.resultado || {}),
-                dica: 'Entradas − saídas do mês.',
+                separar: true,
               })}
               {linha({
                 chave: 'saldo-final',
                 tipo: 'saldo',
                 rotulo: 'Saldo final',
                 pm: porMes.saldoFinal || {},
-                total: (porMes.saldoFinal || {})[meses[meses.length - 1]] ?? null,
                 dica: 'Saldo Inicial + Resultado — vira o Saldo Inicial do mês seguinte.',
               })}
             </tbody>
