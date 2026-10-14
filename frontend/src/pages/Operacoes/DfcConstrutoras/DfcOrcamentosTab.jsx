@@ -4,6 +4,7 @@ import { listCentrosCustoDfc } from '../../../api/dfcCentros.api';
 import { listDfcMascaras } from '../../../api/dfcMascaras.api';
 import { listContas } from '../../../api/planosFinanceirosSienge.api';
 import { listClassificacoesPlanoDfc } from '../../../api/dfcPlanoContas.api';
+import { getOrcamentoProjecaoCef } from '../../../api/dfcProjecaoCef.api';
 
 const MESES = ['jan', 'fev', 'mar', 'abr', 'mai', 'jun', 'jul', 'ago', 'set', 'out', 'nov', 'dez'];
 
@@ -49,17 +50,23 @@ function codigoFormatado(conta) {
   return segmentos.length > 0 ? segmentos.join('.') : digitos;
 }
 
+function dinheiro(v) {
+  return v.toLocaleString('pt-BR', { minimumFractionDigits: 2, maximumFractionDigits: 2 });
+}
+
 const LARGURA_PRIMEIRA = 360;
 const LARGURA_MES = 92;
 const RECUO = [12, 32, 52, 76]; // padding-left de cada nível (centro, máscara 1, máscara 2, conta)
 
 // Operações > DFC Construtoras > Orçamentos: o orçamento é por centro de custo e conta do plano de
-// contas, projetado a partir dos Parâmetros. Por enquanto só a estrutura (pedido do usuário):
+// contas, projetado a partir dos Parâmetros. Valores por enquanto: a Projeção CEF (janela
+// "Projeções" no topo — backend dfc-projecao-cef), que cai nas contas com Origem Projeção CEF_*;
+// os níveis acima somam os de baixo. Estrutura:
 // drilldown Centro de Custo › Máscara Nível 1 › Máscara Nível 2 › Conta analítica (a do plano de
 // contas classificada com aquela máscara na aba Plano Contas), colunas = meses do período do topo.
 // Centros = todos com "Projeta DFC" (obras e administrativos). Contas analíticas sem Máscara DFC
 // entram num grupo "SEM MÁSCARA DFC" pra não sumirem. Começa tudo fechado.
-export default function DfcOrcamentosTab({ empresaId, inicio, fim }) {
+export default function DfcOrcamentosTab({ empresaId, inicio, fim, refreshToken = 0 }) {
   const [dados, setDados] = useState(null);
   const [carregando, setCarregando] = useState(false);
   const [erroCarga, setErroCarga] = useState('');
@@ -74,9 +81,10 @@ export default function DfcOrcamentosTab({ empresaId, inicio, fim }) {
       listDfcMascaras(empresaId),
       listContas(empresaId, { page: 1, limit: 2000, search: '' }),
       listClassificacoesPlanoDfc(empresaId),
+      getOrcamentoProjecaoCef(empresaId),
     ])
-      .then(([centros, mascaras, contas, classificacoes]) =>
-        setDados({ centros, mascaras, contas: contas.data, classificacoes })
+      .then(([centros, mascaras, contas, classificacoes, projecao]) =>
+        setDados({ centros, mascaras, contas: contas.data, classificacoes, projecao })
       )
       .catch((err) => setErroCarga(err.response?.data?.message || 'Não foi possível carregar o orçamento.'))
       .finally(() => setCarregando(false));
@@ -85,15 +93,19 @@ export default function DfcOrcamentosTab({ empresaId, inicio, fim }) {
   useEffect(() => {
     setDados(null);
     setAbertos([]);
+  }, [empresaId]);
+
+  // Recarrega também depois de "Atualizar Projeção CEF" (refreshToken), mantendo o que está aberto.
+  useEffect(() => {
     carregar();
-  }, [carregar]);
+  }, [carregar, refreshToken]);
 
   const periodoValido = Boolean(inicio && fim && fim >= inicio);
   const meses = useMemo(() => (periodoValido ? mesesEntre(inicio, fim) : []), [inicio, fim, periodoValido]);
 
   // A mesma estrutura de máscaras vale pra todos os centros (o plano de contas é da empresa).
-  const { centros, estrutura } = useMemo(() => {
-    if (!dados) return { centros: [], estrutura: [] };
+  const { centros, estrutura, todasContas } = useMemo(() => {
+    if (!dados) return { centros: [], estrutura: [], todasContas: [] };
     const mascaraDaConta = Object.fromEntries(dados.classificacoes.map((c) => [c.sienge_id, c.mascara_id]));
     const analiticas = [...dados.contas]
       .filter((c) => c.tp_conta !== 'T')
@@ -117,11 +129,35 @@ export default function DfcOrcamentosTab({ empresaId, inicio, fim }) {
         filhos: [{ chave: 'sem2', descricao: 'Contas sem Máscara DFC na aba Plano Contas', contas: semMascara }],
       });
     }
+    grupos.forEach((g) => {
+      g.contas = g.filhos.flatMap((f) => f.contas);
+    });
     return {
       centros: dados.centros.filter((c) => c.projeta_dfc).sort((a, b) => a.name.localeCompare(b.name, 'pt-BR')),
       estrutura: grupos,
+      todasContas: grupos.flatMap((g) => g.contas),
     };
   }, [dados]);
+
+  // Valores da projeção: centro -> conta -> mês -> valor; e quando cada obra foi projetada.
+  const { valorConta, execucaoPorCentro } = useMemo(() => {
+    const mapa = new Map();
+    (dados?.projecao?.valores || []).forEach((v) => mapa.set(`${v.sienge_id}|${v.conta}|${v.mes}`, v.valor));
+    return {
+      valorConta: (sid, conta, mes) => mapa.get(`${sid}|${conta}|${mes}`) ?? null,
+      execucaoPorCentro: Object.fromEntries((dados?.projecao?.execucoes || []).map((e) => [e.sienge_id, e])),
+    };
+  }, [dados]);
+
+  // Soma de várias contas num mês (null quando nenhuma tem valor).
+  function somaContas(sid, contas, mes) {
+    let total = null;
+    contas.forEach((c) => {
+      const v = valorConta(sid, c.sienge_id, mes);
+      if (v !== null) total = (total || 0) + v;
+    });
+    return total === null ? null : Math.round(total * 100) / 100;
+  }
 
   function alternar(chave) {
     setAbertos((atual) => (atual.includes(chave) ? atual.filter((v) => v !== chave) : [...atual, chave]));
@@ -137,22 +173,26 @@ export default function DfcOrcamentosTab({ empresaId, inicio, fim }) {
     );
   }
 
-  // Células de valor: ainda sem projeção — só a estrutura por enquanto.
-  const celulas = (nivel) =>
-    meses.map((m) => (
-      <td
-        key={m}
-        className={`border-b border-l px-2 text-right tabular-nums text-gray-300 ${
-          nivel === 0 ? 'border-gray-200 bg-gray-50 py-2 group-hover/linha:bg-gray-100' : 'border-gray-100 bg-white py-1.5 group-hover/linha:bg-gray-50'
-        }`}
-      >
-        —
-      </td>
-    ));
+  // Células de valor do mês (`valorMes(m)` -> número ou null). Saída (negativo) em vermelho.
+  const celulas = (nivel, valorMes) =>
+    meses.map((m) => {
+      const v = valorMes ? valorMes(m) : null;
+      const vazio = v === null || v === 0;
+      return (
+        <td
+          key={m}
+          className={`border-b border-l px-2 text-right tabular-nums ${
+            nivel === 0 ? 'border-gray-200 bg-gray-50 py-2 group-hover/linha:bg-gray-100' : 'border-gray-100 bg-white py-1.5 group-hover/linha:bg-gray-50'
+          } ${vazio ? 'text-gray-300' : v < 0 ? 'text-red-600' : 'text-gray-800'} ${nivel <= 1 && !vazio ? 'font-semibold' : ''}`}
+        >
+          {vazio ? '—' : dinheiro(v)}
+        </td>
+      );
+    });
 
   // Linha de agrupamento (centro, máscara 1, máscara 2) — função comum, não componente, pra não
   // ser recriada a cada render.
-  function linhaGrupo({ chave, nivel, rotulo, contagem, podeAbrir, destaque = false, cinza = false }) {
+  function linhaGrupo({ chave, nivel, rotulo, contagem, podeAbrir, destaque = false, cinza = false, valorMes, dica }) {
     const aberto = abertos.includes(chave);
     return (
       <tr onClick={() => podeAbrir && alternar(chave)} className={`group/linha ${podeAbrir ? 'cursor-pointer' : ''}`}>
@@ -176,7 +216,7 @@ export default function DfcOrcamentosTab({ empresaId, inicio, fim }) {
               className={`min-w-0 truncate text-xs ${destaque ? 'font-semibold text-gray-900' : 'font-medium text-gray-800'} ${
                 cinza ? 'italic text-gray-500' : ''
               }`}
-              title={rotulo}
+              title={dica || rotulo}
             >
               {rotulo}
             </span>
@@ -187,7 +227,7 @@ export default function DfcOrcamentosTab({ empresaId, inicio, fim }) {
             )}
           </span>
         </td>
-        {celulas(nivel)}
+        {celulas(nivel, valorMes)}
       </tr>
     );
   }
@@ -218,6 +258,16 @@ export default function DfcOrcamentosTab({ empresaId, inicio, fim }) {
         // Sem wrapper com overflow próprio (mesmo motivo do Espião NFe / NFSe): o cabeçalho gruda no
         // topo da página ao rolar. -top-6 cancela o p-6 do <main>.
         <div>
+          {(dados?.projecao?.avisos || []).length > 0 && (
+            <div className="mb-3 space-y-1 rounded-lg bg-amber-50 px-3 py-2 text-xs text-amber-700">
+              {dados.projecao.avisos.map((a) => (
+                <p key={a} className="flex items-start gap-1.5">
+                  <TriangleAlert size={13} className="mt-0.5 shrink-0" />
+                  {a}
+                </p>
+              ))}
+            </div>
+          )}
           <table
             className="border-separate border-spacing-0 text-left text-xs"
             style={{ tableLayout: 'fixed', width: '100%', minWidth: LARGURA_PRIMEIRA + meses.length * LARGURA_MES }}
@@ -255,19 +305,46 @@ export default function DfcOrcamentosTab({ empresaId, inicio, fim }) {
                 const chaveCentro = `c${centro.sienge_id}`;
                 return (
                   <Fragment key={chaveCentro}>
-                    {linhaGrupo({ chave: chaveCentro, nivel: 0, rotulo: `${centro.name}${centro.natureza === 'ADMINISTRATIVO' ? ' (Administrativo)' : ''}`, podeAbrir: estrutura.length > 0, destaque: true })}
+                    {linhaGrupo({
+                      chave: chaveCentro,
+                      nivel: 0,
+                      rotulo: `${centro.name}${centro.natureza === 'ADMINISTRATIVO' ? ' (Administrativo)' : ''}`,
+                      podeAbrir: estrutura.length > 0,
+                      destaque: true,
+                      valorMes: (m) => somaContas(centro.sienge_id, todasContas, m),
+                      dica: execucaoPorCentro[centro.sienge_id]
+                        ? `Projeção CEF atualizada em ${new Date(execucaoPorCentro[centro.sienge_id].atualizado_em).toLocaleString('pt-BR')} (Parâmetros v${execucaoPorCentro[centro.sienge_id].versao_parametros})`
+                        : undefined,
+                    })}
                     {abertos.includes(chaveCentro) &&
                       estrutura.map((n1) => {
                         const chaveN1 = `${chaveCentro}|${n1.chave}`;
                         return (
                           <Fragment key={chaveN1}>
-                            {linhaGrupo({ chave: chaveN1, nivel: 1, rotulo: n1.descricao, contagem: n1.filhos.length, podeAbrir: n1.filhos.length > 0, destaque: true, cinza: n1.semMascara })}
+                            {linhaGrupo({
+                              chave: chaveN1,
+                              nivel: 1,
+                              rotulo: n1.descricao,
+                              contagem: n1.filhos.length,
+                              podeAbrir: n1.filhos.length > 0,
+                              destaque: true,
+                              cinza: n1.semMascara,
+                              valorMes: (m) => somaContas(centro.sienge_id, n1.contas, m),
+                            })}
                             {abertos.includes(chaveN1) &&
                               n1.filhos.map((n2) => {
                                 const chaveN2 = `${chaveN1}|${n2.chave}`;
                                 return (
                                   <Fragment key={chaveN2}>
-                                    {linhaGrupo({ chave: chaveN2, nivel: 2, rotulo: n2.descricao, contagem: n2.contas.length, podeAbrir: n2.contas.length > 0, cinza: n1.semMascara })}
+                                    {linhaGrupo({
+                                      chave: chaveN2,
+                                      nivel: 2,
+                                      rotulo: n2.descricao,
+                                      contagem: n2.contas.length,
+                                      podeAbrir: n2.contas.length > 0,
+                                      cinza: n1.semMascara,
+                                      valorMes: (m) => somaContas(centro.sienge_id, n2.contas, m),
+                                    })}
                                     {abertos.includes(chaveN2) &&
                                       n2.contas.map((conta) => (
                                         <tr key={`${chaveN2}|${conta.sienge_id}`} className="group/linha">
@@ -284,7 +361,7 @@ export default function DfcOrcamentosTab({ empresaId, inicio, fim }) {
                                               </span>
                                             </span>
                                           </td>
-                                          {celulas(3)}
+                                          {celulas(3, (m) => valorConta(centro.sienge_id, conta.sienge_id, m))}
                                         </tr>
                                       ))}
                                   </Fragment>

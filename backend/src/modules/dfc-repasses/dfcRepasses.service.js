@@ -16,7 +16,7 @@ function num(v) {
 //                         aba Avanços Obras (dfc-avancos): até o último mês liberado, parado depois
 //   VGF                 = financiamento + subsídio + FGTS
 //   Medição Total       = (financiamento − terreno) + subsídio
-//   Novo Registro       = terreno + subsídio
+//   Novo Registro       = terreno + FGTS (à vista — igual à Projeção CEF / gera_projecao_cef.py)
 //   Medição             = Medição Total × % Obra Acumulado
 //   Novo Registro Total = Novo Registro + Medição
 //   Demanda Mínima      = data de assinatura igual ou anterior à "Data da Demanda Mínima" (versão vigente dos
@@ -114,7 +114,7 @@ async function repasses(empresaId) {
           const fgts = num(u.valor_fgts);
           const pct = pctObra(c.contrato, u.data_registro);
           const medicaoTotal = round2(fin - terreno + subsidio);
-          const novoRegistro = round2(terreno + subsidio);
+          const novoRegistro = round2(terreno + fgts);
           const medicao = pct === null ? null : round2((medicaoTotal * pct) / 100);
           return {
             id: u.id,

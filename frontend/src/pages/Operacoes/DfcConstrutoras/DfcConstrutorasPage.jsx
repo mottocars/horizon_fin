@@ -13,6 +13,7 @@ import {
   Save,
   Search,
   Upload,
+  TrendingUp,
   SlidersHorizontal,
   Tags,
   Wallet,
@@ -35,6 +36,7 @@ import DfcPlanoContasTab from './DfcPlanoContasTab';
 import DfcAvancosTab from './DfcAvancosTab';
 import DfcRepassesTab from './DfcRepassesTab';
 import DfcOrcamentosTab from './DfcOrcamentosTab';
+import ProjecoesModal from './ProjecoesModal';
 
 // Mesmo padrão de DreGerencialPage.jsx: o `{ divider: true }` separa a DFC (a demonstração em
 // si) das abas de cadastro/parâmetro que dão suporte a ela, que ficam juntas, sem divisor entre
@@ -233,6 +235,11 @@ export default function DfcConstrutorasPage() {
     return `${fim.getFullYear()}-${String(fim.getMonth() + 1).padStart(2, '0')}-${String(fim.getDate()).padStart(2, '0')}`;
   });
 
+  // Janela "Projeções" (botão no topo da aba Orçamentos) — ao terminar uma atualização, o
+  // orçamento recarrega (refreshTokenOrcamento).
+  const [projecoesAberto, setProjecoesAberto] = useState(false);
+  const [refreshTokenOrcamento, setRefreshTokenOrcamento] = useState(0);
+
   // Botão "Nova máscara" fica no topo (padrão do resto do sistema, igual "Nova categoria" na
   // DRE), mas o campo de criar vive em DfcMascarasTab.jsx — dispara por ref.
   const mascarasTabRef = useRef(null);
@@ -430,6 +437,15 @@ export default function DfcConstrutorasPage() {
             )}
           </div>
 
+          {abaAtiva === 'orcamentos' && (
+            <div className="flex shrink-0 items-center gap-2">
+              <Button type="button" onClick={() => setProjecoesAberto(true)} disabled={!empresaId}>
+                <TrendingUp size={16} />
+                Projeções
+              </Button>
+            </div>
+          )}
+
           {abaAtiva === 'plano-contas' && (
             <div className="flex shrink-0 flex-col items-end gap-1.5">
               <button
@@ -490,7 +506,12 @@ export default function DfcConstrutorasPage() {
         <Tabs tabs={TABS} activeId={tabAtiva.id} onChange={(aba) => atualizarParams({ aba })} />
 
         {tabAtiva.id === 'orcamentos' ? (
-          <DfcOrcamentosTab empresaId={empresaId} inicio={inicioOrcamento} fim={fimOrcamento} />
+          <DfcOrcamentosTab
+            empresaId={empresaId}
+            inicio={inicioOrcamento}
+            fim={fimOrcamento}
+            refreshToken={refreshTokenOrcamento}
+          />
         ) : tabAtiva.id === 'repasses' ? (
           <DfcRepassesTab empresaId={empresaId} search={buscaRepasses} />
         ) : tabAtiva.id === 'avancos-obras' ? (
@@ -529,6 +550,13 @@ export default function DfcConstrutorasPage() {
           <AbaEmConstrucao key={tabAtiva.id} empresaId={empresaId} icon={tabAtiva.icon} titulo={tabAtiva.label} />
         )}
       </div>
+
+      <ProjecoesModal
+        open={projecoesAberto}
+        onClose={() => setProjecoesAberto(false)}
+        empresaId={empresaId}
+        onConcluido={() => setRefreshTokenOrcamento((n) => n + 1)}
+      />
     </div>
   );
 }

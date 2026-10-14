@@ -116,7 +116,7 @@ function CalculoModal({ unidade, empreendimento, onClose }) {
         />
         <LinhaCalculo
           nome="Novo Registro"
-          formula={`Terreno ${dinheiro(u.valor_terreno)} + Subsídio ${dinheiro(u.valor_subsidio)}`}
+          formula={`Terreno ${dinheiro(u.valor_terreno)} + FGTS ${dinheiro(u.valor_fgts)}`}
           resultado={dinheiro(u.novo_registro)}
         />
         <LinhaCalculo
