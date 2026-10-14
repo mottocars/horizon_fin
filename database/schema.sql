@@ -2908,7 +2908,8 @@ CREATE TABLE dfc_parametros_versoes (
     data_fim_ciclo                  DATE NOT NULL,
     -- Sim/Não; NULL só nas versões publicadas antes do parâmetro existir.
     projeta_vendas_futuras          BOOLEAN,
-    qtd_vendas_mes                  INTEGER NOT NULL,
+    -- NULL quando projeta_vendas_futuras = FALSE (só existe com Sim).
+    qtd_vendas_mes                  INTEGER,
     tempo_assinatura_registro_meses INTEGER NOT NULL,
     -- MANUAL = publicada na tela; DCD / GERAL = criada sozinha ao importar o arquivo do contrato Caixa.
     origem                          VARCHAR(10) NOT NULL DEFAULT 'MANUAL' CHECK (origem IN ('MANUAL', 'DCD', 'GERAL')),

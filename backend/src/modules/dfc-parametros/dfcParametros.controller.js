@@ -45,12 +45,30 @@ const versaoBodySchema = z
       required_error: 'Informe "Projeta Vendas Futuras".',
       invalid_type_error: 'Informe "Projeta Vendas Futuras".',
     }),
-    qtd_vendas_mes: inteiro('Quantidade de Vendas no Mês', 100000),
+    // Só existe com "Projeta Vendas Futuras" = Sim (ver superRefine/transform abaixo).
+    qtd_vendas_mes: z.preprocess(
+      (v) => (v === '' || v === undefined ? null : v),
+      z.union([
+        z.null(),
+        z.coerce
+          .number({ invalid_type_error: 'Informe Quantidade de Vendas no Mês.' })
+          .int('Quantidade de Vendas no Mês precisa ser um número inteiro.')
+          .min(0, 'Quantidade de Vendas no Mês não pode ser negativo.')
+          .max(100000, 'Quantidade de Vendas no Mês acima do limite (100000).'),
+      ])
+    ),
     tempo_assinatura_registro_meses: inteiro('Tempo Entre Assinatura e Registro', 600),
   })
   .refine((d) => d.data_fim_ciclo > d.data_inicio_ciclo, {
     message: 'A Data Fim do Ciclo precisa ser depois da Data Início do Ciclo.',
-  });
+  })
+  .superRefine((d, ctx) => {
+    if (d.projeta_vendas_futuras && d.qtd_vendas_mes === null) {
+      ctx.addIssue({ code: z.ZodIssueCode.custom, message: 'Informe Quantidade de Vendas no Mês.' });
+    }
+  })
+  // Com "Não", a quantidade não vale — grava em branco mesmo que tenha vindo algo.
+  .transform((d) => (d.projeta_vendas_futuras ? d : { ...d, qtd_vendas_mes: null }));
 
 function erro(status, message) {
   const e = new Error(message);

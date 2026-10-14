@@ -176,6 +176,12 @@ const DfcParametrosTab = forwardRef(function DfcParametrosTab(
 
   // O que vale de fato: o digitado/carregado da versão, com os fixos por cima.
   const efetivos = { ...valores, ...(fonte?.fixos || {}) };
+  // Campo com `visivel` (ex.: Quantidade de Vendas no Mês só com Projeta Vendas Futuras ≠ Não): oculto
+  // não aparece, não é obrigatório e vale em branco (igual ao que fica gravado).
+  const campoVisivel = (c) => !c.visivel || c.visivel(efetivos);
+  CAMPOS_EDITAVEIS.forEach((c) => {
+    if (!campoVisivel(c)) efetivos[c.id] = '';
+  });
   const origens = fonte?.origens || {};
 
   function alterar(id, valor) {
@@ -186,7 +192,9 @@ const DfcParametrosTab = forwardRef(function DfcParametrosTab(
   // vigente (pedido do usuário: sem aviso de "preencha X" — os campos em branco já ficam em
   // âmbar). A única mensagem que sobra é a das datas do ciclo invertidas, que senão travaria o
   // botão sem explicação.
-  const todosPreenchidos = CAMPOS_EDITAVEIS.every((c) => efetivos[c.id] !== '' && efetivos[c.id] !== null);
+  const todosPreenchidos = CAMPOS_EDITAVEIS.filter(campoVisivel).every(
+    (c) => efetivos[c.id] !== '' && efetivos[c.id] !== null
+  );
   const datasInvertidas = todosPreenchidos && efetivos.data_fim_ciclo <= efetivos.data_inicio_ciclo;
   const alterado = !valoresVigentes || CAMPOS_EDITAVEIS.some((c) => efetivos[c.id] !== valoresVigentes[c.id]);
   const aguardandoVigente = Boolean(versaoVigenteNumero) && !valoresVigentes;
@@ -321,7 +329,7 @@ const DfcParametrosTab = forwardRef(function DfcParametrosTab(
           <Card key={sessao.titulo}>
             <SectionHeader selo={sessao.selo} titulo={sessao.titulo} texto={sessao.texto} />
             <div>
-              {sessao.campos.map((campo, i) => (
+              {sessao.campos.filter(campoVisivel).map((campo, i) => (
                 <CampoParametro
                   key={campo.id}
                   campo={campo}

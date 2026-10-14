@@ -113,6 +113,8 @@ export const SESSOES_PARAMETROS = [
       },
       {
         id: 'qtd_vendas_mes',
+        // Só aparece (e só é obrigatório) com "Projeta Vendas Futuras" diferente de Não.
+        visivel: (v) => v.projeta_vendas_futuras !== false,
         label: 'Quantidade de Vendas no Mês',
         tipo: 'inteiro',
         unidade: 'vendas/mês',
