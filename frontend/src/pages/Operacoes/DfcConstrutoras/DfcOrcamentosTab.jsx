@@ -155,7 +155,7 @@ const RECUO = [12, 32, 52, 76]; // padding-left de cada nível (centro, máscara
 // contas classificada com aquela máscara na aba Plano Contas), colunas = meses do período do topo.
 // Centros = todos com "Projeta DFC" (obras e administrativos). Contas analíticas sem Máscara DFC
 // entram num grupo "SEM MÁSCARA DFC" pra não sumirem; as com "Projeta DFC" desmarcado no plano do
-// centro não entram (pedido do usuário). Começa tudo fechado.
+// centro não entram (pedido do usuário), e máscara que fica sem conta nenhuma some. Começa tudo fechado.
 // Contas com Origem Projeção "HORIZON - INFORMADO" no plano do centro: o valor é digitado na própria
 // célula (backend dfc-orcamento-informado), e o botão direito abre o "Replicar valor até".
 export default function DfcOrcamentosTab({ empresaId, inicio, fim, refreshToken = 0 }) {
@@ -225,15 +225,21 @@ export default function DfcOrcamentosTab({ empresaId, inicio, fim, refreshToken 
       // "Projeta DFC" desmarcado no plano: a conta fica fora do Orçamento. Sem linha = marcado.
       const foraDoDfc = new Set(classificacoes.filter((c) => c.projeta_dfc === false).map((c) => c.sienge_id));
       const contasDoPlano = analiticas.filter((c) => !foraDoDfc.has(c.sienge_id));
-      const grupos = dados.mascaras.map((g) => ({
-        chave: `m${g.id}`,
-        descricao: g.descricao,
-        filhos: g.filhos.map((f) => ({
-          chave: `m${f.id}`,
-          descricao: f.descricao,
-          contas: contasDoPlano.filter((c) => mascaraDaConta[c.sienge_id] === f.id),
-        })),
-      }));
+      // Máscara sem nenhuma conta com "Projeta DFC" nesse plano não aparece (pedido do usuário) —
+      // tanto a de nível 2 quanto a de nível 1 que ficar sem nenhuma de nível 2.
+      const grupos = dados.mascaras
+        .map((g) => ({
+          chave: `m${g.id}`,
+          descricao: g.descricao,
+          filhos: g.filhos
+            .map((f) => ({
+              chave: `m${f.id}`,
+              descricao: f.descricao,
+              contas: contasDoPlano.filter((c) => mascaraDaConta[c.sienge_id] === f.id),
+            }))
+            .filter((f) => f.contas.length > 0),
+        }))
+        .filter((g) => g.filhos.length > 0);
       const semMascara = contasDoPlano.filter((c) => !idsNivel2.has(mascaraDaConta[c.sienge_id]));
       if (semMascara.length) {
         grupos.push({
