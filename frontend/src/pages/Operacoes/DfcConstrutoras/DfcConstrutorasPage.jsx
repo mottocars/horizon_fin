@@ -7,6 +7,7 @@ import {
   Globe,
   HandCoins,
   HardHat,
+  Landmark,
   ListTree,
   Plus,
   RefreshCw,
@@ -60,6 +61,7 @@ const TABS = [
   { id: 'plano-contas', label: 'Plano Contas', icon: ListTree },
   { id: 'avancos-obras', label: 'Avanços', icon: HardHat },
   { id: 'repasses', label: 'Repasses', icon: Banknote },
+  { id: 'contas-correntes', label: 'Contas Correntes', icon: Landmark },
   { id: 'orcamentos', label: 'Orçamentos', icon: Calculator },
 ];
 
