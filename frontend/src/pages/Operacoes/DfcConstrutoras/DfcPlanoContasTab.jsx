@@ -1,5 +1,5 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
-import { ArrowLeft, Calculator, Check, Globe2, Building2, ListTree, Loader2, Minus, Plus, TriangleAlert } from 'lucide-react';
+import { ArrowLeft, Check, Globe2, Building2, ListTree, Loader2, Minus, Plus, TriangleAlert } from 'lucide-react';
 import SearchableSelect from '../../../components/SearchableSelect';
 import FiltroColuna, { passaNoFiltro } from '../../../components/FiltroColuna';
 import { listContas } from '../../../api/planosFinanceirosSienge.api';
@@ -10,23 +10,17 @@ import { ORIGENS_PROJECAO } from './orcamentoValores';
 import { listDesembolsoDfc } from '../../../api/dfcDesembolso.api';
 import FichaDesembolsoModal from './FichaDesembolsoModal';
 
-// Origem cujas naturezas têm ficha de desembolso (coluna "Prazo Desemb." + calculadora).
+// Origem cujas naturezas têm ficha de desembolso (coluna "Prazo Desemb.", que abre a ficha).
 const ORIGEM_DESEMBOLSO = 'SIENGE_ORCAMENTO_EMPRESARIAL';
 
 const LIMIT = 2000;
 
-const GRADE = 'grid grid-cols-[minmax(0,1fr)_110px_240px_260px_96px_36px_72px] items-center gap-3';
+const GRADE = 'grid grid-cols-[minmax(0,1fr)_110px_240px_260px_104px_72px] items-center gap-3';
 
 // Primeira opção dos filtros Máscara DFC e Origem Projeção (pedido do usuário): acha as contas
 // com aquele campo em branco. O filtro Conta não tem essa opção.
 const NAO_INFORMADO = '__nao_informado__';
 const OPCAO_NAO_INFORMADO = { value: NAO_INFORMADO, label: 'NÃO INFORMADO' };
-
-// Filtro da coluna Projeta DFC (marcada / desmarcada).
-const OPCOES_FILTRO_PROJETA = [
-  { value: 'S', label: 'SIM' },
-  { value: 'N', label: 'NÃO' },
-];
 
 // Mesmo par de cores das outras abas da DFC: vazio em âmbar, preenchido em azul claro.
 function corCampo(valor) {
@@ -97,8 +91,8 @@ function montarArvore(contas) {
 // cada mudança salva na hora, com o mesmo indicador de salvamento das outras abas. Antes delas, o
 // "Projeta DFC" (pedido do usuário): desmarcado, a conta não aparece no Orçamento dos centros que
 // usam este plano. Começa marcado. Nas naturezas "SIENGE - EMPRESARIAL DESEMBOLSO": o "Prazo
-// Desemb." (prazo médio da ficha de desembolso) e a calculadora que abre a ficha
-// (FichaDesembolsoModal) — a ficha é calculada e guardada quando a conta recebe essa origem.
+// Desemb." (prazo médio da ficha de desembolso), clicável, abre a ficha (FichaDesembolsoModal) — a
+// ficha é calculada e guardada quando a conta recebe essa origem.
 // `centroVersao`: id do centro cuja versão própria do plano está sendo editada (null = plano Global,
 // que vale pra todos os centros sem versão própria) — escolhido no topo da página.
 // `tituloPlano` / `onVoltar`: cabeçalho do editor (nome do plano aberto e volta pros cards).
@@ -128,9 +122,7 @@ export default function DfcPlanoContasTab({
   const [filtroConta, setFiltroConta] = useState(null);
   const [filtroMascara, setFiltroMascara] = useState(null);
   const [filtroOrigem, setFiltroOrigem] = useState(null);
-  const [filtroProjeta, setFiltroProjeta] = useState(null);
   const colunaContaRef = useRef(null);
-  const colunaProjetaRef = useRef(null);
   const colunaMascaraRef = useRef(null);
   const colunaOrigemRef = useRef(null);
   const [pendentes, setPendentes] = useState(0);
@@ -168,7 +160,6 @@ export default function DfcPlanoContasTab({
     setFiltroConta(null);
     setFiltroMascara(null);
     setFiltroOrigem(null);
-    setFiltroProjeta(null);
     setErroSalvar('');
     setSalvoAlgumaVez(false);
   }, [empresaId, centroVersao]);
@@ -286,8 +277,7 @@ export default function DfcPlanoContasTab({
   const fConta = efetivo(filtroConta);
   const fMascara = efetivo(filtroMascara);
   const fOrigem = efetivo(filtroOrigem);
-  const fProjeta = efetivo(filtroProjeta);
-  const filtrosAtivos = fConta != null || fMascara != null || fOrigem != null || fProjeta != null;
+  const filtrosAtivos = fConta != null || fMascara != null || fOrigem != null;
   const visivel = useMemo(() => {
     if (!termo && !filtrosAtivos) return null;
     const ids = new Set();
@@ -300,7 +290,6 @@ export default function DfcPlanoContasTab({
       const cl = classificacoes[c.sienge_id] || {};
       return (
         passaNoFiltro(fConta, c.sienge_id) &&
-        passaNoFiltro(fProjeta, cl.projeta_dfc === false ? 'N' : 'S') &&
         passaNoFiltro(fMascara, cl.mascara_id ?? NAO_INFORMADO) &&
         passaNoFiltro(fOrigem, cl.origem_projecao ?? NAO_INFORMADO)
       );
@@ -318,7 +307,7 @@ export default function DfcPlanoContasTab({
     arvore.forEach(marcar);
     return ids;
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [arvore, termo, filtrosAtivos, filtroConta, filtroMascara, filtroOrigem, filtroProjeta, classificacoes]);
+  }, [arvore, termo, filtrosAtivos, filtroConta, filtroMascara, filtroOrigem, classificacoes]);
 
   function alternar(id) {
     setFechados((atual) => (atual.includes(id) ? atual.filter((v) => v !== id) : [...atual, id]));
@@ -438,21 +427,7 @@ export default function DfcPlanoContasTab({
                 colunaRef={colunaContaRef}
               />
             </span>
-            {/* Texto centralizado sobre o checkbox; o ícone do filtro fica fora do centro, à direita. */}
-            <span ref={colunaProjetaRef} className="flex justify-center">
-              <span className="relative whitespace-nowrap">
-                Projeta DFC
-                <span className="absolute left-full top-1/2 ml-1.5 flex -translate-y-1/2 items-center">
-                  <FiltroColuna
-                    filtro={filtroProjeta}
-                    onChange={setFiltroProjeta}
-                    opcoes={OPCOES_FILTRO_PROJETA}
-                    label="Projeta DFC"
-                    colunaRef={colunaProjetaRef}
-                  />
-                </span>
-              </span>
-            </span>
+            <span className="whitespace-nowrap text-center">Projeta DFC</span>
             <span ref={colunaMascaraRef} className="flex items-center gap-1.5">
               Máscara DFC
               <FiltroColuna
@@ -475,10 +450,9 @@ export default function DfcPlanoContasTab({
                 larguraPainel={360}
               />
             </span>
-            <span className="text-right" title="Prazo médio de desembolso (emissão até vencimento, ponderado pelo valor)">
+            <span className="text-center" title="Prazo médio de desembolso (emissão até vencimento, ponderado pelo valor)">
               Prazo Desemb.
             </span>
-            <span className="sr-only">Ficha de desembolso</span>
             <span>Status</span>
           </div>
 
@@ -503,7 +477,6 @@ export default function DfcPlanoContasTab({
                       setFiltroConta(null);
                       setFiltroMascara(null);
                       setFiltroOrigem(null);
-                      setFiltroProjeta(null);
                     }}
                     className="ml-2 font-medium text-primary-600 hover:text-primary-700"
                   >
@@ -550,7 +523,6 @@ export default function DfcPlanoContasTab({
                     <span />
                     <span />
                     <span />
-                    <span />
                   </>
                 ) : (
                   <>
@@ -582,34 +554,25 @@ export default function DfcPlanoContasTab({
                       corClasses={corCampo(classificacao.origem_projecao)}
                       larguraPainel={360}
                     />
+                    {/* Prazo Desemb.: clicável, abre a ficha de desembolso da natureza. */}
                     {classificacao.origem_projecao === ORIGEM_DESEMBOLSO ? (
-                      <>
-                        <span className="text-right text-xs tabular-nums text-gray-700">
-                          {!desembolso[conta.sienge_id] ? (
-                            <span className="text-gray-300">...</span>
-                          ) : desembolso[conta.sienge_id].sem_historico || desembolso[conta.sienge_id].prazo_medio === null ? (
-                            <span className="text-gray-400" title="Nenhum título desta natureza nos últimos 12 meses">
-                              sem histórico
-                            </span>
-                          ) : (
-                            `${Math.round(desembolso[conta.sienge_id].prazo_medio)} dias`
-                          )}
-                        </span>
+                      <span className="flex justify-center">
                         <button
                           type="button"
                           onClick={() => setFichaDe({ sienge_id: conta.sienge_id, codigo: codigoFormatado(conta), name: conta.name })}
-                          title="Ficha de desembolso"
+                          title="Ver a ficha de desembolso"
                           aria-label={`Ficha de desembolso de ${conta.name}`}
-                          className="flex h-7 w-7 items-center justify-center rounded-md text-primary-600 transition-colors hover:bg-primary-50"
+                          className="rounded-md px-2 py-1 text-xs font-medium tabular-nums text-primary-600 underline decoration-primary-100 decoration-2 underline-offset-4 transition-colors hover:bg-primary-50 hover:decoration-primary-500"
                         >
-                          <Calculator size={16} />
+                          {!desembolso[conta.sienge_id]
+                            ? '...'
+                            : desembolso[conta.sienge_id].sem_historico || desembolso[conta.sienge_id].prazo_medio === null
+                              ? 'sem histórico'
+                              : `${Math.round(desembolso[conta.sienge_id].prazo_medio)} dias`}
                         </button>
-                      </>
+                      </span>
                     ) : (
-                      <>
-                        <span />
-                        <span />
-                      </>
+                      <span />
                     )}
                   </>
                 )}
