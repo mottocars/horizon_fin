@@ -44,6 +44,7 @@ import DfcRepassesTab from './DfcRepassesTab';
 import DfcOrcamentosTab from './DfcOrcamentosTab';
 import NovaVersaoOrcamentoModal from './NovaVersaoOrcamentoModal';
 import DfcFluxoTab from './DfcFluxoTab';
+import DfcContasCorrentesTab from './DfcContasCorrentesTab';
 import NovaVersaoPlanoModal from './NovaVersaoPlanoModal';
 import { ORIGENS_PROJECAO, ORIGEM_NAO_INFORMADA } from './orcamentoValores';
 import PlanosContasLista from './PlanosContasLista';
@@ -193,6 +194,12 @@ export default function DfcConstrutorasPage() {
   // Busca (código ou descrição) da aba Centros Custos — só conveniência de navegador, não fica
   // na URL (mesma convenção das buscas da DRE).
   const [buscaCentros, setBuscaCentros] = useState('');
+
+  // Aba Contas Correntes: busca (conveniência de navegador) e o ícone de buscar as contas no Sienge
+  // (a aba faz a busca — `contasTabRef.current.sincronizar()`).
+  const [buscaContas, setBuscaContas] = useState('');
+  const [sincronizandoContas, setSincronizandoContas] = useState(false);
+  const contasTabRef = useRef(null);
 
   // Aba CIWEB: busca e filtro de tipo (só conveniência de navegador, fora da URL); o botão de
   // importar chama a aba por ref (a janela de importação vive lá).
@@ -551,6 +558,23 @@ export default function DfcConstrutorasPage() {
               </div>
             )}
 
+            {abaAtiva === 'contas-correntes' && (
+              <div className="sm:min-w-56 sm:max-w-sm sm:flex-1">
+                <label className="mb-1 block text-sm font-medium text-gray-700">Buscar</label>
+                <div className="relative">
+                  <Search size={15} className="pointer-events-none absolute left-3 top-1/2 -translate-y-1/2 text-gray-400" />
+                  <input
+                    type="text"
+                    value={buscaContas}
+                    onChange={(e) => setBuscaContas(e.target.value)}
+                    disabled={!empresaId}
+                    placeholder={!empresaId ? 'Selecione a empresa primeiro' : 'Buscar por conta, banco ou empresa...'}
+                    className="w-full rounded-lg border border-gray-200 py-2 pl-9 pr-3 text-sm focus:outline-none focus:ring-2 focus:ring-primary-100 disabled:bg-gray-50 disabled:text-gray-400"
+                  />
+                </div>
+              </div>
+            )}
+
             {abaAtiva === 'parametros' && (
               <>
                 <div className="sm:min-w-56 sm:max-w-sm sm:flex-1">
@@ -592,6 +616,22 @@ export default function DfcConstrutorasPage() {
               </>
             )}
           </div>
+
+          {abaAtiva === 'contas-correntes' && (
+            <div className="flex shrink-0 items-center gap-2">
+              {/* Mesmo ícone do "gerar/atualizar plano de contas": busca as contas no Sienge. */}
+              <button
+                type="button"
+                onClick={() => contasTabRef.current?.sincronizar()}
+                disabled={!empresaId || sincronizandoContas}
+                title="Buscar as contas no Sienge"
+                aria-label="Buscar as contas no Sienge"
+                className="flex shrink-0 items-center justify-center rounded-lg bg-primary-600 p-2 text-white transition-colors hover:bg-primary-700 disabled:cursor-not-allowed disabled:opacity-60"
+              >
+                <RefreshCw size={18} className={sincronizandoContas ? 'animate-spin' : ''} />
+              </button>
+            </div>
+          )}
 
           {abaAtiva === 'dfc' && (
             <div className="flex shrink-0 items-center gap-2">
@@ -781,6 +821,13 @@ export default function DfcConstrutorasPage() {
           />
         ) : tabAtiva.id === 'mascaras' ? (
           <DfcMascarasTab ref={mascarasTabRef} empresaId={empresaId} />
+        ) : tabAtiva.id === 'contas-correntes' ? (
+          <DfcContasCorrentesTab
+            ref={contasTabRef}
+            empresaId={empresaId}
+            search={buscaContas}
+            onSincronizando={setSincronizandoContas}
+          />
         ) : tabAtiva.id === 'dfc' ? (
           <DfcFluxoTab
             empresaId={empresaId}

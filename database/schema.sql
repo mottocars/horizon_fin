@@ -939,6 +939,8 @@ CREATE TABLE contas_bancarias_sienge (
     banco_nome     VARCHAR(120),
     company_name   VARCHAR(255),
     status         VARCHAR(20),
+    -- "Projeta DFC" (DFC Construtoras > Contas Correntes) — migration 2026-10-14-contas-bancarias-projeta-dfc.sql.
+    projeta_dfc BOOLEAN NOT NULL DEFAULT FALSE,
     criado_em      TIMESTAMP DEFAULT NOW(),
     atualizado_em  TIMESTAMP DEFAULT NOW(),
     banco_enriquecido    VARCHAR(120), -- código COMPE do banco (3 dígitos), escolhido na lista da BrasilAPI
