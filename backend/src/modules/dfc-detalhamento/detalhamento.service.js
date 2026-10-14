@@ -31,7 +31,6 @@ const ROTULO_ORIGEM = {
   HORIZON_ORCAMENTO_INFORMADO: 'Horizon · Informado',
 };
 
-const ROTULO_EXTRATO = { CP: 'A pagar', CR: 'A receber', BC: 'Bancário', CX: 'Caixa' };
 const ROTULO_FONTE_AVANCO = { CAIXA: 'Caixa (DCD)', PREVISION: 'Prevision', MANUAL: 'Avanço manual' };
 
 const r2 = (v) => Math.round((Number(v) + Number.EPSILON) * 100) / 100;
@@ -83,88 +82,66 @@ async function realizado(empresaId, { mes, natureza, lado, centros, semCentro },
       ORDER BY e.date, e.id, r.id`,
     [empresaId, `${mes}-01`, natureza, lado, centros, semCentro]
   );
-  const linhas = rows.map((r) => {
-    const sinal = Number(r.valor_dfc) < 0 ? -1 : 1;
+  // Um grupo por centro de custo (pedido do usuário), do maior valor pro menor.
+  const porCentro = new Map();
+  rows.forEach((r) => {
+    if (!porCentro.has(r.centro_id)) porCentro.set(r.centro_id, []);
+    porCentro.get(r.centro_id).push(r);
+  });
+  const grupos = [...porCentro.entries()].map(([centroId, doCentro]) => {
+    const linhas = doCentro.map((r) => {
+      const sinal = Number(r.valor_dfc) < 0 ? -1 : 1;
+      return {
+        data: r.data,
+        conta_bancaria: r.conta_nome || r.numero_conta,
+        titulo: r.bill_id ? `${r.bill_id}${r.installment_number ? `/${r.installment_number}` : ''}` : '—',
+        documento: [r.document_id?.trim(), r.document_number?.trim()].filter(Boolean).join(' ') || '—',
+        descricao: r.description?.trim() || r.statement_type || '—',
+        valor_lancamento: r2(Math.abs(Number(r.value)) * sinal),
+        percentual: Number(r.percentual) / 100,
+        valor: r2(r.valor_dfc),
+      };
+    });
+    const valor = r2(doCentro.reduce((t, r) => t + Number(r.valor_dfc), 0));
+    const titulos = new Set(doCentro.filter((r) => r.bill_id).map((r) => `${r.statement_origin}|${r.bill_id}`)).size;
+    const blocos = [
+      {
+        tipo: 'tabela',
+        titulo: 'Lançamentos do extrato',
+        busca: true,
+        colunas: [
+          col('data', 'Data', 'data'),
+          col('conta_bancaria', 'Conta bancária'),
+          col('titulo', 'Título/Parc.'),
+          col('documento', 'Documento'),
+          col('descricao', 'Favorecido / Descrição'),
+          col('valor_lancamento', 'Lançamento', 'moeda'),
+          col('percentual', 'Rateio', 'pct'),
+          col('valor', 'No DFC', 'moeda'),
+        ],
+        linhas,
+        total: { valor },
+      },
+    ];
+    if (natureza === null) {
+      blocos.push({
+        tipo: 'nota',
+        texto:
+          'Lançamentos que vieram do Sienge sem natureza financeira (sem rateio no extrato) e sem outro lançamento do mesmo título na mesma data para herdar a classificação.',
+      });
+    }
     return {
-      data: r.data,
-      conta_bancaria: r.conta_nome || r.numero_conta,
-      origem: ROTULO_EXTRATO[r.statement_origin] || r.statement_origin || '—',
-      titulo: r.bill_id ? `${r.bill_id}${r.installment_number ? `/${r.installment_number}` : ''}` : '—',
-      documento: [r.document_id?.trim(), r.document_number?.trim()].filter(Boolean).join(' ') || '—',
-      descricao: r.description?.trim() || r.statement_type || '—',
-      centro: r.centro_id === null ? 'Sem centro de custo' : centrosInfo.get(r.centro_id)?.name || `Centro ${r.centro_id}`,
-      valor_lancamento: r2(Math.abs(Number(r.value)) * sinal),
-      percentual: Number(r.percentual) / 100,
-      valor: r2(r.valor_dfc),
-      id_sienge: r.id_sienge,
+      chave: `centro|${centroId ?? 'sem'}`,
+      titulo: centroId === null ? 'Sem centro de custo' : centrosInfo.get(centroId)?.name || `Centro ${centroId}`,
+      subtitulo: `${doCentro.length} ${doCentro.length === 1 ? 'lançamento' : 'lançamentos'} · ${titulos} ${titulos === 1 ? 'título' : 'títulos'}`,
+      valor,
+      blocos,
+      avisos: [],
     };
   });
-  const total = r2(rows.reduce((t, r) => t + Number(r.valor_dfc), 0));
-  const titulos = new Set(rows.filter((r) => r.bill_id).map((r) => `${r.statement_origin}|${r.bill_id}`));
-  const contasBancarias = new Set(rows.map((r) => r.numero_conta));
+  grupos.sort((a, b) => Math.abs(b.valor) - Math.abs(a.valor));
 
-  const blocos = [
-    {
-      tipo: 'campos',
-      itens: [
-        campo('Lançamentos', rows.length, 'int'),
-        campo('Títulos', titulos.size, 'int'),
-        campo('Contas bancárias', contasBancarias.size, 'int'),
-        campo('Total', total, 'moeda'),
-      ],
-    },
-  ];
-  // Mais de um centro: o quanto vem de cada um, antes da lista.
-  const porCentro = new Map();
-  linhas.forEach((l) => porCentro.set(l.centro, r2((porCentro.get(l.centro) || 0) + l.valor)));
-  if (porCentro.size > 1) {
-    blocos.push({
-      tipo: 'tabela',
-      titulo: 'Por centro de custo',
-      colunas: [col('centro', 'Centro de custo'), col('valor', 'Valor', 'moeda')],
-      linhas: [...porCentro.entries()].map(([centro, valor]) => ({ centro, valor })).sort((a, b) => Math.abs(b.valor) - Math.abs(a.valor)),
-    });
-  }
-  blocos.push({
-    tipo: 'tabela',
-    titulo: 'Lançamentos do extrato',
-    busca: true,
-    colunas: [
-      col('data', 'Data', 'data'),
-      col('conta_bancaria', 'Conta bancária'),
-      col('origem', 'Origem'),
-      col('titulo', 'Título/Parc.'),
-      col('documento', 'Documento'),
-      col('descricao', 'Favorecido / Descrição'),
-      ...(porCentro.size > 1 ? [col('centro', 'Centro de custo')] : []),
-      col('valor_lancamento', 'Lançamento', 'moeda'),
-      col('percentual', 'Rateio', 'pct'),
-      col('valor', 'No DFC', 'moeda'),
-    ],
-    linhas,
-    total: { valor: total },
-  });
-  blocos.push({
-    tipo: 'nota',
-    texto:
-      natureza === null
-        ? 'Lançamentos que vieram do Sienge sem natureza financeira (sem rateio no extrato) e sem outro lançamento do mesmo título na mesma data para herdar a classificação.'
-        : 'Extrato das contas bancárias com "Projeta DFC" (aba Contas Correntes), buscado no Sienge. Cada lançamento entra pelo percentual do rateio na natureza e no centro de custo — "No DFC" = Lançamento × Rateio.',
-  });
-
-  return {
-    total,
-    grupos: [
-      {
-        chave: 'extrato',
-        titulo: 'Extrato bancário (Sienge)',
-        subtitulo: `${rows.length} ${rows.length === 1 ? 'lançamento' : 'lançamentos'} em ${rotuloMes(mes)}`,
-        valor: total,
-        blocos,
-        avisos: [],
-      },
-    ],
-  };
+  return { total: r2(rows.reduce((t, r) => t + Number(r.valor_dfc), 0)), grupos };
 }
 
 // ─── Projetado: uma fonte por origem ──────────────────────────────────────────────────────────

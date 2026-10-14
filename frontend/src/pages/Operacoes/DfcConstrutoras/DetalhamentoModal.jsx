@@ -200,8 +200,9 @@ function Bloco({ bloco }) {
 }
 
 // Um centro × origem (Projetado) ou o extrato (Realizado), recolhível.
-function Grupo({ grupo, abertoInicial }) {
-  const [aberto, setAberto] = useState(abertoInicial);
+// Sempre começa fechado (pedido do usuário).
+function Grupo({ grupo }) {
+  const [aberto, setAberto] = useState(false);
   return (
     <section className="rounded-xl border border-gray-200">
       <button
@@ -320,11 +321,11 @@ export default function DetalhamentoModal({ empresaId, pedido, onClose }) {
           <div className="space-y-3">
             {dados.grupos.length > 1 && (
               <p className="text-xs text-gray-500">
-                {dados.grupos.length} {realizado ? 'grupos' : 'composições (centro de custo × origem)'} somam o total — clique para abrir cada uma.
+                {dados.grupos.length} {realizado ? 'centros de custo' : 'composições (centro de custo × origem)'} somam o total — clique para abrir.
               </p>
             )}
-            {dados.grupos.map((g, i) => (
-              <Grupo key={g.chave} grupo={g} abertoInicial={dados.grupos.length <= 3 || i === 0} />
+            {dados.grupos.map((g) => (
+              <Grupo key={g.chave} grupo={g} />
             ))}
           </div>
         )}
