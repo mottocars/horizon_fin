@@ -1,5 +1,5 @@
 import { useEffect, useState } from 'react';
-import { BriefcaseBusiness, CheckCircle2, FilePlus2, HandCoins, Landmark, Receipt, XCircle } from 'lucide-react';
+import { BriefcaseBusiness, CheckCircle2, FilePlus2, Globe, HandCoins, Landmark, Receipt, XCircle } from 'lucide-react';
 import Modal from '../../../components/Modal';
 import Button from '../../../components/Button';
 import { atualizarProjecaoCef, listElegiveisProjecaoCef } from '../../../api/dfcProjecaoCef.api';
@@ -9,6 +9,9 @@ import {
   getBaseEmpresarialDfc,
   getExecucaoEmpresarialDfc,
 } from '../../../api/dfcEmpresarial.api';
+import { listDcdContratos } from '../../../api/dcd.api';
+import { listExtratoEmpreendimentos } from '../../../api/extrato.api';
+import ImportarCiwebModal from './ImportarCiwebModal';
 
 // Bases que rodam pela rotina do Monitor de Integrações: como ler a situação, disparar e acompanhar.
 const BASES = {
@@ -32,7 +35,7 @@ function dataHora(v) {
 }
 
 // Uma base da janela: ícone + título + situação curta + botão "Atualizar" e, rodando, a barra.
-function LinhaBase({ icone: Icone, cor, titulo, situacao, erro, rodando, pct, bloqueado, onAtualizar }) {
+function LinhaBase({ icone: Icone, cor, titulo, situacao, erro, rodando, pct, bloqueado, onAtualizar, rotuloBotao = 'Atualizar' }) {
   return (
     <div className="rounded-lg border border-gray-200 px-4 py-3">
       <div className="flex items-center gap-3">
@@ -44,7 +47,7 @@ function LinhaBase({ icone: Icone, cor, titulo, situacao, erro, rodando, pct, bl
           {situacao && <p className={`truncate text-[11px] ${erro ? 'text-red-600' : 'text-gray-400'}`}>{situacao}</p>}
         </div>
         <Button type="button" variant="secondary" onClick={onAtualizar} loading={rodando} disabled={rodando || bloqueado}>
-          Atualizar
+          {rotuloBotao}
         </Button>
       </div>
       {rodando && (
@@ -121,14 +124,30 @@ function useBase(open, empresaId, tipo) {
 }
 
 // Ícone "Nova versão" da aba Orçamentos (pedido do usuário): as bases que alimentam o orçamento,
-// cada uma com o botão de atualizar (Aging a receber e a pagar e Orçamento Empresarial do Sienge —
-// rotinas do Monitor de Integrações; Projeção CEF — obra a obra), e embaixo "Nova versão", que monta na grade a versão
+// cada uma com o botão de atualizar (CIWEB — DCD e Geral, a mesma importação da aba CIWEB; Aging a
+// receber e a pagar e Orçamento Empresarial do Sienge — rotinas do Monitor de Integrações; Projeção
+// CEF — obra a obra), e embaixo "Nova versão", que monta na grade a versão
 // nova a partir do que está no banco agora (`onGerar`) — com ou sem atualizar alguma base antes,
 // incluindo o que foi digitado em HORIZON - INFORMADO. Ela só vira a última versão ao ser salva.
 export default function NovaVersaoOrcamentoModal({ open, onClose, empresaId, onGerar }) {
   const receber = useBase(open, empresaId, 'receber');
   const pagar = useBase(open, empresaId, 'pagar');
   const empresarial = useBase(open, empresaId, 'empresarial');
+
+  // CIWEB (DCD e Geral dos empreendimentos): mesma importação da aba CIWEB. Situação = último envio.
+  const [ciwebAberto, setCiwebAberto] = useState(false);
+  const [ultimoCiweb, setUltimoCiweb] = useState(undefined);
+  const carregarCiweb = () =>
+    Promise.all([listDcdContratos(empresaId), listExtratoEmpreendimentos(empresaId)])
+      .then((listas) => {
+        const datas = listas
+          .flat()
+          .map((x) => x.atualizado_em || x.importado_em)
+          .filter(Boolean)
+          .sort();
+        setUltimoCiweb(datas.at(-1) || null);
+      })
+      .catch(() => setUltimoCiweb(null));
 
   const [obras, setObras] = useState([]);
   const [cefRodando, setCefRodando] = useState(false);
@@ -146,6 +165,7 @@ export default function NovaVersaoOrcamentoModal({ open, onClose, empresaId, onG
     setCefResultado(null);
     setCefErro('');
     carregarObras();
+    carregarCiweb();
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [open, empresaId]);
 
@@ -193,6 +213,19 @@ export default function NovaVersaoOrcamentoModal({ open, onClose, empresaId, onG
   return (
     <Modal open={open} onClose={cefRodando ? () => {} : onClose} title="Nova versão" maxWidthClass="max-w-lg">
       <div className="space-y-2.5">
+        <LinhaBase
+          icone={Globe}
+          cor="bg-sky-50 text-sky-600"
+          titulo="CIWEB (DCD e Geral)"
+          situacao={
+            ultimoCiweb === undefined ? '' : ultimoCiweb ? `Último envio em ${dataHora(ultimoCiweb)}` : 'Nenhum arquivo enviado'
+          }
+          rodando={false}
+          pct={null}
+          bloqueado={cefRodando}
+          rotuloBotao="Enviar arquivos"
+          onAtualizar={() => setCiwebAberto(true)}
+        />
         <LinhaBase
           icone={HandCoins}
           cor="bg-emerald-50 text-emerald-600"
@@ -244,6 +277,16 @@ export default function NovaVersaoOrcamentoModal({ open, onClose, empresaId, onG
             Projeção CEF concluída.
           </p>
         )}
+
+        <ImportarCiwebModal
+          open={ciwebAberto}
+          onClose={() => setCiwebAberto(false)}
+          empresaId={empresaId}
+          onImportado={async () => {
+            await carregarCiweb();
+            carregarObras(); // DCD / Geral mudam Parâmetros e quais obras entram na Projeção CEF
+          }}
+        />
 
         <div className="flex justify-end gap-2 border-t border-gray-100 pt-4">
           <Button type="button" variant="secondary" onClick={onClose} disabled={cefRodando}>
