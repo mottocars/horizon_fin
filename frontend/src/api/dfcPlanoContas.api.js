@@ -28,9 +28,12 @@ export function listVersoesPlanoDfc(empresaId) {
   return http.get(`/dfc-plano-contas/${empresaId}/versoes`).then((res) => res.data);
 }
 
-// Cria a versão do centro copiando o plano Global.
-export function criarVersaoPlanoDfc(empresaId, centroId) {
-  return http.post(`/dfc-plano-contas/${empresaId}/versoes`, { centro_id: centroId }).then((res) => res.data);
+// Cria o plano próprio do centro. `copiarDe`: 'global' (cópia do Global), 'branco' (sem nada) ou o
+// id do centro cujo plano próprio copiar.
+export function criarVersaoPlanoDfc(empresaId, centroId, copiarDe) {
+  return http
+    .post(`/dfc-plano-contas/${empresaId}/versoes`, { centro_id: centroId, copiar_de: copiarDe })
+    .then((res) => res.data);
 }
 
 // Exclui a versão do centro — ele volta a seguir o Global.

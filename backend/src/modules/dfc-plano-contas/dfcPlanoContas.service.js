@@ -152,13 +152,22 @@ async function listVersoes(empresaId) {
   return rows;
 }
 
-// Cria a versão do centro copiando o plano Global como está agora.
-async function criarVersao(empresaId, centroId, usuarioId) {
+// Cria a versão (plano próprio) do centro. `copiarDe` (escolhido pelo usuário na criação):
+// 'global' = cópia do plano Global de agora; um id de centro = cópia do plano próprio daquele
+// centro; 'branco' = sem nenhuma conta classificada.
+async function criarVersao(empresaId, centroId, usuarioId, copiarDe = 'global') {
   const { rows: centro } = await pool.query(
     'SELECT name FROM centros_custo_sienge WHERE empresa_id = $1 AND sienge_id = $2',
     [empresaId, centroId]
   );
   if (!centro[0]) throw erro(404, 'Centro de custo não encontrado nesta empresa.');
+  if (copiarDe !== 'global' && copiarDe !== 'branco') {
+    const { rows: origem } = await pool.query(
+      'SELECT 1 FROM dfc_plano_contas_versoes WHERE empresa_id = $1 AND centro_id = $2',
+      [empresaId, copiarDe]
+    );
+    if (!origem[0]) throw erro(400, 'O plano escolhido pra copiar não existe mais.');
+  }
   const client = await pool.connect();
   try {
     await client.query('BEGIN');
@@ -172,11 +181,21 @@ async function criarVersao(empresaId, centroId, usuarioId) {
       if (e.code === '23505') throw erro(409, `${centro[0].name} já tem versão própria do plano de contas.`);
       throw e;
     }
-    const { rowCount } = await client.query(
-      `INSERT INTO dfc_plano_contas_centro (empresa_id, centro_id, sienge_id, mascara_id, origem_projecao)
-       SELECT empresa_id, $2, sienge_id, mascara_id, origem_projecao FROM dfc_plano_contas WHERE empresa_id = $1`,
-      [empresaId, centroId]
-    );
+    let rowCount = 0;
+    if (copiarDe === 'global') {
+      ({ rowCount } = await client.query(
+        `INSERT INTO dfc_plano_contas_centro (empresa_id, centro_id, sienge_id, mascara_id, origem_projecao)
+         SELECT empresa_id, $2, sienge_id, mascara_id, origem_projecao FROM dfc_plano_contas WHERE empresa_id = $1`,
+        [empresaId, centroId]
+      ));
+    } else if (copiarDe !== 'branco') {
+      ({ rowCount } = await client.query(
+        `INSERT INTO dfc_plano_contas_centro (empresa_id, centro_id, sienge_id, mascara_id, origem_projecao)
+         SELECT empresa_id, $2, sienge_id, mascara_id, origem_projecao FROM dfc_plano_contas_centro
+          WHERE empresa_id = $1 AND centro_id = $3`,
+        [empresaId, centroId, copiarDe]
+      ));
+    }
     await client.query('COMMIT');
     return { centro_id: centroId, name: centro[0].name, contas_copiadas: rowCount };
   } catch (e) {

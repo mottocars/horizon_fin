@@ -152,7 +152,7 @@ export default function PlanosContasLista({ empresaId, onAbrir, onNovo, refreshT
             </span>
             Novo plano por centro de custo
             <span className="max-w-[16rem] text-center text-[11px] font-normal text-gray-400">
-              Começa como cópia do Global e passa a valer só para o centro escolhido.
+              Copiando o Global, o plano de outro centro, ou em branco — vale só para o centro escolhido.
             </span>
           </button>
         </div>

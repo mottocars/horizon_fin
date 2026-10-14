@@ -84,7 +84,14 @@ async function criarVersao(req, res, next) {
   try {
     const empresaId = empresaIdSchema.parse(req.params.empresaId);
     const centroId = z.coerce.number().int().positive('Escolha o centro de custo.').parse(req.body?.centro_id);
-    res.status(201).json(await service.criarVersao(empresaId, centroId, req.user.id));
+    // De onde começa o plano novo: 'global', 'branco' ou o id do centro cujo plano próprio copiar.
+    const copiarDe = z
+      .union([z.enum(['global', 'branco']), z.coerce.number().int().positive()], {
+        errorMap: () => ({ message: 'Escolha se o plano começa em branco ou copiando outro plano.' }),
+      })
+      .parse(req.body?.copiar_de);
+    if (copiarDe === centroId) throw Object.assign(new Error('Escolha outro plano pra copiar.'), { status: 400, expose: true });
+    res.status(201).json(await service.criarVersao(empresaId, centroId, req.user.id, copiarDe));
   } catch (err) {
     tratar(err, next);
   }
