@@ -247,6 +247,7 @@ export default function DfcConstrutorasPage() {
   // Aba DFC (fluxo de caixa): mesmo período do Orçamentos e filtro de centros de custo (os com
   // "Projeta DFC"; vazio = todos).
   const [centrosFluxo, setCentrosFluxo] = useState([]);
+  const [fluxoTelaCheia, setFluxoTelaCheia] = useState(false);
   const [centrosFluxoOpcoes, setCentrosFluxoOpcoes] = useState([]);
   useEffect(() => {
     setCentrosFluxo([]);
@@ -592,6 +593,22 @@ export default function DfcConstrutorasPage() {
             )}
           </div>
 
+          {abaAtiva === 'dfc' && (
+            <div className="flex shrink-0 items-center gap-2">
+              <Button
+                type="button"
+                variant="secondary"
+                className="!px-2.5"
+                onClick={() => setFluxoTelaCheia(true)}
+                disabled={!empresaId}
+                title="Tela cheia"
+                aria-label="Tela cheia"
+              >
+                <Maximize2 size={18} />
+              </Button>
+            </div>
+          )}
+
           {abaAtiva === 'orcamentos' && (
             // Só ícones (dica no title): nova versão, salvar a nova versão e tela cheia.
             <div className="flex shrink-0 items-center gap-2">
@@ -765,7 +782,14 @@ export default function DfcConstrutorasPage() {
         ) : tabAtiva.id === 'mascaras' ? (
           <DfcMascarasTab ref={mascarasTabRef} empresaId={empresaId} />
         ) : tabAtiva.id === 'dfc' ? (
-          <DfcFluxoTab empresaId={empresaId} inicio={inicioOrcamento} fim={fimOrcamento} centros={centrosFluxo} />
+          <DfcFluxoTab
+            empresaId={empresaId}
+            inicio={inicioOrcamento}
+            fim={fimOrcamento}
+            centros={centrosFluxo}
+            telaCheia={fluxoTelaCheia}
+            onSairTelaCheia={() => setFluxoTelaCheia(false)}
+          />
         ) : (
           <AbaEmConstrucao key={tabAtiva.id} empresaId={empresaId} icon={tabAtiva.icon} titulo={tabAtiva.label} />
         )}

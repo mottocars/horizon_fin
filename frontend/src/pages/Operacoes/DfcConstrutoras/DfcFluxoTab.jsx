@@ -1,5 +1,5 @@
 import { Fragment, useCallback, useEffect, useLayoutEffect, useMemo, useRef, useState } from 'react';
-import { ChevronRight, History, Info, TriangleAlert, Wallet } from 'lucide-react';
+import { ChevronRight, Info, Minimize2, TriangleAlert, Wallet } from 'lucide-react';
 import { listDfcMascaras } from '../../../api/dfcMascaras.api';
 import { listContas } from '../../../api/planosFinanceirosSienge.api';
 import { listTodasClassificacoesPlanoDfc } from '../../../api/dfcPlanoContas.api';
@@ -19,11 +19,6 @@ function dinheiro(v) {
   return v.toLocaleString('pt-BR', { minimumFractionDigits: 2, maximumFractionDigits: 2 });
 }
 
-function dataHora(v) {
-  return v
-    ? new Date(v).toLocaleString('pt-BR', { day: '2-digit', month: '2-digit', year: 'numeric', hour: '2-digit', minute: '2-digit' })
-    : '';
-}
 
 // Largura (px) do texto no corpo da grade — text-xs semibold. Canvas reaproveitado.
 let contextoMedida;
@@ -69,7 +64,9 @@ const r2 = (v) => Math.round(v * 100) / 100;
 // Período = o mesmo da aba Orçamentos (filtros do topo). Visual de demonstrativo (é o fluxo de caixa
 // oficial — pedido do usuário): sem coluna de total, sem linhas verticais, zero em branco, saldos em
 // faixas discretas; rolagem própria com a primeira coluna congelada, como no Orçamentos.
-export default function DfcFluxoTab({ empresaId, inicio, fim, centros: centrosFiltro = [] }) {
+// `telaCheia`: a grade ocupa a tela inteira (e a tela cheia do navegador, quando ele deixa); sai pelo
+// botão "Sair da tela cheia" ou com Esc (`onSairTelaCheia`) — mesmo comportamento do Orçamentos.
+export default function DfcFluxoTab({ empresaId, inicio, fim, centros: centrosFiltro = [], telaCheia = false, onSairTelaCheia }) {
   const [dados, setDados] = useState(null);
   const [carregando, setCarregando] = useState(false);
   const [erro, setErro] = useState('');
@@ -180,14 +177,37 @@ export default function DfcFluxoTab({ empresaId, inicio, fim, centros: centrosFi
     return meses.map((m) => Math.max(LARGURA_MES, Math.ceil(Math.max(0, ...linhas.map((pm) => largura(pm[m])))) + FOLGA));
   }, [estrutura, porMes, meses]);
 
+  // Tela cheia: pede também a do navegador; o Esc dele sai e o `fullscreenchange` fecha a nossa
+  // junto. Sem a do navegador, o Esc é tratado aqui.
+  useEffect(() => {
+    if (!telaCheia) return undefined;
+    const doc = document.documentElement;
+    if (!document.fullscreenElement && doc.requestFullscreen) doc.requestFullscreen().catch(() => {});
+    const aoTrocar = () => {
+      if (!document.fullscreenElement) onSairTelaCheia?.();
+    };
+    const aoTeclar = (e) => {
+      if (e.key === 'Escape') onSairTelaCheia?.();
+    };
+    document.addEventListener('fullscreenchange', aoTrocar);
+    window.addEventListener('keydown', aoTeclar);
+    return () => {
+      document.removeEventListener('fullscreenchange', aoTrocar);
+      window.removeEventListener('keydown', aoTeclar);
+      if (document.fullscreenElement) document.exitFullscreen?.().catch(() => {});
+    };
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [telaCheia]);
+
   // A grade ocupa a altura que sobra na tela (mesma regra do Orçamentos).
   useLayoutEffect(() => {
     const el = gradeRef.current;
     if (!el) return undefined;
     const medir = () => {
       const main = el.closest('main');
-      const topo = el.getBoundingClientRect().top + (main ? main.scrollTop : 0);
-      const altura = Math.max(ALTURA_MINIMA_GRADE, Math.floor(window.innerHeight - topo - 44));
+      // Em tela cheia o quadro é fixo na janela (não rola com o <main>).
+      const topo = el.getBoundingClientRect().top + (main && !telaCheia ? main.scrollTop : 0);
+      const altura = Math.max(ALTURA_MINIMA_GRADE, Math.floor(window.innerHeight - topo - (telaCheia ? 20 : 44)));
       setAlturaGrade((atual) => (atual === altura ? atual : altura));
     };
     medir();
@@ -210,6 +230,8 @@ export default function DfcFluxoTab({ empresaId, inicio, fim, centros: centrosFi
   }
 
   const versao = dados?.orcamento?.versao || null;
+  const MESES_LONGOS = ['jan', 'fev', 'mar', 'abr', 'mai', 'jun', 'jul', 'ago', 'set', 'out', 'nov', 'dez'];
+  const rotulo = (m) => `${MESES_LONGOS[Number(m.slice(5, 7)) - 1]}/${m.slice(2, 4)}`;
   const larguraTabela = LARGURA_PRIMEIRA + largurasMes.reduce((t, l) => t + l, 0);
   const mesAtual = (() => {
     const d = new Date();
@@ -278,19 +300,31 @@ export default function DfcFluxoTab({ empresaId, inicio, fim, centros: centrosFi
   }
 
   return (
-    <div className="min-w-0 rounded-card rounded-tl-none bg-white p-5 shadow-card">
-      {dados && (
-        <div className="-mt-1 mb-4 flex flex-wrap items-center gap-x-3 gap-y-1.5 text-xs text-gray-500">
-          <span className="inline-flex items-center gap-1.5 rounded-full bg-primary-50 px-2.5 py-0.5 font-medium text-primary-700">
-            <span className="h-1.5 w-1.5 rounded-full bg-primary-500" />
-            Projetado
-          </span>
-          <span className="flex items-center gap-1.5">
-            <History size={13} className="shrink-0 text-gray-400" />
-            {versao
-              ? `Orçamento versão ${versao.numero} · ${dataHora(versao.criado_em)}${versao.usuario ? ` · ${versao.usuario}` : ''}`
-              : 'Nenhuma versão salva do Orçamento — salve uma na aba Orçamentos pra ver o fluxo.'}
-          </span>
+    <div
+      className={
+        telaCheia ? 'fixed inset-0 z-40 flex flex-col bg-white p-5' : 'min-w-0 rounded-card rounded-tl-none bg-white p-5 shadow-card'
+      }
+    >
+      {telaCheia && (
+        <div className="-mt-1 mb-4 flex items-center gap-3 border-b border-gray-100 pb-3">
+          <Wallet size={18} className="shrink-0 text-primary-600" />
+          <div className="min-w-0">
+            <h2 className="text-sm font-semibold text-gray-900">Fluxo de caixa</h2>
+            {periodoValido && meses.length > 0 && (
+              <p className="text-xs text-gray-500">
+                {rotulo(meses[0])} a {rotulo(meses[meses.length - 1])}
+              </p>
+            )}
+          </div>
+          <span className="ml-auto hidden text-xs text-gray-400 sm:inline">Esc para sair</span>
+          <button
+            type="button"
+            onClick={onSairTelaCheia}
+            className="flex items-center gap-1.5 rounded-lg border border-gray-200 px-3 py-1.5 text-sm font-medium text-gray-700 transition-colors hover:bg-gray-50"
+          >
+            <Minimize2 size={15} />
+            Sair da tela cheia
+          </button>
         </div>
       )}
 
