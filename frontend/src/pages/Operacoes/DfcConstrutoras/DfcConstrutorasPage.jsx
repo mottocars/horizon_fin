@@ -34,6 +34,7 @@ import DfcCiwebTab from './DfcCiwebTab';
 import DfcPlanoContasTab from './DfcPlanoContasTab';
 import DfcAvancosTab from './DfcAvancosTab';
 import DfcRepassesTab from './DfcRepassesTab';
+import DfcOrcamentosTab from './DfcOrcamentosTab';
 
 // Mesmo padrão de DreGerencialPage.jsx: o `{ divider: true }` separa a DFC (a demonstração em
 // si) das abas de cadastro/parâmetro que dão suporte a ela, que ficam juntas, sem divisor entre
@@ -48,7 +49,8 @@ const TABS = [
   { id: 'plano-contas', label: 'Plano Contas', icon: ListTree },
   { id: 'avancos-obras', label: 'Avanços Obras', icon: HardHat },
   { id: 'repasses', label: 'Repasses', icon: Banknote },
-  { id: 'vendas', label: 'Vendas', icon: HandCoins },
+  // Inativa por enquanto (pedido do usuário) — aparece cinza, sem clique.
+  { id: 'vendas', label: 'Vendas', icon: HandCoins, disabled: true, title: 'Em breve' },
   { id: 'orcamentos', label: 'Orçamentos', icon: Calculator },
 ];
 
@@ -71,7 +73,7 @@ export default function DfcConstrutorasPage() {
   const empresaId = searchParams.get('empresa_id') || '';
   const centroId = searchParams.get('centro_id') || '';
   const abaAtiva = searchParams.get('aba') || 'dfc';
-  const tabAtiva = TABS.find((t) => t.id === abaAtiva) || TABS[0];
+  const tabAtiva = TABS.find((t) => t.id === abaAtiva && !t.disabled) || TABS[0];
 
   function atualizarParams(patch) {
     const next = new URLSearchParams(searchParams);
@@ -218,6 +220,19 @@ export default function DfcConstrutorasPage() {
   // Aba Repasses: busca por mutuário ou contrato (só conveniência de navegador, fora da URL).
   const [buscaRepasses, setBuscaRepasses] = useState('');
 
+  // Aba Orçamentos: período das colunas — padrão do mês anterior ao atual até 10 meses depois dele
+  // (pedido do usuário). Só conveniência de navegador, fora da URL.
+  const [inicioOrcamento, setInicioOrcamento] = useState(() => {
+    const d = new Date();
+    const ini = new Date(d.getFullYear(), d.getMonth() - 1, 1);
+    return `${ini.getFullYear()}-${String(ini.getMonth() + 1).padStart(2, '0')}-01`;
+  });
+  const [fimOrcamento, setFimOrcamento] = useState(() => {
+    const d = new Date();
+    const fim = new Date(d.getFullYear(), d.getMonth() + 10, 0); // último dia de (mês anterior + 10)
+    return `${fim.getFullYear()}-${String(fim.getMonth() + 1).padStart(2, '0')}-${String(fim.getDate()).padStart(2, '0')}`;
+  });
+
   // Botão "Nova máscara" fica no topo (padrão do resto do sistema, igual "Nova categoria" na
   // DRE), mas o campo de criar vive em DfcMascarasTab.jsx — dispara por ref.
   const mascarasTabRef = useRef(null);
@@ -267,6 +282,31 @@ export default function DfcConstrutorasPage() {
                       { value: 'EXTRATO', label: 'Geral' },
                     ]}
                     placeholder="Todos"
+                  />
+                </div>
+              </>
+            )}
+
+            {abaAtiva === 'orcamentos' && (
+              <>
+                <div className="sm:w-44">
+                  <label className="mb-1 block text-sm font-medium text-gray-700">Data início</label>
+                  <input
+                    type="date"
+                    value={inicioOrcamento}
+                    onChange={(e) => setInicioOrcamento(e.target.value)}
+                    disabled={!empresaId}
+                    className="w-full rounded-lg border border-gray-200 px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-primary-100 disabled:bg-gray-50 disabled:text-gray-400"
+                  />
+                </div>
+                <div className="sm:w-44">
+                  <label className="mb-1 block text-sm font-medium text-gray-700">Data fim</label>
+                  <input
+                    type="date"
+                    value={fimOrcamento}
+                    onChange={(e) => setFimOrcamento(e.target.value)}
+                    disabled={!empresaId}
+                    className="w-full rounded-lg border border-gray-200 px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-primary-100 disabled:bg-gray-50 disabled:text-gray-400"
                   />
                 </div>
               </>
@@ -449,7 +489,9 @@ export default function DfcConstrutorasPage() {
       <div>
         <Tabs tabs={TABS} activeId={tabAtiva.id} onChange={(aba) => atualizarParams({ aba })} />
 
-        {tabAtiva.id === 'repasses' ? (
+        {tabAtiva.id === 'orcamentos' ? (
+          <DfcOrcamentosTab empresaId={empresaId} inicio={inicioOrcamento} fim={fimOrcamento} />
+        ) : tabAtiva.id === 'repasses' ? (
           <DfcRepassesTab empresaId={empresaId} search={buscaRepasses} />
         ) : tabAtiva.id === 'avancos-obras' ? (
           <DfcAvancosTab empresaId={empresaId} inicio={inicioAvancos} fim={fimAvancos} />

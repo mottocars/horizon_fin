@@ -34,17 +34,24 @@ export default function Tabs({ tabs, activeId, onChange, className = '' }) {
         if (tab.divider) return <Divisor key={`divisor-${i}`} />;
         const Icon = tab.icon;
         const active = tab.id === activeId;
+        // `disabled`: aba visível mas inativa (cinza, sem clique) — ex.: tela ainda não liberada.
+        // `title` vira a dica ao passar o mouse.
         return (
           <button
             key={tab.id}
             type="button"
             role="tab"
             aria-selected={active}
+            aria-disabled={tab.disabled || undefined}
+            disabled={tab.disabled}
+            title={tab.title}
             onClick={() => onChange(tab.id)}
             className={`relative -mb-px flex items-center gap-2 rounded-t-xl border border-b-0 px-4 py-2.5 text-sm font-medium transition-colors ${
               active
                 ? 'border-gray-200 bg-white text-gray-900'
-                : 'border-transparent text-gray-500 hover:bg-gray-100/70 hover:text-gray-700'
+                : tab.disabled
+                  ? 'cursor-not-allowed border-transparent text-gray-300'
+                  : 'border-transparent text-gray-500 hover:bg-gray-100/70 hover:text-gray-700'
             }`}
           >
             {active && (
@@ -65,7 +72,10 @@ export default function Tabs({ tabs, activeId, onChange, className = '' }) {
                 em vez do padrão "azul quando ativa, cinza quando não" — a
                 cor fica só no ícone, o resto da aba continua neutro. */}
             {Icon && (
-              <Icon size={15} className={tab.iconColorClass ?? (active ? 'text-primary-600' : 'text-gray-400')} />
+              <Icon
+                size={15}
+                className={tab.iconColorClass ?? (active ? 'text-primary-600' : tab.disabled ? 'text-gray-300' : 'text-gray-400')}
+              />
             )}
             {tab.label}
           </button>
