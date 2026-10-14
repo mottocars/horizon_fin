@@ -1,5 +1,5 @@
 import { useEffect, useState } from 'react';
-import { BriefcaseBusiness, CheckCircle2, FilePlus2, Globe, HandCoins, Landmark, Receipt, XCircle } from 'lucide-react';
+import { BriefcaseBusiness, CheckCircle2, FilePlus2, Globe, HandCoins, Landmark, Receipt, Wallet, XCircle } from 'lucide-react';
 import Modal from '../../../components/Modal';
 import Button from '../../../components/Button';
 import { atualizarProjecaoCef, listElegiveisProjecaoCef } from '../../../api/dfcProjecaoCef.api';
@@ -12,6 +12,11 @@ import {
 import { listDcdContratos } from '../../../api/dcd.api';
 import { listExtratoEmpreendimentos } from '../../../api/extrato.api';
 import ImportarCiwebModal from './ImportarCiwebModal';
+import {
+  atualizarSaldosContasDfc,
+  getBaseSaldosContasDfc,
+  getExecucaoSaldosContasDfc,
+} from '../../../api/dfcSaldos.api';
 
 // Bases que rodam pela rotina do Monitor de Integrações: como ler a situação, disparar e acompanhar.
 const BASES = {
@@ -26,6 +31,7 @@ const BASES = {
     execucao: (e) => getExecucaoBaseAgingDfc(e, 'pagar'),
   },
   empresarial: { base: getBaseEmpresarialDfc, atualizar: atualizarBaseEmpresarialDfc, execucao: getExecucaoEmpresarialDfc },
+  saldos: { base: getBaseSaldosContasDfc, atualizar: atualizarSaldosContasDfc, execucao: getExecucaoSaldosContasDfc },
 };
 
 function dataHora(v) {
@@ -115,7 +121,7 @@ function useBase(open, empresaId, tipo) {
 
   let situacao = base?.parcelas ? `Atualizada em ${dataHora(base.atualizado_em)}` : 'Ainda não carregada';
   let falhou = false;
-  if (rodando) situacao = 'Atualizando — pode levar alguns minutos';
+  if (rodando) situacao = exec?.progresso?.texto || 'Atualizando — pode levar alguns minutos';
   else if (erro) [situacao, falhou] = [erro, true];
   else if (exec && exec.status !== 'sucesso' && exec.finalizadoEm) {
     [situacao, falhou] = [exec.status === 'interrompida' ? 'A última atualização foi interrompida' : exec.erro || 'A última atualização falhou', true];
@@ -129,7 +135,19 @@ function useBase(open, empresaId, tipo) {
 // CEF — obra a obra), e embaixo "Nova versão", que monta na grade a versão
 // nova a partir do que está no banco agora (`onGerar`) — com ou sem atualizar alguma base antes,
 // incluindo o que foi digitado em HORIZON - INFORMADO. Ela só vira a última versão ao ser salva.
-export default function NovaVersaoOrcamentoModal({ open, onClose, empresaId, onGerar }) {
+// Na aba DFC ("Gerar fluxo") a mesma janela vem com `comSaldos` — a primeira base é "Saldos das
+// Contas" (extrato do Sienge das contas com Projeta DFC, rotina do Monitor) — e `titulo` /
+// `rotuloFinal` próprios.
+export default function NovaVersaoOrcamentoModal({
+  open,
+  onClose,
+  empresaId,
+  onGerar,
+  comSaldos = false,
+  titulo = 'Nova versão',
+  rotuloFinal = 'Nova versão',
+}) {
+  const saldos = useBase(open && comSaldos, empresaId, 'saldos');
   const receber = useBase(open, empresaId, 'receber');
   const pagar = useBase(open, empresaId, 'pagar');
   const empresarial = useBase(open, empresaId, 'empresarial');
@@ -208,11 +226,24 @@ export default function NovaVersaoOrcamentoModal({ open, onClose, empresaId, onG
             ? `Atualizada em ${dataHora(ultimaCef)}`
             : 'Ainda não projetada';
 
-  const ocupado = receber.rodando || pagar.rodando || empresarial.rodando || cefRodando;
+  const ocupado = (comSaldos && saldos.rodando) || receber.rodando || pagar.rodando || empresarial.rodando || cefRodando;
 
   return (
-    <Modal open={open} onClose={cefRodando ? () => {} : onClose} title="Nova versão" maxWidthClass="max-w-lg">
+    <Modal open={open} onClose={cefRodando ? () => {} : onClose} title={titulo} maxWidthClass="max-w-lg">
       <div className="space-y-2.5">
+        {comSaldos && (
+          <LinhaBase
+            icone={Wallet}
+            cor="bg-teal-50 text-teal-600"
+            titulo="Saldos das Contas"
+            situacao={saldos.situacao}
+            erro={saldos.falhou}
+            rodando={saldos.rodando}
+            pct={null}
+            bloqueado={cefRodando}
+            onAtualizar={saldos.atualizar}
+          />
+        )}
         <LinhaBase
           icone={Globe}
           cor="bg-sky-50 text-sky-600"
@@ -294,7 +325,7 @@ export default function NovaVersaoOrcamentoModal({ open, onClose, empresaId, onG
           </Button>
           <Button type="button" onClick={onGerar} disabled={ocupado} title={ocupado ? 'Espere as atualizações terminarem' : undefined}>
             <FilePlus2 size={16} />
-            Nova versão
+            {rotuloFinal}
           </Button>
         </div>
       </div>

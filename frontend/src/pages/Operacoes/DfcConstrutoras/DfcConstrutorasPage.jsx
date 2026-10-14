@@ -255,6 +255,10 @@ export default function DfcConstrutorasPage() {
   // "Projeta DFC"; vazio = todos).
   const [centrosFluxo, setCentrosFluxo] = useState([]);
   const [fluxoTelaCheia, setFluxoTelaCheia] = useState(false);
+  // "Gerar fluxo": a mesma janela de bases da Nova versão do Orçamento, com "Saldos das Contas" na
+  // frente; no fim recarrega o fluxo.
+  const [gerarFluxoAberto, setGerarFluxoAberto] = useState(false);
+  const [refreshTokenFluxo, setRefreshTokenFluxo] = useState(0);
   const [centrosFluxoOpcoes, setCentrosFluxoOpcoes] = useState([]);
   useEffect(() => {
     setCentrosFluxo([]);
@@ -637,6 +641,16 @@ export default function DfcConstrutorasPage() {
             <div className="flex shrink-0 items-center gap-2">
               <Button
                 type="button"
+                className="!px-2.5"
+                onClick={() => setGerarFluxoAberto(true)}
+                disabled={!empresaId}
+                title="Gerar fluxo"
+                aria-label="Gerar fluxo"
+              >
+                <RefreshCw size={18} />
+              </Button>
+              <Button
+                type="button"
                 variant="secondary"
                 className="!px-2.5"
                 onClick={() => setFluxoTelaCheia(true)}
@@ -836,6 +850,7 @@ export default function DfcConstrutorasPage() {
             centros={centrosFluxo}
             telaCheia={fluxoTelaCheia}
             onSairTelaCheia={() => setFluxoTelaCheia(false)}
+            refreshToken={refreshTokenFluxo}
           />
         ) : (
           <AbaEmConstrucao key={tabAtiva.id} empresaId={empresaId} icon={tabAtiva.icon} titulo={tabAtiva.label} />
@@ -851,6 +866,19 @@ export default function DfcConstrutorasPage() {
           setNovaVersaoAberta(false);
           setRefreshTokenCardsPlano((n) => n + 1);
           carregarVersoesPlano().then(() => abrirPlano(String(criada.centro_id)));
+        }}
+      />
+
+      <NovaVersaoOrcamentoModal
+        open={gerarFluxoAberto}
+        onClose={() => setGerarFluxoAberto(false)}
+        empresaId={empresaId}
+        comSaldos
+        titulo="Gerar fluxo"
+        rotuloFinal="Gerar fluxo"
+        onGerar={() => {
+          setGerarFluxoAberto(false);
+          setRefreshTokenFluxo((n) => n + 1);
         }}
       />
 

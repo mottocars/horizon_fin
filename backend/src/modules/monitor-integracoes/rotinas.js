@@ -4,6 +4,7 @@ const repassesCef = require('../repasses-cef/repassesCef.service');
 const income = require('../income-sienge/income.service');
 const outcome = require('../outcome-sienge/outcome.service');
 const businessBudget = require('../business-budget-sienge/businessBudget.service');
+const extratoContas = require('../extrato-contas-sienge/extratoContas.service');
 const customers = require('../customers-sienge/customers.service');
 const clusters = require('../cobranca-clusters/cobrancaClusters.service');
 const itau = require('../integracoes-itau/itau.service');
@@ -192,6 +193,27 @@ const ROTINAS = [
       progresso({ texto: 'Buscando o orçamento empresarial no Sienge (pode levar alguns minutos)' });
       const r = await businessBudget.sincronizar(empresaId, porPagina(progresso, 'Buscando o orçamento empresarial no Sienge'));
       return `${n(r.total_importado)} orçamento(s) importado(s), ${n(r.valores)} valor(es) mensal(is).`;
+    },
+  },
+  {
+    chave: 'dfc_saldos_contas',
+    modulo: 'DFC Construtoras',
+    nome: 'Saldos das contas (Sienge)',
+    descricao:
+      'Busca o extrato completo (desde 01/01/2000 até o início do mês atual) de cada conta bancária com Projeta DFC — a base do saldo inicial do fluxo de caixa do DFC Construtoras.',
+    integracao: 'sienge',
+    async disponibilidade(empresaId) {
+      const motivo = await semSienge(empresaId);
+      if (motivo) return motivo;
+      const { rowCount } = await pool.query(
+        'SELECT 1 FROM contas_bancarias_sienge WHERE empresa_id = $1 AND projeta_dfc LIMIT 1',
+        [empresaId]
+      );
+      return rowCount ? null : 'Nenhuma conta com Projeta DFC marcado (DFC Construtoras > Contas Correntes).';
+    },
+    async executar({ empresaId, progresso }) {
+      const r = await extratoContas.sincronizar(empresaId, progresso);
+      return `${n(r.contas)} conta(s), ${n(r.lancamentos)} lançamento(s) até ${r.ate.split('-').reverse().join('/')}.`;
     },
   },
 ];

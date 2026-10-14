@@ -2202,6 +2202,48 @@ CREATE TABLE sie_business_budget_valores (
 
 CREATE INDEX idx_sie_business_budget_valores_categoria ON sie_business_budget_valores (categoria_id);
 
+-- Extrato das contas bancárias (endpoint v1/accounts-statements do Sienge), só das contas com
+-- "Projeta DFC" — base do Saldo Inicial do fluxo de caixa do DFC Construtoras. Ver
+-- database/migrations/2026-10-14-sie-extrato-contas.sql.
+CREATE TABLE sie_extrato_contas (
+    registro_id            SERIAL PRIMARY KEY,
+    empresa_id             INTEGER NOT NULL REFERENCES empresas(id) ON DELETE CASCADE,
+    company_id             INTEGER NOT NULL,
+    numero_conta           VARCHAR(20) NOT NULL,
+    id                     BIGINT,
+    value                  NUMERIC(18,2),
+    date                   DATE,
+    document_number        VARCHAR(100),
+    description            VARCHAR(500),
+    document_id            VARCHAR(50),
+    type                   VARCHAR(30),
+    reconciliation_date    DATE,
+    bill_id                BIGINT,
+    installment_number     INTEGER,
+    statement_origin       VARCHAR(30),
+    statement_type         VARCHAR(100),
+    statement_type_notes   VARCHAR(500),
+    budget_categories      JSONB,
+    criado_em              TIMESTAMP DEFAULT NOW(),
+    FOREIGN KEY (numero_conta, empresa_id, company_id)
+        REFERENCES contas_bancarias_sienge (numero_conta, empresa_id, company_id) ON DELETE CASCADE
+);
+
+CREATE INDEX idx_sie_extrato_contas_conta ON sie_extrato_contas (empresa_id, company_id, numero_conta, date);
+
+-- Quando cada conta foi buscada por último (e quantos lançamentos vieram) — situação na tela.
+CREATE TABLE sie_extrato_contas_sincronizacoes (
+    empresa_id      INTEGER NOT NULL,
+    company_id      INTEGER NOT NULL,
+    numero_conta    VARCHAR(20) NOT NULL,
+    data_ate        DATE NOT NULL,          -- endDate usado na busca
+    lancamentos     INTEGER NOT NULL,
+    sincronizado_em TIMESTAMPTZ NOT NULL,
+    PRIMARY KEY (empresa_id, company_id, numero_conta),
+    FOREIGN KEY (numero_conta, empresa_id, company_id)
+        REFERENCES contas_bancarias_sienge (numero_conta, empresa_id, company_id) ON DELETE CASCADE
+);
+
 -- Clientes (customers) do Sienge — public/api/v1/customers, diferente da
 -- bulk-data do income (essa aqui pagina de verdade por limit/offset, ver
 -- customersSienge-api.client.js). Mesmo padrão de sie_income: grava o
