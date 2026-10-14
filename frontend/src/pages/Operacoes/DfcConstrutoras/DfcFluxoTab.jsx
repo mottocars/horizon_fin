@@ -11,7 +11,7 @@ const LARGURA_PRIMEIRA = 340;
 const LARGURA_COLUNA = 104;
 const FOLGA = 36;
 const ALTURA_MINIMA_GRADE = 320;
-const ALTURA_CAB_MES = 40; // 1ª linha do cabeçalho (mês/ano) — a 2ª (Realizado/Projetado) gruda logo abaixo
+const ALTURA_CAB_MES = 32; // 1ª linha do cabeçalho (mês/ano) — a 2ª (Realizado/Projetado) gruda logo abaixo
 const RECUO = [16, 36, 58, 80]; // máscara 1, entradas/saídas, máscara 2, conta
 // Nível entre a máscara 1 e a 2 (pedido do usuário): valor positivo = ENTRADAS, negativo = SAÍDAS.
 const LADOS = [
@@ -494,15 +494,18 @@ export default function DfcFluxoTab({
                       key={m}
                       colSpan={m <= mesAtual ? 2 : 1}
                       title={atual ? 'Mês atual' : undefined}
-                      className={`sticky top-0 z-20 border-l border-l-gray-200 bg-white px-3 pt-2 text-center align-bottom ${
+                      className={`sticky top-0 z-20 border-l border-l-gray-200 bg-white px-3 pt-2.5 text-center align-bottom ${
                         atual ? 'bg-primary-50/60' : ''
                       }`}
                       style={{ height: ALTURA_CAB_MES }}
                     >
-                      <span className={`block text-[11px] font-semibold tracking-wider ${atual ? 'text-primary-700' : 'text-gray-600'}`}>
+                      {/* "SET/2026" numa linha só, com o ano um pouco menor (pedido do usuário). */}
+                      <span className={`text-[11px] font-semibold tracking-wider ${atual ? 'text-primary-700' : 'text-gray-600'}`}>
                         {MESES_CAB[Number(m.slice(5, 7)) - 1]}
+                        <span className={`text-[10px] font-medium tracking-normal ${atual ? 'text-primary-500' : 'text-gray-400'}`}>
+                          /{m.slice(0, 4)}
+                        </span>
                       </span>
-                      <span className="block text-[10px] font-medium text-gray-400">{m.slice(0, 4)}</span>
                     </th>
                   );
                 })}
