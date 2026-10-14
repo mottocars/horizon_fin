@@ -60,8 +60,6 @@ const TABS = [
   { id: 'plano-contas', label: 'Plano Contas', icon: ListTree },
   { id: 'avancos-obras', label: 'Avanços', icon: HardHat },
   { id: 'repasses', label: 'Repasses', icon: Banknote },
-  // Inativa por enquanto (pedido do usuário) — aparece cinza, sem clique.
-  { id: 'vendas', label: 'Vendas', icon: HandCoins, disabled: true, title: 'Em breve' },
   { id: 'orcamentos', label: 'Orçamentos', icon: Calculator },
 ];
 
