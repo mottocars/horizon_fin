@@ -1,4 +1,4 @@
-import { Fragment, useCallback, useEffect, useMemo, useState } from 'react';
+import { Fragment, useCallback, useEffect, useLayoutEffect, useMemo, useRef, useState } from 'react';
 import { Calculator, Check, Loader2, Minus, Plus, TriangleAlert } from 'lucide-react';
 import { listCentrosCustoDfc } from '../../../api/dfcCentros.api';
 import { listDfcMascaras } from '../../../api/dfcMascaras.api';
@@ -123,7 +123,28 @@ function CelulaInformada({ valor, onCommit, onReplicar }) {
 }
 
 const LARGURA_PRIMEIRA = 360;
-const LARGURA_MES = 92;
+const LARGURA_MES = 92; // largura mínima de um mês; cresce pra caber o maior valor da coluna
+const FOLGA_MES = 30; // padding da célula + borda + campo de digitação
+const ALTURA_MINIMA_GRADE = 320;
+// Sombra na borda da coluna congelada quando os meses rolaram pra esquerda (indica que há conteúdo
+// por baixo dela, como nas planilhas).
+const SOMBRA_COLUNA_FIXA = '[&_tr>*:first-child]:shadow-[6px_0_8px_-6px_rgba(16,24,40,0.25)]';
+
+// Largura (px) do texto no corpo da grade — text-xs semibold, a fonte da página. Canvas reaproveitado.
+let contextoMedida;
+function larguraTexto(texto) {
+  if (contextoMedida === undefined) {
+    contextoMedida = document.createElement('canvas').getContext('2d');
+    if (contextoMedida) contextoMedida.font = `600 12px ${getComputedStyle(document.body).fontFamily}`;
+  }
+  // +8%: os algarismos tabulares (tabular-nums) são um pouco mais largos que os do canvas.
+  return contextoMedida ? contextoMedida.measureText(texto).width * 1.08 : texto.length * 7.5;
+}
+
+function mesDeHoje() {
+  const d = new Date();
+  return `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}`;
+}
 const RECUO = [12, 32, 52, 76]; // padding-left de cada nível (centro, máscara 1, máscara 2, conta)
 
 // Operações > DFC Construtoras > Orçamentos: o orçamento é por centro de custo e conta do plano de
@@ -148,6 +169,10 @@ export default function DfcOrcamentosTab({ empresaId, inicio, fim, refreshToken 
   const [pendentes, setPendentes] = useState(0);
   const [erroSalvar, setErroSalvar] = useState('');
   const [salvoAlgumaVez, setSalvoAlgumaVez] = useState(false);
+  // Grade com rolagem própria (só os meses andam pro lado; a página fica parada).
+  const gradeRef = useRef(null);
+  const [alturaGrade, setAlturaGrade] = useState(null);
+  const [rolouX, setRolouX] = useState(false);
 
   const carregar = useCallback(() => {
     if (!empresaId) return;
@@ -317,6 +342,56 @@ export default function DfcOrcamentosTab({ empresaId, inicio, fim, refreshToken 
     setAbertos((atual) => (atual.includes(chave) ? atual.filter((v) => v !== chave) : [...atual, chave]));
   }
 
+  // Largura de cada mês: o bastante pro maior valor da coluna, em qualquer nível (aberto ou não —
+  // assim a coluna não pula ao abrir o drilldown), nunca menos que LARGURA_MES.
+  const largurasMes = useMemo(() => {
+    const soma = (sid, contas, mes) => {
+      let total = null;
+      contas.forEach((c) => {
+        const v = valorConta(sid, c.sienge_id, mes);
+        if (v !== null) total = (total || 0) + v;
+      });
+      return total === null ? null : Math.round(total * 100) / 100;
+    };
+    return meses.map((m) => {
+      let maior = 0;
+      const considerar = (v) => {
+        if (v !== null && v !== 0) maior = Math.max(maior, larguraTexto(dinheiro(v)));
+      };
+      centros.forEach((centro) => {
+        const sid = centro.sienge_id;
+        const { estrutura, todasContas } = planosCentro[sid] || planoGlobal;
+        considerar(soma(sid, todasContas, m));
+        estrutura.forEach((n1) => {
+          considerar(soma(sid, n1.contas, m));
+          n1.filhos.forEach((n2) => {
+            considerar(soma(sid, n2.contas, m));
+            n2.contas.forEach((c) => considerar(valorConta(sid, c.sienge_id, m)));
+          });
+        });
+      });
+      return Math.max(LARGURA_MES, Math.ceil(maior) + FOLGA_MES);
+    });
+  }, [meses, centros, planosCentro, planoGlobal, valorConta]);
+
+  // A grade ocupa a altura que sobra na tela (do topo dela até o fim da janela), com a barra de
+  // rolagem horizontal sempre à vista no rodapé — sem precisar descer até a última linha pra rolar
+  // os meses. Mede a cada render (avisos e mensagens acima dela mudam a posição) e no resize.
+  useLayoutEffect(() => {
+    const el = gradeRef.current;
+    if (!el) return undefined;
+    const medir = () => {
+      const main = el.closest('main');
+      const topo = el.getBoundingClientRect().top + (main ? main.scrollTop : 0);
+      // 24 = p-6 do <main>; 20 = p-5 do quadro branco.
+      const altura = Math.max(ALTURA_MINIMA_GRADE, Math.floor(window.innerHeight - topo - 44));
+      setAlturaGrade((atual) => (atual === altura ? atual : altura));
+    };
+    medir();
+    window.addEventListener('resize', medir);
+    return () => window.removeEventListener('resize', medir);
+  });
+
   if (!empresaId) {
     return (
       <div className="flex min-h-70 flex-col items-center justify-center rounded-card rounded-tl-none bg-white text-center shadow-card">
@@ -388,10 +463,12 @@ export default function DfcOrcamentosTab({ empresaId, inicio, fim, refreshToken 
     );
   }
 
+  const mesAtual = mesDeHoje();
+  const larguraTabela = LARGURA_PRIMEIRA + largurasMes.reduce((t, l) => t + l, 0);
+
   return (
-    // min-w-fit: com tabela mais larga que a tela, o quadro branco cresce junto (e a página rola na
-    // horizontal) em vez de a tabela vazar pra fora dele.
-    <div className="min-w-fit rounded-card rounded-tl-none bg-white p-5 shadow-card">
+    // O quadro branco fica na largura da página; quem rola pro lado é só a grade (abaixo).
+    <div className="min-w-0 rounded-card rounded-tl-none bg-white p-5 shadow-card">
       {statusSalvamento && (
         <div className="-mt-1 mb-3 flex items-center justify-end text-xs" aria-live="polite">
           {statusSalvamento === 'salvando' ? (
@@ -443,8 +520,9 @@ export default function DfcOrcamentosTab({ empresaId, inicio, fim, refreshToken 
           </button>
         </div>
       ) : (
-        // Sem wrapper com overflow próprio (mesmo motivo do Espião NFe / NFSe): o cabeçalho gruda no
-        // topo da página ao rolar. -top-6 cancela o p-6 do <main>.
+        // Grade no padrão de planilha: rolagem própria nos dois sentidos, com a primeira coluna
+        // (centro / máscara / conta) e o cabeçalho dos meses congelados. Rolando pro lado, só os
+        // meses andam; a página (filtros, abas) fica parada.
         <div>
           {(dados?.projecao?.avisos || []).length > 0 && (
             <div className="mb-3 space-y-1 rounded-lg bg-amber-50 px-3 py-2 text-xs text-amber-700">
@@ -456,139 +534,149 @@ export default function DfcOrcamentosTab({ empresaId, inicio, fim, refreshToken 
               ))}
             </div>
           )}
-          <table
-            className="border-separate border-spacing-0 text-left text-xs"
-            style={{ tableLayout: 'fixed', width: '100%', minWidth: LARGURA_PRIMEIRA + meses.length * LARGURA_MES }}
+          <div
+            ref={gradeRef}
+            onScroll={(e) => setRolouX(e.currentTarget.scrollLeft > 0)}
+            className={`overflow-auto overscroll-x-contain rounded-lg ${rolouX ? SOMBRA_COLUNA_FIXA : ''}`}
+            style={{ maxHeight: alturaGrade ?? undefined }}
           >
-            <colgroup>
-              <col style={{ width: LARGURA_PRIMEIRA }} />
-              {meses.map((m) => (
-                <col key={m} />
-              ))}
-            </colgroup>
-            <thead>
-              <tr className="[&>th:first-child]:rounded-tl-lg [&>th:last-child]:rounded-tr-lg">
-                <th className="sticky -top-6 left-0 z-30 border-b-2 border-r border-b-blue-500 border-r-blue-100 bg-blue-50 py-2.5 pl-4 pr-3 text-xs font-medium uppercase tracking-wide text-blue-700">
-                  Centro de custo / Máscara / Conta
-                </th>
-                {meses.map((m) => (
-                  <th
-                    key={m}
-                    className="sticky -top-6 z-20 border-b-2 border-l border-b-blue-500 border-l-blue-100 bg-blue-50 px-2 py-2.5 text-right text-xs font-medium uppercase tracking-wide text-blue-700"
-                  >
-                    {rotuloMes(m)}
-                  </th>
+            <table
+              className="border-separate border-spacing-0 text-left text-xs"
+              style={{ tableLayout: 'fixed', width: larguraTabela, minWidth: '100%' }}
+            >
+              <colgroup>
+                <col style={{ width: LARGURA_PRIMEIRA }} />
+                {meses.map((m, i) => (
+                  <col key={m} style={{ width: largurasMes[i] }} />
                 ))}
-              </tr>
-            </thead>
-            <tbody>
-              {centros.length === 0 && (
-                <tr>
-                  <td colSpan={meses.length + 1} className="border-b border-gray-100 py-10 text-center text-sm text-gray-400">
-                    Nenhum centro de custo com &quot;Projeta DFC&quot; marcado. Marque na aba Centros Custos.
-                  </td>
+              </colgroup>
+              <thead>
+                <tr className="[&>th:first-child]:rounded-tl-lg [&>th:last-child]:rounded-tr-lg">
+                  <th className="sticky left-0 top-0 z-30 border-b-2 border-r border-b-blue-500 border-r-blue-100 bg-blue-50 py-2.5 pl-4 pr-3 text-xs font-medium uppercase tracking-wide text-blue-700">
+                    Centro de custo / Máscara / Conta
+                  </th>
+                  {meses.map((m) => (
+                    <th
+                      key={m}
+                      title={m === mesAtual ? 'Mês atual' : undefined}
+                      className={`sticky top-0 z-20 border-b-2 border-l border-b-blue-500 border-l-blue-100 px-2 py-2.5 text-right text-xs font-medium uppercase tracking-wide ${
+                        m === mesAtual ? 'bg-blue-100 font-semibold text-blue-800' : 'bg-blue-50 text-blue-700'
+                      }`}
+                    >
+                      {rotuloMes(m)}
+                    </th>
+                  ))}
                 </tr>
-              )}
-              {centros.map((centro) => {
-                const chaveCentro = `c${centro.sienge_id}`;
-                const { estrutura, todasContas, propria } = planosCentro[centro.sienge_id] || planoGlobal;
-                return (
-                  <Fragment key={chaveCentro}>
-                    {linhaGrupo({
-                      chave: chaveCentro,
-                      nivel: 0,
-                      rotulo: `${centro.name}${propria ? ' · plano próprio' : ''}`,
-                      podeAbrir: estrutura.length > 0,
-                      destaque: true,
-                      valorMes: (m) => somaContas(centro.sienge_id, todasContas, m),
-                      dica: execucaoPorCentro[centro.sienge_id]
-                        ? `Projeção CEF atualizada em ${new Date(execucaoPorCentro[centro.sienge_id].atualizado_em).toLocaleString('pt-BR')} (Parâmetros v${execucaoPorCentro[centro.sienge_id].versao_parametros})`
-                        : undefined,
-                    })}
-                    {abertos.includes(chaveCentro) &&
-                      estrutura.map((n1) => {
-                        const chaveN1 = `${chaveCentro}|${n1.chave}`;
-                        return (
-                          <Fragment key={chaveN1}>
-                            {linhaGrupo({
-                              chave: chaveN1,
-                              nivel: 1,
-                              rotulo: n1.descricao,
-                              contagem: n1.filhos.length,
-                              podeAbrir: n1.filhos.length > 0,
-                              destaque: true,
-                              cinza: n1.semMascara,
-                              valorMes: (m) => somaContas(centro.sienge_id, n1.contas, m),
-                            })}
-                            {abertos.includes(chaveN1) &&
-                              n1.filhos.map((n2) => {
-                                const chaveN2 = `${chaveN1}|${n2.chave}`;
-                                return (
-                                  <Fragment key={chaveN2}>
-                                    {linhaGrupo({
-                                      chave: chaveN2,
-                                      nivel: 2,
-                                      rotulo: n2.descricao,
-                                      contagem: n2.contas.length,
-                                      podeAbrir: n2.contas.length > 0,
-                                      cinza: n1.semMascara,
-                                      valorMes: (m) => somaContas(centro.sienge_id, n2.contas, m),
-                                    })}
-                                    {abertos.includes(chaveN2) &&
-                                      n2.contas.map((conta) => {
-                                        const informada = contaInformada(centro.sienge_id, conta.sienge_id);
-                                        return (
-                                          <tr key={`${chaveN2}|${conta.sienge_id}`} className="group/linha">
-                                            <td
-                                              className="sticky left-0 z-10 border-b border-r border-gray-100 border-r-gray-200 bg-white py-1.5 pr-3 group-hover/linha:bg-gray-50"
-                                              style={{ paddingLeft: RECUO[3] }}
-                                            >
-                                              <span className="flex min-w-0 items-center gap-2">
-                                                <span className="shrink-0 text-[11px] tabular-nums text-gray-400">
-                                                  {codigoFormatado(conta)}
-                                                </span>
-                                                <span className="min-w-0 truncate text-xs text-gray-700" title={conta.name}>
-                                                  {conta.name}
-                                                </span>
-                                              </span>
-                                            </td>
-                                            {informada
-                                              ? meses.map((m) => (
-                                                  <td
-                                                    key={m}
-                                                    className="border-b border-l border-gray-100 bg-white px-1 py-1 group-hover/linha:bg-gray-50"
-                                                  >
-                                                    <CelulaInformada
-                                                      valor={valorConta(centro.sienge_id, conta.sienge_id, m)}
-                                                      onCommit={(novo) => salvarInformado(centro.sienge_id, conta.sienge_id, m, novo)}
-                                                      onReplicar={(valor) =>
-                                                        setReplicando({
-                                                          centroId: centro.sienge_id,
-                                                          contaId: conta.sienge_id,
-                                                          centroNome: centro.name,
-                                                          contaRotulo: `${codigoFormatado(conta)} ${conta.name}`,
-                                                          mes: m,
-                                                          valor,
-                                                        })
-                                                      }
-                                                    />
-                                                  </td>
-                                                ))
-                                              : celulas(3, (m) => valorConta(centro.sienge_id, conta.sienge_id, m))}
-                                          </tr>
-                                        );
-                                      })}
-                                  </Fragment>
-                                );
-                              })}
-                          </Fragment>
-                        );
+              </thead>
+              <tbody>
+                {centros.length === 0 && (
+                  <tr>
+                    <td colSpan={meses.length + 1} className="border-b border-gray-100 py-10 text-center text-sm text-gray-400">
+                      Nenhum centro de custo com &quot;Projeta DFC&quot; marcado. Marque na aba Centros Custos.
+                    </td>
+                  </tr>
+                )}
+                {centros.map((centro) => {
+                  const chaveCentro = `c${centro.sienge_id}`;
+                  const { estrutura, todasContas, propria } = planosCentro[centro.sienge_id] || planoGlobal;
+                  return (
+                    <Fragment key={chaveCentro}>
+                      {linhaGrupo({
+                        chave: chaveCentro,
+                        nivel: 0,
+                        rotulo: `${centro.name}${propria ? ' · plano próprio' : ''}`,
+                        podeAbrir: estrutura.length > 0,
+                        destaque: true,
+                        valorMes: (m) => somaContas(centro.sienge_id, todasContas, m),
+                        dica: execucaoPorCentro[centro.sienge_id]
+                          ? `Projeção CEF atualizada em ${new Date(execucaoPorCentro[centro.sienge_id].atualizado_em).toLocaleString('pt-BR')} (Parâmetros v${execucaoPorCentro[centro.sienge_id].versao_parametros})`
+                          : undefined,
                       })}
-                  </Fragment>
-                );
-              })}
-            </tbody>
-          </table>
+                      {abertos.includes(chaveCentro) &&
+                        estrutura.map((n1) => {
+                          const chaveN1 = `${chaveCentro}|${n1.chave}`;
+                          return (
+                            <Fragment key={chaveN1}>
+                              {linhaGrupo({
+                                chave: chaveN1,
+                                nivel: 1,
+                                rotulo: n1.descricao,
+                                contagem: n1.filhos.length,
+                                podeAbrir: n1.filhos.length > 0,
+                                destaque: true,
+                                cinza: n1.semMascara,
+                                valorMes: (m) => somaContas(centro.sienge_id, n1.contas, m),
+                              })}
+                              {abertos.includes(chaveN1) &&
+                                n1.filhos.map((n2) => {
+                                  const chaveN2 = `${chaveN1}|${n2.chave}`;
+                                  return (
+                                    <Fragment key={chaveN2}>
+                                      {linhaGrupo({
+                                        chave: chaveN2,
+                                        nivel: 2,
+                                        rotulo: n2.descricao,
+                                        contagem: n2.contas.length,
+                                        podeAbrir: n2.contas.length > 0,
+                                        cinza: n1.semMascara,
+                                        valorMes: (m) => somaContas(centro.sienge_id, n2.contas, m),
+                                      })}
+                                      {abertos.includes(chaveN2) &&
+                                        n2.contas.map((conta) => {
+                                          const informada = contaInformada(centro.sienge_id, conta.sienge_id);
+                                          return (
+                                            <tr key={`${chaveN2}|${conta.sienge_id}`} className="group/linha">
+                                              <td
+                                                className="sticky left-0 z-10 border-b border-r border-gray-100 border-r-gray-200 bg-white py-1.5 pr-3 group-hover/linha:bg-gray-50"
+                                                style={{ paddingLeft: RECUO[3] }}
+                                              >
+                                                <span className="flex min-w-0 items-center gap-2">
+                                                  <span className="shrink-0 text-[11px] tabular-nums text-gray-400">
+                                                    {codigoFormatado(conta)}
+                                                  </span>
+                                                  <span className="min-w-0 truncate text-xs text-gray-700" title={conta.name}>
+                                                    {conta.name}
+                                                  </span>
+                                                </span>
+                                              </td>
+                                              {informada
+                                                ? meses.map((m) => (
+                                                    <td
+                                                      key={m}
+                                                      className="border-b border-l border-gray-100 bg-white px-1 py-1 group-hover/linha:bg-gray-50"
+                                                    >
+                                                      <CelulaInformada
+                                                        valor={valorConta(centro.sienge_id, conta.sienge_id, m)}
+                                                        onCommit={(novo) => salvarInformado(centro.sienge_id, conta.sienge_id, m, novo)}
+                                                        onReplicar={(valor) =>
+                                                          setReplicando({
+                                                            centroId: centro.sienge_id,
+                                                            contaId: conta.sienge_id,
+                                                            centroNome: centro.name,
+                                                            contaRotulo: `${codigoFormatado(conta)} ${conta.name}`,
+                                                            mes: m,
+                                                            valor,
+                                                          })
+                                                        }
+                                                      />
+                                                    </td>
+                                                  ))
+                                                : celulas(3, (m) => valorConta(centro.sienge_id, conta.sienge_id, m))}
+                                            </tr>
+                                          );
+                                        })}
+                                    </Fragment>
+                                  );
+                                })}
+                            </Fragment>
+                          );
+                        })}
+                    </Fragment>
+                  );
+                })}
+              </tbody>
+            </table>
+          </div>
         </div>
       )}
     </div>
