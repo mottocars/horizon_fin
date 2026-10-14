@@ -1,7 +1,8 @@
 import http from './http';
 
 // Orçamento consolidado (última versão salva): { versao: { numero, criado_em, usuario, ... } | null,
-// valores: [{ centro_id, sienge_id, mes, valor }], pendencias: { total, inclusoes, alteracoes,
+// valores: [{ centro_id, sienge_id, mes, valor }] (da versão), atuais: [mesmo formato] (valores de
+// hoje das fontes — a prévia da próxima versão), pendencias: { total, inclusoes, alteracoes,
 // exclusoes, manuais, integracao, plano }, avisos: [texto] }.
 export function getOrcamentoDfc(empresaId) {
   return http.get(`/dfc-orcamento/${empresaId}`).then((res) => res.data);

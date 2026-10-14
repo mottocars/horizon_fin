@@ -275,8 +275,9 @@ async function ultimaVersao(db, empresaId) {
   return rows[0] || null;
 }
 
-// O que a aba mostra: a última versão, os valores consolidados e o que está pendente (mudou nas
-// fontes e ainda não foi salvo numa versão).
+// O que a aba mostra: a última versão, os valores consolidados, os valores de hoje das fontes (a
+// "Prévia" do que a próxima versão vai gravar) e o que está pendente (mudou nas fontes e ainda não
+// foi salvo numa versão).
 async function orcamento(empresaId) {
   const [{ valores: atual, contexto }, cons, versao] = await Promise.all([
     valoresAtuais(pool, empresaId),
@@ -292,6 +293,7 @@ async function orcamento(empresaId) {
   return {
     versao,
     valores: [...cons.values()].map(({ centro_id, sienge_id, mes, valor }) => ({ centro_id, sienge_id, mes, valor })),
+    atuais: [...atual.values()].map(({ centro_id, sienge_id, mes, valor }) => ({ centro_id, sienge_id, mes, valor })),
     pendencias: contar(diferencas(atual, cons, contexto)),
     avisos,
   };

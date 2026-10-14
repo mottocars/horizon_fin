@@ -245,6 +245,9 @@ const RECUO = [12, 32, 52, 76]; // padding-left de cada nível (centro, máscara
 // (backend dfc-orcamento). O que muda nas fontes (valor digitado, Projeção CEF, Aging do Sienge,
 // plano de contas) só aparece depois de "Salvar Versão" (botão no topo — `ref.salvarVersao`); até
 // lá fica como pendência (contagem acima da grade; célula digitada com borda tracejada laranja).
+// "Prévia" (seletor acima da grade): mostra os valores de hoje das fontes — exatamente o que a
+// próxima versão vai gravar —, com o que difere da versão salva em laranja. Sem versão nenhuma, a
+// aba abre na prévia (pedido do usuário: só dá pra salvar o que se enxerga).
 // `telaCheia`: a grade ocupa a tela inteira (por cima do menu e do topo, e em tela cheia de verdade
 // no navegador quando ele deixa); sai pelo botão "Sair da tela cheia" ou com Esc (`onSairTelaCheia`).
 // `origens`: filtro "Origem DFC" do topo — só as contas com essas Origens Projeção no plano do centro
@@ -260,6 +263,9 @@ const DfcOrcamentosTab = forwardRef(function DfcOrcamentosTab(
   const [menu, setMenu] = useState(null); // { x, y, opcoes }
   const [logDe, setLogDe] = useState(null); // alvo do "Log de alterações"
   const fecharMenu = useCallback(() => setMenu(null), []);
+  // 'versao' (última versão salva) ou 'previa' (valores de hoje das fontes); null = automático
+  // (prévia enquanto não há versão nenhuma).
+  const [modoEscolhido, setModoEscolhido] = useState(null);
   const [carregando, setCarregando] = useState(false);
   const [erroCarga, setErroCarga] = useState('');
   const [abertos, setAbertos] = useState([]);
@@ -298,6 +304,7 @@ const DfcOrcamentosTab = forwardRef(function DfcOrcamentosTab(
   useEffect(() => {
     setDados(null);
     setAbertos([]);
+    setModoEscolhido(null);
     setInformados({});
     setErroSalvar('');
     setSalvoAlgumaVez(false);
@@ -381,16 +388,26 @@ const DfcOrcamentosTab = forwardRef(function DfcOrcamentosTab(
     [planosCentro, planoGlobal]
   );
 
-  // Valores da grade: centro -> conta -> mês -> valor, do CONSOLIDADO (última versão salva) — todas
-  // as origens (Projeção CEF, Aging do Sienge, digitados). E quando cada obra foi projetada.
-  const { valorConta, execucaoPorCentro } = useMemo(() => {
-    const mapa = new Map();
-    (dados?.consolidado?.valores || []).forEach((v) => mapa.set(`${v.centro_id}|${v.sienge_id}|${v.mes}`, v.valor));
+  const temVersao = Boolean(dados?.consolidado?.versao);
+  const modo = modoEscolhido ?? (temVersao || !dados ? 'versao' : 'previa');
+  const previa = modo === 'previa';
+
+  // Valores: centro -> conta -> mês -> valor. `valorVersao` = CONSOLIDADO (última versão salva);
+  // `valorConta` = o que a grade mostra — a versão ou, na prévia, os valores de hoje das fontes
+  // (Projeção CEF, Aging do Sienge, digitados). E quando cada obra foi projetada.
+  const { valorConta, valorVersao, execucaoPorCentro } = useMemo(() => {
+    const mapaDe = (lista) => {
+      const mapa = new Map();
+      (lista || []).forEach((v) => mapa.set(`${v.centro_id}|${v.sienge_id}|${v.mes}`, v.valor));
+      return (sid, conta, mes) => mapa.get(`${sid}|${conta}|${mes}`) ?? null;
+    };
+    const daVersao = mapaDe(dados?.consolidado?.valores);
     return {
-      valorConta: (sid, conta, mes) => mapa.get(`${sid}|${conta}|${mes}`) ?? null,
+      valorVersao: daVersao,
+      valorConta: previa ? mapaDe(dados?.consolidado?.atuais) : daVersao,
       execucaoPorCentro: Object.fromEntries((dados?.projecao?.execucoes || []).map((e) => [e.sienge_id, e])),
     };
-  }, [dados]);
+  }, [dados, previa]);
 
   // Valor digitado (rascunho) de uma conta "HORIZON - INFORMADO" — o que aparece no campo.
   const rascunho = (sid, conta, mes) => informados[`${sid}|${conta}|${mes}`] ?? null;
@@ -499,7 +516,7 @@ const DfcOrcamentosTab = forwardRef(function DfcOrcamentosTab(
       centroNome: centro.name,
       contaRotulo: `${codigoFormatado(conta)} ${conta.name}`,
       mes,
-      valor: valorConta(centro.sienge_id, conta.sienge_id, mes),
+      valor: valorVersao(centro.sienge_id, conta.sienge_id, mes),
     };
     const opcoes = [];
     if (informada) {
@@ -513,11 +530,11 @@ const DfcOrcamentosTab = forwardRef(function DfcOrcamentosTab(
     setMenu({ x: e.clientX, y: e.clientY, opcoes });
   }
 
-  // Soma de várias contas num mês (null quando nenhuma tem valor).
-  function somaContas(sid, contas, mes) {
+  // Soma de várias contas num mês (null quando nenhuma tem valor) — da grade ou, com `fonte`, da versão.
+  function somaContas(sid, contas, mes, fonte = valorConta) {
     let total = null;
     contas.forEach((c) => {
-      const v = valorConta(sid, c.sienge_id, mes);
+      const v = fonte(sid, c.sienge_id, mes);
       if (v !== null) total = (total || 0) + v;
     });
     return total === null ? null : Math.round(total * 100) / 100;
@@ -630,18 +647,26 @@ const DfcOrcamentosTab = forwardRef(function DfcOrcamentosTab(
   const statusSalvamento = pendentes > 0 ? 'salvando' : erroSalvar ? 'erro' : salvoAlgumaVez ? 'salvo' : null;
 
   // Células de valor do mês (`valorMes(m)` -> número ou null). Saída (negativo) em vermelho.
-  // `aoMenu(e, mes)`: botão direito (só nas linhas de conta).
-  const celulas = (nivel, valorMes, aoMenu) =>
+  // `aoMenu(e, mes)`: botão direito (só nas linhas de conta). Na prévia, `valorMesVersao(m)` (o
+  // da versão salva) marca em laranja o que vai mudar ao salvar.
+  const celulas = (nivel, valorMes, aoMenu, valorMesVersao) =>
     meses.map((m) => {
       const v = valorMes ? valorMes(m) : null;
       const vazio = v === null || v === 0;
+      // Sem versão nenhuma tudo é novo — não destaca (o laranja perderia o sentido).
+      const compara = previa && temVersao && valorMesVersao;
+      const vVersao = compara ? valorMesVersao(m) : null;
+      const muda = compara && centavos(v || null) !== centavos(vVersao || null);
       return (
         <td
           key={m}
+          title={muda ? `Na versão salva: ${vVersao ? dinheiro(vVersao) : 'sem valor'}` : undefined}
           onContextMenu={aoMenu ? (e) => aoMenu(e, m) : undefined}
           className={`border-b border-l px-2 text-right tabular-nums ${
             nivel === 0 ? 'border-gray-200 bg-gray-50 py-2 group-hover/linha:bg-gray-100' : 'border-gray-100 bg-white py-1.5 group-hover/linha:bg-gray-50'
-          } ${vazio ? 'text-gray-300' : v < 0 ? 'text-red-600' : 'text-gray-800'} ${nivel <= 1 && !vazio ? 'font-semibold' : ''}`}
+          } ${vazio ? 'text-gray-300' : v < 0 ? 'text-red-600' : 'text-gray-800'} ${nivel <= 1 && !vazio ? 'font-semibold' : ''} ${
+            muda ? '!bg-orange-50 shadow-[inset_0_-2px_0_0_rgb(251,146,60)]' : ''
+          }`}
         >
           {vazio ? '—' : dinheiro(v)}
         </td>
@@ -650,7 +675,7 @@ const DfcOrcamentosTab = forwardRef(function DfcOrcamentosTab(
 
   // Linha de agrupamento (centro, máscara 1, máscara 2) — função comum, não componente, pra não
   // ser recriada a cada render.
-  function linhaGrupo({ chave, nivel, rotulo, contagem, podeAbrir, destaque = false, cinza = false, valorMes, dica }) {
+  function linhaGrupo({ chave, nivel, rotulo, contagem, podeAbrir, destaque = false, cinza = false, valorMes, valorMesVersao, dica }) {
     const aberto = abertos.includes(chave);
     return (
       <tr onClick={() => podeAbrir && alternar(chave)} className={`group/linha ${podeAbrir ? 'cursor-pointer' : ''}`}>
@@ -685,7 +710,7 @@ const DfcOrcamentosTab = forwardRef(function DfcOrcamentosTab(
             )}
           </span>
         </td>
-        {celulas(nivel, valorMes)}
+        {celulas(nivel, valorMes, undefined, valorMesVersao)}
       </tr>
     );
   }
@@ -744,8 +769,27 @@ const DfcOrcamentosTab = forwardRef(function DfcOrcamentosTab(
             <History size={14} className="shrink-0 text-gray-400" />
             {versao
               ? `Versão ${versao.numero} · salva em ${dataHora(versao.criado_em)}${versao.usuario ? ` por ${versao.usuario}` : ''}`
-              : 'Nenhuma versão salva ainda — o Orçamento fica vazio até a primeira "Salvar Versão".'}
+              : 'Nenhuma versão salva ainda — confira a prévia e clique em "Salvar Versão".'}
           </span>
+          <div className="ml-auto flex items-center rounded-lg bg-gray-100 p-0.5" role="group" aria-label="O que a tabela mostra">
+            {[
+              ['versao', 'Versão salva', !temVersao],
+              ['previa', `Prévia da próxima versão${pendencias?.total ? ` (${pendencias.total.toLocaleString('pt-BR')})` : ''}`, false],
+            ].map(([valor, rotulo, desabilitado]) => (
+              <button
+                key={valor}
+                type="button"
+                disabled={desabilitado}
+                onClick={() => setModoEscolhido(valor)}
+                title={desabilitado ? 'Nenhuma versão salva ainda' : undefined}
+                className={`rounded-md px-2.5 py-1 font-medium transition-colors disabled:cursor-not-allowed disabled:text-gray-300 ${
+                  modo === valor ? 'bg-white text-gray-900 shadow-sm' : 'text-gray-500 hover:text-gray-700'
+                }`}
+              >
+                {rotulo}
+              </button>
+            ))}
+          </div>
           {pendencias?.total > 0 && (
             <span
               className="flex items-center gap-1.5 rounded-full bg-orange-50 px-2.5 py-0.5 font-medium text-orange-700 ring-1 ring-orange-200"
@@ -753,6 +797,12 @@ const DfcOrcamentosTab = forwardRef(function DfcOrcamentosTab(
             >
               {pendencias.total.toLocaleString('pt-BR')} alteração(ões) pendente(s) — só entram no Orçamento ao Salvar Versão
             </span>
+          )}
+          {previa && (
+            <p className="w-full text-[11px] text-gray-400">
+              Prévia: valores de hoje das fontes, ainda não salvos — é isso que a próxima versão vai gravar.
+              {temVersao ? ' Em laranja, o que difere da versão salva (passe o mouse pra ver o valor dela).' : ''}
+            </p>
           )}
         </div>
       )}
@@ -879,6 +929,7 @@ const DfcOrcamentosTab = forwardRef(function DfcOrcamentosTab(
                         podeAbrir: estrutura.length > 0,
                         destaque: true,
                         valorMes: (m) => somaContas(centro.sienge_id, todasContas, m),
+                        valorMesVersao: (m) => somaContas(centro.sienge_id, todasContas, m, valorVersao),
                         dica: execucaoPorCentro[centro.sienge_id]
                           ? `Projeção CEF atualizada em ${new Date(execucaoPorCentro[centro.sienge_id].atualizado_em).toLocaleString('pt-BR')} (Parâmetros v${execucaoPorCentro[centro.sienge_id].versao_parametros})`
                           : undefined,
@@ -897,6 +948,7 @@ const DfcOrcamentosTab = forwardRef(function DfcOrcamentosTab(
                                 destaque: true,
                                 cinza: n1.semMascara,
                                 valorMes: (m) => somaContas(centro.sienge_id, n1.contas, m),
+                                valorMesVersao: (m) => somaContas(centro.sienge_id, n1.contas, m, valorVersao),
                               })}
                               {abertos.includes(chaveN1) &&
                                 n1.filhos.map((n2) => {
@@ -911,6 +963,7 @@ const DfcOrcamentosTab = forwardRef(function DfcOrcamentosTab(
                                         podeAbrir: n2.contas.length > 0,
                                         cinza: n1.semMascara,
                                         valorMes: (m) => somaContas(centro.sienge_id, n2.contas, m),
+                                        valorMesVersao: (m) => somaContas(centro.sienge_id, n2.contas, m, valorVersao),
                                       })}
                                       {abertos.includes(chaveN2) &&
                                         n2.contas.map((conta) => {
@@ -938,10 +991,10 @@ const DfcOrcamentosTab = forwardRef(function DfcOrcamentosTab(
                                                     >
                                                       <CelulaInformada
                                                         valor={rascunho(centro.sienge_id, conta.sienge_id, m)}
-                                                        valorVersao={valorConta(centro.sienge_id, conta.sienge_id, m)}
+                                                        valorVersao={valorVersao(centro.sienge_id, conta.sienge_id, m)}
                                                         pendente={
                                                           centavos(rascunho(centro.sienge_id, conta.sienge_id, m)) !==
-                                                          centavos(valorConta(centro.sienge_id, conta.sienge_id, m))
+                                                          centavos(valorVersao(centro.sienge_id, conta.sienge_id, m))
                                                         }
                                                         onCommit={(novo) => salvarInformado(centro.sienge_id, conta.sienge_id, m, novo)}
                                                         onMenu={(e, valorDigitado) =>
@@ -953,7 +1006,8 @@ const DfcOrcamentosTab = forwardRef(function DfcOrcamentosTab(
                                                 : celulas(
                                                     3,
                                                     (m) => valorConta(centro.sienge_id, conta.sienge_id, m),
-                                                    (e, m) => abrirMenu(e, { centro, conta, mes: m, informada: false })
+                                                    (e, m) => abrirMenu(e, { centro, conta, mes: m, informada: false }),
+                                                    (m) => valorVersao(centro.sienge_id, conta.sienge_id, m)
                                                   )}
                                             </tr>
                                           );
