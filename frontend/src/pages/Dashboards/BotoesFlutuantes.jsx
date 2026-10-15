@@ -1,18 +1,19 @@
-import { Menu, SlidersHorizontal } from 'lucide-react';
+import { Filter, Menu } from 'lucide-react';
 
 // Botões flutuantes dos Dashboards (pedido do usuário): "Menu" e "Filtros", no canto inferior
-// direito da janela — `fixed`, então ficam visíveis em toda a rolagem da página. O que cada um abre
-// será definido depois (`onMenu` / `onFiltros`).
-function Botao({ titulo, onClick, children, destaque = false }) {
+// direito da janela — `fixed`, então ficam visíveis em toda a rolagem da página. Flutuam (sobem e
+// descem devagar, animação `flutuar` em styles/index.css), defasados entre si; quem prefere menos
+// movimento no sistema operacional vê os botões parados. O que cada um abre será definido depois
+// (`onMenu` / `onFiltros`). Borda e foco sem box-shadow: a animação mexe na sombra.
+function Botao({ titulo, onClick, atraso, children }) {
   return (
     <button
       type="button"
       onClick={onClick}
       title={titulo}
       aria-label={titulo}
-      className={`flex h-12 w-12 items-center justify-center rounded-full shadow-[0_8px_24px_-6px_rgba(15,23,42,0.35)] ring-1 transition-all hover:-translate-y-0.5 hover:shadow-[0_12px_28px_-6px_rgba(15,23,42,0.4)] focus:outline-none focus-visible:ring-2 focus-visible:ring-primary-500 ${
-        destaque ? 'bg-primary-600 text-white ring-primary-600 hover:bg-primary-700' : 'bg-white text-gray-700 ring-gray-200 hover:text-primary-700'
-      }`}
+      style={{ animationDelay: atraso }}
+      className="flex h-12 w-12 items-center justify-center rounded-full border border-gray-200 bg-white text-gray-700 shadow-[0_8px_22px_-8px_rgba(15,23,42,0.35)] transition-colors hover:border-primary-100 hover:text-primary-700 focus:outline-none focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-primary-500 motion-safe:animate-flutuar"
     >
       {children}
     </button>
@@ -22,11 +23,11 @@ function Botao({ titulo, onClick, children, destaque = false }) {
 export default function BotoesFlutuantes({ onMenu, onFiltros }) {
   return (
     <div className="fixed bottom-6 right-6 z-40 flex flex-col items-center gap-3">
-      <Botao titulo="Menu" onClick={onMenu}>
+      <Botao titulo="Menu" onClick={onMenu} atraso="0s">
         <Menu size={20} />
       </Botao>
-      <Botao titulo="Filtros" onClick={onFiltros} destaque>
-        <SlidersHorizontal size={20} />
+      <Botao titulo="Filtros" onClick={onFiltros} atraso="-1.8s">
+        <Filter size={19} />
       </Botao>
     </div>
   );
