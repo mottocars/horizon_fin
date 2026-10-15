@@ -42,10 +42,12 @@ router.post('/:token', async (req, res) => {
       {
         instructions: escrita
           ? 'Servidor do DFC Construtoras (fluxo de caixa) do Horizon Fin, com alteração do Orçamento. Comece por dfc_guia para entender como o fluxo é montado. ' +
+            'Para o dashboard Econômico Financeiro › Fluxo de Caixa use dfc_painel_fluxo_caixa. ' +
             'Só dá para inserir/atualizar valores nas contas com Origem Projeção "HORIZON - INFORMADO" (dfc_informado_contas mostra quais); as demais origens vêm das integrações e não podem ser alteradas. ' +
             'Fluxo: dfc_informado_contas -> confirmar com o usuário -> dfc_informado_gravar / dfc_informado_replicar -> prévia em dfc_informado_salvar_versao -> salvar com confirmar=true só com o aval do usuário. ' +
             'Valores em R$ com sinal (saída negativa), meses AAAA-MM.'
-          : 'Servidor do DFC Construtoras (fluxo de caixa) do Horizon Fin, só leitura. Comece por dfc_guia para entender como o fluxo é montado e qual ferramenta usar. Valores em R$, meses AAAA-MM.',
+          : 'Servidor do DFC Construtoras (fluxo de caixa) do Horizon Fin, só leitura. Comece por dfc_guia para entender como o fluxo é montado e qual ferramenta usar. ' +
+            'Para o dashboard Econômico Financeiro › Fluxo de Caixa (indicadores, etiquetas, fôlego por SPE, simulador), use dfc_painel_fluxo_caixa. Valores em R$, meses AAAA-MM.',
       }
     );
     registrarToolsDfc(server, conector.empresa_id, { escrita, usuarioId: acesso.usuario.id });

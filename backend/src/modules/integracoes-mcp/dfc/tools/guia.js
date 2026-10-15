@@ -45,7 +45,12 @@ Cada valor (centro × natureza × mês) tem uma Origem Projeção, definida na n
 - Juros = saldo devedor PJ do mês anterior × taxa. Amortização = (Novo Registro − parte de demanda mínima) × % amortização.
 - Saldo devedor = anterior + Crédito PJ − Amortização. Juros e Amortização são saídas (negativas no fluxo).
 
+## Dashboard Econômico Financeiro › Fluxo de Caixa
+Painel de gestão sobre este mesmo DFC: 8 indicadores com etiquetas (verde/amarela/vermelha), colchão (1 mês de saídas operacionais), trajetória do caixa com simulador de cenário (Orçamento / Conservador / Estresse), entradas e saídas operacionais, fôlego de cada SPE sozinha (quando o caixa de cada empresa zera), quem gera e quem consome caixa, carteira e liquidez, onde o Orçamento erra, maiores saídas e dívida PJ. Filtros: histórico (meses antes do atual, padrão 1), horizonte (contando o mês atual, padrão 6) e centros/SPE.
+- Para analisar ou explicar o painel como quem olha a tela: dfc_painel_fluxo_caixa (explicar=true traz o Sumário de cada análise).
+
 ## Qual ferramenta usar
+- Dashboard (indicadores, etiquetas, fôlego por SPE, simulador, "o que a tela mostra"): dfc_painel_fluxo_caixa.
 - Visão do fluxo (totais, saldos, resultado, por máscara/natureza): dfc_fluxo_caixa.
 - "De onde veio este valor?" (títulos, parcelas, orçamento, rastreio CEF): dfc_detalhar_valor.
 - Listas e filtros de lançamentos/itens, rankings (maiores fornecedores, por centro etc.): dfc_lancamentos.
