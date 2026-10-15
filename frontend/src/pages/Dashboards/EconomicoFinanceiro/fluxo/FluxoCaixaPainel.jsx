@@ -284,9 +284,9 @@ export default function FluxoCaixaPainel({ dashboard, tituloTela, empresaId, onE
         {empresaId && (
           <div className="grade-dfc">
             <div className="grade-barra">
+              <h2>Detalhamento do fluxo de caixa</h2>
               <button type="button" className="btn ghost icone" onClick={() => setTelaCheia(true)} title="Tela cheia" aria-label="Tela cheia">
                 <Maximize2 size={16} />
-                Tela cheia
               </button>
             </div>
             <DfcFluxoTab

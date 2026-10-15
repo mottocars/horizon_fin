@@ -280,7 +280,7 @@
   font-size: 12px;
 }
 
-/* Grade do DFC: barra com o botão de tela cheia em cima dela */
+/* Grade do DFC: título e o ícone de tela cheia em cima dela */
 .painel-cfo .grade-dfc {
   display: flex;
   flex-direction: column;
@@ -288,12 +288,20 @@
 }
 .painel-cfo .grade-barra {
   display: flex;
-  justify-content: flex-end;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+}
+.painel-cfo .grade-barra h2 {
+  font-size: 19px;
+  font-weight: 700;
+  font-stretch: 105%;
 }
 .painel-cfo .btn.icone {
   display: inline-flex;
   align-items: center;
-  gap: 6px;
+  justify-content: center;
+  padding: 7px;
   background: var(--surface);
   border-color: var(--line);
   color: var(--ink-2);
