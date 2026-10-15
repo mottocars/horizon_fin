@@ -97,20 +97,23 @@ export default function AppShell() {
   // Só conta como "acesso" quando a tela realmente é exibida (não quando
   // esbarra no Acesso restrito) — ver useLogAcesso.
   useLogAcesso(location.pathname, acessoPermitido);
+  // Dashboards ocupam a tela inteira (pedido do usuário): só o menu lateral, sem o cabeçalho do topo
+  // nem as margens da área de conteúdo.
+  const telaCheia = location.pathname.startsWith('/dashboards/');
 
   return (
     <SidebarProvider>
       <div className="flex h-screen bg-app-bg">
         <Sidebar />
         <div className="flex flex-1 flex-col overflow-hidden">
-          <Topbar title={meta.title} subtitle={meta.subtitle} />
+          {!telaCheia && <Topbar title={meta.title} subtitle={meta.subtitle} />}
           {/* scrollbar-gutter: stable reserva o espaço da barra de rolagem
               sempre, mesmo quando o conteúdo não enche a tela — sem isso,
               uma página mais alta que rola fica alguns pixels mais estreita
               que uma página mais curta que não rola (a barra "come" espaço
               só numa delas), fazendo cards do mesmo CSS parecerem tamanhos
               diferentes entre telas. */}
-          <main className="flex-1 overflow-y-auto p-6" style={{ scrollbarGutter: 'stable' }}>
+          <main className={`flex-1 overflow-y-auto ${telaCheia ? '' : 'p-6'}`} style={telaCheia ? undefined : { scrollbarGutter: 'stable' }}>
             {acessoPermitido ? <Outlet /> : <AcessoRestrito />}
           </main>
         </div>

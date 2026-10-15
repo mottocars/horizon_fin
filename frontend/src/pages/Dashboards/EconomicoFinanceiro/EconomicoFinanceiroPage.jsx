@@ -1,11 +1,5 @@
-import Card from '../../../components/Card';
-
-// Dashboards > Econômico Financeiro — por enquanto só a entrada no menu (pedido do usuário); o
-// conteúdo será definido depois.
+// Dashboards > Econômico Financeiro — a tela inteira é do dashboard (só o menu lateral fica, ver
+// AppShell.jsx). Vazia por enquanto (pedido do usuário); o conteúdo será definido depois.
 export default function EconomicoFinanceiroPage() {
-  return (
-    <Card>
-      <p className="py-12 text-center text-sm text-gray-400">Em construção.</p>
-    </Card>
-  );
+  return <div className="h-full w-full" />;
 }
