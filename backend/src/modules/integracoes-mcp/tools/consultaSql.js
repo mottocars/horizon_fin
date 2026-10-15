@@ -3,9 +3,11 @@ const pool = require('../../../config/db');
 
 // Só estas views entram nas consultas do Claude — nunca as tabelas reais.
 // Cada view já filtra a própria empresa sozinha (current_setting, ver
-// database/schema.sql) — é essa allowlist + a config de empresa setada na
-// mesma transação (ver executar() abaixo) que garante o isolamento
-// multi-tenant de verdade, não a query do usuário estar "certa".
+// database/schema.sql). Quem garante o isolamento é o BANCO: a consulta roda
+// no papel mcp_leitor (SET LOCAL ROLE em executar()), que só pode ler as views
+// mcp_* (migration 2026-10-15-mcp-leitor-sql.sql — rode de novo ao criar view
+// mcp_* nova). A allowlist abaixo é a primeira barreira e dá a mensagem de erro
+// amigável; sozinha ela não basta (ex.: "FROM mcp_x, outra_tabela").
 const VIEWS_PERMITIDAS = new Set([
   'mcp_sie_income',
   'mcp_sie_income_categorias',
@@ -57,11 +59,15 @@ function validar(sqlOriginal, views = VIEWS_PERMITIDAS, dicaEsquema = 'descrever
   }
 
   // Toda tabela referenciada (FROM/JOIN) precisa estar na allowlist das
-  // views mcp_*. Nota: expressões como EXTRACT(campo FROM coluna) também
+  // views mcp_* ou ser o nome de uma subconsulta do WITH (CTE) da própria
+  // consulta. Nota: expressões como EXTRACT(campo FROM coluna) também
   // batem nesta checagem e serão rejeitadas — use date_part('campo', coluna)
   // no lugar de EXTRACT(... FROM ...) para evitar isso.
+  const ctes = new Set(
+    [...sqlSemPontoVirgula.matchAll(/(?:\bWITH\s+(?:RECURSIVE\s+)?|,\s*)([a-zA-Z_][a-zA-Z0-9_]*)\s+AS\s*\(/gi)].map((m) => m[1].toLowerCase())
+  );
   const referencias = [...sqlSemPontoVirgula.matchAll(/\b(?:FROM|JOIN)\s+([a-zA-Z_][a-zA-Z0-9_]*)/gi)].map((m) => m[1].toLowerCase());
-  const foraDaAllowlist = referencias.filter((nome) => !views.has(nome));
+  const foraDaAllowlist = referencias.filter((nome) => !views.has(nome) && !ctes.has(nome));
   if (foraDaAllowlist.length > 0) {
     throw badRequest(
       `Tabela(s) não permitida(s) nesta consulta: ${[...new Set(foraDaAllowlist)].join(', ')}. ` +
@@ -81,6 +87,8 @@ async function executar(empresaId, sqlValidado) {
     await client.query('BEGIN');
     await client.query('SET LOCAL statement_timeout = 5000');
     await client.query("SELECT set_config('app.empresa_id', $1, true)", [String(empresaId)]);
+    // Só leitura das views mcp_* daqui em diante (vale até o fim da transação).
+    await client.query('SET LOCAL ROLE mcp_leitor');
     const resultado = await client.query(`SELECT * FROM (${sqlValidado}) AS sub LIMIT 500`);
     await client.query('COMMIT');
     return resultado.rows;

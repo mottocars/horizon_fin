@@ -3552,3 +3552,18 @@ CREATE TABLE IF NOT EXISTS usuarios_dashboard_favoritos (
     atualizado_em  TIMESTAMPTZ NOT NULL,
     PRIMARY KEY (usuario_id, dashboard)
 );
+
+-- ─── Papel das consultas SQL do Claude (conectores MCP): só lê as views mcp_* ───
+-- Ver database/migrations/2026-10-15-mcp-leitor-sql.sql (rode de novo ao criar view mcp_* nova).
+DO $$
+DECLARE v record;
+BEGIN
+  IF NOT EXISTS (SELECT 1 FROM pg_roles WHERE rolname = 'mcp_leitor') THEN
+    CREATE ROLE mcp_leitor NOLOGIN;
+  END IF;
+  EXECUTE format('GRANT mcp_leitor TO %I', current_user);
+  GRANT USAGE ON SCHEMA public TO mcp_leitor;
+  FOR v IN SELECT viewname FROM pg_views WHERE schemaname = 'public' AND viewname LIKE 'mcp\_%' LOOP
+    EXECUTE format('GRANT SELECT ON public.%I TO mcp_leitor', v.viewname);
+  END LOOP;
+END $$;
