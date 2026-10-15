@@ -3,14 +3,14 @@ import { createPortal } from 'react-dom';
 import { LayoutGrid, Menu, SlidersHorizontal, Star, X } from 'lucide-react';
 
 // Controles dos Dashboards (pedido do usuário): UM botão flutuante no canto inferior direito que abre
-// um painel vertical do alto da área até logo acima dele (crescendo a partir do botão): metade de
-// cima Telas (os botões das telas do dashboard), metade de baixo Filtros (os filtros da tela). O botão fica parado; flutua só com
-// o mouse em cima.
+// um painel vertical logo acima dele (crescendo a partir do botão) com as Telas do dashboard e, se a
+// tela tiver filtros aqui, a seção Filtros na metade de baixo (do alto da área até o botão). Sem
+// filtros, o painel tem só a altura das telas. O botão fica parado; flutua só com o mouse em cima.
 // Fica na camada fixa da área de conteúdo (#camada-dashboard, AppShell.jsx): não rola com a página e
 // não passa por cima do menu lateral.
 // - `telas`: [{ id, label, icon? }]; `telaAtiva` / `onTela(id)`.
 // - `telaFavorita` / `onFavoritar(id | null)`: a estrela de cada tela (a favorita abre primeiro).
-// - `filtros`: conteúdo da seção Filtros (os campos de cada dashboard).
+// - `filtros`: conteúdo da seção Filtros (opcional — o Fluxo de Caixa tem os filtros na própria tela).
 // Fecha no botão (que vira X) ou com Esc.
 
 const DURACAO_FECHAR = 240; // = animate-barra-desce (styles/index.css)
@@ -18,7 +18,7 @@ const DURACAO_FECHAR = 240; // = animate-barra-desce (styles/index.css)
 // Item do painel entrando em sequência (atraso por posição).
 const entrada = (i) => ({ animationDelay: `${120 + i * 45}ms` });
 
-// Metade do painel (Telas em cima, Filtros embaixo), com rolagem própria.
+// Seção do painel (Telas em cima, Filtros embaixo), com rolagem própria.
 function Secao({ icone: Icone, titulo, ordem, children }) {
   return (
     <section className="motion-safe:animate-item-sobe flex min-h-0 flex-1 flex-col" style={entrada(ordem)}>
@@ -37,7 +37,7 @@ function Painel({ fechando, telas, telaAtiva, onTela, telaFavorita, onFavoritar,
     <div
       role="dialog"
       aria-label="Menu do dashboard"
-      className={`pointer-events-auto absolute bottom-21 right-6 top-6 flex w-80 origin-bottom-right flex-col overflow-hidden rounded-2xl border border-gray-200 bg-white/95 shadow-[0_24px_48px_-16px_rgba(15,23,42,0.35)] backdrop-blur ${
+      className={`pointer-events-auto absolute bottom-21 right-6 ${filtros ? 'top-6' : 'max-h-[calc(100%-6.75rem)]'} flex w-80 origin-bottom-right flex-col overflow-hidden rounded-2xl border border-gray-200 bg-white/95 shadow-[0_24px_48px_-16px_rgba(15,23,42,0.35)] backdrop-blur ${
         fechando ? 'motion-safe:animate-barra-desce' : 'motion-safe:animate-barra-sobe'
       }`}
     >
@@ -83,10 +83,14 @@ function Painel({ fechando, telas, telaAtiva, onTela, telaFavorita, onFavoritar,
           })}
         </div>
       </Secao>
-      <div className="mx-4 shrink-0 border-t border-gray-100" />
-      <Secao icone={SlidersHorizontal} titulo="Filtros" ordem={1}>
-        {filtros && <div className="flex flex-col gap-3">{filtros}</div>}
-      </Secao>
+      {filtros && (
+        <>
+          <div className="mx-4 shrink-0 border-t border-gray-100" />
+          <Secao icone={SlidersHorizontal} titulo="Filtros" ordem={1}>
+            <div className="flex flex-col gap-3">{filtros}</div>
+          </Secao>
+        </>
+      )}
     </div>
   );
 }

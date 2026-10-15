@@ -74,7 +74,8 @@ function mesDeHoje() {
 // Período = o mesmo da aba Orçamentos (filtros do topo). Visual de demonstrativo, rolagem própria com a
 // primeira coluna congelada. `telaCheia` / `onSairTelaCheia`: tela cheia. `refreshToken`: recarrega.
 // Também é o Fluxo de Caixa do dashboard Econômico Financeiro (`variante="dashboard"`: quadro solto,
-// sem o encaixe de aba, ocupando a altura da tela).
+// sem o encaixe de aba, ocupando a altura da tela; `alturaFixa`: altura da grade em px quando há
+// conteúdo acima dela).
 export default function DfcFluxoTab({
   empresaId,
   inicio,
@@ -84,6 +85,7 @@ export default function DfcFluxoTab({
   onSairTelaCheia,
   refreshToken = 0,
   variante = 'aba',
+  alturaFixa = null,
 }) {
   const dashboard = variante === 'dashboard';
   const [dados, setDados] = useState(null);
@@ -301,7 +303,7 @@ export default function DfcFluxoTab({
       // Em tela cheia o quadro é fixo na janela (não rola com o <main>).
       const topo = el.getBoundingClientRect().top + (main && !telaCheia ? main.scrollTop : 0);
       const folga = telaCheia ? 20 : dashboard ? 20 : 44; // dashboard: só a margem da tela
-      const altura = Math.max(ALTURA_MINIMA_GRADE, Math.floor(window.innerHeight - topo - folga));
+      const altura = alturaFixa ?? Math.max(ALTURA_MINIMA_GRADE, Math.floor(window.innerHeight - topo - folga));
       setAlturaGrade((atual) => (atual === altura ? atual : altura));
     };
     medir();

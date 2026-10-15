@@ -2,11 +2,14 @@ const { Router } = require('express');
 const { z } = require('zod');
 const pool = require('../../config/db');
 const authMiddleware = require('../../middlewares/auth.middleware');
+const fluxoCaixaPainel = require('./fluxoCaixaPainel.service');
 
 // Dashboards: tela favorita (estrela) de cada usuário em cada dashboard — a que abre ao entrar pelo
 // menu. Cada usuário só lê e grava a própria. Montado em server.js com exigirTela dos dashboards.
 //   GET /:dashboard/favorita            -> { tela | null }
 //   PUT /:dashboard/favorita { tela }   -> { tela } (tela null = tira a favorita)
+//   GET /economico-financeiro/fluxo-caixa?empresa_id&hist&hor&centros=1,2 -> dados do painel do Fluxo de
+//       Caixa (fluxoCaixaPainel.service.js). A empresa é conferida pelo authMiddleware (query).
 
 const DASHBOARDS = {
   'economico-financeiro': ['dre', 'fluxo-caixa', 'aging', 'detalhamento', 'saldos'],
@@ -20,6 +23,28 @@ function dashboardDe(req, res) {
   if (!telas) res.status(404).json({ message: 'Dashboard não encontrado.' });
   return telas;
 }
+
+const painelSchema = z.object({
+  empresa_id: z.coerce.number().int().positive(),
+  hist: z.coerce.number().int().min(1).max(36).default(1),
+  hor: z.coerce.number().int().min(1).max(36).default(6),
+  centros: z
+    .string()
+    .regex(/^(\d+(,\d+)*)?$/)
+    .optional()
+    .default(''),
+});
+
+router.get('/economico-financeiro/fluxo-caixa', async (req, res, next) => {
+  try {
+    const f = painelSchema.parse(req.query);
+    const centros = f.centros ? f.centros.split(',').map(Number) : [];
+    res.json(await fluxoCaixaPainel.painel(f.empresa_id, { hist: f.hist, hor: f.hor, centros }));
+  } catch (err) {
+    if (err.issues) return res.status(400).json({ message: 'Filtros inválidos (histórico e horizonte de 1 a 36 meses).' });
+    next(err);
+  }
+});
 
 router.get('/:dashboard/favorita', async (req, res, next) => {
   try {
