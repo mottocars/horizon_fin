@@ -249,8 +249,9 @@ function escreverLinhaGrupo(sheet, linha, texto, totais, dias, { total = false, 
 // Linhas de detalhe abaixo da conta — mesmas regras da grade (SaldosContasTab.jsx):
 // - Bloqueio (botão direito > Registrar bloqueio): Saldo bloqueado e Saldo disponível (saldo -
 //   bloqueado), só se a conta tiver bloqueio em algum dia; dias sem bloqueio ficam vazios.
-// - Cheque especial (limite cadastrado na conta): Limite total e Limite restante (saldo negativo
-//   -> limite + saldo; senão o limite inteiro), só nos dias com abertura de período (`periodos`).
+// - Cheque especial (limite cadastrado na conta): Limite total e Limite restante (limite + saldo),
+//   só nos dias com abertura de período (`periodos`) em que o saldo está negativo; conta que não
+//   ficou negativa em nenhum desses dias não ganha as linhas.
 // Devolve [{ rotulo, valores: { iso: número } }] — usado pela planilha e pela mensagem do
 // Comunicar Saldos (comunicarSaldos.service.js).
 function detalhesConta(conta, diasIso, periodos) {
@@ -266,17 +267,21 @@ function detalhesConta(conta, diasIso, periodos) {
     }
     linhas.push({ rotulo: 'Saldo bloqueado', valores: bloqueado }, { rotulo: 'Saldo disponível', valores: disponivel });
   }
+  // Cheque especial só quando a conta USA o limite (saldo negativo num dia com período) — conta
+  // positiva não mostra (pedido do usuário).
   const limite = conta.valor_cheque_especial;
   if (limite > 0) {
     const total = {};
     const restante = {};
     for (const iso of diasIso) {
-      if (!periodos.has(iso)) continue;
-      total[iso] = limite;
       const saldo = conta.saldos[iso];
-      if (saldo !== undefined) restante[iso] = saldo < 0 ? somarCentavos([limite, saldo]) : limite;
+      if (!periodos.has(iso) || saldo === undefined || saldo >= 0) continue;
+      total[iso] = limite;
+      restante[iso] = somarCentavos([limite, saldo]);
     }
-    linhas.push({ rotulo: 'Limite total cheque especial', valores: total }, { rotulo: 'Limite restante', valores: restante });
+    if (Object.keys(total).length > 0) {
+      linhas.push({ rotulo: 'Limite total cheque especial', valores: total }, { rotulo: 'Limite restante', valores: restante });
+    }
   }
   return linhas;
 }
