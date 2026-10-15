@@ -491,7 +491,8 @@ export default function DfcFluxoTab({
           className={`overflow-auto overscroll-x-contain rounded-lg border border-gray-200 ${dashboard ? 'bg-white' : ''} ${
             rolouX ? SOMBRA_COLUNA_FIXA : ''
           }`}
-          style={{ maxHeight: alturaGrade ?? undefined, height: dashboard ? (alturaGrade ?? undefined) : undefined }}
+          // Com `alturaFixa` a grade cresce com as linhas abertas até essa altura (fechada, ocupa só o que tem).
+          style={{ maxHeight: alturaGrade ?? undefined, height: dashboard && alturaFixa === null ? (alturaGrade ?? undefined) : undefined }}
         >
           <table
             className="border-separate border-spacing-0 text-left"
