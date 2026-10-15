@@ -106,9 +106,12 @@ async function avancos(empresaId, inicio, fim) {
         );
       }
 
+      // Prevision só vale com o "Código Prevision" preenchido na aba Centros Custos: tirar o código
+      // devolve a obra pro avanço manual, mesmo com dados antigos do Prevision gravados (pedido do usuário).
+      const temPrevision = Boolean(o.codigo_prevision && String(o.codigo_prevision).trim());
       const porMesPrev = {};
       prevision
-        .filter((r) => r.sienge_id === o.sienge_id && r.primary_view === o.prevision_primary_view)
+        .filter((r) => temPrevision && r.sienge_id === o.sienge_id && r.primary_view === o.prevision_primary_view)
         .forEach((r) => {
           porMesPrev[r.mes] = Number(r.avanco || 0) * 100;
         });
