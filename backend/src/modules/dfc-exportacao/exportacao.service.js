@@ -301,30 +301,7 @@ async function obrasCef(empresaId, celulas) {
   for (const id of ids) {
     const rastro = await projecaoCef.rastrear(empresaId, id);
     if (!rastro) continue;
-    // Conta de cada componente no plano que a obra usa (o próprio, se tiver versão, senão o Global).
-    const { rows: contas } = await pool.query(
-      `WITH proprio AS (SELECT EXISTS (SELECT 1 FROM dfc_plano_contas_versoes WHERE empresa_id = $1 AND centro_id = $2) AS tem)
-       SELECT p.origem_projecao, p.sienge_id, f.name
-         FROM dfc_plano_contas_centro p CROSS JOIN proprio
-         LEFT JOIN planos_financeiros_sienge f ON f.empresa_id = $1 AND f.sienge_id = p.sienge_id
-        WHERE proprio.tem AND p.empresa_id = $1 AND p.centro_id = $2 AND p.origem_projecao LIKE 'CEF_%' AND p.projeta_dfc
-       UNION ALL
-       SELECT g.origem_projecao, g.sienge_id, f.name
-         FROM dfc_plano_contas g CROSS JOIN proprio
-         LEFT JOIN planos_financeiros_sienge f ON f.empresa_id = $1 AND f.sienge_id = g.sienge_id
-        WHERE NOT proprio.tem AND g.empresa_id = $1 AND g.origem_projecao LIKE 'CEF_%' AND g.projeta_dfc`,
-      [empresaId, id]
-    );
-    const { rows: versao } = await pool.query(
-      `SELECT origem, to_char(mes, 'YYYY-MM') AS mes, valor FROM dfc_orcamento_valores
-        WHERE empresa_id = $1 AND centro_id = $2 AND origem LIKE 'CEF_%'`,
-      [empresaId, id]
-    );
-    obras.push({
-      ...rastro,
-      contas: Object.fromEntries(contas.map((c) => [c.origem_projecao, c])),
-      versao_orcamento: new Map(versao.map((v) => [`${v.origem}|${v.mes}`, Number(v.valor)])),
-    });
+    obras.push(rastro);
   }
   return obras;
 }

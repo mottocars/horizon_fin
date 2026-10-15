@@ -4,8 +4,8 @@ const { CORES, FORMATOS, borda, preencher, dataExcel, cabecalho, faixa, cabecalh
 // numa célula se vê de onde o número vem. Réplica de projecaoCef.motor::projetar/calcularUnidades:
 // 1) obra e parâmetros (células nomeadas usadas nas fórmulas);
 // 2) avanço da obra (Caixa/DCD, Prevision, manual -> % usado) e a memória de cálculo mês a mês;
-// 3) até a plotagem: calculado (fórmula) × projeção gravada × versão do Orçamento, com Δ (deve ser 0);
-// 4) unidades do Geral, com o mês do registro, % de obra e novo registro calculados por fórmula.
+// 3) Repasses CEF (unidades do Geral), com o mês do registro, % de obra, novo registro e se a unidade
+//    é de demanda mínima (não amortiza) calculados por fórmula.
 // Os valores do sistema vão junto como resultado em cache; o Excel recalcula ao abrir.
 
 const MESES_CAB = ['JAN', 'FEV', 'MAR', 'ABR', 'MAI', 'JUN', 'JUL', 'AGO', 'SET', 'OUT', 'NOV', 'DEZ'];
@@ -15,18 +15,8 @@ const dataBr = (v) => {
   const s = v instanceof Date ? v.toISOString() : String(v);
   return s.slice(0, 10).split('-').reverse().join('/');
 };
-const r2 = (v) => Math.round((Number(v) + Number.EPSILON) * 100) / 100;
 const ROTULO_FONTE = { CAIXA: 'Caixa (DCD)', PREVISION: 'Prevision', MANUAL: 'Manual' };
 const mesIso = (v) => (v instanceof Date ? v.toISOString() : String(v)).slice(0, 7);
-
-// Componentes da Projeção CEF: coluna da memória e sinal no fluxo (saída = negativo).
-const COMPONENTES = [
-  { origem: 'CEF_NOVO_REGISTRO', nome: 'Novo Registro', col: 'J', sinal: 1, campo: 'novo_registro' },
-  { origem: 'CEF_MEDICAO', nome: 'Medição', col: 'M', sinal: 1, campo: 'medicao' },
-  { origem: 'CEF_CREDITO_PJ', nome: 'Crédito PJ', col: 'O', sinal: 1, campo: 'credito_pj' },
-  { origem: 'CEF_JUROS', nome: 'Juros', col: 'R', sinal: -1, campo: 'juros' },
-  { origem: 'CEF_AMORTIZACAO', nome: 'Amortização', col: 'S', sinal: -1, campo: 'amortizacao' },
-];
 
 const MEMORIA = [
   ['Mês', 11, 'mes', ''],
@@ -97,7 +87,7 @@ module.exports = function planilhaCef(workbook, obra, d, meta, usados, nome) {
   cabecalho(workbook, sheet, {
     titulo: `Projeção CEF — ${obra.obra.name}`,
     subtitulo:
-      'Dossiê com fórmulas vivas: clique numa célula para ver a conta. Mês em azul = dentro do período exportado. A coluna Δ (até a plotagem) deve dar zero.',
+      'Dossiê com fórmulas vivas: clique numa célula para ver a conta. Mês em azul = dentro do período exportado.',
     filtros: meta.filtros,
     gerado: meta.gerado,
     ultimaColuna: ULTIMA,
@@ -107,12 +97,7 @@ module.exports = function planilhaCef(workbook, obra, d, meta, usados, nome) {
   const u = unidades.length;
   const MEM0 = 21;
   const MEMN = MEM0 + Math.max(n, 1) - 1;
-  const PLOT_FAIXA = MEMN + 2;
-  const PLOT_CAB1 = PLOT_FAIXA + 1;
-  const PLOT_CAB2 = PLOT_CAB1 + 1;
-  const PLOT0 = PLOT_CAB2 + 1;
-  const PLOTN = PLOT0 + Math.max(n, 1) - 1;
-  const UN_FAIXA = PLOTN + 2;
+  const UN_FAIXA = MEMN + 2;
   const UN_CAB = UN_FAIXA + 1;
   const UN_REGRA = UN_CAB + 1;
   const UN0 = UN_REGRA + 1;
@@ -138,22 +123,13 @@ module.exports = function planilhaCef(workbook, obra, d, meta, usados, nome) {
     for (let c = de; c <= ateValor; c += 1) sheet.getCell(linha, c).border = { bottom: borda() };
     return v;
   };
-  const somaAbs = (a, b) =>
-    COMPONENTES.map((_, i) => {
-      const colA = sheet.getColumn(2 + i * 4 + a).letter;
-      const colB = sheet.getColumn(2 + i * 4 + b).letter;
-      return `SUMPRODUCT(ABS(${colA}${PLOT0}:${colA}${PLOTN}-${colB}${PLOT0}:${colB}${PLOTN}))`;
-    }).join('+');
-  const ok = (fx) => ({ formula: `IF(${fx}<0.05,"OK — bate","Há diferença — veja a coluna Δ")`, result: 'OK — bate' });
   const esquerda = [
     ['Obra', obra.obra.name],
     ['Contrato Caixa', /^\d+$/.test(obra.obra.contrato) ? Number(obra.obra.contrato) : obra.obra.contrato],
     ['Parâmetros', `Versão ${versao.versao}${versao.criado_por_nome ? ` — ${versao.criado_por_nome}` : ''}, ${dataBr(versao.criado_em)}`],
     ['Projeção CEF atualizada', `${dataBr(exec.atualizado_em)}${exec.usuario ? ` por ${exec.usuario}` : ''}`],
     ['Avanço da obra', textoCenario(cenario, obra.mesAtual, somarMeses)],
-    ['Unidades do Geral', `${u} (sem o 1º contrato, o da construtora)`],
-    ['Memória × projeção gravada', ok(somaAbs(0, 1))],
-    ['Projeção gravada × versão do Orçamento', ok(somaAbs(1, 2))],
+    ['Repasses CEF', `${u} unidades (sem o 1º contrato, o da construtora)`],
   ];
   esquerda.forEach(([r, v], i) => item(7 + i, 1, 4, 9, r, v, typeof v === 'number' ? '0' : null));
   const parametros = [
@@ -166,7 +142,6 @@ module.exports = function planilhaCef(workbook, obra, d, meta, usados, nome) {
     ['INICIO', 'Início do ciclo', dataExcel(linhas[0]?.mes), FORMATOS.mes],
     ['FIM', 'Fim do ciclo', dataExcel(linhas[linhas.length - 1]?.mes), FORMATOS.mes],
     ['PRAZO', 'Assinatura → registro (meses)', Math.trunc(p.prazoRegistro || 0), '0'],
-    ['MESATUAL', 'Mês atual (corte Caixa → Prevision)', dataExcel(obra.mesAtual), FORMATOS.mes],
   ];
   parametros.forEach(([nome, rotulo, valor, formato], i) => {
     const cel = item(7 + i, 11, 15, 18, rotulo, valor, formato);
@@ -189,6 +164,7 @@ module.exports = function planilhaCef(workbook, obra, d, meta, usados, nome) {
 
   const periodo = new Set(d.fluxo.meses);
   const pct = (v) => (v === null || v === undefined ? null : Number(v) / 100);
+  const corte = `DATE(${obra.mesAtual.slice(0, 4)},${Number(obra.mesAtual.slice(5, 7))},1)`; // mês atual: Caixa antes, Prevision/manual dali em diante
   const escolha = (col, r, anterior) => `IF(${col}${r}="",${anterior},MIN(MAX(${col}${r},0),1))`;
   const mesDm = mesIso(p.dataDemandaMinima);
   let cumO = 0;
@@ -201,8 +177,8 @@ module.exports = function planilhaCef(workbook, obra, d, meta, usados, nome) {
     const fonte = fontes.get(l.mes);
     const formulaF =
       {
-        CAIXA_PREVISION: `IF(A${r}<${NOME('MESATUAL')},${escolha('B', r, Fp)},${escolha('C', r, Fp)})`,
-        CAIXA: `IF(A${r}<${NOME('MESATUAL')},${escolha('B', r, Fp)},${escolha('D', r, Fp)})`,
+        CAIXA_PREVISION: `IF(A${r}<${corte},${escolha('B', r, Fp)},${escolha('C', r, Fp)})`,
+        CAIXA: `IF(A${r}<${corte},${escolha('B', r, Fp)},${escolha('D', r, Fp)})`,
         PREVISION: escolha('C', r, Fp),
         MANUAL: escolha('D', r, Fp),
       }[cenario] || '0';
@@ -222,7 +198,7 @@ module.exports = function planilhaCef(workbook, obra, d, meta, usados, nome) {
       temUn ? { formula: `COUNTIFS(${intervalo('D')},A${r})`, result: l.qtd_registro } : 0,
       temUn ? { formula: `SUMIFS(${intervalo('J')},${intervalo('D')},A${r})`, result: l.vgf_medicao } : 0,
       temUn ? { formula: `SUMIFS(${intervalo('M')},${intervalo('D')},A${r})`, result: l.novo_registro } : 0,
-      temUn ? { formula: `SUMIFS(${intervalo('M')},${intervalo('D')},A${r},${intervalo('N')},"Não")`, result: l.novo_registro_nao_amortizacao } : 0,
+      temUn ? { formula: `SUMIFS(${intervalo('M')},${intervalo('D')},A${r},${intervalo('N')},"Sim")`, result: l.novo_registro_nao_amortizacao } : 0,
       { formula: prim ? '0' : `L${ant}+I${ant}`, result: cumOAntes },
       { formula: `L${r}*G${r}`, result: l.medicao },
       {
@@ -254,84 +230,8 @@ module.exports = function planilhaCef(workbook, obra, d, meta, usados, nome) {
     }
   });
 
-  // ─── 3) Até a plotagem ──────────────────────────────────────────────────────────────────────
-  faixa(sheet, PLOT_FAIXA, `ATÉ A PLOTAGEM NO DFC — calculado (memória) × projeção gravada × versão ${d.fluxo.versao?.numero ?? '—'} do Orçamento`, 1, ULTIMA);
-  sheet.mergeCells(PLOT_CAB1, 1, PLOT_CAB2, 1);
-  const cMes = sheet.getCell(PLOT_CAB1, 1);
-  cMes.value = 'Mês';
-  cMes.font = { bold: true, size: 9, color: { argb: CORES.BRANCO } };
-  cMes.fill = preencher(CORES.AZUL_ESCURO);
-  cMes.alignment = { vertical: 'middle', horizontal: 'center' };
-  COMPONENTES.forEach((c, i) => {
-    const de = 2 + i * 4;
-    sheet.mergeCells(PLOT_CAB1, de, PLOT_CAB1, de + 3);
-    const conta = obra.contas[c.origem];
-    const cab = sheet.getCell(PLOT_CAB1, de);
-    cab.value = conta ? `${c.nome} → ${conta.sienge_id} ${conta.name || ''}`.trim() : `${c.nome} → sem conta no plano`;
-    cab.font = { bold: true, size: 9, color: { argb: CORES.BRANCO } };
-    cab.fill = preencher(CORES.AZUL_ESCURO);
-    cab.alignment = { vertical: 'middle', horizontal: 'center', wrapText: true };
-    ['Calculado', 'Projeção gravada', `Versão ${d.fluxo.versao?.numero ?? '—'}`, 'Δ'].forEach((t, j) => {
-      const cel = sheet.getCell(PLOT_CAB2, de + j);
-      cel.value = t;
-      cel.font = { bold: true, size: 8, color: { argb: j === 3 ? CORES.VERMELHO : CORES.CINZA_ESCURO } };
-      cel.fill = preencher(CORES.AZUL_CLARO);
-      cel.alignment = { vertical: 'middle', horizontal: 'center', wrapText: true };
-      cel.border = { left: j === 0 ? borda(CORES.CINZA_BORDA) : undefined };
-    });
-  });
-  sheet.getRow(PLOT_CAB1).height = 28;
-  sheet.getRow(PLOT_CAB2).height = 22;
-  linhas.forEach((l, i) => {
-    const r = PLOT0 + i;
-    const rm = MEM0 + i;
-    const row = sheet.getRow(r);
-    const a = row.getCell(1);
-    a.value = { formula: `A${rm}`, result: dataExcel(l.mes) };
-    a.numFmt = FORMATOS.mes;
-    a.font = { size: 9, bold: periodo.has(l.mes), color: { argb: periodo.has(l.mes) ? CORES.AZUL_ESCURO : CORES.CINZA_ESCURO } };
-    if (periodo.has(l.mes)) a.fill = preencher(CORES.AZUL_CLARO);
-    a.alignment = { horizontal: 'center' };
-    a.border = { bottom: borda() };
-    const gravada = obra.gravadas.get(l.mes);
-    COMPONENTES.forEach((c, k) => {
-      const de = 2 + k * 4;
-      const calculado = r2(l[c.campo] * c.sinal);
-      const grav = gravada ? r2(Number(gravada[c.campo]) * c.sinal) : 0;
-      const ver = obra.versao_orcamento.get(`${c.origem}|${l.mes}`);
-      const L = (j) => sheet.getColumn(de + j).letter;
-      const cels = [
-        { formula: `ROUND(${c.col}${rm}*${c.sinal},2)`, result: calculado },
-        grav,
-        ver === undefined ? null : ver,
-        { formula: `${L(0)}${r}-${L(2)}${r}`, result: r2(calculado - (ver ?? 0)) },
-      ];
-      cels.forEach((v, j) => {
-        const cel = row.getCell(de + j);
-        cel.value = v;
-        cel.numFmt = j === 3 ? '#,##0.00;[Red]-#,##0.00;"✓"' : FORMATOS.moeda;
-        cel.font = { size: 9, color: { argb: j === 3 ? CORES.TEAL : CORES.CINZA_ESCURO } };
-        if (j === 3) cel.alignment = { horizontal: 'center' };
-        cel.border = { bottom: borda(), left: j === 0 ? borda(CORES.CINZA_LINHA) : undefined };
-      });
-    });
-  });
-  COMPONENTES.forEach((_, k) => {
-    const L = sheet.getColumn(2 + k * 4 + 3).letter;
-    sheet.addConditionalFormatting({
-      ref: `${L}${PLOT0}:${L}${PLOTN}`,
-      rules: [
-        {
-          type: 'expression',
-          formulae: [`ABS(${L}${PLOT0})>=0.01`],
-          style: { fill: { type: 'pattern', pattern: 'solid', bgColor: { argb: CORES.VERMELHO_CLARO } }, font: { bold: true, color: { argb: CORES.VERMELHO } } },
-        },
-      ],
-    });
-  });
-
-  // ─── 4) Unidades do Geral ───────────────────────────────────────────────────────────────────
-  faixa(sheet, UN_FAIXA, 'UNIDADES DO GERAL (contrato Caixa) — base do Novo Registro, da Medição e da Amortização', 1, 15);
+  // ─── 3) Repasses CEF (unidades do Geral) ────────────────────────────────────────────────────
+  faixa(sheet, UN_FAIXA, 'REPASSES CEF (contrato Caixa) — base do Novo Registro, da Medição e da Amortização', 1, 16);
   const UNID = [
     ['Unidade (contrato)', '0', ''],
     ['Assinatura', FORMATOS.data, ''],
@@ -346,7 +246,8 @@ module.exports = function planilhaCef(workbook, obra, d, meta, usados, nome) {
     ['% obra no registro', FORMATOS.pct, '% obra do mês do registro (0 fora do ciclo)'],
     ['À vista', FORMATOS.moeda, '= Terreno + FGTS'],
     ['Novo registro', FORMATOS.moeda, '= À vista + VGF medição × % obra'],
-    ['Amortiza?', null, 'Não = assinada até a Data da DM'],
+    ['Demanda mínima?', null, 'Sim = assinada até a Data da DM'],
+    ['Amortiza?', null, 'Demanda mínima não amortiza'],
     ['Situação', null, ''],
   ];
   cabecalhoTabela(sheet, UN_CAB, UNID.map(([r]) => r));
@@ -383,7 +284,8 @@ module.exports = function planilhaCef(workbook, obra, d, meta, usados, nome) {
       { formula: `IFERROR(INDEX(${memIntervalo('F')},MATCH(D${r},${memIntervalo('A')},0)),0)`, result: pctObra },
       { formula: `F${r}+G${r}`, result: Number(un.valor_terreno || 0) + Number(un.valor_fgts || 0) },
       { formula: `L${r}+J${r}*K${r}`, result: c.totalNovoRegistro },
-      { formula: `IF(AND(B${r}<>"",B${r}<=${NOME('DM')}),"Não","Sim")`, result: c.statusDm ? 'Não' : 'Sim' },
+      { formula: `IF(AND(B${r}<>"",B${r}<=${NOME('DM')}),"Sim","Não")`, result: c.statusDm ? 'Sim' : 'Não' },
+      { formula: `IF(N${r}="Sim","Não","Sim")`, result: c.statusDm ? 'Não' : 'Sim' },
       situacao,
     ];
     const row = sheet.getRow(r);
