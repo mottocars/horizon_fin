@@ -78,6 +78,9 @@ export default function EconomicoFinanceiroPage() {
   }, [empresaTravada, empresaIdTravada, carregandoEmpresas, empresas, empresaId]);
 
   const opcoesEmpresas = useMemo(() => empresas.map((e) => ({ value: e.id, label: nomeExibicaoEmpresa(e) })), [empresas]);
+  // Logomarca (cadastro da empresa) da empresa escolhida, no canto direito do cabeçalho.
+  const empresaAtual = empresas.find((e) => String(e.id) === String(empresaId));
+  const marcaEmpresa = empresaAtual ? { logo: empresaAtual.logo || null, nome: nomeExibicaoEmpresa(empresaAtual) } : null;
 
   return (
     <div className="flex min-h-full w-full flex-col gap-3 p-5">
@@ -90,9 +93,10 @@ export default function EconomicoFinanceiroPage() {
           opcoesEmpresas={opcoesEmpresas}
           empresaTravada={empresaTravada}
           carregandoEmpresas={carregandoEmpresas}
+          marcaEmpresa={marcaEmpresa}
         />
       ) : (
-        <CabecalhoDashboard dashboard="Econômico Financeiro" titulo={tela.label} />
+        <CabecalhoDashboard dashboard="Econômico Financeiro" titulo={tela.label} marca={marcaEmpresa} />
       )}
 
       <ControlesDashboard

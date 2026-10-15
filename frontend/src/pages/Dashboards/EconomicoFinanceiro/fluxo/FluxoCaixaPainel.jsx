@@ -7,7 +7,7 @@ import CabecalhoDashboard from '../../CabecalhoDashboard';
 import { DicaProvider } from './graficos';
 import { SumarioCtx } from './ganchos';
 import SumarioModal from './sumario';
-import { addM, curto, lbl, modelo, titulo } from './modelo';
+import { addM, curto, modelo, titulo } from './modelo';
 import { AjudaSecao, Calibracao, Carteira, DividaPj, EntradasSaidas, FolegoSpe, Hero, MaioresSaidas, QuemGera, Tiles } from './secoes';
 import './painel.css';
 
@@ -122,7 +122,8 @@ function FiltroCentros({ opcoes, valor, onChange, disabled }) {
   );
 }
 
-export default function FluxoCaixaPainel({ dashboard, tituloTela, empresaId, onEmpresa, opcoesEmpresas, empresaTravada, carregandoEmpresas }) {
+// `marcaEmpresa`: { logo, nome } da empresa escolhida — a logomarca vai no canto direito do cabeçalho.
+export default function FluxoCaixaPainel({ dashboard, tituloTela, empresaId, onEmpresa, opcoesEmpresas, empresaTravada, carregandoEmpresas, marcaEmpresa }) {
   const [hist, setHist] = useState(1);
   const [hor, setHor] = useState(6);
   const [centros, setCentros] = useState([]);
@@ -254,7 +255,7 @@ export default function FluxoCaixaPainel({ dashboard, tituloTela, empresaId, onE
   };
   const selecionarCentro = (id) => setCentros(centros.length === 1 && centros[0] === id ? [] : [id]);
 
-  // Rótulo do escopo (título da trajetória e etiqueta do cabeçalho).
+  // Rótulo do escopo (título da trajetória).
   const escopo = !centros.length
     ? null
     : empresaSel !== null
@@ -263,21 +264,11 @@ export default function FluxoCaixaPainel({ dashboard, tituloTela, empresaId, onE
         ? titulo(todosCentros.find((c) => c.id === centros[0])?.nome || `centro ${centros[0]}`)
         : `${centros.length} centros`;
 
-  const info = dados?.info || {};
-  const etiquetas = dados
-    ? [
-        ...(info.extratoAte ? [{ rotulo: 'Extrato até', valor: info.extratoAte.split('-').reverse().join('/') }] : []),
-        ...(info.versao ? [{ rotulo: 'Orçamento', valor: `v${info.versao.numero} · ${new Date(info.versao.criado_em).toLocaleDateString('pt-BR')}` }] : []),
-        { rotulo: 'Mês atual', valor: lbl(dados.m0) },
-        { rotulo: 'Escopo', valor: escopo || 'Consolidado' },
-      ]
-    : [];
-
   return (
     <DicaProvider>
       <SumarioCtx.Provider value={abrirSumario}>
       <div className="painel-cfo">
-        <CabecalhoDashboard dashboard={dashboard} titulo={tituloTela} etiquetas={etiquetas} />
+        <CabecalhoDashboard dashboard={dashboard} titulo={tituloTela} marca={marcaEmpresa} />
 
         <section className="controls" aria-label="Controles do painel">
           <div className="ctl">
