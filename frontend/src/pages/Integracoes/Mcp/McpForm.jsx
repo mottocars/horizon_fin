@@ -1,12 +1,33 @@
 import { useEffect, useState } from 'react';
 import { useNavigate, useParams } from 'react-router-dom';
-import { ArrowLeft, Copy, Check, RefreshCw } from 'lucide-react';
+import { ArrowLeft, Copy, Check, RefreshCw, LogOut, ShieldCheck } from 'lucide-react';
 import Card from '../../../components/Card';
 import Button from '../../../components/Button';
 import IconButton from '../../../components/IconButton';
 import SearchableSelect from '../../../components/SearchableSelect';
 import { listEmpresas } from '../../../api/empresas.api';
-import { getMcpConector, createMcpConector, updateMcpConector, regenerarMcpToken } from '../../../api/mcp.api';
+import {
+  getMcpConector,
+  createMcpConector,
+  updateMcpConector,
+  regenerarMcpToken,
+  listMcpSessoes,
+  encerrarMcpSessoes,
+} from '../../../api/mcp.api';
+
+// Duração do login do conector DFC Construtoras (depois disso o Claude pede para entrar de novo).
+const DURACOES = [
+  { value: 1, label: '1 hora' },
+  { value: 8, label: '8 horas' },
+  { value: 24, label: '24 horas' },
+  { value: 72, label: '3 dias' },
+  { value: 168, label: '7 dias' },
+  { value: 720, label: '30 dias' },
+];
+
+function dataHora(v) {
+  return v ? new Date(v).toLocaleString('pt-BR', { day: '2-digit', month: '2-digit', year: 'numeric', hour: '2-digit', minute: '2-digit' }) : '—';
+}
 import { nomeExibicaoEmpresa } from '../../../utils/empresa';
 import { useEmpresaTravada } from '../../../hooks/useEmpresaTravada';
 import { useConfirm } from '../../../confirm/ConfirmContext';
@@ -31,8 +52,12 @@ export default function McpForm() {
   const [fieldErrors, setFieldErrors] = useState({});
   const [copiado, setCopiado] = useState(false);
 
-  const [form, setForm] = useState({ empresa_id: '', nome_conector: '' });
+  // dfc: flag "DFC CONSTRUTORAS" — conector só com as ferramentas do DFC, protegido por login do
+  // Horizon (OAuth) que vale `sessao_horas`. Definida na criação (não muda depois).
+  const [form, setForm] = useState({ empresa_id: '', nome_conector: '', dfc: false, sessao_horas: 24 });
   const [url, setUrl] = useState('');
+  const [sessoes, setSessoes] = useState(null);
+  const [encerrando, setEncerrando] = useState(false);
 
   useEffect(() => {
     listEmpresas({ ativo: true, limit: 100 })
@@ -46,8 +71,14 @@ export default function McpForm() {
     getMcpConector(id)
       .then((data) => {
         if (!active) return;
-        setForm({ empresa_id: String(data.empresa_id), nome_conector: data.nome_conector });
+        setForm({
+          empresa_id: String(data.empresa_id),
+          nome_conector: data.nome_conector,
+          dfc: data.escopo === 'DFC_CONSTRUTORAS',
+          sessao_horas: data.sessao_horas || 24,
+        });
         setUrl(data.url);
+        if (data.escopo === 'DFC_CONSTRUTORAS') listMcpSessoes(id).then(setSessoes).catch(() => setSessoes([]));
       })
       .finally(() => active && setLoading(false));
     return () => {
@@ -98,6 +129,25 @@ export default function McpForm() {
     }
   }
 
+  async function handleEncerrarSessoes() {
+    const confirmado = await confirm({
+      title: 'Encerrar sessões',
+      description: 'Todos os logins ativos deste conector no Claude serão encerrados — quem estiver conectado precisará entrar de novo.',
+      confirmLabel: 'Encerrar',
+      variant: 'warning',
+    });
+    if (!confirmado) return;
+    setEncerrando(true);
+    try {
+      await encerrarMcpSessoes(id);
+      setSessoes(await listMcpSessoes(id));
+    } catch (err) {
+      setError(err.response?.data?.message || 'Não foi possível encerrar as sessões.');
+    } finally {
+      setEncerrando(false);
+    }
+  }
+
   async function handleSubmit(e) {
     e.preventDefault();
     setError('');
@@ -111,12 +161,17 @@ export default function McpForm() {
     setSaving(true);
     try {
       if (isEdit) {
-        await updateMcpConector(id, { nome_conector: form.nome_conector.trim() });
+        await updateMcpConector(id, {
+          nome_conector: form.nome_conector.trim(),
+          ...(form.dfc ? { sessao_horas: Number(form.sessao_horas) } : {}),
+        });
         navigate('/integracoes/mcp', { replace: true });
       } else {
         const criado = await createMcpConector({
           empresa_id: Number(form.empresa_id),
           nome_conector: form.nome_conector.trim(),
+          escopo: form.dfc ? 'DFC_CONSTRUTORAS' : 'COBRANCA',
+          sessao_horas: Number(form.sessao_horas),
         });
         // Diferente do padrão de ZapiForm (volta pra lista): aqui navega pra
         // edição do item recém-criado, pra já mostrar a URL de conexão —
@@ -146,8 +201,9 @@ export default function McpForm() {
           {isEdit ? 'Editar conector MCP' : 'Novo conector MCP'}
         </h2>
         <p className="mb-4 text-sm text-gray-500">
-          Um conector MCP dá ao Claude acesso de leitura aos dados de cobrança e contas a receber desta empresa,
-          através de uma URL que você cola em "Add custom connector".
+          {form.dfc
+            ? 'Um conector DFC Construtoras dá ao Claude acesso de leitura ao fluxo de caixa (DFC) desta empresa — realizado, projetado, saldos, Projeção CEF e as bases — através de uma URL que você cola em "Add custom connector". Ao conectar, o Claude pede o login do Horizon Fin.'
+            : 'Um conector MCP dá ao Claude acesso de leitura aos dados de cobrança e contas a receber desta empresa, através de uma URL que você cola em "Add custom connector".'}
         </p>
 
         {error && <div className="mb-4 rounded-lg bg-red-50 px-3 py-2 text-sm text-red-600">{error}</div>}
@@ -184,6 +240,48 @@ export default function McpForm() {
               </div>
             </div>
 
+            <div className="rounded-lg border border-gray-200 p-4">
+              <label className={`flex items-start gap-3 ${isEdit ? 'cursor-not-allowed opacity-80' : 'cursor-pointer'}`}>
+                <input
+                  type="checkbox"
+                  checked={form.dfc}
+                  disabled={isEdit}
+                  onChange={(e) => handleChange('dfc', e.target.checked)}
+                  className="mt-0.5 h-4 w-4 rounded border-gray-300 text-primary-600 focus:ring-primary-500"
+                />
+                <span>
+                  <span className="block text-sm font-semibold text-gray-900">DFC CONSTRUTORAS</span>
+                  <span className="block text-xs text-gray-500">
+                    Conector só para o DFC Construtoras (fluxo de caixa), protegido por login do Horizon Fin com validade.
+                    {isEdit ? ' Definido na criação do conector.' : ''}
+                  </span>
+                </span>
+              </label>
+              {form.dfc && (
+                <div className="mt-4 grid grid-cols-1 gap-4 border-t border-gray-100 pt-4 sm:grid-cols-2">
+                  <div>
+                    <label className="mb-1 block text-sm font-medium text-gray-700">Validade do login</label>
+                    <select
+                      value={form.sessao_horas}
+                      onChange={(e) => handleChange('sessao_horas', Number(e.target.value))}
+                      className="w-full rounded-lg border border-gray-200 px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-primary-100"
+                    >
+                      {DURACOES.map((d) => (
+                        <option key={d.value} value={d.value}>
+                          {d.label}
+                        </option>
+                      ))}
+                    </select>
+                    <p className="mt-1 text-xs text-gray-400">Depois desse tempo o Claude pede para entrar de novo.</p>
+                  </div>
+                  <div className="flex items-start gap-2 rounded-lg bg-primary-50 px-3 py-2 text-xs text-primary-700">
+                    <ShieldCheck size={16} className="mt-0.5 shrink-0" />
+                    Só entra quem tem acesso à tela DFC Construtoras desta empresa. O acesso é somente leitura.
+                  </div>
+                </div>
+              )}
+            </div>
+
             {isEdit && url && (
               <div>
                 <label className="mb-1 block text-sm font-medium text-gray-700">URL de conexão</label>
@@ -202,10 +300,57 @@ export default function McpForm() {
                   </IconButton>
                 </div>
                 <p className="mt-1 text-xs text-gray-400">
-                  Cole esta URL completa em "Add custom connector" no Claude. Quem tiver esta URL consegue ler os
-                  dados de cobrança desta empresa — trate-a como uma senha. Regenerar o token invalida esta URL
-                  imediatamente.
+                  {form.dfc
+                    ? 'Cole esta URL em "Add custom connector" no Claude e clique em Conectar: abre a tela de login do Horizon Fin. Regenerar o token invalida esta URL imediatamente.'
+                    : 'Cole esta URL completa em "Add custom connector" no Claude. Quem tiver esta URL consegue ler os dados de cobrança desta empresa — trate-a como uma senha. Regenerar o token invalida esta URL imediatamente.'}
                 </p>
+              </div>
+            )}
+
+            {isEdit && form.dfc && (
+              <div>
+                <div className="mb-1 flex items-center justify-between">
+                  <label className="block text-sm font-medium text-gray-700">Sessões ativas no Claude</label>
+                  {sessoes?.length > 0 && (
+                    <button
+                      type="button"
+                      onClick={handleEncerrarSessoes}
+                      disabled={encerrando}
+                      className="flex items-center gap-1.5 text-xs font-medium text-red-600 hover:text-red-700 disabled:opacity-60"
+                    >
+                      <LogOut size={14} />
+                      Encerrar todas
+                    </button>
+                  )}
+                </div>
+                {sessoes === null ? (
+                  <p className="text-xs text-gray-400">Carregando...</p>
+                ) : sessoes.length === 0 ? (
+                  <p className="rounded-lg border border-dashed border-gray-200 px-3 py-3 text-center text-xs text-gray-400">Ninguém conectado.</p>
+                ) : (
+                  <div className="overflow-hidden rounded-lg border border-gray-200">
+                    <table className="w-full text-xs">
+                      <thead className="bg-gray-50 text-left text-gray-500">
+                        <tr>
+                          <th className="px-3 py-2 font-medium">Usuário</th>
+                          <th className="px-3 py-2 font-medium">Entrou em</th>
+                          <th className="px-3 py-2 font-medium">Último uso</th>
+                          <th className="px-3 py-2 font-medium">Expira em</th>
+                        </tr>
+                      </thead>
+                      <tbody>
+                        {sessoes.map((s) => (
+                          <tr key={s.id} className="border-t border-gray-100 text-gray-700">
+                            <td className="px-3 py-2">{s.usuario}</td>
+                            <td className="px-3 py-2">{dataHora(s.criado_em)}</td>
+                            <td className="px-3 py-2">{dataHora(s.ultimo_uso_em)}</td>
+                            <td className="px-3 py-2">{dataHora(s.sessao_expira_em)}</td>
+                          </tr>
+                        ))}
+                      </tbody>
+                    </table>
+                  </div>
+                )}
               </div>
             )}
 

@@ -75,6 +75,8 @@ const comunicacaoRoutes = require('./modules/comunicacao/comunicacao.routes');
 const rotinasRoutes = require('./modules/rotinas/rotinas.routes');
 const mcpRoutes = require('./modules/integracoes-mcp/mcp.routes');
 const mcpProtocoloRoutes = require('./modules/integracoes-mcp/mcpProtocolo.routes');
+const mcpDfcRoutes = require('./modules/integracoes-mcp/dfc/mcpDfc.routes');
+const mcpOauthRoutes = require('./modules/integracoes-mcp/dfc/oauth.routes');
 const logsAcessoRoutes = require('./modules/logs-acesso/logsAcesso.routes');
 const errorMiddleware = require('./middlewares/error.middleware');
 const { QUALQUER_TELA, exigirTela, exigirMaster, exigirAdministradorDaTela } = require('./middlewares/acesso.middleware');
@@ -89,7 +91,11 @@ const app = express();
 app.set('trust proxy', 1);
 
 const allowedOrigins = [env.frontendUrl, env.frontendUrl.replace('localhost', '127.0.0.1')];
-app.use(cors({ origin: allowedOrigins, credentials: true }));
+// O MCP do DFC e o OAuth dele são chamados pelo Claude / por qualquer cliente MCP — CORS próprio
+// (aberto) nos routers deles; o resto da API segue só com as origens do sistema.
+const corsSistema = cors({ origin: allowedOrigins, credentials: true });
+const ROTAS_CORS_PROPRIO = ['/.well-known/', '/api/mcp-oauth', '/api/mcp/dfc/'];
+app.use((req, res, next) => (ROTAS_CORS_PROPRIO.some((p) => req.path.startsWith(p)) ? next() : corsSistema(req, res, next)));
 // Limite maior que o padrão (100kb) por causa da foto de usuário, enviada
 // como data URI (base64) dentro do JSON do cadastro.
 app.use(express.json({ limit: '5mb' }));
@@ -201,6 +207,11 @@ app.use('/api/regua-cobranca-historico', exigirTela([T.COBRANCAS], [T.REL_DESEMP
 app.use('/api/comunicacao', exigirTela([T.COBRANCAS]), comunicacaoRoutes);
 app.use('/api/rotinas', exigirTela([T.COBRANCAS]), rotinasRoutes);
 app.use('/api/integracoes/mcp', exigirTela([T.MCP]), mcpRoutes);
+// MCP do DFC Construtoras (login Horizon via OAuth): metadados na raiz do site (/.well-known), o
+// servidor de autorização em /api/mcp-oauth e o MCP em /api/mcp/dfc/<token> — antes do /api/mcp/:token.
+app.use('/.well-known', mcpOauthRoutes.wellKnown);
+app.use('/api/mcp-oauth', mcpOauthRoutes.router);
+app.use('/api/mcp/dfc', mcpDfcRoutes);
 app.use('/api/mcp', mcpProtocoloRoutes);
 app.use('/api/logs-acesso/metricas', exigirTela([T.METRICAS]));
 app.use('/api/logs-acesso', logsAcessoRoutes);

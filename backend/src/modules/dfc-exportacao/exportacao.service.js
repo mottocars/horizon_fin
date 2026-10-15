@@ -320,4 +320,12 @@ async function dados(empresaId, { inicio, fim, centros = [] }) {
   return { fluxo, centros: infoCentros, realizado, projetado: projetado.linhas, saldos, mesesSaldos, obras, ROTULO_ORIGEM, COMPONENTE_CEF };
 }
 
-module.exports = { dados };
+// Só o fluxo e as bases (MCP do DFC — ferramenta de lançamentos), sem saldos nem dossiês da CEF.
+async function bases(empresaId, { inicio, fim, centros = [] }) {
+  const [fluxo, infoCentros] = await Promise.all([fluxoService.montar(empresaId, { inicio, fim, centros }), centrosInfo(empresaId)]);
+  fluxo.somarMeses = fluxoService.somarMeses;
+  const [realizado, projetado] = await Promise.all([baseRealizado(empresaId, fluxo, infoCentros), baseProjetado(empresaId, fluxo, infoCentros)]);
+  return { fluxo, realizado, projetado: projetado.linhas };
+}
+
+module.exports = { dados, bases, ROTULO_ORIGEM };

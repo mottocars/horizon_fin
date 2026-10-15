@@ -79,7 +79,12 @@ const limiteMcp = rateLimit({
   limit: 120,
   standardHeaders: 'draft-8',
   legacyHeaders: false,
-  keyGenerator: (req) => `mcp:${req.path.split('/')[1] || ipKeyGenerator(req.ip)}`,
+  // /api/mcp/<token> ou /api/mcp/dfc/<token> (conector DFC Construtoras): limite por conector.
+  keyGenerator: (req) => {
+    const partes = req.path.split('/');
+    const token = partes[1] === 'dfc' ? partes[2] : partes[1];
+    return `mcp:${token || ipKeyGenerator(req.ip)}`;
+  },
   handler: respostaLimite('Muitas requisições em pouco tempo. Aguarde um minuto e tente novamente.'),
 });
 

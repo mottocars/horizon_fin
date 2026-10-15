@@ -21,9 +21,10 @@ function hashToken(token) {
 // Monta a URL completa que a tela de Integrações > MCP mostra — nunca o
 // token separado (ver plano: o usuário quer a URL sempre visível/copiável,
 // não o segredo cru ao lado dela).
+// Conector DFC Construtoras: /api/mcp/dfc/<token> (e exige login Horizon — ver dfc/oauth.routes.js).
 function getUrlCompleta(row) {
   const token = decrypt(row.token_enc);
-  return `${env.mcp.publicBaseUrl}/api/mcp/${token}`;
+  return row.escopo === 'DFC_CONSTRUTORAS' ? `${env.mcp.publicBaseUrl}/api/mcp/dfc/${token}` : `${env.mcp.publicBaseUrl}/api/mcp/${token}`;
 }
 
 function formatarItem(row) {
@@ -51,6 +52,7 @@ async function list({ page = 1, limit = 10, search = '', ativo, empresaIds }) {
 
   const { rows } = await pool.query(
     `SELECT m.id, m.nome_conector, m.token_enc, m.token_hash, m.ativo, m.ultimo_uso_em, m.criado_em, m.atualizado_em,
+            m.escopo, m.sessao_horas,
             e.id AS empresa_id, COALESCE(NULLIF(e.nome_fantasia, ''), e.razao_social) AS empresa_razao_social, e.cnpj AS empresa_cnpj
      FROM integracoes_mcp m
      JOIN empresas e ON e.id = m.empresa_id
@@ -82,6 +84,7 @@ async function list({ page = 1, limit = 10, search = '', ativo, empresaIds }) {
 async function getById(id) {
   const { rows } = await pool.query(
     `SELECT m.id, m.nome_conector, m.token_enc, m.token_hash, m.ativo, m.ultimo_uso_em, m.criado_em, m.atualizado_em,
+            m.escopo, m.sessao_horas,
             e.id AS empresa_id, COALESCE(NULLIF(e.nome_fantasia, ''), e.razao_social) AS empresa_razao_social, e.cnpj AS empresa_cnpj
      FROM integracoes_mcp m
      JOIN empresas e ON e.id = m.empresa_id
@@ -92,21 +95,21 @@ async function getById(id) {
   return row ? formatarItem(row) : null;
 }
 
-async function create({ empresa_id, nome_conector }) {
+async function create({ empresa_id, nome_conector, escopo = 'COBRANCA', sessao_horas = 24 }) {
   const token = gerarToken();
   const { rows } = await pool.query(
-    `INSERT INTO integracoes_mcp (empresa_id, nome_conector, token_hash, token_enc)
-     VALUES ($1, $2, $3, $4)
+    `INSERT INTO integracoes_mcp (empresa_id, nome_conector, token_hash, token_enc, escopo, sessao_horas)
+     VALUES ($1, $2, $3, $4, $5, $6)
      RETURNING id`,
-    [empresa_id, nome_conector, hashToken(token), encrypt(token)]
+    [empresa_id, nome_conector, hashToken(token), encrypt(token), escopo, sessao_horas]
   );
   return getById(rows[0].id);
 }
 
-async function update(id, { nome_conector }) {
+async function update(id, { nome_conector, sessao_horas }) {
   const { rows } = await pool.query(
-    `UPDATE integracoes_mcp SET nome_conector = $1 WHERE id = $2 RETURNING id`,
-    [nome_conector, id]
+    `UPDATE integracoes_mcp SET nome_conector = $1, sessao_horas = COALESCE($3, sessao_horas) WHERE id = $2 RETURNING id`,
+    [nome_conector, id, sessao_horas ?? null]
   );
   return rows[0] ? getById(id) : null;
 }
@@ -133,7 +136,8 @@ async function regenerarToken(id) {
 // quem chama (mesma mensagem genérica nos dois casos, ver rota).
 async function resolverEmpresaPorToken(token) {
   const hash = hashToken(token);
-  const { rows } = await pool.query('SELECT empresa_id, ativo FROM integracoes_mcp WHERE token_hash = $1', [hash]);
+  // Só conectores de cobrança: o do DFC tem rota própria, com login (dfc/mcpDfc.routes.js).
+  const { rows } = await pool.query("SELECT empresa_id, ativo FROM integracoes_mcp WHERE token_hash = $1 AND escopo = 'COBRANCA'", [hash]);
   const row = rows[0];
   if (!row || !row.ativo) return null;
 

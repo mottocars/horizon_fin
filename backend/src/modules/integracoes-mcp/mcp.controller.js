@@ -1,14 +1,21 @@
 const { z } = require('zod');
 const service = require('./mcp.service');
 const usuariosService = require('../usuarios/usuarios.service');
+const oauth = require('./dfc/oauth.service');
 
+// `escopo`: DFC_CONSTRUTORAS = flag "DFC CONSTRUTORAS" (só ferramentas do DFC, login Horizon que vale
+// `sessao_horas`); COBRANCA = o conector de cobrança de sempre (token na URL).
+const sessaoHoras = z.coerce.number().int().min(1, 'Duração mínima: 1 hora.').max(720, 'Duração máxima: 30 dias.');
 const createSchema = z.object({
   empresa_id: z.coerce.number().int().positive('Selecione uma empresa.'),
   nome_conector: z.string().min(1, 'Nome do conector é obrigatório.'),
+  escopo: z.enum(['COBRANCA', 'DFC_CONSTRUTORAS']).default('COBRANCA'),
+  sessao_horas: sessaoHoras.default(24),
 });
 
 const updateSchema = z.object({
   nome_conector: z.string().min(1, 'Nome do conector é obrigatório.'),
+  sessao_horas: sessaoHoras.optional(),
 });
 
 function badRequest(message) {
@@ -92,4 +99,21 @@ async function regenerarToken(req, res, next) {
   }
 }
 
-module.exports = { list, getById, create, update, setStatus, regenerarToken };
+// Conector DFC: sessões de login ativas (quem está conectado pelo Claude) e "Encerrar sessões".
+async function sessoes(req, res, next) {
+  try {
+    res.json(await oauth.sessoesAtivas(Number(req.params.id)));
+  } catch (err) {
+    next(err);
+  }
+}
+
+async function encerrarSessoes(req, res, next) {
+  try {
+    res.json({ encerradas: await oauth.encerrarSessoes(Number(req.params.id)) });
+  } catch (err) {
+    next(err);
+  }
+}
+
+module.exports = { list, getById, create, update, setStatus, regenerarToken, sessoes, encerrarSessoes };

@@ -38,7 +38,7 @@ function removerComentarios(sql) {
   return sql.replace(/--.*$/gm, '').replace(/\/\*[\s\S]*?\*\//g, '');
 }
 
-function validar(sqlOriginal) {
+function validar(sqlOriginal, views = VIEWS_PERMITIDAS, dicaEsquema = 'descrever_esquema_dados') {
   const semComentarios = removerComentarios(sqlOriginal).trim();
 
   // Só 1 statement: no máximo 1 ";" e, se houver, só no finalzinho.
@@ -61,11 +61,11 @@ function validar(sqlOriginal) {
   // batem nesta checagem e serão rejeitadas — use date_part('campo', coluna)
   // no lugar de EXTRACT(... FROM ...) para evitar isso.
   const referencias = [...sqlSemPontoVirgula.matchAll(/\b(?:FROM|JOIN)\s+([a-zA-Z_][a-zA-Z0-9_]*)/gi)].map((m) => m[1].toLowerCase());
-  const foraDaAllowlist = referencias.filter((nome) => !VIEWS_PERMITIDAS.has(nome));
+  const foraDaAllowlist = referencias.filter((nome) => !views.has(nome));
   if (foraDaAllowlist.length > 0) {
     throw badRequest(
       `Tabela(s) não permitida(s) nesta consulta: ${[...new Set(foraDaAllowlist)].join(', ')}. ` +
-        `Use somente: ${[...VIEWS_PERMITIDAS].join(', ')} (chame descrever_esquema_dados para ver as colunas de cada uma).`
+        `Use somente: ${[...views].join(', ')} (chame ${dicaEsquema} para ver as colunas de cada uma).`
     );
   }
   if (referencias.length === 0) {
@@ -92,7 +92,33 @@ async function executar(empresaId, sqlValidado) {
   }
 }
 
+// Mesma ferramenta pra outro conjunto de views (MCP do DFC Construtoras — dfc/tools).
+function criarConsultaSql({ name, description, views, dicaEsquema }) {
+  const permitidas = new Set(views);
+  return {
+    name,
+    description,
+    inputSchema: {
+      sql: z.string().min(10).max(4000).describe('A consulta SQL (SELECT/WITH) a executar, usando apenas as views permitidas.'),
+    },
+    handler(empresaId) {
+      return async ({ sql }) => {
+        try {
+          const linhas = await executar(empresaId, validar(sql, permitidas, dicaEsquema));
+          return { content: [{ type: 'text', text: JSON.stringify(linhas, null, 2) }] };
+        } catch (err) {
+          const mensagem = err.expose
+            ? err.message
+            : `Não foi possível executar esta consulta: ${err.message}. Verifique a sintaxe SQL e os nomes de tabela/coluna.`;
+          return { isError: true, content: [{ type: 'text', text: mensagem }] };
+        }
+      };
+    },
+  };
+}
+
 module.exports = {
+  criarConsultaSql,
   name: 'consultar_dados_sql',
   description:
     'Executa uma consulta SQL de LEITURA (somente SELECT) contra as tabelas de contas a receber, clientes e ' +

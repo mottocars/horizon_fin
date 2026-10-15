@@ -13,5 +13,7 @@ router.post('/', controller.create);
 router.put('/:id', controller.update);
 router.patch('/:id/status', controller.setStatus);
 router.post('/:id/regenerar-token', controller.regenerarToken);
+router.get('/:id/sessoes', controller.sessoes);
+router.post('/:id/encerrar-sessoes', controller.encerrarSessoes);
 
 module.exports = router;

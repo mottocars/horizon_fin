@@ -23,6 +23,15 @@ export function setMcpStatus(id, ativo) {
   return http.patch(`/integracoes/mcp/${id}/status`, { ativo }).then((res) => res.data);
 }
 
+// Conector DFC Construtoras: sessões de login ativas (Claude) e encerrar todas.
+export function listMcpSessoes(id) {
+  return http.get(`/integracoes/mcp/${id}/sessoes`).then((res) => res.data);
+}
+
+export function encerrarMcpSessoes(id) {
+  return http.post(`/integracoes/mcp/${id}/encerrar-sessoes`).then((res) => res.data);
+}
+
 export function regenerarMcpToken(id) {
   return http.post(`/integracoes/mcp/${id}/regenerar-token`).then((res) => res.data);
 }

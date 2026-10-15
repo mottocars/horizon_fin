@@ -130,7 +130,12 @@ export default function McpList() {
                   <tr key={item.id} className="border-b border-gray-50 last:border-0">
                     <td className="py-3 text-gray-900">{item.empresa_razao_social}</td>
                     <td className="py-3 text-gray-600">{formatCnpj(item.empresa_cnpj)}</td>
-                    <td className="py-3 text-gray-600">{item.nome_conector}</td>
+                    <td className="py-3 text-gray-600">
+                      {item.nome_conector}
+                      {item.escopo === 'DFC_CONSTRUTORAS' && (
+                        <span className="ml-2 rounded-full bg-primary-50 px-2 py-0.5 text-[11px] font-semibold text-primary-700">DFC CONSTRUTORAS</span>
+                      )}
+                    </td>
                     <td className="py-3">
                       <span
                         className={`inline-flex items-center rounded-full px-2.5 py-1 text-xs font-medium ${
