@@ -13,12 +13,13 @@ const { registrarToolsDfc } = require('./tools');
 const router = Router();
 router.use(cors({ origin: '*', exposedHeaders: ['WWW-Authenticate', 'Mcp-Session-Id'] }));
 
+// O cabeçalho WWW-Authenticate vai em ASCII (sem acento); a mensagem em português fica no corpo.
 function naoAutorizado(res, token, descricao) {
   res
     .status(401)
     .set(
       'WWW-Authenticate',
-      `Bearer resource_metadata="${oauth.urlMetadadosRecurso(token)}", error="invalid_token", error_description="${descricao}"`
+      `Bearer resource_metadata="${oauth.urlMetadadosRecurso(token)}", error="invalid_token", error_description="Login required"`
     )
     .json({ jsonrpc: '2.0', error: { code: -32001, message: descricao }, id: null });
 }
