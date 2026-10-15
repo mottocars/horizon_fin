@@ -226,6 +226,14 @@ CREATE TABLE integracoes_mcp (
 
 CREATE INDEX idx_integracoes_mcp_empresa ON integracoes_mcp (empresa_id);
 
+-- Usuários liberados em cada conector MCP (MASTER pode sempre) — migration 2026-10-15-mcp-usuarios.sql.
+CREATE TABLE integracoes_mcp_usuarios (
+    conector_id  INTEGER NOT NULL REFERENCES integracoes_mcp(id) ON DELETE CASCADE,
+    usuario_id   INTEGER NOT NULL REFERENCES usuarios(id) ON DELETE CASCADE,
+    PRIMARY KEY (conector_id, usuario_id)
+);
+CREATE INDEX idx_integracoes_mcp_usuarios_usuario ON integracoes_mcp_usuarios (usuario_id);
+
 -- Mesmo motivo de nome_conexao acima: uma empresa pode ter mais de uma
 -- caixa de e-mail configurada (financeiro@, cobranca@ etc.).
 CREATE TABLE integracoes_email (

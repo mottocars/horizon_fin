@@ -2,6 +2,7 @@ import { useState, useRef, useEffect } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { ChevronDown, UserCircle, LogOut } from 'lucide-react';
 import { useAuth } from '../auth/AuthContext';
+import ConexoesIa from './ConexoesIa';
 
 export default function Topbar({ title, subtitle }) {
   const { user, logout } = useAuth();
@@ -33,7 +34,9 @@ export default function Topbar({ title, subtitle }) {
         {subtitle && <p className="text-xs text-gray-500">{subtitle}</p>}
       </div>
 
-      <div className="flex items-center gap-4">
+      <div className="flex items-center gap-3">
+        {/* Conexões com IA (conectores MCP liberados para o usuário). */}
+        <ConexoesIa />
         <div className="relative" ref={menuRef}>
           <button
             type="button"

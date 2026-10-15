@@ -6,12 +6,15 @@ const oauth = require('./dfc/oauth.service');
 // `escopo`: DFC_CONSTRUTORAS = flag "DFC CONSTRUTORAS" (só ferramentas do DFC, login Horizon que vale
 // `sessao_horas`); DFC_ORCAMENTO = flag "DFC CONSTRUTORAS (ALTERA ORÇAMENTO)" (as mesmas, mais as que
 // alteram valores HORIZON - INFORMADO do Orçamento); COBRANCA = o conector de cobrança de sempre.
+// Usuários liberados no conector (colaboradores da empresa; MASTER pode sempre).
+const usuarioIds = z.array(z.coerce.number().int().positive()).max(500);
 const sessaoHoras = z.coerce.number().int().min(1, 'Duração mínima: 1 hora.').max(720, 'Duração máxima: 30 dias.');
 const createSchema = z.object({
   empresa_id: z.coerce.number().int().positive('Selecione uma empresa.'),
   nome_conector: z.string().min(1, 'Nome do conector é obrigatório.'),
   escopo: z.enum(['COBRANCA', 'DFC_CONSTRUTORAS', 'DFC_ORCAMENTO']).default('COBRANCA'),
   sessao_horas: sessaoHoras.default(24),
+  usuario_ids: usuarioIds.default([]),
 });
 
 // Na edição o tipo só troca entre os dois do DFC (mesma URL): "DFC CONSTRUTORAS" <-> "DFC CONSTRUTORAS
@@ -21,6 +24,7 @@ const updateSchema = z.object({
   nome_conector: z.string().min(1, 'Nome do conector é obrigatório.'),
   sessao_horas: sessaoHoras.optional(),
   escopo: z.enum(ESCOPOS_DFC, { errorMap: () => ({ message: 'Só dá para trocar o tipo entre os conectores DFC Construtoras.' }) }).optional(),
+  usuario_ids: usuarioIds.optional(),
 });
 
 function badRequest(message) {
@@ -129,4 +133,24 @@ async function encerrarSessoes(req, res, next) {
   }
 }
 
-module.exports = { list, getById, create, update, setStatus, regenerarToken, sessoes, encerrarSessoes };
+// Colaboradores da empresa que podem ser liberados num conector (formulário).
+async function usuariosDisponiveis(req, res, next) {
+  try {
+    const empresaId = z.coerce.number().int().positive('Selecione uma empresa.').parse(req.query.empresa_id);
+    res.json(await service.usuariosDaEmpresa(empresaId));
+  } catch (err) {
+    if (err.issues) return next(badRequest(err.issues[0].message));
+    next(err);
+  }
+}
+
+// "Conexões com IA" do usuário logado (qualquer usuário — ícone do topo).
+async function minhasConexoes(req, res, next) {
+  try {
+    res.json(await service.minhasConexoes(req.user));
+  } catch (err) {
+    next(err);
+  }
+}
+
+module.exports = { list, getById, create, update, setStatus, regenerarToken, sessoes, encerrarSessoes, usuariosDisponiveis, minhasConexoes };

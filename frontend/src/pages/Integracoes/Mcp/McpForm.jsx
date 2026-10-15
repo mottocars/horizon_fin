@@ -1,6 +1,6 @@
 import { useEffect, useState } from 'react';
 import { useNavigate, useParams } from 'react-router-dom';
-import { ArrowLeft, Copy, Check, RefreshCw, LogOut, ShieldCheck } from 'lucide-react';
+import { ArrowLeft, Copy, Check, RefreshCw, LogOut, ShieldCheck, Users, Search } from 'lucide-react';
 import Card from '../../../components/Card';
 import Button from '../../../components/Button';
 import IconButton from '../../../components/IconButton';
@@ -13,6 +13,7 @@ import {
   regenerarMcpToken,
   listMcpSessoes,
   encerrarMcpSessoes,
+  listMcpUsuariosDisponiveis,
 } from '../../../api/mcp.api';
 
 // Duração do login do conector DFC Construtoras (depois disso o Claude pede para entrar de novo).
@@ -36,6 +37,112 @@ import { useConfirm } from '../../../confirm/ConfirmContext';
 // Z-API) — este formulário só coleta Empresa + Nome do conector. Depois de
 // salvo, mostra a URL de conexão pronta pra colar no "Add custom connector"
 // do Claude — nunca o token separado da URL (ver plano).
+// Usuários liberados no conector: colaboradores ativos da empresa (MASTER pode sempre e não aparece).
+// Nos conectores DFC, quem não tem a tela DFC Construtoras não consegue entrar — fica desabilitado.
+function UsuariosConector({ usuarios, carregando, selecionados, onChange, dfc, temEmpresa }) {
+  const [busca, setBusca] = useState('');
+  const pode = (u) => !dfc || u.tem_dfc;
+  const q = busca.trim().toLowerCase();
+  const lista = (usuarios || []).filter((u) => !q || `${u.nome} ${u.username}`.toLowerCase().includes(q));
+  const elegiveis = (usuarios || []).filter(pode).map((u) => u.id);
+  const todos = elegiveis.length > 0 && elegiveis.every((id) => selecionados.includes(id));
+  const alternar = (id) => onChange(selecionados.includes(id) ? selecionados.filter((x) => x !== id) : [...selecionados, id]);
+  const iniciais = (nome) =>
+    nome
+      .split(' ')
+      .slice(0, 2)
+      .map((x) => x[0])
+      .join('')
+      .toUpperCase();
+  return (
+    <div className="rounded-lg border border-gray-200 p-4">
+      <div className="mb-3 flex flex-wrap items-start justify-between gap-2">
+        <div>
+          <h3 className="flex items-center gap-2 text-sm font-semibold text-gray-900">
+            <Users size={16} className="text-primary-600" />
+            Usuários com acesso
+            {selecionados.length > 0 && (
+              <span className="rounded-full bg-primary-50 px-2 py-0.5 text-[11px] font-semibold text-primary-700">{selecionados.length}</span>
+            )}
+          </h3>
+          <p className="mt-0.5 text-xs text-gray-500">
+            {dfc
+              ? 'Só os marcados conseguem entrar neste conector pelo Claude. Usuários MASTER têm acesso sempre.'
+              : 'Este conector não pede login: a lista define quem vê a URL em "Conexões com IA". Usuários MASTER veem sempre.'}
+          </p>
+        </div>
+        {elegiveis.length > 0 && (
+          <button
+            type="button"
+            onClick={() => onChange(todos ? [] : elegiveis)}
+            className="text-xs font-medium text-primary-600 hover:text-primary-700"
+          >
+            {todos ? 'Desmarcar todos' : 'Marcar todos'}
+          </button>
+        )}
+      </div>
+      {!temEmpresa ? (
+        <p className="rounded-lg bg-gray-50 px-3 py-4 text-center text-xs text-gray-400">Selecione a empresa para ver os colaboradores.</p>
+      ) : carregando ? (
+        <p className="py-4 text-center text-xs text-gray-400">Carregando colaboradores...</p>
+      ) : !usuarios?.length ? (
+        <p className="rounded-lg bg-gray-50 px-3 py-4 text-center text-xs text-gray-400">
+          Nenhum colaborador (não MASTER) vinculado a esta empresa.
+        </p>
+      ) : (
+        <>
+          {usuarios.length > 6 && (
+            <div className="relative mb-2">
+              <Search size={14} className="absolute left-2.5 top-1/2 -translate-y-1/2 text-gray-400" />
+              <input
+                type="search"
+                value={busca}
+                onChange={(e) => setBusca(e.target.value)}
+                placeholder="Buscar colaborador"
+                className="w-full rounded-lg border border-gray-200 py-1.5 pl-8 pr-3 text-sm focus:outline-none focus:ring-2 focus:ring-primary-100"
+              />
+            </div>
+          )}
+          <div className="grid max-h-64 grid-cols-1 gap-1 overflow-y-auto sm:grid-cols-2">
+            {lista.map((u) => {
+              const habilitado = pode(u);
+              const marcado = selecionados.includes(u.id);
+              return (
+                <label
+                  key={u.id}
+                  title={habilitado ? undefined : 'Sem acesso à tela DFC Construtoras — libere a tela no cadastro do usuário'}
+                  className={`flex items-center gap-2.5 rounded-lg px-2 py-1.5 ${
+                    habilitado ? 'cursor-pointer hover:bg-gray-50' : 'cursor-not-allowed opacity-50'
+                  } ${marcado ? 'bg-primary-50/60' : ''}`}
+                >
+                  <input
+                    type="checkbox"
+                    checked={marcado}
+                    disabled={!habilitado}
+                    onChange={() => alternar(u.id)}
+                    className="h-4 w-4 rounded border-gray-300 text-primary-600 focus:ring-primary-500"
+                  />
+                  <span className="flex h-7 w-7 shrink-0 items-center justify-center overflow-hidden rounded-full bg-primary-100 text-[10px] font-semibold text-primary-700">
+                    {u.avatar_url ? <img src={u.avatar_url} alt="" className="h-full w-full object-cover" /> : iniciais(u.nome)}
+                  </span>
+                  <span className="min-w-0">
+                    <span className="block truncate text-sm text-gray-800">{u.nome}</span>
+                    <span className="block truncate text-[11px] text-gray-400">
+                      {u.username}
+                      {!habilitado ? ' · sem a tela DFC Construtoras' : ''}
+                    </span>
+                  </span>
+                </label>
+              );
+            })}
+            {!lista.length && <p className="col-span-full py-3 text-center text-xs text-gray-400">Ninguém encontrado.</p>}
+          </div>
+        </>
+      )}
+    </div>
+  );
+}
+
 // Flags do conector DFC (excluentes).
 const ESCOPOS_DFC = [
   {
@@ -72,7 +179,9 @@ export default function McpForm() {
   // inserir/atualizar valores HORIZON - INFORMADO). As duas com login do Horizon (OAuth) que vale
   // `sessao_horas`. Na edição, só troca entre as duas flags do DFC (mesma URL) — e isso encerra as
   // sessões ativas; cobrança continua definida na criação.
-  const [form, setForm] = useState({ empresa_id: '', nome_conector: '', escopo: 'COBRANCA', sessao_horas: 24 });
+  const [form, setForm] = useState({ empresa_id: '', nome_conector: '', escopo: 'COBRANCA', sessao_horas: 24, usuario_ids: [] });
+  const [usuariosEmpresa, setUsuariosEmpresa] = useState(null);
+  const [carregandoUsuarios, setCarregandoUsuarios] = useState(false);
   const [escopoOriginal, setEscopoOriginal] = useState(null);
   const dfc = form.escopo !== 'COBRANCA';
   const alteraOrcamento = form.escopo === 'DFC_ORCAMENTO';
@@ -100,6 +209,7 @@ export default function McpForm() {
           nome_conector: data.nome_conector,
           escopo: data.escopo || 'COBRANCA',
           sessao_horas: data.sessao_horas || 24,
+          usuario_ids: data.usuario_ids || [],
         });
         setEscopoOriginal(data.escopo || 'COBRANCA');
         setUrl(data.url);
@@ -118,6 +228,28 @@ export default function McpForm() {
       setForm((prev) => ({ ...prev, empresa_id: empresaIdTravada }));
     }
   }, [empresaTravada, empresaIdTravada, loading]);
+
+  // Colaboradores da empresa (lista de usuários com acesso). Trocar de empresa na criação limpa os marcados.
+  useEffect(() => {
+    if (!form.empresa_id) {
+      setUsuariosEmpresa(null);
+      return undefined;
+    }
+    let ativo = true;
+    setCarregandoUsuarios(true);
+    listMcpUsuariosDisponiveis(form.empresa_id)
+      .then((lista) => {
+        if (!ativo) return;
+        setUsuariosEmpresa(lista);
+        const ids = new Set(lista.map((u) => u.id));
+        setForm((prev) => ({ ...prev, usuario_ids: prev.usuario_ids.filter((id) => ids.has(id)) }));
+      })
+      .catch(() => ativo && setUsuariosEmpresa([]))
+      .finally(() => ativo && setCarregandoUsuarios(false));
+    return () => {
+      ativo = false;
+    };
+  }, [form.empresa_id]);
 
   function handleChange(field, value) {
     setForm((prev) => ({ ...prev, [field]: value }));
@@ -173,6 +305,9 @@ export default function McpForm() {
     }
   }
 
+  // Nos conectores DFC, quem não tem a tela DFC Construtoras não entra — não vai na lista.
+  const usuariosValidos = form.usuario_ids.filter((uid) => !dfc || usuariosEmpresa?.find((u) => u.id === uid)?.tem_dfc);
+
   async function handleSubmit(e) {
     e.preventDefault();
     setError('');
@@ -200,6 +335,7 @@ export default function McpForm() {
         }
         await updateMcpConector(id, {
           nome_conector: form.nome_conector.trim(),
+          usuario_ids: usuariosValidos,
           ...(dfc ? { sessao_horas: Number(form.sessao_horas), escopo: form.escopo } : {}),
         });
         navigate('/integracoes/mcp', { replace: true });
@@ -209,6 +345,7 @@ export default function McpForm() {
           nome_conector: form.nome_conector.trim(),
           escopo: form.escopo,
           sessao_horas: Number(form.sessao_horas),
+          usuario_ids: usuariosValidos,
         });
         // Diferente do padrão de ZapiForm (volta pra lista): aqui navega pra
         // edição do item recém-criado, pra já mostrar a URL de conexão —
@@ -322,12 +459,21 @@ export default function McpForm() {
                   <div className="flex items-start gap-2 rounded-lg bg-primary-50 px-3 py-2 text-xs text-primary-700">
                     <ShieldCheck size={16} className="mt-0.5 shrink-0" />
                     {alteraOrcamento
-                      ? 'Só entra quem tem acesso à tela DFC Construtoras desta empresa. Altera só valores HORIZON - INFORMADO, em nome de quem entrou.'
-                      : 'Só entra quem tem acesso à tela DFC Construtoras desta empresa. O acesso é somente leitura.'}
+                      ? 'Só entram os usuários marcados em Usuários com acesso (e os MASTER). Altera só valores HORIZON - INFORMADO, em nome de quem entrou.'
+                      : 'Só entram os usuários marcados em Usuários com acesso (e os MASTER). O acesso é somente leitura.'}
                   </div>
                 </div>
               )}
             </div>
+
+            <UsuariosConector
+              usuarios={usuariosEmpresa}
+              carregando={carregandoUsuarios}
+              selecionados={form.usuario_ids}
+              onChange={(ids) => handleChange('usuario_ids', ids)}
+              dfc={dfc}
+              temEmpresa={Boolean(form.empresa_id)}
+            />
 
             {isEdit && url && (
               <div>

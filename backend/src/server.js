@@ -212,6 +212,8 @@ app.use('/api/regua-cobranca-historico', exigirTela([T.COBRANCAS], [T.REL_DESEMP
 app.use('/api/comunicacao', exigirTela([T.COBRANCAS]), comunicacaoRoutes);
 app.use('/api/rotinas', exigirTela([T.COBRANCAS]), rotinasRoutes);
 app.use('/api/integracoes/mcp', exigirTela([T.MCP]), mcpRoutes);
+// Ícone "Conexões com IA" do topo: qualquer usuário logado vê os conectores MCP liberados para ele.
+app.get('/api/minhas-conexoes-ia', exigirTela([QUALQUER_TELA]), require('./modules/integracoes-mcp/mcp.controller').minhasConexoes);
 // MCP do DFC Construtoras (login Horizon via OAuth): metadados na raiz do site (/.well-known), o
 // servidor de autorização em /api/mcp-oauth e o MCP em /api/mcp/dfc/<token> — antes do /api/mcp/:token.
 app.use('/.well-known', mcpOauthRoutes.wellKnown);

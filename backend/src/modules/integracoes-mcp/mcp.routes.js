@@ -8,6 +8,7 @@ const router = Router();
 router.use(authMiddleware);
 router.param('id', paramRecurso('SELECT empresa_id FROM integracoes_mcp WHERE id = $1'));
 router.get('/', controller.list);
+router.get('/usuarios-disponiveis', controller.usuariosDisponiveis);
 router.get('/:id', controller.getById);
 router.post('/', controller.create);
 router.put('/:id', controller.update);

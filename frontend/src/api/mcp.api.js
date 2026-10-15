@@ -35,3 +35,13 @@ export function encerrarMcpSessoes(id) {
 export function regenerarMcpToken(id) {
   return http.post(`/integracoes/mcp/${id}/regenerar-token`).then((res) => res.data);
 }
+
+// Colaboradores da empresa que podem ser liberados num conector (MASTER pode sempre).
+export function listMcpUsuariosDisponiveis(empresaId) {
+  return http.get('/integracoes/mcp/usuarios-disponiveis', { params: { empresa_id: empresaId } }).then((res) => res.data);
+}
+
+// Conexões com IA do usuário logado (ícone do topo): conectores liberados para ele, com a URL.
+export function getMinhasConexoesIa() {
+  return http.get('/minhas-conexoes-ia').then((res) => res.data);
+}

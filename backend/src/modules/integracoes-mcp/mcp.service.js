@@ -2,6 +2,9 @@ const crypto = require('crypto');
 const pool = require('../../config/db');
 const env = require('../../config/env');
 const { encrypt, decrypt } = require('../../utils/crypto');
+const T = require('../../config/telas');
+
+const ESCOPOS_DFC = ['DFC_CONSTRUTORAS', 'DFC_ORCAMENTO'];
 
 function badRequest(message) {
   const err = new Error(message);
@@ -93,27 +96,117 @@ async function getById(id) {
     [id]
   );
   const row = rows[0];
-  return row ? formatarItem(row) : null;
+  if (!row) return null;
+  const { rows: usuarios } = await pool.query(
+    `SELECT u.id, u.nome FROM integracoes_mcp_usuarios mu JOIN usuarios u ON u.id = mu.usuario_id WHERE mu.conector_id = $1 ORDER BY u.nome`,
+    [id]
+  );
+  return { ...formatarItem(row), usuarios, usuario_ids: usuarios.map((u) => u.id) };
 }
 
-async function create({ empresa_id, nome_conector, escopo = 'COBRANCA', sessao_horas = 24 }) {
+// Colaboradores da empresa que podem ser liberados num conector: usuários ativos, não MASTER (MASTER
+// pode sempre), vinculados à empresa. `tem_dfc`: tem a tela DFC Construtoras (exigida nos conectores DFC).
+async function usuariosDaEmpresa(empresaId) {
+  const { rows } = await pool.query(
+    `SELECT u.id, u.nome, u.username, u.avatar_url, ($2 = ANY(COALESCE(u.telas_permitidas, '{}'))) AS tem_dfc
+       FROM usuarios u JOIN usuarios_empresas ue ON ue.usuario_id = u.id AND ue.empresa_id = $1
+      WHERE u.ativo AND u.permissao <> 'MASTER'
+      ORDER BY u.nome`,
+    [empresaId, T.DFC]
+  );
+  return rows;
+}
+
+// Grava a lista de usuários liberados do conector (substitui a anterior). Só aceita colaboradores da
+// empresa do conector (MASTER não precisa estar na lista).
+async function definirUsuarios(conectorId, empresaId, usuarioIds, db = pool) {
+  if (!Array.isArray(usuarioIds)) return;
+  const permitidos = new Set((await usuariosDaEmpresa(empresaId)).map((u) => u.id));
+  const invalidos = usuarioIds.filter((id) => !permitidos.has(id));
+  if (invalidos.length) throw badRequest('Só dá para liberar colaboradores ativos desta empresa (usuários MASTER já têm acesso).');
+  await db.query('DELETE FROM integracoes_mcp_usuarios WHERE conector_id = $1', [conectorId]);
+  if (usuarioIds.length) {
+    await db.query(
+      'INSERT INTO integracoes_mcp_usuarios (conector_id, usuario_id) SELECT $1, unnest($2::int[]) ON CONFLICT DO NOTHING',
+      [conectorId, [...new Set(usuarioIds)]]
+    );
+  }
+}
+
+// "Conexões com IA" do usuário logado (ícone ao lado da foto): MASTER vê todos os conectores ativos;
+// os demais, os ativos em que estão liberados, da empresa a que têm acesso — e, nos conectores DFC,
+// só se tiverem a tela DFC Construtoras (senão o login do conector recusaria).
+async function minhasConexoes(user) {
+  const master = user.permissao === 'MASTER';
+  const { rows } = await pool.query(
+    `SELECT m.id, m.nome_conector, m.token_enc, m.escopo, m.sessao_horas, m.ultimo_uso_em,
+            e.id AS empresa_id, COALESCE(NULLIF(e.nome_fantasia, ''), e.razao_social) AS empresa, e.logo AS empresa_logo
+       FROM integracoes_mcp m JOIN empresas e ON e.id = m.empresa_id
+      WHERE m.ativo
+        AND ($1 OR EXISTS (SELECT 1 FROM integracoes_mcp_usuarios mu WHERE mu.conector_id = m.id AND mu.usuario_id = $2))
+      ORDER BY e.razao_social, m.nome_conector`,
+    [master, user.id]
+  );
+  return rows
+    .filter((r) => master || (user.empresaIds?.has(r.empresa_id) && (!ESCOPOS_DFC.includes(r.escopo) || (user.telas || []).includes(T.DFC))))
+    .map((r) => ({
+      id: r.id,
+      nome_conector: r.nome_conector,
+      escopo: r.escopo,
+      sessao_horas: r.sessao_horas,
+      empresa_id: r.empresa_id,
+      empresa: r.empresa,
+      empresa_logo: r.empresa_logo,
+      url: getUrlCompleta(r),
+    }));
+}
+
+async function create({ empresa_id, nome_conector, escopo = 'COBRANCA', sessao_horas = 24, usuario_ids = [] }) {
   const token = gerarToken();
-  const { rows } = await pool.query(
-    `INSERT INTO integracoes_mcp (empresa_id, nome_conector, token_hash, token_enc, escopo, sessao_horas)
-     VALUES ($1, $2, $3, $4, $5, $6)
-     RETURNING id`,
-    [empresa_id, nome_conector, hashToken(token), encrypt(token), escopo, sessao_horas]
-  );
-  return getById(rows[0].id);
+  const client = await pool.connect();
+  let id;
+  try {
+    await client.query('BEGIN');
+    const { rows } = await client.query(
+      `INSERT INTO integracoes_mcp (empresa_id, nome_conector, token_hash, token_enc, escopo, sessao_horas)
+       VALUES ($1, $2, $3, $4, $5, $6)
+       RETURNING id`,
+      [empresa_id, nome_conector, hashToken(token), encrypt(token), escopo, sessao_horas]
+    );
+    id = rows[0].id;
+    await definirUsuarios(id, empresa_id, usuario_ids, client);
+    await client.query('COMMIT');
+  } catch (e) {
+    await client.query('ROLLBACK');
+    throw e;
+  } finally {
+    client.release();
+  }
+  return getById(id);
 }
 
-async function update(id, { nome_conector, sessao_horas, escopo }) {
-  const { rows } = await pool.query(
-    `UPDATE integracoes_mcp SET nome_conector = $1, sessao_horas = COALESCE($3, sessao_horas), escopo = COALESCE($4, escopo)
-      WHERE id = $2 RETURNING id`,
-    [nome_conector, id, sessao_horas ?? null, escopo ?? null]
-  );
-  return rows[0] ? getById(id) : null;
+async function update(id, { nome_conector, sessao_horas, escopo, usuario_ids }) {
+  const client = await pool.connect();
+  try {
+    await client.query('BEGIN');
+    const { rows } = await client.query(
+      `UPDATE integracoes_mcp SET nome_conector = $1, sessao_horas = COALESCE($3, sessao_horas), escopo = COALESCE($4, escopo)
+        WHERE id = $2 RETURNING id, empresa_id`,
+      [nome_conector, id, sessao_horas ?? null, escopo ?? null]
+    );
+    if (!rows[0]) {
+      await client.query('ROLLBACK');
+      return null;
+    }
+    await definirUsuarios(id, rows[0].empresa_id, usuario_ids, client);
+    await client.query('COMMIT');
+  } catch (e) {
+    await client.query('ROLLBACK');
+    throw e;
+  } finally {
+    client.release();
+  }
+  return getById(id);
 }
 
 async function setAtivo(id, ativo) {
@@ -150,4 +243,4 @@ async function resolverEmpresaPorToken(token) {
   return row.empresa_id;
 }
 
-module.exports = { list, getById, create, update, setAtivo, regenerarToken, resolverEmpresaPorToken };
+module.exports = { list, getById, create, update, setAtivo, regenerarToken, resolverEmpresaPorToken, usuariosDaEmpresa, minhasConexoes };

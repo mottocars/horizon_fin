@@ -122,18 +122,20 @@ const tokenDoRecurso = (resource) => {
   return m ? m[1] : null;
 };
 
-// O usuário pode usar o conector? Ativo, com a tela do DFC e acesso à empresa do conector.
+// O usuário pode usar o conector? Ativo e MASTER; ou liberado no conector (lista de usuários do
+// formulário), com acesso à empresa e à tela do DFC.
 async function usuarioPodeUsar(usuarioId, conector) {
   const { rows } = await pool.query(
     `SELECT u.id, u.nome, u.ativo, u.permissao, u.telas_permitidas,
-            EXISTS (SELECT 1 FROM usuarios_empresas ue WHERE ue.usuario_id = u.id AND ue.empresa_id = $2) AS tem_empresa
+            EXISTS (SELECT 1 FROM usuarios_empresas ue WHERE ue.usuario_id = u.id AND ue.empresa_id = $2) AS tem_empresa,
+            EXISTS (SELECT 1 FROM integracoes_mcp_usuarios mu WHERE mu.usuario_id = u.id AND mu.conector_id = $3) AS liberado
        FROM usuarios u WHERE u.id = $1`,
-    [usuarioId, conector.empresa_id]
+    [usuarioId, conector.empresa_id, conector.id]
   );
   const u = rows[0];
   if (!u || !u.ativo) return null;
   if (u.permissao === 'MASTER') return u;
-  return u.tem_empresa && (u.telas_permitidas || []).includes(T.DFC) ? u : null;
+  return u.liberado && u.tem_empresa && (u.telas_permitidas || []).includes(T.DFC) ? u : null;
 }
 
 // Login (mesma regra de auth.service: usuário + senha). Mensagem genérica em qualquer falha.
@@ -143,7 +145,9 @@ async function autenticar(username, senha, conector) {
   const ok = u && u.ativo && (await bcrypt.compare(String(senha || ''), u.senha_hash));
   if (!ok) throw erroOAuth('access_denied', 'Usuário ou senha inválidos.', 401);
   const permitido = await usuarioPodeUsar(u.id, conector);
-  if (!permitido) throw erroOAuth('access_denied', 'Seu usuário não tem acesso ao DFC Construtoras desta empresa.', 403);
+  if (!permitido) {
+    throw erroOAuth('access_denied', 'Seu usuário não está liberado neste conector (ou não tem acesso ao DFC Construtoras desta empresa). Procure o administrador do sistema.', 403);
+  }
   return permitido;
 }
 
@@ -277,6 +281,7 @@ module.exports = {
   conectorPorToken,
   tokenDoRecurso,
   autenticar,
+  usuarioPodeUsar,
   criarCodigo,
   trocarCodigo,
   renovar,
