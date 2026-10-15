@@ -210,7 +210,8 @@ function limiteRestante(limite, saldo) {
 
 // Linha de detalhe do cheque especial, abaixo da conta (só leitura, fora dos totais). O recuo
 // (pl-18 + seta) fica além do nome da conta (logomarca + gap), pra ler como um nível abaixo.
-function LinhaChequeEspecial({ rotulo, dias, valorDoDia }) {
+// Só tem valor nos dias que tiveram abertura de período (`diasComPeriodo`); os demais ficam "—".
+function LinhaChequeEspecial({ rotulo, dias, diasComPeriodo, valorDoDia }) {
   return (
     <tr>
       <td className="sticky left-0 z-10 border-b border-r border-gray-100 border-r-gray-200 bg-white py-1.5 pl-18 pr-3">
@@ -224,7 +225,7 @@ function LinhaChequeEspecial({ rotulo, dias, valorDoDia }) {
           key={d.iso}
           className={`border-b border-l border-gray-100 px-3 text-right text-xs tabular-nums text-gray-600 ${d.fimDeSemana ? 'bg-gray-50/80' : 'bg-white'}`}
         >
-          <ValorTotal valor={valorDoDia(d.iso)} />
+          <ValorTotal valor={diasComPeriodo.has(d.iso) ? valorDoDia(d.iso) : undefined} />
         </td>
       ))}
     </tr>
@@ -279,6 +280,8 @@ function SaldosContasTab({
   encaixadoNaAba = true,
 }) {
   const [contas, setContas] = useState(null);
+  // Dias do período carregado que tiveram abertura de período (aberto ou encerrado).
+  const [diasComPeriodo, setDiasComPeriodo] = useState(() => new Set());
   const [carregando, setCarregando] = useState(false);
   const [erroCarga, setErroCarga] = useState('');
   const [abertos, setAbertos] = useState([]);
@@ -311,6 +314,7 @@ function SaldosContasTab({
       .then((resposta) => {
         if (minhaRequisicao !== requisicaoRef.current) return;
         setContas(resposta.contas);
+        setDiasComPeriodo(new Set(resposta.periodos || []));
         if (expandirGrupos) setAbertos([...new Set(resposta.contas.map((c) => c.classificacao))]);
       })
       .catch((err) => {
@@ -824,10 +828,16 @@ function SaldosContasTab({
                             </tr>
                             {limite > 0 && (
                               <>
-                                <LinhaChequeEspecial rotulo="Limite total cheque especial" dias={dias} valorDoDia={() => limite} />
+                                <LinhaChequeEspecial
+                                  rotulo="Limite total cheque especial"
+                                  dias={dias}
+                                  diasComPeriodo={diasComPeriodo}
+                                  valorDoDia={() => limite}
+                                />
                                 <LinhaChequeEspecial
                                   rotulo="Limite restante"
                                   dias={dias}
+                                  diasComPeriodo={diasComPeriodo}
                                   valorDoDia={(iso) => limiteRestante(limite, conta.saldos[iso])}
                                 />
                               </>

@@ -150,6 +150,14 @@ async function getSaldos(empresaId, { dataInicio, dataFim, companyIds = [], clas
     [empresaId, dataInicio, dataFim]
   );
 
+  // Dias da semana que tiveram abertura de período (aberto agora ou já encerrado) — a grade só
+  // mostra o cheque especial (limite total/restante) nesses dias.
+  const { rows: periodos } = await pool.query(
+    `SELECT TO_CHAR(data, 'YYYY-MM-DD') AS data FROM saldos_periodos
+     WHERE empresa_id = $1 AND data BETWEEN $2 AND $3 ORDER BY data`,
+    [empresaId, dataInicio, dataFim]
+  );
+
   // `origens` é um mapa paralelo a `saldos` (mesmas chaves de data) — só pra grade colorir a
   // célula (API/HERDADO/MANUAL); os totais/soma continuam olhando só pra `saldos` (números
   // puros), sem precisar saber nada de origem.
@@ -179,6 +187,7 @@ async function getSaldos(empresaId, { dataInicio, dataFim, companyIds = [], clas
         composicoes: dados?.composicoes || {},
       };
     }),
+    periodos: periodos.map((p) => p.data),
   };
 }
 
