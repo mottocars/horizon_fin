@@ -518,13 +518,13 @@ function Flags({ r }) {
           CEF
         </span>
       ) : null}
-      {r.projeta === false && <span className="flag w">fora do DFC</span>}
     </>
   );
 }
 
 export function QuemGera({ D, centroSel, onCentro }) {
-  const rows = D.centros.slice().sort((a, b) => b.lp - a.lp);
+  // Só os centros com "Projeta DFC" (os de fora do DFC não aparecem — pedido do usuário).
+  const rows = D.centros.filter((c) => c.projeta !== false).sort((a, b) => b.lp - a.lp);
   const mx = Math.max(1, ...rows.flatMap((r) => [Math.abs(r.lr), Math.abs(r.lp)]));
   return (
     <section className="panel c7" aria-labelledby="h-obras">
@@ -586,11 +586,8 @@ export function QuemGera({ D, centroSel, onCentro }) {
 export function Carteira({ D }) {
   const rec = D.cart.receber || {};
   const pag = D.cart.pagar || {};
-  const contas = D.contas
-    .filter((c) => !D.empresasDoFiltro || D.empresasDoFiltro.has(c.company_id))
-    .slice()
-    .sort((a, b) => b.saldo - a.saldo)
-    .slice(0, 8);
+  // Todas as contas com "Projeta DFC" (as que formam o caixa do DFC), da maior para a menor.
+  const contas = D.contas.filter((c) => !D.empresasDoFiltro || D.empresasDoFiltro.has(c.company_id)).sort((a, b) => b.saldo - a.saldo);
   return (
     <section className="panel c5" aria-labelledby="h-cart">
       <div className="ph">
