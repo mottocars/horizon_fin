@@ -41,7 +41,7 @@ function Painel({ fechando, telas, telaAtiva, onTela, filtros }) {
       }`}
     >
       <Secao icone={LayoutGrid} titulo="Telas" ordem={0}>
-        <div className="flex flex-col gap-2">
+        <div className="flex flex-col gap-0.5">
           {telas.map((t, i) => {
             const IconeTela = t.icon;
             const ativa = t.id === telaAtiva;
@@ -51,11 +51,11 @@ function Painel({ fechando, telas, telaAtiva, onTela, filtros }) {
                 type="button"
                 onClick={() => onTela?.(t.id)}
                 style={entrada(i + 1)}
-                className={`motion-safe:animate-item-sobe flex w-full items-center gap-2.5 rounded-xl border px-4 py-2.5 text-left text-sm font-medium transition-colors ${
-                  ativa ? 'border-primary-600 bg-primary-50 text-primary-700' : 'border-gray-200 text-gray-700 hover:border-primary-100 hover:bg-gray-50'
+                className={`motion-safe:animate-item-sobe flex w-full items-center gap-2 rounded-lg px-3 py-1.5 text-left text-[13px] font-medium transition-colors ${
+                  ativa ? 'bg-primary-50 text-primary-700' : 'text-gray-700 hover:bg-gray-50'
                 }`}
               >
-                {IconeTela && <IconeTela size={16} />}
+                {IconeTela && <IconeTela size={15} className={ativa ? '' : 'text-gray-400'} />}
                 {t.label}
               </button>
             );
