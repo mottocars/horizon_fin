@@ -103,8 +103,8 @@ async function fonteFixos(empresaId, siengeId, db = pool) {
   };
 }
 
-// Obras da empresa que projetam DFC (na aba Centros Custos: Tipo = Obra e "Projeta DFC" marcado —
-// pedido do usuário), pro filtro "Centro de Custo" e pro resumo da aba Parâmetros, com a versão
+// Obras da empresa que projetam DFC (na aba Centros Custos: Tipo = Obra, "Projeta DFC" marcado e com
+// Contrato Caixa preenchido — pedido do usuário), pro filtro "Centro de Custo" e pro resumo da aba Parâmetros, com a versão
 // vigente dos parâmetros de cada uma (null = nenhum parâmetro registrado ainda).
 // `numero_unidades` do cadastro do centro serve de sugestão no primeiro preenchimento.
 async function listCentros(empresaId) {
@@ -119,6 +119,7 @@ async function listCentros(empresaId) {
           LIMIT 1
        ) v ON TRUE
       WHERE c.empresa_id = $1 AND c.natureza = 'OBRA' AND c.projeta_dfc
+        AND NULLIF(TRIM(c.codigo_contrato_caixa), '') IS NOT NULL
       ORDER BY c.sienge_id::text ASC`,
     [empresaId]
   );
