@@ -300,7 +300,7 @@ export default function DfcFluxoTab({
       const main = el.closest('main');
       // Em tela cheia o quadro é fixo na janela (não rola com o <main>).
       const topo = el.getBoundingClientRect().top + (main && !telaCheia ? main.scrollTop : 0);
-      const folga = telaCheia ? 20 : dashboard ? 36 : 44; // dashboard: padding do quadro + margem da tela
+      const folga = telaCheia ? 20 : dashboard ? 20 : 44; // dashboard: só a margem da tela
       const altura = Math.max(ALTURA_MINIMA_GRADE, Math.floor(window.innerHeight - topo - folga));
       setAlturaGrade((atual) => (atual === altura ? atual : altura));
     };
@@ -437,7 +437,7 @@ export default function DfcFluxoTab({
         telaCheia
           ? 'fixed inset-0 z-40 flex flex-col bg-white p-5'
           : dashboard
-            ? 'min-w-0 rounded-2xl bg-white p-4 shadow-card'
+            ? 'min-w-0' // dashboard: só a tabela, sem o quadro em volta
             : 'min-w-0 rounded-card rounded-tl-none bg-white p-5 shadow-card'
       }
     >
@@ -486,7 +486,9 @@ export default function DfcFluxoTab({
         <div
           ref={gradeRef}
           onScroll={(e) => setRolouX(e.currentTarget.scrollLeft > 0)}
-          className={`overflow-auto overscroll-x-contain rounded-lg border border-gray-200 ${rolouX ? SOMBRA_COLUNA_FIXA : ''}`}
+          className={`overflow-auto overscroll-x-contain rounded-lg border border-gray-200 ${dashboard ? 'bg-white shadow-card' : ''} ${
+            rolouX ? SOMBRA_COLUNA_FIXA : ''
+          }`}
           style={{ maxHeight: alturaGrade ?? undefined, height: dashboard ? (alturaGrade ?? undefined) : undefined }}
         >
           <table
