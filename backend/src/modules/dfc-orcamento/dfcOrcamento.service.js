@@ -98,7 +98,7 @@ async function valoresAtuais(db, empresaId) {
 
   // 1) Digitados na aba (HORIZON - INFORMADO). Linha com valor NULL = limpo (guarda quem limpou).
   const { rows: informados } = await db.query(
-    `SELECT centro_id, sienge_id, to_char(mes, 'YYYY-MM') AS mes, valor, usuario_id, atualizado_em
+    `SELECT centro_id, sienge_id, to_char(mes, 'YYYY-MM') AS mes, valor, usuario_id, atualizado_em, via_mcp
        FROM dfc_orcamento_informado WHERE empresa_id = $1`,
     [empresaId]
   );
@@ -112,7 +112,7 @@ async function valoresAtuais(db, empresaId) {
     somar(r.centro_id, r.sienge_id, r.mes, Number(r.valor), {
       origem: ORIGEM_INFORMADO,
       fonte: 'MANUAL',
-      fonte_descricao: 'Digitado na aba Orçamentos',
+      fonte_descricao: r.via_mcp ? 'Informado pelo Claude (conector MCP)' : 'Digitado na aba Orçamentos',
       responsavel_id: r.usuario_id,
       responsavel_em: r.atualizado_em,
     });
@@ -235,7 +235,7 @@ function responsavelExclusao(anterior, contexto, salvoPor, agora) {
     return {
       origem,
       fonte: 'MANUAL',
-      fonte_descricao: 'Valor limpo na aba Orçamentos',
+      fonte_descricao: limpo?.via_mcp ? 'Valor limpo pelo Claude (conector MCP)' : 'Valor limpo na aba Orçamentos',
       responsavel_id: limpo?.usuario_id ?? salvoPor,
       responsavel_em: limpo?.atualizado_em ?? agora,
     };
@@ -401,7 +401,9 @@ async function rascunho(empresaId) {
 
 // "Salvar Versão": consolida as fontes de hoje numa versão nova e grava o log do que mudou. Nada
 // mudou = não cria versão (mesmo critério dos Parâmetros).
-async function salvarVersao(empresaId, usuarioId) {
+// `origem` (conector MCP "DFC CONSTRUTORAS (ALTERA ORÇAMENTO)"): grava só as mudanças daquela origem
+// (HORIZON - INFORMADO); as pendências das outras fontes continuam pendentes para a próxima versão.
+async function salvarVersao(empresaId, usuarioId, { origem = null } = {}) {
   const client = await pool.connect();
   try {
     await client.query('BEGIN');
@@ -413,21 +415,24 @@ async function salvarVersao(empresaId, usuarioId) {
       consolidado(client, empresaId),
       ultimaVersao(client, empresaId),
     ]);
-    const lista = diferencas(atual, cons, contexto, usuarioId, agora);
+    const lista = diferencas(atual, cons, contexto, usuarioId, agora).filter((d) => !origem || (d.info.origem === origem && d.info.fonte === 'MANUAL'));
     if (!lista.length) {
       throw erro(
         409,
-        anterior
-          ? `Nada mudou desde a versão ${anterior.numero} — não há o que salvar.`
-          : 'Ainda não há nenhum valor no Orçamento pra salvar.'
+        origem
+          ? 'Não há valores informados pendentes de salvar.'
+          : anterior
+            ? `Nada mudou desde a versão ${anterior.numero} — não há o que salvar.`
+            : 'Ainda não há nenhum valor no Orçamento pra salvar.'
       );
     }
     const resumo = contar(lista);
     const numero = (anterior?.numero || 0) + 1;
+    const totalValores = origem ? cons.size + resumo.inclusoes - resumo.exclusoes : atual.size;
     const { rows } = await client.query(
       `INSERT INTO dfc_orcamento_versoes (empresa_id, numero, usuario_id, criado_em, valores, inclusoes, alteracoes, exclusoes)
        VALUES ($1, $2, $3, $4, $5, $6, $7, $8) RETURNING id`,
-      [empresaId, numero, usuarioId, agora, atual.size, resumo.inclusoes, resumo.alteracoes, resumo.exclusoes]
+      [empresaId, numero, usuarioId, agora, totalValores, resumo.inclusoes, resumo.alteracoes, resumo.exclusoes]
     );
     const versaoId = rows[0].id;
 
@@ -479,7 +484,7 @@ async function salvarVersao(empresaId, usuarioId) {
     );
 
     await client.query('COMMIT');
-    return { numero, criado_em: agora, valores: atual.size, ...resumo };
+    return { numero, criado_em: agora, valores: totalValores, ...resumo };
   } catch (e) {
     await client.query('ROLLBACK');
     throw e;
@@ -528,4 +533,26 @@ async function log(empresaId, centroId, siengeId, mes) {
   return { historico, pendente };
 }
 
-module.exports = { orcamento, rascunho, salvarVersao, log };
+// O que mudou nas fontes e ainda não foi salvo, só de uma origem (prévia do "Salvar Versão" do
+// conector MCP): [{ tipo, centro_id, sienge_id, mes, valor_anterior, valor_novo, responsavel_id, responsavel_em }].
+async function pendenciasDaOrigem(empresaId, origem) {
+  const [{ valores: atual, contexto }, cons] = await Promise.all([valoresAtuais(pool, empresaId), consolidado(pool, empresaId)]);
+  return diferencas(atual, cons, contexto)
+    .filter((d) => d.info.origem === origem && d.info.fonte === 'MANUAL')
+    .map((d) => {
+      const base = d.novo || d.anterior;
+      return {
+        tipo: d.tipo,
+        centro_id: base.centro_id,
+        sienge_id: base.sienge_id,
+        mes: base.mes,
+        valor_anterior: d.anterior ? d.anterior.valor : null,
+        valor_novo: d.novo ? d.novo.valor : null,
+        fonte_descricao: d.info.fonte_descricao,
+        responsavel_id: d.info.responsavel_id ?? null,
+        responsavel_em: d.info.responsavel_em ?? null,
+      };
+    });
+}
+
+module.exports = { orcamento, rascunho, salvarVersao, log, pendenciasDaOrigem };

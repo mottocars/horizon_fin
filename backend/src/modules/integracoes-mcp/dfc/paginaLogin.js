@@ -51,7 +51,7 @@ function login({ conector, clienteNome, params, erro, usuario }) {
 <h1>Conectar ao DFC Construtoras</h1>
 <p class="sub">${escapar(clienteNome || 'O Claude')} quer consultar o DFC de <strong>${escapar(conector.empresa)}</strong>
  (conector "${escapar(conector.nome_conector)}").</p>
-<div class="info">Acesso somente leitura. O login vale por <strong>${duracao(conector.sessao_horas)}</strong>; depois disso o Claude pede para entrar de novo.</div>
+<div class="info">${conector.escopo === 'DFC_ORCAMENTO' ? 'Leitura do DFC e alteração do Orçamento só nas contas HORIZON - INFORMADO, em seu nome.' : 'Acesso somente leitura.'} O login vale por <strong>${duracao(conector.sessao_horas)}</strong>; depois disso o Claude pede para entrar de novo.</div>
 ${erro ? `<div class="erro">${escapar(erro)}</div>` : ''}
 <form method="post" action="/api/mcp-oauth/authorize" autocomplete="on">${ocultos}
 <label for="usuario">Usuário</label><input id="usuario" name="usuario" value="${escapar(usuario || '')}" autocomplete="username" required autofocus>

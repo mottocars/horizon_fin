@@ -36,6 +36,21 @@ import { useConfirm } from '../../../confirm/ConfirmContext';
 // Z-API) — este formulário só coleta Empresa + Nome do conector. Depois de
 // salvo, mostra a URL de conexão pronta pra colar no "Add custom connector"
 // do Claude — nunca o token separado da URL (ver plano).
+// Flags do conector DFC (excluentes).
+const ESCOPOS_DFC = [
+  {
+    escopo: 'DFC_CONSTRUTORAS',
+    titulo: 'DFC CONSTRUTORAS',
+    descricao: 'Conector só para o DFC Construtoras (fluxo de caixa), somente leitura, protegido por login do Horizon Fin com validade.',
+  },
+  {
+    escopo: 'DFC_ORCAMENTO',
+    titulo: 'DFC CONSTRUTORAS (ALTERA ORÇAMENTO)',
+    descricao:
+      'O mesmo conector, e o Claude também pode inserir ou atualizar valores do Orçamento — só nas contas com Origem Projeção "HORIZON - INFORMADO" — e salvar a versão.',
+  },
+];
+
 export default function McpForm() {
   const { id } = useParams();
   const isEdit = Boolean(id);
@@ -52,9 +67,13 @@ export default function McpForm() {
   const [fieldErrors, setFieldErrors] = useState({});
   const [copiado, setCopiado] = useState(false);
 
-  // dfc: flag "DFC CONSTRUTORAS" — conector só com as ferramentas do DFC, protegido por login do
-  // Horizon (OAuth) que vale `sessao_horas`. Definida na criação (não muda depois).
-  const [form, setForm] = useState({ empresa_id: '', nome_conector: '', dfc: false, sessao_horas: 24 });
+  // escopo: COBRANCA (padrão) ou uma das flags do DFC — "DFC CONSTRUTORAS" (DFC_CONSTRUTORAS: só as
+  // ferramentas do DFC, leitura) ou "DFC CONSTRUTORAS (ALTERA ORÇAMENTO)" (DFC_ORCAMENTO: as mesmas, mais
+  // inserir/atualizar valores HORIZON - INFORMADO). As duas com login do Horizon (OAuth) que vale
+  // `sessao_horas`. Definido na criação (não muda depois).
+  const [form, setForm] = useState({ empresa_id: '', nome_conector: '', escopo: 'COBRANCA', sessao_horas: 24 });
+  const dfc = form.escopo !== 'COBRANCA';
+  const alteraOrcamento = form.escopo === 'DFC_ORCAMENTO';
   const [url, setUrl] = useState('');
   const [sessoes, setSessoes] = useState(null);
   const [encerrando, setEncerrando] = useState(false);
@@ -74,11 +93,11 @@ export default function McpForm() {
         setForm({
           empresa_id: String(data.empresa_id),
           nome_conector: data.nome_conector,
-          dfc: data.escopo === 'DFC_CONSTRUTORAS',
+          escopo: data.escopo || 'COBRANCA',
           sessao_horas: data.sessao_horas || 24,
         });
         setUrl(data.url);
-        if (data.escopo === 'DFC_CONSTRUTORAS') listMcpSessoes(id).then(setSessoes).catch(() => setSessoes([]));
+        if (data.escopo !== 'COBRANCA') listMcpSessoes(id).then(setSessoes).catch(() => setSessoes([]));
       })
       .finally(() => active && setLoading(false));
     return () => {
@@ -163,14 +182,14 @@ export default function McpForm() {
       if (isEdit) {
         await updateMcpConector(id, {
           nome_conector: form.nome_conector.trim(),
-          ...(form.dfc ? { sessao_horas: Number(form.sessao_horas) } : {}),
+          ...(dfc ? { sessao_horas: Number(form.sessao_horas) } : {}),
         });
         navigate('/integracoes/mcp', { replace: true });
       } else {
         const criado = await createMcpConector({
           empresa_id: Number(form.empresa_id),
           nome_conector: form.nome_conector.trim(),
-          escopo: form.dfc ? 'DFC_CONSTRUTORAS' : 'COBRANCA',
+          escopo: form.escopo,
           sessao_horas: Number(form.sessao_horas),
         });
         // Diferente do padrão de ZapiForm (volta pra lista): aqui navega pra
@@ -201,7 +220,9 @@ export default function McpForm() {
           {isEdit ? 'Editar conector MCP' : 'Novo conector MCP'}
         </h2>
         <p className="mb-4 text-sm text-gray-500">
-          {form.dfc
+          {alteraOrcamento
+            ? 'Um conector DFC Construtoras (altera orçamento) dá ao Claude o acesso de leitura ao fluxo de caixa (DFC) desta empresa e permite pedir a ele que insira ou atualize valores do Orçamento — só nas contas com Origem Projeção "HORIZON - INFORMADO" — e salve a versão. Ao conectar, o Claude pede o login do Horizon Fin, e as alterações ficam em nome de quem entrou.'
+            : dfc
             ? 'Um conector DFC Construtoras dá ao Claude acesso de leitura ao fluxo de caixa (DFC) desta empresa — realizado, projetado, saldos, Projeção CEF e as bases — através de uma URL que você cola em "Add custom connector". Ao conectar, o Claude pede o login do Horizon Fin.'
             : 'Um conector MCP dá ao Claude acesso de leitura aos dados de cobrança e contas a receber desta empresa, através de uma URL que você cola em "Add custom connector".'}
         </p>
@@ -241,23 +262,28 @@ export default function McpForm() {
             </div>
 
             <div className="rounded-lg border border-gray-200 p-4">
-              <label className={`flex items-start gap-3 ${isEdit ? 'cursor-not-allowed opacity-80' : 'cursor-pointer'}`}>
-                <input
-                  type="checkbox"
-                  checked={form.dfc}
-                  disabled={isEdit}
-                  onChange={(e) => handleChange('dfc', e.target.checked)}
-                  className="mt-0.5 h-4 w-4 rounded border-gray-300 text-primary-600 focus:ring-primary-500"
-                />
-                <span>
-                  <span className="block text-sm font-semibold text-gray-900">DFC CONSTRUTORAS</span>
-                  <span className="block text-xs text-gray-500">
-                    Conector só para o DFC Construtoras (fluxo de caixa), protegido por login do Horizon Fin com validade.
-                    {isEdit ? ' Definido na criação do conector.' : ''}
-                  </span>
-                </span>
-              </label>
-              {form.dfc && (
+              {/* As duas flags do DFC são excluentes: marcar uma desmarca a outra. */}
+              <div className="space-y-3">
+                {ESCOPOS_DFC.map((op) => (
+                  <label key={op.escopo} className={`flex items-start gap-3 ${isEdit ? 'cursor-not-allowed opacity-80' : 'cursor-pointer'}`}>
+                    <input
+                      type="checkbox"
+                      checked={form.escopo === op.escopo}
+                      disabled={isEdit}
+                      onChange={(e) => handleChange('escopo', e.target.checked ? op.escopo : 'COBRANCA')}
+                      className="mt-0.5 h-4 w-4 rounded border-gray-300 text-primary-600 focus:ring-primary-500"
+                    />
+                    <span>
+                      <span className="block text-sm font-semibold text-gray-900">{op.titulo}</span>
+                      <span className="block text-xs text-gray-500">
+                        {op.descricao}
+                        {isEdit ? ' Definido na criação do conector.' : ''}
+                      </span>
+                    </span>
+                  </label>
+                ))}
+              </div>
+              {dfc && (
                 <div className="mt-4 grid grid-cols-1 gap-4 border-t border-gray-100 pt-4 sm:grid-cols-2">
                   <div>
                     <label className="mb-1 block text-sm font-medium text-gray-700">Validade do login</label>
@@ -276,7 +302,9 @@ export default function McpForm() {
                   </div>
                   <div className="flex items-start gap-2 rounded-lg bg-primary-50 px-3 py-2 text-xs text-primary-700">
                     <ShieldCheck size={16} className="mt-0.5 shrink-0" />
-                    Só entra quem tem acesso à tela DFC Construtoras desta empresa. O acesso é somente leitura.
+                    {alteraOrcamento
+                      ? 'Só entra quem tem acesso à tela DFC Construtoras desta empresa. Altera só valores HORIZON - INFORMADO, em nome de quem entrou.'
+                      : 'Só entra quem tem acesso à tela DFC Construtoras desta empresa. O acesso é somente leitura.'}
                   </div>
                 </div>
               )}
@@ -300,14 +328,14 @@ export default function McpForm() {
                   </IconButton>
                 </div>
                 <p className="mt-1 text-xs text-gray-400">
-                  {form.dfc
+                  {dfc
                     ? 'Cole esta URL em "Add custom connector" no Claude e clique em Conectar: abre a tela de login do Horizon Fin. Regenerar o token invalida esta URL imediatamente.'
                     : 'Cole esta URL completa em "Add custom connector" no Claude. Quem tiver esta URL consegue ler os dados de cobrança desta empresa — trate-a como uma senha. Regenerar o token invalida esta URL imediatamente.'}
                 </p>
               </div>
             )}
 
-            {isEdit && form.dfc && (
+            {isEdit && dfc && (
               <div>
                 <div className="mb-1 flex items-center justify-between">
                   <label className="block text-sm font-medium text-gray-700">Sessões ativas no Claude</label>

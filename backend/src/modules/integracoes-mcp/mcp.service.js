@@ -21,10 +21,11 @@ function hashToken(token) {
 // Monta a URL completa que a tela de Integrações > MCP mostra — nunca o
 // token separado (ver plano: o usuário quer a URL sempre visível/copiável,
 // não o segredo cru ao lado dela).
-// Conector DFC Construtoras: /api/mcp/dfc/<token> (e exige login Horizon — ver dfc/oauth.routes.js).
+// Conectores DFC Construtoras (DFC_CONSTRUTORAS e DFC_ORCAMENTO): /api/mcp/dfc/<token> (e exigem login
+// Horizon — ver dfc/oauth.routes.js).
 function getUrlCompleta(row) {
   const token = decrypt(row.token_enc);
-  return row.escopo === 'DFC_CONSTRUTORAS' ? `${env.mcp.publicBaseUrl}/api/mcp/dfc/${token}` : `${env.mcp.publicBaseUrl}/api/mcp/${token}`;
+  return row.escopo === 'COBRANCA' ? `${env.mcp.publicBaseUrl}/api/mcp/${token}` : `${env.mcp.publicBaseUrl}/api/mcp/dfc/${token}`;
 }
 
 function formatarItem(row) {

@@ -135,6 +135,11 @@ export default function McpList() {
                       {item.escopo === 'DFC_CONSTRUTORAS' && (
                         <span className="ml-2 rounded-full bg-primary-50 px-2 py-0.5 text-[11px] font-semibold text-primary-700">DFC CONSTRUTORAS</span>
                       )}
+                      {item.escopo === 'DFC_ORCAMENTO' && (
+                        <span className="ml-2 rounded-full bg-amber-50 px-2 py-0.5 text-[11px] font-semibold text-amber-700">
+                          DFC CONSTRUTORAS (ALTERA ORÇAMENTO)
+                        </span>
+                      )}
                     </td>
                     <td className="py-3">
                       <span

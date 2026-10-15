@@ -108,9 +108,9 @@ async function cliente(clientId) {
 async function conectorPorToken(token) {
   if (!token) return null;
   const { rows } = await pool.query(
-    `SELECT m.id, m.empresa_id, m.nome_conector, m.sessao_horas, m.ativo, COALESCE(NULLIF(e.nome_fantasia, ''), e.razao_social) AS empresa
+    `SELECT m.id, m.empresa_id, m.nome_conector, m.sessao_horas, m.ativo, m.escopo, COALESCE(NULLIF(e.nome_fantasia, ''), e.razao_social) AS empresa
        FROM integracoes_mcp m JOIN empresas e ON e.id = m.empresa_id
-      WHERE m.token_hash = $1 AND m.escopo = 'DFC_CONSTRUTORAS'`,
+      WHERE m.token_hash = $1 AND m.escopo IN ('DFC_CONSTRUTORAS', 'DFC_ORCAMENTO')`,
     [hash(token)]
   );
   const c = rows[0];

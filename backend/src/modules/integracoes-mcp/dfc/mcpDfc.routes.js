@@ -36,14 +36,19 @@ router.post('/:token', async (req, res) => {
     const acesso = header.startsWith('Bearer ') ? await oauth.validarAcesso(header.slice(7), conector) : null;
     if (!acesso) return naoAutorizado(res, req.params.token, 'Faça login no Horizon Fin para usar este conector.');
 
+    const escrita = conector.escopo === 'DFC_ORCAMENTO';
     server = new McpServer(
       { name: 'horizon-fin-dfc-construtoras', version: '1.0.0' },
       {
-        instructions:
-          'Servidor do DFC Construtoras (fluxo de caixa) do Horizon Fin, só leitura. Comece por dfc_guia para entender como o fluxo é montado e qual ferramenta usar. Valores em R$, meses AAAA-MM.',
+        instructions: escrita
+          ? 'Servidor do DFC Construtoras (fluxo de caixa) do Horizon Fin, com alteração do Orçamento. Comece por dfc_guia para entender como o fluxo é montado. ' +
+            'Só dá para inserir/atualizar valores nas contas com Origem Projeção "HORIZON - INFORMADO" (dfc_informado_contas mostra quais); as demais origens vêm das integrações e não podem ser alteradas. ' +
+            'Fluxo: dfc_informado_contas -> confirmar com o usuário -> dfc_informado_gravar / dfc_informado_replicar -> prévia em dfc_informado_salvar_versao -> salvar com confirmar=true só com o aval do usuário. ' +
+            'Valores em R$ com sinal (saída negativa), meses AAAA-MM.'
+          : 'Servidor do DFC Construtoras (fluxo de caixa) do Horizon Fin, só leitura. Comece por dfc_guia para entender como o fluxo é montado e qual ferramenta usar. Valores em R$, meses AAAA-MM.',
       }
     );
-    registrarToolsDfc(server, conector.empresa_id);
+    registrarToolsDfc(server, conector.empresa_id, { escrita, usuarioId: acesso.usuario.id });
     transport = new StreamableHTTPServerTransport({ sessionIdGenerator: undefined });
     res.on('close', () => {
       transport.close();

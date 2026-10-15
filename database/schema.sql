@@ -215,7 +215,7 @@ CREATE TABLE integracoes_mcp (
     token_enc           TEXT NOT NULL,
     -- COBRANCA (token na URL) ou DFC_CONSTRUTORAS (só ferramentas do DFC, login Horizon via OAuth)
     -- — ver database/migrations/2026-10-14-mcp-dfc-oauth.sql.
-    escopo              VARCHAR(30) NOT NULL DEFAULT 'COBRANCA' CHECK (escopo IN ('COBRANCA', 'DFC_CONSTRUTORAS')),
+    escopo              VARCHAR(30) NOT NULL DEFAULT 'COBRANCA' CHECK (escopo IN ('COBRANCA', 'DFC_CONSTRUTORAS', 'DFC_ORCAMENTO')),
     -- Duração do login no Claude (conectores DFC).
     sessao_horas        INTEGER NOT NULL DEFAULT 24 CHECK (sessao_horas BETWEEN 1 AND 720),
     ativo               BOOLEAN DEFAULT TRUE,
@@ -3333,6 +3333,8 @@ CREATE TABLE dfc_orcamento_informado (
     valor          NUMERIC(18,2),
     usuario_id     INTEGER REFERENCES usuarios(id) ON DELETE SET NULL,
     atualizado_em  TIMESTAMP DEFAULT NOW(),
+    -- Gravado pelo Claude (conector MCP "DFC CONSTRUTORAS (ALTERA ORÇAMENTO)") — migration 2026-10-15-mcp-dfc-altera-orcamento.sql.
+    via_mcp        BOOLEAN NOT NULL DEFAULT false,
     PRIMARY KEY (empresa_id, centro_id, sienge_id, mes),
     FOREIGN KEY (centro_id, empresa_id) REFERENCES centros_custo_sienge(sienge_id, empresa_id) ON DELETE CASCADE
 );

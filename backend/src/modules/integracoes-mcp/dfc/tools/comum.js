@@ -15,10 +15,11 @@ function falha(mensagem) {
 const r2 = (v) => (v === null || v === undefined ? v : Math.round((Number(v) + Number.EPSILON) * 100) / 100);
 
 // Handler que devolve JSON compacto e transforma erro em mensagem pro Claude (sem derrubar a chamada).
+// `ctx`: { usuarioId } do login do conector (as ferramentas de escrita gravam em nome dele).
 function ferramenta(fn) {
-  return (empresaId) => async (args) => {
+  return (empresaId, ctx = {}) => async (args) => {
     try {
-      const r = await fn(empresaId, args || {});
+      const r = await fn(empresaId, args || {}, ctx);
       return { content: [{ type: 'text', text: typeof r === 'string' ? r : JSON.stringify(r) }] };
     } catch (err) {
       if (!err.mcp) console.error('Erro em ferramenta do MCP do DFC:', err);

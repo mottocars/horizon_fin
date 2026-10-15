@@ -73,30 +73,98 @@ async function salvar(empresaId, { centro_id: centroId, sienge_id: siengeId, mes
   await exigirContaInformada(empresaId, centroId, siengeId);
   const gravado = valor === 0 ? null : valor;
   await pool.query(
-    `INSERT INTO dfc_orcamento_informado (empresa_id, centro_id, sienge_id, mes, valor, usuario_id, atualizado_em)
-     VALUES ($1, $2, $3, $4, $5, $6, $7)
+    `INSERT INTO dfc_orcamento_informado (empresa_id, centro_id, sienge_id, mes, valor, usuario_id, atualizado_em, via_mcp)
+     VALUES ($1, $2, $3, $4, $5, $6, $7, false)
      ON CONFLICT (empresa_id, centro_id, sienge_id, mes)
-     DO UPDATE SET valor = EXCLUDED.valor, usuario_id = EXCLUDED.usuario_id, atualizado_em = EXCLUDED.atualizado_em`,
+     DO UPDATE SET valor = EXCLUDED.valor, usuario_id = EXCLUDED.usuario_id, atualizado_em = EXCLUDED.atualizado_em, via_mcp = false`,
     [empresaId, centroId, siengeId, `${mes}-01`, gravado, usuarioId, new Date()]
   );
   return { centro_id: centroId, sienge_id: siengeId, mes, valor: gravado };
 }
 
 // "Replicar valor até": grava `valor` em cada mês de `de` até `ate` (inclusive), por cima do que
-// houver. Devolve os meses gravados.
-async function replicar(empresaId, { centro_id: centroId, sienge_id: siengeId, de, ate, valor }, usuarioId) {
+// houver. Devolve os meses gravados. `viaMcp`: gravado pelo Claude (conector MCP).
+async function replicar(empresaId, { centro_id: centroId, sienge_id: siengeId, de, ate, valor }, usuarioId, viaMcp = false) {
   if (ate < de) throw erro(400, 'A data final precisa ser igual ou depois do mês de origem.');
   const meses = mesesEntre(de, ate);
   if (meses.length > MAX_MESES) throw erro(400, `Replique no máximo ${MAX_MESES} meses de uma vez.`);
   await exigirContaInformada(empresaId, centroId, siengeId);
   await pool.query(
-    `INSERT INTO dfc_orcamento_informado (empresa_id, centro_id, sienge_id, mes, valor, usuario_id, atualizado_em)
-     SELECT $1, $2, $3, (m || '-01')::date, $5, $6, $7 FROM unnest($4::text[]) AS m
+    `INSERT INTO dfc_orcamento_informado (empresa_id, centro_id, sienge_id, mes, valor, usuario_id, atualizado_em, via_mcp)
+     SELECT $1, $2, $3, (m || '-01')::date, $5, $6, $7, $8 FROM unnest($4::text[]) AS m
      ON CONFLICT (empresa_id, centro_id, sienge_id, mes)
-     DO UPDATE SET valor = EXCLUDED.valor, usuario_id = EXCLUDED.usuario_id, atualizado_em = EXCLUDED.atualizado_em`,
-    [empresaId, centroId, siengeId, meses, valor, usuarioId, new Date()]
+     DO UPDATE SET valor = EXCLUDED.valor, usuario_id = EXCLUDED.usuario_id, atualizado_em = EXCLUDED.atualizado_em, via_mcp = EXCLUDED.via_mcp`,
+    [empresaId, centroId, siengeId, meses, valor, usuarioId, new Date(), viaMcp]
   );
   return { centro_id: centroId, sienge_id: siengeId, meses, valor };
 }
 
-module.exports = { list, salvar, replicar };
+// Contas onde dá pra informar valor (conector MCP "DFC CONSTRUTORAS (ALTERA ORÇAMENTO)"): centros com
+// "Projeta DFC" × contas com Origem Projeção "HORIZON - INFORMADO" e "Projeta DFC" no plano do centro
+// (o próprio, se tiver versão, senão o Global). `centroIds` vazio = todos os centros.
+async function contasInformadas(empresaId, centroIds = []) {
+  const { rows } = await pool.query(
+    `WITH centros AS (
+       SELECT c.sienge_id, c.name,
+              EXISTS (SELECT 1 FROM dfc_plano_contas_versoes v WHERE v.empresa_id = c.empresa_id AND v.centro_id = c.sienge_id) AS proprio
+         FROM centros_custo_sienge c
+        WHERE c.empresa_id = $1 AND c.projeta_dfc AND (cardinality($2::int[]) = 0 OR c.sienge_id = ANY($2::int[]))
+     )
+     SELECT c.sienge_id AS centro_id, c.name AS centro, p.sienge_id, n.name AS natureza
+       FROM centros c
+       JOIN LATERAL (
+         SELECT pc.sienge_id FROM dfc_plano_contas_centro pc
+          WHERE c.proprio AND pc.empresa_id = $1 AND pc.centro_id = c.sienge_id AND pc.origem_projecao = $3 AND pc.projeta_dfc IS NOT FALSE
+         UNION ALL
+         SELECT pg.sienge_id FROM dfc_plano_contas pg
+          WHERE NOT c.proprio AND pg.empresa_id = $1 AND pg.origem_projecao = $3 AND pg.projeta_dfc IS NOT FALSE
+       ) p ON true
+       LEFT JOIN planos_financeiros_sienge n ON n.empresa_id = $1 AND n.sienge_id = p.sienge_id
+      ORDER BY c.name, p.sienge_id`,
+    [empresaId, centroIds, ORIGEM]
+  );
+  return rows;
+}
+
+// Grava vários valores de uma vez (conector MCP), tudo ou nada: confere cada centro × conta antes e
+// devolve o valor anterior (digitado, ainda não salvo em versão) e o novo. Valor 0 ou null limpa.
+async function gravarVarios(empresaId, itens, usuarioId) {
+  const conferidos = new Set();
+  for (const it of itens) {
+    const k = `${it.centro_id}|${it.sienge_id}`;
+    if (conferidos.has(k)) continue;
+    await exigirContaInformada(empresaId, it.centro_id, it.sienge_id);
+    conferidos.add(k);
+  }
+  const client = await pool.connect();
+  try {
+    await client.query('BEGIN');
+    const { rows: antes } = await client.query(
+      `SELECT i.centro_id, i.sienge_id, to_char(i.mes, 'YYYY-MM') AS mes, i.valor
+         FROM dfc_orcamento_informado i
+         JOIN json_to_recordset($2::json) AS x(centro_id int, sienge_id int, mes text)
+           ON i.centro_id = x.centro_id AND i.sienge_id = x.sienge_id AND i.mes = (x.mes || '-01')::date
+        WHERE i.empresa_id = $1`,
+      [empresaId, JSON.stringify(itens)]
+    );
+    const anterior = new Map(antes.map((r) => [`${r.centro_id}|${r.sienge_id}|${r.mes}`, r.valor === null ? null : Number(r.valor)]));
+    const gravar = itens.map((it) => ({ ...it, valor: it.valor === 0 ? null : it.valor }));
+    await client.query(
+      `INSERT INTO dfc_orcamento_informado (empresa_id, centro_id, sienge_id, mes, valor, usuario_id, atualizado_em, via_mcp)
+       SELECT $1, x.centro_id, x.sienge_id, (x.mes || '-01')::date, x.valor, $3, $4, true
+         FROM json_to_recordset($2::json) AS x(centro_id int, sienge_id int, mes text, valor numeric)
+       ON CONFLICT (empresa_id, centro_id, sienge_id, mes)
+       DO UPDATE SET valor = EXCLUDED.valor, usuario_id = EXCLUDED.usuario_id, atualizado_em = EXCLUDED.atualizado_em, via_mcp = true`,
+      [empresaId, JSON.stringify(gravar), usuarioId, new Date()]
+    );
+    await client.query('COMMIT');
+    return gravar.map((it) => ({ ...it, anterior: anterior.get(`${it.centro_id}|${it.sienge_id}|${it.mes}`) ?? null }));
+  } catch (e) {
+    await client.query('ROLLBACK');
+    throw e;
+  } finally {
+    client.release();
+  }
+}
+
+module.exports = { ORIGEM, list, salvar, replicar, contasInformadas, gravarVarios, mesesEntre };
