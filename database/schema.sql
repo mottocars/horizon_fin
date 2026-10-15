@@ -1034,6 +1034,22 @@ CREATE TABLE saldos_contas_bancarias (
 
 CREATE INDEX idx_saldos_contas_bancarias_data ON saldos_contas_bancarias (empresa_id, data);
 
+-- Bloqueio de saldo da conta no dia (botão direito na célula > Registrar bloqueio) — a grade
+-- mostra Saldo bloqueado e Saldo disponível (saldo - bloqueado) abaixo da conta. Tabela própria
+-- pra a busca automática regravar o saldo sem apagar o bloqueio. Migration 2026-10-15-saldos-bloqueios.sql.
+CREATE TABLE saldos_bloqueios (
+    empresa_id     INTEGER NOT NULL,
+    company_id     INTEGER NOT NULL,
+    numero_conta   VARCHAR(20) NOT NULL,
+    data           DATE NOT NULL,
+    valor          NUMERIC(15,2) NOT NULL CHECK (valor > 0),
+    registrado_por INTEGER REFERENCES usuarios(id) ON DELETE SET NULL,
+    registrado_em  TIMESTAMP NOT NULL DEFAULT NOW(),
+    PRIMARY KEY (empresa_id, company_id, numero_conta, data),
+    FOREIGN KEY (numero_conta, empresa_id, company_id)
+        REFERENCES contas_bancarias_sienge (numero_conta, empresa_id, company_id) ON DELETE CASCADE
+);
+
 -- Retorno de cobrança CAIXA (CNAB 240/SIGCB) buscado na VanPix.
 -- 1 linha por título do retorno (par de segmentos T + U), com todos os campos e as linhas cruas.
 -- A varredura dos últimos dias repete arquivos: o UNIQUE + upsert evita duplicar.

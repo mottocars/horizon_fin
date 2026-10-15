@@ -55,6 +55,17 @@ const salvarSchema = z.object({
   itens: z.array(itemSchema).min(1, 'Nenhum saldo informado.').max(MAX_ITENS_POR_LOTE, 'Lote grande demais.'),
 });
 
+// Bloqueio de saldo da conta no dia (botão direito na célula). valor null = remover.
+const bloqueioSchema = z.object({
+  company_id: z.coerce.number().int().positive(),
+  numero_conta: z.string().min(1).max(20),
+  data: z.string().refine(dataValida, 'Data inválida.'),
+  valor: z
+    .union([z.number(), z.null()])
+    .refine((v) => v === null || (Number.isFinite(v) && v > 0 && v <= SALDO_MAXIMO), 'Informe um valor bloqueado maior que zero.')
+    .transform((v) => (v === null ? null : Math.round(v * 100) / 100)),
+});
+
 const abrirPeriodoSchema = z.object({
   data: z.string().refine(dataValida, 'Data inválida.'),
   // true quando a tela já perguntou "esse período já foi encerrado, quer reabrir?" e o
@@ -149,6 +160,16 @@ async function salvarSaldos(req, res, next) {
     const empresaId = await acessoEmpresa(req);
     const { itens } = salvarSchema.parse(req.body);
     res.json(await service.salvarSaldos(empresaId, req.user.id, itens));
+  } catch (err) {
+    tratarErroDeValidacao(err, next);
+  }
+}
+
+async function registrarBloqueio(req, res, next) {
+  try {
+    const empresaId = await acessoEmpresa(req);
+    const item = bloqueioSchema.parse(req.body);
+    res.json(await service.registrarBloqueio(empresaId, req.user.id, item));
   } catch (err) {
     tratarErroDeValidacao(err, next);
   }
@@ -334,6 +355,7 @@ module.exports = {
   getSaldos,
   exportarExcel,
   salvarSaldos,
+  registrarBloqueio,
   getPeriodoAberto,
   abrirPeriodo,
   encerrarPeriodo,

@@ -1,9 +1,10 @@
 import { Fragment, memo, useCallback, useEffect, useMemo, useRef, useState } from 'react';
-import { Check, CornerDownRight, History, Landmark, Loader2, Minus, Pencil, Plus, TriangleAlert, Zap } from 'lucide-react';
+import { Check, CornerDownRight, History, Landmark, Loader2, Lock, Minus, Pencil, Plus, TriangleAlert, Zap } from 'lucide-react';
 import { getSaldosContas, salvarSaldosContas } from '../../../api/saldoContasBancarias.api';
 import LogoBanco from './LogoBanco';
 import ComposicaoSaldo from './ComposicaoSaldo';
-import { formatarSaldo, interpretarSaldo, listarDias, nomeMes, numeroParaEdicao, somarSaldos } from './constantes';
+import BloqueioSaldoModal from './BloqueioSaldoModal';
+import { formatarDataBR, formatarSaldo, interpretarSaldo, listarDias, nomeMes, numeroParaEdicao, somarSaldos } from './constantes';
 
 // Geometria da grade — a tabela tem largura fixa (colunas em px) e rola dentro do card:
 // com até 31+ colunas de valor não existe largura de tela que acomode tudo sem rolar.
@@ -66,6 +67,7 @@ const CelulaSaldo = memo(function CelulaSaldo({
   onCommit,
   onNavegar,
   onColar,
+  onMenu,
   registrar,
 }) {
   const [texto, setTexto] = useState(null); // null = fora de edição
@@ -154,7 +156,24 @@ const CelulaSaldo = memo(function CelulaSaldo({
   useEffect(() => () => clearTimeout(timerDica.current), []);
 
   return (
-    <div className="relative" onMouseEnter={mostrarDica} onMouseLeave={esconderDica} onMouseDown={esconderDica}>
+    <div
+      className="relative"
+      onMouseEnter={mostrarDica}
+      onMouseLeave={esconderDica}
+      onMouseDown={esconderDica}
+      // Botão direito: menu da célula (Registrar bloqueio). Fica no wrapper pra funcionar também
+      // nas células fora do dia liberado, onde o input está disabled.
+      onContextMenu={
+        onMenu
+          ? (e) => {
+              e.preventDefault();
+              esconderDica();
+              commit();
+              onMenu(e, companyId, numeroConta, dia.iso);
+            }
+          : undefined
+      }
+    >
       {ancoraDica && temDica && (
         <ComposicaoSaldo ancora={ancoraDica} composicao={composicao} valor={valor} data={dia.iso} rotulo={rotulo} />
       )}
@@ -208,10 +227,17 @@ function limiteRestante(limite, saldo) {
   return saldo < 0 ? somarSaldos([limite, saldo]) : limite;
 }
 
-// Linha de detalhe do cheque especial, abaixo da conta (só leitura, fora dos totais). O recuo
-// (pl-18 + seta) fica além do nome da conta (logomarca + gap), pra ler como um nível abaixo.
-// Só tem valor nos dias que tiveram abertura de período (`diasComPeriodo`); os demais ficam "—".
-function LinhaChequeEspecial({ rotulo, dias, diasComPeriodo, valorDoDia }) {
+// Saldo disponível com bloqueio: saldo do dia menos o bloqueado. Dia sem bloqueio ou sem saldo
+// lançado fica sem valor ("—").
+function saldoDisponivel(saldo, bloqueio) {
+  if (bloqueio === undefined || saldo === undefined || saldo === null) return undefined;
+  return somarSaldos([saldo, -bloqueio]);
+}
+
+// Linha de detalhe abaixo da conta (bloqueio, cheque especial) — só leitura, fora dos totais.
+// O recuo (pl-18 + seta) fica além do nome da conta (logomarca + gap), pra ler como um nível
+// abaixo. `valorDoDia` devolve undefined nos dias sem valor ("—").
+function LinhaDetalheConta({ rotulo, dias, valorDoDia }) {
   return (
     <tr>
       <td className="sticky left-0 z-10 border-b border-r border-gray-100 border-r-gray-200 bg-white py-1.5 pl-18 pr-3">
@@ -225,7 +251,7 @@ function LinhaChequeEspecial({ rotulo, dias, diasComPeriodo, valorDoDia }) {
           key={d.iso}
           className={`border-b border-l border-gray-100 px-3 text-right text-xs tabular-nums text-gray-600 ${d.fimDeSemana ? 'bg-gray-50/80' : 'bg-white'}`}
         >
-          <ValorTotal valor={diasComPeriodo.has(d.iso) ? valorDoDia(d.iso) : undefined} />
+          <ValorTotal valor={valorDoDia(d.iso)} />
         </td>
       ))}
     </tr>
@@ -275,6 +301,9 @@ function SaldosContasTab({
   expandirGrupos = false,
   onSalvo,
   textoSemContas,
+  // Botão direito na célula > Registrar bloqueio — só a aba Saldos das Contas liga (a Rotinas
+  // só mostra os bloqueios já registrados).
+  permitirBloqueio = false,
   // Canto superior esquerdo reto pra encaixar direto embaixo da aba (padrão); a Rotinas põe um
   // painel de status entre a aba e a grade, então desliga.
   encaixadoNaAba = true,
@@ -290,6 +319,9 @@ function SaldosContasTab({
   const [salvoAlgumaVez, setSalvoAlgumaVez] = useState(false);
   const [erroSalvar, setErroSalvar] = useState('');
   const [aviso, setAviso] = useState('');
+  // Menu do botão direito ({ x, y, companyId, numeroConta, data }) e o bloqueio sendo editado.
+  const [menu, setMenu] = useState(null);
+  const [alvoBloqueio, setAlvoBloqueio] = useState(null);
 
   const tabelaRef = useRef(null);
   const inputsRef = useRef(new Map());
@@ -500,6 +532,38 @@ function SaldosContasTab({
     (companyId, numeroConta, data, saldo) => salvar([{ company_id: companyId, numero_conta: numeroConta, data, saldo }]),
     [salvar]
   );
+
+  const handleMenu = useCallback((e, companyId, numeroConta, data) => {
+    setMenu({ x: e.clientX, y: e.clientY, companyId, numeroConta, data });
+  }, []);
+  const fecharMenu = useCallback(() => setMenu(null), []);
+
+  const contaDoMenu = menu && contas?.find((c) => c.company_id === menu.companyId && c.numero_conta === menu.numeroConta);
+
+  function abrirBloqueio() {
+    setMenu(null);
+    if (!contaDoMenu) return;
+    setAlvoBloqueio({
+      companyId: contaDoMenu.company_id,
+      numeroConta: contaDoMenu.numero_conta,
+      rotulo: contaDoMenu.nome || contaDoMenu.numero_conta,
+      data: menu.data,
+      saldo: contaDoMenu.saldos[menu.data],
+      bloqueio: contaDoMenu.bloqueios?.[menu.data],
+    });
+  }
+
+  const aplicarBloqueio = useCallback((alvo, valor) => {
+    setContas((prev) =>
+      prev?.map((c) => {
+        if (c.company_id !== alvo.companyId || c.numero_conta !== alvo.numeroConta) return c;
+        const bloqueios = { ...c.bloqueios };
+        if (valor === null) delete bloqueios[alvo.data];
+        else bloqueios[alvo.data] = valor;
+        return { ...c, bloqueios };
+      })
+    );
+  }, []);
 
   const registrarInput = useCallback((chave, el) => {
     if (el) inputsRef.current.set(chave, el);
@@ -821,24 +885,34 @@ function SaldosContasTab({
                                     onCommit={handleCommit}
                                     onNavegar={handleNavegar}
                                     onColar={handleColar}
+                                    onMenu={permitirBloqueio && !somenteLeitura ? handleMenu : undefined}
                                     registrar={registrarInput}
                                   />
                                 </td>
                               ))}
                             </tr>
+                            {Object.keys(conta.bloqueios || {}).length > 0 && (
+                              <>
+                                <LinhaDetalheConta rotulo="Saldo bloqueado" dias={dias} valorDoDia={(iso) => conta.bloqueios[iso]} />
+                                <LinhaDetalheConta
+                                  rotulo="Saldo disponível"
+                                  dias={dias}
+                                  valorDoDia={(iso) => saldoDisponivel(conta.saldos[iso], conta.bloqueios[iso])}
+                                />
+                              </>
+                            )}
+                            {/* Cheque especial só nos dias que tiveram abertura de período. */}
                             {limite > 0 && (
                               <>
-                                <LinhaChequeEspecial
+                                <LinhaDetalheConta
                                   rotulo="Limite total cheque especial"
                                   dias={dias}
-                                  diasComPeriodo={diasComPeriodo}
-                                  valorDoDia={() => limite}
+                                  valorDoDia={(iso) => (diasComPeriodo.has(iso) ? limite : undefined)}
                                 />
-                                <LinhaChequeEspecial
+                                <LinhaDetalheConta
                                   rotulo="Limite restante"
                                   dias={dias}
-                                  diasComPeriodo={diasComPeriodo}
-                                  valorDoDia={(iso) => limiteRestante(limite, conta.saldos[iso])}
+                                  valorDoDia={(iso) => (diasComPeriodo.has(iso) ? limiteRestante(limite, conta.saldos[iso]) : undefined)}
                                 />
                               </>
                             )}
@@ -870,6 +944,77 @@ function SaldosContasTab({
           </table>
         </div>
       )}
+
+      {menu && (
+        <MenuCelula
+          menu={menu}
+          onFechar={fecharMenu}
+          temBloqueio={contaDoMenu?.bloqueios?.[menu.data] !== undefined}
+          liberado={menu.data === dataAberta}
+          dataAberta={dataAberta}
+          onRegistrarBloqueio={abrirBloqueio}
+        />
+      )}
+
+      <BloqueioSaldoModal
+        alvo={alvoBloqueio}
+        empresaId={empresaId}
+        onClose={() => setAlvoBloqueio(null)}
+        onSalvo={aplicarBloqueio}
+        onPeriodoDessincronizado={onPeriodoDessincronizado}
+      />
+    </div>
+  );
+}
+
+// Menu do botão direito numa célula de saldo: fixo na posição do clique, fecha ao clicar fora,
+// rolar ou com Esc (mesmo padrão do DfcOrcamentosTab). Registrar bloqueio só no dia liberado —
+// nos demais o item aparece desabilitado, com o motivo.
+function MenuCelula({ menu, onFechar, temBloqueio, liberado, dataAberta, onRegistrarBloqueio }) {
+  useEffect(() => {
+    const aoTeclar = (e) => {
+      if (e.key === 'Escape') onFechar();
+    };
+    window.addEventListener('mousedown', onFechar);
+    window.addEventListener('scroll', onFechar, true);
+    window.addEventListener('resize', onFechar);
+    window.addEventListener('keydown', aoTeclar);
+    return () => {
+      window.removeEventListener('mousedown', onFechar);
+      window.removeEventListener('scroll', onFechar, true);
+      window.removeEventListener('resize', onFechar);
+      window.removeEventListener('keydown', aoTeclar);
+    };
+  }, [onFechar]);
+
+  const largura = 230;
+  const x = Math.min(menu.x, window.innerWidth - largura - 8);
+  const y = Math.min(menu.y, window.innerHeight - 80);
+  return (
+    <div
+      role="menu"
+      className="fixed z-60 rounded-lg border border-gray-100 bg-white py-1 shadow-card"
+      style={{ left: x, top: y, width: largura }}
+      onMouseDown={(e) => e.stopPropagation()}
+      onContextMenu={(e) => e.preventDefault()}
+    >
+      <button
+        type="button"
+        role="menuitem"
+        disabled={!liberado}
+        onClick={onRegistrarBloqueio}
+        className="flex w-full items-start gap-2 px-3 py-2 text-left text-sm text-gray-700 hover:bg-gray-50 disabled:cursor-not-allowed disabled:text-gray-400 disabled:hover:bg-transparent"
+      >
+        <Lock size={15} className="mt-0.5 shrink-0 text-gray-400" />
+        <span>
+          {temBloqueio ? 'Alterar bloqueio' : 'Registrar bloqueio'}
+          {!liberado && (
+            <span className="block text-[11px] text-gray-400">
+              {dataAberta ? `Só no dia liberado (${formatarDataBR(dataAberta)})` : 'Abra um período primeiro'}
+            </span>
+          )}
+        </span>
+      </button>
     </div>
   );
 }

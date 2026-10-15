@@ -66,6 +66,14 @@ export function encerrarPeriodoSaldos(empresaId) {
   return http.delete(`/saldo-contas-bancarias/${empresaId}/periodo-aberto`).then((res) => res.data);
 }
 
+// Registra/altera o bloqueio de saldo de uma conta num dia (só no dia com período aberto);
+// valor null remove. Devolve { company_id, numero_conta, data, valor }.
+export function registrarBloqueioSaldo(empresaId, { companyId, numeroConta, data, valor }) {
+  return http
+    .put(`/saldo-contas-bancarias/${empresaId}/bloqueios`, { company_id: companyId, numero_conta: numeroConta, data, valor })
+    .then((res) => res.data);
+}
+
 // Roda todos os convênios VanPix ativos da empresa pra `data`, casa com as contas já
 // cadastradas (banco+conta+dígito) e grava o saldo automaticamente. Devolve um relatório:
 // { convenios: [{apelido, status, mensagem}], atualizados: [{...,saldo}], semCorrespondencia: [...] }.

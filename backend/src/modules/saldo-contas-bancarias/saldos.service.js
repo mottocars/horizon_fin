@@ -158,6 +158,21 @@ async function getSaldos(empresaId, { dataInicio, dataFim, companyIds = [], clas
     [empresaId, dataInicio, dataFim]
   );
 
+  // Bloqueios registrados (botão direito na célula) — a grade mostra Saldo bloqueado e Saldo
+  // disponível abaixo da conta nos dias que tiverem.
+  const { rows: bloqueios } = await pool.query(
+    `SELECT company_id, numero_conta, TO_CHAR(data, 'YYYY-MM-DD') AS data, valor
+     FROM saldos_bloqueios
+     WHERE empresa_id = $1 AND data BETWEEN $2 AND $3`,
+    [empresaId, dataInicio, dataFim]
+  );
+  const bloqueiosPorConta = new Map();
+  for (const b of bloqueios) {
+    const chave = `${b.company_id}|${b.numero_conta}`;
+    if (!bloqueiosPorConta.has(chave)) bloqueiosPorConta.set(chave, {});
+    bloqueiosPorConta.get(chave)[b.data] = Number(b.valor);
+  }
+
   // `origens` é um mapa paralelo a `saldos` (mesmas chaves de data) — só pra grade colorir a
   // célula (API/HERDADO/MANUAL); os totais/soma continuam olhando só pra `saldos` (números
   // puros), sem precisar saber nada de origem.
@@ -185,6 +200,7 @@ async function getSaldos(empresaId, { dataInicio, dataFim, companyIds = [], clas
         origens: dados?.origens || {},
         cobrancas: dados?.cobrancas || {},
         composicoes: dados?.composicoes || {},
+        bloqueios: bloqueiosPorConta.get(`${c.company_id}|${c.numero_conta}`) || {},
       };
     }),
     periodos: periodos.map((p) => p.data),
@@ -192,6 +208,43 @@ async function getSaldos(empresaId, { dataInicio, dataFim, companyIds = [], clas
 }
 
 const brData = (iso) => iso.split('-').reverse().join('/');
+
+// Registra (ou altera) o bloqueio de saldo de uma conta num dia; valor null remove. Mesma regra
+// do lançamento de saldo: só no dia com período aberto.
+async function registrarBloqueio(empresaId, usuarioId, { company_id, numero_conta, data, valor }) {
+  const { data: dataAberta } = await getPeriodoAberto(empresaId);
+  if (data !== dataAberta) {
+    throw erro(
+      409,
+      dataAberta
+        ? `Só é possível registrar bloqueio no dia liberado (${brData(dataAberta)}).`
+        : 'Nenhum período está aberto para lançamento. Abra um período primeiro.'
+    );
+  }
+
+  const { rows: contas } = await pool.query(
+    'SELECT 1 FROM contas_bancarias_sienge WHERE empresa_id = $1 AND company_id = $2 AND numero_conta = $3',
+    [empresaId, company_id, numero_conta]
+  );
+  if (!contas[0]) throw erro(404, 'Conta bancária não encontrada.');
+
+  if (valor === null) {
+    await pool.query(
+      'DELETE FROM saldos_bloqueios WHERE empresa_id = $1 AND company_id = $2 AND numero_conta = $3 AND data = $4',
+      [empresaId, company_id, numero_conta, data]
+    );
+    return { company_id, numero_conta, data, valor: null };
+  }
+
+  await pool.query(
+    `INSERT INTO saldos_bloqueios (empresa_id, company_id, numero_conta, data, valor, registrado_por)
+     VALUES ($1, $2, $3, $4, $5, $6)
+     ON CONFLICT (empresa_id, company_id, numero_conta, data)
+     DO UPDATE SET valor = EXCLUDED.valor, registrado_por = EXCLUDED.registrado_por, registrado_em = NOW()`,
+    [empresaId, company_id, numero_conta, data, valor.toFixed(2), usuarioId]
+  );
+  return { company_id, numero_conta, data, valor };
+}
 
 // Dia liberado pra lançar saldo nesta empresa AGORA — null se nenhum (cadeado trancado,
 // nada é editável até alguém abrir um período explicitamente; ver abrirPeriodo).
@@ -425,6 +478,7 @@ module.exports = {
   getFiltros,
   getSaldos,
   salvarSaldos,
+  registrarBloqueio,
   getPeriodoAberto,
   abrirPeriodo,
   encerrarPeriodo,

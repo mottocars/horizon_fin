@@ -646,6 +646,7 @@ export default function SaldoContasBancariasPage() {
             refreshToken={refreshToken}
             dataAberta={dataAberta}
             onPeriodoDessincronizado={() => setPeriodoToken((n) => n + 1)}
+            permitirBloqueio
           />
         )}
 

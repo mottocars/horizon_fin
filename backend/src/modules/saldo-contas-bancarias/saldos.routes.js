@@ -14,6 +14,7 @@ router.get('/:empresaId/periodo-aberto', controller.getPeriodoAberto);
 router.put('/:empresaId/periodo-aberto', controller.abrirPeriodo);
 router.delete('/:empresaId/periodo-aberto', controller.encerrarPeriodo);
 router.post('/:empresaId/buscar-vanpix', controller.buscarVanpix);
+router.put('/:empresaId/bloqueios', controller.registrarBloqueio);
 // Aba Configurações: só o Administrador da tela (ou Master). A leitura de
 // comunicar-saldos fica livre — o Encerrar Período mostra quem é avisado.
 const soAdministrador = exigirAdministradorDaTela(T.SALDOS);
