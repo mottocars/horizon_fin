@@ -155,8 +155,15 @@ export default function DfcConstrutorasPage() {
   const [versoes, setVersoes] = useState([]);
   const [loadingVersoes, setLoadingVersoes] = useState(false);
   const [versaoId, setVersaoId] = useState('');
+  // De qual centro é a lista em `versoes` — enquanto a lista do centro novo não chega, nenhuma versão
+  // fica selecionada (a aba não pede a versão do centro anterior pro centro novo).
+  const [versoesCentro, setVersoesCentro] = useState(null);
 
+  // Só a resposta do pedido mais recente vale (trocar de centro rápido não deixa a lista de outro
+  // centro por cima).
+  const pedidoVersoes = useRef(0);
   function carregarVersoes() {
+    const pedido = ++pedidoVersoes.current;
     if (!empresaId || !centroId) {
       setVersoes([]);
       setVersaoId('');
@@ -165,22 +172,29 @@ export default function DfcConstrutorasPage() {
     setLoadingVersoes(true);
     listVersoesParametrosDfc(empresaId, centroId)
       .then((lista) => {
+        if (pedido !== pedidoVersoes.current) return;
         setVersoes(lista);
+        setVersoesCentro(String(centroId));
         setVersaoId(lista[0]?.id ?? '');
       })
       .catch(() => {
+        if (pedido !== pedidoVersoes.current) return;
         setVersoes([]);
         setVersaoId('');
       })
-      .finally(() => setLoadingVersoes(false));
+      .finally(() => pedido === pedidoVersoes.current && setLoadingVersoes(false));
   }
 
+  // Trocou de centro: zera a versão escolhida e recarrega a lista (ver `versoesCentro`).
   useEffect(() => {
+    setVersoes([]);
+    setVersaoId('');
+    setVersoesCentro(null);
     carregarVersoes();
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [empresaId, centroId]);
 
-  const versaoSelecionada = versoes.find((v) => v.id === versaoId) || null;
+  const versaoSelecionada = versoesCentro === String(centroId) ? versoes.find((v) => v.id === versaoId) || null : null;
   const opcoesVersao = versoes.map((v, i) => ({
     value: v.id,
     // Versões criadas sozinhas ao importar DCD / Geral levam a origem no rótulo.
@@ -882,7 +896,7 @@ export default function DfcConstrutorasPage() {
             onSelecionarCentro={(id) => atualizarParams({ centro_id: id })}
             versaoSelecionada={versaoSelecionada}
             versaoMaisRecenteId={versoes[0]?.id ?? null}
-            versaoVigenteNumero={versoes[0]?.versao ?? null}
+            versaoVigenteNumero={versoesCentro === String(centroId) ? (versoes[0]?.versao ?? null) : null}
             onVersaoCriada={() => {
               carregarVersoes();
               carregarCentros();

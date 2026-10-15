@@ -7,6 +7,8 @@ import CampoParametro from './CampoParametro';
 
 // NUMERIC chega do banco como texto ("1234.50") e DATE como 'AAAA-MM-DD' — normaliza pra número
 // (os de data ficam como texto mesmo, sem passar por Date — ver utils/datas.js).
+const ERRO_CARREGAR = 'Não foi possível carregar esta versão.';
+
 function valoresDaVersao(detalhe) {
   return Object.fromEntries(
     CAMPOS_EDITAVEIS.map((c) => {
@@ -145,8 +147,11 @@ const DfcParametrosTab = forwardRef(function DfcParametrosTab(
     }
     setCarregando(true);
     getVersaoParametrosDfc(empresaId, siengeId, versaoNumero)
-      .then((detalhe) => setValores(valoresDaVersao(detalhe)))
-      .catch(() => setErro('Não foi possível carregar esta versão.'))
+      .then((detalhe) => {
+        setValores(valoresDaVersao(detalhe));
+        setErro((atual) => (atual === ERRO_CARREGAR ? '' : atual));
+      })
+      .catch(() => setErro(ERRO_CARREGAR))
       .finally(() => setCarregando(false));
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [empresaId, siengeId, versaoNumero]);
