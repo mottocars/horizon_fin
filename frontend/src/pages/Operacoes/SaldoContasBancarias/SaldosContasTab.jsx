@@ -237,21 +237,32 @@ function saldoDisponivel(saldo, bloqueio) {
 // Linha de detalhe abaixo da conta (bloqueio, cheque especial) — só leitura, fora dos totais.
 // O recuo (pl-18 + seta) fica além do nome da conta (logomarca + gap), pra ler como um nível
 // abaixo. `valorDoDia` devolve undefined nos dias sem valor ("—").
+// Cor de cada tipo de linha de detalhe (pedido do usuário): bloqueado vermelho, disponível verde,
+// limite do cheque especial azul e limite restante roxo — fundo tom 200 na linha inteira, texto
+// tom 900. Mesmas cores na planilha (saldosExcel.service.js::COR_DETALHE).
+const TOM_DETALHE = {
+  'Saldo bloqueado': { fundo: 'bg-red-200', texto: 'text-red-900', borda: 'border-red-300' },
+  'Saldo disponível': { fundo: 'bg-emerald-200', texto: 'text-emerald-900', borda: 'border-emerald-300' },
+  'Limite total cheque especial': { fundo: 'bg-blue-200', texto: 'text-blue-900', borda: 'border-blue-300' },
+  'Limite restante': { fundo: 'bg-purple-200', texto: 'text-purple-900', borda: 'border-purple-300' },
+};
+
 function LinhaDetalheConta({ rotulo, dias, valorDoDia }) {
+  const tom = TOM_DETALHE[rotulo];
   return (
-    <tr>
-      <td className="sticky left-0 z-10 border-b border-r border-gray-100 border-r-gray-200 bg-white py-1.5 pl-18 pr-3">
-        <span className="flex items-center gap-1.5 text-[10px] font-medium uppercase tracking-wide text-gray-500">
-          <CornerDownRight size={12} className="shrink-0 text-gray-300" aria-hidden="true" />
+    <tr className={tom.texto}>
+      <td className={`sticky left-0 z-10 border-b border-r py-1.5 pl-18 pr-3 ${tom.fundo} ${tom.borda}`}>
+        <span className="flex items-center gap-1.5 text-[10px] font-semibold uppercase tracking-wide">
+          <CornerDownRight size={12} className="shrink-0 opacity-50" aria-hidden="true" />
           <span className="truncate">{rotulo}</span>
         </span>
       </td>
       {dias.map((d) => (
         <td
           key={d.iso}
-          className={`border-b border-l border-gray-100 px-3 text-right text-xs tabular-nums text-gray-600 ${d.fimDeSemana ? 'bg-gray-50/80' : 'bg-white'}`}
+          className={`border-b border-l px-3 text-right text-xs font-medium tabular-nums ${tom.fundo} ${tom.borda}`}
         >
-          <ValorTotal valor={valorDoDia(d.iso)} />
+          {valorDoDia(d.iso) === undefined ? <span className="opacity-40">—</span> : <ValorTotal valor={valorDoDia(d.iso)} />}
         </td>
       ))}
     </tr>

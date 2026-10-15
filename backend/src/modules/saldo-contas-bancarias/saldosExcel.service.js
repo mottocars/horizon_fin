@@ -281,16 +281,29 @@ function detalhesConta(conta, diasIso, periodos) {
   return linhas;
 }
 
-// Linha de detalhe (bloqueio/cheque especial) abaixo da conta: recuo maior que o da conta,
-// rótulo em cinza e valores sem negrito — mesmo "nível abaixo" da grade.
+// Cor de cada tipo de linha de detalhe — mesmas da grade (SaldosContasTab.jsx::TOM_DETALHE):
+// fundo tom 200 e texto tom 900 do Tailwind (red, emerald, blue, purple).
+const COR_DETALHE = {
+  'Saldo bloqueado': { fundo: 'FFFECACA', texto: 'FF7F1D1D' },
+  'Saldo disponível': { fundo: 'FFA7F3D0', texto: 'FF064E3B' },
+  'Limite total cheque especial': { fundo: 'FFBFDBFE', texto: 'FF1E3A8A' },
+  'Limite restante': { fundo: 'FFE9D5FF', texto: 'FF581C87' },
+};
+
+// Linha de detalhe (bloqueio/cheque especial) abaixo da conta: recuo maior que o da conta e a
+// linha inteira na cor do tipo (COR_DETALHE) — mesmo "nível abaixo" da grade.
 function escreverLinhaDetalhe(sheet, linha, rotulo, valores, dias) {
+  const cor = COR_DETALHE[rotulo];
+  const fundo = { type: 'pattern', pattern: 'solid', fgColor: { argb: cor.fundo } };
   const c1 = celula(sheet, linha, 1);
   c1.value = `↳ ${rotulo.toUpperCase()}`;
-  c1.font = { size: 9, color: { argb: CINZA } };
+  c1.font = { size: 9, bold: true, color: { argb: cor.texto } };
   c1.alignment = { horizontal: 'left', vertical: 'middle', indent: 5 };
+  c1.fill = fundo;
   dias.forEach((dia, i) => {
     const c = escreverValorDia(sheet, linha, 2 + i, valores[dia.iso]);
-    c.font = { size: 10, color: { argb: CINZA } };
+    c.font = { size: 10, color: { argb: cor.texto } };
+    c.fill = fundo;
   });
 }
 
