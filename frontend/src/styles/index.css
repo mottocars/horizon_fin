@@ -78,6 +78,63 @@ body {
   background-color: var(--color-app-bg);
 }
 
+/* Ícone "Conexões com IA" (layout/ConexoesIa.jsx): a estrela respira, as faíscas piscam alternadas e o
+   degradê do fundo corre devagar — só quando há conexão (classe ia-viva). */
+.ia-viva .ia-estrela,
+.ia-viva .ia-faisca {
+  transform-box: fill-box;
+  transform-origin: center;
+}
+.ia-viva .ia-estrela {
+  animation: ia-respira 3.2s ease-in-out infinite;
+}
+.ia-viva .ia-faisca {
+  animation: ia-pisca 3.2s ease-in-out infinite;
+}
+.ia-viva .ia-faisca-2 {
+  animation-delay: 1.6s;
+}
+.ia-fundo-vivo {
+  background-size: 220% 220%;
+  animation: ia-fluxo 7s ease-in-out infinite;
+}
+@keyframes ia-respira {
+  0%,
+  100% {
+    transform: scale(1) rotate(0deg);
+  }
+  50% {
+    transform: scale(1.1) rotate(10deg);
+  }
+}
+@keyframes ia-pisca {
+  0%,
+  100% {
+    opacity: 0.25;
+    transform: scale(0.55);
+  }
+  50% {
+    opacity: 1;
+    transform: scale(1);
+  }
+}
+@keyframes ia-fluxo {
+  0%,
+  100% {
+    background-position: 0% 50%;
+  }
+  50% {
+    background-position: 100% 50%;
+  }
+}
+@media (prefers-reduced-motion: reduce) {
+  .ia-viva .ia-estrela,
+  .ia-viva .ia-faisca,
+  .ia-fundo-vivo {
+    animation: none;
+  }
+}
+
 /* Qualquer elemento clicável/interativo mostra a mãozinha ao passar o
    mouse — cobre os elementos nativos automaticamente; cliques customizados
    em <div>/<tr>/<span> etc. recebem a classe cursor-pointer manualmente. */
