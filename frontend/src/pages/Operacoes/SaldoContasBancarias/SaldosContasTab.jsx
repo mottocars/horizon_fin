@@ -1,5 +1,5 @@
 import { Fragment, memo, useCallback, useEffect, useMemo, useRef, useState } from 'react';
-import { Check, History, Landmark, Loader2, Minus, Pencil, Plus, TriangleAlert, Zap } from 'lucide-react';
+import { Check, CornerDownRight, History, Landmark, Loader2, Minus, Pencil, Plus, TriangleAlert, Zap } from 'lucide-react';
 import { getSaldosContas, salvarSaldosContas } from '../../../api/saldoContasBancarias.api';
 import LogoBanco from './LogoBanco';
 import ComposicaoSaldo from './ComposicaoSaldo';
@@ -198,6 +198,37 @@ const CelulaSaldo = memo(function CelulaSaldo({
 function ValorTotal({ valor, className = '' }) {
   if (valor === undefined) return <span className="text-gray-300">—</span>;
   return <span className={`${valor < 0 ? 'text-red-600' : ''} ${className}`}>{formatarSaldo(valor)}</span>;
+}
+
+// Cheque especial: com o saldo negativo, o restante é o limite menos o que já foi usado
+// (limite 100.000 e saldo -99.622,18 -> 377,82); com saldo zero ou positivo, o limite inteiro.
+// Dia sem saldo lançado fica sem restante (undefined -> "—").
+function limiteRestante(limite, saldo) {
+  if (saldo === undefined || saldo === null) return undefined;
+  return saldo < 0 ? somarSaldos([limite, saldo]) : limite;
+}
+
+// Linha de detalhe do cheque especial, abaixo da conta (só leitura, fora dos totais). O recuo
+// (pl-18 + seta) fica além do nome da conta (logomarca + gap), pra ler como um nível abaixo.
+function LinhaChequeEspecial({ rotulo, dias, valorDoDia }) {
+  return (
+    <tr>
+      <td className="sticky left-0 z-10 border-b border-r border-gray-100 border-r-gray-200 bg-white py-1.5 pl-18 pr-3">
+        <span className="flex items-center gap-1.5 text-[10px] font-medium uppercase tracking-wide text-gray-500">
+          <CornerDownRight size={12} className="shrink-0 text-gray-300" aria-hidden="true" />
+          <span className="truncate">{rotulo}</span>
+        </span>
+      </td>
+      {dias.map((d) => (
+        <td
+          key={d.iso}
+          className={`border-b border-l border-gray-100 px-3 text-right text-xs tabular-nums text-gray-600 ${d.fimDeSemana ? 'bg-gray-50/80' : 'bg-white'}`}
+        >
+          <ValorTotal valor={valorDoDia(d.iso)} />
+        </td>
+      ))}
+    </tr>
+  );
 }
 
 function Esqueleto() {
@@ -747,48 +778,61 @@ function SaldosContasTab({
 
                     {aberto &&
                       grupo.contas.map((conta) => {
+                        const limite = conta.valor_cheque_especial;
                         return (
-                          <tr key={`${conta.company_id}|${conta.numero_conta}`}>
-                            {/* pl-9: a logomarca fica alinhada com o ícone da classificação na
-                                linha de cima. Só o nome da conta — a empresa não precisa
-                                aparecer aqui (existe o filtro Empresa da conta) — e o banco vai
-                                no tooltip da logomarca. */}
-                            <td className="sticky left-0 z-10 border-b border-r border-gray-100 border-r-gray-200 bg-white py-1.5 pl-9 pr-3">
-                              <div className="flex items-center gap-2.5">
-                                <LogoBanco codigo={conta.banco_codigo} info={infoBancos?.get(conta.banco_codigo)} />
-                                <span className="min-w-0 flex-1 truncate text-xs font-medium text-gray-800" title={conta.nome || conta.numero_conta}>
-                                  {conta.nome || conta.numero_conta}
-                                </span>
-                                {conta.status !== 'ENABLED' && (
-                                  <span className="shrink-0 rounded bg-gray-100 px-1.5 py-0.5 text-[10px] font-medium text-gray-500">
-                                    Inativa
+                          <Fragment key={`${conta.company_id}|${conta.numero_conta}`}>
+                            <tr>
+                              {/* pl-9: a logomarca fica alinhada com o ícone da classificação na
+                                  linha de cima. Só o nome da conta — a empresa não precisa
+                                  aparecer aqui (existe o filtro Empresa da conta) — e o banco vai
+                                  no tooltip da logomarca. */}
+                              <td className="sticky left-0 z-10 border-b border-r border-gray-100 border-r-gray-200 bg-white py-1.5 pl-9 pr-3">
+                                <div className="flex items-center gap-2.5">
+                                  <LogoBanco codigo={conta.banco_codigo} info={infoBancos?.get(conta.banco_codigo)} />
+                                  <span className="min-w-0 flex-1 truncate text-xs font-medium text-gray-800" title={conta.nome || conta.numero_conta}>
+                                    {conta.nome || conta.numero_conta}
                                   </span>
-                                )}
-                              </div>
-                            </td>
-                            {dias.map((d) => (
-                              <td
-                                key={d.iso}
-                                className={`border-b border-l border-gray-100 p-1 ${d.fimDeSemana ? 'bg-gray-50/80' : 'bg-white'}`}
-                              >
-                                <CelulaSaldo
-                                  companyId={conta.company_id}
-                                  numeroConta={conta.numero_conta}
-                                  rotulo={conta.nome || conta.numero_conta}
-                                  dia={d}
-                                  valor={conta.saldos[d.iso]}
-                                  origem={conta.origens?.[d.iso]}
-                                  cobranca={conta.cobrancas?.[d.iso]}
-                                  composicao={conta.composicoes?.[d.iso]}
-                                  bloqueada={somenteLeitura || d.iso !== dataAberta}
-                                  onCommit={handleCommit}
-                                  onNavegar={handleNavegar}
-                                  onColar={handleColar}
-                                  registrar={registrarInput}
-                                />
+                                  {conta.status !== 'ENABLED' && (
+                                    <span className="shrink-0 rounded bg-gray-100 px-1.5 py-0.5 text-[10px] font-medium text-gray-500">
+                                      Inativa
+                                    </span>
+                                  )}
+                                </div>
                               </td>
-                            ))}
-                          </tr>
+                              {dias.map((d) => (
+                                <td
+                                  key={d.iso}
+                                  className={`border-b border-l border-gray-100 p-1 ${d.fimDeSemana ? 'bg-gray-50/80' : 'bg-white'}`}
+                                >
+                                  <CelulaSaldo
+                                    companyId={conta.company_id}
+                                    numeroConta={conta.numero_conta}
+                                    rotulo={conta.nome || conta.numero_conta}
+                                    dia={d}
+                                    valor={conta.saldos[d.iso]}
+                                    origem={conta.origens?.[d.iso]}
+                                    cobranca={conta.cobrancas?.[d.iso]}
+                                    composicao={conta.composicoes?.[d.iso]}
+                                    bloqueada={somenteLeitura || d.iso !== dataAberta}
+                                    onCommit={handleCommit}
+                                    onNavegar={handleNavegar}
+                                    onColar={handleColar}
+                                    registrar={registrarInput}
+                                  />
+                                </td>
+                              ))}
+                            </tr>
+                            {limite > 0 && (
+                              <>
+                                <LinhaChequeEspecial rotulo="Limite total cheque especial" dias={dias} valorDoDia={() => limite} />
+                                <LinhaChequeEspecial
+                                  rotulo="Limite restante"
+                                  dias={dias}
+                                  valorDoDia={(iso) => limiteRestante(limite, conta.saldos[iso])}
+                                />
+                              </>
+                            )}
+                          </Fragment>
                         );
                       })}
                   </Fragment>

@@ -130,7 +130,7 @@ async function getSaldos(empresaId, { dataInicio, dataFim, companyIds = [], clas
   // usuário) — sem os dois, a conta fica de fora mesmo tendo saldo lançado no período.
   const { rows: contas } = await pool.query(
     `SELECT c.numero_conta, c.company_id, c.company_name, c.nome, c.classificacao, c.status,
-            ${BANCO_EFETIVO_SQL} AS banco_codigo
+            ${BANCO_EFETIVO_SQL} AS banco_codigo, c.valor_cheque_especial
      FROM contas_bancarias_sienge c
      WHERE c.empresa_id = $1
        AND c.classificacao IS NOT NULL AND c.projeta_saldo = TRUE
@@ -170,6 +170,9 @@ async function getSaldos(empresaId, { dataInicio, dataFim, companyIds = [], clas
       const dados = porConta.get(`${c.company_id}|${c.numero_conta}`);
       return {
         ...c,
+        // Limite do cheque especial (Cadastros > Contas Bancárias) — a grade mostra o limite
+        // total e o restante abaixo da conta; null/0 = conta sem cheque especial.
+        valor_cheque_especial: c.valor_cheque_especial === null ? null : Number(c.valor_cheque_especial),
         saldos: dados?.saldos || {},
         origens: dados?.origens || {},
         cobrancas: dados?.cobrancas || {},
