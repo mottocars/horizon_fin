@@ -107,10 +107,11 @@ async function create({ empresa_id, nome_conector, escopo = 'COBRANCA', sessao_h
   return getById(rows[0].id);
 }
 
-async function update(id, { nome_conector, sessao_horas }) {
+async function update(id, { nome_conector, sessao_horas, escopo }) {
   const { rows } = await pool.query(
-    `UPDATE integracoes_mcp SET nome_conector = $1, sessao_horas = COALESCE($3, sessao_horas) WHERE id = $2 RETURNING id`,
-    [nome_conector, id, sessao_horas ?? null]
+    `UPDATE integracoes_mcp SET nome_conector = $1, sessao_horas = COALESCE($3, sessao_horas), escopo = COALESCE($4, escopo)
+      WHERE id = $2 RETURNING id`,
+    [nome_conector, id, sessao_horas ?? null, escopo ?? null]
   );
   return rows[0] ? getById(id) : null;
 }

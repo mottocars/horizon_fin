@@ -14,9 +14,13 @@ const createSchema = z.object({
   sessao_horas: sessaoHoras.default(24),
 });
 
+// Na edição o tipo só troca entre os dois do DFC (mesma URL): "DFC CONSTRUTORAS" <-> "DFC CONSTRUTORAS
+// (ALTERA ORÇAMENTO)". Cobrança tem outra URL e outro acesso — continua definida na criação.
+const ESCOPOS_DFC = ['DFC_CONSTRUTORAS', 'DFC_ORCAMENTO'];
 const updateSchema = z.object({
   nome_conector: z.string().min(1, 'Nome do conector é obrigatório.'),
   sessao_horas: sessaoHoras.optional(),
+  escopo: z.enum(ESCOPOS_DFC, { errorMap: () => ({ message: 'Só dá para trocar o tipo entre os conectores DFC Construtoras.' }) }).optional(),
 });
 
 function badRequest(message) {
@@ -70,9 +74,17 @@ async function create(req, res, next) {
 async function update(req, res, next) {
   try {
     const data = updateSchema.parse(req.body);
-    const item = await service.update(req.params.id, data);
-    if (!item) return res.status(404).json({ message: 'Conector não encontrado.' });
-    res.json(item);
+    const atual = await service.getById(req.params.id);
+    if (!atual) return res.status(404).json({ message: 'Conector não encontrado.' });
+    const trocaEscopo = Boolean(data.escopo) && data.escopo !== atual.escopo;
+    if (trocaEscopo && !ESCOPOS_DFC.includes(atual.escopo)) {
+      return next(badRequest('Só dá para trocar o tipo entre os conectores DFC Construtoras.'));
+    }
+    const item = await service.update(req.params.id, { ...data, escopo: trocaEscopo ? data.escopo : undefined });
+    // Trocou leitura <-> altera orçamento: encerra os logins ativos — quem estava conectado entra de novo
+    // e vê na tela de login o que o conector passa a permitir.
+    const sessoesEncerradas = trocaEscopo ? await oauth.encerrarSessoes(atual.id) : 0;
+    res.json({ ...item, sessoes_encerradas: sessoesEncerradas });
   } catch (err) {
     if (err.issues) return next(badRequest(err.issues[0].message));
     next(err);

@@ -70,10 +70,15 @@ export default function McpForm() {
   // escopo: COBRANCA (padrão) ou uma das flags do DFC — "DFC CONSTRUTORAS" (DFC_CONSTRUTORAS: só as
   // ferramentas do DFC, leitura) ou "DFC CONSTRUTORAS (ALTERA ORÇAMENTO)" (DFC_ORCAMENTO: as mesmas, mais
   // inserir/atualizar valores HORIZON - INFORMADO). As duas com login do Horizon (OAuth) que vale
-  // `sessao_horas`. Definido na criação (não muda depois).
+  // `sessao_horas`. Na edição, só troca entre as duas flags do DFC (mesma URL) — e isso encerra as
+  // sessões ativas; cobrança continua definida na criação.
   const [form, setForm] = useState({ empresa_id: '', nome_conector: '', escopo: 'COBRANCA', sessao_horas: 24 });
+  const [escopoOriginal, setEscopoOriginal] = useState(null);
   const dfc = form.escopo !== 'COBRANCA';
   const alteraOrcamento = form.escopo === 'DFC_ORCAMENTO';
+  // Edição: conector de cobrança fica travado; conector DFC troca entre as duas flags.
+  const travaEscopo = isEdit && escopoOriginal === 'COBRANCA';
+  const trocouEscopo = isEdit && escopoOriginal !== null && form.escopo !== escopoOriginal;
   const [url, setUrl] = useState('');
   const [sessoes, setSessoes] = useState(null);
   const [encerrando, setEncerrando] = useState(false);
@@ -96,6 +101,7 @@ export default function McpForm() {
           escopo: data.escopo || 'COBRANCA',
           sessao_horas: data.sessao_horas || 24,
         });
+        setEscopoOriginal(data.escopo || 'COBRANCA');
         setUrl(data.url);
         if (data.escopo !== 'COBRANCA') listMcpSessoes(id).then(setSessoes).catch(() => setSessoes([]));
       })
@@ -180,9 +186,21 @@ export default function McpForm() {
     setSaving(true);
     try {
       if (isEdit) {
+        if (trocouEscopo) {
+          const confirmado = await confirm({
+            title: 'Trocar o tipo do conector',
+            description: `O conector passa a ser "${ESCOPOS_DFC.find((e) => e.escopo === form.escopo).titulo}". A URL continua a mesma, mas os logins ativos no Claude serão encerrados — quem estiver conectado precisa entrar de novo. Deseja continuar?`,
+            confirmLabel: 'Trocar',
+            variant: 'warning',
+          });
+          if (!confirmado) {
+            setSaving(false);
+            return;
+          }
+        }
         await updateMcpConector(id, {
           nome_conector: form.nome_conector.trim(),
-          ...(dfc ? { sessao_horas: Number(form.sessao_horas) } : {}),
+          ...(dfc ? { sessao_horas: Number(form.sessao_horas), escopo: form.escopo } : {}),
         });
         navigate('/integracoes/mcp', { replace: true });
       } else {
@@ -265,19 +283,20 @@ export default function McpForm() {
               {/* As duas flags do DFC são excluentes: marcar uma desmarca a outra. */}
               <div className="space-y-3">
                 {ESCOPOS_DFC.map((op) => (
-                  <label key={op.escopo} className={`flex items-start gap-3 ${isEdit ? 'cursor-not-allowed opacity-80' : 'cursor-pointer'}`}>
+                  <label key={op.escopo} className={`flex items-start gap-3 ${travaEscopo ? 'cursor-not-allowed opacity-80' : 'cursor-pointer'}`}>
                     <input
                       type="checkbox"
                       checked={form.escopo === op.escopo}
-                      disabled={isEdit}
-                      onChange={(e) => handleChange('escopo', e.target.checked ? op.escopo : 'COBRANCA')}
+                      disabled={travaEscopo}
+                      // Na edição de um conector DFC não dá para desmarcar as duas (viraria cobrança).
+                      onChange={(e) => handleChange('escopo', e.target.checked ? op.escopo : isEdit ? form.escopo : 'COBRANCA')}
                       className="mt-0.5 h-4 w-4 rounded border-gray-300 text-primary-600 focus:ring-primary-500"
                     />
                     <span>
                       <span className="block text-sm font-semibold text-gray-900">{op.titulo}</span>
                       <span className="block text-xs text-gray-500">
                         {op.descricao}
-                        {isEdit ? ' Definido na criação do conector.' : ''}
+                        {travaEscopo ? ' Definido na criação do conector.' : ''}
                       </span>
                     </span>
                   </label>
