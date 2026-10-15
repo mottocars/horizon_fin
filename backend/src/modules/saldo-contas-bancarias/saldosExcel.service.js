@@ -246,6 +246,54 @@ function escreverLinhaGrupo(sheet, linha, texto, totais, dias, { total = false, 
   });
 }
 
+// Linhas de detalhe abaixo da conta — mesmas regras da grade (SaldosContasTab.jsx):
+// - Bloqueio (botão direito > Registrar bloqueio): Saldo bloqueado e Saldo disponível (saldo -
+//   bloqueado), só se a conta tiver bloqueio em algum dia; dias sem bloqueio ficam vazios.
+// - Cheque especial (limite cadastrado na conta): Limite total e Limite restante (saldo negativo
+//   -> limite + saldo; senão o limite inteiro), só nos dias com abertura de período (`periodos`).
+// Devolve [{ rotulo, valores: { iso: número } }] — usado pela planilha e pela mensagem do
+// Comunicar Saldos (comunicarSaldos.service.js).
+function detalhesConta(conta, diasIso, periodos) {
+  const linhas = [];
+  const bloqueios = conta.bloqueios || {};
+  if (Object.keys(bloqueios).length > 0) {
+    const bloqueado = {};
+    const disponivel = {};
+    for (const iso of diasIso) {
+      if (bloqueios[iso] === undefined) continue;
+      bloqueado[iso] = bloqueios[iso];
+      if (conta.saldos[iso] !== undefined) disponivel[iso] = somarCentavos([conta.saldos[iso], -bloqueios[iso]]);
+    }
+    linhas.push({ rotulo: 'Saldo bloqueado', valores: bloqueado }, { rotulo: 'Saldo disponível', valores: disponivel });
+  }
+  const limite = conta.valor_cheque_especial;
+  if (limite > 0) {
+    const total = {};
+    const restante = {};
+    for (const iso of diasIso) {
+      if (!periodos.has(iso)) continue;
+      total[iso] = limite;
+      const saldo = conta.saldos[iso];
+      if (saldo !== undefined) restante[iso] = saldo < 0 ? somarCentavos([limite, saldo]) : limite;
+    }
+    linhas.push({ rotulo: 'Limite total cheque especial', valores: total }, { rotulo: 'Limite restante', valores: restante });
+  }
+  return linhas;
+}
+
+// Linha de detalhe (bloqueio/cheque especial) abaixo da conta: recuo maior que o da conta,
+// rótulo em cinza e valores sem negrito — mesmo "nível abaixo" da grade.
+function escreverLinhaDetalhe(sheet, linha, rotulo, valores, dias) {
+  const c1 = celula(sheet, linha, 1);
+  c1.value = `↳ ${rotulo.toUpperCase()}`;
+  c1.font = { size: 9, color: { argb: CINZA } };
+  c1.alignment = { horizontal: 'left', vertical: 'middle', indent: 5 };
+  dias.forEach((dia, i) => {
+    const c = escreverValorDia(sheet, linha, 2 + i, valores[dia.iso]);
+    c.font = { size: 10, color: { argb: CINZA } };
+  });
+}
+
 function escreverLinhaConta(sheet, linha, conta, dias) {
   const c1 = celula(sheet, linha, 1);
   const inativa = conta.status !== 'ENABLED';
@@ -264,7 +312,7 @@ function escreverLinhaConta(sheet, linha, conta, dias) {
 function montarPlanilha(workbook, dados) {
   const {
     empresaLabel, filtrosDisplay, nomeUsuario, geradoEm, dias, meses,
-    grupos, totaisPorGrupo, totalGeral, gruposBanco, totaisPorBanco, bancoNomes,
+    grupos, totaisPorGrupo, totalGeral, gruposBanco, totaisPorBanco, bancoNomes, periodos,
   } = dados;
   const ultimaColuna = 1 + dias.length;
   const sheet = workbook.addWorksheet('Relatório', { views: [{ showGridLines: false }] });
@@ -368,13 +416,17 @@ function montarPlanilha(workbook, dados) {
     for (const conta of grupo.contas) {
       escreverLinhaConta(sheet, linha, conta, dias);
       linha += 1;
+      for (const detalhe of detalhesConta(conta, dias.map((d) => d.iso), periodos)) {
+        escreverLinhaDetalhe(sheet, linha, detalhe.rotulo, detalhe.valores, dias);
+        linha += 1;
+      }
     }
   }
   escreverLinhaGrupo(sheet, linha, 'TOTAL', totalGeral, dias, { total: true });
 }
 
 async function gerarRelatorioExcel(empresaId, filtrosQuery, meta) {
-  const [{ contas }, opcoes, empresa] = await Promise.all([
+  const [{ contas, periodos }, opcoes, empresa] = await Promise.all([
     service.getSaldos(empresaId, filtrosQuery),
     service.getFiltros(empresaId),
     empresasService.getById(empresaId),
@@ -409,6 +461,7 @@ async function gerarRelatorioExcel(empresaId, filtrosQuery, meta) {
     gruposBanco,
     totaisPorBanco,
     bancoNomes,
+    periodos: new Set(periodos),
   });
 
   return workbook;
@@ -449,6 +502,6 @@ async function gerarRelatorioExcelBuffer(empresaId, filtrosQuery, meta) {
   return corrigirTamanhoImagemNoBuffer(buffer);
 }
 
-// agruparContas/calcularTotais também usados por comunicarSaldos.service.js pra montar o
-// resumo por classificação do dia encerrado (mesma lógica, só com `dias` de 1 elemento só).
-module.exports = { gerarRelatorioExcel, gerarRelatorioExcelBuffer, agruparContas, calcularTotais };
+// agruparContas/calcularTotais/detalhesConta também usados por comunicarSaldos.service.js pra
+// montar o resumo do dia encerrado (mesma lógica, só com `dias` de 1 elemento só).
+module.exports = { gerarRelatorioExcel, gerarRelatorioExcelBuffer, agruparContas, calcularTotais, detalhesConta };

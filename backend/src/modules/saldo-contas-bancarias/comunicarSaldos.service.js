@@ -34,8 +34,32 @@ function semanaDe(iso) {
   return { dataInicio: fmt(domingo), dataFim: fmt(sabado) };
 }
 
+// Bloqueios e cheque especial do dia encerrado, conta a conta — mesmas linhas de detalhe da
+// grade/planilha (saldosExcel.service.js::detalhesConta). Devolve { bloqueios, chequeEspecial },
+// cada um uma lista de linhas "* conta: ..." (vazia quando nenhuma conta tem).
+function montarDetalhes(contas, data, periodos) {
+  const bloqueios = [];
+  const chequeEspecial = [];
+  const valor = (v) => (v === undefined ? '—' : `R$ ${formatarMoeda(v)}`);
+  for (const conta of contas) {
+    const nome = conta.nome || conta.numero_conta;
+    const porRotulo = Object.fromEntries(
+      saldosExcelService.detalhesConta(conta, [data], periodos).map((d) => [d.rotulo, d.valores[data]])
+    );
+    if (porRotulo['Saldo bloqueado'] !== undefined) {
+      bloqueios.push(`* ${nome}: bloqueado ${valor(porRotulo['Saldo bloqueado'])} · disponível ${valor(porRotulo['Saldo disponível'])}`);
+    }
+    if (porRotulo['Limite total cheque especial'] !== undefined) {
+      chequeEspecial.push(
+        `* ${nome}: limite ${valor(porRotulo['Limite total cheque especial'])} · restante ${valor(porRotulo['Limite restante'])}`
+      );
+    }
+  }
+  return { bloqueios, chequeEspecial };
+}
+
 // Mesmo formato do comunicado de Repasses CEF (repasses-cef/comunicarRepasses.service.js).
-function montarMensagem({ nomeDestinatario, dataBR, linhas, total, delta }) {
+function montarMensagem({ nomeDestinatario, dataBR, linhas, total, delta, detalhes }) {
   const primeiroNome = String(nomeDestinatario || '').trim().split(/\s+/)[0];
   return [
     '*[ SALDO DAS CONTAS ]*',
@@ -47,6 +71,8 @@ function montarMensagem({ nomeDestinatario, dataBR, linhas, total, delta }) {
     linhas,
     `*Total: R$ ${total}*`,
     ...(typeof delta === 'number' ? ['', formatarVariacao(delta)] : []),
+    ...(detalhes.bloqueios.length ? ['', '🔒 Saldos bloqueados:', ...detalhes.bloqueios] : []),
+    ...(detalhes.chequeEspecial.length ? ['', '💳 Cheque especial:', ...detalhes.chequeEspecial] : []),
     '',
     '📎 Detalhe por conta na planilha anexa',
     '',
@@ -81,7 +107,7 @@ async function notificarComunicarSaldos(empresaId, dataFechada) {
   );
   if (destinatarios.length === 0) return { status: 'sem_destinatario', ...nada };
 
-  const { contas } = await service.getSaldos(empresaId, {
+  const { contas, periodos } = await service.getSaldos(empresaId, {
     dataInicio: dataFechada, dataFim: dataFechada, companyIds: [], classificacoes: [], bancos: [], contas: [],
   });
 
@@ -95,6 +121,7 @@ async function notificarComunicarSaldos(empresaId, dataFechada) {
   const linhas = grupos.map((g) => `* ${g.nome}: R$ ${formatarMoeda(totaisPorGrupo[g.nome][dataFechada])}`).join('\n');
   const total = formatarMoeda(totalGeral[dataFechada]);
   const dataBR = brData(dataFechada);
+  const detalhes = montarDetalhes(contas, dataFechada, new Set(periodos));
 
   // Variação desde a última abertura de período (a anterior a esta que acabou de encerrar) —
   // só entra na mensagem quando dá pra comparar de verdade (existe um período anterior E ele
@@ -148,7 +175,7 @@ async function notificarComunicarSaldos(empresaId, dataFechada) {
         throw new Error(`usuário "${dest.nome}" (id ${dest.id}) sem telefone cadastrado`);
       }
       const telefone = `${dest.telefone_ddd}${dest.telefone_numero}`;
-      const mensagem = montarMensagem({ nomeDestinatario: dest.nome, dataBR, linhas, total, delta });
+      const mensagem = montarMensagem({ nomeDestinatario: dest.nome, dataBR, linhas, total, delta, detalhes });
       if (anexoBase64) {
         await zapiService.enviarDocumento(zapiIntegracaoId, {
           telefone,
