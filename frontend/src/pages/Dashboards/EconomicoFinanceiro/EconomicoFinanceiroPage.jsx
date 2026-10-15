@@ -2,24 +2,22 @@ import { useEffect, useMemo, useState } from 'react';
 import { useSearchParams } from 'react-router-dom';
 import { BarChart3, CalendarClock, FileSearch, Landmark, Wallet } from 'lucide-react';
 import ControlesDashboard from '../ControlesDashboard';
+import CabecalhoDashboard from '../CabecalhoDashboard';
 import SearchableSelect from '../../../components/SearchableSelect';
 import { getTelaFavorita, salvarTelaFavorita } from '../../../api/dashboards.api';
 import { listEmpresas } from '../../../api/empresas.api';
 import { listCentrosCustoDfc } from '../../../api/dfcCentros.api';
-import { listContas } from '../../../api/planosFinanceirosSienge.api';
-import { listTodasClassificacoesPlanoDfc } from '../../../api/dfcPlanoContas.api';
 import { nomeExibicaoEmpresa } from '../../../utils/empresa';
 import { useEmpresaTravada } from '../../../hooks/useEmpresaTravada';
 import DfcFluxoTab from '../../Operacoes/DfcConstrutoras/DfcFluxoTab';
-import { codigoFormatado } from '../../Operacoes/DfcConstrutoras/codigoConta';
 
 // Dashboards > Econômico Financeiro — a tela inteira é do dashboard (só o menu lateral fica, ver
-// AppShell.jsx): título da tela com o ícone em cima e o conteúdo ocupando o resto; o botão de menu
-// abre o painel com as telas e os filtros da tela.
+// AppShell.jsx): cabeçalho (nome do dashboard, título da tela e os filtros em uso) e o conteúdo
+// ocupando o resto; o botão de menu abre o painel com as telas e os filtros da tela.
 // Tela aberta: a da URL (?tela=); sem ela, a favorita do usuário (estrela, gravada no servidor);
 // sem favorita, a primeira da lista (pedido do usuário).
 // Fluxo de Caixa: a mesma grade da aba DFC do DFC Construtoras (DfcFluxoTab), com os filtros
-// Empresa, Data início e fim, Centros de custo e Plano de contas (naturezas). A empresa fica na URL
+// Empresa, Data início e fim e Centros de custo. A empresa fica na URL
 // (?empresa_id=), como nas outras telas. As demais telas ainda serão construídas.
 const DASHBOARD = 'economico-financeiro';
 const TELAS = [
@@ -87,9 +85,7 @@ export default function EconomicoFinanceiroPage() {
   const [carregandoEmpresas, setCarregandoEmpresas] = useState(true);
   const [periodo, setPeriodo] = useState(periodoPadrao);
   const [centros, setCentros] = useState([]);
-  const [naturezas, setNaturezas] = useState([]);
   const [opcoesCentros, setOpcoesCentros] = useState([]);
-  const [opcoesNaturezas, setOpcoesNaturezas] = useState([]);
 
   useEffect(() => {
     listEmpresas({ ativo: true, limit: 100 })
@@ -104,13 +100,10 @@ export default function EconomicoFinanceiroPage() {
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [empresaTravada, empresaIdTravada, carregandoEmpresas, empresas, empresaId]);
 
-  // Opções da empresa: centros com "Projeta DFC" e naturezas que têm Máscara DFC (no Global ou na
-  // versão própria de algum centro) — as que podem aparecer no fluxo. Trocar de empresa limpa os dois.
+  // Centros com "Projeta DFC" da empresa; trocar de empresa limpa a seleção.
   useEffect(() => {
     setCentros([]);
-    setNaturezas([]);
     setOpcoesCentros([]);
-    setOpcoesNaturezas([]);
     if (!empresaId) return;
     listCentrosCustoDfc(empresaId)
       .then((lista) =>
@@ -122,19 +115,6 @@ export default function EconomicoFinanceiroPage() {
         )
       )
       .catch(() => setOpcoesCentros([]));
-    Promise.all([listContas(empresaId, { page: 1, limit: 2000, search: '' }), listTodasClassificacoesPlanoDfc(empresaId)])
-      .then(([contas, cls]) => {
-        const comMascara = new Set(
-          [...cls.global, ...Object.values(cls.centros).flat()].filter((c) => c.mascara_id).map((c) => Number(c.sienge_id))
-        );
-        setOpcoesNaturezas(
-          contas.data
-            .filter((c) => comMascara.has(Number(c.sienge_id)))
-            .sort((a, b) => String(a.sienge_id).localeCompare(String(b.sienge_id)))
-            .map((c) => ({ value: c.sienge_id, label: `${c.mascara_nivel_1 ? codigoFormatado(c) : c.sienge_id} ${c.name}` }))
-        );
-      })
-      .catch(() => setOpcoesNaturezas([]));
   }, [empresaId]);
 
   const opcoesEmpresas = useMemo(() => empresas.map((e) => ({ value: e.id, label: nomeExibicaoEmpresa(e) })), [empresas]);
@@ -172,29 +152,27 @@ export default function EconomicoFinanceiroPage() {
           larguraPainel={300}
         />
       </Campo>
-      <Campo rotulo="Plano de contas">
-        <SearchableSelect
-          multiple
-          value={naturezas}
-          onChange={(l) => setNaturezas(l || [])}
-          disabled={!empresaId}
-          options={opcoesNaturezas}
-          placeholder="Todas as naturezas"
-          larguraPainel={380}
-        />
-      </Campo>
     </>
   );
 
-  const Icone = tela.icon;
+  // Etiquetas do cabeçalho: os filtros em uso na tela.
+  const MESES = ['jan', 'fev', 'mar', 'abr', 'mai', 'jun', 'jul', 'ago', 'set', 'out', 'nov', 'dez'];
+  const mesAno = (d) => `${MESES[Number(d.slice(5, 7)) - 1]}/${d.slice(0, 4)}`;
+  const nomeEmpresa = opcoesEmpresas.find((e) => String(e.value) === String(empresaId))?.label;
+  const nomesCentros = centros.map((id) => opcoesCentros.find((c) => String(c.value) === String(id))?.label).filter(Boolean);
+  const etiquetas =
+    telaAtiva === 'fluxo-caixa'
+      ? [
+          { rotulo: 'Empresa', valor: nomeEmpresa || '—' },
+          { rotulo: 'Período', valor: periodoValido ? `${mesAno(periodo.inicio)} – ${mesAno(periodo.fim)}` : '—' },
+          { rotulo: 'Centros', valor: nomesCentros.length ? (nomesCentros.length > 2 ? `${nomesCentros.length} selecionados` : nomesCentros.join(', ')) : 'Todos' },
+          { rotulo: 'Fonte', valor: 'DFC Construtoras' },
+        ]
+      : [];
+
   return (
     <div className="flex h-full w-full flex-col gap-3 p-5">
-      <header className="flex shrink-0 items-center gap-2.5">
-        <span className="flex h-9 w-9 items-center justify-center rounded-xl bg-primary-50 text-primary-600">
-          <Icone size={18} />
-        </span>
-        <h1 className="text-lg font-semibold text-gray-900">{tela.label}</h1>
-      </header>
+      <CabecalhoDashboard dashboard="Econômico Financeiro" titulo={tela.label} etiquetas={etiquetas} />
 
       {telaAtiva === 'fluxo-caixa' && (
         <DfcFluxoTab
@@ -203,7 +181,6 @@ export default function EconomicoFinanceiroPage() {
           inicio={periodo.inicio}
           fim={periodo.fim}
           centros={centros}
-          naturezas={naturezas}
         />
       )}
 

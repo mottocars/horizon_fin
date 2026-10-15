@@ -74,14 +74,12 @@ function mesDeHoje() {
 // Período = o mesmo da aba Orçamentos (filtros do topo). Visual de demonstrativo, rolagem própria com a
 // primeira coluna congelada. `telaCheia` / `onSairTelaCheia`: tela cheia. `refreshToken`: recarrega.
 // Também é o Fluxo de Caixa do dashboard Econômico Financeiro (`variante="dashboard"`: quadro solto,
-// sem o encaixe de aba, ocupando a altura da tela) — lá com o filtro `naturezas` (ids das contas do
-// plano; vazio = todas): só as naturezas escolhidas entram nas linhas e no resultado.
+// sem o encaixe de aba, ocupando a altura da tela).
 export default function DfcFluxoTab({
   empresaId,
   inicio,
   fim,
   centros: centrosFiltro = [],
-  naturezas: naturezasFiltro = [],
   telaCheia = false,
   onSairTelaCheia,
   refreshToken = 0,
@@ -150,7 +148,6 @@ export default function DfcFluxoTab({
   const { estrutura, porColuna } = useMemo(() => {
     if (!dados) return { estrutura: [], porColuna: {} };
     const filtro = centrosFiltro.length ? new Set(centrosFiltro.map(Number)) : null;
-    const filtroNaturezas = naturezasFiltro.length ? new Set(naturezasFiltro.map(Number)) : null;
     const mapaDe = (lista) => Object.fromEntries(lista.map((c) => [c.sienge_id, c.mascara_id]));
     const planoGlobal = mapaDe(dados.classificacoes.global);
     const planosCentro = Object.fromEntries(Object.entries(dados.classificacoes.centros).map(([id, l]) => [id, mapaDe(l)]));
@@ -167,7 +164,6 @@ export default function DfcFluxoTab({
     const centrosCelula = new Map();
     const lancar = (centroId, natureza, mes, tipo, valor) => {
       if (filtro && !filtro.has(centroId)) return;
-      if (filtroNaturezas && !filtroNaturezas.has(Number(natureza))) return;
       if (!valor) return;
       const lado = valor > 0 ? 'E' : 'S';
       if (natureza === null || natureza === undefined) return;
@@ -253,7 +249,7 @@ export default function DfcFluxoTab({
       });
     }
     return { estrutura: grupos, porColuna: { resultado, saldoInicial, saldoFinal } };
-  }, [dados, realizado, meses, ultimo, mesAtual, centrosFiltro, naturezasFiltro]);
+  }, [dados, realizado, meses, ultimo, mesAtual, centrosFiltro]);
 
   // Larguras: o bastante pro maior valor de cada coluna.
   const larguras = useMemo(() => {
