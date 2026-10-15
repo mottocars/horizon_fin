@@ -9,6 +9,10 @@
 // em utils/permissoes.js).
 export const TELAS_SISTEMA = [
   {
+    grupo: 'Dashboards',
+    telas: [{ codigo: '/dashboards/economico-financeiro', label: 'Econômico Financeiro' }],
+  },
+  {
     grupo: 'Cadastros',
     telas: [
       { codigo: '/cadastros/empresas', label: 'Empresas' },

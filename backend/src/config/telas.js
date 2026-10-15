@@ -3,6 +3,8 @@
 // usuário (frontend/src/config/telasSistema.js). Usados pelo exigirTela
 // de server.js. Tela nova no menu: adicionar aqui e lá.
 module.exports = {
+  ECONOMICO_FINANCEIRO: '/dashboards/economico-financeiro',
+
   EMPRESAS: '/cadastros/empresas',
   USUARIOS: '/cadastros/usuarios',
   MASCARAS: '/cadastros/mascaras',

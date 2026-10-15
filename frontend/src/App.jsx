@@ -7,6 +7,7 @@ import Login from './pages/Login/Login';
 import Home from './pages/Home/Home';
 import DreGerencialPage from './pages/Operacoes/DreGerencial/DreGerencialPage';
 import DfcConstrutorasPage from './pages/Operacoes/DfcConstrutoras/DfcConstrutorasPage';
+import EconomicoFinanceiroPage from './pages/Dashboards/EconomicoFinanceiro/EconomicoFinanceiroPage';
 import EmpresasList from './pages/Empresas/EmpresasList';
 import EmpresaNova from './pages/Empresas/EmpresaNova';
 import EmpresaDetalhe from './pages/Empresas/EmpresaDetalhe';
@@ -85,6 +86,8 @@ export default function App() {
           >
             <Route path="/" element={<Home />} />
             <Route path="/meu-perfil" element={<MeuPerfil />} />
+
+            <Route path="/dashboards/economico-financeiro" element={<EconomicoFinanceiroPage />} />
 
             <Route path="/operacoes/dre-gerencial" element={<DreGerencialPage />} />
             <Route path="/operacoes/dfc-construtoras" element={<DfcConstrutorasPage />} />

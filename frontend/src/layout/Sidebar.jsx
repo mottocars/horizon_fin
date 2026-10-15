@@ -5,6 +5,8 @@ import { useAuth } from '../auth/AuthContext';
 import { temAcessoATela } from '../utils/permissoes';
 import {
   LayoutDashboard,
+  Gauge,
+  TrendingUp,
   FolderKanban,
   ArrowLeftRight,
   Plug,
@@ -41,6 +43,13 @@ import iconActioon from '../assets/integracoes/actioon.svg';
 
 const menuItems = [
   { type: 'link', label: 'Home', to: '/', icon: LayoutDashboard },
+  {
+    type: 'group',
+    label: 'Dashboards',
+    icon: Gauge,
+    basePath: '/dashboards',
+    children: [{ label: 'Econômico Financeiro', to: '/dashboards/economico-financeiro', icon: TrendingUp }],
+  },
   {
     type: 'group',
     label: 'Cadastros',
