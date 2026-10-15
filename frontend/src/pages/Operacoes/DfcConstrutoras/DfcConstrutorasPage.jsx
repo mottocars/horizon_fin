@@ -4,11 +4,13 @@ import {
   Banknote,
   Building2,
   Calculator,
+  Download,
   Globe,
   HandCoins,
   HardHat,
   Landmark,
   ListTree,
+  Loader2,
   Plus,
   RefreshCw,
   Save,
@@ -30,6 +32,7 @@ import { listCentrosDfc, listVersoesParametrosDfc } from '../../../api/dfcParame
 import { listCentrosCustoDfc } from '../../../api/dfcCentros.api';
 import { gerarPlano } from '../../../api/planosFinanceirosSienge.api';
 import { excluirVersaoPlanoDfc, listVersoesPlanoDfc } from '../../../api/dfcPlanoContas.api';
+import { exportarExcelDfc } from '../../../api/dfcExportacao.api';
 import { useConfirm } from '../../../confirm/ConfirmContext';
 import { nomeExibicaoEmpresa } from '../../../utils/empresa';
 import { useEmpresaTravada } from '../../../hooks/useEmpresaTravada';
@@ -347,6 +350,45 @@ export default function DfcConstrutorasPage() {
   // Esc — ver DfcOrcamentosTab.
   const [orcamentoTelaCheia, setOrcamentoTelaCheia] = useState(false);
 
+  // Aba DFC: "Exportar Excel" — o .xlsx do que está filtrado (empresa, período, centros), montado no
+  // backend (dfc-exportacao): Fluxo de Caixa, Saldos das Contas, Base Realizado, Base Projetado e o
+  // dossiê da Projeção CEF de cada obra.
+  const [exportandoFluxo, setExportandoFluxo] = useState(false);
+  const [erroExportacao, setErroExportacao] = useState('');
+  useEffect(() => setErroExportacao(''), [empresaId, abaAtiva]);
+  async function exportarFluxoExcel() {
+    setErroExportacao('');
+    setExportandoFluxo(true);
+    try {
+      const { blob, nome } = await exportarExcelDfc(empresaId, {
+        inicio: inicioOrcamento.slice(0, 7),
+        fim: fimOrcamento.slice(0, 7),
+        centros: centrosFluxo,
+      });
+      const url = window.URL.createObjectURL(blob);
+      const link = document.createElement('a');
+      link.href = url;
+      link.download = nome;
+      document.body.appendChild(link);
+      link.click();
+      link.remove();
+      window.URL.revokeObjectURL(url);
+    } catch (err) {
+      // Com responseType 'blob' a mensagem de erro do backend chega dentro de um Blob.
+      let mensagem = 'Não foi possível gerar o Excel.';
+      const dados = err.response?.data;
+      try {
+        mensagem = (dados instanceof Blob ? JSON.parse(await dados.text()) : dados)?.message || mensagem;
+      } catch {
+        // mantém a mensagem padrão
+      }
+      setErroExportacao(mensagem);
+    } finally {
+      setExportandoFluxo(false);
+    }
+  }
+  const periodoFluxoValido = Boolean(inicioOrcamento && fimOrcamento && fimOrcamento >= inicioOrcamento);
+
   // Botão "Nova máscara" fica no topo (padrão do resto do sistema, igual "Nova categoria" na
   // DRE), mas o campo de criar vive em DfcMascarasTab.jsx — dispara por ref.
   const mascarasTabRef = useRef(null);
@@ -638,6 +680,7 @@ export default function DfcConstrutorasPage() {
           )}
 
           {abaAtiva === 'dfc' && (
+            <div className="flex shrink-0 flex-col items-end gap-1.5">
             <div className="flex shrink-0 items-center gap-2">
               <Button
                 type="button"
@@ -660,6 +703,19 @@ export default function DfcConstrutorasPage() {
               >
                 <Maximize2 size={18} />
               </Button>
+              <Button
+                type="button"
+                variant="secondary"
+                className="!px-2.5"
+                onClick={exportarFluxoExcel}
+                disabled={!empresaId || !periodoFluxoValido || exportandoFluxo}
+                title="Exportar Excel"
+                aria-label="Exportar Excel"
+              >
+                {exportandoFluxo ? <Loader2 size={18} className="animate-spin" /> : <Download size={18} />}
+              </Button>
+            </div>
+            {erroExportacao && <span className="max-w-xs text-right text-xs text-red-600">{erroExportacao}</span>}
             </div>
           )}
 

@@ -95,6 +95,42 @@ async function realizado(empresaId, de, ate) {
   };
 }
 
+// Saldo de abertura de cada conta com "Projeta DFC" em cada mês de `meses` ('AAAA-MM', em ordem) —
+// aba "Saldos das Contas" da exportação Excel. [{ company_id, numero_conta, nome, company_name,
+// tipo_descricao, banco_nome, ultimo_lancamento, sincronizado_em, data_ate, saldos: { mes: valor } }].
+async function saldosPorConta(empresaId, meses) {
+  const { rows: contas } = await pool.query(
+    `SELECT c.company_id, c.numero_conta, c.nome, c.company_name, c.tipo_descricao, c.banco_nome,
+            s.sincronizado_em, s.data_ate
+       FROM contas_bancarias_sienge c
+       LEFT JOIN sie_extrato_contas_sincronizacoes s
+         ON s.empresa_id = c.empresa_id AND s.company_id = c.company_id AND s.numero_conta = c.numero_conta
+      WHERE c.empresa_id = $1 AND c.projeta_dfc
+      ORDER BY c.company_name NULLS LAST, c.numero_conta`,
+    [empresaId]
+  );
+  const { rows: porMes } = await pool.query(
+    `SELECT e.company_id, e.numero_conta, to_char(date_trunc('month', e.date), 'YYYY-MM') AS mes,
+            SUM(${VALOR_COM_SINAL}) AS valor, MAX(e.date) AS ultimo
+       FROM sie_extrato_contas e
+       JOIN contas_bancarias_sienge c
+         ON c.empresa_id = e.empresa_id AND c.company_id = e.company_id AND c.numero_conta = e.numero_conta AND c.projeta_dfc
+      WHERE e.empresa_id = $1 AND e.date IS NOT NULL
+      GROUP BY 1, 2, 3`,
+    [empresaId]
+  );
+  return contas.map((c) => {
+    const movimentos = porMes.filter((r) => r.company_id === c.company_id && r.numero_conta === c.numero_conta);
+    const saldos = {};
+    meses.forEach((m) => {
+      const total = movimentos.filter((r) => r.mes < m).reduce((t, r) => t + Number(r.valor), 0);
+      saldos[m] = Math.round(total * 100) / 100;
+    });
+    const ultimo = movimentos.reduce((u, r) => (!u || r.ultimo > u ? r.ultimo : u), null);
+    return { ...c, ultimo_lancamento: ultimo, saldos };
+  });
+}
+
 // Situação da base (janela "Gerar fluxo"): { parcelas (= contas buscadas), atualizado_em }.
 async function base(empresaId) {
   const { rows } = await pool.query(
@@ -116,4 +152,4 @@ async function execucao(empresaId) {
   return executor.getExecucaoAtualOuUltima(empresaId, ROTINA);
 }
 
-module.exports = { ROTINA, saldos, realizado, base, atualizarBase, execucao };
+module.exports = { ROTINA, saldos, saldosPorConta, realizado, base, atualizarBase, execucao };

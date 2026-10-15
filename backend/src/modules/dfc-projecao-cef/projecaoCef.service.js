@@ -1,5 +1,5 @@
 const pool = require('../../config/db');
-const { projetar, mesDe } = require('./projecaoCef.motor');
+const { projetar, calcularUnidades, mesDe } = require('./projecaoCef.motor');
 const avancosService = require('../dfc-avancos/dfcAvancos.service');
 const parametrosService = require('../dfc-parametros/dfcParametros.service');
 
@@ -99,7 +99,7 @@ async function obraAcumulado(empresaId, siengeId, inicio, fim) {
   const fontes = new Map();
   if (!obra) {
     dados.meses.forEach((m) => mapa.set(m, 0));
-    return { mapa, cenario: 'SEM_DADOS', fontes };
+    return { mapa, cenario: 'SEM_DADOS', fontes, bruto: null, mesAtual: dados.mes_atual };
   }
   const caixa = Boolean(obra.pls);
   const prevision = Boolean(obra.prevision);
@@ -117,7 +117,8 @@ async function obraAcumulado(empresaId, siengeId, inicio, fim) {
     mapa.set(m, ultimo);
     fontes.set(m, { fonte, repetido });
   });
-  return { mapa, cenario, fontes };
+  // `bruto`: os três avanços de origem (Caixa/DCD, Prevision, manual), pro dossiê do Excel.
+  return { mapa, cenario, fontes, bruto: { pls: obra.pls, prevision: obra.prevision, manual: obra.manual }, mesAtual: dados.mes_atual };
 }
 
 // Unidades do Geral do contrato, sem o primeiro contrato por data de assinatura (o da construtora)
@@ -150,6 +151,47 @@ function parametrosMotor(versao) {
     dataInicio: versao.data_inicio_ciclo,
     dataFim: versao.data_fim_ciclo,
     prazoRegistro: Number(versao.tempo_assinatura_registro_meses || 0),
+  };
+}
+
+// Tudo que a projeção de uma obra usa, refeito hoje com a versão dos Parâmetros da última atualização
+// (Detalhamento da aba DFC e dossiê da exportação Excel): execução, parâmetros, avanço (com a fonte de
+// cada mês e os avanços de origem), unidades do Geral, o cálculo por unidade e por mês, e a projeção
+// gravada (o que o Orçamento usa). null = obra sem Projeção CEF atualizada ou sem Código Contrato Caixa.
+async function rastrear(empresaId, centroId) {
+  const { rows } = await pool.query(
+    `SELECT c.sienge_id, c.name, c.codigo_contrato_caixa AS contrato,
+            e.versao_parametros, e.unidades, e.atualizado_em, u.nome AS usuario
+       FROM centros_custo_sienge c
+       LEFT JOIN dfc_projecao_cef_execucao e ON e.empresa_id = c.empresa_id AND e.sienge_id = c.sienge_id
+       LEFT JOIN usuarios u ON u.id = e.usuario_id
+      WHERE c.empresa_id = $1 AND c.sienge_id = $2`,
+    [empresaId, centroId]
+  );
+  const obra = rows[0];
+  if (!obra || !obra.contrato || !obra.versao_parametros) return null;
+  const versao = await parametrosService.getVersao(empresaId, centroId, obra.versao_parametros);
+  if (!versao) return null;
+  const p = parametrosMotor(versao);
+  const [avanco, unidades, { rows: gravadas }] = await Promise.all([
+    obraAcumulado(empresaId, centroId, p.dataInicio, p.dataFim),
+    unidadesGeral(empresaId, obra.contrato),
+    pool.query(
+      `SELECT to_char(mes, 'YYYY-MM') AS mes, novo_registro, medicao, credito_pj, juros, amortizacao
+         FROM dfc_projecao_cef WHERE empresa_id = $1 AND sienge_id = $2`,
+      [empresaId, centroId]
+    ),
+  ]);
+  return {
+    obra: { sienge_id: obra.sienge_id, name: obra.name, contrato: obra.contrato },
+    exec: { versao_parametros: obra.versao_parametros, unidades: obra.unidades, atualizado_em: obra.atualizado_em, usuario: obra.usuario },
+    versao,
+    p,
+    ...avanco,
+    unidades,
+    porUnidade: calcularUnidades(unidades, avanco.mapa, p.dataDemandaMinima, p.prazoRegistro),
+    linhas: projetar(p, unidades, avanco.mapa),
+    gravadas: new Map(gravadas.map((g) => [g.mes, g])),
   };
 }
 
@@ -300,4 +342,4 @@ async function orcamento(empresaId) {
   return { valores, execucoes, avisos };
 }
 
-module.exports = { SAIDAS, elegiveis, atualizar, orcamento, obraAcumulado, mesDe, unidadesGeral, parametrosMotor };
+module.exports = { SAIDAS, elegiveis, atualizar, orcamento, obraAcumulado, rastrear, mesDe, unidadesGeral, parametrosMotor };

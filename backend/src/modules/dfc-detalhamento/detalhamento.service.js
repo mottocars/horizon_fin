@@ -3,7 +3,6 @@ const dfcAging = require('../dfc-aging/dfcAging.service');
 const dfcEmpresarial = require('../dfc-empresarial/dfcEmpresarial.service');
 const projecaoCef = require('../dfc-projecao-cef/projecaoCef.service');
 const motor = require('../dfc-projecao-cef/projecaoCef.motor');
-const parametrosService = require('../dfc-parametros/dfcParametros.service');
 
 // DFC Construtoras > DFC: "Detalhamento" de um valor da grade (pedido do usuário) — clique no valor
 // de uma conta (último nível), num mês, no Realizado ou no Projetado. Mostra tudo que compõe o valor:
@@ -380,36 +379,23 @@ async function empresarial(empresaId, centroId, conta, mes) {
 // projeção gravada (o que o Orçamento usa): se Geral/Avanços mudaram depois, avisa.
 async function cef(empresaId, centroId, origem, mes, centrosInfo) {
   const { coluna, sinal } = projecaoCef.SAIDAS[origem];
-  const { rows: execs } = await pool.query(
-    `SELECT e.versao_parametros, e.unidades, e.atualizado_em, u.nome AS usuario
-       FROM dfc_projecao_cef_execucao e LEFT JOIN usuarios u ON u.id = e.usuario_id
-      WHERE e.empresa_id = $1 AND e.sienge_id = $2`,
-    [empresaId, centroId]
-  );
-  const exec = execs[0];
-  const { rows: gravadas } = await pool.query(
-    `SELECT ${coluna} AS valor FROM dfc_projecao_cef WHERE empresa_id = $1 AND sienge_id = $2 AND mes = $3::date`,
-    [empresaId, centroId, `${mes}-01`]
-  );
-  const gravada = gravadas[0] ? r2(Number(gravadas[0].valor) * sinal) : 0;
-  const contrato = centrosInfo.get(centroId)?.codigo_contrato_caixa;
-  if (!exec || !contrato) {
+  const rastro = await projecaoCef.rastrear(empresaId, centroId);
+  if (!rastro) {
+    const { rows: gravadas } = await pool.query(
+      `SELECT ${coluna} AS valor FROM dfc_projecao_cef WHERE empresa_id = $1 AND sienge_id = $2 AND mes = $3::date`,
+      [empresaId, centroId, `${mes}-01`]
+    );
     return {
-      valor: gravada,
+      valor: gravadas[0] ? r2(Number(gravadas[0].valor) * sinal) : 0,
       resumo: 'Projeção CEF sem execução registrada para esta obra.',
       blocos: [{ tipo: 'nota', texto: 'Não foi possível refazer a conta: a obra não tem Projeção CEF atualizada ou está sem Código Contrato Caixa.' }],
       avisos: ['Sem rastreio: atualize a Projeção CEF da obra.'],
     };
   }
-
-  const versao = await parametrosService.getVersao(empresaId, centroId, exec.versao_parametros);
-  const p = projecaoCef.parametrosMotor(versao);
-  const [{ mapa, cenario, fontes }, unidades] = await Promise.all([
-    projecaoCef.obraAcumulado(empresaId, centroId, p.dataInicio, p.dataFim),
-    projecaoCef.unidadesGeral(empresaId, contrato),
-  ]);
-  const linhas = motor.projetar(p, unidades, mapa);
-  const porUnidade = motor.calcularUnidades(unidades, mapa, p.dataDemandaMinima, p.prazoRegistro);
+  const { exec, versao, p, mapa, cenario, fontes, unidades, porUnidade, linhas } = rastro;
+  const contrato = rastro.obra.contrato;
+  const gravadaLinha = rastro.gravadas.get(mes);
+  const gravada = gravadaLinha ? r2(Number(gravadaLinha[coluna]) * sinal) : 0;
   const idx = linhas.findIndex((l) => l.mes === mes);
   const linha = linhas[idx];
   const anterior = idx > 0 ? linhas[idx - 1] : null;
