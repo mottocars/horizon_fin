@@ -46,6 +46,7 @@ const dfcContasRoutes = require('./modules/dfc-contas/dfcContas.routes');
 const dfcSaldosRoutes = require('./modules/dfc-saldos/dfcSaldos.routes');
 const dfcDetalhamentoRoutes = require('./modules/dfc-detalhamento/detalhamento.routes');
 const dfcExportacaoRoutes = require('./modules/dfc-exportacao/exportacao.routes');
+const dashboardsRoutes = require('./modules/dashboards/dashboards.routes');
 const bancosRoutes = require('./modules/bancos/bancos.routes');
 const eprRoutes = require('./modules/epr/epr.routes');
 const dcdRoutes = require('./modules/dcd/dcd.routes');
@@ -177,6 +178,7 @@ app.use('/api/dfc-contas', exigirTela([T.DFC]), dfcContasRoutes);
 app.use('/api/dfc-saldos', exigirTela([T.DFC]), dfcSaldosRoutes);
 app.use('/api/dfc-detalhamento', exigirTela([T.DFC]), dfcDetalhamentoRoutes);
 app.use('/api/dfc-exportacao', exigirTela([T.DFC]), dfcExportacaoRoutes);
+app.use('/api/dashboards', exigirTela([T.ECONOMICO_FINANCEIRO]), dashboardsRoutes);
 app.use('/api/bancos', exigirTela([T.SALDOS]), exigirMaster, bancosRoutes);
 app.use('/api/epr', exigirTela([T.PORTAL]), eprRoutes);
 // DCD e Extrato também na aba CIWEB da DFC Construtoras (espelho do Portal das Construtoras,

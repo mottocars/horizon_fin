@@ -1,6 +1,6 @@
 import { useCallback, useEffect, useRef, useState } from 'react';
 import { createPortal } from 'react-dom';
-import { LayoutGrid, Menu, SlidersHorizontal, X } from 'lucide-react';
+import { LayoutGrid, Menu, SlidersHorizontal, Star, X } from 'lucide-react';
 
 // Controles dos Dashboards (pedido do usuário): UM botão flutuante no canto inferior direito que abre
 // um painel vertical do alto da área até logo acima dele (crescendo a partir do botão): metade de
@@ -9,6 +9,7 @@ import { LayoutGrid, Menu, SlidersHorizontal, X } from 'lucide-react';
 // Fica na camada fixa da área de conteúdo (#camada-dashboard, AppShell.jsx): não rola com a página e
 // não passa por cima do menu lateral.
 // - `telas`: [{ id, label, icon? }]; `telaAtiva` / `onTela(id)`.
+// - `telaFavorita` / `onFavoritar(id | null)`: a estrela de cada tela (a favorita abre primeiro).
 // - `filtros`: conteúdo da seção Filtros (os campos de cada dashboard).
 // Fecha no botão (que vira X) ou com Esc.
 
@@ -31,7 +32,7 @@ function Secao({ icone: Icone, titulo, ordem, children }) {
 }
 
 // Do alto da área até logo acima do botão: metade de cima Telas, metade de baixo Filtros.
-function Painel({ fechando, telas, telaAtiva, onTela, filtros }) {
+function Painel({ fechando, telas, telaAtiva, onTela, telaFavorita, onFavoritar, filtros }) {
   return (
     <div
       role="dialog"
@@ -45,19 +46,39 @@ function Painel({ fechando, telas, telaAtiva, onTela, filtros }) {
           {telas.map((t, i) => {
             const IconeTela = t.icon;
             const ativa = t.id === telaAtiva;
+            const favorita = t.id === telaFavorita;
             return (
-              <button
+              <div
                 key={t.id}
-                type="button"
-                onClick={() => onTela?.(t.id)}
                 style={entrada(i + 1)}
-                className={`motion-safe:animate-item-sobe flex w-full items-center gap-2 rounded-lg px-3 py-1.5 text-left text-[13px] font-medium transition-colors ${
+                className={`motion-safe:animate-item-sobe group flex items-center rounded-lg transition-colors ${
                   ativa ? 'bg-primary-50 text-primary-700' : 'text-gray-700 hover:bg-gray-50'
                 }`}
               >
-                {IconeTela && <IconeTela size={15} className={ativa ? '' : 'text-gray-400'} />}
-                {t.label}
-              </button>
+                <button
+                  type="button"
+                  onClick={() => onTela?.(t.id)}
+                  className="flex min-w-0 flex-1 items-center gap-2 py-1.5 pl-3 text-left text-[13px] font-medium"
+                >
+                  {IconeTela && <IconeTela size={15} className={`shrink-0 ${ativa ? '' : 'text-gray-400'}`} />}
+                  <span className="truncate">{t.label}</span>
+                </button>
+                {onFavoritar && (
+                  <button
+                    type="button"
+                    onClick={() => onFavoritar(favorita ? null : t.id)}
+                    title={favorita ? 'Tela favorita — abre primeiro (clique para tirar)' : 'Marcar como favorita (abre primeiro)'}
+                    aria-label={favorita ? `Tirar ${t.label} das favoritas` : `Marcar ${t.label} como favorita`}
+                    aria-pressed={favorita}
+                    className="shrink-0 rounded-md p-1.5 pr-3 transition-transform hover:scale-110"
+                  >
+                    <Star
+                      size={14}
+                      className={favorita ? 'fill-amber-400 text-amber-400' : 'text-gray-300 group-hover:text-gray-400 hover:!text-amber-400'}
+                    />
+                  </button>
+                )}
+              </div>
             );
           })}
         </div>
@@ -70,7 +91,7 @@ function Painel({ fechando, telas, telaAtiva, onTela, filtros }) {
   );
 }
 
-export default function ControlesDashboard({ telas = [], telaAtiva, onTela, filtros }) {
+export default function ControlesDashboard({ telas = [], telaAtiva, onTela, telaFavorita, onFavoritar, filtros }) {
   const [camada, setCamada] = useState(null);
   const [aberto, setAberto] = useState(false);
   const [fechando, setFechando] = useState(false);
@@ -118,7 +139,17 @@ export default function ControlesDashboard({ telas = [], telaAtiva, onTela, filt
   const ativo = aberto && !fechando;
   return createPortal(
     <>
-      {aberto && <Painel fechando={fechando} telas={telas} telaAtiva={telaAtiva} onTela={onTela} filtros={filtros} />}
+      {aberto && (
+        <Painel
+          fechando={fechando}
+          telas={telas}
+          telaAtiva={telaAtiva}
+          onTela={onTela}
+          telaFavorita={telaFavorita}
+          onFavoritar={onFavoritar}
+          filtros={filtros}
+        />
+      )}
       <button
         type="button"
         onClick={alternar}

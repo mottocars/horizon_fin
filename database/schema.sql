@@ -3533,3 +3533,12 @@ CREATE OR REPLACE VIEW mcp_dfc_orcamento_empresarial AS
       JOIN sie_business_budget_categorias c ON c.registro_id = b.registro_id
       JOIN sie_business_budget_valores v ON v.categoria_id = c.categoria_id
      WHERE b.empresa_id = current_setting('app.empresa_id', true)::int;
+
+-- ─── Dashboards: tela favorita de cada usuário — ver database/migrations/2026-10-15-dashboards-favoritos.sql ───
+CREATE TABLE IF NOT EXISTS usuarios_dashboard_favoritos (
+    usuario_id     INTEGER NOT NULL REFERENCES usuarios(id) ON DELETE CASCADE,
+    dashboard      VARCHAR(60) NOT NULL,   -- ex.: 'economico-financeiro'
+    tela           VARCHAR(60) NOT NULL,   -- ex.: 'aging'
+    atualizado_em  TIMESTAMPTZ NOT NULL,
+    PRIMARY KEY (usuario_id, dashboard)
+);
