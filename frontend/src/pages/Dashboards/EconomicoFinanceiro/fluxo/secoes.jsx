@@ -305,7 +305,6 @@ function Seg({ rotulo, opcoes, valor, onChange }) {
 export function FolegoSpe({ D, empresaSel, onEmpresa }) {
   const { mostrar, esconder } = useDica();
   const [pref, setPref] = useState(lerPrefSpe);
-  const [busca, setBusca] = useState('');
   const [todas, setTodas] = useState(false);
   const salvar = (p) => {
     setPref(p);
@@ -323,10 +322,9 @@ export function FolegoSpe({ D, empresaSel, onEmpresa }) {
   const zeram = all.filter((s) => s.zera).sort((a, b) => (a.zera < b.zera ? -1 : a.zera > b.zera ? 1 : a.min - b.min));
   const positivo = soma(all.map((s) => Math.max(0, s.caixa)));
   const maior = all.slice().sort((a, b) => b.caixa - a.caixa)[0];
-  const q = busca.trim().toLowerCase();
   const porNome = (a, b) => curto(a.nome).localeCompare(curto(b.nome), 'pt-BR', { numeric: true });
   const linhas = all
-    .filter((s) => (pref.show === 'todas' || s.zera) && (!q || [curto(s.nome), s.nome, ...s.centros].join(' ').toLowerCase().includes(q)))
+    .filter((s) => pref.show === 'todas' || s.zera)
     .sort(
       pref.sort === 'caixa'
         ? (a, b) => b.caixa - a.caixa
@@ -405,10 +403,6 @@ export function FolegoSpe({ D, empresaSel, onEmpresa }) {
     <section className="panel c12" aria-labelledby="h-spe">
       <div className="ph">
         <h2 id="h-spe">Fôlego de cada SPE sozinha</h2>
-        <p>
-          Saldo projetado de cada empresa no fim de cada mês: caixa de hoje mais o fluxo operacional dos seus centros, sem mútuos nem transferências
-          entre empresas.
-        </p>
       </div>
       <div className="kv k4">
         <div>
@@ -448,10 +442,6 @@ export function FolegoSpe({ D, empresaSel, onEmpresa }) {
           valor={pref.show}
           onChange={(v) => salvar({ ...pref, show: v })}
         />
-        <div className="ctl find">
-          <label htmlFor="f-find">Buscar empresa ou obra</label>
-          <input id="f-find" type="search" placeholder="Ex.: Tostes 05, Origens" autoComplete="off" value={busca} onChange={(e) => setBusca(e.target.value)} />
-        </div>
         <div className="ramp" aria-hidden="true">
           <span>negativo</span>
           <i />
@@ -605,7 +595,6 @@ export function Carteira({ D }) {
     <section className="panel c5" aria-labelledby="h-cart">
       <div className="ph">
         <h2 id="h-cart">Carteira e liquidez</h2>
-        <p>Contas do Sienge e saldos de abertura do mês atual. Aplicado: contas do tipo Investimento.</p>
       </div>
       <div className="kv k2">
         {[
@@ -739,6 +728,7 @@ export function MaioresSaidas({ D, forn }) {
         </span>
       </div>
       <BarrasH
+        rotuloGrande
         aria="Maiores favorecidos"
         itens={top.map((f) => {
           const mk = Object.entries(f.mask).sort((a, b) => a[1] - b[1])[0]?.[0] || '';
@@ -836,20 +826,5 @@ export function DividaPj({ D }) {
         </div>
       )}
     </section>
-  );
-}
-
-export function Rodape() {
-  return (
-    <footer className="foot">
-      <span>
-        Dados do DFC Construtoras (Horizon Fin, sobre o Sienge), lidos ao abrir a tela e a cada 30 minutos. Realizado pelo extrato rateado das contas
-        com Projeta DFC; projetado pela última versão salva do Orçamento; dívida PJ pela Projeção CEF gravada.
-      </span>
-      <span>
-        &quot;Fluxo operacional&quot; é a máscara de nível 1 com &quot;OPERACIONAL&quot; no nome e já inclui captação de financiamentos e serviço da
-        dívida. Aplicações e resgates ficam fora. Aplicado = contas do tipo Investimento no cadastro das contas correntes do DFC.
-      </span>
-    </footer>
   );
 }

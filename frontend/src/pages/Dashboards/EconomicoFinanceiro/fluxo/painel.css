@@ -121,8 +121,7 @@
 .painel-cfo .seg .digitar {
   display: inline-flex;
   align-items: center;
-  gap: 2px;
-  padding: 0 8px;
+  border-right: 1px solid var(--line);
   background: var(--surface);
   font-size: 13px;
   font-weight: 600;
@@ -133,22 +132,15 @@
   color: var(--surface);
 }
 .painel-cfo .seg .digitar input {
-  width: 34px;
+  width: 44px;
   border: 0;
   background: transparent;
   color: inherit;
   font-weight: 600;
   font-size: 13px;
-  text-align: right;
-  padding: 6px 0;
+  text-align: center;
+  padding: 6px 4px;
   outline: none;
-}
-.painel-cfo .seg .digitar input::placeholder {
-  color: var(--muted);
-  font-weight: 500;
-}
-.painel-cfo .seg .digitar.ativo input::placeholder {
-  color: var(--s-neutral);
 }
 .painel-cfo .status {
   margin-left: auto;
@@ -286,6 +278,29 @@
 .painel-cfo .multi-rodape .btn {
   padding: 4px 10px;
   font-size: 12px;
+}
+
+/* Grade do DFC: barra com o botão de tela cheia em cima dela */
+.painel-cfo .grade-dfc {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+}
+.painel-cfo .grade-barra {
+  display: flex;
+  justify-content: flex-end;
+}
+.painel-cfo .btn.icone {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  background: var(--surface);
+  border-color: var(--line);
+  color: var(--ink-2);
+}
+.painel-cfo .btn.icone:hover {
+  border-color: var(--ink);
+  color: var(--ink);
 }
 
 /* Tiles */
@@ -453,6 +468,9 @@
   font-size: 12.5px;
   fill: var(--ink-2);
   font-weight: 600;
+}
+.painel-cfo .chart .lbl.lg {
+  font-size: 14px;
 }
 .painel-cfo .chart .val {
   font-family: var(--f-mono);

@@ -237,12 +237,12 @@ export function FluxoOperacional({ D }) {
 }
 
 // ─── Barras horizontais (maiores saídas, maiores saldos) ─────────────────────────────────────────
-// itens: [{ l, v, c?, titulo, linhas }]
-export function BarrasH({ itens, aria }) {
+// itens: [{ l, v, c?, titulo, linhas }]; `rotuloGrande`: nomes maiores (e coluna de nomes mais larga).
+export function BarrasH({ itens, aria, rotuloGrande = false }) {
   const [ref, W] = useLargura(280);
   const { mostrar, esconder } = useDica();
-  const rh = 30;
-  const lw = Math.min(190, W * 0.46) + 8;
+  const rh = rotuloGrande ? 34 : 30;
+  const lw = Math.min(rotuloGrande ? 270 : 190, W * (rotuloGrande ? 0.5 : 0.46)) + 8;
   const mr = 66;
   const H = itens.length * rh + 8;
   const plotW = W - lw - mr;
@@ -251,7 +251,7 @@ export function BarrasH({ itens, aria }) {
   const comSinal = negMax > 0 && posMax > 0;
   const zero = comSinal ? lw + plotW * (negMax / (negMax + posMax)) : lw;
   const escala = plotW / Math.max(1, comSinal ? negMax + posMax : Math.max(negMax, posMax));
-  const maxc = Math.floor((lw - 12) / 7.2);
+  const maxc = Math.floor((lw - 12) / (rotuloGrande ? 8 : 7.2));
   return (
     <div className="chart" ref={ref}>
       {!itens.length && <div className="empty">Sem valores no período.</div>}
@@ -269,7 +269,7 @@ export function BarrasH({ itens, aria }) {
           }
           return (
             <g key={`${it.l}${k}`}>
-              <text x={0} y={yy + rh / 2 + 4} className="lbl">
+              <text x={0} y={yy + rh / 2 + 5} className={rotuloGrande ? 'lbl lg' : 'lbl'}>
                 {it.l.length > maxc ? `${it.l.slice(0, maxc - 1).trim()}…` : it.l}
               </text>
               <rect x={x0} y={yy + 7} width={w} height={rh - 14} rx={2} fill={it.c || (it.v < 0 ? COR.saida : COR.entrada)} />

@@ -1,10 +1,11 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
+import { Maximize2 } from 'lucide-react';
 import { getFluxoCaixaPainel } from '../../../../api/dashboards.api';
 import DfcFluxoTab from '../../../Operacoes/DfcConstrutoras/DfcFluxoTab';
 import CabecalhoDashboard from '../../CabecalhoDashboard';
 import { DicaProvider } from './graficos';
 import { addM, curto, lbl, modelo, titulo } from './modelo';
-import { Calibracao, Carteira, DividaPj, EntradasSaidas, FolegoSpe, Hero, MaioresSaidas, QuemGera, Rodape, Tiles } from './secoes';
+import { Calibracao, Carteira, DividaPj, EntradasSaidas, FolegoSpe, Hero, MaioresSaidas, QuemGera, Tiles } from './secoes';
 import './painel.css';
 
 // Dashboard Econômico Financeiro › Fluxo de Caixa, no layout do painel do CFO
@@ -13,7 +14,7 @@ import './painel.css';
 // indicadores, a grade do DFC (DfcFluxoTab) na altura da tela e, embaixo, os gráficos da especificação.
 // Histórico: meses antes do mês atual (padrão 1). Horizonte: meses a partir do mês atual, contando
 // ele (padrão 6). Os dados vêm de /dashboards/economico-financeiro/fluxo-caixa e o painel recarrega
-// sozinho a cada 30 minutos.
+// sozinho a cada 30 minutos. A grade tem o botão de tela cheia (a mesma do DFC Construtoras).
 
 const MIN_RECARGA = 30;
 const LIMITE_MESES = 36;
@@ -38,17 +39,15 @@ function SegMeses({ rotulo, opcoes, valor, onChange, digitarPrimeiro }) {
     else setTexto(fixo ? '' : String(valor));
   };
   const digitar = (
-    <label key="digitar" className={`digitar${fixo ? '' : ' ativo'}`} title={`De 1 a ${LIMITE_MESES} meses`}>
+    <label key="digitar" className={`digitar${fixo ? '' : ' ativo'}`} title={`Digite quantos meses (de 1 a ${LIMITE_MESES})`}>
       <input
         inputMode="numeric"
-        placeholder="nº"
         aria-label={`${rotulo}: digitar quantos meses`}
         value={texto}
         onChange={(e) => setTexto(e.target.value.replace(/\D/g, '').slice(0, 2))}
         onBlur={() => texto && aplicar()}
         onKeyDown={(e) => e.key === 'Enter' && aplicar()}
       />
-      m
     </label>
   );
   const botoes = opcoes.map((o) => (
@@ -126,7 +125,7 @@ export default function FluxoCaixaPainel({ dashboard, tituloTela, empresaId, onE
   const [dados, setDados] = useState(null);
   const [estado, setEstado] = useState('ocioso'); // ocioso | carregando | erro
   const [erro, setErro] = useState('');
-  const [lidoEm, setLidoEm] = useState(null);
+  const [telaCheia, setTelaCheia] = useState(false);
   const [recarga, setRecarga] = useState(0);
   const [altura, setAltura] = useState(() => Math.max(420, window.innerHeight - 130));
   const pedido = useRef(0);
@@ -142,7 +141,6 @@ export default function FluxoCaixaPainel({ dashboard, tituloTela, empresaId, onE
       .then((d) => {
         if (meu !== pedido.current) return;
         setDados(d);
-        setLidoEm(new Date());
         setEstado('ocioso');
         setErro('');
       })
@@ -236,27 +234,6 @@ export default function FluxoCaixaPainel({ dashboard, tituloTela, empresaId, onE
       ]
     : [];
 
-  const hora = lidoEm ? lidoEm.toLocaleTimeString('pt-BR', { hour: '2-digit', minute: '2-digit' }) : null;
-  const status =
-    estado === 'carregando' ? (
-      <>
-        <i className="dot busy" />
-        {dados ? 'Atualizando…' : 'Carregando o DFC…'}
-      </>
-    ) : estado === 'erro' ? (
-      <>
-        <i className="dot err" />
-        {erro}
-      </>
-    ) : hora ? (
-      <>
-        <i className="dot" />
-        Dados de {hora}
-      </>
-    ) : (
-      'Escolha a empresa'
-    );
-
   return (
     <DicaProvider>
       <div className="painel-cfo">
@@ -277,20 +254,6 @@ export default function FluxoCaixaPainel({ dashboard, tituloTela, empresaId, onE
           <SegMeses rotulo="Histórico" opcoes={[6, 1]} valor={hist} onChange={setHist} digitarPrimeiro />
           <SegMeses rotulo="Horizonte" opcoes={[6, 9]} valor={hor} onChange={setHor} />
           <FiltroCentros opcoes={opcoesCentros} valor={centros} onChange={setCentros} disabled={!empresaId || !dados} />
-          <div className="status">
-            <span>{status}</span>
-            <button
-              className="btn"
-              type="button"
-              disabled={!empresaId || estado === 'carregando'}
-              onClick={() => {
-                carregar();
-                setRecarga((r) => r + 1);
-              }}
-            >
-              Atualizar agora
-            </button>
-          </div>
         </section>
 
         {!empresaId ? (
@@ -318,7 +281,27 @@ export default function FluxoCaixaPainel({ dashboard, tituloTela, empresaId, onE
           <Tiles D={D} />
         )}
 
-        {empresaId && <DfcFluxoTab variante="dashboard" empresaId={empresaId} inicio={inicio} fim={fim} centros={centros} alturaFixa={altura} refreshToken={recarga} />}
+        {empresaId && (
+          <div className="grade-dfc">
+            <div className="grade-barra">
+              <button type="button" className="btn ghost icone" onClick={() => setTelaCheia(true)} title="Tela cheia" aria-label="Tela cheia">
+                <Maximize2 size={16} />
+                Tela cheia
+              </button>
+            </div>
+            <DfcFluxoTab
+              variante="dashboard"
+              empresaId={empresaId}
+              inicio={inicio}
+              fim={fim}
+              centros={centros}
+              alturaFixa={telaCheia ? null : altura}
+              refreshToken={recarga}
+              telaCheia={telaCheia}
+              onSairTelaCheia={() => setTelaCheia(false)}
+            />
+          </div>
+        )}
 
         {D && (
           <>
@@ -332,7 +315,6 @@ export default function FluxoCaixaPainel({ dashboard, tituloTela, empresaId, onE
               <MaioresSaidas D={D} forn={dados.forn} />
               <DividaPj D={D} />
             </div>
-            <Rodape />
           </>
         )}
       </div>
