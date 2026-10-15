@@ -39,6 +39,18 @@ const enriquecimentoSchema = z.object({
   codigo_cedente_cobranca: codigoCedenteSchema,
   // Apelido VanPix do convênio de extrato (conexão com finalidade Extrato Bancário).
   codigo_cedente_extrato: codigoCedenteSchema,
+  // Limite do cheque especial (R$). Chega como número (a tela já interpreta "1.234,56");
+  // vazio = não informado.
+  valor_cheque_especial: z.preprocess(
+    emptyToNull,
+    z.coerce
+      .number({ invalid_type_error: 'Valor de cheque especial inválido.' })
+      .finite('Valor de cheque especial inválido.')
+      .min(0, 'O valor de cheque especial não pode ser negativo.')
+      .max(9_999_999_999_999.99, 'Valor de cheque especial muito alto.')
+      .nullable()
+      .optional()
+  ),
 });
 
 function badRequest(message) {

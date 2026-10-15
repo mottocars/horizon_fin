@@ -968,6 +968,8 @@ CREATE TABLE contas_bancarias_sienge (
     -- daí a abertura do período olha só 10 dias e repete o último saldo de quem não aparecer.
     extrato_carga_inicial_apelido VARCHAR(50),
     extrato_carga_inicial_em      TIMESTAMP,
+    -- Limite do cheque especial da conta (NULL = não informado) — migration 2026-10-15-contas-bancarias-cheque-especial.sql.
+    valor_cheque_especial NUMERIC(15,2),
     PRIMARY KEY (numero_conta, empresa_id, company_id)
 );
 

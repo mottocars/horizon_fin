@@ -6,6 +6,7 @@ import Button from '../../components/Button';
 import SearchableSelect from '../../components/SearchableSelect';
 import { getItem, listBancos, updateEnriquecimento } from '../../api/contasBancariasSienge.api';
 import { listClassificacoes } from '../../api/classificacoesBancarias.api';
+import { formatarSaldo, interpretarSaldo } from '../Operacoes/SaldoContasBancarias/constantes';
 
 // O Sienge guarda o código do banco em banco_numero ("104", "001", "341"...).
 // Só vira sugestão se esse código existir na lista de bancos brasileiros — códigos
@@ -51,7 +52,13 @@ const emptyForm = {
   projeta_saldo: '',
   codigo_cedente_extrato: '',
   codigo_cedente_cobranca: '',
+  valor_cheque_especial: '',
 };
+
+// Valor salvo (número/string numérica do Postgres) -> texto do campo, já formatado (1.234,56).
+function chequeEspecialParaTexto(valor) {
+  return valor === null || valor === undefined || valor === '' ? '' : formatarSaldo(valor);
+}
 
 export default function ContaBancariaItemDetalhe() {
   const { empresaId, companyId, numeroConta } = useParams();
@@ -100,6 +107,7 @@ export default function ContaBancariaItemDetalhe() {
           data.projeta_saldo === true ? 'true' : data.projeta_saldo === false ? 'false' : '',
         codigo_cedente_extrato: data.codigo_cedente_extrato || '',
         codigo_cedente_cobranca: data.codigo_cedente_cobranca || '',
+        valor_cheque_especial: chequeEspecialParaTexto(data.valor_cheque_especial),
       });
     } finally {
       setLoading(false);
@@ -128,17 +136,24 @@ export default function ContaBancariaItemDetalhe() {
     e.preventDefault();
     setError('');
     setSuccess(false);
+    const chequeEspecial = interpretarSaldo(form.valor_cheque_especial);
+    if (Number.isNaN(chequeEspecial) || chequeEspecial < 0) {
+      setError('Valor de Cheque Especial inválido — informe um valor positivo, ex.: 50.000,00.');
+      return;
+    }
     setSaving(true);
     try {
       const updated = await updateEnriquecimento(empresaId, companyId, numeroConta, {
         ...form,
         projeta_saldo: form.projeta_saldo === '' ? '' : form.projeta_saldo === 'true',
+        valor_cheque_especial: chequeEspecial,
       });
       setItem(updated);
       setForm((prev) => ({
         ...prev,
         codigo_cedente_extrato: updated.codigo_cedente_extrato || '',
         codigo_cedente_cobranca: updated.codigo_cedente_cobranca || '',
+        valor_cheque_especial: chequeEspecialParaTexto(updated.valor_cheque_especial),
       }));
       setSuccess(true);
       setTimeout(() => setSuccess(false), 3000);
@@ -299,6 +314,33 @@ export default function ContaBancariaItemDetalhe() {
                 placeholder="ex.: C3U1Y8"
                 className={`w-full rounded-lg border px-3 py-2 text-sm focus:outline-none focus:ring-2 ${corCampo(form.codigo_cedente_cobranca)}`}
               />
+            </Field>
+
+            {/* Limite do cheque especial da conta. Aceita "50.000,00", "50000", "R$ 50.000" — ao
+                sair do campo o texto é reformatado; texto inválido fica como está e o Salvar avisa. */}
+            <Field label="Valor de Cheque Especial">
+              <div className="relative">
+                <span className="pointer-events-none absolute left-3 top-1/2 -translate-y-1/2 text-sm text-gray-400">
+                  R$
+                </span>
+                <input
+                  type="text"
+                  inputMode="decimal"
+                  autoComplete="off"
+                  value={form.valor_cheque_especial}
+                  onChange={(e) => {
+                    if (/^[\d.,\sR$]*$/i.test(e.target.value)) handleChange('valor_cheque_especial', e.target.value);
+                  }}
+                  onBlur={() => {
+                    const valor = interpretarSaldo(form.valor_cheque_especial);
+                    if (valor !== null && !Number.isNaN(valor) && valor >= 0) {
+                      handleChange('valor_cheque_especial', formatarSaldo(valor));
+                    }
+                  }}
+                  placeholder="0,00"
+                  className={`w-full rounded-lg border py-2 pl-9 pr-3 text-right text-sm tabular-nums focus:outline-none focus:ring-2 ${corCampo(form.valor_cheque_especial)}`}
+                />
+              </div>
             </Field>
           </div>
 
