@@ -20,7 +20,7 @@ const MSG_INDISPONIVEL = 'Conexão com IA indisponível, procure o administrador
 function IconeIa({ size = 18, vivo = false }) {
   return (
     <svg width={size} height={size} viewBox="0 0 24 24" fill="currentColor" aria-hidden="true" className={vivo ? 'ia-viva' : ''}>
-      <path className="ia-estrela" d="M10 3.5C10.7 9 12 10.3 17.5 11C12 11.7 10.7 13 10 18.5C9.3 13 8 11.7 2.5 11C8 10.3 9.3 9 10 3.5Z" />
+      <path className="ia-estrela" d="M10 3C10.79 9.23 12.27 10.71 18.5 11.5C12.27 12.29 10.79 13.77 10 20C9.21 13.77 7.73 12.29 1.5 11.5C7.73 10.71 9.21 9.23 10 3Z" />
       <path className="ia-faisca ia-faisca-1" d="M18.5 2C18.75 4 19.4 4.75 21.5 5C19.4 5.25 18.75 6 18.5 8C18.25 6 17.6 5.25 15.5 5C17.6 4.75 18.25 4 18.5 2Z" />
       <path className="ia-faisca ia-faisca-2" d="M18.5 15.5C18.7 17.3 19.2 17.8 21 18C19.2 18.2 18.7 18.7 18.5 20.5C18.3 18.7 17.8 18.2 16 18C17.8 17.8 18.3 17.3 18.5 15.5Z" />
     </svg>
@@ -125,7 +125,7 @@ export default function ConexoesIa() {
               : 'cursor-not-allowed bg-gray-100 text-gray-400'
           }`}
         >
-          <IconeIa size={19} vivo={ativa} />
+          <IconeIa size={21} vivo={ativa} />
         </button>
         {/* Dica ao passar o mouse. */}
         <span
