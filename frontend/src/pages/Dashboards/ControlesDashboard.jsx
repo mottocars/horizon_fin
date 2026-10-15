@@ -1,63 +1,47 @@
 import { useCallback, useEffect, useRef, useState } from 'react';
 import { createPortal } from 'react-dom';
-import { Filter, LayoutGrid, Menu, SlidersHorizontal, X } from 'lucide-react';
+import { LayoutGrid, Menu, SlidersHorizontal, X } from 'lucide-react';
 
-// Controles dos Dashboards (pedido do usuário): dois botões flutuantes no canto inferior direito —
-// Menu e Filtros — que abrem, cada um, um painel VERTICAL logo acima dos botões (crescendo a partir
-// deles) com as opções de tela do dashboard e os filtros da tela. Parados; só o botão sob o mouse
-// flutua.
-// Ficam na camada fixa da área de conteúdo (#camada-dashboard, AppShell.jsx): não rolam com a página
-// e não passam por cima do menu lateral.
-// - `telas`: [{ id, label, icon? }] — opções do Menu; `telaAtiva` / `onTela(id)`.
-// - `filtros`: conteúdo da barra de Filtros (os campos de cada dashboard).
-// Uma barra aberta por vez; fecha no mesmo botão, no X ou com Esc (a outra barra espera esta descer).
+// Controles dos Dashboards (pedido do usuário): UM botão flutuante no canto inferior direito que abre
+// um painel vertical logo acima dele (crescendo a partir do botão), com duas seções — Telas (os
+// botões das telas do dashboard) e Filtros (os filtros da tela). O botão fica parado; flutua só com
+// o mouse em cima.
+// Fica na camada fixa da área de conteúdo (#camada-dashboard, AppShell.jsx): não rola com a página e
+// não passa por cima do menu lateral.
+// - `telas`: [{ id, label, icon? }]; `telaAtiva` / `onTela(id)`.
+// - `filtros`: conteúdo da seção Filtros (os campos de cada dashboard).
+// Fecha no botão, no X ou com Esc.
 
 const DURACAO_FECHAR = 240; // = animate-barra-desce (styles/index.css)
 
-function BotaoFlutuante({ titulo, ativo, onClick, children }) {
-  return (
-    <button
-      type="button"
-      onClick={onClick}
-      title={titulo}
-      aria-label={titulo}
-      aria-expanded={ativo}
-      className={`pointer-events-auto flex h-12 w-12 items-center justify-center rounded-full border shadow-[0_8px_22px_-8px_rgba(15,23,42,0.35)] transition-colors focus:outline-none focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-primary-500 motion-safe:hover:animate-flutuar ${
-        ativo ? 'border-primary-600 bg-primary-600 text-white' : 'border-gray-200 bg-white text-gray-700 hover:border-primary-100 hover:text-primary-700'
-      }`}
-    >
-      {children}
-    </button>
-  );
-}
-
-// Opção da barra entrando em sequência (atraso por posição).
+// Item do painel entrando em sequência (atraso por posição).
 const entrada = (i) => ({ animationDelay: `${120 + i * 45}ms` });
 
-function Vazio({ texto }) {
+function Secao({ icone: Icone, titulo, ordem, children }) {
   return (
-    <p className="motion-safe:animate-item-sobe px-1 text-sm text-gray-400" style={entrada(0)}>
-      {texto}
-    </p>
+    <section className="motion-safe:animate-item-sobe" style={entrada(ordem)}>
+      <h3 className="mb-2 flex items-center gap-2 px-1 text-[11px] font-semibold uppercase tracking-wider text-gray-500">
+        <Icone size={13} className="text-primary-600" />
+        {titulo}
+      </h3>
+      {children}
+    </section>
   );
 }
 
-function Barra({ tipo, fechando, onFechar, telas, telaAtiva, onTela, filtros }) {
-  const menu = tipo === 'menu';
-  const Icone = menu ? LayoutGrid : SlidersHorizontal;
+const vazio = (texto) => <p className="px-1 text-sm text-gray-400">{texto}</p>;
+
+function Painel({ fechando, onFechar, telas, telaAtiva, onTela, filtros }) {
   return (
-    <section
+    <div
       role="dialog"
-      aria-label={menu ? 'Telas do dashboard' : 'Filtros'}
-      className={`pointer-events-auto absolute bottom-[144px] right-6 flex max-h-[calc(100%-176px)] w-80 origin-bottom-right flex-col rounded-2xl border border-gray-200 bg-white/95 shadow-[0_24px_48px_-16px_rgba(15,23,42,0.35)] backdrop-blur ${
+      aria-label="Menu do dashboard"
+      className={`pointer-events-auto absolute bottom-21 right-6 flex max-h-[calc(100%-116px)] w-80 origin-bottom-right flex-col rounded-2xl border border-gray-200 bg-white/95 shadow-[0_24px_48px_-16px_rgba(15,23,42,0.35)] backdrop-blur ${
         fechando ? 'motion-safe:animate-barra-desce' : 'motion-safe:animate-barra-sobe'
       }`}
     >
       <div className="flex items-center gap-3 border-b border-gray-100 px-5 py-3">
-        <span className="flex h-8 w-8 items-center justify-center rounded-lg bg-primary-50 text-primary-600">
-          <Icone size={16} />
-        </span>
-        <h2 className="text-sm font-semibold text-gray-900">{menu ? 'Telas do dashboard' : 'Filtros'}</h2>
+        <h2 className="text-sm font-semibold text-gray-900">Dashboard</h2>
         <button
           type="button"
           onClick={onFechar}
@@ -68,47 +52,46 @@ function Barra({ tipo, fechando, onFechar, telas, telaAtiva, onTela, filtros }) 
           <X size={16} />
         </button>
       </div>
-      <div className="flex min-h-[72px] flex-col gap-2 overflow-y-auto px-4 py-4">
-        {menu ? (
-          telas.length ? (
-            telas.map((t, i) => {
-              const IconeTela = t.icon;
-              const ativa = t.id === telaAtiva;
-              return (
-                <button
-                  key={t.id}
-                  type="button"
-                  onClick={() => onTela?.(t.id)}
-                  style={entrada(i)}
-                  className={`motion-safe:animate-item-sobe flex w-full shrink-0 items-center gap-2.5 rounded-xl border px-4 py-2.5 text-left text-sm font-medium transition-colors ${
-                    ativa ? 'border-primary-600 bg-primary-50 text-primary-700' : 'border-gray-200 text-gray-700 hover:border-primary-100 hover:bg-gray-50'
-                  }`}
-                >
-                  {IconeTela && <IconeTela size={16} />}
-                  {t.label}
-                </button>
-              );
-            })
+      <div className="flex flex-col gap-5 overflow-y-auto px-4 py-4">
+        <Secao icone={LayoutGrid} titulo="Telas" ordem={0}>
+          {telas.length ? (
+            <div className="flex flex-col gap-2">
+              {telas.map((t, i) => {
+                const IconeTela = t.icon;
+                const ativa = t.id === telaAtiva;
+                return (
+                  <button
+                    key={t.id}
+                    type="button"
+                    onClick={() => onTela?.(t.id)}
+                    style={entrada(i + 1)}
+                    className={`motion-safe:animate-item-sobe flex w-full items-center gap-2.5 rounded-xl border px-4 py-2.5 text-left text-sm font-medium transition-colors ${
+                      ativa ? 'border-primary-600 bg-primary-50 text-primary-700' : 'border-gray-200 text-gray-700 hover:border-primary-100 hover:bg-gray-50'
+                    }`}
+                  >
+                    {IconeTela && <IconeTela size={16} />}
+                    {t.label}
+                  </button>
+                );
+              })}
+            </div>
           ) : (
-            <Vazio texto="As telas deste dashboard aparecerão aqui." />
-          )
-        ) : filtros ? (
-          <div className="motion-safe:animate-item-sobe flex flex-col gap-3" style={entrada(0)}>
-            {filtros}
-          </div>
-        ) : (
-          <Vazio texto="Os filtros desta tela aparecerão aqui." />
-        )}
+            vazio('As telas deste dashboard aparecerão aqui.')
+          )}
+        </Secao>
+        <div className="border-t border-gray-100" />
+        <Secao icone={SlidersHorizontal} titulo="Filtros" ordem={Math.max(telas.length, 1) + 1}>
+          {filtros ? <div className="flex flex-col gap-3">{filtros}</div> : vazio('Os filtros desta tela aparecerão aqui.')}
+        </Secao>
       </div>
-    </section>
+    </div>
   );
 }
 
 export default function ControlesDashboard({ telas = [], telaAtiva, onTela, filtros }) {
   const [camada, setCamada] = useState(null);
-  const [aberta, setAberta] = useState(null); // 'menu' | 'filtros' | null
+  const [aberto, setAberto] = useState(false);
   const [fechando, setFechando] = useState(false);
-  const proxima = useRef(null);
   const timer = useRef(null);
 
   useEffect(() => {
@@ -116,8 +99,7 @@ export default function ControlesDashboard({ telas = [], telaAtiva, onTela, filt
     return () => clearTimeout(timer.current);
   }, []);
 
-  const fechar = useCallback((depois = null) => {
-    proxima.current = depois;
+  const fechar = useCallback(() => {
     setFechando(true);
     clearTimeout(timer.current);
     // Sem animação (movimento reduzido) fecha na hora.
@@ -125,55 +107,49 @@ export default function ControlesDashboard({ telas = [], telaAtiva, onTela, filt
     timer.current = setTimeout(
       () => {
         setFechando(false);
-        setAberta(proxima.current);
-        proxima.current = null;
+        setAberto(false);
       },
       reduzido ? 0 : DURACAO_FECHAR
     );
   }, []);
 
-  function alternar(tipo) {
+  function alternar() {
     if (fechando) {
-      proxima.current = proxima.current === tipo ? null : tipo;
+      clearTimeout(timer.current);
+      setFechando(false);
       return;
     }
-    if (aberta === tipo) fechar();
-    else if (aberta) fechar(tipo);
-    else setAberta(tipo);
+    if (aberto) fechar();
+    else setAberto(true);
   }
 
   useEffect(() => {
-    if (!aberta) return undefined;
+    if (!aberto) return undefined;
     const aoTeclar = (e) => {
       if (e.key === 'Escape') fechar();
     };
     window.addEventListener('keydown', aoTeclar);
     return () => window.removeEventListener('keydown', aoTeclar);
-  }, [aberta, fechar]);
+  }, [aberto, fechar]);
 
   if (!camada) return null;
+  const ativo = aberto && !fechando;
   return createPortal(
     <>
-      {aberta && (
-        <Barra
-          key={aberta}
-          tipo={aberta}
-          fechando={fechando}
-          onFechar={() => fechar()}
-          telas={telas}
-          telaAtiva={telaAtiva}
-          onTela={onTela}
-          filtros={filtros}
-        />
-      )}
-      <div className="absolute bottom-6 right-6 flex flex-col items-center gap-3">
-        <BotaoFlutuante titulo="Menu" ativo={aberta === 'menu' && !fechando} onClick={() => alternar('menu')}>
-          <Menu size={20} />
-        </BotaoFlutuante>
-        <BotaoFlutuante titulo="Filtros" ativo={aberta === 'filtros' && !fechando} onClick={() => alternar('filtros')}>
-          <Filter size={19} />
-        </BotaoFlutuante>
-      </div>
+      {aberto && <Painel fechando={fechando} onFechar={fechar} telas={telas} telaAtiva={telaAtiva} onTela={onTela} filtros={filtros} />}
+      <button
+        type="button"
+        onClick={alternar}
+        title={ativo ? 'Fechar menu' : 'Menu'}
+        aria-label={ativo ? 'Fechar menu' : 'Menu'}
+        aria-expanded={ativo}
+        className={`pointer-events-auto absolute bottom-6 right-6 flex h-12 w-12 items-center justify-center rounded-full border shadow-[0_8px_22px_-8px_rgba(15,23,42,0.35)] transition-colors focus:outline-none focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-primary-500 motion-safe:hover:animate-flutuar ${
+          ativo ? 'border-primary-600 bg-primary-600 text-white' : 'border-gray-200 bg-white text-gray-700 hover:border-primary-100 hover:text-primary-700'
+        }`}
+      >
+        {/* Menu vira X girando ao abrir. */}
+        <span className={`transition-transform duration-300 ${ativo ? 'rotate-90' : ''}`}>{ativo ? <X size={20} /> : <Menu size={20} />}</span>
+      </button>
     </>,
     camada
   );
