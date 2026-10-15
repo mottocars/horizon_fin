@@ -280,12 +280,7 @@
   font-size: 12px;
 }
 
-/* Grade do DFC: título e o ícone de tela cheia em cima dela */
-.painel-cfo .grade-dfc {
-  display: flex;
-  flex-direction: column;
-  gap: 8px;
-}
+/* Grade do DFC: quadro como os demais, com o título e o ícone de tela cheia dentro */
 .painel-cfo .grade-barra {
   display: flex;
   align-items: center;

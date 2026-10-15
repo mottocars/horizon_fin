@@ -488,7 +488,7 @@ export default function DfcFluxoTab({
         <div
           ref={gradeRef}
           onScroll={(e) => setRolouX(e.currentTarget.scrollLeft > 0)}
-          className={`overflow-auto overscroll-x-contain rounded-lg border border-gray-200 ${dashboard ? 'bg-white shadow-card' : ''} ${
+          className={`overflow-auto overscroll-x-contain rounded-lg border border-gray-200 ${dashboard ? 'bg-white' : ''} ${
             rolouX ? SOMBRA_COLUNA_FIXA : ''
           }`}
           style={{ maxHeight: alturaGrade ?? undefined, height: dashboard ? (alturaGrade ?? undefined) : undefined }}

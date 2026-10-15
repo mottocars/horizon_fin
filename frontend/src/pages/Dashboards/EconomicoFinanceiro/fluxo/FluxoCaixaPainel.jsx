@@ -127,7 +127,7 @@ export default function FluxoCaixaPainel({ dashboard, tituloTela, empresaId, onE
   const [erro, setErro] = useState('');
   const [telaCheia, setTelaCheia] = useState(false);
   const [recarga, setRecarga] = useState(0);
-  const [altura, setAltura] = useState(() => Math.max(420, window.innerHeight - 130));
+  const [altura, setAltura] = useState(() => Math.max(420, window.innerHeight - 190));
   const pedido = useRef(0);
 
   // Trocar de empresa limpa os centros.
@@ -170,7 +170,7 @@ export default function FluxoCaixaPainel({ dashboard, tituloTela, empresaId, onE
     return () => clearInterval(t);
   }, [carregar]);
   useEffect(() => {
-    const medir = () => setAltura(Math.max(420, window.innerHeight - 130));
+    const medir = () => setAltura(Math.max(420, window.innerHeight - 190));
     window.addEventListener('resize', medir);
     return () => window.removeEventListener('resize', medir);
   }, []);
@@ -282,9 +282,9 @@ export default function FluxoCaixaPainel({ dashboard, tituloTela, empresaId, onE
         )}
 
         {empresaId && (
-          <div className="grade-dfc">
+          <section className="panel grade-dfc" aria-labelledby="h-grade">
             <div className="grade-barra">
-              <h2>Detalhamento do fluxo de caixa</h2>
+              <h2 id="h-grade">Detalhamento do fluxo de caixa</h2>
               <button type="button" className="btn ghost icone" onClick={() => setTelaCheia(true)} title="Tela cheia" aria-label="Tela cheia">
                 <Maximize2 size={16} />
               </button>
@@ -300,7 +300,7 @@ export default function FluxoCaixaPainel({ dashboard, tituloTela, empresaId, onE
               telaCheia={telaCheia}
               onSairTelaCheia={() => setTelaCheia(false)}
             />
-          </div>
+          </section>
         )}
 
         {D && (
