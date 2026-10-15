@@ -1,12 +1,14 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
-import { Download, Loader2, Maximize2 } from 'lucide-react';
+import { BookOpen, Download, Loader2, Maximize2 } from 'lucide-react';
 import { getFluxoCaixaPainel } from '../../../../api/dashboards.api';
 import { exportarExcelDfc } from '../../../../api/dfcExportacao.api';
 import DfcFluxoTab from '../../../Operacoes/DfcConstrutoras/DfcFluxoTab';
 import CabecalhoDashboard from '../../CabecalhoDashboard';
 import { DicaProvider } from './graficos';
+import { SumarioCtx } from './ganchos';
+import SumarioModal from './sumario';
 import { addM, curto, lbl, modelo, titulo } from './modelo';
-import { Calibracao, Carteira, DividaPj, EntradasSaidas, FolegoSpe, Hero, MaioresSaidas, QuemGera, Tiles } from './secoes';
+import { AjudaSecao, Calibracao, Carteira, DividaPj, EntradasSaidas, FolegoSpe, Hero, MaioresSaidas, QuemGera, Tiles } from './secoes';
 import './painel.css';
 
 // Dashboard Econômico Financeiro › Fluxo de Caixa, no layout do painel do CFO
@@ -129,6 +131,9 @@ export default function FluxoCaixaPainel({ dashboard, tituloTela, empresaId, onE
   const [erro, setErro] = useState('');
   const [telaCheia, setTelaCheia] = useState(false);
   const [exportando, setExportando] = useState(false);
+  const [sumario, setSumario] = useState({ aberta: false, aba: 'filtros' });
+  const abrirSumario = useCallback((aba = 'filtros') => setSumario({ aberta: true, aba }), []);
+  const fecharSumario = useCallback(() => setSumario((s) => ({ ...s, aberta: false })), []);
   const [erroExportacao, setErroExportacao] = useState('');
   const [recarga, setRecarga] = useState(0);
   const [altura, setAltura] = useState(() => Math.max(420, window.innerHeight - 190));
@@ -270,6 +275,7 @@ export default function FluxoCaixaPainel({ dashboard, tituloTela, empresaId, onE
 
   return (
     <DicaProvider>
+      <SumarioCtx.Provider value={abrirSumario}>
       <div className="painel-cfo">
         <CabecalhoDashboard dashboard={dashboard} titulo={tituloTela} etiquetas={etiquetas} />
 
@@ -290,6 +296,10 @@ export default function FluxoCaixaPainel({ dashboard, tituloTela, empresaId, onE
           <FiltroCentros opcoes={opcoesCentros} valor={centros} onChange={setCentros} disabled={!empresaId || !dados} />
           <div className="acoes">
             {erroExportacao && <span className="erro">{erroExportacao}</span>}
+            <button type="button" className="btn ghost icone com-texto" onClick={() => abrirSumario()} title="Sumário das análises">
+              <BookOpen size={16} />
+              Sumário
+            </button>
             <button
               type="button"
               className="btn ghost icone"
@@ -331,7 +341,10 @@ export default function FluxoCaixaPainel({ dashboard, tituloTela, empresaId, onE
         {empresaId && (
           <section className="panel grade-dfc" aria-labelledby="h-grade">
             <div className="grade-barra">
-              <h2 id="h-grade">Detalhamento do fluxo de caixa</h2>
+              <h2 id="h-grade">
+                Detalhamento do fluxo de caixa
+                <AjudaSecao aba="detalhamento" rotulo="Detalhamento do fluxo de caixa" />
+              </h2>
               <button type="button" className="btn ghost icone" onClick={() => setTelaCheia(true)} title="Tela cheia" aria-label="Tela cheia">
                 <Maximize2 size={16} />
               </button>
@@ -364,7 +377,9 @@ export default function FluxoCaixaPainel({ dashboard, tituloTela, empresaId, onE
             </div>
           </>
         )}
+        <SumarioModal aberta={sumario.aberta} aba={sumario.aba} onAba={(aba) => setSumario({ aberta: true, aba })} onFechar={fecharSumario} />
       </div>
+      </SumarioCtx.Provider>
     </DicaProvider>
   );
 }

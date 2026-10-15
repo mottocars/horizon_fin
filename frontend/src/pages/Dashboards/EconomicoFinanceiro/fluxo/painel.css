@@ -904,6 +904,238 @@
   gap: 4px;
 }
 
+/* "?" ao lado do título de cada seção */
+.painel-cfo .ajuda {
+  display: inline-flex;
+  vertical-align: middle;
+  margin-left: 8px;
+  padding: 2px;
+  border: 0;
+  border-radius: 50%;
+  background: transparent;
+  color: var(--s-neutral);
+  cursor: pointer;
+  transition: color 0.15s;
+}
+.painel-cfo .ajuda:hover {
+  color: var(--accent);
+}
+.painel-cfo .btn.icone.com-texto {
+  padding: 7px 12px;
+  gap: 6px;
+}
+
+/* Sumário das análises (janela) */
+.painel-cfo .sumario-fundo {
+  position: fixed;
+  inset: 0;
+  z-index: 50;
+  background: rgba(19, 32, 42, 0.45);
+  backdrop-filter: blur(2px);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  padding: 24px;
+  animation: sumario-entra 0.18s ease-out;
+}
+.painel-cfo .sumario {
+  width: min(1040px, 100%);
+  height: min(720px, 100%);
+  background: var(--surface);
+  border-radius: 10px;
+  border-top: 4px solid var(--accent);
+  box-shadow: 0 32px 80px -16px rgba(19, 32, 42, 0.55);
+  display: flex;
+  flex-direction: column;
+  overflow: hidden;
+  animation: sumario-sobe 0.22s ease-out;
+}
+@keyframes sumario-entra {
+  from {
+    opacity: 0;
+  }
+}
+@keyframes sumario-sobe {
+  from {
+    opacity: 0;
+    transform: translateY(12px) scale(0.98);
+  }
+}
+.painel-cfo .sumario-topo {
+  display: flex;
+  align-items: flex-start;
+  justify-content: space-between;
+  gap: 16px;
+  padding: 16px 20px 14px;
+  border-bottom: 2px solid var(--ink);
+}
+.painel-cfo .sumario-topo h2 {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  font-size: 22px;
+  font-weight: 800;
+  font-stretch: 110%;
+  margin-top: 2px;
+}
+.painel-cfo .sumario-fechar {
+  border: 1px solid var(--line);
+  background: var(--surface);
+  color: var(--ink-2);
+  border-radius: 6px;
+  padding: 6px;
+  cursor: pointer;
+  display: inline-flex;
+}
+.painel-cfo .sumario-fechar:hover {
+  border-color: var(--ink);
+  color: var(--ink);
+}
+.painel-cfo .sumario-corpo {
+  flex: 1;
+  min-height: 0;
+  display: grid;
+  grid-template-columns: 270px minmax(0, 1fr);
+}
+.painel-cfo .sumario-abas {
+  border-right: 1px solid var(--line);
+  background: var(--surface-2);
+  padding: 10px 8px;
+  overflow-y: auto;
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+}
+.painel-cfo .sumario-abas button {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  width: 100%;
+  text-align: left;
+  border: 0;
+  border-left: 3px solid transparent;
+  border-radius: 4px;
+  background: transparent;
+  color: var(--ink-2);
+  font-size: 13.5px;
+  font-weight: 600;
+  padding: 8px 10px;
+  cursor: pointer;
+}
+.painel-cfo .sumario-abas button:hover {
+  background: var(--surface);
+  color: var(--ink);
+}
+.painel-cfo .sumario-abas button.ativa {
+  background: var(--surface);
+  color: var(--accent);
+  border-left-color: var(--accent);
+  box-shadow: 0 1px 2px rgba(19, 32, 42, 0.08);
+}
+.painel-cfo .sumario-abas .num {
+  font: 600 10.5px var(--f-mono);
+  color: var(--muted);
+  width: 18px;
+}
+.painel-cfo .sumario-abas .txt {
+  line-height: 1.25;
+}
+.painel-cfo .sumario-conteudo {
+  overflow-y: auto;
+  padding: 22px 28px 28px;
+}
+.painel-cfo .sumario-cab {
+  display: flex;
+  gap: 14px;
+  align-items: flex-start;
+  padding-bottom: 16px;
+  margin-bottom: 6px;
+  border-bottom: 1px solid var(--line);
+}
+.painel-cfo .sumario-icone {
+  display: inline-flex;
+  padding: 10px;
+  border-radius: 8px;
+  background: var(--accent-soft);
+  color: var(--accent);
+}
+.painel-cfo .sumario-cab h3 {
+  font-size: 20px;
+  font-weight: 800;
+}
+.painel-cfo .sumario-cab p {
+  margin: 4px 0 0;
+  color: var(--ink-2);
+  font-size: 15px;
+}
+.painel-cfo .sumario-bloco {
+  margin-top: 18px;
+}
+.painel-cfo .sumario-bloco h4 {
+  font-family: var(--f-display);
+  font-stretch: 115%;
+  font-size: 11.5px;
+  font-weight: 700;
+  letter-spacing: 0.12em;
+  text-transform: uppercase;
+  color: var(--muted);
+  margin: 0 0 8px;
+}
+.painel-cfo .sumario-bloco p {
+  margin: 0;
+  color: var(--ink-2);
+  font-size: 14.5px;
+}
+.painel-cfo .sumario-bloco ul {
+  margin: 0;
+  padding: 0;
+  list-style: none;
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+}
+.painel-cfo .sumario-bloco li {
+  position: relative;
+  padding-left: 16px;
+  color: var(--ink-2);
+  font-size: 14.5px;
+  line-height: 1.5;
+}
+.painel-cfo .sumario-bloco li::before {
+  content: '';
+  position: absolute;
+  left: 2px;
+  top: 0.62em;
+  width: 6px;
+  height: 6px;
+  border-radius: 2px;
+  background: var(--accent);
+}
+.painel-cfo .sumario-bloco li b {
+  color: var(--ink);
+  font-weight: 600;
+}
+.painel-cfo .sumario-bloco .flag {
+  margin-left: 0;
+  margin-right: 4px;
+}
+@media (max-width: 760px) {
+  .painel-cfo .sumario-corpo {
+    grid-template-columns: 1fr;
+    grid-template-rows: auto minmax(0, 1fr);
+  }
+  .painel-cfo .sumario-abas {
+    flex-direction: row;
+    overflow-x: auto;
+    border-right: 0;
+    border-bottom: 1px solid var(--line);
+  }
+  .painel-cfo .sumario-abas button {
+    width: auto;
+    white-space: nowrap;
+  }
+}
+
 /* Tooltip (fora do .painel-cfo, no body) */
 .cfo-tip {
   position: fixed;

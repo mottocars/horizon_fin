@@ -1,10 +1,21 @@
 import { useMemo, useState } from 'react';
+import { CircleHelp } from 'lucide-react';
 import { BarrasH, DividaObra, FluxoOperacional, Trajetoria } from './graficos';
-import { COR, useDica } from './ganchos';
+import { COR, useDica, useSumario } from './ganchos';
 import { CFG, PRESETS, brl, cenario, curto, eixo, lbl, media, nf0, obraMaiorEntrada, pct, presetDe, soma, titulo } from './modelo';
 
 // Seções do painel do Fluxo de Caixa, na ordem da especificação do painel do CFO
 // (C:\Users\motta\Desktop\layout\Especificação do Painel do CFO — Tostes e Diniz.md).
+
+// "?" ao lado do título: abre o Sumário das análises na aba desta seção.
+export function AjudaSecao({ aba, rotulo }) {
+  const abrir = useSumario();
+  return (
+    <button type="button" className="ajuda" onClick={() => abrir(aba)} title="Como ler esta análise" aria-label={`Como ler: ${rotulo}`}>
+      <CircleHelp size={15} />
+    </button>
+  );
+}
 
 function Status({ s }) {
   return <span className={`st ${s[0]}`}>{s[1]}</span>;
@@ -156,6 +167,7 @@ export function Hero({ D, escopo }) {
           {D.minBase < D.caixaHoje
             ? `O caixa ${de} chega a ${brl(D.minBase)} em ${lbl(D.fut[D.minIdx])} (${pct(queda, true)})`
             : `O caixa ${de} cresce no horizonte`}
+          <AjudaSecao aba="trajetoria" rotulo="Trajetória do caixa" />
         </h2>
         <p>Saldo no fim de cada mês: realizado, projeção do Orçamento e o cenário escolhido ao lado.</p>
       </div>
@@ -254,7 +266,9 @@ export function EntradasSaidas({ D }) {
   return (
     <section className="panel c12" aria-labelledby="h-flow">
       <div className="ph">
-        <h2 id="h-flow">Entradas e saídas operacionais, mês a mês</h2>
+        <h2 id="h-flow">Entradas e saídas operacionais, mês a mês
+          <AjudaSecao aba="entradas" rotulo="Entradas e saídas operacionais" />
+        </h2>
         <div className="legend">
           <span>
             <i className="box" style={{ background: COR.entrada }} />
@@ -402,7 +416,9 @@ export function FolegoSpe({ D, empresaSel, onEmpresa }) {
   return (
     <section className="panel c12" aria-labelledby="h-spe">
       <div className="ph">
-        <h2 id="h-spe">Fôlego de cada SPE sozinha</h2>
+        <h2 id="h-spe">Fôlego de cada SPE sozinha
+          <AjudaSecao aba="folego" rotulo="Fôlego de cada SPE" />
+        </h2>
       </div>
       <div className="kv k4">
         <div>
@@ -529,7 +545,9 @@ export function QuemGera({ D, centroSel, onCentro }) {
   return (
     <section className="panel c7" aria-labelledby="h-obras">
       <div className="ph">
-        <h2 id="h-obras">Quem gera e quem consome caixa</h2>
+        <h2 id="h-obras">Quem gera e quem consome caixa
+          <AjudaSecao aba="quemgera" rotulo="Quem gera e quem consome caixa" />
+        </h2>
         <p>Fluxo operacional líquido por centro de custo. Clique numa linha para filtrar o painel.</p>
       </div>
       <div className="tbl">
@@ -591,7 +609,9 @@ export function Carteira({ D }) {
   return (
     <section className="panel c5" aria-labelledby="h-cart">
       <div className="ph">
-        <h2 id="h-cart">Carteira e liquidez</h2>
+        <h2 id="h-cart">Carteira e liquidez
+          <AjudaSecao aba="carteira" rotulo="Carteira e liquidez" />
+        </h2>
       </div>
       <div className="kv k2">
         {[
@@ -645,7 +665,9 @@ export function Calibracao({ D }) {
   return (
     <section className="panel c6" aria-labelledby="h-cal">
       <div className="ph">
-        <h2 id="h-cal">O Orçamento erra para qual lado?</h2>
+        <h2 id="h-cal">O Orçamento erra para qual lado?
+          <AjudaSecao aba="orcamento" rotulo="O Orçamento erra para qual lado?" />
+        </h2>
         <p>
           {D.hist.length
             ? `${lbl(D.hist[0])} a ${lbl(D.hist.at(-1))}: realizado contra o projetado da versão atual para os mesmos meses.`
@@ -711,7 +733,9 @@ export function MaioresSaidas({ D, forn }) {
   return (
     <section className="panel c6" aria-labelledby="h-forn">
       <div className="ph">
-        <h2 id="h-forn">Maiores saídas operacionais</h2>
+        <h2 id="h-forn">Maiores saídas operacionais
+          <AjudaSecao aba="saidas" rotulo="Maiores saídas operacionais" />
+        </h2>
         <p>{D.hist.length ? `${lbl(D.hist[0])} a ${lbl(D.hist.at(-1))}, por favorecido.` : 'Por favorecido, no histórico.'}</p>
       </div>
       <div className="legend">
@@ -751,7 +775,9 @@ export function DividaPj({ D }) {
   return (
     <section className="panel c12" aria-labelledby="h-cef">
       <div className="ph">
-        <h2 id="h-cef">Dívida PJ da Caixa por obra</h2>
+        <h2 id="h-cef">Dívida PJ da Caixa por obra
+          <AjudaSecao aba="divida" rotulo="Dívida PJ da Caixa" />
+        </h2>
         <p>Saldo devedor do crédito PJ na Projeção CEF de cada obra com Parâmetros.</p>
       </div>
       {!D.cef.length ? (

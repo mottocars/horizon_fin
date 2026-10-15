@@ -37,3 +37,7 @@ export function useLargura(minimo = 320) {
   }, []);
   return [ref, Math.max(minimo, largura)];
 }
+
+// Sumário das análises: abrirSumario(aba) abre a janela direto na aba da seção (o "?" de cada título).
+export const SumarioCtx = createContext(() => {});
+export const useSumario = () => useContext(SumarioCtx);
