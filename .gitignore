@@ -6,3 +6,6 @@ build/
 *.log
 backend/uploads/
 .claude/settings.local.json
+
+# Pacote gerado da skill (python ia/skills/empacotar.py)
+ia/skills/*.zip
