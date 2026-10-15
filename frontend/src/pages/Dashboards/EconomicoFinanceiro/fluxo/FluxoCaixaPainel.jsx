@@ -1,6 +1,7 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
-import { Maximize2 } from 'lucide-react';
+import { Download, Loader2, Maximize2 } from 'lucide-react';
 import { getFluxoCaixaPainel } from '../../../../api/dashboards.api';
+import { exportarExcelDfc } from '../../../../api/dfcExportacao.api';
 import DfcFluxoTab from '../../../Operacoes/DfcConstrutoras/DfcFluxoTab';
 import CabecalhoDashboard from '../../CabecalhoDashboard';
 import { DicaProvider } from './graficos';
@@ -14,7 +15,8 @@ import './painel.css';
 // indicadores, a grade do DFC (DfcFluxoTab) na altura da tela e, embaixo, os gráficos da especificação.
 // Histórico: meses antes do mês atual (padrão 1). Horizonte: meses a partir do mês atual, contando
 // ele (padrão 6). Os dados vêm de /dashboards/economico-financeiro/fluxo-caixa e o painel recarrega
-// sozinho a cada 30 minutos. A grade tem o botão de tela cheia (a mesma do DFC Construtoras).
+// sozinho a cada 30 minutos. A grade tem o botão de tela cheia (a mesma do DFC Construtoras) e a barra o
+// Exportar Excel do DFC Construtoras, com os filtros do painel (empresa, histórico + horizonte, centros).
 
 const MIN_RECARGA = 30;
 const LIMITE_MESES = 36;
@@ -126,6 +128,8 @@ export default function FluxoCaixaPainel({ dashboard, tituloTela, empresaId, onE
   const [estado, setEstado] = useState('ocioso'); // ocioso | carregando | erro
   const [erro, setErro] = useState('');
   const [telaCheia, setTelaCheia] = useState(false);
+  const [exportando, setExportando] = useState(false);
+  const [erroExportacao, setErroExportacao] = useState('');
   const [recarga, setRecarga] = useState(0);
   const [altura, setAltura] = useState(() => Math.max(420, window.innerHeight - 190));
   const pedido = useRef(0);
@@ -191,6 +195,36 @@ export default function FluxoCaixaPainel({ dashboard, tituloTela, empresaId, onE
   const inicio = `${addM(m0, -hist)}-01`;
   const fim = ultimoDia(addM(m0, hor - 1));
 
+  // Exportar Excel: o mesmo .xlsx da aba DFC do DFC Construtoras, com o período e os centros do painel.
+  useEffect(() => setErroExportacao(''), [empresaId, hist, hor, centros]);
+  async function exportarExcel() {
+    setErroExportacao('');
+    setExportando(true);
+    try {
+      const { blob, nome } = await exportarExcelDfc(empresaId, { inicio: inicio.slice(0, 7), fim: fim.slice(0, 7), centros });
+      const url = window.URL.createObjectURL(blob);
+      const link = document.createElement('a');
+      link.href = url;
+      link.download = nome;
+      document.body.appendChild(link);
+      link.click();
+      link.remove();
+      window.URL.revokeObjectURL(url);
+    } catch (err) {
+      // Com responseType 'blob' a mensagem de erro do backend chega dentro de um Blob.
+      let mensagem = 'Não foi possível gerar o Excel.';
+      const dados = err.response?.data;
+      try {
+        mensagem = (dados instanceof Blob ? JSON.parse(await dados.text()) : dados)?.message || mensagem;
+      } catch {
+        // mantém a mensagem padrão
+      }
+      setErroExportacao(mensagem);
+    } finally {
+      setExportando(false);
+    }
+  }
+
   const todosCentros = useMemo(() => dados?.centros || [], [dados]);
   const opcoesCentros = useMemo(
     () =>
@@ -254,6 +288,19 @@ export default function FluxoCaixaPainel({ dashboard, tituloTela, empresaId, onE
           <SegMeses rotulo="Histórico" opcoes={[6, 1]} valor={hist} onChange={setHist} digitarPrimeiro />
           <SegMeses rotulo="Horizonte" opcoes={[6, 9]} valor={hor} onChange={setHor} />
           <FiltroCentros opcoes={opcoesCentros} valor={centros} onChange={setCentros} disabled={!empresaId || !dados} />
+          <div className="acoes">
+            {erroExportacao && <span className="erro">{erroExportacao}</span>}
+            <button
+              type="button"
+              className="btn ghost icone"
+              onClick={exportarExcel}
+              disabled={!empresaId || exportando}
+              title="Exportar Excel"
+              aria-label="Exportar Excel"
+            >
+              {exportando ? <Loader2 size={16} className="animate-spin" /> : <Download size={16} />}
+            </button>
+          </div>
         </section>
 
         {!empresaId ? (

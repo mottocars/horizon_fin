@@ -152,7 +152,10 @@ app.use('/api/projetos', exigirTela([QUALQUER_TELA]), projetosRoutes);
 app.use('/api/integracoes/prevision', exigirTela([T.PREVISION], [T.CENTROS_CUSTO]), previsionRoutes);
 app.use('/api/prevision-dashboards', exigirTela([T.PREVISION, T.CENTROS_CUSTO]), previsionDashboardsRoutes);
 // Também na aba Plano Contas da DFC Construtoras (espelho do cadastro de Planos Financeiros).
-app.use('/api/planos-financeiros/sienge', exigirTela([T.PLANOS_FINANCEIROS, T.SIENGE, T.DRE, T.DFC]), planosFinanceirosSiengeRoutes);
+// O Fluxo de Caixa do dashboard Econômico Financeiro usa a grade, o Detalhamento e o Excel do DFC
+// Construtoras: quem tem só a tela do dashboard lê (GET) essas APIs, sem alterar nada.
+const LEITURA_DASHBOARD = [T.ECONOMICO_FINANCEIRO];
+app.use('/api/planos-financeiros/sienge', exigirTela([T.PLANOS_FINANCEIROS, T.SIENGE, T.DRE, T.DFC], LEITURA_DASHBOARD), planosFinanceirosSiengeRoutes);
 app.use('/api/centros-custo/sienge', exigirTela([T.CENTROS_CUSTO, T.SIENGE], [T.DRE]), centrosCustoSiengeRoutes);
 app.use('/api/mascaras', exigirTela([T.MASCARAS, T.DRE, T.REPASSES], [T.CENTROS_CUSTO, T.PLANOS_FINANCEIROS]), mascarasRoutes);
 // Abas de cadastro do Saldo Contas Bancárias: Contas Bancárias e Classificação
@@ -162,22 +165,22 @@ app.use('/api/saldo-contas-bancarias', exigirTela([T.SALDOS]), saldoContasBancar
 app.use('/api/classificacoes-bancarias', exigirTela([T.SALDOS]), exigirAdministradorDaTela(T.SALDOS), classificacoesBancariasRoutes);
 app.use('/api/dre-categorias-orcamento', exigirTela([T.DRE]), dreCategoriasOrcamentoRoutes);
 app.use('/api/dre-orcamento', exigirTela([T.DRE]), dreOrcamentoRoutes);
-app.use('/api/dfc-mascaras', exigirTela([T.DFC]), dfcMascarasRoutes);
+app.use('/api/dfc-mascaras', exigirTela([T.DFC], LEITURA_DASHBOARD), dfcMascarasRoutes);
 app.use('/api/dfc-parametros', exigirTela([T.DFC]), dfcParametrosRoutes);
 app.use('/api/dfc-centros', exigirTela([T.DFC]), dfcCentrosRoutes);
-app.use('/api/dfc-plano-contas', exigirTela([T.DFC]), dfcPlanoContasRoutes);
+app.use('/api/dfc-plano-contas', exigirTela([T.DFC], LEITURA_DASHBOARD), dfcPlanoContasRoutes);
 app.use('/api/dfc-avancos', exigirTela([T.DFC]), dfcAvancosRoutes);
 app.use('/api/dfc-repasses', exigirTela([T.DFC]), dfcRepassesRoutes);
 app.use('/api/dfc-projecao-cef', exigirTela([T.DFC]), dfcProjecaoCefRoutes);
 app.use('/api/dfc-orcamento-informado', exigirTela([T.DFC]), dfcOrcamentoInformadoRoutes);
 app.use('/api/dfc-aging', exigirTela([T.DFC]), dfcAgingRoutes);
-app.use('/api/dfc-orcamento', exigirTela([T.DFC]), dfcOrcamentoRoutes);
+app.use('/api/dfc-orcamento', exigirTela([T.DFC], LEITURA_DASHBOARD), dfcOrcamentoRoutes);
 app.use('/api/dfc-desembolso', exigirTela([T.DFC]), dfcDesembolsoRoutes);
 app.use('/api/dfc-empresarial', exigirTela([T.DFC]), dfcEmpresarialRoutes);
 app.use('/api/dfc-contas', exigirTela([T.DFC]), dfcContasRoutes);
-app.use('/api/dfc-saldos', exigirTela([T.DFC]), dfcSaldosRoutes);
-app.use('/api/dfc-detalhamento', exigirTela([T.DFC]), dfcDetalhamentoRoutes);
-app.use('/api/dfc-exportacao', exigirTela([T.DFC]), dfcExportacaoRoutes);
+app.use('/api/dfc-saldos', exigirTela([T.DFC], LEITURA_DASHBOARD), dfcSaldosRoutes);
+app.use('/api/dfc-detalhamento', exigirTela([T.DFC], LEITURA_DASHBOARD), dfcDetalhamentoRoutes);
+app.use('/api/dfc-exportacao', exigirTela([T.DFC], LEITURA_DASHBOARD), dfcExportacaoRoutes);
 app.use('/api/dashboards', exigirTela([T.ECONOMICO_FINANCEIRO]), dashboardsRoutes);
 app.use('/api/bancos', exigirTela([T.SALDOS]), exigirMaster, bancosRoutes);
 app.use('/api/epr', exigirTela([T.PORTAL]), eprRoutes);
