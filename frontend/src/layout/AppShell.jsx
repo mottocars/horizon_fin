@@ -105,7 +105,7 @@ export default function AppShell() {
     <SidebarProvider>
       <div className="flex h-screen bg-app-bg">
         <Sidebar />
-        <div className="flex flex-1 flex-col overflow-hidden">
+        <div className="relative flex flex-1 flex-col overflow-hidden">
           {!telaCheia && <Topbar title={meta.title} subtitle={meta.subtitle} />}
           {/* scrollbar-gutter: stable reserva o espaço da barra de rolagem
               sempre, mesmo quando o conteúdo não enche a tela — sem isso,
@@ -116,6 +116,10 @@ export default function AppShell() {
           <main className={`flex-1 overflow-y-auto ${telaCheia ? '' : 'p-6'}`} style={telaCheia ? undefined : { scrollbarGutter: 'stable' }}>
             {acessoPermitido ? <Outlet /> : <AcessoRestrito />}
           </main>
+          {/* Camada fixa sobre a área de conteúdo dos Dashboards (não rola com a página e não passa por
+              cima do menu lateral): botões flutuantes e barras de Menu/Filtros entram aqui por portal
+              — ver pages/Dashboards/ControlesDashboard.jsx. */}
+          {telaCheia && <div id="camada-dashboard" className="pointer-events-none absolute inset-0 z-30" />}
         </div>
       </div>
     </SidebarProvider>
