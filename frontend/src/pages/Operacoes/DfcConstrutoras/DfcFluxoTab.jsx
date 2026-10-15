@@ -6,6 +6,7 @@ import { listTodasClassificacoesPlanoDfc } from '../../../api/dfcPlanoContas.api
 import { getOrcamentoDfc } from '../../../api/dfcOrcamento.api';
 import { getRealizadoDfc } from '../../../api/dfcSaldos.api';
 import { mesesEntre } from './orcamentoValores';
+import { codigoFormatado } from './codigoConta';
 import DetalhamentoModal from './DetalhamentoModal';
 
 const LARGURA_PRIMEIRA = 340;
@@ -37,26 +38,6 @@ function larguraTexto(texto) {
     if (contextoMedida) contextoMedida.font = `600 12px ${getComputedStyle(document.body).fontFamily}`;
   }
   return contextoMedida ? contextoMedida.measureText(texto).width * 1.08 : texto.length * 7.5;
-}
-
-// Mesma lógica de PlanoFinanceiroDetalhe.jsx::formatarCodigoMascara.
-function codigoFormatado(conta) {
-  const larguras = [1, 2, 3, 4, 5, 6, 7].map((n) => conta[`mascara_nivel_${n}`]);
-  const digitos = String(conta.sienge_id);
-  const segmentos = [];
-  let pos = 0;
-  for (const largura of larguras) {
-    if (pos >= digitos.length) break;
-    if (!largura) {
-      segmentos[segmentos.length - 1] += digitos.slice(pos);
-      pos = digitos.length;
-      break;
-    }
-    segmentos.push(digitos.slice(pos, pos + largura));
-    pos += largura;
-  }
-  if (pos < digitos.length && segmentos.length > 0) segmentos[segmentos.length - 1] += digitos.slice(pos);
-  return segmentos.length > 0 ? segmentos.join('.') : digitos;
 }
 
 const r2 = (v) => Math.round(v * 100) / 100;
@@ -92,15 +73,21 @@ function mesDeHoje() {
 // 3) RESULTADO — entradas − saídas.
 // Período = o mesmo da aba Orçamentos (filtros do topo). Visual de demonstrativo, rolagem própria com a
 // primeira coluna congelada. `telaCheia` / `onSairTelaCheia`: tela cheia. `refreshToken`: recarrega.
+// Também é o Fluxo de Caixa do dashboard Econômico Financeiro (`variante="dashboard"`: quadro solto,
+// sem o encaixe de aba, ocupando a altura da tela) — lá com o filtro `naturezas` (ids das contas do
+// plano; vazio = todas): só as naturezas escolhidas entram nas linhas e no resultado.
 export default function DfcFluxoTab({
   empresaId,
   inicio,
   fim,
   centros: centrosFiltro = [],
+  naturezas: naturezasFiltro = [],
   telaCheia = false,
   onSairTelaCheia,
   refreshToken = 0,
+  variante = 'aba',
 }) {
+  const dashboard = variante === 'dashboard';
   const [dados, setDados] = useState(null);
   const [carregando, setCarregando] = useState(false);
   const [erro, setErro] = useState('');
@@ -163,6 +150,7 @@ export default function DfcFluxoTab({
   const { estrutura, porColuna } = useMemo(() => {
     if (!dados) return { estrutura: [], porColuna: {} };
     const filtro = centrosFiltro.length ? new Set(centrosFiltro.map(Number)) : null;
+    const filtroNaturezas = naturezasFiltro.length ? new Set(naturezasFiltro.map(Number)) : null;
     const mapaDe = (lista) => Object.fromEntries(lista.map((c) => [c.sienge_id, c.mascara_id]));
     const planoGlobal = mapaDe(dados.classificacoes.global);
     const planosCentro = Object.fromEntries(Object.entries(dados.classificacoes.centros).map(([id, l]) => [id, mapaDe(l)]));
@@ -179,6 +167,7 @@ export default function DfcFluxoTab({
     const centrosCelula = new Map();
     const lancar = (centroId, natureza, mes, tipo, valor) => {
       if (filtro && !filtro.has(centroId)) return;
+      if (filtroNaturezas && !filtroNaturezas.has(Number(natureza))) return;
       if (!valor) return;
       const lado = valor > 0 ? 'E' : 'S';
       if (natureza === null || natureza === undefined) return;
@@ -264,7 +253,7 @@ export default function DfcFluxoTab({
       });
     }
     return { estrutura: grupos, porColuna: { resultado, saldoInicial, saldoFinal } };
-  }, [dados, realizado, meses, ultimo, mesAtual, centrosFiltro]);
+  }, [dados, realizado, meses, ultimo, mesAtual, centrosFiltro, naturezasFiltro]);
 
   // Larguras: o bastante pro maior valor de cada coluna.
   const larguras = useMemo(() => {
@@ -315,7 +304,8 @@ export default function DfcFluxoTab({
       const main = el.closest('main');
       // Em tela cheia o quadro é fixo na janela (não rola com o <main>).
       const topo = el.getBoundingClientRect().top + (main && !telaCheia ? main.scrollTop : 0);
-      const altura = Math.max(ALTURA_MINIMA_GRADE, Math.floor(window.innerHeight - topo - (telaCheia ? 20 : 44)));
+      const folga = telaCheia ? 20 : dashboard ? 36 : 44; // dashboard: padding do quadro + margem da tela
+      const altura = Math.max(ALTURA_MINIMA_GRADE, Math.floor(window.innerHeight - topo - folga));
       setAlturaGrade((atual) => (atual === altura ? atual : altura));
     };
     medir();
@@ -329,10 +319,16 @@ export default function DfcFluxoTab({
 
   if (!empresaId) {
     return (
-      <div className="flex min-h-70 flex-col items-center justify-center rounded-card rounded-tl-none bg-white text-center shadow-card">
+      <div
+        className={`flex min-h-70 flex-col items-center justify-center bg-white text-center shadow-card ${
+          dashboard ? 'rounded-2xl' : 'rounded-card rounded-tl-none'
+        }`}
+      >
         <Wallet size={28} className="mb-3 text-gray-300" />
         <h2 className="text-sm font-semibold text-gray-900">Selecione uma empresa</h2>
-        <p className="mt-1 max-w-sm text-xs text-gray-500">Escolha a empresa no filtro acima para ver o fluxo de caixa.</p>
+        <p className="mt-1 max-w-sm text-xs text-gray-500">
+          {dashboard ? 'Escolha a empresa nos Filtros (botão no canto inferior direito).' : 'Escolha a empresa no filtro acima para ver o fluxo de caixa.'}
+        </p>
       </div>
     );
   }
@@ -442,7 +438,11 @@ export default function DfcFluxoTab({
   return (
     <div
       className={
-        telaCheia ? 'fixed inset-0 z-40 flex flex-col bg-white p-5' : 'min-w-0 rounded-card rounded-tl-none bg-white p-5 shadow-card'
+        telaCheia
+          ? 'fixed inset-0 z-40 flex flex-col bg-white p-5'
+          : dashboard
+            ? 'min-w-0 rounded-2xl bg-white p-4 shadow-card'
+            : 'min-w-0 rounded-card rounded-tl-none bg-white p-5 shadow-card'
       }
     >
       {telaCheia && (
@@ -491,7 +491,7 @@ export default function DfcFluxoTab({
           ref={gradeRef}
           onScroll={(e) => setRolouX(e.currentTarget.scrollLeft > 0)}
           className={`overflow-auto overscroll-x-contain rounded-lg border border-gray-200 ${rolouX ? SOMBRA_COLUNA_FIXA : ''}`}
-          style={{ maxHeight: alturaGrade ?? undefined }}
+          style={{ maxHeight: alturaGrade ?? undefined, height: dashboard ? (alturaGrade ?? undefined) : undefined }}
         >
           <table
             className="border-separate border-spacing-0 text-left"
