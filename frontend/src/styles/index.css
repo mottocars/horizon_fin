@@ -15,17 +15,18 @@
 
   --shadow-card: 0 1px 2px rgba(16, 24, 40, 0.04), 0 4px 12px rgba(16, 24, 40, 0.06);
 
-  /* Barras de Menu e Filtros dos Dashboards: sobem do rodapé (desaceleração forte, sem quique) e
-     descem mais rápido ao fechar; as opções entram em sequência logo depois da barra. */
+  /* Painéis de Menu e Filtros dos Dashboards: abrem verticalmente acima dos botões, crescendo a
+     partir deles (desaceleração forte, sem quique) e fecham mais rápido; as opções entram em sequência
+     logo depois do painel. */
   --animate-barra-sobe: barra-sobe 460ms cubic-bezier(0.16, 1, 0.3, 1) both;
   --animate-barra-desce: barra-desce 240ms cubic-bezier(0.55, 0, 1, 0.45) both;
   --animate-item-sobe: item-sobe 380ms cubic-bezier(0.16, 1, 0.3, 1) both;
   @keyframes barra-sobe {
     from {
-      transform: translateY(calc(100% + 32px)) scale(0.98);
+      transform: translateY(28px) scale(0.86);
       opacity: 0;
     }
-    40% {
+    35% {
       opacity: 1;
     }
     to {
@@ -35,11 +36,11 @@
   }
   @keyframes barra-desce {
     from {
-      transform: translateY(0);
+      transform: translateY(0) scale(1);
       opacity: 1;
     }
     to {
-      transform: translateY(calc(100% + 32px));
+      transform: translateY(20px) scale(0.9);
       opacity: 0;
     }
   }

@@ -3,8 +3,9 @@ import { createPortal } from 'react-dom';
 import { Filter, LayoutGrid, Menu, SlidersHorizontal, X } from 'lucide-react';
 
 // Controles dos Dashboards (pedido do usuário): dois botões flutuantes no canto inferior direito —
-// Menu e Filtros — que abrem, cada um, uma barra que SOBE do rodapé com as opções de tela do
-// dashboard e os filtros da tela. Parados; só o botão sob o mouse flutua.
+// Menu e Filtros — que abrem, cada um, um painel VERTICAL logo acima dos botões (crescendo a partir
+// deles) com as opções de tela do dashboard e os filtros da tela. Parados; só o botão sob o mouse
+// flutua.
 // Ficam na camada fixa da área de conteúdo (#camada-dashboard, AppShell.jsx): não rolam com a página
 // e não passam por cima do menu lateral.
 // - `telas`: [{ id, label, icon? }] — opções do Menu; `telaAtiva` / `onTela(id)`.
@@ -35,7 +36,7 @@ const entrada = (i) => ({ animationDelay: `${120 + i * 45}ms` });
 
 function Vazio({ texto }) {
   return (
-    <p className="motion-safe:animate-item-sobe text-sm text-gray-400" style={entrada(0)}>
+    <p className="motion-safe:animate-item-sobe px-1 text-sm text-gray-400" style={entrada(0)}>
       {texto}
     </p>
   );
@@ -48,7 +49,7 @@ function Barra({ tipo, fechando, onFechar, telas, telaAtiva, onTela, filtros }) 
     <section
       role="dialog"
       aria-label={menu ? 'Telas do dashboard' : 'Filtros'}
-      className={`pointer-events-auto absolute bottom-6 left-6 right-[96px] rounded-2xl border border-gray-200 bg-white/95 shadow-[0_24px_48px_-16px_rgba(15,23,42,0.35)] backdrop-blur ${
+      className={`pointer-events-auto absolute bottom-[144px] right-6 flex max-h-[calc(100%-176px)] w-80 origin-bottom-right flex-col rounded-2xl border border-gray-200 bg-white/95 shadow-[0_24px_48px_-16px_rgba(15,23,42,0.35)] backdrop-blur ${
         fechando ? 'motion-safe:animate-barra-desce' : 'motion-safe:animate-barra-sobe'
       }`}
     >
@@ -67,7 +68,7 @@ function Barra({ tipo, fechando, onFechar, telas, telaAtiva, onTela, filtros }) 
           <X size={16} />
         </button>
       </div>
-      <div className="flex min-h-[72px] items-center gap-2 overflow-x-auto px-5 py-4">
+      <div className="flex min-h-[72px] flex-col gap-2 overflow-y-auto px-4 py-4">
         {menu ? (
           telas.length ? (
             telas.map((t, i) => {
@@ -79,7 +80,7 @@ function Barra({ tipo, fechando, onFechar, telas, telaAtiva, onTela, filtros }) 
                   type="button"
                   onClick={() => onTela?.(t.id)}
                   style={entrada(i)}
-                  className={`motion-safe:animate-item-sobe flex shrink-0 items-center gap-2 rounded-xl border px-4 py-2.5 text-sm font-medium transition-colors ${
+                  className={`motion-safe:animate-item-sobe flex w-full shrink-0 items-center gap-2.5 rounded-xl border px-4 py-2.5 text-left text-sm font-medium transition-colors ${
                     ativa ? 'border-primary-600 bg-primary-50 text-primary-700' : 'border-gray-200 text-gray-700 hover:border-primary-100 hover:bg-gray-50'
                   }`}
                 >
@@ -92,7 +93,7 @@ function Barra({ tipo, fechando, onFechar, telas, telaAtiva, onTela, filtros }) 
             <Vazio texto="As telas deste dashboard aparecerão aqui." />
           )
         ) : filtros ? (
-          <div className="motion-safe:animate-item-sobe flex flex-wrap items-end gap-3" style={entrada(0)}>
+          <div className="motion-safe:animate-item-sobe flex flex-col gap-3" style={entrada(0)}>
             {filtros}
           </div>
         ) : (
