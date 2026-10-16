@@ -127,6 +127,9 @@ async function montarRateio(empresaId, db = pool) {
 
 // Todas as contas da empresa, uma a uma (precisa de ao menos uma com "Projeta DFC" — senão não há
 // fluxo pra montar). `onProgress({ texto, paginaAtual, totalPaginas })`.
+// Uma conta que o Sienge não devolve (mesmo depois das novas tentativas do siengeFetch) não derruba as
+// outras: ela mantém o extrato que já estava gravado e volta em `falhas` ({ numero_conta, nome,
+// projeta_dfc, erro }) — quem chama decide se é erro (conta com Projeta DFC) ou só aviso.
 async function sincronizar(empresaId, onProgress) {
   const integracao = await getIntegracaoAtiva(empresaId);
   if (!integracao) {
@@ -149,23 +152,32 @@ async function sincronizar(empresaId, onProgress) {
   const credenciais = { tenant: integracao.tenant, username: integracao.username, password: decrypt(integracao.password_enc) };
   const endDate = inicioDoMesAtual();
   let lancamentos = 0;
+  const falhas = [];
   for (let i = 0; i < contas.length; i += 1) {
     const conta = contas[i];
     const texto = `Conta ${i + 1} de ${contas.length}: ${conta.numero_conta}${conta.nome ? ` · ${conta.nome}` : ''}`;
     onProgress?.({ texto });
-    const lista = await fetchAllStatements({
-      ...credenciais,
-      accountNumber: conta.numero_conta,
-      companyId: conta.company_id,
-      endDate,
-      onPagina: (pagina, total) => onProgress?.({ texto, paginaAtual: pagina, totalPaginas: total }),
-    });
+    let lista;
+    try {
+      lista = await fetchAllStatements({
+        ...credenciais,
+        accountNumber: conta.numero_conta,
+        companyId: conta.company_id,
+        endDate,
+        onPagina: (pagina, total) => onProgress?.({ texto, paginaAtual: pagina, totalPaginas: total }),
+      });
+    } catch (err) {
+      // Erro do Sienge nesta conta (status da API): segue com as demais. Erro nosso (banco etc.) para tudo.
+      if (err.status !== 502) throw err;
+      falhas.push({ numero_conta: conta.numero_conta, nome: conta.nome, projeta_dfc: conta.projeta_dfc, erro: err.message });
+      continue;
+    }
     await gravarConta(empresaId, conta, lista, endDate);
     lancamentos += lista.length;
   }
   onProgress?.({ texto: 'Classificando os lançamentos por centro de custo e natureza' });
   await montarRateio(empresaId);
-  return { contas: contas.length, lancamentos, ate: endDate };
+  return { contas: contas.length, lancamentos, ate: endDate, falhas };
 }
 
 module.exports = { sincronizar, gravarConta, montarRateio };

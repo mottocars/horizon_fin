@@ -213,7 +213,33 @@ const ROTINAS = [
     },
     async executar({ empresaId, progresso }) {
       const r = await extratoContas.sincronizar(empresaId, progresso);
-      return `${n(r.contas)} conta(s), ${n(r.lancamentos)} lançamento(s) até ${r.ate.split('-').reverse().join('/')}.`;
+      const ate = r.ate.split('-').reverse().join('/');
+      // Mesma conta em várias empresas (ex.: REAPROPFIN em cada SPE) aparece uma vez, com a contagem.
+      const nomes = (lista) => {
+        const cont = new Map();
+        lista.forEach((f) => {
+          const k = f.numero_conta + (f.nome ? ` (${f.nome})` : '');
+          cont.set(k, (cont.get(k) || 0) + 1);
+        });
+        return [...cont].map(([k, q]) => (q > 1 ? `${k} em ${q} empresas` : k)).join(', ');
+      };
+      // Conta com Projeta DFC sem atualizar = saldo/realizado desatualizado: a rotina termina com erro
+      // (as demais contas já foram gravadas). Conta só de apoio (mútuo etc.): aviso no resumo.
+      const doDfc = r.falhas.filter((f) => f.projeta_dfc);
+      const apoio = r.falhas.filter((f) => !f.projeta_dfc);
+      if (doDfc.length) {
+        const e = new Error(
+          `O Sienge não devolveu o extrato de ${doDfc.length} conta(s) com Projeta DFC: ${nomes(doDfc)}. ` +
+            `As demais ${n(r.contas - r.falhas.length)} contas foram atualizadas até ${ate}; essas mantêm o extrato anterior. ` +
+            `Costuma ser instabilidade do Sienge — tente atualizar de novo em alguns minutos. (${doDfc[0].erro})`
+        );
+        e.expose = true;
+        throw e;
+      }
+      return (
+        `${n(r.contas - apoio.length)} conta(s), ${n(r.lancamentos)} lançamento(s) até ${ate}.` +
+        (apoio.length ? ` Sem atualizar (instabilidade do Sienge; mantido o extrato anterior, não entram no saldo): ${nomes(apoio)}.` : '')
+      );
     },
   },
 ];

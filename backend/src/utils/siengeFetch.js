@@ -12,6 +12,12 @@ const TIMEOUT_MS = 120_000;
 // algumas vezes antes de desistir e quebrar o envio de WhatsApp/e-mail.
 const MAX_RETRIES_CONEXAO = 3;
 const BASE_DELAY_CONEXAO_MS = 1000;
+// Erro do lado do Sienge (502/503/504 — "An invalid response was received from the upstream server")
+// também é passageiro: a mesma consulta funciona segundos depois. Só repete CONSULTAS (GET) — um
+// POST/PATCH que falhou no meio do caminho pode já ter sido gravado lá.
+const STATUS_PASSAGEIROS = new Set([502, 503, 504]);
+const MAX_RETRIES_SERVIDOR = 3;
+const BASE_DELAY_SERVIDOR_MS = 2000;
 
 function sleep(ms) {
   return new Promise((resolve) => setTimeout(resolve, ms));
@@ -19,6 +25,8 @@ function sleep(ms) {
 
 async function siengeFetch(url, options = {}) {
   let tentativasConexao = 0;
+  let tentativasServidor = 0;
+  const consulta = !options.method || String(options.method).toUpperCase() === 'GET';
   for (let tentativa = 0; ; tentativa++) {
     let response;
     try {
@@ -36,6 +44,14 @@ async function siengeFetch(url, options = {}) {
       e.status = 502;
       e.expose = true;
       throw e;
+    }
+
+    if (consulta && STATUS_PASSAGEIROS.has(response.status) && tentativasServidor < MAX_RETRIES_SERVIDOR) {
+      tentativasServidor++;
+      console.warn(`[siengeFetch] Sienge respondeu ${response.status}; tentativa ${tentativasServidor} de ${MAX_RETRIES_SERVIDOR}`);
+      await response.body?.cancel().catch(() => {});
+      await sleep(BASE_DELAY_SERVIDOR_MS * 2 ** (tentativasServidor - 1));
+      continue;
     }
 
     if (response.status === 429 && tentativa < MAX_RETRIES) {
