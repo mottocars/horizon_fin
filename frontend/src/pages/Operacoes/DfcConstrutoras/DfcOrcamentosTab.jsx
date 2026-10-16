@@ -358,12 +358,16 @@ const DfcOrcamentosTab = forwardRef(function DfcOrcamentosTab(
     carregarSalva();
   }, [carregarSalva, refreshToken]);
 
-  // "Nova versão": monta a partir das bases a cada pedido (`novaVersaoToken`).
+  // "Nova versão": monta a partir das bases a cada pedido (`novaVersaoToken`) e relê os valores HORIZON -
+  // INFORMADO — eles também mudam fora desta tela (Planilha Orçamentária, Claude pelo conector MCP).
   useEffect(() => {
     if (!empresaId || !novaVersaoToken) return;
     setCarregandoValores(true);
-    getRascunhoOrcamentoDfc(empresaId)
-      .then(setNova)
+    Promise.all([getRascunhoOrcamentoDfc(empresaId), listOrcamentoInformadoDfc(empresaId)])
+      .then(([rascunhoNovo, valoresInformados]) => {
+        setInformados(Object.fromEntries(valoresInformados.map((v) => [`${v.centro_id}|${v.sienge_id}|${v.mes}`, v.valor])));
+        setNova(rascunhoNovo);
+      })
       .catch((err) => setErroCarga(err.response?.data?.message || 'Não foi possível montar a nova versão.'))
       .finally(() => setCarregandoValores(false));
   }, [empresaId, novaVersaoToken]);
