@@ -137,21 +137,18 @@ function useBase(open, empresaId, tipo) {
 // CEF — obra a obra), e embaixo "Nova versão", que monta na grade a versão
 // nova a partir do que está no banco agora (`onGerar`) — com ou sem atualizar alguma base antes,
 // incluindo o que foi digitado em HORIZON - INFORMADO. Ela só vira a última versão ao ser salva.
-// "Planilha Orçamentária" (só no Orçamento): importa o Excel do "Layout do orçamento" — os valores entram
-// como HORIZON - INFORMADO, como se digitados.
-// Na aba DFC ("Gerar fluxo") a mesma janela vem com `comSaldos` — a primeira base é "Saldos das
-// Contas" (extrato do Sienge das contas com Projeta DFC, rotina do Monitor) — e `titulo` /
-// `rotuloFinal` próprios.
+// "Saldos das Contas" (extrato do Sienge das contas com Projeta DFC, rotina do Monitor — o Saldo inicial
+// realizado da aba DFC) vem primeiro. "Planilha Orçamentária": importa o Excel do "Layout do orçamento" —
+// os valores entram como HORIZON - INFORMADO, como se digitados.
 export default function NovaVersaoOrcamentoModal({
   open,
   onClose,
   empresaId,
   onGerar,
-  comSaldos = false,
   titulo = 'Nova versão',
   rotuloFinal = 'Nova versão',
 }) {
-  const saldos = useBase(open && comSaldos, empresaId, 'saldos');
+  const saldos = useBase(open, empresaId, 'saldos');
   const receber = useBase(open, empresaId, 'receber');
   const pagar = useBase(open, empresaId, 'pagar');
   const empresarial = useBase(open, empresaId, 'empresarial');
@@ -196,7 +193,7 @@ export default function NovaVersaoOrcamentoModal({
     setCefErro('');
     carregarObras();
     carregarCiweb();
-    if (!comSaldos) carregarPlanilha();
+    carregarPlanilha();
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [open, empresaId]);
 
@@ -239,24 +236,22 @@ export default function NovaVersaoOrcamentoModal({
             ? `Atualizada em ${dataHora(ultimaCef)}`
             : 'Ainda não projetada';
 
-  const ocupado = (comSaldos && saldos.rodando) || receber.rodando || pagar.rodando || empresarial.rodando || cefRodando;
+  const ocupado = saldos.rodando || receber.rodando || pagar.rodando || empresarial.rodando || cefRodando;
 
   return (
     <Modal open={open} onClose={cefRodando ? () => {} : onClose} title={titulo} maxWidthClass="max-w-lg">
       <div className="space-y-2.5">
-        {comSaldos && (
-          <LinhaBase
-            icone={Wallet}
-            cor="bg-teal-50 text-teal-600"
-            titulo="Saldos das Contas"
-            situacao={saldos.situacao}
-            erro={saldos.falhou}
-            rodando={saldos.rodando}
-            pct={null}
-            bloqueado={cefRodando}
-            onAtualizar={saldos.atualizar}
-          />
-        )}
+        <LinhaBase
+          icone={Wallet}
+          cor="bg-teal-50 text-teal-600"
+          titulo="Saldos das Contas"
+          situacao={saldos.situacao}
+          erro={saldos.falhou}
+          rodando={saldos.rodando}
+          pct={null}
+          bloqueado={cefRodando}
+          onAtualizar={saldos.atualizar}
+        />
         <LinhaBase
           icone={Globe}
           cor="bg-sky-50 text-sky-600"
@@ -315,27 +310,25 @@ export default function NovaVersaoOrcamentoModal({
           onAtualizar={atualizarCef}
         />
 
-        {!comSaldos && (
-          <LinhaBase
-            icone={FileSpreadsheet}
-            cor="bg-amber-50 text-amber-600"
-            titulo="Planilha Orçamentária"
-            situacao={
-              ultimaPlanilha === undefined
-                ? ''
-                : ultimaPlanilha
-                  ? `Última importação em ${dataHora(ultimaPlanilha.criado_em)}${ultimaPlanilha.usuario ? ` por ${ultimaPlanilha.usuario}` : ''} · ${
-                      ultimaPlanilha.incluidos + ultimaPlanilha.alterados + ultimaPlanilha.limpos
-                    } valor(es)`
-                  : 'Nenhuma planilha importada — baixe o "Layout do orçamento" na barra da aba'
-            }
-            rodando={false}
-            pct={null}
-            bloqueado={cefRodando}
-            rotuloBotao="Importar"
-            onAtualizar={() => setPlanilhaAberta(true)}
-          />
-        )}
+        <LinhaBase
+          icone={FileSpreadsheet}
+          cor="bg-amber-50 text-amber-600"
+          titulo="Planilha Orçamentária"
+          situacao={
+            ultimaPlanilha === undefined
+              ? ''
+              : ultimaPlanilha
+                ? `Última importação em ${dataHora(ultimaPlanilha.criado_em)}${ultimaPlanilha.usuario ? ` por ${ultimaPlanilha.usuario}` : ''} · ${
+                    ultimaPlanilha.incluidos + ultimaPlanilha.alterados + ultimaPlanilha.limpos
+                  } valor(es)`
+                : 'Nenhuma planilha importada — baixe o "Layout do orçamento" na barra da aba'
+          }
+          rodando={false}
+          pct={null}
+          bloqueado={cefRodando}
+          rotuloBotao="Importar"
+          onAtualizar={() => setPlanilhaAberta(true)}
+        />
 
         {cefResultado && !cefRodando && (
           <p className={`flex items-center gap-1.5 px-1 text-xs ${cefResultado.falhas ? 'text-amber-600' : 'text-emerald-600'}`}>
