@@ -45,7 +45,7 @@ function dataHora(v) {
 // Uma base da janela: ícone + título + situação curta + botão "Atualizar" e, rodando, a barra.
 function LinhaBase({ icone: Icone, cor, titulo, situacao, erro, rodando, pct, bloqueado, onAtualizar, rotuloBotao = 'Atualizar' }) {
   return (
-    <div className="rounded-lg border border-gray-200 px-4 py-3">
+    <div className="rounded-lg border border-gray-200 px-4 py-2">
       <div className="flex items-center gap-3">
         <span className={`flex h-8 w-8 shrink-0 items-center justify-center rounded-lg ${cor}`}>
           <Icone size={16} />
@@ -239,8 +239,9 @@ export default function NovaVersaoOrcamentoModal({
   const ocupado = saldos.rodando || receber.rodando || pagar.rodando || empresarial.rodando || cefRodando;
 
   return (
-    <Modal open={open} onClose={cefRodando ? () => {} : onClose} title={titulo} maxWidthClass="max-w-lg">
-      <div className="space-y-2.5">
+    // Um pouco mais alta que o padrão (90% da tela): as 7 bases cabem sem barra de rolagem.
+    <Modal open={open} onClose={cefRodando ? () => {} : onClose} title={titulo} maxWidthClass="max-w-lg" maxHeightClass="max-h-[calc(100vh-2rem)]">
+      <div className="space-y-2">
         <LinhaBase
           icone={Wallet}
           cor="bg-teal-50 text-teal-600"
@@ -354,7 +355,7 @@ export default function NovaVersaoOrcamentoModal({
           }}
         />
 
-        <div className="flex justify-end gap-2 border-t border-gray-100 pt-4">
+        <div className="flex justify-end gap-2 border-t border-gray-100 pt-3">
           <Button type="button" variant="secondary" onClick={onClose} disabled={cefRodando}>
             Cancelar
           </Button>

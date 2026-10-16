@@ -1,12 +1,13 @@
 import { X } from 'lucide-react';
 
 // acoes: botões opcionais no cabeçalho, na linha do título (antes do X).
-export default function Modal({ open, title, onClose, children, maxWidthClass = 'max-w-md', acoes }) {
+// maxHeightClass: altura máxima do modal (padrão 90% da tela).
+export default function Modal({ open, title, onClose, children, maxWidthClass = 'max-w-md', maxHeightClass = 'max-h-[90vh]', acoes }) {
   if (!open) return null;
 
   return (
     <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/40 p-4">
-      <div className={`flex max-h-[90vh] w-full ${maxWidthClass} flex-col rounded-card bg-white shadow-card`}>
+      <div className={`flex ${maxHeightClass} w-full ${maxWidthClass} flex-col rounded-card bg-white shadow-card`}>
         <div className="flex items-center justify-between border-b border-gray-100 px-5 py-4">
           <h2 className="text-base font-semibold text-gray-900">{title}</h2>
           <div className="flex items-center gap-2">
