@@ -29,8 +29,8 @@ previsto não deixa nada a receber).
 | Resultado médio · próx. 6 meses | média do resultado de cada mês (mês atual = realizado até hoje + o que falta) | saldo fura o colchão em até 3 meses | média negativa | Gera caixa |
 | Fluxo operacional · até hoje | soma do realizado operacional no histórico + mês atual até hoje | — | negativo (Consome caixa) | Positivo |
 | Dívida PJ Caixa | saldo devedor PJ no último mês fechado, somando obras | — | fim da projeção > 1,5 × hoje (Crescente) | azul: Sob controle |
-| A receber em 90 dias | parcelas a receber em aberto que vencem de hoje até hoje + 90 dias | — | — | azul (informativo) |
-| Inadimplência | vencido até ontem ÷ (vencido + a vencer) a receber | > 8% | > 3% | Baixa |
+| A receber em 90 dias | saldo corrigido (correção e juros do contrato) das parcelas a receber em aberto que vencem de hoje até hoje + 90 dias | — | — | azul (informativo) |
+| Inadimplência | saldo corrigido vencido até ontem ÷ (vencido + a vencer) a receber | > 8% | > 3% | Baixa |
 | Maior concentração de caixa | caixa de hoje da SPE com maior saldo ÷ caixa total | — | > 40% | Distribuído |
 
 ## Fôlego de cada SPE

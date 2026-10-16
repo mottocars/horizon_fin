@@ -141,11 +141,13 @@ async function painel(empresaId, { hist, hor, centros = [] }) {
     ),
     pool.query(
       `SELECT 'receber' AS lado,
-              round(sum(balance_amount) FILTER (WHERE due_date < $2::date), 2) AS vencido,
+              round(sum(COALESCE(corrected_balance_amount, balance_amount)) FILTER (WHERE due_date < $2::date), 2) AS vencido,
               count(*) FILTER (WHERE due_date < $2::date) AS n_vencido,
-              round(sum(balance_amount) FILTER (WHERE due_date >= $2::date AND due_date < $3::date), 2) AS d90,
-              round(sum(balance_amount) FILTER (WHERE due_date >= $2::date), 2) AS a_vencer
+              round(sum(COALESCE(corrected_balance_amount, balance_amount)) FILTER (WHERE due_date >= $2::date AND due_date < $3::date), 2) AS d90,
+              round(sum(COALESCE(corrected_balance_amount, balance_amount)) FILTER (WHERE due_date >= $2::date), 2) AS a_vencer
          FROM sie_income WHERE empresa_id = $1 AND balance_amount > 0
+         -- A receber: saldo CORRIGIDO da parcela em aberto (correctedBalanceAmount do Sienge — correção
+         -- monetária e juros do contrato; sem ele, o saldo simples). Em aberto = balance_amount > 0.
          -- vencido = até ontem; d90 = de hoje até hoje + 90 dias; a vencer = de hoje em diante
        UNION ALL
        SELECT 'pagar',
