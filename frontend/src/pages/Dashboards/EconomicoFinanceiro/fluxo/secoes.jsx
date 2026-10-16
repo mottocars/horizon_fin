@@ -3,7 +3,7 @@ import { CircleHelp } from 'lucide-react';
 import { BarrasH, DividaObra, FluxoOperacional, Trajetoria } from './graficos';
 import { COR, useDica, useSumario } from './ganchos';
 import { PRESETS, brl, cenario, curto, eixo, lbl, nf0, obraMaiorEntrada, pct, presetDe, titulo } from './modelo';
-import { calibracao, carteira, dividaPj, folego, indicadores, maioresSaidas, opcoesAtraso as listaAtraso, quemGera, tituloTrajetoria } from './analise';
+import { calibracao, carteira, diaMes, dividaPj, folego, indicadores, maioresSaidas, opcoesAtraso as listaAtraso, quemGera, tituloTrajetoria } from './analise';
 
 // Seções do painel do Fluxo de Caixa, na ordem da especificação do painel do CFO
 // (C:\Users\motta\Desktop\layout\Especificação do Painel do CFO — Tostes e Diniz.md).
@@ -66,7 +66,7 @@ export function Hero({ D, escopo }) {
           {tituloTrajetoria(D, escopo)}
           <AjudaSecao aba="trajetoria" rotulo="Trajetória do caixa" />
         </h2>
-        <p>Saldo no fim de cada mês: realizado, projeção do Orçamento e o cenário escolhido ao lado.</p>
+        <p>Realizado até hoje e, daqui em diante, o saldo no fim de cada mês pelo Orçamento (no mês atual, só o que falta acontecer) e pelo cenário ao lado.</p>
       </div>
       <div className="hero-body">
         <div style={{ display: 'flex', flexDirection: 'column', gap: 8, minWidth: 0 }}>
@@ -179,7 +179,7 @@ export function EntradasSaidas({ D }) {
             <i className="box" style={{ background: COR.ink, borderRadius: '50%' }} />
             Líquido
           </span>
-          <span style={{ color: 'var(--muted)' }}>Barras claras = projetado</span>
+          <span style={{ color: 'var(--muted)' }}>Barras fortes = realizado; claras = orçado. O mês atual aparece duas vezes: realizado até hoje e orçado no mês.</span>
         </div>
       </div>
       <FluxoOperacional D={D} />
@@ -419,11 +419,11 @@ export function QuemGera({ D, centroSel, onCentro }) {
             <thead>
               <tr>
                 <th>Centro</th>
-                <th className="n">
-                  Últimos {D.hist.length} m
+                <th className="n" title="Realizado: meses fechados do histórico e o mês atual até hoje">
+                  Realizado até {diaMes(D.hoje)}
                 </th>
-                <th className="n">
-                  Próximos {D.fut.length} m
+                <th className="n" title="Orçamento: o que falta do mês atual e os meses seguintes">
+                  A acontecer até {lbl(D.fut.at(-1))}
                 </th>
                 <th style={{ minWidth: 120 }}>Projetado</th>
               </tr>
@@ -519,7 +519,7 @@ export function Calibracao({ D }) {
         </h2>
         <p>
           {D.hist.length
-            ? `${lbl(D.hist[0])} a ${lbl(D.hist.at(-1))}: realizado contra o projetado da versão atual para os mesmos meses.`
+            ? `${lbl(D.hist[0])} a ${lbl(D.hist.at(-1))} (meses fechados): realizado contra o projetado da versão atual para os mesmos meses.`
             : 'Realizado contra o projetado da versão atual para os mesmos meses.'}
         </p>
       </div>
@@ -575,7 +575,7 @@ export function MaioresSaidas({ D, forn }) {
         <h2 id="h-forn">Maiores saídas operacionais
           <AjudaSecao aba="saidas" rotulo="Maiores saídas operacionais" />
         </h2>
-        <p>{D.hist.length ? `${lbl(D.hist[0])} a ${lbl(D.hist.at(-1))}, por favorecido.` : 'Por favorecido, no histórico.'}</p>
+        <p>{`${D.hist.length ? lbl(D.hist[0]) : lbl(D.m0)} até ${diaMes(D.hoje)}, por favorecido (realizado).`}</p>
       </div>
       <div className="legend">
         <span>

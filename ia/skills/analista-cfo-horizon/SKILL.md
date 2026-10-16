@@ -31,6 +31,9 @@ valor e prazo. Responda em português do Brasil, direto, como quem fala com a di
 - **Realizado do mês atual é parcial:** o extrato vai até o dia da última atualização (veja "extrato buscado
   até" no `dfc_guia`). Não compare o realizado do mês corrente com o projetado do mês inteiro como se
   estivesse fechado — compare o ritmo (proporção do mês decorrido) ou espere o mês fechar.
+- **O dashboard é a foto de hoje:** no `dfc_painel_fluxo_caixa`, saldos e carteira são de hoje e a projeção
+  do mês atual é só o que FALTA (orçado − realizado até hoje). Já o `dfc_fluxo_caixa` mostra a coluna
+  Projetado do mês atual com o orçado do mês inteiro — não some os dois.
 - **Projetado = última versão SALVA do Orçamento.** O projetado de meses passados também é da versão atual.
   Se a dúvida for "por que mudou", use `dfc_orcamento_versoes`.
 - **Consolidado × SPE:** o consolidado soma tudo, inclusive mútuos entre empresas; o "Fôlego de cada SPE"

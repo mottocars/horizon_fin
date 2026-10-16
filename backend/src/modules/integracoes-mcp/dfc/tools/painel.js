@@ -115,19 +115,27 @@ module.exports = {
     // Escopo (como o cabeçalho da tela).
     const nomeCentro = (id) => M.titulo(d.centros.find((c) => c.id === id)?.nome || `centro ${id}`);
     const escopo = !ids.length ? null : speNome || (ids.length === 1 ? nomeCentro(ids[0]) : `${ids.length} centros`);
-    const tipoMes = (m) => (m < D.m0 ? 'realizado' : 'projetado');
+    const hoje = A.diaMes(D.hoje);
     const out = {
       painel: 'Econômico Financeiro › Fluxo de Caixa',
       cabecalho: {
         empresa: d.info.empresa,
         extrato_ate: d.info.extratoAte ? d.info.extratoAte.split('-').reverse().join('/') : null,
         orcamento: d.info.versao ? `v${d.info.versao.numero} · ${new Date(d.info.versao.criado_em).toLocaleDateString('pt-BR')}` : null,
+        hoje: D.hoje.split('-').reverse().join('/'),
         mes_atual: M.lbl(D.m0),
+        regra:
+          'Foto de hoje: saldos, carteira e realizado vão até hoje (extrato e Aging do Sienge até a última atualização); o Orçamento (última versão salva) só entra no que ainda vai acontecer — no mês atual, o que falta (orçado − realizado até hoje, por centro × natureza, sem inverter o sinal); nos seguintes, o orçado inteiro.',
         escopo: escopo || 'Consolidado',
         historico: `${historico} ${historico === 1 ? 'mês' : 'meses'} (${M.lbl(D.meses[0])}${D.hist.length > 1 ? ` a ${M.lbl(D.hist.at(-1))}` : ''})`,
         horizonte: `${horizonte} ${horizonte === 1 ? 'mês' : 'meses'} contando o mês atual (${M.lbl(D.fut[0])} a ${M.lbl(D.fut.at(-1))})`,
       },
-      colchao: { valor: r2(D.colchao), fmt: M.brl(D.colchao), significado: '1 mês de saídas operacionais projetadas (média do horizonte)' },
+      caixa: { hoje: M.brl(D.caixaHoje), abertura_do_mes: M.brl(D.caixaAbertura) },
+      colchao: {
+        valor: r2(D.colchao),
+        fmt: M.brl(D.colchao),
+        significado: '1 mês de saídas operacionais (média do horizonte; no mês atual, realizado até hoje + o que falta)',
+      },
     };
 
     if (quer('indicadores')) {
@@ -179,19 +187,20 @@ module.exports = {
     if (quer('trajetoria')) {
       out.trajetoria = {
         titulo: A.tituloTrajetoria(D, escopo),
-        meses: [
-          ...D.hist.map((m, i) => ({ mes: M.lbl(m), tipo: 'realizado', saldo_fim: r2(D.saldoHist[i]) })),
+        pontos: [
+          ...D.hist.map((m, i) => ({ quando: `fim de ${M.lbl(m)}`, tipo: 'realizado', saldo: r2(D.saldoHist[i]) })),
+          { quando: `hoje (${hoje})`, tipo: 'realizado', saldo: r2(D.caixaHoje) },
           ...D.fut.map((m, i) => ({
-            mes: M.lbl(m),
+            quando: `fim de ${M.lbl(m)}`,
             tipo: 'projetado',
-            saldo_fim_orcamento: r2(D.saldoFut[i]),
-            saldo_fim_cenario: r2(serieCenario[i]),
-            resultado_do_mes: r2(D.resFut[i]),
+            saldo_orcamento: r2(D.saldoFut[i]),
+            saldo_cenario: r2(serieCenario[i]),
+            [i === 0 ? 'a_acontecer_ate_o_fim_do_mes' : 'resultado_do_mes']: r2(D.resFut[i]),
             abaixo_do_colchao: D.saldoFut[i] < D.colchao,
           })),
         ],
         minimo_orcamento: { mes: M.lbl(D.fut[D.minIdx]), valor: r2(D.minBase), fmt: M.brl(D.minBase) },
-        nota: 'O último mês realizado fecha com o caixa de hoje (abertura do mês atual).',
+        nota: 'A projeção parte do saldo de hoje; no mês atual soma só o que falta acontecer.',
       };
     }
 
@@ -219,10 +228,20 @@ module.exports = {
     }
 
     if (quer('entradas_saidas')) {
-      const meses = [...D.hist, ...D.fut];
-      const ent = [...D.entR, ...D.entP];
-      const sai = [...D.saiR, ...D.saiP];
-      out.entradas_saidas = meses.map((m, i) => ({ mes: M.lbl(m), tipo: tipoMes(m), entradas: r2(ent[i]), saidas: r2(sai[i]), liquido: r2(ent[i] + sai[i]) }));
+      // O mês atual vem duas vezes: realizado até hoje e orçado do mês inteiro (como na tela).
+      const rotTipo = { realizado: 'realizado', parcial: `realizado até ${hoje}`, orcado_mes: 'orçado no mês inteiro', projetado: 'orçado' };
+      out.entradas_saidas = A.serieEntradasSaidas(D).map((x) => ({
+        mes: M.lbl(x.mes),
+        tipo: rotTipo[x.tipo],
+        entradas: r2(x.ent),
+        saidas: r2(x.sai),
+        liquido: r2(x.liq),
+      }));
+      if (D.saiOrcMes) out.entradas_saidas_mes_atual = {
+        saidas_realizadas_pct_do_orcado: M.pct((Math.abs(D.saiMtd) / Math.abs(D.saiOrcMes)) * 100),
+        entradas_realizadas_pct_do_orcado: D.entOrcMes ? M.pct((D.entMtd / D.entOrcMes) * 100) : null,
+        dia_do_mes: `${Number(D.hoje.slice(8, 10))} de ${new Date(Date.UTC(+D.hoje.slice(0, 4), +D.hoje.slice(5, 7), 0)).getUTCDate()} dias`,
+      };
     }
 
     if (quer('folego_spe')) {
@@ -245,7 +264,7 @@ module.exports = {
     if (quer('quem_gera')) {
       const q = A.quemGera(D);
       out.quem_gera = {
-        colunas: { realizado: `últimos ${D.hist.length} m`, projetado: `próximos ${D.fut.length} m` },
+        colunas: { realizado: `realizado até ${hoje}`, projetado: `a acontecer até ${M.lbl(D.fut.at(-1))} (o que falta do mês atual + os seguintes)` },
         centros: q.linhas.map((r) => ({
           centro: r.nome,
           realizado: M.brl(r.lr, true),
@@ -266,7 +285,7 @@ module.exports = {
 
     if (quer('orcamento_erra')) {
       out.orcamento_erra = {
-        periodo: D.hist.length ? `${M.lbl(D.hist[0])} a ${M.lbl(D.hist.at(-1))}` : 'sem histórico',
+        periodo: D.hist.length ? `${M.lbl(D.hist[0])} a ${M.lbl(D.hist.at(-1))} (meses fechados)` : 'sem histórico',
         linhas: A.calibracao(D).map((c) => ({
           linha: c.nome,
           lado: c.lado === 'ent' ? 'entrada' : 'saída',
@@ -280,7 +299,7 @@ module.exports = {
 
     if (quer('maiores_saidas')) {
       out.maiores_saidas = {
-        periodo: D.hist.length ? `${M.lbl(D.hist[0])} a ${M.lbl(D.hist.at(-1))}` : 'sem histórico',
+        periodo: `${D.hist.length ? M.lbl(D.hist[0]) : M.lbl(D.m0)} até ${hoje} (realizado)`,
         favorecidos: A.maioresSaidas(d.forn).map((f) => ({
           favorecido: f.nome,
           pago: M.brl(-f.valor),

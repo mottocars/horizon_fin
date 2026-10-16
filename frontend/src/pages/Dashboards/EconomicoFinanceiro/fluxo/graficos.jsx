@@ -1,6 +1,7 @@
 import { useCallback, useLayoutEffect, useMemo, useRef, useState } from 'react';
 import { createPortal } from 'react-dom';
 import { brl, eixo, lbl, niceTicks, pct } from './modelo';
+import { diaMes, serieEntradasSaidas } from './analise';
 import { COR, DicaCtx, useDica, useLargura } from './ganchos';
 
 // Gráficos SVG do painel do Fluxo de Caixa (porte dos desenhos do painel do CFO de referência) e a
@@ -59,14 +60,17 @@ function Grade({ ticks, y, l, r, zero = true }) {
 const caminho = (arr, x, y, a = 0) => arr.map((v, k) => `${k ? 'L' : 'M'}${x(a + k).toFixed(1)},${y(v).toFixed(1)}`).join('');
 
 // ─── Trajetória do caixa ─────────────────────────────────────────────────────────────────────────
+// Pontos: fim de cada mês fechado e HOJE (realizado, linha cheia) e, de hoje em diante, o fim de cada mês
+// do horizonte (Orçamento tracejado / cenário em laranja), partindo do saldo de hoje.
 export function Trajetoria({ D, sc }) {
   const [ref, W] = useLargura();
   const { mostrar, esconder } = useDica();
   const [cursor, setCursor] = useState(null);
-  const meses = [...D.hist, ...D.fut];
-  const base = [...D.saldoHist, ...D.saldoFut];
-  const scen = [...D.saldoHist, ...sc];
-  const nh = D.hist.length;
+  const meses = [...D.hist, 'hoje', ...D.fut];
+  const rot = (i) => (meses[i] === 'hoje' ? `hoje ${diaMes(D.hoje)}` : lbl(meses[i]));
+  const base = [...D.saldoHist, D.caixaHoje, ...D.saldoFut];
+  const scen = [...D.saldoHist, D.caixaHoje, ...sc];
+  const nh = D.hist.length + 1; // pontos realizados (com o de hoje)
   const n = meses.length;
   const H = W < 560 ? 260 : 330;
   const m = { l: 58, r: 14, t: 16, b: 30 };
@@ -94,9 +98,9 @@ export function Trajetoria({ D, sc }) {
         : [
             ['Orçamento', brl(base[i])],
             ...(igual ? [] : [['Cenário', brl(scen[i])]]),
-            ['Resultado do mês', brl(D.resFut[i - nh], true)],
+            [i === nh ? 'A acontecer até o fim do mês' : 'Resultado do mês', brl(D.resFut[i - nh], true)],
           ];
-    mostrar(ev, `Fim de ${lbl(meses[i])}`, linhas);
+    mostrar(ev, meses[i] === 'hoje' ? `Hoje, ${diaMes(D.hoje)}` : `Fim de ${lbl(meses[i])}`, linhas);
   }
 
   return (
@@ -108,9 +112,9 @@ export function Trajetoria({ D, sc }) {
           PROJETADO
         </text>
         {meses.map((mm, i) =>
-          i % passo ? null : (
-            <text key={mm} x={x(i)} y={H - 10} textAnchor="middle">
-              {lbl(mm)}
+          i % passo && mm !== 'hoje' ? null : (
+            <text key={mm} x={x(i)} y={H - 10} textAnchor="middle" style={mm === 'hoje' ? { fill: COR.ink, fontWeight: 600 } : undefined}>
+              {rot(i)}
             </text>
           )
         )}
@@ -165,15 +169,18 @@ export function Trajetoria({ D, sc }) {
 }
 
 // ─── Entradas e saídas operacionais ──────────────────────────────────────────────────────────────
+// Meses fechados (realizado), o mês atual duas vezes (realizado até hoje e orçado no mês) e os seguintes.
+const ROTULO_TIPO = { realizado: 'realizado', parcial: 'realizado até hoje', orcado_mes: 'orçado no mês inteiro', projetado: 'projetado' };
 export function FluxoOperacional({ D }) {
   const [ref, W] = useLargura();
   const { mostrar, esconder } = useDica();
-  const meses = [...D.hist, ...D.fut];
-  const ent = [...D.entR, ...D.entP];
-  const sai = [...D.saiR, ...D.saiP];
-  const liq = ent.map((v, i) => v + sai[i]);
-  const nh = D.hist.length;
-  const n = ent.length;
+  const itens = serieEntradasSaidas(D);
+  const ent = itens.map((x) => x.ent);
+  const sai = itens.map((x) => x.sai);
+  const liq = itens.map((x) => x.liq);
+  const nh = itens.filter((x) => x.tipo === 'realizado' || x.tipo === 'parcial').length;
+  const n = itens.length;
+  const chave = (it) => `${it.mes}|${it.tipo}`;
   const H = W < 560 ? 240 : 280;
   const m = { l: 58, r: 10, t: 12, b: 28 };
   const ymax = Math.max(1, ...ent, ...liq) * 1.05;
@@ -187,15 +194,16 @@ export function FluxoOperacional({ D }) {
     <div className="chart" ref={ref}>
       <svg viewBox={`0 0 ${W} ${H}`} role="img" aria-label="Entradas e saídas operacionais por mês">
         <Grade ticks={niceTicks(ymin, ymax, 5)} y={y} l={m.l} r={W - m.r} />
-        {meses.map((mm, i) => {
+        {itens.map((it, i) => {
           const op = i >= nh ? 0.45 : 1;
+          const doMesAtual = it.tipo === 'parcial' || it.tipo === 'orcado_mes';
           return (
-            <g key={mm}>
+            <g key={chave(it)}>
               <rect x={cx(i) - w / 2} y={y(ent[i])} width={w} height={Math.max(0, y(0) - y(ent[i]) - 1)} fill={COR.entrada} fillOpacity={op} rx={2} />
               <rect x={cx(i) - w / 2} y={y(0) + 1} width={w} height={Math.max(0, y(sai[i]) - y(0) - 1)} fill={COR.saida} fillOpacity={op} rx={2} />
-              {i % passo === 0 && (
-                <text x={cx(i)} y={H - 9} textAnchor="middle">
-                  {lbl(mm)}
+              {(i % passo === 0 || doMesAtual) && (
+                <text x={cx(i)} y={H - 9} textAnchor="middle" style={doMesAtual ? { fill: COR.ink, fontWeight: 600 } : undefined}>
+                  {it.tipo === 'parcial' ? `${lbl(it.mes)} até ${diaMes(D.hoje)}` : it.tipo === 'orcado_mes' ? `${lbl(it.mes)} orçado` : lbl(it.mes)}
                 </text>
               )}
             </g>
@@ -203,7 +211,7 @@ export function FluxoOperacional({ D }) {
         })}
         <path d={liq.map((v, i) => `${i ? 'L' : 'M'}${cx(i)},${y(v)}`).join('')} fill="none" stroke={COR.ink} strokeWidth={1.5} opacity={0.55} />
         {liq.map((v, i) => (
-          <circle key={meses[i]} cx={cx(i)} cy={y(v)} r={4} fill={COR.ink} stroke={COR.surface} strokeWidth={2} />
+          <circle key={chave(itens[i])} cx={cx(i)} cy={y(v)} r={4} fill={COR.ink} stroke={COR.surface} strokeWidth={2} />
         ))}
         {nh > 0 && nh < n && (
           <>
@@ -213,19 +221,23 @@ export function FluxoOperacional({ D }) {
             </text>
           </>
         )}
-        {meses.map((mm, i) => (
+        {itens.map((it, i) => (
           <rect
-            key={`h${mm}`}
+            key={`h${chave(it)}`}
             x={m.l + bw * i}
             y={m.t}
             width={bw}
             height={H - m.t - m.b}
             fill="transparent"
             onMouseMove={(ev) =>
-              mostrar(ev, `${lbl(mm)} · ${i >= nh ? 'projetado' : 'realizado'}`, [
+              mostrar(ev, `${lbl(it.mes)} · ${ROTULO_TIPO[it.tipo]}${it.tipo === 'parcial' ? ` (${diaMes(D.hoje)})` : ''}`, [
                 ['Entradas', brl(ent[i])],
                 ['Saídas', brl(sai[i])],
                 ['Líquido', brl(liq[i], true)],
+                ...(it.tipo === 'parcial' && D.saiOrcMes
+                  ? [['Saídas: % do orçado do mês', pct((Math.abs(sai[i]) / Math.abs(D.saiOrcMes)) * 100)]]
+                  : []),
+                ...(it.tipo === 'parcial' && D.entOrcMes ? [['Entradas: % do orçado do mês', pct((ent[i] / D.entOrcMes) * 100)]] : []),
               ])
             }
             onMouseLeave={esconder}

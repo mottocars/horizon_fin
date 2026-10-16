@@ -9,11 +9,20 @@ import { CFG, brl, curto, lbl, media, nf0, pct, soma, titulo } from './modelo';
 export const etiqueta = (tom, texto) => ({ tom, texto });
 export const sev = (crit, aten, ok = 'Ok') => (crit ? etiqueta('crit', 'Crítico') : aten ? etiqueta('warn', 'Atenção') : etiqueta('good', ok));
 const meses = (n) => `${n} ${n === 1 ? 'mês' : 'meses'}`;
+// 'AAAA-MM-DD' -> 'dd/mm'.
+export const diaMes = (iso) => (iso ? `${iso.slice(8, 10)}/${iso.slice(5, 7)}` : '–');
+const somarDias = (iso, n) => {
+  const [a, m, d] = iso.split('-').map(Number);
+  return new Date(Date.UTC(a, m - 1, d + n)).toISOString().slice(0, 10);
+};
 
 // ─── Indicadores (8 cards) ───────────────────────────────────────────────────────────────────────
 export function indicadores(D) {
-  const fco = soma(D.entR) + soma(D.saiR);
-  const prox = D.resFut.slice(0, 6);
+  // Realizado: meses fechados do histórico + o mês atual até hoje.
+  const fco = soma(D.entR) + soma(D.saiR) + (D.entMtd || 0) + (D.saiMtd || 0);
+  const entradasRealizadas = soma(D.entR) + (D.entMtd || 0);
+  // Resultado de cada mês do horizonte (o atual = realizado até hoje + o que falta).
+  const prox = (D.resMes || D.resFut).slice(0, 6);
   const queima = media(prox);
   const fura = D.saldoFut.findIndex((v) => v < D.colchao);
   const dividaHoje = soma(D.cef.map((c) => c.now?.saldo || 0));
@@ -28,7 +37,9 @@ export function indicadores(D) {
       titulo: 'Caixa hoje',
       valor: D.caixaHoje,
       valor_fmt: brl(D.caixaHoje),
-      detalhe: D.totalContas ? [{ b: pct((D.invest / D.totalContas) * 100) }, ` aplicado · ${D.contas.length} contas`] : ['abertura do mês atual'],
+      detalhe: D.totalContas
+        ? [{ b: pct((D.invest / D.totalContas) * 100) }, ` aplicado · ${D.contas.length} contas · em ${diaMes(D.hoje)}`]
+        : [`saldo em ${diaMes(D.hoje)}`],
       etiqueta: D.caixaHoje < D.colchao ? etiqueta('crit', 'Abaixo do colchão') : etiqueta('good', 'Líquido'),
     },
     {
@@ -49,11 +60,11 @@ export function indicadores(D) {
     },
     {
       chave: 'fluxo_operacional',
-      titulo: `Fluxo operacional · últimos ${meses(D.hist.length)}`,
-      valor: D.hist.length ? fco : null,
-      valor_fmt: D.hist.length ? brl(fco, true) : '–',
-      detalhe: ['entradas de ', { b: brl(soma(D.entR)) }],
-      etiqueta: !D.hist.length ? etiqueta('info', 'Sem histórico') : fco < 0 ? etiqueta('warn', 'Consome caixa') : etiqueta('good', 'Positivo'),
+      titulo: `Fluxo operacional · ${D.hist.length ? lbl(D.hist[0]) : 'mês atual'} até ${diaMes(D.hoje)}`,
+      valor: fco,
+      valor_fmt: brl(fco, true),
+      detalhe: ['realizado · entradas de ', { b: brl(entradasRealizadas) }],
+      etiqueta: fco < 0 ? etiqueta('warn', 'Consome caixa') : etiqueta('good', 'Positivo'),
     },
     {
       chave: 'divida_pj',
@@ -74,7 +85,7 @@ export function indicadores(D) {
       titulo: 'A receber em 90 dias',
       valor: rec.d90 || 0,
       valor_fmt: brl(rec.d90 || 0),
-      detalhe: ['carteira a vencer de ', { b: brl(rec.a_vencer || 0) }],
+      detalhe: [`de ${diaMes(D.hoje)} a ${diaMes(somarDias(D.hoje, 89))} · a vencer `, { b: brl(rec.a_vencer || 0) }],
       etiqueta: etiqueta('info', 'Carteira'),
     },
     {
@@ -82,7 +93,7 @@ export function indicadores(D) {
       titulo: 'Inadimplência',
       valor: Number.isFinite(inad) ? inad : null,
       valor_fmt: pct(inad),
-      detalhe: [{ b: brl(rec.vencido || 0) }, ` vencidos em ${nf0.format(rec.n_vencido || 0)} parcelas`],
+      detalhe: [{ b: brl(rec.vencido || 0) }, ` vencidos até ${diaMes(somarDias(D.hoje, -1))} em ${nf0.format(rec.n_vencido || 0)} parcelas`],
       etiqueta: Number.isFinite(inad) ? sev(inad > 8, inad > 3, 'Baixa') : etiqueta('info', 'Sem dados'),
     },
     {
@@ -104,6 +115,19 @@ export function tituloTrajetoria(D, escopo) {
   return D.minBase < D.caixaHoje
     ? `O caixa ${de} chega a ${brl(D.minBase)} em ${lbl(D.fut[D.minIdx])} (${pct(queda, true)})`
     : `O caixa ${de} cresce no horizonte`;
+}
+
+// Entradas e saídas operacionais mês a mês: meses fechados (realizado), o mês atual DUAS vezes — realizado
+// até hoje e orçado no mês inteiro, lado a lado, para ver como o mês está andando — e os meses seguintes
+// (orçado). [{ mes, rotulo, tipo: 'realizado' | 'parcial' | 'orcado_mes' | 'projetado', ent, sai, liq }].
+export function serieEntradasSaidas(D) {
+  const item = (mes, rotulo, tipo, ent, sai) => ({ mes, rotulo, tipo, ent, sai, liq: ent + sai });
+  return [
+    ...D.hist.map((m, i) => item(m, lbl(m), 'realizado', D.entR[i], D.saiR[i])),
+    item(D.m0, `${lbl(D.m0)} até ${diaMes(D.hoje)}`, 'parcial', D.entMtd || 0, D.saiMtd || 0),
+    item(D.m0, `${lbl(D.m0)} orçado`, 'orcado_mes', D.entOrcMes || 0, D.saiOrcMes || 0),
+    ...D.fut.slice(1).map((m, i) => item(m, lbl(m), 'projetado', D.entP[i + 1], D.saiP[i + 1])),
+  ];
 }
 
 // Obras que o simulador pode atrasar (com entradas projetadas), da maior entrada para a menor.

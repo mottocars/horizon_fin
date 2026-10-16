@@ -21,6 +21,14 @@ export const ABAS_SUMARIO = [
         ],
       },
       {
+        titulo: 'O painel é a foto de hoje',
+        itens: [
+          '**Realizado e saldos vão até hoje**: saldos das contas, carteira, inadimplência e o realizado do mês atual usam o extrato e as parcelas do Sienge até o dia da última atualização (Orçamentos › Nova versão › Saldos das Contas e Aging).',
+          '**A projeção (última versão salva do Orçamento) só entra no que ainda vai acontecer**: nos meses seguintes, o orçado inteiro; no mês atual, só o que **falta** — orçado do mês menos o realizado até hoje, por centro de custo e natureza.',
+          'O que falta nunca inverte o sinal: se uma despesa já passou do orçado, não sobra nada a pagar no mês; se uma receita já entrou acima do previsto, não sobra nada a receber. Lançamento sem orçamento no mês conta só no realizado.',
+        ],
+      },
+      {
         titulo: 'Bom saber',
         itens: [
           'Clicar numa empresa (Fôlego de cada SPE) ou num centro (Quem gera e quem consome caixa) aplica o filtro de centro sozinho; clicar de novo volta ao consolidado.',
@@ -39,20 +47,20 @@ export const ABAS_SUMARIO = [
       {
         titulo: 'Cada card',
         itens: [
-          '**Caixa hoje** — saldo de abertura do mês atual nas contas com "Projeta DFC" (o Saldo inicial do mês atual na tabela). "Aplicado" é a parte em contas do tipo **Investimento**.',
-          '**Mínimo projetado** — o menor saldo de fim de mês dentro do horizonte, o mês em que ele acontece e quanto é menor que hoje.',
-          '**Resultado médio · próximos 6 meses** — média do Resultado do mês projetado (todas as entradas menos todas as saídas) nos 6 primeiros meses do horizonte, e o mês em que o saldo fica abaixo do colchão, se ficar.',
-          '**Fluxo operacional · últimos meses** — soma do realizado (entradas + saídas) do Fluxo de Caixa Operacional nos meses do Histórico.',
+          '**Caixa hoje** — saldo real de hoje nas contas com "Projeta DFC" (extrato do Sienge até a última atualização). "Aplicado" é a parte em contas do tipo **Investimento**.',
+          '**Mínimo projetado** — o menor saldo de fim de mês dentro do horizonte, partindo do caixa de hoje e somando só o que ainda vai acontecer; o mês em que ele acontece e quanto é menor que hoje.',
+          '**Resultado médio · próximos 6 meses** — média do resultado de cada mês (todas as entradas menos todas as saídas): no mês atual, o realizado até hoje mais o que falta; nos seguintes, o orçado. E o mês em que o saldo fica abaixo do colchão, se ficar.',
+          '**Fluxo operacional · até hoje** — soma do realizado (entradas + saídas) do Fluxo de Caixa Operacional nos meses do Histórico e no mês atual até hoje.',
           '**Dívida PJ Caixa** — saldo devedor do crédito PJ (Projeção CEF) no último mês fechado, somando as obras, e até onde ele vai no fim da projeção.',
-          '**A receber em 90 dias** — parcelas a receber em aberto no Sienge que vencem do início do mês atual até 3 meses à frente; embaixo, toda a carteira a vencer.',
-          '**Inadimplência** — valor vencido ÷ (vencido + a vencer) das parcelas a receber em aberto.',
-          '**Maior concentração de caixa** — quanto do caixa está na empresa (SPE) com o maior saldo.',
+          '**A receber em 90 dias** — parcelas a receber em aberto no Sienge que vencem de hoje até daqui a 90 dias; embaixo, toda a carteira a vencer (de hoje em diante).',
+          '**Inadimplência** — valor vencido até ontem ÷ (vencido + a vencer) das parcelas a receber em aberto.',
+          '**Maior concentração de caixa** — quanto do caixa de hoje está na empresa (SPE) com o maior saldo.',
         ],
       },
       {
         titulo: 'O colchão',
         texto:
-          'O colchão é 1 mês de saídas operacionais: a média mensal das saídas do Fluxo de Caixa Operacional projetadas no horizonte. É a referência de "caixa mínimo seguro" usada nos cards e na Trajetória do caixa.',
+          'O colchão é 1 mês de saídas operacionais: a média mensal das saídas do Fluxo de Caixa Operacional no horizonte (no mês atual, o realizado até hoje mais o que falta). É a referência de "caixa mínimo seguro" usada nos cards e na Trajetória do caixa.',
       },
       {
         titulo: 'Como ler as etiquetas',
@@ -101,7 +109,7 @@ export const ABAS_SUMARIO = [
       {
         titulo: 'O gráfico',
         itens: [
-          '**Linha azul cheia** — saldo realizado no fim de cada mês do histórico. **Azul tracejada** — saldo projetado pelo Orçamento.',
+          '**Linha azul cheia** — saldo realizado no fim de cada mês do histórico e o saldo de **hoje**. **Azul tracejada** — de hoje em diante, o saldo no fim de cada mês pelo Orçamento: no mês atual, hoje + o que falta acontecer; depois, o orçado de cada mês.',
           '**Laranja** — o mesmo projetado com os ajustes do simulador (só aparece quando o cenário muda alguma coisa).',
           '**Vermelha pontilhada** — o colchão (1 mês de saídas operacionais). O fundo cinza marca os meses projetados.',
           'O título resume o ponto mais baixo do Orçamento no horizonte. Passe o mouse para ver os valores de cada mês.',
@@ -128,7 +136,7 @@ export const ABAS_SUMARIO = [
         titulo: 'O que mostra',
         itens: [
           'Barras azuis: entradas do Fluxo de Caixa Operacional. Barras vermelhas: saídas. Pontos pretos: o líquido do mês (entradas − saídas).',
-          'Barras fortes são realizado; barras claras, projetado. A linha tracejada separa os dois.',
+          'Barras fortes são realizado; barras claras, orçado. O **mês atual aparece duas vezes**: o realizado até hoje e, ao lado, o orçado do mês inteiro — para ver como o mês está andando (passe o mouse para ver o % do orçado já realizado). A linha tracejada separa realizado de orçado.',
           'O Fluxo Operacional já inclui captação de financiamentos (repasses CEF) e serviço da dívida; aplicações e resgates ficam de fora.',
         ],
       },
@@ -143,8 +151,8 @@ export const ABAS_SUMARIO = [
       {
         titulo: 'Como é calculado',
         itens: [
-          'Ponto de partida: o saldo de hoje nas contas com Projeta DFC daquela empresa.',
-          'Mês a mês soma o fluxo operacional projetado dos centros de custo dela — sem mútuos nem transferências entre empresas.',
+          'Ponto de partida: o saldo real de **hoje** nas contas com Projeta DFC daquela empresa.',
+          'Mês a mês soma o fluxo operacional que ainda vai acontecer nos centros de custo dela — no mês atual, só o que falta do orçado; depois, o orçado de cada mês — sem mútuos nem transferências entre empresas.',
           'Cada célula é o saldo projetado no fim do mês: vermelho = negativo, azul = positivo; quanto mais forte, maior o valor.',
         ],
       },
@@ -174,7 +182,7 @@ export const ABAS_SUMARIO = [
       {
         titulo: 'O que mostra',
         itens: [
-          'Para cada centro com Projeta DFC: o fluxo operacional líquido realizado nos meses do Histórico e o projetado nos meses do Horizonte.',
+          'Para cada centro com Projeta DFC: o fluxo operacional líquido **realizado** (meses do Histórico e o mês atual até hoje) e o que ainda **vai acontecer** (o que falta do mês atual e os meses seguintes do Horizonte).',
           'A barra mostra o projetado: azul para a direita gera caixa; vermelha para a esquerda consome. A lista vem do que mais gera para o que mais consome.',
         ],
       },
@@ -198,14 +206,14 @@ export const ABAS_SUMARIO = [
         itens: [
           '**Liquidez imediata** — saldo das contas correntes (que não são do tipo Investimento).',
           '**Em aplicações** — saldo das contas do tipo Investimento (cadastro das contas correntes do DFC Construtoras).',
-          '**A receber a vencer** — parcelas a receber em aberto no Sienge ainda não vencidas.',
+          '**A receber a vencer** — parcelas a receber em aberto no Sienge que vencem de hoje em diante.',
           '**A pagar em aberto** — parcelas a pagar em aberto no Sienge (vencidas + a vencer).',
         ],
       },
       {
         titulo: 'O gráfico',
         texto:
-          'Todas as contas com Projeta DFC e o saldo de abertura do mês atual, da maior para a menor: azul claro = Investimento, azul escuro = conta corrente. Passe o mouse para ver empresa, número e tipo da conta.',
+          'Todas as contas com Projeta DFC e o saldo de hoje, da maior para a menor: azul claro = Investimento, azul escuro = conta corrente. Passe o mouse para ver empresa, número e tipo da conta.',
       },
     ],
   },
@@ -217,7 +225,7 @@ export const ABAS_SUMARIO = [
       {
         titulo: 'Como é calculado',
         itens: [
-          'Para cada linha do Fluxo Operacional, soma o realizado e o projetado (versão atual do Orçamento) nos meses do Histórico.',
+          'Para cada linha do Fluxo Operacional, soma o realizado e o projetado (versão atual do Orçamento) nos meses fechados do Histórico — o mês atual fica de fora porque ainda está pela metade.',
           'Desvio = realizado ÷ projetado − 1. Aparecem as 8 linhas com a maior diferença em reais (só as que somam mais de R$ 20 mil).',
         ],
       },
@@ -239,7 +247,7 @@ export const ABAS_SUMARIO = [
       {
         titulo: 'O que mostra',
         itens: [
-          'Os 10 favorecidos com mais pagamentos no Fluxo Operacional realizado, nos meses do Histórico (respeita o filtro de centro).',
+          'Os 10 favorecidos com mais pagamentos no Fluxo Operacional realizado, nos meses do Histórico e no mês atual até hoje (respeita o filtro de centro).',
           'Vermelho = custo de obra (linhas de construção/obra); cinza = demais saídas.',
           'Passe o mouse para ver o total pago, o número de lançamentos e a linha do fluxo.',
         ],

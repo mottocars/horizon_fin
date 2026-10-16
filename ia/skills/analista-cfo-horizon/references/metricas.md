@@ -6,31 +6,37 @@ análise bater com o dashboard. O painel calcula tudo isso — prefira ler o val
 
 ## Base
 
+**O painel é a foto de hoje.** Saldos, carteira e realizado vão até hoje (extrato e Aging do Sienge até a
+última atualização). O Orçamento (última versão salva) só entra no que ainda vai acontecer: nos meses
+seguintes, o orçado inteiro; no **mês atual, o que falta** = orçado do mês − realizado até hoje, por centro ×
+natureza, sem inverter o sinal (saída que já passou do orçado não deixa nada a pagar; entrada acima do
+previsto não deixa nada a receber).
+
 - **Fluxo operacional:** máscara de nível 1 com "OPERACIONAL" no nome. Já inclui captação de
   financiamentos (repasses CEF) e serviço da dívida; aplicações e resgates ficam fora.
-- **Caixa hoje:** saldo de abertura do mês atual nas contas com Projeta DFC (= Saldo inicial realizado do
-  mês atual no fluxo).
-- **Colchão:** 1 mês de saídas operacionais = média mensal das saídas do Fluxo Operacional projetadas no
-  horizonte. É o "caixa mínimo seguro".
+- **Caixa hoje:** saldo real de hoje nas contas com Projeta DFC (= abertura do mês atual + realizado do mês
+  até hoje).
+- **Colchão:** 1 mês de saídas operacionais = média mensal das saídas do Fluxo Operacional no horizonte (no
+  mês atual, realizado até hoje + o que falta). É o "caixa mínimo seguro".
 - **Aplicado:** saldo das contas do tipo Investimento.
 
 ## Indicadores do painel e etiquetas
 
 | Card | Cálculo | Vermelho (crítico) | Amarelo (atenção) | Verde |
 |---|---|---|---|---|
-| Caixa hoje | abertura do mês atual | abaixo do colchão | — | Líquido |
-| Mínimo projetado | menor saldo de fim de mês no horizonte | < colchão | < 2 × colchão | Confortável |
-| Resultado médio · próx. 6 meses | média do Resultado do mês projetado (todas entradas − todas saídas) | saldo fura o colchão em até 3 meses | média negativa | Gera caixa |
-| Fluxo operacional · últimos meses | soma do realizado operacional no histórico | — | negativo (Consome caixa) | Positivo |
+| Caixa hoje | saldo real de hoje | abaixo do colchão | — | Líquido |
+| Mínimo projetado | menor saldo de fim de mês no horizonte, partindo de hoje + só o que ainda vai acontecer | < colchão | < 2 × colchão | Confortável |
+| Resultado médio · próx. 6 meses | média do resultado de cada mês (mês atual = realizado até hoje + o que falta) | saldo fura o colchão em até 3 meses | média negativa | Gera caixa |
+| Fluxo operacional · até hoje | soma do realizado operacional no histórico + mês atual até hoje | — | negativo (Consome caixa) | Positivo |
 | Dívida PJ Caixa | saldo devedor PJ no último mês fechado, somando obras | — | fim da projeção > 1,5 × hoje (Crescente) | azul: Sob controle |
-| A receber em 90 dias | parcelas a receber em aberto que vencem do 1º dia do mês atual até 3 meses | — | — | azul (informativo) |
-| Inadimplência | vencido ÷ (vencido + a vencer) a receber | > 8% | > 3% | Baixa |
-| Maior concentração de caixa | caixa da SPE com maior saldo ÷ caixa total | — | > 40% | Distribuído |
+| A receber em 90 dias | parcelas a receber em aberto que vencem de hoje até hoje + 90 dias | — | — | azul (informativo) |
+| Inadimplência | vencido até ontem ÷ (vencido + a vencer) a receber | > 8% | > 3% | Baixa |
+| Maior concentração de caixa | caixa de hoje da SPE com maior saldo ÷ caixa total | — | > 40% | Distribuído |
 
 ## Fôlego de cada SPE
 
-Saldo de cada empresa sozinha: caixa de hoje das contas dela + fluxo operacional projetado dos centros
-dela, mês a mês, **sem mútuos nem transferências**.
+Saldo de cada empresa sozinha: caixa real de hoje das contas dela + o fluxo operacional que ainda vai
+acontecer nos centros dela (no mês atual, só o que falta), mês a mês, **sem mútuos nem transferências**.
 - **Zera em <mês>** (vermelho): primeiro mês com saldo negativo.
 - **Cai X%** (amarelo): não zera, mas o mínimo fica abaixo da metade do caixa de hoje.
 - **Cobre** (verde).
@@ -38,7 +44,8 @@ Ordem por risco: quem zera primeiro; depois a maior queda relativa.
 
 ## Orçamento erra para qual lado?
 
-Por linha (máscara 2) operacional, nos meses do histórico: desvio = realizado ÷ projetado − 1. Entram as 8
+Por linha (máscara 2) operacional, nos meses FECHADOS do histórico (o mês atual fica de fora, está pela
+metade): desvio = realizado ÷ projetado − 1. Entram as 8
 linhas com maior diferença em R$ entre as que somam mais de R$ 20 mil. **Desfavorável:** saída maior que
 a prevista ou entrada menor.
 
