@@ -11,6 +11,7 @@ import {
   Landmark,
   ListTree,
   Loader2,
+  FileSpreadsheet,
   Plus,
   RefreshCw,
   Save,
@@ -33,6 +34,7 @@ import { listCentrosCustoDfc } from '../../../api/dfcCentros.api';
 import { gerarPlano } from '../../../api/planosFinanceirosSienge.api';
 import { excluirVersaoPlanoDfc, listVersoesPlanoDfc } from '../../../api/dfcPlanoContas.api';
 import { exportarExcelDfc } from '../../../api/dfcExportacao.api';
+import { baixarLayoutOrcamento } from '../../../api/dfcPlanilhaOrcamentaria.api';
 import { useConfirm } from '../../../confirm/ConfirmContext';
 import { nomeExibicaoEmpresa } from '../../../utils/empresa';
 import { useEmpresaTravada } from '../../../hooks/useEmpresaTravada';
@@ -363,6 +365,38 @@ export default function DfcConstrutorasPage() {
   // "Tela cheia" da grade do Orçamento (ícone no topo); sai pelo botão da própria tela cheia ou com
   // Esc — ver DfcOrcamentosTab.
   const [orcamentoTelaCheia, setOrcamentoTelaCheia] = useState(false);
+
+  // Aba Orçamentos: "Layout do orçamento" — Excel travado com todos os centros × naturezas HORIZON -
+  // INFORMADO × meses e os valores da última versão (Planilha Orçamentária; importa na Nova versão).
+  const [baixandoLayout, setBaixandoLayout] = useState(false);
+  const [erroLayout, setErroLayout] = useState('');
+  useEffect(() => setErroLayout(''), [empresaId, abaAtiva]);
+  async function baixarLayout() {
+    setErroLayout('');
+    setBaixandoLayout(true);
+    try {
+      const { blob, nome } = await baixarLayoutOrcamento(empresaId);
+      const url = window.URL.createObjectURL(blob);
+      const link = document.createElement('a');
+      link.href = url;
+      link.download = nome;
+      document.body.appendChild(link);
+      link.click();
+      link.remove();
+      window.URL.revokeObjectURL(url);
+    } catch (err) {
+      let mensagem = 'Não foi possível gerar o layout do orçamento.';
+      const dados = err.response?.data;
+      try {
+        mensagem = (dados instanceof Blob ? JSON.parse(await dados.text()) : dados)?.message || mensagem;
+      } catch {
+        // mantém a mensagem padrão
+      }
+      setErroLayout(mensagem);
+    } finally {
+      setBaixandoLayout(false);
+    }
+  }
 
   // Aba DFC: "Exportar Excel" — o .xlsx do que está filtrado (empresa, período, centros), montado no
   // backend (dfc-exportacao): Fluxo de Caixa, Saldos das Contas, Base Realizado, Base Projetado e o
@@ -734,8 +768,20 @@ export default function DfcConstrutorasPage() {
           )}
 
           {abaAtiva === 'orcamentos' && (
-            // Só ícones (dica no title): nova versão, salvar a nova versão e tela cheia.
+            // Só ícones (dica no title): layout do orçamento, nova versão, salvar a nova versão e tela cheia.
+            <div className="flex shrink-0 flex-col items-end gap-1">
             <div className="flex shrink-0 items-center gap-2">
+              <Button
+                type="button"
+                variant="secondary"
+                className="!px-2.5"
+                onClick={baixarLayout}
+                disabled={!empresaId || baixandoLayout}
+                title="Layout do orçamento (Planilha Orçamentária)"
+                aria-label="Layout do orçamento"
+              >
+                {baixandoLayout ? <Loader2 size={18} className="animate-spin" /> : <FileSpreadsheet size={18} />}
+              </Button>
               <Button
                 type="button"
                 variant="secondary"
@@ -768,6 +814,8 @@ export default function DfcConstrutorasPage() {
               >
                 <Maximize2 size={18} />
               </Button>
+            </div>
+            {erroLayout && <span className="max-w-xs text-right text-xs text-red-600">{erroLayout}</span>}
             </div>
           )}
 

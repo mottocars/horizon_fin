@@ -73,28 +73,28 @@ async function salvar(empresaId, { centro_id: centroId, sienge_id: siengeId, mes
   await exigirContaInformada(empresaId, centroId, siengeId);
   const gravado = valor === 0 ? null : valor;
   await pool.query(
-    `INSERT INTO dfc_orcamento_informado (empresa_id, centro_id, sienge_id, mes, valor, usuario_id, atualizado_em, via_mcp)
-     VALUES ($1, $2, $3, $4, $5, $6, $7, false)
+    `INSERT INTO dfc_orcamento_informado (empresa_id, centro_id, sienge_id, mes, valor, usuario_id, atualizado_em, via)
+     VALUES ($1, $2, $3, $4, $5, $6, $7, 'TELA')
      ON CONFLICT (empresa_id, centro_id, sienge_id, mes)
-     DO UPDATE SET valor = EXCLUDED.valor, usuario_id = EXCLUDED.usuario_id, atualizado_em = EXCLUDED.atualizado_em, via_mcp = false`,
+     DO UPDATE SET valor = EXCLUDED.valor, usuario_id = EXCLUDED.usuario_id, atualizado_em = EXCLUDED.atualizado_em, via = 'TELA'`,
     [empresaId, centroId, siengeId, `${mes}-01`, gravado, usuarioId, new Date()]
   );
   return { centro_id: centroId, sienge_id: siengeId, mes, valor: gravado };
 }
 
 // "Replicar valor até": grava `valor` em cada mês de `de` até `ate` (inclusive), por cima do que
-// houver. Devolve os meses gravados. `viaMcp`: gravado pelo Claude (conector MCP).
-async function replicar(empresaId, { centro_id: centroId, sienge_id: siengeId, de, ate, valor }, usuarioId, viaMcp = false) {
+// houver. Devolve os meses gravados. `via`: TELA (aba Orçamentos) ou MCP (Claude).
+async function replicar(empresaId, { centro_id: centroId, sienge_id: siengeId, de, ate, valor }, usuarioId, via = 'TELA') {
   if (ate < de) throw erro(400, 'A data final precisa ser igual ou depois do mês de origem.');
   const meses = mesesEntre(de, ate);
   if (meses.length > MAX_MESES) throw erro(400, `Replique no máximo ${MAX_MESES} meses de uma vez.`);
   await exigirContaInformada(empresaId, centroId, siengeId);
   await pool.query(
-    `INSERT INTO dfc_orcamento_informado (empresa_id, centro_id, sienge_id, mes, valor, usuario_id, atualizado_em, via_mcp)
+    `INSERT INTO dfc_orcamento_informado (empresa_id, centro_id, sienge_id, mes, valor, usuario_id, atualizado_em, via)
      SELECT $1, $2, $3, (m || '-01')::date, $5, $6, $7, $8 FROM unnest($4::text[]) AS m
      ON CONFLICT (empresa_id, centro_id, sienge_id, mes)
-     DO UPDATE SET valor = EXCLUDED.valor, usuario_id = EXCLUDED.usuario_id, atualizado_em = EXCLUDED.atualizado_em, via_mcp = EXCLUDED.via_mcp`,
-    [empresaId, centroId, siengeId, meses, valor, usuarioId, new Date(), viaMcp]
+     DO UPDATE SET valor = EXCLUDED.valor, usuario_id = EXCLUDED.usuario_id, atualizado_em = EXCLUDED.atualizado_em, via = EXCLUDED.via`,
+    [empresaId, centroId, siengeId, meses, valor, usuarioId, new Date(), via]
   );
   return { centro_id: centroId, sienge_id: siengeId, meses, valor };
 }
@@ -126,9 +126,10 @@ async function contasInformadas(empresaId, centroIds = []) {
   return rows;
 }
 
-// Grava vários valores de uma vez (conector MCP), tudo ou nada: confere cada centro × conta antes e
-// devolve o valor anterior (digitado, ainda não salvo em versão) e o novo. Valor 0 ou null limpa.
-async function gravarVarios(empresaId, itens, usuarioId) {
+// Grava vários valores de uma vez, tudo ou nada: confere cada centro × conta antes e devolve o valor
+// anterior (digitado, ainda não salvo em versão) e o novo. Valor 0 ou null limpa. `via`: MCP (Claude) ou
+// PLANILHA (Planilha Orçamentária).
+async function gravarVarios(empresaId, itens, usuarioId, via = 'MCP') {
   const conferidos = new Set();
   for (const it of itens) {
     const k = `${it.centro_id}|${it.sienge_id}`;
@@ -150,12 +151,12 @@ async function gravarVarios(empresaId, itens, usuarioId) {
     const anterior = new Map(antes.map((r) => [`${r.centro_id}|${r.sienge_id}|${r.mes}`, r.valor === null ? null : Number(r.valor)]));
     const gravar = itens.map((it) => ({ ...it, valor: it.valor === 0 ? null : it.valor }));
     await client.query(
-      `INSERT INTO dfc_orcamento_informado (empresa_id, centro_id, sienge_id, mes, valor, usuario_id, atualizado_em, via_mcp)
-       SELECT $1, x.centro_id, x.sienge_id, (x.mes || '-01')::date, x.valor, $3, $4, true
+      `INSERT INTO dfc_orcamento_informado (empresa_id, centro_id, sienge_id, mes, valor, usuario_id, atualizado_em, via)
+       SELECT $1, x.centro_id, x.sienge_id, (x.mes || '-01')::date, x.valor, $3, $4, $5
          FROM json_to_recordset($2::json) AS x(centro_id int, sienge_id int, mes text, valor numeric)
        ON CONFLICT (empresa_id, centro_id, sienge_id, mes)
-       DO UPDATE SET valor = EXCLUDED.valor, usuario_id = EXCLUDED.usuario_id, atualizado_em = EXCLUDED.atualizado_em, via_mcp = true`,
-      [empresaId, JSON.stringify(gravar), usuarioId, new Date()]
+       DO UPDATE SET valor = EXCLUDED.valor, usuario_id = EXCLUDED.usuario_id, atualizado_em = EXCLUDED.atualizado_em, via = EXCLUDED.via`,
+      [empresaId, JSON.stringify(gravar), usuarioId, new Date(), via]
     );
     await client.query('COMMIT');
     return gravar.map((it) => ({ ...it, anterior: anterior.get(`${it.centro_id}|${it.sienge_id}|${it.mes}`) ?? null }));

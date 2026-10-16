@@ -3357,11 +3357,25 @@ CREATE TABLE dfc_orcamento_informado (
     valor          NUMERIC(18,2),
     usuario_id     INTEGER REFERENCES usuarios(id) ON DELETE SET NULL,
     atualizado_em  TIMESTAMP DEFAULT NOW(),
-    -- Gravado pelo Claude (conector MCP "DFC CONSTRUTORAS (ALTERA ORÇAMENTO)") — migration 2026-10-15-mcp-dfc-altera-orcamento.sql.
-    via_mcp        BOOLEAN NOT NULL DEFAULT false,
+    -- De onde veio: TELA (aba Orçamentos), MCP (Claude) ou PLANILHA (Planilha Orçamentária) — migration 2026-10-15-dfc-planilha-orcamentaria.sql.
+    via            VARCHAR(10) NOT NULL DEFAULT 'TELA' CHECK (via IN ('TELA', 'MCP', 'PLANILHA')),
     PRIMARY KEY (empresa_id, centro_id, sienge_id, mes),
     FOREIGN KEY (centro_id, empresa_id) REFERENCES centros_custo_sienge(sienge_id, empresa_id) ON DELETE CASCADE
 );
+
+-- Importações da Planilha Orçamentária — migration 2026-10-15-dfc-planilha-orcamentaria.sql.
+CREATE TABLE dfc_orcamento_importacoes (
+    id           SERIAL PRIMARY KEY,
+    empresa_id   INTEGER NOT NULL REFERENCES empresas(id) ON DELETE CASCADE,
+    usuario_id   INTEGER REFERENCES usuarios(id) ON DELETE SET NULL,
+    arquivo      VARCHAR(255),
+    linhas       INTEGER NOT NULL,
+    incluidos    INTEGER NOT NULL,
+    alterados    INTEGER NOT NULL,
+    limpos       INTEGER NOT NULL,
+    criado_em    TIMESTAMPTZ NOT NULL
+);
+CREATE INDEX idx_dfc_orcamento_importacoes_empresa ON dfc_orcamento_importacoes (empresa_id, criado_em DESC);
 
 -- ─── Operações > DFC Construtoras > Orçamentos: versões, consolidado e log — ver database/migrations/2026-10-14-dfc-orcamento-versoes.sql ───
 CREATE TABLE dfc_orcamento_versoes (

@@ -140,7 +140,7 @@ const replicar = {
     const [centroId] = await resolverCentros(empresaId, [centro]);
     const nat = await resolverNatureza(empresaId, natureza);
     try {
-      const r = await informado.replicar(empresaId, { centro_id: centroId, sienge_id: nat.sienge_id, de, ate, valor: arred(valor) }, ctx.usuarioId, true);
+      const r = await informado.replicar(empresaId, { centro_id: centroId, sienge_id: nat.sienge_id, de, ate, valor: arred(valor) }, ctx.usuarioId, 'MCP');
       return {
         centro: centroId,
         natureza: `${nat.sienge_id} ${nat.name}`,

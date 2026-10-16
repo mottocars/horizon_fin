@@ -13,6 +13,17 @@ const dfcEmpresarial = require('../dfc-empresarial/dfcEmpresarial.service');
 // com quem fez a mudança na origem e quando.
 
 const ORIGEM_INFORMADO = 'HORIZON_ORCAMENTO_INFORMADO';
+// De onde veio o valor informado (dfc_orcamento_informado.via) -> como aparece no log da versão.
+const FONTE_INFORMADO = {
+  TELA: 'Digitado na aba Orçamentos',
+  MCP: 'Informado pelo Claude (conector MCP)',
+  PLANILHA: 'Importado da Planilha Orçamentária',
+};
+const LIMPO_INFORMADO = {
+  TELA: 'Valor limpo na aba Orçamentos',
+  MCP: 'Valor limpo pelo Claude (conector MCP)',
+  PLANILHA: 'Valor limpo pela Planilha Orçamentária',
+};
 const ORIGEM_AGING = 'SIENGE_AGING';
 const ROTULO_AGING = { receber: 'Aging a receber (Sienge)', pagar: 'Aging a pagar (Sienge)' };
 const ORIGEM_EMPRESARIAL = dfcEmpresarial.ORIGEM;
@@ -98,7 +109,7 @@ async function valoresAtuais(db, empresaId) {
 
   // 1) Digitados na aba (HORIZON - INFORMADO). Linha com valor NULL = limpo (guarda quem limpou).
   const { rows: informados } = await db.query(
-    `SELECT centro_id, sienge_id, to_char(mes, 'YYYY-MM') AS mes, valor, usuario_id, atualizado_em, via_mcp
+    `SELECT centro_id, sienge_id, to_char(mes, 'YYYY-MM') AS mes, valor, usuario_id, atualizado_em, via
        FROM dfc_orcamento_informado WHERE empresa_id = $1`,
     [empresaId]
   );
@@ -112,7 +123,7 @@ async function valoresAtuais(db, empresaId) {
     somar(r.centro_id, r.sienge_id, r.mes, Number(r.valor), {
       origem: ORIGEM_INFORMADO,
       fonte: 'MANUAL',
-      fonte_descricao: r.via_mcp ? 'Informado pelo Claude (conector MCP)' : 'Digitado na aba Orçamentos',
+      fonte_descricao: FONTE_INFORMADO[r.via] || FONTE_INFORMADO.TELA,
       responsavel_id: r.usuario_id,
       responsavel_em: r.atualizado_em,
     });
@@ -235,7 +246,7 @@ function responsavelExclusao(anterior, contexto, salvoPor, agora) {
     return {
       origem,
       fonte: 'MANUAL',
-      fonte_descricao: limpo?.via_mcp ? 'Valor limpo pelo Claude (conector MCP)' : 'Valor limpo na aba Orçamentos',
+      fonte_descricao: LIMPO_INFORMADO[limpo?.via] || LIMPO_INFORMADO.TELA,
       responsavel_id: limpo?.usuario_id ?? salvoPor,
       responsavel_em: limpo?.atualizado_em ?? agora,
     };
