@@ -16,10 +16,10 @@ function hojeEmBrasilia() {
   return new Intl.DateTimeFormat('en-CA', { timeZone: 'America/Sao_Paulo', year: 'numeric', month: '2-digit', day: '2-digit' }).format(new Date());
 }
 
-async function fetchPage({ tenant, username, password, accountNumber, companyId, endDate, offset }) {
+async function fetchPage({ tenant, username, password, accountNumber, companyId, startDate = START_DATE, endDate, offset }) {
   const auth = Buffer.from(`${username}:${password}`).toString('base64');
   const params = new URLSearchParams({
-    startDate: START_DATE,
+    startDate,
     endDate,
     accountNumber,
     companyId: String(companyId),
@@ -52,13 +52,14 @@ async function fetchPage({ tenant, username, password, accountNumber, companyId,
   return response.json();
 }
 
-// Todos os lançamentos da conta no período. `onPagina(paginaAtual, totalPaginas)` pro progresso.
-async function fetchAllStatements({ tenant, username, password, accountNumber, companyId, endDate, onPagina }) {
+// Todos os lançamentos da conta no período (`startDate` vazio = desde 01/01/2000). `onPagina(paginaAtual,
+// totalPaginas)` pro progresso.
+async function fetchAllStatements({ tenant, username, password, accountNumber, companyId, startDate, endDate, onPagina }) {
   const todos = [];
   let offset = 0;
   let total = Infinity;
   while (offset < total) {
-    const page = await fetchPage({ tenant, username, password, accountNumber, companyId, endDate, offset });
+    const page = await fetchPage({ tenant, username, password, accountNumber, companyId, startDate: startDate || START_DATE, endDate, offset });
     const results = Array.isArray(page?.results) ? page.results : [];
     total = Number(page?.resultSetMetadata?.count ?? results.length);
     todos.push(...results);

@@ -11,6 +11,7 @@ import {
   PauseCircle,
   RefreshCw,
   Save,
+  SlidersHorizontal,
   User,
   XCircle,
 } from 'lucide-react';
@@ -18,7 +19,7 @@ import Card from '../../../components/Card';
 import Button from '../../../components/Button';
 import SearchableSelect from '../../../components/SearchableSelect';
 import { listEmpresas } from '../../../api/empresas.api';
-import { getPainelMonitor, salvarAgendamentoMonitor, executarRotinaMonitor } from '../../../api/monitorIntegracoes.api';
+import { getPainelMonitor, salvarAgendamentoMonitor, salvarParametrosMonitor, executarRotinaMonitor } from '../../../api/monitorIntegracoes.api';
 import { useEmpresaTravada } from '../../../hooks/useEmpresaTravada';
 import { nomeExibicaoEmpresa } from '../../../utils/empresa';
 import logoSienge from '../../../assets/integracoes/sienge.svg';
@@ -235,6 +236,81 @@ function BlocoAgendamento({ rotina, edicao, onEditar, onSalvar, salvando, erro }
   );
 }
 
+// Parâmetros da rotina (declarados no backend, rotinas.js `parametros`) — ex.: "Dias retroativos" dos
+// Saldos das contas. Vazio = o padrão (texto `vazio` da definição). Só aparece nas rotinas que têm.
+const paraTexto = (salvos, defs) => Object.fromEntries(defs.map((d) => [d.chave, salvos?.[d.chave] ?? '']));
+
+function BlocoParametros({ rotina, onSalvar }) {
+  const defs = rotina.parametrosDef || [];
+  const chaveSalvos = JSON.stringify(rotina.parametros || {});
+  const [valores, setValores] = useState(() => paraTexto(rotina.parametros, defs));
+  const [salvando, setSalvando] = useState(false);
+  const [erro, setErro] = useState('');
+  // Recarga do painel (polling) só reaplica quando o salvo muda — não apaga o que está sendo digitado.
+  useEffect(() => {
+    setValores(paraTexto(JSON.parse(chaveSalvos), defs));
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [chaveSalvos]);
+  if (!defs.length) return null;
+  const salvos = paraTexto(rotina.parametros, defs);
+  const alterado = defs.some((d) => String(valores[d.chave]) !== String(salvos[d.chave]));
+
+  async function salvar() {
+    setSalvando(true);
+    setErro('');
+    try {
+      await onSalvar(Object.fromEntries(defs.map((d) => [d.chave, valores[d.chave] === '' ? null : Number(valores[d.chave])])));
+    } catch (e) {
+      setErro(e.response?.data?.message || 'Não foi possível salvar.');
+    } finally {
+      setSalvando(false);
+    }
+  }
+
+  return (
+    <div className="mt-4 min-w-0 border-t border-gray-100 pt-3">
+      <p className="flex items-center gap-1.5 text-[10px] font-semibold uppercase tracking-wider text-gray-400">
+        <SlidersHorizontal size={12} /> Parâmetros
+      </p>
+      {defs.map((d) => (
+        <div key={d.chave} className="mt-2">
+          <label className="flex flex-wrap items-center gap-2 text-xs text-gray-600">
+            {d.rotulo}
+            <input
+              type="number"
+              min={d.min}
+              max={d.max}
+              step={1}
+              value={valores[d.chave]}
+              placeholder="vazio"
+              disabled={salvando}
+              onChange={(e) => {
+                setValores((v) => ({ ...v, [d.chave]: e.target.value }));
+                setErro('');
+              }}
+              className="w-24 rounded-lg border border-gray-200 px-2 py-1 text-sm focus:outline-none focus:ring-2 focus:ring-primary-100"
+            />
+            <span className="text-gray-400">{valores[d.chave] === '' ? d.vazio : 'dias'}</span>
+          </label>
+          {d.ajuda && <p className="mt-1 text-[11px] leading-relaxed text-gray-400">{d.ajuda}</p>}
+        </div>
+      ))}
+      {alterado && (
+        <div className="mt-2 flex items-center gap-2">
+          <Button onClick={salvar} loading={salvando} className="!px-3 !py-1 text-xs">
+            <Save size={13} />
+            Salvar
+          </Button>
+          <button type="button" onClick={() => setValores(salvos)} className="text-xs text-gray-400 hover:text-gray-600">
+            Descartar
+          </button>
+        </div>
+      )}
+      {erro && <p className="mt-1 text-xs text-red-600">{erro}</p>}
+    </div>
+  );
+}
+
 function BlocoExecucao({ rotina }) {
   const [historicoAberto, setHistoricoAberto] = useState(false);
   const atual = rotina.execucaoAtual;
@@ -317,7 +393,7 @@ function BlocoExecucao({ rotina }) {
   );
 }
 
-function CartaoRotina({ rotina, edicao, onEditar, onSalvar, salvando, erroSalvar, onExecutar, disparando }) {
+function CartaoRotina({ rotina, edicao, onEditar, onSalvar, salvando, erroSalvar, onExecutar, disparando, onSalvarParametros }) {
   const executando = Boolean(rotina.execucaoAtual);
   return (
     <div
@@ -342,14 +418,17 @@ function CartaoRotina({ rotina, edicao, onEditar, onSalvar, salvando, erroSalvar
         </div>
       </div>
 
-      <BlocoAgendamento
-        rotina={rotina}
-        edicao={edicao}
-        onEditar={onEditar}
-        onSalvar={onSalvar}
-        salvando={salvando}
-        erro={erroSalvar}
-      />
+      <div className="min-w-0">
+        <BlocoAgendamento
+          rotina={rotina}
+          edicao={edicao}
+          onEditar={onEditar}
+          onSalvar={onSalvar}
+          salvando={salvando}
+          erro={erroSalvar}
+        />
+        <BlocoParametros rotina={rotina} onSalvar={onSalvarParametros} />
+      </div>
 
       <BlocoExecucao rotina={rotina} />
 
@@ -484,6 +563,11 @@ export default function MonitorIntegracoesPage() {
     }
   }
 
+  // Parâmetros: erro sobe para o bloco mostrar.
+  async function salvarParametros(chave, valores) {
+    aplicarPainel(await salvarParametrosMonitor(empresaId, chave, valores));
+  }
+
   async function executar(chave) {
     setDisparando((d) => ({ ...d, [chave]: true }));
     try {
@@ -599,6 +683,7 @@ export default function MonitorIntegracoesPage() {
                     erroSalvar={errosSalvar[rotina.chave]}
                     onExecutar={() => executar(rotina.chave)}
                     disparando={Boolean(disparando[rotina.chave])}
+                    onSalvarParametros={(valores) => salvarParametros(rotina.chave, valores)}
                   />
                 ))}
               </div>

@@ -11,3 +11,8 @@ export function salvarAgendamentoMonitor(empresaId, rotina, agendamento) {
 export function executarRotinaMonitor(empresaId, rotina) {
   return http.post(`/monitor-integracoes/${empresaId}/${rotina}/executar`).then((res) => res.data);
 }
+
+// Parâmetros da rotina (ex.: { dias_retroativos: 365 }; vazio/null = padrão).
+export function salvarParametrosMonitor(empresaId, rotina, parametros) {
+  return http.put(`/monitor-integracoes/${empresaId}/${rotina}/parametros`, parametros).then((res) => res.data);
+}

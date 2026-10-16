@@ -200,7 +200,7 @@ const ROTINAS = [
     modulo: 'DFC Construtoras',
     nome: 'Saldos das contas (Sienge)',
     descricao:
-      'Busca o extrato completo (desde 01/01/2000 até hoje) de todas as contas bancárias — as com Projeta DFC formam o saldo e o realizado do fluxo de caixa do DFC Construtoras; as demais (mútuo etc.) servem pra herdar a natureza da outra perna do lançamento.',
+      'Busca o extrato até hoje (completo desde 01/01/2000, ou só os últimos N dias com o parâmetro Dias retroativos) de todas as contas bancárias — as com Projeta DFC formam o saldo e o realizado do fluxo de caixa do DFC Construtoras; as demais (mútuo etc.) servem pra herdar a natureza da outra perna do lançamento.',
     integracao: 'sienge',
     async disponibilidade(empresaId) {
       const motivo = await semSienge(empresaId);
@@ -211,9 +211,27 @@ const ROTINAS = [
       );
       return rowCount ? null : 'Nenhuma conta com Projeta DFC marcado (DFC Construtoras > Contas Correntes).';
     },
-    async executar({ empresaId, progresso }) {
-      const r = await extratoContas.sincronizar(empresaId, progresso);
+    // Parâmetros editáveis no Monitor (por empresa). Vazio = o padrão.
+    parametros: [
+      {
+        chave: 'dias_retroativos',
+        rotulo: 'Dias retroativos',
+        tipo: 'inteiro',
+        min: 1,
+        max: 10000,
+        vazio: 'Todo o histórico (desde 01/01/2000)',
+        ajuda:
+          'Busca no Sienge só os lançamentos dos últimos N dias e mantém o histórico anterior já gravado. Mudanças no Sienge em datas mais antigas só entram se rodar com o campo vazio. Conta ainda sem extrato vem completa.',
+      },
+    ],
+    async executar({ empresaId, progresso, parametros = {} }) {
+      const r = await extratoContas.sincronizar(empresaId, progresso, { diasRetroativos: parametros.dias_retroativos || null });
       const ate = r.ate.split('-').reverse().join('/');
+      const janela = r.desde
+        ? ` Janela: ${r.desde.split('-').reverse().join('/')} a ${ate} (últimos ${n(parametros.dias_retroativos)} dias; histórico anterior mantido${
+            r.completas ? `; ${n(r.completas)} conta(s) sem extrato vieram completas` : ''
+          }).`
+        : '';
       // Mesma conta em várias empresas (ex.: REAPROPFIN em cada SPE) aparece uma vez, com a contagem.
       const nomes = (lista) => {
         const cont = new Map();
@@ -237,7 +255,7 @@ const ROTINAS = [
         throw e;
       }
       return (
-        `${n(r.contas - apoio.length)} conta(s), ${n(r.lancamentos)} lançamento(s) até ${ate}.` +
+        `${n(r.contas - apoio.length)} conta(s), ${n(r.lancamentos)} lançamento(s) até ${ate}.${janela}` +
         (apoio.length ? ` Sem atualizar (instabilidade do Sienge; mantido o extrato anterior, não entram no saldo): ${nomes(apoio)}.` : '')
       );
     },

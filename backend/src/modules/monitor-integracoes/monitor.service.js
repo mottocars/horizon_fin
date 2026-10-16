@@ -31,6 +31,11 @@ async function carregarAgendamentos(empresaId) {
   return new Map(rows.map((r) => [r.rotina, r]));
 }
 
+async function carregarParametros(empresaId) {
+  const { rows } = await pool.query('SELECT rotina, parametros FROM monitor_integracoes_parametros WHERE empresa_id = $1', [empresaId]);
+  return new Map(rows.map((r) => [r.rotina, r.parametros || {}]));
+}
+
 async function carregarHistorico(empresaId) {
   const { rows } = await pool.query(
     `SELECT * FROM (
@@ -63,8 +68,9 @@ async function carregarHistorico(empresaId) {
 // Tudo que a tela precisa de uma empresa: cada rotina com disponibilidade,
 // agendamento, execução em andamento (progresso ao vivo) e histórico recente.
 async function getPainel(empresaId) {
-  const [agendamentos, historico, disponibilidades] = await Promise.all([
+  const [agendamentos, parametros, historico, disponibilidades] = await Promise.all([
     carregarAgendamentos(empresaId),
+    carregarParametros(empresaId),
     carregarHistorico(empresaId),
     Promise.all(ROTINAS.map((r) => r.disponibilidade(empresaId).catch(() => null))),
   ]);
@@ -78,6 +84,8 @@ async function getPainel(empresaId) {
     integracao: rotina.integracao,
     indisponivel: disponibilidades[i],
     agendamento: agendamentoParaResposta(agendamentos.get(rotina.chave)),
+    parametrosDef: rotina.parametros || [],
+    parametros: parametros.get(rotina.chave) || {},
     execucaoAtual: emAndamento.get(rotina.chave) || null,
     historico: historico.get(rotina.chave) || [],
   }));
@@ -138,4 +146,37 @@ async function verificarAgendamentos() {
   }
 }
 
-module.exports = { getPainel, salvarAgendamento, verificarAgendamentos };
+// Parâmetros da rotina (declarados em rotinas.js `parametros`): valida cada um; vazio/null = padrão.
+async function salvarParametros(empresaId, chaveRotina, valores, usuarioId) {
+  const rotina = ROTINA_POR_CHAVE.get(chaveRotina);
+  if (!rotina) {
+    const err = new Error('Rotina desconhecida.');
+    err.status = 404;
+    err.expose = true;
+    throw err;
+  }
+  const defs = rotina.parametros || [];
+  const limpos = {};
+  for (const def of defs) {
+    const bruto = valores?.[def.chave];
+    if (bruto === undefined || bruto === null || bruto === '') continue;
+    const n = Number(bruto);
+    if (def.tipo === 'inteiro' && (!Number.isInteger(n) || n < def.min || n > def.max)) {
+      const err = new Error(`${def.rotulo}: informe um número inteiro de ${def.min} a ${def.max} (ou deixe vazio).`);
+      err.status = 400;
+      err.expose = true;
+      throw err;
+    }
+    limpos[def.chave] = n;
+  }
+  await pool.query(
+    `INSERT INTO monitor_integracoes_parametros (empresa_id, rotina, parametros, atualizado_por, atualizado_em)
+     VALUES ($1, $2, $3, $4, $5)
+     ON CONFLICT (empresa_id, rotina) DO UPDATE SET
+       parametros = EXCLUDED.parametros, atualizado_por = EXCLUDED.atualizado_por, atualizado_em = EXCLUDED.atualizado_em`,
+    [empresaId, chaveRotina, JSON.stringify(limpos), usuarioId, new Date().toISOString()]
+  );
+  return getPainel(empresaId);
+}
+
+module.exports = { getPainel, salvarAgendamento, salvarParametros, verificarAgendamentos };

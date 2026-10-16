@@ -9,6 +9,7 @@ router.use(authMiddleware);
 router.param('empresaId', paramEmpresa);
 router.get('/:empresaId', controller.getPainel);
 router.put('/:empresaId/:rotina/agendamento', controller.salvarAgendamento);
+router.put('/:empresaId/:rotina/parametros', controller.salvarParametros);
 router.post('/:empresaId/:rotina/executar', controller.executar);
 
 module.exports = router;

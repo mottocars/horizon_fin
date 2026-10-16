@@ -38,6 +38,16 @@ async function salvarAgendamento(req, res, next) {
   }
 }
 
+async function salvarParametros(req, res, next) {
+  try {
+    const valores = z.record(z.union([z.number(), z.string(), z.null()])).parse(req.body || {});
+    res.json(await service.salvarParametros(req.params.empresaId, req.params.rotina, valores, req.user.id));
+  } catch (err) {
+    if (err.issues) return next(badRequest('Parâmetros inválidos.'));
+    next(err);
+  }
+}
+
 async function executar(req, res, next) {
   try {
     await executor.iniciar(req.params.empresaId, req.params.rotina, { origem: 'manual', usuarioId: req.user.id });
@@ -47,4 +57,4 @@ async function executar(req, res, next) {
   }
 }
 
-module.exports = { getPainel, salvarAgendamento, executar };
+module.exports = { getPainel, salvarAgendamento, salvarParametros, executar };

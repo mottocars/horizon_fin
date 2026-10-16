@@ -42,11 +42,22 @@ async function finalizar(job, status, { resumo = null, erro = null } = {}) {
   );
 }
 
+// Parâmetros salvos no Monitor para a empresa e a rotina ({} = os padrões).
+async function parametrosDe(empresaId, chaveRotina) {
+  const { rows } = await pool.query('SELECT parametros FROM monitor_integracoes_parametros WHERE empresa_id = $1 AND rotina = $2', [
+    empresaId,
+    chaveRotina,
+  ]);
+  return rows[0]?.parametros || {};
+}
+
 async function rodar(job, rotina) {
   try {
+    const parametros = rotina.parametros ? await parametrosDe(job.empresaId, job.rotina) : {};
     const resumo = await rotina.executar({
       empresaId: job.empresaId,
       usuarioId: job.usuarioId,
+      parametros,
       progresso: (p) => {
         job.progresso = p || null;
       },

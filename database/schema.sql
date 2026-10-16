@@ -1716,6 +1716,16 @@ CREATE TABLE monitor_integracoes_agendamentos (
 
 -- Histórico de execuções do monitor (manuais e agendadas). status:
 -- executando | sucesso | erro | interrompida (servidor reiniciado no meio).
+-- Parâmetros por empresa e rotina (ex.: dias retroativos do extrato) — migration 2026-10-16-monitor-parametros.sql.
+CREATE TABLE monitor_integracoes_parametros (
+    empresa_id     INTEGER NOT NULL REFERENCES empresas(id) ON DELETE CASCADE,
+    rotina         VARCHAR(40) NOT NULL,
+    parametros     JSONB NOT NULL DEFAULT '{}',
+    atualizado_por INTEGER REFERENCES usuarios(id) ON DELETE SET NULL,
+    atualizado_em  TIMESTAMPTZ,
+    PRIMARY KEY (empresa_id, rotina)
+);
+
 CREATE TABLE monitor_integracoes_execucoes (
     id             SERIAL PRIMARY KEY,
     empresa_id     INTEGER NOT NULL REFERENCES empresas(id) ON DELETE CASCADE,

@@ -17,6 +17,13 @@ async function getIntegracaoAtiva(empresaId) {
 }
 
 const v = (valor) => (valor === undefined ? null : valor);
+
+// 'AAAA-MM-DD' de N dias antes de `data` ('AAAA-MM-DD').
+function diasAntes(data, n) {
+  const [a, m, d] = data.split('-').map(Number);
+  const t = new Date(Date.UTC(a, m - 1, d - n));
+  return t.toISOString().slice(0, 10);
+}
 const MAX_PARAMETROS_POR_QUERY = 60000;
 
 const COLUNAS = [
@@ -34,16 +41,18 @@ function linha(empresaId, conta, r) {
   ];
 }
 
-// Grava os lançamentos de UMA conta (apaga os anteriores dela e reinsere, em lotes).
-async function gravarConta(empresaId, conta, lancamentos, dataAte) {
+// Grava os lançamentos de UMA conta, em lotes. Sem `aPartirDe`: apaga tudo dela e reinsere (base
+// completa). Com `aPartirDe` ('AAAA-MM-DD', dias retroativos): troca só os lançamentos a partir dessa data
+// (e os sem data) e mantém o histórico anterior.
+async function gravarConta(empresaId, conta, lancamentos, dataAte, { aPartirDe = null } = {}) {
   const client = await pool.connect();
   try {
     await client.query('BEGIN');
-    await client.query('DELETE FROM sie_extrato_contas WHERE empresa_id = $1 AND company_id = $2 AND numero_conta = $3', [
-      empresaId,
-      conta.company_id,
-      conta.numero_conta,
-    ]);
+    await client.query(
+      `DELETE FROM sie_extrato_contas WHERE empresa_id = $1 AND company_id = $2 AND numero_conta = $3
+          AND ($4::date IS NULL OR date >= $4::date OR date IS NULL)`,
+      [empresaId, conta.company_id, conta.numero_conta, aPartirDe]
+    );
     const linhas = lancamentos.map((r) => linha(empresaId, conta, r));
     const porLote = Math.floor(MAX_PARAMETROS_POR_QUERY / COLUNAS.length);
     for (let i = 0; i < linhas.length; i += porLote) {
@@ -127,10 +136,13 @@ async function montarRateio(empresaId, db = pool) {
 
 // Todas as contas da empresa, uma a uma (precisa de ao menos uma com "Projeta DFC" — senão não há
 // fluxo pra montar). `onProgress({ texto, paginaAtual, totalPaginas })`.
+// `diasRetroativos` (parâmetro da rotina no Monitor de Integrações): busca só de hoje − N dias até hoje e
+// mantém o histórico anterior; conta que ainda não tem extrato gravado vem completa (senão o saldo dela
+// ficaria sem o passado).
 // Uma conta que o Sienge não devolve (mesmo depois das novas tentativas do siengeFetch) não derruba as
 // outras: ela mantém o extrato que já estava gravado e volta em `falhas` ({ numero_conta, nome,
 // projeta_dfc, erro }) — quem chama decide se é erro (conta com Projeta DFC) ou só aviso.
-async function sincronizar(empresaId, onProgress) {
+async function sincronizar(empresaId, onProgress, { diasRetroativos = null } = {}) {
   const integracao = await getIntegracaoAtiva(empresaId);
   if (!integracao) {
     const e = new Error('Esta empresa não possui uma integração com o Sienge ativa configurada.');
@@ -151,18 +163,28 @@ async function sincronizar(empresaId, onProgress) {
   }
   const credenciais = { tenant: integracao.tenant, username: integracao.username, password: decrypt(integracao.password_enc) };
   const endDate = hojeEmBrasilia();
+  const desde = diasRetroativos ? diasAntes(endDate, diasRetroativos) : null;
+  // Contas que já têm extrato gravado (só essas podem vir pela janela retroativa).
+  const { rows: sincronizadas } = desde
+    ? await pool.query('SELECT company_id, numero_conta FROM sie_extrato_contas_sincronizacoes WHERE empresa_id = $1', [empresaId])
+    : { rows: [] };
+  const jaTem = new Set(sincronizadas.map((r) => `${r.company_id}|${r.numero_conta}`));
   let lancamentos = 0;
+  let completas = 0;
   const falhas = [];
   for (let i = 0; i < contas.length; i += 1) {
     const conta = contas[i];
     const texto = `Conta ${i + 1} de ${contas.length}: ${conta.numero_conta}${conta.nome ? ` · ${conta.nome}` : ''}`;
     onProgress?.({ texto });
+    const aPartirDe = desde && jaTem.has(`${conta.company_id}|${conta.numero_conta}`) ? desde : null;
+    if (desde && !aPartirDe) completas += 1;
     let lista;
     try {
       lista = await fetchAllStatements({
         ...credenciais,
         accountNumber: conta.numero_conta,
         companyId: conta.company_id,
+        startDate: aPartirDe,
         endDate,
         onPagina: (pagina, total) => onProgress?.({ texto, paginaAtual: pagina, totalPaginas: total }),
       });
@@ -172,12 +194,12 @@ async function sincronizar(empresaId, onProgress) {
       falhas.push({ numero_conta: conta.numero_conta, nome: conta.nome, projeta_dfc: conta.projeta_dfc, erro: err.message });
       continue;
     }
-    await gravarConta(empresaId, conta, lista, endDate);
+    await gravarConta(empresaId, conta, lista, endDate, { aPartirDe });
     lancamentos += lista.length;
   }
   onProgress?.({ texto: 'Classificando os lançamentos por centro de custo e natureza' });
   await montarRateio(empresaId);
-  return { contas: contas.length, lancamentos, ate: endDate, falhas };
+  return { contas: contas.length, lancamentos, ate: endDate, desde, completas, falhas };
 }
 
 module.exports = { sincronizar, gravarConta, montarRateio };
