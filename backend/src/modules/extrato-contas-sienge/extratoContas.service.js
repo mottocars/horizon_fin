@@ -1,9 +1,9 @@
 const pool = require('../../config/db');
 const { decrypt } = require('../../utils/crypto');
-const { fetchAllStatements, inicioDoMesAtual } = require('./extratoContas-api.client');
+const { fetchAllStatements, hojeEmBrasilia } = require('./extratoContas-api.client');
 
 // Sincroniza o extrato (v1/accounts-statements) de TODAS as contas da empresa (aba Contas Correntes do
-// DFC Construtoras), conta a conta: busca a base completa da conta (01/01/2000 até o início do mês
+// DFC Construtoras), conta a conta: busca a base completa da conta (01/01/2000 até hoje — o realizado do mês atual vem até o dia da atualização
 // atual) e substitui a que estava gravada pra ela, numa transação por conta. Só as contas com
 // "Projeta DFC" somam no fluxo de caixa e nos saldos (dfc-saldos filtra); as demais estão aqui pra
 // herança da natureza — no mútuo, a perna com a natureza fica na conta de mútuo (pedido do usuário).
@@ -150,7 +150,7 @@ async function sincronizar(empresaId, onProgress) {
     throw e;
   }
   const credenciais = { tenant: integracao.tenant, username: integracao.username, password: decrypt(integracao.password_enc) };
-  const endDate = inicioDoMesAtual();
+  const endDate = hojeEmBrasilia();
   let lancamentos = 0;
   const falhas = [];
   for (let i = 0; i < contas.length; i += 1) {

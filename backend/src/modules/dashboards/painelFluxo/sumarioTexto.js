@@ -81,6 +81,7 @@ const ABAS_SUMARIO = [
         itens: [
           'Saldo inicial › grupos (máscara nível 1) › Entradas e Saídas › linhas (máscara nível 2) › naturezas › Resultado do mês › Saldo final.',
           'Até o mês atual, cada mês tem duas colunas: Realizado (extrato bancário das contas com Projeta DFC) e Projetado (última versão salva do Orçamento). Depois do mês atual, só Projetado.',
+          'O Realizado do mês atual vem até o dia da última atualização do extrato (Orçamentos › Nova versão › Saldos das Contas) — é parcial até o mês fechar.',
           'O mês atual fica destacado em azul.',
         ],
       },

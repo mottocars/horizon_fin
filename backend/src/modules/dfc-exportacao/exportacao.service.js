@@ -313,7 +313,7 @@ async function dados(empresaId, { inicio, fim, centros = [] }) {
   const [realizado, projetado, saldos] = await Promise.all([
     baseRealizado(empresaId, fluxo, infoCentros),
     baseProjetado(empresaId, fluxo, infoCentros),
-    // Abertura de cada mês até o atual (o extrato vai até o início do mês atual).
+    // Abertura de cada mês até o atual (o extrato vai até o dia da última atualização).
     mesesSaldos.length ? dfcSaldos.saldosPorConta(empresaId, mesesSaldos) : [],
   ]);
   const obras = await obrasCef(empresaId, projetado.celulas);

@@ -200,7 +200,7 @@ const ROTINAS = [
     modulo: 'DFC Construtoras',
     nome: 'Saldos das contas (Sienge)',
     descricao:
-      'Busca o extrato completo (desde 01/01/2000 até o início do mês atual) de todas as contas bancárias — as com Projeta DFC formam o saldo e o realizado do fluxo de caixa do DFC Construtoras; as demais (mútuo etc.) servem pra herdar a natureza da outra perna do lançamento.',
+      'Busca o extrato completo (desde 01/01/2000 até hoje) de todas as contas bancárias — as com Projeta DFC formam o saldo e o realizado do fluxo de caixa do DFC Construtoras; as demais (mútuo etc.) servem pra herdar a natureza da outra perna do lançamento.',
     integracao: 'sienge',
     async disponibilidade(empresaId) {
       const motivo = await semSienge(empresaId);

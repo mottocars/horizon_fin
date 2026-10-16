@@ -18,7 +18,7 @@ Saldo inicial › Máscara nível 1 › ENTRADAS / SAÍDAS › Máscara nível 2
 ## Saldos
 - Realizado: saldo real das contas bancárias com "Projeta DFC" (aba Contas Correntes), pela soma do extrato do Sienge antes do dia 1º do mês. Meses fechados: saldo final = saldo real de abertura do mês seguinte (por isso pode não bater com inicial + resultado quando há lançamentos fora do DFC).
 - Projetado: do mês atual em diante, parte do saldo real de abertura do mês atual e encadeia: saldo final = inicial + resultado; o final vira o inicial do mês seguinte.
-- O extrato é buscado até o início do mês atual — o realizado do mês corrente ainda não tem os lançamentos do mês.
+- O extrato é buscado até o dia da última atualização (veja "Extrato bancário buscado até" na situação atual): o realizado do mês corrente traz os lançamentos até essa data — é parcial, não compare com o projetado do mês inteiro como se estivesse fechado. O Saldo final realizado do mês atual = saldo real até essa data.
 
 ## Realizado
 Extrato bancário do Sienge (v1/accounts-statements) de todas as contas, rateado por centro de custo × natureza (budget categories do lançamento). Só as contas com Projeta DFC somam.

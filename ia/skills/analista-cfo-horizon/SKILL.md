@@ -28,8 +28,9 @@ valor e prazo. Responda em português do Brasil, direto, como quem fala com a di
 - **Sinal:** entrada positiva, saída NEGATIVA (no fluxo e ao gravar). Ao falar com o usuário, use "saída de
   R$ 1,2 mi" em vez de "−1,2 mi" quando ficar mais claro.
 - **Meses AAAA-MM.** O **horizonte conta o mês atual**; o histórico são os meses antes dele.
-- **Realizado do mês atual é parcial:** o extrato vai até o início do mês atual (veja "extrato buscado até"
-  no `dfc_guia`). Não compare o realizado do mês corrente com o projetado como se estivesse fechado.
+- **Realizado do mês atual é parcial:** o extrato vai até o dia da última atualização (veja "extrato buscado
+  até" no `dfc_guia`). Não compare o realizado do mês corrente com o projetado do mês inteiro como se
+  estivesse fechado — compare o ritmo (proporção do mês decorrido) ou espere o mês fechar.
 - **Projetado = última versão SALVA do Orçamento.** O projetado de meses passados também é da versão atual.
   Se a dúvida for "por que mudou", use `dfc_orcamento_versoes`.
 - **Consolidado × SPE:** o consolidado soma tudo, inclusive mútuos entre empresas; o "Fôlego de cada SPE"

@@ -6,7 +6,7 @@ module.exports = {
   name: 'dfc_saldos_bancarios',
   description:
     'Saldo de abertura (dia 1º) de cada conta bancária com Projeta DFC em cada mês pedido, pelo extrato do Sienge, e o total — ' +
-    'o Saldo inicial realizado do fluxo. O extrato vai até o início do mês atual, então o saldo mais recente é a abertura do mês atual.',
+    'o Saldo inicial realizado do fluxo. O saldo de cada mês é o de ABERTURA (dia 1º); o extrato vai até o dia da última atualização, então o que já entrou e saiu no mês atual está no realizado do fluxo (dfc_fluxo_caixa).',
   inputSchema: {
     inicio: mesSchema.optional().describe('Mês inicial (AAAA-MM). Sem ele: só o mês atual.'),
     fim: mesSchema.optional().describe('Mês final (AAAA-MM).'),

@@ -2,7 +2,8 @@ const { siengeFetch } = require('../../utils/siengeFetch');
 
 // v1/accounts-statements: extrato de UMA conta bancária (accountNumber + companyId), paginado de
 // 200 em 200 — mesmo esquema de paginação de v1/checking-accounts (contas-bancarias-sienge). Base
-// completa (pedido do usuário): de 01/01/2000 até o início do mês atual.
+// completa (pedido do usuário): de 01/01/2000 até HOJE (dia da atualização, em Brasília) — o realizado
+// do mês atual vem até o dia da última atualização.
 const PAGE_LIMIT = 200;
 const START_DATE = '2000-01-01';
 
@@ -10,10 +11,9 @@ function buildUrl(tenant) {
   return `https://api.sienge.com.br/${tenant}/public/api/v1/accounts-statements`;
 }
 
-// 'AAAA-MM-01' do mês atual (relógio da aplicação).
-function inicioDoMesAtual() {
-  const d = new Date();
-  return `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}-01`;
+// 'AAAA-MM-DD' de hoje em Brasília (o servidor roda em UTC: depois das 21h já seria amanhã).
+function hojeEmBrasilia() {
+  return new Intl.DateTimeFormat('en-CA', { timeZone: 'America/Sao_Paulo', year: 'numeric', month: '2-digit', day: '2-digit' }).format(new Date());
 }
 
 async function fetchPage({ tenant, username, password, accountNumber, companyId, endDate, offset }) {
@@ -69,4 +69,4 @@ async function fetchAllStatements({ tenant, username, password, accountNumber, c
   return todos;
 }
 
-module.exports = { fetchAllStatements, inicioDoMesAtual };
+module.exports = { fetchAllStatements, hojeEmBrasilia };
