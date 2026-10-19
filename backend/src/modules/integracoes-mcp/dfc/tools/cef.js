@@ -84,6 +84,8 @@ module.exports = {
           registro: u.data_registro,
           mes_registro: c.regMes,
           registro_projetado: !u.data_registro,
+          // REGISTRO (data do Geral) | MANUAL (mês informado à mão na aba Repasses) | PARAMETRO (assinatura + prazo)
+          origem_mes_registro: c.origemReg,
           demanda_minima: c.statusDm,
           terreno: r2(u.valor_terreno),
           fgts: r2(u.valor_fgts),

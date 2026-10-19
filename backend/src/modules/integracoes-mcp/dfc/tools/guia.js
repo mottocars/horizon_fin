@@ -36,7 +36,7 @@ Cada valor (centro × natureza × mês) tem uma Origem Projeção, definida na n
 ## Projeção CEF (por obra com contrato Caixa e Parâmetros)
 - Parâmetros: CTO, Teto do financiamento PJ, % Amortização PJ, Taxa de juros ao mês, Data da Demanda Mínima (DM), ciclo, prazo assinatura → registro.
 - % de obra acumulado: Caixa (DCD) até o mês anterior ao atual; Prevision (ou manual) do mês atual em diante; mês sem valor repete o anterior. Δ obra = % do mês − % do mês anterior.
-- Repasses CEF (unidades do Geral, sem o 1º contrato, o da construtora): mês do registro = data de registro, ou assinatura + prazo.
+- Repasses CEF (unidades do Geral, sem o 1º contrato, o da construtora): mês do registro = data de registro; sem ela, o mês informado à mão na aba Repasses (vale sobre o parâmetro e não é desfeito por importação), ou assinatura + prazo.
   VGF medição = financiamento − terreno + subsídio. Novo registro da unidade = terreno + FGTS + VGF medição × % obra no mês do registro.
   Demanda mínima: unidade assinada até a Data da DM — não amortiza.
 - Novo Registro do mês = Σ novo registro das unidades registradas no mês.

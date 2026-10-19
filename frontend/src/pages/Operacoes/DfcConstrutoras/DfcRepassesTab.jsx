@@ -1,8 +1,9 @@
 import { Fragment, useCallback, useEffect, useMemo, useState } from 'react';
-import { Banknote, Calculator, Minus, Plus, TriangleAlert } from 'lucide-react';
+import { Banknote, Calculator, CheckCircle2, Minus, Pencil, Plus, TriangleAlert, X } from 'lucide-react';
 import Modal from '../../../components/Modal';
 import { listRepassesDfc } from '../../../api/dfcRepasses.api';
 import { formatarDataISO } from '../../../utils/datas';
+import RegistroManualModal from './RegistroManualModal';
 
 // Colunas da tabela: as do Geral dos Empreendimentos (sem cálculo) e, no fim, a Demanda Mínima e
 // a calculadora — as colunas calculadas não ficam na grade (pedido do usuário: ficava grande
@@ -10,7 +11,13 @@ import { formatarDataISO } from '../../../utils/datas';
 const COLUNAS = [
   { id: 'mutuario', label: 'Mutuário', tipo: 'texto', largura: 320 },
   { id: 'data_assinatura', label: 'Data Assinatura', tipo: 'data', largura: 105 },
-  { id: 'data_registro', label: 'Data Registro', tipo: 'data', largura: 105 },
+  {
+    id: 'data_registro',
+    label: 'Data Registro',
+    tipo: 'registro',
+    largura: 150,
+    titulo: 'Sem registro no Geral: o mês projetado — assinatura + "Tempo Entre Assinatura e Registro" (Parâmetros) ou o informado à mão. Clique para alterar.',
+  },
   { id: 'valor_financiamento', label: 'Valor Financiamento', tipo: 'moeda', soma: true },
   { id: 'valor_terreno', label: 'Valor Terreno', tipo: 'moeda', soma: true },
   { id: 'valor_subsidio', label: 'Valor Subsídio', tipo: 'moeda', soma: true },
@@ -51,6 +58,48 @@ function rotuloMes(data) {
   return `${MESES[Number(mes) - 1]}/${ano}`;
 }
 
+// Mês atual em Brasília ('AAAA-MM').
+const mesAtual = () => new Date().toLocaleDateString('en-CA', { timeZone: 'America/Sao_Paulo' }).slice(0, 7);
+
+// Coluna "Data Registro": a data do Geral; sem ela, o mês projetado (etiqueta "projetado" = pelo
+// parâmetro, "manual" = informado à mão) — clique abre a janela pra informar outro mês. Mês projetado
+// que já passou (cliente ainda sem registro) fica em vermelho.
+function CelulaRegistro({ unidade: u, onEditar }) {
+  if (u.registro_origem === 'REGISTRO') return formatarDataISO(u.data_registro);
+  if (!u.registro_origem) {
+    return (
+      <span className="text-gray-300" title={u.data_assinatura ? 'Sem "Tempo Entre Assinatura e Registro" nos Parâmetros da obra' : 'Sem data de assinatura'}>
+        —
+      </span>
+    );
+  }
+  const manual = u.registro_origem === 'MANUAL';
+  const passou = u.registro_mes < mesAtual();
+  const dica = manual
+    ? `Informado à mão${u.registro_manual?.usuario ? ` por ${u.registro_manual.usuario}` : ''}. Pelo parâmetro seria ${
+        u.registro_parametro_mes ? rotuloMes(u.registro_parametro_mes) : '—'
+      }.`
+    : 'Projetado: assinatura + "Tempo Entre Assinatura e Registro" (Parâmetros da obra).';
+  return (
+    <button
+      type="button"
+      onClick={onEditar}
+      title={`${dica}${passou ? ' O mês já passou e o cliente não foi registrado.' : ''} Clique para alterar.`}
+      className="group/reg inline-flex items-center gap-1.5 rounded-md px-1.5 py-0.5 transition-colors hover:bg-primary-50"
+    >
+      <span className={`tabular-nums ${passou ? 'font-medium text-red-600' : 'text-gray-700'}`}>{rotuloMes(u.registro_mes)}</span>
+      <span
+        className={`rounded-full px-1.5 py-px text-[10px] font-medium ${
+          manual ? 'bg-amber-50 text-amber-700 ring-1 ring-amber-200' : 'bg-sky-50 text-sky-700 ring-1 ring-sky-100'
+        }`}
+      >
+        {manual ? 'manual' : 'projetado'}
+      </span>
+      <Pencil size={11} className="text-gray-300 group-hover/reg:text-primary-600" />
+    </button>
+  );
+}
+
 function StatusDemanda({ valor }) {
   if (vazio(valor)) return <span className="text-gray-300">—</span>;
   return (
@@ -87,8 +136,12 @@ function CalculoModal({ unidade, empreendimento, onClose }) {
       <div className="mb-4 rounded-lg bg-gray-50 px-3 py-2.5">
         <p className="text-sm font-semibold text-gray-900">{u.mutuario || '—'}</p>
         <p className="mt-0.5 text-xs text-gray-500">
-          Contrato {u.contrato_mutuario} · {empreendimento.name} · Assinatura {formatarDataISO(u.data_assinatura)} · Registro{' '}
-          {formatarDataISO(u.data_registro)}
+          Contrato {u.contrato_mutuario} · {empreendimento.name} · Assinatura {formatarDataISO(u.data_assinatura)} ·{' '}
+          {u.data_registro
+            ? `Registro ${formatarDataISO(u.data_registro)}`
+            : u.registro_mes
+              ? `Registro projetado em ${rotuloMes(u.registro_mes)} (${u.registro_origem === 'MANUAL' ? 'manual' : 'parâmetro'})`
+              : 'Sem registro'}
         </p>
       </div>
 
@@ -98,7 +151,7 @@ function CalculoModal({ unidade, empreendimento, onClose }) {
           formula={
             vazio(pct)
               ? !u.data_registro
-                ? 'Sem data de registro — não há % de obra a considerar.'
+                ? `Ainda sem registro${u.registro_mes ? ` (projetado em ${rotuloMes(u.registro_mes)}; o % de obra desse mês entra na Projeção CEF)` : ''} — aqui não há % de obra a considerar.`
                 : 'Sem DCD liberado do contrato — não há avanço PLS.'
               : `Avanço PLS (DCD) acumulado em ${rotuloMes(u.data_registro)}, mês da data de registro.`
           }
@@ -159,12 +212,16 @@ function CalculoModal({ unidade, empreendimento, onClose }) {
 // assinatura (o da construtora). Drilldown igual ao da aba Avanços: nível 1 = empreendimento
 // (com os totais), nível 2 = cada unidade. As colunas calculadas ficam na janela da calculadora
 // (fim da linha). Começa tudo fechado; com busca, abre os empreendimentos que têm unidade encontrada.
+// Cliente sem registro: a coluna Data Registro mostra o mês projetado e permite informar outro, cliente a
+// cliente (RegistroManualModal) — a Projeção CEF da obra é recalculada com ele.
 export default function DfcRepassesTab({ empresaId, search = '' }) {
   const [dados, setDados] = useState(null);
   const [carregando, setCarregando] = useState(false);
   const [erroCarga, setErroCarga] = useState('');
   const [abertos, setAbertos] = useState([]);
   const [calculo, setCalculo] = useState(null); // { unidade, empreendimento }
+  const [registro, setRegistro] = useState(null); // { unidade, empreendimento } — janela do mês do registro
+  const [aviso, setAviso] = useState(null); // { tipo: 'ok' | 'atencao', texto } depois de salvar
 
   const carregar = useCallback(() => {
     if (!empresaId) return;
@@ -196,6 +253,23 @@ export default function DfcRepassesTab({ empresaId, search = '' }) {
       .filter((e) => e.unidades.length > 0);
   }, [dados, termo]);
 
+  // Mês salvo: recarrega a grade (o mês e a etiqueta vêm do backend) e conta o que aconteceu.
+  function registroSalvo(resposta, mes) {
+    const { unidade, empreendimento } = registro;
+    setRegistro(null);
+    const quem = unidade.mutuario || `contrato ${unidade.contrato_mutuario}`;
+    const oQue = mes ? `${quem} projetado para ${rotuloMes(mes)}` : `${quem} voltou ao mês do parâmetro`;
+    setAviso(
+      resposta.aviso
+        ? { tipo: 'atencao', texto: `${oQue}. ${resposta.aviso}` }
+        : {
+            tipo: 'ok',
+            texto: `${oQue}. Projeção CEF de ${empreendimento.name} recalculada — entra no Orçamento na próxima versão salva (Nova versão).`,
+          }
+    );
+    carregar();
+  }
+
   function alternar(id) {
     setAbertos((atual) => (atual.includes(id) ? atual.filter((v) => v !== id) : [...atual, id]));
   }
@@ -216,6 +290,20 @@ export default function DfcRepassesTab({ empresaId, search = '' }) {
     // min-w-fit: com tabela mais larga que a tela, o quadro branco cresce junto (e a página rola na
     // horizontal) em vez de a tabela vazar pra fora dele.
     <div className="min-w-fit rounded-card rounded-tl-none bg-white p-5 shadow-card">
+      {aviso && (
+        <div
+          role="status"
+          className={`mb-3 flex items-start gap-2 rounded-lg px-3 py-2 text-xs ${
+            aviso.tipo === 'ok' ? 'bg-emerald-50 text-emerald-700' : 'bg-amber-50 text-amber-700'
+          }`}
+        >
+          {aviso.tipo === 'ok' ? <CheckCircle2 size={14} className="mt-px shrink-0" /> : <TriangleAlert size={14} className="mt-px shrink-0" />}
+          <span className="min-w-0 flex-1">{aviso.texto}</span>
+          <button type="button" onClick={() => setAviso(null)} aria-label="Fechar aviso" className="shrink-0 opacity-60 hover:opacity-100">
+            <X size={14} />
+          </button>
+        </div>
+      )}
       {carregando && !dados ? (
         <div className="py-12 text-center text-sm text-gray-400">Carregando...</div>
       ) : erroCarga ? (
@@ -313,6 +401,14 @@ export default function DfcRepassesTab({ empresaId, search = '' }) {
                           conteudo = valores.length ? dinheiro(valores.reduce((s, v) => s + Number(v), 0)) : '—';
                         } else if (c.tipo === 'status' && temUnidades) {
                           conteudo = `${qtdDemanda} sim`;
+                        } else if (c.tipo === 'registro' && temUnidades) {
+                          const proj = e.unidades.filter((u) => u.registro_origem === 'PARAMETRO').length;
+                          const man = e.unidades.filter((u) => u.registro_origem === 'MANUAL').length;
+                          conteudo = (
+                            <span className="text-[11px] font-medium text-gray-500">
+                              {[proj && `${proj} proj.`, man && `${man} manual`].filter(Boolean).join(' · ')}
+                            </span>
+                          );
                         }
                         return (
                           <td
@@ -338,11 +434,13 @@ export default function DfcRepassesTab({ empresaId, search = '' }) {
                                   ? 'sticky left-0 z-10 truncate border-r border-r-gray-200 pl-9 font-medium text-gray-800'
                                   : 'border-l text-gray-700'
                               } ${alinhamento(c)} ${
-                                c.tipo !== 'calculo' && vazio(u[c.id]) ? 'text-gray-300' : ''
+                                c.tipo !== 'calculo' && c.tipo !== 'registro' && vazio(u[c.id]) ? 'text-gray-300' : ''
                               }`}
                             >
                               {c.tipo === 'status' ? (
                                 <StatusDemanda valor={u[c.id]} />
+                              ) : c.tipo === 'registro' ? (
+                                <CelulaRegistro unidade={u} onEditar={() => setRegistro({ unidade: u, empreendimento: e })} />
                               ) : c.tipo === 'calculo' ? (
                                 <button
                                   type="button"
@@ -372,6 +470,7 @@ export default function DfcRepassesTab({ empresaId, search = '' }) {
         empreendimento={calculo?.empreendimento}
         onClose={() => setCalculo(null)}
       />
+      <RegistroManualModal alvo={registro} empresaId={empresaId} onClose={() => setRegistro(null)} onSalvo={registroSalvo} />
     </div>
   );
 }

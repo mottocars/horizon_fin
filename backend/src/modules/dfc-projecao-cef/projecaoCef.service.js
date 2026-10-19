@@ -122,18 +122,25 @@ async function obraAcumulado(empresaId, siengeId, inicio, fim) {
 }
 
 // Unidades do Geral do contrato, sem o primeiro contrato por data de assinatura (o da construtora)
-// — mesma regra da aba Repasses. Contrato e mutuário vão junto só pra identificar a unidade no
-// rastreio do Detalhamento (o motor não usa).
+// — mesma regra da aba Repasses — com o mês do registro informado à mão na aba Repasses
+// (dfc_repasses_registro_manual; só conta enquanto o Geral não trouxer a data de registro). Contrato
+// e mutuário vão junto só pra identificar a unidade no rastreio do Detalhamento (o motor não usa).
 async function unidadesGeral(empresaId, contrato) {
   const { rows } = await pool.query(
-    `SELECT data_assinatura_contrato AS data_assinatura, data_inclusao_dados_registro_cri AS data_registro,
-            valor_financiamento, valor_financiamento_terreno AS valor_terreno,
-            valor_desconto_subsidio_complementar AS valor_subsidio, valor_fgts,
-            numero_contrato_unidade AS contrato_unidade, nome_mutuario
+    `SELECT x.data_assinatura_contrato AS data_assinatura, x.data_inclusao_dados_registro_cri AS data_registro,
+            x.valor_financiamento, x.valor_financiamento_terreno AS valor_terreno,
+            x.valor_desconto_subsidio_complementar AS valor_subsidio, x.valor_fgts,
+            x.numero_contrato_unidade AS contrato_unidade, x.nome_mutuario,
+            to_char(m.mes, 'YYYY-MM') AS mes_registro_manual, um.nome AS registro_manual_por, m.atualizado_em AS registro_manual_em
        FROM (SELECT u.*, ROW_NUMBER() OVER (ORDER BY u.data_assinatura_contrato ASC NULLS LAST, u.id ASC) AS ordem
                FROM extrato_unidades u
               WHERE u.empresa_id = $1 AND u.contrato_empreendimento = $2) x
-      WHERE x.ordem > 1`,
+       LEFT JOIN dfc_repasses_registro_manual m
+              ON m.empresa_id = x.empresa_id AND m.contrato_empreendimento = x.contrato_empreendimento
+             AND m.numero_contrato_unidade = x.numero_contrato_unidade
+       LEFT JOIN usuarios um ON um.id = m.usuario_id
+      WHERE x.ordem > 1
+      ORDER BY x.ordem`,
     [empresaId, contrato]
   );
   return rows;

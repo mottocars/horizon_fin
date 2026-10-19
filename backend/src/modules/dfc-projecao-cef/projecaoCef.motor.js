@@ -9,6 +9,8 @@
 //   o mês anterior ao atual e Prevision (ou manual) do mês atual em diante — a mesma regra da linha
 //   da obra em Avanços Obras. No script era DCD + avanço mensal do Prevision.
 // - Vendas (colunas B, C, I, AD, AE) ficam de fora: não entram em nenhuma das saídas usadas.
+// - Mês do registro de unidade ainda não registrada: o informado à mão na aba Repasses
+//   (`mes_registro_manual`, 19/10/2026) vale sobre assinatura + prazo; a data real do Geral vale sobre os dois.
 
 // 'AAAA-MM' de uma data ('AAAA-MM-DD' ou Date).
 function mesDe(data) {
@@ -48,8 +50,17 @@ function calcularUnidades(unidades, obraAcumulado, dataDemandaMinima, prazoRegis
     const sub = n(u.valor_subsidio);
     const fgts = n(u.valor_fgts);
     const assinMes = mesDe(u.data_assinatura);
-    // Sem registro ainda: projeta o registro pra assinatura + "Tempo Entre Assinatura e Registro".
-    const regMes = u.data_registro ? mesDe(u.data_registro) : assinMes ? somarMeses(assinMes, Math.trunc(prazoRegistro || 0)) : null;
+    // Sem registro ainda: o mês informado à mão (aba Repasses) ou assinatura + "Tempo Entre Assinatura
+    // e Registro". `origemReg`: REGISTRO | MANUAL | PARAMETRO (null sem assinatura).
+    const origemReg = u.data_registro ? 'REGISTRO' : u.mes_registro_manual ? 'MANUAL' : assinMes ? 'PARAMETRO' : null;
+    const regMes =
+      origemReg === 'REGISTRO'
+        ? mesDe(u.data_registro)
+        : origemReg === 'MANUAL'
+          ? mesDe(u.mes_registro_manual)
+          : origemReg === 'PARAMETRO'
+            ? somarMeses(assinMes, Math.trunc(prazoRegistro || 0))
+            : null;
     // Mês do registro fora do ciclo conta como 0% (igual ao .get(r_mes, 0.0) do script).
     const pctObra = regMes && obraAcumulado.has(regMes) ? obraAcumulado.get(regMes) : 0;
     const vgf = fin + sub + fgts;
@@ -60,6 +71,7 @@ function calcularUnidades(unidades, obraAcumulado, dataDemandaMinima, prazoRegis
     return {
       assinMes,
       regMes,
+      origemReg,
       vgf,
       vgfMedicao,
       totalNovoRegistro: novoRegistroMedicao + novoRegistroVista,
@@ -72,8 +84,8 @@ function calcularUnidades(unidades, obraAcumulado, dataDemandaMinima, prazoRegis
  * build_projecao.
  * @param {object} p  parâmetros em FRAÇÃO: { cto, tetoPj, coefGarantia, amortPj, taxaJuros,
  *                    dataDemandaMinima, dataInicio, dataFim, prazoRegistro }
- * @param {Array} unidades  linhas do Geral: { data_assinatura, data_registro, valor_financiamento,
- *                    valor_terreno, valor_subsidio, valor_fgts }
+ * @param {Array} unidades  linhas do Geral: { data_assinatura, data_registro, mes_registro_manual,
+ *                    valor_financiamento, valor_terreno, valor_subsidio, valor_fgts }
  * @param {Map<string, number>} obraAcumulado  'AAAA-MM' -> % obra acumulado (0 a 1) de cada mês do ciclo
  * @returns {Array} uma linha por mês do ciclo
  */

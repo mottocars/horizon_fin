@@ -236,7 +236,7 @@ module.exports = function planilhaCef(workbook, obra, d, meta, usados, nome) {
     ['Unidade (contrato)', '0', ''],
     ['Assinatura', FORMATOS.data, ''],
     ['Registro (Geral)', FORMATOS.data, 'Vazio = não registrada'],
-    ['Mês do registro', FORMATOS.mes, 'Registro ou assinatura + prazo'],
+    ['Mês do registro', FORMATOS.mes, 'Registro, mês manual (Repasses) ou assinatura + prazo'],
     ['Mutuário', null, ''],
     ['Terreno', FORMATOS.moeda, ''],
     ['FGTS', FORMATOS.moeda, ''],
@@ -266,15 +266,27 @@ module.exports = function planilhaCef(workbook, obra, d, meta, usados, nome) {
     const c = porUnidade[i];
     const pctObra = c.regMes && mapa.has(c.regMes) ? mapa.get(c.regMes) : 0;
     const fora = c.regMes && (c.regMes < primeiroMes || c.regMes > ultimoMes);
-    const situacao = `${un.data_registro ? 'Registrada' : un.data_assinatura ? 'Registro projetado' : 'Sem assinatura'}${fora ? ' · fora do ciclo' : ''}`;
+    const manual = c.origemReg === 'MANUAL';
+    const situacao = `${
+      un.data_registro
+        ? 'Registrada'
+        : manual
+          ? `Mês manual${un.registro_manual_por ? ` (${un.registro_manual_por})` : ''}`
+          : un.data_assinatura
+            ? 'Registro projetado'
+            : 'Sem assinatura'
+    }${fora ? ' · fora do ciclo' : ''}`;
     const valores = [
       /^\d+$/.test(un.contrato_unidade || '') ? Number(un.contrato_unidade) : un.contrato_unidade || '',
       dataExcel(un.data_assinatura),
       dataExcel(un.data_registro),
-      {
-        formula: `IF(C${r}<>"",DATE(YEAR(C${r}),MONTH(C${r}),1),IF(B${r}<>"",EDATE(DATE(YEAR(B${r}),MONTH(B${r}),1),${NOME('PRAZO')}),""))`,
-        result: c.regMes ? dataExcel(c.regMes) : '',
-      },
+      // Mês informado à mão na aba Repasses: valor fixo (não vem da fórmula do prazo).
+      manual
+        ? dataExcel(c.regMes)
+        : {
+            formula: `IF(C${r}<>"",DATE(YEAR(C${r}),MONTH(C${r}),1),IF(B${r}<>"",EDATE(DATE(YEAR(B${r}),MONTH(B${r}),1),${NOME('PRAZO')}),""))`,
+            result: c.regMes ? dataExcel(c.regMes) : '',
+          },
       un.nome_mutuario || '',
       Number(un.valor_terreno || 0),
       Number(un.valor_fgts || 0),

@@ -438,7 +438,12 @@ async function cef(empresaId, centroId, origem, mes, centrosInfo) {
     mutuario: u.nome_mutuario || '—',
     assinatura: iso(u.data_assinatura),
     registro: c.regMes,
-    situacao: u.data_registro ? `Registrada em ${dataBr(u.data_registro)}` : `Projetada (assinatura + ${p.prazoRegistro} m)`,
+    situacao:
+      c.origemReg === 'REGISTRO'
+        ? `Registrada em ${dataBr(u.data_registro)}`
+        : c.origemReg === 'MANUAL'
+          ? `Mês informado à mão (aba Repasses${u.registro_manual_por ? `, por ${u.registro_manual_por}` : ''})`
+          : `Projetada (assinatura + ${p.prazoRegistro} m)`,
     terreno: Number(u.valor_terreno || 0),
     fgts: Number(u.valor_fgts || 0),
     a_vista: Number(u.valor_terreno || 0) + Number(u.valor_fgts || 0),

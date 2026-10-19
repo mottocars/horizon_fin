@@ -8,5 +8,6 @@ const router = Router();
 router.use(authMiddleware);
 router.param('empresaId', paramEmpresa);
 router.get('/:empresaId', controller.list);
+router.put('/:empresaId/registro-manual', controller.salvarRegistroManual);
 
 module.exports = router;
