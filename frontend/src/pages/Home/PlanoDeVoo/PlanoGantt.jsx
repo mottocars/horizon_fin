@@ -198,6 +198,8 @@ export default function PlanoGantt({ planoId, recarregarToken, onVoltar, onEdita
   const [zoom, setZoom] = useState('mes'); // abre sempre na visão mensal
   // macros com o drilldown aberto — ao abrir o plano, todas começam recolhidas
   const [abertas, setAbertas] = useState(() => new Set());
+  // status desmarcados na legenda: as micro tarefas deles somem do Gantt
+  const [ocultos, setOcultos] = useState(() => new Set());
   const [novaMacro, setNovaMacro] = useState('');
   const [salvandoMacro, setSalvandoMacro] = useState(false);
   const [editandoMacro, setEditandoMacro] = useState(null);
@@ -368,12 +370,29 @@ export default function PlanoGantt({ planoId, recarregarToken, onVoltar, onEdita
 
       {/* barra de ferramentas */}
       <div className="flex flex-wrap items-center justify-between gap-3">
-        <div className="flex flex-wrap items-center gap-3 text-[11px] text-gray-500">
-          {BUCKETS.map((b) => (
-            <span key={b.id} className="flex items-center gap-1.5">
-              <span className={`h-2.5 w-2.5 rounded-sm ${b.barra}`} /> {b.titulo}
-            </span>
-          ))}
+        <div className="-ml-1.5 flex flex-wrap items-center gap-1 text-[11px] text-gray-500">
+          {BUCKETS.map((b) => {
+            const visivel = !ocultos.has(b.id);
+            return (
+              <button
+                key={b.id}
+                type="button"
+                aria-pressed={visivel}
+                onClick={() =>
+                  setOcultos((s) => {
+                    const n = new Set(s);
+                    if (n.has(b.id)) n.delete(b.id);
+                    else n.add(b.id);
+                    return n;
+                  })
+                }
+                title={visivel ? `Ocultar as atividades em ${b.titulo}` : `Mostrar as atividades em ${b.titulo}`}
+                className={`flex items-center gap-1.5 rounded-md px-1.5 py-1 transition hover:bg-gray-100 ${visivel ? '' : 'text-gray-300 line-through'}`}
+              >
+                <span className={`h-2.5 w-2.5 rounded-sm ${visivel ? b.barra : 'border border-gray-300 bg-white'}`} /> {b.titulo}
+              </button>
+            );
+          })}
         </div>
         <div className="flex items-center gap-2">
           <button
@@ -458,7 +477,8 @@ export default function PlanoGantt({ planoId, recarregarToken, onVoltar, onEdita
             )}
 
             {macros.map((macro, i) => {
-              const micros = cards.filter((c) => c.macro_id === macro.id);
+              const daMacro = cards.filter((c) => c.macro_id === macro.id);
+              const micros = daMacro.filter((c) => !ocultos.has(c.bucket));
               const aberta = abertas.has(macro.id);
               return (
                 <Fragment key={macro.id}>
@@ -570,7 +590,7 @@ export default function PlanoGantt({ planoId, recarregarToken, onVoltar, onEdita
                   {aberta && micros.length === 0 && (
                     <div className="relative flex h-9 border-b border-gray-100">
                       <div className="sticky left-0 z-20 flex shrink-0 items-center border-r border-gray-200 bg-white pl-9 text-[11px] italic text-gray-400" style={{ width: LARGURA_ESQUERDA }}>
-                        Nenhuma atividade nesta macro
+                        {daMacro.length ? 'Nenhuma atividade nos status marcados' : 'Nenhuma atividade nesta macro'}
                       </div>
                     </div>
                   )}
