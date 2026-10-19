@@ -16,6 +16,7 @@ import {
   FilePlus2,
   History,
   Loader2,
+  Lock,
   Minimize2,
   Minus,
   Plus,
@@ -273,6 +274,7 @@ const DfcOrcamentosTab = forwardRef(function DfcOrcamentosTab(
     origens = [],
     versao: versaoEscolhida = null,
     novaVersaoToken = 0,
+    novaVersaoPeriodos = 'todos',
     onVersoes,
     onVersaoSalva,
     refreshToken = 0,
@@ -363,13 +365,14 @@ const DfcOrcamentosTab = forwardRef(function DfcOrcamentosTab(
   useEffect(() => {
     if (!empresaId || !novaVersaoToken) return;
     setCarregandoValores(true);
-    Promise.all([getRascunhoOrcamentoDfc(empresaId), listOrcamentoInformadoDfc(empresaId)])
+    Promise.all([getRascunhoOrcamentoDfc(empresaId, { periodos: novaVersaoPeriodos }), listOrcamentoInformadoDfc(empresaId)])
       .then(([rascunhoNovo, valoresInformados]) => {
         setInformados(Object.fromEntries(valoresInformados.map((v) => [`${v.centro_id}|${v.sienge_id}|${v.mes}`, v.valor])));
         setNova(rascunhoNovo);
       })
       .catch((err) => setErroCarga(err.response?.data?.message || 'Não foi possível montar a nova versão.'))
       .finally(() => setCarregandoValores(false));
+    // eslint-disable-next-line react-hooks/exhaustive-deps -- a escolha de períodos chega junto com o token
   }, [empresaId, novaVersaoToken]);
 
   // Lista de versões pro filtro do topo.
@@ -454,6 +457,10 @@ const DfcOrcamentosTab = forwardRef(function DfcOrcamentosTab(
   // Nova versão na tela (montada a partir das bases) ou uma versão salva.
   const previa = emNova && Boolean(nova);
   const temVersao = previa ? nova.versao_base !== null : Boolean(salva?.versao);
+  // Nova versão "do mês atual em diante": os meses antes de `a_partir_de` ficam com a versão salva
+  // (o backend já devolve esses valores e não os altera ao salvar); na grade, cadeado e sem digitação.
+  const travadoAntes = previa ? nova.a_partir_de || null : null;
+  const travado = useCallback((m) => Boolean(travadoAntes) && m < travadoAntes, [travadoAntes]);
 
   // Valor digitado (rascunho) de uma conta "HORIZON - INFORMADO" — o que aparece no campo.
   const rascunho = useCallback((sid, conta, mes) => informados[`${sid}|${conta}|${mes}`] ?? null, [informados]);
@@ -472,14 +479,16 @@ const DfcOrcamentosTab = forwardRef(function DfcOrcamentosTab(
     if (previa) {
       const dasBases = mapaDe(nova.valores);
       return {
-        valorConta: (sid, conta, mes) => (contaInformada(sid, conta) ? rascunho(sid, conta, mes) : dasBases(sid, conta, mes)),
+        // Mês travado: o valor da versão (já em `nova.valores`), mesmo nas contas digitadas.
+        valorConta: (sid, conta, mes) =>
+          contaInformada(sid, conta) && !travado(mes) ? rascunho(sid, conta, mes) : dasBases(sid, conta, mes),
         valorVersao: mapaDe(nova.valores_versao),
         execucaoPorCentro: execucoes,
       };
     }
     const daVersao = mapaDe(salva?.valores);
     return { valorConta: daVersao, valorVersao: daVersao, execucaoPorCentro: execucoes };
-  }, [dados, salva, nova, previa, contaInformada, rascunho]);
+  }, [dados, salva, nova, previa, contaInformada, rascunho, travado]);
   const centavos = (v) => (v === null || v === undefined ? null : Math.round(v * 100));
 
   function trocarInformados(centroId, contaId, valoresPorMes) {
@@ -546,13 +555,17 @@ const DfcOrcamentosTab = forwardRef(function DfcOrcamentosTab(
     const proxima = (salva?.versoes?.[0]?.numero || 0) + 1;
     const ok = await confirm({
       title: 'Salvar versão do orçamento',
-      description: `A nova versão vira a versão ${proxima} — a última, que o Orçamento passa a mostrar. Cada valor que entrou, mudou ou saiu fica registrado no log de alterações.`,
+      description: `A nova versão vira a versão ${proxima} — a última, que o Orçamento passa a mostrar. ${
+        travadoAntes
+          ? `Só mudam os meses a partir de ${rotuloMes(travadoAntes)}; os anteriores continuam como na versão ${nova.versao_base}. `
+          : 'Todos os períodos podem mudar, inclusive os meses passados. '
+      }Cada valor que entrou, mudou ou saiu fica registrado no log de alterações.`,
       confirmLabel: 'Salvar versão',
     });
     if (!ok) return;
     setSalvandoVersao(true);
     try {
-      const r = await salvarVersaoOrcamentoDfc(empresaId);
+      const r = await salvarVersaoOrcamentoDfc(empresaId, { periodos: nova.periodos || 'todos' });
       await alert({
         title: `Versão ${r.numero} salva`,
         description: `${r.inclusoes} inclusão(ões), ${r.alteracoes} alteração(ões) e ${r.exclusoes} exclusão(ões) — cada uma registrada no log de alterações do valor.`,
@@ -739,29 +752,29 @@ const DfcOrcamentosTab = forwardRef(function DfcOrcamentosTab(
   // Células de valor do mês (`valorMes(m)` -> número ou null). Saída (negativo) em vermelho.
   // `aoMenu(e, mes)`: botão direito (só nas linhas de conta). Na prévia, `valorMesVersao(m)` (o
   // da versão salva) marca em laranja o que vai mudar ao salvar.
-  const celulas = (nivel, valorMes, aoMenu, valorMesVersao) =>
-    meses.map((m) => {
-      const v = valorMes ? valorMes(m) : null;
-      const vazio = v === null || v === 0;
-      // Sem versão nenhuma tudo é novo — não destaca (o laranja perderia o sentido).
-      const compara = previa && temVersao && valorMesVersao;
-      const vVersao = compara ? valorMesVersao(m) : null;
-      const muda = compara && centavos(v || null) !== centavos(vVersao || null);
-      return (
-        <td
-          key={m}
-          title={muda ? `Na versão salva: ${vVersao ? dinheiro(vVersao) : 'sem valor'}` : undefined}
-          onContextMenu={aoMenu ? (e) => aoMenu(e, m) : undefined}
-          className={`border-b border-l px-2 text-right tabular-nums ${
-            nivel === 0 ? 'border-gray-200 bg-gray-50 py-2 group-hover/linha:bg-gray-100' : 'border-gray-100 bg-white py-1.5 group-hover/linha:bg-gray-50'
-          } ${vazio ? 'text-gray-300' : v < 0 ? 'text-red-600' : 'text-gray-800'} ${nivel <= 1 && !vazio ? 'font-semibold' : ''} ${
-            muda ? '!bg-orange-50 shadow-[inset_0_-2px_0_0_rgb(251,146,60)]' : ''
-          }`}
-        >
-          {vazio ? '—' : dinheiro(v)}
-        </td>
-      );
-    });
+  const celulaMes = (nivel, m, valorMes, aoMenu, valorMesVersao) => {
+    const v = valorMes ? valorMes(m) : null;
+    const vazio = v === null || v === 0;
+    // Sem versão nenhuma tudo é novo — não destaca (o laranja perderia o sentido).
+    const compara = previa && temVersao && valorMesVersao;
+    const vVersao = compara ? valorMesVersao(m) : null;
+    const muda = compara && centavos(v || null) !== centavos(vVersao || null);
+    return (
+      <td
+        key={m}
+        title={muda ? `Na versão salva: ${vVersao ? dinheiro(vVersao) : 'sem valor'}` : travado(m) ? 'Mês travado: mantém a versão salva' : undefined}
+        onContextMenu={aoMenu ? (e) => aoMenu(e, m) : undefined}
+        className={`border-b border-l px-2 text-right tabular-nums ${
+          nivel === 0 ? 'border-gray-200 bg-gray-50 py-2 group-hover/linha:bg-gray-100' : 'border-gray-100 bg-white py-1.5 group-hover/linha:bg-gray-50'
+        } ${vazio ? 'text-gray-300' : v < 0 ? 'text-red-600' : 'text-gray-800'} ${nivel <= 1 && !vazio ? 'font-semibold' : ''} ${
+          muda ? '!bg-orange-50 shadow-[inset_0_-2px_0_0_rgb(251,146,60)]' : ''
+        }`}
+      >
+        {vazio ? '—' : dinheiro(v)}
+      </td>
+    );
+  };
+  const celulas = (nivel, valorMes, aoMenu, valorMesVersao) => meses.map((m) => celulaMes(nivel, m, valorMes, aoMenu, valorMesVersao));
 
   // Total da linha no período da tela (soma dos meses) — coluna "Total", fixa logo depois da
   // primeira, com o fundo azul do cabeçalho (pedido do usuário). null quando nenhum mês tem valor.
@@ -900,6 +913,12 @@ const DfcOrcamentosTab = forwardRef(function DfcOrcamentosTab(
                   ? `Em laranja, o que difere da versão ${nova.versao_base} (passe o mouse pra ver o valor dela). Confira e salve pra virar a última versão.`
                   : 'Confira e salve pra virar a versão 1.'}
               </span>
+              {travadoAntes && temVersao && (
+                <span className="flex items-center gap-1 rounded-full bg-blue-50 px-2.5 py-0.5 font-medium text-blue-700 ring-1 ring-blue-200">
+                  <Lock size={12} className="shrink-0" />
+                  Meses antes de {rotuloMes(travadoAntes)} travados
+                </span>
+              )}
             </>
           ) : emNova ? (
             <span className="flex items-center gap-1.5 text-gray-500">
@@ -1018,12 +1037,15 @@ const DfcOrcamentosTab = forwardRef(function DfcOrcamentosTab(
                   {meses.map((m) => (
                     <th
                       key={m}
-                      title={m === mesAtual ? 'Mês atual' : undefined}
+                      title={m === mesAtual ? 'Mês atual' : travado(m) ? `Travado: mantém a versão ${nova.versao_base}` : undefined}
                       className={`sticky top-0 z-20 border-b-2 border-l border-b-blue-500 border-l-blue-100 px-2 py-2.5 text-right text-xs font-medium uppercase tracking-wide ${
                         m === mesAtual ? 'bg-blue-100 font-semibold text-blue-800' : 'bg-blue-50 text-blue-700'
                       }`}
                     >
-                      {rotuloMes(m)}
+                      <span className="inline-flex items-center gap-1">
+                        {travado(m) && <Lock size={10} className="shrink-0 text-blue-400" />}
+                        {rotuloMes(m)}
+                      </span>
                     </th>
                   ))}
                 </tr>
@@ -1111,25 +1133,35 @@ const DfcOrcamentosTab = forwardRef(function DfcOrcamentosTab(
                                                 (m) => valorVersao(centro.sienge_id, conta.sienge_id, m)
                                               )}
                                               {informada
-                                                ? meses.map((m) => (
-                                                    <td
-                                                      key={m}
-                                                      className="border-b border-l border-gray-100 bg-white px-1 py-1 group-hover/linha:bg-gray-50"
-                                                    >
-                                                      <CelulaInformada
-                                                        valor={rascunho(centro.sienge_id, conta.sienge_id, m)}
-                                                        valorVersao={valorVersao(centro.sienge_id, conta.sienge_id, m)}
-                                                        pendente={
-                                                          centavos(rascunho(centro.sienge_id, conta.sienge_id, m)) !==
-                                                          centavos(valorVersao(centro.sienge_id, conta.sienge_id, m))
-                                                        }
-                                                        onCommit={(novo) => salvarInformado(centro.sienge_id, conta.sienge_id, m, novo)}
-                                                        onMenu={(e, valorDigitado) =>
-                                                          abrirMenu(e, { centro, conta, mes: m, informada: true, valorDigitado })
-                                                        }
-                                                      />
-                                                    </td>
-                                                  ))
+                                                ? meses.map((m) =>
+                                                    travado(m) ? (
+                                                      celulaMes(
+                                                        3,
+                                                        m,
+                                                        (mes) => valorConta(centro.sienge_id, conta.sienge_id, mes),
+                                                        (e, mes) => abrirMenu(e, { centro, conta, mes, informada: false }),
+                                                        (mes) => valorVersao(centro.sienge_id, conta.sienge_id, mes)
+                                                      )
+                                                    ) : (
+                                                      <td
+                                                        key={m}
+                                                        className="border-b border-l border-gray-100 bg-white px-1 py-1 group-hover/linha:bg-gray-50"
+                                                      >
+                                                        <CelulaInformada
+                                                          valor={rascunho(centro.sienge_id, conta.sienge_id, m)}
+                                                          valorVersao={valorVersao(centro.sienge_id, conta.sienge_id, m)}
+                                                          pendente={
+                                                            centavos(rascunho(centro.sienge_id, conta.sienge_id, m)) !==
+                                                            centavos(valorVersao(centro.sienge_id, conta.sienge_id, m))
+                                                          }
+                                                          onCommit={(novo) => salvarInformado(centro.sienge_id, conta.sienge_id, m, novo)}
+                                                          onMenu={(e, valorDigitado) =>
+                                                            abrirMenu(e, { centro, conta, mes: m, informada: true, valorDigitado })
+                                                          }
+                                                        />
+                                                      </td>
+                                                    )
+                                                  )
                                                 : celulas(
                                                     3,
                                                     (m) => valorConta(centro.sienge_id, conta.sienge_id, m),

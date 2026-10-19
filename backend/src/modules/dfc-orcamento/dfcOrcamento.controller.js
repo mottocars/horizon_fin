@@ -33,9 +33,13 @@ async function orcamento(req, res, next) {
   }
 }
 
+// Períodos que a nova versão altera (ver service.PERIODOS); sem nada = todos.
+const periodosSchema = z.enum(service.PERIODOS).default('todos');
+
 async function rascunho(req, res, next) {
   try {
-    res.json(await service.rascunho(empresaIdSchema.parse(req.params.empresaId)));
+    const periodos = periodosSchema.parse(req.query.periodos);
+    res.json(await service.rascunho(empresaIdSchema.parse(req.params.empresaId), { periodos }));
   } catch (err) {
     tratar(err, next);
   }
@@ -43,7 +47,8 @@ async function rascunho(req, res, next) {
 
 async function salvarVersao(req, res, next) {
   try {
-    res.status(201).json(await service.salvarVersao(empresaIdSchema.parse(req.params.empresaId), req.user.id));
+    const periodos = periodosSchema.parse(req.body?.periodos);
+    res.status(201).json(await service.salvarVersao(empresaIdSchema.parse(req.params.empresaId), req.user.id, { periodos }));
   } catch (err) {
     tratar(err, next);
   }

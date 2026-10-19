@@ -36,6 +36,23 @@ function erro(status, message) {
 }
 
 const chaveDe = (centroId, siengeId, mes) => `${centroId}|${siengeId}|${mes}`;
+
+// Períodos que a nova versão altera (escolha da janela "Nova versão"): 'todos' recalcula inclusive os
+// meses passados; 'atual_em_diante' só do mês atual (Brasília) em diante — os meses anteriores ficam
+// travados com os valores da última versão salva.
+const PERIODOS = ['todos', 'atual_em_diante'];
+const mesAtualBrasilia = () => new Date().toLocaleDateString('en-CA', { timeZone: 'America/Sao_Paulo' }).slice(0, 7);
+const aPartirDe = (periodos) => (periodos === 'atual_em_diante' ? mesAtualBrasilia() : null);
+
+// Meses travados: antes de `mes`, vale o consolidado (o que estiver nas fontes é ignorado).
+function travarAntesDe(atual, cons, mes) {
+  if (!mes) return atual;
+  const travado = new Map([...atual].filter(([, v]) => v.mes >= mes));
+  cons.forEach((v, chave) => {
+    if (v.mes < mes) travado.set(chave, { ...v });
+  });
+  return travado;
+}
 const centavos = (v) => Math.round(Number(v) * 100);
 const arredondar = (v) => Math.round(Number(v) * 100) / 100;
 
@@ -372,12 +389,15 @@ async function orcamento(empresaId, numero = null) {
 // "Nova versão": os valores de hoje de todas as bases (Projeção CEF, Aging do Sienge, digitados em
 // HORIZON - INFORMADO) — o que "Salvar Versão" vai gravar —, os da última versão (pra comparar) e o
 // que muda em relação a ela.
-async function rascunho(empresaId) {
-  const [{ valores: atual, contexto }, cons, versao] = await Promise.all([
+// `periodos`: ver PERIODOS — com 'atual_em_diante', os meses anteriores vêm da última versão.
+async function rascunho(empresaId, { periodos = 'todos' } = {}) {
+  const [{ valores: fontes, contexto }, cons, versao] = await Promise.all([
     valoresAtuais(pool, empresaId),
     consolidado(pool, empresaId),
     ultimaVersao(pool, empresaId),
   ]);
+  const travadoAntes = aPartirDe(periodos);
+  const atual = travarAntesDe(fontes, cons, travadoAntes);
   const avisos = Object.entries(contexto.bases)
     .filter(([, base]) => !base.parcelas)
     .map(
@@ -403,6 +423,8 @@ async function rascunho(empresaId) {
   return {
     gerado_em: new Date(),
     versao_base: versao ? versao.numero : null,
+    periodos,
+    a_partir_de: travadoAntes,
     valores: [...atual.values()].map(semChave),
     valores_versao: [...cons.values()].map(semChave),
     pendencias: contar(diferencas(atual, cons, contexto)),
@@ -414,18 +436,21 @@ async function rascunho(empresaId) {
 // mudou = não cria versão (mesmo critério dos Parâmetros).
 // `origem` (conector MCP "DFC CONSTRUTORAS (ALTERA ORÇAMENTO)"): grava só as mudanças daquela origem
 // (HORIZON - INFORMADO); as pendências das outras fontes continuam pendentes para a próxima versão.
-async function salvarVersao(empresaId, usuarioId, { origem = null } = {}) {
+// `periodos` (ver PERIODOS): com 'atual_em_diante', os meses anteriores ao atual não mudam.
+async function salvarVersao(empresaId, usuarioId, { origem = null, periodos = 'todos' } = {}) {
   const client = await pool.connect();
   try {
     await client.query('BEGIN');
     // Uma gravação de versão por empresa de cada vez.
     await client.query('SELECT pg_advisory_xact_lock(73110, $1)', [empresaId]);
     const agora = new Date();
-    const [{ valores: atual, contexto }, cons, anterior] = await Promise.all([
+    const [{ valores: fontes, contexto }, cons, anterior] = await Promise.all([
       valoresAtuais(client, empresaId),
       consolidado(client, empresaId),
       ultimaVersao(client, empresaId),
     ]);
+    const travadoAntes = aPartirDe(periodos);
+    const atual = travarAntesDe(fontes, cons, travadoAntes);
     const lista = diferencas(atual, cons, contexto, usuarioId, agora).filter((d) => !origem || (d.info.origem === origem && d.info.fonte === 'MANUAL'));
     if (!lista.length) {
       throw erro(
@@ -433,7 +458,9 @@ async function salvarVersao(empresaId, usuarioId, { origem = null } = {}) {
         origem
           ? 'Não há valores informados pendentes de salvar.'
           : anterior
-            ? `Nada mudou desde a versão ${anterior.numero} — não há o que salvar.`
+            ? `Nada mudou desde a versão ${anterior.numero}${
+                travadoAntes ? ` do mês atual em diante (os meses anteriores estão travados)` : ''
+              } — não há o que salvar.`
             : 'Ainda não há nenhum valor no Orçamento pra salvar.'
       );
     }
@@ -495,7 +522,7 @@ async function salvarVersao(empresaId, usuarioId, { origem = null } = {}) {
     );
 
     await client.query('COMMIT');
-    return { numero, criado_em: agora, valores: totalValores, ...resumo };
+    return { numero, criado_em: agora, valores: totalValores, periodos, a_partir_de: travadoAntes, ...resumo };
   } catch (e) {
     await client.query('ROLLBACK');
     throw e;
@@ -566,4 +593,4 @@ async function pendenciasDaOrigem(empresaId, origem) {
     });
 }
 
-module.exports = { orcamento, rascunho, salvarVersao, log, pendenciasDaOrigem };
+module.exports = { PERIODOS, orcamento, rascunho, salvarVersao, log, pendenciasDaOrigem };

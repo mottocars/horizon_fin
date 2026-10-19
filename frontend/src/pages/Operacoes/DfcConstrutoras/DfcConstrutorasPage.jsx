@@ -356,6 +356,7 @@ export default function DfcConstrutorasPage() {
   const [versaoOrcamento, setVersaoOrcamento] = useState(null);
   const [versoesOrcamento, setVersoesOrcamento] = useState({ lista: [], temNova: false });
   const [novaVersaoToken, setNovaVersaoToken] = useState(0);
+  const [novaVersaoPeriodos, setNovaVersaoPeriodos] = useState('atual_em_diante');
   const [novaVersaoOrcamentoAberta, setNovaVersaoOrcamentoAberta] = useState(false);
   const orcamentoEmNova = versaoOrcamento === 'nova';
   // "Tela cheia" da grade do Orçamento (ícone no topo); sai pelo botão da própria tela cheia ou com
@@ -885,6 +886,7 @@ export default function DfcConstrutorasPage() {
             origens={origensOrcamento}
             versao={versaoOrcamento}
             novaVersaoToken={novaVersaoToken}
+            novaVersaoPeriodos={novaVersaoPeriodos}
             onVersoes={(lista, temNova) => setVersoesOrcamento({ lista, temNova })}
             onVersaoSalva={() => setVersaoOrcamento(null)}
             telaCheia={orcamentoTelaCheia}
@@ -976,8 +978,9 @@ export default function DfcConstrutorasPage() {
         open={novaVersaoOrcamentoAberta}
         onClose={() => setNovaVersaoOrcamentoAberta(false)}
         empresaId={empresaId}
-        onGerar={() => {
+        onGerar={({ periodos }) => {
           setNovaVersaoOrcamentoAberta(false);
+          setNovaVersaoPeriodos(periodos);
           setVersaoOrcamento('nova');
           setNovaVersaoToken((n) => n + 1);
         }}

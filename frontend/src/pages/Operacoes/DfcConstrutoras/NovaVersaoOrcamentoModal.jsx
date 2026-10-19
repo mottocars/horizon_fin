@@ -1,5 +1,18 @@
 import { useEffect, useState } from 'react';
-import { BriefcaseBusiness, CheckCircle2, FilePlus2, FileSpreadsheet, Globe, HandCoins, Landmark, Receipt, Wallet, XCircle } from 'lucide-react';
+import {
+  BriefcaseBusiness,
+  CalendarRange,
+  CheckCircle2,
+  FilePlus2,
+  FileSpreadsheet,
+  Globe,
+  HandCoins,
+  Landmark,
+  Lock,
+  Receipt,
+  Wallet,
+  XCircle,
+} from 'lucide-react';
 import Modal from '../../../components/Modal';
 import Button from '../../../components/Button';
 import { atualizarProjecaoCef, listElegiveisProjecaoCef } from '../../../api/dfcProjecaoCef.api';
@@ -35,6 +48,38 @@ const BASES = {
   empresarial: { base: getBaseEmpresarialDfc, atualizar: atualizarBaseEmpresarialDfc, execucao: getExecucaoEmpresarialDfc },
   saldos: { base: getBaseSaldosContasDfc, atualizar: atualizarSaldosContasDfc, execucao: getExecucaoSaldosContasDfc },
 };
+
+// Mês atual em Brasília (o mesmo que o backend usa pra travar) -> "OUT/2026".
+const MESES_CAB = ['JAN', 'FEV', 'MAR', 'ABR', 'MAI', 'JUN', 'JUL', 'AGO', 'SET', 'OUT', 'NOV', 'DEZ'];
+function rotuloMesAtual() {
+  const [ano, mes] = new Date().toLocaleDateString('en-CA', { timeZone: 'America/Sao_Paulo' }).split('-');
+  return `${MESES_CAB[Number(mes) - 1]}/${ano}`;
+}
+
+// Última escolha de períodos (conveniência do navegador; sem ela, o padrão é travar o passado).
+const CHAVE_PERIODOS = 'dfc.novaVersao.periodos';
+function periodosSalvos() {
+  try {
+    return localStorage.getItem(CHAVE_PERIODOS) === 'todos' ? 'todos' : 'atual_em_diante';
+  } catch {
+    return 'atual_em_diante';
+  }
+}
+
+const OPCOES_PERIODOS = [
+  {
+    id: 'atual_em_diante',
+    icone: Lock,
+    titulo: 'Do mês atual em diante',
+    dica: (mes) => `Os meses antes de ${mes} ficam travados com os valores da versão salva.`,
+  },
+  {
+    id: 'todos',
+    icone: CalendarRange,
+    titulo: 'Todos os períodos',
+    dica: () => 'Recalcula também os meses passados com as bases de hoje.',
+  },
+];
 
 function dataHora(v) {
   return v
@@ -151,6 +196,16 @@ export default function NovaVersaoOrcamentoModal({
   titulo = 'Nova versão',
   rotuloFinal = 'Nova versão',
 }) {
+  const [periodos, setPeriodos] = useState(periodosSalvos);
+  const escolherPeriodos = (id) => {
+    setPeriodos(id);
+    try {
+      localStorage.setItem(CHAVE_PERIODOS, id);
+    } catch {
+      // sem armazenamento: vale só nesta janela
+    }
+  };
+  const mesAtual = rotuloMesAtual();
   const saldos = useBase(open, empresaId, 'saldos');
   const receber = useBase(open, empresaId, 'receber');
   const pagar = useBase(open, empresaId, 'pagar');
@@ -358,11 +413,38 @@ export default function NovaVersaoOrcamentoModal({
           }}
         />
 
-        <div className="flex justify-end gap-2 border-t border-gray-100 pt-3">
+        <div className="border-t border-gray-100 pt-3">
+          <p className="mb-1.5 text-xs font-medium text-gray-600">Períodos que a nova versão altera</p>
+          <div className="grid grid-cols-2 gap-2" role="radiogroup" aria-label="Períodos que a nova versão altera">
+            {OPCOES_PERIODOS.map(({ id, icone: Icone, titulo: rotulo, dica }) => {
+              const marcado = periodos === id;
+              return (
+                <button
+                  key={id}
+                  type="button"
+                  role="radio"
+                  aria-checked={marcado}
+                  onClick={() => escolherPeriodos(id)}
+                  className={`flex items-start gap-2 rounded-lg border px-3 py-2 text-left transition-colors ${
+                    marcado ? 'border-primary-500 bg-primary-50 ring-1 ring-primary-500' : 'border-gray-200 hover:bg-gray-50'
+                  }`}
+                >
+                  <Icone size={15} className={`mt-0.5 shrink-0 ${marcado ? 'text-primary-600' : 'text-gray-400'}`} />
+                  <span className="min-w-0">
+                    <span className={`block text-xs font-semibold ${marcado ? 'text-primary-700' : 'text-gray-800'}`}>{rotulo}</span>
+                    <span className="block text-[11px] leading-snug text-gray-500">{dica(mesAtual)}</span>
+                  </span>
+                </button>
+              );
+            })}
+          </div>
+        </div>
+
+        <div className="flex justify-end gap-2 pt-1">
           <Button type="button" variant="secondary" onClick={onClose} disabled={cefRodando}>
             Cancelar
           </Button>
-          <Button type="button" onClick={onGerar} disabled={ocupado} title={ocupado ? 'Espere as atualizações terminarem' : undefined}>
+          <Button type="button" onClick={() => onGerar({ periodos })} disabled={ocupado} title={ocupado ? 'Espere as atualizações terminarem' : undefined}>
             <FilePlus2 size={16} />
             {rotuloFinal}
           </Button>

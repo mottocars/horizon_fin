@@ -7,15 +7,16 @@ export function getOrcamentoDfc(empresaId, numero = null) {
 }
 
 // "Nova versão": valores de hoje das bases (o que "Salvar Versão" vai gravar) — { gerado_em,
-// versao_base, valores, valores_versao (os da última versão), pendencias, avisos }.
-export function getRascunhoOrcamentoDfc(empresaId) {
-  return http.get(`/dfc-orcamento/${empresaId}/rascunho`).then((res) => res.data);
+// versao_base, periodos, a_partir_de, valores, valores_versao (os da última versão), pendencias, avisos }.
+// `periodos`: 'todos' | 'atual_em_diante' (meses antes de `a_partir_de` ficam com a última versão).
+export function getRascunhoOrcamentoDfc(empresaId, { periodos = 'todos' } = {}) {
+  return http.get(`/dfc-orcamento/${empresaId}/rascunho`, { params: { periodos } }).then((res) => res.data);
 }
 
 // "Salvar Versão": consolida as fontes de hoje. Devolve { numero, criado_em, valores, inclusoes,
 // alteracoes, exclusoes, ... }; 409 quando nada mudou.
-export function salvarVersaoOrcamentoDfc(empresaId) {
-  return http.post(`/dfc-orcamento/${empresaId}/versoes`).then((res) => res.data);
+export function salvarVersaoOrcamentoDfc(empresaId, { periodos = 'todos' } = {}) {
+  return http.post(`/dfc-orcamento/${empresaId}/versoes`, { periodos }).then((res) => res.data);
 }
 
 // Log de alterações de um valor: { historico: [...], pendente: {...} | null }.
