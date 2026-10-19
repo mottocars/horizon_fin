@@ -309,6 +309,7 @@ export default function PlanoGantt({ planoId, recarregarToken, onVoltar, onEdita
   const larguraTempo = (faixa.fim - faixa.ini + 1) * px;
   const xHoje = (numDia(hoje) - faixa.ini) * px + px / 2;
   const pessoas = [plano.criador_id, ...plano.membros];
+  const filtrando = ocultos.size > 0;
 
   // fins de semana sombreados (só no zoom de dias)
   const fimDeSemana = [];
@@ -476,9 +477,18 @@ export default function PlanoGantt({ planoId, recarregarToken, onVoltar, onEdita
               </div>
             )}
 
+            {filtrando && macros.length > 0 && !macros.some((m) => cards.some((c) => c.macro_id === m.id && !ocultos.has(c.bucket))) && (
+              <div className="relative flex">
+                <div className="sticky left-0 z-20 shrink-0 border-r border-gray-200 bg-white px-4 py-10 text-center text-sm text-gray-500" style={{ width: LARGURA_ESQUERDA }}>
+                  Nenhuma atividade nos status marcados
+                </div>
+              </div>
+            )}
+
             {macros.map((macro, i) => {
-              const daMacro = cards.filter((c) => c.macro_id === macro.id);
-              const micros = daMacro.filter((c) => !ocultos.has(c.bucket));
+              const micros = cards.filter((c) => c.macro_id === macro.id && !ocultos.has(c.bucket));
+              // com status desmarcado na legenda, a macro sem nenhuma atividade visível some também
+              if (filtrando && micros.length === 0) return null;
               const aberta = abertas.has(macro.id);
               return (
                 <Fragment key={macro.id}>
@@ -590,7 +600,7 @@ export default function PlanoGantt({ planoId, recarregarToken, onVoltar, onEdita
                   {aberta && micros.length === 0 && (
                     <div className="relative flex h-9 border-b border-gray-100">
                       <div className="sticky left-0 z-20 flex shrink-0 items-center border-r border-gray-200 bg-white pl-9 text-[11px] italic text-gray-400" style={{ width: LARGURA_ESQUERDA }}>
-                        {daMacro.length ? 'Nenhuma atividade nos status marcados' : 'Nenhuma atividade nesta macro'}
+                        Nenhuma atividade nesta macro
                       </div>
                     </div>
                   )}
