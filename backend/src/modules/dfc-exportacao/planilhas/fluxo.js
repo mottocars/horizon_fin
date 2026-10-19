@@ -5,9 +5,14 @@ const { CORES, borda, preencher, cabecalho, impressao } = require('../../../util
 // Saldo final projetado = inicial + resultado, e o inicial do mês seguinte puxa o final do anterior.
 // Meses fechados do Realizado mantêm o saldo real do banco (valor, não fórmula). Linhas agrupadas
 // com o contorno do Excel (botões 1-4).
+// Desvio % (como na tela): em cada mês com Realizado, depois do Projetado — fórmula viva
+// (Realizado − Projetado) ÷ |Projetado|; positivo = melhor para o caixa; vazio sem projetado.
 
 const MESES_CAB = ['JAN', 'FEV', 'MAR', 'ABR', 'MAI', 'JUN', 'JUL', 'AGO', 'SET', 'OUT', 'NOV', 'DEZ'];
 const FORMATO = '#,##0;[Red]-#,##0;""'; // sem casas, negativo vermelho, zero em branco (como na tela)
+const FORMATO_DESVIO = '[Color10]+0.0%;[Red]-0.0%;0.0%'; // verde positivo, vermelho negativo
+const ROXO = 'FF6366F1';
+const valorDe = (v) => (v && typeof v === 'object' ? v.result : v) || 0;
 const LINHA_MESES = 6;
 const LINHA_TIPOS = 7;
 
@@ -23,26 +28,28 @@ const NIVEL = { n1: 0, lado: 1, n2: 2, conta: 3 };
 
 module.exports = function planilhaFluxo(workbook, d, meta) {
   const f = d.fluxo;
+  // Colunas desta aba: as do fluxo + o Desvio % logo depois do Projetado de cada mês com Realizado.
+  const colunas = f.colunas.flatMap((c) => (c.tipo === 'P' && c.mes <= f.mesAtual ? [c, { mes: c.mes, tipo: 'D' }] : [c]));
   const sheet = workbook.addWorksheet('Fluxo de Caixa', {
     views: [{ state: 'frozen', xSplit: 1, ySplit: LINHA_TIPOS, showGridLines: false }],
     properties: { outlineProperties: { summaryBelow: false, summaryRight: false } },
   });
-  const ultima = 1 + f.colunas.length;
+  const ultima = 1 + colunas.length;
   sheet.properties.outlineLevelRow = 3; // botões 1-4 do contorno
   sheet.getColumn(1).width = 58;
-  f.colunas.forEach((_, i) => (sheet.getColumn(i + 2).width = 14));
+  colunas.forEach((c, i) => (sheet.getColumn(i + 2).width = c.tipo === 'D' ? 10 : 14));
   cabecalho(workbook, sheet, {
     titulo: 'Fluxo de Caixa',
     subtitulo:
-      'Realizado: extrato das contas com Projeta DFC (rateio por centro e natureza). Projetado: versão salva do Orçamento. Botões 1-4 à esquerda recolhem os níveis.',
+      'Realizado: extrato das contas com Projeta DFC (rateio por centro e natureza). Projetado: versão salva do Orçamento. Desvio % = (Realizado − Projetado) ÷ |Projetado| (positivo = melhor para o caixa; mês atual: realizado até hoje). Botões 1-4 à esquerda recolhem os níveis.',
     filtros: meta.filtros,
     gerado: meta.gerado,
     ultimaColuna: ultima,
   });
 
-  const colDe = new Map(f.colunas.map((c, i) => [`${c.mes}|${c.tipo}`, i + 2]));
+  const colDe = new Map(colunas.map((c, i) => [`${c.mes}|${c.tipo}`, i + 2]));
   const letra = (col) => sheet.getColumn(col).letter;
-  const inicioDeMes = (i) => i === 0 || f.colunas[i - 1].mes !== f.colunas[i].mes;
+  const inicioDeMes = (i) => i === 0 || colunas[i - 1].mes !== colunas[i].mes;
 
   // Cabeçalho da grade: mês (mesclado sobre Realizado/Projetado) e o tipo.
   const cA = sheet.getCell(LINHA_MESES, 1);
@@ -52,7 +59,7 @@ module.exports = function planilhaFluxo(workbook, d, meta) {
   cA.alignment = { vertical: 'bottom', horizontal: 'left', indent: 1 };
   cA.border = { bottom: borda(CORES.CINZA_BORDA) };
   f.meses.forEach((m) => {
-    const cols = f.colunas.map((c, i) => [c, i + 2]).filter(([c]) => c.mes === m);
+    const cols = colunas.map((c, i) => [c, i + 2]).filter(([c]) => c.mes === m);
     const de = cols[0][1];
     const ate = cols[cols.length - 1][1];
     if (ate > de) sheet.mergeCells(LINHA_MESES, de, LINHA_MESES, ate);
@@ -71,11 +78,11 @@ module.exports = function planilhaFluxo(workbook, d, meta) {
       cel.border = { left: col === de ? borda(CORES.CINZA_BORDA) : undefined };
     }
   });
-  f.colunas.forEach((c, i) => {
+  colunas.forEach((c, i) => {
     const cel = sheet.getCell(LINHA_TIPOS, i + 2);
     const atual = c.mes === f.mesAtual;
-    cel.value = c.tipo === 'R' ? 'REALIZADO' : 'PROJETADO';
-    cel.font = { bold: true, size: 8, color: { argb: c.tipo === 'R' ? CORES.TEAL : CORES.CINZA } };
+    cel.value = c.tipo === 'R' ? 'REALIZADO' : c.tipo === 'P' ? 'PROJETADO' : 'DESVIO %';
+    cel.font = { bold: true, size: 8, color: { argb: c.tipo === 'R' ? CORES.TEAL : c.tipo === 'D' ? ROXO : CORES.CINZA } };
     cel.alignment = { vertical: 'middle', horizontal: 'center' };
     cel.fill = preencher(atual ? CORES.AZUL_CLARO : CORES.BRANCO);
     cel.border = {
@@ -99,13 +106,31 @@ module.exports = function planilhaFluxo(workbook, d, meta) {
     r.fill = preencher(e.fill);
     r.alignment = { vertical: 'middle', horizontal: 'left', indent: tipo === 'saldo' || tipo === 'resultado' ? 1 : (NIVEL[tipo] ?? 0) * 2 + 1 };
     r.border = { bottom: borda(), top: separar ? borda(CORES.CINZA_ESCURO) : undefined };
-    f.colunas.forEach((c, i) => {
+    const valores = new Map();
+    colunas.forEach((c, i) => {
+      if (c.tipo !== 'D') valores.set(`${c.mes}|${c.tipo}`, valor(c, `${c.mes}|${c.tipo}`, i + 2));
+    });
+    colunas.forEach((c, i) => {
       const col = i + 2;
       const cel = row.getCell(col);
-      const v = valor(c, `${c.mes}|${c.tipo}`, col);
-      if (v !== null && v !== undefined) cel.value = v;
-      cel.numFmt = FORMATO;
-      cel.font = { ...e.font, color: undefined };
+      if (c.tipo === 'D') {
+        // Desvio % sobre as duas células da mesma linha (N() trata a célula vazia como zero).
+        const rc = `${letra(colDe.get(`${c.mes}|R`))}${linha}`;
+        const pc = `${letra(colDe.get(`${c.mes}|P`))}${linha}`;
+        const real = valorDe(valores.get(`${c.mes}|R`));
+        const proj = valorDe(valores.get(`${c.mes}|P`));
+        cel.value = {
+          formula: `IF(N(${pc})=0,"",(N(${rc})-N(${pc}))/ABS(N(${pc})))`,
+          result: proj ? (real - proj) / Math.abs(proj) : '',
+        };
+        cel.numFmt = FORMATO_DESVIO;
+        cel.font = { ...e.font, color: undefined, size: 8, italic: c.mes === f.mesAtual };
+      } else {
+        const v = valores.get(`${c.mes}|${c.tipo}`);
+        if (v !== null && v !== undefined) cel.value = v;
+        cel.numFmt = FORMATO;
+        cel.font = { ...e.font, color: undefined };
+      }
       cel.fill = preencher(e.fill);
       cel.alignment = { vertical: 'middle', horizontal: 'center' };
       cel.border = {
