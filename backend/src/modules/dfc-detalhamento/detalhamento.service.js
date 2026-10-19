@@ -30,7 +30,12 @@ const ROTULO_ORIGEM = {
   HORIZON_ORCAMENTO_INFORMADO: 'Horizon · Informado',
 };
 
-const ROTULO_FONTE_AVANCO = { CAIXA: 'Caixa (DCD)', PREVISION: 'Prevision', MANUAL: 'Avanço manual' };
+const ROTULO_FONTE_AVANCO = {
+  CAIXA: 'Caixa (DCD)',
+  PREVISION_MES: 'acumulado do mês anterior + avanço do mês no Prevision',
+  PREVISION: 'Prevision',
+  MANUAL: 'Avanço manual',
+};
 
 const r2 = (v) => Math.round((Number(v) + Number.EPSILON) * 100) / 100;
 const col = (chave, rotulo, formato = 'texto') => ({ chave, rotulo, formato });
@@ -503,7 +508,7 @@ async function cef(empresaId, centroId, origem, mes, centrosInfo) {
     });
     blocos.push({
       tipo: 'nota',
-      texto: `VGF medição = financiamento − terreno + subsídio. % obra = % acumulado da obra no mês do registro (aba Avanços: ${{ CAIXA_PREVISION: 'Caixa até o mês anterior ao atual, Prevision daí em diante', CAIXA: 'Caixa até o mês anterior ao atual, manual daí em diante', PREVISION: 'Prevision', MANUAL: 'avanço manual', SEM_DADOS: 'sem avanço' }[cenario]}). Unidade sem registro no Geral é projetada para a assinatura + ${p.prazoRegistro} meses. O primeiro contrato do Geral (o da construtora) não entra.`,
+      texto: `VGF medição = financiamento − terreno + subsídio. % obra = % acumulado da obra no mês do registro (aba Avanços: ${{ CAIXA_PREVISION: 'Caixa até o mês anterior ao atual; daí em diante, soma o avanço do mês do Prevision', CAIXA: 'Caixa até o mês anterior ao atual, manual daí em diante', PREVISION: 'Prevision', MANUAL: 'avanço manual', SEM_DADOS: 'sem avanço' }[cenario]}). Unidade sem registro no Geral é projetada para a assinatura + ${p.prazoRegistro} meses. O primeiro contrato do Geral (o da construtora) não entra.`,
     });
   } else if (origem === 'CEF_MEDICAO' || origem === 'CEF_CREDITO_PJ') {
     // VGF medição acumulado: unidades registradas em meses do ciclo antes deste (o motor só acumula

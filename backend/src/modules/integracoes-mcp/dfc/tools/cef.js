@@ -4,7 +4,7 @@ const { z, mesSchema, r2, ferramenta, resolverCentros } = require('./comum');
 // A Projeção CEF de uma obra refeita hoje (mesmo motor), com parâmetros, avanço e unidades — a conta
 // completa que leva aos valores de Novo Registro, Medição, Crédito PJ, Juros e Amortização.
 
-const FONTE = { CAIXA: 'Caixa (DCD)', PREVISION: 'Prevision', MANUAL: 'Manual' };
+const FONTE = { CAIXA: 'Caixa (DCD)', PREVISION_MES: 'Acumulado anterior + avanço do mês no Prevision', PREVISION: 'Prevision', MANUAL: 'Manual' };
 const pct = (v) => (v === null || v === undefined ? null : r2(Number(v) * 100));
 
 module.exports = {

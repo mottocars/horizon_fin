@@ -15,7 +15,7 @@ const dataBr = (v) => {
   const s = v instanceof Date ? v.toISOString() : String(v);
   return s.slice(0, 10).split('-').reverse().join('/');
 };
-const ROTULO_FONTE = { CAIXA: 'Caixa (DCD)', PREVISION: 'Prevision', MANUAL: 'Manual' };
+const ROTULO_FONTE = { CAIXA: 'Caixa (DCD)', PREVISION_MES: 'Anterior + avanço do mês (Prevision)', PREVISION: 'Prevision', MANUAL: 'Manual' };
 const mesIso = (v) => (v instanceof Date ? v.toISOString() : String(v)).slice(0, 7);
 
 const MEMORIA = [
@@ -23,7 +23,7 @@ const MEMORIA = [
   ['Caixa (DCD)', 10, 'pct', 'Avanço acumulado da Caixa'],
   ['Prevision', 10, 'pct', 'Avanço acumulado do Prevision'],
   ['Manual', 10, 'pct', 'Avanço manual'],
-  ['Fonte do avanço', 24, null, 'Caixa até o mês anterior ao atual; Prevision/manual depois'],
+  ['Fonte do avanço', 24, null, 'Caixa até o mês anterior ao atual; depois, anterior + avanço do mês do Prevision (ou manual)'],
   ['% obra acumulado', 10, 'pct', 'Avanço usado (vazio = repete o anterior)'],
   ['Δ obra no mês', 10, 'pct', '= % do mês − % do mês anterior'],
   ['Registros no mês', 9, 'int', 'Unidades com registro no mês'],
@@ -66,7 +66,7 @@ function textoCenario(cenario, mesAtual, somarMeses) {
   const depois = rotuloMes(mesAtual);
   return (
     {
-      CAIXA_PREVISION: `Caixa (DCD) até ${antes}; Prevision a partir de ${depois}`,
+      CAIXA_PREVISION: `Caixa (DCD) até ${antes}; a partir de ${depois}, + avanço do mês do Prevision`,
       CAIXA: `Caixa (DCD) até ${antes}; avanço manual a partir de ${depois}`,
       PREVISION: 'Prevision em todos os meses',
       MANUAL: 'Avanço manual em todos os meses',
@@ -177,7 +177,8 @@ module.exports = function planilhaCef(workbook, obra, d, meta, usados, nome) {
     const fonte = fontes.get(l.mes);
     const formulaF =
       {
-        CAIXA_PREVISION: `IF(A${r}<${corte},${escolha('B', r, Fp)},${escolha('C', r, Fp)})`,
+        // Do mês atual em diante: % anterior + avanço do mês do Prevision (diferença entre os acumulados).
+        CAIXA_PREVISION: `IF(A${r}<${corte},${escolha('B', r, Fp)},MIN(MAX(${Fp}+C${r}-${prim ? '0' : `C${ant}`},0),1))`,
         CAIXA: `IF(A${r}<${corte},${escolha('B', r, Fp)},${escolha('D', r, Fp)})`,
         PREVISION: escolha('C', r, Fp),
         MANUAL: escolha('D', r, Fp),

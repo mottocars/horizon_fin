@@ -20,6 +20,11 @@ function mesesEntre(inicio, fim) {
   return meses;
 }
 
+function mesAnterior(anoMes) {
+  const [ano, mes] = anoMes.split('-').map(Number);
+  return mes === 1 ? `${ano - 1}-12` : `${ano}-${String(mes - 1).padStart(2, '0')}`;
+}
+
 // Acumulado até cada mês da lista, a partir de { 'AAAA-MM': avanço do mês } (soma tudo que veio
 // antes, inclusive meses anteriores ao período pedido).
 function acumulado(porMes, meses) {
@@ -38,6 +43,13 @@ function acumulado(porMes, meses) {
 //   primária/secundária escolhida no cadastro do centro de custo).
 // - Manual: % acumulado informado à mão por mês (dfc_avanco_manual) — a tela usa quando a obra
 //   não tem Prevision (ver os cenários em DfcAvancosTab.jsx).
+// - Encadeado (obra com Caixa e Prevision, do mês atual em diante — pedido do usuário, 19/10/2026): o
+//   acumulado da Caixa no mês anterior ao atual + o avanço DO MÊS do Prevision (não o acumulado dele),
+//   mês a mês, entre 0 e 100%. Assim a diferença entre as duas fontes não cai inteira no mês atual. O
+//   avanço do mês sai da diferença entre os acumulados do Prevision (os mesmos valores da linha
+//   Prevision), pra conta bater com a do dossiê Excel. É o que a linha da obra e a Projeção CEF usam.
+//   Com o Prevision à frente da Caixa, a obra termina abaixo de 100% (a diferença não é compensada em
+//   mês nenhum) — decisão do usuário; com a Caixa à frente, chega a 100% antes e para.
 // Obras = centros com Tipo = Obra e "Projeta DFC" marcado (aba Centros Custos).
 async function avancos(empresaId, inicio, fim) {
   const meses = mesesEntre(inicio, fim);
@@ -117,6 +129,22 @@ async function avancos(empresaId, inicio, fim) {
         });
       const previsionAcumulado = Object.keys(porMesPrev).length ? acumulado(porMesPrev, meses) : null;
 
+      let encadeado = null;
+      if (plsAcumulado && previsionAcumulado && meses[meses.length - 1] >= mesAtual) {
+        const antes = mesAnterior(mesAtual);
+        // Caixa no mês anterior ao atual (parada no último mês liberado, se ele for antes).
+        const base = acumulado(porMesPls, [ultimoMes < antes ? ultimoMes : antes]);
+        const ate = meses[meses.length - 1];
+        const mesesPrev = mesesEntre(`${antes}-01`, `${ate}-01`);
+        const prevAcc = acumulado(porMesPrev, mesesPrev);
+        let v = Object.values(base)[0];
+        encadeado = {};
+        mesesPrev.slice(1).forEach((m, i) => {
+          v = Math.min(Math.max(v + (prevAcc[m] - prevAcc[mesesPrev[i]]), 0), 100);
+          if (meses.includes(m)) encadeado[m] = round2(v);
+        });
+      }
+
       return {
         sienge_id: o.sienge_id,
         name: o.name,
@@ -125,6 +153,7 @@ async function avancos(empresaId, inicio, fim) {
         ultimo_mes_liberado: ultimoMes,
         pls: plsAcumulado,
         prevision: previsionAcumulado,
+        encadeado,
         manual: Object.fromEntries(
           manual.filter((r) => r.sienge_id === o.sienge_id).map((r) => [r.mes, Number(r.percentual)])
         ),

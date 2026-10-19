@@ -45,7 +45,8 @@ const LARGURA_MES = 88;
 
 // Os 4 cenários (pedido do usuário), decididos pelos dados que existem pra obra:
 // - Caixa + Prevision: linhas PLS, Prevision e Desvio; a obra mostra Caixa até o mês anterior ao
-//   atual e Prevision do mês atual em diante.
+//   atual e, do mês atual em diante, o acumulado anterior + o avanço DO MÊS do Prevision (não o
+//   acumulado dele — `encadeado`, calculado no backend dfc-avancos).
 // - Só Caixa: linhas PLS e Manual (editável do mês atual em diante); a obra mostra Caixa até o mês
 //   anterior e o Manual do mês atual em diante.
 // - Só Prevision: linha Prevision; a obra mostra tudo Prevision.
@@ -64,7 +65,9 @@ function cenario(obra) {
 function consolidado(obra, cen, mes, mesAtual) {
   const manual = obra.manual?.[mes];
   if (cen === 'CAIXA_PREVISION') {
-    return mes < mesAtual ? { valor: obra.pls[mes], fonte: 'Caixa (DCD)' } : { valor: obra.prevision[mes], fonte: 'Prevision' };
+    return mes < mesAtual
+      ? { valor: obra.pls[mes], fonte: 'Caixa (DCD)' }
+      : { valor: obra.encadeado?.[mes], fonte: 'Acumulado do mês anterior + avanço do mês no Prevision' };
   }
   if (cen === 'CAIXA') {
     return mes < mesAtual ? { valor: obra.pls[mes], fonte: 'Caixa (DCD)' } : { valor: manual, fonte: 'Manual' };
@@ -76,7 +79,7 @@ function consolidado(obra, cen, mes, mesAtual) {
 function legendaObra(cen, mesAtual) {
   const ate = rotuloMes(mesAnterior(mesAtual));
   const de = rotuloMes(mesAtual);
-  if (cen === 'CAIXA_PREVISION') return `Caixa até ${ate} · Prevision a partir de ${de}`;
+  if (cen === 'CAIXA_PREVISION') return `Caixa até ${ate} · depois + mês do Prevision`;
   if (cen === 'CAIXA') return `Caixa até ${ate} · Manual a partir de ${de}`;
   if (cen === 'PREVISION') return 'Prevision';
   return 'Manual';

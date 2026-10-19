@@ -89,9 +89,10 @@ async function elegiveis(empresaId) {
 
 // % de obra acumulado (0 a 1) de cada mês do ciclo — a mesma regra da linha da obra em Avanços
 // Obras (DfcAvancosTab.jsx::consolidado): Caixa (DCD) até o mês anterior ao atual e, do mês atual
-// em diante, Prevision (com Prevision) ou o avanço manual (sem). Mês sem valor repete o anterior.
-// `fontes`: de onde veio o % de cada mês ({ fonte: 'CAIXA' | 'PREVISION' | 'MANUAL', repetido }) —
-// usado no rastreio do Detalhamento (aba DFC).
+// em diante, a Caixa do mês anterior + o avanço DO MÊS do Prevision (com Prevision — `encadeado` em
+// dfcAvancos.service.js) ou o avanço manual (sem). Mês sem valor repete o anterior.
+// `fontes`: de onde veio o % de cada mês ({ fonte: 'CAIXA' | 'PREVISION_MES' | 'PREVISION' | 'MANUAL',
+// repetido }) — usado no rastreio do Detalhamento (aba DFC).
 async function obraAcumulado(empresaId, siengeId, inicio, fim) {
   const dados = await avancosService.avancos(empresaId, inicio, fim);
   const obra = dados.obras.find((o) => o.sienge_id === siengeId);
@@ -108,7 +109,7 @@ async function obraAcumulado(empresaId, siengeId, inicio, fim) {
   dados.meses.forEach((m) => {
     let v;
     let fonte;
-    if (cenario === 'CAIXA_PREVISION') [v, fonte] = m < dados.mes_atual ? [obra.pls[m], 'CAIXA'] : [obra.prevision[m], 'PREVISION'];
+    if (cenario === 'CAIXA_PREVISION') [v, fonte] = m < dados.mes_atual ? [obra.pls[m], 'CAIXA'] : [obra.encadeado?.[m], 'PREVISION_MES'];
     else if (cenario === 'CAIXA') [v, fonte] = m < dados.mes_atual ? [obra.pls[m], 'CAIXA'] : [obra.manual?.[m], 'MANUAL'];
     else if (cenario === 'PREVISION') [v, fonte] = [obra.prevision[m], 'PREVISION'];
     else [v, fonte] = [obra.manual?.[m], 'MANUAL'];
