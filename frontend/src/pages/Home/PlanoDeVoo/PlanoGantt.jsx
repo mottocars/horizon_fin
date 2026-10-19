@@ -7,6 +7,8 @@ import {
   CalendarDays,
   Check,
   Loader2,
+  Maximize2,
+  Minimize2,
   Pencil,
   Plane,
   Plus,
@@ -215,6 +217,7 @@ export default function PlanoGantt({ planoId, recarregarToken, onVoltar, onEdita
   const [abertas, setAbertas] = useState(() => new Set());
   // status desmarcados na legenda: as micro tarefas deles somem do Gantt
   const [ocultos, setOcultos] = useState(() => new Set());
+  const [telaCheia, setTelaCheia] = useState(false);
   const [novaMacro, setNovaMacro] = useState('');
   const [salvandoMacro, setSalvandoMacro] = useState(false);
   const [editandoMacro, setEditandoMacro] = useState(null);
@@ -302,6 +305,28 @@ export default function PlanoGantt({ planoId, recarregarToken, onVoltar, onEdita
     el.scrollTo({ left: Math.max(0, xHoje - xInicio < visivel * 0.7 ? xInicio - 24 : xHoje - 160) });
   }, [zoom, Boolean(dados)]); // eslint-disable-line react-hooks/exhaustive-deps
 
+  // Tela cheia (como no DFC Construtoras): pede também a do navegador; o Esc dele sai e o
+  // `fullscreenchange` fecha a nossa junto. Sem a do navegador, o Esc é tratado aqui — menos
+  // com uma janela aberta por cima (atividade, confirmação), que o Esc não deve tirar da tela cheia.
+  useEffect(() => {
+    if (!telaCheia) return undefined;
+    const doc = document.documentElement;
+    if (!document.fullscreenElement && doc.requestFullscreen) doc.requestFullscreen().catch(() => {});
+    const aoTrocar = () => {
+      if (!document.fullscreenElement) setTelaCheia(false);
+    };
+    const aoTeclar = (e) => {
+      if (e.key === 'Escape' && !document.querySelector('.fixed.inset-0.z-50')) setTelaCheia(false);
+    };
+    document.addEventListener('fullscreenchange', aoTrocar);
+    window.addEventListener('keydown', aoTeclar);
+    return () => {
+      document.removeEventListener('fullscreenchange', aoTrocar);
+      window.removeEventListener('keydown', aoTeclar);
+      if (document.fullscreenElement) document.exitFullscreen?.().catch(() => {});
+    };
+  }, [telaCheia]);
+
   if (erro) {
     return (
       <div className="py-14 text-center text-sm">
@@ -337,7 +362,9 @@ export default function PlanoGantt({ planoId, recarregarToken, onVoltar, onEdita
   if (zoom === 'dia') for (let n = faixa.ini; n <= faixa.fim; n++) if ([0, 6].includes(diaDaSemana(n))) fimDeSemana.push(n);
 
   return (
-    <div className="space-y-4">
+    // Em tela cheia o Gantt cobre a janela e rola sozinho na vertical; o p-6 é o mesmo do <main>,
+    // então a régua (-top-6) e a barra horizontal (-bottom-6) grudam nas bordas do mesmo jeito.
+    <div className={telaCheia ? 'fixed inset-0 z-40 space-y-4 overflow-y-auto bg-white p-6' : 'space-y-4'}>
       {/* cabeçalho do plano */}
       <div className="flex flex-col gap-4 lg:flex-row lg:items-center lg:justify-between">
         <div className="flex min-w-0 items-center gap-3">
@@ -443,6 +470,28 @@ export default function PlanoGantt({ planoId, recarregarToken, onVoltar, onEdita
               </button>
             ))}
           </div>
+          {telaCheia ? (
+            <>
+              <span className="hidden text-xs text-gray-400 sm:inline">Esc para sair</span>
+              <button
+                type="button"
+                onClick={() => setTelaCheia(false)}
+                className="flex items-center gap-1.5 rounded-lg border border-gray-200 px-3 py-1.5 text-xs font-medium text-gray-600 hover:bg-gray-50"
+              >
+                <Minimize2 size={14} /> Sair da tela cheia
+              </button>
+            </>
+          ) : (
+            <button
+              type="button"
+              onClick={() => setTelaCheia(true)}
+              title="Tela cheia"
+              aria-label="Tela cheia"
+              className="rounded-lg border border-gray-200 p-1.5 text-gray-600 hover:bg-gray-50"
+            >
+              <Maximize2 size={15} />
+            </button>
+          )}
         </div>
       </div>
 
