@@ -11,6 +11,7 @@ import DetalhamentoModal from './DetalhamentoModal';
 
 const LARGURA_PRIMEIRA = 340;
 const LARGURA_COLUNA = 104;
+const LARGURA_DESVIO = 84;
 const FOLGA = 36;
 const ALTURA_MINIMA_GRADE = 320;
 const ALTURA_CAB_MES = 32; // 1ª linha do cabeçalho (mês/ano) — a 2ª (Realizado/Projetado) gruda logo abaixo
@@ -24,6 +25,7 @@ const SOMBRA_COLUNA_FIXA = '[&_tr>*:first-child]:shadow-[6px_0_8px_-6px_rgba(16,
 const MESES_CAB = ['JAN', 'FEV', 'MAR', 'ABR', 'MAI', 'JUN', 'JUL', 'AGO', 'SET', 'OUT', 'NOV', 'DEZ'];
 const R = 'R'; // realizado
 const P = 'P'; // projetado
+const D = 'D'; // desvio % (realizado × projetado)
 
 // Sem casas decimais (pedido do usuário) — o cálculo continua em centavos, só a exibição arredonda.
 function dinheiro(v) {
@@ -42,6 +44,15 @@ function larguraTexto(texto) {
 
 const r2 = (v) => Math.round(v * 100) / 100;
 
+// Desvio % = (Realizado − Projetado) ÷ |Projetado| (pedido do usuário). Pelo sinal do caixa: positivo =
+// melhor que o previsto (entrou mais / saiu menos), negativo = pior (entrou menos / saiu mais). Sem
+// projetado (ou zero) não há base: null.
+function desvioPct(real, proj) {
+  if (!proj) return null;
+  return ((real || 0) - proj) / Math.abs(proj) * 100;
+}
+const formatoPct = (v) => `${v > 0 ? '+' : v < 0 ? '−' : ''}${Math.abs(v).toLocaleString('pt-BR', { minimumFractionDigits: 1, maximumFractionDigits: 1 })}%`;
+
 // 'AAAA-MM' + k meses.
 function somarMeses(anoMes, k) {
   const [a, m] = anoMes.split('-').map(Number);
@@ -55,7 +66,8 @@ function mesDeHoje() {
 }
 
 // Operações > DFC Construtoras > DFC: o fluxo de caixa (pedido do usuário).
-// Colunas: até o mês atual, cada mês tem REALIZADO e PROJETADO; depois dele, só PROJETADO.
+// Colunas: até o mês atual, cada mês tem REALIZADO, PROJETADO e DESVIO % (ver desvioPct); depois dele, só
+// PROJETADO. No mês atual o desvio compara o realizado até hoje com o projetado do mês inteiro.
 // - Projetado: a última versão salva do Orçamento (todas as origens).
 // - Realizado: o extrato das contas bancárias com "Projeta DFC" (aba Contas Correntes), já achatado
 //   por rateio centro × natureza na sincronização (backend dfc-saldos / sie_extrato_contas_rateio).
@@ -105,9 +117,12 @@ export default function DfcFluxoTab({
   const primeiro = meses[0] || null;
   const ultimo = meses[meses.length - 1] || null;
 
-  // Colunas da grade: { mes, tipo } — R e P até o mês atual, só P depois.
+  // Colunas da grade: { mes, tipo } — R, P e D (desvio %) até o mês atual, só P depois.
   const colunas = useMemo(
-    () => meses.flatMap((m) => (m <= mesAtual ? [{ mes: m, tipo: R }, { mes: m, tipo: P }] : [{ mes: m, tipo: P }])),
+    () =>
+      meses.flatMap((m) =>
+        m <= mesAtual ? [{ mes: m, tipo: R }, { mes: m, tipo: P }, { mes: m, tipo: D }] : [{ mes: m, tipo: P }]
+      ),
     [meses, mesAtual]
   );
 
@@ -267,8 +282,10 @@ export default function DfcFluxoTab({
       });
     });
     const largura = (v) => (v ? larguraTexto(dinheiro(v)) : 0);
-    return colunas.map(
-      (c) => Math.max(LARGURA_COLUNA, Math.ceil(Math.max(0, ...linhas.map((pc) => largura(pc[`${c.mes}|${c.tipo}`])))) + FOLGA)
+    return colunas.map((c) =>
+      c.tipo === D
+        ? LARGURA_DESVIO
+        : Math.max(LARGURA_COLUNA, Math.ceil(Math.max(0, ...linhas.map((pc) => largura(pc[`${c.mes}|${c.tipo}`])))) + FOLGA)
     );
   }, [estrutura, porColuna, colunas]);
 
@@ -398,6 +415,32 @@ export default function DfcFluxoTab({
           </span>
         </td>
         {colunas.map((c, i) => {
+          if (c.tipo === D) {
+            const real = pc[`${c.mes}|${R}`];
+            const proj = pc[`${c.mes}|${P}`];
+            const d = desvioPct(real, proj);
+            const semNada = !real && !proj;
+            const parcial = c.mes === mesAtual;
+            return (
+              <td
+                key={`${c.mes}|${D}`}
+                title={
+                  semNada
+                    ? undefined
+                    : d === null
+                      ? 'Sem projetado no mês — não há base para o desvio.'
+                      : `(Realizado − Projetado) ÷ |Projetado|${parcial ? ' — mês em andamento: realizado até hoje × projetado do mês inteiro' : ''}`
+                }
+                className={`border-b px-2 text-center text-[11px] tabular-nums transition-colors ${e.borda} ${e.fundo} ${e.py} ${
+                  tipo === 'saldo' ? '' : 'group-hover/linha:bg-gray-50'
+                } ${tipo === 'saldo' || tipo === 'resultado' || tipo === 'n1' ? 'font-semibold' : ''} ${
+                  d === null ? 'text-gray-300' : Math.abs(d) < 0.05 ? 'text-gray-500' : d > 0 ? 'text-emerald-600' : 'text-rose-600'
+                } ${parcial ? 'italic' : ''}`}
+              >
+                {semNada ? '' : d === null ? '—' : formatoPct(d)}
+              </td>
+            );
+          }
           const v = pc[`${c.mes}|${c.tipo}`];
           const vazio = v === undefined || v === null || v === 0;
           return (
@@ -517,7 +560,7 @@ export default function DfcFluxoTab({
                   return (
                     <th
                       key={m}
-                      colSpan={m <= mesAtual ? 2 : 1}
+                      colSpan={m <= mesAtual ? 3 : 1}
                       title={atual ? 'Mês atual' : undefined}
                       className={`sticky top-0 z-20 border-l px-3 pt-2.5 text-center align-bottom ${
                         atual && dashboard ? 'border-l-gray-200 bg-[#1d5c8a]' : `border-l-gray-200 bg-white ${atual ? 'bg-primary-50/60' : ''}`
@@ -549,11 +592,16 @@ export default function DfcFluxoTab({
                       className={`sticky z-20 border-b px-2 py-1.5 text-center text-[10px] font-semibold uppercase tracking-wider ${
                         inicioDeMes(i) ? 'border-l border-l-gray-200' : ''
                       } ${atual ? 'border-b-2 border-b-primary-500 bg-primary-50/60' : 'border-gray-200 bg-white'} ${
-                        c.tipo === R ? 'text-teal-700' : 'text-gray-400'
+                        c.tipo === R ? 'text-teal-700' : c.tipo === D ? 'text-indigo-500' : 'text-gray-400'
                       }`}
                       style={{ top: ALTURA_CAB_MES }}
+                      title={
+                        c.tipo === D
+                          ? '(Realizado − Projetado) ÷ |Projetado|. Positivo (verde) = melhor para o caixa: entrou mais ou saiu menos que o previsto. Negativo (vermelho) = pior.'
+                          : undefined
+                      }
                     >
-                      {c.tipo === R ? 'Realizado' : 'Projetado'}
+                      {c.tipo === R ? 'Realizado' : c.tipo === P ? 'Projetado' : 'Desvio %'}
                     </th>
                   );
                 })}
