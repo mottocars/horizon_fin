@@ -24,7 +24,7 @@ async function fetchPage({ tenant, username, password }) {
       Accept: 'application/json',
       'User-Agent': 'HorizonFin/1.0 (+https://horizonfin.local)',
     },
-    signal: AbortSignal.timeout(TIMEOUT_MS),
+    timeoutMs: TIMEOUT_MS,
   });
 
   if (!response.ok) {
