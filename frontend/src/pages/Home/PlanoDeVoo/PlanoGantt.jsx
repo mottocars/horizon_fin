@@ -195,7 +195,7 @@ export default function PlanoGantt({ planoId, recarregarToken, onVoltar, onEdita
   const [dados, setDados] = useState(null);
   const [erro, setErro] = useState('');
   const [aviso, setAviso] = useState('');
-  const [zoom, setZoom] = useState(null); // definido ao carregar: semanas se o plano for longo
+  const [zoom, setZoom] = useState('mes'); // abre sempre na visão mensal
   // macros com o drilldown aberto — ao abrir o plano, todas começam recolhidas
   const [abertas, setAbertas] = useState(() => new Set());
   const [novaMacro, setNovaMacro] = useState('');
@@ -228,12 +228,6 @@ export default function PlanoGantt({ planoId, recarregarToken, onVoltar, onEdita
   useEffect(() => {
     carregar();
   }, [carregar, recarregarToken]);
-
-  useEffect(() => {
-    if (!dados || zoom) return;
-    const { inicio, fim } = dados.plano;
-    setZoom(inicio && numDia(fim) - numDia(inicio) > 40 ? 'semana' : 'dia');
-  }, [dados, zoom]);
 
   async function executar(fn, msg) {
     setAviso('');
@@ -418,7 +412,7 @@ export default function PlanoGantt({ planoId, recarregarToken, onVoltar, onEdita
         {/* régua — grudada no topo da tela ao rolar a página (-top-6 cancela o p-6 do <main>) */}
         <div className="sticky -top-6 z-30 rounded-t-xl border-b border-gray-200 bg-white">
           <div ref={reguaRef} onScroll={(e) => sincronizar(e.currentTarget)} className={`rounded-t-xl ${ROLAGEM_SEM_BARRA}`}>
-            <div className="flex" style={{ width: LARGURA_ESQUERDA + larguraTempo }}>
+            <div className="flex" style={{ width: LARGURA_ESQUERDA + larguraTempo, minWidth: '100%' }}>
               <div
                 className="sticky left-0 z-20 flex shrink-0 items-end border-r border-gray-200 bg-white px-4 pb-2 text-[11px] font-semibold uppercase tracking-wide text-gray-400"
                 style={{ width: LARGURA_ESQUERDA }}
@@ -439,7 +433,8 @@ export default function PlanoGantt({ planoId, recarregarToken, onVoltar, onEdita
         </div>
 
         <div ref={corpoRef} onScroll={(e) => sincronizar(e.currentTarget)} className={ROLAGEM_SEM_BARRA}>
-          <div className="relative" style={{ width: LARGURA_ESQUERDA + larguraTempo }}>
+          {/* minWidth: plano curto (ex.: visão mensal) — as linhas vão até o fim do quadro */}
+          <div className="relative" style={{ width: LARGURA_ESQUERDA + larguraTempo, minWidth: '100%' }}>
             {/* fundo: fins de semana e linha de hoje, atravessando todas as linhas */}
             <div
               className="pointer-events-none absolute inset-y-0"
