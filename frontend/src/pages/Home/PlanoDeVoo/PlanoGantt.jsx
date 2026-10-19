@@ -188,6 +188,21 @@ function NomeMacroEditavel({ valor, onSalvar, onCancelar }) {
 // rola na horizontal sem mostrar barra (a barra visível é a do rodapé do Gantt)
 const ROLAGEM_SEM_BARRA = 'overflow-x-auto overflow-y-hidden [scrollbar-width:none] [&::-webkit-scrollbar]:hidden';
 
+// Mesmo resumo que o backend devolve por plano e por macro (planos.service.js › resumo) —
+// refeito aqui sobre as atividades visíveis quando há status desmarcado na legenda.
+function resumo(cards) {
+  const porBucket = { AGUARDANDO: 0, PROGRESSO: 0, ATRASADO: 0, CONCLUIDO: 0, FINALIZADO: 0 };
+  for (const c of cards) porBucket[c.bucket]++;
+  const entregues = porBucket.CONCLUIDO + porBucket.FINALIZADO;
+  return {
+    total: cards.length,
+    porBucket,
+    progresso: cards.length ? Math.round((entregues / cards.length) * 100) : 0,
+    inicio: cards.length ? cards.map((c) => c.data_inicio).sort()[0] : null,
+    fim: cards.length ? cards.map((c) => c.data_fim).sort().at(-1) : null,
+  };
+}
+
 const BOTAO_ICONE = 'rounded p-1 text-gray-400 transition hover:bg-gray-100 hover:text-gray-700 disabled:opacity-30';
 
 export default function PlanoGantt({ planoId, recarregarToken, onVoltar, onEditar, onAbrirCard, onNovoCard }) {
@@ -251,9 +266,10 @@ export default function PlanoGantt({ planoId, recarregarToken, onVoltar, onEdita
   }
 
   async function removerMacro(macro) {
+    const total = dados.macros.find((m) => m.id === macro.id)?.total || 0; // sem o filtro da legenda
     const ok = await confirm({
       title: 'Excluir macro tarefa',
-      description: `Excluir "${macro.nome}"?${macro.total ? ` As ${macro.total} atividade(s) dela continuam no Kanban, sem plano de voo.` : ''}`,
+      description: `Excluir "${macro.nome}"?${total ? ` As ${total} atividade(s) dela continuam no Kanban, sem plano de voo.` : ''}`,
       confirmLabel: 'Excluir',
       variant: 'danger',
     });
@@ -304,12 +320,17 @@ export default function PlanoGantt({ planoId, recarregarToken, onVoltar, onEdita
     );
   }
 
-  const { plano, macros, cards, usuarios, hoje, permissoes } = dados;
+  const { usuarios, hoje, permissoes } = dados;
+  // Filtro da legenda: tudo na tela (contagens, progresso, barras e datas do plano e das macros)
+  // é recalculado só com as atividades dos status marcados; as macros sem nenhuma somem.
+  const filtrando = ocultos.size > 0;
+  const cards = filtrando ? dados.cards.filter((c) => !ocultos.has(c.bucket)) : dados.cards;
+  const plano = filtrando ? { ...dados.plano, ...resumo(cards) } : dados.plano;
+  const macros = filtrando ? dados.macros.map((m) => ({ ...m, ...resumo(cards.filter((c) => c.macro_id === m.id)) })) : dados.macros;
   const pode = permissoes.editar;
   const larguraTempo = (faixa.fim - faixa.ini + 1) * px;
   const xHoje = (numDia(hoje) - faixa.ini) * px + px / 2;
   const pessoas = [plano.criador_id, ...plano.membros];
-  const filtrando = ocultos.size > 0;
 
   // fins de semana sombreados (só no zoom de dias)
   const fimDeSemana = [];
@@ -337,7 +358,7 @@ export default function PlanoGantt({ planoId, recarregarToken, onVoltar, onEdita
             <h2 className="flex items-center gap-2 truncate text-lg font-semibold text-gray-900">
               {plano.nome}
               {pode && (
-                <button type="button" onClick={() => onEditar(plano)} title="Editar plano de voo" className={BOTAO_ICONE}>
+                <button type="button" onClick={() => onEditar(dados.plano)} title="Editar plano de voo" className={BOTAO_ICONE}>
                   <Pencil size={15} />
                 </button>
               )}
@@ -477,7 +498,7 @@ export default function PlanoGantt({ planoId, recarregarToken, onVoltar, onEdita
               </div>
             )}
 
-            {filtrando && macros.length > 0 && !macros.some((m) => cards.some((c) => c.macro_id === m.id && !ocultos.has(c.bucket))) && (
+            {filtrando && macros.length > 0 && macros.every((m) => m.total === 0) && (
               <div className="relative flex">
                 <div className="sticky left-0 z-20 shrink-0 border-r border-gray-200 bg-white px-4 py-10 text-center text-sm text-gray-500" style={{ width: LARGURA_ESQUERDA }}>
                   Nenhuma atividade nos status marcados
@@ -486,7 +507,7 @@ export default function PlanoGantt({ planoId, recarregarToken, onVoltar, onEdita
             )}
 
             {macros.map((macro, i) => {
-              const micros = cards.filter((c) => c.macro_id === macro.id && !ocultos.has(c.bucket));
+              const micros = cards.filter((c) => c.macro_id === macro.id);
               // com status desmarcado na legenda, a macro sem nenhuma atividade visível some também
               if (filtrando && micros.length === 0) return null;
               const aberta = abertas.has(macro.id);
