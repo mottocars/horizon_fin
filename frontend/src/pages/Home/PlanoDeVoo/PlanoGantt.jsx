@@ -1,4 +1,4 @@
-import { Fragment, useCallback, useEffect, useMemo, useRef, useState } from 'react';
+import { Fragment, useCallback, useEffect, useLayoutEffect, useMemo, useRef, useState } from 'react';
 import {
   ArrowLeft,
   ChevronDown,
@@ -193,11 +193,13 @@ export default function PlanoGantt({ planoId, recarregarToken, onVoltar, onEdita
   const [erro, setErro] = useState('');
   const [aviso, setAviso] = useState('');
   const [zoom, setZoom] = useState(null); // definido ao carregar: semanas se o plano for longo
-  const [recolhidas, setRecolhidas] = useState(() => new Set());
+  // macros com o drilldown aberto — ao abrir o plano, todas começam recolhidas
+  const [abertas, setAbertas] = useState(() => new Set());
   const [novaMacro, setNovaMacro] = useState('');
   const [salvandoMacro, setSalvandoMacro] = useState(false);
   const [editandoMacro, setEditandoMacro] = useState(null);
   const rolagemRef = useRef(null);
+  const [alturaMax, setAlturaMax] = useState(null);
 
   const carregar = useCallback(() => {
     setErro('');
@@ -270,6 +272,29 @@ export default function PlanoGantt({ planoId, recarregarToken, onVoltar, onEdita
     const visivel = el.clientWidth - LARGURA_ESQUERDA;
     el.scrollTo({ left: Math.max(0, xHoje - xInicio < visivel * 0.7 ? xInicio - 24 : xHoje - 160) });
   }, [zoom, Boolean(dados)]); // eslint-disable-line react-hooks/exhaustive-deps
+
+  // O Gantt rola sozinho nas duas direções, com a altura do que sobra da tela abaixo dele:
+  // assim a régua das datas gruda no topo ao rolar e a barra de rolagem horizontal fica
+  // sempre à vista no rodapé (sem precisar descer até o fim do plano para achá-la).
+  // 40 = p-6 do <main> do AppShell + p-4 do painel em volta.
+  useLayoutEffect(() => {
+    const el = rolagemRef.current;
+    if (!el) return;
+    const main = el.closest('main');
+    const medir = () => {
+      const topoMain = main ? main.getBoundingClientRect().top - main.scrollTop : 0;
+      const topo = el.getBoundingClientRect().top - topoMain;
+      setAlturaMax(Math.max(320, (main ? main.clientHeight : window.innerHeight) - topo - 40));
+    };
+    medir();
+    const obs = new ResizeObserver(medir);
+    if (main) obs.observe(main);
+    window.addEventListener('resize', medir);
+    return () => {
+      obs.disconnect();
+      window.removeEventListener('resize', medir);
+    };
+  }, [dados, faixa, aviso]);
 
   if (erro) {
     return (
@@ -395,7 +420,7 @@ export default function PlanoGantt({ planoId, recarregarToken, onVoltar, onEdita
       {aviso && <p className="rounded-lg bg-amber-50 px-3 py-2 text-xs text-amber-700">{aviso}</p>}
 
       {/* Gantt */}
-      <div ref={rolagemRef} className="overflow-x-auto rounded-xl border border-gray-200">
+      <div ref={rolagemRef} className="overflow-auto rounded-xl border border-gray-200" style={{ maxHeight: alturaMax || undefined }}>
         <div className="relative" style={{ width: LARGURA_ESQUERDA + larguraTempo }}>
           {/* fundo: fins de semana e linha de hoje, atravessando todas as linhas */}
           <div className="pointer-events-none absolute inset-y-0" style={{ left: LARGURA_ESQUERDA, width: larguraTempo }}>
@@ -405,8 +430,8 @@ export default function PlanoGantt({ planoId, recarregarToken, onVoltar, onEdita
             <span className="absolute inset-y-0 z-[1] w-0.5 bg-red-400/70" style={{ left: xHoje }} />
           </div>
 
-          {/* régua */}
-          <div className="relative flex border-b border-gray-200 bg-white/90">
+          {/* régua — grudada no topo ao rolar */}
+          <div className="sticky top-0 z-30 flex border-b border-gray-200 bg-white">
             <div
               className="sticky left-0 z-20 flex shrink-0 items-end border-r border-gray-200 bg-white px-4 pb-2 text-[11px] font-semibold uppercase tracking-wide text-gray-400"
               style={{ width: LARGURA_ESQUERDA }}
@@ -437,7 +462,7 @@ export default function PlanoGantt({ planoId, recarregarToken, onVoltar, onEdita
 
           {macros.map((macro, i) => {
             const micros = cards.filter((c) => c.macro_id === macro.id);
-            const aberta = !recolhidas.has(macro.id);
+            const aberta = abertas.has(macro.id);
             return (
               <Fragment key={macro.id}>
                 {/* linha da macro tarefa */}
@@ -449,7 +474,7 @@ export default function PlanoGantt({ planoId, recarregarToken, onVoltar, onEdita
                     <button
                       type="button"
                       onClick={() =>
-                        setRecolhidas((s) => {
+                        setAbertas((s) => {
                           const n = new Set(s);
                           if (n.has(macro.id)) n.delete(macro.id);
                           else n.add(macro.id);
