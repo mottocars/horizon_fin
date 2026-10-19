@@ -70,14 +70,14 @@ const OPCOES_PERIODOS = [
   {
     id: 'atual_em_diante',
     icone: Lock,
-    titulo: 'Do mês atual em diante',
-    dica: (mes) => `Os meses antes de ${mes} ficam travados com os valores da versão salva.`,
+    titulo: 'Alterar do mês atual em diante',
+    dica: (mes) => `Meses antes de ${mes} ficam como na versão salva.`,
   },
   {
     id: 'todos',
     icone: CalendarRange,
-    titulo: 'Todos os períodos',
-    dica: () => 'Recalcula também os meses passados com as bases de hoje.',
+    titulo: 'Alterar todos os períodos',
+    dica: () => 'Recalcula também os meses passados.',
   },
 ];
 
@@ -90,21 +90,21 @@ function dataHora(v) {
 // Uma base da janela: ícone + título + situação curta + botão "Atualizar" e, rodando, a barra.
 function LinhaBase({ icone: Icone, cor, titulo, situacao, erro, rodando, pct, bloqueado, onAtualizar, rotuloBotao = 'Atualizar' }) {
   return (
-    <div className="rounded-lg border border-gray-200 px-4 py-2">
+    <div className="rounded-lg border border-gray-200 px-3 py-1">
       <div className="flex items-center gap-3">
-        <span className={`flex h-8 w-8 shrink-0 items-center justify-center rounded-lg ${cor}`}>
+        <span className={`flex h-7 w-7 shrink-0 items-center justify-center rounded-lg ${cor}`}>
           <Icone size={16} />
         </span>
         <div className="min-w-0 flex-1">
           <p className="text-sm font-semibold text-gray-900">{titulo}</p>
           {situacao && <p className={`truncate text-[11px] ${erro ? 'text-red-600' : 'text-gray-400'}`}>{situacao}</p>}
         </div>
-        <Button type="button" variant="secondary" onClick={onAtualizar} loading={rodando} disabled={rodando || bloqueado}>
+        <Button type="button" variant="secondary" onClick={onAtualizar} loading={rodando} disabled={rodando || bloqueado} className="!py-1">
           {rotuloBotao}
         </Button>
       </div>
       {rodando && (
-        <div className="mt-3 h-1.5 w-full overflow-hidden rounded-full bg-gray-100">
+        <div className="my-1.5 h-1.5 w-full overflow-hidden rounded-full bg-gray-100">
           {pct === null ? (
             <div className="h-full w-1/3 animate-pulse rounded-full bg-primary-600" />
           ) : (
@@ -297,9 +297,10 @@ export default function NovaVersaoOrcamentoModal({
   const ocupado = saldos.rodando || receber.rodando || pagar.rodando || empresarial.rodando || cefRodando;
 
   return (
-    // Um pouco mais alta que o padrão (90% da tela): as 7 bases cabem sem barra de rolagem.
-    <Modal open={open} onClose={cefRodando ? () => {} : onClose} title={titulo} maxWidthClass="max-w-lg" maxHeightClass="max-h-[calc(100vh-2rem)]">
-      <div className="space-y-2">
+    // Linhas compactas e quase a tela toda de altura: as 7 bases e a escolha de períodos cabem sem barra
+    // de rolagem mesmo em notebook (testado até 1280×600).
+    <Modal open={open} onClose={cefRodando ? () => {} : onClose} title={titulo} maxWidthClass="max-w-xl" maxHeightClass="max-h-[calc(100vh-1rem)]">
+      <div className="space-y-1.5">
         <LinhaBase
           icone={Wallet}
           cor="bg-teal-50 text-teal-600"
@@ -413,8 +414,7 @@ export default function NovaVersaoOrcamentoModal({
           }}
         />
 
-        <div className="border-t border-gray-100 pt-3">
-          <p className="mb-1.5 text-xs font-medium text-gray-600">Períodos que a nova versão altera</p>
+        <div className="border-t border-gray-100 pt-2.5">
           <div className="grid grid-cols-2 gap-2" role="radiogroup" aria-label="Períodos que a nova versão altera">
             {OPCOES_PERIODOS.map(({ id, icone: Icone, titulo: rotulo, dica }) => {
               const marcado = periodos === id;
@@ -425,7 +425,7 @@ export default function NovaVersaoOrcamentoModal({
                   role="radio"
                   aria-checked={marcado}
                   onClick={() => escolherPeriodos(id)}
-                  className={`flex items-start gap-2 rounded-lg border px-3 py-2 text-left transition-colors ${
+                  className={`flex items-start gap-2 rounded-lg border px-3 py-1.5 text-left transition-colors ${
                     marcado ? 'border-primary-500 bg-primary-50 ring-1 ring-primary-500' : 'border-gray-200 hover:bg-gray-50'
                   }`}
                 >
