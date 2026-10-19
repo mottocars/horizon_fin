@@ -11,5 +11,6 @@ router.get('/:empresaId', controller.getPainel);
 router.put('/:empresaId/:rotina/agendamento', controller.salvarAgendamento);
 router.put('/:empresaId/:rotina/parametros', controller.salvarParametros);
 router.post('/:empresaId/:rotina/executar', controller.executar);
+router.post('/:empresaId/:rotina/cancelar', controller.cancelar);
 
 module.exports = router;

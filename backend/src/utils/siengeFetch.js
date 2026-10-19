@@ -1,3 +1,5 @@
+const { sinalDeCancelamento, erroCancelada } = require('./execucaoCancelavel');
+
 const MAX_RETRIES = 5;
 const BASE_DELAY_MS = 1500;
 // Sem isso, uma chamada que o Sienge nunca responde (conexão aceita, sem
@@ -23,8 +25,20 @@ const BASE_DELAY_SERVIDOR_MS = 2000;
 // "executando" o dia inteiro, sem log, e no fim ela caía em "tempo limite excedido".
 const MAX_ESPERA_429_MS = 120_000;
 
-function sleep(ms) {
-  return new Promise((resolve) => setTimeout(resolve, ms));
+// Espera que para na hora se a rotina do Monitor for cancelada.
+function sleep(ms, cancelar) {
+  return new Promise((resolve, reject) => {
+    if (cancelar?.aborted) return reject(erroCancelada());
+    const aoCancelar = () => {
+      clearTimeout(timer);
+      reject(erroCancelada());
+    };
+    const timer = setTimeout(() => {
+      cancelar?.removeEventListener('abort', aoCancelar);
+      resolve();
+    }, ms);
+    cancelar?.addEventListener('abort', aoCancelar, { once: true });
+  });
 }
 
 function horaDeBrasilia(data) {
@@ -40,16 +54,21 @@ async function siengeFetch(url, { timeoutMs = TIMEOUT_MS, ...options } = {}) {
   let tentativasConexao = 0;
   let tentativasServidor = 0;
   const consulta = !options.method || String(options.method).toUpperCase() === 'GET';
+  // Rotina do Monitor cancelada: interrompe a chamada em curso e as esperas (execucaoCancelavel.js).
+  const cancelar = sinalDeCancelamento();
   for (let tentativa = 0; ; tentativa++) {
+    if (cancelar?.aborted) throw erroCancelada();
+    const limite = options.signal ?? AbortSignal.timeout(timeoutMs);
     let response;
     try {
-      response = await fetch(url, { ...options, signal: options.signal ?? AbortSignal.timeout(timeoutMs) });
+      response = await fetch(url, { ...options, signal: cancelar ? AbortSignal.any([limite, cancelar]) : limite });
     } catch (err) {
+      if (cancelar?.aborted) throw erroCancelada();
       const timeout = err?.name === 'TimeoutError';
       console.warn('[siengeFetch] falha de conexão:', err?.name, err?.cause?.code || err?.code || err?.message);
       if (!timeout && tentativasConexao < MAX_RETRIES_CONEXAO) {
         tentativasConexao++;
-        await sleep(BASE_DELAY_CONEXAO_MS * 2 ** (tentativasConexao - 1));
+        await sleep(BASE_DELAY_CONEXAO_MS * 2 ** (tentativasConexao - 1), cancelar);
         continue;
       }
       const motivo = timeout ? ' (tempo limite excedido)' : '';
@@ -63,7 +82,7 @@ async function siengeFetch(url, { timeoutMs = TIMEOUT_MS, ...options } = {}) {
       tentativasServidor++;
       console.warn(`[siengeFetch] Sienge respondeu ${response.status}; tentativa ${tentativasServidor} de ${MAX_RETRIES_SERVIDOR}`);
       await response.body?.cancel().catch(() => {});
-      await sleep(BASE_DELAY_SERVIDOR_MS * 2 ** (tentativasServidor - 1));
+      await sleep(BASE_DELAY_SERVIDOR_MS * 2 ** (tentativasServidor - 1), cancelar);
       continue;
     }
 
@@ -82,7 +101,7 @@ async function siengeFetch(url, { timeoutMs = TIMEOUT_MS, ...options } = {}) {
         e.expose = true;
         throw e;
       }
-      await sleep(delayMs);
+      await sleep(delayMs, cancelar);
       continue;
     }
 

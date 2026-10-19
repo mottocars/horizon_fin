@@ -1,5 +1,6 @@
 const pool = require('../../config/db');
 const { ROTINA_POR_CHAVE } = require('./rotinas');
+const { rodarCancelavel, erroCancelada } = require('../../utils/execucaoCancelavel');
 
 // Executor do Monitor de Integrações: roda uma rotina (ver rotinas.js) em
 // segundo plano — as sincronizações levam de segundos a vários minutos, tempo
@@ -11,9 +12,17 @@ const { ROTINA_POR_CHAVE } = require('./rotinas');
 // devolve a mesma. Datas gravadas a partir do relógio da aplicação (new Date()),
 // nunca com NOW(): o relógio do Postgres da VPS está deslocado em relação à
 // hora real, o que bagunçaria "quando rodou" e "já rodou hoje?".
+//
+// Cancelar ("Parar" na tela): avisa a rotina (as chamadas ao Sienge e as esperas param na hora, e o
+// próximo progresso() lança) e espera ela terminar. Se não parar em ESPERA_CANCELAMENTO_MS, a
+// execução é encerrada como cancelada mesmo assim e a vaga é liberada; o que ela ainda fizer em
+// segundo plano só vai para o log.
 
 const emAndamento = new Map(); // `${empresaId}:${rotina}` -> job
 const chaveJob = (empresaId, rotina) => `${empresaId}:${rotina}`;
+const ESPERA_CANCELAMENTO_MS = 10_000;
+
+const sleep = (ms) => new Promise((resolve) => setTimeout(resolve, ms));
 
 function paraResposta(job) {
   return {
@@ -24,6 +33,7 @@ function paraResposta(job) {
     iniciadoEm: job.iniciadoEm,
     finalizadoEm: job.finalizadoEm,
     progresso: job.progresso,
+    cancelando: Boolean(job.cancelamento),
     etapas: job.etapas,
     resumo: job.resumo,
     erro: job.erro,
@@ -31,6 +41,7 @@ function paraResposta(job) {
 }
 
 async function finalizar(job, status, { resumo = null, erro = null } = {}) {
+  if (job.finalizadoEm) return false; // já encerrada (cancelamento que não esperou a rotina)
   job.status = status;
   job.resumo = resumo;
   job.erro = erro;
@@ -40,6 +51,14 @@ async function finalizar(job, status, { resumo = null, erro = null } = {}) {
     'UPDATE monitor_integracoes_execucoes SET status = $2, finalizado_em = $3, resumo = $4, erro = $5 WHERE id = $1',
     [job.id, status, job.finalizadoEm, resumo, erro]
   );
+  return true;
+}
+
+const textoCancelada = (job) => `Cancelada por ${job.cancelamento?.usuarioNome || 'um usuário'}.`;
+
+function liberar(job) {
+  const chave = chaveJob(job.empresaId, job.rotina);
+  if (emAndamento.get(chave) === job) emAndamento.delete(chave);
 }
 
 // Parâmetros salvos no Monitor para a empresa e a rotina ({} = os padrões).
@@ -52,26 +71,36 @@ async function parametrosDe(empresaId, chaveRotina) {
 }
 
 async function rodar(job, rotina) {
+  const rotulo = `${job.rotina} (empresa ${job.empresaId}, ${job.origem})`;
   try {
     const parametros = rotina.parametros ? await parametrosDe(job.empresaId, job.rotina) : {};
-    const resumo = await rotina.executar({
-      empresaId: job.empresaId,
-      usuarioId: job.usuarioId,
-      parametros,
-      progresso: (p) => {
-        job.progresso = p || null;
-      },
-      etapas: (lista) => {
-        job.etapas = lista;
-      },
-    });
-    await finalizar(job, 'sucesso', { resumo });
-    console.log(`[monitor-integracoes] ${job.rotina} (empresa ${job.empresaId}, ${job.origem}): ${resumo}`);
+    const resumo = await rodarCancelavel(job.controle.signal, () =>
+      rotina.executar({
+        empresaId: job.empresaId,
+        usuarioId: job.usuarioId,
+        parametros,
+        progresso: (p) => {
+          if (job.cancelamento) throw erroCancelada();
+          job.progresso = p || null;
+        },
+        etapas: (lista) => {
+          job.etapas = lista;
+        },
+      })
+    );
+    // Terminou antes de o cancelamento fazer efeito: registra o que de fato aconteceu.
+    if (await finalizar(job, 'sucesso', { resumo })) console.log(`[monitor-integracoes] ${rotulo}: ${resumo}`);
+    else console.warn(`[monitor-integracoes] ${rotulo}: terminou depois de cancelada — ${resumo}`);
   } catch (err) {
-    await finalizar(job, 'erro', { erro: err.message || 'Falha na atualização.' }).catch(() => {});
-    console.error(`[monitor-integracoes] ${job.rotina} (empresa ${job.empresaId}, ${job.origem}) falhou:`, err.message);
+    if (job.cancelamento) {
+      await finalizar(job, 'cancelada', { erro: textoCancelada(job) }).catch(() => {});
+      console.log(`[monitor-integracoes] ${rotulo}: ${textoCancelada(job)}`);
+    } else {
+      await finalizar(job, 'erro', { erro: err.message || 'Falha na atualização.' }).catch(() => {});
+      console.error(`[monitor-integracoes] ${rotulo} falhou:`, err.message);
+    }
   } finally {
-    emAndamento.delete(chaveJob(job.empresaId, job.rotina));
+    liberar(job);
   }
 }
 
@@ -107,9 +136,30 @@ async function iniciar(empresaId, chaveRotina, { origem = 'manual', usuarioId = 
     etapas: null,
     resumo: null,
     erro: null,
+    controle: new AbortController(),
+    cancelamento: null,
   };
   emAndamento.set(chaveJob(id, chaveRotina), job);
-  rodar(job, rotina); // segundo plano
+  job.promessa = rodar(job, rotina); // segundo plano
+  return paraResposta(job);
+}
+
+// Para a execução em andamento (null se não houver nenhuma).
+async function cancelar(empresaId, chaveRotina, { usuarioId = null } = {}) {
+  const job = emAndamento.get(chaveJob(Number(empresaId), chaveRotina));
+  if (!job) return null;
+  if (!job.cancelamento) {
+    const { rows } = await pool.query('SELECT nome FROM usuarios WHERE id = $1', [usuarioId]);
+    job.cancelamento = { usuarioId, usuarioNome: rows[0]?.nome || null };
+    job.progresso = { texto: 'Cancelando...' };
+    job.controle.abort();
+    console.log(`[monitor-integracoes] ${job.rotina} (empresa ${job.empresaId}): cancelamento pedido por ${job.cancelamento.usuarioNome || usuarioId}.`);
+  }
+  await Promise.race([job.promessa, sleep(ESPERA_CANCELAMENTO_MS)]);
+  if (await finalizar(job, 'cancelada', { erro: textoCancelada(job) })) {
+    console.warn(`[monitor-integracoes] ${job.rotina} (empresa ${job.empresaId}): não parou em ${ESPERA_CANCELAMENTO_MS / 1000} s — encerrada como cancelada.`);
+  }
+  liberar(job);
   return paraResposta(job);
 }
 
@@ -157,4 +207,4 @@ async function marcarInterrompidas() {
   );
 }
 
-module.exports = { iniciar, getExecucaoAtualOuUltima, emAndamentoDaEmpresa, marcarInterrompidas };
+module.exports = { iniciar, cancelar, getExecucaoAtualOuUltima, emAndamentoDaEmpresa, marcarInterrompidas };

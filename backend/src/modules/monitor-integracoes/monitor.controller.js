@@ -57,4 +57,13 @@ async function executar(req, res, next) {
   }
 }
 
-module.exports = { getPainel, salvarAgendamento, salvarParametros, executar };
+async function cancelar(req, res, next) {
+  try {
+    await executor.cancelar(req.params.empresaId, req.params.rotina, { usuarioId: req.user.id });
+    res.json(await service.getPainel(req.params.empresaId));
+  } catch (err) {
+    next(err);
+  }
+}
+
+module.exports = { getPainel, salvarAgendamento, salvarParametros, executar, cancelar };

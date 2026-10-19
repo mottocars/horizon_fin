@@ -12,6 +12,11 @@ export function executarRotinaMonitor(empresaId, rotina) {
   return http.post(`/monitor-integracoes/${empresaId}/${rotina}/executar`).then((res) => res.data);
 }
 
+// Para a execução em andamento (devolve o painel atualizado).
+export function cancelarRotinaMonitor(empresaId, rotina) {
+  return http.post(`/monitor-integracoes/${empresaId}/${rotina}/cancelar`).then((res) => res.data);
+}
+
 // Parâmetros da rotina (ex.: { dias_retroativos: 365 }; vazio/null = padrão).
 export function salvarParametrosMonitor(empresaId, rotina, parametros) {
   return http.put(`/monitor-integracoes/${empresaId}/${rotina}/parametros`, parametros).then((res) => res.data);

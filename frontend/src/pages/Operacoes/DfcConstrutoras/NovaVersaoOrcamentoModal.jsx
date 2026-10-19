@@ -126,7 +126,10 @@ function useBase(open, empresaId, tipo) {
   if (rodando) situacao = exec?.progresso?.texto || 'Atualizando — pode levar alguns minutos';
   else if (erro) [situacao, falhou] = [erro, true];
   else if (exec && exec.status !== 'sucesso' && exec.finalizadoEm) {
-    [situacao, falhou] = [exec.status === 'interrompida' ? 'A última atualização foi interrompida' : exec.erro || 'A última atualização falhou', true];
+    [situacao, falhou] = [
+      exec.status === 'interrompida' ? 'A última atualização foi interrompida' : exec.status === 'cancelada' ? `A última atualização foi parada (${exec.erro})` : exec.erro || 'A última atualização falhou',
+      true,
+    ];
   }
   return { rodando, situacao, falhou, atualizar };
 }

@@ -12,14 +12,22 @@ import {
   RefreshCw,
   Save,
   SlidersHorizontal,
+  Square,
   User,
   XCircle,
 } from 'lucide-react';
 import Card from '../../../components/Card';
 import Button from '../../../components/Button';
+import Modal from '../../../components/Modal';
 import SearchableSelect from '../../../components/SearchableSelect';
 import { listEmpresas } from '../../../api/empresas.api';
-import { getPainelMonitor, salvarAgendamentoMonitor, salvarParametrosMonitor, executarRotinaMonitor } from '../../../api/monitorIntegracoes.api';
+import {
+  getPainelMonitor,
+  salvarAgendamentoMonitor,
+  salvarParametrosMonitor,
+  executarRotinaMonitor,
+  cancelarRotinaMonitor,
+} from '../../../api/monitorIntegracoes.api';
 import { useEmpresaTravada } from '../../../hooks/useEmpresaTravada';
 import { nomeExibicaoEmpresa } from '../../../utils/empresa';
 import logoSienge from '../../../assets/integracoes/sienge.svg';
@@ -101,6 +109,7 @@ const STATUS = {
   sucesso: { rotulo: 'Concluída', Icon: CheckCircle2, classe: 'bg-emerald-50 text-emerald-700 ring-emerald-200' },
   erro: { rotulo: 'Falhou', Icon: XCircle, classe: 'bg-red-50 text-red-700 ring-red-200' },
   interrompida: { rotulo: 'Interrompida', Icon: PauseCircle, classe: 'bg-amber-50 text-amber-700 ring-amber-200' },
+  cancelada: { rotulo: 'Cancelada', Icon: Square, classe: 'bg-gray-100 text-gray-600 ring-gray-200' },
 };
 
 function SeloStatus({ status }) {
@@ -352,6 +361,8 @@ function BlocoExecucao({ rotina }) {
             </>
           ) : exibida.status === 'sucesso' ? (
             <p className="text-xs text-emerald-700">{exibida.resumo}</p>
+          ) : exibida.status === 'cancelada' ? (
+            <p className="text-xs text-gray-500">{exibida.erro}</p>
           ) : (
             <p className="text-xs text-red-600">{exibida.erro}</p>
           )}
@@ -382,7 +393,7 @@ function BlocoExecucao({ rotina }) {
                 {h.origem === 'agendada' ? <CalendarClock size={11} /> : <User size={11} />}
                 {h.origem === 'agendada' ? 'agendada' : h.usuarioNome || 'manual'}
               </span>
-              <span className={`basis-full truncate ${h.status === 'sucesso' ? 'text-gray-500' : 'text-red-600'}`} title={h.resumo || h.erro || ''}>
+              <span className={`basis-full truncate ${['sucesso', 'cancelada'].includes(h.status) ? 'text-gray-500' : 'text-red-600'}`} title={h.resumo || h.erro || ''}>
                 {h.resumo || h.erro}
               </span>
             </li>
@@ -393,8 +404,10 @@ function BlocoExecucao({ rotina }) {
   );
 }
 
-function CartaoRotina({ rotina, edicao, onEditar, onSalvar, salvando, erroSalvar, onExecutar, disparando, onSalvarParametros }) {
+function CartaoRotina({ rotina, edicao, onEditar, onSalvar, salvando, erroSalvar, onExecutar, disparando, onCancelar, cancelando, onSalvarParametros }) {
   const executando = Boolean(rotina.execucaoAtual);
+  const parando = cancelando || Boolean(rotina.execucaoAtual?.cancelando);
+  const [confirmarParada, setConfirmarParada] = useState(false);
   return (
     <div
       className={`grid grid-cols-1 gap-5 border-t border-gray-100 px-5 py-4 first:border-t-0 lg:grid-cols-[minmax(0,1.15fr)_minmax(0,1.05fr)_minmax(0,1fr)_auto] lg:items-start ${
@@ -432,7 +445,7 @@ function CartaoRotina({ rotina, edicao, onEditar, onSalvar, salvando, erroSalvar
 
       <BlocoExecucao rotina={rotina} />
 
-      <div className="flex lg:justify-end">
+      <div className="flex flex-col gap-2 lg:items-end">
         <Button
           variant="secondary"
           onClick={onExecutar}
@@ -443,7 +456,41 @@ function CartaoRotina({ rotina, edicao, onEditar, onSalvar, salvando, erroSalvar
           <RefreshCw size={15} className={executando || disparando ? 'animate-spin' : ''} />
           {executando ? 'Executando' : 'Atualizar agora'}
         </Button>
+        {executando && (
+          <Button
+            variant="secondary"
+            onClick={() => setConfirmarParada(true)}
+            disabled={parando}
+            title="Parar esta atualização"
+            className="whitespace-nowrap !text-red-600 hover:!bg-red-50"
+          >
+            {parando ? <Loader2 size={15} className="animate-spin" /> : <Square size={14} className="fill-current" />}
+            {parando ? 'Parando...' : 'Parar'}
+          </Button>
+        )}
       </div>
+
+      <Modal open={confirmarParada} title="Parar atualização" onClose={() => setConfirmarParada(false)}>
+        <p className="text-sm text-gray-600">
+          Parar <strong className="text-gray-900">{rotina.nome}</strong> agora? A base continua com os dados da última
+          atualização concluída — nada é apagado. Você pode atualizar de novo quando quiser.
+        </p>
+        <div className="mt-5 flex justify-end gap-2">
+          <Button variant="secondary" onClick={() => setConfirmarParada(false)}>
+            Continuar atualizando
+          </Button>
+          <Button
+            variant="danger"
+            onClick={() => {
+              setConfirmarParada(false);
+              onCancelar();
+            }}
+          >
+            <Square size={13} className="fill-current" />
+            Parar
+          </Button>
+        </div>
+      </Modal>
     </div>
   );
 }
@@ -475,6 +522,7 @@ export default function MonitorIntegracoesPage() {
   const [salvando, setSalvando] = useState({});
   const [errosSalvar, setErrosSalvar] = useState({});
   const [disparando, setDisparando] = useState({});
+  const [cancelando, setCancelando] = useState({});
 
   useEffect(() => {
     listEmpresas({ ativo: true, limit: 100 })
@@ -576,6 +624,17 @@ export default function MonitorIntegracoesPage() {
       setErro(err.response?.data?.message || 'Não foi possível iniciar a atualização.');
     } finally {
       setDisparando((d) => ({ ...d, [chave]: false }));
+    }
+  }
+
+  async function cancelar(chave) {
+    setCancelando((c) => ({ ...c, [chave]: true }));
+    try {
+      aplicarPainel(await cancelarRotinaMonitor(empresaId, chave));
+    } catch (err) {
+      setErro(err.response?.data?.message || 'Não foi possível parar a atualização.');
+    } finally {
+      setCancelando((c) => ({ ...c, [chave]: false }));
     }
   }
 
@@ -683,6 +742,8 @@ export default function MonitorIntegracoesPage() {
                     erroSalvar={errosSalvar[rotina.chave]}
                     onExecutar={() => executar(rotina.chave)}
                     disparando={Boolean(disparando[rotina.chave])}
+                    onCancelar={() => cancelar(rotina.chave)}
+                    cancelando={Boolean(cancelando[rotina.chave])}
                     onSalvarParametros={(valores) => salvarParametros(rotina.chave, valores)}
                   />
                 ))}
