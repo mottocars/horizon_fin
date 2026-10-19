@@ -26,7 +26,7 @@ previsto não deixa nada a receber).
 |---|---|---|---|---|
 | Caixa hoje | saldo real de hoje | abaixo do colchão | — | Líquido |
 | Mínimo projetado | menor saldo de fim de mês no horizonte, partindo de hoje + só o que ainda vai acontecer | < colchão | < 2 × colchão | Confortável |
-| Resultado médio · próx. 6 meses | média do resultado de cada mês (mês atual = realizado até hoje + o que falta) | saldo fura o colchão em até 3 meses | média negativa | Gera caixa |
+| Resultado médio · próximos meses do horizonte (padrão 5) | média do resultado de cada mês (mês atual = realizado até hoje + o que falta) | saldo fura o colchão em até 3 meses | média negativa | Gera caixa |
 | Fluxo operacional · até hoje | soma do realizado operacional no histórico + mês atual até hoje | — | negativo (Consome caixa) | Positivo |
 | Dívida PJ Caixa | saldo devedor PJ no último mês fechado, somando obras | — | fim da projeção > 1,5 × hoje (Crescente) | azul: Sob controle |
 | A receber em 90 dias | saldo corrigido (correção e juros do contrato) das parcelas a receber em aberto que vencem de hoje até hoje + 90 dias | — | — | azul (informativo) |

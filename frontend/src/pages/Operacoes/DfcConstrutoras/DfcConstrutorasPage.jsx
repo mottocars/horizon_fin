@@ -257,8 +257,9 @@ export default function DfcConstrutorasPage() {
   // Aba Repasses: busca por mutuário ou contrato (só conveniência de navegador, fora da URL).
   const [buscaRepasses, setBuscaRepasses] = useState('');
 
-  // Aba Orçamentos: período das colunas — padrão do mês anterior ao atual até 5 meses depois do atual
-  // (pedido do usuário). Só conveniência de navegador, fora da URL.
+  // Aba Orçamentos (e DFC): período das colunas — padrão do mês anterior ao atual até 4 meses depois do
+  // atual (pedido do usuário: em out/26, de set/26 a fev/27 — o mesmo do dashboard, histórico 1 +
+  // horizonte 5). Só conveniência de navegador, fora da URL.
   const [inicioOrcamento, setInicioOrcamento] = useState(() => {
     const d = new Date();
     const ini = new Date(d.getFullYear(), d.getMonth() - 1, 1);
@@ -266,7 +267,7 @@ export default function DfcConstrutorasPage() {
   });
   const [fimOrcamento, setFimOrcamento] = useState(() => {
     const d = new Date();
-    const fim = new Date(d.getFullYear(), d.getMonth() + 6, 0); // último dia de (mês atual + 5)
+    const fim = new Date(d.getFullYear(), d.getMonth() + 5, 0); // último dia de (mês atual + 4)
     return `${fim.getFullYear()}-${String(fim.getMonth() + 1).padStart(2, '0')}-${String(fim.getDate()).padStart(2, '0')}`;
   });
 

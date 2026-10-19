@@ -62,7 +62,7 @@ Use o roteiro que casa com a pergunta. Cada um diz o mínimo de chamadas; aprofu
 
 ### 1. "Como está o caixa?" — diagnóstico executivo
 - `dfc_painel_fluxo_caixa` com `secoes: [indicadores, trajetoria, simulador, folego_spe]` (padrão da tela:
-  histórico 1, horizonte 6). Para tendência, repita com `historico: 6`.
+  histórico 1, horizonte 5). Para tendência, repita com `historico: 6`.
 - Leia os 8 cards pelas etiquetas (vermelho primeiro), o mínimo projetado contra o colchão, quem zera no
   Fôlego e o resultado do cenário Conservador.
 - Responda no modelo "Diagnóstico de caixa" de [references/relatorios.md](references/relatorios.md).

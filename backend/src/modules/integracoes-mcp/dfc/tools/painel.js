@@ -54,7 +54,7 @@ module.exports = {
     'Para abrir uma linha do fluxo até as naturezas use dfc_fluxo_caixa; para a origem de um valor, dfc_detalhar_valor.',
   inputSchema: {
     historico: z.number().int().min(1).max(36).default(1).describe('Meses de realizado antes do mês atual (a tela abre com 1).'),
-    horizonte: z.number().int().min(1).max(36).default(6).describe('Meses de projeção contando o mês atual (a tela abre com 6).'),
+    horizonte: z.number().int().min(1).max(36).default(5).describe('Meses de projeção contando o mês atual (a tela abre com 5).'),
     centros: z.array(z.union([z.string(), z.number()])).optional().describe('Centros de custo (ids ou nomes). Vazio = consolidado.'),
     spe: z
       .union([z.string(), z.number()])
@@ -76,7 +76,7 @@ module.exports = {
   },
   handler: ferramenta(async (empresaId, a) => {
     const historico = a.historico ?? 1;
-    const horizonte = a.horizonte ?? 6;
+    const horizonte = a.horizonte ?? 5;
     const secoes = a.secoes?.length ? a.secoes : SECOES;
     const quer = (s) => secoes.includes(s);
     if (a.spe && a.centros?.length) throw falha('Use centros OU spe, não os dois.');

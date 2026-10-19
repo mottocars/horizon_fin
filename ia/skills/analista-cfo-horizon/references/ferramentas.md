@@ -20,7 +20,7 @@ DFC. Chame uma vez por conversa, antes de analisar.
 
 **`dfc_painel_fluxo_caixa`** — o dashboard Econômico Financeiro › Fluxo de Caixa como a tela mostra.
 - `historico` (1–36, padrão 1): meses de realizado antes do mês atual.
-- `horizonte` (1–36, padrão 6): meses de projeção **contando o mês atual**.
+- `horizonte` (1–36, padrão 5): meses de projeção **contando o mês atual**.
 - `centros` (lista) **ou** `spe` (nome/company_id de uma empresa — como clicar nela no Fôlego).
 - `secoes`: `indicadores`, `detalhamento`, `trajetoria`, `simulador`, `entradas_saidas`, `folego_spe`,
   `quem_gera`, `carteira`, `orcamento_erra`, `maiores_saidas`, `divida_pj` (padrão: todas).

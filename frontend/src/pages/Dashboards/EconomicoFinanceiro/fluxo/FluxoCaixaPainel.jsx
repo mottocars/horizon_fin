@@ -125,7 +125,7 @@ function FiltroCentros({ opcoes, valor, onChange, disabled }) {
 // `marcaEmpresa`: { logo, nome } da empresa escolhida — a logomarca vai no canto direito do cabeçalho.
 export default function FluxoCaixaPainel({ dashboard, tituloTela, empresaId, onEmpresa, opcoesEmpresas, empresaTravada, carregandoEmpresas, marcaEmpresa }) {
   const [hist, setHist] = useState(1);
-  const [hor, setHor] = useState(6);
+  const [hor, setHor] = useState(5); // padrão 5 (pedido do usuário, 19/10/2026)
   const [centros, setCentros] = useState([]);
   const [dados, setDados] = useState(null);
   const [estado, setEstado] = useState('ocioso'); // ocioso | carregando | erro
@@ -283,7 +283,7 @@ export default function FluxoCaixaPainel({ dashboard, tituloTela, empresaId, onE
             </select>
           </div>
           <SegMeses rotulo="Histórico" opcoes={[6, 1]} valor={hist} onChange={setHist} digitarPrimeiro />
-          <SegMeses rotulo="Horizonte" opcoes={[6, 9]} valor={hor} onChange={setHor} />
+          <SegMeses rotulo="Horizonte" opcoes={[5, 9]} valor={hor} onChange={setHor} />
           <FiltroCentros opcoes={opcoesCentros} valor={centros} onChange={setCentros} disabled={!empresaId || !dados} />
           <div className="acoes">
             {erroExportacao && <span className="erro">{erroExportacao}</span>}

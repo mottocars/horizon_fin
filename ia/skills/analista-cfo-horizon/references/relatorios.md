@@ -22,7 +22,7 @@ valores em R$ mil/mi, meses "out/26". Toda tabela com a base (período, versão 
 | Caixa hoje | R$ … | 🟢/🟡/🔴 <etiqueta do painel> |
 | Mínimo projetado | R$ … em <mês> | … |
 | Colchão (1 mês de saídas) | R$ … | — |
-| Resultado médio próx. 6 meses | R$ … | … |
+| Resultado médio (meses do horizonte) | R$ … | … |
 | Cenário conservador — mínimo | R$ … em <mês> | fura o colchão em <mês> / não fura |
 
 **O que explica:** 2–4 bullets com valores (ex.: "obra X consome R$ 1,8 mi até mar/27").

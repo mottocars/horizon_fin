@@ -18,7 +18,7 @@ const ABAS_SUMARIO = [
         itens: [
           '**Empresa** — a empresa do DFC Construtoras analisada.',
           '**Histórico** — quantos meses **antes** do mês atual entram como realizado (6m, 1m ou digite de 1 a 36). Começa em 1.',
-          '**Horizonte** — quantos meses de projeção, **contando o mês atual** (6m, 9m ou digite). Começa em 6: com o mês atual em out/26, vai até mar/27.',
+          '**Horizonte** — quantos meses de projeção, **contando o mês atual** (5m, 9m ou digite). Começa em 5: com o mês atual em out/26, vai até fev/27.',
           '**Centro de custo** — limita o painel aos centros marcados. Sem nenhum marcado, entram todos os centros com "Projeta DFC".',
         ],
       },
