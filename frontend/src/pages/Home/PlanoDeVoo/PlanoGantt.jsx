@@ -1,4 +1,4 @@
-import { Fragment, useCallback, useEffect, useLayoutEffect, useMemo, useRef, useState } from 'react';
+import { Fragment, useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import {
   ArrowLeft,
   ChevronDown,
@@ -185,6 +185,9 @@ function NomeMacroEditavel({ valor, onSalvar, onCancelar }) {
   );
 }
 
+// rola na horizontal sem mostrar barra (a barra visível é a do rodapé do Gantt)
+const ROLAGEM_SEM_BARRA = 'overflow-x-auto overflow-y-hidden [scrollbar-width:none] [&::-webkit-scrollbar]:hidden';
+
 const BOTAO_ICONE = 'rounded p-1 text-gray-400 transition hover:bg-gray-100 hover:text-gray-700 disabled:opacity-30';
 
 export default function PlanoGantt({ planoId, recarregarToken, onVoltar, onEditar, onAbrirCard, onNovoCard }) {
@@ -198,8 +201,22 @@ export default function PlanoGantt({ planoId, recarregarToken, onVoltar, onEdita
   const [novaMacro, setNovaMacro] = useState('');
   const [salvandoMacro, setSalvandoMacro] = useState(false);
   const [editandoMacro, setEditandoMacro] = useState(null);
-  const rolagemRef = useRef(null);
-  const [alturaMax, setAlturaMax] = useState(null);
+  // A rolagem vertical é a da página (o <main> do AppShell); a horizontal é do Gantt, em três
+  // faixas que rolam juntas: a régua (grudada no topo da tela), as linhas e a barra de rolagem
+  // (grudada no rodapé da tela, como a linha de Total da grade de Saldos de Contas Bancárias).
+  // Régua e linhas rolam sem barra visível — a única barra é a do rodapé.
+  const reguaRef = useRef(null);
+  const corpoRef = useRef(null);
+  const barraRef = useRef(null);
+  const sincronizar = (origem) => {
+    const x = origem.scrollLeft;
+    for (const el of [reguaRef.current, corpoRef.current, barraRef.current]) {
+      if (el && el !== origem && el.scrollLeft !== x) el.scrollLeft = x;
+    }
+    // o fundo (fins de semana e linha de hoje) some sob a coluna das tarefas ao rolar — senão a
+    // linha de hoje aparece nas divisas entre as linhas, onde a coluna não cobre
+    corpoRef.current?.style.setProperty('--rolado', `${x}px`);
+  };
 
   const carregar = useCallback(() => {
     setErro('');
@@ -257,44 +274,21 @@ export default function PlanoGantt({ planoId, recarregarToken, onVoltar, onEdita
   const faixa = useMemo(() => (dados && zoom ? faixaDeDias(dados.cards, dados.hoje, zoom) : null), [dados, zoom]);
 
   const centralizarHoje = useCallback(() => {
-    if (!rolagemRef.current || !faixa || !dados) return;
+    if (!barraRef.current || !faixa || !dados) return;
     const x = (numDia(dados.hoje) - faixa.ini) * px;
-    rolagemRef.current.scrollTo({ left: Math.max(0, x - 160), behavior: 'smooth' });
+    barraRef.current.scrollTo({ left: Math.max(0, x - 160), behavior: 'smooth' });
   }, [faixa, dados, px]);
 
   // Ao abrir e ao trocar o zoom: mostra o plano desde o início, se hoje ainda couber na tela;
   // senão, leva a régua até hoje.
   useEffect(() => {
-    const el = rolagemRef.current;
+    const el = barraRef.current;
     if (!el || !faixa || !dados) return;
     const xHoje = (numDia(dados.hoje) - faixa.ini) * px;
     const xInicio = dados.plano.inicio ? (numDia(dados.plano.inicio) - faixa.ini) * px : xHoje;
     const visivel = el.clientWidth - LARGURA_ESQUERDA;
     el.scrollTo({ left: Math.max(0, xHoje - xInicio < visivel * 0.7 ? xInicio - 24 : xHoje - 160) });
   }, [zoom, Boolean(dados)]); // eslint-disable-line react-hooks/exhaustive-deps
-
-  // O Gantt rola sozinho nas duas direções, com a altura do que sobra da tela abaixo dele:
-  // assim a régua das datas gruda no topo ao rolar e a barra de rolagem horizontal fica
-  // sempre à vista no rodapé (sem precisar descer até o fim do plano para achá-la).
-  // 40 = p-6 do <main> do AppShell + p-4 do painel em volta.
-  useLayoutEffect(() => {
-    const el = rolagemRef.current;
-    if (!el) return;
-    const main = el.closest('main');
-    const medir = () => {
-      const topoMain = main ? main.getBoundingClientRect().top - main.scrollTop : 0;
-      const topo = el.getBoundingClientRect().top - topoMain;
-      setAlturaMax(Math.max(320, (main ? main.clientHeight : window.innerHeight) - topo - 40));
-    };
-    medir();
-    const obs = new ResizeObserver(medir);
-    if (main) obs.observe(main);
-    window.addEventListener('resize', medir);
-    return () => {
-      obs.disconnect();
-      window.removeEventListener('resize', medir);
-    };
-  }, [dados, faixa, aviso]);
 
   if (erro) {
     return (
@@ -420,182 +414,196 @@ export default function PlanoGantt({ planoId, recarregarToken, onVoltar, onEdita
       {aviso && <p className="rounded-lg bg-amber-50 px-3 py-2 text-xs text-amber-700">{aviso}</p>}
 
       {/* Gantt */}
-      <div ref={rolagemRef} className="overflow-auto rounded-xl border border-gray-200" style={{ maxHeight: alturaMax || undefined }}>
-        <div className="relative" style={{ width: LARGURA_ESQUERDA + larguraTempo }}>
-          {/* fundo: fins de semana e linha de hoje, atravessando todas as linhas */}
-          <div className="pointer-events-none absolute inset-y-0" style={{ left: LARGURA_ESQUERDA, width: larguraTempo }}>
-            {fimDeSemana.map((n) => (
-              <span key={n} className="absolute inset-y-0 bg-gray-50" style={{ left: (n - faixa.ini) * px, width: px }} />
-            ))}
-            <span className="absolute inset-y-0 z-[1] w-0.5 bg-red-400/70" style={{ left: xHoje }} />
-          </div>
-
-          {/* régua — grudada no topo ao rolar */}
-          <div className="sticky top-0 z-30 flex border-b border-gray-200 bg-white">
-            <div
-              className="sticky left-0 z-20 flex shrink-0 items-end border-r border-gray-200 bg-white px-4 pb-2 text-[11px] font-semibold uppercase tracking-wide text-gray-400"
-              style={{ width: LARGURA_ESQUERDA }}
-            >
-              Macro / micro tarefas
-            </div>
-            <div className="relative">
-              <Regua ini={faixa.ini} fim={faixa.fim} px={px} zoom={zoom} hoje={hoje} />
-              <span
-                className="absolute bottom-0.5 z-[2] -translate-x-1/2 rounded-full bg-red-500 px-1.5 py-px text-[9px] font-bold uppercase text-white"
-                style={{ left: xHoje }}
+      <div className="rounded-xl border border-gray-200">
+        {/* régua — grudada no topo da tela ao rolar a página (-top-6 cancela o p-6 do <main>) */}
+        <div className="sticky -top-6 z-30 rounded-t-xl border-b border-gray-200 bg-white">
+          <div ref={reguaRef} onScroll={(e) => sincronizar(e.currentTarget)} className={`rounded-t-xl ${ROLAGEM_SEM_BARRA}`}>
+            <div className="flex" style={{ width: LARGURA_ESQUERDA + larguraTempo }}>
+              <div
+                className="sticky left-0 z-20 flex shrink-0 items-end border-r border-gray-200 bg-white px-4 pb-2 text-[11px] font-semibold uppercase tracking-wide text-gray-400"
+                style={{ width: LARGURA_ESQUERDA }}
               >
-                Hoje
-              </span>
-            </div>
-          </div>
-
-          {macros.length === 0 && (
-            <div className="relative flex">
-              <div className="sticky left-0 z-20 shrink-0 border-r border-gray-200 bg-white px-4 py-10 text-center" style={{ width: LARGURA_ESQUERDA }}>
-                <p className="text-sm font-medium text-gray-700">Nenhuma macro tarefa ainda</p>
-                <p className="mt-1 text-xs text-gray-400">
-                  {pode ? 'Crie as macro tarefas abaixo para organizar as atividades.' : 'Quem criou o plano ainda não cadastrou as macro tarefas.'}
-                </p>
+                Macro / micro tarefas
+              </div>
+              <div className="relative">
+                <Regua ini={faixa.ini} fim={faixa.fim} px={px} zoom={zoom} hoje={hoje} />
+                <span
+                  className="absolute bottom-0.5 z-[2] -translate-x-1/2 rounded-full bg-red-500 px-1.5 py-px text-[9px] font-bold uppercase text-white"
+                  style={{ left: xHoje }}
+                >
+                  Hoje
+                </span>
               </div>
             </div>
-          )}
+          </div>
+        </div>
 
-          {macros.map((macro, i) => {
-            const micros = cards.filter((c) => c.macro_id === macro.id);
-            const aberta = abertas.has(macro.id);
-            return (
-              <Fragment key={macro.id}>
-                {/* linha da macro tarefa */}
-                <div className="group relative flex min-h-12 border-b border-gray-100 bg-gray-50/40">
-                  <div
-                    className="sticky left-0 z-20 flex shrink-0 items-center gap-1.5 border-r border-gray-200 bg-white py-1.5 pl-2 pr-2"
-                    style={{ width: LARGURA_ESQUERDA }}
-                  >
-                    <button
-                      type="button"
-                      onClick={() =>
-                        setAbertas((s) => {
-                          const n = new Set(s);
-                          if (n.has(macro.id)) n.delete(macro.id);
-                          else n.add(macro.id);
-                          return n;
-                        })
-                      }
-                      className="rounded p-0.5 text-gray-400 hover:bg-gray-100"
-                      title={aberta ? 'Recolher' : 'Expandir'}
-                    >
-                      {aberta ? <ChevronDown size={16} /> : <ChevronRight size={16} />}
-                    </button>
-                    {editandoMacro === macro.id ? (
-                      <NomeMacroEditavel
-                        valor={macro.nome}
-                        onCancelar={() => setEditandoMacro(null)}
-                        onSalvar={async (nome) => {
-                          if (await executar(() => renomearMacro(planoId, macro.id, nome), 'Não foi possível renomear.')) setEditandoMacro(null);
-                        }}
-                      />
-                    ) : (
-                      <>
-                        <div className="min-w-0 flex-1">
-                          <p className="break-words text-[13px] font-semibold leading-snug text-gray-900">
-                            {macro.nome}
-                          </p>
-                          <p className="text-[10px] text-gray-400">
-                            {macro.total} atividade{macro.total === 1 ? '' : 's'}
-                            {macro.inicio && ` · ${dataBR(macro.inicio, false)} → ${dataBR(macro.fim, false)}`}
-                          </p>
-                        </div>
-                        <div className="flex shrink-0 items-center opacity-0 transition group-hover:opacity-100">
-                          <button
-                            type="button"
-                            onClick={() => onNovoCard({ empresa_id: plano.empresa_id, plano_id: plano.id, macro_id: macro.id })}
-                            className={BOTAO_ICONE}
-                            title="Nova atividade nesta macro"
-                          >
-                            <Plus size={14} />
-                          </button>
-                          {pode && (
-                            <>
-                              <button type="button" onClick={() => setEditandoMacro(macro.id)} className={BOTAO_ICONE} title="Renomear">
-                                <Pencil size={13} />
-                              </button>
-                              <button type="button" onClick={() => mover(i, -1)} disabled={i === 0} className={BOTAO_ICONE} title="Subir">
-                                <ChevronUp size={14} />
-                              </button>
-                              <button type="button" onClick={() => mover(i, 1)} disabled={i === macros.length - 1} className={BOTAO_ICONE} title="Descer">
-                                <ChevronDown size={14} />
-                              </button>
-                              <button
-                                type="button"
-                                onClick={() => removerMacro(macro)}
-                                className="rounded p-1 text-gray-400 transition hover:bg-red-50 hover:text-red-600"
-                                title="Excluir macro tarefa"
-                              >
-                                <Trash2 size={13} />
-                              </button>
-                            </>
-                          )}
-                        </div>
-                      </>
-                    )}
-                  </div>
-                  <div className="relative" style={{ width: larguraTempo }}>
-                    <BarraMacro macro={macro} ini={faixa.ini} px={px} />
-                  </div>
+        <div ref={corpoRef} onScroll={(e) => sincronizar(e.currentTarget)} className={ROLAGEM_SEM_BARRA}>
+          <div className="relative" style={{ width: LARGURA_ESQUERDA + larguraTempo }}>
+            {/* fundo: fins de semana e linha de hoje, atravessando todas as linhas */}
+            <div
+              className="pointer-events-none absolute inset-y-0"
+              style={{ left: LARGURA_ESQUERDA, width: larguraTempo, clipPath: 'inset(0 0 0 var(--rolado, 0px))' }}
+            >
+              {fimDeSemana.map((n) => (
+                <span key={n} className="absolute inset-y-0 bg-gray-50" style={{ left: (n - faixa.ini) * px, width: px }} />
+              ))}
+              <span className="absolute inset-y-0 z-[1] w-0.5 bg-red-400/70" style={{ left: xHoje }} />
+            </div>
+
+            {macros.length === 0 && (
+              <div className="relative flex">
+                <div className="sticky left-0 z-20 shrink-0 border-r border-gray-200 bg-white px-4 py-10 text-center" style={{ width: LARGURA_ESQUERDA }}>
+                  <p className="text-sm font-medium text-gray-700">Nenhuma macro tarefa ainda</p>
+                  <p className="mt-1 text-xs text-gray-400">
+                    {pode ? 'Crie as macro tarefas abaixo para organizar as atividades.' : 'Quem criou o plano ainda não cadastrou as macro tarefas.'}
+                  </p>
                 </div>
+              </div>
+            )}
 
-                {/* micro tarefas */}
-                {aberta &&
-                  micros.map((card) => {
-                    const b = BUCKET_POR_ID[card.bucket];
-                    return (
-                      <div key={card.id} className="relative flex min-h-11 border-b border-gray-100 hover:bg-primary-50/30">
-                        <button
-                          type="button"
-                          onClick={() => onAbrirCard(card.id)}
-                          className="sticky left-0 z-20 flex shrink-0 items-center gap-2 border-r border-gray-200 bg-white py-1.5 pl-9 pr-3 text-left hover:bg-gray-50"
-                          style={{ width: LARGURA_ESQUERDA }}
-                        >
-                          <span className={`h-2 w-2 shrink-0 rounded-full ${b.barra}`} title={b.titulo} />
-                          <span className="min-w-0 flex-1">
-                            <span className="block break-words text-xs font-medium leading-snug text-gray-700">{card.assunto}</span>
-                            <span className="block text-[10px] tabular-nums text-gray-400">
-                              {dataBR(card.data_inicio, false)} → {dataBR(card.data_fim, false)}
-                            </span>
-                          </span>
-                        </button>
-                        <div className="relative" style={{ width: larguraTempo }}>
-                          <BarraMicro card={card} ini={faixa.ini} px={px} usuarios={usuarios} onAbrir={onAbrirCard} />
-                        </div>
-                      </div>
-                    );
-                  })}
-                {aberta && micros.length === 0 && (
-                  <div className="relative flex h-9 border-b border-gray-100">
-                    <div className="sticky left-0 z-20 flex shrink-0 items-center border-r border-gray-200 bg-white pl-9 text-[11px] italic text-gray-400" style={{ width: LARGURA_ESQUERDA }}>
-                      Nenhuma atividade nesta macro
+            {macros.map((macro, i) => {
+              const micros = cards.filter((c) => c.macro_id === macro.id);
+              const aberta = abertas.has(macro.id);
+              return (
+                <Fragment key={macro.id}>
+                  {/* linha da macro tarefa */}
+                  <div className="group relative flex min-h-12 border-b border-gray-100 bg-gray-50/40">
+                    <div
+                      className="sticky left-0 z-20 flex shrink-0 items-center gap-1.5 border-r border-gray-200 bg-white py-1.5 pl-2 pr-2"
+                      style={{ width: LARGURA_ESQUERDA }}
+                    >
+                      <button
+                        type="button"
+                        onClick={() =>
+                          setAbertas((s) => {
+                            const n = new Set(s);
+                            if (n.has(macro.id)) n.delete(macro.id);
+                            else n.add(macro.id);
+                            return n;
+                          })
+                        }
+                        className="rounded p-0.5 text-gray-400 hover:bg-gray-100"
+                        title={aberta ? 'Recolher' : 'Expandir'}
+                      >
+                        {aberta ? <ChevronDown size={16} /> : <ChevronRight size={16} />}
+                      </button>
+                      {editandoMacro === macro.id ? (
+                        <NomeMacroEditavel
+                          valor={macro.nome}
+                          onCancelar={() => setEditandoMacro(null)}
+                          onSalvar={async (nome) => {
+                            if (await executar(() => renomearMacro(planoId, macro.id, nome), 'Não foi possível renomear.')) setEditandoMacro(null);
+                          }}
+                        />
+                      ) : (
+                        <>
+                          <div className="min-w-0 flex-1">
+                            <p className="break-words text-[13px] font-semibold leading-snug text-gray-900">
+                              {macro.nome}
+                            </p>
+                            <p className="text-[10px] text-gray-400">
+                              {macro.total} atividade{macro.total === 1 ? '' : 's'}
+                              {macro.inicio && ` · ${dataBR(macro.inicio, false)} → ${dataBR(macro.fim, false)}`}
+                            </p>
+                          </div>
+                          <div className="flex shrink-0 items-center opacity-0 transition group-hover:opacity-100">
+                            <button
+                              type="button"
+                              onClick={() => onNovoCard({ empresa_id: plano.empresa_id, plano_id: plano.id, macro_id: macro.id })}
+                              className={BOTAO_ICONE}
+                              title="Nova atividade nesta macro"
+                            >
+                              <Plus size={14} />
+                            </button>
+                            {pode && (
+                              <>
+                                <button type="button" onClick={() => setEditandoMacro(macro.id)} className={BOTAO_ICONE} title="Renomear">
+                                  <Pencil size={13} />
+                                </button>
+                                <button type="button" onClick={() => mover(i, -1)} disabled={i === 0} className={BOTAO_ICONE} title="Subir">
+                                  <ChevronUp size={14} />
+                                </button>
+                                <button type="button" onClick={() => mover(i, 1)} disabled={i === macros.length - 1} className={BOTAO_ICONE} title="Descer">
+                                  <ChevronDown size={14} />
+                                </button>
+                                <button
+                                  type="button"
+                                  onClick={() => removerMacro(macro)}
+                                  className="rounded p-1 text-gray-400 transition hover:bg-red-50 hover:text-red-600"
+                                  title="Excluir macro tarefa"
+                                >
+                                  <Trash2 size={13} />
+                                </button>
+                              </>
+                            )}
+                          </div>
+                        </>
+                      )}
+                    </div>
+                    <div className="relative" style={{ width: larguraTempo }}>
+                      <BarraMacro macro={macro} ini={faixa.ini} px={px} />
                     </div>
                   </div>
-                )}
-              </Fragment>
-            );
-          })}
 
-          {pode && (
-            <div className="relative flex">
-              <form onSubmit={adicionarMacro} className="sticky left-0 z-20 flex shrink-0 items-center gap-2 border-r border-gray-200 bg-white px-3 py-2.5" style={{ width: LARGURA_ESQUERDA }}>
-                <Plus size={15} className="shrink-0 text-gray-400" />
-                <input
-                  value={novaMacro}
-                  onChange={(e) => setNovaMacro(e.target.value)}
-                  maxLength={150}
-                  placeholder="Nova macro tarefa (Enter)"
-                  className="min-w-0 flex-1 rounded-md border border-transparent bg-transparent px-2 py-1.5 text-[13px] placeholder:text-gray-400 hover:border-gray-200 focus:border-primary-300 focus:bg-white focus:outline-none focus:ring-2 focus:ring-primary-100"
-                />
-                {salvandoMacro && <Loader2 size={14} className="animate-spin text-gray-400" />}
-              </form>
-            </div>
-          )}
+                  {/* micro tarefas */}
+                  {aberta &&
+                    micros.map((card) => {
+                      const b = BUCKET_POR_ID[card.bucket];
+                      return (
+                        <div key={card.id} className="relative flex min-h-11 border-b border-gray-100 hover:bg-primary-50/30">
+                          <button
+                            type="button"
+                            onClick={() => onAbrirCard(card.id)}
+                            className="sticky left-0 z-20 flex shrink-0 items-center gap-2 border-r border-gray-200 bg-white py-1.5 pl-9 pr-3 text-left hover:bg-gray-50"
+                            style={{ width: LARGURA_ESQUERDA }}
+                          >
+                            <span className={`h-2 w-2 shrink-0 rounded-full ${b.barra}`} title={b.titulo} />
+                            <span className="min-w-0 flex-1">
+                              <span className="block break-words text-xs font-medium leading-snug text-gray-700">{card.assunto}</span>
+                              <span className="block text-[10px] tabular-nums text-gray-400">
+                                {dataBR(card.data_inicio, false)} → {dataBR(card.data_fim, false)}
+                              </span>
+                            </span>
+                          </button>
+                          <div className="relative" style={{ width: larguraTempo }}>
+                            <BarraMicro card={card} ini={faixa.ini} px={px} usuarios={usuarios} onAbrir={onAbrirCard} />
+                          </div>
+                        </div>
+                      );
+                    })}
+                  {aberta && micros.length === 0 && (
+                    <div className="relative flex h-9 border-b border-gray-100">
+                      <div className="sticky left-0 z-20 flex shrink-0 items-center border-r border-gray-200 bg-white pl-9 text-[11px] italic text-gray-400" style={{ width: LARGURA_ESQUERDA }}>
+                        Nenhuma atividade nesta macro
+                      </div>
+                    </div>
+                  )}
+                </Fragment>
+              );
+            })}
+
+            {pode && (
+              <div className="relative flex">
+                <form onSubmit={adicionarMacro} className="sticky left-0 z-20 flex shrink-0 items-center gap-2 rounded-bl-xl border-r border-gray-200 bg-white px-3 py-2.5" style={{ width: LARGURA_ESQUERDA }}>
+                  <Plus size={15} className="shrink-0 text-gray-400" />
+                  <input
+                    value={novaMacro}
+                    onChange={(e) => setNovaMacro(e.target.value)}
+                    maxLength={150}
+                    placeholder="Nova macro tarefa (Enter)"
+                    className="min-w-0 flex-1 rounded-md border border-transparent bg-transparent px-2 py-1.5 text-[13px] placeholder:text-gray-400 hover:border-gray-200 focus:border-primary-300 focus:bg-white focus:outline-none focus:ring-2 focus:ring-primary-100"
+                  />
+                  {salvandoMacro && <Loader2 size={14} className="animate-spin text-gray-400" />}
+                </form>
+              </div>
+            )}
+          </div>
+        </div>
+
+        {/* barra de rolagem horizontal — grudada no rodapé da tela (-bottom-6 cancela o p-6 do <main>) */}
+        <div ref={barraRef} onScroll={(e) => sincronizar(e.currentTarget)} className="sticky -bottom-6 z-30 overflow-x-auto rounded-b-xl bg-white">
+          <div className="h-px" style={{ width: LARGURA_ESQUERDA + larguraTempo }} />
         </div>
       </div>
     </div>
