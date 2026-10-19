@@ -563,18 +563,18 @@ export default function DfcFluxoTab({
                       colSpan={m <= mesAtual ? 3 : 1}
                       title={atual ? 'Mês atual' : undefined}
                       className={`sticky top-0 z-20 border-l px-3 pt-2.5 text-center align-bottom ${
-                        atual && dashboard ? 'border-l-gray-200 bg-[#1d5c8a]' : `border-l-gray-200 bg-white ${atual ? 'bg-primary-50/60' : ''}`
+                        atual ? 'border-l-gray-200 bg-[#1d5c8a]' : 'border-l-gray-200 bg-white'
                       }`}
                       style={{ height: ALTURA_CAB_MES }}
                     >
-                      {/* "SET/2026" numa linha só, com o ano um pouco menor (pedido do usuário). No dashboard, o mês
-                          atual em azul forte com a fonte branca (pedido do usuário). */}
+                      {/* "SET/2026" numa linha só, com o ano um pouco menor (pedido do usuário). O mês atual em azul
+                          forte com a fonte branca, no dashboard e na aba DFC (pedido do usuário). */}
                       <span
-                        className={`text-[11px] font-semibold tracking-wider ${atual ? (dashboard ? 'text-white' : 'text-primary-700') : 'text-gray-600'}`}
+                        className={`text-[11px] font-semibold tracking-wider ${atual ? 'text-white' : 'text-gray-600'}`}
                       >
                         {MESES_CAB[Number(m.slice(5, 7)) - 1]}
                         <span
-                          className={`text-[10px] font-medium tracking-normal ${atual ? (dashboard ? 'text-white/75' : 'text-primary-500') : 'text-gray-400'}`}
+                          className={`text-[10px] font-medium tracking-normal ${atual ? 'text-white/75' : 'text-gray-400'}`}
                         >
                           /{m.slice(0, 4)}
                         </span>
