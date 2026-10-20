@@ -51,7 +51,7 @@ function duracaoTexto(seg) {
   return `${n} ${n === 1 ? 'mês' : 'meses'}`;
 }
 
-// Legenda: retângulo da cor de cada etapa (a forma da marca), etapa sem fim e a linha de hoje.
+// Legenda: retângulo da cor de cada etapa (a forma da marca) e a linha de hoje.
 export function LegendaGantt({ etapas }) {
   return (
     <div className="flex flex-wrap items-center gap-x-3 gap-y-1 text-[11px] text-gray-600">
@@ -61,10 +61,6 @@ export function LegendaGantt({ etapas }) {
           {etapa.descricao || 'Sem nome'}
         </span>
       ))}
-      <span className="flex items-center gap-1.5 text-gray-500">
-        <span className="h-2.5 w-3.5 rounded-[3px]" style={{ background: 'linear-gradient(to right, #9ca3af, #9ca3af00)' }} />
-        Sem fim definido
-      </span>
       <span className="flex items-center gap-1.5 text-gray-500">
         <span className="h-3 w-0.5 rounded-full bg-red-400" />
         Hoje
@@ -128,13 +124,13 @@ function BarraObra({ segmentos, ini, px, onDica }) {
     const primeiro = i === 0;
     const ultimo = i === segmentos.length - 1;
     const esquerda = xDe(seg.inicio);
-    const emAberto = !seg.fim;
-    // em aberto: três meses esmaecendo, sem ponta arredondada (a etapa continua)
-    const direita = emAberto ? esquerda + 3 * px : xDe(somarDias(seg.fim, 1));
-    const largura = Math.max(3, direita - esquerda - (ultimo ? 0 : 2));
+    // sem etapa posterior (sem fim conhecido): só o mês de início, sólido (pedido do usuário — sem
+    // degradê); a dica diz "sem fim definido"
+    const direita = seg.fim ? xDe(somarDias(seg.fim, 1)) : esquerda + px;
+    const largura = Math.max(4, direita - esquerda - (ultimo ? 0 : 2));
     const nome = seg.etapa.descricao || '';
-    const cabe = !emAberto && largura >= nome.length * 6.4 + 18;
-    const raio = `${primeiro ? 4 : 0}px ${ultimo && !emAberto ? 4 : 0}px ${ultimo && !emAberto ? 4 : 0}px ${primeiro ? 4 : 0}px`;
+    const cabe = largura >= nome.length * 6.4 + 18;
+    const raio = `${primeiro ? 4 : 0}px ${ultimo ? 4 : 0}px ${ultimo ? 4 : 0}px ${primeiro ? 4 : 0}px`;
     return (
       <div
         key={seg.etapa.id}
@@ -142,12 +138,7 @@ function BarraObra({ segmentos, ini, px, onDica }) {
         onMouseMove={(e) => onDica(e, seg)}
         onMouseLeave={() => onDica(null)}
         className="absolute top-1/2 flex h-5 -translate-y-1/2 items-center transition-[filter] hover:brightness-110"
-        style={{
-          left: esquerda,
-          width: largura,
-          borderRadius: raio,
-          background: emAberto ? `linear-gradient(to right, ${seg.cor} 0%, ${seg.cor} 35%, ${seg.cor}00 100%)` : seg.cor,
-        }}
+        style={{ left: esquerda, width: largura, borderRadius: raio, background: seg.cor }}
       >
         {/* o nome gruda na borda visível ao rolar (não fica cortado sob a coluna das obras) */}
         {cabe && (
@@ -239,7 +230,7 @@ export default function GanttObras({ etapas, obras, zoom, destaque, onAbrirObra 
   // Faixa de meses: anos inteiros, do primeiro início ao último fim (e hoje).
   const faixa = useMemo(() => {
     const marcos = [hoje];
-    obras.forEach((o) => o.segmentos.forEach((s) => marcos.push(s.inicio, s.fim || somarMeses(s.inicio, 3))));
+    obras.forEach((o) => o.segmentos.forEach((s) => marcos.push(s.inicio, s.fim || somarMeses(s.inicio, 1))));
     const idx = marcos.map(idxMes);
     const ini = Math.min(...idx);
     const fim = Math.max(...idx);
