@@ -1,6 +1,6 @@
 import { useEffect, useRef, useState } from 'react';
 import { useSearchParams } from 'react-router-dom';
-import { Building2, ChartGantt, Milestone, Plus } from 'lucide-react';
+import { Building2, ChartGantt, Milestone, Plus, Search } from 'lucide-react';
 import Card from '../../../components/Card';
 import Tabs from '../../../components/Tabs';
 import Button from '../../../components/Button';
@@ -10,6 +10,7 @@ import { nomeExibicaoEmpresa } from '../../../utils/empresa';
 import { useEmpresaTravada } from '../../../hooks/useEmpresaTravada';
 import AbaEmConstrucao from '../DfcConstrutoras/AbaEmConstrucao';
 import CronogramaEtapasTab from './CronogramaEtapasTab';
+import CronogramaCentrosTab from './CronogramaCentrosTab';
 
 // Mesmo padrão de DfcConstrutorasPage.jsx: o `{ divider: true }` separa os Cronogramas (a tela em
 // si) das abas de cadastro que dão suporte a eles. Abas pedidas pelo usuário; o que cada uma mostra
@@ -68,6 +69,10 @@ export default function CronogramasObrasPage() {
   // vive em CronogramaEtapasTab.jsx — dispara por ref.
   const etapasTabRef = useRef(null);
 
+  // Busca (código ou descrição) da aba Centros de Custos — só conveniência de navegador, fora da
+  // URL (mesma convenção da DFC).
+  const [buscaCentros, setBuscaCentros] = useState('');
+
   return (
     <div className="space-y-4">
       <Card className="shrink-0">
@@ -84,6 +89,23 @@ export default function CronogramasObrasPage() {
                 emptyMessage="Nenhuma empresa encontrada."
               />
             </div>
+
+            {abaAtiva === 'centros-custos' && (
+              <div className="sm:min-w-56 sm:max-w-sm sm:flex-1">
+                <label className="mb-1 block text-sm font-medium text-gray-700">Buscar</label>
+                <div className="relative">
+                  <Search size={15} className="pointer-events-none absolute left-3 top-1/2 -translate-y-1/2 text-gray-400" />
+                  <input
+                    type="text"
+                    value={buscaCentros}
+                    onChange={(e) => setBuscaCentros(e.target.value)}
+                    disabled={!empresaId}
+                    placeholder={!empresaId ? 'Selecione a empresa primeiro' : 'Buscar por código ou descrição...'}
+                    className="w-full rounded-lg border border-gray-200 py-2 pl-9 pr-3 text-sm focus:outline-none focus:ring-2 focus:ring-primary-100 disabled:bg-gray-50 disabled:text-gray-400"
+                  />
+                </div>
+              </div>
+            )}
           </div>
 
           {abaAtiva === 'etapas' && (
@@ -102,6 +124,12 @@ export default function CronogramasObrasPage() {
 
         {tabAtiva.id === 'etapas' ? (
           <CronogramaEtapasTab ref={etapasTabRef} empresaId={empresaId} />
+        ) : tabAtiva.id === 'centros-custos' ? (
+          <CronogramaCentrosTab
+            empresaId={empresaId}
+            search={buscaCentros}
+            onIrParaEtapas={() => atualizarParams({ aba: 'etapas' })}
+          />
         ) : (
           <AbaEmConstrucao key={tabAtiva.id} empresaId={empresaId} icon={tabAtiva.icon} titulo={tabAtiva.label} />
         )}

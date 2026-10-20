@@ -112,7 +112,7 @@ const CronogramaEtapasTab = forwardRef(function CronogramaEtapasTab({ empresaId 
   async function remover(etapa) {
     const confirmado = await confirm({
       title: 'Remover etapa',
-      description: `Remover "${etapa.descricao}"?`,
+      description: `Remover "${etapa.descricao}"? As datas dessa etapa no cronograma das obras (aba Centros de Custos) também serão apagadas.`,
       confirmLabel: 'Remover',
       variant: 'danger',
     });
