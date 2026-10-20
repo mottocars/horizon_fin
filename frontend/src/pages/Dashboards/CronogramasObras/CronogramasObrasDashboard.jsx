@@ -86,7 +86,9 @@ export default function CronogramasObrasDashboard() {
   }, [carregar]);
 
   const hoje = isoHoje();
-  const obras = useMemo(() => montarObras(centros, etapas, hoje), [centros, etapas, hoje]);
+  // Só as obras com alguma data de etapa (pedido do usuário): as sem cronograma saem do dashboard
+  // inteiro — cards, etiqueta e Gantt. Na aba de Operações elas continuam, com o convite pra preencher.
+  const obras = useMemo(() => montarObras(centros, etapas, hoje).filter((o) => o.segmentos.length), [centros, etapas, hoje]);
   const r = useMemo(() => resumoCarteira(obras, etapas), [obras, etapas]);
   const etapaDestacada = etapas.find((e) => e.id === destaque);
 
