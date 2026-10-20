@@ -129,7 +129,7 @@ function BarraObra({ segmentos, ini, px, onDica }) {
     const direita = seg.fim ? xDe(somarDias(seg.fim, 1)) : esquerda + px;
     const largura = Math.max(4, direita - esquerda - (ultimo ? 0 : 2));
     const nome = seg.etapa.descricao || '';
-    const cabe = largura >= nome.length * 6.4 + 18;
+    const cabe = largura >= nome.length * 7 + 20;
     const raio = `${primeiro ? 4 : 0}px ${ultimo ? 4 : 0}px ${ultimo ? 4 : 0}px ${primeiro ? 4 : 0}px`;
     return (
       <div
@@ -137,13 +137,13 @@ function BarraObra({ segmentos, ini, px, onDica }) {
         onMouseEnter={(e) => onDica(e, seg)}
         onMouseMove={(e) => onDica(e, seg)}
         onMouseLeave={() => onDica(null)}
-        className="absolute top-1/2 flex h-5 -translate-y-1/2 items-center transition-[filter] hover:brightness-110"
+        className="absolute top-1/2 flex h-7 -translate-y-1/2 items-center transition-[filter] hover:brightness-110"
         style={{ left: esquerda, width: largura, borderRadius: raio, background: seg.cor }}
       >
         {/* o nome gruda na borda visível ao rolar (não fica cortado sob a coluna das obras) */}
         {cabe && (
           <span
-            className="pointer-events-none sticky whitespace-nowrap px-2 text-[10.5px] font-semibold"
+            className="pointer-events-none sticky whitespace-nowrap px-2.5 text-[11.5px] font-semibold"
             style={{ left: LARGURA_NOMES, color: corDoTexto(seg.cor) }}
           >
             {nome}
