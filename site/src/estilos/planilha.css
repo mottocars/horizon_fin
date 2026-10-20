@@ -10,6 +10,7 @@
   padding: clamp(10px, 2vh, 22px) var(--gutter) clamp(18px, 3.6vh, 40px);
 }
 .folha {
+  position: relative;
   --num-w: 40px;
   --linha-h: 24px;
   --cols: 9;
@@ -348,7 +349,7 @@
       surgir 1ms linear 1.5s both,
       piscar 0.5s ease-out 1.5s;
   }
-  .cel__erro:not(.cel__erro--procv) {
+  .cel__erro:not(.cel__erro--procv):not(.cel__erro--viva) {
     animation: surgir 1ms linear calc(1.75s + var(--i, 0) * 0.09s) both;
   }
   .abertura__titulo {
@@ -360,6 +361,80 @@
     animation: none;
   }
 }
+/* Cursor de texto piscando no fim da fórmula, depois que ela termina de ser digitada. */
+@media (prefers-reduced-motion: no-preference) {
+  .folha__expr::after {
+    content: '';
+    display: inline-block;
+    width: 1px;
+    height: 1.05em;
+    margin-left: 2px;
+    vertical-align: -0.18em;
+    background: #333;
+    opacity: 0;
+    animation: caret 1.1s steps(1) 1.5s infinite;
+  }
+}
+@keyframes caret {
+  0%,
+  49% {
+    opacity: 1;
+  }
+  50%,
+  100% {
+    opacity: 0;
+  }
+}
+
+/* A Juliana editando (cenas/colega.js): cursor de colaboradora com o nome, que passeia pelas células. */
+.colega {
+  position: absolute;
+  top: 0;
+  left: 0;
+  z-index: 3;
+  pointer-events: none;
+  box-shadow: inset 0 0 0 2px var(--colega);
+  opacity: 0;
+  transition:
+    transform 0.6s cubic-bezier(0.45, 0, 0.2, 1),
+    width 0.6s cubic-bezier(0.45, 0, 0.2, 1),
+    height 0.3s ease,
+    opacity 0.4s ease;
+}
+.colega.visivel {
+  opacity: 1;
+}
+.colega.sem-transicao {
+  transition: opacity 0.4s ease;
+}
+.colega__nome {
+  position: absolute;
+  left: 0;
+  bottom: 100%;
+  padding: 1px 6px;
+  border-radius: 3px 3px 3px 0;
+  background: var(--colega);
+  color: #fff;
+  font: 600 11px/1.5 var(--f-planilha);
+  white-space: nowrap;
+}
+.colega--embaixo .colega__nome {
+  top: 100%;
+  bottom: auto;
+  border-radius: 0 3px 3px 3px;
+}
+.cel.editando {
+  background: color-mix(in srgb, var(--colega) 10%, #fff);
+}
+.cel.editada {
+  animation: editada 1.3s ease-out;
+}
+@keyframes editada {
+  from {
+    background: color-mix(in srgb, var(--colega) 22%, #fff);
+  }
+}
+
 @keyframes digitar {
   from {
     clip-path: inset(0 100% 0 0);

@@ -22,6 +22,7 @@
   --cromo-tinta: #5b6570;
   --erro: #c8312f;
   --marca-texto: #fff2a8; /* marca-texto amarelo de quem mexeu na planilha */
+  --colega: #5b3cc4; /* cursor da Juliana: o índigo do símbolo da marca (#311C81), clareado */
 
   /* Tipografia */
   --f-marca: 'Archivo Variable', 'Archivo', 'Arial Narrow', system-ui, sans-serif;

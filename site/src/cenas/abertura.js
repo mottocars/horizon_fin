@@ -1,10 +1,12 @@
 // Abertura e navegação: pular a animação da planilha na primeira interação, topo com borda ao rolar,
 // menu do celular e rolagem suave dos links internos (respeitando movimento reduzido).
 import { reduzir } from '../nucleo/preferencias.js';
+import { montarColega } from './colega.js';
 
 export function montarAbertura() {
   const hero = document.querySelector('[data-hero]');
   const pular = () => hero?.classList.add('intro-pular');
+  montarColega(hero?.querySelector('[data-folha]'));
   ['wheel', 'touchstart', 'keydown', 'pointerdown'].forEach((ev) => window.addEventListener(ev, pular, { once: true, passive: true }));
 
   const topo = document.querySelector('[data-topo]');
