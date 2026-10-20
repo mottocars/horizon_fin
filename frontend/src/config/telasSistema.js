@@ -33,6 +33,7 @@ export const TELAS_SISTEMA = [
       { codigo: '/operacoes/saldo-contas-bancarias', label: 'Saldo Contas Bancárias' },
       { codigo: '/operacoes/repasses-cef', label: 'Repasses CEF' },
       { codigo: '/operacoes/gestao-de-cobrancas', label: 'Gestão de Cobranças' },
+      { codigo: '/operacoes/cronogramas-obras', label: 'Cronogramas Obras' },
     ],
   },
   {

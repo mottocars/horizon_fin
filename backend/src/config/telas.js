@@ -17,6 +17,7 @@ module.exports = {
   SALDOS: '/operacoes/saldo-contas-bancarias',
   REPASSES: '/operacoes/repasses-cef',
   COBRANCAS: '/operacoes/gestao-de-cobrancas',
+  CRONOGRAMAS_OBRAS: '/operacoes/cronogramas-obras',
 
   MONITOR: '/integracoes/monitor',
   PORTAL: '/integracoes/portal-das-construtoras',

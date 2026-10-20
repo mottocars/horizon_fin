@@ -59,6 +59,7 @@ import GestaoCobrancasPage from './pages/Operacoes/GestaoCobrancas/GestaoCobranc
 import ClusterClientesList from './pages/Operacoes/GestaoCobrancas/ClustersCobranca/ClusterClientesList';
 import ClienteClusterDetalhe from './pages/Operacoes/GestaoCobrancas/ClustersCobranca/ClienteClusterDetalhe';
 import DistribuicaoExplicacaoPage from './pages/Operacoes/GestaoCobrancas/ReguaCobranca/DistribuicaoExplicacaoPage';
+import CronogramasObrasPage from './pages/Operacoes/CronogramasObras/CronogramasObrasPage';
 
 export default function App() {
   return (
@@ -104,6 +105,7 @@ export default function App() {
               path="/operacoes/gestao-de-cobrancas/clusters/:cluster/:clientId"
               element={<ClienteClusterDetalhe />}
             />
+            <Route path="/operacoes/cronogramas-obras" element={<CronogramasObrasPage />} />
 
             <Route path="/cadastros/empresas" element={<EmpresasList />} />
             <Route path="/cadastros/empresas/nova" element={<EmpresaNova />} />

@@ -30,6 +30,7 @@ import {
   BarChart3,
   Database,
   Wallet,
+  ChartGantt,
 } from 'lucide-react';
 import iconPortalConstrutoras from '../assets/integracoes/portal-construtoras.svg';
 import iconPrevision from '../assets/integracoes/prevision.svg';
@@ -75,6 +76,7 @@ const menuItems = [
       { label: 'Saldo Contas Bancárias', to: '/operacoes/saldo-contas-bancarias', icon: Landmark },
       { label: 'Repasses CEF', to: '/operacoes/repasses-cef', icon: Banknote },
       { label: 'Gestão de Cobranças', to: '/operacoes/gestao-de-cobrancas', icon: ReceiptText },
+      { label: 'Cronogramas Obras', to: '/operacoes/cronogramas-obras', icon: ChartGantt },
     ],
   },
   {
