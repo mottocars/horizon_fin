@@ -547,6 +547,12 @@
   color: var(--acao);
   font-weight: 650;
 }
+/* Com duas colunas, o título vai na coluna estreita: "Provavelmente" precisa caber nela. */
+@media (min-width: 961px) {
+  .perguntas .titulo {
+    font-size: min(var(--t-4), 3.4vw, 2.8rem);
+  }
+}
 @media (max-width: 960px) {
   .perguntas__miolo {
     grid-template-columns: minmax(0, 1fr);

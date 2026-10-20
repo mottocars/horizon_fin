@@ -152,6 +152,12 @@ for (const vp of VIEWPORTS) {
         .map((el) => `${el.tagName.toLowerCase()}.${[...el.classList].join('.')}`);
       return { scroll: document.documentElement.scrollWidth, janela: larguraTela, largos };
     }, vp.width);
+    const vazam = await page.evaluate(() =>
+      [...document.querySelectorAll('h1, h2, h3, .titulo, .subtitulo')]
+        .filter((el) => el.scrollWidth > el.clientWidth + 1)
+        .map((el) => `"${el.textContent.trim().slice(0, 40)}" (${el.scrollWidth}>${el.clientWidth})`)
+    );
+    if (vazam.length) falhar(`[${vp.nome}/${mov}] título vazando da coluna: ${vazam.join(' | ')}`);
     if (largura.scroll > largura.janela) falhar(`[${vp.nome}/${mov}] rolagem horizontal: ${largura.scroll} > ${largura.janela} (${largura.largos.join(', ')})`);
     if (mov === 'reduce') {
       const rodando = await page.evaluate(() => document.getAnimations().filter((a) => a.playState === 'running' && a.effect?.getTiming().iterations === Infinity).length);
