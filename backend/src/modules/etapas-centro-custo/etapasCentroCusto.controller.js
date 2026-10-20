@@ -1,5 +1,5 @@
 const { z } = require('zod');
-const service = require('./cronogramaEtapas.service');
+const service = require('./etapasCentroCusto.service');
 
 const empresaIdSchema = z.coerce.number().int().positive('Empresa inválida.');
 const idSchema = z.coerce.number().int().positive('Etapa inválida.');
@@ -16,7 +16,7 @@ const corSchema = z
   .transform((c) => c.toLowerCase());
 
 // `descricoes` (lista) em vez de uma só: colar várias linhas de uma vez no campo de criar
-// (ver CronogramaEtapasTab.jsx) cria todas numa chamada, na ordem em que vieram. `cores` é a cor
+// (ver EtapasCentroCustoEditor.jsx) cria todas numa chamada, na ordem em que vieram. `cores` é a cor
 // de cada uma, na mesma posição (a que faltar fica com a cor padrão da coluna).
 const createSchema = z
   .object({

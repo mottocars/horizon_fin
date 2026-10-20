@@ -9,7 +9,7 @@ import { listEmpresas } from '../../../api/empresas.api';
 import { nomeExibicaoEmpresa } from '../../../utils/empresa';
 import { useEmpresaTravada } from '../../../hooks/useEmpresaTravada';
 import AbaEmConstrucao from '../DfcConstrutoras/AbaEmConstrucao';
-import CronogramaEtapasTab from './CronogramaEtapasTab';
+import EtapasCentroCustoEditor from './EtapasCentroCustoEditor';
 import CronogramaCentrosTab from './CronogramaCentrosTab';
 
 // Mesmo padrão de DfcConstrutorasPage.jsx: o `{ divider: true }` separa os Cronogramas (a tela em
@@ -66,7 +66,7 @@ export default function CronogramasObrasPage() {
   }, [loadingEmpresas, empresas, empresaId]);
 
   // Botão "Nova etapa" fica no topo (mesmo esquema do "Nova máscara" da DFC), mas o campo de criar
-  // vive em CronogramaEtapasTab.jsx — dispara por ref.
+  // vive em EtapasCentroCustoEditor.jsx — dispara por ref.
   const etapasTabRef = useRef(null);
 
   // Busca (código ou descrição) da aba Centros de Custos — só conveniência de navegador, fora da
@@ -123,7 +123,11 @@ export default function CronogramasObrasPage() {
         <Tabs tabs={TABS} activeId={tabAtiva.id} onChange={(aba) => atualizarParams({ aba })} />
 
         {tabAtiva.id === 'etapas' ? (
-          <CronogramaEtapasTab ref={etapasTabRef} empresaId={empresaId} />
+          <EtapasCentroCustoEditor
+            ref={etapasTabRef}
+            empresaId={empresaId}
+            aviso="Mesma lista da máscara Etapas do Centro de Custo (Cadastros › Máscaras): mudar aqui muda lá."
+          />
         ) : tabAtiva.id === 'centros-custos' ? (
           <CronogramaCentrosTab
             empresaId={empresaId}

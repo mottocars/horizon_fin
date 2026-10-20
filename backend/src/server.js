@@ -47,7 +47,7 @@ const dfcContasRoutes = require('./modules/dfc-contas/dfcContas.routes');
 const dfcSaldosRoutes = require('./modules/dfc-saldos/dfcSaldos.routes');
 const dfcDetalhamentoRoutes = require('./modules/dfc-detalhamento/detalhamento.routes');
 const dfcExportacaoRoutes = require('./modules/dfc-exportacao/exportacao.routes');
-const cronogramaEtapasRoutes = require('./modules/cronograma-etapas/cronogramaEtapas.routes');
+const etapasCentroCustoRoutes = require('./modules/etapas-centro-custo/etapasCentroCusto.routes');
 const cronogramaCentrosRoutes = require('./modules/cronograma-centros/cronogramaCentros.routes');
 const dashboardsRoutes = require('./modules/dashboards/dashboards.routes');
 const bancosRoutes = require('./modules/bancos/bancos.routes');
@@ -185,7 +185,8 @@ app.use('/api/dfc-contas', exigirTela([T.DFC]), dfcContasRoutes);
 app.use('/api/dfc-saldos', exigirTela([T.DFC], LEITURA_DASHBOARD), dfcSaldosRoutes);
 app.use('/api/dfc-detalhamento', exigirTela([T.DFC], LEITURA_DASHBOARD), dfcDetalhamentoRoutes);
 app.use('/api/dfc-exportacao', exigirTela([T.DFC], LEITURA_DASHBOARD), dfcExportacaoRoutes);
-app.use('/api/cronograma-etapas', exigirTela([T.CRONOGRAMAS_OBRAS]), cronogramaEtapasRoutes);
+// Máscara Etapas do Centro de Custo: editada em Cadastros > Máscaras e em Cronogramas Obras > Etapas.
+app.use('/api/etapas-centro-custo', exigirTela([T.MASCARAS, T.CRONOGRAMAS_OBRAS]), etapasCentroCustoRoutes);
 app.use('/api/cronograma-centros', exigirTela([T.CRONOGRAMAS_OBRAS]), cronogramaCentrosRoutes);
 app.use('/api/dashboards', exigirTela([T.ECONOMICO_FINANCEIRO]), dashboardsRoutes);
 app.use('/api/bancos', exigirTela([T.SALDOS]), exigirMaster, bancosRoutes);

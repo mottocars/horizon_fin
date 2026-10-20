@@ -1,5 +1,5 @@
 const pool = require('../../config/db');
-const etapasService = require('../cronograma-etapas/cronogramaEtapas.service');
+const etapasService = require('../etapas-centro-custo/etapasCentroCusto.service');
 
 function erro(status, message) {
   const e = new Error(message);
@@ -23,8 +23,9 @@ async function datasPorCentro(empresaId, siengeId = null, db = pool) {
   return porCentro;
 }
 
-// As etapas da empresa (na ordem) e todos os centros de custo dela — mesma lista e ordem da aba
-// Centros Custos da DFC (dfcCentros.service.js) —, cada um com o Tipo e o cronograma.
+// As etapas da empresa (máscara Etapas do Centro de Custo, na ordem) e todos os centros de custo
+// dela — mesma lista e ordem da aba Centros Custos da DFC (dfcCentros.service.js) —, cada um com o
+// Tipo e o cronograma.
 async function list(empresaId) {
   const etapas = await etapasService.list(empresaId);
   const { rows: centros } = await pool.query(
@@ -65,10 +66,10 @@ async function updateDatas(empresaId, siengeId, { datas, dataTermino }, usuarioI
 
     const etapaIds = [...new Set(datas.map((d) => d.etapa_id))];
     if (etapaIds.length) {
-      const { rows } = await client.query('SELECT id FROM cronograma_etapas WHERE empresa_id = $1 AND id = ANY($2::int[])', [
-        empresaId,
-        etapaIds,
-      ]);
+      const { rows } = await client.query(
+        'SELECT id FROM mascara_itens WHERE tipo = $1 AND empresa_id = $2 AND id = ANY($3::int[])',
+        [etapasService.TIPO, empresaId, etapaIds]
+      );
       if (rows.length !== etapaIds.length) {
         throw erro(409, 'As etapas foram alteradas em outro lugar. Recarregue a tela e tente de novo.');
       }

@@ -3,6 +3,7 @@ import { Building2 } from 'lucide-react';
 import Card from '../../components/Card';
 import SearchableSelect from '../../components/SearchableSelect';
 import MascaraItensEditor from '../../components/MascaraItensEditor';
+import EtapasCentroCustoEditor from '../Operacoes/CronogramasObras/EtapasCentroCustoEditor';
 import { listEmpresas } from '../../api/empresas.api';
 import { nomeExibicaoEmpresa } from '../../utils/empresa';
 import { useEmpresaTravada } from '../../hooks/useEmpresaTravada';
@@ -86,6 +87,15 @@ export default function MascarasPage() {
               Cada empresa tem sua própria estrutura de DRE, DFC, Pacotes e Unidades de Negócio.
             </p>
           </div>
+        ) : tipo === 'ETAPAS_CENTRO_CUSTO' ? (
+          // Etapas do Centro de Custo é a lista única de etapas de obra — mesmo editor (e mesma lista)
+          // da aba Etapas de Cronogramas Obras, com cor, arrastar e o resto (pedido do usuário).
+          <EtapasCentroCustoEditor
+            key={empresaId}
+            empresaId={empresaId}
+            className=""
+            aviso="Mesma lista da aba Etapas de Operações › Cronogramas Obras: mudar aqui muda lá."
+          />
         ) : (
           <MascaraItensEditor tipo={tipo} empresaId={empresaId} grupo="" itemLabel={tipoLabel} />
         )}

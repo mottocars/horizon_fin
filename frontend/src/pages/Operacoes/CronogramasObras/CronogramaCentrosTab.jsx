@@ -6,6 +6,7 @@ import {
   updateDatasCronogramaCentro,
   updateNaturezaCronogramaCentro,
 } from '../../../api/cronogramaCentros.api';
+import { corPadrao } from '../../../utils/coresPadrao';
 import { anosEntre, dataValida, formatarData, mesesEntre, somarAnos, somarMeses } from './cronogramaDatas';
 
 const NATUREZAS = [
@@ -95,7 +96,8 @@ function CampoQtd({ valor, maximo, disabled, onSalvar, title }) {
 // Operações > Cronogramas Obras > Centros de Custos: todos os centros de custo da empresa (mesma
 // lista e mesmo visual da aba Centros Custos da DFC — DfcCentrosTab.jsx), com o Tipo (a MESMA coluna
 // de lá e do cadastro: mudar aqui muda lá) e, nas obras, o cronograma: pra cada etapa do cadastro
-// da aba Etapas, a data de início e a quantidade até a etapa seguinte (meses; na última, anos até o
+// da aba Etapas (a máscara Etapas do Centro de Custo do cadastro), a data de início e a quantidade
+// até a etapa seguinte (meses; na última, anos até o
 // término) — pedido do usuário. Só as datas são gravadas (ver cronogramaCentros.service.js):
 // - digitar uma data recalcula as quantidades vizinhas;
 // - digitar uma quantidade calcula e grava a data da etapa seguinte (na última, o término);
@@ -265,10 +267,10 @@ export default function CronogramaCentrosTab({ empresaId, search, onIrParaEtapas
             >
               <span className="row-span-2">Centro de custo</span>
               <span className="row-span-2">Tipo</span>
-              {etapas.map((etapa) => (
+              {etapas.map((etapa, i) => (
                 <span key={etapa.id} className="col-span-2 flex min-w-0 items-center justify-center gap-1.5" title={etapa.descricao}>
-                  <span className="h-2.5 w-2.5 shrink-0 rounded-full" style={{ backgroundColor: etapa.cor }} />
-                  <span className="truncate">{etapa.descricao}</span>
+                  <span className="h-2.5 w-2.5 shrink-0 rounded-full" style={{ backgroundColor: etapa.cor || corPadrao(i) }} />
+                  <span className="truncate">{etapa.descricao || 'Sem nome'}</span>
                 </span>
               ))}
               {etapas.length > 0 && (

@@ -432,6 +432,9 @@ CREATE TABLE mascara_itens (
     -- pra essa etapa. NULL nos demais tipos (DRE, DFC, PACOTES...), que não
     -- representam um passo de funil com prazo.
     sla_dias      INTEGER,
+    -- Só usado em tipo='ETAPAS_CENTRO_CUSTO' — cor da etapa (#rrggbb) no cronograma das obras.
+    -- Ver database/migrations/2026-10-20-mascara-itens-cor.sql.
+    cor           VARCHAR(7),
     criado_em     TIMESTAMP DEFAULT NOW(),
     atualizado_em TIMESTAMP DEFAULT NOW(),
     UNIQUE (tipo, empresa_id, grupo, sequencia)
@@ -3607,31 +3610,14 @@ CREATE TABLE IF NOT EXISTS usuarios_dashboard_favoritos (
     PRIMARY KEY (usuario_id, dashboard)
 );
 
--- ─── Operações > Cronogramas Obras > Etapas — ver database/migrations/2026-10-20-cronograma-etapas.sql ───
--- Etapas de obra por empresa, num nível só, reordenáveis arrastando, cada uma com a sua cor.
-CREATE TABLE cronograma_etapas (
-    id            SERIAL PRIMARY KEY,
-    empresa_id    INTEGER NOT NULL REFERENCES empresas(id) ON DELETE CASCADE,
-    ordem         INTEGER NOT NULL,
-    descricao     VARCHAR(150) NOT NULL,
-    cor           VARCHAR(7) NOT NULL DEFAULT '#3b82f6',
-    criado_em     TIMESTAMP DEFAULT NOW(),
-    atualizado_em TIMESTAMP DEFAULT NOW()
-);
-
-CREATE INDEX idx_cronograma_etapas_empresa ON cronograma_etapas (empresa_id, ordem);
-
-CREATE TRIGGER trg_cronograma_etapas_atualizado_em
-    BEFORE UPDATE ON cronograma_etapas
-    FOR EACH ROW EXECUTE FUNCTION set_atualizado_em();
-
 -- ─── Operações > Cronogramas Obras > Centros de Custos — ver database/migrations/2026-10-20-cronograma-centros.sql ───
--- Cronograma de cada obra: data de início de cada etapa e o término da última. Só datas; as
--- quantidades (meses entre etapas, anos da última) são calculadas na tela.
+-- Cronograma de cada obra: data de início de cada etapa (item da máscara ETAPAS_CENTRO_CUSTO) e o
+-- término da última. Só datas; as quantidades (meses entre etapas, anos da última) são calculadas
+-- na tela.
 CREATE TABLE cronograma_centro_etapas (
     empresa_id    INTEGER NOT NULL,
     sienge_id     INTEGER NOT NULL,
-    etapa_id      INTEGER NOT NULL REFERENCES cronograma_etapas(id) ON DELETE CASCADE,
+    etapa_id      INTEGER NOT NULL REFERENCES mascara_itens(id) ON DELETE CASCADE,
     data          DATE NOT NULL,
     usuario_id    INTEGER REFERENCES usuarios(id) ON DELETE SET NULL,
     atualizado_em TIMESTAMP NOT NULL DEFAULT NOW(),

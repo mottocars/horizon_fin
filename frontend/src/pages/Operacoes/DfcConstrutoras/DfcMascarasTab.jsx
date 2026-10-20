@@ -91,7 +91,7 @@ function aplicarMovimento(arvore, arrastado, alvo) {
 // Campo de texto usado tanto pra criar quanto pra renomear: Enter salva, Esc cancela, sair do
 // campo com texto salva (sem texto, só fecha). `onSalvar(texto, viaEnter)` — só o Enter
 // "emenda" o próximo campo de criação; sair clicando fora não. CampoNome, BotaoAcao e Indicador
-// também são usados pela aba Etapas de Cronogramas Obras (CronogramaEtapasTab.jsx).
+// também são usados pelo editor da máscara Etapas do Centro de Custo (EtapasCentroCustoEditor.jsx).
 export function CampoNome({ valorInicial = '', placeholder, onSalvar, onCancelar, onColarVarias, className = '' }) {
   const [valor, setValor] = useState(valorInicial);
   const encerrado = useRef(false);

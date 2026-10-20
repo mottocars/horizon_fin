@@ -1,5 +1,6 @@
 -- Operações > Cronogramas Obras > aba Centros de Custos: o cronograma de cada obra — a data de
--- início de cada etapa (cadastro da aba Etapas) e o término da última. Só as datas são gravadas: a
+-- início de cada etapa (máscara "Etapas do Centro de Custo" — mascara_itens, tipo
+-- ETAPAS_CENTRO_CUSTO; ver 2026-10-20-mascara-itens-cor.sql) e o término da última. Só as datas são gravadas: a
 -- quantidade entre uma etapa e a seguinte (meses; na última, anos até o término) é sempre calculada
 -- pela tela a partir delas, então reordenar ou criar etapas nunca deixa uma quantidade "velha".
 -- Linha só existe com data (apagar a data apaga a linha). Ligadas ao centro de custo como os
@@ -9,7 +10,7 @@
 CREATE TABLE IF NOT EXISTS cronograma_centro_etapas (
     empresa_id    INTEGER NOT NULL,
     sienge_id     INTEGER NOT NULL,     -- o centro de custo
-    etapa_id      INTEGER NOT NULL REFERENCES cronograma_etapas(id) ON DELETE CASCADE,
+    etapa_id      INTEGER NOT NULL REFERENCES mascara_itens(id) ON DELETE CASCADE,  -- item ETAPAS_CENTRO_CUSTO
     data          DATE NOT NULL,        -- início da etapa nesta obra
     usuario_id    INTEGER REFERENCES usuarios(id) ON DELETE SET NULL,
     atualizado_em TIMESTAMP NOT NULL DEFAULT NOW(),

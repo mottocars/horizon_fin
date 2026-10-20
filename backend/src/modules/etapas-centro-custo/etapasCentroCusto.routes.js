@@ -1,7 +1,7 @@
 const { Router } = require('express');
 const authMiddleware = require('../../middlewares/auth.middleware');
 const { paramEmpresa } = require('../../middlewares/acesso.middleware');
-const controller = require('./cronogramaEtapas.controller');
+const controller = require('./etapasCentroCusto.controller');
 
 const router = Router();
 
