@@ -5,11 +5,11 @@
 // Botão "Acessar o sistema": a raiz do app — logado cai direto no Horizon, deslogado vai para o login.
 export const APP_URL = 'https://financas.horizonhub.com.br/';
 
-// PENDENTE: número do WhatsApp comercial (DDI + DDD + número, só dígitos). Enquanto for este
+// Número do WhatsApp comercial (DDI + DDD + número, só dígitos): (31) 99592-7763. Se voltar a ser o
 // placeholder, o build avisa.
 export const WHATSAPP_PLACEHOLDER = '5500000000000';
 export const WHATSAPP = {
-  numero: WHATSAPP_PLACEHOLDER,
+  numero: '5531995927763',
   // Mensagem pronta de cada botão, pelo contexto em que ele aparece.
   mensagens: {
     padrao: 'Olá! Quero ver o Horizon Finanças funcionando na minha empresa.',
