@@ -447,7 +447,6 @@
   /* Vermelho translúcido: a planilha aparece por baixo (com um leve desfoque, para o texto seguir legível). */
   background: radial-gradient(ellipse at 50% 45%, rgb(207 53 48 / 0.68) 0%, rgb(168 25 31 / 0.76) 62%, rgb(134 16 26 / 0.84) 100%);
   backdrop-filter: blur(1.5px);
-  -webkit-backdrop-filter: blur(1.5px);
   color: #fff;
   font-family: var(--f-marca);
   cursor: default;

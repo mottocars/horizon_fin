@@ -178,7 +178,6 @@
   height: var(--topo-h);
   background: color-mix(in srgb, var(--nevoa) 92%, transparent);
   backdrop-filter: saturate(1.4) blur(10px);
-  -webkit-backdrop-filter: saturate(1.4) blur(10px);
   border-bottom: 1px solid transparent;
   transition: border-color 0.2s ease;
 }
