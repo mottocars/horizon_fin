@@ -117,8 +117,10 @@ function Regua({ ini, fim, px, xHoje }) {
 }
 
 // A barra da obra: um segmento por etapa, colados, separados por 2px de respiro; pontas
-// arredondadas só nos extremos. O nome da etapa vai dentro do segmento quando cabe com folga.
-function BarraObra({ segmentos, ini, px, onDica }) {
+// arredondadas só nos extremos. Dentro do segmento: no mês a mês, o número sequencial de cada mês
+// na etapa (1, 2, 3…, sutil — pedido do usuário); na visão geral, onde o mês é estreito demais pra
+// número, o nome da etapa quando cabe com folga.
+function BarraObra({ segmentos, ini, px, mensal, onDica }) {
   const xDe = (iso) => (posMes(iso) - ini) * px;
   return segmentos.map((seg, i) => {
     const primeiro = i === 0;
@@ -129,7 +131,11 @@ function BarraObra({ segmentos, ini, px, onDica }) {
     const direita = seg.fim ? xDe(somarDias(seg.fim, 1)) : esquerda + px;
     const largura = Math.max(4, direita - esquerda - (ultimo ? 0 : 2));
     const nome = seg.etapa.descricao || '';
-    const cabe = largura >= nome.length * 7 + 20;
+    const cabe = !mensal && largura >= nome.length * 7 + 20;
+    // quantos meses a etapa tem — a mesma conta da duração (até o dia seguinte ao fim, arredondado:
+    // 5 anos de Pós Obra dão 60, não 61); sem fim: só o mês de início
+    const qtdMeses = !mensal ? 0 : seg.fim ? Math.max(1, Math.round(posMes(somarDias(seg.fim, 1)) - posMes(seg.inicio))) : 1;
+    const corNumero = corDoTexto(seg.cor);
     const raio = `${primeiro ? 4 : 0}px ${ultimo ? 4 : 0}px ${ultimo ? 4 : 0}px ${primeiro ? 4 : 0}px`;
     // Linha separando os meses dentro da barra (pedido do usuário): um traço claro de 1px em cada
     // virada de mês, alinhado à régua; mais suave quando os meses são estreitos (visão geral).
@@ -162,6 +168,20 @@ function BarraObra({ segmentos, ini, px, onDica }) {
             {nome}
           </span>
         )}
+        {Array.from({ length: qtdMeses }, (_, k) => {
+          const x = (idxMes(seg.inicio) + k - ini) * px - esquerda;
+          // nunca fora da barra (mês que só encosta nela não ganha número)
+          if (x + px / 2 > largura) return null;
+          return (
+            <span
+              key={k}
+              className="pointer-events-none absolute inset-y-0 flex items-center justify-center text-[10px] font-medium tabular-nums"
+              style={{ left: x, width: px, color: corNumero, opacity: 0.6 }}
+            >
+              {k + 1}
+            </span>
+          );
+        })}
       </div>
     );
   });
@@ -346,7 +366,7 @@ export default function GanttObras({ etapas, obras, zoom, destaque, onAbrirObra 
                 <SituacaoObra situacao={o.situacao} centro={o.centro} clicavel={clicavel} />
               </div>
               <div className="relative transition-colors group-hover:bg-primary-50/25" style={{ width: larguraTempo }}>
-                <BarraObra segmentos={o.segmentos} ini={faixa.ini} px={px} onDica={mostrarDica(o.centro)} />
+                <BarraObra segmentos={o.segmentos} ini={faixa.ini} px={px} mensal={zoom === 'mensal'} onDica={mostrarDica(o.centro)} />
               </div>
             </div>
           </Fragment>
