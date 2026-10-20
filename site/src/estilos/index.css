@@ -10,5 +10,6 @@
 @import './componentes.css' layer(componentes);
 @import './planilha.css' layer(planilha);
 @import './mock.css' layer(mock);
+@import './espiao.css' layer(mock);
 @import './secoes.css' layer(secoes);
 @import './util.css' layer(util);

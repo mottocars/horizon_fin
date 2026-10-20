@@ -654,3 +654,74 @@
   line-height: 1;
   color: var(--erro);
 }
+
+/* ─── 7. Espião NF-e / NFS-e ────────────────────────────────────────────────────────────────── */
+.notas__intro {
+  display: flex;
+  flex-direction: column;
+  gap: 1.1rem;
+  margin-bottom: clamp(2rem, 4vw, 3rem);
+}
+.notas__intro .titulo {
+  max-width: 21ch;
+}
+.notas__depois {
+  display: flex;
+  flex-direction: column;
+  gap: clamp(2.5rem, 5vw, 4rem);
+  margin-top: clamp(2.5rem, 5vw, 4rem);
+}
+.notas__gatilho {
+  display: grid;
+  grid-template-columns: minmax(0, 1.5fr) minmax(0, 1fr);
+  align-items: center;
+  gap: 1.5rem clamp(1.5rem, 4vw, 3.5rem);
+  padding: clamp(1.5rem, 3vw, 2.4rem) clamp(1.25rem, 3vw, 2.4rem);
+  border-left: 6px solid var(--warn, #fab219);
+  border-radius: 0 var(--raio-janela) var(--raio-janela) 0;
+  background: #fff;
+  box-shadow: var(--sombra-folha);
+}
+.notas__pergunta {
+  max-width: 24ch;
+  font-size: clamp(1.6rem, 1.1rem + 1.9vw, 2.6rem);
+  font-weight: 800;
+  font-stretch: 118%;
+  line-height: 1.08;
+  letter-spacing: -0.02em;
+  color: var(--marca);
+  text-wrap: balance;
+}
+.notas__chamada {
+  display: flex;
+  flex-direction: column;
+  align-items: flex-start;
+  gap: 0.8rem;
+}
+.notas__achado {
+  display: flex;
+  flex-direction: column;
+  gap: 0.35rem;
+  max-width: none;
+  padding-left: clamp(1rem, 2.5vw, 2rem);
+  border-left: 1px solid var(--grade-forte);
+  color: var(--tinta-2);
+}
+.notas__achado strong {
+  font-size: clamp(2rem, 1.3rem + 2.6vw, 3.4rem);
+  font-weight: 700;
+  line-height: 1;
+  letter-spacing: -0.02em;
+  color: #8a5a00;
+  font-variant-numeric: tabular-nums;
+}
+@media (max-width: 760px) {
+  .notas__gatilho {
+    grid-template-columns: minmax(0, 1fr);
+  }
+  .notas__achado {
+    padding: 1rem 0 0;
+    border-left: 0;
+    border-top: 1px solid var(--grade-forte);
+  }
+}

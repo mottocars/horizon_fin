@@ -30,6 +30,7 @@ function iniciar() {
   quandoPerto(el('[data-dre]'), () => montar('dre', async () => (await import('./cenas/dre.js')).montarDre(el('[data-dre]'), ctx)));
   quandoPerto(el('[data-orcamento]'), () => montar('orcamento', async () => (await import('./cenas/orcamento.js')).montarOrcamento(el('[data-orcamento]'), ctx)));
   quandoPerto(el('[data-simulador]'), () => montar('simulador', async () => (await import('./cenas/simulador.js')).montarSimulador(el('[data-simulador]'), ctx)));
+  quandoPerto(el('[data-espiao]'), () => montar('espiao', async () => (await import('./cenas/espiao.js')).montarEspiao(el('[data-espiao]'), ctx)));
   quandoPerto(el('[data-cena="dia"]'), () => montar('dia', async () => (await import('./cenas/dia.js')).montarDia(el('[data-cena="dia"]'), ctx)));
   quandoPerto(el('[data-cena="ia"]'), () => montar('ia', async () => (await import('./cenas/ia.js')).montarIa(el('[data-cena="ia"]'), ctx)));
   quandoPerto(el('[data-monitor]'), () => montar('integracoes', async () => (await import('./cenas/integracoes.js')).montarIntegracoes(el('[data-monitor]'))));

@@ -18,6 +18,7 @@ export const WHATSAPP = {
     simulador: 'Olá! Brinquei com o simulador do site e quero ver o Horizon com os números da minha empresa.',
     ia: 'Olá! Quero ver a IA do Horizon respondendo sobre o financeiro da minha empresa.',
     erp: 'Olá! Uso outro ERP e quero saber como o Horizon se conecta a ele.',
+    notas: 'Olá! Quero ver quais notas fiscais foram emitidas contra o meu CNPJ. Como funciona o Espião do Horizon?',
     dialogo: 'Olá! Acabei de excluir a planilha "NÃO MEXER" no site de vocês. E agora? Quero o Horizon.',
   },
 };

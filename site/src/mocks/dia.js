@@ -109,51 +109,6 @@ export const saldos = {
   },
 };
 
-// ─── 09:00 Espião NF-e / NFS-e ───────────────────────────────────────────────────────────────────
-const NOTAS = [
-  ['Embalagens Minas Ltda', 'NF-e 48.211', 'R$ 84.300,00', 'good', 'Vinculada'],
-  ['Transportadora Rota 040', 'NFS-e 9.072', 'R$ 31.950,00', 'good', 'Vinculada'],
-  ['Atacado Sul Alimentos', 'NF-e 120.554', 'R$ 212.708,40', 'good', 'Vinculada'],
-  ['TechNuvem Serviços', 'NFS-e 3.318', 'R$ 12.400,00', 'warn', 'Sem pedido'],
-  ['Gráfica Ponto Azul', 'NF-e 7.902', 'R$ 6.180,00', 'good', 'Vinculada'],
-  ['Pneus Centro-Oeste', 'NF-e 61.045', 'R$ 47.660,00', 'good', 'Vinculada'],
-];
-export const notas = {
-  html: () => `${barraJanela(['Operações', 'Espião NFe / NFSe', 'Recebidas'], { usuario: false })}
-    <div class="mock">
-      <div class="mock__cab"><h3 class="mock__titulo">Notas recebidas hoje</h3><span class="mock__sub"><span data-n>23</span> notas · 21 vinculadas ao contas a pagar</span></div>
-      <div class="panel" style="padding:0;overflow-x:auto">
-        <table class="nfe-tab">
-          <thead><tr><th>Emitente</th><th>Nota</th><th style="text-align:right">Valor</th><th>Situação</th></tr></thead>
-          <tbody>${NOTAS.map(([e, n, v, t, s]) => `<tr><td>${esc(e)}</td><td>${n}</td><td class="num">${v}</td><td><span class="chip ${t}">${s}</span></td></tr>`).join('')}</tbody>
-        </table>
-      </div>
-      <p class="note">PDF gerado na hora. A nota "sem pedido" vai para quem aprova antes do boleto vencer.</p>
-    </div>`,
-  animar(el) {
-    const a = agenda();
-    const linhas = [...el.querySelectorAll('tbody tr')];
-    const n = el.querySelector('[data-n]');
-    const ciclo = () => {
-      linhas.forEach((l) => {
-        l.style.visibility = 'hidden';
-        l.classList.remove('chegando');
-      });
-      n.textContent = '17';
-      linhas.forEach((l, i) =>
-        a.depois(500 + i * 650, () => {
-          l.style.visibility = '';
-          l.classList.add('chegando');
-          n.textContent = String(18 + i);
-        })
-      );
-      a.depois(500 + linhas.length * 650 + 4000, ciclo);
-    };
-    ciclo();
-    return a.parar;
-  },
-};
-
 // ─── 10:30 Gestão de cobranças ───────────────────────────────────────────────────────────────────
 export const cobranca = {
   html: () => `${barraJanela(['Operações', 'Gestão de Cobranças', 'Rotinas'], { usuario: false })}
@@ -218,7 +173,7 @@ export const tarefas = {
     const cards = {
       0: [[`Fechamento DRE ${mes}`, 'Rafael', 'em 12 dias']],
       1: [[`Conciliação Itaú ${ant}`, 'Juliana', 'vence hoje', 'mover']],
-      2: [['Notas sem pedido (2)', 'Carla', '1 dia de atraso']],
+      2: [['Lançar notas pendentes (2)', 'Carla', '1 dia de atraso']],
       3: [
         ['Saldos da semana', 'Juliana', 'entregue'],
         ['Revisão do orçamento v3', 'Marcos', 'entregue'],
@@ -263,4 +218,4 @@ export const tarefas = {
   },
 };
 
-export const TELAS = { monitor, saldos, notas, cobranca, tarefas };
+export const TELAS = { monitor, saldos, cobranca, tarefas };

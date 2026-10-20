@@ -22,7 +22,7 @@ const VIEWPORTS = [
   { nome: '360', width: 360, height: 740, isMobile: true, hasTouch: true, deviceScaleFactor: 2 },
 ].filter((v) => !SO || SO.split(',').includes(v.nome));
 const MOVIMENTOS = arg('movimento', 'no-preference,reduce').split(',');
-const ALVOS = ['inicio', 'custo', 'painel', 'queda', '[data-folego]', 'dre', 'orcamento', 'cenarios', '[data-simulador] .sim', 'dia', 'dia-saldos', 'dia-tarefas', 'ia', 'integracoes', 'seguranca', 'perguntas', 'nao-mexer'];
+const ALVOS = ['inicio', 'custo', 'painel', 'queda', '[data-folego]', 'dre', 'orcamento', 'cenarios', '[data-simulador] .sim', 'notas', '[data-espiao]', 'dia', 'dia-saldos', 'dia-tarefas', 'ia', 'integracoes', 'seguranca', 'perguntas', 'nao-mexer'];
 
 let falhas = 0;
 const falhar = (msg) => {
@@ -63,6 +63,18 @@ async function interacoes(page, falhar) {
     await espera(async () => /zera em/.test(await txt('[data-s-titulo]')), 'simulador: Estresse deveria zerar o caixa');
     await page.click('[data-preset="base"]');
     await espera(async () => /acima do colchão/.test(await txt('[data-s-titulo]')), 'simulador: Orçamento deveria ficar acima do colchão');
+    await ver('[data-espiao]');
+    await page.waitForSelector('[data-espiao] [data-aba="vinculadas"]');
+    await page.waitForFunction(() => !document.querySelector('[data-consultar]').disabled, null, { timeout: 30000 });
+    await espera(async () => /Recebidas \(2\)/.test(await txt('[data-espiao] [data-aba="recebidas"]')), 'espião: deveriam sobrar 2 notas em Recebidas');
+    await espera(async () => /87\.420,00/.test(await txt('[data-acervo-valor]')), 'espião: acervo deveria somar R$ 87.420,00');
+    await page.click('[data-espiao] [data-aba="vinculadas"]');
+    await espera(async () => (await page.locator('[data-espiao] tr.nota').count()) === 5, 'espião: aba Vinculadas deveria ter 5 notas');
+    await page.click('[data-espiao] [data-aba="canceladas"]');
+    await espera(async () => (await page.locator('[data-espiao] tr.nota.cancelada').count()) === 1, 'espião: aba Canceladas deveria ter 1 nota');
+    await page.click('[data-consultar]');
+    await page.waitForTimeout(500);
+    await espera(async () => /Consultando/.test(await txt('[data-status]')), 'espião: Consultar novamente não recomeçou');
     await ver('#nao-mexer');
     await page.waitForTimeout(500);
     await page.click('[data-cancelar]');
