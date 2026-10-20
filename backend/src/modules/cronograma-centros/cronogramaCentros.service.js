@@ -1,6 +1,16 @@
 const pool = require('../../config/db');
 const etapasService = require('../etapas-centro-custo/etapasCentroCusto.service');
 
+// O cronograma de cada obra É o Histórico de Etapas do centro de custo (centro_custo_etapas_historico
+// — pedido do usuário): uma linha por etapa da máscara Etapas do Centro de Custo, com data_inicio e
+// data_fim. Editado na aba Centros de Custos de Cronogramas Obras e na aba Histórico de Etapas do
+// cadastro do centro (Cadastros > Centros de Custos) — as duas gravam por updateDatas.
+//
+// As etapas vão em sequência: a duração de uma etapa é o tempo até o início da seguinte (meses; na
+// última, anos até o fim dela). A data_fim continua gravada porque outras telas leem (Curva de
+// Vendas usa o fim da Entrega, Curva de Obras o período de "Obras"): é a véspera do início da etapa
+// seguinte e, na última, o término (início + os anos informados).
+
 function erro(status, message) {
   const e = new Error(message);
   e.status = status;
@@ -8,19 +18,37 @@ function erro(status, message) {
   return e;
 }
 
-// Datas do cronograma de um centro (ou de todos, sem siengeId): Map sienge_id -> { etapa_id: data }.
-async function datasPorCentro(empresaId, siengeId = null, db = pool) {
+function vespera(data) {
+  const d = new Date(`${data}T00:00:00Z`);
+  d.setUTCDate(d.getUTCDate() - 1);
+  return d.toISOString().slice(0, 10);
+}
+
+// Histórico do centro (ou de todos, sem siengeId): Map sienge_id -> { inicios: {etapaId: data},
+// fins: {etapaId: data} }.
+async function historicoPorCentro(empresaId, siengeId = null, db = pool) {
   const { rows } = await db.query(
-    `SELECT sienge_id, etapa_id, data FROM cronograma_centro_etapas
-      WHERE empresa_id = $1 AND ($2::int IS NULL OR sienge_id = $2)`,
+    `SELECT sienge_id, mascara_item_id, data_inicio, data_fim FROM centro_custo_etapas_historico
+      WHERE empresa_id = $1 AND ($2::int IS NULL OR sienge_id = $2)
+      ORDER BY data_inicio ASC`,
     [empresaId, siengeId]
   );
   const porCentro = new Map();
   rows.forEach((r) => {
-    if (!porCentro.has(r.sienge_id)) porCentro.set(r.sienge_id, {});
-    porCentro.get(r.sienge_id)[r.etapa_id] = r.data;
+    if (!porCentro.has(r.sienge_id)) porCentro.set(r.sienge_id, { inicios: {}, fins: {} });
+    const c = porCentro.get(r.sienge_id);
+    c.inicios[r.mascara_item_id] = r.data_inicio;
+    c.fins[r.mascara_item_id] = r.data_fim;
   });
   return porCentro;
+}
+
+// Formato da tela: datas = início de cada etapa, fins = fim gravado (a tela usa quando falta o
+// início da seguinte — histórico antigo), data_termino = fim da última etapa.
+function cronogramaDoCentro(historico, etapas) {
+  const h = historico || { inicios: {}, fins: {} };
+  const ultima = etapas[etapas.length - 1];
+  return { datas: h.inicios, fins: h.fins, data_termino: (ultima && h.fins[ultima.id]) || null };
 }
 
 // As etapas da empresa (máscara Etapas do Centro de Custo, na ordem) e todos os centros de custo
@@ -29,15 +57,13 @@ async function datasPorCentro(empresaId, siengeId = null, db = pool) {
 async function list(empresaId) {
   const etapas = await etapasService.list(empresaId);
   const { rows: centros } = await pool.query(
-    `SELECT c.sienge_id, c.name, c.apelido, c.status, c.natureza, t.data_termino
-       FROM centros_custo_sienge c
-       LEFT JOIN cronograma_centros t ON t.empresa_id = c.empresa_id AND t.sienge_id = c.sienge_id
-      WHERE c.empresa_id = $1
-      ORDER BY c.sienge_id::text ASC`,
+    `SELECT sienge_id, name, apelido, status, natureza FROM centros_custo_sienge
+      WHERE empresa_id = $1
+      ORDER BY sienge_id::text ASC`,
     [empresaId]
   );
-  const datas = await datasPorCentro(empresaId);
-  return { etapas, centros: centros.map((c) => ({ ...c, datas: datas.get(c.sienge_id) || {} })) };
+  const historico = await historicoPorCentro(empresaId);
+  return { etapas, centros: centros.map((c) => ({ ...c, ...cronogramaDoCentro(historico.get(c.sienge_id), etapas) })) };
 }
 
 // Tipo do centro — a MESMA coluna da aba Centros Custos da DFC e do cadastro do centro de custo:
@@ -52,9 +78,10 @@ async function updateNatureza(empresaId, siengeId, natureza) {
   return rows[0] || null;
 }
 
-// Grava as datas que mudaram (data null apaga) e, se veio, o término. Devolve o cronograma do
-// centro como ficou.
-async function updateDatas(empresaId, siengeId, { datas, dataTermino }, usuarioId) {
+// Grava os inícios que mudaram (data null apaga a etapa do histórico) e, se veio, o término (fim da
+// última etapa). Depois recalcula a data_fim só das etapas vizinhas ao que mudou — a anterior e a
+// própria —, pra não mexer no resto do histórico. Devolve o cronograma do centro como ficou.
+async function updateDatas(empresaId, siengeId, { datas, dataTermino }) {
   const client = await pool.connect();
   try {
     await client.query('BEGIN');
@@ -64,53 +91,70 @@ async function updateDatas(empresaId, siengeId, { datas, dataTermino }, usuarioI
     );
     if (!centro[0]) throw erro(404, 'Centro de custo não encontrado.');
 
-    const etapaIds = [...new Set(datas.map((d) => d.etapa_id))];
-    if (etapaIds.length) {
-      const { rows } = await client.query(
-        'SELECT id FROM mascara_itens WHERE tipo = $1 AND empresa_id = $2 AND id = ANY($3::int[])',
-        [etapasService.TIPO, empresaId, etapaIds]
-      );
-      if (rows.length !== etapaIds.length) {
-        throw erro(409, 'As etapas foram alteradas em outro lugar. Recarregue a tela e tente de novo.');
-      }
+    const etapas = await etapasService.list(empresaId, client);
+    const posicao = new Map(etapas.map((e, i) => [e.id, i]));
+    if (datas.some((d) => !posicao.has(d.etapa_id))) {
+      throw erro(409, 'As etapas foram alteradas em outro lugar. Recarregue a tela e tente de novo.');
     }
 
+    // 1) inícios. Se o início novo passar do fim gravado, o fim sai (a CHECK fim >= início não
+    //    deixaria gravar) — o passo 2 recalcula.
     for (const { etapa_id: etapaId, data } of datas) {
       if (data === null) {
         await client.query(
-          'DELETE FROM cronograma_centro_etapas WHERE empresa_id = $1 AND sienge_id = $2 AND etapa_id = $3',
+          'DELETE FROM centro_custo_etapas_historico WHERE empresa_id = $1 AND sienge_id = $2 AND mascara_item_id = $3',
           [empresaId, siengeId, etapaId]
         );
-      } else {
+        continue;
+      }
+      const { rowCount } = await client.query(
+        `UPDATE centro_custo_etapas_historico
+            SET data_inicio = $4, data_fim = CASE WHEN data_fim < $4::date THEN NULL ELSE data_fim END
+          WHERE empresa_id = $1 AND sienge_id = $2 AND mascara_item_id = $3`,
+        [empresaId, siengeId, etapaId, data]
+      );
+      if (!rowCount) {
         await client.query(
-          `INSERT INTO cronograma_centro_etapas (empresa_id, sienge_id, etapa_id, data, usuario_id)
-           VALUES ($1, $2, $3, $4, $5)
-           ON CONFLICT (empresa_id, sienge_id, etapa_id)
-           DO UPDATE SET data = EXCLUDED.data, usuario_id = EXCLUDED.usuario_id, atualizado_em = NOW()`,
-          [empresaId, siengeId, etapaId, data, usuarioId]
+          `INSERT INTO centro_custo_etapas_historico (sienge_id, empresa_id, mascara_item_id, data_inicio)
+           VALUES ($1, $2, $3, $4)`,
+          [siengeId, empresaId, etapaId, data]
         );
       }
     }
 
-    if (dataTermino === null) {
-      await client.query('DELETE FROM cronograma_centros WHERE empresa_id = $1 AND sienge_id = $2', [empresaId, siengeId]);
-    } else if (dataTermino !== undefined) {
+    // 2) fins das etapas afetadas.
+    const afetadas = new Set();
+    datas.forEach((d) => {
+      const i = posicao.get(d.etapa_id);
+      afetadas.add(i);
+      if (i > 0) afetadas.add(i - 1);
+    });
+    if (dataTermino !== undefined && etapas.length) afetadas.add(etapas.length - 1);
+
+    const h = (await historicoPorCentro(empresaId, siengeId, client)).get(siengeId) || { inicios: {}, fins: {} };
+    for (const i of afetadas) {
+      const etapa = etapas[i];
+      const inicio = h.inicios[etapa.id];
+      if (!inicio) continue;
+      let fim;
+      if (i === etapas.length - 1) {
+        fim = dataTermino !== undefined ? dataTermino : h.fins[etapa.id];
+      } else {
+        const seguinte = h.inicios[etapas[i + 1].id];
+        // Sem início na seguinte, fica o fim que já estava (histórico antigo).
+        fim = seguinte ? vespera(seguinte) : h.fins[etapa.id];
+      }
+      if (fim && fim < inicio) fim = null; // seguinte antes desta: sem fim até acertar as datas
       await client.query(
-        `INSERT INTO cronograma_centros (empresa_id, sienge_id, data_termino, usuario_id)
-         VALUES ($1, $2, $3, $4)
-         ON CONFLICT (empresa_id, sienge_id)
-         DO UPDATE SET data_termino = EXCLUDED.data_termino, usuario_id = EXCLUDED.usuario_id, atualizado_em = NOW()`,
-        [empresaId, siengeId, dataTermino, usuarioId]
+        `UPDATE centro_custo_etapas_historico SET data_fim = $4
+          WHERE empresa_id = $1 AND sienge_id = $2 AND mascara_item_id = $3 AND data_fim IS DISTINCT FROM $4::date`,
+        [empresaId, siengeId, etapa.id, fim ?? null]
       );
     }
 
-    const porCentro = await datasPorCentro(empresaId, siengeId, client);
-    const { rows: termino } = await client.query(
-      'SELECT data_termino FROM cronograma_centros WHERE empresa_id = $1 AND sienge_id = $2',
-      [empresaId, siengeId]
-    );
+    const final = (await historicoPorCentro(empresaId, siengeId, client)).get(siengeId);
     await client.query('COMMIT');
-    return { sienge_id: siengeId, datas: porCentro.get(siengeId) || {}, data_termino: termino[0]?.data_termino ?? null };
+    return { sienge_id: siengeId, ...cronogramaDoCentro(final, etapas) };
   } catch (err) {
     await client.query('ROLLBACK');
     throw err;

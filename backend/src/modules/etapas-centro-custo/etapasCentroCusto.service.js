@@ -63,9 +63,9 @@ async function update(id, empresaId, { descricao, cor }) {
   return rows[0] || null;
 }
 
-// Etapa com datas no Histórico de Etapas de algum centro de custo não sai (lá a chave é RESTRICT —
-// avisa em vez de estourar o erro do banco). As datas do cronograma das obras vão junto (CASCADE).
-// Depois renumera a sequência, sem buracos, como o remover genérico de mascaras.service.js.
+// Etapa com datas no Histórico de Etapas de algum centro de custo (= o cronograma das obras) não
+// sai — lá a chave é RESTRICT; avisa em vez de estourar o erro do banco. Depois renumera a
+// sequência, sem buracos, como o remover genérico de mascaras.service.js.
 async function remove(id, empresaId) {
   const client = await pool.connect();
   try {
@@ -77,7 +77,7 @@ async function remove(id, empresaId) {
     if (emUso[0].centros > 0) {
       throw erro(
         409,
-        `Essa etapa tem datas no Histórico de Etapas de ${emUso[0].centros} centro(s) de custo (Cadastros > Centros de Custos). Apague as datas dela lá antes de remover.`
+        `Essa etapa tem datas no cronograma (Histórico de Etapas) de ${emUso[0].centros} centro(s) de custo. Apague as datas dela antes de remover.`
       );
     }
     const { rows } = await client.query(

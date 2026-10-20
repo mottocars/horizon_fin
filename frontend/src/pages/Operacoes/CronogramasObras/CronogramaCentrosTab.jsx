@@ -7,7 +7,8 @@ import {
   updateNaturezaCronogramaCentro,
 } from '../../../api/cronogramaCentros.api';
 import { corPadrao } from '../../../utils/coresPadrao';
-import { anosEntre, dataValida, formatarData, mesesEntre, somarAnos, somarMeses } from './cronogramaDatas';
+import { duracaoEtapa, formatarData, somarAnos, somarMeses } from './cronogramaDatas';
+import { CampoData, CampoQtd } from './CamposCronograma';
 
 const NATUREZAS = [
   { value: 'OBRA', label: 'Obra' },
@@ -27,78 +28,13 @@ function colunasGrade(qtdEtapas) {
   return `minmax(200px,1fr) 140px${' 118px 52px'.repeat(qtdEtapas)} 88px`;
 }
 
-const CLASSE_CAMPO =
-  'w-full min-w-0 rounded-md border border-gray-200 bg-white px-1.5 py-1 text-xs text-gray-900 focus:outline-none focus:ring-2 focus:ring-primary-100 disabled:cursor-not-allowed disabled:bg-gray-50 disabled:text-gray-300';
-
-// Data de início da etapa. Só grava ao sair do campo (ou Enter): o campo de data do navegador
-// muda a cada dígito (o ano passa por 0002, 0020...) e com a digitação pela metade fica vazio —
-// `badInput` diferencia isso de apagar a data de propósito.
-function CampoData({ valor, onSalvar, title }) {
-  const [texto, setTexto] = useState(valor || '');
-  useEffect(() => setTexto(valor || ''), [valor]);
-
-  function confirmar(e) {
-    if (e.currentTarget.validity.badInput || (texto && !dataValida(texto))) {
-      setTexto(valor || '');
-      return;
-    }
-    if (texto === (valor || '')) return;
-    onSalvar(texto || null);
-  }
-
-  return (
-    <input
-      type="date"
-      value={texto}
-      onChange={(e) => setTexto(e.target.value)}
-      onBlur={confirmar}
-      onKeyDown={(e) => e.key === 'Enter' && e.currentTarget.blur()}
-      title={title}
-      aria-label={title}
-      className={CLASSE_CAMPO}
-    />
-  );
-}
-
-// Quantidade (meses até a próxima etapa; na última, anos até o término). Mostra a conta feita a
-// partir das datas; digitar um número calcula a data seguinte. Também só grava ao sair (ou Enter).
-function CampoQtd({ valor, maximo, disabled, onSalvar, title }) {
-  const [texto, setTexto] = useState(valor ?? '');
-  useEffect(() => setTexto(valor ?? ''), [valor]);
-
-  function confirmar() {
-    const n = Number(texto);
-    if (String(texto).trim() === '' || !Number.isInteger(n) || n < 0 || n > maximo || n === valor) {
-      setTexto(valor ?? '');
-      return;
-    }
-    onSalvar(n);
-  }
-
-  return (
-    <input
-      type="number"
-      min={0}
-      max={maximo}
-      step={1}
-      value={texto}
-      disabled={disabled}
-      onChange={(e) => setTexto(e.target.value)}
-      onBlur={confirmar}
-      onKeyDown={(e) => e.key === 'Enter' && e.currentTarget.blur()}
-      title={title}
-      aria-label={title}
-      className={`${CLASSE_CAMPO} text-center tabular-nums ${valor < 0 ? 'border-red-300 text-red-600' : ''}`}
-    />
-  );
-}
-
 // Operações > Cronogramas Obras > Centros de Custos: todos os centros de custo da empresa (mesma
 // lista e mesmo visual da aba Centros Custos da DFC — DfcCentrosTab.jsx), com o Tipo (a MESMA coluna
 // de lá e do cadastro: mudar aqui muda lá) e, nas obras, o cronograma: pra cada etapa do cadastro
 // da aba Etapas (a máscara Etapas do Centro de Custo do cadastro), a data de início e a quantidade
 // até a etapa seguinte (meses; na última, anos até o
-// término) — pedido do usuário. Só as datas são gravadas (ver cronogramaCentros.service.js):
+// término) — pedido do usuário. O cronograma É o Histórico de Etapas do cadastro do centro de custo
+// (o mesmo dado, editável lá também — ver cronogramaCentros.service.js):
 // - digitar uma data recalcula as quantidades vizinhas;
 // - digitar uma quantidade calcula e grava a data da etapa seguinte (na última, o término);
 // - as outras datas não andam sozinhas (sem efeito cascata).
@@ -186,7 +122,7 @@ export default function CronogramaCentrosTab({ empresaId, search, onIrParaEtapas
     });
     gravar(async () => {
       const salvo = await updateDatasCronogramaCentro(empresaId, centro.sienge_id, { datas, dataTermino });
-      trocarCentro(centro.sienge_id, { datas: salvo.datas, data_termino: salvo.data_termino });
+      trocarCentro(centro.sienge_id, { datas: salvo.datas, fins: salvo.fins, data_termino: salvo.data_termino });
     });
   }
 
@@ -328,8 +264,12 @@ export default function CronogramaCentrosTab({ empresaId, search, onIrParaEtapas
                           {etapas.map((etapa, i) => {
                             const ultima = i === etapas.length - 1;
                             const data = centro.datas[etapa.id] || null;
-                            const proxima = ultima ? centro.data_termino : centro.datas[etapas[i + 1].id];
-                            const qtd = data && proxima ? (ultima ? anosEntre(data, proxima) : mesesEntre(data, proxima)) : null;
+                            const qtd = duracaoEtapa({
+                              ultima,
+                              inicio: data,
+                              inicioSeguinte: ultima ? null : centro.datas[etapas[i + 1].id],
+                              fim: ultima ? centro.data_termino : centro.fins?.[etapa.id],
+                            });
                             return (
                               <Fragment key={etapa.id}>
                                 <CampoData

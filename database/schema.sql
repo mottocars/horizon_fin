@@ -3610,33 +3610,6 @@ CREATE TABLE IF NOT EXISTS usuarios_dashboard_favoritos (
     PRIMARY KEY (usuario_id, dashboard)
 );
 
--- ─── Operações > Cronogramas Obras > Centros de Custos — ver database/migrations/2026-10-20-cronograma-centros.sql ───
--- Cronograma de cada obra: data de início de cada etapa (item da máscara ETAPAS_CENTRO_CUSTO) e o
--- término da última. Só datas; as quantidades (meses entre etapas, anos da última) são calculadas
--- na tela.
-CREATE TABLE cronograma_centro_etapas (
-    empresa_id    INTEGER NOT NULL,
-    sienge_id     INTEGER NOT NULL,
-    etapa_id      INTEGER NOT NULL REFERENCES mascara_itens(id) ON DELETE CASCADE,
-    data          DATE NOT NULL,
-    usuario_id    INTEGER REFERENCES usuarios(id) ON DELETE SET NULL,
-    atualizado_em TIMESTAMP NOT NULL DEFAULT NOW(),
-    PRIMARY KEY (empresa_id, sienge_id, etapa_id),
-    FOREIGN KEY (sienge_id, empresa_id) REFERENCES centros_custo_sienge (sienge_id, empresa_id) ON DELETE CASCADE
-);
-
-CREATE INDEX idx_cronograma_centro_etapas_etapa ON cronograma_centro_etapas (etapa_id);
-
-CREATE TABLE cronograma_centros (
-    empresa_id    INTEGER NOT NULL,
-    sienge_id     INTEGER NOT NULL,
-    data_termino  DATE NOT NULL,
-    usuario_id    INTEGER REFERENCES usuarios(id) ON DELETE SET NULL,
-    atualizado_em TIMESTAMP NOT NULL DEFAULT NOW(),
-    PRIMARY KEY (empresa_id, sienge_id),
-    FOREIGN KEY (sienge_id, empresa_id) REFERENCES centros_custo_sienge (sienge_id, empresa_id) ON DELETE CASCADE
-);
-
 -- ─── Papel das consultas SQL do Claude (conectores MCP): só lê as views mcp_* ───
 -- Ver database/migrations/2026-10-15-mcp-leitor-sql.sql (rode de novo ao criar view mcp_* nova).
 DO $$

@@ -11,7 +11,8 @@ const dataSchema = z
   .regex(/^\d{4}-\d{2}-\d{2}$/, 'Data inválida.')
   .refine((s) => {
     const ano = Number(s.slice(0, 4));
-    return ano >= 1900 && ano <= 2200 && new Date(`${s}T00:00:00Z`).toISOString().slice(0, 10) === s;
+    const d = new Date(`${s}T00:00:00Z`);
+    return ano >= 1900 && ano <= 2200 && !Number.isNaN(d.getTime()) && d.toISOString().slice(0, 10) === s;
   }, 'Data inválida.');
 
 const naturezaSchema = z.object({
@@ -66,7 +67,7 @@ async function updateDatas(req, res, next) {
     const empresaId = empresaIdSchema.parse(req.params.empresaId);
     const siengeId = siengeIdSchema.parse(req.params.siengeId);
     const { datas, data_termino: dataTermino } = datasSchema.parse(req.body);
-    res.json(await service.updateDatas(empresaId, siengeId, { datas, dataTermino }, req.user.id));
+    res.json(await service.updateDatas(empresaId, siengeId, { datas, dataTermino }));
   } catch (err) {
     tratar(err, next);
   }

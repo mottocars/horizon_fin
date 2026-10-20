@@ -3,18 +3,14 @@ import { useNavigate, useParams } from 'react-router-dom';
 import { ArrowLeft, Building2, Search } from 'lucide-react';
 import Card from '../../components/Card';
 import Button from '../../components/Button';
-import {
-  getItem,
-  updateEnriquecimento,
-  listEtapas,
-  createEtapa,
-  updateEtapa,
-  deleteEtapa,
-} from '../../api/centrosCustoSienge.api';
+import { getItem, updateEnriquecimento, listEtapas, salvarCronogramaCentro } from '../../api/centrosCustoSienge.api';
 import { listMascaras } from '../../api/mascaras.api';
 import { listPrevisionProjetos } from '../../api/prevision.api';
 import SearchableSelect from '../../components/SearchableSelect';
 import { consultarCep } from '../../api/cep.api';
+import { corPadrao } from '../../utils/coresPadrao';
+import { duracaoEtapa, fimEtapa, formatarData, somarAnos, somarMeses } from '../Operacoes/CronogramasObras/cronogramaDatas';
+import { CampoData, CampoQtd } from '../Operacoes/CronogramasObras/CamposCronograma';
 
 const FAIXAS = ['FAIXA_1', 'FAIXA_2', 'FAIXA_3', 'FAIXA_4', 'SBPE'];
 
@@ -55,6 +51,12 @@ function corCampo(valor) {
 }
 
 const CLASSE_INPUT = 'w-full rounded-lg border px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-primary-100';
+const CLASSE_CAMPO_ETAPA =
+  'rounded-md border px-2 py-1 text-sm text-gray-900 focus:outline-none focus:ring-2 focus:ring-primary-100 disabled:cursor-not-allowed disabled:opacity-60';
+
+// Histórico de Etapas: o que está salvo de cada etapa (as datas vêm 'AAAA-MM-DD').
+const inicioSalvo = (etapa) => (etapa.data_inicio ? etapa.data_inicio.slice(0, 10) : '');
+const fimSalvo = (etapa) => (etapa.data_fim ? etapa.data_fim.slice(0, 10) : '');
 
 const emptyForm = {
   status: 'ATIVO',
@@ -100,7 +102,11 @@ export default function CentroCustoItemDetalhe() {
   // as duas abas juntas (ver handleSalvarTudo) — o usuário pode ir e voltar
   // entre Cadastro e Histórico de Etapas à vontade, sem perder o que já
   // preencheu em nenhuma das duas, e só grava tudo quando pedir.
-  const [etapasForm, setEtapasForm] = useState({});
+  // O Histórico de Etapas é o cronograma da obra (o mesmo dado da aba Centros de Custos de
+  // Cronogramas Obras — pedido do usuário): as etapas vão em sequência, então o que se edita é o
+  // início de cada uma (`inicios`) e o término da última (`termino`); a duração e a data fim das
+  // outras saem das datas (cronogramaDatas.js).
+  const [etapasForm, setEtapasForm] = useState({ inicios: {}, termino: '' });
 
   const loadItem = useCallback(async () => {
     setLoading(true);
@@ -165,26 +171,16 @@ export default function CentroCustoItemDetalhe() {
   // `handleSalvarTudo` bem-sucedido (que recarrega pra pegar os IDs dos
   // registros recém-criados).
   useEffect(() => {
-    const next = {};
-    for (const etapa of etapas) {
-      next[etapa.mascara_item_id] = {
-        data_inicio: etapa.data_inicio ? etapa.data_inicio.slice(0, 10) : '',
-        data_fim: etapa.data_fim ? etapa.data_fim.slice(0, 10) : '',
-      };
-    }
-    setEtapasForm(next);
+    setEtapasForm({
+      inicios: Object.fromEntries(etapas.map((etapa) => [etapa.mascara_item_id, inicioSalvo(etapa)])),
+      termino: etapas.length ? fimSalvo(etapas[etapas.length - 1]) : '',
+    });
   }, [etapas]);
 
-  const etapasAlteradas = useMemo(
-    () =>
-      etapas.some((etapa) => {
-        const atual = etapasForm[etapa.mascara_item_id] || { data_inicio: '', data_fim: '' };
-        const salvoInicio = etapa.data_inicio ? etapa.data_inicio.slice(0, 10) : '';
-        const salvoFim = etapa.data_fim ? etapa.data_fim.slice(0, 10) : '';
-        return atual.data_inicio !== salvoInicio || atual.data_fim !== salvoFim;
-      }),
-    [etapas, etapasForm]
-  );
+  const ultimaEtapa = etapas[etapas.length - 1];
+  const inicioMudou = (etapa) => (etapasForm.inicios[etapa.mascara_item_id] ?? '') !== inicioSalvo(etapa);
+  const terminoMudou = Boolean(ultimaEtapa) && etapasForm.termino !== fimSalvo(ultimaEtapa);
+  const etapasAlteradas = etapas.some(inicioMudou) || terminoMudou;
 
   const formAlterado = useMemo(
     () => JSON.stringify(form) !== JSON.stringify(formOriginal),
@@ -225,19 +221,20 @@ export default function CentroCustoItemDetalhe() {
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [form.cep]);
 
-  function handleChangeEtapa(mascaraItemId, campo, valor) {
-    setEtapasForm((prev) => ({
-      ...prev,
-      [mascaraItemId]: { ...prev[mascaraItemId], [campo]: valor },
-    }));
+  function handleChangeInicio(mascaraItemId, valor) {
+    setEtapasForm((prev) => ({ ...prev, inicios: { ...prev.inicios, [mascaraItemId]: valor || '' } }));
+  }
+
+  function handleChangeTermino(valor) {
+    setEtapasForm((prev) => ({ ...prev, termino: valor || '' }));
   }
 
   // Um único botão salva as duas abas juntas — o Cadastro (se algo mudou) e
-  // todas as linhas alteradas do Histórico de Etapas — não importa em qual
-  // aba o usuário está no momento do clique. Se o Cadastro falhar (ex.: um
-  // código duplicado), para ali e nem chega a mexer nas etapas; se o
-  // Cadastro salvar mas alguma etapa tiver conflito de datas, as outras
-  // etapas continuam salvando normalmente e o erro sai agregado ao final.
+  // o Histórico de Etapas (se algo mudou) — não importa em qual aba o
+  // usuário está no momento do clique. Se o Cadastro falhar (ex.: um código
+  // duplicado), para ali e nem chega a mexer nas etapas. As etapas vão numa
+  // chamada só (a mesma do cronograma de Cronogramas Obras), que grava os
+  // inícios que mudaram e recalcula a data fim das etapas vizinhas.
   async function handleSalvarTudo() {
     setError('');
     setSuccess(false);
@@ -255,44 +252,18 @@ export default function CentroCustoItemDetalhe() {
         setFormOriginal(proximoForm);
       }
 
-      const falhasEtapas = [];
-      for (const etapa of etapas) {
-        const atual = etapasForm[etapa.mascara_item_id] || { data_inicio: '', data_fim: '' };
-        const salvoInicio = etapa.data_inicio ? etapa.data_inicio.slice(0, 10) : '';
-        const salvoFim = etapa.data_fim ? etapa.data_fim.slice(0, 10) : '';
-        if (atual.data_inicio === salvoInicio && atual.data_fim === salvoFim) continue;
-
-        try {
-          if (!atual.data_inicio) {
-            if (etapa.historico_id) await deleteEtapa(empresaId, siengeId, etapa.historico_id);
-          } else if (etapa.historico_id) {
-            await updateEtapa(empresaId, siengeId, etapa.historico_id, {
-              mascara_item_id: etapa.mascara_item_id,
-              data_inicio: atual.data_inicio,
-              data_fim: atual.data_fim || null,
-            });
-          } else {
-            await createEtapa(empresaId, siengeId, {
-              mascara_item_id: etapa.mascara_item_id,
-              data_inicio: atual.data_inicio,
-              data_fim: atual.data_fim || null,
-            });
-          }
-        } catch (err) {
-          falhasEtapas.push(
-            `${etapa.etapa_descricao}: ${err.response?.data?.message || 'não foi possível salvar.'}`
-          );
-        }
+      if (etapasAlteradas) {
+        await salvarCronogramaCentro(empresaId, siengeId, {
+          datas: etapas
+            .filter(inicioMudou)
+            .map((etapa) => ({ etapa_id: etapa.mascara_item_id, data: etapasForm.inicios[etapa.mascara_item_id] || null })),
+          dataTermino: terminoMudou ? etapasForm.termino || null : undefined,
+        });
+        await loadEtapas();
       }
 
-      if (etapas.length > 0) await loadEtapas();
-
-      if (falhasEtapas.length > 0) {
-        setError(`Algumas etapas não foram salvas — ${falhasEtapas.join(' | ')}`);
-      } else {
-        setSuccess(true);
-        setTimeout(() => setSuccess(false), 3000);
-      }
+      setSuccess(true);
+      setTimeout(() => setSuccess(false), 3000);
     } catch (err) {
       setError(err.response?.data?.message || 'Não foi possível salvar as alterações.');
     } finally {
@@ -572,8 +543,10 @@ export default function CentroCustoItemDetalhe() {
               </p>
             ) : (
               <p className="mb-4 text-xs text-gray-400">
-                Preencha a data de início de cada etapa para registrar o andamento da obra e clique em
-                "Salvar alterações". Deixe a data fim em branco enquanto a etapa estiver em curso.
+                Informe a data de início de cada etapa e quanto tempo ela dura (meses; a última em anos): o início da
+                etapa seguinte é calculado. Também dá pra digitar a data da seguinte direto. A data fim sai das datas.
+                É o mesmo cronograma da aba Centros de Custos de Operações › Cronogramas Obras. Clique em "Salvar
+                alterações" para gravar.
               </p>
             )}
 
@@ -591,20 +564,42 @@ export default function CentroCustoItemDetalhe() {
                       <th className="w-12 py-3 font-medium">Seq.</th>
                       <th className="py-3 font-medium">Etapa</th>
                       <th className="py-3 font-medium">Data início</th>
+                      <th className="py-3 font-medium">Duração</th>
                       <th className="py-3 font-medium">Data fim</th>
                       <th className="py-3 font-medium">Status</th>
                     </tr>
                   </thead>
                   <tbody>
-                    {etapas.map((etapa) => (
-                      <EtapaRow
-                        key={etapa.mascara_item_id}
-                        etapa={etapa}
-                        form={etapasForm[etapa.mascara_item_id] || { data_inicio: '', data_fim: '' }}
-                        disabled={saving}
-                        onChange={handleChangeEtapa}
-                      />
-                    ))}
+                    {etapas.map((etapa, i) => {
+                      const ultima = i === etapas.length - 1;
+                      const seguinte = ultima ? null : etapas[i + 1];
+                      const inicio = etapasForm.inicios[etapa.mascara_item_id] || '';
+                      const inicioSeguinte = seguinte ? etapasForm.inicios[seguinte.mascara_item_id] || '' : '';
+                      const fimBase = ultima ? etapasForm.termino : fimSalvo(etapa);
+                      const datas = { ultima, inicio, inicioSeguinte, fim: fimBase };
+                      // Data fim mostrada = a que vai ficar gravada: recalculada só nas etapas que a
+                      // edição afeta (a que mudou e a anterior; a última se o término mudou), como
+                      // o backend faz — nas outras, a que já está salva.
+                      const afetada = inicioMudou(etapa) || (seguinte && inicioMudou(seguinte)) || (ultima && terminoMudou);
+                      return (
+                        <EtapaRow
+                          key={etapa.mascara_item_id}
+                          etapa={etapa}
+                          cor={etapa.etapa_cor || corPadrao(i)}
+                          ultima={ultima}
+                          inicio={inicio}
+                          duracao={duracaoEtapa(datas)}
+                          fim={afetada ? fimEtapa(datas) : fimSalvo(etapa) || null}
+                          disabled={saving}
+                          onChangeInicio={(valor) => handleChangeInicio(etapa.mascara_item_id, valor)}
+                          onChangeDuracao={(n) =>
+                            ultima
+                              ? handleChangeTermino(somarAnos(inicio, n))
+                              : handleChangeInicio(seguinte.mascara_item_id, somarMeses(inicio, n))
+                          }
+                        />
+                      );
+                    })}
                   </tbody>
                 </table>
               </>
@@ -659,36 +654,57 @@ function computeStatus(dataInicio, dataFim) {
 }
 
 // Puramente controlado pelo pai — só reflete o que está no `etapasForm`
-// (edição pendente) e devolve as mudanças via `onChange`. Nada aqui chama a
-// API: quem persiste é o handleSalvarTudo() do componente pai, todo de uma
-// vez, ao clicar em "Salvar alterações".
-function EtapaRow({ etapa, form, disabled, onChange }) {
-  const { data_inicio: dataInicio, data_fim: dataFim } = form;
-  const status = computeStatus(dataInicio, dataFim);
+// (edição pendente) e devolve as mudanças. Nada aqui chama a API: quem
+// persiste é o handleSalvarTudo() do componente pai, todo de uma vez, ao
+// clicar em "Salvar alterações". Duração e data fim vêm calculadas do pai;
+// digitar a duração muda o início da etapa seguinte (na última, o término).
+function EtapaRow({ etapa, cor, ultima, inicio, duracao, fim, disabled, onChangeInicio, onChangeDuracao }) {
+  const status = computeStatus(inicio, fim);
   const statusInfo = STATUS_STYLES[status];
+  const unidade = ultima ? 'anos' : 'meses';
 
   return (
-    <tr className="border-b border-gray-50 last:border-0 align-top">
+    <tr className="border-b border-gray-50 last:border-0 align-middle">
       <td className="py-3 text-gray-600">{etapa.etapa_sequencia}</td>
-      <td className="py-3 text-gray-900">{etapa.etapa_descricao}</td>
+      <td className="py-3 text-gray-900">
+        <span className="flex items-center gap-2">
+          <span className="h-2.5 w-2.5 shrink-0 rounded-full" style={{ backgroundColor: cor }} />
+          {etapa.etapa_descricao || <span className="italic text-gray-400">Sem nome</span>}
+        </span>
+      </td>
       <td className="py-3">
-        <input
-          type="date"
-          value={dataInicio}
+        <CampoData
+          valor={inicio || null}
           disabled={disabled}
-          onChange={(e) => onChange(etapa.mascara_item_id, 'data_inicio', e.target.value)}
-          className="rounded-md border border-gray-200 px-2 py-1 text-sm focus:outline-none focus:ring-2 focus:ring-primary-100 disabled:opacity-60"
+          onSalvar={onChangeInicio}
+          title={`Data de início — ${etapa.etapa_descricao}`}
+          classe={`${CLASSE_CAMPO_ETAPA} ${corCampo(inicio)}`}
         />
       </td>
       <td className="py-3">
-        <input
-          type="date"
-          value={dataFim}
-          disabled={disabled || !dataInicio}
-          onChange={(e) => onChange(etapa.mascara_item_id, 'data_fim', e.target.value)}
-          className="rounded-md border border-gray-200 px-2 py-1 text-sm focus:outline-none focus:ring-2 focus:ring-primary-100 disabled:opacity-60"
-        />
+        <span className="flex items-center gap-1.5">
+          <span className="w-20">
+            <CampoQtd
+              valor={duracao}
+              maximo={ultima ? 100 : 600}
+              disabled={disabled || !inicio}
+              onSalvar={onChangeDuracao}
+              title={
+                !inicio
+                  ? 'Informe a data de início primeiro'
+                  : duracao < 0
+                    ? 'A etapa seguinte começa antes desta'
+                    : ultima
+                      ? 'Anos desta etapa (somados ao início dão a data fim)'
+                      : 'Meses desta etapa (somados ao início dão o início da seguinte)'
+              }
+              classe={`w-full ${CLASSE_CAMPO_ETAPA} ${corCampo(duracao)}`}
+            />
+          </span>
+          <span className="text-xs text-gray-400">{unidade}</span>
+        </span>
       </td>
+      <td className="py-3 tabular-nums text-gray-700">{fim ? formatarData(fim) : <span className="text-gray-300">—</span>}</td>
       <td className="py-3">
         <span className={`inline-flex items-center rounded-full px-2.5 py-1 text-xs font-medium ${statusInfo.className}`}>
           {statusInfo.label}

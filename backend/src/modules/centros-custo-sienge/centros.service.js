@@ -220,7 +220,7 @@ async function listEtapas(empresaId, siengeId) {
   // já preenchidas quando existir um histórico para aquele centro de custo.
   const { rows } = await pool.query(
     `SELECT m.id AS mascara_item_id, m.sequencia AS etapa_sequencia, m.descricao AS etapa_descricao,
-            h.id AS historico_id, h.data_inicio, h.data_fim, h.criado_em, h.atualizado_em
+            m.cor AS etapa_cor, h.id AS historico_id, h.data_inicio, h.data_fim, h.criado_em, h.atualizado_em
      FROM mascara_itens m
      LEFT JOIN centro_custo_etapas_historico h
        ON h.mascara_item_id = m.id AND h.empresa_id = $1 AND h.sienge_id = $2

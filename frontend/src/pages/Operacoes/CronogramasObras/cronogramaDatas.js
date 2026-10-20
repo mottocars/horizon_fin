@@ -25,6 +25,10 @@ export function somarAnos(data, anos) {
   return somarMeses(data, anos * 12);
 }
 
+export function somarDias(data, dias) {
+  return deUtc(paraUtc(data) + dias * MS_DIA);
+}
+
 // Meses (ou anos) inteiros entre duas datas, arredondando pelos dias — assim a conta volta
 // exatamente ao número digitado: mesesEntre(d, somarMeses(d, n)) === n (inclusive no 31/01 → 28/02).
 // Negativo quando `ate` vem antes de `de`.
@@ -42,6 +46,24 @@ export function dataValida(data) {
   if (!/^\d{4}-\d{2}-\d{2}$/.test(data)) return false;
   const ano = Number(data.slice(0, 4));
   return ano >= 1900 && ano <= 2200 && deUtc(paraUtc(data)) === data;
+}
+
+// As etapas do cronograma (= Histórico de Etapas do centro de custo) vão em sequência. Duração de
+// uma etapa: meses até o início da seguinte — sem ele, até o fim gravado (histórico antigo); na
+// última, anos até o fim dela (o término). null quando não dá pra calcular.
+export function duracaoEtapa({ ultima, inicio, inicioSeguinte, fim }) {
+  if (!inicio) return null;
+  if (ultima) return fim ? anosEntre(inicio, fim) : null;
+  if (inicioSeguinte) return mesesEntre(inicio, inicioSeguinte);
+  return fim ? mesesEntre(inicio, somarDias(fim, 1)) : null;
+}
+
+// Fim da etapa do jeito que o backend grava (cronogramaCentros.service.js): véspera do início da
+// seguinte — sem ele, o fim que já estava —; na última, o término. null se cair antes do início.
+export function fimEtapa({ ultima, inicio, inicioSeguinte, fim }) {
+  if (!inicio) return null;
+  const calculado = ultima ? fim : inicioSeguinte ? somarDias(inicioSeguinte, -1) : fim;
+  return calculado && calculado >= inicio ? calculado : null;
 }
 
 export function formatarData(data) {

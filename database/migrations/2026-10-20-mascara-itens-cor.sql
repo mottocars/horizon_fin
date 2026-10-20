@@ -1,8 +1,8 @@
 -- Cor de cada etapa da máscara "Etapas do Centro de Custo" (mascara_itens, tipo
 -- ETAPAS_CENTRO_CUSTO) — pedido do usuário. Essa máscara é a lista única de etapas de obra da
 -- empresa: editada em Cadastros > Máscaras e na aba Etapas de Operações > Cronogramas Obras (mesmo
--- editor), usada pelo Histórico de Etapas dos centros de custo e pelo cronograma das obras
--- (2026-10-20-cronograma-centros.sql). Os outros tipos de máscara não usam a cor (fica NULL).
+-- editor), usada pelo Histórico de Etapas dos centros de custo — que é o cronograma das obras
+-- (aba Centros de Custos de Cronogramas Obras). Os outros tipos de máscara não usam a cor (fica NULL).
 -- As etapas que já existem ganham a cor da paleta padrão pela posição (mesma paleta de
 -- frontend/src/utils/coresPadrao.js); etapa nova nasce com a cor da paleta pela tela.
 -- Aplicar: psql -U postgres -d horizon_fin -f database/migrations/2026-10-20-mascara-itens-cor.sql

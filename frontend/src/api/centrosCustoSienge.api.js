@@ -50,6 +50,15 @@ export function updateEtapa(empresaId, siengeId, etapaId, data) {
     .then((res) => res.data);
 }
 
+// Aba Histórico de Etapas: grava como o cronograma de Cronogramas Obras (mesmo dado). datas:
+// [{ etapa_id, data | null }] só dos inícios que mudaram; dataTermino: fim da última etapa
+// (undefined = não mexe). O backend calcula a data fim das outras etapas.
+export function salvarCronogramaCentro(empresaId, siengeId, { datas = [], dataTermino } = {}) {
+  return http
+    .put(`/centros-custo/sienge/${empresaId}/itens/${siengeId}/cronograma`, { datas, data_termino: dataTermino })
+    .then((res) => res.data);
+}
+
 export function deleteEtapa(empresaId, siengeId, etapaId) {
   return http
     .delete(`/centros-custo/sienge/${empresaId}/itens/${siengeId}/etapas/${etapaId}`)
