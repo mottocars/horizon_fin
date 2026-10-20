@@ -182,9 +182,6 @@
 }
 
 /* ─── 6. Simulador ──────────────────────────────────────────────────────────────────────────── */
-.cenarios {
-  background: linear-gradient(var(--nevoa), #e4eaf0);
-}
 .cenarios__intro {
   display: flex;
   flex-direction: column;
