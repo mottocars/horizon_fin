@@ -1,13 +1,15 @@
-import { useEffect, useState } from 'react';
+import { useEffect, useRef, useState } from 'react';
 import { useSearchParams } from 'react-router-dom';
-import { Building2, ChartGantt, Milestone } from 'lucide-react';
+import { Building2, ChartGantt, Milestone, Plus } from 'lucide-react';
 import Card from '../../../components/Card';
 import Tabs from '../../../components/Tabs';
+import Button from '../../../components/Button';
 import SearchableSelect from '../../../components/SearchableSelect';
 import { listEmpresas } from '../../../api/empresas.api';
 import { nomeExibicaoEmpresa } from '../../../utils/empresa';
 import { useEmpresaTravada } from '../../../hooks/useEmpresaTravada';
 import AbaEmConstrucao from '../DfcConstrutoras/AbaEmConstrucao';
+import CronogramaEtapasTab from './CronogramaEtapasTab';
 
 // Mesmo padrão de DfcConstrutorasPage.jsx: o `{ divider: true }` separa os Cronogramas (a tela em
 // si) das abas de cadastro que dão suporte a eles. Abas pedidas pelo usuário; o que cada uma mostra
@@ -62,28 +64,47 @@ export default function CronogramasObrasPage() {
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [loadingEmpresas, empresas, empresaId]);
 
+  // Botão "Nova etapa" fica no topo (mesmo esquema do "Nova máscara" da DFC), mas o campo de criar
+  // vive em CronogramaEtapasTab.jsx — dispara por ref.
+  const etapasTabRef = useRef(null);
+
   return (
     <div className="space-y-4">
       <Card className="shrink-0">
-        <div className="flex flex-col gap-3 sm:flex-row sm:flex-wrap">
-          <div className="sm:min-w-44 sm:max-w-xs sm:flex-1">
-            <label className="mb-1 block text-sm font-medium text-gray-700">Empresa</label>
-            <SearchableSelect
-              value={empresaId}
-              onChange={(novoId) => atualizarParams({ empresa_id: novoId || null })}
-              disabled={loadingEmpresas || empresaTravada}
-              options={empresas.map((empresa) => ({ value: empresa.id, label: nomeExibicaoEmpresa(empresa) }))}
-              placeholder={loadingEmpresas ? 'Carregando empresas...' : 'Selecione uma empresa'}
-              emptyMessage="Nenhuma empresa encontrada."
-            />
+        <div className="flex flex-col gap-4 lg:flex-row lg:items-end lg:justify-between">
+          <div className="flex min-w-0 flex-col gap-3 sm:flex-1 sm:flex-row sm:flex-wrap">
+            <div className="sm:min-w-44 sm:max-w-xs sm:flex-1">
+              <label className="mb-1 block text-sm font-medium text-gray-700">Empresa</label>
+              <SearchableSelect
+                value={empresaId}
+                onChange={(novoId) => atualizarParams({ empresa_id: novoId || null })}
+                disabled={loadingEmpresas || empresaTravada}
+                options={empresas.map((empresa) => ({ value: empresa.id, label: nomeExibicaoEmpresa(empresa) }))}
+                placeholder={loadingEmpresas ? 'Carregando empresas...' : 'Selecione uma empresa'}
+                emptyMessage="Nenhuma empresa encontrada."
+              />
+            </div>
           </div>
+
+          {abaAtiva === 'etapas' && (
+            <div className="flex shrink-0 items-center gap-2">
+              <Button type="button" onClick={() => etapasTabRef.current?.abrirNova()} disabled={!empresaId}>
+                <Plus size={16} />
+                Nova etapa
+              </Button>
+            </div>
+          )}
         </div>
       </Card>
 
       <div>
         <Tabs tabs={TABS} activeId={tabAtiva.id} onChange={(aba) => atualizarParams({ aba })} />
 
-        <AbaEmConstrucao key={tabAtiva.id} empresaId={empresaId} icon={tabAtiva.icon} titulo={tabAtiva.label} />
+        {tabAtiva.id === 'etapas' ? (
+          <CronogramaEtapasTab ref={etapasTabRef} empresaId={empresaId} />
+        ) : (
+          <AbaEmConstrucao key={tabAtiva.id} empresaId={empresaId} icon={tabAtiva.icon} titulo={tabAtiva.label} />
+        )}
       </div>
     </div>
   );

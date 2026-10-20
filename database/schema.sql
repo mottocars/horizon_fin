@@ -3607,6 +3607,23 @@ CREATE TABLE IF NOT EXISTS usuarios_dashboard_favoritos (
     PRIMARY KEY (usuario_id, dashboard)
 );
 
+-- ─── Operações > Cronogramas Obras > Etapas — ver database/migrations/2026-10-20-cronograma-etapas.sql ───
+-- Etapas de obra por empresa, num nível só, reordenáveis arrastando.
+CREATE TABLE cronograma_etapas (
+    id            SERIAL PRIMARY KEY,
+    empresa_id    INTEGER NOT NULL REFERENCES empresas(id) ON DELETE CASCADE,
+    ordem         INTEGER NOT NULL,
+    descricao     VARCHAR(150) NOT NULL,
+    criado_em     TIMESTAMP DEFAULT NOW(),
+    atualizado_em TIMESTAMP DEFAULT NOW()
+);
+
+CREATE INDEX idx_cronograma_etapas_empresa ON cronograma_etapas (empresa_id, ordem);
+
+CREATE TRIGGER trg_cronograma_etapas_atualizado_em
+    BEFORE UPDATE ON cronograma_etapas
+    FOR EACH ROW EXECUTE FUNCTION set_atualizado_em();
+
 -- ─── Papel das consultas SQL do Claude (conectores MCP): só lê as views mcp_* ───
 -- Ver database/migrations/2026-10-15-mcp-leitor-sql.sql (rode de novo ao criar view mcp_* nova).
 DO $$
