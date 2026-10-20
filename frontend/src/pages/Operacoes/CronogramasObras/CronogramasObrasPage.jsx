@@ -7,8 +7,8 @@ import SearchableSelect from '../../../components/SearchableSelect';
 import { listEmpresas } from '../../../api/empresas.api';
 import { nomeExibicaoEmpresa } from '../../../utils/empresa';
 import { useEmpresaTravada } from '../../../hooks/useEmpresaTravada';
-import AbaEmConstrucao from '../DfcConstrutoras/AbaEmConstrucao';
 import CronogramaCentrosTab from './CronogramaCentrosTab';
+import CronogramasTab from './CronogramasTab';
 
 // Mesmo padrão de DfcConstrutorasPage.jsx: o `{ divider: true }` separa os Cronogramas (a tela em
 // si) das abas que dão suporte a eles. A aba Etapas saiu (pedido do usuário): as etapas se cadastram
@@ -110,7 +110,7 @@ export default function CronogramasObrasPage() {
         {tabAtiva.id === 'centros-custos' ? (
           <CronogramaCentrosTab empresaId={empresaId} search={buscaCentros} />
         ) : (
-          <AbaEmConstrucao key={tabAtiva.id} empresaId={empresaId} icon={tabAtiva.icon} titulo={tabAtiva.label} />
+          <CronogramasTab empresaId={empresaId} />
         )}
       </div>
     </div>

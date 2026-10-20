@@ -1,11 +1,10 @@
 import { useCallback, useEffect, useMemo, useState } from 'react';
 import { Link } from 'react-router-dom';
 import { Building2, Milestone, TriangleAlert } from 'lucide-react';
-import Modal from '../../../components/Modal';
-import { useConfirm } from '../../../confirm/ConfirmContext';
 import { listCronogramaCentros } from '../../../api/cronogramaCentros.api';
 import { corPadrao } from '../../../utils/coresPadrao';
-import CentroCustoEditor from '../../CentrosCusto/CentroCustoEditor';
+import JanelaCentroCusto from './JanelaCentroCusto';
+import { mesAno, moeda } from './formatos';
 
 const TIPOS = { OBRA: 'Obra', ADMINISTRATIVO: 'Administrativo' };
 
@@ -15,38 +14,21 @@ function colunasGrade(qtdEtapas) {
   return `minmax(220px,1fr) 120px${' 124px'.repeat(qtdEtapas)} 140px 80px`;
 }
 
-const MESES = ['jan', 'fev', 'mar', 'abr', 'mai', 'jun', 'jul', 'ago', 'set', 'out', 'nov', 'dez'];
-
-// 'AAAA-MM-DD' -> 'out/2029' (pedido do usuário).
-function mesAno(data) {
-  if (!data) return null;
-  const [ano, mes] = data.split('-');
-  return `${MESES[Number(mes) - 1]}/${ano}`;
-}
-
-function formatarVgv(valor) {
-  if (valor === null || valor === undefined || valor === '') return null;
-  return Number(valor).toLocaleString('pt-BR', { style: 'currency', currency: 'BRL', maximumFractionDigits: 0 });
-}
-
 const Vazio = () => <span className="text-gray-300">—</span>;
 
 // Operações > Cronogramas Obras > Centros de Custos: lista só de leitura (pedido do usuário) de
 // todos os centros de custo da empresa (mesma lista e ordem da aba Centros Custos da DFC), com
 // Tipo, o mês/ano de início de cada etapa do cronograma (= Histórico de Etapas do centro), VGV e
-// nº de unidades. Clicar numa linha abre o cadastro do centro numa janela (CentroCustoEditor — o
-// mesmo da página Cadastros > Centros de Custos, com as abas Cadastro e Histórico de Etapas): é o
+// nº de unidades. Clicar numa linha abre o cadastro do centro numa janela (JanelaCentroCusto): é o
 // atalho pra alterar. Salvou lá, a lista recarrega.
 export default function CronogramaCentrosTab({ empresaId, search }) {
-  const confirm = useConfirm();
   const [etapas, setEtapas] = useState([]);
   const [centros, setCentros] = useState([]);
   const [carregando, setCarregando] = useState(true);
   const [erroCarga, setErroCarga] = useState('');
 
-  // Centro aberto na janela e se há alteração não salva nela (pra confirmar antes de fechar).
+  // Centro aberto na janela do cadastro.
   const [aberto, setAberto] = useState(null);
-  const [pendente, setPendente] = useState(false);
 
   const carregar = useCallback(() => {
     if (!empresaId) return;
@@ -78,20 +60,6 @@ export default function CronogramaCentrosTab({ empresaId, search }) {
         (c.apelido || '').toLowerCase().includes(termo)
     );
   }, [centros, search]);
-
-  async function fechar() {
-    if (pendente) {
-      const ok = await confirm({
-        title: 'Descartar alterações',
-        description: 'Há alterações não salvas neste centro de custo. Fechar mesmo assim?',
-        confirmLabel: 'Descartar',
-        variant: 'danger',
-      });
-      if (!ok) return;
-    }
-    setAberto(null);
-    setPendente(false);
-  }
 
   if (!empresaId) {
     return (
@@ -196,7 +164,7 @@ export default function CronogramaCentrosTab({ empresaId, search }) {
                         {obra && centro.datas[etapa.id] ? mesAno(centro.datas[etapa.id]) : <Vazio />}
                       </span>
                     ))}
-                    <span className="text-right tabular-nums text-gray-700">{formatarVgv(centro.valor_geral_vendas) || <Vazio />}</span>
+                    <span className="text-right tabular-nums text-gray-700">{moeda(centro.valor_geral_vendas) || <Vazio />}</span>
                     <span className="text-right tabular-nums text-gray-700">{centro.numero_unidades ?? <Vazio />}</span>
                   </div>
                 );
@@ -206,17 +174,7 @@ export default function CronogramaCentrosTab({ empresaId, search }) {
         </div>
       )}
 
-      <Modal open={Boolean(aberto)} onClose={fechar} title="Cadastro do Centro de Custo" maxWidthClass="max-w-5xl">
-        {aberto && (
-          <CentroCustoEditor
-            key={aberto.sienge_id}
-            empresaId={empresaId}
-            siengeId={aberto.sienge_id}
-            onSalvo={carregar}
-            onAlteracoesPendentes={setPendente}
-          />
-        )}
-      </Modal>
+      <JanelaCentroCusto empresaId={empresaId} centro={aberto} onFechar={() => setAberto(null)} onSalvo={carregar} />
     </div>
   );
 }
