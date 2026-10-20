@@ -1,4 +1,4 @@
-// Contas de data do cronograma das obras (aba Centros de Custos). Datas sempre como o texto
+// Contas de data do cronograma das obras (= Histórico de Etapas do centro de custo). Datas sempre como o texto
 // 'AAAA-MM-DD' do banco (sem fuso), contas em UTC pra o horário de verão nunca comer um dia.
 
 const MS_DIA = 86400000;

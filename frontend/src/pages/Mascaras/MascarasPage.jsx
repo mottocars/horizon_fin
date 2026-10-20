@@ -3,7 +3,7 @@ import { Building2 } from 'lucide-react';
 import Card from '../../components/Card';
 import SearchableSelect from '../../components/SearchableSelect';
 import MascaraItensEditor from '../../components/MascaraItensEditor';
-import EtapasCentroCustoEditor from '../Operacoes/CronogramasObras/EtapasCentroCustoEditor';
+import EtapasCentroCustoEditor from './EtapasCentroCustoEditor';
 import { listEmpresas } from '../../api/empresas.api';
 import { nomeExibicaoEmpresa } from '../../utils/empresa';
 import { useEmpresaTravada } from '../../hooks/useEmpresaTravada';
@@ -88,13 +88,12 @@ export default function MascarasPage() {
             </p>
           </div>
         ) : tipo === 'ETAPAS_CENTRO_CUSTO' ? (
-          // Etapas do Centro de Custo é a lista única de etapas de obra — mesmo editor (e mesma lista)
-          // da aba Etapas de Cronogramas Obras, com cor, arrastar e o resto (pedido do usuário).
+          // Etapas do Centro de Custo é a lista única de etapas de obra — editor próprio, com cor,
+          // arrastar e o resto (pedido do usuário).
           <EtapasCentroCustoEditor
             key={empresaId}
             empresaId={empresaId}
-            className=""
-            aviso="Mesma lista da aba Etapas de Operações › Cronogramas Obras: mudar aqui muda lá."
+            aviso="Usada no Histórico de Etapas dos centros de custo e no cronograma de Operações › Cronogramas Obras."
           />
         ) : (
           <MascaraItensEditor tipo={tipo} empresaId={empresaId} grupo="" itemLabel={tipoLabel} />

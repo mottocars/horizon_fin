@@ -1,24 +1,21 @@
-import { useEffect, useRef, useState } from 'react';
+import { useEffect, useState } from 'react';
 import { useSearchParams } from 'react-router-dom';
-import { Building2, ChartGantt, Milestone, Plus, Search } from 'lucide-react';
+import { Building2, ChartGantt, Search } from 'lucide-react';
 import Card from '../../../components/Card';
 import Tabs from '../../../components/Tabs';
-import Button from '../../../components/Button';
 import SearchableSelect from '../../../components/SearchableSelect';
 import { listEmpresas } from '../../../api/empresas.api';
 import { nomeExibicaoEmpresa } from '../../../utils/empresa';
 import { useEmpresaTravada } from '../../../hooks/useEmpresaTravada';
 import AbaEmConstrucao from '../DfcConstrutoras/AbaEmConstrucao';
-import EtapasCentroCustoEditor from './EtapasCentroCustoEditor';
 import CronogramaCentrosTab from './CronogramaCentrosTab';
 
 // Mesmo padrão de DfcConstrutorasPage.jsx: o `{ divider: true }` separa os Cronogramas (a tela em
-// si) das abas de cadastro que dão suporte a eles. Abas pedidas pelo usuário; o que cada uma mostra
-// será definido depois.
+// si) das abas que dão suporte a eles. A aba Etapas saiu (pedido do usuário): as etapas se cadastram
+// em Cadastros > Máscaras > Etapas do Centro de Custo.
 const TABS = [
   { id: 'cronogramas', label: 'Cronogramas', icon: ChartGantt },
   { divider: true },
-  { id: 'etapas', label: 'Etapas', icon: Milestone },
   { id: 'centros-custos', label: 'Centros de Custos', icon: Building2 },
 ];
 
@@ -65,10 +62,6 @@ export default function CronogramasObrasPage() {
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [loadingEmpresas, empresas, empresaId]);
 
-  // Botão "Nova etapa" fica no topo (mesmo esquema do "Nova máscara" da DFC), mas o campo de criar
-  // vive em EtapasCentroCustoEditor.jsx — dispara por ref.
-  const etapasTabRef = useRef(null);
-
   // Busca (código ou descrição) da aba Centros de Custos — só conveniência de navegador, fora da
   // URL (mesma convenção da DFC).
   const [buscaCentros, setBuscaCentros] = useState('');
@@ -108,32 +101,14 @@ export default function CronogramasObrasPage() {
             )}
           </div>
 
-          {abaAtiva === 'etapas' && (
-            <div className="flex shrink-0 items-center gap-2">
-              <Button type="button" onClick={() => etapasTabRef.current?.abrirNova()} disabled={!empresaId}>
-                <Plus size={16} />
-                Nova etapa
-              </Button>
-            </div>
-          )}
         </div>
       </Card>
 
       <div>
         <Tabs tabs={TABS} activeId={tabAtiva.id} onChange={(aba) => atualizarParams({ aba })} />
 
-        {tabAtiva.id === 'etapas' ? (
-          <EtapasCentroCustoEditor
-            ref={etapasTabRef}
-            empresaId={empresaId}
-            aviso="Mesma lista da máscara Etapas do Centro de Custo (Cadastros › Máscaras): mudar aqui muda lá."
-          />
-        ) : tabAtiva.id === 'centros-custos' ? (
-          <CronogramaCentrosTab
-            empresaId={empresaId}
-            search={buscaCentros}
-            onIrParaEtapas={() => atualizarParams({ aba: 'etapas' })}
-          />
+        {tabAtiva.id === 'centros-custos' ? (
+          <CronogramaCentrosTab empresaId={empresaId} search={buscaCentros} />
         ) : (
           <AbaEmConstrucao key={tabAtiva.id} empresaId={empresaId} icon={tabAtiva.icon} titulo={tabAtiva.label} />
         )}

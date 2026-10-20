@@ -4,7 +4,8 @@ const etapasService = require('../etapas-centro-custo/etapasCentroCusto.service'
 // O cronograma de cada obra É o Histórico de Etapas do centro de custo (centro_custo_etapas_historico
 // — pedido do usuário): uma linha por etapa da máscara Etapas do Centro de Custo, com data_inicio e
 // data_fim. Editado na aba Centros de Custos de Cronogramas Obras e na aba Histórico de Etapas do
-// cadastro do centro (Cadastros > Centros de Custos) — as duas gravam por updateDatas.
+// cadastro do centro (Cadastros > Centros de Custos — também aberto em janela pela aba Centros de
+// Custos de Cronogramas Obras, que só lista), que grava por updateDatas.
 //
 // As etapas vão em sequência: a duração de uma etapa é o tempo até o início da seguinte (meses; na
 // última, anos até o fim dela). A data_fim continua gravada porque outras telas leem (Curva de
@@ -51,31 +52,20 @@ function cronogramaDoCentro(historico, etapas) {
   return { datas: h.inicios, fins: h.fins, data_termino: (ultima && h.fins[ultima.id]) || null };
 }
 
-// As etapas da empresa (máscara Etapas do Centro de Custo, na ordem) e todos os centros de custo
-// dela — mesma lista e ordem da aba Centros Custos da DFC (dfcCentros.service.js) —, cada um com o
-// Tipo e o cronograma.
+// Lista (só leitura) da aba Centros de Custos de Cronogramas Obras: as etapas da empresa (máscara
+// Etapas do Centro de Custo, na ordem) e todos os centros de custo dela — mesma lista e ordem da aba
+// Centros Custos da DFC (dfcCentros.service.js) —, cada um com Tipo, VGV, nº de unidades e o
+// cronograma.
 async function list(empresaId) {
   const etapas = await etapasService.list(empresaId);
   const { rows: centros } = await pool.query(
-    `SELECT sienge_id, name, apelido, status, natureza FROM centros_custo_sienge
+    `SELECT sienge_id, name, apelido, status, natureza, valor_geral_vendas, numero_unidades FROM centros_custo_sienge
       WHERE empresa_id = $1
       ORDER BY sienge_id::text ASC`,
     [empresaId]
   );
   const historico = await historicoPorCentro(empresaId);
   return { etapas, centros: centros.map((c) => ({ ...c, ...cronogramaDoCentro(historico.get(c.sienge_id), etapas) })) };
-}
-
-// Tipo do centro — a MESMA coluna da aba Centros Custos da DFC e do cadastro do centro de custo:
-// mudar aqui muda lá. Só o Tipo (o resto da classificação da DFC não é desta tela).
-async function updateNatureza(empresaId, siengeId, natureza) {
-  const { rows } = await pool.query(
-    `UPDATE centros_custo_sienge SET natureza = $3
-      WHERE empresa_id = $1 AND sienge_id = $2
-      RETURNING sienge_id, natureza`,
-    [empresaId, siengeId, natureza]
-  );
-  return rows[0] || null;
 }
 
 // Grava os inícios que mudaram (data null apaga a etapa do histórico) e, se veio, o término (fim da
@@ -163,4 +153,4 @@ async function updateDatas(empresaId, siengeId, { datas, dataTermino }) {
   }
 }
 
-module.exports = { list, updateNatureza, updateDatas };
+module.exports = { list, updateDatas };

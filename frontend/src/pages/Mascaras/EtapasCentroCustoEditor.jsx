@@ -1,37 +1,27 @@
-import { forwardRef, useCallback, useEffect, useImperativeHandle, useRef, useState } from 'react';
+import { useCallback, useEffect, useRef, useState } from 'react';
 import { Check, GripVertical, Loader2, Milestone, Pencil, Plus, Trash2, TriangleAlert } from 'lucide-react';
-import Button from '../../../components/Button';
-import { useConfirm } from '../../../confirm/ConfirmContext';
+import Button from '../../components/Button';
+import { useConfirm } from '../../confirm/ConfirmContext';
 import {
   createEtapasCentroCusto,
   listEtapasCentroCusto,
   removeEtapaCentroCusto,
   reordenarEtapasCentroCusto,
   updateEtapaCentroCusto,
-} from '../../../api/etapasCentroCusto.api';
-import { corPadrao } from '../../../utils/coresPadrao';
-import { BotaoAcao, CampoNome, Indicador } from '../DfcConstrutoras/DfcMascarasTab';
+} from '../../api/etapasCentroCusto.api';
+import { corPadrao } from '../../utils/coresPadrao';
+import { BotaoAcao, CampoNome, Indicador } from '../Operacoes/DfcConstrutoras/DfcMascarasTab';
 
-// Painel padrão: embaixo da aba ativa (Cronogramas Obras). Em Cadastros > Máscaras o editor já
-// está dentro de um Card, então lá vem sem quadro.
-const QUADRO_ABA = 'rounded-card rounded-tl-none bg-white p-5 shadow-card';
-
-// Editor da máscara "Etapas do Centro de Custo" — a lista única de etapas de obra da empresa
-// (pedido do usuário), usada na aba Etapas de Operações > Cronogramas Obras e em Cadastros >
-// Máscaras: editar num lugar muda no outro, no Histórico de Etapas dos centros de custo e no
-// cronograma das obras. Igual à aba Máscaras da DFC (DfcMascarasTab.jsx: mesmo quadro, cabeçalho
-// azul, linha cinza do nível 1, arrastar pra reordenar, duplo clique renomeia, colar várias linhas
-// cria várias), mas num nível só: sem grupos, sem +/- e sem contador. Cada etapa tem a sua cor —
-// bolinha de input[type=color], mesmo seletor do ConfigurarFiltrosModal.jsx dos Repasses CEF; etapa
-// nova nasce com a cor da paleta padrão pela posição. Cada mudança salva na hora (reordenação
-// regrava a lista inteira — ver etapasCentroCusto.service.js).
-//
-// `ref` expõe `abrirNova()` pro botão "Nova etapa" do topo da página (mesmo padrão do "Nova
-// máscara" da DFC). `aviso`: texto curto acima da lista (de onde mais a lista é editada).
-const EtapasCentroCustoEditor = forwardRef(function EtapasCentroCustoEditor(
-  { empresaId, aviso, className = QUADRO_ABA },
-  ref
-) {
+// Cadastros > Máscaras > Etapas do Centro de Custo: a lista única de etapas de obra da empresa
+// (pedido do usuário), usada pelo Histórico de Etapas dos centros de custo — que é o cronograma das
+// obras (aba Centros de Custos de Cronogramas Obras). Igual à aba Máscaras da DFC (DfcMascarasTab.jsx:
+// mesmo cabeçalho azul, linha cinza do nível 1, arrastar pra reordenar, duplo clique renomeia, colar
+// várias linhas cria várias), mas num nível só: sem grupos, sem +/- e sem contador. Cada etapa tem a
+// sua cor — bolinha de input[type=color], mesmo seletor do ConfigurarFiltrosModal.jsx dos Repasses
+// CEF; etapa nova nasce com a cor da paleta padrão pela posição. Cada mudança salva na hora
+// (reordenação regrava a lista inteira — ver etapasCentroCusto.service.js). `aviso`: texto curto
+// acima da lista.
+export default function EtapasCentroCustoEditor({ empresaId, aviso }) {
   const confirm = useConfirm();
   const [etapas, setEtapas] = useState([]);
   const [carregando, setCarregando] = useState(true);
@@ -69,8 +59,6 @@ const EtapasCentroCustoEditor = forwardRef(function EtapasCentroCustoEditor(
     setSalvoAlgumaVez(false);
     carregar();
   }, [carregar]);
-
-  useImperativeHandle(ref, () => ({ abrirNova: () => setCriando({ chave: Date.now() }) }), []);
 
   // Toda escrita passa por aqui: conta pendência, mostra erro e, se falhar, recarrega do banco
   // pra tela nunca ficar mostrando algo que não foi salvo.
@@ -174,21 +162,11 @@ const EtapasCentroCustoEditor = forwardRef(function EtapasCentroCustoEditor(
   }
 
   // ------------------------------------------------------------------ renderização
-  if (!empresaId) {
-    return (
-      <div className="flex min-h-70 flex-col items-center justify-center rounded-card rounded-tl-none bg-white text-center shadow-card">
-        <Milestone size={28} className="mb-3 text-gray-300" />
-        <h2 className="text-sm font-semibold text-gray-900">Selecione uma empresa</h2>
-        <p className="mt-1 max-w-sm text-xs text-gray-500">Escolha a empresa no filtro acima para cadastrar as etapas.</p>
-      </div>
-    );
-  }
-
   const statusSalvamento = pendentes > 0 ? 'salvando' : erroSalvar ? 'erro' : salvoAlgumaVez ? 'salvo' : null;
   const vazio = !carregando && !erroCarga && etapas.length === 0;
 
   return (
-    <div className={className}>
+    <div>
       {(aviso || statusSalvamento) && (
         <div className="-mt-1 mb-3 flex items-center justify-between gap-3 text-xs" aria-live="polite">
           <span className="text-gray-400">{aviso}</span>
@@ -337,8 +315,4 @@ const EtapasCentroCustoEditor = forwardRef(function EtapasCentroCustoEditor(
       )}
     </div>
   );
-});
-
-EtapasCentroCustoEditor.displayName = 'EtapasCentroCustoEditor';
-
-export default EtapasCentroCustoEditor;
+}

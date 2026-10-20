@@ -1,9 +1,8 @@
 const pool = require('../../config/db');
 
 // As etapas de obra de cada empresa são a máscara "Etapas do Centro de Custo" (mascara_itens,
-// tipo ETAPAS_CENTRO_CUSTO, grupo '') — uma lista só, editada tanto em Cadastros > Máscaras quanto
-// na aba Etapas de Cronogramas Obras (pedido do usuário), e usada pelo Histórico de Etapas dos
-// centros de custo e pelo cronograma das obras. Mesmo esquema de dfcMascaras.service.js, num nível
+// tipo ETAPAS_CENTRO_CUSTO, grupo '') — uma lista só (pedido do usuário), editada em Cadastros >
+// Máscaras e usada pelo Histórico de Etapas dos centros de custo, que é o cronograma das obras. Mesmo esquema de dfcMascaras.service.js, num nível
 // só. Cuidado: Cobrança, Curvas e Repasses procuram etapas pelo nome (Lançamento, Obras, Entrega).
 
 const TIPO = 'ETAPAS_CENTRO_CUSTO';

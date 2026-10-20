@@ -1,7 +1,7 @@
 import http from './http';
 
 // Máscara "Etapas do Centro de Custo" da empresa — a lista única de etapas de obra, editada em
-// Cadastros > Máscaras e na aba Etapas de Cronogramas Obras. [{ id, sequencia, descricao, cor }]
+// Cadastros > Máscaras. [{ id, sequencia, descricao, cor }]
 export function listEtapasCentroCusto(empresaId) {
   return http.get(`/etapas-centro-custo/${empresaId}`).then((res) => res.data);
 }

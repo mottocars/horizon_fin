@@ -15,10 +15,6 @@ const dataSchema = z
     return ano >= 1900 && ano <= 2200 && !Number.isNaN(d.getTime()) && d.toISOString().slice(0, 10) === s;
   }, 'Data inválida.');
 
-const naturezaSchema = z.object({
-  natureza: z.enum(['OBRA', 'ADMINISTRATIVO']).nullable(),
-});
-
 // `datas`: as etapas que mudaram (data null = apagar). `data_termino` só muda se vier no corpo.
 const datasSchema = z.object({
   datas: z
@@ -49,19 +45,7 @@ async function list(req, res, next) {
   }
 }
 
-async function updateNatureza(req, res, next) {
-  try {
-    const empresaId = empresaIdSchema.parse(req.params.empresaId);
-    const siengeId = siengeIdSchema.parse(req.params.siengeId);
-    const { natureza } = naturezaSchema.parse(req.body);
-    const centro = await service.updateNatureza(empresaId, siengeId, natureza);
-    if (!centro) throw erro(404, 'Centro de custo não encontrado.');
-    res.json(centro);
-  } catch (err) {
-    tratar(err, next);
-  }
-}
-
+// Também montado em centros.routes.js (aba Histórico de Etapas do cadastro do centro).
 async function updateDatas(req, res, next) {
   try {
     const empresaId = empresaIdSchema.parse(req.params.empresaId);
@@ -73,4 +57,4 @@ async function updateDatas(req, res, next) {
   }
 }
 
-module.exports = { list, updateNatureza, updateDatas };
+module.exports = { list, updateDatas };

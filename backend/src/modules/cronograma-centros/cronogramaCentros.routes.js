@@ -7,8 +7,8 @@ const router = Router();
 
 router.use(authMiddleware);
 router.param('empresaId', paramEmpresa);
+// Só a lista: a aba Centros de Custos de Cronogramas Obras não edita direto (abre o cadastro do
+// centro numa janela). updateDatas é montado em centros.routes.js (aba Histórico de Etapas).
 router.get('/:empresaId', controller.list);
-router.put('/:empresaId/:siengeId/natureza', controller.updateNatureza);
-router.put('/:empresaId/:siengeId/datas', controller.updateDatas);
 
 module.exports = router;

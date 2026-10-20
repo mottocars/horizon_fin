@@ -153,14 +153,16 @@ app.use('/api/relatorios/repasses-cef', exigirTela([T.REL_REPASSES]), relatorioR
 app.use('/api/relatorios/desempenho-cobranca', exigirTela([T.REL_DESEMPENHO_COBRANCA]), relatorioDesempenhoCobrancaRoutes);
 app.use('/api/projetos', exigirTela([QUALQUER_TELA]), projetosRoutes);
 app.use('/api/integracoes/prevision', exigirTela([T.PREVISION], [T.CENTROS_CUSTO]), previsionRoutes);
-app.use('/api/prevision-dashboards', exigirTela([T.PREVISION, T.CENTROS_CUSTO]), previsionDashboardsRoutes);
+app.use('/api/prevision-dashboards', exigirTela([T.PREVISION, T.CENTROS_CUSTO], [T.CRONOGRAMAS_OBRAS]), previsionDashboardsRoutes);
 // Também na aba Plano Contas da DFC Construtoras (espelho do cadastro de Planos Financeiros).
 // O Fluxo de Caixa do dashboard Econômico Financeiro usa a grade, o Detalhamento e o Excel do DFC
 // Construtoras: quem tem só a tela do dashboard lê (GET) essas APIs, sem alterar nada.
 const LEITURA_DASHBOARD = [T.ECONOMICO_FINANCEIRO];
 app.use('/api/planos-financeiros/sienge', exigirTela([T.PLANOS_FINANCEIROS, T.SIENGE, T.DRE, T.DFC], LEITURA_DASHBOARD), planosFinanceirosSiengeRoutes);
-app.use('/api/centros-custo/sienge', exigirTela([T.CENTROS_CUSTO, T.SIENGE], [T.DRE]), centrosCustoSiengeRoutes);
-app.use('/api/mascaras', exigirTela([T.MASCARAS, T.DRE, T.REPASSES], [T.CENTROS_CUSTO, T.PLANOS_FINANCEIROS]), mascarasRoutes);
+// Cronogramas Obras abre o cadastro do centro numa janela (atalho pra alterar — pedido do
+// usuário): precisa do cadastro (ler e gravar), das máscaras e dos projetos Prevision dele.
+app.use('/api/centros-custo/sienge', exigirTela([T.CENTROS_CUSTO, T.SIENGE, T.CRONOGRAMAS_OBRAS], [T.DRE]), centrosCustoSiengeRoutes);
+app.use('/api/mascaras', exigirTela([T.MASCARAS, T.DRE, T.REPASSES], [T.CENTROS_CUSTO, T.PLANOS_FINANCEIROS, T.CRONOGRAMAS_OBRAS]), mascarasRoutes);
 // Abas de cadastro do Saldo Contas Bancárias: Contas Bancárias e Classificação
 // só pro Administrador da tela; Bancos só Master.
 app.use('/api/contas-bancarias/sienge', exigirTela([T.SALDOS]), exigirAdministradorDaTela(T.SALDOS), contasBancariasSiengeRoutes);
@@ -185,8 +187,8 @@ app.use('/api/dfc-contas', exigirTela([T.DFC]), dfcContasRoutes);
 app.use('/api/dfc-saldos', exigirTela([T.DFC], LEITURA_DASHBOARD), dfcSaldosRoutes);
 app.use('/api/dfc-detalhamento', exigirTela([T.DFC], LEITURA_DASHBOARD), dfcDetalhamentoRoutes);
 app.use('/api/dfc-exportacao', exigirTela([T.DFC], LEITURA_DASHBOARD), dfcExportacaoRoutes);
-// Máscara Etapas do Centro de Custo: editada em Cadastros > Máscaras e em Cronogramas Obras > Etapas.
-app.use('/api/etapas-centro-custo', exigirTela([T.MASCARAS, T.CRONOGRAMAS_OBRAS]), etapasCentroCustoRoutes);
+// Máscara Etapas do Centro de Custo (editor de Cadastros > Máscaras).
+app.use('/api/etapas-centro-custo', exigirTela([T.MASCARAS]), etapasCentroCustoRoutes);
 app.use('/api/cronograma-centros', exigirTela([T.CRONOGRAMAS_OBRAS]), cronogramaCentrosRoutes);
 app.use('/api/dashboards', exigirTela([T.ECONOMICO_FINANCEIRO]), dashboardsRoutes);
 app.use('/api/bancos', exigirTela([T.SALDOS]), exigirMaster, bancosRoutes);
