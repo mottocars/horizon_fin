@@ -15,10 +15,13 @@ function colunasGrade(qtdEtapas) {
   return `minmax(220px,1fr) 120px${' 124px'.repeat(qtdEtapas)} 140px 80px`;
 }
 
+const MESES = ['jan', 'fev', 'mar', 'abr', 'mai', 'jun', 'jul', 'ago', 'set', 'out', 'nov', 'dez'];
+
+// 'AAAA-MM-DD' -> 'out/2029' (pedido do usuário).
 function mesAno(data) {
   if (!data) return null;
   const [ano, mes] = data.split('-');
-  return `${mes}/${ano}`;
+  return `${MESES[Number(mes) - 1]}/${ano}`;
 }
 
 function formatarVgv(valor) {
