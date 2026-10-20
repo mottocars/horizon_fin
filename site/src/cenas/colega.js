@@ -1,8 +1,10 @@
 // "Somente leitura (Juliana está editando)": o cursor da Juliana passeia pelas células da planilha da abertura
 // e, de vez em quando, "corrige" uma delas (data-versoes="a|b|c": cada edição passa para a próxima versão).
 // Discreto: começa depois da abertura, só anda com a planilha à vista e nunca com movimento reduzido.
+// Roteiro: a 1ª edição é um erro de digitação, a 2ª quebra uma célula com #REF! (e dispara o alerta); depois, sorteio.
 import { registrarCena } from '../nucleo/cenas.js';
 import { reduzir } from '../nucleo/preferencias.js';
+import { criarAlertaRef } from './alerta-ref.js';
 
 // Sorteio com semente: a Juliana faz sempre o mesmo caminho (capturas de tela estáveis).
 function gerador(semente) {
@@ -16,6 +18,8 @@ function gerador(semente) {
 export function montarColega(folha) {
   if (!folha || reduzir()) return;
   const rnd = gerador(1035);
+  const alerta = criarAlertaRef(folha);
+  let edicoes = 0;
   const cursor = document.createElement('span');
   cursor.className = 'colega';
   cursor.setAttribute('aria-hidden', 'true');
@@ -29,7 +33,11 @@ export function montarColega(folha) {
   let primeira = true;
 
   // Só células à vista (no celular e em telas baixas algumas colunas/linhas ficam escondidas).
-  const candidatas = () => [...folha.querySelectorAll('[data-visita], [data-versoes]')].filter((c) => c.getClientRects().length && c !== atual);
+  const candidatas = (sel = '[data-visita], [data-versoes]') => [...folha.querySelectorAll(sel)].filter((c) => c.getClientRects().length && c !== atual);
+  const proxima = (c) => {
+    const v = c.dataset.versoes.split('|');
+    return v[((+c.dataset.v || 0) + 1) % v.length];
+  };
 
   function posicionar(cel, animar = true) {
     const f = folha.getBoundingClientRect();
@@ -58,6 +66,8 @@ export function montarColega(folha) {
     cel.classList.add('editando');
     timer = setTimeout(() => {
       escrever(cel, versoes[i]);
+      edicoes++;
+      if (versoes[i].includes('#REF!')) alerta.alertar(cel);
       cel.classList.remove('editando');
       cel.classList.add('editada');
       setTimeout(() => cel.classList.remove('editada'), 1300);
@@ -67,14 +77,20 @@ export function montarColega(folha) {
 
   function pular() {
     if (!ativo) return;
-    const opcoes = candidatas();
+    passo++;
+    const turnoDeEdicao = passo % 2 === 0;
+    let opcoes = candidatas(turnoDeEdicao ? '[data-versoes]' : undefined);
+    // Roteiro: 1ª edição só troca um dígito; 2ª quebra (#REF!).
+    if (turnoDeEdicao && edicoes < 2) {
+      const roteiro = opcoes.filter((c) => (edicoes === 0 ? !proxima(c).includes('#') : proxima(c).includes('#REF!')));
+      if (roteiro.length) opcoes = roteiro;
+    }
     if (!opcoes.length) return;
     atual = opcoes[Math.floor(rnd() * opcoes.length)];
     cursor.classList.add('visivel');
     posicionar(atual, !primeira);
     primeira = false;
-    passo++;
-    const vaiEditar = atual.dataset.versoes && passo % 2 === 0;
+    const vaiEditar = turnoDeEdicao && atual.dataset.versoes;
     timer = setTimeout(() => (vaiEditar ? editar(atual) : pular()), vaiEditar ? 750 : 1700 + rnd() * 1300);
   }
 
@@ -89,6 +105,7 @@ export function montarColega(folha) {
     sair() {
       ativo = false;
       clearTimeout(timer);
+      alerta.fechar();
     },
   });
   window.addEventListener('resize', () => atual && posicionar(atual, false));
