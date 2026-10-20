@@ -131,6 +131,10 @@ function BarraObra({ segmentos, ini, px, onDica }) {
     const nome = seg.etapa.descricao || '';
     const cabe = largura >= nome.length * 7 + 20;
     const raio = `${primeiro ? 4 : 0}px ${ultimo ? 4 : 0}px ${ultimo ? 4 : 0}px ${primeiro ? 4 : 0}px`;
+    // Linha separando os meses dentro da barra (pedido do usuário): um traço claro de 1px em cada
+    // virada de mês, alinhado à régua; mais suave quando os meses são estreitos (visão geral).
+    const linha = `rgba(255,255,255,${px < 14 ? 0.2 : 0.5})`;
+    const desvio = ((esquerda % px) + px) % px;
     return (
       <div
         key={seg.etapa.id}
@@ -138,7 +142,16 @@ function BarraObra({ segmentos, ini, px, onDica }) {
         onMouseMove={(e) => onDica(e, seg)}
         onMouseLeave={() => onDica(null)}
         className="absolute top-1/2 flex h-7 -translate-y-1/2 items-center transition-[filter] hover:brightness-110"
-        style={{ left: esquerda, width: largura, borderRadius: raio, background: seg.cor }}
+        style={{
+          left: esquerda,
+          width: largura,
+          borderRadius: raio,
+          backgroundColor: seg.cor,
+          backgroundImage: `linear-gradient(to right, transparent ${px - 1}px, ${linha} ${px - 1}px)`,
+          backgroundSize: `${px}px 100%`,
+          backgroundPosition: `${-desvio}px 0`,
+          backgroundRepeat: 'repeat-x',
+        }}
       >
         {/* o nome gruda na borda visível ao rolar (não fica cortado sob a coluna das obras) */}
         {cabe && (
