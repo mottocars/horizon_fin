@@ -18,7 +18,8 @@
   display: flex;
   flex-direction: column;
   width: 100%;
-  max-width: 1280px;
+  /* Mesma largura do conteúdo do topo (.topo__barra): alinha com a logomarca e com os botões. */
+  max-width: 1320px;
   margin-inline: auto;
   background: #fff;
   border: 1px solid var(--grade-forte);
@@ -299,7 +300,6 @@
     display: none;
   }
   .abertura {
-    padding-inline: 8px;
     padding-bottom: 16px;
   }
 }
