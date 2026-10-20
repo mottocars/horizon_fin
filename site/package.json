@@ -1,0 +1,28 @@
+{
+  "name": "site",
+  "private": true,
+  "version": "0.1.0",
+  "type": "module",
+  "description": "Site público do Horizon Finanças (projeto separado do app em frontend/).",
+  "scripts": {
+    "dev": "vite",
+    "prebuild": "node scripts/sincronizar-do-app.mjs --verificar --tolerar-ausente && node scripts/testar-motor.mjs",
+    "build": "vite build",
+    "preview": "vite preview",
+    "sincronizar": "node scripts/sincronizar-do-app.mjs",
+    "testar-motor": "node scripts/testar-motor.mjs",
+    "capturas": "node scripts/capturas.mjs",
+    "lighthouse": "node scripts/lighthouse.mjs",
+    "og": "node scripts/og.mjs"
+  },
+  "dependencies": {
+    "gsap": "3.15.0"
+  },
+  "devDependencies": {
+    "@axe-core/playwright": "4.14.0",
+    "@fontsource-variable/archivo": "5.3.0",
+    "@fontsource/ibm-plex-mono": "5.3.0",
+    "playwright": "1.63.0",
+    "vite": "8.1.3"
+  }
+}

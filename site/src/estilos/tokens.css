@@ -1,0 +1,56 @@
+:root {
+  /* Marca (logomarca.svg) */
+  --marca: #004894; /* azul Horizon: títulos */
+  --ceu: #0088ce; /* azul céu: detalhes da marca */
+  --luz: #189dda; /* luz: seleção, foco, destaques */
+  --acao: #0070b0; /* botão primário (céu escurecido para contraste AA com branco) */
+  --acao-forte: #004894;
+
+  /* Texto e fundos */
+  --tinta: #0f2236;
+  --tinta-2: #3a4d60;
+  --tinta-3: #52647a;
+  --nevoa: #eef2f6; /* fundo do site: frio, não creme */
+  --branco: #ffffff;
+  --noite: #04203f; /* seção da IA e rodapé */
+  --noite-2: #0b2d52;
+
+  /* Mundo planilha */
+  --grade: #e1e5ea;
+  --grade-forte: #d4d9de;
+  --cromo: #f2f3f5;
+  --cromo-tinta: #5b6570;
+  --erro: #c8312f;
+  --marca-texto: #fff2a8; /* marca-texto amarelo de quem mexeu na planilha */
+
+  /* Tipografia */
+  --f-marca: 'Archivo Variable', 'Archivo', 'Arial Narrow', system-ui, sans-serif;
+  --f-planilha: Calibri, Carlito, 'Segoe UI', Arial, sans-serif;
+  --f-numero: 'IBM Plex Mono', ui-monospace, Menlo, Consolas, monospace;
+
+  /* Escala de terça maior (1,25) sobre 17px */
+  --t-0: 0.8125rem;
+  --t-1: 1rem;
+  --t-2: clamp(1.0625rem, 0.95rem + 0.5vw, 1.25rem);
+  --t-3: clamp(1.25rem, 1.05rem + 0.8vw, 1.5625rem);
+  --t-4: clamp(2.05rem, 1.25rem + 3.1vw, 3.6rem);
+  --t-5: clamp(2.35rem, 0.6rem + 4.9vw, 4.85rem);
+
+  /* Medidas */
+  --miolo: 1240px;
+  --gutter: clamp(16px, 4vw, 40px);
+  --topo-h: 64px;
+  --abas-h: 38px;
+  --raio: 10px;
+  --raio-janela: 12px;
+  --sombra-janela: 0 1px 2px rgb(16 38 64 / 0.06), 0 28px 56px -28px rgb(16 38 64 / 0.38);
+  --sombra-folha: 0 1px 0 rgb(15 34 54 / 0.04), 0 22px 44px -26px rgb(15 34 54 / 0.32);
+  --secao-y: clamp(3.5rem, 2.4rem + 6.5vw, 8rem);
+}
+
+@media (max-width: 640px) {
+  :root {
+    --topo-h: 58px;
+    --abas-h: 40px;
+  }
+}

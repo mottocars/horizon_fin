@@ -9,3 +9,6 @@ backend/uploads/
 
 # Pacote gerado da skill (python ia/skills/empacotar.py)
 ia/skills/*.zip
+
+# Capturas de tela e relatórios do site (site/scripts/capturas.mjs, lighthouse.mjs)
+site/capturas/

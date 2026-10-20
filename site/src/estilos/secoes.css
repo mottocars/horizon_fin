@@ -1,0 +1,650 @@
+/* ─── 2. Quanto custa a planilha ────────────────────────────────────────────────────────────── */
+.custo__miolo {
+  display: grid;
+  grid-template-columns: minmax(0, 5fr) minmax(0, 6fr);
+  gap: clamp(2rem, 5vw, 5rem);
+  align-items: start;
+}
+.custo__texto {
+  display: flex;
+  flex-direction: column;
+  gap: 1.1rem;
+}
+.custo__conta {
+  display: flex;
+  flex-direction: column;
+  align-items: flex-start;
+  gap: 0.9rem;
+}
+.custo__conta .mini-folha {
+  width: 100%;
+  margin-bottom: 0.6rem;
+}
+.custo__veredito {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: baseline;
+  gap: 0.2em 0.5em;
+  max-width: none;
+}
+.custo__valor {
+  font-size: var(--t-4);
+  font-weight: 800;
+  font-stretch: 125%;
+  line-height: 1;
+  letter-spacing: -0.025em;
+  color: var(--erro);
+  font-variant-numeric: tabular-nums;
+}
+.custo__frase {
+  font-size: var(--t-2);
+  font-weight: 650;
+  font-stretch: 110%;
+  color: var(--tinta);
+}
+.custo__conta-aberta {
+  font-size: var(--t-0);
+  color: var(--tinta-3);
+}
+.custo__fecho {
+  margin-bottom: 0.4rem;
+}
+@media (max-width: 880px) {
+  .custo__miolo {
+    grid-template-columns: minmax(0, 1fr);
+  }
+}
+
+/* ─── 3. Fluxo de caixa ─────────────────────────────────────────────────────────────────────── */
+.painel {
+  padding-bottom: 0;
+}
+.painel__intro {
+  display: flex;
+  flex-direction: column;
+  gap: 1.1rem;
+  padding-bottom: clamp(2rem, 4vw, 3rem);
+}
+.painel__intro .titulo {
+  max-width: 22ch;
+}
+.queda {
+  position: relative;
+  height: min(250svh, 2600px);
+}
+.queda__palco {
+  position: sticky;
+  top: var(--topo-h);
+  height: min(calc(100svh - var(--topo-h) - var(--abas-h)), 1000px);
+  display: flex;
+  justify-content: center;
+  align-items: flex-start;
+  padding: clamp(10px, 2vh, 22px) var(--gutter);
+  overflow: hidden;
+}
+.queda__tela {
+  flex: none;
+  width: var(--tela-w, 1180px);
+  transform: scale(var(--k, 1));
+  transform-origin: top center;
+}
+.queda__tela .janela {
+  box-shadow: 0 2px 6px rgb(16 38 64 / 0.08), 0 34px 70px -34px rgb(16 38 64 / 0.45);
+}
+.painel__depois {
+  display: flex;
+  flex-direction: column;
+  gap: clamp(3rem, 6vw, 5rem);
+  padding-block: clamp(3rem, 6vw, 5rem) var(--secao-y);
+}
+.destaques {
+  display: grid;
+  grid-template-columns: repeat(3, minmax(0, 1fr));
+  gap: clamp(1.25rem, 3vw, 2.5rem);
+}
+.destaques li {
+  padding-top: 1rem;
+  border-top: 3px solid var(--marca);
+  color: var(--tinta-2);
+}
+.destaques b {
+  display: block;
+  margin-bottom: 0.35rem;
+  font-size: 1.125rem;
+  font-weight: 750;
+  font-stretch: 112%;
+  color: var(--tinta);
+}
+.folego-bloco {
+  display: grid;
+  grid-template-columns: minmax(0, 4fr) minmax(0, 8fr);
+  gap: clamp(1.5rem, 4vw, 3.5rem);
+  align-items: start;
+}
+.folego-bloco__texto {
+  display: flex;
+  flex-direction: column;
+  gap: 0.9rem;
+  position: sticky;
+  top: calc(var(--topo-h) + 24px);
+}
+@media (max-width: 960px) {
+  .destaques {
+    grid-template-columns: minmax(0, 1fr);
+  }
+  .folego-bloco {
+    grid-template-columns: minmax(0, 1fr);
+  }
+  .folego-bloco__texto {
+    position: static;
+  }
+}
+
+/* ─── 4. DRE e 5. Orçamento ─────────────────────────────────────────────────────────────────── */
+.dre__miolo,
+.orcamento__miolo {
+  display: grid;
+  gap: clamp(2rem, 4.5vw, 4rem);
+  align-items: start;
+}
+.dre__miolo {
+  grid-template-columns: minmax(0, 4fr) minmax(0, 8fr);
+}
+.orcamento__miolo {
+  grid-template-columns: minmax(0, 8fr) minmax(0, 4fr);
+}
+.dre__texto,
+.orcamento__texto {
+  display: flex;
+  flex-direction: column;
+  gap: 1.1rem;
+  position: sticky;
+  top: calc(var(--topo-h) + 2.5rem);
+  padding-top: 1rem;
+}
+.dre__texto .titulo,
+.orcamento__texto .titulo {
+  font-size: clamp(2rem, 1.3rem + 2.4vw, 3.15rem);
+}
+@media (max-width: 1080px) {
+  .dre__miolo,
+  .orcamento__miolo {
+    grid-template-columns: minmax(0, 1fr);
+  }
+  .orcamento__texto {
+    order: -1;
+  }
+  .dre__texto,
+  .orcamento__texto {
+    position: static;
+    padding-top: 0;
+  }
+}
+
+/* ─── 6. Simulador ──────────────────────────────────────────────────────────────────────────── */
+.cenarios {
+  background: linear-gradient(var(--nevoa), #e4eaf0);
+}
+.cenarios__intro {
+  display: flex;
+  flex-direction: column;
+  gap: 1.1rem;
+  margin-bottom: clamp(2rem, 4vw, 3rem);
+}
+.cenarios__intro .titulo {
+  max-width: 21ch;
+}
+.cenarios__depois {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  justify-content: space-between;
+  gap: 1rem 2rem;
+  margin-top: 1.5rem;
+}
+.cenarios__motor {
+  font-size: 0.9375rem;
+}
+
+/* ─── 7. Um dia no financeiro ───────────────────────────────────────────────────────────────── */
+.dia__intro {
+  display: flex;
+  flex-direction: column;
+  gap: 1rem;
+  margin-bottom: clamp(2.5rem, 5vw, 4rem);
+}
+.dia__grade {
+  display: grid;
+  grid-template-columns: minmax(0, 5fr) minmax(0, 7fr);
+  gap: clamp(2rem, 5vw, 4.5rem);
+}
+.dia__passos {
+  display: flex;
+  flex-direction: column;
+}
+.dia__passo {
+  display: flex;
+  flex-direction: column;
+  justify-content: center;
+  gap: 0.6rem;
+  min-height: min(72svh, 760px);
+  padding-block: 2rem;
+  scroll-margin-top: calc(var(--topo-h) + 20svh);
+}
+.dia__passo time {
+  font-size: clamp(2.2rem, 1.6rem + 2.4vw, 3.6rem);
+  font-weight: 800;
+  font-stretch: 125%;
+  line-height: 1;
+  letter-spacing: -0.02em;
+  color: #7488a0;
+  font-variant-numeric: tabular-nums;
+  transition: color 0.3s ease;
+}
+.dia__passo.ativo time {
+  color: var(--marca);
+}
+.dia__lado {
+  position: relative;
+}
+.dia__tela {
+  position: sticky;
+  top: calc(var(--topo-h) + 8svh);
+  display: grid;
+  min-height: 560px;
+}
+.dia__tela > * {
+  grid-area: 1 / 1;
+  align-self: start;
+  transition: opacity 0.35s ease, transform 0.35s ease;
+}
+.dia__tela > [inert] {
+  opacity: 0;
+  transform: translateY(14px);
+  pointer-events: none;
+}
+.dia__inline {
+  display: none;
+}
+@media (max-width: 900px) {
+  .dia__grade {
+    grid-template-columns: minmax(0, 1fr);
+  }
+  .dia__lado {
+    display: none;
+  }
+  .dia__passo {
+    min-height: 0;
+    padding-block: 1.5rem 2.5rem;
+  }
+  .dia__inline {
+    display: block;
+    margin-top: 1rem;
+  }
+}
+
+/* ─── 8. IA ─────────────────────────────────────────────────────────────────────────────────── */
+.ia {
+  background: var(--noite);
+  color: #dce6f0;
+}
+.ia .titulo {
+  color: #fff;
+}
+.ia p {
+  color: #b9c8d8;
+}
+.ia__miolo {
+  display: grid;
+  grid-template-columns: minmax(0, 5fr) minmax(0, 6fr);
+  gap: clamp(2rem, 5vw, 5rem);
+  align-items: center;
+}
+.ia__texto {
+  display: flex;
+  flex-direction: column;
+  align-items: flex-start;
+  gap: 1.2rem;
+}
+.ia__regras {
+  display: flex;
+  flex-direction: column;
+  gap: 0.85rem;
+  margin-block: 0.4rem 0.8rem;
+}
+.ia__regras li {
+  max-width: 56ch;
+  padding-left: 1rem;
+  border-left: 2px solid var(--luz);
+  color: #b9c8d8;
+}
+.ia__regras b {
+  color: #fff;
+  font-weight: 700;
+}
+.ia__chat {
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+  min-width: 0;
+}
+.conector {
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+  padding: 10px 14px;
+  border: 1px dashed #3b5f86;
+  border-radius: 10px;
+  font-size: 12.5px;
+  color: #9fb3c8;
+}
+.conector__url {
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  font-family: var(--f-numero);
+  color: #dce6f0;
+}
+.conector__url span {
+  color: #9fb3c8;
+}
+@media (max-width: 960px) {
+  .ia__miolo {
+    grid-template-columns: minmax(0, 1fr);
+  }
+}
+
+/* ─── 9. Integrações ────────────────────────────────────────────────────────────────────────── */
+.integracoes__intro {
+  display: flex;
+  flex-direction: column;
+  gap: 1rem;
+  margin-bottom: clamp(2rem, 4vw, 3rem);
+}
+.integracoes__miolo {
+  display: grid;
+  grid-template-columns: minmax(0, 8fr) minmax(0, 4fr);
+  gap: clamp(1.5rem, 4vw, 3.5rem);
+  align-items: start;
+}
+.monitor {
+  padding: 0;
+  background: var(--surface);
+}
+.monitor__tabela {
+  width: 100%;
+  border-collapse: collapse;
+  font-size: 13.5px;
+}
+.monitor__tabela th {
+  padding: 10px 14px;
+  border-bottom: 1.5px solid var(--ink);
+  font-size: 11px;
+  font-weight: 700;
+  font-stretch: 110%;
+  color: var(--muted);
+  text-align: left;
+  white-space: nowrap;
+}
+.monitor__tabela td {
+  padding: 9px 14px;
+  border-bottom: 1px solid var(--grid);
+  color: var(--ink-2);
+  vertical-align: middle;
+}
+.monitor__tabela td:first-child {
+  font-weight: 650;
+  color: var(--ink);
+  white-space: nowrap;
+}
+.monitor__tabela td:first-child img {
+  display: inline-block;
+  width: 22px;
+  height: 22px;
+  margin-right: 10px;
+  border-radius: 5px;
+  object-fit: contain;
+  vertical-align: middle;
+}
+.monitor__sigla {
+  display: inline-grid;
+  place-items: center;
+  margin-right: 10px;
+  vertical-align: middle;
+  width: 22px;
+  height: 22px;
+  border-radius: 5px;
+  background: #e2f3f0;
+  color: #12786a;
+  font-size: 9px;
+  font-weight: 800;
+}
+.monitor__quando {
+  white-space: nowrap;
+  font-family: var(--f-numero);
+  font-size: 12px;
+}
+.monitor__tabela tr[data-rodando] td {
+  background: #f4f8fc;
+}
+.integracoes__lado {
+  display: flex;
+  flex-direction: column;
+  gap: 2.4rem;
+}
+.integracoes__bloco {
+  display: flex;
+  flex-direction: column;
+  align-items: flex-start;
+  gap: 0.8rem;
+}
+@media (max-width: 1080px) {
+  .integracoes__miolo {
+    grid-template-columns: minmax(0, 1fr);
+  }
+}
+@container (max-width: 620px) {
+  .monitor__tabela th:nth-child(2),
+  .monitor__tabela td:nth-child(2),
+  .monitor__quando {
+    display: none;
+  }
+}
+
+/* ─── 10. Segurança ─────────────────────────────────────────────────────────────────────────── */
+.seguranca {
+  border-top: 1px solid var(--grade-forte);
+}
+.seguranca__miolo {
+  display: grid;
+  grid-template-columns: minmax(0, 4fr) minmax(0, 7fr);
+  gap: clamp(2rem, 5vw, 5rem);
+}
+.seguranca__texto {
+  display: flex;
+  flex-direction: column;
+  gap: 1rem;
+}
+.seguranca__lista {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 2rem clamp(1.5rem, 3vw, 2.5rem);
+}
+.seguranca__lista > div {
+  padding-top: 0.9rem;
+  border-top: 1px solid #b9c6d3;
+}
+.seguranca__lista dt {
+  margin-bottom: 0.3rem;
+  font-size: 1.125rem;
+  font-weight: 750;
+  font-stretch: 112%;
+  color: var(--tinta);
+}
+.seguranca__lista dd {
+  color: var(--tinta-2);
+}
+@media (max-width: 960px) {
+  .seguranca__miolo {
+    grid-template-columns: minmax(0, 1fr);
+  }
+}
+@media (max-width: 600px) {
+  .seguranca__lista {
+    grid-template-columns: minmax(0, 1fr);
+  }
+}
+
+/* ─── 11. Perguntas ─────────────────────────────────────────────────────────────────────────── */
+.perguntas {
+  background: #e4eaf0;
+}
+.perguntas__miolo {
+  display: grid;
+  grid-template-columns: minmax(0, 4fr) minmax(0, 7fr);
+  gap: clamp(2rem, 5vw, 5rem);
+  align-items: start;
+}
+.perguntas__lista {
+  border-top: 1px solid #b9c6d3;
+}
+.perguntas details {
+  border-bottom: 1px solid #b9c6d3;
+}
+.perguntas summary {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  gap: 1rem;
+  padding: 1.15rem 0.2rem;
+  font-size: 1.125rem;
+  font-weight: 700;
+  font-stretch: 108%;
+  color: var(--tinta);
+  cursor: pointer;
+  list-style: none;
+}
+.perguntas summary::-webkit-details-marker {
+  display: none;
+}
+.perguntas summary::after {
+  content: '';
+  width: 12px;
+  height: 12px;
+  flex: none;
+  border-right: 2.5px solid var(--marca);
+  border-bottom: 2.5px solid var(--marca);
+  transform: translateY(-3px) rotate(45deg);
+  transition: transform 0.2s ease;
+}
+.perguntas details[open] summary::after {
+  transform: translateY(3px) rotate(-135deg);
+}
+.perguntas details p {
+  padding: 0 0.2rem 1.3rem;
+}
+.perguntas details a {
+  color: var(--acao);
+  font-weight: 650;
+}
+@media (max-width: 960px) {
+  .perguntas__miolo {
+    grid-template-columns: minmax(0, 1fr);
+  }
+}
+
+/* ─── 12. Final ─────────────────────────────────────────────────────────────────────────────── */
+.final__miolo {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) minmax(0, 520px);
+  gap: clamp(2rem, 5vw, 5rem);
+  align-items: center;
+}
+.final .titulo {
+  max-width: 17ch;
+}
+@media (max-width: 960px) {
+  .final__miolo {
+    grid-template-columns: minmax(0, 1fr);
+  }
+}
+
+/* ─── Rodapé ────────────────────────────────────────────────────────────────────────────────── */
+.rodape {
+  background: var(--noite);
+  color: #b9c8d8;
+  padding-block: clamp(3rem, 6vw, 4.5rem) 2rem;
+}
+.rodape__miolo {
+  display: grid;
+  grid-template-columns: minmax(0, 4fr) minmax(0, 5fr) minmax(0, 3fr);
+  gap: 2.5rem;
+  align-items: start;
+}
+.rodape__marca img {
+  width: 132px;
+  height: auto;
+  filter: brightness(0) invert(1);
+}
+.rodape__marca p {
+  margin-top: 0.8rem;
+  color: #b9c8d8;
+}
+.rodape__nav ul {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 0.5rem 1.5rem;
+}
+.rodape__nav a {
+  color: #dce6f0;
+  text-decoration: none;
+}
+.rodape__nav a:hover {
+  text-decoration: underline;
+}
+.rodape__acoes {
+  display: flex;
+  flex-direction: column;
+  align-items: flex-start;
+  gap: 1rem;
+}
+.rodape__entrar {
+  color: #fff;
+  font-weight: 650;
+  text-underline-offset: 0.25em;
+}
+.rodape__base {
+  display: flex;
+  flex-direction: column;
+  gap: 0.3rem;
+  margin-top: 3rem;
+  padding-top: 1.4rem;
+  border-top: 1px solid #1d3d62;
+  font-size: var(--t-0);
+  color: #8ea4bb;
+}
+@media (max-width: 880px) {
+  .rodape__miolo {
+    grid-template-columns: minmax(0, 1fr);
+  }
+}
+
+/* ─── 404 ───────────────────────────────────────────────────────────────────────────────────── */
+.pagina-404 {
+  padding-bottom: 0;
+}
+.nao-achou {
+  display: flex;
+  flex-direction: column;
+  align-items: flex-start;
+  gap: 1.2rem;
+  min-height: 70svh;
+  justify-content: center;
+}
+.nao-achou__erro {
+  font-family: var(--f-planilha);
+  font-size: clamp(4rem, 14vw, 9rem);
+  font-weight: 700;
+  line-height: 1;
+  color: var(--erro);
+}

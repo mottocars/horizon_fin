@@ -1,0 +1,26 @@
+<!-- 8. IA: o Claude consultando o Horizon pelo conector MCP. As respostas usam os números do motor. -->
+<section class="secao ia" id="ia" aria-labelledby="h-ia">
+  <div class="miolo ia__miolo">
+    <div class="ia__texto">
+      <h2 id="h-ia" class="titulo">Pergunte ao seu financeiro. Em português.</h2>
+      <p>
+        O Horizon tem um conector para o Claude, a IA da Anthropic. Sua diretoria pergunta do jeito que fala, e a resposta
+        vem com os números do painel, exatamente como a tela mostra.
+      </p>
+      <ul class="ia__regras">
+        <li><b>Vê o que você vê.</b> A IA entra com o login de quem pergunta, e o acesso expira.</li>
+        <li><b>Quando altera, deixa rastro.</b> Mexer no orçamento é uma permissão à parte, só nas linhas liberadas, e cada mudança fica no histórico com o nome de quem pediu.</li>
+        <li><b>Número de agora.</b> Ela consulta o Horizon na hora da pergunta. Nada de copiar e colar relatório.</li>
+      </ul>
+      <a class="botao botao--claro" href="{{WHATSAPP:ia}}" target="_blank" rel="noopener">Ver a IA com os dados da minha empresa</a>
+    </div>
+    <div class="ia__chat" data-cena="ia">
+      <div class="chat" data-chat aria-hidden="true"></div>
+      <div class="visualmente-oculto" data-chat-transcricao></div>
+      <div class="conector" aria-hidden="true">
+        <span class="conector__rotulo">No Claude: Configurações › Conectores › Adicionar conector</span>
+        <span class="conector__url">https://financas.horizonhub.com.br/api/mcp/dfc/<span>a8f3…e21c</span></span>
+      </div>
+    </div>
+  </div>
+</section>

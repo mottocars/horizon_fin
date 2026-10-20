@@ -1,0 +1,62 @@
+*,
+*::before,
+*::after {
+  box-sizing: border-box;
+}
+html {
+  -webkit-text-size-adjust: 100%;
+  text-size-adjust: 100%;
+  scroll-padding-top: calc(var(--topo-h) + 12px);
+  scroll-padding-bottom: calc(var(--abas-h) + 12px);
+}
+body {
+  margin: 0;
+  background: var(--nevoa);
+  color: var(--tinta);
+  font-family: var(--f-marca);
+  font-size: clamp(16px, 0.95rem + 0.15vw, 17px);
+  line-height: 1.55;
+  font-stretch: 100%;
+  overflow-x: clip;
+  padding-bottom: calc(var(--abas-h) + env(safe-area-inset-bottom));
+  -webkit-font-smoothing: antialiased;
+  text-rendering: optimizeLegibility;
+}
+img,
+svg {
+  display: block;
+  max-width: 100%;
+}
+h1,
+h2,
+h3,
+p,
+ul,
+ol,
+dl,
+dd,
+figure {
+  margin: 0;
+}
+ul,
+ol {
+  padding: 0;
+  list-style: none;
+}
+a {
+  color: inherit;
+}
+button,
+input,
+select {
+  font: inherit;
+  color: inherit;
+}
+:focus-visible {
+  outline: 3px solid var(--luz);
+  outline-offset: 3px;
+  border-radius: 4px;
+}
+::selection {
+  background: color-mix(in srgb, var(--luz) 30%, transparent);
+}

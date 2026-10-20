@@ -1,0 +1,56 @@
+<!-- 7. Um dia no financeiro: sequência de horários (por isso os horários marcam os passos). -->
+<section class="secao dia" id="dia" aria-labelledby="h-dia">
+  <div class="miolo dia__intro">
+    <h2 id="h-dia" class="titulo">Enquanto você dorme, o Horizon faz o trabalho chato.</h2>
+    <p>Um dia normal no financeiro, sem ninguém colar nada em lugar nenhum.</p>
+  </div>
+  <div class="miolo dia__grade" data-cena="dia">
+    <ol class="dia__passos">
+      <li class="dia__passo" id="dia-monitor" data-passo="monitor">
+        <time datetime="06:00">06:00</time>
+        <h3 class="subtitulo">Os dados chegam sozinhos</h3>
+        <p>
+          O Monitor de Integrações puxa extratos, títulos a pagar e a receber, notas e medições, no horário que você
+          definiu. Cada rotina tem log e um botão de parar.
+        </p>
+        <div class="dia__inline" data-inline="monitor"></div>
+      </li>
+      <li class="dia__passo" id="dia-saldos" data-passo="saldos">
+        <time datetime="07:30">07:30</time>
+        <h3 class="subtitulo">A diretoria acorda com o saldo no WhatsApp</h3>
+        <p>
+          Saldo de cada conta, quanto cresceu desde a última posição e a planilha anexa. Sim, ainda tem planilha. Mas quem
+          faz é ele.
+        </p>
+        <div class="dia__inline" data-inline="saldos"></div>
+      </li>
+      <li class="dia__passo" id="dia-notas" data-passo="notas">
+        <time datetime="09:00">09:00</time>
+        <h3 class="subtitulo">Toda nota contra o seu CNPJ já chegou</h3>
+        <p>
+          O Horizon busca na SEFAZ cada NF-e e NFS-e emitida para a sua empresa, gera o PDF e casa a nota com o contas a
+          pagar. A nota sem pedido aparece antes de o boleto vencer.
+        </p>
+        <div class="dia__inline" data-inline="notas"></div>
+      </li>
+      <li class="dia__passo" id="dia-cobranca" data-passo="cobranca">
+        <time datetime="10:30">10:30</time>
+        <h3 class="subtitulo">A cobrança vai para quem precisa, do jeito certo</h3>
+        <p>
+          Um motor de risco separa o bom pagador do duvidoso. A régua manda WhatsApp com o boleto, e a carteira do dia é
+          dividida entre a equipe.
+        </p>
+        <div class="dia__inline" data-inline="cobranca"></div>
+      </li>
+      <li class="dia__passo" id="dia-tarefas" data-passo="tarefas">
+        <time datetime="16:00">16:00</time>
+        <h3 class="subtitulo">O que foi combinado tem dono e prazo</h3>
+        <p>Fechamento, conciliação, auditoria: cada atividade com responsável e data. Atrasou? Aparece.</p>
+        <div class="dia__inline" data-inline="tarefas"></div>
+      </li>
+    </ol>
+    <div class="dia__lado" aria-hidden="true">
+      <div class="dia__tela" data-dia-tela></div>
+    </div>
+  </div>
+</section>

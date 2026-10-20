@@ -1,0 +1,747 @@
+/* O mundo planilha (o passado): genérico de propósito — sem verde, faixa de menus ou marca de ninguém. */
+
+/* ─── Abertura ──────────────────────────────────────────────────────────────────────────────── */
+.abertura {
+  display: flex;
+  flex-direction: column;
+  /* Teto em px: alturas presas à janela não podem crescer sem limite (ex.: captura de página inteira). */
+  min-height: min(calc(100svh - var(--topo-h) - var(--abas-h)), 1000px);
+  padding: clamp(10px, 1.6vw, 22px) var(--gutter) 0;
+}
+.folha {
+  --num-w: 40px;
+  --linha-h: 24px;
+  --cols: 9;
+  flex: 1;
+  display: flex;
+  flex-direction: column;
+  width: 100%;
+  max-width: 1320px;
+  margin-inline: auto;
+  background: #fff;
+  border: 1px solid var(--grade-forte);
+  border-bottom: 0;
+  border-radius: var(--raio-janela) var(--raio-janela) 0 0;
+  box-shadow: var(--sombra-folha);
+  overflow: hidden;
+  font-family: var(--f-planilha);
+  color: #222;
+}
+.folha__titulo {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  height: 34px;
+  padding: 0 12px;
+  background: var(--cromo);
+  border-bottom: 1px solid var(--grade-forte);
+  font-size: 13px;
+  white-space: nowrap;
+  overflow: hidden;
+}
+.folha__icone {
+  width: 16px;
+  height: 16px;
+  flex: none;
+  fill: none;
+  stroke: var(--cromo-tinta);
+  stroke-width: 1.3;
+}
+.folha__arquivo {
+  font-weight: 700;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+.folha__aviso {
+  padding: 1px 8px;
+  border-radius: 4px;
+  background: #fff4ce;
+  color: #6b5200;
+  font-size: 12px;
+}
+.folha__janela {
+  display: flex;
+  align-items: center;
+  gap: 16px;
+  margin-left: auto;
+  padding-left: 12px;
+}
+.folha__janela i {
+  position: relative;
+  display: block;
+  width: 10px;
+  height: 10px;
+}
+.folha__janela i:nth-child(1) {
+  height: 0;
+  border-top: 1.5px solid #7d8790;
+}
+.folha__janela i:nth-child(2) {
+  border: 1.5px solid #7d8790;
+}
+.folha__janela i:nth-child(3)::before,
+.folha__janela i:nth-child(3)::after {
+  content: '';
+  position: absolute;
+  left: -1px;
+  top: 4px;
+  width: 12px;
+  height: 1.5px;
+  background: #7d8790;
+  transform: rotate(45deg);
+}
+.folha__janela i:nth-child(3)::after {
+  transform: rotate(-45deg);
+}
+.folha__formula {
+  display: grid;
+  grid-template-columns: 64px 38px minmax(0, 1fr);
+  align-items: center;
+  height: 32px;
+  border-bottom: 1px solid var(--grade-forte);
+  font-size: 14px;
+}
+.folha__nome,
+.folha__fx {
+  height: 100%;
+  display: grid;
+  place-items: center;
+  border-right: 1px solid var(--grade-forte);
+  color: #333;
+}
+.folha__fx {
+  font-family: Georgia, 'Times New Roman', serif;
+  font-style: italic;
+  color: #66707a;
+}
+.folha__expr {
+  padding: 0 10px;
+  white-space: nowrap;
+  overflow: hidden;
+}
+.digitando {
+  display: inline-block;
+}
+
+/* Grade: colunas iguais (texto longo corta na vizinha, como numa planilha de verdade). */
+.grade {
+  font-size: 14px;
+  overflow: hidden;
+}
+.grade__cab,
+.grade__corpo {
+  display: grid;
+  grid-template-columns: var(--num-w) repeat(var(--cols), minmax(0, 1fr));
+  grid-auto-columns: 0;
+}
+.grade__cab {
+  height: 22px;
+  background: var(--cromo);
+  border-bottom: 1px solid var(--grade-forte);
+  font-size: 12px;
+  color: #5b6570;
+}
+.grade__cab span {
+  display: grid;
+  place-items: center;
+  border-right: 1px solid var(--grade-forte);
+}
+.grade__corpo {
+  grid-template-rows: repeat(var(--linhas), var(--linha-h));
+  background:
+    linear-gradient(to right, var(--grade) 1px, transparent 1px) var(--num-w) 0 / calc((100% - var(--num-w)) / var(--cols)) 100%,
+    linear-gradient(to bottom, var(--grade) 1px, transparent 1px) 0 0 / 100% var(--linha-h);
+}
+.grade--sem-cab .grade__corpo {
+  border-top: 1px solid var(--grade);
+}
+.grade__num {
+  grid-column: 1;
+  display: grid;
+  place-items: center;
+  background: var(--cromo);
+  border-right: 1px solid var(--grade-forte);
+  border-bottom: 1px solid var(--grade);
+  font-size: 12px;
+  color: #5b6570;
+}
+.cel {
+  position: relative;
+  min-width: 0;
+  padding: 0 6px;
+  line-height: var(--linha-h);
+  white-space: nowrap;
+  overflow: hidden;
+}
+.cel--num {
+  text-align: right;
+  font-variant-numeric: tabular-nums;
+}
+.cel--forte {
+  font-weight: 700;
+}
+.cel--cab {
+  background: #f6f7f9;
+  font-weight: 700;
+  color: #333;
+  box-shadow: inset 0 -1px 0 #c4cbd2;
+}
+.cel--marca {
+  background: var(--marca-texto);
+  overflow: visible;
+}
+.cel--comentario::after {
+  content: '';
+  position: absolute;
+  top: 0;
+  right: 0;
+  border-style: solid;
+  border-width: 0 8px 8px 0;
+  border-color: transparent var(--erro) transparent transparent;
+}
+.cel--ativa {
+  z-index: 1;
+  overflow: visible;
+  box-shadow: inset 0 0 0 2px var(--luz);
+}
+.cel--ativa::after,
+.mesclada__celula::after {
+  content: '';
+  position: absolute;
+  right: -3px;
+  bottom: -3px;
+  width: 7px;
+  height: 7px;
+  background: var(--luz);
+  border: 1px solid #fff;
+}
+.cel--total {
+  font-weight: 700;
+  background: #f6f7f9;
+  box-shadow: inset 0 1px 0 #9aa4ad, inset 0 3px 0 #fff, inset 0 4px 0 #9aa4ad;
+}
+.cel--nota {
+  font-style: italic;
+  color: #6f7a84;
+}
+.cel__erro {
+  color: var(--erro);
+  font-weight: 700;
+}
+
+/* Linha 6: a célula mesclada onde o título rompe a grade. */
+.mesclada {
+  flex: 1;
+  display: grid;
+  grid-template-columns: var(--num-w) minmax(0, 1fr);
+  border-top: 1px solid var(--grade);
+}
+.mesclada__num {
+  display: grid;
+  place-items: center;
+  background: var(--cromo);
+  border-right: 1px solid var(--grade-forte);
+  font-size: 12px;
+  color: #5b6570;
+}
+.mesclada__celula {
+  position: relative;
+  display: flex;
+  flex-direction: column;
+  justify-content: center;
+  padding: clamp(20px, 3.2vw, 46px) clamp(18px, 4.4vw, 64px);
+  box-shadow: inset 0 0 0 2px var(--luz);
+  font-family: var(--f-marca);
+}
+.abertura__titulo {
+  max-width: none;
+  font-size: var(--t-5);
+  font-weight: 800;
+  font-stretch: 125%;
+  line-height: 0.98;
+  letter-spacing: -0.03em;
+  color: var(--marca);
+  text-wrap: balance;
+  transform-origin: 0 50%;
+}
+.abertura__titulo span {
+  display: block;
+}
+.abertura__apoio {
+  max-width: 52ch;
+  margin-top: clamp(1rem, 2vw, 1.6rem);
+  font-size: var(--t-2);
+  line-height: 1.45;
+  color: var(--tinta-2);
+}
+.abertura__acoes {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 12px 22px;
+  margin-top: clamp(1.4rem, 3vw, 2.2rem);
+}
+
+@media (max-width: 760px) {
+  .folha {
+    --cols: 4;
+    --num-w: 30px;
+    --linha-h: 22px;
+  }
+  .grade {
+    font-size: 12.5px;
+  }
+  .folha .larga,
+  .folha__aviso {
+    display: none;
+  }
+  .abertura {
+    padding-inline: 8px;
+  }
+  .abertura__acoes .botao {
+    flex: 1 1 auto;
+  }
+}
+@media (max-height: 760px) and (min-width: 761px) {
+  .folha {
+    --linha-h: 21px;
+  }
+}
+
+/* Coreografia de abertura (só em CSS, para o título — o LCP — não depender de JS). O estado final é o
+   estilo normal; qualquer rolagem, tecla ou toque pula para ele (.intro-pular, cenas/abertura.js). */
+@media (prefers-reduced-motion: no-preference) {
+  .digitando {
+    animation: digitar 1.15s steps(58, end) 0.3s both;
+  }
+  .cel__erro--procv {
+    animation:
+      surgir 1ms linear 1.5s both,
+      piscar 0.5s ease-out 1.5s;
+  }
+  .cel__erro:not(.cel__erro--procv) {
+    animation: surgir 1ms linear calc(1.75s + var(--i, 0) * 0.09s) both;
+  }
+  .abertura__titulo {
+    animation: alargar 0.95s cubic-bezier(0.16, 1, 0.3, 1) 1.6s both;
+  }
+  .intro-pular .digitando,
+  .intro-pular .cel__erro,
+  .intro-pular .abertura__titulo {
+    animation: none;
+  }
+}
+@keyframes digitar {
+  from {
+    clip-path: inset(0 100% 0 0);
+  }
+  to {
+    clip-path: inset(0 0 0 0);
+  }
+}
+@keyframes surgir {
+  from {
+    opacity: 0;
+  }
+  to {
+    opacity: 1;
+  }
+}
+@keyframes piscar {
+  from {
+    background: color-mix(in srgb, var(--erro) 22%, transparent);
+  }
+  to {
+    background: transparent;
+  }
+}
+@keyframes alargar {
+  from {
+    transform: scaleX(0.56);
+    color: #6f7a84;
+  }
+  to {
+    transform: none;
+    color: var(--marca);
+  }
+}
+
+/* ─── Calculadora "Quanto custa a planilha" ────────────────────────────────────────────────── */
+.mini-folha {
+  background: #fff;
+  border: 1px solid var(--grade-forte);
+  border-radius: 8px;
+  box-shadow: var(--sombra-folha);
+  overflow: hidden;
+  font-family: var(--f-planilha);
+  color: #222;
+}
+.mini-folha__formula {
+  display: grid;
+  grid-template-columns: 56px 36px minmax(0, 1fr);
+  align-items: center;
+  height: 32px;
+  background: var(--cromo);
+  border-bottom: 1px solid var(--grade-forte);
+  font-size: 14px;
+}
+.mini-folha__expr {
+  padding: 0 10px;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+.mini-folha__grade {
+  display: grid;
+  grid-template-columns: 32px minmax(0, 1fr) minmax(6.5rem, 11rem);
+  grid-auto-rows: minmax(46px, auto);
+}
+.mini-folha__grade > * {
+  border-bottom: 1px solid var(--grade);
+}
+.mini-folha__num {
+  display: grid;
+  place-items: center;
+  background: var(--cromo);
+  border-right: 1px solid var(--grade-forte);
+  font-size: 12px;
+  color: #5b6570;
+}
+.mini-folha__grade label,
+.mini-folha__total-rot {
+  display: flex;
+  align-items: center;
+  padding: 6px 12px;
+  border-right: 1px solid var(--grade);
+  font-size: 15px;
+  line-height: 1.2;
+}
+.mini-folha__grade input,
+.mini-folha__total {
+  width: 100%;
+  min-width: 0;
+  padding: 0 12px;
+  border: 0;
+  border-bottom: 1px solid var(--grade);
+  border-radius: 0;
+  background: #fff;
+  font: 16px var(--f-planilha);
+  text-align: right;
+  font-variant-numeric: tabular-nums;
+  -moz-appearance: textfield;
+  appearance: textfield;
+}
+.mini-folha__grade input::-webkit-inner-spin-button,
+.mini-folha__grade input::-webkit-outer-spin-button {
+  -webkit-appearance: none;
+  margin: 0;
+}
+.mini-folha__grade input:hover {
+  background: #f8fafc;
+}
+.mini-folha__grade input:focus-visible {
+  outline: none;
+  box-shadow: inset 0 0 0 2px var(--luz);
+  border-radius: 0;
+}
+.mini-folha__total-rot {
+  font-weight: 700;
+  background: #f6f7f9;
+}
+.mini-folha__total {
+  display: flex;
+  align-items: center;
+  justify-content: flex-end;
+  font-weight: 700;
+  background: var(--marca-texto);
+}
+.mini-folha__grade > :nth-last-child(-n + 3) {
+  border-bottom: 0;
+}
+
+/* ─── A planilha caindo (cenas/queda.js) ───────────────────────────────────────────────────── */
+.queda__celulas {
+  position: absolute;
+  inset: 0;
+  z-index: 2;
+  display: grid;
+  pointer-events: none;
+  font-family: var(--f-planilha);
+  font-size: 14px;
+  color: #222;
+}
+.queda__cel {
+  display: flex;
+  align-items: center;
+  justify-content: flex-end;
+  padding: 0 8px;
+  background: #fff;
+  box-shadow: inset -1px -1px 0 var(--grade);
+  white-space: nowrap;
+  overflow: hidden;
+  backface-visibility: hidden;
+}
+.queda__cel--cab {
+  justify-content: center;
+  background: var(--cromo);
+  color: #5b6570;
+  font-size: 12px;
+}
+.queda__cel--texto {
+  justify-content: flex-start;
+}
+.queda__cel--erro {
+  color: var(--erro);
+  font-weight: 700;
+}
+.queda__cel--grande {
+  flex-direction: column;
+  align-items: flex-start;
+  justify-content: center;
+  gap: 6px;
+  padding: 0 clamp(12px, 3vw, 36px);
+  box-shadow: inset 0 0 0 2px var(--luz);
+  z-index: 1;
+}
+.queda__cel--grande code {
+  font: inherit;
+  font-size: clamp(13px, 1.3vw, 16px);
+  color: #444;
+}
+.queda__cel--grande strong {
+  font-size: clamp(56px, 11vw, 148px);
+  line-height: 0.9;
+  color: var(--erro);
+  font-weight: 700;
+}
+
+/* ─── Barra de abas (índice e placar da página) ─────────────────────────────────────────────── */
+.abas {
+  position: fixed;
+  left: 0;
+  right: 0;
+  bottom: 0;
+  z-index: 40;
+  display: flex;
+  align-items: stretch;
+  height: calc(var(--abas-h) + env(safe-area-inset-bottom));
+  padding-bottom: env(safe-area-inset-bottom);
+  background: var(--cromo);
+  border-top: 1px solid var(--grade-forte);
+  font-family: var(--f-planilha);
+  font-size: 14px;
+  color: #333;
+  transition: transform 0.2s ease;
+}
+.abas__setas {
+  display: flex;
+  align-items: center;
+  gap: 4px;
+  padding: 0 10px;
+  border-right: 1px solid var(--grade-forte);
+}
+.abas__setas svg {
+  width: 14px;
+  height: 14px;
+  fill: none;
+  stroke: #8a939c;
+  stroke-width: 1.6;
+}
+.abas__lista {
+  display: flex;
+  flex: 0 1 auto;
+  min-width: 0;
+  overflow-x: auto;
+  scrollbar-width: none;
+}
+.abas__lista::-webkit-scrollbar {
+  display: none;
+}
+.abas__lista li {
+  display: flex;
+}
+.abas__lista a {
+  position: relative;
+  display: flex;
+  align-items: center;
+  max-width: 280px;
+  padding: 0 16px;
+  border-right: 1px solid var(--grade-forte);
+  color: #333;
+  text-decoration: none;
+  white-space: nowrap;
+  overflow: hidden;
+  transition:
+    max-width 0.45s cubic-bezier(0.65, 0, 0.35, 1),
+    padding 0.45s cubic-bezier(0.65, 0, 0.35, 1),
+    opacity 0.3s ease 0.1s,
+    background-color 0.2s ease,
+    color 0.2s ease;
+}
+.abas__lista a:hover {
+  background: #e8ebef;
+}
+.abas__lista a[aria-current] {
+  background: #fff;
+  color: var(--marca);
+  font-weight: 700;
+  box-shadow: inset 0 -3px 0 var(--luz);
+}
+.abas__lista a::after {
+  content: '';
+  position: absolute;
+  left: 12px;
+  right: 12px;
+  top: 50%;
+  height: 2px;
+  background: var(--erro);
+  transform: scaleX(0);
+  transform-origin: 0 50%;
+  transition: transform 0.28s ease;
+}
+.abas__lista a.riscada::after {
+  transform: scaleX(1);
+}
+.abas__lista a.riscada {
+  color: #8a939c;
+}
+.abas__lista a.apagada {
+  max-width: 0;
+  padding-inline: 0;
+  border-right-width: 0;
+  opacity: 0;
+}
+.abas__lista a.apagada:focus-visible {
+  max-width: 280px;
+  padding-inline: 16px;
+  opacity: 1;
+  outline-offset: -3px;
+}
+.abas__mais {
+  display: grid;
+  place-items: center;
+  width: 38px;
+  flex: none;
+  color: #7d8790;
+  font-size: 20px;
+}
+.abas__status {
+  display: flex;
+  align-items: center;
+  margin-left: auto;
+  padding: 0 16px;
+  border-left: 1px solid var(--grade-forte);
+  font-size: 13px;
+  color: #5b6570;
+  white-space: nowrap;
+}
+.abas.vazia .abas__status {
+  color: var(--marca);
+  font-weight: 700;
+}
+body:has(input:focus) .abas {
+  transform: translateY(110%);
+}
+@media (min-width: 761px) {
+  body:has(input:focus) .abas {
+    transform: none;
+  }
+}
+@media (max-width: 760px) {
+  .abas__setas,
+  .abas__mais {
+    display: none;
+  }
+  .abas__lista a {
+    padding: 0 13px;
+  }
+  .abas__status {
+    display: none;
+  }
+}
+
+/* ─── Caixa de diálogo do final ────────────────────────────────────────────────────────────── */
+.dialogo {
+  width: min(100%, 520px);
+  background: #fff;
+  border: 1px solid #c9cfd5;
+  border-radius: 10px;
+  box-shadow: 0 2px 4px rgb(15 34 54 / 0.06), 0 34px 70px -26px rgb(15 34 54 / 0.5);
+  font-family: var(--f-planilha);
+  color: #222;
+  overflow: hidden;
+}
+.dialogo__barra {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  padding: 8px 14px;
+  background: var(--cromo);
+  border-bottom: 1px solid var(--grade-forte);
+  font-size: 13px;
+  color: #444;
+}
+.dialogo__fechar {
+  font-size: 18px;
+  line-height: 1;
+  color: #7d8790;
+}
+.dialogo__corpo {
+  display: flex;
+  gap: 16px;
+  padding: 24px 24px 6px;
+}
+.dialogo__icone {
+  width: 40px;
+  height: 40px;
+  flex: none;
+  fill: #fab219;
+  stroke: #6b4a00;
+  stroke-width: 2.4;
+  stroke-linejoin: round;
+  stroke-linecap: round;
+}
+.dialogo__icone circle {
+  fill: #6b4a00;
+  stroke: none;
+}
+.dialogo__pergunta {
+  font-size: 19px;
+  font-weight: 700;
+  line-height: 1.3;
+}
+.dialogo__msg {
+  margin-top: 6px;
+  font-size: 16px;
+  color: #444;
+}
+.dialogo__acoes {
+  display: flex;
+  flex-wrap: wrap;
+  justify-content: flex-end;
+  gap: 10px;
+  padding: 20px 24px 24px;
+}
+.dialogo.tremeu {
+  animation: tremer 0.4s ease;
+}
+@keyframes tremer {
+  20%,
+  60% {
+    transform: translateX(-6px);
+  }
+  40%,
+  80% {
+    transform: translateX(6px);
+  }
+}
+@media (prefers-reduced-motion: reduce) {
+  .abas,
+  .abas__lista a,
+  .abas__lista a::after {
+    transition: none;
+  }
+  .dialogo.tremeu {
+    animation: none;
+  }
+}

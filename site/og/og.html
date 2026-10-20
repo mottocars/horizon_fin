@@ -1,0 +1,45 @@
+<!doctype html>
+<!-- Composição da imagem de compartilhamento (1200x630). Só para o scripts/og.mjs — não entra no build. -->
+<html lang="pt-BR">
+  <head>
+    <meta charset="UTF-8" />
+    <style>
+      @font-face {
+        font-family: 'Archivo OG';
+        src: url('../node_modules/@fontsource-variable/archivo/files/archivo-latin-wdth-normal.woff2') format('woff2-variations');
+        font-weight: 100 900;
+        font-stretch: 62% 125%;
+      }
+      * { box-sizing: border-box; margin: 0; }
+      body { width: 1200px; height: 630px; overflow: hidden; background: #eef2f6; font-family: 'Archivo OG', sans-serif; }
+      .folha { position: absolute; left: 48px; right: 48px; top: 44px; bottom: 0; background: #fff; border: 1px solid #d4d9de; border-bottom: 0; border-radius: 14px 14px 0 0; box-shadow: 0 30px 60px -30px rgb(15 34 54 / .35); overflow: hidden; font-family: Calibri, Carlito, 'Segoe UI', Arial, sans-serif; color: #222; }
+      .titulo { height: 40px; display: flex; align-items: center; gap: 12px; padding: 0 16px; background: #f2f3f5; border-bottom: 1px solid #d4d9de; font-size: 16px; }
+      .titulo b { font-weight: 700; }
+      .titulo span { padding: 2px 9px; border-radius: 4px; background: #fff4ce; color: #6b5200; font-size: 14px; }
+      .linha { display: grid; grid-template-columns: 46px repeat(5, 1fr); height: 34px; border-bottom: 1px solid #e1e5ea; font-size: 17px; align-items: center; }
+      .linha > * { padding: 0 10px; border-right: 1px solid #e1e5ea; height: 100%; display: flex; align-items: center; }
+      .linha > :first-child { background: #f2f3f5; justify-content: center; color: #5b6570; font-size: 14px; }
+      .n { justify-content: flex-end; }
+      .e { justify-content: flex-end; color: #c8312f; font-weight: 700; }
+      .mesclada { position: absolute; left: 46px; right: 0; top: 108px; bottom: 0; padding: 50px 56px; box-shadow: inset 0 0 0 3px #189dda; font-family: 'Archivo OG', sans-serif; }
+      h1 { font-size: 86px; font-weight: 800; font-stretch: 125%; line-height: .98; letter-spacing: -.03em; color: #004894; }
+      h1 span { display: block; }
+      p { margin-top: 26px; font-size: 28px; line-height: 1.35; color: #3a4d60; max-width: 30ch; }
+      .marca { position: absolute; right: 56px; bottom: 46px; width: 210px; }
+      .num { position: absolute; left: 0; top: 108px; bottom: 0; width: 46px; background: #f2f3f5; border-right: 1px solid #d4d9de; display: flex; align-items: center; justify-content: center; color: #5b6570; font-size: 14px; }
+    </style>
+  </head>
+  <body>
+    <div class="folha">
+      <div class="titulo">▦ <b>FLUXO_CAIXA_FINAL_v7_AGORA_VAI.xlsx</b><span>Somente leitura (Juliana está editando)</span></div>
+      <div class="linha"><span>1</span><span><b>Empresa</b></span><span class="n"><b>Saldo hoje</b></span><span class="n"><b>A receber</b></span><span class="n"><b>A pagar</b></span><span class="n"><b>Saldo em março</b></span></div>
+      <div class="linha"><span>2</span><span>TOTAL</span><span class="e">#REF!</span><span class="e">#REF!</span><span class="e">#N/D</span><span class="e">#REF!</span></div>
+      <div class="num">3</div>
+      <div class="mesclada">
+        <h1><span>Sua empresa cresceu.</span><span>A planilha, não.</span></h1>
+        <p>Fluxo de caixa, DRE, orçamento, cobrança e bancos num sistema só, com IA.</p>
+      </div>
+      <img class="marca" src="../public/marca/logomarca.svg" alt="" />
+    </div>
+  </body>
+</html>

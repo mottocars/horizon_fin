@@ -1,0 +1,23 @@
+<!-- 12. Final: a última aba. A caixa de diálogo é um enfeite com botões de verdade (não é modal). -->
+<section class="secao final" id="nao-mexer" aria-labelledby="h-final" data-cena="final">
+  <div class="miolo final__miolo">
+    <h2 id="h-final" class="titulo">Você rolou até o fim. Sua planilha não teve a mesma sorte.</h2>
+    <div class="dialogo" role="group" aria-labelledby="dlg-pergunta" aria-describedby="dlg-msg">
+      <div class="dialogo__barra" aria-hidden="true">
+        <span>Planilha</span>
+        <span class="dialogo__fechar">×</span>
+      </div>
+      <div class="dialogo__corpo">
+        <svg class="dialogo__icone" viewBox="0 0 40 40" aria-hidden="true"><path d="M20 4 37 34H3Z" /><path d="M20 15v9" /><circle cx="20" cy="28.5" r="1.6" /></svg>
+        <div>
+          <p class="dialogo__pergunta" id="dlg-pergunta">Excluir a planilha "NÃO MEXER"?</p>
+          <p class="dialogo__msg" id="dlg-msg" data-dialogo-msg aria-live="polite">Essa ação não pode ser desfeita.</p>
+        </div>
+      </div>
+      <div class="dialogo__acoes">
+        <button class="botao botao--cinza" type="button" data-cancelar>Cancelar</button>
+        <a class="botao" href="{{WHATSAPP:dialogo}}" target="_blank" rel="noopener" data-excluir>Excluir e chamar o Horizon</a>
+      </div>
+    </div>
+  </div>
+</section>

@@ -1,0 +1,14 @@
+/* Site do Horizon Finanças — ordem das camadas: o que vem depois ganha. */
+@layer reset, tokens, base, componentes, planilha, mock, secoes, util;
+
+@import '@fontsource-variable/archivo/wdth.css' layer(base);
+@import '@fontsource/ibm-plex-mono/latin-400.css' layer(base);
+@import '@fontsource/ibm-plex-mono/latin-500.css' layer(base);
+
+@import './tokens.css' layer(tokens);
+@import './base.css' layer(base);
+@import './componentes.css' layer(componentes);
+@import './planilha.css' layer(planilha);
+@import './mock.css' layer(mock);
+@import './secoes.css' layer(secoes);
+@import './util.css' layer(util);

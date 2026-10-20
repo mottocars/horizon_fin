@@ -1,0 +1,22 @@
+<!-- Barra de abas da planilha: índice e placar da página. Cada aba é excluída quando a seção dela passa
+     (nucleo/abas.js) e volta se você rolar para cima. "NÃO MEXER" só sai no botão do diálogo final. -->
+<nav class="abas" aria-label="Seções da página" data-abas>
+  <span class="abas__setas" aria-hidden="true">
+    <svg viewBox="0 0 16 16"><path d="M10 3 5 8l5 5" /></svg>
+    <svg viewBox="0 0 16 16"><path d="m6 3 5 5-5 5" /></svg>
+  </span>
+  <ol class="abas__lista" data-abas-lista>
+    <li><a href="#painel" data-apaga="#queda" data-ponto="0.45">Fluxo de caixa</a></li>
+    <li><a href="#dre" data-apaga="#dre">DRE</a></li>
+    <li><a href="#orcamento" data-apaga="#orcamento">Orçamento_rev3</a></li>
+    <li><a href="#cenarios" data-apaga="#cenarios">Cenários (NÃO APAGAR)</a></li>
+    <li><a href="#dia-saldos" data-apaga="#dia-saldos">Saldos</a></li>
+    <li><a href="#dia-notas" data-apaga="#dia-notas">Notas</a></li>
+    <li><a href="#dia-cobranca" data-apaga="#dia-cobranca">Cobrança</a></li>
+    <li><a href="#dia-tarefas" data-apaga="#dia-tarefas">Tarefas</a></li>
+    <li><a href="#ia" data-apaga="#ia">Macro_que_ninguem_entende</a></li>
+    <li><a href="#nao-mexer" data-apaga="dialogo">NÃO MEXER</a></li>
+  </ol>
+  <span class="abas__mais" aria-hidden="true">+</span>
+  <span class="abas__status" aria-hidden="true" data-abas-status>10 planilhas</span>
+</nav>

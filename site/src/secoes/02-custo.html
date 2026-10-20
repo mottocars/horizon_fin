@@ -1,0 +1,48 @@
+<!-- 2. Quanto custa a planilha: calculadora em forma de planilha (ainda o mundo velho). -->
+<section class="secao custo" id="custo" aria-labelledby="h-custo">
+  <div class="miolo custo__miolo">
+    <div class="custo__texto">
+      <h2 id="h-custo" class="titulo">Quanto custa a planilha que não custa nada?</h2>
+      <p>
+        Ninguém paga licença pela planilha. Paga em horas: alguém exporta do ERP, cola o extrato, confere a fórmula, refaz o
+        consolidado e manda no grupo. Toda semana.
+      </p>
+      <p>Coloque os números da sua equipe ao lado.</p>
+    </div>
+
+    <div class="custo__conta" data-cena="custo">
+      <form class="mini-folha" aria-label="Calculadora do custo da planilha" data-form-custo>
+        <div class="mini-folha__formula" aria-hidden="true">
+          <span class="folha__nome">B5</span>
+          <span class="folha__fx">fx</span>
+          <span class="mini-folha__expr" data-formula>=B2*B3*52*(B4/176)</span>
+        </div>
+        <div class="mini-folha__grade">
+          <span class="mini-folha__num" aria-hidden="true">2</span>
+          <label for="c-pessoas">Pessoas que mexem na planilha</label>
+          <input id="c-pessoas" name="pessoas" type="number" inputmode="numeric" min="1" max="99" step="1" value="3" />
+
+          <span class="mini-folha__num" aria-hidden="true">3</span>
+          <label for="c-horas">Horas por semana, cada uma</label>
+          <input id="c-horas" name="horas" type="number" inputmode="numeric" min="1" max="60" step="1" value="8" />
+
+          <span class="mini-folha__num" aria-hidden="true">4</span>
+          <label for="c-custo">Custo mensal de cada pessoa, com encargos (R$)</label>
+          <input id="c-custo" name="custo" type="number" inputmode="numeric" min="1000" max="99000" step="500" value="9000" />
+
+          <span class="mini-folha__num" aria-hidden="true">5</span>
+          <span class="mini-folha__total-rot">Custo por ano</span>
+          <output class="mini-folha__total" id="c-resultado" for="c-pessoas c-horas c-custo" data-resultado>R$ 63.818</output>
+        </div>
+      </form>
+
+      <p class="custo__veredito" aria-live="polite">
+        <span class="custo__valor" data-valor-ano>R$ 64 mil</span>
+        <span class="custo__frase">por ano para manter o número de ontem.</span>
+      </p>
+      <p class="custo__conta-aberta" data-conta-aberta>3 pessoas × 8 h × 52 semanas × R$ 51 por hora</p>
+      <p class="custo__fecho">E isso sem contar o dia em que a fórmula quebrou e ninguém viu.</p>
+      <a class="botao" href="{{WHATSAPP:custo}}" target="_blank" rel="noopener" data-link-custo>Parar de pagar essa conta</a>
+    </div>
+  </div>
+</section>

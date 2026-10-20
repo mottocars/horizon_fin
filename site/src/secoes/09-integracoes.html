@@ -1,0 +1,56 @@
+<!-- 9. Integrações: o próprio Monitor de Integrações, em vez de uma nuvem de logos. -->
+<section class="secao integracoes" id="integracoes" aria-labelledby="h-integracoes">
+  <div class="miolo integracoes__intro">
+    <h2 id="h-integracoes" class="titulo">Conecta com o que sua empresa já usa.</h2>
+    <p>
+      ERP, bancos, SEFAZ, WhatsApp, e-mail e IA. O Horizon puxa os dados sozinho, no horário que você definir, e mostra
+      quando cada integração rodou pela última vez.
+    </p>
+  </div>
+  <div class="miolo integracoes__miolo">
+    <div class="janela" data-cena="integracoes" data-monitor role="region" aria-label="Monitor de Integrações do Horizon com as integrações disponíveis">
+      <div class="janela__barra" aria-hidden="true">
+        <img class="janela__simbolo" src="/favicon.svg" width="16" height="20" alt="" />
+        <span class="janela__migalhas">Integrações <i>›</i> Monitor de Integrações</span>
+      </div>
+      <div class="mock monitor">
+        <table class="monitor__tabela">
+          <caption class="visualmente-oculto">Integrações do Horizon e o que cada uma traz</caption>
+          <thead>
+            <tr><th scope="col">Integração</th><th scope="col">O que traz</th><th scope="col" class="monitor__quando">Última execução</th><th scope="col">Situação</th></tr>
+          </thead>
+          <tbody>
+            <tr><td><img src="./src/assets/integracoes/sienge.svg" width="22" height="22" alt="" />Sienge (ERP)</td><td>Contas a pagar e a receber, clientes, orçamento empresarial, boletos</td><td class="monitor__quando">hoje, 06:00</td><td><span class="st good">1.284 títulos</span></td></tr>
+            <tr><td><img src="./src/assets/integracoes/itau.svg" width="22" height="22" alt="" />Itaú (API)</td><td>Extrato e saldo diário, com renovação do certificado</td><td class="monitor__quando">hoje, 06:02</td><td><span class="st good">3 contas</span></td></tr>
+            <tr><td><span class="monitor__sigla" aria-hidden="true">Pix</span>VanPix</td><td>Extrato e cobrança via Pix</td><td class="monitor__quando">hoje, 06:03</td><td><span class="st good">ok</span></td></tr>
+            <tr><td><img src="./src/assets/integracoes/portal-construtoras.svg" width="22" height="22" alt="" />Caixa (Portal das Construtoras)</td><td>Medições, financiamento e extrato das obras</td><td class="monitor__quando">hoje, 06:05</td><td><span class="st good">ok</span></td></tr>
+            <tr><td><img src="./src/assets/integracoes/prevision.svg" width="22" height="22" alt="" />Prevision</td><td>Avanço físico das obras</td><td class="monitor__quando">hoje, 06:08</td><td><span class="st good">ok</span></td></tr>
+            <tr><td><img src="./src/assets/integracoes/construtor-vendas.svg" width="22" height="22" alt="" />Construtor de Vendas (CRM)</td><td>Reservas e contratos</td><td class="monitor__quando">hoje, 06:10</td><td><span class="st good">ok</span></td></tr>
+            <tr><td><img src="./src/assets/integracoes/certificados-digitais.svg" width="22" height="22" alt="" />SEFAZ e NFS-e Nacional</td><td>Toda NF-e e NFS-e emitida contra o seu CNPJ</td><td class="monitor__quando">hoje, 09:00</td><td><span class="st good">23 notas</span></td></tr>
+            <tr><td><img src="./src/assets/integracoes/zapi.svg" width="22" height="22" alt="" />WhatsApp</td><td>Saldos, régua de cobrança e avisos, com anexo</td><td class="monitor__quando">hoje, 07:30</td><td><span class="st good">enviado</span></td></tr>
+            <tr><td><img src="./src/assets/integracoes/email.svg" width="22" height="22" alt="" />E-mail</td><td>Cobrança e relatórios</td><td class="monitor__quando">hoje, 10:30</td><td><span class="st good">enviado</span></td></tr>
+            <tr data-rodando><td><img src="./src/assets/integracoes/mcp.svg" width="22" height="22" alt="" />Claude (conector MCP)</td><td>Perguntas da diretoria, com os números do painel</td><td class="monitor__quando">agora</td><td><span class="st info">consultando</span></td></tr>
+          </tbody>
+        </table>
+      </div>
+    </div>
+
+    <div class="integracoes__lado">
+      <div class="integracoes__bloco">
+        <h3 class="subtitulo">Usa outro ERP? A gente conecta.</h3>
+        <p>
+          A integração com o seu ERP entra na implantação. Você continua lançando onde já lança; o Horizon lê de lá e organiza
+          o financeiro em cima.
+        </p>
+        <a class="botao botao--contorno" href="{{WHATSAPP:erp}}" target="_blank" rel="noopener">Perguntar sobre o meu ERP</a>
+      </div>
+      <div class="integracoes__bloco">
+        <h3 class="subtitulo">Seu setor tem regra própria? A gente já fez isso.</h3>
+        <p>
+          Construção e incorporação, por exemplo: o Horizon projeta o financiamento da Caixa obra a obra, acompanha cada
+          repasse da reserva ao registro e cruza o avanço físico da obra com o fluxo de caixa.
+        </p>
+      </div>
+    </div>
+  </div>
+</section>

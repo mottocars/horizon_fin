@@ -1,0 +1,50 @@
+<!-- 3. Fluxo de caixa: a pergunta, a planilha caindo (rolagem) e a resposta — o painel com o motor real. -->
+<section class="secao painel" id="painel" aria-labelledby="h-painel">
+  <div class="miolo painel__intro">
+    <h2 id="h-painel" class="titulo">
+      Quanto você vai ter em caixa em <span data-mes-minimo>março</span>? O Horizon responde antes do café.
+    </h2>
+    <p>
+      Realizado direto do extrato do banco, projetado pelo seu orçamento, por empresa, unidade e centro de custo. A linha
+      do colchão avisa quando o caixa vai ficar abaixo do mínimo seguro, meses antes de acontecer.
+    </p>
+  </div>
+
+  <div class="queda" id="queda" data-queda>
+    <div class="queda__palco">
+      <div class="queda__tela" data-escala>
+        <div class="janela janela--painel" data-painel role="region" aria-label="Demonstração do painel do fluxo de caixa com a empresa fictícia Grupo Aurora"></div>
+      </div>
+      <div class="queda__celulas" aria-hidden="true" data-celulas></div>
+    </div>
+  </div>
+
+  <div class="miolo painel__depois">
+    <ul class="destaques">
+      <li>
+        <b>Atualiza sozinho.</b>
+        O Horizon puxa extratos e títulos dos seus sistemas a cada 30 minutos. Ninguém exporta, ninguém cola.
+      </li>
+      <li>
+        <b>Separa o que aconteceu do que vai acontecer.</b>
+        Linha cheia é dinheiro que entrou e saiu. Tracejada é o orçamento daqui para a frente.
+      </li>
+      <li>
+        <b>Mostra o colchão.</b>
+        Um mês de saídas é o mínimo seguro. Quando a projeção cruza essa linha, o card avisa.
+      </li>
+    </ul>
+
+    <div class="folego-bloco">
+      <div class="folego-bloco__texto">
+        <h3 class="subtitulo">E cada empresa do grupo, sozinha?</h3>
+        <p>
+          O consolidado bonito pode esconder uma empresa sem fôlego. O Horizon mostra quem zera primeiro se cada uma tiver
+          que se virar com o próprio caixa.
+        </p>
+      </div>
+      <div class="janela janela--compacta" data-folego role="region" aria-label="Demonstração do fôlego de cada empresa do Grupo Aurora"></div>
+    </div>
+    <p class="nota-demo">Empresa fictícia, dados de demonstração calculados pelo motor do painel do Horizon.</p>
+  </div>
+</section>
