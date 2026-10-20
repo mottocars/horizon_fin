@@ -219,11 +219,12 @@ function ValorTotal({ valor, className = '' }) {
   return <span className={`${valor < 0 ? 'text-red-600' : ''} ${className}`}>{formatarSaldo(valor)}</span>;
 }
 
-// Cheque especial: só aparece quando a conta está USANDO o limite — saldo negativo num dia com
-// abertura de período (pedido do usuário: conta positiva não precisa mostrar). Restante = limite
-// menos o que já foi usado (limite 100.000 e saldo -99.622,18 -> 377,82). Demais dias: undefined ("—").
-function usaChequeEspecial(saldo, iso, diasComPeriodo) {
-  return diasComPeriodo.has(iso) && saldo !== undefined && saldo !== null && saldo < 0;
+// Cheque especial: com o saldo negativo, o restante é o limite menos o que já foi usado
+// (limite 100.000 e saldo -99.622,18 -> 377,82); com saldo zero ou positivo, o limite inteiro.
+// Dia sem saldo lançado fica sem restante (undefined -> "—").
+function limiteRestante(limite, saldo) {
+  if (saldo === undefined || saldo === null) return undefined;
+  return saldo < 0 ? somarSaldos([limite, saldo]) : limite;
 }
 
 // Saldo disponível com bloqueio: saldo do dia menos o bloqueado. Dia sem bloqueio ou sem saldo
@@ -857,7 +858,6 @@ function SaldosContasTab({
                     {aberto &&
                       grupo.contas.map((conta) => {
                         const limite = conta.valor_cheque_especial;
-                        const usaLimite = limite > 0 && dias.some((d) => usaChequeEspecial(conta.saldos[d.iso], d.iso, diasComPeriodo));
                         return (
                           <Fragment key={`${conta.company_id}|${conta.numero_conta}`}>
                             <tr>
@@ -912,22 +912,18 @@ function SaldosContasTab({
                                 />
                               </>
                             )}
-                            {/* Cheque especial só quando a conta usa o limite (ver usaChequeEspecial). */}
-                            {usaLimite && (
+                            {/* Cheque especial só nos dias que tiveram abertura de período. */}
+                            {limite > 0 && (
                               <>
                                 <LinhaDetalheConta
                                   rotulo="Limite total cheque especial"
                                   dias={dias}
-                                  valorDoDia={(iso) => (usaChequeEspecial(conta.saldos[iso], iso, diasComPeriodo) ? limite : undefined)}
+                                  valorDoDia={(iso) => (diasComPeriodo.has(iso) ? limite : undefined)}
                                 />
                                 <LinhaDetalheConta
                                   rotulo="Limite restante"
                                   dias={dias}
-                                  valorDoDia={(iso) =>
-                                    usaChequeEspecial(conta.saldos[iso], iso, diasComPeriodo)
-                                      ? somarSaldos([limite, conta.saldos[iso]])
-                                      : undefined
-                                  }
+                                  valorDoDia={(iso) => (diasComPeriodo.has(iso) ? limiteRestante(limite, conta.saldos[iso]) : undefined)}
                                 />
                               </>
                             )}
