@@ -51,15 +51,15 @@
   display: inline-flex;
   align-items: center;
   justify-content: center;
-  gap: 0.55em;
-  min-height: 44px;
-  padding: 0.7em 1.15em;
+  gap: 0.5em;
+  min-height: 40px;
+  padding: 0.6em 1em;
   border: 0;
   border-radius: var(--raio);
   background: var(--b-fundo);
   color: var(--b-tinta);
   font-family: var(--f-marca);
-  font-size: 1rem;
+  font-size: 0.9375rem;
   font-weight: 700;
   font-stretch: 110%;
   line-height: 1.1;
@@ -79,14 +79,24 @@
   }
 }
 .botao--grande {
-  min-height: 52px;
-  padding: 0.85em 1.4em;
-  font-size: 1.0625rem;
+  min-height: 46px;
+  padding: 0.7em 1.2em;
+  font-size: 1rem;
 }
 .botao--pequeno {
-  min-height: 40px;
-  padding: 0.55em 0.95em;
-  font-size: 0.9375rem;
+  min-height: 36px;
+  padding: 0.5em 0.9em;
+  font-size: 0.875rem;
+}
+/* Só o ícone (topo): quadrado; o nome fica no aria-label e na dica (title). */
+.botao--icone {
+  width: 42px;
+  min-height: 42px;
+  padding: 0;
+}
+.botao--icone .icone {
+  width: 20px;
+  height: 20px;
 }
 .botao--contorno {
   --b-fundo: transparent;
@@ -228,10 +238,6 @@
   width: 24px;
   height: 24px;
 }
-.so-estreito {
-  display: none;
-}
-
 @media (max-width: 1080px) {
   .topo__nav {
     position: absolute;
@@ -268,22 +274,11 @@
   .so-largo {
     display: none;
   }
-  .so-estreito {
-    display: inline;
-  }
   .topo__marca img {
     width: 88px;
   }
   .topo__acoes {
     gap: 6px;
-  }
-  .topo__acoes .botao--pequeno {
-    padding-inline: 0.7em;
-  }
-}
-@media (max-width: 480px) {
-  .topo__acoes .botao:not(.botao--contorno) .so-estreito {
-    display: none;
   }
 }
 
