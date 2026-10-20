@@ -7,15 +7,16 @@ import { listCronogramaCentros } from '../../../api/cronogramaCentros.api';
 import { nomeExibicaoEmpresa } from '../../../utils/empresa';
 import { useEmpresaTravada } from '../../../hooks/useEmpresaTravada';
 import GanttObras, { LegendaGantt, ZOOMS_GANTT } from '../../Operacoes/CronogramasObras/GanttObras';
+import CardsCarteira from '../../Operacoes/CronogramasObras/CardsCarteira';
 import { isoHoje, montarObras, plural, resumoCarteira } from '../../Operacoes/CronogramasObras/cronogramaObras';
-import { mesAno, moeda } from '../../Operacoes/CronogramasObras/formatos';
+import { mesAno } from '../../Operacoes/CronogramasObras/formatos';
 import '../EconomicoFinanceiro/fluxo/painel.css';
 import './cronogramas.css';
 
 // Dashboards > Cronogramas de Obras (pedido do usuário): no layout do Econômico Financeiro — tela
-// inteira, cabeçalho dos dashboards, barra de controles e os cards (.tile) do painel do CFO
-// (painel.css) — com os mesmos números da aba Cronogramas de Operações > Cronogramas Obras (VGV,
-// unidades e quantas obras estão em cada etapa hoje) e, embaixo, o mesmo Gantt (GanttObras), aqui
+// inteira, cabeçalho dos dashboards, barra de controles e os cards (CardsCarteira, no estilo .tile
+// do painel do CFO — os mesmos da aba Cronogramas de Operações > Cronogramas Obras: VGV, unidades e
+// quantas obras estão em cada etapa hoje) e, embaixo, o mesmo Gantt (GanttObras), aqui
 // só leitura: quem vê o dashboard pode não ter acesso ao cadastro dos centros de custo. Clicar num
 // card de etapa destaca no Gantt as obras que estão nela hoje. A empresa fica na URL (?empresa_id=).
 
@@ -88,8 +89,6 @@ export default function CronogramasObrasDashboard() {
   const obras = useMemo(() => montarObras(centros, etapas, hoje), [centros, etapas, hoje]);
   const r = useMemo(() => resumoCarteira(obras, etapas), [obras, etapas]);
   const etapaDestacada = etapas.find((e) => e.id === destaque);
-  const semVgv = r.totalObras - r.comVgv;
-  const semUnidades = r.totalObras - r.comUnidades;
 
   return (
     <div className="flex min-h-full w-full flex-col gap-3 p-5">
@@ -142,79 +141,7 @@ export default function CronogramasObrasDashboard() {
         ) : (
           <>
             {/* Os números da carteira */}
-            <section
-              className={`tiles cronograma${destaque ? ' destacando' : ''}`}
-              style={{ '--colunas': 2 + r.porEtapa.length }}
-              aria-label="Indicadores da carteira"
-            >
-              <div className="tile">
-                <span className="k">VGV total</span>
-                <span className="v" title={moeda(r.vgv, { centavos: true })}>
-                  {moeda(r.vgv, { compacta: true })}
-                </span>
-                <span className="d">
-                  <b>{r.comVgv}</b> de {plural(r.totalObras, 'obra', 'obras')} com VGV
-                </span>
-                {semVgv > 0 ? (
-                  <span className="st warn">{plural(semVgv, 'obra sem VGV', 'obras sem VGV')}</span>
-                ) : (
-                  <span className="st good">Todas as obras com VGV</span>
-                )}
-              </div>
-              <div className="tile">
-                <span className="k">Unidades</span>
-                <span className="v">{r.unidades.toLocaleString('pt-BR')}</span>
-                <span className="d">
-                  {r.comUnidades ? (
-                    <>
-                      média de <b>{Math.round(r.unidades / r.comUnidades)}</b> por obra
-                    </>
-                  ) : (
-                    'nenhuma obra com unidades'
-                  )}
-                </span>
-                {semUnidades > 0 ? (
-                  <span className="st warn">{plural(semUnidades, 'obra sem unidades', 'obras sem unidades')}</span>
-                ) : (
-                  <span className="st good">Todas as obras com unidades</span>
-                )}
-              </div>
-              {r.porEtapa.map((e) => {
-                const ativo = destaque === e.etapa.id;
-                const fatia = r.totalObras ? e.obras.length / r.totalObras : 0;
-                return (
-                  <button
-                    key={e.etapa.id}
-                    type="button"
-                    className="tile"
-                    aria-pressed={ativo}
-                    onClick={() => setDestaque(ativo ? null : e.etapa.id)}
-                    title={ativo ? 'Mostrar todas as obras' : `Destacar no gráfico as obras em ${e.etapa.descricao} hoje`}
-                  >
-                    <span className="k">
-                      <i className="marca" style={{ backgroundColor: e.cor }} />
-                      {e.etapa.descricao || 'Sem nome'}
-                    </span>
-                    <span className="v">
-                      {e.obras.length}
-                      <small>{e.obras.length === 1 ? 'obra hoje' : 'obras hoje'}</small>
-                    </span>
-                    <span className="d">
-                      {e.obras.length ? (
-                        <>
-                          <b>{moeda(e.vgv, { compacta: true })}</b> · {plural(e.unidades, 'unidade', 'unidades')}
-                        </>
-                      ) : (
-                        'Nenhuma obra nesta etapa'
-                      )}
-                    </span>
-                    <span className="medidor" style={{ backgroundColor: `${e.cor}26` }}>
-                      <i style={{ width: `${fatia * 100}%`, backgroundColor: e.cor }} />
-                    </span>
-                  </button>
-                );
-              })}
-            </section>
+            <CardsCarteira resumo={r} destaque={destaque} onDestaque={setDestaque} />
 
             {/* O Gantt */}
             <section className="panel" aria-labelledby="h-gantt">

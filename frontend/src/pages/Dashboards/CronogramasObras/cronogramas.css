@@ -1,6 +1,12 @@
 /* Dashboard Cronogramas de Obras — em cima da identidade do painel do Econômico Financeiro
    (../EconomicoFinanceiro/fluxo/painel.css, classe .painel-cfo): só o que é próprio desta tela. */
 
+/* .painel-cfo dentro de outra tela (os cards na aba Cronogramas de Operações > Cronogramas Obras):
+   sem o respiro de baixo, que no dashboard é pro botão de menu flutuante. */
+.painel-cfo.embutido {
+  padding-bottom: 0;
+}
+
 /* Faixa de cards com quantos couberem numa linha (VGV, unidades e uma por etapa). */
 .painel-cfo .tiles.cronograma {
   grid-template-columns: repeat(var(--colunas, 6), minmax(0, 1fr));
