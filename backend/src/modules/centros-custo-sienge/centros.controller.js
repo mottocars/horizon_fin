@@ -60,6 +60,9 @@ const enriquecimentoSchema = z.object({
     emptyToNull,
     z.enum(['FAIXA_1', 'FAIXA_2', 'FAIXA_3', 'FAIXA_4', 'SBPE']).nullable().optional()
   ),
+  // Tipo (OBRA | ADMINISTRATIVO) — a mesma coluna da aba Centros Custos da DFC e de Cronogramas
+  // Obras. Sem emptyToNull de propósito: ausente (undefined) = não mexe (ver service); '' = limpar.
+  natureza: z.union([z.enum(['OBRA', 'ADMINISTRATIVO']), z.literal(''), z.null()]).optional(),
 });
 
 const etapaSchema = z.object({

@@ -78,6 +78,7 @@ async function getItem(empresaId, siengeId) {
   return rows[0] || null;
 }
 
+// O Tipo (natureza) só muda quando vem no corpo — quem não manda (tela antiga aberta) não apaga.
 async function updateEnriquecimento(empresaId, siengeId, data) {
   const { rows } = await pool.query(
     `UPDATE centros_custo_sienge SET
@@ -93,7 +94,8 @@ async function updateEnriquecimento(empresaId, siengeId, data) {
        cidade_enriquecida = $10,
        estado_enriquecido = $11,
        valor_geral_vendas = $12,
-       faixa = $13
+       faixa = $13,
+       natureza = CASE WHEN $16::boolean THEN $17 ELSE natureza END
      WHERE empresa_id = $14 AND sienge_id = $15
      RETURNING *`,
     [
@@ -112,6 +114,8 @@ async function updateEnriquecimento(empresaId, siengeId, data) {
       data.faixa || null,
       empresaId,
       siengeId,
+      data.natureza !== undefined,
+      data.natureza || null,
     ]
   );
   return rows[0] || null;

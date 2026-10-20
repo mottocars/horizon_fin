@@ -40,8 +40,25 @@ function formatBRNumber(value) {
   return num.toLocaleString('pt-BR', { minimumFractionDigits: 2, maximumFractionDigits: 2 });
 }
 
+// Tipo do centro — a mesma coluna da aba Centros Custos da DFC e de Cronogramas Obras.
+const NATUREZAS = [
+  { value: 'OBRA', label: 'Obra' },
+  { value: 'ADMINISTRATIVO', label: 'Administrativo' },
+];
+
+// Campo em branco fica âmbar (falta preencher) e preenchido fica azul claro — mesmo par de cores
+// dos campos da DFC (DfcCentrosTab.jsx / CampoParametro.jsx), pedido do usuário. Vale pros
+// SearchableSelect (corClasses) e pros inputs (junto de CLASSE_INPUT).
+function corCampo(valor) {
+  const preenchido = valor !== null && valor !== undefined && String(valor).trim() !== '';
+  return preenchido ? 'border-primary-100 bg-primary-50' : 'border-amber-300 bg-amber-50';
+}
+
+const CLASSE_INPUT = 'w-full rounded-lg border px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-primary-100';
+
 const emptyForm = {
   status: 'ATIVO',
+  natureza: '',
   apelido: '',
   unidade_negocio_id: '',
   numero_unidades: '',
@@ -92,6 +109,7 @@ export default function CentroCustoItemDetalhe() {
       setItem(data);
       const proximoForm = {
         status: data.status || 'ATIVO',
+        natureza: data.natureza || '',
         apelido: data.apelido || '',
         unidade_negocio_id: data.unidade_negocio_id ? String(data.unidade_negocio_id) : '',
         numero_unidades: data.numero_unidades ?? '',
@@ -383,6 +401,17 @@ export default function CentroCustoItemDetalhe() {
                     { value: 'INATIVO', label: 'Inativo' },
                   ]}
                   clearable={false}
+                  corClasses={corCampo(form.status)}
+                />
+              </Field>
+
+              <Field label="Tipo">
+                <SearchableSelect
+                  value={form.natureza}
+                  onChange={(value) => handleChange('natureza', value || '')}
+                  options={NATUREZAS}
+                  placeholder="Selecione"
+                  corClasses={corCampo(form.natureza)}
                 />
               </Field>
 
@@ -391,7 +420,7 @@ export default function CentroCustoItemDetalhe() {
                   type="text"
                   value={form.apelido}
                   onChange={(e) => handleChange('apelido', e.target.value)}
-                  className="w-full rounded-lg border border-gray-200 px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-primary-100"
+                  className={`${CLASSE_INPUT} ${corCampo(form.apelido)}`}
                 />
               </Field>
 
@@ -401,6 +430,7 @@ export default function CentroCustoItemDetalhe() {
                   onChange={(value) => handleChange('unidade_negocio_id', value)}
                   options={unidadesNegocio.map((un) => ({ value: un.id, label: un.descricao }))}
                   emptyMessage="Nenhuma unidade de negócio encontrada."
+                  corClasses={corCampo(form.unidade_negocio_id)}
                 />
                 {unidadesNegocio.length === 0 && (
                   <p className="mt-1 text-xs text-gray-400">
@@ -418,7 +448,7 @@ export default function CentroCustoItemDetalhe() {
                     const raw = e.target.value;
                     if (/^[0-9]*$/.test(raw)) handleChange('numero_unidades', raw);
                   }}
-                  className="w-full rounded-lg border border-gray-200 px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-primary-100"
+                  className={`${CLASSE_INPUT} ${corCampo(form.numero_unidades)}`}
                 />
               </Field>
 
@@ -434,6 +464,7 @@ export default function CentroCustoItemDetalhe() {
                     ...projetosPrevision.map((p) => ({ value: p.codigo, label: `${p.codigo} - ${p.nome}` })),
                   ]}
                   emptyMessage="Nenhum projeto encontrado."
+                  corClasses={corCampo(form.codigo_prevision)}
                 />
                 {erroProjetosPrevision && (
                   <p className="mt-1 text-xs text-gray-400">{erroProjetosPrevision}</p>
@@ -449,6 +480,7 @@ export default function CentroCustoItemDetalhe() {
                     { value: 'SECUNDARIO', label: 'Secundário' },
                   ]}
                   clearable={false}
+                  corClasses={corCampo(form.prevision_primary_view ? 'PRIMARIO' : 'SECUNDARIO')}
                 />
               </Field>
 
@@ -457,7 +489,7 @@ export default function CentroCustoItemDetalhe() {
                   type="text"
                   value={form.codigo_construtor_vendas}
                   onChange={(e) => handleChange('codigo_construtor_vendas', e.target.value)}
-                  className="w-full rounded-lg border border-gray-200 px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-primary-100"
+                  className={`${CLASSE_INPUT} ${corCampo(form.codigo_construtor_vendas)}`}
                 />
               </Field>
 
@@ -466,7 +498,7 @@ export default function CentroCustoItemDetalhe() {
                   type="text"
                   value={form.codigo_contrato_caixa}
                   onChange={(e) => handleChange('codigo_contrato_caixa', e.target.value)}
-                  className="w-full rounded-lg border border-gray-200 px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-primary-100"
+                  className={`${CLASSE_INPUT} ${corCampo(form.codigo_contrato_caixa)}`}
                 />
               </Field>
 
@@ -478,7 +510,7 @@ export default function CentroCustoItemDetalhe() {
                     onChange={(e) => handleChange('cep', e.target.value)}
                     maxLength={9}
                     placeholder="00000-000"
-                    className="w-full rounded-lg border border-gray-200 px-3 py-2 pr-8 text-sm focus:outline-none focus:ring-2 focus:ring-primary-100"
+                    className={`${CLASSE_INPUT} pr-8 ${corCampo(form.cep)}`}
                   />
                   {buscandoCep && (
                     <Search size={14} className="absolute right-3 top-1/2 -translate-y-1/2 animate-pulse text-gray-400" />
@@ -491,7 +523,7 @@ export default function CentroCustoItemDetalhe() {
                   type="text"
                   value={form.cidade_enriquecida}
                   onChange={(e) => handleChange('cidade_enriquecida', e.target.value)}
-                  className="w-full rounded-lg border border-gray-200 px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-primary-100"
+                  className={`${CLASSE_INPUT} ${corCampo(form.cidade_enriquecida)}`}
                 />
               </Field>
 
@@ -501,7 +533,7 @@ export default function CentroCustoItemDetalhe() {
                   value={form.estado_enriquecido}
                   maxLength={2}
                   onChange={(e) => handleChange('estado_enriquecido', e.target.value.toUpperCase())}
-                  className="w-full rounded-lg border border-gray-200 px-3 py-2 text-sm uppercase focus:outline-none focus:ring-2 focus:ring-primary-100"
+                  className={`${CLASSE_INPUT} uppercase ${corCampo(form.estado_enriquecido)}`}
                 />
               </Field>
 
@@ -515,7 +547,7 @@ export default function CentroCustoItemDetalhe() {
                     const raw = e.target.value;
                     if (/^[0-9.,]*$/.test(raw)) handleChange('valor_geral_vendas', raw);
                   }}
-                  className="w-full rounded-lg border border-gray-200 px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-primary-100"
+                  className={`${CLASSE_INPUT} ${corCampo(form.valor_geral_vendas)}`}
                 />
               </Field>
 
@@ -525,6 +557,7 @@ export default function CentroCustoItemDetalhe() {
                   onChange={(value) => handleChange('faixa', value)}
                   options={FAIXAS.map((f) => ({ value: f, label: faixaLabel(f) }))}
                   emptyMessage="Nenhuma faixa encontrada."
+                  corClasses={corCampo(form.faixa)}
                 />
               </Field>
             </div>
