@@ -1,6 +1,6 @@
 // Conteúdo provisório de cada aba de DFC Construtoras — as abas já existem (pedido do usuário),
 // o que cada uma mostra será definido depois. Mesmo card de "Selecione uma empresa" de DreTab.jsx
-// (rounded-tl-none pra encaixar embaixo da aba ativa).
+// (rounded-tl-none pra encaixar embaixo da aba ativa). Também usado pelas abas de Cronogramas Obras.
 export default function AbaEmConstrucao({ empresaId, icon: Icon, titulo }) {
   return (
     <div className="flex min-h-70 flex-col items-center justify-center rounded-card rounded-tl-none bg-white text-center shadow-card">
