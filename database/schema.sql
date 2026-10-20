@@ -3608,12 +3608,13 @@ CREATE TABLE IF NOT EXISTS usuarios_dashboard_favoritos (
 );
 
 -- ─── Operações > Cronogramas Obras > Etapas — ver database/migrations/2026-10-20-cronograma-etapas.sql ───
--- Etapas de obra por empresa, num nível só, reordenáveis arrastando.
+-- Etapas de obra por empresa, num nível só, reordenáveis arrastando, cada uma com a sua cor.
 CREATE TABLE cronograma_etapas (
     id            SERIAL PRIMARY KEY,
     empresa_id    INTEGER NOT NULL REFERENCES empresas(id) ON DELETE CASCADE,
     ordem         INTEGER NOT NULL,
     descricao     VARCHAR(150) NOT NULL,
+    cor           VARCHAR(7) NOT NULL DEFAULT '#3b82f6',
     criado_em     TIMESTAMP DEFAULT NOW(),
     atualizado_em TIMESTAMP DEFAULT NOW()
 );

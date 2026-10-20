@@ -1,6 +1,8 @@
 -- Operações > Cronogramas Obras > aba Etapas: as etapas de obra de cada empresa, num nível só
 -- (mesmo cadastro da aba Máscaras da DFC, mas sem nível 2 — pedido do usuário). `ordem` é a
--- posição na lista (sem UNIQUE: a reordenação regrava a lista inteira de uma vez).
+-- posição na lista (sem UNIQUE: a reordenação regrava a lista inteira de uma vez). `cor` (#rrggbb)
+-- é a cor da etapa na obra, escolhida pelo usuário; etapa nova já nasce com uma cor da paleta
+-- padrão (frontend/src/utils/coresPadrao.js).
 -- Aplicar: psql -U postgres -d horizon_fin -f database/migrations/2026-10-20-cronograma-etapas.sql
 
 CREATE TABLE IF NOT EXISTS cronograma_etapas (
@@ -8,6 +10,7 @@ CREATE TABLE IF NOT EXISTS cronograma_etapas (
     empresa_id    INTEGER NOT NULL REFERENCES empresas(id) ON DELETE CASCADE,
     ordem         INTEGER NOT NULL,
     descricao     VARCHAR(150) NOT NULL,
+    cor           VARCHAR(7) NOT NULL DEFAULT '#3b82f6',
     criado_em     TIMESTAMP DEFAULT NOW(),
     atualizado_em TIMESTAMP DEFAULT NOW()
 );

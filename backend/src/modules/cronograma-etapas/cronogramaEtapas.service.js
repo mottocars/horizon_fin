@@ -11,7 +11,7 @@ function erro(status, message) {
 
 async function list(empresaId, db = pool) {
   const { rows } = await db.query(
-    `SELECT id, ordem, descricao FROM cronograma_etapas
+    `SELECT id, ordem, descricao, cor FROM cronograma_etapas
       WHERE empresa_id = $1
       ORDER BY ordem ASC, id ASC`,
     [empresaId]
@@ -19,8 +19,9 @@ async function list(empresaId, db = pool) {
   return rows;
 }
 
-// Cria no fim da lista, na ordem em que as descrições vieram.
-async function create(empresaId, descricoes) {
+// Cria no fim da lista, na ordem em que as descrições vieram. `cores` pode ser mais curta (o
+// UNNEST completa com NULL) — a que faltar fica com a cor padrão da coluna.
+async function create(empresaId, descricoes, cores = []) {
   const client = await pool.connect();
   try {
     await client.query('BEGIN');
@@ -29,11 +30,11 @@ async function create(empresaId, descricoes) {
       [empresaId]
     );
     const { rows } = await client.query(
-      `INSERT INTO cronograma_etapas (empresa_id, ordem, descricao)
-       SELECT $1, $2 + d.n, d.descricao
-         FROM UNNEST($3::text[]) WITH ORDINALITY AS d(descricao, n)
-       RETURNING id, ordem, descricao`,
-      [empresaId, maxRows[0].max, descricoes]
+      `INSERT INTO cronograma_etapas (empresa_id, ordem, descricao, cor)
+       SELECT $1, $2 + d.n, d.descricao, COALESCE(d.cor, '#3b82f6')
+         FROM UNNEST($3::text[], $4::text[]) WITH ORDINALITY AS d(descricao, cor, n)
+       RETURNING id, ordem, descricao, cor`,
+      [empresaId, maxRows[0].max, descricoes, cores]
     );
     await client.query('COMMIT');
     return rows;
@@ -45,11 +46,13 @@ async function create(empresaId, descricoes) {
   }
 }
 
-async function update(id, empresaId, { descricao }) {
+// Nome e/ou cor — o que não vier fica como está.
+async function update(id, empresaId, { descricao, cor }) {
   const { rows } = await pool.query(
-    `UPDATE cronograma_etapas SET descricao = $3 WHERE id = $1 AND empresa_id = $2
-     RETURNING id, ordem, descricao`,
-    [id, empresaId, descricao]
+    `UPDATE cronograma_etapas SET descricao = COALESCE($3, descricao), cor = COALESCE($4, cor)
+      WHERE id = $1 AND empresa_id = $2
+     RETURNING id, ordem, descricao, cor`,
+    [id, empresaId, descricao ?? null, cor ?? null]
   );
   return rows[0] || null;
 }

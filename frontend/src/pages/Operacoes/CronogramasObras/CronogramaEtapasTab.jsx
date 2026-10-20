@@ -1,4 +1,4 @@
-import { forwardRef, useCallback, useEffect, useImperativeHandle, useState } from 'react';
+import { forwardRef, useCallback, useEffect, useImperativeHandle, useRef, useState } from 'react';
 import { Check, GripVertical, Loader2, Milestone, Pencil, Plus, Trash2, TriangleAlert } from 'lucide-react';
 import Button from '../../../components/Button';
 import { useConfirm } from '../../../confirm/ConfirmContext';
@@ -9,13 +9,16 @@ import {
   reordenarCronogramaEtapas,
   updateCronogramaEtapa,
 } from '../../../api/cronogramaEtapas.api';
+import { corPadrao } from '../../../utils/coresPadrao';
 import { BotaoAcao, CampoNome, Indicador } from '../DfcConstrutoras/DfcMascarasTab';
 
 // Operações > Cronogramas Obras > Etapas: cadastro das etapas de obra da empresa — igual à aba
 // Máscaras da DFC (DfcMascarasTab.jsx: mesmo quadro, cabeçalho azul, linha cinza do nível 1,
 // arrastar pra reordenar, duplo clique renomeia, colar várias linhas cria várias), mas num nível só
-// (pedido do usuário): sem grupos, sem +/- e sem contador. Cada mudança salva na hora (reordenação
-// regrava a lista inteira — ver cronogramaEtapas.service.js).
+// (pedido do usuário): sem grupos, sem +/- e sem contador. Cada etapa tem a sua cor (pedido do
+// usuário) — bolinha de input[type=color], mesmo seletor do ConfigurarFiltrosModal.jsx dos Repasses
+// CEF; etapa nova nasce com a cor da paleta padrão pela posição. Cada mudança salva na hora
+// (reordenação regrava a lista inteira — ver cronogramaEtapas.service.js).
 //
 // `ref` expõe `abrirNova()` pro botão "Nova etapa" do topo da página (mesmo padrão do "Nova
 // máscara" da DFC).
@@ -80,7 +83,8 @@ const CronogramaEtapasTab = forwardRef(function CronogramaEtapasTab({ empresaId 
 
   // ------------------------------------------------------------------ criar / renomear / remover
   async function criar(descricoes, continuar) {
-    const criadas = await salvar(() => createCronogramaEtapas(empresaId, descricoes));
+    const cores = descricoes.map((_, i) => corPadrao(etapas.length + i));
+    const criadas = await salvar(() => createCronogramaEtapas(empresaId, descricoes, cores));
     if (!criadas) return;
     setEtapas((atual) => [...atual, ...criadas]);
     // Depois de criar com Enter já abre o campo da próxima etapa.
@@ -91,6 +95,18 @@ const CronogramaEtapasTab = forwardRef(function CronogramaEtapasTab({ empresaId 
     setEditandoId(null);
     setEtapas((atual) => atual.map((e) => (e.id === id ? { ...e, descricao } : e)));
     await salvar(() => updateCronogramaEtapa(empresaId, id, { descricao }));
+  }
+
+  // O seletor de cor do navegador dispara a cada movimento enquanto está aberto — a tela muda na
+  // hora, mas só grava quando a cor para de mudar (um pedido por etapa, não um por movimento).
+  const timersCor = useRef({});
+  function mudarCor(id, cor) {
+    setEtapas((atual) => atual.map((e) => (e.id === id ? { ...e, cor } : e)));
+    clearTimeout(timersCor.current[id]);
+    timersCor.current[id] = setTimeout(() => {
+      delete timersCor.current[id];
+      salvar(() => updateCronogramaEtapa(empresaId, id, { cor }));
+    }, 400);
   }
 
   async function remover(etapa) {
@@ -213,7 +229,7 @@ const CronogramaEtapasTab = forwardRef(function CronogramaEtapasTab({ empresaId 
           <div className="sticky -top-6 z-20 flex items-center justify-between rounded-t-lg border-b-2 border-blue-500 bg-blue-50 py-2.5 pl-4 pr-4 text-xs font-medium uppercase tracking-wide text-blue-700">
             <span>Etapas</span>
             <span className="hidden normal-case tracking-normal text-blue-500 sm:inline">
-              Arraste pelas linhas para reordenar · duplo clique renomeia
+              Arraste pelas linhas para reordenar · duplo clique renomeia · clique na cor para trocar
             </span>
           </div>
 
@@ -249,6 +265,16 @@ const CronogramaEtapasTab = forwardRef(function CronogramaEtapasTab({ empresaId 
             >
               {alvo === i && <Indicador />}
               <GripVertical size={14} className="shrink-0 cursor-grab text-gray-300 group-hover/linha:text-gray-500" />
+              <input
+                type="color"
+                value={etapa.cor}
+                onChange={(e) => mudarCor(etapa.id, e.target.value)}
+                onClick={(e) => e.stopPropagation()}
+                onDoubleClick={(e) => e.stopPropagation()}
+                title={`Cor da etapa "${etapa.descricao}"`}
+                aria-label={`Cor da etapa ${etapa.descricao}`}
+                className="h-5 w-5 shrink-0 cursor-pointer overflow-hidden rounded-full border border-gray-200 p-0"
+              />
               {editandoId === etapa.id ? (
                 <CampoNome
                   valorInicial={etapa.descricao}
