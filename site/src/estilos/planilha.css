@@ -435,8 +435,8 @@
   }
 }
 
-/* Erro crítico "#REF!" (cenas/alerta-ref.js): a janela da planilha inteira fica vermelha por ~4s quando a
-   Juliana quebra uma célula. A grade continua aparecendo por baixo, em branco transparente. */
+/* Erro crítico "#REF!" (cenas/alerta-ref.js): a janela da planilha inteira fica vermelha (translúcida) por ~4s
+   quando a Juliana quebra uma célula. */
 .erro-critico {
   position: absolute;
   inset: 0;
@@ -447,10 +447,10 @@
   gap: clamp(8px, 1.6vh, 16px);
   padding: 24px;
   text-align: center;
-  background:
-    linear-gradient(to right, rgb(255 255 255 / 0.07) 1px, transparent 1px) 0 0 / clamp(72px, 9vw, 140px) 100%,
-    linear-gradient(to bottom, rgb(255 255 255 / 0.07) 1px, transparent 1px) 0 0 / 100% var(--linha-h),
-    radial-gradient(ellipse at 50% 45%, #cf3530 0%, #a8191f 62%, #86101a 100%);
+  /* Vermelho translúcido: a planilha aparece por baixo (com um leve desfoque, para o texto seguir legível). */
+  background: radial-gradient(ellipse at 50% 45%, rgb(207 53 48 / 0.68) 0%, rgb(168 25 31 / 0.76) 62%, rgb(134 16 26 / 0.84) 100%);
+  backdrop-filter: blur(1.5px);
+  -webkit-backdrop-filter: blur(1.5px);
   color: #fff;
   font-family: var(--f-marca);
   cursor: default;
@@ -477,7 +477,9 @@
   font-stretch: 125%;
   line-height: 0.92;
   letter-spacing: -0.025em;
-  text-shadow: 0 3px 0 rgb(0 0 0 / 0.14);
+  text-shadow:
+    0 3px 0 rgb(0 0 0 / 0.14),
+    0 2px 24px rgb(120 0 0 / 0.35);
 }
 .erro-critico__titulo span {
   opacity: 0.82;
@@ -485,14 +487,17 @@
 .erro-critico__onde {
   max-width: 44ch;
   font-size: var(--t-2);
+  font-weight: 600;
   line-height: 1.4;
-  color: rgb(255 255 255 / 0.94);
+  color: #fff;
+  text-shadow: 0 1px 12px rgb(110 0 0 / 0.45);
 }
 .erro-critico__efeito {
   font-family: var(--f-planilha);
   font-size: 14px;
   font-weight: 700;
-  color: rgb(255 255 255 / 0.78);
+  color: rgb(255 255 255 / 0.9);
+  text-shadow: 0 1px 10px rgb(110 0 0 / 0.45);
 }
 .erro-critico.ativo {
   animation: erro-entra 0.5s steps(1) both;
