@@ -189,7 +189,8 @@ app.use('/api/dfc-detalhamento', exigirTela([T.DFC], LEITURA_DASHBOARD), dfcDeta
 app.use('/api/dfc-exportacao', exigirTela([T.DFC], LEITURA_DASHBOARD), dfcExportacaoRoutes);
 // Máscara Etapas do Centro de Custo (editor de Cadastros > Máscaras).
 app.use('/api/etapas-centro-custo', exigirTela([T.MASCARAS]), etapasCentroCustoRoutes);
-app.use('/api/cronograma-centros', exigirTela([T.CRONOGRAMAS_OBRAS]), cronogramaCentrosRoutes);
+// Também lido (só GET) pelo dashboard Cronogramas de Obras.
+app.use('/api/cronograma-centros', exigirTela([T.CRONOGRAMAS_OBRAS], [T.DASH_CRONOGRAMAS]), cronogramaCentrosRoutes);
 app.use('/api/dashboards', exigirTela([T.ECONOMICO_FINANCEIRO]), dashboardsRoutes);
 app.use('/api/bancos', exigirTela([T.SALDOS]), exigirMaster, bancosRoutes);
 app.use('/api/epr', exigirTela([T.PORTAL]), eprRoutes);

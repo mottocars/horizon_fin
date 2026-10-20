@@ -4,6 +4,7 @@
 // de server.js. Tela nova no menu: adicionar aqui e lá.
 module.exports = {
   ECONOMICO_FINANCEIRO: '/dashboards/economico-financeiro',
+  DASH_CRONOGRAMAS: '/dashboards/cronogramas-obras',
 
   EMPRESAS: '/cadastros/empresas',
   USUARIOS: '/cadastros/usuarios',

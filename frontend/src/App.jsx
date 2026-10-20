@@ -8,6 +8,7 @@ import Home from './pages/Home/Home';
 import DreGerencialPage from './pages/Operacoes/DreGerencial/DreGerencialPage';
 import DfcConstrutorasPage from './pages/Operacoes/DfcConstrutoras/DfcConstrutorasPage';
 import EconomicoFinanceiroPage from './pages/Dashboards/EconomicoFinanceiro/EconomicoFinanceiroPage';
+import CronogramasObrasDashboard from './pages/Dashboards/CronogramasObras/CronogramasObrasDashboard';
 import EmpresasList from './pages/Empresas/EmpresasList';
 import EmpresaNova from './pages/Empresas/EmpresaNova';
 import EmpresaDetalhe from './pages/Empresas/EmpresaDetalhe';
@@ -89,6 +90,7 @@ export default function App() {
             <Route path="/meu-perfil" element={<MeuPerfil />} />
 
             <Route path="/dashboards/economico-financeiro" element={<EconomicoFinanceiroPage />} />
+            <Route path="/dashboards/cronogramas-obras" element={<CronogramasObrasDashboard />} />
 
             <Route path="/operacoes/dre-gerencial" element={<DreGerencialPage />} />
             <Route path="/operacoes/dfc-construtoras" element={<DfcConstrutorasPage />} />

@@ -1,0 +1,96 @@
+/* Dashboard Cronogramas de Obras — em cima da identidade do painel do Econômico Financeiro
+   (../EconomicoFinanceiro/fluxo/painel.css, classe .painel-cfo): só o que é próprio desta tela. */
+
+/* Faixa de cards com quantos couberem numa linha (VGV, unidades e uma por etapa). */
+.painel-cfo .tiles.cronograma {
+  grid-template-columns: repeat(var(--colunas, 6), minmax(0, 1fr));
+}
+@media (max-width: 1180px) {
+  .painel-cfo .tiles.cronograma {
+    grid-template-columns: repeat(3, minmax(0, 1fr));
+  }
+}
+@media (max-width: 620px) {
+  .painel-cfo .tiles.cronograma {
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+  }
+}
+
+/* Card de etapa: botão que destaca no Gantt as obras que estão nela hoje. */
+.painel-cfo button.tile {
+  border: 0;
+  text-align: left;
+  color: inherit;
+  cursor: pointer;
+  transition: background 0.15s, opacity 0.15s;
+}
+.painel-cfo button.tile:hover {
+  background: var(--surface-2);
+}
+.painel-cfo button.tile[aria-pressed='true'] {
+  box-shadow: inset 0 0 0 2px var(--ink);
+}
+.painel-cfo .tiles.destacando button.tile[aria-pressed='false'] {
+  opacity: 0.5;
+}
+.painel-cfo .tiles.destacando button.tile[aria-pressed='false']:hover {
+  opacity: 1;
+}
+/* Quadradinho da cor da etapa antes do nome (a cor fica na marca; o texto segue em tinta). */
+.painel-cfo .tile .k .marca {
+  display: inline-block;
+  width: 10px;
+  height: 10px;
+  border-radius: 2px;
+  margin-right: 7px;
+  vertical-align: -1px;
+}
+.painel-cfo .tile .v small {
+  font-family: var(--f-body);
+  font-size: 14px;
+  font-weight: 600;
+  color: var(--muted);
+  margin-left: 6px;
+  letter-spacing: 0;
+}
+/* Fatia da carteira na etapa: trilho no próprio tom da etapa, mais claro. */
+.painel-cfo .tile .medidor {
+  height: 4px;
+  border-radius: 2px;
+  margin-top: 6px;
+  overflow: hidden;
+}
+.painel-cfo .tile .medidor > i {
+  display: block;
+  height: 100%;
+  border-radius: 2px;
+}
+
+/* Painel do Gantt */
+.painel-cfo .gantt-barra {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  justify-content: space-between;
+  gap: 8px 16px;
+}
+.painel-cfo .gantt-moldura {
+  border: 1px solid var(--line);
+  border-radius: 4px;
+  overflow: hidden;
+  background: #fff;
+}
+.painel-cfo .destaque-chip {
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+  margin-left: 8px;
+  padding: 1px 8px;
+  border: 1px solid var(--line);
+  border-radius: 999px;
+  background: var(--surface-2);
+  font-size: 12px;
+  font-weight: 600;
+  color: var(--ink-2);
+  cursor: pointer;
+}

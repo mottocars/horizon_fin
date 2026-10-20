@@ -10,7 +10,10 @@
 export const TELAS_SISTEMA = [
   {
     grupo: 'Dashboards',
-    telas: [{ codigo: '/dashboards/economico-financeiro', label: 'Econômico Financeiro' }],
+    telas: [
+      { codigo: '/dashboards/economico-financeiro', label: 'Econômico Financeiro' },
+      { codigo: '/dashboards/cronogramas-obras', label: 'Cronogramas de Obras' },
+    ],
   },
   {
     grupo: 'Cadastros',
