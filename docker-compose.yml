@@ -29,6 +29,18 @@ services:
     depends_on:
       - backend
 
+  # Site público (site/), estático. Pré-lançamento em financas.horizonhub.com.br/site: o Nginx do host
+  # entrega /site/ para cá. Endereço e indexação são fixados no build (ver site/Dockerfile).
+  site:
+    build:
+      context: ./site
+      args:
+        VITE_BASE: /site/
+        VITE_SITE_URL: https://financas.horizonhub.com.br/site
+    restart: unless-stopped
+    ports:
+      - "127.0.0.1:3012:80"
+
 volumes:
   horizonfin_uploads:
 
