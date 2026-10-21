@@ -1,5 +1,5 @@
 import { Fragment, useCallback, useEffect, useLayoutEffect, useMemo, useRef, useState } from 'react';
-import { ChevronRight, Info, Minimize2, TriangleAlert, Wallet } from 'lucide-react';
+import { ChevronLeft, ChevronRight, Info, Minimize2, TriangleAlert, Wallet } from 'lucide-react';
 import { listDfcMascaras } from '../../../api/dfcMascaras.api';
 import { listContas } from '../../../api/planosFinanceirosSienge.api';
 import { listTodasClassificacoesPlanoDfc } from '../../../api/dfcPlanoContas.api';
@@ -12,6 +12,7 @@ import DetalhamentoModal from './DetalhamentoModal';
 const LARGURA_PRIMEIRA = 340;
 const LARGURA_COLUNA = 104;
 const LARGURA_DESVIO = 84;
+const LARGURA_TOTAL_FECHADO = 34; // Total recolhido: só a faixa com "TOTAL" na vertical
 const FOLGA = 36;
 const ALTURA_MINIMA_GRADE = 320;
 const ALTURA_CAB_MES = 32; // 1ª linha do cabeçalho (mês/ano) — a 2ª (Realizado/Projetado) gruda logo abaixo
@@ -23,9 +24,12 @@ const LADOS = [
 ];
 // Sombra na borda das colunas congeladas (nome + Total Realizado/Projetado/Desvio) quando os meses
 // rolaram: no corpo é a 4ª célula da linha; no cabeçalho, a 2ª de cima ("Total") e a 3ª de baixo ("Desvio %").
+// Total recolhido: a faixa é a 2ª célula do corpo e do 1º cabeçalho.
 // (Classes escritas por inteiro: o Tailwind só gera as que aparecem literais no código.)
 const SOMBRA_COLUNA_FIXA =
   '[&_tbody_tr>*:nth-child(4)]:shadow-[6px_0_8px_-6px_rgba(16,24,40,0.18)] [&_thead_tr:first-child>*:nth-child(2)]:shadow-[6px_0_8px_-6px_rgba(16,24,40,0.18)] [&_thead_tr:last-child>*:nth-child(3)]:shadow-[6px_0_8px_-6px_rgba(16,24,40,0.18)]';
+const SOMBRA_COLUNA_FIXA_FECHADO =
+  '[&_tbody_tr>*:nth-child(2)]:shadow-[6px_0_8px_-6px_rgba(16,24,40,0.18)] [&_thead_tr:first-child>*:nth-child(2)]:shadow-[6px_0_8px_-6px_rgba(16,24,40,0.18)]';
 const MESES_CAB = ['JAN', 'FEV', 'MAR', 'ABR', 'MAI', 'JUN', 'JUL', 'AGO', 'SET', 'OUT', 'NOV', 'DEZ'];
 const R = 'R'; // realizado
 const P = 'P'; // projetado
@@ -75,7 +79,8 @@ function mesDeHoje() {
 // Logo depois da primeira coluna, congeladas como na aba Orçamentos (pedido do usuário): TOTAL Realizado
 // (soma dos meses com realizado), TOTAL Projetado (soma de todos os meses do período) e Desvio % do total
 // — este compara o realizado com o projetado DOS MESMOS MESES (até o atual), não do período inteiro. Nas
-// linhas de saldo o total fica vazio — saldo não se soma.
+// linhas de saldo o total fica vazio — saldo não se soma. O Total é retrátil (pedido do usuário): começa
+// sempre recolhido numa faixa com "TOTAL" na vertical; clicar nela abre, clicar no título "Total" fecha.
 // - Projetado: a última versão salva do Orçamento (todas as origens).
 // - Realizado: o extrato das contas bancárias com "Projeta DFC" (aba Contas Correntes), já achatado
 //   por rateio centro × natureza na sincronização (backend dfc-saldos / sie_extrato_contas_rateio).
@@ -117,6 +122,7 @@ export default function DfcFluxoTab({
   const [alturaGrade, setAlturaGrade] = useState(null);
   const [rolouX, setRolouX] = useState(false);
   const [detalhe, setDetalhe] = useState(null); // pedido da janela Detalhamento
+  const [totalAberto, setTotalAberto] = useState(false); // Total começa sempre recolhido
   const fecharDetalhe = useCallback(() => setDetalhe(null), []);
 
   const mesAtual = mesDeHoje();
@@ -382,7 +388,8 @@ export default function DfcFluxoTab({
   const versao = dados?.orcamento?.versao || null;
   const MESES_LONGOS = ['jan', 'fev', 'mar', 'abr', 'mai', 'jun', 'jul', 'ago', 'set', 'out', 'nov', 'dez'];
   const rotulo = (m) => `${MESES_LONGOS[Number(m.slice(5, 7)) - 1]}/${m.slice(2, 4)}`;
-  const larguraTabela = LARGURA_PRIMEIRA + larguras.totalR + larguras.totalP + LARGURA_DESVIO + larguras.meses.reduce((t, l) => t + l, 0);
+  const larguraTotais = totalAberto ? larguras.totalR + larguras.totalP + LARGURA_DESVIO : LARGURA_TOTAL_FECHADO;
+  const larguraTabela = LARGURA_PRIMEIRA + larguraTotais + larguras.meses.reduce((t, l) => t + l, 0);
   const esquerdaTotal = { [R]: LARGURA_PRIMEIRA, [P]: LARGURA_PRIMEIRA + larguras.totalR, [D]: LARGURA_PRIMEIRA + larguras.totalR + larguras.totalP };
   const temRealizado = meses.some((m) => m <= mesAtual);
   // Primeira coluna de cada mês ganha a divisória à esquerda (separa os meses).
@@ -447,7 +454,18 @@ export default function DfcFluxoTab({
             )}
           </span>
         </td>
-        {[R, P].map((t) => {
+        {!totalAberto && (
+          <td
+            onClick={(ev) => {
+              ev.stopPropagation();
+              setTotalAberto(true);
+            }}
+            title="Mostrar o Total (realizado, projetado e desvio)"
+            className={`sticky z-10 cursor-pointer border-b border-r border-b-blue-100 border-r-blue-200 bg-blue-50 transition-colors hover:bg-blue-100 ${e.py}`}
+            style={{ left: LARGURA_PRIMEIRA }}
+          />
+        )}
+        {totalAberto && [R, P].map((t) => {
           const v = tipo === 'saldo' ? null : total(pc, t);
           return (
             <td
@@ -462,7 +480,7 @@ export default function DfcFluxoTab({
             </td>
           );
         })}
-        {(() => {
+        {totalAberto && (() => {
           // Desvio % do total: realizado × projetado dos mesmos meses (até o atual).
           const real = tipo === 'saldo' ? null : total(pc, R);
           const proj = tipo === 'saldo' ? null : total(pc, P, true);
@@ -605,7 +623,7 @@ export default function DfcFluxoTab({
           ref={gradeRef}
           onScroll={(e) => setRolouX(e.currentTarget.scrollLeft > 0)}
           className={`overflow-auto overscroll-x-contain rounded-lg border border-gray-200 ${dashboard ? 'bg-white' : ''} ${
-            rolouX ? SOMBRA_COLUNA_FIXA : ''
+            rolouX ? (totalAberto ? SOMBRA_COLUNA_FIXA : SOMBRA_COLUNA_FIXA_FECHADO) : ''
           }`}
           // Com `alturaFixa` a grade cresce com as linhas abertas até essa altura (fechada, ocupa só o que tem).
           style={{ maxHeight: alturaGrade ?? undefined, height: dashboard && alturaFixa === null ? (alturaGrade ?? undefined) : undefined }}
@@ -616,9 +634,15 @@ export default function DfcFluxoTab({
           >
             <colgroup>
               <col style={{ width: LARGURA_PRIMEIRA }} />
-              <col style={{ width: larguras.totalR }} />
-              <col style={{ width: larguras.totalP }} />
-              <col style={{ width: LARGURA_DESVIO }} />
+              {totalAberto ? (
+                <>
+                  <col style={{ width: larguras.totalR }} />
+                  <col style={{ width: larguras.totalP }} />
+                  <col style={{ width: LARGURA_DESVIO }} />
+                </>
+              ) : (
+                <col style={{ width: LARGURA_TOTAL_FECHADO }} />
+              )}
               {colunas.map((c, i) => (
                 <col key={`${c.mes}|${c.tipo}`} style={{ width: larguras.meses[i] }} />
               ))}
@@ -631,14 +655,32 @@ export default function DfcFluxoTab({
                 >
                   Fluxo de caixa
                 </th>
-                <th
-                  colSpan={3}
-                  title="Soma dos meses do período"
-                  className="sticky top-0 z-30 border-r border-r-blue-200 bg-blue-100 px-3 pt-2.5 text-center align-bottom text-[11px] font-semibold uppercase tracking-wider text-blue-800"
-                  style={{ left: LARGURA_PRIMEIRA, height: ALTURA_CAB_MES }}
-                >
-                  Total
-                </th>
+                {totalAberto ? (
+                  <th
+                    colSpan={3}
+                    onClick={() => setTotalAberto(false)}
+                    title="Recolher o Total"
+                    className="sticky top-0 z-30 cursor-pointer border-r border-r-blue-200 bg-blue-100 px-3 pt-2.5 text-center align-bottom text-[11px] font-semibold uppercase tracking-wider text-blue-800 transition-colors hover:bg-blue-200/70"
+                    style={{ left: LARGURA_PRIMEIRA, height: ALTURA_CAB_MES }}
+                  >
+                    <span className="inline-flex items-center gap-1">
+                      <ChevronLeft size={13} className="shrink-0 text-blue-500" />
+                      Total
+                    </span>
+                  </th>
+                ) : (
+                  <th
+                    rowSpan={2}
+                    onClick={() => setTotalAberto(true)}
+                    title="Mostrar o Total (realizado, projetado e desvio)"
+                    className="sticky top-0 z-30 cursor-pointer border-b border-r border-b-blue-200 border-r-blue-200 bg-blue-100 px-0 py-2 text-center align-middle transition-colors hover:bg-blue-200/70"
+                    style={{ left: LARGURA_PRIMEIRA }}
+                  >
+                    <span className="inline-block rotate-180 text-[10px] font-semibold uppercase tracking-[0.2em] text-blue-800 [writing-mode:vertical-rl]">
+                      Total
+                    </span>
+                  </th>
+                )}
                 {meses.map((m) => {
                   const atual = m === mesAtual;
                   return (
@@ -668,7 +710,7 @@ export default function DfcFluxoTab({
                 })}
               </tr>
               <tr>
-                {[R, P, D].map((t) => (
+                {totalAberto && [R, P, D].map((t) => (
                   <th
                     key={`total|${t}`}
                     title={
@@ -717,7 +759,7 @@ export default function DfcFluxoTab({
               })}
               {estrutura.length === 0 && (
                 <tr>
-                  <td colSpan={colunas.length + 4} className="border-b border-gray-100 py-10 text-center text-sm text-gray-400">
+                  <td colSpan={colunas.length + (totalAberto ? 4 : 2)} className="border-b border-gray-100 py-10 text-center text-sm text-gray-400">
                     {versao ? 'Nenhum valor no período.' : 'Sem valores projetados — nenhuma versão salva do Orçamento.'}
                   </td>
                 </tr>

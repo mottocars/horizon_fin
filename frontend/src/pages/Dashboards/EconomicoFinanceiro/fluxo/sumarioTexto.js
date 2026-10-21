@@ -88,7 +88,7 @@ export const ABAS_SUMARIO = [
           'Saldo inicial › grupos (máscara nível 1) › Entradas e Saídas › linhas (máscara nível 2) › naturezas › Resultado do mês › Saldo final.',
           'Até o mês atual, cada mês tem três colunas: Realizado (extrato bancário das contas com Projeta DFC), Projetado (última versão salva do Orçamento) e Desvio %. Depois do mês atual, só Projetado.',
           'Desvio % = (Realizado − Projetado) ÷ |Projetado|. Positivo, em verde, é melhor para o caixa (entrou mais ou saiu menos que o previsto); negativo, em vermelho, é pior. Sem projetado no mês aparece "—". No mês atual (em itálico) compara o realizado até hoje com o projetado do mês inteiro.',
-          'Logo depois do nome, as colunas Total (fixas ao rolar): Realizado = soma dos meses com realizado (até o mês atual); Projetado = soma de todos os meses do período; Desvio % = o total realizado contra o projetado DOS MESMOS MESES (até o atual), não contra o projetado do período inteiro. Nas linhas de saldo o total fica vazio — saldo não se soma.',
+          'Logo depois do nome, o Total (fixo ao rolar; começa recolhido numa faixa "TOTAL" — clique nela para abrir e no título "Total" para recolher): Realizado = soma dos meses com realizado (até o mês atual); Projetado = soma de todos os meses do período; Desvio % = o total realizado contra o projetado DOS MESMOS MESES (até o atual), não contra o projetado do período inteiro. Nas linhas de saldo o total fica vazio — saldo não se soma.',
           'O Realizado do mês atual vem até o dia da última atualização do extrato (Orçamentos › Nova versão › Saldos das Contas) — é parcial até o mês fechar.',
           'O mês atual fica destacado em azul.',
         ],
