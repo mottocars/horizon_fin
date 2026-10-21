@@ -21,10 +21,11 @@ const LADOS = [
   ['E', 'ENTRADAS'],
   ['S', 'SAÍDAS'],
 ];
-// Sombra na borda das colunas congeladas (nome + Total Realizado/Projetado) quando os meses rolaram:
-// no corpo é a 3ª célula da linha; no cabeçalho, a 2ª (o "Total" de cima e o "Projetado" de baixo).
+// Sombra na borda das colunas congeladas (nome + Total Realizado/Projetado/Desvio) quando os meses
+// rolaram: no corpo é a 4ª célula da linha; no cabeçalho, a 2ª de cima ("Total") e a 3ª de baixo ("Desvio %").
+// (Classes escritas por inteiro: o Tailwind só gera as que aparecem literais no código.)
 const SOMBRA_COLUNA_FIXA =
-  '[&_tbody_tr>*:nth-child(3)]:shadow-[6px_0_8px_-6px_rgba(16,24,40,0.18)] [&_thead_tr>*:nth-child(2)]:shadow-[6px_0_8px_-6px_rgba(16,24,40,0.18)]';
+  '[&_tbody_tr>*:nth-child(4)]:shadow-[6px_0_8px_-6px_rgba(16,24,40,0.18)] [&_thead_tr:first-child>*:nth-child(2)]:shadow-[6px_0_8px_-6px_rgba(16,24,40,0.18)] [&_thead_tr:last-child>*:nth-child(3)]:shadow-[6px_0_8px_-6px_rgba(16,24,40,0.18)]';
 const MESES_CAB = ['JAN', 'FEV', 'MAR', 'ABR', 'MAI', 'JUN', 'JUL', 'AGO', 'SET', 'OUT', 'NOV', 'DEZ'];
 const R = 'R'; // realizado
 const P = 'P'; // projetado
@@ -72,8 +73,9 @@ function mesDeHoje() {
 // Colunas: até o mês atual, cada mês tem REALIZADO, PROJETADO e DESVIO % (ver desvioPct); depois dele, só
 // PROJETADO. No mês atual o desvio compara o realizado até hoje com o projetado do mês inteiro.
 // Logo depois da primeira coluna, congeladas como na aba Orçamentos (pedido do usuário): TOTAL Realizado
-// (soma dos meses com realizado) e TOTAL Projetado (soma de todos os meses do período). Nas linhas de
-// saldo o total fica vazio — saldo não se soma.
+// (soma dos meses com realizado), TOTAL Projetado (soma de todos os meses do período) e Desvio % do total
+// — este compara o realizado com o projetado DOS MESMOS MESES (até o atual), não do período inteiro. Nas
+// linhas de saldo o total fica vazio — saldo não se soma.
 // - Projetado: a última versão salva do Orçamento (todas as origens).
 // - Realizado: o extrato das contas bancárias com "Projeta DFC" (aba Contas Correntes), já achatado
 //   por rateio centro × natureza na sincronização (backend dfc-saldos / sie_extrato_contas_rateio).
@@ -275,12 +277,13 @@ export default function DfcFluxoTab({
   }, [dados, realizado, meses, ultimo, mesAtual, centrosFiltro]);
 
   // Total do período de uma linha: Realizado = meses até o atual; Projetado = todos os meses na tela.
+  // `ateAtual`: só os meses até o atual (o Projetado comparável ao Realizado, pro Desvio % do total).
   const total = useCallback(
-    (pc, tipo) => {
+    (pc, tipo, ateAtual = tipo === R) => {
       let t = 0;
       let tem = false;
       meses.forEach((m) => {
-        if (tipo === R && m > mesAtual) return;
+        if (ateAtual && m > mesAtual) return;
         const v = pc[`${m}|${tipo}`];
         if (v) {
           t += v;
@@ -379,8 +382,9 @@ export default function DfcFluxoTab({
   const versao = dados?.orcamento?.versao || null;
   const MESES_LONGOS = ['jan', 'fev', 'mar', 'abr', 'mai', 'jun', 'jul', 'ago', 'set', 'out', 'nov', 'dez'];
   const rotulo = (m) => `${MESES_LONGOS[Number(m.slice(5, 7)) - 1]}/${m.slice(2, 4)}`;
-  const larguraTabela = LARGURA_PRIMEIRA + larguras.totalR + larguras.totalP + larguras.meses.reduce((t, l) => t + l, 0);
-  const esquerdaTotalP = LARGURA_PRIMEIRA + larguras.totalR;
+  const larguraTabela = LARGURA_PRIMEIRA + larguras.totalR + larguras.totalP + LARGURA_DESVIO + larguras.meses.reduce((t, l) => t + l, 0);
+  const esquerdaTotal = { [R]: LARGURA_PRIMEIRA, [P]: LARGURA_PRIMEIRA + larguras.totalR, [D]: LARGURA_PRIMEIRA + larguras.totalR + larguras.totalP };
+  const temRealizado = meses.some((m) => m <= mesAtual);
   // Primeira coluna de cada mês ganha a divisória à esquerda (separa os meses).
   const inicioDeMes = (i) => i === 0 || colunas[i - 1].mes !== colunas[i].mes;
 
@@ -450,14 +454,39 @@ export default function DfcFluxoTab({
               key={`total|${t}`}
               title={tipo === 'saldo' ? undefined : t === R ? 'Total realizado do período (meses até o atual)' : 'Total projetado do período (todos os meses)'}
               className={`sticky z-10 border-b border-b-blue-100 bg-blue-50 px-3 text-center tabular-nums transition-colors group-hover/linha:bg-blue-100 ${e.py} ${
-                t === P ? 'border-r border-r-blue-200' : ''
-              } ${tipo === 'saldo' || tipo === 'resultado' ? 'text-[13px]' : 'text-xs'} ${numeros} ${v ? corValor(v) : ''}`}
-              style={{ left: t === R ? LARGURA_PRIMEIRA : esquerdaTotalP }}
+                tipo === 'saldo' || tipo === 'resultado' ? 'text-[13px]' : 'text-xs'
+              } ${numeros} ${v ? corValor(v) : ''}`}
+              style={{ left: esquerdaTotal[t] }}
             >
               {v ? dinheiro(v) : ''}
             </td>
           );
         })}
+        {(() => {
+          // Desvio % do total: realizado × projetado dos mesmos meses (até o atual).
+          const real = tipo === 'saldo' ? null : total(pc, R);
+          const proj = tipo === 'saldo' ? null : total(pc, P, true);
+          const d = desvioPct(real, proj);
+          const semNada = !real && !proj;
+          return (
+            <td
+              key={`total|${D}`}
+              title={
+                semNada
+                  ? undefined
+                  : d === null
+                    ? 'Sem projetado nos meses com realizado — não há base para o desvio.'
+                    : `Total realizado ÷ projetado dos mesmos meses (até o atual: ${dinheiro(real || 0)} × ${dinheiro(proj)}). Inclui o mês atual, ainda em andamento.`
+              }
+              className={`sticky z-10 border-b border-r border-b-blue-100 border-r-blue-200 bg-blue-50 px-2 text-center text-[11px] tabular-nums transition-colors group-hover/linha:bg-blue-100 ${e.py} ${
+                tipo === 'saldo' || tipo === 'resultado' || tipo === 'n1' ? 'font-semibold' : ''
+              } ${d === null ? 'text-gray-300' : Math.abs(d) < 0.05 ? 'text-gray-500' : d > 0 ? 'text-emerald-600' : 'text-rose-600'}`}
+              style={{ left: esquerdaTotal[D] }}
+            >
+              {semNada || !temRealizado ? '' : d === null ? '—' : formatoPct(d)}
+            </td>
+          );
+        })()}
         {colunas.map((c, i) => {
           if (c.tipo === D) {
             const real = pc[`${c.mes}|${R}`];
@@ -589,6 +618,7 @@ export default function DfcFluxoTab({
               <col style={{ width: LARGURA_PRIMEIRA }} />
               <col style={{ width: larguras.totalR }} />
               <col style={{ width: larguras.totalP }} />
+              <col style={{ width: LARGURA_DESVIO }} />
               {colunas.map((c, i) => (
                 <col key={`${c.mes}|${c.tipo}`} style={{ width: larguras.meses[i] }} />
               ))}
@@ -602,7 +632,7 @@ export default function DfcFluxoTab({
                   Fluxo de caixa
                 </th>
                 <th
-                  colSpan={2}
+                  colSpan={3}
                   title="Soma dos meses do período"
                   className="sticky top-0 z-30 border-r border-r-blue-200 bg-blue-100 px-3 pt-2.5 text-center align-bottom text-[11px] font-semibold uppercase tracking-wider text-blue-800"
                   style={{ left: LARGURA_PRIMEIRA, height: ALTURA_CAB_MES }}
@@ -638,15 +668,20 @@ export default function DfcFluxoTab({
                 })}
               </tr>
               <tr>
-                {[R, P].map((t) => (
+                {[R, P, D].map((t) => (
                   <th
                     key={`total|${t}`}
+                    title={
+                      t === D
+                        ? 'Total realizado × projetado DOS MESMOS MESES (até o atual) — não do período inteiro. Positivo (verde) = melhor para o caixa.'
+                        : undefined
+                    }
                     className={`sticky z-30 border-b border-b-blue-200 bg-blue-100 px-2 py-1.5 text-center text-[10px] font-semibold uppercase tracking-wider ${
-                      t === R ? 'text-teal-700' : 'border-r border-r-blue-200 text-blue-700'
+                      t === R ? 'text-teal-700' : t === P ? 'text-blue-700' : 'border-r border-r-blue-200 text-indigo-500'
                     }`}
-                    style={{ top: ALTURA_CAB_MES, left: t === R ? LARGURA_PRIMEIRA : esquerdaTotalP }}
+                    style={{ top: ALTURA_CAB_MES, left: esquerdaTotal[t] }}
                   >
-                    {t === R ? 'Realizado' : 'Projetado'}
+                    {t === R ? 'Realizado' : t === P ? 'Projetado' : 'Desvio %'}
                   </th>
                 ))}
                 {colunas.map((c, i) => {
@@ -682,7 +717,7 @@ export default function DfcFluxoTab({
               })}
               {estrutura.length === 0 && (
                 <tr>
-                  <td colSpan={colunas.length + 3} className="border-b border-gray-100 py-10 text-center text-sm text-gray-400">
+                  <td colSpan={colunas.length + 4} className="border-b border-gray-100 py-10 text-center text-sm text-gray-400">
                     {versao ? 'Nenhum valor no período.' : 'Sem valores projetados — nenhuma versão salva do Orçamento.'}
                   </td>
                 </tr>
