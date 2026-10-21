@@ -49,6 +49,7 @@ const dfcDetalhamentoRoutes = require('./modules/dfc-detalhamento/detalhamento.r
 const dfcExportacaoRoutes = require('./modules/dfc-exportacao/exportacao.routes');
 const etapasCentroCustoRoutes = require('./modules/etapas-centro-custo/etapasCentroCusto.routes');
 const cronogramaCentrosRoutes = require('./modules/cronograma-centros/cronogramaCentros.routes');
+const cronogramaConfigRoutes = require('./modules/cronograma-config/cronogramaConfig.routes');
 const dashboardsRoutes = require('./modules/dashboards/dashboards.routes');
 const bancosRoutes = require('./modules/bancos/bancos.routes');
 const eprRoutes = require('./modules/epr/epr.routes');
@@ -191,6 +192,7 @@ app.use('/api/dfc-exportacao', exigirTela([T.DFC], LEITURA_DASHBOARD), dfcExport
 app.use('/api/etapas-centro-custo', exigirTela([T.MASCARAS]), etapasCentroCustoRoutes);
 // Também lido (só GET) pelo dashboard Cronogramas de Obras.
 app.use('/api/cronograma-centros', exigirTela([T.CRONOGRAMAS_OBRAS], [T.DASH_CRONOGRAMAS]), cronogramaCentrosRoutes);
+app.use('/api/cronograma-config', exigirTela([T.CRONOGRAMAS_OBRAS]), cronogramaConfigRoutes);
 app.use('/api/dashboards', exigirTela([T.ECONOMICO_FINANCEIRO]), dashboardsRoutes);
 app.use('/api/bancos', exigirTela([T.SALDOS]), exigirMaster, bancosRoutes);
 app.use('/api/epr', exigirTela([T.PORTAL]), eprRoutes);

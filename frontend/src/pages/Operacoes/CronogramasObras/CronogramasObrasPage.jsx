@@ -1,22 +1,27 @@
-import { useEffect, useState } from 'react';
+import { useEffect, useMemo, useState } from 'react';
 import { useSearchParams } from 'react-router-dom';
-import { Building2, ChartGantt, Search } from 'lucide-react';
+import { Building2, ChartGantt, Search, Settings } from 'lucide-react';
 import Card from '../../../components/Card';
 import Tabs from '../../../components/Tabs';
 import SearchableSelect from '../../../components/SearchableSelect';
 import { listEmpresas } from '../../../api/empresas.api';
 import { nomeExibicaoEmpresa } from '../../../utils/empresa';
 import { useEmpresaTravada } from '../../../hooks/useEmpresaTravada';
+import { useAuth } from '../../../auth/AuthContext';
+import { filtrarAbas } from '../../../utils/permissoes';
 import CronogramaCentrosTab from './CronogramaCentrosTab';
 import CronogramasTab from './CronogramasTab';
+import ConfiguracoesCronogramas from './ConfiguracoesCronogramas';
 
 // Mesmo padrão de DfcConstrutorasPage.jsx: o `{ divider: true }` separa os Cronogramas (a tela em
 // si) das abas que dão suporte a eles. A aba Etapas saiu (pedido do usuário): as etapas se cadastram
-// em Cadastros > Máscaras > Etapas do Centro de Custo.
+// em Cadastros > Máscaras > Etapas do Centro de Custo. Configurações: só o Administrador da tela (ou
+// Master) vê — `nivel`, como em Repasses CEF (ver utils/permissoes.js::filtrarAbas).
 const TABS = [
   { id: 'cronogramas', label: 'Cronogramas', icon: ChartGantt },
   { divider: true },
   { id: 'centros-custos', label: 'Centros de Custos', icon: Building2 },
+  { id: 'configuracoes', label: 'Configurações', icon: Settings, nivel: 'ADMINISTRADOR' },
 ];
 
 // Empresa e aba vivem na URL (não em useState local) — mesmo motivo de DfcConstrutorasPage.jsx:
@@ -24,10 +29,12 @@ const TABS = [
 export default function CronogramasObrasPage() {
   const { travada: empresaTravada, empresaIdTravada } = useEmpresaTravada();
   const [searchParams, setSearchParams] = useSearchParams();
+  const { user } = useAuth();
+  const abas = useMemo(() => filtrarAbas(user, '/operacoes/cronogramas-obras', TABS), [user]);
 
   const empresaId = searchParams.get('empresa_id') || '';
   const abaAtiva = searchParams.get('aba') || 'cronogramas';
-  const tabAtiva = TABS.find((t) => t.id === abaAtiva) || TABS[0];
+  const tabAtiva = abas.find((t) => t.id === abaAtiva) || abas[0];
 
   function atualizarParams(patch) {
     const next = new URLSearchParams(searchParams);
@@ -105,10 +112,12 @@ export default function CronogramasObrasPage() {
       </Card>
 
       <div>
-        <Tabs tabs={TABS} activeId={tabAtiva.id} onChange={(aba) => atualizarParams({ aba })} />
+        <Tabs tabs={abas} activeId={tabAtiva.id} onChange={(aba) => atualizarParams({ aba })} />
 
         {tabAtiva.id === 'centros-custos' ? (
           <CronogramaCentrosTab empresaId={empresaId} search={buscaCentros} />
+        ) : tabAtiva.id === 'configuracoes' ? (
+          <ConfiguracoesCronogramas empresaId={empresaId} />
         ) : (
           <CronogramasTab empresaId={empresaId} />
         )}

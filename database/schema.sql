@@ -3610,6 +3610,28 @@ CREATE TABLE IF NOT EXISTS usuarios_dashboard_favoritos (
     PRIMARY KEY (usuario_id, dashboard)
 );
 
+-- ─── Operações > Cronogramas Obras > Configurações — ver database/migrations/2026-10-21-cronograma-configuracoes.sql ───
+-- Regra de Atraso de Obra (fixa em meses ou pelo planejamento de um sistema) e a comunicação de
+-- alteração de cronograma (canal/conexão e quem recebe), por empresa.
+CREATE TABLE cronograma_config (
+    empresa_id           INTEGER PRIMARY KEY REFERENCES empresas(id) ON DELETE CASCADE,
+    atraso_regra         VARCHAR(15) CHECK (atraso_regra IN ('FIXA', 'PLANEJAMENTO')),
+    atraso_meses         INTEGER CHECK (atraso_meses > 0),
+    atraso_sistema       VARCHAR(20) CHECK (atraso_sistema IN ('PREVISION')),
+    comunicar_canal      VARCHAR(10) CHECK (comunicar_canal IN ('WHATSAPP', 'EMAIL')),
+    zapi_integracao_id   INTEGER REFERENCES integracoes_zapi(id) ON DELETE SET NULL,
+    email_integracao_id  INTEGER REFERENCES integracoes_email(id) ON DELETE SET NULL,
+    atualizado_por       INTEGER REFERENCES usuarios(id) ON DELETE SET NULL,
+    atualizado_em        TIMESTAMP DEFAULT NOW()
+);
+
+CREATE TABLE cronograma_comunicar_usuarios (
+    empresa_id  INTEGER NOT NULL REFERENCES empresas(id) ON DELETE CASCADE,
+    usuario_id  INTEGER NOT NULL REFERENCES usuarios(id) ON DELETE CASCADE,
+    criado_em   TIMESTAMP DEFAULT NOW(),
+    PRIMARY KEY (empresa_id, usuario_id)
+);
+
 -- ─── Papel das consultas SQL do Claude (conectores MCP): só lê as views mcp_* ───
 -- Ver database/migrations/2026-10-15-mcp-leitor-sql.sql (rode de novo ao criar view mcp_* nova).
 DO $$
