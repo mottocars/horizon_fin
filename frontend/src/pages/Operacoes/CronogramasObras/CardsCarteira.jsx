@@ -3,22 +3,22 @@ import { moeda } from './formatos';
 import '../../Dashboards/EconomicoFinanceiro/fluxo/painel.css';
 import '../../Dashboards/CronogramasObras/cronogramas.css';
 
-// Cards da carteira de obras no estilo dos cards do painel do CFO (.tile de painel.css): VGV e
-// unidades — só o número (pedido do usuário) — e, por etapa, as obras que estão nela hoje, o VGV e as
+// Cards da carteira de obras no estilo dos cards do painel do CFO (.tile de painel.css): o VGV com as
+// unidades logo abaixo (pedido do usuário: um card só) e, por etapa, as obras que estão nela hoje, o VGV e as
 // unidades delas e a fatia da carteira — no da construção, também as obras em atraso e o VGV delas;
 // no do lançamento, as obras a iniciar com o VGV e as unidades (pedidos do usuário). Clicar num card
 // de etapa filtra o Gantt: só ficam as obras dela hoje.
 // Usado no dashboard Cronogramas de Obras e na aba Cronogramas de Operações > Cronogramas Obras
 // (pedido do usuário: os mesmos cards) — precisa estar dentro de um .painel-cfo.
 // - `resumo`: resumoCarteira (cronogramaObras.js) das obras que os cards de etapa mostram.
-// - `topo`: numerosTopo — VGV e unidades dos dois primeiros cards e o recorte deles no rótulo
+// - `topo`: numerosTopo — VGV e unidades do primeiro card e o recorte deles no rótulo
 //   (a carteira, as obras da etapa do filtro ou a obra selecionada: os cards são dinâmicos).
 // - `destaque` / `onDestaque(id | null)`: a etapa do filtro.
 export default function CardsCarteira({ resumo: r, topo, destaque, onDestaque }) {
   return (
     <section
       className={`tiles cronograma${destaque ? ' destacando' : ''}`}
-      style={{ '--colunas': 2 + r.porEtapa.length }}
+      style={{ '--colunas': 1 + r.porEtapa.length }}
       aria-label="Indicadores da carteira"
     >
       <div className="tile">
@@ -26,10 +26,9 @@ export default function CardsCarteira({ resumo: r, topo, destaque, onDestaque })
         <span className="v" title={moeda(topo.vgv, { centavos: true })}>
           {moeda(topo.vgv, { compacta: true })}
         </span>
-      </div>
-      <div className="tile">
-        <span className="k">{topo.recorte ? `Unidades ${topo.recorte}` : 'Unidades'}</span>
-        <span className="v">{topo.unidades.toLocaleString('pt-BR')}</span>
+        <span className="d">
+          <b>{topo.unidades.toLocaleString('pt-BR')}</b> {topo.unidades === 1 ? 'unidade' : 'unidades'}
+        </span>
       </div>
       {r.porEtapa.map((e) => {
         const ativo = destaque === e.etapa.id;

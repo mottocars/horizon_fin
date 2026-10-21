@@ -119,7 +119,7 @@ export function montarObras(centros, etapas, hoje, atraso = null) {
     });
 }
 
-// VGV e unidades dos dois primeiros cards: das obras do recorte (a carteira, as da etapa destacada
+// VGV e unidades do primeiro card: das obras do recorte (a carteira, as da etapa do filtro
 // ou a obra selecionada). `recorte`: o complemento do rótulo ("em Construção", "da obra"; null = total).
 export function numerosTopo(obras, recorte = null) {
   const soma = (campo) => obras.reduce((s, o) => s + (Number(o.centro[campo]) || 0), 0);

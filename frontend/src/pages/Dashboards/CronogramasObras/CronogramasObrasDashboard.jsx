@@ -185,7 +185,7 @@ export default function CronogramasObrasDashboard() {
           </div>
         ) : estado === 'carregando' ? (
           <section className="tiles cronograma" aria-hidden="true">
-            {Array.from({ length: 6 }, (_, i) => (
+            {Array.from({ length: 5 }, (_, i) => (
               <div key={i} className="tile">
                 <div className="sk" style={{ height: 14, width: '60%' }} />
                 <div className="sk" style={{ height: 28, width: '70%', marginTop: 6 }} />
