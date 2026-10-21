@@ -84,7 +84,7 @@ export default function CronogramasObrasDashboard() {
   const [atraso, setAtraso] = useState(null); // Regra de Atraso da Construção (aba Configurações)
   const [estado, setEstado] = useState('carregando'); // carregando | ok | erro
   const [erro, setErro] = useState('');
-  const [zoom, setZoom] = useState('geral');
+  const [zoom, setZoom] = useState('mensal'); // abre no mês a mês (pedido do usuário)
   const [destaque, setDestaque] = useState(null);
   const [selecionada, setSelecionada] = useState(null); // sienge_id da obra clicada no Gantt
   const [telaCheia, setTelaCheia] = useState(false);

@@ -23,7 +23,7 @@ export default function CronogramasTab({ empresaId, situacao = '', versaoId = ''
   const [atraso, setAtraso] = useState(null); // Regra de Atraso da Construção (aba Configurações)
   const [carregando, setCarregando] = useState(true);
   const [erroCarga, setErroCarga] = useState('');
-  const [zoom, setZoom] = useState('geral');
+  const [zoom, setZoom] = useState('mensal'); // abre no mês a mês (pedido do usuário)
   const [destaque, setDestaque] = useState(null); // id da etapa destacada pelos cards
   const [aberto, setAberto] = useState(null); // centro aberto na janela do cadastro
   const [versaoDetalhe, setVersaoDetalhe] = useState(null);
