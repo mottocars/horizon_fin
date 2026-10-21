@@ -1,4 +1,4 @@
-import { lazy, Suspense, useMemo, useState } from 'react';
+import { lazy, Suspense, useState } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { Eye, EyeOff } from 'lucide-react';
 import { useAuth } from '../../auth/AuthContext';
@@ -9,19 +9,8 @@ import './login.css';
 // O botão Entrar usa o mesmo fundo da vitrine, na cor do tema que está na tela.
 const Vitrine = lazy(() => import('./Vitrine'));
 
-// Fundo da tela: o da vitrine (brilho, grade de planilha e células que acendem), nas cores claras originais do
-// login. As células caem em lugares sorteados da coluna do formulário.
+// Fundo da tela: o da vitrine (brilho e grade de planilha), parado e nas cores claras originais do login.
 function Fundo() {
-  const celulas = useMemo(
-    () =>
-      Array.from({ length: 10 }, () => ({
-        col: Math.floor(Math.random() * 14),
-        lin: Math.floor(Math.random() * 22),
-        atraso: Math.random() * 9,
-        dur: 6 + Math.random() * 5,
-      })),
-    []
-  );
   return (
     <div className="login-fundo" aria-hidden="true">
       <div className="login-fundo__brilho">
@@ -29,14 +18,6 @@ function Fundo() {
         <i />
       </div>
       <div className="login-fundo__grade" />
-      <div className="login-fundo__celulas">
-        {celulas.map((c, i) => (
-          <span
-            key={i}
-            style={{ left: c.col * 44, top: c.lin * 44, animationDelay: `${c.atraso}s`, animationDuration: `${c.dur}s` }}
-          />
-        ))}
-      </div>
     </div>
   );
 }
