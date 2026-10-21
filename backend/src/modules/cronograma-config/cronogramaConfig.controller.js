@@ -3,14 +3,13 @@ const service = require('./cronogramaConfig.service');
 
 const empresaIdSchema = z.coerce.number().int().positive('Empresa inválida.');
 
-// Regra fixa pede os meses; planejamento pede o sistema. Canal e conexão andam juntos.
+// Regra fixa pede os meses; planejamento pede o sistema.
 const configSchema = z
   .object({
     atrasoRegra: z.enum(['FIXA', 'PLANEJAMENTO']).nullable(),
     atrasoMeses: z.union([z.null(), z.coerce.number().int('Informe um número inteiro de meses.').min(1, 'Informe pelo menos 1 mês.').max(600)]),
     atrasoSistema: z.enum(['PREVISION']).nullable(),
-    comunicarCanal: z.enum(['WHATSAPP', 'EMAIL']).nullable(),
-    conexaoId: z.union([z.null(), z.coerce.number().int().positive()]),
+    zapiIntegracaoId: z.union([z.null(), z.coerce.number().int().positive()]),
     usuarioIds: z.array(z.coerce.number().int().positive()).max(500).default([]),
   })
   .superRefine((c, ctx) => {
@@ -19,9 +18,6 @@ const configSchema = z
     }
     if (c.atrasoRegra === 'PLANEJAMENTO' && c.atrasoSistema === null) {
       ctx.addIssue({ code: 'custom', message: 'No planejamento, escolha o sistema.' });
-    }
-    if (c.conexaoId !== null && c.comunicarCanal === null) {
-      ctx.addIssue({ code: 'custom', message: 'Escolha o canal da conexão.' });
     }
   });
 

@@ -1,8 +1,9 @@
 import { useCallback, useEffect, useState } from 'react';
-import { AlertTriangle, CheckCircle2, Settings, X } from 'lucide-react';
+import { AlertTriangle, CheckCircle2, Settings } from 'lucide-react';
 import Card from '../../../components/Card';
 import Button from '../../../components/Button';
 import SearchableSelect from '../../../components/SearchableSelect';
+import TransferList from '../../../components/TransferList';
 import { getCronogramaConfig, salvarCronogramaConfig } from '../../../api/cronogramaConfig.api';
 
 const ROTULO_PERMISSAO = { MASTER: 'Master', BASICO: 'Básico' };
@@ -14,11 +15,6 @@ const REGRAS_ATRASO = [
 
 // Hoje só o Prevision; a combobox fica pronta pra outros sistemas (pedido do usuário).
 const SISTEMAS_PLANEJAMENTO = [{ value: 'PREVISION', label: 'Prevision' }];
-
-const CANAIS = [
-  { value: 'WHATSAPP', label: 'WhatsApp (Z-API)' },
-  { value: 'EMAIL', label: 'E-mail' },
-];
 
 // Mesmo par âmbar (vazio)/azul (preenchido) da aba Configurações de Repasses CEF.
 const COR_CAMPO_VAZIO = 'border-amber-300 bg-amber-50 hover:border-amber-400';
@@ -35,20 +31,21 @@ function SectionHeader({ titulo, texto }) {
 }
 
 // Aba Configurações de Operações > Cronogramas Obras (pedido do usuário) — mesmo padrão da aba
-// Configurações de Repasses CEF: um Card por parâmetro e um Salvar só no fim. Parâmetros:
+// Configurações de Repasses CEF (ConfiguracoesRepassesCef.jsx): um Card por parâmetro e um Salvar só
+// no fim. Parâmetros:
 // - Regra de Atraso de Obra: regra fixa (meses de obra) ou o planejamento de um sistema (Prevision);
-// - Comunicação de alteração de cronograma: canal, conexão e quem recebe.
+// - Conexão de disparo e Destinatários do comunicado de alteração de cronograma — iguais aos de
+//   Repasses CEF (conexão Z-API e lista de transferência).
 // Por enquanto só guarda os parâmetros (ver cronogramaConfig.service.js).
 export default function ConfiguracoesCronogramas({ empresaId }) {
   const [carregando, setCarregando] = useState(true);
   const [atrasoRegra, setAtrasoRegra] = useState(null);
   const [atrasoMeses, setAtrasoMeses] = useState('');
   const [atrasoSistema, setAtrasoSistema] = useState(null);
-  const [comunicarCanal, setComunicarCanal] = useState(null);
-  const [conexaoId, setConexaoId] = useState(null);
-  const [usuarioIds, setUsuarioIds] = useState([]);
+  const [zapiOpcoes, setZapiOpcoes] = useState([]);
+  const [zapiIntegracaoId, setZapiIntegracaoId] = useState(null);
   const [elegiveis, setElegiveis] = useState([]);
-  const [opcoesConexao, setOpcoesConexao] = useState({ WHATSAPP: [], EMAIL: [] });
+  const [selecionados, setSelecionados] = useState([]);
   const [erro, setErro] = useState('');
   const [salvando, setSalvando] = useState(false);
   const [salvo, setSalvo] = useState(false);
@@ -57,11 +54,10 @@ export default function ConfiguracoesCronogramas({ empresaId }) {
     setAtrasoRegra(c.atrasoRegra);
     setAtrasoMeses(c.atrasoMeses ?? '');
     setAtrasoSistema(c.atrasoSistema);
-    setComunicarCanal(c.comunicarCanal);
-    setConexaoId(c.conexaoId);
-    setUsuarioIds(c.usuarioIds.map(String));
+    setZapiOpcoes(c.opcoesZapi.map((z) => ({ value: z.id, label: z.nome })));
+    setZapiIntegracaoId(c.zapiIntegracaoId);
     setElegiveis(c.elegiveis);
-    setOpcoesConexao(c.opcoesConexao);
+    setSelecionados(c.selecionados.map(String));
   }
 
   const carregar = useCallback(() => {
@@ -98,9 +94,8 @@ export default function ConfiguracoesCronogramas({ empresaId }) {
         atrasoRegra,
         atrasoMeses: atrasoMeses === '' ? null : Number(atrasoMeses),
         atrasoSistema,
-        comunicarCanal,
-        conexaoId,
-        usuarioIds: usuarioIds.map(Number),
+        zapiIntegracaoId,
+        usuarioIds: selecionados.map(Number),
       });
       aplicar(c);
       setSalvo(true);
@@ -120,8 +115,6 @@ export default function ConfiguracoesCronogramas({ empresaId }) {
       </Card>
     );
   }
-
-  const conexoesDoCanal = comunicarCanal ? opcoesConexao[comunicarCanal] || [] : [];
 
   return (
     <div className="space-y-4">
@@ -197,77 +190,51 @@ export default function ConfiguracoesCronogramas({ empresaId }) {
 
       <Card>
         <SectionHeader
-          titulo="Comunicação de alteração de cronograma"
-          texto="Por onde sai o aviso quando o cronograma de uma obra é alterado, e quem recebe. A lista de usuários traz todos os Master e os usuários com acesso a esta empresa; o aviso vai para o WhatsApp ou o e-mail do cadastro do usuário."
+          titulo="Conexão de disparo"
+          texto="Qual conexão de WhatsApp (Z-API) desta empresa envia o comunicado de alteração de cronograma de uma obra."
         />
-        {carregando ? (
-          <div className="mt-4 text-sm text-gray-400">Carregando...</div>
-        ) : (
-          <div className="mt-4 grid max-w-3xl gap-4 sm:grid-cols-2">
-            <div>
-              <label className="mb-1 block text-sm font-medium text-gray-700">Comunicação</label>
+        <div className="mt-4 max-w-xs">
+          {carregando ? (
+            <div className="text-sm text-gray-400">Carregando...</div>
+          ) : (
+            <>
+              <label className="mb-1 block text-sm font-medium text-gray-700">Conexão WhatsApp (Z-API)</label>
               <SearchableSelect
-                value={comunicarCanal ?? ''}
-                onChange={alterado((v) => {
-                  setComunicarCanal(v || null);
-                  setConexaoId(null);
-                })}
-                options={CANAIS}
-                placeholder="Selecione o canal"
-                corClasses={corCampo(Boolean(comunicarCanal))}
+                value={zapiIntegracaoId ?? ''}
+                onChange={alterado((value) => setZapiIntegracaoId(value === '' || value === null ? null : Number(value)))}
+                options={zapiOpcoes}
+                placeholder="Nenhuma conexão selecionada"
+                emptyMessage="Nenhuma conexão Z-API cadastrada para esta empresa."
+                corClasses={corCampo(Boolean(zapiIntegracaoId))}
               />
-            </div>
-            <div>
-              <label className="mb-1 block text-sm font-medium text-gray-700">Conexão</label>
-              <SearchableSelect
-                value={conexaoId ?? ''}
-                onChange={alterado((v) => setConexaoId(v === '' || v === null ? null : Number(v)))}
-                options={conexoesDoCanal.map((c) => ({ value: c.id, label: c.nome }))}
-                disabled={!comunicarCanal}
-                placeholder={comunicarCanal ? 'Selecione a conexão' : 'Escolha a comunicação primeiro'}
-                emptyMessage={comunicarCanal === 'EMAIL' ? 'Nenhuma conexão de e-mail cadastrada para esta empresa.' : 'Nenhuma conexão Z-API cadastrada para esta empresa.'}
-                corClasses={corCampo(Boolean(conexaoId))}
-              />
-            </div>
-            <div className="sm:col-span-2">
-              <label className="mb-1 block text-sm font-medium text-gray-700">Quem recebe os comunicados</label>
-              <SearchableSelect
-                multiple
-                value={usuarioIds}
-                onChange={alterado((lista) => setUsuarioIds((lista || []).map(String)))}
-                options={elegiveis.map((u) => ({ value: String(u.id), label: `${u.nome} (${ROTULO_PERMISSAO[u.permissao] || u.permissao})` }))}
-                placeholder="Selecione os usuários"
-                emptyMessage="Nenhum usuário disponível."
-                corClasses={corCampo(usuarioIds.length > 0)}
-                larguraPainel={360}
-              />
-              {/* quem já recebe, à vista (o campo só diz "N selecionados"); o × tira da lista */}
-              {usuarioIds.length > 0 && (
-                <div className="mt-2 flex flex-wrap gap-1.5">
-                  {elegiveis
-                    .filter((u) => usuarioIds.includes(String(u.id)))
-                    .map((u) => (
-                      <span
-                        key={u.id}
-                        className="inline-flex items-center gap-1 rounded-full border border-primary-100 bg-primary-50 py-0.5 pl-2.5 pr-1 text-xs font-medium text-primary-700"
-                      >
-                        {u.nome}
-                        <button
-                          type="button"
-                          onClick={() => alterado(setUsuarioIds)(usuarioIds.filter((id) => id !== String(u.id)))}
-                          title={`Tirar ${u.nome}`}
-                          aria-label={`Tirar ${u.nome}`}
-                          className="rounded-full p-0.5 text-primary-600 hover:bg-primary-100"
-                        >
-                          <X size={12} />
-                        </button>
-                      </span>
-                    ))}
-                </div>
-              )}
-            </div>
-          </div>
-        )}
+            </>
+          )}
+        </div>
+      </Card>
+
+      <Card>
+        <SectionHeader
+          titulo="Destinatários"
+          texto="Quem recebe o comunicado de alteração de cronograma desta empresa. A lista de disponíveis já traz todos os Master e os Administradores/Básicos com acesso a esta empresa. O WhatsApp vai para o telefone do cadastro do usuário."
+        />
+        <div className="mt-4">
+          {carregando ? (
+            <div className="text-sm text-gray-400">Carregando...</div>
+          ) : (
+            <TransferList
+              itens={elegiveis}
+              selecionados={selecionados}
+              onChange={alterado(setSelecionados)}
+              getId={(u) => u.id}
+              getLabel={(u) => `${u.nome} (${ROTULO_PERMISSAO[u.permissao] || u.permissao})`}
+              tituloDisponiveis="Disponíveis"
+              tituloSelecionados="Recebem o comunicado"
+              vazioDisponiveisTexto="Nenhum usuário disponível."
+              vazioSelecionadosTexto="Nenhum usuário selecionado."
+              corSelecionados={corCampo(selecionados.length > 0)}
+            />
+          )}
+        </div>
       </Card>
 
       <Card>

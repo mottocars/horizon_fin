@@ -1,7 +1,8 @@
 import http from './http';
 
-// Aba Configurações de Cronogramas Obras: { atrasoRegra, atrasoMeses, atrasoSistema, comunicarCanal,
-// conexaoId, usuarioIds, elegiveis: [{ id, nome, permissao }], opcoesConexao: { WHATSAPP, EMAIL } }.
+// Aba Configurações de Cronogramas Obras: { atrasoRegra, atrasoMeses, atrasoSistema, zapiIntegracaoId,
+// selecionados: [usuarioId], elegiveis: [{ id, nome, permissao }], opcoesZapi: [{ id, nome }] }.
+// Salvar manda { atrasoRegra, atrasoMeses, atrasoSistema, zapiIntegracaoId, usuarioIds }.
 export function getCronogramaConfig(empresaId) {
   return http.get(`/cronograma-config/${empresaId}`).then((res) => res.data);
 }

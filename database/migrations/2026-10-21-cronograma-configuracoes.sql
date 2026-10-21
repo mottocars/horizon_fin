@@ -2,9 +2,9 @@
 -- - Regra de Atraso de Obra: o que conta pra dizer que uma obra está atrasada — uma regra fixa
 --   (`atraso_meses`: com quantos meses de obra ela passa a contar como atrasada) ou o planejamento
 --   de um sistema (`atraso_sistema`: por enquanto só o Prevision).
--- - Comunicação de alteração de cronograma: por qual canal/conexão sai o aviso quando o cronograma
---   de uma obra muda, e quem recebe (cronograma_comunicar_usuarios). A conexão fica na coluna do
---   canal escolhido (Z-API para WhatsApp, integração de e-mail para E-mail).
+-- - Comunicação de alteração de cronograma — mesmo esquema da aba Configurações de Repasses CEF:
+--   a conexão de WhatsApp (Z-API) que dispara o aviso quando o cronograma de uma obra muda e os
+--   destinatários (cronograma_comunicar_usuarios).
 -- Aplicar: psql -U postgres -d horizon_fin -f database/migrations/2026-10-21-cronograma-configuracoes.sql
 
 CREATE TABLE IF NOT EXISTS cronograma_config (
@@ -12,9 +12,7 @@ CREATE TABLE IF NOT EXISTS cronograma_config (
     atraso_regra         VARCHAR(15) CHECK (atraso_regra IN ('FIXA', 'PLANEJAMENTO')),
     atraso_meses         INTEGER CHECK (atraso_meses > 0),
     atraso_sistema       VARCHAR(20) CHECK (atraso_sistema IN ('PREVISION')),
-    comunicar_canal      VARCHAR(10) CHECK (comunicar_canal IN ('WHATSAPP', 'EMAIL')),
     zapi_integracao_id   INTEGER REFERENCES integracoes_zapi(id) ON DELETE SET NULL,
-    email_integracao_id  INTEGER REFERENCES integracoes_email(id) ON DELETE SET NULL,
     atualizado_por       INTEGER REFERENCES usuarios(id) ON DELETE SET NULL,
     atualizado_em        TIMESTAMP DEFAULT NOW()
 );

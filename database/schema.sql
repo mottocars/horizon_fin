@@ -3612,15 +3612,13 @@ CREATE TABLE IF NOT EXISTS usuarios_dashboard_favoritos (
 
 -- ─── Operações > Cronogramas Obras > Configurações — ver database/migrations/2026-10-21-cronograma-configuracoes.sql ───
 -- Regra de Atraso de Obra (fixa em meses ou pelo planejamento de um sistema) e a comunicação de
--- alteração de cronograma (canal/conexão e quem recebe), por empresa.
+-- alteração de cronograma (conexão Z-API de disparo e destinatários, como em Repasses CEF), por empresa.
 CREATE TABLE cronograma_config (
     empresa_id           INTEGER PRIMARY KEY REFERENCES empresas(id) ON DELETE CASCADE,
     atraso_regra         VARCHAR(15) CHECK (atraso_regra IN ('FIXA', 'PLANEJAMENTO')),
     atraso_meses         INTEGER CHECK (atraso_meses > 0),
     atraso_sistema       VARCHAR(20) CHECK (atraso_sistema IN ('PREVISION')),
-    comunicar_canal      VARCHAR(10) CHECK (comunicar_canal IN ('WHATSAPP', 'EMAIL')),
     zapi_integracao_id   INTEGER REFERENCES integracoes_zapi(id) ON DELETE SET NULL,
-    email_integracao_id  INTEGER REFERENCES integracoes_email(id) ON DELETE SET NULL,
     atualizado_por       INTEGER REFERENCES usuarios(id) ON DELETE SET NULL,
     atualizado_em        TIMESTAMP DEFAULT NOW()
 );
