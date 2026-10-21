@@ -388,6 +388,13 @@ export default function DfcFluxoTab({
   const versao = dados?.orcamento?.versao || null;
   const MESES_LONGOS = ['jan', 'fev', 'mar', 'abr', 'mai', 'jun', 'jul', 'ago', 'set', 'out', 'nov', 'dez'];
   const rotulo = (m) => `${MESES_LONGOS[Number(m.slice(5, 7)) - 1]}/${m.slice(2, 4)}`;
+  // Meses que cada coluna do Total soma: Projetado = o período todo; Realizado e Desvio = até o mês atual.
+  const ultimoReal = ultimo && ultimo < mesAtual ? ultimo : mesAtual;
+  const intervalo = (de, ate) => (de === ate ? rotulo(de) : `${rotulo(de)} a ${rotulo(ate)}`);
+  const periodoTotal = {
+    P: primeiro && ultimo ? intervalo(primeiro, ultimo) : '',
+    R: primeiro && primeiro <= mesAtual ? intervalo(primeiro, ultimoReal) : '',
+  };
   const larguraTotais = totalAberto ? larguras.totalR + larguras.totalP + LARGURA_DESVIO : LARGURA_TOTAL_FECHADO;
   const larguraTabela = LARGURA_PRIMEIRA + larguraTotais + larguras.meses.reduce((t, l) => t + l, 0);
   const esquerdaTotal = { [R]: LARGURA_PRIMEIRA, [P]: LARGURA_PRIMEIRA + larguras.totalR, [D]: LARGURA_PRIMEIRA + larguras.totalR + larguras.totalP };
@@ -660,12 +667,15 @@ export default function DfcFluxoTab({
                     colSpan={3}
                     onClick={() => setTotalAberto(false)}
                     title="Recolher o Total"
-                    className="sticky top-0 z-30 cursor-pointer border-r border-r-blue-200 bg-blue-100 px-3 pt-2.5 text-center align-bottom text-[11px] font-semibold uppercase tracking-wider text-blue-800 transition-colors hover:bg-blue-200/70"
+                    className="sticky top-0 z-30 cursor-pointer border-r border-r-blue-200 bg-blue-100 px-3 pt-2.5 text-center align-bottom text-[11px] font-semibold uppercase tracking-wider text-blue-800 transition-colors hover:bg-blue-200"
                     style={{ left: LARGURA_PRIMEIRA, height: ALTURA_CAB_MES }}
                   >
                     <span className="inline-flex items-center gap-1">
                       <ChevronLeft size={13} className="shrink-0 text-blue-500" />
                       Total
+                      {periodoTotal.P && (
+                        <span className="ml-1 text-[10px] font-medium normal-case tracking-normal text-blue-600">· {periodoTotal.P}</span>
+                      )}
                     </span>
                   </th>
                 ) : (
@@ -673,11 +683,12 @@ export default function DfcFluxoTab({
                     rowSpan={2}
                     onClick={() => setTotalAberto(true)}
                     title="Mostrar o Total (realizado, projetado e desvio)"
-                    className="sticky top-0 z-30 cursor-pointer border-b border-r border-b-blue-200 border-r-blue-200 bg-blue-100 px-0 py-2 text-center align-middle transition-colors hover:bg-blue-200/70"
+                    className="sticky top-0 z-30 cursor-pointer border-b border-r border-b-blue-200 border-r-blue-200 bg-blue-100 px-0 py-2 text-center align-middle transition-colors hover:bg-blue-200"
                     style={{ left: LARGURA_PRIMEIRA }}
                   >
-                    <span className="inline-block rotate-180 text-[10px] font-semibold uppercase tracking-[0.2em] text-blue-800 [writing-mode:vertical-rl]">
+                    <span className="inline-flex rotate-180 items-center gap-1 text-[11px] font-bold uppercase tracking-[0.2em] text-blue-800 [writing-mode:vertical-rl]">
                       Total
+                      <ChevronLeft size={12} className="shrink-0 text-blue-500" />
                     </span>
                   </th>
                 )}
@@ -724,6 +735,9 @@ export default function DfcFluxoTab({
                     style={{ top: ALTURA_CAB_MES, left: esquerdaTotal[t] }}
                   >
                     {t === R ? 'Realizado' : t === P ? 'Projetado' : 'Desvio %'}
+                    <span className="block text-[9px] font-medium normal-case tracking-normal text-blue-500/90">
+                      {(t === P ? periodoTotal.P : periodoTotal.R) || 'sem realizado'}
+                    </span>
                   </th>
                 ))}
                 {colunas.map((c, i) => {
