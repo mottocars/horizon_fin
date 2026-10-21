@@ -235,7 +235,7 @@ export default function ConfiguracoesCronogramas({ empresaId }) {
                 <p className="mt-1.5 text-xs leading-relaxed text-gray-500">
                   {atrasoRegra === 'FIXA'
                     ? 'Os meses contam a partir do início desta etapa no Histórico de Etapas de cada obra.'
-                    : 'Os meses desta etapa depois do mês em que a curva S de base chega a 100% contam como atraso.'}
+                    : 'Do mês seguinte ao que a curva S de base chega a 100% até o fim desta etapa, tudo conta como atraso — mesmo que comece antes dela no Histórico de Etapas.'}
                 </p>
               </div>
             )}

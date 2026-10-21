@@ -19,7 +19,8 @@ import { MESES_ABREV, mesAno, moeda } from './formatos';
 //   p-6 (o <main> das telas comuns, a tela cheia), `bottom-0` no dashboard (o <main> sem padding).
 // - `ref` expõe `irParaHoje()` (o botão "Hoje" do dashboard).
 // - Meses em atraso da construção (Regra de Atraso da Construção — aba Configurações): vêm no
-//   `prazo` do segmento (montarObras) e saem na cor do atraso.
+//   `atraso` de cada segmento que cai na janela do atraso (montarObras) e saem na cor do atraso;
+//   o `prazo` da etapa da construção vai na dica.
 // ---------------------------------------------------------------------------------------
 
 export const ZOOMS_GANTT = [
@@ -155,10 +156,12 @@ function BarraObra({ segmentos, ini, px, mensal, onDica }) {
     const linha = `rgba(255,255,255,${px < 14 ? 0.2 : 0.5})`;
     const desvio = ((esquerda % px) + px) % px;
     const linhasMes = `linear-gradient(to right, transparent ${px - 1}px, ${linha} ${px - 1}px)`;
-    // Meses em atraso da construção (pedido do usuário): dali até o fim, a cor do atraso — por baixo
-    // das linhas de mês e da contagem, que continuam valendo.
-    const xAtraso = seg.prazo?.meses ? Math.max(0, xDe(seg.prazo.desde) - esquerda) : null;
-    const corNumeroAtraso = xAtraso === null ? null : corDoTexto(seg.prazo.cor);
+    // Meses em atraso da construção (pedido do usuário): o pedaço da etapa que cai na janela do
+    // atraso vai na cor do atraso — por baixo das linhas de mês e da contagem, que continuam valendo.
+    const xAtraso = seg.atraso ? Math.max(0, xDe(seg.atraso.desde) - esquerda) : null;
+    const xFimAtraso = seg.atraso ? xDe(somarDias(seg.atraso.ate, 1)) - esquerda : null;
+    const corNumeroAtraso = seg.atraso ? corDoTexto(seg.atraso.cor) : null;
+    const noAtraso = (x) => xAtraso !== null && x + px / 2 > xAtraso && x + px / 2 < xFimAtraso;
     return (
       <div
         key={seg.etapa.id}
@@ -174,7 +177,7 @@ function BarraObra({ segmentos, ini, px, mensal, onDica }) {
           ...(xAtraso === null
             ? { backgroundImage: linhasMes, backgroundSize: `${px}px 100%`, backgroundPosition: `${-desvio}px 0`, backgroundRepeat: 'repeat-x' }
             : {
-                backgroundImage: `${linhasMes}, linear-gradient(to right, transparent ${xAtraso}px, ${seg.prazo.cor} ${xAtraso}px)`,
+                backgroundImage: `${linhasMes}, linear-gradient(to right, transparent ${xAtraso}px, ${seg.atraso.cor} ${xAtraso}px, ${seg.atraso.cor} ${xFimAtraso}px, transparent ${xFimAtraso}px)`,
                 backgroundSize: `${px}px 100%, 100% 100%`,
                 backgroundPosition: `${-desvio}px 0, 0 0`,
                 backgroundRepeat: 'repeat-x, no-repeat',
@@ -198,7 +201,7 @@ function BarraObra({ segmentos, ini, px, mensal, onDica }) {
             <span
               key={k}
               className="pointer-events-none absolute inset-y-0 flex items-center justify-center text-[10px] font-medium tabular-nums"
-              style={{ left: x, width: px, color: xAtraso !== null && x + px / 2 > xAtraso ? corNumeroAtraso : corNumero, opacity: 0.6 }}
+              style={{ left: x, width: px, color: noAtraso(x) ? corNumeroAtraso : corNumero, opacity: 0.6 }}
             >
               {k + 1}
             </span>
@@ -233,14 +236,15 @@ function DicaSegmento({ seg, centro }) {
         <span className="h-0.5 w-3 shrink-0 rounded-full" style={{ backgroundColor: seg.cor }} />
         {seg.etapa.descricao} · {duracaoTexto(seg)}
       </p>
-      {seg.prazo && <LinhaPrazo prazo={seg.prazo} />}
+      {seg.prazo ? <LinhaPrazo prazo={seg.prazo} /> : seg.atraso && <LinhaPrazo prazo={seg.atraso.prazo} etapa={seg.atraso.construcao} />}
       <p className="mt-0.5 truncate text-gray-400">{centro.name}</p>
     </>
   );
 }
 
 // Na dica da etapa da construção: os meses em atraso (ou até quando vai o prazo) e de onde vem a conta.
-function LinhaPrazo({ prazo }) {
+// Nas etapas anteriores que caem na janela do atraso, `etapa` = o nome da etapa da construção.
+function LinhaPrazo({ prazo, etapa = null }) {
   const regra =
     prazo.regra === 'FIXA'
       ? `Regra fixa: ${plural(prazo.limite, 'mês', 'meses')} de construção`
@@ -254,7 +258,11 @@ function LinhaPrazo({ prazo }) {
       ) : prazo.meses ? (
         <p className="flex items-center gap-1.5 text-gray-600">
           <span className="h-2 w-2 shrink-0 rounded-full" style={{ backgroundColor: prazo.cor }} />
-          <b className="font-semibold text-gray-900">{plural(prazo.meses, 'mês', 'meses')} em atraso</b> · desde {mesAno(prazo.desde)}
+          <b className="font-semibold text-gray-900">
+            {etapa && `${etapa}: `}
+            {plural(prazo.meses, 'mês', 'meses')} em atraso
+          </b>{' '}
+          · desde {mesAno(prazo.desde)}
         </p>
       ) : (
         <p className="text-gray-600">No prazo · até {mesAno(somarDias(prazo.desde, -1))}</p>

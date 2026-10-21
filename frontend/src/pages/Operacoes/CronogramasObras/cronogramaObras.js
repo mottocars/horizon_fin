@@ -17,28 +17,52 @@ export function plural(n, um, varios) {
 // Cor dos meses em atraso quando ninguém escolheu outra na aba Configurações (atraso_cor NULL).
 export const COR_ATRASO_PADRAO = '#dc2626';
 
-// Regra de Atraso da Construção (aba Configurações; `atraso` da lista de /cronograma-centros), na
-// etapa que representa a construção: o dia em que o atraso começa (`desde`) — regra fixa: passados
-// os meses da regra desde o início da etapa; planejamento: o mês seguinte àquele em que a curva S
-// de base do Prevision chega a 100% (`centro.prevision_base_100`) — e quantos meses da etapa ficam
-// dali em diante (`meses`; 0 = no prazo). `desde` null: sem como medir (obra sem a curva do Prevision).
-function prazoConstrucao(centro, inicio, fim, atraso) {
+// Regra de Atraso da Construção (aba Configurações; `atraso` da lista de /cronograma-centros): o
+// dia em que o atraso começa (`desde`) — regra fixa: passados os meses da regra desde o início da
+// etapa da construção; planejamento: o mês seguinte àquele em que a curva S de base do Prevision
+// chega a 100% (`centro.prevision_base_100`) — e quantos meses vão dali até o fim da construção
+// (`meses`; 0 = no prazo). `desde` null: sem como medir (obra sem a curva do Prevision).
+function prazoConstrucao(centro, construcao, inicioObra, atraso) {
   const base = { regra: atraso.regra, limite: atraso.meses, base100: centro.prevision_base_100, cor: atraso.cor || COR_ATRASO_PADRAO };
   let desde = null;
-  if (atraso.regra === 'FIXA') desde = somarMeses(inicio, atraso.meses);
+  if (atraso.regra === 'FIXA') desde = somarMeses(construcao.inicio, atraso.meses);
   else if (centro.prevision_base_100) desde = somarMeses(`${centro.prevision_base_100.slice(0, 8)}01`, 1);
   if (!desde) return { ...base, desde: null, meses: 0 };
-  if (desde < inicio) desde = inicio; // 100% antes de a construção começar: a etapa inteira atrasada
+  if (desde < inicioObra) desde = inicioObra;
+  const { fim } = construcao;
   const meses = fim && desde <= fim ? Math.max(1, mesesEntre(desde, somarDias(fim, 1))) : 0;
   return { ...base, desde, meses };
 }
 
+// Pinta a janela do atraso — de `desde` até o fim da etapa da construção — em toda etapa que cair
+// nela, não só na construção: no planejamento o atraso pode começar antes de a construção começar
+// no Histórico de Etapas (pedido do usuário: a base do ESTAÇÃO NOGUEIRA I chega a 100% em mar/2025
+// e a Construção dele no histórico é só ago–set/2026 — o atraso vale desde abr/2025). A etapa da
+// construção leva o `prazo`; cada etapa na janela, o `atraso` (o pedaço dela que fica pintado).
+function aplicarAtraso(segmentos, centro, atraso) {
+  const construcao = segmentos.find((s) => s.etapa.id === atraso.etapaId);
+  if (!construcao) return;
+  const prazo = prazoConstrucao(centro, construcao, segmentos[0].inicio, atraso);
+  construcao.prazo = prazo;
+  if (!prazo.meses) return;
+  segmentos.forEach((s) => {
+    if (!s.fim || s.fim < prazo.desde || s.inicio > construcao.fim) return;
+    s.atraso = {
+      desde: s.inicio > prazo.desde ? s.inicio : prazo.desde,
+      ate: s.fim < construcao.fim ? s.fim : construcao.fim,
+      cor: prazo.cor,
+      prazo,
+      construcao: s === construcao ? null : construcao.etapa.descricao,
+    };
+  });
+}
+
 // Segmentos da obra: um por etapa com data de início. Fim = véspera do início da seguinte (ou o
 // fim gravado); na última, o término — as mesmas regras do Histórico de Etapas (cronogramaDatas).
-// Sem fim conhecido, a etapa fica "em aberto". A etapa da construção leva o `prazo`
-// (prazoConstrucao) quando a empresa tem a Regra de Atraso da Construção.
+// Sem fim conhecido, a etapa fica "em aberto". Com a Regra de Atraso da Construção, os meses em
+// atraso (aplicarAtraso).
 export function montarSegmentos(centro, etapas, atraso = null) {
-  return etapas
+  const segmentos = etapas
     .map((etapa, i) => {
       const inicio = centro.datas[etapa.id];
       if (!inicio) return null;
@@ -57,10 +81,13 @@ export function montarSegmentos(centro, etapas, atraso = null) {
         fim,
         duracao: duracaoEtapa(datas),
         unidade: ultima ? 'ano' : 'mês',
-        prazo: atraso && atraso.etapaId === etapa.id ? prazoConstrucao(centro, inicio, fim, atraso) : null,
+        prazo: null,
+        atraso: null,
       };
     })
     .filter(Boolean);
+  if (atraso && segmentos.length) aplicarAtraso(segmentos, centro, atraso);
+  return segmentos;
 }
 
 // Onde a obra está hoje: a etapa em curso (a mais adiantada, se uma em aberto se sobrepõe), ou
