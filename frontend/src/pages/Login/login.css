@@ -80,7 +80,12 @@
   z-index: -1;
   overflow: hidden;
   pointer-events: none;
-  background: linear-gradient(135deg, var(--color-primary-50), #fff 50%, var(--color-primary-100));
+  background: linear-gradient(
+    135deg,
+    color-mix(in oklab, var(--color-primary-50) 55%, #fff),
+    #fff 50%,
+    color-mix(in oklab, var(--color-primary-100) 45%, #fff)
+  );
 }
 @media (min-width: 1024px) {
   .login-fundo {
@@ -96,12 +101,12 @@
 .login-fundo__brilho i:nth-child(1) {
   top: -30vmax;
   left: -26vmax;
-  background: radial-gradient(closest-side, rgb(59 130 246 / 0.2), transparent);
+  background: radial-gradient(closest-side, rgb(59 130 246 / 0.09), transparent);
 }
 .login-fundo__brilho i:nth-child(2) {
   bottom: -34vmax;
   left: calc(24vw - 31vmax);
-  background: radial-gradient(closest-side, rgb(147 197 253 / 0.38), transparent);
+  background: radial-gradient(closest-side, rgb(147 197 253 / 0.18), transparent);
 }
 .login-fundo__grade,
 .login-fundo__celulas {
@@ -111,8 +116,8 @@
 }
 .login-fundo__grade {
   background-image:
-    linear-gradient(rgb(37 99 235 / 0.075) 1px, transparent 1px),
-    linear-gradient(90deg, rgb(37 99 235 / 0.075) 1px, transparent 1px);
+    linear-gradient(rgb(37 99 235 / 0.045) 1px, transparent 1px),
+    linear-gradient(90deg, rgb(37 99 235 / 0.045) 1px, transparent 1px);
   background-size: 44px 44px;
 }
 .login-fundo__celulas span {
@@ -120,7 +125,7 @@
   width: 43px;
   height: 43px;
   margin: 1px 0 0 1px;
-  background: rgb(59 130 246 / 0.12);
+  background: rgb(59 130 246 / 0.07);
   opacity: 0;
 }
 
