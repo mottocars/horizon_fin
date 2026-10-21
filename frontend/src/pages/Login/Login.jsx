@@ -56,17 +56,16 @@ export default function Login() {
   return (
     <div className="flex min-h-screen bg-white lg:p-3">
       <main className="flex w-full flex-col px-6 py-8 sm:px-12 lg:w-[42%] lg:max-w-150 lg:shrink-0 lg:px-14 xl:px-20">
-        <img src="/logomarca.svg" alt="Horizon Fin" className="h-9 w-auto self-start" />
-
         <div className="flex flex-1 items-center py-12">
-          <div className="w-full max-w-sm">
+          <div className="mx-auto w-full max-w-sm">
+            <img src="/logomarca.svg" alt="Horizon Fin" className="mx-auto mb-8 h-10 w-auto" />
             <h1
-              className="font-display text-[2rem] font-bold leading-tight tracking-tight text-gray-900"
+              className="text-center font-display text-[2rem] font-bold leading-tight tracking-tight text-gray-900"
               style={{ fontStretch: '110%' }}
             >
               {saudacao()}.
             </h1>
-            <p className="mt-2 text-sm text-gray-500">
+            <p className="mt-2 text-balance text-center text-sm text-gray-500">
               Entre com seu usuário para acessar o Horizon Finanças.
             </p>
 
@@ -140,7 +139,7 @@ export default function Login() {
           </div>
         </div>
 
-        <p className="text-xs text-gray-400">© {new Date().getFullYear()} Horizon Finanças</p>
+        <p className="text-center text-xs text-gray-400">© {new Date().getFullYear()} Horizon Finanças</p>
       </main>
 
       <Suspense fallback={<div className="hidden flex-1 rounded-[28px] bg-[#04203f] lg:block" />}>
