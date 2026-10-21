@@ -359,11 +359,14 @@ const GanttObras = forwardRef(function GanttObras(
   const larguraTempo = meses * px;
   const xHoje = (posMes(hoje) - faixa.ini) * px;
 
-  // Mês a mês: a régua abre com hoje à vista (um terço da tela à esquerda dele).
+  // Mês a mês: a régua abre com hoje à vista (um terço da tela à esquerda dele) — e volta pra hoje
+  // sempre que a lista de obras muda (filtro dos cards de etapa — pedido do usuário). Selecionar uma
+  // obra não muda a lista, então não mexe na régua.
+  const chaveObras = obras.map((o) => o.centro.sienge_id).join(',');
   useEffect(() => {
     if (zoom !== 'mensal' || !area) return;
     area.scrollTo({ left: Math.max(0, xHoje - (larguraArea - LARGURA_NOMES) / 3) });
-  }, [zoom]); // eslint-disable-line react-hooks/exhaustive-deps
+  }, [zoom, chaveObras]); // eslint-disable-line react-hooks/exhaustive-deps
 
   // "Hoje": leva a régua até hoje (um terço da tela à esquerda dele), rolando suave.
   useImperativeHandle(ref, () => ({

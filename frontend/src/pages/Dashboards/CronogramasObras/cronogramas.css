@@ -68,6 +68,18 @@
   margin-right: 6px;
   vertical-align: 0;
 }
+/* Card do lançamento: as obras a iniciar — a marca é o contorno da cor da etapa, como a bolinha das
+   obras a iniciar no Gantt. */
+.painel-cfo .tile .d.iniciar .marca {
+  display: inline-block;
+  width: 8px;
+  height: 8px;
+  border: 2px solid;
+  border-radius: 50%;
+  margin-right: 6px;
+  vertical-align: 0;
+  box-sizing: border-box;
+}
 /* Fatia da carteira na etapa: trilho no próprio tom da etapa, mais claro — no pé do card (o da
    construção tem uma linha a mais e os medidores continuam alinhados). */
 .painel-cfo .tile .medidor {

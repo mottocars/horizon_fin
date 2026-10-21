@@ -129,9 +129,12 @@ export function numerosTopo(obras, recorte = null) {
 // Números da carteira: VGV, unidades e, por etapa, as obras que estão nela hoje. Na etapa da
 // construção (a que leva o `prazo` da Regra de Atraso), também `atraso`: dessas obras, as que têm
 // meses em atraso no cronograma (as barras com a cor do atraso) e o VGV delas; null nas outras etapas.
+// Na primeira etapa (o Lançamento), também `aIniciar`: as obras que ainda não começaram nenhuma
+// etapa, com o VGV e as unidades delas (pedido do usuário); null nas outras.
 export function resumoCarteira(obras, etapas) {
   const soma = (centros, campo) => centros.reduce((s, c) => s + (Number(c[campo]) || 0), 0);
   const centros = obras.map((o) => o.centro);
+  const aIniciar = obras.filter((o) => o.situacao.tipo === 'aIniciar').map((o) => o.centro);
   return {
     totalObras: obras.length,
     vgv: soma(centros, 'valor_geral_vendas'),
@@ -151,11 +154,12 @@ export function resumoCarteira(obras, etapas) {
         vgv: soma(lista, 'valor_geral_vendas'),
         unidades: soma(lista, 'numero_unidades'),
         atraso: construcao ? { obras: atrasadas, vgv: soma(atrasadas, 'valor_geral_vendas'), cor: prazoDe(construcao).cor } : null,
+        aIniciar: i === 0 ? { obras: aIniciar, vgv: soma(aIniciar, 'valor_geral_vendas'), unidades: soma(aIniciar, 'numero_unidades') } : null,
       };
     }),
     comCronograma: obras.filter((o) => o.segmentos.length).length,
     semCronograma: obras.filter((o) => !o.segmentos.length).length,
-    aIniciar: obras.filter((o) => o.situacao.tipo === 'aIniciar').length,
+    aIniciar: aIniciar.length,
     concluidas: obras.filter((o) => o.situacao.tipo === 'concluida').length,
   };
 }
