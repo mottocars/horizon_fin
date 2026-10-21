@@ -14,7 +14,8 @@ import CronogramaCentrosTab from './CronogramaCentrosTab';
 import CronogramasTab from './CronogramasTab';
 import ConfiguracoesCronogramas from './ConfiguracoesCronogramas';
 import VersoesCronograma from './VersoesCronograma';
-import { FILTROS_SITUACAO, periodoPadrao } from './cronogramaObras';
+import CampoDataPeriodo from './CampoDataPeriodo';
+import { FILTROS_SITUACAO, mesesDoPeriodo, periodoPadrao, trocarDataPeriodo } from './cronogramaObras';
 
 // Mesmo padrão de DfcConstrutorasPage.jsx: o `{ divider: true }` separa os Cronogramas (a tela em
 // si) das abas que dão suporte a eles. A aba Etapas saiu (pedido do usuário): as etapas se cadastram
@@ -79,17 +80,13 @@ export default function CronogramasObrasPage() {
   const situacao = searchParams.get('situacao') || '';
   const versaoId = searchParams.get('versao') || '';
   const [versoes, setVersoes] = useState([]);
-  // Zoom do Gantt e período De/Até do Mês a mês (padrão: 3 meses antes a 20 à frente). Ficam no estado
-  // da página — persistem ao trocar de aba ou de zoom e só voltam ao padrão ao recarregar.
+  // Zoom do Gantt e período De/Até do Mês a mês (padrão: 3 meses antes a 20 à frente; digitado com dia,
+  // mês e ano, mas só mês e ano valem — `periodo` em 'AAAA-MM'). Ficam no estado da página — persistem
+  // ao trocar de aba ou de zoom e só voltam ao padrão ao recarregar.
   const [zoom, setZoom] = useState('mensal');
-  const [periodo, setPeriodo] = useState(periodoPadrao);
-  const mudarPeriodo = (campo, valor) => {
-    if (!valor) return;
-    setPeriodo((p) => {
-      const novo = { ...p, [campo]: valor };
-      return novo.ini <= novo.fim ? novo : { ini: novo.fim, fim: novo.ini };
-    });
-  };
+  const [datasPeriodo, setDatasPeriodo] = useState(periodoPadrao);
+  const periodo = useMemo(() => mesesDoPeriodo(datasPeriodo), [datasPeriodo]);
+  const mudarPeriodo = (campo, valor) => setDatasPeriodo((d) => trocarDataPeriodo(d, campo, valor));
   useEffect(() => {
     setVersoes([]);
     if (!empresaId || abaAtiva !== 'cronogramas') return;
@@ -154,22 +151,20 @@ export default function CronogramasObrasPage() {
                   <>
                     <div className="sm:w-40">
                       <label htmlFor="periodo-de" className="mb-1 block text-sm font-medium text-gray-700">De</label>
-                      <input
+                      <CampoDataPeriodo
                         id="periodo-de"
-                        type="month"
-                        value={periodo.ini}
-                        onChange={(e) => mudarPeriodo('ini', e.target.value)}
+                        value={datasPeriodo.ini}
+                        onChange={(valor) => mudarPeriodo('ini', valor)}
                         disabled={!empresaId}
                         className="w-full rounded-lg border border-gray-200 px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-primary-100"
                       />
                     </div>
                     <div className="sm:w-40">
                       <label htmlFor="periodo-ate" className="mb-1 block text-sm font-medium text-gray-700">Até</label>
-                      <input
+                      <CampoDataPeriodo
                         id="periodo-ate"
-                        type="month"
-                        value={periodo.fim}
-                        onChange={(e) => mudarPeriodo('fim', e.target.value)}
+                        value={datasPeriodo.fim}
+                        onChange={(valor) => mudarPeriodo('fim', valor)}
                         disabled={!empresaId}
                         className="w-full rounded-lg border border-gray-200 px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-primary-100"
                       />

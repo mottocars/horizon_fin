@@ -23,8 +23,8 @@ import {
 // carteira — VGV, unidades e quantas obras estão em cada etapa hoje (CardsCarteira, os mesmos cards
 // do dashboard Cronogramas de Obras) —; embaixo, o Gantt das obras
 // mês a mês (GanttObras — o mesmo do dashboard Cronogramas de Obras). Clicar numa obra abre o
-// cadastro dela (JanelaCentroCusto); clicar num card de etapa filtra o Gantt (só as obras que
-// estão nela hoje). Os filtros "Obras" (`situacao`) e "Mudanças" (`versaoId` — as obras alteradas
+// cadastro dela (JanelaCentroCusto); clicar num card de etapa filtra o Gantt (as obras que
+// estiveram nela em algum momento do período De/Até). Os filtros "Obras" (`situacao`) e "Mudanças" (`versaoId` — as obras alteradas
 // numa versão, com como eram antes) ficam ao lado da empresa, na página (CronogramasObrasPage).
 // ---------------------------------------------------------------------------------------
 
@@ -113,12 +113,13 @@ export default function CronogramasTab({ empresaId, situacao = '', versaoId = ''
     );
   }
 
-  const recorte = rotuloRecorte(destaque, etapas);
-  // Card de etapa clicado → o Gantt fica só com as obras dela hoje e VGV e unidades somam só elas.
+  const recorte = rotuloRecorte(destaque, etapas, periodoAtivo);
+  // Card de etapa clicado → o Gantt fica só com as obras que estiveram nela em algum momento do
+  // período (naRecorte) e VGV e unidades somam só elas.
   const baseGantt = obrasVersao || obras;
-  const obrasGantt = recorte ? baseGantt.filter((o) => naRecorte(o, destaque)) : baseGantt;
+  const obrasGantt = recorte ? baseGantt.filter((o) => naRecorte(o, destaque, periodoAtivo)) : baseGantt;
   const rGantt = recorte || obrasVersao ? resumoCarteira(obrasGantt, etapas) : r;
-  const topo = recorte ? numerosTopo(obras.filter((o) => naRecorte(o, destaque)), recorte.topo) : numerosTopo(obras);
+  const topo = recorte ? numerosTopo(obras.filter((o) => naRecorte(o, destaque, periodoAtivo)), recorte.topo) : numerosTopo(obras);
 
   return (
     <div className="space-y-5 rounded-card rounded-tl-none bg-white p-5 shadow-card">

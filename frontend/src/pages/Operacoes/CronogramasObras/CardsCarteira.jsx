@@ -7,7 +7,8 @@ import '../../Dashboards/CronogramasObras/cronogramas.css';
 // unidades logo abaixo (pedido do usuário: um card só) e, por etapa, as obras que estão nela hoje, o VGV e as
 // unidades delas e a fatia da carteira — no da construção, também as obras em atraso e o VGV delas;
 // na etapa por onde começam as obras a iniciar (o Lançamento), essas obras com o VGV e as unidades
-// (pedidos do usuário). Clicar num card de etapa filtra o Gantt: só ficam as obras dela hoje.
+// (pedidos do usuário). Clicar num card de etapa filtra o Gantt: ficam as obras que estiveram nela em
+// algum momento do período De/Até (cronogramaObras.js::naRecorte) — o número do card é o de hoje.
 // Usado no dashboard Cronogramas de Obras e na aba Cronogramas de Operações > Cronogramas Obras
 // (pedido do usuário: os mesmos cards) — precisa estar dentro de um .painel-cfo.
 // - `resumo`: resumoCarteira (cronogramaObras.js) das obras que os cards de etapa mostram.
@@ -40,7 +41,7 @@ export default function CardsCarteira({ resumo: r, topo, destaque, onDestaque })
             className="tile"
             aria-pressed={ativo}
             onClick={() => onDestaque(ativo ? null : e.etapa.id)}
-            title={ativo ? 'Mostrar todas as obras' : `Mostrar no gráfico só as obras em ${e.etapa.descricao} hoje`}
+            title={ativo ? 'Mostrar todas as obras' : `Mostrar no gráfico as obras que estiveram em ${e.etapa.descricao} no período`}
           >
             <span className="k">
               <i className="marca" style={{ backgroundColor: e.cor }} />

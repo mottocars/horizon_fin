@@ -105,35 +105,63 @@ export function situacaoHoje(segmentos, hoje) {
 
 export const naEtapa = (obra, etapaId) => obra.situacao.tipo === 'etapa' && obra.situacao.segmento.etapa.id === etapaId;
 
-// Recorte dos cards (clicar num card de etapa filtra o Gantt): as obras na etapa hoje.
-export const naRecorte = (obra, recorte) => naEtapa(obra, recorte);
-
-// Textos do recorte: o aviso do Gantt ("Só em Construção") e o complemento dos números do primeiro
-// card ("VGV em Construção"). null sem recorte (ou etapa que não existe mais).
-export function rotuloRecorte(recorte, etapas) {
-  const etapa = etapas.find((e) => e.id === recorte);
-  return etapa ? { aviso: `Só em ${etapa.descricao}`, topo: `em ${etapa.descricao}` } : null;
+// Segmento dentro do período 'AAAA-MM' (do dia 1 do mês De ao último dia do mês Até). Etapa sem
+// fim conhecido conta só o mês de início, como no Gantt.
+function noPeriodo(segmento, periodo) {
+  const de = `${periodo.ini}-01`;
+  const ate = somarDias(somarMeses(`${periodo.fim}-01`, 1), -1);
+  return segmento.inicio <= ate && (segmento.fim || segmento.inicio) >= de;
 }
 
-// Período do Mês a mês (filtro De/Até no topo — pedido do usuário): por padrão de 3 meses antes do
-// atual a 20 meses à frente, em 'AAAA-MM'. Quem chama guarda no estado da tela: mudou, só volta ao
-// padrão ao recarregar a página.
-function mesDeHoje(n) {
+// Recorte dos cards (clicar num card de etapa filtra o Gantt — pedido do usuário): as obras que
+// estiveram na etapa em algum momento do período, não só as que estão nela hoje — ex.: duas obras
+// lançando este mês e uma no mês que vem, o card do Lançamento mostra as três. Os números do card
+// continuam sendo os de hoje. Sem período (Visão geral), o cronograma inteiro.
+export const naRecorte = (obra, recorte, periodo = null) =>
+  obra.segmentos.some((s) => s.etapa.id === recorte && (!periodo || noPeriodo(s, periodo)));
+
+// Textos do recorte: o aviso do Gantt ("Em Construção no período") e o complemento dos números do
+// primeiro card ("VGV em Construção"). null sem recorte (ou etapa que não existe mais).
+export function rotuloRecorte(recorte, etapas, periodo = null) {
+  const etapa = etapas.find((e) => e.id === recorte);
+  if (!etapa) return null;
+  return { aviso: periodo ? `Em ${etapa.descricao} no período` : `Passam por ${etapa.descricao}`, topo: `em ${etapa.descricao}` };
+}
+
+// Período do Mês a mês (filtro De/Até no topo — pedido do usuário): digitado com dia, mês e ano
+// ('AAAA-MM-DD', como o input date), mas só o mês e o ano valem (mesesDoPeriodo). Por padrão, do dia 1
+// de 3 meses antes do atual ao último dia de 20 meses à frente. Quem chama guarda no estado da tela:
+// mudou, só volta ao padrão ao recarregar a página.
+function diaDeHoje(meses, dia) {
   const h = new Date();
-  const d = new Date(h.getFullYear(), h.getMonth() + n, 1);
-  return `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}`;
+  const d = new Date(h.getFullYear(), h.getMonth() + meses, dia);
+  return `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}-${String(d.getDate()).padStart(2, '0')}`;
 }
 export function periodoPadrao() {
-  return { ini: mesDeHoje(-3), fim: mesDeHoje(20) };
+  return { ini: diaDeHoje(-3, 1), fim: diaDeHoje(21, 0) };
+}
+
+// As datas digitadas no De/Até → o período em meses ('AAAA-MM') que os filtros e o Gantt usam.
+export function mesesDoPeriodo(datas) {
+  return { ini: datas.ini.slice(0, 7), fim: datas.fim.slice(0, 7) };
+}
+
+// Data completa e com ano de verdade — enquanto o ano é digitado, o input date passa por 0002, 0020...
+export const dataPeriodoValida = (valor) => /^(19|2[01])\d{2}-\d{2}-\d{2}$/.test(valor || '');
+
+// Troca de uma data do De/Até (as duas telas usam): ignora data incompleta e, se De passar de Até,
+// inverte.
+export function trocarDataPeriodo(datas, campo, valor) {
+  if (!dataPeriodoValida(valor)) return datas;
+  const novo = { ...datas, [campo]: valor };
+  return novo.ini <= novo.fim ? novo : { ini: novo.fim, fim: novo.ini };
 }
 
 // Só as obras com alguma etapa dentro do período (as de fora não aparecem — nem no Gantt, nem nos
-// cards). Etapa sem fim conhecido conta só o mês de início, como no Gantt. `periodo` null = todas.
+// cards). `periodo` null = todas.
 export function filtrarPeriodo(obras, periodo) {
   if (!periodo) return obras;
-  const de = `${periodo.ini}-01`;
-  const ate = somarDias(somarMeses(`${periodo.fim}-01`, 1), -1);
-  return obras.filter((o) => [...o.segmentos, ...(o.antes || [])].some((s) => s.inicio <= ate && (s.fim || s.inicio) >= de));
+  return obras.filter((o) => [...o.segmentos, ...(o.antes || [])].some((s) => noPeriodo(s, periodo)));
 }
 
 // As obras (centros com Tipo = Obra), cada uma com os segmentos e a situação de hoje: com

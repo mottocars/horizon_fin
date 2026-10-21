@@ -13,11 +13,13 @@ import { nomeExibicaoEmpresa } from '../../../utils/empresa';
 import { useEmpresaTravada } from '../../../hooks/useEmpresaTravada';
 import GanttObras, { LegendaGantt, ZOOMS_GANTT } from '../../Operacoes/CronogramasObras/GanttObras';
 import CardsCarteira from '../../Operacoes/CronogramasObras/CardsCarteira';
+import CampoDataPeriodo from '../../Operacoes/CronogramasObras/CampoDataPeriodo';
 import {
   FILTROS_SITUACAO,
   filtrarPeriodo,
   filtrarSituacao,
   isoHoje,
+  mesesDoPeriodo,
   montarObras,
   naRecorte,
   nomeObra,
@@ -27,6 +29,7 @@ import {
   periodoPadrao,
   resumoCarteira,
   rotuloRecorte,
+  trocarDataPeriodo,
 } from '../../Operacoes/CronogramasObras/cronogramaObras';
 import { mesAno } from '../../Operacoes/CronogramasObras/formatos';
 import '../EconomicoFinanceiro/fluxo/painel.css';
@@ -90,14 +93,10 @@ export default function CronogramasObrasDashboard() {
   const [estado, setEstado] = useState('carregando'); // carregando | ok | erro
   const [erro, setErro] = useState('');
   const [zoom, setZoom] = useState('mensal'); // abre no mês a mês (pedido do usuário)
-  const [periodo, setPeriodo] = useState(periodoPadrao); // De/Até do Mês a mês
-  const mudarPeriodo = (campo, valor) => {
-    if (!valor) return;
-    setPeriodo((p) => {
-      const novo = { ...p, [campo]: valor };
-      return novo.ini <= novo.fim ? novo : { ini: novo.fim, fim: novo.ini };
-    });
-  };
+  // De/Até do Mês a mês: digitado com dia, mês e ano, mas só mês e ano valem (`periodo` em 'AAAA-MM').
+  const [datasPeriodo, setDatasPeriodo] = useState(periodoPadrao);
+  const periodo = useMemo(() => mesesDoPeriodo(datasPeriodo), [datasPeriodo]);
+  const mudarPeriodo = (campo, valor) => setDatasPeriodo((d) => trocarDataPeriodo(d, campo, valor));
   const [destaque, setDestaque] = useState(null);
   const [selecionada, setSelecionada] = useState(null); // sienge_id da obra clicada no Gantt
   const [telaCheia, setTelaCheia] = useState(false);
@@ -224,19 +223,19 @@ export default function CronogramasObrasDashboard() {
   const obrasVersaoPeriodo = useMemo(() => (obrasVersao ? filtrarPeriodo(obrasVersao, periodoAtivo) : null), [obrasVersao, periodoAtivo]);
   const baseGantt = obrasVersaoPeriodo || obrasPeriodo;
   const r = useMemo(() => resumoCarteira(obrasPeriodo, etapas), [obrasPeriodo, etapas]);
-  const recorte = rotuloRecorte(destaque, etapas);
+  const recorte = rotuloRecorte(destaque, etapas, periodoAtivo);
 
-  // Cards dinâmicos (pedido do usuário): card de etapa clicado → o Gantt fica só com as obras dela
-  // hoje e VGV e unidades somam só elas; obra clicada no Gantt → todos os cards mostram só ela (o
+  // Cards dinâmicos (pedido do usuário): card de etapa clicado → o Gantt fica só com as obras que
+  // estiveram nela em algum momento do período (naRecorte) e VGV e unidades somam só elas; obra clicada no Gantt → todos os cards mostram só ela (o
   // filtro da etapa continua no Gantt).
   const obraSelecionada = baseGantt.find((o) => o.centro.sienge_id === selecionada) || null;
   const rCards = useMemo(() => (obraSelecionada ? resumoCarteira([obraSelecionada], etapas) : r), [obraSelecionada, etapas, r]);
   const topo = obraSelecionada
     ? numerosTopo([obraSelecionada], 'da obra')
     : recorte
-      ? numerosTopo(obrasPeriodo.filter((o) => naRecorte(o, destaque)), recorte.topo)
+      ? numerosTopo(obrasPeriodo.filter((o) => naRecorte(o, destaque, periodoAtivo)), recorte.topo)
       : numerosTopo(obrasPeriodo);
-  const obrasGantt = recorte ? baseGantt.filter((o) => naRecorte(o, destaque)) : baseGantt;
+  const obrasGantt = recorte ? baseGantt.filter((o) => naRecorte(o, destaque, periodoAtivo)) : baseGantt;
   const rGantt = recorte || obrasVersao ? resumoCarteira(obrasGantt, etapas) : r;
   const destacar = (id) => {
     setSelecionada(null);
@@ -302,11 +301,11 @@ export default function CronogramasObrasDashboard() {
             <>
               <div className="ctl">
                 <label htmlFor="f-de">De</label>
-                <input id="f-de" type="month" value={periodo.ini} onChange={(e) => mudarPeriodo('ini', e.target.value)} disabled={!empresaId} />
+                <CampoDataPeriodo id="f-de" value={datasPeriodo.ini} onChange={(valor) => mudarPeriodo('ini', valor)} disabled={!empresaId} />
               </div>
               <div className="ctl">
                 <label htmlFor="f-ate">Até</label>
-                <input id="f-ate" type="month" value={periodo.fim} onChange={(e) => mudarPeriodo('fim', e.target.value)} disabled={!empresaId} />
+                <CampoDataPeriodo id="f-ate" value={datasPeriodo.fim} onChange={(valor) => mudarPeriodo('fim', valor)} disabled={!empresaId} />
               </div>
             </>
           )}
