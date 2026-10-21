@@ -263,7 +263,7 @@ const ROTINAS = [
   },
   {
     chave: 'prevision_dashboards',
-    modulo: 'Obras (DFC e Cronogramas)',
+    modulo: 'DFC Construtoras', // junto das demais do DFC (pedido do usuário); também alimenta os Cronogramas Obras
     nome: 'Avanço e curva S das obras (Prevision)',
     descricao:
       'Busca no Prevision o dashboard de cada obra com Código Prevision (aba Centros Custos) e atualiza o avanço previsto mês a mês (DFC Construtoras › Avanços, base da Projeção CEF) e a curva S de base que define os atrasos (Cronogramas Obras). A mesma sincronização de Integrações › Prevision.',
