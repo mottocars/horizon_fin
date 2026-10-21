@@ -3618,6 +3618,7 @@ CREATE TABLE cronograma_config (
     atraso_regra         VARCHAR(15) CHECK (atraso_regra IN ('FIXA', 'PLANEJAMENTO')),
     atraso_meses         INTEGER CHECK (atraso_meses > 0),
     atraso_sistema       VARCHAR(20) CHECK (atraso_sistema IN ('PREVISION')),
+    atraso_etapa_id      INTEGER REFERENCES mascara_itens(id) ON DELETE SET NULL,   -- etapa que representa a construção
     atraso_cor           VARCHAR(7),   -- cor dos meses em atraso (NULL = padrão, vermelha)
     zapi_integracao_id   INTEGER REFERENCES integracoes_zapi(id) ON DELETE SET NULL,
     atualizado_por       INTEGER REFERENCES usuarios(id) ON DELETE SET NULL,

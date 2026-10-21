@@ -1,5 +1,5 @@
 import { corPadrao } from '../../../utils/coresPadrao';
-import { duracaoEtapa, fimEtapa } from '../../CentrosCusto/cronogramaDatas';
+import { duracaoEtapa, fimEtapa, mesesEntre, somarDias, somarMeses } from '../../CentrosCusto/cronogramaDatas';
 
 // Contas da carteira de obras — usadas na aba Cronogramas de Operações > Cronogramas Obras e no
 // dashboard Cronogramas de Obras (as duas telas mostram os mesmos números e o mesmo Gantt). O
@@ -14,10 +14,30 @@ export function plural(n, um, varios) {
   return `${n.toLocaleString('pt-BR')} ${n === 1 ? um : varios}`;
 }
 
+// Cor dos meses em atraso quando ninguém escolheu outra na aba Configurações (atraso_cor NULL).
+export const COR_ATRASO_PADRAO = '#dc2626';
+
+// Regra de Atraso da Construção (aba Configurações; `atraso` da lista de /cronograma-centros), na
+// etapa que representa a construção: o dia em que o atraso começa (`desde`) — regra fixa: passados
+// os meses da regra desde o início da etapa; planejamento: o mês seguinte àquele em que a curva S
+// de base do Prevision chega a 100% (`centro.prevision_base_100`) — e quantos meses da etapa ficam
+// dali em diante (`meses`; 0 = no prazo). `desde` null: sem como medir (obra sem a curva do Prevision).
+function prazoConstrucao(centro, inicio, fim, atraso) {
+  const base = { regra: atraso.regra, limite: atraso.meses, base100: centro.prevision_base_100, cor: atraso.cor || COR_ATRASO_PADRAO };
+  let desde = null;
+  if (atraso.regra === 'FIXA') desde = somarMeses(inicio, atraso.meses);
+  else if (centro.prevision_base_100) desde = somarMeses(`${centro.prevision_base_100.slice(0, 8)}01`, 1);
+  if (!desde) return { ...base, desde: null, meses: 0 };
+  if (desde < inicio) desde = inicio; // 100% antes de a construção começar: a etapa inteira atrasada
+  const meses = fim && desde <= fim ? Math.max(1, mesesEntre(desde, somarDias(fim, 1))) : 0;
+  return { ...base, desde, meses };
+}
+
 // Segmentos da obra: um por etapa com data de início. Fim = véspera do início da seguinte (ou o
 // fim gravado); na última, o término — as mesmas regras do Histórico de Etapas (cronogramaDatas).
-// Sem fim conhecido, a etapa fica "em aberto".
-export function montarSegmentos(centro, etapas) {
+// Sem fim conhecido, a etapa fica "em aberto". A etapa da construção leva o `prazo`
+// (prazoConstrucao) quando a empresa tem a Regra de Atraso da Construção.
+export function montarSegmentos(centro, etapas, atraso = null) {
   return etapas
     .map((etapa, i) => {
       const inicio = centro.datas[etapa.id];
@@ -29,13 +49,15 @@ export function montarSegmentos(centro, etapas) {
         inicioSeguinte: ultima ? null : centro.datas[etapas[i + 1].id],
         fim: ultima ? centro.data_termino : centro.fins?.[etapa.id],
       };
+      const fim = fimEtapa(datas);
       return {
         etapa,
         cor: etapa.cor || corPadrao(i),
         inicio,
-        fim: fimEtapa(datas),
+        fim,
         duracao: duracaoEtapa(datas),
         unidade: ultima ? 'ano' : 'mês',
+        prazo: atraso && atraso.etapaId === etapa.id ? prazoConstrucao(centro, inicio, fim, atraso) : null,
       };
     })
     .filter(Boolean);
@@ -54,12 +76,13 @@ export function situacaoHoje(segmentos, hoje) {
 export const naEtapa = (obra, etapaId) => obra.situacao.tipo === 'etapa' && obra.situacao.segmento.etapa.id === etapaId;
 
 // As obras (centros com Tipo = Obra), cada uma com os segmentos e a situação de hoje: com
-// cronograma primeiro, pela data de início da primeira etapa; sem cronograma no fim.
-export function montarObras(centros, etapas, hoje) {
+// cronograma primeiro, pela data de início da primeira etapa; sem cronograma no fim. `atraso`: a
+// Regra de Atraso da Construção da empresa (null = sem regra).
+export function montarObras(centros, etapas, hoje, atraso = null) {
   return centros
     .filter((c) => c.natureza === 'OBRA')
     .map((centro) => {
-      const segmentos = montarSegmentos(centro, etapas);
+      const segmentos = montarSegmentos(centro, etapas, atraso);
       return { centro, segmentos, situacao: situacaoHoje(segmentos, hoje) };
     })
     .sort((a, b) => {

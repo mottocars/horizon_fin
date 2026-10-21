@@ -3,12 +3,13 @@ const service = require('./cronogramaConfig.service');
 
 const empresaIdSchema = z.coerce.number().int().positive('Empresa inválida.');
 
-// Regra fixa pede os meses; planejamento pede o sistema.
+// Regra fixa pede os meses; planejamento pede o sistema; as duas pedem a etapa da construção.
 const configSchema = z
   .object({
     atrasoRegra: z.enum(['FIXA', 'PLANEJAMENTO']).nullable(),
     atrasoMeses: z.union([z.null(), z.coerce.number().int('Informe um número inteiro de meses.').min(1, 'Informe pelo menos 1 mês.').max(600)]),
     atrasoSistema: z.enum(['PREVISION']).nullable(),
+    atrasoEtapaId: z.union([z.null(), z.coerce.number().int().positive()]).default(null),
     atrasoCor: z
       .union([z.null(), z.string().regex(/^#[0-9a-fA-F]{6}$/, 'Cor inválida.')])
       .transform((c) => (c ? c.toLowerCase() : null))
@@ -22,6 +23,9 @@ const configSchema = z
     }
     if (c.atrasoRegra === 'PLANEJAMENTO' && c.atrasoSistema === null) {
       ctx.addIssue({ code: 'custom', message: 'No planejamento, escolha o sistema.' });
+    }
+    if (c.atrasoRegra && c.atrasoEtapaId === null) {
+      ctx.addIssue({ code: 'custom', message: 'Informe qual etapa representa a construção.' });
     }
   });
 

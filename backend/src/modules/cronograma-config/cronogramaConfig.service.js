@@ -1,11 +1,12 @@
 const pool = require('../../config/db');
 const saldosService = require('../saldo-contas-bancarias/saldos.service');
+const etapasService = require('../etapas-centro-custo/etapasCentroCusto.service');
 
 // Aba Configurações de Cronogramas Obras (cronograma_config + cronograma_comunicar_usuarios — ver
 // database/migrations/2026-10-21-cronograma-configuracoes.sql). A comunicação segue o esquema da aba
 // Configurações de Repasses CEF (comunicarRepasses.service.js): conexão Z-API de disparo e
-// destinatários. Por enquanto só guarda os parâmetros: a regra de atraso ainda não entra em nenhum
-// cálculo e o comunicado de alteração de cronograma ainda não é enviado.
+// destinatários. A regra de atraso da construção e a cor pintam os Gantts (ver atrasoDaEmpresa em
+// cronogramaCentros.service.js); o comunicado de alteração de cronograma ainda não é enviado.
 
 function erro(status, message) {
   const e = new Error(message);
@@ -24,9 +25,10 @@ async function conexoesZapi(empresaId) {
 }
 
 async function getConfig(empresaId) {
-  const [elegiveis, opcoesZapi, { rows: selecionados }, { rows: config }] = await Promise.all([
+  const [elegiveis, opcoesZapi, etapas, { rows: selecionados }, { rows: config }] = await Promise.all([
     saldosService.listUsuariosElegiveisComunicar(empresaId),
     conexoesZapi(empresaId),
+    etapasService.list(empresaId),
     pool.query('SELECT usuario_id FROM cronograma_comunicar_usuarios WHERE empresa_id = $1', [empresaId]),
     pool.query('SELECT * FROM cronograma_config WHERE empresa_id = $1', [empresaId]),
   ]);
@@ -35,11 +37,13 @@ async function getConfig(empresaId) {
     atrasoRegra: c.atraso_regra ?? null,
     atrasoMeses: c.atraso_meses ?? null,
     atrasoSistema: c.atraso_sistema ?? null,
+    atrasoEtapaId: c.atraso_etapa_id ?? null,
     atrasoCor: c.atraso_cor ?? null,
     zapiIntegracaoId: c.zapi_integracao_id ?? null,
     selecionados: selecionados.map((r) => r.usuario_id),
     elegiveis,
     opcoesZapi,
+    opcoesEtapas: etapas.map((e) => ({ id: e.id, nome: e.descricao })),
   };
 }
 
@@ -52,22 +56,26 @@ async function salvarConfig(empresaId, dados, usuarioId) {
   if (dados.zapiIntegracaoId !== null && !(await conexoesZapi(empresaId)).some((c) => c.id === dados.zapiIntegracaoId)) {
     throw erro(400, 'Conexão Z-API inválida para esta empresa.');
   }
+  if (dados.atrasoEtapaId !== null && !(await etapasService.list(empresaId)).some((e) => e.id === dados.atrasoEtapaId)) {
+    throw erro(400, 'Etapa inválida para esta empresa.');
+  }
 
   const client = await pool.connect();
   try {
     await client.query('BEGIN');
     await client.query(
-      `INSERT INTO cronograma_config (empresa_id, atraso_regra, atraso_meses, atraso_sistema, atraso_cor, zapi_integracao_id, atualizado_por, atualizado_em)
-       VALUES ($1, $2, $3, $4, $5, $6, $7, NOW())
+      `INSERT INTO cronograma_config (empresa_id, atraso_regra, atraso_meses, atraso_sistema, atraso_etapa_id, atraso_cor, zapi_integracao_id, atualizado_por, atualizado_em)
+       VALUES ($1, $2, $3, $4, $5, $6, $7, $8, NOW())
        ON CONFLICT (empresa_id) DO UPDATE SET
          atraso_regra = EXCLUDED.atraso_regra,
          atraso_meses = EXCLUDED.atraso_meses,
          atraso_sistema = EXCLUDED.atraso_sistema,
+         atraso_etapa_id = EXCLUDED.atraso_etapa_id,
          atraso_cor = EXCLUDED.atraso_cor,
          zapi_integracao_id = EXCLUDED.zapi_integracao_id,
          atualizado_por = EXCLUDED.atualizado_por,
          atualizado_em = NOW()`,
-      [empresaId, dados.atrasoRegra, dados.atrasoMeses, dados.atrasoSistema, dados.atrasoCor, dados.zapiIntegracaoId, usuarioId]
+      [empresaId, dados.atrasoRegra, dados.atrasoMeses, dados.atrasoSistema, dados.atrasoEtapaId, dados.atrasoCor, dados.zapiIntegracaoId, usuarioId]
     );
     await client.query('DELETE FROM cronograma_comunicar_usuarios WHERE empresa_id = $1', [empresaId]);
     if (dados.usuarioIds.length) {

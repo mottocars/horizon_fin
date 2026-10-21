@@ -1,7 +1,9 @@
 -- Operações > Cronogramas Obras > aba Configurações (pedido do usuário), por empresa:
--- - Regra de Atraso de Obra: o que conta pra dizer que uma obra está atrasada — uma regra fixa
---   (`atraso_meses`: com quantos meses de obra ela passa a contar como atrasada) ou o planejamento
---   de um sistema (`atraso_sistema`: por enquanto só o Prevision).
+-- - Regra de Atraso da Construção: o que conta pra dizer que a construção de uma obra está
+--   atrasada — uma regra fixa (`atraso_meses`: passados tantos meses da etapa, o resto é atraso) ou
+--   o planejamento de um sistema (`atraso_sistema`: por enquanto só o Prevision — passou do mês em
+--   que a curva S de base chega a 100%, é atraso) — e qual etapa da máscara Etapas do Centro de
+--   Custo representa a construção (`atraso_etapa_id`).
 -- - Cor dos meses em atraso (`atraso_cor`, #rrggbb; NULL = a cor padrão, vermelha).
 -- - Comunicação de alteração de cronograma — mesmo esquema da aba Configurações de Repasses CEF:
 --   a conexão de WhatsApp (Z-API) que dispara o aviso quando o cronograma de uma obra muda e os
@@ -13,6 +15,7 @@ CREATE TABLE IF NOT EXISTS cronograma_config (
     atraso_regra         VARCHAR(15) CHECK (atraso_regra IN ('FIXA', 'PLANEJAMENTO')),
     atraso_meses         INTEGER CHECK (atraso_meses > 0),
     atraso_sistema       VARCHAR(20) CHECK (atraso_sistema IN ('PREVISION')),
+    atraso_etapa_id      INTEGER REFERENCES mascara_itens(id) ON DELETE SET NULL,
     atraso_cor           VARCHAR(7),
     zapi_integracao_id   INTEGER REFERENCES integracoes_zapi(id) ON DELETE SET NULL,
     atualizado_por       INTEGER REFERENCES usuarios(id) ON DELETE SET NULL,

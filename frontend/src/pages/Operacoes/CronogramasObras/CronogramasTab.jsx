@@ -19,6 +19,7 @@ import { isoHoje, montarObras, naEtapa, numerosTopo, plural, resumoCarteira } fr
 export default function CronogramasTab({ empresaId }) {
   const [etapas, setEtapas] = useState([]);
   const [centros, setCentros] = useState([]);
+  const [atraso, setAtraso] = useState(null); // Regra de Atraso da Construção (aba Configurações)
   const [carregando, setCarregando] = useState(true);
   const [erroCarga, setErroCarga] = useState('');
   const [zoom, setZoom] = useState('geral');
@@ -33,6 +34,7 @@ export default function CronogramasTab({ empresaId }) {
       .then((r) => {
         setEtapas(r.etapas);
         setCentros(r.centros);
+        setAtraso(r.atraso);
       })
       .catch((err) => setErroCarga(err.response?.data?.message || 'Não foi possível carregar o cronograma.'))
       .finally(() => setCarregando(false));
@@ -41,11 +43,12 @@ export default function CronogramasTab({ empresaId }) {
   useEffect(() => {
     setEtapas([]);
     setCentros([]);
+    setAtraso(null);
     setDestaque(null);
     carregar();
   }, [carregar]);
 
-  const obras = useMemo(() => montarObras(centros, etapas, isoHoje()), [centros, etapas]);
+  const obras = useMemo(() => montarObras(centros, etapas, isoHoje(), atraso), [centros, etapas, atraso]);
   const r = useMemo(() => resumoCarteira(obras, etapas), [obras, etapas]);
 
   if (!empresaId) {
@@ -124,7 +127,7 @@ export default function CronogramasTab({ empresaId }) {
             </p>
           </div>
           <div className="flex flex-wrap items-center gap-x-4 gap-y-2">
-            <LegendaGantt etapas={etapas} />
+            <LegendaGantt etapas={etapas} atraso={atraso} />
             <div className="inline-flex rounded-lg border border-gray-200 bg-white p-0.5">
               {ZOOMS_GANTT.map((z) => (
                 <button

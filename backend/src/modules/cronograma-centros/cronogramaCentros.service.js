@@ -52,10 +52,37 @@ function cronogramaDoCentro(historico, etapas) {
   return { datas: h.inicios, fins: h.fins, data_termino: (ultima && h.fins[ultima.id]) || null };
 }
 
+// Regra de Atraso da Construção da empresa (aba Configurações — cronograma_config), pros Gantts
+// pintarem os meses em atraso da etapa da construção: null sem regra ou sem a etapa. A conta dos
+// meses fica na tela (cronogramaObras.js); daqui vai, na regra de planejamento, o dia em que a curva
+// S de base do Prevision (na visão do orçamento escolhida no cadastro do centro) chega a 100% pela
+// primeira vez — Map sienge_id -> data.
+async function atrasoDaEmpresa(empresaId) {
+  const { rows } = await pool.query(
+    `SELECT atraso_regra, atraso_meses, atraso_sistema, atraso_etapa_id, atraso_cor FROM cronograma_config
+      WHERE empresa_id = $1 AND atraso_regra IS NOT NULL AND atraso_etapa_id IS NOT NULL`,
+    [empresaId]
+  );
+  const c = rows[0];
+  if (!c) return { atraso: null, base100: new Map() };
+  const atraso = { regra: c.atraso_regra, meses: c.atraso_meses, sistema: c.atraso_sistema, etapaId: c.atraso_etapa_id, cor: c.atraso_cor };
+  if (c.atraso_regra !== 'PLANEJAMENTO') return { atraso, base100: new Map() };
+  const { rows: curvas } = await pool.query(
+    `SELECT s.sienge_id, MIN(s.data) AS data
+       FROM prevision_dashboard_scurve s
+       JOIN centros_custo_sienge c ON c.empresa_id = s.empresa_id AND c.sienge_id = s.sienge_id
+        AND s.primary_view = c.prevision_primary_view
+      WHERE s.empresa_id = $1 AND s.base >= 1
+      GROUP BY s.sienge_id`,
+    [empresaId]
+  );
+  return { atraso, base100: new Map(curvas.map((r) => [r.sienge_id, r.data])) };
+}
+
 // Lista (só leitura) da aba Centros de Custos de Cronogramas Obras: as etapas da empresa (máscara
 // Etapas do Centro de Custo, na ordem) e todos os centros de custo dela — mesma lista e ordem da aba
 // Centros Custos da DFC (dfcCentros.service.js) —, cada um com Tipo, VGV, nº de unidades e o
-// cronograma.
+// cronograma. Vai junto a regra de atraso (atrasoDaEmpresa) e, por centro, `prevision_base_100`.
 async function list(empresaId) {
   const etapas = await etapasService.list(empresaId);
   const { rows: centros } = await pool.query(
@@ -65,7 +92,16 @@ async function list(empresaId) {
     [empresaId]
   );
   const historico = await historicoPorCentro(empresaId);
-  return { etapas, centros: centros.map((c) => ({ ...c, ...cronogramaDoCentro(historico.get(c.sienge_id), etapas) })) };
+  const { atraso, base100 } = await atrasoDaEmpresa(empresaId);
+  return {
+    etapas,
+    atraso,
+    centros: centros.map((c) => ({
+      ...c,
+      ...cronogramaDoCentro(historico.get(c.sienge_id), etapas),
+      prevision_base_100: base100.get(c.sienge_id) || null,
+    })),
+  };
 }
 
 // Grava os inícios que mudaram (data null apaga a etapa do histórico) e, se veio, o término (fim da

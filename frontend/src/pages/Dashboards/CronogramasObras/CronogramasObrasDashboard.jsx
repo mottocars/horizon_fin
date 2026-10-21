@@ -58,6 +58,7 @@ export default function CronogramasObrasDashboard() {
   // ─── Cronograma ───────────────────────────────────────────────────────────────────────────────
   const [etapas, setEtapas] = useState([]);
   const [centros, setCentros] = useState([]);
+  const [atraso, setAtraso] = useState(null); // Regra de Atraso da Construção (aba Configurações)
   const [estado, setEstado] = useState('carregando'); // carregando | ok | erro
   const [erro, setErro] = useState('');
   const [zoom, setZoom] = useState('geral');
@@ -97,6 +98,7 @@ export default function CronogramasObrasDashboard() {
   const carregar = useCallback(() => {
     setEtapas([]);
     setCentros([]);
+    setAtraso(null);
     setDestaque(null);
     setSelecionada(null);
     if (!empresaId) return;
@@ -105,6 +107,7 @@ export default function CronogramasObrasDashboard() {
       .then((r) => {
         setEtapas(r.etapas);
         setCentros(r.centros);
+        setAtraso(r.atraso);
         setEstado('ok');
       })
       .catch((err) => {
@@ -120,7 +123,7 @@ export default function CronogramasObrasDashboard() {
   const hoje = isoHoje();
   // Só as obras com alguma data de etapa (pedido do usuário): as sem cronograma saem do dashboard
   // inteiro — cards, etiqueta e Gantt. Na aba de Operações elas continuam, com o convite pra preencher.
-  const obras = useMemo(() => montarObras(centros, etapas, hoje).filter((o) => o.segmentos.length), [centros, etapas, hoje]);
+  const obras = useMemo(() => montarObras(centros, etapas, hoje, atraso).filter((o) => o.segmentos.length), [centros, etapas, hoje, atraso]);
   const r = useMemo(() => resumoCarteira(obras, etapas), [obras, etapas]);
   const etapaDestacada = etapas.find((e) => e.id === destaque);
 
@@ -217,7 +220,7 @@ export default function CronogramasObrasDashboard() {
                 </p>
               </div>
               <div className="gantt-barra">
-                <LegendaGantt etapas={etapas} />
+                <LegendaGantt etapas={etapas} atraso={atraso} />
                 {/* Hoje, zoom e tela cheia — como na barra do Gantt do Plano de Voo (pedido do usuário) */}
                 <div className="gantt-acoes">
                   <button type="button" className="btn ghost icone com-texto" onClick={irParaHoje} title="Levar a régua até hoje">

@@ -1,7 +1,7 @@
 import { Fragment, forwardRef, useEffect, useImperativeHandle, useMemo, useRef, useState } from 'react';
 import { corPadrao } from '../../../utils/coresPadrao';
 import { somarDias, somarMeses } from '../../CentrosCusto/cronogramaDatas';
-import { isoHoje, naEtapa } from './cronogramaObras';
+import { COR_ATRASO_PADRAO, isoHoje, naEtapa, plural } from './cronogramaObras';
 import { MESES_ABREV, mesAno, moeda } from './formatos';
 
 // ---------------------------------------------------------------------------------------
@@ -18,6 +18,8 @@ import { MESES_ABREV, mesAno, moeda } from './formatos';
 //   no rodapé da área que rola na vertical (como no Plano de Voo): `-bottom-6` quando essa área tem
 //   p-6 (o <main> das telas comuns, a tela cheia), `bottom-0` no dashboard (o <main> sem padding).
 // - `ref` expõe `irParaHoje()` (o botão "Hoje" do dashboard).
+// - Meses em atraso da construção (Regra de Atraso da Construção — aba Configurações): vêm no
+//   `prazo` do segmento (montarObras) e saem na cor do atraso.
 // ---------------------------------------------------------------------------------------
 
 export const ZOOMS_GANTT = [
@@ -56,8 +58,8 @@ function duracaoTexto(seg) {
   return `${n} ${n === 1 ? 'mês' : 'meses'}`;
 }
 
-// Legenda: retângulo da cor de cada etapa (a forma da marca) e a linha de hoje.
-export function LegendaGantt({ etapas }) {
+// Legenda: retângulo da cor de cada etapa (a forma da marca), o atraso (com a regra) e a linha de hoje.
+export function LegendaGantt({ etapas, atraso = null }) {
   return (
     <div className="flex flex-wrap items-center gap-x-3 gap-y-1 text-[11px] text-gray-600">
       {etapas.map((etapa, i) => (
@@ -66,6 +68,12 @@ export function LegendaGantt({ etapas }) {
           {etapa.descricao || 'Sem nome'}
         </span>
       ))}
+      {atraso && (
+        <span className="flex items-center gap-1.5">
+          <span className="h-2.5 w-3.5 rounded-[3px]" style={{ backgroundColor: atraso.cor || COR_ATRASO_PADRAO }} />
+          Atraso
+        </span>
+      )}
       <span className="flex items-center gap-1.5 text-gray-500">
         <span className="h-3 w-0.5 rounded-full bg-red-400" />
         Hoje
@@ -146,6 +154,11 @@ function BarraObra({ segmentos, ini, px, mensal, onDica }) {
     // virada de mês, alinhado à régua; mais suave quando os meses são estreitos (visão geral).
     const linha = `rgba(255,255,255,${px < 14 ? 0.2 : 0.5})`;
     const desvio = ((esquerda % px) + px) % px;
+    const linhasMes = `linear-gradient(to right, transparent ${px - 1}px, ${linha} ${px - 1}px)`;
+    // Meses em atraso da construção (pedido do usuário): dali até o fim, a cor do atraso — por baixo
+    // das linhas de mês e da contagem, que continuam valendo.
+    const xAtraso = seg.prazo?.meses ? Math.max(0, xDe(seg.prazo.desde) - esquerda) : null;
+    const corNumeroAtraso = xAtraso === null ? null : corDoTexto(seg.prazo.cor);
     return (
       <div
         key={seg.etapa.id}
@@ -158,10 +171,14 @@ function BarraObra({ segmentos, ini, px, mensal, onDica }) {
           width: largura,
           borderRadius: raio,
           backgroundColor: seg.cor,
-          backgroundImage: `linear-gradient(to right, transparent ${px - 1}px, ${linha} ${px - 1}px)`,
-          backgroundSize: `${px}px 100%`,
-          backgroundPosition: `${-desvio}px 0`,
-          backgroundRepeat: 'repeat-x',
+          ...(xAtraso === null
+            ? { backgroundImage: linhasMes, backgroundSize: `${px}px 100%`, backgroundPosition: `${-desvio}px 0`, backgroundRepeat: 'repeat-x' }
+            : {
+                backgroundImage: `${linhasMes}, linear-gradient(to right, transparent ${xAtraso}px, ${seg.prazo.cor} ${xAtraso}px)`,
+                backgroundSize: `${px}px 100%, 100% 100%`,
+                backgroundPosition: `${-desvio}px 0, 0 0`,
+                backgroundRepeat: 'repeat-x, no-repeat',
+              }),
         }}
       >
         {/* o nome gruda na borda visível ao rolar (não fica cortado sob a coluna das obras) */}
@@ -181,7 +198,7 @@ function BarraObra({ segmentos, ini, px, mensal, onDica }) {
             <span
               key={k}
               className="pointer-events-none absolute inset-y-0 flex items-center justify-center text-[10px] font-medium tabular-nums"
-              style={{ left: x, width: px, color: corNumero, opacity: 0.6 }}
+              style={{ left: x, width: px, color: xAtraso !== null && x + px / 2 > xAtraso ? corNumeroAtraso : corNumero, opacity: 0.6 }}
             >
               {k + 1}
             </span>
@@ -216,8 +233,34 @@ function DicaSegmento({ seg, centro }) {
         <span className="h-0.5 w-3 shrink-0 rounded-full" style={{ backgroundColor: seg.cor }} />
         {seg.etapa.descricao} · {duracaoTexto(seg)}
       </p>
+      {seg.prazo && <LinhaPrazo prazo={seg.prazo} />}
       <p className="mt-0.5 truncate text-gray-400">{centro.name}</p>
     </>
+  );
+}
+
+// Na dica da etapa da construção: os meses em atraso (ou até quando vai o prazo) e de onde vem a conta.
+function LinhaPrazo({ prazo }) {
+  const regra =
+    prazo.regra === 'FIXA'
+      ? `Regra fixa: ${plural(prazo.limite, 'mês', 'meses')} de construção`
+      : prazo.base100
+        ? `Planejamento Prevision: base 100% em ${mesAno(prazo.base100)}`
+        : 'Planejamento Prevision';
+  return (
+    <div className="mt-1 border-t border-gray-100 pt-1">
+      {!prazo.desde ? (
+        <p className="text-gray-600">Sem a curva S do Prevision para medir o atraso</p>
+      ) : prazo.meses ? (
+        <p className="flex items-center gap-1.5 text-gray-600">
+          <span className="h-2 w-2 shrink-0 rounded-full" style={{ backgroundColor: prazo.cor }} />
+          <b className="font-semibold text-gray-900">{plural(prazo.meses, 'mês', 'meses')} em atraso</b> · desde {mesAno(prazo.desde)}
+        </p>
+      ) : (
+        <p className="text-gray-600">No prazo · até {mesAno(somarDias(prazo.desde, -1))}</p>
+      )}
+      <p className="text-gray-400">{regra}</p>
+    </div>
   );
 }
 
@@ -225,6 +268,8 @@ function DicaSegmento({ seg, centro }) {
 function DicaObra({ obra, acao }) {
   const { centro, situacao } = obra;
   const vgv = moeda(centro.valor_geral_vendas, { centavos: true });
+  const etapaPrazo = obra.segmentos.find((s) => s.prazo);
+  const prazo = etapaPrazo?.prazo;
   return (
     <>
       <p className="truncate text-[13px] font-semibold text-gray-900">{centro.name}</p>
@@ -244,6 +289,12 @@ function DicaObra({ obra, acao }) {
               ? 'Concluída'
               : 'Sem datas no cronograma'}
       </p>
+      {prazo?.meses > 0 && (
+        <p className="flex items-center gap-1.5 text-gray-600">
+          <span className="h-2.5 w-2.5 shrink-0 rounded-full" style={{ backgroundColor: prazo.cor }} />
+          {plural(prazo.meses, 'mês', 'meses')} de atraso na {etapaPrazo.etapa.descricao}
+        </p>
+      )}
       {acao && <p className="mt-0.5 text-gray-400">{acao}</p>}
     </>
   );

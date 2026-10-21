@@ -5,19 +5,17 @@ import Button from '../../../components/Button';
 import SearchableSelect from '../../../components/SearchableSelect';
 import TransferList from '../../../components/TransferList';
 import { getCronogramaConfig, salvarCronogramaConfig } from '../../../api/cronogramaConfig.api';
+import { COR_ATRASO_PADRAO } from './cronogramaObras';
 
 const ROTULO_PERMISSAO = { MASTER: 'Master', BASICO: 'Básico' };
 
 const REGRAS_ATRASO = [
-  { value: 'FIXA', titulo: 'Regra fixa', texto: 'A obra conta como atrasada a partir de um número fixo de meses de obra.' },
-  { value: 'PLANEJAMENTO', titulo: 'Planejamento', texto: 'O atraso é contado pelo planejamento de um sistema de planejamento da obra.' },
+  { value: 'FIXA', titulo: 'Regra fixa', texto: 'Passado um número fixo de meses da construção, o que vier depois conta como atraso.' },
+  { value: 'PLANEJAMENTO', titulo: 'Planejamento', texto: 'O que passar do mês em que a curva S de base do sistema de planejamento chega a 100% conta como atraso.' },
 ];
 
 // Hoje só o Prevision; a combobox fica pronta pra outros sistemas (pedido do usuário).
 const SISTEMAS_PLANEJAMENTO = [{ value: 'PREVISION', label: 'Prevision' }];
-
-// Cor dos meses em atraso quando ninguém escolheu outra (atraso_cor NULL).
-const COR_ATRASO_PADRAO = '#dc2626';
 
 // Mesmo par âmbar (vazio)/azul (preenchido) da aba Configurações de Repasses CEF.
 const COR_CAMPO_VAZIO = 'border-amber-300 bg-amber-50 hover:border-amber-400';
@@ -61,16 +59,19 @@ function SectionHeader({ titulo, texto }) {
 // Aba Configurações de Operações > Cronogramas Obras (pedido do usuário) — mesmo padrão da aba
 // Configurações de Repasses CEF (ConfiguracoesRepassesCef.jsx): um Card por parâmetro e um Salvar só
 // no fim. Parâmetros:
-// - Regra de Atraso de Obra: regra fixa (meses de obra) ou o planejamento de um sistema (Prevision);
-// - Cor dos meses em atraso (padrão vermelha);
+// - Regra de Atraso da Construção: regra fixa (meses de obra) ou o planejamento de um sistema
+//   (Prevision), e qual etapa representa a construção;
+// - Cor dos meses em atraso (padrão vermelha) — os Gantts pintam com ela os meses em atraso;
 // - Conexão de disparo e Destinatários do comunicado de alteração de cronograma — iguais aos de
 //   Repasses CEF (conexão Z-API e lista de transferência).
-// Por enquanto só guarda os parâmetros (ver cronogramaConfig.service.js).
+// O comunicado ainda não é enviado (ver cronogramaConfig.service.js).
 export default function ConfiguracoesCronogramas({ empresaId }) {
   const [carregando, setCarregando] = useState(true);
   const [atrasoRegra, setAtrasoRegra] = useState(null);
   const [atrasoMeses, setAtrasoMeses] = useState('');
   const [atrasoSistema, setAtrasoSistema] = useState(null);
+  const [etapaOpcoes, setEtapaOpcoes] = useState([]);
+  const [atrasoEtapaId, setAtrasoEtapaId] = useState(null);
   const [atrasoCor, setAtrasoCor] = useState(null);
   const [zapiOpcoes, setZapiOpcoes] = useState([]);
   const [zapiIntegracaoId, setZapiIntegracaoId] = useState(null);
@@ -84,6 +85,8 @@ export default function ConfiguracoesCronogramas({ empresaId }) {
     setAtrasoRegra(c.atrasoRegra);
     setAtrasoMeses(c.atrasoMeses ?? '');
     setAtrasoSistema(c.atrasoSistema);
+    setEtapaOpcoes(c.opcoesEtapas.map((e) => ({ value: e.id, label: e.nome || 'Sem nome' })));
+    setAtrasoEtapaId(c.atrasoEtapaId);
     setAtrasoCor(c.atrasoCor);
     setZapiOpcoes(c.opcoesZapi.map((z) => ({ value: z.id, label: z.nome })));
     setZapiIntegracaoId(c.zapiIntegracaoId);
@@ -125,6 +128,7 @@ export default function ConfiguracoesCronogramas({ empresaId }) {
         atrasoRegra,
         atrasoMeses: atrasoMeses === '' ? null : Number(atrasoMeses),
         atrasoSistema,
+        atrasoEtapaId,
         atrasoCor,
         zapiIntegracaoId,
         usuarioIds: selecionados.map(Number),
@@ -152,14 +156,14 @@ export default function ConfiguracoesCronogramas({ empresaId }) {
     <div className="space-y-4">
       <Card className="rounded-tl-none">
         <SectionHeader
-          titulo="Regra de Atraso de Obra"
-          texto="O que deve ser considerado para dizer que uma obra está atrasada: uma regra fixa, com quantos meses de obra ela passa a contar como atrasada, ou o planejamento feito num sistema de planejamento."
+          titulo="Regra de Atraso da Construção"
+          texto="O que deve ser considerado para dizer que a construção de uma obra está atrasada: uma regra fixa, com quantos meses de obra ela passa a contar como atrasada, ou o planejamento feito num sistema de planejamento. Os meses em atraso aparecem nos cronogramas na cor escolhida abaixo."
         />
         {carregando ? (
           <div className="mt-4 text-sm text-gray-400">Carregando...</div>
         ) : (
           <>
-            <div role="radiogroup" aria-label="Regra de atraso de obra" className="mt-4 grid max-w-2xl gap-3 sm:grid-cols-2">
+            <div role="radiogroup" aria-label="Regra de atraso da construção" className="mt-4 grid max-w-2xl gap-3 sm:grid-cols-2">
               {REGRAS_ATRASO.map((r) => {
                 const ativo = atrasoRegra === r.value;
                 return (
@@ -216,6 +220,25 @@ export default function ConfiguracoesCronogramas({ empresaId }) {
                 />
               </div>
             )}
+
+            {atrasoRegra && (
+              <div className="mt-4 max-w-xs">
+                <label className="mb-1 block text-sm font-medium text-gray-700">Etapa que representa a construção</label>
+                <SearchableSelect
+                  value={atrasoEtapaId ?? ''}
+                  onChange={alterado((v) => setAtrasoEtapaId(v === '' || v === null ? null : Number(v)))}
+                  options={etapaOpcoes}
+                  placeholder="Selecione a etapa"
+                  emptyMessage="Nenhuma etapa cadastrada (Cadastros › Máscaras › Etapas do Centro de Custo)."
+                  corClasses={corCampo(Boolean(atrasoEtapaId))}
+                />
+                <p className="mt-1.5 text-xs leading-relaxed text-gray-500">
+                  {atrasoRegra === 'FIXA'
+                    ? 'Os meses contam a partir do início desta etapa no Histórico de Etapas de cada obra.'
+                    : 'Os meses desta etapa depois do mês em que a curva S de base chega a 100% contam como atraso.'}
+                </p>
+              </div>
+            )}
           </>
         )}
       </Card>
@@ -223,7 +246,7 @@ export default function ConfiguracoesCronogramas({ empresaId }) {
       <Card>
         <SectionHeader
           titulo="Cor dos meses em atraso"
-          texto="Com que cor os meses de atraso de uma obra aparecem nas barras dos cronogramas. Sem escolha, fica a vermelha padrão."
+          texto="Com que cor os meses em atraso da construção aparecem nas barras dos cronogramas. Sem escolha, fica a vermelha padrão."
         />
         {carregando ? (
           <div className="mt-4 text-sm text-gray-400">Carregando...</div>
