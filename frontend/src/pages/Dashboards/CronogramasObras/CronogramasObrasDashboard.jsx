@@ -214,8 +214,17 @@ export default function CronogramasObrasDashboard() {
   );
   // "Mudanças da versão": o Gantt fica com as obras alteradas nela (como ficaram + como eram antes).
   const obrasVersao = useMemo(
-    () => (versaoDetalhe ? filtrarSituacao(obrasDaVersao(versaoDetalhe, hoje), situacao) : null),
-    [versaoDetalhe, hoje, situacao]
+    () => {
+      if (!versaoDetalhe) return null;
+      // A versão guarda as obras sem cidade/UF: pega do cadastro atual, pra agrupar por cidade igual.
+      const cadastro = new Map(centros.map((c) => [c.sienge_id, c]));
+      const comCidade = obrasDaVersao(versaoDetalhe, hoje).map((o) => {
+        const c = cadastro.get(o.centro.sienge_id);
+        return c ? { ...o, centro: { ...o.centro, cidade: c.cidade, uf: c.uf } } : o;
+      });
+      return filtrarSituacao(comCidade, situacao);
+    },
+    [versaoDetalhe, hoje, situacao, centros]
   );
   // Mês a mês: só as obras do período De/Até (cards e Gantt); Visão geral: todas.
   const periodoAtivo = zoom === 'mensal' ? periodo : null;
@@ -422,6 +431,7 @@ export default function CronogramasObrasDashboard() {
                   ref={ganttRef}
                   etapas={etapas}
                   obras={obrasGantt}
+                  agruparPorCidade
                   zoom={zoom}
                   selecionada={selecionada}
                   onSelecionarObra={selecionar}
