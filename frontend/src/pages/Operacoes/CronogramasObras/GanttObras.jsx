@@ -626,9 +626,9 @@ const GanttObras = forwardRef(function GanttObras(
                   }}
                   className="group relative flex h-7 cursor-pointer border-b border-gray-100 focus:outline-none"
                 >
-                  {/* só um demonstrativo, bem limpo (pedido do usuário): a mesma letra do nome da obra, linha mais baixa, sem fundo */}
+                  {/* só um demonstrativo, bem limpo (pedido do usuário): a mesma letra do nome da obra, linha mais baixa, fundo cinza claro */}
                   <div
-                    className="sticky left-0 z-20 flex shrink-0 items-center gap-1 border-r border-gray-200 bg-white px-3 transition-colors group-hover:bg-gray-50"
+                    className="sticky left-0 z-20 flex shrink-0 items-center gap-1 border-r border-gray-200 bg-gray-50 px-3 transition-colors group-hover:bg-gray-100"
                     style={{ width: LARGURA_NOMES }}
                   >
                     <ChevronRight size={12} className={`shrink-0 text-gray-400 transition-transform ${fechada ? '' : 'rotate-90'}`} />
@@ -637,7 +637,8 @@ const GanttObras = forwardRef(function GanttObras(
                     </span>
                     <span className="shrink-0 text-xs tabular-nums text-gray-400">· {lista.length}</span>
                   </div>
-                  <div style={{ width: larguraTempo }} />
+                  {/* fundo cinza claro (pedido do usuário) marcando a quebra; translúcido, deixa ver as divisas de mês e a linha de hoje */}
+                  <div className="flex-1 bg-gray-100/60" style={{ minWidth: larguraTempo }} />
                 </div>
                 {!fechada && lista.map((o) => linhaObra(o, true))}
               </Fragment>
