@@ -1,4 +1,4 @@
-import { lazy, Suspense, useState } from 'react';
+import { lazy, Suspense, useMemo, useState } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { Eye, EyeOff } from 'lucide-react';
 import { useAuth } from '../../auth/AuthContext';
@@ -8,6 +8,38 @@ import './login.css';
 // À direita, em telas largas, a vitrine com os títulos do site (carregada à parte, não pesa no login).
 // O botão Entrar usa o mesmo fundo da vitrine, na cor do tema que está na tela.
 const Vitrine = lazy(() => import('./Vitrine'));
+
+// Fundo da tela: o da vitrine (brilho, grade de planilha e células que acendem), nas cores claras originais do
+// login. As células caem em lugares sorteados da coluna do formulário.
+function Fundo() {
+  const celulas = useMemo(
+    () =>
+      Array.from({ length: 10 }, () => ({
+        col: Math.floor(Math.random() * 14),
+        lin: Math.floor(Math.random() * 22),
+        atraso: Math.random() * 9,
+        dur: 6 + Math.random() * 5,
+      })),
+    []
+  );
+  return (
+    <div className="login-fundo" aria-hidden="true">
+      <div className="login-fundo__brilho">
+        <i />
+        <i />
+      </div>
+      <div className="login-fundo__grade" />
+      <div className="login-fundo__celulas">
+        {celulas.map((c, i) => (
+          <span
+            key={i}
+            style={{ left: c.col * 44, top: c.lin * 44, animationDelay: `${c.atraso}s`, animationDuration: `${c.dur}s` }}
+          />
+        ))}
+      </div>
+    </div>
+  );
+}
 
 function saudacao() {
   const h = new Date().getHours();
@@ -57,7 +89,8 @@ export default function Login() {
   }
 
   return (
-    <div className="flex min-h-screen bg-white lg:p-3">
+    <div className="relative isolate flex min-h-screen lg:p-3">
+      <Fundo />
       <main className="flex w-full flex-col px-6 py-8 sm:px-12 lg:w-[42%] lg:max-w-150 lg:shrink-0 lg:px-14 xl:px-20">
         <div className="flex flex-1 items-center py-12">
           <div className="mx-auto w-full max-w-sm">
@@ -89,7 +122,7 @@ export default function Login() {
                   value={username}
                   onChange={(e) => setUsername(e.target.value)}
                   autoComplete="username"
-                  className="w-full rounded-lg border border-gray-200 h-11 px-3 text-sm focus:outline-none focus:ring-2 focus:ring-primary-100"
+                  className="w-full rounded-lg border border-gray-200 bg-white h-11 px-3 text-sm focus:outline-none focus:ring-2 focus:ring-primary-100"
                   placeholder="seu.usuario"
                 />
                 {formErrors.username && (
@@ -108,7 +141,7 @@ export default function Login() {
                     value={senha}
                     onChange={(e) => setSenha(e.target.value)}
                     autoComplete="current-password"
-                    className="w-full rounded-lg border border-gray-200 h-11 px-3 pr-10 text-sm focus:outline-none focus:ring-2 focus:ring-primary-100"
+                    className="w-full rounded-lg border border-gray-200 bg-white h-11 px-3 pr-10 text-sm focus:outline-none focus:ring-2 focus:ring-primary-100"
                     placeholder="••••••••"
                   />
                   <button

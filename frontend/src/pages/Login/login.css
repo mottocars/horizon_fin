@@ -69,3 +69,84 @@
     animation: botao-entrar-deriva 7s ease-in-out infinite alternate;
   }
 }
+
+/* Fundo da tela (Fundo em Login.jsx): a mesma composição do fundo da vitrine — brilho que deriva devagar, grade de
+   planilha e células que acendem —, mas nas cores claras originais do login (o degradê primary-50 → branco →
+   primary-100). Preso à janela; a vitrine cobre a parte da direita. */
+.login-fundo {
+  --login-centro: 50% 45%;
+  position: fixed;
+  inset: 0;
+  z-index: -1;
+  overflow: hidden;
+  pointer-events: none;
+  background: linear-gradient(135deg, var(--color-primary-50), #fff 50%, var(--color-primary-100));
+}
+@media (min-width: 1024px) {
+  .login-fundo {
+    --login-centro: 21% 48%;
+  }
+}
+.login-fundo__brilho i {
+  position: absolute;
+  width: 62vmax;
+  height: 62vmax;
+  border-radius: 50%;
+}
+.login-fundo__brilho i:nth-child(1) {
+  top: -30vmax;
+  left: -26vmax;
+  background: radial-gradient(closest-side, rgb(59 130 246 / 0.2), transparent);
+}
+.login-fundo__brilho i:nth-child(2) {
+  bottom: -34vmax;
+  left: calc(24vw - 31vmax);
+  background: radial-gradient(closest-side, rgb(147 197 253 / 0.38), transparent);
+}
+.login-fundo__grade,
+.login-fundo__celulas {
+  position: absolute;
+  inset: 0;
+  mask-image: radial-gradient(ellipse 34vmax 46vmax at var(--login-centro), #000 25%, transparent 100%);
+}
+.login-fundo__grade {
+  background-image:
+    linear-gradient(rgb(37 99 235 / 0.075) 1px, transparent 1px),
+    linear-gradient(90deg, rgb(37 99 235 / 0.075) 1px, transparent 1px);
+  background-size: 44px 44px;
+}
+.login-fundo__celulas span {
+  position: absolute;
+  width: 43px;
+  height: 43px;
+  margin: 1px 0 0 1px;
+  background: rgb(59 130 246 / 0.12);
+  opacity: 0;
+}
+
+@keyframes login-fundo-deriva {
+  to {
+    transform: translate(8vmax, 6vmax) scale(1.12);
+  }
+}
+@keyframes login-fundo-pisca {
+  0%,
+  100% {
+    opacity: 0;
+  }
+  50% {
+    opacity: 1;
+  }
+}
+@media (prefers-reduced-motion: no-preference) {
+  .login-fundo__brilho i {
+    animation: login-fundo-deriva 18s ease-in-out infinite alternate;
+  }
+  .login-fundo__brilho i:nth-child(2) {
+    animation-direction: alternate-reverse;
+    animation-duration: 23s;
+  }
+  .login-fundo__celulas span {
+    animation: login-fundo-pisca 7s ease-in-out infinite;
+  }
+}
