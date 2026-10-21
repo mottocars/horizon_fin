@@ -35,6 +35,7 @@ async function getConfig(empresaId) {
     atrasoRegra: c.atraso_regra ?? null,
     atrasoMeses: c.atraso_meses ?? null,
     atrasoSistema: c.atraso_sistema ?? null,
+    atrasoCor: c.atraso_cor ?? null,
     zapiIntegracaoId: c.zapi_integracao_id ?? null,
     selecionados: selecionados.map((r) => r.usuario_id),
     elegiveis,
@@ -56,16 +57,17 @@ async function salvarConfig(empresaId, dados, usuarioId) {
   try {
     await client.query('BEGIN');
     await client.query(
-      `INSERT INTO cronograma_config (empresa_id, atraso_regra, atraso_meses, atraso_sistema, zapi_integracao_id, atualizado_por, atualizado_em)
-       VALUES ($1, $2, $3, $4, $5, $6, NOW())
+      `INSERT INTO cronograma_config (empresa_id, atraso_regra, atraso_meses, atraso_sistema, atraso_cor, zapi_integracao_id, atualizado_por, atualizado_em)
+       VALUES ($1, $2, $3, $4, $5, $6, $7, NOW())
        ON CONFLICT (empresa_id) DO UPDATE SET
          atraso_regra = EXCLUDED.atraso_regra,
          atraso_meses = EXCLUDED.atraso_meses,
          atraso_sistema = EXCLUDED.atraso_sistema,
+         atraso_cor = EXCLUDED.atraso_cor,
          zapi_integracao_id = EXCLUDED.zapi_integracao_id,
          atualizado_por = EXCLUDED.atualizado_por,
          atualizado_em = NOW()`,
-      [empresaId, dados.atrasoRegra, dados.atrasoMeses, dados.atrasoSistema, dados.zapiIntegracaoId, usuarioId]
+      [empresaId, dados.atrasoRegra, dados.atrasoMeses, dados.atrasoSistema, dados.atrasoCor, dados.zapiIntegracaoId, usuarioId]
     );
     await client.query('DELETE FROM cronograma_comunicar_usuarios WHERE empresa_id = $1', [empresaId]);
     if (dados.usuarioIds.length) {

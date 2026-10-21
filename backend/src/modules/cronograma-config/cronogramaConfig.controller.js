@@ -9,6 +9,10 @@ const configSchema = z
     atrasoRegra: z.enum(['FIXA', 'PLANEJAMENTO']).nullable(),
     atrasoMeses: z.union([z.null(), z.coerce.number().int('Informe um número inteiro de meses.').min(1, 'Informe pelo menos 1 mês.').max(600)]),
     atrasoSistema: z.enum(['PREVISION']).nullable(),
+    atrasoCor: z
+      .union([z.null(), z.string().regex(/^#[0-9a-fA-F]{6}$/, 'Cor inválida.')])
+      .transform((c) => (c ? c.toLowerCase() : null))
+      .default(null),
     zapiIntegracaoId: z.union([z.null(), z.coerce.number().int().positive()]),
     usuarioIds: z.array(z.coerce.number().int().positive()).max(500).default([]),
   })

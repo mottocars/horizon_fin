@@ -1,5 +1,5 @@
 import { useCallback, useEffect, useState } from 'react';
-import { AlertTriangle, CheckCircle2, Settings } from 'lucide-react';
+import { AlertTriangle, CheckCircle2, RotateCcw, Settings } from 'lucide-react';
 import Card from '../../../components/Card';
 import Button from '../../../components/Button';
 import SearchableSelect from '../../../components/SearchableSelect';
@@ -16,10 +16,38 @@ const REGRAS_ATRASO = [
 // Hoje só o Prevision; a combobox fica pronta pra outros sistemas (pedido do usuário).
 const SISTEMAS_PLANEJAMENTO = [{ value: 'PREVISION', label: 'Prevision' }];
 
+// Cor dos meses em atraso quando ninguém escolheu outra (atraso_cor NULL).
+const COR_ATRASO_PADRAO = '#dc2626';
+
 // Mesmo par âmbar (vazio)/azul (preenchido) da aba Configurações de Repasses CEF.
 const COR_CAMPO_VAZIO = 'border-amber-300 bg-amber-50 hover:border-amber-400';
 const COR_CAMPO_PREENCHIDO = 'border-primary-100 bg-primary-50 hover:border-primary-500';
 const corCampo = (preenchido) => (preenchido ? COR_CAMPO_PREENCHIDO : COR_CAMPO_VAZIO);
+
+// Prévia de uma obra com 6 meses no prazo e 3 em atraso, no mesmo desenho das barras do Gantt
+// (meses separados, contagem sequencial sutil).
+function PreviaAtraso({ cor }) {
+  const meses = [...Array(9)].map((_, i) => ({ n: i + 1, atraso: i >= 6 }));
+  return (
+    <div className="max-w-md">
+      <div className="flex h-7 gap-0.5">
+        {meses.map((m) => (
+          <div
+            key={m.n}
+            className="flex flex-1 items-center justify-center text-[10px] font-medium text-white/80 first:rounded-l last:rounded-r"
+            style={{ backgroundColor: m.atraso ? cor : '#94a3b8' }}
+          >
+            {m.n}
+          </div>
+        ))}
+      </div>
+      <div className="mt-1.5 flex text-[11px] text-gray-500">
+        <span style={{ width: `${(6 / 9) * 100}%` }}>No prazo</span>
+        <span>Em atraso</span>
+      </div>
+    </div>
+  );
+}
 
 function SectionHeader({ titulo, texto }) {
   return (
@@ -34,6 +62,7 @@ function SectionHeader({ titulo, texto }) {
 // Configurações de Repasses CEF (ConfiguracoesRepassesCef.jsx): um Card por parâmetro e um Salvar só
 // no fim. Parâmetros:
 // - Regra de Atraso de Obra: regra fixa (meses de obra) ou o planejamento de um sistema (Prevision);
+// - Cor dos meses em atraso (padrão vermelha);
 // - Conexão de disparo e Destinatários do comunicado de alteração de cronograma — iguais aos de
 //   Repasses CEF (conexão Z-API e lista de transferência).
 // Por enquanto só guarda os parâmetros (ver cronogramaConfig.service.js).
@@ -42,6 +71,7 @@ export default function ConfiguracoesCronogramas({ empresaId }) {
   const [atrasoRegra, setAtrasoRegra] = useState(null);
   const [atrasoMeses, setAtrasoMeses] = useState('');
   const [atrasoSistema, setAtrasoSistema] = useState(null);
+  const [atrasoCor, setAtrasoCor] = useState(null);
   const [zapiOpcoes, setZapiOpcoes] = useState([]);
   const [zapiIntegracaoId, setZapiIntegracaoId] = useState(null);
   const [elegiveis, setElegiveis] = useState([]);
@@ -54,6 +84,7 @@ export default function ConfiguracoesCronogramas({ empresaId }) {
     setAtrasoRegra(c.atrasoRegra);
     setAtrasoMeses(c.atrasoMeses ?? '');
     setAtrasoSistema(c.atrasoSistema);
+    setAtrasoCor(c.atrasoCor);
     setZapiOpcoes(c.opcoesZapi.map((z) => ({ value: z.id, label: z.nome })));
     setZapiIntegracaoId(c.zapiIntegracaoId);
     setElegiveis(c.elegiveis);
@@ -94,6 +125,7 @@ export default function ConfiguracoesCronogramas({ empresaId }) {
         atrasoRegra,
         atrasoMeses: atrasoMeses === '' ? null : Number(atrasoMeses),
         atrasoSistema,
+        atrasoCor,
         zapiIntegracaoId,
         usuarioIds: selecionados.map(Number),
       });
@@ -185,6 +217,44 @@ export default function ConfiguracoesCronogramas({ empresaId }) {
               </div>
             )}
           </>
+        )}
+      </Card>
+
+      <Card>
+        <SectionHeader
+          titulo="Cor dos meses em atraso"
+          texto="Com que cor os meses de atraso de uma obra aparecem nas barras dos cronogramas. Sem escolha, fica a vermelha padrão."
+        />
+        {carregando ? (
+          <div className="mt-4 text-sm text-gray-400">Carregando...</div>
+        ) : (
+          <div className="mt-4 space-y-4">
+            <div className="flex flex-wrap items-center gap-3">
+              <label
+                className={`flex cursor-pointer items-center gap-2.5 rounded-lg border py-1.5 pl-1.5 pr-3 transition-colors ${corCampo(Boolean(atrasoCor))}`}
+              >
+                <input
+                  type="color"
+                  value={atrasoCor || COR_ATRASO_PADRAO}
+                  onChange={(e) => alterado(setAtrasoCor)(e.target.value.toLowerCase())}
+                  aria-label="Cor dos meses em atraso"
+                  className="h-7 w-7 shrink-0 cursor-pointer overflow-hidden rounded-full border border-white p-0 shadow-sm"
+                />
+                <span className="text-sm text-gray-900">{atrasoCor ? 'Cor escolhida' : 'Cor padrão'}</span>
+                <span className="font-mono text-xs uppercase text-gray-500">{atrasoCor || COR_ATRASO_PADRAO}</span>
+              </label>
+              {atrasoCor && atrasoCor !== COR_ATRASO_PADRAO && (
+                <button
+                  type="button"
+                  onClick={() => alterado(setAtrasoCor)(null)}
+                  className="flex items-center gap-1.5 rounded-lg px-2 py-1.5 text-xs font-medium text-gray-500 transition-colors hover:bg-gray-100 hover:text-gray-700"
+                >
+                  <RotateCcw size={13} /> Usar a padrão
+                </button>
+              )}
+            </div>
+            <PreviaAtraso cor={atrasoCor || COR_ATRASO_PADRAO} />
+          </div>
         )}
       </Card>
 
