@@ -5,7 +5,18 @@ import { getVersaoCronograma, listCronogramaCentros } from '../../../api/cronogr
 import JanelaCentroCusto from './JanelaCentroCusto';
 import CardsCarteira from './CardsCarteira';
 import GanttObras, { LegendaGantt, ZOOMS_GANTT } from './GanttObras';
-import { filtrarSituacao, isoHoje, montarObras, naEtapa, numerosTopo, obrasDaVersao, plural, resumoCarteira } from './cronogramaObras';
+import {
+  filtrarPeriodo,
+  filtrarSituacao,
+  isoHoje,
+  montarObras,
+  naRecorte,
+  numerosTopo,
+  obrasDaVersao,
+  plural,
+  resumoCarteira,
+  rotuloRecorte,
+} from './cronogramaObras';
 
 // ---------------------------------------------------------------------------------------
 // Operações > Cronogramas Obras > Cronogramas (pedido do usuário): no topo, os números da
@@ -17,13 +28,14 @@ import { filtrarSituacao, isoHoje, montarObras, naEtapa, numerosTopo, obrasDaVer
 // numa versão, com como eram antes) ficam ao lado da empresa, na página (CronogramasObrasPage).
 // ---------------------------------------------------------------------------------------
 
-export default function CronogramasTab({ empresaId, situacao = '', versaoId = '', onLimparVersao }) {
+// `zoom`/`onZoom` e `periodo` (De/Até do Mês a mês) vêm da página — o período fica no topo, ao lado da
+// empresa; no Mês a mês, obras fora dele não aparecem e os cards somam só as do período.
+export default function CronogramasTab({ empresaId, situacao = '', versaoId = '', onLimparVersao, zoom = 'mensal', onZoom, periodo = null }) {
   const [etapas, setEtapas] = useState([]);
   const [centros, setCentros] = useState([]);
   const [atraso, setAtraso] = useState(null); // Regra de Atraso da Construção (aba Configurações)
   const [carregando, setCarregando] = useState(true);
   const [erroCarga, setErroCarga] = useState('');
-  const [zoom, setZoom] = useState('mensal'); // abre no mês a mês (pedido do usuário)
   const [destaque, setDestaque] = useState(null); // id da etapa destacada pelos cards
   const [aberto, setAberto] = useState(null); // centro aberto na janela do cadastro
   const [versaoDetalhe, setVersaoDetalhe] = useState(null);
@@ -59,12 +71,16 @@ export default function CronogramasTab({ empresaId, situacao = '', versaoId = ''
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [empresaId, versaoId]);
 
-  const obras = useMemo(() => filtrarSituacao(montarObras(centros, etapas, isoHoje(), atraso), situacao), [centros, etapas, atraso, situacao]);
+  const periodoAtivo = zoom === 'mensal' ? periodo : null;
+  const obras = useMemo(
+    () => filtrarPeriodo(filtrarSituacao(montarObras(centros, etapas, isoHoje(), atraso), situacao), periodoAtivo),
+    [centros, etapas, atraso, situacao, periodoAtivo]
+  );
   const r = useMemo(() => resumoCarteira(obras, etapas), [obras, etapas]);
   // "Mudanças da versão": o Gantt fica com as obras alteradas nela (como ficaram + como eram antes).
   const obrasVersao = useMemo(
-    () => (versaoDetalhe ? filtrarSituacao(obrasDaVersao(versaoDetalhe, isoHoje()), situacao) : null),
-    [versaoDetalhe, situacao]
+    () => (versaoDetalhe ? filtrarPeriodo(filtrarSituacao(obrasDaVersao(versaoDetalhe, isoHoje()), situacao), periodoAtivo) : null),
+    [versaoDetalhe, situacao, periodoAtivo]
   );
 
   if (!empresaId) {
@@ -97,12 +113,12 @@ export default function CronogramasTab({ empresaId, situacao = '', versaoId = ''
     );
   }
 
-  const etapaDestacada = etapas.find((e) => e.id === destaque);
+  const recorte = rotuloRecorte(destaque, etapas);
   // Card de etapa clicado → o Gantt fica só com as obras dela hoje e VGV e unidades somam só elas.
   const baseGantt = obrasVersao || obras;
-  const obrasGantt = etapaDestacada ? baseGantt.filter((o) => naEtapa(o, destaque)) : baseGantt;
-  const rGantt = etapaDestacada || obrasVersao ? resumoCarteira(obrasGantt, etapas) : r;
-  const topo = etapaDestacada ? numerosTopo(obrasGantt, `em ${etapaDestacada.descricao}`) : numerosTopo(obras);
+  const obrasGantt = recorte ? baseGantt.filter((o) => naRecorte(o, destaque)) : baseGantt;
+  const rGantt = recorte || obrasVersao ? resumoCarteira(obrasGantt, etapas) : r;
+  const topo = recorte ? numerosTopo(obras.filter((o) => naRecorte(o, destaque)), recorte.topo) : numerosTopo(obras);
 
   return (
     <div className="space-y-5 rounded-card rounded-tl-none bg-white p-5 shadow-card">
@@ -143,13 +159,13 @@ export default function CronogramasTab({ empresaId, situacao = '', versaoId = ''
                   Mudanças da versão {versaoDetalhe.numero} <X size={11} />
                 </button>
               )}
-              {etapaDestacada && (
+              {recorte && (
                 <button
                   type="button"
                   onClick={() => setDestaque(null)}
                   className="ml-2 inline-flex items-center gap-1 rounded-full bg-gray-100 px-2 py-0.5 text-[11px] font-medium text-gray-600 hover:bg-gray-200"
                 >
-                  Só em {etapaDestacada.descricao} <X size={11} />
+                  {recorte.aviso} <X size={11} />
                 </button>
               )}
             </p>
@@ -161,7 +177,7 @@ export default function CronogramasTab({ empresaId, situacao = '', versaoId = ''
                 <button
                   key={z.id}
                   type="button"
-                  onClick={() => setZoom(z.id)}
+                  onClick={() => onZoom?.(z.id)}
                   className={`rounded-md px-2.5 py-1 text-xs font-medium transition-colors ${
                     zoom === z.id ? 'bg-primary-50 text-primary-700' : 'text-gray-400 hover:text-gray-600'
                   }`}
@@ -172,7 +188,7 @@ export default function CronogramasTab({ empresaId, situacao = '', versaoId = ''
             </div>
           </div>
         </div>
-        <GanttObras etapas={etapas} obras={obrasGantt} zoom={zoom} onAbrirObra={setAberto} />
+        <GanttObras etapas={etapas} obras={obrasGantt} zoom={zoom} periodo={periodoAtivo} onAbrirObra={setAberto} />
       </div>
 
       <JanelaCentroCusto empresaId={empresaId} centro={aberto} onFechar={() => setAberto(null)} onSalvo={carregar} />

@@ -15,15 +15,18 @@ import GanttObras, { LegendaGantt, ZOOMS_GANTT } from '../../Operacoes/Cronogram
 import CardsCarteira from '../../Operacoes/CronogramasObras/CardsCarteira';
 import {
   FILTROS_SITUACAO,
+  filtrarPeriodo,
   filtrarSituacao,
   isoHoje,
   montarObras,
-  naEtapa,
+  naRecorte,
   nomeObra,
   numerosTopo,
   obrasDaVersao,
   plural,
+  periodoPadrao,
   resumoCarteira,
+  rotuloRecorte,
 } from '../../Operacoes/CronogramasObras/cronogramaObras';
 import { mesAno } from '../../Operacoes/CronogramasObras/formatos';
 import '../EconomicoFinanceiro/fluxo/painel.css';
@@ -38,7 +41,9 @@ import './cronogramas.css';
 // Ao lado da empresa (pedidos do usuário), também na URL: "Obras" (?situacao= — todas, em andamento
 // ou só as concluídas) e "Mudanças" (?versao= — uma versão gravada: o Gantt mostra só as obras
 // alteradas nela, com como eram antes numa faixa fina em cima da barra), e o botão de exportar o
-// Excel do comunicado (o do cronograma em vigor, ou o da versão escolhida).
+// Excel do comunicado (o do cronograma em vigor, ou o da versão escolhida). No Mês a mês, o período
+// De/Até (padrão: 3 meses antes a 20 à frente; fica no estado da tela — só volta ao padrão ao
+// recarregar): obras fora dele não aparecem e os cards somam só as do período.
 
 export default function CronogramasObrasDashboard() {
   const [params, setParams] = useSearchParams();
@@ -85,6 +90,14 @@ export default function CronogramasObrasDashboard() {
   const [estado, setEstado] = useState('carregando'); // carregando | ok | erro
   const [erro, setErro] = useState('');
   const [zoom, setZoom] = useState('mensal'); // abre no mês a mês (pedido do usuário)
+  const [periodo, setPeriodo] = useState(periodoPadrao); // De/Até do Mês a mês
+  const mudarPeriodo = (campo, valor) => {
+    if (!valor) return;
+    setPeriodo((p) => {
+      const novo = { ...p, [campo]: valor };
+      return novo.ini <= novo.fim ? novo : { ini: novo.fim, fim: novo.ini };
+    });
+  };
   const [destaque, setDestaque] = useState(null);
   const [selecionada, setSelecionada] = useState(null); // sienge_id da obra clicada no Gantt
   const [telaCheia, setTelaCheia] = useState(false);
@@ -205,9 +218,13 @@ export default function CronogramasObrasDashboard() {
     () => (versaoDetalhe ? filtrarSituacao(obrasDaVersao(versaoDetalhe, hoje), situacao) : null),
     [versaoDetalhe, hoje, situacao]
   );
-  const baseGantt = obrasVersao || obras;
-  const r = useMemo(() => resumoCarteira(obras, etapas), [obras, etapas]);
-  const etapaDestacada = etapas.find((e) => e.id === destaque);
+  // Mês a mês: só as obras do período De/Até (cards e Gantt); Visão geral: todas.
+  const periodoAtivo = zoom === 'mensal' ? periodo : null;
+  const obrasPeriodo = useMemo(() => filtrarPeriodo(obras, periodoAtivo), [obras, periodoAtivo]);
+  const obrasVersaoPeriodo = useMemo(() => (obrasVersao ? filtrarPeriodo(obrasVersao, periodoAtivo) : null), [obrasVersao, periodoAtivo]);
+  const baseGantt = obrasVersaoPeriodo || obrasPeriodo;
+  const r = useMemo(() => resumoCarteira(obrasPeriodo, etapas), [obrasPeriodo, etapas]);
+  const recorte = rotuloRecorte(destaque, etapas);
 
   // Cards dinâmicos (pedido do usuário): card de etapa clicado → o Gantt fica só com as obras dela
   // hoje e VGV e unidades somam só elas; obra clicada no Gantt → todos os cards mostram só ela (o
@@ -216,11 +233,11 @@ export default function CronogramasObrasDashboard() {
   const rCards = useMemo(() => (obraSelecionada ? resumoCarteira([obraSelecionada], etapas) : r), [obraSelecionada, etapas, r]);
   const topo = obraSelecionada
     ? numerosTopo([obraSelecionada], 'da obra')
-    : etapaDestacada
-      ? numerosTopo(obras.filter((o) => naEtapa(o, destaque)), `em ${etapaDestacada.descricao}`)
-      : numerosTopo(obras);
-  const obrasGantt = etapaDestacada ? baseGantt.filter((o) => naEtapa(o, destaque)) : baseGantt;
-  const rGantt = etapaDestacada || obrasVersao ? resumoCarteira(obrasGantt, etapas) : r;
+    : recorte
+      ? numerosTopo(obrasPeriodo.filter((o) => naRecorte(o, destaque)), recorte.topo)
+      : numerosTopo(obrasPeriodo);
+  const obrasGantt = recorte ? baseGantt.filter((o) => naRecorte(o, destaque)) : baseGantt;
+  const rGantt = recorte || obrasVersao ? resumoCarteira(obrasGantt, etapas) : r;
   const destacar = (id) => {
     setSelecionada(null);
     setDestaque(id);
@@ -281,6 +298,18 @@ export default function CronogramasObrasDashboard() {
               ))}
             </select>
           </div>
+          {zoom === 'mensal' && (
+            <>
+              <div className="ctl">
+                <label htmlFor="f-de">De</label>
+                <input id="f-de" type="month" value={periodo.ini} onChange={(e) => mudarPeriodo('ini', e.target.value)} disabled={!empresaId} />
+              </div>
+              <div className="ctl">
+                <label htmlFor="f-ate">Até</label>
+                <input id="f-ate" type="month" value={periodo.fim} onChange={(e) => mudarPeriodo('fim', e.target.value)} disabled={!empresaId} />
+              </div>
+            </>
+          )}
           <div className="acoes">
             {erroExportacao && <span className="erro">{erroExportacao}</span>}
             <button
@@ -336,9 +365,9 @@ export default function CronogramasObrasDashboard() {
                       Mudanças da versão {versaoDetalhe.numero} <X size={11} />
                     </button>
                   )}
-                  {etapaDestacada && (
+                  {recorte && (
                     <button type="button" className="destaque-chip" onClick={() => destacar(null)} title="Voltar para todas as obras">
-                      Só em {etapaDestacada.descricao} <X size={11} />
+                      {recorte.aviso} <X size={11} />
                     </button>
                   )}
                   {obraSelecionada && (
@@ -394,7 +423,9 @@ export default function CronogramasObrasDashboard() {
                   zoom={zoom}
                   selecionada={selecionada}
                   onSelecionarObra={selecionar}
+                  periodo={periodoAtivo}
                   fundoBarra={telaCheia ? '-bottom-6' : 'bottom-0'}
+                  topoCabecalho={telaCheia ? '-top-6' : 'top-0'}
                 />
               </div>
             </section>

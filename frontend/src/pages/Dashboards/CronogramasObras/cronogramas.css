@@ -59,6 +59,16 @@
   margin-left: 6px;
   letter-spacing: 0;
 }
+/* Campos de mês (De/Até do Mês a mês) no mesmo visual das listas da barra de controles. */
+.painel-cfo .ctl input[type='month'] {
+  padding: 5px 8px;
+  border: 1px solid var(--line);
+  border-radius: 4px;
+  background: var(--surface-2);
+  color: var(--ink);
+  font-size: 14px;
+  font-family: inherit;
+}
 /* Card da construção: as obras em atraso e o VGV delas, com a marca da cor do atraso. */
 .painel-cfo .tile .d.atraso .marca {
   display: inline-block;

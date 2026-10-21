@@ -105,6 +105,37 @@ export function situacaoHoje(segmentos, hoje) {
 
 export const naEtapa = (obra, etapaId) => obra.situacao.tipo === 'etapa' && obra.situacao.segmento.etapa.id === etapaId;
 
+// Recorte dos cards (clicar num card de etapa filtra o Gantt): as obras na etapa hoje.
+export const naRecorte = (obra, recorte) => naEtapa(obra, recorte);
+
+// Textos do recorte: o aviso do Gantt ("Só em Construção") e o complemento dos números do primeiro
+// card ("VGV em Construção"). null sem recorte (ou etapa que não existe mais).
+export function rotuloRecorte(recorte, etapas) {
+  const etapa = etapas.find((e) => e.id === recorte);
+  return etapa ? { aviso: `Só em ${etapa.descricao}`, topo: `em ${etapa.descricao}` } : null;
+}
+
+// Período do Mês a mês (filtro De/Até no topo — pedido do usuário): por padrão de 3 meses antes do
+// atual a 20 meses à frente, em 'AAAA-MM'. Quem chama guarda no estado da tela: mudou, só volta ao
+// padrão ao recarregar a página.
+function mesDeHoje(n) {
+  const h = new Date();
+  const d = new Date(h.getFullYear(), h.getMonth() + n, 1);
+  return `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}`;
+}
+export function periodoPadrao() {
+  return { ini: mesDeHoje(-3), fim: mesDeHoje(20) };
+}
+
+// Só as obras com alguma etapa dentro do período (as de fora não aparecem — nem no Gantt, nem nos
+// cards). Etapa sem fim conhecido conta só o mês de início, como no Gantt. `periodo` null = todas.
+export function filtrarPeriodo(obras, periodo) {
+  if (!periodo) return obras;
+  const de = `${periodo.ini}-01`;
+  const ate = somarDias(somarMeses(`${periodo.fim}-01`, 1), -1);
+  return obras.filter((o) => [...o.segmentos, ...(o.antes || [])].some((s) => s.inicio <= ate && (s.fim || s.inicio) >= de));
+}
+
 // As obras (centros com Tipo = Obra), cada uma com os segmentos e a situação de hoje: com
 // cronograma primeiro, pela data de início da primeira etapa; sem cronograma no fim. `atraso`: a
 // Regra de Atraso da Construção da empresa (null = sem regra). `atrasadaHoje`: a construção já passou
@@ -135,8 +166,10 @@ export function numerosTopo(obras, recorte = null) {
 // construção (a que leva o `prazo` da Regra de Atraso), também `atraso`: dessas obras, as que já
 // estão atrasadas hoje (pedido do usuário: as que o cronograma só prevê atrasar mais adiante não
 // contam) e o VGV delas; null nas outras etapas.
-// Na primeira etapa (o Lançamento), também `aIniciar`: as obras que ainda não começaram nenhuma
-// etapa, com o VGV e as unidades delas (pedido do usuário); null nas outras.
+// Em cada etapa também `aIniciar`: as obras que ainda não começaram e vão começar por ela (a primeira
+// etapa com data no cronograma delas), com o VGV e as unidades — null quando nenhuma. Antes ia sempre
+// no primeiro card, e uma etapa nova sem datas na frente do Lançamento (Landbank, GENESIS) ficava
+// com as obras a iniciar dele (pedido do usuário).
 export function resumoCarteira(obras, etapas) {
   const soma = (centros, campo) => centros.reduce((s, c) => s + (Number(c[campo]) || 0), 0);
   const centros = obras.map((o) => o.centro);
@@ -153,6 +186,9 @@ export function resumoCarteira(obras, etapas) {
       const prazoDe = (o) => o.segmentos.find((s) => s.etapa.id === etapa.id)?.prazo;
       const construcao = obras.find(prazoDe);
       const atrasadas = daEtapa.filter((o) => o.atrasadaHoje && prazoDe(o)).map((o) => o.centro);
+      const iniciam = obras
+        .filter((o) => o.situacao.tipo === 'aIniciar' && o.situacao.segmento.etapa.id === etapa.id)
+        .map((o) => o.centro);
       return {
         etapa,
         cor: etapa.cor || corPadrao(i),
@@ -160,7 +196,7 @@ export function resumoCarteira(obras, etapas) {
         vgv: soma(lista, 'valor_geral_vendas'),
         unidades: soma(lista, 'numero_unidades'),
         atraso: construcao ? { obras: atrasadas, vgv: soma(atrasadas, 'valor_geral_vendas'), cor: prazoDe(construcao).cor } : null,
-        aIniciar: i === 0 ? { obras: aIniciar, vgv: soma(aIniciar, 'valor_geral_vendas'), unidades: soma(aIniciar, 'numero_unidades') } : null,
+        aIniciar: iniciam.length ? { obras: iniciam, vgv: soma(iniciam, 'valor_geral_vendas'), unidades: soma(iniciam, 'numero_unidades') } : null,
       };
     }),
     comCronograma: obras.filter((o) => o.segmentos.length).length,

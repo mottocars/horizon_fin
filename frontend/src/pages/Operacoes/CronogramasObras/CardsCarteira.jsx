@@ -6,8 +6,8 @@ import '../../Dashboards/CronogramasObras/cronogramas.css';
 // Cards da carteira de obras no estilo dos cards do painel do CFO (.tile de painel.css): o VGV com as
 // unidades logo abaixo (pedido do usuário: um card só) e, por etapa, as obras que estão nela hoje, o VGV e as
 // unidades delas e a fatia da carteira — no da construção, também as obras em atraso e o VGV delas;
-// no do lançamento, as obras a iniciar com o VGV e as unidades (pedidos do usuário). Clicar num card
-// de etapa filtra o Gantt: só ficam as obras dela hoje.
+// na etapa por onde começam as obras a iniciar (o Lançamento), essas obras com o VGV e as unidades
+// (pedidos do usuário). Clicar num card de etapa filtra o Gantt: só ficam as obras dela hoje.
 // Usado no dashboard Cronogramas de Obras e na aba Cronogramas de Operações > Cronogramas Obras
 // (pedido do usuário: os mesmos cards) — precisa estar dentro de um .painel-cfo.
 // - `resumo`: resumoCarteira (cronogramaObras.js) das obras que os cards de etapa mostram.
@@ -62,14 +62,8 @@ export default function CardsCarteira({ resumo: r, topo, destaque, onDestaque })
             {e.aIniciar && (
               <span className="d iniciar">
                 <i className="marca" style={{ borderColor: e.cor }} />
-                {e.aIniciar.obras.length ? (
-                  <>
-                    <b>{plural(e.aIniciar.obras.length, 'a iniciar', 'a iniciar')}</b> · {moeda(e.aIniciar.vgv, { compacta: true })} ·{' '}
-                    {plural(e.aIniciar.unidades, 'unidade', 'unidades')}
-                  </>
-                ) : (
-                  'Nenhuma a iniciar'
-                )}
+                <b>{plural(e.aIniciar.obras.length, 'a iniciar', 'a iniciar')}</b> · {moeda(e.aIniciar.vgv, { compacta: true })} ·{' '}
+                {plural(e.aIniciar.unidades, 'unidade', 'unidades')}
               </span>
             )}
             {e.atraso && e.obras.length > 0 && (
@@ -93,3 +87,4 @@ export default function CardsCarteira({ resumo: r, topo, destaque, onDestaque })
     </section>
   );
 }
+

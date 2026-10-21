@@ -16,6 +16,11 @@ import { MESES_ABREV, mesAno, moeda } from './formatos';
 // - `fundoBarra`: classe do `bottom` da barra de rolagem horizontal, que fica sempre à vista grudada
 //   no rodapé da área que rola na vertical (como no Plano de Voo): `-bottom-6` quando essa área tem
 //   p-6 (o <main> das telas comuns, a tela cheia), `bottom-0` no dashboard (o <main> sem padding).
+// - `periodo`: { ini, fim } 'AAAA-MM' — no Mês a mês, a régua vai exatamente desses meses (o filtro
+//   De/Até do topo; as barras são cortadas nas bordas). null = a carteira inteira, em anos inteiros.
+// - `topoCabecalho`: classe do `top` da régua, que fica grudada no alto da área que rola na vertical
+//   (pedido do usuário — como a barra de rolagem de baixo): `-top-6` quando a área tem p-6, `top-0`
+//   no dashboard.
 // - `ref` expõe `irParaHoje()` (o botão "Hoje" do dashboard).
 // - Meses em atraso da construção (Regra de Atraso da Construção — aba Configurações): vêm no
 //   `atraso` de cada segmento que cai na janela do atraso (montarObras) e saem na cor do atraso;
@@ -91,9 +96,21 @@ export function LegendaGantt({ etapas, atraso = null, comparando = false }) {
   );
 }
 
-function Regua({ ini, fim, px, xHoje }) {
+// Os anos da faixa de meses [ini, fim] (índices ano*12+mês), cada um com onde começa (`desvio`, em
+// meses desde `ini`) e quantos meses dele entram — a faixa pode começar e terminar no meio do ano.
+function anosDaFaixa(ini, fim) {
   const anos = [];
-  for (let m = ini; m <= fim; m += 12) anos.push(Math.floor(m / 12));
+  for (let m = ini; m <= fim; ) {
+    const ano = Math.floor(m / 12);
+    const ate = Math.min(fim, ano * 12 + 11);
+    anos.push({ ano, desvio: m - ini, meses: ate - m + 1 });
+    m = ate + 1;
+  }
+  return anos;
+}
+
+function Regua({ ini, fim, px, xHoje }) {
+  const anos = anosDaFaixa(ini, fim);
   const meses = [];
   for (let m = ini; m <= fim; m++) meses.push(m);
   const anoAtual = new Date().getFullYear();
@@ -101,13 +118,13 @@ function Regua({ ini, fim, px, xHoje }) {
   return (
     <div className="relative" style={{ width: (fim - ini + 1) * px }}>
       <div className="flex h-7">
-        {anos.map((ano) => (
+        {anos.map(({ ano, meses: qtd }) => (
           <div
             key={ano}
-            className={`shrink-0 border-l border-gray-200 text-[11px] leading-7 tabular-nums first:border-l-0 ${
+            className={`shrink-0 overflow-clip whitespace-nowrap border-l border-gray-200 text-[11px] leading-7 tabular-nums first:border-l-0 ${
               ano === anoAtual ? 'font-bold text-gray-900' : 'font-semibold text-gray-500'
             }`}
-            style={{ width: 12 * px }}
+            style={{ width: qtd * px }}
           >
             {/* gruda na borda visível ao rolar (o ano não some sob a coluna das obras) */}
             <span className="sticky px-2" style={{ left: LARGURA_NOMES }}>
@@ -128,12 +145,14 @@ function Regua({ ini, fim, px, xHoje }) {
           </div>
         ))}
       </div>
-      <span
-        className="absolute bottom-0.5 z-4 -translate-x-1/2 rounded-full bg-red-500 px-1.5 py-px text-[9px] font-bold uppercase text-white"
-        style={{ left: xHoje }}
-      >
-        Hoje
-      </span>
+      {xHoje !== null && (
+        <span
+          className="absolute bottom-0.5 z-4 -translate-x-1/2 rounded-full bg-red-500 px-1.5 py-px text-[9px] font-bold uppercase text-white"
+          style={{ left: xHoje }}
+        >
+          Hoje
+        </span>
+      )}
     </div>
   );
 }
@@ -363,11 +382,12 @@ function PontoSituacao({ situacao }) {
 const ROLAGEM_SEM_BARRA = 'overflow-x-auto overflow-y-hidden [scrollbar-width:none] [&::-webkit-scrollbar]:hidden';
 
 const GanttObras = forwardRef(function GanttObras(
-  { etapas, obras, zoom, onAbrirObra, selecionada, onSelecionarObra, fundoBarra = '-bottom-6' },
+  { etapas, obras, zoom, periodo = null, onAbrirObra, selecionada, onSelecionarObra, fundoBarra = '-bottom-6', topoCabecalho = '-top-6' },
   ref
 ) {
   const [area, setArea] = useState(null);
   const barraRef = useRef(null);
+  const cabecalhoRef = useRef(null);
   const [larguraArea, setLarguraArea] = useState(0);
   const [dica, setDica] = useState(null);
   const hoje = isoHoje();
@@ -383,8 +403,10 @@ const GanttObras = forwardRef(function GanttObras(
   const comCronograma = obras.filter((o) => o.segmentos.length);
   const semCronograma = obras.filter((o) => !o.segmentos.length);
 
-  // Faixa de meses: anos inteiros, do primeiro início ao último fim (e hoje).
+  // Faixa de meses: com período (Mês a mês), exatamente os meses dele; sem, anos inteiros do primeiro
+  // início ao último fim (e hoje).
   const faixa = useMemo(() => {
+    if (periodo) return { ini: idxMes(`${periodo.ini}-01`), fim: idxMes(`${periodo.fim}-01`) };
     const marcos = [hoje];
     obras.forEach((o) =>
       [...o.segmentos, ...(o.antes || [])].forEach((s) => marcos.push(s.inicio, s.fim || somarMeses(s.inicio, 1)))
@@ -393,12 +415,14 @@ const GanttObras = forwardRef(function GanttObras(
     const ini = Math.min(...idx);
     const fim = Math.max(...idx);
     return { ini: ini - (ini % 12), fim: fim + (11 - (fim % 12)) };
-  }, [obras, hoje]);
+  }, [obras, hoje, periodo?.ini, periodo?.fim]); // eslint-disable-line react-hooks/exhaustive-deps
 
   const meses = faixa.fim - faixa.ini + 1;
   const px = zoom === 'mensal' ? PX_MES_MENSAL : Math.max(3, (larguraArea - LARGURA_NOMES - 2) / meses);
   const larguraTempo = meses * px;
   const xHoje = (posMes(hoje) - faixa.ini) * px;
+  const hojeNaFaixa = idxMes(hoje) >= faixa.ini && idxMes(hoje) <= faixa.fim;
+  const anosFundo = anosDaFaixa(faixa.ini, faixa.fim);
 
   // Mês a mês: a régua abre com hoje à vista (um terço da tela à esquerda dele) — também quando a
   // tela já abre nele (`pronto`: a área medida) — e volta pra hoje sempre que a lista de obras muda
@@ -430,7 +454,7 @@ const GanttObras = forwardRef(function GanttObras(
       quemRola.current = null;
     }, 120);
     const x = origem.scrollLeft;
-    for (const el of [area, barraRef.current]) if (el && el !== origem && el.scrollLeft !== x) el.scrollLeft = x;
+    for (const el of [area, barraRef.current, cabecalhoRef.current]) if (el && el !== origem && el.scrollLeft !== x) el.scrollLeft = x;
     if (dica) setDica(null);
   };
   const larguraTotal = LARGURA_NOMES + larguraTempo;
@@ -453,43 +477,45 @@ const GanttObras = forwardRef(function GanttObras(
 
   return (
     <div>
+    {/* régua: grudada no alto da área que rola na vertical (sempre à vista, como a barra de baixo),
+        com rolagem horizontal própria, escondida e sincronizada com o corpo */}
+    <div ref={cabecalhoRef} onScroll={(e) => sincronizar(e.currentTarget)} className={`sticky ${topoCabecalho} z-30 bg-white ${ROLAGEM_SEM_BARRA}`}>
+      <div className="relative flex border-b border-gray-200 leading-normal" style={{ width: larguraTotal, minWidth: '100%' }}>
+        <div
+          className="sticky left-0 z-20 flex shrink-0 items-end border-r border-gray-200 bg-white px-4 pb-1.5 text-[11px] font-semibold uppercase tracking-wide text-gray-400"
+          style={{ width: LARGURA_NOMES }}
+        >
+          Obra
+        </div>
+        <Regua ini={faixa.ini} fim={faixa.fim} px={px} xHoje={hojeNaFaixa ? xHoje : null} />
+      </div>
+    </div>
     <div ref={setArea} className={ROLAGEM_SEM_BARRA} onScroll={(e) => sincronizar(e.currentTarget)}>
       <div className="relative leading-normal" style={{ width: larguraTotal, minWidth: '100%' }}>
         {/* fundo: anos alternados, divisas de ano (e de mês, no zoom mensal) e a linha de hoje */}
         <div className="pointer-events-none absolute inset-y-0" style={{ left: LARGURA_NOMES, width: larguraTempo }}>
-          {Array.from({ length: meses / 12 }, (_, i) => (
+          {anosFundo.map(({ ano, desvio, meses: qtd }, i) => (
             <span
-              key={i}
+              key={ano}
               className={`absolute inset-y-0 border-l border-gray-200 first:border-l-0 ${i % 2 ? 'bg-gray-50/70' : ''}`}
-              style={{ left: i * 12 * px, width: 12 * px }}
+              style={{ left: desvio * px, width: qtd * px }}
             />
           ))}
           {zoom === 'mensal' &&
             Array.from({ length: meses }, (_, m) =>
-              m % 12 ? <span key={m} className="absolute inset-y-0 border-l border-gray-100" style={{ left: m * px }} /> : null
+              (faixa.ini + m) % 12 ? <span key={m} className="absolute inset-y-0 border-l border-gray-100" style={{ left: m * px }} /> : null
             )}
           {/* atrás das barras: não passa por cima do nome das etapas */}
-          <span className="absolute inset-y-0 w-0.5 -translate-x-1/2 bg-red-400/80" style={{ left: xHoje }} />
-        </div>
-
-        {/* régua */}
-        <div className="relative flex border-b border-gray-200">
-          <div
-            className="sticky left-0 z-20 flex shrink-0 items-end border-r border-gray-200 bg-white px-4 pb-1.5 text-[11px] font-semibold uppercase tracking-wide text-gray-400"
-            style={{ width: LARGURA_NOMES }}
-          >
-            Obra
-          </div>
-          <div className="bg-white/80">
-            <Regua ini={faixa.ini} fim={faixa.fim} px={px} xHoje={xHoje} />
-          </div>
+          {hojeNaFaixa && <span className="absolute inset-y-0 w-0.5 -translate-x-1/2 bg-red-400/80" style={{ left: xHoje }} />}
         </div>
 
         {obras.length === 0 && (
           <div className="relative flex">
             <div className="sticky left-0 z-20 shrink-0 border-r border-gray-200 bg-white px-4 py-10 text-center" style={{ width: LARGURA_NOMES }}>
-              <p className="text-sm font-medium text-gray-700">Nenhuma obra nesta empresa</p>
-              <p className="mt-1 text-xs text-gray-400">Marque o Tipo dos centros de custo como Obra no cadastro.</p>
+              <p className="text-sm font-medium text-gray-700">{periodo ? 'Nenhuma obra neste período' : 'Nenhuma obra nesta empresa'}</p>
+              <p className="mt-1 text-xs text-gray-400">
+                {periodo ? 'Mude o De/Até no topo da tela.' : 'Marque o Tipo dos centros de custo como Obra no cadastro.'}
+              </p>
             </div>
           </div>
         )}
@@ -539,7 +565,7 @@ const GanttObras = forwardRef(function GanttObras(
                 </span>
               </div>
               <div
-                className={`relative transition-colors ${o.centro.sienge_id === selecionada ? 'bg-primary-50/40' : 'group-hover:bg-primary-50/25'}`}
+                className={`relative overflow-clip transition-colors ${o.centro.sienge_id === selecionada ? 'bg-primary-50/40' : 'group-hover:bg-primary-50/25'}`}
                 style={{ width: larguraTempo }}
               >
                 {o.antes && <BarraAntes segmentos={o.antes} ini={faixa.ini} px={px} />}
