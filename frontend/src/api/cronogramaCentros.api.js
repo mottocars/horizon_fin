@@ -35,3 +35,19 @@ export function gravarVersaoCronograma(empresaId, { observacao } = {}) {
 export function baixarPlanilhaVersaoCronograma(empresaId, versaoId) {
   return http.get(`/cronograma-centros/${empresaId}/versoes/${versaoId}/excel`, { responseType: 'blob' }).then((res) => res.data);
 }
+
+// Uma versão com o retrato do cronograma (filtro "Mudanças da versão" do Gantt).
+export function getVersaoCronograma(empresaId, versaoId) {
+  return http.get(`/cronograma-centros/${empresaId}/versoes/${versaoId}`).then((res) => res.data);
+}
+
+// Botão de exportar do dashboard: a planilha do cronograma em vigor (sem `versaoId`) ou a de uma
+// versão — a mesma do comunicado. Devolve { blob, nome } (nome vindo do Content-Disposition).
+export function exportarCronogramaExcel(empresaId, versaoId = null) {
+  const url = versaoId ? `/cronograma-centros/${empresaId}/versoes/${versaoId}/excel` : `/cronograma-centros/${empresaId}/excel`;
+  return http.get(url, { responseType: 'blob' }).then((res) => {
+    const cabecalho = res.headers['content-disposition'] || '';
+    const utf8 = /filename\*=UTF-8''([^;]+)/i.exec(cabecalho);
+    return { blob: res.data, nome: utf8 ? decodeURIComponent(utf8[1]) : 'Cronograma de Obras.xlsx' };
+  });
+}

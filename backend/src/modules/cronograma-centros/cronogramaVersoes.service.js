@@ -355,6 +355,7 @@ function montarMensagem({ empresa, versao, nomeDestinatario, link }) {
     ...(versao.observacao ? ['', `📝 _${versao.observacao}_`] : []),
     '',
     '📎 Cronograma completo na planilha anexa',
+    '',
     `🔗 Ver no dashboard: ${link}`,
     '',
     '_Comunicado automático enviado pelo Horizon Finanças._',
@@ -419,6 +420,33 @@ async function dispararComunicado(empresaId, versao) {
   }
 }
 
+// Uma versão com o retrato do cronograma — o filtro "Mudanças da versão" do Gantt (a aba
+// Cronogramas e o dashboard) mostra como as obras alteradas eram antes e como ficaram.
+async function detalheDaVersao(empresaId, versaoId) {
+  return getVersao(empresaId, versaoId, { comCronograma: true });
+}
+
+// A planilha do cronograma em vigor (botão de exportar do dashboard): a mesma do comunicado, com as
+// obras de agora e, nas abas Alterações e Versão, a última versão gravada (sem versão, só o cronograma).
+async function excelAtual(empresaId) {
+  const [retrato, { rows }] = await Promise.all([
+    cronograma.list(empresaId),
+    pool.query(
+      `SELECT ${COLUNAS_VERSAO} FROM cronograma_versoes v LEFT JOIN usuarios u ON u.id = v.criado_por
+        WHERE v.empresa_id = $1 ORDER BY v.numero DESC LIMIT 1`,
+      [empresaId]
+    ),
+  ]);
+  const ultima = rows[0] || { numero: null, alteracoes: [], criado_em: null, criado_por_nome: null, observacao: null };
+  const versao = {
+    ...ultima,
+    exportadaEm: new Intl.DateTimeFormat('pt-BR', { dateStyle: 'short', timeStyle: 'short', timeZone: 'America/Sao_Paulo' }).format(new Date()),
+    cronograma: { etapas: retrato.etapas, atraso: retrato.atraso, centros: retrato.centros.filter((c) => c.natureza === 'OBRA') },
+  };
+  const buffer = await cronogramaExcel.gerar({ empresa: await nomeDaEmpresa(empresaId), versao, link: linkDashboard(empresaId) });
+  return { buffer, nomeArquivo: ultima.numero ? `${nomeArquivo(ultima.numero)}.xlsx` : 'Cronograma de Obras.xlsx' };
+}
+
 async function excelDaVersao(empresaId, versaoId) {
   const versao = await getVersao(empresaId, versaoId, { comCronograma: true });
   const buffer = await cronogramaExcel.gerar({ empresa: await nomeDaEmpresa(empresaId), versao, link: linkDashboard(empresaId) });
@@ -431,6 +459,8 @@ module.exports = {
   descartarPendencia,
   listarVersoes,
   gravarVersao,
+  detalheDaVersao,
   excelDaVersao,
+  excelAtual,
   montarMensagem,
 };

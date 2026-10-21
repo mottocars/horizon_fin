@@ -102,17 +102,50 @@ async function gravarVersao(req, res, next) {
   }
 }
 
-async function excelVersao(req, res, next) {
+async function detalheVersao(req, res, next) {
   try {
     const empresaId = empresaIdSchema.parse(req.params.empresaId);
     const versaoId = versaoIdSchema.parse(req.params.versaoId);
-    const { buffer, nomeArquivo } = await versoes.excelDaVersao(empresaId, versaoId);
-    res.setHeader('Content-Type', 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet');
-    res.setHeader('Content-Disposition', `attachment; filename*=UTF-8''${encodeURIComponent(nomeArquivo)}`);
-    res.send(Buffer.from(buffer));
+    res.json(await versoes.detalheDaVersao(empresaId, versaoId));
   } catch (err) {
     tratar(err, next);
   }
 }
 
-module.exports = { list, updateDatas, listPendencias, descartarPendencia, listVersoes, gravarVersao, excelVersao };
+function enviarPlanilha(res, { buffer, nomeArquivo }) {
+  res.setHeader('Content-Type', 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet');
+  res.setHeader('Content-Disposition', `attachment; filename*=UTF-8''${encodeURIComponent(nomeArquivo)}`);
+  res.send(Buffer.from(buffer));
+}
+
+async function excelVersao(req, res, next) {
+  try {
+    const empresaId = empresaIdSchema.parse(req.params.empresaId);
+    const versaoId = versaoIdSchema.parse(req.params.versaoId);
+    enviarPlanilha(res, await versoes.excelDaVersao(empresaId, versaoId));
+  } catch (err) {
+    tratar(err, next);
+  }
+}
+
+// Botão de exportar do dashboard: a planilha do cronograma em vigor.
+async function excelAtual(req, res, next) {
+  try {
+    const empresaId = empresaIdSchema.parse(req.params.empresaId);
+    enviarPlanilha(res, await versoes.excelAtual(empresaId));
+  } catch (err) {
+    tratar(err, next);
+  }
+}
+
+module.exports = {
+  list,
+  updateDatas,
+  listPendencias,
+  descartarPendencia,
+  listVersoes,
+  detalheVersao,
+  gravarVersao,
+  excelVersao,
+  excelAtual,
+};

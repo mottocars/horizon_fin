@@ -2,11 +2,12 @@ const ExcelJS = require('exceljs');
 
 // Planilha de uma versão do cronograma de obras — o anexo do comunicado de WhatsApp e o download da
 // aba Versões de Cronogramas Obras (cronogramaVersoes.service.js). É o espelho do cronograma da tela
-// (pedido do usuário), montada do retrato guardado na versão:
+// (pedido do usuário), montada do retrato guardado na versão — ou do cronograma em vigor, no botão
+// de exportar do dashboard (excelAtual):
 // - Cronograma: uma linha por obra — início, fim e duração de cada etapa, a etapa de hoje e o atraso;
-// - Gantt: mês a mês, nas cores das etapas e com os meses em atraso na cor do atraso;
 // - Alterações: o que mudou nesta versão;
 // - Versão: quem gravou, quando, a observação e o link do dashboard.
+// (O Gantt mês a mês saiu da planilha a pedido do usuário.)
 // As contas de data e de atraso são as mesmas da tela (frontend: CentrosCusto/cronogramaDatas.js e
 // Operacoes/CronogramasObras/cronogramaObras.js).
 
@@ -17,7 +18,6 @@ const AZUL = 'FF1E40AF';
 const AMARELO_ALTERADA = 'FFFFF4CC';
 const MS_DIA = 86400000;
 const DIAS_MES = 365.25 / 12;
-const LIMITE_MESES_GANTT = 300;
 
 // ----- datas ('AAAA-MM-DD', contas em UTC)
 const utc = (d) => {
@@ -34,18 +34,12 @@ function somarMeses(d, n) {
 }
 const mesesEntre = (de, ate) => Math.round((utc(ate) - utc(de)) / MS_DIA / DIAS_MES);
 const anosEntre = (de, ate) => Math.round((utc(ate) - utc(de)) / MS_DIA / 365.25);
-const idxMes = (d) => {
-  const [a, m] = d.split('-').map(Number);
-  return a * 12 + m - 1;
-};
-const rotuloMes = (idx) => `${MESES[idx % 12]}/${String(Math.floor(idx / 12)).slice(2)}`;
 const mesAno = (d) => (d ? `${MESES[Number(d.slice(5, 7)) - 1]}/${d.slice(0, 4)}` : '');
 const dataExcel = (d) => (d ? new Date(utc(d)) : null);
 function hojeSp() {
   return new Intl.DateTimeFormat('en-CA', { timeZone: 'America/Sao_Paulo' }).format(new Date());
 }
 const argb = (hex) => `FF${String(hex || '#9ca3af').replace('#', '').toUpperCase()}`;
-const preenchimento = (hex) => ({ type: 'pattern', pattern: 'solid', fgColor: { argb: argb(hex) } });
 
 // Segmentos da obra (um por etapa com início) — fim e duração como montarSegmentos da tela.
 function segmentos(centro, etapas) {
@@ -169,61 +163,6 @@ async function gerar({ empresa, versao, link }) {
   sheet.getRow(1).height = 32;
   sheet.autoFilter = { from: { row: 1, column: 1 }, to: { row: 1, column: colunas.length } };
 
-  // ----- Gantt
-  const gantt = workbook.addWorksheet('Gantt', { views: [{ state: 'frozen', xSplit: 1, ySplit: 2 }] });
-  const marcos = [hoje];
-  obras.forEach(({ segs }) => segs.forEach((s) => marcos.push(s.inicio, s.fim || s.inicio)));
-  const ini = Math.min(...marcos.map(idxMes));
-  const fim = Math.min(Math.max(...marcos.map(idxMes)), ini + LIMITE_MESES_GANTT - 1);
-  const qtdMeses = fim - ini + 1;
-  const idxHoje = idxMes(hoje);
-  gantt.getColumn(1).width = 26;
-  for (let k = 0; k < qtdMeses; k++) gantt.getColumn(k + 2).width = 4.2;
-  // linha 1: os anos (mesclados); linha 2: os meses
-  gantt.getCell(1, 1).value = 'Empreendimento';
-  gantt.mergeCells(1, 1, 2, 1);
-  for (let k = 0; k < qtdMeses; k++) {
-    const m = ini + k;
-    if (k === 0 || m % 12 === 0) {
-      const ateFimDoAno = Math.min(qtdMeses - 1, k + (11 - (m % 12)));
-      gantt.getCell(1, k + 2).value = Math.floor(m / 12);
-      if (ateFimDoAno > k) gantt.mergeCells(1, k + 2, 1, ateFimDoAno + 2);
-    }
-    gantt.getCell(2, k + 2).value = MESES[m % 12].charAt(0).toUpperCase();
-  }
-  [1, 2].forEach((r) => {
-    estilizarCabecalho(gantt.getRow(r));
-    gantt.getRow(r).alignment = { horizontal: 'center', vertical: 'middle' };
-  });
-  // o mês de hoje em destaque na régua
-  if (idxHoje >= ini && idxHoje <= fim) gantt.getCell(2, idxHoje - ini + 2).font = { bold: true, color: { argb: 'FFFCA5A5' } };
-  obras.forEach(({ c, segs, janela }, n) => {
-    const r = n + 3;
-    gantt.getCell(r, 1).value = nome(c);
-    if (alteradas.has(c.sienge_id)) gantt.getCell(r, 1).font = { bold: true };
-    for (let k = 0; k < qtdMeses; k++) {
-      const m = ini + k;
-      const seg = segs.filter((s) => idxMes(s.inicio) <= m && m <= idxMes(s.fim || s.inicio)).at(-1);
-      if (!seg) continue;
-      const noAtraso = janela && idxMes(janela.desde) <= m && m <= idxMes(janela.ate);
-      const cel = gantt.getCell(r, k + 2);
-      cel.fill = preenchimento(noAtraso ? corAtraso : seg.cor);
-      cel.border = { left: { style: 'thin', color: { argb: 'FFFFFFFF' } } };
-    }
-  });
-  // legenda embaixo
-  const rLegenda = obras.length + 4;
-  gantt.getCell(rLegenda, 1).value = 'Legenda';
-  gantt.getCell(rLegenda, 1).font = { bold: true };
-  const itensLegenda = [
-    ...etapas.map((e, i) => ({ cor: e.cor || CORES_PADRAO[i % CORES_PADRAO.length], texto: e.descricao })),
-    ...(atraso ? [{ cor: corAtraso, texto: 'Atraso' }] : []),
-  ];
-  itensLegenda.forEach((item, i) => {
-    gantt.getCell(rLegenda + 1 + i, 2).fill = preenchimento(item.cor);
-    gantt.getCell(rLegenda + 1 + i, 3).value = item.texto;
-  });
-
   // ----- Alterações
   const alt = workbook.addWorksheet('Alterações', { views: [{ state: 'frozen', ySplit: 1 }] });
   alt.columns = [
@@ -259,9 +198,9 @@ async function gerar({ empresa, versao, link }) {
   const sobre = workbook.addWorksheet('Versão');
   sobre.getColumn(1).width = 22;
   sobre.getColumn(2).width = 70;
-  const quando = new Intl.DateTimeFormat('pt-BR', { dateStyle: 'short', timeStyle: 'short', timeZone: 'America/Sao_Paulo' }).format(
-    new Date(versao.criado_em)
-  );
+  const quando = versao.criado_em
+    ? new Intl.DateTimeFormat('pt-BR', { dateStyle: 'short', timeStyle: 'short', timeZone: 'America/Sao_Paulo' }).format(new Date(versao.criado_em))
+    : '';
   const regra = !atraso
     ? 'Sem regra de atraso'
     : atraso.regra === 'FIXA'
@@ -269,7 +208,8 @@ async function gerar({ empresa, versao, link }) {
       : 'Planejamento do Prevision (mês em que a curva S de base chega a 100%)';
   const linhas = [
     ['Empresa', empresa],
-    ['Versão', versao.numero],
+    ['Versão', versao.numero ?? 'Nenhuma versão gravada ainda — cronograma em vigor'],
+    ...(versao.exportadaEm ? [['Exportada em', versao.exportadaEm]] : []),
     ['Gravada em', quando],
     ['Gravada por', versao.criado_por_nome || ''],
     ['Observação', versao.observacao || ''],

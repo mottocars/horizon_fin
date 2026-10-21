@@ -1,22 +1,23 @@
 import { useCallback, useEffect, useMemo, useState } from 'react';
 import { Link } from 'react-router-dom';
 import { ChartGantt, Milestone, TriangleAlert, X } from 'lucide-react';
-import { listCronogramaCentros } from '../../../api/cronogramaCentros.api';
+import { getVersaoCronograma, listCronogramaCentros } from '../../../api/cronogramaCentros.api';
 import JanelaCentroCusto from './JanelaCentroCusto';
 import CardsCarteira from './CardsCarteira';
 import GanttObras, { LegendaGantt, ZOOMS_GANTT } from './GanttObras';
-import { isoHoje, montarObras, naEtapa, numerosTopo, plural, resumoCarteira } from './cronogramaObras';
+import { filtrarSituacao, isoHoje, montarObras, naEtapa, numerosTopo, obrasDaVersao, plural, resumoCarteira } from './cronogramaObras';
 
 // ---------------------------------------------------------------------------------------
 // Operações > Cronogramas Obras > Cronogramas (pedido do usuário): no topo, os números da
 // carteira — VGV, unidades e quantas obras estão em cada etapa hoje (CardsCarteira, os mesmos cards
 // do dashboard Cronogramas de Obras) —; embaixo, o Gantt das obras
 // mês a mês (GanttObras — o mesmo do dashboard Cronogramas de Obras). Clicar numa obra abre o
-// cadastro dela (JanelaCentroCusto); clicar num card de etapa destaca, no Gantt, as obras que
-// estão nela hoje.
+// cadastro dela (JanelaCentroCusto); clicar num card de etapa filtra o Gantt (só as obras que
+// estão nela hoje). Os filtros "Obras" (`situacao`) e "Mudanças" (`versaoId` — as obras alteradas
+// numa versão, com como eram antes) ficam ao lado da empresa, na página (CronogramasObrasPage).
 // ---------------------------------------------------------------------------------------
 
-export default function CronogramasTab({ empresaId }) {
+export default function CronogramasTab({ empresaId, situacao = '', versaoId = '', onLimparVersao }) {
   const [etapas, setEtapas] = useState([]);
   const [centros, setCentros] = useState([]);
   const [atraso, setAtraso] = useState(null); // Regra de Atraso da Construção (aba Configurações)
@@ -25,6 +26,7 @@ export default function CronogramasTab({ empresaId }) {
   const [zoom, setZoom] = useState('geral');
   const [destaque, setDestaque] = useState(null); // id da etapa destacada pelos cards
   const [aberto, setAberto] = useState(null); // centro aberto na janela do cadastro
+  const [versaoDetalhe, setVersaoDetalhe] = useState(null);
 
   const carregar = useCallback(() => {
     if (!empresaId) return;
@@ -48,8 +50,22 @@ export default function CronogramasTab({ empresaId }) {
     carregar();
   }, [carregar]);
 
-  const obras = useMemo(() => montarObras(centros, etapas, isoHoje(), atraso), [centros, etapas, atraso]);
+  useEffect(() => {
+    setVersaoDetalhe(null);
+    if (!empresaId || !versaoId) return;
+    getVersaoCronograma(empresaId, versaoId)
+      .then(setVersaoDetalhe)
+      .catch(() => onLimparVersao?.());
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [empresaId, versaoId]);
+
+  const obras = useMemo(() => filtrarSituacao(montarObras(centros, etapas, isoHoje(), atraso), situacao), [centros, etapas, atraso, situacao]);
   const r = useMemo(() => resumoCarteira(obras, etapas), [obras, etapas]);
+  // "Mudanças da versão": o Gantt fica com as obras alteradas nela (como ficaram + como eram antes).
+  const obrasVersao = useMemo(
+    () => (versaoDetalhe ? filtrarSituacao(obrasDaVersao(versaoDetalhe, isoHoje()), situacao) : null),
+    [versaoDetalhe, situacao]
+  );
 
   if (!empresaId) {
     return (
@@ -83,8 +99,9 @@ export default function CronogramasTab({ empresaId }) {
 
   const etapaDestacada = etapas.find((e) => e.id === destaque);
   // Card de etapa clicado → o Gantt fica só com as obras dela hoje e VGV e unidades somam só elas.
-  const obrasGantt = etapaDestacada ? obras.filter((o) => naEtapa(o, destaque)) : obras;
-  const rGantt = etapaDestacada ? resumoCarteira(obrasGantt, etapas) : r;
+  const baseGantt = obrasVersao || obras;
+  const obrasGantt = etapaDestacada ? baseGantt.filter((o) => naEtapa(o, destaque)) : baseGantt;
+  const rGantt = etapaDestacada || obrasVersao ? resumoCarteira(obrasGantt, etapas) : r;
   const topo = etapaDestacada ? numerosTopo(obrasGantt, `em ${etapaDestacada.descricao}`) : numerosTopo(obras);
 
   return (
@@ -111,10 +128,21 @@ export default function CronogramasTab({ empresaId }) {
           <div className="min-w-0">
             <h3 className="text-sm font-semibold text-gray-900">Linha do tempo das obras</h3>
             <p className="mt-0.5 text-xs text-gray-500">
-              {plural(rGantt.comCronograma, 'obra no cronograma', 'obras no cronograma')}
+              {versaoDetalhe
+                ? plural(rGantt.comCronograma, `obra alterada na versão ${versaoDetalhe.numero}`, `obras alteradas na versão ${versaoDetalhe.numero}`)
+                : plural(rGantt.comCronograma, 'obra no cronograma', 'obras no cronograma')}
               {rGantt.aIniciar > 0 && ` · ${plural(rGantt.aIniciar, 'a iniciar', 'a iniciar')}`}
               {rGantt.concluidas > 0 && ` · ${plural(rGantt.concluidas, 'concluída', 'concluídas')}`}
               {rGantt.semCronograma > 0 && <span className="text-amber-600"> · {plural(rGantt.semCronograma, 'sem datas', 'sem datas')}</span>}
+              {versaoDetalhe && (
+                <button
+                  type="button"
+                  onClick={() => onLimparVersao?.()}
+                  className="ml-2 inline-flex items-center gap-1 rounded-full bg-gray-100 px-2 py-0.5 text-[11px] font-medium text-gray-600 hover:bg-gray-200"
+                >
+                  Mudanças da versão {versaoDetalhe.numero} <X size={11} />
+                </button>
+              )}
               {etapaDestacada && (
                 <button
                   type="button"
@@ -127,7 +155,7 @@ export default function CronogramasTab({ empresaId }) {
             </p>
           </div>
           <div className="flex flex-wrap items-center gap-x-4 gap-y-2">
-            <LegendaGantt etapas={etapas} atraso={atraso} />
+            <LegendaGantt etapas={etapas} atraso={atraso} comparando={Boolean(obrasVersao)} />
             <div className="inline-flex rounded-lg border border-gray-200 bg-white p-0.5">
               {ZOOMS_GANTT.map((z) => (
                 <button

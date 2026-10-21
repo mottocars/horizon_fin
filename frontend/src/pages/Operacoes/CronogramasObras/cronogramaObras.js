@@ -14,6 +14,9 @@ export function plural(n, um, varios) {
   return `${n.toLocaleString('pt-BR')} ${n === 1 ? um : varios}`;
 }
 
+// Nome da obra nas telas do cronograma: o apelido do cadastro, quando preenchido (pedido do usuário).
+export const nomeObra = (centro) => String(centro.apelido || '').trim() || centro.name;
+
 // Cor dos meses em atraso quando ninguém escolheu outra na aba Configurações (atraso_cor NULL).
 export const COR_ATRASO_PADRAO = '#dc2626';
 
@@ -117,7 +120,7 @@ export function montarObras(centros, etapas, hoje, atraso = null) {
     .sort((a, b) => {
       const ia = a.segmentos[0]?.inicio || '9999';
       const ib = b.segmentos[0]?.inicio || '9999';
-      return ia.localeCompare(ib) || a.centro.name.localeCompare(b.centro.name, 'pt-BR');
+      return ia.localeCompare(ib) || nomeObra(a.centro).localeCompare(nomeObra(b.centro), 'pt-BR');
     });
 }
 
@@ -176,5 +179,48 @@ export function linhasDaObra(obra) {
     if (m.inicio_antes !== m.inicio_depois) linhas.push({ chave: `${m.etapa_id}i`, etapa: m.etapa, rotulo: 'início', antes: m.inicio_antes, depois: m.inicio_depois });
     if (m.ultima && m.fim_antes !== m.fim_depois) linhas.push({ chave: `${m.etapa_id}f`, etapa: m.etapa, rotulo: 'término', antes: m.fim_antes, depois: m.fim_depois });
     return linhas;
+  });
+}
+
+// Filtro "Obras" (ao lado da empresa — pedido do usuário): todas, só as que ainda têm etapa por vir
+// (em andamento ou a iniciar) ou só as concluídas (todas as etapas já passaram).
+export const FILTROS_SITUACAO = [
+  { value: '', label: 'Todas as obras' },
+  { value: 'andamento', label: 'Em andamento e a iniciar' },
+  { value: 'concluidas', label: 'Concluídas (todas as etapas já passaram)' },
+];
+
+export function filtrarSituacao(obras, filtro) {
+  if (filtro === 'concluidas') return obras.filter((o) => o.situacao.tipo === 'concluida');
+  if (filtro === 'andamento') return obras.filter((o) => o.situacao.tipo !== 'concluida');
+  return obras;
+}
+
+// Filtro "Mudanças da versão" do Gantt (pedido do usuário): as obras alteradas numa versão, montadas
+// do retrato guardado nela (como ficaram), cada uma com `antes` — os segmentos de como eram antes da
+// versão, o Gantt desenha numa faixa fina em cima da barra — e `mudancas` (etapaId -> a alteração da
+// etapa, pra dica). `versao`: detalhe de /cronograma-centros/:empresa/versoes/:id.
+export function obrasDaVersao(versao, hoje) {
+  const { etapas, atraso, centros } = versao.cronograma;
+  const porObra = new Map(versao.alteracoes.map((a) => [a.sienge_id, a]));
+  return montarObras(
+    centros.filter((c) => porObra.has(c.sienge_id)),
+    etapas,
+    hoje,
+    atraso
+  ).map((o) => {
+    const alteracao = porObra.get(o.centro.sienge_id);
+    const antes = { ...o.centro, datas: { ...o.centro.datas }, fins: { ...o.centro.fins } };
+    alteracao.etapas.forEach((m) => {
+      if (m.inicio_antes) antes.datas[m.etapa_id] = m.inicio_antes;
+      else delete antes.datas[m.etapa_id];
+      antes.fins[m.etapa_id] = m.fim_antes;
+      if (m.ultima) antes.data_termino = m.fim_antes;
+    });
+    return {
+      ...o,
+      antes: montarSegmentos(antes, etapas),
+      mudancas: Object.fromEntries(alteracao.etapas.map((m) => [m.etapa_id, m])),
+    };
   });
 }

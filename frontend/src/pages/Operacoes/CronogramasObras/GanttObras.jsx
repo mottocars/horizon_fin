@@ -1,7 +1,7 @@
 import { Fragment, forwardRef, useEffect, useImperativeHandle, useMemo, useRef, useState } from 'react';
 import { corPadrao } from '../../../utils/coresPadrao';
 import { somarDias, somarMeses } from '../../CentrosCusto/cronogramaDatas';
-import { COR_ATRASO_PADRAO, isoHoje, plural } from './cronogramaObras';
+import { COR_ATRASO_PADRAO, isoHoje, nomeObra, plural } from './cronogramaObras';
 import { MESES_ABREV, mesAno, moeda } from './formatos';
 
 // ---------------------------------------------------------------------------------------
@@ -20,6 +20,9 @@ import { MESES_ABREV, mesAno, moeda } from './formatos';
 // - Meses em atraso da construção (Regra de Atraso da Construção — aba Configurações): vêm no
 //   `atraso` de cada segmento que cai na janela do atraso (montarObras) e saem na cor do atraso;
 //   o `prazo` da etapa da construção vai na dica.
+// - Mudanças de uma versão (obrasDaVersao): a obra traz `antes` (os segmentos de antes da versão,
+//   desenhados numa faixa fina em cima da barra) e `mudancas` (a dica da etapa mostra como era).
+// - O nome da obra é o apelido, quando preenchido (nomeObra).
 // ---------------------------------------------------------------------------------------
 
 export const ZOOMS_GANTT = [
@@ -59,7 +62,7 @@ function duracaoTexto(seg) {
 }
 
 // Legenda: retângulo da cor de cada etapa (a forma da marca), o atraso (com a regra) e a linha de hoje.
-export function LegendaGantt({ etapas, atraso = null }) {
+export function LegendaGantt({ etapas, atraso = null, comparando = false }) {
   return (
     <div className="flex flex-wrap items-center gap-x-3 gap-y-1 text-[11px] text-gray-600">
       {etapas.map((etapa, i) => (
@@ -72,6 +75,12 @@ export function LegendaGantt({ etapas, atraso = null }) {
         <span className="flex items-center gap-1.5">
           <span className="h-2.5 w-3.5 rounded-[3px]" style={{ backgroundColor: atraso.cor || COR_ATRASO_PADRAO }} />
           Atraso
+        </span>
+      )}
+      {comparando && (
+        <span className="flex items-center gap-1.5">
+          <span className="h-1 w-3.5 rounded-full bg-gray-400/70" />
+          Antes da versão
         </span>
       )}
       <span className="flex items-center gap-1.5 text-gray-500">
@@ -211,6 +220,24 @@ function BarraObra({ segmentos, ini, px, mensal, onDica }) {
   });
 }
 
+// Como a obra era antes da versão (filtro "Mudanças da versão"): uma faixa fina em cima da barra,
+// nas cores das etapas, mais apagada — dá pra ver de bate-pronto o que andou.
+function BarraAntes({ segmentos, ini, px }) {
+  const xDe = (iso) => (posMes(iso) - ini) * px;
+  return segmentos.map((seg, i) => {
+    const esquerda = xDe(seg.inicio);
+    const direita = seg.fim ? xDe(somarDias(seg.fim, 1)) : esquerda + px;
+    const ultimo = i === segmentos.length - 1;
+    return (
+      <span
+        key={seg.etapa.id}
+        className={`pointer-events-none absolute top-[3px] h-[5px] opacity-50 ${i === 0 ? 'rounded-l-full' : ''} ${ultimo ? 'rounded-r-full' : ''}`}
+        style={{ left: esquerda, width: Math.max(2, direita - esquerda - (ultimo ? 0 : 2)), backgroundColor: seg.cor }}
+      />
+    );
+  });
+}
+
 function Dica({ dica }) {
   if (!dica) return null;
   const { x, y } = dica;
@@ -220,12 +247,16 @@ function Dica({ dica }) {
       className="pointer-events-none fixed z-60 w-60 rounded-lg border border-gray-200 bg-white px-3 py-2 text-xs leading-normal shadow-lg"
       style={{ left: esquerda, top: y + 14 }}
     >
-      {dica.seg ? <DicaSegmento seg={dica.seg} centro={dica.centro} /> : <DicaObra obra={dica.obra} acao={dica.acao} />}
+      {dica.seg ? (
+        <DicaSegmento seg={dica.seg} centro={dica.centro} mudanca={dica.mudanca} />
+      ) : (
+        <DicaObra obra={dica.obra} acao={dica.acao} />
+      )}
     </div>
   );
 }
 
-function DicaSegmento({ seg, centro }) {
+function DicaSegmento({ seg, centro, mudanca }) {
   return (
     <>
       <p className="text-[13px] font-semibold tabular-nums text-gray-900">
@@ -236,7 +267,15 @@ function DicaSegmento({ seg, centro }) {
         {seg.etapa.descricao} · {duracaoTexto(seg)}
       </p>
       {seg.prazo ? <LinhaPrazo prazo={seg.prazo} /> : seg.atraso && <LinhaPrazo prazo={seg.atraso.prazo} etapa={seg.atraso.construcao} />}
-      <p className="mt-0.5 truncate text-gray-400">{centro.name}</p>
+      {mudanca && (
+        <p className="mt-1 border-t border-gray-100 pt-1 text-gray-500">
+          Antes da versão:{' '}
+          <span className="tabular-nums text-gray-700">
+            {mudanca.inicio_antes ? mesAno(mudanca.inicio_antes) : 'sem data'} → {mudanca.fim_antes ? mesAno(mudanca.fim_antes) : 'em aberto'}
+          </span>
+        </p>
+      )}
+      <p className="mt-0.5 truncate text-gray-400">{nomeObra(centro)}</p>
     </>
   );
 }
@@ -279,7 +318,7 @@ function DicaObra({ obra, acao }) {
   const prazo = etapaPrazo?.prazo;
   return (
     <>
-      <p className="truncate text-[13px] font-semibold text-gray-900">{centro.name}</p>
+      <p className="truncate text-[13px] font-semibold text-gray-900">{nomeObra(centro)}</p>
       <p className="mt-1 flex items-baseline justify-between gap-3 text-gray-500">
         VGV <b className="font-semibold tabular-nums text-gray-900">{vgv || '—'}</b>
       </p>
@@ -347,7 +386,9 @@ const GanttObras = forwardRef(function GanttObras(
   // Faixa de meses: anos inteiros, do primeiro início ao último fim (e hoje).
   const faixa = useMemo(() => {
     const marcos = [hoje];
-    obras.forEach((o) => o.segmentos.forEach((s) => marcos.push(s.inicio, s.fim || somarMeses(s.inicio, 1))));
+    obras.forEach((o) =>
+      [...o.segmentos, ...(o.antes || [])].forEach((s) => marcos.push(s.inicio, s.fim || somarMeses(s.inicio, 1)))
+    );
     const idx = marcos.map(idxMes);
     const ini = Math.min(...idx);
     const fim = Math.max(...idx);
@@ -393,7 +434,8 @@ const GanttObras = forwardRef(function GanttObras(
   const larguraTotal = LARGURA_NOMES + larguraTempo;
   const transborda = larguraTotal > larguraArea + 1;
 
-  const mostrarDica = (centro) => (e, seg) => setDica(e && seg ? { seg, centro, x: e.clientX, y: e.clientY } : null);
+  const mostrarDica = (o) => (e, seg) =>
+    setDica(e && seg ? { seg, centro: o.centro, mudanca: o.mudancas?.[seg.etapa.id], x: e.clientX, y: e.clientY } : null);
   const acaoClique = onAbrirObra || onSelecionarObra;
   const clicavel = Boolean(acaoClique);
   const dicaAcao = (o) =>
@@ -491,14 +533,15 @@ const GanttObras = forwardRef(function GanttObras(
               >
                 <PontoSituacao situacao={o.situacao} />
                 <span className={`truncate text-[13px] font-semibold ${o.centro.sienge_id === selecionada ? 'text-primary-700' : 'text-gray-900'}`}>
-                  {o.centro.name}
+                  {nomeObra(o.centro)}
                 </span>
               </div>
               <div
                 className={`relative transition-colors ${o.centro.sienge_id === selecionada ? 'bg-primary-50/40' : 'group-hover:bg-primary-50/25'}`}
                 style={{ width: larguraTempo }}
               >
-                <BarraObra segmentos={o.segmentos} ini={faixa.ini} px={px} mensal={zoom === 'mensal'} onDica={mostrarDica(o.centro)} />
+                {o.antes && <BarraAntes segmentos={o.antes} ini={faixa.ini} px={px} />}
+                <BarraObra segmentos={o.segmentos} ini={faixa.ini} px={px} mensal={zoom === 'mensal'} onDica={mostrarDica(o)} />
               </div>
             </div>
           </Fragment>

@@ -5,6 +5,7 @@ import Card from '../../../components/Card';
 import Tabs from '../../../components/Tabs';
 import SearchableSelect from '../../../components/SearchableSelect';
 import { listEmpresas } from '../../../api/empresas.api';
+import { listVersoesCronograma } from '../../../api/cronogramaCentros.api';
 import { nomeExibicaoEmpresa } from '../../../utils/empresa';
 import { useEmpresaTravada } from '../../../hooks/useEmpresaTravada';
 import { useAuth } from '../../../auth/AuthContext';
@@ -13,6 +14,7 @@ import CronogramaCentrosTab from './CronogramaCentrosTab';
 import CronogramasTab from './CronogramasTab';
 import ConfiguracoesCronogramas from './ConfiguracoesCronogramas';
 import VersoesCronograma from './VersoesCronograma';
+import { FILTROS_SITUACAO } from './cronogramaObras';
 
 // Mesmo padrão de DfcConstrutorasPage.jsx: o `{ divider: true }` separa os Cronogramas (a tela em
 // si) das abas que dão suporte a eles. A aba Etapas saiu (pedido do usuário): as etapas se cadastram
@@ -72,6 +74,19 @@ export default function CronogramasObrasPage() {
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [loadingEmpresas, empresas, empresaId]);
 
+  // Filtros da aba Cronogramas ao lado da empresa (pedidos do usuário), na URL: "Obras" (?situacao=)
+  // e "Mudanças" (?versao= — uma versão gravada: o Gantt mostra as obras alteradas nela).
+  const situacao = searchParams.get('situacao') || '';
+  const versaoId = searchParams.get('versao') || '';
+  const [versoes, setVersoes] = useState([]);
+  useEffect(() => {
+    setVersoes([]);
+    if (!empresaId || abaAtiva !== 'cronogramas') return;
+    listVersoesCronograma(empresaId)
+      .then(setVersoes)
+      .catch(() => setVersoes([]));
+  }, [empresaId, abaAtiva]);
+
   // Busca (código ou descrição) da aba Centros de Custos — só conveniência de navegador, fora da
   // URL (mesma convenção da DFC).
   const [buscaCentros, setBuscaCentros] = useState('');
@@ -85,7 +100,7 @@ export default function CronogramasObrasPage() {
               <label className="mb-1 block text-sm font-medium text-gray-700">Empresa</label>
               <SearchableSelect
                 value={empresaId}
-                onChange={(novoId) => atualizarParams({ empresa_id: novoId || null })}
+                onChange={(novoId) => atualizarParams({ empresa_id: novoId || null, versao: null })}
                 disabled={loadingEmpresas || empresaTravada}
                 options={empresas.map((empresa) => ({ value: empresa.id, label: nomeExibicaoEmpresa(empresa) }))}
                 placeholder={loadingEmpresas ? 'Carregando empresas...' : 'Selecione uma empresa'}
@@ -93,6 +108,39 @@ export default function CronogramasObrasPage() {
               />
             </div>
 
+            {tabAtiva.id === 'cronogramas' && (
+              <>
+                <div className="sm:min-w-52 sm:max-w-xs sm:flex-1">
+                  <label className="mb-1 block text-sm font-medium text-gray-700">Obras</label>
+                  <SearchableSelect
+                    value={situacao}
+                    onChange={(v) => atualizarParams({ situacao: v || null })}
+                    disabled={!empresaId}
+                    options={FILTROS_SITUACAO}
+                    clearable={false}
+                  />
+                </div>
+                <div className="sm:min-w-56 sm:max-w-sm sm:flex-1">
+                  <label className="mb-1 block text-sm font-medium text-gray-700">Mudanças</label>
+                  <SearchableSelect
+                    value={versaoId}
+                    onChange={(v) => atualizarParams({ versao: v || null })}
+                    disabled={!empresaId || !versoes.length}
+                    options={[
+                      { value: '', label: 'Cronograma atual' },
+                      ...versoes.map((v) => ({
+                        value: String(v.id),
+                        label: `Versão ${v.numero} · ${new Date(v.criado_em).toLocaleDateString('pt-BR')} · ${
+                          v.alteracoes.length === 1 ? '1 obra alterada' : `${v.alteracoes.length} obras alteradas`
+                        }`,
+                      })),
+                    ]}
+                    placeholder={versoes.length ? 'Cronograma atual' : 'Nenhuma versão gravada'}
+                    clearable={false}
+                  />
+                </div>
+              </>
+            )}
             {abaAtiva === 'centros-custos' && (
               <div className="sm:min-w-56 sm:max-w-sm sm:flex-1">
                 <label className="mb-1 block text-sm font-medium text-gray-700">Buscar</label>
@@ -124,7 +172,12 @@ export default function CronogramasObrasPage() {
         ) : tabAtiva.id === 'configuracoes' ? (
           <ConfiguracoesCronogramas empresaId={empresaId} />
         ) : (
-          <CronogramasTab empresaId={empresaId} />
+          <CronogramasTab
+            empresaId={empresaId}
+            situacao={situacao}
+            versaoId={versaoId}
+            onLimparVersao={() => atualizarParams({ versao: null })}
+          />
         )}
       </div>
     </div>

@@ -12,12 +12,15 @@ router.param('empresaId', paramEmpresa);
 // guarda a alteração como pendente.
 router.get('/:empresaId', controller.list);
 // Versionamento (cronogramaVersoes.service.js): as alterações pendentes (com a prévia do
-// comunicado), descartar a de uma obra, as versões gravadas, gravar uma nova (aplica as pendências
-// e manda o WhatsApp) e a planilha de uma versão.
+// comunicado), descartar a de uma obra, as versões gravadas, uma versão com o retrato (o filtro
+// "Mudanças da versão" do Gantt), gravar uma nova (aplica as pendências e manda o WhatsApp), a
+// planilha de uma versão e a do cronograma em vigor (botão de exportar do dashboard).
 router.get('/:empresaId/pendencias', controller.listPendencias);
 router.delete('/:empresaId/pendencias/:siengeId', controller.descartarPendencia);
 router.get('/:empresaId/versoes', controller.listVersoes);
 router.post('/:empresaId/versoes', controller.gravarVersao);
+router.get('/:empresaId/versoes/:versaoId', controller.detalheVersao);
 router.get('/:empresaId/versoes/:versaoId/excel', controller.excelVersao);
+router.get('/:empresaId/excel', controller.excelAtual);
 
 module.exports = router;
