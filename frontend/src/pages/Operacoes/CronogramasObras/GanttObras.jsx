@@ -624,18 +624,18 @@ const GanttObras = forwardRef(function GanttObras(
                       alternarCidade(cidade);
                     }
                   }}
-                  className="group relative flex h-6 cursor-pointer border-b border-gray-100 focus:outline-none"
+                  className="group relative flex h-7 cursor-pointer border-b border-gray-100 focus:outline-none"
                 >
                   {/* só um demonstrativo, bem limpo (pedido do usuário): linha baixa, texto pequeno, sem fundo */}
                   <div
                     className="sticky left-0 z-20 flex shrink-0 items-center gap-1 border-r border-gray-200 bg-white px-3 transition-colors group-hover:bg-gray-50"
                     style={{ width: LARGURA_NOMES }}
                   >
-                    <ChevronRight size={11} className={`shrink-0 text-gray-300 transition-transform ${fechada ? '' : 'rotate-90'}`} />
-                    <span className={`truncate text-[10px] font-semibold uppercase tracking-wider ${cidade === SEM_CIDADE ? 'text-gray-300' : 'text-gray-400'}`}>
+                    <ChevronRight size={12} className={`shrink-0 text-gray-400 transition-transform ${fechada ? '' : 'rotate-90'}`} />
+                    <span className={`truncate text-[11px] font-semibold uppercase tracking-wider ${cidade === SEM_CIDADE ? 'text-gray-400' : 'text-gray-600'}`}>
                       {cidade}
                     </span>
-                    <span className="shrink-0 text-[10px] tabular-nums text-gray-300">· {lista.length}</span>
+                    <span className="shrink-0 text-[11px] tabular-nums text-gray-400">· {lista.length}</span>
                   </div>
                   <div style={{ width: larguraTempo }} />
                 </div>
