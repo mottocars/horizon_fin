@@ -5,7 +5,7 @@ import { listCronogramaCentros } from '../../../api/cronogramaCentros.api';
 import JanelaCentroCusto from './JanelaCentroCusto';
 import CardsCarteira from './CardsCarteira';
 import GanttObras, { LegendaGantt, ZOOMS_GANTT } from './GanttObras';
-import { isoHoje, montarObras, plural, resumoCarteira } from './cronogramaObras';
+import { isoHoje, montarObras, naEtapa, numerosTopo, plural, resumoCarteira } from './cronogramaObras';
 
 // ---------------------------------------------------------------------------------------
 // Operações > Cronogramas Obras > Cronogramas (pedido do usuário): no topo, os números da
@@ -79,6 +79,10 @@ export default function CronogramasTab({ empresaId }) {
   }
 
   const etapaDestacada = etapas.find((e) => e.id === destaque);
+  // Card de etapa clicado → VGV e unidades somam só as obras dela (os cards são dinâmicos).
+  const topo = etapaDestacada
+    ? numerosTopo(obras.filter((o) => naEtapa(o, destaque)), `em ${etapaDestacada.descricao}`)
+    : numerosTopo(obras);
 
   return (
     <div className="space-y-5 rounded-card rounded-tl-none bg-white p-5 shadow-card">
@@ -94,7 +98,7 @@ export default function CronogramasTab({ empresaId }) {
 
       {/* Números da carteira — os mesmos cards do dashboard (pedido do usuário) */}
       <div className="painel-cfo embutido">
-        <CardsCarteira resumo={r} destaque={destaque} onDestaque={setDestaque} />
+        <CardsCarteira resumo={r} topo={topo} destaque={destaque} onDestaque={setDestaque} />
       </div>
 
       {/* Gantt — overflow-clip (não hidden): recorta sem virar área de rolagem, então a barra de

@@ -8,7 +8,7 @@ import { nomeExibicaoEmpresa } from '../../../utils/empresa';
 import { useEmpresaTravada } from '../../../hooks/useEmpresaTravada';
 import GanttObras, { LegendaGantt, ZOOMS_GANTT } from '../../Operacoes/CronogramasObras/GanttObras';
 import CardsCarteira from '../../Operacoes/CronogramasObras/CardsCarteira';
-import { isoHoje, montarObras, plural, resumoCarteira } from '../../Operacoes/CronogramasObras/cronogramaObras';
+import { isoHoje, montarObras, naEtapa, numerosTopo, plural, resumoCarteira } from '../../Operacoes/CronogramasObras/cronogramaObras';
 import { mesAno } from '../../Operacoes/CronogramasObras/formatos';
 import '../EconomicoFinanceiro/fluxo/painel.css';
 import './cronogramas.css';
@@ -62,6 +62,7 @@ export default function CronogramasObrasDashboard() {
   const [erro, setErro] = useState('');
   const [zoom, setZoom] = useState('geral');
   const [destaque, setDestaque] = useState(null);
+  const [selecionada, setSelecionada] = useState(null); // sienge_id da obra clicada no Gantt
   const [telaCheia, setTelaCheia] = useState(false);
   const ganttRef = useRef(null);
 
@@ -97,6 +98,7 @@ export default function CronogramasObrasDashboard() {
     setEtapas([]);
     setCentros([]);
     setDestaque(null);
+    setSelecionada(null);
     if (!empresaId) return;
     setEstado('carregando');
     listCronogramaCentros(empresaId)
@@ -121,6 +123,24 @@ export default function CronogramasObrasDashboard() {
   const obras = useMemo(() => montarObras(centros, etapas, hoje).filter((o) => o.segmentos.length), [centros, etapas, hoje]);
   const r = useMemo(() => resumoCarteira(obras, etapas), [obras, etapas]);
   const etapaDestacada = etapas.find((e) => e.id === destaque);
+
+  // Cards dinâmicos (pedido do usuário): obra clicada no Gantt → todos os cards mostram só ela; card
+  // de etapa clicado → VGV e unidades passam a somar só as obras dela. Um recorte troca o outro.
+  const obraSelecionada = obras.find((o) => o.centro.sienge_id === selecionada) || null;
+  const rCards = useMemo(() => (obraSelecionada ? resumoCarteira([obraSelecionada], etapas) : r), [obraSelecionada, etapas, r]);
+  const topo = obraSelecionada
+    ? numerosTopo([obraSelecionada], 'da obra')
+    : etapaDestacada
+      ? numerosTopo(obras.filter((o) => naEtapa(o, destaque)), `em ${etapaDestacada.descricao}`)
+      : numerosTopo(obras);
+  const destacar = (id) => {
+    setSelecionada(null);
+    setDestaque(id);
+  };
+  const selecionar = (centro) => {
+    setDestaque(null);
+    setSelecionada((atual) => (atual === centro.sienge_id ? null : centro.sienge_id));
+  };
 
   return (
     <div className="flex min-h-full w-full flex-col gap-3 p-5">
@@ -173,7 +193,7 @@ export default function CronogramasObrasDashboard() {
         ) : (
           <>
             {/* Os números da carteira */}
-            <CardsCarteira resumo={r} destaque={destaque} onDestaque={setDestaque} />
+            <CardsCarteira resumo={rCards} topo={topo} destaque={destaque} onDestaque={destacar} />
 
             {/* O Gantt */}
             <section className={`panel${telaCheia ? ' tela-cheia' : ''}`} aria-labelledby="h-gantt">
@@ -187,6 +207,11 @@ export default function CronogramasObrasDashboard() {
                   {etapaDestacada && (
                     <button type="button" className="destaque-chip" onClick={() => setDestaque(null)}>
                       Destacando {etapaDestacada.descricao} <X size={11} />
+                    </button>
+                  )}
+                  {obraSelecionada && (
+                    <button type="button" className="destaque-chip" onClick={() => setSelecionada(null)} title="Voltar para todas as obras">
+                      Só {obraSelecionada.centro.name} <X size={11} />
                     </button>
                   )}
                 </p>
@@ -236,6 +261,8 @@ export default function CronogramasObrasDashboard() {
                   obras={obras}
                   zoom={zoom}
                   destaque={destaque}
+                  selecionada={selecionada}
+                  onSelecionarObra={selecionar}
                   fundoBarra={telaCheia ? '-bottom-6' : 'bottom-0'}
                 />
               </div>

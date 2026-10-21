@@ -4,14 +4,15 @@ import '../../Dashboards/EconomicoFinanceiro/fluxo/painel.css';
 import '../../Dashboards/CronogramasObras/cronogramas.css';
 
 // Cards da carteira de obras no estilo dos cards do painel do CFO (.tile de painel.css): VGV e
-// unidades (com alerta das obras sem o dado) e, por etapa, as obras que estão nela hoje, o VGV e as
+// unidades — só o número (pedido do usuário) — e, por etapa, as obras que estão nela hoje, o VGV e as
 // unidades delas e a fatia da carteira. Clicar num card de etapa destaca essas obras no Gantt.
 // Usado no dashboard Cronogramas de Obras e na aba Cronogramas de Operações > Cronogramas Obras
 // (pedido do usuário: os mesmos cards) — precisa estar dentro de um .painel-cfo.
-// - `resumo`: resumoCarteira (cronogramaObras.js); `destaque` / `onDestaque(id | null)`.
-export default function CardsCarteira({ resumo: r, destaque, onDestaque }) {
-  const semVgv = r.totalObras - r.comVgv;
-  const semUnidades = r.totalObras - r.comUnidades;
+// - `resumo`: resumoCarteira (cronogramaObras.js) das obras que os cards de etapa mostram.
+// - `topo`: numerosTopo — VGV e unidades dos dois primeiros cards e o recorte deles no rótulo
+//   (a carteira, as obras da etapa destacada ou a obra selecionada: os cards são dinâmicos).
+// - `destaque` / `onDestaque(id | null)`.
+export default function CardsCarteira({ resumo: r, topo, destaque, onDestaque }) {
   return (
     <section
       className={`tiles cronograma${destaque ? ' destacando' : ''}`}
@@ -19,36 +20,14 @@ export default function CardsCarteira({ resumo: r, destaque, onDestaque }) {
       aria-label="Indicadores da carteira"
     >
       <div className="tile">
-        <span className="k">VGV total</span>
-        <span className="v" title={moeda(r.vgv, { centavos: true })}>
-          {moeda(r.vgv, { compacta: true })}
+        <span className="k">{topo.recorte ? `VGV ${topo.recorte}` : 'VGV total'}</span>
+        <span className="v" title={moeda(topo.vgv, { centavos: true })}>
+          {moeda(topo.vgv, { compacta: true })}
         </span>
-        <span className="d">
-          <b>{r.comVgv}</b> de {plural(r.totalObras, 'obra', 'obras')} com VGV
-        </span>
-        {semVgv > 0 ? (
-          <span className="st warn">{plural(semVgv, 'obra sem VGV', 'obras sem VGV')}</span>
-        ) : (
-          <span className="st good">Todas as obras com VGV</span>
-        )}
       </div>
       <div className="tile">
-        <span className="k">Unidades</span>
-        <span className="v">{r.unidades.toLocaleString('pt-BR')}</span>
-        <span className="d">
-          {r.comUnidades ? (
-            <>
-              média de <b>{Math.round(r.unidades / r.comUnidades)}</b> por obra
-            </>
-          ) : (
-            'nenhuma obra com unidades'
-          )}
-        </span>
-        {semUnidades > 0 ? (
-          <span className="st warn">{plural(semUnidades, 'obra sem unidades', 'obras sem unidades')}</span>
-        ) : (
-          <span className="st good">Todas as obras com unidades</span>
-        )}
+        <span className="k">{topo.recorte ? `Unidades ${topo.recorte}` : 'Unidades'}</span>
+        <span className="v">{topo.unidades.toLocaleString('pt-BR')}</span>
       </div>
       {r.porEtapa.map((e) => {
         const ativo = destaque === e.etapa.id;

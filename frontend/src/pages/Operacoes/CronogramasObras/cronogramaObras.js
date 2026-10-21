@@ -69,6 +69,13 @@ export function montarObras(centros, etapas, hoje) {
     });
 }
 
+// VGV e unidades dos dois primeiros cards: das obras do recorte (a carteira, as da etapa destacada
+// ou a obra selecionada). `recorte`: o complemento do rótulo ("em Construção", "da obra"; null = total).
+export function numerosTopo(obras, recorte = null) {
+  const soma = (campo) => obras.reduce((s, o) => s + (Number(o.centro[campo]) || 0), 0);
+  return { vgv: soma('valor_geral_vendas'), unidades: soma('numero_unidades'), recorte };
+}
+
 // Números da carteira: VGV, unidades e, por etapa, as obras que estão nela hoje.
 export function resumoCarteira(obras, etapas) {
   const soma = (centros, campo) => centros.reduce((s, c) => s + (Number(c[campo]) || 0), 0);

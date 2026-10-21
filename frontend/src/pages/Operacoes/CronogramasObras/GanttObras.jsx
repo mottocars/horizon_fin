@@ -1,5 +1,4 @@
 import { Fragment, forwardRef, useEffect, useImperativeHandle, useMemo, useRef, useState } from 'react';
-import { Check, CircleDashed } from 'lucide-react';
 import { corPadrao } from '../../../utils/coresPadrao';
 import { somarDias, somarMeses } from '../../CentrosCusto/cronogramaDatas';
 import { isoHoje, naEtapa } from './cronogramaObras';
@@ -11,8 +10,10 @@ import { MESES_ABREV, mesAno, moeda } from './formatos';
 // do Gantt do Plano de Voo (PlanoGantt.jsx): nomes fixos à esquerda, régua de meses, linha de hoje.
 // - `obras`: montarObras (cronogramaObras.js). `zoom`: 'geral' (encaixa tudo na largura) | 'mensal'.
 // - `destaque`: id de etapa — as obras que não estão nela hoje ficam apagadas.
-// - `onAbrirObra(centro)`: opcional — com ele, clicar numa obra abre o cadastro (Operações); sem
-//   ele, o gráfico é só leitura (dashboard).
+// - `onAbrirObra(centro)`: opcional — clicar numa obra abre o cadastro (Operações).
+// - `selecionada` (sienge_id | null) / `onSelecionarObra(centro)`: opcional — clicar numa obra a
+//   seleciona (dashboard: os cards passam a mostrar só ela); as outras ficam apagadas.
+//   Sem nenhum dos dois, o gráfico é só leitura.
 // - `fundoBarra`: classe do `bottom` da barra de rolagem horizontal, que fica sempre à vista grudada
 //   no rodapé da área que rola na vertical (como no Plano de Voo): `-bottom-6` quando essa área tem
 //   p-6 (o <main> das telas comuns, a tela cheia), `bottom-0` no dashboard (o <main> sem padding).
@@ -193,13 +194,21 @@ function BarraObra({ segmentos, ini, px, mensal, onDica }) {
 
 function Dica({ dica }) {
   if (!dica) return null;
-  const { seg, obra, x, y } = dica;
+  const { x, y } = dica;
   const esquerda = x + 260 > window.innerWidth ? x - 252 : x + 14;
   return (
     <div
       className="pointer-events-none fixed z-60 w-60 rounded-lg border border-gray-200 bg-white px-3 py-2 text-xs leading-normal shadow-lg"
       style={{ left: esquerda, top: y + 14 }}
     >
+      {dica.seg ? <DicaSegmento seg={dica.seg} centro={dica.centro} /> : <DicaObra obra={dica.obra} acao={dica.acao} />}
+    </div>
+  );
+}
+
+function DicaSegmento({ seg, centro }) {
+  return (
+    <>
       <p className="text-[13px] font-semibold tabular-nums text-gray-900">
         {mesAno(seg.inicio)} → {seg.fim ? mesAno(seg.fim) : 'em aberto'}
       </p>
@@ -207,50 +216,59 @@ function Dica({ dica }) {
         <span className="h-0.5 w-3 shrink-0 rounded-full" style={{ backgroundColor: seg.cor }} />
         {seg.etapa.descricao} · {duracaoTexto(seg)}
       </p>
-      <p className="mt-0.5 truncate text-gray-400">{obra.name}</p>
-    </div>
+      <p className="mt-0.5 truncate text-gray-400">{centro.name}</p>
+    </>
   );
 }
 
-function SituacaoObra({ situacao, centro, clicavel }) {
-  const extras = [moeda(centro.valor_geral_vendas, { compacta: true }), centro.numero_unidades ? `${centro.numero_unidades} un.` : null].filter(Boolean);
-  let estado;
-  if (situacao.tipo === 'etapa') {
-    estado = (
-      <>
-        <span className="h-2 w-2 shrink-0 rounded-full" style={{ backgroundColor: situacao.segmento.cor }} />
-        {situacao.segmento.etapa.descricao}
-      </>
-    );
-  } else if (situacao.tipo === 'aIniciar') {
-    estado = (
-      <>
-        <CircleDashed size={11} className="shrink-0 text-gray-400" />
-        Inicia em {mesAno(situacao.segmento.inicio)}
-      </>
-    );
-  } else if (situacao.tipo === 'concluida') {
-    estado = (
-      <>
-        <Check size={11} className="shrink-0 text-emerald-600" />
-        Concluída
-      </>
-    );
-  } else {
-    return <span className="text-[11px] leading-normal text-amber-600">{clicavel ? 'Sem datas — clique para preencher' : 'Sem datas no cronograma'}</span>;
-  }
+// Dica do nome da obra (pedido do usuário: o VGV e as unidades dela ao passar o mouse).
+function DicaObra({ obra, acao }) {
+  const { centro, situacao } = obra;
+  const vgv = moeda(centro.valor_geral_vendas, { centavos: true });
   return (
-    <span className="flex min-w-0 items-center gap-1.5 text-[11px] leading-normal text-gray-500">
-      {estado}
-      {extras.length > 0 && <span className="truncate text-gray-400">· {extras.join(' · ')}</span>}
-    </span>
+    <>
+      <p className="truncate text-[13px] font-semibold text-gray-900">{centro.name}</p>
+      <p className="mt-1 flex items-baseline justify-between gap-3 text-gray-500">
+        VGV <b className="font-semibold tabular-nums text-gray-900">{vgv || '—'}</b>
+      </p>
+      <p className="flex items-baseline justify-between gap-3 text-gray-500">
+        Unidades <b className="font-semibold tabular-nums text-gray-900">{centro.numero_unidades ?? '—'}</b>
+      </p>
+      <p className="mt-1 flex items-center gap-1.5 border-t border-gray-100 pt-1 text-gray-600">
+        <PontoSituacao situacao={situacao} />
+        {situacao.tipo === 'etapa'
+          ? `Hoje em ${situacao.segmento.etapa.descricao}`
+          : situacao.tipo === 'aIniciar'
+            ? `Inicia em ${mesAno(situacao.segmento.inicio)}`
+            : situacao.tipo === 'concluida'
+              ? 'Concluída'
+              : 'Sem datas no cronograma'}
+      </p>
+      {acao && <p className="mt-0.5 text-gray-400">{acao}</p>}
+    </>
   );
+}
+
+// Bolinha da situação de hoje, na frente do nome da obra: a cor da etapa em curso; antes de começar,
+// só o contorno na cor da primeira etapa; concluída, cinza; sem datas, tracejada.
+function PontoSituacao({ situacao }) {
+  if (situacao.tipo === 'etapa') {
+    return <span className="h-2.5 w-2.5 shrink-0 rounded-full" style={{ backgroundColor: situacao.segmento.cor }} />;
+  }
+  if (situacao.tipo === 'aIniciar') {
+    return <span className="h-2.5 w-2.5 shrink-0 rounded-full border-2 bg-white" style={{ borderColor: situacao.segmento.cor }} />;
+  }
+  if (situacao.tipo === 'concluida') return <span className="h-2.5 w-2.5 shrink-0 rounded-full bg-gray-400" />;
+  return <span className="h-2.5 w-2.5 shrink-0 rounded-full border border-dashed border-gray-400" />;
 }
 
 // O corpo rola na horizontal sem mostrar barra — a barra visível é a do rodapé, sincronizada.
 const ROLAGEM_SEM_BARRA = 'overflow-x-auto overflow-y-hidden [scrollbar-width:none] [&::-webkit-scrollbar]:hidden';
 
-const GanttObras = forwardRef(function GanttObras({ etapas, obras, zoom, destaque, onAbrirObra, fundoBarra = '-bottom-6' }, ref) {
+const GanttObras = forwardRef(function GanttObras(
+  { etapas, obras, zoom, destaque, onAbrirObra, selecionada, onSelecionarObra, fundoBarra = '-bottom-6' },
+  ref
+) {
   const [area, setArea] = useState(null);
   const barraRef = useRef(null);
   const [larguraArea, setLarguraArea] = useState(0);
@@ -314,9 +332,19 @@ const GanttObras = forwardRef(function GanttObras({ etapas, obras, zoom, destaqu
   const larguraTotal = LARGURA_NOMES + larguraTempo;
   const transborda = larguraTotal > larguraArea + 1;
 
-  const mostrarDica = (obra) => (e, seg) => setDica(e && seg ? { seg, obra, x: e.clientX, y: e.clientY } : null);
-  const apagada = (o) => destaque && !naEtapa(o, destaque);
-  const clicavel = Boolean(onAbrirObra);
+  const mostrarDica = (centro) => (e, seg) => setDica(e && seg ? { seg, centro, x: e.clientX, y: e.clientY } : null);
+  const acaoClique = onAbrirObra || onSelecionarObra;
+  const clicavel = Boolean(acaoClique);
+  const dicaAcao = (o) =>
+    onAbrirObra
+      ? 'Clique para abrir o cadastro'
+      : onSelecionarObra
+        ? o.centro.sienge_id === selecionada
+          ? 'Clique para ver todas as obras'
+          : 'Clique para ver só esta obra nos cards'
+        : null;
+  const mostrarDicaObra = (o) => (e) => setDica({ obra: o, acao: dicaAcao(o), x: e.clientX, y: e.clientY });
+  const apagada = (o) => (selecionada ? o.centro.sienge_id !== selecionada : destaque && !naEtapa(o, destaque));
 
   return (
     <div>
@@ -377,29 +405,38 @@ const GanttObras = forwardRef(function GanttObras({ etapas, obras, zoom, destaqu
               {...(clicavel && {
                 role: 'button',
                 tabIndex: 0,
-                title: 'Abrir o cadastro da obra',
-                onClick: () => onAbrirObra(o.centro),
+                'aria-pressed': onSelecionarObra ? o.centro.sienge_id === selecionada : undefined,
+                onClick: () => acaoClique(o.centro),
                 onKeyDown: (e) => {
                   if (e.key === 'Enter' || e.key === ' ') {
                     e.preventDefault();
-                    onAbrirObra(o.centro);
+                    acaoClique(o.centro);
                   }
                 },
               })}
-              className={`group relative flex h-14 border-b border-gray-100 transition-opacity focus:outline-none ${clicavel ? 'cursor-pointer' : ''} ${
+              className={`group relative flex h-12 border-b border-gray-100 transition-opacity focus:outline-none ${clicavel ? 'cursor-pointer' : ''} ${
                 apagada(o) ? 'opacity-30 hover:opacity-70' : ''
               }`}
             >
+              {/* bolinha da etapa de hoje + nome; VGV e unidades na dica ao passar o mouse */}
               <div
-                className="sticky left-0 z-20 flex shrink-0 flex-col justify-center border-r border-gray-200 bg-white px-4 transition-colors group-hover:bg-[#f7f9fd] group-focus:bg-primary-50/50"
+                onMouseEnter={mostrarDicaObra(o)}
+                onMouseMove={mostrarDicaObra(o)}
+                onMouseLeave={() => setDica(null)}
+                className={`sticky left-0 z-20 flex shrink-0 items-center gap-2 border-r border-gray-200 px-4 transition-colors group-focus:bg-primary-50/50 ${
+                  o.centro.sienge_id === selecionada ? 'bg-primary-50' : 'bg-white group-hover:bg-[#f7f9fd]'
+                }`}
                 style={{ width: LARGURA_NOMES }}
               >
-                <span className="truncate text-[13px] font-semibold text-gray-900" title={o.centro.name}>
+                <PontoSituacao situacao={o.situacao} />
+                <span className={`truncate text-[13px] font-semibold ${o.centro.sienge_id === selecionada ? 'text-primary-700' : 'text-gray-900'}`}>
                   {o.centro.name}
                 </span>
-                <SituacaoObra situacao={o.situacao} centro={o.centro} clicavel={clicavel} />
               </div>
-              <div className="relative transition-colors group-hover:bg-primary-50/25" style={{ width: larguraTempo }}>
+              <div
+                className={`relative transition-colors ${o.centro.sienge_id === selecionada ? 'bg-primary-50/40' : 'group-hover:bg-primary-50/25'}`}
+                style={{ width: larguraTempo }}
+              >
                 <BarraObra segmentos={o.segmentos} ini={faixa.ini} px={px} mensal={zoom === 'mensal'} onDica={mostrarDica(o.centro)} />
               </div>
             </div>
