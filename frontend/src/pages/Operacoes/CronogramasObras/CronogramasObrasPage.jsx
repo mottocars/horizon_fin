@@ -14,8 +14,7 @@ import CronogramaCentrosTab from './CronogramaCentrosTab';
 import CronogramasTab from './CronogramasTab';
 import ConfiguracoesCronogramas from './ConfiguracoesCronogramas';
 import VersoesCronograma from './VersoesCronograma';
-import CampoDataPeriodo from './CampoDataPeriodo';
-import { FILTROS_SITUACAO, mesesDoPeriodo, periodoPadrao, trocarDataPeriodo } from './cronogramaObras';
+import { FILTROS_SITUACAO } from './cronogramaObras';
 
 // Mesmo padrão de DfcConstrutorasPage.jsx: o `{ divider: true }` separa os Cronogramas (a tela em
 // si) das abas que dão suporte a eles. A aba Etapas saiu (pedido do usuário): as etapas se cadastram
@@ -80,13 +79,9 @@ export default function CronogramasObrasPage() {
   const situacao = searchParams.get('situacao') || '';
   const versaoId = searchParams.get('versao') || '';
   const [versoes, setVersoes] = useState([]);
-  // Zoom do Gantt e período De/Até do Mês a mês (padrão: 3 meses antes a 20 à frente; digitado com dia,
-  // mês e ano, mas só mês e ano valem — `periodo` em 'AAAA-MM'). Ficam no estado da página — persistem
-  // ao trocar de aba ou de zoom e só voltam ao padrão ao recarregar.
+  // Zoom do Gantt — fica no estado da página (persiste ao trocar de aba). Sem filtro de período aqui
+  // (pedido do usuário): o De/Até é só do dashboard Cronogramas de Obras.
   const [zoom, setZoom] = useState('mensal');
-  const [datasPeriodo, setDatasPeriodo] = useState(periodoPadrao);
-  const periodo = useMemo(() => mesesDoPeriodo(datasPeriodo), [datasPeriodo]);
-  const mudarPeriodo = (campo, valor) => setDatasPeriodo((d) => trocarDataPeriodo(d, campo, valor));
   useEffect(() => {
     setVersoes([]);
     if (!empresaId || abaAtiva !== 'cronogramas') return;
@@ -147,30 +142,6 @@ export default function CronogramasObrasPage() {
                     clearable={false}
                   />
                 </div>
-                {zoom === 'mensal' && (
-                  <>
-                    <div className="sm:w-40">
-                      <label htmlFor="periodo-de" className="mb-1 block text-sm font-medium text-gray-700">De</label>
-                      <CampoDataPeriodo
-                        id="periodo-de"
-                        value={datasPeriodo.ini}
-                        onChange={(valor) => mudarPeriodo('ini', valor)}
-                        disabled={!empresaId}
-                        className="w-full rounded-lg border border-gray-200 px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-primary-100"
-                      />
-                    </div>
-                    <div className="sm:w-40">
-                      <label htmlFor="periodo-ate" className="mb-1 block text-sm font-medium text-gray-700">Até</label>
-                      <CampoDataPeriodo
-                        id="periodo-ate"
-                        value={datasPeriodo.fim}
-                        onChange={(valor) => mudarPeriodo('fim', valor)}
-                        disabled={!empresaId}
-                        className="w-full rounded-lg border border-gray-200 px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-primary-100"
-                      />
-                    </div>
-                  </>
-                )}
               </>
             )}
             {abaAtiva === 'centros-custos' && (
@@ -211,7 +182,6 @@ export default function CronogramasObrasPage() {
             onLimparVersao={() => atualizarParams({ versao: null })}
             zoom={zoom}
             onZoom={setZoom}
-            periodo={periodo}
           />
         )}
       </div>

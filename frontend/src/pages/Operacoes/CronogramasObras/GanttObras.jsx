@@ -1,4 +1,5 @@
 import { Fragment, forwardRef, useEffect, useImperativeHandle, useMemo, useRef, useState } from 'react';
+import { ChevronRight } from 'lucide-react';
 import { corPadrao } from '../../../utils/coresPadrao';
 import { somarDias, somarMeses } from '../../CentrosCusto/cronogramaDatas';
 import { COR_ATRASO_PADRAO, isoHoje, nomeObra, plural } from './cronogramaObras';
@@ -10,6 +11,9 @@ import { MESES_ABREV, mesAno, moeda } from './formatos';
 // do Gantt do Plano de Voo (PlanoGantt.jsx): nomes fixos à esquerda, régua de meses, linha de hoje.
 // - `obras`: montarObras (cronogramaObras.js). `zoom`: 'geral' (encaixa tudo na largura) | 'mensal'.
 // - `onAbrirObra(centro)`: opcional — clicar numa obra abre o cadastro (Operações).
+// - `agruparPorCidade`: opcional (Operações — pedido do usuário) — as obras em drilldown por "Cidade - UF"
+//   (cidade e UF do cadastro do centro): a linha da cidade, sem nada nas colunas das datas, com a seta
+//   pra recolher; as obras dela embaixo. Começa tudo aberto; sem cidade vai pra "Sem cidade", no fim.
 // - `selecionada` (sienge_id | null) / `onSelecionarObra(centro)`: opcional — clicar numa obra a
 //   seleciona (dashboard: os cards passam a mostrar só ela); as outras ficam apagadas.
 //   Sem nenhum dos dois, o gráfico é só leitura.
@@ -382,7 +386,18 @@ function PontoSituacao({ situacao }) {
 const ROLAGEM_SEM_BARRA = 'overflow-x-auto overflow-y-hidden [scrollbar-width:none] [&::-webkit-scrollbar]:hidden';
 
 const GanttObras = forwardRef(function GanttObras(
-  { etapas, obras, zoom, periodo = null, onAbrirObra, selecionada, onSelecionarObra, fundoBarra = '-bottom-6', topoCabecalho = '-top-6' },
+  {
+    etapas,
+    obras,
+    zoom,
+    periodo = null,
+    onAbrirObra,
+    selecionada,
+    onSelecionarObra,
+    fundoBarra = '-bottom-6',
+    topoCabecalho = '-top-6',
+    agruparPorCidade = false,
+  },
   ref
 ) {
   const [area, setArea] = useState(null);
@@ -390,6 +405,7 @@ const GanttObras = forwardRef(function GanttObras(
   const cabecalhoRef = useRef(null);
   const [larguraArea, setLarguraArea] = useState(0);
   const [dica, setDica] = useState(null);
+  const [cidadesFechadas, setCidadesFechadas] = useState(() => new Set());
   const hoje = isoHoje();
 
   // Largura da área — a "Visão geral" encaixa a carteira inteira nela.
@@ -402,6 +418,32 @@ const GanttObras = forwardRef(function GanttObras(
 
   const comCronograma = obras.filter((o) => o.segmentos.length);
   const semCronograma = obras.filter((o) => !o.segmentos.length);
+
+  // Grupos por cidade (só com `agruparPorCidade`): em ordem alfabética, "Sem cidade" por último; dentro de
+  // cada um, primeiro as obras com cronograma, na ordem que vieram.
+  const SEM_CIDADE = 'Sem cidade';
+  const cidadeDe = (c) => {
+    const cidade = (c.cidade || '').trim();
+    const uf = (c.uf || '').trim().toUpperCase();
+    return cidade ? (uf ? `${cidade} - ${uf}` : cidade) : SEM_CIDADE;
+  };
+  const grupos = useMemo(() => {
+    if (!agruparPorCidade) return null;
+    const mapa = new Map();
+    [...comCronograma, ...semCronograma].forEach((o) => {
+      const k = cidadeDe(o.centro);
+      if (!mapa.has(k)) mapa.set(k, []);
+      mapa.get(k).push(o);
+    });
+    return [...mapa.entries()].sort(([a], [b]) => (a === SEM_CIDADE) - (b === SEM_CIDADE) || a.localeCompare(b, 'pt-BR'));
+  }, [agruparPorCidade, obras]); // eslint-disable-line react-hooks/exhaustive-deps
+  const alternarCidade = (k) =>
+    setCidadesFechadas((atual) => {
+      const prox = new Set(atual);
+      if (prox.has(k)) prox.delete(k);
+      else prox.add(k);
+      return prox;
+    });
 
   // Faixa de meses: com período (Mês a mês), exatamente os meses dele; sem, anos inteiros do primeiro
   // início ao último fim (e hoje).
@@ -475,6 +517,51 @@ const GanttObras = forwardRef(function GanttObras(
   const mostrarDicaObra = (o) => (e) => setDica({ obra: o, acao: dicaAcao(o), x: e.clientX, y: e.clientY });
   const apagada = (o) => selecionada && o.centro.sienge_id !== selecionada;
 
+  // Uma linha de obra (bolinha + nome à esquerda, barra das etapas). `recuada`: dentro de uma cidade.
+  const linhaObra = (o, recuada) => (
+    <div
+      key={o.centro.sienge_id}
+      {...(clicavel && {
+        role: 'button',
+        tabIndex: 0,
+        'aria-pressed': onSelecionarObra ? o.centro.sienge_id === selecionada : undefined,
+        onClick: () => acaoClique(o.centro),
+        onKeyDown: (e) => {
+          if (e.key === 'Enter' || e.key === ' ') {
+            e.preventDefault();
+            acaoClique(o.centro);
+          }
+        },
+      })}
+      className={`group relative flex h-12 border-b border-gray-100 transition-opacity focus:outline-none ${clicavel ? 'cursor-pointer' : ''} ${
+        apagada(o) ? 'opacity-30 hover:opacity-70' : ''
+      }`}
+    >
+      {/* bolinha da etapa de hoje + nome; VGV e unidades na dica ao passar o mouse */}
+      <div
+        onMouseEnter={mostrarDicaObra(o)}
+        onMouseMove={mostrarDicaObra(o)}
+        onMouseLeave={() => setDica(null)}
+        className={`sticky left-0 z-20 flex shrink-0 items-center gap-2 border-r border-gray-200 ${recuada ? 'pl-8 pr-4' : 'px-4'} transition-colors group-focus:bg-primary-50/50 ${
+          o.centro.sienge_id === selecionada ? 'bg-primary-50' : 'bg-white group-hover:bg-[#f7f9fd]'
+        }`}
+        style={{ width: LARGURA_NOMES }}
+      >
+        <PontoSituacao situacao={o.situacao} />
+        <span className={`truncate text-[13px] font-semibold ${o.centro.sienge_id === selecionada ? 'text-primary-700' : 'text-gray-900'}`}>
+          {nomeObra(o.centro)}
+        </span>
+      </div>
+      <div
+        className={`relative overflow-clip transition-colors ${o.centro.sienge_id === selecionada ? 'bg-primary-50/40' : 'group-hover:bg-primary-50/25'}`}
+        style={{ width: larguraTempo }}
+      >
+        {o.antes && <BarraAntes segmentos={o.antes} ini={faixa.ini} px={px} />}
+        <BarraObra segmentos={o.segmentos} ini={faixa.ini} px={px} mensal={zoom === 'mensal'} onDica={mostrarDica(o)} />
+      </div>
+    </div>
+  );
+
   return (
     <div>
     {/* régua: grudada no alto da área que rola na vertical (sempre à vista, como a barra de baixo),
@@ -520,7 +607,45 @@ const GanttObras = forwardRef(function GanttObras(
           </div>
         )}
 
-        {[...comCronograma, ...semCronograma].map((o, i) => (
+        {grupos &&
+          grupos.map(([cidade, lista]) => {
+            const fechada = cidadesFechadas.has(cidade);
+            return (
+              <Fragment key={`cidade|${cidade}`}>
+                {/* nível da cidade: só o nome (sem nada nas colunas das datas) */}
+                <div
+                  role="button"
+                  tabIndex={0}
+                  aria-expanded={!fechada}
+                  onClick={() => alternarCidade(cidade)}
+                  onKeyDown={(e) => {
+                    if (e.key === 'Enter' || e.key === ' ') {
+                      e.preventDefault();
+                      alternarCidade(cidade);
+                    }
+                  }}
+                  className="group relative flex h-9 cursor-pointer border-b border-gray-200 focus:outline-none"
+                >
+                  <div
+                    className="sticky left-0 z-20 flex shrink-0 items-center gap-2 border-r border-gray-200 bg-gray-50 px-3 transition-colors group-hover:bg-gray-100"
+                    style={{ width: LARGURA_NOMES }}
+                  >
+                    <ChevronRight size={14} className={`shrink-0 text-gray-400 transition-transform ${fechada ? '' : 'rotate-90'}`} />
+                    <span className={`truncate text-xs font-semibold uppercase tracking-wide ${cidade === SEM_CIDADE ? 'text-gray-400' : 'text-gray-700'}`}>
+                      {cidade}
+                    </span>
+                    <span className="ml-auto shrink-0 rounded-full bg-white px-2 py-0.5 text-[10px] font-medium tabular-nums text-gray-500 ring-1 ring-gray-200">
+                      {lista.length}
+                    </span>
+                  </div>
+                  <div className="bg-gray-50/60" style={{ width: larguraTempo }} />
+                </div>
+                {!fechada && lista.map((o) => linhaObra(o, true))}
+              </Fragment>
+            );
+          })}
+
+        {!grupos && [...comCronograma, ...semCronograma].map((o, i) => (
           <Fragment key={o.centro.sienge_id}>
             {i === comCronograma.length && semCronograma.length > 0 && (
               <div className="relative flex h-8 border-b border-gray-100">
@@ -532,46 +657,7 @@ const GanttObras = forwardRef(function GanttObras(
                 </div>
               </div>
             )}
-            <div
-              {...(clicavel && {
-                role: 'button',
-                tabIndex: 0,
-                'aria-pressed': onSelecionarObra ? o.centro.sienge_id === selecionada : undefined,
-                onClick: () => acaoClique(o.centro),
-                onKeyDown: (e) => {
-                  if (e.key === 'Enter' || e.key === ' ') {
-                    e.preventDefault();
-                    acaoClique(o.centro);
-                  }
-                },
-              })}
-              className={`group relative flex h-12 border-b border-gray-100 transition-opacity focus:outline-none ${clicavel ? 'cursor-pointer' : ''} ${
-                apagada(o) ? 'opacity-30 hover:opacity-70' : ''
-              }`}
-            >
-              {/* bolinha da etapa de hoje + nome; VGV e unidades na dica ao passar o mouse */}
-              <div
-                onMouseEnter={mostrarDicaObra(o)}
-                onMouseMove={mostrarDicaObra(o)}
-                onMouseLeave={() => setDica(null)}
-                className={`sticky left-0 z-20 flex shrink-0 items-center gap-2 border-r border-gray-200 px-4 transition-colors group-focus:bg-primary-50/50 ${
-                  o.centro.sienge_id === selecionada ? 'bg-primary-50' : 'bg-white group-hover:bg-[#f7f9fd]'
-                }`}
-                style={{ width: LARGURA_NOMES }}
-              >
-                <PontoSituacao situacao={o.situacao} />
-                <span className={`truncate text-[13px] font-semibold ${o.centro.sienge_id === selecionada ? 'text-primary-700' : 'text-gray-900'}`}>
-                  {nomeObra(o.centro)}
-                </span>
-              </div>
-              <div
-                className={`relative overflow-clip transition-colors ${o.centro.sienge_id === selecionada ? 'bg-primary-50/40' : 'group-hover:bg-primary-50/25'}`}
-                style={{ width: larguraTempo }}
-              >
-                {o.antes && <BarraAntes segmentos={o.antes} ini={faixa.ini} px={px} />}
-                <BarraObra segmentos={o.segmentos} ini={faixa.ini} px={px} mensal={zoom === 'mensal'} onDica={mostrarDica(o)} />
-              </div>
-            </div>
+            {linhaObra(o, false)}
           </Fragment>
         ))}
       </div>

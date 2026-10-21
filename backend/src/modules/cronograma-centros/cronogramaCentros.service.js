@@ -88,7 +88,9 @@ async function atrasoDaEmpresa(empresaId, db = pool) {
 async function list(empresaId, db = pool) {
   const etapas = await etapasService.list(empresaId, db);
   const { rows: centros } = await db.query(
-    `SELECT sienge_id, name, apelido, status, natureza, valor_geral_vendas, numero_unidades FROM centros_custo_sienge
+    `SELECT sienge_id, name, apelido, status, natureza, valor_geral_vendas, numero_unidades,
+            cidade_enriquecida AS cidade, estado_enriquecido AS uf
+       FROM centros_custo_sienge
       WHERE empresa_id = $1
       ORDER BY sienge_id::text ASC`,
     [empresaId]

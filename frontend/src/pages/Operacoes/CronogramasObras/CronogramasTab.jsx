@@ -28,9 +28,10 @@ import {
 // numa versão, com como eram antes) ficam ao lado da empresa, na página (CronogramasObrasPage).
 // ---------------------------------------------------------------------------------------
 
-// `zoom`/`onZoom` e `periodo` (De/Até do Mês a mês) vêm da página — o período fica no topo, ao lado da
-// empresa; no Mês a mês, obras fora dele não aparecem e os cards somam só as do período.
-export default function CronogramasTab({ empresaId, situacao = '', versaoId = '', onLimparVersao, zoom = 'mensal', onZoom, periodo = null }) {
+// `zoom`/`onZoom` vêm da página. Aqui não há filtro de período (pedido do usuário — o De/Até fica só no
+// dashboard): o Mês a mês mostra a linha do tempo inteira, aberta em hoje. As obras ficam agrupadas por
+// cidade (GanttObras `agruparPorCidade`).
+export default function CronogramasTab({ empresaId, situacao = '', versaoId = '', onLimparVersao, zoom = 'mensal', onZoom }) {
   const [etapas, setEtapas] = useState([]);
   const [centros, setCentros] = useState([]);
   const [atraso, setAtraso] = useState(null); // Regra de Atraso da Construção (aba Configurações)
@@ -71,17 +72,23 @@ export default function CronogramasTab({ empresaId, situacao = '', versaoId = ''
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [empresaId, versaoId]);
 
-  const periodoAtivo = zoom === 'mensal' ? periodo : null;
+  const periodoAtivo = null;
   const obras = useMemo(
     () => filtrarPeriodo(filtrarSituacao(montarObras(centros, etapas, isoHoje(), atraso), situacao), periodoAtivo),
     [centros, etapas, atraso, situacao, periodoAtivo]
   );
   const r = useMemo(() => resumoCarteira(obras, etapas, periodoAtivo), [obras, etapas, periodoAtivo]);
   // "Mudanças da versão": o Gantt fica com as obras alteradas nela (como ficaram + como eram antes).
-  const obrasVersao = useMemo(
-    () => (versaoDetalhe ? filtrarPeriodo(filtrarSituacao(obrasDaVersao(versaoDetalhe, isoHoje()), situacao), periodoAtivo) : null),
-    [versaoDetalhe, situacao, periodoAtivo]
-  );
+  // A versão guarda as obras sem cidade/UF: pega do cadastro atual, pra agrupar igual.
+  const obrasVersao = useMemo(() => {
+    if (!versaoDetalhe) return null;
+    const cadastro = new Map(centros.map((c) => [c.sienge_id, c]));
+    const comCidade = obrasDaVersao(versaoDetalhe, isoHoje()).map((o) => {
+      const c = cadastro.get(o.centro.sienge_id);
+      return c ? { ...o, centro: { ...o.centro, cidade: c.cidade, uf: c.uf } } : o;
+    });
+    return filtrarPeriodo(filtrarSituacao(comCidade, situacao), periodoAtivo);
+  }, [versaoDetalhe, situacao, periodoAtivo, centros]);
 
   if (!empresaId) {
     return (
@@ -189,7 +196,7 @@ export default function CronogramasTab({ empresaId, situacao = '', versaoId = ''
             </div>
           </div>
         </div>
-        <GanttObras etapas={etapas} obras={obrasGantt} zoom={zoom} periodo={periodoAtivo} onAbrirObra={setAberto} />
+        <GanttObras etapas={etapas} obras={obrasGantt} zoom={zoom} periodo={periodoAtivo} onAbrirObra={setAberto} agruparPorCidade />
       </div>
 
       <JanelaCentroCusto empresaId={empresaId} centro={aberto} onFechar={() => setAberto(null)} onSalvo={carregar} />
