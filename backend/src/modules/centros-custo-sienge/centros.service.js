@@ -218,12 +218,19 @@ async function listEtapas(empresaId, siengeId) {
   // Traz TODAS as etapas cadastradas na máscara "Etapas do Centro de Custo" da
   // empresa (ordenadas pela sequência da máscara), com as datas de início/fim
   // já preenchidas quando existir um histórico para aquele centro de custo.
+  // Junto, a alteração pendente da obra (versionamento do cronograma —
+  // cronograma-centros/cronogramaVersoes.service.js): `pendente` + `inicio_pendente`
+  // por etapa e, na pendência, o término (`termino_alterado`/`termino_pendente`).
   const { rows } = await pool.query(
     `SELECT m.id AS mascara_item_id, m.sequencia AS etapa_sequencia, m.descricao AS etapa_descricao,
-            m.cor AS etapa_cor, h.id AS historico_id, h.data_inicio, h.data_fim, h.criado_em, h.atualizado_em
+            m.cor AS etapa_cor, h.id AS historico_id, h.data_inicio, h.data_fim, h.criado_em, h.atualizado_em,
+            COALESCE(p.datas ? m.id::text, FALSE) AS pendente, p.datas ->> m.id::text AS inicio_pendente,
+            COALESCE(p.termino_alterado, FALSE) AS termino_alterado, p.data_termino AS termino_pendente
      FROM mascara_itens m
      LEFT JOIN centro_custo_etapas_historico h
        ON h.mascara_item_id = m.id AND h.empresa_id = $1 AND h.sienge_id = $2
+     LEFT JOIN cronograma_pendencias p
+       ON p.empresa_id = $1 AND p.sienge_id = $2
      WHERE m.tipo = 'ETAPAS_CENTRO_CUSTO' AND m.empresa_id = $1
      ORDER BY m.sequencia ASC`,
     [empresaId, siengeId]

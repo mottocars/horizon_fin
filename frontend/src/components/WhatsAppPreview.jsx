@@ -52,10 +52,11 @@ export default function WhatsAppPreview({ mensagem, contatoNome = 'Financeiro', 
           {/* Mensagem recebida (do ponto de vista do cliente lendo) */}
           <div className="relative max-w-[82%] rounded-lg rounded-tl-none bg-white px-2.5 py-2 shadow-sm">
             <p className="whitespace-pre-line text-[13px] leading-snug text-gray-800">{mensagem}</p>
+            {/* `anexo`: true = o boleto (PDF); um texto = o nome do arquivo (ex.: a planilha do cronograma) */}
             {anexo && (
               <div className="mt-2 flex items-center gap-2 rounded-md border border-gray-200 bg-gray-50 px-2 py-1.5">
-                <FileText size={16} className="shrink-0 text-red-500" />
-                <span className="truncate text-[11.5px] text-gray-600">boleto.pdf</span>
+                <FileText size={16} className={`shrink-0 ${typeof anexo === 'string' && anexo.endsWith('.xlsx') ? 'text-emerald-600' : 'text-red-500'}`} />
+                <span className="truncate text-[11.5px] text-gray-600">{typeof anexo === 'string' ? anexo : 'boleto.pdf'}</span>
               </div>
             )}
             <div className="mt-1 flex justify-end">

@@ -1,6 +1,6 @@
 import { useEffect, useMemo, useState } from 'react';
 import { useSearchParams } from 'react-router-dom';
-import { Building2, ChartGantt, Search, Settings } from 'lucide-react';
+import { Building2, ChartGantt, History, Search, Settings } from 'lucide-react';
 import Card from '../../../components/Card';
 import Tabs from '../../../components/Tabs';
 import SearchableSelect from '../../../components/SearchableSelect';
@@ -12,15 +12,18 @@ import { filtrarAbas } from '../../../utils/permissoes';
 import CronogramaCentrosTab from './CronogramaCentrosTab';
 import CronogramasTab from './CronogramasTab';
 import ConfiguracoesCronogramas from './ConfiguracoesCronogramas';
+import VersoesCronograma from './VersoesCronograma';
 
 // Mesmo padrão de DfcConstrutorasPage.jsx: o `{ divider: true }` separa os Cronogramas (a tela em
 // si) das abas que dão suporte a eles. A aba Etapas saiu (pedido do usuário): as etapas se cadastram
 // em Cadastros > Máscaras > Etapas do Centro de Custo. Configurações: só o Administrador da tela (ou
-// Master) vê — `nivel`, como em Repasses CEF (ver utils/permissoes.js::filtrarAbas).
+// Master) vê — `nivel`, como em Repasses CEF (ver utils/permissoes.js::filtrarAbas). Versões: o
+// histórico das versões gravadas do cronograma (versionamento — pedido do usuário).
 const TABS = [
   { id: 'cronogramas', label: 'Cronogramas', icon: ChartGantt },
   { divider: true },
   { id: 'centros-custos', label: 'Centros de Custos', icon: Building2 },
+  { id: 'versoes', label: 'Versões', icon: History },
   { id: 'configuracoes', label: 'Configurações', icon: Settings, nivel: 'ADMINISTRADOR' },
 ];
 
@@ -116,6 +119,8 @@ export default function CronogramasObrasPage() {
 
         {tabAtiva.id === 'centros-custos' ? (
           <CronogramaCentrosTab empresaId={empresaId} search={buscaCentros} />
+        ) : tabAtiva.id === 'versoes' ? (
+          <VersoesCronograma empresaId={empresaId} />
         ) : tabAtiva.id === 'configuracoes' ? (
           <ConfiguracoesCronogramas empresaId={empresaId} />
         ) : (

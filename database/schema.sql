@@ -3632,6 +3632,35 @@ CREATE TABLE cronograma_comunicar_usuarios (
     PRIMARY KEY (empresa_id, usuario_id)
 );
 
+-- ─── Operações > Cronogramas Obras > versões do cronograma ───
+-- Alterar as datas das etapas de uma obra deixa a alteração pendente; ela só entra no Histórico de
+-- Etapas (o cronograma) quando uma nova versão é gravada — e aí sai o comunicado de WhatsApp. Ver
+-- database/migrations/2026-10-21-cronograma-versoes.sql.
+CREATE TABLE cronograma_pendencias (
+    empresa_id        INTEGER NOT NULL,
+    sienge_id         INTEGER NOT NULL,
+    datas             JSONB NOT NULL DEFAULT '{}'::jsonb,   -- { "<mascara_item_id>": "AAAA-MM-DD" | null }
+    termino_alterado  BOOLEAN NOT NULL DEFAULT FALSE,
+    data_termino      DATE,
+    atualizado_por    INTEGER REFERENCES usuarios(id) ON DELETE SET NULL,
+    atualizado_em     TIMESTAMP NOT NULL DEFAULT NOW(),
+    PRIMARY KEY (empresa_id, sienge_id),
+    FOREIGN KEY (sienge_id, empresa_id) REFERENCES centros_custo_sienge (sienge_id, empresa_id) ON DELETE CASCADE
+);
+
+CREATE TABLE cronograma_versoes (
+    id            SERIAL PRIMARY KEY,
+    empresa_id    INTEGER NOT NULL REFERENCES empresas(id) ON DELETE CASCADE,
+    numero        INTEGER NOT NULL,
+    observacao    TEXT,
+    alteracoes    JSONB NOT NULL,   -- o que mudou, obra a obra e etapa a etapa
+    cronograma    JSONB NOT NULL,   -- retrato do cronograma depois da versão (planilha de qualquer versão)
+    comunicado    JSONB,            -- { status, enviados, falhas } do WhatsApp
+    criado_por    INTEGER REFERENCES usuarios(id) ON DELETE SET NULL,
+    criado_em     TIMESTAMP NOT NULL DEFAULT NOW(),
+    UNIQUE (empresa_id, numero)
+);
+
 -- ─── Papel das consultas SQL do Claude (conectores MCP): só lê as views mcp_* ───
 -- Ver database/migrations/2026-10-15-mcp-leitor-sql.sql (rode de novo ao criar view mcp_* nova).
 DO $$

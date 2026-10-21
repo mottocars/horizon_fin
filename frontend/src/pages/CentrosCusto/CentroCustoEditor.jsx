@@ -1,5 +1,5 @@
 import { useCallback, useEffect, useMemo, useState } from 'react';
-import { Building2, Search } from 'lucide-react';
+import { Building2, Clock, Search } from 'lucide-react';
 import Button from '../../components/Button';
 import { getItem, updateEnriquecimento, listEtapas, salvarCronogramaCentro } from '../../api/centrosCustoSienge.api';
 import { listMascaras } from '../../api/mascaras.api';
@@ -53,8 +53,13 @@ const CLASSE_CAMPO_ETAPA =
   'rounded-md border px-2 py-1 text-sm text-gray-900 focus:outline-none focus:ring-2 focus:ring-primary-100 disabled:cursor-not-allowed disabled:opacity-60';
 
 // Histórico de Etapas: o que está salvo de cada etapa (as datas vêm 'AAAA-MM-DD').
+// O que está em vigor no cronograma (Histórico de Etapas)...
 const inicioSalvo = (etapa) => (etapa.data_inicio ? etapa.data_inicio.slice(0, 10) : '');
 const fimSalvo = (etapa) => (etapa.data_fim ? etapa.data_fim.slice(0, 10) : '');
+// ...e o que está guardado: a alteração pendente da obra, quando há (versionamento do cronograma —
+// só entra no Histórico quando uma nova versão é gravada em Operações › Cronogramas Obras).
+const inicioGuardado = (etapa) => (etapa.pendente ? etapa.inicio_pendente || '' : inicioSalvo(etapa));
+const fimGuardado = (etapa) => (etapa.termino_alterado ? (etapa.termino_pendente || '').slice(0, 10) : fimSalvo(etapa));
 
 const emptyForm = {
   status: 'ATIVO',
@@ -90,7 +95,7 @@ export default function CentroCustoEditor({ empresaId, siengeId, onSalvo, onAlte
   const [saving, setSaving] = useState(false);
   const [buscandoCep, setBuscandoCep] = useState(false);
   const [error, setError] = useState('');
-  const [success, setSuccess] = useState(false);
+  const [success, setSuccess] = useState('');
   const [unidadesNegocio, setUnidadesNegocio] = useState([]);
   const [projetosPrevision, setProjetosPrevision] = useState([]);
   const [erroProjetosPrevision, setErroProjetosPrevision] = useState('');
@@ -105,7 +110,8 @@ export default function CentroCustoEditor({ empresaId, siengeId, onSalvo, onAlte
   // O Histórico de Etapas é o cronograma da obra (o mesmo dado da aba Centros de Custos de
   // Cronogramas Obras — pedido do usuário): as etapas vão em sequência, então o que se edita é o
   // início de cada uma (`inicios`) e o término da última (`termino`); a duração e a data fim das
-  // outras saem das datas (cronogramaDatas.js).
+  // outras saem das datas (cronogramaDatas.js). Salvar só guarda as datas como alteração pendente:
+  // elas entram no cronograma quando uma nova versão é gravada (versionamento — pedido do usuário).
   const [etapasForm, setEtapasForm] = useState({ inicios: {}, termino: '' });
 
   const loadItem = useCallback(async () => {
@@ -172,15 +178,20 @@ export default function CentroCustoEditor({ empresaId, siengeId, onSalvo, onAlte
   // registros recém-criados).
   useEffect(() => {
     setEtapasForm({
-      inicios: Object.fromEntries(etapas.map((etapa) => [etapa.mascara_item_id, inicioSalvo(etapa)])),
-      termino: etapas.length ? fimSalvo(etapas[etapas.length - 1]) : '',
+      inicios: Object.fromEntries(etapas.map((etapa) => [etapa.mascara_item_id, inicioGuardado(etapa)])),
+      termino: etapas.length ? fimGuardado(etapas[etapas.length - 1]) : '',
     });
   }, [etapas]);
 
   const ultimaEtapa = etapas[etapas.length - 1];
-  const inicioMudou = (etapa) => (etapasForm.inicios[etapa.mascara_item_id] ?? '') !== inicioSalvo(etapa);
-  const terminoMudou = Boolean(ultimaEtapa) && etapasForm.termino !== fimSalvo(ultimaEtapa);
+  // Não salvo ainda (comparado com o guardado)...
+  const inicioMudou = (etapa) => (etapasForm.inicios[etapa.mascara_item_id] ?? '') !== inicioGuardado(etapa);
+  const terminoMudou = Boolean(ultimaEtapa) && etapasForm.termino !== fimGuardado(ultimaEtapa);
   const etapasAlteradas = etapas.some(inicioMudou) || terminoMudou;
+  // ...e diferente do cronograma em vigor (o que a data fim mostrada recalcula).
+  const inicioDifere = (etapa) => (etapasForm.inicios[etapa.mascara_item_id] ?? '') !== inicioSalvo(etapa);
+  const terminoDifere = Boolean(ultimaEtapa) && etapasForm.termino !== fimSalvo(ultimaEtapa);
+  const temPendencia = etapas.some((e) => e.pendente) || Boolean(ultimaEtapa?.termino_alterado);
 
   const formAlterado = useMemo(
     () => JSON.stringify(form) !== JSON.stringify(formOriginal),
@@ -241,7 +252,7 @@ export default function CentroCustoEditor({ empresaId, siengeId, onSalvo, onAlte
   // inícios que mudaram e recalcula a data fim das etapas vizinhas.
   async function handleSalvarTudo() {
     setError('');
-    setSuccess(false);
+    setSuccess('');
     setSaving(true);
     try {
       if (formAlterado) {
@@ -266,8 +277,12 @@ export default function CentroCustoEditor({ empresaId, siengeId, onSalvo, onAlte
         await loadEtapas();
       }
 
-      setSuccess(true);
-      setTimeout(() => setSuccess(false), 3000);
+      setSuccess(
+        etapasAlteradas
+          ? 'Alterações guardadas. As datas das etapas ficam pendentes e entram no cronograma quando uma nova versão for gravada.'
+          : 'Alterações salvas com sucesso.'
+      );
+      setTimeout(() => setSuccess(''), etapasAlteradas ? 6000 : 3000);
       onSalvo?.();
     } catch (err) {
       setError(err.response?.data?.message || 'Não foi possível salvar as alterações.');
@@ -347,9 +362,7 @@ export default function CentroCustoEditor({ empresaId, siengeId, onSalvo, onAlte
           <div className="mb-4 rounded-lg bg-red-50 px-3 py-2 text-sm text-red-600">{error}</div>
         )}
         {success && (
-          <div className="mb-4 rounded-lg bg-emerald-50 px-3 py-2 text-sm text-emerald-600">
-            Alterações salvas com sucesso.
-          </div>
+          <div className="mb-4 rounded-lg bg-emerald-50 px-3 py-2 text-sm text-emerald-600">{success}</div>
         )}
 
         {tab === 'cadastro' && (
@@ -538,8 +551,20 @@ export default function CentroCustoEditor({ empresaId, siengeId, onSalvo, onAlte
                 Informe a data de início de cada etapa e quanto tempo ela dura (meses; a última em anos): o início da
                 etapa seguinte é calculado. Também dá pra digitar a data da seguinte direto. A data fim sai das datas.
                 É o mesmo cronograma da aba Centros de Custos de Operações › Cronogramas Obras. Clique em "Salvar
-                alterações" para gravar.
+                alterações" para guardar: as datas novas ficam pendentes e só entram no cronograma quando uma nova
+                versão for gravada lá.
               </p>
+            )}
+
+            {temPendencia && (
+              <div className="mb-4 flex items-start gap-2 rounded-lg border border-amber-200 bg-amber-50 px-3 py-2 text-xs text-amber-800">
+                <Clock size={14} className="mt-0.5 shrink-0" />
+                <span>
+                  Esta obra tem alteração aguardando uma nova versão do cronograma (marcadas como <b>Pendente</b>). Até lá o
+                  cronograma e o dashboard continuam com as datas em vigor — grave a versão em Operações › Cronogramas Obras ›
+                  Centros de Custos.
+                </span>
+              </div>
             )}
 
             {loadingEtapas ? (
@@ -572,7 +597,8 @@ export default function CentroCustoEditor({ empresaId, siengeId, onSalvo, onAlte
                       // Data fim mostrada = a que vai ficar gravada: recalculada só nas etapas que a
                       // edição afeta (a que mudou e a anterior; a última se o término mudou), como
                       // o backend faz — nas outras, a que já está salva.
-                      const afetada = inicioMudou(etapa) || (seguinte && inicioMudou(seguinte)) || (ultima && terminoMudou);
+                      // (em relação ao cronograma em vigor: a alteração pendente também conta)
+                      const afetada = inicioDifere(etapa) || (seguinte && inicioDifere(seguinte)) || (ultima && terminoDifere);
                       return (
                         <EtapaRow
                           key={etapa.mascara_item_id}
@@ -582,6 +608,7 @@ export default function CentroCustoEditor({ empresaId, siengeId, onSalvo, onAlte
                           inicio={inicio}
                           duracao={duracaoEtapa(datas)}
                           fim={afetada ? fimEtapa(datas) : fimSalvo(etapa) || null}
+                          pendente={etapa.pendente || (ultima && etapa.termino_alterado)}
                           disabled={saving}
                           onChangeInicio={(valor) => handleChangeInicio(etapa.mascara_item_id, valor)}
                           onChangeDuracao={(n) =>
@@ -649,7 +676,7 @@ function computeStatus(dataInicio, dataFim) {
 // persiste é o handleSalvarTudo() do componente pai, todo de uma vez, ao
 // clicar em "Salvar alterações". Duração e data fim vêm calculadas do pai;
 // digitar a duração muda o início da etapa seguinte (na última, o término).
-function EtapaRow({ etapa, cor, ultima, inicio, duracao, fim, disabled, onChangeInicio, onChangeDuracao }) {
+function EtapaRow({ etapa, cor, ultima, inicio, duracao, fim, pendente, disabled, onChangeInicio, onChangeDuracao }) {
   const status = computeStatus(inicio, fim);
   const statusInfo = STATUS_STYLES[status];
   const unidade = ultima ? 'anos' : 'meses';
@@ -661,6 +688,16 @@ function EtapaRow({ etapa, cor, ultima, inicio, duracao, fim, disabled, onChange
         <span className="flex items-center gap-2">
           <span className="h-2.5 w-2.5 shrink-0 rounded-full" style={{ backgroundColor: cor }} />
           {etapa.etapa_descricao || <span className="italic text-gray-400">Sem nome</span>}
+          {pendente && (
+            <span
+              title={`Alteração guardada — entra no cronograma quando uma nova versão for gravada. Em vigor: ${
+                inicioSalvo(etapa) ? formatarData(inicioSalvo(etapa)) : 'sem data'
+              }`}
+              className="rounded-full bg-amber-100 px-2 py-0.5 text-[10px] font-semibold text-amber-700"
+            >
+              Pendente
+            </span>
+          )}
         </span>
       </td>
       <td className="py-3">

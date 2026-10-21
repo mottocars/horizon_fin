@@ -1,9 +1,10 @@
 import { useCallback, useEffect, useMemo, useState } from 'react';
 import { Link } from 'react-router-dom';
 import { Building2, Milestone, TriangleAlert } from 'lucide-react';
-import { listCronogramaCentros } from '../../../api/cronogramaCentros.api';
+import { listCronogramaCentros, listPendenciasCronograma } from '../../../api/cronogramaCentros.api';
 import { corPadrao } from '../../../utils/coresPadrao';
 import JanelaCentroCusto from './JanelaCentroCusto';
+import PendenciasCronograma from './PendenciasCronograma';
 import { mesAno, moeda } from './formatos';
 
 const TIPOS = { OBRA: 'Obra', ADMINISTRATIVO: 'Administrativo' };
@@ -21,9 +22,14 @@ const Vazio = () => <span className="text-gray-300">—</span>;
 // Tipo, o mês/ano de início de cada etapa do cronograma (= Histórico de Etapas do centro), VGV e
 // nº de unidades. Clicar numa linha abre o cadastro do centro numa janela (JanelaCentroCusto): é o
 // atalho pra alterar. Salvou lá, a lista recarrega.
+// Versionamento (pedido do usuário): salvar as etapas de uma obra só deixa a alteração pendente. O
+// quadro de cima (PendenciasCronograma) lista as pendências e grava a nova versão — que aplica tudo
+// no cronograma e manda o comunicado; até lá a grade mostra, em âmbar, a data nova das etapas
+// pendentes (a em vigor na dica).
 export default function CronogramaCentrosTab({ empresaId, search }) {
   const [etapas, setEtapas] = useState([]);
   const [centros, setCentros] = useState([]);
+  const [pendencias, setPendencias] = useState(null);
   const [carregando, setCarregando] = useState(true);
   const [erroCarga, setErroCarga] = useState('');
 
@@ -34,10 +40,11 @@ export default function CronogramaCentrosTab({ empresaId, search }) {
     if (!empresaId) return;
     setCarregando(true);
     setErroCarga('');
-    listCronogramaCentros(empresaId)
-      .then((r) => {
+    Promise.all([listCronogramaCentros(empresaId), listPendenciasCronograma(empresaId)])
+      .then(([r, p]) => {
         setEtapas(r.etapas);
         setCentros(r.centros);
+        setPendencias(p);
       })
       .catch((err) => setErroCarga(err.response?.data?.message || 'Não foi possível carregar os centros de custo.'))
       .finally(() => setCarregando(false));
@@ -46,6 +53,7 @@ export default function CronogramaCentrosTab({ empresaId, search }) {
   useEffect(() => {
     setEtapas([]);
     setCentros([]);
+    setPendencias(null);
     setAberto(null);
     carregar();
   }, [carregar]);
@@ -72,6 +80,15 @@ export default function CronogramaCentrosTab({ empresaId, search }) {
   }
 
   const colunas = colunasGrade(etapas.length);
+  // sienge_id -> { etapaId: { antes, depois } } — o início pendente de cada etapa alterada
+  const pendentes = new Map(
+    (pendencias?.alteracoes || []).map((obra) => [
+      obra.sienge_id,
+      Object.fromEntries(
+        obra.etapas.filter((m) => m.inicio_antes !== m.inicio_depois).map((m) => [m.etapa_id, { antes: m.inicio_antes, depois: m.inicio_depois }])
+      ),
+    ])
+  );
 
   return (
     <div className="rounded-card rounded-tl-none bg-white p-5 shadow-card">
@@ -84,6 +101,8 @@ export default function CronogramaCentrosTab({ empresaId, search }) {
           </Link>
         </div>
       )}
+
+      {!carregando && !erroCarga && pendencias && <PendenciasCronograma empresaId={empresaId} pendencias={pendencias} onMudou={carregar} />}
 
       {carregando && centros.length === 0 ? (
         <div className="py-12 text-center text-sm text-gray-400">Carregando...</div>
@@ -128,6 +147,7 @@ export default function CronogramaCentrosTab({ empresaId, search }) {
             ) : (
               filtrados.map((centro) => {
                 const obra = centro.natureza === 'OBRA';
+                const pendente = pendentes.get(centro.sienge_id);
                 return (
                   <div
                     key={centro.sienge_id}
@@ -150,6 +170,14 @@ export default function CronogramaCentrosTab({ empresaId, search }) {
                         {centro.name}
                         {centro.apelido && <span className="font-normal text-gray-400"> · {centro.apelido}</span>}
                       </span>
+                      {pendente && (
+                        <span
+                          title="Alteração pendente — entra no cronograma quando a nova versão for gravada"
+                          className="shrink-0 rounded-full bg-amber-100 px-1.5 py-0.5 text-[10px] font-semibold text-amber-700"
+                        >
+                          Pendente
+                        </span>
+                      )}
                       {centro.status !== 'ATIVO' && (
                         <span className="shrink-0 rounded bg-gray-100 px-1.5 py-0.5 text-[10px] font-medium text-gray-500">
                           Inativo
@@ -159,11 +187,25 @@ export default function CronogramaCentrosTab({ empresaId, search }) {
                     <span className={centro.natureza ? 'text-gray-700' : 'text-amber-600'}>
                       {TIPOS[centro.natureza] || 'Não classificado'}
                     </span>
-                    {etapas.map((etapa) => (
-                      <span key={etapa.id} className="text-center tabular-nums text-gray-700">
-                        {obra && centro.datas[etapa.id] ? mesAno(centro.datas[etapa.id]) : <Vazio />}
-                      </span>
-                    ))}
+                    {etapas.map((etapa) => {
+                      const nova = pendente?.[etapa.id];
+                      if (nova) {
+                        return (
+                          <span
+                            key={etapa.id}
+                            className="text-center font-semibold tabular-nums text-amber-700"
+                            title={`Pendente — em vigor: ${nova.antes ? mesAno(nova.antes) : 'sem data'}`}
+                          >
+                            {nova.depois ? mesAno(nova.depois) : '—'}
+                          </span>
+                        );
+                      }
+                      return (
+                        <span key={etapa.id} className="text-center tabular-nums text-gray-700">
+                          {obra && centro.datas[etapa.id] ? mesAno(centro.datas[etapa.id]) : <Vazio />}
+                        </span>
+                      );
+                    })}
                     <span className="text-right tabular-nums text-gray-700">{moeda(centro.valor_geral_vendas) || <Vazio />}</span>
                     <span className="text-right tabular-nums text-gray-700">{centro.numero_unidades ?? <Vazio />}</span>
                   </div>

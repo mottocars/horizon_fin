@@ -166,3 +166,15 @@ export function resumoCarteira(obras, etapas) {
     concluidas: obras.filter((o) => o.situacao.tipo === 'concluida').length,
   };
 }
+
+// Alterações de uma obra numa versão do cronograma (pendências e versões gravadas), em linhas: o
+// início de cada etapa que mudou (e o término da última) — o fim das outras sai do início da
+// seguinte, então já está na linha dela.
+export function linhasDaObra(obra) {
+  return obra.etapas.flatMap((m) => {
+    const linhas = [];
+    if (m.inicio_antes !== m.inicio_depois) linhas.push({ chave: `${m.etapa_id}i`, etapa: m.etapa, rotulo: 'início', antes: m.inicio_antes, depois: m.inicio_depois });
+    if (m.ultima && m.fim_antes !== m.fim_depois) linhas.push({ chave: `${m.etapa_id}f`, etapa: m.etapa, rotulo: 'término', antes: m.fim_antes, depois: m.fim_depois });
+    return linhas;
+  });
+}
