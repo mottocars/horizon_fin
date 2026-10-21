@@ -10,10 +10,12 @@ import { codigoFormatado } from './codigoConta';
 import DetalhamentoModal from './DetalhamentoModal';
 
 const LARGURA_PRIMEIRA = 340;
-const LARGURA_COLUNA = 104;
-const LARGURA_DESVIO = 84;
-const LARGURA_TOTAL_FECHADO = 34; // Total recolhido: só a faixa com "TOTAL" na vertical
-const FOLGA = 36;
+// Colunas de valor estreitas (pedido do usuário): no período padrão, com o Total fechado, a grade cabe
+// sem barra de rolagem num notebook de 14" (1366 px).
+const LARGURA_COLUNA = 84; // cabe um valor de 7 dígitos (-1.447.622) mesmo se a medida do texto sair curta
+const LARGURA_DESVIO = 66;
+const LARGURA_TOTAL_FECHADO = 28; // Total recolhido: só a faixa com "TOTAL" na vertical
+const FOLGA = 13; // padding da célula (px-1.5) + respiro
 const ALTURA_MINIMA_GRADE = 320;
 const ALTURA_CAB_MES = 32; // 1ª linha do cabeçalho (mês/ano) — a 2ª (Realizado/Projetado) gruda logo abaixo
 const RECUO = [16, 36, 58, 80]; // máscara 1, entradas/saídas, máscara 2, conta
@@ -473,7 +475,7 @@ export default function DfcFluxoTab({
             <td
               key={`total|${t}`}
               title={tipo === 'saldo' ? undefined : t === R ? 'Total realizado do período (meses até o atual)' : 'Total projetado do período (todos os meses)'}
-              className={`sticky z-10 border-b border-b-blue-100 bg-blue-50 px-3 text-center tabular-nums transition-colors group-hover/linha:bg-blue-100 ${e.py} ${
+              className={`sticky z-10 border-b border-b-blue-100 bg-blue-50 px-1.5 text-center tabular-nums transition-colors group-hover/linha:bg-blue-100 ${e.py} ${
                 tipo === 'saldo' || tipo === 'resultado' ? 'text-[13px]' : 'text-xs'
               } ${numeros} ${v ? corValor(v) : ''}`}
               style={{ left: esquerdaTotal[t] }}
@@ -498,7 +500,7 @@ export default function DfcFluxoTab({
                     ? 'Sem projetado nos meses com realizado — não há base para o desvio.'
                     : `Total realizado ÷ projetado dos mesmos meses (até o atual: ${dinheiro(real || 0)} × ${dinheiro(proj)}). Inclui o mês atual, ainda em andamento.`
               }
-              className={`sticky z-10 border-b border-r border-b-blue-100 border-r-blue-200 bg-blue-50 px-2 text-center text-[11px] tabular-nums transition-colors group-hover/linha:bg-blue-100 ${e.py} ${
+              className={`sticky z-10 border-b border-r border-b-blue-100 border-r-blue-200 bg-blue-50 px-1 text-center text-[11px] tabular-nums transition-colors group-hover/linha:bg-blue-100 ${e.py} ${
                 tipo === 'saldo' || tipo === 'resultado' || tipo === 'n1' ? 'font-semibold' : ''
               } ${d === null ? 'text-gray-300' : Math.abs(d) < 0.05 ? 'text-gray-500' : d > 0 ? 'text-emerald-600' : 'text-rose-600'}`}
               style={{ left: esquerdaTotal[D] }}
@@ -524,7 +526,7 @@ export default function DfcFluxoTab({
                       ? 'Sem projetado no mês — não há base para o desvio.'
                       : `(Realizado − Projetado) ÷ |Projetado|${parcial ? ' — mês em andamento: realizado até hoje × projetado do mês inteiro' : ''}`
                 }
-                className={`border-b px-2 text-center text-[11px] tabular-nums transition-colors ${e.borda} ${e.fundo} ${e.py} ${
+                className={`border-b px-1 text-center text-[11px] tabular-nums transition-colors ${e.borda} ${e.fundo} ${e.py} ${
                   tipo === 'saldo' ? '' : 'group-hover/linha:bg-gray-50'
                 } ${tipo === 'saldo' || tipo === 'resultado' || tipo === 'n1' ? 'font-semibold' : ''} ${
                   d === null ? 'text-gray-300' : Math.abs(d) < 0.05 ? 'text-gray-500' : d > 0 ? 'text-emerald-600' : 'text-rose-600'
@@ -539,7 +541,7 @@ export default function DfcFluxoTab({
           return (
             <td
               key={`${c.mes}|${c.tipo}`}
-              className={`border-b px-3 text-center tabular-nums transition-colors ${e.borda} ${e.fundo} ${e.py} ${
+              className={`border-b px-1.5 text-center tabular-nums transition-colors ${e.borda} ${e.fundo} ${e.py} ${
                 inicioDeMes(i) ? 'border-l border-l-gray-200' : ''
               } ${tipo === 'saldo' ? '' : 'group-hover/linha:bg-gray-50'} ${
                 tipo === 'saldo' || tipo === 'resultado' ? 'text-[13px]' : 'text-xs'
@@ -724,7 +726,7 @@ export default function DfcFluxoTab({
                         ? 'Total realizado × projetado DOS MESMOS MESES (até o atual) — não do período inteiro. Positivo (verde) = melhor para o caixa.'
                         : undefined
                     }
-                    className={`sticky z-30 border-b border-b-blue-200 bg-blue-100 px-2 py-1.5 text-center text-[10px] font-semibold uppercase tracking-wider ${
+                    className={`sticky z-30 border-b border-b-blue-200 bg-blue-100 px-1 py-1.5 text-center text-[10px] font-semibold uppercase tracking-wider ${
                       t === R ? 'text-teal-700' : t === P ? 'text-blue-700' : 'border-r border-r-blue-200 text-indigo-500'
                     }`}
                     style={{ top: ALTURA_CAB_MES, left: esquerdaTotal[t] }}
@@ -734,12 +736,14 @@ export default function DfcFluxoTab({
                 ))}
                 {colunas.map((c, i) => {
                   const atual = c.mes === mesAtual;
+                  // Fundo sólido (#f5f9ff = o azul-claro do mês atual já misturado com o branco): o cabeçalho
+                  // é fixo e, transparente, deixava ver as linhas rolando por baixo.
                   return (
                     <th
                       key={`${c.mes}|${c.tipo}`}
-                      className={`sticky z-20 border-b px-2 py-1.5 text-center text-[10px] font-semibold uppercase tracking-wider ${
+                      className={`sticky z-20 border-b px-1 py-1.5 text-center text-[10px] font-semibold uppercase tracking-wider ${
                         inicioDeMes(i) ? 'border-l border-l-gray-200' : ''
-                      } ${atual ? 'border-b-2 border-b-primary-500 bg-primary-50/60' : 'border-gray-200 bg-white'} ${
+                      } ${atual ? 'border-b-2 border-b-primary-500 bg-[#f5f9ff]' : 'border-gray-200 bg-white'} ${
                         c.tipo === R ? 'text-teal-700' : c.tipo === D ? 'text-indigo-500' : 'text-gray-400'
                       }`}
                       style={{ top: ALTURA_CAB_MES }}
