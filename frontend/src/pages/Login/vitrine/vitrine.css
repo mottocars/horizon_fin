@@ -3,11 +3,7 @@
    partem do estado inicial com fill-mode both. Com movimento reduzido nada anima e cada tela aparece pronta —
    só a barra de progresso continua (é ela que marca a troca de tema). */
 
-@property --vt-cor {
-  syntax: '<color>';
-  inherits: true;
-  initial-value: #2f86e8;
-}
+/* --vt-cor (a cor do tema) é registrada em ../login.css, que o botão Entrar também usa. */
 
 .vitrine {
   --vt-noite: #04203f;

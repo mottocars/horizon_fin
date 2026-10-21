@@ -3,8 +3,10 @@ import { useNavigate } from 'react-router-dom';
 import { Eye, EyeOff } from 'lucide-react';
 import { useAuth } from '../../auth/AuthContext';
 import Button from '../../components/Button';
+import './login.css';
 
 // À direita, em telas largas, a vitrine com os títulos do site (carregada à parte, não pesa no login).
+// O botão Entrar usa o mesmo fundo da vitrine, na cor do tema que está na tela.
 const Vitrine = lazy(() => import('./Vitrine'));
 
 function saudacao() {
@@ -25,6 +27,7 @@ export default function Login() {
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState('');
   const [formErrors, setFormErrors] = useState({});
+  const [corTema, setCorTema] = useState(null);
 
   async function handleSubmit(e) {
     e.preventDefault();
@@ -132,7 +135,12 @@ export default function Login() {
                 Lembrar-me
               </label>
 
-              <Button type="submit" loading={loading} className="h-11 w-full">
+              <Button
+                type="submit"
+                loading={loading}
+                className="botao-entrar h-11 w-full"
+                style={corTema ? { '--vt-cor': corTema } : undefined}
+              >
                 Entrar
               </Button>
             </form>
@@ -143,7 +151,7 @@ export default function Login() {
       </main>
 
       <Suspense fallback={<div className="hidden flex-1 rounded-[28px] bg-[#04203f] lg:block" />}>
-        <Vitrine />
+        <Vitrine onTema={setCorTema} />
       </Suspense>
     </div>
   );

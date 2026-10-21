@@ -110,7 +110,7 @@ function Celulas() {
   );
 }
 
-function Palco() {
+function Palco({ onTema }) {
   const [reduzido] = useState(movimentoReduzido);
   const [estado, setEstado] = useState(() => ({ fila: montarFila(null), pos: 0, volta: 0 }));
   const [saindo, setSaindo] = useState(false);
@@ -126,6 +126,11 @@ function Palco() {
   useEffect(() => {
     marcarVisto(tema.id);
   }, [tema.id, estado.volta]);
+
+  // A cor do tema vai também para o botão Entrar, que usa o mesmo fundo da vitrine.
+  useEffect(() => {
+    onTema?.(tema.cor);
+  }, [tema.cor, onTema]);
 
   useEffect(
     () => () => {
@@ -238,7 +243,7 @@ function Palco() {
   );
 }
 
-export default function Vitrine() {
+export default function Vitrine({ onTema }) {
   const larga = useMedia('(min-width: 1024px)');
-  return larga ? <Palco /> : null;
+  return larga ? <Palco onTema={onTema} /> : null;
 }

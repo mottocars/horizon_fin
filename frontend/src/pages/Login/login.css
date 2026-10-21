@@ -1,0 +1,71 @@
+/* Tela de login. O botão Entrar tem o mesmo fundo da vitrine (vitrine/vitrine.css): noite, o brilho na cor do
+   tema que está na tela (--vt-cor, que a vitrine passa ao login a cada troca) e a grade de planilha. Sem vitrine
+   (celular) fica no azul inicial. */
+
+/* Registrada para a cor poder transicionar entre um tema e outro. */
+@property --vt-cor {
+  syntax: '<color>';
+  inherits: true;
+  initial-value: #2f86e8;
+}
+
+.botao-entrar {
+  position: relative;
+  isolation: isolate;
+  overflow: hidden;
+  background: #04203f;
+  box-shadow: 0 12px 26px -14px color-mix(in oklab, var(--vt-cor) 85%, transparent);
+  transition:
+    --vt-cor 1.2s ease,
+    box-shadow 0.3s ease,
+    transform 0.15s ease;
+}
+/* O brilho: as duas manchas da vitrine, em escala de botão. */
+.botao-entrar::before {
+  content: '';
+  position: absolute;
+  inset: -70% -15%;
+  z-index: -1;
+  background:
+    radial-gradient(34% 58% at 78% 30%, var(--vt-cor), transparent),
+    radial-gradient(28% 50% at 16% 78%, color-mix(in oklab, var(--vt-cor) 45%, #0a4f9e), transparent);
+  opacity: 0.85;
+  mix-blend-mode: screen;
+  transition: opacity 0.3s ease;
+}
+/* A grade de planilha, sumindo para as bordas. */
+.botao-entrar::after {
+  content: '';
+  position: absolute;
+  inset: 0;
+  z-index: -1;
+  background-image:
+    linear-gradient(rgb(255 255 255 / 0.08) 1px, transparent 1px),
+    linear-gradient(90deg, rgb(255 255 255 / 0.08) 1px, transparent 1px);
+  background-size: 11px 11px;
+  mask-image: radial-gradient(ellipse 70% 90% at 65% 40%, #000 20%, transparent 85%);
+}
+.botao-entrar:hover:not(:disabled) {
+  box-shadow: 0 16px 32px -14px color-mix(in oklab, var(--vt-cor) 95%, transparent);
+}
+.botao-entrar:hover:not(:disabled)::before {
+  opacity: 1;
+}
+.botao-entrar:active:not(:disabled) {
+  transform: translateY(1px);
+}
+.botao-entrar:focus-visible {
+  outline: 2px solid color-mix(in oklab, var(--vt-cor) 70%, white);
+  outline-offset: 2px;
+}
+
+@keyframes botao-entrar-deriva {
+  to {
+    transform: translate(-14%, 8%) scale(1.15);
+  }
+}
+@media (prefers-reduced-motion: no-preference) {
+  .botao-entrar::before {
+    animation: botao-entrar-deriva 7s ease-in-out infinite alternate;
+  }
+}
