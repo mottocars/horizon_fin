@@ -74,6 +74,8 @@
   z-index: 25; /* a lista de centros abre por cima do cabeçalho fixo da grade do DFC */
 }
 .painel-cfo .ctl {
+  /* Mesma altura em todos os campos da barra (select, mês e a lista de centros). */
+  --altura-filtro: 36px;
   display: flex;
   flex-direction: column;
   gap: 3px;
@@ -86,6 +88,8 @@
   color: var(--muted);
 }
 .painel-cfo .ctl select {
+  height: var(--altura-filtro);
+  box-sizing: border-box;
   padding: 6px 8px;
   border: 1px solid var(--line);
   border-radius: 4px;
@@ -96,7 +100,9 @@
   font-size: 14px;
 }
 .painel-cfo .ctl input[type='month'] {
-  padding: 5px 8px;
+  height: var(--altura-filtro);
+  box-sizing: border-box;
+  padding: 0 8px;
   border: 1px solid var(--line);
   border-radius: 4px;
   background: var(--surface-2);
@@ -220,6 +226,8 @@
   position: relative;
 }
 .painel-cfo .multi-btn {
+  height: var(--altura-filtro);
+  box-sizing: border-box;
   display: inline-flex;
   align-items: center;
   justify-content: space-between;
