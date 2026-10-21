@@ -222,21 +222,24 @@ export default function CronogramasObrasDashboard() {
   const obrasPeriodo = useMemo(() => filtrarPeriodo(obras, periodoAtivo), [obras, periodoAtivo]);
   const obrasVersaoPeriodo = useMemo(() => (obrasVersao ? filtrarPeriodo(obrasVersao, periodoAtivo) : null), [obrasVersao, periodoAtivo]);
   const baseGantt = obrasVersaoPeriodo || obrasPeriodo;
-  const r = useMemo(() => resumoCarteira(obrasPeriodo, etapas), [obrasPeriodo, etapas]);
+  const r = useMemo(() => resumoCarteira(obrasPeriodo, etapas, periodoAtivo), [obrasPeriodo, etapas, periodoAtivo]);
   const recorte = rotuloRecorte(destaque, etapas, periodoAtivo);
 
   // Cards dinâmicos (pedido do usuário): card de etapa clicado → o Gantt fica só com as obras que
   // estiveram nela em algum momento do período (naRecorte) e VGV e unidades somam só elas; obra clicada no Gantt → todos os cards mostram só ela (o
   // filtro da etapa continua no Gantt).
   const obraSelecionada = baseGantt.find((o) => o.centro.sienge_id === selecionada) || null;
-  const rCards = useMemo(() => (obraSelecionada ? resumoCarteira([obraSelecionada], etapas) : r), [obraSelecionada, etapas, r]);
+  const rCards = useMemo(
+    () => (obraSelecionada ? resumoCarteira([obraSelecionada], etapas, periodoAtivo) : r),
+    [obraSelecionada, etapas, periodoAtivo, r]
+  );
   const topo = obraSelecionada
     ? numerosTopo([obraSelecionada], 'da obra')
     : recorte
       ? numerosTopo(obrasPeriodo.filter((o) => naRecorte(o, destaque, periodoAtivo)), recorte.topo)
       : numerosTopo(obrasPeriodo);
   const obrasGantt = recorte ? baseGantt.filter((o) => naRecorte(o, destaque, periodoAtivo)) : baseGantt;
-  const rGantt = recorte || obrasVersao ? resumoCarteira(obrasGantt, etapas) : r;
+  const rGantt = recorte || obrasVersao ? resumoCarteira(obrasGantt, etapas, periodoAtivo) : r;
   const destacar = (id) => {
     setSelecionada(null);
     setDestaque(id);

@@ -4,11 +4,11 @@ import '../../Dashboards/EconomicoFinanceiro/fluxo/painel.css';
 import '../../Dashboards/CronogramasObras/cronogramas.css';
 
 // Cards da carteira de obras no estilo dos cards do painel do CFO (.tile de painel.css): o VGV com as
-// unidades logo abaixo (pedido do usuário: um card só) e, por etapa, as obras que estão nela hoje, o VGV e as
+// unidades logo abaixo (pedido do usuário: um card só) e, por etapa, as obras que estiveram nela no período, o VGV e as
 // unidades delas e a fatia da carteira — no da construção, também as obras em atraso e o VGV delas;
 // na etapa por onde começam as obras a iniciar (o Lançamento), essas obras com o VGV e as unidades
 // (pedidos do usuário). Clicar num card de etapa filtra o Gantt: ficam as obras que estiveram nela em
-// algum momento do período De/Até (cronogramaObras.js::naRecorte) — o número do card é o de hoje.
+// algum momento do período De/Até (cronogramaObras.js::naRecorte) — as mesmas que o card conta.
 // Usado no dashboard Cronogramas de Obras e na aba Cronogramas de Operações > Cronogramas Obras
 // (pedido do usuário: os mesmos cards) — precisa estar dentro de um .painel-cfo.
 // - `resumo`: resumoCarteira (cronogramaObras.js) das obras que os cards de etapa mostram.
@@ -49,7 +49,7 @@ export default function CardsCarteira({ resumo: r, topo, destaque, onDestaque })
             </span>
             <span className="v">
               {e.obras.length}
-              <small>{e.obras.length === 1 ? 'obra hoje' : 'obras hoje'}</small>
+              <small>{e.obras.length === 1 ? 'obra' : 'obras'} {r.quando}</small>
             </span>
             <span className="d">
               {e.obras.length ? (

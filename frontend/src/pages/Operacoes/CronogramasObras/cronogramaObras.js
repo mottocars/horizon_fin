@@ -116,7 +116,7 @@ function noPeriodo(segmento, periodo) {
 // Recorte dos cards (clicar num card de etapa filtra o Gantt — pedido do usuário): as obras que
 // estiveram na etapa em algum momento do período, não só as que estão nela hoje — ex.: duas obras
 // lançando este mês e uma no mês que vem, o card do Lançamento mostra as três. Os números do card
-// continuam sendo os de hoje. Sem período (Visão geral), o cronograma inteiro.
+// contam as mesmas (resumoCarteira). Sem período (Visão geral), o cronograma inteiro.
 export const naRecorte = (obra, recorte, periodo = null) =>
   obra.segmentos.some((s) => s.etapa.id === recorte && (!periodo || noPeriodo(s, periodo)));
 
@@ -190,30 +190,32 @@ export function numerosTopo(obras, recorte = null) {
   return { vgv: soma('valor_geral_vendas'), unidades: soma('numero_unidades'), recorte };
 }
 
-// Números da carteira: VGV, unidades e, por etapa, as obras que estão nela hoje. Na etapa da
-// construção (a que leva o `prazo` da Regra de Atraso), também `atraso`: dessas obras, as que já
-// estão atrasadas hoje (pedido do usuário: as que o cronograma só prevê atrasar mais adiante não
-// contam) e o VGV delas; null nas outras etapas.
+// Números da carteira: VGV, unidades e, por etapa, as obras que estiveram nela em algum momento do
+// `periodo` (De/Até; null = o cronograma inteiro) — o mesmo recorte do clique no card (naRecorte),
+// pedido do usuário: antes eram só as que estão nela hoje. `quando`: o complemento do número no card.
+// Na etapa da construção (a que leva o `prazo` da Regra de Atraso), também `atraso`: as obras que
+// estão na construção hoje e já atrasadas hoje (pedido do usuário: as que o cronograma só prevê
+// atrasar mais adiante não contam) e o VGV delas; null nas outras etapas.
 // Em cada etapa também `aIniciar`: as obras que ainda não começaram e vão começar por ela (a primeira
 // etapa com data no cronograma delas), com o VGV e as unidades — null quando nenhuma. Antes ia sempre
 // no primeiro card, e uma etapa nova sem datas na frente do Lançamento (Landbank, GENESIS) ficava
 // com as obras a iniciar dele (pedido do usuário).
-export function resumoCarteira(obras, etapas) {
+export function resumoCarteira(obras, etapas, periodo = null) {
   const soma = (centros, campo) => centros.reduce((s, c) => s + (Number(c[campo]) || 0), 0);
   const centros = obras.map((o) => o.centro);
   const aIniciar = obras.filter((o) => o.situacao.tipo === 'aIniciar').map((o) => o.centro);
   return {
     totalObras: obras.length,
+    quando: periodo ? 'no período' : 'no cronograma',
     vgv: soma(centros, 'valor_geral_vendas'),
     comVgv: centros.filter((c) => Number(c.valor_geral_vendas) > 0).length,
     unidades: soma(centros, 'numero_unidades'),
     comUnidades: centros.filter((c) => Number(c.numero_unidades) > 0).length,
     porEtapa: etapas.map((etapa, i) => {
-      const daEtapa = obras.filter((o) => naEtapa(o, etapa.id));
-      const lista = daEtapa.map((o) => o.centro);
+      const lista = obras.filter((o) => naRecorte(o, etapa.id, periodo)).map((o) => o.centro);
       const prazoDe = (o) => o.segmentos.find((s) => s.etapa.id === etapa.id)?.prazo;
       const construcao = obras.find(prazoDe);
-      const atrasadas = daEtapa.filter((o) => o.atrasadaHoje && prazoDe(o)).map((o) => o.centro);
+      const atrasadas = obras.filter((o) => naEtapa(o, etapa.id) && o.atrasadaHoje && prazoDe(o)).map((o) => o.centro);
       const iniciam = obras
         .filter((o) => o.situacao.tipo === 'aIniciar' && o.situacao.segmento.etapa.id === etapa.id)
         .map((o) => o.centro);

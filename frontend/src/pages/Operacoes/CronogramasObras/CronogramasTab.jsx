@@ -76,7 +76,7 @@ export default function CronogramasTab({ empresaId, situacao = '', versaoId = ''
     () => filtrarPeriodo(filtrarSituacao(montarObras(centros, etapas, isoHoje(), atraso), situacao), periodoAtivo),
     [centros, etapas, atraso, situacao, periodoAtivo]
   );
-  const r = useMemo(() => resumoCarteira(obras, etapas), [obras, etapas]);
+  const r = useMemo(() => resumoCarteira(obras, etapas, periodoAtivo), [obras, etapas, periodoAtivo]);
   // "Mudanças da versão": o Gantt fica com as obras alteradas nela (como ficaram + como eram antes).
   const obrasVersao = useMemo(
     () => (versaoDetalhe ? filtrarPeriodo(filtrarSituacao(obrasDaVersao(versaoDetalhe, isoHoje()), situacao), periodoAtivo) : null),
@@ -118,7 +118,7 @@ export default function CronogramasTab({ empresaId, situacao = '', versaoId = ''
   // período (naRecorte) e VGV e unidades somam só elas.
   const baseGantt = obrasVersao || obras;
   const obrasGantt = recorte ? baseGantt.filter((o) => naRecorte(o, destaque, periodoAtivo)) : baseGantt;
-  const rGantt = recorte || obrasVersao ? resumoCarteira(obrasGantt, etapas) : r;
+  const rGantt = recorte || obrasVersao ? resumoCarteira(obrasGantt, etapas, periodoAtivo) : r;
   const topo = recorte ? numerosTopo(obras.filter((o) => naRecorte(o, destaque, periodoAtivo)), recorte.topo) : numerosTopo(obras);
 
   return (
