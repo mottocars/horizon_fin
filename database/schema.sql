@@ -691,6 +691,9 @@ CREATE TABLE planos_financeiros_sienge (
     incremento_out         NUMERIC(6,2),
     incremento_nov         NUMERIC(6,2),
     incremento_dez         NUMERIC(6,2),
+    -- Responsável pela conta (Cadastros > Planos Financeiros): usuário com a empresa no cadastro
+    -- (usuarios_empresas). Junto com pacote_id, é o que a tela de cadastro da conta edita hoje.
+    responsavel_id         INTEGER REFERENCES usuarios(id) ON DELETE SET NULL,
     PRIMARY KEY (sienge_id, empresa_id)
 );
 

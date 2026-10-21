@@ -9,6 +9,8 @@ router.use(authMiddleware);
 router.param('empresaId', paramEmpresa);
 router.get('/', controller.listGerados);
 router.get('/:empresaId/contas', controller.listContas);
+router.get('/:empresaId/export', controller.exportExcel);
+router.get('/:empresaId/responsaveis', controller.listResponsaveis);
 router.post('/gerar', controller.gerar);
 
 router.get('/:empresaId/contas/:siengeId', controller.getItem);

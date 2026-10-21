@@ -1,8 +1,8 @@
 import { useCallback, useEffect, useState } from 'react';
 import { useNavigate, useParams } from 'react-router-dom';
-import { ArrowLeft, RefreshCw, Search } from 'lucide-react';
+import { ArrowLeft, Download, RefreshCw, Search } from 'lucide-react';
 import Card from '../../components/Card';
-import { listContas, gerarPlano } from '../../api/planosFinanceirosSienge.api';
+import { listContas, gerarPlano, exportarPlano } from '../../api/planosFinanceirosSienge.api';
 import iconSienge from '../../assets/integracoes/sienge.svg';
 
 const LIMIT = 2000;
@@ -39,6 +39,7 @@ export default function PlanoFinanceiroDetalhe() {
   const [search, setSearch] = useState('');
   const [loading, setLoading] = useState(true);
   const [refreshing, setRefreshing] = useState(false);
+  const [exporting, setExporting] = useState(false);
   const [error, setError] = useState('');
 
   const loadContas = useCallback(
@@ -72,6 +73,26 @@ export default function PlanoFinanceiroDetalhe() {
       setError(err.response?.data?.message || 'Não foi possível atualizar o plano financeiro.');
     } finally {
       setRefreshing(false);
+    }
+  }
+
+  async function handleExport() {
+    setError('');
+    setExporting(true);
+    try {
+      const blob = await exportarPlano(empresaId);
+      const url = window.URL.createObjectURL(blob);
+      const link = document.createElement('a');
+      link.href = url;
+      link.download = `plano-financeiro-empresa-${empresaId}.xlsx`;
+      document.body.appendChild(link);
+      link.click();
+      link.remove();
+      window.URL.revokeObjectURL(url);
+    } catch (err) {
+      setError(err.response?.data?.message || 'Não foi possível exportar o plano financeiro.');
+    } finally {
+      setExporting(false);
     }
   }
 
@@ -112,6 +133,16 @@ export default function PlanoFinanceiroDetalhe() {
                 className="w-full rounded-lg border border-gray-200 py-2 pl-9 pr-3 text-sm focus:outline-none focus:ring-2 focus:ring-primary-100"
               />
             </div>
+            <button
+              type="button"
+              onClick={handleExport}
+              disabled={exporting || contas.length === 0}
+              title="Exportar para Excel"
+              className="flex items-center justify-center gap-2 rounded-lg border border-gray-200 px-3 py-2 text-sm text-gray-600 hover:bg-gray-50 disabled:opacity-60"
+            >
+              <Download size={16} className={exporting ? 'animate-pulse' : ''} />
+              Exportar
+            </button>
             <button
               type="button"
               onClick={handleRefresh}

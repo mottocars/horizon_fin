@@ -51,6 +51,23 @@ async function listContas(empresaId, { page = 1, limit = 15, search = '' }) {
   };
 }
 
+// Exportar (botão da lista de contas da empresa): o cadastro inteiro, com Pacote e Responsável.
+async function listContasParaExportacao(empresaId) {
+  const { rows } = await pool.query(
+    `SELECT p.sienge_id, p.name, p.tp_conta, p.fl_ativa, p.fl_redutora, p.fl_adiantamento, p.fl_imposto,
+            p.mascara_nivel_1, p.mascara_nivel_2, p.mascara_nivel_3, p.mascara_nivel_4, p.mascara_nivel_5,
+            p.mascara_nivel_6, p.mascara_nivel_7,
+            pac.descricao AS pacote_descricao, resp.nome AS responsavel_nome, p.atualizado_em
+     FROM planos_financeiros_sienge p
+     LEFT JOIN mascara_itens pac ON pac.id = p.pacote_id
+     LEFT JOIN usuarios resp ON resp.id = p.responsavel_id
+     WHERE p.empresa_id = $1
+     ORDER BY p.sienge_id::text ASC`,
+    [empresaId]
+  );
+  return rows;
+}
+
 async function getItem(empresaId, siengeId) {
   const { rows } = await pool.query(
     `SELECT p.*,
@@ -58,17 +75,33 @@ async function getItem(empresaId, siengeId) {
             dfc.descricao AS classificacao_dfc_descricao,
             sub_dre.descricao AS submascara_dre_descricao,
             sub_dfc.descricao AS submascara_dfc_descricao,
-            pac.descricao AS pacote_descricao
+            pac.descricao AS pacote_descricao,
+            resp.nome AS responsavel_nome
      FROM planos_financeiros_sienge p
      LEFT JOIN mascara_itens dre ON dre.id = p.classificacao_dre_id
      LEFT JOIN mascara_itens dfc ON dfc.id = p.classificacao_dfc_id
      LEFT JOIN mascara_itens sub_dre ON sub_dre.id = p.submascara_dre_id
      LEFT JOIN mascara_itens sub_dfc ON sub_dfc.id = p.submascara_dfc_id
      LEFT JOIN mascara_itens pac ON pac.id = p.pacote_id
+     LEFT JOIN usuarios resp ON resp.id = p.responsavel_id
      WHERE p.empresa_id = $1 AND p.sienge_id = $2`,
     [empresaId, siengeId]
   );
   return rows[0] || null;
+}
+
+// Quem pode ser Responsável por uma conta do plano: usuário ativo com a empresa no cadastro
+// (usuarios_empresas). Master não entra — não tem empresa vinculada no cadastro.
+async function listResponsaveis(empresaId) {
+  const { rows } = await pool.query(
+    `SELECT u.id, u.nome
+     FROM usuarios u
+     JOIN usuarios_empresas ue ON ue.usuario_id = u.id AND ue.empresa_id = $1
+     WHERE u.ativo = TRUE
+     ORDER BY u.nome ASC`,
+    [empresaId]
+  );
+  return rows;
 }
 
 // Atualiza só a Máscara DRE — usado pela aba "Plano de Contas" da DRE POC Gerencial (combobox
@@ -86,55 +119,43 @@ async function updateClassificacaoDre(empresaId, siengeId, classificacaoDreId) {
   return rows[0] || null;
 }
 
-const MESES = ['jan', 'fev', 'mar', 'abr', 'mai', 'jun', 'jul', 'ago', 'set', 'out', 'nov', 'dez'];
+function badRequest(message) {
+  const err = new Error(message);
+  err.status = 400;
+  err.expose = true;
+  return err;
+}
 
+// O cadastro da conta edita só Pacote e Responsável. As demais colunas de enriquecimento
+// (classificação DFC, submáscaras, projeção, incrementos...) saíram da tela e ficam como estão; a
+// Classificação DRE segue sendo editada pela DRE POC Gerencial (updateClassificacaoDre).
+// responsavel_id ausente (undefined) = não mexe — uma aba antiga aberta, que não manda o campo, não
+// apaga o responsável; null = limpar.
 async function updateEnriquecimento(empresaId, siengeId, data) {
   const item = await getItem(empresaId, siengeId);
   if (!item) return null;
   if (item.tp_conta === 'T') {
-    const err = new Error('Contas totalizadoras (tp_conta = T) não podem ser editadas.');
-    err.status = 400;
-    err.expose = true;
-    throw err;
+    throw badRequest('Contas totalizadoras (tp_conta = T) não podem ser editadas.');
   }
 
-  const mesColumns = MESES.map((mes) => `incremento_${mes}`);
-  const mesValues = MESES.map((mes) => data[`incremento_${mes}`] ?? null);
+  const mudaResponsavel = data.responsavel_id !== undefined;
+  // Manter o responsável atual sempre vale (mesmo que tenha sido inativado ou desvinculado depois);
+  // trocar, só por um usuário da empresa.
+  if (mudaResponsavel && data.responsavel_id && data.responsavel_id !== item.responsavel_id) {
+    const responsaveis = await listResponsaveis(empresaId);
+    if (!responsaveis.some((u) => u.id === data.responsavel_id)) {
+      throw badRequest('O responsável precisa ser um usuário ativo desta empresa.');
+    }
+  }
 
-  const { rows } = await pool.query(
+  await pool.query(
     `UPDATE planos_financeiros_sienge SET
-       classificacao_dre_id = $1,
-       classificacao_dfc_id = $2,
-       submascara_dre_id = $3,
-       submascara_dfc_id = $4,
-       projeta_mes_atual_dfc = $5,
-       pacote_id = $6,
-       tipo_projecao = $7,
-       quantidade_meses = $8,
-       gera_orcamento = $9,
-       fonte_dados = $10,
-       regra_calculo = $11,
-       ${mesColumns.map((col, i) => `${col} = $${12 + i}`).join(', ')}
-     WHERE empresa_id = $${12 + mesColumns.length} AND sienge_id = $${13 + mesColumns.length}
-     RETURNING *`,
-    [
-      data.classificacao_dre_id || null,
-      data.classificacao_dfc_id || null,
-      data.submascara_dre_id || null,
-      data.submascara_dfc_id || null,
-      data.projeta_mes_atual_dfc ?? null,
-      data.pacote_id || null,
-      data.tipo_projecao || null,
-      data.quantidade_meses ?? null,
-      data.gera_orcamento ?? null,
-      data.fonte_dados || null,
-      data.regra_calculo || null,
-      ...mesValues,
-      empresaId,
-      siengeId,
-    ]
+       pacote_id = $1,
+       responsavel_id = CASE WHEN $2 THEN $3::int ELSE responsavel_id END
+     WHERE empresa_id = $4 AND sienge_id = $5`,
+    [data.pacote_id || null, mudaResponsavel, data.responsavel_id || null, empresaId, siengeId]
   );
-  return rows[0] || null;
+  return getItem(empresaId, siengeId);
 }
 
 async function getEmpresaComIntegracao(empresaId) {
@@ -225,4 +246,13 @@ async function gerar(empresaId, mascaraNiveis) {
   return { empresa_id: empresaId, total_importado: contas.length };
 }
 
-module.exports = { listGerados, listContas, gerar, getItem, updateEnriquecimento, updateClassificacaoDre };
+module.exports = {
+  listGerados,
+  listContas,
+  listContasParaExportacao,
+  gerar,
+  getItem,
+  listResponsaveis,
+  updateEnriquecimento,
+  updateClassificacaoDre,
+};

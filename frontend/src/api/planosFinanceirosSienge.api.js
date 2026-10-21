@@ -10,6 +10,17 @@ export function listContas(empresaId, { page = 1, limit = 15, search = '' } = {}
     .then((res) => res.data);
 }
 
+export function exportarPlano(empresaId) {
+  return http
+    .get(`/planos-financeiros/sienge/${empresaId}/export`, { responseType: 'blob' })
+    .then((res) => res.data);
+}
+
+// Usuários ativos com a empresa no cadastro — opções do campo Responsável da conta.
+export function listResponsaveis(empresaId) {
+  return http.get(`/planos-financeiros/sienge/${empresaId}/responsaveis`).then((res) => res.data);
+}
+
 export function gerarPlano(empresaId, mascaraNiveis) {
   const body = { empresa_id: empresaId };
   if (mascaraNiveis) body.mascara_niveis = mascaraNiveis;

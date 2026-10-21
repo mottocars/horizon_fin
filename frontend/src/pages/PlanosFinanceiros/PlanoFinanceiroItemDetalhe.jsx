@@ -4,111 +4,38 @@ import { ArrowLeft, PieChart } from 'lucide-react';
 import Card from '../../components/Card';
 import Button from '../../components/Button';
 import SearchableSelect from '../../components/SearchableSelect';
-import { getItem, updateEnriquecimento } from '../../api/planosFinanceirosSienge.api';
+import { getItem, listResponsaveis, updateEnriquecimento } from '../../api/planosFinanceirosSienge.api';
 import { listMascaras } from '../../api/mascaras.api';
 
-const MESES = [
-  { key: 'jan', label: 'Janeiro' },
-  { key: 'fev', label: 'Fevereiro' },
-  { key: 'mar', label: 'Março' },
-  { key: 'abr', label: 'Abril' },
-  { key: 'mai', label: 'Maio' },
-  { key: 'jun', label: 'Junho' },
-  { key: 'jul', label: 'Julho' },
-  { key: 'ago', label: 'Agosto' },
-  { key: 'set', label: 'Setembro' },
-  { key: 'out', label: 'Outubro' },
-  { key: 'nov', label: 'Novembro' },
-  { key: 'dez', label: 'Dezembro' },
-];
-
-// Mesmo padrão de ContaBancariaItemDetalhe.jsx/ConveniosBancariosForm.jsx (corCampo/corSelect):
+// Mesmo padrão de ContaBancariaItemDetalhe.jsx/ConveniosBancariosForm.jsx (corSelect):
 // âmbar quando o campo está em branco, azul claro quando já tem valor — dá pra ver de relance
-// o que ainda falta preencher no enriquecimento desta conta do plano financeiro.
+// o que ainda falta preencher no cadastro desta conta do plano financeiro.
 // A borda azul é primary-100/500 (não 200/400): o tema (styles/index.css) só define primary
 // 50, 100, 500, 600 e 700 — classe de tom inexistente não gera CSS e a borda cairia na cor
 // padrão (preta).
+// O gatilho do SearchableSelect já traz o próprio anel de foco (primary-100), então aqui
+// vão só borda e fundo — repetir o anel geraria conflito de especificidade no Tailwind.
 const COR_CAMPO_VAZIO = 'border-amber-200 bg-amber-50 focus:border-amber-400';
 const COR_CAMPO_PREENCHIDO = 'border-primary-100 bg-primary-50 focus:border-primary-500';
 
-function estaPreenchido(valor) {
-  return String(valor ?? '').trim() !== '';
-}
-
-function corCampo(valor) {
-  return estaPreenchido(valor)
-    ? `${COR_CAMPO_PREENCHIDO} focus:ring-primary-100`
-    : `${COR_CAMPO_VAZIO} focus:ring-amber-100`;
-}
-
-// O gatilho do SearchableSelect já traz o próprio anel de foco (primary-100), então aqui
-// vão só borda e fundo — repetir o anel geraria conflito de especificidade no Tailwind.
 function corSelect(valor) {
-  return estaPreenchido(valor) ? COR_CAMPO_PREENCHIDO : COR_CAMPO_VAZIO;
+  return String(valor ?? '').trim() !== '' ? COR_CAMPO_PREENCHIDO : COR_CAMPO_VAZIO;
 }
 
-function parseBRNumber(value) {
-  if (!value) return '';
-  const cleaned = value.trim();
-  if (cleaned.includes(',')) {
-    return cleaned.replace(/\./g, '').replace(',', '.');
-  }
-  return cleaned;
-}
-
-function formatBRNumber(value) {
-  if (value === null || value === undefined || value === '') return '';
-  const num = Number(value);
-  if (Number.isNaN(num)) return '';
-  return num.toLocaleString('pt-BR', { minimumFractionDigits: 2, maximumFractionDigits: 2 });
-}
-
-const TIPO_PROJECAO_OPTIONS = [
-  { value: 'BASE_ZERO', label: 'Base Zero' },
-  { value: 'ULTIMO_REALIZADO', label: 'Último Realizado' },
-  { value: 'MEDIA_ULTIMOS_MESES', label: 'Média dos Últimos Meses' },
-  { value: 'REALIZADO_ANO_ANTERIOR', label: 'Realizado Ano Anterior' },
-];
-
-const FONTE_DADOS_OPTIONS = [
-  { value: 'SIENGE', label: 'Sienge' },
-  { value: 'CONTA_AZUL', label: 'Conta Azul' },
-  { value: 'PORTAL_CONSTRUTORAS', label: 'Portal das Construtoras' },
-];
-
-const REGRAS_CALCULO_POR_FONTE = {
-  SIENGE: [
-    { value: 'FINANCEIRO', label: 'Financeiro' },
-    { value: 'ORCAMENTO_OBRAS', label: 'Orçamento de Obras' },
-    { value: 'ORCAMENTO_EMPRESARIAL', label: 'Orçamento Empresarial' },
-  ],
-  CONTA_AZUL: [{ value: 'FINANCEIRO', label: 'Financeiro' }],
-  PORTAL_CONSTRUTORAS: [
-    { value: 'REPASSE_CAIXA_PF', label: 'Repasse Caixa PF' },
-    { value: 'NOVO_REGISTRO_PF', label: 'Novo Registro PF' },
-    { value: 'MEDICAO_PF', label: 'Medição PF' },
-    { value: 'REPASSE_CAIXA_PJ', label: 'Repasse Caixa PJ' },
-    { value: 'AMORTIZACAO_PJ', label: 'Amortização PJ' },
-    { value: 'JUROS_PJ', label: 'Juros PJ' },
-  ],
-};
-
-const emptyIncrementos = Object.fromEntries(MESES.map((m) => [`incremento_${m.key}`, '']));
-
+// O cadastro da conta tem só Pacote e Responsável — os demais campos de enriquecimento
+// (classificações, submáscaras, projeção, incrementos) saíram da tela; a Classificação DRE
+// continua na aba Plano de Contas da DRE POC Gerencial.
 const emptyForm = {
-  classificacao_dre_id: '',
-  classificacao_dfc_id: '',
-  submascara_dre_id: '',
-  submascara_dfc_id: '',
-  projeta_mes_atual_dfc: '',
   pacote_id: '',
-  ...emptyIncrementos,
-  tipo_projecao: '',
-  quantidade_meses: '',
-  gera_orcamento: '',
-  fonte_dados: '',
-  regra_calculo: '',
+  responsavel_id: '',
 };
+
+function formDoItem(data) {
+  return {
+    pacote_id: data.pacote_id ? String(data.pacote_id) : '',
+    responsavel_id: data.responsavel_id ? String(data.responsavel_id) : '',
+  };
+}
 
 export default function PlanoFinanceiroItemDetalhe() {
   const { empresaId, siengeId } = useParams();
@@ -121,38 +48,15 @@ export default function PlanoFinanceiroItemDetalhe() {
   const [error, setError] = useState('');
   const [success, setSuccess] = useState(false);
 
-  const [classificacoesDre, setClassificacoesDre] = useState([]);
-  const [classificacoesDfc, setClassificacoesDfc] = useState([]);
-  const [submascarasDre, setSubmascarasDre] = useState([]);
-  const [submascarasDfc, setSubmascarasDfc] = useState([]);
   const [pacotes, setPacotes] = useState([]);
-  const [geral, setGeral] = useState('');
+  const [responsaveis, setResponsaveis] = useState([]);
 
   const loadItem = useCallback(async () => {
     setLoading(true);
     try {
       const data = await getItem(empresaId, siengeId);
       setItem(data);
-      const incrementos = Object.fromEntries(
-        MESES.map((m) => [`incremento_${m.key}`, formatBRNumber(data[`incremento_${m.key}`])])
-      );
-      setGeral('');
-      setForm({
-        classificacao_dre_id: data.classificacao_dre_id ? String(data.classificacao_dre_id) : '',
-        classificacao_dfc_id: data.classificacao_dfc_id ? String(data.classificacao_dfc_id) : '',
-        submascara_dre_id: data.submascara_dre_id ? String(data.submascara_dre_id) : '',
-        submascara_dfc_id: data.submascara_dfc_id ? String(data.submascara_dfc_id) : '',
-        projeta_mes_atual_dfc:
-          data.projeta_mes_atual_dfc === true ? 'true' : data.projeta_mes_atual_dfc === false ? 'false' : '',
-        pacote_id: data.pacote_id ? String(data.pacote_id) : '',
-        ...incrementos,
-        tipo_projecao: data.tipo_projecao || '',
-        quantidade_meses: data.quantidade_meses ?? '',
-        gera_orcamento:
-          data.gera_orcamento === true ? 'true' : data.gera_orcamento === false ? 'false' : '',
-        fonte_dados: data.fonte_dados || '',
-        regra_calculo: data.regra_calculo || '',
-      });
+      setForm(formDoItem(data));
     } finally {
       setLoading(false);
     }
@@ -160,37 +64,19 @@ export default function PlanoFinanceiroItemDetalhe() {
 
   useEffect(() => {
     loadItem();
-    listMascaras('DRE', empresaId).then(setClassificacoesDre);
-    listMascaras('DFC', empresaId).then(setClassificacoesDfc);
-    listMascaras('SUBMASCARA_DRE', empresaId).then(setSubmascarasDre);
-    listMascaras('SUBMASCARA_DFC', empresaId).then(setSubmascarasDfc);
     listMascaras('PACOTES', empresaId).then(setPacotes);
+    listResponsaveis(empresaId).then(setResponsaveis);
   }, [loadItem, empresaId]);
 
-  const isBaseZero = form.tipo_projecao === 'BASE_ZERO';
-  const mostrarCamposProjecao = form.tipo_projecao !== '' && !isBaseZero;
+  // O responsável gravado continua aparecendo mesmo que tenha sido inativado ou desvinculado
+  // da empresa depois (aí não vem na lista) — senão o campo ficaria em branco sem ter sido limpo.
+  const opcoesResponsavel = responsaveis.map((u) => ({ value: u.id, label: u.nome }));
+  if (item?.responsavel_id && !responsaveis.some((u) => u.id === item.responsavel_id)) {
+    opcoesResponsavel.push({ value: item.responsavel_id, label: item.responsavel_nome || 'Usuário removido' });
+  }
 
   function handleChange(field, value) {
-    setForm((prev) => {
-      const next = { ...prev, [field]: value };
-      if (field === 'fonte_dados') next.regra_calculo = '';
-      return next;
-    });
-  }
-
-  function handleGeralChange(value) {
-    if (!/^-?[0-9.,]*$/.test(value)) return;
-    setGeral(value);
-  }
-
-  function handleReplicarTodos() {
-    setForm((prev) => {
-      const next = { ...prev };
-      MESES.forEach((m) => {
-        next[`incremento_${m.key}`] = geral;
-      });
-      return next;
-    });
+    setForm((prev) => ({ ...prev, [field]: value }));
   }
 
   async function handleSave(e) {
@@ -200,42 +86,9 @@ export default function PlanoFinanceiroItemDetalhe() {
     setSuccess(false);
     setSaving(true);
     try {
-      const clearExtras = !mostrarCamposProjecao;
-      const incrementosPayload = Object.fromEntries(
-        MESES.map((m) => [
-          `incremento_${m.key}`,
-          clearExtras ? '' : parseBRNumber(form[`incremento_${m.key}`]),
-        ])
-      );
-      const updated = await updateEnriquecimento(empresaId, siengeId, {
-        ...form,
-        ...incrementosPayload,
-        quantidade_meses: form.tipo_projecao === 'MEDIA_ULTIMOS_MESES' ? form.quantidade_meses : '',
-        gera_orcamento: form.gera_orcamento === '' ? '' : form.gera_orcamento === 'true',
-        fonte_dados: clearExtras ? '' : form.fonte_dados,
-        regra_calculo: clearExtras ? '' : form.regra_calculo,
-        projeta_mes_atual_dfc:
-          form.projeta_mes_atual_dfc === '' ? '' : form.projeta_mes_atual_dfc === 'true',
-      });
+      const updated = await updateEnriquecimento(empresaId, siengeId, form);
       setItem(updated);
-      const incrementosAtualizados = Object.fromEntries(
-        MESES.map((m) => [`incremento_${m.key}`, formatBRNumber(updated[`incremento_${m.key}`])])
-      );
-      setForm((prev) => ({
-        ...prev,
-        ...incrementosAtualizados,
-        quantidade_meses: updated.quantidade_meses ?? '',
-        gera_orcamento:
-          updated.gera_orcamento === true ? 'true' : updated.gera_orcamento === false ? 'false' : '',
-        fonte_dados: updated.fonte_dados || '',
-        regra_calculo: updated.regra_calculo || '',
-        projeta_mes_atual_dfc:
-          updated.projeta_mes_atual_dfc === true
-            ? 'true'
-            : updated.projeta_mes_atual_dfc === false
-              ? 'false'
-              : '',
-      }));
+      setForm(formDoItem(updated));
       setSuccess(true);
       setTimeout(() => setSuccess(false), 3000);
     } catch (err) {
@@ -302,78 +155,6 @@ export default function PlanoFinanceiroItemDetalhe() {
 
           <fieldset disabled={travado} className="contents space-y-4">
           <div className="grid grid-cols-1 gap-4 sm:grid-cols-2">
-            <Field label="Classificação DRE">
-              <SearchableSelect
-                value={form.classificacao_dre_id}
-                onChange={(value) => handleChange('classificacao_dre_id', value)}
-                options={classificacoesDre.map((c) => ({ value: c.id, label: c.descricao }))}
-                emptyMessage="Nenhuma classificação encontrada."
-                corClasses={corSelect(form.classificacao_dre_id)}
-              />
-              {classificacoesDre.length === 0 && (
-                <p className="mt-1 text-xs text-gray-400">
-                  Nenhuma classificação DRE cadastrada em Máscaras ainda.
-                </p>
-              )}
-            </Field>
-
-            <Field label="Classificação DFC">
-              <SearchableSelect
-                value={form.classificacao_dfc_id}
-                onChange={(value) => handleChange('classificacao_dfc_id', value)}
-                options={classificacoesDfc.map((c) => ({ value: c.id, label: c.descricao }))}
-                emptyMessage="Nenhuma classificação encontrada."
-                corClasses={corSelect(form.classificacao_dfc_id)}
-              />
-              {classificacoesDfc.length === 0 && (
-                <p className="mt-1 text-xs text-gray-400">
-                  Nenhuma classificação DFC cadastrada em Máscaras ainda.
-                </p>
-              )}
-            </Field>
-
-            <Field label="Submáscara DRE">
-              <SearchableSelect
-                value={form.submascara_dre_id}
-                onChange={(value) => handleChange('submascara_dre_id', value)}
-                options={submascarasDre.map((c) => ({ value: c.id, label: c.descricao }))}
-                emptyMessage="Nenhuma submáscara encontrada."
-                corClasses={corSelect(form.submascara_dre_id)}
-              />
-              {submascarasDre.length === 0 && (
-                <p className="mt-1 text-xs text-gray-400">
-                  Nenhuma submáscara DRE cadastrada em Máscaras ainda.
-                </p>
-              )}
-            </Field>
-
-            <Field label="Submáscara DFC">
-              <SearchableSelect
-                value={form.submascara_dfc_id}
-                onChange={(value) => handleChange('submascara_dfc_id', value)}
-                options={submascarasDfc.map((c) => ({ value: c.id, label: c.descricao }))}
-                emptyMessage="Nenhuma submáscara encontrada."
-                corClasses={corSelect(form.submascara_dfc_id)}
-              />
-              {submascarasDfc.length === 0 && (
-                <p className="mt-1 text-xs text-gray-400">
-                  Nenhuma submáscara DFC cadastrada em Máscaras ainda.
-                </p>
-              )}
-            </Field>
-
-            <Field label="Projeta Mês Atual DFC">
-              <SearchableSelect
-                value={form.projeta_mes_atual_dfc}
-                onChange={(value) => handleChange('projeta_mes_atual_dfc', value)}
-                options={[
-                  { value: 'true', label: 'Sim' },
-                  { value: 'false', label: 'Não' },
-                ]}
-                corClasses={corSelect(form.projeta_mes_atual_dfc)}
-              />
-            </Field>
-
             <Field label="Pacote">
               <SearchableSelect
                 value={form.pacote_id}
@@ -389,103 +170,21 @@ export default function PlanoFinanceiroItemDetalhe() {
               )}
             </Field>
 
-            <Field label="Gera Orçamento">
+            <Field label="Responsável">
               <SearchableSelect
-                value={form.gera_orcamento}
-                onChange={(value) => handleChange('gera_orcamento', value)}
-                options={[
-                  { value: 'true', label: 'Sim' },
-                  { value: 'false', label: 'Não' },
-                ]}
-                corClasses={corSelect(form.gera_orcamento)}
+                value={form.responsavel_id}
+                onChange={(value) => handleChange('responsavel_id', value)}
+                options={opcoesResponsavel}
+                emptyMessage="Nenhum usuário encontrado."
+                corClasses={corSelect(form.responsavel_id)}
               />
+              {responsaveis.length === 0 && (
+                <p className="mt-1 text-xs text-gray-400">
+                  Nenhum usuário ativo vinculado a esta empresa.
+                </p>
+              )}
             </Field>
-
-            <Field label="Tipo de Projeção">
-              <SearchableSelect
-                value={form.tipo_projecao}
-                onChange={(value) => handleChange('tipo_projecao', value)}
-                options={TIPO_PROJECAO_OPTIONS}
-                emptyMessage="Nenhum tipo encontrado."
-                corClasses={corSelect(form.tipo_projecao)}
-              />
-            </Field>
-
-            {mostrarCamposProjecao && (
-              <Field label="Fonte de Dados">
-                <SearchableSelect
-                  value={form.fonte_dados}
-                  onChange={(value) => handleChange('fonte_dados', value)}
-                  options={FONTE_DADOS_OPTIONS}
-                  emptyMessage="Nenhuma fonte encontrada."
-                  corClasses={corSelect(form.fonte_dados)}
-                />
-              </Field>
-            )}
-
-            {mostrarCamposProjecao && (
-              <Field label="Regra de Cálculo">
-                <SearchableSelect
-                  value={form.regra_calculo}
-                  disabled={!form.fonte_dados}
-                  onChange={(value) => handleChange('regra_calculo', value)}
-                  options={REGRAS_CALCULO_POR_FONTE[form.fonte_dados] || []}
-                  emptyMessage="Nenhuma regra encontrada."
-                  corClasses={corSelect(form.regra_calculo)}
-                />
-              </Field>
-            )}
-
-            {form.tipo_projecao === 'MEDIA_ULTIMOS_MESES' && (
-              <Field label="Quantidade de Meses">
-                <input
-                  type="text"
-                  inputMode="numeric"
-                  disabled={isBaseZero}
-                  value={form.quantidade_meses}
-                  onChange={(e) => {
-                    const raw = e.target.value;
-                    if (/^[0-9]*$/.test(raw)) handleChange('quantidade_meses', raw);
-                  }}
-                  className={`w-full rounded-lg border px-3 py-2 text-sm focus:outline-none focus:ring-2 disabled:bg-gray-50 disabled:opacity-60 ${corCampo(form.quantidade_meses)}`}
-                />
-              </Field>
-            )}
           </div>
-
-          {mostrarCamposProjecao && (
-            <div className="rounded-lg border border-gray-200 p-4">
-              <p className="mb-3 text-xs text-gray-500">
-                Informe o percentual "Geral" e clique em "Replicar para todos" para aplicá-lo a
-                todos os meses. Depois disso, você pode alterar qualquer mês individualmente.
-                Aceita valores negativos.
-              </p>
-              <div className="grid grid-cols-2 gap-4 sm:grid-cols-3 md:grid-cols-4">
-                <Field label="Geral">
-                  <div className="flex gap-2">
-                    <PercentInput value={geral} onChange={handleGeralChange} />
-                    <button
-                      type="button"
-                      onClick={handleReplicarTodos}
-                      title="Replicar para todos os meses, substituindo valores já preenchidos"
-                      className="shrink-0 rounded-lg bg-primary-600 px-2 text-xs font-medium text-white hover:bg-primary-700"
-                    >
-                      Replicar todos
-                    </button>
-                  </div>
-                </Field>
-                {MESES.map((m) => (
-                  <Field key={m.key} label={m.label}>
-                    <PercentInput
-                      value={form[`incremento_${m.key}`]}
-                      onChange={(value) => handleChange(`incremento_${m.key}`, value)}
-                      className={corCampo(form[`incremento_${m.key}`])}
-                    />
-                  </Field>
-                ))}
-              </div>
-            </div>
-          )}
 
           <div className="flex justify-end pt-2">
             <Button type="submit" loading={saving}>
@@ -504,27 +203,6 @@ function Field({ label, children }) {
     <div>
       <label className="mb-1 block text-sm font-medium text-gray-700">{label}</label>
       {children}
-    </div>
-  );
-}
-
-function PercentInput({ value, onChange, className = 'border-gray-200 focus:ring-primary-100' }) {
-  return (
-    <div className="relative">
-      <input
-        type="text"
-        inputMode="decimal"
-        placeholder="0,00"
-        value={value}
-        onChange={(e) => {
-          const raw = e.target.value;
-          if (/^-?[0-9.,]*$/.test(raw)) onChange(raw);
-        }}
-        className={`w-full rounded-lg border px-3 py-2 pr-7 text-sm focus:outline-none focus:ring-2 ${className}`}
-      />
-      <span className="pointer-events-none absolute right-2.5 top-1/2 -translate-y-1/2 text-xs text-gray-400">
-        %
-      </span>
     </div>
   );
 }
