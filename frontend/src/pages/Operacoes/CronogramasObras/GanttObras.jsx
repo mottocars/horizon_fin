@@ -626,16 +626,16 @@ const GanttObras = forwardRef(function GanttObras(
                   }}
                   className="group relative flex h-7 cursor-pointer border-b border-gray-100 focus:outline-none"
                 >
-                  {/* só um demonstrativo, bem limpo (pedido do usuário): linha baixa, texto pequeno, sem fundo */}
+                  {/* só um demonstrativo, bem limpo (pedido do usuário): a mesma letra do nome da obra, linha mais baixa, sem fundo */}
                   <div
                     className="sticky left-0 z-20 flex shrink-0 items-center gap-1 border-r border-gray-200 bg-white px-3 transition-colors group-hover:bg-gray-50"
                     style={{ width: LARGURA_NOMES }}
                   >
                     <ChevronRight size={12} className={`shrink-0 text-gray-400 transition-transform ${fechada ? '' : 'rotate-90'}`} />
-                    <span className={`truncate text-[11px] font-semibold uppercase tracking-wider ${cidade === SEM_CIDADE ? 'text-gray-400' : 'text-gray-600'}`}>
+                    <span className={`truncate text-[13px] font-semibold uppercase ${cidade === SEM_CIDADE ? 'text-gray-400' : 'text-gray-900'}`}>
                       {cidade}
                     </span>
-                    <span className="shrink-0 text-[11px] tabular-nums text-gray-400">· {lista.length}</span>
+                    <span className="shrink-0 text-xs tabular-nums text-gray-400">· {lista.length}</span>
                   </div>
                   <div style={{ width: larguraTempo }} />
                 </div>
