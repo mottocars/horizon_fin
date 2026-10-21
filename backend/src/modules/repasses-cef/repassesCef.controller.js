@@ -191,6 +191,17 @@ async function getUltimasAtualizacoes(req, res, next) {
   }
 }
 
+async function getIntegracoes(req, res, next) {
+  try {
+    const empresaId = empresaIdSchema.parse(req.params.empresaId);
+    const result = await service.getIntegracoes(empresaId);
+    res.json(result);
+  } catch (err) {
+    if (err.issues) return next(badRequest(err.issues[0].message));
+    next(err);
+  }
+}
+
 const EXPORT_COLUMNS = [
   { header: 'Bucket', key: 'bucket', width: 12 },
   { header: 'Empreendimento', key: 'empreendimento', width: 28 },
@@ -579,6 +590,7 @@ module.exports = {
   listRegistros,
   getStatusSincronizacao,
   getUltimasAtualizacoes,
+  getIntegracoes,
   exportarExcel,
   atualizarNumeroInstituicaoFinanceira,
   getHistoricoEtapas,

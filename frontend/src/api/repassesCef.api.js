@@ -66,6 +66,11 @@ export function getUltimasAtualizacoesRepassesCef(empresaId, centroCustoIds = []
   return http.get(`/repasses-cef/${empresaId}/ultimas-atualizacoes`, { params }).then((res) => res.data);
 }
 
+// { construtor_vendas: boolean } — sem CVCRM o Kanban fica sem o bucket Reserva.
+export function getIntegracoesRepassesCef(empresaId) {
+  return http.get(`/repasses-cef/${empresaId}/integracoes`).then((res) => res.data);
+}
+
 export function exportarRepassesCefExcel(empresaId, centroCustoIds = []) {
   const params = {};
   if (centroCustoIds.length > 0) params.centro_custo_ids = centroCustoIds.join(',');

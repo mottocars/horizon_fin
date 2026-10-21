@@ -31,6 +31,7 @@ router.get('/:empresaId/assinaturas', controller.listAssinaturas);
 router.get('/:empresaId/registros', controller.listRegistros);
 router.get('/:empresaId/status-sincronizacao', controller.getStatusSincronizacao);
 router.get('/:empresaId/ultimas-atualizacoes', controller.getUltimasAtualizacoes);
+router.get('/:empresaId/integracoes', controller.getIntegracoes);
 router.get('/:empresaId/exportar', controller.exportarExcel);
 router.patch(
   '/:empresaId/contratos/:siengeContractId/numero-instituicao-financeira',

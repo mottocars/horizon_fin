@@ -33,6 +33,7 @@ import {
   listRegistrosRepassesCef,
   getStatusSincronizacaoRepassesCef,
   getUltimasAtualizacoesRepassesCef,
+  getIntegracoesRepassesCef,
   exportarRepassesCefExcel,
 } from '../../../api/repassesCef.api';
 import { nomeExibicaoEmpresa } from '../../../utils/empresa';
@@ -103,6 +104,19 @@ export default function RepassesCefPage() {
   const [loadingRegistros, setLoadingRegistros] = useState(false);
 
   const [ultimasAtualizacoes, setUltimasAtualizacoes] = useState({});
+
+  // Empresa sem integração Construtor de Vendas (CVCRM) ativa não tem o
+  // bucket Reserva — o Kanban fica só com Contrato, Assinatura e Registro, e
+  // o Atualizar não tenta sincronizar reservas. `null` enquanto não sabe
+  // (mostra os quatro, que é o caso mais comum).
+  const [temConstrutorVendas, setTemConstrutorVendas] = useState(null);
+  const macroEtapas = useMemo(
+    () =>
+      temConstrutorVendas === false
+        ? MACRO_ETAPAS_REPASSES.filter((m) => m.value !== 'VENDA')
+        : MACRO_ETAPAS_REPASSES,
+    [temConstrutorVendas]
+  );
 
   const [atualizando, setAtualizando] = useState(false);
   const [exportando, setExportando] = useState(false);
@@ -232,6 +246,12 @@ export default function RepassesCefPage() {
     setBusca('');
     loadCentros();
     loadCores();
+    setTemConstrutorVendas(null);
+    if (empresaId) {
+      getIntegracoesRepassesCef(empresaId)
+        .then((r) => setTemConstrutorVendas(r.construtor_vendas))
+        .catch(() => {});
+    }
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [empresaId]);
 
@@ -254,16 +274,22 @@ export default function RepassesCefPage() {
   // módulo Extrato), só recarregam o que já está salvo. Cada integração
   // sincroniza de forma independente (uma pode não estar configurada sem
   // travar a outra) e o progresso de cada uma aparece no log de atualização.
+  // Empresa sem CVCRM nem entra a linha de Reservas no log.
   async function handleAtualizar() {
+    const sincronizaReservas = temConstrutorVendas !== false;
     setAtualizando(true);
     setLogsAtualizacao([
       { chave: 'sienge', logo: LOGO_SIENGE, integracaoNome: 'Sienge — Contratos', status: 'carregando' },
-      {
-        chave: 'cvcrm',
-        logo: LOGO_CONSTRUTOR_VENDAS,
-        integracaoNome: 'Construtor de Vendas — Reservas',
-        status: 'carregando',
-      },
+      ...(sincronizaReservas
+        ? [
+            {
+              chave: 'cvcrm',
+              logo: LOGO_CONSTRUTOR_VENDAS,
+              integracaoNome: 'Construtor de Vendas — Reservas',
+              status: 'carregando',
+            },
+          ]
+        : []),
     ]);
     setModalLogAberto(true);
 
@@ -315,7 +341,7 @@ export default function RepassesCefPage() {
 
     await Promise.all([
       atualizarEtapa('sienge', () => sincronizarContratosRepassesCef(empresaId)),
-      atualizarEtapa('cvcrm', () => sincronizarReservasRepassesCef(empresaId)),
+      sincronizaReservas && atualizarEtapa('cvcrm', () => sincronizarReservasRepassesCef(empresaId)),
     ]);
     clearInterval(intervaloProgresso);
 
@@ -609,6 +635,7 @@ export default function RepassesCefPage() {
             // cantos, sombra), só com padding mais enxuto (p-3).
             <div className="flex min-h-0 flex-1 flex-col rounded-card rounded-tl-none bg-white p-3 shadow-card">
               <KanbanRepasses
+                macroEtapas={macroEtapas}
                 reservas={reservasFiltradas}
                 loadingReservas={loadingReservas}
                 cores={cores}
@@ -651,6 +678,7 @@ export default function RepassesCefPage() {
 }
 
 function KanbanRepasses({
+  macroEtapas,
   reservas,
   loadingReservas,
   cores,
@@ -677,7 +705,7 @@ function KanbanRepasses({
     // em fundo branco) — são seções de um quadro geral só (ver Card em
     // volta, no componente pai), mas com separação bem visível entre elas.
     <div className="flex min-h-0 flex-1 gap-3">
-      {MACRO_ETAPAS_REPASSES.map((macro) => {
+      {macroEtapas.map((macro) => {
         // Os quatro buckets já têm base de dados real.
         const ehReserva = macro.value === 'VENDA';
         const ehContrato = macro.value === 'CONTRATO';

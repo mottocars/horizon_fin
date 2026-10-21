@@ -827,6 +827,15 @@ async function getUltimasAtualizacoes(empresaId, centroCustoIds = []) {
   return { reserva, contrato, assinatura: extrato, registro: extrato };
 }
 
+// Quais integrações opcionais a empresa tem ativas — sem Construtor de Vendas
+// (CVCRM) o Kanban não mostra o bucket Reserva nem tenta sincronizar reservas,
+// fica só com Contrato, Assinatura e Registro. Mesmo critério de "ativa" do
+// sincronizarReservas (getCredenciaisAtivas).
+async function getIntegracoes(empresaId) {
+  const credenciais = await construtorVendasService.getCredenciaisAtivas(empresaId);
+  return { construtor_vendas: Boolean(credenciais) };
+}
+
 // Progresso "ao vivo" (página atual / total de páginas) das sincronizações
 // em andamento pra essa empresa — o frontend faz polling nisso enquanto
 // espera o POST de sincronizar-*, pra desenhar a barra de progresso no log
@@ -1290,6 +1299,7 @@ module.exports = {
   listRegistros,
   getStatusSincronizacao,
   getUltimasAtualizacoes,
+  getIntegracoes,
   listParaExportacao,
   listHistoricoEtapasParaExportacao,
   atualizarNumeroInstituicaoFinanceira,
