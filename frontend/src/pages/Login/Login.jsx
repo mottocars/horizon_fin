@@ -77,7 +77,7 @@ export default function Login() {
           <div className="mx-auto w-full max-w-sm">
             <img src="/logomarca.svg" alt="Horizon Fin" className="mx-auto mb-8 h-10 w-auto" />
             <h1
-              className="text-center font-display text-[2rem] font-bold leading-tight tracking-tight text-gray-900"
+              className="text-center font-display text-2xl font-bold leading-tight tracking-tight text-gray-900"
               style={{ fontStretch: '110%' }}
             >
               {saudacao()}.
@@ -103,7 +103,7 @@ export default function Login() {
                   value={username}
                   onChange={(e) => setUsername(e.target.value)}
                   autoComplete="username"
-                  className="w-full rounded-lg border border-gray-200 bg-white h-11 px-3 text-sm focus:outline-none focus:ring-2 focus:ring-primary-100"
+                  className="w-full rounded-lg border border-gray-300 bg-white h-11 px-3 text-sm focus:outline-none focus:ring-2 focus:ring-primary-100"
                   placeholder="seu.usuario"
                 />
                 {formErrors.username && (
@@ -122,7 +122,7 @@ export default function Login() {
                     value={senha}
                     onChange={(e) => setSenha(e.target.value)}
                     autoComplete="current-password"
-                    className="w-full rounded-lg border border-gray-200 bg-white h-11 px-3 pr-10 text-sm focus:outline-none focus:ring-2 focus:ring-primary-100"
+                    className="w-full rounded-lg border border-gray-300 bg-white h-11 px-3 pr-10 text-sm focus:outline-none focus:ring-2 focus:ring-primary-100"
                     placeholder="••••••••"
                   />
                   <button
