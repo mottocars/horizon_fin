@@ -82,10 +82,10 @@ export default function CronogramasTab({ empresaId }) {
   }
 
   const etapaDestacada = etapas.find((e) => e.id === destaque);
-  // Card de etapa clicado → VGV e unidades somam só as obras dela (os cards são dinâmicos).
-  const topo = etapaDestacada
-    ? numerosTopo(obras.filter((o) => naEtapa(o, destaque)), `em ${etapaDestacada.descricao}`)
-    : numerosTopo(obras);
+  // Card de etapa clicado → o Gantt fica só com as obras dela hoje e VGV e unidades somam só elas.
+  const obrasGantt = etapaDestacada ? obras.filter((o) => naEtapa(o, destaque)) : obras;
+  const rGantt = etapaDestacada ? resumoCarteira(obrasGantt, etapas) : r;
+  const topo = etapaDestacada ? numerosTopo(obrasGantt, `em ${etapaDestacada.descricao}`) : numerosTopo(obras);
 
   return (
     <div className="space-y-5 rounded-card rounded-tl-none bg-white p-5 shadow-card">
@@ -111,17 +111,17 @@ export default function CronogramasTab({ empresaId }) {
           <div className="min-w-0">
             <h3 className="text-sm font-semibold text-gray-900">Linha do tempo das obras</h3>
             <p className="mt-0.5 text-xs text-gray-500">
-              {plural(r.comCronograma, 'obra no cronograma', 'obras no cronograma')}
-              {r.aIniciar > 0 && ` · ${plural(r.aIniciar, 'a iniciar', 'a iniciar')}`}
-              {r.concluidas > 0 && ` · ${plural(r.concluidas, 'concluída', 'concluídas')}`}
-              {r.semCronograma > 0 && <span className="text-amber-600"> · {plural(r.semCronograma, 'sem datas', 'sem datas')}</span>}
+              {plural(rGantt.comCronograma, 'obra no cronograma', 'obras no cronograma')}
+              {rGantt.aIniciar > 0 && ` · ${plural(rGantt.aIniciar, 'a iniciar', 'a iniciar')}`}
+              {rGantt.concluidas > 0 && ` · ${plural(rGantt.concluidas, 'concluída', 'concluídas')}`}
+              {rGantt.semCronograma > 0 && <span className="text-amber-600"> · {plural(rGantt.semCronograma, 'sem datas', 'sem datas')}</span>}
               {etapaDestacada && (
                 <button
                   type="button"
                   onClick={() => setDestaque(null)}
                   className="ml-2 inline-flex items-center gap-1 rounded-full bg-gray-100 px-2 py-0.5 text-[11px] font-medium text-gray-600 hover:bg-gray-200"
                 >
-                  Destacando {etapaDestacada.descricao} <X size={11} />
+                  Só em {etapaDestacada.descricao} <X size={11} />
                 </button>
               )}
             </p>
@@ -144,7 +144,7 @@ export default function CronogramasTab({ empresaId }) {
             </div>
           </div>
         </div>
-        <GanttObras etapas={etapas} obras={obras} zoom={zoom} destaque={destaque} onAbrirObra={setAberto} />
+        <GanttObras etapas={etapas} obras={obrasGantt} zoom={zoom} onAbrirObra={setAberto} />
       </div>
 
       <JanelaCentroCusto empresaId={empresaId} centro={aberto} onFechar={() => setAberto(null)} onSalvo={carregar} />

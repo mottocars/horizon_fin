@@ -1,7 +1,7 @@
 import { Fragment, forwardRef, useEffect, useImperativeHandle, useMemo, useRef, useState } from 'react';
 import { corPadrao } from '../../../utils/coresPadrao';
 import { somarDias, somarMeses } from '../../CentrosCusto/cronogramaDatas';
-import { COR_ATRASO_PADRAO, isoHoje, naEtapa, plural } from './cronogramaObras';
+import { COR_ATRASO_PADRAO, isoHoje, plural } from './cronogramaObras';
 import { MESES_ABREV, mesAno, moeda } from './formatos';
 
 // ---------------------------------------------------------------------------------------
@@ -9,7 +9,6 @@ import { MESES_ABREV, mesAno, moeda } from './formatos';
 // Cronogramas de Operações > Cronogramas Obras e no dashboard Cronogramas de Obras. Mesmo estilo
 // do Gantt do Plano de Voo (PlanoGantt.jsx): nomes fixos à esquerda, régua de meses, linha de hoje.
 // - `obras`: montarObras (cronogramaObras.js). `zoom`: 'geral' (encaixa tudo na largura) | 'mensal'.
-// - `destaque`: id de etapa — as obras que não estão nela hoje ficam apagadas.
 // - `onAbrirObra(centro)`: opcional — clicar numa obra abre o cadastro (Operações).
 // - `selecionada` (sienge_id | null) / `onSelecionarObra(centro)`: opcional — clicar numa obra a
 //   seleciona (dashboard: os cards passam a mostrar só ela); as outras ficam apagadas.
@@ -325,7 +324,7 @@ function PontoSituacao({ situacao }) {
 const ROLAGEM_SEM_BARRA = 'overflow-x-auto overflow-y-hidden [scrollbar-width:none] [&::-webkit-scrollbar]:hidden';
 
 const GanttObras = forwardRef(function GanttObras(
-  { etapas, obras, zoom, destaque, onAbrirObra, selecionada, onSelecionarObra, fundoBarra = '-bottom-6' },
+  { etapas, obras, zoom, onAbrirObra, selecionada, onSelecionarObra, fundoBarra = '-bottom-6' },
   ref
 ) {
   const [area, setArea] = useState(null);
@@ -403,7 +402,7 @@ const GanttObras = forwardRef(function GanttObras(
           : 'Clique para ver só esta obra nos cards'
         : null;
   const mostrarDicaObra = (o) => (e) => setDica({ obra: o, acao: dicaAcao(o), x: e.clientX, y: e.clientY });
-  const apagada = (o) => (selecionada ? o.centro.sienge_id !== selecionada : destaque && !naEtapa(o, destaque));
+  const apagada = (o) => selecionada && o.centro.sienge_id !== selecionada;
 
   return (
     <div>

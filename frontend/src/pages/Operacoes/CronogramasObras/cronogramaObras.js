@@ -126,7 +126,9 @@ export function numerosTopo(obras, recorte = null) {
   return { vgv: soma('valor_geral_vendas'), unidades: soma('numero_unidades'), recorte };
 }
 
-// Números da carteira: VGV, unidades e, por etapa, as obras que estão nela hoje.
+// Números da carteira: VGV, unidades e, por etapa, as obras que estão nela hoje. Na etapa da
+// construção (a que leva o `prazo` da Regra de Atraso), também `atraso`: dessas obras, as que têm
+// meses em atraso no cronograma (as barras com a cor do atraso) e o VGV delas; null nas outras etapas.
 export function resumoCarteira(obras, etapas) {
   const soma = (centros, campo) => centros.reduce((s, c) => s + (Number(c[campo]) || 0), 0);
   const centros = obras.map((o) => o.centro);
@@ -137,8 +139,19 @@ export function resumoCarteira(obras, etapas) {
     unidades: soma(centros, 'numero_unidades'),
     comUnidades: centros.filter((c) => Number(c.numero_unidades) > 0).length,
     porEtapa: etapas.map((etapa, i) => {
-      const lista = obras.filter((o) => naEtapa(o, etapa.id)).map((o) => o.centro);
-      return { etapa, cor: etapa.cor || corPadrao(i), obras: lista, vgv: soma(lista, 'valor_geral_vendas'), unidades: soma(lista, 'numero_unidades') };
+      const daEtapa = obras.filter((o) => naEtapa(o, etapa.id));
+      const lista = daEtapa.map((o) => o.centro);
+      const prazoDe = (o) => o.segmentos.find((s) => s.etapa.id === etapa.id)?.prazo;
+      const construcao = obras.find(prazoDe);
+      const atrasadas = daEtapa.filter((o) => prazoDe(o)?.meses > 0).map((o) => o.centro);
+      return {
+        etapa,
+        cor: etapa.cor || corPadrao(i),
+        obras: lista,
+        vgv: soma(lista, 'valor_geral_vendas'),
+        unidades: soma(lista, 'numero_unidades'),
+        atraso: construcao ? { obras: atrasadas, vgv: soma(atrasadas, 'valor_geral_vendas'), cor: prazoDe(construcao).cor } : null,
+      };
     }),
     comCronograma: obras.filter((o) => o.segmentos.length).length,
     semCronograma: obras.filter((o) => !o.segmentos.length).length,

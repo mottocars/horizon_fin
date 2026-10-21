@@ -22,7 +22,7 @@
   }
 }
 
-/* Card de etapa: botão que destaca no Gantt as obras que estão nela hoje. */
+/* Card de etapa: botão que filtra o Gantt (só as obras que estão nela hoje). */
 .painel-cfo button.tile {
   border: 0;
   text-align: left;
@@ -59,12 +59,25 @@
   margin-left: 6px;
   letter-spacing: 0;
 }
-/* Fatia da carteira na etapa: trilho no próprio tom da etapa, mais claro. */
+/* Card da construção: as obras em atraso e o VGV delas, com a marca da cor do atraso. */
+.painel-cfo .tile .d.atraso .marca {
+  display: inline-block;
+  width: 8px;
+  height: 8px;
+  border-radius: 2px;
+  margin-right: 6px;
+  vertical-align: 0;
+}
+/* Fatia da carteira na etapa: trilho no próprio tom da etapa, mais claro — no pé do card (o da
+   construção tem uma linha a mais e os medidores continuam alinhados). */
 .painel-cfo .tile .medidor {
   height: 4px;
   border-radius: 2px;
-  margin-top: 6px;
+  margin-top: auto;
   overflow: hidden;
+}
+.painel-cfo .tiles.cronograma .tile .d {
+  margin-bottom: 4px;
 }
 .painel-cfo .tile .medidor > i {
   display: block;

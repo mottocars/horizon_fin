@@ -127,8 +127,9 @@ export default function CronogramasObrasDashboard() {
   const r = useMemo(() => resumoCarteira(obras, etapas), [obras, etapas]);
   const etapaDestacada = etapas.find((e) => e.id === destaque);
 
-  // Cards dinâmicos (pedido do usuário): obra clicada no Gantt → todos os cards mostram só ela; card
-  // de etapa clicado → VGV e unidades passam a somar só as obras dela. Um recorte troca o outro.
+  // Cards dinâmicos (pedido do usuário): card de etapa clicado → o Gantt fica só com as obras dela
+  // hoje e VGV e unidades somam só elas; obra clicada no Gantt → todos os cards mostram só ela (o
+  // filtro da etapa continua no Gantt).
   const obraSelecionada = obras.find((o) => o.centro.sienge_id === selecionada) || null;
   const rCards = useMemo(() => (obraSelecionada ? resumoCarteira([obraSelecionada], etapas) : r), [obraSelecionada, etapas, r]);
   const topo = obraSelecionada
@@ -136,14 +137,13 @@ export default function CronogramasObrasDashboard() {
     : etapaDestacada
       ? numerosTopo(obras.filter((o) => naEtapa(o, destaque)), `em ${etapaDestacada.descricao}`)
       : numerosTopo(obras);
+  const obrasGantt = etapaDestacada ? obras.filter((o) => naEtapa(o, destaque)) : obras;
+  const rGantt = etapaDestacada ? resumoCarteira(obrasGantt, etapas) : r;
   const destacar = (id) => {
     setSelecionada(null);
     setDestaque(id);
   };
-  const selecionar = (centro) => {
-    setDestaque(null);
-    setSelecionada((atual) => (atual === centro.sienge_id ? null : centro.sienge_id));
-  };
+  const selecionar = (centro) => setSelecionada((atual) => (atual === centro.sienge_id ? null : centro.sienge_id));
 
   return (
     <div className="flex min-h-full w-full flex-col gap-3 p-5">
@@ -203,13 +203,13 @@ export default function CronogramasObrasDashboard() {
               <div className="ph">
                 <h2 id="h-gantt">Linha do tempo das obras</h2>
                 <p>
-                  {plural(r.comCronograma, 'obra no cronograma', 'obras no cronograma')}
-                  {r.aIniciar > 0 && ` · ${plural(r.aIniciar, 'a iniciar', 'a iniciar')}`}
-                  {r.concluidas > 0 && ` · ${plural(r.concluidas, 'concluída', 'concluídas')}`}
-                  {r.semCronograma > 0 && ` · ${plural(r.semCronograma, 'sem datas', 'sem datas')}`}
+                  {plural(rGantt.comCronograma, 'obra no cronograma', 'obras no cronograma')}
+                  {rGantt.aIniciar > 0 && ` · ${plural(rGantt.aIniciar, 'a iniciar', 'a iniciar')}`}
+                  {rGantt.concluidas > 0 && ` · ${plural(rGantt.concluidas, 'concluída', 'concluídas')}`}
+                  {rGantt.semCronograma > 0 && ` · ${plural(rGantt.semCronograma, 'sem datas', 'sem datas')}`}
                   {etapaDestacada && (
-                    <button type="button" className="destaque-chip" onClick={() => setDestaque(null)}>
-                      Destacando {etapaDestacada.descricao} <X size={11} />
+                    <button type="button" className="destaque-chip" onClick={() => destacar(null)} title="Voltar para todas as obras">
+                      Só em {etapaDestacada.descricao} <X size={11} />
                     </button>
                   )}
                   {obraSelecionada && (
@@ -261,9 +261,8 @@ export default function CronogramasObrasDashboard() {
                 <GanttObras
                   ref={ganttRef}
                   etapas={etapas}
-                  obras={obras}
+                  obras={obrasGantt}
                   zoom={zoom}
-                  destaque={destaque}
                   selecionada={selecionada}
                   onSelecionarObra={selecionar}
                   fundoBarra={telaCheia ? '-bottom-6' : 'bottom-0'}
