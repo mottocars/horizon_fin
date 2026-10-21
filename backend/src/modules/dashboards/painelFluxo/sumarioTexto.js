@@ -17,8 +17,7 @@ const ABAS_SUMARIO = [
         titulo: 'Filtros',
         itens: [
           '**Empresa** — a empresa do DFC Construtoras analisada.',
-          '**Histórico** — quantos meses **antes** do mês atual entram como realizado (6m, 1m ou digite de 1 a 36). Começa em 1.',
-          '**Horizonte** — quantos meses de projeção, **contando o mês atual** (5m, 9m ou digite). Começa em 5: com o mês atual em out/26, vai até fev/27.',
+          '**Início** e **Fim** — o período do painel, em mês e ano. Como o painel é a foto de hoje, o período sempre contém o mês atual: o Início vai até ele (até 36 meses antes) e o Fim começa nele (até 35 meses depois). Os meses antes do atual entram como realizado; do atual em diante, como projeção. Começa do mês anterior ao atual até 4 meses depois dele (com o mês atual em out/26: set/26 a fev/27).',
           '**Centro de custo** — limita o painel aos centros marcados. Sem nenhum marcado, entram todos os centros com "Projeta DFC".',
         ],
       },
@@ -52,7 +51,7 @@ const ABAS_SUMARIO = [
           '**Caixa hoje** — saldo real de hoje nas contas com "Projeta DFC" (extrato do Sienge até a última atualização). "Aplicado" é a parte em contas do tipo **Investimento**.',
           '**Mínimo projetado** — o menor saldo de fim de mês dentro do horizonte, partindo do caixa de hoje e somando só o que ainda vai acontecer; o mês em que ele acontece e quanto é menor que hoje.',
           '**Resultado médio · próximos 6 meses** — média do resultado de cada mês (todas as entradas menos todas as saídas): no mês atual, o realizado até hoje mais o que falta; nos seguintes, o orçado. E o mês em que o saldo fica abaixo do colchão, se ficar.',
-          '**Fluxo operacional · até hoje** — soma do realizado (entradas + saídas) do Fluxo de Caixa Operacional nos meses do Histórico e no mês atual até hoje.',
+          '**Fluxo operacional · até hoje** — soma do realizado (entradas + saídas) do Fluxo de Caixa Operacional nos meses do período antes do mês atual e no mês atual até hoje.',
           '**Dívida PJ Caixa** — saldo devedor do crédito PJ (Projeção CEF) no último mês fechado, somando as obras, e até onde ele vai no fim da projeção.',
           '**A receber em 90 dias** — saldo **corrigido** (com a correção monetária e os juros do contrato, como o Sienge calcula) das parcelas a receber em aberto que vencem de hoje até daqui a 90 dias; embaixo, toda a carteira a vencer (de hoje em diante), também corrigida.',
           '**Inadimplência** — saldo corrigido vencido até ontem ÷ (vencido + a vencer) das parcelas a receber em aberto.',

@@ -53,8 +53,20 @@ module.exports = {
     'Com explicar=true traz também o Sumário da tela (o que cada análise mostra, como é calculada e como ler). ' +
     'Para abrir uma linha do fluxo até as naturezas use dfc_fluxo_caixa; para a origem de um valor, dfc_detalhar_valor.',
   inputSchema: {
-    historico: z.number().int().min(1).max(36).default(1).describe('Meses de realizado antes do mês atual (a tela abre com 1).'),
-    horizonte: z.number().int().min(1).max(36).default(5).describe('Meses de projeção contando o mês atual (a tela abre com 5).'),
+    historico: z
+      .number()
+      .int()
+      .min(0)
+      .max(36)
+      .default(1)
+      .describe('Meses de realizado antes do mês atual (0 = começa no mês atual). Na tela é o Início do período (abre no mês anterior ao atual = 1).'),
+    horizonte: z
+      .number()
+      .int()
+      .min(1)
+      .max(36)
+      .default(5)
+      .describe('Meses de projeção contando o mês atual. Na tela é o Fim do período (abre no atual + 4 = 5).'),
     centros: z.array(z.union([z.string(), z.number()])).optional().describe('Centros de custo (ids ou nomes). Vazio = consolidado.'),
     spe: z
       .union([z.string(), z.number()])
@@ -127,7 +139,9 @@ module.exports = {
         regra:
           'Foto de hoje: saldos, carteira e realizado vão até hoje (extrato e Aging do Sienge até a última atualização); o Orçamento (última versão salva) só entra no que ainda vai acontecer — no mês atual, o que falta (orçado − realizado até hoje, por centro × natureza, sem inverter o sinal); nos seguintes, o orçado inteiro.',
         escopo: escopo || 'Consolidado',
-        historico: `${historico} ${historico === 1 ? 'mês' : 'meses'} (${M.lbl(D.meses[0])}${D.hist.length > 1 ? ` a ${M.lbl(D.hist.at(-1))}` : ''})`,
+        historico: historico
+          ? `${historico} ${historico === 1 ? 'mês' : 'meses'} (${M.lbl(D.meses[0])}${D.hist.length > 1 ? ` a ${M.lbl(D.hist.at(-1))}` : ''})`
+          : 'nenhum — o período começa no mês atual',
         horizonte: `${horizonte} ${horizonte === 1 ? 'mês' : 'meses'} contando o mês atual (${M.lbl(D.fut[0])} a ${M.lbl(D.fut.at(-1))})`,
       },
       caixa: { hoje: M.brl(D.caixaHoje), abertura_do_mes: M.brl(D.caixaAbertura) },

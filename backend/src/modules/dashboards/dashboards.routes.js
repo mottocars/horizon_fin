@@ -26,8 +26,9 @@ function dashboardDe(req, res) {
 
 const painelSchema = z.object({
   empresa_id: z.coerce.number().int().positive(),
-  hist: z.coerce.number().int().min(1).max(36).default(1),
-  hor: z.coerce.number().int().min(1).max(36).default(6),
+  // hist = meses antes do atual (0 = o período começa no mês atual); hor = do atual em diante.
+  hist: z.coerce.number().int().min(0).max(36).default(1),
+  hor: z.coerce.number().int().min(1).max(36).default(5),
   centros: z
     .string()
     .regex(/^(\d+(,\d+)*)?$/)
@@ -41,7 +42,7 @@ router.get('/economico-financeiro/fluxo-caixa', async (req, res, next) => {
     const centros = f.centros ? f.centros.split(',').map(Number) : [];
     res.json(await fluxoCaixaPainel.painel(f.empresa_id, { hist: f.hist, hor: f.hor, centros }));
   } catch (err) {
-    if (err.issues) return res.status(400).json({ message: 'Filtros inválidos (histórico e horizonte de 1 a 36 meses).' });
+    if (err.issues) return res.status(400).json({ message: 'Filtros inválidos (período: até 36 meses antes do mês atual e até 35 depois).' });
     next(err);
   }
 });

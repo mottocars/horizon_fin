@@ -13,12 +13,11 @@ import './painel.css';
 
 // Dashboard Econômico Financeiro › Fluxo de Caixa, no layout do painel do CFO
 // (C:\Users\motta\Desktop\layout\Especificação do Painel do CFO — Tostes e Diniz.md):
-// barra de controles (Empresa no lugar do Escopo, Histórico, Horizonte e Centro de custo), os 8
+// barra de controles (Empresa no lugar do Escopo, período Início–Fim e Centro de custo), os 8
 // indicadores, a grade do DFC (DfcFluxoTab) na altura da tela e, embaixo, os gráficos da especificação.
-// Histórico: meses antes do mês atual (padrão 1). Horizonte: meses a partir do mês atual, contando
-// ele (padrão 6). Os dados vêm de /dashboards/economico-financeiro/fluxo-caixa e o painel recarrega
+// Período: ver CampoMes (vira o Histórico/Horizonte da API). Os dados vêm de /dashboards/economico-financeiro/fluxo-caixa e o painel recarrega
 // sozinho a cada 30 minutos. A grade tem o botão de tela cheia (a mesma do DFC Construtoras) e a barra o
-// Exportar Excel do DFC Construtoras, com os filtros do painel (empresa, histórico + horizonte, centros).
+// Exportar Excel do DFC Construtoras, com os filtros do painel (empresa, período Início–Fim, centros).
 
 const MIN_RECARGA = 30;
 const LIMITE_MESES = 36;
@@ -32,39 +31,32 @@ const ultimoDia = (m) => {
   return `${m}-${String(new Date(a, mm, 0).getDate()).padStart(2, '0')}`;
 };
 
-// Opções fixas + campo para digitar quantos meses (o digitado fica marcado quando é o valor em uso).
-function SegMeses({ rotulo, opcoes, valor, onChange, digitarPrimeiro }) {
-  const fixo = opcoes.includes(valor);
-  const [texto, setTexto] = useState(fixo ? '' : String(valor));
-  useEffect(() => setTexto(opcoes.includes(valor) ? '' : String(valor)), [valor, opcoes]);
-  const aplicar = () => {
-    const n = Math.round(Number(texto));
-    if (Number.isFinite(n) && n >= 1 && n <= LIMITE_MESES) onChange(n);
-    else setTexto(fixo ? '' : String(valor));
-  };
-  const digitar = (
-    <label key="digitar" className={`digitar${fixo ? '' : ' ativo'}`} title={`Digite quantos meses (de 1 a ${LIMITE_MESES})`}>
-      <input
-        inputMode="numeric"
-        aria-label={`${rotulo}: digitar quantos meses`}
-        value={texto}
-        onChange={(e) => setTexto(e.target.value.replace(/\D/g, '').slice(0, 2))}
-        onBlur={() => texto && aplicar()}
-        onKeyDown={(e) => e.key === 'Enter' && aplicar()}
-      />
-    </label>
-  );
-  const botoes = opcoes.map((o) => (
-    <button key={o} type="button" aria-pressed={valor === o} onClick={() => onChange(o)}>
-      {o}m
-    </button>
-  ));
+// Período (pedido do usuário): Início e Fim em mês/ano no lugar de Histórico e Horizonte. O painel é a
+// foto de hoje, então o período sempre contém o mês atual — Início até ele (até 36 meses antes), Fim a
+// partir dele (até 35 depois). Por dentro vira o Histórico (meses antes do atual) e o Horizonte (meses
+// do atual em diante) que a API, o modelo e o conector MCP usam (limite: LIMITE_MESES).
+const diferencaMeses = (de, ate) => {
+  const [a1, m1] = de.split('-').map(Number);
+  const [a2, m2] = ate.split('-').map(Number);
+  return a2 * 12 + m2 - (a1 * 12 + m1);
+};
+
+function CampoMes({ id, rotulo, valor, min, max, onChange, dica }) {
   return (
     <div className="ctl">
-      <span className="rot">{rotulo}</span>
-      <div className="seg" role="group" aria-label={rotulo}>
-        {digitarPrimeiro ? [digitar, ...botoes] : [...botoes, digitar]}
-      </div>
+      <label htmlFor={id}>{rotulo}</label>
+      <input
+        id={id}
+        type="month"
+        value={valor}
+        min={min}
+        max={max}
+        title={dica}
+        onChange={(e) => {
+          const v = e.target.value;
+          if (/^\d{4}-\d{2}$/.test(v) && v >= min && v <= max) onChange(v);
+        }}
+      />
     </div>
   );
 }
@@ -124,8 +116,12 @@ function FiltroCentros({ opcoes, valor, onChange, disabled }) {
 
 // `marcaEmpresa`: { logo, nome } da empresa escolhida — a logomarca vai no canto direito do cabeçalho.
 export default function FluxoCaixaPainel({ dashboard, tituloTela, empresaId, onEmpresa, opcoesEmpresas, empresaTravada, carregandoEmpresas, marcaEmpresa }) {
-  const [hist, setHist] = useState(1);
-  const [hor, setHor] = useState(5); // padrão 5 (pedido do usuário, 19/10/2026)
+  // Padrão: do mês anterior ao atual até o atual + 4 (em out/26: set/26 a fev/27).
+  const mesAtual = mesHoje();
+  const [inicioMes, setInicioMes] = useState(() => addM(mesAtual, -1));
+  const [fimMes, setFimMes] = useState(() => addM(mesAtual, 4));
+  const hist = diferencaMeses(inicioMes, mesAtual);
+  const hor = diferencaMeses(mesAtual, fimMes) + 1;
   const [centros, setCentros] = useState([]);
   const [dados, setDados] = useState(null);
   const [estado, setEstado] = useState('ocioso'); // ocioso | carregando | erro
@@ -197,7 +193,7 @@ export default function FluxoCaixaPainel({ dashboard, tituloTela, empresaId, onE
   }, [dados]);
 
   // Período da grade: do 1º mês do histórico ao último do horizonte (o mês atual conta no horizonte).
-  const m0 = mesHoje();
+  const m0 = mesAtual;
   const inicio = `${addM(m0, -hist)}-01`;
   const fim = ultimoDia(addM(m0, hor - 1));
 
@@ -282,8 +278,24 @@ export default function FluxoCaixaPainel({ dashboard, tituloTela, empresaId, onE
               ))}
             </select>
           </div>
-          <SegMeses rotulo="Histórico" opcoes={[6, 1]} valor={hist} onChange={setHist} digitarPrimeiro />
-          <SegMeses rotulo="Horizonte" opcoes={[5, 9]} valor={hor} onChange={setHor} />
+          <CampoMes
+            id="f-inicio"
+            rotulo="Início"
+            valor={inicioMes}
+            min={addM(mesAtual, -LIMITE_MESES)}
+            max={mesAtual}
+            onChange={setInicioMes}
+            dica="Primeiro mês do período — até o mês atual (o painel é a foto de hoje)"
+          />
+          <CampoMes
+            id="f-fim"
+            rotulo="Fim"
+            valor={fimMes}
+            min={mesAtual}
+            max={addM(mesAtual, LIMITE_MESES - 1)}
+            onChange={setFimMes}
+            dica="Último mês do período — a partir do mês atual"
+          />
           <FiltroCentros opcoes={opcoesCentros} valor={centros} onChange={setCentros} disabled={!empresaId || !dados} />
           <div className="acoes">
             {erroExportacao && <span className="erro">{erroExportacao}</span>}

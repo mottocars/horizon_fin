@@ -95,6 +95,16 @@
   min-width: min(280px, 80vw);
   font-size: 14px;
 }
+.painel-cfo .ctl input[type='month'] {
+  padding: 5px 8px;
+  border: 1px solid var(--line);
+  border-radius: 4px;
+  background: var(--surface-2);
+  color: var(--ink);
+  font-size: 14px;
+  font-family: inherit;
+  min-width: 150px;
+}
 .painel-cfo .seg {
   display: inline-flex;
   border: 1px solid var(--line);
