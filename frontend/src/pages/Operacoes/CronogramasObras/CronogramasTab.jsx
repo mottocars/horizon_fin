@@ -97,8 +97,9 @@ export default function CronogramasTab({ empresaId }) {
         <CardsCarteira resumo={r} destaque={destaque} onDestaque={setDestaque} />
       </div>
 
-      {/* Gantt */}
-      <div className="overflow-hidden rounded-xl border border-gray-200">
+      {/* Gantt — overflow-clip (não hidden): recorta sem virar área de rolagem, então a barra de
+          rolagem do Gantt gruda no rodapé da tela */}
+      <div className="overflow-clip rounded-xl border border-gray-200">
         <div className="flex flex-col gap-3 border-b border-gray-100 px-4 py-3 lg:flex-row lg:items-center lg:justify-between">
           <div className="min-w-0">
             <h3 className="text-sm font-semibold text-gray-900">Linha do tempo das obras</h3>

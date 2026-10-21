@@ -1,6 +1,6 @@
-import { useCallback, useEffect, useMemo, useState } from 'react';
+import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { useSearchParams } from 'react-router-dom';
-import { X } from 'lucide-react';
+import { LocateFixed, Maximize2, Minimize2, X } from 'lucide-react';
 import CabecalhoDashboard from '../CabecalhoDashboard';
 import { listEmpresas } from '../../../api/empresas.api';
 import { listCronogramaCentros } from '../../../api/cronogramaCentros.api';
@@ -62,6 +62,36 @@ export default function CronogramasObrasDashboard() {
   const [erro, setErro] = useState('');
   const [zoom, setZoom] = useState('geral');
   const [destaque, setDestaque] = useState(null);
+  const [telaCheia, setTelaCheia] = useState(false);
+  const ganttRef = useRef(null);
+
+  // "Hoje": no mês a mês leva a régua até hoje; na visão geral (tudo já cabe na tela) troca para o
+  // mês a mês, que abre com hoje à vista.
+  function irParaHoje() {
+    if (zoom === 'mensal') ganttRef.current?.irParaHoje();
+    else setZoom('mensal');
+  }
+
+  // Tela cheia (como no Plano de Voo): pede também a do navegador; o Esc dele sai e o
+  // `fullscreenchange` fecha a nossa junto. Sem a do navegador, o Esc é tratado aqui.
+  useEffect(() => {
+    if (!telaCheia) return undefined;
+    const doc = document.documentElement;
+    if (!document.fullscreenElement && doc.requestFullscreen) doc.requestFullscreen().catch(() => {});
+    const aoTrocar = () => {
+      if (!document.fullscreenElement) setTelaCheia(false);
+    };
+    const aoTeclar = (e) => {
+      if (e.key === 'Escape') setTelaCheia(false);
+    };
+    document.addEventListener('fullscreenchange', aoTrocar);
+    window.addEventListener('keydown', aoTeclar);
+    return () => {
+      document.removeEventListener('fullscreenchange', aoTrocar);
+      window.removeEventListener('keydown', aoTeclar);
+      if (document.fullscreenElement) document.exitFullscreen?.().catch(() => {});
+    };
+  }, [telaCheia]);
 
   const carregar = useCallback(() => {
     setEtapas([]);
@@ -146,7 +176,7 @@ export default function CronogramasObrasDashboard() {
             <CardsCarteira resumo={r} destaque={destaque} onDestaque={setDestaque} />
 
             {/* O Gantt */}
-            <section className="panel" aria-labelledby="h-gantt">
+            <section className={`panel${telaCheia ? ' tela-cheia' : ''}`} aria-labelledby="h-gantt">
               <div className="ph">
                 <h2 id="h-gantt">Linha do tempo das obras</h2>
                 <p>
@@ -163,16 +193,51 @@ export default function CronogramasObrasDashboard() {
               </div>
               <div className="gantt-barra">
                 <LegendaGantt etapas={etapas} />
-                <div className="seg" role="group" aria-label="Zoom do gráfico">
-                  {ZOOMS_GANTT.map((z) => (
-                    <button key={z.id} type="button" aria-pressed={zoom === z.id} onClick={() => setZoom(z.id)}>
-                      {z.rotulo}
+                {/* Hoje, zoom e tela cheia — como na barra do Gantt do Plano de Voo (pedido do usuário) */}
+                <div className="gantt-acoes">
+                  <button type="button" className="btn ghost icone com-texto" onClick={irParaHoje} title="Levar a régua até hoje">
+                    <LocateFixed size={15} />
+                    Hoje
+                  </button>
+                  <div className="seg" role="group" aria-label="Zoom do gráfico">
+                    {ZOOMS_GANTT.map((z) => (
+                      <button key={z.id} type="button" aria-pressed={zoom === z.id} onClick={() => setZoom(z.id)}>
+                        {z.rotulo}
+                      </button>
+                    ))}
+                  </div>
+                  {telaCheia ? (
+                    <>
+                      <span className="dica-esc">Esc para sair</span>
+                      <button type="button" className="btn ghost icone com-texto" onClick={() => setTelaCheia(false)}>
+                        <Minimize2 size={15} />
+                        Sair da tela cheia
+                      </button>
+                    </>
+                  ) : (
+                    <button
+                      type="button"
+                      className="btn ghost icone"
+                      onClick={() => setTelaCheia(true)}
+                      title="Tela cheia"
+                      aria-label="Tela cheia"
+                    >
+                      <Maximize2 size={15} />
                     </button>
-                  ))}
+                  )}
                 </div>
               </div>
               <div className="gantt-moldura">
-                <GanttObras etapas={etapas} obras={obras} zoom={zoom} destaque={destaque} />
+                {/* a barra de rolagem gruda no rodapé de quem rola na vertical: o <main> do dashboard
+                    (sem padding) ou, na tela cheia, o próprio painel (padding 24px) */}
+                <GanttObras
+                  ref={ganttRef}
+                  etapas={etapas}
+                  obras={obras}
+                  zoom={zoom}
+                  destaque={destaque}
+                  fundoBarra={telaCheia ? '-bottom-6' : 'bottom-0'}
+                />
               </div>
             </section>
           </>

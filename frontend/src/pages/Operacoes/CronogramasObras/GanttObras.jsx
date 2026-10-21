@@ -1,4 +1,4 @@
-import { Fragment, useEffect, useMemo, useState } from 'react';
+import { Fragment, forwardRef, useEffect, useImperativeHandle, useMemo, useRef, useState } from 'react';
 import { Check, CircleDashed } from 'lucide-react';
 import { corPadrao } from '../../../utils/coresPadrao';
 import { somarDias, somarMeses } from '../../CentrosCusto/cronogramaDatas';
@@ -13,6 +13,10 @@ import { MESES_ABREV, mesAno, moeda } from './formatos';
 // - `destaque`: id de etapa — as obras que não estão nela hoje ficam apagadas.
 // - `onAbrirObra(centro)`: opcional — com ele, clicar numa obra abre o cadastro (Operações); sem
 //   ele, o gráfico é só leitura (dashboard).
+// - `fundoBarra`: classe do `bottom` da barra de rolagem horizontal, que fica sempre à vista grudada
+//   no rodapé da área que rola na vertical (como no Plano de Voo): `-bottom-6` quando essa área tem
+//   p-6 (o <main> das telas comuns, a tela cheia), `bottom-0` no dashboard (o <main> sem padding).
+// - `ref` expõe `irParaHoje()` (o botão "Hoje" do dashboard).
 // ---------------------------------------------------------------------------------------
 
 export const ZOOMS_GANTT = [
@@ -243,8 +247,12 @@ function SituacaoObra({ situacao, centro, clicavel }) {
   );
 }
 
-export default function GanttObras({ etapas, obras, zoom, destaque, onAbrirObra }) {
+// O corpo rola na horizontal sem mostrar barra — a barra visível é a do rodapé, sincronizada.
+const ROLAGEM_SEM_BARRA = 'overflow-x-auto overflow-y-hidden [scrollbar-width:none] [&::-webkit-scrollbar]:hidden';
+
+const GanttObras = forwardRef(function GanttObras({ etapas, obras, zoom, destaque, onAbrirObra, fundoBarra = '-bottom-6' }, ref) {
   const [area, setArea] = useState(null);
+  const barraRef = useRef(null);
   const [larguraArea, setLarguraArea] = useState(0);
   const [dica, setDica] = useState(null);
   const hoje = isoHoje();
@@ -281,13 +289,39 @@ export default function GanttObras({ etapas, obras, zoom, destaque, onAbrirObra 
     area.scrollTo({ left: Math.max(0, xHoje - (larguraArea - LARGURA_NOMES) / 3) });
   }, [zoom]); // eslint-disable-line react-hooks/exhaustive-deps
 
+  // "Hoje": leva a régua até hoje (um terço da tela à esquerda dele), rolando suave.
+  useImperativeHandle(ref, () => ({
+    irParaHoje: () => area?.scrollTo({ left: Math.max(0, xHoje - (larguraArea - LARGURA_NOMES) / 3), behavior: 'smooth' }),
+  }));
+
+  // Corpo e barra do rodapé rolam juntos (mexer num move o outro). Quem está rolando dita a posição
+  // até parar; o eco da outra faixa é ignorado — senão ela devolveria a posição e cortaria a rolagem
+  // suave do "Hoje" no meio.
+  const quemRola = useRef(null);
+  const fimRolagem = useRef(null);
+  useEffect(() => () => clearTimeout(fimRolagem.current), []);
+  const sincronizar = (origem) => {
+    if (quemRola.current && quemRola.current !== origem) return;
+    quemRola.current = origem;
+    clearTimeout(fimRolagem.current);
+    fimRolagem.current = setTimeout(() => {
+      quemRola.current = null;
+    }, 120);
+    const x = origem.scrollLeft;
+    for (const el of [area, barraRef.current]) if (el && el !== origem && el.scrollLeft !== x) el.scrollLeft = x;
+    if (dica) setDica(null);
+  };
+  const larguraTotal = LARGURA_NOMES + larguraTempo;
+  const transborda = larguraTotal > larguraArea + 1;
+
   const mostrarDica = (obra) => (e, seg) => setDica(e && seg ? { seg, obra, x: e.clientX, y: e.clientY } : null);
   const apagada = (o) => destaque && !naEtapa(o, destaque);
   const clicavel = Boolean(onAbrirObra);
 
   return (
-    <div ref={setArea} className="overflow-x-auto" onScroll={() => dica && setDica(null)}>
-      <div className="relative leading-normal" style={{ width: LARGURA_NOMES + larguraTempo, minWidth: '100%' }}>
+    <div>
+    <div ref={setArea} className={ROLAGEM_SEM_BARRA} onScroll={(e) => sincronizar(e.currentTarget)}>
+      <div className="relative leading-normal" style={{ width: larguraTotal, minWidth: '100%' }}>
         {/* fundo: anos alternados, divisas de ano (e de mês, no zoom mensal) e a linha de hoje */}
         <div className="pointer-events-none absolute inset-y-0" style={{ left: LARGURA_NOMES, width: larguraTempo }}>
           {Array.from({ length: meses / 12 }, (_, i) => (
@@ -372,7 +406,16 @@ export default function GanttObras({ etapas, obras, zoom, destaque, onAbrirObra 
           </Fragment>
         ))}
       </div>
-      <Dica dica={dica} />
+    </div>
+    {/* barra de rolagem horizontal sempre à vista, grudada no rodapé da tela (só quando há o que rolar) */}
+    {transborda && (
+      <div ref={barraRef} onScroll={(e) => sincronizar(e.currentTarget)} className={`sticky ${fundoBarra} z-30 overflow-x-auto bg-white`}>
+        <div className="h-px" style={{ width: larguraTotal }} />
+      </div>
+    )}
+    <Dica dica={dica} />
     </div>
   );
-}
+});
+
+export default GanttObras;

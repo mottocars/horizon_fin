@@ -80,11 +80,33 @@
   justify-content: space-between;
   gap: 8px 16px;
 }
+/* clip (não hidden): recorta os cantos sem virar área de rolagem — assim a barra de rolagem
+   horizontal do Gantt gruda no rodapé da tela. */
 .painel-cfo .gantt-moldura {
   border: 1px solid var(--line);
   border-radius: 4px;
-  overflow: hidden;
+  overflow: clip;
   background: #fff;
+}
+.painel-cfo .gantt-acoes {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 8px;
+}
+.painel-cfo .gantt-acoes .dica-esc {
+  font-size: 12px;
+  color: var(--muted);
+}
+/* Tela cheia do Gantt (como a do Plano de Voo): o painel cobre a janela e rola sozinho. */
+.painel-cfo .panel.tela-cheia {
+  position: fixed;
+  inset: 0;
+  z-index: 40;
+  overflow-y: auto;
+  border: 0;
+  border-radius: 0;
+  padding: 24px;
 }
 .painel-cfo .destaque-chip {
   display: inline-flex;
