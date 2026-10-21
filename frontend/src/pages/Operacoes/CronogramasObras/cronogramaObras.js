@@ -104,13 +104,15 @@ export const naEtapa = (obra, etapaId) => obra.situacao.tipo === 'etapa' && obra
 
 // As obras (centros com Tipo = Obra), cada uma com os segmentos e a situação de hoje: com
 // cronograma primeiro, pela data de início da primeira etapa; sem cronograma no fim. `atraso`: a
-// Regra de Atraso da Construção da empresa (null = sem regra).
+// Regra de Atraso da Construção da empresa (null = sem regra). `atrasadaHoje`: a construção já passou
+// do prazo hoje (o atraso já começou — não conta o que o cronograma só prevê atrasar mais adiante).
 export function montarObras(centros, etapas, hoje, atraso = null) {
   return centros
     .filter((c) => c.natureza === 'OBRA')
     .map((centro) => {
       const segmentos = montarSegmentos(centro, etapas, atraso);
-      return { centro, segmentos, situacao: situacaoHoje(segmentos, hoje) };
+      const prazo = segmentos.find((s) => s.prazo)?.prazo;
+      return { centro, segmentos, situacao: situacaoHoje(segmentos, hoje), atrasadaHoje: Boolean(prazo?.meses && prazo.desde <= hoje) };
     })
     .sort((a, b) => {
       const ia = a.segmentos[0]?.inicio || '9999';
@@ -127,8 +129,9 @@ export function numerosTopo(obras, recorte = null) {
 }
 
 // Números da carteira: VGV, unidades e, por etapa, as obras que estão nela hoje. Na etapa da
-// construção (a que leva o `prazo` da Regra de Atraso), também `atraso`: dessas obras, as que têm
-// meses em atraso no cronograma (as barras com a cor do atraso) e o VGV delas; null nas outras etapas.
+// construção (a que leva o `prazo` da Regra de Atraso), também `atraso`: dessas obras, as que já
+// estão atrasadas hoje (pedido do usuário: as que o cronograma só prevê atrasar mais adiante não
+// contam) e o VGV delas; null nas outras etapas.
 // Na primeira etapa (o Lançamento), também `aIniciar`: as obras que ainda não começaram nenhuma
 // etapa, com o VGV e as unidades delas (pedido do usuário); null nas outras.
 export function resumoCarteira(obras, etapas) {
@@ -146,7 +149,7 @@ export function resumoCarteira(obras, etapas) {
       const lista = daEtapa.map((o) => o.centro);
       const prazoDe = (o) => o.segmentos.find((s) => s.etapa.id === etapa.id)?.prazo;
       const construcao = obras.find(prazoDe);
-      const atrasadas = daEtapa.filter((o) => prazoDe(o)?.meses > 0).map((o) => o.centro);
+      const atrasadas = daEtapa.filter((o) => o.atrasadaHoje && prazoDe(o)).map((o) => o.centro);
       return {
         etapa,
         cor: etapa.cor || corPadrao(i),
