@@ -34,6 +34,10 @@ const PROJECTS_QUERY = `
 `;
 
 const PROJECTS_PAGE_SIZE = 50;
+// Sem tempo limite, uma chamada que o Prevision não responde prenderia a rotina do Monitor pra sempre.
+const TIMEOUT_MS = 60_000;
+
+const { sinalDeCancelamento, erroCancelada } = require('../../utils/execucaoCancelavel');
 
 function apiError(message) {
   const e = new Error(message);
@@ -42,21 +46,33 @@ function apiError(message) {
   return e;
 }
 
-async function fetchCompanyId(apiKey) {
-  let response;
+// Tempo limite de cada chamada + o "Parar" do Monitor de Integrações (execucaoCancelavel.js).
+function sinal() {
+  const limite = AbortSignal.timeout(TIMEOUT_MS);
+  const cancelar = sinalDeCancelamento();
+  return cancelar ? AbortSignal.any([limite, cancelar]) : limite;
+}
+
+// fetch com o sinal; erro de rede/tempo vira a mensagem da integração (ou o cancelamento).
+async function chamar(url, opcoes) {
   try {
-    response = await fetch(GRAPHQL_URL, {
-      method: 'POST',
-      headers: {
-        'Content-Type': 'application/json',
-        Accept: 'application/json',
-        UserAuthorization: `token ${apiKey}`,
-      },
-      body: JSON.stringify({ query: ME_QUERY }),
-    });
-  } catch {
-    throw apiError('Não foi possível conectar à API do Prevision.');
+    return await fetch(url, { ...opcoes, signal: sinal() });
+  } catch (err) {
+    if (sinalDeCancelamento()?.aborted) throw erroCancelada();
+    throw apiError(`Não foi possível conectar à API do Prevision${err?.name === 'TimeoutError' ? ' (tempo limite excedido)' : ''}.`);
   }
+}
+
+async function fetchCompanyId(apiKey) {
+  const response = await chamar(GRAPHQL_URL, {
+    method: 'POST',
+    headers: {
+      'Content-Type': 'application/json',
+      Accept: 'application/json',
+      UserAuthorization: `token ${apiKey}`,
+    },
+    body: JSON.stringify({ query: ME_QUERY }),
+  });
 
   if (!response.ok) {
     throw apiError(`A API do Prevision retornou erro (status ${response.status}) ao identificar a conta.`);
@@ -79,23 +95,18 @@ async function fetchProjects(apiKey) {
   let afterCursor = null;
 
   for (;;) {
-    let response;
-    try {
-      response = await fetch(GRAPHQL_URL, {
-        method: 'POST',
-        headers: {
-          'Content-Type': 'application/json',
-          Accept: 'application/json',
-          UserAuthorization: `token ${apiKey}`,
-        },
-        body: JSON.stringify({
-          query: PROJECTS_QUERY,
-          variables: { first: PROJECTS_PAGE_SIZE, after: afterCursor },
-        }),
-      });
-    } catch {
-      throw apiError('Não foi possível conectar à API do Prevision.');
-    }
+    const response = await chamar(GRAPHQL_URL, {
+      method: 'POST',
+      headers: {
+        'Content-Type': 'application/json',
+        Accept: 'application/json',
+        UserAuthorization: `token ${apiKey}`,
+      },
+      body: JSON.stringify({
+        query: PROJECTS_QUERY,
+        variables: { first: PROJECTS_PAGE_SIZE, after: afterCursor },
+      }),
+    });
 
     if (!response.ok) {
       throw apiError(`A API do Prevision retornou erro (status ${response.status}) ao listar projetos.`);
@@ -136,23 +147,18 @@ async function fetchDashboard({ apiKey, companyId, projectId, primary }) {
     project_id: String(projectId),
   };
 
-  let response;
-  try {
-    response = await fetch(DASHBOARDS_URL, {
-      method: 'PATCH',
-      headers: {
-        'Content-Type': 'application/json',
-        Accept: 'application/json',
-        Authorization: `Token token=${apiKey}`,
-        'User-Authorization': apiKey,
-        'X-Api-Key': apiKey,
-        Locale: 'pt-BR',
-      },
-      body: JSON.stringify(body),
-    });
-  } catch {
-    throw apiError('Não foi possível conectar à API do Prevision.');
-  }
+  const response = await chamar(DASHBOARDS_URL, {
+    method: 'PATCH',
+    headers: {
+      'Content-Type': 'application/json',
+      Accept: 'application/json',
+      Authorization: `Token token=${apiKey}`,
+      'User-Authorization': apiKey,
+      'X-Api-Key': apiKey,
+      Locale: 'pt-BR',
+    },
+    body: JSON.stringify(body),
+  });
 
   if (!response.ok) {
     throw apiError(

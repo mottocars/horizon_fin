@@ -33,9 +33,10 @@ import { nomeExibicaoEmpresa } from '../../../utils/empresa';
 import logoSienge from '../../../assets/integracoes/sienge.svg';
 import logoConstrutorVendas from '../../../assets/integracoes/construtor-vendas.svg';
 import logoItau from '../../../assets/integracoes/itau.svg';
+import logoPrevision from '../../../assets/integracoes/prevision.svg';
 
-const LOGOS = { sienge: logoSienge, 'construtor-vendas': logoConstrutorVendas, horizon: '/logomarca.svg', itau: logoItau };
-const NOME_INTEGRACAO = { sienge: 'Sienge', 'construtor-vendas': 'Construtor de Vendas', horizon: 'Horizon (cálculo interno)', itau: 'API Itaú' };
+const LOGOS = { sienge: logoSienge, 'construtor-vendas': logoConstrutorVendas, horizon: '/logomarca.svg', itau: logoItau, prevision: logoPrevision };
+const NOME_INTEGRACAO = { sienge: 'Sienge', 'construtor-vendas': 'Construtor de Vendas', horizon: 'Horizon (cálculo interno)', itau: 'API Itaú', prevision: 'Prevision' };
 
 const FREQUENCIAS = [
   { id: 'diaria', rotulo: 'Diária' },

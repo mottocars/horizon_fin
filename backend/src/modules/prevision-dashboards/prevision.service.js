@@ -1,6 +1,7 @@
 const pool = require('../../config/db');
 const { decrypt } = require('../../utils/crypto');
 const previsionApi = require('./prevision-api.client');
+const { verificarCancelamento } = require('../../utils/execucaoCancelavel');
 
 const PRIMARY_VALUES = [true, false];
 
@@ -235,7 +236,11 @@ async function persistDashboard(client, { empresaId, siengeId, projectId, compan
   return totais;
 }
 
-async function sincronizar(empresaId) {
+// Busca o dashboard de cada obra com Código Prevision (visão primária e secundária) e regrava as
+// tabelas prevision_dashboard_* — a base do avanço previsto (DFC Construtoras › Avanços) e da curva S de
+// base dos atrasos (Cronogramas Obras). Cada obra × visão grava na própria transação: a que falhar mantém
+// os dados anteriores. `onProgress({ texto, paginaAtual, totalPaginas })`: andamento (Monitor de Integrações).
+async function sincronizar(empresaId, onProgress) {
   const integracao = await getIntegracaoAtiva(empresaId);
   if (!integracao) {
     const err = new Error('Esta empresa não possui uma integração Prevision ativa configurada.');
@@ -258,8 +263,12 @@ async function sincronizar(empresaId) {
   }
 
   const resultado = [];
+  const total = centros.length * PRIMARY_VALUES.length;
+  let feitos = 0;
   for (const centro of centros) {
     for (const primary of PRIMARY_VALUES) {
+      verificarCancelamento();
+      onProgress?.({ texto: `Buscando ${centro.name} no Prevision`, paginaAtual: ++feitos, totalPaginas: total });
       let apiData;
       try {
         apiData = await previsionApi.fetchDashboard({
@@ -269,6 +278,7 @@ async function sincronizar(empresaId) {
           primary,
         });
       } catch (err) {
+        if (err.cancelada) throw err;
         resultado.push({
           sienge_id: centro.sienge_id,
           nome: centro.name,
@@ -279,6 +289,7 @@ async function sincronizar(empresaId) {
         continue;
       }
 
+      verificarCancelamento();
       if (!apiData) {
         resultado.push({
           sienge_id: centro.sienge_id,

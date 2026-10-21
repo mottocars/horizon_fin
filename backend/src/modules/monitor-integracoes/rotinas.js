@@ -9,6 +9,7 @@ const customers = require('../customers-sienge/customers.service');
 const clusters = require('../cobranca-clusters/cobrancaClusters.service');
 const itau = require('../integracoes-itau/itau.service');
 const distribuicao = require('../regua-cobranca/distribuicao.service');
+const prevision = require('../prevision-dashboards/prevision.service');
 
 // Catálogo das atualizações que o Monitor de Integrações agenda e executa.
 // Cada uma é a MESMA função que o botão da tela de origem já chamava — o
@@ -258,6 +259,40 @@ const ROTINAS = [
         `${n(r.contas - apoio.length)} conta(s), ${n(r.lancamentos)} lançamento(s) até ${ate}.${janela}` +
         (apoio.length ? ` Sem atualizar (instabilidade do Sienge; mantido o extrato anterior, não entram no saldo): ${nomes(apoio)}.` : '')
       );
+    },
+  },
+  {
+    chave: 'prevision_dashboards',
+    modulo: 'Obras (DFC e Cronogramas)',
+    nome: 'Avanço e curva S das obras (Prevision)',
+    descricao:
+      'Busca no Prevision o dashboard de cada obra com Código Prevision (aba Centros Custos) e atualiza o avanço previsto mês a mês (DFC Construtoras › Avanços, base da Projeção CEF) e a curva S de base que define os atrasos (Cronogramas Obras). A mesma sincronização de Integrações › Prevision.',
+    integracao: 'prevision',
+    async disponibilidade(empresaId) {
+      const { rowCount } = await pool.query('SELECT 1 FROM integracoes_prevision WHERE empresa_id = $1 AND ativo = TRUE', [empresaId]);
+      if (!rowCount) return 'Esta empresa não tem uma integração Prevision ativa (Integrações > Prevision).';
+      const { rows } = await pool.query(
+        "SELECT count(*)::int AS n FROM centros_custo_sienge WHERE empresa_id = $1 AND COALESCE(codigo_prevision, '') <> ''",
+        [empresaId]
+      );
+      return rows[0].n ? null : 'Nenhum centro de custo desta empresa tem Código Prevision (Cadastros > Centros de Custos).';
+    },
+    async executar({ empresaId, progresso }) {
+      progresso({ texto: 'Conectando ao Prevision' });
+      const r = await prevision.sincronizar(empresaId, progresso);
+      const obras = r.total_centros;
+      // Obra com alguma visão sem atualizar = avanço/curva S desatualizados: termina com erro (as demais já
+      // foram gravadas; a que falhou mantém os dados anteriores).
+      const falhas = r.detalhes.filter((d) => !d.sucesso);
+      const nomesFalha = [...new Set(falhas.map((f) => f.nome))];
+      if (falhas.length) {
+        const e = new Error(
+          `O Prevision não devolveu ${nomesFalha.length} de ${n(obras)} obra(s): ${nomesFalha.join(', ')} — essas mantêm os dados anteriores; as demais foram atualizadas. (${falhas[0].erro})`
+        );
+        e.expose = true;
+        throw e;
+      }
+      return `${n(obras)} obra(s) atualizada(s) no Prevision (visão primária e secundária): avanço previsto e curva S de base.`;
     },
   },
 ];
