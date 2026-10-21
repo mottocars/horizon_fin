@@ -21,7 +21,10 @@ const LADOS = [
   ['E', 'ENTRADAS'],
   ['S', 'SAÍDAS'],
 ];
-const SOMBRA_COLUNA_FIXA = '[&_tr>*:first-child]:shadow-[6px_0_8px_-6px_rgba(16,24,40,0.18)]';
+// Sombra na borda das colunas congeladas (nome + Total Realizado/Projetado) quando os meses rolaram:
+// no corpo é a 3ª célula da linha; no cabeçalho, a 2ª (o "Total" de cima e o "Projetado" de baixo).
+const SOMBRA_COLUNA_FIXA =
+  '[&_tbody_tr>*:nth-child(3)]:shadow-[6px_0_8px_-6px_rgba(16,24,40,0.18)] [&_thead_tr>*:nth-child(2)]:shadow-[6px_0_8px_-6px_rgba(16,24,40,0.18)]';
 const MESES_CAB = ['JAN', 'FEV', 'MAR', 'ABR', 'MAI', 'JUN', 'JUL', 'AGO', 'SET', 'OUT', 'NOV', 'DEZ'];
 const R = 'R'; // realizado
 const P = 'P'; // projetado
@@ -68,6 +71,9 @@ function mesDeHoje() {
 // Operações > DFC Construtoras > DFC: o fluxo de caixa (pedido do usuário).
 // Colunas: até o mês atual, cada mês tem REALIZADO, PROJETADO e DESVIO % (ver desvioPct); depois dele, só
 // PROJETADO. No mês atual o desvio compara o realizado até hoje com o projetado do mês inteiro.
+// Logo depois da primeira coluna, congeladas como na aba Orçamentos (pedido do usuário): TOTAL Realizado
+// (soma dos meses com realizado) e TOTAL Projetado (soma de todos os meses do período). Nas linhas de
+// saldo o total fica vazio — saldo não se soma.
 // - Projetado: a última versão salva do Orçamento (todas as origens).
 // - Realizado: o extrato das contas bancárias com "Projeta DFC" (aba Contas Correntes), já achatado
 //   por rateio centro × natureza na sincronização (backend dfc-saldos / sie_extrato_contas_rateio).
@@ -268,6 +274,24 @@ export default function DfcFluxoTab({
     return { estrutura: grupos, porColuna: { resultado, saldoInicial, saldoFinal } };
   }, [dados, realizado, meses, ultimo, mesAtual, centrosFiltro]);
 
+  // Total do período de uma linha: Realizado = meses até o atual; Projetado = todos os meses na tela.
+  const total = useCallback(
+    (pc, tipo) => {
+      let t = 0;
+      let tem = false;
+      meses.forEach((m) => {
+        if (tipo === R && m > mesAtual) return;
+        const v = pc[`${m}|${tipo}`];
+        if (v) {
+          t += v;
+          tem = true;
+        }
+      });
+      return tem ? r2(t) : null;
+    },
+    [meses, mesAtual]
+  );
+
   // Larguras: o bastante pro maior valor de cada coluna.
   const larguras = useMemo(() => {
     const linhas = [porColuna.saldoInicial || {}, porColuna.resultado || {}, porColuna.saldoFinal || {}];
@@ -282,12 +306,16 @@ export default function DfcFluxoTab({
       });
     });
     const largura = (v) => (v ? larguraTexto(dinheiro(v)) : 0);
-    return colunas.map((c) =>
+    const porColunaMes = colunas.map((c) =>
       c.tipo === D
         ? LARGURA_DESVIO
         : Math.max(LARGURA_COLUNA, Math.ceil(Math.max(0, ...linhas.map((pc) => largura(pc[`${c.mes}|${c.tipo}`])))) + FOLGA)
     );
-  }, [estrutura, porColuna, colunas]);
+    // Totais: o saldo não entra (fica vazio no total).
+    const semSaldo = linhas.slice(1, 2).concat(linhas.slice(3));
+    const larguraTotal = (tipo) => Math.max(LARGURA_COLUNA, Math.ceil(Math.max(0, ...semSaldo.map((pc) => largura(total(pc, tipo))))) + FOLGA);
+    return { meses: porColunaMes, totalR: larguraTotal(R), totalP: larguraTotal(P) };
+  }, [estrutura, porColuna, colunas, total]);
 
   // Tela cheia: pede também a do navegador; o Esc dele sai e o `fullscreenchange` fecha a nossa
   // junto. Sem a do navegador, o Esc é tratado aqui.
@@ -351,7 +379,8 @@ export default function DfcFluxoTab({
   const versao = dados?.orcamento?.versao || null;
   const MESES_LONGOS = ['jan', 'fev', 'mar', 'abr', 'mai', 'jun', 'jul', 'ago', 'set', 'out', 'nov', 'dez'];
   const rotulo = (m) => `${MESES_LONGOS[Number(m.slice(5, 7)) - 1]}/${m.slice(2, 4)}`;
-  const larguraTabela = LARGURA_PRIMEIRA + larguras.reduce((t, l) => t + l, 0);
+  const larguraTabela = LARGURA_PRIMEIRA + larguras.totalR + larguras.totalP + larguras.meses.reduce((t, l) => t + l, 0);
+  const esquerdaTotalP = LARGURA_PRIMEIRA + larguras.totalR;
   // Primeira coluna de cada mês ganha a divisória à esquerda (separa os meses).
   const inicioDeMes = (i) => i === 0 || colunas[i - 1].mes !== colunas[i].mes;
 
@@ -414,6 +443,21 @@ export default function DfcFluxoTab({
             )}
           </span>
         </td>
+        {[R, P].map((t) => {
+          const v = tipo === 'saldo' ? null : total(pc, t);
+          return (
+            <td
+              key={`total|${t}`}
+              title={tipo === 'saldo' ? undefined : t === R ? 'Total realizado do período (meses até o atual)' : 'Total projetado do período (todos os meses)'}
+              className={`sticky z-10 border-b border-b-blue-100 bg-blue-50 px-3 text-center tabular-nums transition-colors group-hover/linha:bg-blue-100 ${e.py} ${
+                t === P ? 'border-r border-r-blue-200' : ''
+              } ${tipo === 'saldo' || tipo === 'resultado' ? 'text-[13px]' : 'text-xs'} ${numeros} ${v ? corValor(v) : ''}`}
+              style={{ left: t === R ? LARGURA_PRIMEIRA : esquerdaTotalP }}
+            >
+              {v ? dinheiro(v) : ''}
+            </td>
+          );
+        })}
         {colunas.map((c, i) => {
           if (c.tipo === D) {
             const real = pc[`${c.mes}|${R}`];
@@ -543,8 +587,10 @@ export default function DfcFluxoTab({
           >
             <colgroup>
               <col style={{ width: LARGURA_PRIMEIRA }} />
+              <col style={{ width: larguras.totalR }} />
+              <col style={{ width: larguras.totalP }} />
               {colunas.map((c, i) => (
-                <col key={`${c.mes}|${c.tipo}`} style={{ width: larguras[i] }} />
+                <col key={`${c.mes}|${c.tipo}`} style={{ width: larguras.meses[i] }} />
               ))}
             </colgroup>
             <thead>
@@ -554,6 +600,14 @@ export default function DfcFluxoTab({
                   className="sticky left-0 top-0 z-30 border-b border-gray-200 bg-white py-3 pl-5 pr-3 align-bottom text-[11px] font-semibold uppercase tracking-wider text-gray-500"
                 >
                   Fluxo de caixa
+                </th>
+                <th
+                  colSpan={2}
+                  title="Soma dos meses do período"
+                  className="sticky top-0 z-30 border-r border-r-blue-200 bg-blue-100 px-3 pt-2.5 text-center align-bottom text-[11px] font-semibold uppercase tracking-wider text-blue-800"
+                  style={{ left: LARGURA_PRIMEIRA, height: ALTURA_CAB_MES }}
+                >
+                  Total
                 </th>
                 {meses.map((m) => {
                   const atual = m === mesAtual;
@@ -584,6 +638,17 @@ export default function DfcFluxoTab({
                 })}
               </tr>
               <tr>
+                {[R, P].map((t) => (
+                  <th
+                    key={`total|${t}`}
+                    className={`sticky z-30 border-b border-b-blue-200 bg-blue-100 px-2 py-1.5 text-center text-[10px] font-semibold uppercase tracking-wider ${
+                      t === R ? 'text-teal-700' : 'border-r border-r-blue-200 text-blue-700'
+                    }`}
+                    style={{ top: ALTURA_CAB_MES, left: t === R ? LARGURA_PRIMEIRA : esquerdaTotalP }}
+                  >
+                    {t === R ? 'Realizado' : 'Projetado'}
+                  </th>
+                ))}
                 {colunas.map((c, i) => {
                   const atual = c.mes === mesAtual;
                   return (
@@ -617,7 +682,7 @@ export default function DfcFluxoTab({
               })}
               {estrutura.length === 0 && (
                 <tr>
-                  <td colSpan={colunas.length + 1} className="border-b border-gray-100 py-10 text-center text-sm text-gray-400">
+                  <td colSpan={colunas.length + 3} className="border-b border-gray-100 py-10 text-center text-sm text-gray-400">
                     {versao ? 'Nenhum valor no período.' : 'Sem valores projetados — nenhuma versão salva do Orçamento.'}
                   </td>
                 </tr>
