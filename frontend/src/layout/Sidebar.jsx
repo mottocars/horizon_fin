@@ -50,8 +50,8 @@ const menuItems = [
     icon: Gauge,
     basePath: '/dashboards',
     children: [
-      { label: 'Econômico Financeiro', to: '/dashboards/economico-financeiro', icon: TrendingUp },
       { label: 'Cronogramas de Obras', to: '/dashboards/cronogramas-obras', icon: ChartGantt },
+      { label: 'Econômico Financeiro', to: '/dashboards/economico-financeiro', icon: TrendingUp },
     ],
   },
   {
