@@ -22,3 +22,17 @@ export function removeDreMascara(empresaId, id) {
 export function reordenarDreMascaras(empresaId, estrutura) {
   return http.put(`/dre-mascaras/${empresaId}/ordem`, { estrutura }).then((res) => res.data);
 }
+
+// Histórico de alíquotas da máscara com origem Imposto Fixo: [{ id, inicio: 'AAAA-MM', fim: 'AAAA-MM' | null,
+// aliquota }], mais recente primeiro. Criar e remover devolvem a lista já recalculada.
+export function listHistoricoImposto(empresaId, mascaraId) {
+  return http.get(`/dre-mascaras/${empresaId}/${mascaraId}/historico`).then((res) => res.data);
+}
+
+export function createHistoricoImposto(empresaId, mascaraId, { inicio, aliquota }) {
+  return http.post(`/dre-mascaras/${empresaId}/${mascaraId}/historico`, { inicio, aliquota }).then((res) => res.data);
+}
+
+export function removeHistoricoImposto(empresaId, mascaraId, historicoId) {
+  return http.delete(`/dre-mascaras/${empresaId}/${mascaraId}/historico/${historicoId}`).then((res) => res.data);
+}

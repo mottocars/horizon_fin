@@ -13,5 +13,9 @@ router.post('/:empresaId', controller.create);
 router.put('/:empresaId/ordem', controller.reordenar);
 router.put('/:empresaId/:id', controller.update);
 router.delete('/:empresaId/:id', controller.remove);
+// Histórico de alíquotas da máscara com origem Imposto Fixo.
+router.get('/:empresaId/:id/historico', controller.listHistorico);
+router.post('/:empresaId/:id/historico', controller.createHistorico);
+router.delete('/:empresaId/:id/historico/:historicoId', controller.removeHistorico);
 
 module.exports = router;

@@ -1,5 +1,7 @@
-import { forwardRef } from 'react';
+import { forwardRef, useMemo, useState } from 'react';
+import { History } from 'lucide-react';
 import MascarasArvoreEditor from '../../../components/MascarasArvoreEditor';
+import HistoricoImpostoModal from './HistoricoImpostoModal';
 import {
   createDreMascaras,
   listDreMascaras,
@@ -45,6 +47,7 @@ const ORIGENS = [
   { value: 'CONTRATOS_VENDAS', label: 'SIENGE - CONTRATOS DE VENDAS' },
   { value: 'UNIDADES_IMOBILIARIAS', label: 'SIENGE - UNIDADES IMOBILIÁRIAS' },
   { value: 'FINANCEIRO', label: 'SIENGE - FINANCEIRO CP/CR/EXTRATO' },
+  { value: 'IMPOSTO_FIXO', label: 'IMPOSTO FIXO' },
 ];
 
 const CALCULOS = [
@@ -59,8 +62,10 @@ const CALCULOS = [
 // Marcações — por enquanto só informadas (nenhum cálculo usa ainda). Totalizadora é do nível 1
 // (linha de subtotal: sem drilldown e sem máscaras de nível 2 — semFilhos); Realiza POC é do
 // nível 2, e com ela o Tipo POC (POC Receita / POC Despesa, opcional). Origem e Cálculo também
-// são do nível 2: o Cálculo só abre com a Origem escolhida e mostra só os cálculos dela.
-const FLAGS = [
+// são do nível 2: o Cálculo só abre com a Origem escolhida e mostra só os cálculos dela. Imposto
+// Fixo não tem cálculo: no lugar da combobox vem o botão "Informar histórico" (alíquotas por mês —
+// HistoricoImpostoModal), por isso as flags são montadas no componente (`abrirHistorico`).
+const montarFlags = (abrirHistorico) => [
   {
     campo: 'totalizadora',
     label: 'Totalizadora',
@@ -96,24 +101,41 @@ const FLAGS = [
     largura: 'w-64',
     requer: 'origem',
     opcoes: CALCULOS,
+    substituir: (item) =>
+      item.origem === 'IMPOSTO_FIXO' ? (
+        <button
+          type="button"
+          onClick={() => abrirHistorico(item)}
+          className="flex w-full items-center justify-center gap-1.5 rounded-md border border-primary-200 bg-white px-1.5 py-1 text-xs font-medium text-primary-700 hover:bg-primary-50"
+        >
+          <History size={12} />
+          Informar histórico
+        </button>
+      ) : null,
   },
 ];
 
 // Operações > DRE Gerencial > Máscaras: estrutura da DRE da empresa em 2 níveis, cadastrada
 // pelo usuário — mesma tela da aba Máscaras da DFC Construtoras (MascarasArvoreEditor), mais as
-// colunas de marcação (FLAGS). As máscaras de nível 2 são as opções da combobox
+// colunas de marcação (montarFlags). As máscaras de nível 2 são as opções da combobox
 // "Máscara DRE" na aba Plano de Contas.
 const MascarasTab = forwardRef(function MascarasTab({ empresaId }, ref) {
+  const [historicoDe, setHistoricoDe] = useState(null);
+  const flags = useMemo(() => montarFlags(setHistoricoDe), []);
+
   return (
-    <MascarasArvoreEditor
-      ref={ref}
-      empresaId={empresaId}
-      api={API}
-      modeloSugerido={MODELO_SUGERIDO}
-      demonstrativo="DRE"
-      exemploNivel1="Receita Bruta"
-      flags={FLAGS}
-    />
+    <>
+      <MascarasArvoreEditor
+        ref={ref}
+        empresaId={empresaId}
+        api={API}
+        modeloSugerido={MODELO_SUGERIDO}
+        demonstrativo="DRE"
+        exemploNivel1="Receita Bruta"
+        flags={flags}
+      />
+      <HistoricoImpostoModal empresaId={empresaId} mascara={historicoDe} onClose={() => setHistoricoDe(null)} />
+    </>
   );
 });
 

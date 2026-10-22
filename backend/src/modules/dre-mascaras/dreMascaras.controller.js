@@ -47,6 +47,16 @@ const ordemSchema = z.object({
   ),
 });
 
+// Histórico do Imposto Fixo: mês de início 'AAAA-MM' e alíquota em % (0 a 100, até 4 casas).
+const historicoSchema = z.object({
+  inicio: z.string().regex(/^\d{4}-(0[1-9]|1[0-2])$/, 'Informe o mês/ano de início.'),
+  aliquota: z.coerce
+    .number({ invalid_type_error: 'Informe a alíquota.' })
+    .min(0, 'A alíquota não pode ser negativa.')
+    .max(100, 'A alíquota vai até 100%.')
+    .refine((v) => Math.abs(v * 10000 - Math.round(v * 10000)) < 1e-6, { message: 'A alíquota aceita até 4 casas decimais.' }),
+});
+
 function erro(status, message) {
   const e = new Error(message);
   e.status = status;
@@ -113,4 +123,42 @@ async function reordenar(req, res, next) {
   }
 }
 
-module.exports = { list, create, update, remove, reordenar };
+async function listHistorico(req, res, next) {
+  try {
+    const empresaId = empresaIdSchema.parse(req.params.empresaId);
+    const id = idSchema.parse(req.params.id);
+    const historico = await service.listHistorico(empresaId, id);
+    if (!historico) throw erro(404, 'Máscara não encontrada.');
+    res.json(historico);
+  } catch (err) {
+    tratar(err, next);
+  }
+}
+
+async function createHistorico(req, res, next) {
+  try {
+    const empresaId = empresaIdSchema.parse(req.params.empresaId);
+    const id = idSchema.parse(req.params.id);
+    const campos = historicoSchema.parse(req.body);
+    const historico = await service.createHistorico(empresaId, id, campos);
+    if (!historico) throw erro(404, 'Máscara não encontrada.');
+    res.status(201).json(historico);
+  } catch (err) {
+    tratar(err, next);
+  }
+}
+
+async function removeHistorico(req, res, next) {
+  try {
+    const empresaId = empresaIdSchema.parse(req.params.empresaId);
+    const id = idSchema.parse(req.params.id);
+    const historicoId = z.coerce.number().int().positive('Histórico inválido.').parse(req.params.historicoId);
+    const historico = await service.removeHistorico(empresaId, id, historicoId);
+    if (!historico) throw erro(404, 'Histórico não encontrado.');
+    res.json(historico);
+  } catch (err) {
+    tratar(err, next);
+  }
+}
+
+module.exports = { list, create, update, remove, reordenar, listHistorico, createHistorico, removeHistorico };

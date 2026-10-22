@@ -3277,7 +3277,7 @@ CREATE TABLE dre_mascaras (
     CONSTRAINT dre_mascaras_realiza_poc_so_nivel_2 CHECK (parent_id IS NOT NULL OR NOT realiza_poc),
     CONSTRAINT dre_mascaras_tipo_poc_valido CHECK (tipo_poc IS NULL OR (realiza_poc AND tipo_poc IN ('RECEITA', 'DESPESA'))),
     CONSTRAINT dre_mascaras_origem_valida CHECK (origem IS NULL OR (parent_id IS NOT NULL
-        AND origem IN ('CONTRATOS_VENDAS', 'UNIDADES_IMOBILIARIAS', 'FINANCEIRO'))),
+        AND origem IN ('CONTRATOS_VENDAS', 'UNIDADES_IMOBILIARIAS', 'FINANCEIRO', 'IMPOSTO_FIXO'))),
     CONSTRAINT dre_mascaras_calculo_valido CHECK (calculo IS NULL
         OR (origem = 'CONTRATOS_VENDAS' AND calculo IN ('VALOR_VENDAS', 'ESTORNO_VENDAS', 'RECEITA_DISTRATO'))
         OR (origem = 'UNIDADES_IMOBILIARIAS' AND calculo = 'RECEITA_PERMUTA')
@@ -3289,6 +3289,17 @@ CREATE INDEX idx_dre_mascaras_empresa ON dre_mascaras (empresa_id, parent_id, or
 CREATE TRIGGER trg_dre_mascaras_atualizado_em
     BEFORE UPDATE ON dre_mascaras
     FOR EACH ROW EXECUTE FUNCTION set_atualizado_em();
+
+-- Alíquotas da máscara com origem IMPOSTO_FIXO — ver 2026-10-22-dre-mascaras-origem-calculo.sql.
+-- Cada uma vale do mês `inicio` até o mês anterior ao início da seguinte (o fim não é gravado).
+CREATE TABLE dre_mascaras_imposto_historico (
+    id         SERIAL PRIMARY KEY,
+    mascara_id INTEGER NOT NULL REFERENCES dre_mascaras(id) ON DELETE CASCADE,
+    inicio     DATE NOT NULL CHECK (EXTRACT(DAY FROM inicio) = 1),
+    aliquota   NUMERIC(7, 4) NOT NULL CHECK (aliquota >= 0 AND aliquota <= 100),
+    criado_em  TIMESTAMP DEFAULT NOW(),
+    CONSTRAINT dre_mascaras_imposto_historico_inicio_unico UNIQUE (mascara_id, inicio)
+);
 
 ALTER TABLE planos_financeiros_sienge
     ADD CONSTRAINT planos_financeiros_sienge_classificacao_dre_id_fkey

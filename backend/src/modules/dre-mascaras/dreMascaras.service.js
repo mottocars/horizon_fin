@@ -10,11 +10,13 @@ const pool = require('../../config/db');
 const COLUNAS = 'id, parent_id, ordem, descricao, totalizadora, realiza_poc, tipo_poc, origem, calculo';
 
 // Cálculos que cada origem oferece — mesma lista da constraint dre_mascaras_calculo_valido e das
-// opções da tela (DreGerencial/MascarasTab.jsx).
+// opções da tela (DreGerencial/MascarasTab.jsx). Imposto Fixo não tem cálculo: usa o histórico de
+// alíquotas (listHistorico etc., abaixo).
 const CALCULOS_POR_ORIGEM = {
   CONTRATOS_VENDAS: ['VALOR_VENDAS', 'ESTORNO_VENDAS', 'RECEITA_DISTRATO'],
   UNIDADES_IMOBILIARIAS: ['RECEITA_PERMUTA'],
   FINANCEIRO: ['ENTRADAS_SAIDAS', 'CORRECAO_MONETARIA'],
+  IMPOSTO_FIXO: [],
 };
 
 function erro(status, message) {
@@ -220,4 +222,74 @@ async function reordenar(empresaId, estrutura) {
   }
 }
 
-module.exports = { list, create, update, remove, reordenar, CALCULOS_POR_ORIGEM };
+// ------------------------------------------------------------- histórico do Imposto Fixo
+// Alíquotas da máscara com origem IMPOSTO_FIXO (dre_mascaras_imposto_historico), mais recente
+// primeiro, com o `fim` calculado: o mês anterior ao início do histórico seguinte (null = vigente).
+// Meses em 'AAAA-MM'. Devolve null se a máscara não é da empresa.
+async function listHistorico(empresaId, mascaraId, db = pool) {
+  const { rows: mascara } = await db.query('SELECT 1 FROM dre_mascaras WHERE id = $1 AND empresa_id = $2', [
+    mascaraId,
+    empresaId,
+  ]);
+  if (!mascara[0]) return null;
+  const { rows } = await db.query(
+    `SELECT id, to_char(inicio, 'YYYY-MM') AS inicio,
+            to_char(LEAD(inicio) OVER (ORDER BY inicio) - INTERVAL '1 month', 'YYYY-MM') AS fim,
+            aliquota::float AS aliquota
+       FROM dre_mascaras_imposto_historico
+      WHERE mascara_id = $1
+      ORDER BY inicio DESC`,
+    [mascaraId]
+  );
+  return rows;
+}
+
+// Cria um histórico começando em `inicio` ('AAAA-MM') — o que estava vigente antes passa a
+// terminar no mês anterior (pelo cálculo do fim em listHistorico). Só pra origem Imposto Fixo.
+async function createHistorico(empresaId, mascaraId, { inicio, aliquota }) {
+  const { rows: mascara } = await pool.query('SELECT origem FROM dre_mascaras WHERE id = $1 AND empresa_id = $2', [
+    mascaraId,
+    empresaId,
+  ]);
+  if (!mascara[0]) return null;
+  if (mascara[0].origem !== 'IMPOSTO_FIXO') throw erro(400, 'O histórico é só da origem Imposto Fixo.');
+  try {
+    await pool.query(
+      `INSERT INTO dre_mascaras_imposto_historico (mascara_id, inicio, aliquota)
+       VALUES ($1, to_date($2, 'YYYY-MM'), $3)`,
+      [mascaraId, inicio, aliquota]
+    );
+  } catch (err) {
+    if (err.code === '23505') {
+      const [ano, mes] = inicio.split('-');
+      throw erro(409, `Já existe um histórico começando em ${mes}/${ano}.`);
+    }
+    throw err;
+  }
+  return listHistorico(empresaId, mascaraId);
+}
+
+// Apagar um histórico faz o anterior voltar a valer até o início do próximo (ou ficar vigente).
+async function removeHistorico(empresaId, mascaraId, historicoId) {
+  const { rows } = await pool.query(
+    `DELETE FROM dre_mascaras_imposto_historico h
+      USING dre_mascaras m
+      WHERE h.id = $1 AND h.mascara_id = $2 AND m.id = h.mascara_id AND m.empresa_id = $3
+     RETURNING h.id`,
+    [historicoId, mascaraId, empresaId]
+  );
+  if (!rows[0]) return null;
+  return listHistorico(empresaId, mascaraId);
+}
+
+module.exports = {
+  list,
+  create,
+  update,
+  remove,
+  reordenar,
+  listHistorico,
+  createHistorico,
+  removeHistorico,
+  CALCULOS_POR_ORIGEM,
+};

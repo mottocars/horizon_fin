@@ -146,6 +146,14 @@ function ColunasFlags({ flags, nivel, item, onDefinir, travadaMotivo = () => nul
   return flags.map((flag) => {
     const largura = larguraFlag(flag);
     if (flag.nivel !== nivel) return <span key={flag.campo} className={`${largura} shrink-0`} />;
+    const substituto = flag.substituir?.(item);
+    if (substituto) {
+      return (
+        <span key={flag.campo} className={`flex ${largura} shrink-0 justify-center`} onClick={(e) => e.stopPropagation()}>
+          {substituto}
+        </span>
+      );
+    }
     const motivo = travadaMotivo(flag) || (flag.requer && !item[flag.requer] ? requerTexto(flags, flag.requer) : null);
     if (flag.opcoes) {
       const vazio = !item[flag.campo];
@@ -218,8 +226,8 @@ export function Indicador({ recuo = false, embaixo = false }) {
 // Checkbox, ou combobox quando tem `opcoes` ([{ value, label, pai }]); `requer` = campo de outra
 // flag que precisa estar marcada/escolhida (desmarcá-la limpa esta — o backend faz o mesmo). Opção
 // com `pai` só aparece quando a flag `requer` vale `pai`, e trocar aquela limpa esta. `largura`
-// (classe Tailwind, opcional) alarga a coluna. Com `semFilhos`
-// (só nível 1), o grupo marcado não tem drilldown nem nível 2 (a Totalizadora da DRE): não abre,
+// (classe Tailwind, opcional) alarga a coluna; `substituir(item)` (opcional) devolve o que mostrar
+// na célula no lugar do campo (ex.: um botão), ou null pra mostrar o campo. Com `semFilhos` (só nível 1), o grupo marcado não tem drilldown nem nível 2 (a Totalizadora da DRE): não abre,
 // não recebe item arrastado e a marcação fica travada enquanto ele tiver filhos.
 //
 // `ref` expõe `abrirNova()` pro botão "Nova máscara" do topo da página (mesmo padrão de
