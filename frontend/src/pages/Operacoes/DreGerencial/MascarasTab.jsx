@@ -41,7 +41,7 @@ const API = {
 
 // Marcações — por enquanto só informadas (nenhum cálculo usa ainda). Totalizadora é do nível 1
 // (linha de subtotal: sem drilldown e sem máscaras de nível 2 — semFilhos); Realiza POC é do
-// nível 2.
+// nível 2, e com ela o Tipo POC (POC Receita / POC Despesa, opcional).
 const FLAGS = [
   {
     campo: 'totalizadora',
@@ -51,6 +51,17 @@ const FLAGS = [
     semFilhos: true,
   },
   { campo: 'realiza_poc', label: 'Realiza POC', title: 'Nível 2 — apropriada por POC (percentual de obra concluída)', nivel: 2 },
+  {
+    campo: 'tipo_poc',
+    label: 'Tipo POC',
+    title: 'Nível 2 — POC Receita ou POC Despesa (só com Realiza POC marcada)',
+    nivel: 2,
+    requer: 'realiza_poc',
+    opcoes: [
+      { value: 'RECEITA', label: 'POC Receita' },
+      { value: 'DESPESA', label: 'POC Despesa' },
+    ],
+  },
 ];
 
 // Operações > DRE Gerencial > Máscaras: estrutura da DRE da empresa em 2 níveis, cadastrada

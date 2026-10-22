@@ -3260,14 +3260,17 @@ CREATE TABLE dre_mascaras (
     ordem         INTEGER NOT NULL,
     descricao     VARCHAR(150) NOT NULL,
     -- Marcações só informativas por enquanto — ver 2026-10-22-dre-mascaras-flags.sql.
-    -- Totalizadora (nível 1) não tem nível 2 dentro (garantido no backend); Realiza POC é do nível 2.
+    -- Totalizadora (nível 1) não tem nível 2 dentro (garantido no backend); Realiza POC é do nível 2,
+    -- e só com ela o Tipo POC ('RECEITA' | 'DESPESA', opcional).
     totalizadora  BOOLEAN NOT NULL DEFAULT FALSE,
     realiza_poc   BOOLEAN NOT NULL DEFAULT FALSE,
+    tipo_poc      VARCHAR(10),
     criado_em     TIMESTAMP DEFAULT NOW(),
     atualizado_em TIMESTAMP DEFAULT NOW(),
     CHECK (parent_id IS NULL OR parent_id <> id),
     CONSTRAINT dre_mascaras_totalizadora_so_nivel_1 CHECK (parent_id IS NULL OR NOT totalizadora),
-    CONSTRAINT dre_mascaras_realiza_poc_so_nivel_2 CHECK (parent_id IS NOT NULL OR NOT realiza_poc)
+    CONSTRAINT dre_mascaras_realiza_poc_so_nivel_2 CHECK (parent_id IS NOT NULL OR NOT realiza_poc),
+    CONSTRAINT dre_mascaras_tipo_poc_valido CHECK (tipo_poc IS NULL OR (realiza_poc AND tipo_poc IN ('RECEITA', 'DESPESA')))
 );
 
 CREATE INDEX idx_dre_mascaras_empresa ON dre_mascaras (empresa_id, parent_id, ordem);

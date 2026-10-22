@@ -71,14 +71,17 @@ export default function DreTab({ empresaId }) {
   );
 }
 
-// Selo da marcação "Realiza POC" (nível 2, aba Máscaras) — só informativo por enquanto.
-function SeloPoc() {
+const ROTULO_TIPO_POC = { RECEITA: 'POC Receita', DESPESA: 'POC Despesa' };
+
+// Selo da marcação "Realiza POC" (nível 2, aba Máscaras), com o Tipo POC quando informado — só
+// informativo por enquanto.
+function SeloPoc({ tipo }) {
   return (
     <span
       title="Realiza POC"
       className="rounded bg-primary-50 px-1.5 py-px text-[10px] font-semibold text-primary-600 ring-1 ring-primary-100"
     >
-      POC
+      {ROTULO_TIPO_POC[tipo] || 'POC'}
     </span>
   );
 }
@@ -121,7 +124,7 @@ function LinhaGrupo({ grupo }) {
             <td className="border-b border-gray-100 py-0.5 pl-11 text-xs text-gray-700">
               <span className="flex items-center gap-2">
                 {item.descricao}
-                {item.realiza_poc && <SeloPoc />}
+                {item.realiza_poc && <SeloPoc tipo={item.tipo_poc} />}
               </span>
             </td>
             <td className="border-b border-l border-gray-100 px-4 py-0.5 text-right text-xs tabular-nums text-gray-300">

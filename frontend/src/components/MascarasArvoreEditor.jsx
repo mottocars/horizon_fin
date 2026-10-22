@@ -21,7 +21,7 @@ function aplicarMovimento(arvore, arrastado, alvo, flags) {
   const soDoNivel = (item, nivel) => {
     const limpo = { ...item };
     flags.forEach((f) => {
-      if (f.nivel !== nivel) limpo[f.campo] = false;
+      if (f.nivel !== nivel) limpo[f.campo] = f.opcoes ? null : false;
     });
     return limpo;
   };
@@ -126,26 +126,58 @@ export function BotaoAcao({ title, onClick, perigo = false, children }) {
   );
 }
 
-// Colunas de marcação (`flags`) à direita de uma linha: checkbox só nas flags do `nivel` da
-// linha, espaço vazio nas outras (mantém as colunas alinhadas entre nível 1 e nível 2).
-// `travadaMotivo(flag)` devolve o texto de por que a caixa está travada, ou null.
-function ColunasFlags({ flags, nivel, item, onAlternar, travadaMotivo = () => null }) {
+// Largura da coluna de uma flag — combobox precisa de mais espaço que checkbox.
+const larguraFlag = (flag) => (flag.opcoes ? 'w-32' : 'w-24');
+
+// Colunas de marcação (`flags`) à direita de uma linha: campo só nas flags do `nivel` da linha,
+// espaço vazio nas outras (mantém as colunas alinhadas entre nível 1 e nível 2). Flag com
+// `opcoes` é combobox (valor ou null), habilitada só quando a flag `requer` está marcada; as
+// demais são checkbox. `travadaMotivo(flag)` devolve o texto de por que está travada, ou null.
+function ColunasFlags({ flags, nivel, item, onDefinir, travadaMotivo = () => null }) {
   return flags.map((flag) => {
-    if (flag.nivel !== nivel) return <span key={flag.campo} className="w-24 shrink-0" />;
-    const motivo = travadaMotivo(flag);
+    const largura = larguraFlag(flag);
+    if (flag.nivel !== nivel) return <span key={flag.campo} className={`${largura} shrink-0`} />;
+    const motivo = travadaMotivo(flag) || (flag.requer && !item[flag.requer] ? `Marque ${rotulo(flags, flag.requer)} antes` : null);
+    if (flag.opcoes) {
+      const vazio = !item[flag.campo];
+      return (
+        <span key={flag.campo} className={`flex ${largura} shrink-0 justify-center`} onClick={(e) => e.stopPropagation()}>
+          <select
+            value={item[flag.campo] || ''}
+            disabled={!!motivo}
+            onChange={(e) => onDefinir(flag, e.target.value || null)}
+            title={motivo || flag.label}
+            className={`w-full rounded-md border px-1.5 py-1 text-xs focus:outline-none focus:ring-2 focus:ring-primary-100 disabled:cursor-not-allowed disabled:border-gray-200 disabled:bg-gray-50 disabled:text-gray-300 ${
+              vazio ? 'border-amber-200 bg-amber-50 text-gray-400' : 'border-primary-100 bg-primary-50 text-gray-900'
+            }`}
+          >
+            <option value="">Selecione...</option>
+            {flag.opcoes.map((o) => (
+              <option key={o.value} value={o.value}>
+                {o.label}
+              </option>
+            ))}
+          </select>
+        </span>
+      );
+    }
     return (
-      <span key={flag.campo} className="flex w-24 shrink-0 justify-center" onClick={(e) => e.stopPropagation()}>
+      <span key={flag.campo} className={`flex ${largura} shrink-0 justify-center`} onClick={(e) => e.stopPropagation()}>
         <input
           type="checkbox"
           checked={!!item[flag.campo]}
           disabled={!!motivo}
-          onChange={() => onAlternar(flag)}
+          onChange={() => onDefinir(flag, !item[flag.campo])}
           title={motivo || flag.label}
           className="h-4 w-4 cursor-pointer rounded border-gray-300 text-primary-600 focus:ring-primary-100 disabled:cursor-not-allowed disabled:opacity-40"
         />
       </span>
     );
   });
+}
+
+function rotulo(flags, campo) {
+  return flags.find((f) => f.campo === campo)?.label || campo;
 }
 
 // Linha azul que marca onde o item arrastado vai cair.
@@ -171,11 +203,12 @@ export function Indicador({ recuo = false, embaixo = false }) {
 // pode ir pra outro grupo ou virar nível 1, e um nível 1 sem filhos pode entrar num grupo.
 // Cada mudança salva na hora (reordenação regrava a árvore inteira — ver dfcMascaras.service.js).
 //
-// `flags` (opcional, só a DRE usa): marcações booleanas, cada uma uma coluna de checkbox à
-// direita — `{ campo, label, title, nivel, semFilhos }`, com a caixa só nas linhas do `nivel`
-// (1 ou 2). Com `semFilhos` (só nível 1), o grupo marcado não tem drilldown nem nível 2 (a
-// Totalizadora da DRE): não abre, não recebe item arrastado e a marcação fica travada enquanto
-// ele tiver filhos.
+// `flags` (opcional, só a DRE usa): marcações, cada uma uma coluna à direita — `{ campo, label,
+// title, nivel, semFilhos, opcoes, requer }`, com o campo só nas linhas do `nivel` (1 ou 2).
+// Checkbox, ou combobox quando tem `opcoes` ([{ value, label }]); `requer` = campo de outra flag
+// que precisa estar marcada (desmarcá-la limpa esta — o backend faz o mesmo). Com `semFilhos`
+// (só nível 1), o grupo marcado não tem drilldown nem nível 2 (a Totalizadora da DRE): não abre,
+// não recebe item arrastado e a marcação fica travada enquanto ele tiver filhos.
 //
 // `ref` expõe `abrirNova()` pro botão "Nova máscara" do topo da página (mesmo padrão de
 // CategoriasOrcamentoTab na DRE).
@@ -280,10 +313,13 @@ const MascarasArvoreEditor = forwardRef(function MascarasArvoreEditor(
     await salvar(() => api.atualizar(empresaId, id, { descricao }));
   }
 
-  // `item` é um grupo (nível 1) ou um filho (nível 2) — a troca vale pros dois.
-  async function alternarFlag(item, flag) {
-    const valor = !item[flag.campo];
-    const trocar = (x) => (x.id === item.id ? { ...x, [flag.campo]: valor } : x);
+  // `item` é um grupo (nível 1) ou um filho (nível 2) — vale pros dois. Desmarcar uma flag limpa
+  // as que dependem dela (`requer`).
+  async function definirFlag(item, flag, valor) {
+    const dependentes = valor
+      ? {}
+      : Object.fromEntries(flags.filter((f) => f.requer === flag.campo).map((f) => [f.campo, null]));
+    const trocar = (x) => (x.id === item.id ? { ...x, [flag.campo]: valor, ...dependentes } : x);
     setArvore((atual) => atual.map((g) => ({ ...trocar(g), filhos: g.filhos.map(trocar) })));
     if (valor && flag.semFilhos) {
       setAbertos((atual) => atual.filter((v) => v !== item.id));
@@ -456,7 +492,7 @@ const MascarasArvoreEditor = forwardRef(function MascarasArvoreEditor(
           >
             <span className="flex-1">Nível 1 / Nível 2</span>
             {flags.map((flag) => (
-              <span key={flag.campo} title={flag.title} className="w-24 shrink-0 text-center">
+              <span key={flag.campo} title={flag.title} className={`${larguraFlag(flag)} shrink-0 text-center`}>
                 {flag.label}
               </span>
             ))}
@@ -560,7 +596,7 @@ const MascarasArvoreEditor = forwardRef(function MascarasArvoreEditor(
                     flags={flags}
                     nivel={1}
                     item={grupo}
-                    onAlternar={(flag) => alternarFlag(grupo, flag)}
+                    onDefinir={(flag, valor) => definirFlag(grupo, flag, valor)}
                     travadaMotivo={(flag) =>
                       flag.semFilhos && !grupo[flag.campo] && grupo.filhos.length > 0
                         ? `Remova ou mova as máscaras de nível 2 antes de marcar ${flag.label}`
@@ -604,7 +640,7 @@ const MascarasArvoreEditor = forwardRef(function MascarasArvoreEditor(
                           <Trash2 size={13} />
                         </BotaoAcao>
                       </span>
-                      <ColunasFlags flags={flags} nivel={2} item={filho} onAlternar={(flag) => alternarFlag(filho, flag)} />
+                      <ColunasFlags flags={flags} nivel={2} item={filho} onDefinir={(flag, valor) => definirFlag(filho, flag, valor)} />
                     </div>
                   ))}
 

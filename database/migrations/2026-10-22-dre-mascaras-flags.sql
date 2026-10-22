@@ -1,9 +1,11 @@
--- Operações > DRE Gerencial > Máscaras: duas marcações, por enquanto só informativas (nenhum
+-- Operações > DRE Gerencial > Máscaras: marcações, por enquanto só informativas (nenhum
 -- cálculo usa ainda):
 --   totalizadora — só nível 1. Linha de subtotal da DRE: não tem máscaras de nível 2 dentro (nem
 --                  drilldown). Garantido no backend (dreMascaras.service.js), que recusa marcar um
 --                  grupo com filhos e criar/mover filho pra dentro de uma totalizadora.
 --   realiza_poc  — só nível 2. A linha é apropriada por POC (percentual de obra concluída).
+--   tipo_poc     — só com realiza_poc: 'RECEITA' (POC Receita) ou 'DESPESA' (POC Despesa). Pode
+--                  ficar vazio; desmarcar realiza_poc limpa (o backend faz junto, no mesmo UPDATE).
 -- Ao trocar de nível arrastando, o backend limpa a marcação que não vale no nível novo.
 -- Aplicar: psql -U postgres -d horizon_fin -f database/migrations/2026-10-22-dre-mascaras-flags.sql
 
@@ -21,3 +23,9 @@ ALTER TABLE dre_mascaras ADD CONSTRAINT dre_mascaras_totalizadora_so_nivel_1
 ALTER TABLE dre_mascaras DROP CONSTRAINT IF EXISTS dre_mascaras_realiza_poc_so_nivel_2;
 ALTER TABLE dre_mascaras ADD CONSTRAINT dre_mascaras_realiza_poc_so_nivel_2
     CHECK (parent_id IS NOT NULL OR NOT realiza_poc);
+
+ALTER TABLE dre_mascaras ADD COLUMN IF NOT EXISTS tipo_poc VARCHAR(10);
+
+ALTER TABLE dre_mascaras DROP CONSTRAINT IF EXISTS dre_mascaras_tipo_poc_valido;
+ALTER TABLE dre_mascaras ADD CONSTRAINT dre_mascaras_tipo_poc_valido
+    CHECK (tipo_poc IS NULL OR (realiza_poc AND tipo_poc IN ('RECEITA', 'DESPESA')));

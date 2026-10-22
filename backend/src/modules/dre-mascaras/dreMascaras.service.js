@@ -2,10 +2,11 @@ const pool = require('../../config/db');
 
 // Operações > DRE Gerencial > Máscaras: espelho de dfc-mascaras/dfcMascaras.service.js (mesma
 // árvore de 2 níveis, mesma tela), na tabela dre_mascaras — mais as marcações totalizadora (só
-// nível 1) e realiza_poc (só nível 2; ver 2026-10-22-dre-mascaras-flags.sql). Totalizadora nunca
-// tem nível 2 dentro: create, update e reordenar recusam o que quebraria isso.
+// nível 1) e realiza_poc (só nível 2, com o tipo_poc opcional; ver
+// 2026-10-22-dre-mascaras-flags.sql). Totalizadora nunca tem nível 2 dentro: create, update e
+// reordenar recusam o que quebraria isso.
 
-const COLUNAS = 'id, parent_id, ordem, descricao, totalizadora, realiza_poc';
+const COLUNAS = 'id, parent_id, ordem, descricao, totalizadora, realiza_poc, tipo_poc';
 
 function erro(status, message) {
   const e = new Error(message);
@@ -69,13 +70,14 @@ async function create(empresaId, { parentId, descricoes }) {
   }
 }
 
-// `campos` é parcial: descricao, totalizadora e/ou realiza_poc — o que não vier fica como está.
-async function update(id, empresaId, { descricao, totalizadora, realiza_poc: realizaPoc }) {
+// `campos` é parcial: descricao, totalizadora, realiza_poc e/ou tipo_poc — o que não vier
+// (undefined) fica como está; tipo_poc null limpa. Desmarcar realiza_poc limpa o tipo_poc junto.
+async function update(id, empresaId, { descricao, totalizadora, realiza_poc: realizaPoc, tipo_poc: tipoPoc }) {
   const client = await pool.connect();
   try {
     await client.query('BEGIN');
     const { rows: atual } = await client.query(
-      `SELECT m.parent_id, EXISTS (SELECT 1 FROM dre_mascaras f WHERE f.parent_id = m.id) AS tem_filhos
+      `SELECT m.parent_id, m.realiza_poc, EXISTS (SELECT 1 FROM dre_mascaras f WHERE f.parent_id = m.id) AS tem_filhos
          FROM dre_mascaras m WHERE m.id = $1 AND m.empresa_id = $2 FOR UPDATE`,
       [id, empresaId]
     );
@@ -89,6 +91,9 @@ async function update(id, empresaId, { descricao, totalizadora, realiza_poc: rea
     if (realizaPoc && atual[0].parent_id === null) {
       throw erro(400, 'Só as máscaras de nível 2 podem ser Realiza POC.');
     }
+    if (tipoPoc && !(realizaPoc ?? atual[0].realiza_poc)) {
+      throw erro(400, 'Marque Realiza POC antes de escolher o Tipo POC.');
+    }
     if (totalizadora && atual[0].tem_filhos) {
       throw erro(400, 'Máscara totalizadora não tem máscaras de nível 2: remova ou mova as que estão dentro dela antes.');
     }
@@ -96,10 +101,13 @@ async function update(id, empresaId, { descricao, totalizadora, realiza_poc: rea
       `UPDATE dre_mascaras
           SET descricao = COALESCE($3, descricao),
               totalizadora = COALESCE($4, totalizadora),
-              realiza_poc = COALESCE($5, realiza_poc)
+              realiza_poc = COALESCE($5, realiza_poc),
+              tipo_poc = CASE WHEN NOT COALESCE($5, realiza_poc) THEN NULL
+                              WHEN $7 THEN $6
+                              ELSE tipo_poc END
         WHERE id = $1 AND empresa_id = $2
        RETURNING ${COLUNAS}`,
-      [id, empresaId, descricao ?? null, totalizadora ?? null, realizaPoc ?? null]
+      [id, empresaId, descricao ?? null, totalizadora ?? null, realizaPoc ?? null, tipoPoc ?? null, tipoPoc !== undefined]
     );
     await client.query('COMMIT');
     return rows[0];
@@ -154,7 +162,8 @@ async function reordenar(empresaId, estrutura) {
       `UPDATE dre_mascaras m
           SET parent_id = v.parent_id, ordem = v.ordem,
               totalizadora = m.totalizadora AND v.parent_id IS NULL,
-              realiza_poc = m.realiza_poc AND v.parent_id IS NOT NULL
+              realiza_poc = m.realiza_poc AND v.parent_id IS NOT NULL,
+              tipo_poc = CASE WHEN v.parent_id IS NOT NULL THEN m.tipo_poc END
          FROM UNNEST($2::int[], $3::int[], $4::int[]) AS v(id, parent_id, ordem)
         WHERE m.id = v.id AND m.empresa_id = $1`,
       [empresaId, ids, linhas.map((l) => l.parentId), linhas.map((l) => l.ordem)]
