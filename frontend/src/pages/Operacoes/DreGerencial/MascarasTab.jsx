@@ -42,18 +42,18 @@ const API = {
 // Origem do valor de uma linha de nível 2 e os cálculos de cada uma — mesmos códigos de
 // CALCULOS_POR_ORIGEM no backend (dreMascaras.service.js).
 const ORIGENS = [
-  { value: 'CONTRATOS_VENDAS', label: 'Sienge - Contratos de Vendas' },
-  { value: 'UNIDADES_IMOBILIARIAS', label: 'Sienge - Unidades Imobiliárias' },
-  { value: 'FINANCEIRO', label: 'Sienge - Financeiro CP/CR/Extrato' },
+  { value: 'CONTRATOS_VENDAS', label: 'SIENGE - CONTRATOS DE VENDAS' },
+  { value: 'UNIDADES_IMOBILIARIAS', label: 'SIENGE - UNIDADES IMOBILIÁRIAS' },
+  { value: 'FINANCEIRO', label: 'SIENGE - FINANCEIRO CP/CR/EXTRATO' },
 ];
 
 const CALCULOS = [
-  { value: 'VALOR_VENDAS', label: 'Valor de Vendas', pai: 'CONTRATOS_VENDAS' },
-  { value: 'ESTORNO_VENDAS', label: 'Estorno de Vendas', pai: 'CONTRATOS_VENDAS' },
-  { value: 'RECEITA_DISTRATO', label: 'Receitas com Distrato', pai: 'CONTRATOS_VENDAS' },
-  { value: 'RECEITA_PERMUTA', label: 'Receita com Permuta', pai: 'UNIDADES_IMOBILIARIAS' },
-  { value: 'ENTRADAS_SAIDAS', label: 'Entradas e Saídas Financeiras', pai: 'FINANCEIRO' },
-  { value: 'CORRECAO_MONETARIA', label: 'Correção Monetária', pai: 'FINANCEIRO' },
+  { value: 'VALOR_VENDAS', label: 'VALOR DE VENDAS', pai: 'CONTRATOS_VENDAS' },
+  { value: 'ESTORNO_VENDAS', label: 'ESTORNO DE VENDAS', pai: 'CONTRATOS_VENDAS' },
+  { value: 'RECEITA_DISTRATO', label: 'RECEITAS COM DISTRATO', pai: 'CONTRATOS_VENDAS' },
+  { value: 'RECEITA_PERMUTA', label: 'RECEITA COM PERMUTA', pai: 'UNIDADES_IMOBILIARIAS' },
+  { value: 'ENTRADAS_SAIDAS', label: 'ENTRADAS E SAÍDAS FINANCEIRAS', pai: 'FINANCEIRO' },
+  { value: 'CORRECAO_MONETARIA', label: 'CORREÇÃO MONETÁRIA', pai: 'FINANCEIRO' },
 ];
 
 // Marcações — por enquanto só informadas (nenhum cálculo usa ainda). Totalizadora é do nível 1
