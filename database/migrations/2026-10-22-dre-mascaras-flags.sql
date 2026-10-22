@@ -6,7 +6,7 @@
 --   realiza_poc  — só nível 2. A linha é apropriada por POC (percentual de obra concluída).
 --   tipo_poc     — só com realiza_poc: 'RECEITA' (POC Receita) ou 'DESPESA' (POC Despesa). Pode
 --                  ficar vazio; desmarcar realiza_poc limpa (o backend faz junto, no mesmo UPDATE).
---   icone        — os dois níveis: sinal da linha na DRE. 'MAIS' (+), 'MENOS' (-), 'MAIS_MENOS' (+/-)
+--   icone        — só nível 1: sinal da linha na DRE. 'MAIS' (+), 'MENOS' (-), 'MAIS_MENOS' (+/-)
 --                  escolhidos na tela, ou 'IGUAL' (=), que é automático: só e sempre com
 --                  totalizadora (o backend grava ao marcar e limpa ao desmarcar, no mesmo UPDATE).
 -- Ao trocar de nível arrastando, o backend limpa a marcação que não vale no nível novo.
@@ -36,8 +36,11 @@ ALTER TABLE dre_mascaras ADD CONSTRAINT dre_mascaras_tipo_poc_valido
 ALTER TABLE dre_mascaras ADD COLUMN IF NOT EXISTS icone VARCHAR(10);
 UPDATE dre_mascaras SET icone = 'IGUAL' WHERE totalizadora AND icone IS DISTINCT FROM 'IGUAL';
 UPDATE dre_mascaras SET icone = NULL WHERE NOT totalizadora AND icone = 'IGUAL';
+-- Primeira versão desta migração (só no ambiente local) deixava ícone no nível 2.
+UPDATE dre_mascaras SET icone = NULL WHERE parent_id IS NOT NULL AND icone IS NOT NULL;
 
 ALTER TABLE dre_mascaras DROP CONSTRAINT IF EXISTS dre_mascaras_icone_valido;
 ALTER TABLE dre_mascaras ADD CONSTRAINT dre_mascaras_icone_valido
     CHECK ((icone IS NULL OR icone IN ('IGUAL', 'MAIS', 'MENOS', 'MAIS_MENOS'))
-           AND (icone IS NOT DISTINCT FROM 'IGUAL') = totalizadora);
+           AND (icone IS NOT DISTINCT FROM 'IGUAL') = totalizadora
+           AND (parent_id IS NULL OR icone IS NULL));

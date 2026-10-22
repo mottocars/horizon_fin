@@ -119,6 +119,9 @@ async function update(
     if (totalizadora && atual[0].tem_filhos) {
       throw erro(400, 'Máscara totalizadora não tem máscaras de nível 2: remova ou mova as que estão dentro dela antes.');
     }
+    if (icone && atual[0].parent_id !== null) {
+      throw erro(400, 'Só as máscaras de nível 1 têm ícone.');
+    }
     if (icone && (totalizadora ?? atual[0].totalizadora)) {
       throw erro(400, 'Linha com Totaliza tem sempre o ícone =.');
     }
@@ -217,7 +220,7 @@ async function reordenar(empresaId, estrutura) {
       `UPDATE dre_mascaras m
           SET parent_id = v.parent_id, ordem = v.ordem,
               totalizadora = m.totalizadora AND v.parent_id IS NULL,
-              icone = CASE WHEN m.totalizadora AND v.parent_id IS NOT NULL THEN NULL ELSE m.icone END,
+              icone = CASE WHEN v.parent_id IS NULL THEN m.icone END,
               realiza_poc = m.realiza_poc AND v.parent_id IS NOT NULL,
               tipo_poc = CASE WHEN v.parent_id IS NOT NULL THEN m.tipo_poc END,
               origem = CASE WHEN v.parent_id IS NOT NULL THEN m.origem END,

@@ -21,7 +21,7 @@ function aplicarMovimento(arvore, arrastado, alvo, flags) {
   const soDoNivel = (item, nivel) => {
     const limpo = { ...item };
     flags.forEach((f) => {
-      if (f.nivel && f.nivel !== nivel) limpo[f.campo] = f.opcoes ? null : false;
+      if (f.nivel && f.nivel !== nivel) limpo[f.campo] = typeof item[f.campo] === 'boolean' ? false : null;
     });
     return limpo;
   };

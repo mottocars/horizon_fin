@@ -60,7 +60,7 @@ const CALCULOS = [
   { value: 'CORRECAO_MONETARIA', label: 'CORREÇÃO MONETÁRIA', pai: 'FINANCEIRO' },
 ];
 
-// Ícone (sinal) da linha: + / - / +/- escolhidos no seletor (SeletorIcone); o = é automático com Totaliza (o
+// Ícone (sinal) da linha de nível 1: + / - / +/- escolhidos no seletor (SeletorIcone); o = é automático com Totaliza (o
 // backend grava e limpa junto com ela) e não é escolhível.
 const ICONES = [
   { value: 'MAIS', label: '+', title: 'Soma' },
@@ -96,8 +96,6 @@ function SeletorIcone({ item, definir }) {
       </span>
     );
   }
-  // 'IGUAL' sem Totaliza só sobra na tela depois de arrastar uma Totaliza pro nível 2 (o backend já
-  // limpou) — conta como vazio.
   const atual = ICONES.find((o) => o.value === item.icone);
 
   function escolher(valor) {
@@ -159,7 +157,8 @@ const montarFlags = (abrirHistorico, aliquotaDe) => [
   {
     campo: 'icone',
     label: 'Ícone',
-    title: 'Sinal da linha na DRE: + / - / +/- (o = vem sozinho com Totaliza)',
+    title: 'Nível 1 — sinal da linha na DRE: + / - / +/- (o = vem sozinho com Totaliza)',
+    nivel: 1,
     largura: 'w-[72px]',
     substituir: (item, definir) => <SeletorIcone item={item} definir={definir} />,
   },
