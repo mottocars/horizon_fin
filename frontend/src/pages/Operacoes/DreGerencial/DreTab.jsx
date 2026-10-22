@@ -86,13 +86,28 @@ function SeloPoc({ tipo }) {
   );
 }
 
-// Totalizadora (aba Máscaras) é linha de subtotal: escura, fechando a seção, sem nível 2.
+const SIMBOLO_ICONE = { IGUAL: '=', MAIS: '+', MENOS: '-', MAIS_MENOS: '+/-' };
+
+// Ícone (sinal) da linha de nível 1, escolhido na aba Máscaras (o = vem com Totaliza), à frente da
+// descrição. Largura fixa, mesmo sem ícone, pra as descrições ficarem alinhadas.
+function IconeLinha({ icone, className }) {
+  return (
+    <span className={`inline-block w-9 shrink-0 text-xs font-bold tabular-nums ${className}`}>
+      {SIMBOLO_ICONE[icone] ? `(${SIMBOLO_ICONE[icone]})` : ''}
+    </span>
+  );
+}
+
+// Totaliza (aba Máscaras) é linha de subtotal: escura, fechando a seção, sem nível 2.
 function LinhaGrupo({ grupo }) {
   if (grupo.totalizadora) {
     return (
       <tr className="bg-gray-900">
         <td className="border-b border-gray-900 py-1 pl-4">
-          <span className="text-xs font-bold uppercase tracking-wide text-white">{grupo.descricao}</span>
+          <span className="flex items-center">
+            <IconeLinha icone={grupo.icone} className="text-white" />
+            <span className="text-xs font-bold uppercase tracking-wide text-white">{grupo.descricao}</span>
+          </span>
         </td>
         <td className="border-b border-l border-gray-900 px-4 py-1 text-right text-xs font-bold tabular-nums text-white/50">
           —
@@ -105,7 +120,10 @@ function LinhaGrupo({ grupo }) {
     <Fragment>
       <tr className="bg-gray-50">
         <td className="border-b border-gray-200 py-1 pl-4">
-          <span className="text-xs font-bold uppercase tracking-wide text-gray-900">{grupo.descricao}</span>
+          <span className="flex items-center">
+            <IconeLinha icone={grupo.icone} className="text-gray-500" />
+            <span className="text-xs font-bold uppercase tracking-wide text-gray-900">{grupo.descricao}</span>
+          </span>
         </td>
         <td className="border-b border-l border-gray-200 px-4 py-1 text-right text-xs font-bold tabular-nums text-gray-300">
           —
@@ -114,14 +132,14 @@ function LinhaGrupo({ grupo }) {
 
       {grupo.filhos.length === 0 ? (
         <tr>
-          <td colSpan={2} className="border-b border-gray-100 py-1 pl-11 text-xs italic text-gray-300">
+          <td colSpan={2} className="border-b border-gray-100 py-1 pl-20 text-xs italic text-gray-300">
             Nenhum item cadastrado nesta linha ainda.
           </td>
         </tr>
       ) : (
         grupo.filhos.map((item) => (
           <tr key={item.id} className="hover:bg-gray-50">
-            <td className="border-b border-gray-100 py-0.5 pl-11 text-xs text-gray-700">
+            <td className="border-b border-gray-100 py-0.5 pl-20 text-xs text-gray-700">
               <span className="flex items-center gap-2">
                 {item.descricao}
                 {item.realiza_poc && <SeloPoc tipo={item.tipo_poc} />}
