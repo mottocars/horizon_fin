@@ -1,5 +1,5 @@
 import { forwardRef, useEffect, useMemo, useRef, useState } from 'react';
-import { ChevronDown, History, X } from 'lucide-react';
+import { History, X } from 'lucide-react';
 import MascarasArvoreEditor from '../../../components/MascarasArvoreEditor';
 import HistoricoImpostoModal, { formatarAliquota } from './HistoricoImpostoModal';
 import {
@@ -111,12 +111,11 @@ function SeletorIcone({ item, definir }) {
         type="button"
         title={atual ? `${atual.title} — clique para trocar` : 'Escolher ícone'}
         onClick={() => setAberto((v) => !v)}
-        className={`flex h-6 w-11 items-center justify-center gap-0.5 rounded-md border text-xs font-bold transition-colors ${
+        className={`flex h-6 w-11 items-center justify-center rounded-md border text-xs font-bold transition-colors ${
           atual ? 'border-primary-100 bg-primary-50 text-gray-900' : 'border-amber-200 bg-amber-50 text-gray-400'
         } ${aberto ? 'ring-2 ring-primary-100' : ''}`}
       >
         {atual ? atual.label : '—'}
-        <ChevronDown size={10} className="text-gray-400" />
       </button>
       {aberto && (
         <span className="absolute left-1/2 top-full z-30 mt-1 flex -translate-x-1/2 items-center gap-1 rounded-lg border border-gray-200 bg-white p-1 shadow-lg">
