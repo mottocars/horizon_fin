@@ -1,5 +1,5 @@
 import { forwardRef, useCallback, useEffect, useImperativeHandle, useRef, useState } from 'react';
-import { Check, GripVertical, Loader2, Minus, Pencil, Plus, Tags, Trash2, TriangleAlert, Wand2 } from 'lucide-react';
+import { Check, GripVertical, Loader2, Minus, Pencil, Plus, Sigma, Tags, Trash2, TriangleAlert, Wand2 } from 'lucide-react';
 import Button from './Button';
 import { useConfirm } from '../confirm/ConfirmContext';
 
@@ -15,7 +15,8 @@ function linhasColadas(texto) {
 // Move `arrastado` pra posição `alvo` ({ parentId: null = nível 1 | id do grupo, index }) e
 // devolve a árvore nova — ou null se a posição final é a mesma de antes. Um item de nível 2
 // solto no nível 1 vira um grupo (vazio); um de nível 1 solto dentro de um grupo vira nível 2
-// (só se não tiver filhos — isso é barrado antes, em podeSerFilho).
+// (só se não tiver filhos — isso é barrado antes, em podeSerFilho). As marcações (`flags`) vão
+// junto enquanto o item continua no nível 1; quem vira nível 2 perde (mesma regra do backend).
 function aplicarMovimento(arvore, arrastado, alvo) {
   let origemParentId = null;
   let origemIndex = arvore.findIndex((g) => g.id === arrastado.id);
@@ -37,7 +38,7 @@ function aplicarMovimento(arvore, arrastado, alvo) {
       : nova.find((g) => g.id === origemParentId).filhos.splice(origemIndex, 1)[0];
 
   if (alvo.parentId === null) {
-    nova.splice(destino, 0, { id: item.id, descricao: item.descricao, filhos: item.filhos || [] });
+    nova.splice(destino, 0, { ...item, filhos: item.filhos || [] });
   } else {
     nova.find((g) => g.id === alvo.parentId).filhos.splice(destino, 0, { id: item.id, descricao: item.descricao });
   }
@@ -130,17 +131,23 @@ export function Indicador({ recuo = false, embaixo = false }) {
 // Editor da estrutura de máscaras de um demonstrativo em 2 níveis — usado por Operações > DFC
 // Construtoras > Máscaras (DfcMascarasTab.jsx) e Operações > DRE Gerencial > Máscaras
 // (DreGerencial/MascarasTab.jsx), que só mudam a API (`api`: listar/criar/renomear/remover/
-// reordenar, todas recebendo o empresaId primeiro), o `modeloSugerido` e os textos. Visual de
+// reordenar, todas recebendo o empresaId primeiro; atualizar recebe campos parciais), o
+// `modeloSugerido` e os textos. Visual de
 // drilldown igual à grade de Saldos das Contas (SaldosContasTab.jsx — linha cinza com +/- e
 // contador no nível 1, linhas brancas recuadas no nível 2). Tudo se reordena arrastando, com o
 // drag-and-drop nativo do navegador (mesmo esquema do Kanban do Plano de Voo): um item de nível 2
 // pode ir pra outro grupo ou virar nível 1, e um nível 1 sem filhos pode entrar num grupo.
 // Cada mudança salva na hora (reordenação regrava a árvore inteira — ver dfcMascaras.service.js).
 //
+// `flags` (opcional, só a DRE usa): marcações booleanas do nível 1, cada uma uma coluna de
+// checkbox à direita — `{ campo, label, title, semFilhos }`. Com `semFilhos`, o grupo marcado
+// não tem drilldown nem nível 2 (a Totalizadora da DRE): não abre, não recebe item arrastado e
+// a marcação fica travada enquanto ele tiver filhos.
+//
 // `ref` expõe `abrirNova()` pro botão "Nova máscara" do topo da página (mesmo padrão de
 // CategoriasOrcamentoTab na DRE).
 const MascarasArvoreEditor = forwardRef(function MascarasArvoreEditor(
-  { empresaId, api, modeloSugerido, demonstrativo, exemploNivel1 },
+  { empresaId, api, modeloSugerido, demonstrativo, exemploNivel1, flags = [] },
   ref
 ) {
   const confirm = useConfirm();
@@ -203,6 +210,9 @@ const MascarasArvoreEditor = forwardRef(function MascarasArvoreEditor(
     }
   }
 
+  // Grupo marcado com uma flag `semFilhos` (Totalizadora): sem drilldown, sem nível 2.
+  const fechado = (grupo) => flags.some((f) => f.semFilhos && grupo[f.campo]);
+
   function alternarGrupo(id) {
     setAbertos((atual) => (atual.includes(id) ? atual.filter((v) => v !== id) : [...atual, id]));
   }
@@ -213,7 +223,7 @@ const MascarasArvoreEditor = forwardRef(function MascarasArvoreEditor(
     if (!criados) return;
     setArvore((atual) =>
       parentId === null
-        ? [...atual, ...criados.map((c) => ({ id: c.id, descricao: c.descricao, filhos: [] }))]
+        ? [...atual, ...criados.map((c) => ({ ...c, filhos: [] }))]
         : atual.map((g) =>
             g.id === parentId ? { ...g, filhos: [...g.filhos, ...criados.map((c) => ({ id: c.id, descricao: c.descricao }))] } : g
           )
@@ -234,7 +244,17 @@ const MascarasArvoreEditor = forwardRef(function MascarasArvoreEditor(
         g.id === id ? { ...g, descricao } : { ...g, filhos: g.filhos.map((f) => (f.id === id ? { ...f, descricao } : f)) }
       )
     );
-    await salvar(() => api.renomear(empresaId, id, { descricao }));
+    await salvar(() => api.atualizar(empresaId, id, { descricao }));
+  }
+
+  async function alternarFlag(grupo, flag) {
+    const valor = !grupo[flag.campo];
+    setArvore((atual) => atual.map((g) => (g.id === grupo.id ? { ...g, [flag.campo]: valor } : g)));
+    if (valor && flag.semFilhos) {
+      setAbertos((atual) => atual.filter((v) => v !== grupo.id));
+      if (criando?.parentId === grupo.id) setCriando(null);
+    }
+    await salvar(() => api.atualizar(empresaId, grupo.id, { [flag.campo]: valor }));
   }
 
   async function remover(item, grupo) {
@@ -304,7 +324,7 @@ const MascarasArvoreEditor = forwardRef(function MascarasArvoreEditor(
   // dele, no começo (se o item puder ser nível 2), senão depois dele.
   function mirarGrupo(e, grupo, i) {
     if (metadeDeCima(e)) mirar(e, { parentId: null, index: i });
-    else if (podeSerFilho && grupo.id !== arrastado.id) mirar(e, { parentId: grupo.id, index: 0 });
+    else if (podeSerFilho && grupo.id !== arrastado.id && !fechado(grupo)) mirar(e, { parentId: grupo.id, index: 0 });
     else mirar(e, { parentId: null, index: i + 1 });
   }
 
@@ -394,11 +414,20 @@ const MascarasArvoreEditor = forwardRef(function MascarasArvoreEditor(
             if (!e.currentTarget.contains(e.relatedTarget)) setAlvo(null);
           }}
         >
-          <div className="sticky -top-6 z-20 flex items-center justify-between rounded-t-lg border-b-2 border-blue-500 bg-blue-50 py-2.5 pl-4 pr-4 text-xs font-medium uppercase tracking-wide text-blue-700">
+          <div
+            className={`sticky -top-6 z-20 flex items-center gap-2 rounded-t-lg border-b-2 border-blue-500 bg-blue-50 py-2.5 pl-4 text-xs font-medium uppercase tracking-wide text-blue-700 ${
+              flags.length ? 'pr-2' : 'pr-4'
+            }`}
+          >
             <span>Nível 1 / Nível 2</span>
-            <span className="hidden normal-case tracking-normal text-blue-500 sm:inline">
+            <span className="ml-auto hidden normal-case tracking-normal text-blue-500 sm:inline">
               Arraste pelas linhas para reordenar ou mudar de grupo · duplo clique renomeia
             </span>
+            {flags.map((flag) => (
+              <span key={flag.campo} title={flag.title} className="w-24 shrink-0 text-center">
+                {flag.label}
+              </span>
+            ))}
           </div>
 
           {/* Cabeçalho sempre visível, mesmo sem nenhuma máscara (pedido do usuário). */}
@@ -424,7 +453,8 @@ const MascarasArvoreEditor = forwardRef(function MascarasArvoreEditor(
           )}
 
           {arvore.map((grupo, i) => {
-            const aberto = abertos.includes(grupo.id);
+            const semDrilldown = fechado(grupo);
+            const aberto = !semDrilldown && abertos.includes(grupo.id);
             const sendoArrastado = arrastado?.id === grupo.id;
             const recebendo = alvo?.parentId === grupo.id;
             const criandoAqui = criando && criando.parentId === grupo.id;
@@ -436,17 +466,28 @@ const MascarasArvoreEditor = forwardRef(function MascarasArvoreEditor(
                   onDragStart={(e) => iniciarArraste(e, { id: grupo.id, nivel: 1, temFilhos: grupo.filhos.length > 0 })}
                   onDragEnd={encerrarArraste}
                   onDragOver={(e) => mirarGrupo(e, grupo, i)}
-                  onClick={() => alternarGrupo(grupo.id)}
+                  onClick={() => !semDrilldown && alternarGrupo(grupo.id)}
                   onDoubleClick={() => setEditandoId(grupo.id)}
-                  className={`group/linha relative flex cursor-pointer items-center gap-2 border-b border-gray-200 py-2.5 pl-1.5 pr-2 ${
+                  className={`group/linha relative flex items-center gap-2 border-b border-gray-200 py-2.5 pl-1.5 pr-2 ${
+                    semDrilldown ? '' : 'cursor-pointer'
+                  } ${
                     recebendo ? 'bg-primary-50 ring-1 ring-inset ring-primary-300' : 'bg-gray-50 hover:bg-gray-100'
                   }`}
                 >
                   {marca(null, i) && <Indicador />}
                   <GripVertical size={14} className="shrink-0 cursor-grab text-gray-300 group-hover/linha:text-gray-500" />
-                  <span className="flex h-4 w-4 shrink-0 items-center justify-center rounded bg-primary-100 text-primary-600">
-                    {aberto ? <Minus size={10} /> : <Plus size={10} />}
-                  </span>
+                  {semDrilldown ? (
+                    <span
+                      title="Totalizadora — sem máscaras de nível 2"
+                      className="flex h-4 w-4 shrink-0 items-center justify-center rounded bg-gray-200 text-gray-600"
+                    >
+                      <Sigma size={10} />
+                    </span>
+                  ) : (
+                    <span className="flex h-4 w-4 shrink-0 items-center justify-center rounded bg-primary-100 text-primary-600">
+                      {aberto ? <Minus size={10} /> : <Plus size={10} />}
+                    </span>
+                  )}
                   {editandoId === grupo.id ? (
                     <CampoNome
                       valorInicial={grupo.descricao}
@@ -459,19 +500,23 @@ const MascarasArvoreEditor = forwardRef(function MascarasArvoreEditor(
                       {grupo.descricao}
                     </span>
                   )}
-                  <span className="shrink-0 rounded-full bg-white px-2 py-0.5 text-[10px] font-medium tabular-nums text-gray-500 ring-1 ring-gray-200">
-                    {grupo.filhos.length}
-                  </span>
+                  {!semDrilldown && (
+                    <span className="shrink-0 rounded-full bg-white px-2 py-0.5 text-[10px] font-medium tabular-nums text-gray-500 ring-1 ring-gray-200">
+                      {grupo.filhos.length}
+                    </span>
+                  )}
                   <span className="ml-auto flex shrink-0 items-center gap-0.5 opacity-0 transition-opacity group-hover/linha:opacity-100">
-                    <BotaoAcao
-                      title="Adicionar máscara de nível 2"
-                      onClick={() => {
-                        setAbertos((atual) => (atual.includes(grupo.id) ? atual : [...atual, grupo.id]));
-                        setCriando({ parentId: grupo.id });
-                      }}
-                    >
-                      <Plus size={14} />
-                    </BotaoAcao>
+                    {!semDrilldown && (
+                      <BotaoAcao
+                        title="Adicionar máscara de nível 2"
+                        onClick={() => {
+                          setAbertos((atual) => (atual.includes(grupo.id) ? atual : [...atual, grupo.id]));
+                          setCriando({ parentId: grupo.id });
+                        }}
+                      >
+                        <Plus size={14} />
+                      </BotaoAcao>
+                    )}
                     <BotaoAcao title="Renomear" onClick={() => setEditandoId(grupo.id)}>
                       <Pencil size={13} />
                     </BotaoAcao>
@@ -479,6 +524,21 @@ const MascarasArvoreEditor = forwardRef(function MascarasArvoreEditor(
                       <Trash2 size={13} />
                     </BotaoAcao>
                   </span>
+                  {flags.map((flag) => {
+                    const travada = flag.semFilhos && !grupo[flag.campo] && grupo.filhos.length > 0;
+                    return (
+                      <span key={flag.campo} className="flex w-24 shrink-0 justify-center" onClick={(e) => e.stopPropagation()}>
+                        <input
+                          type="checkbox"
+                          checked={!!grupo[flag.campo]}
+                          disabled={travada}
+                          onChange={() => alternarFlag(grupo, flag)}
+                          title={travada ? `Remova ou mova as máscaras de nível 2 antes de marcar ${flag.label}` : flag.label}
+                          className="h-4 w-4 cursor-pointer rounded border-gray-300 text-primary-600 focus:ring-primary-100 disabled:cursor-not-allowed disabled:opacity-40"
+                        />
+                      </span>
+                    );
+                  })}
                 </div>
 
                 {/* Linhas do nível 2 */}
@@ -516,6 +576,9 @@ const MascarasArvoreEditor = forwardRef(function MascarasArvoreEditor(
                           <Trash2 size={13} />
                         </BotaoAcao>
                       </span>
+                      {flags.map((flag) => (
+                        <span key={flag.campo} className="w-24 shrink-0" />
+                      ))}
                     </div>
                   ))}
 

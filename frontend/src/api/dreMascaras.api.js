@@ -9,8 +9,9 @@ export function createDreMascaras(empresaId, { parentId = null, descricoes }) {
   return http.post(`/dre-mascaras/${empresaId}`, { parent_id: parentId, descricoes }).then((res) => res.data);
 }
 
-export function updateDreMascara(empresaId, id, { descricao }) {
-  return http.put(`/dre-mascaras/${empresaId}/${id}`, { descricao }).then((res) => res.data);
+// `campos` é parcial: { descricao } pra renomear, { totalizadora } / { realiza_poc } pras marcações.
+export function updateDreMascara(empresaId, id, campos) {
+  return http.put(`/dre-mascaras/${empresaId}/${id}`, campos).then((res) => res.data);
 }
 
 export function removeDreMascara(empresaId, id) {

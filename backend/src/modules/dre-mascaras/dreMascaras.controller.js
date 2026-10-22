@@ -17,7 +17,14 @@ const createSchema = z.object({
   descricoes: z.array(descricaoSchema).min(1, 'Informe o nome da máscara.').max(200),
 });
 
-const updateSchema = z.object({ descricao: descricaoSchema });
+// Parcial: renomear manda só `descricao`; marcar/desmarcar manda só a marcação.
+const updateSchema = z
+  .object({
+    descricao: descricaoSchema.optional(),
+    totalizadora: z.boolean().optional(),
+    realiza_poc: z.boolean().optional(),
+  })
+  .refine((c) => Object.values(c).some((v) => v !== undefined), { message: 'Nada para alterar.' });
 
 // A estrutura inteira, já na ordem final: nível 1 na ordem do array e, em `filhos`, os ids de
 // nível 2 de cada um. Por construção não dá pra mandar 3 níveis.
@@ -65,8 +72,8 @@ async function update(req, res, next) {
   try {
     const empresaId = empresaIdSchema.parse(req.params.empresaId);
     const id = idSchema.parse(req.params.id);
-    const { descricao } = updateSchema.parse(req.body);
-    const item = await service.update(id, empresaId, { descricao });
+    const campos = updateSchema.parse(req.body);
+    const item = await service.update(id, empresaId, campos);
     if (!item) throw erro(404, 'Máscara não encontrada.');
     res.json(item);
   } catch (err) {

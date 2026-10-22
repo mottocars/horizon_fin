@@ -1,7 +1,11 @@
 const pool = require('../../config/db');
 
 // Operações > DRE Gerencial > Máscaras: espelho de dfc-mascaras/dfcMascaras.service.js (mesma
-// árvore de 2 níveis, mesma tela), na tabela dre_mascaras.
+// árvore de 2 níveis, mesma tela), na tabela dre_mascaras — mais as marcações do nível 1
+// (totalizadora, realiza_poc; ver 2026-10-22-dre-mascaras-flags.sql). Totalizadora nunca tem
+// nível 2 dentro: create, update e reordenar recusam o que quebraria isso.
+
+const COLUNAS = 'id, parent_id, ordem, descricao, totalizadora, realiza_poc';
 
 function erro(status, message) {
   const e = new Error(message);
@@ -13,7 +17,7 @@ function erro(status, message) {
 // Devolve já em árvore: nível 1 na ordem, cada um com seus `filhos` (nível 2) na ordem.
 async function list(empresaId, db = pool) {
   const { rows } = await db.query(
-    `SELECT id, parent_id, ordem, descricao FROM dre_mascaras
+    `SELECT ${COLUNAS} FROM dre_mascaras
       WHERE empresa_id = $1
       ORDER BY ordem ASC, id ASC`,
     [empresaId]
@@ -34,13 +38,14 @@ async function create(empresaId, { parentId, descricoes }) {
     await client.query('BEGIN');
     if (parentId !== null) {
       const { rows } = await client.query(
-        'SELECT parent_id FROM dre_mascaras WHERE id = $1 AND empresa_id = $2 FOR UPDATE',
+        'SELECT parent_id, totalizadora FROM dre_mascaras WHERE id = $1 AND empresa_id = $2 FOR UPDATE',
         [parentId, empresaId]
       );
       if (!rows[0]) throw erro(404, 'Máscara de nível 1 não encontrada.');
       if (rows[0].parent_id !== null) {
         throw erro(400, 'A DRE tem só 2 níveis: não dá pra criar dentro de um item de nível 2.');
       }
+      if (rows[0].totalizadora) throw erro(400, 'Máscara totalizadora não tem máscaras de nível 2.');
     }
     const { rows: maxRows } = await client.query(
       `SELECT COALESCE(MAX(ordem), 0) AS max FROM dre_mascaras
@@ -51,7 +56,7 @@ async function create(empresaId, { parentId, descricoes }) {
       `INSERT INTO dre_mascaras (empresa_id, parent_id, ordem, descricao)
        SELECT $1, $2, $3 + d.n, d.descricao
          FROM UNNEST($4::text[]) WITH ORDINALITY AS d(descricao, n)
-       RETURNING id, parent_id, ordem, descricao`,
+       RETURNING ${COLUNAS}`,
       [empresaId, parentId, maxRows[0].max, descricoes]
     );
     await client.query('COMMIT');
@@ -64,13 +69,43 @@ async function create(empresaId, { parentId, descricoes }) {
   }
 }
 
-async function update(id, empresaId, { descricao }) {
-  const { rows } = await pool.query(
-    `UPDATE dre_mascaras SET descricao = $3 WHERE id = $1 AND empresa_id = $2
-     RETURNING id, parent_id, ordem, descricao`,
-    [id, empresaId, descricao]
-  );
-  return rows[0] || null;
+// `campos` é parcial: descricao, totalizadora e/ou realiza_poc — o que não vier fica como está.
+async function update(id, empresaId, { descricao, totalizadora, realiza_poc: realizaPoc }) {
+  const client = await pool.connect();
+  try {
+    await client.query('BEGIN');
+    const { rows: atual } = await client.query(
+      `SELECT m.parent_id, EXISTS (SELECT 1 FROM dre_mascaras f WHERE f.parent_id = m.id) AS tem_filhos
+         FROM dre_mascaras m WHERE m.id = $1 AND m.empresa_id = $2 FOR UPDATE`,
+      [id, empresaId]
+    );
+    if (!atual[0]) {
+      await client.query('ROLLBACK');
+      return null;
+    }
+    if ((totalizadora || realizaPoc) && atual[0].parent_id !== null) {
+      throw erro(400, 'Só as máscaras de nível 1 podem ser Totalizadora ou Realiza POC.');
+    }
+    if (totalizadora && atual[0].tem_filhos) {
+      throw erro(400, 'Máscara totalizadora não tem máscaras de nível 2: remova ou mova as que estão dentro dela antes.');
+    }
+    const { rows } = await client.query(
+      `UPDATE dre_mascaras
+          SET descricao = COALESCE($3, descricao),
+              totalizadora = COALESCE($4, totalizadora),
+              realiza_poc = COALESCE($5, realiza_poc)
+        WHERE id = $1 AND empresa_id = $2
+       RETURNING ${COLUNAS}`,
+      [id, empresaId, descricao ?? null, totalizadora ?? null, realizaPoc ?? null]
+    );
+    await client.query('COMMIT');
+    return rows[0];
+  } catch (err) {
+    await client.query('ROLLBACK');
+    throw err;
+  } finally {
+    client.release();
+  }
 }
 
 // Remover um nível 1 leva junto os itens de nível 2 dele (ON DELETE CASCADE) — o front avisa
@@ -99,16 +134,24 @@ async function reordenar(empresaId, estrutura) {
   const client = await pool.connect();
   try {
     await client.query('BEGIN');
-    const { rows: atuais } = await client.query('SELECT id FROM dre_mascaras WHERE empresa_id = $1 FOR UPDATE', [
-      empresaId,
-    ]);
+    const { rows: atuais } = await client.query(
+      'SELECT id, totalizadora FROM dre_mascaras WHERE empresa_id = $1 FOR UPDATE',
+      [empresaId]
+    );
     const atuaisIds = new Set(atuais.map((r) => r.id));
     if (atuaisIds.size !== ids.length || ids.some((id) => !atuaisIds.has(id))) {
       throw erro(409, 'As máscaras foram alteradas em outro lugar. Recarregue a tela e tente de novo.');
     }
+    const totalizadoras = new Set(atuais.filter((r) => r.totalizadora).map((r) => r.id));
+    if (estrutura.some((raiz) => raiz.filhos.length > 0 && totalizadoras.has(raiz.id))) {
+      throw erro(400, 'Máscara totalizadora não tem máscaras de nível 2.');
+    }
+    // Quem vira nível 2 perde as marcações (só o nível 1 tem).
     await client.query(
       `UPDATE dre_mascaras m
-          SET parent_id = v.parent_id, ordem = v.ordem
+          SET parent_id = v.parent_id, ordem = v.ordem,
+              totalizadora = m.totalizadora AND v.parent_id IS NULL,
+              realiza_poc = m.realiza_poc AND v.parent_id IS NULL
          FROM UNNEST($2::int[], $3::int[], $4::int[]) AS v(id, parent_id, ordem)
         WHERE m.id = v.id AND m.empresa_id = $1`,
       [empresaId, ids, linhas.map((l) => l.parentId), linhas.map((l) => l.ordem)]

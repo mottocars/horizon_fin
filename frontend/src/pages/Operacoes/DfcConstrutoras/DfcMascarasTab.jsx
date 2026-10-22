@@ -48,7 +48,7 @@ const MODELO_SUGERIDO = [
 const API = {
   listar: listDfcMascaras,
   criar: createDfcMascaras,
-  renomear: updateDfcMascara,
+  atualizar: updateDfcMascara,
   remover: removeDfcMascara,
   reordenar: reordenarDfcMascaras,
 };

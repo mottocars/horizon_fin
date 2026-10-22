@@ -34,14 +34,22 @@ const MODELO_SUGERIDO = [
 const API = {
   listar: listDreMascaras,
   criar: createDreMascaras,
-  renomear: updateDreMascara,
+  atualizar: updateDreMascara,
   remover: removeDreMascara,
   reordenar: reordenarDreMascaras,
 };
 
+// Marcações do nível 1 — por enquanto só informadas (nenhum cálculo usa ainda). Totalizadora é
+// linha de subtotal: sem drilldown e sem máscaras de nível 2 (semFilhos).
+const FLAGS = [
+  { campo: 'totalizadora', label: 'Totalizadora', title: 'Linha de subtotal — sem máscaras de nível 2', semFilhos: true },
+  { campo: 'realiza_poc', label: 'Realiza POC', title: 'Linha apropriada por POC (percentual de obra concluída)' },
+];
+
 // Operações > DRE Gerencial > Máscaras: estrutura da DRE da empresa em 2 níveis, cadastrada
-// pelo usuário — mesma tela da aba Máscaras da DFC Construtoras (MascarasArvoreEditor). As
-// máscaras de nível 2 são as opções da combobox "Máscara DRE" na aba Plano de Contas.
+// pelo usuário — mesma tela da aba Máscaras da DFC Construtoras (MascarasArvoreEditor), mais as
+// colunas de marcação do nível 1 (FLAGS). As máscaras de nível 2 são as opções da combobox
+// "Máscara DRE" na aba Plano de Contas.
 const MascarasTab = forwardRef(function MascarasTab({ empresaId }, ref) {
   return (
     <MascarasArvoreEditor
@@ -51,6 +59,7 @@ const MascarasTab = forwardRef(function MascarasTab({ empresaId }, ref) {
       modeloSugerido={MODELO_SUGERIDO}
       demonstrativo="DRE"
       exemploNivel1="Receita Bruta"
+      flags={FLAGS}
     />
   );
 });

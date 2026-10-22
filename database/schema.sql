@@ -3259,9 +3259,14 @@ CREATE TABLE dre_mascaras (
     parent_id     INTEGER REFERENCES dre_mascaras(id) ON DELETE CASCADE,
     ordem         INTEGER NOT NULL,
     descricao     VARCHAR(150) NOT NULL,
+    -- Marcações do nível 1, só informativas por enquanto — ver 2026-10-22-dre-mascaras-flags.sql.
+    -- Totalizadora não tem nível 2 dentro (garantido no backend).
+    totalizadora  BOOLEAN NOT NULL DEFAULT FALSE,
+    realiza_poc   BOOLEAN NOT NULL DEFAULT FALSE,
     criado_em     TIMESTAMP DEFAULT NOW(),
     atualizado_em TIMESTAMP DEFAULT NOW(),
-    CHECK (parent_id IS NULL OR parent_id <> id)
+    CHECK (parent_id IS NULL OR parent_id <> id),
+    CONSTRAINT dre_mascaras_flags_so_nivel_1 CHECK (parent_id IS NULL OR (NOT totalizadora AND NOT realiza_poc))
 );
 
 CREATE INDEX idx_dre_mascaras_empresa ON dre_mascaras (empresa_id, parent_id, ordem);

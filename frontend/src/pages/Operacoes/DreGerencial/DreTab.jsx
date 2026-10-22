@@ -71,12 +71,46 @@ export default function DreTab({ empresaId }) {
   );
 }
 
+// Selo da marcação "Realiza POC" (aba Máscaras) — só informativo por enquanto.
+function SeloPoc({ escuro = false }) {
+  return (
+    <span
+      title="Realiza POC"
+      className={`rounded px-1.5 py-px text-[10px] font-semibold tracking-normal ${
+        escuro ? 'bg-white/15 text-white' : 'bg-primary-50 text-primary-600 ring-1 ring-primary-100'
+      }`}
+    >
+      POC
+    </span>
+  );
+}
+
+// Totalizadora (aba Máscaras) é linha de subtotal: escura, fechando a seção, sem nível 2.
 function LinhaGrupo({ grupo }) {
+  if (grupo.totalizadora) {
+    return (
+      <tr className="bg-gray-900">
+        <td className="border-b border-gray-900 py-1 pl-4">
+          <span className="flex items-center gap-2">
+            <span className="text-xs font-bold uppercase tracking-wide text-white">{grupo.descricao}</span>
+            {grupo.realiza_poc && <SeloPoc escuro />}
+          </span>
+        </td>
+        <td className="border-b border-l border-gray-900 px-4 py-1 text-right text-xs font-bold tabular-nums text-white/50">
+          —
+        </td>
+      </tr>
+    );
+  }
+
   return (
     <Fragment>
       <tr className="bg-gray-50">
         <td className="border-b border-gray-200 py-1 pl-4">
-          <span className="text-xs font-bold uppercase tracking-wide text-gray-900">{grupo.descricao}</span>
+          <span className="flex items-center gap-2">
+            <span className="text-xs font-bold uppercase tracking-wide text-gray-900">{grupo.descricao}</span>
+            {grupo.realiza_poc && <SeloPoc />}
+          </span>
         </td>
         <td className="border-b border-l border-gray-200 px-4 py-1 text-right text-xs font-bold tabular-nums text-gray-300">
           —
