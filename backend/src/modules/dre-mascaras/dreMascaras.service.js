@@ -26,10 +26,14 @@ function erro(status, message) {
   return e;
 }
 
-// Devolve já em árvore: nível 1 na ordem, cada um com seus `filhos` (nível 2) na ordem.
+// Devolve já em árvore: nível 1 na ordem, cada um com seus `filhos` (nível 2) na ordem. Com a
+// `aliquota_vigente` (a do histórico mais recente do Imposto Fixo, ou null) pra mostrar na linha.
 async function list(empresaId, db = pool) {
   const { rows } = await db.query(
-    `SELECT ${COLUNAS} FROM dre_mascaras
+    `SELECT ${COLUNAS},
+            (SELECT h.aliquota::float FROM dre_mascaras_imposto_historico h
+              WHERE h.mascara_id = m.id ORDER BY h.inicio DESC LIMIT 1) AS aliquota_vigente
+       FROM dre_mascaras m
       WHERE empresa_id = $1
       ORDER BY ordem ASC, id ASC`,
     [empresaId]

@@ -21,7 +21,7 @@ function mesAnterior(anoMes) {
   return `${ano}-${String(mes).padStart(2, '0')}`;
 }
 
-const formatarAliquota = (v) => `${v.toLocaleString('pt-BR', { minimumFractionDigits: 2, maximumFractionDigits: 4 })}%`;
+export const formatarAliquota = (v) => `${v.toLocaleString('pt-BR', { minimumFractionDigits: 2, maximumFractionDigits: 4 })}%`;
 
 // Alíquota digitada ("4", "4,5", "0,6500") -> número; inválida -> null.
 function lerAliquota(texto) {
@@ -55,8 +55,9 @@ function efeitoDoNovo(historico, inicio) {
 // DRE Gerencial > Máscaras, origem Imposto Fixo > "Informar histórico": as alíquotas da máscara,
 // cada uma valendo a partir de um mês. O fim não é digitado — cada uma vai até o mês anterior ao
 // início da seguinte (calculado no backend), então criar uma nova fecha a anterior.
-// `mascara`: { id, descricao } ou null (fechada).
-export default function HistoricoImpostoModal({ empresaId, mascara, onClose }) {
+// `mascara`: { id, descricao } ou null (fechada). `onAlterado(historico)` a cada criação/remoção,
+// com a lista nova (a linha da máscara mostra a alíquota do mais recente).
+export default function HistoricoImpostoModal({ empresaId, mascara, onClose, onAlterado }) {
   const confirm = useConfirm();
   const [historico, setHistorico] = useState([]);
   const [carregando, setCarregando] = useState(false);
@@ -87,7 +88,9 @@ export default function HistoricoImpostoModal({ empresaId, mascara, onClose }) {
     setErro('');
     setSalvando(true);
     try {
-      setHistorico(await createHistoricoImposto(empresaId, mascara.id, { inicio, aliquota }));
+      const novo = await createHistoricoImposto(empresaId, mascara.id, { inicio, aliquota });
+      setHistorico(novo);
+      onAlterado(novo);
       setInicio('');
       setAliquotaTexto('');
     } catch (err) {
@@ -106,7 +109,9 @@ export default function HistoricoImpostoModal({ empresaId, mascara, onClose }) {
     if (!confirmado) return;
     setErro('');
     try {
-      setHistorico(await removeHistoricoImposto(empresaId, mascara.id, h.id));
+      const novo = await removeHistoricoImposto(empresaId, mascara.id, h.id);
+      setHistorico(novo);
+      onAlterado(novo);
     } catch (err) {
       setErro(err.response?.data?.message || 'Não foi possível remover o histórico.');
     }

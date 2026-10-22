@@ -1,7 +1,7 @@
 import { forwardRef, useMemo, useState } from 'react';
 import { History } from 'lucide-react';
 import MascarasArvoreEditor from '../../../components/MascarasArvoreEditor';
-import HistoricoImpostoModal from './HistoricoImpostoModal';
+import HistoricoImpostoModal, { formatarAliquota } from './HistoricoImpostoModal';
 import {
   createDreMascaras,
   listDreMascaras,
@@ -64,8 +64,9 @@ const CALCULOS = [
 // nível 2, e com ela o Tipo POC (POC Receita / POC Despesa, opcional). Origem e Cálculo também
 // são do nível 2: o Cálculo só abre com a Origem escolhida e mostra só os cálculos dela. Imposto
 // Fixo não tem cálculo: no lugar da combobox vem o botão "Informar histórico" (alíquotas por mês —
-// HistoricoImpostoModal), por isso as flags são montadas no componente (`abrirHistorico`).
-const montarFlags = (abrirHistorico) => [
+// HistoricoImpostoModal) e, à frente dele, a alíquota do histórico mais recente — por isso as flags
+// são montadas no componente (`abrirHistorico`, `aliquotaDe`).
+const montarFlags = (abrirHistorico, aliquotaDe) => [
   {
     campo: 'totalizadora',
     label: 'Totalizadora',
@@ -101,17 +102,27 @@ const montarFlags = (abrirHistorico) => [
     largura: 'w-64',
     requer: 'origem',
     opcoes: CALCULOS,
-    substituir: (item) =>
-      item.origem === 'IMPOSTO_FIXO' ? (
-        <button
-          type="button"
-          onClick={() => abrirHistorico(item)}
-          className="flex w-full items-center justify-center gap-1.5 rounded-md border border-primary-200 bg-white px-1.5 py-1 text-xs font-medium text-primary-700 hover:bg-primary-50"
-        >
-          <History size={12} />
-          Informar histórico
-        </button>
-      ) : null,
+    substituir: (item) => {
+      if (item.origem !== 'IMPOSTO_FIXO') return null;
+      const aliquota = aliquotaDe(item);
+      return (
+        <span className="flex w-full items-center gap-2">
+          <button
+            type="button"
+            onClick={() => abrirHistorico(item)}
+            className="flex shrink-0 items-center gap-1 rounded border border-primary-200 bg-white px-1.5 py-0.5 text-[11px] font-medium text-primary-700 hover:bg-primary-50"
+          >
+            <History size={11} />
+            Informar histórico
+          </button>
+          {aliquota === null ? (
+            <span className="text-[11px] text-gray-400">sem alíquota</span>
+          ) : (
+            <span className="text-xs font-semibold tabular-nums text-gray-900">{formatarAliquota(aliquota)}</span>
+          )}
+        </span>
+      );
+    },
   },
 ];
 
@@ -121,7 +132,16 @@ const montarFlags = (abrirHistorico) => [
 // "Máscara DRE" na aba Plano de Contas.
 const MascarasTab = forwardRef(function MascarasTab({ empresaId }, ref) {
   const [historicoDe, setHistoricoDe] = useState(null);
-  const flags = useMemo(() => montarFlags(setHistoricoDe), []);
+  // Alíquota mais recente por máscara depois de mexer no histórico nesta tela — a da carga
+  // (aliquota_vigente) vale até lá, sem precisar recarregar a árvore.
+  const [aliquotasAlteradas, setAliquotasAlteradas] = useState({});
+  const flags = useMemo(
+    () =>
+      montarFlags(setHistoricoDe, (item) =>
+        item.id in aliquotasAlteradas ? aliquotasAlteradas[item.id] : (item.aliquota_vigente ?? null)
+      ),
+    [aliquotasAlteradas]
+  );
 
   return (
     <>
@@ -134,7 +154,14 @@ const MascarasTab = forwardRef(function MascarasTab({ empresaId }, ref) {
         exemploNivel1="Receita Bruta"
         flags={flags}
       />
-      <HistoricoImpostoModal empresaId={empresaId} mascara={historicoDe} onClose={() => setHistoricoDe(null)} />
+      <HistoricoImpostoModal
+        empresaId={empresaId}
+        mascara={historicoDe}
+        onClose={() => setHistoricoDe(null)}
+        onAlterado={(historico) =>
+          setAliquotasAlteradas((atual) => ({ ...atual, [historicoDe.id]: historico[0]?.aliquota ?? null }))
+        }
+      />
     </>
   );
 });
