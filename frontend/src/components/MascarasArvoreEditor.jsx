@@ -16,8 +16,16 @@ function linhasColadas(texto) {
 // devolve a árvore nova — ou null se a posição final é a mesma de antes. Um item de nível 2
 // solto no nível 1 vira um grupo (vazio); um de nível 1 solto dentro de um grupo vira nível 2
 // (só se não tiver filhos — isso é barrado antes, em podeSerFilho). As marcações (`flags`) vão
-// junto enquanto o item continua no nível 1; quem vira nível 2 perde (mesma regra do backend).
-function aplicarMovimento(arvore, arrastado, alvo) {
+// junto; quem troca de nível perde as que não valem no nível novo (mesma regra do backend).
+function aplicarMovimento(arvore, arrastado, alvo, flags) {
+  const soDoNivel = (item, nivel) => {
+    const limpo = { ...item };
+    flags.forEach((f) => {
+      if (f.nivel !== nivel) limpo[f.campo] = false;
+    });
+    return limpo;
+  };
+
   let origemParentId = null;
   let origemIndex = arvore.findIndex((g) => g.id === arrastado.id);
   if (origemIndex === -1) {
@@ -38,9 +46,11 @@ function aplicarMovimento(arvore, arrastado, alvo) {
       : nova.find((g) => g.id === origemParentId).filhos.splice(origemIndex, 1)[0];
 
   if (alvo.parentId === null) {
-    nova.splice(destino, 0, { ...item, filhos: item.filhos || [] });
+    nova.splice(destino, 0, { ...soDoNivel(item, 1), filhos: item.filhos || [] });
   } else {
-    nova.find((g) => g.id === alvo.parentId).filhos.splice(destino, 0, { id: item.id, descricao: item.descricao });
+    const filho = soDoNivel(item, 2);
+    delete filho.filhos;
+    nova.find((g) => g.id === alvo.parentId).filhos.splice(destino, 0, filho);
   }
   return nova;
 }
@@ -116,6 +126,28 @@ export function BotaoAcao({ title, onClick, perigo = false, children }) {
   );
 }
 
+// Colunas de marcação (`flags`) à direita de uma linha: checkbox só nas flags do `nivel` da
+// linha, espaço vazio nas outras (mantém as colunas alinhadas entre nível 1 e nível 2).
+// `travadaMotivo(flag)` devolve o texto de por que a caixa está travada, ou null.
+function ColunasFlags({ flags, nivel, item, onAlternar, travadaMotivo = () => null }) {
+  return flags.map((flag) => {
+    if (flag.nivel !== nivel) return <span key={flag.campo} className="w-24 shrink-0" />;
+    const motivo = travadaMotivo(flag);
+    return (
+      <span key={flag.campo} className="flex w-24 shrink-0 justify-center" onClick={(e) => e.stopPropagation()}>
+        <input
+          type="checkbox"
+          checked={!!item[flag.campo]}
+          disabled={!!motivo}
+          onChange={() => onAlternar(flag)}
+          title={motivo || flag.label}
+          className="h-4 w-4 cursor-pointer rounded border-gray-300 text-primary-600 focus:ring-primary-100 disabled:cursor-not-allowed disabled:opacity-40"
+        />
+      </span>
+    );
+  });
+}
+
 // Linha azul que marca onde o item arrastado vai cair.
 export function Indicador({ recuo = false, embaixo = false }) {
   return (
@@ -139,10 +171,11 @@ export function Indicador({ recuo = false, embaixo = false }) {
 // pode ir pra outro grupo ou virar nível 1, e um nível 1 sem filhos pode entrar num grupo.
 // Cada mudança salva na hora (reordenação regrava a árvore inteira — ver dfcMascaras.service.js).
 //
-// `flags` (opcional, só a DRE usa): marcações booleanas do nível 1, cada uma uma coluna de
-// checkbox à direita — `{ campo, label, title, semFilhos }`. Com `semFilhos`, o grupo marcado
-// não tem drilldown nem nível 2 (a Totalizadora da DRE): não abre, não recebe item arrastado e
-// a marcação fica travada enquanto ele tiver filhos.
+// `flags` (opcional, só a DRE usa): marcações booleanas, cada uma uma coluna de checkbox à
+// direita — `{ campo, label, title, nivel, semFilhos }`, com a caixa só nas linhas do `nivel`
+// (1 ou 2). Com `semFilhos` (só nível 1), o grupo marcado não tem drilldown nem nível 2 (a
+// Totalizadora da DRE): não abre, não recebe item arrastado e a marcação fica travada enquanto
+// ele tiver filhos.
 //
 // `ref` expõe `abrirNova()` pro botão "Nova máscara" do topo da página (mesmo padrão de
 // CategoriasOrcamentoTab na DRE).
@@ -225,7 +258,7 @@ const MascarasArvoreEditor = forwardRef(function MascarasArvoreEditor(
       parentId === null
         ? [...atual, ...criados.map((c) => ({ ...c, filhos: [] }))]
         : atual.map((g) =>
-            g.id === parentId ? { ...g, filhos: [...g.filhos, ...criados.map((c) => ({ id: c.id, descricao: c.descricao }))] } : g
+            g.id === parentId ? { ...g, filhos: [...g.filhos, ...criados] } : g
           )
     );
     // Grupo novo já nasce aberto, pronto pra receber os itens de nível 2.
@@ -247,14 +280,16 @@ const MascarasArvoreEditor = forwardRef(function MascarasArvoreEditor(
     await salvar(() => api.atualizar(empresaId, id, { descricao }));
   }
 
-  async function alternarFlag(grupo, flag) {
-    const valor = !grupo[flag.campo];
-    setArvore((atual) => atual.map((g) => (g.id === grupo.id ? { ...g, [flag.campo]: valor } : g)));
+  // `item` é um grupo (nível 1) ou um filho (nível 2) — a troca vale pros dois.
+  async function alternarFlag(item, flag) {
+    const valor = !item[flag.campo];
+    const trocar = (x) => (x.id === item.id ? { ...x, [flag.campo]: valor } : x);
+    setArvore((atual) => atual.map((g) => ({ ...trocar(g), filhos: g.filhos.map(trocar) })));
     if (valor && flag.semFilhos) {
-      setAbertos((atual) => atual.filter((v) => v !== grupo.id));
-      if (criando?.parentId === grupo.id) setCriando(null);
+      setAbertos((atual) => atual.filter((v) => v !== item.id));
+      if (criando?.parentId === item.id) setCriando(null);
     }
-    await salvar(() => api.atualizar(empresaId, grupo.id, { [flag.campo]: valor }));
+    await salvar(() => api.atualizar(empresaId, item.id, { [flag.campo]: valor }));
   }
 
   async function remover(item, grupo) {
@@ -339,7 +374,7 @@ const MascarasArvoreEditor = forwardRef(function MascarasArvoreEditor(
     const destino = alvo;
     encerrarArraste();
     if (!item || !destino) return;
-    const nova = aplicarMovimento(arvore, item, destino);
+    const nova = aplicarMovimento(arvore, item, destino, flags);
     if (!nova) return;
     setArvore(nova);
     if (destino.parentId !== null) setAbertos((atual) => (atual.includes(destino.parentId) ? atual : [...atual, destino.parentId]));
@@ -419,10 +454,7 @@ const MascarasArvoreEditor = forwardRef(function MascarasArvoreEditor(
               flags.length ? 'pr-2' : 'pr-4'
             }`}
           >
-            <span>Nível 1 / Nível 2</span>
-            <span className="ml-auto hidden normal-case tracking-normal text-blue-500 sm:inline">
-              Arraste pelas linhas para reordenar ou mudar de grupo · duplo clique renomeia
-            </span>
+            <span className="flex-1">Nível 1 / Nível 2</span>
             {flags.map((flag) => (
               <span key={flag.campo} title={flag.title} className="w-24 shrink-0 text-center">
                 {flag.label}
@@ -524,21 +556,17 @@ const MascarasArvoreEditor = forwardRef(function MascarasArvoreEditor(
                       <Trash2 size={13} />
                     </BotaoAcao>
                   </span>
-                  {flags.map((flag) => {
-                    const travada = flag.semFilhos && !grupo[flag.campo] && grupo.filhos.length > 0;
-                    return (
-                      <span key={flag.campo} className="flex w-24 shrink-0 justify-center" onClick={(e) => e.stopPropagation()}>
-                        <input
-                          type="checkbox"
-                          checked={!!grupo[flag.campo]}
-                          disabled={travada}
-                          onChange={() => alternarFlag(grupo, flag)}
-                          title={travada ? `Remova ou mova as máscaras de nível 2 antes de marcar ${flag.label}` : flag.label}
-                          className="h-4 w-4 cursor-pointer rounded border-gray-300 text-primary-600 focus:ring-primary-100 disabled:cursor-not-allowed disabled:opacity-40"
-                        />
-                      </span>
-                    );
-                  })}
+                  <ColunasFlags
+                    flags={flags}
+                    nivel={1}
+                    item={grupo}
+                    onAlternar={(flag) => alternarFlag(grupo, flag)}
+                    travadaMotivo={(flag) =>
+                      flag.semFilhos && !grupo[flag.campo] && grupo.filhos.length > 0
+                        ? `Remova ou mova as máscaras de nível 2 antes de marcar ${flag.label}`
+                        : null
+                    }
+                  />
                 </div>
 
                 {/* Linhas do nível 2 */}
@@ -576,9 +604,7 @@ const MascarasArvoreEditor = forwardRef(function MascarasArvoreEditor(
                           <Trash2 size={13} />
                         </BotaoAcao>
                       </span>
-                      {flags.map((flag) => (
-                        <span key={flag.campo} className="w-24 shrink-0" />
-                      ))}
+                      <ColunasFlags flags={flags} nivel={2} item={filho} onAlternar={(flag) => alternarFlag(filho, flag)} />
                     </div>
                   ))}
 

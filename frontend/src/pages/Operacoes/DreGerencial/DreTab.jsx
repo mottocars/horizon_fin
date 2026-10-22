@@ -71,14 +71,12 @@ export default function DreTab({ empresaId }) {
   );
 }
 
-// Selo da marcação "Realiza POC" (aba Máscaras) — só informativo por enquanto.
-function SeloPoc({ escuro = false }) {
+// Selo da marcação "Realiza POC" (nível 2, aba Máscaras) — só informativo por enquanto.
+function SeloPoc() {
   return (
     <span
       title="Realiza POC"
-      className={`rounded px-1.5 py-px text-[10px] font-semibold tracking-normal ${
-        escuro ? 'bg-white/15 text-white' : 'bg-primary-50 text-primary-600 ring-1 ring-primary-100'
-      }`}
+      className="rounded bg-primary-50 px-1.5 py-px text-[10px] font-semibold text-primary-600 ring-1 ring-primary-100"
     >
       POC
     </span>
@@ -91,10 +89,7 @@ function LinhaGrupo({ grupo }) {
     return (
       <tr className="bg-gray-900">
         <td className="border-b border-gray-900 py-1 pl-4">
-          <span className="flex items-center gap-2">
-            <span className="text-xs font-bold uppercase tracking-wide text-white">{grupo.descricao}</span>
-            {grupo.realiza_poc && <SeloPoc escuro />}
-          </span>
+          <span className="text-xs font-bold uppercase tracking-wide text-white">{grupo.descricao}</span>
         </td>
         <td className="border-b border-l border-gray-900 px-4 py-1 text-right text-xs font-bold tabular-nums text-white/50">
           —
@@ -107,10 +102,7 @@ function LinhaGrupo({ grupo }) {
     <Fragment>
       <tr className="bg-gray-50">
         <td className="border-b border-gray-200 py-1 pl-4">
-          <span className="flex items-center gap-2">
-            <span className="text-xs font-bold uppercase tracking-wide text-gray-900">{grupo.descricao}</span>
-            {grupo.realiza_poc && <SeloPoc />}
-          </span>
+          <span className="text-xs font-bold uppercase tracking-wide text-gray-900">{grupo.descricao}</span>
         </td>
         <td className="border-b border-l border-gray-200 px-4 py-1 text-right text-xs font-bold tabular-nums text-gray-300">
           —
@@ -126,7 +118,12 @@ function LinhaGrupo({ grupo }) {
       ) : (
         grupo.filhos.map((item) => (
           <tr key={item.id} className="hover:bg-gray-50">
-            <td className="border-b border-gray-100 py-0.5 pl-11 text-xs text-gray-700">{item.descricao}</td>
+            <td className="border-b border-gray-100 py-0.5 pl-11 text-xs text-gray-700">
+              <span className="flex items-center gap-2">
+                {item.descricao}
+                {item.realiza_poc && <SeloPoc />}
+              </span>
+            </td>
             <td className="border-b border-l border-gray-100 px-4 py-0.5 text-right text-xs tabular-nums text-gray-300">
               —
             </td>

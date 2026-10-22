@@ -1,9 +1,9 @@
 const pool = require('../../config/db');
 
 // Operações > DRE Gerencial > Máscaras: espelho de dfc-mascaras/dfcMascaras.service.js (mesma
-// árvore de 2 níveis, mesma tela), na tabela dre_mascaras — mais as marcações do nível 1
-// (totalizadora, realiza_poc; ver 2026-10-22-dre-mascaras-flags.sql). Totalizadora nunca tem
-// nível 2 dentro: create, update e reordenar recusam o que quebraria isso.
+// árvore de 2 níveis, mesma tela), na tabela dre_mascaras — mais as marcações totalizadora (só
+// nível 1) e realiza_poc (só nível 2; ver 2026-10-22-dre-mascaras-flags.sql). Totalizadora nunca
+// tem nível 2 dentro: create, update e reordenar recusam o que quebraria isso.
 
 const COLUNAS = 'id, parent_id, ordem, descricao, totalizadora, realiza_poc';
 
@@ -83,8 +83,11 @@ async function update(id, empresaId, { descricao, totalizadora, realiza_poc: rea
       await client.query('ROLLBACK');
       return null;
     }
-    if ((totalizadora || realizaPoc) && atual[0].parent_id !== null) {
-      throw erro(400, 'Só as máscaras de nível 1 podem ser Totalizadora ou Realiza POC.');
+    if (totalizadora && atual[0].parent_id !== null) {
+      throw erro(400, 'Só as máscaras de nível 1 podem ser Totalizadora.');
+    }
+    if (realizaPoc && atual[0].parent_id === null) {
+      throw erro(400, 'Só as máscaras de nível 2 podem ser Realiza POC.');
     }
     if (totalizadora && atual[0].tem_filhos) {
       throw erro(400, 'Máscara totalizadora não tem máscaras de nível 2: remova ou mova as que estão dentro dela antes.');
@@ -146,12 +149,12 @@ async function reordenar(empresaId, estrutura) {
     if (estrutura.some((raiz) => raiz.filhos.length > 0 && totalizadoras.has(raiz.id))) {
       throw erro(400, 'Máscara totalizadora não tem máscaras de nível 2.');
     }
-    // Quem vira nível 2 perde as marcações (só o nível 1 tem).
+    // Quem troca de nível perde a marcação que não vale no nível novo.
     await client.query(
       `UPDATE dre_mascaras m
           SET parent_id = v.parent_id, ordem = v.ordem,
               totalizadora = m.totalizadora AND v.parent_id IS NULL,
-              realiza_poc = m.realiza_poc AND v.parent_id IS NULL
+              realiza_poc = m.realiza_poc AND v.parent_id IS NOT NULL
          FROM UNNEST($2::int[], $3::int[], $4::int[]) AS v(id, parent_id, ordem)
         WHERE m.id = v.id AND m.empresa_id = $1`,
       [empresaId, ids, linhas.map((l) => l.parentId), linhas.map((l) => l.ordem)]
