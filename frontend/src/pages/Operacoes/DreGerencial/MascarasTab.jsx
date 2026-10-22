@@ -1,5 +1,5 @@
-import { forwardRef, useMemo, useState } from 'react';
-import { History } from 'lucide-react';
+import { forwardRef, useEffect, useMemo, useRef, useState } from 'react';
+import { ChevronDown, History, X } from 'lucide-react';
 import MascarasArvoreEditor from '../../../components/MascarasArvoreEditor';
 import HistoricoImpostoModal, { formatarAliquota } from './HistoricoImpostoModal';
 import {
@@ -60,7 +60,7 @@ const CALCULOS = [
   { value: 'CORRECAO_MONETARIA', label: 'CORREÇÃO MONETÁRIA', pai: 'FINANCEIRO' },
 ];
 
-// Ícone (sinal) da linha: + / - / +/- escolhidos no seletor; o = é automático com Totaliza (o
+// Ícone (sinal) da linha: + / - / +/- escolhidos no seletor (SeletorIcone); o = é automático com Totaliza (o
 // backend grava e limpa junto com ela) e não é escolhível.
 const ICONES = [
   { value: 'MAIS', label: '+', title: 'Soma' },
@@ -68,12 +68,29 @@ const ICONES = [
   { value: 'MAIS_MENOS', label: '+/-', title: 'Soma ou subtrai' },
 ];
 
+// Botão com o ícone atual; ao clicar abre a lista dos ícones e, escolhido um, ela fecha. Com
+// Totaliza, o = fixo no lugar (sem lista).
 function SeletorIcone({ item, definir }) {
+  const [aberto, setAberto] = useState(false);
+  const raiz = useRef(null);
+
+  useEffect(() => {
+    if (!aberto) return undefined;
+    const fora = (e) => !raiz.current?.contains(e.target) && setAberto(false);
+    const esc = (e) => e.key === 'Escape' && setAberto(false);
+    document.addEventListener('mousedown', fora);
+    document.addEventListener('keydown', esc);
+    return () => {
+      document.removeEventListener('mousedown', fora);
+      document.removeEventListener('keydown', esc);
+    };
+  }, [aberto]);
+
   if (item.totalizadora) {
     return (
       <span
         title="= — automático com Totaliza"
-        className="flex h-6 min-w-[24px] items-center justify-center rounded bg-gray-200 px-1 text-xs font-bold text-gray-700"
+        className="flex h-6 w-11 items-center justify-center rounded-md bg-gray-200 text-xs font-bold text-gray-700"
       >
         =
       </span>
@@ -81,22 +98,53 @@ function SeletorIcone({ item, definir }) {
   }
   // 'IGUAL' sem Totaliza só sobra na tela depois de arrastar uma Totaliza pro nível 2 (o backend já
   // limpou) — conta como vazio.
-  const atual = item.icone === 'IGUAL' ? null : item.icone;
+  const atual = ICONES.find((o) => o.value === item.icone);
+
+  function escolher(valor) {
+    setAberto(false);
+    if (valor !== (atual?.value ?? null)) definir(valor);
+  }
+
   return (
-    <span className="inline-flex overflow-hidden rounded border border-gray-200 bg-white">
-      {ICONES.map((o, i) => (
-        <button
-          key={o.value}
-          type="button"
-          title={atual === o.value ? `${o.title} — clique de novo para limpar` : o.title}
-          onClick={() => definir(atual === o.value ? null : o.value)}
-          className={`h-6 min-w-[24px] px-1 text-xs font-bold transition-colors ${i > 0 ? 'border-l border-gray-200' : ''} ${
-            atual === o.value ? 'bg-primary-600 text-white' : 'text-gray-500 hover:bg-gray-100'
-          }`}
-        >
-          {o.label}
-        </button>
-      ))}
+    <span ref={raiz} className="relative">
+      <button
+        type="button"
+        title={atual ? `${atual.title} — clique para trocar` : 'Escolher ícone'}
+        onClick={() => setAberto((v) => !v)}
+        className={`flex h-6 w-11 items-center justify-center gap-0.5 rounded-md border text-xs font-bold transition-colors ${
+          atual ? 'border-primary-100 bg-primary-50 text-gray-900' : 'border-amber-200 bg-amber-50 text-gray-400'
+        } ${aberto ? 'ring-2 ring-primary-100' : ''}`}
+      >
+        {atual ? atual.label : '—'}
+        <ChevronDown size={10} className="text-gray-400" />
+      </button>
+      {aberto && (
+        <span className="absolute left-1/2 top-full z-30 mt-1 flex -translate-x-1/2 items-center gap-1 rounded-lg border border-gray-200 bg-white p-1 shadow-lg">
+          {ICONES.map((o) => (
+            <button
+              key={o.value}
+              type="button"
+              title={o.title}
+              onClick={() => escolher(o.value)}
+              className={`flex h-7 min-w-[28px] items-center justify-center rounded-md px-1 text-sm font-bold transition-colors ${
+                atual?.value === o.value ? 'bg-primary-600 text-white' : 'text-gray-700 hover:bg-gray-100'
+              }`}
+            >
+              {o.label}
+            </button>
+          ))}
+          {atual && (
+            <button
+              type="button"
+              title="Limpar ícone"
+              onClick={() => escolher(null)}
+              className="flex h-7 w-7 items-center justify-center rounded-md text-gray-400 hover:bg-red-50 hover:text-red-600"
+            >
+              <X size={13} />
+            </button>
+          )}
+        </span>
+      )}
     </span>
   );
 }
@@ -113,7 +161,7 @@ const montarFlags = (abrirHistorico, aliquotaDe) => [
     campo: 'icone',
     label: 'Ícone',
     title: 'Sinal da linha na DRE: + / - / +/- (o = vem sozinho com Totaliza)',
-    largura: 'w-[84px]',
+    largura: 'w-[72px]',
     substituir: (item, definir) => <SeletorIcone item={item} definir={definir} />,
   },
   {
