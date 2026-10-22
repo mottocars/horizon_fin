@@ -2,7 +2,7 @@ import { useCallback, useEffect, useState } from 'react';
 import { ListTree } from 'lucide-react';
 import SearchableSelect from '../../../components/SearchableSelect';
 import { listContas, updateClassificacaoDre } from '../../../api/planosFinanceirosSienge.api';
-import { listMascaras } from '../../../api/mascaras.api';
+import { listDreMascaras } from '../../../api/dreMascaras.api';
 
 const LIMIT = 2000;
 
@@ -56,7 +56,7 @@ export default function PlanoDeContasTab({ empresaId, search = '', refreshToken 
       return;
     }
     setCarregando(true);
-    Promise.all([listContas(empresaId, { page: 1, limit: LIMIT, search: '' }), listMascaras('DRE', empresaId)])
+    Promise.all([listContas(empresaId, { page: 1, limit: LIMIT, search: '' }), listDreMascaras(empresaId)])
       .then(([result, mascaras]) => {
         setContas(result.data);
         setMascarasDre(mascaras);
@@ -105,7 +105,11 @@ export default function PlanoDeContasTab({ empresaId, search = '', refreshToken 
   const contasFiltradas = contas.filter(
     (c) => !termo || c.name.toLowerCase().includes(termo) || String(c.sienge_id).includes(termo)
   );
-  const opcoesMascarasDre = mascarasDre.map((m) => ({ value: m.id, label: m.descricao }));
+  // Só o nível 2 classifica conta; o nível 1 aparece como título do grupo na lista (mesmo
+  // esquema da coluna Máscara de DfcPlanoContasTab.jsx).
+  const opcoesMascarasDre = mascarasDre.flatMap((g) =>
+    g.filhos.map((f) => ({ value: f.id, label: f.descricao, grupo: g.descricao }))
+  );
 
   return (
     <div className="rounded-card rounded-tl-none bg-white shadow-card">
@@ -170,7 +174,7 @@ export default function PlanoDeContasTab({ empresaId, search = '', refreshToken 
           </table>
           {opcoesMascarasDre.length === 0 && (
             <p className="px-4 py-3 text-xs text-gray-400">
-              Nenhuma Máscara DRE cadastrada ainda. Cadastre em Cadastros → Máscaras antes de classificar as contas.
+              Nenhuma Máscara DRE cadastrada ainda. Cadastre na aba Máscaras antes de classificar as contas.
             </p>
           )}
         </div>

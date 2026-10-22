@@ -1,95 +1,60 @@
-import { useEffect, useRef, useState } from 'react';
-import { ChevronDown, ChevronRight } from 'lucide-react';
-import MascaraItensEditor from '../../../components/MascaraItensEditor';
-import { ESTRUTURA_DRE } from '../../../config/estruturaDre';
-import OperadorBadge from './OperadorBadge';
+import { forwardRef } from 'react';
+import MascarasArvoreEditor from '../../../components/MascarasArvoreEditor';
+import {
+  createDreMascaras,
+  listDreMascaras,
+  removeDreMascara,
+  reordenarDreMascaras,
+  updateDreMascara,
+} from '../../../api/dreMascaras.api';
 
-// Cadastro da Máscara DRE da empresa, organizado pela mesma estrutura de nível 1 usada na aba
-// DRE (ESTRUTURA_DRE) — mesmo padrão de RepassesCef/MascarasRepassesCef.jsx (macro etapa fixa,
-// expande pra cadastrar as linhas de nível 2 dentro dela, mesmo MascaraItensEditor). Os 4 grupos
-// "calculado" (RECEITA LÍQUIDA, LUCRO BRUTO, EBITDA, LUCRO LÍQUIDO) não têm cadastro — são
-// subtotais somados a partir dos grupos acima — aparecem só como uma barra cinza informativa,
-// sem expandir (mesmo "cinza = não editável" já usado na totalizadora do Plano de Contas).
-export default function MascarasTab({ empresaId }) {
-  const [expandido, setExpandido] = useState(null);
-  const cardRefs = useRef(new Map());
-  const grupoAbertoRef = useRef(null);
+// Oferecido só quando a empresa ainda não tem nenhuma máscara (botão "Usar modelo sugerido") —
+// a estrutura de nível 1 que a DRE tinha fixa no código, com as linhas de nível 2 que já
+// tinham sido cadastradas nela. Depois é tudo editável normalmente.
+const MODELO_SUGERIDO = [
+  {
+    descricao: 'RECEITA BRUTA',
+    filhos: [
+      'RECEITA COM VENDA DE IMÓVEIS',
+      'RECEITA COM PERMUTA',
+      'CORREÇÃO MONETÁRIA',
+      'RECEITA COM DISTRATOS',
+      'ESTORNO DE RECEITA',
+    ],
+  },
+  { descricao: 'IMPOSTOS SOBRE A RECEITA', filhos: ['RET'] },
+  { descricao: 'CIV - CUSTO DOS IMÓVEIS VENDIDOS', filhos: ['CUSTO DOS IMÓVEIS', 'PÓS OBRA', 'ESTORNO DE CUSTO'] },
+  { descricao: 'DESPESAS OPERACIONAIS', filhos: ['DESPESAS ADMINISTRATIVAS', 'DESPESAS COM MARKETING', 'DESPESAS COM VENDAS'] },
+  {
+    descricao: 'DESPESAS/RECEITAS NÃO OPERACIONAIS',
+    filhos: ['DESPESAS FINANCEIRAS', 'RECEITAS FINANCEIRAS', 'PARTICIPAÇÃO NOS LUCROS - PLR'],
+  },
+];
 
-  function toggleExpandido(value) {
-    setExpandido((atual) => {
-      if (atual === value) return null;
-      grupoAbertoRef.current = value;
-      return value;
-    });
-  }
+const API = {
+  listar: listDreMascaras,
+  criar: createDreMascaras,
+  renomear: updateDreMascara,
+  remover: removeDreMascara,
+  reordenar: reordenarDreMascaras,
+};
 
-  useEffect(() => {
-    const value = grupoAbertoRef.current;
-    if (!value || expandido !== value) return;
-    grupoAbertoRef.current = null;
-    const el = cardRefs.current.get(value);
-    if (!el) return;
-    requestAnimationFrame(() => {
-      requestAnimationFrame(() => {
-        el.scrollIntoView({ behavior: 'smooth', block: 'start' });
-      });
-    });
-  }, [expandido]);
-
+// Operações > DRE Gerencial > Máscaras: estrutura da DRE da empresa em 2 níveis, cadastrada
+// pelo usuário — mesma tela da aba Máscaras da DFC Construtoras (MascarasArvoreEditor). As
+// máscaras de nível 2 são as opções da combobox "Máscara DRE" na aba Plano de Contas.
+const MascarasTab = forwardRef(function MascarasTab({ empresaId }, ref) {
   return (
-    <div className="space-y-2">
-      {ESTRUTURA_DRE.map((grupo) => {
-        if (grupo.calculado) {
-          return (
-            <div
-              key={grupo.value}
-              className="flex min-h-[52px] items-center gap-3 rounded-card bg-gray-100 px-5 py-2.5"
-            >
-              <OperadorBadge operador={grupo.operador} />
-              <p className="flex-1 text-sm font-semibold text-gray-500">{grupo.label}</p>
-              <span className="shrink-0 text-xs italic text-gray-400">Subtotal calculado automaticamente</span>
-            </div>
-          );
-        }
-
-        const aberto = expandido === grupo.value;
-        return (
-          <div
-            key={grupo.value}
-            ref={(el) => {
-              if (el) cardRefs.current.set(grupo.value, el);
-              else cardRefs.current.delete(grupo.value);
-            }}
-            className="overflow-hidden rounded-card border border-gray-100"
-          >
-            <div
-              role="button"
-              tabIndex={0}
-              onClick={() => toggleExpandido(grupo.value)}
-              onKeyDown={(e) => {
-                if (e.key === 'Enter' || e.key === ' ') toggleExpandido(grupo.value);
-              }}
-              className="flex min-h-[52px] w-full cursor-pointer items-center gap-3 px-5 py-2.5 text-left hover:bg-gray-50"
-            >
-              {aberto ? (
-                <ChevronDown size={18} className="shrink-0 text-gray-400" />
-              ) : (
-                <ChevronRight size={18} className="shrink-0 text-gray-400" />
-              )}
-              <OperadorBadge operador={grupo.operador} />
-              <p className="min-w-0 flex-1 truncate text-sm font-semibold text-gray-900">{grupo.label}</p>
-            </div>
-
-            {aberto && (
-              <div className="border-t border-gray-100 px-5 py-4">
-                <div className="border-l-2 border-primary-100 pl-8">
-                  <MascaraItensEditor tipo="DRE" empresaId={empresaId} grupo={grupo.value} itemLabel={grupo.label} />
-                </div>
-              </div>
-            )}
-          </div>
-        );
-      })}
-    </div>
+    <MascarasArvoreEditor
+      ref={ref}
+      empresaId={empresaId}
+      api={API}
+      modeloSugerido={MODELO_SUGERIDO}
+      demonstrativo="DRE"
+      exemploNivel1="Receita Bruta"
+    />
   );
-}
+});
+
+MascarasTab.displayName = 'MascarasTab';
+
+export default MascarasTab;

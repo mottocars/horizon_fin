@@ -1,45 +1,24 @@
 import { Fragment, useCallback, useEffect, useState } from 'react';
 import { BarChart3 } from 'lucide-react';
-import { listMascaras } from '../../../api/mascaras.api';
-import { ESTRUTURA_DRE } from '../../../config/estruturaDre';
-import OperadorBadge from './OperadorBadge';
-
-const GRUPOS_COM_ITENS = ESTRUTURA_DRE.filter((g) => !g.calculado);
-
-// Wash de fundo por tipo de operador na linha de nível 1 — mesma leitura em cascata da versão
-// anterior (receita em verde, deduções em vermelho, mista em âmbar), só que agora como linha de
-// tabela em vez de bloco de cartão (pedido do usuário: "segue como tabela, tipo Saldo das
-// Contas — vai ter valores à direita, pensa numa matriz").
-const FUNDO_OPERADOR = {
-  '+': 'bg-emerald-50/60',
-  '-': 'bg-rose-50/60',
-  '+/-': 'bg-amber-50/60',
-};
+import { listDreMascaras } from '../../../api/dreMascaras.api';
 
 // Demonstração estrutural (nível 1 + nível 2) da DRE, em formato de tabela — mesma mecânica
 // visual de SaldosContasTab.jsx (primeira coluna com a hierarquia, valor alinhado à direita nas
 // colunas seguintes), só que aqui só existe 1 coluna de valor por enquanto (sem período — o
-// cálculo real por mês fica pra outra rodada). Busca os itens de Máscara DRE cadastrados em
-// cada grupo (aba Máscaras) e monta a hierarquia; os 4 subtotais calculados (RECEITA LÍQUIDA,
-// LUCRO BRUTO, EBITDA, LUCRO LÍQUIDO) aparecem como uma linha escura fechando cada seção.
+// cálculo real por mês fica pra outra rodada). A hierarquia é a árvore cadastrada na aba
+// Máscaras (dre_mascaras), na mesma ordem de lá.
 export default function DreTab({ empresaId }) {
-  const [itensPorGrupo, setItensPorGrupo] = useState({});
+  const [arvore, setArvore] = useState([]);
   const [carregando, setCarregando] = useState(false);
 
   const carregar = useCallback(() => {
     if (!empresaId) {
-      setItensPorGrupo({});
+      setArvore([]);
       return;
     }
     setCarregando(true);
-    Promise.all(GRUPOS_COM_ITENS.map((g) => listMascaras('DRE', empresaId, g.value)))
-      .then((listas) => {
-        const mapa = {};
-        GRUPOS_COM_ITENS.forEach((g, i) => {
-          mapa[g.value] = listas[i];
-        });
-        setItensPorGrupo(mapa);
-      })
+    listDreMascaras(empresaId)
+      .then(setArvore)
       .finally(() => setCarregando(false));
   }, [empresaId]);
 
@@ -63,6 +42,12 @@ export default function DreTab({ empresaId }) {
     <div className="rounded-card rounded-tl-none bg-white shadow-card">
       {carregando ? (
         <div className="py-12 text-center text-sm text-gray-400">Carregando...</div>
+      ) : arvore.length === 0 ? (
+        <div className="flex flex-col items-center gap-1 py-14 text-center">
+          <BarChart3 size={26} className="mb-1 text-gray-300" />
+          <p className="text-sm text-gray-600">Nenhuma máscara da DRE cadastrada ainda.</p>
+          <p className="max-w-sm text-xs text-gray-400">Monte a estrutura da DRE (nível 1 e nível 2) na aba Máscaras.</p>
+        </div>
       ) : (
         <div className="overflow-x-auto rounded-b-card">
           <table className="w-full border-separate border-spacing-0 text-left text-xs">
@@ -75,8 +60,8 @@ export default function DreTab({ empresaId }) {
               </tr>
             </thead>
             <tbody>
-              {ESTRUTURA_DRE.map((grupo) => (
-                <LinhaGrupo key={grupo.value} grupo={grupo} itens={itensPorGrupo[grupo.value]} />
+              {arvore.map((grupo) => (
+                <LinhaGrupo key={grupo.id} grupo={grupo} />
               ))}
             </tbody>
           </table>
@@ -86,45 +71,26 @@ export default function DreTab({ empresaId }) {
   );
 }
 
-function LinhaGrupo({ grupo, itens }) {
-  if (grupo.calculado) {
-    return (
-      <tr className="bg-gray-900">
-        <td className="border-b border-gray-900 py-1 pl-4">
-          <span className="flex items-center gap-2">
-            <OperadorBadge operador={grupo.operador} escuro />
-            <span className="text-xs font-bold uppercase tracking-wide text-white">{grupo.label}</span>
-          </span>
-        </td>
-        <td className="border-b border-l border-gray-900 px-4 py-1 text-right text-xs font-bold tabular-nums text-white/50">
-          —
-        </td>
-      </tr>
-    );
-  }
-
+function LinhaGrupo({ grupo }) {
   return (
     <Fragment>
-      <tr className={FUNDO_OPERADOR[grupo.operador]}>
+      <tr className="bg-gray-50">
         <td className="border-b border-gray-200 py-1 pl-4">
-          <span className="flex items-center gap-2">
-            <OperadorBadge operador={grupo.operador} />
-            <span className="text-xs font-bold uppercase tracking-wide text-gray-900">{grupo.label}</span>
-          </span>
+          <span className="text-xs font-bold uppercase tracking-wide text-gray-900">{grupo.descricao}</span>
         </td>
         <td className="border-b border-l border-gray-200 px-4 py-1 text-right text-xs font-bold tabular-nums text-gray-300">
           —
         </td>
       </tr>
 
-      {!itens ? null : itens.length === 0 ? (
+      {grupo.filhos.length === 0 ? (
         <tr>
           <td colSpan={2} className="border-b border-gray-100 py-1 pl-11 text-xs italic text-gray-300">
             Nenhum item cadastrado nesta linha ainda.
           </td>
         </tr>
       ) : (
-        itens.map((item) => (
+        grupo.filhos.map((item) => (
           <tr key={item.id} className="hover:bg-gray-50">
             <td className="border-b border-gray-100 py-0.5 pl-11 text-xs text-gray-700">{item.descricao}</td>
             <td className="border-b border-l border-gray-100 px-4 py-0.5 text-right text-xs tabular-nums text-gray-300">

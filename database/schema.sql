@@ -656,7 +656,8 @@ CREATE TABLE planos_financeiros_sienge (
     fl_imposto             VARCHAR(1),
     criado_em              TIMESTAMP DEFAULT NOW(),
     atualizado_em          TIMESTAMP DEFAULT NOW(),
-    classificacao_dre_id   INTEGER REFERENCES mascara_itens(id) ON DELETE SET NULL,
+    -- FK pra dre_mascaras — adicionada depois da tabela (ver bloco DRE Gerencial > Máscaras).
+    classificacao_dre_id   INTEGER,
     classificacao_dfc_id   INTEGER REFERENCES mascara_itens(id) ON DELETE SET NULL,
     submascara_dre_id      INTEGER REFERENCES mascara_itens(id) ON DELETE SET NULL,
     submascara_dfc_id      INTEGER REFERENCES mascara_itens(id) ON DELETE SET NULL,
@@ -3248,6 +3249,30 @@ CREATE INDEX idx_dfc_mascaras_empresa ON dfc_mascaras (empresa_id, parent_id, or
 CREATE TRIGGER trg_dfc_mascaras_atualizado_em
     BEFORE UPDATE ON dfc_mascaras
     FOR EACH ROW EXECUTE FUNCTION set_atualizado_em();
+
+-- ─── Operações > DRE Gerencial > Máscaras — ver database/migrations/2026-10-22-dre-mascaras.sql ───
+-- Estrutura da DRE por empresa em 2 níveis, espelho de dfc_mascaras. A Máscara DRE escolhida em
+-- cada conta do Plano de Contas (planos_financeiros_sienge.classificacao_dre_id) aponta pra cá.
+CREATE TABLE dre_mascaras (
+    id            SERIAL PRIMARY KEY,
+    empresa_id    INTEGER NOT NULL REFERENCES empresas(id) ON DELETE CASCADE,
+    parent_id     INTEGER REFERENCES dre_mascaras(id) ON DELETE CASCADE,
+    ordem         INTEGER NOT NULL,
+    descricao     VARCHAR(150) NOT NULL,
+    criado_em     TIMESTAMP DEFAULT NOW(),
+    atualizado_em TIMESTAMP DEFAULT NOW(),
+    CHECK (parent_id IS NULL OR parent_id <> id)
+);
+
+CREATE INDEX idx_dre_mascaras_empresa ON dre_mascaras (empresa_id, parent_id, ordem);
+
+CREATE TRIGGER trg_dre_mascaras_atualizado_em
+    BEFORE UPDATE ON dre_mascaras
+    FOR EACH ROW EXECUTE FUNCTION set_atualizado_em();
+
+ALTER TABLE planos_financeiros_sienge
+    ADD CONSTRAINT planos_financeiros_sienge_classificacao_dre_id_fkey
+    FOREIGN KEY (classificacao_dre_id) REFERENCES dre_mascaras(id) ON DELETE SET NULL;
 
 -- ─── Operações > DFC Construtoras > Parâmetros — ver database/migrations/2026-10-13-dfc-parametros.sql ───
 -- Parâmetros da DFC por empreendimento (centro de custo), versionados como o Motor de Risco:

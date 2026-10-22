@@ -16,9 +16,9 @@ const TIPOS = [
 // demais tipos ele é sempre '' (mascara "de nível único").
 const GRUPOS_REPASSES = ['VENDA', 'CONTRATO', 'ASSINATURA', 'REGISTRO'];
 
-// Nível 1 fixo da estrutura de DRE (ver frontend/src/config/estruturaDre.js — os dois têm que
-// ficar em sincronia). Só os grupos que guardam itens de nível 2 entram aqui; os 4 subtotais
-// calculados (RECEITA_LIQUIDA, LUCRO_BRUTO, EBITDA, LUCRO_LIQUIDO) não têm cadastro próprio.
+// Nível 1 fixo da estrutura de DRE antiga. A DRE Gerencial não usa mais o tipo 'DRE' daqui —
+// desde 2026-10-22 a estrutura (nível 1 e 2) é cadastrada em dre_mascaras (ver
+// database/migrations/2026-10-22-dre-mascaras.sql); os itens antigos ficaram só como histórico.
 const GRUPOS_DRE = ['RECEITA_BRUTA', 'IMPOSTOS_RECEITA', 'CIV', 'DESPESAS_OPERACIONAIS', 'DESPESAS_RECEITAS_NAO_OPERACIONAIS'];
 
 const tipoSchema = z.enum(TIPOS, { errorMap: () => ({ message: 'Tipo de máscara inválido.' }) });

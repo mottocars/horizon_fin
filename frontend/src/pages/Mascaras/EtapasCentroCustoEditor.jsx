@@ -10,7 +10,7 @@ import {
   updateEtapaCentroCusto,
 } from '../../api/etapasCentroCusto.api';
 import { corPadrao } from '../../utils/coresPadrao';
-import { BotaoAcao, CampoNome, Indicador } from '../Operacoes/DfcConstrutoras/DfcMascarasTab';
+import { BotaoAcao, CampoNome, Indicador } from '../../components/MascarasArvoreEditor';
 
 // Cadastros > Máscaras > Etapas do Centro de Custo: a lista única de etapas de obra da empresa
 // (pedido do usuário), usada pelo Histórico de Etapas dos centros de custo — que é o cronograma das

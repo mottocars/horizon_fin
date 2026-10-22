@@ -78,7 +78,7 @@ async function getItem(empresaId, siengeId) {
             pac.descricao AS pacote_descricao,
             resp.nome AS responsavel_nome
      FROM planos_financeiros_sienge p
-     LEFT JOIN mascara_itens dre ON dre.id = p.classificacao_dre_id
+     LEFT JOIN dre_mascaras dre ON dre.id = p.classificacao_dre_id
      LEFT JOIN mascara_itens dfc ON dfc.id = p.classificacao_dfc_id
      LEFT JOIN mascara_itens sub_dre ON sub_dre.id = p.submascara_dre_id
      LEFT JOIN mascara_itens sub_dfc ON sub_dfc.id = p.submascara_dfc_id
@@ -108,11 +108,14 @@ async function listResponsaveis(empresaId) {
 // direto na linha da lista, sem abrir a tela de cadastro completa). Diferente de
 // updateEnriquecimento (que reescreve TODOS os campos de enriquecimento de uma vez, pensado pra
 // vir de um formulário completo), este só toca em classificacao_dre_id — não pode zerar
-// classificação DFC, pacote, orçamento etc. já preenchidos por outro fluxo.
+// classificação DFC, pacote, orçamento etc. já preenchidos por outro fluxo. A máscara tem que
+// ser de nível 2 da própria empresa (dre_mascaras) — senão não grava nada (o controller dá 404).
 async function updateClassificacaoDre(empresaId, siengeId, classificacaoDreId) {
   const { rows } = await pool.query(
     `UPDATE planos_financeiros_sienge SET classificacao_dre_id = $1
      WHERE empresa_id = $2 AND sienge_id = $3 AND tp_conta != 'T'
+       AND ($1::int IS NULL OR EXISTS (
+             SELECT 1 FROM dre_mascaras m WHERE m.id = $1 AND m.empresa_id = $2 AND m.parent_id IS NOT NULL))
      RETURNING sienge_id, classificacao_dre_id`,
     [classificacaoDreId, empresaId, siengeId]
   );

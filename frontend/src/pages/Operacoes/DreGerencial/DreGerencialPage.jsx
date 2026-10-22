@@ -16,17 +16,17 @@ import PlanoDeContasTab from './PlanoDeContasTab';
 import DreTab from './DreTab';
 
 // O `{ divider: true }` separa a DRE (a demonstração em si) das abas de cadastro/parâmetro que
-// dão suporte a ela — Categorias Orçamento, Orçamento, Máscaras e Plano de Contas ficam juntas,
+// dão suporte a ela — Máscaras, Categorias Orçamento, Orçamento e Plano de Contas ficam juntas,
 // sem divisor entre elas (mesmo padrão de SaldoContasBancariasPage.jsx, que separa "Saldos das
-// Contas" de "Bancos" e as demais abas de cadastro/parâmetro). Máscaras fica antes de Plano de
-// Contas de propósito (pedido do usuário) — é lá que se cadastra a Máscara DRE que a combobox
-// de cada linha do Plano de Contas usa pra classificar.
+// Contas" de "Bancos" e as demais abas de cadastro/parâmetro). Máscaras é a primeira depois da
+// DRE (pedido do usuário) — é lá que se monta a estrutura da DRE (nível 1 e 2) e se cadastra a
+// Máscara DRE que a combobox de cada linha do Plano de Contas usa pra classificar.
 const TABS = [
   { id: 'dre', label: 'DRE', icon: BarChart3 },
   { divider: true },
+  { id: 'mascaras', label: 'Máscaras', icon: Tags },
   { id: 'categorias-orcamento', label: 'Categorias Orçamento', icon: Layers },
   { id: 'orcamento', label: 'Orçamento', icon: Calculator },
-  { id: 'mascaras', label: 'Máscaras', icon: Tags },
   { id: 'plano-de-contas', label: 'Plano de Contas', icon: ListTree },
 ];
 
@@ -82,6 +82,9 @@ export default function DreGerencialPage() {
   // continua vivendo em CategoriasOrcamentoTab.jsx — dispara por ref, mesmo esquema de
   // ClassificacoesTab.jsx em Saldo Contas Bancárias.
   const categoriasOrcamentoTabRef = useRef(null);
+
+  // Mesmo esquema pro botão "Nova máscara" da aba Máscaras (igual à DFC Construtoras).
+  const mascarasTabRef = useRef(null);
 
   // Busca (nome ou código do centro de custo) da aba Orçamento — só conveniência de navegador,
   // não fica na URL (mesma convenção de bancosSearch/contasSearch em SaldoContasBancariasPage.jsx).
@@ -167,6 +170,15 @@ export default function DreGerencialPage() {
             )}
           </div>
 
+          {abaAtiva === 'mascaras' && (
+            <div className="flex shrink-0 items-center gap-2">
+              <Button type="button" onClick={() => mascarasTabRef.current?.abrirNova()} disabled={semEmpresa}>
+                <Plus size={16} />
+                Nova máscara
+              </Button>
+            </div>
+          )}
+
           {abaAtiva === 'categorias-orcamento' && (
             <div className="flex shrink-0 items-center gap-2">
               <Button type="button" onClick={() => categoriasOrcamentoTabRef.current?.abrirNova()} disabled={semEmpresa}>
@@ -208,13 +220,13 @@ export default function DreGerencialPage() {
 
         {abaAtiva === 'dre' && <DreTab empresaId={empresaId} />}
 
+        {abaAtiva === 'mascaras' && <MascarasTab ref={mascarasTabRef} empresaId={empresaId} />}
+
         {abaAtiva === 'categorias-orcamento' && (
           <CategoriasOrcamentoTab ref={categoriasOrcamentoTabRef} empresaId={empresaId} />
         )}
 
         {abaAtiva === 'orcamento' && <OrcamentoTab empresaId={empresaId} search={buscaOrcamento} />}
-
-        {abaAtiva === 'mascaras' && <MascarasTab empresaId={empresaId} />}
 
         {abaAtiva === 'plano-de-contas' && (
           <PlanoDeContasTab
