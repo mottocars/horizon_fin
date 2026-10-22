@@ -126,8 +126,9 @@ export function BotaoAcao({ title, onClick, perigo = false, children }) {
   );
 }
 
-// Largura da coluna de uma flag — combobox precisa de mais espaço que checkbox.
-const larguraFlag = (flag) => (flag.opcoes ? 'w-32' : 'w-24');
+// Largura da coluna de uma flag (combobox precisa de mais espaço que checkbox), com um respiro à
+// esquerda separando uma coluna da outra.
+const larguraFlag = (flag) => (flag.opcoes ? 'ml-6 w-32' : 'ml-6 w-24');
 
 // Colunas de marcação (`flags`) à direita de uma linha: campo só nas flags do `nivel` da linha,
 // espaço vazio nas outras (mantém as colunas alinhadas entre nível 1 e nível 2). Flag com
@@ -492,7 +493,11 @@ const MascarasArvoreEditor = forwardRef(function MascarasArvoreEditor(
           >
             <span className="flex-1">Nível 1 / Nível 2</span>
             {flags.map((flag) => (
-              <span key={flag.campo} title={flag.title} className={`${larguraFlag(flag)} shrink-0 text-center`}>
+              <span
+                key={flag.campo}
+                title={flag.title}
+                className={`${larguraFlag(flag)} shrink-0 ${flag.opcoes ? 'pl-2 text-left' : 'text-center'}`}
+              >
                 {flag.label}
               </span>
             ))}

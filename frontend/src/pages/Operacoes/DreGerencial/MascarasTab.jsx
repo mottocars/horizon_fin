@@ -54,12 +54,12 @@ const FLAGS = [
   {
     campo: 'tipo_poc',
     label: 'Tipo POC',
-    title: 'Nível 2 — POC Receita ou POC Despesa (só com Realiza POC marcada)',
+    title: 'Nível 2 — Receita ou Despesa (só com Realiza POC marcada)',
     nivel: 2,
     requer: 'realiza_poc',
     opcoes: [
-      { value: 'RECEITA', label: 'POC Receita' },
-      { value: 'DESPESA', label: 'POC Despesa' },
+      { value: 'RECEITA', label: 'RECEITA' },
+      { value: 'DESPESA', label: 'DESPESA' },
     ],
   },
 ];
