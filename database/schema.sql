@@ -3262,7 +3262,7 @@ CREATE TABLE dre_mascaras (
     ordem         INTEGER NOT NULL,
     descricao     VARCHAR(150) NOT NULL,
     -- Marcações só informativas por enquanto — ver 2026-10-22-dre-mascaras-flags.sql.
-    -- Totalizadora (nível 1) não tem nível 2 dentro (garantido no backend); Realiza POC é do nível 2,
+    -- Totalizadora (nível 1) não tem nível 2 dentro (garantido no backend); % POC (realiza_poc) é do nível 2,
     -- e só com ela o Tipo POC ('RECEITA' | 'DESPESA', opcional).
     totalizadora  BOOLEAN NOT NULL DEFAULT FALSE,
     realiza_poc   BOOLEAN NOT NULL DEFAULT FALSE,

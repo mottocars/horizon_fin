@@ -110,10 +110,10 @@ async function update(
       throw erro(400, 'Só as máscaras de nível 1 podem ser Totalizadora.');
     }
     if (realizaPoc && atual[0].parent_id === null) {
-      throw erro(400, 'Só as máscaras de nível 2 podem ser Realiza POC.');
+      throw erro(400, 'Só as máscaras de nível 2 podem ter % POC.');
     }
     if (tipoPoc && !(realizaPoc ?? atual[0].realiza_poc)) {
-      throw erro(400, 'Marque Realiza POC antes de escolher o Tipo POC.');
+      throw erro(400, 'Marque % POC antes de escolher o Tipo POC.');
     }
     if (totalizadora && atual[0].tem_filhos) {
       throw erro(400, 'Máscara totalizadora não tem máscaras de nível 2: remova ou mova as que estão dentro dela antes.');

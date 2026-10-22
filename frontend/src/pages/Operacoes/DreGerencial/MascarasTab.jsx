@@ -61,7 +61,7 @@ const CALCULOS = [
 ];
 
 // Marcações — por enquanto só informadas (nenhum cálculo usa ainda). Totalizadora é do nível 1
-// (linha de subtotal: sem drilldown e sem máscaras de nível 2 — semFilhos); Realiza POC é do
+// (linha de subtotal: sem drilldown e sem máscaras de nível 2 — semFilhos); % POC é do
 // nível 2, e com ela o Tipo POC (POC Receita / POC Despesa, opcional). Origem e Cálculo também
 // são do nível 2: o Cálculo só abre com a Origem escolhida e mostra só os cálculos dela. Imposto
 // Fixo não tem cálculo: no lugar da combobox vem o botão "Informar histórico" (alíquotas por mês —
@@ -75,11 +75,11 @@ const montarFlags = (abrirHistorico, aliquotaDe) => [
     nivel: 1,
     semFilhos: true,
   },
-  { campo: 'realiza_poc', label: 'Realiza POC', title: 'Nível 2 — apropriada por POC (percentual de obra concluída)', nivel: 2 },
+  { campo: 'realiza_poc', label: '% POC', title: 'Nível 2 — apropriada por POC (percentual de obra concluída)', nivel: 2 },
   {
     campo: 'tipo_poc',
     label: 'Tipo POC',
-    title: 'Nível 2 — Receita ou Despesa (só com Realiza POC marcada)',
+    title: 'Nível 2 — Receita ou Despesa (só com % POC marcada)',
     nivel: 2,
     requer: 'realiza_poc',
     opcoes: [

@@ -73,12 +73,12 @@ export default function DreTab({ empresaId }) {
 
 const ROTULO_TIPO_POC = { RECEITA: 'POC Receita', DESPESA: 'POC Despesa' };
 
-// Selo da marcação "Realiza POC" (nível 2, aba Máscaras), com o Tipo POC quando informado — só
+// Selo da marcação "% POC" (nível 2, aba Máscaras), com o Tipo POC quando informado — só
 // informativo por enquanto.
 function SeloPoc({ tipo }) {
   return (
     <span
-      title="Realiza POC"
+      title="% POC"
       className="rounded bg-primary-50 px-1.5 py-px text-[10px] font-semibold text-primary-600 ring-1 ring-primary-100"
     >
       {ROTULO_TIPO_POC[tipo] || 'POC'}
