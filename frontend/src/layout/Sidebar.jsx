@@ -123,9 +123,10 @@ export default function Sidebar() {
   const location = useLocation();
   const { user } = useAuth();
   const { forceCollapsed } = useSidebar();
-  // Puramente hover: nenhum estado "fixado" — some assim que o mouse sai.
-  const [hovering, setHovering] = useState(false);
-  const collapsed = forceCollapsed || !hovering;
+  // Abre só com clique (passar o mouse por cima não abre mais — incomodava, pedido do usuário) e
+  // fecha sozinho assim que o mouse sai. Nenhum estado "fixado".
+  const [expandido, setExpandido] = useState(false);
+  const collapsed = forceCollapsed || !expandido;
 
   const [openGroups, setOpenGroups] = useState(() => {
     const initial = {};
@@ -156,15 +157,16 @@ export default function Sidebar() {
   // abre/fecha o submenu (hover é só pra expandir o menu inteiro — deixar o
   // grupo abrindo no hover também deixava a navegação rápida demais/nervosa
   // ao passar o mouse por cima pra alcançar um item mais abaixo).
+  // Recolhido, o clique no ícone do grupo abre o menu já com ele aberto (nunca fecha).
   function toggleGrupo(label) {
-    setOpenGroups((prev) => (prev[label] ? {} : { [label]: true }));
+    setOpenGroups((prev) => (prev[label] && !collapsed ? {} : { [label]: true }));
   }
 
   return (
     <aside
-      onMouseEnter={() => setHovering(true)}
-      onMouseLeave={() => setHovering(false)}
-      className={`flex h-screen shrink-0 flex-col bg-linear-to-b from-white to-[#fbfcff] shadow-[1px_0_0_rgba(15,23,42,0.05),8px_0_28px_-18px_rgba(15,23,42,0.35)] transition-all duration-200 ${
+      onClick={() => !forceCollapsed && setExpandido(true)}
+      onMouseLeave={() => setExpandido(false)}
+      className={`flex h-screen shrink-0 flex-col ${collapsed && !forceCollapsed ? 'cursor-pointer' : ''} bg-linear-to-b from-white to-[#fbfcff] shadow-[1px_0_0_rgba(15,23,42,0.05),8px_0_28px_-18px_rgba(15,23,42,0.35)] transition-all duration-200 ${
         collapsed ? 'w-[76px]' : 'w-64'
       }`}
     >
@@ -262,6 +264,8 @@ export default function Sidebar() {
                 to={item.to}
                 end={item.to === '/'}
                 title={collapsed ? item.label : undefined}
+                // Recolhido, o link só navega — não abre o menu junto.
+                onClick={(e) => collapsed && e.stopPropagation()}
                 className={({ isActive }) =>
                   `flex items-center gap-2.5 rounded-[10px] text-[13px] font-medium transition-colors ${
                     collapsed ? 'mx-auto h-8 w-8 justify-center' : 'w-full px-2.5 py-1.5'
