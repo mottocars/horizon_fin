@@ -21,7 +21,7 @@ function aplicarMovimento(arvore, arrastado, alvo, flags) {
   const soDoNivel = (item, nivel) => {
     const limpo = { ...item };
     flags.forEach((f) => {
-      if (f.nivel !== nivel) limpo[f.campo] = f.opcoes ? null : false;
+      if (f.nivel && f.nivel !== nivel) limpo[f.campo] = f.opcoes ? null : false;
     });
     return limpo;
   };
@@ -145,8 +145,8 @@ const opcoesDaFlag = (flag, item) => flag.opcoes.filter((o) => !o.pai || o.pai =
 function ColunasFlags({ flags, nivel, item, onDefinir, travadaMotivo = () => null }) {
   return flags.map((flag) => {
     const largura = larguraFlag(flag);
-    if (flag.nivel !== nivel) return <span key={flag.campo} className={`${largura} shrink-0`} />;
-    const substituto = flag.substituir?.(item);
+    if (flag.nivel && flag.nivel !== nivel) return <span key={flag.campo} className={`${largura} shrink-0`} />;
+    const substituto = flag.substituir?.(item, (valor) => onDefinir(flag, valor));
     if (substituto) {
       return (
         <span key={flag.campo} className={`flex ${largura} shrink-0 justify-center`} onClick={(e) => e.stopPropagation()}>
@@ -224,12 +224,16 @@ export function Indicador({ recuo = false, embaixo = false }) {
 // Cada mudança salva na hora (reordenação regrava a árvore inteira — ver dfcMascaras.service.js).
 //
 // `flags` (opcional, só a DRE usa): marcações, cada uma uma coluna à direita — `{ campo, label,
-// title, nivel, semFilhos, opcoes, requer }`, com o campo só nas linhas do `nivel` (1 ou 2).
+// title, nivel, semFilhos, opcoes, requer }`, com o campo só nas linhas do `nivel` (1 ou 2; sem
+// `nivel`, nos dois).
 // Checkbox, ou combobox quando tem `opcoes` ([{ value, label, pai }]); `requer` = campo de outra
 // flag que precisa estar marcada/escolhida (desmarcá-la limpa esta — o backend faz o mesmo). Opção
 // com `pai` só aparece quando a flag `requer` vale `pai`, e trocar aquela limpa esta. `largura`
-// (classe Tailwind, opcional) alarga a coluna; `substituir(item)` (opcional) devolve o que mostrar
-// na célula no lugar do campo (ex.: um botão), ou null pra mostrar o campo. Com `semFilhos` (só nível 1), o grupo marcado não tem drilldown nem nível 2 (a Totalizadora da DRE): não abre,
+// (classe Tailwind, opcional) alarga a coluna; `substituir(item, definir)` (opcional) devolve o que
+// mostrar na célula no lugar do campo (ex.: um botão; `definir(valor)` grava a flag), ou null pra
+// mostrar o campo; `junto(valor)` (opcional) devolve outros campos que mudam junto na tela (o que o
+// backend também muda no mesmo UPDATE). Com `semFilhos` (só nível 1), o grupo marcado não tem drilldown nem nível 2 (a
+// Totaliza da DRE): não abre,
 // não recebe item arrastado e a marcação fica travada enquanto ele tiver filhos.
 //
 // `ref` expõe `abrirNova()` pro botão "Nova máscara" do topo da página (mesmo padrão de
@@ -343,7 +347,7 @@ const MascarasArvoreEditor = forwardRef(function MascarasArvoreEditor(
         .filter((f) => f.requer === flag.campo && (!valor || f.opcoes?.some((o) => o.pai)))
         .map((f) => [f.campo, null])
     );
-    const trocar = (x) => (x.id === item.id ? { ...x, [flag.campo]: valor, ...dependentes } : x);
+    const trocar = (x) => (x.id === item.id ? { ...x, [flag.campo]: valor, ...dependentes, ...flag.junto?.(valor) } : x);
     setArvore((atual) => atual.map((g) => ({ ...trocar(g), filhos: g.filhos.map(trocar) })));
     if (valor && flag.semFilhos) {
       setAbertos((atual) => atual.filter((v) => v !== item.id));

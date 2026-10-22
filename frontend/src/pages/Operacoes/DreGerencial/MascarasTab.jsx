@@ -60,6 +60,47 @@ const CALCULOS = [
   { value: 'CORRECAO_MONETARIA', label: 'CORREÇÃO MONETÁRIA', pai: 'FINANCEIRO' },
 ];
 
+// Ícone (sinal) da linha: + / - / +/- escolhidos no seletor; o = é automático com Totaliza (o
+// backend grava e limpa junto com ela) e não é escolhível.
+const ICONES = [
+  { value: 'MAIS', label: '+', title: 'Soma' },
+  { value: 'MENOS', label: '-', title: 'Subtrai' },
+  { value: 'MAIS_MENOS', label: '+/-', title: 'Soma ou subtrai' },
+];
+
+function SeletorIcone({ item, definir }) {
+  if (item.totalizadora) {
+    return (
+      <span
+        title="= — automático com Totaliza"
+        className="flex h-6 min-w-[24px] items-center justify-center rounded bg-gray-200 px-1 text-xs font-bold text-gray-700"
+      >
+        =
+      </span>
+    );
+  }
+  // 'IGUAL' sem Totaliza só sobra na tela depois de arrastar uma Totaliza pro nível 2 (o backend já
+  // limpou) — conta como vazio.
+  const atual = item.icone === 'IGUAL' ? null : item.icone;
+  return (
+    <span className="inline-flex overflow-hidden rounded border border-gray-200 bg-white">
+      {ICONES.map((o, i) => (
+        <button
+          key={o.value}
+          type="button"
+          title={atual === o.value ? `${o.title} — clique de novo para limpar` : o.title}
+          onClick={() => definir(atual === o.value ? null : o.value)}
+          className={`h-6 min-w-[24px] px-1 text-xs font-bold transition-colors ${i > 0 ? 'border-l border-gray-200' : ''} ${
+            atual === o.value ? 'bg-primary-600 text-white' : 'text-gray-500 hover:bg-gray-100'
+          }`}
+        >
+          {o.label}
+        </button>
+      ))}
+    </span>
+  );
+}
+
 // Marcações — por enquanto só informadas (nenhum cálculo usa ainda). Totalizadora é do nível 1
 // (linha de subtotal: sem drilldown e sem máscaras de nível 2 — semFilhos); % POC é do
 // nível 2, e com ela o Tipo POC (POC Receita / POC Despesa, opcional). Origem e Cálculo também
@@ -69,11 +110,19 @@ const CALCULOS = [
 // são montadas no componente (`abrirHistorico`, `aliquotaDe`).
 const montarFlags = (abrirHistorico, aliquotaDe) => [
   {
+    campo: 'icone',
+    label: 'Ícone',
+    title: 'Sinal da linha na DRE: + / - / +/- (o = vem sozinho com Totaliza)',
+    largura: 'w-[84px]',
+    substituir: (item, definir) => <SeletorIcone item={item} definir={definir} />,
+  },
+  {
     campo: 'totalizadora',
     label: 'Totaliza',
     title: 'Nível 1 — linha de subtotal, sem máscaras de nível 2',
     nivel: 1,
     semFilhos: true,
+    junto: (valor) => ({ icone: valor ? 'IGUAL' : null }),
   },
   { campo: 'realiza_poc', label: '% POC', title: 'Nível 2 — apropriada por POC (percentual de obra concluída)', nivel: 2 },
   {

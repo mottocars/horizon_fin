@@ -25,6 +25,11 @@ const updateSchema = z
     totalizadora: z.boolean().optional(),
     realiza_poc: z.boolean().optional(),
     tipo_poc: z.enum(['RECEITA', 'DESPESA'], { errorMap: () => ({ message: 'Tipo POC inválido.' }) }).nullable().optional(),
+    // '=' (IGUAL) fica de fora: é automático com totalizadora (ver service).
+    icone: z
+      .enum(['MAIS', 'MENOS', 'MAIS_MENOS'], { errorMap: () => ({ message: 'Ícone inválido.' }) })
+      .nullable()
+      .optional(),
     origem: z
       .enum(Object.keys(service.CALCULOS_POR_ORIGEM), { errorMap: () => ({ message: 'Origem inválida.' }) })
       .nullable()

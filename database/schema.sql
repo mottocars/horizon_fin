@@ -3267,6 +3267,8 @@ CREATE TABLE dre_mascaras (
     totalizadora  BOOLEAN NOT NULL DEFAULT FALSE,
     realiza_poc   BOOLEAN NOT NULL DEFAULT FALSE,
     tipo_poc      VARCHAR(10),
+    -- Sinal da linha: 'MAIS' | 'MENOS' | 'MAIS_MENOS', ou 'IGUAL' — só e sempre com totalizadora.
+    icone         VARCHAR(10),
     -- Origem (nível 2) e Cálculo (um dos da origem) — ver 2026-10-22-dre-mascaras-origem-calculo.sql.
     origem        VARCHAR(30),
     calculo       VARCHAR(30),
@@ -3276,6 +3278,8 @@ CREATE TABLE dre_mascaras (
     CONSTRAINT dre_mascaras_totalizadora_so_nivel_1 CHECK (parent_id IS NULL OR NOT totalizadora),
     CONSTRAINT dre_mascaras_realiza_poc_so_nivel_2 CHECK (parent_id IS NOT NULL OR NOT realiza_poc),
     CONSTRAINT dre_mascaras_tipo_poc_valido CHECK (tipo_poc IS NULL OR (realiza_poc AND tipo_poc IN ('RECEITA', 'DESPESA'))),
+    CONSTRAINT dre_mascaras_icone_valido CHECK ((icone IS NULL OR icone IN ('IGUAL', 'MAIS', 'MENOS', 'MAIS_MENOS'))
+        AND (icone IS NOT DISTINCT FROM 'IGUAL') = totalizadora),
     CONSTRAINT dre_mascaras_origem_valida CHECK (origem IS NULL OR (parent_id IS NOT NULL
         AND origem IN ('CONTRATOS_VENDAS', 'UNIDADES_IMOBILIARIAS', 'FINANCEIRO', 'IMPOSTO_FIXO'))),
     CONSTRAINT dre_mascaras_calculo_valido CHECK (calculo IS NULL

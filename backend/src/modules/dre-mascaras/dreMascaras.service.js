@@ -7,7 +7,7 @@ const pool = require('../../config/db');
 // 2026-10-22-dre-mascaras-origem-calculo.sql). Totalizadora nunca tem nível 2 dentro: create,
 // update e reordenar recusam o que quebraria isso.
 
-const COLUNAS = 'id, parent_id, ordem, descricao, totalizadora, realiza_poc, tipo_poc, origem, calculo';
+const COLUNAS = 'id, parent_id, ordem, descricao, totalizadora, realiza_poc, tipo_poc, icone, origem, calculo';
 
 // Cálculos que cada origem oferece — mesma lista da constraint dre_mascaras_calculo_valido e das
 // opções da tela (DreGerencial/MascarasTab.jsx). Imposto Fixo não tem cálculo: usa o histórico de
@@ -85,19 +85,20 @@ async function create(empresaId, { parentId, descricoes }) {
   }
 }
 
-// `campos` é parcial: descricao, totalizadora, realiza_poc, tipo_poc, origem e/ou calculo — o que
-// não vier (undefined) fica como está; tipo_poc / origem / calculo null limpam. Desmarcar
-// realiza_poc limpa o tipo_poc junto; trocar ou limpar a origem limpa o calculo.
+// `campos` é parcial: descricao, totalizadora, realiza_poc, tipo_poc, icone, origem e/ou calculo —
+// o que não vier (undefined) fica como está; tipo_poc / icone / origem / calculo null limpam.
+// Desmarcar realiza_poc limpa o tipo_poc junto; trocar ou limpar a origem limpa o calculo. O ícone
+// '=' (IGUAL) não é escolhido: marcar totalizadora grava, desmarcar limpa.
 async function update(
   id,
   empresaId,
-  { descricao, totalizadora, realiza_poc: realizaPoc, tipo_poc: tipoPoc, origem, calculo }
+  { descricao, totalizadora, realiza_poc: realizaPoc, tipo_poc: tipoPoc, icone, origem, calculo }
 ) {
   const client = await pool.connect();
   try {
     await client.query('BEGIN');
     const { rows: atual } = await client.query(
-      `SELECT m.parent_id, m.realiza_poc, m.origem,
+      `SELECT m.parent_id, m.realiza_poc, m.totalizadora, m.origem,
               EXISTS (SELECT 1 FROM dre_mascaras f WHERE f.parent_id = m.id) AS tem_filhos
          FROM dre_mascaras m WHERE m.id = $1 AND m.empresa_id = $2 FOR UPDATE`,
       [id, empresaId]
@@ -118,6 +119,9 @@ async function update(
     if (totalizadora && atual[0].tem_filhos) {
       throw erro(400, 'Máscara totalizadora não tem máscaras de nível 2: remova ou mova as que estão dentro dela antes.');
     }
+    if (icone && (totalizadora ?? atual[0].totalizadora)) {
+      throw erro(400, 'Linha com Totaliza tem sempre o ícone =.');
+    }
     if (origem && atual[0].parent_id === null) {
       throw erro(400, 'Só as máscaras de nível 2 têm Origem.');
     }
@@ -134,6 +138,10 @@ async function update(
               tipo_poc = CASE WHEN NOT COALESCE($5, realiza_poc) THEN NULL
                               WHEN $7 THEN $6
                               ELSE tipo_poc END,
+              icone = CASE WHEN $4 IS TRUE THEN 'IGUAL'
+                           WHEN $4 IS FALSE AND icone = 'IGUAL' THEN NULL
+                           WHEN $13 THEN $12::varchar
+                           ELSE icone END,
               origem = CASE WHEN $9 THEN $8::varchar ELSE origem END,
               calculo = CASE WHEN $11 THEN $10::varchar
                              WHEN $9 AND $8::varchar IS DISTINCT FROM origem THEN NULL
@@ -152,6 +160,8 @@ async function update(
         origem !== undefined,
         calculo ?? null,
         calculo !== undefined,
+        icone ?? null,
+        icone !== undefined,
       ]
     );
     await client.query('COMMIT');
@@ -207,6 +217,7 @@ async function reordenar(empresaId, estrutura) {
       `UPDATE dre_mascaras m
           SET parent_id = v.parent_id, ordem = v.ordem,
               totalizadora = m.totalizadora AND v.parent_id IS NULL,
+              icone = CASE WHEN m.totalizadora AND v.parent_id IS NOT NULL THEN NULL ELSE m.icone END,
               realiza_poc = m.realiza_poc AND v.parent_id IS NOT NULL,
               tipo_poc = CASE WHEN v.parent_id IS NOT NULL THEN m.tipo_poc END,
               origem = CASE WHEN v.parent_id IS NOT NULL THEN m.origem END,
