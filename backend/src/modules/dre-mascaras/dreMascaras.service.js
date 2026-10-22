@@ -3,10 +3,19 @@ const pool = require('../../config/db');
 // Operações > DRE Gerencial > Máscaras: espelho de dfc-mascaras/dfcMascaras.service.js (mesma
 // árvore de 2 níveis, mesma tela), na tabela dre_mascaras — mais as marcações totalizadora (só
 // nível 1) e realiza_poc (só nível 2, com o tipo_poc opcional; ver
-// 2026-10-22-dre-mascaras-flags.sql). Totalizadora nunca tem nível 2 dentro: create, update e
-// reordenar recusam o que quebraria isso.
+// 2026-10-22-dre-mascaras-flags.sql), e a origem / cálculo do nível 2 (ver
+// 2026-10-22-dre-mascaras-origem-calculo.sql). Totalizadora nunca tem nível 2 dentro: create,
+// update e reordenar recusam o que quebraria isso.
 
-const COLUNAS = 'id, parent_id, ordem, descricao, totalizadora, realiza_poc, tipo_poc';
+const COLUNAS = 'id, parent_id, ordem, descricao, totalizadora, realiza_poc, tipo_poc, origem, calculo';
+
+// Cálculos que cada origem oferece — mesma lista da constraint dre_mascaras_calculo_valido e das
+// opções da tela (DreGerencial/MascarasTab.jsx).
+const CALCULOS_POR_ORIGEM = {
+  CONTRATOS_VENDAS: ['VALOR_VENDAS', 'ESTORNO_VENDAS', 'RECEITA_DISTRATO'],
+  UNIDADES_IMOBILIARIAS: ['RECEITA_PERMUTA'],
+  FINANCEIRO: ['ENTRADAS_SAIDAS', 'CORRECAO_MONETARIA'],
+};
 
 function erro(status, message) {
   const e = new Error(message);
@@ -70,14 +79,20 @@ async function create(empresaId, { parentId, descricoes }) {
   }
 }
 
-// `campos` é parcial: descricao, totalizadora, realiza_poc e/ou tipo_poc — o que não vier
-// (undefined) fica como está; tipo_poc null limpa. Desmarcar realiza_poc limpa o tipo_poc junto.
-async function update(id, empresaId, { descricao, totalizadora, realiza_poc: realizaPoc, tipo_poc: tipoPoc }) {
+// `campos` é parcial: descricao, totalizadora, realiza_poc, tipo_poc, origem e/ou calculo — o que
+// não vier (undefined) fica como está; tipo_poc / origem / calculo null limpam. Desmarcar
+// realiza_poc limpa o tipo_poc junto; trocar ou limpar a origem limpa o calculo.
+async function update(
+  id,
+  empresaId,
+  { descricao, totalizadora, realiza_poc: realizaPoc, tipo_poc: tipoPoc, origem, calculo }
+) {
   const client = await pool.connect();
   try {
     await client.query('BEGIN');
     const { rows: atual } = await client.query(
-      `SELECT m.parent_id, m.realiza_poc, EXISTS (SELECT 1 FROM dre_mascaras f WHERE f.parent_id = m.id) AS tem_filhos
+      `SELECT m.parent_id, m.realiza_poc, m.origem,
+              EXISTS (SELECT 1 FROM dre_mascaras f WHERE f.parent_id = m.id) AS tem_filhos
          FROM dre_mascaras m WHERE m.id = $1 AND m.empresa_id = $2 FOR UPDATE`,
       [id, empresaId]
     );
@@ -97,6 +112,14 @@ async function update(id, empresaId, { descricao, totalizadora, realiza_poc: rea
     if (totalizadora && atual[0].tem_filhos) {
       throw erro(400, 'Máscara totalizadora não tem máscaras de nível 2: remova ou mova as que estão dentro dela antes.');
     }
+    if (origem && atual[0].parent_id === null) {
+      throw erro(400, 'Só as máscaras de nível 2 têm Origem.');
+    }
+    if (calculo) {
+      const origemFinal = origem !== undefined ? origem : atual[0].origem;
+      if (!origemFinal) throw erro(400, 'Escolha a Origem antes do Cálculo.');
+      if (!CALCULOS_POR_ORIGEM[origemFinal].includes(calculo)) throw erro(400, 'Esse Cálculo não é da Origem escolhida.');
+    }
     const { rows } = await client.query(
       `UPDATE dre_mascaras
           SET descricao = COALESCE($3, descricao),
@@ -104,10 +127,26 @@ async function update(id, empresaId, { descricao, totalizadora, realiza_poc: rea
               realiza_poc = COALESCE($5, realiza_poc),
               tipo_poc = CASE WHEN NOT COALESCE($5, realiza_poc) THEN NULL
                               WHEN $7 THEN $6
-                              ELSE tipo_poc END
+                              ELSE tipo_poc END,
+              origem = CASE WHEN $9 THEN $8::varchar ELSE origem END,
+              calculo = CASE WHEN $11 THEN $10::varchar
+                             WHEN $9 AND $8::varchar IS DISTINCT FROM origem THEN NULL
+                             ELSE calculo END
         WHERE id = $1 AND empresa_id = $2
        RETURNING ${COLUNAS}`,
-      [id, empresaId, descricao ?? null, totalizadora ?? null, realizaPoc ?? null, tipoPoc ?? null, tipoPoc !== undefined]
+      [
+        id,
+        empresaId,
+        descricao ?? null,
+        totalizadora ?? null,
+        realizaPoc ?? null,
+        tipoPoc ?? null,
+        tipoPoc !== undefined,
+        origem ?? null,
+        origem !== undefined,
+        calculo ?? null,
+        calculo !== undefined,
+      ]
     );
     await client.query('COMMIT');
     return rows[0];
@@ -163,7 +202,9 @@ async function reordenar(empresaId, estrutura) {
           SET parent_id = v.parent_id, ordem = v.ordem,
               totalizadora = m.totalizadora AND v.parent_id IS NULL,
               realiza_poc = m.realiza_poc AND v.parent_id IS NOT NULL,
-              tipo_poc = CASE WHEN v.parent_id IS NOT NULL THEN m.tipo_poc END
+              tipo_poc = CASE WHEN v.parent_id IS NOT NULL THEN m.tipo_poc END,
+              origem = CASE WHEN v.parent_id IS NOT NULL THEN m.origem END,
+              calculo = CASE WHEN v.parent_id IS NOT NULL THEN m.calculo END
          FROM UNNEST($2::int[], $3::int[], $4::int[]) AS v(id, parent_id, ordem)
         WHERE m.id = v.id AND m.empresa_id = $1`,
       [empresaId, ids, linhas.map((l) => l.parentId), linhas.map((l) => l.ordem)]
@@ -179,4 +220,4 @@ async function reordenar(empresaId, estrutura) {
   }
 }
 
-module.exports = { list, create, update, remove, reordenar };
+module.exports = { list, create, update, remove, reordenar, CALCULOS_POR_ORIGEM };

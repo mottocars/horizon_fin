@@ -131,19 +131,22 @@ export function BotaoAcao({ title, onClick, perigo = false, children }) {
 // posição nos dois níveis.
 const COLUNA_ACOES = 'ml-6 flex w-[76px] shrink-0 items-center justify-end gap-0.5';
 
-// Largura da coluna de uma flag (combobox precisa de mais espaço que checkbox), com um respiro à
-// esquerda separando uma coluna da outra.
-const larguraFlag = (flag) => (flag.opcoes ? 'ml-6 w-32' : 'ml-6 w-24');
+// Largura da coluna de uma flag (combobox precisa de mais espaço que checkbox; `largura` sobrepõe
+// pra opções de texto longo), com um respiro à esquerda separando uma coluna da outra.
+const larguraFlag = (flag) => `ml-6 ${flag.largura || (flag.opcoes ? 'w-32' : 'w-24')}`;
+
+// Opções com `pai` dependem do valor da flag `requer` (o Cálculo da DRE, filtrado pela Origem).
+const opcoesDaFlag = (flag, item) => flag.opcoes.filter((o) => !o.pai || o.pai === item[flag.requer]);
 
 // Colunas de marcação (`flags`) à direita de uma linha: campo só nas flags do `nivel` da linha,
 // espaço vazio nas outras (mantém as colunas alinhadas entre nível 1 e nível 2). Flag com
-// `opcoes` é combobox (valor ou null), habilitada só quando a flag `requer` está marcada; as
-// demais são checkbox. `travadaMotivo(flag)` devolve o texto de por que está travada, ou null.
+// `opcoes` é combobox (valor ou null), habilitada só quando a flag `requer` está marcada (ou
+// escolhida, se também for combobox); as demais são checkbox. `travadaMotivo(flag)` devolve o texto de por que está travada, ou null.
 function ColunasFlags({ flags, nivel, item, onDefinir, travadaMotivo = () => null }) {
   return flags.map((flag) => {
     const largura = larguraFlag(flag);
     if (flag.nivel !== nivel) return <span key={flag.campo} className={`${largura} shrink-0`} />;
-    const motivo = travadaMotivo(flag) || (flag.requer && !item[flag.requer] ? `Marque ${rotulo(flags, flag.requer)} antes` : null);
+    const motivo = travadaMotivo(flag) || (flag.requer && !item[flag.requer] ? requerTexto(flags, flag.requer) : null);
     if (flag.opcoes) {
       const vazio = !item[flag.campo];
       return (
@@ -158,7 +161,7 @@ function ColunasFlags({ flags, nivel, item, onDefinir, travadaMotivo = () => nul
             }`}
           >
             <option value="">Selecione...</option>
-            {flag.opcoes.map((o) => (
+            {opcoesDaFlag(flag, item).map((o) => (
               <option key={o.value} value={o.value}>
                 {o.label}
               </option>
@@ -182,8 +185,9 @@ function ColunasFlags({ flags, nivel, item, onDefinir, travadaMotivo = () => nul
   });
 }
 
-function rotulo(flags, campo) {
-  return flags.find((f) => f.campo === campo)?.label || campo;
+function requerTexto(flags, campo) {
+  const requerida = flags.find((f) => f.campo === campo);
+  return `${requerida?.opcoes ? 'Escolha' : 'Marque'} ${requerida?.label || campo} antes`;
 }
 
 // Linha azul que marca onde o item arrastado vai cair.
@@ -211,8 +215,10 @@ export function Indicador({ recuo = false, embaixo = false }) {
 //
 // `flags` (opcional, só a DRE usa): marcações, cada uma uma coluna à direita — `{ campo, label,
 // title, nivel, semFilhos, opcoes, requer }`, com o campo só nas linhas do `nivel` (1 ou 2).
-// Checkbox, ou combobox quando tem `opcoes` ([{ value, label }]); `requer` = campo de outra flag
-// que precisa estar marcada (desmarcá-la limpa esta — o backend faz o mesmo). Com `semFilhos`
+// Checkbox, ou combobox quando tem `opcoes` ([{ value, label, pai }]); `requer` = campo de outra
+// flag que precisa estar marcada/escolhida (desmarcá-la limpa esta — o backend faz o mesmo). Opção
+// com `pai` só aparece quando a flag `requer` vale `pai`, e trocar aquela limpa esta. `largura`
+// (classe Tailwind, opcional) alarga a coluna. Com `semFilhos`
 // (só nível 1), o grupo marcado não tem drilldown nem nível 2 (a Totalizadora da DRE): não abre,
 // não recebe item arrastado e a marcação fica travada enquanto ele tiver filhos.
 //
@@ -320,11 +326,13 @@ const MascarasArvoreEditor = forwardRef(function MascarasArvoreEditor(
   }
 
   // `item` é um grupo (nível 1) ou um filho (nível 2) — vale pros dois. Desmarcar uma flag limpa
-  // as que dependem dela (`requer`).
+  // as que dependem dela (`requer`); trocar o valor limpa as que filtram as opções por ela (`pai`).
   async function definirFlag(item, flag, valor) {
-    const dependentes = valor
-      ? {}
-      : Object.fromEntries(flags.filter((f) => f.requer === flag.campo).map((f) => [f.campo, null]));
+    const dependentes = Object.fromEntries(
+      flags
+        .filter((f) => f.requer === flag.campo && (!valor || f.opcoes?.some((o) => o.pai)))
+        .map((f) => [f.campo, null])
+    );
     const trocar = (x) => (x.id === item.id ? { ...x, [flag.campo]: valor, ...dependentes } : x);
     setArvore((atual) => atual.map((g) => ({ ...trocar(g), filhos: g.filhos.map(trocar) })));
     if (valor && flag.semFilhos) {

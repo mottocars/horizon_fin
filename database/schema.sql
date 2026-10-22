@@ -3267,12 +3267,21 @@ CREATE TABLE dre_mascaras (
     totalizadora  BOOLEAN NOT NULL DEFAULT FALSE,
     realiza_poc   BOOLEAN NOT NULL DEFAULT FALSE,
     tipo_poc      VARCHAR(10),
+    -- Origem (nível 2) e Cálculo (um dos da origem) — ver 2026-10-22-dre-mascaras-origem-calculo.sql.
+    origem        VARCHAR(30),
+    calculo       VARCHAR(30),
     criado_em     TIMESTAMP DEFAULT NOW(),
     atualizado_em TIMESTAMP DEFAULT NOW(),
     CHECK (parent_id IS NULL OR parent_id <> id),
     CONSTRAINT dre_mascaras_totalizadora_so_nivel_1 CHECK (parent_id IS NULL OR NOT totalizadora),
     CONSTRAINT dre_mascaras_realiza_poc_so_nivel_2 CHECK (parent_id IS NOT NULL OR NOT realiza_poc),
-    CONSTRAINT dre_mascaras_tipo_poc_valido CHECK (tipo_poc IS NULL OR (realiza_poc AND tipo_poc IN ('RECEITA', 'DESPESA')))
+    CONSTRAINT dre_mascaras_tipo_poc_valido CHECK (tipo_poc IS NULL OR (realiza_poc AND tipo_poc IN ('RECEITA', 'DESPESA'))),
+    CONSTRAINT dre_mascaras_origem_valida CHECK (origem IS NULL OR (parent_id IS NOT NULL
+        AND origem IN ('CONTRATOS_VENDAS', 'UNIDADES_IMOBILIARIAS', 'FINANCEIRO'))),
+    CONSTRAINT dre_mascaras_calculo_valido CHECK (calculo IS NULL
+        OR (origem = 'CONTRATOS_VENDAS' AND calculo IN ('VALOR_VENDAS', 'ESTORNO_VENDAS', 'RECEITA_DISTRATO'))
+        OR (origem = 'UNIDADES_IMOBILIARIAS' AND calculo = 'RECEITA_PERMUTA')
+        OR (origem = 'FINANCEIRO' AND calculo IN ('ENTRADAS_SAIDAS', 'CORRECAO_MONETARIA')))
 );
 
 CREATE INDEX idx_dre_mascaras_empresa ON dre_mascaras (empresa_id, parent_id, ordem);

@@ -17,13 +17,22 @@ const createSchema = z.object({
   descricoes: z.array(descricaoSchema).min(1, 'Informe o nome da máscara.').max(200),
 });
 
-// Parcial: renomear manda só `descricao`; marcar/desmarcar manda só a marcação (tipo_poc null limpa).
+// Parcial: renomear manda só `descricao`; marcar/desmarcar manda só a marcação (tipo_poc, origem
+// e calculo null limpam). Se o cálculo é da origem, quem confere é o service.
 const updateSchema = z
   .object({
     descricao: descricaoSchema.optional(),
     totalizadora: z.boolean().optional(),
     realiza_poc: z.boolean().optional(),
     tipo_poc: z.enum(['RECEITA', 'DESPESA'], { errorMap: () => ({ message: 'Tipo POC inválido.' }) }).nullable().optional(),
+    origem: z
+      .enum(Object.keys(service.CALCULOS_POR_ORIGEM), { errorMap: () => ({ message: 'Origem inválida.' }) })
+      .nullable()
+      .optional(),
+    calculo: z
+      .enum(Object.values(service.CALCULOS_POR_ORIGEM).flat(), { errorMap: () => ({ message: 'Cálculo inválido.' }) })
+      .nullable()
+      .optional(),
   })
   .refine((c) => Object.values(c).some((v) => v !== undefined), { message: 'Nada para alterar.' });
 
