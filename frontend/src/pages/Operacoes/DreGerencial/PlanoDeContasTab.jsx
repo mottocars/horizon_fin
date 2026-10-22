@@ -409,6 +409,7 @@ export default function PlanoDeContasTab({
                       corClasses={corCampo(mascaraId)}
                       larguraPainel={460}
                       alturaLista="max-h-64"
+                      compacto
                     />
                   )}
                   <span>

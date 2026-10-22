@@ -44,6 +44,9 @@ export default function SearchableSelect({
   larguraPainel = 0,
   // Classe de altura máxima da lista de opções (padrão max-h-60).
   alturaLista = 'max-h-60',
+  // Gatilho baixo, de texto pequeno — mesma altura das comboboxes das linhas da aba Máscaras da DRE
+  // (ex.: Máscara DRE no Plano de Contas da DRE Gerencial). O painel que abre não muda.
+  compacto = false,
 }) {
   const [open, setOpen] = useState(false);
   const [busca, setBusca] = useState('');
@@ -183,10 +186,12 @@ export default function SearchableSelect({
           type="button"
           disabled={disabled}
           onClick={() => (open ? setOpen(false) : abrir())}
-          className={`flex w-full items-center justify-between rounded-lg border px-3 py-2 text-left text-sm transition-colors focus:outline-none focus:ring-2 focus:ring-primary-100 disabled:bg-gray-50 disabled:opacity-60 ${corClasses}`}
+          className={`flex w-full items-center justify-between border text-left transition-colors focus:outline-none focus:ring-2 focus:ring-primary-100 disabled:bg-gray-50 disabled:opacity-60 ${
+            compacto ? 'h-6.75 rounded-md px-1.5 text-xs' : 'rounded-lg px-3 py-2 text-sm'
+          } ${corClasses}`}
         >
           <span className={`truncate ${temSelecao ? 'text-gray-900' : 'text-gray-400'}`}>{rotuloBotao}</span>
-          <ChevronDown size={16} className="shrink-0 text-gray-400" />
+          <ChevronDown size={compacto ? 14 : 16} className="shrink-0 text-gray-400" />
         </button>
       )}
 
