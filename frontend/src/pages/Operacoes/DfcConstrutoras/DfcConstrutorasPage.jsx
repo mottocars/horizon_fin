@@ -67,7 +67,7 @@ const TABS = [
   { id: 'plano-contas', label: 'Plano Contas', icon: ListTree },
   { id: 'avancos-obras', label: 'Avanços', icon: HardHat },
   { id: 'repasses', label: 'Repasses', icon: Banknote },
-  { id: 'contas-correntes', label: 'Contas Correntes', icon: Landmark },
+  { id: 'contas-correntes', label: 'Contas', icon: Landmark },
   { id: 'orcamentos', label: 'Orçamentos', icon: Calculator },
 ];
 

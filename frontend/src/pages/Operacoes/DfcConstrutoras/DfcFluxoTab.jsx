@@ -569,7 +569,7 @@ export default function DfcFluxoTab({
   }
 
   const dicaSaldoInicial =
-    'Realizado: saldo real das contas com Projeta DFC (aba Contas Correntes) na abertura do mês, pelo extrato do Sienge. Projetado: a partir do mês atual, parte do saldo real de abertura dele e segue o Saldo Final projetado do mês anterior.';
+    'Realizado: saldo real das contas com Projeta DFC (aba Contas) na abertura do mês, pelo extrato do Sienge. Projetado: a partir do mês atual, parte do saldo real de abertura dele e segue o Saldo Final projetado do mês anterior.';
 
   return (
     <div
