@@ -85,7 +85,7 @@ const FLAGS = [
     label: 'Origem',
     title: 'Nível 2 — de onde vem o valor da linha',
     nivel: 2,
-    largura: 'w-60',
+    largura: 'w-72',
     opcoes: ORIGENS,
   },
   {
@@ -93,7 +93,7 @@ const FLAGS = [
     label: 'Cálculo',
     title: 'Nível 2 — cálculo da Origem escolhida',
     nivel: 2,
-    largura: 'w-56',
+    largura: 'w-64',
     requer: 'origem',
     opcoes: CALCULOS,
   },
