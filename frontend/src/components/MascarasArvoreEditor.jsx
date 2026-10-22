@@ -129,11 +129,11 @@ export function BotaoAcao({ title, onClick, perigo = false, children }) {
 // Coluna dos botões de ação (acrescentar / renomear / remover), sempre a última à direita. Largura
 // fixa = 3 botões (o nível 2 tem 2, alinhados à direita) pra as colunas de flag ficarem na mesma
 // posição nos dois níveis.
-const COLUNA_ACOES = 'ml-6 flex w-[76px] shrink-0 items-center justify-end gap-0.5';
+const COLUNA_ACOES = 'ml-3 flex w-[76px] shrink-0 items-center justify-end gap-0.5';
 
 // Largura da coluna de uma flag (combobox precisa de mais espaço que checkbox; `largura` sobrepõe
 // pra opções de texto longo), com um respiro à esquerda separando uma coluna da outra.
-const larguraFlag = (flag) => `ml-6 ${flag.largura || (flag.opcoes ? 'w-32' : 'w-24')}`;
+const larguraFlag = (flag) => `ml-3 ${flag.largura || (flag.opcoes ? 'w-28' : 'w-[72px]')}`;
 
 // Opções com `pai` dependem do valor da flag `requer` (o Cálculo da DRE, filtrado pela Origem).
 const opcoesDaFlag = (flag, item) => flag.opcoes.filter((o) => !o.pai || o.pai === item[flag.requer]);
@@ -157,19 +157,21 @@ function ColunasFlags({ flags, nivel, item, onDefinir, travadaMotivo = () => nul
     const motivo = travadaMotivo(flag) || (flag.requer && !item[flag.requer] ? requerTexto(flags, flag.requer) : null);
     if (flag.opcoes) {
       const vazio = !item[flag.campo];
+      const opcoes = opcoesDaFlag(flag, item);
+      const escolhida = opcoes.find((o) => o.value === item[flag.campo]);
       return (
         <span key={flag.campo} className={`flex ${largura} shrink-0 justify-center`} onClick={(e) => e.stopPropagation()}>
           <select
             value={item[flag.campo] || ''}
             disabled={!!motivo}
             onChange={(e) => onDefinir(flag, e.target.value || null)}
-            title={motivo || flag.label}
+            title={motivo || escolhida?.label || flag.label}
             className={`w-full rounded-md border px-1.5 py-1 text-xs focus:outline-none focus:ring-2 focus:ring-primary-100 disabled:cursor-not-allowed disabled:border-gray-200 disabled:bg-gray-50 disabled:text-gray-300 ${
               vazio ? 'border-amber-200 bg-amber-50 text-gray-400' : 'border-primary-100 bg-primary-50 text-gray-900'
             }`}
           >
             <option value="">Selecione...</option>
-            {opcoesDaFlag(flag, item).map((o) => (
+            {opcoes.map((o) => (
               <option key={o.value} value={o.value}>
                 {o.label}
               </option>
@@ -577,7 +579,7 @@ const MascarasArvoreEditor = forwardRef(function MascarasArvoreEditor(
                   <GripVertical size={14} className="shrink-0 cursor-grab text-gray-300 group-hover/linha:text-gray-500" />
                   {semDrilldown ? (
                     <span
-                      title="Totalizadora — sem máscaras de nível 2"
+                      title="Totaliza — sem máscaras de nível 2"
                       className="flex h-4 w-4 shrink-0 items-center justify-center rounded bg-gray-200 text-gray-600"
                     >
                       <Sigma size={10} />
@@ -595,7 +597,7 @@ const MascarasArvoreEditor = forwardRef(function MascarasArvoreEditor(
                       className="font-semibold"
                     />
                   ) : (
-                    <span className="min-w-0 truncate text-xs font-semibold text-gray-900" title={grupo.descricao}>
+                    <span className="min-w-0 break-words text-xs font-semibold text-gray-900" title={grupo.descricao}>
                       {grupo.descricao}
                     </span>
                   )}
@@ -661,7 +663,7 @@ const MascarasArvoreEditor = forwardRef(function MascarasArvoreEditor(
                           onCancelar={() => setEditandoId(null)}
                         />
                       ) : (
-                        <span className="min-w-0 flex-1 truncate text-xs font-medium text-gray-800" title={filho.descricao}>
+                        <span className="min-w-0 flex-1 break-words text-xs font-medium text-gray-800" title={filho.descricao}>
                           {filho.descricao}
                         </span>
                       )}

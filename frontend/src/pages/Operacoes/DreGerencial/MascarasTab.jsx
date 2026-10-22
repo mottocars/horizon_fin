@@ -70,7 +70,7 @@ const CALCULOS = [
 const montarFlags = (abrirHistorico, aliquotaDe) => [
   {
     campo: 'totalizadora',
-    label: 'Totalizadora',
+    label: 'Totaliza',
     title: 'Nível 1 — linha de subtotal, sem máscaras de nível 2',
     nivel: 1,
     semFilhos: true,
