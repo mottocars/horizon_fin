@@ -497,15 +497,19 @@ const MascarasArvoreEditor = forwardRef(function MascarasArvoreEditor(
             }`}
           >
             <span className="flex-1">Nível 1 / Nível 2</span>
-            {flags.map((flag) => (
-              <span
-                key={flag.campo}
-                title={flag.title}
-                className={`${larguraFlag(flag)} shrink-0 ${flag.opcoes ? 'pl-2 text-left' : 'text-center'}`}
-              >
-                {flag.label}
-              </span>
-            ))}
+            {/* Agrupadas sem o gap-2 da linha, igual às colunas das linhas (ColunasFlags dentro de um
+                span) — senão cada coluna do cabeçalho fica 8px mais à esquerda que a anterior. */}
+            <span className="flex shrink-0 items-center">
+              {flags.map((flag) => (
+                <span
+                  key={flag.campo}
+                  title={flag.title}
+                  className={`${larguraFlag(flag)} shrink-0 ${flag.opcoes ? 'pl-2 text-left' : 'text-center'}`}
+                >
+                  {flag.label}
+                </span>
+              ))}
+            </span>
             {flags.length > 0 && <span className={COLUNA_ACOES} />}
           </div>
 
