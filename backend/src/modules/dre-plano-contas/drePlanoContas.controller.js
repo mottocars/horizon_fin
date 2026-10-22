@@ -5,8 +5,10 @@ const empresaIdSchema = z.coerce.number().int().positive('Empresa inválida.');
 const siengeIdSchema = z.coerce.number().int().positive('Conta inválida.');
 const emptyToNull = (v) => (v === '' || v === undefined ? null : v);
 
+// `nao_entra: true` = "NÃO ENTRA NA DRE" (a máscara é ignorada); sem ele, mascara_id null limpa.
 const updateSchema = z.object({
   mascara_id: z.preprocess(emptyToNull, z.coerce.number().int().positive().nullable()),
+  nao_entra: z.boolean().optional().default(false),
 });
 
 function erro(status, message) {
@@ -40,9 +42,9 @@ async function update(req, res, next) {
   try {
     const empresaId = empresaIdSchema.parse(req.params.empresaId);
     const siengeId = siengeIdSchema.parse(req.params.siengeId);
-    const { mascara_id: mascaraId } = updateSchema.parse(req.body);
+    const { mascara_id: mascaraId, nao_entra: naoEntra } = updateSchema.parse(req.body);
     const centroId = centroSchema.parse(req.body?.centro);
-    res.json(await service.update(empresaId, siengeId, mascaraId, { centroId }));
+    res.json(await service.update(empresaId, siengeId, mascaraId, { centroId, naoEntra }));
   } catch (err) {
     tratar(err, next);
   }

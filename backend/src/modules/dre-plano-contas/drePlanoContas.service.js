@@ -2,7 +2,8 @@ const pool = require('../../config/db');
 
 // Operações > DRE Gerencial > Plano de Contas: mesmo esquema de dfc-plano-contas/dfcPlanoContas.service.js
 // (plano Global + versões próprias por centro de custo), só que cada conta guarda apenas a Máscara
-// DRE (nível 2 de dre_mascaras). Linha só existe pra conta classificada — sem máscara, apaga.
+// DRE (nível 2 de dre_mascaras) ou "NÃO ENTRA NA DRE" (nao_entra, sem máscara). Linha só existe pra
+// conta classificada — limpar a combobox apaga.
 
 function erro(status, message) {
   const e = new Error(message);
@@ -32,17 +33,21 @@ async function exigirVersao(db, empresaId, centroId) {
   if (!rows[0]) throw erro(404, 'Este centro de custo não tem versão própria do plano de contas.');
 }
 
-// Máscara DRE das contas classificadas, no Global ou na versão do centro.
+// Máscara DRE (ou nao_entra) das contas classificadas, no Global ou na versão do centro.
 async function list(empresaId, centroId = null) {
   await exigirVersao(pool, empresaId, centroId);
   const a = alvo(centroId);
-  const { rows } = await pool.query(`SELECT sienge_id, mascara_id FROM ${a.tabela} WHERE ${a.filtro()}`, a.chave(empresaId));
+  const { rows } = await pool.query(
+    `SELECT sienge_id, mascara_id, nao_entra FROM ${a.tabela} WHERE ${a.filtro()}`,
+    a.chave(empresaId)
+  );
   return rows;
 }
 
-// Grava (ou limpa, com mascaraId null) a Máscara DRE de uma conta, no Global ou na versão do
-// centro. Só conta analítica (tp_conta diferente de 'T') e só máscara de nível 2 da mesma empresa.
-async function update(empresaId, siengeId, mascaraId, { centroId = null } = {}) {
+// Grava a Máscara DRE de uma conta, ou "NÃO ENTRA NA DRE" (naoEntra, a máscara é ignorada), ou limpa
+// (mascaraId null sem naoEntra), no Global ou na versão do centro. Só conta analítica (tp_conta
+// diferente de 'T') e só máscara de nível 2 da mesma empresa.
+async function update(empresaId, siengeId, mascaraId, { centroId = null, naoEntra = false } = {}) {
   const { rows: conta } = await pool.query(
     'SELECT tp_conta FROM planos_financeiros_sienge WHERE empresa_id = $1 AND sienge_id = $2',
     [empresaId, siengeId]
@@ -50,7 +55,8 @@ async function update(empresaId, siengeId, mascaraId, { centroId = null } = {}) 
   if (!conta[0]) throw erro(404, 'Conta não encontrada no plano de contas desta empresa.');
   if (conta[0].tp_conta === 'T') throw erro(400, 'Conta totalizadora não recebe Máscara DRE.');
 
-  if (mascaraId !== null) {
+  if (naoEntra) mascaraId = null;
+  else if (mascaraId !== null) {
     const { rows: mascara } = await pool.query('SELECT parent_id FROM dre_mascaras WHERE id = $1 AND empresa_id = $2', [
       mascaraId,
       empresaId,
@@ -62,18 +68,18 @@ async function update(empresaId, siengeId, mascaraId, { centroId = null } = {}) 
   const a = alvo(centroId);
   const base = a.chave(empresaId); // [$1] ou [$1, $2]
   await exigirVersao(pool, empresaId, centroId);
-  if (mascaraId === null) {
+  if (mascaraId === null && !naoEntra) {
     await pool.query(`DELETE FROM ${a.tabela} WHERE ${a.filtro()} AND sienge_id = $${base.length + 1}`, [...base, siengeId]);
-    return { sienge_id: siengeId, mascara_id: null };
+    return { sienge_id: siengeId, mascara_id: null, nao_entra: false };
   }
   const colunas = centroId ? 'empresa_id, centro_id, sienge_id' : 'empresa_id, sienge_id';
   const n = base.length;
   const { rows } = await pool.query(
-    `INSERT INTO ${a.tabela} (${colunas}, mascara_id)
-     VALUES (${[...base.map((_, i) => `$${i + 1}`), `$${n + 1}`, `$${n + 2}`].join(', ')})
-     ON CONFLICT (${colunas}) DO UPDATE SET mascara_id = EXCLUDED.mascara_id
-     RETURNING sienge_id, mascara_id`,
-    [...base, siengeId, mascaraId]
+    `INSERT INTO ${a.tabela} (${colunas}, mascara_id, nao_entra)
+     VALUES (${[...base.map((_, i) => `$${i + 1}`), `$${n + 1}`, `$${n + 2}`, `$${n + 3}`].join(', ')})
+     ON CONFLICT (${colunas}) DO UPDATE SET mascara_id = EXCLUDED.mascara_id, nao_entra = EXCLUDED.nao_entra
+     RETURNING sienge_id, mascara_id, nao_entra`,
+    [...base, siengeId, mascaraId, naoEntra]
   );
   return rows[0];
 }
@@ -123,14 +129,14 @@ async function criarVersao(empresaId, centroId, usuarioId, copiarDe = 'global') 
     let rowCount = 0;
     if (copiarDe === 'global') {
       ({ rowCount } = await client.query(
-        `INSERT INTO dre_plano_contas_centro (empresa_id, centro_id, sienge_id, mascara_id)
-         SELECT empresa_id, $2, sienge_id, mascara_id FROM dre_plano_contas WHERE empresa_id = $1`,
+        `INSERT INTO dre_plano_contas_centro (empresa_id, centro_id, sienge_id, mascara_id, nao_entra)
+         SELECT empresa_id, $2, sienge_id, mascara_id, nao_entra FROM dre_plano_contas WHERE empresa_id = $1`,
         [empresaId, centroId]
       ));
     } else if (copiarDe !== 'branco') {
       ({ rowCount } = await client.query(
-        `INSERT INTO dre_plano_contas_centro (empresa_id, centro_id, sienge_id, mascara_id)
-         SELECT empresa_id, $2, sienge_id, mascara_id FROM dre_plano_contas_centro
+        `INSERT INTO dre_plano_contas_centro (empresa_id, centro_id, sienge_id, mascara_id, nao_entra)
+         SELECT empresa_id, $2, sienge_id, mascara_id, nao_entra FROM dre_plano_contas_centro
           WHERE empresa_id = $1 AND centro_id = $3`,
         [empresaId, centroId, copiarDe]
       ));
@@ -156,7 +162,7 @@ async function excluirVersao(empresaId, centroId) {
 }
 
 // Resumo pros cards da aba Plano de Contas: o Global e cada versão de centro, com quantas contas
-// analíticas têm Máscara DRE. O Global diz também quantos centros seguem ele (os sem versão própria).
+// analíticas estão classificadas (Máscara DRE ou NÃO ENTRA NA DRE). O Global diz também quantos centros seguem ele (os sem versão própria).
 async function resumo(empresaId) {
   const { rows: tot } = await pool.query(
     "SELECT count(*)::int AS analiticas FROM planos_financeiros_sienge WHERE empresa_id = $1 AND tp_conta <> 'T'",
@@ -175,7 +181,7 @@ async function resumo(empresaId) {
   );
   const { rows: versoes } = await pool.query(
     `SELECT v.centro_id, c.name, c.natureza, v.criado_em, u.nome AS criado_por,
-            count(d.mascara_id)::int AS com_mascara, MAX(d.atualizado_em) AS atualizado_em
+            count(d.sienge_id)::int AS com_mascara, MAX(d.atualizado_em) AS atualizado_em
        FROM dre_plano_contas_versoes v
        JOIN centros_custo_sienge c ON c.empresa_id = v.empresa_id AND c.sienge_id = v.centro_id
        LEFT JOIN usuarios u ON u.id = v.usuario_id

@@ -3,17 +3,18 @@ import http from './http';
 // Mesmo esquema de dfcPlanoContas.api.js. `centroId` (opcional) em todas: a versão própria do plano
 // daquele centro de custo; sem ele, o plano Global (vale pra todos os centros sem versão própria).
 
-// Máscara DRE das contas classificadas: [{ sienge_id, mascara_id }]. Conta ausente = sem máscara.
+// Máscara DRE das contas classificadas: [{ sienge_id, mascara_id, nao_entra }] (nao_entra = "NÃO
+// ENTRA NA DRE", com mascara_id null). Conta ausente = sem máscara.
 export function listClassificacoesPlanoDre(empresaId, centroId = null) {
   return http
     .get(`/dre-plano-contas/${empresaId}`, { params: centroId ? { centro: centroId } : {} })
     .then((res) => res.data);
 }
 
-// `mascaraId` null limpa a classificação da conta.
-export function updateClassificacaoPlanoDre(empresaId, siengeId, mascaraId, { centroId = null } = {}) {
+// `mascaraId` null limpa a classificação da conta; `naoEntra` grava "NÃO ENTRA NA DRE".
+export function updateClassificacaoPlanoDre(empresaId, siengeId, mascaraId, { centroId = null, naoEntra = false } = {}) {
   return http
-    .put(`/dre-plano-contas/${empresaId}/${siengeId}`, { mascara_id: mascaraId, centro: centroId })
+    .put(`/dre-plano-contas/${empresaId}/${siengeId}`, { mascara_id: mascaraId, nao_entra: naoEntra, centro: centroId })
     .then((res) => res.data);
 }
 

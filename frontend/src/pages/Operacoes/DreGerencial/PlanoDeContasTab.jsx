@@ -16,6 +16,11 @@ const GRADE = 'grid grid-cols-[minmax(0,1fr)_288px_72px] items-center gap-3';
 const NAO_INFORMADO = '__nao_informado__';
 const OPCAO_NAO_INFORMADO = { value: NAO_INFORMADO, label: 'NÃO INFORMADO' };
 
+// Primeira opção da combobox Máscara DRE: a conta fica fora da DRE (gravada como nao_entra — é uma
+// classificação, não um campo em branco).
+const NAO_ENTRA = 'NAO_ENTRA';
+const OPCAO_NAO_ENTRA = { value: NAO_ENTRA, label: 'NÃO ENTRA NA DRE' };
+
 // Mesmo par de cores do Plano Contas da DFC: vazio em âmbar, preenchido em azul claro.
 function corCampo(valor) {
   return valor ? 'border-primary-100 bg-primary-50' : 'border-amber-300 bg-amber-50';
@@ -100,7 +105,7 @@ export default function PlanoDeContasTab({
   const [erroCarga, setErroCarga] = useState('');
   // Guarda as FECHADAS (não as abertas): vazio = árvore inteira aberta, que é o padrão.
   const [fechados, setFechados] = useState([]);
-  // sienge_id -> mascara_id (conta ausente = sem máscara)
+  // sienge_id -> mascara_id ou NAO_ENTRA (conta ausente = sem máscara)
   const [classificacoes, setClassificacoes] = useState({});
   const [mascaras, setMascaras] = useState([]);
   // Filtros de coluna (FiltroColuna): null = sem filtro (tudo marcado).
@@ -127,7 +132,7 @@ export default function PlanoDeContasTab({
     ])
       .then(([result, lista, arvoreMascaras]) => {
         setContas(result.data);
-        setClassificacoes(Object.fromEntries(lista.map((c) => [c.sienge_id, c.mascara_id])));
+        setClassificacoes(Object.fromEntries(lista.map((c) => [c.sienge_id, c.nao_entra ? NAO_ENTRA : c.mascara_id])));
         setMascaras(arvoreMascaras);
         onTotal?.(result.pagination.total);
       })
@@ -149,20 +154,24 @@ export default function PlanoDeContasTab({
   }, [carregar, refreshToken]);
 
   // Só as máscaras de nível 2 são escolhíveis, na ordem da aba Máscaras — agrupadas pelo nível 1
-  // (título no painel da combobox).
+  // (título no painel da combobox) —, depois de NÃO ENTRA NA DRE (sem grupo, no topo).
   const opcoesMascara = useMemo(
-    () => mascaras.flatMap((g) => g.filhos.map((f) => ({ value: f.id, label: f.descricao, grupo: g.descricao }))),
+    () => [
+      OPCAO_NAO_ENTRA,
+      ...mascaras.flatMap((g) => g.filhos.map((f) => ({ value: f.id, label: f.descricao, grupo: g.descricao }))),
+    ],
     [mascaras]
   );
 
-  // Atualiza na hora e grava; se falhar, volta o que estava.
-  async function classificar(siengeId, mascaraId) {
+  // Atualiza na hora e grava; se falhar, volta o que estava. `valor`: id da máscara, NAO_ENTRA ou null.
+  async function classificar(siengeId, valor) {
     const anterior = classificacoes[siengeId] ?? null;
-    setClassificacoes((atual) => ({ ...atual, [siengeId]: mascaraId }));
+    setClassificacoes((atual) => ({ ...atual, [siengeId]: valor }));
     setErroSalvar('');
     setPendentes((n) => n + 1);
     try {
-      await updateClassificacaoPlanoDre(empresaId, siengeId, mascaraId, { centroId: centroVersao });
+      const naoEntra = valor === NAO_ENTRA;
+      await updateClassificacaoPlanoDre(empresaId, siengeId, naoEntra ? null : valor, { centroId: centroVersao, naoEntra });
       setSalvoAlgumaVez(true);
     } catch (err) {
       setClassificacoes((atual) => ({ ...atual, [siengeId]: anterior }));
@@ -402,7 +411,7 @@ export default function PlanoDeContasTab({
                   ) : (
                     <SearchableSelect
                       value={mascaraId ?? ''}
-                      onChange={(v) => classificar(conta.sienge_id, v ? Number(v) : null)}
+                      onChange={(v) => classificar(conta.sienge_id, v === NAO_ENTRA ? NAO_ENTRA : v ? Number(v) : null)}
                       options={opcoesMascara}
                       placeholder="Selecione a máscara"
                       emptyMessage="Nenhuma máscara de nível 2. Cadastre na aba Máscaras."

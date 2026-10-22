@@ -3308,13 +3308,16 @@ ALTER TABLE planos_financeiros_sienge
 -- ─── Operações > DRE Gerencial > Plano de Contas — ver database/migrations/2026-10-22-dre-plano-contas.sql ───
 -- Mesmo esquema do Plano Contas da DFC: Máscara DRE (nível 2) de cada conta analítica no plano
 -- Global (vale pra todos os centros) e em versões próprias por centro de custo. Linha só existe
--- pra conta classificada; apagar a máscara apaga a classificação (CASCADE).
+-- pra conta classificada; apagar a máscara apaga a classificação (CASCADE). "NÃO ENTRA NA DRE" é
+-- classificação também: nao_entra = TRUE e mascara_id NULL (as duas andam juntas).
 CREATE TABLE dre_plano_contas (
     empresa_id     INTEGER NOT NULL,
     sienge_id      INTEGER NOT NULL,
-    mascara_id     INTEGER NOT NULL REFERENCES dre_mascaras(id) ON DELETE CASCADE,
+    mascara_id     INTEGER REFERENCES dre_mascaras(id) ON DELETE CASCADE,
+    nao_entra      BOOLEAN NOT NULL DEFAULT FALSE,
     atualizado_em  TIMESTAMP DEFAULT NOW(),
     PRIMARY KEY (empresa_id, sienge_id),
+    CONSTRAINT dre_plano_contas_mascara_ou_nao_entra CHECK ((mascara_id IS NULL) = nao_entra),
     FOREIGN KEY (sienge_id, empresa_id) REFERENCES planos_financeiros_sienge(sienge_id, empresa_id) ON DELETE CASCADE
 );
 
@@ -3335,9 +3338,11 @@ CREATE TABLE dre_plano_contas_centro (
     empresa_id     INTEGER NOT NULL,
     centro_id      INTEGER NOT NULL,
     sienge_id      INTEGER NOT NULL,
-    mascara_id     INTEGER NOT NULL REFERENCES dre_mascaras(id) ON DELETE CASCADE,
+    mascara_id     INTEGER REFERENCES dre_mascaras(id) ON DELETE CASCADE,
+    nao_entra      BOOLEAN NOT NULL DEFAULT FALSE,
     atualizado_em  TIMESTAMP DEFAULT NOW(),
     PRIMARY KEY (empresa_id, centro_id, sienge_id),
+    CONSTRAINT dre_plano_contas_centro_mascara_ou_nao_entra CHECK ((mascara_id IS NULL) = nao_entra),
     FOREIGN KEY (empresa_id, centro_id) REFERENCES dre_plano_contas_versoes(empresa_id, centro_id) ON DELETE CASCADE,
     FOREIGN KEY (sienge_id, empresa_id) REFERENCES planos_financeiros_sienge(sienge_id, empresa_id) ON DELETE CASCADE
 );

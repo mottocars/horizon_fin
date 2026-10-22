@@ -5,6 +5,10 @@
 -- de outro centro ou em branco). Linha só existe pra conta classificada: apagar a máscara na aba
 -- Máscaras apaga a classificação junto (CASCADE).
 --
+-- "NÃO ENTRA NA DRE" (opção da combobox) também é classificação: linha com nao_entra = TRUE e
+-- mascara_id NULL — a conta foi olhada e fica fora da DRE (diferente de conta sem linha, que ainda
+-- não foi classificada). As duas colunas andam juntas (CHECK).
+--
 -- Antes a Máscara DRE ficava em planos_financeiros_sienge.classificacao_dre_id (um plano só). A
 -- migração copia o que estiver lá pro plano Global; a coluna fica sem uso (não é apagada).
 -- Aplicar: psql -U postgres -d horizon_fin -f database/migrations/2026-10-22-dre-plano-contas.sql
@@ -60,5 +64,19 @@ SELECT p.empresa_id, p.sienge_id, p.classificacao_dre_id
   JOIN dre_mascaras m ON m.id = p.classificacao_dre_id AND m.empresa_id = p.empresa_id AND m.parent_id IS NOT NULL
  WHERE p.tp_conta <> 'T'
 ON CONFLICT (empresa_id, sienge_id) DO NOTHING;
+
+-- NÃO ENTRA NA DRE (ver cabeçalho). ALTERs separados pra rodar de novo num banco que já tinha as
+-- tabelas sem a coluna.
+ALTER TABLE dre_plano_contas ALTER COLUMN mascara_id DROP NOT NULL;
+ALTER TABLE dre_plano_contas ADD COLUMN IF NOT EXISTS nao_entra BOOLEAN NOT NULL DEFAULT FALSE;
+ALTER TABLE dre_plano_contas DROP CONSTRAINT IF EXISTS dre_plano_contas_mascara_ou_nao_entra;
+ALTER TABLE dre_plano_contas ADD CONSTRAINT dre_plano_contas_mascara_ou_nao_entra
+    CHECK ((mascara_id IS NULL) = nao_entra);
+
+ALTER TABLE dre_plano_contas_centro ALTER COLUMN mascara_id DROP NOT NULL;
+ALTER TABLE dre_plano_contas_centro ADD COLUMN IF NOT EXISTS nao_entra BOOLEAN NOT NULL DEFAULT FALSE;
+ALTER TABLE dre_plano_contas_centro DROP CONSTRAINT IF EXISTS dre_plano_contas_centro_mascara_ou_nao_entra;
+ALTER TABLE dre_plano_contas_centro ADD CONSTRAINT dre_plano_contas_centro_mascara_ou_nao_entra
+    CHECK ((mascara_id IS NULL) = nao_entra);
 
 COMMIT;
