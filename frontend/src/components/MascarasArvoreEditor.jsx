@@ -126,6 +126,11 @@ export function BotaoAcao({ title, onClick, perigo = false, children }) {
   );
 }
 
+// Coluna dos botões de ação (acrescentar / renomear / remover), sempre a última à direita. Largura
+// fixa = 3 botões (o nível 2 tem 2, alinhados à direita) pra as colunas de flag ficarem na mesma
+// posição nos dois níveis.
+const COLUNA_ACOES = 'ml-6 flex w-[76px] shrink-0 items-center justify-end gap-0.5';
+
 // Largura da coluna de uma flag (combobox precisa de mais espaço que checkbox), com um respiro à
 // esquerda separando uma coluna da outra.
 const larguraFlag = (flag) => (flag.opcoes ? 'ml-6 w-32' : 'ml-6 w-24');
@@ -501,6 +506,7 @@ const MascarasArvoreEditor = forwardRef(function MascarasArvoreEditor(
                 {flag.label}
               </span>
             ))}
+            {flags.length > 0 && <span className={COLUNA_ACOES} />}
           </div>
 
           {/* Cabeçalho sempre visível, mesmo sem nenhuma máscara (pedido do usuário). */}
@@ -578,7 +584,20 @@ const MascarasArvoreEditor = forwardRef(function MascarasArvoreEditor(
                       {grupo.filhos.length}
                     </span>
                   )}
-                  <span className="ml-auto flex shrink-0 items-center gap-0.5 opacity-0 transition-opacity group-hover/linha:opacity-100">
+                  <span className="ml-auto flex shrink-0 items-center">
+                    <ColunasFlags
+                      flags={flags}
+                      nivel={1}
+                      item={grupo}
+                      onDefinir={(flag, valor) => definirFlag(grupo, flag, valor)}
+                      travadaMotivo={(flag) =>
+                        flag.semFilhos && !grupo[flag.campo] && grupo.filhos.length > 0
+                          ? `Remova ou mova as máscaras de nível 2 antes de marcar ${flag.label}`
+                          : null
+                      }
+                    />
+                  </span>
+                  <span className={`${COLUNA_ACOES} opacity-0 transition-opacity group-hover/linha:opacity-100`}>
                     {!semDrilldown && (
                       <BotaoAcao
                         title="Adicionar máscara de nível 2"
@@ -597,17 +616,6 @@ const MascarasArvoreEditor = forwardRef(function MascarasArvoreEditor(
                       <Trash2 size={13} />
                     </BotaoAcao>
                   </span>
-                  <ColunasFlags
-                    flags={flags}
-                    nivel={1}
-                    item={grupo}
-                    onDefinir={(flag, valor) => definirFlag(grupo, flag, valor)}
-                    travadaMotivo={(flag) =>
-                      flag.semFilhos && !grupo[flag.campo] && grupo.filhos.length > 0
-                        ? `Remova ou mova as máscaras de nível 2 antes de marcar ${flag.label}`
-                        : null
-                    }
-                  />
                 </div>
 
                 {/* Linhas do nível 2 */}
@@ -637,7 +645,10 @@ const MascarasArvoreEditor = forwardRef(function MascarasArvoreEditor(
                           {filho.descricao}
                         </span>
                       )}
-                      <span className="ml-auto flex shrink-0 items-center gap-0.5 opacity-0 transition-opacity group-hover/linha:opacity-100">
+                      <span className="ml-auto flex shrink-0 items-center">
+                        <ColunasFlags flags={flags} nivel={2} item={filho} onDefinir={(flag, valor) => definirFlag(filho, flag, valor)} />
+                      </span>
+                      <span className={`${COLUNA_ACOES} opacity-0 transition-opacity group-hover/linha:opacity-100`}>
                         <BotaoAcao title="Renomear" onClick={() => setEditandoId(filho.id)}>
                           <Pencil size={13} />
                         </BotaoAcao>
@@ -645,7 +656,6 @@ const MascarasArvoreEditor = forwardRef(function MascarasArvoreEditor(
                           <Trash2 size={13} />
                         </BotaoAcao>
                       </span>
-                      <ColunasFlags flags={flags} nivel={2} item={filho} onDefinir={(flag, valor) => definirFlag(filho, flag, valor)} />
                     </div>
                   ))}
 
