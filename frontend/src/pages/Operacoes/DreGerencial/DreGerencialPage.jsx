@@ -1,33 +1,37 @@
 import { useEffect, useRef, useState } from 'react';
 import { useSearchParams } from 'react-router-dom';
-import { BarChart3, Calculator, Layers, ListTree, Plus, RefreshCw, Search, Tags } from 'lucide-react';
+import { BarChart3, Calculator, Layers, ListTree, Plus, RefreshCw, Search, Tags, Trash2 } from 'lucide-react';
 import Card from '../../../components/Card';
 import Tabs from '../../../components/Tabs';
 import Button from '../../../components/Button';
 import SearchableSelect from '../../../components/SearchableSelect';
 import { listEmpresas } from '../../../api/empresas.api';
 import { gerarPlano } from '../../../api/planosFinanceirosSienge.api';
+import { excluirVersaoPlanoDre, listVersoesPlanoDre } from '../../../api/drePlanoContas.api';
 import { nomeExibicaoEmpresa } from '../../../utils/empresa';
 import { useEmpresaTravada } from '../../../hooks/useEmpresaTravada';
+import { useConfirm } from '../../../confirm/ConfirmContext';
 import CategoriasOrcamentoTab from './CategoriasOrcamentoTab';
 import OrcamentoTab from './OrcamentoTab';
 import MascarasTab from './MascarasTab';
 import PlanoDeContasTab from './PlanoDeContasTab';
+import PlanosContasLista from './PlanosContasLista';
+import NovaVersaoPlanoModal from './NovaVersaoPlanoModal';
 import DreTab from './DreTab';
 
 // O `{ divider: true }` separa a DRE (a demonstração em si) das abas de cadastro/parâmetro que
-// dão suporte a ela — Máscaras, Categorias Orçamento, Orçamento e Plano de Contas ficam juntas,
+// dão suporte a ela — Máscaras, Plano de Contas, Categorias Orçamento e Orçamento ficam juntas,
 // sem divisor entre elas (mesmo padrão de SaldoContasBancariasPage.jsx, que separa "Saldos das
 // Contas" de "Bancos" e as demais abas de cadastro/parâmetro). Máscaras é a primeira depois da
-// DRE (pedido do usuário) — é lá que se monta a estrutura da DRE (nível 1 e 2) e se cadastra a
-// Máscara DRE que a combobox de cada linha do Plano de Contas usa pra classificar.
+// DRE e Plano de Contas vem logo em seguida (pedido do usuário): na Máscaras se monta a estrutura
+// da DRE (nível 1 e 2); no Plano de Contas cada conta recebe a Máscara DRE de nível 2.
 const TABS = [
   { id: 'dre', label: 'DRE', icon: BarChart3 },
   { divider: true },
   { id: 'mascaras', label: 'Máscaras', icon: Tags },
+  { id: 'plano-de-contas', label: 'Plano de Contas', icon: ListTree },
   { id: 'categorias-orcamento', label: 'Categorias Orçamento', icon: Layers },
   { id: 'orcamento', label: 'Orçamento', icon: Calculator },
-  { id: 'plano-de-contas', label: 'Plano de Contas', icon: ListTree },
 ];
 
 // Empresa e aba vivem na URL (não em useState local) — mesmo motivo de todas as outras telas
@@ -51,7 +55,7 @@ export default function DreGerencialPage() {
   }
 
   function handleEmpresaChange(novoId) {
-    atualizarParams({ empresa_id: novoId || null });
+    atualizarParams({ empresa_id: novoId || null, plano: null });
     setTotalPlanoContas(0);
   }
 
@@ -116,6 +120,58 @@ export default function DreGerencialPage() {
     }
   }
 
+  // Aba Plano de Contas: mesmo esquema do Plano Contas da DFC (DfcConstrutorasPage.jsx). Abre nos
+  // cards dos planos (PlanosContasLista); clicar num card abre o plano pra edição. Qual plano está
+  // aberto vai na URL (`plano`: 'global' ou o id do centro com plano próprio), pra o "Voltar" do
+  // navegador funcionar. Sem `plano` = os cards.
+  const confirm = useConfirm();
+  const [versoesPlano, setVersoesPlano] = useState([]);
+  const versaoPlano = searchParams.get('plano') || '';
+  const [novaVersaoAberta, setNovaVersaoAberta] = useState(false);
+  const [refreshTokenCardsPlano, setRefreshTokenCardsPlano] = useState(0);
+  const abrirPlano = (plano) => atualizarParams({ plano: plano || null });
+
+  function carregarVersoesPlano() {
+    if (!empresaId) {
+      setVersoesPlano([]);
+      return Promise.resolve([]);
+    }
+    return listVersoesPlanoDre(empresaId)
+      .then((lista) => {
+        setVersoesPlano(lista);
+        return lista;
+      })
+      .catch(() => []);
+  }
+
+  useEffect(() => {
+    if (abaAtiva === 'plano-de-contas') carregarVersoesPlano();
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [empresaId, abaAtiva]);
+
+  // Plano de centro que não existe mais (excluído, ou link antigo): volta pros cards.
+  const planoCentro = versaoPlano && versaoPlano !== 'global' ? versoesPlano.find((v) => String(v.centro_id) === versaoPlano) : null;
+  const planoAberto = versaoPlano === 'global' || Boolean(planoCentro);
+
+  async function excluirVersaoPlano() {
+    if (!planoCentro) return;
+    const ok = await confirm({
+      title: 'Excluir versão do plano',
+      description: `Excluir a versão própria do plano de contas de ${planoCentro.name}? As classificações dela serão apagadas e o centro volta a seguir o plano Global.`,
+      confirmLabel: 'Excluir',
+      variant: 'danger',
+    });
+    if (!ok) return;
+    try {
+      await excluirVersaoPlanoDre(empresaId, planoCentro.centro_id);
+      abrirPlano(null);
+      carregarVersoesPlano();
+      setRefreshTokenCardsPlano((n) => n + 1);
+    } catch (e) {
+      setErroPlanoContas(e.response?.data?.message || 'Não foi possível excluir a versão.');
+    }
+  }
+
   const semEmpresa = !empresaId;
 
   return (
@@ -152,7 +208,7 @@ export default function DreGerencialPage() {
               </div>
             )}
 
-            {abaAtiva === 'plano-de-contas' && (
+            {abaAtiva === 'plano-de-contas' && planoAberto && (
               <div className="sm:min-w-56 sm:max-w-sm sm:flex-1">
                 <label className="mb-1 block text-sm font-medium text-gray-700">Buscar</label>
                 <div className="relative">
@@ -188,9 +244,19 @@ export default function DreGerencialPage() {
             </div>
           )}
 
-          {abaAtiva === 'plano-de-contas' && (
+          {abaAtiva === 'plano-de-contas' && planoAberto && (
             <div className="flex shrink-0 flex-col items-end gap-1.5">
               <div className="flex shrink-0 items-center gap-2">
+                {planoCentro && (
+                  <button
+                    type="button"
+                    onClick={excluirVersaoPlano}
+                    title="Excluir o plano deste centro (ele volta a seguir o Global)"
+                    className="flex shrink-0 items-center justify-center rounded-lg border border-gray-200 p-2 text-gray-500 transition-colors hover:bg-red-50 hover:text-red-600"
+                  >
+                    <Trash2 size={18} />
+                  </button>
+                )}
                 {/* Só o ícone (pedido do usuário, mesmo padrão de ContasTab.jsx em Saldo Contas
                     Bancárias): "+" gera o plano de contas pela primeira vez, refresh atualiza
                     (traz novas contas) depois de já gerado — troca sozinho conforme
@@ -228,15 +294,41 @@ export default function DreGerencialPage() {
 
         {abaAtiva === 'orcamento' && <OrcamentoTab empresaId={empresaId} search={buscaOrcamento} />}
 
-        {abaAtiva === 'plano-de-contas' && (
-          <PlanoDeContasTab
-            empresaId={empresaId}
-            search={buscaPlanoContas}
-            refreshToken={refreshTokenPlanoContas}
-            onTotal={setTotalPlanoContas}
-          />
-        )}
+        {abaAtiva === 'plano-de-contas' &&
+          (planoAberto ? (
+            <PlanoDeContasTab
+              empresaId={empresaId}
+              search={buscaPlanoContas}
+              refreshToken={refreshTokenPlanoContas}
+              onTotal={setTotalPlanoContas}
+              centroVersao={planoCentro ? planoCentro.centro_id : null}
+              tituloPlano={planoCentro ? planoCentro.name : 'Global'}
+              onVoltar={() => {
+                abrirPlano(null);
+                setRefreshTokenCardsPlano((n) => n + 1);
+              }}
+            />
+          ) : (
+            <PlanosContasLista
+              empresaId={empresaId}
+              onAbrir={abrirPlano}
+              onNovo={() => setNovaVersaoAberta(true)}
+              refreshToken={refreshTokenCardsPlano}
+            />
+          ))}
       </div>
+
+      <NovaVersaoPlanoModal
+        open={novaVersaoAberta}
+        onClose={() => setNovaVersaoAberta(false)}
+        empresaId={empresaId}
+        versoes={versoesPlano}
+        onCriada={(criada) => {
+          setNovaVersaoAberta(false);
+          setRefreshTokenCardsPlano((n) => n + 1);
+          carregarVersoesPlano().then(() => abrirPlano(String(criada.centro_id)));
+        }}
+      />
     </div>
   );
 }

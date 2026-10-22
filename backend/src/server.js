@@ -32,6 +32,7 @@ const dreCategoriasOrcamentoRoutes = require('./modules/dre-categorias-orcamento
 const dreOrcamentoRoutes = require('./modules/dre-orcamento/orcamento.routes');
 const dfcMascarasRoutes = require('./modules/dfc-mascaras/dfcMascaras.routes');
 const dreMascarasRoutes = require('./modules/dre-mascaras/dreMascaras.routes');
+const drePlanoContasRoutes = require('./modules/dre-plano-contas/drePlanoContas.routes');
 const dfcParametrosRoutes = require('./modules/dfc-parametros/dfcParametros.routes');
 const dfcCentrosRoutes = require('./modules/dfc-centros/dfcCentros.routes');
 const dfcPlanoContasRoutes = require('./modules/dfc-plano-contas/dfcPlanoContas.routes');
@@ -173,6 +174,7 @@ app.use('/api/classificacoes-bancarias', exigirTela([T.SALDOS]), exigirAdministr
 app.use('/api/dre-categorias-orcamento', exigirTela([T.DRE]), dreCategoriasOrcamentoRoutes);
 app.use('/api/dre-orcamento', exigirTela([T.DRE]), dreOrcamentoRoutes);
 app.use('/api/dre-mascaras', exigirTela([T.DRE]), dreMascarasRoutes);
+app.use('/api/dre-plano-contas', exigirTela([T.DRE]), drePlanoContasRoutes);
 app.use('/api/dfc-mascaras', exigirTela([T.DFC], LEITURA_DASHBOARD), dfcMascarasRoutes);
 app.use('/api/dfc-parametros', exigirTela([T.DFC]), dfcParametrosRoutes);
 app.use('/api/dfc-centros', exigirTela([T.DFC]), dfcCentrosRoutes);

@@ -104,24 +104,6 @@ async function listResponsaveis(empresaId) {
   return rows;
 }
 
-// Atualiza só a Máscara DRE — usado pela aba "Plano de Contas" da DRE POC Gerencial (combobox
-// direto na linha da lista, sem abrir a tela de cadastro completa). Diferente de
-// updateEnriquecimento (que reescreve TODOS os campos de enriquecimento de uma vez, pensado pra
-// vir de um formulário completo), este só toca em classificacao_dre_id — não pode zerar
-// classificação DFC, pacote, orçamento etc. já preenchidos por outro fluxo. A máscara tem que
-// ser de nível 2 da própria empresa (dre_mascaras) — senão não grava nada (o controller dá 404).
-async function updateClassificacaoDre(empresaId, siengeId, classificacaoDreId) {
-  const { rows } = await pool.query(
-    `UPDATE planos_financeiros_sienge SET classificacao_dre_id = $1
-     WHERE empresa_id = $2 AND sienge_id = $3 AND tp_conta != 'T'
-       AND ($1::int IS NULL OR EXISTS (
-             SELECT 1 FROM dre_mascaras m WHERE m.id = $1 AND m.empresa_id = $2 AND m.parent_id IS NOT NULL))
-     RETURNING sienge_id, classificacao_dre_id`,
-    [classificacaoDreId, empresaId, siengeId]
-  );
-  return rows[0] || null;
-}
-
 function badRequest(message) {
   const err = new Error(message);
   err.status = 400;
@@ -131,7 +113,7 @@ function badRequest(message) {
 
 // O cadastro da conta edita só Pacote e Responsável. As demais colunas de enriquecimento
 // (classificação DFC, submáscaras, projeção, incrementos...) saíram da tela e ficam como estão; a
-// Classificação DRE segue sendo editada pela DRE POC Gerencial (updateClassificacaoDre).
+// Máscara DRE de cada conta é editada na aba Plano de Contas da DRE Gerencial (dre-plano-contas).
 // responsavel_id ausente (undefined) = não mexe — uma aba antiga aberta, que não manda o campo, não
 // apaga o responsável; null = limpar.
 async function updateEnriquecimento(empresaId, siengeId, data) {
@@ -257,5 +239,4 @@ module.exports = {
   getItem,
   listResponsaveis,
   updateEnriquecimento,
-  updateClassificacaoDre,
 };

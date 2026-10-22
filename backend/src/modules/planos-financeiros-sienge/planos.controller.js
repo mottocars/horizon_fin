@@ -65,10 +65,6 @@ function badRequest(message) {
   return err;
 }
 
-const classificacaoDreSchema = z.object({
-  classificacao_dre_id: z.preprocess(emptyToNull, z.coerce.number().int().positive().nullable()),
-});
-
 async function listGerados(req, res, next) {
   try {
     const result = await service.listGerados(req.user.empresaIds ? [...req.user.empresaIds] : null);
@@ -177,18 +173,6 @@ async function updateEnriquecimento(req, res, next) {
   }
 }
 
-async function updateClassificacaoDre(req, res, next) {
-  try {
-    const { classificacao_dre_id } = classificacaoDreSchema.parse(req.body);
-    const item = await service.updateClassificacaoDre(req.params.empresaId, req.params.siengeId, classificacao_dre_id);
-    if (!item) return res.status(404).json({ message: 'Conta não encontrada ou não pode ser editada.' });
-    res.json(item);
-  } catch (err) {
-    if (err.issues) return next(badRequest(err.issues[0].message));
-    next(err);
-  }
-}
-
 module.exports = {
   listGerados,
   listContas,
@@ -197,5 +181,4 @@ module.exports = {
   gerar,
   getItem,
   updateEnriquecimento,
-  updateClassificacaoDre,
 };

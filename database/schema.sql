@@ -656,7 +656,9 @@ CREATE TABLE planos_financeiros_sienge (
     fl_imposto             VARCHAR(1),
     criado_em              TIMESTAMP DEFAULT NOW(),
     atualizado_em          TIMESTAMP DEFAULT NOW(),
-    -- FK pra dre_mascaras — adicionada depois da tabela (ver bloco DRE Gerencial > Máscaras).
+    -- Sem uso desde 2026-10-22: a Máscara DRE de cada conta foi pro plano Global da DRE
+    -- (dre_plano_contas — ver bloco DRE Gerencial > Plano de Contas). FK pra dre_mascaras,
+    -- adicionada depois da tabela.
     classificacao_dre_id   INTEGER,
     classificacao_dfc_id   INTEGER REFERENCES mascara_itens(id) ON DELETE SET NULL,
     submascara_dre_id      INTEGER REFERENCES mascara_itens(id) ON DELETE SET NULL,
@@ -3252,7 +3254,7 @@ CREATE TRIGGER trg_dfc_mascaras_atualizado_em
 
 -- ─── Operações > DRE Gerencial > Máscaras — ver database/migrations/2026-10-22-dre-mascaras.sql ───
 -- Estrutura da DRE por empresa em 2 níveis, espelho de dfc_mascaras. A Máscara DRE escolhida em
--- cada conta do Plano de Contas (planos_financeiros_sienge.classificacao_dre_id) aponta pra cá.
+-- cada conta do Plano de Contas (dre_plano_contas / dre_plano_contas_centro) aponta pra cá.
 CREATE TABLE dre_mascaras (
     id            SERIAL PRIMARY KEY,
     empresa_id    INTEGER NOT NULL REFERENCES empresas(id) ON DELETE CASCADE,
@@ -3282,6 +3284,47 @@ CREATE TRIGGER trg_dre_mascaras_atualizado_em
 ALTER TABLE planos_financeiros_sienge
     ADD CONSTRAINT planos_financeiros_sienge_classificacao_dre_id_fkey
     FOREIGN KEY (classificacao_dre_id) REFERENCES dre_mascaras(id) ON DELETE SET NULL;
+
+-- ─── Operações > DRE Gerencial > Plano de Contas — ver database/migrations/2026-10-22-dre-plano-contas.sql ───
+-- Mesmo esquema do Plano Contas da DFC: Máscara DRE (nível 2) de cada conta analítica no plano
+-- Global (vale pra todos os centros) e em versões próprias por centro de custo. Linha só existe
+-- pra conta classificada; apagar a máscara apaga a classificação (CASCADE).
+CREATE TABLE dre_plano_contas (
+    empresa_id     INTEGER NOT NULL,
+    sienge_id      INTEGER NOT NULL,
+    mascara_id     INTEGER NOT NULL REFERENCES dre_mascaras(id) ON DELETE CASCADE,
+    atualizado_em  TIMESTAMP DEFAULT NOW(),
+    PRIMARY KEY (empresa_id, sienge_id),
+    FOREIGN KEY (sienge_id, empresa_id) REFERENCES planos_financeiros_sienge(sienge_id, empresa_id) ON DELETE CASCADE
+);
+
+CREATE TRIGGER trg_dre_plano_contas_atualizado_em
+    BEFORE UPDATE ON dre_plano_contas
+    FOR EACH ROW EXECUTE FUNCTION set_atualizado_em();
+
+CREATE TABLE dre_plano_contas_versoes (
+    empresa_id   INTEGER NOT NULL,
+    centro_id    INTEGER NOT NULL,
+    usuario_id   INTEGER REFERENCES usuarios(id) ON DELETE SET NULL,
+    criado_em    TIMESTAMP DEFAULT NOW(),
+    PRIMARY KEY (empresa_id, centro_id),
+    FOREIGN KEY (centro_id, empresa_id) REFERENCES centros_custo_sienge(sienge_id, empresa_id) ON DELETE CASCADE
+);
+
+CREATE TABLE dre_plano_contas_centro (
+    empresa_id     INTEGER NOT NULL,
+    centro_id      INTEGER NOT NULL,
+    sienge_id      INTEGER NOT NULL,
+    mascara_id     INTEGER NOT NULL REFERENCES dre_mascaras(id) ON DELETE CASCADE,
+    atualizado_em  TIMESTAMP DEFAULT NOW(),
+    PRIMARY KEY (empresa_id, centro_id, sienge_id),
+    FOREIGN KEY (empresa_id, centro_id) REFERENCES dre_plano_contas_versoes(empresa_id, centro_id) ON DELETE CASCADE,
+    FOREIGN KEY (sienge_id, empresa_id) REFERENCES planos_financeiros_sienge(sienge_id, empresa_id) ON DELETE CASCADE
+);
+
+CREATE TRIGGER trg_dre_plano_contas_centro_atualizado_em
+    BEFORE UPDATE ON dre_plano_contas_centro
+    FOR EACH ROW EXECUTE FUNCTION set_atualizado_em();
 
 -- ─── Operações > DFC Construtoras > Parâmetros — ver database/migrations/2026-10-13-dfc-parametros.sql ───
 -- Parâmetros da DFC por empreendimento (centro de custo), versionados como o Motor de Risco:
