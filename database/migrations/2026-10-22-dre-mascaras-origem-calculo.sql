@@ -6,7 +6,7 @@
 --             'FINANCEIRO' (Sienge - Financeiro CP/CR/Extrato) ou 'IMPOSTO_FIXO' (Imposto Fixo — sem
 --             cálculo; a alíquota vem do histórico, abaixo). Pode ficar vazia.
 --   calculo — só com origem, e só um dos cálculos dela:
---               CONTRATOS_VENDAS      → VALOR_VENDAS, ESTORNO_VENDAS, RECEITA_DISTRATO
+--               CONTRATOS_VENDAS      → VALOR_VENDAS, ESTORNO_VENDAS, RECEITA_DISTRATO, ESTORNO_CUSTO
 --               UNIDADES_IMOBILIARIAS → RECEITA_PERMUTA
 --               FINANCEIRO            → ENTRADAS_SAIDAS, CORRECAO_MONETARIA
 --             Trocar ou limpar a origem limpa o cálculo (o backend faz junto, no mesmo UPDATE).
@@ -29,7 +29,7 @@ ALTER TABLE dre_mascaras ADD CONSTRAINT dre_mascaras_origem_valida
 ALTER TABLE dre_mascaras DROP CONSTRAINT IF EXISTS dre_mascaras_calculo_valido;
 ALTER TABLE dre_mascaras ADD CONSTRAINT dre_mascaras_calculo_valido
     CHECK (calculo IS NULL
-        OR (origem = 'CONTRATOS_VENDAS' AND calculo IN ('VALOR_VENDAS', 'ESTORNO_VENDAS', 'RECEITA_DISTRATO'))
+        OR (origem = 'CONTRATOS_VENDAS' AND calculo IN ('VALOR_VENDAS', 'ESTORNO_VENDAS', 'RECEITA_DISTRATO', 'ESTORNO_CUSTO'))
         OR (origem = 'UNIDADES_IMOBILIARIAS' AND calculo = 'RECEITA_PERMUTA')
         OR (origem = 'FINANCEIRO' AND calculo IN ('ENTRADAS_SAIDAS', 'CORRECAO_MONETARIA')));
 

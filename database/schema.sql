@@ -3279,7 +3279,7 @@ CREATE TABLE dre_mascaras (
     CONSTRAINT dre_mascaras_origem_valida CHECK (origem IS NULL OR (parent_id IS NOT NULL
         AND origem IN ('CONTRATOS_VENDAS', 'UNIDADES_IMOBILIARIAS', 'FINANCEIRO', 'IMPOSTO_FIXO'))),
     CONSTRAINT dre_mascaras_calculo_valido CHECK (calculo IS NULL
-        OR (origem = 'CONTRATOS_VENDAS' AND calculo IN ('VALOR_VENDAS', 'ESTORNO_VENDAS', 'RECEITA_DISTRATO'))
+        OR (origem = 'CONTRATOS_VENDAS' AND calculo IN ('VALOR_VENDAS', 'ESTORNO_VENDAS', 'RECEITA_DISTRATO', 'ESTORNO_CUSTO'))
         OR (origem = 'UNIDADES_IMOBILIARIAS' AND calculo = 'RECEITA_PERMUTA')
         OR (origem = 'FINANCEIRO' AND calculo IN ('ENTRADAS_SAIDAS', 'CORRECAO_MONETARIA')))
 );

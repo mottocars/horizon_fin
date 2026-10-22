@@ -13,7 +13,7 @@ const COLUNAS = 'id, parent_id, ordem, descricao, totalizadora, realiza_poc, tip
 // opções da tela (DreGerencial/MascarasTab.jsx). Imposto Fixo não tem cálculo: usa o histórico de
 // alíquotas (listHistorico etc., abaixo).
 const CALCULOS_POR_ORIGEM = {
-  CONTRATOS_VENDAS: ['VALOR_VENDAS', 'ESTORNO_VENDAS', 'RECEITA_DISTRATO'],
+  CONTRATOS_VENDAS: ['VALOR_VENDAS', 'ESTORNO_VENDAS', 'RECEITA_DISTRATO', 'ESTORNO_CUSTO'],
   UNIDADES_IMOBILIARIAS: ['RECEITA_PERMUTA'],
   FINANCEIRO: ['ENTRADAS_SAIDAS', 'CORRECAO_MONETARIA'],
   IMPOSTO_FIXO: [],
