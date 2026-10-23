@@ -17,12 +17,18 @@ import {
 } from '../../../api/dreOrcamento.api';
 import { useConfirm } from '../../../confirm/ConfirmContext';
 
-const MESES = ['Janeiro', 'Fevereiro', 'Março', 'Abril', 'Maio', 'Junho', 'Julho', 'Agosto', 'Setembro', 'Outubro', 'Novembro', 'Dezembro'];
+const MESES = ['jan', 'fev', 'mar', 'abr', 'mai', 'jun', 'jul', 'ago', 'set', 'out', 'nov', 'dez'];
 
-function nomeMesAno(iso) {
+// '2025-10-01' -> 'out/2025' (pedido do usuário: "Vigente em mmm/yyyy").
+function mesAno(iso) {
   const [ano, mes] = iso.split('-').map(Number);
-  return `${MESES[mes - 1]} de ${ano}`;
+  return `${MESES[mes - 1]}/${ano}`;
 }
+
+// Mesmas medidas da tabela da aba Avanços da DFC (DfcAvancosTab.jsx): primeira coluna fixa e as
+// colunas de categoria dividindo o resto, com largura mínima (a página rola na horizontal).
+const LARGURA_PRIMEIRA = 300;
+const LARGURA_CATEGORIA = 130;
 
 function formatarValor(valor) {
   return Number(valor || 0).toLocaleString('pt-BR', { minimumFractionDigits: 2, maximumFractionDigits: 2 });
@@ -96,7 +102,7 @@ function CelulaValor({ valor, onCommit }) {
 // pra essa categoria no orçamento vigente.
 function ValorVigente({ valor }) {
   if (valor === undefined) return <span className="text-gray-300">—</span>;
-  return <span className="font-semibold text-gray-900">{formatarValor(valor)}</span>;
+  return <span className="text-gray-900">{formatarValor(valor)}</span>;
 }
 
 // Linha "+ Novo orçamento" — clicar revela um mini-formulário inline (só o mês de início) sem
@@ -133,11 +139,11 @@ function LinhaNovoOrcamento({ totalColunas, mesesExistentes, onCriar }) {
   if (!aberto) {
     return (
       <tr>
-        <td colSpan={totalColunas} className="border-b border-gray-50 p-0">
+        <td colSpan={totalColunas} className="border-b border-gray-100 bg-white p-0">
           <button
             type="button"
             onClick={() => setAberto(true)}
-            className="flex w-full items-center gap-1.5 px-9 py-2.5 text-left text-xs font-medium text-primary-600 hover:bg-primary-50"
+            className="flex w-full items-center gap-1.5 py-2 pl-9 pr-3 text-left text-xs font-medium text-primary-600 hover:bg-primary-50"
           >
             <Plus size={13} />
             Novo orçamento
@@ -149,7 +155,7 @@ function LinhaNovoOrcamento({ totalColunas, mesesExistentes, onCriar }) {
 
   return (
     <tr>
-      <td colSpan={totalColunas} className="border-b border-gray-50 bg-primary-50/40 px-9 py-2.5">
+      <td colSpan={totalColunas} className="border-b border-gray-100 bg-primary-50/40 py-2 pl-9 pr-3">
         <div className="flex flex-wrap items-center gap-2">
           <label className="text-xs font-medium text-gray-600">Mês de início</label>
           <input
@@ -187,10 +193,13 @@ function LinhaNovoOrcamento({ totalColunas, mesesExistentes, onCriar }) {
   );
 }
 
-// Nível 0 = 1 linha por centro de custo (só 1 expandido por vez, mesmo padrão de
-// ClustersCobranca/CentrosCustoResumo.jsx — drilldown de tabela única, sem cabeçalho repetido).
-// Nível 1 (expandido) = 1 linha por orçamento (rotulada pelo mês de início), 1 coluna por
-// categoria — mesma mecânica de célula editável de SaldosContasTab.jsx.
+// Mesmo layout da tabela da aba Avanços da DFC (DfcAvancosTab.jsx — pedido do usuário): cabeçalho
+// azul grudado no topo, primeira coluna fixa, 1 coluna por categoria.
+// Nível 1 = 1 linha por centro de custo (só os com "Realiza DRE"), fechada mostra o orçamento
+// vigente (o de início mais recente) e, abaixo do nome, "Vigente em mmm/aaaa". Só 1 aberto por vez.
+// Nível 2 (aberto) = o histórico, 1 linha por orçamento (rotulada pelo mês de início, o vigente com
+// selo), valores editáveis (mesma mecânica de célula de SaldosContasTab.jsx), remover no hover, e a
+// linha "Novo orçamento" no fim.
 //
 // As categorias (as colunas) são cadastradas aqui mesmo (pedido do usuário — saiu a aba Categorias
 // Orçamento): `ref` expõe `abrirNova()` pro botão "Nova categoria" do topo da página, e cada
@@ -354,7 +363,7 @@ const OrcamentoTab = forwardRef(function OrcamentoTab({ empresaId, search = '' }
   async function handleRemoverOrcamento(siengeId, dataInicio) {
     const confirmado = await confirm({
       title: 'Remover orçamento',
-      description: `Remover o orçamento de ${nomeMesAno(dataInicio)}? Os valores lançados nele serão perdidos.`,
+      description: `Remover o orçamento de ${mesAno(dataInicio)}? Os valores lançados nele serão perdidos.`,
       confirmLabel: 'Remover',
       variant: 'warning',
     });
@@ -386,12 +395,14 @@ const OrcamentoTab = forwardRef(function OrcamentoTab({ empresaId, search = '' }
   );
   const semCategorias = !carregando && categorias.length === 0;
   const semCentros = !carregando && !semCategorias && centrosFiltrados.length === 0;
-  const totalColunas = 2 + categorias.length;
+  const totalColunas = 1 + categorias.length;
 
   return (
-    <div className="rounded-card rounded-tl-none bg-white shadow-card">
+    // min-w-fit: com tabela mais larga que a tela, o quadro branco cresce junto (e a página rola na
+    // horizontal) em vez de a tabela vazar pra fora dele — mesmo esquema da aba Avanços da DFC.
+    <div className="min-w-fit rounded-card rounded-tl-none bg-white p-5 shadow-card">
       {erroRemoverCategoria && (
-        <div className="flex items-center justify-between gap-3 rounded-t-card bg-red-50 px-4 py-2 text-xs text-red-600" role="status">
+        <div className="mb-3 flex items-center justify-between gap-3 rounded-lg bg-red-50 px-3 py-2 text-xs text-red-600" role="status">
           {erroRemoverCategoria}
           <button type="button" onClick={() => setErroRemoverCategoria('')} title="Fechar" className="shrink-0 hover:text-red-800">
             <X size={14} />
@@ -408,31 +419,38 @@ const OrcamentoTab = forwardRef(function OrcamentoTab({ empresaId, search = '' }
             Cadastre ao menos uma no botão "Nova categoria", acima, antes de lançar orçamentos aqui.
           </p>
         </div>
-      ) : semCentros ? (
-        <div className="flex flex-col items-center gap-1 py-14 text-center">
-          <Briefcase size={26} className="mb-1 text-gray-300" />
-          <p className="text-sm text-gray-600">
-            {(centros || []).length === 0 ? 'Nenhum centro de custo com Realiza DRE.' : 'Nenhum centro de custo encontrado.'}
-          </p>
-          {(centros || []).length === 0 && (
-            <p className="max-w-sm text-xs text-gray-400">Marque os centros na aba Centros Custos.</p>
-          )}
-        </div>
       ) : (
-        <div className="overflow-x-auto rounded-b-card">
-          <table className="w-full border-separate border-spacing-0 text-left text-xs">
+        // Sem wrapper com overflow próprio (mesmo motivo da aba Avanços): qualquer overflow aqui vira
+        // o "teto" do sticky e o cabeçalho deixaria de grudar no topo da página ao rolar. -top-6
+        // cancela o p-6 do <main>.
+        <div>
+          <table
+            className="border-separate border-spacing-0 text-left text-xs"
+            style={{ tableLayout: 'fixed', width: '100%', minWidth: LARGURA_PRIMEIRA + categorias.length * LARGURA_CATEGORIA }}
+          >
+            <colgroup>
+              <col style={{ width: LARGURA_PRIMEIRA }} />
+              {categorias.map((c) => (
+                <col key={c.id} />
+              ))}
+            </colgroup>
             <thead>
-              <tr className="text-xs uppercase tracking-wide text-gray-400">
-                <th className="border-b border-gray-200 bg-white py-2.5 pl-4 font-medium">Centro de Custo / Mês</th>
+              <tr className="[&>th:first-child]:rounded-tl-lg [&>th:last-child]:rounded-tr-lg">
+                <th className="sticky -top-6 left-0 z-30 border-b-2 border-r border-b-blue-500 border-r-blue-100 bg-blue-50 py-2.5 pl-4 pr-3 text-xs font-medium uppercase tracking-wide text-blue-700">
+                  Centro de custo / Orçamento
+                </th>
                 {categorias.map((c) => (
-                  <th key={c.id} className="group/cat relative border-b border-l border-gray-200 bg-white px-3 py-2.5 text-right font-medium">
+                  <th
+                    key={c.id}
+                    className="group/cat sticky -top-6 z-20 border-b-2 border-l border-b-blue-500 border-l-blue-100 bg-blue-50 px-2 py-2.5 text-right text-xs font-medium uppercase tracking-wide text-blue-700"
+                  >
                     {/* Renomear/remover sobrepostos no canto esquerdo (só no hover), sem ocupar espaço do nome. */}
-                    <span className="absolute left-1 top-1/2 flex -translate-y-1/2 items-center gap-0.5 bg-white opacity-0 transition-opacity group-hover/cat:opacity-100">
+                    <span className="absolute left-1 top-1/2 flex -translate-y-1/2 items-center gap-0.5 bg-blue-50 opacity-0 transition-opacity group-hover/cat:opacity-100">
                       <button
                         type="button"
                         onClick={() => abrirCategoria(c)}
                         title="Renomear categoria"
-                        className="flex h-5 w-5 items-center justify-center rounded text-gray-400 hover:bg-gray-100 hover:text-gray-700"
+                        className="flex h-5 w-5 items-center justify-center rounded text-blue-400 hover:bg-white hover:text-blue-700"
                       >
                         <Pencil size={11} />
                       </button>
@@ -440,7 +458,7 @@ const OrcamentoTab = forwardRef(function OrcamentoTab({ empresaId, search = '' }
                         type="button"
                         onClick={() => removerCategoria(c)}
                         title="Remover categoria"
-                        className="flex h-5 w-5 items-center justify-center rounded text-gray-400 hover:bg-red-50 hover:text-red-600"
+                        className="flex h-5 w-5 items-center justify-center rounded text-blue-400 hover:bg-red-50 hover:text-red-600"
                       >
                         <Trash2 size={11} />
                       </button>
@@ -448,78 +466,91 @@ const OrcamentoTab = forwardRef(function OrcamentoTab({ empresaId, search = '' }
                     {c.nome}
                   </th>
                 ))}
-                <th className="w-14 border-b border-l border-gray-200 bg-white px-3 py-2.5 text-right font-medium">Ação</th>
               </tr>
             </thead>
             <tbody>
+              {semCentros && (
+                <tr>
+                  <td colSpan={totalColunas} className="border-b border-gray-100 py-10 text-center text-sm text-gray-400">
+                    {(centros || []).length === 0
+                      ? 'Nenhum centro de custo com "Realiza DRE" marcado. Marque na aba Centros Custos.'
+                      : 'Nenhum centro de custo encontrado para essa busca.'}
+                  </td>
+                </tr>
+              )}
               {centrosFiltrados.map((centro) => {
                 const expandido = expandidoId === centro.sienge_id;
                 const vigente = vigentes[centro.sienge_id];
                 return (
                   <Fragment key={centro.sienge_id}>
-                    <tr onClick={() => toggleExpandir(centro.sienge_id)} className="group/grupo cursor-pointer">
-                      <td className="border-b border-gray-200 bg-gray-50 py-2.5 pl-3 pr-2 group-hover/grupo:bg-gray-100">
+                    {/* Nível 1: o centro, com o orçamento vigente */}
+                    <tr onClick={() => toggleExpandir(centro.sienge_id)} className="group/obra cursor-pointer">
+                      <td className="sticky left-0 z-10 border-b border-r border-gray-200 bg-gray-50 py-2 pl-3 pr-2 group-hover/obra:bg-gray-100">
                         <span className="flex items-center gap-2">
                           <span className="flex h-4 w-4 shrink-0 items-center justify-center rounded bg-primary-100 text-primary-600">
                             {expandido ? <Minus size={10} /> : <Plus size={10} />}
                           </span>
-                          <span className="truncate text-xs font-semibold text-gray-900" title={centro.name}>
-                            {centro.name}
-                          </span>
-                          <span className="shrink-0 text-[11px] text-gray-400">#{centro.sienge_id}</span>
-                          {vigente && (
-                            <span className="shrink-0 text-[11px] text-gray-400">
-                              · vigente desde {nomeMesAno(vigente.data_inicio)}
+                          <span className="min-w-0">
+                            <span className="block truncate text-xs font-semibold text-gray-900" title={centro.name}>
+                              {centro.name}
                             </span>
-                          )}
+                            <span className="block truncate text-[10px] text-gray-400">
+                              {vigente ? `Vigente em ${mesAno(vigente.data_inicio)}` : 'Sem orçamento'}
+                            </span>
+                          </span>
                         </span>
                       </td>
                       {categorias.map((c) => (
                         <td
                           key={c.id}
-                          className="border-b border-l border-gray-200 bg-gray-50 px-3 py-2.5 text-right text-xs tabular-nums group-hover/grupo:bg-gray-100"
+                          className="border-b border-l border-gray-200 bg-gray-50 px-2 text-right text-xs font-semibold tabular-nums group-hover/obra:bg-gray-100"
                         >
                           <ValorVigente valor={vigente?.valores?.[c.id]} />
                         </td>
                       ))}
-                      <td className="border-b border-l border-gray-200 bg-gray-50 group-hover/grupo:bg-gray-100" />
                     </tr>
 
                     {expandido && carregandoDetalhe && (
                       <tr>
-                        <td colSpan={totalColunas} className="py-6 text-center text-xs text-gray-400">
+                        <td colSpan={totalColunas} className="border-b border-gray-100 bg-white py-6 text-center text-xs text-gray-400">
                           Carregando...
                         </td>
                       </tr>
                     )}
 
+                    {/* Nível 2: o histórico (o último é o vigente), editável */}
                     {expandido &&
                       !carregandoDetalhe &&
                       orcamentos &&
-                      orcamentos.map((orc) => (
-                        <tr key={orc.data_inicio}>
-                          <td className="border-b border-gray-100 py-1.5 pl-9 pr-3 text-xs font-medium text-gray-700">
-                            {nomeMesAno(orc.data_inicio)}
+                      orcamentos.map((orc, i) => (
+                        <tr key={orc.data_inicio} className="group/orc">
+                          <td className="sticky left-0 z-10 border-b border-r border-gray-100 border-r-gray-200 bg-white py-1.5 pl-9 pr-2">
+                            <span className="flex items-center gap-2">
+                              <span className="text-xs font-medium text-gray-800">{mesAno(orc.data_inicio)}</span>
+                              {i === orcamentos.length - 1 && (
+                                <span className="rounded bg-primary-50 px-1.5 py-px text-[10px] font-semibold text-primary-600 ring-1 ring-primary-100">
+                                  Vigente
+                                </span>
+                              )}
+                              <button
+                                type="button"
+                                onClick={() => handleRemoverOrcamento(centro.sienge_id, orc.data_inicio)}
+                                disabled={removendoData === orc.data_inicio}
+                                title="Remover orçamento"
+                                className="ml-auto flex h-6 w-6 items-center justify-center rounded-md text-gray-400 opacity-0 transition hover:bg-red-50 hover:text-red-600 group-hover/orc:opacity-100 disabled:opacity-50"
+                              >
+                                <Trash2 size={13} />
+                              </button>
+                            </span>
                           </td>
                           {categorias.map((c) => (
-                            <td key={c.id} className="border-b border-l border-gray-100 p-1">
+                            <td key={c.id} className="border-b border-l border-gray-100 bg-white p-1">
                               <CelulaValor
                                 valor={orc.valores[c.id]}
                                 onCommit={(novo) => handleEditarCelula(centro.sienge_id, orc.data_inicio, c.id, novo)}
                               />
                             </td>
                           ))}
-                          <td className="border-b border-l border-gray-100 px-3 py-1.5 text-right">
-                            <button
-                              type="button"
-                              onClick={() => handleRemoverOrcamento(centro.sienge_id, orc.data_inicio)}
-                              disabled={removendoData === orc.data_inicio}
-                              title="Remover orçamento"
-                              className="flex h-7 w-7 items-center justify-center rounded-lg text-gray-400 transition-colors hover:bg-red-50 hover:text-red-600 disabled:opacity-50"
-                            >
-                              <Trash2 size={14} />
-                            </button>
-                          </td>
                         </tr>
                       ))}
 

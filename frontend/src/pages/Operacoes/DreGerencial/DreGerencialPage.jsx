@@ -33,7 +33,7 @@ const TABS = [
   { divider: true },
   { id: 'centros-custos', label: 'Centros Custos', icon: Building2 },
   { id: 'mascaras', label: 'Máscaras', icon: Tags },
-  { id: 'plano-de-contas', label: 'Plano de Contas', icon: ListTree },
+  { id: 'plano-de-contas', label: 'Plano Contas', icon: ListTree },
   { id: 'orcamento', label: 'Orçamento', icon: Calculator },
 ];
 
