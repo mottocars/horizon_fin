@@ -2,14 +2,14 @@ import { useEffect, useState } from 'react';
 import Modal from '../../../components/Modal';
 import Button from '../../../components/Button';
 import SearchableSelect from '../../../components/SearchableSelect';
-import { listItens } from '../../../api/centrosCustoSienge.api';
+import { listCentrosCustoDre } from '../../../api/dreCentros.api';
 import { criarVersaoPlanoDre } from '../../../api/drePlanoContas.api';
 
 // Cria o plano de contas próprio de um centro de custo (aba Plano de Contas da DRE) — mesma janela
 // do Plano Contas da DFC (NovaVersaoPlanoModal.jsx de DfcConstrutoras). O usuário escolhe de onde
 // ele começa: cópia do Global, cópia do plano de outro centro ou em branco. Dali em diante é editado
-// à parte. Lista todos os centros de custo da empresa que ainda não têm plano próprio (a DFC só
-// lista os com "Projeta DFC", marcação que é da DFC).
+// à parte. Lista os centros com "Realiza DRE" (aba Centros Custos) que ainda não têm plano próprio
+// — mesmo esquema do "Projeta DFC" na DFC.
 export default function NovaVersaoPlanoModal({ open, onClose, empresaId, versoes, onCriada }) {
   const [centros, setCentros] = useState([]);
   const [centroId, setCentroId] = useState('');
@@ -23,9 +23,13 @@ export default function NovaVersaoPlanoModal({ open, onClose, empresaId, versoes
     setCopiarDe('');
     setErro('');
     const jaTem = new Set(versoes.map((v) => v.centro_id));
-    listItens(empresaId, { page: 1, limit: 1000 })
-      .then((result) =>
-        setCentros(result.data.filter((c) => !jaTem.has(c.sienge_id)).sort((a, b) => a.name.localeCompare(b.name, 'pt-BR')))
+    listCentrosCustoDre(empresaId)
+      .then((lista) =>
+        setCentros(
+          lista
+            .filter((c) => c.realiza_dre && !jaTem.has(c.sienge_id))
+            .sort((a, b) => a.name.localeCompare(b.name, 'pt-BR'))
+        )
       )
       .catch(() => setCentros([]));
   }, [open, empresaId, versoes]);
@@ -64,7 +68,7 @@ export default function NovaVersaoPlanoModal({ open, onClose, empresaId, versoes
             onChange={(v) => setCentroId(v || '')}
             options={centros.map((c) => ({ value: c.sienge_id, label: c.name }))}
             placeholder={centros.length ? 'Selecione o centro de custo' : 'Nenhum centro disponível'}
-            emptyMessage="Todos os centros de custo já têm plano próprio."
+            emptyMessage="Nenhum centro com Realiza DRE sem plano próprio. Marque na aba Centros Custos."
             clearable={false}
           />
         </div>

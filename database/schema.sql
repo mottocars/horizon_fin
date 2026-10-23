@@ -746,6 +746,9 @@ CREATE TABLE centros_custo_sienge (
     natureza                   VARCHAR(15) CHECK (natureza IN ('OBRA', 'ADMINISTRATIVO')),
     -- Flag "Projeta DFC" (aba Centros Custos) — só os marcados aparecem nos Parâmetros da DFC.
     projeta_dfc                BOOLEAN NOT NULL DEFAULT FALSE,
+    -- Flag "Realiza DRE" (aba Centros Custos da DRE Gerencial) — só os marcados podem ter plano de
+    -- contas próprio na DRE. Ver database/migrations/2026-10-23-centros-realiza-dre.sql.
+    realiza_dre                BOOLEAN NOT NULL DEFAULT FALSE,
     PRIMARY KEY (sienge_id, empresa_id)
 );
 

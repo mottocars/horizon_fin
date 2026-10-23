@@ -104,7 +104,7 @@ export default function PlanosContasLista({ empresaId, onAbrir, onNovo, refreshT
             rodape={
               <>
                 <Building2 size={12} className="text-gray-400" />
-                {resumo.global.centros_seguindo} centro(s) de custo seguem este plano
+                {resumo.global.centros_seguindo} centro(s) com Realiza DRE seguem este plano
               </>
             }
             onAbrir={() => onAbrir('global')}

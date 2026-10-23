@@ -162,7 +162,8 @@ async function excluirVersao(empresaId, centroId) {
 }
 
 // Resumo pros cards da aba Plano de Contas: o Global e cada versão de centro, com quantas contas
-// analíticas estão classificadas (Máscara DRE ou NÃO ENTRA NA DRE). O Global diz também quantos centros seguem ele (os sem versão própria).
+// analíticas estão classificadas (Máscara DRE ou NÃO ENTRA NA DRE). O Global diz também quantos
+// centros com "Realiza DRE" seguem ele (os sem versão própria) — mesmo esquema do Projeta DFC na DFC.
 async function resumo(empresaId) {
   const { rows: tot } = await pool.query(
     "SELECT count(*)::int AS analiticas FROM planos_financeiros_sienge WHERE empresa_id = $1 AND tp_conta <> 'T'",
@@ -175,7 +176,7 @@ async function resumo(empresaId) {
   );
   const { rows: seguem } = await pool.query(
     `SELECT count(*)::int AS n FROM centros_custo_sienge c
-      WHERE c.empresa_id = $1
+      WHERE c.empresa_id = $1 AND c.realiza_dre
         AND NOT EXISTS (SELECT 1 FROM dre_plano_contas_versoes v WHERE v.empresa_id = c.empresa_id AND v.centro_id = c.sienge_id)`,
     [empresaId]
   );

@@ -1,6 +1,6 @@
 import { useEffect, useRef, useState } from 'react';
 import { useSearchParams } from 'react-router-dom';
-import { BarChart3, Calculator, Layers, ListTree, Plus, RefreshCw, Search, Tags, Trash2 } from 'lucide-react';
+import { BarChart3, Building2, Calculator, Layers, ListTree, Plus, RefreshCw, Search, Tags, Trash2 } from 'lucide-react';
 import Card from '../../../components/Card';
 import Tabs from '../../../components/Tabs';
 import Button from '../../../components/Button';
@@ -17,19 +17,23 @@ import MascarasTab from './MascarasTab';
 import PlanoDeContasTab from './PlanoDeContasTab';
 import PlanosContasLista from './PlanosContasLista';
 import NovaVersaoPlanoModal from './NovaVersaoPlanoModal';
+import CentrosCustosTab from './CentrosCustosTab';
 import DreTab from './DreTab';
 
 // O `{ divider: true }` separa a DRE (a demonstração em si) das abas de cadastro/parâmetro que
-// dão suporte a ela — Máscaras, Plano de Contas, Categorias Orçamento e Orçamento ficam juntas,
+// dão suporte a ela — Máscaras, Plano de Contas, Centros Custos, Categorias Orçamento e Orçamento ficam juntas,
 // sem divisor entre elas (mesmo padrão de SaldoContasBancariasPage.jsx, que separa "Saldos das
 // Contas" de "Bancos" e as demais abas de cadastro/parâmetro). Máscaras é a primeira depois da
 // DRE e Plano de Contas vem logo em seguida (pedido do usuário): na Máscaras se monta a estrutura
-// da DRE (nível 1 e 2); no Plano de Contas cada conta recebe a Máscara DRE de nível 2.
+// da DRE (nível 1 e 2); no Plano de Contas cada conta recebe a Máscara DRE de nível 2. Centros Custos
+// (igual à aba da DFC, com a flag "Realiza DRE") vem em seguida: os centros marcados é que podem ter
+// plano de contas próprio.
 const TABS = [
   { id: 'dre', label: 'DRE', icon: BarChart3 },
   { divider: true },
   { id: 'mascaras', label: 'Máscaras', icon: Tags },
   { id: 'plano-de-contas', label: 'Plano de Contas', icon: ListTree },
+  { id: 'centros-custos', label: 'Centros Custos', icon: Building2 },
   { id: 'categorias-orcamento', label: 'Categorias Orçamento', icon: Layers },
   { id: 'orcamento', label: 'Orçamento', icon: Calculator },
 ];
@@ -96,6 +100,9 @@ export default function DreGerencialPage() {
 
   // Busca (nome ou código da conta) da aba Plano de Contas — mesma convenção acima.
   const [buscaPlanoContas, setBuscaPlanoContas] = useState('');
+
+  // Busca (código ou descrição) da aba Centros Custos — mesma convenção acima.
+  const [buscaCentros, setBuscaCentros] = useState('');
 
   // Geração/atualização do plano de contas (Sienge) — mesmo esquema de handleAtualizarContas
   // em SaldoContasBancariasPage.jsx. `totalPlanoContas` (reportado pela própria aba via
@@ -224,6 +231,23 @@ export default function DreGerencialPage() {
                 </div>
               </div>
             )}
+
+            {abaAtiva === 'centros-custos' && (
+              <div className="sm:min-w-56 sm:max-w-sm sm:flex-1">
+                <label className="mb-1 block text-sm font-medium text-gray-700">Buscar</label>
+                <div className="relative">
+                  <Search size={15} className="pointer-events-none absolute left-3 top-1/2 -translate-y-1/2 text-gray-400" />
+                  <input
+                    type="text"
+                    value={buscaCentros}
+                    onChange={(e) => setBuscaCentros(e.target.value)}
+                    disabled={semEmpresa}
+                    placeholder={semEmpresa ? 'Selecione a empresa primeiro' : 'Buscar por código ou descrição...'}
+                    className="w-full rounded-lg border border-gray-200 py-2 pl-9 pr-3 text-sm focus:outline-none focus:ring-2 focus:ring-primary-100 disabled:bg-gray-50 disabled:text-gray-400"
+                  />
+                </div>
+              </div>
+            )}
           </div>
 
           {abaAtiva === 'mascaras' && (
@@ -287,6 +311,8 @@ export default function DreGerencialPage() {
         {abaAtiva === 'dre' && <DreTab empresaId={empresaId} />}
 
         {abaAtiva === 'mascaras' && <MascarasTab ref={mascarasTabRef} empresaId={empresaId} />}
+
+        {abaAtiva === 'centros-custos' && <CentrosCustosTab empresaId={empresaId} search={buscaCentros} />}
 
         {abaAtiva === 'categorias-orcamento' && (
           <CategoriasOrcamentoTab ref={categoriasOrcamentoTabRef} empresaId={empresaId} />
