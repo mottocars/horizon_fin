@@ -6,10 +6,11 @@ const pool = require('../../config/db');
 
 const COLUNAS = `sienge_id, name, apelido, status, natureza, realiza_dre`;
 
-// Todos os centros de custo da empresa (ativos e inativos), na mesma ordem da aba da DFC.
+// Todos os centros de custo da empresa (ativos e inativos), pelo ID em ordem numérica (1, 2, 3…
+// 10 — pedido do usuário; a aba da DFC ordena como texto: 1, 10, 11… 2).
 async function list(empresaId) {
   const { rows } = await pool.query(
-    `SELECT ${COLUNAS} FROM centros_custo_sienge WHERE empresa_id = $1 ORDER BY sienge_id::text ASC`,
+    `SELECT ${COLUNAS} FROM centros_custo_sienge WHERE empresa_id = $1 ORDER BY sienge_id ASC`,
     [empresaId]
   );
   return rows;
