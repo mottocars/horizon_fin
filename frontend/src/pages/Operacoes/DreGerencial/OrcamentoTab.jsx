@@ -25,10 +25,18 @@ function mesAno(iso) {
   return `${MESES[mes - 1]}/${ano}`;
 }
 
-// Mesmas medidas da tabela da aba Avanços da DFC (DfcAvancosTab.jsx): primeira coluna fixa e as
-// colunas de categoria dividindo o resto, com largura mínima (a página rola na horizontal).
-const LARGURA_PRIMEIRA = 300;
-const LARGURA_CATEGORIA = 130;
+// Mesmo esquema da tabela da aba Avanços da DFC (DfcAvancosTab.jsx): primeira coluna fixa, Total e
+// as colunas de categoria dividindo o resto, com largura mínima (a página rola na horizontal). A
+// primeira é mais estreita que a de lá (260 e não 300) pra 7 categorias + Total caberem na tela sem
+// cortar os valores de 10 milhões.
+const LARGURA_PRIMEIRA = 260;
+const LARGURA_CATEGORIA = 110;
+const LARGURA_TOTAL = 130;
+
+// Soma das categorias de um orçamento ({ [categoria_id]: valor }) — coluna Total.
+function somaValores(valores) {
+  return Object.values(valores || {}).reduce((t, v) => t + Number(v || 0), 0);
+}
 
 // Zero aparece em branco (pedido do usuário) — no banco continua 0.
 function formatarValor(valor) {
@@ -98,6 +106,13 @@ function CelulaValor({ valor, onCommit }) {
       className="h-8 w-full rounded-md border border-transparent bg-transparent px-2 text-right text-xs tabular-nums text-gray-900 outline-none transition-colors hover:border-gray-300 hover:bg-white focus:border-primary-500 focus:bg-white focus:ring-2 focus:ring-primary-100"
     />
   );
+}
+
+// Coluna Total (em azul, antes das categorias — pedido do usuário): soma das categorias; traço
+// quando o centro não tem orçamento, branco quando a soma dá zero (formatarValor).
+function ValorTotal({ valores }) {
+  if (!valores) return <span className="text-blue-200">—</span>;
+  return formatarValor(somaValores(valores));
 }
 
 // Valor do orçamento vigente na linha-resumo (nível 0) — negrito, não editável (mesmo peso
@@ -398,7 +413,7 @@ const OrcamentoTab = forwardRef(function OrcamentoTab({ empresaId, search = '' }
   );
   const semCategorias = !carregando && categorias.length === 0;
   const semCentros = !carregando && !semCategorias && centrosFiltrados.length === 0;
-  const totalColunas = 1 + categorias.length;
+  const totalColunas = 2 + categorias.length;
 
   return (
     // min-w-fit: com tabela mais larga que a tela, o quadro branco cresce junto (e a página rola na
@@ -429,10 +444,11 @@ const OrcamentoTab = forwardRef(function OrcamentoTab({ empresaId, search = '' }
         <div>
           <table
             className="border-separate border-spacing-0 text-left text-xs"
-            style={{ tableLayout: 'fixed', width: '100%', minWidth: LARGURA_PRIMEIRA + categorias.length * LARGURA_CATEGORIA }}
+            style={{ tableLayout: 'fixed', width: '100%', minWidth: LARGURA_PRIMEIRA + LARGURA_TOTAL + categorias.length * LARGURA_CATEGORIA }}
           >
             <colgroup>
               <col style={{ width: LARGURA_PRIMEIRA }} />
+              <col style={{ width: LARGURA_TOTAL }} />
               {categorias.map((c) => (
                 <col key={c.id} />
               ))}
@@ -441,6 +457,9 @@ const OrcamentoTab = forwardRef(function OrcamentoTab({ empresaId, search = '' }
               <tr className="[&>th:first-child]:rounded-tl-lg [&>th:last-child]:rounded-tr-lg">
                 <th className="sticky -top-6 left-0 z-30 border-b-2 border-r border-b-blue-500 border-r-blue-100 bg-blue-50 py-2.5 pl-4 pr-3 text-xs font-medium uppercase tracking-wide text-blue-700">
                   Centro de custo / Orçamento
+                </th>
+                <th className="sticky -top-6 z-20 border-b-2 border-l border-b-blue-500 border-l-blue-100 bg-blue-100 px-2 py-2.5 text-center text-xs font-semibold uppercase tracking-wide text-blue-800">
+                  Total
                 </th>
                 {categorias.map((c) => (
                   <th
@@ -503,6 +522,9 @@ const OrcamentoTab = forwardRef(function OrcamentoTab({ empresaId, search = '' }
                           </span>
                         </span>
                       </td>
+                      <td className="border-b border-l border-blue-100 bg-blue-50 px-2 text-right text-xs font-bold tabular-nums text-blue-700 group-hover/obra:bg-blue-100">
+                        <ValorTotal valores={vigente?.valores} />
+                      </td>
                       {categorias.map((c) => (
                         <td
                           key={c.id}
@@ -545,6 +567,9 @@ const OrcamentoTab = forwardRef(function OrcamentoTab({ empresaId, search = '' }
                                 <Trash2 size={13} />
                               </button>
                             </span>
+                          </td>
+                          <td className="border-b border-l border-blue-100 bg-blue-50/60 px-3 text-right text-xs font-semibold tabular-nums text-blue-700">
+                            <ValorTotal valores={orc.valores} />
                           </td>
                           {categorias.map((c) => (
                             <td key={c.id} className="border-b border-l border-gray-100 bg-white p-1">
