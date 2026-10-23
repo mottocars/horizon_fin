@@ -30,11 +30,14 @@ function mesAno(iso) {
 const LARGURA_PRIMEIRA = 300;
 const LARGURA_CATEGORIA = 130;
 
+// Zero aparece em branco (pedido do usuário) — no banco continua 0.
 function formatarValor(valor) {
-  return Number(valor || 0).toLocaleString('pt-BR', { minimumFractionDigits: 2, maximumFractionDigits: 2 });
+  const n = Number(valor || 0);
+  return n === 0 ? '' : n.toLocaleString('pt-BR', { minimumFractionDigits: 2, maximumFractionDigits: 2 });
 }
 
 function numeroParaEdicao(valor) {
+  if (!Number(valor || 0)) return '';
   return Number(valor || 0).toFixed(2).replace('.', ',');
 }
 
@@ -99,7 +102,7 @@ function CelulaValor({ valor, onCommit }) {
 
 // Valor do orçamento vigente na linha-resumo (nível 0) — negrito, não editável (mesmo peso
 // visual do "total" de SaldosContasTab.jsx::ValorTotal); traço quando não existe nenhum valor
-// pra essa categoria no orçamento vigente.
+// pra essa categoria no orçamento vigente; zero em branco (formatarValor).
 function ValorVigente({ valor }) {
   if (valor === undefined) return <span className="text-gray-300">—</span>;
   return <span className="text-gray-900">{formatarValor(valor)}</span>;
