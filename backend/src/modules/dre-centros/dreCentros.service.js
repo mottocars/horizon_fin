@@ -1,11 +1,10 @@
 const pool = require('../../config/db');
 
-// Operações > DRE Gerencial > Centros Custos: mesma aba de dfc-centros/dfcCentros.service.js, com a
-// flag "Realiza DRE" (realiza_dre) no lugar do "Projeta DFC". Tipo, Contrato Caixa e Código
-// Prevision são as MESMAS colunas do cadastro do centro (e da aba da DFC) — gravar aqui muda lá.
-// O update não toca no projeta_dfc (é da DFC).
+// Operações > DRE Gerencial > Centros Custos: mesma lista da aba Centros Custos da DFC
+// (dfc-centros/dfcCentros.service.js), só com a flag "Realiza DRE" (realiza_dre). O update só toca
+// nela — Tipo, Contrato Caixa, Código Prevision e Projeta DFC são da DFC / do cadastro.
 
-const COLUNAS = `sienge_id, name, apelido, status, natureza, realiza_dre, codigo_contrato_caixa, codigo_prevision`;
+const COLUNAS = `sienge_id, name, apelido, status, natureza, realiza_dre`;
 
 // Todos os centros de custo da empresa (ativos e inativos), na mesma ordem da aba da DFC.
 async function list(empresaId) {
@@ -16,17 +15,12 @@ async function list(empresaId) {
   return rows;
 }
 
-async function update(
-  empresaId,
-  siengeId,
-  { natureza, realiza_dre: realizaDre, codigo_contrato_caixa: contrato, codigo_prevision: prevision }
-) {
+async function update(empresaId, siengeId, realizaDre) {
   const { rows } = await pool.query(
-    `UPDATE centros_custo_sienge
-        SET natureza = $3, realiza_dre = $4, codigo_contrato_caixa = $5, codigo_prevision = $6
+    `UPDATE centros_custo_sienge SET realiza_dre = $3
       WHERE empresa_id = $1 AND sienge_id = $2
       RETURNING ${COLUNAS}`,
-    [empresaId, siengeId, natureza, realizaDre, contrato, prevision]
+    [empresaId, siengeId, realizaDre]
   );
   return rows[0] || null;
 }
