@@ -442,7 +442,7 @@ const OrcamentoTab = forwardRef(function OrcamentoTab({ empresaId, search = '' }
                 {categorias.map((c) => (
                   <th
                     key={c.id}
-                    className="group/cat sticky -top-6 z-20 border-b-2 border-l border-b-blue-500 border-l-blue-100 bg-blue-50 px-2 py-2.5 text-right text-xs font-medium uppercase tracking-wide text-blue-700"
+                    className="group/cat sticky -top-6 z-20 border-b-2 border-l border-b-blue-500 border-l-blue-100 bg-blue-50 px-2 py-2.5 text-center text-xs font-medium uppercase tracking-wide text-blue-700"
                   >
                     {/* Renomear/remover sobrepostos no canto esquerdo (só no hover), sem ocupar espaço do nome. */}
                     <span className="absolute left-1 top-1/2 flex -translate-y-1/2 items-center gap-0.5 bg-blue-50 opacity-0 transition-opacity group-hover/cat:opacity-100">
