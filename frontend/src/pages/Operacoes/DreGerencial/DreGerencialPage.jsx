@@ -107,6 +107,13 @@ export default function DreGerencialPage() {
   // Busca (código ou descrição) da aba Centros Custos — mesma convenção acima.
   const [buscaCentros, setBuscaCentros] = useState('');
 
+  // Aba Fração Ideal: busca (unidade ou centro) e o ícone de atualizar do Sienge — a sincronização e
+  // o Log de Atualização vivem em FracaoIdealTab.jsx, disparados por ref (mesmo esquema do "Nova
+  // categoria" do Orçamento); `atualizandoFracao` só gira o ícone.
+  const fracaoIdealTabRef = useRef(null);
+  const [buscaFracao, setBuscaFracao] = useState('');
+  const [atualizandoFracao, setAtualizandoFracao] = useState(false);
+
   // Geração/atualização do plano de contas (Sienge) — mesmo esquema de handleAtualizarContas
   // em SaldoContasBancariasPage.jsx. `totalPlanoContas` (reportado pela própria aba via
   // onTotal) decide qual ícone mostrar: "+" sem nenhuma conta gerada ainda, refresh depois de
@@ -235,6 +242,23 @@ export default function DreGerencialPage() {
               </div>
             )}
 
+            {abaAtiva === 'fracao-ideal' && (
+              <div className="sm:min-w-56 sm:max-w-sm sm:flex-1">
+                <label className="mb-1 block text-sm font-medium text-gray-700">Buscar</label>
+                <div className="relative">
+                  <Search size={15} className="pointer-events-none absolute left-3 top-1/2 -translate-y-1/2 text-gray-400" />
+                  <input
+                    type="text"
+                    value={buscaFracao}
+                    onChange={(e) => setBuscaFracao(e.target.value)}
+                    disabled={semEmpresa}
+                    placeholder={semEmpresa ? 'Selecione a empresa primeiro' : 'Buscar por unidade ou centro de custo...'}
+                    className="w-full rounded-lg border border-gray-200 py-2 pl-9 pr-3 text-sm focus:outline-none focus:ring-2 focus:ring-primary-100 disabled:bg-gray-50 disabled:text-gray-400"
+                  />
+                </div>
+              </div>
+            )}
+
             {abaAtiva === 'centros-custos' && (
               <div className="sm:min-w-56 sm:max-w-sm sm:flex-1">
                 <label className="mb-1 block text-sm font-medium text-gray-700">Buscar</label>
@@ -252,6 +276,21 @@ export default function DreGerencialPage() {
               </div>
             )}
           </div>
+
+          {abaAtiva === 'fracao-ideal' && (
+            <div className="flex shrink-0 items-center gap-2">
+              {/* Mesmo ícone de atualizar do Repasses CEF: busca as unidades no Sienge. */}
+              <button
+                type="button"
+                onClick={() => fracaoIdealTabRef.current?.atualizar()}
+                disabled={semEmpresa || atualizandoFracao}
+                title="Atualizar as unidades a partir do Sienge"
+                className="flex shrink-0 items-center justify-center rounded-lg bg-primary-600 p-2 text-white transition-colors hover:bg-primary-700 disabled:cursor-not-allowed disabled:opacity-60"
+              >
+                <RefreshCw size={18} className={atualizandoFracao ? 'animate-spin' : ''} />
+              </button>
+            </div>
+          )}
 
           {abaAtiva === 'mascaras' && (
             <div className="flex shrink-0 items-center gap-2">
@@ -319,7 +358,14 @@ export default function DreGerencialPage() {
 
         {abaAtiva === 'orcamento' && <OrcamentoTab ref={orcamentoTabRef} empresaId={empresaId} search={buscaOrcamento} />}
 
-        {abaAtiva === 'fracao-ideal' && <FracaoIdealTab empresaId={empresaId} />}
+        {abaAtiva === 'fracao-ideal' && (
+          <FracaoIdealTab
+            ref={fracaoIdealTabRef}
+            empresaId={empresaId}
+            search={buscaFracao}
+            onAtualizando={setAtualizandoFracao}
+          />
+        )}
 
         {abaAtiva === 'plano-de-contas' &&
           (planoAberto ? (
