@@ -84,14 +84,15 @@ async function update(empresaId, siengeId, mascaraId, { centroId = null, naoEntr
   return rows[0];
 }
 
-// Centros que têm versão própria do plano.
+// Centros que têm versão própria do plano — só os com "Realiza DRE" (aba Centros Custos): centro
+// desmarcado some da tela (o plano dele fica guardado e volta se marcar de novo).
 async function listVersoes(empresaId) {
   const { rows } = await pool.query(
     `SELECT v.centro_id, c.name, v.criado_em, u.nome AS criado_por
        FROM dre_plano_contas_versoes v
        JOIN centros_custo_sienge c ON c.empresa_id = v.empresa_id AND c.sienge_id = v.centro_id
        LEFT JOIN usuarios u ON u.id = v.usuario_id
-      WHERE v.empresa_id = $1
+      WHERE v.empresa_id = $1 AND c.realiza_dre
       ORDER BY c.name ASC`,
     [empresaId]
   );
@@ -102,10 +103,13 @@ async function listVersoes(empresaId) {
 // um id de centro = cópia do plano próprio daquele centro; 'branco' = sem nenhuma conta classificada.
 async function criarVersao(empresaId, centroId, usuarioId, copiarDe = 'global') {
   const { rows: centro } = await pool.query(
-    'SELECT name FROM centros_custo_sienge WHERE empresa_id = $1 AND sienge_id = $2',
+    'SELECT name, realiza_dre FROM centros_custo_sienge WHERE empresa_id = $1 AND sienge_id = $2',
     [empresaId, centroId]
   );
   if (!centro[0]) throw erro(404, 'Centro de custo não encontrado nesta empresa.');
+  if (!centro[0].realiza_dre) {
+    throw erro(400, `${centro[0].name} não está com "Realiza DRE" marcado na aba Centros Custos.`);
+  }
   if (copiarDe !== 'global' && copiarDe !== 'branco') {
     const { rows: origem } = await pool.query(
       'SELECT 1 FROM dre_plano_contas_versoes WHERE empresa_id = $1 AND centro_id = $2',
@@ -187,7 +191,7 @@ async function resumo(empresaId) {
        JOIN centros_custo_sienge c ON c.empresa_id = v.empresa_id AND c.sienge_id = v.centro_id
        LEFT JOIN usuarios u ON u.id = v.usuario_id
        LEFT JOIN dre_plano_contas_centro d ON d.empresa_id = v.empresa_id AND d.centro_id = v.centro_id
-      WHERE v.empresa_id = $1
+      WHERE v.empresa_id = $1 AND c.realiza_dre
       GROUP BY v.centro_id, c.name, c.natureza, v.criado_em, u.nome
       ORDER BY c.name ASC`,
     [empresaId]

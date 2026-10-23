@@ -1,6 +1,6 @@
 import { Fragment, useCallback, useEffect, useState } from 'react';
 import { Briefcase, Check, Minus, Plus, Trash2, X } from 'lucide-react';
-import { listItens } from '../../../api/centrosCustoSienge.api';
+import { listCentrosCustoDre } from '../../../api/dreCentros.api';
 import { listCategoriasOrcamento } from '../../../api/dreCategoriasOrcamento.api';
 import {
   listOrcamentoCentroCusto,
@@ -208,12 +208,13 @@ export default function OrcamentoTab({ empresaId, search = '' }) {
     setCarregando(true);
     Promise.all([
       listCategoriasOrcamento(empresaId),
-      listItens(empresaId, { page: 1, limit: 500 }),
+      listCentrosCustoDre(empresaId),
       listOrcamentosVigentes(empresaId),
     ])
-      .then(([cats, centrosResult, vig]) => {
+      .then(([cats, listaCentros, vig]) => {
         setCategorias(cats);
-        setCentros(centrosResult.data);
+        // Só os centros com "Realiza DRE" (aba Centros Custos).
+        setCentros(listaCentros.filter((c) => c.realiza_dre));
         setVigentes(vig);
       })
       .finally(() => setCarregando(false));
@@ -333,7 +334,12 @@ export default function OrcamentoTab({ empresaId, search = '' }) {
       ) : semCentros ? (
         <div className="flex flex-col items-center gap-1 py-14 text-center">
           <Briefcase size={26} className="mb-1 text-gray-300" />
-          <p className="text-sm text-gray-600">Nenhum centro de custo encontrado.</p>
+          <p className="text-sm text-gray-600">
+            {(centros || []).length === 0 ? 'Nenhum centro de custo com Realiza DRE.' : 'Nenhum centro de custo encontrado.'}
+          </p>
+          {(centros || []).length === 0 && (
+            <p className="max-w-sm text-xs text-gray-400">Marque os centros na aba Centros Custos.</p>
+          )}
         </div>
       ) : (
         <div className="overflow-x-auto rounded-b-card">

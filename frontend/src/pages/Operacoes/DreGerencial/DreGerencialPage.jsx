@@ -21,19 +21,19 @@ import CentrosCustosTab from './CentrosCustosTab';
 import DreTab from './DreTab';
 
 // O `{ divider: true }` separa a DRE (a demonstração em si) das abas de cadastro/parâmetro que
-// dão suporte a ela — Máscaras, Plano de Contas, Centros Custos, Categorias Orçamento e Orçamento ficam juntas,
-// sem divisor entre elas (mesmo padrão de SaldoContasBancariasPage.jsx, que separa "Saldos das
-// Contas" de "Bancos" e as demais abas de cadastro/parâmetro). Máscaras é a primeira depois da
-// DRE e Plano de Contas vem logo em seguida (pedido do usuário): na Máscaras se monta a estrutura
-// da DRE (nível 1 e 2); no Plano de Contas cada conta recebe a Máscara DRE de nível 2. Centros Custos
-// (igual à aba da DFC, com a flag "Realiza DRE") vem em seguida: os centros marcados é que podem ter
-// plano de contas próprio.
+// dão suporte a ela — Centros Custos, Máscaras, Plano de Contas, Categorias Orçamento e Orçamento
+// ficam juntas, sem divisor entre elas (mesmo padrão de SaldoContasBancariasPage.jsx, que separa
+// "Saldos das Contas" de "Bancos" e as demais abas de cadastro/parâmetro). Ordem pedida pelo
+// usuário: Centros Custos é a primeira depois da DRE (igual à aba da DFC, com a flag "Realiza DRE" —
+// só os centros marcados aparecem nas abas seguintes: plano de contas próprio e Orçamento); na
+// Máscaras se monta a estrutura da DRE (nível 1 e 2); no Plano de Contas cada conta recebe a
+// Máscara DRE de nível 2.
 const TABS = [
   { id: 'dre', label: 'DRE', icon: BarChart3 },
   { divider: true },
+  { id: 'centros-custos', label: 'Centros Custos', icon: Building2 },
   { id: 'mascaras', label: 'Máscaras', icon: Tags },
   { id: 'plano-de-contas', label: 'Plano de Contas', icon: ListTree },
-  { id: 'centros-custos', label: 'Centros Custos', icon: Building2 },
   { id: 'categorias-orcamento', label: 'Categorias Orçamento', icon: Layers },
   { id: 'orcamento', label: 'Orçamento', icon: Calculator },
 ];
