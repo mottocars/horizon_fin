@@ -10,12 +10,8 @@ const LARGURA_PRIMEIRA = 260;
 // Colunas depois do nome: largura fixa das de texto; as numéricas dividem o resto.
 const COLUNAS = [
   { chave: 'property_type', rotulo: 'Tipo', largura: 140 },
-  { chave: 'floor', rotulo: 'Andar', largura: 120 },
   { chave: 'commercial_stock', rotulo: 'Estoque', largura: 150 },
-  { chave: 'private_area', rotulo: 'Área privativa (m²)', numero: true, casas: 2, soma: true },
-  { chave: 'common_area', rotulo: 'Área comum (m²)', numero: true, casas: 2, soma: true },
   { chave: 'ideal_fraction', rotulo: 'Fração ideal', numero: true, casas: 8, soma: true, destaque: true },
-  { chave: 'ideal_fraction_square_meter', rotulo: 'Fração ideal (m²)', numero: true, casas: 8, soma: true },
 ];
 const LARGURA_NUMERO = 130;
 
@@ -36,8 +32,8 @@ function ehErroDeIntegracaoAusente(mensagem) {
 // Operações > DRE Gerencial > Fração Ideal: as unidades dos empreendimentos (/units do Sienge,
 // guardadas em sie_units), no layout da tabela da aba Avanços da DFC (DfcAvancosTab.jsx) —
 // cabeçalho azul grudado no topo, primeira coluna fixa. Nível 1 = o centro de custo (só os com
-// "Realiza DRE"), com a quantidade de unidades e as somas de área e de fração ideal; nível 2 = as
-// unidades. Vários abertos ao mesmo tempo.
+// "Realiza DRE"), com a quantidade de unidades e a soma da fração ideal; nível 2 = as unidades
+// (tipo, estoque e fração ideal). Vários abertos ao mesmo tempo.
 //
 // A atualização a partir do Sienge segue a dos contratos do Repasses CEF (RepassesCefPage.jsx::
 // handleAtualizar): o POST busca tudo paginado (200 por página) e substitui o que estava salvo,
