@@ -237,7 +237,7 @@ export function Indicador({ recuo = false, embaixo = false }) {
 // não recebe item arrastado e a marcação fica travada enquanto ele tiver filhos.
 //
 // `ref` expõe `abrirNova()` pro botão "Nova máscara" do topo da página (mesmo padrão de
-// CategoriasOrcamentoTab na DRE).
+// OrcamentoTab na DRE, botão "Nova categoria").
 const MascarasArvoreEditor = forwardRef(function MascarasArvoreEditor(
   { empresaId, api, modeloSugerido, demonstrativo, exemploNivel1, flags = [] },
   ref

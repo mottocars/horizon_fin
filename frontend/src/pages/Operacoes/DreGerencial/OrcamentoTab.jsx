@@ -1,7 +1,14 @@
-import { Fragment, useCallback, useEffect, useState } from 'react';
-import { Briefcase, Check, Minus, Plus, Trash2, X } from 'lucide-react';
+import { Fragment, forwardRef, useCallback, useEffect, useImperativeHandle, useState } from 'react';
+import { Briefcase, Check, Minus, Pencil, Plus, Trash2, X } from 'lucide-react';
+import Modal from '../../../components/Modal';
+import Button from '../../../components/Button';
 import { listCentrosCustoDre } from '../../../api/dreCentros.api';
-import { listCategoriasOrcamento } from '../../../api/dreCategoriasOrcamento.api';
+import {
+  createCategoriaOrcamento,
+  listCategoriasOrcamento,
+  removeCategoriaOrcamento,
+  updateCategoriaOrcamento,
+} from '../../../api/dreCategoriasOrcamento.api';
 import {
   listOrcamentoCentroCusto,
   listOrcamentosVigentes,
@@ -184,7 +191,12 @@ function LinhaNovoOrcamento({ totalColunas, mesesExistentes, onCriar }) {
 // ClustersCobranca/CentrosCustoResumo.jsx — drilldown de tabela única, sem cabeçalho repetido).
 // Nível 1 (expandido) = 1 linha por orçamento (rotulada pelo mês de início), 1 coluna por
 // categoria — mesma mecânica de célula editável de SaldosContasTab.jsx.
-export default function OrcamentoTab({ empresaId, search = '' }) {
+//
+// As categorias (as colunas) são cadastradas aqui mesmo (pedido do usuário — saiu a aba Categorias
+// Orçamento): `ref` expõe `abrirNova()` pro botão "Nova categoria" do topo da página, e cada
+// cabeçalho de categoria mostra renomear/remover ao passar o mouse. Mesmo formulário da aba antiga
+// (nome sempre maiúsculo — o backend já normaliza, aqui é só pra mostrar maiúsculo ao digitar).
+const OrcamentoTab = forwardRef(function OrcamentoTab({ empresaId, search = '' }, ref) {
   const confirm = useConfirm();
   const [categorias, setCategorias] = useState([]);
   const [centros, setCentros] = useState(null);
@@ -197,6 +209,14 @@ export default function OrcamentoTab({ empresaId, search = '' }) {
   const [orcamentos, setOrcamentos] = useState(null);
   const [carregandoDetalhe, setCarregandoDetalhe] = useState(false);
   const [removendoData, setRemovendoData] = useState(null);
+
+  // Janela de criar/editar categoria. editandoCategoria null = criando.
+  const [modalCategoria, setModalCategoria] = useState(false);
+  const [editandoCategoria, setEditandoCategoria] = useState(null);
+  const [nomeCategoria, setNomeCategoria] = useState('');
+  const [erroCategoria, setErroCategoria] = useState('');
+  const [salvandoCategoria, setSalvandoCategoria] = useState(false);
+  const [erroRemoverCategoria, setErroRemoverCategoria] = useState('');
 
   const carregar = useCallback(() => {
     if (!empresaId) {
@@ -282,6 +302,55 @@ export default function OrcamentoTab({ empresaId, search = '' }) {
     sincronizarVigenteLocal(siengeId, atualizado);
   }
 
+  function abrirCategoria(categoria) {
+    setEditandoCategoria(categoria);
+    setNomeCategoria(categoria ? categoria.nome : '');
+    setErroCategoria('');
+    setModalCategoria(true);
+  }
+
+  useImperativeHandle(ref, () => ({ abrirNova: () => abrirCategoria(null) }), []);
+
+  // Recarrega as categorias (colunas) e, se um centro está aberto, os orçamentos dele.
+  function recarregarCategorias() {
+    listCategoriasOrcamento(empresaId).then(setCategorias);
+    if (expandidoId) carregarDetalhe(expandidoId);
+  }
+
+  async function salvarCategoria(e) {
+    e.preventDefault();
+    setErroCategoria('');
+    setSalvandoCategoria(true);
+    try {
+      if (editandoCategoria) await updateCategoriaOrcamento(empresaId, editandoCategoria.id, { nome: nomeCategoria });
+      else await createCategoriaOrcamento(empresaId, { nome: nomeCategoria });
+      setModalCategoria(false);
+      recarregarCategorias();
+    } catch (err) {
+      setErroCategoria(err.response?.data?.message || 'Não foi possível salvar.');
+    } finally {
+      setSalvandoCategoria(false);
+    }
+  }
+
+  // Categoria com valor lançado em algum orçamento não pode ser removida (o backend recusa).
+  async function removerCategoria(categoria) {
+    const confirmado = await confirm({
+      title: 'Remover categoria',
+      description: `Remover "${categoria.nome}"?`,
+      confirmLabel: 'Remover',
+      variant: 'warning',
+    });
+    if (!confirmado) return;
+    setErroRemoverCategoria('');
+    try {
+      await removeCategoriaOrcamento(empresaId, categoria.id);
+      recarregarCategorias();
+    } catch (err) {
+      setErroRemoverCategoria(err.response?.data?.message || 'Não foi possível remover a categoria.');
+    }
+  }
+
   async function handleRemoverOrcamento(siengeId, dataInicio) {
     const confirmado = await confirm({
       title: 'Remover orçamento',
@@ -321,6 +390,14 @@ export default function OrcamentoTab({ empresaId, search = '' }) {
 
   return (
     <div className="rounded-card rounded-tl-none bg-white shadow-card">
+      {erroRemoverCategoria && (
+        <div className="flex items-center justify-between gap-3 rounded-t-card bg-red-50 px-4 py-2 text-xs text-red-600" role="status">
+          {erroRemoverCategoria}
+          <button type="button" onClick={() => setErroRemoverCategoria('')} title="Fechar" className="shrink-0 hover:text-red-800">
+            <X size={14} />
+          </button>
+        </div>
+      )}
       {carregando ? (
         <div className="py-12 text-center text-sm text-gray-400">Carregando...</div>
       ) : semCategorias ? (
@@ -328,7 +405,7 @@ export default function OrcamentoTab({ empresaId, search = '' }) {
           <Briefcase size={26} className="mb-1 text-gray-300" />
           <p className="text-sm text-gray-600">Nenhuma categoria de orçamento cadastrada.</p>
           <p className="max-w-sm text-xs text-gray-400">
-            Cadastre ao menos uma em "Categorias Orçamento" antes de lançar orçamentos aqui.
+            Cadastre ao menos uma no botão "Nova categoria", acima, antes de lançar orçamentos aqui.
           </p>
         </div>
       ) : semCentros ? (
@@ -348,7 +425,26 @@ export default function OrcamentoTab({ empresaId, search = '' }) {
               <tr className="text-xs uppercase tracking-wide text-gray-400">
                 <th className="border-b border-gray-200 bg-white py-2.5 pl-4 font-medium">Centro de Custo / Mês</th>
                 {categorias.map((c) => (
-                  <th key={c.id} className="border-b border-l border-gray-200 bg-white px-3 py-2.5 text-right font-medium">
+                  <th key={c.id} className="group/cat relative border-b border-l border-gray-200 bg-white px-3 py-2.5 text-right font-medium">
+                    {/* Renomear/remover sobrepostos no canto esquerdo (só no hover), sem ocupar espaço do nome. */}
+                    <span className="absolute left-1 top-1/2 flex -translate-y-1/2 items-center gap-0.5 bg-white opacity-0 transition-opacity group-hover/cat:opacity-100">
+                      <button
+                        type="button"
+                        onClick={() => abrirCategoria(c)}
+                        title="Renomear categoria"
+                        className="flex h-5 w-5 items-center justify-center rounded text-gray-400 hover:bg-gray-100 hover:text-gray-700"
+                      >
+                        <Pencil size={11} />
+                      </button>
+                      <button
+                        type="button"
+                        onClick={() => removerCategoria(c)}
+                        title="Remover categoria"
+                        className="flex h-5 w-5 items-center justify-center rounded text-gray-400 hover:bg-red-50 hover:text-red-600"
+                      >
+                        <Trash2 size={11} />
+                      </button>
+                    </span>
                     {c.nome}
                   </th>
                 ))}
@@ -441,6 +537,41 @@ export default function OrcamentoTab({ empresaId, search = '' }) {
           </table>
         </div>
       )}
+
+      <Modal
+        open={modalCategoria}
+        onClose={() => setModalCategoria(false)}
+        title={editandoCategoria ? 'Editar categoria' : 'Nova categoria'}
+      >
+        <form onSubmit={salvarCategoria} className="space-y-4">
+          {erroCategoria && <div className="rounded-lg bg-red-50 px-3 py-2 text-sm text-red-600">{erroCategoria}</div>}
+
+          <div>
+            <label className="mb-1 block text-sm font-medium text-gray-700">Nome</label>
+            <input
+              type="text"
+              value={nomeCategoria}
+              onChange={(e) => setNomeCategoria(e.target.value.toUpperCase())}
+              autoFocus
+              maxLength={80}
+              className="w-full rounded-lg border border-gray-200 px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-primary-100"
+            />
+          </div>
+
+          <div className="flex justify-end gap-2 pt-2">
+            <Button type="button" variant="secondary" onClick={() => setModalCategoria(false)}>
+              Cancelar
+            </Button>
+            <Button type="submit" loading={salvandoCategoria}>
+              Salvar
+            </Button>
+          </div>
+        </form>
+      </Modal>
     </div>
   );
-}
+});
+
+OrcamentoTab.displayName = 'OrcamentoTab';
+
+export default OrcamentoTab;

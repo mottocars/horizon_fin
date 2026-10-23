@@ -1,6 +1,6 @@
 import { useEffect, useRef, useState } from 'react';
 import { useSearchParams } from 'react-router-dom';
-import { BarChart3, Building2, Calculator, Layers, ListTree, Plus, RefreshCw, Search, Tags, Trash2 } from 'lucide-react';
+import { BarChart3, Building2, Calculator, ListTree, Plus, RefreshCw, Search, Tags, Trash2 } from 'lucide-react';
 import Card from '../../../components/Card';
 import Tabs from '../../../components/Tabs';
 import Button from '../../../components/Button';
@@ -11,7 +11,6 @@ import { excluirVersaoPlanoDre, listVersoesPlanoDre } from '../../../api/drePlan
 import { nomeExibicaoEmpresa } from '../../../utils/empresa';
 import { useEmpresaTravada } from '../../../hooks/useEmpresaTravada';
 import { useConfirm } from '../../../confirm/ConfirmContext';
-import CategoriasOrcamentoTab from './CategoriasOrcamentoTab';
 import OrcamentoTab from './OrcamentoTab';
 import MascarasTab from './MascarasTab';
 import PlanoDeContasTab from './PlanoDeContasTab';
@@ -21,20 +20,20 @@ import CentrosCustosTab from './CentrosCustosTab';
 import DreTab from './DreTab';
 
 // O `{ divider: true }` separa a DRE (a demonstração em si) das abas de cadastro/parâmetro que
-// dão suporte a ela — Centros Custos, Máscaras, Plano de Contas, Categorias Orçamento e Orçamento
+// dão suporte a ela — Centros Custos, Máscaras, Plano de Contas e Orçamento
 // ficam juntas, sem divisor entre elas (mesmo padrão de SaldoContasBancariasPage.jsx, que separa
 // "Saldos das Contas" de "Bancos" e as demais abas de cadastro/parâmetro). Ordem pedida pelo
 // usuário: Centros Custos é a primeira depois da DRE (igual à aba da DFC, com a flag "Realiza DRE" —
 // só os centros marcados aparecem nas abas seguintes: plano de contas próprio e Orçamento); na
 // Máscaras se monta a estrutura da DRE (nível 1 e 2); no Plano de Contas cada conta recebe a
-// Máscara DRE de nível 2.
+// Máscara DRE de nível 2. As categorias de orçamento são cadastradas na própria aba Orçamento
+// (botão "Nova categoria" — a aba Categorias Orçamento saiu a pedido do usuário).
 const TABS = [
   { id: 'dre', label: 'DRE', icon: BarChart3 },
   { divider: true },
   { id: 'centros-custos', label: 'Centros Custos', icon: Building2 },
   { id: 'mascaras', label: 'Máscaras', icon: Tags },
   { id: 'plano-de-contas', label: 'Plano de Contas', icon: ListTree },
-  { id: 'categorias-orcamento', label: 'Categorias Orçamento', icon: Layers },
   { id: 'orcamento', label: 'Orçamento', icon: Calculator },
 ];
 
@@ -46,7 +45,9 @@ export default function DreGerencialPage() {
   const [searchParams, setSearchParams] = useSearchParams();
 
   const empresaId = searchParams.get('empresa_id') || '';
-  const abaAtiva = searchParams.get('aba') || 'dre';
+  // Link antigo da aba Categorias Orçamento (que saiu) abre a Orçamento, onde elas agora ficam.
+  const abaUrl = searchParams.get('aba') || 'dre';
+  const abaAtiva = abaUrl === 'categorias-orcamento' ? 'orcamento' : abaUrl;
 
   function atualizarParams(patch) {
     const next = new URLSearchParams(searchParams);
@@ -86,10 +87,10 @@ export default function DreGerencialPage() {
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [loadingEmpresas, empresas, empresaId]);
 
-  // Botão "Nova categoria" fica aqui no topo (padrão do resto do sistema), mas o modal de criar
-  // continua vivendo em CategoriasOrcamentoTab.jsx — dispara por ref, mesmo esquema de
+  // Botão "Nova categoria" (aba Orçamento) fica aqui no topo (padrão do resto do sistema), mas a
+  // janela de criar continua vivendo em OrcamentoTab.jsx — dispara por ref, mesmo esquema de
   // ClassificacoesTab.jsx em Saldo Contas Bancárias.
-  const categoriasOrcamentoTabRef = useRef(null);
+  const orcamentoTabRef = useRef(null);
 
   // Mesmo esquema pro botão "Nova máscara" da aba Máscaras (igual à DFC Construtoras).
   const mascarasTabRef = useRef(null);
@@ -259,9 +260,9 @@ export default function DreGerencialPage() {
             </div>
           )}
 
-          {abaAtiva === 'categorias-orcamento' && (
+          {abaAtiva === 'orcamento' && (
             <div className="flex shrink-0 items-center gap-2">
-              <Button type="button" onClick={() => categoriasOrcamentoTabRef.current?.abrirNova()} disabled={semEmpresa}>
+              <Button type="button" onClick={() => orcamentoTabRef.current?.abrirNova()} disabled={semEmpresa}>
                 <Plus size={16} />
                 Nova categoria
               </Button>
@@ -314,11 +315,7 @@ export default function DreGerencialPage() {
 
         {abaAtiva === 'centros-custos' && <CentrosCustosTab empresaId={empresaId} search={buscaCentros} />}
 
-        {abaAtiva === 'categorias-orcamento' && (
-          <CategoriasOrcamentoTab ref={categoriasOrcamentoTabRef} empresaId={empresaId} />
-        )}
-
-        {abaAtiva === 'orcamento' && <OrcamentoTab empresaId={empresaId} search={buscaOrcamento} />}
+        {abaAtiva === 'orcamento' && <OrcamentoTab ref={orcamentoTabRef} empresaId={empresaId} search={buscaOrcamento} />}
 
         {abaAtiva === 'plano-de-contas' &&
           (planoAberto ? (
