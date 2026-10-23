@@ -1,6 +1,6 @@
 import { useEffect, useRef, useState } from 'react';
 import { useSearchParams } from 'react-router-dom';
-import { BarChart3, Building2, Calculator, ListTree, Plus, RefreshCw, Search, Tags, Trash2 } from 'lucide-react';
+import { BarChart3, Building2, Calculator, ListTree, PieChart, Plus, RefreshCw, Search, Tags, Trash2 } from 'lucide-react';
 import Card from '../../../components/Card';
 import Tabs from '../../../components/Tabs';
 import Button from '../../../components/Button';
@@ -17,6 +17,7 @@ import PlanoDeContasTab from './PlanoDeContasTab';
 import PlanosContasLista from './PlanosContasLista';
 import NovaVersaoPlanoModal from './NovaVersaoPlanoModal';
 import CentrosCustosTab from './CentrosCustosTab';
+import FracaoIdealTab from './FracaoIdealTab';
 import DreTab from './DreTab';
 
 // O `{ divider: true }` separa a DRE (a demonstração em si) das abas de cadastro/parâmetro que
@@ -35,6 +36,7 @@ const TABS = [
   { id: 'mascaras', label: 'Máscaras', icon: Tags },
   { id: 'plano-de-contas', label: 'Plano Contas', icon: ListTree },
   { id: 'orcamento', label: 'Orçamento', icon: Calculator },
+  { id: 'fracao-ideal', label: 'Fração Ideal', icon: PieChart },
 ];
 
 // Empresa e aba vivem na URL (não em useState local) — mesmo motivo de todas as outras telas
@@ -316,6 +318,8 @@ export default function DreGerencialPage() {
         {abaAtiva === 'centros-custos' && <CentrosCustosTab empresaId={empresaId} search={buscaCentros} />}
 
         {abaAtiva === 'orcamento' && <OrcamentoTab ref={orcamentoTabRef} empresaId={empresaId} search={buscaOrcamento} />}
+
+        {abaAtiva === 'fracao-ideal' && <FracaoIdealTab empresaId={empresaId} />}
 
         {abaAtiva === 'plano-de-contas' &&
           (planoAberto ? (
