@@ -13,6 +13,9 @@ const { alertar } = require('./alertasSeguranca.service');
 //     de toda resposta — limite de requisições estourado (429), força bruta
 //     e login por fora do navegador, acessos negados (403/404) em sequência
 //     e varredura de rotas sem login.
+// Renovação de sessão (/api/auth/refresh) por script não alerta sozinha: o
+// token renovado só serve pra chamar a API, e essas chamadas já alertam.
+// Só o refresh token forjado alerta.
 // Contadores em memória do processo: reiniciar o backend zera as janelas.
 // O MCP (/api/mcp, /api/mcp-oauth, /.well-known) é robô autorizado — só o
 // limite estourado dele conta.
@@ -45,6 +48,16 @@ const TITULOS = {
   script: 'Acesso por programa fora do navegador',
   desconhecido: 'Acesso por programa sem identificação',
 };
+
+// O deploy que criou a marca X-Horizon-App (27/10/2026) deixou abas abertas
+// com o frontend antigo, sem a marca — toda chamada delas parece "chamada
+// manual". Até as abas serem recarregadas, esse tipo só fica gravado (sem
+// WhatsApp). Pode apagar depois da data.
+const FIM_TRANSICAO_APP = Date.parse('2026-10-29T12:00:00-03:00');
+
+function emTransicao(tipo) {
+  return tipo === 'fora_do_app' && Date.now() < FIM_TRANSICAO_APP;
+}
 
 function ipDe(req) {
   return String(req.ip || '').replace(/^::ffff:/, '').slice(0, 64);
@@ -127,6 +140,7 @@ function aoAutenticar(req, usuarioId, classificacao) {
           userAgent: userAgent || '(vazio)',
           rota,
           detalhe: `Identificado como: ${cliente.detalhe}. O login deste usuário está sendo usado por fora do sistema aberto no navegador.`,
+          semWhatsapp: emTransicao(cliente.tipo),
         },
         SILENCIO.cliente
       );
@@ -225,7 +239,6 @@ function aoRecusarToken(req, motivo, { erro, usuarioId } = {}) {
 // ---------------------------------------------------------------- respostas
 
 const ROTAS_LOGIN = ['/api/auth/login', '/api/mcp-oauth/authorize'];
-const ROTAS_SESSAO = ['/api/auth/login', '/api/auth/refresh'];
 const FALHAS_LOGIN = { janela: 15 * MIN, total: 15, usuariosDiferentes: 5 };
 const NEGADOS = { janela: 10 * MIN, total: 30 };
 const VARREDURA = { janela: 10 * MIN, total: 40 };
@@ -243,13 +256,14 @@ function usuarioDoToken(req) {
   }
 }
 
-// Dono do refresh token do corpo (POST /api/auth/refresh), ou o erro da
-// verificação — refresh token com assinatura inválida é forjado.
-function verificarRefresh(req) {
+// Erro da verificação do refresh token do corpo (POST /api/auth/refresh) —
+// assinatura inválida é token forjado.
+function erroDoRefresh(req) {
   try {
-    return { usuarioId: Number(jwt.verify(String(req.body?.refreshToken || ''), env.jwt.refreshSecret).sub) || null };
+    jwt.verify(String(req.body?.refreshToken || ''), env.jwt.refreshSecret);
+    return null;
   } catch (err) {
-    return { erro: err };
+    return err;
   }
 }
 
@@ -268,24 +282,21 @@ function analisarResposta(req, res) {
   const rota = rotaDe(req);
   const mcp = ehRotaMcp(caminho);
 
-  // Login/renovação de sessão por script — vale com senha certa, errada ou bloqueada (429).
-  if (ROTAS_SESSAO.includes(caminho) && req.method === 'POST') {
+  // Login por script — vale com senha certa, errada ou bloqueada (429).
+  if (caminho === '/api/auth/login' && req.method === 'POST') {
     const cliente = classificarCliente(req);
     if (ehSuspeito(cliente.tipo)) {
-      const refresh = caminho.endsWith('/refresh');
       alertar(
         {
           motivo: 'login_fora_navegador',
-          titulo: refresh ? 'Renovação de sessão por fora do navegador' : 'Login por fora do navegador',
+          titulo: 'Login por fora do navegador',
           chave: `loginfora|${ip}|${cliente.tipo}`,
-          username: refresh ? null : usernameDigitado(req),
-          usuarioId: refresh ? verificarRefresh(req).usuarioId || null : null,
+          username: usernameDigitado(req),
           ip,
           userAgent: userAgent || '(vazio)',
           rota,
-          detalhe: `Identificado como: ${cliente.detalhe}. Resultado: ${
-            status >= 400 ? `recusado (${status})` : refresh ? 'sessão renovada' : 'senha aceita, entrou no sistema'
-          }.`,
+          detalhe: `Identificado como: ${cliente.detalhe}. Resultado: ${status >= 400 ? `recusado (${status})` : 'senha aceita, entrou no sistema'}.`,
+          semWhatsapp: emTransicao(cliente.tipo),
         },
         SILENCIO.loginFora
       );
@@ -345,7 +356,7 @@ function analisarResposta(req, res) {
   if (mcp) return;
 
   if (status === 401 && caminho === '/api/auth/refresh' && req.body?.refreshToken) {
-    const { erro } = verificarRefresh(req);
+    const erro = erroDoRefresh(req);
     if (erro && erro.name !== 'TokenExpiredError') aoRecusarToken(req, 'forjado', { erro: `renovação de sessão: ${erro.message}` });
   }
 

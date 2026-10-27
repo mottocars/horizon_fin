@@ -167,7 +167,9 @@ async function abrirEpisodio(entrada, alerta, silencioMs) {
   );
   entrada.id = rows[0].id;
 
-  const envio = await enviarWhatsapp(registro, silencioMs);
+  const envio = alerta.semWhatsapp
+    ? { enviado: false, erro: 'Só gravado: abas abertas com o frontend antigo (sem a marca do app) ainda parecem chamada manual.' }
+    : await enviarWhatsapp(registro, silencioMs);
   if (!envio.enviado) console.warn(`[alertas-seguranca] #${entrada.id} ${alerta.titulo}: WhatsApp não enviado — ${envio.erro}`);
   await pool.query('UPDATE alertas_seguranca SET whatsapp_enviado = $1, whatsapp_erro = $2 WHERE id = $3', [
     envio.enviado,
@@ -176,7 +178,8 @@ async function abrirEpisodio(entrada, alerta, silencioMs) {
   ]);
 }
 
-// alerta = { motivo, titulo, chave, usuarioId?, username?, ip?, userAgent?, rota?, detalhe? }
+// alerta = { motivo, titulo, chave, usuarioId?, username?, ip?, userAgent?, rota?, detalhe?, semWhatsapp? }
+// semWhatsapp = só grava (aparece em Métricas de Uso), sem mandar mensagem.
 // silencioMs = por quanto tempo sinais com a mesma chave não geram outra mensagem.
 // Nunca lança erro nem segura a requisição: roda em segundo plano.
 function alertar(alerta, silencioMs) {
