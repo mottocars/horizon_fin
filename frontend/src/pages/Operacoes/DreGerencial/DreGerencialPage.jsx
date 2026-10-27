@@ -1,6 +1,6 @@
 import { useEffect, useRef, useState } from 'react';
 import { useSearchParams } from 'react-router-dom';
-import { BarChart3, Building2, Calculator, ListTree, PieChart, Plus, RefreshCw, Search, Tags, Trash2 } from 'lucide-react';
+import { BarChart3, Building2, Calculator, House, ListTree, Plus, RefreshCw, Search, Tags, Trash2 } from 'lucide-react';
 import Card from '../../../components/Card';
 import Tabs from '../../../components/Tabs';
 import Button from '../../../components/Button';
@@ -17,7 +17,7 @@ import PlanoDeContasTab from './PlanoDeContasTab';
 import PlanosContasLista from './PlanosContasLista';
 import NovaVersaoPlanoModal from './NovaVersaoPlanoModal';
 import CentrosCustosTab from './CentrosCustosTab';
-import FracaoIdealTab from './FracaoIdealTab';
+import UnidadesTab from './UnidadesTab';
 import DreTab from './DreTab';
 
 // O `{ divider: true }` separa a DRE (a demonstração em si) das abas de cadastro/parâmetro que
@@ -36,7 +36,7 @@ const TABS = [
   { id: 'mascaras', label: 'Máscaras', icon: Tags },
   { id: 'plano-de-contas', label: 'Plano Contas', icon: ListTree },
   { id: 'orcamento', label: 'Orçamento', icon: Calculator },
-  { id: 'fracao-ideal', label: 'Fração Ideal', icon: PieChart },
+  { id: 'unidades', label: 'Unidades', icon: House },
 ];
 
 // Empresa e aba vivem na URL (não em useState local) — mesmo motivo de todas as outras telas
@@ -47,9 +47,11 @@ export default function DreGerencialPage() {
   const [searchParams, setSearchParams] = useSearchParams();
 
   const empresaId = searchParams.get('empresa_id') || '';
-  // Link antigo da aba Categorias Orçamento (que saiu) abre a Orçamento, onde elas agora ficam.
+  // Links antigos: a aba Categorias Orçamento (que saiu) abre a Orçamento, onde elas agora ficam; a
+  // Fração Ideal virou Unidades.
+  const ABAS_RENOMEADAS = { 'categorias-orcamento': 'orcamento', 'fracao-ideal': 'unidades' };
   const abaUrl = searchParams.get('aba') || 'dre';
-  const abaAtiva = abaUrl === 'categorias-orcamento' ? 'orcamento' : abaUrl;
+  const abaAtiva = ABAS_RENOMEADAS[abaUrl] || abaUrl;
 
   function atualizarParams(patch) {
     const next = new URLSearchParams(searchParams);
@@ -107,12 +109,12 @@ export default function DreGerencialPage() {
   // Busca (código ou descrição) da aba Centros Custos — mesma convenção acima.
   const [buscaCentros, setBuscaCentros] = useState('');
 
-  // Aba Fração Ideal: busca (unidade ou centro) e o ícone de atualizar do Sienge — a sincronização e
-  // o Log de Atualização vivem em FracaoIdealTab.jsx, disparados por ref (mesmo esquema do "Nova
-  // categoria" do Orçamento); `atualizandoFracao` só gira o ícone.
-  const fracaoIdealTabRef = useRef(null);
-  const [buscaFracao, setBuscaFracao] = useState('');
-  const [atualizandoFracao, setAtualizandoFracao] = useState(false);
+  // Aba Unidades: busca (unidade ou centro) e o ícone de atualizar do Sienge — a sincronização e
+  // o Log de Atualização vivem em UnidadesTab.jsx, disparados por ref (mesmo esquema do "Nova
+  // categoria" do Orçamento); `atualizandoUnidades` só gira o ícone.
+  const unidadesTabRef = useRef(null);
+  const [buscaUnidades, setBuscaUnidades] = useState('');
+  const [atualizandoUnidades, setAtualizandoUnidades] = useState(false);
 
   // Geração/atualização do plano de contas (Sienge) — mesmo esquema de handleAtualizarContas
   // em SaldoContasBancariasPage.jsx. `totalPlanoContas` (reportado pela própria aba via
@@ -242,15 +244,15 @@ export default function DreGerencialPage() {
               </div>
             )}
 
-            {abaAtiva === 'fracao-ideal' && (
+            {abaAtiva === 'unidades' && (
               <div className="sm:min-w-56 sm:max-w-sm sm:flex-1">
                 <label className="mb-1 block text-sm font-medium text-gray-700">Buscar</label>
                 <div className="relative">
                   <Search size={15} className="pointer-events-none absolute left-3 top-1/2 -translate-y-1/2 text-gray-400" />
                   <input
                     type="text"
-                    value={buscaFracao}
-                    onChange={(e) => setBuscaFracao(e.target.value)}
+                    value={buscaUnidades}
+                    onChange={(e) => setBuscaUnidades(e.target.value)}
                     disabled={semEmpresa}
                     placeholder={semEmpresa ? 'Selecione a empresa primeiro' : 'Buscar por unidade ou centro de custo...'}
                     className="w-full rounded-lg border border-gray-200 py-2 pl-9 pr-3 text-sm focus:outline-none focus:ring-2 focus:ring-primary-100 disabled:bg-gray-50 disabled:text-gray-400"
@@ -277,17 +279,17 @@ export default function DreGerencialPage() {
             )}
           </div>
 
-          {abaAtiva === 'fracao-ideal' && (
+          {abaAtiva === 'unidades' && (
             <div className="flex shrink-0 items-center gap-2">
-              {/* Mesmo ícone de atualizar do Repasses CEF: busca as unidades no Sienge. */}
+              {/* Mesmo ícone de atualizar do Repasses CEF: busca unidades e contratos no Sienge. */}
               <button
                 type="button"
-                onClick={() => fracaoIdealTabRef.current?.atualizar()}
-                disabled={semEmpresa || atualizandoFracao}
-                title="Atualizar as unidades a partir do Sienge"
+                onClick={() => unidadesTabRef.current?.atualizar()}
+                disabled={semEmpresa || atualizandoUnidades}
+                title="Atualizar unidades e contratos a partir do Sienge"
                 className="flex shrink-0 items-center justify-center rounded-lg bg-primary-600 p-2 text-white transition-colors hover:bg-primary-700 disabled:cursor-not-allowed disabled:opacity-60"
               >
-                <RefreshCw size={18} className={atualizandoFracao ? 'animate-spin' : ''} />
+                <RefreshCw size={18} className={atualizandoUnidades ? 'animate-spin' : ''} />
               </button>
             </div>
           )}
@@ -358,12 +360,12 @@ export default function DreGerencialPage() {
 
         {abaAtiva === 'orcamento' && <OrcamentoTab ref={orcamentoTabRef} empresaId={empresaId} search={buscaOrcamento} />}
 
-        {abaAtiva === 'fracao-ideal' && (
-          <FracaoIdealTab
-            ref={fracaoIdealTabRef}
+        {abaAtiva === 'unidades' && (
+          <UnidadesTab
+            ref={unidadesTabRef}
             empresaId={empresaId}
-            search={buscaFracao}
-            onAtualizando={setAtualizandoFracao}
+            search={buscaUnidades}
+            onAtualizando={setAtualizandoUnidades}
           />
         )}
 

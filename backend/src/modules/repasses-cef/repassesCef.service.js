@@ -225,11 +225,33 @@ async function inserirContrato(client, empresaId, reg) {
       ]
     );
   }
+
+  // Unidades do contrato (salesContractUnits) — o elo contrato → unidade que sobrevive ao distrato,
+  // usado na aba Unidades da DRE Gerencial (sie_units.contract_id só tem o contrato atual).
+  let unidades = reg.salesContractUnits;
+  if (unidades && !Array.isArray(unidades)) unidades = [unidades];
+  for (const u of Array.isArray(unidades) ? unidades : []) {
+    if (!u || u.id === undefined || u.id === null) continue;
+    await client.query(
+      `INSERT INTO sie_sales_contracts_units
+         (sienge_contract_id, empresa_id, unit_id, name, main, participation_percentage)
+       VALUES ($1, $2, $3, $4, $5, $6)
+       ON CONFLICT DO NOTHING`,
+      [
+        vazioParaNulo(reg.id),
+        empresaId,
+        u.id,
+        vazioParaNulo(u.name),
+        vazioParaNulo(u.main),
+        vazioParaNulo(u.participationPercentage),
+      ]
+    );
+  }
 }
 
 // Puxa TODOS os contratos da API do Sienge (/sales-contracts) pra essa
 // empresa e substitui completamente o que já estava salvo — mesmo critério
-// de sincronizarReservas: apaga tudo (o CASCADE já limpa os compradores) e
+// de sincronizarReservas: apaga tudo (o CASCADE já limpa os compradores e as unidades) e
 // reinsere, pra nunca duplicar.
 // `onProgress` (opcional) — ver sincronizarReservas.
 async function sincronizarContratos(empresaId, onProgress) {

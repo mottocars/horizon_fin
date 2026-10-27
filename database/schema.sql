@@ -688,6 +688,23 @@ CREATE TABLE sie_sales_contracts_customers (
 CREATE INDEX idx_sie_sales_contracts_customers_contract
     ON sie_sales_contracts_customers (sienge_contract_id, empresa_id);
 
+-- Unidades vendidas em cada contrato (salesContractUnits) — o elo contrato → unidade que sobrevive
+-- ao distrato (sie_units.contract_id só tem o contrato atual). Ver
+-- database/migrations/2026-10-27-sie-sales-contracts-units.sql.
+CREATE TABLE sie_sales_contracts_units (
+    sienge_contract_id        BIGINT NOT NULL,
+    empresa_id                INTEGER NOT NULL,
+    unit_id                   BIGINT NOT NULL,
+    name                      VARCHAR(255),
+    main                      BOOLEAN,
+    participation_percentage  NUMERIC(10,4),
+    PRIMARY KEY (sienge_contract_id, empresa_id, unit_id),
+    FOREIGN KEY (sienge_contract_id, empresa_id)
+        REFERENCES sie_sales_contracts (sienge_contract_id, empresa_id) ON DELETE CASCADE
+);
+
+CREATE INDEX idx_sie_sales_contracts_units_unidade ON sie_sales_contracts_units (empresa_id, unit_id);
+
 CREATE TABLE integracoes_prevision (
     id             SERIAL PRIMARY KEY,
     empresa_id     INTEGER NOT NULL REFERENCES empresas(id) ON DELETE CASCADE,

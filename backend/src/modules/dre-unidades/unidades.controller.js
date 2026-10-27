@@ -1,5 +1,5 @@
 const { z } = require('zod');
-const service = require('./fracaoIdeal.service');
+const service = require('./unidades.service');
 
 const empresaIdSchema = z.coerce.number().int().positive('Empresa inválida.');
 
@@ -31,6 +31,14 @@ async function sincronizar(req, res, next) {
   }
 }
 
+async function sincronizarContratos(req, res, next) {
+  try {
+    res.json(await service.sincronizarContratos(empresaIdSchema.parse(req.params.empresaId)));
+  } catch (err) {
+    tratar(err, next);
+  }
+}
+
 async function statusSincronizacao(req, res, next) {
   try {
     res.json(service.getStatusSincronizacao(empresaIdSchema.parse(req.params.empresaId)));
@@ -39,4 +47,4 @@ async function statusSincronizacao(req, res, next) {
   }
 }
 
-module.exports = { listar, sincronizar, statusSincronizacao };
+module.exports = { listar, sincronizar, sincronizarContratos, statusSincronizacao };
