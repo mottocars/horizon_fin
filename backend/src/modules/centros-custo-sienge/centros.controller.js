@@ -21,7 +21,7 @@ const EXPORT_COLUMNS = [
   { header: 'Tipo de Edificação', key: 'building_type_description', width: 22 },
   { header: 'Status', key: 'status_label', width: 12 },
   { header: 'Apelido', key: 'apelido', width: 22 },
-  { header: 'Unidade de Negócio', key: 'unidade_negocio_descricao', width: 22 },
+  { header: 'Pilar', key: 'pilar_descricao', width: 22 },
   { header: 'Número de Unidades', key: 'numero_unidades', width: 18 },
   { header: 'Código Prevision', key: 'codigo_prevision', width: 18 },
   { header: 'Classificação de Orçamento', key: 'classificacao_orcamento_label', width: 22 },
@@ -46,7 +46,7 @@ const emptyToNull = (val) => (val === '' || val === undefined ? null : val);
 const enriquecimentoSchema = z.object({
   status: z.enum(['ATIVO', 'INATIVO']).default('ATIVO'),
   apelido: z.preprocess(emptyToNull, z.string().max(150).nullable().optional()),
-  unidade_negocio_id: z.preprocess(emptyToNull, z.coerce.number().int().positive().nullable().optional()),
+  pilar_id: z.preprocess(emptyToNull, z.coerce.number().int().positive().nullable().optional()),
   numero_unidades: z.preprocess(emptyToNull, z.coerce.number().int().nullable().optional()),
   codigo_prevision: z.preprocess(emptyToNull, z.string().max(50).nullable().optional()),
   prevision_primary_view: z.coerce.boolean().default(true),

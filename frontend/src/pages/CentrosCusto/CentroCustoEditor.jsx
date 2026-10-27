@@ -65,7 +65,7 @@ const emptyForm = {
   status: 'ATIVO',
   natureza: '',
   apelido: '',
-  unidade_negocio_id: '',
+  pilar_id: '',
   numero_unidades: '',
   codigo_prevision: '',
   prevision_primary_view: true,
@@ -96,7 +96,7 @@ export default function CentroCustoEditor({ empresaId, siengeId, onSalvo, onAlte
   const [buscandoCep, setBuscandoCep] = useState(false);
   const [error, setError] = useState('');
   const [success, setSuccess] = useState('');
-  const [unidadesNegocio, setUnidadesNegocio] = useState([]);
+  const [pilares, setPilares] = useState([]);
   const [projetosPrevision, setProjetosPrevision] = useState([]);
   const [erroProjetosPrevision, setErroProjetosPrevision] = useState('');
 
@@ -123,7 +123,7 @@ export default function CentroCustoEditor({ empresaId, siengeId, onSalvo, onAlte
         status: data.status || 'ATIVO',
         natureza: data.natureza || '',
         apelido: data.apelido || '',
-        unidade_negocio_id: data.unidade_negocio_id ? String(data.unidade_negocio_id) : '',
+        pilar_id: data.pilar_id ? String(data.pilar_id) : '',
         numero_unidades: data.numero_unidades ?? '',
         codigo_prevision: data.codigo_prevision || '',
         prevision_primary_view: data.prevision_primary_view !== false,
@@ -154,7 +154,7 @@ export default function CentroCustoEditor({ empresaId, siengeId, onSalvo, onAlte
 
   useEffect(() => {
     loadItem();
-    listMascaras('UNIDADES_NEGOCIO', empresaId).then(setUnidadesNegocio);
+    listMascaras('PILARES', empresaId).then(setPilares);
     listPrevisionProjetos(empresaId)
       .then((projetos) => {
         setProjetosPrevision(projetos);
@@ -400,17 +400,17 @@ export default function CentroCustoEditor({ empresaId, siengeId, onSalvo, onAlte
                 />
               </Field>
 
-              <Field label="Unidade de Negócio">
+              <Field label="Pilar">
                 <SearchableSelect
-                  value={form.unidade_negocio_id}
-                  onChange={(value) => handleChange('unidade_negocio_id', value)}
-                  options={unidadesNegocio.map((un) => ({ value: un.id, label: un.descricao }))}
-                  emptyMessage="Nenhuma unidade de negócio encontrada."
-                  corClasses={corCampo(form.unidade_negocio_id)}
+                  value={form.pilar_id}
+                  onChange={(value) => handleChange('pilar_id', value)}
+                  options={pilares.map((p) => ({ value: p.id, label: p.descricao }))}
+                  emptyMessage="Nenhum pilar encontrado."
+                  corClasses={corCampo(form.pilar_id)}
                 />
-                {unidadesNegocio.length === 0 && (
+                {pilares.length === 0 && (
                   <p className="mt-1 text-xs text-gray-400">
-                    Nenhuma unidade de negócio cadastrada em Máscaras ainda.
+                    Nenhum pilar cadastrado em Máscaras ainda.
                   </p>
                 )}
               </Field>

@@ -54,12 +54,12 @@ async function listItensParaExportacao(empresaId) {
   const { rows } = await pool.query(
     `SELECT c.sienge_id, c.name, c.commercial_name, c.cnpj, c.company_name,
             c.tipo, c.endereco, c.cost_database_description, c.building_type_description,
-            c.status, c.apelido, m.descricao AS unidade_negocio_descricao,
+            c.status, c.apelido, m.descricao AS pilar_descricao,
             c.numero_unidades, c.codigo_prevision, c.prevision_primary_view, c.codigo_construtor_vendas,
             c.codigo_contrato_caixa, c.cep, c.cidade_enriquecida, c.estado_enriquecido,
             c.valor_geral_vendas, c.faixa, c.data_criacao, c.data_modificacao, c.atualizado_em
      FROM centros_custo_sienge c
-     LEFT JOIN mascara_itens m ON m.id = c.unidade_negocio_id
+     LEFT JOIN mascara_itens m ON m.id = c.pilar_id
      WHERE c.empresa_id = $1
      ORDER BY c.sienge_id::text ASC`,
     [empresaId]
@@ -69,9 +69,9 @@ async function listItensParaExportacao(empresaId) {
 
 async function getItem(empresaId, siengeId) {
   const { rows } = await pool.query(
-    `SELECT c.*, m.descricao AS unidade_negocio_descricao
+    `SELECT c.*, m.descricao AS pilar_descricao
      FROM centros_custo_sienge c
-     LEFT JOIN mascara_itens m ON m.id = c.unidade_negocio_id
+     LEFT JOIN mascara_itens m ON m.id = c.pilar_id
      WHERE c.empresa_id = $1 AND c.sienge_id = $2`,
     [empresaId, siengeId]
   );
@@ -84,7 +84,7 @@ async function updateEnriquecimento(empresaId, siengeId, data) {
     `UPDATE centros_custo_sienge SET
        status = $1,
        apelido = $2,
-       unidade_negocio_id = $3,
+       pilar_id = $3,
        numero_unidades = $4,
        codigo_prevision = $5,
        prevision_primary_view = $6,
@@ -101,7 +101,7 @@ async function updateEnriquecimento(empresaId, siengeId, data) {
     [
       data.status,
       data.apelido || null,
-      data.unidade_negocio_id || null,
+      data.pilar_id || null,
       data.numero_unidades || null,
       data.codigo_prevision || null,
       data.prevision_primary_view,

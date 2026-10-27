@@ -18,7 +18,7 @@ const TIPOS = [
   { value: 'DRE', label: 'DRE' },
   { value: 'DFC', label: 'DFC' },
   { value: 'PACOTES', label: 'Pacotes' },
-  { value: 'UNIDADES_NEGOCIO', label: 'Unidades de Negócio' },
+  { value: 'PILARES', label: 'Pilares' },
   { value: 'ETAPAS_CENTRO_CUSTO', label: 'Etapas do Centro de Custo' },
   { value: 'SUBMASCARA_DRE', label: 'Submáscara DRE' },
   { value: 'SUBMASCARA_DFC', label: 'Submáscara DFC' },

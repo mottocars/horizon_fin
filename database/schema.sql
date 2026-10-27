@@ -821,7 +821,8 @@ CREATE TABLE centros_custo_sienge (
     -- Campos de enriquecimento (cadastro manual, nunca sobrescritos pela sincronização com o Sienge)
     status                     VARCHAR(10) NOT NULL DEFAULT 'ATIVO',
     apelido                    VARCHAR(150),
-    unidade_negocio_id         INTEGER REFERENCES mascara_itens(id) ON DELETE SET NULL,
+    -- Pilar do centro (máscara tipo PILARES; até 27/10/2026 se chamava Unidade de Negócio).
+    pilar_id                   INTEGER REFERENCES mascara_itens(id) ON DELETE SET NULL,
     numero_unidades            INTEGER,
     codigo_prevision           VARCHAR(50),
     -- TRUE = Primário, FALSE = Secundário. Corresponde ao campo primary_view
