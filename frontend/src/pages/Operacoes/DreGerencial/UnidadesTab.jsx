@@ -10,12 +10,19 @@ import { statusConfig } from '../../../utils/statusUnidade';
 import iconSienge from '../../../assets/integracoes/sienge.svg';
 import AtualizacaoLogModal from '../RepassesCef/AtualizacaoLogModal';
 
-const LARGURA_PRIMEIRA = 280;
+// Largura mínima da primeira coluna (centro / unidade) — ela fica com o espaço que sobrar; as de
+// dados têm largura fixa e parecida (antes a Fração ideal ficava com a sobra e ficava enorme).
+const LARGURA_MINIMA_PRIMEIRA = 260;
 
-// Colunas depois do nome (larguras fixas; Fração ideal divide o resto).
 const COLUNAS = [
-  { chave: 'tipo', rotulo: 'Tipo', largura: 150 },
-  { chave: 'situacao_atual', rotulo: 'Situação atual', largura: 170 },
+  { chave: 'tipo', rotulo: 'Tipo', largura: 140 },
+  { chave: 'situacao_atual', rotulo: 'Situação atual', largura: 150 },
+  {
+    chave: 'contrato',
+    rotulo: 'Contrato',
+    largura: 150,
+    titulo: 'Número do contrato de venda (Vendidas e Distratadas)',
+  },
   {
     chave: 'data',
     rotulo: 'Data',
@@ -25,23 +32,22 @@ const COLUNAS = [
   {
     chave: 'valor',
     rotulo: 'Valor',
-    largura: 150,
+    largura: 140,
     titulo:
       'Vendidas e Distratadas: valor do contrato · Permuta: valor da avaliação · Disponíveis: ticket médio das vendas do mesmo tipo no empreendimento',
   },
-  { chave: 'fracao_ideal', rotulo: 'Fração ideal', destaque: true },
+  { chave: 'fracao_ideal', rotulo: 'Fração ideal', largura: 130, destaque: true },
 ];
-const LARGURA_MINIMA_FRACAO = 130;
 
 // Os 4 clusters do drilldown, na ordem pedida, com a cor do estoque comercial correspondente
 // (utils/statusUnidade.js: Vendida vermelho, Permuta roxo, Disponível verde; distrato em âmbar).
 const CLUSTERS = [
-  { chave: 'vendidas', rotulo: 'Vendidas', cor: 'bg-red-500', dica: 'Todo contrato de venda, inclusive os depois cancelados' },
-  { chave: 'distratadas', rotulo: 'Distratadas', cor: 'bg-amber-500', dica: 'Contratos de venda cancelados' },
-  { chave: 'permuta', rotulo: 'Permuta', cor: 'bg-purple-500', dica: 'Unidades com estoque Permuta' },
+  { chave: 'vendidas', rotulo: 'VENDIDAS', cor: 'bg-red-500', dica: 'Todo contrato de venda, inclusive os depois cancelados' },
+  { chave: 'distratadas', rotulo: 'DISTRATADAS', cor: 'bg-amber-500', dica: 'Contratos de venda cancelados' },
+  { chave: 'permuta', rotulo: 'PERMUTA', cor: 'bg-purple-500', dica: 'Unidades com estoque Permuta' },
   {
     chave: 'disponiveis',
-    rotulo: 'Unidades disponíveis',
+    rotulo: 'UNIDADES DISPONÍVEIS',
     cor: 'bg-emerald-500',
     dica: 'Unidades que hoje não estão vendidas nem em permuta',
   },
@@ -242,13 +248,13 @@ const UnidadesTab = forwardRef(function UnidadesTab({ empresaId, search = '', on
             style={{
               tableLayout: 'fixed',
               width: '100%',
-              minWidth: LARGURA_PRIMEIRA + COLUNAS.reduce((t, c) => t + (c.largura || LARGURA_MINIMA_FRACAO), 0),
+              minWidth: LARGURA_MINIMA_PRIMEIRA + COLUNAS.reduce((t, c) => t + c.largura, 0),
             }}
           >
             <colgroup>
-              <col style={{ width: LARGURA_PRIMEIRA }} />
+              <col />
               {COLUNAS.map((c) => (
-                <col key={c.chave} style={c.largura ? { width: c.largura } : undefined} />
+                <col key={c.chave} style={{ width: c.largura }} />
               ))}
             </colgroup>
             <thead>
@@ -306,6 +312,7 @@ const UnidadesTab = forwardRef(function UnidadesTab({ empresaId, search = '', on
                       <td className={celulaCentro} />
                       <td className={celulaCentro} />
                       <td className={celulaCentro} />
+                      <td className={celulaCentro} />
                       <td className="border-b border-l border-blue-100 bg-blue-50 px-2 text-right text-xs font-semibold tabular-nums text-blue-700 group-hover/obra:bg-blue-100">
                         {numero(c.fracao_ideal, 8)}
                       </td>
@@ -351,6 +358,7 @@ const UnidadesTab = forwardRef(function UnidadesTab({ empresaId, search = '', on
                               <td className="border-b border-l border-gray-100 bg-white group-hover/cluster:bg-gray-50" />
                               <td className="border-b border-l border-gray-100 bg-white group-hover/cluster:bg-gray-50" />
                               <td className="border-b border-l border-gray-100 bg-white group-hover/cluster:bg-gray-50" />
+                              <td className="border-b border-l border-gray-100 bg-white group-hover/cluster:bg-gray-50" />
                               <td
                                 className={`border-b border-l border-gray-100 bg-white px-2 text-right text-xs font-semibold tabular-nums group-hover/cluster:bg-gray-50 ${
                                   estimado ? 'italic text-gray-500' : 'text-gray-900'
@@ -382,27 +390,13 @@ const UnidadesTab = forwardRef(function UnidadesTab({ empresaId, search = '', on
 
 UnidadesTab.displayName = 'UnidadesTab';
 
-// Linha de uma unidade dentro de um cluster. Abaixo do nome: o contrato (Vendidas, com selo quando
-// foi distratado) ou o contrato e o motivo do cancelamento (Distratadas). Em Disponíveis o valor é
-// estimado (ticket médio) — itálico, com "≈" e de quantas vendas veio.
+// Linha de uma unidade dentro de um cluster. Coluna Contrato: o número do contrato (Vendidas, com
+// selo quando foi distratado; Distratadas, com o motivo do cancelamento embaixo). Em Disponíveis o
+// valor é estimado (ticket médio) — itálico, com "≈" e de quantas vendas veio.
 function LinhaUnidade({ linha: l, cluster }) {
   const situacao = statusConfig(l.situacao_atual);
   const celula = 'border-b border-l border-gray-100 bg-white px-2 py-1.5 text-xs';
-  let detalhe = null;
-  if (l.contrato && cluster === 'vendidas') {
-    detalhe = (
-      <span className="flex items-center gap-1.5">
-        Contrato {l.contrato.numero}
-        {l.contrato.cancelado && (
-          <span className="rounded bg-amber-50 px-1 py-px text-[9px] font-semibold uppercase text-amber-700 ring-1 ring-amber-200">
-            Distratado
-          </span>
-        )}
-      </span>
-    );
-  } else if (l.contrato && cluster === 'distratadas') {
-    detalhe = `Contrato ${l.contrato.numero}${l.contrato.motivo ? ` · ${l.contrato.motivo}` : ''}`;
-  }
+  const motivo = cluster === 'distratadas' ? l.contrato?.motivo : null;
 
   let valor;
   if (cluster === 'disponiveis') {
@@ -429,11 +423,6 @@ function LinhaUnidade({ linha: l, cluster }) {
         <span className="block truncate text-xs font-medium text-gray-800" title={l.unidade}>
           {l.unidade}
         </span>
-        {detalhe && (
-          <span className="block truncate text-[10px] text-gray-400" title={typeof detalhe === 'string' ? detalhe : undefined}>
-            {detalhe}
-          </span>
-        )}
       </td>
       <td className={`${celula} truncate text-gray-700`} title={l.tipo || undefined}>
         {l.tipo || ''}
@@ -444,6 +433,25 @@ function LinhaUnidade({ linha: l, cluster }) {
             <span className={`h-2 w-2 shrink-0 rounded-full ${situacao.dot}`} />
             {situacao.label}
           </span>
+        )}
+      </td>
+      <td className={celula}>
+        {l.contrato && (
+          <>
+            <span className="flex items-center gap-1.5">
+              <span className="tabular-nums text-gray-700">{l.contrato.numero}</span>
+              {cluster === 'vendidas' && l.contrato.cancelado && (
+                <span className="rounded bg-amber-50 px-1 py-px text-[9px] font-semibold uppercase text-amber-700 ring-1 ring-amber-200">
+                  Distratado
+                </span>
+              )}
+            </span>
+            {motivo && (
+              <span className="block truncate text-[10px] text-gray-400" title={motivo}>
+                {motivo}
+              </span>
+            )}
+          </>
         )}
       </td>
       <td className={`${celula} tabular-nums text-gray-700`}>{dataBr(l.data)}</td>
