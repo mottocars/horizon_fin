@@ -404,11 +404,11 @@ const UnidadesTab = forwardRef(function UnidadesTab({ empresaId, search = '', on
                               >
                                 <span className="flex items-center gap-2">
                                   <span
-                                    className={`flex h-3.5 w-3.5 shrink-0 items-center justify-center rounded ${
-                                      temLinhas ? 'bg-gray-100 text-gray-500' : 'text-transparent'
+                                    className={`flex h-4 w-4 shrink-0 items-center justify-center rounded ${
+                                      temLinhas ? 'bg-primary-100 text-primary-600' : 'text-transparent'
                                     }`}
                                   >
-                                    {clusterAberto ? <Minus size={9} /> : <Plus size={9} />}
+                                    {clusterAberto ? <Minus size={10} /> : <Plus size={10} />}
                                   </span>
                                   <span className={`truncate text-xs font-semibold ${temLinhas ? 'text-gray-800' : 'text-gray-400'}`}>
                                     {k.rotulo}
