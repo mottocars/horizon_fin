@@ -36,7 +36,7 @@ const COLUNAS = [
     titulo:
       'Vendidas e Distratadas: valor do contrato · Permuta: valor da avaliação · Disponíveis: ticket médio das vendas do mesmo tipo no empreendimento',
   },
-  { chave: 'fracao_ideal', rotulo: 'Fração ideal', largura: 130, destaque: true },
+  { chave: 'fracao_ideal', rotulo: 'Fração ideal', largura: 130 },
 ];
 
 // Os 4 clusters do drilldown, na ordem pedida, com a cor do estoque comercial correspondente
@@ -268,7 +268,7 @@ const UnidadesTab = forwardRef(function UnidadesTab({ empresaId, search = '', on
                     title={c.titulo}
                     className={`sticky -top-6 z-20 border-b-2 border-l border-b-blue-500 border-l-blue-100 px-2 py-2.5 text-xs uppercase tracking-wide ${
                       c.chave === 'valor' || c.chave === 'fracao_ideal' ? 'text-right' : 'text-left'
-                    } ${c.destaque ? 'bg-blue-100 font-semibold text-blue-800' : 'bg-blue-50 font-medium text-blue-700'} ${
+                    } bg-blue-50 font-medium text-blue-700 ${
                       c.titulo ? 'cursor-help' : ''
                     }`}
                   >
@@ -313,7 +313,7 @@ const UnidadesTab = forwardRef(function UnidadesTab({ empresaId, search = '', on
                       <td className={celulaCentro} />
                       <td className={celulaCentro} />
                       <td className={celulaCentro} />
-                      <td className="border-b border-l border-blue-100 bg-blue-50 px-2 text-right text-xs font-semibold tabular-nums text-blue-700 group-hover/obra:bg-blue-100">
+                      <td className={`${celulaCentro} font-semibold text-gray-900`}>
                         {numero(c.fracao_ideal, 8)}
                       </td>
                     </tr>
@@ -367,7 +367,7 @@ const UnidadesTab = forwardRef(function UnidadesTab({ empresaId, search = '', on
                               >
                                 {temLinhas ? `${estimado ? '≈ ' : ''}${numero(soma(linhas, 'valor'), 2)}` : ''}
                               </td>
-                              <td className="border-b border-l border-blue-100 bg-blue-50/60 px-2 text-right text-xs font-semibold tabular-nums text-blue-700">
+                              <td className="border-b border-l border-gray-100 bg-white px-2 text-right text-xs font-semibold tabular-nums text-gray-900 group-hover/cluster:bg-gray-50">
                                 {temLinhas ? numero(soma(linhas, 'fracao_ideal'), 8) : ''}
                               </td>
                             </tr>
@@ -390,13 +390,12 @@ const UnidadesTab = forwardRef(function UnidadesTab({ empresaId, search = '', on
 
 UnidadesTab.displayName = 'UnidadesTab';
 
-// Linha de uma unidade dentro de um cluster. Coluna Contrato: o número do contrato (Vendidas, com
-// selo quando foi distratado; Distratadas, com o motivo do cancelamento embaixo). Em Disponíveis o
+// Linha de uma unidade dentro de um cluster. Coluna Contrato: só o número do contrato (em Vendidas,
+// com selo quando foi distratado). Em Disponíveis o
 // valor é estimado (ticket médio) — itálico, com "≈" e de quantas vendas veio.
 function LinhaUnidade({ linha: l, cluster }) {
   const situacao = statusConfig(l.situacao_atual);
   const celula = 'border-b border-l border-gray-100 bg-white px-2 py-1.5 text-xs';
-  const motivo = cluster === 'distratadas' ? l.contrato?.motivo : null;
 
   let valor;
   if (cluster === 'disponiveis') {
@@ -437,26 +436,19 @@ function LinhaUnidade({ linha: l, cluster }) {
       </td>
       <td className={celula}>
         {l.contrato && (
-          <>
-            <span className="flex items-center gap-1.5">
-              <span className="tabular-nums text-gray-700">{l.contrato.numero}</span>
-              {cluster === 'vendidas' && l.contrato.cancelado && (
-                <span className="rounded bg-amber-50 px-1 py-px text-[9px] font-semibold uppercase text-amber-700 ring-1 ring-amber-200">
-                  Distratado
-                </span>
-              )}
-            </span>
-            {motivo && (
-              <span className="block truncate text-[10px] text-gray-400" title={motivo}>
-                {motivo}
+          <span className="flex items-center gap-1.5">
+            <span className="tabular-nums text-gray-700">{l.contrato.numero}</span>
+            {cluster === 'vendidas' && l.contrato.cancelado && (
+              <span className="rounded bg-amber-50 px-1 py-px text-[9px] font-semibold uppercase text-amber-700 ring-1 ring-amber-200">
+                Distratado
               </span>
             )}
-          </>
+          </span>
         )}
       </td>
       <td className={`${celula} tabular-nums text-gray-700`}>{dataBr(l.data)}</td>
       <td className={`${celula} text-right tabular-nums text-gray-800`}>{valor}</td>
-      <td className="border-b border-l border-blue-100 bg-blue-50/60 px-2 py-1.5 text-right text-xs font-semibold tabular-nums text-blue-700">
+      <td className={`${celula} text-right tabular-nums text-gray-800`}>
         {numero(l.fracao_ideal, 8)}
       </td>
     </tr>
