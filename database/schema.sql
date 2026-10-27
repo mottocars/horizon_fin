@@ -124,13 +124,16 @@ CREATE INDEX idx_integracoes_zapi_empresa ON integracoes_zapi (empresa_id);
 -- pela conexão "Comunicação Oficial" da HORIZON (ver
 -- primeiroAcessoCodigo.service.js). Um código pendente por usuário — pedir
 -- de novo substitui o anterior; concluir o primeiro acesso apaga a linha.
+-- `validado_em` = acertou o código; é o que libera a nova senha e o
+-- "Concluir".
 CREATE TABLE usuarios_codigos_verificacao (
     usuario_id    INTEGER PRIMARY KEY REFERENCES usuarios(id) ON DELETE CASCADE,
     telefone      VARCHAR(20) NOT NULL,  -- só dígitos, com DDI 55 (formato da Z-API)
     codigo_hash   VARCHAR(255) NOT NULL,
     tentativas    INTEGER NOT NULL DEFAULT 0,
     enviado_em    TIMESTAMP NOT NULL DEFAULT NOW(),
-    expira_em     TIMESTAMP NOT NULL
+    expira_em     TIMESTAMP NOT NULL,
+    validado_em   TIMESTAMP
 );
 
 -- Conexão com a VanPix (tela Integrações > Convênios Bancários — hoje o único "tipo" de

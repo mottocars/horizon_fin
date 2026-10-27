@@ -20,6 +20,10 @@ export function enviarCodigoPrimeiroAcesso(data) {
   return http.post('/me/primeiro-acesso/codigo', data).then((res) => res.data);
 }
 
+export function validarCodigoPrimeiroAcesso(data) {
+  return http.post('/me/primeiro-acesso/codigo/validar', data).then((res) => res.data);
+}
+
 export function completarPrimeiroAcesso(data) {
   return http.put('/me/primeiro-acesso', data).then((res) => res.data);
 }

@@ -1,8 +1,13 @@
 import { useEffect, useRef, useState } from 'react';
 import { useNavigate } from 'react-router-dom';
-import { Eye, EyeOff, User as UserIcon, Camera } from 'lucide-react';
+import { Eye, EyeOff, User as UserIcon, Camera, CheckCircle2 } from 'lucide-react';
 import Button from '../../components/Button';
-import { fetchMe, completarPrimeiroAcesso, enviarCodigoPrimeiroAcesso } from '../../api/auth.api';
+import {
+  fetchMe,
+  completarPrimeiroAcesso,
+  enviarCodigoPrimeiroAcesso,
+  validarCodigoPrimeiroAcesso,
+} from '../../api/auth.api';
 import { useAuth } from '../../auth/AuthContext';
 import { redimensionarImagem } from '../../utils/imagemPerfil';
 import { formatDdd, formatCelular } from '../Usuarios/format';
@@ -17,11 +22,24 @@ const emptyForm = {
   avatar_url: '',
 };
 
-// Mesma classe de input da tela de Login, pra manter os componentes
-// idênticos entre as duas telas. Sem largura fixa aqui de propósito — o
-// campo de celular usa w-16/flex-1 em vez de w-full nos dois inputs.
-const inputClass =
-  'rounded-lg border border-gray-200 px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-primary-100';
+// Mesma classe de input da tela de Login, sem a cor da borda/fundo — que
+// vem de corCampo(). Sem largura fixa aqui de propósito — o campo de
+// celular usa w-16/flex-1 em vez de w-full nos dois inputs.
+const inputClass = 'rounded-lg border px-3 py-2 text-sm focus:outline-none focus:ring-2';
+
+// Mesmo padrão dos cadastros do sistema (ContaBancariaItemDetalhe.jsx,
+// Convênios Bancários): âmbar quando o campo está em branco, azul claro
+// quando já tem valor — dá pra ver de relance o que ainda falta preencher.
+const COR_CAMPO_VAZIO = 'border-amber-200 bg-amber-50 focus:border-amber-400';
+const COR_CAMPO_PREENCHIDO = 'border-primary-100 bg-primary-50 focus:border-primary-500';
+
+function corCampo(valor) {
+  return String(valor ?? '').trim() !== ''
+    ? `${COR_CAMPO_PREENCHIDO} focus:ring-primary-100`
+    : `${COR_CAMPO_VAZIO} focus:ring-amber-100`;
+}
+
+const EMAIL_VALIDO = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
 
 function Campo({ label, error, children }) {
   return (
@@ -33,6 +51,9 @@ function Campo({ label, error, children }) {
   );
 }
 
+// Duas etapas: (1) confere e-mail e celular e valida o celular com o código
+// enviado por WhatsApp; (2) só depois da validação aparecem foto, nova senha
+// e o "Concluir".
 export default function PrimeiroAcesso() {
   const { user, updateUser, logout } = useAuth();
   const navigate = useNavigate();
@@ -54,7 +75,9 @@ export default function PrimeiroAcesso() {
   // número depois disso exige pedir outro. `reenviarEm` é a contagem
   // regressiva até poder pedir de novo (o backend aceita 1 pedido por minuto).
   const [enviandoCodigo, setEnviandoCodigo] = useState(false);
+  const [validandoCodigo, setValidandoCodigo] = useState(false);
   const [codigoEnviadoPara, setCodigoEnviadoPara] = useState('');
+  const [celularValidado, setCelularValidado] = useState(false);
   const [reenviarEm, setReenviarEm] = useState(0);
 
   useEffect(() => {
@@ -90,8 +113,10 @@ export default function PrimeiroAcesso() {
   const celularDigitos = `${form.telefone_ddd}${form.telefone_numero.replace(/\D/g, '')}`;
   const codigoValeParaCelular = !!codigoEnviadoPara && codigoEnviadoPara === celularDigitos;
 
-  function validarCelular() {
+  function validarEtapaContato() {
     const errors = {};
+    if (!form.email.trim()) errors.email = 'E-mail é obrigatório.';
+    else if (!EMAIL_VALIDO.test(form.email.trim())) errors.email = 'Informe um e-mail válido.';
     if (form.telefone_ddd.length < 2) errors.telefone_ddd = 'DDD inválido.';
     if (!form.telefone_numero.trim()) errors.telefone_numero = 'Informe seu celular.';
     else if (form.telefone_numero.replace(/\D/g, '').length < 8) {
@@ -102,13 +127,8 @@ export default function PrimeiroAcesso() {
 
   async function handleEnviarCodigo() {
     setError('');
-    const errors = validarCelular();
-    setFieldErrors((prev) => ({
-      ...prev,
-      telefone_ddd: errors.telefone_ddd,
-      telefone_numero: errors.telefone_numero,
-      codigo: undefined,
-    }));
+    const errors = validarEtapaContato();
+    setFieldErrors(errors);
     if (Object.keys(errors).length > 0) return;
 
     setEnviandoCodigo(true);
@@ -125,6 +145,45 @@ export default function PrimeiroAcesso() {
     } finally {
       setEnviandoCodigo(false);
     }
+  }
+
+  // Enter na etapa 1 faz o passo da vez: pedir o código ou validá-lo.
+  function handleSubmitEtapa1(e) {
+    e.preventDefault();
+    if (codigoValeParaCelular) handleValidarCodigo();
+    else if (reenviarEm <= 0) handleEnviarCodigo();
+  }
+
+  async function handleValidarCodigo() {
+    setError('');
+    const errors = validarEtapaContato();
+    if (!/^\d{6}$/.test(form.codigo)) errors.codigo = 'Informe o código de 6 dígitos enviado para o seu WhatsApp.';
+    setFieldErrors(errors);
+    if (Object.keys(errors).length > 0) return;
+
+    setValidandoCodigo(true);
+    try {
+      await validarCodigoPrimeiroAcesso({
+        telefone_ddd: form.telefone_ddd,
+        telefone_numero: form.telefone_numero,
+        codigo: form.codigo,
+      });
+      setCelularValidado(true);
+    } catch (err) {
+      setError(err.response?.data?.message || 'Não foi possível validar o código.');
+    } finally {
+      setValidandoCodigo(false);
+    }
+  }
+
+  // Volta pra etapa 1 pra corrigir e-mail/celular — o celular novo (ou o
+  // mesmo) precisa de um código novo.
+  function handleAlterarContato() {
+    setError('');
+    setFieldErrors({});
+    setCelularValidado(false);
+    setCodigoEnviadoPara('');
+    handleChange('codigo', '');
   }
 
   async function handleFotoSelecionada(e) {
@@ -149,22 +208,12 @@ export default function PrimeiroAcesso() {
     }
   }
 
-  async function handleSubmit(e) {
+  async function handleConcluir(e) {
     e.preventDefault();
     setError('');
 
     const errors = {};
     if (!form.avatar_url) errors.avatar_url = 'Envie uma foto de perfil.';
-
-    if (!form.email.trim()) errors.email = 'E-mail é obrigatório.';
-    else if (!/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(form.email.trim())) errors.email = 'Informe um e-mail válido.';
-
-    Object.assign(errors, validarCelular());
-    if (!errors.telefone_ddd && !errors.telefone_numero) {
-      if (!codigoValeParaCelular) errors.codigo = 'Clique em "Enviar código" para receber o código no seu WhatsApp.';
-      else if (!/^\d{6}$/.test(form.codigo)) errors.codigo = 'Informe o código de 6 dígitos enviado para o seu WhatsApp.';
-    }
-
     if (!form.senha.trim()) errors.senha = 'Informe uma nova senha.';
     else if (form.senha.trim().length < 6) errors.senha = 'A senha deve ter pelo menos 6 caracteres.';
     if (!form.confirmarSenha.trim()) errors.confirmarSenha = 'Confirme sua nova senha.';
@@ -181,7 +230,6 @@ export default function PrimeiroAcesso() {
         email: form.email.trim(),
         telefone_ddd: form.telefone_ddd,
         telefone_numero: form.telefone_numero,
-        codigo: form.codigo,
         senha: form.senha.trim(),
         confirmarSenha: form.confirmarSenha.trim(),
         avatar_url: form.avatar_url,
@@ -205,6 +253,7 @@ export default function PrimeiroAcesso() {
   }
 
   const primeiroNome = (user?.nome || '').trim().split(' ')[0];
+  const celularFormatado = `(${form.telefone_ddd}) ${formatCelular(form.telefone_numero)}`;
 
   return (
     <div className="flex min-h-screen items-center justify-center bg-gradient-to-br from-primary-50 via-white to-primary-100 px-4">
@@ -214,168 +263,222 @@ export default function PrimeiroAcesso() {
           <h1 className="mt-4 text-lg font-semibold text-gray-900">
             Bem-vindo{primeiroNome ? `, ${primeiroNome}` : ''}!
           </h1>
+          <p className="mt-1 text-xs text-gray-500">
+            {celularValidado
+              ? 'Etapa 2 de 2 · Crie sua senha para concluir.'
+              : 'Etapa 1 de 2 · Confira seus dados e valide seu celular.'}
+          </p>
         </div>
 
-        <form onSubmit={handleSubmit} className="space-y-4" noValidate>
-          {error && (
-            <div className="rounded-lg bg-red-50 px-3 py-2 text-sm text-red-600">{error}</div>
-          )}
+        {error && <div className="mb-4 rounded-lg bg-red-50 px-3 py-2 text-sm text-red-600">{error}</div>}
 
-          <div className="flex flex-col items-center gap-1.5">
-            <div className="relative shrink-0">
-              <div className="flex h-16 w-16 items-center justify-center overflow-hidden rounded-full bg-primary-100 text-primary-600">
-                {form.avatar_url ? (
-                  <img src={form.avatar_url} alt="" className="h-full w-full object-cover" />
-                ) : (
-                  <UserIcon size={26} />
-                )}
-              </div>
-              <button
-                type="button"
-                onClick={() => fileInputRef.current?.click()}
-                disabled={processandoFoto}
-                title="Escolher foto"
-                className="absolute -bottom-1 -right-1 flex h-6 w-6 items-center justify-center rounded-full border-2 border-white bg-primary-600 text-white shadow hover:bg-primary-700 disabled:opacity-60"
-              >
-                <Camera size={12} />
-              </button>
+        {!celularValidado ? (
+          <form onSubmit={handleSubmitEtapa1} className="space-y-4" noValidate>
+            <Campo label="E-mail" error={fieldErrors.email}>
               <input
-                ref={fileInputRef}
-                type="file"
-                accept="image/*"
-                onChange={handleFotoSelecionada}
-                className="hidden"
+                type="email"
+                value={form.email}
+                onChange={(e) => handleChange('email', e.target.value)}
+                autoComplete="off"
+                className={`w-full ${inputClass} ${corCampo(form.email)}`}
               />
-            </div>
-            <p className="text-xs text-gray-500">
-              {processandoFoto ? 'Processando imagem...' : 'Foto do perfil'}
-            </p>
-            {fieldErrors.avatar_url && <p className="text-xs text-red-600">{fieldErrors.avatar_url}</p>}
-            {avatarError && <p className="text-xs text-red-600">{avatarError}</p>}
-          </div>
-
-          <Campo label="E-mail" error={fieldErrors.email}>
-            <input
-              type="email"
-              value={form.email}
-              onChange={(e) => handleChange('email', e.target.value)}
-              autoComplete="off"
-              className={`w-full ${inputClass}`}
-            />
-          </Campo>
-
-          <Campo label="Celular" error={fieldErrors.telefone_ddd || fieldErrors.telefone_numero}>
-            <div className="flex flex-wrap gap-2 sm:flex-nowrap">
-              <input
-                type="text"
-                value={form.telefone_ddd}
-                onChange={(e) => handleChange('telefone_ddd', formatDdd(e.target.value))}
-                placeholder="DDD"
-                maxLength={3}
-                className={`w-16 text-center ${inputClass}`}
-              />
-              <input
-                type="text"
-                value={formatCelular(form.telefone_numero)}
-                onChange={(e) => handleChange('telefone_numero', formatCelular(e.target.value))}
-                placeholder="91234-5678"
-                maxLength={10}
-                className={`min-w-0 flex-1 ${inputClass}`}
-              />
-              <Button
-                variant="secondary"
-                onClick={handleEnviarCodigo}
-                disabled={enviandoCodigo || reenviarEm > 0}
-                className="w-full shrink-0 whitespace-nowrap px-3 sm:w-auto"
-              >
-                {enviandoCodigo
-                  ? 'Enviando...'
-                  : reenviarEm > 0
-                    ? `Reenviar (${reenviarEm}s)`
-                    : codigoEnviadoPara
-                      ? 'Reenviar'
-                      : 'Enviar código'}
-              </Button>
-            </div>
-          </Campo>
-
-          {codigoValeParaCelular ? (
-            <Campo label="Código de verificação" error={fieldErrors.codigo}>
-              <input
-                type="text"
-                inputMode="numeric"
-                autoComplete="one-time-code"
-                value={form.codigo}
-                onChange={(e) => handleChange('codigo', e.target.value.replace(/\D/g, '').slice(0, 6))}
-                placeholder="000000"
-                className={`w-full text-center tracking-[0.4em] ${inputClass}`}
-              />
-              <p className="mt-1 text-xs text-gray-500">
-                Enviamos o código por WhatsApp para{' '}
-                <span className="whitespace-nowrap">
-                  ({form.telefone_ddd}) {formatCelular(form.telefone_numero)}
-                </span>
-                . Ele vale por 10 minutos.
-              </p>
             </Campo>
-          ) : (
-            (fieldErrors.codigo || codigoEnviadoPara) && (
-              <p className={`-mt-2 text-xs ${fieldErrors.codigo ? 'text-red-600' : 'text-gray-500'}`}>
-                {fieldErrors.codigo || 'Você alterou o celular. Envie um novo código para o número informado.'}
+
+            <Campo label="Celular" error={fieldErrors.telefone_ddd || fieldErrors.telefone_numero}>
+              <div className="flex gap-2">
+                <input
+                  type="text"
+                  value={form.telefone_ddd}
+                  onChange={(e) => handleChange('telefone_ddd', formatDdd(e.target.value))}
+                  placeholder="DDD"
+                  maxLength={3}
+                  className={`w-16 text-center ${inputClass} ${corCampo(form.telefone_ddd)}`}
+                />
+                <input
+                  type="text"
+                  value={formatCelular(form.telefone_numero)}
+                  onChange={(e) => handleChange('telefone_numero', formatCelular(e.target.value))}
+                  placeholder="91234-5678"
+                  maxLength={10}
+                  className={`min-w-0 flex-1 ${inputClass} ${corCampo(form.telefone_numero)}`}
+                />
+              </div>
+            </Campo>
+
+            {codigoValeParaCelular ? (
+              <>
+                <Campo label="Código de verificação" error={fieldErrors.codigo}>
+                  <input
+                    type="text"
+                    inputMode="numeric"
+                    autoComplete="one-time-code"
+                    autoFocus
+                    value={form.codigo}
+                    onChange={(e) => handleChange('codigo', e.target.value.replace(/\D/g, '').slice(0, 6))}
+                    placeholder="000000"
+                    className={`w-full text-center tracking-[0.4em] ${inputClass} ${corCampo(form.codigo)}`}
+                  />
+                  <p className="mt-1 text-xs text-gray-500">
+                    Enviamos o código por WhatsApp para{' '}
+                    <span className="whitespace-nowrap">{celularFormatado}</span>. Ele vale por 10 minutos.
+                  </p>
+                </Campo>
+
+                <Button type="submit" loading={validandoCodigo} className="w-full">
+                  Validar código
+                </Button>
+
+                <button
+                  type="button"
+                  onClick={handleEnviarCodigo}
+                  disabled={enviandoCodigo || reenviarEm > 0}
+                  className="block w-full text-center text-xs text-primary-600 hover:text-primary-700 disabled:cursor-not-allowed disabled:text-gray-400"
+                >
+                  {enviandoCodigo
+                    ? 'Reenviando...'
+                    : reenviarEm > 0
+                      ? `Não recebeu? Reenviar em ${reenviarEm}s`
+                      : 'Não recebeu? Reenviar código'}
+                </button>
+              </>
+            ) : (
+              <>
+                {codigoEnviadoPara && (
+                  <p className="text-xs text-gray-500">
+                    Você alterou o celular. Envie um novo código para o número informado.
+                  </p>
+                )}
+                <Button
+                  type="submit"
+                  loading={enviandoCodigo}
+                  disabled={reenviarEm > 0}
+                  className="w-full"
+                >
+                  {reenviarEm > 0 ? `Enviar código em ${reenviarEm}s` : 'Enviar código por WhatsApp'}
+                </Button>
+              </>
+            )}
+
+            <button
+              type="button"
+              onClick={logout}
+              className="block w-full text-center text-xs text-gray-500 hover:text-gray-700"
+            >
+              Sair
+            </button>
+          </form>
+        ) : (
+          <form onSubmit={handleConcluir} className="space-y-4" noValidate>
+            <div className="space-y-2 rounded-lg border border-primary-100 bg-primary-50 px-3 py-2.5 text-sm">
+              <div className="flex items-center justify-between gap-2">
+                <span className="truncate text-gray-700">{form.email.trim()}</span>
+                <button
+                  type="button"
+                  onClick={handleAlterarContato}
+                  className="shrink-0 text-xs text-primary-600 hover:text-primary-700"
+                >
+                  Alterar
+                </button>
+              </div>
+              <div className="flex items-center gap-1.5 text-gray-700">
+                <span className="whitespace-nowrap">{celularFormatado}</span>
+                <span className="inline-flex items-center gap-1 text-xs text-emerald-600">
+                  <CheckCircle2 size={14} /> confirmado
+                </span>
+              </div>
+            </div>
+
+            <div className="flex flex-col items-center gap-1.5">
+              <div className="relative shrink-0">
+                <div
+                  className={`flex h-16 w-16 items-center justify-center overflow-hidden rounded-full border-2 ${
+                    form.avatar_url
+                      ? 'border-primary-100 bg-primary-50 text-primary-600'
+                      : 'border-amber-200 bg-amber-50 text-amber-500'
+                  }`}
+                >
+                  {form.avatar_url ? (
+                    <img src={form.avatar_url} alt="" className="h-full w-full object-cover" />
+                  ) : (
+                    <UserIcon size={26} />
+                  )}
+                </div>
+                <button
+                  type="button"
+                  onClick={() => fileInputRef.current?.click()}
+                  disabled={processandoFoto}
+                  title="Escolher foto"
+                  className="absolute -bottom-1 -right-1 flex h-6 w-6 items-center justify-center rounded-full border-2 border-white bg-primary-600 text-white shadow hover:bg-primary-700 disabled:opacity-60"
+                >
+                  <Camera size={12} />
+                </button>
+                <input
+                  ref={fileInputRef}
+                  type="file"
+                  accept="image/*"
+                  onChange={handleFotoSelecionada}
+                  className="hidden"
+                />
+              </div>
+              <p className="text-xs text-gray-500">
+                {processandoFoto ? 'Processando imagem...' : 'Foto do perfil'}
               </p>
-            )
-          )}
-
-          <Campo label="Nova senha" error={fieldErrors.senha}>
-            <div className="relative">
-              <input
-                type={showPassword ? 'text' : 'password'}
-                value={form.senha}
-                onChange={(e) => handleChange('senha', e.target.value)}
-                autoComplete="new-password"
-                className={`w-full pr-10 ${inputClass}`}
-              />
-              <button
-                type="button"
-                onClick={() => setShowPassword((prev) => !prev)}
-                className="absolute right-3 top-1/2 -translate-y-1/2 text-gray-400 hover:text-gray-600"
-              >
-                {showPassword ? <EyeOff size={16} /> : <Eye size={16} />}
-              </button>
+              {fieldErrors.avatar_url && <p className="text-xs text-red-600">{fieldErrors.avatar_url}</p>}
+              {avatarError && <p className="text-xs text-red-600">{avatarError}</p>}
             </div>
-          </Campo>
 
-          <Campo label="Confirmar nova senha" error={fieldErrors.confirmarSenha}>
-            <div className="relative">
-              <input
-                type={showConfirmPassword ? 'text' : 'password'}
-                value={form.confirmarSenha}
-                onChange={(e) => handleChange('confirmarSenha', e.target.value)}
-                autoComplete="new-password"
-                className={`w-full pr-10 ${inputClass}`}
-              />
-              <button
-                type="button"
-                onClick={() => setShowConfirmPassword((prev) => !prev)}
-                className="absolute right-3 top-1/2 -translate-y-1/2 text-gray-400 hover:text-gray-600"
-              >
-                {showConfirmPassword ? <EyeOff size={16} /> : <Eye size={16} />}
-              </button>
-            </div>
-          </Campo>
+            <Campo label="Nova senha" error={fieldErrors.senha}>
+              <div className="relative">
+                <input
+                  type={showPassword ? 'text' : 'password'}
+                  value={form.senha}
+                  onChange={(e) => handleChange('senha', e.target.value)}
+                  autoComplete="new-password"
+                  autoFocus
+                  className={`w-full pr-10 ${inputClass} ${corCampo(form.senha)}`}
+                />
+                <button
+                  type="button"
+                  onClick={() => setShowPassword((prev) => !prev)}
+                  className="absolute right-3 top-1/2 -translate-y-1/2 text-gray-400 hover:text-gray-600"
+                >
+                  {showPassword ? <EyeOff size={16} /> : <Eye size={16} />}
+                </button>
+              </div>
+            </Campo>
 
-          <Button type="submit" loading={saving} className="w-full">
-            Concluir
-          </Button>
+            <Campo label="Confirmar nova senha" error={fieldErrors.confirmarSenha}>
+              <div className="relative">
+                <input
+                  type={showConfirmPassword ? 'text' : 'password'}
+                  value={form.confirmarSenha}
+                  onChange={(e) => handleChange('confirmarSenha', e.target.value)}
+                  autoComplete="new-password"
+                  className={`w-full pr-10 ${inputClass} ${corCampo(form.confirmarSenha)}`}
+                />
+                <button
+                  type="button"
+                  onClick={() => setShowConfirmPassword((prev) => !prev)}
+                  className="absolute right-3 top-1/2 -translate-y-1/2 text-gray-400 hover:text-gray-600"
+                >
+                  {showConfirmPassword ? <EyeOff size={16} /> : <Eye size={16} />}
+                </button>
+              </div>
+            </Campo>
 
-          <button
-            type="button"
-            onClick={logout}
-            className="block w-full text-center text-xs text-gray-500 hover:text-gray-700"
-          >
-            Sair
-          </button>
-        </form>
+            <Button type="submit" loading={saving} className="w-full">
+              Concluir
+            </Button>
+
+            <button
+              type="button"
+              onClick={logout}
+              className="block w-full text-center text-xs text-gray-500 hover:text-gray-700"
+            >
+              Sair
+            </button>
+          </form>
+        )}
       </div>
     </div>
   );

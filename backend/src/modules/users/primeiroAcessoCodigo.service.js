@@ -14,6 +14,7 @@ const NOME_CONEXAO = 'Comunicação Oficial';
 const VALIDADE_MINUTOS = 10;
 const INTERVALO_REENVIO_SEGUNDOS = 60;
 const MAX_TENTATIVAS = 5;
+const VALIDACAO_VALE_MINUTOS = 30;
 
 function erro(status, message) {
   const err = new Error(message);
@@ -92,18 +93,20 @@ async function enviarCodigo(usuarioId, { telefone_ddd, telefone_numero }) {
      VALUES ($1, $2, $3, 0, NOW(), NOW() + make_interval(mins => $4))
      ON CONFLICT (usuario_id) DO UPDATE
      SET telefone = EXCLUDED.telefone, codigo_hash = EXCLUDED.codigo_hash, tentativas = 0,
-         enviado_em = EXCLUDED.enviado_em, expira_em = EXCLUDED.expira_em`,
+         enviado_em = EXCLUDED.enviado_em, expira_em = EXCLUDED.expira_em, validado_em = NULL`,
     [usuarioId, telefone, codigoHash, VALIDADE_MINUTOS]
   );
 
   return { validade_minutos: VALIDADE_MINUTOS, reenviar_em_segundos: INTERVALO_REENVIO_SEGUNDOS };
 }
 
-// Confere o código antes de concluir o primeiro acesso. Tem que ser o código
-// do mesmo celular que está sendo gravado — trocar o número depois de pedir
-// o código exige pedir outro. A tentativa é contada antes de comparar (num
-// UPDATE só), pra requisições em paralelo não passarem do limite.
-async function conferirCodigo(usuarioId, { telefone_ddd, telefone_numero, codigo }) {
+// Passo "Validar" da tela: confere o código e marca o celular como
+// confirmado (`validado_em`) — só depois disso a tela libera a nova senha.
+// Tem que ser o código do mesmo celular informado — trocar o número depois
+// de pedir o código exige pedir outro. A tentativa é contada antes de
+// comparar (num UPDATE só), pra requisições em paralelo não passarem do
+// limite.
+async function validarCodigo(usuarioId, { telefone_ddd, telefone_numero, codigo }) {
   const telefone = telefoneZapi(telefone_ddd, telefone_numero);
   const { rows } = await pool.query(
     `UPDATE usuarios_codigos_verificacao
@@ -119,7 +122,7 @@ async function conferirCodigo(usuarioId, { telefone_ddd, telefone_numero, codigo
       'SELECT telefone FROM usuarios_codigos_verificacao WHERE usuario_id = $1',
       [usuarioId]
     );
-    if (!pendente[0]) throw erro(400, 'Peça o código de verificação no seu celular e informe-o para concluir.');
+    if (!pendente[0]) throw erro(400, 'Peça o código de verificação no seu celular antes de validar.');
     if (pendente[0].telefone !== telefone) {
       throw erro(400, 'O celular foi alterado depois do envio do código. Peça um novo código para o número informado.');
     }
@@ -136,10 +139,30 @@ async function conferirCodigo(usuarioId, { telefone_ddd, telefone_numero, codigo
         : 'Código de verificação incorreto. Peça um novo código.'
     );
   }
+
+  await pool.query('UPDATE usuarios_codigos_verificacao SET validado_em = NOW() WHERE usuario_id = $1', [usuarioId]);
+  return { validado: true };
+}
+
+// Conferido no "Concluir": o celular gravado tem que ser o mesmo que foi
+// validado, e há pouco tempo (a tela fica aberta, mas não indefinidamente).
+async function exigirCelularValidado(usuarioId, { telefone_ddd, telefone_numero }) {
+  const { rows } = await pool.query(
+    `SELECT telefone, validado_em < NOW() - make_interval(mins => $2) AS vencido
+     FROM usuarios_codigos_verificacao
+     WHERE usuario_id = $1 AND validado_em IS NOT NULL`,
+    [usuarioId, VALIDACAO_VALE_MINUTOS]
+  );
+  const registro = rows[0];
+  if (!registro) throw erro(400, 'Valide seu celular com o código enviado por WhatsApp antes de concluir.');
+  if (registro.telefone !== telefoneZapi(telefone_ddd, telefone_numero)) {
+    throw erro(400, 'O celular foi alterado depois da validação. Valide o novo número.');
+  }
+  if (registro.vencido) throw erro(400, 'A validação do celular expirou. Peça um novo código.');
 }
 
 async function descartarCodigo(usuarioId) {
   await pool.query('DELETE FROM usuarios_codigos_verificacao WHERE usuario_id = $1', [usuarioId]);
 }
 
-module.exports = { enviarCodigo, conferirCodigo, descartarCodigo };
+module.exports = { enviarCodigo, validarCodigo, exigirCelularValidado, descartarCodigo };

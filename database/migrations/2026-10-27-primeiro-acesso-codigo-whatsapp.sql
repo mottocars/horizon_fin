@@ -4,6 +4,8 @@
 -- conclui com o código certo.
 -- - usuarios_codigos_verificacao: o código pendente de cada usuário (um por vez — pedir de novo
 --   substitui o anterior), só o hash, com o celular para o qual foi enviado, validade e tentativas.
+--   `validado_em` marca que o usuário acertou o código (passo "Validar"); só então a tela libera a
+--   nova senha, e o "Concluir" confere essa marca.
 -- - A conexão "Comunicação Oficial" da HORIZON nasce como cópia da "Comunicação" da GENESIS (mesma
 --   instância e tokens; os tokens são copiados já criptografados — a chave vem do JWT_SECRET, que é
 --   o mesmo no banco local e na VPS). Não faz nada se a HORIZON já tiver a conexão.
@@ -15,8 +17,11 @@ CREATE TABLE IF NOT EXISTS usuarios_codigos_verificacao (
     codigo_hash   VARCHAR(255) NOT NULL,
     tentativas    INTEGER NOT NULL DEFAULT 0,
     enviado_em    TIMESTAMP NOT NULL DEFAULT NOW(),
-    expira_em     TIMESTAMP NOT NULL
+    expira_em     TIMESTAMP NOT NULL,
+    validado_em   TIMESTAMP
 );
+
+ALTER TABLE usuarios_codigos_verificacao ADD COLUMN IF NOT EXISTS validado_em TIMESTAMP;
 
 INSERT INTO integracoes_zapi (empresa_id, nome_conexao, instance_id, instance_token_enc, client_token_enc, ativo)
 SELECT horizon.id, 'Comunicação Oficial', z.instance_id, z.instance_token_enc, z.client_token_enc, z.ativo

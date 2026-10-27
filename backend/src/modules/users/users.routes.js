@@ -8,5 +8,6 @@ router.get('/me', authMiddleware, controller.me);
 router.put('/me', authMiddleware, controller.updateMe);
 router.put('/me/primeiro-acesso', authMiddleware, controller.primeiroAcesso);
 router.post('/me/primeiro-acesso/codigo', authMiddleware, controller.primeiroAcessoCodigo);
+router.post('/me/primeiro-acesso/codigo/validar', authMiddleware, controller.primeiroAcessoValidarCodigo);
 
 module.exports = router;

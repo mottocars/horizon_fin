@@ -98,14 +98,29 @@ async function primeiroAcessoCodigo(req, res, next) {
   }
 }
 
+const validarCodigoSchema = z.object({
+  ...celularSchema,
+  codigo: z.string().trim().regex(/^\d{6}$/, 'Informe o código de 6 dígitos enviado para o seu WhatsApp.'),
+});
+
+async function primeiroAcessoValidarCodigo(req, res, next) {
+  try {
+    const data = validarCodigoSchema.parse(req.body);
+    res.json(await primeiroAcessoCodigoService.validarCodigo(req.user.id, data));
+  } catch (err) {
+    if (err.issues) return next(badRequest(err.issues[0].message));
+    next(err);
+  }
+}
+
 // E-mail aqui é só edição livre (o usuário confere/corrige o que o admin
-// cadastrou); o celular também, mas confirmado pelo código enviado por
-// WhatsApp — só a senha tem dupla digitação, igual ao resto do sistema.
+// cadastrou); o celular também, mas precisa ter sido validado antes com o
+// código enviado por WhatsApp — só a senha tem dupla digitação, igual ao
+// resto do sistema.
 const primeiroAcessoSchema = z
   .object({
     email: z.string().trim().email('Informe um e-mail válido.'),
     ...celularSchema,
-    codigo: z.string().trim().regex(/^\d{6}$/, 'Informe o código de 6 dígitos enviado para o seu WhatsApp.'),
     senha: z.string().min(6, 'A senha deve ter pelo menos 6 caracteres.'),
     confirmarSenha: z.string().min(1, 'Confirme sua nova senha.'),
     // Data URI (base64) da foto, já redimensionada/comprimida no navegador.
@@ -120,7 +135,7 @@ const primeiroAcessoSchema = z
 async function primeiroAcesso(req, res, next) {
   try {
     const data = primeiroAcessoSchema.parse(req.body);
-    await primeiroAcessoCodigoService.conferirCodigo(req.user.id, data);
+    await primeiroAcessoCodigoService.exigirCelularValidado(req.user.id, data);
     const usuario = await usuariosService.completarPrimeiroAcesso(req.user.id, {
       email: data.email,
       telefone_ddd: data.telefone_ddd,
@@ -138,4 +153,4 @@ async function primeiroAcesso(req, res, next) {
   }
 }
 
-module.exports = { me, updateMe, primeiroAcesso, primeiroAcessoCodigo };
+module.exports = { me, updateMe, primeiroAcesso, primeiroAcessoCodigo, primeiroAcessoValidarCodigo };
