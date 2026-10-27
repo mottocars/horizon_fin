@@ -22,6 +22,10 @@ export function exportarCentrosCusto(empresaId) {
     .then((res) => res.data);
 }
 
+export function listResponsaveis(empresaId) {
+  return http.get(`/centros-custo/sienge/${empresaId}/responsaveis`).then((res) => res.data);
+}
+
 export function getItem(empresaId, siengeId) {
   return http.get(`/centros-custo/sienge/${empresaId}/itens/${siengeId}`).then((res) => res.data);
 }

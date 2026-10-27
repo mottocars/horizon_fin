@@ -823,6 +823,8 @@ CREATE TABLE centros_custo_sienge (
     apelido                    VARCHAR(150),
     -- Pilar do centro (máscara tipo PILARES; até 27/10/2026 se chamava Unidade de Negócio).
     pilar_id                   INTEGER REFERENCES mascara_itens(id) ON DELETE SET NULL,
+    -- Responsável pelo centro (usuário ativo da empresa). Ver 2026-10-27-centros-custo-responsavel.sql.
+    responsavel_id             INTEGER REFERENCES usuarios(id) ON DELETE SET NULL,
     numero_unidades            INTEGER,
     codigo_prevision           VARCHAR(50),
     -- TRUE = Primário, FALSE = Secundário. Corresponde ao campo primary_view

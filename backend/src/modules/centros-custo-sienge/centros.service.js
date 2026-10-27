@@ -1,6 +1,7 @@
 const pool = require('../../config/db');
 const { decrypt } = require('../../utils/crypto');
 const siengeApi = require('./sienge-api.client');
+const { listResponsaveis } = require('../planos-financeiros-sienge/planos.service');
 
 // `empresaIds` null = todas (Master); senão só as empresas do usuário.
 async function listGerados(empresaIds = null) {
@@ -54,12 +55,13 @@ async function listItensParaExportacao(empresaId) {
   const { rows } = await pool.query(
     `SELECT c.sienge_id, c.name, c.commercial_name, c.cnpj, c.company_name,
             c.tipo, c.endereco, c.cost_database_description, c.building_type_description,
-            c.status, c.apelido, m.descricao AS pilar_descricao,
+            c.status, c.apelido, m.descricao AS pilar_descricao, resp.nome AS responsavel_nome,
             c.numero_unidades, c.codigo_prevision, c.prevision_primary_view, c.codigo_construtor_vendas,
             c.codigo_contrato_caixa, c.cep, c.cidade_enriquecida, c.estado_enriquecido,
             c.valor_geral_vendas, c.faixa, c.data_criacao, c.data_modificacao, c.atualizado_em
      FROM centros_custo_sienge c
      LEFT JOIN mascara_itens m ON m.id = c.pilar_id
+     LEFT JOIN usuarios resp ON resp.id = c.responsavel_id
      WHERE c.empresa_id = $1
      ORDER BY c.sienge_id::text ASC`,
     [empresaId]
@@ -69,18 +71,41 @@ async function listItensParaExportacao(empresaId) {
 
 async function getItem(empresaId, siengeId) {
   const { rows } = await pool.query(
-    `SELECT c.*, m.descricao AS pilar_descricao
+    `SELECT c.*, m.descricao AS pilar_descricao, resp.nome AS responsavel_nome
      FROM centros_custo_sienge c
      LEFT JOIN mascara_itens m ON m.id = c.pilar_id
+     LEFT JOIN usuarios resp ON resp.id = c.responsavel_id
      WHERE c.empresa_id = $1 AND c.sienge_id = $2`,
     [empresaId, siengeId]
   );
   return rows[0] || null;
 }
 
-// O Tipo (natureza) só muda quando vem no corpo — quem não manda (tela antiga aberta) não apaga.
+function badRequest(message) {
+  const err = new Error(message);
+  err.status = 400;
+  err.expose = true;
+  return err;
+}
+
+// O Tipo (natureza) e o Responsável só mudam quando vêm no corpo — quem não manda (tela antiga
+// aberta) não apaga. Responsável segue a regra do Plano Financeiro: manter o atual sempre vale
+// (mesmo inativado ou desvinculado depois); trocar, só por um usuário ativo da empresa.
 async function updateEnriquecimento(empresaId, siengeId, data) {
-  const { rows } = await pool.query(
+  if (data.responsavel_id) {
+    const { rows: atual } = await pool.query(
+      'SELECT responsavel_id FROM centros_custo_sienge WHERE empresa_id = $1 AND sienge_id = $2',
+      [empresaId, siengeId]
+    );
+    if (atual[0] && data.responsavel_id !== atual[0].responsavel_id) {
+      const responsaveis = await listResponsaveis(empresaId);
+      if (!responsaveis.some((u) => u.id === data.responsavel_id)) {
+        throw badRequest('O responsável precisa ser um usuário ativo desta empresa.');
+      }
+    }
+  }
+
+  const { rowCount } = await pool.query(
     `UPDATE centros_custo_sienge SET
        status = $1,
        apelido = $2,
@@ -95,9 +120,9 @@ async function updateEnriquecimento(empresaId, siengeId, data) {
        estado_enriquecido = $11,
        valor_geral_vendas = $12,
        faixa = $13,
-       natureza = CASE WHEN $16::boolean THEN $17 ELSE natureza END
-     WHERE empresa_id = $14 AND sienge_id = $15
-     RETURNING *`,
+       natureza = CASE WHEN $16::boolean THEN $17 ELSE natureza END,
+       responsavel_id = CASE WHEN $18::boolean THEN $19::int ELSE responsavel_id END
+     WHERE empresa_id = $14 AND sienge_id = $15`,
     [
       data.status,
       data.apelido || null,
@@ -116,9 +141,11 @@ async function updateEnriquecimento(empresaId, siengeId, data) {
       siengeId,
       data.natureza !== undefined,
       data.natureza || null,
+      data.responsavel_id !== undefined,
+      data.responsavel_id || null,
     ]
   );
-  return rows[0] || null;
+  return rowCount ? getItem(empresaId, siengeId) : null;
 }
 
 async function getEmpresaComIntegracao(empresaId) {
@@ -305,6 +332,7 @@ module.exports = {
   gerar,
   getItem,
   updateEnriquecimento,
+  listResponsaveis,
   listEtapas,
   createEtapa,
   updateEtapa,

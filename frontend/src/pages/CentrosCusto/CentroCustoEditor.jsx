@@ -1,7 +1,7 @@
 import { useCallback, useEffect, useMemo, useState } from 'react';
 import { Building2, Clock, Search } from 'lucide-react';
 import Button from '../../components/Button';
-import { getItem, updateEnriquecimento, listEtapas, salvarCronogramaCentro } from '../../api/centrosCustoSienge.api';
+import { getItem, updateEnriquecimento, listEtapas, listResponsaveis, salvarCronogramaCentro } from '../../api/centrosCustoSienge.api';
 import { listMascaras } from '../../api/mascaras.api';
 import { listPrevisionProjetos } from '../../api/prevision.api';
 import SearchableSelect from '../../components/SearchableSelect';
@@ -66,6 +66,7 @@ const emptyForm = {
   natureza: '',
   apelido: '',
   pilar_id: '',
+  responsavel_id: '',
   numero_unidades: '',
   codigo_prevision: '',
   prevision_primary_view: true,
@@ -97,6 +98,7 @@ export default function CentroCustoEditor({ empresaId, siengeId, onSalvo, onAlte
   const [error, setError] = useState('');
   const [success, setSuccess] = useState('');
   const [pilares, setPilares] = useState([]);
+  const [responsaveis, setResponsaveis] = useState([]);
   const [projetosPrevision, setProjetosPrevision] = useState([]);
   const [erroProjetosPrevision, setErroProjetosPrevision] = useState('');
 
@@ -124,6 +126,7 @@ export default function CentroCustoEditor({ empresaId, siengeId, onSalvo, onAlte
         natureza: data.natureza || '',
         apelido: data.apelido || '',
         pilar_id: data.pilar_id ? String(data.pilar_id) : '',
+        responsavel_id: data.responsavel_id ? String(data.responsavel_id) : '',
         numero_unidades: data.numero_unidades ?? '',
         codigo_prevision: data.codigo_prevision || '',
         prevision_primary_view: data.prevision_primary_view !== false,
@@ -155,6 +158,7 @@ export default function CentroCustoEditor({ empresaId, siengeId, onSalvo, onAlte
   useEffect(() => {
     loadItem();
     listMascaras('PILARES', empresaId).then(setPilares);
+    listResponsaveis(empresaId).then(setResponsaveis);
     listPrevisionProjetos(empresaId)
       .then((projetos) => {
         setProjetosPrevision(projetos);
@@ -291,6 +295,12 @@ export default function CentroCustoEditor({ empresaId, siengeId, onSalvo, onAlte
     }
   }
 
+  // Responsável atual que saiu da lista (inativado ou desvinculado da empresa) continua aparecendo.
+  const opcoesResponsavel = responsaveis.map((u) => ({ value: u.id, label: u.nome }));
+  if (item?.responsavel_id && !responsaveis.some((u) => u.id === item.responsavel_id)) {
+    opcoesResponsavel.push({ value: item.responsavel_id, label: item.responsavel_nome || 'Usuário removido' });
+  }
+
   if (loading) {
     return <div className="py-12 text-center text-sm text-gray-400">Carregando...</div>;
   }
@@ -411,6 +421,21 @@ export default function CentroCustoEditor({ empresaId, siengeId, onSalvo, onAlte
                 {pilares.length === 0 && (
                   <p className="mt-1 text-xs text-gray-400">
                     Nenhum pilar cadastrado em Máscaras ainda.
+                  </p>
+                )}
+              </Field>
+
+              <Field label="Responsável">
+                <SearchableSelect
+                  value={form.responsavel_id}
+                  onChange={(value) => handleChange('responsavel_id', value)}
+                  options={opcoesResponsavel}
+                  emptyMessage="Nenhum usuário encontrado."
+                  corClasses={corCampo(form.responsavel_id)}
+                />
+                {responsaveis.length === 0 && (
+                  <p className="mt-1 text-xs text-gray-400">
+                    Nenhum usuário ativo vinculado a esta empresa.
                   </p>
                 )}
               </Field>
