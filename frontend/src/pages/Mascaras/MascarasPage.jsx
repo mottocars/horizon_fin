@@ -84,7 +84,7 @@ export default function MascarasPage() {
               Selecione uma empresa para ver ou cadastrar a máscara.
             </p>
             <p className="text-xs text-gray-400">
-              Cada empresa tem sua própria estrutura de DRE, DFC, Pacotes e Unidades de Negócio.
+              Cada empresa tem sua própria estrutura de DRE, DFC, Pacotes e Pilares.
             </p>
           </div>
         ) : tipo === 'ETAPAS_CENTRO_CUSTO' ? (
