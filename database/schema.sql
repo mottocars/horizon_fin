@@ -3189,7 +3189,7 @@ CREATE INDEX idx_logs_acesso_criado_em ON logs_acesso (criado_em);
 -- De onde vêm as chamadas autenticadas à API (navegador, celular, Postman,
 -- script Python...) — Métricas de Uso > "Como cada usuário acessa". Gravado
 -- pelo auth.middleware.js (ver utils/clienteHttp.js), agregado por usuário +
--- dia + User-Agent + IP. `assinatura` = md5(user_agent|ip), pro UNIQUE.
+-- dia + tipo + User-Agent + IP. `assinatura` = md5(tipo|user_agent|ip), pro UNIQUE.
 CREATE TABLE logs_acesso_clientes (
     id            SERIAL PRIMARY KEY,
     usuario_id    INTEGER NOT NULL REFERENCES usuarios(id) ON DELETE CASCADE,
@@ -3206,6 +3206,33 @@ CREATE TABLE logs_acesso_clientes (
 );
 
 CREATE INDEX idx_logs_acesso_clientes_dia ON logs_acesso_clientes (dia);
+
+-- Alertas de atividade suspeita (chamadas por fora do navegador, token forjado, força bruta,
+-- limite estourado, varredura, acesso do exterior...) — mandados por WhatsApp ao Bruno Motta
+-- pela conexão "Comunicação Oficial" e listados em Métricas de Uso. 1 linha por episódio: os
+-- sinais iguais (`chave`) dentro do intervalo de silêncio só somam `ocorrencias`. Ver
+-- backend/src/modules/alertas-seguranca/.
+CREATE TABLE alertas_seguranca (
+    id               SERIAL PRIMARY KEY,
+    motivo           VARCHAR(40) NOT NULL,
+    titulo           VARCHAR(200) NOT NULL,
+    chave            VARCHAR(200) NOT NULL,
+    usuario_id       INTEGER REFERENCES usuarios(id) ON DELETE SET NULL,
+    username         VARCHAR(150),
+    ip               VARCHAR(64),
+    pais             VARCHAR(10),
+    user_agent       TEXT,
+    rota             VARCHAR(300),
+    detalhe          TEXT,
+    ocorrencias      INTEGER NOT NULL DEFAULT 1,
+    whatsapp_enviado BOOLEAN NOT NULL DEFAULT FALSE,
+    whatsapp_erro    TEXT,
+    criado_em        TIMESTAMP NOT NULL DEFAULT NOW(),
+    ultimo_em        TIMESTAMP NOT NULL DEFAULT NOW()
+);
+
+CREATE INDEX idx_alertas_seguranca_chave ON alertas_seguranca (chave, criado_em DESC);
+CREATE INDEX idx_alertas_seguranca_criado ON alertas_seguranca (criado_em);
 
 -- Categorias de orçamento cadastráveis por empresa (aba "Categorias Orçamento" de Operações >
 -- DRE POC Gerencial) — mesmo padrão de classificacoes_bancarias (lista simples por empresa,

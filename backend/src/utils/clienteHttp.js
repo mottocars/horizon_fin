@@ -10,7 +10,15 @@ const pool = require('../config/db');
 //     o JavaScript da página não consegue tirar. Programas não mandam por
 //     padrão — um User-Agent de navegador SEM esses cabeçalhos é alguém
 //     se passando por navegador.
-// É um indício forte, não prova: quem souber imitar os dois passa como
+//   - Client Hints (Sec-CH-UA): Chrome/Edge/Opera mandam sozinhos em toda
+//     chamada de página segura (https ou localhost) — User-Agent de Chrome
+//     sem eles também é imitação.
+//   - X-Horizon-App: o próprio frontend manda em toda chamada (api/http.js).
+//     Navegador de verdade sem ele = alguém chamando a API na mão com o
+//     token (console do DevTools, extensão, outro site). O frontend também
+//     avisa quando o navegador está sendo controlado por WebDriver
+//     (Selenium, Playwright, Puppeteer — navigator.webdriver).
+// É um indício forte, não prova: quem souber imitar tudo passa como
 // navegador.
 
 const SCRIPTS = [
@@ -47,8 +55,32 @@ function sistemaDoUa(ua) {
   return null;
 }
 
+// Página segura (https ou localhost) — só nela o Chrome manda os Client Hints.
+function contextoSeguro(req) {
+  if (req.secure) return true;
+  if (/^https:/i.test(req.headers.origin || req.headers.referer || '')) return true;
+  return /^(localhost|127\.0\.0\.1|\[::1\])(:|$)/i.test(req.headers.host || '');
+}
+
+// Chrome/Edge/Opera (Chromium 90+) num desktop ou Android comum — os que
+// mandam Sec-CH-UA. Fora: iOS (CriOS/EdgiOS são Safari por dentro),
+// WebView de app (`; wv)`) e Samsung Internet, que não mandam sempre.
+function ehChromiumComClientHints(ua) {
+  const versao = ua.match(/Chrome\/(\d+)/);
+  if (!versao || Number(versao[1]) < 90) return false;
+  return !/CriOS|EdgiOS|FxiOS|SamsungBrowser|; wv\)|Firefox/.test(ua);
+}
+
+// Tipos que não são o sistema aberto num navegador de verdade.
+const TIPOS_CONFIAVEIS = new Set(['navegador', 'celular']);
+
+function ehSuspeito(tipo) {
+  return !TIPOS_CONFIAVEIS.has(tipo);
+}
+
 // { tipo, detalhe } — tipos: navegador, celular, navegador_automatizado,
-// imitando_navegador, postman, insomnia, python, curl, node, script, desconhecido.
+// imitando_navegador, fora_do_app, postman, insomnia, python, curl, node,
+// script, desconhecido.
 function classificarCliente(req) {
   const ua = String(req.headers['user-agent'] || '').trim();
   if (!ua) return { tipo: 'desconhecido', detalhe: 'Sem identificação (User-Agent vazio)' };
@@ -64,11 +96,26 @@ function classificarCliente(req) {
     return { tipo: 'navegador_automatizado', detalhe: ua.match(/HeadlessChrome|Puppeteer|Playwright|PhantomJS|Selenium|Electron/i)[0] };
   }
 
+  const marcas = String(req.headers['sec-ch-ua'] || '');
+  if (req.headers['x-horizon-webdriver'] || /HeadlessChrome/i.test(marcas)) {
+    return { tipo: 'navegador_automatizado', detalhe: /HeadlessChrome/i.test(marcas) ? 'HeadlessChrome' : 'WebDriver (Selenium/Playwright)' };
+  }
+
   if (/^Mozilla\//.test(ua)) {
     const nome = navegadorDoUa(ua);
     const sistema = sistemaDoUa(ua);
     const detalhe = sistema ? `${nome} · ${sistema}` : nome;
-    if (!req.headers['sec-fetch-mode']) return { tipo: 'imitando_navegador', detalhe };
+    const modo = req.headers['sec-fetch-mode'];
+    if (!modo) return { tipo: 'imitando_navegador', detalhe };
+    // Token Bearer não vai em navegação nem em endereço digitado — só em
+    // fetch/XHR. Navegador de verdade nunca manda essa combinação.
+    if (modo === 'navigate' || req.headers['sec-fetch-site'] === 'none') {
+      return { tipo: 'imitando_navegador', detalhe: `${detalhe} · cabeçalhos incoerentes` };
+    }
+    if (!marcas && ehChromiumComClientHints(ua) && contextoSeguro(req)) {
+      return { tipo: 'imitando_navegador', detalhe: `${detalhe} · sem Client Hints` };
+    }
+    if (!req.headers['x-horizon-app']) return { tipo: 'fora_do_app', detalhe: `${detalhe} · chamada manual` };
     const movel = /Mobile|Android|iPhone|iPad/.test(ua);
     return { tipo: movel ? 'celular' : 'navegador', detalhe };
   }
@@ -87,20 +134,28 @@ function diaBrasil(data) {
   return new Intl.DateTimeFormat('en-CA', { timeZone: 'America/Sao_Paulo' }).format(data);
 }
 
+// Devolve a classificação (ou null se der erro) — o auth.middleware.js
+// repassa pros alertas de segurança.
 function registrarCliente(req, usuarioId) {
   try {
-    const { tipo, detalhe } = classificarCliente(req);
+    const classificacao = classificarCliente(req);
+    const { tipo, detalhe } = classificacao;
     const userAgent = String(req.headers['user-agent'] || '').slice(0, 500);
     const ip = String(req.ip || '').replace(/^::ffff:/, '').slice(0, 64);
     const agora = new Date();
     const dia = diaBrasil(agora);
-    const assinatura = crypto.createHash('md5').update(`${userAgent}|${ip}`).digest('hex');
+    // O tipo entra na assinatura: mesmo User-Agent e IP do navegador, mas sem
+    // os cabeçalhos dele (chamada manual, imitação), vira outra linha em vez
+    // de somar na do navegador.
+    const assinatura = crypto.createHash('md5').update(`${tipo}|${userAgent}|${ip}`).digest('hex');
     const chave = `${usuarioId}|${dia}|${assinatura}`;
     const atual = pendentes.get(chave);
     if (atual) atual.total += 1;
     else pendentes.set(chave, { usuarioId, dia, tipo, detalhe, userAgent, ip, assinatura, total: 1 });
+    return classificacao;
   } catch {
     // métrica nunca pode derrubar a requisição
+    return null;
   }
 }
 
@@ -127,4 +182,4 @@ async function gravarPendentes() {
 
 setInterval(gravarPendentes, INTERVALO_GRAVACAO_MS).unref();
 
-module.exports = { classificarCliente, registrarCliente, gravarPendentes };
+module.exports = { classificarCliente, ehSuspeito, registrarCliente, gravarPendentes };

@@ -10,6 +10,10 @@ module.exports = {
   // false no ambiente de desenvolvimento local: não sobe os agendadores (Espião NF-e e Monitor
   // de Integrações). Sem a variável (produção), continuam ligados.
   agendadoresAtivos: process.env.AGENDADORES_ATIVOS !== 'false',
+  // false no ambiente de desenvolvimento local: os alertas de segurança continuam sendo gravados
+  // (Métricas de Uso), mas não mandam WhatsApp — os testes locais com navegador automatizado e
+  // scripts gerariam alerta de verdade no celular. Sem a variável (produção), manda.
+  alertasSegurancaWhatsapp: process.env.ALERTAS_SEGURANCA_WHATSAPP !== 'false',
   mcp: {
     // Domínio público de verdade do backend (quem expõe é o Nginx do host
     // na VPS — ver docker-compose.yml) — usado só pra montar a URL completa

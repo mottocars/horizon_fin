@@ -87,6 +87,7 @@ const mcpProtocoloRoutes = require('./modules/integracoes-mcp/mcpProtocolo.route
 const mcpDfcRoutes = require('./modules/integracoes-mcp/dfc/mcpDfc.routes');
 const mcpOauthRoutes = require('./modules/integracoes-mcp/dfc/oauth.routes');
 const logsAcessoRoutes = require('./modules/logs-acesso/logsAcesso.routes');
+const { observarRespostas } = require('./modules/alertas-seguranca/vigilancia');
 const errorMiddleware = require('./middlewares/error.middleware');
 const { QUALQUER_TELA, exigirTela, exigirMaster, exigirAdministradorDaTela } = require('./middlewares/acesso.middleware');
 const T = require('./config/telas');
@@ -112,6 +113,11 @@ app.use(express.json({ limit: '5mb' }));
 // exceção, todo request do Claude apareceria com o segredo em texto puro no
 // log do Morgan/stdout do container.
 app.use(morgan('dev', { skip: (req) => req.path.startsWith('/api/mcp/') }));
+
+// Alertas de atividade suspeita (WhatsApp pro Bruno Motta — ver
+// modules/alertas-seguranca/): olha o status de toda resposta, inclusive o
+// 429 dos limites logo abaixo, por isso vem antes deles.
+app.use(observarRespostas);
 
 // Limite de chamadas (ver rateLimit.middleware.js). O /api/health fica de
 // fora (monitoramento), o MCP tem o limite próprio, por token.

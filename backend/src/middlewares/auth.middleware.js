@@ -2,6 +2,7 @@ const jwt = require('jsonwebtoken');
 const env = require('../config/env');
 const pool = require('../config/db');
 const { registrarCliente } = require('../utils/clienteHttp');
+const vigilancia = require('../modules/alertas-seguranca/vigilancia');
 
 // Autenticação + contexto de acesso do usuário. Toda rota protegida passa
 // por aqui (router.use(authMiddleware) em cada módulo, e também pelo
@@ -100,13 +101,17 @@ async function autenticar(req, res) {
   let payload;
   try {
     payload = jwt.verify(token, env.jwt.secret);
-  } catch {
+  } catch (err) {
+    // Vencido é o normal (o frontend renova); qualquer outro erro é token
+    // que o Horizon não emitiu — alerta de segurança.
+    if (err.name !== 'TokenExpiredError') vigilancia.aoRecusarToken(req, 'forjado', { erro: err.message });
     res.status(401).json({ message: 'Token inválido ou expirado.' });
     return false;
   }
 
   const usuario = await carregarUsuario(Number(payload.sub));
   if (!usuario || !usuario.ativo) {
+    vigilancia.aoRecusarToken(req, 'inativo', { usuarioId: Number(payload.sub) });
     res.status(401).json({ message: 'Usuário inativo ou inexistente.' });
     return false;
   }
@@ -117,8 +122,9 @@ async function autenticar(req, res) {
     telasAdministrador: usuario.telasAdministrador,
     empresaIds: usuario.empresaIds,
   };
-  // De onde veio a chamada (navegador, Postman, script...) — Métricas de Uso.
-  registrarCliente(req, usuario.id);
+  // De onde veio a chamada (navegador, Postman, script...) — Métricas de Uso
+  // e alertas de segurança (fora do navegador, exterior, muitos IPs).
+  vigilancia.aoAutenticar(req, usuario.id, registrarCliente(req, usuario.id));
   return true;
 }
 

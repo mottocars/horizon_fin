@@ -9,8 +9,6 @@ const zapiService = require('../integracoes-zapi/zapi.service');
 // Oficial" da HORIZON (a administradora master do sistema), não de uma
 // conexão da empresa do usuário — ele ainda nem entrou no sistema.
 
-const CNPJ_HORIZON = '62009822000190';
-const NOME_CONEXAO = 'Comunicação Oficial';
 const VALIDADE_MINUTOS = 10;
 const INTERVALO_REENVIO_SEGUNDOS = 60;
 const MAX_TENTATIVAS = 5;
@@ -30,19 +28,6 @@ function telefoneZapi(ddd, numero) {
   return `55${String(ddd).replace(/\D/g, '')}${String(numero).replace(/\D/g, '')}`;
 }
 
-async function conexaoOficialId() {
-  const { rows } = await pool.query(
-    `SELECT z.id
-     FROM integracoes_zapi z
-     JOIN empresas e ON e.id = z.empresa_id
-     WHERE e.cnpj = $1 AND z.nome_conexao = $2 AND z.ativo
-     ORDER BY z.id
-     LIMIT 1`,
-    [CNPJ_HORIZON, NOME_CONEXAO]
-  );
-  return rows[0]?.id || null;
-}
-
 async function enviarCodigo(usuarioId, { telefone_ddd, telefone_numero }) {
   const telefone = telefoneZapi(telefone_ddd, telefone_numero);
 
@@ -57,7 +42,7 @@ async function enviarCodigo(usuarioId, { telefone_ddd, telefone_numero }) {
   const aguardar = pendente[0]?.aguardar || 0;
   if (aguardar > 0) throw erro(429, `Aguarde ${aguardar}s para pedir um novo código.`);
 
-  const integracaoId = await conexaoOficialId();
+  const integracaoId = await zapiService.conexaoOficialId();
   if (!integracaoId) {
     throw erro(
       503,

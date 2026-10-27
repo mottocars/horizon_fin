@@ -3,6 +3,12 @@ const { encrypt, decrypt } = require('../../utils/crypto');
 
 const ZAPI_BASE_URL = 'https://api.z-api.io';
 
+// Conexão "Comunicação Oficial" da HORIZON (a administradora master do sistema) — a que fala
+// em nome do próprio sistema, não de uma empresa cliente: código do primeiro acesso
+// (users/primeiroAcessoCodigo.service.js) e alertas de segurança (alertas-seguranca/).
+const CNPJ_HORIZON = '62009822000190';
+const NOME_CONEXAO_OFICIAL = 'Comunicação Oficial';
+
 function badRequest(message) {
   const err = new Error(message);
   err.status = 400;
@@ -135,6 +141,20 @@ async function getCredenciais(id) {
   };
 }
 
+// id da conexão "Comunicação Oficial" ativa, ou null se não houver.
+async function conexaoOficialId() {
+  const { rows } = await pool.query(
+    `SELECT z.id
+     FROM integracoes_zapi z
+     JOIN empresas e ON e.id = z.empresa_id
+     WHERE e.cnpj = $1 AND z.nome_conexao = $2 AND z.ativo
+     ORDER BY z.id
+     LIMIT 1`,
+    [CNPJ_HORIZON, NOME_CONEXAO_OFICIAL]
+  );
+  return rows[0]?.id || null;
+}
+
 // Só dígitos, com DDI 55 (Brasil) na frente quando faltar — os números
 // chegam do Sienge formatados tipo "(31)998832751" (sem DDI), então
 // completa antes de mandar pra Z-API (formato exigido: DDI+DDD+NÚMERO, só
@@ -245,4 +265,4 @@ async function enviarDocumento(
   );
 }
 
-module.exports = { list, getById, create, update, setAtivo, enviarMensagemTexto, enviarDocumento };
+module.exports = { list, getById, create, update, setAtivo, conexaoOficialId, enviarMensagemTexto, enviarDocumento };

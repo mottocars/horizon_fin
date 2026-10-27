@@ -5,6 +5,7 @@ import { getMetricasUso } from '../../../api/logsAcesso.api';
 import { TELAS_SISTEMA } from '../../../config/telas';
 import HeatmapUsuarioTela from './HeatmapUsuarioTela';
 import ComoAcessaTabela from './ComoAcessaTabela';
+import AlertasSegurancaTabela from './AlertasSegurancaTabela';
 
 const PRESETS = [
   { id: '7', label: '7 dias', dias: 7 },
@@ -170,6 +171,8 @@ export default function MetricasUsoPage() {
               hint={dados.resumo.telaMaisAcessada ? `${dados.resumo.telaMaisAcessada.total.toLocaleString('pt-BR')} acessos` : undefined}
             />
           </div>
+
+          <AlertasSegurancaTabela alertas={dados.alertas || []} />
 
           <HeatmapUsuarioTela matriz={dados.matriz} porTela={dados.porTela} />
 

@@ -9,6 +9,12 @@ http.interceptors.request.use((config) => {
   if (token) {
     config.headers.Authorization = `Bearer ${token}`;
   }
+  // Marca as chamadas feitas pelas telas do sistema — o backend alerta (Métricas de Uso +
+  // WhatsApp) quando o token é usado sem ela (console, extensão, script). E avisa quando o
+  // navegador está sendo controlado por Selenium/Playwright/Puppeteer (ver
+  // backend/src/utils/clienteHttp.js).
+  config.headers['X-Horizon-App'] = '1';
+  if (navigator.webdriver) config.headers['X-Horizon-Webdriver'] = '1';
   return config;
 });
 

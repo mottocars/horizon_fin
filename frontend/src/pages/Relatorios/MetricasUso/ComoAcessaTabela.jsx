@@ -15,6 +15,13 @@ const TIPOS = {
     suspeito: true,
     dica: 'Se apresenta como navegador, mas não envia os cabeçalhos que todo navegador envia sozinho — típico de script.',
   },
+  fora_do_app: {
+    label: 'Chamada manual',
+    icone: AlertTriangle,
+    cor: 'border-amber-200 bg-amber-50 text-amber-700',
+    suspeito: true,
+    dica: 'Navegador de verdade, mas a chamada não saiu das telas do sistema — console do navegador, extensão ou outro site usando o token.',
+  },
   navegador_automatizado: { label: 'Navegador automatizado', icone: Bot, cor: 'border-red-200 bg-red-50 text-red-700', suspeito: true },
   postman: { label: 'Postman', icone: Terminal, cor: 'border-red-200 bg-red-50 text-red-700', suspeito: true },
   insomnia: { label: 'Insomnia', icone: Terminal, cor: 'border-red-200 bg-red-50 text-red-700', suspeito: true },

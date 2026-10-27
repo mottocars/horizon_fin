@@ -1,5 +1,6 @@
 const pool = require('../../config/db');
 const { paisDoIp } = require('../../utils/paisDoIp');
+const alertasSeguranca = require('../alertas-seguranca/alertasSeguranca.service');
 
 function paraISODate(data) {
   return data.toISOString().slice(0, 10);
@@ -29,13 +30,14 @@ const FILTRO_USUARIOS = (coluna) =>
 // Agrega tudo que o dashboard de Métricas de Uso precisa numa chamada só —
 // resumo, ranking por tela (ordem das colunas do heatmap), a matriz
 // usuário x tela (heatmap) e "como cada usuário acessa" (navegador,
-// celular, Postman, script... — ver utils/clienteHttp.js). As consultas
+// celular, Postman, script... — ver utils/clienteHttp.js) e os alertas de
+// atividade suspeita. As consultas
 // não dependem uma da outra, então rodam em paralelo.
 async function metricas({ dataInicio, dataFim }, empresaIds = null) {
   const periodo = dataInicio && dataFim ? { dataInicio, dataFim } : periodoPadrao();
   const params = [periodo.dataInicio, periodo.dataFim, empresaIds];
 
-  const [resumoResult, porTelaResult, matrizResult, clientesResult] = await Promise.all([
+  const [resumoResult, porTelaResult, matrizResult, clientesResult, alertas] = await Promise.all([
     pool.query(
       `SELECT COUNT(*)::int AS total_acessos,
               COUNT(DISTINCT usuario_id)::int AS usuarios_ativos,
@@ -78,6 +80,8 @@ async function metricas({ dataInicio, dataFim }, empresaIds = null) {
        ORDER BY u.nome ASC, requisicoes DESC`,
       params
     ),
+    // Alertas de atividade suspeita do período (ver modules/alertas-seguranca/).
+    alertasSeguranca.listar(periodo, empresaIds),
   ]);
 
   return {
@@ -96,6 +100,7 @@ async function metricas({ dataInicio, dataFim }, empresaIds = null) {
       const ips = (c.ips || []).map((ip) => ({ ip, pais: paisDoIp(ip) }));
       return { ...c, ips, paises: [...new Set(ips.map((i) => i.pais).filter(Boolean))] };
     }),
+    alertas,
   };
 }
 
