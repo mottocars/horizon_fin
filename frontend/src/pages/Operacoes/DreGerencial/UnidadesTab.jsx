@@ -266,9 +266,7 @@ const UnidadesTab = forwardRef(function UnidadesTab({ empresaId, search = '', on
                   <th
                     key={c.chave}
                     title={c.titulo}
-                    className={`sticky -top-6 z-20 border-b-2 border-l border-b-blue-500 border-l-blue-100 px-2 py-2.5 text-xs uppercase tracking-wide ${
-                      c.chave === 'valor' || c.chave === 'fracao_ideal' ? 'text-right' : 'text-left'
-                    } bg-blue-50 font-medium text-blue-700 ${
+                    className={`sticky -top-6 z-20 border-b-2 border-l border-b-blue-500 border-l-blue-100 bg-blue-50 px-2 py-2.5 text-center text-xs font-medium uppercase tracking-wide text-blue-700 ${
                       c.titulo ? 'cursor-help' : ''
                     }`}
                   >
