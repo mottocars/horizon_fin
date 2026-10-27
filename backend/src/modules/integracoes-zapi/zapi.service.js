@@ -180,9 +180,13 @@ async function prepararEnvio(integracaoId, telefone) {
 
   const existe = await verificarNumeroExiste(credenciais, phone);
   if (!existe) {
-    throw badRequest(
+    const err = badRequest(
       'Este número de telefone não tem WhatsApp (ou está incorreto) — confira o telefone cadastrado para o cliente antes de enviar.'
     );
+    // Pra quem chama trocar a mensagem quando o telefone não é de cliente
+    // (ex.: o celular do próprio usuário no primeiro acesso).
+    err.code = 'SEM_WHATSAPP';
+    throw err;
   }
 
   return { credenciais, phone };

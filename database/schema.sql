@@ -36,7 +36,8 @@ CREATE TABLE usuarios (
     -- Cobranças). Vazio para MASTER, que é Administrador de tudo.
     telas_administrador TEXT[] NOT NULL DEFAULT '{}',
     -- TRUE até o usuário completar a tela obrigatória de primeiro acesso
-    -- (confirmar e-mail, confirmar celular, trocar senha e enviar foto).
+    -- (confirmar e-mail, confirmar celular com o código enviado por
+    -- WhatsApp, trocar senha e enviar foto).
     -- Usuários criados pelo cadastro de usuários já nascem com TRUE — o
     -- seed do administrador inicial é a única exceção (ver seed.js).
     primeiro_acesso   BOOLEAN NOT NULL DEFAULT TRUE,
@@ -118,6 +119,19 @@ CREATE TABLE integracoes_zapi (
 );
 
 CREATE INDEX idx_integracoes_zapi_empresa ON integracoes_zapi (empresa_id);
+
+-- Código de verificação do celular no primeiro acesso, enviado por WhatsApp
+-- pela conexão "Comunicação Oficial" da HORIZON (ver
+-- primeiroAcessoCodigo.service.js). Um código pendente por usuário — pedir
+-- de novo substitui o anterior; concluir o primeiro acesso apaga a linha.
+CREATE TABLE usuarios_codigos_verificacao (
+    usuario_id    INTEGER PRIMARY KEY REFERENCES usuarios(id) ON DELETE CASCADE,
+    telefone      VARCHAR(20) NOT NULL,  -- só dígitos, com DDI 55 (formato da Z-API)
+    codigo_hash   VARCHAR(255) NOT NULL,
+    tentativas    INTEGER NOT NULL DEFAULT 0,
+    enviado_em    TIMESTAMP NOT NULL DEFAULT NOW(),
+    expira_em     TIMESTAMP NOT NULL
+);
 
 -- Conexão com a VanPix (tela Integrações > Convênios Bancários — hoje o único "tipo" de
 -- conexão dessa tela, mas o combobox de tipo já é pensado pra ganhar outros no futuro; cada

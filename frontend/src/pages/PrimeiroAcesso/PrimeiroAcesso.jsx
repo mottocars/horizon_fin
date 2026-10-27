@@ -2,7 +2,7 @@ import { useEffect, useRef, useState } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { Eye, EyeOff, User as UserIcon, Camera } from 'lucide-react';
 import Button from '../../components/Button';
-import { fetchMe, completarPrimeiroAcesso } from '../../api/auth.api';
+import { fetchMe, completarPrimeiroAcesso, enviarCodigoPrimeiroAcesso } from '../../api/auth.api';
 import { useAuth } from '../../auth/AuthContext';
 import { redimensionarImagem } from '../../utils/imagemPerfil';
 import { formatDdd, formatCelular } from '../Usuarios/format';
@@ -11,6 +11,7 @@ const emptyForm = {
   email: '',
   telefone_ddd: '',
   telefone_numero: '',
+  codigo: '',
   senha: '',
   confirmarSenha: '',
   avatar_url: '',
@@ -48,6 +49,20 @@ export default function PrimeiroAcesso() {
   const [processandoFoto, setProcessandoFoto] = useState(false);
   const fileInputRef = useRef(null);
 
+  // Código de verificação do celular, enviado por WhatsApp: `codigoEnviadoPara`
+  // guarda pra qual celular (só dígitos) o último código foi — mexer no
+  // número depois disso exige pedir outro. `reenviarEm` é a contagem
+  // regressiva até poder pedir de novo (o backend aceita 1 pedido por minuto).
+  const [enviandoCodigo, setEnviandoCodigo] = useState(false);
+  const [codigoEnviadoPara, setCodigoEnviadoPara] = useState('');
+  const [reenviarEm, setReenviarEm] = useState(0);
+
+  useEffect(() => {
+    if (reenviarEm <= 0) return undefined;
+    const timer = setTimeout(() => setReenviarEm((s) => s - 1), 1000);
+    return () => clearTimeout(timer);
+  }, [reenviarEm]);
+
   useEffect(() => {
     let active = true;
     fetchMe()
@@ -70,6 +85,46 @@ export default function PrimeiroAcesso() {
 
   function handleChange(field, value) {
     setForm((prev) => ({ ...prev, [field]: value }));
+  }
+
+  const celularDigitos = `${form.telefone_ddd}${form.telefone_numero.replace(/\D/g, '')}`;
+  const codigoValeParaCelular = !!codigoEnviadoPara && codigoEnviadoPara === celularDigitos;
+
+  function validarCelular() {
+    const errors = {};
+    if (form.telefone_ddd.length < 2) errors.telefone_ddd = 'DDD inválido.';
+    if (!form.telefone_numero.trim()) errors.telefone_numero = 'Informe seu celular.';
+    else if (form.telefone_numero.replace(/\D/g, '').length < 8) {
+      errors.telefone_numero = 'Informe um número de celular válido.';
+    }
+    return errors;
+  }
+
+  async function handleEnviarCodigo() {
+    setError('');
+    const errors = validarCelular();
+    setFieldErrors((prev) => ({
+      ...prev,
+      telefone_ddd: errors.telefone_ddd,
+      telefone_numero: errors.telefone_numero,
+      codigo: undefined,
+    }));
+    if (Object.keys(errors).length > 0) return;
+
+    setEnviandoCodigo(true);
+    try {
+      const resposta = await enviarCodigoPrimeiroAcesso({
+        telefone_ddd: form.telefone_ddd,
+        telefone_numero: form.telefone_numero,
+      });
+      setCodigoEnviadoPara(celularDigitos);
+      handleChange('codigo', '');
+      setReenviarEm(resposta.reenviar_em_segundos || 60);
+    } catch (err) {
+      setError(err.response?.data?.message || 'Não foi possível enviar o código por WhatsApp.');
+    } finally {
+      setEnviandoCodigo(false);
+    }
   }
 
   async function handleFotoSelecionada(e) {
@@ -104,8 +159,11 @@ export default function PrimeiroAcesso() {
     if (!form.email.trim()) errors.email = 'E-mail é obrigatório.';
     else if (!/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(form.email.trim())) errors.email = 'Informe um e-mail válido.';
 
-    if (form.telefone_ddd.length < 2) errors.telefone_ddd = 'DDD inválido.';
-    if (!form.telefone_numero.trim()) errors.telefone_numero = 'Informe seu celular.';
+    Object.assign(errors, validarCelular());
+    if (!errors.telefone_ddd && !errors.telefone_numero) {
+      if (!codigoValeParaCelular) errors.codigo = 'Clique em "Enviar código" para receber o código no seu WhatsApp.';
+      else if (!/^\d{6}$/.test(form.codigo)) errors.codigo = 'Informe o código de 6 dígitos enviado para o seu WhatsApp.';
+    }
 
     if (!form.senha.trim()) errors.senha = 'Informe uma nova senha.';
     else if (form.senha.trim().length < 6) errors.senha = 'A senha deve ter pelo menos 6 caracteres.';
@@ -123,6 +181,7 @@ export default function PrimeiroAcesso() {
         email: form.email.trim(),
         telefone_ddd: form.telefone_ddd,
         telefone_numero: form.telefone_numero,
+        codigo: form.codigo,
         senha: form.senha.trim(),
         confirmarSenha: form.confirmarSenha.trim(),
         avatar_url: form.avatar_url,
@@ -206,7 +265,7 @@ export default function PrimeiroAcesso() {
           </Campo>
 
           <Campo label="Celular" error={fieldErrors.telefone_ddd || fieldErrors.telefone_numero}>
-            <div className="flex gap-2">
+            <div className="flex flex-wrap gap-2 sm:flex-nowrap">
               <input
                 type="text"
                 value={form.telefone_ddd}
@@ -221,10 +280,51 @@ export default function PrimeiroAcesso() {
                 onChange={(e) => handleChange('telefone_numero', formatCelular(e.target.value))}
                 placeholder="91234-5678"
                 maxLength={10}
-                className={`flex-1 ${inputClass}`}
+                className={`min-w-0 flex-1 ${inputClass}`}
               />
+              <Button
+                variant="secondary"
+                onClick={handleEnviarCodigo}
+                disabled={enviandoCodigo || reenviarEm > 0}
+                className="w-full shrink-0 whitespace-nowrap px-3 sm:w-auto"
+              >
+                {enviandoCodigo
+                  ? 'Enviando...'
+                  : reenviarEm > 0
+                    ? `Reenviar (${reenviarEm}s)`
+                    : codigoEnviadoPara
+                      ? 'Reenviar'
+                      : 'Enviar código'}
+              </Button>
             </div>
           </Campo>
+
+          {codigoValeParaCelular ? (
+            <Campo label="Código de verificação" error={fieldErrors.codigo}>
+              <input
+                type="text"
+                inputMode="numeric"
+                autoComplete="one-time-code"
+                value={form.codigo}
+                onChange={(e) => handleChange('codigo', e.target.value.replace(/\D/g, '').slice(0, 6))}
+                placeholder="000000"
+                className={`w-full text-center tracking-[0.4em] ${inputClass}`}
+              />
+              <p className="mt-1 text-xs text-gray-500">
+                Enviamos o código por WhatsApp para{' '}
+                <span className="whitespace-nowrap">
+                  ({form.telefone_ddd}) {formatCelular(form.telefone_numero)}
+                </span>
+                . Ele vale por 10 minutos.
+              </p>
+            </Campo>
+          ) : (
+            (fieldErrors.codigo || codigoEnviadoPara) && (
+              <p className={`-mt-2 text-xs ${fieldErrors.codigo ? 'text-red-600' : 'text-gray-500'}`}>
+                {fieldErrors.codigo || 'Você alterou o celular. Envie um novo código para o número informado.'}
+              </p>
+            )
+          )}
 
           <Campo label="Nova senha" error={fieldErrors.senha}>
             <div className="relative">

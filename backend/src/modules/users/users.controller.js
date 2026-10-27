@@ -1,6 +1,7 @@
 const { z } = require('zod');
 const pool = require('../../config/db');
 const usuariosService = require('../usuarios/usuarios.service');
+const primeiroAcessoCodigoService = require('./primeiroAcessoCodigo.service');
 
 async function me(req, res, next) {
   try {
@@ -77,14 +78,34 @@ async function updateMe(req, res, next) {
   }
 }
 
-// E-mail e celular aqui são só edição livre (o usuário confere/corrige o
-// que o admin cadastrou) — só a senha tem dupla digitação, igual ao resto
-// do sistema.
+const celularSchema = {
+  telefone_ddd: z.string().trim().regex(/^\d{2,3}$/, 'DDD inválido.'),
+  telefone_numero: z
+    .string()
+    .trim()
+    .refine((v) => /^\d{8,9}$/.test(v.replace(/\D/g, '')), 'Informe um número de celular válido.'),
+};
+
+// Manda por WhatsApp o código que confirma o celular no primeiro acesso
+// (ver primeiroAcessoCodigo.service.js).
+async function primeiroAcessoCodigo(req, res, next) {
+  try {
+    const data = z.object(celularSchema).parse(req.body);
+    res.json(await primeiroAcessoCodigoService.enviarCodigo(req.user.id, data));
+  } catch (err) {
+    if (err.issues) return next(badRequest(err.issues[0].message));
+    next(err);
+  }
+}
+
+// E-mail aqui é só edição livre (o usuário confere/corrige o que o admin
+// cadastrou); o celular também, mas confirmado pelo código enviado por
+// WhatsApp — só a senha tem dupla digitação, igual ao resto do sistema.
 const primeiroAcessoSchema = z
   .object({
     email: z.string().trim().email('Informe um e-mail válido.'),
-    telefone_ddd: z.string().trim().regex(/^\d{2,3}$/, 'DDD inválido.'),
-    telefone_numero: z.string().trim().min(8, 'Informe um número de celular válido.'),
+    ...celularSchema,
+    codigo: z.string().trim().regex(/^\d{6}$/, 'Informe o código de 6 dígitos enviado para o seu WhatsApp.'),
     senha: z.string().min(6, 'A senha deve ter pelo menos 6 caracteres.'),
     confirmarSenha: z.string().min(1, 'Confirme sua nova senha.'),
     // Data URI (base64) da foto, já redimensionada/comprimida no navegador.
@@ -99,6 +120,7 @@ const primeiroAcessoSchema = z
 async function primeiroAcesso(req, res, next) {
   try {
     const data = primeiroAcessoSchema.parse(req.body);
+    await primeiroAcessoCodigoService.conferirCodigo(req.user.id, data);
     const usuario = await usuariosService.completarPrimeiroAcesso(req.user.id, {
       email: data.email,
       telefone_ddd: data.telefone_ddd,
@@ -107,6 +129,7 @@ async function primeiroAcesso(req, res, next) {
       avatar_url: data.avatar_url,
     });
     if (!usuario) return res.status(404).json({ message: 'Usuário não encontrado.' });
+    await primeiroAcessoCodigoService.descartarCodigo(req.user.id);
     res.json(usuario);
   } catch (err) {
     if (err.issues) return next(badRequest(err.issues[0].message));
@@ -115,4 +138,4 @@ async function primeiroAcesso(req, res, next) {
   }
 }
 
-module.exports = { me, updateMe, primeiroAcesso };
+module.exports = { me, updateMe, primeiroAcesso, primeiroAcessoCodigo };
