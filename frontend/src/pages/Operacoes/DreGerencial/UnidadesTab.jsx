@@ -16,7 +16,6 @@ const LARGURA_MINIMA_PRIMEIRA = 230;
 const LARGURA_ICONE = 44;
 
 const COLUNAS = [
-  { chave: 'tipo', rotulo: 'Tipo', largura: 140 },
   { chave: 'situacao_atual', rotulo: 'Situação atual', largura: 150 },
   {
     chave: 'contrato',
@@ -100,6 +99,22 @@ function soma(linhas, campo) {
   return linhas.reduce((t, l) => t + (Number(l[campo]) || 0), 0);
 }
 
+const SEM_TIPO = 'SEM TIPO';
+
+// Linhas de um cluster agrupadas pelo tipo da unidade (APARTAMENTO, GARAGEM, LOJA…), em ordem
+// alfabética, com as sem tipo por último. Cada grupo mantém a ordem das linhas que veio do backend.
+function agruparPorTipo(linhas) {
+  const grupos = new Map();
+  linhas.forEach((l) => {
+    const tipo = l.tipo || SEM_TIPO;
+    if (!grupos.has(tipo)) grupos.set(tipo, []);
+    grupos.get(tipo).push(l);
+  });
+  return [...grupos.entries()]
+    .map(([tipo, itens]) => ({ tipo, linhas: itens }))
+    .sort((a, b) => (a.tipo === SEM_TIPO) - (b.tipo === SEM_TIPO) || a.tipo.localeCompare(b.tipo, 'pt-BR'));
+}
+
 // Mesma regra de RepassesCefPage.jsx: falta de integração não é erro, é "não integrado" no log.
 function ehErroDeIntegracaoAusente(mensagem) {
   return /não possui uma integração .* ativa configurada/i.test(mensagem || '');
@@ -108,10 +123,10 @@ function ehErroDeIntegracaoAusente(mensagem) {
 // Operações > DRE Gerencial > Unidades: as unidades dos empreendimentos (/units do Sienge, em
 // sie_units) cruzadas com os contratos de venda (sie_sales_contracts), no layout da tabela da aba
 // Avanços da DFC (DfcAvancosTab.jsx) — cabeçalho azul grudado no topo, primeira coluna fixa.
-// Drilldown em 3 níveis: centro de custo (só os com "Realiza DRE") → cluster (Vendidas,
+// Drilldown em 4 níveis: centro de custo (só os com "Realiza DRE") → cluster (Vendidas,
 // Distratadas, Permuta, Unidades disponíveis — a mesma unidade aparece em todos em que se encaixa;
-// regras em dre-unidades/unidades.service.js::listar) → unidades. Vários abertos ao mesmo tempo;
-// com busca, abre tudo e mostra só as linhas que batem.
+// regras em dre-unidades/unidades.service.js::listar) → tipo da unidade → unidades. Vários abertos
+// ao mesmo tempo; com busca, abre tudo e mostra só as linhas que batem.
 //
 // A atualização segue a do Repasses CEF (RepassesCefPage.jsx::handleAtualizar): unidades e
 // contratos sincronizam em paralelo (cada POST busca tudo paginado e substitui o que estava
@@ -123,6 +138,7 @@ const UnidadesTab = forwardRef(function UnidadesTab({ empresaId, search = '', on
   const [erroCarga, setErroCarga] = useState('');
   const [centrosAbertos, setCentrosAbertos] = useState([]);
   const [clustersAbertos, setClustersAbertos] = useState([]); // `${centroId}:${cluster}`
+  const [tiposAbertos, setTiposAbertos] = useState([]); // `${centroId}:${cluster}:${tipo}`
   const [logs, setLogs] = useState([]);
   const [logAberto, setLogAberto] = useState(false);
 
@@ -142,6 +158,7 @@ const UnidadesTab = forwardRef(function UnidadesTab({ empresaId, search = '', on
   useEffect(() => {
     setCentrosAbertos([]);
     setClustersAbertos([]);
+    setTiposAbertos([]);
     carregar();
   }, [carregar]);
 
@@ -241,6 +258,10 @@ const UnidadesTab = forwardRef(function UnidadesTab({ empresaId, search = '', on
 
   function alternarCluster(chave) {
     setClustersAbertos((atual) => (atual.includes(chave) ? atual.filter((v) => v !== chave) : [...atual, chave]));
+  }
+
+  function alternarTipo(chave) {
+    setTiposAbertos((atual) => (atual.includes(chave) ? atual.filter((v) => v !== chave) : [...atual, chave]));
   }
 
   if (!empresaId) {
@@ -376,7 +397,6 @@ const UnidadesTab = forwardRef(function UnidadesTab({ empresaId, search = '', on
                       <td className={celulaCentro} />
                       <td className={celulaCentro} />
                       <td className={celulaCentro} />
-                      <td className={celulaCentro} />
                       <td className={`${celulaCentro} font-semibold text-gray-900`}>
                         {numero(c.fracao_ideal, 8)}
                       </td>
@@ -436,7 +456,6 @@ const UnidadesTab = forwardRef(function UnidadesTab({ empresaId, search = '', on
                               <td className="border-b border-l border-gray-100 bg-white group-hover/cluster:bg-gray-50" />
                               <td className="border-b border-l border-gray-100 bg-white group-hover/cluster:bg-gray-50" />
                               <td className="border-b border-l border-gray-100 bg-white group-hover/cluster:bg-gray-50" />
-                              <td className="border-b border-l border-gray-100 bg-white group-hover/cluster:bg-gray-50" />
                               <td
                                 className={`border-b border-l border-gray-100 bg-white px-2 text-right text-xs font-semibold tabular-nums group-hover/cluster:bg-gray-50 ${
                                   estimado ? 'italic text-gray-500' : 'text-gray-900'
@@ -450,16 +469,66 @@ const UnidadesTab = forwardRef(function UnidadesTab({ empresaId, search = '', on
                               </td>
                             </tr>
 
-                            {/* Nível 3: as unidades do cluster */}
+                            {/* Nível 3: os tipos de unidade do cluster */}
                             {clusterAberto &&
-                              linhas.map((l) => (
-                                <LinhaUnidade
-                                  key={l.chave}
-                                  linha={l}
-                                  cluster={k.chave}
-                                  clustersDaUnidade={clustersDaUnidade.get(c.id)?.get(l.unit_id) || new Set([k.chave])}
-                                />
-                              ))}
+                              agruparPorTipo(linhas).map((g) => {
+                                const chaveTipo = `${chaveCluster}:${g.tipo}`;
+                                const tipoAberto = Boolean(termo) || tiposAbertos.includes(chaveTipo);
+                                return (
+                                  <Fragment key={g.tipo}>
+                                    <tr onClick={() => alternarTipo(chaveTipo)} className="group/tipo cursor-pointer">
+                                      <td className="sticky left-0 z-10 border-b border-r border-gray-100 border-r-gray-200 bg-white py-1.5 pl-15 pr-2 group-hover/tipo:bg-gray-50">
+                                        <span className="flex items-center gap-2">
+                                          <span className="flex h-4 w-4 shrink-0 items-center justify-center rounded bg-primary-100 text-primary-600">
+                                            {tipoAberto ? <Minus size={10} /> : <Plus size={10} />}
+                                          </span>
+                                          <span className="truncate text-xs font-medium text-gray-700" title={g.tipo}>
+                                            {g.tipo}
+                                          </span>
+                                          <span className="shrink-0 rounded-full bg-white px-1.5 py-px text-[10px] font-medium tabular-nums text-gray-500 ring-1 ring-gray-200">
+                                            {g.linhas.length}
+                                          </span>
+                                        </span>
+                                      </td>
+                                      {CLUSTERS.map((outro) => (
+                                        <td
+                                          key={outro.chave}
+                                          className="border-b border-l border-gray-100 bg-white text-center group-hover/tipo:bg-gray-50"
+                                        >
+                                          {outro.chave === k.chave && <outro.icone size={14} className={`inline ${outro.cor}`} />}
+                                        </td>
+                                      ))}
+                                      <td className="border-b border-l border-gray-100 bg-white group-hover/tipo:bg-gray-50" />
+                                      <td className="border-b border-l border-gray-100 bg-white group-hover/tipo:bg-gray-50" />
+                                      <td className="border-b border-l border-gray-100 bg-white group-hover/tipo:bg-gray-50" />
+                                      <td
+                                        className={`border-b border-l border-gray-100 bg-white px-2 text-right text-xs font-medium tabular-nums group-hover/tipo:bg-gray-50 ${
+                                          estimado ? 'italic text-gray-500' : 'text-gray-800'
+                                        }`}
+                                        title={estimado ? 'Soma dos tickets médios (estimativa)' : undefined}
+                                      >
+                                        {g.linhas.some((l) => l.valor !== null)
+                                          ? `${estimado ? '≈ ' : ''}${numero(soma(g.linhas, 'valor'), 2)}`
+                                          : ''}
+                                      </td>
+                                      <td className="border-b border-l border-gray-100 bg-white px-2 text-right text-xs font-medium tabular-nums text-gray-800 group-hover/tipo:bg-gray-50">
+                                        {numero(soma(g.linhas, 'fracao_ideal'), 8)}
+                                      </td>
+                                    </tr>
+
+                                    {/* Nível 4: as unidades do tipo */}
+                                    {tipoAberto &&
+                                      g.linhas.map((l) => (
+                                        <LinhaUnidade
+                                          key={l.chave}
+                                          linha={l}
+                                          cluster={k.chave}
+                                          clustersDaUnidade={clustersDaUnidade.get(c.id)?.get(l.unit_id) || new Set([k.chave])}
+                                        />
+                                      ))}
+                                  </Fragment>
+                                );
+                              })}
                           </Fragment>
                         );
                       })}
@@ -505,7 +574,7 @@ function LinhaUnidade({ linha: l, cluster, clustersDaUnidade }) {
 
   return (
     <tr className="hover:[&>td]:bg-gray-50">
-      <td className="sticky left-0 z-10 border-b border-r border-gray-100 border-r-gray-200 bg-white py-1.5 pl-16 pr-3">
+      <td className="sticky left-0 z-10 border-b border-r border-gray-100 border-r-gray-200 bg-white py-1.5 pl-21 pr-3">
         <span className="block truncate text-xs font-medium text-gray-800" title={l.unidade}>
           {l.unidade}
         </span>
@@ -522,9 +591,6 @@ function LinhaUnidade({ linha: l, cluster, clustersDaUnidade }) {
           </td>
         );
       })}
-      <td className={`${celula} truncate text-gray-700`} title={l.tipo || undefined}>
-        {l.tipo || ''}
-      </td>
       <td className={celula}>
         {l.situacao_atual && (
           <span className="flex items-center gap-1.5 truncate text-gray-700">
