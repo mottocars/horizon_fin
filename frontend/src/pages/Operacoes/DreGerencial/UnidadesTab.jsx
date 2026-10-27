@@ -12,7 +12,8 @@ import AtualizacaoLogModal from '../RepassesCef/AtualizacaoLogModal';
 
 // Largura mínima da primeira coluna (centro / unidade) — ela fica com o espaço que sobrar; as de
 // dados têm largura fixa e parecida (antes a Fração ideal ficava com a sobra e ficava enorme).
-const LARGURA_MINIMA_PRIMEIRA = 260;
+const LARGURA_MINIMA_PRIMEIRA = 230;
+const LARGURA_ICONE = 44;
 
 const COLUNAS = [
   { chave: 'tipo', rotulo: 'Tipo', largura: 140 },
@@ -20,7 +21,7 @@ const COLUNAS = [
   {
     chave: 'contrato',
     rotulo: 'Contrato',
-    largura: 150,
+    largura: 120,
     titulo: 'Número do contrato de venda (Vendidas e Distratadas)',
   },
   {
@@ -41,22 +42,41 @@ const COLUNAS = [
 
 // Os 4 clusters do drilldown, na ordem pedida, cada um com um ícone (venda, contrato cancelado,
 // troca, porta aberta) na cor do estoque comercial correspondente (utils/statusUnidade.js: Vendida
-// vermelho, Permuta roxo, Disponível verde; distrato em âmbar).
+// vermelho, Permuta roxo, Disponível verde; distrato em âmbar). Os ícones viram 4 colunas estreitas
+// logo depois do nome — mesmo esquema da aba Gestão das Parcelas (GestaoParcelasTab.jsx): no centro,
+// a quantidade de cada cluster; no cluster, o ícone dele destacado (`tag`); na unidade, destacados
+// todos os clusters em que ela aparece (o resto cinza).
 const CLUSTERS = [
   {
     chave: 'vendidas',
     rotulo: 'VENDIDAS',
     icone: HandCoins,
     cor: 'text-red-500',
+    tag: 'bg-red-50 text-red-600',
     dica: 'Todo contrato de venda, inclusive os depois cancelados',
   },
-  { chave: 'distratadas', rotulo: 'DISTRATADAS', icone: FileX, cor: 'text-amber-500', dica: 'Contratos de venda cancelados' },
-  { chave: 'permuta', rotulo: 'PERMUTA', icone: ArrowLeftRight, cor: 'text-purple-500', dica: 'Unidades com estoque Permuta' },
+  {
+    chave: 'distratadas',
+    rotulo: 'DISTRATADAS',
+    icone: FileX,
+    cor: 'text-amber-500',
+    tag: 'bg-amber-50 text-amber-600',
+    dica: 'Contratos de venda cancelados',
+  },
+  {
+    chave: 'permuta',
+    rotulo: 'PERMUTA',
+    icone: ArrowLeftRight,
+    cor: 'text-purple-500',
+    tag: 'bg-purple-50 text-purple-600',
+    dica: 'Unidades com estoque Permuta',
+  },
   {
     chave: 'disponiveis',
     rotulo: 'UNIDADES DISPONÍVEIS',
     icone: DoorOpen,
     cor: 'text-emerald-500',
+    tag: 'bg-emerald-50 text-emerald-600',
     dica: 'Unidades que hoje não estão vendidas nem em permuta',
   },
 ];
@@ -198,6 +218,23 @@ const UnidadesTab = forwardRef(function UnidadesTab({ empresaId, search = '', on
       .filter((c) => Object.values(c.clusters).some((l) => l.length));
   }, [dados, termo]);
 
+  // centro -> unit_id -> clusters em que a unidade aparece (colunas de ícone da linha da unidade).
+  const clustersDaUnidade = useMemo(() => {
+    const mapa = new Map();
+    (dados?.centros || []).forEach((c) => {
+      const porUnidade = new Map();
+      Object.entries(c.clusters).forEach(([k, linhas]) =>
+        linhas.forEach((l) => {
+          if (l.unit_id === null) return;
+          if (!porUnidade.has(l.unit_id)) porUnidade.set(l.unit_id, new Set());
+          porUnidade.get(l.unit_id).add(k);
+        })
+      );
+      mapa.set(c.id, porUnidade);
+    });
+    return mapa;
+  }, [dados]);
+
   function alternarCentro(id) {
     setCentrosAbertos((atual) => (atual.includes(id) ? atual.filter((v) => v !== id) : [...atual, id]));
   }
@@ -216,7 +253,7 @@ const UnidadesTab = forwardRef(function UnidadesTab({ empresaId, search = '', on
     );
   }
 
-  const totalColunas = 1 + COLUNAS.length;
+  const totalColunas = 1 + CLUSTERS.length + COLUNAS.length;
   const ultima = dados?.ultima_atualizacao;
   const celulaCentro = 'border-b border-l border-gray-200 bg-gray-50 px-2 text-right text-xs tabular-nums group-hover/obra:bg-gray-100';
 
@@ -256,11 +293,14 @@ const UnidadesTab = forwardRef(function UnidadesTab({ empresaId, search = '', on
             style={{
               tableLayout: 'fixed',
               width: '100%',
-              minWidth: LARGURA_MINIMA_PRIMEIRA + COLUNAS.reduce((t, c) => t + c.largura, 0),
+              minWidth: LARGURA_MINIMA_PRIMEIRA + CLUSTERS.length * LARGURA_ICONE + COLUNAS.reduce((t, c) => t + c.largura, 0),
             }}
           >
             <colgroup>
               <col />
+              {CLUSTERS.map((k) => (
+                <col key={k.chave} style={{ width: LARGURA_ICONE }} />
+              ))}
               {COLUNAS.map((c) => (
                 <col key={c.chave} style={{ width: c.largura }} />
               ))}
@@ -270,6 +310,15 @@ const UnidadesTab = forwardRef(function UnidadesTab({ empresaId, search = '', on
                 <th className="sticky -top-6 left-0 z-30 border-b-2 border-r border-b-blue-500 border-r-blue-100 bg-blue-50 py-2.5 pl-4 pr-3 text-xs font-medium uppercase tracking-wide text-blue-700">
                   Centro de custo / Unidade
                 </th>
+                {CLUSTERS.map((k) => (
+                  <th
+                    key={k.chave}
+                    title={k.rotulo}
+                    className="sticky -top-6 z-20 border-b-2 border-l border-b-blue-500 border-l-blue-100 bg-blue-50 py-2.5 text-center"
+                  >
+                    <k.icone size={15} className={`inline ${k.cor}`} />
+                  </th>
+                ))}
                 {COLUNAS.map((c) => (
                   <th
                     key={c.chave}
@@ -314,6 +363,15 @@ const UnidadesTab = forwardRef(function UnidadesTab({ empresaId, search = '', on
                           </span>
                         </span>
                       </td>
+                      {CLUSTERS.map((k) => (
+                        <td
+                          key={k.chave}
+                          title={k.rotulo}
+                          className="border-b border-l border-gray-200 bg-gray-50 text-center font-mono text-xs tabular-nums text-gray-900 group-hover/obra:bg-gray-100"
+                        >
+                          {(c.clusters[k.chave] || []).length}
+                        </td>
+                      ))}
                       <td className={celulaCentro} />
                       <td className={celulaCentro} />
                       <td className={celulaCentro} />
@@ -352,7 +410,6 @@ const UnidadesTab = forwardRef(function UnidadesTab({ empresaId, search = '', on
                                   >
                                     {clusterAberto ? <Minus size={9} /> : <Plus size={9} />}
                                   </span>
-                                  <k.icone size={14} className={`shrink-0 ${k.cor} ${temLinhas ? '' : 'opacity-40'}`} />
                                   <span className={`truncate text-xs font-semibold ${temLinhas ? 'text-gray-800' : 'text-gray-400'}`}>
                                     {k.rotulo}
                                   </span>
@@ -361,6 +418,21 @@ const UnidadesTab = forwardRef(function UnidadesTab({ empresaId, search = '', on
                                   </span>
                                 </span>
                               </td>
+                              {CLUSTERS.map((outro) => {
+                                const proprio = outro.chave === k.chave;
+                                return (
+                                  <td
+                                    key={outro.chave}
+                                    className={`border-b border-l border-gray-100 text-center ${
+                                      proprio && temLinhas ? outro.tag : 'bg-white group-hover/cluster:bg-gray-50'
+                                    }`}
+                                  >
+                                    {proprio && (
+                                      <outro.icone size={14} className={`inline ${temLinhas ? '' : 'text-gray-300'}`} />
+                                    )}
+                                  </td>
+                                );
+                              })}
                               <td className="border-b border-l border-gray-100 bg-white group-hover/cluster:bg-gray-50" />
                               <td className="border-b border-l border-gray-100 bg-white group-hover/cluster:bg-gray-50" />
                               <td className="border-b border-l border-gray-100 bg-white group-hover/cluster:bg-gray-50" />
@@ -379,7 +451,15 @@ const UnidadesTab = forwardRef(function UnidadesTab({ empresaId, search = '', on
                             </tr>
 
                             {/* Nível 3: as unidades do cluster */}
-                            {clusterAberto && linhas.map((l) => <LinhaUnidade key={l.chave} linha={l} cluster={k.chave} />)}
+                            {clusterAberto &&
+                              linhas.map((l) => (
+                                <LinhaUnidade
+                                  key={l.chave}
+                                  linha={l}
+                                  cluster={k.chave}
+                                  clustersDaUnidade={clustersDaUnidade.get(c.id)?.get(l.unit_id) || new Set([k.chave])}
+                                />
+                              ))}
                           </Fragment>
                         );
                       })}
@@ -396,10 +476,11 @@ const UnidadesTab = forwardRef(function UnidadesTab({ empresaId, search = '', on
 
 UnidadesTab.displayName = 'UnidadesTab';
 
-// Linha de uma unidade dentro de um cluster. Coluna Contrato: só o número do contrato (em Vendidas,
-// com selo quando foi distratado). Em Disponíveis o
-// valor é estimado (ticket médio) — itálico, com "≈" e de quantas vendas veio.
-function LinhaUnidade({ linha: l, cluster }) {
+// Linha de uma unidade dentro de um cluster. Colunas de ícone: destacados todos os clusters em que a
+// unidade aparece (`clustersDaUnidade`), o resto cinza. Coluna Contrato: só o número do contrato (em
+// Vendidas, com selo quando foi distratado). Em Disponíveis o valor é estimado (ticket médio) —
+// itálico, com "≈" e de quantas vendas veio.
+function LinhaUnidade({ linha: l, cluster, clustersDaUnidade }) {
   const situacao = statusConfig(l.situacao_atual);
   const celula = 'border-b border-l border-gray-100 bg-white px-2 py-1.5 text-xs';
 
@@ -429,6 +510,18 @@ function LinhaUnidade({ linha: l, cluster }) {
           {l.unidade}
         </span>
       </td>
+      {CLUSTERS.map((k) => {
+        const tem = clustersDaUnidade.has(k.chave);
+        return (
+          <td
+            key={k.chave}
+            title={tem ? k.rotulo : undefined}
+            className={`border-b border-l border-gray-100 text-center ${tem ? k.tag : 'bg-white'}`}
+          >
+            <k.icone size={14} className={`inline ${tem ? '' : 'text-gray-300'}`} />
+          </td>
+        );
+      })}
       <td className={`${celula} truncate text-gray-700`} title={l.tipo || undefined}>
         {l.tipo || ''}
       </td>
