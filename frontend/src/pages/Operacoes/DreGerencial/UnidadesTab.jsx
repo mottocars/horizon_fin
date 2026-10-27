@@ -1,5 +1,5 @@
 import { Fragment, forwardRef, useCallback, useEffect, useImperativeHandle, useMemo, useState } from 'react';
-import { House, Minus, Plus, TriangleAlert } from 'lucide-react';
+import { ArrowLeftRight, DoorOpen, FileX, HandCoins, House, Minus, Plus, TriangleAlert } from 'lucide-react';
 import {
   listarUnidadesDre,
   sincronizarContratosUnidadesDre,
@@ -39,16 +39,24 @@ const COLUNAS = [
   { chave: 'fracao_ideal', rotulo: 'Fração ideal', largura: 130 },
 ];
 
-// Os 4 clusters do drilldown, na ordem pedida, com a cor do estoque comercial correspondente
-// (utils/statusUnidade.js: Vendida vermelho, Permuta roxo, Disponível verde; distrato em âmbar).
+// Os 4 clusters do drilldown, na ordem pedida, cada um com um ícone (venda, contrato cancelado,
+// troca, porta aberta) na cor do estoque comercial correspondente (utils/statusUnidade.js: Vendida
+// vermelho, Permuta roxo, Disponível verde; distrato em âmbar).
 const CLUSTERS = [
-  { chave: 'vendidas', rotulo: 'VENDIDAS', cor: 'bg-red-500', dica: 'Todo contrato de venda, inclusive os depois cancelados' },
-  { chave: 'distratadas', rotulo: 'DISTRATADAS', cor: 'bg-amber-500', dica: 'Contratos de venda cancelados' },
-  { chave: 'permuta', rotulo: 'PERMUTA', cor: 'bg-purple-500', dica: 'Unidades com estoque Permuta' },
+  {
+    chave: 'vendidas',
+    rotulo: 'VENDIDAS',
+    icone: HandCoins,
+    cor: 'text-red-500',
+    dica: 'Todo contrato de venda, inclusive os depois cancelados',
+  },
+  { chave: 'distratadas', rotulo: 'DISTRATADAS', icone: FileX, cor: 'text-amber-500', dica: 'Contratos de venda cancelados' },
+  { chave: 'permuta', rotulo: 'PERMUTA', icone: ArrowLeftRight, cor: 'text-purple-500', dica: 'Unidades com estoque Permuta' },
   {
     chave: 'disponiveis',
     rotulo: 'UNIDADES DISPONÍVEIS',
-    cor: 'bg-emerald-500',
+    icone: DoorOpen,
+    cor: 'text-emerald-500',
     dica: 'Unidades que hoje não estão vendidas nem em permuta',
   },
 ];
@@ -344,7 +352,7 @@ const UnidadesTab = forwardRef(function UnidadesTab({ empresaId, search = '', on
                                   >
                                     {clusterAberto ? <Minus size={9} /> : <Plus size={9} />}
                                   </span>
-                                  <span className={`h-2 w-2 shrink-0 rounded-full ${k.cor} ${temLinhas ? '' : 'opacity-40'}`} />
+                                  <k.icone size={14} className={`shrink-0 ${k.cor} ${temLinhas ? '' : 'opacity-40'}`} />
                                   <span className={`truncate text-xs font-semibold ${temLinhas ? 'text-gray-800' : 'text-gray-400'}`}>
                                     {k.rotulo}
                                   </span>
