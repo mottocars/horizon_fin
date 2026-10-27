@@ -69,7 +69,10 @@ async function enviarCodigo(usuarioId, { telefone_ddd, telefone_numero }) {
   const primeiroNome = String(usuarios[0]?.nome || '').trim().split(/\s+/)[0];
   const codigo = String(crypto.randomInt(0, 1_000_000)).padStart(6, '0');
   const mensagem = [
-    `Olá${primeiroNome ? `, ${primeiroNome}` : ''}! Seu código de verificação do Horizon Fin é *${codigo}*.`,
+    `Olá${primeiroNome ? `, ${primeiroNome}` : ''}!`,
+    'Seu código de verificação do Horizon é:',
+    '',
+    `${codigo}.`,
     '',
     `Informe-o na tela de primeiro acesso para concluir seu cadastro. Ele vale por ${VALIDADE_MINUTOS} minutos.`,
     '',
