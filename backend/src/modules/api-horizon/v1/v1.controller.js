@@ -54,7 +54,7 @@ const notasSchema = z
       .number({ invalid_type_error: 'pageSize deve ser um número.' })
       .int()
       .min(1, 'pageSize mínimo é 1.')
-      .max(500, 'pageSize máximo é 500.')
+      .max(200, 'pageSize máximo é 200.')
       .default(100),
   })
   .strict()

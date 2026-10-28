@@ -157,7 +157,7 @@ export const ENDPOINTS = [
       { nome: 'status', tipo: 'lista de textos', descricao: 'Um ou mais de <code class="ic">pendente</code>, <code class="ic">vinculada</code>, <code class="ic">inativada</code>, <code class="ic">cancelada</code>.' },
       { nome: 'atualizadoDesde', tipo: 'data e hora', descricao: 'Só notas cujo status mudou a partir deste momento. ISO 8601 com fuso: <code class="ic">2026-10-20T07:00:00-03:00</code>.' },
       { nome: 'page', tipo: 'número', descricao: 'Página. Padrão <code class="ic">1</code>.' },
-      { nome: 'pageSize', tipo: 'número', descricao: 'Itens por página. Padrão <code class="ic">100</code>, máximo <code class="ic">500</code>.' },
+      { nome: 'pageSize', tipo: 'número', descricao: 'Itens por página. Padrão <code class="ic">100</code>, máximo <code class="ic">200</code>.' },
     ],
     exemploConsulta: 'certificadoIds=1,2,7&dataEmissaoInicio=2026-10-01&dataEmissaoFim=2026-10-31&status=pendente,vinculada',
     resposta: { items: [NOTA_EXEMPLO], pagination: { page: 1, pageSize: 100, total: 412, totalPages: 5 } },
@@ -168,7 +168,7 @@ export const ENDPOINTS = [
     erros: ['PARAMETRO_INVALIDO', 'PARAMETRO_DESCONHECIDO', 'CERTIFICADO_INVALIDO', 'TOKEN_EXPIRADO', 'GRUPO_NAO_LIBERADO', 'SEM_PERMISSAO', 'LIMITE_EXCEDIDO'],
     teste: {
       campos: [
-        { nome: 'certificadoIds', tipo: 'certificados', obrigatorio: true },
+        { nome: 'certificadoIds', tipo: 'certificados', obrigatorio: true, exemplo: '1,2,7' },
         { nome: 'dataEmissaoInicio', tipo: 'date', obrigatorio: true, padrao: inicioDoMes },
         { nome: 'dataEmissaoFim', tipo: 'date', obrigatorio: true, padrao: hoje },
         { nome: 'tipoDocumento', tipo: 'select', opcoes: ['', 'NFE', 'NFSE'] },
@@ -234,7 +234,7 @@ export const ENDPOINTS = [
     teste: {
       campos: [
         { nome: 'id', tipo: 'number', obrigatorio: true, caminho: true },
-        { nome: 'motivo', tipo: 'textarea', obrigatorio: true, corpo: true, placeholder: 'Ex.: Nota de boleto, não é lançada no Sienge.' },
+        { nome: 'motivo', tipo: 'textarea', obrigatorio: true, corpo: true, placeholder: 'Ex.: Nota de boleto, não é lançada no Sienge.', exemplo: 'Nota de boleto, não é lançada no Sienge.' },
       ],
       confirmacao: 'Entendo que esta nota será inativada de verdade no Horizon.',
     },

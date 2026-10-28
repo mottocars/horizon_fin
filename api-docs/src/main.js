@@ -81,8 +81,10 @@ function caminhoExemplo(ep) {
   return ep.exemploConsulta ? `${caminho}?${ep.exemploConsulta}` : caminho;
 }
 
-function exemplos(ep) {
-  const url = `${URL_PUBLICA}${caminhoExemplo(ep)}`;
+// pedido (opcional): { caminho, corpo } montado do formulário "Testar" do endpoint — os exemplos
+// mostram exatamente a chamada que o Executar vai fazer. Sem pedido: o exemplo padrão.
+function exemplos(ep, pedido) {
+  const url = `${URL_PUBLICA}${pedido?.caminho ?? caminhoExemplo(ep)}`;
   if (ep.autenticacao === 'chave') {
     return {
       curl: `curl -X POST ${URL_PUBLICA}${ep.caminho} \\\n  -H "X-Api-Key: $HORIZON_API_KEY"`,
@@ -91,11 +93,15 @@ function exemplos(ep) {
     };
   }
   if (ep.metodo === 'PATCH') {
-    const { motivo } = ep.exemploCorpo;
+    const corpo = pedido?.corpo ?? ep.exemploCorpo;
+    // Texto digitado pode ter aspas: JSON.stringify serve de literal em JS e em Python; no cURL
+    // (entre aspas simples) a aspa simples vira '\''.
+    const motivo = JSON.stringify(corpo.motivo ?? '');
+    const corpoCurl = JSON.stringify(corpo).replace(/'/g, "'\\''");
     return {
-      curl: `curl -X PATCH "${url}" \\\n  -H "Authorization: Bearer $TOKEN" \\\n  -H "Content-Type: application/json" \\\n  -d '${JSON.stringify(ep.exemploCorpo)}'`,
-      js: `const resposta = await fetch('${url}', {\n  method: 'PATCH',\n  headers: {\n    Authorization: \`Bearer \${token}\`,\n    'Content-Type': 'application/json',\n  },\n  body: JSON.stringify({ motivo: '${motivo}' }),\n});\nconst nota = await resposta.json();`,
-      python: `resposta = requests.patch(\n    "${url}",\n    headers={"Authorization": f"Bearer {token}"},\n    json={"motivo": "${motivo}"},\n)\nnota = resposta.json()`,
+      curl: `curl -X PATCH "${url}" \\\n  -H "Authorization: Bearer $TOKEN" \\\n  -H "Content-Type: application/json" \\\n  -d '${corpoCurl}'`,
+      js: `const resposta = await fetch('${url}', {\n  method: 'PATCH',\n  headers: {\n    Authorization: \`Bearer \${token}\`,\n    'Content-Type': 'application/json',\n  },\n  body: JSON.stringify({ motivo: ${motivo} }),\n});\nconst nota = await resposta.json();`,
+      python: `resposta = requests.patch(\n    "${url}",\n    headers={"Authorization": f"Bearer {token}"},\n    json={"motivo": ${motivo}},\n)\nnota = resposta.json()`,
     };
   }
   const xml = ep.id === 'xml';
@@ -229,8 +235,8 @@ function painelTeste(ep) {
 
 function secaoEndpoint(ep) {
   const resposta = ep.respostaTexto
-    ? painelCodigo({ titulo: 'Resposta 200 · application/xml', conteudo: ep.respostaTexto })
-    : painelCodigo({ titulo: 'Resposta 200', html: realcarJson(ep.resposta) });
+    ? painelCodigo({ titulo: 'Exemplo de resposta · 200 · application/xml', conteudo: ep.respostaTexto })
+    : painelCodigo({ titulo: 'Exemplo de resposta · 200', html: realcarJson(ep.resposta) });
   const escopo = ep.escopo
     ? `<span class="rounded-full bg-amber-50 px-2 py-0.5 font-mono text-[11px] font-semibold text-amber-700">escopo ${ep.escopo}</span>`
     : '';
@@ -258,7 +264,7 @@ function secaoEndpoint(ep) {
           .join(' · ')}</p>
       </div>
       <div class="min-w-0 space-y-4 xl:sticky xl:top-20 xl:self-start">
-        ${painelCodigo({ abas: exemplos(ep) })}
+        <div data-exemplo-ep="${ep.id}">${painelCodigo({ abas: exemplos(ep) })}</div>
         ${resposta}
       </div>
     </div>
@@ -351,21 +357,27 @@ function mostrarResultado(form, passos) {
   }
 }
 
-function lerFormulario(ep, form) {
+// paraExemplo: monta a chamada mesmo com campo obrigatório vazio (usa o valor de exemplo do campo
+// ou {nome}), para os exemplos de código acompanharem o formulário enquanto ele é preenchido.
+function lerFormulario(ep, form, { paraExemplo = false } = {}) {
   const dados = new FormData(form);
   const consulta = new URLSearchParams();
   let caminho = ep.caminho;
   let corpo;
   for (const c of ep.teste.campos) {
-    const valores = dados.getAll(c.nome).map((v) => String(v).trim()).filter(Boolean);
-    if (c.obrigatorio && !valores.length) return { erro: `Preencha ${c.nome}.` };
+    let valores = dados.getAll(c.nome).map((v) => String(v).trim()).filter(Boolean);
+    if (c.obrigatorio && !valores.length) {
+      if (!paraExemplo) return { erro: `Preencha ${c.nome}.` };
+      if (c.caminho) continue; // fica o {id} do caminho
+      valores = [c.exemplo ?? `{${c.nome}}`];
+    }
     if (!valores.length) continue;
     if (c.caminho) caminho = caminho.replace('{id}', encodeURIComponent(valores[0]));
     else if (c.corpo) corpo = { ...(corpo || {}), [c.nome]: valores[0] };
     else consulta.set(c.nome, valores.join(','));
   }
-  if (ep.teste.confirmacao && !dados.get('__confirmacao')) return { erro: 'Marque a confirmação antes de executar.' };
-  const qs = consulta.toString().replace(/%2C/g, ',');
+  if (!paraExemplo && ep.teste.confirmacao && !dados.get('__confirmacao')) return { erro: 'Marque a confirmação antes de executar.' };
+  const qs = consulta.toString().replace(/%2C/g, ',').replace(/%7B/g, '{').replace(/%7D/g, '}');
   return { caminho: qs ? `${caminho}?${qs}` : caminho, corpo };
 }
 
@@ -421,6 +433,7 @@ async function carregarCertificados(form) {
   const marcados = new Set(campo.value.split(',').map((s) => s.trim()).filter(Boolean));
   if (!marcados.size) r.corpo.items.forEach((c) => marcados.add(String(c.id)));
   campo.value = [...marcados].join(',');
+  form.atualizarExemplo?.();
   lista.innerHTML = r.corpo.items
     .map(
       (c) => `<label class="inline-flex cursor-pointer items-center gap-2 rounded-lg border border-gray-200 bg-white px-3 py-1.5 text-[12.5px] text-gray-700 has-checked:border-primary-500 has-checked:bg-primary-50 has-checked:text-primary-700">
@@ -433,6 +446,7 @@ async function carregarCertificados(form) {
       campo.value = $$('input[type="checkbox"]:checked', lista)
         .map((x) => x.value)
         .join(',');
+      form.atualizarExemplo?.();
     })
   );
 }
@@ -510,8 +524,8 @@ function montar() {
   $('[data-exemplo="incremental"]').innerHTML = painelCodigo({
     abas: {
       curl: `# 1ª rodada: tudo do período\ncurl "${URL_PUBLICA}/notas-fiscais?certificadoIds=1,2,7&dataEmissaoInicio=2026-01-01&dataEmissaoFim=2026-12-31" \\\n  -H "Authorization: Bearer $TOKEN"\n\n# Próximas: só o que mudou desde o início da rodada anterior\ncurl "${URL_PUBLICA}/notas-fiscais?certificadoIds=1,2,7&dataEmissaoInicio=2026-01-01&dataEmissaoFim=2026-12-31&atualizadoDesde=2026-10-28T03:00:00-03:00" \\\n  -H "Authorization: Bearer $TOKEN"`,
-      js: `// Guarde o início da rodada ANTES de consultar\nconst inicioRodada = new Date().toISOString();\nconst params = new URLSearchParams({\n  certificadoIds: '1,2,7',\n  dataEmissaoInicio: '2026-01-01',\n  dataEmissaoFim: '2026-12-31',\n  pageSize: '500',\n});\nif (ultimaRodada) params.set('atualizadoDesde', ultimaRodada);\n\nfor (let page = 1; ; page++) {\n  params.set('page', String(page));\n  const r = await fetch(\`${URL_PUBLICA}/notas-fiscais?\${params}\`, {\n    headers: { Authorization: \`Bearer \${token}\` },\n  });\n  const { items, pagination } = await r.json();\n  processar(items);\n  if (page >= pagination.totalPages) break;\n}\nultimaRodada = inicioRodada;`,
-      python: `# Guarde o início da rodada ANTES de consultar\ninicio_rodada = datetime.now(timezone.utc).isoformat()\nparams = {\n    "certificadoIds": "1,2,7",\n    "dataEmissaoInicio": "2026-01-01",\n    "dataEmissaoFim": "2026-12-31",\n    "pageSize": 500,\n}\nif ultima_rodada:\n    params["atualizadoDesde"] = ultima_rodada\n\npage = 1\nwhile True:\n    params["page"] = page\n    r = requests.get("${URL_PUBLICA}/notas-fiscais", params=params,\n                     headers={"Authorization": f"Bearer {token}"})\n    dados = r.json()\n    processar(dados["items"])\n    if page >= dados["pagination"]["totalPages"]:\n        break\n    page += 1\nultima_rodada = inicio_rodada`,
+      js: `// Guarde o início da rodada ANTES de consultar\nconst inicioRodada = new Date().toISOString();\nconst params = new URLSearchParams({\n  certificadoIds: '1,2,7',\n  dataEmissaoInicio: '2026-01-01',\n  dataEmissaoFim: '2026-12-31',\n  pageSize: '200',\n});\nif (ultimaRodada) params.set('atualizadoDesde', ultimaRodada);\n\nfor (let page = 1; ; page++) {\n  params.set('page', String(page));\n  const r = await fetch(\`${URL_PUBLICA}/notas-fiscais?\${params}\`, {\n    headers: { Authorization: \`Bearer \${token}\` },\n  });\n  const { items, pagination } = await r.json();\n  processar(items);\n  if (page >= pagination.totalPages) break;\n}\nultimaRodada = inicioRodada;`,
+      python: `# Guarde o início da rodada ANTES de consultar\ninicio_rodada = datetime.now(timezone.utc).isoformat()\nparams = {\n    "certificadoIds": "1,2,7",\n    "dataEmissaoInicio": "2026-01-01",\n    "dataEmissaoFim": "2026-12-31",\n    "pageSize": 200,\n}\nif ultima_rodada:\n    params["atualizadoDesde"] = ultima_rodada\n\npage = 1\nwhile True:\n    params["page"] = page\n    r = requests.get("${URL_PUBLICA}/notas-fiscais", params=params,\n                     headers={"Authorization": f"Bearer {token}"})\n    dados = r.json()\n    processar(dados["items"])\n    if page >= dados["pagination"]["totalPages"]:\n        break\n    page += 1\nultima_rodada = inicio_rodada`,
     },
   });
   $('[data-exemplo="erro"]').innerHTML = painelCodigo({
@@ -568,6 +582,17 @@ function ligarEventos() {
 
   $$('form[data-teste]').forEach((form) => {
     const ep = ENDPOINTS.find((x) => x.id === form.dataset.teste);
+    // Exemplos de código acompanham o que está no formulário.
+    const atualizarExemplo = () => {
+      if (ep.autenticacao === 'chave') return;
+      const caixa = $(`[data-exemplo-ep="${ep.id}"]`);
+      caixa.innerHTML = painelCodigo({ abas: exemplos(ep, lerFormulario(ep, form, { paraExemplo: true })) });
+      atualizarAbasLinguagem();
+    };
+    form.addEventListener('input', atualizarExemplo);
+    form.addEventListener('change', atualizarExemplo);
+    form.atualizarExemplo = atualizarExemplo;
+    atualizarExemplo();
     form.addEventListener('submit', (e) => {
       e.preventDefault();
       executar(ep, form);
