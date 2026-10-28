@@ -1,4 +1,4 @@
-import { ENDPOINTS, ERROS, CAMPOS_NOTA, STATUS_INTERNO } from './endpoints.js';
+import { GRUPOS, ENDPOINTS, ERROS, CAMPOS_NOTA, STATUS_INTERNO } from './endpoints.js';
 
 // Endereços. Produção: a página e a API no mesmo domínio (api.horizonhub.com.br, /v1 vai pro
 // backend). Dev: backend local na 3001.
@@ -232,14 +232,14 @@ function secaoEndpoint(ep) {
     ? painelCodigo({ titulo: 'Resposta 200 · application/xml', conteudo: ep.respostaTexto })
     : painelCodigo({ titulo: 'Resposta 200', html: realcarJson(ep.resposta) });
   const escopo = ep.escopo
-    ? `<span class="rounded-full bg-amber-50 px-2 py-0.5 text-[11px] font-semibold text-amber-700">escopo inativar</span>`
+    ? `<span class="rounded-full bg-amber-50 px-2 py-0.5 font-mono text-[11px] font-semibold text-amber-700">escopo ${ep.escopo}</span>`
     : '';
   const autenticacao =
     ep.autenticacao === 'chave'
       ? '<span class="rounded-full bg-gray-100 px-2 py-0.5 text-[11px] font-medium text-gray-600">X-Api-Key</span>'
       : '<span class="rounded-full bg-gray-100 px-2 py-0.5 text-[11px] font-medium text-gray-600">Bearer token</span>';
   return `<section id="ep-${ep.id}" class="rounded-card bg-white p-6 shadow-card sm:p-8">
-    <div class="grid grid-cols-1 gap-6 lg:grid-cols-[minmax(0,1fr)_minmax(0,1.15fr)]">
+    <div class="grid grid-cols-1 gap-6 xl:grid-cols-[minmax(0,1fr)_minmax(0,1.2fr)]">
       <div class="min-w-0">
         <div class="flex flex-wrap items-center gap-2">
           <span class="${classeMetodo(ep.metodo)}">${ep.metodo}</span>
@@ -257,7 +257,7 @@ function secaoEndpoint(ep) {
           .map((c) => `<a href="#erros" class="font-mono text-gray-500 hover:text-primary-600">${c}</a>`)
           .join(' · ')}</p>
       </div>
-      <div class="min-w-0 space-y-4 lg:sticky lg:top-20 lg:self-start">
+      <div class="min-w-0 space-y-4 xl:sticky xl:top-20 xl:self-start">
         ${painelCodigo({ abas: exemplos(ep) })}
         ${resposta}
       </div>
@@ -443,10 +443,54 @@ function montar() {
   $$('[data-url-base]').forEach((el) => (el.textContent = URL_PUBLICA));
   $$('[data-app-link]').forEach((a) => (a.href = `${APP_URL}${a.dataset.appLink}`));
 
-  $('#menu-endpoints').innerHTML = ENDPOINTS.map(
-    (ep) => `<a class="nav-link" href="#ep-${ep.id}"><span class="${classeMetodo(ep.metodo)} min-w-11!">${ep.metodo}</span><span class="truncate">${ep.titulo}</span></a>`
+  const doGrupo = (g) => ENDPOINTS.filter((ep) => ep.grupo === g.id);
+  const linkEndpoint = (ep) =>
+    `<a class="nav-link" href="#ep-${ep.id}"><span class="${classeMetodo(ep.metodo)} min-w-11!">${ep.metodo}</span><span class="truncate">${ep.titulo}</span></a>`;
+  $('#menu-grupos').innerHTML = GRUPOS.map(
+    (g) => `<p class="mt-4 px-2.5 pb-1 text-[11px] font-semibold uppercase tracking-wide text-gray-400">${g.titulo}</p>
+      ${g.tela ? `<a class="nav-link" href="#grupo-${g.id}">Visão geral</a>` : ''}
+      ${doGrupo(g).map(linkEndpoint).join('')}
+      ${(g.referencias || []).map(([id, titulo]) => `<a class="nav-link" href="#${id}">${titulo}</a>`).join('')}`
   ).join('');
-  $('#endpoints').innerHTML = ENDPOINTS.map(secaoEndpoint).join('');
+
+  // Grupos com tela própria aparecem na introdução (Autenticação vale para todos).
+  $('#lista-grupos').innerHTML = GRUPOS.filter((g) => g.tela)
+    .map(
+      (g) => `<a href="#grupo-${g.id}" class="group block rounded-lg border border-gray-200 p-4 transition-colors hover:border-primary-200 hover:bg-primary-50/40">
+        <span class="flex items-center justify-between gap-2">
+          <span class="text-[14px] font-semibold text-gray-900 group-hover:text-primary-700">${g.titulo}</span>
+          <span class="text-[12px] text-gray-400">${doGrupo(g).length} endpoints</span>
+        </span>
+        <span class="mt-1 block text-[13px] leading-5 text-gray-500">${g.descricao[0]}</span>
+        <span class="mt-2 inline-block rounded-full bg-gray-100 px-2 py-0.5 text-[11px] font-medium text-gray-600">Exige a tela ${g.tela}</span>
+      </a>`
+    )
+    .join('');
+
+  $('#grupos').innerHTML = GRUPOS.map((g) => {
+    const cabecalho = g.tela
+      ? `<section id="grupo-${g.id}" class="rounded-card bg-white p-5 shadow-card sm:p-8">
+          <p class="text-[11px] font-semibold uppercase tracking-wide text-primary-600">Grupo</p>
+          <h2 class="mt-1 text-xl font-semibold text-gray-900">${g.titulo}</h2>
+          <div class="prosa mt-2 max-w-4xl">${g.descricao.map((p) => `<p>${p}</p>`).join('')}</div>
+          <div class="mt-4 grid grid-cols-1 gap-3 md:grid-cols-2">
+            <div class="rounded-lg bg-gray-50 px-4 py-3">
+              <p class="text-[11px] font-semibold uppercase tracking-wide text-gray-400">Tela exigida do dono da chave</p>
+              <p class="mt-1 text-[13px] text-gray-900">${g.tela}</p>
+            </div>
+            <div class="rounded-lg bg-gray-50 px-4 py-3">
+              <p class="text-[11px] font-semibold uppercase tracking-wide text-gray-400">Permissões de escrita</p>
+              ${(g.escopos || [])
+                .map(([codigo, nome, desc]) => `<p class="mt-1 text-[13px] text-gray-900">${nome} <code class="ic">${codigo}</code><span class="block text-[12px] text-gray-500">${esc(desc)}</span></p>`)
+                .join('') || '<p class="mt-1 text-[13px] text-gray-500">Nenhuma — só leitura.</p>'}
+            </div>
+          </div>
+        </section>`
+      : '';
+    return `<div class="space-y-6" data-bloco-grupo="${g.id}">${cabecalho}${doGrupo(g).map(secaoEndpoint).join('')}</div>`;
+  }).join('');
+  // Seções fixas de referência de um grupo (index.html, data-grupo) vão para o fim do bloco dele.
+  $$('main > section[data-grupo]').forEach((s) => $(`[data-bloco-grupo="${s.dataset.grupo}"]`)?.append(s));
 
   const token = ENDPOINTS.find((e) => e.id === 'auth-token');
   const certificados = ENDPOINTS.find((e) => e.id === 'certificados');
@@ -477,9 +521,17 @@ function montar() {
   $('#tabela-status').innerHTML = `<tbody>${STATUS_INTERNO.map(
     ([n, d]) => `<tr><td><code class="font-mono text-[12.5px] font-medium text-gray-900">${n}</code></td><td>${d}</td></tr>`
   ).join('')}</tbody>`;
-  $('#tabela-erros').innerHTML = `<thead><tr><th>HTTP</th><th>codigo</th><th>Quando</th></tr></thead><tbody>${ERROS.map(
-    ([s, c, d]) => `<tr><td>${chipStatus(s)}</td><td><code class="font-mono text-[12.5px] font-medium text-gray-900">${c}</code></td><td>${d}</td></tr>`
-  ).join('')}</tbody>`;
+  const tabelaErros = (titulo, lista) =>
+    lista.length
+      ? `<h3 class="mt-6 text-[13px] font-semibold text-gray-900">${titulo}</h3>
+        <div class="mt-2 overflow-x-auto"><table class="tabela"><thead><tr><th>HTTP</th><th>codigo</th><th>Quando</th></tr></thead><tbody>${lista
+          .map(([st, c, d]) => `<tr><td>${chipStatus(st)}</td><td><code class="font-mono text-[12.5px] font-medium text-gray-900">${c}</code></td><td>${d}</td></tr>`)
+          .join('')}</tbody></table></div>`
+      : '';
+  $('#tabelas-erros').innerHTML = [
+    tabelaErros('Gerais', ERROS.filter((e) => !e[3])),
+    ...GRUPOS.map((g) => tabelaErros(g.titulo, ERROS.filter((e) => e[3] === g.id))),
+  ].join('');
 
   atualizarAbasLinguagem();
 }

@@ -1,5 +1,6 @@
-// Endpoints da API Horizon v1 — fonte única dos exemplos, das tabelas e do "Testar" desta página.
-// Backend: backend/src/modules/api-horizon/v1/. Mudou lá (rota, parâmetro, campo, erro)? Mude aqui.
+// Grupos e endpoints da API Horizon v1 — fonte única dos exemplos, das tabelas, do menu e do
+// "Testar" desta página. Backend: backend/src/modules/api-horizon/v1/. Mudou lá (rota, parâmetro,
+// campo, erro)? Mude aqui. Grupo novo: entra em GRUPOS e seus endpoints em ENDPOINTS (campo grupo).
 
 const hoje = () => new Date().toLocaleDateString('sv-SE', { timeZone: 'America/Sao_Paulo' });
 const inicioDoMes = () => `${hoje().slice(0, 8)}01`;
@@ -40,9 +41,34 @@ const NOTA_INATIVADA = {
 
 const ERRO = (codigo, mensagem) => ({ error: { codigo, mensagem } });
 
+// Cada grupo exige do dono da chave a tela correspondente do sistema (tela) e pode ter permissões
+// de escrita próprias (escopos), marcadas na criação da chave.
+export const GRUPOS = [
+  {
+    id: 'autenticacao',
+    titulo: 'Autenticação',
+    descricao: ['Troca da chave de API pelo token usado em todos os outros endpoints.'],
+  },
+  {
+    id: 'notas-fiscais',
+    titulo: 'Notas fiscais',
+    descricao: [
+      'Certificados digitais e notas fiscais (NF-e e NFS-e) capturadas pelo Espião NF-e / NFS-e: situação fiscal, status de triagem, vínculo com o contas a pagar do Sienge e o XML original de cada nota.',
+      'Quem consulta a Receita e as prefeituras é o Horizon, no intervalo configurado para a empresa. A API lê o que já foi capturado.',
+    ],
+    tela: 'Espião NFe / NFSe',
+    escopos: [['notas:inativar', 'Inativar notas', 'Permite PATCH /notas-fiscais/{id}/inativar.']],
+    referencias: [
+      ['objeto-nota', 'Objeto Nota fiscal'],
+      ['consulta-incremental', 'Consulta incremental'],
+    ],
+  },
+];
+
 export const ENDPOINTS = [
   {
     id: 'auth-token',
+    grupo: 'autenticacao',
     metodo: 'POST',
     caminho: '/auth/token',
     titulo: 'Gerar token',
@@ -58,20 +84,21 @@ export const ENDPOINTS = [
       tipo: 'Bearer',
       expiraEm: '2026-10-28T10:15:00-03:00',
       expiraEmSegundos: 900,
-      escopos: ['leitura', 'inativar'],
+      escopos: ['leitura', 'notas:inativar'],
     },
     camposResposta: [
       ['token', 'texto', 'Token a enviar em <code class="ic">Authorization: Bearer</code>.'],
       ['tipo', 'texto', 'Sempre <code class="ic">Bearer</code>.'],
       ['expiraEm', 'data e hora', 'Quando o token deixa de valer.'],
       ['expiraEmSegundos', 'número', 'Validade em segundos (900).'],
-      ['escopos', 'lista', '<code class="ic">leitura</code> sempre; <code class="ic">inativar</code> se a chave permite inativar notas.'],
+      ['escopos', 'lista', '<code class="ic">leitura</code> sempre, mais as permissões de escrita marcadas na chave (ex.: <code class="ic">notas:inativar</code>).'],
     ],
     erros: ['CHAVE_AUSENTE', 'CHAVE_INVALIDA', 'CHAVE_EXPIRADA', 'CHAVE_REVOGADA', 'SEM_PERMISSAO', 'LIMITE_EXCEDIDO'],
     teste: { campos: [] },
   },
   {
     id: 'certificados',
+    grupo: 'notas-fiscais',
     metodo: 'GET',
     caminho: '/certificados',
     titulo: 'Listar certificados',
@@ -110,6 +137,7 @@ export const ENDPOINTS = [
   },
   {
     id: 'notas',
+    grupo: 'notas-fiscais',
     metodo: 'GET',
     caminho: '/notas-fiscais',
     titulo: 'Listar notas fiscais',
@@ -151,6 +179,7 @@ export const ENDPOINTS = [
   },
   {
     id: 'nota',
+    grupo: 'notas-fiscais',
     metodo: 'GET',
     caminho: '/notas-fiscais/{id}',
     titulo: 'Consultar uma nota',
@@ -165,6 +194,7 @@ export const ENDPOINTS = [
   },
   {
     id: 'xml',
+    grupo: 'notas-fiscais',
     metodo: 'GET',
     caminho: '/notas-fiscais/{id}/xml',
     titulo: 'Baixar o XML',
@@ -182,16 +212,17 @@ export const ENDPOINTS = [
   },
   {
     id: 'inativar',
+    grupo: 'notas-fiscais',
     metodo: 'PATCH',
     caminho: '/notas-fiscais/{id}/inativar',
     titulo: 'Inativar uma nota',
     resumo: 'Marca a nota como "não lançar", com motivo.',
     descricao: [
       'Mesma ação do botão <strong>Inativar</strong> da tela Espião NFe / NFSe: a nota sai das pendentes e passa a <code class="ic">statusInterno: "inativada"</code>, registrada no nome do dono da chave.',
-      'Exige uma chave com a permissão <strong>Inativar notas</strong> (escopo <code class="ic">inativar</code>). Reativar continua sendo feito na tela.',
+      'Exige uma chave com a permissão <strong>Inativar notas</strong> (escopo <code class="ic">notas:inativar</code>). Reativar continua sendo feito na tela.',
     ],
     autenticacao: 'token',
-    escopo: 'inativar',
+    escopo: 'notas:inativar',
     parametrosCaminho: [{ nome: 'id', tipo: 'número', obrigatorio: true, descricao: 'Id da nota.' }],
     corpo: [{ nome: 'motivo', tipo: 'texto', obrigatorio: true, descricao: 'Por que a nota não deve ser lançada. De 3 a 500 caracteres.' }],
     exemploCorpo: { motivo: 'Nota de boleto, não é lançada no Sienge.' },
@@ -208,10 +239,11 @@ export const ENDPOINTS = [
   },
 ];
 
+// [status, codigo, quando, grupo] — sem grupo = vale para qualquer endpoint.
 export const ERROS = [
   [400, 'PARAMETRO_INVALIDO', 'Parâmetro ausente, com formato errado ou fora do limite. A mensagem diz qual.'],
   [400, 'PARAMETRO_DESCONHECIDO', 'Parâmetro que a rota não aceita (geralmente nome digitado errado).'],
-  [400, 'CERTIFICADO_INVALIDO', 'Algum id de <code class="ic">certificadoIds</code> não é da empresa da chave.'],
+  [400, 'CERTIFICADO_INVALIDO', 'Algum id de <code class="ic">certificadoIds</code> não é da empresa da chave.', 'notas-fiscais'],
   [400, 'JSON_INVALIDO', 'Corpo da requisição não é um JSON válido.'],
   [401, 'CHAVE_AUSENTE', 'Faltou o cabeçalho <code class="ic">X-Api-Key</code>.'],
   [401, 'CHAVE_INVALIDA', 'Chave inexistente.'],
@@ -220,12 +252,12 @@ export const ERROS = [
   [401, 'TOKEN_AUSENTE', 'Faltou o cabeçalho <code class="ic">Authorization: Bearer</code>.'],
   [401, 'TOKEN_INVALIDO', 'Token inexistente ou de chave revogada.'],
   [401, 'TOKEN_EXPIRADO', 'O token passou dos 15 minutos. Gere outro.'],
-  [403, 'SEM_PERMISSAO', 'O dono da chave está inativo ou perdeu o acesso à tela Espião NFe / NFSe ou à empresa.'],
-  [403, 'ESCOPO_INSUFICIENTE', 'A chave é só de leitura e a rota exige o escopo <code class="ic">inativar</code>.'],
-  [404, 'NOTA_NAO_ENCONTRADA', 'Nota inexistente ou de outra empresa.'],
-  [404, 'XML_INDISPONIVEL', 'A nota existe, mas o arquivo XML não está disponível.'],
+  [403, 'SEM_PERMISSAO', 'O dono da chave está inativo, perdeu o acesso à empresa da chave ou não tem a tela exigida pelo grupo do endpoint.'],
+  [403, 'ESCOPO_INSUFICIENTE', 'A chave não tem a permissão de escrita que o endpoint exige.'],
+  [404, 'NOTA_NAO_ENCONTRADA', 'Nota inexistente ou de outra empresa.', 'notas-fiscais'],
+  [404, 'XML_INDISPONIVEL', 'A nota existe, mas o arquivo XML não está disponível.', 'notas-fiscais'],
   [404, 'ROTA_NAO_ENCONTRADA', 'Caminho ou método inexistente.'],
-  [409, 'NOTA_JA_INATIVADA', 'A nota já estava inativada.'],
+  [409, 'NOTA_JA_INATIVADA', 'A nota já estava inativada.', 'notas-fiscais'],
   [413, 'CORPO_MUITO_GRANDE', 'Corpo da requisição grande demais.'],
   [429, 'LIMITE_EXCEDIDO', 'Limite de requisições atingido. Espere os segundos do cabeçalho <code class="ic">Retry-After</code>.'],
   [500, 'ERRO_INTERNO', 'Falha do lado do Horizon. Tente de novo em instantes.'],

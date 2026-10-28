@@ -9,8 +9,8 @@ const {
 } = require('./comum');
 
 // Chaves da API Horizon (tela Integrações > API Horizon). Cada chave é de um usuário e de uma
-// empresa: a API age com as permissões desse usuário (precisa da tela Espião NFe/NFSe) e só
-// enxerga essa empresa. A chave aparece uma única vez, na criação.
+// empresa: a API age com as permissões desse usuário (cada grupo de endpoints exige a tela
+// correspondente) e só enxerga essa empresa. A chave aparece uma única vez, na criação.
 
 function erro(status, message) {
   const err = new Error(message);
@@ -60,7 +60,7 @@ async function buscar(id) {
 async function criar(user, { nome, empresaId, validadeDias, podeInativar }) {
   const { rows: usuarios } = await pool.query(SQL_USUARIO, [user.id]);
   if (!usuarioPodeUsarApi(usuarios[0], empresaId)) {
-    throw erro(403, 'Para gerar uma chave você precisa ter acesso à tela Espião NFe / NFSe e à empresa escolhida.');
+    throw erro(403, 'Você não tem acesso à empresa escolhida.');
   }
 
   const { rows: ativas } = await pool.query(

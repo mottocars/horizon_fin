@@ -4,16 +4,16 @@
     <meta charset="UTF-8" />
     <meta name="viewport" content="width=device-width, initial-scale=1.0" />
     <meta name="robots" content="noindex" />
-    <meta name="description" content="Documentação da API Horizon: certificados digitais e notas fiscais (NF-e e NFS-e) do Horizon Finanças." />
+    <meta name="description" content="Documentação da API Horizon: integre seus sistemas aos dados do Horizon Finanças." />
     <title>API Horizon — Documentação</title>
     <link rel="icon" type="image/svg+xml" href="/favicon.svg" />
     <link rel="stylesheet" href="/src/styles.css" />
   </head>
   <body>
     <!-- Barra do topo (mesma altura e estilo do sistema) -->
-    <header class="fixed inset-x-0 top-0 z-40 flex h-14 items-center justify-between border-b border-gray-100 bg-white/95 px-4 backdrop-blur sm:px-6">
-      <div class="flex items-center gap-3">
-        <button id="abrir-menu" type="button" class="-ml-1 rounded-lg p-1.5 text-gray-500 hover:bg-gray-50 lg:hidden" aria-label="Abrir menu">
+    <header class="fixed inset-x-0 top-0 z-40 flex h-14 items-center justify-between gap-3 border-b border-gray-100 bg-white/95 px-4 backdrop-blur sm:px-6">
+      <div class="flex min-w-0 items-center gap-3">
+        <button id="abrir-menu" type="button" class="-ml-1 rounded-lg p-1.5 text-gray-500 hover:bg-gray-50 lg:hidden" aria-label="Abrir menu" aria-controls="menu" aria-expanded="false">
           <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"><path d="M4 6h16M4 12h16M4 18h16" /></svg>
         </button>
         <a href="#introducao" class="flex items-center gap-3">
@@ -23,8 +23,8 @@
           <span class="rounded-full bg-primary-50 px-2 py-0.5 font-mono text-[11px] font-semibold text-primary-700">v1</span>
         </a>
       </div>
-      <div class="flex items-center gap-2">
-        <button id="status-chave" type="button" class="hidden items-center gap-2 rounded-lg border border-gray-200 px-3 py-1.5 text-[13px] text-gray-600 hover:bg-gray-50 sm:inline-flex">
+      <div class="flex shrink-0 items-center gap-2">
+        <button id="status-chave" type="button" class="hidden items-center gap-2 rounded-lg border border-gray-200 px-3 py-1.5 text-[13px] text-gray-600 hover:bg-gray-50 md:inline-flex">
           <span id="status-chave-ponto" class="h-2 w-2 rounded-full bg-gray-300"></span>
           <span id="status-chave-texto">Chave para testar</span>
         </button>
@@ -41,28 +41,26 @@
         <p class="px-2.5 pb-1 text-[11px] font-semibold uppercase tracking-wide text-gray-400">Começo</p>
         <a class="nav-link" href="#introducao">Introdução</a>
         <a class="nav-link" href="#inicio-rapido">Início rápido</a>
-        <a class="nav-link" href="#autenticacao">Autenticação</a>
+        <a class="nav-link" href="#autenticacao">Autenticação e permissões</a>
         <a class="nav-link" href="#testar">Testar nesta página</a>
-        <p class="mt-4 px-2.5 pb-1 text-[11px] font-semibold uppercase tracking-wide text-gray-400">Endpoints</p>
-        <div id="menu-endpoints"></div>
+        <!-- Um bloco por grupo de endpoints (montado por src/main.js) -->
+        <div id="menu-grupos"></div>
         <p class="mt-4 px-2.5 pb-1 text-[11px] font-semibold uppercase tracking-wide text-gray-400">Referência</p>
-        <a class="nav-link" href="#objeto-nota">Nota fiscal</a>
-        <a class="nav-link" href="#consulta-incremental">Consulta incremental</a>
         <a class="nav-link" href="#convencoes">Convenções</a>
         <a class="nav-link" href="#erros">Erros</a>
         <a class="nav-link" href="#limites">Limites</a>
         <a class="nav-link" href="#seguranca">Segurança</a>
       </nav>
 
-      <main class="mx-auto max-w-6xl space-y-6 px-4 py-6 sm:px-6 lg:py-8">
+      <main class="w-full space-y-6 px-4 py-6 sm:px-6 lg:px-8 lg:py-8 2xl:px-10">
         <!-- Introdução -->
-        <section id="introducao" class="rounded-card bg-white p-6 shadow-card sm:p-8">
+        <section id="introducao" class="rounded-card bg-white p-5 shadow-card sm:p-8">
           <p class="text-[12px] font-semibold uppercase tracking-wide text-primary-600">Horizon Finanças</p>
           <h1 class="mt-1 text-2xl font-semibold tracking-tight text-gray-900 sm:text-3xl">API Horizon</h1>
-          <div class="prosa mt-3 max-w-3xl">
-            <p>Consulte os certificados digitais e as notas fiscais (NF-e e NFS-e) que o Horizon captura na Receita e nas prefeituras, saiba quais já foram vinculadas ao contas a pagar e inative as que não devem ser lançadas.</p>
+          <div class="prosa mt-3 max-w-4xl">
+            <p>Integre seus sistemas aos dados do Horizon Finanças da sua empresa. Os endpoints são organizados em grupos; cada grupo corresponde a uma área do sistema e exige acesso à tela dela.</p>
           </div>
-          <dl class="mt-6 grid grid-cols-1 gap-3 sm:grid-cols-2 lg:grid-cols-4">
+          <dl class="mt-6 grid grid-cols-1 gap-3 sm:grid-cols-2 xl:grid-cols-4">
             <div class="rounded-lg bg-gray-50 px-4 py-3">
               <dt class="text-[11px] font-semibold uppercase tracking-wide text-gray-400">Endereço base</dt>
               <dd class="mt-1 break-all font-mono text-[13px] text-gray-900" data-url-base></dd>
@@ -80,49 +78,51 @@
               <dd class="mt-1 text-[13px] text-gray-900">Horário de Brasília (-03:00)</dd>
             </div>
           </dl>
+          <h2 class="mt-7 text-[13px] font-semibold text-gray-900">Grupos de endpoints</h2>
+          <div id="lista-grupos" class="mt-3 grid grid-cols-1 gap-3 md:grid-cols-2 2xl:grid-cols-3"></div>
         </section>
 
         <!-- Início rápido -->
-        <section id="inicio-rapido" class="rounded-card bg-white p-6 shadow-card sm:p-8">
+        <section id="inicio-rapido" class="rounded-card bg-white p-5 shadow-card sm:p-8">
           <h2 class="text-lg font-semibold text-gray-900">Início rápido</h2>
           <ol class="mt-5 space-y-6">
-            <li class="grid grid-cols-1 gap-4 lg:grid-cols-[minmax(0,1fr)_minmax(0,1.15fr)]">
+            <li class="grid grid-cols-1 gap-4 xl:grid-cols-[minmax(0,1fr)_minmax(0,1.2fr)]">
               <div class="flex gap-3">
                 <span class="flex h-7 w-7 shrink-0 items-center justify-center rounded-full bg-primary-600 text-[13px] font-semibold text-white">1</span>
                 <div class="prosa">
-                  <p><strong>Gere uma chave</strong> no Horizon Finanças, em <a data-app-link="/integracoes/api-horizon" target="_blank" rel="noreferrer">Integrações › API Horizon</a> › Nova chave. É preciso ter acesso à tela <strong>Espião NFe / NFSe</strong>.</p>
+                  <p><strong>Gere uma chave</strong> no Horizon Finanças, em <a data-app-link="/integracoes/api-horizon" target="_blank" rel="noreferrer">Integrações › API Horizon</a> › Nova chave.</p>
                   <p>A chave aparece uma vez só: guarde num cofre de senhas.</p>
                 </div>
               </div>
-              <div class="hidden lg:block"></div>
+              <div class="hidden xl:block"></div>
             </li>
-            <li class="grid grid-cols-1 gap-4 lg:grid-cols-[minmax(0,1fr)_minmax(0,1.15fr)]">
+            <li class="grid grid-cols-1 gap-4 xl:grid-cols-[minmax(0,1fr)_minmax(0,1.2fr)]">
               <div class="flex gap-3">
                 <span class="flex h-7 w-7 shrink-0 items-center justify-center rounded-full bg-primary-600 text-[13px] font-semibold text-white">2</span>
                 <div class="prosa"><p><strong>Troque a chave por um token</strong>. Ele vale 15 minutos.</p></div>
               </div>
-              <div data-exemplo="passo-token"></div>
+              <div data-exemplo="passo-token" class="min-w-0"></div>
             </li>
-            <li class="grid grid-cols-1 gap-4 lg:grid-cols-[minmax(0,1fr)_minmax(0,1.15fr)]">
+            <li class="grid grid-cols-1 gap-4 xl:grid-cols-[minmax(0,1fr)_minmax(0,1.2fr)]">
               <div class="flex gap-3">
                 <span class="flex h-7 w-7 shrink-0 items-center justify-center rounded-full bg-primary-600 text-[13px] font-semibold text-white">3</span>
-                <div class="prosa"><p><strong>Consulte</strong> com o token no cabeçalho <code class="ic">Authorization</code>. Comece pelos certificados e depois liste as notas deles.</p></div>
+                <div class="prosa"><p><strong>Chame os endpoints</strong> com o token no cabeçalho <code class="ic">Authorization</code>. Ao lado, um exemplo com o grupo Notas fiscais.</p></div>
               </div>
-              <div data-exemplo="passo-consulta"></div>
+              <div data-exemplo="passo-consulta" class="min-w-0"></div>
             </li>
           </ol>
         </section>
 
         <!-- Autenticação -->
-        <section id="autenticacao" class="rounded-card bg-white p-6 shadow-card sm:p-8">
-          <h2 class="text-lg font-semibold text-gray-900">Autenticação</h2>
+        <section id="autenticacao" class="rounded-card bg-white p-5 shadow-card sm:p-8">
+          <h2 class="text-lg font-semibold text-gray-900">Autenticação e permissões</h2>
           <div class="mt-4 grid grid-cols-1 gap-4 md:grid-cols-2">
             <div class="rounded-lg border border-gray-200 p-4">
               <p class="font-mono text-[12px] font-semibold text-gray-900">Chave de API <span class="font-normal text-gray-400">hzn_…</span></p>
               <ul class="prosa mt-1">
                 <li>Gerada em Integrações › API Horizon, com validade de 90 dias, 180 dias ou 1 ano.</li>
                 <li>Presa a <strong>um usuário</strong> (age com as permissões dele) e a <strong>uma empresa</strong> (só enxerga os dados dela).</li>
-                <li>Só de leitura, ou leitura + inativar notas.</li>
+                <li>Sempre lê; as permissões de escrita de cada grupo são marcadas na criação.</li>
                 <li>Enviada só em <code class="ic">POST /auth/token</code>, no cabeçalho <code class="ic">X-Api-Key</code>.</li>
               </ul>
             </div>
@@ -136,22 +136,22 @@
               </ul>
             </div>
           </div>
-          <div class="prosa mt-5">
-            <p><strong>Permissões conferidas a cada chamada.</strong> O dono da chave precisa estar ativo, com acesso à tela <strong>Espião NFe / NFSe</strong> e à empresa da chave. Se perder qualquer um, a API responde <code class="ic">403 SEM_PERMISSAO</code> na hora. Revogar a chave invalida também os tokens já gerados com ela.</p>
+          <div class="prosa mt-5 max-w-4xl">
+            <p><strong>Permissões conferidas a cada chamada.</strong> O dono da chave precisa estar ativo e com acesso à empresa da chave, e cada grupo de endpoints exige ainda a tela correspondente do sistema (indicada no grupo). Se faltar algo, a API responde <code class="ic">403 SEM_PERMISSAO</code> na hora. Revogar a chave invalida também os tokens já gerados com ela.</p>
           </div>
         </section>
 
         <!-- Testar -->
-        <section id="testar" class="rounded-card border border-primary-100 bg-white p-6 shadow-card sm:p-8">
-          <div class="flex flex-col gap-4 md:flex-row md:items-end md:justify-between">
-            <div class="max-w-xl">
+        <section id="testar" class="rounded-card border border-primary-100 bg-white p-5 shadow-card sm:p-8">
+          <div class="flex flex-col gap-4 lg:flex-row lg:items-end lg:justify-between">
+            <div class="max-w-2xl">
               <h2 class="text-lg font-semibold text-gray-900">Testar nesta página</h2>
               <div class="prosa mt-2">
                 <p>Cole sua chave e use o botão <strong>Executar</strong> de cada endpoint. A cada execução a página gera um token novo e faz a chamada com ele — os dados são reais.</p>
                 <p>A chave fica só na memória desta aba: não é gravada e some ao recarregar a página.</p>
               </div>
             </div>
-            <form id="form-chave" class="w-full md:max-w-md" autocomplete="off">
+            <form id="form-chave" class="w-full lg:max-w-md" autocomplete="off">
               <label for="campo-chave" class="mb-1 block text-sm font-medium text-gray-700">Chave de API</label>
               <div class="flex gap-2">
                 <input id="campo-chave" type="password" class="campo font-mono text-[13px]" placeholder="hzn_…" spellcheck="false" autocomplete="off" />
@@ -162,23 +162,26 @@
           </div>
         </section>
 
-        <!-- Endpoints (montados por src/main.js a partir de src/endpoints.js) -->
-        <div id="endpoints" class="space-y-6"></div>
+        <!-- Grupos e endpoints (montados por src/main.js a partir de src/endpoints.js). As seções
+             com data-grupo abaixo são levadas para o fim do grupo delas. -->
+        <div id="grupos" class="space-y-6"></div>
 
-        <!-- Nota fiscal -->
-        <section id="objeto-nota" class="rounded-card bg-white p-6 shadow-card sm:p-8">
-          <h2 class="text-lg font-semibold text-gray-900">Nota fiscal</h2>
-          <p class="prosa mt-2"><span class="text-[14px] text-gray-600">Objeto devolvido pela listagem, pela consulta de uma nota e pela inativação.</span></p>
+        <!-- Notas fiscais: objeto -->
+        <section id="objeto-nota" data-grupo="notas-fiscais" class="rounded-card bg-white p-5 shadow-card sm:p-8">
+          <p class="text-[11px] font-semibold uppercase tracking-wide text-primary-600">Notas fiscais</p>
+          <h2 class="mt-1 text-lg font-semibold text-gray-900">Objeto Nota fiscal</h2>
+          <p class="prosa mt-2"><span class="text-[14px] text-gray-600">Devolvido pela listagem, pela consulta de uma nota e pela inativação.</span></p>
           <div class="mt-4 overflow-x-auto"><table class="tabela" id="tabela-nota"></table></div>
           <h3 class="mt-6 text-[15px] font-semibold text-gray-900">statusInterno</h3>
           <p class="prosa mt-1"><span class="text-[14px] text-gray-600">Mesmas abas do Acervo NF-e / NFS-e. Quando mais de um vale, prevalece nesta ordem: inativada, cancelada, vinculada, pendente.</span></p>
           <div class="mt-3 overflow-x-auto"><table class="tabela" id="tabela-status"></table></div>
         </section>
 
-        <!-- Consulta incremental -->
-        <section id="consulta-incremental" class="rounded-card bg-white p-6 shadow-card sm:p-8">
-          <h2 class="text-lg font-semibold text-gray-900">Consulta incremental</h2>
-          <div class="mt-4 grid grid-cols-1 gap-5 lg:grid-cols-[minmax(0,1fr)_minmax(0,1.15fr)]">
+        <!-- Notas fiscais: consulta incremental -->
+        <section id="consulta-incremental" data-grupo="notas-fiscais" class="rounded-card bg-white p-5 shadow-card sm:p-8">
+          <p class="text-[11px] font-semibold uppercase tracking-wide text-primary-600">Notas fiscais</p>
+          <h2 class="mt-1 text-lg font-semibold text-gray-900">Consulta incremental</h2>
+          <div class="mt-4 grid grid-cols-1 gap-5 xl:grid-cols-[minmax(0,1fr)_minmax(0,1.2fr)]">
             <div class="prosa">
               <p>Para não baixar tudo a cada rodada, guarde o momento em que a consulta começou e envie esse valor em <code class="ic">atualizadoDesde</code> na próxima.</p>
               <p><code class="ic">dataAtualizacao</code> muda quando a nota:</p>
@@ -190,63 +193,63 @@
               </ul>
               <p>Mantenha o período de emissão cobrindo as notas que você acompanha (até 366 dias).</p>
             </div>
-            <div data-exemplo="incremental"></div>
+            <div data-exemplo="incremental" class="min-w-0"></div>
           </div>
         </section>
 
         <!-- Convenções -->
-        <section id="convencoes" class="rounded-card bg-white p-6 shadow-card sm:p-8">
+        <section id="convencoes" class="rounded-card bg-white p-5 shadow-card sm:p-8">
           <h2 class="text-lg font-semibold text-gray-900">Convenções</h2>
           <div class="mt-4 overflow-x-auto">
             <table class="tabela">
               <tbody>
                 <tr><td class="font-medium text-gray-900">Data</td><td><code class="ic">AAAA-MM-DD</code></td></tr>
-                <tr><td class="font-medium text-gray-900">Data e hora</td><td>ISO 8601 em horário de Brasília, com o deslocamento: <code class="ic">2026-10-28T09:15:42-03:00</code>. Em <code class="ic">atualizadoDesde</code> o fuso é obrigatório (aceita <code class="ic">Z</code>).</td></tr>
+                <tr><td class="font-medium text-gray-900">Data e hora</td><td>ISO 8601 em horário de Brasília, com o deslocamento: <code class="ic">2026-10-28T09:15:42-03:00</code>. Em parâmetros de data e hora o fuso é obrigatório (aceita <code class="ic">Z</code>).</td></tr>
                 <tr><td class="font-medium text-gray-900">Valores</td><td>Número decimal em reais, com ponto: <code class="ic">379.34</code>.</td></tr>
                 <tr><td class="font-medium text-gray-900">CNPJ</td><td>Só dígitos, 14 caracteres (CPF: 11).</td></tr>
                 <tr><td class="font-medium text-gray-900">Listas na URL</td><td>Separadas por vírgula (<code class="ic">status=pendente,vinculada</code>) ou repetindo o parâmetro.</td></tr>
-                <tr><td class="font-medium text-gray-900">Paginação</td><td><code class="ic">page</code> e <code class="ic">pageSize</code> (padrão 100, máximo 500). A resposta traz <code class="ic">total</code> e <code class="ic">totalPages</code>.</td></tr>
+                <tr><td class="font-medium text-gray-900">Paginação</td><td><code class="ic">page</code> e <code class="ic">pageSize</code> (padrão 100, máximo 500). A resposta traz <code class="ic">items</code> e <code class="ic">pagination</code> com <code class="ic">total</code> e <code class="ic">totalPages</code>.</td></tr>
                 <tr><td class="font-medium text-gray-900">Parâmetros</td><td>Nome desconhecido é recusado (<code class="ic">400 PARAMETRO_DESCONHECIDO</code>), para um erro de digitação não virar filtro ignorado.</td></tr>
-                <tr><td class="font-medium text-gray-900">Captura</td><td>Quem consulta a Receita e as prefeituras é o Horizon, no intervalo configurado para a empresa. A API só lê o que já foi capturado.</td></tr>
+                <tr><td class="font-medium text-gray-900">Versão</td><td>Tudo sob <code class="ic">/v1</code>. Campos novos podem ser acrescentados nas respostas sem aviso; mudanças incompatíveis só numa versão nova.</td></tr>
               </tbody>
             </table>
           </div>
         </section>
 
         <!-- Erros -->
-        <section id="erros" class="rounded-card bg-white p-6 shadow-card sm:p-8">
+        <section id="erros" class="rounded-card bg-white p-5 shadow-card sm:p-8">
           <h2 class="text-lg font-semibold text-gray-900">Erros</h2>
-          <div class="mt-4 grid grid-cols-1 gap-5 lg:grid-cols-[minmax(0,1fr)_minmax(0,1.15fr)]">
+          <div class="mt-4 grid grid-cols-1 gap-5 xl:grid-cols-[minmax(0,1fr)_minmax(0,1.2fr)]">
             <p class="prosa"><span class="text-[14px] leading-6 text-gray-600">Todo erro vem com o status HTTP e um corpo no mesmo formato. Trate pelo <code class="ic">codigo</code>; a <code class="ic">mensagem</code> é para pessoas e pode mudar.</span></p>
-            <div data-exemplo="erro"></div>
+            <div data-exemplo="erro" class="min-w-0"></div>
           </div>
-          <div class="mt-5 overflow-x-auto"><table class="tabela" id="tabela-erros"></table></div>
+          <div id="tabelas-erros"></div>
         </section>
 
         <!-- Limites -->
-        <section id="limites" class="rounded-card bg-white p-6 shadow-card sm:p-8">
+        <section id="limites" class="rounded-card bg-white p-5 shadow-card sm:p-8">
           <h2 class="text-lg font-semibold text-gray-900">Limites</h2>
           <div class="mt-4 overflow-x-auto">
             <table class="tabela">
               <thead><tr><th>O quê</th><th>Limite</th></tr></thead>
               <tbody>
-                <tr><td class="font-medium text-gray-900">Consultas, XML e inativação</td><td>60 por minuto, por chave</td></tr>
+                <tr><td class="font-medium text-gray-900">Endpoints com token</td><td>60 por minuto, por chave</td></tr>
                 <tr><td class="font-medium text-gray-900">Geração de token</td><td>30 por minuto, por endereço IP</td></tr>
                 <tr><td class="font-medium text-gray-900">Total</td><td>120 por minuto, por endereço IP</td></tr>
               </tbody>
             </table>
           </div>
-          <div class="prosa mt-4">
+          <div class="prosa mt-4 max-w-4xl">
             <p>Passou do limite: <code class="ic">429 LIMITE_EXCEDIDO</code> com o cabeçalho <code class="ic">Retry-After</code> (segundos até liberar). Toda resposta traz <code class="ic">RateLimit</code> e <code class="ic">RateLimit-Policy</code> com o saldo restante.</p>
           </div>
         </section>
 
         <!-- Segurança -->
-        <section id="seguranca" class="rounded-card bg-white p-6 shadow-card sm:p-8">
+        <section id="seguranca" class="rounded-card bg-white p-5 shadow-card sm:p-8">
           <h2 class="text-lg font-semibold text-gray-900">Segurança</h2>
-          <ul class="prosa mt-2">
+          <ul class="prosa mt-2 max-w-4xl">
             <li>Guarde a chave num cofre de senhas ou variável de ambiente do servidor. Nunca em código-fonte, repositório, aplicativo ou página web.</li>
-            <li>Use uma chave por sistema, só com a permissão necessária. Inativar notas só quando o fluxo exigir.</li>
+            <li>Use uma chave por sistema, só com as permissões necessárias.</li>
             <li>A chave só trafega em <code class="ic">POST /auth/token</code>; nas demais chamadas vai só o token, que expira em 15 minutos.</li>
             <li>Sempre HTTPS. O Horizon guarda apenas o hash da chave e do token.</li>
             <li>Vazou? Revogue em Integrações › API Horizon: a chave e todos os tokens dela param na hora.</li>

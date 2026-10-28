@@ -1,5 +1,5 @@
--- API Horizon (api.horizonhub.com.br): API pública das notas fiscais do Espião NF-e/NFS-e para
--- integrações de terceiros (ex.: Gerando Impulso, notas da Tostes). Ver backend/src/modules/api-horizon/.
+-- API Horizon (api.horizonhub.com.br): API pública para integrações de terceiros, organizada em
+-- grupos de endpoints (o primeiro: notas fiscais do Espião NF-e/NFS-e). Ver backend/src/modules/api-horizon/.
 --
 -- Fluxo: o usuário gera uma CHAVE em Integrações > API Horizon (presa a ele e a uma empresa);
 -- a integração troca a chave por um TOKEN temporário (POST /v1/auth/token) e usa o token como

@@ -12,7 +12,7 @@ function badRequest(message) {
 const idSchema = z.coerce.number().int().positive();
 
 const criarSchema = z.object({
-  nome: z.string().trim().min(3, 'Dê um nome para a chave (ex.: "Integração GI").').max(100, 'Nome muito longo.'),
+  nome: z.string().trim().min(3, 'Dê um nome para a chave (ex.: "Integração ERP").').max(100, 'Nome muito longo.'),
   empresaId: z.coerce.number().int().positive('Escolha a empresa.'),
   validadeDias: z.coerce
     .number()

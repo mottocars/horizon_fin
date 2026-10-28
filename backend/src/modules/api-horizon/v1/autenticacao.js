@@ -7,6 +7,7 @@ const {
   gerarSegredo,
   hashSegredo,
   usuarioPodeUsarApi,
+  usuarioTemTela,
   SQL_USUARIO,
 } = require('../comum');
 
@@ -15,15 +16,12 @@ const {
 //      → token temporário (15 min);
 //   2. demais rotas com Authorization: Bearer <token>.
 // O token é opaco (não é o JWT do sistema): não abre nenhuma outra rota do Horizon. A cada
-// chamada confere de novo a chave (revogada/vencida) e o dono (ativo, com a tela Espião NFe /
-// NFSe e com a empresa da chave) — tirar a tela do usuário corta a API na hora.
+// chamada confere de novo a chave (revogada/vencida) e o dono (ativo e com a empresa da chave);
+// cada grupo de endpoints confere ainda a tela do sistema dele (exigirTelaApi) — tirar a tela
+// do usuário corta aquele grupo na hora.
 
 function semPermissao() {
-  return new ErroApi(
-    403,
-    'SEM_PERMISSAO',
-    'O usuário dono da chave não tem mais acesso à tela Espião NFe / NFSe ou à empresa da chave.'
-  );
+  return new ErroApi(403, 'SEM_PERMISSAO', 'O usuário dono da chave está inativo ou não tem mais acesso à empresa da chave.');
 }
 
 function conferirChave(chave) {
@@ -85,7 +83,7 @@ async function emitirToken(req, res, next) {
       tipo: 'Bearer',
       expiraEm: emitido[0].expira_em,
       expiraEmSegundos: TOKEN_MINUTOS * 60,
-      escopos: chave.pode_inativar ? ['leitura', 'inativar'] : ['leitura'],
+      escopos: chave.pode_inativar ? ['leitura', 'notas:inativar'] : ['leitura'],
     });
   } catch (err) {
     next(err);
@@ -121,6 +119,7 @@ async function exigirToken(req, res, next) {
       usuarioId: dono.id,
       empresaId: linha.empresa_id,
       podeInativar: linha.pode_inativar,
+      dono,
     };
     pool
       .query(
@@ -134,11 +133,21 @@ async function exigirToken(req, res, next) {
   }
 }
 
+// Tela do sistema exigida por um grupo de endpoints (ex.: Notas fiscais → Espião NFe / NFSe).
+function exigirTelaApi(tela, nomeTela) {
+  return (req, res, next) => {
+    if (usuarioTemTela(req.apiHorizon?.dono, tela)) return next();
+    return next(
+      new ErroApi(403, 'SEM_PERMISSAO', `O usuário dono da chave não tem acesso à tela ${nomeTela}, exigida por este endpoint.`)
+    );
+  };
+}
+
 function exigirEscopoInativar(req, res, next) {
   if (req.apiHorizon?.podeInativar) return next();
   return next(
-    new ErroApi(403, 'ESCOPO_INSUFICIENTE', 'Esta chave é só de leitura. Gere uma chave com a permissão "Inativar notas".')
+    new ErroApi(403, 'ESCOPO_INSUFICIENTE', 'Esta chave não tem a permissão "Inativar notas" (escopo notas:inativar).')
   );
 }
 
-module.exports = { emitirToken, exigirToken, exigirEscopoInativar };
+module.exports = { emitirToken, exigirToken, exigirTelaApi, exigirEscopoInativar };

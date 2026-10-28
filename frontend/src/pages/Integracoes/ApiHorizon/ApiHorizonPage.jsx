@@ -17,13 +17,12 @@ import { useConfirm } from '../../../confirm/ConfirmContext';
 import { useAuth } from '../../../auth/AuthContext';
 
 // Chaves da API Horizon (api.horizonhub.com.br): um sistema externo troca a chave por um token
-// temporário e consulta certificados e notas do Espião NF-e / NFS-e. A chave age com as
-// permissões de quem a gerou (precisa da tela Espião NFe / NFSe) e só enxerga a empresa escolhida.
+// temporário e chama os endpoints da API. A chave age com as permissões de quem a gerou (cada
+// grupo de endpoints exige a tela correspondente do sistema) e só enxerga a empresa escolhida.
 // O backend guarda só o hash — a chave aparece uma única vez, logo depois de gerada.
 
 const DOCS_URL =
   import.meta.env.VITE_API_DOCS_URL || (import.meta.env.DEV ? 'http://localhost:5182' : 'https://api.horizonhub.com.br');
-const TELA_ESPIAO = '/operacoes/espiao-nfe-nfse';
 
 const VALIDADES = [
   { value: 90, label: '90 dias' },
@@ -76,7 +75,7 @@ function NovaChaveModal({ open, onClose, onCriada }) {
 
   async function gerar(e) {
     e.preventDefault();
-    if (form.nome.trim().length < 3) return setErro('Dê um nome para a chave (ex.: "Integração GI").');
+    if (form.nome.trim().length < 3) return setErro('Dê um nome para a chave (ex.: "Integração ERP").');
     if (!form.empresaId) return setErro('Escolha a empresa.');
     setSalvando(true);
     setErro('');
@@ -165,7 +164,7 @@ function NovaChaveModal({ open, onClose, onCriada }) {
             value={form.nome}
             maxLength={100}
             onChange={(e) => setForm((f) => ({ ...f, nome: e.target.value }))}
-            placeholder="ex.: Integração Gerando Impulso"
+            placeholder="ex.: Integração ERP"
             className={inputClasse}
           />
           <p className="mt-1 text-xs text-gray-400">Quem vai usar esta chave — aparece na lista e no registro de chamadas.</p>
@@ -196,21 +195,31 @@ function NovaChaveModal({ open, onClose, onCriada }) {
             </select>
           </div>
         </div>
-        <label className="flex cursor-pointer items-start gap-3 rounded-lg border border-gray-200 p-4">
-          <input
-            type="checkbox"
-            checked={form.podeInativar}
-            onChange={(e) => setForm((f) => ({ ...f, podeInativar: e.target.checked }))}
-            className="mt-0.5 h-4 w-4 rounded border-gray-300 text-primary-600 focus:ring-primary-500"
-          />
-          <span>
-            <span className="block text-sm font-semibold text-gray-900">Permitir inativar notas</span>
-            <span className="block text-xs text-gray-500">
-              Sem isso a chave só lê. Com isso, o sistema externo também marca notas como &quot;não lançar&quot;, com
-              motivo — registrado no seu nome, como se você tivesse clicado em Inativar.
+        <div className="rounded-lg border border-gray-200 p-4">
+          <p className="text-sm font-semibold text-gray-900">Permissões</p>
+          <p className="mt-0.5 text-xs text-gray-500">
+            A chave sempre lê. Cada grupo da API exige que você tenha a tela correspondente no sistema; marque abaixo só
+            as ações de escrita que o sistema externo precisa.
+          </p>
+          <p className="mt-3 text-[11px] font-semibold uppercase tracking-wide text-gray-400">
+            Notas fiscais · exige a tela Espião NFe / NFSe
+          </p>
+          <label className="mt-1.5 flex cursor-pointer items-start gap-3">
+            <input
+              type="checkbox"
+              checked={form.podeInativar}
+              onChange={(e) => setForm((f) => ({ ...f, podeInativar: e.target.checked }))}
+              className="mt-0.5 h-4 w-4 rounded border-gray-300 text-primary-600 focus:ring-primary-500"
+            />
+            <span>
+              <span className="block text-sm font-medium text-gray-900">Inativar notas</span>
+              <span className="block text-xs text-gray-500">
+                Marca notas como &quot;não lançar&quot;, com motivo — registrado no seu nome, como se você tivesse
+                clicado em Inativar.
+              </span>
             </span>
-          </span>
-        </label>
+          </label>
+        </div>
         <div className="flex justify-end gap-2">
           <Button variant="secondary" onClick={onClose}>
             Cancelar
@@ -296,7 +305,6 @@ export default function ApiHorizonPage() {
   const [revogandoId, setRevogandoId] = useState(null);
 
   const master = user?.permissao === 'MASTER';
-  const temEspiao = master || (user?.telas_permitidas || []).includes(TELA_ESPIAO);
 
   const carregar = useCallback(async () => {
     try {
@@ -338,8 +346,8 @@ export default function ApiHorizonPage() {
       <Card>
         <div className="mb-4 flex flex-col gap-3 sm:flex-row sm:items-start sm:justify-between">
           <p className="max-w-3xl text-sm text-gray-500">
-            Chaves para sistemas externos consultarem, pela API Horizon, os certificados digitais e as notas fiscais do
-            Espião NF-e / NFS-e. Cada chave age com as suas permissões e só enxerga a empresa escolhida.
+            Chaves para sistemas externos acessarem a API Horizon. Cada chave age com as suas permissões — cada grupo
+            de endpoints exige a tela correspondente do sistema — e só enxerga a empresa escolhida.
           </p>
           <div className="flex shrink-0 gap-2">
             <a
@@ -351,19 +359,13 @@ export default function ApiHorizonPage() {
               <ExternalLink size={16} />
               Documentação
             </a>
-            <Button onClick={() => setNovaAberta(true)} disabled={!temEspiao}>
+            <Button onClick={() => setNovaAberta(true)}>
               <Plus size={16} />
               Nova chave
             </Button>
           </div>
         </div>
 
-        {!temEspiao && (
-          <div className="mb-4 flex items-start gap-2 rounded-lg bg-amber-50 px-3 py-2 text-sm text-amber-800">
-            <TriangleAlert size={16} className="mt-0.5 shrink-0" />
-            A API Horizon serve os dados do Espião NFe / NFSe. Para gerar uma chave, peça acesso a essa tela.
-          </div>
-        )}
         {erro && <div className="mb-4 rounded-lg bg-red-50 px-3 py-2 text-sm text-red-600">{erro}</div>}
 
         {carregando ? (
@@ -401,7 +403,7 @@ export default function ApiHorizonPage() {
                       <td className="py-3 pr-3">
                         <span className="inline-flex items-center gap-1 rounded-full bg-primary-50 px-2 py-0.5 text-[11px] font-semibold text-primary-700">
                           <ShieldCheck size={12} />
-                          {item.pode_inativar ? 'Leitura + inativar' : 'Leitura'}
+                          {item.pode_inativar ? 'Leitura + inativar notas' : 'Leitura'}
                         </span>
                       </td>
                       <td className="py-3 pr-3 text-gray-500">{formatarData(item.expira_em)}</td>
