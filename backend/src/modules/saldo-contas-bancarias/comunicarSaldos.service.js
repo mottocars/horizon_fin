@@ -10,10 +10,6 @@ function brData(iso) {
   return iso.split('-').reverse().join('/');
 }
 
-function formatarMoeda(valor) {
-  return Number(valor || 0).toLocaleString('pt-BR', { minimumFractionDigits: 2, maximumFractionDigits: 2 });
-}
-
 // Domingo->sábado da semana que contém `iso` — mesmo critério de constantes.js::domingoDaSemana/
 // semanaDe no frontend (a grade sempre trava numa semana só), portado com aritmética de Date
 // local pura (sem parsing UTC, sem risco de fuso).
@@ -32,7 +28,8 @@ function semanaDe(iso) {
 // lugar do antigo resumo por classificação (pedido do usuário; o detalhe segue na planilha).
 function montarMensagem({ nomeDestinatario, dataBR, resumo, mensagemAdministrador }) {
   const primeiroNome = String(nomeDestinatario || '').trim().split(/\s+/)[0];
-  const valor = (v) => `R$ ${formatarMoeda(v)}`;
+  // Sem centavos no WhatsApp (pedido do usuário) — o valor exato está na planilha anexa.
+  const valor = (v) => `R$ ${Math.round(Number(v || 0)).toLocaleString('pt-BR')}`;
   return [
     '*[ SALDO DAS CONTAS ]*',
     `_Posição de ${dataBR}_`,
@@ -40,8 +37,8 @@ function montarMensagem({ nomeDestinatario, dataBR, resumo, mensagemAdministrado
     `Olá${primeiroNome ? `, ${primeiroNome}` : ''}! Segue o resumo dos saldos das contas bancárias.`,
     '',
     '*Resumo dos saldos:*',
-    `🔓 Total liberado: *${valor(resumo.liberado)}*`,
-    `🔒 Total bloqueado: ${valor(resumo.bloqueado)}`,
+    `🔓 Liberado: *${valor(resumo.liberado)}*`,
+    `🔒 Bloqueado: ${valor(resumo.bloqueado)}`,
     `💳 Limite cheque: ${valor(resumo.limiteCheque)}`,
     `⚠️ Saldo a cobrir: ${valor(resumo.aCobrir)}`,
     ...(mensagemAdministrador ? ['', '💬 *Mensagem do administrador:*', mensagemAdministrador] : []),

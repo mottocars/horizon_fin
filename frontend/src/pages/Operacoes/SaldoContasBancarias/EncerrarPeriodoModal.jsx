@@ -2,6 +2,7 @@ import { useEffect, useState } from 'react';
 import { Lock, Loader2, CheckCircle2, AlertTriangle, HelpCircle, Users, Clock, ListChecks } from 'lucide-react';
 import Modal from '../../../components/Modal';
 import Button from '../../../components/Button';
+import EditorMensagemWhatsApp from '../../../components/EditorMensagemWhatsApp';
 import { getComunicarSaldos, encerrarPeriodoSaldos, getRotinasStatus } from '../../../api/saldoContasBancarias.api';
 import { formatarDataBR } from './constantes';
 
@@ -63,7 +64,12 @@ export default function EncerrarPeriodoModal({ open, onClose, empresaId, dataAbe
   }
 
   return (
-    <Modal open={open} onClose={etapa === 'enviando' ? () => {} : onClose} title="Encerrar período">
+    <Modal
+      open={open}
+      onClose={etapa === 'enviando' ? () => {} : onClose}
+      title="Encerrar período"
+      maxWidthClass={!carregandoDestinatarios && nomesDestinatarios.length > 0 ? 'max-w-lg' : 'max-w-md'}
+    >
       {etapa === 'confirmar' && (
         <div className="space-y-4">
           <p className="text-sm text-gray-500">
@@ -97,15 +103,7 @@ export default function EncerrarPeriodoModal({ open, onClose, empresaId, dataAbe
               <label htmlFor="mensagem-encerramento" className="mb-1 block text-sm font-medium text-gray-700">
                 Mensagem do administrador <span className="font-normal text-gray-400">(opcional — vai no WhatsApp)</span>
               </label>
-              <textarea
-                id="mensagem-encerramento"
-                rows={3}
-                maxLength={1000}
-                value={mensagem}
-                onChange={(e) => setMensagem(e.target.value)}
-                placeholder="Ex.: atenção ao saldo a cobrir da conta da obra X, cobertura prevista para amanhã"
-                className="w-full resize-none rounded-lg border border-gray-200 px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-primary-100"
-              />
+              <EditorMensagemWhatsApp id="mensagem-encerramento" value={mensagem} onChange={setMensagem} />
               <p className="mt-1 text-xs text-gray-400">
                 O WhatsApp leva o resumo dos saldos (liberado, bloqueado, limite cheque e saldo a cobrir) e esta mensagem logo abaixo.
               </p>
