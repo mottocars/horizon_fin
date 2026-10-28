@@ -8,6 +8,7 @@ import { listEmpresas } from '../../../api/empresas.api';
 import { nomeExibicaoEmpresa } from '../../../utils/empresa';
 import { useEmpresaTravada } from '../../../hooks/useEmpresaTravada';
 import FluxoCaixaPainel from './fluxo/FluxoCaixaPainel';
+import AgingPainel from './aging/AgingPainel';
 
 // Dashboards > Econômico Financeiro — a tela inteira é do dashboard (só o menu lateral fica, ver
 // AppShell.jsx): cabeçalho (nome do dashboard, título da tela e o contexto dos dados) e o conteúdo
@@ -15,8 +16,8 @@ import FluxoCaixaPainel from './fluxo/FluxoCaixaPainel';
 // Tela aberta: a da URL (?tela=); sem ela, a favorita do usuário (estrela, gravada no servidor);
 // sem favorita, a primeira da lista (pedido do usuário).
 // Fluxo de Caixa: painel no layout do painel do CFO (fluxo/FluxoCaixaPainel.jsx), com os filtros na
-// barra de controles dele. A empresa fica na URL (?empresa_id=), como nas outras telas. As demais
-// telas ainda serão construídas.
+// barra de controles dele. Aging List: no mesmo layout (aging/AgingPainel.jsx). A empresa fica na URL
+// (?empresa_id=), como nas outras telas. As demais telas ainda serão construídas.
 const DASHBOARD = 'economico-financeiro';
 const TELAS = [
   { id: 'dre', label: 'Demonstração do Resultado', icon: BarChart3 },
@@ -86,6 +87,17 @@ export default function EconomicoFinanceiroPage() {
     <div className="flex min-h-full w-full flex-col gap-3 p-5">
       {telaAtiva === 'fluxo-caixa' ? (
         <FluxoCaixaPainel
+          dashboard="Econômico Financeiro"
+          tituloTela={tela.label}
+          empresaId={empresaId}
+          onEmpresa={(v) => atualizarParams({ empresa_id: v })}
+          opcoesEmpresas={opcoesEmpresas}
+          empresaTravada={empresaTravada}
+          carregandoEmpresas={carregandoEmpresas}
+          marcaEmpresa={marcaEmpresa}
+        />
+      ) : telaAtiva === 'aging' ? (
+        <AgingPainel
           dashboard="Econômico Financeiro"
           tituloTela={tela.label}
           empresaId={empresaId}

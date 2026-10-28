@@ -1,0 +1,618 @@
+/* Aging List (dashboard Econômico Financeiro) — complementa o painel.css do Fluxo de Caixa (mesmos
+   tokens e peças: barra, tiles, panel, kv, sim, tab), só dentro de .painel-cfo.aging. */
+.painel-cfo.aging {
+  --venc: var(--s-out);
+  --hoje: var(--warn);
+  --avencer: var(--s-in);
+}
+
+/* Barra: situação da base */
+.painel-cfo.aging .controls .base {
+  font-size: 12px;
+  color: var(--muted);
+  line-height: 1.35;
+  align-self: center;
+}
+.painel-cfo.aging .controls .base b {
+  color: var(--ink-2);
+  font-weight: 600;
+}
+
+/* Tiles: linha de cima a receber, de baixo a pagar — filete colorido à esquerda */
+.painel-cfo.aging .tile.lado-r {
+  box-shadow: inset 3px 0 0 var(--s-in);
+}
+.painel-cfo.aging .tile.lado-p {
+  box-shadow: inset 3px 0 0 var(--s-out);
+}
+.painel-cfo.aging .tile.lado-c {
+  box-shadow: inset 3px 0 0 var(--ink);
+}
+
+/* Escada de vencimentos */
+.painel-cfo .esc {
+  display: flex;
+  flex-direction: column;
+  font-size: 13px;
+}
+.painel-cfo .esc-cab,
+.painel-cfo .esc-l,
+.painel-cfo .esc-sep {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) 92px minmax(0, 1fr) 118px 132px;
+  align-items: center;
+  column-gap: 10px;
+}
+.painel-cfo .esc-cab {
+  font-family: var(--f-display);
+  font-stretch: 110%;
+  font-weight: 700;
+  font-size: 11px;
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
+  color: var(--muted);
+  padding: 0 8px 6px;
+  border-bottom: 1.5px solid var(--ink);
+}
+.painel-cfo .esc-cab > :first-child {
+  text-align: right;
+}
+.painel-cfo .esc-cab > :nth-child(2) {
+  text-align: center;
+}
+.painel-cfo .esc-cab .n {
+  text-align: right;
+}
+.painel-cfo .esc-sep {
+  padding: 8px 8px 3px;
+  font: 700 10.5px var(--f-display);
+  letter-spacing: 0.12em;
+  text-transform: uppercase;
+}
+.painel-cfo .esc-sep span {
+  grid-column: 1 / -1;
+}
+.painel-cfo .esc-sep.v {
+  color: var(--crit-ink);
+}
+.painel-cfo .esc-sep.a {
+  color: var(--accent);
+}
+.painel-cfo .esc-l {
+  width: 100%;
+  border: 0;
+  border-bottom: 1px solid var(--grid);
+  background: transparent;
+  padding: 4px 8px;
+  cursor: pointer;
+  text-align: left;
+  color: var(--ink);
+  font: inherit;
+}
+.painel-cfo .esc-l:hover {
+  background: var(--surface-2);
+}
+.painel-cfo .esc-l.sel {
+  background: var(--accent-soft);
+  box-shadow: inset 3px 0 0 var(--accent);
+}
+.painel-cfo .esc-l .lado {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  min-width: 0;
+  height: 22px;
+}
+.painel-cfo .esc-l .lado.p {
+  justify-content: flex-end;
+}
+.painel-cfo .esc-l .lado i {
+  display: block;
+  height: 14px;
+  border-radius: 2px;
+  min-width: 0;
+  flex-shrink: 1;
+}
+.painel-cfo .esc-l .lado.p i {
+  background: var(--s-out);
+}
+.painel-cfo .esc-l .lado.r i {
+  background: var(--s-in);
+}
+.painel-cfo .esc-l.g-v .lado i {
+  opacity: 0.72;
+}
+/* Barra maior que a escala: ponta cortada em zigue-zague */
+.painel-cfo .esc-l .lado.r i.corte {
+  -webkit-mask: linear-gradient(-45deg, transparent 4px, #000 0) right / 8px 51% repeat-y, linear-gradient(#000, #000) left / calc(100% - 8px) 100% no-repeat;
+  mask: linear-gradient(-45deg, transparent 4px, #000 0) right / 8px 51% repeat-y, linear-gradient(#000, #000) left / calc(100% - 8px) 100% no-repeat;
+}
+.painel-cfo .esc-l .lado.p i.corte {
+  -webkit-mask: linear-gradient(45deg, transparent 4px, #000 0) left / 8px 51% repeat-y, linear-gradient(#000, #000) right / calc(100% - 8px) 100% no-repeat;
+  mask: linear-gradient(45deg, transparent 4px, #000 0) left / 8px 51% repeat-y, linear-gradient(#000, #000) right / calc(100% - 8px) 100% no-repeat;
+}
+.painel-cfo .esc-l .lado b {
+  font: 500 12px var(--f-mono);
+  font-variant-numeric: tabular-nums;
+  white-space: nowrap;
+  color: var(--ink-2);
+}
+.painel-cfo .esc-l .fx {
+  text-align: center;
+  font: 700 12.5px var(--f-display);
+  font-stretch: 105%;
+  border-radius: 3px;
+  padding: 2px 0;
+  white-space: nowrap;
+}
+.painel-cfo .esc-l.g-v .fx {
+  color: var(--crit-ink);
+  background: color-mix(in srgb, var(--s-out) 9%, var(--surface));
+}
+.painel-cfo .esc-l.g-h .fx {
+  color: var(--warn-ink);
+  background: color-mix(in srgb, var(--warn) 28%, var(--surface));
+}
+.painel-cfo .esc-l.g-a .fx {
+  color: var(--accent);
+  background: color-mix(in srgb, var(--s-in) 9%, var(--surface));
+}
+.painel-cfo .esc-l .n {
+  text-align: right;
+}
+.painel-cfo .esc-l .n.ac {
+  font-weight: 600;
+}
+.painel-cfo .esc-rodape {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) 92px minmax(0, 1fr) 118px 132px;
+  column-gap: 10px;
+  padding: 8px 8px 0;
+  border-top: 1.5px solid var(--ink);
+  font-weight: 700;
+  font-size: 13px;
+}
+.painel-cfo .esc-rodape > :first-child {
+  text-align: right;
+}
+.painel-cfo .esc-rodape > :nth-child(2) {
+  text-align: center;
+  font-family: var(--f-display);
+  font-size: 11px;
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
+  color: var(--muted);
+}
+
+/* Chip do filtro de faixa */
+.painel-cfo .chip {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  font-size: 12.5px;
+  font-weight: 600;
+  padding: 3px 4px 3px 10px;
+  border-radius: 999px;
+  background: var(--accent-soft);
+  color: var(--accent);
+  border: 1px solid color-mix(in srgb, var(--accent) 30%, var(--surface));
+}
+.painel-cfo .chip button {
+  display: inline-flex;
+  border: 0;
+  background: transparent;
+  color: inherit;
+  cursor: pointer;
+  padding: 1px;
+  border-radius: 50%;
+}
+.painel-cfo .chip button:hover {
+  background: color-mix(in srgb, var(--accent) 18%, var(--surface));
+}
+
+/* Simulador */
+.painel-cfo .kv.k6 {
+  grid-template-columns: repeat(6, minmax(0, 1fr));
+}
+.painel-cfo .kv small {
+  font-size: 11.5px;
+  color: var(--muted);
+}
+.painel-cfo .sim .seg {
+  display: flex;
+}
+.painel-cfo .sim .seg button {
+  flex: 1;
+  padding: 5px 6px;
+}
+.painel-cfo .sim .campo {
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+  font-size: 13.5px;
+  color: var(--ink-2);
+}
+.painel-cfo .sim .campo select,
+.painel-cfo .sim .campo input {
+  padding: 5px 8px;
+  border: 1px solid var(--line);
+  border-radius: 4px;
+  background: var(--surface);
+  color: var(--ink);
+  font-size: 13.5px;
+  min-width: 0;
+  width: 100%;
+  box-sizing: border-box;
+}
+.painel-cfo .sim .campo input {
+  font-family: var(--f-mono);
+  text-align: right;
+}
+.painel-cfo .sim .duas {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 8px;
+}
+.painel-cfo .sim .sub {
+  font: 700 10.5px var(--f-display);
+  letter-spacing: 0.12em;
+  text-transform: uppercase;
+  color: var(--muted);
+  border-top: 1px solid var(--line);
+  padding-top: 10px;
+}
+.painel-cfo .range .dica {
+  font-size: 12px;
+  color: var(--muted);
+}
+.painel-cfo .alerta {
+  display: flex;
+  gap: 8px;
+  align-items: flex-start;
+  font-size: 13.5px;
+  padding: 8px 10px;
+  border-radius: 4px;
+  border-left: 3px solid var(--accent);
+  background: var(--accent-soft);
+  color: var(--ink-2);
+}
+.painel-cfo .alerta.crit {
+  border-left-color: var(--crit);
+  background: color-mix(in srgb, var(--crit) 9%, var(--surface));
+}
+.painel-cfo .alerta.warn {
+  border-left-color: var(--warn);
+  background: color-mix(in srgb, var(--warn) 14%, var(--surface));
+}
+.painel-cfo .alerta.good {
+  border-left-color: var(--good);
+  background: color-mix(in srgb, var(--good) 9%, var(--surface));
+}
+.painel-cfo .alerta b {
+  color: var(--ink);
+}
+
+/* Dia a dia do simulador */
+.painel-cfo .dias td.d {
+  white-space: nowrap;
+}
+.painel-cfo .dias td.d small {
+  color: var(--muted);
+  margin-left: 6px;
+  font-size: 11.5px;
+}
+.painel-cfo .dias tr.fds td {
+  color: var(--muted);
+  background: var(--surface-2);
+}
+.painel-cfo .dias tr.aberto td {
+  background: var(--accent-soft);
+}
+.painel-cfo .dias tr.itens > td {
+  padding: 0 0 10px 28px;
+  background: var(--surface-2);
+}
+.painel-cfo .dias .lista {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 0 24px;
+}
+.painel-cfo .dias .lista h4 {
+  margin: 8px 0 4px;
+  font: 700 11px var(--f-display);
+  letter-spacing: 0.1em;
+  text-transform: uppercase;
+  color: var(--muted);
+}
+.painel-cfo .dias .it {
+  display: flex;
+  justify-content: space-between;
+  gap: 12px;
+  padding: 3px 0;
+  border-bottom: 1px dashed var(--line);
+  font-size: 12.5px;
+}
+.painel-cfo .dias .it span {
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+.painel-cfo .dias .it small {
+  color: var(--muted);
+  margin-left: 6px;
+}
+.painel-cfo .dias .it b {
+  font: 500 12px var(--f-mono);
+  white-space: nowrap;
+}
+
+/* Detalhamento (árvore com as faixas nas colunas) */
+.painel-cfo .det-bar {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 10px 18px;
+  align-items: flex-end;
+}
+.painel-cfo .det-bar .ctl select {
+  min-width: 0;
+  height: 32px;
+  padding: 4px 6px;
+  font-size: 13px;
+}
+.painel-cfo .det-bar .niveis {
+  display: flex;
+  align-items: center;
+  gap: 4px;
+}
+.painel-cfo .det-bar .niveis svg {
+  color: var(--muted);
+  flex-shrink: 0;
+}
+.painel-cfo .det-bar .busca {
+  position: relative;
+  margin-left: auto;
+}
+.painel-cfo .det-bar .busca svg {
+  position: absolute;
+  left: 8px;
+  top: 50%;
+  transform: translateY(-50%);
+  color: var(--muted);
+}
+.painel-cfo .det-bar .busca input {
+  height: 32px;
+  box-sizing: border-box;
+  padding: 4px 8px 4px 28px;
+  border: 1px solid var(--line);
+  border-radius: 4px;
+  background: var(--surface-2);
+  color: var(--ink);
+  font-size: 13.5px;
+  width: 280px;
+  max-width: 100%;
+}
+.painel-cfo .ag-wrap {
+  border: 1px solid var(--line);
+  border-radius: 4px;
+  overflow: auto;
+  max-height: 78vh;
+}
+.painel-cfo table.ag {
+  border-collapse: separate;
+  border-spacing: 0;
+  width: 100%;
+  font-size: 13px;
+}
+.painel-cfo .ag th {
+  position: sticky;
+  top: 0;
+  z-index: 2;
+  background: var(--surface);
+  font-family: var(--f-display);
+  font-stretch: 110%;
+  font-weight: 700;
+  font-size: 11px;
+  letter-spacing: 0.06em;
+  text-transform: uppercase;
+  color: var(--muted);
+  white-space: nowrap;
+  padding: 6px 8px;
+  text-align: right;
+}
+.painel-cfo .ag thead tr:first-child th {
+  border-bottom: 1px solid var(--line);
+  text-align: center;
+  font-size: 10.5px;
+  letter-spacing: 0.12em;
+}
+.painel-cfo .ag thead tr:nth-child(2) th {
+  top: 27px;
+  border-bottom: 1.5px solid var(--ink);
+}
+.painel-cfo .ag th.g-v {
+  color: var(--crit-ink);
+}
+.painel-cfo .ag th.g-h {
+  color: var(--warn-ink);
+}
+.painel-cfo .ag th.g-a {
+  color: var(--accent);
+}
+.painel-cfo .ag th.fxh {
+  cursor: pointer;
+}
+.painel-cfo .ag th.fxh:hover,
+.painel-cfo .ag th.fxh.sel {
+  background: var(--accent-soft);
+}
+.painel-cfo .ag th.nmh,
+.painel-cfo .ag td.nm {
+  position: sticky;
+  left: 0;
+  text-align: left;
+  border-right: 1px solid var(--line);
+}
+.painel-cfo .ag th.nmh {
+  z-index: 3;
+}
+.painel-cfo .ag td {
+  padding: 5px 8px;
+  border-bottom: 1px solid var(--grid);
+  background: var(--surface);
+  vertical-align: middle;
+}
+.painel-cfo .ag td.nm {
+  z-index: 1;
+  min-width: 300px;
+  max-width: 440px;
+}
+.painel-cfo .ag td.nm .lin {
+  display: flex;
+  align-items: flex-start;
+  gap: 4px;
+}
+.painel-cfo .ag td.nm .car {
+  flex-shrink: 0;
+  color: var(--muted);
+  margin-top: 1px;
+}
+.painel-cfo .ag td.nm .txt {
+  min-width: 0;
+}
+.painel-cfo .ag td.nm b {
+  display: block;
+  font-weight: 600;
+  line-height: 1.25;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+.painel-cfo .ag td.nm small {
+  display: block;
+  font-size: 11.5px;
+  color: var(--muted);
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+.painel-cfo .ag tr.n0 td.nm b {
+  font-family: var(--f-display);
+  font-weight: 700;
+  font-size: 14px;
+}
+.painel-cfo .ag tr.grupo {
+  cursor: pointer;
+}
+.painel-cfo .ag tr.grupo:hover td {
+  background: var(--surface-2);
+}
+.painel-cfo .ag tr.grupo:hover td.c {
+  filter: brightness(0.97);
+}
+.painel-cfo .ag tr.aberto > td.nm {
+  background: var(--accent-soft);
+}
+.painel-cfo .ag td.c {
+  text-align: right;
+  font: 500 12px var(--f-mono);
+  font-variant-numeric: tabular-nums;
+  white-space: nowrap;
+  min-width: 64px;
+}
+.painel-cfo .ag td.c.z {
+  color: var(--line);
+}
+.painel-cfo .ag td.tot {
+  font-weight: 700;
+  border-left: 1px solid var(--line);
+}
+.painel-cfo .ag tr.parc td {
+  background: var(--surface-2);
+  font-size: 12.5px;
+}
+.painel-cfo .ag tr.parc td.nm b {
+  font-weight: 600;
+  font-family: var(--f-mono);
+  font-size: 12px;
+}
+.painel-cfo .ag tr.mais td {
+  background: var(--surface-2);
+}
+.painel-cfo .ag tr.mais button {
+  border: 0;
+  background: transparent;
+  color: var(--accent);
+  font-weight: 600;
+  font-size: 12.5px;
+  cursor: pointer;
+  padding: 2px 0;
+}
+.painel-cfo .ag tr.mais button:hover {
+  text-decoration: underline;
+}
+.painel-cfo .ag tfoot td {
+  position: sticky;
+  bottom: 0;
+  z-index: 2;
+  border-top: 1.5px solid var(--ink);
+  border-bottom: 0;
+  font-weight: 700;
+}
+.painel-cfo .ag tfoot td.nm {
+  z-index: 3;
+}
+.painel-cfo .tag {
+  display: inline-block;
+  font: 700 9.5px var(--f-display);
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
+  padding: 1px 5px;
+  border-radius: 3px;
+  margin-left: 6px;
+  vertical-align: 1px;
+  background: color-mix(in srgb, var(--crit) 12%, var(--surface));
+  color: var(--crit-ink);
+}
+.painel-cfo .tag.info {
+  background: var(--accent-soft);
+  color: var(--accent);
+}
+.painel-cfo .tag.warn {
+  background: color-mix(in srgb, var(--warn) 22%, var(--surface));
+  color: var(--warn-ink);
+}
+
+/* Maiores devedores / credores */
+.painel-cfo .ph .seg button {
+  padding: 4px 9px;
+  font-size: 12.5px;
+}
+
+@media (max-width: 1000px) {
+  .painel-cfo .kv.k6 {
+    grid-template-columns: repeat(3, minmax(0, 1fr));
+  }
+  .painel-cfo .esc-cab,
+  .painel-cfo .esc-l,
+  .painel-cfo .esc-sep,
+  .painel-cfo .esc-rodape {
+    grid-template-columns: minmax(0, 1fr) 76px minmax(0, 1fr) 96px;
+  }
+  .painel-cfo .esc-cab > :nth-child(5),
+  .painel-cfo .esc-l > :nth-child(5),
+  .painel-cfo .esc-rodape > :nth-child(5) {
+    display: none;
+  }
+  .painel-cfo .dias .lista {
+    grid-template-columns: 1fr;
+  }
+  .painel-cfo .det-bar .busca {
+    margin-left: 0;
+  }
+}
+@media (max-width: 620px) {
+  .painel-cfo .kv.k6 {
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+  }
+}

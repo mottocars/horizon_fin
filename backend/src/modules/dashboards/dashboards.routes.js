@@ -1,8 +1,11 @@
+const zlib = require('zlib');
+const { promisify } = require('util');
 const { Router } = require('express');
 const { z } = require('zod');
 const pool = require('../../config/db');
 const authMiddleware = require('../../middlewares/auth.middleware');
 const fluxoCaixaPainel = require('./fluxoCaixaPainel.service');
+const agingPainel = require('./agingPainel.service');
 
 // Dashboards: tela favorita (estrela) de cada usuário em cada dashboard — a que abre ao entrar pelo
 // menu. Cada usuário só lê e grava a própria. Montado em server.js com exigirTela dos dashboards.
@@ -10,6 +13,8 @@ const fluxoCaixaPainel = require('./fluxoCaixaPainel.service');
 //   PUT /:dashboard/favorita { tela }   -> { tela } (tela null = tira a favorita)
 //   GET /economico-financeiro/fluxo-caixa?empresa_id&hist&hor&centros=1,2 -> dados do painel do Fluxo de
 //       Caixa (fluxoCaixaPainel.service.js). A empresa é conferida pelo authMiddleware (query).
+//   GET /economico-financeiro/aging?empresa_id -> parcelas em aberto a receber e a pagar (com rateio) e o
+//       saldo bancário de hoje, para o Aging List (agingPainel.service.js).
 
 const DASHBOARDS = {
   'economico-financeiro': ['dre', 'fluxo-caixa', 'aging', 'detalhamento', 'saldos'],
@@ -43,6 +48,21 @@ router.get('/economico-financeiro/fluxo-caixa', async (req, res, next) => {
     res.json(await fluxoCaixaPainel.painel(f.empresa_id, { hist: f.hist, hor: f.hor, centros }));
   } catch (err) {
     if (err.issues) return res.status(400).json({ message: 'Filtros inválidos (período: até 36 meses antes do mês atual e até 35 depois).' });
+    next(err);
+  }
+});
+
+router.get('/economico-financeiro/aging', async (req, res, next) => {
+  try {
+    const { empresa_id: empresaId } = z.object({ empresa_id: z.coerce.number().int().positive() }).parse(req.query);
+    const dados = await agingPainel.painel(empresaId);
+    // Todas as parcelas em aberto vão juntas (a GENESIS passa de 15 mil, ~3 MB): gzip aqui, que o
+    // servidor não comprime as respostas da API.
+    if (!/\bgzip\b/.test(req.headers['accept-encoding'] || '')) return res.json(dados);
+    const corpo = await promisify(zlib.gzip)(JSON.stringify(dados));
+    res.set({ 'Content-Type': 'application/json; charset=utf-8', 'Content-Encoding': 'gzip', Vary: 'Accept-Encoding' }).send(corpo);
+  } catch (err) {
+    if (err.issues) return res.status(400).json({ message: 'Escolha a empresa.' });
     next(err);
   }
 });

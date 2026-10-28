@@ -61,8 +61,8 @@ function CampoMes({ id, rotulo, valor, min, max, onChange, dica }) {
   );
 }
 
-// Centro de custo: lista com marcação múltipla e busca, no visual da barra.
-function FiltroCentros({ opcoes, valor, onChange, disabled }) {
+// Centro de custo: lista com marcação múltipla e busca, no visual da barra (também no Aging List).
+export function FiltroCentros({ opcoes, valor, onChange, disabled }) {
   const [aberto, setAberto] = useState(false);
   const [busca, setBusca] = useState('');
   const ref = useRef(null);

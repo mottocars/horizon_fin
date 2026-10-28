@@ -55,9 +55,10 @@ function Texto({ children }) {
   );
 }
 
-export default function SumarioModal({ aberta, aba, onAba, onFechar }) {
+// `abas` / `icones` / `contexto`: outro painel (o Aging List) usa a mesma janela com os textos dele.
+export default function SumarioModal({ aberta, aba, onAba, onFechar, abas = ABAS_SUMARIO, icones = ICONES, contexto = 'Econômico Financeiro · Fluxo de Caixa' }) {
   const painel = useRef(null);
-  const atual = ABAS_SUMARIO.find((a) => a.id === aba) || ABAS_SUMARIO[0];
+  const atual = abas.find((a) => a.id === aba) || abas[0];
 
   useEffect(() => {
     if (!aberta) return undefined;
@@ -79,19 +80,19 @@ export default function SumarioModal({ aberta, aba, onAba, onFechar }) {
   const mover = (e) => {
     if (!['ArrowDown', 'ArrowUp'].includes(e.key)) return;
     e.preventDefault();
-    const i = ABAS_SUMARIO.findIndex((a) => a.id === atual.id);
-    const prox = ABAS_SUMARIO[(i + (e.key === 'ArrowDown' ? 1 : -1) + ABAS_SUMARIO.length) % ABAS_SUMARIO.length];
+    const i = abas.findIndex((a) => a.id === atual.id);
+    const prox = abas[(i + (e.key === 'ArrowDown' ? 1 : -1) + abas.length) % abas.length];
     onAba(prox.id);
     document.getElementById(`sum-aba-${prox.id}`)?.focus();
   };
-  const Icone = ICONES[atual.id] || BookOpen;
+  const Icone = icones[atual.id] || BookOpen;
 
   return (
     <div className="sumario-fundo" onMouseDown={(e) => e.target === e.currentTarget && onFechar()}>
       <div className="sumario" role="dialog" aria-modal="true" aria-labelledby="sumario-titulo">
         <header className="sumario-topo">
           <div>
-            <div className="eyebrow">Econômico Financeiro · Fluxo de Caixa</div>
+            <div className="eyebrow">{contexto}</div>
             <h2 id="sumario-titulo">
               <BookOpen size={20} aria-hidden="true" /> Sumário das análises
             </h2>
@@ -102,8 +103,8 @@ export default function SumarioModal({ aberta, aba, onAba, onFechar }) {
         </header>
         <div className="sumario-corpo">
           <nav className="sumario-abas" role="tablist" aria-orientation="vertical" aria-label="Seções do painel" onKeyDown={mover}>
-            {ABAS_SUMARIO.map((a, i) => {
-              const IconeAba = ICONES[a.id] || BookOpen;
+            {abas.map((a, i) => {
+              const IconeAba = icones[a.id] || BookOpen;
               const ativa = a.id === atual.id;
               return (
                 <button
