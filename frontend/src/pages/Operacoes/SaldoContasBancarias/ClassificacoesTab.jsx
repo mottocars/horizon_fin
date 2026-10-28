@@ -1,5 +1,5 @@
 import { forwardRef, useCallback, useEffect, useImperativeHandle, useState } from 'react';
-import { Layers, Pencil, Trash2 } from 'lucide-react';
+import { Layers, Lock, LockOpen, Pencil, Trash2 } from 'lucide-react';
 import Modal from '../../../components/Modal';
 import Button from '../../../components/Button';
 import SearchableSelect from '../../../components/SearchableSelect';
@@ -17,7 +17,39 @@ const PRIORIDADES = [
 ];
 const ROTULO_PRIORIDADE = Object.fromEntries(PRIORIDADES.map((p) => [p.value, p.label]));
 
-const formVazio = { nome: '', prioridade_sem_saldo: 'SEM_SALDO' };
+// libera_saldo no formulário: '' (ainda não escolhido) | 'LIBERADO' | 'BLOQUEADO' — vira boolean
+// só no envio. As classificações cadastradas antes desse campo existir chegam com null e
+// aparecem como "Não informado" até alguém editar (o formulário obriga a escolher).
+const SITUACOES_SALDO = [
+  { value: 'LIBERADO', label: 'Liberado', Icone: LockOpen, descricao: 'Saldo disponível para uso' },
+  { value: 'BLOQUEADO', label: 'Bloqueado', Icone: Lock, descricao: 'Saldo retido, não disponível' },
+];
+
+const formVazio = { nome: '', prioridade_sem_saldo: 'SEM_SALDO', descricao: '', libera_saldo: '' };
+
+function situacaoDoBanco(liberaSaldo) {
+  if (liberaSaldo === true) return 'LIBERADO';
+  if (liberaSaldo === false) return 'BLOQUEADO';
+  return '';
+}
+
+function SeloSaldo({ liberaSaldo }) {
+  if (liberaSaldo === true) {
+    return (
+      <span className="inline-flex items-center gap-1 rounded-full bg-emerald-50 px-2 py-0.5 font-medium text-emerald-700">
+        <LockOpen size={12} /> Liberado
+      </span>
+    );
+  }
+  if (liberaSaldo === false) {
+    return (
+      <span className="inline-flex items-center gap-1 rounded-full bg-amber-50 px-2 py-0.5 font-medium text-amber-700">
+        <Lock size={12} /> Bloqueado
+      </span>
+    );
+  }
+  return <span className="text-gray-400">Não informado</span>;
+}
 
 // Cadastro das classificações bancárias da empresa (antes era uma lista fixa de 6 valores pro
 // sistema inteiro) — cada uma define, quando a busca automática de saldo (VanPix) não retorna
@@ -67,18 +99,28 @@ const ClassificacoesTab = forwardRef(function ClassificacoesTab({ empresaId }, r
 
   function abrirEdicao(item) {
     setEditando(item);
-    setForm({ nome: item.nome, prioridade_sem_saldo: item.prioridade_sem_saldo });
+    setForm({
+      nome: item.nome,
+      prioridade_sem_saldo: item.prioridade_sem_saldo,
+      descricao: item.descricao || '',
+      libera_saldo: situacaoDoBanco(item.libera_saldo),
+    });
     setErro('');
     setModalAberto(true);
   }
 
   async function handleSubmit(e) {
     e.preventDefault();
+    if (!form.libera_saldo) {
+      setErro('Informe se o saldo dessa classificação é liberado ou bloqueado.');
+      return;
+    }
     setErro('');
     setSalvando(true);
+    const dados = { ...form, libera_saldo: form.libera_saldo === 'LIBERADO' };
     try {
-      if (editando) await updateClassificacao(empresaId, editando.id, form);
-      else await createClassificacao(empresaId, form);
+      if (editando) await updateClassificacao(empresaId, editando.id, dados);
+      else await createClassificacao(empresaId, dados);
       setModalAberto(false);
       carregar();
     } catch (err) {
@@ -132,6 +174,7 @@ const ClassificacoesTab = forwardRef(function ClassificacoesTab({ empresaId }, r
             <thead>
               <tr className="text-xs uppercase tracking-wide text-gray-400">
                 <th className="border-b border-gray-200 bg-white py-2.5 pl-4 font-medium">Nome</th>
+                <th className="w-32 border-b border-l border-gray-200 bg-white px-3 py-2.5 font-medium">Saldo</th>
                 <th className="border-b border-l border-gray-200 bg-white px-3 py-2.5 font-medium">
                   Sem saldo na API, priorizar
                 </th>
@@ -143,8 +186,16 @@ const ClassificacoesTab = forwardRef(function ClassificacoesTab({ empresaId }, r
             <tbody>
               {itens.map((item) => (
                 <tr key={item.id} className="group">
-                  <td className="border-b border-gray-100 py-2 pl-4 font-medium text-gray-800 group-hover:bg-gray-50">
-                    {item.nome}
+                  <td className="border-b border-gray-100 py-2 pl-4 pr-3 group-hover:bg-gray-50">
+                    <div className="font-medium text-gray-800">{item.nome}</div>
+                    {item.descricao && (
+                      <p className="mt-0.5 line-clamp-2 max-w-3xl whitespace-pre-line text-gray-500" title={item.descricao}>
+                        {item.descricao}
+                      </p>
+                    )}
+                  </td>
+                  <td className="border-b border-l border-gray-100 px-3 py-2 group-hover:bg-gray-50">
+                    <SeloSaldo liberaSaldo={item.libera_saldo} />
                   </td>
                   <td className="border-b border-l border-gray-100 px-3 py-2 text-gray-600 group-hover:bg-gray-50">
                     {ROTULO_PRIORIDADE[item.prioridade_sem_saldo] || item.prioridade_sem_saldo}
@@ -177,7 +228,12 @@ const ClassificacoesTab = forwardRef(function ClassificacoesTab({ empresaId }, r
         </div>
       )}
 
-      <Modal open={modalAberto} onClose={() => setModalAberto(false)} title={editando ? 'Editar classificação' : 'Nova classificação'}>
+      <Modal
+        open={modalAberto}
+        onClose={() => setModalAberto(false)}
+        title={editando ? 'Editar classificação' : 'Nova classificação'}
+        maxWidthClass="max-w-lg"
+      >
         <form onSubmit={handleSubmit} className="space-y-4">
           {erro && <div className="rounded-lg bg-red-50 px-3 py-2 text-sm text-red-600">{erro}</div>}
 
@@ -191,6 +247,49 @@ const ClassificacoesTab = forwardRef(function ClassificacoesTab({ empresaId }, r
               maxLength={50}
               className="w-full rounded-lg border border-gray-200 px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-primary-100"
             />
+          </div>
+
+          <div>
+            <label htmlFor="descricao-classificacao" className="mb-1 block text-sm font-medium text-gray-700">
+              Descrição <span className="font-normal text-gray-400">(opcional)</span>
+            </label>
+            <textarea
+              id="descricao-classificacao"
+              rows={4}
+              maxLength={1000}
+              value={form.descricao}
+              onChange={(e) => setForm((f) => ({ ...f, descricao: e.target.value }))}
+              placeholder="Motivo da classificação, por que ela é necessária e que tipo de conta ela classifica"
+              className="w-full resize-none rounded-lg border border-gray-200 px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-primary-100"
+            />
+          </div>
+
+          <div>
+            <span className="mb-1 block text-sm font-medium text-gray-700">O saldo das contas nessa classificação é</span>
+            <div className="grid grid-cols-2 gap-2" role="radiogroup">
+              {SITUACOES_SALDO.map(({ value, label, Icone, descricao }) => {
+                const ativo = form.libera_saldo === value;
+                const cor = value === 'LIBERADO' ? 'border-emerald-400 bg-emerald-50 text-emerald-700' : 'border-amber-400 bg-amber-50 text-amber-700';
+                return (
+                  <button
+                    key={value}
+                    type="button"
+                    role="radio"
+                    aria-checked={ativo}
+                    onClick={() => setForm((f) => ({ ...f, libera_saldo: value }))}
+                    className={`flex items-start gap-2 rounded-lg border px-3 py-2 text-left transition-colors ${
+                      ativo ? cor : 'border-gray-200 text-gray-600 hover:bg-gray-50'
+                    }`}
+                  >
+                    <Icone size={16} className="mt-0.5 shrink-0" />
+                    <span>
+                      <span className="block text-sm font-medium">{label}</span>
+                      <span className={`block text-xs ${ativo ? '' : 'text-gray-400'}`}>{descricao}</span>
+                    </span>
+                  </button>
+                );
+              })}
+            </div>
           </div>
 
           <div>

@@ -1103,6 +1103,11 @@ CREATE TABLE classificacoes_bancarias (
     nome                   VARCHAR(50) NOT NULL,
     prioridade_sem_saldo   VARCHAR(20) NOT NULL DEFAULT 'SEM_SALDO'
         CHECK (prioridade_sem_saldo IN ('SALDO_ANTERIOR', 'SEM_SALDO')),
+    -- Motivo da classificação, por que ela é necessária e o que ela classifica (texto livre).
+    descricao              TEXT,
+    -- Saldo das contas nessa classificação: TRUE = liberado, FALSE = bloqueado, NULL = não
+    -- informado (só as cadastradas antes da migration 2026-10-28; o formulário obriga a escolher).
+    libera_saldo           BOOLEAN,
     criado_em              TIMESTAMP DEFAULT NOW(),
     atualizado_em          TIMESTAMP DEFAULT NOW(),
     UNIQUE (empresa_id, nome)

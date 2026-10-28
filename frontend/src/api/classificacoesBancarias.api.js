@@ -4,12 +4,12 @@ export function listClassificacoes(empresaId) {
   return http.get(`/classificacoes-bancarias/${empresaId}`).then((res) => res.data);
 }
 
-export function createClassificacao(empresaId, { nome, prioridade_sem_saldo }) {
-  return http.post(`/classificacoes-bancarias/${empresaId}`, { nome, prioridade_sem_saldo }).then((res) => res.data);
+export function createClassificacao(empresaId, { nome, prioridade_sem_saldo, descricao, libera_saldo }) {
+  return http.post(`/classificacoes-bancarias/${empresaId}`, { nome, prioridade_sem_saldo, descricao, libera_saldo }).then((res) => res.data);
 }
 
-export function updateClassificacao(empresaId, id, { nome, prioridade_sem_saldo }) {
-  return http.put(`/classificacoes-bancarias/${empresaId}/${id}`, { nome, prioridade_sem_saldo }).then((res) => res.data);
+export function updateClassificacao(empresaId, id, { nome, prioridade_sem_saldo, descricao, libera_saldo }) {
+  return http.put(`/classificacoes-bancarias/${empresaId}/${id}`, { nome, prioridade_sem_saldo, descricao, libera_saldo }).then((res) => res.data);
 }
 
 export function removeClassificacao(empresaId, id) {

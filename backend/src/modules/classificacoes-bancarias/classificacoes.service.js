@@ -9,20 +9,20 @@ function erro(status, message) {
 
 async function list(empresaId) {
   const { rows } = await pool.query(
-    `SELECT id, nome, prioridade_sem_saldo, criado_em, atualizado_em
+    `SELECT id, nome, prioridade_sem_saldo, descricao, libera_saldo, criado_em, atualizado_em
      FROM classificacoes_bancarias WHERE empresa_id = $1 ORDER BY nome ASC`,
     [empresaId]
   );
   return rows;
 }
 
-async function create(empresaId, { nome, prioridadeSemSaldo }) {
+async function create(empresaId, { nome, prioridadeSemSaldo, descricao, liberaSaldo }) {
   try {
     const { rows } = await pool.query(
-      `INSERT INTO classificacoes_bancarias (empresa_id, nome, prioridade_sem_saldo)
-       VALUES ($1, $2, $3)
-       RETURNING id, nome, prioridade_sem_saldo, criado_em, atualizado_em`,
-      [empresaId, nome, prioridadeSemSaldo]
+      `INSERT INTO classificacoes_bancarias (empresa_id, nome, prioridade_sem_saldo, descricao, libera_saldo)
+       VALUES ($1, $2, $3, $4, $5)
+       RETURNING id, nome, prioridade_sem_saldo, descricao, libera_saldo, criado_em, atualizado_em`,
+      [empresaId, nome, prioridadeSemSaldo, descricao, liberaSaldo]
     );
     return rows[0];
   } catch (err) {
@@ -31,13 +31,14 @@ async function create(empresaId, { nome, prioridadeSemSaldo }) {
   }
 }
 
-async function update(id, empresaId, { nome, prioridadeSemSaldo }) {
+async function update(id, empresaId, { nome, prioridadeSemSaldo, descricao, liberaSaldo }) {
   try {
     const { rows } = await pool.query(
-      `UPDATE classificacoes_bancarias SET nome = $3, prioridade_sem_saldo = $4, atualizado_em = NOW()
+      `UPDATE classificacoes_bancarias SET nome = $3, prioridade_sem_saldo = $4, descricao = $5, libera_saldo = $6,
+           atualizado_em = NOW()
        WHERE id = $1 AND empresa_id = $2
-       RETURNING id, nome, prioridade_sem_saldo, criado_em, atualizado_em`,
-      [id, empresaId, nome, prioridadeSemSaldo]
+       RETURNING id, nome, prioridade_sem_saldo, descricao, libera_saldo, criado_em, atualizado_em`,
+      [id, empresaId, nome, prioridadeSemSaldo, descricao, liberaSaldo]
     );
     return rows[0] || null;
   } catch (err) {
