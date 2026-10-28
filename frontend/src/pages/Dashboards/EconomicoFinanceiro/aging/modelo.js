@@ -49,8 +49,6 @@ export const NF = FAIXAS.length;
 export const IDX_HOJE = FAIXAS.findIndex((f) => f.id === 'h');
 export const faixaDe = (atraso) => FAIXAS.findIndex((f) => atraso >= f.min && atraso <= f.max);
 
-// Colunas do detalhamento: uma por faixa. `fx`: índices das faixas somadas.
-export const COLUNAS = FAIXAS.map((f, i) => ({ id: f.id, grupo: f.grupo, rotulo: f.curto, titulo: f.rotulo, fx: [i] }));
 
 // Condições de pagamento que não viram dinheiro no banco (simulador).
 export const SEM_CAIXA = /PERMUTA|N[AÃ]O COBRAR/i;

@@ -216,6 +216,13 @@
 .painel-cfo .kv.k6 {
   grid-template-columns: repeat(6, minmax(0, 1fr));
 }
+/* Cards do simulador: mais juntos, na coluna ao lado do cenário */
+.painel-cfo .kv.juntos {
+  gap: 6px;
+}
+.painel-cfo .kv.juntos > div {
+  padding-left: 8px;
+}
 .painel-cfo .kv small {
   font-size: 11.5px;
   color: var(--muted);
@@ -344,7 +351,7 @@
   white-space: nowrap;
 }
 
-/* Detalhamento (árvore com as faixas nas colunas) */
+/* Detalhamento (árvore até a parcela): a receber e a pagar lado a lado */
 .painel-cfo .det-bar {
   display: flex;
   flex-wrap: wrap;
@@ -414,34 +421,17 @@
   text-transform: uppercase;
   color: var(--muted);
   white-space: nowrap;
-  padding: 6px 5px;
+  padding: 7px 8px;
   text-align: right;
 }
-.painel-cfo .ag thead tr:first-child th {
-  border-bottom: 1px solid var(--line);
-  text-align: center;
-  font-size: 10.5px;
-  letter-spacing: 0.12em;
-}
-.painel-cfo .ag thead tr:nth-child(2) th {
-  top: 27px;
+.painel-cfo .ag thead th {
   border-bottom: 1.5px solid var(--ink);
 }
 .painel-cfo .ag th.g-v {
   color: var(--crit-ink);
 }
-.painel-cfo .ag th.g-h {
-  color: var(--warn-ink);
-}
 .painel-cfo .ag th.g-a {
   color: var(--accent);
-}
-.painel-cfo .ag th.fxh {
-  cursor: pointer;
-}
-.painel-cfo .ag th.fxh:hover,
-.painel-cfo .ag th.fxh.sel {
-  background: var(--accent-soft);
 }
 .painel-cfo .ag th.nmh,
 .painel-cfo .ag td.nm {
@@ -452,17 +442,24 @@
 }
 .painel-cfo .ag th.nmh {
   z-index: 3;
+  overflow: hidden;
+  text-overflow: ellipsis;
 }
 .painel-cfo .ag td {
-  padding: 5px 5px;
+  padding: 5px 8px;
   border-bottom: 1px solid var(--grid);
   background: var(--surface);
   vertical-align: middle;
 }
+/* A coluna do nome fica com o que sobra (e corta o texto com reticências); os valores, o necessário. */
+.painel-cfo .ag th.nmh,
+.painel-cfo .ag td.nm {
+  width: 100%;
+  max-width: 0;
+  min-width: 190px;
+}
 .painel-cfo .ag td.nm {
   z-index: 1;
-  min-width: 220px;
-  max-width: 300px;
 }
 .painel-cfo .ag td.nm .lin {
   display: flex;
@@ -515,7 +512,7 @@
   font: 500 12px var(--f-mono);
   font-variant-numeric: tabular-nums;
   white-space: nowrap;
-  min-width: 48px;
+  min-width: 78px;
 }
 .painel-cfo .ag td.c.z {
   color: var(--line);
@@ -580,6 +577,38 @@
   color: var(--warn-ink);
 }
 
+.painel-cfo .det-duas {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 18px;
+}
+.painel-cfo .det-lado {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+  min-width: 0;
+}
+.painel-cfo .det-cab {
+  display: flex;
+  justify-content: space-between;
+  align-items: baseline;
+  gap: 10px;
+  padding-top: 8px;
+  border-top: 3px solid var(--s-in);
+}
+.painel-cfo .det-lado.p .det-cab {
+  border-top-color: var(--s-out);
+}
+.painel-cfo .det-cab h3 {
+  font-size: 16px;
+  font-weight: 700;
+}
+.painel-cfo .det-cab span {
+  font: 500 12.5px var(--f-mono);
+  color: var(--ink-2);
+  white-space: nowrap;
+}
+
 /* Maiores devedores / credores */
 .painel-cfo .ph .seg button {
   padding: 4px 9px;
@@ -606,6 +635,9 @@
   }
   .painel-cfo .det-bar .busca {
     margin-left: 0;
+  }
+  .painel-cfo .det-duas {
+    grid-template-columns: 1fr;
   }
 }
 @media (max-width: 620px) {

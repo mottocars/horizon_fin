@@ -107,12 +107,12 @@ export const ABAS_SUMARIO = [
       {
         titulo: 'Como usar',
         itens: [
-          '**Carteira**: a receber ou a pagar. **Agrupar por**: até 3 níveis entre centro de custo, natureza, cliente/fornecedor, empresa, condição de pagamento (só a receber) e tipo de documento. Abaixo do último nível vêm as parcelas.',
+          '**A receber** e **a pagar** lado a lado, com o mesmo agrupamento e a mesma busca. **Agrupar por**: até 3 níveis entre centro de custo, natureza, cliente/fornecedor, empresa, condição de pagamento (só no a receber; no a pagar esse nível é pulado) e tipo de documento. Abaixo do último nível vêm as parcelas.',
           'Cada parcela mostra o **título/parcela** (bill e installment do Sienge), o número da parcela, o documento, o vencimento, a unidade e a condição (a receber) e as etiquetas **Inadimplente**, **Sub judice** e **Previsão**.',
-          'As colunas são as 15 faixas da escada; clicar no cabeçalho de uma faixa filtra a tabela por ela. As linhas vêm do maior vencido para o menor.',
+          'Colunas: **Vencido** (até ontem), **A vencer** (de hoje em diante) e **Total**. As linhas vêm do maior vencido para o menor. Clicar numa faixa da escada de vencimentos filtra as duas tabelas por ela.',
           '**Buscar**: nome, título, documento, unidade, centro ou natureza.',
           'Parcela rateada entre centros ou naturezas aparece em cada um com a fração dela (a soma bate com o saldo).',
-          'A cor de cada célula mostra o peso da faixa no total da linha: vermelho no vencido, amarelo hoje, azul a vencer.',
+          'A cor de cada célula mostra o peso dela no total da linha: vermelho no vencido, azul no a vencer.',
         ],
       },
     ],

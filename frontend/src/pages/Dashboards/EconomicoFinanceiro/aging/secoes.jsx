@@ -7,9 +7,7 @@ import { eixo } from '../fluxo/modelo';
 import { CaixaDiario } from './graficos';
 import {
   CENARIOS,
-  COLUNAS,
   DIMENSOES,
-  FAIXAS,
   IDX_HOJE,
   PADRAO_SIM,
   arvore,
@@ -28,7 +26,6 @@ import {
   nomePessoa,
   parcelas,
   pct,
-  rotuloPessoa,
   semana,
   simular,
   soma,
@@ -94,7 +91,6 @@ export function Escada({ E, faixaSel, onFaixa }) {
           Escada de vencimentos: a pagar × a receber
           <AjudaSecao aba="faixas" rotulo="Escada de vencimentos" />
         </h2>
-        <p>Saldo corrigido em aberto por faixa de dias. Clique numa faixa para abrir as parcelas dela no detalhamento.</p>
       </div>
       <div className="kv k4">
         <div>
@@ -265,40 +261,41 @@ export function Simulador({ E }) {
           <AjudaSecao aba="simulador" rotulo="Simulador de caixa" />
         </h2>
       </div>
-      <div className="kv k6">
-        <div>
-          <span>Saldo de partida</span>
-          <strong>{brl(sim.ini)}</strong>
-          <small>{temBanco ? `${p.partida === 'total' ? 'todas as contas' : 'caixa livre'} em ${dm(E.banco.data)}` : 'sem saldo lançado'}</small>
-        </div>
-        <div>
-          <span>Entradas</span>
-          <strong className="pos">{brl(sim.entradas)}</strong>
-          <small>{p.naoReceber ? `já sem ${p.naoReceber}% de perda` : 'tudo o que vence'}</small>
-        </div>
-        <div>
-          <span>Saídas</span>
-          <strong className="neg">{brl(-sim.saidas)}</strong>
-          <small>tudo o que vence</small>
-        </div>
-        <div>
-          <span>Saldo no fim</span>
-          <strong className={sim.final >= 0 ? '' : 'neg'}>{brl(sim.final)}</strong>
-          <small>em {dm(sim.dias.at(-1).data)}</small>
-        </div>
-        <div>
-          <span>Menor saldo</span>
-          <strong className={sim.min >= 0 ? '' : 'neg'}>{brl(sim.min)}</strong>
-          <small>em {dm(sim.minData)}</small>
-        </div>
-        <div>
-          <span>Necessidade de caixa</span>
-          <strong className={sim.necessidade > 0 ? 'neg' : 'pos'}>{brl(sim.necessidade)}</strong>
-          <small>para o caixa não ficar negativo</small>
-        </div>
-      </div>
+      {/* Cards, aviso e gráfico à esquerda; o cenário à direita, começando na altura dos cards. */}
       <div className="hero-body">
-        <div style={{ display: 'flex', flexDirection: 'column', gap: 10, minWidth: 0 }}>
+        <div style={{ display: 'flex', flexDirection: 'column', gap: 12, minWidth: 0 }}>
+          <div className="kv k6 juntos">
+            <div>
+              <span>Saldo de partida</span>
+              <strong>{brl(sim.ini)}</strong>
+              <small>{temBanco ? `${p.partida === 'total' ? 'todas as contas' : 'caixa livre'} em ${dm(E.banco.data)}` : 'sem saldo lançado'}</small>
+            </div>
+            <div>
+              <span>Entradas</span>
+              <strong className="pos">{brl(sim.entradas)}</strong>
+              <small>{p.naoReceber ? `já sem ${p.naoReceber}% de perda` : 'tudo o que vence'}</small>
+            </div>
+            <div>
+              <span>Saídas</span>
+              <strong className="neg">{brl(-sim.saidas)}</strong>
+              <small>tudo o que vence</small>
+            </div>
+            <div>
+              <span>Saldo no fim</span>
+              <strong className={sim.final >= 0 ? '' : 'neg'}>{brl(sim.final)}</strong>
+              <small>em {dm(sim.dias.at(-1).data)}</small>
+            </div>
+            <div>
+              <span>Menor saldo</span>
+              <strong className={sim.min >= 0 ? '' : 'neg'}>{brl(sim.min)}</strong>
+              <small>em {dm(sim.minData)}</small>
+            </div>
+            <div>
+              <span>Necessidade de caixa</span>
+              <strong className={sim.necessidade > 0 ? 'neg' : 'pos'}>{brl(sim.necessidade)}</strong>
+              <small>para o caixa não ficar negativo</small>
+            </div>
+          </div>
           <div className={`alerta ${sit.tom}`}>
             <span>
               <Partes partes={sit.partes} />
@@ -451,43 +448,47 @@ export function Simulador({ E }) {
   );
 }
 
-// ─── Detalhamento (árvore até a parcela) ─────────────────────────────────────────────────────────
+// ─── Detalhamento (árvore até a parcela): a receber e a pagar lado a lado ────────────────────────
 const PADRAO_NIVEIS = ['centro', 'natureza', 'pessoa'];
 const LIMITE = { 0: 60, outros: 40, parcelas: 25 };
+// Rótulo do agrupamento, que vale para as duas carteiras (a condição de pagamento só existe no a receber).
+const rotuloDim = (d) => (d === 'pessoa' ? 'Cliente / fornecedor' : d === 'condicao' ? 'Condição de pagamento (a receber)' : DIMENSOES[d].rotulo('r'));
+const quando = (a) => (a > 0 ? `${nf0.format(a)} d de atraso` : a === 0 ? 'vence hoje' : `vence em ${nf0.format(-a)} d`);
 
+// Cor da célula = peso no total da linha (vermelho no vencido, azul no a vencer).
 function corCelula(grupo, v, total) {
   if (!tem(v) || !total) return undefined;
   const p = Math.round(6 + 46 * Math.min(1, Math.abs(v) / Math.abs(total)));
-  const cor = grupo === 'v' ? '--s-out' : grupo === 'h' ? '--warn' : '--s-in';
-  return { background: `color-mix(in srgb, var(${cor}) ${p}%, var(--surface))` };
+  return { background: `color-mix(in srgb, var(${grupo === 'v' ? '--s-out' : '--s-in'}) ${p}%, var(--surface))` };
 }
 
-export function Detalhamento({ E, faixaSel, onFaixa }) {
-  const [lado, setLado] = useState('r');
-  const [niveis, setNiveis] = useState(PADRAO_NIVEIS);
-  const [busca, setBusca] = useState('');
+// Vencido (até ontem), a vencer (de hoje em diante) e total de um grupo ou de uma parcela.
+function Valores({ vencido, total }) {
+  const aVencer = total - vencido;
+  return (
+    <>
+      <td className={`c${tem(vencido) ? '' : ' z'}`} style={corCelula('v', vencido, total)}>
+        {tem(vencido) ? eixo(vencido) : '·'}
+      </td>
+      <td className={`c${tem(aVencer) ? '' : ' z'}`} style={corCelula('a', aVencer, total)}>
+        {tem(aVencer) ? eixo(aVencer) : '·'}
+      </td>
+      <td className="n tot">{brl(total)}</td>
+    </>
+  );
+}
+
+// Uma carteira: a árvore pelos níveis do agrupamento, com as parcelas embaixo do último nível.
+function ArvoreLado({ E, lado, linhas, niveis, filtrado }) {
   const [abertos, setAbertos] = useState(() => new Set());
   const [limites, setLimites] = useState({});
   const { B } = E;
-  const colunas = COLUNAS;
-  const opcoesDim = dimensoesDoLado(lado);
-  const validos = niveis.filter((n, i) => n && opcoesDim.includes(n) && niveis.indexOf(n) === i);
-
-  const linhas = useMemo(() => {
-    let ls = E.linhas.filter((x) => x.t.l === lado);
-    if (faixaSel) {
-      const fx = new Set(faixaSel.fx);
-      ls = ls.filter((x) => fx.has(x.t.fx));
-    }
-    return filtrarBusca(E, ls, busca);
-  }, [E, lado, faixaSel, busca]);
-  const raiz = useMemo(() => (validos.length ? arvore(E, linhas, validos, lado) : null), [E, linhas, validos.join(), lado]); // eslint-disable-line react-hooks/exhaustive-deps
-  const total = useMemo(() => {
-    const fx = new Array(FAIXAS.length).fill(0);
-    linhas.forEach((x) => (fx[x.t.fx] += x.valor));
-    return { fx, total: soma(fx), vencido: soma(fx.slice(0, IDX_HOJE)), n: new Set(linhas.map((x) => x.t)).size };
-  }, [linhas]);
-
+  const validos = niveis.filter((n) => dimensoesDoLado(lado).includes(n));
+  const raiz = useMemo(() => (validos.length ? arvore(E, linhas, validos, lado) : []), [E, linhas, validos.join(), lado]); // eslint-disable-line react-hooks/exhaustive-deps
+  const total = useMemo(
+    () => ({ vencido: soma(linhas.filter((x) => x.t.atraso > 0).map((x) => x.valor)), total: soma(linhas.map((x) => x.valor)), n: new Set(linhas.map((x) => x.t)).size }),
+    [linhas]
+  );
   const alternar = (id) =>
     setAbertos((a) => {
       const n = new Set(a);
@@ -496,40 +497,24 @@ export function Detalhamento({ E, faixaSel, onFaixa }) {
       return n;
     });
   const mais = (id, padrao) => setLimites((l) => ({ ...l, [id]: (l[id] || padrao) * 3 }));
-  // "—" num nível corta os seguintes.
-  const mudarNivel = (i, v) => {
-    const n = niveis.slice(0, 3);
-    n[i] = v;
-    setNiveis(v ? n : n.slice(0, i));
-    setAbertos(new Set());
-  };
-  const somaCols = (fx) => colunas.map((c) => soma(c.fx.map((i) => fx[i])));
-  const nCols = colunas.length + 3;
-
-  const celulas = (fx, tot) =>
-    somaCols(fx).map((v, k) => (
-      <td key={colunas[k].id} className={`c${tem(v) ? '' : ' z'}`} style={corCelula(colunas[k].grupo, v, tot)}>
-        {tem(v) ? eixo(v) : '·'}
-      </td>
-    ));
 
   function linhasParcelas(no, nivel) {
     const lista = parcelas(no.linhas);
     const lim = limites[`${no.id}#p`] || LIMITE.parcelas;
     return [
       ...lista.slice(0, lim).map(({ t, valor, frac }) => {
-        const k = colunas.findIndex((c) => c.fx.includes(t.fx));
         const extra = [
+          quando(t.atraso),
+          `venc. ${dma(t.v)}`,
           t.pc ? `parc. ${t.pc}` : null,
           `${nomeDocumento(B, t.d)}${t.n ? ` ${t.n}` : ''}`,
-          `venc. ${dma(t.v)}`,
           t.u ? `unid. ${t.u}` : null,
           t.cp ? nomeCondicao(B, t.cp) : null,
           frac < 0.999 ? `rateio ${pct(frac * 100)} de ${brl(t.s)}` : null,
         ].filter(Boolean);
         return (
           <tr key={`${no.id}#${t.b}/${t.p}`} className="parc">
-            <td className="nm" style={{ paddingLeft: 12 + nivel * 18 }}>
+            <td className="nm" style={{ paddingLeft: 12 + nivel * 16 }}>
               <div className="lin">
                 <div className="txt">
                   <b title={`Título ${t.b}, parcela ${t.p}`}>
@@ -543,21 +528,13 @@ export function Detalhamento({ E, faixaSel, onFaixa }) {
                 </div>
               </div>
             </td>
-            {colunas.map((c, i) => (
-              <td key={c.id} className={`c${i === k ? '' : ' z'}`} style={i === k ? corCelula(c.grupo, 1, 1) : undefined}>
-                {i === k ? eixo(valor) : '·'}
-              </td>
-            ))}
-            <td className="n tot">{brl(valor)}</td>
-            <td className="n" style={{ color: t.atraso > 0 ? 'var(--crit-ink)' : 'var(--muted)' }}>
-              {t.atraso > 0 ? `${nf0.format(t.atraso)} d` : t.atraso === 0 ? 'hoje' : `em ${nf0.format(-t.atraso)} d`}
-            </td>
+            <Valores vencido={t.atraso > 0 ? valor : 0} total={valor} />
           </tr>
         );
       }),
       lista.length > lim && (
         <tr key={`${no.id}#mais`} className="mais">
-          <td colSpan={nCols} style={{ paddingLeft: 12 + nivel * 18 }}>
+          <td colSpan={4} style={{ paddingLeft: 12 + nivel * 16 }}>
             <button type="button" onClick={() => mais(`${no.id}#p`, LIMITE.parcelas)}>
               Mostrar mais parcelas ({nf0.format(lista.length - lim)} restantes)
             </button>
@@ -588,21 +565,19 @@ export function Detalhamento({ E, faixaSel, onFaixa }) {
                 }
               }}
             >
-              <td className="nm" style={{ paddingLeft: 8 + nivel * 18 }}>
+              <td className="nm" style={{ paddingLeft: 8 + nivel * 16 }}>
                 <div className="lin">
                   <Caret size={15} className="car" />
                   <div className="txt">
                     <b title={no.nome}>{no.nome}</b>
                     <small>
                       {nf0.format(no.n)} {no.n === 1 ? 'parcela' : 'parcelas'}
-                      {no.vencido > 0 ? ` · atraso médio ${dias(Math.round(no.atrasoMedio))}` : ''}
+                      {no.vencido > 0 ? ` · ${pct((no.vencido / no.total) * 100)} vencido · atraso médio ${dias(Math.round(no.atrasoMedio))}` : ''}
                     </small>
                   </div>
                 </div>
               </td>
-              {celulas(no.fx, no.total)}
-              <td className="n tot">{brl(no.total)}</td>
-              <td className={`n ${no.vencido > 0 ? 'neg' : ''}`}>{no.total ? pct((no.vencido / no.total) * 100) : '–'}</td>
+              <Valores vencido={no.vencido} total={no.total} />
             </tr>
             {aberto && (no.filhos ? linhasNos(no.filhos(), nivel + 1, no.id) : linhasParcelas(no, nivel + 1))}
           </Fragment>
@@ -610,7 +585,7 @@ export function Detalhamento({ E, faixaSel, onFaixa }) {
       }),
       nos.length > lim && (
         <tr key={`${idPai}#mais`} className="mais">
-          <td colSpan={nCols} style={{ paddingLeft: 12 + nivel * 18 }}>
+          <td colSpan={4} style={{ paddingLeft: 12 + nivel * 16 }}>
             <button type="button" onClick={() => mais(idPai, padrao)}>
               Mostrar mais ({nf0.format(nos.length - lim)} restantes)
             </button>
@@ -620,34 +595,85 @@ export function Detalhamento({ E, faixaSel, onFaixa }) {
     ];
   }
 
-  const grupos = [
-    { g: 'v', rotulo: 'Vencido há (dias)', n: colunas.filter((c) => c.grupo === 'v').length },
-    { g: 'h', rotulo: '', n: 1 },
-    { g: 'a', rotulo: 'A vencer em (dias)', n: colunas.filter((c) => c.grupo === 'a').length },
-  ];
-  const colSel = (c) => faixaSel && faixaSel.fx.length === c.fx.length && c.fx.every((i) => faixaSel.fx.includes(i));
+  return (
+    <div className={`det-lado ${lado}`}>
+      <div className="det-cab">
+        <h3>{lado === 'r' ? 'A receber' : 'A pagar'}</h3>
+        <span>
+          {brl(total.total)}
+          {total.total > 0 ? ` · ${pct((total.vencido / total.total) * 100)} vencido` : ''}
+        </span>
+      </div>
+      <div className="ag-wrap">
+        {!raiz.length ? (
+          <div className="empty" style={{ padding: 14 }}>
+            {filtrado ? 'Nenhuma parcela com esses filtros.' : `Nenhuma parcela ${lado === 'r' ? 'a receber' : 'a pagar'} em aberto neste escopo.`}
+          </div>
+        ) : (
+          <table className="ag">
+            <thead>
+              <tr>
+                <th className="nmh">{validos.map((d) => DIMENSOES[d].rotulo(lado)).join(' › ')}</th>
+                <th className="g-v" title="Vencido até ontem">
+                  Vencido
+                </th>
+                <th className="g-a" title="Vence de hoje em diante">
+                  A vencer
+                </th>
+                <th>Total</th>
+              </tr>
+            </thead>
+            <tbody>{linhasNos(raiz, 0, 'raiz')}</tbody>
+            <tfoot>
+              <tr>
+                <td className="nm">
+                  <b>Total</b>
+                  <small>
+                    {nf0.format(total.n)} parcelas · {nf0.format(raiz.length)} {raiz.length === 1 ? 'grupo' : 'grupos'}
+                  </small>
+                </td>
+                <Valores vencido={total.vencido} total={total.total} />
+              </tr>
+            </tfoot>
+          </table>
+        )}
+      </div>
+    </div>
+  );
+}
+
+export function Detalhamento({ E, faixaSel, onFaixa }) {
+  const [niveis, setNiveis] = useState(PADRAO_NIVEIS);
+  const [busca, setBusca] = useState('');
+  const opcoesDim = dimensoesDoLado('r');
+  const validos = niveis.filter((n, i) => n && opcoesDim.includes(n) && niveis.indexOf(n) === i);
+
+  const porLado = useMemo(() => {
+    let ls = E.linhas;
+    if (faixaSel) {
+      const fx = new Set(faixaSel.fx);
+      ls = ls.filter((x) => fx.has(x.t.fx));
+    }
+    ls = filtrarBusca(E, ls, busca);
+    return { r: ls.filter((x) => x.t.l === 'r'), p: ls.filter((x) => x.t.l === 'p') };
+  }, [E, faixaSel, busca]);
+
+  // "—" num nível corta os seguintes.
+  const mudarNivel = (i, v) => {
+    const n = niveis.slice(0, 3);
+    n[i] = v;
+    setNiveis(v ? n : n.slice(0, i));
+  };
 
   return (
     <section className="panel c12" aria-labelledby="h-det">
       <div className="ph">
         <h2 id="h-det">
-          Aging por {validos.map((d) => DIMENSOES[d].rotulo(lado).toLowerCase()).join(' › ') || '…'} › parcela
+          Aging por {validos.map((d) => rotuloDim(d).toLowerCase()).join(' › ') || '…'} › parcela
           <AjudaSecao aba="detalhamento" rotulo="Detalhamento do aging" />
         </h2>
       </div>
       <div className="det-bar">
-        <Seg
-          rotulo="Carteira"
-          opcoes={[
-            ['r', 'A receber'],
-            ['p', 'A pagar'],
-          ]}
-          valor={lado}
-          onChange={(v) => {
-            setLado(v);
-            setAbertos(new Set());
-          }}
-        />
         <div className="ctl">
           <span className="rot">Agrupar por</span>
           <div className="niveis">
@@ -663,7 +689,7 @@ export function Detalhamento({ E, faixaSel, onFaixa }) {
                   {i > 0 && <option value="">—</option>}
                   {opcoesDim.map((d) => (
                     <option key={d} value={d} disabled={niveis.some((n, k) => k !== i && n === d)}>
-                      {DIMENSOES[d].rotulo(lado)}
+                      {rotuloDim(d)}
                     </option>
                   ))}
                 </select>
@@ -675,7 +701,7 @@ export function Detalhamento({ E, faixaSel, onFaixa }) {
           <span className="rot">Buscar</span>
           <div style={{ position: 'relative' }}>
             <Search size={14} />
-            <input type="search" placeholder={`${rotuloPessoa(lado)}, título, documento, unidade…`} value={busca} onChange={(e) => setBusca(e.target.value)} />
+            <input type="search" placeholder="Cliente, fornecedor, título, documento, unidade…" value={busca} onChange={(e) => setBusca(e.target.value)} />
           </div>
         </div>
       </div>
@@ -689,63 +715,11 @@ export function Detalhamento({ E, faixaSel, onFaixa }) {
           </span>
         </div>
       )}
-      <div className="ag-wrap">
-        {!raiz?.length ? (
-          <div className="empty" style={{ padding: 14 }}>
-            {busca || faixaSel ? 'Nenhuma parcela com esses filtros.' : `Nenhuma parcela ${lado === 'r' ? 'a receber' : 'a pagar'} em aberto neste escopo.`}
-          </div>
-        ) : (
-          <table className="ag">
-            <thead>
-              <tr>
-                <th className="nmh" rowSpan={2} style={{ textAlign: 'left', verticalAlign: 'bottom', borderBottom: '1.5px solid var(--ink)' }}>
-                  {validos.map((d) => DIMENSOES[d].rotulo(lado)).join(' › ')}
-                </th>
-                {grupos.map((g) => (
-                  <th key={g.g} colSpan={g.n} className={`g-${g.g}`}>
-                    {g.rotulo}
-                  </th>
-                ))}
-                <th rowSpan={2} style={{ verticalAlign: 'bottom', borderBottom: '1.5px solid var(--ink)' }}>
-                  Total
-                </th>
-                <th rowSpan={2} style={{ verticalAlign: 'bottom', borderBottom: '1.5px solid var(--ink)' }} title="Vencido ÷ total da linha; na parcela, os dias de atraso">
-                  % vencido
-                </th>
-              </tr>
-              <tr>
-                {colunas.map((c) => (
-                  <th
-                    key={c.id}
-                    className={`fxh g-${c.grupo}${colSel(c) ? ' sel' : ''}`}
-                    title={`${c.titulo} — clique para ficar só com esta faixa`}
-                    onClick={() => onFaixa(colSel(c) ? null : { fx: c.fx, rotulo: c.titulo })}
-                  >
-                    {c.rotulo}
-                  </th>
-                ))}
-              </tr>
-            </thead>
-            <tbody>{linhasNos(raiz, 0, 'raiz')}</tbody>
-            <tfoot>
-              <tr>
-                <td className="nm">
-                  <b>Total</b>
-                  <small>
-                    {nf0.format(total.n)} parcelas · {nf0.format(raiz.length)} {raiz.length === 1 ? 'grupo' : 'grupos'}
-                  </small>
-                </td>
-                {somaCols(total.fx).map((v, k) => (
-                  <td key={colunas[k].id} className="c">
-                    {tem(v) ? eixo(v) : '·'}
-                  </td>
-                ))}
-                <td className="n tot">{brl(total.total)}</td>
-                <td className={`n ${total.vencido > 0 ? 'neg' : ''}`}>{total.total ? pct((total.vencido / total.total) * 100) : '–'}</td>
-              </tr>
-            </tfoot>
-          </table>
-        )}
+      <div className="det-duas">
+        {/* A chave recria a árvore (e fecha os grupos) quando o agrupamento muda. */}
+        {['r', 'p'].map((l) => (
+          <ArvoreLado key={`${l}|${validos.join()}`} E={E} lado={l} linhas={porLado[l]} niveis={validos} filtrado={!!(busca || faixaSel)} />
+        ))}
       </div>
     </section>
   );
