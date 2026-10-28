@@ -54,12 +54,18 @@ body {
   @apply font-medium text-primary-600 hover:text-primary-700;
 }
 .prosa ul {
-  @apply mt-3 space-y-1.5 text-[14px] leading-6 text-gray-600;
+  @apply mt-3;
 }
-.prosa ul li {
+.prosa ul,
+ul.prosa {
+  @apply space-y-1.5 text-[14px] leading-6 text-gray-600;
+}
+.prosa ul li,
+ul.prosa li {
   @apply relative pl-4;
 }
-.prosa ul li::before {
+.prosa ul li::before,
+ul.prosa li::before {
   content: "";
   @apply absolute left-0 top-[0.62rem] h-1.5 w-1.5 rounded-full bg-primary-500;
 }

@@ -1,9 +1,10 @@
 -- API Horizon (api.horizonhub.com.br): API pública para integrações de terceiros, organizada em
 -- grupos de endpoints (o primeiro: notas fiscais do Espião NF-e/NFS-e). Ver backend/src/modules/api-horizon/.
 --
--- Fluxo: o usuário gera uma CHAVE em Integrações > API Horizon (presa a ele e a uma empresa);
--- a integração troca a chave por um TOKEN temporário (POST /v1/auth/token) e usa o token como
--- Bearer nas consultas. Chave e token só existem aqui como hash SHA-256.
+-- Fluxo: cada usuário gera a SUA chave em Integrações > API Horizon (uma por usuário, presa a ele
+-- e a uma empresa, com os grupos de endpoints que ele liberou); a integração troca a chave por um
+-- TOKEN temporário (POST /v1/auth/token) e usa o token como Bearer nas consultas. Chave e token
+-- só existem aqui como hash SHA-256.
 --
 -- Também em espiao_notas: CNPJ do emitente/destinatário lidos do XML (antes só a razão social) e
 -- atualizado_em (última mudança de status — inativação, vínculo, evento fiscal), mantido por
@@ -19,17 +20,18 @@ CREATE TABLE IF NOT EXISTS api_horizon_chaves (
     id             SERIAL PRIMARY KEY,
     usuario_id     INTEGER NOT NULL REFERENCES usuarios(id) ON DELETE CASCADE,  -- dono: a API age com as permissões dele
     empresa_id     INTEGER NOT NULL REFERENCES empresas(id) ON DELETE CASCADE,  -- a chave só enxerga esta empresa
-    nome           VARCHAR(100) NOT NULL,
     prefixo        VARCHAR(16) NOT NULL,           -- início da chave, só pra reconhecer na tela
     chave_hash     CHAR(64) NOT NULL UNIQUE,       -- SHA-256 da chave (a chave em si não é guardada)
-    pode_inativar  BOOLEAN NOT NULL DEFAULT FALSE, -- escopo de escrita (PATCH .../inativar)
+    grupos         TEXT[] NOT NULL DEFAULT '{}',   -- grupos de endpoints liberados (backend/src/modules/api-horizon/grupos.js)
+    escopos        TEXT[] NOT NULL DEFAULT '{}',   -- permissões de escrita liberadas (ex.: notas:inativar)
     expira_em      TIMESTAMPTZ NOT NULL,
     ultimo_uso_em  TIMESTAMPTZ,
-    revogada_em    TIMESTAMPTZ,
+    revogada_em    TIMESTAMPTZ,                    -- revogada ou substituída por uma chave nova
     revogada_por   INTEGER REFERENCES usuarios(id) ON DELETE SET NULL,
     criado_em      TIMESTAMPTZ NOT NULL DEFAULT NOW()
 );
-CREATE INDEX IF NOT EXISTS idx_api_horizon_chaves_usuario ON api_horizon_chaves (usuario_id);
+-- Uma chave em uso por usuário: gerar outra revoga a anterior (ver chaves.service.js).
+CREATE UNIQUE INDEX IF NOT EXISTS uq_api_horizon_chaves_usuario ON api_horizon_chaves (usuario_id) WHERE revogada_em IS NULL;
 
 -- ---------- Tokens temporários (Bearer) ----------
 CREATE TABLE IF NOT EXISTS api_horizon_tokens (

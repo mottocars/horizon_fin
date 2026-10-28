@@ -11,50 +11,44 @@ function badRequest(message) {
 
 const idSchema = z.coerce.number().int().positive();
 
-const criarSchema = z.object({
-  nome: z.string().trim().min(3, 'Dê um nome para a chave (ex.: "Integração ERP").').max(100, 'Nome muito longo.'),
-  empresaId: z.coerce.number().int().positive('Escolha a empresa.'),
+const acessosSchema = z.object({
+  grupos: z.array(z.string().trim().min(1)).max(50),
+  escopos: z.array(z.string().trim().min(1)).max(50).default([]),
+});
+
+const gerarSchema = acessosSchema.extend({
+  empresaId: z.coerce.number({ invalid_type_error: 'Escolha a empresa.' }).int().positive('Escolha a empresa.'),
   validadeDias: z.coerce
     .number()
     .int()
     .refine((v) => VALIDADES_DIAS.includes(v), 'Validade inválida.'),
-  podeInativar: z.boolean().default(false),
 });
 
-async function listar(req, res, next) {
-  try {
-    res.json({ data: await service.listar(req.user) });
-  } catch (err) {
-    next(err);
-  }
+// Envolve o handler: erros de validação (zod) viram 400 com a 1ª mensagem.
+function rota(fn) {
+  return async (req, res, next) => {
+    try {
+      await fn(req, res);
+    } catch (err) {
+      if (err.issues) return next(badRequest(err.issues[0].message));
+      next(err);
+    }
+  };
 }
 
-async function criar(req, res, next) {
-  try {
-    const dados = criarSchema.parse(req.body);
-    res.status(201).json(await service.criar(req.user, dados));
-  } catch (err) {
-    if (err.issues) return next(badRequest(err.issues[0].message));
-    next(err);
-  }
-}
-
-async function revogar(req, res, next) {
-  try {
-    res.json(await service.revogar(req.user, idSchema.parse(req.params.id)));
-  } catch (err) {
-    if (err.issues) return next(badRequest('Chave inválida.'));
-    next(err);
-  }
-}
-
-async function requisicoes(req, res, next) {
-  try {
-    res.json({ data: await service.listarRequisicoes(req.user, idSchema.parse(req.params.id)) });
-  } catch (err) {
-    if (err.issues) return next(badRequest('Chave inválida.'));
-    next(err);
-  }
-}
-
-module.exports = { listar, criar, revogar, requisicoes };
+module.exports = {
+  minha: rota(async (req, res) => res.json(await service.minha(req.user))),
+  gerar: rota(async (req, res) => res.status(201).json(await service.gerar(req.user, gerarSchema.parse(req.body)))),
+  alterarAcessos: rota(async (req, res) => res.json(await service.alterarAcessos(req.user, acessosSchema.parse(req.body)))),
+  revogarMinha: rota(async (req, res) => {
+    await service.revogarMinha(req.user);
+    res.status(204).end();
+  }),
+  minhasRequisicoes: rota(async (req, res) => res.json({ data: await service.minhasRequisicoes(req.user) })),
+  listarTodas: rota(async (req, res) => res.json({ data: await service.listarTodas() })),
+  revogarDeUsuario: rota(async (req, res) => {
+    await service.revogarDeUsuario(req.user, idSchema.parse(req.params.id));
+    res.status(204).end();
+  }),
+  requisicoesDaChave: rota(async (req, res) => res.json({ data: await service.requisicoesDaChave(idSchema.parse(req.params.id)) })),
+};

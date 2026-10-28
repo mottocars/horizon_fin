@@ -58,7 +58,7 @@
           <p class="text-[12px] font-semibold uppercase tracking-wide text-primary-600">Horizon Finanças</p>
           <h1 class="mt-1 text-2xl font-semibold tracking-tight text-gray-900 sm:text-3xl">API Horizon</h1>
           <div class="prosa mt-3 max-w-4xl">
-            <p>Integre seus sistemas aos dados do Horizon Finanças da sua empresa. Os endpoints são organizados em grupos; cada grupo corresponde a uma área do sistema e exige acesso à tela dela.</p>
+            <p>Integre seus sistemas aos dados do Horizon Finanças da sua empresa. Os endpoints são organizados em grupos; cada grupo corresponde a uma área do sistema, é liberado na sua chave e exige acesso à tela dela.</p>
           </div>
           <dl class="mt-6 grid grid-cols-1 gap-3 sm:grid-cols-2 xl:grid-cols-4">
             <div class="rounded-lg bg-gray-50 px-4 py-3">
@@ -90,7 +90,7 @@
               <div class="flex gap-3">
                 <span class="flex h-7 w-7 shrink-0 items-center justify-center rounded-full bg-primary-600 text-[13px] font-semibold text-white">1</span>
                 <div class="prosa">
-                  <p><strong>Gere uma chave</strong> no Horizon Finanças, em <a data-app-link="/integracoes/api-horizon" target="_blank" rel="noreferrer">Integrações › API Horizon</a> › Nova chave.</p>
+                  <p><strong>Gere sua chave</strong> no Horizon Finanças, em <a data-app-link="/integracoes/api-horizon" target="_blank" rel="noreferrer">Integrações › API Horizon</a>: escolha a empresa, a validade e o que a chave acessa. Aparecem só os grupos das telas que você tem.</p>
                   <p>A chave aparece uma vez só: guarde num cofre de senhas.</p>
                 </div>
               </div>
@@ -120,9 +120,9 @@
             <div class="rounded-lg border border-gray-200 p-4">
               <p class="font-mono text-[12px] font-semibold text-gray-900">Chave de API <span class="font-normal text-gray-400">hzn_…</span></p>
               <ul class="prosa mt-1">
-                <li>Gerada em Integrações › API Horizon, com validade de 90 dias, 180 dias ou 1 ano.</li>
-                <li>Presa a <strong>um usuário</strong> (age com as permissões dele) e a <strong>uma empresa</strong> (só enxerga os dados dela).</li>
-                <li>Sempre lê; as permissões de escrita de cada grupo são marcadas na criação.</li>
+                <li><strong>Uma por usuário</strong>, gerada em Integrações › API Horizon, com validade de 90 dias, 180 dias ou 1 ano. Gerar outra substitui a anterior.</li>
+                <li>Presa ao usuário (age com as permissões dele) e a <strong>uma empresa</strong> (só enxerga os dados dela).</li>
+                <li>Acessa só os grupos liberados nela e as permissões de escrita marcadas. Dá para mudar sem trocar a chave.</li>
                 <li>Enviada só em <code class="ic">POST /auth/token</code>, no cabeçalho <code class="ic">X-Api-Key</code>.</li>
               </ul>
             </div>
@@ -137,7 +137,7 @@
             </div>
           </div>
           <div class="prosa mt-5 max-w-4xl">
-            <p><strong>Permissões conferidas a cada chamada.</strong> O dono da chave precisa estar ativo e com acesso à empresa da chave, e cada grupo de endpoints exige ainda a tela correspondente do sistema (indicada no grupo). Se faltar algo, a API responde <code class="ic">403 SEM_PERMISSAO</code> na hora. Revogar a chave invalida também os tokens já gerados com ela.</p>
+            <p><strong>Conferido a cada chamada:</strong> o dono da chave está ativo e com acesso à empresa; o grupo do endpoint está liberado na chave (senão <code class="ic">403 GRUPO_NAO_LIBERADO</code>); e o dono ainda tem a tela do grupo (senão <code class="ic">403 SEM_PERMISSAO</code>). Revogar ou substituir a chave invalida também os tokens já gerados com ela.</p>
           </div>
         </section>
 
@@ -249,10 +249,10 @@
           <h2 class="text-lg font-semibold text-gray-900">Segurança</h2>
           <ul class="prosa mt-2 max-w-4xl">
             <li>Guarde a chave num cofre de senhas ou variável de ambiente do servidor. Nunca em código-fonte, repositório, aplicativo ou página web.</li>
-            <li>Use uma chave por sistema, só com as permissões necessárias.</li>
+            <li>Libere na chave só os acessos que a integração precisa; escrita só quando o fluxo exigir.</li>
             <li>A chave só trafega em <code class="ic">POST /auth/token</code>; nas demais chamadas vai só o token, que expira em 15 minutos.</li>
             <li>Sempre HTTPS. O Horizon guarda apenas o hash da chave e do token.</li>
-            <li>Vazou? Revogue em Integrações › API Horizon: a chave e todos os tokens dela param na hora.</li>
+            <li>Vazou? Revogue ou gere uma nova em Integrações › API Horizon: a chave antiga e todos os tokens dela param na hora.</li>
             <li>Toda chamada fica registrada (quando, rota, status, IP) e aparece em <strong>Chamadas</strong>, na tela da chave.</li>
           </ul>
         </section>

@@ -7,9 +7,9 @@ const {
   gerarSegredo,
   hashSegredo,
   usuarioPodeUsarApi,
-  usuarioTemTela,
   SQL_USUARIO,
 } = require('../comum');
+const { PORID, usuarioTemTela } = require('../grupos');
 
 // Autenticação da API pública em dois passos:
 //   1. POST /v1/auth/token com o cabeçalho X-Api-Key (chave gerada em Integrações > API Horizon)
@@ -17,8 +17,8 @@ const {
 //   2. demais rotas com Authorization: Bearer <token>.
 // O token é opaco (não é o JWT do sistema): não abre nenhuma outra rota do Horizon. A cada
 // chamada confere de novo a chave (revogada/vencida) e o dono (ativo e com a empresa da chave);
-// cada grupo de endpoints confere ainda a tela do sistema dele (exigirTelaApi) — tirar a tela
-// do usuário corta aquele grupo na hora.
+// cada grupo de endpoints confere ainda se está liberado na chave e se o dono tem a tela dele
+// (exigirGrupo) — tirar a tela do usuário corta aquele grupo na hora.
 
 function semPermissao() {
   return new ErroApi(403, 'SEM_PERMISSAO', 'O usuário dono da chave está inativo ou não tem mais acesso à empresa da chave.');
@@ -57,7 +57,7 @@ async function emitirToken(req, res, next) {
     }
 
     const { rows } = await pool.query(
-      `SELECT id, usuario_id, empresa_id, pode_inativar, expira_em, revogada_em
+      `SELECT id, usuario_id, empresa_id, grupos, escopos, expira_em, revogada_em
        FROM api_horizon_chaves WHERE chave_hash = $1`,
       [hashSegredo(chaveInformada)]
     );
@@ -83,7 +83,8 @@ async function emitirToken(req, res, next) {
       tipo: 'Bearer',
       expiraEm: emitido[0].expira_em,
       expiraEmSegundos: TOKEN_MINUTOS * 60,
-      escopos: chave.pode_inativar ? ['leitura', 'notas:inativar'] : ['leitura'],
+      grupos: chave.grupos,
+      escopos: chave.escopos,
     });
   } catch (err) {
     next(err);
@@ -99,7 +100,7 @@ async function exigirToken(req, res, next) {
     }
 
     const { rows } = await pool.query(
-      `SELECT t.expira_em AS token_expira_em, k.id, k.usuario_id, k.empresa_id, k.pode_inativar, k.expira_em, k.revogada_em
+      `SELECT t.expira_em AS token_expira_em, k.id, k.usuario_id, k.empresa_id, k.grupos, k.escopos, k.expira_em, k.revogada_em
        FROM api_horizon_tokens t
        JOIN api_horizon_chaves k ON k.id = t.chave_id
        WHERE t.token_hash = $1`,
@@ -118,7 +119,8 @@ async function exigirToken(req, res, next) {
       chaveId: linha.id,
       usuarioId: dono.id,
       empresaId: linha.empresa_id,
-      podeInativar: linha.pode_inativar,
+      grupos: linha.grupos,
+      escopos: linha.escopos,
       dono,
     };
     pool
@@ -133,21 +135,30 @@ async function exigirToken(req, res, next) {
   }
 }
 
-// Tela do sistema exigida por um grupo de endpoints (ex.: Notas fiscais → Espião NFe / NFSe).
-function exigirTelaApi(tela, nomeTela) {
+// Grupo de endpoints: precisa estar liberado na chave e o dono precisa ter a tela dele.
+function exigirGrupo(grupoId) {
+  const grupo = PORID.get(grupoId);
   return (req, res, next) => {
-    if (usuarioTemTela(req.apiHorizon?.dono, tela)) return next();
-    return next(
-      new ErroApi(403, 'SEM_PERMISSAO', `O usuário dono da chave não tem acesso à tela ${nomeTela}, exigida por este endpoint.`)
-    );
+    if (!req.apiHorizon?.grupos?.includes(grupoId)) {
+      return next(
+        new ErroApi(403, 'GRUPO_NAO_LIBERADO', `Esta chave não tem acesso a ${grupo.titulo}. Libere em Integrações > API Horizon.`)
+      );
+    }
+    if (!usuarioTemTela(req.apiHorizon.dono, grupo.tela)) {
+      return next(
+        new ErroApi(403, 'SEM_PERMISSAO', `O usuário dono da chave não tem mais acesso à tela ${grupo.nomeTela}, exigida por ${grupo.titulo}.`)
+      );
+    }
+    return next();
   };
 }
 
-function exigirEscopoInativar(req, res, next) {
-  if (req.apiHorizon?.podeInativar) return next();
-  return next(
-    new ErroApi(403, 'ESCOPO_INSUFICIENTE', 'Esta chave não tem a permissão "Inativar notas" (escopo notas:inativar).')
-  );
+// Permissão de escrita (ex.: notas:inativar), liberada na chave junto com o grupo.
+function exigirEscopo(escopo, nome) {
+  return (req, res, next) => {
+    if (req.apiHorizon?.escopos?.includes(escopo)) return next();
+    return next(new ErroApi(403, 'ESCOPO_INSUFICIENTE', `Esta chave não tem a permissão "${nome}" (${escopo}).`));
+  };
 }
 
-module.exports = { emitirToken, exigirToken, exigirTelaApi, exigirEscopoInativar };
+module.exports = { emitirToken, exigirToken, exigirGrupo, exigirEscopo };

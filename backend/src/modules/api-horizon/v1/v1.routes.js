@@ -4,8 +4,7 @@ const { rateLimit, ipKeyGenerator } = require('express-rate-limit');
 const pool = require('../../../config/db');
 const env = require('../../../config/env');
 const { responderErro } = require('./erros');
-const T = require('../../../config/telas');
-const { emitirToken, exigirToken, exigirTelaApi, exigirEscopoInativar } = require('./autenticacao');
+const { emitirToken, exigirToken, exigirGrupo, exigirEscopo } = require('./autenticacao');
 const controller = require('./v1.controller');
 
 // API pública Horizon, versão 1 — montada em /api/v1 (em produção: https://api.horizonhub.com.br/v1).
@@ -95,14 +94,14 @@ router.use(limitePorIp);
 
 router.post('/auth/token', limiteToken, emitirToken);
 
-// Grupo Notas fiscais (Espião NF-e / NFS-e). Grupo novo: mesmo padrão — token, limite e a tela
-// do sistema que dá acesso àqueles dados (e documentar em api-docs/src/endpoints.js).
-const notas = [exigirToken, limitePorChave, exigirTelaApi(T.ESPIAO, 'Espião NFe / NFSe')];
+// Grupo Notas fiscais (Espião NF-e / NFS-e). Grupo novo: mesmo padrão — token, limite e
+// exigirGrupo('<id>') (cadastrado em ../grupos.js e documentado em api-docs/src/endpoints.js).
+const notas = [exigirToken, limitePorChave, exigirGrupo('notas-fiscais')];
 router.get('/certificados', ...notas, controller.certificados);
 router.get('/notas-fiscais', ...notas, controller.notas);
 router.get('/notas-fiscais/:id', ...notas, controller.nota);
 router.get('/notas-fiscais/:id/xml', ...notas, controller.xml);
-router.patch('/notas-fiscais/:id/inativar', ...notas, exigirEscopoInativar, controller.inativar);
+router.patch('/notas-fiscais/:id/inativar', ...notas, exigirEscopo('notas:inativar', 'Inativar notas'), controller.inativar);
 
 router.use((req, res) => responderErro(res, 404, 'ROTA_NAO_ENCONTRADA', `Rota não encontrada: ${req.method} ${req.baseUrl}${req.path}`));
 

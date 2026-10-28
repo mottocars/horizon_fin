@@ -41,8 +41,8 @@ const NOTA_INATIVADA = {
 
 const ERRO = (codigo, mensagem) => ({ error: { codigo, mensagem } });
 
-// Cada grupo exige do dono da chave a tela correspondente do sistema (tela) e pode ter permissões
-// de escrita próprias (escopos), marcadas na criação da chave.
+// Cada grupo é liberado na chave pelo dono (só aparece para quem tem a tela correspondente) e
+// pode ter permissões de escrita próprias (escopos). Mesmos ids de backend/src/modules/api-horizon/grupos.js.
 export const GRUPOS = [
   {
     id: 'autenticacao',
@@ -84,14 +84,16 @@ export const ENDPOINTS = [
       tipo: 'Bearer',
       expiraEm: '2026-10-28T10:15:00-03:00',
       expiraEmSegundos: 900,
-      escopos: ['leitura', 'notas:inativar'],
+      grupos: ['notas-fiscais'],
+      escopos: ['notas:inativar'],
     },
     camposResposta: [
       ['token', 'texto', 'Token a enviar em <code class="ic">Authorization: Bearer</code>.'],
       ['tipo', 'texto', 'Sempre <code class="ic">Bearer</code>.'],
       ['expiraEm', 'data e hora', 'Quando o token deixa de valer.'],
       ['expiraEmSegundos', 'número', 'Validade em segundos (900).'],
-      ['escopos', 'lista', '<code class="ic">leitura</code> sempre, mais as permissões de escrita marcadas na chave (ex.: <code class="ic">notas:inativar</code>).'],
+      ['grupos', 'lista', 'Grupos de endpoints liberados na chave (ex.: <code class="ic">notas-fiscais</code>).'],
+      ['escopos', 'lista', 'Permissões de escrita liberadas na chave (ex.: <code class="ic">notas:inativar</code>). Vazia = só leitura.'],
     ],
     erros: ['CHAVE_AUSENTE', 'CHAVE_INVALIDA', 'CHAVE_EXPIRADA', 'CHAVE_REVOGADA', 'SEM_PERMISSAO', 'LIMITE_EXCEDIDO'],
     teste: { campos: [] },
@@ -132,7 +134,7 @@ export const ENDPOINTS = [
       ['ultimaConsultaEm', 'data e hora', 'Última consulta do Horizon à Receita/prefeitura com este certificado.'],
       ['totais', 'objeto', 'Quantidade de notas capturadas: <code class="ic">nfe</code>, <code class="ic">nfse</code>, <code class="ic">nfeInativas</code>, <code class="ic">nfseInativas</code>.'],
     ],
-    erros: ['TOKEN_AUSENTE', 'TOKEN_INVALIDO', 'TOKEN_EXPIRADO', 'SEM_PERMISSAO', 'LIMITE_EXCEDIDO'],
+    erros: ['TOKEN_AUSENTE', 'TOKEN_INVALIDO', 'TOKEN_EXPIRADO', 'GRUPO_NAO_LIBERADO', 'SEM_PERMISSAO', 'LIMITE_EXCEDIDO'],
     teste: { campos: [] },
   },
   {
@@ -163,7 +165,7 @@ export const ENDPOINTS = [
       ['items', 'lista', 'Notas da página — ver <a href="#objeto-nota">Nota fiscal</a>.'],
       ['pagination', 'objeto', '<code class="ic">page</code>, <code class="ic">pageSize</code>, <code class="ic">total</code> (notas no filtro) e <code class="ic">totalPages</code>.'],
     ],
-    erros: ['PARAMETRO_INVALIDO', 'PARAMETRO_DESCONHECIDO', 'CERTIFICADO_INVALIDO', 'TOKEN_EXPIRADO', 'SEM_PERMISSAO', 'LIMITE_EXCEDIDO'],
+    erros: ['PARAMETRO_INVALIDO', 'PARAMETRO_DESCONHECIDO', 'CERTIFICADO_INVALIDO', 'TOKEN_EXPIRADO', 'GRUPO_NAO_LIBERADO', 'SEM_PERMISSAO', 'LIMITE_EXCEDIDO'],
     teste: {
       campos: [
         { nome: 'certificadoIds', tipo: 'certificados', obrigatorio: true },
@@ -189,7 +191,7 @@ export const ENDPOINTS = [
     parametrosCaminho: [{ nome: 'id', tipo: 'número', obrigatorio: true, descricao: 'Id da nota (campo <code class="ic">id</code> da listagem).' }],
     resposta: NOTA_EXEMPLO,
     camposResposta: [['—', '', 'Ver <a href="#objeto-nota">Nota fiscal</a>.']],
-    erros: ['NOTA_NAO_ENCONTRADA', 'TOKEN_EXPIRADO', 'SEM_PERMISSAO', 'LIMITE_EXCEDIDO'],
+    erros: ['NOTA_NAO_ENCONTRADA', 'TOKEN_EXPIRADO', 'GRUPO_NAO_LIBERADO', 'SEM_PERMISSAO', 'LIMITE_EXCEDIDO'],
     teste: { campos: [{ nome: 'id', tipo: 'number', obrigatorio: true, caminho: true }] },
   },
   {
@@ -207,7 +209,7 @@ export const ENDPOINTS = [
     parametrosCaminho: [{ nome: 'id', tipo: 'número', obrigatorio: true, descricao: 'Id da nota.' }],
     respostaTexto:
       '<?xml version="1.0" encoding="UTF-8"?>\n<nfeProc versao="4.00" xmlns="http://www.portalfiscal.inf.br/nfe">\n  <NFe>\n    <infNFe Id="NFe3326100595354300022855…" versao="4.00">\n      <ide>…</ide>\n      <emit>…</emit>\n      <det nItem="1">…</det>\n      <total>…</total>\n    </infNFe>\n  </NFe>\n  <protNFe>…</protNFe>\n</nfeProc>',
-    erros: ['NOTA_NAO_ENCONTRADA', 'XML_INDISPONIVEL', 'TOKEN_EXPIRADO', 'LIMITE_EXCEDIDO'],
+    erros: ['NOTA_NAO_ENCONTRADA', 'XML_INDISPONIVEL', 'TOKEN_EXPIRADO', 'GRUPO_NAO_LIBERADO', 'LIMITE_EXCEDIDO'],
     teste: { campos: [{ nome: 'id', tipo: 'number', obrigatorio: true, caminho: true }] },
   },
   {
@@ -219,7 +221,7 @@ export const ENDPOINTS = [
     resumo: 'Marca a nota como "não lançar", com motivo.',
     descricao: [
       'Mesma ação do botão <strong>Inativar</strong> da tela Espião NFe / NFSe: a nota sai das pendentes e passa a <code class="ic">statusInterno: "inativada"</code>, registrada no nome do dono da chave.',
-      'Exige uma chave com a permissão <strong>Inativar notas</strong> (escopo <code class="ic">notas:inativar</code>). Reativar continua sendo feito na tela.',
+      'Exige a permissão <strong>Inativar notas</strong> (escopo <code class="ic">notas:inativar</code>) liberada na chave, junto com Notas fiscais. Reativar continua sendo feito na tela.',
     ],
     autenticacao: 'token',
     escopo: 'notas:inativar',
@@ -228,7 +230,7 @@ export const ENDPOINTS = [
     exemploCorpo: { motivo: 'Nota de boleto, não é lançada no Sienge.' },
     resposta: NOTA_INATIVADA,
     camposResposta: [['—', '', 'A nota já atualizada — ver <a href="#objeto-nota">Nota fiscal</a>.']],
-    erros: ['PARAMETRO_INVALIDO', 'ESCOPO_INSUFICIENTE', 'NOTA_NAO_ENCONTRADA', 'NOTA_JA_INATIVADA', 'SEM_PERMISSAO', 'LIMITE_EXCEDIDO'],
+    erros: ['PARAMETRO_INVALIDO', 'GRUPO_NAO_LIBERADO', 'ESCOPO_INSUFICIENTE', 'NOTA_NAO_ENCONTRADA', 'NOTA_JA_INATIVADA', 'LIMITE_EXCEDIDO'],
     teste: {
       campos: [
         { nome: 'id', tipo: 'number', obrigatorio: true, caminho: true },
@@ -248,12 +250,13 @@ export const ERROS = [
   [401, 'CHAVE_AUSENTE', 'Faltou o cabeçalho <code class="ic">X-Api-Key</code>.'],
   [401, 'CHAVE_INVALIDA', 'Chave inexistente.'],
   [401, 'CHAVE_EXPIRADA', 'A chave passou da validade. Gere outra.'],
-  [401, 'CHAVE_REVOGADA', 'A chave foi revogada em Integrações › API Horizon.'],
+  [401, 'CHAVE_REVOGADA', 'A chave foi revogada ou substituída por uma nova em Integrações › API Horizon.'],
   [401, 'TOKEN_AUSENTE', 'Faltou o cabeçalho <code class="ic">Authorization: Bearer</code>.'],
   [401, 'TOKEN_INVALIDO', 'Token inexistente ou de chave revogada.'],
   [401, 'TOKEN_EXPIRADO', 'O token passou dos 15 minutos. Gere outro.'],
-  [403, 'SEM_PERMISSAO', 'O dono da chave está inativo, perdeu o acesso à empresa da chave ou não tem a tela exigida pelo grupo do endpoint.'],
-  [403, 'ESCOPO_INSUFICIENTE', 'A chave não tem a permissão de escrita que o endpoint exige.'],
+  [403, 'GRUPO_NAO_LIBERADO', 'O grupo do endpoint não está liberado na chave. Libere em Integrações › API Horizon.'],
+  [403, 'SEM_PERMISSAO', 'O dono da chave está inativo, perdeu o acesso à empresa da chave ou à tela exigida pelo grupo.'],
+  [403, 'ESCOPO_INSUFICIENTE', 'A permissão de escrita que o endpoint exige não está liberada na chave.'],
   [404, 'NOTA_NAO_ENCONTRADA', 'Nota inexistente ou de outra empresa.', 'notas-fiscais'],
   [404, 'XML_INDISPONIVEL', 'A nota existe, mas o arquivo XML não está disponível.', 'notas-fiscais'],
   [404, 'ROTA_NAO_ENCONTRADA', 'Caminho ou método inexistente.'],

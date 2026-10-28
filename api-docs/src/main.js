@@ -473,7 +473,11 @@ function montar() {
           <p class="text-[11px] font-semibold uppercase tracking-wide text-primary-600">Grupo</p>
           <h2 class="mt-1 text-xl font-semibold text-gray-900">${g.titulo}</h2>
           <div class="prosa mt-2 max-w-4xl">${g.descricao.map((p) => `<p>${p}</p>`).join('')}</div>
-          <div class="mt-4 grid grid-cols-1 gap-3 md:grid-cols-2">
+          <div class="mt-4 grid grid-cols-1 gap-3 md:grid-cols-3">
+            <div class="rounded-lg bg-gray-50 px-4 py-3">
+              <p class="text-[11px] font-semibold uppercase tracking-wide text-gray-400">Liberação na chave</p>
+              <p class="mt-1 text-[13px] text-gray-900">Marque <strong>${g.titulo}</strong> em Integrações › API Horizon</p>
+            </div>
             <div class="rounded-lg bg-gray-50 px-4 py-3">
               <p class="text-[11px] font-semibold uppercase tracking-wide text-gray-400">Tela exigida do dono da chave</p>
               <p class="mt-1 text-[13px] text-gray-900">${g.tela}</p>
