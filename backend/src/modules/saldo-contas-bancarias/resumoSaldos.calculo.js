@@ -31,28 +31,35 @@ function limiteRestanteCentavos(conta, iso, periodos) {
   return saldo < 0 ? centavos(limite) + centavos(saldo) : centavos(limite);
 }
 
+// Quanto UMA conta entra em cada total no dia `iso` (em centavos) — base de calcularResumoSaldos
+// e do detalhamento do MCP (quem compõe cada total). null = conta sem saldo lançado no dia.
+function contribuicaoConta(conta, iso, periodos) {
+  if (conta.saldos[iso] === undefined || conta.saldos[iso] === null) return null;
+  const saldo = centavos(conta.saldos[iso]);
+  const bloqueio = centavos(conta.bloqueios?.[iso] || 0);
+  const restante = limiteRestanteCentavos(conta, iso, periodos);
+  return {
+    saldo,
+    bloqueio,
+    restante,
+    liberado: conta.classificacao_libera_saldo === true ? Math.max(saldo - bloqueio, 0) + restante : 0,
+    bloqueado: conta.classificacao_libera_saldo === false ? saldo : bloqueio,
+    limiteCheque: restante,
+    aCobrir: Math.min(saldo, 0),
+  };
+}
+
 // `contas`: o formato de saldos.service.js::getSaldos (saldos/bloqueios por dia,
 // classificacao_libera_saldo, valor_cheque_especial). Devolve { liberado: {iso: n}, ... } —
 // só os dias em que alguma conta tem saldo lançado.
 function calcularResumoSaldos(contas, diasIso, periodos) {
   const resumo = Object.fromEntries(RESUMO_SALDOS.map((r) => [r.chave, {}]));
   for (const iso of diasIso) {
-    const comSaldo = contas.filter((c) => c.saldos[iso] !== undefined && c.saldos[iso] !== null);
-    if (comSaldo.length === 0) continue;
-    const soma = { liberado: 0, bloqueado: 0, limiteCheque: 0, aCobrir: 0 };
-    for (const conta of comSaldo) {
-      const saldo = centavos(conta.saldos[iso]);
-      const bloqueio = centavos(conta.bloqueios?.[iso] || 0);
-      const restante = limiteRestanteCentavos(conta, iso, periodos);
-      if (conta.classificacao_libera_saldo === true) soma.liberado += Math.max(saldo - bloqueio, 0) + restante;
-      if (conta.classificacao_libera_saldo === false) soma.bloqueado += saldo;
-      else soma.bloqueado += bloqueio;
-      soma.limiteCheque += restante;
-      if (saldo < 0) soma.aCobrir += saldo;
-    }
-    for (const r of RESUMO_SALDOS) resumo[r.chave][iso] = soma[r.chave] / 100;
+    const partes = contas.map((c) => contribuicaoConta(c, iso, periodos)).filter(Boolean);
+    if (partes.length === 0) continue;
+    for (const { chave } of RESUMO_SALDOS) resumo[chave][iso] = partes.reduce((t, p) => t + p[chave], 0) / 100;
   }
   return resumo;
 }
 
-module.exports = { RESUMO_SALDOS, calcularResumoSaldos };
+module.exports = { RESUMO_SALDOS, calcularResumoSaldos, contribuicaoConta };

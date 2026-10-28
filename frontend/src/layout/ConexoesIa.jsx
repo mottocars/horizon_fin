@@ -1,17 +1,15 @@
 import { useEffect, useState } from 'react';
 import { Check, Copy, KeyRound, X } from 'lucide-react';
 import { getMinhasConexoesIa } from '../api/mcp.api';
+import { etiquetasModulos } from '../config/mcpModulos';
 
 // Ícone "Conexões com IA" ao lado da foto do usuário (Topbar — pedido do usuário): colorido quando há
 // algum conector MCP liberado para ele (Integrações > MCP > usuários do conector; MASTER vê todos),
 // cinza quando não há — com a dica "Conexão com IA indisponível, procure o administrador do sistema".
 // Clicando, abre a janela com cada conexão liberada e a URL para colar no Claude.
 
-const TIPO = {
-  COBRANCA: { rotulo: 'Cobrança', cor: 'bg-emerald-50 text-emerald-700' },
-  DFC_CONSTRUTORAS: { rotulo: 'DFC Construtoras', cor: 'bg-primary-50 text-primary-700' },
-  DFC_ORCAMENTO: { rotulo: 'DFC Construtoras · altera orçamento', cor: 'bg-amber-50 text-amber-700' },
-};
+// Conector de cobrança: uma etiqueta só. Conector Horizon: uma por módulo que ESTE usuário recebe.
+const COBRANCA = [{ codigo: 'COBRANCA', curto: 'Cobrança', cor: 'bg-emerald-50 text-emerald-700' }];
 const DURACAO = (h) => (h % 24 === 0 ? `${h / 24} ${h / 24 === 1 ? 'dia' : 'dias'}` : `${h} ${h === 1 ? 'hora' : 'horas'}`);
 const MSG_INDISPONIVEL = 'Conexão com IA indisponível, procure o administrador do sistema';
 
@@ -29,8 +27,8 @@ function IconeIa({ size = 18, vivo = false }) {
 
 function Conexao({ c }) {
   const [copiado, setCopiado] = useState(false);
-  const tipo = TIPO[c.escopo] || TIPO.COBRANCA;
-  const dfc = c.escopo !== 'COBRANCA';
+  const horizon = c.escopo === 'HORIZON';
+  const etiquetas = horizon ? etiquetasModulos(c.modulos) : COBRANCA;
   async function copiar() {
     try {
       await navigator.clipboard.writeText(c.url);
@@ -53,7 +51,11 @@ function Conexao({ c }) {
         <div className="min-w-0 flex-1">
           <div className="flex flex-wrap items-center gap-2">
             <h3 className="text-sm font-semibold text-gray-900">{c.nome_conector}</h3>
-            <span className={`rounded-full px-2 py-0.5 text-[11px] font-semibold ${tipo.cor}`}>{tipo.rotulo}</span>
+            {etiquetas.map((t) => (
+              <span key={t.codigo} className={`rounded-full px-2 py-0.5 text-[11px] font-semibold ${t.cor}`}>
+                {t.curto}
+              </span>
+            ))}
           </div>
           <p className="text-xs text-gray-500">{c.empresa}</p>
         </div>
@@ -79,11 +81,11 @@ function Conexao({ c }) {
         </button>
       </div>
       <p className="mt-2 flex items-start gap-1.5 text-xs text-gray-500">
-        {dfc ? (
+        {horizon ? (
           <>
             <KeyRound size={13} className="mt-0.5 shrink-0" />
             Ao conectar, o Claude abre o login do Horizon Fin — entre com o seu usuário. O acesso vale {DURACAO(c.sessao_horas)}
-            {c.escopo === 'DFC_ORCAMENTO' ? '; as alterações no Orçamento ficam em seu nome.' : '.'}
+            {c.modulos?.includes('DFC_ORCAMENTO') ? '; as alterações no Orçamento ficam em seu nome.' : '.'}
           </>
         ) : (
           'Quem tiver esta URL consegue ler os dados de cobrança desta empresa — não compartilhe.'

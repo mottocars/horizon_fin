@@ -2,28 +2,28 @@ const { z } = require('zod');
 const service = require('./mcp.service');
 const usuariosService = require('../usuarios/usuarios.service');
 const oauth = require('./dfc/oauth.service');
+const { CODIGOS, normalizarModulos } = require('./modulos');
 
-// `escopo`: DFC_CONSTRUTORAS = flag "DFC CONSTRUTORAS" (só ferramentas do DFC, login Horizon que vale
-// `sessao_horas`); DFC_ORCAMENTO = flag "DFC CONSTRUTORAS (ALTERA ORÇAMENTO)" (as mesmas, mais as que
-// alteram valores HORIZON - INFORMADO do Orçamento); COBRANCA = o conector de cobrança de sempre.
-// Usuários liberados no conector (colaboradores da empresa; MASTER pode sempre).
+// `escopo`: HORIZON = conector com login do Horizon (vale `sessao_horas`) e as ferramentas dos `modulos`
+// marcados (DFC, DFC_ORCAMENTO, SALDOS_CONTAS — ver modulos.js); COBRANCA = o conector de cobrança de
+// sempre. Usuários liberados no conector (colaboradores da empresa; MASTER pode sempre).
 const usuarioIds = z.array(z.coerce.number().int().positive()).max(500);
 const sessaoHoras = z.coerce.number().int().min(1, 'Duração mínima: 1 hora.').max(720, 'Duração máxima: 30 dias.');
 const createSchema = z.object({
   empresa_id: z.coerce.number().int().positive('Selecione uma empresa.'),
   nome_conector: z.string().min(1, 'Nome do conector é obrigatório.'),
-  escopo: z.enum(['COBRANCA', 'DFC_CONSTRUTORAS', 'DFC_ORCAMENTO']).default('COBRANCA'),
+  escopo: z.enum(['COBRANCA', 'HORIZON']).default('COBRANCA'),
+  modulos: z.array(z.enum(CODIGOS)).default([]),
   sessao_horas: sessaoHoras.default(24),
   usuario_ids: usuarioIds.default([]),
 });
 
-// Na edição o tipo só troca entre os dois do DFC (mesma URL): "DFC CONSTRUTORAS" <-> "DFC CONSTRUTORAS
-// (ALTERA ORÇAMENTO)". Cobrança tem outra URL e outro acesso — continua definida na criação.
-const ESCOPOS_DFC = ['DFC_CONSTRUTORAS', 'DFC_ORCAMENTO'];
+// Na edição só os módulos mudam (conector Horizon, mesma URL). Cobrança tem outra URL e outro acesso —
+// continua definida na criação.
 const updateSchema = z.object({
   nome_conector: z.string().min(1, 'Nome do conector é obrigatório.'),
   sessao_horas: sessaoHoras.optional(),
-  escopo: z.enum(ESCOPOS_DFC, { errorMap: () => ({ message: 'Só dá para trocar o tipo entre os conectores DFC Construtoras.' }) }).optional(),
+  modulos: z.array(z.enum(CODIGOS)).optional(),
   usuario_ids: usuarioIds.optional(),
 });
 
@@ -66,6 +66,7 @@ async function getById(req, res, next) {
 async function create(req, res, next) {
   try {
     const data = createSchema.parse(req.body);
+    if (data.escopo === 'HORIZON' && !data.modulos.length) throw badRequest('Marque ao menos um módulo.');
     const item = await service.create(data);
     res.status(201).json(item);
   } catch (err) {
@@ -80,14 +81,13 @@ async function update(req, res, next) {
     const data = updateSchema.parse(req.body);
     const atual = await service.getById(req.params.id);
     if (!atual) return res.status(404).json({ message: 'Conector não encontrado.' });
-    const trocaEscopo = Boolean(data.escopo) && data.escopo !== atual.escopo;
-    if (trocaEscopo && !ESCOPOS_DFC.includes(atual.escopo)) {
-      return next(badRequest('Só dá para trocar o tipo entre os conectores DFC Construtoras.'));
-    }
-    const item = await service.update(req.params.id, { ...data, escopo: trocaEscopo ? data.escopo : undefined });
-    // Trocou leitura <-> altera orçamento: encerra os logins ativos — quem estava conectado entra de novo
-    // e vê na tela de login o que o conector passa a permitir.
-    const sessoesEncerradas = trocaEscopo ? await oauth.encerrarSessoes(atual.id) : 0;
+    if (data.modulos && atual.escopo !== 'HORIZON') return next(badRequest('O conector de cobrança não tem módulos.'));
+    if (data.modulos && !data.modulos.length) return next(badRequest('Marque ao menos um módulo.'));
+    const trocaModulos = Boolean(data.modulos) && normalizarModulos(data.modulos).join() !== normalizarModulos(atual.modulos).join();
+    const item = await service.update(req.params.id, data);
+    // Mudou os módulos: encerra os logins ativos — quem estava conectado entra de novo e vê na tela de
+    // login o que o conector passa a permitir.
+    const sessoesEncerradas = trocaModulos ? await oauth.encerrarSessoes(atual.id) : 0;
     res.json({ ...item, sessoes_encerradas: sessoesEncerradas });
   } catch (err) {
     if (err.issues) return next(badRequest(err.issues[0].message));

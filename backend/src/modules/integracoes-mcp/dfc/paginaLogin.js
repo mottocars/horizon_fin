@@ -1,5 +1,6 @@
-// Tela de login do OAuth do MCP do DFC (aberta pelo Claude ao conectar): HTML simples servido pelo
+// Tela de login do OAuth do MCP do conector Horizon (aberta pelo Claude ao conectar): HTML simples servido pelo
 // backend, na identidade visual do Horizon Fin.
+const { MODULOS } = require('../modulos');
 
 const escapar = (v) =>
   String(v ?? '')
@@ -37,7 +38,7 @@ const ESTILO = `
 
 function pagina(conteudo) {
   return `<!doctype html><html lang="pt-BR"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1">
-<title>Horizon Fin — Conectar ao DFC</title><style>${ESTILO}</style></head><body><div class="card">
+<title>Horizon Fin — Conectar ao Claude</title><style>${ESTILO}</style></head><body><div class="card">
 <img class="logo" src="/api/mcp-oauth/logo.png" alt="Horizon Finanças">${conteudo}</div></body></html>`;
 }
 
@@ -48,16 +49,18 @@ function login({ conector, clienteNome, params, erro, usuario }) {
     .map(([k, v]) => `<input type="hidden" name="${escapar(k)}" value="${escapar(v)}">`)
     .join('');
   return pagina(`
-<h1>Conectar ao DFC Construtoras</h1>
-<p class="sub">${escapar(clienteNome || 'O Claude')} quer consultar o DFC de <strong>${escapar(conector.empresa)}</strong>
+<h1>Conectar ao Horizon Fin</h1>
+<p class="sub">${escapar(clienteNome || 'O Claude')} quer consultar dados de <strong>${escapar(conector.empresa)}</strong>
  (conector "${escapar(conector.nome_conector)}").</p>
-<div class="info">${conector.escopo === 'DFC_ORCAMENTO' ? 'Leitura do DFC e alteração do Orçamento só nas contas HORIZON - INFORMADO, em seu nome.' : 'Acesso somente leitura.'} O login vale por <strong>${duracao(conector.sessao_horas)}</strong>; depois disso o Claude pede para entrar de novo.</div>
+<div class="info">Módulos: ${(conector.modulos || []).map((m) => `<strong>${escapar(MODULOS[m]?.titulo || m)}</strong>`).join(', ')}.
+ ${(conector.modulos || []).includes('DFC_ORCAMENTO') ? 'A alteração do Orçamento (só contas HORIZON - INFORMADO) fica em seu nome; o resto é somente leitura.' : 'Acesso somente leitura.'}
+ Você recebe só os módulos das telas que tem liberadas. O login vale por <strong>${duracao(conector.sessao_horas)}</strong>; depois disso o Claude pede para entrar de novo.</div>
 ${erro ? `<div class="erro">${escapar(erro)}</div>` : ''}
 <form method="post" action="/api/mcp-oauth/authorize" autocomplete="on">${ocultos}
 <label for="usuario">Usuário</label><input id="usuario" name="usuario" value="${escapar(usuario || '')}" autocomplete="username" required autofocus>
 <label for="senha">Senha</label><input id="senha" name="senha" type="password" autocomplete="current-password" required>
 <button type="submit">Entrar e autorizar</button></form>
-<p class="rodape">Use o mesmo usuário do Horizon Fin. Seu usuário precisa ter acesso à tela DFC Construtoras desta empresa.</p>`);
+<p class="rodape">Use o mesmo usuário do Horizon Fin. Seu usuário precisa ter acesso a esta empresa e à tela de ao menos um dos módulos.</p>`);
 }
 
 function erro(mensagem) {

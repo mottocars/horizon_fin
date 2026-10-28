@@ -16,7 +16,7 @@ import {
   listMcpUsuariosDisponiveis,
 } from '../../../api/mcp.api';
 
-// Duração do login do conector DFC Construtoras (depois disso o Claude pede para entrar de novo).
+// Duração do login do conector Horizon (depois disso o Claude pede para entrar de novo).
 const DURACOES = [
   { value: 1, label: '1 hora' },
   { value: 8, label: '8 horas' },
@@ -32,16 +32,20 @@ function dataHora(v) {
 import { nomeExibicaoEmpresa } from '../../../utils/empresa';
 import { useEmpresaTravada } from '../../../hooks/useEmpresaTravada';
 import { useConfirm } from '../../../confirm/ConfirmContext';
+import { MODULOS, alternarModulo } from '../../../config/mcpModulos';
 
 // O token é sempre gerado pelo backend (nunca digitado aqui, diferente da
 // Z-API) — este formulário só coleta Empresa + Nome do conector. Depois de
 // salvo, mostra a URL de conexão pronta pra colar no "Add custom connector"
 // do Claude — nunca o token separado da URL (ver plano).
 // Usuários liberados no conector: colaboradores ativos da empresa (MASTER pode sempre e não aparece).
-// Nos conectores DFC, quem não tem a tela DFC Construtoras não consegue entrar — fica desabilitado.
-function UsuariosConector({ usuarios, carregando, selecionados, onChange, dfc, temEmpresa }) {
+// No conector Horizon, cada um recebe só os módulos das telas que tem (`u.modulos`, vindo do backend):
+// sem nenhum dos módulos marcados não consegue entrar — fica desabilitado.
+function UsuariosConector({ usuarios, carregando, selecionados, onChange, modulos, temEmpresa }) {
   const [busca, setBusca] = useState('');
-  const pode = (u) => !dfc || u.tem_dfc;
+  const horizon = modulos.length > 0;
+  const faltam = (u) => modulos.filter((m) => !u.modulos.includes(m));
+  const pode = (u) => !horizon || faltam(u).length < modulos.length;
   const q = busca.trim().toLowerCase();
   const lista = (usuarios || []).filter((u) => !q || `${u.nome} ${u.username}`.toLowerCase().includes(q));
   const elegiveis = (usuarios || []).filter(pode).map((u) => u.id);
@@ -66,8 +70,8 @@ function UsuariosConector({ usuarios, carregando, selecionados, onChange, dfc, t
             )}
           </h3>
           <p className="mt-0.5 text-xs text-gray-500">
-            {dfc
-              ? 'Só os marcados conseguem entrar neste conector pelo Claude. Usuários MASTER têm acesso sempre.'
+            {horizon
+              ? 'Só os marcados conseguem entrar neste conector pelo Claude, e cada um recebe só os módulos das telas que tem. Usuários MASTER têm acesso a tudo.'
               : 'Este conector não pede login: a lista define quem vê a URL em "Conexões com IA". Usuários MASTER veem sempre.'}
           </p>
         </div>
@@ -110,7 +114,7 @@ function UsuariosConector({ usuarios, carregando, selecionados, onChange, dfc, t
               return (
                 <label
                   key={u.id}
-                  title={habilitado ? undefined : 'Sem acesso à tela DFC Construtoras — libere a tela no cadastro do usuário'}
+                  title={habilitado ? undefined : 'Sem acesso às telas dos módulos marcados — libere a tela no cadastro do usuário'}
                   className={`flex items-center gap-2.5 rounded-lg px-2 py-1.5 ${
                     habilitado ? 'cursor-pointer hover:bg-gray-50' : 'cursor-not-allowed opacity-50'
                   } ${marcado ? 'bg-primary-50/60' : ''}`}
@@ -129,7 +133,11 @@ function UsuariosConector({ usuarios, carregando, selecionados, onChange, dfc, t
                     <span className="block truncate text-sm text-gray-800">{u.nome}</span>
                     <span className="block truncate text-[11px] text-gray-400">
                       {u.username}
-                      {!habilitado ? ' · sem a tela DFC Construtoras' : ''}
+                      {!habilitado
+                        ? ' · sem acesso aos módulos'
+                        : horizon && faltam(u).length
+                        ? ` · sem ${faltam(u).map((m) => MODULOS.find((x) => x.codigo === m).curto).join(', ')}`
+                        : ''}
                     </span>
                   </span>
                 </label>
@@ -142,21 +150,6 @@ function UsuariosConector({ usuarios, carregando, selecionados, onChange, dfc, t
     </div>
   );
 }
-
-// Flags do conector DFC (excluentes).
-const ESCOPOS_DFC = [
-  {
-    escopo: 'DFC_CONSTRUTORAS',
-    titulo: 'DFC CONSTRUTORAS',
-    descricao: 'Conector só para o DFC Construtoras (fluxo de caixa), somente leitura, protegido por login do Horizon Fin com validade.',
-  },
-  {
-    escopo: 'DFC_ORCAMENTO',
-    titulo: 'DFC CONSTRUTORAS (ALTERA ORÇAMENTO)',
-    descricao:
-      'O mesmo conector, e o Claude também pode inserir ou atualizar valores do Orçamento — só nas contas com Origem Projeção "HORIZON - INFORMADO" — e salvar a versão.',
-  },
-];
 
 export default function McpForm() {
   const { id } = useParams();
@@ -174,20 +167,19 @@ export default function McpForm() {
   const [fieldErrors, setFieldErrors] = useState({});
   const [copiado, setCopiado] = useState(false);
 
-  // escopo: COBRANCA (padrão) ou uma das flags do DFC — "DFC CONSTRUTORAS" (DFC_CONSTRUTORAS: só as
-  // ferramentas do DFC, leitura) ou "DFC CONSTRUTORAS (ALTERA ORÇAMENTO)" (DFC_ORCAMENTO: as mesmas, mais
-  // inserir/atualizar valores HORIZON - INFORMADO). As duas com login do Horizon (OAuth) que vale
-  // `sessao_horas`. Na edição, só troca entre as duas flags do DFC (mesma URL) — e isso encerra as
-  // sessões ativas; cobrança continua definida na criação.
-  const [form, setForm] = useState({ empresa_id: '', nome_conector: '', escopo: 'COBRANCA', sessao_horas: 24, usuario_ids: [] });
+  // modulos: os módulos do conector Horizon (login do Horizon via OAuth que vale `sessao_horas`); nenhum
+  // marcado na criação = conector de cobrança. Na edição, um conector Horizon troca os módulos (mesma URL
+  // — e isso encerra as sessões ativas); cobrança continua definida na criação.
+  const [form, setForm] = useState({ empresa_id: '', nome_conector: '', modulos: [], sessao_horas: 24, usuario_ids: [] });
   const [usuariosEmpresa, setUsuariosEmpresa] = useState(null);
   const [carregandoUsuarios, setCarregandoUsuarios] = useState(false);
   const [escopoOriginal, setEscopoOriginal] = useState(null);
-  const dfc = form.escopo !== 'COBRANCA';
-  const alteraOrcamento = form.escopo === 'DFC_ORCAMENTO';
-  // Edição: conector de cobrança fica travado; conector DFC troca entre as duas flags.
+  const [modulosOriginais, setModulosOriginais] = useState([]);
+  const horizon = form.modulos.length > 0;
+  const alteraOrcamento = form.modulos.includes('DFC_ORCAMENTO');
+  // Edição: conector de cobrança fica travado; o Horizon troca os módulos (sem poder ficar sem nenhum).
   const travaEscopo = isEdit && escopoOriginal === 'COBRANCA';
-  const trocouEscopo = isEdit && escopoOriginal !== null && form.escopo !== escopoOriginal;
+  const trocouModulos = isEdit && escopoOriginal === 'HORIZON' && form.modulos.join() !== modulosOriginais.join();
   const [url, setUrl] = useState('');
   const [sessoes, setSessoes] = useState(null);
   const [encerrando, setEncerrando] = useState(false);
@@ -207,11 +199,12 @@ export default function McpForm() {
         setForm({
           empresa_id: String(data.empresa_id),
           nome_conector: data.nome_conector,
-          escopo: data.escopo || 'COBRANCA',
+          modulos: data.modulos || [],
           sessao_horas: data.sessao_horas || 24,
           usuario_ids: data.usuario_ids || [],
         });
         setEscopoOriginal(data.escopo || 'COBRANCA');
+        setModulosOriginais(data.modulos || []);
         setUrl(data.url);
         if (data.escopo !== 'COBRANCA') listMcpSessoes(id).then(setSessoes).catch(() => setSessoes([]));
       })
@@ -305,8 +298,10 @@ export default function McpForm() {
     }
   }
 
-  // Nos conectores DFC, quem não tem a tela DFC Construtoras não entra — não vai na lista.
-  const usuariosValidos = form.usuario_ids.filter((uid) => !dfc || usuariosEmpresa?.find((u) => u.id === uid)?.tem_dfc);
+  // No conector Horizon, quem não tem a tela de nenhum dos módulos não entra — não vai na lista.
+  const usuariosValidos = form.usuario_ids.filter(
+    (uid) => !horizon || usuariosEmpresa?.find((u) => u.id === uid)?.modulos.some((m) => form.modulos.includes(m))
+  );
 
   async function handleSubmit(e) {
     e.preventDefault();
@@ -315,16 +310,17 @@ export default function McpForm() {
     const errors = {};
     if (!form.empresa_id) errors.empresa_id = 'Selecione uma empresa.';
     if (!form.nome_conector.trim()) errors.nome_conector = 'Nome do conector é obrigatório.';
+    if (isEdit && escopoOriginal === 'HORIZON' && !horizon) errors.modulos = 'Marque ao menos um módulo.';
     setFieldErrors(errors);
     if (Object.keys(errors).length > 0) return;
 
     setSaving(true);
     try {
       if (isEdit) {
-        if (trocouEscopo) {
+        if (trocouModulos) {
           const confirmado = await confirm({
-            title: 'Trocar o tipo do conector',
-            description: `O conector passa a ser "${ESCOPOS_DFC.find((e) => e.escopo === form.escopo).titulo}". A URL continua a mesma, mas os logins ativos no Claude serão encerrados — quem estiver conectado precisa entrar de novo. Deseja continuar?`,
+            title: 'Trocar os módulos do conector',
+            description: `O conector passa a ter: ${form.modulos.map((m) => MODULOS.find((x) => x.codigo === m).titulo).join(', ')}. A URL continua a mesma, mas os logins ativos no Claude serão encerrados — quem estiver conectado precisa entrar de novo. Deseja continuar?`,
             confirmLabel: 'Trocar',
             variant: 'warning',
           });
@@ -336,14 +332,15 @@ export default function McpForm() {
         await updateMcpConector(id, {
           nome_conector: form.nome_conector.trim(),
           usuario_ids: usuariosValidos,
-          ...(dfc ? { sessao_horas: Number(form.sessao_horas), escopo: form.escopo } : {}),
+          ...(horizon ? { sessao_horas: Number(form.sessao_horas), modulos: form.modulos } : {}),
         });
         navigate('/integracoes/mcp', { replace: true });
       } else {
         const criado = await createMcpConector({
           empresa_id: Number(form.empresa_id),
           nome_conector: form.nome_conector.trim(),
-          escopo: form.escopo,
+          escopo: horizon ? 'HORIZON' : 'COBRANCA',
+          modulos: form.modulos,
           sessao_horas: Number(form.sessao_horas),
           usuario_ids: usuariosValidos,
         });
@@ -375,11 +372,11 @@ export default function McpForm() {
           {isEdit ? 'Editar conector MCP' : 'Novo conector MCP'}
         </h2>
         <p className="mb-4 text-sm text-gray-500">
-          {alteraOrcamento
-            ? 'Um conector DFC Construtoras (altera orçamento) dá ao Claude o acesso de leitura ao fluxo de caixa (DFC) desta empresa e permite pedir a ele que insira ou atualize valores do Orçamento — só nas contas com Origem Projeção "HORIZON - INFORMADO" — e salve a versão. Ao conectar, o Claude pede o login do Horizon Fin, e as alterações ficam em nome de quem entrou.'
-            : dfc
-            ? 'Um conector DFC Construtoras dá ao Claude acesso de leitura ao fluxo de caixa (DFC) desta empresa — realizado, projetado, saldos, Projeção CEF e as bases — através de uma URL que você cola em "Add custom connector". Ao conectar, o Claude pede o login do Horizon Fin.'
-            : 'Um conector MCP dá ao Claude acesso de leitura aos dados de cobrança e contas a receber desta empresa, através de uma URL que você cola em "Add custom connector".'}
+          {horizon
+            ? `Um conector Horizon dá ao Claude, numa URL só (cole em "Add custom connector"), os módulos marcados abaixo desta empresa. Ao conectar, o Claude pede o login do Horizon Fin${
+                alteraOrcamento ? ', e as alterações no Orçamento ficam em nome de quem entrou' : ''
+              }.`
+            : 'Marque os módulos para criar um conector Horizon (com login). Sem nenhum módulo, é o conector de cobrança: leitura dos dados de cobrança e contas a receber desta empresa, por uma URL sem login.'}
         </p>
 
         {error && <div className="mb-4 rounded-lg bg-red-50 px-3 py-2 text-sm text-red-600">{error}</div>}
@@ -417,16 +414,15 @@ export default function McpForm() {
             </div>
 
             <div className="rounded-lg border border-gray-200 p-4">
-              {/* As duas flags do DFC são excluentes: marcar uma desmarca a outra. */}
+              <p className="mb-3 text-xs font-medium uppercase tracking-wide text-gray-400">Módulos do conector</p>
               <div className="space-y-3">
-                {ESCOPOS_DFC.map((op) => (
-                  <label key={op.escopo} className={`flex items-start gap-3 ${travaEscopo ? 'cursor-not-allowed opacity-80' : 'cursor-pointer'}`}>
+                {MODULOS.map((op) => (
+                  <label key={op.codigo} className={`flex items-start gap-3 ${travaEscopo ? 'cursor-not-allowed opacity-80' : 'cursor-pointer'}`}>
                     <input
                       type="checkbox"
-                      checked={form.escopo === op.escopo}
+                      checked={form.modulos.includes(op.codigo)}
                       disabled={travaEscopo}
-                      // Na edição de um conector DFC não dá para desmarcar as duas (viraria cobrança).
-                      onChange={(e) => handleChange('escopo', e.target.checked ? op.escopo : isEdit ? form.escopo : 'COBRANCA')}
+                      onChange={() => handleChange('modulos', alternarModulo(form.modulos, op.codigo))}
                       className="mt-0.5 h-4 w-4 rounded border-gray-300 text-primary-600 focus:ring-primary-500"
                     />
                     <span>
@@ -439,7 +435,8 @@ export default function McpForm() {
                   </label>
                 ))}
               </div>
-              {dfc && (
+              {fieldErrors.modulos && <p className="mt-2 text-xs text-red-600">{fieldErrors.modulos}</p>}
+              {horizon && (
                 <div className="mt-4 grid grid-cols-1 gap-4 border-t border-gray-100 pt-4 sm:grid-cols-2">
                   <div>
                     <label className="mb-1 block text-sm font-medium text-gray-700">Validade do login</label>
@@ -459,7 +456,7 @@ export default function McpForm() {
                   <div className="flex items-start gap-2 rounded-lg bg-primary-50 px-3 py-2 text-xs text-primary-700">
                     <ShieldCheck size={16} className="mt-0.5 shrink-0" />
                     {alteraOrcamento
-                      ? 'Só entram os usuários marcados em Usuários com acesso (e os MASTER). Altera só valores HORIZON - INFORMADO, em nome de quem entrou.'
+                      ? 'Só entram os usuários marcados em Usuários com acesso (e os MASTER). Altera só valores HORIZON - INFORMADO do Orçamento, em nome de quem entrou; o resto é leitura.'
                       : 'Só entram os usuários marcados em Usuários com acesso (e os MASTER). O acesso é somente leitura.'}
                   </div>
                 </div>
@@ -471,7 +468,7 @@ export default function McpForm() {
               carregando={carregandoUsuarios}
               selecionados={form.usuario_ids}
               onChange={(ids) => handleChange('usuario_ids', ids)}
-              dfc={dfc}
+              modulos={form.modulos}
               temEmpresa={Boolean(form.empresa_id)}
             />
 
@@ -493,14 +490,14 @@ export default function McpForm() {
                   </IconButton>
                 </div>
                 <p className="mt-1 text-xs text-gray-400">
-                  {dfc
+                  {horizon
                     ? 'Cole esta URL em "Add custom connector" no Claude e clique em Conectar: abre a tela de login do Horizon Fin. Regenerar o token invalida esta URL imediatamente.'
                     : 'Cole esta URL completa em "Add custom connector" no Claude. Quem tiver esta URL consegue ler os dados de cobrança desta empresa — trate-a como uma senha. Regenerar o token invalida esta URL imediatamente.'}
                 </p>
               </div>
             )}
 
-            {isEdit && dfc && (
+            {isEdit && horizon && (
               <div>
                 <div className="mb-1 flex items-center justify-between">
                   <label className="block text-sm font-medium text-gray-700">Sessões ativas no Claude</label>

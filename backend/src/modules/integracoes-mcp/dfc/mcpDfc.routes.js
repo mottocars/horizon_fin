@@ -4,11 +4,40 @@ const { McpServer } = require('@modelcontextprotocol/sdk/server/mcp.js');
 const { StreamableHTTPServerTransport } = require('@modelcontextprotocol/sdk/server/streamableHttp.js');
 const oauth = require('./oauth.service');
 const { registrarToolsDfc } = require('./tools');
+const { TOOLS_SALDOS } = require('../saldos/tools');
 
-// MCP do DFC Construtoras (/api/mcp/dfc/:token). O token do link só diz QUAL conector (empresa e
-// duração do login); quem libera é o login do Horizon (OAuth, ver oauth.routes.js): sem um Bearer
-// válido e dentro da validade da sessão, responde 401 apontando os metadados de autorização — e o
-// Claude abre a tela de login. Mesmo modo stateless de mcpProtocolo.routes.js.
+// MCP do conector Horizon (/api/mcp/dfc/:token — o caminho "dfc" ficou dos conectores já criados). O
+// token do link só diz QUAL conector (empresa, módulos e duração do login); quem libera é o login do
+// Horizon (OAuth, ver oauth.routes.js): sem um Bearer válido e dentro da validade da sessão, responde
+// 401 apontando os metadados de autorização — e o Claude abre a tela de login. Mesmo modo stateless de
+// mcpProtocolo.routes.js. As ferramentas são as dos módulos que QUEM ENTROU pode usar (modulos.js).
+
+const INSTRUCOES = {
+  DFC:
+    'DFC Construtoras (fluxo de caixa): comece por dfc_guia para entender como o fluxo é montado e qual ferramenta usar. ' +
+    'Para o dashboard Econômico Financeiro › Fluxo de Caixa (indicadores, etiquetas, fôlego por SPE, simulador), use dfc_painel_fluxo_caixa. Valores em R$, meses AAAA-MM.',
+  DFC_ORCAMENTO:
+    'Alteração do Orçamento: só dá para inserir/atualizar valores nas contas com Origem Projeção "HORIZON - INFORMADO" (dfc_informado_contas mostra quais); as demais origens vêm das integrações e não podem ser alteradas. ' +
+    'Fluxo: dfc_informado_contas -> confirmar com o usuário -> dfc_informado_gravar / dfc_informado_replicar -> prévia em dfc_informado_salvar_versao -> salvar com confirmar=true só com o aval do usuário. ' +
+    'Valores em R$ com sinal (saída negativa).',
+  SALDOS_CONTAS:
+    'Saldo das Contas Bancárias (Operações > Saldo Contas Bancárias, só leitura): comece por saldos_guia — explica classificações, origem de cada saldo (automático VanPix/Itaú, herdado do dia anterior ou manual), bloqueios, cheque especial e como cada total é calculado. ' +
+    'Totais e quem compõe cada um: saldos_resumo; cada conta no dia: saldos_contas; uma conta ao longo dos dias: saldos_historico_conta. Datas AAAA-MM-DD. ' +
+    'Não confunda com dfc_saldos_bancarios (saldo de abertura do mês pelo extrato do Sienge, usado no DFC).',
+};
+
+function registrarTools(server, empresaId, modulos, ctx) {
+  if (modulos.includes('DFC')) registrarToolsDfc(server, empresaId, { escrita: modulos.includes('DFC_ORCAMENTO'), usuarioId: ctx.usuarioId });
+  if (modulos.includes('SALDOS_CONTAS')) {
+    for (const tool of TOOLS_SALDOS) {
+      server.registerTool(
+        tool.name,
+        { description: tool.description, inputSchema: tool.inputSchema, annotations: { readOnlyHint: true } },
+        tool.handler(empresaId, ctx)
+      );
+    }
+  }
+}
 
 const router = Router();
 router.use(cors({ origin: '*', exposedHeaders: ['WWW-Authenticate', 'Mcp-Session-Id'] }));
@@ -36,21 +65,17 @@ router.post('/:token', async (req, res) => {
     const acesso = header.startsWith('Bearer ') ? await oauth.validarAcesso(header.slice(7), conector) : null;
     if (!acesso) return naoAutorizado(res, req.params.token, 'Faça login no Horizon Fin para usar este conector.');
 
-    const escrita = conector.escopo === 'DFC_ORCAMENTO';
+    const { modulos } = acesso.usuario;
     server = new McpServer(
-      { name: 'horizon-fin-dfc-construtoras', version: '1.0.0' },
+      { name: 'horizon-fin', version: '2.0.0' },
       {
-        instructions: escrita
-          ? 'Servidor do DFC Construtoras (fluxo de caixa) do Horizon Fin, com alteração do Orçamento. Comece por dfc_guia para entender como o fluxo é montado. ' +
-            'Para o dashboard Econômico Financeiro › Fluxo de Caixa use dfc_painel_fluxo_caixa. ' +
-            'Só dá para inserir/atualizar valores nas contas com Origem Projeção "HORIZON - INFORMADO" (dfc_informado_contas mostra quais); as demais origens vêm das integrações e não podem ser alteradas. ' +
-            'Fluxo: dfc_informado_contas -> confirmar com o usuário -> dfc_informado_gravar / dfc_informado_replicar -> prévia em dfc_informado_salvar_versao -> salvar com confirmar=true só com o aval do usuário. ' +
-            'Valores em R$ com sinal (saída negativa), meses AAAA-MM.'
-          : 'Servidor do DFC Construtoras (fluxo de caixa) do Horizon Fin, só leitura. Comece por dfc_guia para entender como o fluxo é montado e qual ferramenta usar. ' +
-            'Para o dashboard Econômico Financeiro › Fluxo de Caixa (indicadores, etiquetas, fôlego por SPE, simulador), use dfc_painel_fluxo_caixa. Valores em R$, meses AAAA-MM.',
+        instructions:
+          `Servidor do Horizon Fin da empresa ${conector.empresa}. ` +
+          (modulos.includes('DFC_ORCAMENTO') ? '' : 'Só leitura. ') +
+          modulos.map((m) => INSTRUCOES[m]).join(' '),
       }
     );
-    registrarToolsDfc(server, conector.empresa_id, { escrita, usuarioId: acesso.usuario.id });
+    registrarTools(server, conector.empresa_id, modulos, { usuarioId: acesso.usuario.id });
     transport = new StreamableHTTPServerTransport({ sessionIdGenerator: undefined });
     res.on('close', () => {
       transport.close();

@@ -230,9 +230,11 @@ CREATE TABLE integracoes_mcp (
     -- remontar a URL completa e reexibi-la na tela (fica sempre visível,
     -- não é reveal-once); nunca usado para autenticar a chamada MCP em si.
     token_enc           TEXT NOT NULL,
-    -- COBRANCA (token na URL) ou DFC_CONSTRUTORAS (só ferramentas do DFC, login Horizon via OAuth)
-    -- — ver database/migrations/2026-10-14-mcp-dfc-oauth.sql.
-    escopo              VARCHAR(30) NOT NULL DEFAULT 'COBRANCA' CHECK (escopo IN ('COBRANCA', 'DFC_CONSTRUTORAS', 'DFC_ORCAMENTO')),
+    -- COBRANCA (token na URL) ou HORIZON (login Horizon via OAuth, ferramentas dos `modulos`) — ver
+    -- database/migrations/2026-10-14-mcp-dfc-oauth.sql e 2026-10-28-mcp-modulos.sql.
+    escopo              VARCHAR(30) NOT NULL DEFAULT 'COBRANCA' CHECK (escopo IN ('COBRANCA', 'HORIZON')),
+    -- Conector HORIZON: DFC, DFC_ORCAMENTO (inclui DFC), SALDOS_CONTAS — ver integracoes-mcp/modulos.js.
+    modulos             TEXT[] NOT NULL DEFAULT '{}',
     -- Duração do login no Claude (conectores DFC).
     sessao_horas        INTEGER NOT NULL DEFAULT 24 CHECK (sessao_horas BETWEEN 1 AND 720),
     ativo               BOOLEAN DEFAULT TRUE,

@@ -9,6 +9,7 @@ import SearchableSelect from '../../../components/SearchableSelect';
 import { listMcpConectores, setMcpStatus } from '../../../api/mcp.api';
 import { formatCnpj } from '../../Empresas/format';
 import { useConfirm } from '../../../confirm/ConfirmContext';
+import { etiquetasModulos } from '../../../config/mcpModulos';
 
 const LIMIT = 8;
 
@@ -132,14 +133,14 @@ export default function McpList() {
                     <td className="py-3 text-gray-600">{formatCnpj(item.empresa_cnpj)}</td>
                     <td className="py-3 text-gray-600">
                       {item.nome_conector}
-                      {item.escopo === 'DFC_CONSTRUTORAS' && (
-                        <span className="ml-2 rounded-full bg-primary-50 px-2 py-0.5 text-[11px] font-semibold text-primary-700">DFC CONSTRUTORAS</span>
+                      {item.escopo === 'COBRANCA' && (
+                        <span className="ml-2 rounded-full bg-emerald-50 px-2 py-0.5 text-[11px] font-semibold text-emerald-700">COBRANÇA</span>
                       )}
-                      {item.escopo === 'DFC_ORCAMENTO' && (
-                        <span className="ml-2 rounded-full bg-amber-50 px-2 py-0.5 text-[11px] font-semibold text-amber-700">
-                          DFC CONSTRUTORAS (ALTERA ORÇAMENTO)
+                      {etiquetasModulos(item.modulos).map((m) => (
+                        <span key={m.codigo} className={`ml-2 rounded-full px-2 py-0.5 text-[11px] font-semibold ${m.cor}`}>
+                          {m.titulo}
                         </span>
-                      )}
+                      ))}
                     </td>
                     <td className="py-3">
                       <span

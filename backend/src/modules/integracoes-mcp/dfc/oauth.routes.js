@@ -69,7 +69,7 @@ async function validarPedido(q) {
     return { redirecionar: voltar('invalid_request', 'PKCE S256 obrigatório.') };
   }
   const conector = await oauth.conectorPorToken(oauth.tokenDoRecurso(q.resource));
-  if (!conector) return { erroPagina: 'Este link de conector não existe, foi desativado ou não é do DFC Construtoras.' };
+  if (!conector) return { erroPagina: 'Este link de conector não existe, foi desativado ou não é um conector com login do Horizon Fin.' };
   return { cli, redirect, conector };
 }
 

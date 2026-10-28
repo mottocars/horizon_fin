@@ -2,7 +2,7 @@ const crypto = require('crypto');
 const bcrypt = require('bcryptjs');
 const pool = require('../../../config/db');
 const env = require('../../../config/env');
-const T = require('../../../config/telas');
+const { modulosDoUsuario } = require('../modulos');
 
 // Servidor de autorização OAuth 2.1 do MCP do DFC Construtoras (pedido do usuário: o conector do
 // Claude só funciona depois de entrar com o usuário do Horizon Fin, e o login expira).
@@ -60,7 +60,7 @@ function metadadosRecurso(token) {
     authorization_servers: [urls().issuer],
     bearer_methods_supported: ['header'],
     scopes_supported: ['dfc'],
-    resource_name: 'Horizon Fin — DFC Construtoras',
+    resource_name: 'Horizon Fin',
   };
 }
 
@@ -104,13 +104,14 @@ async function cliente(clientId) {
 }
 
 // ─── Conector e usuário ─────────────────────────────────────────────────────────────────────────
-// Conector DFC ativo pelo token do link (o `resource` que o Claude manda no /authorize termina nele).
+// Conector Horizon ativo pelo token do link (o `resource` que o Claude manda no /authorize termina nele).
 async function conectorPorToken(token) {
   if (!token) return null;
   const { rows } = await pool.query(
-    `SELECT m.id, m.empresa_id, m.nome_conector, m.sessao_horas, m.ativo, m.escopo, COALESCE(NULLIF(e.nome_fantasia, ''), e.razao_social) AS empresa
+    `SELECT m.id, m.empresa_id, m.nome_conector, m.sessao_horas, m.ativo, m.escopo, m.modulos,
+            COALESCE(NULLIF(e.nome_fantasia, ''), e.razao_social) AS empresa
        FROM integracoes_mcp m JOIN empresas e ON e.id = m.empresa_id
-      WHERE m.token_hash = $1 AND m.escopo IN ('DFC_CONSTRUTORAS', 'DFC_ORCAMENTO')`,
+      WHERE m.token_hash = $1 AND m.escopo = 'HORIZON'`,
     [hash(token)]
   );
   const c = rows[0];
@@ -123,7 +124,8 @@ const tokenDoRecurso = (resource) => {
 };
 
 // O usuário pode usar o conector? Ativo e MASTER; ou liberado no conector (lista de usuários do
-// formulário), com acesso à empresa e à tela do DFC.
+// formulário), com acesso à empresa e à tela de ao menos um dos módulos. Devolve o usuário com os
+// `modulos` que ele recebe (só os das telas que tem — ver modulos.js).
 async function usuarioPodeUsar(usuarioId, conector) {
   const { rows } = await pool.query(
     `SELECT u.id, u.nome, u.ativo, u.permissao, u.telas_permitidas,
@@ -134,8 +136,10 @@ async function usuarioPodeUsar(usuarioId, conector) {
   );
   const u = rows[0];
   if (!u || !u.ativo) return null;
-  if (u.permissao === 'MASTER') return u;
-  return u.liberado && u.tem_empresa && (u.telas_permitidas || []).includes(T.DFC) ? u : null;
+  const modulos = modulosDoUsuario(u, conector.modulos);
+  if (!modulos.length) return null;
+  if (u.permissao === 'MASTER') return { ...u, modulos };
+  return u.liberado && u.tem_empresa ? { ...u, modulos } : null;
 }
 
 // Login (mesma regra de auth.service: usuário + senha). Mensagem genérica em qualquer falha.
@@ -146,7 +150,7 @@ async function autenticar(username, senha, conector) {
   if (!ok) throw erroOAuth('access_denied', 'Usuário ou senha inválidos.', 401);
   const permitido = await usuarioPodeUsar(u.id, conector);
   if (!permitido) {
-    throw erroOAuth('access_denied', 'Seu usuário não está liberado neste conector (ou não tem acesso ao DFC Construtoras desta empresa). Procure o administrador do sistema.', 403);
+    throw erroOAuth('access_denied', 'Seu usuário não está liberado neste conector (ou não tem acesso às telas dos módulos dele nesta empresa). Procure o administrador do sistema.', 403);
   }
   return permitido;
 }
