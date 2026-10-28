@@ -49,20 +49,8 @@ export const NF = FAIXAS.length;
 export const IDX_HOJE = FAIXAS.findIndex((f) => f.id === 'h');
 export const faixaDe = (atraso) => FAIXAS.findIndex((f) => atraso >= f.min && atraso <= f.max);
 
-// Colunas do detalhamento: resumidas (8) ou uma por faixa (15). `fx`: índices das faixas somadas.
-export const COLUNAS = {
-  resumidas: [
-    { id: 'v180', grupo: 'v', rotulo: '+180', titulo: 'Vencido há mais de 180 dias', fx: [0] },
-    { id: 'v91', grupo: 'v', rotulo: '91–180', titulo: 'Vencido de 91 a 180 dias', fx: [1] },
-    { id: 'v31', grupo: 'v', rotulo: '31–90', titulo: 'Vencido de 31 a 90 dias', fx: [2, 3] },
-    { id: 'v1', grupo: 'v', rotulo: '1–30', titulo: 'Vencido de 1 a 30 dias', fx: [4, 5, 6] },
-    { id: 'h', grupo: 'h', rotulo: 'Hoje', titulo: 'Vence hoje', fx: [7] },
-    { id: 'a1', grupo: 'a', rotulo: '1–30', titulo: 'Vence em 1 a 30 dias', fx: [8, 9, 10] },
-    { id: 'a31', grupo: 'a', rotulo: '31–90', titulo: 'Vence em 31 a 90 dias', fx: [11, 12] },
-    { id: 'a91', grupo: 'a', rotulo: '+90', titulo: 'Vence em mais de 90 dias', fx: [13, 14] },
-  ],
-  detalhadas: FAIXAS.map((f, i) => ({ id: f.id, grupo: f.grupo, rotulo: f.curto, titulo: f.rotulo, fx: [i] })),
-};
+// Colunas do detalhamento: uma por faixa. `fx`: índices das faixas somadas.
+export const COLUNAS = FAIXAS.map((f, i) => ({ id: f.id, grupo: f.grupo, rotulo: f.curto, titulo: f.rotulo, fx: [i] }));
 
 // Condições de pagamento que não viram dinheiro no banco (simulador).
 export const SEM_CAIXA = /PERMUTA|N[AÃ]O COBRAR/i;
@@ -107,14 +95,16 @@ export function caixa(contas) {
 }
 
 // ─── Escopo dos filtros da barra ─────────────────────────────────────────────────────────────────
-// `centros`: ids marcados (vazio = todos); `previsoes`: entram as previsões financeiras.
+// `inicio` / `fim` ('AAAA-MM-DD'): período do VENCIMENTO das parcelas; `centros`: ids marcados (vazio =
+// todos); `previsoes`: entram as previsões financeiras.
 // Devolve as fatias (parcela × centro × natureza) no escopo e o saldo das contas — com centros
 // marcados, só as contas das empresas (Sienge) desses centros.
-export function escopo(B, { centros = [], previsoes = false } = {}) {
+export function escopo(B, { inicio = null, fim = null, centros = [], previsoes = false } = {}) {
   const sel = centros.length ? new Set(centros) : null;
   const linhas = [];
   B.titulos.forEach((t) => {
     if (t.pv && !previsoes) return;
+    if ((inicio && t.v < inicio) || (fim && t.v > fim)) return;
     t.f.forEach(([centro, nat, frac]) => {
       if (sel && !sel.has(centro)) return;
       linhas.push({ t, centro, nat, frac, valor: t.s * frac });
@@ -125,8 +115,7 @@ export function escopo(B, { centros = [], previsoes = false } = {}) {
     const cos = new Set([...sel].map((id) => B.centroPorId.get(id)?.company_id).filter((x) => x !== null && x !== undefined));
     contas = contas.filter((c) => cos.has(c.company_id));
   }
-  const previsoesFora = previsoes ? 0 : soma(B.titulos.filter((t) => t.pv).flatMap((t) => t.f.filter(([c]) => !sel || sel.has(c)).map(([, , fr]) => t.s * fr)));
-  return { B, linhas, banco: { data: B.bancos.data, ...caixa(contas), lista: contas }, filtrado: !!sel, previsoesFora };
+  return { B, linhas, banco: { data: B.bancos.data, ...caixa(contas), lista: contas }, filtrado: !!sel };
 }
 
 // Soma por faixa de um conjunto de fatias: { fx: [15], total, vencido, n (parcelas), pessoas }.
@@ -308,16 +297,10 @@ function somar(linhas) {
   return { fx, total: soma(fx), vencido, n: tit.size, atrasoMedio: vencido > 0 ? vencidoDias / vencido : 0 };
 }
 
-const ORDENS = {
-  total: (a, b) => b.total - a.total,
-  vencido: (a, b) => b.vencido - a.vencido || b.total - a.total,
-  atraso: (a, b) => b.atrasoMedio - a.atrasoMedio || b.vencido - a.vencido,
-  nome: (a, b) => a.nome.localeCompare(b.nome, 'pt-BR'),
-};
-
-// Árvore pelos níveis escolhidos (ex.: ['centro', 'natureza', 'pessoa']); embaixo do último nível,
-// as parcelas (a mesma parcela em duas fatias do mesmo grupo vira uma linha só).
-export function arvore(E, linhas, niveis, lado, ordem = 'total', caminho = '') {
+// Árvore pelos níveis escolhidos (ex.: ['centro', 'natureza', 'pessoa']), do maior vencido para o
+// menor (empate: maior total); embaixo do último nível, as parcelas (a mesma parcela em duas fatias do
+// mesmo grupo vira uma linha só).
+export function arvore(E, linhas, niveis, lado, caminho = '') {
   if (!niveis.length) return null;
   const [dim, ...resto] = niveis;
   const D = DIMENSOES[dim];
@@ -331,10 +314,10 @@ export function arvore(E, linhas, niveis, lado, ordem = 'total', caminho = '') {
     .map(([k, ls]) => {
       const id = `${caminho}/${dim}:${k}`;
       let cache = null; // os filhos só são montados quando o grupo é aberto
-      const filhos = resto.length ? () => (cache ||= arvore(E, ls, resto, lado, ordem, id)) : null;
+      const filhos = resto.length ? () => (cache ||= arvore(E, ls, resto, lado, id)) : null;
       return { id, dim, chave: k, nome: D.nome(E.B, k, lado), linhas: ls, ...somar(ls), filhos };
     })
-    .sort(ORDENS[ordem]);
+    .sort((a, b) => b.vencido - a.vencido || b.total - a.total);
 }
 
 // Parcelas de um grupo: soma as fatias da mesma parcela; mais vencidas primeiro, depois as que
@@ -404,21 +387,19 @@ export function maiores(E, lado, quais, n = 10) {
 
 // ─── Simulador de caixa dos próximos dias ────────────────────────────────────────────────────────
 // Parte do saldo das contas de hoje (Saldo Contas Bancárias) e, dia a dia, recebe e paga o que vence
-// (fim de semana cai na segunda), com os ajustes do cenário:
+// (fim de semana cai na segunda); o vencido a pagar não entra. Ajustes do cenário (só nos recebimentos):
 // - naoReceber: % das entradas previstas que não entra;
-// - atrasoReceb / adiarPag: dias de atraso nos recebimentos / de adiamento dos pagamentos;
+// - atrasoReceb: dias de atraso nos recebimentos;
 // - recuperar: % do vencido a receber de até 90 dias que entra, dividido pelos dias úteis do período;
-// - pagarVencidos: % do vencido a pagar de até 90 dias quitado no 1º dia útil;
 // - semCaixa: permutas e "Não cobrar" não entram no banco;
-// - partida: 'livre' (contas liberadas, menos bloqueios) ou 'total' (todas as contas);
-// - aporte: dinheiro novo (aporte, captação) no 1º dia; minimo: saldo mínimo de segurança.
+// - partida: 'livre' (contas liberadas, menos bloqueios) ou 'total' (todas as contas).
 export const CENARIOS = {
-  previsto: { rotulo: 'Previsto', naoReceber: 0, atrasoReceb: 0, recuperar: 0, pagarVencidos: 0, adiarPag: 0 },
-  conservador: { rotulo: 'Conservador', naoReceber: 10, atrasoReceb: 5, recuperar: 0, pagarVencidos: 50, adiarPag: 0 },
-  estresse: { rotulo: 'Estresse', naoReceber: 30, atrasoReceb: 10, recuperar: 0, pagarVencidos: 100, adiarPag: 0 },
+  previsto: { rotulo: 'Previsto', naoReceber: 0, atrasoReceb: 0, recuperar: 0 },
+  conservador: { rotulo: 'Conservador', naoReceber: 10, atrasoReceb: 5, recuperar: 0 },
+  estresse: { rotulo: 'Estresse', naoReceber: 30, atrasoReceb: 10, recuperar: 0 },
 };
-export const PADRAO_SIM = { ...CENARIOS.previsto, horizonte: 15, partida: 'livre', semCaixa: true, aporte: 0, minimo: 0 };
-const CHAVES_CENARIO = ['naoReceber', 'atrasoReceb', 'recuperar', 'pagarVencidos', 'adiarPag'];
+export const PADRAO_SIM = { ...CENARIOS.previsto, horizonte: 15, partida: 'livre', semCaixa: true };
+const CHAVES_CENARIO = ['naoReceber', 'atrasoReceb', 'recuperar'];
 export const cenarioDe = (p) => Object.keys(CENARIOS).find((k) => CHAVES_CENARIO.every((c) => CENARIOS[k][c] === p[c])) || null;
 
 export function simular(E, params) {
@@ -438,7 +419,6 @@ export function simular(E, params) {
   const uteis = dia.filter((d) => d.util);
   const fatorR = 1 - p.naoReceber / 100;
   let recuperavel = 0;
-  let vencidoPagar = 0;
   let semCaixa = 0;
 
   E.linhas.forEach((x) => {
@@ -453,26 +433,18 @@ export function simular(E, params) {
         return;
       }
       lancar(diaUtil(diaUtil(t.vn) + p.atrasoReceb), 'ent', x.valor * fatorR, { t, frac: x.frac, nominal: x.valor });
-    } else {
-      if (t.atraso > 0) {
-        if (t.atraso <= 90) vencidoPagar += x.valor;
-        return;
-      }
-      lancar(diaUtil(diaUtil(t.vn) + p.adiarPag), 'sai', x.valor, { t, frac: x.frac, nominal: x.valor });
+    } else if (t.atraso <= 0) {
+      lancar(diaUtil(t.vn), 'sai', x.valor, { t, frac: x.frac, nominal: x.valor });
     }
   });
-  // Vencidos: recuperação dividida pelos dias úteis; vencido a pagar no 1º dia útil.
+  // Recuperação do vencido a receber, dividida pelos dias úteis.
   const rec = recuperavel * (p.recuperar / 100);
   if (rec && uteis.length) uteis.forEach((d) => lancar(d.n, 'ent', rec / uteis.length, { extra: 'recuperacao', nominal: rec / uteis.length }));
-  const pv = vencidoPagar * (p.pagarVencidos / 100);
-  if (pv && uteis.length) lancar(uteis[0].n, 'sai', pv, { extra: 'vencidos', nominal: pv });
-  if (p.aporte) lancar(h, 'ent', p.aporte, { extra: 'aporte', nominal: p.aporte });
 
   let saldo = ini;
   let min = Infinity;
   let minData = null;
   let primeiroNegativo = null;
-  let primeiroAbaixo = null;
   let primeiroEstouro = null;
   dia.forEach((d) => {
     d.ini = saldo;
@@ -483,7 +455,6 @@ export function simular(E, params) {
       minData = d.data;
     }
     if (saldo < 0 && !primeiroNegativo) primeiroNegativo = d.data;
-    if (saldo < p.minimo && !primeiroAbaixo) primeiroAbaixo = d.data;
     if (saldo < -banco.cheque && !primeiroEstouro) primeiroEstouro = d.data;
   });
   return {
@@ -497,12 +468,10 @@ export function simular(E, params) {
     minData,
     cheque: banco.cheque,
     primeiroNegativo,
-    primeiroAbaixo,
     primeiroEstouro,
-    necessidade: Math.max(0, p.minimo - min),
+    necessidade: Math.max(0, -min), // para o caixa não ficar negativo
     diasNegativos: dia.filter((d) => d.fim < 0).length,
     recuperavel,
-    vencidoPagar,
     semCaixa,
   };
 }

@@ -6,16 +6,18 @@
   --avencer: var(--s-in);
 }
 
-/* Barra: situação da base */
-.painel-cfo.aging .controls .base {
-  font-size: 12px;
-  color: var(--muted);
-  line-height: 1.35;
-  align-self: center;
-}
-.painel-cfo.aging .controls .base b {
-  color: var(--ink-2);
-  font-weight: 600;
+/* Barra: período (Início e Fim), no visual do campo de mês do Fluxo de Caixa */
+.painel-cfo.aging .ctl input[type='date'] {
+  height: var(--altura-filtro);
+  box-sizing: border-box;
+  padding: 0 8px;
+  border: 1px solid var(--line);
+  border-radius: 4px;
+  background: var(--surface-2);
+  color: var(--ink);
+  font-size: 14px;
+  font-family: inherit;
+  min-width: 150px;
 }
 
 /* Tiles: linha de cima a receber, de baixo a pagar — filete colorido à esquerda */
@@ -232,8 +234,7 @@
   font-size: 13.5px;
   color: var(--ink-2);
 }
-.painel-cfo .sim .campo select,
-.painel-cfo .sim .campo input {
+.painel-cfo .sim .campo select {
   padding: 5px 8px;
   border: 1px solid var(--line);
   border-radius: 4px;
@@ -243,10 +244,6 @@
   min-width: 0;
   width: 100%;
   box-sizing: border-box;
-}
-.painel-cfo .sim .campo input {
-  font-family: var(--f-mono);
-  text-align: right;
 }
 .painel-cfo .sim .duas {
   display: grid;
@@ -417,7 +414,7 @@
   text-transform: uppercase;
   color: var(--muted);
   white-space: nowrap;
-  padding: 6px 8px;
+  padding: 6px 5px;
   text-align: right;
 }
 .painel-cfo .ag thead tr:first-child th {
@@ -457,15 +454,15 @@
   z-index: 3;
 }
 .painel-cfo .ag td {
-  padding: 5px 8px;
+  padding: 5px 5px;
   border-bottom: 1px solid var(--grid);
   background: var(--surface);
   vertical-align: middle;
 }
 .painel-cfo .ag td.nm {
   z-index: 1;
-  min-width: 300px;
-  max-width: 440px;
+  min-width: 220px;
+  max-width: 300px;
 }
 .painel-cfo .ag td.nm .lin {
   display: flex;
@@ -518,7 +515,7 @@
   font: 500 12px var(--f-mono);
   font-variant-numeric: tabular-nums;
   white-space: nowrap;
-  min-width: 64px;
+  min-width: 48px;
 }
 .painel-cfo .ag td.c.z {
   color: var(--line);

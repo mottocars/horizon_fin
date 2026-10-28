@@ -1,5 +1,5 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
-import { BookOpen, CircleDollarSign, Download, Filter, LayoutGrid, Layers, LineChart, Loader2, Table2, Users } from 'lucide-react';
+import { BookOpen, Download, Filter, LayoutGrid, Layers, LineChart, Loader2, Table2, Users } from 'lucide-react';
 import { getAgingPainel } from '../../../../api/dashboards.api';
 import CabecalhoDashboard from '../../CabecalhoDashboard';
 import { FiltroCentros } from '../fluxo/FluxoCaixaPainel';
@@ -8,13 +8,14 @@ import { SumarioCtx } from '../fluxo/ganchos';
 import SumarioModal from '../fluxo/sumario';
 import '../fluxo/painel.css';
 import './aging.css';
-import { brl, dm, escopo, preparar, titulo } from './modelo';
+import { escopo, preparar, titulo } from './modelo';
 import { exportarAging } from './exportar';
 import { Detalhamento, Escada, Maiores, Simulador, Tiles } from './secoes';
 import { ABAS_SUMARIO } from './sumarioTexto';
 
 // Dashboard Econômico Financeiro › Aging List, no layout do painel do Fluxo de Caixa: barra de controles
-// (Empresa, Centro de custo, Previsões financeiras), os 8 indicadores, a escada de vencimentos (a pagar ×
+// (Empresa, período Início–Fim do vencimento — padrão o ano atual inteiro —, Centro de custo, Previsões
+// financeiras), os 8 indicadores, a escada de vencimentos (a pagar ×
 // a receber por faixa), o simulador do caixa dos próximos dias (a partir do Saldo Contas Bancárias), o
 // detalhamento em árvore até a parcela e os maiores devedores e credores. Dados de
 // /dashboards/economico-financeiro/aging (todas as parcelas em aberto, recalculadas no navegador por
@@ -22,13 +23,32 @@ import { ABAS_SUMARIO } from './sumarioTexto';
 
 const MIN_RECARGA = 30;
 const ICONES_SUMARIO = { filtros: Filter, indicadores: LayoutGrid, faixas: Layers, simulador: LineChart, detalhamento: Table2, maiores: Users };
-const quando = (ts) => {
-  if (!ts) return '–';
-  const d = new Date(ts);
-  return `${String(d.getDate()).padStart(2, '0')}/${String(d.getMonth() + 1).padStart(2, '0')} ${String(d.getHours()).padStart(2, '0')}:${String(d.getMinutes()).padStart(2, '0')}`;
-};
+const ehData = (v) => /^\d{4}-\d{2}-\d{2}$/.test(v);
+
+function CampoData({ id, rotulo, valor, min, max, onChange, dica }) {
+  return (
+    <div className="ctl">
+      <label htmlFor={id}>{rotulo}</label>
+      <input
+        id={id}
+        type="date"
+        value={valor}
+        min={min}
+        max={max}
+        title={dica}
+        onChange={(e) => {
+          const v = e.target.value;
+          if (ehData(v) && (!min || v >= min) && (!max || v <= max)) onChange(v);
+        }}
+      />
+    </div>
+  );
+}
 
 export default function AgingPainel({ dashboard, tituloTela, empresaId, onEmpresa, opcoesEmpresas, empresaTravada, carregandoEmpresas, marcaEmpresa }) {
+  const ano = new Date().getFullYear();
+  const [inicio, setInicio] = useState(`${ano}-01-01`);
+  const [fim, setFim] = useState(`${ano}-12-31`);
   const [centros, setCentros] = useState([]);
   const [previsoes, setPrevisoes] = useState(false);
   const [dados, setDados] = useState(null);
@@ -75,7 +95,7 @@ export default function AgingPainel({ dashboard, tituloTela, empresaId, onEmpres
     return () => clearInterval(t);
   }, [carregar]);
 
-  const E = useMemo(() => (dados ? escopo(dados, { centros, previsoes }) : null), [dados, centros, previsoes]);
+  const E = useMemo(() => (dados ? escopo(dados, { inicio, fim, centros, previsoes }) : null), [dados, inicio, fim, centros, previsoes]);
 
   const opcoesCentros = useMemo(
     () => (dados?.centros || []).map((c) => ({ value: c.id, label: titulo(c.nome) })).sort((a, b) => a.label.localeCompare(b.label, 'pt-BR')),
@@ -115,6 +135,8 @@ export default function AgingPainel({ dashboard, tituloTela, empresaId, onEmpres
                 ))}
               </select>
             </div>
+            <CampoData id="a-inicio" rotulo="Início" valor={inicio} max={fim} onChange={setInicio} dica="Vencimento a partir desta data" />
+            <CampoData id="a-fim" rotulo="Fim" valor={fim} min={inicio} onChange={setFim} dica="Vencimento até esta data" />
             <FiltroCentros opcoes={opcoesCentros} valor={centros} onChange={setCentros} disabled={!empresaId || !dados} />
             <div className="ctl">
               <span className="rot">Previsões financeiras</span>
@@ -132,19 +154,6 @@ export default function AgingPainel({ dashboard, tituloTela, empresaId, onEmpres
                 </button>
               </div>
             </div>
-            {dados && (
-              <div className="base">
-                Sienge: a receber <b>{quando(dados.bases.r)}</b> · a pagar <b>{quando(dados.bases.p)}</b>
-                <br />
-                Saldos bancários: <b>{dados.bancos.data ? dm(dados.bancos.data) : 'sem lançamento'}</b>
-                {E && !previsoes && E.previsoesFora > 0 ? (
-                  <>
-                    {' '}
-                    · previsões fora: <b>{brl(E.previsoesFora)}</b>
-                  </>
-                ) : null}
-              </div>
-            )}
             <div className="acoes">
               {estado === 'carregando' && dados && <Loader2 size={16} className="animate-spin" style={{ color: 'var(--muted)' }} aria-label="Atualizando" />}
               <button type="button" className="btn ghost icone com-texto" onClick={() => abrirSumario()} title="Sumário das análises">
@@ -188,10 +197,6 @@ export default function AgingPainel({ dashboard, tituloTela, empresaId, onEmpres
                 <Maiores E={E} lado="r" />
                 <Maiores E={E} lado="p" />
               </div>
-              <p className="note">
-                <CircleDollarSign size={13} style={{ verticalAlign: -2, marginRight: 4 }} />
-                Valores em saldo corrigido das parcelas em aberto do Sienge. Posição de hoje ({dm(dados.hoje)}).
-              </p>
             </>
           )}
           <SumarioModal

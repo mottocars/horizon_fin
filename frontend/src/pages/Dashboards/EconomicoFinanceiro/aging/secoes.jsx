@@ -41,6 +41,8 @@ function Status({ s }) {
 }
 const Partes = ({ partes }) => partes.map((p, i) => (typeof p === 'string' ? p : <b key={i}>{p.b}</b>));
 const dias = (n) => `${nf0.format(n)} ${Math.abs(n) === 1 ? 'dia' : 'dias'}`;
+// Valor que aparece na célula (resto de centavos do rateio fica como vazio).
+const tem = (v) => Math.abs(v) >= 0.5;
 
 function Seg({ rotulo, opcoes, valor, onChange, oculto = false }) {
   return (
@@ -175,10 +177,6 @@ export function Escada({ E, faixaSel, onFaixa }) {
           </div>
         </div>
       </div>
-      <p className="note">
-        Barras na mesma escala; as das pontas (+180 dias) que passam dela aparecem com a ponta cortada. O caixa acumulado parte do caixa livre de hoje
-        e soma o líquido de cada faixa a vencer — é o caixa se tudo for pago e recebido exatamente no vencimento.
-      </p>
     </section>
   );
 }
@@ -200,29 +198,8 @@ function Faixa({ id, rotulo, valor, sufixo, min, max, step, onChange, dica }) {
   );
 }
 
-function CampoValor({ id, rotulo, valor, onChange }) {
-  const [texto, setTexto] = useState(valor ? String(valor) : '');
-  return (
-    <label className="campo" htmlFor={id}>
-      {rotulo}
-      <input
-        id={id}
-        inputMode="decimal"
-        placeholder="0"
-        value={texto}
-        onChange={(e) => {
-          const t = e.target.value.replace(/[^\d,.-]/g, '');
-          setTexto(t);
-          const v = Number(t.replace(/\./g, '').replace(',', '.'));
-          onChange(Number.isFinite(v) ? v : 0);
-        }}
-      />
-    </label>
-  );
-}
-
 function situacao(sim, temBanco) {
-  if (!temBanco) return { tom: 'warn', partes: ['Sem saldo lançado em ', { b: 'Saldo Contas Bancárias' }, ': a simulação parte de zero (use o aporte para informar um saldo).'] };
+  if (!temBanco) return { tom: 'warn', partes: ['Sem saldo lançado em ', { b: 'Saldo Contas Bancárias' }, ': a simulação parte de zero.'] };
   if (sim.primeiroEstouro)
     return {
       tom: 'crit',
@@ -239,17 +216,14 @@ function situacao(sim, temBanco) {
         sim.cheque > 0 ? ` do cheque especial (${sim.diasNegativos} ${sim.diasNegativos === 1 ? 'dia' : 'dias'} no vermelho).` : ` no pior dia (${dm(sim.minData)}).`,
       ],
     };
-  if (sim.primeiroAbaixo)
-    return { tom: 'warn', partes: ['Fica abaixo do mínimo de segurança em ', { b: dm(sim.primeiroAbaixo) }, ': faltam ', { b: brl(sim.necessidade) }, ' para mantê-lo.'] };
   return { tom: 'good', partes: ['O caixa cobre o período: o menor saldo é ', { b: brl(sim.min) }, ' em ', { b: dm(sim.minData) }, '.'] };
 }
 
 function ItemDia({ it, B }) {
   if (it.extra) {
-    const nome = { recuperacao: 'Recuperação de vencidos a receber', vencidos: 'Vencidos a pagar (até 90 dias)', aporte: 'Aporte / captação' }[it.extra];
     return (
       <div className="it">
-        <span>{nome}</span>
+        <span>Recuperação de vencidos a receber</span>
         <b>{brl(it.valor)}</b>
       </div>
     );
@@ -290,26 +264,22 @@ export function Simulador({ E }) {
           Caixa dos próximos {p.horizonte} dias
           <AjudaSecao aba="simulador" rotulo="Simulador de caixa" />
         </h2>
-        <p>
-          Parte do saldo das contas de hoje e paga e recebe, dia a dia, tudo o que vence no período (fim de semana cai na segunda), com os ajustes do
-          cenário ao lado.
-        </p>
       </div>
       <div className="kv k6">
         <div>
           <span>Saldo de partida</span>
-          <strong>{brl(sim.ini + (p.aporte || 0))}</strong>
+          <strong>{brl(sim.ini)}</strong>
           <small>{temBanco ? `${p.partida === 'total' ? 'todas as contas' : 'caixa livre'} em ${dm(E.banco.data)}` : 'sem saldo lançado'}</small>
         </div>
         <div>
           <span>Entradas</span>
-          <strong className="pos">{brl(sim.entradas - (p.aporte || 0))}</strong>
+          <strong className="pos">{brl(sim.entradas)}</strong>
           <small>{p.naoReceber ? `já sem ${p.naoReceber}% de perda` : 'tudo o que vence'}</small>
         </div>
         <div>
           <span>Saídas</span>
           <strong className="neg">{brl(-sim.saidas)}</strong>
-          <small>{p.pagarVencidos ? `com ${p.pagarVencidos}% dos vencidos` : 'só o que vence'}</small>
+          <small>tudo o que vence</small>
         </div>
         <div>
           <span>Saldo no fim</span>
@@ -318,13 +288,13 @@ export function Simulador({ E }) {
         </div>
         <div>
           <span>Menor saldo</span>
-          <strong className={sim.min >= p.minimo ? '' : 'neg'}>{brl(sim.min)}</strong>
+          <strong className={sim.min >= 0 ? '' : 'neg'}>{brl(sim.min)}</strong>
           <small>em {dm(sim.minData)}</small>
         </div>
         <div>
           <span>Necessidade de caixa</span>
           <strong className={sim.necessidade > 0 ? 'neg' : 'pos'}>{brl(sim.necessidade)}</strong>
-          <small>para não ficar abaixo de {brl(p.minimo)}</small>
+          <small>para o caixa não ficar negativo</small>
         </div>
       </div>
       <div className="hero-body">
@@ -347,12 +317,6 @@ export function Simulador({ E }) {
               <i style={{ borderColor: COR.ink }} />
               Saldo no fim do dia
             </span>
-            {p.minimo ? (
-              <span>
-                <i className="dash" style={{ borderColor: COR.crit }} />
-                Mínimo de segurança
-              </span>
-            ) : null}
             <span style={{ color: 'var(--muted)' }}>Faixa cinza = fim de semana. Clique num dia para ver as parcelas.</span>
           </div>
           <CaixaDiario sim={sim} diaSel={diaAberto} onDia={abrirDia} />
@@ -406,24 +370,6 @@ export function Simulador({ E }) {
               <span>{sim.semCaixa ? `${brl(sim.semCaixa)} no período não vira dinheiro no banco.` : 'Condições que não viram dinheiro no banco.'}</span>
             </span>
           </label>
-          <div className="sub">Pagamentos</div>
-          <Faixa
-            id="s-pv"
-            rotulo="Pagar do vencido (até 90 dias)"
-            valor={p.pagarVencidos}
-            sufixo="%"
-            min={0}
-            max={100}
-            step={5}
-            onChange={(v) => mudar({ pagarVencidos: v })}
-            dica={`${brl(sim.vencidoPagar)} vencidos há até 90 dias, pagos no 1º dia útil`}
-          />
-          <Faixa id="s-ad" rotulo="Adiar os pagamentos" valor={p.adiarPag} sufixo=" d" min={0} max={30} step={1} onChange={(v) => mudar({ adiarPag: v })} />
-          <div className="sub">Caixa</div>
-          <div className="duas">
-            <CampoValor id="s-ap" rotulo="Aporte / captação (R$)" valor={p.aporte} onChange={(v) => mudar({ aporte: v })} />
-            <CampoValor id="s-mi" rotulo="Mínimo de segurança (R$)" valor={p.minimo} onChange={(v) => mudar({ minimo: v })} />
-          </div>
         </aside>
       </div>
       <div>
@@ -469,7 +415,7 @@ export function Simulador({ E }) {
                       <td className="n">{brl(d.ini)}</td>
                       <td className="n pos">{d.ent ? brl(d.ent) : '–'}</td>
                       <td className="n neg">{d.sai ? brl(-d.sai) : '–'}</td>
-                      <td className={`n ${d.fim < p.minimo ? 'neg' : ''}`}>
+                      <td className={`n ${d.fim < 0 ? 'neg' : ''}`}>
                         <b>{brl(d.fim)}</b>
                       </td>
                       <td className="n">{d.itens.length ? nf0.format(d.itens.length) : '–'}</td>
@@ -510,7 +456,7 @@ const PADRAO_NIVEIS = ['centro', 'natureza', 'pessoa'];
 const LIMITE = { 0: 60, outros: 40, parcelas: 25 };
 
 function corCelula(grupo, v, total) {
-  if (!v || !total) return undefined;
+  if (!tem(v) || !total) return undefined;
   const p = Math.round(6 + 46 * Math.min(1, Math.abs(v) / Math.abs(total)));
   const cor = grupo === 'v' ? '--s-out' : grupo === 'h' ? '--warn' : '--s-in';
   return { background: `color-mix(in srgb, var(${cor}) ${p}%, var(--surface))` };
@@ -519,13 +465,11 @@ function corCelula(grupo, v, total) {
 export function Detalhamento({ E, faixaSel, onFaixa }) {
   const [lado, setLado] = useState('r');
   const [niveis, setNiveis] = useState(PADRAO_NIVEIS);
-  const [cols, setCols] = useState('resumidas');
-  const [ordem, setOrdem] = useState('vencido');
   const [busca, setBusca] = useState('');
   const [abertos, setAbertos] = useState(() => new Set());
   const [limites, setLimites] = useState({});
   const { B } = E;
-  const colunas = COLUNAS[cols];
+  const colunas = COLUNAS;
   const opcoesDim = dimensoesDoLado(lado);
   const validos = niveis.filter((n, i) => n && opcoesDim.includes(n) && niveis.indexOf(n) === i);
 
@@ -537,7 +481,7 @@ export function Detalhamento({ E, faixaSel, onFaixa }) {
     }
     return filtrarBusca(E, ls, busca);
   }, [E, lado, faixaSel, busca]);
-  const raiz = useMemo(() => (validos.length ? arvore(E, linhas, validos, lado, ordem) : null), [E, linhas, validos.join(), lado, ordem]); // eslint-disable-line react-hooks/exhaustive-deps
+  const raiz = useMemo(() => (validos.length ? arvore(E, linhas, validos, lado) : null), [E, linhas, validos.join(), lado]); // eslint-disable-line react-hooks/exhaustive-deps
   const total = useMemo(() => {
     const fx = new Array(FAIXAS.length).fill(0);
     linhas.forEach((x) => (fx[x.t.fx] += x.valor));
@@ -564,8 +508,8 @@ export function Detalhamento({ E, faixaSel, onFaixa }) {
 
   const celulas = (fx, tot) =>
     somaCols(fx).map((v, k) => (
-      <td key={colunas[k].id} className={`c${v ? '' : ' z'}`} style={corCelula(colunas[k].grupo, v, tot)}>
-        {v ? eixo(v) : '·'}
+      <td key={colunas[k].id} className={`c${tem(v) ? '' : ' z'}`} style={corCelula(colunas[k].grupo, v, tot)}>
+        {tem(v) ? eixo(v) : '·'}
       </td>
     ));
 
@@ -690,7 +634,6 @@ export function Detalhamento({ E, faixaSel, onFaixa }) {
           Aging por {validos.map((d) => DIMENSOES[d].rotulo(lado).toLowerCase()).join(' › ') || '…'} › parcela
           <AjudaSecao aba="detalhamento" rotulo="Detalhamento do aging" />
         </h2>
-        <p>Abra cada linha até chegar no título e na parcela (bill e installment do Sienge). Clique no cabeçalho de uma faixa para ficar só com ela.</p>
       </div>
       <div className="det-bar">
         <Seg
@@ -728,26 +671,6 @@ export function Detalhamento({ E, faixaSel, onFaixa }) {
             ))}
           </div>
         </div>
-        <Seg
-          rotulo="Faixas"
-          opcoes={[
-            ['resumidas', 'Resumidas'],
-            ['detalhadas', 'Todas'],
-          ]}
-          valor={cols}
-          onChange={setCols}
-        />
-        <Seg
-          rotulo="Ordenar por"
-          opcoes={[
-            ['vencido', 'Vencido'],
-            ['total', 'Total'],
-            ['atraso', 'Atraso'],
-            ['nome', 'Nome'],
-          ]}
-          valor={ordem}
-          onChange={setOrdem}
-        />
         <div className="ctl busca">
           <span className="rot">Buscar</span>
           <div style={{ position: 'relative' }}>
@@ -814,7 +737,7 @@ export function Detalhamento({ E, faixaSel, onFaixa }) {
                 </td>
                 {somaCols(total.fx).map((v, k) => (
                   <td key={colunas[k].id} className="c">
-                    {v ? eixo(v) : '·'}
+                    {tem(v) ? eixo(v) : '·'}
                   </td>
                 ))}
                 <td className="n tot">{brl(total.total)}</td>
@@ -824,10 +747,6 @@ export function Detalhamento({ E, faixaSel, onFaixa }) {
           </table>
         )}
       </div>
-      <p className="note">
-        Valores no saldo corrigido. Parcela rateada entre centros ou naturezas aparece em cada um com a fração dela (a soma bate com o saldo). Cor da
-        célula = peso da faixa no total da linha.
-      </p>
     </section>
   );
 }

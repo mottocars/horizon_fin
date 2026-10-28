@@ -4,18 +4,18 @@ import { eixo, niceTicks } from '../fluxo/modelo';
 import { brl, dm, semana } from './modelo';
 
 // Gráfico do simulador do Aging List: o caixa dia a dia — entradas (para cima) e saídas (para baixo)
-// de cada dia, a linha do saldo no fim do dia, o saldo mínimo de segurança e o piso do cheque especial.
+// de cada dia, a linha do saldo no fim do dia e o piso do cheque especial.
 // Fim de semana em faixa cinza (o que vence nele cai na segunda). Clicar num dia abre as parcelas dele.
 export function CaixaDiario({ sim, diaSel, onDia }) {
   const [ref, W] = useLargura();
   const { mostrar, esconder } = useDica();
   const [cursor, setCursor] = useState(null);
-  const { dias, ini, cheque, p } = sim;
+  const { dias, ini, cheque } = sim;
   const n = dias.length;
   const H = W < 560 ? 250 : 300;
   const m = { l: 58, r: 14, t: 18, b: 32 };
   const piso = sim.min < 0 && cheque > 0 ? -cheque : null;
-  const valores = [ini, 0, ...dias.flatMap((d) => [d.fim, d.ent, -d.sai]), ...(p.minimo ? [p.minimo] : []), ...(piso !== null ? [piso] : [])];
+  const valores = [ini, 0, ...dias.flatMap((d) => [d.fim, d.ent, -d.sai]), ...(piso !== null ? [piso] : [])];
   const ymin = Math.min(...valores) * 1.08;
   const ymax = Math.max(...valores) * 1.08 || 1;
   const bw = (W - m.l - m.r) / Math.max(1, n);
@@ -53,14 +53,6 @@ export function CaixaDiario({ sim, diaSel, onDia }) {
             )}
           </g>
         ))}
-        {p.minimo ? (
-          <>
-            <line x1={m.l} x2={W - m.r} y1={y(p.minimo)} y2={y(p.minimo)} stroke={COR.crit} strokeWidth={1.5} strokeDasharray="2 4" />
-            <text x={m.l + 6} y={y(p.minimo) - 6} style={{ fill: COR.critInk }}>
-              mínimo {eixo(p.minimo)}
-            </text>
-          </>
-        ) : null}
         {piso !== null && (
           <>
             <line x1={m.l} x2={W - m.r} y1={y(piso)} y2={y(piso)} stroke="#8a5a00" strokeWidth={1.5} strokeDasharray="6 4" />
