@@ -3861,6 +3861,20 @@ CREATE TABLE IF NOT EXISTS usuarios_dashboard_favoritos (
     PRIMARY KEY (usuario_id, dashboard)
 );
 
+-- ─── Dashboards: filtros salvos de cada usuário — ver database/migrations/2026-10-28-dashboards-filtros-salvos.sql ───
+CREATE TABLE IF NOT EXISTS usuarios_dashboard_filtros (
+    id             SERIAL PRIMARY KEY,
+    usuario_id     INTEGER NOT NULL REFERENCES usuarios(id) ON DELETE CASCADE,
+    empresa_id     INTEGER NOT NULL REFERENCES empresas(id) ON DELETE CASCADE,
+    dashboard      VARCHAR(60) NOT NULL,
+    tela           VARCHAR(60) NOT NULL,
+    nome           VARCHAR(80) NOT NULL,
+    filtros        JSONB NOT NULL,
+    criado_em      TIMESTAMPTZ NOT NULL DEFAULT NOW(),
+    atualizado_em  TIMESTAMPTZ NOT NULL DEFAULT NOW(),
+    UNIQUE (usuario_id, empresa_id, dashboard, tela, nome)
+);
+
 -- ─── Operações > Cronogramas Obras > Configurações — ver database/migrations/2026-10-21-cronograma-configuracoes.sql ───
 -- Regra de Atraso de Obra (fixa em meses ou pelo planejamento de um sistema) e a comunicação de
 -- alteração de cronograma (conexão Z-API de disparo e destinatários, como em Repasses CEF), por empresa.

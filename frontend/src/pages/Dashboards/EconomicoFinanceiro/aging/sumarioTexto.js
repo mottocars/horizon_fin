@@ -23,8 +23,25 @@ export const ABAS_SUMARIO = [
           '**Empresa** — a empresa analisada.',
           '**Início** e **Fim** — o período do **vencimento** das parcelas: só entram as que vencem entre as duas datas, vencidas ou a vencer. Começa com o ano atual inteiro (1º de janeiro a 31 de dezembro). Vale para a tela toda: cards, escada, simulador, detalhamento, maiores e o Excel.',
           '**Centro de custo** — só as fatias das parcelas nesses centros. O saldo bancário passa a ser o das contas das empresas (Sienge) donas dos centros marcados.',
-          '**Previsões financeiras** — previsões de contratos de medição, de pedidos de compra e de pagamento/recebimento (quase sempre no a pagar). Ficam **fora** por padrão: quando o documento real chega, ele também entra no Sienge e contar os dois duplica o valor (mesma regra do DFC).',
-          'O botão de download gera um Excel com o resumo por faixa e todas as parcelas a receber e a pagar do escopo, com centro, natureza, faixa e dias de atraso.',
+          'O botão de download gera um Excel com o resumo por faixa e todas as parcelas a receber e a pagar do escopo (com todos os filtros), com centro, natureza, faixa e dias de atraso.',
+        ],
+      },
+      {
+        titulo: 'Botão Filtros',
+        itens: [
+          'Abre o painel de filtros abaixo da barra (clique de novo ou no X para recolher). Com ele fechado, os filtros valendo aparecem em etiquetas — o X de cada uma tira aquele filtro — e o botão mostra quantos estão valendo.',
+          '**Tipo de documento** e **Natureza** — valem para o a receber e o a pagar. A natureza filtra cada fatia do rateio.',
+          '**Cliente** filtra só o a receber; **Fornecedor**, só o a pagar — dá para olhar o que um cliente deve e o que se deve a um fornecedor ao mesmo tempo.',
+          '**Previsão financeira** — previsões de contratos de medição, de pedidos de compra e de pagamento/recebimento (quase sempre no a pagar). **Não** (padrão): ficam de fora — quando o documento real chega, ele também entra no Sienge e contar os dois duplica o valor (mesma regra do DFC). **Sim**: só as previsões. **Todas**: documentos e previsões juntos.',
+          'As listas só trazem o que tem parcela em aberto; marcadas aparecem primeiro. **Limpar filtros** tira os do painel (o centro de custo da barra fica).',
+        ],
+      },
+      {
+        titulo: 'Filtros salvos',
+        itens: [
+          '**Gravar filtro** (no painel) guarda o centro de custo e os filtros do painel com um nome. Gravar com um nome que já existe substitui o filtro.',
+          'A lista **Filtros salvos** da barra aplica o filtro escolhido. Ela mostra o nome enquanto os filtros forem iguais aos gravados; mexeu em algum, vira "Personalizado". Para excluir, aplique o filtro, abra o painel e use **Excluir**.',
+          'Cada usuário tem os próprios filtros salvos, separados por empresa. O período (Início e Fim) não é gravado.',
         ],
       },
     ],

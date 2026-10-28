@@ -92,19 +92,42 @@ export function caixa(contas) {
   return r;
 }
 
-// ─── Escopo dos filtros da barra ─────────────────────────────────────────────────────────────────
-// `inicio` / `fim` ('AAAA-MM-DD'): período do VENCIMENTO das parcelas; `centros`: ids marcados (vazio =
-// todos); `previsoes`: entram as previsões financeiras.
+// ─── Filtros (barra e painel de filtros) ─────────────────────────────────────────────────────────
+// O que um filtro salvo grava: centros de custo, tipos de documento, naturezas, clientes (só no a
+// receber), fornecedores (só no a pagar) e previsão financeira ('nao' = sem as previsões, o padrão;
+// 'sim' = só elas; 'todos'). Listas vazias = sem filtro.
+export const FILTROS_VAZIOS = { centros: [], documentos: [], naturezas: [], clientes: [], fornecedores: [], previsao: 'nao' };
+const LISTAS_FILTRO = ['centros', 'documentos', 'naturezas', 'clientes', 'fornecedores'];
+export const normalizarFiltros = (f = {}) => ({
+  ...Object.fromEntries(LISTAS_FILTRO.map((k) => [k, [...(f[k] || [])].sort()])),
+  previsao: ['nao', 'sim', 'todos'].includes(f.previsao) ? f.previsao : 'nao',
+});
+export const mesmosFiltros = (a, b) => JSON.stringify(normalizarFiltros(a)) === JSON.stringify(normalizarFiltros(b));
+// Quantos filtros do painel estão valendo (o centro de custo fica na barra).
+export const filtrosNoPainel = (f) => ['documentos', 'naturezas', 'clientes', 'fornecedores'].filter((k) => f[k]?.length).length + (f.previsao !== 'nao' ? 1 : 0);
+
+// ─── Escopo dos filtros ──────────────────────────────────────────────────────────────────────────
+// `inicio` / `fim` ('AAAA-MM-DD'): período do VENCIMENTO das parcelas; o resto, os filtros acima.
+// Natureza e centro filtram cada fatia do rateio; os demais, a parcela inteira.
 // Devolve as fatias (parcela × centro × natureza) no escopo e o saldo das contas — com centros
 // marcados, só as contas das empresas (Sienge) desses centros.
-export function escopo(B, { inicio = null, fim = null, centros = [], previsoes = false } = {}) {
-  const sel = centros.length ? new Set(centros) : null;
+export function escopo(B, { inicio = null, fim = null, ...filtros } = {}) {
+  const f = { ...FILTROS_VAZIOS, ...filtros };
+  const conj = (lista) => (lista.length ? new Set(lista) : null);
+  const sel = conj(f.centros);
+  const docs = conj(f.documentos);
+  const nats = conj(f.naturezas);
+  const clientes = conj(f.clientes);
+  const fornecedores = conj(f.fornecedores);
   const linhas = [];
   B.titulos.forEach((t) => {
-    if (t.pv && !previsoes) return;
+    if (f.previsao === 'nao' ? t.pv : f.previsao === 'sim' ? !t.pv : false) return;
     if ((inicio && t.v < inicio) || (fim && t.v > fim)) return;
+    if (docs && !docs.has(t.d)) return;
+    if (t.l === 'r' ? clientes && !clientes.has(t.q) : fornecedores && !fornecedores.has(t.q)) return;
     t.f.forEach(([centro, nat, frac]) => {
       if (sel && !sel.has(centro)) return;
+      if (nats && !nats.has(nat)) return;
       linhas.push({ t, centro, nat, frac, valor: t.s * frac });
     });
   });

@@ -17,7 +17,189 @@
   color: var(--ink);
   font-size: 14px;
   font-family: inherit;
-  min-width: 150px;
+  min-width: 140px;
+}
+
+/* Barra: lista de filtros salvos e o botão Filtros (com o número de filtros valendo) */
+/* Campos um pouco mais estreitos que no Fluxo, para a barra caber numa linha com a lista de filtros salvos. */
+.painel-cfo.aging .controls .ctl select {
+  min-width: 210px;
+}
+.painel-cfo.aging .controls .ctl.salvos select {
+  min-width: 180px;
+  max-width: 220px;
+}
+.painel-cfo .btn.icone.ativo {
+  border-color: var(--accent);
+  color: var(--accent);
+  background: var(--accent-soft);
+}
+.painel-cfo .btn.icone.escuro {
+  background: var(--ink);
+  border-color: var(--ink);
+  color: var(--surface);
+}
+.painel-cfo .btn .contador {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  min-width: 18px;
+  height: 18px;
+  padding: 0 5px;
+  border-radius: 999px;
+  background: var(--accent);
+  color: var(--surface);
+  font: 700 11px var(--f-mono);
+}
+
+/* Painel de filtros (retrátil, abaixo da barra) */
+.painel-cfo .filtros-painel {
+  border-top: 3px solid var(--accent);
+  animation: fp-abre 0.18s ease-out;
+}
+@keyframes fp-abre {
+  from {
+    opacity: 0;
+    transform: translateY(-6px);
+  }
+}
+.painel-cfo .fp-topo {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+}
+.painel-cfo .fp-topo h2 {
+  font-size: 17px;
+  font-weight: 700;
+}
+.painel-cfo .fp-grade {
+  display: grid;
+  grid-template-columns: repeat(4, minmax(0, 1fr));
+  gap: 16px;
+}
+.painel-cfo .lb {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+  min-width: 0;
+}
+.painel-cfo .lb-cab {
+  display: flex;
+  justify-content: space-between;
+  align-items: baseline;
+  gap: 8px;
+  font-size: 12px;
+  color: var(--muted);
+}
+.painel-cfo .lb-cab label {
+  font-weight: 600;
+}
+.painel-cfo .lb-cab button {
+  border: 0;
+  padding: 0;
+  background: transparent;
+  color: var(--accent);
+  font-size: 12px;
+  font-weight: 600;
+  cursor: pointer;
+}
+.painel-cfo .lb input[type='search'] {
+  height: 32px;
+  box-sizing: border-box;
+  padding: 4px 8px;
+  border: 1px solid var(--line);
+  border-radius: 4px;
+  background: var(--surface-2);
+  color: var(--ink);
+  font-size: 13.5px;
+}
+.painel-cfo .lb-lista {
+  height: 230px;
+  overflow-y: auto;
+  border: 1px solid var(--line);
+  border-radius: 4px;
+  padding: 3px;
+  background: var(--surface);
+}
+.painel-cfo .lb-item {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  padding: 4px 6px;
+  border-radius: 3px;
+  font-size: 13px;
+  color: var(--ink-2);
+  cursor: pointer;
+}
+.painel-cfo .lb-item:hover {
+  background: var(--surface-2);
+}
+.painel-cfo .lb-item input {
+  accent-color: var(--ink);
+  flex-shrink: 0;
+}
+.painel-cfo .lb-item span {
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+.painel-cfo .lb-item small {
+  margin-left: auto;
+  flex-shrink: 0;
+  font: 500 11px var(--f-mono);
+  color: var(--muted);
+}
+.painel-cfo .lb-mais {
+  padding: 6px;
+  font-size: 12px;
+  color: var(--muted);
+}
+.painel-cfo .lb .nota {
+  font-size: 11.5px;
+  color: var(--muted);
+}
+.painel-cfo .fp-rodape {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: flex-end;
+  gap: 10px 16px;
+  border-top: 1px solid var(--line);
+  padding-top: 12px;
+}
+.painel-cfo .fp-acoes {
+  margin-left: auto;
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 8px;
+}
+.painel-cfo .fp-acoes .erro {
+  font-size: 12.5px;
+  color: var(--crit-ink);
+}
+.painel-cfo .fp-gravar {
+  display: flex;
+  gap: 8px;
+  align-items: center;
+}
+.painel-cfo .fp-gravar input {
+  height: 32px;
+  box-sizing: border-box;
+  width: 260px;
+  max-width: 60vw;
+  padding: 4px 8px;
+  border: 1px solid var(--line);
+  border-radius: 4px;
+  background: var(--surface);
+  color: var(--ink);
+  font-size: 13.5px;
+}
+.painel-cfo .filtros-ativos {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 6px;
+  margin-top: -8px;
 }
 
 /* Tiles: linha de cima a receber, de baixo a pagar — filete colorido à esquerda */
@@ -638,6 +820,9 @@
   }
   .painel-cfo .det-duas {
     grid-template-columns: 1fr;
+  }
+  .painel-cfo .fp-grade {
+    grid-template-columns: repeat(2, minmax(0, 1fr));
   }
 }
 @media (max-width: 620px) {

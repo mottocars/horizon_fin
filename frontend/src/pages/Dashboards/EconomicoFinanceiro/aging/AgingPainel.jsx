@@ -1,6 +1,6 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
-import { BookOpen, Download, Filter, LayoutGrid, Layers, LineChart, Loader2, Table2, Users } from 'lucide-react';
-import { getAgingPainel } from '../../../../api/dashboards.api';
+import { BookOpen, Download, Filter, LayoutGrid, Layers, LineChart, Loader2, SlidersHorizontal, Table2, Users } from 'lucide-react';
+import { excluirFiltroSalvo, getAgingPainel, gravarFiltroSalvo, listarFiltrosSalvos } from '../../../../api/dashboards.api';
 import CabecalhoDashboard from '../../CabecalhoDashboard';
 import { FiltroCentros } from '../fluxo/FluxoCaixaPainel';
 import { DicaProvider } from '../fluxo/graficos';
@@ -8,19 +8,23 @@ import { SumarioCtx } from '../fluxo/ganchos';
 import SumarioModal from '../fluxo/sumario';
 import '../fluxo/painel.css';
 import './aging.css';
-import { escopo, preparar, titulo } from './modelo';
+import { FILTROS_VAZIOS, escopo, filtrosNoPainel, mesmosFiltros, normalizarFiltros, preparar, titulo } from './modelo';
 import { exportarAging } from './exportar';
+import { PainelFiltros, ResumoFiltros } from './filtros';
 import { Detalhamento, Escada, Maiores, Simulador, Tiles } from './secoes';
 import { ABAS_SUMARIO } from './sumarioTexto';
 
 // Dashboard Econômico Financeiro › Aging List, no layout do painel do Fluxo de Caixa: barra de controles
-// (Empresa, período Início–Fim do vencimento — padrão o ano atual inteiro —, Centro de custo, Previsões
-// financeiras), os 8 indicadores, a escada de vencimentos (a pagar ×
-// a receber por faixa), o simulador do caixa dos próximos dias (a partir do Saldo Contas Bancárias), o
-// detalhamento em árvore até a parcela e os maiores devedores e credores. Dados de
-// /dashboards/economico-financeiro/aging (todas as parcelas em aberto, recalculadas no navegador por
-// aging/modelo.js); recarrega sozinho a cada 30 minutos com a aba visível.
+// (Empresa, período Início–Fim do vencimento — padrão o ano atual inteiro —, Centro de custo e Filtros
+// salvos; o botão "Filtros" abre o painel com tipo de documento, natureza, cliente, fornecedor e
+// previsão financeira), os 8 indicadores, a escada de vencimentos (a pagar × a receber por faixa), o
+// simulador do caixa dos próximos dias (a partir do Saldo Contas Bancárias), o detalhamento em árvore
+// até a parcela e os maiores devedores e credores. Dados de /dashboards/economico-financeiro/aging (todas
+// as parcelas em aberto, recalculadas no navegador por aging/modelo.js); recarrega sozinho a cada 30
+// minutos com a aba visível.
 
+const DASHBOARD = 'economico-financeiro';
+const TELA = 'aging';
 const MIN_RECARGA = 30;
 const ICONES_SUMARIO = { filtros: Filter, indicadores: LayoutGrid, faixas: Layers, simulador: LineChart, detalhamento: Table2, maiores: Users };
 const ehData = (v) => /^\d{4}-\d{2}-\d{2}$/.test(v);
@@ -49,8 +53,9 @@ export default function AgingPainel({ dashboard, tituloTela, empresaId, onEmpres
   const ano = new Date().getFullYear();
   const [inicio, setInicio] = useState(`${ano}-01-01`);
   const [fim, setFim] = useState(`${ano}-12-31`);
-  const [centros, setCentros] = useState([]);
-  const [previsoes, setPrevisoes] = useState(false);
+  const [filtros, setFiltros] = useState(FILTROS_VAZIOS);
+  const [painelFiltros, setPainelFiltros] = useState(false);
+  const [salvos, setSalvos] = useState([]);
   const [dados, setDados] = useState(null);
   const [estado, setEstado] = useState('ocioso'); // ocioso | carregando | erro
   const [erro, setErro] = useState('');
@@ -61,11 +66,16 @@ export default function AgingPainel({ dashboard, tituloTela, empresaId, onEmpres
   const fecharSumario = useCallback(() => setSumario((s) => ({ ...s, aberta: false })), []);
   const pedido = useRef(0);
 
-  // Trocar de empresa limpa os dados, os centros e a faixa.
+  // Trocar de empresa limpa os dados, os filtros e a faixa, e traz os filtros salvos dela.
   useEffect(() => {
     setDados(null);
-    setCentros((c) => (c.length ? [] : c));
+    setFiltros(FILTROS_VAZIOS);
     setFaixaSel(null);
+    setSalvos([]);
+    if (!empresaId) return;
+    listarFiltrosSalvos(DASHBOARD, TELA, empresaId)
+      .then(setSalvos)
+      .catch(() => setSalvos([]));
   }, [empresaId]);
 
   const carregar = useCallback(() => {
@@ -95,12 +105,25 @@ export default function AgingPainel({ dashboard, tituloTela, empresaId, onEmpres
     return () => clearInterval(t);
   }, [carregar]);
 
-  const E = useMemo(() => (dados ? escopo(dados, { inicio, fim, centros, previsoes }) : null), [dados, inicio, fim, centros, previsoes]);
+  const E = useMemo(() => (dados ? escopo(dados, { inicio, fim, ...filtros }) : null), [dados, inicio, fim, filtros]);
 
   const opcoesCentros = useMemo(
     () => (dados?.centros || []).map((c) => ({ value: c.id, label: titulo(c.nome) })).sort((a, b) => a.label.localeCompare(b.label, 'pt-BR')),
     [dados]
   );
+
+  // Filtro salvo igual aos filtros de agora (a lista da barra mostra ele; mexeu, deixa de mostrar).
+  const salvoAtual = salvos.find((s) => mesmosFiltros(s.filtros, filtros)) || null;
+  const noPainel = filtrosNoPainel(filtros);
+
+  async function gravarFiltro(nome) {
+    const salvo = await gravarFiltroSalvo(DASHBOARD, TELA, empresaId, nome, normalizarFiltros(filtros));
+    setSalvos((lista) => [...lista.filter((s) => s.id !== salvo.id), salvo].sort((a, b) => a.nome.localeCompare(b.nome, 'pt-BR')));
+  }
+  async function excluirFiltro(salvo) {
+    await excluirFiltroSalvo(DASHBOARD, TELA, salvo.id);
+    setSalvos((lista) => lista.filter((s) => s.id !== salvo.id));
+  }
 
   async function exportar() {
     setExportando(true);
@@ -137,22 +160,25 @@ export default function AgingPainel({ dashboard, tituloTela, empresaId, onEmpres
             </div>
             <CampoData id="a-inicio" rotulo="Início" valor={inicio} max={fim} onChange={setInicio} dica="Vencimento a partir desta data" />
             <CampoData id="a-fim" rotulo="Fim" valor={fim} min={inicio} onChange={setFim} dica="Vencimento até esta data" />
-            <FiltroCentros opcoes={opcoesCentros} valor={centros} onChange={setCentros} disabled={!empresaId || !dados} />
-            <div className="ctl">
-              <span className="rot">Previsões financeiras</span>
-              <div className="seg" role="group" aria-label="Previsões financeiras">
-                <button
-                  type="button"
-                  aria-pressed={!previsoes}
-                  onClick={() => setPrevisoes(false)}
-                  title="Previsões (de contrato de medição, de pedido de compra…) ficam fora: o documento real que as substitui também está no Sienge"
-                >
-                  Fora
-                </button>
-                <button type="button" aria-pressed={previsoes} onClick={() => setPrevisoes(true)} title="Somar as previsões financeiras ao a pagar e ao a receber">
-                  Incluir
-                </button>
-              </div>
+            <FiltroCentros opcoes={opcoesCentros} valor={filtros.centros} onChange={(c) => setFiltros((f) => ({ ...f, centros: c }))} disabled={!empresaId || !dados} />
+            <div className="ctl salvos">
+              <label htmlFor="a-salvos">Filtros salvos</label>
+              <select
+                id="a-salvos"
+                value={salvoAtual ? String(salvoAtual.id) : ''}
+                disabled={!empresaId || !salvos.length}
+                onChange={(e) => {
+                  const s = salvos.find((x) => String(x.id) === e.target.value);
+                  setFiltros(s ? normalizarFiltros(s.filtros) : FILTROS_VAZIOS);
+                }}
+              >
+                <option value="">{salvos.length ? (noPainel || filtros.centros.length ? 'Personalizado' : 'Nenhum') : 'Nenhum filtro salvo'}</option>
+                {salvos.map((s) => (
+                  <option key={s.id} value={s.id}>
+                    {s.nome}
+                  </option>
+                ))}
+              </select>
             </div>
             <div className="acoes">
               {estado === 'carregando' && dados && <Loader2 size={16} className="animate-spin" style={{ color: 'var(--muted)' }} aria-label="Atualizando" />}
@@ -160,11 +186,37 @@ export default function AgingPainel({ dashboard, tituloTela, empresaId, onEmpres
                 <BookOpen size={16} />
                 Sumário
               </button>
+              <button
+                type="button"
+                className={`btn ghost icone com-texto${painelFiltros || noPainel ? ' ativo' : ''}`}
+                onClick={() => setPainelFiltros((a) => !a)}
+                disabled={!dados}
+                aria-expanded={painelFiltros}
+                title={painelFiltros ? 'Fechar os filtros' : 'Abrir os filtros'}
+              >
+                <SlidersHorizontal size={16} />
+                Filtros
+                {noPainel > 0 && <span className="contador">{noPainel}</span>}
+              </button>
               <button type="button" className="btn ghost icone" onClick={exportar} disabled={!E || exportando} title="Exportar Excel" aria-label="Exportar Excel">
                 {exportando ? <Loader2 size={16} className="animate-spin" /> : <Download size={16} />}
               </button>
             </div>
           </section>
+
+          {dados && painelFiltros && (
+            <PainelFiltros
+              B={dados}
+              filtros={filtros}
+              onFiltros={setFiltros}
+              salvos={salvos}
+              salvoAtual={salvoAtual}
+              onGravar={gravarFiltro}
+              onExcluir={excluirFiltro}
+              onFechar={() => setPainelFiltros(false)}
+            />
+          )}
+          {dados && !painelFiltros && <ResumoFiltros B={dados} filtros={filtros} onFiltros={setFiltros} />}
 
           {!empresaId ? (
             <div className="panel">

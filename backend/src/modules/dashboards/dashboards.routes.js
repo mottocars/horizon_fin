@@ -15,6 +15,10 @@ const agingPainel = require('./agingPainel.service');
 //       Caixa (fluxoCaixaPainel.service.js). A empresa é conferida pelo authMiddleware (query).
 //   GET /economico-financeiro/aging?empresa_id -> parcelas em aberto a receber e a pagar (com rateio) e o
 //       saldo bancário de hoje, para o Aging List (agingPainel.service.js).
+//   Filtros salvos do usuário numa tela, por empresa (botão "Gravar filtro" / lista "Filtros salvos"):
+//   GET    /:dashboard/:tela/filtros?empresa_id            -> [{ id, nome, filtros }]
+//   POST   /:dashboard/:tela/filtros { empresa_id, nome, filtros } -> { id, nome, filtros } (mesmo nome substitui)
+//   DELETE /:dashboard/:tela/filtros/:id                   -> 204 (só os do próprio usuário)
 
 const DASHBOARDS = {
   'economico-financeiro': ['dre', 'fluxo-caixa', 'aging', 'detalhamento', 'saldos'],
@@ -63,6 +67,79 @@ router.get('/economico-financeiro/aging', async (req, res, next) => {
     res.set({ 'Content-Type': 'application/json; charset=utf-8', 'Content-Encoding': 'gzip', Vary: 'Accept-Encoding' }).send(corpo);
   } catch (err) {
     if (err.issues) return res.status(400).json({ message: 'Escolha a empresa.' });
+    next(err);
+  }
+});
+
+// Tela que aceita filtros salvos e o formato do que ela grava.
+const lista = (item) => z.array(item).max(5000).default([]);
+const FILTROS_SALVOS = {
+  'economico-financeiro/aging': z.object({
+    centros: lista(z.number().int()),
+    documentos: lista(z.string().max(50)),
+    naturezas: lista(z.string().max(50)),
+    clientes: lista(z.number().int()),
+    fornecedores: lista(z.number().int()),
+    previsao: z.enum(['nao', 'sim', 'todos']).default('nao'),
+  }),
+};
+
+function telaComFiltros(req, res) {
+  const schema = FILTROS_SALVOS[`${req.params.dashboard}/${req.params.tela}`];
+  if (!schema) res.status(404).json({ message: 'Esta tela não tem filtros salvos.' });
+  return schema;
+}
+
+router.get('/:dashboard/:tela/filtros', async (req, res, next) => {
+  try {
+    if (!telaComFiltros(req, res)) return;
+    const { empresa_id: empresaId } = z.object({ empresa_id: z.coerce.number().int().positive() }).parse(req.query);
+    const { rows } = await pool.query(
+      `SELECT id, nome, filtros FROM usuarios_dashboard_filtros
+        WHERE usuario_id = $1 AND empresa_id = $2 AND dashboard = $3 AND tela = $4 ORDER BY lower(nome)`,
+      [req.user.id, empresaId, req.params.dashboard, req.params.tela]
+    );
+    res.json(rows);
+  } catch (err) {
+    if (err.issues) return res.status(400).json({ message: 'Escolha a empresa.' });
+    next(err);
+  }
+});
+
+router.post('/:dashboard/:tela/filtros', async (req, res, next) => {
+  try {
+    const schema = telaComFiltros(req, res);
+    if (!schema) return;
+    const corpo = z
+      .object({ empresa_id: z.coerce.number().int().positive(), nome: z.string().trim().min(1).max(80), filtros: schema })
+      .parse(req.body || {});
+    const { rows } = await pool.query(
+      `INSERT INTO usuarios_dashboard_filtros (usuario_id, empresa_id, dashboard, tela, nome, filtros)
+       VALUES ($1, $2, $3, $4, $5, $6)
+       ON CONFLICT (usuario_id, empresa_id, dashboard, tela, nome)
+       DO UPDATE SET filtros = EXCLUDED.filtros, atualizado_em = NOW()
+       RETURNING id, nome, filtros`,
+      [req.user.id, corpo.empresa_id, req.params.dashboard, req.params.tela, corpo.nome, JSON.stringify(corpo.filtros)]
+    );
+    res.json(rows[0]);
+  } catch (err) {
+    if (err.issues) return res.status(400).json({ message: 'Informe o nome do filtro (até 80 caracteres).' });
+    next(err);
+  }
+});
+
+router.delete('/:dashboard/:tela/filtros/:id', async (req, res, next) => {
+  try {
+    if (!telaComFiltros(req, res)) return;
+    const id = z.coerce.number().int().positive().parse(req.params.id);
+    const { rowCount } = await pool.query(
+      'DELETE FROM usuarios_dashboard_filtros WHERE id = $1 AND usuario_id = $2 AND dashboard = $3 AND tela = $4',
+      [id, req.user.id, req.params.dashboard, req.params.tela]
+    );
+    if (!rowCount) return res.status(404).json({ message: 'Filtro não encontrado.' });
+    res.status(204).end();
+  } catch (err) {
+    if (err.issues) return res.status(400).json({ message: 'Filtro inválido.' });
     next(err);
   }
 });
