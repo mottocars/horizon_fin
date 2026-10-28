@@ -176,7 +176,7 @@ export default function MetricasUsoPage() {
 
           <HeatmapUsuarioTela matriz={dados.matriz} porTela={dados.porTela} />
 
-          <ComoAcessaTabela clientes={dados.clientes || []} />
+          <ComoAcessaTabela clientes={dados.clientes || []} periodo={dados.periodo} />
         </div>
       )}
     </div>

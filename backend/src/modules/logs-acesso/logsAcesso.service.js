@@ -1,5 +1,6 @@
 const pool = require('../../config/db');
 const { paisDoIp } = require('../../utils/paisDoIp');
+const { localizarIp } = require('../../utils/geoIp');
 const alertasSeguranca = require('../alertas-seguranca/alertasSeguranca.service');
 
 function paraISODate(data) {
@@ -104,4 +105,41 @@ async function metricas({ dataInicio, dataFim }, empresaIds = null) {
   };
 }
 
-module.exports = { registrar, metricas };
+// Drilldown "Onde acessou" de 1 usuário: cada IP de onde vieram as
+// chamadas no período, com o local (cidade/coordenadas, ver utils/geoIp.js),
+// o provedor, quando apareceu e sumiu, quantos dias e por qual cliente
+// (navegador, script...). Ordem: o IP mais recente primeiro. Quem não é
+// Master só vê usuários das próprias empresas (null = não pode / não existe).
+async function locaisUsuario(usuarioId, { dataInicio, dataFim }, empresaIds = null) {
+  const periodo = dataInicio && dataFim ? { dataInicio, dataFim } : periodoPadrao();
+  const { rows: usuarios } = await pool.query(
+    `SELECT u.id, u.nome, u.username
+     FROM usuarios u
+     WHERE u.id = $1
+       AND ($2::int[] IS NULL OR u.id IN (SELECT ue.usuario_id FROM usuarios_empresas ue WHERE ue.empresa_id = ANY($2::int[])))`,
+    [usuarioId, empresaIds]
+  );
+  if (!usuarios[0]) return null;
+
+  const { rows } = await pool.query(
+    `SELECT c.ip,
+            MIN(c.primeiro_em) AS primeiro_em,
+            MAX(c.ultimo_em) AS ultimo_em,
+            SUM(c.total)::int AS requisicoes,
+            ARRAY_AGG(DISTINCT TO_CHAR(c.dia, 'YYYY-MM-DD')) AS dias,
+            JSONB_AGG(DISTINCT JSONB_BUILD_OBJECT('tipo', c.tipo, 'detalhe', c.detalhe)) AS clientes
+     FROM logs_acesso_clientes c
+     WHERE c.usuario_id = $1 AND c.dia BETWEEN $2 AND $3 AND c.ip IS NOT NULL AND c.ip <> ''
+     GROUP BY c.ip
+     ORDER BY MAX(c.ultimo_em) DESC`,
+    [usuarioId, periodo.dataInicio, periodo.dataFim]
+  );
+
+  return {
+    periodo,
+    usuario: usuarios[0],
+    ips: rows.map((r) => ({ ...r, dias: [...r.dias].sort(), local: localizarIp(r.ip) })),
+  };
+}
+
+module.exports = { registrar, metricas, locaisUsuario };

@@ -11,6 +11,9 @@
     "test": "node --test"
   },
   "dependencies": {
+    "@ip-location-db/asn-mmdb": "^2.3.2026061719",
+    "@ip-location-db/dbip-city-mmdb": "^2.3.2026060513",
+    "@ip-location-db/geolite2-city-mmdb": "^2.3.2026061719",
     "@modelcontextprotocol/sdk": "^1.30.0",
     "bcryptjs": "^2.4.3",
     "cors": "^2.8.5",
@@ -21,6 +24,7 @@
     "geoip-country": "^5.0.202610030217",
     "jsonwebtoken": "^9.0.2",
     "jszip": "^3.10.1",
+    "maxmind": "^5.0.7",
     "morgan": "^1.10.0",
     "multer": "^2.2.0",
     "node-forge": "^1.4.0",

@@ -43,4 +43,18 @@ async function metricas(req, res, next) {
   }
 }
 
-module.exports = { registrar, metricas };
+async function locaisUsuario(req, res, next) {
+  try {
+    const query = metricasQuerySchema.parse(req.query);
+    const usuarioId = Number(req.params.usuarioId);
+    if (!Number.isInteger(usuarioId) || usuarioId <= 0) throw badRequest('Usuário inválido.');
+    const result = await service.locaisUsuario(usuarioId, query, req.user.empresaIds ? [...req.user.empresaIds] : null);
+    if (!result) return res.status(404).json({ message: 'Usuário não encontrado.' });
+    res.json(result);
+  } catch (err) {
+    if (err.issues) return next(badRequest(err.issues[0].message));
+    next(err);
+  }
+}
+
+module.exports = { registrar, metricas, locaisUsuario };
