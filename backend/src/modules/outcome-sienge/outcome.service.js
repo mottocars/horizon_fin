@@ -1,8 +1,9 @@
 const pool = require('../../config/db');
 const { decrypt } = require('../../utils/crypto');
-const { fetchAllOutcome } = require('./outcome-api.client');
+const { abrirOutcome } = require('./outcome-api.client');
 // (Sincroniza o contas a pagar do Sienge — mesmo padrão do income.service.js: uma chamada HTTP só,
-// apaga e reinsere tudo da empresa numa transação, em lotes multi-linha.)
+// apaga e reinsere tudo da empresa numa transação, em lotes multi-linha. Diferente do income, a
+// resposta é lida em partes e gravada enquanto chega: a da GENESIS não cabe num texto só.)
 
 async function getIntegracaoAtiva(empresaId) {
   const { rows } = await pool.query(
@@ -164,10 +165,9 @@ function linhaAutorizacao(empresaId, r, aut) {
   ];
 }
 
-// Substitui inteiro o que estava salvo da empresa pelos `registros` da API (apaga + reinsere numa
-// transação só). A ligação pai/filho (pagamento -> movimentos -> categorias do movimento) é
-// resolvida por índice de lista, como no income.
-async function gravar(empresaId, registros) {
+// Insere um lote de `registros` da API com o `client` da transação já aberta. A ligação pai/filho
+// (pagamento -> movimentos -> categorias do movimento) é resolvida por índice de lista, como no income.
+async function gravarLote(client, empresaId, registros) {
   const linhasParcelas = [];
   const linhasCategorias = [];
   const linhasDepartamentos = [];
@@ -186,60 +186,82 @@ async function gravar(empresaId, registros) {
     }
   }
 
+  await inserirEmLotes(client, 'sie_outcome', COLUNAS_PARCELA, linhasParcelas);
+  await inserirEmLotes(client, 'sie_outcome_categorias', COLUNAS_CATEGORIA, linhasCategorias);
+  await inserirEmLotes(client, 'sie_outcome_departamentos', COLUNAS_DEPARTAMENTO, linhasDepartamentos);
+  await inserirEmLotes(client, 'sie_outcome_obras', COLUNAS_OBRA, linhasObras);
+  await inserirEmLotes(client, 'sie_outcome_autorizacoes', COLUNAS_AUTORIZACAO, linhasAutorizacoes);
+
+  const idsPagamentos = await inserirEmLotes(
+    client,
+    'sie_outcome_pagamentos',
+    COLUNAS_PAGAMENTO,
+    pagamentosBrutos.map((item) => item.linha),
+    { retornarId: true }
+  );
+
+  const movimentosBrutos = [];
+  pagamentosBrutos.forEach((item, i) => {
+    const pagamentoId = idsPagamentos[i];
+    item.bankMovements.forEach((mov) => {
+      movimentosBrutos.push({
+        linha: linhaMovimento(pagamentoId, mov),
+        paymentCategories: mov.paymentCategories || [],
+      });
+    });
+  });
+
+  const idsMovimentos = await inserirEmLotes(
+    client,
+    'sie_outcome_pagamentos_movimentos',
+    COLUNAS_MOVIMENTO,
+    movimentosBrutos.map((item) => item.linha),
+    { retornarId: true }
+  );
+
+  const linhasCategoriasMovimento = [];
+  movimentosBrutos.forEach((item, i) => {
+    const movimentoId = idsMovimentos[i];
+    item.paymentCategories.forEach((catMov) => {
+      linhasCategoriasMovimento.push(linhaCategoriaMovimento(movimentoId, catMov));
+    });
+  });
+
+  await inserirEmLotes(
+    client,
+    'sie_outcome_pagamentos_movimentos_categorias',
+    COLUNAS_CATEGORIA_MOVIMENTO,
+    linhasCategoriasMovimento
+  );
+}
+
+// Parcelas por lote gravado enquanto a resposta chega (só o lote fica em memória).
+const PARCELAS_POR_LOTE = 2000;
+
+// Substitui inteiro o que estava salvo da empresa pelas parcelas que vêm de `registros` (lista ou
+// iterável assíncrono): apaga e reinsere numa transação só — se a leitura ou a gravação falhar no
+// meio, nada muda e a base anterior continua valendo. `onProgress({ lidas })` a cada lote.
+async function gravar(empresaId, registros, onProgress) {
   const client = await pool.connect();
+  let total = 0;
   try {
     await client.query('BEGIN');
-
     await client.query('DELETE FROM sie_outcome WHERE empresa_id = $1', [empresaId]);
-
-    await inserirEmLotes(client, 'sie_outcome', COLUNAS_PARCELA, linhasParcelas);
-    await inserirEmLotes(client, 'sie_outcome_categorias', COLUNAS_CATEGORIA, linhasCategorias);
-    await inserirEmLotes(client, 'sie_outcome_departamentos', COLUNAS_DEPARTAMENTO, linhasDepartamentos);
-    await inserirEmLotes(client, 'sie_outcome_obras', COLUNAS_OBRA, linhasObras);
-    await inserirEmLotes(client, 'sie_outcome_autorizacoes', COLUNAS_AUTORIZACAO, linhasAutorizacoes);
-
-    const idsPagamentos = await inserirEmLotes(
-      client,
-      'sie_outcome_pagamentos',
-      COLUNAS_PAGAMENTO,
-      pagamentosBrutos.map((item) => item.linha),
-      { retornarId: true }
-    );
-
-    const movimentosBrutos = [];
-    pagamentosBrutos.forEach((item, i) => {
-      const pagamentoId = idsPagamentos[i];
-      item.bankMovements.forEach((mov) => {
-        movimentosBrutos.push({
-          linha: linhaMovimento(pagamentoId, mov),
-          paymentCategories: mov.paymentCategories || [],
-        });
-      });
-    });
-
-    const idsMovimentos = await inserirEmLotes(
-      client,
-      'sie_outcome_pagamentos_movimentos',
-      COLUNAS_MOVIMENTO,
-      movimentosBrutos.map((item) => item.linha),
-      { retornarId: true }
-    );
-
-    const linhasCategoriasMovimento = [];
-    movimentosBrutos.forEach((item, i) => {
-      const movimentoId = idsMovimentos[i];
-      item.paymentCategories.forEach((catMov) => {
-        linhasCategoriasMovimento.push(linhaCategoriaMovimento(movimentoId, catMov));
-      });
-    });
-
-    await inserirEmLotes(
-      client,
-      'sie_outcome_pagamentos_movimentos_categorias',
-      COLUNAS_CATEGORIA_MOVIMENTO,
-      linhasCategoriasMovimento
-    );
-
+    let lote = [];
+    for await (const r of registros) {
+      lote.push(r);
+      if (lote.length >= PARCELAS_POR_LOTE) {
+        await gravarLote(client, empresaId, lote);
+        total += lote.length;
+        lote = [];
+        onProgress?.({ lidas: total });
+      }
+    }
+    if (lote.length) {
+      await gravarLote(client, empresaId, lote);
+      total += lote.length;
+      onProgress?.({ lidas: total });
+    }
     await client.query('COMMIT');
   } catch (err) {
     await client.query('ROLLBACK');
@@ -247,11 +269,10 @@ async function gravar(empresaId, registros) {
   } finally {
     client.release();
   }
-
-  return { total_importado: registros.length };
+  return { total_importado: total };
 }
 
-// Busca tudo da API (uma chamada só) e grava.
+// Busca tudo da API (uma chamada só) e grava conforme as parcelas chegam.
 async function sincronizar(empresaId, onProgress) {
   const integracao = await getIntegracaoAtiva(empresaId);
   if (!integracao) {
@@ -262,14 +283,8 @@ async function sincronizar(empresaId, onProgress) {
   }
 
   const password = decrypt(integracao.password_enc);
-  const registros = await fetchAllOutcome({
-    tenant: integracao.tenant,
-    username: integracao.username,
-    password,
-    onProgress,
-  });
-
-  return gravar(empresaId, registros);
+  const registros = await abrirOutcome({ tenant: integracao.tenant, username: integracao.username, password });
+  return gravar(empresaId, registros, onProgress);
 }
 
 async function getResumo(empresaId) {

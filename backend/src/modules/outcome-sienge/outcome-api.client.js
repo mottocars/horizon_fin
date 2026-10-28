@@ -1,4 +1,5 @@
 const { siengeFetch } = require('../../utils/siengeFetch');
+const { itensDoCampo } = require('../../utils/jsonEmPartes');
 
 // bulk-data/v1/outcome: contas a pagar (parcelas de credor) — base do Aging a pagar do DFC
 // Construtoras. Mesmo período aberto do income (histórico inteiro, por vencimento), com o saldo
@@ -7,8 +8,9 @@ const START_DATE = '2000-01-01';
 const END_DATE = '2050-12-31';
 const CORRECTION_INDEXER_ID = '2';
 // O contas a pagar é bem maior que o a receber, e as requisições ao Sienge são limitadas: um
-// timeout desperdiça a chamada inteira. Mais folga que os 120 s padrão do siengeFetch.
-const TIMEOUT_MS = 300_000;
+// timeout desperdiça a chamada inteira. O tempo vale para a resposta inteira — download e gravação
+// juntos, já que as parcelas são gravadas enquanto chegam (a da GENESIS leva uns 4 min só para baixar).
+const TIMEOUT_MS = 30 * 60_000;
 
 function buildOutcomeUrl(tenant) {
   return `https://api.sienge.com.br/${tenant}/public/api/bulk-data/v1/outcome`;
@@ -58,16 +60,16 @@ async function fetchPage({ tenant, username, password, offset, limit }) {
     throw e;
   }
 
-  return response.json();
+  return response;
 }
 
 // Mesmo comportamento da bulk-data do income (ver income-api.client.js): ignora offset/limit e
 // devolve o período inteiro numa resposta só, em `data`. Sempre uma chamada HTTP só, nunca um laço.
-async function fetchAllOutcome({ tenant, username, password, onProgress }) {
-  const page = await fetchPage({ tenant, username, password, offset: 0, limit: 1000 });
-  const results = Array.isArray(page?.data) ? page.data : [];
-  onProgress?.({ paginaAtual: 1, totalPaginas: 1 });
-  return results;
+// A resposta é grande demais para response.json() (passa de 512 MB na GENESIS): devolve as parcelas
+// uma a uma, conforme chegam (utils/jsonEmPartes.js). O erro da API (429, 4xx/5xx) sai antes da 1ª.
+async function abrirOutcome({ tenant, username, password }) {
+  const response = await fetchPage({ tenant, username, password, offset: 0, limit: 1000 });
+  return itensDoCampo(response.body, 'data');
 }
 
-module.exports = { fetchAllOutcome };
+module.exports = { abrirOutcome };

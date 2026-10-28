@@ -178,7 +178,8 @@ const ROTINAS = [
     disponibilidade: semSienge,
     async executar({ empresaId, progresso }) {
       progresso({ texto: 'Buscando o contas a pagar no Sienge (pode levar alguns minutos)' });
-      const r = await outcome.sincronizar(empresaId, porPagina(progresso, 'Buscando o contas a pagar no Sienge'));
+      // A resposta é gravada enquanto chega: o progresso é a contagem de parcelas já gravadas.
+      const r = await outcome.sincronizar(empresaId, (p) => progresso({ texto: `Gravando o contas a pagar do Sienge: ${n(p.lidas)} parcela(s)` }));
       return `${n(r.total_importado)} parcela(s) importada(s).`;
     },
   },
