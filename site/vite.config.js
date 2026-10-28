@@ -2,12 +2,12 @@ import { resolve } from 'node:path';
 import { defineConfig, loadEnv } from 'vite';
 import pluginSite from './vite/plugin-site.js';
 
-// Endereço do site (ver plano): pré-lançamento em financas.horizonhub.com.br/site (padrão), lançamento em
-// www.horizonhub.com.br com VITE_BASE=/ VITE_SITE_URL=https://www.horizonhub.com.br VITE_INDEXAR=true.
+// Endereço do site: raiz de https://horizonhub.com.br. A produção liga VITE_INDEXAR=true (docker-compose.yml);
+// sem ela (dev, testes) o build sai com noindex.
 export default defineConfig(({ mode }) => {
   const env = { ...loadEnv(mode, process.cwd(), 'VITE_'), ...process.env };
-  const base = env.VITE_BASE || '/site/';
-  const siteUrl = (env.VITE_SITE_URL || 'https://financas.horizonhub.com.br/site').replace(/\/$/, '');
+  const base = env.VITE_BASE || '/';
+  const siteUrl = (env.VITE_SITE_URL || 'https://horizonhub.com.br').replace(/\/$/, '');
   const indexar = env.VITE_INDEXAR === 'true';
   return {
     base,

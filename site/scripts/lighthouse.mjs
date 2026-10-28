@@ -16,7 +16,7 @@ const navegador = process.env.CHROME_PATH || (fs.existsSync(CHROME_WIN) ? CHROME
 const SITE = path.resolve(path.dirname(fileURLToPath(import.meta.url)), '..');
 const desktop = process.argv.includes('--desktop');
 const servidor = await preview({ root: SITE, preview: { port: 4180, strictPort: true } });
-const url = 'http://localhost:4180/site/';
+const url = 'http://localhost:4180/';
 const saida = path.join(SITE, 'capturas', `lighthouse-${desktop ? 'desktop' : 'mobile'}.json`);
 fs.mkdirSync(path.dirname(saida), { recursive: true });
 try {

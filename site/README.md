@@ -7,9 +7,9 @@ Site público de vendas ("A planilha que morreu"). É um projeto separado do app
 ```bash
 cd site
 npm install
-npm run dev        # http://localhost:5180/site/
+npm run dev        # http://localhost:5180/
 npm run build      # confere o motor e a história do Grupo Aurora, depois gera dist/
-npm run preview    # http://localhost:4180/site/
+npm run preview    # http://localhost:4180/
 ```
 
 ## Onde fica cada coisa
@@ -36,8 +36,8 @@ O `prebuild` acusa erro se a cópia estiver diferente do app ou se a história q
 
 | | `VITE_BASE` | `VITE_SITE_URL` | `VITE_INDEXAR` |
 |---|---|---|---|
-| Pré-lançamento (padrão) | `/site/` | `https://financas.horizonhub.com.br/site` | (vazio) |
-| Lançamento | `/` | `https://www.horizonhub.com.br` | `true` |
+| Desenvolvimento (padrão) | `/` | `https://horizonhub.com.br` | (vazio) |
+| Produção (docker-compose.yml) | `/` | `https://horizonhub.com.br` | `true` |
 
 Sem `VITE_INDEXAR=true`, a página sai com `noindex` e o `robots.txt` bloqueia tudo.
 

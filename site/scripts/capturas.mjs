@@ -1,7 +1,7 @@
 #!/usr/bin/env node
 // Capturas de tela do site para revisão visual + checagens automáticas (erros no console, rolagem
 // horizontal, animações rodando com movimento reduzido, violações de acessibilidade do axe).
-// Uso: node scripts/capturas.mjs [--url=http://localhost:5180/site/] [--so=1440] [--secoes=inicio,custo] [--sem-axe]
+// Uso: node scripts/capturas.mjs [--url=http://localhost:5180/] [--so=1440] [--secoes=inicio,custo] [--sem-axe]
 // Saída: site/capturas/<largura>-<movimento>/NN-secao.png
 import fs from 'node:fs';
 import path from 'node:path';
@@ -10,7 +10,7 @@ import { chromium } from 'playwright';
 
 const SITE = path.resolve(path.dirname(fileURLToPath(import.meta.url)), '..');
 const arg = (n, padrao) => process.argv.find((a) => a.startsWith(`--${n}=`))?.split('=').slice(1).join('=') ?? padrao;
-const URL_BASE = arg('url', 'http://localhost:5180/site/');
+const URL_BASE = arg('url', 'http://localhost:5180/');
 const HOJE = arg('hoje', '2026-10-19');
 const SO = arg('so', null);
 const SECOES = arg('secoes', null)?.split(',');

@@ -10,11 +10,10 @@ RUN npm ci
 
 COPY . .
 
-# Endereço do site, fixado no build (Vite): pré-lançamento em financas.horizonhub.com.br/site, sem indexação.
-# No lançamento em www.horizonhub.com.br: VITE_BASE=/, VITE_SITE_URL=https://www.horizonhub.com.br,
-# VITE_INDEXAR=true (no docker-compose.yml).
-ARG VITE_BASE=/site/
-ARG VITE_SITE_URL=https://financas.horizonhub.com.br/site
+# Endereço do site, fixado no build (Vite): raiz de https://horizonhub.com.br. A indexação (VITE_INDEXAR=true)
+# vem do docker-compose.yml — sem ela, o build sai com noindex.
+ARG VITE_BASE=/
+ARG VITE_SITE_URL=https://horizonhub.com.br
 ARG VITE_INDEXAR=
 ENV VITE_BASE=$VITE_BASE VITE_SITE_URL=$VITE_SITE_URL VITE_INDEXAR=$VITE_INDEXAR
 

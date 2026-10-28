@@ -8,7 +8,7 @@ export const esc = (s) => String(s ?? '').replace(/[&<>"']/g, (c) => ESC[c]);
 // Texto do motor em partes (string ou { b: 'negrito' }) -> HTML.
 export const partes = (ps) => (ps || []).map((p) => (typeof p === 'string' ? esc(p) : `<b>${esc(p.b)}</b>`)).join('');
 
-// Base do site (/site/ no pré-lançamento, / no lançamento) para arquivos de public/.
+// Base do site (VITE_BASE, hoje /) para arquivos de public/.
 export const BASE = import.meta.env.BASE_URL;
 
 const MESES = ['janeiro', 'fevereiro', 'março', 'abril', 'maio', 'junho', 'julho', 'agosto', 'setembro', 'outubro', 'novembro', 'dezembro'];
