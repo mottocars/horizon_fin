@@ -118,3 +118,41 @@ export function interpretarSaldo(texto) {
 export function somarSaldos(valores) {
   return valores.reduce((acc, v) => acc + Math.round(v * 100), 0) / 100;
 }
+
+// Resumo dos saldos — linhas abaixo do TOTAL GERAL. Mesma regra (e mesmo teste) do backend:
+// backend/src/modules/saldo-contas-bancarias/resumoSaldos.calculo.js — mudou lá, muda aqui.
+// - Total liberado: classificação liberada — saldo menos bloqueio (só a parte positiva) +
+//   limite restante do cheque especial (saldo negativo não entra: -200 com limite 500 -> 300).
+// - Total bloqueado: saldo das contas de classificação bloqueada + bloqueios das demais.
+// - Limite cheque: soma dos limites restantes. Saldo a cobrir: soma dos saldos negativos.
+// Limite restante só nos dias com abertura de período, como a linha de detalhe da grade.
+export const RESUMO_SALDOS = [
+  { chave: 'liberado', rotulo: 'Total liberado' },
+  { chave: 'bloqueado', rotulo: 'Total bloqueado' },
+  { chave: 'limiteCheque', rotulo: 'Limite cheque' },
+  { chave: 'aCobrir', rotulo: 'Saldo a cobrir' },
+];
+
+const centavos = (v) => Math.round(Number(v) * 100);
+
+export function calcularResumoSaldos(contas, diasIso, periodos) {
+  const resumo = Object.fromEntries(RESUMO_SALDOS.map((r) => [r.chave, {}]));
+  for (const iso of diasIso) {
+    const comSaldo = contas.filter((c) => c.saldos[iso] !== undefined && c.saldos[iso] !== null);
+    if (comSaldo.length === 0) continue;
+    const soma = { liberado: 0, bloqueado: 0, limiteCheque: 0, aCobrir: 0 };
+    for (const conta of comSaldo) {
+      const saldo = centavos(conta.saldos[iso]);
+      const bloqueio = centavos(conta.bloqueios?.[iso] || 0);
+      const limite = conta.valor_cheque_especial;
+      const restante = limite > 0 && periodos.has(iso) ? (saldo < 0 ? centavos(limite) + saldo : centavos(limite)) : 0;
+      if (conta.classificacao_libera_saldo === true) soma.liberado += Math.max(saldo - bloqueio, 0) + restante;
+      if (conta.classificacao_libera_saldo === false) soma.bloqueado += saldo;
+      else soma.bloqueado += bloqueio;
+      soma.limiteCheque += restante;
+      if (saldo < 0) soma.aCobrir += saldo;
+    }
+    for (const r of RESUMO_SALDOS) resumo[r.chave][iso] = soma[r.chave] / 100;
+  }
+  return resumo;
+}

@@ -17,6 +17,8 @@ export default function EncerrarPeriodoModal({ open, onClose, empresaId, dataAbe
   const [encerrando, setEncerrando] = useState(false);
   const [erro, setErro] = useState('');
   const [notificacao, setNotificacao] = useState(null);
+  // Mensagem do administrador — vai no WhatsApp do Comunicar Saldos, abaixo do resumo dos saldos.
+  const [mensagem, setMensagem] = useState('');
   // Andamento das rotinas (parâmetro Gerar Rotinas): com alguma pendente, o período não encerra.
   const [rotinas, setRotinas] = useState(null);
 
@@ -25,6 +27,7 @@ export default function EncerrarPeriodoModal({ open, onClose, empresaId, dataAbe
     setEtapa('confirmar');
     setErro('');
     setNotificacao(null);
+    setMensagem('');
     setCarregandoDestinatarios(true);
     setRotinas(null);
     getRotinasStatus(empresaId)
@@ -44,7 +47,7 @@ export default function EncerrarPeriodoModal({ open, onClose, empresaId, dataAbe
     setEncerrando(true);
     setEtapa('enviando');
     try {
-      const resultado = await encerrarPeriodoSaldos(empresaId);
+      const resultado = await encerrarPeriodoSaldos(empresaId, mensagem);
       setNotificacao(resultado.notificacao);
       setEtapa('resultado');
       onEncerrado();
@@ -87,6 +90,26 @@ export default function EncerrarPeriodoModal({ open, onClose, empresaId, dataAbe
                 </span>
               </div>
             )
+          )}
+
+          {!carregandoDestinatarios && nomesDestinatarios.length > 0 && (
+            <div>
+              <label htmlFor="mensagem-encerramento" className="mb-1 block text-sm font-medium text-gray-700">
+                Mensagem do administrador <span className="font-normal text-gray-400">(opcional — vai no WhatsApp)</span>
+              </label>
+              <textarea
+                id="mensagem-encerramento"
+                rows={3}
+                maxLength={1000}
+                value={mensagem}
+                onChange={(e) => setMensagem(e.target.value)}
+                placeholder="Ex.: atenção ao saldo a cobrir da conta da obra X, cobertura prevista para amanhã"
+                className="w-full resize-none rounded-lg border border-gray-200 px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-primary-100"
+              />
+              <p className="mt-1 text-xs text-gray-400">
+                O WhatsApp leva o resumo dos saldos (liberado, bloqueado, limite cheque e saldo a cobrir) e esta mensagem logo abaixo.
+              </p>
+            </div>
           )}
 
           <div className="flex justify-end gap-2 pt-2">

@@ -4,6 +4,7 @@ const ExcelJS = require('exceljs');
 const JSZip = require('jszip');
 const service = require('./saldos.service');
 const empresasService = require('../empresas/empresas.service');
+const { RESUMO_SALDOS, calcularResumoSaldos } = require('./resumoSaldos.calculo');
 
 // Logomarca completa (o mesmo wordmark do topo do menu lateral expandido, ver
 // frontend/src/layout/Sidebar.jsx e frontend/public/logomarca.svg) — rasterizada em PNG porque
@@ -251,8 +252,7 @@ function escreverLinhaGrupo(sheet, linha, texto, totais, dias, { total = false, 
 //   bloqueado), só se a conta tiver bloqueio em algum dia; dias sem bloqueio ficam vazios.
 // - Cheque especial (limite cadastrado na conta): Limite total e Limite restante (saldo negativo
 //   -> limite + saldo; senão o limite inteiro), só nos dias com abertura de período (`periodos`).
-// Devolve [{ rotulo, valores: { iso: número } }] — usado pela planilha e pela mensagem do
-// Comunicar Saldos (comunicarSaldos.service.js).
+// Devolve [{ rotulo, valores: { iso: número } }].
 function detalhesConta(conta, diasIso, periodos) {
   const linhas = [];
   const bloqueios = conta.bloqueios || {};
@@ -325,7 +325,7 @@ function escreverLinhaConta(sheet, linha, conta, dias) {
 function montarPlanilha(workbook, dados) {
   const {
     empresaLabel, filtrosDisplay, nomeUsuario, geradoEm, dias, meses,
-    grupos, totaisPorGrupo, totalGeral, gruposBanco, totaisPorBanco, bancoNomes, periodos,
+    grupos, totaisPorGrupo, totalGeral, gruposBanco, totaisPorBanco, bancoNomes, periodos, resumo,
   } = dados;
   const ultimaColuna = 1 + dias.length;
   const sheet = workbook.addWorksheet('Relatório', { views: [{ showGridLines: false }] });
@@ -394,17 +394,18 @@ function montarPlanilha(workbook, dados) {
 
   let linha = 6;
 
-  // ------------------------------------------------------------- saldos por banco
-  escreverFaixaTitulo(sheet, linha, 'SALDOS POR BANCO', ultimaColuna);
+  // ------------------------------------------------------------- resumo dos saldos
+  // Mesmos totalizadores das linhas abaixo do TOTAL GERAL da grade (resumoSaldos.calculo.js).
+  // Ordem das seções pedida pelo usuário: resumo, classificação, conta bancária, banco.
+  escreverFaixaTitulo(sheet, linha, 'RESUMO DOS SALDOS', ultimaColuna);
   linha += 1;
-  escreverCabecalhoColunas(sheet, linha, 'BANCO', dias, meses, ultimaColuna);
+  escreverCabecalhoColunas(sheet, linha, 'RESUMO', dias, meses, ultimaColuna);
   linha += 2;
-  for (const grupo of gruposBanco) {
-    escreverLinhaGrupo(sheet, linha, rotuloBanco(grupo.nome, bancoNomes), totaisPorBanco[grupo.nome], dias, { comFundo: false });
+  for (const { chave, rotulo } of RESUMO_SALDOS) {
+    escreverLinhaGrupo(sheet, linha, rotulo.toUpperCase(), resumo[chave], dias, { comFundo: false });
     linha += 1;
   }
-  escreverLinhaGrupo(sheet, linha, 'TOTAL', totalGeral, dias, { total: true });
-  linha += 2;
+  linha += 1;
 
   // ------------------------------------------------------------- saldos por classificação
   escreverFaixaTitulo(sheet, linha, 'SALDOS POR CLASSIFICAÇÃO', ultimaColuna);
@@ -434,6 +435,18 @@ function montarPlanilha(workbook, dados) {
         linha += 1;
       }
     }
+  }
+  escreverLinhaGrupo(sheet, linha, 'TOTAL', totalGeral, dias, { total: true });
+  linha += 2;
+
+  // ------------------------------------------------------------- saldos por banco
+  escreverFaixaTitulo(sheet, linha, 'SALDOS POR BANCO', ultimaColuna);
+  linha += 1;
+  escreverCabecalhoColunas(sheet, linha, 'BANCO', dias, meses, ultimaColuna);
+  linha += 2;
+  for (const grupo of gruposBanco) {
+    escreverLinhaGrupo(sheet, linha, rotuloBanco(grupo.nome, bancoNomes), totaisPorBanco[grupo.nome], dias, { comFundo: false });
+    linha += 1;
   }
   escreverLinhaGrupo(sheet, linha, 'TOTAL', totalGeral, dias, { total: true });
 }
@@ -475,6 +488,7 @@ async function gerarRelatorioExcel(empresaId, filtrosQuery, meta) {
     totaisPorBanco,
     bancoNomes,
     periodos: new Set(periodos),
+    resumo: calcularResumoSaldos(contas, dias.map((d) => d.iso), new Set(periodos)),
   });
 
   return workbook;
@@ -515,6 +529,5 @@ async function gerarRelatorioExcelBuffer(empresaId, filtrosQuery, meta) {
   return corrigirTamanhoImagemNoBuffer(buffer);
 }
 
-// agruparContas/calcularTotais/detalhesConta também usados por comunicarSaldos.service.js pra
-// montar o resumo do dia encerrado (mesma lógica, só com `dias` de 1 elemento só).
-module.exports = { gerarRelatorioExcel, gerarRelatorioExcelBuffer, agruparContas, calcularTotais, detalhesConta };
+// agruparContas também usado por comunicarSaldos.service.js (saber se o dia encerrado tem saldo).
+module.exports = { gerarRelatorioExcel, gerarRelatorioExcelBuffer, agruparContas };

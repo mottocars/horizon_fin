@@ -1,10 +1,20 @@
 import { Fragment, memo, useCallback, useEffect, useMemo, useRef, useState } from 'react';
-import { Check, CornerDownRight, History, Landmark, Loader2, Lock, LockOpen, Minus, Pencil, Plus, TriangleAlert, Zap } from 'lucide-react';
+import { Check, CornerDownRight, CreditCard, History, Landmark, Loader2, Lock, LockOpen, Minus, Pencil, Plus, TriangleAlert, Zap } from 'lucide-react';
 import { getSaldosContas, salvarSaldosContas } from '../../../api/saldoContasBancarias.api';
 import LogoBanco from './LogoBanco';
 import ComposicaoSaldo from './ComposicaoSaldo';
 import BloqueioSaldoModal from './BloqueioSaldoModal';
-import { formatarDataBR, formatarSaldo, interpretarSaldo, listarDias, nomeMes, numeroParaEdicao, somarSaldos } from './constantes';
+import {
+  RESUMO_SALDOS,
+  calcularResumoSaldos,
+  formatarDataBR,
+  formatarSaldo,
+  interpretarSaldo,
+  listarDias,
+  nomeMes,
+  numeroParaEdicao,
+  somarSaldos,
+} from './constantes';
 
 // Geometria da grade — a tabela tem largura fixa (colunas em px) e rola dentro do card:
 // com até 31+ colunas de valor não existe largura de tela que acomode tudo sem rolar.
@@ -14,10 +24,21 @@ const ALTURA_MES = 28;
 // Cabeçalho do dia numa linha só (dia da semana + número lado a lado, pedido do usuário) —
 // bem mais baixo que o layout antigo, em duas linhas empilhadas.
 const ALTURA_DIA = 28;
+// Rodapé: Total geral + as 4 linhas do resumo dos saldos, todas grudadas embaixo ao rolar — cada
+// linha com altura fixa pra calcular o `bottom` de cada uma (ver tfoot).
+const ALTURA_RODAPE = 34;
 // A coluna de nomes é sticky: o que foca/rola por baixo dela precisa de margem, senão a
 // célula focada por teclado fica escondida atrás da coluna/cabeçalho fixos. scroll-mt =
-// ALTURA_MES + ALTURA_DIA + uma folga pequena.
-const MARGEM_ROLAGEM = 'scroll-mt-[60px] scroll-mb-14 scroll-ml-[356px] scroll-mr-4';
+// ALTURA_MES + ALTURA_DIA + uma folga pequena; scroll-mb = as 5 linhas do rodapé + folga.
+const MARGEM_ROLAGEM = 'scroll-mt-[60px] scroll-mb-[186px] scroll-ml-[356px] scroll-mr-4';
+
+// Linhas do resumo dos saldos abaixo do Total geral (cálculo em constantes.js::calcularResumoSaldos).
+const VISUAL_RESUMO = {
+  liberado: { Icone: LockOpen, cor: 'text-emerald-700' },
+  bloqueado: { Icone: Lock, cor: 'text-amber-700' },
+  limiteCheque: { Icone: CreditCard, cor: 'text-purple-700' },
+  aCobrir: { Icone: TriangleAlert, cor: 'text-red-700' },
+};
 
 const tomNegativo = (valor) => (valor < 0 ? 'text-red-600' : 'text-gray-900');
 
@@ -435,6 +456,11 @@ function SaldosContasTab({
       totalGeral: Object.fromEntries(Object.entries(somaGeral).map(([data, v]) => [data, somarSaldos(v)])),
     };
   }, [grupos]);
+
+  const resumo = useMemo(
+    () => calcularResumoSaldos(contasFiltradas || [], dias.map((d) => d.iso), diasComPeriodo),
+    [contasFiltradas, dias, diasComPeriodo]
+  );
 
   const meses = useMemo(() => {
     const segmentos = [];
@@ -945,22 +971,57 @@ function SaldosContasTab({
               })}
             </tbody>
 
+            {/* Rodapé grudado embaixo: Total geral e, abaixo dele, o resumo dos saldos. Cada linha
+                tem altura fixa (ALTURA_RODAPE) e um `bottom` que empilha as de baixo — o -24 cancela
+                o p-6 do <main>, como no -bottom-6 de antes. */}
             <tfoot>
-              <tr>
-                <td className="sticky -bottom-6 left-0 z-30 border-r border-t-2 border-r-blue-100 border-t-blue-500 bg-blue-50 py-3 pl-4 text-xs font-semibold uppercase tracking-wide text-blue-700">
+              <tr style={{ height: ALTURA_RODAPE }}>
+                <td
+                  className="sticky left-0 z-30 border-r border-t-2 border-r-blue-100 border-t-blue-500 bg-blue-50 pl-4 text-xs font-semibold uppercase tracking-wide text-blue-700"
+                  style={{ bottom: -24 + RESUMO_SALDOS.length * ALTURA_RODAPE }}
+                >
                   Total geral
                 </td>
                 {dias.map((d) => (
                   <td
                     key={d.iso}
-                    className={`sticky -bottom-6 z-20 border-l border-t-2 border-l-blue-100 border-t-blue-500 px-3 text-right text-xs font-bold tabular-nums text-blue-700 ${
+                    className={`sticky z-20 border-l border-t-2 border-l-blue-100 border-t-blue-500 px-3 text-right text-xs font-bold tabular-nums text-blue-700 ${
                       d.iso === dataAberta ? 'bg-amber-50' : 'bg-blue-50'
                     }`}
+                    style={{ bottom: -24 + RESUMO_SALDOS.length * ALTURA_RODAPE }}
                   >
                     <ValorTotal valor={totalGeral[d.iso]} />
                   </td>
                 ))}
               </tr>
+              {RESUMO_SALDOS.map(({ chave, rotulo }, i) => {
+                const { Icone, cor } = VISUAL_RESUMO[chave];
+                const bottom = -24 + (RESUMO_SALDOS.length - 1 - i) * ALTURA_RODAPE;
+                return (
+                  <tr key={chave} style={{ height: ALTURA_RODAPE }}>
+                    <td
+                      className={`sticky left-0 z-30 border-r border-t border-r-blue-100 border-t-blue-100 bg-white pl-4 text-xs font-semibold uppercase tracking-wide ${cor}`}
+                      style={{ bottom }}
+                    >
+                      <span className="flex items-center gap-2">
+                        <Icone size={13} className="shrink-0" />
+                        {rotulo}
+                      </span>
+                    </td>
+                    {dias.map((d) => (
+                      <td
+                        key={d.iso}
+                        className={`sticky z-20 border-l border-t border-l-blue-100 border-t-blue-100 px-3 text-right text-xs font-semibold tabular-nums text-gray-800 ${
+                          d.iso === dataAberta ? 'bg-amber-50' : 'bg-white'
+                        }`}
+                        style={{ bottom }}
+                      >
+                        <ValorTotal valor={resumo[chave][d.iso]} />
+                      </td>
+                    ))}
+                  </tr>
+                );
+              })}
             </tfoot>
           </table>
         </div>

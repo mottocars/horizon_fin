@@ -62,8 +62,9 @@ export function abrirPeriodoSaldos(empresaId, data, reabrirEncerrado = false) {
 // Encerra o período aberto desta empresa (se houver) — o cadeado volta a ficar trancado. Espera
 // o "Comunicar Saldos" terminar (pode levar alguns segundos) e devolve também o resultado do
 // aviso: { data: null, notificacao: { status, enviados: [{nome}], falhas: [{nome, motivo}] } }.
-export function encerrarPeriodoSaldos(empresaId) {
-  return http.delete(`/saldo-contas-bancarias/${empresaId}/periodo-aberto`).then((res) => res.data);
+// `mensagem` (opcional): texto do administrador que vai no WhatsApp abaixo do resumo dos saldos.
+export function encerrarPeriodoSaldos(empresaId, mensagem = '') {
+  return http.delete(`/saldo-contas-bancarias/${empresaId}/periodo-aberto`, { data: { mensagem } }).then((res) => res.data);
 }
 
 // Registra/altera o bloqueio de saldo de uma conta num dia (só no dia com período aberto);

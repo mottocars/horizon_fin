@@ -194,9 +194,21 @@ async function abrirPeriodo(req, res, next) {
   }
 }
 
+const encerrarPeriodoSchema = z.object({
+  mensagem: z
+    .string()
+    .trim()
+    .max(1000, 'Mensagem com no máximo 1000 caracteres.')
+    .nullish()
+    .transform((v) => v || null),
+});
+
 async function encerrarPeriodo(req, res, next) {
   try {
     const empresaId = await acessoEmpresa(req);
+    // Mensagem do administrador pro WhatsApp do Comunicar Saldos (opcional) — validada antes de
+    // encerrar, pra um texto inválido não deixar o período encerrado sem aviso.
+    const { mensagem } = encerrarPeriodoSchema.parse(req.body || {});
     // Com "Gerar Rotinas" ligado, só encerra depois que todos os responsáveis encerraram a
     // própria rotina (409 ROTINAS_PENDENTES com os nomes de quem falta).
     await rotinasService.assertPodeEncerrarPeriodo(empresaId, req.user.id);
@@ -206,7 +218,7 @@ async function encerrarPeriodo(req, res, next) {
     // disso era fire-and-forget e ficava invisível pra quem estava na tela). O período já
     // está encerrado no banco nesse ponto; uma falha aqui não desfaz isso, só é informada.
     const notificacao = await comunicarSaldosService
-      .notificarComunicarSaldos(empresaId, resultado.dataFechada, req.user.id)
+      .notificarComunicarSaldos(empresaId, resultado.dataFechada, { mensagem })
       .catch((err) => {
         console.error('[comunicar-saldos] falha inesperada:', err);
         return { status: 'erro', mensagem: err.message || 'Falha inesperada ao enviar o aviso.', enviados: [], falhas: [] };
