@@ -126,7 +126,7 @@ export const ABAS_SUMARIO = [
         itens: [
           '**A receber** e **a pagar** lado a lado, com o mesmo agrupamento e a mesma busca. **Agrupar por**: até 3 níveis entre centro de custo, plano de contas, cliente/fornecedor, empresa, condição de pagamento (só no a receber; no a pagar esse nível é pulado) e tipo de documento. Abaixo do último nível vêm as parcelas.',
           'Cada parcela mostra o **título/parcela** (bill e installment do Sienge), o número da parcela, o documento, o vencimento, a unidade e a condição (a receber) e as etiquetas **Inadimplente**, **Sub judice** e **Previsão**.',
-          'Colunas: **Vencido** (até ontem), **A vencer** (de hoje em diante) e **Total**. As linhas vêm do maior vencido para o menor. Clicar numa faixa da escada de vencimentos filtra as duas tabelas por ela.',
+          'Colunas: **Vencido** (até ontem), **A vencer** (de hoje em diante) e **Total**. **Ordenar por**: maior vencido (padrão), maior a vencer ou maior total — também clicando no título da coluna, que fica marcado com a seta. Nas parcelas: por vencido, as mais atrasadas primeiro; por a vencer, as a vencer primeiro, da que vence antes; por total, da maior para a menor. Clicar numa faixa da escada de vencimentos filtra as duas tabelas por ela.',
           '**Buscar**: nome, título, documento, unidade, centro ou plano de contas. O botão ao lado da busca abre as duas tabelas em **tela cheia** (Esc ou o mesmo botão para sair).',
           'Parcela rateada entre centros ou contas do plano de contas aparece em cada um com a fração dela (a soma bate com o saldo).',
           'A cor de cada célula mostra o peso dela no total da linha: vermelho no vencido, azul no a vencer.',

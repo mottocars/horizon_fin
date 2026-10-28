@@ -633,6 +633,22 @@
 .painel-cfo .ag th.g-a {
   color: var(--accent);
 }
+/* Colunas de valor: clicar ordena; a que está ordenando fica sublinhada, com a seta */
+.painel-cfo .ag th.ordena {
+  cursor: pointer;
+}
+.painel-cfo .ag th.ordena:hover {
+  background: var(--surface-2);
+}
+.painel-cfo .ag th.ord {
+  color: var(--ink);
+  box-shadow: inset 0 -3px 0 var(--accent);
+}
+.painel-cfo .ag th.ordena svg {
+  display: inline-block;
+  margin-left: 3px;
+  vertical-align: -1px;
+}
 .painel-cfo .ag th.nmh,
 .painel-cfo .ag td.nm {
   position: sticky;

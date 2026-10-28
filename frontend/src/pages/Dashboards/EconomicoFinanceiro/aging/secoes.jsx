@@ -1,5 +1,5 @@
 import { Fragment, useEffect, useMemo, useState } from 'react';
-import { ChevronDown, ChevronRight, Maximize2, Minimize2, Search, X } from 'lucide-react';
+import { ArrowDown, ChevronDown, ChevronRight, Maximize2, Minimize2, Search, X } from 'lucide-react';
 import { AjudaSecao } from '../fluxo/secoes';
 import { BarrasH } from '../fluxo/graficos';
 import { COR, useDica } from '../fluxo/ganchos';
@@ -25,6 +25,7 @@ import {
   nomeDocumento,
   nomePessoa,
   parcelas,
+  ORDENS,
   pct,
   semana,
   simular,
@@ -479,12 +480,12 @@ function Valores({ vencido, total }) {
 }
 
 // Uma carteira: a árvore pelos níveis do agrupamento, com as parcelas embaixo do último nível.
-function ArvoreLado({ E, lado, linhas, niveis, filtrado }) {
+function ArvoreLado({ E, lado, linhas, niveis, filtrado, ordem, onOrdem }) {
   const [abertos, setAbertos] = useState(() => new Set());
   const [limites, setLimites] = useState({});
   const { B } = E;
   const validos = niveis.filter((n) => dimensoesDoLado(lado).includes(n));
-  const raiz = useMemo(() => (validos.length ? arvore(E, linhas, validos, lado) : []), [E, linhas, validos.join(), lado]); // eslint-disable-line react-hooks/exhaustive-deps
+  const raiz = useMemo(() => (validos.length ? arvore(E, linhas, validos, lado, ordem) : []), [E, linhas, validos.join(), lado, ordem]); // eslint-disable-line react-hooks/exhaustive-deps
   const total = useMemo(
     () => ({ vencido: soma(linhas.filter((x) => x.t.atraso > 0).map((x) => x.valor)), total: soma(linhas.map((x) => x.valor)), n: new Set(linhas.map((x) => x.t)).size }),
     [linhas]
@@ -499,7 +500,7 @@ function ArvoreLado({ E, lado, linhas, niveis, filtrado }) {
   const mais = (id, padrao) => setLimites((l) => ({ ...l, [id]: (l[id] || padrao) * 3 }));
 
   function linhasParcelas(no, nivel) {
-    const lista = parcelas(no.linhas);
+    const lista = parcelas(no.linhas, ordem);
     const lim = limites[`${no.id}#p`] || LIMITE.parcelas;
     return [
       ...lista.slice(0, lim).map(({ t, valor, frac }) => {
@@ -614,13 +615,22 @@ function ArvoreLado({ E, lado, linhas, niveis, filtrado }) {
             <thead>
               <tr>
                 <th className="nmh">{validos.map((d) => DIMENSOES[d].rotulo(lado)).join(' › ')}</th>
-                <th className="g-v" title="Vencido até ontem">
-                  Vencido
-                </th>
-                <th className="g-a" title="Vence de hoje em diante">
-                  A vencer
-                </th>
-                <th>Total</th>
+                {[
+                  ['vencido', 'Vencido', 'g-v', 'Vencido até ontem'],
+                  ['avencer', 'A vencer', 'g-a', 'Vence de hoje em diante'],
+                  ['total', 'Total', '', 'Vencido + a vencer'],
+                ].map(([k, rotulo, cls, dica]) => (
+                  <th
+                    key={k}
+                    className={`${cls} ordena${ordem === k ? ' ord' : ''}`}
+                    title={`${dica} — clique para ordenar por esta coluna`}
+                    aria-sort={ordem === k ? 'descending' : undefined}
+                    onClick={() => onOrdem(k)}
+                  >
+                    {rotulo}
+                    {ordem === k && <ArrowDown size={12} aria-hidden="true" />}
+                  </th>
+                ))}
               </tr>
             </thead>
             <tbody>{linhasNos(raiz, 0, 'raiz')}</tbody>
@@ -646,6 +656,7 @@ export function Detalhamento({ E, faixaSel, onFaixa }) {
   const [niveis, setNiveis] = useState(PADRAO_NIVEIS);
   const [busca, setBusca] = useState('');
   const [telaCheia, setTelaCheia] = useState(false);
+  const [ordem, setOrdem] = useState('vencido');
   const opcoesDim = dimensoesDoLado('r');
   const validos = niveis.filter((n, i) => n && opcoesDim.includes(n) && niveis.indexOf(n) === i);
 
@@ -719,6 +730,7 @@ export function Detalhamento({ E, faixaSel, onFaixa }) {
             ))}
           </div>
         </div>
+        <Seg rotulo="Ordenar por" opcoes={ORDENS} valor={ordem} onChange={setOrdem} />
         <div className="ctl busca">
           <span className="rot">Buscar</span>
           <div style={{ position: 'relative' }}>
@@ -749,7 +761,16 @@ export function Detalhamento({ E, faixaSel, onFaixa }) {
       <div className="det-duas">
         {/* A chave recria a árvore (e fecha os grupos) quando o agrupamento muda. */}
         {['r', 'p'].map((l) => (
-          <ArvoreLado key={`${l}|${validos.join()}`} E={E} lado={l} linhas={porLado[l]} niveis={validos} filtrado={!!(busca || faixaSel)} />
+          <ArvoreLado
+            key={`${l}|${validos.join()}`}
+            E={E}
+            lado={l}
+            linhas={porLado[l]}
+            niveis={validos}
+            filtrado={!!(busca || faixaSel)}
+            ordem={ordem}
+            onOrdem={setOrdem}
+          />
         ))}
       </div>
     </section>

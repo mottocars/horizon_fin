@@ -345,10 +345,22 @@ function somar(linhas) {
   return { fx, total: soma(fx), vencido, n: tit.size, atrasoMedio: vencido > 0 ? vencidoDias / vencido : 0 };
 }
 
-// Árvore pelos níveis escolhidos (ex.: ['centro', 'natureza', 'pessoa']), do maior vencido para o
-// menor (empate: maior total); embaixo do último nível, as parcelas (a mesma parcela em duas fatias do
-// mesmo grupo vira uma linha só).
-export function arvore(E, linhas, niveis, lado, caminho = '') {
+// Ordem do detalhamento ("Ordenar por"): maior vencido, maior a vencer ou maior total (empate: maior total).
+export const ORDENS = [
+  ['vencido', 'Vencido'],
+  ['avencer', 'A vencer'],
+  ['total', 'Total'],
+];
+const aVencerDe = (x) => x.total - x.vencido;
+const COMPARA = {
+  vencido: (a, b) => b.vencido - a.vencido || b.total - a.total,
+  avencer: (a, b) => aVencerDe(b) - aVencerDe(a) || b.total - a.total,
+  total: (a, b) => b.total - a.total,
+};
+
+// Árvore pelos níveis escolhidos (ex.: ['centro', 'natureza', 'pessoa']), na `ordem` escolhida;
+// embaixo do último nível, as parcelas (a mesma parcela em duas fatias do mesmo grupo vira uma linha só).
+export function arvore(E, linhas, niveis, lado, ordem = 'vencido', caminho = '') {
   if (!niveis.length) return null;
   const [dim, ...resto] = niveis;
   const D = DIMENSOES[dim];
@@ -362,15 +374,15 @@ export function arvore(E, linhas, niveis, lado, caminho = '') {
     .map(([k, ls]) => {
       const id = `${caminho}/${dim}:${k}`;
       let cache = null; // os filhos só são montados quando o grupo é aberto
-      const filhos = resto.length ? () => (cache ||= arvore(E, ls, resto, lado, id)) : null;
+      const filhos = resto.length ? () => (cache ||= arvore(E, ls, resto, lado, ordem, id)) : null;
       return { id, dim, chave: k, nome: D.nome(E.B, k, lado), linhas: ls, ...somar(ls), filhos };
     })
-    .sort((a, b) => b.vencido - a.vencido || b.total - a.total);
+    .sort(COMPARA[ordem] || COMPARA.vencido);
 }
 
-// Parcelas de um grupo: soma as fatias da mesma parcela; mais vencidas primeiro, depois as que
-// vencem antes.
-export function parcelas(linhas) {
+// Parcelas de um grupo: soma as fatias da mesma parcela. Por vencido: as mais atrasadas primeiro; por a
+// vencer: as a vencer primeiro, da que vence antes; por total: do maior valor para o menor.
+export function parcelas(linhas, ordem = 'vencido') {
   const m = new Map();
   linhas.forEach((x) => {
     const r = m.get(x.t) || { t: x.t, valor: 0, frac: 0 };
@@ -378,7 +390,10 @@ export function parcelas(linhas) {
     r.frac += x.frac;
     m.set(x.t, r);
   });
-  return [...m.values()].sort((a, b) => b.t.atraso - a.t.atraso || b.valor - a.valor);
+  const lista = [...m.values()];
+  if (ordem === 'total') return lista.sort((a, b) => b.valor - a.valor);
+  if (ordem === 'avencer') return lista.sort((a, b) => (a.t.atraso > 0) - (b.t.atraso > 0) || a.t.vn - b.t.vn || b.valor - a.valor);
+  return lista.sort((a, b) => b.t.atraso - a.t.atraso || b.valor - a.valor);
 }
 
 // Busca do detalhamento: nome do cliente/fornecedor, título, documento, unidade, centro ou plano de contas.
