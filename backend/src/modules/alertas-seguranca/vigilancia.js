@@ -381,7 +381,12 @@ function analisarResposta(req, res) {
     return;
   }
 
-  if (!usuarioId && (status === 401 || status === 404)) {
+  // Token vencido (de tela parada além dos 15 min) e refresh token vencido
+  // são o normal do sistema, não varredura — só conta sem token, token
+  // inválido e rota inexistente.
+  const sessaoVencida =
+    req.tokenVencido || (caminho === '/api/auth/refresh' && erroDoRefresh(req)?.name === 'TokenExpiredError');
+  if (!usuarioId && !sessaoVencida && (status === 401 || status === 404)) {
     const tentativas = contar(`varredura|${ip}`, VARREDURA.janela);
     if (tentativas.length >= VARREDURA.total) {
       alertar(

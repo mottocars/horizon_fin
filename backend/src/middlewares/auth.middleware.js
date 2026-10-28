@@ -105,6 +105,9 @@ async function autenticar(req, res) {
     // Vencido é o normal (o frontend renova); qualquer outro erro é token
     // que o Horizon não emitiu — alerta de segurança.
     if (err.name !== 'TokenExpiredError') vigilancia.aoRecusarToken(req, 'forjado', { erro: err.message });
+    // Marca pra vigilância não contar como varredura: tela aberta além dos 15 min do token dispara
+    // várias chamadas vencidas antes de o frontend renovar.
+    else req.tokenVencido = true;
     res.status(401).json({ message: 'Token inválido ou expirado.' });
     return false;
   }

@@ -242,7 +242,9 @@ export default function RepassesCefPage() {
   }, [empresaId, centroCustoIds]);
 
   useEffect(() => {
-    setCentroCustoIds([]);
+    // Mantém a mesma lista quando já está vazia — um [] novo dispararia o
+    // efeito de baixo de novo e carregaria tudo duas vezes ao abrir a tela.
+    setCentroCustoIds((atual) => (atual.length ? [] : atual));
     setBusca('');
     loadCentros();
     loadCores();
