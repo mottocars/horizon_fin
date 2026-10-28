@@ -169,16 +169,25 @@ const ClassificacoesTab = forwardRef(function ClassificacoesTab({ empresaId }, r
           Nenhuma classificação cadastrada ainda.
         </div>
       ) : (
-        <div className="rounded-b-card">
+        // Só a Descrição tem largura livre: as outras colunas são `w-px whitespace-nowrap`
+        // (encolhem até o conteúdo), então toda sobra de largura vai pra ela. Em tela estreita a
+        // Descrição para no min-w e a tabela rola na horizontal em vez de espremer o texto.
+        <div className="overflow-x-auto rounded-b-card">
           <table className="w-full border-separate border-spacing-0 text-left text-xs">
             <thead>
               <tr className="text-xs uppercase tracking-wide text-gray-400">
-                <th className="border-b border-gray-200 bg-white py-2.5 pl-4 font-medium">Nome</th>
-                <th className="w-32 border-b border-l border-gray-200 bg-white px-3 py-2.5 font-medium">Saldo</th>
-                <th className="border-b border-l border-gray-200 bg-white px-3 py-2.5 font-medium">
-                  Sem saldo na API, priorizar
+                <th className="w-px whitespace-nowrap border-b border-gray-200 bg-white py-2.5 pl-4 pr-3 font-medium">Nome</th>
+                <th className="min-w-64 border-b border-l border-gray-200 bg-white px-3 py-2.5 font-medium">Descrição</th>
+                <th className="w-px whitespace-nowrap border-b border-l border-gray-200 bg-white px-3 py-2.5 font-medium">
+                  Tipo saldo
                 </th>
-                <th className="w-20 border-b border-l border-gray-200 bg-white px-3 py-2.5 text-right font-medium">
+                <th
+                  className="w-px whitespace-nowrap border-b border-l border-gray-200 bg-white px-3 py-2.5 font-medium"
+                  title="Sem saldo na API, priorizar"
+                >
+                  Priorizar
+                </th>
+                <th className="w-px whitespace-nowrap border-b border-l border-gray-200 bg-white px-3 py-2.5 text-right font-medium">
                   Ação
                 </th>
               </tr>
@@ -186,18 +195,16 @@ const ClassificacoesTab = forwardRef(function ClassificacoesTab({ empresaId }, r
             <tbody>
               {itens.map((item) => (
                 <tr key={item.id} className="group">
-                  <td className="border-b border-gray-100 py-2 pl-4 pr-3 group-hover:bg-gray-50">
-                    <div className="font-medium text-gray-800">{item.nome}</div>
-                    {item.descricao && (
-                      <p className="mt-0.5 line-clamp-2 max-w-3xl whitespace-pre-line text-gray-500" title={item.descricao}>
-                        {item.descricao}
-                      </p>
-                    )}
+                  <td className="whitespace-nowrap border-b border-gray-100 py-2 pl-4 pr-3 font-medium text-gray-800 group-hover:bg-gray-50">
+                    {item.nome}
                   </td>
-                  <td className="border-b border-l border-gray-100 px-3 py-2 group-hover:bg-gray-50">
+                  <td className="whitespace-pre-line border-b border-l border-gray-100 px-3 py-2 text-gray-600 group-hover:bg-gray-50">
+                    {item.descricao || <span className="text-gray-300">—</span>}
+                  </td>
+                  <td className="whitespace-nowrap border-b border-l border-gray-100 px-3 py-2 group-hover:bg-gray-50">
                     <SeloSaldo liberaSaldo={item.libera_saldo} />
                   </td>
-                  <td className="border-b border-l border-gray-100 px-3 py-2 text-gray-600 group-hover:bg-gray-50">
+                  <td className="whitespace-nowrap border-b border-l border-gray-100 px-3 py-2 text-gray-600 group-hover:bg-gray-50">
                     {ROTULO_PRIORIDADE[item.prioridade_sem_saldo] || item.prioridade_sem_saldo}
                   </td>
                   <td className="border-b border-l border-gray-100 px-3 py-2 group-hover:bg-gray-50">
