@@ -331,19 +331,18 @@ function FormGerar({ grupos, inicial, substituindo, onGerada, onCancelar }) {
   );
 }
 
-function ChavesUsuarios({ onChamadas }) {
+// versao: muda sempre que a chave do próprio Master muda no quadro de cima (gerar, revogar,
+// alterar acessos) — a lista recarrega junto. onMudou: avisa o quadro de cima quando o Master
+// revoga por aqui (pode ser a chave dele mesmo).
+function ChavesUsuarios({ onChamadas, versao, onMudou }) {
   const confirm = useConfirm();
   const [itens, setItens] = useState(null);
 
-  const carregar = useCallback(() => {
+  useEffect(() => {
     listChavesUsuarios()
       .then((r) => setItens(r.data))
       .catch(() => setItens([]));
-  }, []);
-
-  useEffect(() => {
-    carregar();
-  }, [carregar]);
+  }, [versao]);
 
   async function revogar(item) {
     const ok = await confirm({
@@ -354,7 +353,7 @@ function ChavesUsuarios({ onChamadas }) {
     });
     if (!ok) return;
     await revogarChaveUsuario(item.id);
-    carregar();
+    onMudou();
   }
 
   return (
@@ -425,6 +424,7 @@ export default function ApiHorizonPage() {
   const [acessos, setAcessos] = useState({ grupos: [], escopos: [] });
   const [salvandoAcessos, setSalvandoAcessos] = useState(false);
   const [chamadas, setChamadas] = useState(null);
+  const [versao, setVersao] = useState(0);
 
   const carregar = useCallback(async () => {
     try {
@@ -434,6 +434,8 @@ export default function ApiHorizonPage() {
       setErro('');
     } catch (err) {
       setErro(mensagemErro(err, 'Não foi possível carregar sua chave.'));
+    } finally {
+      setVersao((v) => v + 1);
     }
   }, []);
 
@@ -604,7 +606,9 @@ export default function ApiHorizonPage() {
         )}
       </Card>
 
-      {user?.permissao === 'MASTER' && <ChavesUsuarios onChamadas={(item) => setChamadas(item)} />}
+      {user?.permissao === 'MASTER' && (
+        <ChavesUsuarios onChamadas={(item) => setChamadas(item)} versao={versao} onMudou={carregar} />
+      )}
 
       <ChamadasModal
         aberto={!!chamadas}
