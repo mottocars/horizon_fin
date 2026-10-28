@@ -21,6 +21,12 @@ const MODULOS = {
     descricao: 'Leitura do Saldo Contas Bancárias: saldos por conta e dia, totais, bloqueios, cheque especial, classificações e automações.',
     tela: T.SALDOS,
   },
+  AGING: {
+    titulo: 'AGING LIST (CONTAS A PAGAR E A RECEBER)',
+    descricao:
+      'Leitura do Aging List (dashboard Econômico Financeiro): contas a receber e a pagar em aberto por faixa, inadimplência, baixas já feitas e a projeção do caixa com o saldo das contas bancárias.',
+    tela: T.ECONOMICO_FINANCEIRO,
+  },
 };
 
 const CODIGOS = Object.keys(MODULOS);

@@ -5,7 +5,7 @@ const oauth = require('./dfc/oauth.service');
 const { CODIGOS, normalizarModulos } = require('./modulos');
 
 // `escopo`: HORIZON = conector com login do Horizon (vale `sessao_horas`) e as ferramentas dos `modulos`
-// marcados (DFC, DFC_ORCAMENTO, SALDOS_CONTAS — ver modulos.js); COBRANCA = o conector de cobrança de
+// marcados (DFC, DFC_ORCAMENTO, SALDOS_CONTAS, AGING — ver modulos.js); COBRANCA = o conector de cobrança de
 // sempre. Usuários liberados no conector (colaboradores da empresa; MASTER pode sempre).
 const usuarioIds = z.array(z.coerce.number().int().positive()).max(500);
 const sessaoHoras = z.coerce.number().int().min(1, 'Duração mínima: 1 hora.').max(720, 'Duração máxima: 30 dias.');

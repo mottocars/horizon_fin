@@ -26,6 +26,14 @@ export const MODULOS = [
     descricao:
       'Leitura do Saldo Contas Bancárias: saldo de cada conta por dia e de onde veio (automático, dia anterior ou manual), totais (liberado, bloqueado, limite cheque, a cobrir), bloqueios, cheque especial, classificações e automações.',
   },
+  {
+    codigo: 'AGING',
+    titulo: 'AGING LIST (CONTAS A PAGAR E A RECEBER)',
+    curto: 'Aging List',
+    cor: 'bg-emerald-50 text-emerald-700',
+    descricao:
+      'Leitura do Aging List: contas a receber e a pagar em aberto por faixa de vencimento, centro, plano de contas, cliente, fornecedor e SPE; inadimplência e recuperação; o que já foi recebido e pago; e a projeção do caixa (dia, semana ou mês, com cenários e por SPE) partindo do saldo das contas bancárias.',
+  },
 ];
 
 // Marca/desmarca um módulo mantendo as dependências (Altera Orçamento liga o DFC; desligar o DFC

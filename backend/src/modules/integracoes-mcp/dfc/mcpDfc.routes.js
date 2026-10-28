@@ -5,6 +5,7 @@ const { StreamableHTTPServerTransport } = require('@modelcontextprotocol/sdk/ser
 const oauth = require('./oauth.service');
 const { registrarToolsDfc } = require('./tools');
 const { TOOLS_SALDOS } = require('../saldos/tools');
+const { TOOLS_AGING } = require('../aging/tools');
 
 // MCP do conector Horizon (/api/mcp/dfc/:token — o caminho "dfc" ficou dos conectores já criados). O
 // token do link só diz QUAL conector (empresa, módulos e duração do login); quem libera é o login do
@@ -24,19 +25,24 @@ const INSTRUCOES = {
     'Saldo das Contas Bancárias (Operações > Saldo Contas Bancárias, só leitura): comece por saldos_guia — explica classificações, origem de cada saldo (automático VanPix/Itaú, herdado do dia anterior ou manual), bloqueios, cheque especial e como cada total é calculado. ' +
     'Totais e quem compõe cada um: saldos_resumo; cada conta no dia: saldos_contas; uma conta ao longo dos dias: saldos_historico_conta. Datas AAAA-MM-DD. ' +
     'Não confunda com dfc_saldos_bancarios (saldo de abertura do mês pelo extrato do Sienge, usado no DFC).',
+  AGING:
+    'Aging List (Dashboards › Econômico Financeiro › Aging List, só leitura): contas a receber e a pagar em aberto do Sienge (saldo corrigido), por faixa de vencimento, integrados ao saldo das contas bancárias. ' +
+    'Comece por aging_guia (regras, faixas, filtros, filtros salvos do usuário e qual ferramenta usar). Tela: aging_painel; agrupamentos (centro, plano de contas, cliente/fornecedor, SPE…): aging_agrupar; títulos: aging_parcelas; ' +
+    'caixa futuro (dia/semana/mês, cenários, por SPE): aging_projecao_caixa; inadimplência: aging_inadimplencia; recebido/pago de fato e pontualidade: aging_historico_baixas. ' +
+    'Sem período = toda a carteira em aberto; a tela abre com o ano atual (periodo_da_tela=true).',
 };
+
+// Ferramentas de só leitura no formato { name, description, inputSchema, handler(empresaId, ctx) }.
+function registrarLeitura(server, empresaId, tools, ctx) {
+  for (const tool of tools) {
+    server.registerTool(tool.name, { description: tool.description, inputSchema: tool.inputSchema, annotations: { readOnlyHint: true } }, tool.handler(empresaId, ctx));
+  }
+}
 
 function registrarTools(server, empresaId, modulos, ctx) {
   if (modulos.includes('DFC')) registrarToolsDfc(server, empresaId, { escrita: modulos.includes('DFC_ORCAMENTO'), usuarioId: ctx.usuarioId });
-  if (modulos.includes('SALDOS_CONTAS')) {
-    for (const tool of TOOLS_SALDOS) {
-      server.registerTool(
-        tool.name,
-        { description: tool.description, inputSchema: tool.inputSchema, annotations: { readOnlyHint: true } },
-        tool.handler(empresaId, ctx)
-      );
-    }
-  }
+  if (modulos.includes('SALDOS_CONTAS')) registrarLeitura(server, empresaId, TOOLS_SALDOS, ctx);
+  if (modulos.includes('AGING')) registrarLeitura(server, empresaId, TOOLS_AGING, ctx);
 }
 
 const router = Router();

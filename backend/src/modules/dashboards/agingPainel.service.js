@@ -71,7 +71,8 @@ async function titulosDoLado(empresaId, t, dic) {
     if (r.q !== null && !dic.pessoas[t.l][r.q]) dic.pessoas[t.l][r.q] = r.q_nome;
     r.d = r.d === null ? null : r.d.trim(); // o Sienge manda o código com espaços ("CT  ")
     if (r.d !== null && !dic.documentos[r.d]) dic.documentos[r.d] = r.d_nome;
-    if (r.cp !== null && !dic.condicoes[r.cp]) dic.condicoes[r.cp] = r.cp_nome;
+    // Nome da condição como vem do Sienge tem espaços sobrando ("CEF  FINANCIAMENTO ").
+    if (r.cp !== null && !dic.condicoes[r.cp]) dic.condicoes[r.cp] = r.cp_nome ? r.cp_nome.replace(/\s+/g, ' ').trim() : r.cp_nome;
     const linhas = rateio.get(`${r.b}|${r.p}`) || [];
     const totalPct = linhas.reduce((s, c) => s + num(c.pct), 0);
     const f = linhas.length
