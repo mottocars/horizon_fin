@@ -8,14 +8,15 @@ import { SumarioCtx } from '../fluxo/ganchos';
 import SumarioModal from '../fluxo/sumario';
 import '../fluxo/painel.css';
 import './aging.css';
-import { FILTROS_VAZIOS, escopo, filtrosNoPainel, mesmosFiltros, normalizarFiltros, preparar, titulo } from './modelo';
+import { MAX_MESES, dma, escopo, filtrosNoPainel, filtrosVazios, mesmosFiltros, normalizarFiltros, periodoDe, preparar, titulo } from './modelo';
 import { exportarAging } from './exportar';
 import { PainelFiltros, ResumoFiltros } from './filtros';
 import { Detalhamento, Escada, Maiores, Simulador, Tiles } from './secoes';
 import { ABAS_SUMARIO } from './sumarioTexto';
 
 // Dashboard Econômico Financeiro › Aging List, no layout do painel do Fluxo de Caixa: barra de controles
-// (Empresa, período Início–Fim do vencimento — padrão o ano atual inteiro —, Centro de custo e Filtros
+// (Empresa, período do vencimento em meses a partir do mês atual — Histórico para trás e Horizonte para
+// frente, padrão o ano atual inteiro, gravados junto no filtro salvo —, Centro de custo e Filtros
 // salvos; o botão "Filtros" abre o painel com tipo de documento, plano de contas, cliente, fornecedor e
 // previsão financeira), os 8 indicadores, a escada de vencimentos (a pagar × a receber por faixa), o
 // detalhamento em árvore até a parcela (com tela cheia), o simulador do caixa dos próximos dias (a
@@ -27,33 +28,44 @@ const DASHBOARD = 'economico-financeiro';
 const TELA = 'aging';
 const MIN_RECARGA = 30;
 const ICONES_SUMARIO = { filtros: Filter, indicadores: LayoutGrid, faixas: Layers, simulador: LineChart, detalhamento: Table2, maiores: Users };
-const ehData = (v) => /^\d{4}-\d{2}-\d{2}$/.test(v);
+const hojeLocal = () => {
+  const d = new Date();
+  return `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}-${String(d.getDate()).padStart(2, '0')}`;
+};
 
-function CampoData({ id, rotulo, valor, min, max, onChange, dica }) {
+// Meses (0 a MAX_MESES) com a data que resulta deles no rótulo ("desde 01/01/26" / "até 31/12/26").
+// Campo vazio ou fora do limite não muda o filtro.
+function CampoMeses({ id, rotulo, valor, legenda, onChange, dica }) {
+  const [texto, setTexto] = useState(String(valor));
+  useEffect(() => setTexto(String(valor)), [valor]);
   return (
-    <div className="ctl">
-      <label htmlFor={id}>{rotulo}</label>
-      <input
-        id={id}
-        type="date"
-        value={valor}
-        min={min}
-        max={max}
-        title={dica}
-        onChange={(e) => {
-          const v = e.target.value;
-          if (ehData(v) && (!min || v >= min) && (!max || v <= max)) onChange(v);
-        }}
-      />
+    <div className="ctl meses">
+      <label htmlFor={id}>
+        {rotulo} <span>{legenda}</span>
+      </label>
+      <div className="meses-campo" title={dica}>
+        <input
+          id={id}
+          type="number"
+          inputMode="numeric"
+          min={0}
+          max={MAX_MESES}
+          value={texto}
+          onChange={(e) => {
+            setTexto(e.target.value);
+            const n = Number(e.target.value);
+            if (e.target.value !== '' && Number.isInteger(n) && n >= 0 && n <= MAX_MESES) onChange(n);
+          }}
+          onBlur={() => setTexto(String(valor))}
+        />
+        <span>meses</span>
+      </div>
     </div>
   );
 }
 
 export default function AgingPainel({ dashboard, tituloTela, empresaId, onEmpresa, opcoesEmpresas, empresaTravada, carregandoEmpresas, marcaEmpresa }) {
-  const ano = new Date().getFullYear();
-  const [inicio, setInicio] = useState(`${ano}-01-01`);
-  const [fim, setFim] = useState(`${ano}-12-31`);
-  const [filtros, setFiltros] = useState(FILTROS_VAZIOS);
+  const [filtros, setFiltros] = useState(filtrosVazios);
   const [painelFiltros, setPainelFiltros] = useState(false);
   const [salvos, setSalvos] = useState([]);
   const [dados, setDados] = useState(null);
@@ -69,7 +81,7 @@ export default function AgingPainel({ dashboard, tituloTela, empresaId, onEmpres
   // Trocar de empresa limpa os dados, os filtros e a faixa, e traz os filtros salvos dela.
   useEffect(() => {
     setDados(null);
-    setFiltros(FILTROS_VAZIOS);
+    setFiltros(filtrosVazios());
     setFaixaSel(null);
     setSalvos([]);
     if (!empresaId) return;
@@ -105,6 +117,8 @@ export default function AgingPainel({ dashboard, tituloTela, empresaId, onEmpres
     return () => clearInterval(t);
   }, [carregar]);
 
+  // Período do vencimento: Histórico meses antes do mês atual até Horizonte meses depois dele.
+  const { inicio, fim } = periodoDe(dados?.hoje || hojeLocal(), filtros.historico, filtros.horizonte);
   const E = useMemo(() => (dados ? escopo(dados, { inicio, fim, ...filtros }) : null), [dados, inicio, fim, filtros]);
 
   const opcoesCentros = useMemo(
@@ -158,8 +172,22 @@ export default function AgingPainel({ dashboard, tituloTela, empresaId, onEmpres
                 ))}
               </select>
             </div>
-            <CampoData id="a-inicio" rotulo="Início" valor={inicio} max={fim} onChange={setInicio} dica="Vencimento a partir desta data" />
-            <CampoData id="a-fim" rotulo="Fim" valor={fim} min={inicio} onChange={setFim} dica="Vencimento até esta data" />
+            <CampoMeses
+              id="a-historico"
+              rotulo="Histórico"
+              valor={filtros.historico}
+              legenda={`desde ${dma(inicio)}`}
+              onChange={(n) => setFiltros((f) => ({ ...f, historico: n }))}
+              dica="Meses para trás, antes do mês atual (0 = desde o 1º dia do mês atual) — vencimento a partir desta data"
+            />
+            <CampoMeses
+              id="a-horizonte"
+              rotulo="Horizonte"
+              valor={filtros.horizonte}
+              legenda={`até ${dma(fim)}`}
+              onChange={(n) => setFiltros((f) => ({ ...f, horizonte: n }))}
+              dica="Meses para frente, depois do mês atual (0 = até o fim do mês atual) — vencimento até esta data"
+            />
             <FiltroCentros opcoes={opcoesCentros} valor={filtros.centros} onChange={(c) => setFiltros((f) => ({ ...f, centros: c }))} disabled={!empresaId || !dados} />
             <div className="ctl salvos">
               <label htmlFor="a-salvos">Filtros salvos</label>
@@ -169,10 +197,10 @@ export default function AgingPainel({ dashboard, tituloTela, empresaId, onEmpres
                 disabled={!empresaId || !salvos.length}
                 onChange={(e) => {
                   const s = salvos.find((x) => String(x.id) === e.target.value);
-                  setFiltros(s ? normalizarFiltros(s.filtros) : FILTROS_VAZIOS);
+                  setFiltros(s ? normalizarFiltros(s.filtros) : filtrosVazios());
                 }}
               >
-                <option value="">{salvos.length ? (noPainel || filtros.centros.length ? 'Personalizado' : 'Nenhum') : 'Nenhum filtro salvo'}</option>
+                <option value="">{salvos.length ? (mesmosFiltros(filtros, filtrosVazios()) ? 'Nenhum' : 'Personalizado') : 'Nenhum filtro salvo'}</option>
                 {salvos.map((s) => (
                   <option key={s.id} value={s.id}>
                     {s.nome}

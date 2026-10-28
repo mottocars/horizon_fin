@@ -21,7 +21,7 @@ export const ABAS_SUMARIO = [
         titulo: 'Filtros',
         itens: [
           '**Empresa** — a empresa analisada.',
-          '**Início** e **Fim** — o período do **vencimento** das parcelas: só entram as que vencem entre as duas datas, vencidas ou a vencer. Começa com o ano atual inteiro (1º de janeiro a 31 de dezembro). Vale para a tela toda: cards, escada, simulador, detalhamento, maiores e o Excel.',
+          '**Histórico** e **Horizonte** — o período do **vencimento** das parcelas, em meses a partir do mês atual: Histórico = quantos meses para trás (0 = desde o 1º dia do mês atual), Horizonte = quantos meses para frente (0 = até o último dia do mês atual). As datas que resultam aparecem ao lado do nome de cada campo. Só entram as parcelas que vencem nesse período, vencidas ou a vencer. Começa com o ano atual inteiro (em outubro: 9 meses de histórico e 2 de horizonte). Vale para a tela toda: cards, escada, simulador, detalhamento, maiores e o Excel.',
           '**Centro de custo** — só as fatias das parcelas nesses centros. O saldo bancário passa a ser o das contas das empresas (Sienge) donas dos centros marcados.',
           'O botão de download gera um Excel com o resumo por faixa e todas as parcelas a receber e a pagar do escopo (com todos os filtros), com centro, plano de contas, faixa e dias de atraso.',
         ],
@@ -39,9 +39,9 @@ export const ABAS_SUMARIO = [
       {
         titulo: 'Filtros salvos',
         itens: [
-          '**Gravar filtro** (no painel) guarda o centro de custo e os filtros do painel com um nome. Gravar com um nome que já existe substitui o filtro.',
+          '**Gravar filtro** (no painel) guarda o Histórico, o Horizonte, o centro de custo e os filtros do painel com um nome. Gravar com um nome que já existe substitui o filtro. Como o período é gravado em meses, o filtro acompanha o calendário: "12 meses de histórico" sempre vale a partir do mês em que ele é aberto.',
           'A lista **Filtros salvos** da barra aplica o filtro escolhido. Ela mostra o nome enquanto os filtros forem iguais aos gravados; mexeu em algum, vira "Personalizado". Para excluir, aplique o filtro, abra o painel e use **Excluir**.',
-          'Cada usuário tem os próprios filtros salvos, separados por empresa. O período (Início e Fim) não é gravado.',
+          'Cada usuário tem os próprios filtros salvos, separados por empresa.',
         ],
       },
     ],

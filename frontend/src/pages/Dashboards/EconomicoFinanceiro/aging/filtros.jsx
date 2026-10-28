@@ -1,7 +1,7 @@
 import { useMemo, useState } from 'react';
 import { Loader2, Save, Trash2, X } from 'lucide-react';
 import { useConfirm } from '../../../../confirm/ConfirmContext';
-import { FILTROS_VAZIOS, titulo } from './modelo';
+import { filtrosVazios, titulo } from './modelo';
 
 // Filtros do Aging List além da barra: o painel retrátil (botão "Filtros" ao lado do Exportar) com tipo
 // de documento, plano de contas, cliente, fornecedor e previsão financeira, o "Gravar filtro" e o resumo dos
@@ -208,7 +208,7 @@ export function PainelFiltros({ B, filtros, onFiltros, salvos, salvoAtual, onGra
                   Excluir "{salvoAtual.nome}"
                 </button>
               )}
-              <button type="button" className="btn ghost" onClick={() => onFiltros({ ...FILTROS_VAZIOS, centros: filtros.centros })}>
+              <button type="button" className="btn ghost" onClick={() => onFiltros({ ...filtrosVazios(), centros: filtros.centros, historico: filtros.historico, horizonte: filtros.horizonte })}>
                 Limpar filtros
               </button>
               <button

@@ -6,18 +6,36 @@
   --avencer: var(--s-in);
 }
 
-/* Barra: período (Início e Fim), no visual do campo de mês do Fluxo de Caixa */
-.painel-cfo.aging .ctl input[type='date'] {
+/* Barra: período em meses (Histórico e Horizonte), com a data que resulta deles no rótulo */
+.painel-cfo.aging .ctl.meses label span {
+  font-weight: 500;
+  margin-left: 2px;
+}
+.painel-cfo.aging .meses-campo {
+  display: flex;
+  align-items: center;
+  gap: 6px;
   height: var(--altura-filtro);
   box-sizing: border-box;
-  padding: 0 8px;
+  padding-right: 10px;
   border: 1px solid var(--line);
   border-radius: 4px;
   background: var(--surface-2);
+}
+.painel-cfo.aging .meses-campo input {
+  width: 64px;
+  height: 100%;
+  box-sizing: border-box;
+  border: 0;
+  background: transparent;
+  padding: 0 4px 0 10px;
   color: var(--ink);
-  font-size: 14px;
-  font-family: inherit;
-  min-width: 140px;
+  font: 500 14px var(--f-mono);
+  text-align: right;
+}
+.painel-cfo.aging .meses-campo span {
+  font-size: 13px;
+  color: var(--muted);
 }
 
 /* Barra: lista de filtros salvos e o botão Filtros (com o número de filtros valendo) */

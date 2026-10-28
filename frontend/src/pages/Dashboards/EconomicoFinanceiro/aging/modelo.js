@@ -98,15 +98,37 @@ export function caixa(contas) {
 }
 
 // ─── Filtros (barra e painel de filtros) ─────────────────────────────────────────────────────────
-// O que um filtro salvo grava: centros de custo, tipos de documento, plano de contas (`naturezas`), clientes (só no a
-// receber), fornecedores (só no a pagar) e previsão financeira ('nao' = sem as previsões, o padrão;
-// 'sim' = só elas; 'todos'). Listas vazias = sem filtro.
-export const FILTROS_VAZIOS = { centros: [], documentos: [], naturezas: [], clientes: [], fornecedores: [], previsao: 'nao' };
+// O que um filtro salvo grava: o período em meses a partir do mês atual (`historico` para trás e
+// `horizonte` para frente — o filtro acompanha o calendário), centros de custo, tipos de documento,
+// plano de contas (`naturezas`), clientes (só no a receber), fornecedores (só no a pagar) e previsão
+// financeira ('nao' = sem as previsões, o padrão; 'sim' = só elas; 'todos'). Listas vazias = sem filtro.
+export const MAX_MESES = 360;
+// Padrão do período: o ano atual inteiro (em outubro, 9 meses de histórico e 2 de horizonte).
+export function periodoPadrao(hoje = new Date()) {
+  const mes = hoje.getMonth() + 1;
+  return { historico: mes - 1, horizonte: 12 - mes };
+}
+export const filtrosVazios = () => ({ centros: [], documentos: [], naturezas: [], clientes: [], fornecedores: [], previsao: 'nao', ...periodoPadrao() });
+// Datas do período: do 1º dia do mês atual − histórico ao último dia do mês atual + horizonte.
+export function periodoDe(hojeIso, historico, horizonte) {
+  const a = +hojeIso.slice(0, 4);
+  const m = +hojeIso.slice(5, 7) - 1;
+  return {
+    inicio: new Date(Date.UTC(a, m - historico, 1)).toISOString().slice(0, 10),
+    fim: new Date(Date.UTC(a, m + horizonte + 1, 0)).toISOString().slice(0, 10),
+  };
+}
 const LISTAS_FILTRO = ['centros', 'documentos', 'naturezas', 'clientes', 'fornecedores'];
-export const normalizarFiltros = (f = {}) => ({
-  ...Object.fromEntries(LISTAS_FILTRO.map((k) => [k, [...(f[k] || [])].sort()])),
-  previsao: ['nao', 'sim', 'todos'].includes(f.previsao) ? f.previsao : 'nao',
-});
+const meses = (v, padrao) => (Number.isInteger(v) && v >= 0 && v <= MAX_MESES ? v : padrao);
+export const normalizarFiltros = (f = {}) => {
+  const p = periodoPadrao();
+  return {
+    historico: meses(f.historico, p.historico),
+    horizonte: meses(f.horizonte, p.horizonte),
+    ...Object.fromEntries(LISTAS_FILTRO.map((k) => [k, [...(f[k] || [])].sort()])),
+    previsao: ['nao', 'sim', 'todos'].includes(f.previsao) ? f.previsao : 'nao',
+  };
+};
 export const mesmosFiltros = (a, b) => JSON.stringify(normalizarFiltros(a)) === JSON.stringify(normalizarFiltros(b));
 // Quantos filtros do painel estão valendo (o centro de custo fica na barra).
 export const filtrosNoPainel = (f) => ['documentos', 'naturezas', 'clientes', 'fornecedores'].filter((k) => f[k]?.length).length + (f.previsao !== 'nao' ? 1 : 0);
@@ -117,7 +139,7 @@ export const filtrosNoPainel = (f) => ['documentos', 'naturezas', 'clientes', 'f
 // Devolve as fatias (parcela × centro × natureza) no escopo e o saldo das contas — com centros
 // marcados, só as contas das empresas (Sienge) desses centros.
 export function escopo(B, { inicio = null, fim = null, ...filtros } = {}) {
-  const f = { ...FILTROS_VAZIOS, ...filtros };
+  const f = { ...filtrosVazios(), ...filtros };
   const conj = (lista) => (lista.length ? new Set(lista) : null);
   const sel = conj(f.centros);
   const docs = conj(f.documentos);
