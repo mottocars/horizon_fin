@@ -128,10 +128,14 @@ async function getSaldos(empresaId, { dataInicio, dataFim, companyIds = [], clas
 
   // Só entra na grade quem está classificada E marcada pra projetar saldo (pedido do
   // usuário) — sem os dois, a conta fica de fora mesmo tendo saldo lançado no período.
+  // classificacao_libera_saldo: se a classificação da conta é de saldo liberado (true) ou
+  // bloqueado (false) — null quando não informado ou o nome não está mais cadastrado.
   const { rows: contas } = await pool.query(
     `SELECT c.numero_conta, c.company_id, c.company_name, c.nome, c.classificacao, c.status,
-            ${BANCO_EFETIVO_SQL} AS banco_codigo, c.valor_cheque_especial
+            ${BANCO_EFETIVO_SQL} AS banco_codigo, c.valor_cheque_especial,
+            cb.libera_saldo AS classificacao_libera_saldo
      FROM contas_bancarias_sienge c
+     LEFT JOIN classificacoes_bancarias cb ON cb.empresa_id = c.empresa_id AND cb.nome = c.classificacao
      WHERE c.empresa_id = $1
        AND c.classificacao IS NOT NULL AND c.projeta_saldo = TRUE
        AND (c.status = 'ENABLED' OR EXISTS (

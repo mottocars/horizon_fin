@@ -1,5 +1,5 @@
 import { Fragment, memo, useCallback, useEffect, useMemo, useRef, useState } from 'react';
-import { Check, CornerDownRight, History, Landmark, Loader2, Lock, Minus, Pencil, Plus, TriangleAlert, Zap } from 'lucide-react';
+import { Check, CornerDownRight, History, Landmark, Loader2, Lock, LockOpen, Minus, Pencil, Plus, TriangleAlert, Zap } from 'lucide-react';
 import { getSaldosContas, salvarSaldosContas } from '../../../api/saldoContasBancarias.api';
 import LogoBanco from './LogoBanco';
 import ComposicaoSaldo from './ComposicaoSaldo';
@@ -412,11 +412,11 @@ function SaldosContasTab({
   const grupos = useMemo(() => {
     if (!contasFiltradas) return [];
     const nomes = [...new Set(contasFiltradas.map((c) => c.classificacao))].sort((a, b) => a.localeCompare(b, 'pt-BR'));
-    return nomes.map((nome) => ({
-      value: nome,
-      label: nome,
-      contas: contasFiltradas.filter((c) => c.classificacao === nome),
-    }));
+    return nomes.map((nome) => {
+      const contasDoGrupo = contasFiltradas.filter((c) => c.classificacao === nome);
+      // liberado/bloqueado é da classificação (aba Classificação) — igual pra todas as contas do grupo
+      return { value: nome, label: nome, liberaSaldo: contasDoGrupo[0].classificacao_libera_saldo, contas: contasDoGrupo };
+    });
   }, [contasFiltradas]);
 
   const { totaisPorGrupo, totalGeral } = useMemo(() => {
@@ -837,6 +837,16 @@ function SaldosContasTab({
                           <span className="flex h-4 w-4 shrink-0 items-center justify-center rounded bg-primary-100 text-primary-600">
                             {aberto ? <Minus size={10} /> : <Plus size={10} />}
                           </span>
+                          {grupo.liberaSaldo === true && (
+                            <span title="Saldo liberado" className="shrink-0 text-emerald-600">
+                              <LockOpen size={13} />
+                            </span>
+                          )}
+                          {grupo.liberaSaldo === false && (
+                            <span title="Saldo bloqueado" className="shrink-0 text-amber-600">
+                              <Lock size={13} />
+                            </span>
+                          )}
                           <span className="truncate text-xs font-semibold text-gray-900">{grupo.label}</span>
                           <span className="shrink-0 rounded-full bg-white px-2 py-0.5 text-[10px] font-medium tabular-nums text-gray-500 ring-1 ring-gray-200">
                             {grupo.contas.length}
