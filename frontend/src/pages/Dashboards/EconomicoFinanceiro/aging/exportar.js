@@ -1,7 +1,7 @@
 import { FAIXAS, escada, nomeCentro, nomeCondicao, nomeDocumento, nomeEmpresa, nomeNatureza, nomePessoa } from './modelo';
 
 // Excel do Aging List (no navegador, com o SheetJS): resumo por faixa e uma aba por carteira com cada
-// fatia (parcela × centro × natureza) do escopo da barra — mesmos números da tela.
+// fatia (parcela × centro × plano de contas) do escopo da barra — mesmos números da tela.
 const data = (iso) => (iso ? new Date(`${iso}T12:00:00`) : null);
 const R$ = '"R$" #,##0.00;[Red]-"R$" #,##0.00';
 
@@ -45,7 +45,7 @@ export async function exportarAging(E, nomeArquivo) {
       .map(({ t, centro, nat, frac, valor }) => ({
         Empresa: nomeEmpresa(B, t.c),
         'Centro de custo': nomeCentro(B, centro),
-        Natureza: nomeNatureza(B, nat),
+        'Plano de contas': nomeNatureza(B, nat),
         [pessoa]: nomePessoa(B, lado, t.q),
         Título: t.b,
         Parcela: t.p,
@@ -65,7 +65,7 @@ export async function exportarAging(E, nomeArquivo) {
     const larg = {
       Empresa: 22,
       'Centro de custo': 28,
-      Natureza: 32,
+      'Plano de contas': 32,
       [pessoa]: 36,
       Título: 9,
       Parcela: 8,

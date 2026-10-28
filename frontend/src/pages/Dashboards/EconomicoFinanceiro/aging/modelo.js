@@ -63,11 +63,16 @@ export function preparar(d) {
     t.atraso = h - t.vn;
     t.fx = faixaDe(t.atraso);
   });
+  // Nome de cada conta do plano de contas: o do cadastro (Plano de Contas), se vier; senão o do rateio.
+  (d.catalogos?.planos || []).forEach((p) => {
+    if (p.nome) d.naturezas[p.id] = p.nome;
+  });
   return { ...d, h, centroPorId: new Map(d.centros.map((c) => [c.id, c])) };
 }
 
 export const nomeCentro = (B, id) => (id === null || id === undefined ? 'Sem centro de custo' : titulo(B.centroPorId.get(id)?.nome || `Centro ${id}`));
-export const nomeNatureza = (B, id) => (id === null || id === undefined ? 'Sem natureza' : titulo(B.naturezas[id] || id));
+// Plano de contas (a natureza financeira do rateio do Sienge).
+export const nomeNatureza = (B, id) => (id === null || id === undefined ? 'Sem plano de contas' : titulo(B.naturezas[id] || id));
 export const nomePessoa = (B, lado, id) => (id === null || id === undefined ? 'Sem nome' : titulo(B.pessoas[lado]?.[id] || `Código ${id}`));
 export const nomeEmpresa = (B, id) => (id === null || id === undefined ? 'Sem empresa' : curto(B.empresas[id] || `Empresa ${id}`));
 export const nomeCondicao = (B, id) => (id ? titulo(B.condicoes[id] || id) : 'Sem condição');
@@ -93,7 +98,7 @@ export function caixa(contas) {
 }
 
 // ─── Filtros (barra e painel de filtros) ─────────────────────────────────────────────────────────
-// O que um filtro salvo grava: centros de custo, tipos de documento, naturezas, clientes (só no a
+// O que um filtro salvo grava: centros de custo, tipos de documento, plano de contas (`naturezas`), clientes (só no a
 // receber), fornecedores (só no a pagar) e previsão financeira ('nao' = sem as previsões, o padrão;
 // 'sim' = só elas; 'todos'). Listas vazias = sem filtro.
 export const FILTROS_VAZIOS = { centros: [], documentos: [], naturezas: [], clientes: [], fornecedores: [], previsao: 'nao' };
@@ -108,7 +113,7 @@ export const filtrosNoPainel = (f) => ['documentos', 'naturezas', 'clientes', 'f
 
 // ─── Escopo dos filtros ──────────────────────────────────────────────────────────────────────────
 // `inicio` / `fim` ('AAAA-MM-DD'): período do VENCIMENTO das parcelas; o resto, os filtros acima.
-// Natureza e centro filtram cada fatia do rateio; os demais, a parcela inteira.
+// Plano de contas e centro filtram cada fatia do rateio; os demais, a parcela inteira.
 // Devolve as fatias (parcela × centro × natureza) no escopo e o saldo das contas — com centros
 // marcados, só as contas das empresas (Sienge) desses centros.
 export function escopo(B, { inicio = null, fim = null, ...filtros } = {}) {
@@ -116,7 +121,7 @@ export function escopo(B, { inicio = null, fim = null, ...filtros } = {}) {
   const conj = (lista) => (lista.length ? new Set(lista) : null);
   const sel = conj(f.centros);
   const docs = conj(f.documentos);
-  const nats = conj(f.naturezas);
+  const planos = conj(f.naturezas.map(String)); // contas do plano de contas (só as de resultado)
   const clientes = conj(f.clientes);
   const fornecedores = conj(f.fornecedores);
   const linhas = [];
@@ -127,7 +132,7 @@ export function escopo(B, { inicio = null, fim = null, ...filtros } = {}) {
     if (t.l === 'r' ? clientes && !clientes.has(t.q) : fornecedores && !fornecedores.has(t.q)) return;
     t.f.forEach(([centro, nat, frac]) => {
       if (sel && !sel.has(centro)) return;
-      if (nats && !nats.has(nat)) return;
+      if (planos && !planos.has(nat)) return;
       linhas.push({ t, centro, nat, frac, valor: t.s * frac });
     });
   });
@@ -297,7 +302,7 @@ export function escada(E) {
 // ─── Detalhamento (árvore) ───────────────────────────────────────────────────────────────────────
 export const DIMENSOES = {
   centro: { rotulo: () => 'Centro de custo', chave: (x) => x.centro, nome: (B, k) => nomeCentro(B, k) },
-  natureza: { rotulo: () => 'Natureza', chave: (x) => x.nat, nome: (B, k) => nomeNatureza(B, k) },
+  natureza: { rotulo: () => 'Plano de contas', chave: (x) => x.nat, nome: (B, k) => nomeNatureza(B, k) },
   pessoa: { rotulo: (lado) => rotuloPessoa(lado), chave: (x) => x.t.q, nome: (B, k, lado) => nomePessoa(B, lado, k) },
   empresa: { rotulo: () => 'Empresa', chave: (x) => x.t.c, nome: (B, k) => nomeEmpresa(B, k) },
   condicao: { rotulo: () => 'Condição de pagamento', soReceber: true, chave: (x) => x.t.cp ?? null, nome: (B, k) => nomeCondicao(B, k) },
@@ -354,7 +359,7 @@ export function parcelas(linhas) {
   return [...m.values()].sort((a, b) => b.t.atraso - a.t.atraso || b.valor - a.valor);
 }
 
-// Busca do detalhamento: nome do cliente/fornecedor, título, documento, unidade, centro ou natureza.
+// Busca do detalhamento: nome do cliente/fornecedor, título, documento, unidade, centro ou plano de contas.
 export function filtrarBusca(E, linhas, termo) {
   const q = termo
     .trim()

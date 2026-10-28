@@ -136,13 +136,65 @@ async function saldoBancario(empresaId, hoje) {
   };
 }
 
+// Listas completas para o painel de filtros — tudo o que existe, tenha ou não parcela em aberto no
+// período: as contas de resultado do plano de contas (Cadastros › Plano de Contas; as totalizadoras,
+// tp_conta T, ficam de fora — pedido do usuário), os tipos de documento de qualquer título (pago ou em aberto; o Sienge não tem um
+// cadastro deles aqui), os clientes (cadastro do Sienge + quem já teve título a receber) e os
+// fornecedores (credores já consultados no Sienge + quem já teve título a pagar).
+async function catalogos(empresaId) {
+  const [planos, documentos, clientes, fornecedores] = await Promise.all([
+    pool.query(
+      `SELECT sienge_id::text AS id, name AS nome, fl_ativa AS ativa
+         FROM planos_financeiros_sienge WHERE empresa_id = $1 AND tp_conta IS DISTINCT FROM 'T' ORDER BY sienge_id::text`,
+      [empresaId]
+    ),
+    pool.query(
+      `SELECT DISTINCT ON (id) id, nome FROM (
+         SELECT trim(document_identification_id) AS id, document_identification_name AS nome FROM sie_income WHERE empresa_id = $1
+         UNION SELECT trim(document_identification_id), document_identification_name FROM sie_outcome WHERE empresa_id = $1
+       ) d WHERE id IS NOT NULL AND id <> '' ORDER BY id, nome`,
+      [empresaId]
+    ),
+    pool.query(
+      `SELECT id, nome FROM (
+         SELECT id, COALESCE(NULLIF(name, ''), social_name) AS nome, 1 AS ordem FROM sie_customers WHERE empresa_id = $1
+         UNION ALL SELECT DISTINCT client_id, client_name, 2 FROM sie_income WHERE empresa_id = $1 AND client_id IS NOT NULL
+       ) c ORDER BY ordem`,
+      [empresaId]
+    ),
+    pool.query(
+      `SELECT id, nome FROM (
+         SELECT c.credor_id AS id, c.nome, 1 AS ordem
+           FROM sienge_credores_cache c JOIN integracoes_sienge i ON i.tenant = c.tenant AND i.empresa_id = $1
+         UNION ALL SELECT DISTINCT creditor_id, creditor_name, 2 FROM sie_outcome WHERE empresa_id = $1 AND creditor_id IS NOT NULL
+       ) f ORDER BY ordem`,
+      [empresaId]
+    ),
+  ]);
+  // Um nome por código: o do cadastro, se houver (vem primeiro); senão o do título.
+  const porId = (rows) => {
+    const m = {};
+    rows.forEach((r) => {
+      if (r.id !== null && !m[r.id] && r.nome) m[r.id] = r.nome;
+    });
+    return m;
+  };
+  return {
+    planos: planos.rows,
+    documentos: porId(documentos.rows),
+    clientes: porId(clientes.rows),
+    fornecedores: porId(fornecedores.rows),
+  };
+}
+
 async function painel(empresaId) {
   const hoje = hojeEmBrasilia();
   const dic = { empresas: {}, centrosSienge: {}, naturezas: {}, pessoas: { r: {}, p: {} }, documentos: {}, condicoes: {} };
-  const [receber, pagar, bancos, centrosRows, empresa] = await Promise.all([
+  const [receber, pagar, bancos, listas, centrosRows, empresa] = await Promise.all([
     titulosDoLado(empresaId, LADOS[0], dic),
     titulosDoLado(empresaId, LADOS[1], dic),
     saldoBancario(empresaId, hoje),
+    catalogos(empresaId),
     pool.query(`SELECT sienge_id AS id, name AS nome, company_id, company_name FROM centros_custo_sienge WHERE empresa_id = $1`, [empresaId]),
     pool.query(`SELECT COALESCE(NULLIF(nome_fantasia, ''), razao_social) AS nome FROM empresas WHERE id = $1`, [empresaId]),
   ]);
@@ -169,6 +221,7 @@ async function painel(empresaId) {
     condicoes: dic.condicoes,
     titulos: [...receber.titulos, ...pagar.titulos],
     bancos,
+    catalogos: listas,
   };
 }
 

@@ -4,34 +4,43 @@ import { useConfirm } from '../../../../confirm/ConfirmContext';
 import { FILTROS_VAZIOS, titulo } from './modelo';
 
 // Filtros do Aging List além da barra: o painel retrátil (botão "Filtros" ao lado do Exportar) com tipo
-// de documento, natureza, cliente, fornecedor e previsão financeira, o "Gravar filtro" e o resumo dos
+// de documento, plano de contas, cliente, fornecedor e previsão financeira, o "Gravar filtro" e o resumo dos
 // filtros valendo quando o painel está fechado. Os filtros salvos ficam no servidor, por usuário e
 // empresa (rotas /dashboards/:dashboard/:tela/filtros); a lista "Filtros salvos" fica na barra.
 
-const MAX_ITENS = 150; // itens desenhados por lista (a busca acha os demais)
+const MAX_ITENS = 250; // itens desenhados por lista — o plano de contas cabe inteiro; clientes e fornecedores, pela busca
 const sem = (s) =>
   String(s ?? '')
     .toLowerCase()
     .normalize('NFD')
     .replace(/\p{M}/gu, '');
 
-// Opções de cada lista a partir da base (só o que tem parcela em aberto); `valor` já marcado que não
-// está mais na base continua aparecendo, para poder desmarcar.
+// Opções de cada lista: tudo o que existe (B.catalogos — tenha ou não parcela em aberto no período),
+// mais o que só aparece nas parcelas. `valor` já marcado que não está em nenhuma continua aparecendo,
+// para poder desmarcar.
 function opcoesFiltro(B) {
   const ord = (a, b) => a.label.localeCompare(b.label, 'pt-BR');
+  const cat = B.catalogos || {};
+  const pessoas = (catalogo, daBase) =>
+    Object.entries({ ...daBase, ...catalogo })
+      .map(([id, nome]) => ({ value: Number(id), label: titulo(nome || `Código ${id}`) }))
+      .sort(ord);
+  // Plano de contas: só as contas de resultado (o backend já tira as totalizadoras), com o código ao lado.
+  const planos = cat.planos || [];
+  const doPlano = new Set(planos.map((p) => p.id));
+  const naturezas = [
+    ...planos.map((p) => ({ value: p.id, label: titulo(p.nome || p.id), extra: p.ativa === 'N' ? `${p.id} · inativa` : p.id })),
+    ...Object.entries(B.naturezas)
+      .filter(([id]) => !doPlano.has(id))
+      .map(([id, nome]) => ({ value: id, label: titulo(nome || id), extra: id })),
+  ].sort(ord);
   return {
-    documentos: Object.entries(B.documentos)
+    documentos: Object.entries({ ...B.documentos, ...cat.documentos })
       .map(([id, nome]) => ({ value: id, label: titulo(nome || id), extra: id }))
       .sort(ord),
-    naturezas: Object.entries(B.naturezas)
-      .map(([id, nome]) => ({ value: id, label: titulo(nome || id), extra: id }))
-      .sort(ord),
-    clientes: Object.entries(B.pessoas.r)
-      .map(([id, nome]) => ({ value: Number(id), label: titulo(nome || `Código ${id}`) }))
-      .sort(ord),
-    fornecedores: Object.entries(B.pessoas.p)
-      .map(([id, nome]) => ({ value: Number(id), label: titulo(nome || `Código ${id}`) }))
-      .sort(ord),
+    naturezas,
+    clientes: pessoas(cat.clientes, B.pessoas.r),
+    fornecedores: pessoas(cat.fornecedores, B.pessoas.p),
   };
 }
 
@@ -40,7 +49,7 @@ function ListaBusca({ id, rotulo, opcoes, valor, onChange, nota }) {
   const marcados = useMemo(() => new Set(valor), [valor]);
   const todas = useMemo(() => {
     const conhecidos = new Set(opcoes.map((o) => o.value));
-    return [...valor.filter((v) => !conhecidos.has(v)).map((v) => ({ value: v, label: `Código ${v}`, extra: 'sem parcela em aberto' })), ...opcoes];
+    return [...valor.filter((v) => !conhecidos.has(v)).map((v) => ({ value: v, label: `Código ${v}`, extra: 'fora do cadastro' })), ...opcoes];
   }, [opcoes, valor]);
   const q = sem(busca.trim());
   const achadas = q ? todas.filter((o) => sem(`${o.label} ${o.extra || ''}`).includes(q)) : todas;
@@ -125,7 +134,13 @@ export function PainelFiltros({ B, filtros, onFiltros, salvos, salvoAtual, onGra
       </div>
       <div className="fp-grade">
         <ListaBusca id="f-doc" rotulo="Tipo de documento" opcoes={opcoes.documentos} valor={filtros.documentos} onChange={(v) => mudar({ documentos: v })} />
-        <ListaBusca id="f-nat" rotulo="Natureza" opcoes={opcoes.naturezas} valor={filtros.naturezas} onChange={(v) => mudar({ naturezas: v })} />
+        <ListaBusca
+          id="f-nat"
+          rotulo="Plano de contas"
+          opcoes={opcoes.naturezas}
+          valor={filtros.naturezas}
+          onChange={(v) => mudar({ naturezas: v })}
+        />
         <ListaBusca
           id="f-cli"
           rotulo="Cliente"
@@ -225,7 +240,7 @@ export function ResumoFiltros({ B, filtros, onFiltros }) {
   };
   const grupos = [
     ['documentos', 'Tipo de documento'],
-    ['naturezas', 'Natureza'],
+    ['naturezas', 'Plano de contas'],
     ['clientes', 'Cliente'],
     ['fornecedores', 'Fornecedor'],
   ].filter(([k]) => filtros[k].length);

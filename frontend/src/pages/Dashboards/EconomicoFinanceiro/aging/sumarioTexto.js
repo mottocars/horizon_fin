@@ -14,7 +14,7 @@ export const ABAS_SUMARIO = [
           '**A receber**: parcelas em aberto do contas a receber do Sienge (rotina "Base do contas a receber" do Monitor de Integrações). **A pagar**: parcelas em aberto do contas a pagar (rotina "Base do contas a pagar").',
           '**Em aberto** = parcela com saldo maior que zero. O valor é sempre o **saldo corrigido** (correção monetária e juros do contrato, como o Sienge calcula); sem ele, o saldo simples.',
           '**Atraso** = dias entre o vencimento e hoje. A foto é de hoje: uma parcela que vence hoje e não foi baixada ainda está "Hoje"; amanhã passa a "vencido 1–7".',
-          'Parcela rateada entre centros de custo ou naturezas entra em cada um com a fração dela; a soma das frações bate com o saldo da parcela.',
+          'Parcela rateada entre centros de custo ou contas do plano de contas entra em cada um com a fração dela; a soma das frações bate com o saldo da parcela.',
         ],
       },
       {
@@ -23,17 +23,17 @@ export const ABAS_SUMARIO = [
           '**Empresa** — a empresa analisada.',
           '**Início** e **Fim** — o período do **vencimento** das parcelas: só entram as que vencem entre as duas datas, vencidas ou a vencer. Começa com o ano atual inteiro (1º de janeiro a 31 de dezembro). Vale para a tela toda: cards, escada, simulador, detalhamento, maiores e o Excel.',
           '**Centro de custo** — só as fatias das parcelas nesses centros. O saldo bancário passa a ser o das contas das empresas (Sienge) donas dos centros marcados.',
-          'O botão de download gera um Excel com o resumo por faixa e todas as parcelas a receber e a pagar do escopo (com todos os filtros), com centro, natureza, faixa e dias de atraso.',
+          'O botão de download gera um Excel com o resumo por faixa e todas as parcelas a receber e a pagar do escopo (com todos os filtros), com centro, plano de contas, faixa e dias de atraso.',
         ],
       },
       {
         titulo: 'Botão Filtros',
         itens: [
           'Abre o painel de filtros abaixo da barra (clique de novo ou no X para recolher). Com ele fechado, os filtros valendo aparecem em etiquetas — o X de cada uma tira aquele filtro — e o botão mostra quantos estão valendo.',
-          '**Tipo de documento** e **Natureza** — valem para o a receber e o a pagar. A natureza filtra cada fatia do rateio.',
+          '**Tipo de documento** e **Plano de contas** — valem para o a receber e o a pagar. O plano de contas filtra cada fatia do rateio.',
           '**Cliente** filtra só o a receber; **Fornecedor**, só o a pagar — dá para olhar o que um cliente deve e o que se deve a um fornecedor ao mesmo tempo.',
           '**Previsão financeira** — previsões de contratos de medição, de pedidos de compra e de pagamento/recebimento (quase sempre no a pagar). **Não** (padrão): ficam de fora — quando o documento real chega, ele também entra no Sienge e contar os dois duplica o valor (mesma regra do DFC). **Sim**: só as previsões. **Todas**: documentos e previsões juntos.',
-          'As listas só trazem o que tem parcela em aberto; marcadas aparecem primeiro. **Limpar filtros** tira os do painel (o centro de custo da barra fica).',
+          'As listas trazem tudo o que existe, tenha ou não parcela em aberto no período: as contas de resultado do plano de contas (Cadastros › Plano de Contas; as totalizadoras não entram), os tipos de documento de qualquer título (pago ou em aberto), os clientes do cadastro do Sienge e de qualquer título a receber e os fornecedores já consultados no Sienge e de qualquer título a pagar. Marcados aparecem primeiro. **Limpar filtros** tira os do painel (o centro de custo da barra fica).',
         ],
       },
       {
@@ -118,17 +118,17 @@ export const ABAS_SUMARIO = [
   },
   {
     id: 'detalhamento',
-    titulo: 'Aging por centro, natureza e pessoa',
+    titulo: 'Aging por centro, plano de contas e pessoa',
     resumo: 'A tabela que desce do grupo até a parcela (título e parcela do Sienge).',
     blocos: [
       {
         titulo: 'Como usar',
         itens: [
-          '**A receber** e **a pagar** lado a lado, com o mesmo agrupamento e a mesma busca. **Agrupar por**: até 3 níveis entre centro de custo, natureza, cliente/fornecedor, empresa, condição de pagamento (só no a receber; no a pagar esse nível é pulado) e tipo de documento. Abaixo do último nível vêm as parcelas.',
+          '**A receber** e **a pagar** lado a lado, com o mesmo agrupamento e a mesma busca. **Agrupar por**: até 3 níveis entre centro de custo, plano de contas, cliente/fornecedor, empresa, condição de pagamento (só no a receber; no a pagar esse nível é pulado) e tipo de documento. Abaixo do último nível vêm as parcelas.',
           'Cada parcela mostra o **título/parcela** (bill e installment do Sienge), o número da parcela, o documento, o vencimento, a unidade e a condição (a receber) e as etiquetas **Inadimplente**, **Sub judice** e **Previsão**.',
           'Colunas: **Vencido** (até ontem), **A vencer** (de hoje em diante) e **Total**. As linhas vêm do maior vencido para o menor. Clicar numa faixa da escada de vencimentos filtra as duas tabelas por ela.',
-          '**Buscar**: nome, título, documento, unidade, centro ou natureza.',
-          'Parcela rateada entre centros ou naturezas aparece em cada um com a fração dela (a soma bate com o saldo).',
+          '**Buscar**: nome, título, documento, unidade, centro ou plano de contas. O botão ao lado da busca abre as duas tabelas em **tela cheia** (Esc ou o mesmo botão para sair).',
+          'Parcela rateada entre centros ou contas do plano de contas aparece em cada um com a fração dela (a soma bate com o saldo).',
           'A cor de cada célula mostra o peso dela no total da linha: vermelho no vencido, azul no a vencer.',
         ],
       },

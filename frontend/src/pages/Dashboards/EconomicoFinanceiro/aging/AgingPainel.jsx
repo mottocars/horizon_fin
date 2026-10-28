@@ -16,10 +16,10 @@ import { ABAS_SUMARIO } from './sumarioTexto';
 
 // Dashboard Econômico Financeiro › Aging List, no layout do painel do Fluxo de Caixa: barra de controles
 // (Empresa, período Início–Fim do vencimento — padrão o ano atual inteiro —, Centro de custo e Filtros
-// salvos; o botão "Filtros" abre o painel com tipo de documento, natureza, cliente, fornecedor e
+// salvos; o botão "Filtros" abre o painel com tipo de documento, plano de contas, cliente, fornecedor e
 // previsão financeira), os 8 indicadores, a escada de vencimentos (a pagar × a receber por faixa), o
-// simulador do caixa dos próximos dias (a partir do Saldo Contas Bancárias), o detalhamento em árvore
-// até a parcela e os maiores devedores e credores. Dados de /dashboards/economico-financeiro/aging (todas
+// detalhamento em árvore até a parcela (com tela cheia), o simulador do caixa dos próximos dias (a
+// partir do Saldo Contas Bancárias) e os maiores devedores e credores. Dados de /dashboards/economico-financeiro/aging (todas
 // as parcelas em aberto, recalculadas no navegador por aging/modelo.js); recarrega sozinho a cada 30
 // minutos com a aba visível.
 
@@ -244,8 +244,8 @@ export default function AgingPainel({ dashboard, tituloTela, empresaId, onEmpres
               <Tiles E={E} />
               <div className="grid">
                 <Escada E={E} faixaSel={faixaSel} onFaixa={irParaDetalhe} />
-                <Simulador E={E} />
                 <Detalhamento E={E} faixaSel={faixaSel} onFaixa={setFaixaSel} />
+                <Simulador E={E} />
                 <Maiores E={E} lado="r" />
                 <Maiores E={E} lado="p" />
               </div>

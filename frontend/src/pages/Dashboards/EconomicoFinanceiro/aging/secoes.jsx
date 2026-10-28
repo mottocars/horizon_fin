@@ -1,5 +1,5 @@
-import { Fragment, useMemo, useState } from 'react';
-import { ChevronDown, ChevronRight, Search, X } from 'lucide-react';
+import { Fragment, useEffect, useMemo, useState } from 'react';
+import { ChevronDown, ChevronRight, Maximize2, Minimize2, Search, X } from 'lucide-react';
 import { AjudaSecao } from '../fluxo/secoes';
 import { BarrasH } from '../fluxo/graficos';
 import { COR, useDica } from '../fluxo/ganchos';
@@ -645,8 +645,30 @@ function ArvoreLado({ E, lado, linhas, niveis, filtrado }) {
 export function Detalhamento({ E, faixaSel, onFaixa }) {
   const [niveis, setNiveis] = useState(PADRAO_NIVEIS);
   const [busca, setBusca] = useState('');
+  const [telaCheia, setTelaCheia] = useState(false);
   const opcoesDim = dimensoesDoLado('r');
   const validos = niveis.filter((n, i) => n && opcoesDim.includes(n) && niveis.indexOf(n) === i);
+
+  // Tela cheia (como a grade do DFC): pede também a do navegador; o Esc dele sai e o
+  // `fullscreenchange` fecha a nossa junto. Sem a do navegador, o Esc é tratado aqui.
+  useEffect(() => {
+    if (!telaCheia) return undefined;
+    const doc = document.documentElement;
+    if (!document.fullscreenElement && doc.requestFullscreen) doc.requestFullscreen().catch(() => {});
+    const aoTrocar = () => {
+      if (!document.fullscreenElement) setTelaCheia(false);
+    };
+    const aoTeclar = (e) => {
+      if (e.key === 'Escape') setTelaCheia(false);
+    };
+    document.addEventListener('fullscreenchange', aoTrocar);
+    window.addEventListener('keydown', aoTeclar);
+    return () => {
+      document.removeEventListener('fullscreenchange', aoTrocar);
+      window.removeEventListener('keydown', aoTeclar);
+      if (document.fullscreenElement) document.exitFullscreen?.().catch(() => {});
+    };
+  }, [telaCheia]);
 
   const porLado = useMemo(() => {
     let ls = E.linhas;
@@ -666,7 +688,7 @@ export function Detalhamento({ E, faixaSel, onFaixa }) {
   };
 
   return (
-    <section className="panel c12" aria-labelledby="h-det">
+    <section className={`panel c12${telaCheia ? ' tela-cheia' : ''}`} aria-labelledby="h-det">
       <div className="ph">
         <h2 id="h-det">
           Aging por {validos.map((d) => rotuloDim(d).toLowerCase()).join(' › ') || '…'} › parcela
@@ -704,6 +726,15 @@ export function Detalhamento({ E, faixaSel, onFaixa }) {
             <input type="search" placeholder="Cliente, fornecedor, título, documento, unidade…" value={busca} onChange={(e) => setBusca(e.target.value)} />
           </div>
         </div>
+        <button
+          type="button"
+          className="btn ghost icone tela-cheia-btn"
+          onClick={() => setTelaCheia((t) => !t)}
+          title={telaCheia ? 'Sair da tela cheia (Esc)' : 'Tela cheia'}
+          aria-label={telaCheia ? 'Sair da tela cheia' : 'Tela cheia'}
+        >
+          {telaCheia ? <Minimize2 size={16} /> : <Maximize2 size={16} />}
+        </button>
       </div>
       {faixaSel && (
         <div>

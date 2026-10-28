@@ -791,6 +791,24 @@
   white-space: nowrap;
 }
 
+/* Tela cheia do detalhamento (botão ao lado da busca; Esc sai) */
+.painel-cfo .det-bar .tela-cheia-btn {
+  align-self: flex-end;
+  height: 32px;
+}
+.painel-cfo .panel.tela-cheia {
+  position: fixed;
+  inset: 0;
+  z-index: 40;
+  border: 0;
+  border-radius: 0;
+  padding: 20px 24px;
+  overflow: auto;
+}
+.painel-cfo .panel.tela-cheia .ag-wrap {
+  max-height: calc(100vh - 230px);
+}
+
 /* Maiores devedores / credores */
 .painel-cfo .ph .seg button {
   padding: 4px 9px;
