@@ -16,27 +16,39 @@ const LARGURA_MINIMA_PRIMEIRA = 230;
 const LARGURA_ICONE = 44;
 
 const COLUNAS = [
-  { chave: 'situacao_atual', rotulo: 'Situação atual', largura: 150 },
+  { chave: 'situacao_atual', rotulo: 'Situação atual', largura: 115 },
   {
     chave: 'contrato',
     rotulo: 'Contrato',
-    largura: 120,
+    largura: 85,
     titulo: 'Número do contrato de venda (Vendidas e Distratadas)',
   },
   {
     chave: 'data',
     rotulo: 'Data',
-    largura: 110,
+    largura: 95,
     titulo: 'Vendidas: data do contrato · Distratadas: data do cancelamento · Permuta: data da avaliação',
   },
   {
     chave: 'valor',
     rotulo: 'Valor',
-    largura: 140,
+    largura: 130,
     titulo:
       'Vendidas e Distratadas: valor do contrato · Permuta: valor da avaliação · Disponíveis: ticket médio das vendas do mesmo tipo no empreendimento',
   },
-  { chave: 'fracao_ideal', rotulo: 'Fração ideal', largura: 130 },
+  {
+    chave: 'receita_distrato',
+    rotulo: 'Receita com distrato',
+    largura: 125,
+    titulo: 'Distratadas: o que o cliente pagou no contrato (recebimentos do título no extrato de contas do Sienge)',
+  },
+  {
+    chave: 'despesa_distrato',
+    rotulo: 'Despesa com distrato',
+    largura: 125,
+    titulo: 'Distratadas: valor devolvido ao cliente no cancelamento (total do distrato)',
+  },
+  { chave: 'fracao_ideal', rotulo: 'Fração ideal', largura: 115 },
 ];
 
 // Os 4 clusters do drilldown, na ordem pedida, cada um com um ícone (venda, contrato cancelado,
@@ -97,6 +109,16 @@ function dataHora(v) {
 
 function soma(linhas, campo) {
   return linhas.reduce((t, l) => t + (Number(l[campo]) || 0), 0);
+}
+
+// Receita / despesa com distrato: zero ou sem valor fica em branco; despesa (negativa) em vermelho.
+function ValorDistrato({ valor, className = '' }) {
+  const v = Number(valor) || 0;
+  return (
+    <td className={`${className} text-right tabular-nums ${v < 0 ? 'text-red-600' : 'text-gray-800'}`}>
+      {v ? numero(v, 2) : ''}
+    </td>
+  );
 }
 
 const SEM_TIPO = 'SEM TIPO';
@@ -397,6 +419,8 @@ const UnidadesTab = forwardRef(function UnidadesTab({ empresaId, search = '', on
                       <td className={celulaCentro} />
                       <td className={celulaCentro} />
                       <td className={celulaCentro} />
+                      <ValorDistrato valor={c.receita_distrato} className={`${celulaCentro} font-semibold`} />
+                      <ValorDistrato valor={c.despesa_distrato} className={`${celulaCentro} font-semibold`} />
                       <td className={`${celulaCentro} font-semibold text-gray-900`}>
                         {numero(c.fracao_ideal, 8)}
                       </td>
@@ -464,6 +488,14 @@ const UnidadesTab = forwardRef(function UnidadesTab({ empresaId, search = '', on
                               >
                                 {temLinhas ? `${estimado ? '≈ ' : ''}${numero(soma(linhas, 'valor'), 2)}` : ''}
                               </td>
+                              <ValorDistrato
+                                valor={soma(linhas, 'receita_distrato')}
+                                className="border-b border-l border-gray-100 bg-white px-2 text-xs font-semibold group-hover/cluster:bg-gray-50"
+                              />
+                              <ValorDistrato
+                                valor={soma(linhas, 'despesa_distrato')}
+                                className="border-b border-l border-gray-100 bg-white px-2 text-xs font-semibold group-hover/cluster:bg-gray-50"
+                              />
                               <td className="border-b border-l border-gray-100 bg-white px-2 text-right text-xs font-semibold tabular-nums text-gray-900 group-hover/cluster:bg-gray-50">
                                 {temLinhas ? numero(soma(linhas, 'fracao_ideal'), 8) : ''}
                               </td>
@@ -511,6 +543,14 @@ const UnidadesTab = forwardRef(function UnidadesTab({ empresaId, search = '', on
                                           ? `${estimado ? '≈ ' : ''}${numero(soma(g.linhas, 'valor'), 2)}`
                                           : ''}
                                       </td>
+                                      <ValorDistrato
+                                        valor={soma(g.linhas, 'receita_distrato')}
+                                        className="border-b border-l border-gray-100 bg-white px-2 text-xs font-medium group-hover/tipo:bg-gray-50"
+                                      />
+                                      <ValorDistrato
+                                        valor={soma(g.linhas, 'despesa_distrato')}
+                                        className="border-b border-l border-gray-100 bg-white px-2 text-xs font-medium group-hover/tipo:bg-gray-50"
+                                      />
                                       <td className="border-b border-l border-gray-100 bg-white px-2 text-right text-xs font-medium tabular-nums text-gray-800 group-hover/tipo:bg-gray-50">
                                         {numero(soma(g.linhas, 'fracao_ideal'), 8)}
                                       </td>
@@ -613,6 +653,8 @@ function LinhaUnidade({ linha: l, cluster, clustersDaUnidade }) {
       </td>
       <td className={`${celula} tabular-nums text-gray-700`}>{dataBr(l.data)}</td>
       <td className={`${celula} text-right tabular-nums text-gray-800`}>{valor}</td>
+      <ValorDistrato valor={l.receita_distrato} className={celula} />
+      <ValorDistrato valor={l.despesa_distrato} className={celula} />
       <td className={`${celula} text-right tabular-nums text-gray-800`}>
         {numero(l.fracao_ideal, 8)}
       </td>

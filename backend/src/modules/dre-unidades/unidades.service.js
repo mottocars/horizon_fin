@@ -189,6 +189,10 @@ function ordenar(linhas) {
 //   vendidas    — todo contrato de venda, de qualquer situação (o cancelado também foi uma venda):
 //                 uma linha por contrato × unidade; data = data do contrato, valor = valor do contrato.
 //   distratadas — contratos cancelados; data = data do cancelamento, valor = valor do contrato.
+//                 Receita com distrato = o que o cliente pagou no título a receber do contrato
+//                 (extrato de contas do Sienge, sie_extrato_contas, lançamentos "Recebimento" do
+//                 receivable_bill_id); despesa com distrato = −total_cancellation_amount (o que se
+//                 devolve). Só nesse cluster — em Vendidas o mesmo contrato contaria em dobro.
 //   permuta     — unidades com estoque Permuta; data e valor = avaliação (sale_value_date/price).
 //   disponiveis — unidades que hoje não estão vendidas nem em permuta; sem data, valor estimado
 //                 pelo ticket médio das vendas ativas (não canceladas) do mesmo tipo no mesmo
@@ -209,10 +213,17 @@ async function listar(empresaId) {
     `SELECT k.sienge_contract_id::int AS contrato_id, k.number, k.situation, k.enterprise_id::int AS centro_id,
             cc.name AS centro, to_char(k.contract_date, 'YYYY-MM-DD') AS contract_date,
             to_char(k.cancellation_date, 'YYYY-MM-DD') AS cancellation_date, k.cancellation_reason, k.value,
-            cu.unit_id::int AS unit_id, cu.name AS unit_name, cu.participation_percentage
+            cu.unit_id::int AS unit_id, cu.name AS unit_name, cu.participation_percentage,
+            r.recebido, k.total_cancellation_amount
        FROM sie_sales_contracts k
        JOIN sie_sales_contracts_units cu ON cu.sienge_contract_id = k.sienge_contract_id AND cu.empresa_id = k.empresa_id
        JOIN centros_custo_sienge cc ON cc.empresa_id = k.empresa_id AND cc.sienge_id = k.enterprise_id
+       LEFT JOIN (
+         SELECT bill_id, SUM(value) AS recebido
+           FROM sie_extrato_contas
+          WHERE empresa_id = $1 AND statement_type_notes = 'Recebimento' AND bill_id IS NOT NULL
+          GROUP BY bill_id
+       ) r ON r.bill_id = k.receivable_bill_id
       WHERE k.empresa_id = $1 AND cc.realiza_dre`,
     [empresaId]
   );
@@ -231,6 +242,8 @@ async function listar(empresaId) {
         nome,
         total_unidades: 0,
         fracao_ideal: 0,
+        receita_distrato: 0,
+        despesa_distrato: 0,
         clusters: { vendidas: [], distratadas: [], permuta: [], disponiveis: [] },
       });
     }
@@ -255,11 +268,17 @@ async function listar(empresaId) {
     const contrato = { id: k.contrato_id, numero: k.number, cancelado, motivo: k.cancellation_reason || null };
     c.clusters.vendidas.push({ ...base(u, k.unit_name), chave: `v${k.contrato_id}-${k.unit_id}`, data: k.contract_date, valor, contrato });
     if (cancelado) {
+      const receita = k.recebido === null ? null : Number(k.recebido) * participacao;
+      const despesa = k.total_cancellation_amount === null ? null : -Number(k.total_cancellation_amount) * participacao;
+      c.receita_distrato += receita || 0;
+      c.despesa_distrato += despesa || 0;
       c.clusters.distratadas.push({
         ...base(u, k.unit_name),
         chave: `d${k.contrato_id}-${k.unit_id}`,
         data: k.cancellation_date,
         valor,
+        receita_distrato: receita,
+        despesa_distrato: despesa,
         contrato,
       });
     } else if (u && valor !== null) {
