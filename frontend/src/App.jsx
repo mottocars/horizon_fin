@@ -22,6 +22,7 @@ import ConveniosBancariosForm from './pages/Integracoes/ConveniosBancarios/Conve
 import ItauConexaoDetalhe from './pages/Integracoes/ConveniosBancarios/ItauConexaoDetalhe';
 import McpList from './pages/Integracoes/Mcp/McpList';
 import McpForm from './pages/Integracoes/Mcp/McpForm';
+import ApiHorizonPage from './pages/Integracoes/ApiHorizon/ApiHorizonPage';
 import EmailList from './pages/Integracoes/Email/EmailList';
 import EmailForm from './pages/Integracoes/Email/EmailForm';
 import ConstrutorVendasList from './pages/Integracoes/ConstrutorVendas/ConstrutorVendasList';
@@ -173,6 +174,7 @@ export default function App() {
             <Route path="/integracoes/mcp" element={<McpList />} />
             <Route path="/integracoes/mcp/nova" element={<McpForm />} />
             <Route path="/integracoes/mcp/:id" element={<McpForm />} />
+            <Route path="/integracoes/api-horizon" element={<ApiHorizonPage />} />
             <Route path="/integracoes/actioon" element={<ActioonList />} />
             <Route path="/integracoes/actioon/nova" element={<ActioonForm />} />
             <Route path="/integracoes/actioon/:id" element={<ActioonForm />} />

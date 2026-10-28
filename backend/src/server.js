@@ -87,6 +87,9 @@ const mcpProtocoloRoutes = require('./modules/integracoes-mcp/mcpProtocolo.route
 const mcpDfcRoutes = require('./modules/integracoes-mcp/dfc/mcpDfc.routes');
 const mcpOauthRoutes = require('./modules/integracoes-mcp/dfc/oauth.routes');
 const logsAcessoRoutes = require('./modules/logs-acesso/logsAcesso.routes');
+const apiHorizonChavesRoutes = require('./modules/api-horizon/chaves.routes');
+const apiHorizonV1Routes = require('./modules/api-horizon/v1/v1.routes');
+const { tratarErros: tratarErrosApiHorizon } = require('./modules/api-horizon/v1/erros');
 const { observarRespostas } = require('./modules/alertas-seguranca/vigilancia');
 const errorMiddleware = require('./middlewares/error.middleware');
 const { QUALQUER_TELA, exigirTela, exigirMaster, exigirAdministradorDaTela } = require('./middlewares/acesso.middleware');
@@ -102,9 +105,10 @@ app.set('trust proxy', 1);
 
 const allowedOrigins = [env.frontendUrl, env.frontendUrl.replace('localhost', '127.0.0.1')];
 // O MCP do DFC e o OAuth dele são chamados pelo Claude / por qualquer cliente MCP — CORS próprio
-// (aberto) nos routers deles; o resto da API segue só com as origens do sistema.
+// (aberto) nos routers deles; o resto da API segue só com as origens do sistema. A API pública
+// Horizon (/api/v1) libera só a documentação (ver api-horizon/v1/v1.routes.js).
 const corsSistema = cors({ origin: allowedOrigins, credentials: true });
-const ROTAS_CORS_PROPRIO = ['/.well-known/', '/api/mcp-oauth', '/api/mcp/dfc/'];
+const ROTAS_CORS_PROPRIO = ['/.well-known/', '/api/mcp-oauth', '/api/mcp/dfc/', '/api/v1/'];
 app.use((req, res, next) => (ROTAS_CORS_PROPRIO.some((p) => req.path.startsWith(p)) ? next() : corsSistema(req, res, next)));
 // Limite maior que o padrão (100kb) por causa da foto de usuário, enviada
 // como data URI (base64) dentro do JSON do cadastro.
@@ -120,11 +124,11 @@ app.use(morgan('dev', { skip: (req) => req.path.startsWith('/api/mcp/') }));
 app.use(observarRespostas);
 
 // Limite de chamadas (ver rateLimit.middleware.js). O /api/health fica de
-// fora (monitoramento), o MCP tem o limite próprio, por token.
+// fora (monitoramento), o MCP e a API pública Horizon (/api/v1) têm limites próprios.
 app.use('/api/mcp', limiteMcp);
 app.use('/api/auth/login', limiteLogin);
 app.use('/api', (req, res, next) => {
-  if (req.path === '/health' || req.path.startsWith('/mcp/')) return next();
+  if (req.path === '/health' || req.path.startsWith('/mcp/') || req.path.startsWith('/v1/')) return next();
   return limiteGeral(req, res, () => limiteDownloadsSeAplicavel(req, res, next));
 });
 
@@ -246,6 +250,10 @@ app.use('/.well-known', mcpOauthRoutes.wellKnown);
 app.use('/api/mcp-oauth', mcpOauthRoutes.router);
 app.use('/api/mcp/dfc', mcpDfcRoutes);
 app.use('/api/mcp', mcpProtocoloRoutes);
+// API pública Horizon (api.horizonhub.com.br/v1): chaves geradas na tela Integrações > API Horizon,
+// trocadas por token temporário. Autenticação e permissões próprias (ver modules/api-horizon/).
+app.use('/api/integracoes/api-horizon', exigirTela([T.API_HORIZON]), apiHorizonChavesRoutes);
+app.use('/api/v1', apiHorizonV1Routes, tratarErrosApiHorizon);
 app.use('/api/logs-acesso/metricas', exigirTela([T.METRICAS]));
 app.use('/api/logs-acesso', logsAcessoRoutes);
 

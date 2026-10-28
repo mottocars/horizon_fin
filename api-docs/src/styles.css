@@ -1,0 +1,131 @@
+@import "tailwindcss";
+@import "@fontsource-variable/inter";
+@import "@fontsource/ibm-plex-mono/400.css";
+@import "@fontsource/ibm-plex-mono/500.css";
+
+/* Mesmo tema do sistema (frontend/src/styles/index.css). */
+@theme {
+  --font-sans: "Inter Variable", "Inter", ui-sans-serif, system-ui, sans-serif;
+  --font-mono: "IBM Plex Mono", ui-monospace, Menlo, monospace;
+
+  --color-primary-50: #eff6ff;
+  --color-primary-100: #dbeafe;
+  --color-primary-200: #bfdbfe;
+  --color-primary-500: #3b82f6;
+  --color-primary-600: #2563eb;
+  --color-primary-700: #1d4ed8;
+
+  --color-app-bg: #edeff2;
+  --color-codigo: #0f172a;
+
+  --radius-card: 12px;
+  --shadow-card: 0 1px 2px rgba(16, 24, 40, 0.04), 0 4px 12px rgba(16, 24, 40, 0.06);
+}
+
+html {
+  scroll-behavior: smooth;
+  scroll-padding-top: 4.5rem;
+}
+
+body {
+  font-family: var(--font-sans);
+  background-color: var(--color-app-bg);
+  color: #111827;
+  -webkit-font-smoothing: antialiased;
+}
+
+@media (prefers-reduced-motion: reduce) {
+  html {
+    scroll-behavior: auto;
+  }
+}
+
+/* Texto corrido das seções. */
+.prosa p {
+  @apply text-[14px] leading-6 text-gray-600;
+}
+.prosa p + p {
+  @apply mt-3;
+}
+.prosa strong {
+  @apply font-semibold text-gray-900;
+}
+.prosa a {
+  @apply font-medium text-primary-600 hover:text-primary-700;
+}
+.prosa ul {
+  @apply mt-3 space-y-1.5 text-[14px] leading-6 text-gray-600;
+}
+.prosa ul li {
+  @apply relative pl-4;
+}
+.prosa ul li::before {
+  content: "";
+  @apply absolute left-0 top-[0.62rem] h-1.5 w-1.5 rounded-full bg-primary-500;
+}
+
+code.ic {
+  @apply rounded-md bg-gray-100 px-1.5 py-0.5 font-mono text-[12.5px] text-gray-900;
+}
+
+/* Tabelas de parâmetros / campos / erros. */
+.tabela {
+  @apply w-full border-collapse text-left text-[13px];
+}
+.tabela th {
+  @apply border-b border-gray-200 py-2 pr-4 text-[11px] font-semibold uppercase tracking-wide text-gray-400;
+}
+.tabela td {
+  @apply border-b border-gray-100 py-2.5 pr-4 align-top text-gray-600;
+}
+.tabela tr:last-child td {
+  @apply border-0;
+}
+.tabela td:first-child {
+  @apply whitespace-nowrap;
+}
+
+/* Blocos de código (fundo escuro). */
+.codigo {
+  @apply overflow-x-auto font-mono text-[12.5px] leading-[1.65] text-slate-200;
+  tab-size: 2;
+}
+.codigo .k {
+  color: #7dd3fc;
+}
+.codigo .s {
+  color: #86efac;
+}
+.codigo .n {
+  color: #fcd34d;
+}
+.codigo .b {
+  color: #c4b5fd;
+}
+.codigo .c {
+  color: #64748b;
+}
+
+.campo {
+  @apply w-full rounded-lg border border-gray-200 bg-white px-3 py-2 text-sm text-gray-900 placeholder:text-gray-400 focus:outline-none focus:ring-2 focus:ring-primary-100;
+}
+
+.metodo {
+  @apply inline-flex h-5 min-w-12 items-center justify-center rounded-md px-1.5 font-mono text-[10.5px] font-semibold tracking-wide;
+}
+.metodo-get {
+  @apply bg-emerald-50 text-emerald-700;
+}
+.metodo-post {
+  @apply bg-primary-50 text-primary-700;
+}
+.metodo-patch {
+  @apply bg-amber-50 text-amber-700;
+}
+
+.nav-link {
+  @apply flex items-center gap-2 rounded-[10px] px-2.5 py-1.5 text-[13px] text-gray-500 transition-colors hover:bg-[#f2f6fd] hover:text-[#27324a];
+}
+.nav-link.ativo {
+  @apply bg-linear-to-b from-primary-500/10 to-primary-500/3 font-medium text-primary-700;
+}

@@ -41,6 +41,15 @@ services:
     ports:
       - "127.0.0.1:3012:80"
 
+  # Documentação da API Horizon (api-docs/), estática. Em api.horizonhub.com.br o Nginx do host
+  # entrega / para cá e /v1/ para o backend (ver api-docs/README.md).
+  api-docs:
+    build:
+      context: ./api-docs
+    restart: unless-stopped
+    ports:
+      - "127.0.0.1:3013:80"
+
 volumes:
   horizonfin_uploads:
 

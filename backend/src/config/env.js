@@ -22,6 +22,18 @@ module.exports = {
     // conectar de fora.
     publicBaseUrl: process.env.MCP_PUBLIC_BASE_URL || `http://localhost:${process.env.PORT || 3001}`,
   },
+  apiHorizon: {
+    // Endereço público da API Horizon (sem o /v1) — monta o linkXml das notas. Produção:
+    // API_HORIZON_PUBLIC_URL=https://api.horizonhub.com.br (o Nginx do host entrega /v1/ para
+    // /api/v1/ deste backend).
+    publicUrl: (process.env.API_HORIZON_PUBLIC_URL || `http://localhost:${process.env.PORT || 3001}/api`).replace(/\/$/, ''),
+    // Origens que podem chamar a API pelo navegador (o "Testar" da documentação). Em produção a
+    // documentação fica no mesmo domínio da API; em dev, o Vite de api-docs/ (porta 5182).
+    origensDocs: (process.env.API_HORIZON_DOCS_ORIGINS || 'http://localhost:5182,https://api.horizonhub.com.br')
+      .split(',')
+      .map((o) => o.trim())
+      .filter(Boolean),
+  },
   itau: {
     // Chave AES-256-GCM (32 bytes, em hex de 64 caracteres ou base64) que criptografa a chave
     // privada, o client_secret e a resposta bruta das conexões API Itaú. Só existe aqui (env) —

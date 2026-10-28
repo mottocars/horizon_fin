@@ -435,6 +435,19 @@ function extrairValorNota(tipo, xml) {
   return bruto && Number.isFinite(valor) ? valor : null;
 }
 
+// CNPJ (ou CPF) do emitente e do destinatário direto do XML (texto ou Buffer):
+// - NF-e: <emit> e <dest>; o resumo (resNFe) só traz o CNPJ do emitente, solto
+//   dentro de <resNFe>;
+// - NFS-e nacional: <emit> (prestador, ou <prest> da DPS) e <toma> (tomador).
+function extrairCnpjsNota(tipo, xml) {
+  const texto = Buffer.isBuffer(xml) ? xml.toString('utf-8') : String(xml || '');
+  const doc = (bloco) => extrairTagDentroDe(texto, bloco, 'CNPJ') || extrairTagDentroDe(texto, bloco, 'CPF');
+  const emitente = tipo === 'NFSE' ? doc('emit') || doc('prest') : doc('emit') || doc('resNFe');
+  const destinatario = tipo === 'NFSE' ? doc('toma') : doc('dest');
+  const limpar = (v) => (v ? v.replace(/\D/g, '').slice(0, 14) || null : null);
+  return { emitente: limpar(emitente), destinatario: limpar(destinatario) };
+}
+
 // ────────────────────────────────────────────────────────────────
 // Persistência das notas encontradas
 // ────────────────────────────────────────────────────────────────
@@ -463,10 +476,12 @@ async function salvarNota(
   // vez que essa chave aparece, nunca de novo quando um resNFe é
   // substituído pela versão completa da mesma nota.
   // valor_total: o XML que chega por último (a versão completa, depois do
-  // resumo) é o que vale — por isso EXCLUDED primeiro no COALESCE.
+  // resumo) é o que vale — por isso EXCLUDED primeiro no COALESCE. Mesma
+  // coisa nos CNPJs (o resumo não traz o do destinatário).
+  const cnpjs = extrairCnpjsNota(tipo, raw);
   const { rows } = await pool.query(
-    `INSERT INTO espiao_notas (empresa_id, certificado_id, tipo, chave_acesso, emissor, destinatario, data_emissao, numero_nota, serie_nota, arquivo_armazenado, apenas_resumo, valor_total)
-     VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12)
+    `INSERT INTO espiao_notas (empresa_id, certificado_id, tipo, chave_acesso, emissor, destinatario, data_emissao, numero_nota, serie_nota, arquivo_armazenado, apenas_resumo, valor_total, cnpj_emitente, cnpj_destinatario)
+     VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13, $14)
      ON CONFLICT (empresa_id, chave_acesso) DO UPDATE SET
        emissor = COALESCE(espiao_notas.emissor, EXCLUDED.emissor),
        destinatario = COALESCE(espiao_notas.destinatario, EXCLUDED.destinatario),
@@ -475,7 +490,9 @@ async function salvarNota(
        serie_nota = COALESCE(espiao_notas.serie_nota, EXCLUDED.serie_nota),
        arquivo_armazenado = EXCLUDED.arquivo_armazenado,
        apenas_resumo = EXCLUDED.apenas_resumo,
-       valor_total = COALESCE(EXCLUDED.valor_total, espiao_notas.valor_total)
+       valor_total = COALESCE(EXCLUDED.valor_total, espiao_notas.valor_total),
+       cnpj_emitente = COALESCE(EXCLUDED.cnpj_emitente, espiao_notas.cnpj_emitente),
+       cnpj_destinatario = COALESCE(EXCLUDED.cnpj_destinatario, espiao_notas.cnpj_destinatario)
      RETURNING id, (xmax = 0) AS inserted`,
     [
       empresaId,
@@ -490,6 +507,8 @@ async function salvarNota(
       arquivoArmazenado,
       apenasResumo,
       extrairValorNota(tipo, raw),
+      cnpjs.emitente,
+      cnpjs.destinatario,
     ]
   );
 
@@ -1192,6 +1211,7 @@ async function salvarConfiguracoes(empresaId, { codigoDocumentoNfe, codigoDocume
 module.exports = {
   NOTAS_DIR,
   extrairValorNota,
+  extrairCnpjsNota,
   getConfiguracoes,
   salvarConfiguracoes,
   consultarEmpresa,

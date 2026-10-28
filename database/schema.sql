@@ -1720,11 +1720,20 @@ CREATE TABLE espiao_notas (
     -- sempre chega completa, então fica FALSE.
     apenas_resumo        BOOLEAN NOT NULL DEFAULT FALSE,
     criado_em            TIMESTAMP DEFAULT NOW(),
+    -- CNPJ (ou CPF) do emitente e do destinatário/tomador, lidos do XML ao
+    -- salvar (ver salvarNota). Notas antigas: backend/scripts/preencher-cnpjs-notas.js.
+    cnpj_emitente        VARCHAR(14),
+    cnpj_destinatario    VARCHAR(14),
+    -- Última mudança de status (inativação, vínculo, evento fiscal) — mantida
+    -- pelos gatilhos abaixo; base do filtro atualizadoDesde da API Horizon.
+    atualizado_em        TIMESTAMPTZ NOT NULL DEFAULT NOW(),
     UNIQUE (empresa_id, chave_acesso)
 );
 
 CREATE INDEX idx_espiao_notas_empresa ON espiao_notas (empresa_id, data_emissao);
 CREATE INDEX idx_espiao_notas_inativa ON espiao_notas (empresa_id, inativa);
+CREATE INDEX idx_espiao_notas_certificado_emissao ON espiao_notas (certificado_id, data_emissao);
+CREATE INDEX idx_espiao_notas_atualizado ON espiao_notas (empresa_id, atualizado_em);
 
 -- Histórico de etapas de cada nota do Espião — uma linha por evento
 -- recebido (nunca sobrescreve, ao contrário de espiao_notas.situacao). A
@@ -3910,3 +3919,83 @@ BEGIN
     EXECUTE format('GRANT SELECT ON public.%I TO mcp_leitor', v.viewname);
   END LOOP;
 END $$;
+
+-- ─── API Horizon (api.horizonhub.com.br) — ver database/migrations/2026-10-28-api-horizon.sql ───
+-- ---------- Chaves de API ----------
+CREATE TABLE api_horizon_chaves (
+    id             SERIAL PRIMARY KEY,
+    usuario_id     INTEGER NOT NULL REFERENCES usuarios(id) ON DELETE CASCADE,  -- dono: a API age com as permissões dele
+    empresa_id     INTEGER NOT NULL REFERENCES empresas(id) ON DELETE CASCADE,  -- a chave só enxerga esta empresa
+    nome           VARCHAR(100) NOT NULL,
+    prefixo        VARCHAR(16) NOT NULL,           -- início da chave, só pra reconhecer na tela
+    chave_hash     CHAR(64) NOT NULL UNIQUE,       -- SHA-256 da chave (a chave em si não é guardada)
+    pode_inativar  BOOLEAN NOT NULL DEFAULT FALSE, -- escopo de escrita (PATCH .../inativar)
+    expira_em      TIMESTAMPTZ NOT NULL,
+    ultimo_uso_em  TIMESTAMPTZ,
+    revogada_em    TIMESTAMPTZ,
+    revogada_por   INTEGER REFERENCES usuarios(id) ON DELETE SET NULL,
+    criado_em      TIMESTAMPTZ NOT NULL DEFAULT NOW()
+);
+CREATE INDEX idx_api_horizon_chaves_usuario ON api_horizon_chaves (usuario_id);
+
+-- ---------- Tokens temporários (Bearer) ----------
+CREATE TABLE api_horizon_tokens (
+    token_hash  CHAR(64) PRIMARY KEY,
+    chave_id    INTEGER NOT NULL REFERENCES api_horizon_chaves(id) ON DELETE CASCADE,
+    ip          VARCHAR(64),
+    criado_em   TIMESTAMPTZ NOT NULL DEFAULT NOW(),
+    expira_em   TIMESTAMPTZ NOT NULL
+);
+CREATE INDEX idx_api_horizon_tokens_expira ON api_horizon_tokens (expira_em);
+
+-- ---------- Registro de chamadas (auditoria) ----------
+CREATE TABLE api_horizon_requisicoes (
+    id           BIGSERIAL PRIMARY KEY,
+    chave_id     INTEGER REFERENCES api_horizon_chaves(id) ON DELETE SET NULL,
+    usuario_id   INTEGER REFERENCES usuarios(id) ON DELETE SET NULL,
+    metodo       VARCHAR(8) NOT NULL,
+    rota         VARCHAR(300) NOT NULL,   -- caminho sem query string
+    consulta     VARCHAR(1000),           -- query string (sem segredos: chave e token vão em cabeçalho)
+    status       SMALLINT NOT NULL,
+    ip           VARCHAR(64),
+    user_agent   VARCHAR(300),
+    duracao_ms   INTEGER,
+    criado_em    TIMESTAMPTZ NOT NULL DEFAULT NOW()
+);
+CREATE INDEX idx_api_horizon_requisicoes_chave ON api_horizon_requisicoes (chave_id, criado_em DESC);
+CREATE INDEX idx_api_horizon_requisicoes_criado ON api_horizon_requisicoes (criado_em);
+
+-- Mudança de status na própria nota (inativar/reativar, cancelamento e demais eventos fiscais).
+CREATE OR REPLACE FUNCTION espiao_notas_marcar_atualizacao() RETURNS trigger AS $$
+BEGIN
+  IF NEW.inativa IS DISTINCT FROM OLD.inativa
+     OR NEW.motivo_inativacao IS DISTINCT FROM OLD.motivo_inativacao
+     OR NEW.situacao IS DISTINCT FROM OLD.situacao
+     OR NEW.situacao_categoria IS DISTINCT FROM OLD.situacao_categoria
+     OR NEW.apenas_resumo IS DISTINCT FROM OLD.apenas_resumo
+     OR NEW.valor_total IS DISTINCT FROM OLD.valor_total THEN
+    NEW.atualizado_em := NOW();
+  END IF;
+  RETURN NEW;
+END;
+$$ LANGUAGE plpgsql;
+
+CREATE TRIGGER trg_espiao_notas_atualizacao
+  BEFORE UPDATE ON espiao_notas
+  FOR EACH ROW EXECUTE FUNCTION espiao_notas_marcar_atualizacao();
+
+-- Vincular, trocar ou desfazer o vínculo com o contas a pagar também é mudança de status.
+CREATE OR REPLACE FUNCTION espiao_notas_vinculos_marcar_nota() RETURNS trigger AS $$
+BEGIN
+  IF TG_OP = 'DELETE' THEN
+    UPDATE espiao_notas SET atualizado_em = NOW() WHERE id = OLD.nota_id;
+  ELSE
+    UPDATE espiao_notas SET atualizado_em = NOW() WHERE id = NEW.nota_id;
+  END IF;
+  RETURN NULL;
+END;
+$$ LANGUAGE plpgsql;
+
+CREATE TRIGGER trg_espiao_notas_vinculos_atualizacao
+  AFTER INSERT OR UPDATE OR DELETE ON espiao_notas_vinculos
+  FOR EACH ROW EXECUTE FUNCTION espiao_notas_vinculos_marcar_nota();

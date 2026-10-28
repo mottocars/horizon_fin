@@ -30,6 +30,7 @@ module.exports = {
   ZAPI: '/integracoes/z-api',
   EMAIL: '/integracoes/email',
   MCP: '/integracoes/mcp',
+  API_HORIZON: '/integracoes/api-horizon',
   ACTIOON: '/integracoes/actioon',
   BANCO_DADOS: '/integracoes/banco-dados',
 
