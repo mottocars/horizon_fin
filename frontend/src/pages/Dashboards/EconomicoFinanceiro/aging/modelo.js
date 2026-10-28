@@ -98,37 +98,41 @@ export function caixa(contas) {
 }
 
 // ─── Filtros (barra e painel de filtros) ─────────────────────────────────────────────────────────
-// O que um filtro salvo grava: o período em meses a partir do mês atual (`historico` para trás e
-// `horizonte` para frente — o filtro acompanha o calendário), centros de custo, tipos de documento,
-// plano de contas (`naturezas`), clientes (só no a receber), fornecedores (só no a pagar) e previsão
-// financeira ('nao' = sem as previsões, o padrão; 'sim' = só elas; 'todos'). Listas vazias = sem filtro.
+// O período (Início e Fim) fica na barra. O filtro salvo grava o período em meses a partir do mês
+// atual — `historico` para trás e `horizonte` para frente (painel de filtros) — e, ao ser aplicado,
+// recalcula o Início e o Fim: o filtro acompanha o calendário. null = o filtro não mexe naquele lado do
+// período. Grava também centros de custo, tipos de documento, plano de contas (`naturezas`), clientes
+// (só no a receber), fornecedores (só no a pagar) e previsão financeira ('nao' = sem as previsões, o
+// padrão; 'sim' = só elas; 'todos'). Listas vazias = sem filtro.
 export const MAX_MESES = 360;
-// Padrão do período: o ano atual inteiro (em outubro, 9 meses de histórico e 2 de horizonte).
-export function periodoPadrao(hoje = new Date()) {
-  const mes = hoje.getMonth() + 1;
-  return { historico: mes - 1, horizonte: 12 - mes };
-}
-export const filtrosVazios = () => ({ centros: [], documentos: [], naturezas: [], clientes: [], fornecedores: [], previsao: 'nao', ...periodoPadrao() });
-// Datas do período: do 1º dia do mês atual − histórico ao último dia do mês atual + horizonte.
-export function periodoDe(hojeIso, historico, horizonte) {
-  const a = +hojeIso.slice(0, 4);
-  const m = +hojeIso.slice(5, 7) - 1;
+export const filtrosVazios = () => ({ centros: [], documentos: [], naturezas: [], clientes: [], fornecedores: [], previsao: 'nao' });
+
+// Período padrão: o ano atual inteiro.
+export const periodoPadrao = (hojeIso) => ({ inicio: `${hojeIso.slice(0, 4)}-01-01`, fim: `${hojeIso.slice(0, 4)}-12-31` });
+const mesNum = (iso) => +iso.slice(0, 4) * 12 + +iso.slice(5, 7) - 1;
+const isoMes = (n, dia) => new Date(Date.UTC(Math.floor(n / 12), n % 12, dia)).toISOString().slice(0, 10);
+// Início = 1º dia do mês atual − histórico; Fim = último dia do mês atual + horizonte.
+export const inicioDe = (hojeIso, historico) => isoMes(mesNum(hojeIso) - historico, 1);
+export const fimDe = (hojeIso, horizonte) => isoMes(mesNum(hojeIso) + horizonte + 1, 0);
+// O contrário: os meses que um Início/Fim representam — null quando a data não é o começo (fim) de um
+// mês ou fica do outro lado do mês atual.
+export function mesesDoPeriodo(hojeIso, inicio, fim) {
+  const historico = mesNum(hojeIso) - mesNum(inicio);
+  const horizonte = mesNum(fim) - mesNum(hojeIso);
   return {
-    inicio: new Date(Date.UTC(a, m - historico, 1)).toISOString().slice(0, 10),
-    fim: new Date(Date.UTC(a, m + horizonte + 1, 0)).toISOString().slice(0, 10),
+    historico: inicio.slice(8) === '01' && historico >= 0 && historico <= MAX_MESES ? historico : null,
+    horizonte: fim === fimDe(fim, 0) && horizonte >= 0 && horizonte <= MAX_MESES ? horizonte : null,
   };
 }
+
 const LISTAS_FILTRO = ['centros', 'documentos', 'naturezas', 'clientes', 'fornecedores'];
-const meses = (v, padrao) => (Number.isInteger(v) && v >= 0 && v <= MAX_MESES ? v : padrao);
-export const normalizarFiltros = (f = {}) => {
-  const p = periodoPadrao();
-  return {
-    historico: meses(f.historico, p.historico),
-    horizonte: meses(f.horizonte, p.horizonte),
-    ...Object.fromEntries(LISTAS_FILTRO.map((k) => [k, [...(f[k] || [])].sort()])),
-    previsao: ['nao', 'sim', 'todos'].includes(f.previsao) ? f.previsao : 'nao',
-  };
-};
+const meses = (v) => (Number.isInteger(v) && v >= 0 && v <= MAX_MESES ? v : null);
+export const normalizarFiltros = (f = {}) => ({
+  historico: meses(f.historico),
+  horizonte: meses(f.horizonte),
+  ...Object.fromEntries(LISTAS_FILTRO.map((k) => [k, [...(f[k] || [])].sort()])),
+  previsao: ['nao', 'sim', 'todos'].includes(f.previsao) ? f.previsao : 'nao',
+});
 export const mesmosFiltros = (a, b) => JSON.stringify(normalizarFiltros(a)) === JSON.stringify(normalizarFiltros(b));
 // Quantos filtros do painel estão valendo (o centro de custo fica na barra).
 export const filtrosNoPainel = (f) => ['documentos', 'naturezas', 'clientes', 'fornecedores'].filter((k) => f[k]?.length).length + (f.previsao !== 'nao' ? 1 : 0);

@@ -1,9 +1,10 @@
-import { useMemo, useState } from 'react';
+import { useEffect, useMemo, useState } from 'react';
 import { Loader2, Save, Trash2, X } from 'lucide-react';
 import { useConfirm } from '../../../../confirm/ConfirmContext';
-import { filtrosVazios, titulo } from './modelo';
+import { MAX_MESES, dma, filtrosVazios, titulo } from './modelo';
 
-// Filtros do Aging List além da barra: o painel retrátil (botão "Filtros" ao lado do Exportar) com tipo
+// Filtros do Aging List além da barra: o painel retrátil (botão "Filtros" ao lado do Exportar) com o
+// período em meses (Histórico e Horizonte, que mudam o Início/Fim da barra e ficam no filtro salvo), tipo
 // de documento, plano de contas, cliente, fornecedor e previsão financeira, o "Gravar filtro" e o resumo dos
 // filtros valendo quando o painel está fechado. Os filtros salvos ficam no servidor, por usuário e
 // empresa (rotas /dashboards/:dashboard/:tela/filtros); a lista "Filtros salvos" fica na barra.
@@ -87,7 +88,42 @@ function ListaBusca({ id, rotulo, opcoes, valor, onChange, nota }) {
 
 // `salvoAtual`: o filtro salvo igual aos filtros de agora (ou null); `onGravar(nome)` e `onExcluir(salvo)`
 // devolvem promessas.
-export function PainelFiltros({ B, filtros, onFiltros, salvos, salvoAtual, onGravar, onExcluir, onFechar }) {
+// Histórico / Horizonte em meses (0 a MAX_MESES), com a data da barra que eles dão no rótulo. `valor`
+// null = a data da barra não é o começo (fim) de um mês: o campo fica vazio até informar os meses.
+function CampoMeses({ id, rotulo, valor, legenda, onChange, dica, semMeses }) {
+  const mostrar = valor === null || valor === undefined ? '' : String(valor);
+  const [texto, setTexto] = useState(mostrar);
+  useEffect(() => setTexto(mostrar), [mostrar]);
+  return (
+    <div className="ctl meses">
+      <label htmlFor={id}>
+        {rotulo} <span>{legenda}</span>
+      </label>
+      <div className="meses-campo" title={mostrar ? dica : semMeses}>
+        <input
+          id={id}
+          type="number"
+          inputMode="numeric"
+          min={0}
+          max={MAX_MESES}
+          placeholder="—"
+          value={texto}
+          onChange={(e) => {
+            setTexto(e.target.value);
+            const n = Number(e.target.value);
+            if (e.target.value !== '' && Number.isInteger(n) && n >= 0 && n <= MAX_MESES) onChange(n);
+          }}
+          onBlur={() => setTexto(mostrar)}
+        />
+        <span>meses</span>
+      </div>
+    </div>
+  );
+}
+
+// `meses` ({ historico, horizonte }) e `periodo` ({ inicio, fim }): o período da barra; `onMeses(patch)`
+// muda o Início/Fim a partir dos meses.
+export function PainelFiltros({ B, filtros, onFiltros, meses, periodo, onMeses, salvos, salvoAtual, onGravar, onExcluir, onFechar }) {
   const confirm = useConfirm();
   const opcoes = useMemo(() => opcoesFiltro(B), [B]);
   const [gravando, setGravando] = useState(false);
@@ -159,6 +195,24 @@ export function PainelFiltros({ B, filtros, onFiltros, salvos, salvoAtual, onGra
         />
       </div>
       <div className="fp-rodape">
+        <CampoMeses
+          id="f-historico"
+          rotulo="Histórico"
+          valor={meses.historico}
+          legenda={`desde ${dma(periodo.inicio)}`}
+          onChange={(n) => onMeses({ historico: n })}
+          dica="Meses para trás, antes do mês atual (0 = desde o 1º dia do mês atual). Muda o Início da barra e fica gravado no filtro salvo."
+          semMeses="O Início não é o 1º dia de um mês — informe os meses para alinhar"
+        />
+        <CampoMeses
+          id="f-horizonte"
+          rotulo="Horizonte"
+          valor={meses.horizonte}
+          legenda={`até ${dma(periodo.fim)}`}
+          onChange={(n) => onMeses({ horizonte: n })}
+          dica="Meses para frente, depois do mês atual (0 = até o último dia do mês atual). Muda o Fim da barra e fica gravado no filtro salvo."
+          semMeses="O Fim não é o último dia de um mês — informe os meses para alinhar"
+        />
         <div className="ctl">
           <span className="rot">Previsão financeira</span>
           <div className="seg" role="group" aria-label="Previsão financeira">
@@ -208,7 +262,7 @@ export function PainelFiltros({ B, filtros, onFiltros, salvos, salvoAtual, onGra
                   Excluir "{salvoAtual.nome}"
                 </button>
               )}
-              <button type="button" className="btn ghost" onClick={() => onFiltros({ ...filtrosVazios(), centros: filtros.centros, historico: filtros.historico, horizonte: filtros.horizonte })}>
+              <button type="button" className="btn ghost" onClick={() => onFiltros({ ...filtrosVazios(), centros: filtros.centros })}>
                 Limpar filtros
               </button>
               <button

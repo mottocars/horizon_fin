@@ -75,9 +75,10 @@ router.get('/economico-financeiro/aging', async (req, res, next) => {
 const lista = (item) => z.array(item).max(5000).default([]);
 const FILTROS_SALVOS = {
   'economico-financeiro/aging': z.object({
-    // Período em meses a partir do mês atual (para trás / para frente).
-    historico: z.number().int().min(0).max(360).optional(),
-    horizonte: z.number().int().min(0).max(360).optional(),
+    // Período em meses a partir do mês atual (para trás / para frente); ao aplicar o filtro, refaz o
+    // Início/Fim da tela. null = o filtro não mexe naquele lado do período.
+    historico: z.number().int().min(0).max(360).nullable().optional(),
+    horizonte: z.number().int().min(0).max(360).nullable().optional(),
     centros: lista(z.number().int()),
     documentos: lista(z.string().max(50)),
     naturezas: lista(z.string().max(50)),

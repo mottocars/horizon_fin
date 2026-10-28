@@ -6,7 +6,21 @@
   --avencer: var(--s-in);
 }
 
-/* Barra: período em meses (Histórico e Horizonte), com a data que resulta deles no rótulo */
+/* Barra: período (Início e Fim), no visual do campo de mês do Fluxo de Caixa */
+.painel-cfo.aging .ctl input[type='date'] {
+  height: var(--altura-filtro);
+  box-sizing: border-box;
+  padding: 0 8px;
+  border: 1px solid var(--line);
+  border-radius: 4px;
+  background: var(--surface-2);
+  color: var(--ink);
+  font-size: 14px;
+  font-family: inherit;
+  min-width: 140px;
+}
+
+/* Painel de filtros: o período em meses (Histórico e Horizonte), com a data que dá no rótulo */
 .painel-cfo.aging .ctl.meses label span {
   font-weight: 500;
   margin-left: 2px;
