@@ -197,20 +197,30 @@ function Faixa({ id, rotulo, valor, sufixo, min, max, step, onChange, dica }) {
 
 function situacao(sim, temBanco) {
   if (!temBanco) return { tom: 'warn', partes: ['Sem saldo lançado em ', { b: 'Saldo Contas Bancárias' }, ': a simulação parte de zero.'] };
-  if (sim.primeiroEstouro)
-    return {
-      tom: 'crit',
-      partes: ['O caixa passa do limite do cheque especial em ', { b: dm(sim.primeiroEstouro) }, '. Falta ', { b: brl(-(sim.min + sim.cheque)) }, ' no pior dia (', { b: dm(sim.minData) }, ').'],
-    };
+  // O cheque especial já está no saldo de partida: negativo = falta caixa mesmo usando todo ele.
   if (sim.primeiroNegativo)
     return {
-      tom: sim.cheque > 0 ? 'warn' : 'crit',
+      tom: 'crit',
       partes: [
-        'O caixa fica negativo em ',
+        'Falta caixa em ',
         { b: dm(sim.primeiroNegativo) },
-        sim.cheque > 0 ? ' e usa até ' : ': faltam ',
+        sim.cheque > 0 ? ', mesmo usando todo o cheque especial' : '',
+        ': faltam ',
         { b: brl(-sim.min) },
-        sim.cheque > 0 ? ` do cheque especial (${sim.diasNegativos} ${sim.diasNegativos === 1 ? 'dia' : 'dias'} no vermelho).` : ` no pior dia (${dm(sim.minData)}).`,
+        ' no pior dia (',
+        { b: dm(sim.minData) },
+        ').',
+      ],
+    };
+  if (sim.primeiroCheque)
+    return {
+      tom: 'warn',
+      partes: [
+        'O caixa entra no cheque especial em ',
+        { b: dm(sim.primeiroCheque) },
+        ' e usa até ',
+        { b: brl(sim.usoCheque) },
+        ` dele (${sim.diasNoCheque} ${sim.diasNoCheque === 1 ? 'dia' : 'dias'} no cheque).`,
       ],
     };
   return { tom: 'good', partes: ['O caixa cobre o período: o menor saldo é ', { b: brl(sim.min) }, ' em ', { b: dm(sim.minData) }, '.'] };
@@ -269,7 +279,7 @@ export function Simulador({ E }) {
             <div>
               <span>Saldo de partida</span>
               <strong>{brl(sim.ini)}</strong>
-              <small>{temBanco ? `${p.partida === 'total' ? 'todas as contas' : 'caixa livre'} em ${dm(E.banco.data)}` : 'sem saldo lançado'}</small>
+              <small>{temBanco ? `${p.partida === 'total' ? 'liberado + bloqueado' : 'caixa livre'} em ${dm(E.banco.data)}` : 'sem saldo lançado'}</small>
             </div>
             <div>
               <span>Entradas</span>
@@ -343,7 +353,7 @@ export function Simulador({ E }) {
               Saldo de partida
               <select id="s-part" value={p.partida} onChange={(e) => mudar({ partida: e.target.value })} disabled={!temBanco}>
                 <option value="livre">Caixa livre</option>
-                <option value="total">Todas as contas</option>
+                <option value="total">Liberado + bloqueado</option>
               </select>
             </label>
           </div>

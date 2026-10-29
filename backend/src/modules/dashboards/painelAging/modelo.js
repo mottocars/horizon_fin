@@ -80,22 +80,30 @@ const nomeCondicao = (B, id) => (id ? titulo(B.condicoes[id] || id) : 'Sem condi
 const nomeDocumento = (B, id) => (id ? titulo(B.documentos[id] || id) : 'Sem documento');
 const rotuloPessoa = (lado, plural = false) => (lado === 'r' ? (plural ? 'clientes' : 'Cliente') : plural ? 'fornecedores' : 'Fornecedor');
 
-// Saldo das contas (o formato do backend) separado em caixa livre, bloqueado e crédito, como a tela
-// Saldo Contas Bancárias: livre = contas de classificação liberada, menos o bloqueio registrado (pode
-// ficar negativo se a conta está no vermelho); bloqueado = contas de classificação bloqueada + bloqueios
-// registrados nas outras; cheque = limite do cheque especial das contas liberadas; total = todas.
+// Saldo das contas (o formato do backend) com a regra do Resumo dos saldos da tela Saldo Contas
+// Bancárias (backend/.../saldo-contas-bancarias/resumoSaldos.calculo.js — mudou lá, muda aqui):
+// - livre = o Total liberado, tudo o que dá para usar no dia: nas contas de classificação liberada,
+//   saldo menos o bloqueio registrado (só a parte positiva) + o limite restante do cheque especial
+//   (saldo negativo já sai do limite: -200 com limite 500 -> 300);
+// - cheque = quanto do livre é cheque especial (os limites restantes das contas liberadas);
+// - bloqueado = contas de classificação bloqueada + bloqueios registrados nas outras;
+// - total = livre + bloqueado.
 function caixa(contas) {
-  const r = { livre: 0, bloqueado: 0, cheque: 0, total: 0, contas: contas.length };
+  const c100 = (v) => Math.round(Number(v) * 100);
+  let livre = 0;
+  let cheque = 0;
+  let bloqueado = 0;
   contas.forEach((c) => {
-    r.total += c.saldo;
+    const saldo = c100(c.saldo);
+    const bloqueio = c100(c.bloqueio);
+    const restante = c.limite > 0 ? c100(c.limite) + Math.min(saldo, 0) : 0;
     if (c.libera === true) {
-      r.livre += c.saldo - c.bloqueio;
-      r.cheque += c.limite;
-      r.bloqueado += c.bloqueio;
-    } else if (c.libera === false) r.bloqueado += c.saldo;
-    else r.bloqueado += c.bloqueio;
+      livre += Math.max(saldo - bloqueio, 0) + restante;
+      cheque += restante;
+    }
+    bloqueado += c.libera === false ? saldo : bloqueio;
   });
-  return r;
+  return { livre: livre / 100, cheque: cheque / 100, bloqueado: bloqueado / 100, total: (livre + bloqueado) / 100, contas: contas.length };
 }
 
 // ─── Filtros (barra e painel de filtros) ─────────────────────────────────────────────────────────
@@ -254,7 +262,7 @@ function indicadores(E) {
       titulo: 'Caixa livre hoje',
       valor_fmt: banco.data ? brl(banco.livre) : '–',
       detalhe: banco.data
-        ? ['em ', { b: dm(banco.data) }, ' · ', { b: brl(banco.cheque) }, ' de cheque especial · ', { b: brl(banco.bloqueado) }, ' bloqueado']
+        ? ['em ', { b: dm(banco.data) }, ...(banco.cheque ? [' · inclui ', { b: brl(banco.cheque) }, ' de cheque especial'] : [' · sem cheque especial'])]
         : ['sem saldo lançado em Saldo Contas Bancárias'],
       etiqueta: banco.data ? etiqueta(banco.livre < 0 ? 'crit' : 'info', `${banco.contas} contas`) : etiqueta('warn', 'Sem saldo'),
     },
@@ -290,9 +298,9 @@ function indicadores(E) {
       detalhe: [...(banco.data ? [] : ['partindo de zero · ']), 'em ', { b: dm(sim.minData) }, ' · fecha com ', { b: brl(sim.final) }],
       etiqueta: !banco.data
         ? etiqueta('warn', 'Sem saldo de partida')
-        : sim.min < -sim.cheque
+        : sim.min < 0
           ? etiqueta('crit', 'Falta caixa')
-          : sim.min < 0
+          : sim.min < sim.cheque
             ? etiqueta('warn', 'Usa cheque especial')
             : etiqueta('good', 'Caixa cobre'),
     },
@@ -460,7 +468,9 @@ function maiores(E, lado, quais, n = 10) {
 // - atrasoReceb: dias de atraso nos recebimentos;
 // - recuperar: % do vencido a receber de até 90 dias que entra, dividido pelos dias úteis do período;
 // - semCaixa: permutas e "Não cobrar" não entram no banco;
-// - partida: 'livre' (contas liberadas, menos bloqueios) ou 'total' (todas as contas).
+// - partida: 'livre' (o Total liberado, com o cheque especial dentro) ou 'total' (liberado + bloqueado).
+// Como o cheque especial já está no saldo de partida, saldo negativo = falta caixa; abaixo do valor do
+// cheque (`cheque`) = o caixa próprio acabou e o cheque especial está sendo usado.
 const CENARIOS = {
   previsto: { rotulo: 'Previsto', naoReceber: 0, atrasoReceb: 0, recuperar: 0 },
   conservador: { rotulo: 'Conservador', naoReceber: 10, atrasoReceb: 5, recuperar: 0 },
@@ -513,7 +523,7 @@ function simular(E, params) {
   let min = Infinity;
   let minData = null;
   let primeiroNegativo = null;
-  let primeiroEstouro = null;
+  let primeiroCheque = null;
   dia.forEach((d) => {
     d.ini = saldo;
     saldo += d.ent - d.sai;
@@ -523,7 +533,7 @@ function simular(E, params) {
       minData = d.data;
     }
     if (saldo < 0 && !primeiroNegativo) primeiroNegativo = d.data;
-    if (saldo < -banco.cheque && !primeiroEstouro) primeiroEstouro = d.data;
+    if (banco.cheque > 0 && saldo < banco.cheque && !primeiroCheque) primeiroCheque = d.data;
   });
   return {
     p,
@@ -536,9 +546,11 @@ function simular(E, params) {
     minData,
     cheque: banco.cheque,
     primeiroNegativo,
-    primeiroEstouro,
-    necessidade: Math.max(0, -min), // para o caixa não ficar negativo
+    primeiroCheque,
+    usoCheque: Math.min(banco.cheque, Math.max(0, banco.cheque - min)), // o máximo do cheque especial usado
+    necessidade: Math.max(0, -min), // para o caixa não ficar negativo (já usando todo o cheque especial)
     diasNegativos: dia.filter((d) => d.fim < 0).length,
+    diasNoCheque: banco.cheque > 0 ? dia.filter((d) => d.fim < banco.cheque).length : 0,
     recuperavel,
     semCaixa,
   };

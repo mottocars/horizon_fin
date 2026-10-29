@@ -280,6 +280,9 @@ function simulacao(E, p) {
     }
   });
   const primeiro = (cond) => dias.find(cond)?.data || null;
+  // O cheque especial já está no saldo de partida (caixa livre = Total liberado): abaixo do valor dele,
+  // o caixa próprio acabou e o cheque está sendo usado; negativo = falta caixa mesmo usando todo o cheque.
+  const { cheque } = sim;
   return {
     sim,
     dias,
@@ -288,7 +291,9 @@ function simulacao(E, p) {
     min,
     minData,
     primeiroNegativo: primeiro((d) => d.fim < 0),
-    primeiroEstouro: sim.cheque > 0 ? primeiro((d) => d.fim < -sim.cheque) : null,
+    primeiroCheque: cheque > 0 ? primeiro((d) => d.fim < cheque) : null,
+    usoCheque: Math.min(cheque, Math.max(0, cheque - min)),
+    diasNoCheque: cheque > 0 ? dias.filter((d) => d.fim < cheque).length : 0,
     primeiroAbaixoMinimo: minimo ? primeiro((d) => d.fim < minimo) : null,
     necessidade: Math.max(0, minimo - min),
     diasNegativos: dias.filter((d) => d.fim < 0).length,
@@ -329,9 +334,10 @@ function serie(dias, agrupar) {
 
 function situacaoTexto(s, temBanco, minimo) {
   if (!temBanco) return 'Sem saldo lançado em Saldo Contas Bancárias: a simulação parte de zero (só o efeito das parcelas).';
-  if (s.primeiroEstouro) return `Passa do limite do cheque especial em ${M.dma(s.primeiroEstouro)}; no pior dia (${M.dma(s.minData)}) faltam ${M.brl(-(s.min + s.sim.cheque))} além do limite.`;
   if (s.primeiroNegativo)
-    return `Fica negativo em ${M.dma(s.primeiroNegativo)} (${s.diasNegativos} dia(s) no vermelho; menor saldo ${M.brl(s.min)} em ${M.dma(s.minData)})${s.sim.cheque > 0 ? ', dentro do limite do cheque especial' : ''}.`;
+    return `Falta caixa em ${M.dma(s.primeiroNegativo)}${s.sim.cheque > 0 ? ', mesmo usando todo o cheque especial' : ''}: no pior dia (${M.dma(s.minData)}) faltam ${M.brl(-s.min)} (${s.diasNegativos} dia(s) no vermelho).`;
+  if (s.primeiroCheque)
+    return `Entra no cheque especial em ${M.dma(s.primeiroCheque)} e usa até ${M.brl(s.usoCheque)} dele (${s.diasNoCheque} dia(s) no cheque); não chega a faltar caixa.`;
   if (s.primeiroAbaixoMinimo) return `Fica abaixo do mínimo de ${M.brl(minimo)} em ${M.dma(s.primeiroAbaixoMinimo)}; faltam ${M.brl(s.necessidade)}.`;
   return `O caixa cobre o período: menor saldo ${M.brl(s.min)} em ${M.dma(s.minData)}.`;
 }
@@ -345,7 +351,10 @@ const CENARIO = {
   atraso_recebimentos_dias: z.number().int().min(0).max(120).optional().describe('Dias de atraso em todas as entradas.'),
   recuperar_vencido_pct: z.number().min(0).max(100).optional().describe('% do vencido a receber de até 90 dias que entra, dividido pelos dias úteis.'),
   permutas_nao_entram: z.boolean().optional().describe('Permutas e "Não cobrar" não viram dinheiro (padrão true).'),
-  partida: z.enum(['livre', 'total']).optional().describe('Saldo de partida: livre = contas de saldo liberado menos bloqueios (padrão); total = todas as contas.'),
+  partida: z
+    .enum(['livre', 'total'])
+    .optional()
+    .describe('Saldo de partida: livre = caixa livre, o Total liberado da tela Saldo Contas Bancárias, com o cheque especial dentro (padrão); total = liberado + bloqueado.'),
   aporte: z.number().optional().describe('Dinheiro novo no primeiro dia (aporte, captação), em R$.'),
   saldo_minimo: z.number().optional().describe('Saldo mínimo de segurança, em R$ (para a necessidade de caixa).'),
 };
@@ -372,11 +381,13 @@ function partidaInfo(banco) {
   return {
     data: M.dma(banco.data),
     caixa_livre: r2(banco.livre),
+    dos_quais_cheque_especial: r2(banco.cheque),
     bloqueado: r2(banco.bloqueado),
-    cheque_especial_limite: r2(banco.cheque),
-    todas_as_contas: r2(banco.total),
+    liberado_mais_bloqueado: r2(banco.total),
     contas: banco.contas,
-    regra: 'Caixa livre = saldo das contas de classificação LIBERADA menos os bloqueios registrados; bloqueado = contas de classificação BLOQUEADA + bloqueios; cheque especial = limite das contas liberadas (só no dia com período aberto).',
+    regra:
+      'Caixa livre = o Total liberado da tela Saldo Contas Bancárias, tudo o que dá para usar no dia: nas contas de classificação LIBERADA, (saldo − bloqueio, só se positivo) + limite restante do cheque especial (saldo negativo já sai do limite: −200 com limite 500 → 300; o limite só conta no dia com período aberto). ' +
+      'dos_quais_cheque_especial = quanto do caixa livre é cheque especial. Bloqueado = contas de classificação BLOQUEADA + bloqueios registrados (fora do caixa livre).',
   };
 }
 
@@ -409,8 +420,8 @@ const guia = {
       '- **Rateio**: cada parcela pode ser rateada entre centros de custo e contas do plano de contas; cada fatia leva a fração dela (a soma bate com o saldo). Filtros de centro e plano de contas pegam só as fatias.',
       '- **Previsões financeiras** (de contrato de medição, pedido de compra…) ficam FORA por padrão: o documento real que as substitui também está no Sienge e somar os dois duplica.',
       '- **Período**: a tela abre com o ano atual (vencimento de 01/01 a 31/12). Nas ferramentas, sem período = toda a carteira em aberto; use inicio/fim, historico_meses/horizonte_meses (como o painel de filtros) ou periodo_da_tela=true.',
-      '- **Saldo das contas**: vem de Operações › Saldo Contas Bancárias, último dia lançado até hoje. Caixa livre = contas de classificação liberada menos bloqueios; bloqueado = contas bloqueadas + bloqueios; cheque especial = limite das contas liberadas.',
-      '- **Projeção de caixa**: parte do caixa livre (ou de todas as contas) e, dia a dia, recebe e paga o que vence (fim de semana cai na segunda; feriados não são tratados). O vencido a pagar não entra; o vencido a receber só entra pela recuperação (% do vencido de até 90 dias, dividido pelos dias úteis). Permutas e "Não cobrar" não viram dinheiro.',
+      '- **Saldo das contas**: vem de Operações › Saldo Contas Bancárias, último dia lançado até hoje. **Caixa livre = o Total liberado** daquela tela, tudo o que dá para usar no dia para pagar as contas: nas contas de classificação liberada, saldo menos bloqueios (só a parte positiva) + o limite restante do cheque especial. Sempre diga quanto do caixa livre é cheque especial. Bloqueado (contas bloqueadas + bloqueios) fica fora.',
+      '- **Projeção de caixa**: parte do caixa livre (ou do liberado + bloqueado) e, dia a dia, recebe e paga o que vence (fim de semana cai na segunda; feriados não são tratados). O vencido a pagar não entra; o vencido a receber só entra pela recuperação (% do vencido de até 90 dias, dividido pelos dias úteis). Permutas e "Não cobrar" não viram dinheiro. Como o cheque especial já está no saldo de partida: saldo abaixo do valor do cheque = usando o cheque especial; saldo negativo = falta caixa mesmo usando todo o cheque.',
       '- Cliente filtra só o a receber; fornecedor, só o a pagar. Empresa (SPE) filtra as parcelas e o saldo bancário dela.',
       '',
       '## Qual ferramenta usar',
@@ -480,6 +491,7 @@ const painel = {
         vencido_liquido: r2(es.vencidoLiq),
         liquido_hoje_a_30_dias: r2(es.trintaLiq),
         caixa_livre_hoje: E.banco.data ? r2(E.banco.livre) : null,
+        ...(E.banco.cheque ? { dos_quais_cheque_especial: r2(E.banco.cheque) } : {}),
         faixas: es.linhas.map((l) => ({
           faixa: l.rotulo,
           a_receber: r2(l.r),
@@ -647,7 +659,8 @@ const projecao = {
     'Projeção do caixa integrando o saldo das contas bancárias (Saldo Contas Bancárias, último dia lançado) com o contas a ' +
     'receber e a pagar: dia a dia, recebe e paga o que vence (fim de semana na segunda), com cenários (previsto, conservador, ' +
     'estresse) e ajustes (não receber X%, atrasar recebimentos, recuperar vencido, aporte, saldo mínimo). Até 365 dias, por dia, ' +
-    'semana ou mês. Diz quando o caixa fica negativo, quando passa do cheque especial, o menor saldo e a necessidade de caixa. ' +
+    'semana ou mês. Parte do caixa livre (o Total liberado, com o cheque especial dentro). Diz quando entra no cheque especial e quanto usa dele, ' +
+    'quando falta caixa (saldo negativo, já sem cheque), o menor saldo e a necessidade de caixa. ' +
     'Com por_empresa=true, faz a projeção de cada SPE com o saldo das contas dela e mostra quais faltam caixa e quando. ' +
     'detalhar_dia lista as parcelas de um dia.',
   inputSchema: {
@@ -676,7 +689,7 @@ const projecao = {
         atraso_recebimentos_dias: p.atrasoReceb,
         recuperar_vencido_pct: p.recuperar,
         permutas_nao_entram: p.semCaixa,
-        partida: p.partida === 'total' ? 'todas as contas' : 'caixa livre',
+        partida: p.partida === 'total' ? 'liberado + bloqueado' : 'caixa livre (Total liberado)',
         ...(p.aporte ? { aporte: r2(p.aporte) } : {}),
         ...(p.minimo ? { saldo_minimo: r2(p.minimo) } : {}),
       },
@@ -689,8 +702,10 @@ const projecao = {
         saldo_no_fim: r2(s.final),
         menor_saldo: r2(s.min),
         dia_do_menor_saldo: M.dma(s.minData),
-        fica_negativo_em: s.primeiroNegativo ? M.dma(s.primeiroNegativo) : null,
-        passa_do_cheque_especial_em: s.primeiroEstouro ? M.dma(s.primeiroEstouro) : null,
+        entra_no_cheque_especial_em: s.primeiroCheque ? M.dma(s.primeiroCheque) : null,
+        maior_uso_do_cheque_especial: r2(s.usoCheque),
+        dias_no_cheque_especial: s.diasNoCheque,
+        falta_caixa_em: s.primeiroNegativo ? M.dma(s.primeiroNegativo) : null,
         dias_no_vermelho: s.diasNegativos,
         necessidade_de_caixa: r2(s.necessidade),
         vencido_a_receber_ate_90_dias: r2(s.sim.recuperavel),
@@ -744,13 +759,14 @@ const projecao = {
             empresa: M.nomeEmpresa(B, id),
             company_id: id,
             caixa_livre_hoje: r2(Ec.banco.livre),
-            ...(Ec.banco.cheque ? { cheque_especial: r2(Ec.banco.cheque) } : {}),
+            ...(Ec.banco.cheque ? { dos_quais_cheque_especial: r2(Ec.banco.cheque) } : {}),
             entradas: r2(M.soma(sc.dias.map((d) => d.ent))),
             saidas: r2(-M.soma(sc.dias.map((d) => d.sai))),
             saldo_no_fim: r2(sc.final),
             menor_saldo: r2(sc.min),
             dia_do_menor_saldo: M.dma(sc.minData),
-            fica_negativo_em: sc.primeiroNegativo ? M.dma(sc.primeiroNegativo) : null,
+            entra_no_cheque_especial_em: sc.primeiroCheque ? M.dma(sc.primeiroCheque) : null,
+            falta_caixa_em: sc.primeiroNegativo ? M.dma(sc.primeiroNegativo) : null,
           };
         })
         .filter((x) => x.entradas || x.saidas || x.caixa_livre_hoje)

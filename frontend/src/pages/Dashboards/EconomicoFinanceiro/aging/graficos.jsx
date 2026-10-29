@@ -4,7 +4,8 @@ import { eixo, niceTicks } from '../fluxo/modelo';
 import { brl, dm, semana } from './modelo';
 
 // Gráfico do simulador do Aging List: o caixa dia a dia — entradas (para cima) e saídas (para baixo)
-// de cada dia, a linha do saldo no fim do dia e o piso do cheque especial.
+// de cada dia, a linha do saldo no fim do dia e — quando o saldo desce até ele — o valor do cheque especial
+// que está dentro do saldo (abaixo da linha, o caixa está usando o cheque).
 // Fim de semana em faixa cinza (o que vence nele cai na segunda). Clicar num dia abre as parcelas dele.
 export function CaixaDiario({ sim, diaSel, onDia }) {
   const [ref, W] = useLargura();
@@ -14,7 +15,7 @@ export function CaixaDiario({ sim, diaSel, onDia }) {
   const n = dias.length;
   const H = W < 560 ? 250 : 300;
   const m = { l: 58, r: 14, t: 18, b: 32 };
-  const piso = sim.min < 0 && cheque > 0 ? -cheque : null;
+  const piso = cheque > 0 && sim.min < cheque ? cheque : null;
   const valores = [ini, 0, ...dias.flatMap((d) => [d.fim, d.ent, -d.sai]), ...(piso !== null ? [piso] : [])];
   const ymin = Math.min(...valores) * 1.08;
   const ymax = Math.max(...valores) * 1.08 || 1;
@@ -57,7 +58,7 @@ export function CaixaDiario({ sim, diaSel, onDia }) {
           <>
             <line x1={m.l} x2={W - m.r} y1={y(piso)} y2={y(piso)} stroke="#8a5a00" strokeWidth={1.5} strokeDasharray="6 4" />
             <text x={W - m.r - 4} y={y(piso) + 14} textAnchor="end" style={{ fill: '#8a5a00' }}>
-              fim do cheque especial {eixo(piso)}
+              abaixo daqui, cheque especial ({eixo(piso)})
             </text>
           </>
         )}
