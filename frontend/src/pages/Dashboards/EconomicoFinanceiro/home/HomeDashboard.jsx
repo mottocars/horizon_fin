@@ -62,7 +62,7 @@ export default function HomeDashboard() {
 
       <div className="home-ef__titulo">
         <h1>
-          <span className="home-ef__script">Dashboards</span>
+          <span className="home-ef__marca">Dashboards</span>
           <span className="home-ef__divisor" aria-hidden="true">
             <i />
             <b />

@@ -9,7 +9,7 @@
   --menu: 368px;
   --tam: min(94cqh, 62cqw);
   --vao: calc(100cqw - var(--menu) - var(--tam) * 0.66);
-  --titulo: clamp(46px, calc(var(--vao) * 0.21), 136px);
+  --titulo: clamp(40px, calc(var(--vao) * 0.14), 100px);
   position: relative;
   height: 100%;
   min-height: 520px;
@@ -70,12 +70,13 @@
   align-items: center;
   margin: 0;
 }
-.home-ef__script {
-  font-family: 'Great Vibes', 'Segoe Script', cursive;
-  font-weight: 400;
+.home-ef__marca {
+  font-family: var(--font-display);
+  font-stretch: 112%;
+  font-weight: 800;
   font-size: var(--titulo);
-  line-height: 1.05;
-  padding: 0 0.12em;
+  line-height: 1;
+  letter-spacing: -0.015em;
   background: linear-gradient(180deg, #ffffff 30%, #d7e6ff 100%);
   -webkit-background-clip: text;
   background-clip: text;
@@ -108,7 +109,7 @@
   font-family: var(--font-display);
   font-stretch: 118%;
   font-weight: 700;
-  font-size: clamp(11px, calc(var(--titulo) * 0.19), 26px);
+  font-size: clamp(11px, calc(var(--titulo) * 0.24), 24px);
   letter-spacing: 0.32em;
   margin-right: -0.32em; /* o espaçamento da última letra não descentraliza */
   text-transform: uppercase;
@@ -123,7 +124,7 @@
     --tam: min(72cqh, 92cqw);
   }
   .home-ef__titulo {
-    --titulo: clamp(44px, 12cqw, 96px);
+    --titulo: clamp(36px, 8cqw, 72px);
     left: 16px;
     right: 16px;
     top: 28px;
