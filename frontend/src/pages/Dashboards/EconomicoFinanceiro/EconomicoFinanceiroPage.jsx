@@ -1,6 +1,6 @@
 import { useEffect, useMemo, useState } from 'react';
 import { useSearchParams } from 'react-router-dom';
-import { BarChart3, CalendarClock, FileSearch, Landmark, Wallet } from 'lucide-react';
+import { BarChart3, CalendarClock, FileSearch, House, Landmark, Wallet } from 'lucide-react';
 import ControlesDashboard from '../ControlesDashboard';
 import CabecalhoDashboard from '../CabecalhoDashboard';
 import { getTelaFavorita, salvarTelaFavorita } from '../../../api/dashboards.api';
@@ -9,17 +9,20 @@ import { nomeExibicaoEmpresa } from '../../../utils/empresa';
 import { useEmpresaTravada } from '../../../hooks/useEmpresaTravada';
 import FluxoCaixaPainel from './fluxo/FluxoCaixaPainel';
 import AgingPainel from './aging/AgingPainel';
+import HomeDashboard from './home/HomeDashboard';
 
 // Dashboards > Econômico Financeiro — a tela inteira é do dashboard (só o menu lateral fica, ver
 // AppShell.jsx): cabeçalho (nome do dashboard, título da tela e o contexto dos dados) e o conteúdo
 // ocupando o resto; o botão de menu abre o painel com as telas.
 // Tela aberta: a da URL (?tela=); sem ela, a favorita do usuário (estrela, gravada no servidor);
-// sem favorita, a primeira da lista (pedido do usuário).
+// sem favorita, a primeira da lista (pedido do usuário) — a Home, que abre com o menu de telas aberto.
+// Enquanto a favorita não chega, nada é desenhado (para o menu não abrir na Home e a tela trocar em seguida).
 // Fluxo de Caixa: painel no layout do painel do CFO (fluxo/FluxoCaixaPainel.jsx), com os filtros na
 // barra de controles dele. Aging List: no mesmo layout (aging/AgingPainel.jsx). A empresa fica na URL
 // (?empresa_id=), como nas outras telas. As demais telas ainda serão construídas.
 const DASHBOARD = 'economico-financeiro';
 const TELAS = [
+  { id: 'home', label: 'Home', icon: House },
   { id: 'dre', label: 'Demonstração do Resultado', icon: BarChart3 },
   { id: 'fluxo-caixa', label: 'Fluxo de Caixa', icon: Wallet },
   { id: 'aging', label: 'Aging List', icon: CalendarClock },
@@ -30,7 +33,7 @@ const existe = (id) => TELAS.some((t) => t.id === id);
 
 export default function EconomicoFinanceiroPage() {
   const [params, setParams] = useSearchParams();
-  const [favorita, setFavorita] = useState(null);
+  const [favorita, setFavorita] = useState(undefined); // undefined = carregando
   const { travada: empresaTravada, empresaIdTravada } = useEmpresaTravada();
 
   function atualizarParams(patch) {
@@ -51,7 +54,7 @@ export default function EconomicoFinanceiroPage() {
   }, []);
 
   const daUrl = params.get('tela');
-  const telaAtiva = existe(daUrl) ? daUrl : favorita || TELAS[0].id;
+  const telaAtiva = existe(daUrl) ? daUrl : favorita === undefined ? null : favorita || TELAS[0].id;
   const tela = TELAS.find((t) => t.id === telaAtiva);
 
   function favoritar(id) {
@@ -83,9 +86,13 @@ export default function EconomicoFinanceiroPage() {
   const empresaAtual = empresas.find((e) => String(e.id) === String(empresaId));
   const marcaEmpresa = empresaAtual ? { logo: empresaAtual.logo || null, nome: nomeExibicaoEmpresa(empresaAtual) } : null;
 
+  if (!tela) return null;
+  const home = telaAtiva === 'home';
   return (
-    <div className="flex min-h-full w-full flex-col gap-3 p-5">
-      {telaAtiva === 'fluxo-caixa' ? (
+    <div className={home ? 'h-full w-full' : 'flex min-h-full w-full flex-col gap-3 p-5'}>
+      {home ? (
+        <HomeDashboard />
+      ) : telaAtiva === 'fluxo-caixa' ? (
         <FluxoCaixaPainel
           dashboard="Econômico Financeiro"
           tituloTela={tela.label}
@@ -117,6 +124,7 @@ export default function EconomicoFinanceiroPage() {
         onTela={(id) => atualizarParams({ tela: id })}
         telaFavorita={favorita}
         onFavoritar={favoritar}
+        abertoInicial={home}
       />
     </div>
   );

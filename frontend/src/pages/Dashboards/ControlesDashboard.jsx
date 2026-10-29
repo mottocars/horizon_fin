@@ -11,6 +11,7 @@ import { LayoutGrid, Menu, SlidersHorizontal, Star, X } from 'lucide-react';
 // - `telas`: [{ id, label, icon? }]; `telaAtiva` / `onTela(id)`.
 // - `telaFavorita` / `onFavoritar(id | null)`: a estrela de cada tela (a favorita abre primeiro).
 // - `filtros`: conteúdo da seção Filtros (opcional — o Fluxo de Caixa tem os filtros na própria tela).
+// - `abertoInicial`: já entra com o painel aberto (a Home do Econômico Financeiro).
 // Fecha no botão (que vira X) ou com Esc.
 
 const DURACAO_FECHAR = 240; // = animate-barra-desce (styles/index.css)
@@ -95,9 +96,9 @@ function Painel({ fechando, telas, telaAtiva, onTela, telaFavorita, onFavoritar,
   );
 }
 
-export default function ControlesDashboard({ telas = [], telaAtiva, onTela, telaFavorita, onFavoritar, filtros }) {
+export default function ControlesDashboard({ telas = [], telaAtiva, onTela, telaFavorita, onFavoritar, filtros, abertoInicial = false }) {
   const [camada, setCamada] = useState(null);
-  const [aberto, setAberto] = useState(false);
+  const [aberto, setAberto] = useState(abertoInicial);
   const [fechando, setFechando] = useState(false);
   const timer = useRef(null);
 
