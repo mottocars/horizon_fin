@@ -118,11 +118,16 @@ async function montar(empresaId, a, ctx) {
   const salvo = a.filtro_salvo ? await filtroSalvo(empresaId, ctx.usuarioId, a.filtro_salvo) : null;
   const f = salvo ? { ...salvo } : M.filtrosVazios();
   const cat = B0.catalogos || {};
+  // Lista informada aqui substitui a do filtro salvo (e sai do "todos, menos" dele).
+  const trocar = (k, valor) => {
+    f[k] = valor;
+    f.exceto = f.exceto.filter((x) => x !== k);
+  };
   if (a.centros?.length) f.centros = await resolverCentros(empresaId, a.centros);
-  if (a.planos_de_contas?.length) f.naturezas = await Promise.all(a.planos_de_contas.map(async (p) => String((await resolverNatureza(empresaId, p)).sienge_id)));
-  if (a.documentos?.length) f.documentos = resolverLista({ ...B0.documentos, ...cat.documentos }, a.documentos, 'tipo de documento', false);
-  if (a.clientes?.length) f.clientes = resolverLista({ ...B0.pessoas.r, ...cat.clientes }, a.clientes, 'cliente', true);
-  if (a.fornecedores?.length) f.fornecedores = resolverLista({ ...B0.pessoas.p, ...cat.fornecedores }, a.fornecedores, 'fornecedor', true);
+  if (a.planos_de_contas?.length) trocar('naturezas', await Promise.all(a.planos_de_contas.map(async (p) => String((await resolverNatureza(empresaId, p)).sienge_id))));
+  if (a.documentos?.length) trocar('documentos', resolverLista({ ...B0.documentos, ...cat.documentos }, a.documentos, 'tipo de documento', false));
+  if (a.clientes?.length) trocar('clientes', resolverLista({ ...B0.pessoas.r, ...cat.clientes }, a.clientes, 'cliente', true));
+  if (a.fornecedores?.length) trocar('fornecedores', resolverLista({ ...B0.pessoas.p, ...cat.fornecedores }, a.fornecedores, 'fornecedor', true));
   if (a.previsao) f.previsao = a.previsao;
 
   // Período: datas > meses informados > meses do filtro salvo > período da tela > toda a carteira.
@@ -162,15 +167,18 @@ async function montar(empresaId, a, ctx) {
   const E = M.escopo(B, { inicio, fim, ...f });
 
   const nomesDe = (lista, fn) => (lista.length > 6 ? [...lista.slice(0, 6).map(fn), `e mais ${lista.length - 6}`] : lista.map(fn));
+  // Lista do painel no "todos, menos" (filtro salvo com "Marcar todos"): diz quais ficaram de fora.
+  const daLista = (k, rotulo, fn) =>
+    f[k].length ? { [f.exceto.includes(k) ? `${rotulo}_todos_menos` : rotulo]: nomesDe(f[k], fn) } : {};
   const aplicado = {
     periodo_vencimento: inicio || fim ? `${inicio ? M.dma(inicio) : 'qualquer data'} a ${fim ? M.dma(fim) : 'qualquer data'}` : 'toda a carteira em aberto',
     ...(salvo ? { filtro_salvo: salvo.nome } : {}),
     ...(f.centros.length ? { centros: nomesDe(f.centros, (id) => M.nomeCentro(B0, id)) } : {}),
     ...(empresas.length ? { empresas: nomesDe(empresas, (id) => M.nomeEmpresa(B0, id)) } : {}),
-    ...(f.naturezas.length ? { planos_de_contas: nomesDe(f.naturezas, (id) => M.nomeNatureza(B0, id)) } : {}),
-    ...(f.documentos.length ? { documentos: nomesDe(f.documentos, (id) => M.nomeDocumento(B0, id)) } : {}),
-    ...(f.clientes.length ? { clientes: nomesDe(f.clientes, (id) => M.nomePessoa(B0, 'r', id)) } : {}),
-    ...(f.fornecedores.length ? { fornecedores: nomesDe(f.fornecedores, (id) => M.nomePessoa(B0, 'p', id)) } : {}),
+    ...daLista('naturezas', 'planos_de_contas', (id) => M.nomeNatureza(B0, id)),
+    ...daLista('documentos', 'documentos', (id) => M.nomeDocumento(B0, id)),
+    ...daLista('clientes', 'clientes', (id) => M.nomePessoa(B0, 'r', id)),
+    ...daLista('fornecedores', 'fornecedores', (id) => M.nomePessoa(B0, 'p', id)),
     previsoes_financeiras: { nao: 'fora (padrão)', sim: 'só as previsões', todos: 'documentos e previsões' }[f.previsao],
   };
   return { B: B0, E, f, aplicado, inicio, fim, empresas };
@@ -440,7 +448,9 @@ const guia = {
               const partes = [
                 f.historico !== null ? `${f.historico} meses de histórico` : null,
                 f.horizonte !== null ? `${f.horizonte} de horizonte` : null,
-                ...['centros', 'documentos', 'naturezas', 'clientes', 'fornecedores'].filter((k) => f[k].length).map((k) => `${f[k].length} ${k === 'naturezas' ? 'planos de contas' : k}`),
+                ...['centros', 'documentos', 'naturezas', 'clientes', 'fornecedores']
+                  .filter((k) => f[k].length)
+                  .map((k) => `${f.exceto.includes(k) ? 'todos menos ' : ''}${f[k].length} ${k === 'naturezas' ? 'planos de contas' : k}`),
                 f.previsao !== 'nao' ? `previsão: ${f.previsao}` : null,
               ].filter(Boolean);
               return `- **${s.nome}**: ${partes.join(', ') || 'sem filtros'} (use filtro_salvo: "${s.nome}")`;
@@ -785,10 +795,21 @@ const BAIXAS = {
   r: { tabela: 'sie_income_recebimentos', parcelas: 'sie_income', categorias: 'sie_income_categorias', pessoa: 'client', caixa: [2, 10], nomeCaixa: 'Recebimento' },
   p: { tabela: 'sie_outcome_pagamentos', parcelas: 'sie_outcome', categorias: 'sie_outcome_categorias', pessoa: 'creditor', caixa: [1, 10], nomeCaixa: 'Pagamento' },
 };
-async function baixas(empresaId, lado, { de, ate, pessoas, empresas, centros, planos }, agruparSql) {
+// `pessoasFora` / `planosFora`: a lista é dos que ficam DE FORA (filtro salvo no "todos, menos").
+async function baixas(empresaId, lado, { de, ate, pessoas, pessoasFora = false, empresas, centros, planos, planosFora = false }, agruparSql) {
   const t = BAIXAS[lado];
   const rateio = centros.length || planos.length;
-  const params = [empresaId, de, ate, pessoas.length ? pessoas : null, empresas.length ? empresas : null, centros.length ? centros : null, planos.length ? planos : null];
+  const params = [
+    empresaId,
+    de,
+    ate,
+    pessoas.length ? pessoas : null,
+    empresas.length ? empresas : null,
+    centros.length ? centros : null,
+    planos.length ? planos : null,
+    pessoasFora,
+    planosFora,
+  ];
   const { rows } = await pool.query(
     `SELECT ${agruparSql} AS grupo, b.operation_type_id AS tipo_id, b.operation_type_name AS tipo,
             sum(b.net_amount * f.frac) AS valor,
@@ -803,16 +824,16 @@ async function baixas(empresaId, lado, { de, ate, pessoas, empresas, centros, pl
          rateio
            ? `JOIN LATERAL (
                 SELECT COALESCE(sum(c.financial_category_rate) FILTER (WHERE ($6::bigint[] IS NULL OR c.cost_center_id = ANY($6::bigint[]))
-                                                                        AND ($7::text[] IS NULL OR c.financial_category_id = ANY($7::text[]))), 0)
+                                                                        AND ($7::text[] IS NULL OR COALESCE(c.financial_category_id = ANY($7::text[]), false) <> $9::boolean)), 0)
                        / NULLIF(sum(c.financial_category_rate), 0) AS frac
                   FROM ${t.categorias} c WHERE c.empresa_id = i.empresa_id AND c.bill_id = i.bill_id AND c.installment_id = i.installment_id
               ) f ON f.frac > 0`
            : 'CROSS JOIN (SELECT 1::numeric AS frac) f'
        }
       WHERE b.empresa_id = $1 AND b.payment_date BETWEEN $2::date AND $3::date
-        AND ($4::bigint[] IS NULL OR i.${t.pessoa}_id = ANY($4::bigint[]))
+        AND ($4::bigint[] IS NULL OR COALESCE(i.${t.pessoa}_id = ANY($4::bigint[]), false) <> $8::boolean)
         AND ($5::bigint[] IS NULL OR i.company_id = ANY($5::bigint[]))
-        ${rateio ? '' : 'AND $6::bigint[] IS NULL AND $7::text[] IS NULL'}
+        ${rateio ? '' : 'AND $6::bigint[] IS NULL AND $7::text[] IS NULL AND $9::boolean IS NOT NULL'}
       GROUP BY 1, 2, 3 ORDER BY 1, 2`,
     params
   );
@@ -879,7 +900,16 @@ const inadimplencia = {
     const rows = await baixas(
       empresaId,
       'r',
-      { de, ate: hoje, pessoas: f.clientes, empresas, centros: f.centros, planos: f.naturezas },
+      {
+        de,
+        ate: hoje,
+        pessoas: f.clientes,
+        pessoasFora: f.exceto.includes('clientes'),
+        empresas,
+        centros: f.centros,
+        planos: f.naturezas,
+        planosFora: f.exceto.includes('naturezas'),
+      },
       "'periodo'"
     );
     return {

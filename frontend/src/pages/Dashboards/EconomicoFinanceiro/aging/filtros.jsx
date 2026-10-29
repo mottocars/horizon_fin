@@ -45,35 +45,51 @@ function opcoesFiltro(B) {
   };
 }
 
-function ListaBusca({ id, rotulo, opcoes, valor, onChange, nota }) {
+// `valor`: os marcados; com `todos` (o "Marcar todos"), os DESMARCADOS — todos, menos esses.
+// `onChange(valor, todos)`.
+function ListaBusca({ id, rotulo, opcoes, valor, todos, onChange, nota }) {
   const [busca, setBusca] = useState('');
-  const marcados = useMemo(() => new Set(valor), [valor]);
+  const naLista = useMemo(() => new Set(valor), [valor]);
   const todas = useMemo(() => {
     const conhecidos = new Set(opcoes.map((o) => o.value));
     return [...valor.filter((v) => !conhecidos.has(v)).map((v) => ({ value: v, label: `Código ${v}`, extra: 'fora do cadastro' })), ...opcoes];
   }, [opcoes, valor]);
   const q = sem(busca.trim());
-  const achadas = q ? todas.filter((o) => sem(`${o.label} ${o.extra || ''}`).includes(q)) : todas;
-  // Marcadas primeiro.
-  const lista = [...achadas.filter((o) => marcados.has(o.value)), ...achadas.filter((o) => !marcados.has(o.value))];
-  const alternar = (v) => onChange(marcados.has(v) ? valor.filter((x) => x !== v) : [...valor, v]);
+  // Sempre na mesma ordem (alfabética): marcar ou desmarcar não tira o item do lugar.
+  const lista = q ? todas.filter((o) => sem(`${o.label} ${o.extra || ''}`).includes(q)) : todas;
+  const alternar = (v) => onChange(naLista.has(v) ? valor.filter((x) => x !== v) : [...valor, v], todos);
+  const n = valor.length;
   return (
     <div className="lb">
       <div className="lb-cab">
         <label htmlFor={id}>{rotulo}</label>
-        {valor.length > 0 ? (
-          <button type="button" onClick={() => onChange([])}>
-            {valor.length} marcado{valor.length > 1 ? 's' : ''} · limpar
-          </button>
-        ) : (
-          <span>Todos</span>
-        )}
+        <span className="lb-acoes">
+          {todos ? (
+            <span>{n ? `Todos menos ${n}` : 'Todos marcados'}</span>
+          ) : n > 0 ? (
+            <span>
+              {n} marcado{n > 1 ? 's' : ''}
+            </span>
+          ) : (
+            <span>Todos</span>
+          )}
+          {!(todos && !n) && (
+            <button type="button" onClick={() => onChange([], true)} title="Marca a lista inteira — depois é só desmarcar o que não quer">
+              marcar todos
+            </button>
+          )}
+          {(todos || n > 0) && (
+            <button type="button" onClick={() => onChange([], false)} title="Desmarca tudo (sem filtro)">
+              limpar
+            </button>
+          )}
+        </span>
       </div>
       <input id={id} type="search" placeholder="Buscar" value={busca} onChange={(e) => setBusca(e.target.value)} />
       <div className="lb-lista" role="listbox" aria-multiselectable="true" aria-label={rotulo}>
         {lista.slice(0, MAX_ITENS).map((o) => (
           <label key={o.value} className="lb-item" title={o.extra ? `${o.label} (${o.extra})` : o.label}>
-            <input type="checkbox" checked={marcados.has(o.value)} onChange={() => alternar(o.value)} />
+            <input type="checkbox" checked={naLista.has(o.value) !== !!todos} onChange={() => alternar(o.value)} />
             <span>{o.label}</span>
             {o.extra && <small>{o.extra}</small>}
           </label>
@@ -131,6 +147,12 @@ export function PainelFiltros({ B, filtros, onFiltros, meses, periodo, onMeses, 
   const [ocupado, setOcupado] = useState(false);
   const [erro, setErro] = useState('');
   const mudar = (patch) => onFiltros({ ...filtros, ...patch });
+  // Uma lista do painel: os itens e se ela está no "Marcar todos".
+  const lista = (k) => ({
+    valor: filtros[k],
+    todos: filtros.exceto.includes(k),
+    onChange: (v, todos) => mudar({ [k]: v, exceto: todos ? [...new Set([...filtros.exceto, k])] : filtros.exceto.filter((x) => x !== k) }),
+  });
   const existente = salvos.find((s) => s.nome.trim().toLowerCase() === nome.trim().toLowerCase());
 
   async function gravar(e) {
@@ -169,30 +191,10 @@ export function PainelFiltros({ B, filtros, onFiltros, meses, periodo, onMeses, 
         </button>
       </div>
       <div className="fp-grade">
-        <ListaBusca id="f-doc" rotulo="Tipo de documento" opcoes={opcoes.documentos} valor={filtros.documentos} onChange={(v) => mudar({ documentos: v })} />
-        <ListaBusca
-          id="f-nat"
-          rotulo="Plano de contas"
-          opcoes={opcoes.naturezas}
-          valor={filtros.naturezas}
-          onChange={(v) => mudar({ naturezas: v })}
-        />
-        <ListaBusca
-          id="f-cli"
-          rotulo="Cliente"
-          opcoes={opcoes.clientes}
-          valor={filtros.clientes}
-          onChange={(v) => mudar({ clientes: v })}
-          nota="Filtra o a receber."
-        />
-        <ListaBusca
-          id="f-for"
-          rotulo="Fornecedor"
-          opcoes={opcoes.fornecedores}
-          valor={filtros.fornecedores}
-          onChange={(v) => mudar({ fornecedores: v })}
-          nota="Filtra o a pagar."
-        />
+        <ListaBusca id="f-doc" rotulo="Tipo de documento" opcoes={opcoes.documentos} {...lista('documentos')} />
+        <ListaBusca id="f-nat" rotulo="Plano de contas" opcoes={opcoes.naturezas} {...lista('naturezas')} />
+        <ListaBusca id="f-cli" rotulo="Cliente" opcoes={opcoes.clientes} {...lista('clientes')} nota="Filtra o a receber." />
+        <ListaBusca id="f-for" rotulo="Fornecedor" opcoes={opcoes.fornecedores} {...lista('fornecedores')} nota="Filtra o a pagar." />
       </div>
       <div className="fp-rodape">
         <CampoMeses
@@ -303,8 +305,13 @@ export function ResumoFiltros({ B, filtros, onFiltros }) {
     <div className="filtros-ativos" aria-label="Filtros valendo">
       {grupos.map(([k, rotulo]) => (
         <span key={k} className="chip">
-          {rotulo}: {nomes(k, filtros[k])}
-          <button type="button" onClick={() => onFiltros({ ...filtros, [k]: [] })} aria-label={`Tirar o filtro de ${rotulo.toLowerCase()}`}>
+          {rotulo}: {filtros.exceto.includes(k) ? 'todos, menos ' : ''}
+          {nomes(k, filtros[k])}
+          <button
+            type="button"
+            onClick={() => onFiltros({ ...filtros, [k]: [], exceto: filtros.exceto.filter((x) => x !== k) })}
+            aria-label={`Tirar o filtro de ${rotulo.toLowerCase()}`}
+          >
             <X size={14} />
           </button>
         </span>

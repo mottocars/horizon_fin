@@ -126,6 +126,13 @@
 .painel-cfo .lb-cab label {
   font-weight: 600;
 }
+.painel-cfo .lb-acoes {
+  display: flex;
+  flex-wrap: wrap;
+  justify-content: flex-end;
+  gap: 2px 10px;
+  text-align: right;
+}
 .painel-cfo .lb-cab button {
   border: 0;
   padding: 0;

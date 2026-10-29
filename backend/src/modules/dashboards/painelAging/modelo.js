@@ -113,8 +113,11 @@ function caixa(contas) {
 // período. Grava também centros de custo, tipos de documento, plano de contas (`naturezas`), clientes
 // (só no a receber), fornecedores (só no a pagar) e previsão financeira ('nao' = sem as previsões, o
 // padrão; 'sim' = só elas; 'todos'). Listas vazias = sem filtro.
+// `exceto`: as listas do painel no modo "Marcar todos" — nelas a lista guarda os DESMARCADOS (todos,
+// menos esses; o que aparecer depois no Sienge entra). Modo "todos" sem nenhum desmarcado = sem filtro.
 const MAX_MESES = 360;
-const filtrosVazios = () => ({ centros: [], documentos: [], naturezas: [], clientes: [], fornecedores: [], previsao: 'nao' });
+const LISTAS_PAINEL = ['documentos', 'naturezas', 'clientes', 'fornecedores'];
+const filtrosVazios = () => ({ centros: [], documentos: [], naturezas: [], clientes: [], fornecedores: [], exceto: [], previsao: 'nao' });
 
 // Período padrão: o ano atual inteiro.
 const periodoPadrao = (hojeIso) => ({ inicio: `${hojeIso.slice(0, 4)}-01-01`, fim: `${hojeIso.slice(0, 4)}-12-31` });
@@ -134,17 +137,19 @@ function mesesDoPeriodo(hojeIso, inicio, fim) {
   };
 }
 
-const LISTAS_FILTRO = ['centros', 'documentos', 'naturezas', 'clientes', 'fornecedores'];
+const LISTAS_FILTRO = ['centros', ...LISTAS_PAINEL];
 const meses = (v) => (Number.isInteger(v) && v >= 0 && v <= MAX_MESES ? v : null);
+// "Todos" sem nenhum desmarcado = sem filtro: some do `exceto` (grava e compara igual a não filtrar).
 const normalizarFiltros = (f = {}) => ({
   historico: meses(f.historico),
   horizonte: meses(f.horizonte),
   ...Object.fromEntries(LISTAS_FILTRO.map((k) => [k, [...(f[k] || [])].sort()])),
+  exceto: LISTAS_PAINEL.filter((k) => f.exceto?.includes(k) && f[k]?.length),
   previsao: ['nao', 'sim', 'todos'].includes(f.previsao) ? f.previsao : 'nao',
 });
 const mesmosFiltros = (a, b) => JSON.stringify(normalizarFiltros(a)) === JSON.stringify(normalizarFiltros(b));
 // Quantos filtros do painel estão valendo (o centro de custo fica na barra).
-const filtrosNoPainel = (f) => ['documentos', 'naturezas', 'clientes', 'fornecedores'].filter((k) => f[k]?.length).length + (f.previsao !== 'nao' ? 1 : 0);
+const filtrosNoPainel = (f) => LISTAS_PAINEL.filter((k) => f[k]?.length).length + (f.previsao !== 'nao' ? 1 : 0);
 
 // ─── Escopo dos filtros ──────────────────────────────────────────────────────────────────────────
 // `inicio` / `fim` ('AAAA-MM-DD'): período do VENCIMENTO das parcelas; o resto, os filtros acima.
@@ -154,20 +159,26 @@ const filtrosNoPainel = (f) => ['documentos', 'naturezas', 'clientes', 'forneced
 function escopo(B, { inicio = null, fim = null, ...filtros } = {}) {
   const f = { ...filtrosVazios(), ...filtros };
   const conj = (lista) => (lista.length ? new Set(lista) : null);
+  // Lista do painel: fica de fora o que não está marcado — no modo "todos" (`exceto`), o que foi desmarcado.
+  const fora = (k, conv = (v) => v) => {
+    const s = conj(f[k].map(conv));
+    if (!s) return null;
+    return f.exceto?.includes(k) ? (v) => s.has(v) : (v) => !s.has(v);
+  };
   const sel = conj(f.centros);
-  const docs = conj(f.documentos);
-  const planos = conj(f.naturezas.map(String)); // contas do plano de contas (só as de resultado)
-  const clientes = conj(f.clientes);
-  const fornecedores = conj(f.fornecedores);
+  const docs = fora('documentos');
+  const planos = fora('naturezas', String); // contas do plano de contas (só as de resultado)
+  const clientes = fora('clientes');
+  const fornecedores = fora('fornecedores');
   const linhas = [];
   B.titulos.forEach((t) => {
     if (f.previsao === 'nao' ? t.pv : f.previsao === 'sim' ? !t.pv : false) return;
     if ((inicio && t.v < inicio) || (fim && t.v > fim)) return;
-    if (docs && !docs.has(t.d)) return;
-    if (t.l === 'r' ? clientes && !clientes.has(t.q) : fornecedores && !fornecedores.has(t.q)) return;
+    if (docs && docs(t.d)) return;
+    if (t.l === 'r' ? clientes && clientes(t.q) : fornecedores && fornecedores(t.q)) return;
     t.f.forEach(([centro, nat, frac]) => {
       if (sel && !sel.has(centro)) return;
-      if (planos && !planos.has(nat)) return;
+      if (planos && planos(nat)) return;
       linhas.push({ t, centro, nat, frac, valor: t.s * frac });
     });
   });
@@ -556,4 +567,4 @@ function simular(E, params) {
   };
 }
 
-module.exports = { brl, nf0, pct, soma, titulo, curto, diaNum, isoDe, fimDeSemana, diaUtil, semana, dm, dma, FAIXAS, NF, IDX_HOJE, faixaDe, SEM_CAIXA, preparar, nomeCentro, nomeNatureza, nomePessoa, nomeEmpresa, nomeCondicao, nomeDocumento, rotuloPessoa, caixa, MAX_MESES, filtrosVazios, periodoPadrao, inicioDe, fimDe, mesesDoPeriodo, normalizarFiltros, mesmosFiltros, filtrosNoPainel, escopo, porFaixa, HORIZONTE_CARDS, indicadores, escada, DIMENSOES, dimensoesDoLado, ORDENS, arvore, parcelas, filtrarBusca, maiores, CENARIOS, PADRAO_SIM, cenarioDe, simular };
+module.exports = { brl, nf0, pct, soma, titulo, curto, diaNum, isoDe, fimDeSemana, diaUtil, semana, dm, dma, FAIXAS, NF, IDX_HOJE, faixaDe, SEM_CAIXA, preparar, nomeCentro, nomeNatureza, nomePessoa, nomeEmpresa, nomeCondicao, nomeDocumento, rotuloPessoa, caixa, MAX_MESES, LISTAS_PAINEL, filtrosVazios, periodoPadrao, inicioDe, fimDe, mesesDoPeriodo, normalizarFiltros, mesmosFiltros, filtrosNoPainel, escopo, porFaixa, HORIZONTE_CARDS, indicadores, escada, DIMENSOES, dimensoesDoLado, ORDENS, arvore, parcelas, filtrarBusca, maiores, CENARIOS, PADRAO_SIM, cenarioDe, simular };

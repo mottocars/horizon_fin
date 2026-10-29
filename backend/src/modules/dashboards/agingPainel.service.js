@@ -68,7 +68,7 @@ async function titulosDoLado(empresaId, t, dic) {
 
   const titulos = rows.map((r) => {
     if (r.c !== null && !dic.empresas[r.c]) dic.empresas[r.c] = r.c_nome;
-    if (r.q !== null && !dic.pessoas[t.l][r.q]) dic.pessoas[t.l][r.q] = r.q_nome;
+    if (r.q !== null && !dic.pessoas[t.l][r.q]) dic.pessoas[t.l][r.q] = r.q_nome ? r.q_nome.trim() : r.q_nome;
     r.d = r.d === null ? null : r.d.trim(); // o Sienge manda o código com espaços ("CT  ")
     if (r.d !== null && !dic.documentos[r.d]) dic.documentos[r.d] = r.d_nome;
     // Nome da condição como vem do Sienge tem espaços sobrando ("CEF  FINANCIAMENTO ").
@@ -172,11 +172,13 @@ async function catalogos(empresaId) {
       [empresaId]
     ),
   ]);
-  // Um nome por código: o do cadastro, se houver (vem primeiro); senão o do título.
+  // Um nome por código: o do cadastro, se houver (vem primeiro); senão o do título. Sem os espaços da
+  // ponta (há nomes no Sienge que começam com espaço e furavam a ordem alfabética da lista).
   const porId = (rows) => {
     const m = {};
     rows.forEach((r) => {
-      if (r.id !== null && !m[r.id] && r.nome) m[r.id] = r.nome;
+      const nome = r.nome?.trim();
+      if (r.id !== null && !m[r.id] && nome) m[r.id] = nome;
     });
     return m;
   };
