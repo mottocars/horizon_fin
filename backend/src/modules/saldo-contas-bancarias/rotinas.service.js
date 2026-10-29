@@ -35,15 +35,18 @@ async function getConfig(empresaId) {
 // projetando saldo), só as ativas — conta inativa não tem saldo novo pra lançar.
 async function contasDaRotina(empresaId) {
   const { rows } = await pool.query(
-    `SELECT c.company_id, c.numero_conta, c.classificacao, c.banco_nome, ${saldosService.BANCO_EFETIVO_SQL} AS banco_codigo
+    `SELECT c.company_id, c.numero_conta, c.classificacao_id, cb.nome AS classificacao, c.banco_nome,
+            ${saldosService.BANCO_EFETIVO_SQL} AS banco_codigo
      FROM contas_bancarias_sienge c
-     WHERE c.empresa_id = $1 AND c.classificacao IS NOT NULL AND c.projeta_saldo = TRUE AND c.status = 'ENABLED'`,
+     JOIN classificacoes_bancarias cb ON cb.id = c.classificacao_id
+     WHERE c.empresa_id = $1 AND c.projeta_saldo = TRUE AND c.status = 'ENABLED'`,
     [empresaId]
   );
   return rows;
 }
 
-const chaveDaConta = (conta, tipo) => (tipo === 'BANCO' ? conta.banco_codigo || '' : conta.classificacao);
+// Chave da divisão: código do banco ou o ID da classificação (renomear a classificação não solta o responsável).
+const chaveDaConta = (conta, tipo) => (tipo === 'BANCO' ? conta.banco_codigo || '' : String(conta.classificacao_id));
 
 async function nomesBancos() {
   try {
@@ -69,21 +72,17 @@ async function itensDasDivisoes(empresaId, contas) {
   const porBanco = contagem('BANCO');
 
   const { rows: classificacoes } = await pool.query(
-    'SELECT nome FROM classificacoes_bancarias WHERE empresa_id = $1 ORDER BY nome',
+    'SELECT id, nome FROM classificacoes_bancarias WHERE empresa_id = $1 ORDER BY nome',
     [empresaId]
   );
-  const nomesClassificacao = new Set(classificacoes.map((c) => c.nome));
-  // Conta classificada com um nome que não existe mais no cadastro (renomeado) — entra igual,
-  // senão ficaria sem responsável possível.
-  for (const nome of porClassificacao.keys()) nomesClassificacao.add(nome);
 
   const oficiais = await nomesBancos();
   const nomeSienge = new Map(contas.filter((c) => c.banco_codigo).map((c) => [c.banco_codigo, c.banco_nome]));
 
   return {
-    CLASSIFICACAO: [...nomesClassificacao]
-      .sort((a, b) => a.localeCompare(b, 'pt-BR'))
-      .map((nome) => ({ chave: nome, nome, contas: porClassificacao.get(nome) || 0 })),
+    CLASSIFICACAO: classificacoes
+      .sort((a, b) => a.nome.localeCompare(b.nome, 'pt-BR'))
+      .map((c) => ({ chave: String(c.id), nome: c.nome, contas: porClassificacao.get(String(c.id)) || 0 })),
     BANCO: [...porBanco.keys()]
       .map((codigo) => ({
         chave: codigo,

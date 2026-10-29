@@ -48,7 +48,7 @@ const emptyForm = {
   agencia_enriquecida: '',
   conta_enriquecida: '',
   digito: '',
-  classificacao: '',
+  classificacao_id: '',
   projeta_saldo: '',
   codigo_cedente_extrato: '',
   codigo_cedente_cobranca: '',
@@ -102,7 +102,7 @@ export default function ContaBancariaItemDetalhe() {
         agencia_enriquecida: data.agencia_enriquecida || '',
         conta_enriquecida: data.conta_enriquecida || '',
         digito: data.digito || '',
-        classificacao: data.classificacao || '',
+        classificacao_id: data.classificacao_id || '',
         projeta_saldo:
           data.projeta_saldo === true ? 'true' : data.projeta_saldo === false ? 'false' : '',
         codigo_cedente_extrato: data.codigo_cedente_extrato || '',
@@ -266,16 +266,16 @@ export default function ContaBancariaItemDetalhe() {
 
             <Field label="Classificação">
               <SearchableSelect
-                value={form.classificacao}
-                onChange={(value) => handleChange('classificacao', value)}
-                options={classificacoes.map((c) => ({ value: c.nome, label: c.nome }))}
+                value={form.classificacao_id}
+                onChange={(value) => handleChange('classificacao_id', value)}
+                options={classificacoes.map((c) => ({ value: c.id, label: c.nome }))}
                 placeholder={
                   classificacoes.length === 0
                     ? 'Cadastre classificações na aba Classificação'
                     : 'Selecione a classificação'
                 }
                 emptyMessage="Nenhuma classificação cadastrada para esta empresa ainda."
-                corClasses={corSelect(form.classificacao)}
+                corClasses={corSelect(form.classificacao_id)}
               />
             </Field>
 

@@ -91,7 +91,7 @@ async function resolverConta(empresaId, termo) {
   if (!t) throw falha('Informe a conta (número, nome ou parte do nome).');
   const { rows } = await pool.query(
     `SELECT company_id, numero_conta, nome, company_name FROM contas_bancarias_sienge
-      WHERE empresa_id = $1 AND classificacao IS NOT NULL AND projeta_saldo = TRUE`,
+      WHERE empresa_id = $1 AND classificacao_id IS NOT NULL AND projeta_saldo = TRUE`,
     [empresaId]
   );
   const alvo = t.toLowerCase();
@@ -216,9 +216,10 @@ const guia = {
       ),
       classificacoes(empresaId),
       pool.query(
-        `SELECT classificacao, COUNT(*)::int AS contas, COUNT(*) FILTER (WHERE status = 'ENABLED')::int AS ativas
-           FROM contas_bancarias_sienge WHERE empresa_id = $1 AND classificacao IS NOT NULL AND projeta_saldo = TRUE
-          GROUP BY classificacao`,
+        `SELECT cb.nome AS classificacao, COUNT(*)::int AS contas, COUNT(*) FILTER (WHERE c.status = 'ENABLED')::int AS ativas
+           FROM contas_bancarias_sienge c JOIN classificacoes_bancarias cb ON cb.id = c.classificacao_id
+          WHERE c.empresa_id = $1 AND c.projeta_saldo = TRUE
+          GROUP BY cb.nome`,
         [empresaId]
       ),
       pool.query('SELECT gerar_rotinas, dividir_por FROM saldos_rotinas_config WHERE empresa_id = $1', [empresaId]),
@@ -474,13 +475,12 @@ const classificacoesTool = {
     const [classes, { rows: contas }] = await Promise.all([
       classificacoes(empresaId),
       pool.query(
-        `SELECT classificacao, company_id, numero_conta, nome, status, projeta_saldo, valor_cheque_especial
-           FROM contas_bancarias_sienge WHERE empresa_id = $1 AND classificacao IS NOT NULL ORDER BY nome`,
+        `SELECT cb.nome AS classificacao, c.company_id, c.numero_conta, c.nome, c.status, c.projeta_saldo, c.valor_cheque_especial
+           FROM contas_bancarias_sienge c JOIN classificacoes_bancarias cb ON cb.id = c.classificacao_id
+          WHERE c.empresa_id = $1 ORDER BY c.nome`,
         [empresaId]
       ),
     ]);
-    const cadastradas = new Set(classes.map((c) => c.nome));
-    const orfas = [...new Set(contas.map((c) => c.classificacao).filter((n) => !cadastradas.has(n)))];
     return {
       classificacoes: classes.map((c) => {
         const daClasse = contas.filter((x) => x.classificacao === c.nome);
@@ -504,7 +504,6 @@ const classificacoesTool = {
             : {}),
         };
       }),
-      ...(orfas.length ? { nomes_em_contas_sem_cadastro: orfas } : {}),
     };
   }),
 };
@@ -524,10 +523,11 @@ const automacoes = {
     const de = somarDias(ate, -(dias - 1));
     const [{ rows: contas }, classes, { rows: vanpix }, { rows: itau }, { rows: origens }] = await Promise.all([
       pool.query(
-        `SELECT company_id, numero_conta, nome, company_name, classificacao, status, codigo_cedente_extrato, codigo_cedente_cobranca,
-                extrato_carga_inicial_apelido, extrato_carga_inicial_em, valor_cheque_especial,
-                agencia_enriquecida, conta_enriquecida, digito
-           FROM contas_bancarias_sienge WHERE empresa_id = $1 AND classificacao IS NOT NULL AND projeta_saldo = TRUE ORDER BY nome`,
+        `SELECT c.company_id, c.numero_conta, c.nome, c.company_name, cb.nome AS classificacao, c.status, c.codigo_cedente_extrato,
+                c.codigo_cedente_cobranca, c.extrato_carga_inicial_apelido, c.extrato_carga_inicial_em, c.valor_cheque_especial,
+                c.agencia_enriquecida, c.conta_enriquecida, c.digito
+           FROM contas_bancarias_sienge c JOIN classificacoes_bancarias cb ON cb.id = c.classificacao_id
+          WHERE c.empresa_id = $1 AND c.projeta_saldo = TRUE ORDER BY c.nome`,
         [empresaId]
       ),
       classificacoes(empresaId),
@@ -580,7 +580,7 @@ const automacoes = {
             : null,
           vanpix_cobranca: c.codigo_cedente_cobranca || null,
           itau: it ? { conexao: it.nome, ativa: it.ativo, certificado_valido_ate: it.certificado_valido_ate } : null,
-          sem_saldo_da_integracao: PRIORIDADE[prioridade.get(c.classificacao)] || 'classificação sem cadastro',
+          sem_saldo_da_integracao: PRIORIDADE[prioridade.get(c.classificacao)],
           automatica: Boolean(c.codigo_cedente_extrato || c.codigo_cedente_cobranca || it),
           origens_na_janela: minhas.map((o) => ({ origem: o.origem, ...(o.fonte ? { fonte: o.fonte } : {}), dias: o.dias, ultimo_dia: o.ultimo })),
         };

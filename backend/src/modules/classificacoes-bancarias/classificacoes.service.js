@@ -47,11 +47,17 @@ async function update(id, empresaId, { nome, prioridadeSemSaldo, descricao, libe
   }
 }
 
-// Não bloqueia remover uma classificação já usada por contas — o vínculo é por nome (texto),
-// sem FK; contas que já tinham esse nome continuam com o texto salvo (viram "sem prioridade
-// configurada" pra fins de saldo automático, mesmo efeito de nunca ter sido classificada
-// assim), sem quebrar nada e sem exigir uma tela de "mover contas pra outra classificação".
+// As contas apontam para a classificação pelo id (contas_bancarias_sienge.classificacao_id, FK
+// RESTRICT): com conta usando, não remove — troque a classificação das contas antes. Renomear é
+// livre (o nome é lido do cadastro).
 async function remove(id, empresaId) {
+  const { rows: uso } = await pool.query(
+    'SELECT COUNT(*)::int AS n FROM contas_bancarias_sienge WHERE empresa_id = $2 AND classificacao_id = $1',
+    [id, empresaId]
+  );
+  if (uso[0].n > 0) {
+    throw erro(409, `${uso[0].n} conta(s) bancária(s) usam esta classificação — troque a classificação delas antes de remover.`);
+  }
   const { rows } = await pool.query(`DELETE FROM classificacoes_bancarias WHERE id = $1 AND empresa_id = $2 RETURNING id`, [
     id,
     empresaId,
@@ -59,13 +65,4 @@ async function remove(id, empresaId) {
   return !!rows[0];
 }
 
-// Usado pelo cadastro de Contas Bancárias (validar o texto digitado) e pela busca automática
-// de saldo (saber a prioridade configurada por nome de classificação desta empresa).
-async function mapaPorNome(empresaId) {
-  const { rows } = await pool.query(`SELECT nome, prioridade_sem_saldo FROM classificacoes_bancarias WHERE empresa_id = $1`, [
-    empresaId,
-  ]);
-  return new Map(rows.map((r) => [r.nome, r.prioridade_sem_saldo]));
-}
-
-module.exports = { list, create, update, remove, mapaPorNome };
+module.exports = { list, create, update, remove };

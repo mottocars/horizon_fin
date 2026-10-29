@@ -41,7 +41,9 @@ async function listContas(empresaId, { page = 1, limit = 15, search = '', status
 
   const { rows } = await pool.query(
     `SELECT numero_conta, nome, tipo_id, tipo_descricao, agencia, banco_numero, banco_nome,
-            company_id, company_name, status, classificacao,
+            company_id, company_name, status, classificacao_id,
+            -- Nome da classificação pelo id (renomear no cadastro vale na hora).
+            (SELECT cb.nome FROM classificacoes_bancarias cb WHERE cb.id = contas_bancarias_sienge.classificacao_id) AS classificacao,
             ${BANCO_EFETIVO_SQL} AS banco_codigo, criado_em, atualizado_em,
             -- Automação = integração do saldo automático (origem API) mais recente da conta:
             -- VANPIX ou ITAU (linhas API antigas, sem fonte, eram todas VanPix); NULL = manual.
@@ -92,7 +94,7 @@ async function listContas(empresaId, { page = 1, limit = 15, search = '', status
 
 async function getItem(empresaId, companyId, numeroConta) {
   const { rows } = await pool.query(
-    `SELECT * FROM contas_bancarias_sienge
+    `SELECT *, (SELECT cb.nome FROM classificacoes_bancarias cb WHERE cb.id = contas_bancarias_sienge.classificacao_id) AS classificacao FROM contas_bancarias_sienge
      WHERE empresa_id = $1 AND company_id = $2 AND numero_conta = $3`,
     [empresaId, companyId, numeroConta]
   );
@@ -107,10 +109,10 @@ function erro(status, message) {
 }
 
 async function updateEnriquecimento(empresaId, companyId, numeroConta, data) {
-  if (data.classificacao) {
+  if (data.classificacao_id) {
     const { rows: validas } = await pool.query(
-      'SELECT 1 FROM classificacoes_bancarias WHERE empresa_id = $1 AND nome = $2',
-      [empresaId, data.classificacao]
+      'SELECT 1 FROM classificacoes_bancarias WHERE empresa_id = $1 AND id = $2',
+      [empresaId, data.classificacao_id]
     );
     if (!validas[0]) throw erro(400, 'Classificação inválida — cadastre-a primeiro na aba Classificação.');
   }
@@ -122,19 +124,19 @@ async function updateEnriquecimento(empresaId, companyId, numeroConta, data) {
        conta_enriquecida = $3,
        digito = $4,
        projeta_saldo = $5,
-       classificacao = $6,
+       classificacao_id = $6,
        codigo_cedente_cobranca = $10,
        codigo_cedente_extrato = $11,
        valor_cheque_especial = $12
      WHERE empresa_id = $7 AND company_id = $8 AND numero_conta = $9
-     RETURNING *`,
+     RETURNING *, (SELECT cb.nome FROM classificacoes_bancarias cb WHERE cb.id = contas_bancarias_sienge.classificacao_id) AS classificacao`,
     [
       data.banco_enriquecido || null,
       data.agencia_enriquecida || null,
       data.conta_enriquecida || null,
       data.digito || null,
       data.projeta_saldo ?? null,
-      data.classificacao || null,
+      data.classificacao_id || null,
       empresaId,
       companyId,
       numeroConta,

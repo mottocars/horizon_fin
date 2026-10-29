@@ -1073,9 +1073,10 @@ CREATE TABLE contas_bancarias_sienge (
     projeta_saldo        BOOLEAN,
     saldo_inicial        NUMERIC(15,2),
     data_saldo_inicial   DATE,
-    -- Texto livre, mas só pode ser um `nome` já cadastrado em classificacoes_bancarias para
-    -- esta mesma empresa (validado na aplicação, sem FK — mesmo espírito de banco_enriquecido).
-    classificacao        VARCHAR(50),
+    -- Classificação da conta PELO ID (classificacoes_bancarias.id; o nome vem sempre do cadastro, então
+    -- renomear vale na hora) — a FK (RESTRICT) é criada logo depois de classificacoes_bancarias.
+    -- Migration 2026-10-29-contas-classificacao-id.sql (antes era o nome, em texto).
+    classificacao_id     INTEGER,
     -- Apelido VanPix do convênio de cobrança (conexão VanPix com finalidade COBRANCA): os
     -- títulos com Dt Crédito = dia somam no saldo na abertura do período.
     codigo_cedente_cobranca VARCHAR(50),
@@ -1097,8 +1098,8 @@ CREATE INDEX idx_contas_bancarias_sienge_empresa ON contas_bancarias_sienge (emp
 -- global pro sistema inteiro) — cada uma define a prioridade a seguir quando a busca
 -- automática de saldo (VanPix) não retorna nada pra aquele dia: repetir o saldo do dia
 -- anterior (SALDO_ANTERIOR) ou deixar sem saldo nenhum (SEM_SALDO). `contas_bancarias_sienge.
--- classificacao` referencia o `nome` daqui por texto (empresa nova nasce sem nenhuma linha —
--- o combobox de classificação do cadastro de contas fica vazio até serem cadastradas).
+-- classificacao_id` aponta para o `id` daqui (empresa nova nasce sem nenhuma linha — o combobox de
+-- classificação do cadastro de contas fica vazio até serem cadastradas). Com conta usando, não remove.
 CREATE TABLE classificacoes_bancarias (
     id                     SERIAL PRIMARY KEY,
     empresa_id             INTEGER NOT NULL REFERENCES empresas(id) ON DELETE CASCADE,
@@ -1114,6 +1115,10 @@ CREATE TABLE classificacoes_bancarias (
     atualizado_em          TIMESTAMP DEFAULT NOW(),
     UNIQUE (empresa_id, nome)
 );
+ALTER TABLE contas_bancarias_sienge
+    ADD CONSTRAINT contas_bancarias_sienge_classificacao_id_fkey
+    FOREIGN KEY (classificacao_id) REFERENCES classificacoes_bancarias(id) ON DELETE RESTRICT;
+CREATE INDEX idx_contas_bancarias_sienge_classificacao ON contas_bancarias_sienge (classificacao_id);
 
 -- Saldo de cada conta bancária em cada dia, informado à mão na tela Operações >
 -- Saldo Contas Bancárias. Uma linha por (conta, dia): limpar a célula na tela apaga
@@ -1267,8 +1272,8 @@ CREATE TABLE saldos_rotinas_config (
     atualizado_em   TIMESTAMP DEFAULT NOW()
 );
 
--- Responsável de cada classificação (chave = nome da classificação, o mesmo texto gravado em
--- contas_bancarias_sienge.classificacao) ou de cada banco (chave = código COMPE efetivo da
+-- Responsável de cada classificação (chave = id da classificação, em texto — o mesmo de
+-- contas_bancarias_sienge.classificacao_id) ou de cada banco (chave = código COMPE efetivo da
 -- conta). As duas divisões ficam guardadas: trocar "Dividir por" não perde a outra.
 CREATE TABLE saldos_rotinas_responsaveis (
     empresa_id  INTEGER NOT NULL REFERENCES empresas(id) ON DELETE CASCADE,
@@ -3811,8 +3816,12 @@ CREATE OR REPLACE VIEW mcp_dfc_plano_contas AS
     SELECT * FROM dfc_plano_contas WHERE empresa_id = current_setting('app.empresa_id', true)::int;
 CREATE OR REPLACE VIEW mcp_dfc_plano_contas_centro AS
     SELECT * FROM dfc_plano_contas_centro WHERE empresa_id = current_setting('app.empresa_id', true)::int;
+-- Com o nome da classificação (pelo id) na coluna "classificacao" — migration 2026-10-29-contas-classificacao-id.sql.
 CREATE OR REPLACE VIEW mcp_dfc_contas_bancarias AS
-    SELECT * FROM contas_bancarias_sienge WHERE empresa_id = current_setting('app.empresa_id', true)::int;
+    SELECT c.*, cb.nome AS classificacao
+      FROM contas_bancarias_sienge c
+      LEFT JOIN classificacoes_bancarias cb ON cb.id = c.classificacao_id
+     WHERE c.empresa_id = current_setting('app.empresa_id', true)::int;
 CREATE OR REPLACE VIEW mcp_dfc_extrato AS
     SELECT * FROM sie_extrato_contas WHERE empresa_id = current_setting('app.empresa_id', true)::int;
 CREATE OR REPLACE VIEW mcp_dfc_extrato_rateio AS

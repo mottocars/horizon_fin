@@ -9,7 +9,7 @@ import {
   removeClassificacao,
   updateClassificacao,
 } from '../../../api/classificacoesBancarias.api';
-import { useConfirm } from '../../../confirm/ConfirmContext';
+import { useAlert, useConfirm } from '../../../confirm/ConfirmContext';
 
 const PRIORIDADES = [
   { value: 'SALDO_ANTERIOR', label: 'Buscar saldo anterior' },
@@ -63,6 +63,7 @@ function SeloSaldo({ liberaSaldo }) {
 // depois de criar.
 const ClassificacoesTab = forwardRef(function ClassificacoesTab({ empresaId }, ref) {
   const confirm = useConfirm();
+  const alert = useAlert();
   const [itens, setItens] = useState([]);
   const [loading, setLoading] = useState(true);
   const [modalAberto, setModalAberto] = useState(false);
@@ -133,7 +134,7 @@ const ClassificacoesTab = forwardRef(function ClassificacoesTab({ empresaId }, r
   async function handleRemover(item) {
     const confirmado = await confirm({
       title: 'Remover classificação',
-      description: `Remover "${item.nome}"? Contas que já usam esse nome continuam com ele salvo, mas ele deixa de valer como uma classificação cadastrada (some da grade de saldos e da prioridade automática).`,
+      description: `Remover "${item.nome}"? Só é possível se nenhuma conta bancária estiver nesta classificação.`,
       confirmLabel: 'Remover',
       variant: 'warning',
     });
@@ -142,6 +143,12 @@ const ClassificacoesTab = forwardRef(function ClassificacoesTab({ empresaId }, r
     try {
       await removeClassificacao(empresaId, item.id);
       carregar();
+    } catch (err) {
+      await alert({
+        title: 'Não foi possível remover',
+        description: err.response?.data?.message || 'Tente novamente em instantes.',
+        variant: 'warning',
+      });
     } finally {
       setRemovendoId(null);
     }

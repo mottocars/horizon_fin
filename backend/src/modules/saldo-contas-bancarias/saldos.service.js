@@ -50,7 +50,7 @@ async function getFiltros(empresaId) {
   const { rows: empresas } = await pool.query(
     `SELECT company_id, MAX(company_name) AS company_name
      FROM contas_bancarias_sienge
-     WHERE empresa_id = $1 AND classificacao IS NOT NULL
+     WHERE empresa_id = $1 AND classificacao_id IS NOT NULL
      GROUP BY company_id
      ORDER BY MAX(company_name) ASC NULLS LAST, company_id ASC`,
     [empresaId]
@@ -74,7 +74,7 @@ async function getFiltros(empresaId) {
   const { rows: contasFiltro } = await pool.query(
     `SELECT company_id, numero_conta, COALESCE(NULLIF(nome, ''), numero_conta) AS nome
      FROM contas_bancarias_sienge
-     WHERE empresa_id = $1 AND classificacao IS NOT NULL AND projeta_saldo = TRUE
+     WHERE empresa_id = $1 AND classificacao_id IS NOT NULL AND projeta_saldo = TRUE
      ORDER BY nome ASC NULLS LAST, numero_conta ASC`,
     [empresaId]
   );
@@ -115,7 +115,7 @@ async function getSaldos(empresaId, { dataInicio, dataFim, companyIds = [], clas
   }
   if (classificacoes.length) {
     params.push(classificacoes);
-    filtros += ` AND COALESCE(c.classificacao, '${SEM_CLASSIFICACAO}') = ANY($${params.length}::text[])`;
+    filtros += ` AND COALESCE(cb.nome, '${SEM_CLASSIFICACAO}') = ANY($${params.length}::text[])`;
   }
   if (bancos.length) {
     params.push(bancos);
@@ -128,16 +128,16 @@ async function getSaldos(empresaId, { dataInicio, dataFim, companyIds = [], clas
 
   // Só entra na grade quem está classificada E marcada pra projetar saldo (pedido do
   // usuário) — sem os dois, a conta fica de fora mesmo tendo saldo lançado no período.
-  // classificacao_libera_saldo: se a classificação da conta é de saldo liberado (true) ou
-  // bloqueado (false) — null quando não informado ou o nome não está mais cadastrado.
+  // A classificação é pelo id (o nome vem do cadastro). classificacao_libera_saldo: se ela é de
+  // saldo liberado (true) ou bloqueado (false) — null quando não informado.
   const { rows: contas } = await pool.query(
-    `SELECT c.numero_conta, c.company_id, c.company_name, c.nome, c.classificacao, c.status,
+    `SELECT c.numero_conta, c.company_id, c.company_name, c.nome, c.classificacao_id, cb.nome AS classificacao, c.status,
             ${BANCO_EFETIVO_SQL} AS banco_codigo, c.valor_cheque_especial,
             cb.libera_saldo AS classificacao_libera_saldo
      FROM contas_bancarias_sienge c
-     LEFT JOIN classificacoes_bancarias cb ON cb.empresa_id = c.empresa_id AND cb.nome = c.classificacao
+     JOIN classificacoes_bancarias cb ON cb.id = c.classificacao_id
      WHERE c.empresa_id = $1
-       AND c.classificacao IS NOT NULL AND c.projeta_saldo = TRUE
+       AND c.projeta_saldo = TRUE
        AND (c.status = 'ENABLED' OR EXISTS (
              SELECT 1 FROM saldos_contas_bancarias s
              WHERE s.empresa_id = c.empresa_id AND s.company_id = c.company_id

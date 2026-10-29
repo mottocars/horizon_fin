@@ -14,7 +14,6 @@
 const pool = require('../../config/db');
 const vanpixService = require('../integracoes-vanpix/vanpix.service');
 const itauService = require('../integracoes-itau/itau.service');
-const classificacoesService = require('../classificacoes-bancarias/classificacoes.service');
 const saldosService = require('./saldos.service');
 const { MOVIMENTOS_LIQUIDACAO, somaCreditos } = require('./cobranca.calculo');
 
@@ -36,9 +35,10 @@ function paraDDMMYYYY(iso) {
 // VanPix conseguir casar.
 async function listarContasAlvo(empresaId) {
   const { rows } = await pool.query(
-    `SELECT company_id, numero_conta, nome, classificacao
-     FROM contas_bancarias_sienge
-     WHERE empresa_id = $1 AND classificacao IS NOT NULL AND projeta_saldo = TRUE`,
+    `SELECT c.company_id, c.numero_conta, c.nome, cb.nome AS classificacao, cb.prioridade_sem_saldo
+     FROM contas_bancarias_sienge c
+     JOIN classificacoes_bancarias cb ON cb.id = c.classificacao_id
+     WHERE c.empresa_id = $1 AND c.projeta_saldo = TRUE`,
     [empresaId]
   );
   return rows;
@@ -542,16 +542,12 @@ async function buscarSaldosVanpix(empresaId, usuarioId, data) {
   // classificação dela estiver como "Buscar saldo anterior" (SALDO_ANTERIOR). Qualquer outra
   // fica em branco pra ser informada à mão; se uma abertura anterior deste mesmo dia tinha
   // gravado saldo automático nela, ele é apagado (saldo digitado à mão nunca é apagado).
-  const [contasAlvo, prioridadePorClassificacao, automaticosDoDia] = await Promise.all([
-    listarContasAlvo(empresaId),
-    classificacoesService.mapaPorNome(empresaId),
-    listarSaldosAutomaticosDoDia(empresaId, data),
-  ]);
+  const [contasAlvo, automaticosDoDia] = await Promise.all([listarContasAlvo(empresaId), listarSaldosAutomaticosDoDia(empresaId, data)]);
 
   for (const conta of contasAlvo) {
     const chave = `${conta.company_id}:${conta.numero_conta}`;
     if (casadasNaApi.has(chave)) continue;
-    const herda = prioridadePorClassificacao.get(conta.classificacao) === 'SALDO_ANTERIOR';
+    const herda = conta.prioridade_sem_saldo === 'SALDO_ANTERIOR';
     const anterior = herda ? await ultimoSaldoAnterior(empresaId, conta.company_id, conta.numero_conta, data) : null;
     const valorHerdado = anterior ? anterior.valor : null;
 
