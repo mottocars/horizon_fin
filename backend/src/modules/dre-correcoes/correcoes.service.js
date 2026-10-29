@@ -21,10 +21,11 @@ const BAIXA_DISTRATO = 7;
 //   em_aberto   — saldo corrigido − saldo (corrected_balance_amount − balance_amount) das parcelas
 //                 com saldo: a correção já acumulada e ainda não recebida. Mantém o sinal (índice
 //                 negativo, ex. IGP-M, dá correção negativa; a query antiga só pegava > 0).
-// Só o que foi corrigido até o mês atual (pedido do usuário — nada de correção futura): paga e
-// reparcelada pela data da baixa (quando a correção se realizou — uma parcela de 2027 reparcelada em
-// 2025 conta, a correção dela foi realizada em 2025); em aberto só das parcelas que vencem até o
-// fim do mês atual (as de vencimento futuro ficam de fora).
+// Sempre pela data de vencimento da parcela (pedido do usuário), só até o mês atual — nada de
+// correção futura: paga, reparcelada e em aberto só das parcelas que vencem até o fim do mês atual.
+// Uma parcela de 2027 paga adiantado ou reparcelada em 2025 só entra quando vencer (como na planilha
+// do usuário; até 29/10/2026 era pela data da baixa e o centro 5 da TOSTE E DINIZ dava 568 mil em
+// vez de 247 mil — 290 mil de reparcelamentos de 2025 de parcelas de 2027, 31 mil de antecipações).
 // Todo tipo de documento entra (contrato, recibo, reembolso de encargos…): correção é correção.
 // Centro de custo: o das categorias da parcela (sie_income_categorias), rateado pelo percentual
 // quando uma parcela cai em mais de um centro — a query antiga, com DISTINCT, repetia a correção
@@ -43,8 +44,7 @@ function sqlParcelas(filtros = []) {
          i.due_date, r.data_baixa,
          COALESCE(r.paga, 0) * p.peso AS paga,
          COALESCE(r.reparcelada, 0) * p.peso AS reparcelada,
-         CASE WHEN i.balance_amount > 0 AND i.due_date < ${LIMITE}
-              THEN i.corrected_balance_amount - i.balance_amount ELSE 0 END * p.peso AS em_aberto
+         CASE WHEN i.balance_amount > 0 THEN i.corrected_balance_amount - i.balance_amount ELSE 0 END * p.peso AS em_aberto
     FROM sie_income i
     CROSS JOIN LATERAL (
       SELECT cost_center_id,
@@ -67,9 +67,8 @@ function sqlParcelas(filtros = []) {
              ) AS data_baixa
         FROM sie_income_recebimentos r
        WHERE r.bill_id = i.bill_id AND r.installment_id = i.installment_id AND r.empresa_id = i.empresa_id
-         AND r.payment_date < ${LIMITE}
     ) r
-   WHERE ${['i.empresa_id = $1', ...filtros].join(' AND ')}`;
+   WHERE ${['i.empresa_id = $1', `i.due_date < ${LIMITE}`, ...filtros].join(' AND ')}`;
 }
 
 // Só as parcelas com alguma correção.

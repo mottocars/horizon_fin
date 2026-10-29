@@ -76,7 +76,8 @@ function plural(n, um, varios) {
 }
 
 // Operações > DRE Gerencial > Correções: a correção monetária das parcelas a receber do Sienge, paga,
-// reparcelada e em aberto, só até o mês atual (premissas em dre-correcoes/correcoes.service.js).
+// reparcelada e em aberto, pelo vencimento da parcela e só até o mês atual (premissas em
+// dre-correcoes/correcoes.service.js).
 // Drilldown em 3 níveis: centro de custo (só os com "Realiza DRE", todos, como no Orçamento) →
 // cliente → parcela. As parcelas de um cliente só são buscadas ao abri-lo (a GENESIS tem dezenas de
 // milhares de parcelas com correção). Vários abertos ao mesmo tempo; com busca (cliente, unidade ou
@@ -182,7 +183,7 @@ export default function CorrecoesTab({ empresaId, search = '' }) {
     <div className="min-w-fit rounded-card rounded-tl-none bg-white p-5 shadow-card">
       {dados && (
         <div className="-mt-1 mb-3 flex justify-end gap-3 text-xs text-gray-400">
-          <span title="Paga e reparcelada pela data da baixa; em aberto só das parcelas que vencem até o fim deste mês">
+          <span title="Pela data de vencimento: só as parcelas que vencem até o fim deste mês (paga, reparcelada e em aberto)">
             Correções até {mesAno(dados.ate_mes)}
           </span>
           {dados.ultima_atualizacao && <span>· Contas a receber atualizadas do Sienge em {dataHora(dados.ultima_atualizacao)}</span>}
