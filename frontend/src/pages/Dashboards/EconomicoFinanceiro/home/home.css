@@ -28,6 +28,14 @@
   width: 100%;
   height: 100%;
 }
+/* Luz larga e fraca que passa devagar pelo fundo (animada só com movimento liberado, lá embaixo). */
+.home-ef__luz {
+  position: absolute;
+  inset: -30%;
+  pointer-events: none;
+  background: radial-gradient(circle at 50% 50%, rgb(255 255 255 / 0.1), rgb(255 255 255 / 0.03) 22%, transparent 38%);
+  transform: translate(-12%, -8%);
+}
 
 .home-ef__executivo {
   position: absolute;
@@ -133,6 +141,19 @@
 
 /* Entrada: o executivo sobe e o letreiro aparece logo depois (só com movimento liberado). */
 @media (prefers-reduced-motion: no-preference) {
+  /* Fundo vivo, mas discreto: a luz atravessa em ~25s, os triângulos acendem um pouco e voltam,
+     a aura atrás da cabeça respira. Só transform/opacidade — leve para o navegador. */
+  .home-ef__luz {
+    animation: home-ef-luz 26s ease-in-out infinite alternate;
+  }
+  .home-ef__faceta-viva {
+    animation-name: home-ef-faceta;
+    animation-timing-function: ease-in-out;
+    animation-iteration-count: infinite;
+  }
+  .home-ef__aura {
+    animation: home-ef-aura 7s ease-in-out infinite;
+  }
   .home-ef__executivo {
     animation: home-ef-sobe 900ms cubic-bezier(0.16, 1, 0.3, 1) both;
   }
@@ -167,5 +188,33 @@
   to {
     transform: none;
     opacity: 1;
+  }
+}
+@keyframes home-ef-luz {
+  from {
+    transform: translate(-22%, -14%);
+  }
+  to {
+    transform: translate(26%, 12%);
+  }
+}
+@keyframes home-ef-faceta {
+  0%,
+  100% {
+    fill-opacity: var(--op);
+  }
+  50% {
+    fill-opacity: calc(var(--op) + 0.07);
+  }
+}
+@keyframes home-ef-aura {
+  0%,
+  100% {
+    transform: scale(1);
+    opacity: 1;
+  }
+  50% {
+    transform: scale(1.06);
+    opacity: 0.75;
   }
 }
