@@ -187,7 +187,7 @@ Limite cadastrado na conta (Cadastros > Contas Bancárias). Nos dias com abertur
 
 ## Rotinas e Comunicar Saldos (aba Configurações)
 - Gerar Rotinas: divide as contas entre responsáveis (por classificação ou por banco); o período só encerra depois que todos encerram a própria rotina.
-- Comunicar Saldos: ao encerrar o período, manda WhatsApp aos destinatários com o resumo (Liberado — sem o cheque —, Limite cheque, Bloqueado, Saldo a cobrir; sem centavos e sem o Liberado + cheque), a mensagem do administrador e a planilha da semana.
+- Comunicar Saldos: ao encerrar o período, manda WhatsApp aos destinatários com o resumo na ordem da tela (Liberado + cheque em destaque, Liberado — sem o cheque —, Limite cheque, Bloqueado, Saldo a cobrir; sem centavos), a mensagem do administrador e a planilha da semana.
 
 ## Ferramentas
 - saldos_resumo: totais do dia (ou intervalo) e quem compõe cada total (conta a conta).

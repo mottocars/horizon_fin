@@ -105,7 +105,7 @@ export default function EncerrarPeriodoModal({ open, onClose, empresaId, dataAbe
               </label>
               <EditorMensagemWhatsApp id="mensagem-encerramento" value={mensagem} onChange={setMensagem} />
               <p className="mt-1 text-xs text-gray-400">
-                O WhatsApp leva o resumo dos saldos (liberado, bloqueado, limite cheque e saldo a cobrir) e esta mensagem logo abaixo.
+                O WhatsApp leva o resumo dos saldos (liberado + cheque, liberado, limite cheque, bloqueado e saldo a cobrir) e esta mensagem logo abaixo.
               </p>
             </div>
           )}
