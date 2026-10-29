@@ -130,6 +130,9 @@ export default function DreGerencialPage() {
   const [buscaUnidades, setBuscaUnidades] = useState('');
   const [atualizandoUnidades, setAtualizandoUnidades] = useState(false);
 
+  // Busca (cliente, unidade ou centro de custo) da aba Correções — mesma convenção acima.
+  const [buscaCorrecoes, setBuscaCorrecoes] = useState('');
+
   // Geração/atualização do plano de contas (Sienge) — mesmo esquema de handleAtualizarContas
   // em SaldoContasBancariasPage.jsx. `totalPlanoContas` (reportado pela própria aba via
   // onTotal) decide qual ícone mostrar: "+" sem nenhuma conta gerada ainda, refresh depois de
@@ -275,6 +278,23 @@ export default function DreGerencialPage() {
               </div>
             )}
 
+            {abaAtiva === 'correcoes' && (
+              <div className="sm:min-w-56 sm:max-w-sm sm:flex-1">
+                <label className="mb-1 block text-sm font-medium text-gray-700">Buscar</label>
+                <div className="relative">
+                  <Search size={15} className="pointer-events-none absolute left-3 top-1/2 -translate-y-1/2 text-gray-400" />
+                  <input
+                    type="text"
+                    value={buscaCorrecoes}
+                    onChange={(e) => setBuscaCorrecoes(e.target.value)}
+                    disabled={semEmpresa}
+                    placeholder={semEmpresa ? 'Selecione a empresa primeiro' : 'Buscar por cliente, unidade ou centro de custo...'}
+                    className="w-full rounded-lg border border-gray-200 py-2 pl-9 pr-3 text-sm focus:outline-none focus:ring-2 focus:ring-primary-100 disabled:bg-gray-50 disabled:text-gray-400"
+                  />
+                </div>
+              </div>
+            )}
+
             {abaAtiva === 'centros-custos' && (
               <div className="sm:min-w-56 sm:max-w-sm sm:flex-1">
                 <label className="mb-1 block text-sm font-medium text-gray-700">Buscar</label>
@@ -383,7 +403,7 @@ export default function DreGerencialPage() {
           />
         )}
 
-        {abaAtiva === 'correcoes' && <CorrecoesTab empresaId={empresaId} />}
+        {abaAtiva === 'correcoes' && <CorrecoesTab empresaId={empresaId} search={buscaCorrecoes} />}
 
         {abaAtiva === 'plano-de-contas' &&
           (planoAberto ? (
