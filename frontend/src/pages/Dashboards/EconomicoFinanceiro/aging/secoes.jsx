@@ -279,7 +279,7 @@ export function Simulador({ E }) {
             <div>
               <span>Saldo de partida</span>
               <strong>{brl(sim.ini)}</strong>
-              <small>{temBanco ? `${p.partida === 'total' ? 'liberado + bloqueado' : 'caixa livre'} em ${dm(E.banco.data)}` : 'sem saldo lançado'}</small>
+              <small>{temBanco ? `${p.partida === 'total' ? 'caixa livre + bloqueado' : 'caixa livre'} em ${dm(E.banco.data)}` : 'sem saldo lançado'}</small>
             </div>
             <div>
               <span>Entradas</span>
@@ -353,7 +353,7 @@ export function Simulador({ E }) {
               Saldo de partida
               <select id="s-part" value={p.partida} onChange={(e) => mudar({ partida: e.target.value })} disabled={!temBanco}>
                 <option value="livre">Caixa livre</option>
-                <option value="total">Liberado + bloqueado</option>
+                <option value="total">Caixa livre + bloqueado</option>
               </select>
             </label>
           </div>

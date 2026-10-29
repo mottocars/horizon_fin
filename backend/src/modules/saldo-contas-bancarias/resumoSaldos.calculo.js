@@ -1,22 +1,26 @@
-// Resumo dos saldos (linhas abaixo do TOTAL GERAL na grade, 1ª seção da planilha e corpo do
+// Resumo dos saldos (TOTAL GERAL e as linhas abaixo dele na grade, 1ª seção da planilha e corpo do
 // WhatsApp do Comunicar Saldos) — função pura (backend/test/resumoSaldos.test.js). A grade tem
-// a mesma regra em frontend/.../SaldoContasBancarias/constantes.js::calcularResumoSaldos.
+// a mesma regra em frontend/.../SaldoContasBancarias/constantes.js::calcularResumoSaldos, e o caixa
+// livre do Aging List (frontend/.../aging/modelo.js::caixa) é o Total geral.
 //
 // Por dia, olhando só as contas com saldo lançado no dia:
-// - Total liberado: contas de classificação liberada — saldo menos o bloqueio registrado (só a
-//   parte positiva) + limite restante do cheque especial. Saldo negativo não entra (já está
-//   descontado do limite restante e aparece no Saldo a cobrir): -200 com limite 500 -> 300.
+// - Total geral = Liberado + Limite cheque (pedido do usuário): tudo que dá para usar no dia.
+// - Liberado: contas de classificação liberada — saldo menos o bloqueio registrado, só a parte
+//   positiva, SEM o cheque especial. Saldo negativo não entra (aparece no Saldo a cobrir e já está
+//   descontado do limite restante).
 // - Total bloqueado: saldo inteiro das contas de classificação bloqueada + bloqueios
 //   registrados nas demais contas.
 // - Limite cheque: soma dos limites restantes do cheque especial (todas as contas).
 // - Saldo a cobrir: soma dos saldos negativos (todas as contas).
+// Ex.: −500 com limite 100 mil → Liberado 0, Limite cheque 99.500, Total geral 99.500; 500 com limite
+// 100 mil → Liberado 500, Limite cheque 100.000, Total geral 100.500.
 // Limite restante segue a regra da linha de detalhe da grade: só nos dias com abertura de
 // período (`periodos`); saldo negativo -> limite + saldo; senão o limite inteiro.
 // Classificação com liberado/bloqueado não informado (null) não entra em nenhum dos dois totais
 // pelo saldo — só o bloqueio registrado dela conta como bloqueado.
 
 const RESUMO_SALDOS = [
-  { chave: 'liberado', rotulo: 'Total liberado' },
+  { chave: 'liberado', rotulo: 'Liberado' },
   { chave: 'bloqueado', rotulo: 'Total bloqueado' },
   { chave: 'limiteCheque', rotulo: 'Limite cheque' },
   { chave: 'aCobrir', rotulo: 'Saldo a cobrir' },
@@ -38,26 +42,29 @@ function contribuicaoConta(conta, iso, periodos) {
   const saldo = centavos(conta.saldos[iso]);
   const bloqueio = centavos(conta.bloqueios?.[iso] || 0);
   const restante = limiteRestanteCentavos(conta, iso, periodos);
+  const liberado = conta.classificacao_libera_saldo === true ? Math.max(saldo - bloqueio, 0) : 0;
   return {
     saldo,
     bloqueio,
     restante,
-    liberado: conta.classificacao_libera_saldo === true ? Math.max(saldo - bloqueio, 0) + restante : 0,
+    liberado,
     bloqueado: conta.classificacao_libera_saldo === false ? saldo : bloqueio,
     limiteCheque: restante,
     aCobrir: Math.min(saldo, 0),
+    totalGeral: liberado + restante,
   };
 }
 
 // `contas`: o formato de saldos.service.js::getSaldos (saldos/bloqueios por dia,
-// classificacao_libera_saldo, valor_cheque_especial). Devolve { liberado: {iso: n}, ... } —
-// só os dias em que alguma conta tem saldo lançado.
+// classificacao_libera_saldo, valor_cheque_especial). Devolve { totalGeral: {iso: n}, liberado: {...},
+// ... } — só os dias em que alguma conta tem saldo lançado.
 function calcularResumoSaldos(contas, diasIso, periodos) {
-  const resumo = Object.fromEntries(RESUMO_SALDOS.map((r) => [r.chave, {}]));
+  const chaves = ['totalGeral', ...RESUMO_SALDOS.map((r) => r.chave)];
+  const resumo = Object.fromEntries(chaves.map((k) => [k, {}]));
   for (const iso of diasIso) {
     const partes = contas.map((c) => contribuicaoConta(c, iso, periodos)).filter(Boolean);
     if (partes.length === 0) continue;
-    for (const { chave } of RESUMO_SALDOS) resumo[chave][iso] = partes.reduce((t, p) => t + p[chave], 0) / 100;
+    for (const k of chaves) resumo[k][iso] = partes.reduce((t, p) => t + p[k], 0) / 100;
   }
   return resumo;
 }

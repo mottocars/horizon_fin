@@ -440,23 +440,19 @@ function SaldosContasTab({
     });
   }, [contasFiltradas]);
 
-  const { totaisPorGrupo, totalGeral } = useMemo(() => {
+  const totaisPorGrupo = useMemo(() => {
     const porGrupo = {};
-    const somaGeral = {};
     for (const grupo of grupos) {
       const porDia = {};
       for (const conta of grupo.contas) {
         for (const [data, valor] of Object.entries(conta.saldos)) (porDia[data] ||= []).push(valor);
       }
       porGrupo[grupo.value] = Object.fromEntries(Object.entries(porDia).map(([data, v]) => [data, somarSaldos(v)]));
-      for (const [data, v] of Object.entries(porGrupo[grupo.value])) (somaGeral[data] ||= []).push(v);
     }
-    return {
-      totaisPorGrupo: porGrupo,
-      totalGeral: Object.fromEntries(Object.entries(somaGeral).map(([data, v]) => [data, somarSaldos(v)])),
-    };
+    return porGrupo;
   }, [grupos]);
 
+  // Total geral = Liberado + Limite cheque (pedido do usuário) — vem do resumo, não da soma dos grupos.
   const resumo = useMemo(
     () => calcularResumoSaldos(contasFiltradas || [], dias.map((d) => d.iso), diasComPeriodo),
     [contasFiltradas, dias, diasComPeriodo]
@@ -990,7 +986,7 @@ function SaldosContasTab({
                     }`}
                     style={{ bottom: -24 + RESUMO_SALDOS.length * ALTURA_RODAPE }}
                   >
-                    <ValorTotal valor={totalGeral[d.iso]} />
+                    <ValorTotal valor={resumo.totalGeral[d.iso]} />
                   </td>
                 ))}
               </tr>

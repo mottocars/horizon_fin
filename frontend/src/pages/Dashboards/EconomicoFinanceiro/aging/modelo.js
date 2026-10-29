@@ -81,10 +81,11 @@ export const rotuloPessoa = (lado, plural = false) => (lado === 'r' ? (plural ? 
 
 // Saldo das contas (o formato do backend) com a regra do Resumo dos saldos da tela Saldo Contas
 // Bancárias (backend/.../saldo-contas-bancarias/resumoSaldos.calculo.js — mudou lá, muda aqui):
-// - livre = o Total liberado, tudo o que dá para usar no dia: nas contas de classificação liberada,
-//   saldo menos o bloqueio registrado (só a parte positiva) + o limite restante do cheque especial
-//   (saldo negativo já sai do limite: -200 com limite 500 -> 300);
-// - cheque = quanto do livre é cheque especial (os limites restantes das contas liberadas);
+// - livre = o Total geral da tela (Liberado + Limite cheque), tudo o que dá para usar no dia: nas contas
+//   de classificação liberada, saldo menos o bloqueio registrado (só a parte positiva), + o limite
+//   restante do cheque especial de todas as contas (saldo negativo já sai do limite: -200 com limite
+//   500 -> 300);
+// - cheque = quanto do livre é cheque especial (o Limite cheque da tela);
 // - bloqueado = contas de classificação bloqueada + bloqueios registrados nas outras;
 // - total = livre + bloqueado.
 export function caixa(contas) {
@@ -96,10 +97,9 @@ export function caixa(contas) {
     const saldo = c100(c.saldo);
     const bloqueio = c100(c.bloqueio);
     const restante = c.limite > 0 ? c100(c.limite) + Math.min(saldo, 0) : 0;
-    if (c.libera === true) {
-      livre += Math.max(saldo - bloqueio, 0) + restante;
-      cheque += restante;
-    }
+    if (c.libera === true) livre += Math.max(saldo - bloqueio, 0);
+    livre += restante;
+    cheque += restante;
     bloqueado += c.libera === false ? saldo : bloqueio;
   });
   return { livre: livre / 100, cheque: cheque / 100, bloqueado: bloqueado / 100, total: (livre + bloqueado) / 100, contas: contas.length };
@@ -478,7 +478,7 @@ export function maiores(E, lado, quais, n = 10) {
 // - atrasoReceb: dias de atraso nos recebimentos;
 // - recuperar: % do vencido a receber de até 90 dias que entra, dividido pelos dias úteis do período;
 // - semCaixa: permutas e "Não cobrar" não entram no banco;
-// - partida: 'livre' (o Total liberado, com o cheque especial dentro) ou 'total' (liberado + bloqueado).
+// - partida: 'livre' (o Total geral da tela Saldo, com o cheque especial dentro) ou 'total' (caixa livre + bloqueado).
 // Como o cheque especial já está no saldo de partida, saldo negativo = falta caixa; abaixo do valor do
 // cheque (`cheque`) = o caixa próprio acabou e o cheque especial está sendo usado.
 export const CENARIOS = {

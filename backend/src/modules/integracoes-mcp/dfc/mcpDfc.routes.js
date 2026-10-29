@@ -23,6 +23,7 @@ const INSTRUCOES = {
     'Valores em R$ com sinal (saída negativa).',
   SALDOS_CONTAS:
     'Saldo das Contas Bancárias (Operações > Saldo Contas Bancárias, só leitura): comece por saldos_guia — explica classificações, origem de cada saldo (automático VanPix/Itaú, herdado do dia anterior ou manual), bloqueios, cheque especial e como cada total é calculado. ' +
+    'Total geral = Liberado + Limite cheque (tudo que dá para usar no dia); o Liberado NÃO inclui o cheque especial. ' +
     'Totais e quem compõe cada um: saldos_resumo; cada conta no dia: saldos_contas; uma conta ao longo dos dias: saldos_historico_conta. Datas AAAA-MM-DD. ' +
     'Não confunda com dfc_saldos_bancarios (saldo de abertura do mês pelo extrato do Sienge, usado no DFC).',
   AGING:
