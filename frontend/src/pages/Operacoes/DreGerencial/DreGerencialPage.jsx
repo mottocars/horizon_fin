@@ -1,6 +1,18 @@
 import { useEffect, useRef, useState } from 'react';
 import { useSearchParams } from 'react-router-dom';
-import { BarChart3, Building2, Calculator, House, ListTree, Plus, RefreshCw, Search, Tags, Trash2 } from 'lucide-react';
+import {
+  BarChart3,
+  Building2,
+  Calculator,
+  FilePenLine,
+  House,
+  ListTree,
+  Plus,
+  RefreshCw,
+  Search,
+  Tags,
+  Trash2,
+} from 'lucide-react';
 import Card from '../../../components/Card';
 import Tabs from '../../../components/Tabs';
 import Button from '../../../components/Button';
@@ -18,6 +30,7 @@ import PlanosContasLista from './PlanosContasLista';
 import NovaVersaoPlanoModal from './NovaVersaoPlanoModal';
 import CentrosCustosTab from './CentrosCustosTab';
 import UnidadesTab from './UnidadesTab';
+import CorrecoesTab from './CorrecoesTab';
 import DreTab from './DreTab';
 
 // O `{ divider: true }` separa a DRE (a demonstração em si) das abas de cadastro/parâmetro que
@@ -37,6 +50,7 @@ const TABS = [
   { id: 'plano-de-contas', label: 'Plano Contas', icon: ListTree },
   { id: 'orcamento', label: 'Orçamento', icon: Calculator },
   { id: 'unidades', label: 'Unidades', icon: House },
+  { id: 'correcoes', label: 'Correções', icon: FilePenLine },
 ];
 
 // Empresa e aba vivem na URL (não em useState local) — mesmo motivo de todas as outras telas
@@ -368,6 +382,8 @@ export default function DreGerencialPage() {
             onAtualizando={setAtualizandoUnidades}
           />
         )}
+
+        {abaAtiva === 'correcoes' && <CorrecoesTab empresaId={empresaId} />}
 
         {abaAtiva === 'plano-de-contas' &&
           (planoAberto ? (
