@@ -26,13 +26,14 @@ function semanaDe(iso) {
 // Corpo = os 4 totalizadores do Resumo dos saldos (resumoSaldos.calculo.js) + a mensagem que o
 // administrador escreveu ao encerrar o período (EncerrarPeriodoModal.jsx), quando houver — no
 // lugar do antigo resumo por classificação (pedido do usuário; o detalhe segue na planilha).
-function montarMensagem({ nomeDestinatario, dataBR, resumo, mensagemAdministrador }) {
+// `enviadoPor`: quem encerrou o período (responsável pelo envio) — vai ao lado da data (pedido do usuário).
+function montarMensagem({ nomeDestinatario, dataBR, enviadoPor, resumo, mensagemAdministrador }) {
   const primeiroNome = String(nomeDestinatario || '').trim().split(/\s+/)[0];
   // Sem centavos no WhatsApp (pedido do usuário) — o valor exato está na planilha anexa.
   const valor = (v) => `R$ ${Math.round(Number(v || 0)).toLocaleString('pt-BR')}`;
   return [
     '*[ SALDO DAS CONTAS ]*',
-    `_Posição de ${dataBR}_`,
+    `_Posição de ${dataBR}${enviadoPor ? ` · enviado por ${enviadoPor}` : ''}_`,
     '',
     `Olá${primeiroNome ? `, ${primeiroNome}` : ''}! Segue o resumo dos saldos das contas bancárias.`,
     '',
@@ -56,8 +57,9 @@ function montarMensagem({ nomeDestinatario, dataBR, resumo, mensagemAdministrado
 // saiu, pra quem, e o motivo de quem falhou — antes disso era só log de servidor, invisível
 // pra quem estava na tela. Nunca lança: todo problema vira `status: 'erro'` ou uma falha
 // pontual em `falhas`, nunca interrompe o encerramento do período (que já aconteceu antes
-// desta função ser chamada). `mensagem`: texto livre do administrador (opcional).
-async function notificarComunicarSaldos(empresaId, dataFechada, { mensagem = null } = {}) {
+// desta função ser chamada). `mensagem`: texto livre do administrador (opcional); `usuarioId`: quem
+// encerrou o período (o nome vai na mensagem como responsável pelo envio).
+async function notificarComunicarSaldos(empresaId, dataFechada, { mensagem = null, usuarioId = null } = {}) {
   const prefixo = `[comunicar-saldos] empresa ${empresaId}, dia ${dataFechada}:`;
   const nada = { enviados: [], falhas: [] };
 
@@ -89,6 +91,8 @@ async function notificarComunicarSaldos(empresaId, dataFechada, { mensagem = nul
   const resumoDia = calcularResumoSaldos(contas, [dataFechada], new Set(periodos));
   const resumo = Object.fromEntries(Object.entries(resumoDia).map(([chave, porDia]) => [chave, porDia[dataFechada] || 0]));
   const dataBR = brData(dataFechada);
+  const { rows: remetente } = usuarioId ? await pool.query('SELECT nome FROM usuarios WHERE id = $1', [usuarioId]) : { rows: [] };
+  const enviadoPor = remetente[0]?.nome || null;
 
   // Anexo: o mesmo relatório do botão "Exportar", pra semana (domingo-sábado) inteira que
   // contém o dia encerrado — sem filtro nenhum (não existe filtro de tela ativo num disparo
@@ -120,7 +124,7 @@ async function notificarComunicarSaldos(empresaId, dataFechada, { mensagem = nul
         throw new Error(`usuário "${dest.nome}" (id ${dest.id}) sem telefone cadastrado`);
       }
       const telefone = `${dest.telefone_ddd}${dest.telefone_numero}`;
-      const texto = montarMensagem({ nomeDestinatario: dest.nome, dataBR, resumo, mensagemAdministrador: mensagem });
+      const texto = montarMensagem({ nomeDestinatario: dest.nome, dataBR, enviadoPor, resumo, mensagemAdministrador: mensagem });
       if (anexoBase64) {
         await zapiService.enviarDocumento(zapiIntegracaoId, {
           telefone,

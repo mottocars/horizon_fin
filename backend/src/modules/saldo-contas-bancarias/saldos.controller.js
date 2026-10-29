@@ -218,7 +218,7 @@ async function encerrarPeriodo(req, res, next) {
     // disso era fire-and-forget e ficava invisível pra quem estava na tela). O período já
     // está encerrado no banco nesse ponto; uma falha aqui não desfaz isso, só é informada.
     const notificacao = await comunicarSaldosService
-      .notificarComunicarSaldos(empresaId, resultado.dataFechada, { mensagem })
+      .notificarComunicarSaldos(empresaId, resultado.dataFechada, { mensagem, usuarioId: req.user.id })
       .catch((err) => {
         console.error('[comunicar-saldos] falha inesperada:', err);
         return { status: 'erro', mensagem: err.message || 'Falha inesperada ao enviar o aviso.', enviados: [], falhas: [] };
