@@ -32,7 +32,7 @@ import { listEmpresas } from '../../../api/empresas.api';
 import { listCentrosDfc, listVersoesParametrosDfc } from '../../../api/dfcParametros.api';
 import { listCentrosCustoDfc } from '../../../api/dfcCentros.api';
 import { gerarPlano } from '../../../api/planosFinanceirosSienge.api';
-import { excluirVersaoPlanoDfc, listVersoesPlanoDfc } from '../../../api/dfcPlanoContas.api';
+import { excluirVersaoPlanoDfc, exportarPlanoDfcExcel, listVersoesPlanoDfc } from '../../../api/dfcPlanoContas.api';
 import { exportarExcelDfc } from '../../../api/dfcExportacao.api';
 import { baixarLayoutOrcamento } from '../../../api/dfcPlanilhaOrcamentaria.api';
 import { useConfirm } from '../../../confirm/ConfirmContext';
@@ -348,6 +348,37 @@ export default function DfcConstrutorasPage() {
       setRefreshTokenCardsPlano((n) => n + 1);
     } catch (e) {
       setErroPlano(e.response?.data?.message || 'Não foi possível excluir a versão.');
+    }
+  }
+
+  // Exportar Excel do plano aberto (Global ou o do centro): espelho da tabela, montado no backend
+  // (dfcPlanoContas.excel.js) — mesmo download do Exportar Excel da aba DFC.
+  const [exportandoPlano, setExportandoPlano] = useState(false);
+  async function exportarPlanoExcel() {
+    setErroPlano('');
+    setExportandoPlano(true);
+    try {
+      const { blob, nome } = await exportarPlanoDfcExcel(empresaId, planoCentro?.centro_id ?? null);
+      const url = window.URL.createObjectURL(blob);
+      const link = document.createElement('a');
+      link.href = url;
+      link.download = nome;
+      document.body.appendChild(link);
+      link.click();
+      link.remove();
+      window.URL.revokeObjectURL(url);
+    } catch (err) {
+      // Com responseType 'blob' a mensagem de erro do backend chega dentro de um Blob.
+      let mensagem = 'Não foi possível gerar o Excel.';
+      const dados = err.response?.data;
+      try {
+        mensagem = (dados instanceof Blob ? JSON.parse(await dados.text()) : dados)?.message || mensagem;
+      } catch {
+        // mantém a mensagem padrão
+      }
+      setErroPlano(mensagem);
+    } finally {
+      setExportandoPlano(false);
     }
   }
 
@@ -820,6 +851,16 @@ export default function DfcConstrutorasPage() {
                     <Trash2 size={18} />
                   </button>
                 )}
+                <button
+                  type="button"
+                  onClick={exportarPlanoExcel}
+                  disabled={!empresaId || exportandoPlano}
+                  title="Exportar Excel"
+                  aria-label="Exportar Excel"
+                  className="flex shrink-0 items-center justify-center rounded-lg border border-gray-200 p-2 text-gray-500 transition-colors hover:bg-gray-50 hover:text-gray-800 disabled:cursor-not-allowed disabled:opacity-60"
+                >
+                  {exportandoPlano ? <Loader2 size={18} className="animate-spin" /> : <Download size={18} />}
+                </button>
                 <button
                   type="button"
                   onClick={handleGerarOuAtualizarPlano}

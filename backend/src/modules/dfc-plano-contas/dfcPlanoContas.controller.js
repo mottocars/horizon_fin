@@ -1,5 +1,6 @@
 const { z } = require('zod');
 const service = require('./dfcPlanoContas.service');
+const excel = require('./dfcPlanoContas.excel');
 
 // Opções fixas da "Origem Projeção" (pedido do usuário) — mesma lista do CHECK da tabela e de
 // frontend/src/pages/Operacoes/DfcConstrutoras/DfcPlanoContasTab.jsx (ORIGENS_PROJECAO).
@@ -125,4 +126,18 @@ async function resumo(req, res, next) {
   }
 }
 
-module.exports = { list, update, listVersoes, criarVersao, excluirVersao, listTodas, resumo };
+// GET /:empresaId/excel?centro= — o .xlsx espelho da tabela do plano aberto (sem centro = Global).
+async function exportarExcel(req, res, next) {
+  try {
+    const empresaId = empresaIdSchema.parse(req.params.empresaId);
+    const { buffer, nome } = await excel.gerar(empresaId, centroSchema.parse(req.query.centro), req.user.id);
+    res.setHeader('Content-Type', 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet');
+    res.setHeader('Content-Disposition', `attachment; filename="plano-de-contas-dfc.xlsx"; filename*=UTF-8''${encodeURIComponent(nome)}`);
+    res.setHeader('Access-Control-Expose-Headers', 'Content-Disposition');
+    res.end(buffer);
+  } catch (err) {
+    tratar(err, next);
+  }
+}
+
+module.exports = { list, update, listVersoes, criarVersao, excluirVersao, listTodas, resumo, exportarExcel };
