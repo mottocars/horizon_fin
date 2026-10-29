@@ -4,7 +4,8 @@
 // response.json() estourava o limite de texto do Node ("Cannot create a string longer than
 // 0x1fffffe8 characters"). Só o item em leitura fica em memória.
 // `corpo`: fetch Response.body (ou qualquer iterável assíncrono de Uint8Array).
-// Sem a lista `campo` no objeto raiz, dá erro no fim (uma resposta inesperada não vira "zero itens").
+// Sem a lista `campo` no objeto raiz, dá erro no fim (uma resposta inesperada não vira "zero itens"),
+// com o começo do que veio e `semLista = true` — nenhum item foi entregue, então dá para tentar de novo.
 
 const ASPAS = 34;
 const BARRA = 92;
@@ -14,6 +15,7 @@ const ABRE_OBJ = 123;
 const FECHA_OBJ = 125;
 const ABRE_LISTA = 91;
 const FECHA_LISTA = 93;
+const AMOSTRA = 200; // caracteres do começo da resposta na mensagem de erro
 
 async function* itensDoCampo(corpo, campo) {
   const decodificador = new TextDecoder('utf-8');
@@ -26,8 +28,10 @@ async function* itensDoCampo(corpo, campo) {
   let naLista = false; // dentro da lista `campo`
   let achou = false;
   let partes = null; // pedaços do item em leitura (ele pode atravessar vários blocos)
+  let comeco = ''; // o começo da resposta, para o erro
 
   const processar = function* (s) {
+    if (comeco.length < AMOSTRA) comeco += s.slice(0, AMOSTRA - comeco.length);
     let inicio = partes ? 0 : -1;
     for (let i = 0; i < s.length; i++) {
       const c = s.charCodeAt(i);
@@ -75,7 +79,12 @@ async function* itensDoCampo(corpo, campo) {
 
   for await (const bloco of corpo) yield* processar(decodificador.decode(bloco, { stream: true }));
   yield* processar(decodificador.decode());
-  if (!achou) throw new Error(`A resposta não trouxe a lista "${campo}".`);
+  if (!achou) {
+    const amostra = comeco.replace(/\s+/g, ' ').trim();
+    const e = new Error(`A resposta não trouxe a lista "${campo}" (${amostra ? `começou com: ${amostra}${comeco.length >= AMOSTRA ? '…' : ''}` : 'veio vazia'}).`);
+    e.semLista = true;
+    throw e;
+  }
 }
 
 module.exports = { itensDoCampo };

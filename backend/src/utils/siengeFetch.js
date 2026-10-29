@@ -109,4 +109,4 @@ async function siengeFetch(url, { timeoutMs = TIMEOUT_MS, ...options } = {}) {
   }
 }
 
-module.exports = { siengeFetch };
+module.exports = { siengeFetch, sleep };

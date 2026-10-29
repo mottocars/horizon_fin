@@ -61,7 +61,16 @@ async function fetchPage({ tenant, username, password, offset, limit }) {
 // incidentes de teste travando essa sincronização por minutos).
 async function fetchAllIncome({ tenant, username, password, onProgress }) {
   const page = await fetchPage({ tenant, username, password, offset: 0, limit: 1000 });
-  const results = Array.isArray(page?.data) ? page.data : [];
+  // Resposta sem a lista (o Sienge às vezes responde 200 sem ela — ver outcome-api.client.js) é erro:
+  // virar "zero parcelas" apagaria a base inteira da empresa.
+  if (!Array.isArray(page?.data)) {
+    const amostra = JSON.stringify(page ?? null).slice(0, 200);
+    const e = new Error(`A resposta do Sienge não trouxe a lista "data" do contas a receber (começou com: ${amostra}). Tente de novo em alguns minutos.`);
+    e.status = 502;
+    e.expose = true;
+    throw e;
+  }
+  const results = page.data;
   onProgress?.({ paginaAtual: 1, totalPaginas: 1 });
   return results;
 }

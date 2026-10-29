@@ -1,5 +1,6 @@
-const { siengeFetch } = require('../../utils/siengeFetch');
+const { siengeFetch, sleep } = require('../../utils/siengeFetch');
 const { itensDoCampo } = require('../../utils/jsonEmPartes');
+const { sinalDeCancelamento } = require('../../utils/execucaoCancelavel');
 
 // bulk-data/v1/outcome: contas a pagar (parcelas de credor) — base do Aging a pagar do DFC
 // Construtoras. Mesmo período aberto do income (histórico inteiro, por vencimento), com o saldo
@@ -11,6 +12,10 @@ const CORRECTION_INDEXER_ID = '2';
 // timeout desperdiça a chamada inteira. O tempo vale para a resposta inteira — download e gravação
 // juntos, já que as parcelas são gravadas enquanto chegam (a da GENESIS leva uns 4 min só para baixar).
 const TIMEOUT_MS = 30 * 60_000;
+// Às vezes o Sienge responde 200 sem a lista `data` (madrugada de 29/10/2026: as duas empresas, em
+// 8 s e 63 s; a mesma consulta voltou normal horas depois). Nenhuma parcela foi lida, então tenta de
+// novo depois de cada espera; o erro final traz o começo do que o Sienge mandou.
+const ESPERAS_SEM_LISTA_MS = [60_000, 180_000];
 
 function buildOutcomeUrl(tenant) {
   return `https://api.sienge.com.br/${tenant}/public/api/bulk-data/v1/outcome`;
@@ -66,10 +71,26 @@ async function fetchPage({ tenant, username, password, offset, limit }) {
 // Mesmo comportamento da bulk-data do income (ver income-api.client.js): ignora offset/limit e
 // devolve o período inteiro numa resposta só, em `data`. Sempre uma chamada HTTP só, nunca um laço.
 // A resposta é grande demais para response.json() (passa de 512 MB na GENESIS): devolve as parcelas
-// uma a uma, conforme chegam (utils/jsonEmPartes.js). O erro da API (429, 4xx/5xx) sai antes da 1ª.
-async function abrirOutcome({ tenant, username, password }) {
-  const response = await fetchPage({ tenant, username, password, offset: 0, limit: 1000 });
-  return itensDoCampo(response.body, 'data');
+// uma a uma, conforme chegam (utils/jsonEmPartes.js). O erro da API (429, 4xx/5xx) da 1ª chamada sai
+// antes da 1ª parcela; resposta sem a lista é chamada de novo (ESPERAS_SEM_LISTA_MS).
+async function abrirOutcome(credenciais) {
+  const response = await fetchPage({ ...credenciais, offset: 0, limit: 1000 });
+  return parcelas(credenciais, response);
+}
+
+async function* parcelas(credenciais, response) {
+  for (let tentativa = 0; ; tentativa++) {
+    try {
+      yield* itensDoCampo(response.body, 'data');
+      return;
+    } catch (err) {
+      if (!err.semLista || tentativa >= ESPERAS_SEM_LISTA_MS.length) throw err;
+      const espera = ESPERAS_SEM_LISTA_MS[tentativa];
+      console.warn(`[outcome] ${err.message} Nova chamada ao Sienge em ${espera / 1000} s (tentativa ${tentativa + 2} de ${ESPERAS_SEM_LISTA_MS.length + 1}).`);
+      await sleep(espera, sinalDeCancelamento());
+      response = await fetchPage({ ...credenciais, offset: 0, limit: 1000 });
+    }
+  }
 }
 
 module.exports = { abrirOutcome };
