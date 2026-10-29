@@ -36,6 +36,18 @@ export function excluirVersaoPlanoDre(empresaId, centroId) {
   return http.delete(`/dre-plano-contas/${empresaId}/versoes/${centroId}`).then((res) => res.data);
 }
 
+// Exportar Excel: o .xlsx espelho da tabela do plano aberto (sem `centroId` = Global). Devolve
+// { blob, nome } (nome do arquivo vindo do Content-Disposition).
+export function exportarPlanoDreExcel(empresaId, centroId = null) {
+  return http
+    .get(`/dre-plano-contas/${empresaId}/excel`, { params: centroId ? { centro: centroId } : {}, responseType: 'blob' })
+    .then((res) => {
+      const cabecalho = res.headers['content-disposition'] || '';
+      const utf8 = /filename\*=UTF-8''([^;]+)/i.exec(cabecalho);
+      return { blob: res.data, nome: utf8 ? decodeURIComponent(utf8[1]) : 'Plano de Contas DRE.xlsx' };
+    });
+}
+
 // Resumo pros cards da aba Plano de Contas: { analiticas, global: { com_mascara, centros_seguindo,
 // atualizado_em }, versoes: [{ centro_id, name, natureza, criado_em, criado_por, com_mascara,
 // atualizado_em }] }.

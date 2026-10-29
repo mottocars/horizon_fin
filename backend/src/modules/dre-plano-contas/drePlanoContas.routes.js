@@ -10,6 +10,7 @@ router.param('empresaId', paramEmpresa);
 router.get('/:empresaId', controller.list);
 // Versões do plano por centro de custo — antes de '/:empresaId/:siengeId' (senão "versoes" seria conta).
 router.get('/:empresaId/resumo', controller.resumo);
+router.get('/:empresaId/excel', controller.exportarExcel);
 router.get('/:empresaId/versoes', controller.listVersoes);
 router.post('/:empresaId/versoes', controller.criarVersao);
 router.delete('/:empresaId/versoes/:centroId', controller.excluirVersao);

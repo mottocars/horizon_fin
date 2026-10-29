@@ -4,9 +4,11 @@ import {
   BarChart3,
   Building2,
   Calculator,
+  Download,
   FilePenLine,
   House,
   ListTree,
+  Loader2,
   Plus,
   RefreshCw,
   Search,
@@ -19,7 +21,7 @@ import Button from '../../../components/Button';
 import SearchableSelect from '../../../components/SearchableSelect';
 import { listEmpresas } from '../../../api/empresas.api';
 import { gerarPlano } from '../../../api/planosFinanceirosSienge.api';
-import { excluirVersaoPlanoDre, listVersoesPlanoDre } from '../../../api/drePlanoContas.api';
+import { excluirVersaoPlanoDre, exportarPlanoDreExcel, listVersoesPlanoDre } from '../../../api/drePlanoContas.api';
 import { nomeExibicaoEmpresa } from '../../../utils/empresa';
 import { useEmpresaTravada } from '../../../hooks/useEmpresaTravada';
 import { useConfirm } from '../../../confirm/ConfirmContext';
@@ -208,6 +210,37 @@ export default function DreGerencialPage() {
     }
   }
 
+  // Exportar Excel do plano aberto (Global ou o do centro): espelho da tabela, montado no backend
+  // (drePlanoContas.excel.js) — mesmo download do Exportar Excel da DFC.
+  const [exportandoPlano, setExportandoPlano] = useState(false);
+  async function exportarPlanoExcel() {
+    setErroPlanoContas('');
+    setExportandoPlano(true);
+    try {
+      const { blob, nome } = await exportarPlanoDreExcel(empresaId, planoCentro?.centro_id ?? null);
+      const url = window.URL.createObjectURL(blob);
+      const link = document.createElement('a');
+      link.href = url;
+      link.download = nome;
+      document.body.appendChild(link);
+      link.click();
+      link.remove();
+      window.URL.revokeObjectURL(url);
+    } catch (err) {
+      // Com responseType 'blob' a mensagem de erro do backend chega dentro de um Blob.
+      let mensagem = 'Não foi possível gerar o Excel.';
+      const dados = err.response?.data;
+      try {
+        mensagem = (dados instanceof Blob ? JSON.parse(await dados.text()) : dados)?.message || mensagem;
+      } catch {
+        // mantém a mensagem padrão
+      }
+      setErroPlanoContas(mensagem);
+    } finally {
+      setExportandoPlano(false);
+    }
+  }
+
   const semEmpresa = !empresaId;
 
   return (
@@ -359,6 +392,16 @@ export default function DreGerencialPage() {
                     <Trash2 size={18} />
                   </button>
                 )}
+                <button
+                  type="button"
+                  onClick={exportarPlanoExcel}
+                  disabled={semEmpresa || exportandoPlano}
+                  title="Exportar Excel"
+                  aria-label="Exportar Excel"
+                  className="flex shrink-0 items-center justify-center rounded-lg border border-gray-200 p-2 text-gray-500 transition-colors hover:bg-gray-50 hover:text-gray-800 disabled:cursor-not-allowed disabled:opacity-60"
+                >
+                  {exportandoPlano ? <Loader2 size={18} className="animate-spin" /> : <Download size={18} />}
+                </button>
                 {/* Só o ícone (pedido do usuário, mesmo padrão de ContasTab.jsx em Saldo Contas
                     Bancárias): "+" gera o plano de contas pela primeira vez, refresh atualiza
                     (traz novas contas) depois de já gerado — troca sozinho conforme
