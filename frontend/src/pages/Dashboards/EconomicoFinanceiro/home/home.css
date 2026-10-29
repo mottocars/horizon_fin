@@ -33,8 +33,13 @@
   position: absolute;
   inset: -30%;
   pointer-events: none;
-  background: radial-gradient(circle at 50% 50%, rgb(255 255 255 / 0.1), rgb(255 255 255 / 0.03) 22%, transparent 38%);
+  background: radial-gradient(circle at 50% 50%, rgb(255 255 255 / 0.24), rgb(255 255 255 / 0.08) 18%, transparent 34%);
   transform: translate(-12%, -8%);
+}
+/* Segunda luz, mais fria, no caminho inverso. */
+.home-ef__luz--2 {
+  background: radial-gradient(circle at 50% 50%, rgb(150 200 255 / 0.2), rgb(150 200 255 / 0.06) 16%, transparent 30%);
+  transform: translate(20%, 10%);
 }
 
 .home-ef__executivo {
@@ -141,10 +146,13 @@
 
 /* Entrada: o executivo sobe e o letreiro aparece logo depois (só com movimento liberado). */
 @media (prefers-reduced-motion: no-preference) {
-  /* Fundo vivo, mas discreto: a luz atravessa em ~25s, os triângulos acendem um pouco e voltam,
-     a aura atrás da cabeça respira. Só transform/opacidade — leve para o navegador. */
+  /* Fundo vivo: duas luzes cruzam o fundo em sentidos opostos, os triângulos acendem e voltam,
+     a aura atrás da cabeça pulsa. Só transform/opacidade — leve para o navegador. */
   .home-ef__luz {
-    animation: home-ef-luz 26s ease-in-out infinite alternate;
+    animation: home-ef-luz 12s ease-in-out infinite alternate;
+  }
+  .home-ef__luz--2 {
+    animation: home-ef-luz-2 15s ease-in-out infinite alternate;
   }
   .home-ef__faceta-viva {
     animation-name: home-ef-faceta;
@@ -152,7 +160,7 @@
     animation-iteration-count: infinite;
   }
   .home-ef__aura {
-    animation: home-ef-aura 7s ease-in-out infinite;
+    animation: home-ef-aura 4.5s ease-in-out infinite;
   }
   .home-ef__executivo {
     animation: home-ef-sobe 900ms cubic-bezier(0.16, 1, 0.3, 1) both;
@@ -192,10 +200,18 @@
 }
 @keyframes home-ef-luz {
   from {
-    transform: translate(-22%, -14%);
+    transform: translate(-32%, -20%);
   }
   to {
-    transform: translate(26%, 12%);
+    transform: translate(34%, 18%);
+  }
+}
+@keyframes home-ef-luz-2 {
+  from {
+    transform: translate(30%, 22%);
+  }
+  to {
+    transform: translate(-26%, -16%);
   }
 }
 @keyframes home-ef-faceta {
@@ -204,7 +220,7 @@
     fill-opacity: var(--op);
   }
   50% {
-    fill-opacity: calc(var(--op) + 0.07);
+    fill-opacity: calc(var(--op) + 0.17);
   }
 }
 @keyframes home-ef-aura {
@@ -214,7 +230,7 @@
     opacity: 1;
   }
   50% {
-    transform: scale(1.06);
-    opacity: 0.75;
+    transform: scale(1.14);
+    opacity: 0.55;
   }
 }

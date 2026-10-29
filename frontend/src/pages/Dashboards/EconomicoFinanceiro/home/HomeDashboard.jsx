@@ -40,7 +40,7 @@ function gerarFacetas() {
       for (const t of diag ? [[a, b, d], [a, d, c]] : [[a, b, c], [b, d, c]]) {
         const claro = rnd() > 0.45;
         // Parte dos claros "acende" devagar, cada um no seu tempo (home.css, .home-ef__faceta-viva).
-        const viva = claro && rnd() < 0.35 ? { atraso: -rnd() * 14, duracao: 7 + rnd() * 7 } : null;
+        const viva = claro && rnd() < 0.6 ? { atraso: -rnd() * 10, duracao: 4 + rnd() * 5 } : null;
         tris.push({ d: `M${t.map((p) => p.map((n) => n.toFixed(1)).join(',')).join('L')}Z`, claro, op: 0.015 + rnd() * 0.05, viva });
       }
     }
@@ -65,6 +65,7 @@ export default function HomeDashboard() {
         ))}
       </svg>
       <div className="home-ef__luz" aria-hidden="true" />
+      <div className="home-ef__luz home-ef__luz--2" aria-hidden="true" />
 
       <div className="home-ef__executivo">
         <div className="home-ef__aura" aria-hidden="true" />
