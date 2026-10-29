@@ -1,10 +1,11 @@
-// Resumo dos saldos (TOTAL GERAL e as linhas abaixo dele na grade, 1ª seção da planilha e corpo do
+// Resumo dos saldos (LIBERADO + CHEQUE e as linhas abaixo dele na grade, 1ª seção da planilha e corpo do
 // WhatsApp do Comunicar Saldos) — função pura (backend/test/resumoSaldos.test.js). A grade tem
 // a mesma regra em frontend/.../SaldoContasBancarias/constantes.js::calcularResumoSaldos, e o caixa
-// livre do Aging List (frontend/.../aging/modelo.js::caixa) é o Total geral.
+// livre do Aging List (frontend/.../aging/modelo.js::caixa) é o Liberado + cheque.
 //
 // Por dia, olhando só as contas com saldo lançado no dia:
-// - Total geral = Liberado + Limite cheque (pedido do usuário): tudo que dá para usar no dia.
+// - Liberado + cheque = Liberado + Limite cheque (pedido do usuário; na grade, no lugar do antigo
+//   "Total geral"): tudo que dá para usar no dia.
 // - Liberado: contas de classificação liberada — saldo menos o bloqueio registrado, só a parte
 //   positiva, SEM o cheque especial. Saldo negativo não entra (aparece no Saldo a cobrir e já está
 //   descontado do limite restante).
@@ -12,17 +13,19 @@
 //   registrados nas demais contas.
 // - Limite cheque: soma dos limites restantes do cheque especial (todas as contas).
 // - Saldo a cobrir: soma dos saldos negativos (todas as contas).
-// Ex.: −500 com limite 100 mil → Liberado 0, Limite cheque 99.500, Total geral 99.500; 500 com limite
-// 100 mil → Liberado 500, Limite cheque 100.000, Total geral 100.500.
+// Ex.: −500 com limite 100 mil → Liberado 0, Limite cheque 99.500, Liberado + cheque 99.500; 500 com limite
+// 100 mil → Liberado 500, Limite cheque 100.000, Liberado + cheque 100.500.
 // Limite restante segue a regra da linha de detalhe da grade: só nos dias com abertura de
 // período (`periodos`); saldo negativo -> limite + saldo; senão o limite inteiro.
 // Classificação com liberado/bloqueado não informado (null) não entra em nenhum dos dois totais
 // pelo saldo — só o bloqueio registrado dela conta como bloqueado.
 
+// Ordem das linhas pedida pelo usuário: Liberado + cheque (fora desta lista, é a 1ª), Liberado, Limite
+// cheque, Total bloqueado, Saldo a cobrir.
 const RESUMO_SALDOS = [
   { chave: 'liberado', rotulo: 'Liberado' },
-  { chave: 'bloqueado', rotulo: 'Total bloqueado' },
   { chave: 'limiteCheque', rotulo: 'Limite cheque' },
+  { chave: 'bloqueado', rotulo: 'Total bloqueado' },
   { chave: 'aCobrir', rotulo: 'Saldo a cobrir' },
 ];
 
@@ -51,15 +54,15 @@ function contribuicaoConta(conta, iso, periodos) {
     bloqueado: conta.classificacao_libera_saldo === false ? saldo : bloqueio,
     limiteCheque: restante,
     aCobrir: Math.min(saldo, 0),
-    totalGeral: liberado + restante,
+    liberadoCheque: liberado + restante,
   };
 }
 
 // `contas`: o formato de saldos.service.js::getSaldos (saldos/bloqueios por dia,
-// classificacao_libera_saldo, valor_cheque_especial). Devolve { totalGeral: {iso: n}, liberado: {...},
+// classificacao_libera_saldo, valor_cheque_especial). Devolve { liberadoCheque: {iso: n}, liberado: {...},
 // ... } — só os dias em que alguma conta tem saldo lançado.
 function calcularResumoSaldos(contas, diasIso, periodos) {
-  const chaves = ['totalGeral', ...RESUMO_SALDOS.map((r) => r.chave)];
+  const chaves = ['liberadoCheque', ...RESUMO_SALDOS.map((r) => r.chave)];
   const resumo = Object.fromEntries(chaves.map((k) => [k, {}]));
   for (const iso of diasIso) {
     const partes = contas.map((c) => contribuicaoConta(c, iso, periodos)).filter(Boolean);

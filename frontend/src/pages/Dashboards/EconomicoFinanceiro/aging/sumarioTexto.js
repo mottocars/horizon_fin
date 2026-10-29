@@ -60,7 +60,7 @@ export const ABAS_SUMARIO = [
           '**Vencido a receber** — o que já passou do vencimento; quanto disso tem mais de 90 dias e o **atraso médio ponderado pelo valor** (parcela grande pesa mais). {crit|Atraso crônico} quando mais da metade do vencido tem mais de 90 dias; {warn|Cobrar} nos demais casos.',
           '**Vencido a pagar** — o mesmo para o contas a pagar. {crit|Pagamentos atrasados} quando o atraso é recente; {warn|Atraso antigo: revisar} quando mais de 70% tem mais de 90 dias — costuma ser título que já foi resolvido fora do Sienge ou está em disputa e precisa de baixa ou renegociação.',
           '**Entra / Sai nos próximos 15 dias** — vence de hoje até 14 dias à frente; embaixo, o que vence hoje e nos próximos 7 dias.',
-          '**Caixa livre hoje** — o **Total geral** do último dia com saldo em Operações › Saldo Contas Bancárias (**Liberado + Limite cheque**): tudo o que dá para usar no dia para pagar as contas. O Liberado é, nas contas de classificação de saldo **liberado**, o saldo menos os bloqueios registrados (só a parte positiva); o Limite cheque é o que resta do cheque especial (saldo negativo já sai do limite: −200 com limite 500 → 300). Embaixo, quanto desse valor é cheque especial.',
+          '**Caixa livre hoje** — o **Liberado + cheque** do último dia com saldo em Operações › Saldo Contas Bancárias (Liberado + Limite cheque): tudo o que dá para usar no dia para pagar as contas. O Liberado é, nas contas de classificação de saldo **liberado**, o saldo menos os bloqueios registrados (só a parte positiva); o Limite cheque é o que resta do cheque especial (saldo negativo já sai do limite: −200 com limite 500 → 300). Embaixo, quanto desse valor é cheque especial.',
           '**Menor saldo · 15 dias** — o simulador no cenário Previsto (sem perdas nem atrasos): partindo do caixa livre, o menor saldo de fim de dia nos próximos 15 dias. {good|Caixa cobre}, {warn|Usa cheque especial} (o caixa próprio acaba e entra no cheque, mas não fica negativo) ou {crit|Falta caixa} (negativo: falta mesmo usando todo o cheque especial).',
         ],
       },
@@ -98,7 +98,7 @@ export const ABAS_SUMARIO = [
       {
         titulo: 'Como é calculado',
         itens: [
-          '**Saldo de partida**: o caixa livre (o Total geral da tela Saldo Contas Bancárias: Liberado + Limite cheque) ou o caixa livre + o bloqueado, do último dia com saldo lançado.',
+          '**Saldo de partida**: o caixa livre (o Liberado + cheque da tela Saldo Contas Bancárias) ou o caixa livre + o bloqueado, do último dia com saldo lançado.',
           'Cada dia do horizonte recebe as parcelas a receber e paga as parcelas a pagar que vencem nele. **Vencimento no sábado ou domingo cai na segunda-feira.** Feriados não são tratados.',
           'O que já está vencido **não entra**: o vencido a pagar fica de fora e o vencido a receber só entra pelo ajuste de recuperar.',
           'O gráfico mostra as entradas e as saídas de cada dia, a linha do saldo no fim do dia e — quando o saldo desce até ele — o valor do cheque especial que está dentro do saldo: abaixo dessa linha o caixa está usando o cheque; abaixo de zero, falta caixa. Clique num dia (no gráfico ou no dia a dia) para ver as parcelas dele.',

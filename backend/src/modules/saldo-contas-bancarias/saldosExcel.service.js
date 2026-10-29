@@ -395,14 +395,14 @@ function montarPlanilha(workbook, dados) {
   let linha = 6;
 
   // ------------------------------------------------------------- resumo dos saldos
-  // O mesmo rodapé da grade (resumoSaldos.calculo.js): TOTAL GERAL (= Liberado + Limite cheque) e
+  // O mesmo rodapé da grade (resumoSaldos.calculo.js): LIBERADO + CHEQUE (= Liberado + Limite cheque) e
   // os 4 totalizadores. Os TOTAL das outras seções continuam sendo a soma das linhas de cada uma.
   // Ordem das seções pedida pelo usuário: resumo, classificação, conta bancária, banco.
   escreverFaixaTitulo(sheet, linha, 'RESUMO DOS SALDOS', ultimaColuna);
   linha += 1;
   escreverCabecalhoColunas(sheet, linha, 'RESUMO', dias, meses, ultimaColuna);
   linha += 2;
-  escreverLinhaGrupo(sheet, linha, 'TOTAL GERAL (LIBERADO + LIMITE CHEQUE)', resumo.totalGeral, dias, { total: true });
+  escreverLinhaGrupo(sheet, linha, 'LIBERADO + CHEQUE', resumo.liberadoCheque, dias, { total: true });
   linha += 1;
   for (const { chave, rotulo } of RESUMO_SALDOS) {
     escreverLinhaGrupo(sheet, linha, rotulo.toUpperCase(), resumo[chave], dias, { comFundo: false });

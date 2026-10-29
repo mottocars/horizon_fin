@@ -119,29 +119,31 @@ export function somarSaldos(valores) {
   return valores.reduce((acc, v) => acc + Math.round(v * 100), 0) / 100;
 }
 
-// Resumo dos saldos — TOTAL GERAL e as linhas abaixo dele. Mesma regra (e mesmo teste) do backend:
+// Resumo dos saldos — LIBERADO + CHEQUE e as linhas abaixo dele. Mesma regra (e mesmo teste) do backend:
 // backend/src/modules/saldo-contas-bancarias/resumoSaldos.calculo.js — mudou lá, muda aqui.
-// - Total geral = Liberado + Limite cheque (tudo que dá para usar no dia).
+// - Liberado + cheque = Liberado + Limite cheque (tudo que dá para usar no dia).
 // - Liberado: classificação liberada — saldo menos bloqueio, só a parte positiva, sem o cheque especial.
 // - Total bloqueado: saldo das contas de classificação bloqueada + bloqueios das demais.
 // - Limite cheque: soma dos limites restantes. Saldo a cobrir: soma dos saldos negativos.
 // Limite restante só nos dias com abertura de período, como a linha de detalhe da grade.
+// Ordem das linhas pedida pelo usuário: Liberado + cheque (fora desta lista, é a 1ª), Liberado, Limite
+// cheque, Total bloqueado, Saldo a cobrir.
 export const RESUMO_SALDOS = [
   { chave: 'liberado', rotulo: 'Liberado' },
-  { chave: 'bloqueado', rotulo: 'Total bloqueado' },
   { chave: 'limiteCheque', rotulo: 'Limite cheque' },
+  { chave: 'bloqueado', rotulo: 'Total bloqueado' },
   { chave: 'aCobrir', rotulo: 'Saldo a cobrir' },
 ];
 
 const centavos = (v) => Math.round(Number(v) * 100);
 
 export function calcularResumoSaldos(contas, diasIso, periodos) {
-  const chaves = ['totalGeral', ...RESUMO_SALDOS.map((r) => r.chave)];
+  const chaves = ['liberadoCheque', ...RESUMO_SALDOS.map((r) => r.chave)];
   const resumo = Object.fromEntries(chaves.map((k) => [k, {}]));
   for (const iso of diasIso) {
     const comSaldo = contas.filter((c) => c.saldos[iso] !== undefined && c.saldos[iso] !== null);
     if (comSaldo.length === 0) continue;
-    const soma = { totalGeral: 0, liberado: 0, bloqueado: 0, limiteCheque: 0, aCobrir: 0 };
+    const soma = { liberadoCheque: 0, liberado: 0, bloqueado: 0, limiteCheque: 0, aCobrir: 0 };
     for (const conta of comSaldo) {
       const saldo = centavos(conta.saldos[iso]);
       const bloqueio = centavos(conta.bloqueios?.[iso] || 0);
@@ -153,7 +155,7 @@ export function calcularResumoSaldos(contas, diasIso, periodos) {
       soma.limiteCheque += restante;
       if (saldo < 0) soma.aCobrir += saldo;
     }
-    soma.totalGeral = soma.liberado + soma.limiteCheque;
+    soma.liberadoCheque = soma.liberado + soma.limiteCheque;
     for (const k of chaves) resumo[k][iso] = soma[k] / 100;
   }
   return resumo;

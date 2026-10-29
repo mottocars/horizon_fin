@@ -6,7 +6,7 @@ const { z, falha, r2, ferramenta } = require('../dfc/tools/comum');
 
 // Ferramentas do módulo SALDO DAS CONTAS BANCÁRIAS do conector Horizon (só leitura) — a mesma base da
 // tela Operações > Saldo Contas Bancárias: saldos.service.js::getSaldos (universo da grade) e
-// resumoSaldos.calculo.js (Total geral = Liberado + Limite cheque; Liberado/Total bloqueado/Limite
+// resumoSaldos.calculo.js (Liberado + cheque = Liberado + Limite cheque; Liberado/Total bloqueado/Limite
 // cheque/Saldo a cobrir — a mesma regra da
 // grade, da planilha e do WhatsApp). Fechadas sobre a empresa do conector.
 
@@ -175,19 +175,19 @@ Limite cadastrado na conta (Cadastros > Contas Bancárias). Nos dias com abertur
 
 ## Totais (rodapé da grade), por dia, só contas com saldo lançado
 - Total da classificação (linha de cada classificação): soma dos saldos (com sinal) das contas dela no dia.
-- TOTAL GERAL = LIBERADO + LIMITE CHEQUE: tudo que dá para usar no dia (o dinheiro liberado + o que ainda resta de cheque especial). NÃO é a soma das classificações (essa soma está em "soma_dos_saldos" no saldos_resumo).
-- Abaixo do Total geral, o Resumo dos saldos (1ª seção da planilha e corpo do WhatsApp):
+- LIBERADO + CHEQUE (1ª linha do rodapé, no lugar do antigo "Total geral" — a tela NÃO tem mais "Total geral") = Liberado + Limite cheque: tudo que dá para usar no dia (o dinheiro liberado + o que ainda resta de cheque especial). NÃO é a soma das classificações (essa soma está em "soma_dos_saldos" no saldos_resumo). Chame sempre de "Liberado + cheque".
+- Abaixo do Liberado + cheque, nesta ordem, o Resumo dos saldos (1ª seção da planilha e corpo do WhatsApp):
   · Liberado = nas contas de classificação LIBERADA, saldo − bloqueio, só se positivo. NÃO inclui o cheque especial. Saldo negativo não entra (aparece no Saldo a cobrir).
-  · Total bloqueado = saldo inteiro das contas de classificação BLOQUEADA + bloqueios registrados nas demais contas.
   · Limite cheque = soma dos limites restantes do cheque especial (todas as contas).
+  · Total bloqueado = saldo inteiro das contas de classificação BLOQUEADA + bloqueios registrados nas demais contas.
   · Saldo a cobrir = soma dos saldos negativos (todas as contas).
-  · Ex.: conta liberada com −500 e limite 100 mil → Liberado 0, Limite cheque 99.500, Saldo a cobrir −500, Total geral 99.500. Com 500 e limite 100 mil → Liberado 500, Limite cheque 100.000, Total geral 100.500.
+  · Ex.: conta liberada com −500 e limite 100 mil → Liberado 0, Limite cheque 99.500, Saldo a cobrir −500, Liberado + cheque 99.500. Com 500 e limite 100 mil → Liberado 500, Limite cheque 100.000, Liberado + cheque 100.500.
   · Classificação com tipo "não informado": o saldo não entra nem no Liberado nem no Total bloqueado (só o bloqueio registrado entra no bloqueado).
-- Na planilha, a seção "Resumo dos saldos" traz o TOTAL GERAL (Liberado + Limite cheque) e as 4 linhas; os "TOTAL" das outras seções são a soma das linhas de cada seção (= soma dos saldos).
+- Na planilha, a seção "Resumo dos saldos" traz o LIBERADO + CHEQUE e as 4 linhas; os "TOTAL" das outras seções são a soma das linhas de cada seção (= soma dos saldos).
 
 ## Rotinas e Comunicar Saldos (aba Configurações)
 - Gerar Rotinas: divide as contas entre responsáveis (por classificação ou por banco); o período só encerra depois que todos encerram a própria rotina.
-- Comunicar Saldos: ao encerrar o período, manda WhatsApp aos destinatários com o resumo (Liberado — sem o cheque —, Bloqueado, Limite cheque, Saldo a cobrir; sem centavos e sem o Total geral), a mensagem do administrador e a planilha da semana.
+- Comunicar Saldos: ao encerrar o período, manda WhatsApp aos destinatários com o resumo (Liberado — sem o cheque —, Limite cheque, Bloqueado, Saldo a cobrir; sem centavos e sem o Liberado + cheque), a mensagem do administrador e a planilha da semana.
 
 ## Ferramentas
 - saldos_resumo: totais do dia (ou intervalo) e quem compõe cada total (conta a conta).
@@ -249,7 +249,7 @@ const guia = {
 const resumo = {
   name: 'saldos_resumo',
   description:
-    'Totais do saldo das contas por dia: Total geral (= Liberado + Limite cheque, tudo que dá para usar no dia), total por classificação (com o tipo liberado/bloqueado), a soma dos saldos e o Resumo dos saldos (Liberado sem o cheque especial, Total bloqueado, Limite cheque, Saldo a cobrir). Para UM dia, traz também quem compõe cada total, conta a conta (saldo, bloqueio, limite restante e quanto entrou em cada total), e as contas sem saldo lançado. Sem data: o período aberto ou o último dia com saldo.',
+    'Totais do saldo das contas por dia: Liberado + cheque (= Liberado + Limite cheque, tudo que dá para usar no dia; a tela não tem "Total geral"), total por classificação (com o tipo liberado/bloqueado), a soma dos saldos e o Resumo dos saldos (Liberado sem o cheque especial, Limite cheque, Total bloqueado, Saldo a cobrir). Para UM dia, traz também quem compõe cada total, conta a conta (saldo, bloqueio, limite restante e quanto entrou em cada total), e as contas sem saldo lançado. Sem data: o período aberto ou o último dia com saldo.',
   inputSchema: {
     data: dataSchema.optional().describe('Um dia (AAAA-MM-DD).'),
     inicio: dataSchema.optional().describe('Início de um intervalo (até 31 dias; sem o detalhamento conta a conta).'),
@@ -274,16 +274,16 @@ const resumo = {
       return {
         data: iso,
         periodo_teve_abertura: comPeriodo.has(iso),
-        total_geral: soma('totalGeral'),
-        total_geral_regra: 'Liberado + Limite cheque',
+        liberado_mais_cheque: soma('liberadoCheque'),
+        liberado_mais_cheque_regra: 'Liberado + Limite cheque',
         soma_dos_saldos: soma('saldo'),
         por_classificacao: Object.values(porClasse)
           .sort((a, b) => a.classificacao.localeCompare(b.classificacao, 'pt-BR'))
           .map((g) => ({ ...g, total: reais(g.total) })),
         resumo: {
           liberado: soma('liberado'),
-          total_bloqueado: soma('bloqueado'),
           limite_cheque: soma('limiteCheque'),
+          total_bloqueado: soma('bloqueado'),
           saldo_a_cobrir: soma('aCobrir'),
         },
         contas_com_saldo: partes.length,
@@ -302,12 +302,16 @@ const resumo = {
     const { _partes, ...cabecalho } = dia;
     return {
       ...cabecalho,
-      rotulos_na_tela: { total_geral: 'Total geral (Liberado + Limite cheque)', ...Object.fromEntries(RESUMO_SALDOS.map((r) => [r.chave, r.rotulo])) },
+      rotulos_na_tela: { liberado_mais_cheque: 'Liberado + cheque', ...Object.fromEntries(RESUMO_SALDOS.map((r) => [r.chave, r.rotulo])) },
       composicao: {
-        total_geral: 'Liberado + Limite cheque — some as duas composições abaixo',
+        liberado_mais_cheque: 'Liberado + Limite cheque — some as duas composições abaixo',
         liberado: linhas(
           ({ p }) => p.liberado !== 0,
           ({ c, p }) => ({ conta: nome(c), classificacao: c.classificacao, saldo: reais(p.saldo), bloqueio: reais(p.bloqueio), entrou: reais(p.liberado) })
+        ),
+        limite_cheque: linhas(
+          ({ p }) => p.limiteCheque !== 0 || p.restante !== 0,
+          ({ c, p }) => ({ conta: nome(c), limite_total: c.valor_cheque_especial, saldo: reais(p.saldo), limite_restante: reais(p.restante) })
         ),
         total_bloqueado: linhas(
           ({ p }) => p.bloqueado !== 0,
@@ -317,10 +321,6 @@ const resumo = {
             motivo: c.classificacao_libera_saldo === false ? 'classificação bloqueada (saldo inteiro)' : 'bloqueio registrado na conta',
             entrou: reais(p.bloqueado),
           })
-        ),
-        limite_cheque: linhas(
-          ({ p }) => p.limiteCheque !== 0 || p.restante !== 0,
-          ({ c, p }) => ({ conta: nome(c), limite_total: c.valor_cheque_especial, saldo: reais(p.saldo), limite_restante: reais(p.restante) })
         ),
         saldo_a_cobrir: linhas(({ p }) => p.aCobrir !== 0, ({ c, p }) => ({ conta: nome(c), classificacao: c.classificacao, saldo: reais(p.saldo) })),
       },
@@ -390,10 +390,10 @@ const contasDia = {
           ...(p
             ? {
                 entra_no_resumo: {
-                  total_geral: reais(p.totalGeral),
+                  liberado_mais_cheque: reais(p.liberadoCheque),
                   liberado: reais(p.liberado),
-                  bloqueado: reais(p.bloqueado),
                   limite_cheque: reais(p.limiteCheque),
+                  bloqueado: reais(p.bloqueado),
                   a_cobrir: reais(p.aCobrir),
                 },
               }

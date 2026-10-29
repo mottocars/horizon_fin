@@ -24,7 +24,7 @@ const ALTURA_MES = 28;
 // Cabeçalho do dia numa linha só (dia da semana + número lado a lado, pedido do usuário) —
 // bem mais baixo que o layout antigo, em duas linhas empilhadas.
 const ALTURA_DIA = 28;
-// Rodapé: Total geral + as 4 linhas do resumo dos saldos, todas grudadas embaixo ao rolar — cada
+// Rodapé: Liberado + cheque + as 4 linhas do resumo dos saldos, todas grudadas embaixo ao rolar — cada
 // linha com altura fixa pra calcular o `bottom` de cada uma (ver tfoot).
 const ALTURA_RODAPE = 34;
 // A coluna de nomes é sticky: o que foca/rola por baixo dela precisa de margem, senão a
@@ -32,7 +32,7 @@ const ALTURA_RODAPE = 34;
 // ALTURA_MES + ALTURA_DIA + uma folga pequena; scroll-mb = as 5 linhas do rodapé + folga.
 const MARGEM_ROLAGEM = 'scroll-mt-[60px] scroll-mb-[186px] scroll-ml-[356px] scroll-mr-4';
 
-// Linhas do resumo dos saldos abaixo do Total geral (cálculo em constantes.js::calcularResumoSaldos).
+// Linhas do resumo dos saldos abaixo do Liberado + cheque (cálculo em constantes.js::calcularResumoSaldos).
 const VISUAL_RESUMO = {
   liberado: { Icone: LockOpen, cor: 'text-emerald-700' },
   bloqueado: { Icone: Lock, cor: 'text-amber-700' },
@@ -452,7 +452,8 @@ function SaldosContasTab({
     return porGrupo;
   }, [grupos]);
 
-  // Total geral = Liberado + Limite cheque (pedido do usuário) — vem do resumo, não da soma dos grupos.
+  // Liberado + cheque (no lugar do antigo "Total geral", pedido do usuário) = Liberado + Limite cheque —
+  // vem do resumo, não da soma dos grupos.
   const resumo = useMemo(
     () => calcularResumoSaldos(contasFiltradas || [], dias.map((d) => d.iso), diasComPeriodo),
     [contasFiltradas, dias, diasComPeriodo]
@@ -787,7 +788,7 @@ function SaldosContasTab({
               ))}
             </colgroup>
 
-            {/* Cabeçalho e Total geral em azul (mesmo tom do cabeçalho da aba Recebidas do
+            {/* Cabeçalho e Liberado + cheque em azul (mesmo tom do cabeçalho da aba Recebidas do
                 Espião NFe/NFSe) e grudados nas bordas do <main> ao rolar: -top-6/-bottom-6 (e
                 ALTURA_MES - 24 na 2ª linha) cancelam o p-6 do <main>, senão sobrava uma faixa de
                 24px entre eles e a borda da tela. O dia liberado pro lançamento continua âmbar. */}
@@ -967,7 +968,7 @@ function SaldosContasTab({
               })}
             </tbody>
 
-            {/* Rodapé grudado embaixo: Total geral e, abaixo dele, o resumo dos saldos. Cada linha
+            {/* Rodapé grudado embaixo: Liberado + cheque e, abaixo dele, o resumo dos saldos. Cada linha
                 tem altura fixa (ALTURA_RODAPE) e um `bottom` que empilha as de baixo — o -24 cancela
                 o p-6 do <main>, como no -bottom-6 de antes. */}
             <tfoot>
@@ -976,7 +977,7 @@ function SaldosContasTab({
                   className="sticky left-0 z-30 border-r border-t-2 border-r-blue-100 border-t-blue-500 bg-blue-50 pl-4 text-xs font-semibold uppercase tracking-wide text-blue-700"
                   style={{ bottom: -24 + RESUMO_SALDOS.length * ALTURA_RODAPE }}
                 >
-                  Total geral
+                  Liberado + cheque
                 </td>
                 {dias.map((d) => (
                   <td
@@ -986,7 +987,7 @@ function SaldosContasTab({
                     }`}
                     style={{ bottom: -24 + RESUMO_SALDOS.length * ALTURA_RODAPE }}
                   >
-                    <ValorTotal valor={resumo.totalGeral[d.iso]} />
+                    <ValorTotal valor={resumo.liberadoCheque[d.iso]} />
                   </td>
                 ))}
               </tr>
