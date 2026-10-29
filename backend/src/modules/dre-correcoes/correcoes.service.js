@@ -21,10 +21,17 @@ const BAIXA_DISTRATO = 7;
 //   em_aberto   — saldo corrigido − saldo (corrected_balance_amount − balance_amount) das parcelas
 //                 com saldo: a correção já acumulada e ainda não recebida. Mantém o sinal (índice
 //                 negativo, ex. IGP-M, dá correção negativa; a query antiga só pegava > 0).
+// Só o que foi corrigido até o mês atual (pedido do usuário — nada de correção futura): paga e
+// reparcelada pela data da baixa (quando a correção se realizou — uma parcela de 2027 reparcelada em
+// 2025 conta, a correção dela foi realizada em 2025); em aberto só das parcelas que vencem até o
+// fim do mês atual (as de vencimento futuro ficam de fora).
 // Todo tipo de documento entra (contrato, recibo, reembolso de encargos…): correção é correção.
 // Centro de custo: o das categorias da parcela (sie_income_categorias), rateado pelo percentual
 // quando uma parcela cai em mais de um centro — a query antiga, com DISTINCT, repetia a correção
 // inteira em cada centro e juntava baixas diferentes de mesmo valor numa só.
+// Primeiro dia do mês seguinte: tudo antes dele é "até o mês atual".
+const LIMITE = "date_trunc('month', CURRENT_DATE) + INTERVAL '1 month'";
+
 // $1 = empresa; `filtros` = condições a mais (centro/cliente, com os parâmetros seguintes).
 // Categorias e recebimentos entram por LATERAL (cada parcela busca os seus pelos índices
 // idx_sie_income_*_parcela): com CTEs agregando a empresa inteira, estatística desatualizada fazia
@@ -36,7 +43,8 @@ function sqlParcelas(filtros = []) {
          i.due_date, r.data_baixa,
          COALESCE(r.paga, 0) * p.peso AS paga,
          COALESCE(r.reparcelada, 0) * p.peso AS reparcelada,
-         CASE WHEN i.balance_amount > 0 THEN i.corrected_balance_amount - i.balance_amount ELSE 0 END * p.peso AS em_aberto
+         CASE WHEN i.balance_amount > 0 AND i.due_date < ${LIMITE}
+              THEN i.corrected_balance_amount - i.balance_amount ELSE 0 END * p.peso AS em_aberto
     FROM sie_income i
     CROSS JOIN LATERAL (
       SELECT cost_center_id,
@@ -59,6 +67,7 @@ function sqlParcelas(filtros = []) {
              ) AS data_baixa
         FROM sie_income_recebimentos r
        WHERE r.bill_id = i.bill_id AND r.installment_id = i.installment_id AND r.empresa_id = i.empresa_id
+         AND r.payment_date < ${LIMITE}
     ) r
    WHERE ${['i.empresa_id = $1', ...filtros].join(' AND ')}`;
 }
@@ -91,9 +100,11 @@ async function listar(empresaId) {
       ORDER BY 3`,
     [empresaId]
   );
-  const { rows: ultima } = await pool.query('SELECT MAX(atualizado_em) AS em FROM sie_income WHERE empresa_id = $1', [
-    empresaId,
-  ]);
+  const { rows: ultima } = await pool.query(
+    `SELECT MAX(atualizado_em) AS em, to_char(CURRENT_DATE, 'YYYY-MM') AS ate_mes
+       FROM sie_income WHERE empresa_id = $1`,
+    [empresaId]
+  );
 
   const porCentro = new Map(centros.map((c) => [c.id, { ...c, paga: 0, reparcelada: 0, em_aberto: 0, parcelas: 0, clientes: [] }]));
   clientes.forEach((k) => {
@@ -115,7 +126,7 @@ async function listar(empresaId) {
     c.parcelas += cliente.parcelas;
   });
 
-  return { centros: [...porCentro.values()], ultima_atualizacao: ultima[0].em };
+  return { centros: [...porCentro.values()], ultima_atualizacao: ultima[0].em, ate_mes: ultima[0].ate_mes };
 }
 
 // Parcelas com correção de um cliente num centro, por vencimento.

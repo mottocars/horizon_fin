@@ -26,7 +26,8 @@ const COLUNAS_VALOR = [
     chave: 'em_aberto',
     rotulo: 'Em aberto',
     largura: 120,
-    titulo: 'Saldo corrigido menos saldo das parcelas em aberto: a correção já acumulada e ainda não recebida',
+    titulo:
+      'Saldo corrigido menos saldo das parcelas em aberto que vencem até o mês atual: a correção já acumulada e ainda não recebida',
   },
 ];
 
@@ -58,6 +59,14 @@ function dataBr(iso) {
   return `${dia}/${mes}/${ano}`;
 }
 
+const MESES = ['jan', 'fev', 'mar', 'abr', 'mai', 'jun', 'jul', 'ago', 'set', 'out', 'nov', 'dez'];
+
+// '2026-10' -> 'out/2026' (mesmo formato do "Vigente em" da aba Orçamento).
+function mesAno(anoMes) {
+  const [ano, mes] = anoMes.split('-').map(Number);
+  return `${MESES[mes - 1]}/${ano}`;
+}
+
 function dataHora(v) {
   return v ? new Date(v).toLocaleString('pt-BR', { dateStyle: 'short', timeStyle: 'short' }) : null;
 }
@@ -67,10 +76,11 @@ function plural(n, um, varios) {
 }
 
 // Operações > DRE Gerencial > Correções: a correção monetária das parcelas a receber do Sienge, paga,
-// reparcelada e em aberto (premissas em dre-correcoes/correcoes.service.js). Drilldown em 3 níveis:
-// centro de custo (só os com "Realiza DRE", todos, como no Orçamento) → cliente → parcela. As parcelas
-// de um cliente só são buscadas ao abri-lo (a GENESIS tem 40 mil parcelas com correção). Vários abertos
-// ao mesmo tempo; com busca (cliente, unidade ou centro), abre os centros e mostra só os clientes que batem.
+// reparcelada e em aberto, só até o mês atual (premissas em dre-correcoes/correcoes.service.js).
+// Drilldown em 3 níveis: centro de custo (só os com "Realiza DRE", todos, como no Orçamento) →
+// cliente → parcela. As parcelas de um cliente só são buscadas ao abri-lo (a GENESIS tem dezenas de
+// milhares de parcelas com correção). Vários abertos ao mesmo tempo; com busca (cliente, unidade ou
+// centro), abre os centros e mostra só os clientes que batem.
 export default function CorrecoesTab({ empresaId, search = '' }) {
   const [dados, setDados] = useState(null);
   const [carregando, setCarregando] = useState(false);
@@ -170,9 +180,12 @@ export default function CorrecoesTab({ empresaId, search = '' }) {
     // min-w-fit: com tabela mais larga que a tela, o quadro branco cresce junto (mesmo esquema da
     // aba Orçamento).
     <div className="min-w-fit rounded-card rounded-tl-none bg-white p-5 shadow-card">
-      {dados?.ultima_atualizacao && (
-        <div className="-mt-1 mb-3 flex justify-end text-xs text-gray-400">
-          Contas a receber atualizadas do Sienge em {dataHora(dados.ultima_atualizacao)}
+      {dados && (
+        <div className="-mt-1 mb-3 flex justify-end gap-3 text-xs text-gray-400">
+          <span title="Paga e reparcelada pela data da baixa; em aberto só das parcelas que vencem até o fim deste mês">
+            Correções até {mesAno(dados.ate_mes)}
+          </span>
+          {dados.ultima_atualizacao && <span>· Contas a receber atualizadas do Sienge em {dataHora(dados.ultima_atualizacao)}</span>}
         </div>
       )}
 
