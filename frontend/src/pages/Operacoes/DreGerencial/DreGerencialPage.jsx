@@ -195,7 +195,7 @@ export default function DreGerencialPage() {
   const [dreTelaCheia, setDreTelaCheia] = useState(false);
   const [centrosDre, setCentrosDre] = useState([]);
   useEffect(() => {
-    if (abaAtiva !== 'dre' || !empresaId) return;
+    if ((abaAtiva !== 'dre' && abaAtiva !== 'poc') || !empresaId) return;
     listCentrosCustoDre(empresaId)
       .then((lista) => setCentrosDre(lista.filter((c) => c.realiza_dre)))
       .catch(() => setCentrosDre([]));
@@ -326,7 +326,7 @@ export default function DreGerencialPage() {
               />
             </div>
 
-            {abaAtiva === 'dre' && (
+            {(abaAtiva === 'dre' || abaAtiva === 'poc') && (
               <>
                 <div className="sm:w-40">
                   <label className="mb-1 block text-sm font-medium text-gray-700">Data início</label>
@@ -344,7 +344,10 @@ export default function DreGerencialPage() {
                     value={dreCentros}
                     onChange={(lista) => atualizarParams({ centros: lista.join(',') })}
                     disabled={semEmpresa}
-                    options={centrosDre.map((c) => ({ value: String(c.sienge_id), label: `${c.sienge_id} - ${c.apelido || c.name}` }))}
+                    options={centrosDre
+                      // Na aba POC, só as obras (natureza OBRA), que são as colunas dela.
+                      .filter((c) => abaAtiva !== 'poc' || c.natureza === 'OBRA')
+                      .map((c) => ({ value: String(c.sienge_id), label: `${c.sienge_id} - ${c.apelido || c.name}` }))}
                     placeholder="Todos os centros"
                     emptyMessage="Nenhum centro com Realiza DRE."
                   />
@@ -455,7 +458,7 @@ export default function DreGerencialPage() {
             )}
           </div>
 
-          {abaAtiva === 'dre' && (
+          {(abaAtiva === 'dre' || abaAtiva === 'poc') && (
             <div className="flex shrink-0 items-center gap-2">
               <Button
                 type="button"
@@ -580,7 +583,16 @@ export default function DreGerencialPage() {
             onSairTelaCheia={() => setDreTelaCheia(false)}
           />
         )}
-        {abaAtiva === 'poc' && <PocTab empresaId={empresaId} />}
+        {abaAtiva === 'poc' && (
+          <PocTab
+            empresaId={empresaId}
+            de={dreDe}
+            ate={dreAte}
+            centros={dreCentros}
+            telaCheia={dreTelaCheia}
+            onSairTelaCheia={() => setDreTelaCheia(false)}
+          />
+        )}
 
         {abaAtiva === 'mascaras' && <MascarasTab ref={mascarasTabRef} empresaId={empresaId} />}
 

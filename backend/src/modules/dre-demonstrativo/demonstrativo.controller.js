@@ -1,5 +1,6 @@
 const { z } = require('zod');
 const service = require('./demonstrativo.service');
+const poc = require('./poc.service');
 
 const empresaIdSchema = z.coerce.number().int().positive('Empresa inválida.');
 const dataSchema = (rotulo) => z.string({ required_error: `Informe a ${rotulo}.` }).regex(/^\d{4}-\d{2}-\d{2}$/, `${rotulo} inválida.`);
@@ -29,4 +30,15 @@ async function calcular(req, res, next) {
   }
 }
 
-module.exports = { calcular };
+// Aba POC: o rastreio da POC por obra (mesmos filtros da DRE).
+async function rastrearPoc(req, res, next) {
+  try {
+    const q = querySchema.parse({ ...req.query, centro: req.query.centro ?? req.query['centro[]'] });
+    res.json(await poc.rastrear(empresaIdSchema.parse(req.params.empresaId), { de: q.de, ate: q.ate, centros: q.centro }));
+  } catch (err) {
+    if (err.issues) return next(erro(400, err.issues[0].message));
+    return next(err);
+  }
+}
+
+module.exports = { calcular, rastrearPoc };

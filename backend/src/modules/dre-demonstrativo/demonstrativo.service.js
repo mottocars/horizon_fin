@@ -117,7 +117,8 @@ function serie(linhas) {
 }
 
 // Lançamentos-base { centro_id, data 'AAAA-MM-DD', valor } de cada cálculo, dos centros pedidos, e as
-// frações ideais da POC de Despesa (FRACAO_VENDIDA, FRACAO_DISTRATADA).
+// frações ideais da POC de Despesa (FRACAO_VENDAS + FRACAO_PERMUTA = vendida; FRACAO_DISTRATADA), já
+// como séries acumuladas (`serie`). `centros`: a análise da aba Unidades (clusters), pro rastreio da POC.
 async function bases(empresaId, centroOk) {
   const [{ centros }, { rows: corr }] = await Promise.all([
     unidades.listar(empresaId),
@@ -129,7 +130,7 @@ async function bases(empresaId, centroOk) {
       [empresaId]
     ),
   ]);
-  const b = Object.fromEntries([...CALCULOS_RECEITA, 'FRACAO_VENDIDA', 'FRACAO_DISTRATADA'].map((c) => [c, []]));
+  const b = Object.fromEntries([...CALCULOS_RECEITA, 'FRACAO_VENDAS', 'FRACAO_PERMUTA', 'FRACAO_DISTRATADA'].map((c) => [c, []]));
   const add = (calculo, centroId, data, valor) => {
     if (!data || !centroOk(centroId) || !valor) return;
     b[calculo].push({ centro_id: centroId, data, valor });
@@ -137,11 +138,11 @@ async function bases(empresaId, centroOk) {
   centros.forEach((c) => {
     c.clusters.vendidas.forEach((v) => {
       add('VALOR_VENDAS', c.id, v.data, num(v.valor));
-      add('FRACAO_VENDIDA', c.id, v.data, num(v.fracao_ideal) * v.participacao);
+      add('FRACAO_VENDAS', c.id, v.data, num(v.fracao_ideal) * v.participacao);
     });
     c.clusters.permuta.forEach((p) => {
       add('RECEITA_PERMUTA', c.id, p.data, num(p.valor));
-      add('FRACAO_VENDIDA', c.id, p.data, num(p.fracao_ideal));
+      add('FRACAO_PERMUTA', c.id, p.data, num(p.fracao_ideal));
     });
     c.clusters.distratadas.forEach((d) => {
       add('ESTORNO_VENDAS', c.id, d.data, -num(d.valor));
@@ -150,7 +151,10 @@ async function bases(empresaId, centroOk) {
     });
   });
   corr.forEach((r) => add('CORRECAO_MONETARIA', r.centro_id, r.data, num(r.valor)));
-  return Object.fromEntries(Object.entries(b).map(([calculo, linhas]) => [calculo, serie(linhas)]));
+  return {
+    serie: Object.fromEntries(Object.entries(b).map(([calculo, linhas]) => [calculo, serie(linhas)])),
+    centros: centros.filter((c) => centroOk(c.id)),
+  };
 }
 
 // POC de Receita de uma obra em qualquer data até `ate`: custo acumulado da máscara (`custoAte`,
@@ -182,12 +186,18 @@ async function pocReceita(empresaId, custoAte, ate) {
   };
 }
 
-async function calcular(empresaId, { de, ate, centros: filtro = [] }) {
+// Tudo o que a DRE (calcular) e o rastreio da POC (poc.service.js) usam, num lugar só — assim os dois
+// dão sempre o mesmo número: os centros pedidos (com "Realiza DRE"; `soObras`: só os de natureza OBRA),
+// as máscaras na ordem da DRE, a configuração, as séries de cada base e as POCs em qualquer data até
+// `ate`, e `reconhecidoNoCentro(m, centro, D)` (o reconhecido acumulado de uma máscara até D).
+async function motor(empresaId, { ate, filtro = [], soObras = false }) {
   const [{ rows: centrosDre }, { rows: mascaras }, { rows: cfg }, { rows: aliquotas }] = await Promise.all([
     pool.query(
       `SELECT sienge_id::int AS id, name AS nome, COALESCE(NULLIF(TRIM(apelido), ''), name) AS rotulo
-         FROM centros_custo_sienge WHERE empresa_id = $1 AND realiza_dre ORDER BY ${ORDEM_CENTROS}`,
-      [empresaId]
+         FROM centros_custo_sienge
+        WHERE empresa_id = $1 AND realiza_dre AND ($2::boolean IS FALSE OR natureza = 'OBRA')
+        ORDER BY ${ORDEM_CENTROS}`,
+      [empresaId, soObras]
     ),
     // Nível 2 na ordem da DRE (grupo de nível 1, depois a ordem dentro dele) — "acima" do imposto.
     pool.query(
@@ -218,7 +228,6 @@ async function calcular(empresaId, { de, ate, centros: filtro = [] }) {
   const ids = obras.map((c) => c.id);
   const idsOk = new Set(ids);
   const mascaraPoc = cfg[0]?.id ? { id: cfg[0].id, descricao: cfg[0].descricao } : null;
-  const antes = vespera(de);
 
   const comPocReceita = (m) => CALCULOS_RECEITA.has(m.calculo) && m.realiza_poc && m.tipo_poc === 'RECEITA';
   const usaPoc = mascaraPoc && mascaras.some(comPocReceita);
@@ -231,13 +240,13 @@ async function calcular(empresaId, { de, ate, centros: filtro = [] }) {
   const idsFinanceiro = [
     ...new Set([...(usaPoc ? [mascaraPoc.id] : []), ...mascaras.filter((m) => comPocDespesa(m) || semPoc(m)).map((m) => m.id)]),
   ];
-  const [base, custos] = await Promise.all([
+  const [{ serie: base, centros: unidadesPorCentro }, custos] = await Promise.all([
     bases(empresaId, (id) => idsOk.has(Number(id))),
     idsFinanceiro.length ? financeiro.somaPorCentroData(empresaId, idsFinanceiro, ate) : Promise.resolve([]),
   ]);
   const custoAte = new Map(idsFinanceiro.map((id) => [id, serie(custos.filter((c) => c.mascara_id === id))]));
   const pocEm = usaPoc ? await pocReceita(empresaId, custoAte.get(mascaraPoc.id), ate) : null;
-  const pocDespesa = (id, data) => arredondarPoc(base.FRACAO_VENDIDA(id, data));
+  const pocDespesa = (id, data) => arredondarPoc(base.FRACAO_VENDAS(id, data) + base.FRACAO_PERMUTA(id, data));
   const fracaoDistratada = (id, data) => arredondarPoc(Math.min(base.FRACAO_DISTRATADA(id, data), 1));
   // Custos do CIV que o Estorno de Custo devolve: os do mesmo grupo de nível 1.
   const custosDoGrupo = (m) => mascaras.filter((x) => custoCiv(x) && x.parent_id === m.parent_id);
@@ -256,6 +265,33 @@ async function calcular(empresaId, { de, ate, centros: filtro = [] }) {
       return -custosDoGrupo(m).reduce((s, x) => s + custoAte.get(x.id)(id, data), 0) * fracaoDistratada(id, data);
     return base[m.calculo](id, data) * (comPocReceita(m) ? pocEm(id, data).poc : 1);
   };
+
+  return {
+    obras,
+    ids,
+    mascaras,
+    cfg,
+    aliquotas,
+    mascaraPoc,
+    base,
+    unidadesPorCentro,
+    custoAte,
+    pocEm,
+    pocDespesa,
+    fracaoDistratada,
+    custosDoGrupo,
+    comPocReceita,
+    comPocDespesa,
+    custoCiv,
+    calculavel,
+    reconhecidoNoCentro,
+  };
+}
+
+async function calcular(empresaId, { de, ate, centros: filtro = [] }) {
+  const { obras, ids, mascaras, cfg, aliquotas, mascaraPoc, pocEm, pocDespesa, fracaoDistratada, calculavel, reconhecidoNoCentro } =
+    await motor(empresaId, { ate, filtro });
+  const antes = vespera(de);
   const reconhecido = (m, data, lista) => lista.reduce((s, id) => s + reconhecidoNoCentro(m, id, data), 0);
   const valorEm = (m, a, b, lista) => reconhecido(m, b, lista) - reconhecido(m, vespera(a), lista);
 
@@ -352,4 +388,4 @@ async function calcular(empresaId, { de, ate, centros: filtro = [] }) {
   };
 }
 
-module.exports = { calcular };
+module.exports = { calcular, motor, meses, vespera, fimDoMes, CALCULOS_RECEITA };

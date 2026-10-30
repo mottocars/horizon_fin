@@ -8,5 +8,6 @@ const router = Router();
 router.use(authMiddleware);
 router.param('empresaId', paramEmpresa);
 router.get('/:empresaId', controller.calcular);
+router.get('/:empresaId/poc', controller.rastrearPoc);
 
 module.exports = router;
