@@ -13,6 +13,7 @@ import {
   Plus,
   RefreshCw,
   Search,
+  Settings,
   Tags,
   Trash2,
   Wallet,
@@ -36,6 +37,7 @@ import CentrosCustosTab from './CentrosCustosTab';
 import UnidadesTab from './UnidadesTab';
 import CorrecoesTab from './CorrecoesTab';
 import FinanceiroTab from './FinanceiroTab';
+import ConfiguracoesDreTab from './ConfiguracoesDreTab';
 import DreTab from './DreTab';
 
 // O `{ divider: true }` separa a DRE (a demonstração em si) das abas de cadastro/parâmetro que
@@ -57,6 +59,7 @@ const TABS = [
   { id: 'unidades', label: 'Unidades', icon: House },
   { id: 'correcoes', label: 'Correções', icon: FilePenLine },
   { id: 'financeiro', label: 'Financeiro', icon: Wallet },
+  { id: 'configuracoes', label: 'Configurações', icon: Settings },
 ];
 
 // Empresa e aba vivem na URL (não em useState local) — mesmo motivo de todas as outras telas
@@ -505,6 +508,7 @@ export default function DreGerencialPage() {
             novoToken={novoLancamentoToken}
           />
         )}
+        {abaAtiva === 'configuracoes' && <ConfiguracoesDreTab empresaId={empresaId} />}
 
         {abaAtiva === 'plano-de-contas' &&
           (planoAberto ? (

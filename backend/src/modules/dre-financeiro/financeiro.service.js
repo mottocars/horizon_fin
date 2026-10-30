@@ -13,7 +13,8 @@ const { sqlMapaDre } = require('../dre-plano-contas/drePlanoContas.service');
 // lançamentos (títulos e movimentos) têm ajuste (lancamentos_ajustes), pela emissão / data, e quantos
 // foram criados à mão no ano (lancamentos_manuais). Só lançamentos com alguma linha (original ou
 // ajustada) que entra na DRE — centro com "Realiza DRE" e natureza com Máscara DRE no plano do centro
-// (sqlMapaDre) —, como a listagem.
+// (sqlMapaDre) — e de tipo de documento que não está fora da DRE (aba Configurações), como a
+// listagem.
 // O exercício do ano atual vem travado (`travado`, pedido do usuário): só visualização — nenhuma
 // ação que altere dados pode valer pra ele (o backend deve recusar, não só a tela esconder).
 async function exercicios(empresaId) {
@@ -36,6 +37,7 @@ async function exercicios(empresaId) {
             COUNT(DISTINCT id) FILTER (WHERE tipo = 'E')::int AS movimentos
        FROM (SELECT 'R' AS tipo, t.bill_id AS id, t.issue_date AS data FROM sie_income t
               WHERE t.empresa_id = $1 AND t.issue_date >= $2 AND t.issue_date < $3
+                AND NOT EXISTS (SELECT 1 FROM dre_documentos_excluidos x WHERE x.empresa_id = $1 AND x.documento = TRIM(t.document_identification_id))
                 AND (EXISTS (SELECT 1 FROM sie_income_categorias c
                                 JOIN mapa m ON m.centro_id = c.cost_center_id AND m.natureza_id = NULLIF(TRIM(c.financial_category_id), '')
                               WHERE c.bill_id = t.bill_id AND c.installment_id = t.installment_id AND c.empresa_id = t.empresa_id)
@@ -44,6 +46,7 @@ async function exercicios(empresaId) {
              UNION ALL
              SELECT 'P', t.bill_id, t.issue_date FROM sie_outcome t
               WHERE t.empresa_id = $1 AND t.issue_date >= $2 AND t.issue_date < $3
+                AND NOT EXISTS (SELECT 1 FROM dre_documentos_excluidos x WHERE x.empresa_id = $1 AND x.documento = TRIM(t.document_identification_id))
                 AND (EXISTS (SELECT 1 FROM sie_outcome_categorias c
                                 JOIN mapa m ON m.centro_id = c.cost_center_id AND m.natureza_id = NULLIF(TRIM(c.financial_category_id), '')
                               WHERE c.bill_id = t.bill_id AND c.installment_id = t.installment_id AND c.empresa_id = t.empresa_id)
@@ -54,6 +57,7 @@ async function exercicios(empresaId) {
                JOIN sie_extrato_contas e ON e.registro_id = r.registro_id
               WHERE r.empresa_id = $1 AND r.mes >= $2 AND r.mes < $3 AND r.data >= $2 AND r.data < $3
                 AND e.bill_id IS NULL AND r.natureza_id IS NOT NULL
+                AND NOT EXISTS (SELECT 1 FROM dre_documentos_excluidos x WHERE x.empresa_id = $1 AND x.documento = TRIM(e.document_id))
                 AND (EXISTS (SELECT 1 FROM mapa m WHERE m.centro_id = r.centro_id AND m.natureza_id = r.natureza_id::text)
                      OR EXISTS (SELECT 1 FROM lancamentos_ajustes j JOIN mapa m ON m.centro_id = j.centro_id AND m.natureza_id = j.natureza_id
                                  WHERE j.empresa_id = $1 AND j.origem = 'E' AND j.chave = e.id))) t
@@ -69,15 +73,21 @@ async function exercicios(empresaId) {
      SELECT EXTRACT(YEAR FROM data)::int AS ano, COUNT(*)::int AS n
        FROM (SELECT a.origem, a.chave, MIN(t.issue_date) AS data
                FROM (SELECT origem, chave FROM ajustes WHERE origem = 'R') a
-               JOIN sie_income t ON t.bill_id = a.chave AND t.empresa_id = $1 GROUP BY 1, 2
+               JOIN sie_income t ON t.bill_id = a.chave AND t.empresa_id = $1
+              WHERE NOT EXISTS (SELECT 1 FROM dre_documentos_excluidos x WHERE x.empresa_id = $1 AND x.documento = TRIM(t.document_identification_id))
+              GROUP BY 1, 2
              UNION ALL
              SELECT a.origem, a.chave, MIN(t.issue_date)
                FROM (SELECT origem, chave FROM ajustes WHERE origem = 'P') a
-               JOIN sie_outcome t ON t.bill_id = a.chave AND t.empresa_id = $1 GROUP BY 1, 2
+               JOIN sie_outcome t ON t.bill_id = a.chave AND t.empresa_id = $1
+              WHERE NOT EXISTS (SELECT 1 FROM dre_documentos_excluidos x WHERE x.empresa_id = $1 AND x.documento = TRIM(t.document_identification_id))
+              GROUP BY 1, 2
              UNION ALL
              SELECT a.origem, a.chave, MIN(e.date)
                FROM (SELECT origem, chave FROM ajustes WHERE origem = 'E') a
-               JOIN sie_extrato_contas e ON e.id = a.chave AND e.empresa_id = $1 GROUP BY 1, 2) x
+               JOIN sie_extrato_contas e ON e.id = a.chave AND e.empresa_id = $1
+              WHERE NOT EXISTS (SELECT 1 FROM dre_documentos_excluidos x WHERE x.empresa_id = $1 AND x.documento = TRIM(e.document_id))
+              GROUP BY 1, 2) x
       GROUP BY 1`,
     [empresaId]
   );
@@ -224,6 +234,9 @@ const CTE_LINHAS = `
       JOIN centros_custo_sienge cc ON cc.empresa_id = $1 AND cc.sienge_id = g.centro_id
       LEFT JOIN dre_mascaras dm ON dm.id = mp.mascara_id
       LEFT JOIN planos_financeiros_sienge pf ON pf.empresa_id = $1 AND pf.sienge_id::text = g.natureza_id
+     -- Tipo de documento fora da DRE (aba Configurações) some da listagem; lançamento criado à mão fica.
+     WHERE g.origem = 'M' OR g.documento IS NULL
+        OR NOT EXISTS (SELECT 1 FROM dre_documentos_excluidos x WHERE x.empresa_id = $1 AND x.documento = g.documento)
   )`;
 
 // 'AAAA-MM-DD' + 1 dia (fim exclusivo do período).
@@ -348,4 +361,18 @@ async function opcoesFiltros(empresaId, ano) {
   };
 }
 
-module.exports = { exercicios, lancamentos, opcoesFiltros };
+// Soma, por centro de custo, as linhas de uma Máscara DRE da listagem do Financeiro (mesmas regras:
+// ajustes, plano de contas do centro, documentos fora da DRE) com data até `ate` ('AAAA-MM-DD') —
+// desde o começo, todos os exercícios. Usada na prévia da POC de Receita (aba Configurações: custo
+// acumulado da obra ÷ orçamento). Valor com sinal (custo vem negativo).
+async function somaPorCentro(empresaId, mascaraId, ate) {
+  const { rows } = await pool.query(
+    `WITH ${CTE_LINHAS}
+     SELECT centro_id::int AS centro_id, SUM(valor) AS valor, MIN(data)::text AS desde, COUNT(*)::int AS linhas
+       FROM lc WHERE mascara_id = $4 GROUP BY 1`,
+    [empresaId, '1900-01-01', diaSeguinte(ate), mascaraId]
+  );
+  return rows.map((r) => ({ ...r, valor: num(r.valor) }));
+}
+
+module.exports = { exercicios, lancamentos, opcoesFiltros, somaPorCentro };
