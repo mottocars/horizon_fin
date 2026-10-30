@@ -6,8 +6,9 @@ const { arredondarPoc } = require('../../utils/poc');
 
 // Operações > DRE Gerencial > DRE: a coluna Valor de cada Máscara DRE de nível 2 num período
 // (de/até, inclusive), somando os centros de custo com "Realiza DRE" (ou os do filtro). Inspirado no
-// calc_dre_poc.py do usuário. Por enquanto só os cálculos da RECEITA BRUTA (aba Máscaras, Origem +
-// Cálculo), o Imposto Fixo (RET) e o CIV; os demais voltam null e a tela mostra traço.
+// calc_dre_poc.py do usuário. Cálculos da RECEITA BRUTA (aba Máscaras, Origem + Cálculo), o Imposto
+// Fixo (RET), o CIV e as demais linhas do Financeiro (Entradas e Saídas); máscara sem cálculo volta
+// null e a tela mostra traço.
 //
 // Base de cada cálculo — datas e valores das próprias abas da DRE, pra bater com elas:
 //   VALOR_VENDAS       — aba Unidades, Vendidas: todo contrato (até o cancelado depois), data do
@@ -41,7 +42,13 @@ const { arredondarPoc } = require('../../utils/poc');
 //                        imóveis, o distrato sai pelo Estorno de Custo; sem trava, como no script;
 //   fração distratada(D) = fração ideal dos contratos distratados até D (data do distrato), até 100%.
 // Mesmo delta da POC de Receita: valor em [a, b] = reconhecido(b) − reconhecido(véspera de a).
-// Grupo sem Estorno de Custo (ex.: despesas indiretas com "% POC") fica, por enquanto, com traço.
+//
+// Demais linhas do Financeiro (Entradas e Saídas), fora do grupo do CIV — mesma base (aba Financeiro
+// da máscara, com sinal, pela data de emissão; no movimento do extrato, a data dele):
+//   com "% POC" Despesa (ex.: comissão, legalização) — mesma premissa do CIV, mas sem linha de
+//                        estorno pra devolver o distrato: reconhecido(D) = base acumulada × (POC
+//                        Despesa(D) − fração distratada(D)), o mesmo que o CIV dá líquido do estorno;
+//   sem "% POC"        — o valor lançado no período, direto.
 //
 // Imposto Fixo (RET): −alíquota × tudo o que está acima dele na DRE (as linhas de nível 2 antes dele,
 // na ordem da aba Máscaras), mês a mês, cada mês com a alíquota do histórico vigente nele (a de
@@ -207,11 +214,15 @@ async function calcular(empresaId, { de, ate, centros: filtro = [] }) {
 
   const comPocReceita = (m) => CALCULOS_RECEITA.has(m.calculo) && m.realiza_poc && m.tipo_poc === 'RECEITA';
   const usaPoc = mascaraPoc && mascaras.some(comPocReceita);
-  // CIV: custos com POC de Despesa do grupo que tem o Estorno de Custo.
+  // Linhas do Financeiro; CIV = as com POC de Despesa do grupo que tem o Estorno de Custo.
   const gruposCiv = new Set(mascaras.filter((m) => m.calculo === 'ESTORNO_CUSTO').map((m) => m.parent_id));
-  const custoCiv = (m) =>
-    m.origem === 'FINANCEIRO' && m.calculo === 'ENTRADAS_SAIDAS' && m.realiza_poc && m.tipo_poc === 'DESPESA' && gruposCiv.has(m.parent_id);
-  const idsFinanceiro = [...new Set([...(usaPoc ? [mascaraPoc.id] : []), ...mascaras.filter(custoCiv).map((m) => m.id)])];
+  const doFinanceiro = (m) => m.origem === 'FINANCEIRO' && m.calculo === 'ENTRADAS_SAIDAS';
+  const comPocDespesa = (m) => doFinanceiro(m) && m.realiza_poc && m.tipo_poc === 'DESPESA';
+  const custoCiv = (m) => comPocDespesa(m) && gruposCiv.has(m.parent_id);
+  const semPoc = (m) => doFinanceiro(m) && !m.realiza_poc;
+  const idsFinanceiro = [
+    ...new Set([...(usaPoc ? [mascaraPoc.id] : []), ...mascaras.filter((m) => comPocDespesa(m) || semPoc(m)).map((m) => m.id)]),
+  ];
   const [base, custos] = await Promise.all([
     bases(empresaId, (id) => idsOk.has(Number(id))),
     idsFinanceiro.length ? financeiro.somaPorCentroData(empresaId, idsFinanceiro, ate) : Promise.resolve([]),
@@ -226,10 +237,13 @@ async function calcular(empresaId, { de, ate, centros: filtro = [] }) {
   // Reconhecido acumulado de uma máscara até D (todos os centros pedidos); null = sem cálculo.
   const calculavel = (m) =>
     (CALCULOS_RECEITA.has(m.calculo) && !(m.realiza_poc && m.tipo_poc !== 'RECEITA') && (!comPocReceita(m) || pocEm)) ||
-    custoCiv(m) ||
+    comPocDespesa(m) ||
+    semPoc(m) ||
     m.calculo === 'ESTORNO_CUSTO';
   const reconhecidoNoCentro = (m, id, data) => {
     if (custoCiv(m)) return custoAte.get(m.id)(id, data) * pocDespesa(id, data);
+    if (comPocDespesa(m)) return custoAte.get(m.id)(id, data) * (pocDespesa(id, data) - fracaoDistratada(id, data));
+    if (semPoc(m)) return custoAte.get(m.id)(id, data);
     if (m.calculo === 'ESTORNO_CUSTO')
       return -custosDoGrupo(m).reduce((s, x) => s + custoAte.get(x.id)(id, data), 0) * fracaoDistratada(id, data);
     return base[m.calculo](id, data) * (comPocReceita(m) ? pocEm(id, data).poc : 1);
