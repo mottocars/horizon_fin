@@ -185,16 +185,26 @@ function comAcumulado(arvore, valores) {
   });
 }
 
-const ROTULO_TIPO_POC = { RECEITA: 'POC Receita', DESPESA: 'POC Despesa' };
+const STATUS_POC = {
+  RECEITA: { sigla: 'PR', titulo: 'POC de Receita', cor: 'bg-emerald-100 text-emerald-700 ring-emerald-200' },
+  DESPESA: { sigla: 'PD', titulo: 'POC de Despesa', cor: 'bg-red-100 text-red-700 ring-red-200' },
+};
 
-// Selo da marcação "% POC" (nível 2, aba Máscaras), com o Tipo POC quando informado.
-function SeloPoc({ tipo }) {
+// Bolinha de status da marcação "% POC" (nível 2, aba Máscaras), à esquerda da descrição: PR (verde) =
+// POC de Receita, PD (vermelho) = POC de Despesa; sem Tipo POC, só "P". Sem "% POC" fica o espaço
+// vazio, pra as descrições ficarem alinhadas.
+function StatusPoc({ realiza, tipo }) {
+  const s = STATUS_POC[tipo] || { sigla: 'P', titulo: '% POC', cor: 'bg-gray-100 text-gray-600 ring-gray-200' };
   return (
-    <span
-      title="% POC"
-      className="rounded bg-primary-50 px-1.5 py-px text-[10px] font-semibold text-primary-600 ring-1 ring-primary-100"
-    >
-      {ROTULO_TIPO_POC[tipo] || 'POC'}
+    <span className="inline-flex h-5 w-6 shrink-0 items-center justify-center">
+      {realiza && (
+        <span
+          title={s.titulo}
+          className={`flex h-5 w-5 items-center justify-center rounded-full text-[9px] font-bold leading-none ring-1 ${s.cor}`}
+        >
+          {s.sigla}
+        </span>
+      )}
     </span>
   );
 }
@@ -266,11 +276,12 @@ function LinhaGrupo({ grupo, valores, acumulado }) {
       ) : (
         grupo.filhos.map((item) => (
           <tr key={item.id} className="hover:bg-gray-50">
-            <td className="border-b border-gray-100 py-0.5 pl-20 text-xs text-gray-700">
-              {/* Descrição com largura mínima fixa: os selos de POC ficam alinhados, como numa coluna. */}
-              <span className="flex items-center gap-2">
-                <span className="min-w-64">{item.descricao}</span>
-                {item.realiza_poc && <SeloPoc tipo={item.tipo_poc} />}
+            {/* Recuo menor que o do aviso de linha vazia (pl-20): a bolinha da POC ocupa o espaço e a
+                descrição fica na mesma posição de antes. */}
+            <td className="border-b border-gray-100 py-0.5 pl-[50px] text-xs text-gray-700">
+              <span className="flex items-center gap-1.5">
+                <StatusPoc realiza={item.realiza_poc} tipo={item.tipo_poc} />
+                <span>{item.descricao}</span>
               </span>
             </td>
             <td className="border-b border-l border-gray-100 px-4 py-0.5 text-right text-xs tabular-nums">
