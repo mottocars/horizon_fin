@@ -7,7 +7,7 @@ const { arredondarPoc } = require('../../utils/poc');
 // Operações > DRE Gerencial > DRE: a coluna Valor de cada Máscara DRE de nível 2 num período
 // (de/até, inclusive), somando os centros de custo com "Realiza DRE" (ou os do filtro). Inspirado no
 // calc_dre_poc.py do usuário. Por enquanto só os cálculos da RECEITA BRUTA (aba Máscaras, Origem +
-// Cálculo) e o Imposto Fixo (RET); os demais voltam null e a tela mostra traço.
+// Cálculo), o Imposto Fixo (RET) e o CIV; os demais voltam null e a tela mostra traço.
 //
 // Base de cada cálculo — datas e valores das próprias abas da DRE, pra bater com elas:
 //   VALOR_VENDAS       — aba Unidades, Vendidas: todo contrato (até o cancelado depois), data do
@@ -28,6 +28,20 @@ const { arredondarPoc } = require('../../utils/poc');
 // obra no período; venda nova entra com todo o avanço já feito). Somado mês a mês dá o mesmo que o
 // script. Sem a máscara configurada a POC de Receita não é gerada (essas linhas voltam null).
 // Máscara sem "% POC": a base dentro do intervalo, direto.
+//
+// CIV (POC de Despesa, como o proc_custo_imoveis / proc_estorno_custo do script) — no grupo de nível 1
+// que tem a linha de Estorno de Custo:
+//   custo (Financeiro + Entradas e Saídas, "% POC" Despesa) — base = linhas da aba Financeiro dessa
+//                        máscara (naturezas que o plano de contas do centro manda pra ela), com sinal
+//                        (custo negativo), pela data; reconhecido(D) = custo acumulado × POC Despesa(D);
+//   ESTORNO_CUSTO      — reconhecido(D) = −(custo acumulado dos custos do mesmo grupo) × fração
+//                        distratada(D): devolve o custo das unidades distratadas.
+//   POC Despesa(D)     = fração ideal de todo contrato até D (até o cancelado depois, × participação
+//                        da unidade no contrato) + das permutas (data da avaliação) — como a Venda de
+//                        imóveis, o distrato sai pelo Estorno de Custo; sem trava, como no script;
+//   fração distratada(D) = fração ideal dos contratos distratados até D (data do distrato), até 100%.
+// Mesmo delta da POC de Receita: valor em [a, b] = reconhecido(b) − reconhecido(véspera de a).
+// Grupo sem Estorno de Custo (ex.: despesas indiretas com "% POC") fica, por enquanto, com traço.
 //
 // Imposto Fixo (RET): −alíquota × tudo o que está acima dele na DRE (as linhas de nível 2 antes dele,
 // na ordem da aba Máscaras), mês a mês, cada mês com a alíquota do histórico vigente nele (a de
@@ -90,7 +104,8 @@ function serie(linhas) {
   };
 }
 
-// Lançamentos-base { centro_id, data 'AAAA-MM-DD', valor } de cada cálculo, dos centros pedidos.
+// Lançamentos-base { centro_id, data 'AAAA-MM-DD', valor } de cada cálculo, dos centros pedidos, e as
+// frações ideais da POC de Despesa (FRACAO_VENDIDA, FRACAO_DISTRATADA).
 async function bases(empresaId, centroOk) {
   const [{ centros }, { rows: corr }] = await Promise.all([
     unidades.listar(empresaId),
@@ -102,37 +117,41 @@ async function bases(empresaId, centroOk) {
       [empresaId]
     ),
   ]);
-  const b = Object.fromEntries([...CALCULOS_RECEITA].map((c) => [c, []]));
+  const b = Object.fromEntries([...CALCULOS_RECEITA, 'FRACAO_VENDIDA', 'FRACAO_DISTRATADA'].map((c) => [c, []]));
   const add = (calculo, centroId, data, valor) => {
     if (!data || !centroOk(centroId) || !valor) return;
     b[calculo].push({ centro_id: centroId, data, valor });
   };
   centros.forEach((c) => {
-    c.clusters.vendidas.forEach((v) => add('VALOR_VENDAS', c.id, v.data, num(v.valor)));
-    c.clusters.permuta.forEach((p) => add('RECEITA_PERMUTA', c.id, p.data, num(p.valor)));
+    c.clusters.vendidas.forEach((v) => {
+      add('VALOR_VENDAS', c.id, v.data, num(v.valor));
+      add('FRACAO_VENDIDA', c.id, v.data, num(v.fracao_ideal) * v.participacao);
+    });
+    c.clusters.permuta.forEach((p) => {
+      add('RECEITA_PERMUTA', c.id, p.data, num(p.valor));
+      add('FRACAO_VENDIDA', c.id, p.data, num(p.fracao_ideal));
+    });
     c.clusters.distratadas.forEach((d) => {
       add('ESTORNO_VENDAS', c.id, d.data, -num(d.valor));
       add('RECEITA_DISTRATO', c.id, d.data, num(d.receita_distrato) + num(d.despesa_distrato));
+      add('FRACAO_DISTRATADA', c.id, d.data, num(d.fracao_ideal) * d.participacao);
     });
   });
   corr.forEach((r) => add('CORRECAO_MONETARIA', r.centro_id, r.data, num(r.valor)));
   return Object.fromEntries(Object.entries(b).map(([calculo, linhas]) => [calculo, serie(linhas)]));
 }
 
-// POC de Receita de uma obra em qualquer data até `ate`: custo acumulado da máscara ÷ orçamento
-// vigente. Devolve `pocEm(centro, D)` → { poc, custo, orcamento } (com cache).
-async function pocReceita(empresaId, mascaraId, ate) {
-  const [custos, { rows: orcamentos }] = await Promise.all([
-    financeiro.somaPorCentroData(empresaId, mascaraId, ate),
-    pool.query(
-      `SELECT sienge_id::int AS centro_id, to_char(data_inicio, 'YYYY-MM-DD') AS inicio, SUM(valor) AS total
-         FROM dre_orcamento_valores
-        WHERE empresa_id = $1 AND data_inicio <= $2
-        GROUP BY 1, 2 ORDER BY 1, 2`,
-      [empresaId, ate]
-    ),
-  ]);
-  const custoAte = serie(custos);
+// POC de Receita de uma obra em qualquer data até `ate`: custo acumulado da máscara (`custoAte`,
+// série do Financeiro) ÷ orçamento vigente. Devolve `pocEm(centro, D)` → { poc, custo, orcamento }
+// (com cache).
+async function pocReceita(empresaId, custoAte, ate) {
+  const { rows: orcamentos } = await pool.query(
+    `SELECT sienge_id::int AS centro_id, to_char(data_inicio, 'YYYY-MM-DD') AS inicio, SUM(valor) AS total
+       FROM dre_orcamento_valores
+      WHERE empresa_id = $1 AND data_inicio <= $2
+      GROUP BY 1, 2 ORDER BY 1, 2`,
+    [empresaId, ate]
+  );
   const versoes = new Map();
   orcamentos.forEach((o) => {
     if (!versoes.has(o.centro_id)) versoes.set(o.centro_id, []);
@@ -159,7 +178,7 @@ async function calcular(empresaId, { de, ate, centros: filtro = [] }) {
     ),
     // Nível 2 na ordem da DRE (grupo de nível 1, depois a ordem dentro dele) — "acima" do imposto.
     pool.query(
-      `SELECT m.id, m.descricao, m.realiza_poc, m.tipo_poc, m.origem, m.calculo
+      `SELECT m.id, m.parent_id, m.descricao, m.realiza_poc, m.tipo_poc, m.origem, m.calculo
          FROM dre_mascaras m JOIN dre_mascaras p ON p.id = m.parent_id
         WHERE m.empresa_id = $1
         ORDER BY p.ordem, m.ordem`,
@@ -188,15 +207,34 @@ async function calcular(empresaId, { de, ate, centros: filtro = [] }) {
 
   const comPocReceita = (m) => CALCULOS_RECEITA.has(m.calculo) && m.realiza_poc && m.tipo_poc === 'RECEITA';
   const usaPoc = mascaraPoc && mascaras.some(comPocReceita);
-  const [base, pocEm] = await Promise.all([
+  // CIV: custos com POC de Despesa do grupo que tem o Estorno de Custo.
+  const gruposCiv = new Set(mascaras.filter((m) => m.calculo === 'ESTORNO_CUSTO').map((m) => m.parent_id));
+  const custoCiv = (m) =>
+    m.origem === 'FINANCEIRO' && m.calculo === 'ENTRADAS_SAIDAS' && m.realiza_poc && m.tipo_poc === 'DESPESA' && gruposCiv.has(m.parent_id);
+  const idsFinanceiro = [...new Set([...(usaPoc ? [mascaraPoc.id] : []), ...mascaras.filter(custoCiv).map((m) => m.id)])];
+  const [base, custos] = await Promise.all([
     bases(empresaId, (id) => idsOk.has(Number(id))),
-    usaPoc ? pocReceita(empresaId, mascaraPoc.id, ate) : Promise.resolve(null),
+    idsFinanceiro.length ? financeiro.somaPorCentroData(empresaId, idsFinanceiro, ate) : Promise.resolve([]),
   ]);
+  const custoAte = new Map(idsFinanceiro.map((id) => [id, serie(custos.filter((c) => c.mascara_id === id))]));
+  const pocEm = usaPoc ? await pocReceita(empresaId, custoAte.get(mascaraPoc.id), ate) : null;
+  const pocDespesa = (id, data) => arredondarPoc(base.FRACAO_VENDIDA(id, data));
+  const fracaoDistratada = (id, data) => arredondarPoc(Math.min(base.FRACAO_DISTRATADA(id, data), 1));
+  // Custos do CIV que o Estorno de Custo devolve: os do mesmo grupo de nível 1.
+  const custosDoGrupo = (m) => mascaras.filter((x) => custoCiv(x) && x.parent_id === m.parent_id);
 
   // Reconhecido acumulado de uma máscara até D (todos os centros pedidos); null = sem cálculo.
-  const calculavel = (m) => CALCULOS_RECEITA.has(m.calculo) && !(m.realiza_poc && m.tipo_poc !== 'RECEITA') && (!comPocReceita(m) || pocEm);
-  const reconhecido = (m, data) =>
-    ids.reduce((s, id) => s + base[m.calculo](id, data) * (comPocReceita(m) ? pocEm(id, data).poc : 1), 0);
+  const calculavel = (m) =>
+    (CALCULOS_RECEITA.has(m.calculo) && !(m.realiza_poc && m.tipo_poc !== 'RECEITA') && (!comPocReceita(m) || pocEm)) ||
+    custoCiv(m) ||
+    m.calculo === 'ESTORNO_CUSTO';
+  const reconhecidoNoCentro = (m, id, data) => {
+    if (custoCiv(m)) return custoAte.get(m.id)(id, data) * pocDespesa(id, data);
+    if (m.calculo === 'ESTORNO_CUSTO')
+      return -custosDoGrupo(m).reduce((s, x) => s + custoAte.get(x.id)(id, data), 0) * fracaoDistratada(id, data);
+    return base[m.calculo](id, data) * (comPocReceita(m) ? pocEm(id, data).poc : 1);
+  };
+  const reconhecido = (m, data) => ids.reduce((s, id) => s + reconhecidoNoCentro(m, id, data), 0);
   const valorEm = (m, a, b) => reconhecido(m, b) - reconhecido(m, vespera(a));
 
   // Alíquota (%) vigente num mês, pelo histórico do imposto.
@@ -242,6 +280,13 @@ async function calcular(empresaId, { de, ate, centros: filtro = [] }) {
         orcamento_fim: pocEm ? pocEm(c.id, ate).orcamento : null,
       })),
     },
+    poc_despesa: obras.map((c) => ({
+      centro_id: c.id,
+      nome: c.nome,
+      poc_inicio: pocDespesa(c.id, antes),
+      poc_fim: pocDespesa(c.id, ate),
+      fracao_distratada_fim: fracaoDistratada(c.id, ate),
+    })),
     valores,
   };
 }

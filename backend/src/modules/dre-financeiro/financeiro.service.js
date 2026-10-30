@@ -375,14 +375,15 @@ async function somaPorCentro(empresaId, mascaraId, ate) {
   return rows.map((r) => ({ ...r, valor: num(r.valor) }));
 }
 
-// Igual a somaPorCentro, mas por centro e dia (até `ate`): a DRE calcula a POC de Receita em
-// várias datas (mês a mês, pro RET) sem refazer a listagem a cada uma.
-async function somaPorCentroData(empresaId, mascaraId, ate) {
+// Igual a somaPorCentro, mas por máscara, centro e dia (até `ate`), de várias máscaras numa listagem
+// só: a DRE usa o custo acumulado em várias datas (POC de Receita, CIV, mês a mês pro RET) sem
+// refazer a listagem a cada uma.
+async function somaPorCentroData(empresaId, mascaraIds, ate) {
   const { rows } = await pool.query(
     `WITH ${CTE_LINHAS}
-     SELECT centro_id::int AS centro_id, to_char(data, 'YYYY-MM-DD') AS data, SUM(valor) AS valor
-       FROM lc WHERE mascara_id = $4 GROUP BY 1, 2 ORDER BY 1, 2`,
-    [empresaId, '1900-01-01', diaSeguinte(ate), mascaraId]
+     SELECT mascara_id::int AS mascara_id, centro_id::int AS centro_id, to_char(data, 'YYYY-MM-DD') AS data, SUM(valor) AS valor
+       FROM lc WHERE mascara_id = ANY($4::int[]) GROUP BY 1, 2, 3 ORDER BY 1, 2, 3`,
+    [empresaId, '1900-01-01', diaSeguinte(ate), mascaraIds]
   );
   return rows.map((r) => ({ ...r, valor: num(r.valor) }));
 }

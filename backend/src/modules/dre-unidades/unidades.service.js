@@ -266,7 +266,7 @@ async function listar(empresaId) {
     const valor = k.value === null ? null : Number(k.value) * participacao;
     const cancelado = k.situation === 'Cancelado' || Boolean(k.cancellation_date);
     const contrato = { id: k.contrato_id, numero: k.number, cancelado, motivo: k.cancellation_reason || null };
-    c.clusters.vendidas.push({ ...base(u, k.unit_name), chave: `v${k.contrato_id}-${k.unit_id}`, data: k.contract_date, valor, contrato });
+    c.clusters.vendidas.push({ ...base(u, k.unit_name), chave: `v${k.contrato_id}-${k.unit_id}`, data: k.contract_date, valor, participacao, contrato });
     if (cancelado) {
       const receita = k.recebido === null ? null : Number(k.recebido) * participacao;
       const despesa = k.total_cancellation_amount === null ? null : -Number(k.total_cancellation_amount) * participacao;
@@ -277,6 +277,7 @@ async function listar(empresaId) {
         chave: `d${k.contrato_id}-${k.unit_id}`,
         data: k.cancellation_date,
         valor,
+        participacao,
         receita_distrato: receita,
         despesa_distrato: despesa,
         contrato,

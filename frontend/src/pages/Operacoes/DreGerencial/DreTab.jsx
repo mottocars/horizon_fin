@@ -9,8 +9,8 @@ const moeda = (v) => Number(v).toLocaleString('pt-BR', { minimumFractionDigits: 
 // SaldosContasTab.jsx (primeira coluna com a hierarquia, valor alinhado à direita). A hierarquia é a
 // árvore cadastrada na aba Máscaras (dre_mascaras), na mesma ordem de lá. Valor = período do filtro
 // (de/até) somando os centros escolhidos (vazio = todos com "Realiza DRE") — cálculo em
-// dre-demonstrativo/demonstrativo.service.js. Por enquanto só a RECEITA BRUTA e o RET (Imposto Fixo)
-// têm valor; o resto fica com traço.
+// dre-demonstrativo/demonstrativo.service.js. Por enquanto só a RECEITA BRUTA, o RET (Imposto Fixo) e
+// o CIV têm valor; o resto fica com traço.
 export default function DreTab({ empresaId, de, ate, centros = [] }) {
   const [arvore, setArvore] = useState([]);
   const [carregando, setCarregando] = useState(false);
