@@ -12,6 +12,7 @@ import {
   Loader2,
   Plus,
   RefreshCw,
+  Save,
   Search,
   Settings,
   Tags,
@@ -121,6 +122,10 @@ export default function DreGerencialPage() {
 
   // Mesmo esquema pro botão "Nova máscara" da aba Máscaras (igual à DFC Construtoras).
   const mascarasTabRef = useRef(null);
+  // Aba Configurações: o "Salvar configurações" fica aqui na barra (mesmo esquema do "Publicar Versão"
+  // da aba Parâmetros da DFC) — a aba expõe salvar() por ref e avisa o estado do botão.
+  const configuracoesTabRef = useRef(null);
+  const [statusConfiguracoes, setStatusConfiguracoes] = useState({ podeSalvar: false, salvando: false });
 
   // Busca (nome ou código do centro de custo) da aba Orçamento — só conveniência de navegador,
   // não fica na URL (mesma convenção de bancosSearch/contasSearch em SaldoContasBancariasPage.jsx).
@@ -413,6 +418,20 @@ export default function DreGerencialPage() {
             </div>
           )}
 
+          {abaAtiva === 'configuracoes' && (
+            <div className="flex shrink-0 items-center gap-2">
+              <Button
+                type="button"
+                onClick={() => configuracoesTabRef.current?.salvar()}
+                disabled={semEmpresa || !statusConfiguracoes.podeSalvar}
+                loading={statusConfiguracoes.salvando}
+              >
+                <Save size={16} />
+                Salvar configurações
+              </Button>
+            </div>
+          )}
+
           {abaAtiva === 'mascaras' && (
             <div className="flex shrink-0 items-center gap-2">
               <Button type="button" onClick={() => mascarasTabRef.current?.abrirNova()} disabled={semEmpresa}>
@@ -508,7 +527,9 @@ export default function DreGerencialPage() {
             novoToken={novoLancamentoToken}
           />
         )}
-        {abaAtiva === 'configuracoes' && <ConfiguracoesDreTab empresaId={empresaId} />}
+        {abaAtiva === 'configuracoes' && (
+          <ConfiguracoesDreTab ref={configuracoesTabRef} empresaId={empresaId} onStatusChange={setStatusConfiguracoes} />
+        )}
 
         {abaAtiva === 'plano-de-contas' &&
           (planoAberto ? (

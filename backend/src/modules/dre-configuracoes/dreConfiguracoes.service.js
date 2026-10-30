@@ -91,12 +91,11 @@ async function obter(empresaId) {
   };
 }
 
+// Máscara obrigatória e de nível 2 da empresa (o controller recusa vazio).
 async function salvarPocReceita(empresaId, mascaraId, usuarioId) {
-  if (mascaraId !== null) {
-    const { rows } = await pool.query('SELECT parent_id FROM dre_mascaras WHERE id = $1 AND empresa_id = $2', [mascaraId, empresaId]);
-    if (!rows[0]) throw erro(400, 'Máscara DRE não encontrada nesta empresa.');
-    if (rows[0].parent_id === null) throw erro(400, 'Escolha uma máscara de nível 2.');
-  }
+  const { rows } = await pool.query('SELECT parent_id FROM dre_mascaras WHERE id = $1 AND empresa_id = $2', [mascaraId, empresaId]);
+  if (!rows[0]) throw erro(400, 'Máscara DRE não encontrada nesta empresa.');
+  if (rows[0].parent_id === null) throw erro(400, 'Escolha uma máscara de nível 2.');
   await pool.query(
     `INSERT INTO dre_configuracoes (empresa_id, poc_receita_mascara_id, usuario_id) VALUES ($1, $2, $3)
      ON CONFLICT (empresa_id) DO UPDATE SET poc_receita_mascara_id = EXCLUDED.poc_receita_mascara_id, usuario_id = EXCLUDED.usuario_id`,

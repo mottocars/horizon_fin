@@ -16,7 +16,7 @@ export function previaPocDre(empresaId) {
   return http.get(`/dre-configuracoes/${empresaId}/previa-poc`).then((res) => res.data);
 }
 
-// Máscara DRE de nível 2 do custo da obra (null = sem configuração).
+// Máscara DRE Nível 2 da POC de Receita (obrigatória).
 export function salvarPocReceitaDre(empresaId, mascaraId) {
   return http.put(`/dre-configuracoes/${empresaId}/poc-receita`, { mascara_id: mascaraId }).then((res) => res.data);
 }

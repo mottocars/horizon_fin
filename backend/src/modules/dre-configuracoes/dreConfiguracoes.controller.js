@@ -2,8 +2,12 @@ const { z } = require('zod');
 const service = require('./dreConfiguracoes.service');
 
 const empresaIdSchema = z.coerce.number().int().positive('Empresa inválida.');
+// Máscara DRE Nível 2 da POC de Receita: obrigatória (sem ela a POC de Receita não é gerada).
 const pocSchema = z.object({
-  mascara_id: z.preprocess((v) => (v === '' || v === undefined ? null : v), z.coerce.number().int().positive().nullable()),
+  mascara_id: z.coerce
+    .number({ invalid_type_error: 'Escolha a Máscara DRE Nível 2 da POC de Receita.' })
+    .int()
+    .positive('Escolha a Máscara DRE Nível 2 da POC de Receita.'),
 });
 const documentosSchema = z.object({
   excluidos: z.array(z.string().trim().min(1).max(20)).max(500),

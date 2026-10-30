@@ -1,6 +1,6 @@
-import { useCallback, useEffect, useMemo, useState } from 'react';
-import { AlertTriangle, CheckCircle2, Divide, FileX2, Info, Loader2, Lock, Settings, TriangleAlert } from 'lucide-react';
-import Button from '../../../components/Button';
+import { forwardRef, useCallback, useEffect, useImperativeHandle, useMemo, useState } from 'react';
+import { AlertTriangle, CheckCircle2, Lock, Settings, TriangleAlert } from 'lucide-react';
+import Card from '../../../components/Card';
 import SearchableSelect from '../../../components/SearchableSelect';
 import TransferList from '../../../components/TransferList';
 import {
@@ -15,89 +15,151 @@ const mesAno = (iso) => (iso ? `${MESES[Number(iso.slice(5, 7)) - 1]}/${iso.slic
 const dataBr = (iso) => (iso ? iso.slice(0, 10).split('-').reverse().join('/') : '');
 const dataHora = (v) => (v ? new Date(v).toLocaleString('pt-BR', { dateStyle: 'short', timeStyle: 'short' }) : '');
 const moeda = (v) => (v === null || v === undefined ? '' : Number(v).toLocaleString('pt-BR', { minimumFractionDigits: 2, maximumFractionDigits: 2 }));
-const pct = (v) => (v === null || v === undefined ? '' : `${(v * 100).toLocaleString('pt-BR', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}%`);
+const pct = (v) => (v === null || v === undefined ? '—' : `${(v * 100).toLocaleString('pt-BR', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}%`);
 const ORIGENS = { P: 'a pagar', R: 'a receber', E: 'extrato' };
 
-// Mesmo par de cores dos campos das outras telas: vazio em âmbar, preenchido em azul claro.
-const corCampo = (preenchido) => (preenchido ? 'border-primary-100 bg-primary-50' : 'border-amber-300 bg-amber-50');
+// Mesmo destaque dos campos da aba Parâmetros da DFC (CampoParametro.jsx — duplicado aqui de
+// propósito, telas não importam umas das outras): em branco fica âmbar; preenchido, azul claro.
+const estadoCampo = (preenchido) =>
+  preenchido ? 'border-primary-100 bg-primary-50 hover:border-primary-500' : 'border-amber-300 bg-amber-50 hover:border-amber-400';
 
-function Secao({ titulo, texto, icone: Icone, selo, children }) {
+// Cabeçalho de sessão — mesmo da aba Parâmetros da DFC (DfcParametrosTab.jsx).
+function SectionHeader({ selo, titulo, texto }) {
   return (
-    <section className="rounded-xl border border-gray-200 p-5">
-      <div className="flex items-start gap-3 border-b border-gray-100 pb-3">
-        <span className="flex h-8 w-8 shrink-0 items-center justify-center rounded-lg bg-primary-50 text-primary-600">
-          <Icone size={16} />
-        </span>
-        <div className="min-w-0 flex-1">
-          <h3 className="flex items-center gap-2 text-sm font-semibold text-gray-900">
-            {titulo}
-            {selo}
-          </h3>
-          {texto && <p className="mt-1 max-w-3xl text-xs leading-relaxed text-gray-500">{texto}</p>}
-        </div>
-      </div>
-      <div className="mt-4">{children}</div>
-    </section>
-  );
-}
-
-// Fórmula em "fração": numerador sobre denominador, como na apresentação do método.
-function Formula({ rotulo, numerador, denominador, nota }) {
-  return (
-    <div className="rounded-lg bg-gray-50 px-4 py-3">
-      <p className="text-[11px] font-medium uppercase tracking-wide text-gray-400">{rotulo}</p>
-      <div className="mt-2 flex items-center gap-3">
-        <div className="text-center">
-          <p className="border-b border-gray-300 px-2 pb-1 text-sm font-medium text-gray-800">{numerador}</p>
-          <p className="px-2 pt-1 text-sm text-gray-600">{denominador}</p>
-        </div>
-        {nota && <p className="text-xs text-gray-500">{nota}</p>}
-      </div>
+    <div className="border-b border-gray-100 pb-3">
+      {selo && <p className="mb-1 font-mono text-[10px] font-semibold uppercase tracking-wider text-gray-400">{selo}</p>}
+      <h3 className="text-sm font-semibold text-gray-900">{titulo}</h3>
+      {texto && <p className="mt-1.5 max-w-2xl text-xs leading-relaxed text-gray-500">{texto}</p>}
     </div>
   );
 }
 
-function Chips({ titulo, itens, cor }) {
+// Um parâmetro: rótulo e explicação à esquerda, campo à direita (mesmo par de CampoParametro.jsx).
+// `travado`: regra fixa do sistema — mostra o valor com cadeado, sem edição. `extra`: abaixo da
+// explicação.
+function Linha({ label, desc, primeiro = false, travado = null, extra = null, children }) {
   return (
-    <div className="mt-3">
-      <p className="mb-1.5 text-[11px] text-gray-400">{titulo}</p>
-      <div className="flex flex-wrap gap-1.5">
-        {itens.length ? (
-          itens.map((m) => (
-            <span key={m.id} className={`rounded-full px-2 py-0.5 text-[11px] font-medium ${cor}`}>
-              {m.descricao}
-            </span>
-          ))
+    <div className={`grid grid-cols-1 gap-3 py-4 sm:grid-cols-[1fr_320px] sm:items-start sm:gap-4 ${primeiro ? '' : 'border-t border-gray-100'}`}>
+      <div>
+        <p className="text-sm font-medium text-gray-800">{label}</p>
+        <p className="mt-1 text-xs leading-relaxed text-gray-500">{desc}</p>
+        {extra}
+        {travado && (
+          <p className="mt-2 inline-flex items-center gap-1 rounded-md bg-gray-100 px-1.5 py-0.5 text-[11px] font-medium text-gray-500">
+            <Lock size={10} /> Regra fixa do sistema — não editável
+          </p>
+        )}
+      </div>
+      <div>
+        {travado ? (
+          <div className="flex w-full items-center gap-2 rounded-lg border border-gray-100 bg-gray-50 px-3 py-2 text-sm text-gray-600">
+            <Lock size={13} className="shrink-0 text-gray-400" />
+            <span>{travado}</span>
+          </div>
         ) : (
-          <span className="text-[11px] text-gray-400">Nenhuma máscara marcada (aba Máscaras).</span>
+          children
         )}
       </div>
     </div>
   );
 }
 
-function Barra({ valor, cor }) {
+function Chips({ itens, cor }) {
   return (
-    <div className="flex items-center gap-2">
-      <div className="h-1.5 flex-1 overflow-hidden rounded-full bg-gray-100">
-        <span className={`block h-full ${cor}`} style={{ width: `${Math.min(100, (valor || 0) * 100)}%` }} />
-      </div>
-      <span className="w-16 text-right text-xs tabular-nums text-gray-700">{pct(valor)}</span>
+    <div className="mt-2 flex flex-wrap gap-1.5">
+      {itens.length ? (
+        itens.map((m) => (
+          <span key={m.id} className={`rounded-full px-2 py-0.5 text-[11px] font-medium ${cor}`}>
+            {m.descricao}
+          </span>
+        ))
+      ) : (
+        <span className="text-[11px] text-gray-400">Nenhuma máscara marcada na aba Máscaras.</span>
+      )}
     </div>
   );
 }
 
+function Barra({ valor, cor }) {
+  return (
+    <div className="h-1.5 w-full overflow-hidden rounded-full bg-gray-100">
+      <span className={`block h-full ${cor}`} style={{ width: `${Math.min(100, (valor || 0) * 100)}%` }} />
+    </div>
+  );
+}
+
+// Resumo (lado direito, como o da aba Parâmetros da DFC): a POC de cada obra até hoje, com a
+// configuração salva — POC de Receita só existe com a máscara configurada.
+function ResumoPoc({ previa, carregando }) {
+  return (
+    <Card className="xl:sticky xl:top-4">
+      <SectionHeader
+        titulo="Resumo"
+        texto={
+          carregando && !previa
+            ? 'Calculando a POC das obras...'
+            : `POC de cada obra até ${dataBr(previa?.ate)}, com a configuração salva.`
+        }
+      />
+      {!previa ? null : !previa.obras.length ? (
+        <p className="py-6 text-center text-xs text-gray-400">Nenhuma obra com orçamento ou unidades entre os centros com "Realiza DRE".</p>
+      ) : (
+        <div className={`-mx-2 mt-2 max-h-[70vh] space-y-1 overflow-y-auto ${carregando ? 'opacity-60' : ''}`}>
+          {!previa.mascara && (
+            <p className="mx-2 mb-2 flex items-start gap-1.5 rounded-lg bg-amber-50 px-2 py-1.5 text-[11px] text-amber-700">
+              <AlertTriangle size={12} className="mt-0.5 shrink-0" /> Sem Máscara DRE Nível 2, a POC de Receita não é gerada.
+            </p>
+          )}
+          {previa.obras.map((o) => {
+            const estourou = o.orcamento > 0 && o.custo_acumulado > o.orcamento;
+            return (
+              <div key={o.centro_id} className="rounded-lg px-2 py-2 hover:bg-gray-50">
+                <p className="truncate text-xs font-medium text-gray-800" title={o.nome}>
+                  {o.nome}
+                </p>
+                <p className="text-[11px] tabular-nums text-gray-400">
+                  {o.orcamento ? `Orçamento ${moeda(o.orcamento)} · desde ${mesAno(o.orcamento_desde)}` : 'Sem orçamento (aba Orçamento)'}
+                </p>
+                {previa.mascara && o.orcamento > 0 && (
+                  <p className={`text-[11px] tabular-nums ${estourou ? 'text-amber-700' : 'text-gray-400'}`}>
+                    {estourou && <AlertTriangle size={10} className="mr-1 inline" />}
+                    Custo acumulado {moeda(o.custo_acumulado)}
+                  </p>
+                )}
+                <div className="mt-1.5 grid grid-cols-[56px_1fr_56px] items-center gap-2 text-[11px]">
+                  <span className="text-gray-500">Receita</span>
+                  <Barra valor={o.poc_receita} cor={estourou ? 'bg-amber-500' : 'bg-emerald-500'} />
+                  <span className="text-right tabular-nums text-gray-700">{pct(o.poc_receita)}</span>
+                  <span className="text-gray-500">Despesa</span>
+                  <Barra valor={o.poc_despesa} cor="bg-red-400" />
+                  <span
+                    className="text-right tabular-nums text-gray-700"
+                    title={o.poc_despesa === null ? '' : `Vendida ${pct(o.fracao_vendida)} + permuta ${pct(o.fracao_permuta)} · ${o.unidades} unidades`}
+                  >
+                    {pct(o.poc_despesa)}
+                  </span>
+                </div>
+              </div>
+            );
+          })}
+        </div>
+      )}
+    </Card>
+  );
+}
+
 // Operações > DRE Gerencial > Configurações (por empresa — regras em
-// dre-configuracoes/dreConfiguracoes.service.js):
-// - POC de Receita: qual Máscara DRE de nível 2 é o custo da obra — POC Receita = custo acumulado
-//   dessa máscara ÷ orçamento vigente da obra (aba Orçamento), até 100%. Pelo id: o nome da máscara
-//   pode mudar, ou ser outra.
-// - POC de Despesa: fração ideal vendida (aba Unidades) — regra fixa, só explicada.
-// - Prévia por obra das duas POCs, até hoje (recalcula depois de salvar).
-// - Tipos de documento financeiro: à direita = fora da DRE (somem da aba Financeiro); tipo novo que
-//   chegar do Sienge entra sempre à esquerda (só os excluídos ficam gravados).
-// Um "Salvar configurações" só no fim, mesmo padrão da aba Configurações dos Cronogramas.
-export default function ConfiguracoesDreTab({ empresaId }) {
+// dre-configuracoes/dreConfiguracoes.service.js), no modelo da aba Parâmetros da DFC
+// (DfcParametrosTab.jsx): cartão de status, uma sessão por assunto com os parâmetros em linhas
+// (rótulo + explicação | campo) e o Resumo à direita. O botão "Salvar configurações" mora na barra da
+// página (DreGerencialPage.jsx): esta aba expõe `salvar()` via ref e avisa o estado
+// (`podeSalvar`/`salvando`) via `onStatusChange`.
+// - Sessão 1, POC: Máscara DRE Nível 2 da POC de Receita (custo acumulado dela ÷ orçamento vigente
+//   da obra, até 100%) — obrigatória, livre escolha, pelo id; sem ela a POC de Receita não é gerada.
+//   A POC de Despesa (fração ideal vendida) é regra fixa, só explicada.
+// - Sessão 2, Tipos de documento financeiro: à direita = fora da DRE (somem da aba Financeiro e do
+//   custo da POC); tipo novo que chegar do Sienge entra sempre à esquerda.
+const ConfiguracoesDreTab = forwardRef(function ConfiguracoesDreTab({ empresaId, onStatusChange }, ref) {
   const [dados, setDados] = useState(null);
   const [erroCarga, setErroCarga] = useState('');
   const [mascaraId, setMascaraId] = useState('');
@@ -105,7 +167,7 @@ export default function ConfiguracoesDreTab({ empresaId }) {
   const [previa, setPrevia] = useState(null);
   const [carregandoPrevia, setCarregandoPrevia] = useState(false);
   const [salvando, setSalvando] = useState(false);
-  const [salvo, setSalvo] = useState(false);
+  const [sucesso, setSucesso] = useState('');
   const [erro, setErro] = useState('');
 
   const aplicar = (d) => {
@@ -126,8 +188,9 @@ export default function ConfiguracoesDreTab({ empresaId }) {
   useEffect(() => {
     if (!empresaId) return;
     setDados(null);
+    setPrevia(null);
     setErroCarga('');
-    setSalvo(false);
+    setSucesso('');
     setErro('');
     obterConfiguracoesDre(empresaId)
       .then(aplicar)
@@ -136,32 +199,32 @@ export default function ConfiguracoesDreTab({ empresaId }) {
   }, [empresaId, carregarPrevia]);
 
   const opcoesMascara = useMemo(
-    () =>
-      (dados?.mascaras || []).flatMap((g) =>
-        g.filhos.map((f) => ({ value: f.id, label: f.descricao, grupo: g.descricao }))
-      ),
+    () => (dados?.mascaras || []).flatMap((g) => g.filhos.map((f) => ({ value: f.id, label: f.descricao, grupo: g.descricao }))),
     [dados]
   );
   const filhos = useMemo(() => (dados?.mascaras || []).flatMap((g) => g.filhos), [dados]);
   const receitaPoc = filhos.filter((f) => f.realiza_poc && f.tipo_poc === 'RECEITA');
   const despesaPoc = filhos.filter((f) => f.realiza_poc && f.tipo_poc === 'DESPESA');
-  const sugestao = filhos.find((f) => /CUSTO DOS IM[OÓ]VEIS/i.test(f.descricao));
-  const mascaraEscolhida = filhos.find((f) => String(f.id) === String(mascaraId));
 
-  const mudouPoc = dados && String(mascaraId || '') !== String(dados.poc_receita_mascara_id ?? '');
-  const mudouDocs = dados && [...excluidos].sort().join('|') !== [...dados.excluidos].sort().join('|');
-  const mudou = mudouPoc || mudouDocs;
+  const mudouPoc = Boolean(dados) && String(mascaraId || '') !== String(dados.poc_receita_mascara_id ?? '');
+  const mudouDocs = Boolean(dados) && [...excluidos].sort().join('|') !== [...dados.excluidos].sort().join('|');
+  const podeSalvar = Boolean(dados) && (mudouPoc || mudouDocs) && !salvando;
+
+  useEffect(() => {
+    onStatusChange?.({ podeSalvar, salvando });
+  }, [podeSalvar, salvando, onStatusChange]);
 
   async function salvar() {
+    if (!podeSalvar) return;
     setErro('');
-    setSalvo(false);
+    setSucesso('');
     setSalvando(true);
     try {
       let d = dados;
-      if (mudouPoc) d = await salvarPocReceitaDre(empresaId, mascaraId === '' ? null : Number(mascaraId));
+      if (mudouPoc && mascaraId !== '') d = await salvarPocReceitaDre(empresaId, Number(mascaraId));
       if (mudouDocs) d = await salvarDocumentosExcluidosDre(empresaId, excluidos);
       aplicar(d);
-      setSalvo(true);
+      setSucesso('Configurações salvas.');
       carregarPrevia();
     } catch (e) {
       setErro(e.response?.data?.message || 'Não foi possível salvar as configurações.');
@@ -170,196 +233,141 @@ export default function ConfiguracoesDreTab({ empresaId }) {
     }
   }
 
+  useImperativeHandle(ref, () => ({ salvar }));
+
+  const mexeu = () => {
+    setSucesso('');
+    setErro('');
+  };
+
   if (!empresaId) {
     return (
-      <div className="flex min-h-70 flex-col items-center justify-center rounded-card rounded-tl-none bg-white text-center shadow-card">
+      <Card className="flex min-h-[280px] flex-col items-center justify-center rounded-tl-none text-center">
         <Settings size={28} className="mb-3 text-gray-300" />
         <h2 className="text-sm font-semibold text-gray-900">Selecione uma empresa</h2>
         <p className="mt-1 max-w-sm text-xs text-gray-500">Escolha a empresa no filtro acima para ver as configurações da DRE.</p>
-      </div>
+      </Card>
+    );
+  }
+
+  if (erroCarga || !dados) {
+    return (
+      <Card className="flex min-h-[280px] flex-col items-center justify-center rounded-tl-none text-center">
+        {erroCarga ? (
+          <p className="flex items-center gap-2 text-sm text-red-600">
+            <TriangleAlert size={15} /> {erroCarga}
+          </p>
+        ) : (
+          <p className="text-sm text-gray-400">Carregando...</p>
+        )}
+      </Card>
     );
   }
 
   return (
-    <div className="space-y-4 rounded-card rounded-tl-none bg-white p-5 shadow-card">
-      {erroCarga ? (
-        <div className="flex items-center gap-2 rounded-lg bg-red-50 px-3 py-2 text-sm text-red-600">
-          <TriangleAlert size={15} className="shrink-0" /> {erroCarga}
-        </div>
-      ) : !dados ? (
-        <div className="py-12 text-center text-sm text-gray-400">Carregando...</div>
-      ) : (
-        <>
-          <div className="grid grid-cols-1 gap-4 xl:grid-cols-2">
-            <Secao
-              titulo="POC de Receita"
-              icone={Divide}
-              texto="Percentual de obra concluída usado no reconhecimento das receitas. Escolha a máscara de nível 2 cujo custo acumulado, dividido pelo orçamento da obra, mede o avanço — pelo id da máscara: se o nome mudar, a configuração continua valendo."
-            >
-              <Formula
-                rotulo="Como é calculada"
-                numerador={`Custo acumulado — ${mascaraEscolhida ? mascaraEscolhida.descricao : 'máscara escolhida'}`}
-                denominador="Orçamento vigente da obra (aba Orçamento)"
-                nota="limitada a 100%, mês a mês"
-              />
-              <div className="mt-4">
-                <label className="mb-1 block text-sm font-medium text-gray-700">Máscara DRE (nível 2) do custo da obra</label>
-                <div className="flex items-center gap-2">
-                  <div className="min-w-0 flex-1">
-                    <SearchableSelect
-                      value={mascaraId}
-                      onChange={(v) => {
-                        setMascaraId(v ?? '');
-                        setSalvo(false);
-                      }}
-                      options={opcoesMascara}
-                      placeholder="Não configurada"
-                      emptyMessage="Nenhuma máscara de nível 2 (aba Máscaras)."
-                      corClasses={corCampo(Boolean(mascaraId))}
-                      larguraPainel={380}
-                    />
-                  </div>
-                  {!mascaraId && sugestao && (
-                    <button
-                      type="button"
-                      onClick={() => setMascaraId(sugestao.id)}
-                      className="shrink-0 rounded-lg px-2 py-1.5 text-xs font-medium text-primary-600 hover:bg-primary-50"
-                    >
-                      Usar {sugestao.descricao}
-                    </button>
-                  )}
-                </div>
-                {!dados.poc_receita_mascara_id ? (
-                  <p className="mt-1.5 flex items-center gap-1.5 text-xs text-amber-700">
-                    <AlertTriangle size={13} className="shrink-0" /> Sem configuração, a POC de receita não pode ser calculada.
-                  </p>
-                ) : (
-                  <p className="mt-1.5 text-[11px] text-gray-400">
-                    Configurado{dados.atualizado_por ? ` por ${dados.atualizado_por}` : ''} em {dataHora(dados.atualizado_em)}
-                  </p>
-                )}
-              </div>
-              <Chips titulo="Aplica-se às máscaras marcadas com POC Receita" itens={receitaPoc} cor="bg-emerald-50 text-emerald-700" />
-            </Secao>
-
-            <Secao
-              titulo="POC de Despesa"
-              icone={Divide}
-              selo={
-                <span className="flex items-center gap-1 rounded-full bg-gray-100 px-2 py-0.5 text-[10px] font-medium text-gray-500">
-                  <Lock size={10} /> Regra fixa
-                </span>
-              }
-              texto="Percentual usado no reconhecimento dos custos: a fração ideal das unidades já vendidas. Não é configurável."
-            >
-              <Formula
-                rotulo="Como é calculada"
-                numerador="Fração ideal vendida (contratos ativos + permutas)"
-                denominador="Fração ideal total do empreendimento (100%)"
-                nota="distratos estornam a fração da unidade"
-              />
-              <p className="mt-4 flex items-start gap-1.5 text-xs leading-relaxed text-gray-500">
-                <Info size={13} className="mt-0.5 shrink-0 text-gray-400" />
-                Vem das unidades e contratos do Sienge (aba Unidades): cada unidade tem sua fração ideal, e a soma do
-                empreendimento é 100%.
-              </p>
-              <Chips titulo="Aplica-se às máscaras marcadas com POC Despesa" itens={despesaPoc} cor="bg-red-50 text-red-600" />
-            </Secao>
-          </div>
-
-          <Secao
-            titulo="Prévia da POC por obra"
-            icone={Divide}
-            texto={`Até ${dataBr(previa?.ate)}, com a configuração salva. Custo acumulado = linhas da aba Financeiro na máscara configurada, desde o começo (com ajustes, plano de contas do centro e só os tipos de documento considerados na DRE).`}
-          >
-            {carregandoPrevia && !previa ? (
-              <div className="py-6 text-center text-sm text-gray-400">Calculando...</div>
-            ) : !previa || !previa.obras.length ? (
-              <p className="text-sm text-gray-400">Nenhuma obra com orçamento ou unidades entre os centros com "Realiza DRE".</p>
-            ) : (
-              <div className={carregandoPrevia ? 'opacity-60 transition-opacity' : ''}>
-                <table className="w-full table-fixed border-collapse">
-                  <colgroup>
-                    <col />
-                    <col style={{ width: '17%' }} />
-                    <col style={{ width: '17%' }} />
-                    <col style={{ width: '20%' }} />
-                    <col style={{ width: '20%' }} />
-                  </colgroup>
-                  <thead>
-                    <tr className="border-b-2 border-blue-500 bg-blue-50 text-left text-xs font-medium uppercase tracking-wide text-blue-700">
-                      <th className="rounded-tl-lg px-3 py-2.5">Obra</th>
-                      <th className="px-3 py-2.5 text-right">Orçamento vigente</th>
-                      <th className="px-3 py-2.5 text-right">Custo acumulado</th>
-                      <th className="px-3 py-2.5">POC Receita</th>
-                      <th className="rounded-tr-lg px-3 py-2.5">POC Despesa</th>
-                    </tr>
-                  </thead>
-                  <tbody>
-                    {previa.obras.map((o) => {
-                      const estourou = o.orcamento > 0 && o.custo_acumulado > o.orcamento;
-                      return (
-                        <tr key={o.centro_id} className="border-b border-gray-100 text-xs">
-                          <td className="truncate px-3 py-2 text-gray-800" title={o.nome}>
-                            <span className="tabular-nums text-gray-400">{o.centro_id}</span> {o.nome}
-                          </td>
-                          <td className="px-3 py-2 text-right tabular-nums text-gray-700">
-                            {o.orcamento ? (
-                              <>
-                                {moeda(o.orcamento)}
-                                <span className="block text-[10px] text-gray-400">desde {mesAno(o.orcamento_desde)}</span>
-                              </>
-                            ) : (
-                              <span className="text-amber-600">Sem orçamento</span>
-                            )}
-                          </td>
-                          <td className="px-3 py-2 text-right tabular-nums text-gray-700">
-                            {previa.mascara ? (
-                              <span className={estourou ? 'text-amber-700' : ''} title={estourou ? 'O custo acumulado passou do orçamento: a POC fica em 100%' : ''}>
-                                {estourou && <AlertTriangle size={11} className="mr-1 inline" />}
-                                {moeda(o.custo_acumulado)}
-                              </span>
-                            ) : (
-                              <span className="text-gray-400">—</span>
-                            )}
-                          </td>
-                          <td className="px-3 py-2">
-                            {o.poc_receita === null ? (
-                              <span className="text-gray-400">{previa.mascara ? 'sem orçamento' : 'não configurada'}</span>
-                            ) : (
-                              <Barra valor={o.poc_receita} cor={estourou ? 'bg-amber-500' : 'bg-emerald-500'} />
-                            )}
-                          </td>
-                          <td className="px-3 py-2" title={`Vendida ${pct(o.fracao_vendida)} + permuta ${pct(o.fracao_permuta)} · ${o.unidades} unidades`}>
-                            {o.poc_despesa === null ? <span className="text-gray-400">sem unidades</span> : <Barra valor={o.poc_despesa} cor="bg-red-400" />}
-                          </td>
-                        </tr>
-                      );
-                    })}
-                  </tbody>
-                </table>
-              </div>
+    <div className="grid grid-cols-1 gap-4 xl:grid-cols-[minmax(0,1fr)_320px] xl:items-start">
+      <div className="space-y-4">
+        <Card className="rounded-tl-none">
+          <p className="text-sm font-medium text-gray-800">
+            Configurações da DRE
+            {dados.atualizado_em && (
+              <span className="font-normal text-gray-400">
+                {' '}
+                · última alteração{dados.atualizado_por ? ` por ${dados.atualizado_por}` : ''} em {dataHora(dados.atualizado_em)}
+              </span>
             )}
-          </Secao>
+          </p>
+          <p className="mt-0.5 text-xs text-gray-500">
+            Valem para todas as obras da empresa. Ajuste as sessões abaixo e salve no botão do topo.
+          </p>
+          {erro && (
+            <div className="mt-3 flex items-center gap-2 rounded-lg bg-red-50 px-3 py-2 text-sm text-red-600">
+              <AlertTriangle size={15} className="shrink-0" /> {erro}
+            </div>
+          )}
+          {sucesso && (
+            <div className="mt-3 flex items-center gap-2 rounded-lg bg-emerald-50 px-3 py-2 text-sm text-emerald-600">
+              <CheckCircle2 size={15} className="shrink-0" /> {sucesso}
+            </div>
+          )}
+          {!erro && !sucesso && (mudouPoc || mudouDocs) && (
+            <div className="mt-3 flex items-center gap-2 rounded-lg bg-amber-50 px-3 py-2 text-sm text-amber-600">
+              <AlertTriangle size={15} className="shrink-0" /> Alterações não salvas.
+              <button type="button" onClick={() => aplicar(dados)} className="ml-auto text-xs font-medium text-amber-700 hover:underline">
+                Descartar
+              </button>
+            </div>
+          )}
+          {!erro && !sucesso && !(mudouPoc || mudouDocs) && !dados.poc_receita_mascara_id && (
+            <div className="mt-3 flex items-center gap-2 rounded-lg bg-amber-50 px-3 py-2 text-sm text-amber-600">
+              <AlertTriangle size={15} className="shrink-0" /> Escolha a Máscara DRE Nível 2 da POC de Receita — sem ela, a POC de Receita não é gerada.
+            </div>
+          )}
+        </Card>
 
-          <Secao
+        <Card>
+          <SectionHeader
+            selo="Sessão 1"
+            titulo="POC — Percentual de obra concluída"
+            texto="Como a DRE reconhece receitas e custos das obras ao longo da construção."
+          />
+          <div>
+            <Linha
+              primeiro
+              label="Máscara DRE Nível 2"
+              desc="Obrigatória. O custo acumulado desta máscara (aba Financeiro, desde o começo da obra), dividido pelo orçamento vigente da obra (aba Orçamento), dá a POC de Receita — limitada a 100%. Fica gravada pela máscara, não pelo nome: renomear não perde a configuração."
+            >
+              <SearchableSelect
+                value={mascaraId}
+                onChange={(v) => {
+                  setMascaraId(v ?? '');
+                  mexeu();
+                }}
+                options={opcoesMascara}
+                placeholder="Selecione a máscara"
+                emptyMessage="Nenhuma máscara de nível 2 (aba Máscaras)."
+                clearable={false}
+                corClasses={estadoCampo(Boolean(mascaraId))}
+                larguraPainel={380}
+              />
+            </Linha>
+            <Linha
+              label="POC de Receita"
+              desc="Custo acumulado da máscara acima ÷ orçamento vigente da obra, até 100%. Reconhece as máscaras marcadas com POC Receita na aba Máscaras:"
+              extra={<Chips itens={receitaPoc} cor="bg-emerald-50 text-emerald-700" />}
+              travado="Custo acumulado ÷ Orçamento vigente"
+            />
+            <Linha
+              label="POC de Despesa"
+              desc="Fração ideal das unidades vendidas — contratos ativos + permutas, sobre 100% do empreendimento (aba Unidades); distratos estornam a fração da unidade. Reconhece as máscaras marcadas com POC Despesa:"
+              extra={<Chips itens={despesaPoc} cor="bg-red-50 text-red-600" />}
+              travado="Fração ideal vendida"
+            />
+          </div>
+        </Card>
+
+        <Card>
+          <SectionHeader
+            selo="Sessão 2"
             titulo="Tipos de documento financeiro"
-            icone={FileX2}
             texto="Os tipos à direita não entram na DRE: somem da aba Financeiro e do custo da POC. Todo tipo novo que chegar do Sienge entra sempre à esquerda (considerado). Clique para destacar e use as setas."
-          >
+          />
+          <div className="mt-4">
             <TransferList
               itens={dados.documentos}
               selecionados={excluidos}
               onChange={(lista) => {
                 setExcluidos(lista);
-                setSalvo(false);
+                mexeu();
               }}
               getId={(d) => d.documento}
               getLabel={(d) =>
-                `${d.documento}${d.nome ? ` — ${d.nome}` : ''} · ${d.lancamentos.toLocaleString('pt-BR')} (${d.origens
-                  .split('')
-                  .map((o) => ORIGENS[o])
-                  .join(', ') || 'sem lançamentos'})`
+                `${d.documento}${d.nome ? ` — ${d.nome}` : ''} · ${d.lancamentos.toLocaleString('pt-BR')} (${
+                  d.origens
+                    .split('')
+                    .map((o) => ORIGENS[o])
+                    .join(', ') || 'sem lançamentos'
+                })`
               }
               tituloDisponiveis="Considerados na DRE"
               tituloSelecionados="Fora da DRE"
@@ -367,36 +375,13 @@ export default function ConfiguracoesDreTab({ empresaId }) {
               vazioSelecionadosTexto="Nenhum tipo fora da DRE."
               corSelecionados={excluidos.length ? 'border-red-200' : 'border-gray-200'}
             />
-          </Secao>
-
-          <div className="flex flex-wrap items-center gap-3 border-t border-gray-100 pt-4">
-            <Button type="button" onClick={salvar} loading={salvando} disabled={!mudou}>
-              Salvar configurações
-            </Button>
-            {mudou && !salvando && <span className="text-xs text-amber-700">Alterações não salvas</span>}
-            {mudou && (
-              <button type="button" onClick={() => aplicar(dados)} className="text-xs font-medium text-gray-500 hover:text-gray-700">
-                Descartar
-              </button>
-            )}
-            {salvo && !mudou && (
-              <span className="flex items-center gap-1.5 text-sm text-emerald-600">
-                <CheckCircle2 size={15} /> Configurações salvas
-              </span>
-            )}
-            {carregandoPrevia && previa && (
-              <span className="flex items-center gap-1.5 text-xs text-gray-400">
-                <Loader2 size={13} className="animate-spin" /> Recalculando a prévia...
-              </span>
-            )}
-            {erro && (
-              <span className="flex items-center gap-1.5 text-sm text-red-600">
-                <AlertTriangle size={15} className="shrink-0" /> {erro}
-              </span>
-            )}
           </div>
-        </>
-      )}
+        </Card>
+      </div>
+
+      <ResumoPoc previa={previa} carregando={carregandoPrevia} />
     </div>
   );
-}
+});
+
+export default ConfiguracoesDreTab;
