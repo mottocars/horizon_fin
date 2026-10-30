@@ -17,6 +17,8 @@ const dataBr = (iso) => (iso ? iso.slice(0, 10).split('-').reverse().join('/') :
 const dataHora = (v) => (v ? new Date(v).toLocaleString('pt-BR', { dateStyle: 'short', timeStyle: 'short' }) : '');
 const moeda = (v) => (v === null || v === undefined ? '' : Number(v).toLocaleString('pt-BR', { minimumFractionDigits: 2, maximumFractionDigits: 2 }));
 const pct = (v) => (v === null || v === undefined ? '' : `${(v * 100).toLocaleString('pt-BR', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}%`);
+// POC com 6 casas decimais, como no cálculo da DRE (backend utils/poc.js).
+const pctPoc = (v) => (v === null || v === undefined ? '' : `${(v * 100).toLocaleString('pt-BR', { minimumFractionDigits: 6, maximumFractionDigits: 6 })}%`);
 const ORIGENS = { P: 'a pagar', R: 'a receber', E: 'extrato' };
 
 // Mesmo par âmbar (vazio)/azul (preenchido) da aba Configurações do Saldo Contas Bancárias.
@@ -78,7 +80,7 @@ function Barra({ valor, cor }) {
       <div className="h-1.5 flex-1 overflow-hidden rounded-full bg-gray-100">
         <span className={`block h-full ${cor}`} style={{ width: `${Math.min(100, (valor || 0) * 100)}%` }} />
       </div>
-      <span className="w-16 text-right text-xs tabular-nums text-gray-700">{pct(valor)}</span>
+      <span className="w-24 text-right text-xs tabular-nums text-gray-700">{pctPoc(valor)}</span>
     </div>
   );
 }

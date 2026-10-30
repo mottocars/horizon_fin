@@ -2,6 +2,7 @@ const pool = require('../../config/db');
 const unidades = require('../dre-unidades/unidades.service');
 const correcoes = require('../dre-correcoes/correcoes.service');
 const financeiro = require('../dre-financeiro/financeiro.service');
+const { arredondarPoc } = require('../../utils/poc');
 
 // Operações > DRE Gerencial > DRE: a coluna Valor de cada Máscara DRE de nível 2 num período
 // (de/até, inclusive), somando os centros de custo com "Realiza DRE" (ou os do filtro). Inspirado no
@@ -19,7 +20,8 @@ const financeiro = require('../dre-financeiro/financeiro.service');
 //
 // POC de Receita (máscara marcada "% POC" + Tipo POC Receita), por obra, como o delta_poc do script:
 //   POC(D)          = custo acumulado até D na Máscara DRE Nível 2 da aba Configurações ÷ orçamento
-//                     vigente em D (aba Orçamento: o de início mais recente até D), até 100%;
+//                     vigente em D (aba Orçamento: o de início mais recente até D), até 100%, com
+//                     6 casas decimais no percentual (utils/poc.js);
 //   reconhecido(D)  = base acumulada até D × POC(D);
 //   valor           = reconhecido(até) − reconhecido(véspera do de).
 // Assim o período já desconta o que foi reconhecido antes dele (venda antiga só entra pelo avanço da
@@ -83,7 +85,7 @@ async function pocReceitaEm(empresaId, mascaraId, data) {
   orcamentos.forEach((o) => {
     const orcamento = num(o.total);
     const c = custo.get(o.centro_id) || 0;
-    mapa[o.centro_id] = { poc: orcamento > 0 ? Math.min(c / orcamento, 1) : 0, custo: c, orcamento };
+    mapa[o.centro_id] = { poc: orcamento > 0 ? arredondarPoc(Math.min(c / orcamento, 1)) : 0, custo: c, orcamento };
   });
   custo.forEach((c, centroId) => {
     if (!mapa[centroId]) mapa[centroId] = { poc: 0, custo: c, orcamento: 0 };

@@ -1,5 +1,6 @@
 const pool = require('../../config/db');
 const financeiro = require('../dre-financeiro/financeiro.service');
+const { arredondarPoc } = require('../../utils/poc');
 
 // Operações > DRE Gerencial > aba Configurações (por empresa — database/migrations/
 // 2026-10-30-dre-configuracoes.sql):
@@ -181,7 +182,7 @@ async function previaPoc(empresaId) {
       const k = custo.get(c.id);
       const orcamento = o ? num(o.total) : null;
       const custoAcumulado = k ? Math.abs(k.valor) : 0;
-      const fracao = f ? Math.min(Number(f.vendida) + Number(f.permuta), 1) : null;
+      const fracao = f ? arredondarPoc(Math.min(Number(f.vendida) + Number(f.permuta), 1)) : null;
       return {
         centro_id: c.id,
         nome: c.nome,
@@ -189,7 +190,7 @@ async function previaPoc(empresaId) {
         orcamento_desde: o?.desde || null,
         custo_acumulado: mascara ? custoAcumulado : null,
         custo_desde: k?.desde || null,
-        poc_receita: mascara && orcamento > 0 ? Math.min(custoAcumulado / orcamento, 1) : null,
+        poc_receita: mascara && orcamento > 0 ? arredondarPoc(Math.min(custoAcumulado / orcamento, 1)) : null,
         poc_despesa: fracao,
         unidades: f?.unidades ?? 0,
         fracao_vendida: f ? Number(f.vendida) : null,
