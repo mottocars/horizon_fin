@@ -222,14 +222,14 @@ function Valor({ valor, vazio = 'text-gray-300', cor = 'text-gray-700' }) {
 function LinhaGrupo({ grupo, valores, acumulado }) {
   if (grupo.totalizadora) {
     return (
-      <tr className="bg-gray-900">
-        <td className="border-b border-gray-900 py-1 pl-4">
+      <tr className="bg-[#1d5c8a]">
+        <td className="border-b border-[#1d5c8a] py-1 pl-4">
           <span className="flex items-center">
             <IconeLinha icone={grupo.icone} className="text-white" />
             <span className="text-xs font-bold uppercase tracking-wide text-white">{grupo.descricao}</span>
           </span>
         </td>
-        <td className="border-b border-l border-gray-900 px-4 py-1 text-right text-xs font-bold tabular-nums">
+        <td className="border-b border-l border-[#1d5c8a] px-4 py-1 text-right text-xs font-bold tabular-nums">
           {acumulado === null ? (
             <span className="text-white/50">—</span>
           ) : (
