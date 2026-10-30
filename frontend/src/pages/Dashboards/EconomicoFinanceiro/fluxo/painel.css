@@ -314,6 +314,10 @@
   font-size: 12px;
   color: var(--muted);
 }
+.painel-cfo .multi-rodape-acoes {
+  display: flex;
+  gap: 6px;
+}
 .painel-cfo .multi-rodape .btn {
   padding: 4px 10px;
   font-size: 12px;

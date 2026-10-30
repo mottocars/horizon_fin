@@ -131,6 +131,7 @@ export default function CronogramasObrasPage() {
                   <label className="mb-1 block text-sm font-medium text-gray-700">Obras</label>
                   <SearchableSelect
                     multiple
+                    todosELimpar
                     value={obrasMarcadas}
                     onChange={(v) => atualizarParams({ obra: v })}
                     disabled={!empresaId}
@@ -144,6 +145,7 @@ export default function CronogramasObrasPage() {
                   <label className="mb-1 block text-sm font-medium text-gray-700">Localidade</label>
                   <SearchableSelect
                     multiple
+                    todosELimpar
                     value={localidades}
                     onChange={(v) => atualizarParams({ local: v, obra: obrasNasLocalidades(obrasMarcadas, v, centrosObras) })}
                     disabled={!empresaId}

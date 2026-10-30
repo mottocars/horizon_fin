@@ -285,7 +285,7 @@ export default function CronogramasObrasDashboard() {
           marca={marcaEmpresa}
         />
 
-        <section className="controls" aria-label="Controles do painel">
+        <section className="controls cronograma" aria-label="Controles do painel">
           <div className="ctl">
             <label htmlFor="f-empresa">Empresa</label>
             <select
@@ -315,6 +315,7 @@ export default function CronogramasObrasDashboard() {
             valor={obrasMarcadas}
             onChange={(v) => atualizarParams({ obra: v })}
             disabled={!empresaId}
+            selecionarTodos
           />
           <FiltroCentros
             id="f-local"
@@ -327,6 +328,7 @@ export default function CronogramasObrasDashboard() {
             valor={localidades}
             onChange={(v) => atualizarParams({ local: v, obra: obrasNasLocalidades(obrasMarcadas, v, centros) })}
             disabled={!empresaId}
+            selecionarTodos
           />
           <div className="ctl">
             <label htmlFor="f-versao">Mudanças</label>

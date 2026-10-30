@@ -64,6 +64,7 @@ function CampoMes({ id, rotulo, valor, min, max, onChange, dica }) {
 // Centro de custo: lista com marcação múltipla e busca, no visual da barra (também no Aging List).
 // Os textos mudam pelas props (Cronogramas de Obras usa a mesma lista nos filtros Obras e Localidade);
 // opção com `grupo` ganha um título antes da primeira do grupo (as opções vêm ordenadas por grupo).
+// `selecionarTodos`: botão "Selecionar todos" ao lado do "Limpar" (marca as opções que aparecem na busca).
 export function FiltroCentros({
   opcoes,
   valor,
@@ -75,6 +76,7 @@ export function FiltroCentros({
   varios = 'centros',
   buscar = 'Buscar centro',
   vazio = 'Nenhum centro encontrado.',
+  selecionarTodos = false,
 }) {
   const [aberto, setAberto] = useState(false);
   const [busca, setBusca] = useState('');
@@ -120,9 +122,21 @@ export function FiltroCentros({
           </div>
           <div className="multi-rodape">
             <span>{valor.length ? `${valor.length} marcado${valor.length > 1 ? 's' : ''}` : 'Todos'}</span>
-            <button type="button" className="btn ghost" onClick={() => onChange([])} disabled={!valor.length}>
-              Limpar
-            </button>
+            <span className="multi-rodape-acoes">
+              {selecionarTodos && (
+                <button
+                  type="button"
+                  className="btn ghost"
+                  onClick={() => onChange([...valor, ...lista.map((o) => o.value).filter((v) => !valor.includes(v))])}
+                  disabled={lista.every((o) => valor.includes(o.value))}
+                >
+                  Selecionar todos
+                </button>
+              )}
+              <button type="button" className="btn ghost" onClick={() => onChange([])} disabled={!valor.length}>
+                Limpar
+              </button>
+            </span>
           </div>
         </div>
       )}

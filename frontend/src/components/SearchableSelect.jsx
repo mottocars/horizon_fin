@@ -39,6 +39,10 @@ export default function SearchableSelect({
   // marcadas, por "Desmarcar todos". Usado nas telas em que o filtro nasce
   // com tudo marcado (ex.: EmpreendimentosMasaPage.jsx).
   selecionarTodos = false,
+  // Só com `multiple`: "Selecionar todos" e "Limpar seleção" lado a lado no topo da lista (ex.: filtros
+  // Obras e Localidade de Cronogramas Obras). Com texto na busca, "Selecionar todos" marca só as
+  // opções que aparecem, somando às já marcadas.
+  todosELimpar = false,
   // Largura mínima do painel de opções, em px — o gatilho (campo) continua do tamanho dele, só o
   // painel que abre fica mais largo (ex.: Máscara DFC no Plano Contas da DFC Construtoras).
   larguraPainel = 0,
@@ -229,7 +233,32 @@ export default function SearchableSelect({
                   {todosSelecionados ? 'Desmarcar todos' : 'Selecionar todos'}
                 </button>
               )}
-              {multiple && !selecionarTodos && (
+              {multiple && todosELimpar && (
+                <div className="flex items-center justify-between px-3 py-2 text-sm">
+                  <button
+                    type="button"
+                    disabled={filtrados.every((o) => valoresSelecionados.some((v) => String(v) === String(o.value)))}
+                    onClick={() =>
+                      onChange([
+                        ...valoresSelecionados,
+                        ...filtrados.map((o) => o.value).filter((v) => !valoresSelecionados.some((x) => String(x) === String(v))),
+                      ])
+                    }
+                    className="font-medium text-primary-600 hover:text-primary-700 disabled:cursor-default disabled:opacity-40"
+                  >
+                    Selecionar todos
+                  </button>
+                  <button
+                    type="button"
+                    disabled={valoresSelecionados.length === 0}
+                    onClick={() => onChange([])}
+                    className="text-gray-400 hover:text-gray-600 disabled:cursor-default disabled:opacity-50"
+                  >
+                    Limpar seleção
+                  </button>
+                </div>
+              )}
+              {multiple && !selecionarTodos && !todosELimpar && (
                 <button
                   type="button"
                   disabled={valoresSelecionados.length === 0}

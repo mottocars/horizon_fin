@@ -69,6 +69,11 @@
   font-size: 14px;
   font-family: inherit;
 }
+/* As listas de Obras e Localidade abrem por cima da régua do Gantt (sticky, z-index 30) quando o
+   Gantt é curto; abaixo da tela cheia do Gantt (40). */
+.painel-cfo .controls.cronograma {
+  z-index: 35;
+}
 /* Com o filtro Localidade, a barra ficou com cinco listas: mais estreitas que as 280px do painel,
    pra Empresa, Obras, Localidade, Mudanças e o De/Até caberem numa linha só. Obras e Localidade
    são listas de marcação múltipla (FiltroCentros). */
