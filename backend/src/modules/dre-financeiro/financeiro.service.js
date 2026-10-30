@@ -198,7 +198,9 @@ const CTE_LINHAS = `
     WINDOW w AS (PARTITION BY g.origem, g.chave)
   ),
   lc AS (
-    SELECT g.origem, g.chave, CASE WHEN g.origem IN ('R', 'P') THEN g.chave END AS titulo,
+    -- titulo: o número do título ou, no movimento do extrato, o id do lançamento no Sienge (é o
+    -- cod_movimento das planilhas do usuário) — a busca e o filtro da coluna acham pelos dois.
+    SELECT g.origem, g.chave, CASE WHEN g.origem IN ('R', 'P', 'E') THEN g.chave END AS titulo,
            g.data_lanc AS data, g.venc_min_lanc AS venc_min, g.venc_max_lanc AS venc_max, g.parcelas_lanc AS parcelas,
            g.documento, g.documento_nome, g.numero, g.contraparte,
            g.centro_original, g.natureza_original, g.centro_id, COALESCE(cc.name, g.centro_nome_cat) AS centro_nome,

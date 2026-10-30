@@ -106,7 +106,7 @@ function FiltroTitulo({ valor, onChange }) {
           className="absolute left-0 top-7 z-30 w-72 rounded-lg border border-gray-200 bg-white p-3 text-left normal-case tracking-normal shadow-lg"
         >
           <label className="mb-1 block text-xs font-medium text-gray-600" htmlFor="filtro-titulo">
-            Número do título
+            Número do título ou do movimento
           </label>
           <input
             id="filtro-titulo"
@@ -420,6 +420,7 @@ export default function LancamentosExercicio({ empresaId, ano, search = '', novo
                       </td>
                       <td className={`${td} tabular-nums`}>
                         {l.titulo ? <span className="font-medium text-gray-700">{l.titulo}</span> : null}
+                        {l.origem === 'E' && <span className="ml-1 text-[10px] text-gray-400" title="Número do movimento no extrato do Sienge">mov.</span>}
                         {l.parcelas > 1 && <span className="ml-1 text-[10px] text-gray-400">{l.parcelas}x</span>}
                       </td>
                       <td className={`${td} truncate ${l.origem === 'E' ? 'italic text-gray-500' : 'text-gray-800'}`} title={l.contraparte || ''}>
