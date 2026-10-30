@@ -16,7 +16,8 @@ function plural(n, um, varios) {
 // Mesmo card dos planos da aba Plano Contas (PlanosContasLista.jsx): ícone, título e rodapé. Exercício
 // travado (o do ano atual): em amarelo sutil, com cadeado e "Somente visualização" — nada nele pode ser
 // alterado. Quantidades: títulos distintos a receber e a pagar emitidos no ano (um título tem várias
-// parcelas), movimentações do extrato sem título e quantos títulos foram ajustados (titulos_ajustes).
+// parcelas), movimentações do extrato sem título e quantos lançamentos (títulos e movimentos) têm
+// ajuste (lancamentos_ajustes).
 // Clicar abre os lançamentos do exercício.
 function CardExercicio({ exercicio, atual, onAbrir }) {
   const travado = exercicio.travado;
@@ -73,9 +74,9 @@ function CardExercicio({ exercicio, atual, onAbrir }) {
         </div>
         <div className={`flex items-center justify-between ${exercicio.ajustados ? 'font-medium text-violet-700' : ''}`}>
           <span className="flex items-center gap-1">
-            <PencilLine size={12} className={exercicio.ajustados ? 'text-violet-500' : 'text-gray-400'} /> Títulos ajustados
+            <PencilLine size={12} className={exercicio.ajustados ? 'text-violet-500' : 'text-gray-400'} /> Lançamentos ajustados
           </span>
-          <span className="tabular-nums">{plural(exercicio.ajustados || 0, 'título', 'títulos')}</span>
+          <span className="tabular-nums">{plural(exercicio.ajustados || 0, 'lançamento', 'lançamentos')}</span>
         </div>
       </div>
 

@@ -37,7 +37,7 @@ const dreCentrosRoutes = require('./modules/dre-centros/dreCentros.routes');
 const dreUnidadesRoutes = require('./modules/dre-unidades/unidades.routes');
 const dreCorrecoesRoutes = require('./modules/dre-correcoes/correcoes.routes');
 const dreFinanceiroRoutes = require('./modules/dre-financeiro/financeiro.routes');
-const titulosAjustesRoutes = require('./modules/titulos-ajustes/titulosAjustes.routes');
+const lancamentosAjustesRoutes = require('./modules/lancamentos-ajustes/lancamentosAjustes.routes');
 const dfcParametrosRoutes = require('./modules/dfc-parametros/dfcParametros.routes');
 const dfcCentrosRoutes = require('./modules/dfc-centros/dfcCentros.routes');
 const dfcPlanoContasRoutes = require('./modules/dfc-plano-contas/dfcPlanoContas.routes');
@@ -194,8 +194,8 @@ app.use('/api/dre-centros', exigirTela([T.DRE]), dreCentrosRoutes);
 app.use('/api/dre-unidades', exigirTela([T.DRE]), dreUnidadesRoutes);
 app.use('/api/dre-correcoes', exigirTela([T.DRE]), dreCorrecoesRoutes);
 app.use('/api/dre-financeiro', exigirTela([T.DRE]), dreFinanceiroRoutes);
-// Ajustes de títulos (genérico; hoje só a DRE › Financeiro edita).
-app.use('/api/titulos-ajustes', exigirTela([T.DRE]), titulosAjustesRoutes);
+// Ajustes de lançamentos financeiros (genérico; hoje só a DRE › Financeiro edita).
+app.use('/api/lancamentos-ajustes', exigirTela([T.DRE]), lancamentosAjustesRoutes);
 app.use('/api/dfc-mascaras', exigirTela([T.DFC], LEITURA_DASHBOARD), dfcMascarasRoutes);
 app.use('/api/dfc-parametros', exigirTela([T.DFC]), dfcParametrosRoutes);
 app.use('/api/dfc-centros', exigirTela([T.DFC]), dfcCentrosRoutes);

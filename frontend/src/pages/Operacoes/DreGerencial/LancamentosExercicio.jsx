@@ -2,7 +2,7 @@ import { useEffect, useMemo, useRef, useState } from 'react';
 import { ArrowLeft, CalendarDays, ChevronLeft, ChevronRight, ListChecks, ListFilter, Loader2, Lock, TriangleAlert } from 'lucide-react';
 import FiltroColuna from '../../../components/FiltroColuna';
 import { listarFiltrosExercicioDre, listarLancamentosExercicioDre } from '../../../api/dreFinanceiro.api';
-import TituloAjusteModal from './TituloAjusteModal';
+import LancamentoAjusteModal from './LancamentoAjusteModal';
 
 const POR_PAGINA = 100;
 // "Mostrar todos": busca em blocos (a barra de carregamento anda a cada um).
@@ -40,8 +40,8 @@ function opcoes(lista, rotulo, vazio) {
 // sem filtro (mesma regra do Plano Contas).
 const SEM_FILTROS = { origens: null, meses: null, documentos: null, titulos: null, contrapartes: null, naturezas: null, centros: null, status: null };
 
-// Status do lançamento: Original (como veio do Sienge) ou Ajustado (o título tem ajuste —
-// titulos_ajustes; centro, natureza e/ou valor trocados sem mexer no título).
+// Status da linha: Original (como veio do Sienge) ou Ajustado (a linha tem ajuste — lancamentos_ajustes;
+// centro, natureza e/ou valor trocados sem mexer no Sienge).
 const STATUS = {
   ORIGINAL: { rotulo: 'Original', classe: 'bg-gray-100 text-gray-600' },
   AJUSTADO: { rotulo: 'Ajustado', classe: 'bg-violet-50 text-violet-700' },
@@ -134,10 +134,10 @@ function FiltroTitulo({ valor, onChange }) {
 
 // Operações > DRE Gerencial > Financeiro > um exercício: todos os lançamentos financeiros do ano — a
 // pagar, a receber (pela emissão) e o movimento das contas sem título (extrato, pela data). Uma linha
-// por título, com as parcelas somadas; título rateado, uma por centro × natureza (regras em
-// dre-financeiro/financeiro.service.js). Clicar no título abre a janela dele (TituloAjusteModal), onde
-// se ajusta valor, natureza e centro sem mexer no título do Sienge; a coluna Status mostra Original
-// ou Ajustado. Filtros no cabeçalho da tabela (Origem, Data — mês de emissão —, Documento, Título —
+// por título, com as parcelas somadas; título rateado, uma por centro × natureza, com o % do rateio
+// (regras em dre-financeiro/financeiro.service.js). Clicar em qualquer lugar da linha — título ou
+// movimento — abre a janela daquela linha de rateio (LancamentoAjusteModal), onde se ajusta centro,
+// natureza e valor sem mexer no Sienge; a coluna Status mostra Original ou Ajustado. Filtros no cabeçalho da tabela (Origem, Data — mês de emissão —, Documento, Título —
 // números digitados —, Cliente/Fornecedor, Natureza, Centro de custo e Status) e a busca do topo da
 // página, tudo aplicado no backend. Paginado (um ano da GENESIS passa de dezenas de milhares de
 // linhas); no rodapé, "Mostrar todos" busca o resto em blocos, com barra de carregamento. O exercício
@@ -153,7 +153,8 @@ export default function LancamentosExercicio({ empresaId, ano, search = '', onVo
   const [progresso, setProgresso] = useState(null); // { carregadas, total } durante o "mostrar todos"
   const [carregando, setCarregando] = useState(true);
   const [erro, setErro] = useState('');
-  // Título aberto na janela ({ origem, titulo }) e recarga depois de ajustar.
+  // Linha aberta na janela ({ origem, chave, centro, natureza } — centro/natureza originais) e recarga
+  // depois de ajustar.
   const [tituloAberto, setTituloAberto] = useState(null);
   const [recarga, setRecarga] = useState(0);
   const pedido = useRef(null);
@@ -315,7 +316,7 @@ export default function LancamentosExercicio({ empresaId, ano, search = '', onVo
         </div>
       ) : (
         <div>
-          <table className={`w-full min-w-[1270px] table-fixed border-collapse ${carregando && dados ? 'opacity-60 transition-opacity' : ''}`}>
+          <table className={`w-full min-w-[1360px] table-fixed border-collapse ${carregando && dados ? 'opacity-60 transition-opacity' : ''}`}>
             <colgroup>
               <col style={{ width: 110 }} />
               <col style={{ width: 92 }} />
@@ -324,6 +325,7 @@ export default function LancamentosExercicio({ empresaId, ano, search = '', onVo
               <col />
               <col style={{ width: 250 }} />
               <col style={{ width: 200 }} />
+              <col style={{ width: 88 }} />
               <col style={{ width: 130 }} />
               <col style={{ width: 100 }} />
             </colgroup>
@@ -341,6 +343,7 @@ export default function LancamentosExercicio({ empresaId, ano, search = '', onVo
                 {cab('contrapartes', 'Cliente / Fornecedor', opContraparte, 420)}
                 {cab('naturezas', 'Natureza', opNatureza, 460)}
                 {cab('centros', 'Centro de custo', opCentro, 380)}
+                <th className={`${th} text-right`}>% Rateio</th>
                 <th className={`${th} text-right`}>Valor</th>
                 {cab('status', 'Status', OPCOES_STATUS, 200, 'rounded-tr-lg')}
               </tr>
@@ -348,13 +351,13 @@ export default function LancamentosExercicio({ empresaId, ano, search = '', onVo
             <tbody>
               {!dados ? (
                 <tr>
-                  <td colSpan={9} className="py-12 text-center text-sm text-gray-400">
+                  <td colSpan={10} className="py-12 text-center text-sm text-gray-400">
                     Carregando...
                   </td>
                 </tr>
               ) : dados.linhas.length === 0 ? (
                 <tr>
-                  <td colSpan={9} className="border-b border-gray-100 py-10 text-center text-sm text-gray-400">
+                  <td colSpan={10} className="border-b border-gray-100 py-10 text-center text-sm text-gray-400">
                     Nenhum lançamento encontrado{filtrosAtivos || busca ? ' para essa busca/filtro.' : ' neste exercício.'}
                     {filtrosAtivos && (
                       <button
@@ -372,7 +375,12 @@ export default function LancamentosExercicio({ empresaId, ano, search = '', onVo
                   const origem = ORIGENS[l.origem];
                   const docNome = nomeDocumento.get(l.documento || '') || l.documento_nome || '';
                   return (
-                    <tr key={i} className="border-b border-gray-100 hover:bg-gray-50">
+                    <tr
+                      key={i}
+                      onClick={() => setTituloAberto({ origem: l.origem, chave: l.chave, centro: l.centro_original, natureza: l.natureza_original })}
+                      title="Abrir para ver ou ajustar esta linha"
+                      className={`cursor-pointer border-b border-gray-100 hover:bg-primary-50/50 ${l.status === 'AJUSTADO' ? 'bg-violet-50/30' : ''}`}
+                    >
                       <td className={td}>
                         <span className={`inline-flex rounded-full px-2 py-0.5 text-[11px] font-medium ${origem.classe}`}>{origem.rotulo}</span>
                       </td>
@@ -391,16 +399,7 @@ export default function LancamentosExercicio({ empresaId, ano, search = '', onVo
                         {l.numero && <span className="text-gray-400"> {l.numero}</span>}
                       </td>
                       <td className={`${td} tabular-nums`}>
-                        {l.titulo ? (
-                          <button
-                            type="button"
-                            onClick={() => setTituloAberto({ origem: l.origem, titulo: l.titulo })}
-                            title={`Abrir o título${l.parcelas > 1 ? ` · ${l.parcelas} parcelas, vencimentos de ${dataBr(l.vencimento)} a ${dataBr(l.vencimento_ate)}` : ` · vencimento ${dataBr(l.vencimento)}`}`}
-                            className="font-medium text-primary-600 underline decoration-primary-100 decoration-2 underline-offset-4 hover:decoration-primary-500"
-                          >
-                            {l.titulo}
-                          </button>
-                        ) : null}
+                        {l.titulo ? <span className="font-medium text-gray-700">{l.titulo}</span> : null}
                         {l.parcelas > 1 && <span className="ml-1 text-[10px] text-gray-400">{l.parcelas}x</span>}
                       </td>
                       <td className={`${td} truncate ${l.origem === 'E' ? 'italic text-gray-500' : 'text-gray-800'}`} title={l.contraparte || ''}>
@@ -423,6 +422,9 @@ export default function LancamentosExercicio({ empresaId, ano, search = '', onVo
                         ) : (
                           <span className="text-gray-400">Sem centro</span>
                         )}
+                      </td>
+                      <td className={`${td} text-right tabular-nums text-gray-500`}>
+                        {l.percentual === null || l.percentual === undefined ? '' : `${Number(l.percentual).toLocaleString('pt-BR', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}%`}
                       </td>
                       <td className={`${td} text-right tabular-nums font-medium ${l.valor < 0 ? 'text-red-600' : 'text-gray-900'}`}>
                         {moeda(l.valor)}
@@ -510,10 +512,11 @@ export default function LancamentosExercicio({ empresaId, ano, search = '', onVo
         </div>
       )}
       {tituloAberto && (
-        <TituloAjusteModal
+        <LancamentoAjusteModal
           empresaId={empresaId}
           origem={tituloAberto.origem}
-          billId={tituloAberto.titulo}
+          chave={tituloAberto.chave}
+          linha={{ centro: tituloAberto.centro, natureza: tituloAberto.natureza }}
           onClose={() => setTituloAberto(null)}
           onAlterado={() => setRecarga((n) => n + 1)}
         />

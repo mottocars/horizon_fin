@@ -9,7 +9,7 @@ const pool = require('../../config/db');
 // exercício não aparece em nenhum. O card conta TÍTULOS distintos (um título tem várias parcelas) a
 // receber e a pagar, e as movimentações do extrato sem título (cada lançamento uma vez, mesmo
 // rateado em vários centros) — mesmo critério do movimento na listagem (com natureza) — e quantos
-// títulos têm ajuste (titulos_ajustes), pela emissão do título.
+// lançamentos (títulos e movimentos) têm ajuste (lancamentos_ajustes), pela emissão / data.
 // O exercício do ano atual vem travado (`travado`, pedido do usuário): só visualização — nenhuma
 // ação que altere dados pode valer pra ele (o backend deve recusar, não só a tela esconder).
 async function exercicios(empresaId) {
@@ -44,13 +44,17 @@ async function exercicios(empresaId) {
   );
   const { rows: ajustados } = await pool.query(
     `SELECT EXTRACT(YEAR FROM data)::int AS ano, COUNT(*)::int AS n
-       FROM (SELECT a.origem, a.bill_id, MIN(t.issue_date) AS data
-               FROM titulos_ajustes a JOIN sie_income t ON t.bill_id = a.bill_id AND t.empresa_id = a.empresa_id
-              WHERE a.empresa_id = $1 AND a.origem = 'R' GROUP BY 1, 2
+       FROM (SELECT a.origem, a.chave, MIN(t.issue_date) AS data
+               FROM (SELECT DISTINCT origem, chave FROM lancamentos_ajustes WHERE empresa_id = $1 AND origem = 'R') a
+               JOIN sie_income t ON t.bill_id = a.chave AND t.empresa_id = $1 GROUP BY 1, 2
              UNION ALL
-             SELECT a.origem, a.bill_id, MIN(t.issue_date)
-               FROM titulos_ajustes a JOIN sie_outcome t ON t.bill_id = a.bill_id AND t.empresa_id = a.empresa_id
-              WHERE a.empresa_id = $1 AND a.origem = 'P' GROUP BY 1, 2) x
+             SELECT a.origem, a.chave, MIN(t.issue_date)
+               FROM (SELECT DISTINCT origem, chave FROM lancamentos_ajustes WHERE empresa_id = $1 AND origem = 'P') a
+               JOIN sie_outcome t ON t.bill_id = a.chave AND t.empresa_id = $1 GROUP BY 1, 2
+             UNION ALL
+             SELECT a.origem, a.chave, MIN(e.date)
+               FROM (SELECT DISTINCT origem, chave FROM lancamentos_ajustes WHERE empresa_id = $1 AND origem = 'E') a
+               JOIN sie_extrato_contas e ON e.id = a.chave AND e.empresa_id = $1 GROUP BY 1, 2) x
       GROUP BY 1`,
     [empresaId]
   );
@@ -87,7 +91,8 @@ async function exercicios(empresaId) {
 // categoria entra inteira, sem centro/natureza. Categorias entram por LATERAL (índice
 // idx_sie_*_categorias_parcela): com estatística desatualizada o Postgres errava os planos dos joins
 // por empresa (ver dre-correcoes). Emissão pelos índices idx_sie_*_emissao.
-// `chave` = o título (bill_id) ou, no movimento, o lançamento do extrato (registro_id).
+// `chave` = o título (bill_id) ou, no movimento, o id do lançamento no extrato do Sienge (o registro_id
+// é refeito a cada sincronização do extrato).
 // $1 empresa, $2 primeiro dia do período, $3 dia seguinte ao último.
 function sqlCategorias(tabela) {
   return `LEFT JOIN LATERAL (
@@ -119,49 +124,55 @@ const SQL_LINHAS = `
     ${sqlCategorias('sie_outcome_categorias')}
    WHERE t.empresa_id = $1 AND t.issue_date >= $2 AND t.issue_date < $3
   UNION ALL
-  SELECT 'E', r.registro_id, r.data, NULL, NULL, NULLIF(TRIM(e.document_id), ''), e.statement_type_notes, e.document_number,
+  SELECT 'E', e.id, r.data, NULL, NULL, NULLIF(TRIM(e.document_id), ''), e.statement_type_notes, e.document_number,
          NULLIF(BTRIM(e.description, E' \\t\\r\\n'), ''), r.centro_id, NULL, r.natureza_id::text, NULL, r.valor
     FROM sie_extrato_contas_rateio r
     JOIN sie_extrato_contas e ON e.registro_id = r.registro_id
    WHERE r.empresa_id = $1 AND r.mes >= date_trunc('month', $2::date) AND r.mes < $3
      AND r.data >= $2 AND r.data < $3 AND e.bill_id IS NULL AND r.natureza_id IS NOT NULL`;
 
-// Linhas com os ajustes (titulos_ajustes, módulo titulos-ajustes): título ajustado troca TODAS as
-// linhas originais pelas do ajuste (centro × natureza × valor, com o sinal da origem), mantendo o
-// cabeçalho do título (emissão, vencimentos, documento, cliente/fornecedor). `status` AJUSTADO marca
-// as linhas do título ajustado. Nomes de centro e natureza pelos cadastros (o extrato e o ajuste só
-// trazem o id); o nome da categoria do título fica de reserva. Resultado: `lc`.
+// Uma linha por lançamento × centro × natureza (parcelas do título somadas — `g0`), com o ajuste da
+// linha (lancamentos_ajustes, módulo lancamentos-ajustes) aplicado: centro, natureza e valor trocados,
+// com o sinal da linha original; `centro_original`/`natureza_original` identificam a linha pra janela
+// de ajuste. `percentual` = a linha sobre o total do lançamento (% do rateio, depois dos ajustes).
+// Título/movimento: emissão (ou data) do lançamento inteiro. Nomes de centro e natureza pelos
+// cadastros (o extrato e o ajuste só trazem o id); o nome da categoria do título fica de reserva.
+// Resultado: `lc`.
 const CTE_LINHAS = `
   o AS MATERIALIZED (${SQL_LINHAS}),
-  aj AS (SELECT id, origem, bill_id FROM titulos_ajustes WHERE empresa_id = $1),
-  cab AS (
-    SELECT o.origem, o.chave, MIN(o.data) AS data, MIN(o.vencimento) AS venc_min, MAX(o.vencimento) AS venc_max,
-           COUNT(DISTINCT o.parcela)::int AS n_parcelas, MAX(o.documento) AS documento, MAX(o.documento_nome) AS documento_nome,
-           MAX(o.numero) AS numero, MAX(o.contraparte) AS contraparte, aj.id AS ajuste_id
-      FROM o JOIN aj ON aj.origem = o.origem AND aj.bill_id = o.chave
-     GROUP BY o.origem, o.chave, aj.id
-  ),
-  l AS (
-    SELECT o.origem, o.chave, o.data, o.vencimento AS venc_min, o.vencimento AS venc_max, o.parcela, NULL::int AS n_parcelas,
-           o.documento, o.documento_nome, o.numero, o.contraparte, o.centro_id::bigint AS centro_id, o.centro_nome,
-           o.natureza_id, o.natureza_nome, o.valor, FALSE AS ajustado
+  g0 AS (
+    SELECT origem, chave, centro_id::bigint AS centro_id, natureza_id, MIN(data) AS data, MIN(vencimento) AS venc_min,
+           MAX(vencimento) AS venc_max, COUNT(DISTINCT parcela)::int AS parcelas, MAX(documento) AS documento,
+           MAX(documento_nome) AS documento_nome, MAX(numero) AS numero, MAX(contraparte) AS contraparte,
+           MAX(centro_nome) AS centro_nome, MAX(natureza_nome) AS natureza_nome, SUM(valor) AS valor
       FROM o
-     WHERE o.origem = 'E' OR NOT EXISTS (SELECT 1 FROM aj WHERE aj.origem = o.origem AND aj.bill_id = o.chave)
-    UNION ALL
-    SELECT c.origem, c.chave, c.data, c.venc_min, c.venc_max, NULL, c.n_parcelas,
-           c.documento, c.documento_nome, c.numero, c.contraparte, ar.centro_id, NULL,
-           ar.natureza_id, NULL, CASE WHEN c.origem = 'P' THEN -ar.valor ELSE ar.valor END, TRUE
-      FROM cab c JOIN titulos_ajustes_rateio ar ON ar.ajuste_id = c.ajuste_id
+     GROUP BY origem, chave, centro_id, natureza_id
+  ),
+  g AS (
+    SELECT g0.origem, g0.chave, g0.data, g0.venc_min, g0.venc_max, g0.parcelas, g0.documento, g0.documento_nome, g0.numero,
+           g0.contraparte, g0.centro_id AS centro_original, g0.natureza_id AS natureza_original,
+           COALESCE(a.centro_id, g0.centro_id) AS centro_id, COALESCE(a.natureza_id, g0.natureza_id) AS natureza_id,
+           CASE WHEN a.id IS NULL THEN g0.centro_nome END AS centro_nome_cat,
+           CASE WHEN a.id IS NULL THEN g0.natureza_nome END AS natureza_nome_cat,
+           CASE WHEN a.id IS NULL THEN g0.valor
+                WHEN g0.valor < 0 OR (g0.valor = 0 AND g0.origem = 'P') THEN -a.valor ELSE a.valor END AS valor,
+           CASE WHEN a.id IS NULL THEN 'ORIGINAL' ELSE 'AJUSTADO' END AS status
+      FROM g0
+      LEFT JOIN lancamentos_ajustes a
+        ON a.empresa_id = $1 AND a.origem = g0.origem AND a.chave = g0.chave
+       AND a.centro_original IS NOT DISTINCT FROM g0.centro_id AND a.natureza_original IS NOT DISTINCT FROM g0.natureza_id
   ),
   lc AS (
-    SELECT l.origem, l.chave, CASE WHEN l.origem <> 'E' THEN l.chave END AS titulo, l.data, l.venc_min, l.venc_max,
-           l.parcela, l.n_parcelas, l.documento, l.documento_nome, l.numero, l.contraparte,
-           l.centro_id, COALESCE(cc.name, l.centro_nome) AS centro_nome,
-           l.natureza_id, COALESCE(pf.name, l.natureza_nome) AS natureza_nome, l.valor,
-           CASE WHEN l.ajustado THEN 'AJUSTADO' ELSE 'ORIGINAL' END AS status
-      FROM l
-      LEFT JOIN centros_custo_sienge cc ON cc.empresa_id = $1 AND cc.sienge_id = l.centro_id
-      LEFT JOIN planos_financeiros_sienge pf ON pf.empresa_id = $1 AND pf.sienge_id::text = l.natureza_id
+    SELECT g.origem, g.chave, CASE WHEN g.origem <> 'E' THEN g.chave END AS titulo,
+           MIN(g.data) OVER w AS data, MIN(g.venc_min) OVER w AS venc_min, MAX(g.venc_max) OVER w AS venc_max,
+           MAX(g.parcelas) OVER w AS parcelas, g.documento, g.documento_nome, g.numero, g.contraparte,
+           g.centro_original, g.natureza_original, g.centro_id, COALESCE(cc.name, g.centro_nome_cat) AS centro_nome,
+           g.natureza_id, COALESCE(pf.name, g.natureza_nome_cat) AS natureza_nome, g.valor,
+           g.valor / NULLIF(SUM(g.valor) OVER w, 0) * 100 AS percentual, g.status
+      FROM g
+      LEFT JOIN centros_custo_sienge cc ON cc.empresa_id = $1 AND cc.sienge_id = g.centro_id
+      LEFT JOIN planos_financeiros_sienge pf ON pf.empresa_id = $1 AND pf.sienge_id::text = g.natureza_id
+    WINDOW w AS (PARTITION BY g.origem, g.chave)
   )`;
 
 // 'AAAA-MM-DD' + 1 dia (fim exclusivo do período).
@@ -212,31 +223,23 @@ const num = (v) => (v === null || v === undefined ? 0 : Number(v));
 // Uma página dos lançamentos (pela data, do mais antigo pro mais novo) e o total de linhas que passam
 // nos filtros (a tela pede as páginas seguidas pra "mostrar todos"). Uma linha por título — as
 // parcelas somadas —; título rateado sai uma linha por centro × natureza (pedido do usuário). No
-// movimento, uma por lançamento do extrato (× centro × natureza). Os filtros valem por linha antes de
-// somar: com filtro de centro, o título rateado mostra só a parte daquele centro.
+// movimento, uma por lançamento do extrato (× centro × natureza). Com filtro de centro ou natureza, o
+// lançamento rateado mostra só as linhas que passam.
 async function lancamentos(empresaId, ano, filtros = {}, { pagina = 1, porPagina = 100 } = {}) {
   const params = [empresaId, ...periodo(ano, filtros.de, filtros.ate)];
   const where = montarFiltros(filtros, params);
   params.push(porPagina, (pagina - 1) * porPagina);
   const { rows } = await pool.query(
     `WITH ${CTE_LINHAS},
-     f AS (SELECT * FROM lc ${where}),
-     g AS MATERIALIZED (
-       SELECT origem, chave, MAX(titulo) AS titulo, MIN(data) AS data, MIN(venc_min) AS venc_min, MAX(venc_max) AS venc_max,
-              COALESCE(MAX(n_parcelas), COUNT(DISTINCT parcela))::int AS parcelas,
-              MAX(documento) AS documento, MAX(documento_nome) AS documento_nome, MAX(numero) AS numero,
-              MAX(contraparte) AS contraparte, centro_id, MAX(centro_nome) AS centro_nome, natureza_id,
-              MAX(natureza_nome) AS natureza_nome, SUM(valor) AS valor, MAX(status) AS status
-         FROM f
-        GROUP BY origem, chave, centro_id, natureza_id
-     )
-     SELECT (SELECT COUNT(*) FROM g) AS total,
+     f AS MATERIALIZED (SELECT * FROM lc ${where})
+     SELECT (SELECT COUNT(*) FROM f) AS total,
             (SELECT COALESCE(json_agg(p), '[]'::json) FROM (
-               SELECT origem, titulo, to_char(data, 'YYYY-MM-DD') AS data, to_char(venc_min, 'YYYY-MM-DD') AS vencimento,
+               SELECT origem, chave, titulo, to_char(data, 'YYYY-MM-DD') AS data, to_char(venc_min, 'YYYY-MM-DD') AS vencimento,
                       to_char(venc_max, 'YYYY-MM-DD') AS vencimento_ate, parcelas, documento, documento_nome, numero,
-                      contraparte, centro_id, centro_nome, natureza_id, natureza_nome, ROUND(valor, 2) AS valor, status
-                 FROM g
-                ORDER BY data, origem DESC, chave, centro_id NULLS LAST, natureza_id NULLS LAST
+                      contraparte, centro_original, natureza_original, centro_id, centro_nome, natureza_id, natureza_nome,
+                      ROUND(valor, 2) AS valor, ROUND(percentual, 2) AS percentual, status
+                 FROM f
+                ORDER BY data, origem DESC, chave, centro_original NULLS LAST, natureza_original NULLS LAST
                 LIMIT $${params.length - 1} OFFSET $${params.length}) p) AS linhas`,
     params
   );
@@ -246,7 +249,7 @@ async function lancamentos(empresaId, ano, filtros = {}, { pagina = 1, porPagina
     pagina,
     por_pagina: porPagina,
     total: num(rows[0].total),
-    linhas: rows[0].linhas.map((l) => ({ ...l, valor: num(l.valor) })),
+    linhas: rows[0].linhas.map((l) => ({ ...l, valor: num(l.valor), percentual: l.percentual === null ? null : num(l.percentual) })),
   };
 }
 
