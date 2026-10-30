@@ -70,14 +70,21 @@
   font-family: inherit;
 }
 /* Com o filtro Localidade, a barra ficou com cinco listas: mais estreitas que as 280px do painel,
-   pra Empresa, Obras, Localidade, Mudanças e o De/Até caberem numa linha só. */
-.painel-cfo .ctl select#f-empresa,
-.painel-cfo .ctl select#f-local {
+   pra Empresa, Obras, Localidade, Mudanças e o De/Até caberem numa linha só. Obras e Localidade
+   são listas de marcação múltipla (FiltroCentros). */
+.painel-cfo .ctl select#f-empresa {
   min-width: min(190px, 80vw);
 }
-.painel-cfo .ctl select#f-situacao,
 .painel-cfo .ctl select#f-versao {
   min-width: min(240px, 80vw);
+}
+.painel-cfo .ctl .multi-btn#f-situacao {
+  min-width: min(240px, 80vw);
+  max-width: 260px;
+}
+.painel-cfo .ctl .multi-btn#f-local {
+  min-width: min(190px, 80vw);
+  max-width: 220px;
 }
 /* Card da construção: as obras em atraso e o VGV delas, com a marca da cor do atraso. */
 .painel-cfo .tile .d.atraso .marca {

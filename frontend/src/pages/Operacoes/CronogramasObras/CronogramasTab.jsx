@@ -24,10 +24,10 @@ import {
 // do dashboard Cronogramas de Obras) —; embaixo, o Gantt das obras
 // mês a mês (GanttObras — o mesmo do dashboard Cronogramas de Obras). Clicar numa obra abre o
 // cadastro dela (JanelaCentroCusto); clicar num card de etapa filtra o Gantt (as obras que
-// estiveram nela em algum momento do período De/Até). Os filtros "Obras" (`situacao`) e "Mudanças" (`versaoId` — as obras alteradas
+// estiveram nela em algum momento do período De/Até). Os filtros "Obras" (`filtrosObras`) e "Mudanças" (`versaoId` — as obras alteradas
 // numa versão, com como eram antes) ficam ao lado da empresa, na página (CronogramasObrasPage) —
-// junto com "Localidade" (`localidade`, Cidade - UF); o filtro "Obras" também escolhe um centro, e
-// a lista deles vai pra página por `onCentros`.
+// junto com "Localidade" (`localidades`, Cidade - UF); os dois com marcação múltipla. O filtro "Obras"
+// também marca centros, e a lista deles vai pra página por `onCentros`.
 // ---------------------------------------------------------------------------------------
 
 // `zoom`/`onZoom` vêm da página. Aqui não há filtro de período (pedido do usuário — o De/Até fica só no
@@ -35,8 +35,8 @@ import {
 // cidade (GanttObras `agruparPorCidade`).
 export default function CronogramasTab({
   empresaId,
-  situacao = '',
-  localidade = '',
+  filtrosObras = [],
+  localidades = [],
   versaoId = '',
   onLimparVersao,
   zoom = 'mensal',
@@ -88,8 +88,8 @@ export default function CronogramasTab({
 
   const periodoAtivo = null;
   const obras = useMemo(
-    () => filtrarPeriodo(filtrarObras(montarObras(centros, etapas, isoHoje(), atraso), situacao, localidade), periodoAtivo),
-    [centros, etapas, atraso, situacao, localidade, periodoAtivo]
+    () => filtrarPeriodo(filtrarObras(montarObras(centros, etapas, isoHoje(), atraso), filtrosObras, localidades), periodoAtivo),
+    [centros, etapas, atraso, filtrosObras, localidades, periodoAtivo]
   );
   const r = useMemo(() => resumoCarteira(obras, etapas, periodoAtivo), [obras, etapas, periodoAtivo]);
   // "Mudanças da versão": o Gantt fica com as obras alteradas nela (como ficaram + como eram antes).
@@ -101,8 +101,8 @@ export default function CronogramasTab({
       const c = cadastro.get(o.centro.sienge_id);
       return c ? { ...o, centro: { ...o.centro, cidade: c.cidade, uf: c.uf } } : o;
     });
-    return filtrarPeriodo(filtrarObras(comCidade, situacao, localidade), periodoAtivo);
-  }, [versaoDetalhe, situacao, localidade, periodoAtivo, centros]);
+    return filtrarPeriodo(filtrarObras(comCidade, filtrosObras, localidades), periodoAtivo);
+  }, [versaoDetalhe, filtrosObras, localidades, periodoAtivo, centros]);
 
   if (!empresaId) {
     return (

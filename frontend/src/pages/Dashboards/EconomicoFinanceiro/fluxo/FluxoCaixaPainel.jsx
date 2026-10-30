@@ -1,4 +1,4 @@
-import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
+import { Fragment, useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { BookOpen, Download, Loader2, Maximize2 } from 'lucide-react';
 import { getFluxoCaixaPainel } from '../../../../api/dashboards.api';
 import { exportarExcelDfc } from '../../../../api/dfcExportacao.api';
@@ -62,7 +62,20 @@ function CampoMes({ id, rotulo, valor, min, max, onChange, dica }) {
 }
 
 // Centro de custo: lista com marcação múltipla e busca, no visual da barra (também no Aging List).
-export function FiltroCentros({ opcoes, valor, onChange, disabled }) {
+// Os textos mudam pelas props (Cronogramas de Obras usa a mesma lista nos filtros Obras e Localidade);
+// opção com `grupo` ganha um título antes da primeira do grupo (as opções vêm ordenadas por grupo).
+export function FiltroCentros({
+  opcoes,
+  valor,
+  onChange,
+  disabled,
+  id,
+  rotulo = 'Centro de custo',
+  todos = 'Todos os centros',
+  varios = 'centros',
+  buscar = 'Buscar centro',
+  vazio = 'Nenhum centro encontrado.',
+}) {
   const [aberto, setAberto] = useState(false);
   const [busca, setBusca] = useState('');
   const ref = useRef(null);
@@ -78,13 +91,13 @@ export function FiltroCentros({ opcoes, valor, onChange, disabled }) {
     };
   }, [aberto]);
   const q = busca.trim().toLowerCase();
-  const lista = opcoes.filter((o) => !q || o.label.toLowerCase().includes(q));
-  const resumo = !valor.length ? 'Todos os centros' : valor.length === 1 ? opcoes.find((o) => o.value === valor[0])?.label || '1 centro' : `${valor.length} centros`;
+  const lista = opcoes.filter((o) => !q || o.label.toLowerCase().includes(q) || (o.grupo || '').toLowerCase().includes(q));
+  const resumo = !valor.length ? todos : valor.length === 1 ? opcoes.find((o) => o.value === valor[0])?.label || `1 de ${varios}` : `${valor.length} ${varios}`;
   const alternar = (id) => onChange(valor.includes(id) ? valor.filter((v) => v !== id) : [...valor, id]);
   return (
     <div className="ctl multi" ref={ref}>
-      <span className="rot">Centro de custo</span>
-      <button type="button" className="multi-btn" disabled={disabled} aria-expanded={aberto} onClick={() => setAberto((a) => !a)}>
+      <span className="rot">{rotulo}</span>
+      <button type="button" id={id} className="multi-btn" disabled={disabled} aria-expanded={aberto} onClick={() => setAberto((a) => !a)}>
         <span>{resumo}</span>
         <svg width="10" height="10" viewBox="0 0 10 10" aria-hidden="true">
           <path d="M1 3l4 4 4-4" fill="none" stroke="currentColor" strokeWidth="1.6" />
@@ -92,15 +105,18 @@ export function FiltroCentros({ opcoes, valor, onChange, disabled }) {
       </button>
       {aberto && (
         <div className="multi-pop" role="listbox" aria-multiselectable="true">
-          <input type="search" placeholder="Buscar centro" value={busca} onChange={(e) => setBusca(e.target.value)} autoFocus />
+          <input type="search" placeholder={buscar} value={busca} onChange={(e) => setBusca(e.target.value)} autoFocus />
           <div className="multi-lista">
-            {lista.map((o) => (
-              <label key={o.value} className="multi-item">
-                <input type="checkbox" checked={valor.includes(o.value)} onChange={() => alternar(o.value)} />
-                <span>{o.label}</span>
-              </label>
+            {lista.map((o, i) => (
+              <Fragment key={o.value}>
+                {o.grupo && o.grupo !== lista[i - 1]?.grupo && <div className="multi-grupo">{o.grupo}</div>}
+                <label className="multi-item">
+                  <input type="checkbox" checked={valor.includes(o.value)} onChange={() => alternar(o.value)} />
+                  <span>{o.label}</span>
+                </label>
+              </Fragment>
             ))}
-            {!lista.length && <div className="empty">Nenhum centro encontrado.</div>}
+            {!lista.length && <div className="empty">{vazio}</div>}
           </div>
           <div className="multi-rodape">
             <span>{valor.length ? `${valor.length} marcado${valor.length > 1 ? 's' : ''}` : 'Todos'}</span>

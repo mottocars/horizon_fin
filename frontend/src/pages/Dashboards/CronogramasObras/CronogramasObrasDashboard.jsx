@@ -15,10 +15,9 @@ import GanttObras, { LegendaGantt, ZOOMS_GANTT } from '../../Operacoes/Cronogram
 import CardsCarteira from '../../Operacoes/CronogramasObras/CardsCarteira';
 import CampoDataPeriodo from '../../Operacoes/CronogramasObras/CampoDataPeriodo';
 import {
-  centroDoFiltro,
   filtrarObras,
   filtrarPeriodo,
-  filtroObrasNaLocalidade,
+  filtroObrasNasLocalidades,
   isoHoje,
   mesesDoPeriodo,
   montarObras,
@@ -29,12 +28,14 @@ import {
   opcoesFiltroObras,
   opcoesLocalidade,
   plural,
+  situacoesDoFiltro,
   periodoPadrao,
   resumoCarteira,
   rotuloRecorte,
   trocarDataPeriodo,
 } from '../../Operacoes/CronogramasObras/cronogramaObras';
 import { mesAno } from '../../Operacoes/CronogramasObras/formatos';
+import { FiltroCentros } from '../EconomicoFinanceiro/fluxo/FluxoCaixaPainel';
 import '../EconomicoFinanceiro/fluxo/painel.css';
 import './cronogramas.css';
 
@@ -45,7 +46,8 @@ import './cronogramas.css';
 // só leitura: quem vê o dashboard pode não ter acesso ao cadastro dos centros de custo. Clicar num
 // card de etapa filtra o Gantt (só as obras que estão nela hoje). A empresa fica na URL (?empresa_id=).
 // Ao lado da empresa (pedidos do usuário), também na URL: "Obras" (?situacao= — todas, em andamento
-// ou só as concluídas — ou um centro de custo), "Localidade" (?local= — Cidade - UF) e "Mudanças" (?versao= — uma versão gravada: o Gantt mostra só as obras
+// ou só as concluídas, e centros de custo), "Localidade" (?local= — Cidade - UF), os dois com marcação
+// múltipla (a chave repetida na URL), e "Mudanças" (?versao= — uma versão gravada: o Gantt mostra só as obras
 // alteradas nela, com como eram antes numa faixa fina em cima da barra), e o botão de exportar o
 // Excel do comunicado (o do cronograma em vigor, ou o da versão escolhida). No Mês a mês, o período
 // De/Até (padrão: 3 meses antes a 20 à frente; fica no estado da tela — só volta ao padrão ao
@@ -59,7 +61,14 @@ export default function CronogramasObrasDashboard() {
     setParams(
       (atual) => {
         const novo = new URLSearchParams(atual);
-        Object.entries(patch).forEach(([k, v]) => (v === null || v === undefined || v === '' ? novo.delete(k) : novo.set(k, String(v))));
+        Object.entries(patch).forEach(([k, v]) => {
+          // lista (filtros de marcação múltipla): a chave repetida, uma vez por valor
+          if (Array.isArray(v)) {
+            novo.delete(k);
+            v.forEach((x) => novo.append(k, String(x)));
+          } else if (v === null || v === undefined || v === '') novo.delete(k);
+          else novo.set(k, String(v));
+        });
         return novo;
       },
       { replace: true }
@@ -83,9 +92,11 @@ export default function CronogramasObrasDashboard() {
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [empresaTravada, empresaIdTravada, carregandoEmpresas, empresas, empresaId]);
 
-  // "Obras": a situação ou um centro de custo ('centro:<sienge_id>'); "Localidade" (?local=): Cidade - UF.
-  const situacao = params.get('situacao') || '';
-  const localidade = params.get('local') || '';
+  // "Obras": situações e centros de custo ('centro:<sienge_id>'); "Localidade" (?local=): Cidade - UF.
+  const textoSituacao = params.getAll('situacao').join('|');
+  const textoLocal = params.getAll('local').join('|');
+  const filtrosObras = useMemo(() => (textoSituacao ? textoSituacao.split('|') : []), [textoSituacao]);
+  const localidades = useMemo(() => (textoLocal ? textoLocal.split('|') : []), [textoLocal]);
   const versaoId = params.get('versao') || '';
 
   const empresaAtual = empresas.find((e) => String(e.id) === String(empresaId));
@@ -217,13 +228,11 @@ export default function CronogramasObrasDashboard() {
     () => montarObras(centros, etapas, hoje, atraso).filter((o) => o.segmentos.length),
     [centros, etapas, hoje, atraso]
   );
-  const obras = useMemo(() => filtrarObras(obrasTodas, situacao, localidade), [obrasTodas, situacao, localidade]);
+  const obras = useMemo(() => filtrarObras(obrasTodas, filtrosObras, localidades), [obrasTodas, filtrosObras, localidades]);
   // Opções dos filtros "Obras" (situações + centros) e "Localidade": só as obras do dashboard (com datas).
   const centrosComDatas = useMemo(() => obrasTodas.map((o) => o.centro), [obrasTodas]);
-  const opcoesObras = useMemo(() => opcoesFiltroObras(centrosComDatas, localidade), [centrosComDatas, localidade]);
+  const opcoesObras = useMemo(() => opcoesFiltroObras(centrosComDatas, localidades), [centrosComDatas, localidades]);
   const opcoesLocal = useMemo(() => opcoesLocalidade(centrosComDatas), [centrosComDatas]);
-  const situacoesObras = opcoesObras.filter((o) => o.grupo === 'Situação');
-  const centrosObras = opcoesObras.filter((o) => o.grupo !== 'Situação');
   // "Mudanças da versão": o Gantt fica com as obras alteradas nela (como ficaram + como eram antes).
   const obrasVersao = useMemo(
     () => {
@@ -234,9 +243,9 @@ export default function CronogramasObrasDashboard() {
         const c = cadastro.get(o.centro.sienge_id);
         return c ? { ...o, centro: { ...o.centro, cidade: c.cidade, uf: c.uf } } : o;
       });
-      return filtrarObras(comCidade, situacao, localidade);
+      return filtrarObras(comCidade, filtrosObras, localidades);
     },
-    [versaoDetalhe, hoje, situacao, localidade, centros]
+    [versaoDetalhe, hoje, filtrosObras, localidades, centros]
   );
   // Mês a mês: só as obras do período De/Até (cards e Gantt); Visão geral: todas.
   const periodoAtivo = zoom === 'mensal' ? periodo : null;
@@ -284,7 +293,7 @@ export default function CronogramasObrasDashboard() {
               id="f-empresa"
               value={empresaId}
               onChange={(e) =>
-                atualizarParams({ empresa_id: e.target.value, versao: null, local: null, situacao: centroDoFiltro(situacao) ? null : situacao })
+                atualizarParams({ empresa_id: e.target.value, versao: null, local: null, situacao: situacoesDoFiltro(filtrosObras) })
               }
               disabled={carregandoEmpresas || empresaTravada}
             >
@@ -296,40 +305,30 @@ export default function CronogramasObrasDashboard() {
               ))}
             </select>
           </div>
-          <div className="ctl">
-            <label htmlFor="f-situacao">Obras</label>
-            <select id="f-situacao" value={situacao} onChange={(e) => atualizarParams({ situacao: e.target.value })} disabled={!empresaId}>
-              {situacoesObras.map((f) => (
-                <option key={f.value} value={f.value}>
-                  {f.label}
-                </option>
-              ))}
-              {centrosObras.length > 0 && (
-                <optgroup label="Centro de custo">
-                  {centrosObras.map((f) => (
-                    <option key={f.value} value={f.value}>
-                      {f.label}
-                    </option>
-                  ))}
-                </optgroup>
-              )}
-            </select>
-          </div>
-          <div className="ctl">
-            <label htmlFor="f-local">Localidade</label>
-            <select
-              id="f-local"
-              value={localidade}
-              onChange={(e) => atualizarParams({ local: e.target.value, situacao: filtroObrasNaLocalidade(situacao, e.target.value, centros) })}
-              disabled={!empresaId}
-            >
-              {opcoesLocal.map((f) => (
-                <option key={f.value} value={f.value}>
-                  {f.label}
-                </option>
-              ))}
-            </select>
-          </div>
+          <FiltroCentros
+            id="f-situacao"
+            rotulo="Obras"
+            todos="Todas as obras"
+            varios="marcados"
+            buscar="Buscar obra ou centro"
+            vazio="Nenhuma obra encontrada."
+            opcoes={opcoesObras}
+            valor={filtrosObras}
+            onChange={(v) => atualizarParams({ situacao: v })}
+            disabled={!empresaId}
+          />
+          <FiltroCentros
+            id="f-local"
+            rotulo="Localidade"
+            todos="Todas as localidades"
+            varios="localidades"
+            buscar="Buscar cidade"
+            vazio="Nenhuma localidade encontrada."
+            opcoes={opcoesLocal}
+            valor={localidades}
+            onChange={(v) => atualizarParams({ local: v, situacao: filtroObrasNasLocalidades(filtrosObras, v, centros) })}
+            disabled={!empresaId}
+          />
           <div className="ctl">
             <label htmlFor="f-versao">Mudanças</label>
             <select
