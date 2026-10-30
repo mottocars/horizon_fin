@@ -295,7 +295,7 @@ export default function LancamentosExercicio({ empresaId, ano, search = '', novo
   );
 
   return (
-    <div className="min-w-fit rounded-card rounded-tl-none bg-white p-5 shadow-card">
+    <div className="rounded-card rounded-tl-none bg-white p-5 shadow-card">
       <div className="-mt-1 mb-4 flex items-center gap-3 border-b border-gray-100 pb-3">
         <button
           type="button"
@@ -337,19 +337,20 @@ export default function LancamentosExercicio({ empresaId, ano, search = '', novo
         </div>
       ) : (
         <div>
-          <table className={`w-full min-w-[1540px] table-fixed border-collapse ${carregando && dados ? 'opacity-60 transition-opacity' : ''}`}>
+          {/* Cabe na tela sem rolagem: colunas curtas com largura fixa; cliente/fornecedor, natureza,
+              máscara e centro dividem o resto (texto longo corta com reticências e aparece no title). */}
+          <table className={`w-full table-fixed border-collapse ${carregando && dados ? 'opacity-60 transition-opacity' : ''}`}>
             <colgroup>
-              <col style={{ width: 110 }} />
-              <col style={{ width: 92 }} />
-              <col style={{ width: 160 }} />
-              <col style={{ width: 92 }} />
-              <col />
-              <col style={{ width: 250 }} />
-              <col style={{ width: 180 }} />
-              <col style={{ width: 200 }} />
-              <col style={{ width: 88 }} />
-              <col style={{ width: 130 }} />
-              <col style={{ width: 100 }} />
+              <col style={{ width: 98 }} />
+              <col style={{ width: 90 }} />
+              <col style={{ width: 124 }} />
+              <col style={{ width: 96 }} />
+              <col style={{ width: '22%' }} />
+              <col style={{ width: '20%' }} />
+              <col style={{ width: '16%' }} />
+              <col style={{ width: '15%' }} />
+              <col style={{ width: 116 }} />
+              <col style={{ width: 98 }} />
             </colgroup>
             <thead className="sticky -top-6 z-20">
               <tr className="border-b-2 border-blue-500 bg-blue-50">
@@ -366,7 +367,6 @@ export default function LancamentosExercicio({ empresaId, ano, search = '', novo
                 {cab('naturezas', 'Natureza', opNatureza, 460)}
                 {cab('mascaras', 'Máscara DRE', opMascara, 320)}
                 {cab('centros', 'Centro de custo', opCentro, 380)}
-                <th className={`${th} text-right`}>% Rateio</th>
                 <th className={`${th} text-right`}>Valor</th>
                 {cab('status', 'Status', OPCOES_STATUS, 200, 'rounded-tr-lg')}
               </tr>
@@ -374,13 +374,13 @@ export default function LancamentosExercicio({ empresaId, ano, search = '', novo
             <tbody>
               {!dados ? (
                 <tr>
-                  <td colSpan={11} className="py-12 text-center text-sm text-gray-400">
+                  <td colSpan={10} className="py-12 text-center text-sm text-gray-400">
                     Carregando...
                   </td>
                 </tr>
               ) : dados.linhas.length === 0 ? (
                 <tr>
-                  <td colSpan={11} className="border-b border-gray-100 py-10 text-center text-sm text-gray-400">
+                  <td colSpan={10} className="border-b border-gray-100 py-10 text-center text-sm text-gray-400">
                     Nenhum lançamento encontrado{filtrosAtivos || busca ? ' para essa busca/filtro.' : ' neste exercício.'}
                     {filtrosAtivos && (
                       <button
@@ -423,7 +423,6 @@ export default function LancamentosExercicio({ empresaId, ano, search = '', novo
                       </td>
                       <td className={`${td} truncate text-gray-700`} title={[docNome, l.numero].filter(Boolean).join(' · ')}>
                         <span className="font-medium">{l.documento || '—'}</span>
-                        {l.numero && <span className="text-gray-400"> {l.numero}</span>}
                       </td>
                       <td className={`${td} tabular-nums`}>
                         {l.titulo ? <span className="font-medium text-gray-700">{l.titulo}</span> : null}
@@ -434,13 +433,7 @@ export default function LancamentosExercicio({ empresaId, ano, search = '', novo
                         {l.contraparte || (l.origem === 'E' ? l.documento_nome : '—')}
                       </td>
                       <td className={`${td} truncate text-gray-700`} title={`${l.natureza_id || ''} ${l.natureza_nome || ''}`.trim()}>
-                        {l.natureza_id ? (
-                          <>
-                            <span className="tabular-nums text-gray-400">{l.natureza_id}</span> {l.natureza_nome}
-                          </>
-                        ) : (
-                          <span className="text-gray-400">Sem natureza</span>
-                        )}
+                        {l.natureza_id ? l.natureza_nome || l.natureza_id : <span className="text-gray-400">Sem natureza</span>}
                       </td>
                       <td className={`${td} truncate text-gray-700`} title={l.mascara_nome || ''}>
                         {l.mascara_nome}
@@ -453,9 +446,6 @@ export default function LancamentosExercicio({ empresaId, ano, search = '', novo
                         ) : (
                           <span className="text-gray-400">Sem centro</span>
                         )}
-                      </td>
-                      <td className={`${td} text-right tabular-nums text-gray-500`}>
-                        {l.percentual === null || l.percentual === undefined ? '' : `${Number(l.percentual).toLocaleString('pt-BR', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}%`}
                       </td>
                       <td className={`${td} text-right tabular-nums font-medium ${l.valor < 0 ? 'text-red-600' : 'text-gray-900'}`}>
                         {moeda(l.valor)}
