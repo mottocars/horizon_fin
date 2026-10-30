@@ -680,12 +680,14 @@ export default function DfcFluxoTab({
                     rowSpan={2}
                     onClick={() => setTotalAberto(true)}
                     title="Mostrar o Total (realizado, projetado e desvio)"
-                    className="sticky top-0 z-30 cursor-pointer border-b border-r border-b-blue-200 border-r-blue-200 bg-blue-100 px-0 py-2 text-center align-middle transition-colors hover:bg-blue-200"
+                    className="sticky top-0 z-30 cursor-pointer border-b border-r border-b-blue-200 border-r-blue-200 bg-blue-100 px-0 py-2 text-center align-bottom transition-colors hover:bg-blue-200"
                     style={{ left: LARGURA_PRIMEIRA }}
                   >
-                    <span className="inline-flex rotate-180 items-center gap-1 text-[11px] font-bold uppercase tracking-[0.2em] text-blue-800 [writing-mode:vertical-rl]">
+                    {/* Só a seta no cabeçalho (que fica na altura dos meses); a palavra, na vertical, desce
+                        pela faixa por cima das linhas (pedido do usuário) — não recebe o clique. */}
+                    <ChevronLeft size={12} className="mx-auto rotate-180 text-blue-500" />
+                    <span className="pointer-events-none absolute left-1/2 top-full mt-1.5 -translate-x-1/2 rotate-180 whitespace-nowrap text-[11px] font-bold uppercase tracking-[0.2em] text-blue-800 [writing-mode:vertical-rl]">
                       Total
-                      <ChevronLeft size={12} className="shrink-0 text-blue-500" />
                     </span>
                   </th>
                 )}
