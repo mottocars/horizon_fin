@@ -52,7 +52,7 @@ const { ORDEM: ORDEM_CENTROS } = require('../dre-centros/dreCentros.service');
 //   sem "% POC"        — o valor lançado no período, direto.
 //
 // Resposta: `valores` (o consolidado do período), `por_centro` (o período de cada centro — a soma
-// deles é o consolidado) e `meses` (o consolidado de cada mês).
+// deles é o consolidado — e os meses dele) e `meses` (o consolidado de cada mês).
 //
 // Imposto Fixo (RET): −alíquota × tudo o que está acima dele na DRE (as linhas de nível 2 antes dele,
 // na ordem da aba Máscaras), mês a mês, cada mês com a alíquota do histórico vigente nele (a de
@@ -334,8 +334,14 @@ async function calcular(empresaId, { de, ate, centros: filtro = [] }) {
     avaliacao_vertical: cfg[0]?.av_mascara_id ? { mascara_id: cfg[0].av_mascara_id, descricao: cfg[0].av_descricao } : null,
     valores,
     meses: porMes,
-    // Colunas dos centros na tela (na ordem da aba Centros Custos): o total do período de cada um.
-    por_centro: porCentro.map(({ id, nome, valores: v }) => ({ id, nome, valores: v })),
+    // Colunas dos centros na tela (na ordem da aba Centros Custos): o total do período de cada um e os
+    // meses (a visão mês a mês de um centro, com a AH %).
+    por_centro: porCentro.map(({ id, nome, valores: v, meses: doCentro }) => ({
+      id,
+      nome,
+      valores: v,
+      meses: doCentro.map((valoresMes, i) => ({ mes: porMes[i].mes, de: porMes[i].de, ate: porMes[i].ate, valores: valoresMes })),
+    })),
   };
 }
 

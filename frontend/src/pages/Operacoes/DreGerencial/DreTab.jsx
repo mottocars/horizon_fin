@@ -1,20 +1,32 @@
 import { Fragment, useCallback, useEffect, useState } from 'react';
-import { AlertTriangle, BarChart3, ChevronLeft, Minimize2, TriangleAlert } from 'lucide-react';
+import { AlertTriangle, ArrowLeft, BarChart3, CalendarDays, ChevronLeft, Minimize2, TriangleAlert } from 'lucide-react';
 import { listDreMascaras } from '../../../api/dreMascaras.api';
 import { calcularDre } from '../../../api/dreDemonstrativo.api';
 
 const moeda = (v) => Number(v).toLocaleString('pt-BR', { minimumFractionDigits: 2, maximumFractionDigits: 2 });
 const dataBr = (iso) => iso.split('-').reverse().join('/');
+const MESES_CAB = ['JAN', 'FEV', 'MAR', 'ABR', 'MAI', 'JUN', 'JUL', 'AGO', 'SET', 'OUT', 'NOV', 'DEZ'];
+const fimDoMes = (anoMes) =>
+  new Date(Date.UTC(Number(anoMes.slice(0, 4)), Number(anoMes.slice(5, 7)), 0)).toISOString().slice(0, 10);
+
+function mesDeHoje() {
+  const d = new Date();
+  return `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}`;
+}
 
 // Demonstração (nível 1 + nível 2) da DRE, em formato de tabela — mesma mecânica visual de
 // SaldosContasTab.jsx (primeira coluna com a hierarquia, valor alinhado à direita), num quadro de
-// bordas arredondadas como o do fluxo de caixa do DFC Construtoras. Colunas: CONSOLIDADO (o
-// totalizador = soma dos centros) e um centro de custo por coluna, cada um com Valor e AV % (Avaliação
-// Vertical, a partir da linha de nível 1 da aba Configurações); descrição e consolidado ficam
-// congelados à esquerda quando os centros rolam. A hierarquia é a
-// árvore cadastrada na aba Máscaras (dre_mascaras), na mesma ordem de lá. Valor = período do filtro
-// (de/até) somando os centros escolhidos (vazio = todos com "Realiza DRE") — cálculo em
-// dre-demonstrativo/demonstrativo.service.js; linha de nível 2 sem cálculo fica com traço.
+// bordas arredondadas como o do fluxo de caixa do DFC Construtoras. A hierarquia é a árvore cadastrada
+// na aba Máscaras (dre_mascaras), na mesma ordem de lá. Valores do período do filtro (de/até) — cálculo
+// em dre-demonstrativo/demonstrativo.service.js; linha de nível 2 sem cálculo fica com traço.
+// Duas visões:
+// - Centros (padrão): CONSOLIDADO (o totalizador = soma dos centros, retrátil como o Total do fluxo do
+//   DFC) e um centro de custo por coluna (na ordem da aba Centros Custos), cada um com Valor e AV %
+//   (Avaliação Vertical, a partir da linha de nível 1 da aba Configurações).
+// - Mês a mês de um centro: clicar no nome do centro no cabeçalho mostra o botão "Mês a mês"; com ele
+//   as colunas viram o TOTAL do centro no período e os meses (JAN/2026…, como no DFC), cada mês com
+//   Valor e AH % (Avaliação Horizontal: variação sobre o mês anterior). "Voltar aos centros" volta.
+// A primeira coluna (DRE) e a coluna fixa (Consolidado / Total) ficam congeladas quando as outras rolam.
 // `telaCheia` / `onSairTelaCheia`: a DRE ocupa a tela inteira (por cima do menu e do topo, e em tela
 // cheia de verdade no navegador quando ele deixa), como o fluxo do DFC Construtoras; sai pelo botão
 // "Sair da tela cheia" ou com Esc.
@@ -24,10 +36,13 @@ export default function DreTab({ empresaId, de, ate, centros = [], telaCheia = f
   const [resultado, setResultado] = useState(null);
   const [calculando, setCalculando] = useState(false);
   const [erro, setErro] = useState('');
-  // Consolidado retrátil, como o Total do fluxo do DFC: clicar no título recolhe numa faixa com
-  // "CONSOLIDADO" na vertical; clicar na faixa abre. Começa aberto (é o totalizador da DRE).
-  const [consolidadoAberto, setConsolidadoAberto] = useState(true);
+  // Coluna fixa retrátil, como o Total do fluxo do DFC: clicar no título recolhe numa faixa com o nome
+  // na vertical; clicar na faixa abre. Começa aberta (é o totalizador da DRE).
+  const [fixaAberta, setFixaAberta] = useState(true);
+  const [centroMarcado, setCentroMarcado] = useState(null); // centro clicado no cabeçalho (mostra o botão)
+  const [mensal, setMensal] = useState(null); // centro na visão mês a mês
   const chaveCentros = centros.join(',');
+  const mesAtual = mesDeHoje();
 
   const carregar = useCallback(() => {
     if (!empresaId) {
@@ -65,6 +80,12 @@ export default function DreTab({ empresaId, de, ate, centros = [], telaCheia = f
     };
   }, [empresaId, de, ate, chaveCentros]);
 
+  // Outra empresa: volta pra visão dos centros.
+  useEffect(() => {
+    setMensal(null);
+    setCentroMarcado(null);
+  }, [empresaId]);
+
   // Tela cheia: pede também a do navegador; o Esc dele sai e o `fullscreenchange` fecha a nossa
   // junto. Sem a do navegador, o Esc é tratado aqui.
   useEffect(() => {
@@ -100,15 +121,23 @@ export default function DreTab({ empresaId, de, ate, centros = [], telaCheia = f
   }
 
   const semMascaraPoc = resultado && !resultado.poc_receita.mascara;
-  // Colunas de valor: o CONSOLIDADO (soma dos centros) e um centro de custo por coluna — cada uma com a
-  // sua AV % ao lado.
-  const colunas = [
-    { chave: 'consolidado', valores: resultado?.valores || {} },
-    ...(resultado?.por_centro || []).map((c) => ({ chave: c.id, nome: c.nome, valores: c.valores })),
-  ];
+  // Centro da visão mês a mês (se o filtro tirou o centro, volta pros centros).
+  const centroMensal = mensal !== null ? (resultado?.por_centro || []).find((c) => c.id === mensal) : null;
+
+  // Colunas de valor. `segunda`: a coluna ao lado do valor — 'av' (AV %), 'ah' (AH %) ou nenhuma.
+  const colunas = centroMensal
+    ? [
+        { chave: 'total', nome: 'Total', valores: centroMensal.valores, segunda: null },
+        ...centroMensal.meses.map((m) => ({ chave: m.mes, mes: m.mes, de: m.de, ate: m.ate, valores: m.valores, segunda: 'ah' })),
+      ]
+    : [
+        { chave: 'consolidado', nome: 'Consolidado', valores: resultado?.valores || {}, segunda: 'av' },
+        ...(resultado?.por_centro || []).map((c) => ({ chave: c.id, nome: c.nome, valores: c.valores, segunda: 'av' })),
+      ];
+  const fixa = colunas[0];
   const linhas = comAcumulado(arvore, colunas);
-  // AV %: a linha de nível 1 da aba Configurações vale 100% em cada coluna; ela e as de baixo mostram o
-  // percentual dela (as de cima ficam vazias). Sem a linha configurada, traço.
+  // AV % (visão dos centros): a linha de nível 1 da aba Configurações vale 100% em cada coluna; ela e as
+  // de baixo mostram o percentual dela (as de cima ficam vazias). Sem a linha configurada, traço.
   const av = resultado?.avaliacao_vertical || null;
   const indiceBase = av ? arvore.findIndex((g) => g.id === av.mascara_id) : -1;
   const bases = colunas.map((c, i) => {
@@ -116,7 +145,19 @@ export default function DreTab({ empresaId, de, ate, centros = [], telaCheia = f
     const g = arvore[indiceBase];
     return g.totalizadora ? linhas[indiceBase].acumulados[i] : totalDoGrupo(g, c.valores);
   });
-  const semAv = resultado && indiceBase < 0;
+  const semAv = resultado && !centroMensal && indiceBase < 0;
+  const tituloSegunda = (c) =>
+    c.segunda === 'ah'
+      ? 'Avaliação Horizontal: variação sobre o mês anterior — (mês − mês anterior) ÷ |mês anterior|'
+      : av
+        ? `Avaliação Vertical: percentual de ${av.descricao}`
+        : 'Avaliação Vertical não configurada';
+
+  function abrirMensal(id) {
+    setMensal(id);
+    setCentroMarcado(null);
+    setFixaAberta(true);
+  }
 
   return (
     <div
@@ -128,10 +169,10 @@ export default function DreTab({ empresaId, de, ate, centros = [], telaCheia = f
         <div className="-mt-1 mb-2 flex items-center gap-3 border-b border-gray-100 pb-3">
           <BarChart3 size={18} className="shrink-0 text-primary-600" />
           <div className="min-w-0">
-            <h2 className="text-sm font-semibold text-gray-900">DRE</h2>
+            <h2 className="text-sm font-semibold text-gray-900">DRE{centroMensal ? ` · ${centroMensal.nome} mês a mês` : ''}</h2>
             <p className="text-xs text-gray-500">
               {dataBr(de)} a {dataBr(ate)}
-              {centros.length > 0 && ` · ${centros.length} ${centros.length === 1 ? 'centro' : 'centros'} de custo`}
+              {!centroMensal && centros.length > 0 && ` · ${centros.length} ${centros.length === 1 ? 'centro' : 'centros'} de custo`}
             </p>
           </div>
           <span className="ml-auto hidden text-xs text-gray-400 sm:inline">Esc para sair</span>
@@ -166,6 +207,24 @@ export default function DreTab({ empresaId, de, ate, centros = [], telaCheia = f
           )}
         </div>
       )}
+      {centroMensal && (
+        <div className="mb-3 flex flex-wrap items-center gap-3">
+          <button
+            type="button"
+            onClick={() => setMensal(null)}
+            className="flex items-center gap-1.5 rounded-lg border border-gray-200 px-3 py-1.5 text-xs font-medium text-gray-700 transition-colors hover:bg-gray-50"
+          >
+            <ArrowLeft size={14} />
+            Voltar aos centros
+          </button>
+          <span className="flex items-center gap-1.5 text-sm font-semibold text-gray-900">
+            <CalendarDays size={15} className="text-primary-600" />
+            {centroMensal.nome}
+            <span className="font-normal text-gray-500">· mês a mês</span>
+          </span>
+          <span className="text-xs text-gray-400">AH % = variação de cada mês sobre o mês anterior</span>
+        </div>
+      )}
       {carregando ? (
         <div className="py-12 text-center text-sm text-gray-400">Carregando...</div>
       ) : arvore.length === 0 ? (
@@ -178,72 +237,105 @@ export default function DreTab({ empresaId, de, ate, centros = [], telaCheia = f
         <div className="overflow-x-auto rounded-lg border border-gray-200">
           <table className="w-full border-separate border-spacing-0 text-left text-xs">
             <thead>
-              {/* Cabeçalhos centralizados: o nome da coluna (Consolidado / centro) em cima, Valor e AV % embaixo. */}
+              {/* Cabeçalhos centralizados: o nome da coluna (Consolidado / centro / mês) em cima, Valor e
+                  AV % / AH % embaixo. */}
               <tr className="text-xs uppercase tracking-wide text-gray-700">
                 <th
                   rowSpan={2}
                   className={`${COL_DESCRICAO} border-b border-gray-200 bg-white py-1.5 pl-4 align-bottom font-semibold`}
                 >
-                  Descrição
+                  DRE
                 </th>
-                {consolidadoAberto ? (
+                {fixaAberta ? (
                   <th
-                    colSpan={2}
-                    onClick={() => setConsolidadoAberto(false)}
-                    title="Recolher o Consolidado"
+                    colSpan={fixa.segunda ? 2 : 1}
+                    onClick={() => setFixaAberta(false)}
+                    title={`Recolher o ${fixa.nome}`}
                     className="sticky left-[380px] z-10 cursor-pointer border-b border-r border-b-blue-200 border-r-blue-200 bg-blue-100 px-3 pb-1 pt-1.5 text-center align-bottom font-semibold text-blue-800 transition-colors hover:bg-blue-200"
                   >
                     <span className="inline-flex items-center gap-1">
                       <ChevronLeft size={13} className="shrink-0 text-blue-500" />
-                      Consolidado
+                      {fixa.nome}
                     </span>
                   </th>
                 ) : (
                   <th
                     rowSpan={2}
-                    onClick={() => setConsolidadoAberto(true)}
-                    title="Mostrar o Consolidado (valor e AV %)"
+                    onClick={() => setFixaAberta(true)}
+                    title={`Mostrar o ${fixa.nome}`}
                     className={`${COL_FAIXA} z-20 cursor-pointer border-b border-b-blue-200 bg-blue-100 px-0 py-2 text-center align-bottom transition-colors hover:bg-blue-200`}
                   >
                     {/* Só a seta no cabeçalho (que fica na altura normal); a palavra, na vertical, desce
                         pela faixa por cima das linhas — é do cabeçalho, então não recebe o clique. */}
                     <ChevronLeft size={12} className="mx-auto rotate-180 text-blue-500" />
                     <span className="pointer-events-none absolute left-1/2 top-full mt-1.5 -translate-x-1/2 rotate-180 whitespace-nowrap text-[11px] font-bold uppercase tracking-[0.2em] text-blue-800 [writing-mode:vertical-rl]">
-                      Consolidado
+                      {fixa.nome}
                     </span>
                   </th>
                 )}
-                {colunas.slice(1).map((c) => (
-                  <th
-                    key={c.chave}
-                    colSpan={2}
-                    title={`${c.chave} - ${c.nome}`}
-                    className="border-b border-l border-gray-200 bg-white px-3 pb-1 pt-1.5 text-center align-bottom font-semibold"
-                  >
-                    <span className="line-clamp-2 whitespace-normal leading-tight">{c.nome}</span>
-                  </th>
-                ))}
+                {colunas.slice(1).map((c) =>
+                  c.mes ? (
+                    <CabecalhoMes key={c.chave} coluna={c} atual={c.mes === mesAtual} />
+                  ) : (
+                    <th
+                      key={c.chave}
+                      colSpan={2}
+                      onClick={() => setCentroMarcado((m) => (m === c.chave ? null : c.chave))}
+                      title={`${c.chave} - ${c.nome} · clique para ver mês a mês`}
+                      className={`cursor-pointer border-b border-l border-gray-200 px-3 pb-1 pt-1.5 text-center align-bottom font-semibold transition-colors ${
+                        centroMarcado === c.chave ? 'bg-primary-50 text-primary-700' : 'bg-white hover:bg-gray-50'
+                      }`}
+                    >
+                      <span className="line-clamp-2 whitespace-normal leading-tight">{c.nome}</span>
+                      {centroMarcado === c.chave && (
+                        <button
+                          type="button"
+                          onClick={(e) => {
+                            e.stopPropagation();
+                            abrirMensal(c.chave);
+                          }}
+                          className="mx-auto mt-1 flex items-center gap-1 rounded-md bg-primary-600 px-2 py-0.5 text-[10px] font-semibold normal-case tracking-normal text-white shadow-sm transition-colors hover:bg-primary-700"
+                        >
+                          <CalendarDays size={11} />
+                          Mês a mês
+                        </button>
+                      )}
+                    </th>
+                  )
+                )}
               </tr>
               <tr className="text-[10px] uppercase tracking-wide text-gray-500">
-                {consolidadoAberto && (
+                {fixaAberta && (
                   <>
-                    <th className={`${COL_CONSOLIDADO} border-b border-b-blue-200 bg-blue-100 py-1 text-center font-medium text-blue-700`}>Valor</th>
                     <th
-                      className={`${COL_AV_CONSOLIDADO} border-b border-b-blue-200 bg-blue-100 py-1 text-center font-medium text-blue-700`}
-                      title={av ? `Percentual de ${av.descricao}` : 'Avaliação Vertical não configurada'}
+                      className={`${COL_FIXA_VALOR} ${fixa.segunda ? '' : 'border-r border-r-blue-200'} border-b border-b-blue-200 bg-blue-100 py-1 text-center font-medium text-blue-700`}
                     >
-                      AV %
+                      Valor
                     </th>
+                    {fixa.segunda && (
+                      <th
+                        className={`${COL_FIXA_SEGUNDA} border-b border-b-blue-200 bg-blue-100 py-1 text-center font-medium text-blue-700`}
+                        title={tituloSegunda(fixa)}
+                      >
+                        AV %
+                      </th>
+                    )}
                   </>
                 )}
                 {colunas.slice(1).map((c) => (
                   <Fragment key={c.chave}>
-                    <th className={`${COL_CENTRO} border-b border-l border-gray-200 bg-white py-1 text-center font-semibold`}>Valor</th>
                     <th
-                      className={`${COL_AV} border-b border-gray-200 bg-white py-1 text-center font-semibold`}
-                      title={av ? `Percentual de ${av.descricao}` : 'Avaliação Vertical não configurada'}
+                      className={`${COL_VALOR} border-b border-l border-gray-200 py-1 text-center font-semibold ${
+                        c.mes === mesAtual ? 'bg-[#f5f9ff]' : 'bg-white'
+                      }`}
                     >
-                      AV %
+                      Valor
+                    </th>
+                    <th
+                      className={`${COL_SEGUNDA} border-b border-gray-200 py-1 text-center font-semibold ${c.mes === mesAtual ? 'bg-[#f5f9ff]' : 'bg-white'}`}
+                      title={tituloSegunda(c)}
+                    >
+                      {c.segunda === 'ah' ? 'AH %' : 'AV %'}
                     </th>
                   </Fragment>
                 ))}
@@ -257,8 +349,8 @@ export default function DreTab({ empresaId, de, ate, centros = [], telaCheia = f
                   colunas={colunas}
                   acumulados={acumulados}
                   bases={indiceBase >= 0 && i >= indiceBase ? bases : null}
-                  recolhido={!consolidadoAberto}
-                  onAbrir={() => setConsolidadoAberto(true)}
+                  recolhido={!fixaAberta}
+                  onAbrir={() => setFixaAberta(true)}
                 />
               ))}
             </tbody>
@@ -269,8 +361,30 @@ export default function DreTab({ empresaId, de, ate, centros = [], telaCheia = f
   );
 }
 
+// "OUT/2026" numa linha só, com o ano um pouco menor; o mês atual em azul forte, como no fluxo do DFC.
+// Mês parcial (o primeiro e o último do período) mostra as datas ao passar o mouse.
+function CabecalhoMes({ coluna, atual }) {
+  const parcial = coluna.de.slice(8) !== '01' || coluna.ate !== fimDoMes(coluna.mes);
+  return (
+    <th
+      colSpan={2}
+      title={parcial ? `${dataBr(coluna.de)} a ${dataBr(coluna.ate)}` : undefined}
+      className={`border-b border-l px-3 pb-1 pt-1.5 text-center align-bottom ${
+        atual ? 'border-b-[#1d5c8a] border-l-gray-200 bg-[#1d5c8a]' : 'border-gray-200 bg-white'
+      }`}
+    >
+      <span className={`text-[11px] font-semibold tracking-wider ${atual ? 'text-white' : 'text-gray-700'}`}>
+        {MESES_CAB[Number(coluna.mes.slice(5, 7)) - 1]}
+        <span className={`text-[10px] font-medium tracking-normal ${atual ? 'text-white/75' : 'text-gray-400'}`}>
+          /{coluna.mes.slice(0, 4)}
+        </span>
+      </span>
+    </th>
+  );
+}
+
 // Totaliza = soma de todas as linhas de nível 2 acima dela na DRE (Receita Líquida = Receita Bruta +
-// impostos…), só quando todas já têm valor; senão, traço. Uma por coluna (consolidado e centros).
+// impostos…), só quando todas já têm valor; senão, traço. Uma por coluna.
 function comAcumulado(arvore, colunas) {
   const soma = colunas.map(() => 0);
   const completo = colunas.map(() => true);
@@ -293,46 +407,61 @@ function totalDoGrupo(grupo, valores) {
   return doGrupo.length && doGrupo.every((v) => v !== null && v !== undefined) ? doGrupo.reduce((t, v) => t + v, 0) : null;
 }
 
-// Larguras fixas: a descrição e o consolidado (valor + AV %) ficam congelados à esquerda quando os
-// centros rolam (left = soma das larguras à esquerda: 380, +144).
+// Larguras fixas: a descrição e a coluna fixa (Consolidado / Total: valor + AV %) ficam congeladas à
+// esquerda quando as outras rolam (left = soma das larguras à esquerda: 380, +144).
 const COL_DESCRICAO = 'sticky left-0 z-10 w-[380px] min-w-[380px] max-w-[380px]';
-const COL_CONSOLIDADO = 'sticky left-[380px] z-10 w-36 min-w-36 max-w-36';
-const COL_AV_CONSOLIDADO = 'sticky left-[524px] z-10 w-20 min-w-20 max-w-20 border-r border-r-blue-200';
-// Consolidado recolhido: só a faixa (como o Total recolhido do fluxo do DFC).
-// Sem z-index aqui: o cabeçalho fica acima (z-20) pra palavra vertical passar por cima das células.
+const COL_FIXA_VALOR = 'sticky left-[380px] z-10 w-36 min-w-36 max-w-36';
+const COL_FIXA_SEGUNDA = 'sticky left-[524px] z-10 w-20 min-w-20 max-w-20 border-r border-r-blue-200';
+const COL_VALOR = 'w-32 min-w-32 max-w-32';
+const COL_SEGUNDA = 'w-20 min-w-20 max-w-20';
+// Coluna fixa recolhida: só a faixa (como o Total recolhido do fluxo do DFC). Sem z-index aqui: o
+// cabeçalho fica acima (z-20) pra palavra vertical passar por cima das células.
 const COL_FAIXA = 'sticky left-[380px] w-7 min-w-7 max-w-7 border-r border-r-blue-200';
-const COL_CENTRO = 'w-32 min-w-32 max-w-32';
-const COL_AV = 'w-20 min-w-20 max-w-20';
 
 // AV % = valor ÷ |base| (o sinal do valor fica: despesa sai negativa). Sem base (ou zero), traço.
 const pctAv = (v, base) => (v === null || v === undefined || !base ? null : (v / Math.abs(base)) * 100);
+// AH % = (mês − mês anterior) ÷ |mês anterior|: positivo = melhor pro resultado (entrou mais / saiu
+// menos), negativo = pior — mesmo critério do Desvio % do fluxo do DFC. Sem mês anterior (ou zero), traço.
+const pctAh = (v, anterior) =>
+  v === null || v === undefined || anterior === null || anterior === undefined || !anterior ? null : ((v - anterior) / Math.abs(anterior)) * 100;
 // Abaixo de 0,005% vira 0 (senão aparecia "-0,00%").
-const formatoAv = (p) => `${(Math.abs(p) < 0.005 ? 0 : p).toLocaleString('pt-BR', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}%`;
+const formatoPct = (p, comSinal) => {
+  const x = Math.abs(p) < 0.005 ? 0 : p;
+  return `${comSinal && x > 0 ? '+' : ''}${x.toLocaleString('pt-BR', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}%`;
+};
 
-// Fundo e bordas de cada célula de valor / AV %, por tipo de linha e coluna (consolidado ou centro).
-// As do consolidado são congeladas, então o fundo é sempre sólido.
-function estilo(tipo, consolidado) {
+// Fundo e bordas de cada célula, por tipo de linha e coluna (fixa ou não). As da coluna fixa são
+// congeladas, então o fundo é sempre sólido.
+function estilo(tipo, fixa) {
   if (tipo === 'totalizadora')
-    return { fundo: consolidado ? 'bg-[#174a70]' : 'bg-[#1d5c8a]', borda: 'border-b-[#1d5c8a]', divisa: 'border-l-white/10' };
+    return { fundo: fixa ? 'bg-[#174a70]' : 'bg-[#1d5c8a]', borda: 'border-b-[#1d5c8a]', divisa: 'border-l-white/10' };
   if (tipo === 'n1')
-    return consolidado
+    return fixa
       ? { fundo: 'bg-blue-100', borda: 'border-b-blue-200', divisa: '' }
       : { fundo: 'bg-gray-50', borda: 'border-b-gray-200', divisa: 'border-l-gray-200' };
-  return consolidado
+  return fixa
     ? { fundo: 'bg-blue-50 group-hover:bg-blue-100', borda: 'border-b-blue-100', divisa: '' }
     : { fundo: 'group-hover:bg-gray-50', borda: 'border-b-gray-100', divisa: 'border-l-gray-100' };
 }
 
-// As duas células de uma coluna (valor e AV %) numa linha. `base`: o 100% da AV % nessa coluna, ou
-// undefined quando a linha fica sem AV (acima da linha configurada). Consolidado recolhido
-// (`recolhido`): uma faixa só, que abre ao clicar (`onAbrir`).
-function Celulas({ tipo, consolidado, valor, base, recolhido, onAbrir }) {
-  const e = estilo(tipo, consolidado);
-  if (consolidado && recolhido) {
+// Cor do AV % (sinal do valor) e do AH % (verde = melhor, vermelho = pior), clara nas totalizadoras.
+function corPct(tipo, segunda, p) {
+  const total = tipo === 'totalizadora';
+  if (p === null || p === undefined || Math.abs(p) < 0.005) return total ? 'text-white/80' : 'text-gray-500';
+  if (segunda === 'ah') return p > 0 ? (total ? 'text-emerald-300' : 'text-emerald-600') : total ? 'text-red-300' : 'text-red-500';
+  return p < 0 ? (total ? 'text-red-300' : 'text-red-500') : total ? 'text-white/80' : 'text-gray-500';
+}
+
+// As células de uma coluna numa linha: o valor e, se a coluna tiver, o AV % / AH % (`pct`: número,
+// null = traço, undefined = vazio). Coluna fixa recolhida (`recolhido`): uma faixa só, que abre ao
+// clicar (`onAbrir`).
+function Celulas({ tipo, fixa, segunda, valor, pct, recolhido, onAbrir }) {
+  const e = estilo(tipo, fixa);
+  if (fixa && recolhido) {
     return (
       <td
         onClick={onAbrir}
-        title="Mostrar o Consolidado (valor e AV %)"
+        title="Mostrar a coluna"
         className={`${COL_FAIXA} z-10 cursor-pointer border-b ${e.borda} ${
           tipo === 'totalizadora' ? 'bg-[#174a70]' : tipo === 'n1' ? 'bg-blue-100 hover:bg-blue-200' : 'bg-blue-50 hover:bg-blue-100'
         }`}
@@ -340,12 +469,13 @@ function Celulas({ tipo, consolidado, valor, base, recolhido, onAbrir }) {
     );
   }
   const py = tipo === 'n2' ? 'py-0.5' : 'py-1';
-  const forte = tipo === 'n2' ? (consolidado ? 'font-semibold' : '') : 'font-bold';
-  const p = base === undefined ? undefined : pctAv(valor, base);
+  const forte = tipo === 'n2' ? (fixa ? 'font-semibold' : '') : 'font-bold';
   return (
     <>
       <td
-        className={`${consolidado ? COL_CONSOLIDADO : `${COL_CENTRO} border-l ${e.divisa}`} ${e.fundo} border-b ${e.borda} ${py} px-3 text-right text-xs tabular-nums ${forte}`}
+        className={`${fixa ? `${COL_FIXA_VALOR} ${segunda ? '' : 'border-r border-r-blue-200'}` : `${COL_VALOR} border-l ${e.divisa}`} ${
+          e.fundo
+        } border-b ${e.borda} ${py} px-3 text-right text-xs tabular-nums ${forte}`}
       >
         {tipo === 'totalizadora' ? (
           valor === null || valor === undefined ? (
@@ -357,17 +487,15 @@ function Celulas({ tipo, consolidado, valor, base, recolhido, onAbrir }) {
           <Valor valor={valor} cor={tipo === 'n1' ? 'text-gray-900' : 'text-gray-700'} />
         )}
       </td>
-      <td
-        className={`${consolidado ? COL_AV_CONSOLIDADO : COL_AV} ${e.fundo} border-b ${e.borda} ${py} px-2 text-right text-[11px] tabular-nums ${
-          tipo === 'n2' ? '' : 'font-semibold'
-        } ${
-          tipo === 'totalizadora'
-            ? p !== null && p !== undefined && p < 0 ? 'text-red-300' : 'text-white/80'
-            : p !== null && p !== undefined && p < 0 ? 'text-red-500' : 'text-gray-500'
-        }`}
-      >
-        {p === undefined ? '' : p === null ? <span className={tipo === 'totalizadora' ? 'text-white/40' : 'text-gray-300'}>—</span> : formatoAv(p)}
-      </td>
+      {segunda && (
+        <td
+          className={`${fixa ? COL_FIXA_SEGUNDA : COL_SEGUNDA} ${e.fundo} border-b ${e.borda} ${py} px-2 text-right text-[11px] tabular-nums ${
+            tipo === 'n2' ? '' : 'font-semibold'
+          } ${corPct(tipo, segunda, pct)}`}
+        >
+          {pct === undefined ? '' : pct === null ? <span className={tipo === 'totalizadora' ? 'text-white/40' : 'text-gray-300'}>—</span> : formatoPct(pct, segunda === 'ah')}
+        </td>
+      )}
     </>
   );
 }
@@ -414,14 +542,36 @@ function Valor({ valor, vazio = 'text-gray-300', cor = 'text-gray-700' }) {
   return <span className={valor < 0 ? 'text-red-600' : cor}>{moeda(valor)}</span>;
 }
 
+// As células de valor de uma linha: `vals` = o valor em cada coluna. AV % = valor ÷ base da coluna
+// (`bases`, null quando a linha está acima da linha configurada → vazio); AH % = sobre a coluna
+// anterior, se ela também for um mês (o primeiro mês fica com traço).
+function CelulasDaLinha({ tipo, colunas, vals, bases, recolhido, onAbrir }) {
+  return colunas.map((c, i) => {
+    let pct;
+    if (c.segunda === 'av') pct = bases ? pctAv(vals[i], bases[i]) : undefined;
+    else if (c.segunda === 'ah') pct = colunas[i - 1]?.mes ? pctAh(vals[i], vals[i - 1]) : null;
+    return (
+      <Celulas
+        key={c.chave}
+        tipo={tipo}
+        fixa={i === 0}
+        segunda={c.segunda}
+        valor={vals[i]}
+        pct={pct}
+        recolhido={recolhido}
+        onAbrir={onAbrir}
+      />
+    );
+  });
+}
+
 // Totaliza (aba Máscaras) é linha de subtotal: escura, fechando a seção, sem nível 2 — valor de cada
 // coluna = `acumulados` (tudo acima). Linha de nível 1 = soma das de nível 2, só quando todas já têm
-// valor. As células congeladas (descrição e consolidado) têm fundo sólido: os centros rolam por baixo.
+// valor. As células congeladas (descrição e coluna fixa) têm fundo sólido: as outras rolam por baixo.
 // `bases`: o 100% da AV % de cada coluna, ou null quando o grupo está acima da linha configurada.
-// `recolhido` / `onAbrir`: o Consolidado recolhido numa faixa.
+// `recolhido` / `onAbrir`: a coluna fixa recolhida numa faixa.
 function LinhaGrupo({ grupo, colunas, acumulados, bases, recolhido, onAbrir }) {
-  const base = (i) => (bases ? bases[i] : undefined);
-  const faixa = { recolhido, onAbrir };
+  const faixa = { colunas, bases, recolhido, onAbrir };
   if (grupo.totalizadora) {
     return (
       <tr>
@@ -431,9 +581,7 @@ function LinhaGrupo({ grupo, colunas, acumulados, bases, recolhido, onAbrir }) {
             <span className="truncate text-xs font-bold uppercase tracking-wide text-white">{grupo.descricao}</span>
           </span>
         </td>
-        {colunas.map((c, i) => (
-          <Celulas key={c.chave} tipo="totalizadora" consolidado={i === 0} valor={acumulados[i]} base={base(i)} {...faixa} />
-        ))}
+        <CelulasDaLinha tipo="totalizadora" vals={acumulados} {...faixa} />
       </tr>
     );
   }
@@ -447,9 +595,7 @@ function LinhaGrupo({ grupo, colunas, acumulados, bases, recolhido, onAbrir }) {
             <span className="truncate text-xs font-bold uppercase tracking-wide text-gray-900">{grupo.descricao}</span>
           </span>
         </td>
-        {colunas.map((c, i) => (
-          <Celulas key={c.chave} tipo="n1" consolidado={i === 0} valor={totalDoGrupo(grupo, c.valores)} base={base(i)} {...faixa} />
-        ))}
+        <CelulasDaLinha tipo="n1" vals={colunas.map((c) => totalDoGrupo(grupo, c.valores))} {...faixa} />
       </tr>
 
       {grupo.filhos.length === 0 ? (
@@ -460,10 +606,10 @@ function LinhaGrupo({ grupo, colunas, acumulados, bases, recolhido, onAbrir }) {
           {recolhido ? (
             <td className={`${COL_FAIXA} z-10 border-b border-b-blue-100 bg-blue-50`} />
           ) : (
-            <>
-              <td className={`${COL_CONSOLIDADO} border-b border-b-blue-100 bg-blue-50`} />
-              <td className={`${COL_AV_CONSOLIDADO} border-b border-b-blue-100 bg-blue-50`} />
-            </>
+            <td
+              colSpan={colunas[0].segunda ? 2 : 1}
+              className="sticky left-[380px] z-10 border-b border-r border-b-blue-100 border-r-blue-200 bg-blue-50"
+            />
           )}
           <td colSpan={(colunas.length - 1) * 2} className="border-b border-gray-100" />
         </tr>
@@ -478,9 +624,7 @@ function LinhaGrupo({ grupo, colunas, acumulados, bases, recolhido, onAbrir }) {
                 <span className="truncate" title={item.descricao}>{item.descricao}</span>
               </span>
             </td>
-            {colunas.map((c, i) => (
-              <Celulas key={c.chave} tipo="n2" consolidado={i === 0} valor={c.valores[item.id]} base={base(i)} {...faixa} />
-            ))}
+            <CelulasDaLinha tipo="n2" vals={colunas.map((c) => c.valores[item.id])} {...faixa} />
           </tr>
         ))
       )}
