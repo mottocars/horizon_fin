@@ -375,4 +375,16 @@ async function somaPorCentro(empresaId, mascaraId, ate) {
   return rows.map((r) => ({ ...r, valor: num(r.valor) }));
 }
 
-module.exports = { exercicios, lancamentos, opcoesFiltros, somaPorCentro };
+// Igual a somaPorCentro, mas por centro e dia (até `ate`): a DRE calcula a POC de Receita em
+// várias datas (mês a mês, pro RET) sem refazer a listagem a cada uma.
+async function somaPorCentroData(empresaId, mascaraId, ate) {
+  const { rows } = await pool.query(
+    `WITH ${CTE_LINHAS}
+     SELECT centro_id::int AS centro_id, to_char(data, 'YYYY-MM-DD') AS data, SUM(valor) AS valor
+       FROM lc WHERE mascara_id = $4 GROUP BY 1, 2 ORDER BY 1, 2`,
+    [empresaId, '1900-01-01', diaSeguinte(ate), mascaraId]
+  );
+  return rows.map((r) => ({ ...r, valor: num(r.valor) }));
+}
+
+module.exports = { exercicios, lancamentos, opcoesFiltros, somaPorCentro, somaPorCentroData };

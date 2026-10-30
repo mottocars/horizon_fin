@@ -9,8 +9,8 @@ const moeda = (v) => Number(v).toLocaleString('pt-BR', { minimumFractionDigits: 
 // SaldosContasTab.jsx (primeira coluna com a hierarquia, valor alinhado à direita). A hierarquia é a
 // árvore cadastrada na aba Máscaras (dre_mascaras), na mesma ordem de lá. Valor = período do filtro
 // (de/até) somando os centros escolhidos (vazio = todos com "Realiza DRE") — cálculo em
-// dre-demonstrativo/demonstrativo.service.js. Por enquanto só a RECEITA BRUTA tem valor; o resto
-// fica com traço.
+// dre-demonstrativo/demonstrativo.service.js. Por enquanto só a RECEITA BRUTA e o RET (Imposto Fixo)
+// têm valor; o resto fica com traço.
 export default function DreTab({ empresaId, de, ate, centros = [] }) {
   const [arvore, setArvore] = useState([]);
   const [carregando, setCarregando] = useState(false);
@@ -107,8 +107,8 @@ export default function DreTab({ empresaId, de, ate, centros = [] }) {
               </tr>
             </thead>
             <tbody className={calculando ? 'opacity-50 transition-opacity' : ''}>
-              {arvore.map((grupo) => (
-                <LinhaGrupo key={grupo.id} grupo={grupo} valores={valores} />
+              {comAcumulado(arvore, valores).map(({ grupo, acumulado }) => (
+                <LinhaGrupo key={grupo.id} grupo={grupo} valores={valores} acumulado={acumulado} />
               ))}
             </tbody>
           </table>
@@ -116,6 +116,22 @@ export default function DreTab({ empresaId, de, ate, centros = [] }) {
       )}
     </div>
   );
+}
+
+// Totaliza = soma de todas as linhas de nível 2 acima dela na DRE (Receita Líquida = Receita Bruta +
+// impostos…), só quando todas já têm valor; senão, traço.
+function comAcumulado(arvore, valores) {
+  let soma = 0;
+  let completo = true;
+  return arvore.map((grupo) => {
+    if (grupo.totalizadora) return { grupo, acumulado: completo ? soma : null };
+    grupo.filhos.forEach((f) => {
+      const v = valores[f.id];
+      if (v === null || v === undefined) completo = false;
+      else soma += v;
+    });
+    return { grupo, acumulado: null };
+  });
 }
 
 const ROTULO_TIPO_POC = { RECEITA: 'POC Receita', DESPESA: 'POC Despesa' };
@@ -150,9 +166,9 @@ function Valor({ valor, vazio = 'text-gray-300', cor = 'text-gray-700' }) {
   return <span className={valor < 0 ? 'text-red-600' : cor}>{moeda(valor)}</span>;
 }
 
-// Totaliza (aba Máscaras) é linha de subtotal: escura, fechando a seção, sem nível 2 (por enquanto
-// com traço). Linha de nível 1 = soma das de nível 2, só quando todas já têm valor.
-function LinhaGrupo({ grupo, valores }) {
+// Totaliza (aba Máscaras) é linha de subtotal: escura, fechando a seção, sem nível 2 — valor =
+// `acumulado` (tudo acima). Linha de nível 1 = soma das de nível 2, só quando todas já têm valor.
+function LinhaGrupo({ grupo, valores, acumulado }) {
   if (grupo.totalizadora) {
     return (
       <tr className="bg-gray-900">
@@ -162,8 +178,12 @@ function LinhaGrupo({ grupo, valores }) {
             <span className="text-xs font-bold uppercase tracking-wide text-white">{grupo.descricao}</span>
           </span>
         </td>
-        <td className="border-b border-l border-gray-900 px-4 py-1 text-right text-xs font-bold tabular-nums text-white/50">
-          —
+        <td className="border-b border-l border-gray-900 px-4 py-1 text-right text-xs font-bold tabular-nums">
+          {acumulado === null ? (
+            <span className="text-white/50">—</span>
+          ) : (
+            <span className={acumulado < 0 ? 'text-red-300' : 'text-white'}>{moeda(acumulado)}</span>
+          )}
         </td>
       </tr>
     );
