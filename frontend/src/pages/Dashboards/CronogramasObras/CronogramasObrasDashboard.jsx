@@ -15,9 +15,10 @@ import GanttObras, { LegendaGantt, ZOOMS_GANTT } from '../../Operacoes/Cronogram
 import CardsCarteira from '../../Operacoes/CronogramasObras/CardsCarteira';
 import CampoDataPeriodo from '../../Operacoes/CronogramasObras/CampoDataPeriodo';
 import {
-  FILTROS_SITUACAO,
+  centroDoFiltro,
+  filtrarObras,
   filtrarPeriodo,
-  filtrarSituacao,
+  filtroObrasNaLocalidade,
   isoHoje,
   mesesDoPeriodo,
   montarObras,
@@ -25,6 +26,8 @@ import {
   nomeObra,
   numerosTopo,
   obrasDaVersao,
+  opcoesFiltroObras,
+  opcoesLocalidade,
   plural,
   periodoPadrao,
   resumoCarteira,
@@ -42,7 +45,7 @@ import './cronogramas.css';
 // só leitura: quem vê o dashboard pode não ter acesso ao cadastro dos centros de custo. Clicar num
 // card de etapa filtra o Gantt (só as obras que estão nela hoje). A empresa fica na URL (?empresa_id=).
 // Ao lado da empresa (pedidos do usuário), também na URL: "Obras" (?situacao= — todas, em andamento
-// ou só as concluídas) e "Mudanças" (?versao= — uma versão gravada: o Gantt mostra só as obras
+// ou só as concluídas — ou um centro de custo), "Localidade" (?local= — Cidade - UF) e "Mudanças" (?versao= — uma versão gravada: o Gantt mostra só as obras
 // alteradas nela, com como eram antes numa faixa fina em cima da barra), e o botão de exportar o
 // Excel do comunicado (o do cronograma em vigor, ou o da versão escolhida). No Mês a mês, o período
 // De/Até (padrão: 3 meses antes a 20 à frente; fica no estado da tela — só volta ao padrão ao
@@ -80,7 +83,9 @@ export default function CronogramasObrasDashboard() {
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [empresaTravada, empresaIdTravada, carregandoEmpresas, empresas, empresaId]);
 
+  // "Obras": a situação ou um centro de custo ('centro:<sienge_id>'); "Localidade" (?local=): Cidade - UF.
   const situacao = params.get('situacao') || '';
+  const localidade = params.get('local') || '';
   const versaoId = params.get('versao') || '';
 
   const empresaAtual = empresas.find((e) => String(e.id) === String(empresaId));
@@ -208,10 +213,17 @@ export default function CronogramasObrasDashboard() {
   const hoje = isoHoje();
   // Só as obras com alguma data de etapa (pedido do usuário): as sem cronograma saem do dashboard
   // inteiro — cards, etiqueta e Gantt. Na aba de Operações elas continuam, com o convite pra preencher.
-  const obras = useMemo(
-    () => filtrarSituacao(montarObras(centros, etapas, hoje, atraso).filter((o) => o.segmentos.length), situacao),
-    [centros, etapas, hoje, atraso, situacao]
+  const obrasTodas = useMemo(
+    () => montarObras(centros, etapas, hoje, atraso).filter((o) => o.segmentos.length),
+    [centros, etapas, hoje, atraso]
   );
+  const obras = useMemo(() => filtrarObras(obrasTodas, situacao, localidade), [obrasTodas, situacao, localidade]);
+  // Opções dos filtros "Obras" (situações + centros) e "Localidade": só as obras do dashboard (com datas).
+  const centrosComDatas = useMemo(() => obrasTodas.map((o) => o.centro), [obrasTodas]);
+  const opcoesObras = useMemo(() => opcoesFiltroObras(centrosComDatas, localidade), [centrosComDatas, localidade]);
+  const opcoesLocal = useMemo(() => opcoesLocalidade(centrosComDatas), [centrosComDatas]);
+  const situacoesObras = opcoesObras.filter((o) => o.grupo === 'Situação');
+  const centrosObras = opcoesObras.filter((o) => o.grupo !== 'Situação');
   // "Mudanças da versão": o Gantt fica com as obras alteradas nela (como ficaram + como eram antes).
   const obrasVersao = useMemo(
     () => {
@@ -222,9 +234,9 @@ export default function CronogramasObrasDashboard() {
         const c = cadastro.get(o.centro.sienge_id);
         return c ? { ...o, centro: { ...o.centro, cidade: c.cidade, uf: c.uf } } : o;
       });
-      return filtrarSituacao(comCidade, situacao);
+      return filtrarObras(comCidade, situacao, localidade);
     },
-    [versaoDetalhe, hoje, situacao, centros]
+    [versaoDetalhe, hoje, situacao, localidade, centros]
   );
   // Mês a mês: só as obras do período De/Até (cards e Gantt); Visão geral: todas.
   const periodoAtivo = zoom === 'mensal' ? periodo : null;
@@ -271,7 +283,9 @@ export default function CronogramasObrasDashboard() {
             <select
               id="f-empresa"
               value={empresaId}
-              onChange={(e) => atualizarParams({ empresa_id: e.target.value, versao: null })}
+              onChange={(e) =>
+                atualizarParams({ empresa_id: e.target.value, versao: null, local: null, situacao: centroDoFiltro(situacao) ? null : situacao })
+              }
               disabled={carregandoEmpresas || empresaTravada}
             >
               {!empresaId && <option value="">{carregandoEmpresas ? 'Carregando…' : 'Selecione a empresa'}</option>}
@@ -285,7 +299,31 @@ export default function CronogramasObrasDashboard() {
           <div className="ctl">
             <label htmlFor="f-situacao">Obras</label>
             <select id="f-situacao" value={situacao} onChange={(e) => atualizarParams({ situacao: e.target.value })} disabled={!empresaId}>
-              {FILTROS_SITUACAO.map((f) => (
+              {situacoesObras.map((f) => (
+                <option key={f.value} value={f.value}>
+                  {f.label}
+                </option>
+              ))}
+              {centrosObras.length > 0 && (
+                <optgroup label="Centro de custo">
+                  {centrosObras.map((f) => (
+                    <option key={f.value} value={f.value}>
+                      {f.label}
+                    </option>
+                  ))}
+                </optgroup>
+              )}
+            </select>
+          </div>
+          <div className="ctl">
+            <label htmlFor="f-local">Localidade</label>
+            <select
+              id="f-local"
+              value={localidade}
+              onChange={(e) => atualizarParams({ local: e.target.value, situacao: filtroObrasNaLocalidade(situacao, e.target.value, centros) })}
+              disabled={!empresaId}
+            >
+              {opcoesLocal.map((f) => (
                 <option key={f.value} value={f.value}>
                   {f.label}
                 </option>

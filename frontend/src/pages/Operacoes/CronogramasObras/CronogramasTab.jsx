@@ -6,8 +6,8 @@ import JanelaCentroCusto from './JanelaCentroCusto';
 import CardsCarteira from './CardsCarteira';
 import GanttObras, { LegendaGantt, ZOOMS_GANTT } from './GanttObras';
 import {
+  filtrarObras,
   filtrarPeriodo,
-  filtrarSituacao,
   isoHoje,
   montarObras,
   naRecorte,
@@ -25,13 +25,24 @@ import {
 // mês a mês (GanttObras — o mesmo do dashboard Cronogramas de Obras). Clicar numa obra abre o
 // cadastro dela (JanelaCentroCusto); clicar num card de etapa filtra o Gantt (as obras que
 // estiveram nela em algum momento do período De/Até). Os filtros "Obras" (`situacao`) e "Mudanças" (`versaoId` — as obras alteradas
-// numa versão, com como eram antes) ficam ao lado da empresa, na página (CronogramasObrasPage).
+// numa versão, com como eram antes) ficam ao lado da empresa, na página (CronogramasObrasPage) —
+// junto com "Localidade" (`localidade`, Cidade - UF); o filtro "Obras" também escolhe um centro, e
+// a lista deles vai pra página por `onCentros`.
 // ---------------------------------------------------------------------------------------
 
 // `zoom`/`onZoom` vêm da página. Aqui não há filtro de período (pedido do usuário — o De/Até fica só no
 // dashboard): o Mês a mês mostra a linha do tempo inteira, aberta em hoje. As obras ficam agrupadas por
 // cidade (GanttObras `agruparPorCidade`).
-export default function CronogramasTab({ empresaId, situacao = '', versaoId = '', onLimparVersao, zoom = 'mensal', onZoom }) {
+export default function CronogramasTab({
+  empresaId,
+  situacao = '',
+  localidade = '',
+  versaoId = '',
+  onLimparVersao,
+  zoom = 'mensal',
+  onZoom,
+  onCentros,
+}) {
   const [etapas, setEtapas] = useState([]);
   const [centros, setCentros] = useState([]);
   const [atraso, setAtraso] = useState(null); // Regra de Atraso da Construção (aba Configurações)
@@ -50,17 +61,20 @@ export default function CronogramasTab({ empresaId, situacao = '', versaoId = ''
         setEtapas(r.etapas);
         setCentros(r.centros);
         setAtraso(r.atraso);
+        onCentros?.(r.centros);
       })
       .catch((err) => setErroCarga(err.response?.data?.message || 'Não foi possível carregar o cronograma.'))
       .finally(() => setCarregando(false));
-  }, [empresaId]);
+  }, [empresaId, onCentros]);
 
   useEffect(() => {
     setEtapas([]);
     setCentros([]);
+    onCentros?.([]);
     setAtraso(null);
     setDestaque(null);
     carregar();
+    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [carregar]);
 
   useEffect(() => {
@@ -74,8 +88,8 @@ export default function CronogramasTab({ empresaId, situacao = '', versaoId = ''
 
   const periodoAtivo = null;
   const obras = useMemo(
-    () => filtrarPeriodo(filtrarSituacao(montarObras(centros, etapas, isoHoje(), atraso), situacao), periodoAtivo),
-    [centros, etapas, atraso, situacao, periodoAtivo]
+    () => filtrarPeriodo(filtrarObras(montarObras(centros, etapas, isoHoje(), atraso), situacao, localidade), periodoAtivo),
+    [centros, etapas, atraso, situacao, localidade, periodoAtivo]
   );
   const r = useMemo(() => resumoCarteira(obras, etapas, periodoAtivo), [obras, etapas, periodoAtivo]);
   // "Mudanças da versão": o Gantt fica com as obras alteradas nela (como ficaram + como eram antes).
@@ -87,8 +101,8 @@ export default function CronogramasTab({ empresaId, situacao = '', versaoId = ''
       const c = cadastro.get(o.centro.sienge_id);
       return c ? { ...o, centro: { ...o.centro, cidade: c.cidade, uf: c.uf } } : o;
     });
-    return filtrarPeriodo(filtrarSituacao(comCidade, situacao), periodoAtivo);
-  }, [versaoDetalhe, situacao, periodoAtivo, centros]);
+    return filtrarPeriodo(filtrarObras(comCidade, situacao, localidade), periodoAtivo);
+  }, [versaoDetalhe, situacao, localidade, periodoAtivo, centros]);
 
   if (!empresaId) {
     return (

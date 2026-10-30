@@ -2,7 +2,7 @@ import { Fragment, forwardRef, useEffect, useImperativeHandle, useMemo, useRef, 
 import { ChevronRight } from 'lucide-react';
 import { corPadrao } from '../../../utils/coresPadrao';
 import { somarDias, somarMeses } from '../../CentrosCusto/cronogramaDatas';
-import { COR_ATRASO_PADRAO, isoHoje, nomeObra, plural } from './cronogramaObras';
+import { COR_ATRASO_PADRAO, SEM_CIDADE, isoHoje, localidadeObra, nomeObra, plural } from './cronogramaObras';
 import { MESES_ABREV, mesAno, moeda } from './formatos';
 
 // ---------------------------------------------------------------------------------------
@@ -421,12 +421,7 @@ const GanttObras = forwardRef(function GanttObras(
 
   // Grupos por cidade (só com `agruparPorCidade`): em ordem alfabética, "Sem cidade" por último; dentro de
   // cada um, primeiro as obras com cronograma, na ordem que vieram.
-  const SEM_CIDADE = 'Sem cidade';
-  const cidadeDe = (c) => {
-    const cidade = (c.cidade || '').trim();
-    const uf = (c.uf || '').trim().toUpperCase();
-    return cidade ? (uf ? `${cidade} - ${uf}` : cidade) : SEM_CIDADE;
-  };
+  const cidadeDe = localidadeObra;
   const grupos = useMemo(() => {
     if (!agruparPorCidade) return null;
     const mapa = new Map();

@@ -14,7 +14,7 @@ import CronogramaCentrosTab from './CronogramaCentrosTab';
 import CronogramasTab from './CronogramasTab';
 import ConfiguracoesCronogramas from './ConfiguracoesCronogramas';
 import VersoesCronograma from './VersoesCronograma';
-import { FILTROS_SITUACAO } from './cronogramaObras';
+import { centroDoFiltro, filtroObrasNaLocalidade, opcoesFiltroObras, opcoesLocalidade } from './cronogramaObras';
 
 // Mesmo padrão de DfcConstrutorasPage.jsx: o `{ divider: true }` separa os Cronogramas (a tela em
 // si) das abas que dão suporte a eles. A aba Etapas saiu (pedido do usuário): as etapas se cadastram
@@ -74,10 +74,16 @@ export default function CronogramasObrasPage() {
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [loadingEmpresas, empresas, empresaId]);
 
-  // Filtros da aba Cronogramas ao lado da empresa (pedidos do usuário), na URL: "Obras" (?situacao=)
-  // e "Mudanças" (?versao= — uma versão gravada: o Gantt mostra as obras alteradas nela).
+  // Filtros da aba Cronogramas ao lado da empresa (pedidos do usuário), na URL: "Obras" (?situacao= —
+  // a situação ou um centro de custo, 'centro:<sienge_id>'), "Localidade" (?local= — Cidade - UF) e
+  // "Mudanças" (?versao= — uma versão gravada: o Gantt mostra as obras alteradas nela). Os centros
+  // das opções vêm da aba (CronogramasTab `onCentros`).
   const situacao = searchParams.get('situacao') || '';
+  const localidade = searchParams.get('local') || '';
   const versaoId = searchParams.get('versao') || '';
+  const [centrosObras, setCentrosObras] = useState([]);
+  const opcoesObras = useMemo(() => opcoesFiltroObras(centrosObras, localidade), [centrosObras, localidade]);
+  const opcoesLocal = useMemo(() => opcoesLocalidade(centrosObras), [centrosObras]);
   const [versoes, setVersoes] = useState([]);
   // Zoom do Gantt — fica no estado da página (persiste ao trocar de aba). Sem filtro de período aqui
   // (pedido do usuário): o De/Até é só do dashboard Cronogramas de Obras.
@@ -103,7 +109,7 @@ export default function CronogramasObrasPage() {
               <label className="mb-1 block text-sm font-medium text-gray-700">Empresa</label>
               <SearchableSelect
                 value={empresaId}
-                onChange={(novoId) => atualizarParams({ empresa_id: novoId || null, versao: null })}
+                onChange={(novoId) => atualizarParams({ empresa_id: novoId || null, versao: null, local: null, situacao: centroDoFiltro(situacao) ? null : situacao || null })}
                 disabled={loadingEmpresas || empresaTravada}
                 options={empresas.map((empresa) => ({ value: empresa.id, label: nomeExibicaoEmpresa(empresa) }))}
                 placeholder={loadingEmpresas ? 'Carregando empresas...' : 'Selecione uma empresa'}
@@ -119,7 +125,19 @@ export default function CronogramasObrasPage() {
                     value={situacao}
                     onChange={(v) => atualizarParams({ situacao: v || null })}
                     disabled={!empresaId}
-                    options={FILTROS_SITUACAO}
+                    options={opcoesObras}
+                    clearable={false}
+                    larguraPainel={320}
+                    alturaLista="max-h-80"
+                  />
+                </div>
+                <div className="sm:min-w-44 sm:max-w-xs sm:flex-1">
+                  <label className="mb-1 block text-sm font-medium text-gray-700">Localidade</label>
+                  <SearchableSelect
+                    value={localidade}
+                    onChange={(v) => atualizarParams({ local: v || null, situacao: filtroObrasNaLocalidade(situacao, v, centrosObras) || null })}
+                    disabled={!empresaId}
+                    options={opcoesLocal}
                     clearable={false}
                   />
                 </div>
@@ -178,10 +196,12 @@ export default function CronogramasObrasPage() {
           <CronogramasTab
             empresaId={empresaId}
             situacao={situacao}
+            localidade={localidade}
             versaoId={versaoId}
             onLimparVersao={() => atualizarParams({ versao: null })}
             zoom={zoom}
             onZoom={setZoom}
+            onCentros={setCentrosObras}
           />
         )}
       </div>

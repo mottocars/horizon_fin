@@ -262,6 +262,53 @@ export function filtrarSituacao(obras, filtro) {
   return obras;
 }
 
+// No mesmo filtro "Obras", embaixo das situações, a escolha de um centro de custo (pedido do
+// usuário): o valor vira 'centro:<sienge_id>' e o Gantt e os cards ficam só com ele.
+const PREFIXO_CENTRO = 'centro:';
+export const valorCentro = (siengeId) => `${PREFIXO_CENTRO}${siengeId}`;
+export const centroDoFiltro = (filtro) => (String(filtro || '').startsWith(PREFIXO_CENTRO) ? String(filtro).slice(PREFIXO_CENTRO.length) : null);
+
+// Localidade da obra: "Cidade - UF" do cadastro do centro (a mesma chave que agrupa o Gantt por cidade).
+export const SEM_CIDADE = 'Sem cidade';
+export function localidadeObra(centro) {
+  const cidade = (centro.cidade || '').trim();
+  const uf = (centro.uf || '').trim().toUpperCase();
+  return cidade ? (uf ? `${cidade} - ${uf}` : cidade) : SEM_CIDADE;
+}
+
+// Opções do filtro "Obras": as situações e, num grupo à parte, os centros (da localidade escolhida,
+// se houver), em ordem de nome. `grupo` = título no SearchableSelect / <optgroup> no dashboard.
+export function opcoesFiltroObras(centros, localidade = '') {
+  const lista = centros
+    .filter((c) => !localidade || localidadeObra(c) === localidade)
+    .map((c) => ({ value: valorCentro(c.sienge_id), label: `${nomeObra(c)} (${c.sienge_id})`, grupo: 'Centro de custo' }))
+    .sort((a, b) => a.label.localeCompare(b.label, 'pt-BR'));
+  return [...FILTROS_SITUACAO.map((f) => ({ ...f, grupo: 'Situação' })), ...lista];
+}
+
+// Opções do filtro "Localidade": as "Cidade - UF" das obras, em ordem alfabética, "Sem cidade" por último.
+export function opcoesLocalidade(centros) {
+  const locais = [...new Set(centros.map(localidadeObra))].sort(
+    (a, b) => (a === SEM_CIDADE) - (b === SEM_CIDADE) || a.localeCompare(b, 'pt-BR')
+  );
+  return [{ value: '', label: 'Todas as localidades' }, ...locais.map((l) => ({ value: l, label: l === SEM_CIDADE ? l : l.toUpperCase() }))];
+}
+
+// Os filtros "Obras" (situação ou um centro) e "Localidade" juntos.
+export function filtrarObras(obras, filtro, localidade = '') {
+  const centro = centroDoFiltro(filtro);
+  const porObra = centro ? obras.filter((o) => String(o.centro.sienge_id) === centro) : filtrarSituacao(obras, filtro);
+  return localidade ? porObra.filter((o) => localidadeObra(o.centro) === localidade) : porObra;
+}
+
+// Trocou a localidade: o centro escolhido no filtro "Obras" sai se não for dela.
+export function filtroObrasNaLocalidade(filtro, localidade, centros) {
+  const centro = centroDoFiltro(filtro);
+  if (!centro || !localidade) return filtro;
+  const c = centros.find((x) => String(x.sienge_id) === centro);
+  return c && localidadeObra(c) === localidade ? filtro : '';
+}
+
 // Filtro "Mudanças da versão" do Gantt (pedido do usuário): as obras alteradas numa versão, montadas
 // do retrato guardado nela (como ficaram), cada uma com `antes` — os segmentos de como eram antes da
 // versão, o Gantt desenha numa faixa fina em cima da barra — e `mudancas` (etapaId -> a alteração da
