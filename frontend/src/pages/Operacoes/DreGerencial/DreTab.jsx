@@ -462,7 +462,7 @@ function Celulas({ tipo, fixa, segunda, valor, pct, recolhido, onAbrir }) {
       />
     );
   }
-  const py = tipo === 'n2' ? 'py-0.5' : 'py-1';
+  const py = tipo === 'n2' ? 'py-px' : 'py-0.5';
   const forte = tipo === 'n2' ? (fixa ? 'font-semibold' : '') : 'font-bold';
   return (
     <>
@@ -505,11 +505,11 @@ const STATUS_POC = {
 function StatusPoc({ realiza, tipo }) {
   const s = STATUS_POC[tipo] || { sigla: 'P', titulo: '% POC', cor: 'bg-gray-100 text-gray-600 ring-gray-200' };
   return (
-    <span className="inline-flex h-5 w-6 shrink-0 items-center justify-center">
+    <span className="inline-flex h-4 w-6 shrink-0 items-center justify-center">
       {realiza && (
         <span
           title={s.titulo}
-          className={`flex h-5 w-5 items-center justify-center rounded-full text-[9px] font-bold leading-none ring-1 ${s.cor}`}
+          className={`flex h-4 w-4 items-center justify-center rounded-full text-[8px] font-bold leading-none ring-1 ${s.cor}`}
         >
           {s.sigla}
         </span>
@@ -575,7 +575,7 @@ function LinhaGrupo({ grupo, colunas, acumulados, bases, recolhido, onAbrir }) {
   if (grupo.totalizadora) {
     return (
       <tr>
-        <td className={`${COL_DESCRICAO} border-b border-[#1d5c8a] bg-[#1d5c8a] py-1 pl-4`}>
+        <td className={`${COL_DESCRICAO} border-b border-[#1d5c8a] bg-[#1d5c8a] py-0.5 pl-4`}>
           <span className="flex items-center">
             <IconeLinha icone={grupo.icone} className="text-white" />
             <span className="truncate text-xs font-bold uppercase tracking-wide text-white">{grupo.descricao}</span>
@@ -589,7 +589,7 @@ function LinhaGrupo({ grupo, colunas, acumulados, bases, recolhido, onAbrir }) {
   return (
     <Fragment>
       <tr>
-        <td className={`${COL_DESCRICAO} border-b border-gray-200 bg-gray-50 py-1 pl-4`}>
+        <td className={`${COL_DESCRICAO} border-b border-gray-200 bg-gray-50 py-0.5 pl-4`}>
           <span className="flex items-center">
             <IconeLinha icone={grupo.icone} className="text-gray-500" />
             <span className="truncate text-xs font-bold uppercase tracking-wide text-gray-900">{grupo.descricao}</span>
@@ -618,7 +618,7 @@ function LinhaGrupo({ grupo, colunas, acumulados, bases, recolhido, onAbrir }) {
           <tr key={item.id} className="group">
             {/* Recuo menor que o do aviso de linha vazia (pl-20): a bolinha da POC ocupa o espaço e a
                 descrição fica na mesma posição de antes. */}
-            <td className={`${COL_DESCRICAO} border-b border-gray-100 bg-white py-0.5 pl-[50px] text-xs text-gray-700 group-hover:bg-gray-50`}>
+            <td className={`${COL_DESCRICAO} border-b border-gray-100 bg-white py-px pl-[50px] text-xs text-gray-700 group-hover:bg-gray-50`}>
               <span className="flex items-center gap-1.5">
                 <StatusPoc realiza={item.realiza_poc} tipo={item.tipo_poc} />
                 <span className="truncate" title={item.descricao}>{item.descricao}</span>
