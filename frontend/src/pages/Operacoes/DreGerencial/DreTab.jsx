@@ -140,8 +140,9 @@ function LinhaGrupo({ grupo }) {
         grupo.filhos.map((item) => (
           <tr key={item.id} className="hover:bg-gray-50">
             <td className="border-b border-gray-100 py-0.5 pl-20 text-xs text-gray-700">
+              {/* Descrição com largura mínima fixa: os selos de POC ficam alinhados, como numa coluna. */}
               <span className="flex items-center gap-2">
-                {item.descricao}
+                <span className="min-w-64">{item.descricao}</span>
                 {item.realiza_poc && <SeloPoc tipo={item.tipo_poc} />}
               </span>
             </td>
