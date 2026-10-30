@@ -9,8 +9,10 @@
 --   original (a pagar e saídas negativos).
 --   chave: R/P = bill_id do título; E = id do lançamento no extrato do Sienge (sie_extrato_contas.id —
 --   o registro_id é refeito a cada sincronização do extrato).
--- lancamentos_ajustes_historico — cada gravação ou restauração, com quem fez, quando e o antes/depois
---   (JSON). Restaurar (apagar o ajuste) mantém o histórico.
+-- lancamentos_ajustes_historico — o log: cada gravação ou restauração de ajuste, com quem fez, quando e
+--   o antes/depois (JSON); restaurar (apagar o ajuste) mantém o log. Também guarda o log dos lançamentos
+--   criados à mão (origem M, chave = lancamentos_manuais.id — ver 2026-10-30-lancamentos-manuais.sql):
+--   CRIOU / ALTEROU / EXCLUIU.
 -- Aplicar: psql -U postgres -d horizon_fin -f database/migrations/2026-10-30-lancamentos-ajustes.sql
 
 BEGIN;
@@ -43,13 +45,16 @@ CREATE TRIGGER trg_lancamentos_ajustes_atualizado_em
 CREATE TABLE IF NOT EXISTS lancamentos_ajustes_historico (
     id                 SERIAL PRIMARY KEY,
     empresa_id         INTEGER NOT NULL REFERENCES empresas(id) ON DELETE CASCADE,
-    origem             CHAR(1) NOT NULL CHECK (origem IN ('R', 'P', 'E')),
+    origem             CHAR(1) NOT NULL CONSTRAINT lancamentos_ajustes_historico_origem_check
+                           CHECK (origem IN ('R', 'P', 'E', 'M')),  -- M = lançamento criado à mão
     chave              BIGINT NOT NULL,
     centro_original    INTEGER,
     natureza_original  VARCHAR(20),
-    acao               VARCHAR(10) NOT NULL CHECK (acao IN ('AJUSTOU', 'RESTAUROU')),
-    antes              JSONB,           -- { centro_id, natureza_id, valor, observacao } antes (null = estava original)
-    depois             JSONB,           -- depois (null = voltou ao original)
+    acao               VARCHAR(10) NOT NULL CONSTRAINT lancamentos_ajustes_historico_acao_check
+                           CHECK (acao IN ('AJUSTOU', 'RESTAUROU', 'CRIOU', 'ALTEROU', 'EXCLUIU')),
+    antes              JSONB,           -- ajuste: { centro_id, natureza_id, valor, observacao } antes (null = estava original);
+                                        -- lançamento criado: os campos dele antes (null = não existia)
+    depois             JSONB,           -- depois (null = voltou ao original / foi excluído)
     usuario_id         INTEGER REFERENCES usuarios(id) ON DELETE SET NULL,
     criado_em          TIMESTAMP DEFAULT NOW()
 );

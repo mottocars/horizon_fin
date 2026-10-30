@@ -1,5 +1,5 @@
 import { useCallback, useEffect, useRef, useState } from 'react';
-import { ArrowDownLeft, ArrowLeftRight, ArrowUpRight, CalendarDays, Lock, PencilLine, TriangleAlert, Wallet } from 'lucide-react';
+import { ArrowDownLeft, ArrowLeftRight, ArrowUpRight, CalendarDays, FilePlus2, Lock, PencilLine, TriangleAlert, Wallet } from 'lucide-react';
 import { listarExerciciosDre } from '../../../api/dreFinanceiro.api';
 import LancamentosExercicio from './LancamentosExercicio';
 
@@ -17,7 +17,7 @@ function plural(n, um, varios) {
 // travado (o do ano atual): em amarelo sutil, com cadeado e "Somente visualização" — nada nele pode ser
 // alterado. Quantidades: títulos distintos a receber e a pagar emitidos no ano (um título tem várias
 // parcelas), movimentações do extrato sem título e quantos lançamentos (títulos e movimentos) têm
-// ajuste (lancamentos_ajustes).
+// ajuste (lancamentos_ajustes) e quantos foram criados à mão (lancamentos_manuais).
 // Clicar abre os lançamentos do exercício.
 function CardExercicio({ exercicio, atual, onAbrir }) {
   const travado = exercicio.travado;
@@ -78,6 +78,12 @@ function CardExercicio({ exercicio, atual, onAbrir }) {
           </span>
           <span className="tabular-nums">{plural(exercicio.ajustados || 0, 'lançamento', 'lançamentos')}</span>
         </div>
+        <div className={`flex items-center justify-between ${exercicio.criados ? 'font-medium text-sky-700' : ''}`}>
+          <span className="flex items-center gap-1">
+            <FilePlus2 size={12} className={exercicio.criados ? 'text-sky-500' : 'text-gray-400'} /> Lançamentos criados
+          </span>
+          <span className="tabular-nums">{plural(exercicio.criados || 0, 'lançamento', 'lançamentos')}</span>
+        </div>
       </div>
 
       <div className={`mt-4 border-t pt-3 text-[11px] text-gray-500 ${travado ? 'border-amber-100' : 'border-gray-100'}`}>
@@ -91,7 +97,7 @@ function CardExercicio({ exercicio, atual, onAbrir }) {
 // lançamento financeiro da empresa — o menor vencimento do contas a pagar e a receber (regra em
 // dre-financeiro/financeiro.service.js) —, do mais novo pro mais antigo. Clicar num card abre os
 // lançamentos dele (LancamentosExercicio); o exercício aberto vem da URL (DreGerencialPage.jsx).
-export default function FinanceiroTab({ empresaId, exercicio = null, onAbrir, search = '' }) {
+export default function FinanceiroTab({ empresaId, exercicio = null, onAbrir, search = '', novoToken = 0 }) {
   const [dados, setDados] = useState(null);
   const [erro, setErro] = useState('');
 
@@ -116,7 +122,9 @@ export default function FinanceiroTab({ empresaId, exercicio = null, onAbrir, se
   }, [exercicio, carregar]);
 
   if (empresaId && exercicio) {
-    return <LancamentosExercicio empresaId={empresaId} ano={exercicio} search={search} onVoltar={() => onAbrir(null)} />;
+    return (
+      <LancamentosExercicio empresaId={empresaId} ano={exercicio} search={search} novoToken={novoToken} onVoltar={() => onAbrir(null)} />
+    );
   }
 
   if (!empresaId) {

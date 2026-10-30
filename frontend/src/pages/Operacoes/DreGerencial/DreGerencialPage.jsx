@@ -5,6 +5,7 @@ import {
   Building2,
   Calculator,
   Download,
+  FilePlus2,
   FilePenLine,
   House,
   ListTree,
@@ -144,6 +145,10 @@ export default function DreGerencialPage() {
   const exercicioAberto = Number(searchParams.get('exercicio')) || null;
   const abrirExercicio = (ano) => atualizarParams({ exercicio: ano || null });
   const [buscaFinanceiro, setBuscaFinanceiro] = useState('');
+  // Ícone "Novo lançamento" (exercício aberto): cada clique muda o token e a listagem abre a janela.
+  // Exercício do ano atual ou futuro é só visualização — o ícone fica desabilitado (o backend recusa).
+  const [novoLancamentoToken, setNovoLancamentoToken] = useState(0);
+  const exercicioTravado = Boolean(exercicioAberto) && exercicioAberto >= new Date().getFullYear();
   useEffect(() => setBuscaFinanceiro(''), [empresaId, exercicioAberto]);
 
   // Geração/atualização do plano de contas (Sienge) — mesmo esquema de handleAtualizarContas
@@ -389,6 +394,22 @@ export default function DreGerencialPage() {
             </div>
           )}
 
+          {abaAtiva === 'financeiro' && exercicioAberto && (
+            <div className="flex shrink-0 items-center gap-2">
+              <Button
+                type="button"
+                variant="secondary"
+                className="!px-2.5"
+                onClick={() => setNovoLancamentoToken((n) => n + 1)}
+                disabled={semEmpresa || exercicioTravado}
+                title={exercicioTravado ? 'Exercício em andamento: só visualização' : 'Novo lançamento'}
+                aria-label="Novo lançamento"
+              >
+                <FilePlus2 size={18} />
+              </Button>
+            </div>
+          )}
+
           {abaAtiva === 'mascaras' && (
             <div className="flex shrink-0 items-center gap-2">
               <Button type="button" onClick={() => mascarasTabRef.current?.abrirNova()} disabled={semEmpresa}>
@@ -476,7 +497,13 @@ export default function DreGerencialPage() {
 
         {abaAtiva === 'correcoes' && <CorrecoesTab empresaId={empresaId} search={buscaCorrecoes} />}
         {abaAtiva === 'financeiro' && (
-          <FinanceiroTab empresaId={empresaId} exercicio={exercicioAberto} onAbrir={abrirExercicio} search={buscaFinanceiro} />
+          <FinanceiroTab
+            empresaId={empresaId}
+            exercicio={exercicioAberto}
+            onAbrir={abrirExercicio}
+            search={buscaFinanceiro}
+            novoToken={novoLancamentoToken}
+          />
         )}
 
         {abaAtiva === 'plano-de-contas' &&

@@ -3,6 +3,7 @@ import { ArrowLeft, CalendarDays, ChevronLeft, ChevronRight, ListChecks, ListFil
 import FiltroColuna from '../../../components/FiltroColuna';
 import { listarFiltrosExercicioDre, listarLancamentosExercicioDre } from '../../../api/dreFinanceiro.api';
 import LancamentoAjusteModal from './LancamentoAjusteModal';
+import LancamentoManualModal from './LancamentoManualModal';
 
 const POR_PAGINA = 100;
 // "Mostrar todos": busca em blocos (a barra de carregamento anda a cada um).
@@ -12,6 +13,8 @@ const ORIGENS = {
   P: { rotulo: 'A pagar', classe: 'bg-red-50 text-red-600' },
   R: { rotulo: 'A receber', classe: 'bg-emerald-50 text-emerald-700' },
   E: { rotulo: 'Movimento', classe: 'bg-gray-100 text-gray-600' },
+  // Lançamento criado à mão: na tela é movimento (o status "Criado" diferencia).
+  M: { rotulo: 'Movimento', classe: 'bg-gray-100 text-gray-600' },
 };
 const OPCOES_ORIGEM = [
   { value: 'P', label: 'A pagar' },
@@ -40,15 +43,18 @@ function opcoes(lista, rotulo, vazio) {
 // sem filtro (mesma regra do Plano Contas).
 const SEM_FILTROS = { origens: null, meses: null, documentos: null, titulos: null, contrapartes: null, naturezas: null, centros: null, status: null };
 
-// Status da linha: Original (como veio do Sienge) ou Ajustado (a linha tem ajuste — lancamentos_ajustes;
-// centro, natureza e/ou valor trocados sem mexer no Sienge).
+// Status da linha: Original (como veio do Sienge), Ajustado (a linha tem ajuste — lancamentos_ajustes;
+// centro, natureza e/ou valor trocados sem mexer no Sienge) ou Criado (lançamento criado à mão —
+// lancamentos_manuais).
 const STATUS = {
   ORIGINAL: { rotulo: 'Original', classe: 'bg-gray-100 text-gray-600' },
   AJUSTADO: { rotulo: 'Ajustado', classe: 'bg-violet-50 text-violet-700' },
+  CRIADO: { rotulo: 'Criado', classe: 'bg-sky-50 text-sky-700' },
 };
 const OPCOES_STATUS = [
   { value: 'ORIGINAL', label: 'Original' },
   { value: 'AJUSTADO', label: 'Ajustado' },
+  { value: 'CRIADO', label: 'Criado' },
 ];
 const efetivo = (f) => (f && f.length ? f : []);
 
@@ -142,7 +148,8 @@ function FiltroTitulo({ valor, onChange }) {
 // página, tudo aplicado no backend. Paginado (um ano da GENESIS passa de dezenas de milhares de
 // linhas); no rodapé, "Mostrar todos" busca o resto em blocos, com barra de carregamento. O exercício
 // do ano atual (travado) ganha o selo e a janela do título abre só pra consulta.
-export default function LancamentosExercicio({ empresaId, ano, search = '', onVoltar }) {
+// `novoToken`: muda a cada clique no ícone "Novo lançamento" do topo da página — abre a janela de criar.
+export default function LancamentosExercicio({ empresaId, ano, search = '', novoToken = 0, onVoltar }) {
   const [opcoesFiltro, setOpcoesFiltro] = useState(null);
   const [filtros, setFiltros] = useState(SEM_FILTROS);
   const [busca, setBusca] = useState(search.trim());
@@ -157,6 +164,15 @@ export default function LancamentosExercicio({ empresaId, ano, search = '', onVo
   // depois de ajustar.
   const [tituloAberto, setTituloAberto] = useState(null);
   const [recarga, setRecarga] = useState(0);
+  // Lançamento criado à mão aberto na janela ({ id } — id null = novo).
+  const [manualAberto, setManualAberto] = useState(null);
+  const tokenVisto = useRef(novoToken);
+  useEffect(() => {
+    if (novoToken !== tokenVisto.current) {
+      tokenVisto.current = novoToken;
+      setManualAberto({ id: null });
+    }
+  }, [novoToken]);
   const pedido = useRef(null);
 
   // Busca com espera curta (não consulta a cada tecla).
@@ -377,7 +393,11 @@ export default function LancamentosExercicio({ empresaId, ano, search = '', onVo
                   return (
                     <tr
                       key={i}
-                      onClick={() => setTituloAberto({ origem: l.origem, chave: l.chave, centro: l.centro_original, natureza: l.natureza_original })}
+                      onClick={() =>
+                        l.origem === 'M'
+                          ? setManualAberto({ id: l.chave })
+                          : setTituloAberto({ origem: l.origem, chave: l.chave, centro: l.centro_original, natureza: l.natureza_original })
+                      }
                       title="Abrir para ver ou ajustar esta linha"
                       className={`cursor-pointer border-b border-gray-100 hover:bg-primary-50/50 ${l.status === 'AJUSTADO' ? 'bg-violet-50/30' : ''}`}
                     >
@@ -510,6 +530,15 @@ export default function LancamentosExercicio({ empresaId, ano, search = '', onVo
             </div>
           )}
         </div>
+      )}
+      {manualAberto && (
+        <LancamentoManualModal
+          empresaId={empresaId}
+          ano={ano}
+          id={manualAberto.id}
+          onClose={() => setManualAberto(null)}
+          onAlterado={() => setRecarga((n) => n + 1)}
+        />
       )}
       {tituloAberto && (
         <LancamentoAjusteModal

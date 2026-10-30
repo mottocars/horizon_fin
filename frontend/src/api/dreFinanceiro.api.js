@@ -4,8 +4,9 @@ import http from './http';
 
 // Exercícios da empresa, do ano do primeiro vencimento (contas a pagar e a receber) até o atual, do
 // mais novo pro mais antigo: { primeiro_vencimento, ano_atual, exercicios: [{ ano, receber, pagar,
-// movimentos, ajustados, travado }] } (receber/pagar = títulos distintos emitidos no ano; movimentos =
-// lançamentos do extrato sem título; ajustados = lançamentos com ajuste; travado = o ano atual, só
+// movimentos, ajustados, criados, travado }] } (receber/pagar = títulos distintos emitidos no ano; movimentos =
+// lançamentos do extrato sem título; ajustados = lançamentos com ajuste; criados = lançamentos
+// criados à mão; travado = o ano atual, só
 // visualização).
 export function listarExerciciosDre(empresaId) {
   return http.get(`/dre-financeiro/${empresaId}/exercicios`).then((res) => res.data);

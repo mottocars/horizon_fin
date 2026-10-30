@@ -9,7 +9,8 @@ const pool = require('../../config/db');
 // exercício não aparece em nenhum. O card conta TÍTULOS distintos (um título tem várias parcelas) a
 // receber e a pagar, e as movimentações do extrato sem título (cada lançamento uma vez, mesmo
 // rateado em vários centros) — mesmo critério do movimento na listagem (com natureza) — e quantos
-// lançamentos (títulos e movimentos) têm ajuste (lancamentos_ajustes), pela emissão / data.
+// lançamentos (títulos e movimentos) têm ajuste (lancamentos_ajustes), pela emissão / data, e quantos
+// foram criados à mão no ano (lancamentos_manuais).
 // O exercício do ano atual vem travado (`travado`, pedido do usuário): só visualização — nenhuma
 // ação que altere dados pode valer pra ele (o backend deve recusar, não só a tela esconder).
 async function exercicios(empresaId) {
@@ -60,6 +61,11 @@ async function exercicios(empresaId) {
   );
   const porAno = new Map(rows.map((r) => [r.ano, r]));
   const ajustadosPorAno = new Map(ajustados.map((r) => [r.ano, r.n]));
+  const { rows: criados } = await pool.query(
+    'SELECT EXTRACT(YEAR FROM data)::int AS ano, COUNT(*)::int AS n FROM lancamentos_manuais WHERE empresa_id = $1 GROUP BY 1',
+    [empresaId]
+  );
+  const criadosPorAno = new Map(criados.map((r) => [r.ano, r.n]));
   const lista = [];
   for (let ano = anoAtual; ano >= primeiroAno; ano -= 1) {
     const r = porAno.get(ano);
@@ -69,6 +75,7 @@ async function exercicios(empresaId) {
       pagar: r?.pagar || 0,
       movimentos: r?.movimentos || 0,
       ajustados: ajustadosPorAno.get(ano) || 0,
+      criados: criadosPorAno.get(ano) || 0,
       travado: ano === anoAtual,
     });
   }
@@ -79,6 +86,8 @@ async function exercicios(empresaId) {
 // centro de custo × natureza (`o`):
 //   R  a receber (sie_income): valor líquido (original − impostos retidos), positivo, pela emissão;
 //   P  a pagar (sie_outcome): valor original, negativo, pela emissão;
+//   M  lançamento criado à mão (lancamentos_manuais, módulo lancamentos-manuais), pela data: entra como
+//      movimento na tela, com o status CRIADO — entrada positiva, saída negativa;
 //   E  movimento — extrato das contas sem título de contas a pagar/receber (bill_id nulo): o valor com
 //      sinal da base do saldo de contas já rateada por centro e natureza (sie_extrato_contas_rateio,
 //      montada a cada sincronização do extrato), pela data do lançamento. Fora só o que não tem
@@ -129,7 +138,12 @@ const SQL_LINHAS = `
     FROM sie_extrato_contas_rateio r
     JOIN sie_extrato_contas e ON e.registro_id = r.registro_id
    WHERE r.empresa_id = $1 AND r.mes >= date_trunc('month', $2::date) AND r.mes < $3
-     AND r.data >= $2 AND r.data < $3 AND e.bill_id IS NULL AND r.natureza_id IS NOT NULL`;
+     AND r.data >= $2 AND r.data < $3 AND e.bill_id IS NULL AND r.natureza_id IS NOT NULL
+  UNION ALL
+  SELECT 'M', m.id, m.data, NULL, NULL, NULLIF(TRIM(m.documento), ''), 'Lançamento criado', NULL, m.historico,
+         m.centro_id, NULL, m.natureza_id, NULL, CASE WHEN m.tipo = 'SAIDA' THEN -m.valor ELSE m.valor END
+    FROM lancamentos_manuais m
+   WHERE m.empresa_id = $1 AND m.data >= $2 AND m.data < $3`;
 
 // Uma linha por lançamento × centro × natureza (parcelas do título somadas — `g0`), com o ajuste da
 // linha (lancamentos_ajustes, módulo lancamentos-ajustes) aplicado: centro, natureza e valor trocados,
@@ -156,14 +170,14 @@ const CTE_LINHAS = `
            CASE WHEN a.id IS NULL THEN g0.natureza_nome END AS natureza_nome_cat,
            CASE WHEN a.id IS NULL THEN g0.valor
                 WHEN g0.valor < 0 OR (g0.valor = 0 AND g0.origem = 'P') THEN -a.valor ELSE a.valor END AS valor,
-           CASE WHEN a.id IS NULL THEN 'ORIGINAL' ELSE 'AJUSTADO' END AS status
+           CASE WHEN g0.origem = 'M' THEN 'CRIADO' WHEN a.id IS NULL THEN 'ORIGINAL' ELSE 'AJUSTADO' END AS status
       FROM g0
       LEFT JOIN lancamentos_ajustes a
         ON a.empresa_id = $1 AND a.origem = g0.origem AND a.chave = g0.chave
        AND a.centro_original IS NOT DISTINCT FROM g0.centro_id AND a.natureza_original IS NOT DISTINCT FROM g0.natureza_id
   ),
   lc AS (
-    SELECT g.origem, g.chave, CASE WHEN g.origem <> 'E' THEN g.chave END AS titulo,
+    SELECT g.origem, g.chave, CASE WHEN g.origem IN ('R', 'P') THEN g.chave END AS titulo,
            MIN(g.data) OVER w AS data, MIN(g.venc_min) OVER w AS venc_min, MAX(g.venc_max) OVER w AS venc_max,
            MAX(g.parcelas) OVER w AS parcelas, g.documento, g.documento_nome, g.numero, g.contraparte,
            g.centro_original, g.natureza_original, g.centro_id, COALESCE(cc.name, g.centro_nome_cat) AS centro_nome,
@@ -201,7 +215,8 @@ function montarFiltros({ origens, documentos, titulos, centros, naturezas, contr
     params.push(valores.map(String));
     cond.push(`COALESCE(${coluna}, '') = ANY($${params.length}::text[])`);
   };
-  lista('origem', origens);
+  // "Movimento" na tela (E) inclui os lançamentos criados à mão (M).
+  lista('origem', origens?.includes('E') ? [...origens, 'M'] : origens);
   lista('documento', documentos);
   lista('titulo::text', titulos);
   lista('centro_id::text', centros);
@@ -261,7 +276,7 @@ async function opcoesFiltros(empresaId, ano) {
   const { rows } = await pool.query(
     `WITH ${CTE_LINHAS},
      nomes AS (
-       SELECT documento, MAX(documento_nome) AS nome FROM lc l WHERE origem <> 'E' AND documento IS NOT NULL GROUP BY 1
+       SELECT documento, MAX(documento_nome) AS nome FROM lc l WHERE origem IN ('R', 'P') AND documento IS NOT NULL GROUP BY 1
      )
      SELECT 'documento' AS tipo, COALESCE(l.documento, '') AS valor, MAX(n.nome) AS nome, COUNT(*)::int AS n
        FROM lc l LEFT JOIN nomes n ON n.documento = l.documento GROUP BY 2
@@ -272,7 +287,7 @@ async function opcoesFiltros(empresaId, ano) {
      UNION ALL
      SELECT 'mes', to_char(data, 'YYYY-MM'), NULL, COUNT(*)::int FROM lc l GROUP BY 2
      UNION ALL
-     SELECT 'contraparte', contraparte, NULL, COUNT(*)::int FROM lc l WHERE origem <> 'E' AND contraparte IS NOT NULL GROUP BY 2`,
+     SELECT 'contraparte', contraparte, NULL, COUNT(*)::int FROM lc l WHERE origem IN ('R', 'P') AND contraparte IS NOT NULL GROUP BY 2`,
     [empresaId, ...periodo(ano)]
   );
   // Em ordem de código/nome (centro pelo número); o vazio ("sem …") por último.
