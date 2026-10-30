@@ -119,10 +119,11 @@ function periodo(ano, de, ate) {
 }
 
 // Filtros da tela (os de coluna da tabela): listas (vazio = todos). Centro, natureza e documento
-// vazios no lançamento vêm como '' na lista. `contrapartes`: nomes de cliente/fornecedor; `meses`:
+// vazios no lançamento vêm como '' na lista. `titulos`: números de título (exatos); `contrapartes`:
+// nomes de cliente/fornecedor; `meses`:
 // 'AAAA-MM' da data (emissão; no movimento, a do extrato). `busca`: cliente/fornecedor/histórico,
 // número, título, documento, centro ou natureza.
-function montarFiltros({ origens, documentos, centros, naturezas, contrapartes, meses, busca }, params) {
+function montarFiltros({ origens, documentos, titulos, centros, naturezas, contrapartes, meses, busca }, params) {
   const cond = [];
   const lista = (coluna, valores) => {
     if (!valores?.length) return;
@@ -131,6 +132,7 @@ function montarFiltros({ origens, documentos, centros, naturezas, contrapartes, 
   };
   lista('origem', origens);
   lista('documento', documentos);
+  lista('titulo::text', titulos);
   lista('centro_id::text', centros);
   lista('natureza_id', naturezas);
   lista('contraparte', contrapartes);

@@ -19,6 +19,7 @@ const dataSchema = z
 const lancamentosSchema = z.object({
   origem: listaSchema,
   documento: listaSchema,
+  titulo: listaSchema,
   centro: listaSchema,
   natureza: listaSchema,
   contraparte: listaSchema,
@@ -50,7 +51,7 @@ async function exercicios(req, res, next) {
   }
 }
 
-// GET /:empresaId/exercicios/:ano/lancamentos?origem[]=&documento[]=&centro[]=&natureza[]=&contraparte[]=&mes[]=&de=&ate=&busca=&pagina=&por_pagina=
+// GET /:empresaId/exercicios/:ano/lancamentos?origem[]=&documento[]=&titulo[]=&centro[]=&natureza[]=&contraparte[]=&mes[]=&de=&ate=&busca=&pagina=&por_pagina=
 async function lancamentos(req, res, next) {
   try {
     const empresaId = empresaIdSchema.parse(req.params.empresaId);
@@ -63,6 +64,7 @@ async function lancamentos(req, res, next) {
         {
           origens: q.origem,
           documentos: q.documento,
+          titulos: q.titulo,
           centros: q.centro,
           naturezas: q.natureza,
           contrapartes: q.contraparte,

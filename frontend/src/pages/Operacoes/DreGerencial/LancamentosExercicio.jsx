@@ -1,5 +1,5 @@
 import { useEffect, useMemo, useRef, useState } from 'react';
-import { ArrowLeft, CalendarDays, ChevronLeft, ChevronRight, ListChecks, Loader2, Lock, TriangleAlert } from 'lucide-react';
+import { ArrowLeft, CalendarDays, ChevronLeft, ChevronRight, ListChecks, ListFilter, Loader2, Lock, TriangleAlert } from 'lucide-react';
 import FiltroColuna from '../../../components/FiltroColuna';
 import { listarFiltrosExercicioDre, listarLancamentosExercicioDre } from '../../../api/dreFinanceiro.api';
 
@@ -37,14 +37,94 @@ function opcoes(lista, rotulo, vazio) {
 
 // Filtros de coluna (FiltroColuna): null = sem filtro; lista vazia (nada marcado) também vale como
 // sem filtro (mesma regra do Plano Contas).
-const SEM_FILTROS = { origens: null, meses: null, documentos: null, contrapartes: null, naturezas: null, centros: null };
+const SEM_FILTROS = { origens: null, meses: null, documentos: null, titulos: null, contrapartes: null, naturezas: null, centros: null };
 const efetivo = (f) => (f && f.length ? f : []);
+
+// Filtro da coluna Título: em vez de lista (milhares de títulos por ano), um campo pra digitar um ou
+// mais números (separados por vírgula ou espaço). Mesmo ícone do FiltroColuna; Enter aplica.
+function FiltroTitulo({ valor, onChange }) {
+  const [aberto, setAberto] = useState(false);
+  const [texto, setTexto] = useState('');
+  const caixa = useRef(null);
+  const ativo = Boolean(valor && valor.length);
+
+  useEffect(() => {
+    if (!aberto) return undefined;
+    setTexto((valor || []).join(', '));
+    const fora = (e) => caixa.current && !caixa.current.contains(e.target) && setAberto(false);
+    const esc = (e) => e.key === 'Escape' && setAberto(false);
+    document.addEventListener('mousedown', fora);
+    document.addEventListener('keydown', esc);
+    return () => {
+      document.removeEventListener('mousedown', fora);
+      document.removeEventListener('keydown', esc);
+    };
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [aberto]);
+
+  function aplicar(e) {
+    e.preventDefault();
+    const numeros = [...new Set(texto.split(/[\s,;]+/).map((t) => t.replace(/\D/g, '')).filter(Boolean))];
+    onChange(numeros.length ? numeros : null);
+    setAberto(false);
+  }
+
+  return (
+    <span ref={caixa} className="relative inline-flex">
+      <button
+        type="button"
+        onClick={() => setAberto((a) => !a)}
+        title="Filtrar por Título"
+        aria-pressed={ativo}
+        className={`inline-flex h-5 w-5 shrink-0 items-center justify-center rounded transition ${
+          ativo ? 'bg-white text-primary-700 shadow-sm' : 'text-primary-400 hover:bg-white/60 hover:text-primary-700'
+        }`}
+      >
+        <ListFilter size={13} />
+      </button>
+      {aberto && (
+        <form
+          onSubmit={aplicar}
+          className="absolute left-0 top-7 z-30 w-72 rounded-lg border border-gray-200 bg-white p-3 text-left normal-case tracking-normal shadow-lg"
+        >
+          <label className="mb-1 block text-xs font-medium text-gray-600" htmlFor="filtro-titulo">
+            Número do título
+          </label>
+          <input
+            id="filtro-titulo"
+            autoFocus
+            value={texto}
+            onChange={(e) => setTexto(e.target.value)}
+            placeholder="Ex.: 11251, 12610"
+            className="w-full rounded-lg border border-gray-200 px-2.5 py-1.5 text-sm font-normal text-gray-800 focus:outline-none focus:ring-2 focus:ring-primary-100"
+          />
+          <p className="mt-1 text-[11px] font-normal text-gray-400">Vários números separados por vírgula ou espaço.</p>
+          <div className="mt-2 flex justify-end gap-2">
+            <button
+              type="button"
+              onClick={() => {
+                onChange(null);
+                setAberto(false);
+              }}
+              className="rounded-lg px-2.5 py-1 text-xs font-medium text-gray-500 hover:bg-gray-50"
+            >
+              Limpar
+            </button>
+            <button type="submit" className="rounded-lg bg-primary-600 px-2.5 py-1 text-xs font-medium text-white hover:bg-primary-700">
+              Filtrar
+            </button>
+          </div>
+        </form>
+      )}
+    </span>
+  );
+}
 
 // Operações > DRE Gerencial > Financeiro > um exercício: todos os lançamentos financeiros do ano — a
 // pagar, a receber (pela emissão) e o movimento das contas sem título (extrato, pela data) —, uma
 // linha por parcela × centro de custo × natureza (regras em dre-financeiro/financeiro.service.js).
-// Filtros no cabeçalho da tabela (Origem, Data — mês de emissão —, Documento, Cliente/Fornecedor,
-// Natureza e Centro de custo) e a busca do topo da página, tudo aplicado no backend. Paginado (um ano da GENESIS passa de dezenas de
+// Filtros no cabeçalho da tabela (Origem, Data — mês de emissão —, Documento, Título — números
+// digitados —, Cliente/Fornecedor, Natureza e Centro de custo) e a busca do topo da página, tudo aplicado no backend. Paginado (um ano da GENESIS passa de dezenas de
 // milhares de linhas); no rodapé, "Mostrar todos" busca o resto em blocos, com barra de carregamento.
 // Só visualização (o exercício do ano atual, travado, ganha o selo).
 export default function LancamentosExercicio({ empresaId, ano, search = '', onVoltar }) {
@@ -233,7 +313,12 @@ export default function LancamentosExercicio({ empresaId, ano, search = '', onVo
                 {cab('origens', 'Origem', OPCOES_ORIGEM, 260, 'rounded-tl-lg')}
                 {cab('meses', 'Data', opMes, 220)}
                 {cab('documentos', 'Documento', opDocumento, 420)}
-                <th className={th}>Título</th>
+                <th className={th}>
+                  <span className="flex items-center gap-1.5">
+                    Título
+                    <FiltroTitulo valor={filtros.titulos} onChange={mudar('titulos')} />
+                  </span>
+                </th>
                 {cab('contrapartes', 'Cliente / Fornecedor', opContraparte, 420)}
                 {cab('naturezas', 'Natureza', opNatureza, 460)}
                 {cab('centros', 'Centro de custo', opCentro, 380)}
