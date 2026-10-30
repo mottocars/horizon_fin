@@ -66,7 +66,7 @@ function CardExercicio({ exercicio, atual, onAbrir }) {
       </div>
 
       <div className={`mt-4 border-t pt-3 text-[11px] text-gray-500 ${travado ? 'border-amber-100' : 'border-gray-100'}`}>
-        Vencimentos de 01/01 a 31/12/{exercicio.ano}
+        Emitidas de 01/01 a 31/12/{exercicio.ano}
       </div>
     </button>
   );

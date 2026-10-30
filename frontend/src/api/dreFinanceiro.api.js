@@ -9,23 +9,30 @@ export function listarExerciciosDre(empresaId) {
   return http.get(`/dre-financeiro/${empresaId}/exercicios`).then((res) => res.data);
 }
 
-// Lançamentos do exercício, uma página: { ano, travado, pagina, por_pagina, total, totais: { receber,
-// pagar, extrato_entradas, extrato_saidas, resultado }, linhas: [{ origem ('R' a receber, 'P' a pagar,
-// 'E' extrato sem título), data, emissao, titulo, parcela, documento, documento_nome, numero,
-// contraparte, centro_id, centro_nome, natureza_id, natureza_nome, valor (com sinal), situacao }] }.
-// Filtros em listas (vazio = todos; '' dentro da lista = sem o campo).
-export function listarLancamentosExercicioDre(empresaId, ano, { origens = [], documentos = [], centros = [], naturezas = [], busca = '', pagina = 1, porPagina = 100 } = {}) {
+// Lançamentos do exercício, uma página: { ano, travado, pagina, por_pagina, total, linhas: [{ origem
+// ('R' a receber, 'P' a pagar, 'E' movimento — extrato sem título), data (emissão; no movimento, a
+// data do extrato), vencimento, titulo, parcela, documento, documento_nome, numero, contraparte,
+// centro_id, centro_nome, natureza_id, natureza_nome, valor (com sinal) }] }. Filtros em listas
+// (vazio = todos; '' dentro da lista = sem o campo) e período `de`/`ate` ('AAAA-MM-DD', dentro do ano).
+export function listarLancamentosExercicioDre(
+  empresaId,
+  ano,
+  { origens = [], documentos = [], centros = [], contrapartes = [], de = '', ate = '', busca = '', pagina = 1, porPagina = 100 } = {},
+  { signal } = {}
+) {
   const params = { pagina, por_pagina: porPagina };
-  if (origens.length) params.origem = origens.join(',');
-  if (documentos.length) params.documento = documentos.join(',');
-  if (centros.length) params.centro = centros.join(',');
-  if (naturezas.length) params.natureza = naturezas.join(',');
+  if (origens.length) params.origem = origens;
+  if (documentos.length) params.documento = documentos;
+  if (centros.length) params.centro = centros;
+  if (contrapartes.length) params.contraparte = contrapartes;
+  if (de) params.de = de;
+  if (ate) params.ate = ate;
   if (busca) params.busca = busca;
-  return http.get(`/dre-financeiro/${empresaId}/exercicios/${ano}/lancamentos`, { params }).then((res) => res.data);
+  return http.get(`/dre-financeiro/${empresaId}/exercicios/${ano}/lancamentos`, { params, signal }).then((res) => res.data);
 }
 
-// Opções dos filtros de coluna do exercício: { documentos, centros, naturezas: [{ valor, nome, n }] }
-// (valor '' = lançamentos sem o campo).
+// Opções dos filtros do exercício: { documentos, centros, contrapartes: [{ valor, nome, n }] } (valor
+// '' = lançamentos sem o campo).
 export function listarFiltrosExercicioDre(empresaId, ano) {
   return http.get(`/dre-financeiro/${empresaId}/exercicios/${ano}/filtros`).then((res) => res.data);
 }

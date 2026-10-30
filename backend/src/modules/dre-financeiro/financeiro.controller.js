@@ -4,21 +4,28 @@ const service = require('./financeiro.service');
 const empresaIdSchema = z.coerce.number().int().positive('Empresa inválida.');
 const anoSchema = z.coerce.number().int().min(1990, 'Exercício inválido.').max(2100, 'Exercício inválido.');
 
-// Lista na query string separada por vírgula ("R,P"); vazio = sem filtro. Valor vazio dentro da lista
-// ("5,,9" ou só ",") = lançamentos sem aquele campo.
+// Lista na query string como parâmetro repetido (`centro[]=5&centro[]=9` — o que o axios manda pra um
+// array; nome de cliente/fornecedor pode ter vírgula); vazio = sem filtro. Valor vazio dentro da lista
+// = lançamentos sem aquele campo.
 const listaSchema = z
-  .string()
+  .union([z.string(), z.array(z.string())])
   .optional()
-  .transform((v) => (v === undefined || v === '' ? [] : v.split(',')));
+  .transform((v) => (v === undefined ? [] : Array.isArray(v) ? v : [v]));
+const dataSchema = z
+  .string()
+  .regex(/^\d{4}-\d{2}-\d{2}$/, 'Data inválida.')
+  .optional();
 
 const lancamentosSchema = z.object({
   origem: listaSchema,
   documento: listaSchema,
   centro: listaSchema,
-  natureza: listaSchema,
+  contraparte: listaSchema,
+  de: dataSchema,
+  ate: dataSchema,
   busca: z.string().trim().max(100).optional().default(''),
   pagina: z.coerce.number().int().min(1).optional().default(1),
-  por_pagina: z.coerce.number().int().min(10).max(500).optional().default(100),
+  por_pagina: z.coerce.number().int().min(10).max(5000).optional().default(100),
 });
 
 function erro(status, message) {
@@ -41,7 +48,7 @@ async function exercicios(req, res, next) {
   }
 }
 
-// GET /:empresaId/exercicios/:ano/lancamentos?origem=R,P,E&documento=&centro=&natureza=&busca=&pagina=&por_pagina=
+// GET /:empresaId/exercicios/:ano/lancamentos?origem[]=&documento[]=&centro[]=&contraparte[]=&de=&ate=&busca=&pagina=&por_pagina=
 async function lancamentos(req, res, next) {
   try {
     const empresaId = empresaIdSchema.parse(req.params.empresaId);
@@ -51,7 +58,15 @@ async function lancamentos(req, res, next) {
       await service.lancamentos(
         empresaId,
         ano,
-        { origens: q.origem, documentos: q.documento, centros: q.centro, naturezas: q.natureza, busca: q.busca },
+        {
+          origens: q.origem,
+          documentos: q.documento,
+          centros: q.centro,
+          contrapartes: q.contraparte,
+          de: q.de,
+          ate: q.ate,
+          busca: q.busca,
+        },
         { pagina: q.pagina, porPagina: q.por_pagina }
       )
     );
