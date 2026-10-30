@@ -1,6 +1,7 @@
 import { useCallback, useEffect, useState } from 'react';
 import { ArrowDownLeft, ArrowUpRight, CalendarDays, Lock, TriangleAlert, Wallet } from 'lucide-react';
 import { listarExerciciosDre } from '../../../api/dreFinanceiro.api';
+import LancamentosExercicio from './LancamentosExercicio';
 
 function dataBr(iso) {
   if (!iso) return '';
@@ -14,13 +15,17 @@ function parcelas(n) {
 
 // Mesmo card dos planos da aba Plano Contas (PlanosContasLista.jsx): ícone, título e rodapé. Exercício
 // travado (o do ano atual): em amarelo sutil, com cadeado e "Somente visualização" — nada nele pode ser
-// alterado.
-function CardExercicio({ exercicio, atual }) {
+// alterado. Clicar abre os lançamentos do exercício.
+function CardExercicio({ exercicio, atual, onAbrir }) {
   const travado = exercicio.travado;
   return (
-    <div
-      className={`flex flex-col rounded-xl border p-4 shadow-[0_1px_2px_rgba(16,24,40,0.04)] ${
-        travado ? 'border-amber-200 bg-amber-50/60' : atual ? 'border-primary-100 bg-white' : 'border-gray-200/80 bg-white'
+    <button
+      type="button"
+      onClick={onAbrir}
+      className={`flex flex-col rounded-xl border p-4 text-left shadow-[0_1px_2px_rgba(16,24,40,0.04)] transition hover:shadow-card focus:outline-none focus:ring-2 focus:ring-primary-100 ${
+        travado
+          ? 'border-amber-200 bg-amber-50/60 hover:border-amber-300'
+          : `${atual ? 'border-primary-100' : 'border-gray-200/80'} bg-white hover:border-primary-500`
       }`}
     >
       <div className="flex items-start gap-3">
@@ -63,14 +68,15 @@ function CardExercicio({ exercicio, atual }) {
       <div className={`mt-4 border-t pt-3 text-[11px] text-gray-500 ${travado ? 'border-amber-100' : 'border-gray-100'}`}>
         Vencimentos de 01/01 a 31/12/{exercicio.ano}
       </div>
-    </div>
+    </button>
   );
 }
 
 // Operações > DRE Gerencial > Financeiro: um card por exercício (ano), do atual até o ano do primeiro
 // lançamento financeiro da empresa — o menor vencimento do contas a pagar e a receber (regra em
-// dre-financeiro/financeiro.service.js) —, do mais novo pro mais antigo.
-export default function FinanceiroTab({ empresaId }) {
+// dre-financeiro/financeiro.service.js) —, do mais novo pro mais antigo. Clicar num card abre os
+// lançamentos dele (LancamentosExercicio); o exercício aberto vem da URL (DreGerencialPage.jsx).
+export default function FinanceiroTab({ empresaId, exercicio = null, onAbrir, search = '' }) {
   const [dados, setDados] = useState(null);
   const [erro, setErro] = useState('');
 
@@ -86,6 +92,10 @@ export default function FinanceiroTab({ empresaId }) {
     setDados(null);
     carregar();
   }, [carregar]);
+
+  if (empresaId && exercicio) {
+    return <LancamentosExercicio empresaId={empresaId} ano={exercicio} search={search} onVoltar={() => onAbrir(null)} />;
+  }
 
   if (!empresaId) {
     return (
@@ -118,7 +128,7 @@ export default function FinanceiroTab({ empresaId }) {
           </div>
           <div className="grid grid-cols-1 gap-3 md:grid-cols-2 xl:grid-cols-3 2xl:grid-cols-4">
             {dados.exercicios.map((e) => (
-              <CardExercicio key={e.ano} exercicio={e} atual={e.ano === dados.ano_atual} />
+              <CardExercicio key={e.ano} exercicio={e} atual={e.ano === dados.ano_atual} onAbrir={() => onAbrir(e.ano)} />
             ))}
           </div>
         </>

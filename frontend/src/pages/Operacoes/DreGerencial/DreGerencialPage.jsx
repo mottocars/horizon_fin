@@ -83,7 +83,7 @@ export default function DreGerencialPage() {
   }
 
   function handleEmpresaChange(novoId) {
-    atualizarParams({ empresa_id: novoId || null, plano: null });
+    atualizarParams({ empresa_id: novoId || null, plano: null, exercicio: null });
     setTotalPlanoContas(0);
   }
 
@@ -137,6 +137,14 @@ export default function DreGerencialPage() {
 
   // Busca (cliente, unidade ou centro de custo) da aba Correções — mesma convenção acima.
   const [buscaCorrecoes, setBuscaCorrecoes] = useState('');
+
+  // Aba Financeiro: o exercício aberto vai na URL (`exercicio`: o ano; sem ele = os cards), pra o
+  // "Voltar" do navegador funcionar — mesmo esquema do `plano` da aba Plano Contas. Busca dos
+  // lançamentos do exercício aberto.
+  const exercicioAberto = Number(searchParams.get('exercicio')) || null;
+  const abrirExercicio = (ano) => atualizarParams({ exercicio: ano || null });
+  const [buscaFinanceiro, setBuscaFinanceiro] = useState('');
+  useEffect(() => setBuscaFinanceiro(''), [empresaId, exercicioAberto]);
 
   // Geração/atualização do plano de contas (Sienge) — mesmo esquema de handleAtualizarContas
   // em SaldoContasBancariasPage.jsx. `totalPlanoContas` (reportado pela própria aba via
@@ -314,6 +322,23 @@ export default function DreGerencialPage() {
               </div>
             )}
 
+            {abaAtiva === 'financeiro' && exercicioAberto && (
+              <div className="sm:min-w-56 sm:max-w-sm sm:flex-1">
+                <label className="mb-1 block text-sm font-medium text-gray-700">Buscar</label>
+                <div className="relative">
+                  <Search size={15} className="pointer-events-none absolute left-3 top-1/2 -translate-y-1/2 text-gray-400" />
+                  <input
+                    type="text"
+                    value={buscaFinanceiro}
+                    onChange={(e) => setBuscaFinanceiro(e.target.value)}
+                    disabled={semEmpresa}
+                    placeholder="Cliente, fornecedor, documento, natureza..."
+                    className="w-full rounded-lg border border-gray-200 py-2 pl-9 pr-3 text-sm focus:outline-none focus:ring-2 focus:ring-primary-100 disabled:bg-gray-50 disabled:text-gray-400"
+                  />
+                </div>
+              </div>
+            )}
+
             {abaAtiva === 'correcoes' && (
               <div className="sm:min-w-56 sm:max-w-sm sm:flex-1">
                 <label className="mb-1 block text-sm font-medium text-gray-700">Buscar</label>
@@ -450,7 +475,9 @@ export default function DreGerencialPage() {
         )}
 
         {abaAtiva === 'correcoes' && <CorrecoesTab empresaId={empresaId} search={buscaCorrecoes} />}
-        {abaAtiva === 'financeiro' && <FinanceiroTab empresaId={empresaId} />}
+        {abaAtiva === 'financeiro' && (
+          <FinanceiroTab empresaId={empresaId} exercicio={exercicioAberto} onAbrir={abrirExercicio} search={buscaFinanceiro} />
+        )}
 
         {abaAtiva === 'plano-de-contas' &&
           (planoAberto ? (
