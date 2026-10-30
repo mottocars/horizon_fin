@@ -10,6 +10,7 @@ import {
   House,
   ListTree,
   Loader2,
+  Percent,
   Plus,
   RefreshCw,
   Search,
@@ -39,8 +40,10 @@ import CorrecoesTab from './CorrecoesTab';
 import FinanceiroTab from './FinanceiroTab';
 import ConfiguracoesDreTab from './ConfiguracoesDreTab';
 import DreTab from './DreTab';
+import PocTab from './PocTab';
 
-// O `{ divider: true }` separa a DRE (a demonstração em si) das abas de cadastro/parâmetro que
+// O `{ divider: true }` separa a DRE (a demonstração em si) e a POC (logo depois dela, a pedido do
+// usuário) das abas de cadastro/parâmetro que
 // dão suporte a ela — Centros Custos, Máscaras, Plano de Contas e Orçamento
 // ficam juntas, sem divisor entre elas (mesmo padrão de SaldoContasBancariasPage.jsx, que separa
 // "Saldos das Contas" de "Bancos" e as demais abas de cadastro/parâmetro). Ordem pedida pelo
@@ -51,6 +54,7 @@ import DreTab from './DreTab';
 // (botão "Nova categoria" — a aba Categorias Orçamento saiu a pedido do usuário).
 const TABS = [
   { id: 'dre', label: 'DRE', icon: BarChart3 },
+  { id: 'poc', label: 'POC', icon: Percent },
   { divider: true },
   { id: 'centros-custos', label: 'Centros Custos', icon: Building2 },
   { id: 'mascaras', label: 'Máscaras', icon: Tags },
@@ -482,6 +486,7 @@ export default function DreGerencialPage() {
         <Tabs tabs={TABS} activeId={abaAtiva} onChange={(aba) => atualizarParams({ aba })} />
 
         {abaAtiva === 'dre' && <DreTab empresaId={empresaId} />}
+        {abaAtiva === 'poc' && <PocTab empresaId={empresaId} />}
 
         {abaAtiva === 'mascaras' && <MascarasTab ref={mascarasTabRef} empresaId={empresaId} />}
 
