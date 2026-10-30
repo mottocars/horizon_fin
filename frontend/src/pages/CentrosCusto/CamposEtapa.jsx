@@ -35,15 +35,16 @@ export function CampoData({ valor, onSalvar, title, disabled, classe }) {
   );
 }
 
-// Quantidade (meses até a próxima etapa; na última, anos até o término). Mostra a conta feita a
-// partir das datas; digitar um número calcula a data seguinte. Também só confirma ao sair (ou Enter).
-export function CampoQtd({ valor, maximo, disabled, onSalvar, title, classe }) {
+// Quantidade (até a próxima etapa; na última, até o término), na unidade do "Tipo duração" da
+// etapa. Mostra a conta feita a partir das datas; digitar um número calcula a data seguinte. Também
+// só confirma ao sair (ou Enter). `decimais`: aceita número quebrado (anos: 2,5).
+export function CampoQtd({ valor, maximo, disabled, onSalvar, title, classe, decimais = false }) {
   const [texto, setTexto] = useState(valor ?? '');
   useEffect(() => setTexto(valor ?? ''), [valor]);
 
   function confirmar() {
-    const n = Number(texto);
-    if (String(texto).trim() === '' || !Number.isInteger(n) || n < 0 || n > maximo || n === valor) {
+    const n = Number(String(texto).replace(',', '.'));
+    if (String(texto).trim() === '' || !Number.isFinite(n) || (!decimais && !Number.isInteger(n)) || n < 0 || n > maximo || n === valor) {
       setTexto(valor ?? '');
       return;
     }
@@ -55,7 +56,7 @@ export function CampoQtd({ valor, maximo, disabled, onSalvar, title, classe }) {
       type="number"
       min={0}
       max={maximo}
-      step={1}
+      step={decimais ? 'any' : 1}
       value={texto}
       disabled={disabled}
       onChange={(e) => setTexto(e.target.value)}

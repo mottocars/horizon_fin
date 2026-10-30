@@ -25,9 +25,12 @@ const createSchema = z
   })
   .refine((b) => b.cores.length <= b.descricoes.length, 'Mais cores do que etapas.');
 
+// Tipo duração: a unidade da duração da etapa no cronograma (meses ou anos).
+const tipoDuracaoSchema = z.enum(['MESES', 'ANOS'], { message: 'Tipo duração inválido.' });
+
 const updateSchema = z
-  .object({ descricao: descricaoSchema.optional(), cor: corSchema.optional() })
-  .refine((b) => b.descricao !== undefined || b.cor !== undefined, 'Nada para alterar.');
+  .object({ descricao: descricaoSchema.optional(), cor: corSchema.optional(), tipo_duracao: tipoDuracaoSchema.optional() })
+  .refine((b) => b.descricao !== undefined || b.cor !== undefined || b.tipo_duracao !== undefined, 'Nada para alterar.');
 
 // A lista inteira de ids, já na ordem final.
 const ordemSchema = z.object({ ids: z.array(idSchema) });
@@ -67,8 +70,8 @@ async function update(req, res, next) {
   try {
     const empresaId = empresaIdSchema.parse(req.params.empresaId);
     const id = idSchema.parse(req.params.id);
-    const { descricao, cor } = updateSchema.parse(req.body);
-    const item = await service.update(id, empresaId, { descricao, cor });
+    const { descricao, cor, tipo_duracao: tipoDuracao } = updateSchema.parse(req.body);
+    const item = await service.update(id, empresaId, { descricao, cor, tipoDuracao });
     if (!item) throw erro(404, 'Etapa não encontrada.');
     res.json(item);
   } catch (err) {

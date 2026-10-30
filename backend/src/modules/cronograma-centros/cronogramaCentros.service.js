@@ -8,10 +8,10 @@ const etapasService = require('../etapas-centro-custo/etapasCentroCusto.service'
 // grava aqui na hora: a alteração fica pendente e só entra quando uma nova versão do cronograma é
 // gravada (cronogramaVersoes.service.js), que aplica as pendências com aplicarDatas.
 //
-// As etapas vão em sequência: a duração de uma etapa é o tempo até o início da seguinte (meses; na
-// última, anos até o fim dela). A data_fim continua gravada porque outras telas leem (Curva de
+// As etapas vão em sequência: a duração de uma etapa é o tempo até o início da seguinte (na última,
+// até o fim dela), em meses ou anos conforme o "Tipo duração" da etapa na máscara. A data_fim continua gravada porque outras telas leem (Curva de
 // Vendas usa o fim da Entrega, Curva de Obras o período de "Obras"): é a véspera do início da etapa
-// seguinte e, na última, o término (início + os anos informados).
+// seguinte e, na última, o término (início + a duração informada).
 
 function erro(status, message) {
   const e = new Error(message);

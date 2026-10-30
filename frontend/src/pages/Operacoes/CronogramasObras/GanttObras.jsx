@@ -66,7 +66,8 @@ function corDoTexto(hex) {
 function duracaoTexto(seg) {
   if (seg.duracao === null || seg.duracao === undefined) return 'sem fim definido';
   const n = seg.duracao;
-  if (seg.unidade === 'ano') return `${n} ${n === 1 ? 'ano' : 'anos'}`;
+  // anos podem vir quebrados (2,5 anos = 30 meses)
+  if (seg.unidade === 'ano') return `${n.toLocaleString('pt-BR')} ${n === 1 ? 'ano' : 'anos'}`;
   return `${n} ${n === 1 ? 'mês' : 'meses'}`;
 }
 

@@ -33,7 +33,10 @@ function somarMeses(d, n) {
   return deUtc(Date.UTC(alvo.getUTCFullYear(), alvo.getUTCMonth(), Math.min(dia, ultimoDia)));
 }
 const mesesEntre = (de, ate) => Math.round((utc(ate) - utc(de)) / MS_DIA / DIAS_MES);
-const anosEntre = (de, ate) => Math.round((utc(ate) - utc(de)) / MS_DIA / 365.25);
+// Unidade da duração da etapa: o "Tipo duração" da máscara; sem ele (versão gravada antes de
+// existir), como era — meses, e anos na última.
+const emAnos = (etapa, ultima) => (etapa.tipo_duracao || (ultima ? 'ANOS' : 'MESES')) === 'ANOS';
+const paraAnos = (meses) => Math.round((meses / 12) * 10) / 10;
 const mesAno = (d) => (d ? `${MESES[Number(d.slice(5, 7)) - 1]}/${d.slice(0, 4)}` : '');
 const dataExcel = (d) => (d ? new Date(utc(d)) : null);
 function hojeSp() {
@@ -52,10 +55,12 @@ function segmentos(centro, etapas) {
       const fimGravado = ultima ? centro.data_termino : centro.fins?.[etapa.id];
       const calculado = ultima ? fimGravado : inicioSeguinte ? somarDias(inicioSeguinte, -1) : fimGravado;
       const fim = calculado && calculado >= inicio ? calculado : null;
+      // em meses (na última, até o término); a etapa em anos vira anos, com uma casa
       let duracao = null;
-      if (ultima) duracao = fimGravado ? anosEntre(inicio, fimGravado) : null;
+      if (ultima) duracao = fimGravado ? mesesEntre(inicio, fimGravado) : null;
       else if (inicioSeguinte) duracao = mesesEntre(inicio, inicioSeguinte);
       else if (fimGravado) duracao = mesesEntre(inicio, somarDias(fimGravado, 1));
+      if (duracao !== null && emAnos(etapa, ultima)) duracao = paraAnos(duracao);
       return { etapa, cor: etapa.cor || CORES_PADRAO[i % CORES_PADRAO.length], inicio, fim, duracao, ultima };
     })
     .filter(Boolean);
@@ -119,7 +124,7 @@ async function gerar({ empresa, versao, link }) {
     colunas.push(
       { header: `${e.descricao} — início`, key: `i${e.id}`, width: 13, numFmt: 'dd/mm/yyyy' },
       { header: `${e.descricao} — fim`, key: `f${e.id}`, width: 13, numFmt: 'dd/mm/yyyy' },
-      { header: `${e.descricao} — duração (${ultima ? 'anos' : 'meses'})`, key: `d${e.id}`, width: 12, numFmt: '0' }
+      { header: `${e.descricao} — duração (${emAnos(e, ultima) ? 'anos' : 'meses'})`, key: `d${e.id}`, width: 12, numFmt: emAnos(e, ultima) ? 'General' : '0' }
     );
   });
   colunas.push(

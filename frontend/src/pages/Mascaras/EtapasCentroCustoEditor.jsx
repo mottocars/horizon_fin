@@ -20,7 +20,12 @@ import { BotaoAcao, CampoNome, Indicador } from '../../components/MascarasArvore
 // sua cor — bolinha de input[type=color], mesmo seletor do ConfigurarFiltrosModal.jsx dos Repasses
 // CEF; etapa nova nasce com a cor da paleta padrão pela posição. Cada mudança salva na hora
 // (reordenação regrava a lista inteira — ver etapasCentroCusto.service.js). `aviso`: texto curto
-// acima da lista.
+// acima da lista. "Tipo duração" (pedido do usuário): Meses ou Anos por etapa — a unidade em que a
+// duração dela é digitada no Histórico de Etapas do centro de custo (e mostrada no Gantt e no Excel).
+const TIPOS_DURACAO = [
+  { valor: 'MESES', rotulo: 'Meses' },
+  { valor: 'ANOS', rotulo: 'Anos' },
+];
 export default function EtapasCentroCustoEditor({ empresaId, aviso }) {
   const confirm = useConfirm();
   const [etapas, setEtapas] = useState([]);
@@ -104,6 +109,11 @@ export default function EtapasCentroCustoEditor({ empresaId, aviso }) {
       delete timersCor.current[id];
       salvar(() => updateEtapaCentroCusto(empresaId, id, { cor }));
     }, 400);
+  }
+
+  async function mudarTipoDuracao(id, tipoDuracao) {
+    setEtapas((atual) => atual.map((e) => (e.id === id ? { ...e, tipo_duracao: tipoDuracao } : e)));
+    await salvar(() => updateEtapaCentroCusto(empresaId, id, { tipo_duracao: tipoDuracao }));
   }
 
   async function remover(etapa) {
@@ -216,8 +226,12 @@ export default function EtapasCentroCustoEditor({ empresaId, aviso }) {
         >
           <div className="sticky -top-6 z-20 flex items-center justify-between rounded-t-lg border-b-2 border-blue-500 bg-blue-50 py-2.5 pl-4 pr-4 text-xs font-medium uppercase tracking-wide text-blue-700">
             <span>Etapas</span>
-            <span className="hidden normal-case tracking-normal text-blue-500 sm:inline">
-              Arraste pelas linhas para reordenar · duplo clique renomeia · clique na cor para trocar
+            <span className="flex items-center gap-4">
+              <span className="hidden normal-case tracking-normal text-blue-500 lg:inline">
+                Arraste pelas linhas para reordenar · duplo clique renomeia · clique na cor para trocar
+              </span>
+              {/* rótulo da coluna do seletor de cada linha (mesma largura dele + a dos botões) */}
+              {etapas.length > 0 && <span className="w-[11.5rem] text-left">Tipo duração</span>}
             </span>
           </div>
 
@@ -275,7 +289,32 @@ export default function EtapasCentroCustoEditor({ empresaId, aviso }) {
                   {etapa.descricao || <span className="font-normal italic text-gray-400">Sem nome</span>}
                 </span>
               )}
-              <span className="ml-auto flex shrink-0 items-center gap-0.5 opacity-0 transition-opacity group-hover/linha:opacity-100">
+              <span
+                role="radiogroup"
+                aria-label={`Tipo duração da etapa ${etapa.descricao || 'Sem nome'}`}
+                onDoubleClick={(e) => e.stopPropagation()}
+                className="ml-auto inline-flex shrink-0 rounded-md border border-gray-200 bg-white p-0.5"
+              >
+                {TIPOS_DURACAO.map((t) => {
+                  const ativo = (etapa.tipo_duracao || 'MESES') === t.valor;
+                  return (
+                    <button
+                      key={t.valor}
+                      type="button"
+                      role="radio"
+                      aria-checked={ativo}
+                      onClick={() => !ativo && mudarTipoDuracao(etapa.id, t.valor)}
+                      title={`Duração desta etapa em ${t.rotulo.toLowerCase()} no cronograma das obras`}
+                      className={`w-14 rounded px-2 py-0.5 text-[11px] font-medium transition-colors ${
+                        ativo ? 'bg-primary-50 text-primary-700' : 'text-gray-400 hover:text-gray-600'
+                      }`}
+                    >
+                      {t.rotulo}
+                    </button>
+                  );
+                })}
+              </span>
+              <span className="flex shrink-0 items-center gap-0.5 opacity-0 transition-opacity group-hover/linha:opacity-100">
                 <BotaoAcao title="Renomear" onClick={() => setEditandoId(etapa.id)}>
                   <Pencil size={13} />
                 </BotaoAcao>

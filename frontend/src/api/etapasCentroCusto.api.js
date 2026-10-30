@@ -1,7 +1,7 @@
 import http from './http';
 
 // Máscara "Etapas do Centro de Custo" da empresa — a lista única de etapas de obra, editada em
-// Cadastros > Máscaras. [{ id, sequencia, descricao, cor }]
+// Cadastros > Máscaras. [{ id, sequencia, descricao, cor, tipo_duracao }]
 export function listEtapasCentroCusto(empresaId) {
   return http.get(`/etapas-centro-custo/${empresaId}`).then((res) => res.data);
 }
@@ -12,9 +12,9 @@ export function createEtapasCentroCusto(empresaId, descricoes, cores = []) {
   return http.post(`/etapas-centro-custo/${empresaId}`, { descricoes, cores }).then((res) => res.data);
 }
 
-// Manda só o que mudou (nome e/ou cor).
-export function updateEtapaCentroCusto(empresaId, id, { descricao, cor }) {
-  return http.put(`/etapas-centro-custo/${empresaId}/${id}`, { descricao, cor }).then((res) => res.data);
+// Manda só o que mudou (nome, cor e/ou tipo duração — 'MESES' | 'ANOS').
+export function updateEtapaCentroCusto(empresaId, id, { descricao, cor, tipo_duracao }) {
+  return http.put(`/etapas-centro-custo/${empresaId}/${id}`, { descricao, cor, tipo_duracao }).then((res) => res.data);
 }
 
 export function removeEtapaCentroCusto(empresaId, id) {

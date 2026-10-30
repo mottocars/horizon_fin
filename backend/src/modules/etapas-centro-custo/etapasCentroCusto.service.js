@@ -4,6 +4,8 @@ const pool = require('../../config/db');
 // tipo ETAPAS_CENTRO_CUSTO, grupo '') — uma lista só (pedido do usuário), editada em Cadastros >
 // Máscaras e usada pelo Histórico de Etapas dos centros de custo, que é o cronograma das obras. Mesmo esquema de dfcMascaras.service.js, num nível
 // só. Cuidado: Cobrança, Curvas e Repasses procuram etapas pelo nome (Lançamento, Obras, Entrega).
+// Cada etapa tem o "Tipo duração" (`tipo_duracao`: MESES | ANOS — pedido do usuário): a unidade em
+// que a duração dela é digitada e mostrada no Histórico de Etapas, no Gantt e no Excel.
 
 const TIPO = 'ETAPAS_CENTRO_CUSTO';
 
@@ -16,7 +18,7 @@ function erro(status, message) {
 
 async function list(empresaId, db = pool) {
   const { rows } = await db.query(
-    `SELECT id, sequencia, descricao, cor FROM mascara_itens
+    `SELECT id, sequencia, descricao, cor, tipo_duracao FROM mascara_itens
       WHERE tipo = $1 AND empresa_id = $2 AND grupo = ''
       ORDER BY sequencia ASC, id ASC`,
     [TIPO, empresaId]
@@ -35,10 +37,10 @@ async function create(empresaId, descricoes, cores = []) {
       [TIPO, empresaId]
     );
     const { rows } = await client.query(
-      `INSERT INTO mascara_itens (tipo, empresa_id, grupo, sequencia, descricao, cor)
-       SELECT $1, $2, '', $3 + d.n, d.descricao, COALESCE(d.cor, '#3b82f6')
+      `INSERT INTO mascara_itens (tipo, empresa_id, grupo, sequencia, descricao, cor, tipo_duracao)
+       SELECT $1, $2, '', $3 + d.n, d.descricao, COALESCE(d.cor, '#3b82f6'), 'MESES'
          FROM UNNEST($4::text[], $5::text[]) WITH ORDINALITY AS d(descricao, cor, n)
-       RETURNING id, sequencia, descricao, cor`,
+       RETURNING id, sequencia, descricao, cor, tipo_duracao`,
       [TIPO, empresaId, maxRows[0].max, descricoes, cores]
     );
     await client.query('COMMIT');
@@ -51,13 +53,14 @@ async function create(empresaId, descricoes, cores = []) {
   }
 }
 
-// Nome e/ou cor — o que não vier fica como está.
-async function update(id, empresaId, { descricao, cor }) {
+// Nome, cor e/ou tipo duração — o que não vier fica como está.
+async function update(id, empresaId, { descricao, cor, tipoDuracao }) {
   const { rows } = await pool.query(
-    `UPDATE mascara_itens SET descricao = COALESCE($4, descricao), cor = COALESCE($5, cor)
+    `UPDATE mascara_itens
+        SET descricao = COALESCE($4, descricao), cor = COALESCE($5, cor), tipo_duracao = COALESCE($6, tipo_duracao)
       WHERE id = $1 AND empresa_id = $2 AND tipo = $3
-     RETURNING id, sequencia, descricao, cor`,
-    [id, empresaId, TIPO, descricao ?? null, cor ?? null]
+     RETURNING id, sequencia, descricao, cor, tipo_duracao`,
+    [id, empresaId, TIPO, descricao ?? null, cor ?? null, tipoDuracao ?? null]
   );
   return rows[0] || null;
 }

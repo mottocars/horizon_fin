@@ -1,5 +1,5 @@
 import { corPadrao } from '../../../utils/coresPadrao';
-import { duracaoEtapa, fimEtapa, mesesEntre, somarDias, somarMeses } from '../../CentrosCusto/cronogramaDatas';
+import { duracaoEmAnos, duracaoEtapa, fimEtapa, mesesEntre, somarDias, somarMeses } from '../../CentrosCusto/cronogramaDatas';
 
 // Contas da carteira de obras — usadas na aba Cronogramas de Operações > Cronogramas Obras e no
 // dashboard Cronogramas de Obras (as duas telas mostram os mesmos números e o mesmo Gantt). O
@@ -70,8 +70,10 @@ export function montarSegmentos(centro, etapas, atraso = null) {
       const inicio = centro.datas[etapa.id];
       if (!inicio) return null;
       const ultima = i === etapas.length - 1;
+      const anos = duracaoEmAnos(etapa.tipo_duracao, ultima);
       const datas = {
         ultima,
+        anos,
         inicio,
         inicioSeguinte: ultima ? null : centro.datas[etapas[i + 1].id],
         fim: ultima ? centro.data_termino : centro.fins?.[etapa.id],
@@ -83,7 +85,7 @@ export function montarSegmentos(centro, etapas, atraso = null) {
         inicio,
         fim,
         duracao: duracaoEtapa(datas),
-        unidade: ultima ? 'ano' : 'mês',
+        unidade: anos ? 'ano' : 'mês',
         prazo: null,
         atraso: null,
       };

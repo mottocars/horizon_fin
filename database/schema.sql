@@ -454,6 +454,9 @@ CREATE TABLE mascara_itens (
     -- Só usado em tipo='ETAPAS_CENTRO_CUSTO' — cor da etapa (#rrggbb) no cronograma das obras.
     -- Ver database/migrations/2026-10-20-mascara-itens-cor.sql.
     cor           VARCHAR(7),
+    -- Só usado em tipo='ETAPAS_CENTRO_CUSTO' — unidade da duração da etapa no cronograma (MESES/ANOS).
+    -- Ver database/migrations/2026-10-30-mascara-itens-tipo-duracao.sql.
+    tipo_duracao  VARCHAR(5) CHECK (tipo_duracao IN ('MESES', 'ANOS')),
     criado_em     TIMESTAMP DEFAULT NOW(),
     atualizado_em TIMESTAMP DEFAULT NOW(),
     UNIQUE (tipo, empresa_id, grupo, sequencia)

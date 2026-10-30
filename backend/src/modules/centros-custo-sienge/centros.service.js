@@ -250,7 +250,7 @@ async function listEtapas(empresaId, siengeId) {
   // por etapa e, na pendência, o término (`termino_alterado`/`termino_pendente`).
   const { rows } = await pool.query(
     `SELECT m.id AS mascara_item_id, m.sequencia AS etapa_sequencia, m.descricao AS etapa_descricao,
-            m.cor AS etapa_cor, h.id AS historico_id, h.data_inicio, h.data_fim, h.criado_em, h.atualizado_em,
+            m.cor AS etapa_cor, m.tipo_duracao AS etapa_tipo_duracao, h.id AS historico_id, h.data_inicio, h.data_fim, h.criado_em, h.atualizado_em,
             COALESCE(p.datas ? m.id::text, FALSE) AS pendente, p.datas ->> m.id::text AS inicio_pendente,
             COALESCE(p.termino_alterado, FALSE) AS termino_alterado, p.data_termino AS termino_pendente
      FROM mascara_itens m

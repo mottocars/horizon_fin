@@ -29,15 +29,11 @@ export function somarDias(data, dias) {
   return deUtc(paraUtc(data) + dias * MS_DIA);
 }
 
-// Meses (ou anos) inteiros entre duas datas, arredondando pelos dias — assim a conta volta
+// Meses inteiros entre duas datas, arredondando pelos dias — assim a conta volta
 // exatamente ao número digitado: mesesEntre(d, somarMeses(d, n)) === n (inclusive no 31/01 → 28/02).
 // Negativo quando `ate` vem antes de `de`.
 export function mesesEntre(de, ate) {
   return Math.round((paraUtc(ate) - paraUtc(de)) / MS_DIA / DIAS_MES);
-}
-
-export function anosEntre(de, ate) {
-  return Math.round((paraUtc(ate) - paraUtc(de)) / MS_DIA / 365.25);
 }
 
 // O campo de data do navegador passa por anos como 0002 enquanto se digita — só aceita ano
@@ -48,14 +44,26 @@ export function dataValida(data) {
   return ano >= 1900 && ano <= 2200 && deUtc(paraUtc(data)) === data;
 }
 
+// Unidade da duração da etapa: o "Tipo duração" da máscara Etapas do Centro de Custo (pedido do
+// usuário — MESES ou ANOS). Sem ele (versão do cronograma gravada antes de existir), como era:
+// meses, e anos na última.
+export const duracaoEmAnos = (tipoDuracao, ultima) => (tipoDuracao || (ultima ? 'ANOS' : 'MESES')) === 'ANOS';
+
+// Meses que uma duração digitada representa (em anos, pode vir quebrada: 2,5 anos = 30 meses).
+export const mesesDaDuracao = (n, anos) => (anos ? Math.round(n * 12) : n);
+
 // As etapas do cronograma (= Histórico de Etapas do centro de custo) vão em sequência. Duração de
-// uma etapa: meses até o início da seguinte — sem ele, até o fim gravado (histórico antigo); na
-// última, anos até o fim dela (o término). null quando não dá pra calcular.
-export function duracaoEtapa({ ultima, inicio, inicioSeguinte, fim }) {
+// uma etapa: até o início da seguinte — sem ele, até o fim gravado (histórico antigo); na última,
+// até o fim dela (o término). Em meses ou, com `anos`, em anos (com uma casa: 30 meses = 2,5).
+// null quando não dá pra calcular.
+export function duracaoEtapa({ ultima, inicio, inicioSeguinte, fim, anos = ultima }) {
   if (!inicio) return null;
-  if (ultima) return fim ? anosEntre(inicio, fim) : null;
-  if (inicioSeguinte) return mesesEntre(inicio, inicioSeguinte);
-  return fim ? mesesEntre(inicio, somarDias(fim, 1)) : null;
+  let meses = null;
+  if (ultima) meses = fim ? mesesEntre(inicio, fim) : null;
+  else if (inicioSeguinte) meses = mesesEntre(inicio, inicioSeguinte);
+  else if (fim) meses = mesesEntre(inicio, somarDias(fim, 1));
+  if (meses === null) return null;
+  return anos ? Math.round((meses / 12) * 10) / 10 : meses;
 }
 
 // Fim da etapa do jeito que o backend grava (cronogramaCentros.service.js): véspera do início da

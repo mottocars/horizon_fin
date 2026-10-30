@@ -7,7 +7,7 @@ import { listPrevisionProjetos } from '../../api/prevision.api';
 import SearchableSelect from '../../components/SearchableSelect';
 import { consultarCep } from '../../api/cep.api';
 import { corPadrao } from '../../utils/coresPadrao';
-import { duracaoEtapa, fimEtapa, formatarData, somarAnos, somarMeses } from './cronogramaDatas';
+import { duracaoEmAnos, duracaoEtapa, fimEtapa, formatarData, mesesDaDuracao, somarMeses } from './cronogramaDatas';
 import { CampoData, CampoQtd } from './CamposEtapa';
 
 const FAIXAS = ['FAIXA_1', 'FAIXA_2', 'FAIXA_3', 'FAIXA_4', 'SBPE'];
@@ -573,7 +573,8 @@ export default function CentroCustoEditor({ empresaId, siengeId, onSalvo, onAlte
               </p>
             ) : (
               <p className="mb-4 text-xs text-gray-400">
-                Informe a data de início de cada etapa e quanto tempo ela dura (meses; a última em anos): o início da
+                Informe a data de início de cada etapa e quanto tempo ela dura (em meses ou anos, conforme o Tipo duração da
+                etapa em Máscaras › Etapas do Centro de Custo): o início da
                 etapa seguinte é calculado. Também dá pra digitar a data da seguinte direto. A data fim sai das datas.
                 É o mesmo cronograma da aba Centros de Custos de Operações › Cronogramas Obras. Clique em "Salvar
                 alterações" para guardar: as datas novas ficam pendentes e só entram no cronograma quando uma nova
@@ -618,7 +619,8 @@ export default function CentroCustoEditor({ empresaId, siengeId, onSalvo, onAlte
                       const inicio = etapasForm.inicios[etapa.mascara_item_id] || '';
                       const inicioSeguinte = seguinte ? etapasForm.inicios[seguinte.mascara_item_id] || '' : '';
                       const fimBase = ultima ? etapasForm.termino : fimSalvo(etapa);
-                      const datas = { ultima, inicio, inicioSeguinte, fim: fimBase };
+                      const anos = duracaoEmAnos(etapa.etapa_tipo_duracao, ultima);
+                      const datas = { ultima, inicio, inicioSeguinte, fim: fimBase, anos };
                       // Data fim mostrada = a que vai ficar gravada: recalculada só nas etapas que a
                       // edição afeta (a que mudou e a anterior; a última se o término mudou), como
                       // o backend faz — nas outras, a que já está salva.
@@ -630,6 +632,7 @@ export default function CentroCustoEditor({ empresaId, siengeId, onSalvo, onAlte
                           etapa={etapa}
                           cor={etapa.etapa_cor || corPadrao(i)}
                           ultima={ultima}
+                          anos={anos}
                           inicio={inicio}
                           duracao={duracaoEtapa(datas)}
                           fim={afetada ? fimEtapa(datas) : fimSalvo(etapa) || null}
@@ -638,8 +641,8 @@ export default function CentroCustoEditor({ empresaId, siengeId, onSalvo, onAlte
                           onChangeInicio={(valor) => handleChangeInicio(etapa.mascara_item_id, valor)}
                           onChangeDuracao={(n) =>
                             ultima
-                              ? handleChangeTermino(somarAnos(inicio, n))
-                              : handleChangeInicio(seguinte.mascara_item_id, somarMeses(inicio, n))
+                              ? handleChangeTermino(somarMeses(inicio, mesesDaDuracao(n, anos)))
+                              : handleChangeInicio(seguinte.mascara_item_id, somarMeses(inicio, mesesDaDuracao(n, anos)))
                           }
                         />
                       );
@@ -700,11 +703,12 @@ function computeStatus(dataInicio, dataFim) {
 // (edição pendente) e devolve as mudanças. Nada aqui chama a API: quem
 // persiste é o handleSalvarTudo() do componente pai, todo de uma vez, ao
 // clicar em "Salvar alterações". Duração e data fim vêm calculadas do pai;
-// digitar a duração muda o início da etapa seguinte (na última, o término).
-function EtapaRow({ etapa, cor, ultima, inicio, duracao, fim, pendente, disabled, onChangeInicio, onChangeDuracao }) {
+// digitar a duração muda o início da etapa seguinte (na última, o término). `anos`: a duração da
+// etapa é em anos (Tipo duração da máscara) — senão, em meses.
+function EtapaRow({ etapa, cor, ultima, anos, inicio, duracao, fim, pendente, disabled, onChangeInicio, onChangeDuracao }) {
   const status = computeStatus(inicio, fim);
   const statusInfo = STATUS_STYLES[status];
-  const unidade = ultima ? 'anos' : 'meses';
+  const unidade = anos ? 'anos' : 'meses';
 
   return (
     <tr className="border-b border-gray-50 last:border-0 align-middle">
@@ -739,7 +743,8 @@ function EtapaRow({ etapa, cor, ultima, inicio, duracao, fim, pendente, disabled
           <span className="w-20">
             <CampoQtd
               valor={duracao}
-              maximo={ultima ? 100 : 600}
+              maximo={anos ? 100 : 1200}
+              decimais={anos}
               disabled={disabled || !inicio}
               onSalvar={onChangeDuracao}
               title={
@@ -747,9 +752,7 @@ function EtapaRow({ etapa, cor, ultima, inicio, duracao, fim, pendente, disabled
                   ? 'Informe a data de início primeiro'
                   : duracao < 0
                     ? 'A etapa seguinte começa antes desta'
-                    : ultima
-                      ? 'Anos desta etapa (somados ao início dão a data fim)'
-                      : 'Meses desta etapa (somados ao início dão o início da seguinte)'
+                    : `${anos ? 'Anos' : 'Meses'} desta etapa (somados ao início dão ${ultima ? 'a data fim' : 'o início da seguinte'})`
               }
               classe={`w-full ${CLASSE_CAMPO_ETAPA} ${corCampo(duracao)}`}
             />
