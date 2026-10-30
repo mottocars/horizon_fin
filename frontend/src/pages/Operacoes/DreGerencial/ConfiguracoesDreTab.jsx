@@ -206,7 +206,7 @@ export default function ConfiguracoesDreTab({ empresaId }) {
           <div className="mt-4">
             <Formula
               rotulo="Como é calculada"
-              numerador={`Custo acumulado — ${mascaraEscolhida ? mascaraEscolhida.descricao : 'máscara escolhida'}`}
+              numerador={mascaraEscolhida ? mascaraEscolhida.descricao : 'Máscara DRE Nível 2'}
               denominador="Orçamento vigente da obra (aba Orçamento)"
               nota="limitada a 100%, mês a mês"
             />
