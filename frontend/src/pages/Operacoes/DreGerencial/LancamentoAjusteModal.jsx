@@ -1,5 +1,5 @@
 import { useEffect, useMemo, useState } from 'react';
-import { ArrowRight, Lock, RotateCcw, TriangleAlert } from 'lucide-react';
+import { History, Lock, RotateCcw, TriangleAlert } from 'lucide-react';
 import Modal from '../../../components/Modal';
 import Button from '../../../components/Button';
 import SearchableSelect from '../../../components/SearchableSelect';
@@ -35,25 +35,39 @@ function lerValor(texto) {
 
 const valorEdicao = (v) => Math.abs(Number(v || 0)).toLocaleString('pt-BR', { minimumFractionDigits: 2, maximumFractionDigits: 2, useGrouping: false });
 
-function Info({ rotulo, children }) {
+function Info({ rotulo, children, direita = false }) {
   return (
-    <div className="min-w-0">
+    <div className={`min-w-0 ${direita ? 'text-right' : ''}`}>
       <p className="text-[11px] text-gray-400">{rotulo}</p>
-      <p className="truncate text-sm text-gray-900" title={typeof children === 'string' ? children : undefined}>
-        {children || '—'}
+      <p className="truncate text-sm tabular-nums text-gray-900" title={typeof children === 'string' ? children : undefined}>
+        {children || children === 0 ? children : '—'}
       </p>
     </div>
   );
 }
 
+// Uma faixa da janela: título pequeno e os campos lado a lado (`colunas` = classes do grid).
+function Faixa({ titulo, colunas, fundo = 'bg-white', borda = 'border-gray-200', children }) {
+  return (
+    <div className={`rounded-xl border px-4 py-3 ${fundo} ${borda}`}>
+      <p className="mb-2 text-[11px] font-semibold uppercase tracking-wide text-gray-500">{titulo}</p>
+      <div className={`grid items-end gap-x-4 gap-y-2 ${colunas}`}>{children}</div>
+    </div>
+  );
+}
+
+// Centro | Natureza | % Rateio | Valor — mesmas colunas no rateio original e no ajuste, alinhadas.
+const COLUNAS_RATEIO = 'grid-cols-2 md:grid-cols-[minmax(0,1fr)_minmax(0,1.3fr)_100px_150px]';
+
 const rotuloCentro = (id, nome) => (id === null || id === undefined ? 'Sem centro' : `${id} - ${nome || ''}`);
 const rotuloNatureza = (id, nome) => (id ? `${id} ${nome || ''}` : 'Sem natureza');
 
 // Janela de ajuste de UMA linha de rateio da listagem do Financeiro (título × centro × natureza, ou
-// movimento do extrato): o lançamento, a linha original (centro, natureza, % do rateio e valor) e o
-// ajuste dela — centro, natureza e valor que passam a valer no lugar, sem mexer no Sienge (tabela
-// lancamentos_ajustes, módulo lancamentos-ajustes). Lançamento do exercício em andamento
-// (`travado`): só visualização. Histórico da linha no fim.
+// movimento do extrato), em faixas: cabeçalho (cliente/fornecedor, documento, emissão, valor do
+// título, valor do rateio e parcelas), rateio original, ajuste (centro, natureza e valor que passam a
+// valer no lugar, sem mexer no Sienge — tabela lancamentos_ajustes, módulo lancamentos-ajustes) e
+// motivo. À direita, o log de alterações da linha com o motivo de cada uma. Lançamento do exercício
+// em andamento (`travado`): só visualização.
 export default function LancamentoAjusteModal({ empresaId, origem, chave, linha: linhaOriginal, onClose, onAlterado }) {
   const confirm = useConfirm();
   const [dados, setDados] = useState(null);
@@ -146,7 +160,7 @@ export default function LancamentoAjusteModal({ empresaId, origem, chave, linha:
       open
       onClose={onClose}
       title={titulo}
-      maxWidthClass="max-w-3xl"
+      maxWidthClass="max-w-7xl"
       acoes={
         dados && (
           <span className={`rounded-full px-2 py-0.5 text-[11px] font-medium ${dados.ajuste ? 'bg-violet-50 text-violet-700' : 'bg-gray-100 text-gray-600'}`}>
@@ -163,122 +177,145 @@ export default function LancamentoAjusteModal({ empresaId, origem, chave, linha:
       ) : !dados ? (
         <div className="py-12 text-center text-sm text-gray-400">Carregando...</div>
       ) : (
-        <>
-          {travado && (
-            <div className="mb-4 flex items-center gap-2 rounded-lg bg-amber-50 px-3 py-2 text-xs text-amber-700">
-              <Lock size={14} className="shrink-0" />
-              Exercício em andamento: este lançamento só pode ser visualizado, não pode ser ajustado.
-            </div>
-          )}
-
-          <div className="grid grid-cols-2 gap-x-6 gap-y-3 md:grid-cols-4">
-            <Info rotulo={origem === 'E' ? 'Histórico' : 'Cliente / Fornecedor'}>{dados.contraparte}</Info>
-            <Info rotulo="Documento">{[dados.documento, dados.numero].filter(Boolean).join(' ')}</Info>
-            <Info rotulo={origem === 'E' ? 'Data do movimento' : 'Emissão'}>
-              {dataBr(dados.data)}
-              {dados.parcelas > 1 ? ` · ${dados.parcelas} parcelas` : ''}
-            </Info>
-            <Info rotulo={origem === 'E' ? 'Valor do movimento' : 'Valor do título'}>{moeda(dados.valor_lancamento)}</Info>
-          </div>
-
-          <div className="mt-5 grid grid-cols-1 items-stretch gap-3 md:grid-cols-[minmax(0,1fr)_auto_minmax(0,1.25fr)]">
-            <div className="rounded-xl border border-gray-200 bg-gray-50 p-4">
-              <p className="mb-3 text-xs font-semibold uppercase tracking-wide text-gray-500">Original (Sienge)</p>
-              <div className="space-y-2 text-sm">
-                <Info rotulo="Centro de custo">{rotuloCentro(dados.linha.centro_id, dados.linha.centro_nome)}</Info>
-                <Info rotulo="Natureza">{rotuloNatureza(dados.linha.natureza_id, dados.linha.natureza_nome)}</Info>
-                <div className="grid grid-cols-2 gap-3">
-                  <Info rotulo="% Rateio">{pct(dados.linha.percentual)}</Info>
-                  <Info rotulo="Valor">{moeda(dados.linha.valor)}</Info>
-                </div>
+        // Esquerda: cabeçalho, rateio original, ajuste e motivo, cada um numa faixa. Direita: o log.
+        <div className="grid grid-cols-1 gap-5 lg:grid-cols-[minmax(0,1fr)_320px]">
+          <div className="min-w-0 space-y-3">
+            {travado && (
+              <div className="flex items-center gap-2 rounded-lg bg-amber-50 px-3 py-2 text-xs text-amber-700">
+                <Lock size={14} className="shrink-0" />
+                Exercício em andamento: este lançamento só pode ser visualizado, não pode ser ajustado.
               </div>
-            </div>
+            )}
 
-            <div className="hidden items-center text-gray-300 md:flex">
-              <ArrowRight size={20} />
-            </div>
+            <Faixa titulo={origem === 'E' ? 'Movimento' : 'Título'} colunas="grid-cols-2 md:grid-cols-[minmax(0,1.6fr)_minmax(0,1fr)_110px_130px_130px_90px]">
+              <Info rotulo={origem === 'E' ? 'Histórico' : 'Cliente / Fornecedor'}>{dados.contraparte}</Info>
+              <Info rotulo="Documento">{[dados.documento, dados.numero].filter(Boolean).join(' ')}</Info>
+              <Info rotulo={origem === 'E' ? 'Data' : 'Emissão'}>{dataBr(dados.data)}</Info>
+              <Info rotulo={origem === 'E' ? 'Valor do movimento' : 'Valor do título'} direita>
+                {moeda(dados.valor_lancamento)}
+              </Info>
+              <Info rotulo="Valor do rateio" direita>
+                {moeda(dados.linha.valor)}
+              </Info>
+              <Info rotulo="Parcelas" direita>
+                {dados.parcelas ?? '—'}
+              </Info>
+            </Faixa>
 
-            <div className={`rounded-xl border p-4 ${dados.ajuste ? 'border-violet-200 bg-violet-50/40' : 'border-gray-200'}`}>
-              <p className="mb-3 text-xs font-semibold uppercase tracking-wide text-gray-500">{dados.ajuste ? 'Ajuste (em uso)' : 'Ajuste'}</p>
-              <div className="space-y-2.5">
-                <div>
-                  <p className="mb-1 text-[11px] text-gray-400">Centro de custo</p>
-                  <SearchableSelect value={centro} onChange={setCentro} options={opCentros} placeholder="Centro de custo" disabled={travado} clearable={false} larguraPainel={380} />
-                </div>
-                <div>
-                  <p className="mb-1 text-[11px] text-gray-400">Natureza</p>
-                  <SearchableSelect value={natureza} onChange={setNatureza} options={opNaturezas} placeholder="Natureza" disabled={travado} clearable={false} larguraPainel={460} />
-                </div>
-                <div className="grid grid-cols-2 gap-3">
-                  <div>
-                    <p className="mb-1 text-[11px] text-gray-400">% Rateio</p>
-                    <p className="py-2 text-sm tabular-nums text-gray-700">{pct(pctNovo)}</p>
-                  </div>
-                  <div>
-                    <p className="mb-1 text-[11px] text-gray-400">Valor{sinal < 0 ? ' (saída)' : ''}</p>
-                    <input
-                      value={valor}
-                      onChange={(e) => setValor(e.target.value)}
-                      disabled={travado}
-                      inputMode="decimal"
-                      placeholder="0,00"
-                      aria-label="Valor ajustado"
-                      className="w-full rounded-lg border border-gray-200 px-2.5 py-2 text-right text-sm tabular-nums focus:outline-none focus:ring-2 focus:ring-primary-100 disabled:bg-gray-50 disabled:text-gray-500"
-                    />
-                  </div>
-                </div>
+            <Faixa titulo="Rateio original (Sienge)" colunas={COLUNAS_RATEIO} fundo="bg-gray-50">
+              <Info rotulo="Centro de custo">{rotuloCentro(dados.linha.centro_id, dados.linha.centro_nome)}</Info>
+              <Info rotulo="Natureza">{rotuloNatureza(dados.linha.natureza_id, dados.linha.natureza_nome)}</Info>
+              <Info rotulo="% Rateio" direita>
+                {pct(dados.linha.percentual)}
+              </Info>
+              <Info rotulo="Valor" direita>
+                {moeda(dados.linha.valor)}
+              </Info>
+            </Faixa>
+
+            <Faixa
+              titulo={dados.ajuste ? 'Ajuste (em uso)' : 'Ajuste'}
+              colunas={COLUNAS_RATEIO}
+              fundo={dados.ajuste ? 'bg-violet-50/40' : 'bg-white'}
+              borda={dados.ajuste ? 'border-violet-200' : 'border-gray-200'}
+            >
+              <div className="min-w-0">
+                <p className="mb-1 text-[11px] text-gray-400">Centro de custo</p>
+                <SearchableSelect value={centro} onChange={setCentro} options={opCentros} placeholder="Centro de custo" disabled={travado} clearable={false} larguraPainel={380} />
               </div>
-            </div>
-          </div>
+              <div className="min-w-0">
+                <p className="mb-1 text-[11px] text-gray-400">Natureza</p>
+                <SearchableSelect value={natureza} onChange={setNatureza} options={opNaturezas} placeholder="Natureza" disabled={travado} clearable={false} larguraPainel={460} />
+              </div>
+              <div className="text-right">
+                <p className="mb-1 text-[11px] text-gray-400">% Rateio</p>
+                <p className="py-2 text-sm tabular-nums text-gray-700">{pct(pctNovo)}</p>
+              </div>
+              <div>
+                <p className="mb-1 text-right text-[11px] text-gray-400">Valor{sinal < 0 ? ' (saída)' : ''}</p>
+                <input
+                  value={valor}
+                  onChange={(e) => setValor(e.target.value)}
+                  disabled={travado}
+                  inputMode="decimal"
+                  placeholder="0,00"
+                  aria-label="Valor ajustado"
+                  className="w-full rounded-lg border border-gray-200 px-2.5 py-2 text-right text-sm tabular-nums focus:outline-none focus:ring-2 focus:ring-primary-100 disabled:bg-gray-50 disabled:text-gray-500"
+                />
+              </div>
+            </Faixa>
 
-          <textarea
-            value={observacao}
-            onChange={(e) => setObservacao(e.target.value)}
-            disabled={travado}
-            rows={2}
-            maxLength={1000}
-            placeholder="Motivo do ajuste (opcional)"
-            className="mt-3 w-full rounded-lg border border-gray-200 px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-primary-100 disabled:bg-gray-50 disabled:text-gray-500"
-          />
-          {dados.ajuste && (
-            <p className="mt-1 text-[11px] text-gray-400">
-              Ajustado por {dados.ajuste.usuario || 'usuário'} em {dataHora(dados.ajuste.atualizado_em)}
-            </p>
-          )}
-          {erroSalvar && <p className="mt-2 rounded-lg bg-red-50 px-3 py-2 text-xs text-red-600">{erroSalvar}</p>}
-          {!travado && (
-            <div className="mt-3 flex justify-end gap-2">
-              {dados.ajuste && (
-                <Button type="button" variant="secondary" onClick={restaurar} disabled={salvando}>
-                  <RotateCcw size={15} />
-                  Restaurar original
-                </Button>
+            <div className="rounded-xl border border-gray-200 px-4 py-3">
+              <p className="mb-2 text-[11px] font-semibold uppercase tracking-wide text-gray-500">Motivo</p>
+              <textarea
+                value={observacao}
+                onChange={(e) => setObservacao(e.target.value)}
+                disabled={travado}
+                rows={2}
+                maxLength={1000}
+                placeholder="Descreva o motivo do ajuste"
+                className="w-full rounded-lg border border-gray-200 px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-primary-100 disabled:bg-gray-50 disabled:text-gray-500"
+              />
+              {erroSalvar && <p className="mt-2 rounded-lg bg-red-50 px-3 py-2 text-xs text-red-600">{erroSalvar}</p>}
+              {!travado && (
+                <div className="mt-2 flex justify-end gap-2">
+                  {dados.ajuste && (
+                    <Button type="button" variant="secondary" onClick={restaurar} disabled={salvando}>
+                      <RotateCcw size={15} />
+                      Restaurar original
+                    </Button>
+                  )}
+                  <Button type="button" onClick={salvar} disabled={salvando}>
+                    {salvando ? 'Salvando...' : 'Salvar ajuste'}
+                  </Button>
+                </div>
               )}
-              <Button type="button" onClick={salvar} disabled={salvando}>
-                {salvando ? 'Salvando...' : 'Salvar ajuste'}
-              </Button>
             </div>
-          )}
+          </div>
 
-          {dados.historico.length > 0 && (
-            <section className="mt-5">
-              <h3 className="mb-2 text-xs font-semibold uppercase tracking-wide text-gray-500">Histórico</h3>
-              <ul className="space-y-1.5 text-xs text-gray-600">
-                {dados.historico.map((h, i) => (
-                  <li key={i} className="rounded-lg bg-gray-50 px-3 py-2">
-                    <span className="font-medium text-gray-800">{h.acao === 'AJUSTOU' ? 'Ajustou' : 'Restaurou o original'}</span>
-                    {' · '}
-                    {h.usuario || 'usuário'} em {dataHora(h.criado_em)}
-                    <div className="mt-0.5 text-[11px] text-gray-500">
-                      De: {resumo(h.antes)} → Para: {resumo(h.depois)}
-                      {h.depois?.observacao ? ` — ${h.depois.observacao}` : ''}
-                    </div>
-                  </li>
-                ))}
-              </ul>
-            </section>
-          )}
-        </>
+          {/* Log de alterações da linha, com o motivo de cada uma. */}
+          <aside className="flex min-h-0 flex-col rounded-xl border border-gray-200 bg-gray-50/60 p-4 lg:max-h-[70vh]">
+            <p className="mb-3 flex items-center gap-1.5 text-[11px] font-semibold uppercase tracking-wide text-gray-500">
+              <History size={13} /> Log de alterações
+            </p>
+            {dados.historico.length === 0 ? (
+              <p className="text-xs text-gray-400">Nenhuma alteração nesta linha — está como veio do Sienge.</p>
+            ) : (
+              <ol className="-mr-2 space-y-3 overflow-y-auto pr-2">
+                {dados.historico.map((h, i) => {
+                  const motivo = h.acao === 'AJUSTOU' ? h.depois?.observacao : null;
+                  return (
+                    <li key={i} className="rounded-lg border border-gray-200 bg-white p-3 text-xs">
+                      <div className="flex items-center justify-between gap-2">
+                        <span className={`font-semibold ${h.acao === 'AJUSTOU' ? 'text-violet-700' : 'text-gray-700'}`}>
+                          {h.acao === 'AJUSTOU' ? 'Ajustou' : 'Restaurou o original'}
+                        </span>
+                        <span className="shrink-0 text-[11px] text-gray-400">{dataHora(h.criado_em)}</span>
+                      </div>
+                      <p className="text-[11px] text-gray-500">{h.usuario || 'usuário'}</p>
+                      <p className={`mt-2 rounded-md px-2 py-1.5 ${motivo ? 'bg-amber-50 text-gray-800' : 'bg-gray-50 italic text-gray-400'}`}>
+                        {motivo || (h.acao === 'AJUSTOU' ? 'Sem motivo informado' : 'Voltou ao rateio do Sienge')}
+                      </p>
+                      <div className="mt-2 space-y-0.5 text-[11px] text-gray-500">
+                        <p>
+                          <span className="text-gray-400">De:</span> {resumo(h.antes)}
+                        </p>
+                        <p>
+                          <span className="text-gray-400">Para:</span> {resumo(h.depois)}
+                        </p>
+                      </div>
+                    </li>
+                  );
+                })}
+              </ol>
+            )}
+            {dados.ajuste && (
+              <p className="mt-3 border-t border-gray-200 pt-2 text-[11px] text-gray-400">
+                Ajuste em uso desde {dataHora(dados.ajuste.atualizado_em)}, por {dados.ajuste.usuario || 'usuário'}
+              </p>
+            )}
+          </aside>
+        </div>
       )}
     </Modal>
   );
