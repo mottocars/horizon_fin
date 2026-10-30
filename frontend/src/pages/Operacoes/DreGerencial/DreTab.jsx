@@ -1,5 +1,5 @@
 import { Fragment, useCallback, useEffect, useState } from 'react';
-import { AlertTriangle, BarChart3, Minimize2, TriangleAlert } from 'lucide-react';
+import { AlertTriangle, BarChart3, ChevronLeft, Minimize2, TriangleAlert } from 'lucide-react';
 import { listDreMascaras } from '../../../api/dreMascaras.api';
 import { calcularDre } from '../../../api/dreDemonstrativo.api';
 
@@ -24,6 +24,9 @@ export default function DreTab({ empresaId, de, ate, centros = [], telaCheia = f
   const [resultado, setResultado] = useState(null);
   const [calculando, setCalculando] = useState(false);
   const [erro, setErro] = useState('');
+  // Consolidado retrátil, como o Total do fluxo do DFC: clicar no título recolhe numa faixa com
+  // "CONSOLIDADO" na vertical; clicar na faixa abre. Começa aberto (é o totalizador da DRE).
+  const [consolidadoAberto, setConsolidadoAberto] = useState(true);
   const chaveCentros = centros.join(',');
 
   const carregar = useCallback(() => {
@@ -183,12 +186,31 @@ export default function DreTab({ empresaId, de, ate, centros = [], telaCheia = f
                 >
                   Descrição
                 </th>
-                <th
-                  colSpan={2}
-                  className="sticky left-[380px] z-10 border-b border-r border-b-blue-200 border-r-blue-200 bg-blue-100 px-3 pb-1 pt-1.5 text-center align-bottom font-semibold text-blue-800"
-                >
-                  Consolidado
-                </th>
+                {consolidadoAberto ? (
+                  <th
+                    colSpan={2}
+                    onClick={() => setConsolidadoAberto(false)}
+                    title="Recolher o Consolidado"
+                    className="sticky left-[380px] z-10 cursor-pointer border-b border-r border-b-blue-200 border-r-blue-200 bg-blue-100 px-3 pb-1 pt-1.5 text-center align-bottom font-semibold text-blue-800 transition-colors hover:bg-blue-200"
+                  >
+                    <span className="inline-flex items-center gap-1">
+                      <ChevronLeft size={13} className="shrink-0 text-blue-500" />
+                      Consolidado
+                    </span>
+                  </th>
+                ) : (
+                  <th
+                    rowSpan={2}
+                    onClick={() => setConsolidadoAberto(true)}
+                    title="Mostrar o Consolidado (valor e AV %)"
+                    className={`${COL_FAIXA} cursor-pointer border-b border-b-blue-200 bg-blue-100 px-0 py-2 text-center align-middle transition-colors hover:bg-blue-200`}
+                  >
+                    <span className="inline-flex rotate-180 items-center gap-1 text-[11px] font-bold uppercase tracking-[0.2em] text-blue-800 [writing-mode:vertical-rl]">
+                      Consolidado
+                      <ChevronLeft size={12} className="shrink-0 text-blue-500" />
+                    </span>
+                  </th>
+                )}
                 {colunas.slice(1).map((c) => (
                   <th
                     key={c.chave}
@@ -201,13 +223,17 @@ export default function DreTab({ empresaId, de, ate, centros = [], telaCheia = f
                 ))}
               </tr>
               <tr className="text-[10px] uppercase tracking-wide text-gray-400">
-                <th className={`${COL_CONSOLIDADO} border-b border-b-blue-200 bg-blue-100 py-1 text-center font-medium text-blue-700`}>Valor</th>
-                <th
-                  className={`${COL_AV_CONSOLIDADO} border-b border-b-blue-200 bg-blue-100 py-1 text-center font-medium text-blue-700`}
-                  title={av ? `Percentual de ${av.descricao}` : 'Avaliação Vertical não configurada'}
-                >
-                  AV %
-                </th>
+                {consolidadoAberto && (
+                  <>
+                    <th className={`${COL_CONSOLIDADO} border-b border-b-blue-200 bg-blue-100 py-1 text-center font-medium text-blue-700`}>Valor</th>
+                    <th
+                      className={`${COL_AV_CONSOLIDADO} border-b border-b-blue-200 bg-blue-100 py-1 text-center font-medium text-blue-700`}
+                      title={av ? `Percentual de ${av.descricao}` : 'Avaliação Vertical não configurada'}
+                    >
+                      AV %
+                    </th>
+                  </>
+                )}
                 {colunas.slice(1).map((c) => (
                   <Fragment key={c.chave}>
                     <th className={`${COL_CENTRO} border-b border-l border-gray-200 bg-white py-1 text-center font-medium`}>Valor</th>
@@ -229,6 +255,8 @@ export default function DreTab({ empresaId, de, ate, centros = [], telaCheia = f
                   colunas={colunas}
                   acumulados={acumulados}
                   bases={indiceBase >= 0 && i >= indiceBase ? bases : null}
+                  recolhido={!consolidadoAberto}
+                  onAbrir={() => setConsolidadoAberto(true)}
                 />
               ))}
             </tbody>
@@ -268,6 +296,8 @@ function totalDoGrupo(grupo, valores) {
 const COL_DESCRICAO = 'sticky left-0 z-10 w-[380px] min-w-[380px] max-w-[380px]';
 const COL_CONSOLIDADO = 'sticky left-[380px] z-10 w-36 min-w-36 max-w-36';
 const COL_AV_CONSOLIDADO = 'sticky left-[524px] z-10 w-20 min-w-20 max-w-20 border-r border-r-blue-200';
+// Consolidado recolhido: só a faixa (como o Total recolhido do fluxo do DFC).
+const COL_FAIXA = 'sticky left-[380px] z-10 w-7 min-w-7 max-w-7 border-r border-r-blue-200';
 const COL_CENTRO = 'w-32 min-w-32 max-w-32';
 const COL_AV = 'w-20 min-w-20 max-w-20';
 
@@ -291,9 +321,21 @@ function estilo(tipo, consolidado) {
 }
 
 // As duas células de uma coluna (valor e AV %) numa linha. `base`: o 100% da AV % nessa coluna, ou
-// undefined quando a linha fica sem AV (acima da linha configurada).
-function Celulas({ tipo, consolidado, valor, base }) {
+// undefined quando a linha fica sem AV (acima da linha configurada). Consolidado recolhido
+// (`recolhido`): uma faixa só, que abre ao clicar (`onAbrir`).
+function Celulas({ tipo, consolidado, valor, base, recolhido, onAbrir }) {
   const e = estilo(tipo, consolidado);
+  if (consolidado && recolhido) {
+    return (
+      <td
+        onClick={onAbrir}
+        title="Mostrar o Consolidado (valor e AV %)"
+        className={`${COL_FAIXA} cursor-pointer border-b ${e.borda} ${
+          tipo === 'totalizadora' ? 'bg-[#174a70]' : tipo === 'n1' ? 'bg-blue-100 hover:bg-blue-200' : 'bg-blue-50 hover:bg-blue-100'
+        }`}
+      />
+    );
+  }
   const py = tipo === 'n2' ? 'py-0.5' : 'py-1';
   const forte = tipo === 'n2' ? (consolidado ? 'font-semibold' : '') : 'font-bold';
   const p = base === undefined ? undefined : pctAv(valor, base);
@@ -373,8 +415,10 @@ function Valor({ valor, vazio = 'text-gray-300', cor = 'text-gray-700' }) {
 // coluna = `acumulados` (tudo acima). Linha de nível 1 = soma das de nível 2, só quando todas já têm
 // valor. As células congeladas (descrição e consolidado) têm fundo sólido: os centros rolam por baixo.
 // `bases`: o 100% da AV % de cada coluna, ou null quando o grupo está acima da linha configurada.
-function LinhaGrupo({ grupo, colunas, acumulados, bases }) {
+// `recolhido` / `onAbrir`: o Consolidado recolhido numa faixa.
+function LinhaGrupo({ grupo, colunas, acumulados, bases, recolhido, onAbrir }) {
   const base = (i) => (bases ? bases[i] : undefined);
+  const faixa = { recolhido, onAbrir };
   if (grupo.totalizadora) {
     return (
       <tr>
@@ -385,7 +429,7 @@ function LinhaGrupo({ grupo, colunas, acumulados, bases }) {
           </span>
         </td>
         {colunas.map((c, i) => (
-          <Celulas key={c.chave} tipo="totalizadora" consolidado={i === 0} valor={acumulados[i]} base={base(i)} />
+          <Celulas key={c.chave} tipo="totalizadora" consolidado={i === 0} valor={acumulados[i]} base={base(i)} {...faixa} />
         ))}
       </tr>
     );
@@ -401,7 +445,7 @@ function LinhaGrupo({ grupo, colunas, acumulados, bases }) {
           </span>
         </td>
         {colunas.map((c, i) => (
-          <Celulas key={c.chave} tipo="n1" consolidado={i === 0} valor={totalDoGrupo(grupo, c.valores)} base={base(i)} />
+          <Celulas key={c.chave} tipo="n1" consolidado={i === 0} valor={totalDoGrupo(grupo, c.valores)} base={base(i)} {...faixa} />
         ))}
       </tr>
 
@@ -410,8 +454,14 @@ function LinhaGrupo({ grupo, colunas, acumulados, bases }) {
           <td className={`${COL_DESCRICAO} border-b border-gray-100 bg-white py-1 pl-20 text-xs italic text-gray-300`}>
             Nenhum item cadastrado nesta linha ainda.
           </td>
-          <td className={`${COL_CONSOLIDADO} border-b border-b-blue-100 bg-blue-50`} />
-          <td className={`${COL_AV_CONSOLIDADO} border-b border-b-blue-100 bg-blue-50`} />
+          {recolhido ? (
+            <td className={`${COL_FAIXA} border-b border-b-blue-100 bg-blue-50`} />
+          ) : (
+            <>
+              <td className={`${COL_CONSOLIDADO} border-b border-b-blue-100 bg-blue-50`} />
+              <td className={`${COL_AV_CONSOLIDADO} border-b border-b-blue-100 bg-blue-50`} />
+            </>
+          )}
           <td colSpan={(colunas.length - 1) * 2} className="border-b border-gray-100" />
         </tr>
       ) : (
@@ -426,7 +476,7 @@ function LinhaGrupo({ grupo, colunas, acumulados, bases }) {
               </span>
             </td>
             {colunas.map((c, i) => (
-              <Celulas key={c.chave} tipo="n2" consolidado={i === 0} valor={c.valores[item.id]} base={base(i)} />
+              <Celulas key={c.chave} tipo="n2" consolidado={i === 0} valor={c.valores[item.id]} base={base(i)} {...faixa} />
             ))}
           </tr>
         ))
