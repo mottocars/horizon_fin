@@ -1,4 +1,5 @@
 const pool = require('../../config/db');
+const { sqlMapaDre } = require('../dre-plano-contas/drePlanoContas.service');
 
 // Operações > DRE Gerencial > Financeiro: os exercícios (anos) da empresa, do ano do primeiro
 // lançamento financeiro até o ano atual. O primeiro ano sai do menor VENCIMENTO do contas a receber
@@ -11,7 +12,8 @@ const pool = require('../../config/db');
 // rateado em vários centros) — mesmo critério do movimento na listagem (com natureza) — e quantos
 // lançamentos (títulos e movimentos) têm ajuste (lancamentos_ajustes), pela emissão / data, e quantos
 // foram criados à mão no ano (lancamentos_manuais). Só lançamentos com alguma linha (original ou
-// ajustada) em centro com "Realiza DRE", como a listagem.
+// ajustada) que entra na DRE — centro com "Realiza DRE" e natureza com Máscara DRE no plano do centro
+// (sqlMapaDre) —, como a listagem.
 // O exercício do ano atual vem travado (`travado`, pedido do usuário): só visualização — nenhuma
 // ação que altere dados pode valer pra ele (o backend deve recusar, não só a tela esconder).
 async function exercicios(empresaId) {
@@ -27,48 +29,54 @@ async function exercicios(empresaId) {
   const primeiroAno = Math.min(Number(String(primeiro).slice(0, 4)), anoAtual);
 
   const { rows } = await pool.query(
-    `WITH ativos AS (SELECT sienge_id AS id FROM centros_custo_sienge WHERE empresa_id = $1 AND realiza_dre)
+    `WITH mapa AS (${sqlMapaDre('$1')})
      SELECT EXTRACT(YEAR FROM data)::int AS ano,
             COUNT(DISTINCT id) FILTER (WHERE tipo = 'R')::int AS receber,
             COUNT(DISTINCT id) FILTER (WHERE tipo = 'P')::int AS pagar,
             COUNT(DISTINCT id) FILTER (WHERE tipo = 'E')::int AS movimentos
        FROM (SELECT 'R' AS tipo, t.bill_id AS id, t.issue_date AS data FROM sie_income t
               WHERE t.empresa_id = $1 AND t.issue_date >= $2 AND t.issue_date < $3
-                AND (EXISTS (SELECT 1 FROM sie_income_categorias c JOIN ativos a ON a.id = c.cost_center_id
+                AND (EXISTS (SELECT 1 FROM sie_income_categorias c
+                                JOIN mapa m ON m.centro_id = c.cost_center_id AND m.natureza_id = NULLIF(TRIM(c.financial_category_id), '')
                               WHERE c.bill_id = t.bill_id AND c.installment_id = t.installment_id AND c.empresa_id = t.empresa_id)
-                     OR EXISTS (SELECT 1 FROM lancamentos_ajustes j JOIN ativos a ON a.id = j.centro_id
+                     OR EXISTS (SELECT 1 FROM lancamentos_ajustes j JOIN mapa m ON m.centro_id = j.centro_id AND m.natureza_id = j.natureza_id
                                  WHERE j.empresa_id = $1 AND j.origem = 'R' AND j.chave = t.bill_id))
              UNION ALL
              SELECT 'P', t.bill_id, t.issue_date FROM sie_outcome t
               WHERE t.empresa_id = $1 AND t.issue_date >= $2 AND t.issue_date < $3
-                AND (EXISTS (SELECT 1 FROM sie_outcome_categorias c JOIN ativos a ON a.id = c.cost_center_id
+                AND (EXISTS (SELECT 1 FROM sie_outcome_categorias c
+                                JOIN mapa m ON m.centro_id = c.cost_center_id AND m.natureza_id = NULLIF(TRIM(c.financial_category_id), '')
                               WHERE c.bill_id = t.bill_id AND c.installment_id = t.installment_id AND c.empresa_id = t.empresa_id)
-                     OR EXISTS (SELECT 1 FROM lancamentos_ajustes j JOIN ativos a ON a.id = j.centro_id
+                     OR EXISTS (SELECT 1 FROM lancamentos_ajustes j JOIN mapa m ON m.centro_id = j.centro_id AND m.natureza_id = j.natureza_id
                                  WHERE j.empresa_id = $1 AND j.origem = 'P' AND j.chave = t.bill_id))
              UNION ALL
              SELECT 'E', r.registro_id, r.data FROM sie_extrato_contas_rateio r
                JOIN sie_extrato_contas e ON e.registro_id = r.registro_id
               WHERE r.empresa_id = $1 AND r.mes >= $2 AND r.mes < $3 AND r.data >= $2 AND r.data < $3
                 AND e.bill_id IS NULL AND r.natureza_id IS NOT NULL
-                AND (r.centro_id IN (SELECT id FROM ativos)
-                     OR EXISTS (SELECT 1 FROM lancamentos_ajustes j JOIN ativos a ON a.id = j.centro_id
+                AND (EXISTS (SELECT 1 FROM mapa m WHERE m.centro_id = r.centro_id AND m.natureza_id = r.natureza_id::text)
+                     OR EXISTS (SELECT 1 FROM lancamentos_ajustes j JOIN mapa m ON m.centro_id = j.centro_id AND m.natureza_id = j.natureza_id
                                  WHERE j.empresa_id = $1 AND j.origem = 'E' AND j.chave = e.id))) t
       GROUP BY 1`,
     [empresaId, `${primeiroAno}-01-01`, `${anoAtual + 1}-01-01`]
   );
   const { rows: ajustados } = await pool.query(
-    `WITH ativos AS (SELECT sienge_id AS id FROM centros_custo_sienge WHERE empresa_id = $1 AND realiza_dre)
+    `WITH ajustes AS (
+       SELECT DISTINCT j.origem, j.chave FROM lancamentos_ajustes j
+         JOIN (${sqlMapaDre('$1')}) m ON m.centro_id = j.centro_id AND m.natureza_id = j.natureza_id
+        WHERE j.empresa_id = $1
+     )
      SELECT EXTRACT(YEAR FROM data)::int AS ano, COUNT(*)::int AS n
        FROM (SELECT a.origem, a.chave, MIN(t.issue_date) AS data
-               FROM (SELECT DISTINCT origem, chave FROM lancamentos_ajustes WHERE empresa_id = $1 AND origem = 'R' AND centro_id IN (SELECT id FROM ativos)) a
+               FROM (SELECT origem, chave FROM ajustes WHERE origem = 'R') a
                JOIN sie_income t ON t.bill_id = a.chave AND t.empresa_id = $1 GROUP BY 1, 2
              UNION ALL
              SELECT a.origem, a.chave, MIN(t.issue_date)
-               FROM (SELECT DISTINCT origem, chave FROM lancamentos_ajustes WHERE empresa_id = $1 AND origem = 'P' AND centro_id IN (SELECT id FROM ativos)) a
+               FROM (SELECT origem, chave FROM ajustes WHERE origem = 'P') a
                JOIN sie_outcome t ON t.bill_id = a.chave AND t.empresa_id = $1 GROUP BY 1, 2
              UNION ALL
              SELECT a.origem, a.chave, MIN(e.date)
-               FROM (SELECT DISTINCT origem, chave FROM lancamentos_ajustes WHERE empresa_id = $1 AND origem = 'E' AND centro_id IN (SELECT id FROM ativos)) a
+               FROM (SELECT origem, chave FROM ajustes WHERE origem = 'E') a
                JOIN sie_extrato_contas e ON e.id = a.chave AND e.empresa_id = $1 GROUP BY 1, 2) x
       GROUP BY 1`,
     [empresaId]
@@ -76,7 +84,9 @@ async function exercicios(empresaId) {
   const porAno = new Map(rows.map((r) => [r.ano, r]));
   const ajustadosPorAno = new Map(ajustados.map((r) => [r.ano, r.n]));
   const { rows: criados } = await pool.query(
-    'SELECT EXTRACT(YEAR FROM data)::int AS ano, COUNT(*)::int AS n FROM lancamentos_manuais WHERE empresa_id = $1 GROUP BY 1',
+    `SELECT EXTRACT(YEAR FROM l.data)::int AS ano, COUNT(*)::int AS n
+       FROM lancamentos_manuais l JOIN (${sqlMapaDre('$1')}) m ON m.centro_id = l.centro_id AND m.natureza_id = l.natureza_id
+      WHERE l.empresa_id = $1 GROUP BY 1`,
     [empresaId]
   );
   const criadosPorAno = new Map(criados.map((r) => [r.ano, r.n]));
@@ -163,9 +173,11 @@ const SQL_LINHAS = `
 // linha (lancamentos_ajustes, módulo lancamentos-ajustes) aplicado: centro, natureza e valor trocados,
 // com o sinal da linha original; `centro_original`/`natureza_original` identificam a linha pra janela
 // de ajuste. `percentual` = a linha sobre o total do lançamento (% do rateio, depois dos ajustes).
-// Título/movimento: emissão (ou data) do lançamento inteiro. Só as linhas de centros com "Realiza
-// DRE" (aba Centros Custos — pedido do usuário); o % do rateio continua sobre o lançamento inteiro
-// (a fatia do título que cai naquele centro). Nomes de centro e natureza pelos cadastros (o extrato e
+// Título/movimento: emissão (ou data) do lançamento inteiro. Só as linhas que entram na DRE (pedido
+// do usuário): centro com "Realiza DRE" e natureza com Máscara DRE no plano de contas que vale pro
+// centro — o plano próprio dele, se tiver, senão o Global; sem máscara ou "NÃO ENTRA NA DRE" fica de
+// fora (`mapa` — drePlanoContas.service.js::sqlMapaDre). O % do rateio continua sobre o lançamento
+// inteiro (a fatia do título que cai naquela linha). Nomes de centro e natureza pelos cadastros (o extrato e
 // o ajuste só trazem o id); o nome da categoria do título fica de reserva. Resultado: `lc`.
 const CTE_LINHAS = `
   o AS MATERIALIZED (${SQL_LINHAS}),
@@ -197,6 +209,7 @@ const CTE_LINHAS = `
       FROM g
     WINDOW w AS (PARTITION BY g.origem, g.chave)
   ),
+  mapa AS (${sqlMapaDre('$1')}),
   lc AS (
     -- titulo: o número do título ou, no movimento do extrato, o id do lançamento no Sienge (é o
     -- cod_movimento das planilhas do usuário) — a busca e o filtro da coluna acham pelos dois.
@@ -204,9 +217,12 @@ const CTE_LINHAS = `
            g.data_lanc AS data, g.venc_min_lanc AS venc_min, g.venc_max_lanc AS venc_max, g.parcelas_lanc AS parcelas,
            g.documento, g.documento_nome, g.numero, g.contraparte,
            g.centro_original, g.natureza_original, g.centro_id, COALESCE(cc.name, g.centro_nome_cat) AS centro_nome,
-           g.natureza_id, COALESCE(pf.name, g.natureza_nome_cat) AS natureza_nome, g.valor, g.percentual, g.status
+           g.natureza_id, COALESCE(pf.name, g.natureza_nome_cat) AS natureza_nome, g.valor, g.percentual, g.status,
+           mp.mascara_id, dm.descricao AS mascara_nome
       FROM gw g
-      JOIN centros_custo_sienge cc ON cc.empresa_id = $1 AND cc.sienge_id = g.centro_id AND cc.realiza_dre
+      JOIN mapa mp ON mp.centro_id = g.centro_id AND mp.natureza_id = g.natureza_id
+      JOIN centros_custo_sienge cc ON cc.empresa_id = $1 AND cc.sienge_id = g.centro_id
+      LEFT JOIN dre_mascaras dm ON dm.id = mp.mascara_id
       LEFT JOIN planos_financeiros_sienge pf ON pf.empresa_id = $1 AND pf.sienge_id::text = g.natureza_id
   )`;
 
@@ -229,7 +245,7 @@ function periodo(ano, de, ate) {
 // nomes de cliente/fornecedor; `meses`: 'AAAA-MM' da data (emissão; no movimento, a do extrato);
 // `status`: 'ORIGINAL' / 'AJUSTADO'. `busca`: cliente/fornecedor/histórico, número, título, documento,
 // centro ou natureza.
-function montarFiltros({ origens, documentos, titulos, centros, naturezas, contrapartes, meses, status, busca }, params) {
+function montarFiltros({ origens, documentos, titulos, centros, naturezas, mascaras, contrapartes, meses, status, busca }, params) {
   const cond = [];
   const lista = (coluna, valores) => {
     if (!valores?.length) return;
@@ -242,6 +258,7 @@ function montarFiltros({ origens, documentos, titulos, centros, naturezas, contr
   lista('titulo::text', titulos);
   lista('centro_id::text', centros);
   lista('natureza_id', naturezas);
+  lista('mascara_id::text', mascaras);
   lista('contraparte', contrapartes);
   lista("to_char(data, 'YYYY-MM')", meses);
   lista('status', status);
@@ -273,7 +290,7 @@ async function lancamentos(empresaId, ano, filtros = {}, { pagina = 1, porPagina
                SELECT origem, chave, titulo, to_char(data, 'YYYY-MM-DD') AS data, to_char(venc_min, 'YYYY-MM-DD') AS vencimento,
                       to_char(venc_max, 'YYYY-MM-DD') AS vencimento_ate, parcelas, documento, documento_nome, numero,
                       contraparte, centro_original, natureza_original, centro_id, centro_nome, natureza_id, natureza_nome,
-                      ROUND(valor, 2) AS valor, ROUND(percentual, 2) AS percentual, status
+                      mascara_id, mascara_nome, ROUND(valor, 2) AS valor, ROUND(percentual, 2) AS percentual, status
                  FROM f
                 ORDER BY data, origem DESC, chave, centro_original NULLS LAST, natureza_original NULLS LAST
                 LIMIT $${params.length - 1} OFFSET $${params.length}) p) AS linhas`,
@@ -306,6 +323,8 @@ async function opcoesFiltros(empresaId, ano) {
      UNION ALL
      SELECT 'natureza', COALESCE(natureza_id, ''), MAX(natureza_nome), COUNT(*)::int FROM lc l GROUP BY 2
      UNION ALL
+     SELECT 'mascara', mascara_id::text, MAX(mascara_nome), COUNT(*)::int FROM lc l GROUP BY 2
+     UNION ALL
      SELECT 'mes', to_char(data, 'YYYY-MM'), NULL, COUNT(*)::int FROM lc l GROUP BY 2
      UNION ALL
      SELECT 'contraparte', contraparte, NULL, COUNT(*)::int FROM lc l WHERE origem IN ('R', 'P') AND contraparte IS NOT NULL GROUP BY 2`,
@@ -319,7 +338,14 @@ async function opcoesFiltros(empresaId, ano) {
       .filter((r) => r.tipo === tipo)
       .map(({ valor, nome, n }) => ({ valor, nome, n }))
       .sort(ordem);
-  return { meses: de('mes'), documentos: de('documento'), contrapartes: de('contraparte'), naturezas: de('natureza'), centros: de('centro') };
+  return {
+    meses: de('mes'),
+    documentos: de('documento'),
+    contrapartes: de('contraparte'),
+    naturezas: de('natureza'),
+    mascaras: de('mascara'),
+    centros: de('centro'),
+  };
 }
 
 module.exports = { exercicios, lancamentos, opcoesFiltros };

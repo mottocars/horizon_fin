@@ -100,7 +100,11 @@ export default function LancamentoAjusteModal({ empresaId, origem, chave, linha:
   }, [empresaId, origem, chave, linhaOriginal.centro, linhaOriginal.natureza]);
 
   const opCentros = useMemo(() => (dados?.opcoes.centros || []).map((c) => ({ value: c.id, label: `${c.id} - ${c.nome}` })), [dados]);
-  const opNaturezas = useMemo(() => (dados?.opcoes.naturezas || []).map((n) => ({ value: n.id, label: `${n.id} ${n.nome}` })), [dados]);
+  // Naturezas que entram na DRE no centro escolhido (Máscara DRE no plano de contas dele).
+  const opNaturezas = useMemo(() => {
+    const permitidas = new Set(dados?.opcoes.naturezas_por_centro?.[centro] || []);
+    return (dados?.opcoes.naturezas || []).filter((n) => permitidas.has(n.id)).map((n) => ({ value: n.id, label: `${n.id} ${n.nome}` }));
+  }, [dados, centro]);
 
   const travado = Boolean(dados?.travado);
   const sinal = dados && dados.linha.valor < 0 ? -1 : 1;
@@ -149,7 +153,10 @@ export default function LancamentoAjusteModal({ empresaId, origem, chave, linha:
   }
 
   const nomeCentro = (id) => opCentros.find((c) => String(c.value) === String(id))?.label || id;
-  const nomeNatureza = (id) => opNaturezas.find((n) => String(n.value) === String(id))?.label || id;
+  const nomeNatureza = (id) => {
+    const n = (dados?.opcoes.naturezas || []).find((x) => String(x.id) === String(id));
+    return n ? `${n.id} ${n.nome}` : id;
+  };
   const resumo = (r) => (r ? `${nomeCentro(r.centro_id)} · ${nomeNatureza(r.natureza_id)} · ${moeda(r.valor)}` : 'original do Sienge');
 
   const titulo =
@@ -227,7 +234,16 @@ export default function LancamentoAjusteModal({ empresaId, origem, chave, linha:
               </div>
               <div className="min-w-0">
                 <p className="mb-1 text-[11px] text-gray-400">Natureza</p>
-                <SearchableSelect value={natureza} onChange={setNatureza} options={opNaturezas} placeholder="Natureza" disabled={travado} clearable={false} larguraPainel={460} />
+                <SearchableSelect
+                  value={natureza}
+                  onChange={setNatureza}
+                  options={opNaturezas}
+                  placeholder="Natureza"
+                  emptyMessage="Nenhuma natureza com Máscara DRE no plano deste centro."
+                  disabled={travado}
+                  clearable={false}
+                  larguraPainel={460}
+                />
               </div>
               <div className="text-right">
                 <p className="mb-1 text-[11px] text-gray-400">% Rateio</p>

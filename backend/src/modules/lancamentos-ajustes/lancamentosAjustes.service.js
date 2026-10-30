@@ -1,4 +1,5 @@
 const pool = require('../../config/db');
+const { sqlMapaDre } = require('../dre-plano-contas/drePlanoContas.service');
 
 // Ajustes de lançamentos financeiros do Sienge (tabelas lancamentos_ajustes / _historico —
 // database/migrations/2026-10-30-lancamentos-ajustes.sql). O lançamento original nunca é alterado: o
@@ -93,11 +94,26 @@ async function ajusteDa(db, empresaId, origem, chave, centroOriginal, naturezaOr
   return rows[0] ? { ...rows[0], valor: num(rows[0].valor) } : null;
 }
 
+// A linha ajustada tem de entrar na DRE: natureza com Máscara DRE no plano do centro (senão some da
+// listagem).
+async function exigirNaDre(empresaId, centroId, naturezaId) {
+  const { rows } = await pool.query(`SELECT 1 FROM (${sqlMapaDre('$1')}) m WHERE m.centro_id = $2 AND m.natureza_id = $3`, [
+    empresaId,
+    centroId,
+    String(naturezaId),
+  ]);
+  if (!rows[0]) {
+    throw erro(400, 'Esta natureza não tem Máscara DRE no plano de contas deste centro (ou está como "NÃO ENTRA NA DRE").');
+  }
+}
+
 // Exercício em andamento ou futuro (pelo relógio da aplicação — o do Postgres da VPS é deslocado).
 const travadoPela = (data) => Boolean(data) && Number(data.slice(0, 4)) >= new Date().getFullYear();
 
+// Opções da janela: centros com "Realiza DRE", naturezas analíticas e, por centro, as naturezas que
+// entram na DRE nele (Máscara DRE no plano do centro — sqlMapaDre); a tela só oferece essas.
 async function nomes(empresaId) {
-  const [{ rows: centros }, { rows: naturezas }] = await Promise.all([
+  const [{ rows: centros }, { rows: naturezas }, { rows: mapa }] = await Promise.all([
     // Só centros com "Realiza DRE" (os que a listagem do Financeiro mostra).
     pool.query('SELECT sienge_id AS id, name AS nome FROM centros_custo_sienge WHERE empresa_id = $1 AND realiza_dre ORDER BY sienge_id', [empresaId]),
     pool.query(
@@ -105,8 +121,11 @@ async function nomes(empresaId) {
         WHERE empresa_id = $1 ORDER BY sienge_id::text`,
       [empresaId]
     ),
+    pool.query(`SELECT centro_id, natureza_id FROM (${sqlMapaDre('$1')}) m`, [empresaId]),
   ]);
-  return { centros, naturezas };
+  const naturezasPorCentro = {};
+  mapa.forEach((m) => (naturezasPorCentro[m.centro_id] ||= []).push(m.natureza_id));
+  return { centros, naturezas, naturezasPorCentro };
 }
 
 // O lançamento original e a linha de rateio pedida; 404 se não existir.
@@ -155,7 +174,11 @@ async function obter(empresaId, origem, chave, centroOriginal, naturezaOriginal)
     }),
     ajuste: comNomes(ajuste),
     historico,
-    opcoes: { centros: opcoes.centros, naturezas: opcoes.naturezas.filter((n) => n.analitica).map(({ id, nome }) => ({ id, nome })) },
+    opcoes: {
+      centros: opcoes.centros,
+      naturezas: opcoes.naturezas.filter((n) => n.analitica).map(({ id, nome }) => ({ id, nome })),
+      naturezas_por_centro: opcoes.naturezasPorCentro,
+    },
   };
 }
 
@@ -173,6 +196,7 @@ async function salvar(empresaId, origem, chave, centroOriginal, naturezaOriginal
     [empresaId, String(naturezaId)]
   );
   if (!nat[0]) throw erro(400, 'Natureza não encontrada no plano de contas (só contas analíticas).');
+  await exigirNaDre(empresaId, centroId, naturezaId);
 
   const client = await pool.connect();
   try {

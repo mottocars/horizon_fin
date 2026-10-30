@@ -101,9 +101,16 @@ export default function LancamentoManualModal({ empresaId, ano, id = null, onClo
   }, [empresaId, id]);
 
   const opCentros = useMemo(() => (opcoes?.centros || []).map((c) => ({ value: c.id, label: `${c.id} - ${c.nome}` })), [opcoes]);
-  const opNaturezas = useMemo(() => (opcoes?.naturezas || []).map((n) => ({ value: n.id, label: `${n.id} ${n.nome}` })), [opcoes]);
+  // Naturezas que entram na DRE no centro escolhido (Máscara DRE no plano de contas dele).
+  const opNaturezas = useMemo(() => {
+    const permitidas = new Set(opcoes?.naturezas_por_centro?.[form.centro_id] || []);
+    return (opcoes?.naturezas || []).filter((n) => permitidas.has(n.id)).map((n) => ({ value: n.id, label: `${n.id} ${n.nome}` }));
+  }, [opcoes, form.centro_id]);
   const nomeCentro = (cid) => opCentros.find((c) => String(c.value) === String(cid))?.label || cid;
-  const nomeNatureza = (nid) => opNaturezas.find((n) => String(n.value) === String(nid))?.label || nid;
+  const nomeNatureza = (nid) => {
+    const n = (opcoes?.naturezas || []).find((x) => String(x.id) === String(nid));
+    return n ? `${n.id} ${n.nome}` : nid;
+  };
 
   // Exercício em andamento ou futuro: só visualização (mesma regra do backend).
   const travado = dados ? dados.travado : ano >= new Date().getFullYear();
@@ -247,7 +254,16 @@ export default function LancamentoManualModal({ empresaId, ano, id = null, onClo
                 <SearchableSelect value={form.centro_id} onChange={mudar('centro_id')} options={opCentros} placeholder="Centro de custo" disabled={travado} clearable={false} larguraPainel={380} />
               </Campo>
               <Campo rotulo="Natureza">
-                <SearchableSelect value={form.natureza_id} onChange={mudar('natureza_id')} options={opNaturezas} placeholder="Natureza" disabled={travado} clearable={false} larguraPainel={460} />
+                <SearchableSelect
+                  value={form.natureza_id}
+                  onChange={mudar('natureza_id')}
+                  options={opNaturezas}
+                  placeholder={form.centro_id ? 'Natureza' : 'Escolha o centro primeiro'}
+                  emptyMessage="Nenhuma natureza com Máscara DRE no plano deste centro."
+                  disabled={travado || !form.centro_id}
+                  clearable={false}
+                  larguraPainel={460}
+                />
               </Campo>
               <Campo rotulo={`Valor${form.tipo === 'SAIDA' ? ' (saída)' : ' (entrada)'}`} className="text-right">
                 <input

@@ -203,4 +203,25 @@ async function resumo(empresaId) {
   };
 }
 
-module.exports = { list, update, listVersoes, criarVersao, excluirVersao, resumo };
+// Quais naturezas entram na DRE em cada centro de custo, e com qual Máscara DRE: centro com "Realiza
+// DRE" (aba Centros Custos) × conta com Máscara DRE no plano que vale pro centro — o plano próprio
+// dele, se tiver (sem cair no Global), senão o Global. Conta sem máscara ou "NÃO ENTRA NA DRE" fica
+// de fora. Subconsulta com as colunas centro_id (int), natureza_id (texto) e mascara_id; `p` = o
+// parâmetro da empresa ('$1'). Usada pela DRE › Financeiro (listagem, cards, ajustes e lançamentos
+// criados).
+function sqlMapaDre(p = '$1') {
+  return `
+    SELECT c.sienge_id AS centro_id, pc.sienge_id::text AS natureza_id, pc.mascara_id
+      FROM centros_custo_sienge c
+      JOIN dre_plano_contas_versoes v ON v.empresa_id = c.empresa_id AND v.centro_id = c.sienge_id
+      JOIN dre_plano_contas_centro pc ON pc.empresa_id = c.empresa_id AND pc.centro_id = c.sienge_id
+     WHERE c.empresa_id = ${p} AND c.realiza_dre AND pc.mascara_id IS NOT NULL AND NOT pc.nao_entra
+    UNION ALL
+    SELECT c.sienge_id, pg.sienge_id::text, pg.mascara_id
+      FROM centros_custo_sienge c
+      JOIN dre_plano_contas pg ON pg.empresa_id = c.empresa_id
+     WHERE c.empresa_id = ${p} AND c.realiza_dre AND pg.mascara_id IS NOT NULL AND NOT pg.nao_entra
+       AND NOT EXISTS (SELECT 1 FROM dre_plano_contas_versoes v WHERE v.empresa_id = c.empresa_id AND v.centro_id = c.sienge_id)`;
+}
+
+module.exports = { list, update, listVersoes, criarVersao, excluirVersao, resumo, sqlMapaDre };

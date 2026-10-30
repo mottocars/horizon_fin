@@ -1,4 +1,5 @@
 const pool = require('../../config/db');
+const { sqlMapaDre } = require('../dre-plano-contas/drePlanoContas.service');
 
 // Lançamentos financeiros criados à mão (tabela lancamentos_manuais —
 // database/migrations/2026-10-30-lancamentos-manuais.sql): não vêm do Sienge; entram nas listagens
@@ -23,16 +24,21 @@ const CAMPOS = 'id, tipo, to_char(data, \'YYYY-MM-DD\') AS data, documento, hist
 const resumo = (l) =>
   l && { tipo: l.tipo, data: l.data, documento: l.documento || null, historico: l.historico, centro_id: l.centro_id, natureza_id: l.natureza_id, valor: Number(l.valor) };
 
+// Centros com "Realiza DRE", naturezas analíticas e, por centro, as naturezas que entram na DRE nele
+// (Máscara DRE no plano do centro — sqlMapaDre); a tela só oferece essas.
 async function opcoes(empresaId) {
-  const [{ rows: centros }, { rows: naturezas }] = await Promise.all([
+  const [{ rows: centros }, { rows: naturezas }, { rows: mapa }] = await Promise.all([
     // Só centros com "Realiza DRE" (os que a listagem do Financeiro mostra).
     pool.query('SELECT sienge_id AS id, name AS nome FROM centros_custo_sienge WHERE empresa_id = $1 AND realiza_dre ORDER BY sienge_id', [empresaId]),
     pool.query(
       "SELECT sienge_id::text AS id, name AS nome FROM planos_financeiros_sienge WHERE empresa_id = $1 AND tp_conta <> 'T' ORDER BY sienge_id::text",
       [empresaId]
     ),
+    pool.query(`SELECT centro_id, natureza_id FROM (${sqlMapaDre('$1')}) m`, [empresaId]),
   ]);
-  return { centros, naturezas };
+  const naturezas_por_centro = {};
+  mapa.forEach((m) => (naturezas_por_centro[m.centro_id] ||= []).push(m.natureza_id));
+  return { centros, naturezas, naturezas_por_centro };
 }
 
 async function buscar(db, empresaId, id) {
@@ -68,6 +74,12 @@ async function validar(empresaId, dados) {
     [empresaId, String(dados.natureza_id)]
   );
   if (!nat[0]) throw erro(400, 'Natureza não encontrada no plano de contas (só contas analíticas).');
+  const { rows: dre } = await pool.query(`SELECT 1 FROM (${sqlMapaDre('$1')}) m WHERE m.centro_id = $2 AND m.natureza_id = $3`, [
+    empresaId,
+    dados.centro_id,
+    String(dados.natureza_id),
+  ]);
+  if (!dre[0]) throw erro(400, 'Esta natureza não tem Máscara DRE no plano de contas deste centro (ou está como "NÃO ENTRA NA DRE").');
 }
 
 async function registrar(db, empresaId, id, acao, antes, depois, usuarioId) {

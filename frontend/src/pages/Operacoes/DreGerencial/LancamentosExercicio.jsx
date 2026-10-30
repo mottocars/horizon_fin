@@ -41,7 +41,7 @@ function opcoes(lista, rotulo, vazio) {
 
 // Filtros de coluna (FiltroColuna): null = sem filtro; lista vazia (nada marcado) também vale como
 // sem filtro (mesma regra do Plano Contas).
-const SEM_FILTROS = { origens: null, meses: null, documentos: null, titulos: null, contrapartes: null, naturezas: null, centros: null, status: null };
+const SEM_FILTROS = { origens: null, meses: null, documentos: null, titulos: null, contrapartes: null, naturezas: null, mascaras: null, centros: null, status: null };
 
 // Status da linha: Original (como veio do Sienge), Ajustado (a linha tem ajuste — lancamentos_ajustes;
 // centro, natureza e/ou valor trocados sem mexer no Sienge) ou Criado (lançamento criado à mão —
@@ -143,8 +143,11 @@ function FiltroTitulo({ valor, onChange }) {
 // por título, com as parcelas somadas; título rateado, uma por centro × natureza, com o % do rateio
 // (regras em dre-financeiro/financeiro.service.js). Clicar em qualquer lugar da linha — título ou
 // movimento — abre a janela daquela linha de rateio (LancamentoAjusteModal), onde se ajusta centro,
-// natureza e valor sem mexer no Sienge; a coluna Status mostra Original ou Ajustado. Filtros no cabeçalho da tabela (Origem, Data — mês de emissão —, Documento, Título —
-// números digitados —, Cliente/Fornecedor, Natureza, Centro de custo e Status) e a busca do topo da
+// natureza e valor sem mexer no Sienge; a coluna Status mostra Original ou Ajustado. Só as linhas que
+// entram na DRE: centro com "Realiza DRE" e natureza com Máscara DRE no plano de contas do centro (o
+// próprio, se tiver, senão o Global) — coluna Máscara DRE. Filtros no cabeçalho da tabela (Origem,
+// Data — mês de emissão —, Documento, Título — números digitados —, Cliente/Fornecedor, Natureza,
+// Máscara DRE, Centro de custo e Status) e a busca do topo da
 // página, tudo aplicado no backend. Paginado (um ano da GENESIS passa de dezenas de milhares de
 // linhas); no rodapé, "Mostrar todos" busca o resto em blocos, com barra de carregamento. O exercício
 // do ano atual (travado) ganha o selo e a janela do título abre só pra consulta.
@@ -187,7 +190,7 @@ export default function LancamentosExercicio({ empresaId, ano, search = '', novo
     setOpcoesFiltro(null);
     listarFiltrosExercicioDre(empresaId, ano)
       .then(setOpcoesFiltro)
-      .catch(() => setOpcoesFiltro({ meses: [], documentos: [], contrapartes: [], naturezas: [], centros: [] }));
+      .catch(() => setOpcoesFiltro({ meses: [], documentos: [], contrapartes: [], naturezas: [], mascaras: [], centros: [] }));
   }, [empresaId, ano]);
 
   // Filtro ou busca novos voltam pra primeira página (o "mostrar todos" continua valendo).
@@ -250,12 +253,14 @@ export default function LancamentosExercicio({ empresaId, ano, search = '', novo
     () => opcoes(opcoesFiltro?.naturezas, (o) => `${o.valor} ${o.nome || ''}`.trim(), 'SEM NATUREZA'),
     [opcoesFiltro]
   );
+  const opMascara = useMemo(() => opcoes(opcoesFiltro?.mascaras, (o) => o.nome || o.valor, ''), [opcoesFiltro]);
   const refs = {
     origens: useRef(null),
     meses: useRef(null),
     documentos: useRef(null),
     contrapartes: useRef(null),
     naturezas: useRef(null),
+    mascaras: useRef(null),
     centros: useRef(null),
   };
   const opCentro = useMemo(
@@ -332,7 +337,7 @@ export default function LancamentosExercicio({ empresaId, ano, search = '', novo
         </div>
       ) : (
         <div>
-          <table className={`w-full min-w-[1360px] table-fixed border-collapse ${carregando && dados ? 'opacity-60 transition-opacity' : ''}`}>
+          <table className={`w-full min-w-[1540px] table-fixed border-collapse ${carregando && dados ? 'opacity-60 transition-opacity' : ''}`}>
             <colgroup>
               <col style={{ width: 110 }} />
               <col style={{ width: 92 }} />
@@ -340,6 +345,7 @@ export default function LancamentosExercicio({ empresaId, ano, search = '', novo
               <col style={{ width: 92 }} />
               <col />
               <col style={{ width: 250 }} />
+              <col style={{ width: 180 }} />
               <col style={{ width: 200 }} />
               <col style={{ width: 88 }} />
               <col style={{ width: 130 }} />
@@ -358,6 +364,7 @@ export default function LancamentosExercicio({ empresaId, ano, search = '', novo
                 </th>
                 {cab('contrapartes', 'Cliente / Fornecedor', opContraparte, 420)}
                 {cab('naturezas', 'Natureza', opNatureza, 460)}
+                {cab('mascaras', 'Máscara DRE', opMascara, 320)}
                 {cab('centros', 'Centro de custo', opCentro, 380)}
                 <th className={`${th} text-right`}>% Rateio</th>
                 <th className={`${th} text-right`}>Valor</th>
@@ -367,13 +374,13 @@ export default function LancamentosExercicio({ empresaId, ano, search = '', novo
             <tbody>
               {!dados ? (
                 <tr>
-                  <td colSpan={10} className="py-12 text-center text-sm text-gray-400">
+                  <td colSpan={11} className="py-12 text-center text-sm text-gray-400">
                     Carregando...
                   </td>
                 </tr>
               ) : dados.linhas.length === 0 ? (
                 <tr>
-                  <td colSpan={10} className="border-b border-gray-100 py-10 text-center text-sm text-gray-400">
+                  <td colSpan={11} className="border-b border-gray-100 py-10 text-center text-sm text-gray-400">
                     Nenhum lançamento encontrado{filtrosAtivos || busca ? ' para essa busca/filtro.' : ' neste exercício.'}
                     {filtrosAtivos && (
                       <button
@@ -434,6 +441,9 @@ export default function LancamentosExercicio({ empresaId, ano, search = '', novo
                         ) : (
                           <span className="text-gray-400">Sem natureza</span>
                         )}
+                      </td>
+                      <td className={`${td} truncate text-gray-700`} title={l.mascara_nome || ''}>
+                        {l.mascara_nome}
                       </td>
                       <td className={`${td} truncate text-gray-700`} title={l.centro_nome || ''}>
                         {l.centro_id != null ? (
