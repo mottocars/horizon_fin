@@ -1,5 +1,5 @@
 import { useCallback, useEffect, useState } from 'react';
-import { ArrowDownLeft, ArrowUpRight, CalendarDays, Lock, TriangleAlert, Wallet } from 'lucide-react';
+import { ArrowDownLeft, ArrowLeftRight, ArrowUpRight, CalendarDays, Lock, TriangleAlert, Wallet } from 'lucide-react';
 import { listarExerciciosDre } from '../../../api/dreFinanceiro.api';
 import LancamentosExercicio from './LancamentosExercicio';
 
@@ -9,13 +9,14 @@ function dataBr(iso) {
   return `${dia}/${mes}/${ano}`;
 }
 
-function parcelas(n) {
-  return `${n.toLocaleString('pt-BR')} ${n === 1 ? 'parcela' : 'parcelas'}`;
+function plural(n, um, varios) {
+  return `${n.toLocaleString('pt-BR')} ${n === 1 ? um : varios}`;
 }
 
 // Mesmo card dos planos da aba Plano Contas (PlanosContasLista.jsx): ícone, título e rodapé. Exercício
 // travado (o do ano atual): em amarelo sutil, com cadeado e "Somente visualização" — nada nele pode ser
-// alterado. Clicar abre os lançamentos do exercício.
+// alterado. Quantidades: títulos distintos a receber e a pagar emitidos no ano (um título tem várias
+// parcelas) e movimentações do extrato sem título. Clicar abre os lançamentos do exercício.
 function CardExercicio({ exercicio, atual, onAbrir }) {
   const travado = exercicio.travado;
   return (
@@ -55,18 +56,24 @@ function CardExercicio({ exercicio, atual, onAbrir }) {
           <span className="flex items-center gap-1">
             <ArrowDownLeft size={12} className="text-emerald-500" /> Contas a receber
           </span>
-          <span className="tabular-nums">{parcelas(exercicio.receber)}</span>
+          <span className="tabular-nums">{plural(exercicio.receber, 'título', 'títulos')}</span>
         </div>
         <div className="flex items-center justify-between">
           <span className="flex items-center gap-1">
             <ArrowUpRight size={12} className="text-red-400" /> Contas a pagar
           </span>
-          <span className="tabular-nums">{parcelas(exercicio.pagar)}</span>
+          <span className="tabular-nums">{plural(exercicio.pagar, 'título', 'títulos')}</span>
+        </div>
+        <div className="flex items-center justify-between">
+          <span className="flex items-center gap-1">
+            <ArrowLeftRight size={12} className="text-gray-400" /> Movimentações
+          </span>
+          <span className="tabular-nums">{plural(exercicio.movimentos || 0, 'lançamento', 'lançamentos')}</span>
         </div>
       </div>
 
       <div className={`mt-4 border-t pt-3 text-[11px] text-gray-500 ${travado ? 'border-amber-100' : 'border-gray-100'}`}>
-        Emitidas de 01/01 a 31/12/{exercicio.ano}
+        Títulos emitidos e movimentos de 01/01 a 31/12/{exercicio.ano}
       </div>
     </button>
   );

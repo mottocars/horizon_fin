@@ -6,7 +6,9 @@ const pool = require('../../config/db');
 // TOSTE E DINIZ emitidos em "2002" que vencem em 2026) e jogaria o primeiro exercício décadas pra
 // trás. Dentro do exercício, porém, os títulos entram pela EMISSÃO (pedido do usuário) — a contagem
 // de cada card e a listagem (lancamentos) são por emissão; título emitido antes do primeiro
-// exercício não aparece em nenhum.
+// exercício não aparece em nenhum. O card conta TÍTULOS distintos (um título tem várias parcelas) a
+// receber e a pagar, e as movimentações do extrato sem título (cada lançamento uma vez, mesmo
+// rateado em vários centros) — mesmo critério do movimento na listagem (com natureza).
 // O exercício do ano atual vem travado (`travado`, pedido do usuário): só visualização — nenhuma
 // ação que altere dados pode valer pra ele (o backend deve recusar, não só a tela esconder).
 async function exercicios(empresaId) {
@@ -22,12 +24,20 @@ async function exercicios(empresaId) {
   const primeiroAno = Math.min(Number(String(primeiro).slice(0, 4)), anoAtual);
 
   const { rows } = await pool.query(
-    `SELECT EXTRACT(YEAR FROM issue_date)::int AS ano,
-            COUNT(*) FILTER (WHERE tipo = 'R')::int AS receber,
-            COUNT(*) FILTER (WHERE tipo = 'P')::int AS pagar
-       FROM (SELECT 'R' AS tipo, issue_date FROM sie_income WHERE empresa_id = $1 AND issue_date >= $2 AND issue_date < $3
+    `SELECT EXTRACT(YEAR FROM data)::int AS ano,
+            COUNT(DISTINCT id) FILTER (WHERE tipo = 'R')::int AS receber,
+            COUNT(DISTINCT id) FILTER (WHERE tipo = 'P')::int AS pagar,
+            COUNT(DISTINCT id) FILTER (WHERE tipo = 'E')::int AS movimentos
+       FROM (SELECT 'R' AS tipo, bill_id AS id, issue_date AS data FROM sie_income
+              WHERE empresa_id = $1 AND issue_date >= $2 AND issue_date < $3
              UNION ALL
-             SELECT 'P', issue_date FROM sie_outcome WHERE empresa_id = $1 AND issue_date >= $2 AND issue_date < $3) t
+             SELECT 'P', bill_id, issue_date FROM sie_outcome
+              WHERE empresa_id = $1 AND issue_date >= $2 AND issue_date < $3
+             UNION ALL
+             SELECT 'E', r.registro_id, r.data FROM sie_extrato_contas_rateio r
+               JOIN sie_extrato_contas e ON e.registro_id = r.registro_id
+              WHERE r.empresa_id = $1 AND r.mes >= $2 AND r.mes < $3 AND r.data >= $2 AND r.data < $3
+                AND e.bill_id IS NULL AND r.natureza_id IS NOT NULL) t
       GROUP BY 1`,
     [empresaId, `${primeiroAno}-01-01`, `${anoAtual + 1}-01-01`]
   );
@@ -35,7 +45,7 @@ async function exercicios(empresaId) {
   const lista = [];
   for (let ano = anoAtual; ano >= primeiroAno; ano -= 1) {
     const r = porAno.get(ano);
-    lista.push({ ano, receber: r?.receber || 0, pagar: r?.pagar || 0, travado: ano === anoAtual });
+    lista.push({ ano, receber: r?.receber || 0, pagar: r?.pagar || 0, movimentos: r?.movimentos || 0, travado: ano === anoAtual });
   }
   return { primeiro_vencimento: primeiro, ano_atual: anoAtual, exercicios: lista };
 }
