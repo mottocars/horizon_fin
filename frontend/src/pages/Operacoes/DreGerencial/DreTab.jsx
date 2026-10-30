@@ -279,13 +279,17 @@ export default function DreTab({ empresaId, de, ate, centros = [], telaCheia = f
                   c.mes ? (
                     <CabecalhoMes key={c.chave} coluna={c} atual={c.mes === mesAtual} />
                   ) : (
-                    // O próprio nome do centro é o botão do mês a mês: acende no hover.
-                    <th key={c.chave} colSpan={2} className="border-b border-l border-gray-200 bg-white p-1 text-center align-bottom font-semibold">
+                    // A célula inteira do centro é o botão do mês a mês: o fundo todo acende no hover.
+                    <th
+                      key={c.chave}
+                      colSpan={2}
+                      onClick={() => abrirMensal(c.chave)}
+                      className="group/centro cursor-pointer border-b border-l border-gray-200 bg-white p-0 text-center align-bottom font-semibold transition-colors hover:bg-primary-600"
+                    >
                       <button
                         type="button"
-                        onClick={() => abrirMensal(c.chave)}
                         title={`${c.chave} - ${c.nome} · ver mês a mês`}
-                        className="group/centro flex w-full items-center justify-center gap-1 rounded-md px-2 py-1 uppercase tracking-wide text-gray-700 transition-colors hover:bg-primary-600 hover:text-white"
+                        className="flex w-full items-center justify-center gap-1 px-3 pb-1 pt-1.5 uppercase tracking-wide text-gray-700 transition-colors group-hover/centro:text-white"
                       >
                         <span className="line-clamp-2 whitespace-normal leading-tight">{c.nome}</span>
                         <CalendarDays size={12} className="shrink-0 text-gray-300 transition-colors group-hover/centro:text-white" />
