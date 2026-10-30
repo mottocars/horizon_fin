@@ -10,6 +10,7 @@ router.param('empresaId', paramEmpresa);
 router.get('/:empresaId', controller.obter);
 router.get('/:empresaId/previa-poc', controller.previaPoc);
 router.put('/:empresaId/poc-receita', controller.salvarPocReceita);
+router.put('/:empresaId/avaliacao-vertical', controller.salvarAvaliacaoVertical);
 router.put('/:empresaId/documentos', controller.salvarDocumentos);
 
 module.exports = router;

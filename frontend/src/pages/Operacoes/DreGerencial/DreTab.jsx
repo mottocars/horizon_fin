@@ -9,7 +9,8 @@ const dataBr = (iso) => iso.split('-').reverse().join('/');
 // Demonstração (nível 1 + nível 2) da DRE, em formato de tabela — mesma mecânica visual de
 // SaldosContasTab.jsx (primeira coluna com a hierarquia, valor alinhado à direita), num quadro de
 // bordas arredondadas como o do fluxo de caixa do DFC Construtoras. Colunas: CONSOLIDADO (o
-// totalizador = soma dos centros) e um centro de custo por coluna; descrição e consolidado ficam
+// totalizador = soma dos centros) e um centro de custo por coluna, cada um com Valor e AV % (Avaliação
+// Vertical, a partir da linha de nível 1 da aba Configurações); descrição e consolidado ficam
 // congelados à esquerda quando os centros rolam. A hierarquia é a
 // árvore cadastrada na aba Máscaras (dre_mascaras), na mesma ordem de lá. Valor = período do filtro
 // (de/até) somando os centros escolhidos (vazio = todos com "Realiza DRE") — cálculo em
@@ -96,11 +97,23 @@ export default function DreTab({ empresaId, de, ate, centros = [], telaCheia = f
   }
 
   const semMascaraPoc = resultado && !resultado.poc_receita.mascara;
-  // Colunas de valor: o CONSOLIDADO (soma dos centros) e um centro de custo por coluna.
+  // Colunas de valor: o CONSOLIDADO (soma dos centros) e um centro de custo por coluna — cada uma com a
+  // sua AV % ao lado.
   const colunas = [
     { chave: 'consolidado', valores: resultado?.valores || {} },
     ...(resultado?.por_centro || []).map((c) => ({ chave: c.id, nome: c.nome, valores: c.valores })),
   ];
+  const linhas = comAcumulado(arvore, colunas);
+  // AV %: a linha de nível 1 da aba Configurações vale 100% em cada coluna; ela e as de baixo mostram o
+  // percentual dela (as de cima ficam vazias). Sem a linha configurada, traço.
+  const av = resultado?.avaliacao_vertical || null;
+  const indiceBase = av ? arvore.findIndex((g) => g.id === av.mascara_id) : -1;
+  const bases = colunas.map((c, i) => {
+    if (indiceBase < 0) return null;
+    const g = arvore[indiceBase];
+    return g.totalizadora ? linhas[indiceBase].acumulados[i] : totalDoGrupo(g, c.valores);
+  });
+  const semAv = resultado && indiceBase < 0;
 
   return (
     <div
@@ -129,7 +142,7 @@ export default function DreTab({ empresaId, de, ate, centros = [], telaCheia = f
           </button>
         </div>
       )}
-      {(erro || semMascaraPoc) && (
+      {(erro || semMascaraPoc || semAv) && (
         <div className="mb-4 space-y-2">
           {erro && (
             <div className="flex items-center gap-2 rounded-lg bg-red-50 px-3 py-2 text-sm text-red-600">
@@ -140,6 +153,12 @@ export default function DreTab({ empresaId, de, ate, centros = [], telaCheia = f
             <div className="flex items-center gap-2 rounded-lg bg-amber-50 px-3 py-2 text-xs text-amber-700">
               <AlertTriangle size={14} className="shrink-0" />
               POC de Receita não gerada: escolha a Máscara DRE Nível 2 na aba Configurações.
+            </div>
+          )}
+          {semAv && (
+            <div className="flex items-center gap-2 rounded-lg bg-amber-50 px-3 py-2 text-xs text-amber-700">
+              <AlertTriangle size={14} className="shrink-0" />
+              Avaliação Vertical não configurada: escolha a linha de nível 1 que vale 100% na aba Configurações.
             </div>
           )}
         </div>
@@ -156,25 +175,61 @@ export default function DreTab({ empresaId, de, ate, centros = [], telaCheia = f
         <div className="overflow-x-auto rounded-lg border border-gray-200">
           <table className="w-full border-separate border-spacing-0 text-left text-xs">
             <thead>
+              {/* Cabeçalhos centralizados: o nome da coluna (Consolidado / centro) em cima, Valor e AV % embaixo. */}
               <tr className="text-xs uppercase tracking-wide text-gray-400">
-                <th className={`${COL_DESCRICAO} border-b border-gray-200 bg-white py-1.5 pl-4 align-bottom font-medium`}>Descrição</th>
-                <th className={`${COL_CONSOLIDADO} border-b border-b-blue-200 bg-blue-100 px-4 py-1.5 text-right align-bottom font-semibold text-blue-800`}>
+                <th
+                  rowSpan={2}
+                  className={`${COL_DESCRICAO} border-b border-gray-200 bg-white py-1.5 pl-4 align-bottom font-medium`}
+                >
+                  Descrição
+                </th>
+                <th
+                  colSpan={2}
+                  className="sticky left-[380px] z-10 border-b border-r border-b-blue-200 border-r-blue-200 bg-blue-100 px-3 pb-1 pt-1.5 text-center align-bottom font-semibold text-blue-800"
+                >
                   Consolidado
                 </th>
                 {colunas.slice(1).map((c) => (
                   <th
                     key={c.chave}
+                    colSpan={2}
                     title={`${c.chave} - ${c.nome}`}
-                    className={`${COL_CENTRO} border-b border-l border-gray-200 bg-white px-3 py-1.5 text-right align-bottom font-medium`}
+                    className="border-b border-l border-gray-200 bg-white px-3 pb-1 pt-1.5 text-center align-bottom font-medium"
                   >
                     <span className="line-clamp-2 whitespace-normal leading-tight">{c.nome}</span>
                   </th>
                 ))}
               </tr>
+              <tr className="text-[10px] uppercase tracking-wide text-gray-400">
+                <th className={`${COL_CONSOLIDADO} border-b border-b-blue-200 bg-blue-100 py-1 text-center font-medium text-blue-700`}>Valor</th>
+                <th
+                  className={`${COL_AV_CONSOLIDADO} border-b border-b-blue-200 bg-blue-100 py-1 text-center font-medium text-blue-700`}
+                  title={av ? `Percentual de ${av.descricao}` : 'Avaliação Vertical não configurada'}
+                >
+                  AV %
+                </th>
+                {colunas.slice(1).map((c) => (
+                  <Fragment key={c.chave}>
+                    <th className={`${COL_CENTRO} border-b border-l border-gray-200 bg-white py-1 text-center font-medium`}>Valor</th>
+                    <th
+                      className={`${COL_AV} border-b border-gray-200 bg-white py-1 text-center font-medium`}
+                      title={av ? `Percentual de ${av.descricao}` : 'Avaliação Vertical não configurada'}
+                    >
+                      AV %
+                    </th>
+                  </Fragment>
+                ))}
+              </tr>
             </thead>
             <tbody className={calculando ? 'opacity-50 transition-opacity' : ''}>
-              {comAcumulado(arvore, colunas).map(({ grupo, acumulados }) => (
-                <LinhaGrupo key={grupo.id} grupo={grupo} colunas={colunas} acumulados={acumulados} />
+              {linhas.map(({ grupo, acumulados }, i) => (
+                <LinhaGrupo
+                  key={grupo.id}
+                  grupo={grupo}
+                  colunas={colunas}
+                  acumulados={acumulados}
+                  bases={indiceBase >= 0 && i >= indiceBase ? bases : null}
+                />
               ))}
             </tbody>
           </table>
@@ -202,10 +257,75 @@ function comAcumulado(arvore, colunas) {
   });
 }
 
-// Larguras fixas: a descrição e o consolidado ficam congelados à esquerda quando os centros rolam.
+// Linha de nível 1 = soma das de nível 2, só quando todas já têm valor.
+function totalDoGrupo(grupo, valores) {
+  const doGrupo = grupo.filhos.map((f) => valores[f.id]);
+  return doGrupo.length && doGrupo.every((v) => v !== null && v !== undefined) ? doGrupo.reduce((t, v) => t + v, 0) : null;
+}
+
+// Larguras fixas: a descrição e o consolidado (valor + AV %) ficam congelados à esquerda quando os
+// centros rolam (left = soma das larguras à esquerda: 380, +144).
 const COL_DESCRICAO = 'sticky left-0 z-10 w-[380px] min-w-[380px] max-w-[380px]';
-const COL_CONSOLIDADO = 'sticky left-[380px] z-10 w-36 min-w-36 border-r border-r-blue-200';
+const COL_CONSOLIDADO = 'sticky left-[380px] z-10 w-36 min-w-36 max-w-36';
+const COL_AV_CONSOLIDADO = 'sticky left-[524px] z-10 w-20 min-w-20 max-w-20 border-r border-r-blue-200';
 const COL_CENTRO = 'w-32 min-w-32 max-w-32';
+const COL_AV = 'w-20 min-w-20 max-w-20';
+
+// AV % = valor ÷ |base| (o sinal do valor fica: despesa sai negativa). Sem base (ou zero), traço.
+const pctAv = (v, base) => (v === null || v === undefined || !base ? null : (v / Math.abs(base)) * 100);
+// Abaixo de 0,005% vira 0 (senão aparecia "-0,00%").
+const formatoAv = (p) => `${(Math.abs(p) < 0.005 ? 0 : p).toLocaleString('pt-BR', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}%`;
+
+// Fundo e bordas de cada célula de valor / AV %, por tipo de linha e coluna (consolidado ou centro).
+// As do consolidado são congeladas, então o fundo é sempre sólido.
+function estilo(tipo, consolidado) {
+  if (tipo === 'totalizadora')
+    return { fundo: consolidado ? 'bg-[#174a70]' : 'bg-[#1d5c8a]', borda: 'border-b-[#1d5c8a]', divisa: 'border-l-white/10' };
+  if (tipo === 'n1')
+    return consolidado
+      ? { fundo: 'bg-blue-100', borda: 'border-b-blue-200', divisa: '' }
+      : { fundo: 'bg-gray-50', borda: 'border-b-gray-200', divisa: 'border-l-gray-200' };
+  return consolidado
+    ? { fundo: 'bg-blue-50 group-hover:bg-blue-100', borda: 'border-b-blue-100', divisa: '' }
+    : { fundo: 'group-hover:bg-gray-50', borda: 'border-b-gray-100', divisa: 'border-l-gray-100' };
+}
+
+// As duas células de uma coluna (valor e AV %) numa linha. `base`: o 100% da AV % nessa coluna, ou
+// undefined quando a linha fica sem AV (acima da linha configurada).
+function Celulas({ tipo, consolidado, valor, base }) {
+  const e = estilo(tipo, consolidado);
+  const py = tipo === 'n2' ? 'py-0.5' : 'py-1';
+  const forte = tipo === 'n2' ? (consolidado ? 'font-semibold' : '') : 'font-bold';
+  const p = base === undefined ? undefined : pctAv(valor, base);
+  return (
+    <>
+      <td
+        className={`${consolidado ? COL_CONSOLIDADO : `${COL_CENTRO} border-l ${e.divisa}`} ${e.fundo} border-b ${e.borda} ${py} px-3 text-right text-xs tabular-nums ${forte}`}
+      >
+        {tipo === 'totalizadora' ? (
+          valor === null || valor === undefined ? (
+            <span className="text-white/50">—</span>
+          ) : (
+            <span className={valor < 0 ? 'text-red-300' : 'text-white'}>{moeda(valor)}</span>
+          )
+        ) : (
+          <Valor valor={valor} cor={tipo === 'n1' ? 'text-gray-900' : 'text-gray-700'} />
+        )}
+      </td>
+      <td
+        className={`${consolidado ? COL_AV_CONSOLIDADO : COL_AV} ${e.fundo} border-b ${e.borda} ${py} px-2 text-right text-[11px] tabular-nums ${
+          tipo === 'n2' ? '' : 'font-semibold'
+        } ${
+          tipo === 'totalizadora'
+            ? p !== null && p !== undefined && p < 0 ? 'text-red-300' : 'text-white/80'
+            : p !== null && p !== undefined && p < 0 ? 'text-red-500' : 'text-gray-500'
+        }`}
+      >
+        {p === undefined ? '' : p === null ? <span className={tipo === 'totalizadora' ? 'text-white/40' : 'text-gray-300'}>—</span> : formatoAv(p)}
+      </td>
+    </>
+  );
+}
 
 const STATUS_POC = {
   RECEITA: { sigla: 'PR', titulo: 'POC de Receita', cor: 'bg-emerald-100 text-emerald-700 ring-emerald-200' },
@@ -252,7 +372,9 @@ function Valor({ valor, vazio = 'text-gray-300', cor = 'text-gray-700' }) {
 // Totaliza (aba Máscaras) é linha de subtotal: escura, fechando a seção, sem nível 2 — valor de cada
 // coluna = `acumulados` (tudo acima). Linha de nível 1 = soma das de nível 2, só quando todas já têm
 // valor. As células congeladas (descrição e consolidado) têm fundo sólido: os centros rolam por baixo.
-function LinhaGrupo({ grupo, colunas, acumulados }) {
+// `bases`: o 100% da AV % de cada coluna, ou null quando o grupo está acima da linha configurada.
+function LinhaGrupo({ grupo, colunas, acumulados, bases }) {
+  const base = (i) => (bases ? bases[i] : undefined);
   if (grupo.totalizadora) {
     return (
       <tr>
@@ -263,25 +385,11 @@ function LinhaGrupo({ grupo, colunas, acumulados }) {
           </span>
         </td>
         {colunas.map((c, i) => (
-          <td
-            key={c.chave}
-            className={`${i === 0 ? `${COL_CONSOLIDADO} bg-[#174a70]` : `${COL_CENTRO} border-l border-l-white/10 bg-[#1d5c8a]`} border-b border-b-[#1d5c8a] px-3 py-1 text-right text-xs font-bold tabular-nums`}
-          >
-            {acumulados[i] === null ? (
-              <span className="text-white/50">—</span>
-            ) : (
-              <span className={acumulados[i] < 0 ? 'text-red-300' : 'text-white'}>{moeda(acumulados[i])}</span>
-            )}
-          </td>
+          <Celulas key={c.chave} tipo="totalizadora" consolidado={i === 0} valor={acumulados[i]} base={base(i)} />
         ))}
       </tr>
     );
   }
-
-  const totalDoGrupo = (valores) => {
-    const doGrupo = grupo.filhos.map((f) => valores[f.id]);
-    return doGrupo.length && doGrupo.every((v) => v !== null && v !== undefined) ? doGrupo.reduce((t, v) => t + v, 0) : null;
-  };
 
   return (
     <Fragment>
@@ -293,12 +401,7 @@ function LinhaGrupo({ grupo, colunas, acumulados }) {
           </span>
         </td>
         {colunas.map((c, i) => (
-          <td
-            key={c.chave}
-            className={`${i === 0 ? `${COL_CONSOLIDADO} border-b-blue-200 bg-blue-100` : `${COL_CENTRO} border-l border-l-gray-200 border-b-gray-200 bg-gray-50`} border-b px-3 py-1 text-right text-xs font-bold tabular-nums`}
-          >
-            <Valor valor={totalDoGrupo(c.valores)} cor="text-gray-900" />
-          </td>
+          <Celulas key={c.chave} tipo="n1" consolidado={i === 0} valor={totalDoGrupo(grupo, c.valores)} base={base(i)} />
         ))}
       </tr>
 
@@ -308,7 +411,8 @@ function LinhaGrupo({ grupo, colunas, acumulados }) {
             Nenhum item cadastrado nesta linha ainda.
           </td>
           <td className={`${COL_CONSOLIDADO} border-b border-b-blue-100 bg-blue-50`} />
-          <td colSpan={colunas.length - 1} className="border-b border-gray-100" />
+          <td className={`${COL_AV_CONSOLIDADO} border-b border-b-blue-100 bg-blue-50`} />
+          <td colSpan={(colunas.length - 1) * 2} className="border-b border-gray-100" />
         </tr>
       ) : (
         grupo.filhos.map((item) => (
@@ -322,14 +426,7 @@ function LinhaGrupo({ grupo, colunas, acumulados }) {
               </span>
             </td>
             {colunas.map((c, i) => (
-              <td
-                key={c.chave}
-                className={`${
-                  i === 0 ? `${COL_CONSOLIDADO} border-b-blue-100 bg-blue-50 font-semibold group-hover:bg-blue-100` : `${COL_CENTRO} border-l border-l-gray-100 border-b-gray-100 group-hover:bg-gray-50`
-                } border-b px-3 py-0.5 text-right text-xs tabular-nums`}
-              >
-                <Valor valor={c.valores[item.id]} />
-              </td>
+              <Celulas key={c.chave} tipo="n2" consolidado={i === 0} valor={c.valores[item.id]} base={base(i)} />
             ))}
           </tr>
         ))

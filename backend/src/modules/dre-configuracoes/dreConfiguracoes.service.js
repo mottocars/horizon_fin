@@ -12,6 +12,8 @@ const { arredondarPoc } = require('../../utils/poc');
 //     aparece na prévia ao lado da de receita.
 //   Tipos de documento financeiro fora da DRE — somem da aba Financeiro. Só os excluídos ficam
 //     gravados: tipo novo que chegar do Sienge entra sempre considerado.
+//   Avaliação Vertical — a linha de nível 1 (grupo ou totalizadora) que vale 100% na coluna AV % da aba
+//     DRE (database/migrations/2026-10-30-dre-configuracoes-av.sql). Pelo id; pode ficar sem.
 
 function erro(status, message) {
   const e = new Error(message);
@@ -32,7 +34,7 @@ function hoje() {
 async function obter(empresaId) {
   const [{ rows: cfg }, { rows: mascaras }, { rows: documentos }, { rows: excluidos }] = await Promise.all([
     pool.query(
-      `SELECT c.poc_receita_mascara_id, c.atualizado_em, u.nome AS usuario
+      `SELECT c.poc_receita_mascara_id, c.av_mascara_id, c.atualizado_em, u.nome AS usuario
          FROM dre_configuracoes c LEFT JOIN usuarios u ON u.id = c.usuario_id
         WHERE c.empresa_id = $1`,
       [empresaId]
@@ -84,6 +86,7 @@ async function obter(empresaId) {
 
   return {
     poc_receita_mascara_id: cfg[0]?.poc_receita_mascara_id ?? null,
+    av_mascara_id: cfg[0]?.av_mascara_id ?? null,
     atualizado_em: cfg[0]?.atualizado_em ?? null,
     atualizado_por: cfg[0]?.usuario ?? null,
     mascaras: grupos,
@@ -100,6 +103,21 @@ async function salvarPocReceita(empresaId, mascaraId, usuarioId) {
   await pool.query(
     `INSERT INTO dre_configuracoes (empresa_id, poc_receita_mascara_id, usuario_id) VALUES ($1, $2, $3)
      ON CONFLICT (empresa_id) DO UPDATE SET poc_receita_mascara_id = EXCLUDED.poc_receita_mascara_id, usuario_id = EXCLUDED.usuario_id`,
+    [empresaId, mascaraId, usuarioId]
+  );
+  return obter(empresaId);
+}
+
+// Linha de nível 1 da empresa (grupo ou totalizadora) que vale 100% na AV %; null = sem avaliação vertical.
+async function salvarAvaliacaoVertical(empresaId, mascaraId, usuarioId) {
+  if (mascaraId !== null) {
+    const { rows } = await pool.query('SELECT parent_id FROM dre_mascaras WHERE id = $1 AND empresa_id = $2', [mascaraId, empresaId]);
+    if (!rows[0]) throw erro(400, 'Máscara DRE não encontrada nesta empresa.');
+    if (rows[0].parent_id !== null) throw erro(400, 'Escolha uma linha de nível 1.');
+  }
+  await pool.query(
+    `INSERT INTO dre_configuracoes (empresa_id, av_mascara_id, usuario_id) VALUES ($1, $2, $3)
+     ON CONFLICT (empresa_id) DO UPDATE SET av_mascara_id = EXCLUDED.av_mascara_id, usuario_id = EXCLUDED.usuario_id`,
     [empresaId, mascaraId, usuarioId]
   );
   return obter(empresaId);
@@ -200,4 +218,4 @@ async function previaPoc(empresaId) {
   return { ate, mascara, obras };
 }
 
-module.exports = { obter, salvarPocReceita, salvarDocumentos, previaPoc };
+module.exports = { obter, salvarPocReceita, salvarAvaliacaoVertical, salvarDocumentos, previaPoc };

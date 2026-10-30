@@ -22,6 +22,11 @@ export function salvarPocReceitaDre(empresaId, mascaraId) {
 }
 
 // Lista completa dos tipos de documento fora da DRE (a caixa da direita).
+// Avaliação Vertical: linha de nível 1 que vale 100% na AV % da aba DRE (null = sem).
+export function salvarAvaliacaoVerticalDre(empresaId, mascaraId) {
+  return http.put(`/dre-configuracoes/${empresaId}/avaliacao-vertical`, { mascara_id: mascaraId }).then((res) => res.data);
+}
+
 export function salvarDocumentosExcluidosDre(empresaId, excluidos) {
   return http.put(`/dre-configuracoes/${empresaId}/documentos`, { excluidos }).then((res) => res.data);
 }

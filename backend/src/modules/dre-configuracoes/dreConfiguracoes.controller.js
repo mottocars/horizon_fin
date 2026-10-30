@@ -9,6 +9,10 @@ const pocSchema = z.object({
     .int()
     .positive('Escolha a Máscara DRE Nível 2 da POC de Receita.'),
 });
+// Linha de nível 1 da Avaliação Vertical: opcional (null = sem AV %).
+const avSchema = z.object({
+  mascara_id: z.coerce.number().int().positive('Linha de nível 1 inválida.').nullable(),
+});
 const documentosSchema = z.object({
   excluidos: z.array(z.string().trim().min(1).max(20)).max(500),
 });
@@ -42,6 +46,15 @@ async function salvarPocReceita(req, res, next) {
   }
 }
 
+async function salvarAvaliacaoVertical(req, res, next) {
+  try {
+    const { mascara_id: mascaraId } = avSchema.parse({ mascara_id: req.body?.mascara_id ?? null });
+    res.json(await service.salvarAvaliacaoVertical(empresaIdSchema.parse(req.params.empresaId), mascaraId, req.user.id));
+  } catch (err) {
+    tratar(err, next);
+  }
+}
+
 async function salvarDocumentos(req, res, next) {
   try {
     const { excluidos } = documentosSchema.parse(req.body || {});
@@ -59,4 +72,4 @@ async function previaPoc(req, res, next) {
   }
 }
 
-module.exports = { obter, salvarPocReceita, salvarDocumentos, previaPoc };
+module.exports = { obter, salvarPocReceita, salvarAvaliacaoVertical, salvarDocumentos, previaPoc };

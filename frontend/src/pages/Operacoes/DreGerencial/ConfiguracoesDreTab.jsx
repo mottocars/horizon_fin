@@ -7,6 +7,7 @@ import TransferList from '../../../components/TransferList';
 import {
   obterConfiguracoesDre,
   previaPocDre,
+  salvarAvaliacaoVerticalDre,
   salvarDocumentosExcluidosDre,
   salvarPocReceitaDre,
 } from '../../../api/dreConfiguracoes.api';
@@ -92,6 +93,8 @@ function Barra({ valor, cor }) {
 //   não é gerada. POC Receita = custo acumulado dessa máscara ÷ orçamento vigente da obra (aba
 //   Orçamento), até 100%. Pelo id: o nome da máscara pode mudar.
 // - POC de Despesa: fração ideal vendida (aba Unidades) — regra fixa, só explicada.
+// - Avaliação Vertical: a linha de nível 1 (grupo ou totalizadora) que vale 100% na coluna AV % da aba
+//   DRE; opcional (sem ela a AV % fica com traço).
 // - Prévia por obra das duas POCs, até hoje (recalcula depois de salvar).
 // - Tipos de documento financeiro: à direita = fora da DRE (somem da aba Financeiro); tipo novo que
 //   chegar do Sienge entra sempre à esquerda (só os excluídos ficam gravados).
@@ -100,6 +103,7 @@ export default function ConfiguracoesDreTab({ empresaId }) {
   const [dados, setDados] = useState(null);
   const [erroCarga, setErroCarga] = useState('');
   const [mascaraId, setMascaraId] = useState('');
+  const [avId, setAvId] = useState('');
   const [excluidos, setExcluidos] = useState([]);
   const [previa, setPrevia] = useState(null);
   const [carregandoPrevia, setCarregandoPrevia] = useState(false);
@@ -110,6 +114,7 @@ export default function ConfiguracoesDreTab({ empresaId }) {
   const aplicar = (d) => {
     setDados(d);
     setMascaraId(d.poc_receita_mascara_id ?? '');
+    setAvId(d.av_mascara_id ?? '');
     setExcluidos(d.excluidos);
   };
 
@@ -141,14 +146,21 @@ export default function ConfiguracoesDreTab({ empresaId }) {
       ),
     [dados]
   );
+  // Avaliação Vertical: qualquer linha de nível 1, na ordem da DRE (grupos e totalizadoras).
+  const opcoesNivel1 = useMemo(
+    () => (dados?.mascaras || []).map((g) => ({ value: g.id, label: g.descricao })),
+    [dados]
+  );
+  const avEscolhida = (dados?.mascaras || []).find((g) => String(g.id) === String(avId));
   const filhos = useMemo(() => (dados?.mascaras || []).flatMap((g) => g.filhos), [dados]);
   const receitaPoc = filhos.filter((f) => f.realiza_poc && f.tipo_poc === 'RECEITA');
   const despesaPoc = filhos.filter((f) => f.realiza_poc && f.tipo_poc === 'DESPESA');
   const mascaraEscolhida = filhos.find((f) => String(f.id) === String(mascaraId));
 
   const mudouPoc = dados && String(mascaraId || '') !== String(dados.poc_receita_mascara_id ?? '');
+  const mudouAv = dados && String(avId || '') !== String(dados.av_mascara_id ?? '');
   const mudouDocs = dados && [...excluidos].sort().join('|') !== [...dados.excluidos].sort().join('|');
-  const mudou = mudouPoc || mudouDocs;
+  const mudou = mudouPoc || mudouAv || mudouDocs;
 
   async function salvar() {
     setErro('');
@@ -162,6 +174,7 @@ export default function ConfiguracoesDreTab({ empresaId }) {
     try {
       let d = dados;
       if (mudouPoc) d = await salvarPocReceitaDre(empresaId, Number(mascaraId));
+      if (mudouAv) d = await salvarAvaliacaoVerticalDre(empresaId, avId ? Number(avId) : null);
       if (mudouDocs) d = await salvarDocumentosExcluidosDre(empresaId, excluidos);
       aplicar(d);
       setSalvo(true);
@@ -269,6 +282,58 @@ export default function ConfiguracoesDreTab({ empresaId }) {
           </div>
         </Card>
       </div>
+
+      <Card>
+        <SectionHeader
+          titulo="Avaliação Vertical"
+          texto="A linha de nível 1 que vale 100% na coluna AV % da aba DRE: dela para baixo, cada linha aparece como percentual dela, no consolidado e em cada centro de custo. Ex.: na Receita Líquida, a AV % começa com 100% nela e vai até o Lucro Líquido. Pode ser qualquer linha de nível 1 — a Receita Bruta, por exemplo."
+        />
+        <div className="mt-4 grid grid-cols-1 gap-4 lg:grid-cols-2">
+          <div>
+            <label className="mb-1 block text-sm font-medium text-gray-700">Linha de nível 1 (100%)</label>
+            <SearchableSelect
+              value={avId}
+              onChange={(v) => {
+                setAvId(v ?? '');
+                setSalvo(false);
+                setErro('');
+              }}
+              options={opcoesNivel1}
+              placeholder="Sem avaliação vertical"
+              emptyMessage="Nenhuma linha de nível 1 (aba Máscaras)."
+              corClasses={corCampo(Boolean(avId))}
+              larguraPainel={380}
+            />
+            <div className="mt-1.5 flex items-center gap-3">
+              {!dados.av_mascara_id ? (
+                <p className="flex items-center gap-1.5 text-xs text-amber-700">
+                  <AlertTriangle size={13} className="shrink-0" /> Sem a linha, a coluna AV % fica com traço.
+                </p>
+              ) : (
+                <p className="text-[11px] text-gray-400">Configurada: {dados.mascaras.find((g) => g.id === dados.av_mascara_id)?.descricao}</p>
+              )}
+              {avId && (
+                <button
+                  type="button"
+                  onClick={() => {
+                    setAvId('');
+                    setSalvo(false);
+                  }}
+                  className="text-[11px] font-medium text-gray-500 hover:text-red-600"
+                >
+                  Remover
+                </button>
+              )}
+            </div>
+          </div>
+          <Formula
+            rotulo="Como é calculada"
+            numerador="Valor da linha"
+            denominador={avEscolhida ? avEscolhida.descricao : 'Linha de nível 1 escolhida'}
+            nota="× 100, em cada coluna (consolidado e centros)"
+          />
+        </div>
+      </Card>
 
       <Card>
         <SectionHeader

@@ -196,8 +196,10 @@ async function calcular(empresaId, { de, ate, centros: filtro = [] }) {
       [empresaId]
     ),
     pool.query(
-      `SELECT c.poc_receita_mascara_id AS id, m.descricao
-         FROM dre_configuracoes c JOIN dre_mascaras m ON m.id = c.poc_receita_mascara_id
+      `SELECT c.poc_receita_mascara_id AS id, m.descricao, c.av_mascara_id, a.descricao AS av_descricao
+         FROM dre_configuracoes c
+         LEFT JOIN dre_mascaras m ON m.id = c.poc_receita_mascara_id
+         LEFT JOIN dre_mascaras a ON a.id = c.av_mascara_id
         WHERE c.empresa_id = $1`,
       [empresaId]
     ),
@@ -213,7 +215,7 @@ async function calcular(empresaId, { de, ate, centros: filtro = [] }) {
   const obras = centrosDre.filter((c) => !pedidos.size || pedidos.has(c.id));
   const ids = obras.map((c) => c.id);
   const idsOk = new Set(ids);
-  const mascaraPoc = cfg[0] ? { id: cfg[0].id, descricao: cfg[0].descricao } : null;
+  const mascaraPoc = cfg[0]?.id ? { id: cfg[0].id, descricao: cfg[0].descricao } : null;
   const antes = vespera(de);
 
   const comPocReceita = (m) => CALCULOS_RECEITA.has(m.calculo) && m.realiza_poc && m.tipo_poc === 'RECEITA';
@@ -327,6 +329,8 @@ async function calcular(empresaId, { de, ate, centros: filtro = [] }) {
       poc_fim: pocDespesa(c.id, ate),
       fracao_distratada_fim: fracaoDistratada(c.id, ate),
     })),
+    // Linha de nível 1 que vale 100% na AV % (aba Configurações); a tela faz a conta.
+    avaliacao_vertical: cfg[0]?.av_mascara_id ? { mascara_id: cfg[0].av_mascara_id, descricao: cfg[0].av_descricao } : null,
     valores,
     meses: porMes,
     // Colunas dos centros na tela: o total do período de cada um.
