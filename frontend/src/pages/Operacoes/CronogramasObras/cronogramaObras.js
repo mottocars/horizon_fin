@@ -248,28 +248,9 @@ export function linhasDaObra(obra) {
   });
 }
 
-// Filtro "Obras" (ao lado da empresa — pedido do usuário): todas, só as que ainda têm etapa por vir
-// (em andamento ou a iniciar) ou só as concluídas (todas as etapas já passaram).
-export const FILTROS_SITUACAO = [
-  { value: '', label: 'Todas as obras' },
-  { value: 'andamento', label: 'Em andamento e a iniciar' },
-  { value: 'concluidas', label: 'Concluídas (todas as etapas já passaram)' },
-];
-
-export function filtrarSituacao(obras, filtro) {
-  if (filtro === 'concluidas') return obras.filter((o) => o.situacao.tipo === 'concluida');
-  if (filtro === 'andamento') return obras.filter((o) => o.situacao.tipo !== 'concluida');
-  return obras;
-}
-
-// Filtros "Obras" e "Localidade" com marcação múltipla (pedidos do usuário). "Obras" junta as
-// situações e, embaixo, os centros de custo (valor 'centro:<sienge_id>'); "Localidade" as
-// "Cidade - UF". Dentro de um filtro as marcações somam (uma OU outra); entre os grupos — situação,
-// centros, localidades — elas se cruzam. Nada marcado = todas.
-const PREFIXO_CENTRO = 'centro:';
-export const valorCentro = (siengeId) => `${PREFIXO_CENTRO}${siengeId}`;
-const ehCentro = (v) => String(v).startsWith(PREFIXO_CENTRO);
-export const situacoesDoFiltro = (filtros) => filtros.filter((v) => !ehCentro(v));
+// Filtros "Obras" e "Localidade" com marcação múltipla (pedidos do usuário): "Obras" marca centros
+// de custo (sienge_id); "Localidade", as "Cidade - UF". Dentro de um filtro as marcações somam (uma OU
+// outra); entre os dois elas se cruzam. Nada marcado = todas.
 
 // Localidade da obra: "Cidade - UF" do cadastro do centro (a mesma chave que agrupa o Gantt por cidade).
 export const SEM_CIDADE = 'Sem cidade';
@@ -279,14 +260,12 @@ export function localidadeObra(centro) {
   return cidade ? (uf ? `${cidade} - ${uf}` : cidade) : SEM_CIDADE;
 }
 
-// Opções do filtro "Obras": as situações e, num grupo à parte, os centros (das localidades marcadas,
-// se houver), em ordem de nome. `grupo` = título do grupo na lista.
+// Opções do filtro "Obras": os centros (das localidades marcadas, se houver), em ordem de nome.
 export function opcoesFiltroObras(centros, localidades = []) {
-  const lista = centros
+  return centros
     .filter((c) => !localidades.length || localidades.includes(localidadeObra(c)))
-    .map((c) => ({ value: valorCentro(c.sienge_id), label: `${nomeObra(c)} (${c.sienge_id})`, grupo: 'Centro de custo' }))
+    .map((c) => ({ value: String(c.sienge_id), label: `${nomeObra(c)} (${c.sienge_id})` }))
     .sort((a, b) => a.label.localeCompare(b.label, 'pt-BR'));
-  return [...FILTROS_SITUACAO.filter((f) => f.value).map((f) => ({ ...f, grupo: 'Situação' })), ...lista];
 }
 
 // Opções do filtro "Localidade": as "Cidade - UF" das obras, em ordem alfabética, "Sem cidade" por último.
@@ -297,23 +276,20 @@ export function opcoesLocalidade(centros) {
   return locais.map((l) => ({ value: l, label: l === SEM_CIDADE ? l : l.toUpperCase() }));
 }
 
-// Os filtros "Obras" (situações e centros marcados) e "Localidade" juntos. As duas situações marcadas = todas.
-export function filtrarObras(obras, filtros = [], localidades = []) {
-  const situacoes = situacoesDoFiltro(filtros);
-  const centros = new Set(filtros.filter(ehCentro).map((v) => v.slice(PREFIXO_CENTRO.length)));
+// Os filtros "Obras" (centros marcados) e "Localidade" juntos.
+export function filtrarObras(obras, centros = [], localidades = []) {
   return obras.filter(
     (o) =>
-      (situacoes.length !== 1 || filtrarSituacao([o], situacoes[0]).length > 0) &&
-      (!centros.size || centros.has(String(o.centro.sienge_id))) &&
+      (!centros.length || centros.includes(String(o.centro.sienge_id))) &&
       (!localidades.length || localidades.includes(localidadeObra(o.centro)))
   );
 }
 
 // Trocou as localidades: os centros marcados no filtro "Obras" que não são delas saem.
-export function filtroObrasNasLocalidades(filtros, localidades, centros) {
-  if (!localidades.length) return filtros;
-  const local = new Map(centros.map((c) => [valorCentro(c.sienge_id), localidadeObra(c)]));
-  return filtros.filter((v) => !ehCentro(v) || localidades.includes(local.get(v)));
+export function obrasNasLocalidades(marcadas, localidades, centros) {
+  if (!localidades.length) return marcadas;
+  const local = new Map(centros.map((c) => [String(c.sienge_id), localidadeObra(c)]));
+  return marcadas.filter((v) => localidades.includes(local.get(v)));
 }
 
 // Filtro "Mudanças da versão" do Gantt (pedido do usuário): as obras alteradas numa versão, montadas

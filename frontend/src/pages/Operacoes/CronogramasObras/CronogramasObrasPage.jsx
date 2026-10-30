@@ -14,7 +14,7 @@ import CronogramaCentrosTab from './CronogramaCentrosTab';
 import CronogramasTab from './CronogramasTab';
 import ConfiguracoesCronogramas from './ConfiguracoesCronogramas';
 import VersoesCronograma from './VersoesCronograma';
-import { filtroObrasNasLocalidades, opcoesFiltroObras, opcoesLocalidade, situacoesDoFiltro } from './cronogramaObras';
+import { obrasNasLocalidades, opcoesFiltroObras, opcoesLocalidade } from './cronogramaObras';
 
 // Mesmo padrão de DfcConstrutorasPage.jsx: o `{ divider: true }` separa os Cronogramas (a tela em
 // si) das abas que dão suporte a eles. A aba Etapas saiu (pedido do usuário): as etapas se cadastram
@@ -80,13 +80,13 @@ export default function CronogramasObrasPage() {
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [loadingEmpresas, empresas, empresaId]);
 
-  // Filtros da aba Cronogramas ao lado da empresa (pedidos do usuário), na URL: "Obras" (?situacao=,
-  // repetido — situações e centros de custo, 'centro:<sienge_id>', com marcação múltipla), "Localidade"
+  // Filtros da aba Cronogramas ao lado da empresa (pedidos do usuário), na URL: "Obras" (?obra=,
+  // repetido — os centros de custo marcados, pelo sienge_id), "Localidade"
   // (?local=, repetido — Cidade - UF) e "Mudanças" (?versao= — uma versão gravada: o Gantt mostra as
   // obras alteradas nela). Os centros das opções vêm da aba (CronogramasTab `onCentros`).
-  const textoSituacao = searchParams.getAll('situacao').join('|');
+  const textoObras = searchParams.getAll('obra').join('|');
   const textoLocal = searchParams.getAll('local').join('|');
-  const filtrosObras = useMemo(() => (textoSituacao ? textoSituacao.split('|') : []), [textoSituacao]);
+  const obrasMarcadas = useMemo(() => (textoObras ? textoObras.split('|') : []), [textoObras]);
   const localidades = useMemo(() => (textoLocal ? textoLocal.split('|') : []), [textoLocal]);
   const versaoId = searchParams.get('versao') || '';
   const [centrosObras, setCentrosObras] = useState([]);
@@ -117,7 +117,7 @@ export default function CronogramasObrasPage() {
               <label className="mb-1 block text-sm font-medium text-gray-700">Empresa</label>
               <SearchableSelect
                 value={empresaId}
-                onChange={(novoId) => atualizarParams({ empresa_id: novoId || null, versao: null, local: null, situacao: situacoesDoFiltro(filtrosObras) })}
+                onChange={(novoId) => atualizarParams({ empresa_id: novoId || null, versao: null, local: null, obra: null })}
                 disabled={loadingEmpresas || empresaTravada}
                 options={empresas.map((empresa) => ({ value: empresa.id, label: nomeExibicaoEmpresa(empresa) }))}
                 placeholder={loadingEmpresas ? 'Carregando empresas...' : 'Selecione uma empresa'}
@@ -131,8 +131,8 @@ export default function CronogramasObrasPage() {
                   <label className="mb-1 block text-sm font-medium text-gray-700">Obras</label>
                   <SearchableSelect
                     multiple
-                    value={filtrosObras}
-                    onChange={(v) => atualizarParams({ situacao: v })}
+                    value={obrasMarcadas}
+                    onChange={(v) => atualizarParams({ obra: v })}
                     disabled={!empresaId}
                     options={opcoesObras}
                     placeholder="Todas as obras"
@@ -145,7 +145,7 @@ export default function CronogramasObrasPage() {
                   <SearchableSelect
                     multiple
                     value={localidades}
-                    onChange={(v) => atualizarParams({ local: v, situacao: filtroObrasNasLocalidades(filtrosObras, v, centrosObras) })}
+                    onChange={(v) => atualizarParams({ local: v, obra: obrasNasLocalidades(obrasMarcadas, v, centrosObras) })}
                     disabled={!empresaId}
                     options={opcoesLocal}
                     placeholder="Todas as localidades"
@@ -205,7 +205,7 @@ export default function CronogramasObrasPage() {
         ) : (
           <CronogramasTab
             empresaId={empresaId}
-            filtrosObras={filtrosObras}
+            obrasMarcadas={obrasMarcadas}
             localidades={localidades}
             versaoId={versaoId}
             onLimparVersao={() => atualizarParams({ versao: null })}

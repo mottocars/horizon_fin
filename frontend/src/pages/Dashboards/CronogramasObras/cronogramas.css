@@ -78,7 +78,7 @@
 .painel-cfo .ctl select#f-versao {
   min-width: min(240px, 80vw);
 }
-.painel-cfo .ctl .multi-btn#f-situacao {
+.painel-cfo .ctl .multi-btn#f-obras {
   min-width: min(240px, 80vw);
   max-width: 260px;
 }

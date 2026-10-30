@@ -24,7 +24,7 @@ import {
 // do dashboard Cronogramas de Obras) —; embaixo, o Gantt das obras
 // mês a mês (GanttObras — o mesmo do dashboard Cronogramas de Obras). Clicar numa obra abre o
 // cadastro dela (JanelaCentroCusto); clicar num card de etapa filtra o Gantt (as obras que
-// estiveram nela em algum momento do período De/Até). Os filtros "Obras" (`filtrosObras`) e "Mudanças" (`versaoId` — as obras alteradas
+// estiveram nela em algum momento do período De/Até). Os filtros "Obras" (`obrasMarcadas`) e "Mudanças" (`versaoId` — as obras alteradas
 // numa versão, com como eram antes) ficam ao lado da empresa, na página (CronogramasObrasPage) —
 // junto com "Localidade" (`localidades`, Cidade - UF); os dois com marcação múltipla. O filtro "Obras"
 // também marca centros, e a lista deles vai pra página por `onCentros`.
@@ -35,7 +35,7 @@ import {
 // cidade (GanttObras `agruparPorCidade`).
 export default function CronogramasTab({
   empresaId,
-  filtrosObras = [],
+  obrasMarcadas = [],
   localidades = [],
   versaoId = '',
   onLimparVersao,
@@ -88,8 +88,8 @@ export default function CronogramasTab({
 
   const periodoAtivo = null;
   const obras = useMemo(
-    () => filtrarPeriodo(filtrarObras(montarObras(centros, etapas, isoHoje(), atraso), filtrosObras, localidades), periodoAtivo),
-    [centros, etapas, atraso, filtrosObras, localidades, periodoAtivo]
+    () => filtrarPeriodo(filtrarObras(montarObras(centros, etapas, isoHoje(), atraso), obrasMarcadas, localidades), periodoAtivo),
+    [centros, etapas, atraso, obrasMarcadas, localidades, periodoAtivo]
   );
   const r = useMemo(() => resumoCarteira(obras, etapas, periodoAtivo), [obras, etapas, periodoAtivo]);
   // "Mudanças da versão": o Gantt fica com as obras alteradas nela (como ficaram + como eram antes).
@@ -101,8 +101,8 @@ export default function CronogramasTab({
       const c = cadastro.get(o.centro.sienge_id);
       return c ? { ...o, centro: { ...o.centro, cidade: c.cidade, uf: c.uf } } : o;
     });
-    return filtrarPeriodo(filtrarObras(comCidade, filtrosObras, localidades), periodoAtivo);
-  }, [versaoDetalhe, filtrosObras, localidades, periodoAtivo, centros]);
+    return filtrarPeriodo(filtrarObras(comCidade, obrasMarcadas, localidades), periodoAtivo);
+  }, [versaoDetalhe, obrasMarcadas, localidades, periodoAtivo, centros]);
 
   if (!empresaId) {
     return (

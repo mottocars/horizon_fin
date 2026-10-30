@@ -17,10 +17,10 @@ import CampoDataPeriodo from '../../Operacoes/CronogramasObras/CampoDataPeriodo'
 import {
   filtrarObras,
   filtrarPeriodo,
-  filtroObrasNasLocalidades,
   isoHoje,
   mesesDoPeriodo,
   montarObras,
+  obrasNasLocalidades,
   naRecorte,
   nomeObra,
   numerosTopo,
@@ -28,7 +28,6 @@ import {
   opcoesFiltroObras,
   opcoesLocalidade,
   plural,
-  situacoesDoFiltro,
   periodoPadrao,
   resumoCarteira,
   rotuloRecorte,
@@ -45,8 +44,8 @@ import './cronogramas.css';
 // quantas obras estão em cada etapa hoje) e, embaixo, o mesmo Gantt (GanttObras), aqui
 // só leitura: quem vê o dashboard pode não ter acesso ao cadastro dos centros de custo. Clicar num
 // card de etapa filtra o Gantt (só as obras que estão nela hoje). A empresa fica na URL (?empresa_id=).
-// Ao lado da empresa (pedidos do usuário), também na URL: "Obras" (?situacao= — todas, em andamento
-// ou só as concluídas, e centros de custo), "Localidade" (?local= — Cidade - UF), os dois com marcação
+// Ao lado da empresa (pedidos do usuário), também na URL: "Obras" (?obra= — os centros de custo
+// marcados), "Localidade" (?local= — Cidade - UF), os dois com marcação
 // múltipla (a chave repetida na URL), e "Mudanças" (?versao= — uma versão gravada: o Gantt mostra só as obras
 // alteradas nela, com como eram antes numa faixa fina em cima da barra), e o botão de exportar o
 // Excel do comunicado (o do cronograma em vigor, ou o da versão escolhida). No Mês a mês, o período
@@ -92,10 +91,10 @@ export default function CronogramasObrasDashboard() {
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [empresaTravada, empresaIdTravada, carregandoEmpresas, empresas, empresaId]);
 
-  // "Obras": situações e centros de custo ('centro:<sienge_id>'); "Localidade" (?local=): Cidade - UF.
-  const textoSituacao = params.getAll('situacao').join('|');
+  // "Obras" (?obra=): os sienge_id dos centros marcados; "Localidade" (?local=): Cidade - UF.
+  const textoObras = params.getAll('obra').join('|');
   const textoLocal = params.getAll('local').join('|');
-  const filtrosObras = useMemo(() => (textoSituacao ? textoSituacao.split('|') : []), [textoSituacao]);
+  const obrasMarcadas = useMemo(() => (textoObras ? textoObras.split('|') : []), [textoObras]);
   const localidades = useMemo(() => (textoLocal ? textoLocal.split('|') : []), [textoLocal]);
   const versaoId = params.get('versao') || '';
 
@@ -228,7 +227,7 @@ export default function CronogramasObrasDashboard() {
     () => montarObras(centros, etapas, hoje, atraso).filter((o) => o.segmentos.length),
     [centros, etapas, hoje, atraso]
   );
-  const obras = useMemo(() => filtrarObras(obrasTodas, filtrosObras, localidades), [obrasTodas, filtrosObras, localidades]);
+  const obras = useMemo(() => filtrarObras(obrasTodas, obrasMarcadas, localidades), [obrasTodas, obrasMarcadas, localidades]);
   // Opções dos filtros "Obras" (situações + centros) e "Localidade": só as obras do dashboard (com datas).
   const centrosComDatas = useMemo(() => obrasTodas.map((o) => o.centro), [obrasTodas]);
   const opcoesObras = useMemo(() => opcoesFiltroObras(centrosComDatas, localidades), [centrosComDatas, localidades]);
@@ -243,9 +242,9 @@ export default function CronogramasObrasDashboard() {
         const c = cadastro.get(o.centro.sienge_id);
         return c ? { ...o, centro: { ...o.centro, cidade: c.cidade, uf: c.uf } } : o;
       });
-      return filtrarObras(comCidade, filtrosObras, localidades);
+      return filtrarObras(comCidade, obrasMarcadas, localidades);
     },
-    [versaoDetalhe, hoje, filtrosObras, localidades, centros]
+    [versaoDetalhe, hoje, obrasMarcadas, localidades, centros]
   );
   // Mês a mês: só as obras do período De/Até (cards e Gantt); Visão geral: todas.
   const periodoAtivo = zoom === 'mensal' ? periodo : null;
@@ -293,7 +292,7 @@ export default function CronogramasObrasDashboard() {
               id="f-empresa"
               value={empresaId}
               onChange={(e) =>
-                atualizarParams({ empresa_id: e.target.value, versao: null, local: null, situacao: situacoesDoFiltro(filtrosObras) })
+                atualizarParams({ empresa_id: e.target.value, versao: null, local: null, obra: null })
               }
               disabled={carregandoEmpresas || empresaTravada}
             >
@@ -306,15 +305,15 @@ export default function CronogramasObrasDashboard() {
             </select>
           </div>
           <FiltroCentros
-            id="f-situacao"
+            id="f-obras"
             rotulo="Obras"
             todos="Todas as obras"
-            varios="marcados"
+            varios="obras"
             buscar="Buscar obra ou centro"
             vazio="Nenhuma obra encontrada."
             opcoes={opcoesObras}
-            valor={filtrosObras}
-            onChange={(v) => atualizarParams({ situacao: v })}
+            valor={obrasMarcadas}
+            onChange={(v) => atualizarParams({ obra: v })}
             disabled={!empresaId}
           />
           <FiltroCentros
@@ -326,7 +325,7 @@ export default function CronogramasObrasDashboard() {
             vazio="Nenhuma localidade encontrada."
             opcoes={opcoesLocal}
             valor={localidades}
-            onChange={(v) => atualizarParams({ local: v, situacao: filtroObrasNasLocalidades(filtrosObras, v, centros) })}
+            onChange={(v) => atualizarParams({ local: v, obra: obrasNasLocalidades(obrasMarcadas, v, centros) })}
             disabled={!empresaId}
           />
           <div className="ctl">
