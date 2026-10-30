@@ -13,25 +13,31 @@ function parcelas(n) {
 }
 
 // Mesmo card dos planos da aba Plano Contas (PlanosContasLista.jsx): ícone, título e rodapé. Exercício
-// travado (o do ano atual): cadeado e "Somente visualização" — nada nele pode ser alterado.
+// travado (o do ano atual): em amarelo sutil, com cadeado e "Somente visualização" — nada nele pode ser
+// alterado.
 function CardExercicio({ exercicio, atual }) {
+  const travado = exercicio.travado;
   return (
     <div
-      className={`flex flex-col rounded-xl border bg-white p-4 shadow-[0_1px_2px_rgba(16,24,40,0.04)] ${
-        atual ? 'border-primary-100' : 'border-gray-200/80'
+      className={`flex flex-col rounded-xl border p-4 shadow-[0_1px_2px_rgba(16,24,40,0.04)] ${
+        travado ? 'border-amber-200 bg-amber-50/60' : atual ? 'border-primary-100 bg-white' : 'border-gray-200/80 bg-white'
       }`}
     >
       <div className="flex items-start gap-3">
-        <span className="flex h-9 w-9 shrink-0 items-center justify-center rounded-lg bg-primary-50 text-primary-600">
+        <span
+          className={`flex h-9 w-9 shrink-0 items-center justify-center rounded-lg ${
+            travado ? 'bg-amber-100 text-amber-600' : 'bg-primary-50 text-primary-600'
+          }`}
+        >
           <CalendarDays size={17} />
         </span>
         <div className="min-w-0 flex-1">
           <p className="truncate text-[11px] text-gray-400">{atual ? 'Exercício atual' : 'Exercício'}</p>
           <p className="text-lg font-semibold leading-snug tabular-nums text-gray-900">{exercicio.ano}</p>
         </div>
-        {exercicio.travado && (
+        {travado && (
           <span
-            className="flex shrink-0 items-center gap-1 rounded-full bg-gray-100 px-2 py-0.5 text-[10px] font-medium text-gray-500"
+            className="flex shrink-0 items-center gap-1 rounded-full bg-amber-100 px-2 py-0.5 text-[10px] font-medium text-amber-700"
             title="Exercício em andamento: só pode ser visualizado, não pode ser alterado"
           >
             <Lock size={11} /> Somente visualização
@@ -54,7 +60,7 @@ function CardExercicio({ exercicio, atual }) {
         </div>
       </div>
 
-      <div className="mt-4 border-t border-gray-100 pt-3 text-[11px] text-gray-500">
+      <div className={`mt-4 border-t pt-3 text-[11px] text-gray-500 ${travado ? 'border-amber-100' : 'border-gray-100'}`}>
         Vencimentos de 01/01 a 31/12/{exercicio.ano}
       </div>
     </div>
