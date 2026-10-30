@@ -33,7 +33,8 @@ function lerValor(texto) {
   return Number(t.includes(',') ? t.replace(/\./g, '').replace(',', '.') : t);
 }
 
-const valorEdicao = (v) => Math.abs(Number(v || 0)).toLocaleString('pt-BR', { minimumFractionDigits: 2, maximumFractionDigits: 2, useGrouping: false });
+// Valor do campo no mesmo formato do valor original (milhar, 2 casas e o sinal da linha: saída negativa).
+const valorEdicao = (v, sinal) => moeda(sinal * Math.abs(Number(v || 0)));
 
 function Info({ rotulo, children, direita = false }) {
   return (
@@ -84,7 +85,7 @@ export default function LancamentoAjusteModal({ empresaId, origem, chave, linha:
     const base = d.ajuste || d.linha;
     setCentro(base.centro_id ?? '');
     setNatureza(base.natureza_id ?? '');
-    setValor(valorEdicao(base.valor));
+    setValor(valorEdicao(base.valor, d.linha.valor < 0 ? -1 : 1));
     setObservacao(d.ajuste?.observacao || '');
   }
 
@@ -103,7 +104,8 @@ export default function LancamentoAjusteModal({ empresaId, origem, chave, linha:
 
   const travado = Boolean(dados?.travado);
   const sinal = dados && dados.linha.valor < 0 ? -1 : 1;
-  const valorNovo = lerValor(valor);
+  // O sinal vem da linha original: o que foi digitado vale pelo módulo.
+  const valorNovo = Math.abs(lerValor(valor));
   const pctNovo =
     dados && Number.isFinite(valorNovo) && dados.valor_lancamento
       ? ((sinal * valorNovo) / (dados.valor_lancamento - dados.linha.valor + sinal * valorNovo)) * 100
@@ -236,6 +238,7 @@ export default function LancamentoAjusteModal({ empresaId, origem, chave, linha:
                 <input
                   value={valor}
                   onChange={(e) => setValor(e.target.value)}
+                  onBlur={() => Number.isFinite(valorNovo) && setValor(valorEdicao(valorNovo, sinal))}
                   disabled={travado}
                   inputMode="decimal"
                   placeholder="0,00"
