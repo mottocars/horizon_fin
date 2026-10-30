@@ -199,7 +199,7 @@ function BarraObra({ segmentos, ini, px, mensal, onDica }) {
         onMouseEnter={(e) => onDica(e, seg)}
         onMouseMove={(e) => onDica(e, seg)}
         onMouseLeave={() => onDica(null)}
-        className="absolute top-1/2 flex h-7 -translate-y-1/2 items-center transition-[filter] hover:brightness-110"
+        className="absolute top-1/2 flex h-6 -translate-y-1/2 items-center transition-[filter] hover:brightness-110"
         style={{
           left: esquerda,
           width: largura,
@@ -518,6 +518,7 @@ const GanttObras = forwardRef(function GanttObras(
   const apagada = (o) => selecionada && o.centro.sienge_id !== selecionada;
 
   // Uma linha de obra (bolinha + nome à esquerda, barra das etapas). `recuada`: dentro de uma cidade.
+  // Linha mais baixa e divisa mais escura entre uma obra e outra (pedido do usuário).
   const linhaObra = (o, recuada) => (
     <div
       key={o.centro.sienge_id}
@@ -533,7 +534,7 @@ const GanttObras = forwardRef(function GanttObras(
           }
         },
       })}
-      className={`group relative flex h-12 border-b border-gray-100 transition-opacity focus:outline-none ${clicavel ? 'cursor-pointer' : ''} ${
+      className={`group relative flex h-10 border-b border-gray-300 transition-opacity focus:outline-none ${clicavel ? 'cursor-pointer' : ''} ${
         apagada(o) ? 'opacity-30 hover:opacity-70' : ''
       }`}
     >
