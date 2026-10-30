@@ -179,10 +179,10 @@ export default function DreTab({ empresaId, de, ate, centros = [], telaCheia = f
           <table className="w-full border-separate border-spacing-0 text-left text-xs">
             <thead>
               {/* Cabeçalhos centralizados: o nome da coluna (Consolidado / centro) em cima, Valor e AV % embaixo. */}
-              <tr className="text-xs uppercase tracking-wide text-gray-400">
+              <tr className="text-xs uppercase tracking-wide text-gray-700">
                 <th
                   rowSpan={2}
-                  className={`${COL_DESCRICAO} border-b border-gray-200 bg-white py-1.5 pl-4 align-bottom font-medium`}
+                  className={`${COL_DESCRICAO} border-b border-gray-200 bg-white py-1.5 pl-4 align-bottom font-semibold`}
                 >
                   Descrição
                 </th>
@@ -218,13 +218,13 @@ export default function DreTab({ empresaId, de, ate, centros = [], telaCheia = f
                     key={c.chave}
                     colSpan={2}
                     title={`${c.chave} - ${c.nome}`}
-                    className="border-b border-l border-gray-200 bg-white px-3 pb-1 pt-1.5 text-center align-bottom font-medium"
+                    className="border-b border-l border-gray-200 bg-white px-3 pb-1 pt-1.5 text-center align-bottom font-semibold"
                   >
                     <span className="line-clamp-2 whitespace-normal leading-tight">{c.nome}</span>
                   </th>
                 ))}
               </tr>
-              <tr className="text-[10px] uppercase tracking-wide text-gray-400">
+              <tr className="text-[10px] uppercase tracking-wide text-gray-500">
                 {consolidadoAberto && (
                   <>
                     <th className={`${COL_CONSOLIDADO} border-b border-b-blue-200 bg-blue-100 py-1 text-center font-medium text-blue-700`}>Valor</th>
@@ -238,9 +238,9 @@ export default function DreTab({ empresaId, de, ate, centros = [], telaCheia = f
                 )}
                 {colunas.slice(1).map((c) => (
                   <Fragment key={c.chave}>
-                    <th className={`${COL_CENTRO} border-b border-l border-gray-200 bg-white py-1 text-center font-medium`}>Valor</th>
+                    <th className={`${COL_CENTRO} border-b border-l border-gray-200 bg-white py-1 text-center font-semibold`}>Valor</th>
                     <th
-                      className={`${COL_AV} border-b border-gray-200 bg-white py-1 text-center font-medium`}
+                      className={`${COL_AV} border-b border-gray-200 bg-white py-1 text-center font-semibold`}
                       title={av ? `Percentual de ${av.descricao}` : 'Avaliação Vertical não configurada'}
                     >
                       AV %
