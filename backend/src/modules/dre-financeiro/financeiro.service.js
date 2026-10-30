@@ -118,10 +118,11 @@ function periodo(ano, de, ate) {
   return [ini, diaSeguinte(fim < ini ? ini : fim)];
 }
 
-// Filtros da tela: listas (vazio = todos). Centro e documento vazios no lançamento vêm como '' na
-// lista. `contrapartes`: nomes de cliente/fornecedor. `busca`: cliente/fornecedor/histórico, número,
-// título, documento, centro ou natureza.
-function montarFiltros({ origens, documentos, centros, contrapartes, busca }, params) {
+// Filtros da tela (os de coluna da tabela): listas (vazio = todos). Centro, natureza e documento
+// vazios no lançamento vêm como '' na lista. `contrapartes`: nomes de cliente/fornecedor; `meses`:
+// 'AAAA-MM' da data (emissão; no movimento, a do extrato). `busca`: cliente/fornecedor/histórico,
+// número, título, documento, centro ou natureza.
+function montarFiltros({ origens, documentos, centros, naturezas, contrapartes, meses, busca }, params) {
   const cond = [];
   const lista = (coluna, valores) => {
     if (!valores?.length) return;
@@ -131,7 +132,9 @@ function montarFiltros({ origens, documentos, centros, contrapartes, busca }, pa
   lista('origem', origens);
   lista('documento', documentos);
   lista('centro_id::text', centros);
+  lista('natureza_id', naturezas);
   lista('contraparte', contrapartes);
+  lista("to_char(data, 'YYYY-MM')", meses);
   if (busca) {
     params.push(`%${busca}%`);
     const p = `$${params.length}`;
@@ -172,9 +175,9 @@ async function lancamentos(empresaId, ano, filtros = {}, { pagina = 1, porPagina
   };
 }
 
-// Opções dos filtros do exercício (o que existe nele, o ano inteiro): tipos de documento, centros e
-// clientes/fornecedores (só dos títulos — no movimento a coluna é o histórico do extrato), com
-// quantas linhas cada. O nome do documento do movimento (que só traz a sigla) vem dos títulos com a
+// Opções dos filtros de coluna do exercício (o que existe nele, o ano inteiro): meses, tipos de
+// documento, clientes/fornecedores (só dos títulos — no movimento a coluna é o histórico do extrato),
+// naturezas e centros, com quantas linhas cada. O nome do documento do movimento (que só traz a sigla) vem dos títulos com a
 // mesma sigla.
 async function opcoesFiltros(empresaId, ano) {
   const { rows } = await pool.query(
@@ -187,6 +190,10 @@ async function opcoesFiltros(empresaId, ano) {
      UNION ALL
      SELECT 'centro', COALESCE(centro_id::text, ''), MAX(centro_nome), COUNT(*)::int FROM l GROUP BY 2
      UNION ALL
+     SELECT 'natureza', COALESCE(natureza_id, ''), MAX(natureza_nome), COUNT(*)::int FROM l GROUP BY 2
+     UNION ALL
+     SELECT 'mes', to_char(data, 'YYYY-MM'), NULL, COUNT(*)::int FROM l GROUP BY 2
+     UNION ALL
      SELECT 'contraparte', contraparte, NULL, COUNT(*)::int FROM l WHERE origem <> 'E' AND contraparte IS NOT NULL GROUP BY 2`,
     [empresaId, ...periodo(ano)]
   );
@@ -198,7 +205,7 @@ async function opcoesFiltros(empresaId, ano) {
       .filter((r) => r.tipo === tipo)
       .map(({ valor, nome, n }) => ({ valor, nome, n }))
       .sort(ordem);
-  return { documentos: de('documento'), centros: de('centro'), contrapartes: de('contraparte') };
+  return { meses: de('mes'), documentos: de('documento'), contrapartes: de('contraparte'), naturezas: de('natureza'), centros: de('centro') };
 }
 
 module.exports = { exercicios, lancamentos, opcoesFiltros };

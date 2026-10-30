@@ -1,6 +1,6 @@
 import { useEffect, useMemo, useRef, useState } from 'react';
 import { ArrowLeft, CalendarDays, ChevronLeft, ChevronRight, ListChecks, Loader2, Lock, TriangleAlert } from 'lucide-react';
-import SearchableSelect from '../../../components/SearchableSelect';
+import FiltroColuna from '../../../components/FiltroColuna';
 import { listarFiltrosExercicioDre, listarLancamentosExercicioDre } from '../../../api/dreFinanceiro.api';
 
 const POR_PAGINA = 100;
@@ -28,27 +28,23 @@ function dataBr(iso) {
   return `${dia}/${mes}/${ano}`;
 }
 
+const MESES = ['Janeiro', 'Fevereiro', 'Março', 'Abril', 'Maio', 'Junho', 'Julho', 'Agosto', 'Setembro', 'Outubro', 'Novembro', 'Dezembro'];
+
 // Opções do filtro a partir de [{ valor, nome, n }] — valor '' = lançamentos sem o campo.
 function opcoes(lista, rotulo, vazio) {
   return (lista || []).map((o) => ({ value: o.valor, label: o.valor === '' ? vazio : rotulo(o) }));
 }
 
-function Filtro({ rotulo, children, className = '' }) {
-  return (
-    <div className={className}>
-      <label className="mb-1 block text-xs font-medium text-gray-600">{rotulo}</label>
-      {children}
-    </div>
-  );
-}
-
-const SEM_FILTROS = { origens: [], documentos: [], contrapartes: [], centros: [], de: '', ate: '' };
+// Filtros de coluna (FiltroColuna): null = sem filtro; lista vazia (nada marcado) também vale como
+// sem filtro (mesma regra do Plano Contas).
+const SEM_FILTROS = { origens: null, meses: null, documentos: null, contrapartes: null, naturezas: null, centros: null };
+const efetivo = (f) => (f && f.length ? f : []);
 
 // Operações > DRE Gerencial > Financeiro > um exercício: todos os lançamentos financeiros do ano — a
 // pagar, a receber (pela emissão) e o movimento das contas sem título (extrato, pela data) —, uma
 // linha por parcela × centro de custo × natureza (regras em dre-financeiro/financeiro.service.js).
-// Filtros acima da tabela (Origem, Período, Tipo do documento, Cliente/Fornecedor e Centro de custo) e
-// a busca do topo da página, tudo aplicado no backend. Paginado (um ano da GENESIS passa de dezenas de
+// Filtros no cabeçalho da tabela (Origem, Data — mês de emissão —, Documento, Cliente/Fornecedor,
+// Natureza e Centro de custo) e a busca do topo da página, tudo aplicado no backend. Paginado (um ano da GENESIS passa de dezenas de
 // milhares de linhas); no rodapé, "Mostrar todos" busca o resto em blocos, com barra de carregamento.
 // Só visualização (o exercício do ano atual, travado, ganha o selo).
 export default function LancamentosExercicio({ empresaId, ano, search = '', onVoltar }) {
@@ -76,7 +72,7 @@ export default function LancamentosExercicio({ empresaId, ano, search = '', onVo
     setOpcoesFiltro(null);
     listarFiltrosExercicioDre(empresaId, ano)
       .then(setOpcoesFiltro)
-      .catch(() => setOpcoesFiltro({ documentos: [], centros: [], contrapartes: [] }));
+      .catch(() => setOpcoesFiltro({ meses: [], documentos: [], contrapartes: [], naturezas: [], centros: [] }));
   }, [empresaId, ano]);
 
   // Filtro ou busca novos voltam pra primeira página (o "mostrar todos" continua valendo).
@@ -86,7 +82,8 @@ export default function LancamentosExercicio({ empresaId, ano, search = '', onVo
     pedido.current?.abort();
     const controle = new AbortController();
     pedido.current = controle;
-    const consulta = { ...filtros, busca };
+    const consulta = Object.fromEntries(Object.entries(filtros).map(([k, v]) => [k, efetivo(v)]));
+    consulta.busca = busca;
     setCarregando(true);
     setErro('');
     setProgresso(null);
@@ -130,13 +127,29 @@ export default function LancamentosExercicio({ empresaId, ano, search = '', onVo
     [opcoesFiltro]
   );
   const opContraparte = useMemo(() => opcoes(opcoesFiltro?.contrapartes, (o) => o.valor, ''), [opcoesFiltro]);
+  const opMes = useMemo(
+    () => opcoes(opcoesFiltro?.meses, (o) => `${MESES[Number(o.valor.slice(5, 7)) - 1]}/${o.valor.slice(0, 4)}`, ''),
+    [opcoesFiltro]
+  );
+  const opNatureza = useMemo(
+    () => opcoes(opcoesFiltro?.naturezas, (o) => `${o.valor} ${o.nome || ''}`.trim(), 'SEM NATUREZA'),
+    [opcoesFiltro]
+  );
+  const refs = {
+    origens: useRef(null),
+    meses: useRef(null),
+    documentos: useRef(null),
+    contrapartes: useRef(null),
+    naturezas: useRef(null),
+    centros: useRef(null),
+  };
   const opCentro = useMemo(
     () => opcoes(opcoesFiltro?.centros, (o) => `${o.valor} - ${o.nome || ''}`, 'SEM CENTRO DE CUSTO'),
     [opcoesFiltro]
   );
 
   const mudar = (campo) => (valor) => setFiltros((f) => ({ ...f, [campo]: valor }));
-  const filtrosAtivos = Object.values(filtros).some((v) => (Array.isArray(v) ? v.length : v));
+  const filtrosAtivos = Object.values(filtros).some((v) => v && v.length);
   const todos = modo === 'todos';
   const de = dados && dados.total ? (dados.pagina - 1) * POR_PAGINA + 1 : 0;
   const ate = dados ? Math.min(dados.pagina * POR_PAGINA, dados.total) : 0;
@@ -144,8 +157,22 @@ export default function LancamentosExercicio({ empresaId, ano, search = '', onVo
   const pct = progresso && progresso.total ? Math.round((progresso.carregadas / progresso.total) * 100) : 0;
   const th = 'px-3 py-2.5 text-left text-xs font-medium uppercase tracking-wide text-blue-700';
   const td = 'px-3 py-1.5 text-xs';
-  const inicioAno = `${ano}-01-01`;
-  const fimAno = `${ano}-12-31`;
+  // Cabeçalho com o filtro de coluna da tela de Plano Contas (ícone ao lado do nome).
+  const cab = (campo, titulo, opts, larguraPainel, extra = '') => (
+    <th ref={refs[campo]} className={`${th} ${extra}`}>
+      <span className="flex items-center gap-1.5">
+        {titulo}
+        <FiltroColuna
+          filtro={filtros[campo]}
+          onChange={mudar(campo)}
+          opcoes={opts}
+          label={titulo}
+          colunaRef={refs[campo]}
+          larguraPainel={larguraPainel}
+        />
+      </span>
+    </th>
+  );
 
   return (
     <div className="min-w-fit rounded-card rounded-tl-none bg-white p-5 shadow-card">
@@ -172,61 +199,15 @@ export default function LancamentosExercicio({ empresaId, ano, search = '', onVo
           </span>
         )}
         <span className="ml-auto text-xs text-gray-400">Títulos pela data de emissão · movimento pela data do extrato</span>
-      </div>
-
-      <div className="mb-4 grid grid-cols-1 gap-3 md:grid-cols-2 xl:grid-cols-[minmax(0,1fr)_300px_minmax(0,1fr)_minmax(0,1.3fr)_minmax(0,1.2fr)_auto] xl:items-end">
-        <Filtro rotulo="Origem">
-          <SearchableSelect multiple todosELimpar value={filtros.origens} onChange={mudar('origens')} options={OPCOES_ORIGEM} placeholder="Todas" />
-        </Filtro>
-        <Filtro rotulo="Data de emissão">
-          <div className="flex items-center gap-2">
-            <input
-              type="date"
-              value={filtros.de}
-              min={inicioAno}
-              max={filtros.ate || fimAno}
-              onChange={(e) => mudar('de')(e.target.value)}
-              className="w-full rounded-lg border border-gray-200 px-2 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-primary-100"
-              aria-label="Data de emissão inicial"
-            />
-            <span className="text-xs text-gray-400">até</span>
-            <input
-              type="date"
-              value={filtros.ate}
-              min={filtros.de || inicioAno}
-              max={fimAno}
-              onChange={(e) => mudar('ate')(e.target.value)}
-              className="w-full rounded-lg border border-gray-200 px-2 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-primary-100"
-              aria-label="Data de emissão final"
-            />
-          </div>
-        </Filtro>
-        <Filtro rotulo="Tipo do documento">
-          <SearchableSelect multiple todosELimpar value={filtros.documentos} onChange={mudar('documentos')} options={opDocumento} placeholder="Todos" larguraPainel={420} />
-        </Filtro>
-        <Filtro rotulo="Cliente / Fornecedor">
-          <SearchableSelect
-            multiple
-            todosELimpar
-            value={filtros.contrapartes}
-            onChange={mudar('contrapartes')}
-            options={opContraparte}
-            placeholder="Todos"
-            emptyMessage="Nenhum cliente ou fornecedor encontrado."
-            larguraPainel={420}
-          />
-        </Filtro>
-        <Filtro rotulo="Centro de custo">
-          <SearchableSelect multiple todosELimpar value={filtros.centros} onChange={mudar('centros')} options={opCentro} placeholder="Todos" larguraPainel={380} />
-        </Filtro>
-        <button
-          type="button"
-          onClick={() => setFiltros(SEM_FILTROS)}
-          disabled={!filtrosAtivos}
-          className="h-[38px] whitespace-nowrap rounded-lg px-2 text-xs font-medium text-primary-600 hover:text-primary-700 disabled:cursor-default disabled:text-gray-300"
-        >
-          Limpar filtros
-        </button>
+        {filtrosAtivos && (
+          <button
+            type="button"
+            onClick={() => setFiltros(SEM_FILTROS)}
+            className="text-xs font-medium text-primary-600 hover:text-primary-700"
+          >
+            Limpar filtros
+          </button>
+        )}
       </div>
 
       {erro ? (
@@ -249,13 +230,13 @@ export default function LancamentosExercicio({ empresaId, ano, search = '', onVo
             </colgroup>
             <thead className="sticky -top-6 z-20">
               <tr className="border-b-2 border-blue-500 bg-blue-50">
-                <th className={`${th} rounded-tl-lg`}>Origem</th>
-                <th className={th}>Data</th>
-                <th className={th}>Documento</th>
+                {cab('origens', 'Origem', OPCOES_ORIGEM, 260, 'rounded-tl-lg')}
+                {cab('meses', 'Data', opMes, 220)}
+                {cab('documentos', 'Documento', opDocumento, 420)}
                 <th className={th}>Título</th>
-                <th className={th}>Cliente / Fornecedor</th>
-                <th className={th}>Natureza</th>
-                <th className={th}>Centro de custo</th>
+                {cab('contrapartes', 'Cliente / Fornecedor', opContraparte, 420)}
+                {cab('naturezas', 'Natureza', opNatureza, 460)}
+                {cab('centros', 'Centro de custo', opCentro, 380)}
                 <th className={`${th} rounded-tr-lg text-right`}>Valor</th>
               </tr>
             </thead>
@@ -270,6 +251,15 @@ export default function LancamentosExercicio({ empresaId, ano, search = '', onVo
                 <tr>
                   <td colSpan={8} className="border-b border-gray-100 py-10 text-center text-sm text-gray-400">
                     Nenhum lançamento encontrado{filtrosAtivos || busca ? ' para essa busca/filtro.' : ' neste exercício.'}
+                    {filtrosAtivos && (
+                      <button
+                        type="button"
+                        onClick={() => setFiltros(SEM_FILTROS)}
+                        className="ml-2 font-medium text-primary-600 hover:text-primary-700"
+                      >
+                        Limpar filtros
+                      </button>
+                    )}
                   </td>
                 </tr>
               ) : (

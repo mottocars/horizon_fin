@@ -13,25 +13,29 @@ export function listarExerciciosDre(empresaId) {
 // ('R' a receber, 'P' a pagar, 'E' movimento — extrato sem título), data (emissão; no movimento, a
 // data do extrato), vencimento, titulo, parcela, documento, documento_nome, numero, contraparte,
 // centro_id, centro_nome, natureza_id, natureza_nome, valor (com sinal) }] }. Filtros em listas
-// (vazio = todos; '' dentro da lista = sem o campo) e período `de`/`ate` ('AAAA-MM-DD', dentro do ano).
+// (vazio = todos; '' dentro da lista = sem o campo); `meses` 'AAAA-MM'; período `de`/`ate` ('AAAA-MM-DD',
+// dentro do ano).
 export function listarLancamentosExercicioDre(
   empresaId,
   ano,
-  { origens = [], documentos = [], centros = [], contrapartes = [], de = '', ate = '', busca = '', pagina = 1, porPagina = 100 } = {},
+  { origens = [], documentos = [], centros = [], naturezas = [], contrapartes = [], meses = [], de = '', ate = '', busca = '', pagina = 1, porPagina = 100 } = {},
   { signal } = {}
 ) {
   const params = { pagina, por_pagina: porPagina };
   if (origens.length) params.origem = origens;
   if (documentos.length) params.documento = documentos;
   if (centros.length) params.centro = centros;
+  if (naturezas.length) params.natureza = naturezas;
   if (contrapartes.length) params.contraparte = contrapartes;
+  if (meses.length) params.mes = meses;
   if (de) params.de = de;
   if (ate) params.ate = ate;
   if (busca) params.busca = busca;
   return http.get(`/dre-financeiro/${empresaId}/exercicios/${ano}/lancamentos`, { params, signal }).then((res) => res.data);
 }
 
-// Opções dos filtros do exercício: { documentos, centros, contrapartes: [{ valor, nome, n }] } (valor
+// Opções dos filtros de coluna do exercício: { meses, documentos, contrapartes, naturezas, centros:
+// [{ valor, nome, n }] } (valor
 // '' = lançamentos sem o campo).
 export function listarFiltrosExercicioDre(empresaId, ano) {
   return http.get(`/dre-financeiro/${empresaId}/exercicios/${ano}/filtros`).then((res) => res.data);
