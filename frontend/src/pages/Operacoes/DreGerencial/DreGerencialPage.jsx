@@ -14,6 +14,7 @@ import {
   Search,
   Tags,
   Trash2,
+  Wallet,
 } from 'lucide-react';
 import Card from '../../../components/Card';
 import Tabs from '../../../components/Tabs';
@@ -33,6 +34,7 @@ import NovaVersaoPlanoModal from './NovaVersaoPlanoModal';
 import CentrosCustosTab from './CentrosCustosTab';
 import UnidadesTab from './UnidadesTab';
 import CorrecoesTab from './CorrecoesTab';
+import FinanceiroTab from './FinanceiroTab';
 import DreTab from './DreTab';
 
 // O `{ divider: true }` separa a DRE (a demonstração em si) das abas de cadastro/parâmetro que
@@ -53,6 +55,7 @@ const TABS = [
   { id: 'orcamento', label: 'Orçamento', icon: Calculator },
   { id: 'unidades', label: 'Unidades', icon: House },
   { id: 'correcoes', label: 'Correções', icon: FilePenLine },
+  { id: 'financeiro', label: 'Financeiro', icon: Wallet },
 ];
 
 // Empresa e aba vivem na URL (não em useState local) — mesmo motivo de todas as outras telas
@@ -447,6 +450,7 @@ export default function DreGerencialPage() {
         )}
 
         {abaAtiva === 'correcoes' && <CorrecoesTab empresaId={empresaId} search={buscaCorrecoes} />}
+        {abaAtiva === 'financeiro' && <FinanceiroTab empresaId={empresaId} />}
 
         {abaAtiva === 'plano-de-contas' &&
           (planoAberto ? (
