@@ -10,7 +10,8 @@ const pool = require('../../config/db');
 // receber e a pagar, e as movimentações do extrato sem título (cada lançamento uma vez, mesmo
 // rateado em vários centros) — mesmo critério do movimento na listagem (com natureza) — e quantos
 // lançamentos (títulos e movimentos) têm ajuste (lancamentos_ajustes), pela emissão / data, e quantos
-// foram criados à mão no ano (lancamentos_manuais).
+// foram criados à mão no ano (lancamentos_manuais). Só lançamentos com alguma linha (original ou
+// ajustada) em centro com "Realiza DRE", como a listagem.
 // O exercício do ano atual vem travado (`travado`, pedido do usuário): só visualização — nenhuma
 // ação que altere dados pode valer pra ele (o backend deve recusar, não só a tela esconder).
 async function exercicios(empresaId) {
@@ -26,35 +27,48 @@ async function exercicios(empresaId) {
   const primeiroAno = Math.min(Number(String(primeiro).slice(0, 4)), anoAtual);
 
   const { rows } = await pool.query(
-    `SELECT EXTRACT(YEAR FROM data)::int AS ano,
+    `WITH ativos AS (SELECT sienge_id AS id FROM centros_custo_sienge WHERE empresa_id = $1 AND realiza_dre)
+     SELECT EXTRACT(YEAR FROM data)::int AS ano,
             COUNT(DISTINCT id) FILTER (WHERE tipo = 'R')::int AS receber,
             COUNT(DISTINCT id) FILTER (WHERE tipo = 'P')::int AS pagar,
             COUNT(DISTINCT id) FILTER (WHERE tipo = 'E')::int AS movimentos
-       FROM (SELECT 'R' AS tipo, bill_id AS id, issue_date AS data FROM sie_income
-              WHERE empresa_id = $1 AND issue_date >= $2 AND issue_date < $3
+       FROM (SELECT 'R' AS tipo, t.bill_id AS id, t.issue_date AS data FROM sie_income t
+              WHERE t.empresa_id = $1 AND t.issue_date >= $2 AND t.issue_date < $3
+                AND (EXISTS (SELECT 1 FROM sie_income_categorias c JOIN ativos a ON a.id = c.cost_center_id
+                              WHERE c.bill_id = t.bill_id AND c.installment_id = t.installment_id AND c.empresa_id = t.empresa_id)
+                     OR EXISTS (SELECT 1 FROM lancamentos_ajustes j JOIN ativos a ON a.id = j.centro_id
+                                 WHERE j.empresa_id = $1 AND j.origem = 'R' AND j.chave = t.bill_id))
              UNION ALL
-             SELECT 'P', bill_id, issue_date FROM sie_outcome
-              WHERE empresa_id = $1 AND issue_date >= $2 AND issue_date < $3
+             SELECT 'P', t.bill_id, t.issue_date FROM sie_outcome t
+              WHERE t.empresa_id = $1 AND t.issue_date >= $2 AND t.issue_date < $3
+                AND (EXISTS (SELECT 1 FROM sie_outcome_categorias c JOIN ativos a ON a.id = c.cost_center_id
+                              WHERE c.bill_id = t.bill_id AND c.installment_id = t.installment_id AND c.empresa_id = t.empresa_id)
+                     OR EXISTS (SELECT 1 FROM lancamentos_ajustes j JOIN ativos a ON a.id = j.centro_id
+                                 WHERE j.empresa_id = $1 AND j.origem = 'P' AND j.chave = t.bill_id))
              UNION ALL
              SELECT 'E', r.registro_id, r.data FROM sie_extrato_contas_rateio r
                JOIN sie_extrato_contas e ON e.registro_id = r.registro_id
               WHERE r.empresa_id = $1 AND r.mes >= $2 AND r.mes < $3 AND r.data >= $2 AND r.data < $3
-                AND e.bill_id IS NULL AND r.natureza_id IS NOT NULL) t
+                AND e.bill_id IS NULL AND r.natureza_id IS NOT NULL
+                AND (r.centro_id IN (SELECT id FROM ativos)
+                     OR EXISTS (SELECT 1 FROM lancamentos_ajustes j JOIN ativos a ON a.id = j.centro_id
+                                 WHERE j.empresa_id = $1 AND j.origem = 'E' AND j.chave = e.id))) t
       GROUP BY 1`,
     [empresaId, `${primeiroAno}-01-01`, `${anoAtual + 1}-01-01`]
   );
   const { rows: ajustados } = await pool.query(
-    `SELECT EXTRACT(YEAR FROM data)::int AS ano, COUNT(*)::int AS n
+    `WITH ativos AS (SELECT sienge_id AS id FROM centros_custo_sienge WHERE empresa_id = $1 AND realiza_dre)
+     SELECT EXTRACT(YEAR FROM data)::int AS ano, COUNT(*)::int AS n
        FROM (SELECT a.origem, a.chave, MIN(t.issue_date) AS data
-               FROM (SELECT DISTINCT origem, chave FROM lancamentos_ajustes WHERE empresa_id = $1 AND origem = 'R') a
+               FROM (SELECT DISTINCT origem, chave FROM lancamentos_ajustes WHERE empresa_id = $1 AND origem = 'R' AND centro_id IN (SELECT id FROM ativos)) a
                JOIN sie_income t ON t.bill_id = a.chave AND t.empresa_id = $1 GROUP BY 1, 2
              UNION ALL
              SELECT a.origem, a.chave, MIN(t.issue_date)
-               FROM (SELECT DISTINCT origem, chave FROM lancamentos_ajustes WHERE empresa_id = $1 AND origem = 'P') a
+               FROM (SELECT DISTINCT origem, chave FROM lancamentos_ajustes WHERE empresa_id = $1 AND origem = 'P' AND centro_id IN (SELECT id FROM ativos)) a
                JOIN sie_outcome t ON t.bill_id = a.chave AND t.empresa_id = $1 GROUP BY 1, 2
              UNION ALL
              SELECT a.origem, a.chave, MIN(e.date)
-               FROM (SELECT DISTINCT origem, chave FROM lancamentos_ajustes WHERE empresa_id = $1 AND origem = 'E') a
+               FROM (SELECT DISTINCT origem, chave FROM lancamentos_ajustes WHERE empresa_id = $1 AND origem = 'E' AND centro_id IN (SELECT id FROM ativos)) a
                JOIN sie_extrato_contas e ON e.id = a.chave AND e.empresa_id = $1 GROUP BY 1, 2) x
       GROUP BY 1`,
     [empresaId]
@@ -149,9 +163,10 @@ const SQL_LINHAS = `
 // linha (lancamentos_ajustes, módulo lancamentos-ajustes) aplicado: centro, natureza e valor trocados,
 // com o sinal da linha original; `centro_original`/`natureza_original` identificam a linha pra janela
 // de ajuste. `percentual` = a linha sobre o total do lançamento (% do rateio, depois dos ajustes).
-// Título/movimento: emissão (ou data) do lançamento inteiro. Nomes de centro e natureza pelos
-// cadastros (o extrato e o ajuste só trazem o id); o nome da categoria do título fica de reserva.
-// Resultado: `lc`.
+// Título/movimento: emissão (ou data) do lançamento inteiro. Só as linhas de centros com "Realiza
+// DRE" (aba Centros Custos — pedido do usuário); o % do rateio continua sobre o lançamento inteiro
+// (a fatia do título que cai naquele centro). Nomes de centro e natureza pelos cadastros (o extrato e
+// o ajuste só trazem o id); o nome da categoria do título fica de reserva. Resultado: `lc`.
 const CTE_LINHAS = `
   o AS MATERIALIZED (${SQL_LINHAS}),
   g0 AS (
@@ -176,17 +191,21 @@ const CTE_LINHAS = `
         ON a.empresa_id = $1 AND a.origem = g0.origem AND a.chave = g0.chave
        AND a.centro_original IS NOT DISTINCT FROM g0.centro_id AND a.natureza_original IS NOT DISTINCT FROM g0.natureza_id
   ),
+  gw AS (
+    SELECT g.*, MIN(g.data) OVER w AS data_lanc, MIN(g.venc_min) OVER w AS venc_min_lanc, MAX(g.venc_max) OVER w AS venc_max_lanc,
+           MAX(g.parcelas) OVER w AS parcelas_lanc, g.valor / NULLIF(SUM(g.valor) OVER w, 0) * 100 AS percentual
+      FROM g
+    WINDOW w AS (PARTITION BY g.origem, g.chave)
+  ),
   lc AS (
     SELECT g.origem, g.chave, CASE WHEN g.origem IN ('R', 'P') THEN g.chave END AS titulo,
-           MIN(g.data) OVER w AS data, MIN(g.venc_min) OVER w AS venc_min, MAX(g.venc_max) OVER w AS venc_max,
-           MAX(g.parcelas) OVER w AS parcelas, g.documento, g.documento_nome, g.numero, g.contraparte,
+           g.data_lanc AS data, g.venc_min_lanc AS venc_min, g.venc_max_lanc AS venc_max, g.parcelas_lanc AS parcelas,
+           g.documento, g.documento_nome, g.numero, g.contraparte,
            g.centro_original, g.natureza_original, g.centro_id, COALESCE(cc.name, g.centro_nome_cat) AS centro_nome,
-           g.natureza_id, COALESCE(pf.name, g.natureza_nome_cat) AS natureza_nome, g.valor,
-           g.valor / NULLIF(SUM(g.valor) OVER w, 0) * 100 AS percentual, g.status
-      FROM g
-      LEFT JOIN centros_custo_sienge cc ON cc.empresa_id = $1 AND cc.sienge_id = g.centro_id
+           g.natureza_id, COALESCE(pf.name, g.natureza_nome_cat) AS natureza_nome, g.valor, g.percentual, g.status
+      FROM gw g
+      JOIN centros_custo_sienge cc ON cc.empresa_id = $1 AND cc.sienge_id = g.centro_id AND cc.realiza_dre
       LEFT JOIN planos_financeiros_sienge pf ON pf.empresa_id = $1 AND pf.sienge_id::text = g.natureza_id
-    WINDOW w AS (PARTITION BY g.origem, g.chave)
   )`;
 
 // 'AAAA-MM-DD' + 1 dia (fim exclusivo do período).

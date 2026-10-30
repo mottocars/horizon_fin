@@ -98,7 +98,8 @@ const travadoPela = (data) => Boolean(data) && Number(data.slice(0, 4)) >= new D
 
 async function nomes(empresaId) {
   const [{ rows: centros }, { rows: naturezas }] = await Promise.all([
-    pool.query('SELECT sienge_id AS id, name AS nome FROM centros_custo_sienge WHERE empresa_id = $1 ORDER BY sienge_id', [empresaId]),
+    // Só centros com "Realiza DRE" (os que a listagem do Financeiro mostra).
+    pool.query('SELECT sienge_id AS id, name AS nome FROM centros_custo_sienge WHERE empresa_id = $1 AND realiza_dre ORDER BY sienge_id', [empresaId]),
     pool.query(
       `SELECT sienge_id::text AS id, name AS nome, tp_conta <> 'T' AS analitica FROM planos_financeiros_sienge
         WHERE empresa_id = $1 ORDER BY sienge_id::text`,
@@ -165,8 +166,8 @@ async function salvar(empresaId, origem, chave, centroOriginal, naturezaOriginal
   if (travadoPela(o.cabecalho.data)) {
     throw erro(403, 'Lançamento do exercício em andamento: só pode ser visualizado, não pode ser ajustado.');
   }
-  const { rows: cc } = await pool.query('SELECT 1 FROM centros_custo_sienge WHERE empresa_id = $1 AND sienge_id = $2', [empresaId, centroId]);
-  if (!cc[0]) throw erro(400, 'Centro de custo não encontrado nesta empresa.');
+  const { rows: cc } = await pool.query('SELECT 1 FROM centros_custo_sienge WHERE empresa_id = $1 AND sienge_id = $2 AND realiza_dre', [empresaId, centroId]);
+  if (!cc[0]) throw erro(400, 'Centro de custo não encontrado ou sem "Realiza DRE" (aba Centros Custos).');
   const { rows: nat } = await pool.query(
     "SELECT 1 FROM planos_financeiros_sienge WHERE empresa_id = $1 AND sienge_id::text = $2 AND tp_conta <> 'T'",
     [empresaId, String(naturezaId)]
