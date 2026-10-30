@@ -3,6 +3,7 @@ const unidades = require('../dre-unidades/unidades.service');
 const correcoes = require('../dre-correcoes/correcoes.service');
 const financeiro = require('../dre-financeiro/financeiro.service');
 const { arredondarPoc } = require('../../utils/poc');
+const { ORDEM: ORDEM_CENTROS } = require('../dre-centros/dreCentros.service');
 
 // Operações > DRE Gerencial > DRE: a coluna Valor de cada Máscara DRE de nível 2 num período
 // (de/até, inclusive), somando os centros de custo com "Realiza DRE" (ou os do filtro). Inspirado no
@@ -184,7 +185,7 @@ async function calcular(empresaId, { de, ate, centros: filtro = [] }) {
   const [{ rows: centrosDre }, { rows: mascaras }, { rows: cfg }, { rows: aliquotas }] = await Promise.all([
     pool.query(
       `SELECT sienge_id::int AS id, name AS nome, COALESCE(NULLIF(TRIM(apelido), ''), name) AS rotulo
-         FROM centros_custo_sienge WHERE empresa_id = $1 AND realiza_dre ORDER BY sienge_id`,
+         FROM centros_custo_sienge WHERE empresa_id = $1 AND realiza_dre ORDER BY ${ORDEM_CENTROS}`,
       [empresaId]
     ),
     // Nível 2 na ordem da DRE (grupo de nível 1, depois a ordem dentro dele) — "acima" do imposto.
@@ -333,7 +334,7 @@ async function calcular(empresaId, { de, ate, centros: filtro = [] }) {
     avaliacao_vertical: cfg[0]?.av_mascara_id ? { mascara_id: cfg[0].av_mascara_id, descricao: cfg[0].av_descricao } : null,
     valores,
     meses: porMes,
-    // Colunas dos centros na tela: o total do período de cada um.
+    // Colunas dos centros na tela (na ordem da aba Centros Custos): o total do período de cada um.
     por_centro: porCentro.map(({ id, nome, valores: v }) => ({ id, nome, valores: v })),
   };
 }

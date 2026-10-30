@@ -1,6 +1,7 @@
 import { useCallback, useEffect, useMemo, useState } from 'react';
-import { Building2, Check, Loader2, TriangleAlert } from 'lucide-react';
-import { listCentrosCustoDre, updateCentroCustoDre } from '../../../api/dreCentros.api';
+import { Building2, Check, GripVertical, Loader2, TriangleAlert } from 'lucide-react';
+import { Indicador } from '../../../components/MascarasArvoreEditor';
+import { listCentrosCustoDre, reordenarCentrosCustoDre, updateCentroCustoDre } from '../../../api/dreCentros.api';
 
 // Mesma grade no cabeçalho e nas linhas, pra a caixa ficar em coluna.
 const GRADE = 'grid grid-cols-[minmax(0,1fr)_100px] items-center gap-3';
@@ -10,6 +11,9 @@ const GRADE = 'grid grid-cols-[minmax(0,1fr)_100px] items-center gap-3';
 // Código Prevision, que a DRE não usa). Todos os centros de custo da empresa, lista única, sem
 // drilldown; só os marcados aparecem nas abas seguintes (plano de contas próprio e Orçamento). Cada
 // mudança salva na hora, com o mesmo indicador de salvamento da aba Máscaras.
+// Ordem: arrastando a linha pela alça, como na aba Máscaras (drag-and-drop nativo, mesma linha azul de
+// destino); grava a lista inteira na nova ordem. É a ordem das colunas dos centros na aba DRE. Com
+// busca digitada o arraste fica desligado (a lista estaria incompleta).
 export default function CentrosCustosTab({ empresaId, search }) {
   const [centros, setCentros] = useState([]);
   const [carregando, setCarregando] = useState(true);
@@ -18,6 +22,8 @@ export default function CentrosCustosTab({ empresaId, search }) {
   const [pendentes, setPendentes] = useState(0);
   const [erroSalvar, setErroSalvar] = useState('');
   const [salvoAlgumaVez, setSalvoAlgumaVez] = useState(false);
+  const [arrastado, setArrastado] = useState(null); // sienge_id da linha sendo arrastada
+  const [alvo, setAlvo] = useState(null); // posição (0…n) onde ela vai entrar
 
   const carregar = useCallback(() => {
     if (!empresaId) return;
@@ -60,6 +66,58 @@ export default function CentrosCustosTab({ empresaId, search }) {
     } catch (err) {
       setCentros((atual) => atual.map((c) => (c.sienge_id === centro.sienge_id ? centro : c)));
       setErroSalvar(err.response?.data?.message || 'Não foi possível salvar.');
+    } finally {
+      setPendentes((n) => n - 1);
+    }
+  }
+
+  const podeArrastar = !search.trim();
+
+  function iniciarArraste(e, siengeId) {
+    e.dataTransfer.effectAllowed = 'move';
+    e.dataTransfer.setData('text/plain', String(siengeId));
+    // adia pra o navegador capturar a "foto" da linha antes de esmaecer a original
+    requestAnimationFrame(() => setArrastado(siengeId));
+  }
+
+  function encerrarArraste() {
+    setArrastado(null);
+    setAlvo(null);
+  }
+
+  // Metade de cima da linha = antes dela; metade de baixo = depois.
+  function mirar(e, i) {
+    if (arrastado === null) return;
+    e.preventDefault();
+    e.dataTransfer.dropEffect = 'move';
+    const r = e.currentTarget.getBoundingClientRect();
+    const posicao = e.clientY < r.top + r.height / 2 ? i : i + 1;
+    if (posicao !== alvo) setAlvo(posicao);
+  }
+
+  // Move na tela na hora e grava a lista inteira; se falhar, volta pro que estava.
+  async function soltar(e) {
+    e.preventDefault();
+    const id = arrastado;
+    const posicao = alvo;
+    encerrarArraste();
+    if (id === null || posicao === null) return;
+    const de = centros.findIndex((c) => c.sienge_id === id);
+    const para = posicao > de ? posicao - 1 : posicao;
+    if (de < 0 || para === de) return;
+    const anterior = centros;
+    const nova = [...centros];
+    const [item] = nova.splice(de, 1);
+    nova.splice(para, 0, item);
+    setCentros(nova);
+    setErroSalvar('');
+    setPendentes((n) => n + 1);
+    try {
+      setCentros(await reordenarCentrosCustoDre(empresaId, nova.map((c) => c.sienge_id)));
+      setSalvoAlgumaVez(true);
+    } catch (err) {
+      setCentros(anterior);
+      setErroSalvar(err.response?.data?.message || 'Não foi possível salvar a ordem.');
     } finally {
       setPendentes((n) => n - 1);
     }
@@ -120,12 +178,20 @@ export default function CentrosCustosTab({ empresaId, search }) {
           </button>
         </div>
       ) : (
-        <div>
+        <div
+          onDragOver={(e) => arrastado !== null && e.preventDefault()}
+          onDrop={soltar}
+          onDragLeave={(e) => {
+            if (!e.currentTarget.contains(e.relatedTarget)) setAlvo(null);
+          }}
+        >
           {/* Cabeçalho azul, mesmo da aba Máscaras, com os títulos das colunas dos campos. */}
           <div
             className={`${GRADE} sticky -top-6 z-20 rounded-t-lg border-b-2 border-blue-500 bg-blue-50 py-2.5 pl-4 pr-4 text-xs font-medium uppercase tracking-wide text-blue-700`}
           >
-            <span>Centro de custo</span>
+            <span className="pl-5" title="Arraste pela alça para mudar a ordem — é a ordem das colunas na aba DRE">
+              Centro de custo
+            </span>
             <span className="text-center">Realiza DRE</span>
           </div>
 
@@ -135,13 +201,26 @@ export default function CentrosCustosTab({ empresaId, search }) {
               {centros.length === 0 ? 'Nenhum centro de custo nesta empresa.' : 'Nenhum centro de custo encontrado para essa busca.'}
             </div>
           ) : (
-            filtrados.map((centro) => {
+            filtrados.map((centro, i) => {
             return (
               <div
                 key={centro.sienge_id}
-                className={`${GRADE} border-b border-gray-100 bg-white py-1.5 pl-4 pr-4 hover:bg-gray-50`}
+                draggable={podeArrastar}
+                onDragStart={(e) => iniciarArraste(e, centro.sienge_id)}
+                onDragEnd={encerrarArraste}
+                onDragOver={(e) => mirar(e, i)}
+                className={`${GRADE} group/linha relative border-b border-gray-100 bg-white py-1.5 pl-1.5 pr-4 hover:bg-gray-50 ${
+                  arrastado === centro.sienge_id ? 'opacity-40' : ''
+                }`}
               >
+                {alvo === i && <Indicador />}
+                {alvo === filtrados.length && i === filtrados.length - 1 && <Indicador embaixo />}
                 <div className="flex min-w-0 items-center gap-2">
+                  <GripVertical
+                    size={14}
+                    className={`shrink-0 ${podeArrastar ? 'cursor-grab text-gray-300 group-hover/linha:text-gray-500' : 'text-gray-200'}`}
+                    title={podeArrastar ? 'Arraste para mudar a ordem' : 'Limpe a busca para mudar a ordem'}
+                  />
                   <span className="shrink-0 text-xs tabular-nums text-gray-400">{centro.sienge_id}</span>
                   <span className="min-w-0 truncate text-xs font-medium text-gray-800" title={centro.name}>
                     {centro.name}

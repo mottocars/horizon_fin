@@ -8,6 +8,10 @@ const updateSchema = z.object({
   realiza_dre: z.boolean({ required_error: 'Informe o Realiza DRE.', invalid_type_error: 'Realiza DRE inválido.' }),
 });
 
+const ordemSchema = z.object({
+  ordem: z.array(z.coerce.number().int().positive('Centro de custo inválido.')).max(2000),
+});
+
 function erro(status, message) {
   const e = new Error(message);
   e.status = status;
@@ -42,4 +46,14 @@ async function update(req, res, next) {
   }
 }
 
-module.exports = { list, update };
+async function reordenar(req, res, next) {
+  try {
+    const empresaId = empresaIdSchema.parse(req.params.empresaId);
+    const { ordem } = ordemSchema.parse(req.body || {});
+    res.json(await service.reordenar(empresaId, ordem));
+  } catch (err) {
+    tratar(err, next);
+  }
+}
+
+module.exports = { list, update, reordenar };
