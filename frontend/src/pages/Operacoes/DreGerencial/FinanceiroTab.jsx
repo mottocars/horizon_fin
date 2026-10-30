@@ -1,5 +1,5 @@
-import { useCallback, useEffect, useState } from 'react';
-import { ArrowDownLeft, ArrowLeftRight, ArrowUpRight, CalendarDays, Lock, TriangleAlert, Wallet } from 'lucide-react';
+import { useCallback, useEffect, useRef, useState } from 'react';
+import { ArrowDownLeft, ArrowLeftRight, ArrowUpRight, CalendarDays, Lock, PencilLine, TriangleAlert, Wallet } from 'lucide-react';
 import { listarExerciciosDre } from '../../../api/dreFinanceiro.api';
 import LancamentosExercicio from './LancamentosExercicio';
 
@@ -16,7 +16,8 @@ function plural(n, um, varios) {
 // Mesmo card dos planos da aba Plano Contas (PlanosContasLista.jsx): ícone, título e rodapé. Exercício
 // travado (o do ano atual): em amarelo sutil, com cadeado e "Somente visualização" — nada nele pode ser
 // alterado. Quantidades: títulos distintos a receber e a pagar emitidos no ano (um título tem várias
-// parcelas) e movimentações do extrato sem título. Clicar abre os lançamentos do exercício.
+// parcelas), movimentações do extrato sem título e quantos títulos foram ajustados (titulos_ajustes).
+// Clicar abre os lançamentos do exercício.
 function CardExercicio({ exercicio, atual, onAbrir }) {
   const travado = exercicio.travado;
   return (
@@ -70,6 +71,12 @@ function CardExercicio({ exercicio, atual, onAbrir }) {
           </span>
           <span className="tabular-nums">{plural(exercicio.movimentos || 0, 'lançamento', 'lançamentos')}</span>
         </div>
+        <div className={`flex items-center justify-between ${exercicio.ajustados ? 'font-medium text-violet-700' : ''}`}>
+          <span className="flex items-center gap-1">
+            <PencilLine size={12} className={exercicio.ajustados ? 'text-violet-500' : 'text-gray-400'} /> Títulos ajustados
+          </span>
+          <span className="tabular-nums">{plural(exercicio.ajustados || 0, 'título', 'títulos')}</span>
+        </div>
       </div>
 
       <div className={`mt-4 border-t pt-3 text-[11px] text-gray-500 ${travado ? 'border-amber-100' : 'border-gray-100'}`}>
@@ -99,6 +106,13 @@ export default function FinanceiroTab({ empresaId, exercicio = null, onAbrir, se
     setDados(null);
     carregar();
   }, [carregar]);
+
+  // Voltando de um exercício, recarrega os cards (um ajuste feito lá muda os "Títulos ajustados").
+  const exercicioAnterior = useRef(exercicio);
+  useEffect(() => {
+    if (exercicioAnterior.current && !exercicio) carregar();
+    exercicioAnterior.current = exercicio;
+  }, [exercicio, carregar]);
 
   if (empresaId && exercicio) {
     return <LancamentosExercicio empresaId={empresaId} ano={exercicio} search={search} onVoltar={() => onAbrir(null)} />;

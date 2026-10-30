@@ -24,6 +24,7 @@ const lancamentosSchema = z.object({
   natureza: listaSchema,
   contraparte: listaSchema,
   mes: listaSchema,
+  status: listaSchema,
   de: dataSchema,
   ate: dataSchema,
   busca: z.string().trim().max(100).optional().default(''),
@@ -51,7 +52,7 @@ async function exercicios(req, res, next) {
   }
 }
 
-// GET /:empresaId/exercicios/:ano/lancamentos?origem[]=&documento[]=&titulo[]=&centro[]=&natureza[]=&contraparte[]=&mes[]=&de=&ate=&busca=&pagina=&por_pagina=
+// GET /:empresaId/exercicios/:ano/lancamentos?origem[]=&documento[]=&titulo[]=&centro[]=&natureza[]=&contraparte[]=&mes[]=&status[]=&de=&ate=&busca=&pagina=&por_pagina=
 async function lancamentos(req, res, next) {
   try {
     const empresaId = empresaIdSchema.parse(req.params.empresaId);
@@ -69,6 +70,7 @@ async function lancamentos(req, res, next) {
           naturezas: q.natureza,
           contrapartes: q.contraparte,
           meses: q.mes,
+          status: q.status,
           de: q.de,
           ate: q.ate,
           busca: q.busca,
