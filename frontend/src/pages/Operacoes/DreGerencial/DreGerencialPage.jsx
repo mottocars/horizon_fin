@@ -10,6 +10,7 @@ import {
   House,
   ListTree,
   Loader2,
+  Maximize2,
   Percent,
   Plus,
   RefreshCw,
@@ -191,6 +192,7 @@ export default function DreGerencialPage() {
   const dreDe = searchParams.get('de') || `${hojeIso.slice(0, 4)}-01-01`;
   const dreAte = searchParams.get('ate') || hojeIso;
   const dreCentros = (searchParams.get('centros') || '').split(',').filter(Boolean);
+  const [dreTelaCheia, setDreTelaCheia] = useState(false);
   const [centrosDre, setCentrosDre] = useState([]);
   useEffect(() => {
     if (abaAtiva !== 'dre' || !empresaId) return;
@@ -453,6 +455,22 @@ export default function DreGerencialPage() {
             )}
           </div>
 
+          {abaAtiva === 'dre' && (
+            <div className="flex shrink-0 items-center gap-2">
+              <Button
+                type="button"
+                variant="secondary"
+                className="!px-2.5"
+                onClick={() => setDreTelaCheia(true)}
+                disabled={semEmpresa}
+                title="Tela cheia"
+                aria-label="Tela cheia"
+              >
+                <Maximize2 size={18} />
+              </Button>
+            </div>
+          )}
+
           {abaAtiva === 'unidades' && (
             <div className="flex shrink-0 items-center gap-2">
               {/* Mesmo ícone de atualizar do Repasses CEF: busca unidades e contratos no Sienge. */}
@@ -552,7 +570,16 @@ export default function DreGerencialPage() {
       <div>
         <Tabs tabs={TABS} activeId={abaAtiva} onChange={(aba) => atualizarParams({ aba })} />
 
-        {abaAtiva === 'dre' && <DreTab empresaId={empresaId} de={dreDe} ate={dreAte} centros={dreCentros} />}
+        {abaAtiva === 'dre' && (
+          <DreTab
+            empresaId={empresaId}
+            de={dreDe}
+            ate={dreAte}
+            centros={dreCentros}
+            telaCheia={dreTelaCheia}
+            onSairTelaCheia={() => setDreTelaCheia(false)}
+          />
+        )}
         {abaAtiva === 'poc' && <PocTab empresaId={empresaId} />}
 
         {abaAtiva === 'mascaras' && <MascarasTab ref={mascarasTabRef} empresaId={empresaId} />}

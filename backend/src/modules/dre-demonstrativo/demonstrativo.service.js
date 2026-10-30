@@ -50,6 +50,9 @@ const { arredondarPoc } = require('../../utils/poc');
 //                        Despesa(D) − fração distratada(D)), o mesmo que o CIV dá líquido do estorno;
 //   sem "% POC"        — o valor lançado no período, direto.
 //
+// Resposta: `meses` (os valores de cada mês do período, colunas da tela) e `valores` (o total do
+// período = soma dos meses).
+//
 // Imposto Fixo (RET): −alíquota × tudo o que está acima dele na DRE (as linhas de nível 2 antes dele,
 // na ordem da aba Máscaras), mês a mês, cada mês com a alíquota do histórico vigente nele (a de
 // início mais recente até o mês; antes da primeira, 0). O período é quebrado nos meses (o primeiro e
@@ -259,25 +262,30 @@ async function calcular(empresaId, { de, ate, centros: filtro = [] }) {
   });
   const aliquotaEm = (mascaraId, data) => (historico.get(mascaraId) || []).filter((h) => h.inicio <= data).pop()?.aliquota || 0;
 
-  const valores = {};
-  const intervalos = meses(de, ate);
-  mascaras.forEach((m, i) => {
-    if (m.origem === 'IMPOSTO_FIXO') {
-      const acima = mascaras.slice(0, i);
-      if (!acima.length || !acima.every(calculavel)) {
-        valores[m.id] = null;
+  // Valores de cada máscara num mês [a, b] (o imposto com a alíquota vigente nele).
+  const valoresDoMes = (a, b) => {
+    const valores = {};
+    mascaras.forEach((m, i) => {
+      if (m.origem === 'IMPOSTO_FIXO') {
+        const acima = mascaras.slice(0, i);
+        if (!acima.length || !acima.every(calculavel)) {
+          valores[m.id] = null;
+          return;
+        }
+        const aliquota = aliquotaEm(m.id, a.slice(0, 8) + '01');
+        valores[m.id] = aliquota ? -(acima.reduce((t, x) => t + valorEm(x, a, b), 0) * aliquota) / 100 : 0;
         return;
       }
-      valores[m.id] = intervalos.reduce((s, [a, b]) => {
-        const aliquota = aliquotaEm(m.id, a.slice(0, 8) + '01');
-        if (!aliquota) return s;
-        const baseMes = acima.reduce((t, x) => t + valorEm(x, a, b), 0);
-        return s - (baseMes * aliquota) / 100;
-      }, 0);
-      return;
-    }
-    valores[m.id] = calculavel(m) ? valorEm(m, de, ate) : null;
-  });
+      valores[m.id] = calculavel(m) ? valorEm(m, a, b) : null;
+    });
+    return valores;
+  };
+  // Coluna por mês do período (o primeiro e o último podem ser parciais); o total do período é a soma
+  // dos meses — o mesmo que calcular [de, até] direto, já que cada mês desconta o reconhecido antes.
+  const porMes = meses(de, ate).map(([a, b]) => ({ mes: a.slice(0, 7), de: a, ate: b, valores: valoresDoMes(a, b) }));
+  const valores = Object.fromEntries(
+    mascaras.map((m) => [m.id, porMes.some((x) => x.valores[m.id] === null) ? null : porMes.reduce((t, x) => t + x.valores[m.id], 0)])
+  );
 
   return {
     de,
@@ -302,6 +310,7 @@ async function calcular(empresaId, { de, ate, centros: filtro = [] }) {
       fracao_distratada_fim: fracaoDistratada(c.id, ate),
     })),
     valores,
+    meses: porMes,
   };
 }
 
