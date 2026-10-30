@@ -203,11 +203,13 @@ export default function DreTab({ empresaId, de, ate, centros = [], telaCheia = f
                     rowSpan={2}
                     onClick={() => setConsolidadoAberto(true)}
                     title="Mostrar o Consolidado (valor e AV %)"
-                    className={`${COL_FAIXA} cursor-pointer border-b border-b-blue-200 bg-blue-100 px-0 py-2 text-center align-middle transition-colors hover:bg-blue-200`}
+                    className={`${COL_FAIXA} z-20 cursor-pointer border-b border-b-blue-200 bg-blue-100 px-0 py-2 text-center align-bottom transition-colors hover:bg-blue-200`}
                   >
-                    <span className="inline-flex rotate-180 items-center gap-1 text-[11px] font-bold uppercase tracking-[0.2em] text-blue-800 [writing-mode:vertical-rl]">
+                    {/* Só a seta no cabeçalho (que fica na altura normal); a palavra, na vertical, desce
+                        pela faixa por cima das linhas — é do cabeçalho, então não recebe o clique. */}
+                    <ChevronLeft size={12} className="mx-auto rotate-180 text-blue-500" />
+                    <span className="pointer-events-none absolute left-1/2 top-full mt-1.5 -translate-x-1/2 rotate-180 whitespace-nowrap text-[11px] font-bold uppercase tracking-[0.2em] text-blue-800 [writing-mode:vertical-rl]">
                       Consolidado
-                      <ChevronLeft size={12} className="shrink-0 text-blue-500" />
                     </span>
                   </th>
                 )}
@@ -297,7 +299,8 @@ const COL_DESCRICAO = 'sticky left-0 z-10 w-[380px] min-w-[380px] max-w-[380px]'
 const COL_CONSOLIDADO = 'sticky left-[380px] z-10 w-36 min-w-36 max-w-36';
 const COL_AV_CONSOLIDADO = 'sticky left-[524px] z-10 w-20 min-w-20 max-w-20 border-r border-r-blue-200';
 // Consolidado recolhido: só a faixa (como o Total recolhido do fluxo do DFC).
-const COL_FAIXA = 'sticky left-[380px] z-10 w-7 min-w-7 max-w-7 border-r border-r-blue-200';
+// Sem z-index aqui: o cabeçalho fica acima (z-20) pra palavra vertical passar por cima das células.
+const COL_FAIXA = 'sticky left-[380px] w-7 min-w-7 max-w-7 border-r border-r-blue-200';
 const COL_CENTRO = 'w-32 min-w-32 max-w-32';
 const COL_AV = 'w-20 min-w-20 max-w-20';
 
@@ -330,7 +333,7 @@ function Celulas({ tipo, consolidado, valor, base, recolhido, onAbrir }) {
       <td
         onClick={onAbrir}
         title="Mostrar o Consolidado (valor e AV %)"
-        className={`${COL_FAIXA} cursor-pointer border-b ${e.borda} ${
+        className={`${COL_FAIXA} z-10 cursor-pointer border-b ${e.borda} ${
           tipo === 'totalizadora' ? 'bg-[#174a70]' : tipo === 'n1' ? 'bg-blue-100 hover:bg-blue-200' : 'bg-blue-50 hover:bg-blue-100'
         }`}
       />
@@ -455,7 +458,7 @@ function LinhaGrupo({ grupo, colunas, acumulados, bases, recolhido, onAbrir }) {
             Nenhum item cadastrado nesta linha ainda.
           </td>
           {recolhido ? (
-            <td className={`${COL_FAIXA} border-b border-b-blue-100 bg-blue-50`} />
+            <td className={`${COL_FAIXA} z-10 border-b border-b-blue-100 bg-blue-50`} />
           ) : (
             <>
               <td className={`${COL_CONSOLIDADO} border-b border-b-blue-100 bg-blue-50`} />
