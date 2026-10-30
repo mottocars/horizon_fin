@@ -52,7 +52,8 @@ const { ORDEM: ORDEM_CENTROS } = require('../dre-centros/dreCentros.service');
 //   sem "% POC"        — o valor lançado no período, direto.
 //
 // Resposta: `valores` (o consolidado do período), `por_centro` (o período de cada centro — a soma
-// deles é o consolidado — e os meses dele) e `meses` (o consolidado de cada mês).
+// deles é o consolidado — e os meses dele, mais o mês anterior ao período pra AH % do primeiro) e
+// `meses` (o consolidado de cada mês).
 //
 // Imposto Fixo (RET): −alíquota × tudo o que está acima dele na DRE (as linhas de nível 2 antes dele,
 // na ordem da aba Máscaras), mês a mês, cada mês com a alíquota do histórico vigente nele (a de
@@ -296,6 +297,10 @@ async function calcular(empresaId, { de, ate, centros: filtro = [] }) {
   // a soma dos centros.
   const intervalos = meses(de, ate);
   const vazio = (a, b) => valoresDoMes(a, b, []);
+  // O mês inteiro antes do primeiro do período (fora do filtro): só pra AH % do primeiro mês na visão
+  // mês a mês de um centro.
+  const inicioAnterior = `${vespera(`${de.slice(0, 7)}-01`).slice(0, 7)}-01`;
+  const anterior = [inicioAnterior, fimDoMes(inicioAnterior)];
   const porCentro = obras.map((c) => {
     const doCentro = intervalos.map(([a, b]) => valoresDoMes(a, b, [c.id]));
     return { id: c.id, nome: c.rotulo, meses: doCentro, valores: somar(vazio(de, ate), doCentro) };
@@ -341,6 +346,8 @@ async function calcular(empresaId, { de, ate, centros: filtro = [] }) {
       nome,
       valores: v,
       meses: doCentro.map((valoresMes, i) => ({ mes: porMes[i].mes, de: porMes[i].de, ate: porMes[i].ate, valores: valoresMes })),
+      // Mês anterior ao período (fora do filtro), pra AH % do primeiro mês.
+      mes_anterior: { mes: anterior[0].slice(0, 7), de: anterior[0], ate: anterior[1], valores: valoresDoMes(anterior[0], anterior[1], [id]) },
     })),
   };
 }

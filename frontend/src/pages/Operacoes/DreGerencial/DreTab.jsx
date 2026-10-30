@@ -23,9 +23,10 @@ function mesDeHoje() {
 // - Centros (padrão): CONSOLIDADO (o totalizador = soma dos centros, retrátil como o Total do fluxo do
 //   DFC) e um centro de custo por coluna (na ordem da aba Centros Custos), cada um com Valor e AV %
 //   (Avaliação Vertical, a partir da linha de nível 1 da aba Configurações).
-// - Mês a mês de um centro: clicar no nome do centro no cabeçalho mostra o botão "Mês a mês"; com ele
-//   as colunas viram o TOTAL do centro no período e os meses (JAN/2026…, como no DFC), cada mês com
-//   Valor e AH % (Avaliação Horizontal: variação sobre o mês anterior). "Voltar aos centros" volta.
+// - Mês a mês de um centro: o nome do centro no cabeçalho é um botão (acende no hover); clicando, as
+//   colunas viram o TOTAL do centro no período e os meses (JAN/2026…, como no DFC), cada mês com Valor e
+//   AH % (Avaliação Horizontal: variação sobre o mês anterior — o primeiro mês compara com o mês antes
+//   do período, que vem do backend sem aparecer). "Voltar aos centros" volta.
 // A primeira coluna (DRE) e a coluna fixa (Consolidado / Total) ficam congeladas quando as outras rolam.
 // `telaCheia` / `onSairTelaCheia`: a DRE ocupa a tela inteira (por cima do menu e do topo, e em tela
 // cheia de verdade no navegador quando ele deixa), como o fluxo do DFC Construtoras; sai pelo botão
@@ -39,7 +40,6 @@ export default function DreTab({ empresaId, de, ate, centros = [], telaCheia = f
   // Coluna fixa retrátil, como o Total do fluxo do DFC: clicar no título recolhe numa faixa com o nome
   // na vertical; clicar na faixa abre. Começa aberta (é o totalizador da DRE).
   const [fixaAberta, setFixaAberta] = useState(true);
-  const [centroMarcado, setCentroMarcado] = useState(null); // centro clicado no cabeçalho (mostra o botão)
   const [mensal, setMensal] = useState(null); // centro na visão mês a mês
   const chaveCentros = centros.join(',');
   const mesAtual = mesDeHoje();
@@ -83,7 +83,6 @@ export default function DreTab({ empresaId, de, ate, centros = [], telaCheia = f
   // Outra empresa: volta pra visão dos centros.
   useEffect(() => {
     setMensal(null);
-    setCentroMarcado(null);
   }, [empresaId]);
 
   // Tela cheia: pede também a do navegador; o Esc dele sai e o `fullscreenchange` fecha a nossa
@@ -135,12 +134,16 @@ export default function DreTab({ empresaId, de, ate, centros = [], telaCheia = f
         ...(resultado?.por_centro || []).map((c) => ({ chave: c.id, nome: c.nome, valores: c.valores, segunda: 'av' })),
       ];
   const fixa = colunas[0];
-  const linhas = comAcumulado(arvore, colunas);
+  // Visão mês a mês: o mês antes do período entra só no cálculo (coluna `oculta`), pra AH % do primeiro.
+  const colunasCalc = centroMensal
+    ? [...colunas, { chave: 'anterior', valores: centroMensal.mes_anterior.valores, oculta: true }]
+    : colunas;
+  const linhas = comAcumulado(arvore, colunasCalc);
   // AV % (visão dos centros): a linha de nível 1 da aba Configurações vale 100% em cada coluna; ela e as
   // de baixo mostram o percentual dela (as de cima ficam vazias). Sem a linha configurada, traço.
   const av = resultado?.avaliacao_vertical || null;
   const indiceBase = av ? arvore.findIndex((g) => g.id === av.mascara_id) : -1;
-  const bases = colunas.map((c, i) => {
+  const bases = colunasCalc.map((c, i) => {
     if (indiceBase < 0) return null;
     const g = arvore[indiceBase];
     return g.totalizadora ? linhas[indiceBase].acumulados[i] : totalDoGrupo(g, c.valores);
@@ -155,7 +158,6 @@ export default function DreTab({ empresaId, de, ate, centros = [], telaCheia = f
 
   function abrirMensal(id) {
     setMensal(id);
-    setCentroMarcado(null);
     setFixaAberta(true);
   }
 
@@ -277,29 +279,17 @@ export default function DreTab({ empresaId, de, ate, centros = [], telaCheia = f
                   c.mes ? (
                     <CabecalhoMes key={c.chave} coluna={c} atual={c.mes === mesAtual} />
                   ) : (
-                    <th
-                      key={c.chave}
-                      colSpan={2}
-                      onClick={() => setCentroMarcado((m) => (m === c.chave ? null : c.chave))}
-                      title={`${c.chave} - ${c.nome} · clique para ver mês a mês`}
-                      className={`cursor-pointer border-b border-l border-gray-200 px-3 pb-1 pt-1.5 text-center align-bottom font-semibold transition-colors ${
-                        centroMarcado === c.chave ? 'bg-primary-50 text-primary-700' : 'bg-white hover:bg-gray-50'
-                      }`}
-                    >
-                      <span className="line-clamp-2 whitespace-normal leading-tight">{c.nome}</span>
-                      {centroMarcado === c.chave && (
-                        <button
-                          type="button"
-                          onClick={(e) => {
-                            e.stopPropagation();
-                            abrirMensal(c.chave);
-                          }}
-                          className="mx-auto mt-1 flex items-center gap-1 rounded-md bg-primary-600 px-2 py-0.5 text-[10px] font-semibold normal-case tracking-normal text-white shadow-sm transition-colors hover:bg-primary-700"
-                        >
-                          <CalendarDays size={11} />
-                          Mês a mês
-                        </button>
-                      )}
+                    // O próprio nome do centro é o botão do mês a mês: acende no hover.
+                    <th key={c.chave} colSpan={2} className="border-b border-l border-gray-200 bg-white p-1 text-center align-bottom font-semibold">
+                      <button
+                        type="button"
+                        onClick={() => abrirMensal(c.chave)}
+                        title={`${c.chave} - ${c.nome} · ver mês a mês`}
+                        className="group/centro flex w-full items-center justify-center gap-1 rounded-md px-2 py-1 uppercase tracking-wide text-gray-700 transition-colors hover:bg-primary-600 hover:text-white"
+                      >
+                        <span className="line-clamp-2 whitespace-normal leading-tight">{c.nome}</span>
+                        <CalendarDays size={12} className="shrink-0 text-gray-300 transition-colors group-hover/centro:text-white" />
+                      </button>
                     </th>
                   )
                 )}
@@ -346,7 +336,7 @@ export default function DreTab({ empresaId, de, ate, centros = [], telaCheia = f
                 <LinhaGrupo
                   key={grupo.id}
                   grupo={grupo}
-                  colunas={colunas}
+                  colunas={colunasCalc}
                   acumulados={acumulados}
                   bases={indiceBase >= 0 && i >= indiceBase ? bases : null}
                   recolhido={!fixaAberta}
@@ -544,12 +534,18 @@ function Valor({ valor, vazio = 'text-gray-300', cor = 'text-gray-700' }) {
 
 // As células de valor de uma linha: `vals` = o valor em cada coluna. AV % = valor ÷ base da coluna
 // (`bases`, null quando a linha está acima da linha configurada → vazio); AH % = sobre a coluna
-// anterior, se ela também for um mês (o primeiro mês fica com traço).
+// anterior, se ela também for um mês; o primeiro mês compara com a coluna `oculta` (o mês antes do
+// período), que não é desenhada.
 function CelulasDaLinha({ tipo, colunas, vals, bases, recolhido, onAbrir }) {
+  const iAnterior = colunas.findIndex((c) => c.oculta);
   return colunas.map((c, i) => {
+    if (c.oculta) return null;
     let pct;
     if (c.segunda === 'av') pct = bases ? pctAv(vals[i], bases[i]) : undefined;
-    else if (c.segunda === 'ah') pct = colunas[i - 1]?.mes ? pctAh(vals[i], vals[i - 1]) : null;
+    else if (c.segunda === 'ah') {
+      const j = colunas[i - 1]?.mes ? i - 1 : iAnterior;
+      pct = j >= 0 ? pctAh(vals[i], vals[j]) : null;
+    }
     return (
       <Celulas
         key={c.chave}
@@ -611,7 +607,7 @@ function LinhaGrupo({ grupo, colunas, acumulados, bases, recolhido, onAbrir }) {
               className="sticky left-[380px] z-10 border-b border-r border-b-blue-100 border-r-blue-200 bg-blue-50"
             />
           )}
-          <td colSpan={(colunas.length - 1) * 2} className="border-b border-gray-100" />
+          <td colSpan={(colunas.filter((c) => !c.oculta).length - 1) * 2} className="border-b border-gray-100" />
         </tr>
       ) : (
         grupo.filhos.map((item) => (
