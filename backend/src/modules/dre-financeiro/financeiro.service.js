@@ -5,6 +5,8 @@ const pool = require('../../config/db');
 // receber (sie_income) e do contas a pagar (sie_outcome) — pelo vencimento, a mesma regra da aba
 // Correções: a emissão tem datas digitadas erradas no Sienge (títulos da TOSTE E DINIZ emitidos em
 // "2002" que vencem em 2026). Cada exercício traz quantas parcelas vencem nele, a receber e a pagar.
+// O exercício do ano atual vem travado (`travado`, pedido do usuário): só visualização — nenhuma
+// ação que altere dados pode valer pra ele (o backend deve recusar, não só a tela esconder).
 async function exercicios(empresaId) {
   const { rows } = await pool.query(
     `SELECT EXTRACT(YEAR FROM due_date)::int AS ano,
@@ -26,7 +28,7 @@ async function exercicios(empresaId) {
   const lista = [];
   for (let ano = anoAtual; ano >= Math.min(primeiro.ano, anoAtual); ano -= 1) {
     const r = porAno.get(ano);
-    lista.push({ ano, receber: r?.receber || 0, pagar: r?.pagar || 0 });
+    lista.push({ ano, receber: r?.receber || 0, pagar: r?.pagar || 0, travado: ano === anoAtual });
   }
   return { primeiro_vencimento: primeiro.primeiro, ano_atual: anoAtual, exercicios: lista };
 }

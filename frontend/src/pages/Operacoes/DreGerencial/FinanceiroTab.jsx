@@ -1,5 +1,5 @@
 import { useCallback, useEffect, useState } from 'react';
-import { ArrowDownLeft, ArrowUpRight, CalendarDays, TriangleAlert, Wallet } from 'lucide-react';
+import { ArrowDownLeft, ArrowUpRight, CalendarDays, Lock, TriangleAlert, Wallet } from 'lucide-react';
 import { listarExerciciosDre } from '../../../api/dreFinanceiro.api';
 
 function dataBr(iso) {
@@ -12,7 +12,8 @@ function parcelas(n) {
   return `${n.toLocaleString('pt-BR')} ${n === 1 ? 'parcela' : 'parcelas'}`;
 }
 
-// Mesmo card dos planos da aba Plano Contas (PlanosContasLista.jsx): ícone, título e rodapé.
+// Mesmo card dos planos da aba Plano Contas (PlanosContasLista.jsx): ícone, título e rodapé. Exercício
+// travado (o do ano atual): cadeado e "Somente visualização" — nada nele pode ser alterado.
 function CardExercicio({ exercicio, atual }) {
   return (
     <div
@@ -28,6 +29,14 @@ function CardExercicio({ exercicio, atual }) {
           <p className="truncate text-[11px] text-gray-400">{atual ? 'Exercício atual' : 'Exercício'}</p>
           <p className="text-lg font-semibold leading-snug tabular-nums text-gray-900">{exercicio.ano}</p>
         </div>
+        {exercicio.travado && (
+          <span
+            className="flex shrink-0 items-center gap-1 rounded-full bg-gray-100 px-2 py-0.5 text-[10px] font-medium text-gray-500"
+            title="Exercício em andamento: só pode ser visualizado, não pode ser alterado"
+          >
+            <Lock size={11} /> Somente visualização
+          </span>
+        )}
       </div>
 
       <div className="mt-4 space-y-1.5 text-[11px] text-gray-500">
