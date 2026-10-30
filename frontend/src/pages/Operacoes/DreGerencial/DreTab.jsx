@@ -158,7 +158,7 @@ export default function DreTab({ empresaId, de, ate, centros = [], telaCheia = f
             <thead>
               <tr className="text-xs uppercase tracking-wide text-gray-400">
                 <th className={`${COL_DESCRICAO} border-b border-gray-200 bg-white py-1.5 pl-4 align-bottom font-medium`}>Descrição</th>
-                <th className={`${COL_CONSOLIDADO} border-b border-gray-200 bg-slate-100 px-4 py-1.5 text-right align-bottom font-semibold text-slate-600`}>
+                <th className={`${COL_CONSOLIDADO} border-b border-b-blue-200 bg-blue-100 px-4 py-1.5 text-right align-bottom font-semibold text-blue-800`}>
                   Consolidado
                 </th>
                 {colunas.slice(1).map((c) => (
@@ -204,7 +204,7 @@ function comAcumulado(arvore, colunas) {
 
 // Larguras fixas: a descrição e o consolidado ficam congelados à esquerda quando os centros rolam.
 const COL_DESCRICAO = 'sticky left-0 z-10 w-[380px] min-w-[380px] max-w-[380px]';
-const COL_CONSOLIDADO = 'sticky left-[380px] z-10 w-36 min-w-36 border-r border-r-gray-300';
+const COL_CONSOLIDADO = 'sticky left-[380px] z-10 w-36 min-w-36 border-r border-r-blue-200';
 const COL_CENTRO = 'w-32 min-w-32 max-w-32';
 
 const STATUS_POC = {
@@ -295,7 +295,7 @@ function LinhaGrupo({ grupo, colunas, acumulados }) {
         {colunas.map((c, i) => (
           <td
             key={c.chave}
-            className={`${i === 0 ? `${COL_CONSOLIDADO} bg-slate-100` : `${COL_CENTRO} border-l border-l-gray-200 bg-gray-50`} border-b border-b-gray-200 px-3 py-1 text-right text-xs font-bold tabular-nums`}
+            className={`${i === 0 ? `${COL_CONSOLIDADO} border-b-blue-200 bg-blue-100` : `${COL_CENTRO} border-l border-l-gray-200 border-b-gray-200 bg-gray-50`} border-b px-3 py-1 text-right text-xs font-bold tabular-nums`}
           >
             <Valor valor={totalDoGrupo(c.valores)} cor="text-gray-900" />
           </td>
@@ -307,7 +307,7 @@ function LinhaGrupo({ grupo, colunas, acumulados }) {
           <td className={`${COL_DESCRICAO} border-b border-gray-100 bg-white py-1 pl-20 text-xs italic text-gray-300`}>
             Nenhum item cadastrado nesta linha ainda.
           </td>
-          <td className={`${COL_CONSOLIDADO} border-b border-gray-100 bg-slate-50`} />
+          <td className={`${COL_CONSOLIDADO} border-b border-b-blue-100 bg-blue-50`} />
           <td colSpan={colunas.length - 1} className="border-b border-gray-100" />
         </tr>
       ) : (
@@ -325,8 +325,8 @@ function LinhaGrupo({ grupo, colunas, acumulados }) {
               <td
                 key={c.chave}
                 className={`${
-                  i === 0 ? `${COL_CONSOLIDADO} bg-slate-50 font-semibold group-hover:bg-slate-100` : `${COL_CENTRO} border-l border-l-gray-100 group-hover:bg-gray-50`
-                } border-b border-b-gray-100 px-3 py-0.5 text-right text-xs tabular-nums`}
+                  i === 0 ? `${COL_CONSOLIDADO} border-b-blue-100 bg-blue-50 font-semibold group-hover:bg-blue-100` : `${COL_CENTRO} border-l border-l-gray-100 border-b-gray-100 group-hover:bg-gray-50`
+                } border-b px-3 py-0.5 text-right text-xs tabular-nums`}
               >
                 <Valor valor={c.valores[item.id]} />
               </td>
