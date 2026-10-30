@@ -26,6 +26,7 @@ import SearchableSelect from '../../../components/SearchableSelect';
 import { listEmpresas } from '../../../api/empresas.api';
 import { gerarPlano } from '../../../api/planosFinanceirosSienge.api';
 import { excluirVersaoPlanoDre, exportarPlanoDreExcel, listVersoesPlanoDre } from '../../../api/drePlanoContas.api';
+import { listCentrosCustoDre } from '../../../api/dreCentros.api';
 import { nomeExibicaoEmpresa } from '../../../utils/empresa';
 import { useEmpresaTravada } from '../../../hooks/useEmpresaTravada';
 import { useConfirm } from '../../../confirm/ConfirmContext';
@@ -91,7 +92,7 @@ export default function DreGerencialPage() {
   }
 
   function handleEmpresaChange(novoId) {
-    atualizarParams({ empresa_id: novoId || null, plano: null, exercicio: null });
+    atualizarParams({ empresa_id: novoId || null, plano: null, exercicio: null, centros: null });
     setTotalPlanoContas(0);
   }
 
@@ -157,6 +158,23 @@ export default function DreGerencialPage() {
   const [novoLancamentoToken, setNovoLancamentoToken] = useState(0);
   const exercicioTravado = Boolean(exercicioAberto) && exercicioAberto >= new Date().getFullYear();
   useEffect(() => setBuscaFinanceiro(''), [empresaId, exercicioAberto]);
+
+  // Aba DRE: período (de/até) e centros de custo na URL, como o resto dos filtros da tela. Sem
+  // período = do primeiro dia do ano até hoje; sem centro = todos com "Realiza DRE", somados.
+  const hojeIso = (() => {
+    const d = new Date();
+    return `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}-${String(d.getDate()).padStart(2, '0')}`;
+  })();
+  const dreDe = searchParams.get('de') || `${hojeIso.slice(0, 4)}-01-01`;
+  const dreAte = searchParams.get('ate') || hojeIso;
+  const dreCentros = (searchParams.get('centros') || '').split(',').filter(Boolean);
+  const [centrosDre, setCentrosDre] = useState([]);
+  useEffect(() => {
+    if (abaAtiva !== 'dre' || !empresaId) return;
+    listCentrosCustoDre(empresaId)
+      .then((lista) => setCentrosDre(lista.filter((c) => c.realiza_dre)))
+      .catch(() => setCentrosDre([]));
+  }, [abaAtiva, empresaId]);
 
   // Geração/atualização do plano de contas (Sienge) — mesmo esquema de handleAtualizarContas
   // em SaldoContasBancariasPage.jsx. `totalPlanoContas` (reportado pela própria aba via
@@ -282,6 +300,44 @@ export default function DreGerencialPage() {
                 emptyMessage="Nenhuma empresa encontrada."
               />
             </div>
+
+            {abaAtiva === 'dre' && (
+              <>
+                <div className="sm:w-40">
+                  <label className="mb-1 block text-sm font-medium text-gray-700">Data início</label>
+                  <input
+                    type="date"
+                    value={dreDe}
+                    onChange={(e) => e.target.value && atualizarParams({ de: e.target.value })}
+                    disabled={semEmpresa}
+                    className="w-full rounded-lg border border-gray-200 px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-primary-100 disabled:bg-gray-50 disabled:text-gray-400"
+                  />
+                </div>
+                <div className="sm:w-40">
+                  <label className="mb-1 block text-sm font-medium text-gray-700">Data fim</label>
+                  <input
+                    type="date"
+                    value={dreAte}
+                    onChange={(e) => e.target.value && atualizarParams({ ate: e.target.value })}
+                    disabled={semEmpresa}
+                    className="w-full rounded-lg border border-gray-200 px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-primary-100 disabled:bg-gray-50 disabled:text-gray-400"
+                  />
+                </div>
+                <div className="sm:min-w-56 sm:max-w-sm sm:flex-1">
+                  <label className="mb-1 block text-sm font-medium text-gray-700">Centro de custo</label>
+                  <SearchableSelect
+                    multiple
+                    todosELimpar
+                    value={dreCentros}
+                    onChange={(lista) => atualizarParams({ centros: lista.join(',') })}
+                    disabled={semEmpresa}
+                    options={centrosDre.map((c) => ({ value: String(c.sienge_id), label: `${c.sienge_id} - ${c.apelido || c.name}` }))}
+                    placeholder="Todos os centros"
+                    emptyMessage="Nenhum centro com Realiza DRE."
+                  />
+                </div>
+              </>
+            )}
 
             {abaAtiva === 'orcamento' && (
               <div className="sm:min-w-56 sm:max-w-sm sm:flex-1">
@@ -485,7 +541,7 @@ export default function DreGerencialPage() {
       <div>
         <Tabs tabs={TABS} activeId={abaAtiva} onChange={(aba) => atualizarParams({ aba })} />
 
-        {abaAtiva === 'dre' && <DreTab empresaId={empresaId} />}
+        {abaAtiva === 'dre' && <DreTab empresaId={empresaId} de={dreDe} ate={dreAte} centros={dreCentros} />}
         {abaAtiva === 'poc' && <PocTab empresaId={empresaId} />}
 
         {abaAtiva === 'mascaras' && <MascarasTab ref={mascarasTabRef} empresaId={empresaId} />}

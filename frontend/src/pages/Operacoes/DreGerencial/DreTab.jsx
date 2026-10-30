@@ -1,15 +1,23 @@
 import { Fragment, useCallback, useEffect, useState } from 'react';
-import { BarChart3 } from 'lucide-react';
+import { AlertTriangle, BarChart3, TriangleAlert } from 'lucide-react';
 import { listDreMascaras } from '../../../api/dreMascaras.api';
+import { calcularDre } from '../../../api/dreDemonstrativo.api';
 
-// Demonstração estrutural (nível 1 + nível 2) da DRE, em formato de tabela — mesma mecânica
-// visual de SaldosContasTab.jsx (primeira coluna com a hierarquia, valor alinhado à direita nas
-// colunas seguintes), só que aqui só existe 1 coluna de valor por enquanto (sem período — o
-// cálculo real por mês fica pra outra rodada). A hierarquia é a árvore cadastrada na aba
-// Máscaras (dre_mascaras), na mesma ordem de lá.
-export default function DreTab({ empresaId }) {
+const moeda = (v) => Number(v).toLocaleString('pt-BR', { minimumFractionDigits: 2, maximumFractionDigits: 2 });
+
+// Demonstração (nível 1 + nível 2) da DRE, em formato de tabela — mesma mecânica visual de
+// SaldosContasTab.jsx (primeira coluna com a hierarquia, valor alinhado à direita). A hierarquia é a
+// árvore cadastrada na aba Máscaras (dre_mascaras), na mesma ordem de lá. Valor = período do filtro
+// (de/até) somando os centros escolhidos (vazio = todos com "Realiza DRE") — cálculo em
+// dre-demonstrativo/demonstrativo.service.js. Por enquanto só a RECEITA BRUTA tem valor; o resto
+// fica com traço.
+export default function DreTab({ empresaId, de, ate, centros = [] }) {
   const [arvore, setArvore] = useState([]);
   const [carregando, setCarregando] = useState(false);
+  const [resultado, setResultado] = useState(null);
+  const [calculando, setCalculando] = useState(false);
+  const [erro, setErro] = useState('');
+  const chaveCentros = centros.join(',');
 
   const carregar = useCallback(() => {
     if (!empresaId) {
@@ -26,20 +34,59 @@ export default function DreTab({ empresaId }) {
     carregar();
   }, [carregar]);
 
+  useEffect(() => {
+    setErro('');
+    if (!empresaId) {
+      setResultado(null);
+      return undefined;
+    }
+    if (de > ate) {
+      setErro('A data início não pode ser depois da data fim.');
+      return undefined;
+    }
+    let ativo = true;
+    setCalculando(true);
+    calcularDre(empresaId, { de, ate, centros: chaveCentros ? chaveCentros.split(',') : [] })
+      .then((r) => ativo && setResultado(r))
+      .catch((e) => ativo && setErro(e.response?.data?.message || 'Não foi possível calcular a DRE.'))
+      .finally(() => ativo && setCalculando(false));
+    return () => {
+      ativo = false;
+    };
+  }, [empresaId, de, ate, chaveCentros]);
+
   if (!empresaId) {
     return (
       <div className="flex min-h-70 flex-col items-center justify-center rounded-card rounded-tl-none bg-white text-center shadow-card">
         <BarChart3 size={28} className="mb-3 text-gray-300" />
         <h2 className="text-sm font-semibold text-gray-900">Selecione uma empresa</h2>
         <p className="mt-1 max-w-sm text-xs text-gray-500">
-          Escolha a empresa no filtro acima para ver a estrutura da DRE.
+          Escolha a empresa no filtro acima para ver a DRE.
         </p>
       </div>
     );
   }
 
+  const valores = resultado?.valores || {};
+  const semMascaraPoc = resultado && !resultado.poc_receita.mascara;
+
   return (
     <div className="rounded-card rounded-tl-none bg-white shadow-card">
+      {(erro || semMascaraPoc) && (
+        <div className="space-y-2 px-4 pt-3">
+          {erro && (
+            <div className="flex items-center gap-2 rounded-lg bg-red-50 px-3 py-2 text-sm text-red-600">
+              <TriangleAlert size={15} className="shrink-0" /> {erro}
+            </div>
+          )}
+          {semMascaraPoc && (
+            <div className="flex items-center gap-2 rounded-lg bg-amber-50 px-3 py-2 text-xs text-amber-700">
+              <AlertTriangle size={14} className="shrink-0" />
+              POC de Receita não gerada: escolha a Máscara DRE Nível 2 na aba Configurações.
+            </div>
+          )}
+        </div>
+      )}
       {carregando ? (
         <div className="py-12 text-center text-sm text-gray-400">Carregando...</div>
       ) : arvore.length === 0 ? (
@@ -59,9 +106,9 @@ export default function DreTab({ empresaId }) {
                 </th>
               </tr>
             </thead>
-            <tbody>
+            <tbody className={calculando ? 'opacity-50 transition-opacity' : ''}>
               {arvore.map((grupo) => (
-                <LinhaGrupo key={grupo.id} grupo={grupo} />
+                <LinhaGrupo key={grupo.id} grupo={grupo} valores={valores} />
               ))}
             </tbody>
           </table>
@@ -73,8 +120,7 @@ export default function DreTab({ empresaId }) {
 
 const ROTULO_TIPO_POC = { RECEITA: 'POC Receita', DESPESA: 'POC Despesa' };
 
-// Selo da marcação "% POC" (nível 2, aba Máscaras), com o Tipo POC quando informado — só
-// informativo por enquanto.
+// Selo da marcação "% POC" (nível 2, aba Máscaras), com o Tipo POC quando informado.
 function SeloPoc({ tipo }) {
   return (
     <span
@@ -98,8 +144,15 @@ function IconeLinha({ icone, className }) {
   );
 }
 
-// Totaliza (aba Máscaras) é linha de subtotal: escura, fechando a seção, sem nível 2.
-function LinhaGrupo({ grupo }) {
+// Valor ou traço (cálculo ainda não feito); negativo em vermelho.
+function Valor({ valor, vazio = 'text-gray-300', cor = 'text-gray-700' }) {
+  if (valor === null || valor === undefined) return <span className={vazio}>—</span>;
+  return <span className={valor < 0 ? 'text-red-600' : cor}>{moeda(valor)}</span>;
+}
+
+// Totaliza (aba Máscaras) é linha de subtotal: escura, fechando a seção, sem nível 2 (por enquanto
+// com traço). Linha de nível 1 = soma das de nível 2, só quando todas já têm valor.
+function LinhaGrupo({ grupo, valores }) {
   if (grupo.totalizadora) {
     return (
       <tr className="bg-gray-900">
@@ -116,6 +169,9 @@ function LinhaGrupo({ grupo }) {
     );
   }
 
+  const doGrupo = grupo.filhos.map((f) => valores[f.id]);
+  const total = doGrupo.length && doGrupo.every((v) => v !== null && v !== undefined) ? doGrupo.reduce((s, v) => s + v, 0) : null;
+
   return (
     <Fragment>
       <tr className="bg-gray-50">
@@ -125,8 +181,8 @@ function LinhaGrupo({ grupo }) {
             <span className="text-xs font-bold uppercase tracking-wide text-gray-900">{grupo.descricao}</span>
           </span>
         </td>
-        <td className="border-b border-l border-gray-200 px-4 py-1 text-right text-xs font-bold tabular-nums text-gray-300">
-          —
+        <td className="border-b border-l border-gray-200 px-4 py-1 text-right text-xs font-bold tabular-nums">
+          <Valor valor={total} cor="text-gray-900" />
         </td>
       </tr>
 
@@ -146,8 +202,8 @@ function LinhaGrupo({ grupo }) {
                 {item.realiza_poc && <SeloPoc tipo={item.tipo_poc} />}
               </span>
             </td>
-            <td className="border-b border-l border-gray-100 px-4 py-0.5 text-right text-xs tabular-nums text-gray-300">
-              —
+            <td className="border-b border-l border-gray-100 px-4 py-0.5 text-right text-xs tabular-nums">
+              <Valor valor={valores[item.id]} />
             </td>
           </tr>
         ))

@@ -144,4 +144,4 @@ async function parcelas(empresaId, centroId, clienteId) {
   return rows.map((r) => ({ ...r, paga: num(r.paga), reparcelada: num(r.reparcelada), em_aberto: num(r.em_aberto) }));
 }
 
-module.exports = { listar, parcelas };
+module.exports = { listar, parcelas, sqlParcelas };
