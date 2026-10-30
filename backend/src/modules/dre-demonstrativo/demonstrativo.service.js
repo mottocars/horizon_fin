@@ -50,8 +50,8 @@ const { arredondarPoc } = require('../../utils/poc');
 //                        Despesa(D) − fração distratada(D)), o mesmo que o CIV dá líquido do estorno;
 //   sem "% POC"        — o valor lançado no período, direto.
 //
-// Resposta: `meses` (os valores de cada mês do período, colunas da tela) e `valores` (o total do
-// período = soma dos meses).
+// Resposta: `valores` (o consolidado do período), `por_centro` (o período de cada centro — a soma
+// deles é o consolidado) e `meses` (o consolidado de cada mês).
 //
 // Imposto Fixo (RET): −alíquota × tudo o que está acima dele na DRE (as linhas de nível 2 antes dele,
 // na ordem da aba Máscaras), mês a mês, cada mês com a alíquota do histórico vigente nele (a de
@@ -183,7 +183,8 @@ async function pocReceita(empresaId, custoAte, ate) {
 async function calcular(empresaId, { de, ate, centros: filtro = [] }) {
   const [{ rows: centrosDre }, { rows: mascaras }, { rows: cfg }, { rows: aliquotas }] = await Promise.all([
     pool.query(
-      'SELECT sienge_id::int AS id, name AS nome FROM centros_custo_sienge WHERE empresa_id = $1 AND realiza_dre ORDER BY sienge_id',
+      `SELECT sienge_id::int AS id, name AS nome, COALESCE(NULLIF(TRIM(apelido), ''), name) AS rotulo
+         FROM centros_custo_sienge WHERE empresa_id = $1 AND realiza_dre ORDER BY sienge_id`,
       [empresaId]
     ),
     // Nível 2 na ordem da DRE (grupo de nível 1, depois a ordem dentro dele) — "acima" do imposto.
@@ -237,7 +238,7 @@ async function calcular(empresaId, { de, ate, centros: filtro = [] }) {
   // Custos do CIV que o Estorno de Custo devolve: os do mesmo grupo de nível 1.
   const custosDoGrupo = (m) => mascaras.filter((x) => custoCiv(x) && x.parent_id === m.parent_id);
 
-  // Reconhecido acumulado de uma máscara até D (todos os centros pedidos); null = sem cálculo.
+  // Reconhecido acumulado de uma máscara até D (nos centros da `lista`); null = sem cálculo.
   const calculavel = (m) =>
     (CALCULOS_RECEITA.has(m.calculo) && !(m.realiza_poc && m.tipo_poc !== 'RECEITA') && (!comPocReceita(m) || pocEm)) ||
     comPocDespesa(m) ||
@@ -251,8 +252,8 @@ async function calcular(empresaId, { de, ate, centros: filtro = [] }) {
       return -custosDoGrupo(m).reduce((s, x) => s + custoAte.get(x.id)(id, data), 0) * fracaoDistratada(id, data);
     return base[m.calculo](id, data) * (comPocReceita(m) ? pocEm(id, data).poc : 1);
   };
-  const reconhecido = (m, data) => ids.reduce((s, id) => s + reconhecidoNoCentro(m, id, data), 0);
-  const valorEm = (m, a, b) => reconhecido(m, b) - reconhecido(m, vespera(a));
+  const reconhecido = (m, data, lista) => lista.reduce((s, id) => s + reconhecidoNoCentro(m, id, data), 0);
+  const valorEm = (m, a, b, lista) => reconhecido(m, b, lista) - reconhecido(m, vespera(a), lista);
 
   // Alíquota (%) vigente num mês, pelo histórico do imposto.
   const historico = new Map();
@@ -262,8 +263,9 @@ async function calcular(empresaId, { de, ate, centros: filtro = [] }) {
   });
   const aliquotaEm = (mascaraId, data) => (historico.get(mascaraId) || []).filter((h) => h.inicio <= data).pop()?.aliquota || 0;
 
-  // Valores de cada máscara num mês [a, b] (o imposto com a alíquota vigente nele).
-  const valoresDoMes = (a, b) => {
+  // Valores de cada máscara num mês [a, b] nos centros da `lista` (o imposto com a alíquota vigente
+  // nele). Lista vazia = zero nas máscaras com cálculo, null nas sem.
+  const valoresDoMes = (a, b, lista) => {
     const valores = {};
     mascaras.forEach((m, i) => {
       if (m.origem === 'IMPOSTO_FIXO') {
@@ -273,19 +275,35 @@ async function calcular(empresaId, { de, ate, centros: filtro = [] }) {
           return;
         }
         const aliquota = aliquotaEm(m.id, a.slice(0, 8) + '01');
-        valores[m.id] = aliquota ? -(acima.reduce((t, x) => t + valorEm(x, a, b), 0) * aliquota) / 100 : 0;
+        valores[m.id] = aliquota ? -(acima.reduce((t, x) => t + valorEm(x, a, b, lista), 0) * aliquota) / 100 : 0;
         return;
       }
-      valores[m.id] = calculavel(m) ? valorEm(m, a, b) : null;
+      valores[m.id] = calculavel(m) ? valorEm(m, a, b, lista) : null;
     });
     return valores;
   };
-  // Coluna por mês do período (o primeiro e o último podem ser parciais); o total do período é a soma
-  // dos meses — o mesmo que calcular [de, até] direto, já que cada mês desconta o reconhecido antes.
-  const porMes = meses(de, ate).map(([a, b]) => ({ mes: a.slice(0, 7), de: a, ate: b, valores: valoresDoMes(a, b) }));
-  const valores = Object.fromEntries(
-    mascaras.map((m) => [m.id, porMes.some((x) => x.valores[m.id] === null) ? null : porMes.reduce((t, x) => t + x.valores[m.id], 0)])
-  );
+  // Soma de vários conjuntos de valores, máscara a máscara (null se algum for null), partindo de `base`.
+  const somar = (base, lista) =>
+    Object.fromEntries(
+      mascaras.map((m) => [m.id, [base, ...lista].some((v) => v[m.id] === null) ? null : lista.reduce((t, v) => t + v[m.id], base[m.id])])
+    );
+  // Mês a mês (o primeiro e o último podem ser parciais), cada centro sozinho; o total do período é a
+  // soma dos meses — o mesmo que calcular [de, até] direto, já que cada mês desconta o reconhecido
+  // antes. Tudo é linear (inclusive o RET, alíquota × base do mês), então o consolidado de cada mês é
+  // a soma dos centros.
+  const intervalos = meses(de, ate);
+  const vazio = (a, b) => valoresDoMes(a, b, []);
+  const porCentro = obras.map((c) => {
+    const doCentro = intervalos.map(([a, b]) => valoresDoMes(a, b, [c.id]));
+    return { id: c.id, nome: c.rotulo, meses: doCentro, valores: somar(vazio(de, ate), doCentro) };
+  });
+  const porMes = intervalos.map(([a, b], i) => ({
+    mes: a.slice(0, 7),
+    de: a,
+    ate: b,
+    valores: somar(vazio(a, b), porCentro.map((c) => c.meses[i])),
+  }));
+  const valores = somar(vazio(de, ate), porMes.map((x) => x.valores));
 
   return {
     de,
@@ -311,6 +329,8 @@ async function calcular(empresaId, { de, ate, centros: filtro = [] }) {
     })),
     valores,
     meses: porMes,
+    // Colunas dos centros na tela: o total do período de cada um.
+    por_centro: porCentro.map(({ id, nome, valores: v }) => ({ id, nome, valores: v })),
   };
 }
 

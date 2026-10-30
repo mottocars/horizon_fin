@@ -8,7 +8,9 @@ const dataBr = (iso) => iso.split('-').reverse().join('/');
 
 // Demonstração (nível 1 + nível 2) da DRE, em formato de tabela — mesma mecânica visual de
 // SaldosContasTab.jsx (primeira coluna com a hierarquia, valor alinhado à direita), num quadro de
-// bordas arredondadas como o do fluxo de caixa do DFC Construtoras. A hierarquia é a
+// bordas arredondadas como o do fluxo de caixa do DFC Construtoras. Colunas: CONSOLIDADO (o
+// totalizador = soma dos centros) e um centro de custo por coluna; descrição e consolidado ficam
+// congelados à esquerda quando os centros rolam. A hierarquia é a
 // árvore cadastrada na aba Máscaras (dre_mascaras), na mesma ordem de lá. Valor = período do filtro
 // (de/até) somando os centros escolhidos (vazio = todos com "Realiza DRE") — cálculo em
 // dre-demonstrativo/demonstrativo.service.js; linha de nível 2 sem cálculo fica com traço.
@@ -93,8 +95,12 @@ export default function DreTab({ empresaId, de, ate, centros = [], telaCheia = f
     );
   }
 
-  const valores = resultado?.valores || {};
   const semMascaraPoc = resultado && !resultado.poc_receita.mascara;
+  // Colunas de valor: o CONSOLIDADO (soma dos centros) e um centro de custo por coluna.
+  const colunas = [
+    { chave: 'consolidado', valores: resultado?.valores || {} },
+    ...(resultado?.por_centro || []).map((c) => ({ chave: c.id, nome: c.nome, valores: c.valores })),
+  ];
 
   return (
     <div
@@ -151,15 +157,24 @@ export default function DreTab({ empresaId, de, ate, centros = [], telaCheia = f
           <table className="w-full border-separate border-spacing-0 text-left text-xs">
             <thead>
               <tr className="text-xs uppercase tracking-wide text-gray-400">
-                <th className="border-b border-gray-200 bg-white py-1.5 pl-4 font-medium">Descrição</th>
-                <th className="w-44 border-b border-l border-gray-200 bg-white px-4 py-1.5 text-right font-medium">
-                  Valor
+                <th className={`${COL_DESCRICAO} border-b border-gray-200 bg-white py-1.5 pl-4 align-bottom font-medium`}>Descrição</th>
+                <th className={`${COL_CONSOLIDADO} border-b border-gray-200 bg-slate-100 px-4 py-1.5 text-right align-bottom font-semibold text-slate-600`}>
+                  Consolidado
                 </th>
+                {colunas.slice(1).map((c) => (
+                  <th
+                    key={c.chave}
+                    title={`${c.chave} - ${c.nome}`}
+                    className={`${COL_CENTRO} border-b border-l border-gray-200 bg-white px-3 py-1.5 text-right align-bottom font-medium`}
+                  >
+                    <span className="line-clamp-2 whitespace-normal leading-tight">{c.nome}</span>
+                  </th>
+                ))}
               </tr>
             </thead>
             <tbody className={calculando ? 'opacity-50 transition-opacity' : ''}>
-              {comAcumulado(arvore, valores).map(({ grupo, acumulado }) => (
-                <LinhaGrupo key={grupo.id} grupo={grupo} valores={valores} acumulado={acumulado} />
+              {comAcumulado(arvore, colunas).map(({ grupo, acumulados }) => (
+                <LinhaGrupo key={grupo.id} grupo={grupo} colunas={colunas} acumulados={acumulados} />
               ))}
             </tbody>
           </table>
@@ -170,20 +185,27 @@ export default function DreTab({ empresaId, de, ate, centros = [], telaCheia = f
 }
 
 // Totaliza = soma de todas as linhas de nível 2 acima dela na DRE (Receita Líquida = Receita Bruta +
-// impostos…), só quando todas já têm valor; senão, traço.
-function comAcumulado(arvore, valores) {
-  let soma = 0;
-  let completo = true;
+// impostos…), só quando todas já têm valor; senão, traço. Uma por coluna (consolidado e centros).
+function comAcumulado(arvore, colunas) {
+  const soma = colunas.map(() => 0);
+  const completo = colunas.map(() => true);
   return arvore.map((grupo) => {
-    if (grupo.totalizadora) return { grupo, acumulado: completo ? soma : null };
-    grupo.filhos.forEach((f) => {
-      const v = valores[f.id];
-      if (v === null || v === undefined) completo = false;
-      else soma += v;
+    if (grupo.totalizadora) return { grupo, acumulados: colunas.map((_, i) => (completo[i] ? soma[i] : null)) };
+    colunas.forEach((c, i) => {
+      grupo.filhos.forEach((f) => {
+        const v = c.valores[f.id];
+        if (v === null || v === undefined) completo[i] = false;
+        else soma[i] += v;
+      });
     });
-    return { grupo, acumulado: null };
+    return { grupo, acumulados: null };
   });
 }
+
+// Larguras fixas: a descrição e o consolidado ficam congelados à esquerda quando os centros rolam.
+const COL_DESCRICAO = 'sticky left-0 z-10 w-[380px] min-w-[380px] max-w-[380px]';
+const COL_CONSOLIDADO = 'sticky left-[380px] z-10 w-36 min-w-36 border-r border-r-gray-300';
+const COL_CENTRO = 'w-32 min-w-32 max-w-32';
 
 const STATUS_POC = {
   RECEITA: { sigla: 'PR', titulo: 'POC de Receita', cor: 'bg-emerald-100 text-emerald-700 ring-emerald-200' },
@@ -227,66 +249,88 @@ function Valor({ valor, vazio = 'text-gray-300', cor = 'text-gray-700' }) {
   return <span className={valor < 0 ? 'text-red-600' : cor}>{moeda(valor)}</span>;
 }
 
-// Totaliza (aba Máscaras) é linha de subtotal: escura, fechando a seção, sem nível 2 — valor =
-// `acumulado` (tudo acima). Linha de nível 1 = soma das de nível 2, só quando todas já têm valor.
-function LinhaGrupo({ grupo, valores, acumulado }) {
+// Totaliza (aba Máscaras) é linha de subtotal: escura, fechando a seção, sem nível 2 — valor de cada
+// coluna = `acumulados` (tudo acima). Linha de nível 1 = soma das de nível 2, só quando todas já têm
+// valor. As células congeladas (descrição e consolidado) têm fundo sólido: os centros rolam por baixo.
+function LinhaGrupo({ grupo, colunas, acumulados }) {
   if (grupo.totalizadora) {
     return (
-      <tr className="bg-[#1d5c8a]">
-        <td className="border-b border-[#1d5c8a] py-1 pl-4">
+      <tr>
+        <td className={`${COL_DESCRICAO} border-b border-[#1d5c8a] bg-[#1d5c8a] py-1 pl-4`}>
           <span className="flex items-center">
             <IconeLinha icone={grupo.icone} className="text-white" />
-            <span className="text-xs font-bold uppercase tracking-wide text-white">{grupo.descricao}</span>
+            <span className="truncate text-xs font-bold uppercase tracking-wide text-white">{grupo.descricao}</span>
           </span>
         </td>
-        <td className="border-b border-l border-[#1d5c8a] px-4 py-1 text-right text-xs font-bold tabular-nums">
-          {acumulado === null ? (
-            <span className="text-white/50">—</span>
-          ) : (
-            <span className={acumulado < 0 ? 'text-red-300' : 'text-white'}>{moeda(acumulado)}</span>
-          )}
-        </td>
+        {colunas.map((c, i) => (
+          <td
+            key={c.chave}
+            className={`${i === 0 ? `${COL_CONSOLIDADO} bg-[#174a70]` : `${COL_CENTRO} border-l border-l-white/10 bg-[#1d5c8a]`} border-b border-b-[#1d5c8a] px-3 py-1 text-right text-xs font-bold tabular-nums`}
+          >
+            {acumulados[i] === null ? (
+              <span className="text-white/50">—</span>
+            ) : (
+              <span className={acumulados[i] < 0 ? 'text-red-300' : 'text-white'}>{moeda(acumulados[i])}</span>
+            )}
+          </td>
+        ))}
       </tr>
     );
   }
 
-  const doGrupo = grupo.filhos.map((f) => valores[f.id]);
-  const total = doGrupo.length && doGrupo.every((v) => v !== null && v !== undefined) ? doGrupo.reduce((s, v) => s + v, 0) : null;
+  const totalDoGrupo = (valores) => {
+    const doGrupo = grupo.filhos.map((f) => valores[f.id]);
+    return doGrupo.length && doGrupo.every((v) => v !== null && v !== undefined) ? doGrupo.reduce((t, v) => t + v, 0) : null;
+  };
 
   return (
     <Fragment>
-      <tr className="bg-gray-50">
-        <td className="border-b border-gray-200 py-1 pl-4">
+      <tr>
+        <td className={`${COL_DESCRICAO} border-b border-gray-200 bg-gray-50 py-1 pl-4`}>
           <span className="flex items-center">
             <IconeLinha icone={grupo.icone} className="text-gray-500" />
-            <span className="text-xs font-bold uppercase tracking-wide text-gray-900">{grupo.descricao}</span>
+            <span className="truncate text-xs font-bold uppercase tracking-wide text-gray-900">{grupo.descricao}</span>
           </span>
         </td>
-        <td className="border-b border-l border-gray-200 px-4 py-1 text-right text-xs font-bold tabular-nums">
-          <Valor valor={total} cor="text-gray-900" />
-        </td>
+        {colunas.map((c, i) => (
+          <td
+            key={c.chave}
+            className={`${i === 0 ? `${COL_CONSOLIDADO} bg-slate-100` : `${COL_CENTRO} border-l border-l-gray-200 bg-gray-50`} border-b border-b-gray-200 px-3 py-1 text-right text-xs font-bold tabular-nums`}
+          >
+            <Valor valor={totalDoGrupo(c.valores)} cor="text-gray-900" />
+          </td>
+        ))}
       </tr>
 
       {grupo.filhos.length === 0 ? (
         <tr>
-          <td colSpan={2} className="border-b border-gray-100 py-1 pl-20 text-xs italic text-gray-300">
+          <td className={`${COL_DESCRICAO} border-b border-gray-100 bg-white py-1 pl-20 text-xs italic text-gray-300`}>
             Nenhum item cadastrado nesta linha ainda.
           </td>
+          <td className={`${COL_CONSOLIDADO} border-b border-gray-100 bg-slate-50`} />
+          <td colSpan={colunas.length - 1} className="border-b border-gray-100" />
         </tr>
       ) : (
         grupo.filhos.map((item) => (
-          <tr key={item.id} className="hover:bg-gray-50">
+          <tr key={item.id} className="group">
             {/* Recuo menor que o do aviso de linha vazia (pl-20): a bolinha da POC ocupa o espaço e a
                 descrição fica na mesma posição de antes. */}
-            <td className="border-b border-gray-100 py-0.5 pl-[50px] text-xs text-gray-700">
+            <td className={`${COL_DESCRICAO} border-b border-gray-100 bg-white py-0.5 pl-[50px] text-xs text-gray-700 group-hover:bg-gray-50`}>
               <span className="flex items-center gap-1.5">
                 <StatusPoc realiza={item.realiza_poc} tipo={item.tipo_poc} />
-                <span>{item.descricao}</span>
+                <span className="truncate" title={item.descricao}>{item.descricao}</span>
               </span>
             </td>
-            <td className="border-b border-l border-gray-100 px-4 py-0.5 text-right text-xs tabular-nums">
-              <Valor valor={valores[item.id]} />
-            </td>
+            {colunas.map((c, i) => (
+              <td
+                key={c.chave}
+                className={`${
+                  i === 0 ? `${COL_CONSOLIDADO} bg-slate-50 font-semibold group-hover:bg-slate-100` : `${COL_CENTRO} border-l border-l-gray-100 group-hover:bg-gray-50`
+                } border-b border-b-gray-100 px-3 py-0.5 text-right text-xs tabular-nums`}
+              >
+                <Valor valor={c.valores[item.id]} />
+              </td>
+            ))}
           </tr>
         ))
       )}
