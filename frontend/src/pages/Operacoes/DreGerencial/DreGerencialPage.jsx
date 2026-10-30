@@ -67,6 +67,29 @@ const TABS = [
   { id: 'configuracoes', label: 'Configurações', icon: Settings },
 ];
 
+// Campo de data que só aplica a data (onConfirmar) quando ela está completa, com ano de 4 dígitos
+// a partir de 1900: enquanto o ano é digitado o navegador manda 0002, 0020, 0202… e, se cada um
+// fosse pra URL, o campo seria redesenhado no meio da digitação e só ficariam os 2 últimos dígitos.
+// O texto digitado fica no estado local; data incompleta volta à da URL ao sair do campo.
+function CampoData({ valor, onConfirmar, disabled }) {
+  const [texto, setTexto] = useState(valor);
+  useEffect(() => setTexto(valor), [valor]);
+  const completa = (v) => /^\d{4}-\d{2}-\d{2}$/.test(v) && Number(v.slice(0, 4)) >= 1900;
+  return (
+    <input
+      type="date"
+      value={texto}
+      onChange={(e) => {
+        setTexto(e.target.value);
+        if (completa(e.target.value) && e.target.value !== valor) onConfirmar(e.target.value);
+      }}
+      onBlur={() => !completa(texto) && setTexto(valor)}
+      disabled={disabled}
+      className="w-full rounded-lg border border-gray-200 px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-primary-100 disabled:bg-gray-50 disabled:text-gray-400"
+    />
+  );
+}
+
 // Empresa e aba vivem na URL (não em useState local) — mesmo motivo de todas as outras telas
 // com esse padrão (Saldo Contas Bancárias, Gestão de Cobranças): o "Voltar" do navegador
 // devolve o usuário pro mesmo lugar, com a mesma empresa e a mesma aba.
@@ -305,23 +328,11 @@ export default function DreGerencialPage() {
               <>
                 <div className="sm:w-40">
                   <label className="mb-1 block text-sm font-medium text-gray-700">Data início</label>
-                  <input
-                    type="date"
-                    value={dreDe}
-                    onChange={(e) => e.target.value && atualizarParams({ de: e.target.value })}
-                    disabled={semEmpresa}
-                    className="w-full rounded-lg border border-gray-200 px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-primary-100 disabled:bg-gray-50 disabled:text-gray-400"
-                  />
+                  <CampoData valor={dreDe} onConfirmar={(v) => atualizarParams({ de: v })} disabled={semEmpresa} />
                 </div>
                 <div className="sm:w-40">
                   <label className="mb-1 block text-sm font-medium text-gray-700">Data fim</label>
-                  <input
-                    type="date"
-                    value={dreAte}
-                    onChange={(e) => e.target.value && atualizarParams({ ate: e.target.value })}
-                    disabled={semEmpresa}
-                    className="w-full rounded-lg border border-gray-200 px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-primary-100 disabled:bg-gray-50 disabled:text-gray-400"
-                  />
+                  <CampoData valor={dreAte} onConfirmar={(v) => atualizarParams({ ate: v })} disabled={semEmpresa} />
                 </div>
                 <div className="sm:min-w-56 sm:max-w-sm sm:flex-1">
                   <label className="mb-1 block text-sm font-medium text-gray-700">Centro de custo</label>
