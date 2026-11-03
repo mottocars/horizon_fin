@@ -75,6 +75,23 @@ async function list({ page = 1, limit = 10, search = '', ativo, empresaIds, excl
   };
 }
 
+// Mapa de Acessos: todos os usuários visíveis de uma vez (sem busca nem
+// paginação — a matriz filtra no navegador). Mesmas restrições do list().
+async function listAcessos({ empresaIds, excludeMaster }) {
+  const conditions = [];
+  const params = [];
+  if (excludeMaster) conditions.push(`u.permissao <> 'MASTER'`);
+  if (Array.isArray(empresaIds)) {
+    params.push(empresaIds);
+    conditions.push(
+      `EXISTS (SELECT 1 FROM usuarios_empresas ue2 WHERE ue2.usuario_id = u.id AND ue2.empresa_id = ANY($${params.length}::int[]))`
+    );
+  }
+  const whereClause = conditions.length ? `WHERE ${conditions.join(' AND ')}` : '';
+  const { rows } = await pool.query(`${SELECT_BASE} ${whereClause} ${GROUP_BY} ORDER BY u.nome ASC`, params);
+  return rows;
+}
+
 async function getById(id) {
   const { rows } = await pool.query(`${SELECT_BASE} WHERE u.id = $1 ${GROUP_BY}`, [id]);
   return rows[0] || null;
@@ -198,6 +215,35 @@ async function update(id, data) {
   }
 }
 
+// Grava as telas de vários usuários Básicos numa transação só (Mapa de
+// Acessos). `usuarios`: [{ id, telas_permitidas, telas_administrador }] já
+// conferidos pelo controller. Só mexe nas telas — o resto do cadastro fica.
+async function atualizarAcessos(usuarios) {
+  const client = await pool.connect();
+  try {
+    await client.query('BEGIN');
+    for (const u of usuarios) {
+      const { telas, telasAdmin } = telasDoUsuario({ ...u, permissao: 'BASICO' });
+      const { rowCount } = await client.query(
+        `UPDATE usuarios SET telas_permitidas = $1, telas_administrador = $2 WHERE id = $3 AND permissao = 'BASICO'`,
+        [telas, telasAdmin, u.id]
+      );
+      if (rowCount === 0) {
+        const err = new Error('Um dos usuários mudou enquanto você editava. Recarregue o mapa e tente de novo.');
+        err.status = 409;
+        err.expose = true;
+        throw err;
+      }
+    }
+    await client.query('COMMIT');
+  } catch (err) {
+    await client.query('ROLLBACK');
+    throw err;
+  } finally {
+    client.release();
+  }
+}
+
 async function setAtivo(id, ativo) {
   const { rowCount } = await pool.query('UPDATE usuarios SET ativo = $1 WHERE id = $2', [ativo, id]);
   if (rowCount === 0) return null;
@@ -265,4 +311,14 @@ async function completarPrimeiroAcesso(id, data) {
   return getById(id);
 }
 
-module.exports = { list, getById, create, update, setAtivo, updateSelf, completarPrimeiroAcesso };
+module.exports = {
+  list,
+  listAcessos,
+  getById,
+  create,
+  update,
+  atualizarAcessos,
+  setAtivo,
+  updateSelf,
+  completarPrimeiroAcesso,
+};

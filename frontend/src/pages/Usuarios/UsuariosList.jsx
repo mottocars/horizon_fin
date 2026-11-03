@@ -53,7 +53,7 @@ export default function UsuariosList() {
 
   return (
     <div className="space-y-4">
-      <Card>
+      <Card className="rounded-tl-none">
         <div className="mb-4 flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
           <div className="flex flex-1 flex-col gap-3 sm:flex-row sm:items-center">
             <div className="relative w-full sm:max-w-xs">

@@ -1,6 +1,9 @@
 const { z } = require('zod');
 const service = require('./usuarios.service');
 const { limparCacheUsuario } = require('../../middlewares/auth.middleware');
+const TELAS = require('../../config/telas');
+
+const CODIGOS_TELAS = new Set(Object.values(TELAS));
 
 function badRequest(message) {
   const err = new Error(message);
@@ -162,15 +165,28 @@ async function getById(req, res, next) {
   }
 }
 
-// router.param('id'): usuário alvo precisa ter ao menos uma empresa em
-// comum com quem pede (Master vê todos). Fora disso responde 404 — mesmo
+// Usuário alvo precisa ter ao menos uma empresa em comum com quem pede
+// (Master vê todos); Master é invisível pra quem não é Master.
+function alvoAcessivel(user, alvo) {
+  if (!alvo) return false;
+  if (user.empresaIds === null) return true;
+  const emComum = (alvo.empresa_ids || []).some((e) => user.empresaIds.has(Number(e)));
+  return alvo.permissao !== 'MASTER' && emComum;
+}
+
+// Mesma restrição do list(), a partir de quem pede.
+function escopoDoSolicitante(user) {
+  const isMaster = user.permissao === 'MASTER';
+  return { excludeMaster: !isMaster, empresaIds: isMaster ? undefined : [...user.empresaIds] };
+}
+
+// router.param('id'): fora do alcance (alvoAcessivel) responde 404 — mesmo
 // tratamento do Master oculto, pra não confirmar que o id existe.
 async function paramUsuarioAcessivel(req, res, next, id) {
   try {
     if (req.user.empresaIds === null) return next();
     const alvo = await service.getById(id);
-    const emComum = (alvo?.empresa_ids || []).some((e) => req.user.empresaIds.has(Number(e)));
-    if (!alvo || alvo.permissao === 'MASTER' || !emComum) {
+    if (!alvoAcessivel(req.user, alvo)) {
       return res.status(404).json({ message: 'Usuário não encontrado.' });
     }
     next();
@@ -238,6 +254,89 @@ async function update(req, res, next) {
   }
 }
 
+// Mapa de Acessos (aba de Cadastros › Usuários): todos os usuários visíveis
+// com as telas de cada um, pra montar a matriz usuário × tela.
+async function listAcessos(req, res, next) {
+  try {
+    res.json(await service.listAcessos(escopoDoSolicitante(req.user)));
+  } catch (err) {
+    next(err);
+  }
+}
+
+// A matriz manda só o que mudou, célula a célula — { usuario_id, tela,
+// nivel } com nivel null (sem acesso), COMUM ou ADMINISTRADOR —, aplicado
+// sobre o que está no banco agora (o que outra pessoa mudou em outra tela
+// enquanto isso continua valendo). Mesmas travas do cadastro: só Básico,
+// ninguém mexe nos próprios acessos e ninguém concede mais do que tem
+// (garantirNivelConcedivel).
+const acessosSchema = z.object({
+  alteracoes: z
+    .array(
+      z.object({
+        usuario_id: z.coerce.number().int().positive(),
+        tela: z.string().refine((t) => CODIGOS_TELAS.has(t), 'Tela desconhecida.'),
+        nivel: z.enum(['COMUM', 'ADMINISTRADOR']).nullable(),
+      })
+    )
+    .min(1, 'Nenhuma alteração para salvar.')
+    .max(5000),
+});
+
+async function atualizarAcessos(req, res, next) {
+  try {
+    const { alteracoes } = acessosSchema.parse(req.body);
+    const porUsuario = new Map();
+    for (const a of alteracoes) {
+      if (!porUsuario.has(a.usuario_id)) porUsuario.set(a.usuario_id, []);
+      porUsuario.get(a.usuario_id).push(a);
+    }
+
+    const novos = [];
+    for (const [id, lista] of porUsuario) {
+      if (id === req.user.id) throw forbidden('Você não pode alterar os seus próprios acessos.');
+      const alvo = await service.getById(id);
+      if (!alvoAcessivel(req.user, alvo)) {
+        const err = new Error('Usuário não encontrado.');
+        err.status = 404;
+        err.expose = true;
+        throw err;
+      }
+      if (alvo.permissao !== 'BASICO') throw badRequest(`${alvo.nome} é Master: já tem acesso a todas as telas.`);
+
+      const telas = new Set(alvo.telas_permitidas || []);
+      const admin = new Set(alvo.telas_administrador || []);
+      for (const { tela, nivel } of lista) {
+        if (nivel) telas.add(tela);
+        else telas.delete(tela);
+        if (nivel === 'ADMINISTRADOR') admin.add(tela);
+        else admin.delete(tela);
+      }
+      const data = {
+        permissao: 'BASICO',
+        telas_permitidas: [...telas],
+        telas_administrador: [...admin].filter((t) => telas.has(t)),
+      };
+      if (!data.telas_permitidas.some((t) => CODIGOS_TELAS.has(t))) {
+        throw badRequest(`${alvo.nome} ficaria sem nenhuma tela. Para tirar todo o acesso, desative o usuário no cadastro.`);
+      }
+      await garantirNivelConcedivel(req, data, id);
+      const igual = (a, b) => a.length === b.length && a.every((t) => b.includes(t));
+      const mudou =
+        !igual(data.telas_permitidas, alvo.telas_permitidas || []) ||
+        !igual(data.telas_administrador, alvo.telas_administrador || []);
+      if (mudou) novos.push({ id, ...data });
+    }
+
+    await service.atualizarAcessos(novos);
+    for (const { id } of novos) limparCacheUsuario(id);
+    res.json(await service.listAcessos(escopoDoSolicitante(req.user)));
+  } catch (err) {
+    if (err.issues) return next(badRequest(err.issues[0].message));
+    next(err);
+  }
+}
+
 async function setStatus(req, res, next) {
   try {
     const ativo = Boolean(req.body.ativo);
@@ -251,4 +350,13 @@ async function setStatus(req, res, next) {
   }
 }
 
-module.exports = { list, getById, create, update, setStatus, paramUsuarioAcessivel };
+module.exports = {
+  list,
+  listAcessos,
+  getById,
+  create,
+  update,
+  atualizarAcessos,
+  setStatus,
+  paramUsuarioAcessivel,
+};

@@ -46,7 +46,7 @@ import MascarasPage from './pages/Mascaras/MascarasPage';
 import ContaBancariaItemDetalhe from './pages/ContasBancarias/ContaBancariaItemDetalhe';
 import SaldoContasBancariasPage from './pages/Operacoes/SaldoContasBancarias/SaldoContasBancariasPage';
 import PortalConstrutorasPage from './pages/Integracoes/PortalConstrutoras/PortalConstrutorasPage';
-import UsuariosList from './pages/Usuarios/UsuariosList';
+import UsuariosPage from './pages/Usuarios/UsuariosPage';
 import UsuarioForm from './pages/Usuarios/UsuarioForm';
 import MeuPerfil from './pages/MeuPerfil/MeuPerfil';
 import PrimeiroAcesso from './pages/PrimeiroAcesso/PrimeiroAcesso';
@@ -115,7 +115,7 @@ export default function App() {
             <Route path="/cadastros/empresas" element={<EmpresasList />} />
             <Route path="/cadastros/empresas/nova" element={<EmpresaNova />} />
             <Route path="/cadastros/empresas/:id" element={<EmpresaDetalhe />} />
-            <Route path="/cadastros/usuarios" element={<UsuariosList />} />
+            <Route path="/cadastros/usuarios" element={<UsuariosPage />} />
             <Route path="/cadastros/usuarios/novo" element={<UsuarioForm />} />
             <Route path="/cadastros/usuarios/:id" element={<UsuarioForm />} />
             <Route path="/cadastros/mascaras" element={<MascarasPage />} />

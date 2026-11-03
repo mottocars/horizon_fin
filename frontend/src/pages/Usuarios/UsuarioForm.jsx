@@ -1,5 +1,5 @@
 import { useEffect, useMemo, useRef, useState } from 'react';
-import { useNavigate, useParams } from 'react-router-dom';
+import { useLocation, useNavigate, useParams } from 'react-router-dom';
 import {
   ArrowLeft,
   Eye,
@@ -70,6 +70,8 @@ export default function UsuarioForm() {
   const { id } = useParams();
   const isEdit = Boolean(id);
   const navigate = useNavigate();
+  // Aberto pelo Mapa de Acessos, volta pra ele (não pra lista).
+  const voltarPara = useLocation().state?.voltarPara || '/cadastros/usuarios';
   const confirm = useConfirm();
   const { user: usuarioLogado } = useAuth();
 
@@ -356,7 +358,7 @@ export default function UsuarioForm() {
       } else {
         await createUsuario(payload);
       }
-      navigate('/cadastros/usuarios', { replace: true });
+      navigate(voltarPara, { replace: true });
     } catch (err) {
       setError(err.response?.data?.message || 'Não foi possível salvar o usuário.');
     } finally {
@@ -402,7 +404,7 @@ export default function UsuarioForm() {
       <Card className="flex flex-col items-center gap-3 py-12 text-center">
         <UserIcon size={28} className="text-gray-300" />
         <p className="text-sm text-gray-500">Usuário não encontrado.</p>
-        <Button variant="secondary" onClick={() => navigate('/cadastros/usuarios')}>
+        <Button variant="secondary" onClick={() => navigate(voltarPara)}>
           Voltar para Usuários
         </Button>
       </Card>
@@ -413,7 +415,7 @@ export default function UsuarioForm() {
     <div className="space-y-4">
       <button
         type="button"
-        onClick={() => navigate('/cadastros/usuarios')}
+        onClick={() => navigate(voltarPara)}
         className="flex items-center gap-1.5 text-sm text-gray-500 hover:text-gray-700"
       >
         <ArrowLeft size={16} />
@@ -821,7 +823,7 @@ export default function UsuarioForm() {
           </div>
 
           <div className="flex justify-end gap-2 pt-2">
-            <Button type="button" variant="secondary" onClick={() => navigate('/cadastros/usuarios')}>
+            <Button type="button" variant="secondary" onClick={() => navigate(voltarPara)}>
               Cancelar
             </Button>
             <Button type="submit" loading={saving}>

@@ -22,3 +22,13 @@ export function updateUsuario(id, data) {
 export function setUsuarioStatus(id, ativo) {
   return http.patch(`/usuarios/${id}/status`, { ativo }).then((res) => res.data);
 }
+
+// Mapa de Acessos: todos os usuários visíveis com as telas de cada um.
+export function getMapaAcessos() {
+  return http.get('/usuarios/acessos').then((res) => res.data);
+}
+
+// alteracoes: [{ usuario_id, tela, nivel: null | 'COMUM' | 'ADMINISTRADOR' }] — devolve o mapa atualizado.
+export function salvarAcessos(alteracoes) {
+  return http.put('/usuarios/acessos', { alteracoes }).then((res) => res.data);
+}
