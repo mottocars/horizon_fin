@@ -31,6 +31,7 @@ import {
   Database,
   Wallet,
   ChartGantt,
+  Handshake,
   KeyRound,
 } from 'lucide-react';
 import iconPortalConstrutoras from '../assets/integracoes/portal-construtoras.svg';
@@ -51,8 +52,9 @@ const menuItems = [
     icon: Gauge,
     basePath: '/dashboards',
     children: [
-      { label: 'Cronogramas de Obras', to: '/dashboards/cronogramas-obras', icon: ChartGantt },
-      { label: 'Econômico Financeiro', to: '/dashboards/economico-financeiro', icon: TrendingUp },
+      { label: 'I.H - Comercial', to: '/dashboards/comercial', icon: Handshake },
+      { label: 'I.H - Cronograma Obras', to: '/dashboards/cronogramas-obras', icon: ChartGantt },
+      { label: 'I.H - Econômico/Financeiro', to: '/dashboards/economico-financeiro', icon: TrendingUp },
     ],
   },
   {

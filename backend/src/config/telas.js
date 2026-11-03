@@ -5,6 +5,7 @@
 module.exports = {
   ECONOMICO_FINANCEIRO: '/dashboards/economico-financeiro',
   DASH_CRONOGRAMAS: '/dashboards/cronogramas-obras',
+  DASH_COMERCIAL: '/dashboards/comercial',
 
   EMPRESAS: '/cadastros/empresas',
   USUARIOS: '/cadastros/usuarios',

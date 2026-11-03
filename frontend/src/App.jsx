@@ -9,6 +9,7 @@ import DreGerencialPage from './pages/Operacoes/DreGerencial/DreGerencialPage';
 import DfcConstrutorasPage from './pages/Operacoes/DfcConstrutoras/DfcConstrutorasPage';
 import EconomicoFinanceiroPage from './pages/Dashboards/EconomicoFinanceiro/EconomicoFinanceiroPage';
 import CronogramasObrasDashboard from './pages/Dashboards/CronogramasObras/CronogramasObrasDashboard';
+import ComercialDashboard from './pages/Dashboards/Comercial/ComercialDashboard';
 import EmpresasList from './pages/Empresas/EmpresasList';
 import EmpresaNova from './pages/Empresas/EmpresaNova';
 import EmpresaDetalhe from './pages/Empresas/EmpresaDetalhe';
@@ -92,6 +93,7 @@ export default function App() {
 
             <Route path="/dashboards/economico-financeiro" element={<EconomicoFinanceiroPage />} />
             <Route path="/dashboards/cronogramas-obras" element={<CronogramasObrasDashboard />} />
+            <Route path="/dashboards/comercial" element={<ComercialDashboard />} />
 
             <Route path="/operacoes/dre-gerencial" element={<DreGerencialPage />} />
             <Route path="/operacoes/dfc-construtoras" element={<DfcConstrutorasPage />} />

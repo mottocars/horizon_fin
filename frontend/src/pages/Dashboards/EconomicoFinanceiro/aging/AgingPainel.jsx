@@ -288,7 +288,7 @@ export default function AgingPainel({ dashboard, tituloTela, empresaId, onEmpres
             onFechar={fecharSumario}
             abas={ABAS_SUMARIO}
             icones={ICONES_SUMARIO}
-            contexto="Econômico Financeiro · Aging List"
+            contexto="I.H - Econômico/Financeiro · Aging List"
           />
         </div>
       </SumarioCtx.Provider>

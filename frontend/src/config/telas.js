@@ -8,8 +8,9 @@
 export const TELAS_SISTEMA = {
   '/': { title: 'Home', subtitle: 'Visão geral das suas atividades' },
   '/meu-perfil': { title: 'Meu Perfil', subtitle: 'Altere seus dados de acesso' },
-  '/dashboards/economico-financeiro': { title: 'Econômico Financeiro', subtitle: 'Dashboards — Econômico Financeiro' },
-  '/dashboards/cronogramas-obras': { title: 'Cronogramas de Obras', subtitle: 'Dashboards — Cronogramas de Obras' },
+  '/dashboards/economico-financeiro': { title: 'I.H - Econômico/Financeiro', subtitle: 'Dashboards — I.H - Econômico/Financeiro' },
+  '/dashboards/cronogramas-obras': { title: 'I.H - Cronograma Obras', subtitle: 'Dashboards — I.H - Cronograma Obras' },
+  '/dashboards/comercial': { title: 'I.H - Comercial', subtitle: 'Dashboards — I.H - Comercial' },
   '/operacoes/dre-gerencial': { title: 'DRE Construtoras', subtitle: 'Operações — DRE Construtoras' },
   '/operacoes/dfc-construtoras': { title: 'DFC Construtoras', subtitle: 'Operações — DFC Construtoras' },
   '/operacoes/espiao-nfe-nfse': { title: 'Espião NFe / NFSe', subtitle: 'Operações — Espião NFe / NFSe' },

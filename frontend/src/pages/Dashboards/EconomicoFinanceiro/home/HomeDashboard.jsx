@@ -80,7 +80,7 @@ export default function HomeDashboard() {
             <b />
             <i />
           </span>
-          <span className="home-ef__nome">Econômico Financeiro</span>
+          <span className="home-ef__nome">Econômico/Financeiro</span>
         </h1>
       </div>
     </div>

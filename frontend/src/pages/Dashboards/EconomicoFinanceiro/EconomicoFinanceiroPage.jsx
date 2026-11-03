@@ -22,7 +22,8 @@ import HomeDashboard from './home/HomeDashboard';
 // barra de controles dele. Aging List e Demonstração do Resultado: no mesmo layout (aging/AgingPainel.jsx,
 // dre/DrePainel.jsx). A empresa fica na URL
 // (?empresa_id=), como nas outras telas. As demais telas ainda serão construídas.
-const DASHBOARD = 'economico-financeiro';
+const DASHBOARD = 'economico-financeiro'; // chave no servidor (favoritas, filtros salvos) — não muda com o nome
+const NOME = 'I.H - Econômico/Financeiro'; // nome no menu e nos cabeçalhos (pedido do usuário)
 const TELAS = [
   { id: 'home', label: 'Home', icon: House },
   { id: 'dre', label: 'Demonstração do Resultado', icon: BarChart3 },
@@ -96,7 +97,7 @@ export default function EconomicoFinanceiroPage() {
         <HomeDashboard />
       ) : telaAtiva === 'fluxo-caixa' ? (
         <FluxoCaixaPainel
-          dashboard="Econômico Financeiro"
+          dashboard={NOME}
           tituloTela={tela.label}
           empresaId={empresaId}
           onEmpresa={(v) => atualizarParams({ empresa_id: v })}
@@ -107,7 +108,7 @@ export default function EconomicoFinanceiroPage() {
         />
       ) : telaAtiva === 'dre' ? (
         <DrePainel
-          dashboard="Econômico Financeiro"
+          dashboard={NOME}
           tituloTela={tela.label}
           empresaId={empresaId}
           onEmpresa={(v) => atualizarParams({ empresa_id: v })}
@@ -118,7 +119,7 @@ export default function EconomicoFinanceiroPage() {
         />
       ) : telaAtiva === 'aging' ? (
         <AgingPainel
-          dashboard="Econômico Financeiro"
+          dashboard={NOME}
           tituloTela={tela.label}
           empresaId={empresaId}
           onEmpresa={(v) => atualizarParams({ empresa_id: v })}
@@ -128,7 +129,7 @@ export default function EconomicoFinanceiroPage() {
           marcaEmpresa={marcaEmpresa}
         />
       ) : (
-        <CabecalhoDashboard dashboard="Econômico Financeiro" titulo={tela.label} marca={marcaEmpresa} />
+        <CabecalhoDashboard dashboard={NOME} titulo={tela.label} marca={marcaEmpresa} />
       )}
 
       <ControlesDashboard
