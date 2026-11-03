@@ -2,7 +2,7 @@ const { z } = require('zod');
 const service = require('./mcp.service');
 const usuariosService = require('../usuarios/usuarios.service');
 const oauth = require('./dfc/oauth.service');
-const { CODIGOS, normalizarModulos } = require('./modulos');
+const { CODIGOS } = require('./modulos');
 
 // `escopo`: HORIZON = conector com login do Horizon (vale `sessao_horas`) e as ferramentas dos `modulos`
 // marcados (DFC, DFC_ORCAMENTO, SALDOS_CONTAS, AGING — ver modulos.js); COBRANCA = o conector de cobrança de
@@ -83,12 +83,11 @@ async function update(req, res, next) {
     if (!atual) return res.status(404).json({ message: 'Conector não encontrado.' });
     if (data.modulos && atual.escopo !== 'HORIZON') return next(badRequest('O conector de cobrança não tem módulos.'));
     if (data.modulos && !data.modulos.length) return next(badRequest('Marque ao menos um módulo.'));
-    const trocaModulos = Boolean(data.modulos) && normalizarModulos(data.modulos).join() !== normalizarModulos(atual.modulos).join();
+    // Trocar os módulos NÃO encerra os logins ativos: cada chamada do Claude relê o conector e as telas do
+    // usuário (oauth.validarAcesso), então módulo novo aparece na próxima conversa e o retirado para de
+    // responder na hora. Pra forçar um novo login há o "Encerrar sessões".
     const item = await service.update(req.params.id, data);
-    // Mudou os módulos: encerra os logins ativos — quem estava conectado entra de novo e vê na tela de
-    // login o que o conector passa a permitir.
-    const sessoesEncerradas = trocaModulos ? await oauth.encerrarSessoes(atual.id) : 0;
-    res.json({ ...item, sessoes_encerradas: sessoesEncerradas });
+    res.json(item);
   } catch (err) {
     if (err.issues) return next(badRequest(err.issues[0].message));
     next(err);

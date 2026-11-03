@@ -320,7 +320,7 @@ export default function McpForm() {
         if (trocouModulos) {
           const confirmado = await confirm({
             title: 'Trocar os módulos do conector',
-            description: `O conector passa a ter: ${form.modulos.map((m) => MODULOS.find((x) => x.codigo === m).titulo).join(', ')}. A URL continua a mesma, mas os logins ativos no Claude serão encerrados — quem estiver conectado precisa entrar de novo. Deseja continuar?`,
+            description: `O conector passa a ter: ${form.modulos.map((m) => MODULOS.find((x) => x.codigo === m).titulo).join(', ')}. A URL continua a mesma e quem está conectado no Claude não precisa entrar de novo: módulo novo aparece na próxima conversa e o retirado deixa de responder na hora. Deseja continuar?`,
             confirmLabel: 'Trocar',
             variant: 'warning',
           });
