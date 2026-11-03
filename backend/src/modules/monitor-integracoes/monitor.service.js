@@ -78,7 +78,7 @@ async function getPainel(empresaId) {
 
   return ROTINAS.map((rotina, i) => ({
     chave: rotina.chave,
-    modulo: rotina.modulo,
+    alimenta: rotina.alimenta || [],
     nome: rotina.nome,
     descricao: rotina.descricao,
     integracao: rotina.integracao,

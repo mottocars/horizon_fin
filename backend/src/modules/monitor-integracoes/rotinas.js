@@ -10,10 +10,17 @@ const clusters = require('../cobranca-clusters/cobrancaClusters.service');
 const itau = require('../integracoes-itau/itau.service');
 const distribuicao = require('../regua-cobranca/distribuicao.service');
 const prevision = require('../prevision-dashboards/prevision.service');
+const centrosCusto = require('../centros-custo-sienge/centros.service');
+const planosFinanceiros = require('../planos-financeiros-sienge/planos.service');
 
 // Catálogo das atualizações que o Monitor de Integrações agenda e executa.
 // Cada uma é a MESMA função que o botão da tela de origem já chamava — o
 // monitor só passa a disparar em segundo plano, no horário, e registrar.
+// A tela agrupa pelo SISTEMA de onde vem o dado (`integracao`: Sienge,
+// Construtor de Vendas, Prevision, API Itaú, Horizon) — pedido do usuário: a
+// mesma base atende várias telas, então `alimenta` lista as telas que usam o
+// que a rotina atualiza. A ordem do catálogo é a da tela (ORDEM, no fim):
+// dentro do Sienge, os cadastros antes das bases.
 //
 // executar({ empresaId, usuarioId, progresso, etapas }) → texto de resumo.
 //   progresso({ texto, paginaAtual, totalPaginas }) — andamento pra barra;
@@ -29,10 +36,42 @@ const semSienge = async (empresaId) =>
 const porPagina = (progresso, texto) => (p) => progresso({ texto, paginaAtual: p.paginaAtual, totalPaginas: p.totalPaginas });
 const n = (valor) => Number(valor || 0).toLocaleString('pt-BR');
 
-const ROTINAS = [
+const CATALOGO = [
+  {
+    chave: 'sienge_centros_custo',
+    alimenta: ['Cadastros › Centros de Custo', 'DFC Construtoras', 'DRE Gerencial', 'Cronogramas de Obras', 'Repasses CEF', 'Dashboards'],
+    nome: 'Cadastro de centros de custo (Sienge)',
+    descricao:
+      'Traz do Sienge os centros de custo (empreendimentos) novos e atualiza nome, empresa, CNPJ e tipo dos existentes — o mesmo botão de Cadastros › Centros de Custo. Não mexe no que é do Horizon (apelido, natureza, Projeta DFC, Realiza DRE, pilar, responsável, cronograma). Centro que não estiver cadastrado fica fora do DFC e da DRE.',
+    integracao: 'sienge',
+    disponibilidade: semSienge,
+    async executar({ empresaId, progresso }) {
+      progresso({ texto: 'Buscando os centros de custo no Sienge' });
+      const antes = (await pool.query('SELECT count(*)::int AS n FROM centros_custo_sienge WHERE empresa_id = $1', [empresaId])).rows[0].n;
+      const r = await centrosCusto.gerar(empresaId);
+      const depois = (await pool.query('SELECT count(*)::int AS n FROM centros_custo_sienge WHERE empresa_id = $1', [empresaId])).rows[0].n;
+      return `${n(r.total_importado)} centro(s) de custo lido(s) do Sienge${depois > antes ? `; ${n(depois - antes)} novo(s)` : '; nenhum novo'}.`;
+    },
+  },
+  {
+    chave: 'sienge_plano_contas',
+    alimenta: ['Cadastros › Planos Financeiros', 'DFC Construtoras', 'DRE Gerencial', 'Dashboards'],
+    nome: 'Plano de contas (Sienge)',
+    descricao:
+      'Traz do Sienge as naturezas (plano financeiro) novas e atualiza nome, tipo e situação das existentes — o mesmo botão das abas Plano Contas. Mantém a classificação do Horizon (máscaras do DFC e da DRE, pacote, responsável). Natureza nova entra sem classificação: confira no Plano Contas do DFC e da DRE.',
+    integracao: 'sienge',
+    disponibilidade: semSienge,
+    async executar({ empresaId, progresso }) {
+      progresso({ texto: 'Buscando o plano de contas no Sienge' });
+      const antes = (await pool.query('SELECT count(*)::int AS n FROM planos_financeiros_sienge WHERE empresa_id = $1', [empresaId])).rows[0].n;
+      const r = await planosFinanceiros.gerar(empresaId);
+      const depois = (await pool.query('SELECT count(*)::int AS n FROM planos_financeiros_sienge WHERE empresa_id = $1', [empresaId])).rows[0].n;
+      return `${n(r.total_importado)} conta(s) lida(s) do Sienge${depois > antes ? `; ${n(depois - antes)} nova(s) — classifique no Plano Contas do DFC e da DRE` : '; nenhuma nova'}.`;
+    },
+  },
   {
     chave: 'espiao_vinculacao',
-    modulo: 'Espião NFe / NFS-e',
+    alimenta: ['Espião NFe / NFS-e'],
     nome: 'Vinculação ao contas a pagar',
     descricao:
       'Procura no contas a pagar do Sienge o título de cada nota ainda sem vínculo (desde a primeira delas) e vincula as que conferem em CNPJ, data e nº.',
@@ -65,7 +104,7 @@ const ROTINAS = [
   },
   {
     chave: 'repasses_contratos',
-    modulo: 'Repasses CEF',
+    alimenta: ['Repasses CEF', 'DRE Gerencial', 'Dashboard Demonstração do Resultado'],
     nome: 'Contratos de venda (Sienge)',
     descricao: 'Recarrega todos os contratos de venda do Sienge, que alimentam a etapa Contrato do kanban de Repasses CEF.',
     integracao: 'sienge',
@@ -77,7 +116,7 @@ const ROTINAS = [
   },
   {
     chave: 'repasses_reservas',
-    modulo: 'Repasses CEF',
+    alimenta: ['Repasses CEF'],
     nome: 'Reservas (Construtor de Vendas)',
     descricao: 'Recarrega todas as reservas do Construtor de Vendas, que alimentam a etapa Reserva do kanban de Repasses CEF.',
     integracao: 'construtor-vendas',
@@ -95,7 +134,7 @@ const ROTINAS = [
   },
   {
     chave: 'cobranca_base',
-    modulo: 'Gestão de Cobranças',
+    alimenta: ['Gestão de Cobranças', 'DFC Construtoras', 'Aging List', 'DRE Gerencial', 'Dashboard Demonstração do Resultado'],
     nome: 'Base do contas a receber (Sienge)',
     descricao: 'Recarrega parcelas e recebimentos do contas a receber do Sienge — a base de toda a Gestão de Cobranças.',
     integracao: 'sienge',
@@ -108,7 +147,7 @@ const ROTINAS = [
   },
   {
     chave: 'cobranca_clientes',
-    modulo: 'Gestão de Cobranças',
+    alimenta: ['Gestão de Cobranças', 'Aging List'],
     nome: 'Clientes (Sienge)',
     descricao: 'Recarrega o cadastro de clientes do Sienge (dados pessoais, contatos e endereços).',
     integracao: 'sienge',
@@ -120,7 +159,7 @@ const ROTINAS = [
   },
   {
     chave: 'cobranca_clusters',
-    modulo: 'Gestão de Cobranças',
+    alimenta: ['Gestão de Cobranças'],
     nome: 'Recálculo dos clusters',
     descricao:
       'Recalcula o cluster (bom pagador, duvidoso, mau pagador...) de cada cliente com a versão vigente do Motor de Risco. Agende depois da atualização da base.',
@@ -137,7 +176,7 @@ const ROTINAS = [
   },
   {
     chave: distribuicao.ROTINA_MONITOR,
-    modulo: 'Gestão de Cobranças',
+    alimenta: ['Gestão de Cobranças'],
     nome: 'Distribuição da Rotina de Cobrança',
     descricao:
       'Distribui os clientes da Rotina do dia entre os atendentes (Distribuição automática da Régua de Cobrança): continuidade da carteira, faixas de atraso, quantidade e valor equilibrados. Agende depois da atualização da base e dos clusters.',
@@ -151,7 +190,7 @@ const ROTINAS = [
   },
   {
     chave: 'itau_certificado',
-    modulo: 'Contas Bancárias',
+    alimenta: ['Saldo Contas Bancárias'],
     nome: 'Renovação do certificado (API Itaú)',
     descricao:
       'Renova o certificado dinâmico das conexões API Itaú quando faltam 30 dias ou menos para vencer (o Itaú só aceita a renovação nessa janela). Fora dela, só confere a validade.',
@@ -170,7 +209,7 @@ const ROTINAS = [
   },
   {
     chave: 'dfc_contas_pagar_base',
-    modulo: 'DFC Construtoras',
+    alimenta: ['DFC Construtoras', 'Aging List', 'DRE Gerencial', 'Dashboard Demonstração do Resultado'],
     nome: 'Base do contas a pagar (Sienge)',
     descricao:
       'Recarrega parcelas, rateios e pagamentos do contas a pagar do Sienge (a base inteira, ou só os títulos emitidos nos últimos N dias com o parâmetro Dias retroativos) — a base do Aging a pagar nos Orçamentos do DFC Construtoras e do Aging List.',
@@ -204,7 +243,7 @@ const ROTINAS = [
   },
   {
     chave: 'dfc_orcamento_empresarial_base',
-    modulo: 'DFC Construtoras',
+    alimenta: ['DFC Construtoras', 'Dashboard Fluxo de Caixa'],
     nome: 'Base do orçamento empresarial (Sienge)',
     descricao:
       'Recarrega o Orçamento Empresarial do Sienge (todas as versões) — a base das naturezas EMPRESARIAL DESEMBOLSO nos Orçamentos do DFC Construtoras, espalhadas pelo cronograma de desembolso de cada natureza.',
@@ -218,7 +257,7 @@ const ROTINAS = [
   },
   {
     chave: 'dfc_saldos_contas',
-    modulo: 'DFC Construtoras',
+    alimenta: ['DFC Construtoras', 'Dashboard Fluxo de Caixa', 'DRE Gerencial', 'Dashboard Demonstração do Resultado'],
     nome: 'Saldos das contas (Sienge)',
     descricao:
       'Busca o extrato até hoje (completo desde 01/01/2000, ou só os últimos N dias com o parâmetro Dias retroativos) de todas as contas bancárias — as com Projeta DFC formam o saldo e o realizado do fluxo de caixa do DFC Construtoras; as demais (mútuo etc.) servem pra herdar a natureza da outra perna do lançamento.',
@@ -283,7 +322,7 @@ const ROTINAS = [
   },
   {
     chave: 'prevision_dashboards',
-    modulo: 'DFC Construtoras', // junto das demais do DFC (pedido do usuário); também alimenta os Cronogramas Obras
+    alimenta: ['DFC Construtoras', 'Cronogramas de Obras'],
     nome: 'Avanço e curva S das obras (Prevision)',
     descricao:
       'Busca no Prevision o dashboard de cada obra com Código Prevision (aba Centros Custos) e atualiza o avanço previsto mês a mês (DFC Construtoras › Avanços, base da Projeção CEF) e a curva S de base que define os atrasos (Cronogramas Obras). A mesma sincronização de Integrações › Prevision.',
@@ -316,6 +355,26 @@ const ROTINAS = [
     },
   },
 ];
+
+// Ordem na tela: por sistema e, dentro dele, na sequência em que faz sentido rodar (cadastros, bases,
+// depois o que depende delas).
+const ORDEM = [
+  'sienge_centros_custo',
+  'sienge_plano_contas',
+  'cobranca_clientes',
+  'cobranca_base',
+  'dfc_contas_pagar_base',
+  'dfc_saldos_contas',
+  'repasses_contratos',
+  'dfc_orcamento_empresarial_base',
+  'espiao_vinculacao',
+  'repasses_reservas',
+  'prevision_dashboards',
+  'itau_certificado',
+  'cobranca_clusters',
+  distribuicao.ROTINA_MONITOR,
+];
+const ROTINAS = [...CATALOGO].sort((a, b) => ORDEM.indexOf(a.chave) - ORDEM.indexOf(b.chave));
 
 const ROTINA_POR_CHAVE = new Map(ROTINAS.map((r) => [r.chave, r]));
 

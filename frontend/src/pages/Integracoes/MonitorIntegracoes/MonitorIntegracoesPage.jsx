@@ -421,8 +421,17 @@ function CartaoRotina({ rotina, edicao, onEditar, onSalvar, salvando, erroSalvar
         </span>
         <div className="min-w-0">
           <p className="text-sm font-semibold text-gray-900">{rotina.nome}</p>
-          <p className="text-[11px] text-gray-400">{NOME_INTEGRACAO[rotina.integracao]}</p>
           <p className="mt-1 text-xs leading-relaxed text-gray-500">{rotina.descricao}</p>
+          {rotina.alimenta?.length > 0 && (
+            <div className="mt-2 flex flex-wrap items-center gap-1" title="Telas que usam o que esta atualização traz">
+              <span className="text-[11px] text-gray-400">Alimenta:</span>
+              {rotina.alimenta.map((tela) => (
+                <span key={tela} className="rounded-full bg-gray-100 px-2 py-0.5 text-[11px] font-medium text-gray-600">
+                  {tela}
+                </span>
+              ))}
+            </div>
+          )}
           {rotina.indisponivel && (
             <p className="mt-2 flex items-start gap-1.5 rounded-md bg-amber-50 px-2 py-1.5 text-xs text-amber-700">
               <AlertTriangle size={13} className="mt-px shrink-0" />
@@ -639,13 +648,15 @@ export default function MonitorIntegracoesPage() {
     }
   }
 
+  // Um bloco por sistema de origem (pedido do usuário: a mesma atualização serve várias telas — as telas
+  // aparecem em "Alimenta" de cada rotina). Os sistemas na ordem em que aparecem no catálogo do backend.
   const grupos = useMemo(() => {
-    const porModulo = new Map();
+    const porSistema = new Map();
     for (const r of rotinas || []) {
-      if (!porModulo.has(r.modulo)) porModulo.set(r.modulo, []);
-      porModulo.get(r.modulo).push(r);
+      if (!porSistema.has(r.integracao)) porSistema.set(r.integracao, []);
+      porSistema.get(r.integracao).push(r);
     }
-    return [...porModulo.entries()];
+    return [...porSistema.entries()];
   }, [rotinas]);
 
   const resumo = useMemo(() => {
@@ -703,8 +714,8 @@ export default function MonitorIntegracoesPage() {
           <CalendarClock size={28} className="mb-3 text-gray-300" />
           <p className="text-sm font-semibold text-gray-900">Selecione uma empresa</p>
           <p className="mt-1 max-w-md text-xs text-gray-500">
-            Escolha a empresa para ver, agendar e executar as atualizações automáticas do sistema — vinculação do Espião,
-            dados do Repasses CEF, da Gestão de Cobranças e do DFC Construtoras.
+            Escolha a empresa para ver, agendar e executar as atualizações automáticas, agrupadas pelo sistema de onde vêm os
+            dados (Sienge, Construtor de Vendas, Prevision, API Itaú e os cálculos do Horizon).
           </p>
         </Card>
       ) : erro && !rotinas ? (
@@ -726,11 +737,15 @@ export default function MonitorIntegracoesPage() {
           <p className="px-1 text-xs text-gray-400">
             Horários sempre de Brasília. As atualizações rodam no servidor — dá pra fechar esta tela enquanto executam.
           </p>
-          {grupos.map(([modulo, lista]) => (
-            <Fragment key={modulo}>
+          {grupos.map(([sistema, lista]) => (
+            <Fragment key={sistema}>
               <div className="overflow-hidden rounded-card bg-white shadow-card">
-                <div className="border-b border-gray-100 bg-gray-50/70 px-5 py-2.5">
-                  <h2 className="text-xs font-semibold uppercase tracking-wider text-gray-500">{modulo}</h2>
+                <div className="flex items-center gap-2.5 border-b border-gray-100 bg-gray-50/70 px-5 py-2.5">
+                  <img src={LOGOS[sistema]} alt="" className="h-5 w-5 object-contain" />
+                  <h2 className="text-xs font-semibold uppercase tracking-wider text-gray-600">{NOME_INTEGRACAO[sistema] || sistema}</h2>
+                  <span className="text-[11px] text-gray-400">
+                    {lista.length} atualizaç{lista.length > 1 ? 'ões' : 'ão'}
+                  </span>
                 </div>
                 {lista.map((rotina) => (
                   <CartaoRotina
