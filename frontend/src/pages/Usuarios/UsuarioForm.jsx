@@ -5,7 +5,6 @@ import {
   Eye,
   EyeOff,
   Crown,
-  ShieldCheck,
   User as UserIcon,
   Ban,
   CheckCircle2,
@@ -60,7 +59,7 @@ const PERMISSOES = [
     value: 'BASICO',
     label: 'Básico',
     Icon: UserIcon,
-    descricao: 'Acesso só às telas marcadas abaixo — como Comum ou Administrador em cada uma —, dentro das empresas selecionadas.',
+    descricao: 'Acesso só às telas marcadas abaixo (a todo o conteúdo de cada uma), dentro das empresas selecionadas.',
     corAtivo: 'border-gray-500 bg-gray-100 text-gray-700',
     corIcone: 'bg-gray-200 text-gray-600',
   },
@@ -209,9 +208,11 @@ export default function UsuarioForm() {
   }
 
   // Quem não é Master só concede o que tem: libera só telas que ele mesmo
-  // acessa e marca Administrador só onde ele mesmo é Administrador — o que o
-  // usuário editado JÁ tinha continua podendo ficar (o backend confere a
-  // mesma regra em usuarios.controller.js::garantirNivelConcedivel).
+  // acessa — o que o usuário editado JÁ tinha continua podendo ficar (o
+  // backend confere a mesma regra em usuarios.controller.js::garantirNivelConcedivel).
+  // Sem Comum × Administrador por enquanto (ver utils/permissoes.js::ehAdministradorDaTela):
+  // quem tem a tela acessa todo o conteúdo dela; telas_administrador só é
+  // preservado como está.
   const criadorEhMaster = usuarioLogado?.permissao === 'MASTER';
   function podeLiberarTela(codigo) {
     return (
@@ -220,15 +221,8 @@ export default function UsuarioForm() {
       (usuario?.telas_permitidas || []).includes(codigo)
     );
   }
-  function podeMarcarAdministrador(codigo) {
-    return (
-      criadorEhMaster ||
-      (usuarioLogado?.telas_administrador || []).includes(codigo) ||
-      (usuario?.telas_administrador || []).includes(codigo)
-    );
-  }
 
-  // Desmarcar a tela tira também o nível Administrador dela.
+  // Desmarcar a tela tira também o nível Administrador gravado nela.
   function toggleTela(codigo) {
     setForm((prev) => {
       const has = prev.telas_permitidas.includes(codigo);
@@ -240,21 +234,6 @@ export default function UsuarioForm() {
         telas_administrador: has
           ? prev.telas_administrador.filter((c) => c !== codigo)
           : prev.telas_administrador,
-      };
-    });
-  }
-
-  // Escolher Comum/Administrador numa tela ainda não marcada já libera a
-  // tela com esse nível — um clique só.
-  function definirNivel(codigo, administrador) {
-    setForm((prev) => {
-      const semTela = prev.telas_administrador.filter((c) => c !== codigo);
-      return {
-        ...prev,
-        telas_permitidas: prev.telas_permitidas.includes(codigo)
-          ? prev.telas_permitidas
-          : [...prev.telas_permitidas, codigo],
-        telas_administrador: administrador ? [...semTela, codigo] : semTela,
       };
     });
   }
@@ -277,7 +256,6 @@ export default function UsuarioForm() {
   }
 
   const totalTelasMarcadas = form.telas_permitidas.length;
-  const totalTelasAdministrador = form.telas_administrador.filter((c) => form.telas_permitidas.includes(c)).length;
   const todosGruposAbertos = gruposAbertos.length === TELAS_SISTEMA.length;
 
   async function handleFotoSelecionada(e) {
@@ -717,9 +695,6 @@ export default function UsuarioForm() {
                     <LayoutGrid size={13} />
                     {totalTelasMarcadas} tela{totalTelasMarcadas !== 1 ? 's' : ''} selecionada
                     {totalTelasMarcadas !== 1 ? 's' : ''}
-                    {totalTelasAdministrador > 0 && (
-                      <span className="text-blue-600">· {totalTelasAdministrador} como Administrador</span>
-                    )}
                   </span>
                   <button
                     type="button"
@@ -734,7 +709,6 @@ export default function UsuarioForm() {
                   {TELAS_SISTEMA.map((grupo) => {
                     const codigosLiberaveis = grupo.telas.map((t) => t.codigo).filter(podeLiberarTela);
                     const marcadasNoGrupo = grupo.telas.filter((t) => form.telas_permitidas.includes(t.codigo));
-                    const adminNoGrupo = marcadasNoGrupo.filter((t) => form.telas_administrador.includes(t.codigo));
                     const todasMarcadas =
                       codigosLiberaveis.length > 0 && codigosLiberaveis.every((c) => form.telas_permitidas.includes(c));
                     const aberto = gruposAbertos.includes(grupo.grupo);
@@ -755,9 +729,6 @@ export default function UsuarioForm() {
                             <span className="text-sm font-semibold text-gray-800">{grupo.grupo}</span>
                             <span className="truncate text-xs text-gray-400">
                               {marcadasNoGrupo.length} de {grupo.telas.length}
-                              {adminNoGrupo.length > 0 && (
-                                <span className="text-blue-600"> · {adminNoGrupo.length} Administrador</span>
-                              )}
                             </span>
                           </button>
                           {codigosLiberaveis.length > 0 && (
@@ -776,13 +747,9 @@ export default function UsuarioForm() {
                           <div className="space-y-1 border-t border-gray-100 bg-gray-50/50 px-4 py-2 sm:pl-10">
                             {grupo.telas.map((tela) => {
                               const marcada = form.telas_permitidas.includes(tela.codigo);
-                              const administrador = marcada && form.telas_administrador.includes(tela.codigo);
                               const liberavel = podeLiberarTela(tela.codigo);
                               return (
-                                <div
-                                  key={tela.codigo}
-                                  className="flex flex-wrap items-center justify-between gap-x-3 gap-y-1.5 rounded-lg px-2 py-1.5 hover:bg-white"
-                                >
+                                <div key={tela.codigo} className="flex items-center rounded-lg px-2 py-1.5 hover:bg-white">
                                   <label
                                     className={`flex min-w-0 items-center gap-2 text-sm ${
                                       liberavel ? 'cursor-pointer text-gray-700' : 'cursor-not-allowed text-gray-400'
@@ -798,13 +765,6 @@ export default function UsuarioForm() {
                                     />
                                     {tela.label}
                                   </label>
-                                  <NivelDaTela
-                                    marcada={marcada}
-                                    administrador={administrador}
-                                    disabled={!liberavel}
-                                    adminDisabled={!podeMarcarAdministrador(tela.codigo)}
-                                    onChange={(admin) => definirNivel(tela.codigo, admin)}
-                                  />
                                 </div>
                               );
                             })}
@@ -888,46 +848,6 @@ function CaixaDeEmpresas({ titulo, empresas, destacadas, onToggleDestaque, disab
           })
         )}
       </div>
-    </div>
-  );
-}
-
-// Seletor Comum | Administrador de cada tela no drilldown de telas. Com a
-// tela desmarcada fica apagado, mas clicar num dos lados já libera a tela
-// com aquele nível.
-function NivelDaTela({ marcada, administrador, disabled, adminDisabled, onChange }) {
-  const opcoes = [
-    { admin: false, label: 'Comum', Icon: UserIcon, ativoCls: 'bg-white text-gray-800 shadow-sm', bloqueado: disabled },
-    {
-      admin: true,
-      label: 'Administrador',
-      Icon: ShieldCheck,
-      ativoCls: 'bg-blue-600 text-white shadow-sm',
-      bloqueado: disabled || adminDisabled,
-    },
-  ];
-  return (
-    <div role="radiogroup" className={`inline-flex shrink-0 rounded-lg bg-gray-100 p-0.5 ${marcada ? '' : 'opacity-60'}`}>
-      {opcoes.map(({ admin, label, Icon, ativoCls, bloqueado }) => {
-        const ativo = marcada && administrador === admin;
-        return (
-          <button
-            key={label}
-            type="button"
-            role="radio"
-            aria-checked={ativo}
-            disabled={bloqueado}
-            onClick={() => onChange(admin)}
-            title={bloqueado && admin && !disabled ? 'Você não é Administrador desta tela.' : undefined}
-            className={`flex items-center gap-1 rounded-md px-2.5 py-1 text-xs font-medium transition-colors disabled:cursor-not-allowed disabled:opacity-40 ${
-              ativo ? ativoCls : 'text-gray-500 hover:text-gray-700'
-            }`}
-          >
-            <Icon size={12} />
-            {label}
-          </button>
-        );
-      })}
     </div>
   );
 }

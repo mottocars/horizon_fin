@@ -10,6 +10,7 @@ const {
 const usuariosService = require('../usuarios/usuarios.service');
 const distribuicao = require('../regua-cobranca/distribuicao.service');
 const T = require('../../config/telas');
+const { ehAdministradorDaTela } = require('../../middlewares/acesso.middleware');
 
 const CLUSTERS_VALIDOS = ['novo', 'bom', 'duvidoso', 'mau', 'inad'];
 const ORIGIN_ID_PADRAO = 'CO';
@@ -62,8 +63,14 @@ function paraIso(data) {
 // própria de verdade).
 async function resolverUsuarioAlvo(empresaId, solicitanteId, usuarioIdFiltro) {
   const solicitante = await usuariosService.getById(solicitanteId);
-  const podeFiltrar =
-    solicitante?.permissao === 'MASTER' || (solicitante?.telas_administrador || []).includes(T.COBRANCAS);
+  const podeFiltrar = ehAdministradorDaTela(
+    solicitante && {
+      permissao: solicitante.permissao,
+      telas: solicitante.telas_permitidas,
+      telasAdministrador: solicitante.telas_administrador,
+    },
+    T.COBRANCAS
+  );
   if (!podeFiltrar || !usuarioIdFiltro) return solicitanteId;
   if (usuarioIdFiltro === 'todos') return 'todos';
 

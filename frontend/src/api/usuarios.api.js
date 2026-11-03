@@ -28,7 +28,7 @@ export function getMapaAcessos() {
   return http.get('/usuarios/acessos').then((res) => res.data);
 }
 
-// alteracoes: [{ usuario_id, tela, nivel: null | 'COMUM' | 'ADMINISTRADOR' }] — devolve o mapa atualizado.
+// alteracoes: [{ usuario_id, tela, acesso: boolean }] — devolve o mapa atualizado.
 export function salvarAcessos(alteracoes) {
   return http.put('/usuarios/acessos', { alteracoes }).then((res) => res.data);
 }

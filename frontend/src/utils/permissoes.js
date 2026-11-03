@@ -38,14 +38,16 @@ export function podeCriarUsuario(user) {
   return temAcessoATela(user, USUARIOS_NOVO);
 }
 
-// Nível do usuário dentro de uma tela liberada: Comum ou Administrador
-// (marcado no cadastro do usuário, em telas_administrador). Master é
-// Administrador de tudo. O que o Administrador pode a mais é decidido em
-// cada tela — o backend confere a mesma regra (acesso.middleware.js).
+// Nível do usuário dentro de uma tela liberada. Master é Administrador de
+// tudo. O que o Administrador pode a mais é decidido em cada tela — o
+// backend confere a mesma regra (acesso.middleware.js). Por enquanto
+// (pedido do usuário, 03/11/2026) não há Comum × Administrador: quem tem a
+// tela acessa todo o conteúdo dela. O nível continua gravado em
+// telas_administrador, só não é consultado.
 export function ehAdministradorDaTela(user, codigo) {
   if (!user) return false;
   if (user.permissao === 'MASTER') return true;
-  return (user.telas_administrador || []).includes(codigo);
+  return (user.telas_permitidas || []).includes(codigo);
 }
 
 // Abas restritas dentro de uma tela: a aba declara `nivel: 'ADMINISTRADOR'`

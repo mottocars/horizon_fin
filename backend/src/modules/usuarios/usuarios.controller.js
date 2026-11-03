@@ -254,29 +254,31 @@ async function update(req, res, next) {
   }
 }
 
-// Mapa de Acessos (aba de Cadastros › Usuários): todos os usuários visíveis
-// com as telas de cada um, pra montar a matriz usuário × tela.
+// Mapa de Acessos (aba de Cadastros › Usuários): os usuários Básicos
+// visíveis com as telas de cada um, pra montar a matriz usuário × tela.
+// Master fica de fora (tem tudo, não há o que ver nem mudar).
 async function listAcessos(req, res, next) {
   try {
-    res.json(await service.listAcessos(escopoDoSolicitante(req.user)));
+    res.json(await service.listAcessos({ ...escopoDoSolicitante(req.user), excludeMaster: true }));
   } catch (err) {
     next(err);
   }
 }
 
 // A matriz manda só o que mudou, célula a célula — { usuario_id, tela,
-// nivel } com nivel null (sem acesso), COMUM ou ADMINISTRADOR —, aplicado
-// sobre o que está no banco agora (o que outra pessoa mudou em outra tela
-// enquanto isso continua valendo). Mesmas travas do cadastro: só Básico,
-// ninguém mexe nos próprios acessos e ninguém concede mais do que tem
-// (garantirNivelConcedivel).
+// acesso } —, aplicado sobre o que está no banco agora (o que outra pessoa
+// mudou em outra tela enquanto isso continua valendo). Sem Comum ×
+// Administrador por enquanto (ver acesso.middleware.js::ehAdministradorDaTela):
+// liberar não mexe em telas_administrador; tirar a tela tira de lá também.
+// Mesmas travas do cadastro: só Básico, ninguém mexe nos próprios acessos e
+// ninguém concede tela que não tem (garantirNivelConcedivel).
 const acessosSchema = z.object({
   alteracoes: z
     .array(
       z.object({
         usuario_id: z.coerce.number().int().positive(),
         tela: z.string().refine((t) => CODIGOS_TELAS.has(t), 'Tela desconhecida.'),
-        nivel: z.enum(['COMUM', 'ADMINISTRADOR']).nullable(),
+        acesso: z.boolean(),
       })
     )
     .min(1, 'Nenhuma alteração para salvar.')
@@ -305,17 +307,14 @@ async function atualizarAcessos(req, res, next) {
       if (alvo.permissao !== 'BASICO') throw badRequest(`${alvo.nome} é Master: já tem acesso a todas as telas.`);
 
       const telas = new Set(alvo.telas_permitidas || []);
-      const admin = new Set(alvo.telas_administrador || []);
-      for (const { tela, nivel } of lista) {
-        if (nivel) telas.add(tela);
+      for (const { tela, acesso } of lista) {
+        if (acesso) telas.add(tela);
         else telas.delete(tela);
-        if (nivel === 'ADMINISTRADOR') admin.add(tela);
-        else admin.delete(tela);
       }
       const data = {
         permissao: 'BASICO',
         telas_permitidas: [...telas],
-        telas_administrador: [...admin].filter((t) => telas.has(t)),
+        telas_administrador: (alvo.telas_administrador || []).filter((t) => telas.has(t)),
       };
       if (!data.telas_permitidas.some((t) => CODIGOS_TELAS.has(t))) {
         throw badRequest(`${alvo.nome} ficaria sem nenhuma tela. Para tirar todo o acesso, desative o usuário no cadastro.`);
@@ -330,7 +329,7 @@ async function atualizarAcessos(req, res, next) {
 
     await service.atualizarAcessos(novos);
     for (const { id } of novos) limparCacheUsuario(id);
-    res.json(await service.listAcessos(escopoDoSolicitante(req.user)));
+    res.json(await service.listAcessos({ ...escopoDoSolicitante(req.user), excludeMaster: true }));
   } catch (err) {
     if (err.issues) return next(badRequest(err.issues[0].message));
     next(err);

@@ -5,8 +5,8 @@ const { autenticar, podeAcessarEmpresa, extrairIds } = require('./auth.middlewar
 // conveniência — quem decide o que pode é aqui):
 //   MASTER → todas as telas, todas as empresas;
 //   BASICO → só as telas em telas_permitidas, só as empresas vinculadas.
-//            Em cada tela liberada ele é Comum ou Administrador
-//            (telas_administrador) — ver ehAdministradorDaTela.
+//            Por enquanto, quem tem a tela acessa todo o conteúdo dela
+//            (sem Comum × Administrador) — ver ehAdministradorDaTela.
 // A empresa é conferida em auth.middleware.js (query/body) e nos
 // router.param abaixo (URL e IDs de recursos).
 
@@ -39,10 +39,14 @@ function exigirTela(telasDaApi, telasSoLeitura = []) {
 
 // O que o Administrador de uma tela pode a mais (em relação ao Comum) é
 // decidido em cada tela, chamando isto. Master é Administrador de tudo.
+// Por enquanto (pedido do usuário, 03/11/2026) não há Comum × Administrador:
+// quem tem a tela acessa todo o conteúdo dela. O nível continua gravado em
+// telas_administrador, só não é consultado — pra voltar, basta conferir
+// `user.telasAdministrador` aqui de novo (e em utils/permissoes.js do frontend).
 function ehAdministradorDaTela(user, tela) {
   if (!user) return false;
   if (user.permissao === 'MASTER') return true;
-  return (user.telasAdministrador || []).includes(tela);
+  return (user.telas || []).includes(tela);
 }
 
 // Pras partes de uma tela restritas ao Administrador dela (abas de
