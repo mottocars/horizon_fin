@@ -2,6 +2,7 @@ import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { BookOpen, Download, Filter, LayoutGrid, Layers, LineChart, Loader2, SlidersHorizontal, Table2, Users } from 'lucide-react';
 import { excluirFiltroSalvo, getAgingPainel, gravarFiltroSalvo, listarFiltrosSalvos } from '../../../../api/dashboards.api';
 import CabecalhoDashboard from '../../CabecalhoDashboard';
+import CampoPeriodo from '../fluxo/CampoPeriodo';
 import { FiltroCentros, centrosDoFiltro } from '../fluxo/FluxoCaixaPainel';
 import { DicaProvider } from '../fluxo/graficos';
 import { SumarioCtx } from '../fluxo/ganchos';
@@ -34,27 +35,6 @@ const hojeLocal = () => {
   return `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}-${String(d.getDate()).padStart(2, '0')}`;
 };
 
-const ehData = (v) => /^\d{4}-\d{2}-\d{2}$/.test(v);
-
-function CampoData({ id, rotulo, valor, min, max, onChange, dica }) {
-  return (
-    <div className="ctl">
-      <label htmlFor={id}>{rotulo}</label>
-      <input
-        id={id}
-        type="date"
-        value={valor}
-        min={min}
-        max={max}
-        title={dica}
-        onChange={(e) => {
-          const v = e.target.value;
-          if (ehData(v) && (!min || v >= min) && (!max || v <= max)) onChange(v);
-        }}
-      />
-    </div>
-  );
-}
 
 export default function AgingPainel({ dashboard, tituloTela, empresaId, onEmpresa, opcoesEmpresas, empresaTravada, carregandoEmpresas, marcaEmpresa }) {
   // Período (barra): padrão o ano atual inteiro. O painel de filtros mostra o mesmo período em meses
@@ -195,7 +175,7 @@ export default function AgingPainel({ dashboard, tituloTela, empresaId, onEmpres
                 ))}
               </select>
             </div>
-            <CampoData
+            <CampoPeriodo tipo="date"
               id="a-inicio"
               rotulo="Início"
               valor={inicio}
@@ -203,7 +183,7 @@ export default function AgingPainel({ dashboard, tituloTela, empresaId, onEmpres
               onChange={(v) => setPeriodo((p) => ({ ...p, inicio: v }))}
               dica="Vencimento a partir desta data"
             />
-            <CampoData id="a-fim" rotulo="Fim" valor={fim} min={inicio} onChange={(v) => setPeriodo((p) => ({ ...p, fim: v }))} dica="Vencimento até esta data" />
+            <CampoPeriodo tipo="date" id="a-fim" rotulo="Fim" valor={fim} min={inicio} onChange={(v) => setPeriodo((p) => ({ ...p, fim: v }))} dica="Vencimento até esta data" />
             <FiltroCentros
               opcoes={opcoesCentros}
               valor={filtros.centros}

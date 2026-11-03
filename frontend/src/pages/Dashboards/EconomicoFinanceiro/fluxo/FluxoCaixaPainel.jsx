@@ -2,6 +2,7 @@ import { Fragment, useCallback, useEffect, useMemo, useRef, useState } from 'rea
 import { BookOpen, Download, Loader2, Maximize2 } from 'lucide-react';
 import { getFluxoCaixaPainel } from '../../../../api/dashboards.api';
 import { exportarExcelDfc } from '../../../../api/dfcExportacao.api';
+import CampoPeriodo from './CampoPeriodo';
 import DfcFluxoTab from '../../../Operacoes/DfcConstrutoras/DfcFluxoTab';
 import CabecalhoDashboard from '../../CabecalhoDashboard';
 import { DicaProvider } from './graficos';
@@ -15,7 +16,7 @@ import './painel.css';
 // (C:\Users\motta\Desktop\layout\Especificação do Painel do CFO — Tostes e Diniz.md):
 // barra de controles (Empresa no lugar do Escopo, período Início–Fim e Centro de custo), os 8
 // indicadores, a grade do DFC (DfcFluxoTab) na altura da tela e, embaixo, os gráficos da especificação.
-// Período: ver CampoMes (vira o Histórico/Horizonte da API). Os dados vêm de /dashboards/economico-financeiro/fluxo-caixa e o painel recarrega
+// Período: ver CampoPeriodo e diferencaMeses (vira o Histórico/Horizonte da API). Os dados vêm de /dashboards/economico-financeiro/fluxo-caixa e o painel recarrega
 // sozinho a cada 30 minutos. A grade tem o botão de tela cheia (a mesma do DFC Construtoras) e a barra o
 // Exportar Excel do DFC Construtoras, com os filtros do painel (empresa, período Início–Fim, centros).
 
@@ -40,26 +41,6 @@ const diferencaMeses = (de, ate) => {
   const [a2, m2] = ate.split('-').map(Number);
   return a2 * 12 + m2 - (a1 * 12 + m1);
 };
-
-function CampoMes({ id, rotulo, valor, min, max, onChange, dica }) {
-  return (
-    <div className="ctl">
-      <label htmlFor={id}>{rotulo}</label>
-      <input
-        id={id}
-        type="month"
-        value={valor}
-        min={min}
-        max={max}
-        title={dica}
-        onChange={(e) => {
-          const v = e.target.value;
-          if (/^\d{4}-\d{2}$/.test(v) && v >= min && v <= max) onChange(v);
-        }}
-      />
-    </div>
-  );
-}
 
 // Centro de custo: lista com marcação múltipla e busca, no visual da barra (também no Aging List).
 // Os textos mudam pelas props (Cronogramas de Obras usa a mesma lista nos filtros Obras e Localidade);
@@ -322,7 +303,7 @@ export default function FluxoCaixaPainel({ dashboard, tituloTela, empresaId, onE
               ))}
             </select>
           </div>
-          <CampoMes
+          <CampoPeriodo
             id="f-inicio"
             rotulo="Início"
             valor={inicioMes}
@@ -331,7 +312,7 @@ export default function FluxoCaixaPainel({ dashboard, tituloTela, empresaId, onE
             onChange={setInicioMes}
             dica="Primeiro mês do período — até o mês atual (o painel é a foto de hoje)"
           />
-          <CampoMes
+          <CampoPeriodo
             id="f-fim"
             rotulo="Fim"
             valor={fimMes}

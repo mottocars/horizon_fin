@@ -5,6 +5,7 @@ import { exportarExcelDre } from '../../../../api/dreExportacao.api';
 import DreTab from '../../../Operacoes/DreGerencial/DreTab';
 import PocTab from '../../../Operacoes/DreGerencial/PocTab';
 import CabecalhoDashboard from '../../CabecalhoDashboard';
+import CampoPeriodo from '../fluxo/CampoPeriodo';
 import { FiltroCentros, centrosDoFiltro } from '../fluxo/FluxoCaixaPainel';
 import { DicaProvider } from '../fluxo/graficos';
 import { SumarioCtx } from '../fluxo/ganchos';
@@ -35,26 +36,6 @@ const ultimoDia = (m) => {
   const [a, mm] = m.split('-').map(Number);
   return `${m}-${String(new Date(a, mm, 0).getDate()).padStart(2, '0')}`;
 };
-
-function CampoMes({ id, rotulo, valor, min, max, onChange, dica }) {
-  return (
-    <div className="ctl">
-      <label htmlFor={id}>{rotulo}</label>
-      <input
-        id={id}
-        type="month"
-        value={valor}
-        min={min}
-        max={max}
-        title={dica}
-        onChange={(e) => {
-          const v = e.target.value;
-          if (/^\d{4}-\d{2}$/.test(v) && (!min || v >= min) && (!max || v <= max)) onChange(v);
-        }}
-      />
-    </div>
-  );
-}
 
 export default function DrePainel({ dashboard, tituloTela, empresaId, onEmpresa, opcoesEmpresas, empresaTravada, carregandoEmpresas, marcaEmpresa }) {
   // Padrão: o ano até agora (de janeiro ao mês atual) — o olhar do CFO no fechamento.
@@ -180,8 +161,8 @@ export default function DrePainel({ dashboard, tituloTela, empresaId, onEmpresa,
                 ))}
               </select>
             </div>
-            <CampoMes id="d-inicio" rotulo="Início" valor={inicioMes} min="2015-01" max={fimMes} onChange={setInicioMes} dica="Primeiro mês do período" />
-            <CampoMes id="d-fim" rotulo="Fim" valor={fimMes} min={inicioMes} max={mesAtual} onChange={setFimMes} dica="Último mês do período (até o mês atual: a DRE é do realizado)" />
+            <CampoPeriodo id="d-inicio" rotulo="Início" valor={inicioMes} min="2015-01" max={fimMes} onChange={setInicioMes} dica="Primeiro mês do período" />
+            <CampoPeriodo id="d-fim" rotulo="Fim" valor={fimMes} min={inicioMes} max={mesAtual} onChange={setFimMes} dica="Último mês do período (até o mês atual: a DRE é do realizado)" />
             <FiltroCentros opcoes={opcoesCentros} valor={marcados} onChange={setMarcados} disabled={!empresaId || !dados} selecionarTodos />
             <div className="acoes">
               {estado === 'carregando' && dados && <Loader2 size={16} className="animate-spin" style={{ color: 'var(--muted)' }} aria-label="Atualizando" />}
