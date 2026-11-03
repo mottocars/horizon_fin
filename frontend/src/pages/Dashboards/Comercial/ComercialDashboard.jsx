@@ -1,10 +1,10 @@
 import { Handshake } from 'lucide-react';
 import CabecalhoDashboard from '../CabecalhoDashboard';
 
-// Dashboards > I.H - Comercial (pedido do usuário) — criado vazio, no layout dos outros dashboards
+// Dashboards > Comercial - I.H (pedido do usuário) — criado vazio, no layout dos outros dashboards
 // (tela cheia, só o menu lateral). As telas entram aqui como no Econômico/Financeiro: lista TELAS +
 // ControlesDashboard (menu flutuante) quando houver mais de uma.
-const NOME = 'I.H - Comercial';
+const NOME = 'Comercial - I.H';
 
 export default function ComercialDashboard() {
   return (

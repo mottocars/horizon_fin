@@ -52,9 +52,9 @@ const menuItems = [
     icon: Gauge,
     basePath: '/dashboards',
     children: [
-      { label: 'I.H - Comercial', to: '/dashboards/comercial', icon: Handshake },
-      { label: 'I.H - Cronograma Obras', to: '/dashboards/cronogramas-obras', icon: ChartGantt },
-      { label: 'I.H - Econômico/Financeiro', to: '/dashboards/economico-financeiro', icon: TrendingUp },
+      { label: 'Comercial - I.H', to: '/dashboards/comercial', icon: Handshake },
+      { label: 'Cronograma Obras - I.H', to: '/dashboards/cronogramas-obras', icon: ChartGantt },
+      { label: 'Econômico/Financeiro - I.H', to: '/dashboards/economico-financeiro', icon: TrendingUp },
     ],
   },
   {
