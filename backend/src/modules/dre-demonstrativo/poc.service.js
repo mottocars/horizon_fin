@@ -25,7 +25,8 @@ const { arredondarPoc } = require('../../utils/poc');
 //                  em b), reconhecido (acumulado × poc), anterior (o reconhecido até a véspera de a),
 //                  periodo (reconhecido − anterior = o valor da DRE no intervalo) e a_reconhecer
 //                  (acumulado − reconhecido: o que ainda vai entrar na DRE conforme a obra/as vendas
-//                  avançam; null no Estorno de Custo, que não tem saldo a apropriar).
+//                  avançam; null no Estorno de Custo, que não tem saldo a apropriar); e acumulado_inicio
+//                  / poc_inicio (na véspera de a), pra abrir o período em avanço × base nova.
 const num = (v) => (v === null || v === undefined ? 0 : Number(v));
 
 // Unidade do contrato sem cadastro em sie_units: pelo nome.
@@ -130,6 +131,7 @@ async function rastrear(empresaId, { de, ate, centros: filtro = [] }) {
       linhas: Object.fromEntries(
         linhas.map((x) => {
           const { acumulado, poc } = decompor(x, id, b);
+          const inicio = decompor(x, id, antes);
           const reconhecido = reconhecidoNoCentro(x, id, b);
           const anterior = reconhecidoNoCentro(x, id, antes);
           return [
@@ -137,6 +139,11 @@ async function rastrear(empresaId, { de, ate, centros: filtro = [] }) {
             {
               acumulado,
               poc,
+              // Base e POC na véspera de a: o período se abre em avanço sobre a base antiga
+              // (acumulado_inicio × (poc − poc_inicio)) + base nova pela POC de agora
+              // ((acumulado − acumulado_inicio) × poc) — a soma é o `periodo`.
+              acumulado_inicio: inicio.acumulado,
+              poc_inicio: inicio.poc,
               reconhecido,
               anterior,
               periodo: reconhecido - anterior,

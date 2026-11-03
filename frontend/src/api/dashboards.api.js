@@ -32,3 +32,9 @@ export function excluirFiltroSalvo(dashboard, tela, id) {
 export function salvarTelaFavorita(dashboard, tela) {
   return http.put(`/dashboards/${dashboard}/favorita`, { tela }).then((res) => res.data);
 }
+
+// Demonstração do Resultado: DRE do período (e do mesmo período do ano anterior), máscaras e rastreio da POC.
+// params: { empresa_id, de, ate ('AAAA-MM-DD'), centros: '1,2' }.
+export function getDrePainel(params) {
+  return http.get('/dashboards/economico-financeiro/dre', { params }).then((res) => res.data);
+}

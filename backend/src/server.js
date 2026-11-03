@@ -191,14 +191,16 @@ app.use('/api/saldo-contas-bancarias', exigirTela([T.SALDOS]), saldoContasBancar
 app.use('/api/classificacoes-bancarias', exigirTela([T.SALDOS]), exigirAdministradorDaTela(T.SALDOS), classificacoesBancariasRoutes);
 app.use('/api/dre-categorias-orcamento', exigirTela([T.DRE]), dreCategoriasOrcamentoRoutes);
 app.use('/api/dre-orcamento', exigirTela([T.DRE]), dreOrcamentoRoutes);
-app.use('/api/dre-mascaras', exigirTela([T.DRE]), dreMascarasRoutes);
+// Leitura também pro dashboard Econômico Financeiro (a tela da Demonstração do Resultado mostra a DRE e o
+// rastreio da POC com os mesmos componentes do DRE Gerencial).
+app.use('/api/dre-mascaras', exigirTela([T.DRE], LEITURA_DASHBOARD), dreMascarasRoutes);
 app.use('/api/dre-plano-contas', exigirTela([T.DRE]), drePlanoContasRoutes);
 app.use('/api/dre-centros', exigirTela([T.DRE]), dreCentrosRoutes);
 app.use('/api/dre-unidades', exigirTela([T.DRE]), dreUnidadesRoutes);
 app.use('/api/dre-correcoes', exigirTela([T.DRE]), dreCorrecoesRoutes);
 app.use('/api/dre-financeiro', exigirTela([T.DRE]), dreFinanceiroRoutes);
 app.use('/api/dre-configuracoes', exigirTela([T.DRE]), dreConfiguracoesRoutes);
-app.use('/api/dre-demonstrativo', exigirTela([T.DRE]), dreDemonstrativoRoutes);
+app.use('/api/dre-demonstrativo', exigirTela([T.DRE], LEITURA_DASHBOARD), dreDemonstrativoRoutes);
 // Ajustes de lançamentos financeiros (genérico; hoje só a DRE › Financeiro edita).
 app.use('/api/lancamentos-ajustes', exigirTela([T.DRE]), lancamentosAjustesRoutes);
 // Lançamentos financeiros criados à mão (genérico; hoje só a DRE › Financeiro cria).

@@ -6,6 +6,7 @@ const pool = require('../../config/db');
 const authMiddleware = require('../../middlewares/auth.middleware');
 const fluxoCaixaPainel = require('./fluxoCaixaPainel.service');
 const agingPainel = require('./agingPainel.service');
+const drePainel = require('./drePainel.service');
 
 // Dashboards: tela favorita (estrela) de cada usuário em cada dashboard — a que abre ao entrar pelo
 // menu. Cada usuário só lê e grava a própria. Montado em server.js com exigirTela dos dashboards.
@@ -13,6 +14,8 @@ const agingPainel = require('./agingPainel.service');
 //   PUT /:dashboard/favorita { tela }   -> { tela } (tela null = tira a favorita)
 //   GET /economico-financeiro/fluxo-caixa?empresa_id&hist&hor&centros=1,2 -> dados do painel do Fluxo de
 //       Caixa (fluxoCaixaPainel.service.js). A empresa é conferida pelo authMiddleware (query).
+//   GET /economico-financeiro/dre?empresa_id&de&ate&centros=1,2 -> DRE do período (e do mesmo período do ano
+//       anterior), máscaras e rastreio da POC, pro painel da Demonstração do Resultado (drePainel.service.js).
 //   GET /economico-financeiro/aging?empresa_id -> parcelas em aberto a receber e a pagar (com rateio) e o
 //       saldo bancário de hoje, para o Aging List (agingPainel.service.js).
 //   Filtros salvos do usuário numa tela, por empresa (botão "Gravar filtro" / lista "Filtros salvos"):
@@ -52,6 +55,30 @@ router.get('/economico-financeiro/fluxo-caixa', async (req, res, next) => {
     res.json(await fluxoCaixaPainel.painel(f.empresa_id, { hist: f.hist, hor: f.hor, centros }));
   } catch (err) {
     if (err.issues) return res.status(400).json({ message: 'Filtros inválidos (período: até 36 meses antes do mês atual e até 35 depois).' });
+    next(err);
+  }
+});
+
+const drePainelSchema = z
+  .object({
+    empresa_id: z.coerce.number().int().positive(),
+    de: z.string().regex(/^\d{4}-\d{2}-\d{2}$/),
+    ate: z.string().regex(/^\d{4}-\d{2}-\d{2}$/),
+    centros: z
+      .string()
+      .regex(/^(\d+(,\d+)*)?$/)
+      .optional()
+      .default(''),
+  })
+  .refine((f) => f.de <= f.ate, { message: 'A data início não pode ser depois da data fim.' });
+
+router.get('/economico-financeiro/dre', async (req, res, next) => {
+  try {
+    const f = drePainelSchema.parse(req.query);
+    const centros = f.centros ? f.centros.split(',').map(Number) : [];
+    res.json(await drePainel.painel(f.empresa_id, { de: f.de, ate: f.ate, centros }));
+  } catch (err) {
+    if (err.issues) return res.status(400).json({ message: err.issues[0].message || 'Filtros inválidos.' });
     next(err);
   }
 });

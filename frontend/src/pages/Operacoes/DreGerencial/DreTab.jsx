@@ -31,7 +31,10 @@ function mesDeHoje() {
 // `telaCheia` / `onSairTelaCheia`: a DRE ocupa a tela inteira (por cima do menu e do topo, e em tela
 // cheia de verdade no navegador quando ele deixa), como o fluxo do DFC Construtoras; sai pelo botão
 // "Sair da tela cheia" ou com Esc.
-export default function DreTab({ empresaId, de, ate, centros = [], telaCheia = false, onSairTelaCheia }) {
+// `variante="dashboard"`: sem o quadro em volta (o painel do dashboard Econômico Financeiro já tem o
+// dele). `dadosProntos` ({ arvore, resultado }): máscaras e DRE já carregadas por quem embute (o
+// dashboard) — aí a aba não busca de novo.
+export default function DreTab({ empresaId, de, ate, centros = [], telaCheia = false, onSairTelaCheia, variante = 'aba', dadosProntos = null }) {
   const [arvore, setArvore] = useState([]);
   const [carregando, setCarregando] = useState(false);
   const [resultado, setResultado] = useState(null);
@@ -49,11 +52,15 @@ export default function DreTab({ empresaId, de, ate, centros = [], telaCheia = f
       setArvore([]);
       return;
     }
+    if (dadosProntos) {
+      setArvore(dadosProntos.arvore);
+      return;
+    }
     setCarregando(true);
     listDreMascaras(empresaId)
       .then(setArvore)
       .finally(() => setCarregando(false));
-  }, [empresaId]);
+  }, [empresaId, dadosProntos]);
 
   useEffect(() => {
     carregar();
@@ -69,6 +76,10 @@ export default function DreTab({ empresaId, de, ate, centros = [], telaCheia = f
       setErro('A data início não pode ser depois da data fim.');
       return undefined;
     }
+    if (dadosProntos) {
+      setResultado(dadosProntos.resultado);
+      return undefined;
+    }
     let ativo = true;
     setCalculando(true);
     calcularDre(empresaId, { de, ate, centros: chaveCentros ? chaveCentros.split(',') : [] })
@@ -78,7 +89,7 @@ export default function DreTab({ empresaId, de, ate, centros = [], telaCheia = f
     return () => {
       ativo = false;
     };
-  }, [empresaId, de, ate, chaveCentros]);
+  }, [empresaId, de, ate, chaveCentros, dadosProntos]);
 
   // Outra empresa: volta pra visão dos centros.
   useEffect(() => {
@@ -164,7 +175,11 @@ export default function DreTab({ empresaId, de, ate, centros = [], telaCheia = f
   return (
     <div
       className={
-        telaCheia ? 'fixed inset-0 z-40 flex flex-col overflow-y-auto bg-white p-5' : 'rounded-card rounded-tl-none bg-white p-5 shadow-card'
+        telaCheia
+          ? 'fixed inset-0 z-40 flex flex-col overflow-y-auto bg-white p-5'
+          : variante === 'dashboard'
+            ? 'min-w-0'
+            : 'rounded-card rounded-tl-none bg-white p-5 shadow-card'
       }
     >
       {telaCheia && (

@@ -1,0 +1,232 @@
+/* Demonstração do Resultado (dashboard Econômico Financeiro) — complementa o painel.css do Fluxo de Caixa
+   (mesmos tokens e peças: barra, tiles, panel, kv, sim, tab), só dentro de .painel-cfo.dre. */
+
+/* Cards do simulador e da carteira */
+.painel-cfo.dre .kv.k3 {
+  grid-template-columns: repeat(3, minmax(0, 1fr));
+}
+.painel-cfo.dre .kv.juntos {
+  gap: 6px;
+}
+.painel-cfo.dre .kv.juntos > div {
+  padding-left: 8px;
+}
+.painel-cfo.dre .kv small {
+  font-size: 11.5px;
+  color: var(--muted);
+}
+.painel-cfo.dre .kv strong.neg {
+  color: var(--crit-ink);
+}
+
+/* Frase do cenário */
+.painel-cfo.dre .alerta {
+  display: flex;
+  gap: 8px;
+  align-items: flex-start;
+  font-size: 13.5px;
+  padding: 8px 10px;
+  border-radius: 4px;
+  border-left: 3px solid var(--accent);
+  background: var(--accent-soft);
+  color: var(--ink-2);
+}
+.painel-cfo.dre .alerta.crit {
+  border-left-color: var(--crit);
+  background: color-mix(in srgb, var(--crit) 9%, var(--surface));
+}
+.painel-cfo.dre .alerta.warn {
+  border-left-color: var(--warn);
+  background: color-mix(in srgb, var(--warn) 14%, var(--surface));
+}
+.painel-cfo.dre .alerta.good {
+  border-left-color: var(--good);
+  background: color-mix(in srgb, var(--good) 9%, var(--surface));
+}
+.painel-cfo.dre .alerta b {
+  color: var(--ink);
+}
+.painel-cfo.dre .sim .dica-alavanca {
+  font-size: 11.5px;
+  line-height: 1.3;
+  color: var(--muted);
+}
+
+/* Avisos da configuração (POC de Receita) */
+.painel-cfo.dre .aviso {
+  font-size: 13.5px;
+  color: var(--warn-ink);
+  background: color-mix(in srgb, var(--warn) 14%, var(--surface));
+  border-left: 3px solid var(--warn);
+  border-radius: 4px;
+  padding: 8px 10px;
+}
+
+/* Sankey */
+.painel-cfo.dre .sankey path {
+  transition: fill-opacity 0.15s;
+}
+.painel-cfo.dre .sankey .sk-lbl {
+  font-family: var(--f-body);
+  pointer-events: none;
+}
+.painel-cfo.dre .sankey .sk-nome {
+  font-size: 12.5px;
+  font-weight: 600;
+  fill: var(--ink-2);
+}
+.painel-cfo.dre .sankey .sk-nome.forte {
+  fill: var(--ink);
+  font-weight: 700;
+}
+.painel-cfo.dre .sankey .sk-val {
+  font-family: var(--f-mono);
+  font-size: 11px;
+  fill: var(--muted);
+}
+
+/* "De cada R$ 100 que entraram" */
+.painel-cfo.dre .cem {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+  border-top: 1px solid var(--grid);
+  padding-top: 12px;
+}
+.painel-cfo.dre .cem-rot {
+  font-family: var(--f-display);
+  font-weight: 700;
+  font-size: 13px;
+  color: var(--ink);
+}
+.painel-cfo.dre .cem-barra {
+  display: flex;
+  height: 14px;
+  border-radius: 3px;
+  overflow: hidden;
+  gap: 2px;
+}
+.painel-cfo.dre .cem-itens {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 6px 18px;
+  font-size: 13px;
+  color: var(--ink-2);
+}
+.painel-cfo.dre .cem-itens i {
+  display: inline-block;
+  width: 10px;
+  height: 10px;
+  border-radius: 2px;
+  margin-right: 6px;
+  vertical-align: -1px;
+}
+.painel-cfo.dre .cem-itens b {
+  font-family: var(--f-mono);
+  font-weight: 600;
+  color: var(--ink);
+}
+.painel-cfo.dre .cem-itens .lucro b {
+  color: var(--good-ink);
+}
+.painel-cfo.dre .cem-itens .prejuizo b {
+  color: var(--crit-ink);
+}
+
+/* Carteira de obras */
+.painel-cfo.dre .carteira-ph {
+  align-items: center;
+}
+.painel-cfo.dre .tab td small.sub {
+  display: block;
+  font-size: 11px;
+  color: var(--muted);
+}
+.painel-cfo.dre .tab td .sub-aviso {
+  font-family: var(--f-body);
+  font-size: 12px;
+  color: var(--warn-ink);
+}
+.painel-cfo.dre .prog {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+}
+.painel-cfo.dre .prog > span {
+  font-family: var(--f-mono);
+  font-size: 12px;
+  color: var(--ink);
+  min-width: 50px;
+  text-align: right;
+}
+.painel-cfo.dre .prog-trilho {
+  position: relative;
+  flex: 1;
+  min-width: 90px;
+  height: 10px;
+  border-radius: 3px;
+  background: var(--surface-2);
+  border: 1px solid var(--grid);
+  overflow: hidden;
+}
+.painel-cfo.dre .prog-ini {
+  position: absolute;
+  inset: 0 auto 0 0;
+  background: var(--accent-soft);
+}
+.painel-cfo.dre .prog-fim {
+  position: absolute;
+  top: 0;
+  bottom: 0;
+}
+.painel-cfo.dre tr.detalhe-obra > td {
+  background: var(--surface-2);
+  padding: 14px 12px;
+}
+.painel-cfo.dre tr.detalhe-obra:hover > td {
+  background: var(--surface-2);
+}
+.painel-cfo.dre .detalhe-grade {
+  display: grid;
+  grid-template-columns: minmax(0, 5fr) minmax(0, 7fr);
+  gap: 20px;
+  align-items: start;
+}
+.painel-cfo.dre .detalhe-grade > div {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+  min-width: 0;
+}
+.painel-cfo.dre .detalhe-grade .btn {
+  align-self: flex-start;
+}
+.painel-cfo.dre .conta-obra {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+}
+.painel-cfo.dre table.tab.mini {
+  font-size: 12.5px;
+}
+.painel-cfo.dre table.tab.mini td,
+.painel-cfo.dre table.tab.mini th {
+  padding: 4px 6px;
+}
+
+/* Grade da DRE (a aba DRE do DRE Gerencial, embutida como a grade do DFC no Fluxo de Caixa) */
+.painel-cfo.dre .grade-dre .grade-barra p {
+  margin: 2px 0 0;
+  font-size: 13.5px;
+  color: var(--ink-2);
+}
+
+@media (max-width: 1000px) {
+  .painel-cfo.dre .detalhe-grade {
+    grid-template-columns: 1fr;
+  }
+  .painel-cfo.dre .kv.k3,
+  .painel-cfo.dre .kv.k4 {
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+  }
+}

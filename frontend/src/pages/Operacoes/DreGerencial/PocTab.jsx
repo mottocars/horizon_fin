@@ -38,11 +38,13 @@ function mesDeHoje() {
 // Clicando no nome da obra (a célula acende no hover), a visão mês a mês dela: o período fixo à
 // esquerda e uma coluna por mês, cada uma com a "foto" daquele mês (unidades no fim do mês, a POC
 // evoluindo, o reconhecido no mês). `telaCheia` / `onSairTelaCheia`: como na aba DRE.
-export default function PocTab({ empresaId, de, ate, centros = [], telaCheia = false, onSairTelaCheia }) {
+// `dadosProntos`: o rastreio já carregado por quem embute (o dashboard Econômico Financeiro abre esta aba
+// em tela cheia com os dados dele) — aí não busca de novo. `obraInicial`: já abre no mês a mês da obra.
+export default function PocTab({ empresaId, de, ate, centros = [], telaCheia = false, onSairTelaCheia, dadosProntos = null, obraInicial = null }) {
   const [dados, setDados] = useState(null);
   const [calculando, setCalculando] = useState(false);
   const [erro, setErro] = useState('');
-  const [mensal, setMensal] = useState(null); // obra na visão mês a mês
+  const [mensal, setMensal] = useState(obraInicial); // obra na visão mês a mês
   const [abertas, setAbertas] = useState([]); // linhas do reconhecimento com a conta aberta
   const chaveCentros = centros.join(',');
   const mesAtual = mesDeHoje();
@@ -57,6 +59,10 @@ export default function PocTab({ empresaId, de, ate, centros = [], telaCheia = f
       setErro('A data início não pode ser depois da data fim.');
       return undefined;
     }
+    if (dadosProntos) {
+      setDados(dadosProntos);
+      return undefined;
+    }
     let ativo = true;
     setCalculando(true);
     rastrearPocDre(empresaId, { de, ate, centros: chaveCentros ? chaveCentros.split(',') : [] })
@@ -66,11 +72,13 @@ export default function PocTab({ empresaId, de, ate, centros = [], telaCheia = f
     return () => {
       ativo = false;
     };
-  }, [empresaId, de, ate, chaveCentros]);
+  }, [empresaId, de, ate, chaveCentros, dadosProntos]);
 
+  // Outra empresa: volta pra visão das obras (ou pra obra pedida por quem embute).
   useEffect(() => {
-    setMensal(null);
+    setMensal(obraInicial);
     setAbertas([]);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [empresaId]);
 
   // Tela cheia: pede também a do navegador; o Esc dele sai e o `fullscreenchange` fecha a nossa

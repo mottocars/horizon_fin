@@ -9,6 +9,7 @@ import { nomeExibicaoEmpresa } from '../../../utils/empresa';
 import { useEmpresaTravada } from '../../../hooks/useEmpresaTravada';
 import FluxoCaixaPainel from './fluxo/FluxoCaixaPainel';
 import AgingPainel from './aging/AgingPainel';
+import DrePainel from './dre/DrePainel';
 import HomeDashboard from './home/HomeDashboard';
 
 // Dashboards > Econômico Financeiro — a tela inteira é do dashboard (só o menu lateral fica, ver
@@ -18,7 +19,8 @@ import HomeDashboard from './home/HomeDashboard';
 // sem favorita, a primeira da lista (pedido do usuário) — a Home, que abre com o menu de telas aberto.
 // Enquanto a favorita não chega, nada é desenhado (para o menu não abrir na Home e a tela trocar em seguida).
 // Fluxo de Caixa: painel no layout do painel do CFO (fluxo/FluxoCaixaPainel.jsx), com os filtros na
-// barra de controles dele. Aging List: no mesmo layout (aging/AgingPainel.jsx). A empresa fica na URL
+// barra de controles dele. Aging List e Demonstração do Resultado: no mesmo layout (aging/AgingPainel.jsx,
+// dre/DrePainel.jsx). A empresa fica na URL
 // (?empresa_id=), como nas outras telas. As demais telas ainda serão construídas.
 const DASHBOARD = 'economico-financeiro';
 const TELAS = [
@@ -94,6 +96,17 @@ export default function EconomicoFinanceiroPage() {
         <HomeDashboard />
       ) : telaAtiva === 'fluxo-caixa' ? (
         <FluxoCaixaPainel
+          dashboard="Econômico Financeiro"
+          tituloTela={tela.label}
+          empresaId={empresaId}
+          onEmpresa={(v) => atualizarParams({ empresa_id: v })}
+          opcoesEmpresas={opcoesEmpresas}
+          empresaTravada={empresaTravada}
+          carregandoEmpresas={carregandoEmpresas}
+          marcaEmpresa={marcaEmpresa}
+        />
+      ) : telaAtiva === 'dre' ? (
+        <DrePainel
           dashboard="Econômico Financeiro"
           tituloTela={tela.label}
           empresaId={empresaId}
