@@ -19,8 +19,9 @@ import { ABAS_SUMARIO } from './sumarioTexto';
 // salvos; o botão "Filtros" abre o painel com o período em meses — Histórico e Horizonte, gravados no
 // filtro salvo e que refazem o Início/Fim quando ele é aplicado —, tipo de documento, plano de contas,
 // cliente, fornecedor e previsão financeira), os 8 indicadores, a escada de vencimentos (a pagar × a receber por faixa), o
-// detalhamento em árvore até a parcela (com tela cheia), o simulador do caixa dos próximos dias (a
-// partir do Saldo Contas Bancárias) e os maiores devedores e credores. Dados de /dashboards/economico-financeiro/aging (todas
+// simulador do caixa dos próximos dias (a partir do Saldo Contas Bancárias), os maiores devedores e
+// credores e, no fim, o aging por centro de custo — detalhamento em árvore até a parcela (com tela
+// cheia; clicar numa faixa da escada desce até ele). Dados de /dashboards/economico-financeiro/aging (todas
 // as parcelas em aberto, recalculadas no navegador por aging/modelo.js); recarrega sozinho a cada 30
 // minutos com a aba visível.
 
@@ -283,10 +284,10 @@ export default function AgingPainel({ dashboard, tituloTela, empresaId, onEmpres
               <Tiles E={E} />
               <div className="grid">
                 <Escada E={E} faixaSel={faixaSel} onFaixa={irParaDetalhe} />
-                <Detalhamento E={E} faixaSel={faixaSel} onFaixa={setFaixaSel} />
                 <Simulador E={E} />
                 <Maiores E={E} lado="r" />
                 <Maiores E={E} lado="p" />
+                <Detalhamento E={E} faixaSel={faixaSel} onFaixa={setFaixaSel} />
               </div>
             </>
           )}

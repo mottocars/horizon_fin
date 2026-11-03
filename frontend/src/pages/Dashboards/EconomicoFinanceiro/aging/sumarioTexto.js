@@ -119,6 +119,21 @@ export const ABAS_SUMARIO = [
     ],
   },
   {
+    id: 'maiores',
+    titulo: 'Maiores devedores e credores',
+    resumo: 'Os 10 clientes que mais devem e os 10 fornecedores a quem mais devo.',
+    blocos: [
+      {
+        titulo: 'Como ler',
+        itens: [
+          '**Vencido**: o saldo vencido de cada um, com o maior atraso — é a lista de cobrança (a receber) e de negociação (a pagar).',
+          '**Vence em 30 dias**: o que vence de hoje a 29 dias, com o próximo vencimento — é onde concentrar a confirmação de recebimento e a programação de pagamento.',
+          '**Concentração nos 10 maiores**: quanto do total eles representam. Concentração alta no a receber é risco (depender de poucos); no a pagar, é poder de negociação.',
+        ],
+      },
+    ],
+  },
+  {
     id: 'detalhamento',
     titulo: 'Aging por centro, plano de contas e pessoa',
     resumo: 'A tabela que desce do grupo até a parcela (título e parcela do Sienge).',
@@ -132,21 +147,6 @@ export const ABAS_SUMARIO = [
           '**Buscar**: nome, título, documento, unidade, centro ou plano de contas. O botão ao lado da busca abre as duas tabelas em **tela cheia** (Esc ou o mesmo botão para sair).',
           'Parcela rateada entre centros ou contas do plano de contas aparece em cada um com a fração dela (a soma bate com o saldo).',
           'A cor de cada célula mostra o peso dela no total da linha: vermelho no vencido, azul no a vencer.',
-        ],
-      },
-    ],
-  },
-  {
-    id: 'maiores',
-    titulo: 'Maiores devedores e credores',
-    resumo: 'Os 10 clientes que mais devem e os 10 fornecedores a quem mais devo.',
-    blocos: [
-      {
-        titulo: 'Como ler',
-        itens: [
-          '**Vencido**: o saldo vencido de cada um, com o maior atraso — é a lista de cobrança (a receber) e de negociação (a pagar).',
-          '**Vence em 30 dias**: o que vence de hoje a 29 dias, com o próximo vencimento — é onde concentrar a confirmação de recebimento e a programação de pagamento.',
-          '**Concentração nos 10 maiores**: quanto do total eles representam. Concentração alta no a receber é risco (depender de poucos); no a pagar, é poder de negociação.',
         ],
       },
     ],
