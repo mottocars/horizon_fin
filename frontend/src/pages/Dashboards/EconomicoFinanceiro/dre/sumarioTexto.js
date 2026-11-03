@@ -22,7 +22,7 @@ export const ABAS_SUMARIO = [
         itens: [
           '**Empresa** — a empresa analisada.',
           '**Início** e **Fim** — os meses do período (começa no ano atual, de janeiro até o mês de hoje). O período sempre já desconta o que foi reconhecido antes dele: uma venda antiga só entra pelo avanço da obra no período.',
-          '**Centro de custo** — só os centros marcados (vazio = todos com "Realiza DRE"). Vale para a tela toda, inclusive a comparação com o ano anterior.',
+          '**Centro de custo** — só os centros marcados (vazio = todos com "Realiza DRE"). Vale para a tela toda, inclusive a comparação com o ano anterior. **Marcar todos** marca a lista inteira (com todos marcados é o consolidado, o mesmo que nenhum) — depois é só desmarcar o que não quer ver.',
           'A comparação é sempre com o **mesmo período do ano anterior** (ex.: jan a out/26 contra jan a out/25), com os mesmos filtros.',
         ],
       },

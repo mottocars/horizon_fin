@@ -18,7 +18,7 @@ const ABAS_SUMARIO = [
         itens: [
           '**Empresa** — a empresa do DFC Construtoras analisada.',
           '**Início** e **Fim** — o período do painel, em mês e ano. Como o painel é a foto de hoje, o período sempre contém o mês atual: o Início vai até ele (até 36 meses antes) e o Fim começa nele (até 35 meses depois). Os meses antes do atual entram como realizado; do atual em diante, como projeção. Começa do mês anterior ao atual até 4 meses depois dele (com o mês atual em out/26: set/26 a fev/27).',
-          '**Centro de custo** — limita o painel aos centros marcados. Sem nenhum marcado, entram todos os centros com "Projeta DFC".',
+          '**Centro de custo** — limita o painel aos centros marcados. Sem nenhum marcado, entram todos os centros com "Projeta DFC". **Marcar todos** marca a lista inteira (com todos marcados é o mesmo que nenhum) — depois é só desmarcar o que não quer ver.',
         ],
       },
       {

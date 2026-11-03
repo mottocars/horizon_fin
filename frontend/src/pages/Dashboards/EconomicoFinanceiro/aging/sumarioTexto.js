@@ -22,7 +22,7 @@ export const ABAS_SUMARIO = [
         itens: [
           '**Empresa** — a empresa analisada.',
           '**Início** e **Fim** — o período do **vencimento** das parcelas: só entram as que vencem entre as duas datas, vencidas ou a vencer. Começa com o ano atual inteiro (1º de janeiro a 31 de dezembro). Vale para a tela toda: cards, escada, detalhamento, simulador, maiores e o Excel.',
-          '**Centro de custo** — só as fatias das parcelas nesses centros. O saldo bancário passa a ser o das contas das empresas (Sienge) donas dos centros marcados.',
+          '**Centro de custo** — só as fatias das parcelas nesses centros. O saldo bancário passa a ser o das contas das empresas (Sienge) donas dos centros marcados. **Marcar todos** marca a lista inteira — com todos marcados é o mesmo que sem filtro (o saldo continua o de todas as contas, e o filtro salvo grava "todos"); depois é só desmarcar o que não quer ver.',
           'O botão de download gera um Excel com o resumo por faixa e todas as parcelas a receber e a pagar do escopo (com todos os filtros), com centro, plano de contas, faixa e dias de atraso.',
         ],
       },

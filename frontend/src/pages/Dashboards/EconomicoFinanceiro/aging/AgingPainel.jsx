@@ -2,7 +2,7 @@ import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { BookOpen, Download, Filter, LayoutGrid, Layers, LineChart, Loader2, SlidersHorizontal, Table2, Users } from 'lucide-react';
 import { excluirFiltroSalvo, getAgingPainel, gravarFiltroSalvo, listarFiltrosSalvos } from '../../../../api/dashboards.api';
 import CabecalhoDashboard from '../../CabecalhoDashboard';
-import { FiltroCentros } from '../fluxo/FluxoCaixaPainel';
+import { FiltroCentros, centrosDoFiltro } from '../fluxo/FluxoCaixaPainel';
 import { DicaProvider } from '../fluxo/graficos';
 import { SumarioCtx } from '../fluxo/ganchos';
 import SumarioModal from '../fluxo/sumario';
@@ -113,12 +113,16 @@ export default function AgingPainel({ dashboard, tituloTela, empresaId, onEmpres
     return () => clearInterval(t);
   }, [carregar]);
 
-  const E = useMemo(() => (dados ? escopo(dados, { inicio, fim, ...filtros }) : null), [dados, inicio, fim, filtros]);
-
   const opcoesCentros = useMemo(
     () => (dados?.centros || []).map((c) => ({ value: c.id, label: titulo(c.nome) })).sort((a, b) => a.label.localeCompare(b.label, 'pt-BR')),
     [dados]
   );
+  // Os filtros que valem: com todos os centros marcados, o centro fica sem filtro (o saldo das contas
+  // continua o de todas as empresas, e o filtro salvo grava "todos").
+  const centros = useMemo(() => centrosDoFiltro(filtros.centros, opcoesCentros), [filtros.centros, opcoesCentros]);
+  const valendo = useMemo(() => ({ ...filtros, centros }), [filtros, centros]);
+
+  const E = useMemo(() => (dados ? escopo(dados, { inicio, fim, ...valendo }) : null), [dados, inicio, fim, valendo]);
 
   // Histórico e Horizonte: o período da barra em meses a partir do mês atual (null = a data não é o
   // começo/fim de um mês). Mudar os meses no painel muda o Início/Fim da barra.
@@ -130,7 +134,7 @@ export default function AgingPainel({ dashboard, tituloTela, empresaId, onEmpres
       fim: patch.horizonte !== undefined ? fimDe(hoje, patch.horizonte) : p.fim,
     }));
   // O que um filtro salvo grava (e o que se compara com os salvos): os filtros + os meses do período.
-  const atuais = { ...filtros, ...meses };
+  const atuais = { ...valendo, ...meses };
 
   // Filtro salvo igual aos filtros de agora (a lista da barra mostra ele; mexeu, deixa de mostrar).
   const salvoAtual = salvos.find((s) => mesmosFiltros(s.filtros, atuais)) || null;
@@ -200,7 +204,13 @@ export default function AgingPainel({ dashboard, tituloTela, empresaId, onEmpres
               dica="Vencimento a partir desta data"
             />
             <CampoData id="a-fim" rotulo="Fim" valor={fim} min={inicio} onChange={(v) => setPeriodo((p) => ({ ...p, fim: v }))} dica="Vencimento até esta data" />
-            <FiltroCentros opcoes={opcoesCentros} valor={filtros.centros} onChange={(c) => setFiltros((f) => ({ ...f, centros: c }))} disabled={!empresaId || !dados} />
+            <FiltroCentros
+              opcoes={opcoesCentros}
+              valor={filtros.centros}
+              onChange={(c) => setFiltros((f) => ({ ...f, centros: c }))}
+              disabled={!empresaId || !dados}
+              selecionarTodos
+            />
             <div className="ctl salvos">
               <label htmlFor="a-salvos">Filtros salvos</label>
               <select

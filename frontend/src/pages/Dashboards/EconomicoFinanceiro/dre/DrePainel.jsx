@@ -4,7 +4,7 @@ import { getDrePainel } from '../../../../api/dashboards.api';
 import DreTab from '../../../Operacoes/DreGerencial/DreTab';
 import PocTab from '../../../Operacoes/DreGerencial/PocTab';
 import CabecalhoDashboard from '../../CabecalhoDashboard';
-import { FiltroCentros } from '../fluxo/FluxoCaixaPainel';
+import { FiltroCentros, centrosDoFiltro } from '../fluxo/FluxoCaixaPainel';
 import { DicaProvider } from '../fluxo/graficos';
 import { SumarioCtx } from '../fluxo/ganchos';
 import { AjudaSecao } from '../fluxo/secoes';
@@ -60,7 +60,7 @@ export default function DrePainel({ dashboard, tituloTela, empresaId, onEmpresa,
   const mesAtual = mesHoje();
   const [inicioMes, setInicioMes] = useState(`${mesAtual.slice(0, 4)}-01`);
   const [fimMes, setFimMes] = useState(mesAtual);
-  const [centros, setCentros] = useState([]);
+  const [marcados, setMarcados] = useState([]); // centros marcados no filtro
   const [dados, setDados] = useState(null);
   const [estado, setEstado] = useState('ocioso'); // ocioso | carregando | erro
   const [erro, setErro] = useState('');
@@ -76,9 +76,13 @@ export default function DrePainel({ dashboard, tituloTela, empresaId, onEmpresa,
 
   // Trocar de empresa limpa os centros e os dados.
   useEffect(() => {
-    setCentros((c) => (c.length ? [] : c));
+    setMarcados((c) => (c.length ? [] : c));
     setDados(null);
   }, [empresaId]);
+
+  const opcoesCentros = useMemo(() => (dados?.centros || []).map((c) => ({ value: c.id, label: nome(c.rotulo || c.nome) })), [dados]);
+  // O filtro que vale (todos marcados = nenhum: o consolidado).
+  const centros = useMemo(() => centrosDoFiltro(marcados, opcoesCentros), [marcados, opcoesCentros]);
 
   const carregar = useCallback(() => {
     if (!empresaId) return;
@@ -120,10 +124,9 @@ export default function DrePainel({ dashboard, tituloTela, empresaId, onEmpresa,
   // A grade da DRE recebe os dados já carregados (não calcula de novo).
   const dadosDre = useMemo(() => (dados ? { arvore: dados.arvore, resultado: dados.atual } : null), [dados]);
 
-  const opcoesCentros = useMemo(() => (dados?.centros || []).map((c) => ({ value: c.id, label: nome(c.rotulo || c.nome) })), [dados]);
   const nomeCentro = (id) => opcoesCentros.find((o) => o.value === id)?.label || `centro ${id}`;
   const escopo = !centros.length ? 'consolidado de todos os centros' : centros.length === 1 ? nomeCentro(centros[0]) : `${centros.length} centros`;
-  const selecionarCentro = (id) => setCentros((c) => (c.length === 1 && c[0] === id ? [] : [id]));
+  const selecionarCentro = (id) => setMarcados(centros.length === 1 && centros[0] === id ? [] : [id]);
 
   return (
     <DicaProvider>
@@ -145,7 +148,7 @@ export default function DrePainel({ dashboard, tituloTela, empresaId, onEmpresa,
             </div>
             <CampoMes id="d-inicio" rotulo="Início" valor={inicioMes} min="2015-01" max={fimMes} onChange={setInicioMes} dica="Primeiro mês do período" />
             <CampoMes id="d-fim" rotulo="Fim" valor={fimMes} min={inicioMes} max={mesAtual} onChange={setFimMes} dica="Último mês do período (até o mês atual: a DRE é do realizado)" />
-            <FiltroCentros opcoes={opcoesCentros} valor={centros} onChange={setCentros} disabled={!empresaId || !dados} />
+            <FiltroCentros opcoes={opcoesCentros} valor={marcados} onChange={setMarcados} disabled={!empresaId || !dados} selecionarTodos />
             <div className="acoes">
               {estado === 'carregando' && dados && <Loader2 size={16} className="animate-spin" style={{ color: 'var(--muted)' }} aria-label="Atualizando" />}
               <button type="button" className="btn ghost icone com-texto" onClick={() => abrirSumario()} title="Sumário das análises">

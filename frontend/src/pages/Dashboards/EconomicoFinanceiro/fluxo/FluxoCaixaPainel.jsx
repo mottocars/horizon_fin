@@ -64,9 +64,9 @@ function CampoMes({ id, rotulo, valor, min, max, onChange, dica }) {
 // Centro de custo: lista com marcação múltipla e busca, no visual da barra (também no Aging List).
 // Os textos mudam pelas props (Cronogramas de Obras usa a mesma lista nos filtros Obras e Localidade);
 // opção com `grupo` ganha um título antes da primeira do grupo (as opções vêm ordenadas por grupo).
-// `selecionarTodos`: botão "Selecionar todos" ao lado do "Limpar" (marca as opções que aparecem na busca).
-// `todasMarcadas`: lista que nasce com tudo marcado (filtro Etapas dos Cronogramas de Obras) — com
-// todas marcadas o botão mostra `todos`; com nenhuma, `nenhum`.
+// `selecionarTodos`: botão "Marcar todos" ao lado do "Limpar" (marca as opções que aparecem na busca).
+// Com todas marcadas o botão mostra `todos`. `todasMarcadas`: lista que nasce com tudo marcado (filtro
+// Etapas dos Cronogramas de Obras) — com nenhuma marcada, o botão mostra `nenhum`.
 export function FiltroCentros({
   opcoes,
   valor,
@@ -98,7 +98,7 @@ export function FiltroCentros({
   }, [aberto]);
   const q = busca.trim().toLowerCase();
   const lista = opcoes.filter((o) => !q || o.label.toLowerCase().includes(q) || (o.grupo || '').toLowerCase().includes(q));
-  const completo = todasMarcadas && opcoes.length > 0 && opcoes.every((o) => valor.includes(o.value));
+  const completo = opcoes.length > 0 && opcoes.every((o) => valor.includes(o.value));
   const resumo = completo ? todos : !valor.length ? (todasMarcadas ? nenhum : todos) : valor.length === 1 ? opcoes.find((o) => o.value === valor[0])?.label || `1 de ${varios}` : `${valor.length} ${varios}`;
   const alternar = (id) => onChange(valor.includes(id) ? valor.filter((v) => v !== id) : [...valor, id]);
   return (
@@ -126,7 +126,7 @@ export function FiltroCentros({
             {!lista.length && <div className="empty">{vazio}</div>}
           </div>
           <div className="multi-rodape">
-            <span>{valor.length ? `${valor.length} marcado${valor.length > 1 ? 's' : ''}` : todasMarcadas ? 'Nenhum' : 'Todos'}</span>
+            <span>{completo ? 'Todos marcados' : valor.length ? `${valor.length} marcado${valor.length > 1 ? 's' : ''}` : todasMarcadas ? 'Nenhum' : 'Todos'}</span>
             <span className="multi-rodape-acoes">
               {selecionarTodos && (
                 <button
@@ -135,7 +135,7 @@ export function FiltroCentros({
                   onClick={() => onChange([...valor, ...lista.map((o) => o.value).filter((v) => !valor.includes(v))])}
                   disabled={lista.every((o) => valor.includes(o.value))}
                 >
-                  Selecionar todos
+                  Marcar todos
                 </button>
               )}
               <button type="button" className="btn ghost" onClick={() => onChange([])} disabled={!valor.length}>
@@ -149,6 +149,12 @@ export function FiltroCentros({
   );
 }
 
+// O filtro que vale de fato: com todos os centros marcados ("Marcar todos") é o mesmo que nenhum — o
+// consolidado, sem cortar o saldo das contas pelas empresas dos centros. Devolve sempre o mesmo array
+// vazio, para não disparar outra carga.
+const SEM_FILTRO = [];
+export const centrosDoFiltro = (marcados, opcoes) => (!marcados.length || opcoes.every((o) => marcados.includes(o.value)) ? SEM_FILTRO : marcados);
+
 // `marcaEmpresa`: { logo, nome } da empresa escolhida — a logomarca vai no canto direito do cabeçalho.
 export default function FluxoCaixaPainel({ dashboard, tituloTela, empresaId, onEmpresa, opcoesEmpresas, empresaTravada, carregandoEmpresas, marcaEmpresa }) {
   // Padrão: do mês anterior ao atual até o atual + 4 (em out/26: set/26 a fev/27).
@@ -157,7 +163,7 @@ export default function FluxoCaixaPainel({ dashboard, tituloTela, empresaId, onE
   const [fimMes, setFimMes] = useState(() => addM(mesAtual, 4));
   const hist = diferencaMeses(inicioMes, mesAtual);
   const hor = diferencaMeses(mesAtual, fimMes) + 1;
-  const [centros, setCentros] = useState([]);
+  const [marcados, setMarcados] = useState([]); // centros marcados no filtro
   const [dados, setDados] = useState(null);
   const [estado, setEstado] = useState('ocioso'); // ocioso | carregando | erro
   const [erro, setErro] = useState('');
@@ -172,7 +178,19 @@ export default function FluxoCaixaPainel({ dashboard, tituloTela, empresaId, onE
   const pedido = useRef(0);
 
   // Trocar de empresa limpa os centros.
-  useEffect(() => setCentros((c) => (c.length ? [] : c)), [empresaId]);
+  useEffect(() => setMarcados((c) => (c.length ? [] : c)), [empresaId]);
+
+  const todosCentros = useMemo(() => dados?.centros || [], [dados]);
+  const opcoesCentros = useMemo(
+    () =>
+      todosCentros
+        .filter((c) => c.projeta_dfc)
+        .map((c) => ({ value: c.id, label: titulo(c.nome) }))
+        .sort((a, b) => a.label.localeCompare(b.label, 'pt-BR')),
+    [todosCentros]
+  );
+  // O filtro que vale (todos marcados = nenhum).
+  const centros = useMemo(() => centrosDoFiltro(marcados, opcoesCentros), [marcados, opcoesCentros]);
 
   const carregar = useCallback(() => {
     if (!empresaId) return;
@@ -262,15 +280,6 @@ export default function FluxoCaixaPainel({ dashboard, tituloTela, empresaId, onE
     }
   }
 
-  const todosCentros = useMemo(() => dados?.centros || [], [dados]);
-  const opcoesCentros = useMemo(
-    () =>
-      todosCentros
-        .filter((c) => c.projeta_dfc)
-        .map((c) => ({ value: c.id, label: titulo(c.nome) }))
-        .sort((a, b) => a.label.localeCompare(b.label, 'pt-BR')),
-    [todosCentros]
-  );
   const centrosDaEmpresa = (companyId) => todosCentros.filter((c) => String(c.company_id) === String(companyId) && c.projeta_dfc).map((c) => c.id);
   const mesmo = (a, b) => a.length === b.length && a.every((v) => b.includes(v));
   const empresaSel = useMemo(() => {
@@ -282,9 +291,9 @@ export default function FluxoCaixaPainel({ dashboard, tituloTela, empresaId, onE
 
   const selecionarEmpresa = (companyId) => {
     const lista = centrosDaEmpresa(companyId);
-    setCentros(String(empresaSel) === String(companyId) || !lista.length ? [] : lista);
+    setMarcados(String(empresaSel) === String(companyId) || !lista.length ? [] : lista);
   };
-  const selecionarCentro = (id) => setCentros(centros.length === 1 && centros[0] === id ? [] : [id]);
+  const selecionarCentro = (id) => setMarcados(centros.length === 1 && centros[0] === id ? [] : [id]);
 
   // Rótulo do escopo (título da trajetória).
   const escopo = !centros.length
@@ -331,7 +340,7 @@ export default function FluxoCaixaPainel({ dashboard, tituloTela, empresaId, onE
             onChange={setFimMes}
             dica="Último mês do período — a partir do mês atual"
           />
-          <FiltroCentros opcoes={opcoesCentros} valor={centros} onChange={setCentros} disabled={!empresaId || !dados} />
+          <FiltroCentros opcoes={opcoesCentros} valor={marcados} onChange={setMarcados} disabled={!empresaId || !dados} selecionarTodos />
           <div className="acoes">
             {erroExportacao && <span className="erro">{erroExportacao}</span>}
             <button type="button" className="btn ghost icone com-texto" onClick={() => abrirSumario()} title="Sumário das análises">
