@@ -10,7 +10,8 @@ import { useEmpresaTravada } from '../../../hooks/useEmpresaTravada';
 import FluxoCaixaPainel from './fluxo/FluxoCaixaPainel';
 import AgingPainel from './aging/AgingPainel';
 import DrePainel from './dre/DrePainel';
-import HomeDashboard from './home/HomeDashboard';
+import CapaDashboard from '../capa/CapaDashboard';
+import executivo from '../../../assets/dashboards/executivo-financeiro.webp';
 
 // Dashboards > Econômico Financeiro — a tela inteira é do dashboard (só o menu lateral fica, ver
 // AppShell.jsx): cabeçalho (nome do dashboard, título da tela e o contexto dos dados) e o conteúdo
@@ -94,7 +95,7 @@ export default function EconomicoFinanceiroPage() {
   return (
     <div className={home ? 'h-full w-full' : 'flex min-h-full w-full flex-col gap-3 p-5'}>
       {home ? (
-        <HomeDashboard />
+        <CapaDashboard imagem={executivo} nome="Econômico/Financeiro" tema="azul" />
       ) : telaAtiva === 'fluxo-caixa' ? (
         <FluxoCaixaPainel
           dashboard={NOME}
