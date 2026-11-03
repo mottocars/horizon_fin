@@ -288,9 +288,11 @@ async function motor(empresaId, { ate, filtro = [], soObras = false }) {
   };
 }
 
-async function calcular(empresaId, { de, ate, centros: filtro = [] }) {
+// `motorPronto`: o motor já montado com os mesmos `ate` e centros (a exportação de auditoria usa o
+// mesmo motor pra DRE e pra memória de cálculo — os dois leem o banco uma vez só).
+async function calcular(empresaId, { de, ate, centros: filtro = [] }, motorPronto = null) {
   const { obras, ids, mascaras, cfg, aliquotas, mascaraPoc, pocEm, pocDespesa, fracaoDistratada, calculavel, reconhecidoNoCentro } =
-    await motor(empresaId, { ate, filtro });
+    motorPronto || (await motor(empresaId, { ate, filtro }));
   const antes = vespera(de);
   const reconhecido = (m, data, lista) => lista.reduce((s, id) => s + reconhecidoNoCentro(m, id, data), 0);
   const valorEm = (m, a, b, lista) => reconhecido(m, b, lista) - reconhecido(m, vespera(a), lista);

@@ -39,6 +39,7 @@ const dreCorrecoesRoutes = require('./modules/dre-correcoes/correcoes.routes');
 const dreFinanceiroRoutes = require('./modules/dre-financeiro/financeiro.routes');
 const dreConfiguracoesRoutes = require('./modules/dre-configuracoes/dreConfiguracoes.routes');
 const dreDemonstrativoRoutes = require('./modules/dre-demonstrativo/demonstrativo.routes');
+const dreExportacaoRoutes = require('./modules/dre-exportacao/exportacao.routes');
 const lancamentosAjustesRoutes = require('./modules/lancamentos-ajustes/lancamentosAjustes.routes');
 const lancamentosManuaisRoutes = require('./modules/lancamentos-manuais/lancamentosManuais.routes');
 const dfcParametrosRoutes = require('./modules/dfc-parametros/dfcParametros.routes');
@@ -201,6 +202,8 @@ app.use('/api/dre-correcoes', exigirTela([T.DRE]), dreCorrecoesRoutes);
 app.use('/api/dre-financeiro', exigirTela([T.DRE]), dreFinanceiroRoutes);
 app.use('/api/dre-configuracoes', exigirTela([T.DRE]), dreConfiguracoesRoutes);
 app.use('/api/dre-demonstrativo', exigirTela([T.DRE], LEITURA_DASHBOARD), dreDemonstrativoRoutes);
+// Exportação de auditoria da DRE (Excel com a memória de cálculo e as bases) — só quem tem a tela DRE.
+app.use('/api/dre-exportacao', exigirTela([T.DRE]), dreExportacaoRoutes);
 // Ajustes de lançamentos financeiros (genérico; hoje só a DRE › Financeiro edita).
 app.use('/api/lancamentos-ajustes', exigirTela([T.DRE]), lancamentosAjustesRoutes);
 // Lançamentos financeiros criados à mão (genérico; hoje só a DRE › Financeiro cria).

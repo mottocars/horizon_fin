@@ -174,24 +174,37 @@ function impressao(sheet, linhasTitulo) {
 //    saldosExcel.service.js::corrigirTamanhoImagemNoBuffer, que só olha o drawing1;
 // 2) aba com agrupamento de linhas (outlinePr) e "ajustar à página" (pageSetUpPr) sai com os dois na
 //    ordem trocada dentro do <sheetPr> — o esquema exige outlinePr antes, e o Excel recusa abrir.
-async function corrigirArquivo(buffer) {
+// O zip é regravado comprimido (DEFLATE, como o exceljs e o Excel gravam): o padrão do JSZip é sem
+// compressão, e o arquivo saía do tamanho do XML (a exportação de auditoria da DRE dava 21 MB).
+// `ignorarAvisos`: desliga os triângulos verdes do Excel (fórmula inconsistente com as vizinhas,
+// fórmula que omite células, número guardado como texto) em todas as abas — os erros de fórmula de
+// verdade (#VALOR!, #REF!…) continuam aparecendo. O <ignoredErrors> vai antes do <drawing> (ordem do
+// esquema).
+const IGNORAR_AVISOS =
+  '<ignoredErrors><ignoredError sqref="A1:XFD1048576" numberStoredAsText="1" formula="1" formulaRange="1" emptyCellReference="1" unlockedFormula="1"/></ignoredErrors>';
+async function corrigirArquivo(buffer, { ignorarAvisos = false } = {}) {
   const zip = await JSZip.loadAsync(buffer);
   const arquivos = Object.keys(zip.files).filter((n) => /^xl\/(drawings\/drawing|worksheets\/sheet)\d+\.xml$/.test(n));
   let mudou = false;
   for (const caminho of arquivos) {
     const xml = await zip.file(caminho).async('string');
-    const corrigido = caminho.includes('drawings')
+    let corrigido = caminho.includes('drawings')
       ? xml.replace(
           /(<xdr:ext cx="(\d+)" cy="(\d+)"\/>[\s\S]*?)<a:ext cx="0" cy="0"\/>/g,
           (match, antes, cx, cy) => `${antes}<a:ext cx="${cx}" cy="${cy}"/>`
         )
       : xml.replace(/(<sheetPr[^>]*>)(<pageSetUpPr[^>]*\/>)(<outlinePr[^>]*\/>)/, '$1$3$2');
+    if (ignorarAvisos && !caminho.includes('drawings') && !corrigido.includes('<ignoredErrors')) {
+      const antes = ['<drawing ', '<legacyDrawing ', '<tableParts', '<extLst', '</worksheet>'].map((t) => corrigido.indexOf(t)).filter((i) => i >= 0);
+      const pos = Math.min(...antes);
+      corrigido = corrigido.slice(0, pos) + IGNORAR_AVISOS + corrigido.slice(pos);
+    }
     if (corrigido !== xml) {
       zip.file(caminho, corrigido);
       mudou = true;
     }
   }
-  return mudou ? zip.generateAsync({ type: 'nodebuffer' }) : buffer;
+  return mudou ? zip.generateAsync({ type: 'nodebuffer', compression: 'DEFLATE', compressionOptions: { level: 6 } }) : buffer;
 }
 
 module.exports = { CORES, FORMATOS, borda, preencher, dataExcel, dataHoraExcel, cabecalho, faixa, cabecalhoTabela, impressao, corrigirArquivo };

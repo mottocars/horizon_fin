@@ -27,6 +27,7 @@ import SearchableSelect from '../../../components/SearchableSelect';
 import { listEmpresas } from '../../../api/empresas.api';
 import { gerarPlano } from '../../../api/planosFinanceirosSienge.api';
 import { excluirVersaoPlanoDre, exportarPlanoDreExcel, listVersoesPlanoDre } from '../../../api/drePlanoContas.api';
+import { exportarExcelDre } from '../../../api/dreExportacao.api';
 import { listCentrosCustoDre } from '../../../api/dreCentros.api';
 import { nomeExibicaoEmpresa } from '../../../utils/empresa';
 import { useEmpresaTravada } from '../../../hooks/useEmpresaTravada';
@@ -307,6 +308,39 @@ export default function DreGerencialPage() {
     }
   }
 
+  // Exportar Excel de auditoria (abas DRE e POC): a DRE do filtro recalculada em fórmulas, a memória de
+  // cálculo, as POCs e as bases linha a linha (backend dre-exportacao) — mesmo download do DFC.
+  const [exportandoDre, setExportandoDre] = useState(false);
+  const [erroExportacaoDre, setErroExportacaoDre] = useState('');
+  useEffect(() => setErroExportacaoDre(''), [empresaId, dreDe, dreAte, searchParams]);
+  async function exportarDreExcel() {
+    setErroExportacaoDre('');
+    setExportandoDre(true);
+    try {
+      const { blob, nome } = await exportarExcelDre(empresaId, { de: dreDe, ate: dreAte, centros: dreCentros });
+      const url = window.URL.createObjectURL(blob);
+      const link = document.createElement('a');
+      link.href = url;
+      link.download = nome;
+      document.body.appendChild(link);
+      link.click();
+      link.remove();
+      window.URL.revokeObjectURL(url);
+    } catch (err) {
+      // Com responseType 'blob' a mensagem de erro do backend chega dentro de um Blob.
+      let mensagem = 'Não foi possível gerar o Excel.';
+      const dados = err.response?.data;
+      try {
+        mensagem = (dados instanceof Blob ? JSON.parse(await dados.text()) : dados)?.message || mensagem;
+      } catch {
+        // mantém a mensagem padrão
+      }
+      setErroExportacaoDre(mensagem);
+    } finally {
+      setExportandoDre(false);
+    }
+  }
+
   const semEmpresa = !empresaId;
 
   return (
@@ -459,18 +493,33 @@ export default function DreGerencialPage() {
           </div>
 
           {(abaAtiva === 'dre' || abaAtiva === 'poc') && (
-            <div className="flex shrink-0 items-center gap-2">
-              <Button
-                type="button"
-                variant="secondary"
-                className="!px-2.5"
-                onClick={() => setDreTelaCheia(true)}
-                disabled={semEmpresa}
-                title="Tela cheia"
-                aria-label="Tela cheia"
-              >
-                <Maximize2 size={18} />
-              </Button>
+            <div className="flex shrink-0 flex-col items-end gap-1.5">
+              <div className="flex shrink-0 items-center gap-2">
+                <Button
+                  type="button"
+                  variant="secondary"
+                  className="!px-2.5"
+                  onClick={exportarDreExcel}
+                  disabled={semEmpresa || exportandoDre || dreDe > dreAte}
+                  title="Exportar Excel de auditoria (DRE recalculada, memória de cálculo, POCs e bases)"
+                  aria-label="Exportar Excel de auditoria"
+                >
+                  {exportandoDre ? <Loader2 size={18} className="animate-spin" /> : <Download size={18} />}
+                </Button>
+                <Button
+                  type="button"
+                  variant="secondary"
+                  className="!px-2.5"
+                  onClick={() => setDreTelaCheia(true)}
+                  disabled={semEmpresa}
+                  title="Tela cheia"
+                  aria-label="Tela cheia"
+                >
+                  <Maximize2 size={18} />
+                </Button>
+              </div>
+              {exportandoDre && <span className="text-xs text-gray-500">Montando o Excel de auditoria…</span>}
+              {erroExportacaoDre && <span className="text-xs text-red-600">{erroExportacaoDre}</span>}
             </div>
           )}
 

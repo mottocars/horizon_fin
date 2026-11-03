@@ -182,7 +182,7 @@ const SQL_LINHAS = `
 // Uma linha por lançamento × centro × natureza (parcelas do título somadas — `g0`), com o ajuste da
 // linha (lancamentos_ajustes, módulo lancamentos-ajustes) aplicado: centro, natureza e valor trocados,
 // com o sinal da linha original; `centro_original`/`natureza_original` identificam a linha pra janela
-// de ajuste. `percentual` = a linha sobre o total do lançamento (% do rateio, depois dos ajustes).
+// de ajuste; `valor_original` (o de antes do ajuste) e `ajuste_id` vão pra exportação de auditoria. `percentual` = a linha sobre o total do lançamento (% do rateio, depois dos ajustes).
 // Título/movimento: emissão (ou data) do lançamento inteiro. Só as linhas que entram na DRE (pedido
 // do usuário): centro com "Realiza DRE" e natureza com Máscara DRE no plano de contas que vale pro
 // centro — o plano próprio dele, se tiver, senão o Global; sem máscara ou "NÃO ENTRA NA DRE" fica de
@@ -207,7 +207,8 @@ const CTE_LINHAS = `
            CASE WHEN a.id IS NULL THEN g0.natureza_nome END AS natureza_nome_cat,
            CASE WHEN a.id IS NULL THEN g0.valor
                 WHEN g0.valor < 0 OR (g0.valor = 0 AND g0.origem = 'P') THEN -a.valor ELSE a.valor END AS valor,
-           CASE WHEN g0.origem = 'M' THEN 'CRIADO' WHEN a.id IS NULL THEN 'ORIGINAL' ELSE 'AJUSTADO' END AS status
+           CASE WHEN g0.origem = 'M' THEN 'CRIADO' WHEN a.id IS NULL THEN 'ORIGINAL' ELSE 'AJUSTADO' END AS status,
+           CASE WHEN a.id IS NOT NULL THEN g0.valor END AS valor_original, a.id AS ajuste_id
       FROM g0
       LEFT JOIN lancamentos_ajustes a
         ON a.empresa_id = $1 AND a.origem = g0.origem AND a.chave = g0.chave
@@ -228,7 +229,7 @@ const CTE_LINHAS = `
            g.documento, g.documento_nome, g.numero, g.contraparte,
            g.centro_original, g.natureza_original, g.centro_id, COALESCE(cc.name, g.centro_nome_cat) AS centro_nome,
            g.natureza_id, COALESCE(pf.name, g.natureza_nome_cat) AS natureza_nome, g.valor, g.percentual, g.status,
-           mp.mascara_id, dm.descricao AS mascara_nome
+           mp.mascara_id, dm.descricao AS mascara_nome, g.valor_original, g.ajuste_id
       FROM gw g
       JOIN mapa mp ON mp.centro_id = g.centro_id AND mp.natureza_id = g.natureza_id
       JOIN centros_custo_sienge cc ON cc.empresa_id = $1 AND cc.sienge_id = g.centro_id
@@ -388,4 +389,90 @@ async function somaPorCentroData(empresaId, mascaraIds, ate) {
   return rows.map((r) => ({ ...r, valor: num(r.valor) }));
 }
 
-module.exports = { exercicios, lancamentos, opcoesFiltros, somaPorCentro, somaPorCentroData };
+// Exportação de auditoria da DRE (dre-exportacao): as linhas que somaPorCentroData soma, uma a uma —
+// as máscaras pedidas, nos centros pedidos, com data até `ate`, desde o começo — com o lançamento
+// inteiro (origem, título, documento, contraparte, vencimento), o valor de antes do ajuste e quem
+// ajustou / criou. Valor sem arredondar (a soma bate centavo a centavo com a DRE).
+async function linhasAuditoria(empresaId, { mascaraIds, centros, ate }) {
+  const { rows } = await pool.query(
+    `WITH ${CTE_LINHAS}
+     SELECT l.origem, l.chave, l.titulo, to_char(l.data, 'YYYY-MM-DD') AS data, to_char(l.venc_min, 'YYYY-MM-DD') AS vencimento,
+            l.parcelas, l.documento, l.documento_nome, l.numero, l.contraparte, l.centro_original, l.natureza_original,
+            l.centro_id::int AS centro_id, l.centro_nome, l.natureza_id, l.natureza_nome, l.mascara_id, l.valor, l.percentual,
+            l.status, l.valor_original, a.observacao AS ajuste_observacao, ua.nome AS ajuste_usuario,
+            COALESCE(a.atualizado_em, a.criado_em) AS ajuste_em, um.nome AS criado_usuario, mn.criado_em AS criado_em
+       FROM lc l
+       LEFT JOIN lancamentos_ajustes a ON a.id = l.ajuste_id
+       LEFT JOIN usuarios ua ON ua.id = a.usuario_id
+       LEFT JOIN lancamentos_manuais mn ON l.origem = 'M' AND mn.id = l.chave
+       LEFT JOIN usuarios um ON um.id = mn.usuario_id
+      WHERE l.mascara_id = ANY($4::int[]) AND l.centro_id = ANY($5::bigint[])
+      ORDER BY l.data, l.origem DESC, l.chave, l.centro_id, l.natureza_id`,
+    [empresaId, '1900-01-01', diaSeguinte(ate), mascaraIds, centros]
+  );
+  return rows.map((r) => ({
+    ...r,
+    valor: num(r.valor),
+    percentual: r.percentual === null ? null : num(r.percentual),
+    valor_original: r.valor_original === null ? null : num(r.valor_original),
+  }));
+}
+
+// O outro lado da auditoria: os lançamentos do período [de, ate] (títulos pela emissão, movimentos e
+// criados pela data, já com os ajustes) que NÃO entram na DRE, com o motivo — na ordem em que a regra
+// corta: tipo de documento fora da DRE (aba Configurações), sem centro, centro sem cadastro, centro sem
+// "Realiza DRE", sem natureza, natureza "NÃO ENTRA NA DRE" ou sem Máscara DRE no plano que vale pro
+// centro (o próprio dele ou o Global), ou máscara que não calcula pelo Financeiro (as de contratos,
+// unidades, correção, imposto — `mascarasUsadas` são as que usam). `centros`: só os lançamentos desses
+// centros (null = todos os da empresa, inclusive os sem centro).
+async function foraDaDre(empresaId, { de, ate, centros = null, mascarasUsadas }) {
+  const { rows } = await pool.query(
+    `WITH ${CTE_LINHAS},
+     proprio AS (SELECT centro_id FROM dre_plano_contas_versoes WHERE empresa_id = $1),
+     classif AS (
+       SELECT pc.centro_id, pc.sienge_id::text AS natureza_id, pc.mascara_id, pc.nao_entra
+         FROM dre_plano_contas_centro pc JOIN proprio p ON p.centro_id = pc.centro_id
+        WHERE pc.empresa_id = $1
+       UNION ALL
+       SELECT c.sienge_id, pg.sienge_id::text, pg.mascara_id, pg.nao_entra
+         FROM centros_custo_sienge c JOIN dre_plano_contas pg ON pg.empresa_id = c.empresa_id
+        WHERE c.empresa_id = $1 AND c.sienge_id NOT IN (SELECT centro_id FROM proprio)
+     ),
+     x AS (
+       SELECT g.*, cc.sienge_id AS cc_id, COALESCE(cc.name, g.centro_nome_cat) AS centro_nome, cc.realiza_dre,
+              cl.mascara_id, cl.nao_entra, dm.descricao AS mascara_nome,
+              COALESCE(pf.name, g.natureza_nome_cat) AS natureza_nome,
+              CASE WHEN g.centro_id IN (SELECT centro_id FROM proprio) THEN 'Próprio do centro' ELSE 'Global' END AS plano,
+              EXISTS (SELECT 1 FROM dre_documentos_excluidos d WHERE d.empresa_id = $1 AND d.documento = g.documento) AS doc_fora
+         FROM gw g
+         LEFT JOIN centros_custo_sienge cc ON cc.empresa_id = $1 AND cc.sienge_id = g.centro_id
+         LEFT JOIN classif cl ON cl.centro_id = g.centro_id AND cl.natureza_id = g.natureza_id
+         LEFT JOIN dre_mascaras dm ON dm.id = cl.mascara_id
+         LEFT JOIN planos_financeiros_sienge pf ON pf.empresa_id = $1 AND pf.sienge_id::text = g.natureza_id
+        WHERE $5::bigint[] IS NULL OR g.centro_id = ANY($5::bigint[])
+     ),
+     m AS (
+       SELECT x.*, CASE
+                WHEN origem <> 'M' AND documento IS NOT NULL AND doc_fora THEN 'DOCUMENTO'
+                WHEN centro_id IS NULL THEN 'SEM_CENTRO'
+                WHEN cc_id IS NULL THEN 'CENTRO_SEM_CADASTRO'
+                WHEN NOT realiza_dre THEN 'CENTRO_SEM_DRE'
+                WHEN natureza_id IS NULL THEN 'SEM_NATUREZA'
+                WHEN nao_entra THEN 'NAO_ENTRA'
+                WHEN mascara_id IS NULL THEN 'SEM_MASCARA'
+                WHEN NOT (mascara_id = ANY($4::int[])) THEN 'MASCARA_SEM_FINANCEIRO'
+              END AS motivo
+         FROM x
+     )
+     SELECT motivo, origem, chave, CASE WHEN origem IN ('R', 'P', 'E') THEN chave END AS titulo,
+            to_char(data_lanc, 'YYYY-MM-DD') AS data, documento, documento_nome, numero, contraparte,
+            centro_id::int AS centro_id, centro_nome, natureza_id, natureza_nome, plano, mascara_id, mascara_nome,
+            valor, percentual, status
+       FROM m WHERE motivo IS NOT NULL
+      ORDER BY data_lanc, origem DESC, chave, centro_id NULLS LAST, natureza_id NULLS LAST`,
+    [empresaId, de, diaSeguinte(ate), mascarasUsadas, centros]
+  );
+  return rows.map((r) => ({ ...r, valor: num(r.valor), percentual: r.percentual === null ? null : num(r.percentual) }));
+}
+
+module.exports = { exercicios, lancamentos, opcoesFiltros, somaPorCentro, somaPorCentroData, linhasAuditoria, foraDaDre };

@@ -144,4 +144,21 @@ async function parcelas(empresaId, centroId, clienteId) {
   return rows.map((r) => ({ ...r, paga: num(r.paga), reparcelada: num(r.reparcelada), em_aberto: num(r.em_aberto) }));
 }
 
-module.exports = { listar, parcelas, sqlParcelas };
+// Exportação de auditoria da DRE (dre-exportacao): as parcelas com correção dos centros pedidos que
+// vencem até `ate` — a base da linha de Correção Monetária, uma a uma (sem arredondar).
+async function parcelasDaDre(empresaId, centros, ate) {
+  const { rows } = await pool.query(
+    `SELECT centro_id::int AS centro_id, bill_id AS titulo, installment_number AS parcela,
+            NULLIF(TRIM(document_identification_id), '') AS documento, document_number AS documento_numero,
+            client_name AS cliente, main_unit AS unidade, indexer_name AS indexador,
+            to_char(due_date, 'YYYY-MM-DD') AS vencimento, to_char(data_baixa, 'YYYY-MM-DD') AS data_baixa,
+            paga, reparcelada, em_aberto
+       FROM (${sqlParcelas(['p.cost_center_id::bigint = ANY($2::bigint[])', 'i.due_date <= $3'])}) t
+      WHERE ${COM_CORRECAO}
+      ORDER BY centro_id, due_date, bill_id, installment_id`,
+    [empresaId, centros, ate]
+  );
+  return rows.map((r) => ({ ...r, paga: num(r.paga), reparcelada: num(r.reparcelada), em_aberto: num(r.em_aberto) }));
+}
+
+module.exports = { listar, parcelas, sqlParcelas, parcelasDaDre };
