@@ -16,3 +16,11 @@ test('cada usuário recebe só os módulos das telas que tem; MASTER recebe todo
   assert.deepStrictEqual(modulosDoUsuario({ permissao: 'BASICO', telas_permitidas: [T.DFC] }, conector), ['DFC', 'DFC_ORCAMENTO']);
   assert.deepStrictEqual(modulosDoUsuario({ permissao: 'BASICO', telas_permitidas: [] }, conector), []);
 });
+
+test('o módulo DRE vale com a tela DRE ou com o dashboard Econômico Financeiro', () => {
+  const conector = ['AGING', 'DRE'];
+  assert.deepStrictEqual(modulosDoUsuario({ permissao: 'BASICO', telas_permitidas: [T.DRE] }, conector), ['DRE']);
+  assert.deepStrictEqual(modulosDoUsuario({ permissao: 'BASICO', telas_permitidas: [T.ECONOMICO_FINANCEIRO] }, conector), ['AGING', 'DRE']);
+  assert.deepStrictEqual(modulosDoUsuario({ permissao: 'BASICO', telas_permitidas: [T.DFC] }, conector), []);
+  assert.deepStrictEqual(normalizarModulos(['DRE', 'DFC']), ['DFC', 'DRE']);
+});

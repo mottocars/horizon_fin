@@ -6,6 +6,7 @@ const oauth = require('./oauth.service');
 const { registrarToolsDfc } = require('./tools');
 const { TOOLS_SALDOS } = require('../saldos/tools');
 const { TOOLS_AGING } = require('../aging/tools');
+const { TOOLS_DRE } = require('../dre');
 
 // MCP do conector Horizon (/api/mcp/dfc/:token — o caminho "dfc" ficou dos conectores já criados). O
 // token do link só diz QUAL conector (empresa, módulos e duração do login); quem libera é o login do
@@ -31,6 +32,13 @@ const INSTRUCOES = {
     'Comece por aging_guia (regras, faixas, filtros, filtros salvos do usuário e qual ferramenta usar). Tela: aging_painel; agrupamentos (centro, plano de contas, cliente/fornecedor, SPE…): aging_agrupar; títulos: aging_parcelas; ' +
     'caixa futuro (dia/semana/mês, cenários, por SPE): aging_projecao_caixa; inadimplência: aging_inadimplencia; recebido/pago de fato e pontualidade: aging_historico_baixas. ' +
     'Sem período = toda a carteira em aberto; a tela abre com o ano atual (periodo_da_tela=true).',
+  DRE:
+    'DRE Gerencial (Operações › DRE Gerencial e o dashboard Econômico Financeiro › Demonstração do Resultado, só leitura): comece por dre_guia — como a DRE é gerada do Sienge até cada linha, ' +
+    'a POC (de Receita = obra executada; de Despesa = fração vendida), o princípio do acumulado, a configuração desta empresa, as fontes e a auditoria. ' +
+    'A DRE: dre_demonstrativo (por centro, mês a mês, comparação). "Como chegou nesse número?": dre_explicar_numero (base × fator, avanço × vendas novas, POC e de onde veio, composição da base, exemplo). ' +
+    'POC por obra: dre_poc. Bases: dre_lancamentos (Financeiro), dre_unidades (contratos, distratos, permutas). Completude: dre_fora_da_dre. Conferências e alertas: dre_auditoria. ' +
+    'Dashboard: dre_painel (indicadores com etiquetas, para onde foi a receita, origem, centros, carteira); cenários: dre_simular. ' +
+    'Período padrão: 1º de janeiro do ano até hoje; datas AAAA-MM-DD; valores em R$ com sinal (despesa negativa). Responda como um CFO: mostre a conta e dê exemplos.',
 };
 
 // Ferramentas de só leitura no formato { name, description, inputSchema, handler(empresaId, ctx) }.
@@ -44,6 +52,7 @@ function registrarTools(server, empresaId, modulos, ctx) {
   if (modulos.includes('DFC')) registrarToolsDfc(server, empresaId, { escrita: modulos.includes('DFC_ORCAMENTO'), usuarioId: ctx.usuarioId });
   if (modulos.includes('SALDOS_CONTAS')) registrarLeitura(server, empresaId, TOOLS_SALDOS, ctx);
   if (modulos.includes('AGING')) registrarLeitura(server, empresaId, TOOLS_AGING, ctx);
+  if (modulos.includes('DRE')) registrarLeitura(server, empresaId, TOOLS_DRE, ctx);
 }
 
 const router = Router();

@@ -27,6 +27,15 @@ const MODULOS = {
       'Leitura do Aging List (dashboard Econômico Financeiro): contas a receber e a pagar em aberto por faixa, inadimplência, baixas já feitas e a projeção do caixa com o saldo das contas bancárias.',
     tela: T.ECONOMICO_FINANCEIRO,
   },
+  // Quem tem o DRE Gerencial OU o dashboard (a Demonstração do Resultado e o Excel de auditoria já mostram
+  // os mesmos números e bases).
+  DRE: {
+    titulo: 'DRE GERENCIAL (DEMONSTRAÇÃO DO RESULTADO)',
+    descricao:
+      'Leitura da DRE: a demonstração por período e centro, como cada número foi calculado (POC, bases, lançamentos), a auditoria, o dashboard e o simulador.',
+    tela: T.DRE,
+    telas: [T.DRE, T.ECONOMICO_FINANCEIRO],
+  },
 };
 
 const CODIGOS = Object.keys(MODULOS);
@@ -38,11 +47,12 @@ function normalizarModulos(lista) {
   return CODIGOS.filter((m) => marcados.has(m));
 }
 
-// Módulos do conector que o usuário pode usar (pelas telas liberadas no cadastro dele).
+// Módulos do conector que o usuário pode usar (pelas telas liberadas no cadastro dele; módulo com
+// `telas` vale com qualquer uma delas).
 function modulosDoUsuario(usuario, modulosConector) {
   if (usuario.permissao === 'MASTER') return normalizarModulos(modulosConector);
   const telas = usuario.telas_permitidas || [];
-  return normalizarModulos(modulosConector).filter((m) => telas.includes(MODULOS[m].tela));
+  return normalizarModulos(modulosConector).filter((m) => (MODULOS[m].telas || [MODULOS[m].tela]).some((t) => telas.includes(t)));
 }
 
 module.exports = { MODULOS, CODIGOS, normalizarModulos, modulosDoUsuario };

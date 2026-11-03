@@ -34,6 +34,14 @@ export const MODULOS = [
     descricao:
       'Leitura do Aging List: contas a receber e a pagar em aberto por faixa de vencimento, centro, plano de contas, cliente, fornecedor e SPE; inadimplência e recuperação; o que já foi recebido e pago; e a projeção do caixa (dia, semana ou mês, com cenários e por SPE) partindo do saldo das contas bancárias.',
   },
+  {
+    codigo: 'DRE',
+    titulo: 'DRE GERENCIAL (DEMONSTRAÇÃO DO RESULTADO)',
+    curto: 'DRE',
+    cor: 'bg-violet-50 text-violet-700',
+    descricao:
+      'Leitura da DRE como um CFO: a demonstração por período, centro e mês; como cada número foi calculado (POC de Receita e de Despesa, base × fator, avanço de obra × vendas novas, os lançamentos, contratos e parcelas que formam a base); a POC de cada obra e o resultado a apropriar; a auditoria (conferências, alertas, o que ficou fora da DRE); o dashboard Demonstração do Resultado e o simulador de cenários. Para quem tem o DRE Gerencial ou o dashboard Econômico Financeiro.',
+  },
 ];
 
 // Marca/desmarca um módulo mantendo as dependências (Altera Orçamento liga o DFC; desligar o DFC

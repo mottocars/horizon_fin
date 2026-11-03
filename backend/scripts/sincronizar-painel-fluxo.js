@@ -5,6 +5,8 @@
 //                   -> backend/src/modules/dashboards/painelFluxo/  (ferramenta dfc_painel_fluxo_caixa do MCP)
 //   Aging List:     frontend/src/pages/Dashboards/EconomicoFinanceiro/aging/{modelo,sumarioTexto}.js
 //                   -> backend/src/modules/dashboards/painelAging/  (ferramentas aging_* do MCP)
+//   Demonstração do Resultado: frontend/src/pages/Dashboards/EconomicoFinanceiro/dre/{modelo,sumarioTexto}.js
+//                   -> backend/src/modules/dashboards/painelDre/    (ferramentas dre_* do MCP)
 // Assim a tela e o MCP calculam e explicam exatamente igual.
 // (O backend e o frontend são imagens Docker separadas, por isso a cópia em vez de um import.)
 //
@@ -19,6 +21,7 @@ const TELAS = 'frontend/src/pages/Dashboards/EconomicoFinanceiro';
 const GRUPOS = [
   { pasta: 'fluxo', destino: 'painelFluxo', arquivos: ['modelo.js', 'analise.js', 'sumarioTexto.js'], imports: {} },
   { pasta: 'aging', destino: 'painelAging', arquivos: ['modelo.js', 'sumarioTexto.js'], imports: { '../fluxo/modelo': '../painelFluxo/modelo' } },
+  { pasta: 'dre', destino: 'painelDre', arquivos: ['modelo.js', 'sumarioTexto.js'], imports: { '../fluxo/modelo': '../painelFluxo/modelo' } },
 ];
 
 function converter(fonte, nome, grupo) {
