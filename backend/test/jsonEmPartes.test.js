@@ -68,6 +68,14 @@ test('contas a pagar: resposta sem a lista chama o Sienge de novo', async (t) =>
   assert.deepStrictEqual(esperas, [60_000, 180_000]);
   assert.strictEqual(silenciar.mock.callCount(), 2);
 
+  // Período da consulta: sem janela, o histórico inteiro por vencimento; com Dias retroativos, por emissão.
+  const params = (url) => Object.fromEntries(['startDate', 'endDate', 'selectionType'].map((k) => [k, new URL(url).searchParams.get(k)]));
+  assert.deepStrictEqual(params(chamadas[0]), { startDate: '2000-01-01', endDate: '2050-12-31', selectionType: 'D' });
+  respostas.splice(0, 3, '{"data":[]}');
+  chamadas.length = 0;
+  for await (const p of await abrirOutcome({ tenant: 't', username: 'u', password: 'p' }, { emitidosDesde: '2026-10-04' })) itens.push(p);
+  assert.deepStrictEqual(params(chamadas[0]), { startDate: '2026-10-04', endDate: '2050-12-31', selectionType: 'I' });
+
   // Na 3ª sem a lista, desiste com a mensagem do que veio.
   respostas.splice(0, 3, '{}', '{}', '{"erro":"x"}');
   chamadas.length = 0;

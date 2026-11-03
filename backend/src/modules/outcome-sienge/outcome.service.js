@@ -1,9 +1,17 @@
 const pool = require('../../config/db');
 const { decrypt } = require('../../utils/crypto');
 const { abrirOutcome } = require('./outcome-api.client');
+const { hojeEmBrasilia } = require('../extrato-contas-sienge/extratoContas-api.client');
+
+// 'AAAA-MM-DD' de N dias antes de `data`.
+function diasAntes(data, n) {
+  const [a, m, d] = data.split('-').map(Number);
+  return new Date(Date.UTC(a, m - 1, d - n)).toISOString().slice(0, 10);
+}
 // (Sincroniza o contas a pagar do Sienge — mesmo padrão do income.service.js: uma chamada HTTP só,
-// apaga e reinsere tudo da empresa numa transação, em lotes multi-linha. Diferente do income, a
-// resposta é lida em partes e gravada enquanto chega: a da GENESIS não cabe num texto só.)
+// apaga e reinsere tudo da empresa numa transação, em lotes multi-linha — ou só os títulos emitidos
+// nos últimos N dias, com o parâmetro Dias retroativos. Diferente do income, a resposta é lida em
+// partes e gravada enquanto chega: a da GENESIS não cabe num texto só.)
 
 async function getIntegracaoAtiva(empresaId) {
   const { rows } = await pool.query(
@@ -241,24 +249,38 @@ const PARCELAS_POR_LOTE = 2000;
 // Substitui inteiro o que estava salvo da empresa pelas parcelas que vêm de `registros` (lista ou
 // iterável assíncrono): apaga e reinsere numa transação só — se a leitura ou a gravação falhar no
 // meio, nada muda e a base anterior continua valendo. `onProgress({ lidas })` a cada lote.
-async function gravar(empresaId, registros, onProgress) {
+// `desde` ('AAAA-MM-DD'): só a janela de emissão — apaga as parcelas emitidas dessa data em diante (as
+// que sumiram do Sienge nessa janela saem) e as que voltam na resposta (título que mudou de data de
+// emissão), e mantém o resto da base como está.
+async function gravar(empresaId, registros, onProgress, { desde = null } = {}) {
   const client = await pool.connect();
   let total = 0;
+  const gravarJanela = async (lote) => {
+    if (desde) {
+      await client.query(
+        `DELETE FROM sie_outcome o USING unnest($2::bigint[], $3::bigint[]) AS k(b, p)
+          WHERE o.empresa_id = $1 AND o.bill_id = k.b AND o.installment_id = k.p`,
+        [empresaId, lote.map((r) => r.billId), lote.map((r) => r.installmentId)]
+      );
+    }
+    await gravarLote(client, empresaId, lote);
+  };
   try {
     await client.query('BEGIN');
-    await client.query('DELETE FROM sie_outcome WHERE empresa_id = $1', [empresaId]);
+    if (desde) await client.query('DELETE FROM sie_outcome WHERE empresa_id = $1 AND issue_date >= $2::date', [empresaId, desde]);
+    else await client.query('DELETE FROM sie_outcome WHERE empresa_id = $1', [empresaId]);
     let lote = [];
     for await (const r of registros) {
       lote.push(r);
       if (lote.length >= PARCELAS_POR_LOTE) {
-        await gravarLote(client, empresaId, lote);
+        await gravarJanela(lote);
         total += lote.length;
         lote = [];
         onProgress?.({ lidas: total });
       }
     }
     if (lote.length) {
-      await gravarLote(client, empresaId, lote);
+      await gravarJanela(lote);
       total += lote.length;
       onProgress?.({ lidas: total });
     }
@@ -269,11 +291,13 @@ async function gravar(empresaId, registros, onProgress) {
   } finally {
     client.release();
   }
-  return { total_importado: total };
+  return { total_importado: total, desde };
 }
 
-// Busca tudo da API (uma chamada só) e grava conforme as parcelas chegam.
-async function sincronizar(empresaId, onProgress) {
+// Busca da API (uma chamada só) e grava conforme as parcelas chegam.
+// `diasRetroativos` (parâmetro da rotina no Monitor de Integrações): só os títulos emitidos de hoje − N
+// dias em diante, mantendo as demais parcelas já gravadas. Empresa ainda sem base vem completa.
+async function sincronizar(empresaId, onProgress, { diasRetroativos = null } = {}) {
   const integracao = await getIntegracaoAtiva(empresaId);
   if (!integracao) {
     const e = new Error('Esta empresa não possui uma integração com o Sienge ativa configurada.');
@@ -282,9 +306,15 @@ async function sincronizar(empresaId, onProgress) {
     throw e;
   }
 
+  let desde = null;
+  if (diasRetroativos) {
+    const { rowCount } = await pool.query('SELECT 1 FROM sie_outcome WHERE empresa_id = $1 LIMIT 1', [empresaId]);
+    if (rowCount) desde = diasAntes(hojeEmBrasilia(), diasRetroativos);
+  }
   const password = decrypt(integracao.password_enc);
-  const registros = await abrirOutcome({ tenant: integracao.tenant, username: integracao.username, password });
-  return gravar(empresaId, registros, onProgress);
+  const registros = await abrirOutcome({ tenant: integracao.tenant, username: integracao.username, password }, { emitidosDesde: desde });
+  const r = await gravar(empresaId, registros, onProgress, { desde });
+  return { ...r, completa: Boolean(diasRetroativos && !desde) };
 }
 
 async function getResumo(empresaId) {

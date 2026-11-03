@@ -173,14 +173,33 @@ const ROTINAS = [
     modulo: 'DFC Construtoras',
     nome: 'Base do contas a pagar (Sienge)',
     descricao:
-      'Recarrega parcelas, rateios e pagamentos do contas a pagar do Sienge — a base do Aging a pagar nos Orçamentos do DFC Construtoras.',
+      'Recarrega parcelas, rateios e pagamentos do contas a pagar do Sienge (a base inteira, ou só os títulos emitidos nos últimos N dias com o parâmetro Dias retroativos) — a base do Aging a pagar nos Orçamentos do DFC Construtoras e do Aging List.',
     integracao: 'sienge',
     disponibilidade: semSienge,
-    async executar({ empresaId, progresso }) {
+    parametros: [
+      {
+        chave: 'dias_retroativos',
+        rotulo: 'Dias retroativos',
+        tipo: 'inteiro',
+        min: 1,
+        max: 10000,
+        vazio: 'Base inteira (todos os títulos)',
+        ajuda:
+          'Busca no Sienge só os títulos com data de emissão nos últimos N dias e mantém as demais parcelas já gravadas. Atenção: título emitido antes da janela não é atualizado — pagamento, baixa, cancelamento ou mudança de valor dele só entram rodando com o campo vazio. Empresa ainda sem base vem completa.',
+      },
+    ],
+    async executar({ empresaId, progresso, parametros = {} }) {
       progresso({ texto: 'Buscando o contas a pagar no Sienge (pode levar alguns minutos)' });
       // A resposta é gravada enquanto chega: o progresso é a contagem de parcelas já gravadas.
-      const r = await outcome.sincronizar(empresaId, (p) => progresso({ texto: `Gravando o contas a pagar do Sienge: ${n(p.lidas)} parcela(s)` }));
-      return `${n(r.total_importado)} parcela(s) importada(s).`;
+      const r = await outcome.sincronizar(empresaId, (p) => progresso({ texto: `Gravando o contas a pagar do Sienge: ${n(p.lidas)} parcela(s)` }), {
+        diasRetroativos: parametros.dias_retroativos || null,
+      });
+      const janela = r.desde
+        ? ` Janela: títulos emitidos de ${r.desde.split('-').reverse().join('/')} em diante (últimos ${n(parametros.dias_retroativos)} dias; parcelas de títulos emitidos antes mantidas).`
+        : r.completa
+          ? ' A empresa ainda não tinha base: veio completa, sem a janela de Dias retroativos.'
+          : '';
+      return `${n(r.total_importado)} parcela(s) importada(s).${janela}`;
     },
   },
   {

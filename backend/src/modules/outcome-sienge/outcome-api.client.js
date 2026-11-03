@@ -26,12 +26,14 @@ function inicioDoAno() {
   return `${new Date().getFullYear()}-01-01`;
 }
 
-async function fetchPage({ tenant, username, password, offset, limit }) {
+// `selectionType` (doc. da bulk-data): I = data de emissão do título, D = vencimento da parcela,
+// P = pagamento, B = competência.
+async function fetchPage({ tenant, username, password, startDate = START_DATE, endDate = END_DATE, selectionType = 'D', offset, limit }) {
   const auth = Buffer.from(`${username}:${password}`).toString('base64');
   const params = new URLSearchParams({
-    startDate: START_DATE,
-    endDate: END_DATE,
-    selectionType: 'D',
+    startDate,
+    endDate,
+    selectionType,
     correctionIndexerId: CORRECTION_INDEXER_ID,
     correctionDate: inicioDoAno(),
     offset: String(offset),
@@ -73,12 +75,15 @@ async function fetchPage({ tenant, username, password, offset, limit }) {
 // A resposta é grande demais para response.json() (passa de 512 MB na GENESIS): devolve as parcelas
 // uma a uma, conforme chegam (utils/jsonEmPartes.js). O erro da API (429, 4xx/5xx) da 1ª chamada sai
 // antes da 1ª parcela; resposta sem a lista é chamada de novo (ESPERAS_SEM_LISTA_MS).
-async function abrirOutcome(credenciais) {
-  const response = await fetchPage({ ...credenciais, offset: 0, limit: 1000 });
-  return parcelas(credenciais, response);
+// `emitidosDesde` ('AAAA-MM-DD', do parâmetro Dias retroativos da rotina no Monitor): só os títulos
+// emitidos dessa data em diante (por data de emissão); sem ele, o histórico inteiro por vencimento.
+async function abrirOutcome(credenciais, { emitidosDesde = null } = {}) {
+  const consulta = { ...credenciais, ...(emitidosDesde ? { startDate: emitidosDesde, selectionType: 'I' } : {}), offset: 0, limit: 1000 };
+  const response = await fetchPage(consulta);
+  return parcelas(consulta, response);
 }
 
-async function* parcelas(credenciais, response) {
+async function* parcelas(consulta, response) {
   for (let tentativa = 0; ; tentativa++) {
     try {
       yield* itensDoCampo(response.body, 'data');
@@ -88,7 +93,7 @@ async function* parcelas(credenciais, response) {
       const espera = ESPERAS_SEM_LISTA_MS[tentativa];
       console.warn(`[outcome] ${err.message} Nova chamada ao Sienge em ${espera / 1000} s (tentativa ${tentativa + 2} de ${ESPERAS_SEM_LISTA_MS.length + 1}).`);
       await sleep(espera, sinalDeCancelamento());
-      response = await fetchPage({ ...credenciais, offset: 0, limit: 1000 });
+      response = await fetchPage(consulta);
     }
   }
 }
