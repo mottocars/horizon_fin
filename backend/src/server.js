@@ -202,8 +202,9 @@ app.use('/api/dre-correcoes', exigirTela([T.DRE]), dreCorrecoesRoutes);
 app.use('/api/dre-financeiro', exigirTela([T.DRE]), dreFinanceiroRoutes);
 app.use('/api/dre-configuracoes', exigirTela([T.DRE]), dreConfiguracoesRoutes);
 app.use('/api/dre-demonstrativo', exigirTela([T.DRE], LEITURA_DASHBOARD), dreDemonstrativoRoutes);
-// Exportação de auditoria da DRE (Excel com a memória de cálculo e as bases) — só quem tem a tela DRE.
-app.use('/api/dre-exportacao', exigirTela([T.DRE]), dreExportacaoRoutes);
+// Exportação de auditoria da DRE (Excel com a memória de cálculo e as bases): tela DRE e, só leitura
+// (é um GET), o dashboard Econômico Financeiro › Demonstração do Resultado.
+app.use('/api/dre-exportacao', exigirTela([T.DRE], LEITURA_DASHBOARD), dreExportacaoRoutes);
 // Ajustes de lançamentos financeiros (genérico; hoje só a DRE › Financeiro edita).
 app.use('/api/lancamentos-ajustes', exigirTela([T.DRE]), lancamentosAjustesRoutes);
 // Lançamentos financeiros criados à mão (genérico; hoje só a DRE › Financeiro cria).

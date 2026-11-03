@@ -1,6 +1,7 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
-import { BarChart3, BookOpen, Building2, Calculator, Filter, LayoutGrid, LineChart, Loader2, Maximize2, Route, Table2, Workflow } from 'lucide-react';
+import { BarChart3, BookOpen, Building2, Calculator, Download, Filter, LayoutGrid, LineChart, Loader2, Maximize2, Route, Table2, Workflow } from 'lucide-react';
 import { getDrePainel } from '../../../../api/dashboards.api';
+import { exportarExcelDre } from '../../../../api/dreExportacao.api';
 import DreTab from '../../../Operacoes/DreGerencial/DreTab';
 import PocTab from '../../../Operacoes/DreGerencial/PocTab';
 import CabecalhoDashboard from '../../CabecalhoDashboard';
@@ -124,6 +125,39 @@ export default function DrePainel({ dashboard, tituloTela, empresaId, onEmpresa,
   // A grade da DRE recebe os dados já carregados (não calcula de novo).
   const dadosDre = useMemo(() => (dados ? { arvore: dados.arvore, resultado: dados.atual } : null), [dados]);
 
+  // Exportar Excel de auditoria: o mesmo .xlsx do DRE Gerencial (DRE recalculada em fórmulas, memória de
+  // cálculo, POCs e bases), com o período e os centros do painel.
+  const [exportando, setExportando] = useState(false);
+  const [erroExportacao, setErroExportacao] = useState('');
+  useEffect(() => setErroExportacao(''), [empresaId, de, ate, centros]);
+  async function exportarExcel() {
+    setErroExportacao('');
+    setExportando(true);
+    try {
+      const { blob, nome } = await exportarExcelDre(empresaId, { de: dados?.meta.de || de, ate: dados?.meta.ate || ate, centros });
+      const url = window.URL.createObjectURL(blob);
+      const link = document.createElement('a');
+      link.href = url;
+      link.download = nome;
+      document.body.appendChild(link);
+      link.click();
+      link.remove();
+      window.URL.revokeObjectURL(url);
+    } catch (err) {
+      // Com responseType 'blob' a mensagem de erro do backend chega dentro de um Blob.
+      let mensagem = 'Não foi possível gerar o Excel.';
+      const resposta = err.response?.data;
+      try {
+        mensagem = (resposta instanceof Blob ? JSON.parse(await resposta.text()) : resposta)?.message || mensagem;
+      } catch {
+        // mantém a mensagem padrão
+      }
+      setErroExportacao(mensagem);
+    } finally {
+      setExportando(false);
+    }
+  }
+
   const nomeCentro = (id) => opcoesCentros.find((o) => o.value === id)?.label || `centro ${id}`;
   const escopo = !centros.length ? 'consolidado de todos os centros' : centros.length === 1 ? nomeCentro(centros[0]) : `${centros.length} centros`;
   const selecionarCentro = (id) => setMarcados(centros.length === 1 && centros[0] === id ? [] : [id]);
@@ -151,9 +185,20 @@ export default function DrePainel({ dashboard, tituloTela, empresaId, onEmpresa,
             <FiltroCentros opcoes={opcoesCentros} valor={marcados} onChange={setMarcados} disabled={!empresaId || !dados} selecionarTodos />
             <div className="acoes">
               {estado === 'carregando' && dados && <Loader2 size={16} className="animate-spin" style={{ color: 'var(--muted)' }} aria-label="Atualizando" />}
+              {erroExportacao && <span className="erro">{erroExportacao}</span>}
               <button type="button" className="btn ghost icone com-texto" onClick={() => abrirSumario()} title="Sumário das análises">
                 <BookOpen size={16} />
                 Sumário
+              </button>
+              <button
+                type="button"
+                className="btn ghost icone"
+                onClick={exportarExcel}
+                disabled={!empresaId || exportando}
+                title="Exportar Excel de auditoria (DRE recalculada, memória de cálculo, POCs e bases)"
+                aria-label="Exportar Excel de auditoria"
+              >
+                {exportando ? <Loader2 size={16} className="animate-spin" /> : <Download size={16} />}
               </button>
             </div>
           </section>
