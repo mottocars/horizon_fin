@@ -8,7 +8,7 @@ const bases = require('./planilhas/bases');
 const planilhaCef = require('./planilhas/cef');
 
 // Monta o .xlsx da exportação da aba DFC: Fluxo de Caixa, Saldos das Contas, Base Realizado, Base
-// Projetado e um dossiê por obra com Projeção CEF. Devolve { buffer, nome }.
+// Projetado, Plano de Contas (por tipo de plano) e um dossiê por obra com Projeção CEF. Devolve { buffer, nome }.
 
 const MESES = ['jan', 'fev', 'mar', 'abr', 'mai', 'jun', 'jul', 'ago', 'set', 'out', 'nov', 'dez'];
 const rotuloMes = (m) => `${MESES[Number(m.slice(5, 7)) - 1]}/${m.slice(0, 4)}`;
@@ -53,8 +53,9 @@ async function gerar(empresaId, { inicio, fim, centros = [] }, usuarioId) {
 
   planilhaFluxo(workbook, d, meta);
   planilhaSaldos(workbook, d, meta);
-  bases.realizado(workbook, d, meta);
-  bases.projetado(workbook, d, meta, abasCef);
+  const baseRealizado = bases.realizado(workbook, d, meta);
+  const baseProjetado = bases.projetado(workbook, d, meta, abasCef);
+  bases.planoContas(workbook, d, meta, { realizado: baseRealizado, projetado: baseProjetado });
   const slugs = new Set();
   d.obras.forEach((o) => planilhaCef(workbook, o, d, meta, slugs, abasCef.get(o.obra.sienge_id)));
 

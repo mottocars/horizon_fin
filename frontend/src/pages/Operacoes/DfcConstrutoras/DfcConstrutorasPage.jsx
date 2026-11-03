@@ -428,8 +428,8 @@ export default function DfcConstrutorasPage() {
   }
 
   // Aba DFC: "Exportar Excel" — o .xlsx do que está filtrado (empresa, período, centros), montado no
-  // backend (dfc-exportacao): Fluxo de Caixa, Saldos das Contas, Base Realizado, Base Projetado e o
-  // dossiê da Projeção CEF de cada obra.
+  // backend (dfc-exportacao): Fluxo de Caixa, Saldos das Contas, Base Realizado, Base Projetado, Plano
+  // de Contas (por tipo de plano) e o dossiê da Projeção CEF de cada obra.
   const [exportandoFluxo, setExportandoFluxo] = useState(false);
   const [erroExportacao, setErroExportacao] = useState('');
   useEffect(() => setErroExportacao(''), [empresaId, abaAtiva]);

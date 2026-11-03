@@ -96,7 +96,9 @@ async function classificador(empresaId) {
     return { n1: pai[n2], n2 };
   };
   const conta = (siengeId) => contaPorId.get(siengeId) || { sienge_id: siengeId, name: `Natureza ${siengeId}`, codigo: String(siengeId) };
-  return { mascaras, nomeMascara, classificar, conta };
+  // O centro classifica pelo plano próprio (versão, mesmo vazia) ou pelo Global.
+  const planoProprio = (centroId) => Boolean(planosCentro[centroId]);
+  return { mascaras, nomeMascara, classificar, conta, planoProprio, classificacoes };
 }
 
 // `inicio` / `fim`: 'AAAA-MM'. `centros`: ids do filtro (vazio = todos).

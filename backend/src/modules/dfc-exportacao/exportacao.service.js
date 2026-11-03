@@ -30,11 +30,14 @@ const COMPONENTE_CEF = {
 const ORIGEM_EXTRATO = { CP: 'Contas a pagar', CR: 'Contas a receber', BC: 'Bancário', CX: 'Caixa' };
 const PESSOA = { receber: 'client_name', pagar: 'creditor_name' };
 
+const PLANO_GLOBAL = 'Global';
+const PLANO_PROPRIO = 'Próprio do centro';
+
 const r2 = (v) => Math.round((Number(v) + Number.EPSILON) * 100) / 100;
 const chave = (centro, conta, mes) => `${centro}|${conta}|${mes}`;
 
 async function centrosInfo(empresaId) {
-  const { rows } = await pool.query('SELECT sienge_id, name, codigo_contrato_caixa FROM centros_custo_sienge WHERE empresa_id = $1', [
+  const { rows } = await pool.query('SELECT sienge_id, name, codigo_contrato_caixa, projeta_dfc FROM centros_custo_sienge WHERE empresa_id = $1', [
     empresaId,
   ]);
   return new Map(rows.map((r) => [r.sienge_id, r]));
@@ -51,6 +54,7 @@ function classificacao(cls, centroId, natureza, lado) {
     mascara_n1: cls.nomeMascara[c.n1],
     mascara_n2: cls.nomeMascara[c.n2],
     lado: lado === 'E' ? 'Entrada' : 'Saída',
+    plano: cls.planoProprio(centroId) ? PLANO_PROPRIO : PLANO_GLOBAL,
     natureza_codigo: conta.codigo,
     natureza: conta.name,
     natureza_id: natureza,
@@ -306,6 +310,60 @@ async function obrasCef(empresaId, celulas) {
   return obras;
 }
 
+// ─── Plano de Contas: cada plano que vale pros centros da exportação, por tipo ────────────────────
+// Global (centros sem plano próprio) e o Próprio de cada centro com versão. Uma linha por plano ×
+// conta analítica, com a classificação dele (Projeta DFC, Máscaras, Origem). "Centros que usam" =
+// centros do filtro (sem filtro: os com Projeta DFC) + os que aparecem nas bases por esse plano.
+async function planosContas(empresaId, fluxo, centros, bases) {
+  const cls = fluxo.classificador;
+  const { rows: contas } = await pool.query(
+    "SELECT sienge_id, name, fl_ativa FROM planos_financeiros_sienge WHERE empresa_id = $1 AND tp_conta <> 'T'",
+    [empresaId]
+  );
+  const pai = {};
+  cls.mascaras.forEach((g) => g.filhos.forEach((f) => (pai[f.id] = g.id)));
+  const nomeCentro = (id) => centros.get(id)?.name || `Centro ${id}`;
+  const doFiltro = fluxo.filtro ? [...fluxo.filtro] : [...centros.values()].filter((c) => c.projeta_dfc).map((c) => c.sienge_id);
+  const nasBases = new Set(bases.filter((l) => l.plano === PLANO_GLOBAL).map((l) => l.centro));
+  const seguemGlobal = [...new Set([...doFiltro.filter((id) => !cls.planoProprio(id)).map(nomeCentro), ...nasBases])].sort((a, b) =>
+    a.localeCompare(b, 'pt-BR')
+  );
+
+  const { global, centros: proprios } = cls.classificacoes;
+  const planos = [];
+  if (!fluxo.filtro || seguemGlobal.length) planos.push({ tipo: PLANO_GLOBAL, nome: PLANO_GLOBAL, usam: seguemGlobal, lista: global });
+  Object.entries(proprios)
+    .map(([id, lista]) => ({ id: Number(id), lista }))
+    .filter((p) => !fluxo.filtro || fluxo.filtro.has(p.id))
+    .map((p) => ({ tipo: PLANO_PROPRIO, nome: nomeCentro(p.id), usam: [nomeCentro(p.id)], lista: p.lista }))
+    .sort((a, b) => a.nome.localeCompare(b.nome, 'pt-BR'))
+    .forEach((p) => planos.push(p));
+
+  const ordenadas = contas
+    .map((c) => ({ ...c, codigo: cls.conta(c.sienge_id).codigo }))
+    .sort((a, b) => a.codigo.localeCompare(b.codigo, 'pt-BR', { numeric: true }));
+  return planos.flatMap((p) => {
+    const de = new Map(p.lista.map((c) => [String(c.sienge_id), c]));
+    return ordenadas.map((c) => {
+      const k = de.get(String(c.sienge_id)) || {};
+      const n2 = k.mascara_id && pai[k.mascara_id] ? k.mascara_id : null;
+      return {
+        tipo: p.tipo,
+        plano: p.nome,
+        centros_usam: p.usam.join(', ') || '—',
+        natureza_codigo: c.codigo,
+        natureza: c.name,
+        ativa: c.fl_ativa === 'S' ? 'Ativa' : 'Inativa',
+        projeta: k.projeta_dfc === false ? 'Não' : 'Sim',
+        mascara_n1: n2 ? cls.nomeMascara[pai[n2]] : '',
+        mascara_n2: n2 ? cls.nomeMascara[n2] : '',
+        origem: k.origem_projecao ? ROTULO_ORIGEM[k.origem_projecao] || k.origem_projecao : '',
+        situacao: n2 ? 'Entra no DFC' : 'Fora (sem Máscara DFC)',
+      };
+    });
+  });
+}
+
 async function dados(empresaId, { inicio, fim, centros = [] }) {
   const [fluxo, infoCentros] = await Promise.all([fluxoService.montar(empresaId, { inicio, fim, centros }), centrosInfo(empresaId)]);
   fluxo.somarMeses = fluxoService.somarMeses;
@@ -316,8 +374,11 @@ async function dados(empresaId, { inicio, fim, centros = [] }) {
     // Abertura de cada mês até o atual (o extrato vai até o dia da última atualização).
     mesesSaldos.length ? dfcSaldos.saldosPorConta(empresaId, mesesSaldos) : [],
   ]);
-  const obras = await obrasCef(empresaId, projetado.celulas);
-  return { fluxo, centros: infoCentros, realizado, projetado: projetado.linhas, saldos, mesesSaldos, obras, ROTULO_ORIGEM, COMPONENTE_CEF };
+  const [obras, planos] = await Promise.all([
+    obrasCef(empresaId, projetado.celulas),
+    planosContas(empresaId, fluxo, infoCentros, [...realizado, ...projetado.linhas]),
+  ]);
+  return { fluxo, centros: infoCentros, realizado, projetado: projetado.linhas, planos, saldos, mesesSaldos, obras, ROTULO_ORIGEM, COMPONENTE_CEF };
 }
 
 // Só o fluxo e as bases (MCP do DFC — ferramenta de lançamentos), sem saldos nem dossiês da CEF.
@@ -328,4 +389,4 @@ async function bases(empresaId, { inicio, fim, centros = [] }) {
   return { fluxo, realizado, projetado: projetado.linhas };
 }
 
-module.exports = { dados, bases, ROTULO_ORIGEM };
+module.exports = { dados, bases, ROTULO_ORIGEM, PLANO_GLOBAL };

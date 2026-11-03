@@ -1,6 +1,7 @@
 const { CORES, FORMATOS, borda, preencher, dataExcel, dataHoraExcel, cabecalho, cabecalhoTabela, impressao } = require('../../../utils/excelMarca');
+const { PLANO_GLOBAL } = require('../exportacao.service');
 
-// Abas "Base Realizado" e "Base Projetado": base empilhada, uma linha por lançamento/parcela/item,
+// Abas "Base Realizado", "Base Projetado" e "Plano de Contas" (no fim). Bases: base empilhada, uma linha por lançamento/parcela/item,
 // com a classificação completa (centro, máscaras, entrada/saída, natureza) — pronta pra filtro e
 // tabela dinâmica. Acima do cabeçalho, o TOTAL DO FILTRO (SUBTOTAL: soma só as linhas visíveis).
 
@@ -18,7 +19,9 @@ const FORMATO_DE = {
 };
 const DATAS = new Set(['mes', 'data', 'dataHora']);
 
-// colunas: [{ chave, rotulo, largura, formato?, total? }]; `estiloLinha(l)` -> fill opcional.
+// colunas: [{ chave, rotulo, largura, formato?, total?, formula? }]; `estiloLinha(l)` -> fill opcional.
+// `formula(linha, letra)`: fórmula da célula (letra(chave) = coluna desta aba); o valor da linha vira
+// o resultado guardado.
 function base(workbook, { nome, titulo, subtitulo, colunas, linhas, estiloLinha, link }, meta) {
   const ultima = colunas.length;
   const sheet = workbook.addWorksheet(nome, { views: [{ state: 'frozen', xSplit: 0, ySplit: LINHA_CAB, showGridLines: false }] });
@@ -28,6 +31,7 @@ function base(workbook, { nome, titulo, subtitulo, colunas, linhas, estiloLinha,
 
   const primeira = LINHA_CAB + 1;
   const ultimaLinha = Math.max(primeira, LINHA_CAB + linhas.length);
+  const letra = (chave) => sheet.getColumn(colunas.findIndex((c) => c.chave === chave) + 1).letter;
   linhas.forEach((l, i) => {
     const row = sheet.getRow(primeira + i);
     const fill = estiloLinha?.(l);
@@ -38,7 +42,9 @@ function base(workbook, { nome, titulo, subtitulo, colunas, linhas, estiloLinha,
       if (v !== null && DATAS.has(c.formato)) v = c.formato === 'dataHora' ? dataHoraExcel(v) : dataExcel(v);
       // Código só de dígitos vira número (sem o aviso de "número armazenado como texto").
       if (c.numerico && typeof v === 'string' && /^\d+$/.test(v)) v = Number(v);
-      if (c.link && v !== null) {
+      if (c.formula) {
+        cel.value = { formula: c.formula(primeira + i, letra), result: v ?? 0 };
+      } else if (c.link && v !== null) {
         const destino = link?.(l);
         cel.value = destino ? { text: String(v), hyperlink: destino } : v;
         if (destino) cel.font = { size: 9, underline: true, color: { argb: CORES.AZUL } };
@@ -85,11 +91,14 @@ function base(workbook, { nome, titulo, subtitulo, colunas, linhas, estiloLinha,
 
   sheet.autoFilter = { from: { row: LINHA_CAB, column: 1 }, to: { row: ultimaLinha, column: ultima } };
   impressao(sheet, `${LINHA_CAB}:${LINHA_CAB}`);
-  return sheet;
+  // faixa(chave): a coluna inteira dos dados, pra SOMASES de outra aba.
+  const faixa = (chave) => `'${nome}'!$${letra(chave)}$${primeira}:$${letra(chave)}$${ultimaLinha}`;
+  return { sheet, faixa };
 }
 
 const CLASSIFICACAO = [
   { chave: 'centro', rotulo: 'Centro de custo', largura: 22 },
+  { chave: 'plano', rotulo: 'Plano de contas', largura: 12 },
   { chave: 'mascara_n1', rotulo: 'Máscara N1', largura: 26 },
   { chave: 'lado', rotulo: 'Entrada / Saída', largura: 10 },
   { chave: 'mascara_n2', rotulo: 'Máscara N2', largura: 30 },
@@ -159,4 +168,65 @@ function projetado(workbook, d, meta, abasCef) {
   );
 }
 
-module.exports = { realizado, projetado };
+// Aba "Plano de Contas": os planos que valem pros centros da exportação, por tipo — o Global (centros
+// sem plano próprio) e o Próprio de cada centro com versão —, uma linha por plano × conta analítica.
+// As colunas de linhas e valor contam/somam as bases (CONT.SES/SOMASES pelo plano, centro e natureza):
+// a soma do Realizado/Projetado de todos os planos = o total das bases.
+function planoContas(workbook, d, meta, bases) {
+  const chaveBase = (tipo, centro, codigo) => (tipo === PLANO_GLOBAL ? `${tipo}|${codigo}` : `${tipo}|${centro}|${codigo}`);
+  const somas = new Map();
+  [
+    ['realizado', d.realizado],
+    ['projetado', d.projetado],
+  ].forEach(([qual, linhas]) =>
+    linhas.forEach((l) => {
+      const k = chaveBase(l.plano, l.centro, l.natureza_codigo);
+      const s = somas.get(k) || { realizado: 0, realizado_linhas: 0, projetado: 0, projetado_linhas: 0 };
+      s[qual] += Number(l.valor) || 0;
+      s[`${qual}_linhas`] += 1;
+      somas.set(k, s);
+    })
+  );
+  const linhas = d.planos.map((p) => {
+    const s = somas.get(chaveBase(p.tipo, p.plano, p.natureza_codigo)) || {};
+    return { ...p, ...Object.fromEntries(Object.entries(s).map(([k, v]) => [k, Math.round(v * 100) / 100])) };
+  });
+  // Global: plano + natureza; Próprio: plano + centro (= nome do plano) + natureza.
+  const criterios = (b, r, letra, linha) =>
+    `${b.faixa('plano')},$${letra('tipo')}${r},${b.faixa('natureza_codigo')},$${letra('natureza_codigo')}${r}` +
+    (linha.tipo === PLANO_GLOBAL ? '' : `,${b.faixa('centro')},$${letra('plano')}${r}`);
+  const contar = (b) => (r, letra) => `COUNTIFS(${criterios(b, r, letra, linhas[r - LINHA_CAB - 1])})`;
+  const somar = (b) => (r, letra) => `SUMIFS(${b.faixa('valor')},${criterios(b, r, letra, linhas[r - LINHA_CAB - 1])})`;
+
+  const nPlanos = new Set(d.planos.map((p) => `${p.tipo}|${p.plano}`)).size;
+  return base(
+    workbook,
+    {
+      nome: 'Plano de Contas',
+      titulo: 'Plano de Contas DFC por tipo de plano',
+      subtitulo: `${nPlanos} plano(s): o Global vale pros centros sem plano próprio; o Próprio, só pro seu centro. Uma linha por plano × conta analítica — conta sem Máscara DFC fica fora do fluxo. Linhas e valores contam/somam a Base Realizado e a Base Projetado.`,
+      colunas: [
+        { chave: 'tipo', rotulo: 'Tipo de plano', largura: 13 },
+        { chave: 'plano', rotulo: 'Plano', largura: 24 },
+        { chave: 'centros_usam', rotulo: 'Centros que usam', largura: 30 },
+        { chave: 'natureza_codigo', rotulo: 'Cód. natureza', largura: 14, numerico: true },
+        { chave: 'natureza', rotulo: 'Natureza', largura: 34 },
+        { chave: 'ativa', rotulo: 'No Sienge', largura: 10 },
+        { chave: 'projeta', rotulo: 'Projeta DFC', largura: 10 },
+        { chave: 'mascara_n1', rotulo: 'Máscara N1', largura: 26 },
+        { chave: 'mascara_n2', rotulo: 'Máscara N2', largura: 30 },
+        { chave: 'origem', rotulo: 'Origem projeção', largura: 24 },
+        { chave: 'situacao', rotulo: 'No DFC?', largura: 21 },
+        { chave: 'realizado_linhas', rotulo: 'Linhas Realizado', largura: 11, formato: 'int', total: true, formula: contar(bases.realizado) },
+        { chave: 'realizado', rotulo: 'Realizado no DFC', largura: 16, formato: 'moeda', total: true, formula: somar(bases.realizado) },
+        { chave: 'projetado_linhas', rotulo: 'Linhas Projetado', largura: 11, formato: 'int', total: true, formula: contar(bases.projetado) },
+        { chave: 'projetado', rotulo: 'Projetado no DFC', largura: 16, formato: 'moeda', total: true, formula: somar(bases.projetado) },
+      ],
+      linhas,
+      estiloLinha: (l) => (l.situacao === 'Entra no DFC' ? null : CORES.CINZA_CLARO),
+    },
+    meta
+  );
+}
+
+module.exports = { realizado, projetado, planoContas };
