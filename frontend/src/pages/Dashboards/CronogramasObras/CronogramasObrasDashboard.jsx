@@ -3,12 +3,7 @@ import { useSearchParams } from 'react-router-dom';
 import { Download, Loader2, LocateFixed, Maximize2, Minimize2, X } from 'lucide-react';
 import CabecalhoDashboard from '../CabecalhoDashboard';
 import { listEmpresas } from '../../../api/empresas.api';
-import {
-  exportarCronogramaExcel,
-  getVersaoCronograma,
-  listCronogramaCentros,
-  listVersoesCronograma,
-} from '../../../api/cronogramaCentros.api';
+import { exportarCronogramaExcel, listCronogramaCentros } from '../../../api/cronogramaCentros.api';
 import { nomeExibicaoEmpresa } from '../../../utils/empresa';
 import { useEmpresaTravada } from '../../../hooks/useEmpresaTravada';
 import GanttObras, { LegendaGantt, ZOOMS_GANTT } from '../../Operacoes/CronogramasObras/GanttObras';
@@ -24,7 +19,6 @@ import {
   naRecorte,
   nomeObra,
   numerosTopo,
-  obrasDaVersao,
   opcoesFiltroObras,
   opcoesLocalidade,
   plural,
@@ -45,10 +39,10 @@ import './cronogramas.css';
 // só leitura: quem vê o dashboard pode não ter acesso ao cadastro dos centros de custo. Clicar num
 // card de etapa filtra o Gantt (só as obras que estão nela hoje). A empresa fica na URL (?empresa_id=).
 // Ao lado da empresa (pedidos do usuário), também na URL: "Obras" (?obra= — os centros de custo
-// marcados), "Localidade" (?local= — Cidade - UF), os dois com marcação
-// múltipla (a chave repetida na URL), e "Mudanças" (?versao= — uma versão gravada: o Gantt mostra só as obras
-// alteradas nela, com como eram antes numa faixa fina em cima da barra), e o botão de exportar o
-// Excel do comunicado (o do cronograma em vigor, ou o da versão escolhida). No Mês a mês, o período
+// marcados), "Localidade" (?local= — Cidade - UF) e "Etapas" (?sem_etapa= — as desmarcadas; no lugar
+// do antigo filtro Mudanças, pedido do usuário: etapa desmarcada some do dashboard — barras, legenda
+// e card), os três com marcação múltipla (a chave repetida na URL), e o botão de exportar o Excel do
+// comunicado (o do cronograma em vigor, com todas as etapas). No Mês a mês, o período
 // De/Até (padrão: 3 meses antes a 20 à frente; fica no estado da tela — só volta ao padrão ao
 // recarregar): obras fora dele não aparecem e os cards somam só as do período.
 
@@ -96,7 +90,9 @@ export default function CronogramasObrasDashboard() {
   const textoLocal = params.getAll('local').join('|');
   const obrasMarcadas = useMemo(() => (textoObras ? textoObras.split('|') : []), [textoObras]);
   const localidades = useMemo(() => (textoLocal ? textoLocal.split('|') : []), [textoLocal]);
-  const versaoId = params.get('versao') || '';
+  // "Etapas" (?sem_etapa=): os ids das etapas desmarcadas — nasce com todas marcadas.
+  const textoSemEtapa = params.getAll('sem_etapa').join('|');
+  const etapasOcultas = useMemo(() => (textoSemEtapa ? textoSemEtapa.split('|') : []), [textoSemEtapa]);
 
   const empresaAtual = empresas.find((e) => String(e.id) === String(empresaId));
   const marcaEmpresa = empresaAtual ? { logo: empresaAtual.logo || null, nome: nomeExibicaoEmpresa(empresaAtual) } : null;
@@ -116,8 +112,6 @@ export default function CronogramasObrasDashboard() {
   const [selecionada, setSelecionada] = useState(null); // sienge_id da obra clicada no Gantt
   const [telaCheia, setTelaCheia] = useState(false);
   const ganttRef = useRef(null);
-  const [versoes, setVersoes] = useState([]);
-  const [versaoDetalhe, setVersaoDetalhe] = useState(null);
   const [exportando, setExportando] = useState(false);
   const [erroExportacao, setErroExportacao] = useState('');
 
@@ -174,29 +168,12 @@ export default function CronogramasObrasDashboard() {
     carregar();
   }, [carregar]);
 
-  // As versões gravadas (filtro "Mudanças") e, com uma escolhida, o retrato dela.
-  useEffect(() => {
-    setVersoes([]);
-    if (!empresaId) return;
-    listVersoesCronograma(empresaId)
-      .then(setVersoes)
-      .catch(() => setVersoes([]));
-  }, [empresaId]);
-  useEffect(() => {
-    setVersaoDetalhe(null);
-    if (!empresaId || !versaoId) return;
-    getVersaoCronograma(empresaId, versaoId)
-      .then(setVersaoDetalhe)
-      .catch(() => atualizarParams({ versao: null }));
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [empresaId, versaoId]);
-
   // Exportar Excel (como no Econômico Financeiro): a mesma planilha do comunicado.
   async function exportarExcel() {
     setErroExportacao('');
     setExportando(true);
     try {
-      const { blob, nome } = await exportarCronogramaExcel(empresaId, versaoId || null);
+      const { blob, nome } = await exportarCronogramaExcel(empresaId, null);
       const url = window.URL.createObjectURL(blob);
       const link = document.createElement('a');
       link.href = url;
@@ -223,44 +200,41 @@ export default function CronogramasObrasDashboard() {
   const hoje = isoHoje();
   // Só as obras com alguma data de etapa (pedido do usuário): as sem cronograma saem do dashboard
   // inteiro — cards, etiqueta e Gantt. Na aba de Operações elas continuam, com o convite pra preencher.
+  // Filtro Etapas: as marcadas (cards, legenda e Gantt) — obra que só tem etapas desmarcadas sai.
+  const etapasVisiveis = useMemo(() => etapas.filter((e) => !etapasOcultas.includes(String(e.id))), [etapas, etapasOcultas]);
   const obrasTodas = useMemo(
-    () => montarObras(centros, etapas, hoje, atraso).filter((o) => o.segmentos.length),
-    [centros, etapas, hoje, atraso]
+    () =>
+      montarObras(centros, etapas, hoje, atraso, etapasOcultas.length ? new Set(etapasVisiveis.map((e) => e.id)) : null).filter(
+        (o) => o.segmentos.length
+      ),
+    [centros, etapas, hoje, atraso, etapasOcultas, etapasVisiveis]
   );
   const obras = useMemo(() => filtrarObras(obrasTodas, obrasMarcadas, localidades), [obrasTodas, obrasMarcadas, localidades]);
   // Opções dos filtros "Obras" (situações + centros) e "Localidade": só as obras do dashboard (com datas).
   const centrosComDatas = useMemo(() => obrasTodas.map((o) => o.centro), [obrasTodas]);
   const opcoesObras = useMemo(() => opcoesFiltroObras(centrosComDatas, localidades), [centrosComDatas, localidades]);
   const opcoesLocal = useMemo(() => opcoesLocalidade(centrosComDatas), [centrosComDatas]);
-  // "Mudanças da versão": o Gantt fica com as obras alteradas nela (como ficaram + como eram antes).
-  const obrasVersao = useMemo(
-    () => {
-      if (!versaoDetalhe) return null;
-      // A versão guarda as obras sem cidade/UF: pega do cadastro atual, pra agrupar por cidade igual.
-      const cadastro = new Map(centros.map((c) => [c.sienge_id, c]));
-      const comCidade = obrasDaVersao(versaoDetalhe, hoje).map((o) => {
-        const c = cadastro.get(o.centro.sienge_id);
-        return c ? { ...o, centro: { ...o.centro, cidade: c.cidade, uf: c.uf } } : o;
-      });
-      return filtrarObras(comCidade, obrasMarcadas, localidades);
-    },
-    [versaoDetalhe, hoje, obrasMarcadas, localidades, centros]
-  );
+  const opcoesEtapas = useMemo(() => etapas.map((e) => ({ value: String(e.id), label: e.descricao || 'Sem nome' })), [etapas]);
+  const mudarEtapas = (marcadas) =>
+    atualizarParams({ sem_etapa: etapas.map((e) => String(e.id)).filter((id) => !marcadas.includes(id)) });
+  // Card de etapa clicado e a etapa desmarcada depois: o recorte sai junto.
+  useEffect(() => {
+    if (destaque !== null && etapasOcultas.includes(String(destaque))) setDestaque(null);
+  }, [destaque, etapasOcultas]);
   // Mês a mês: só as obras do período De/Até (cards e Gantt); Visão geral: todas.
   const periodoAtivo = zoom === 'mensal' ? periodo : null;
   const obrasPeriodo = useMemo(() => filtrarPeriodo(obras, periodoAtivo), [obras, periodoAtivo]);
-  const obrasVersaoPeriodo = useMemo(() => (obrasVersao ? filtrarPeriodo(obrasVersao, periodoAtivo) : null), [obrasVersao, periodoAtivo]);
-  const baseGantt = obrasVersaoPeriodo || obrasPeriodo;
-  const r = useMemo(() => resumoCarteira(obrasPeriodo, etapas, periodoAtivo), [obrasPeriodo, etapas, periodoAtivo]);
-  const recorte = rotuloRecorte(destaque, etapas, periodoAtivo);
+  const baseGantt = obrasPeriodo;
+  const r = useMemo(() => resumoCarteira(obrasPeriodo, etapasVisiveis, periodoAtivo), [obrasPeriodo, etapasVisiveis, periodoAtivo]);
+  const recorte = rotuloRecorte(destaque, etapasVisiveis, periodoAtivo);
 
   // Cards dinâmicos (pedido do usuário): card de etapa clicado → o Gantt fica só com as obras que
   // estiveram nela em algum momento do período (naRecorte) e VGV e unidades somam só elas; obra clicada no Gantt → todos os cards mostram só ela (o
   // filtro da etapa continua no Gantt).
   const obraSelecionada = baseGantt.find((o) => o.centro.sienge_id === selecionada) || null;
   const rCards = useMemo(
-    () => (obraSelecionada ? resumoCarteira([obraSelecionada], etapas, periodoAtivo) : r),
-    [obraSelecionada, etapas, periodoAtivo, r]
+    () => (obraSelecionada ? resumoCarteira([obraSelecionada], etapasVisiveis, periodoAtivo) : r),
+    [obraSelecionada, etapasVisiveis, periodoAtivo, r]
   );
   const topo = obraSelecionada
     ? numerosTopo([obraSelecionada], 'da obra')
@@ -268,7 +242,7 @@ export default function CronogramasObrasDashboard() {
       ? numerosTopo(obrasPeriodo.filter((o) => naRecorte(o, destaque, periodoAtivo)), recorte.topo)
       : numerosTopo(obrasPeriodo);
   const obrasGantt = recorte ? baseGantt.filter((o) => naRecorte(o, destaque, periodoAtivo)) : baseGantt;
-  const rGantt = recorte || obrasVersao ? resumoCarteira(obrasGantt, etapas, periodoAtivo) : r;
+  const rGantt = recorte ? resumoCarteira(obrasGantt, etapasVisiveis, periodoAtivo) : r;
   const destacar = (id) => {
     setSelecionada(null);
     setDestaque(id);
@@ -292,7 +266,7 @@ export default function CronogramasObrasDashboard() {
               id="f-empresa"
               value={empresaId}
               onChange={(e) =>
-                atualizarParams({ empresa_id: e.target.value, versao: null, local: null, obra: null })
+                atualizarParams({ empresa_id: e.target.value, local: null, obra: null, sem_etapa: null })
               }
               disabled={carregandoEmpresas || empresaTravada}
             >
@@ -330,23 +304,21 @@ export default function CronogramasObrasDashboard() {
             disabled={!empresaId}
             selecionarTodos
           />
-          <div className="ctl">
-            <label htmlFor="f-versao">Mudanças</label>
-            <select
-              id="f-versao"
-              value={versaoId}
-              onChange={(e) => atualizarParams({ versao: e.target.value })}
-              disabled={!empresaId || !versoes.length}
-            >
-              <option value="">{versoes.length ? 'Cronograma atual' : 'Nenhuma versão gravada'}</option>
-              {versoes.map((v) => (
-                <option key={v.id} value={v.id}>
-                  Versão {v.numero} · {new Date(v.criado_em).toLocaleDateString('pt-BR')} ·{' '}
-                  {v.alteracoes.length === 1 ? '1 obra alterada' : `${v.alteracoes.length} obras alteradas`}
-                </option>
-              ))}
-            </select>
-          </div>
+          <FiltroCentros
+            id="f-etapas"
+            rotulo="Etapas"
+            todos="Todas as etapas"
+            nenhum="Nenhuma etapa"
+            varios="etapas"
+            buscar="Buscar etapa"
+            vazio="Nenhuma etapa encontrada."
+            opcoes={opcoesEtapas}
+            valor={opcoesEtapas.map((o) => o.value).filter((id) => !etapasOcultas.includes(id))}
+            onChange={mudarEtapas}
+            disabled={!empresaId}
+            selecionarTodos
+            todasMarcadas
+          />
           {zoom === 'mensal' && (
             <>
               <div className="ctl">
@@ -366,7 +338,7 @@ export default function CronogramasObrasDashboard() {
               className="btn ghost icone"
               onClick={exportarExcel}
               disabled={!empresaId || exportando || estado !== 'ok'}
-              title={versaoId ? 'Exportar o Excel desta versão' : 'Exportar Excel do cronograma'}
+              title="Exportar Excel do cronograma"
               aria-label="Exportar Excel"
             >
               {exportando ? <Loader2 size={16} className="animate-spin" /> : <Download size={16} />}
@@ -403,17 +375,10 @@ export default function CronogramasObrasDashboard() {
               <div className="ph">
                 <h2 id="h-gantt">Linha do tempo das obras</h2>
                 <p>
-                  {versaoDetalhe
-                    ? plural(rGantt.comCronograma, `obra alterada na versão ${versaoDetalhe.numero}`, `obras alteradas na versão ${versaoDetalhe.numero}`)
-                    : plural(rGantt.comCronograma, 'obra no cronograma', 'obras no cronograma')}
+                  {plural(rGantt.comCronograma, 'obra no cronograma', 'obras no cronograma')}
                   {rGantt.aIniciar > 0 && ` · ${plural(rGantt.aIniciar, 'a iniciar', 'a iniciar')}`}
                   {rGantt.concluidas > 0 && ` · ${plural(rGantt.concluidas, 'concluída', 'concluídas')}`}
                   {rGantt.semCronograma > 0 && ` · ${plural(rGantt.semCronograma, 'sem datas', 'sem datas')}`}
-                  {versaoDetalhe && (
-                    <button type="button" className="destaque-chip" onClick={() => atualizarParams({ versao: null })} title="Voltar para o cronograma atual">
-                      Mudanças da versão {versaoDetalhe.numero} <X size={11} />
-                    </button>
-                  )}
                   {recorte && (
                     <button type="button" className="destaque-chip" onClick={() => destacar(null)} title="Voltar para todas as obras">
                       {recorte.aviso} <X size={11} />
@@ -427,7 +392,7 @@ export default function CronogramasObrasDashboard() {
                 </p>
               </div>
               <div className="gantt-barra">
-                <LegendaGantt etapas={etapas} atraso={atraso} comparando={Boolean(obrasVersao)} />
+                <LegendaGantt etapas={etapasVisiveis} atraso={atraso} />
                 {/* Hoje, zoom e tela cheia — como na barra do Gantt do Plano de Voo (pedido do usuário) */}
                 <div className="gantt-acoes">
                   <button type="button" className="btn ghost icone com-texto" onClick={irParaHoje} title="Levar a régua até hoje">
@@ -467,7 +432,7 @@ export default function CronogramasObrasDashboard() {
                     (sem padding) ou, na tela cheia, o próprio painel (padding 24px) */}
                 <GanttObras
                   ref={ganttRef}
-                  etapas={etapas}
+                  etapas={etapasVisiveis}
                   obras={obrasGantt}
                   agruparPorCidade
                   zoom={zoom}

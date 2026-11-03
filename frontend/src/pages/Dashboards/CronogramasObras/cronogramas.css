@@ -75,13 +75,14 @@
   z-index: 35;
 }
 /* Com o filtro Localidade, a barra ficou com cinco listas: mais estreitas que as 280px do painel,
-   pra Empresa, Obras, Localidade, Mudanças e o De/Até caberem numa linha só. Obras e Localidade
-   são listas de marcação múltipla (FiltroCentros). */
+   pra Empresa, Obras, Localidade, Etapas e o De/Até caberem numa linha só. Obras, Localidade e
+   Etapas são listas de marcação múltipla (FiltroCentros). */
 .painel-cfo .ctl select#f-empresa {
   min-width: min(190px, 80vw);
 }
-.painel-cfo .ctl select#f-versao {
-  min-width: min(240px, 80vw);
+.painel-cfo .ctl .multi-btn#f-etapas {
+  min-width: min(190px, 80vw);
+  max-width: 220px;
 }
 .painel-cfo .ctl .multi-btn#f-obras {
   min-width: min(240px, 80vw);

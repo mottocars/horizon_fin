@@ -65,6 +65,8 @@ function CampoMes({ id, rotulo, valor, min, max, onChange, dica }) {
 // Os textos mudam pelas props (Cronogramas de Obras usa a mesma lista nos filtros Obras e Localidade);
 // opção com `grupo` ganha um título antes da primeira do grupo (as opções vêm ordenadas por grupo).
 // `selecionarTodos`: botão "Selecionar todos" ao lado do "Limpar" (marca as opções que aparecem na busca).
+// `todasMarcadas`: lista que nasce com tudo marcado (filtro Etapas dos Cronogramas de Obras) — com
+// todas marcadas o botão mostra `todos`; com nenhuma, `nenhum`.
 export function FiltroCentros({
   opcoes,
   valor,
@@ -77,6 +79,8 @@ export function FiltroCentros({
   buscar = 'Buscar centro',
   vazio = 'Nenhum centro encontrado.',
   selecionarTodos = false,
+  todasMarcadas = false,
+  nenhum = 'Nenhum marcado',
 }) {
   const [aberto, setAberto] = useState(false);
   const [busca, setBusca] = useState('');
@@ -94,7 +98,8 @@ export function FiltroCentros({
   }, [aberto]);
   const q = busca.trim().toLowerCase();
   const lista = opcoes.filter((o) => !q || o.label.toLowerCase().includes(q) || (o.grupo || '').toLowerCase().includes(q));
-  const resumo = !valor.length ? todos : valor.length === 1 ? opcoes.find((o) => o.value === valor[0])?.label || `1 de ${varios}` : `${valor.length} ${varios}`;
+  const completo = todasMarcadas && opcoes.length > 0 && opcoes.every((o) => valor.includes(o.value));
+  const resumo = completo ? todos : !valor.length ? (todasMarcadas ? nenhum : todos) : valor.length === 1 ? opcoes.find((o) => o.value === valor[0])?.label || `1 de ${varios}` : `${valor.length} ${varios}`;
   const alternar = (id) => onChange(valor.includes(id) ? valor.filter((v) => v !== id) : [...valor, id]);
   return (
     <div className="ctl multi" ref={ref}>
@@ -121,7 +126,7 @@ export function FiltroCentros({
             {!lista.length && <div className="empty">{vazio}</div>}
           </div>
           <div className="multi-rodape">
-            <span>{valor.length ? `${valor.length} marcado${valor.length > 1 ? 's' : ''}` : 'Todos'}</span>
+            <span>{valor.length ? `${valor.length} marcado${valor.length > 1 ? 's' : ''}` : todasMarcadas ? 'Nenhum' : 'Todos'}</span>
             <span className="multi-rodape-acoes">
               {selecionarTodos && (
                 <button

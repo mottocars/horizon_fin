@@ -170,11 +170,15 @@ export function filtrarPeriodo(obras, periodo) {
 // cronograma primeiro, pela data de início da primeira etapa; sem cronograma no fim. `atraso`: a
 // Regra de Atraso da Construção da empresa (null = sem regra). `atrasadaHoje`: a construção já passou
 // do prazo hoje (o atraso já começou — não conta o que o cronograma só prevê atrasar mais adiante).
-export function montarObras(centros, etapas, hoje, atraso = null) {
+// `visiveis` (Set de ids de etapa; null = todas): filtro Etapas do dashboard — os segmentos são
+// montados com todas as etapas (o fim de cada uma continua sendo a véspera da seguinte) e só depois
+// saem os das etapas desmarcadas; a situação de hoje já vem sem elas.
+export function montarObras(centros, etapas, hoje, atraso = null, visiveis = null) {
   return centros
     .filter((c) => c.natureza === 'OBRA')
     .map((centro) => {
-      const segmentos = montarSegmentos(centro, etapas, atraso);
+      const todos = montarSegmentos(centro, etapas, atraso);
+      const segmentos = visiveis ? todos.filter((s) => visiveis.has(s.etapa.id)) : todos;
       const prazo = segmentos.find((s) => s.prazo)?.prazo;
       return { centro, segmentos, situacao: situacaoHoje(segmentos, hoje), atrasadaHoje: Boolean(prazo?.meses && prazo.desde <= hoje) };
     })
