@@ -56,7 +56,7 @@ function Texto({ children }) {
 }
 
 // `abas` / `icones` / `contexto`: outro painel (o Aging List) usa a mesma janela com os textos dele.
-export default function SumarioModal({ aberta, aba, onAba, onFechar, abas = ABAS_SUMARIO, icones = ICONES, contexto = 'Econômico/Financeiro - I.H · Fluxo de Caixa' }) {
+export default function SumarioModal({ aberta, aba, onAba, onFechar, abas = ABAS_SUMARIO, icones = ICONES, contexto = 'Econômico/Financeiro · Fluxo de Caixa' }) {
   const painel = useRef(null);
   const atual = abas.find((a) => a.id === aba) || abas[0];
 

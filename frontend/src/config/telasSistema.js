@@ -11,9 +11,9 @@ export const TELAS_SISTEMA = [
   {
     grupo: 'Dashboards',
     telas: [
-      { codigo: '/dashboards/comercial', label: 'Comercial - I.H' },
-      { codigo: '/dashboards/cronogramas-obras', label: 'Cronograma Obras - I.H' },
-      { codigo: '/dashboards/economico-financeiro', label: 'Econômico/Financeiro - I.H' },
+      { codigo: '/dashboards/comercial', label: 'Comercial' },
+      { codigo: '/dashboards/cronogramas-obras', label: 'Cronograma Obras' },
+      { codigo: '/dashboards/economico-financeiro', label: 'Econômico/Financeiro' },
     ],
   },
   {

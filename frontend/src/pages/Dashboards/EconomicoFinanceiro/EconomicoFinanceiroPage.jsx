@@ -23,7 +23,7 @@ import HomeDashboard from './home/HomeDashboard';
 // dre/DrePainel.jsx). A empresa fica na URL
 // (?empresa_id=), como nas outras telas. As demais telas ainda serão construídas.
 const DASHBOARD = 'economico-financeiro'; // chave no servidor (favoritas, filtros salvos) — não muda com o nome
-const NOME = 'Econômico/Financeiro - I.H'; // nome no menu e nos cabeçalhos (pedido do usuário)
+const NOME = 'Econômico/Financeiro'; // nome no menu e nos cabeçalhos (pedido do usuário)
 const TELAS = [
   { id: 'home', label: 'Home', icon: House },
   { id: 'dre', label: 'Demonstração do Resultado', icon: BarChart3 },

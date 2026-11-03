@@ -1,15 +1,15 @@
 import { Handshake } from 'lucide-react';
 import CabecalhoDashboard from '../CabecalhoDashboard';
 
-// Dashboards > Comercial - I.H (pedido do usuário) — criado vazio, no layout dos outros dashboards
+// Dashboards > Comercial (pedido do usuário) — criado vazio, no layout dos outros dashboards
 // (tela cheia, só o menu lateral). As telas entram aqui como no Econômico/Financeiro: lista TELAS +
 // ControlesDashboard (menu flutuante) quando houver mais de uma.
-const NOME = 'Comercial - I.H';
+const NOME = 'Comercial';
 
 export default function ComercialDashboard() {
   return (
     <div className="flex min-h-full w-full flex-col gap-3 p-5">
-      <CabecalhoDashboard dashboard={NOME} titulo="Comercial" />
+      <CabecalhoDashboard dashboard={NOME} titulo="Visão geral" />
       <div className="flex flex-1 items-center justify-center">
         <div className="flex max-w-md flex-col items-center gap-3 rounded-card bg-white px-8 py-10 text-center shadow-card">
           <span className="flex h-12 w-12 items-center justify-center rounded-full bg-primary-50 text-primary-600">

@@ -253,7 +253,7 @@ export default function CronogramasObrasDashboard() {
     <div className="flex min-h-full w-full flex-col gap-3 p-5">
       <div className="painel-cfo">
         <CabecalhoDashboard
-          dashboard="Cronograma Obras - I.H"
+          dashboard="Cronograma Obras"
           titulo="Carteira de obras"
           etiquetas={empresaId && estado === 'ok' ? [{ rotulo: 'Obras', valor: r.totalObras }, { rotulo: 'Referência', valor: mesAno(hoje) }] : []}
           marca={marcaEmpresa}

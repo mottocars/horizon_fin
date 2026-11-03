@@ -278,7 +278,7 @@ export default function DrePainel({ dashboard, tituloTela, empresaId, onEmpresa,
             onFechar={fecharSumario}
             abas={ABAS_SUMARIO}
             icones={ICONES_SUMARIO}
-            contexto="Econômico/Financeiro - I.H · Demonstração do Resultado"
+            contexto="Econômico/Financeiro · Demonstração do Resultado"
           />
         </div>
       </SumarioCtx.Provider>
