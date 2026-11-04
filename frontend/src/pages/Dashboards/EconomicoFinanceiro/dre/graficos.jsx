@@ -1,4 +1,4 @@
-import { useMemo, useState } from 'react';
+import { useLayoutEffect, useMemo, useRef, useState } from 'react';
 import { brl, eixo, lbl, niceTicks, pct } from '../fluxo/modelo';
 import { COR, useDica, useLargura } from '../fluxo/ganchos';
 
@@ -232,9 +232,25 @@ function layout(F, W) {
 
 // ─── Ponte do resultado (cascata) ────────────────────────────────────────────────────────────────
 // Do resultado realizado ao do cenário: cada alavanca sobe (verde) ou desce (vermelho) a partir de onde a
-// anterior parou.
+// anterior parou. Ocupa a altura que sobra na coluna (até o pé do simulador ao lado): o quadro .ponte
+// cresce no flex e o SVG, absoluto, é redesenhado na altura medida.
+function useAltura(minimo) {
+  const ref = useRef(null);
+  const [altura, setAltura] = useState(0);
+  useLayoutEffect(() => {
+    const el = ref.current;
+    if (!el) return undefined;
+    setAltura(el.clientHeight);
+    const ro = new ResizeObserver(() => setAltura(el.clientHeight));
+    ro.observe(el);
+    return () => ro.disconnect();
+  }, []);
+  return [ref, Math.max(minimo, altura)];
+}
+
 export function Ponte({ base, contrib, cen, rotuloBase, rotuloCen }) {
   const [ref, W] = useLargura(360);
+  const [refAltura, alturaQuadro] = useAltura(250);
   const { mostrar, esconder } = useDica();
   const barras = [{ rotulo: rotuloBase, total: true, de: 0, ate: base }];
   let acc = base;
@@ -243,7 +259,7 @@ export function Ponte({ base, contrib, cen, rotuloBase, rotuloCen }) {
     acc += c.valor;
   });
   barras.push({ rotulo: rotuloCen, total: true, de: 0, ate: cen });
-  const H = W < 560 ? 250 : 290;
+  const H = alturaQuadro;
   const m = { l: 58, r: 10, t: 22, b: 46 };
   const vals = barras.flatMap((b) => [b.de, b.ate]);
   const ymin = Math.min(0, ...vals);
@@ -257,8 +273,12 @@ export function Ponte({ base, contrib, cen, rotuloBase, rotuloCen }) {
     const meio = Math.ceil(p.length / 2);
     return [p.slice(0, meio).join(' '), p.slice(meio).join(' ')];
   };
+  const quadro = (el) => {
+    ref.current = el;
+    refAltura.current = el;
+  };
   return (
-    <div className="chart" ref={ref}>
+    <div className="chart ponte" ref={quadro}>
       <svg viewBox={`0 0 ${W} ${H}`} role="img" aria-label="Ponte do resultado: realizado até o cenário">
         {niceTicks(ymin, ymax, 4).map((v, i) => (
           <g key={`${v}-${i}`}>

@@ -46,6 +46,16 @@
 .painel-cfo.dre .alerta b {
   color: var(--ink);
 }
+/* Ponte do simulador: ocupa o resto da coluna, até o pé do simulador (o SVG não empurra a altura) */
+.painel-cfo.dre .chart.ponte {
+  flex: 1 1 0;
+  min-height: 280px;
+}
+.painel-cfo.dre .chart.ponte svg {
+  position: absolute;
+  inset: 0;
+  height: 100%;
+}
 .painel-cfo.dre .sim .dica-alavanca {
   font-size: 11.5px;
   line-height: 1.3;
