@@ -109,7 +109,7 @@ function segmentoU(l) {
 }
 
 function parseRetornoCobrancaCaixa(linhas) {
-  const arquivo = { beneficiarioCodigo: null, nsa: null, geradoEm: null };
+  const arquivo = { beneficiarioCodigo: null, beneficiarioDv: null, nsa: null, geradoEm: null };
   const titulos = [];
   let pendenteT = null;
 
@@ -120,6 +120,7 @@ function parseRetornoCobrancaCaixa(linhas) {
       const data = converterData(campo(linha, 144, 151));
       const hora = campo(linha, 152, 157);
       arquivo.beneficiarioCodigo = campo(linha, 59, 64);
+      arquivo.beneficiarioDv = campo(linha, 65, 65) || null; // DV do código (124207-2)
       arquivo.nsa = campo(linha, 158, 163);
       arquivo.geradoEm = data && /^\d{6}$/.test(hora) ? `${data}T${hora.slice(0, 2)}:${hora.slice(2, 4)}:${hora.slice(4, 6)}` : data;
     } else if (tipoRegistro === '3') {

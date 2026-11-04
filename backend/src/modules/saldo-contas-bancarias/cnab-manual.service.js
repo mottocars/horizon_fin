@@ -121,12 +121,17 @@ function casarExtratos(contas, extratos, data) {
   return { encontrados, avisos };
 }
 
-// Títulos dos retornos de cobrança agrupados pela conta do beneficiário.
+// Títulos dos retornos de cobrança agrupados pela conta do beneficiário. O código do
+// beneficiário tem 6 dígitos no arquivo e o DV vem à parte (cabeçalho, posição 65): o cadastro
+// pode ter o código com ou sem o DV (124207 ou 1242072).
 // Devolve { porConta: Map(conta -> [{arquivo, titulos}]), avisos }.
 function casarCobrancas(contas, cobrancas) {
-  const porBeneficiario = new Map(
-    contas.filter((c) => semZeros(c.codigo_beneficiario)).map((c) => [semZeros(c.codigo_beneficiario), c])
-  );
+  const comBeneficiario = contas.filter((c) => semZeros(c.codigo_beneficiario));
+  const contaDoBeneficiario = (codigo, dv) =>
+    comBeneficiario.find((c) => {
+      const cadastro = semZeros(c.codigo_beneficiario);
+      return cadastro === codigo || (dv && cadastro === `${codigo}${dv}`);
+    });
   const porConta = new Map();
   const avisos = [];
   for (const { nome, arquivo, titulos } of cobrancas) {
@@ -134,9 +139,9 @@ function casarCobrancas(contas, cobrancas) {
     const grupos = new Map(); // conta -> títulos deste arquivo
     for (const t of titulos) {
       const beneficiario = semZeros(t.beneficiarioCodigo || arquivo.beneficiarioCodigo);
-      const conta = porBeneficiario.get(beneficiario);
+      const conta = contaDoBeneficiario(beneficiario, arquivo.beneficiarioDv);
       if (!conta) {
-        semConta.add(beneficiario || '(vazio)');
+        semConta.add(beneficiario ? `${beneficiario}${arquivo.beneficiarioDv ? `-${arquivo.beneficiarioDv}` : ''}` : '(vazio)');
         continue;
       }
       if (!grupos.has(conta)) grupos.set(conta, []);

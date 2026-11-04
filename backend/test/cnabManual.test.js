@@ -24,9 +24,9 @@ function extrato({ conta, dv, banco = '104', dataFinal, centavos, situacao = 'C'
 }
 
 // Retorno de cobrança SIGCB: beneficiário no header (59-64) e em cada segmento T (24-29).
-function cobranca({ beneficiario, banco = '104' }) {
+function cobranca({ beneficiario, dv = '4', banco = '104' }) {
   return [
-    linha([[1, `${banco}00000`], [59, beneficiario], [144, '03112026']]),
+    linha([[1, `${banco}00000`], [59, `${beneficiario}${dv}`], [144, '03112026']]),
     linha([[1, `${banco}00011T0100030`]]),
     linha([[1, `${banco}00013${num(1, 5)}T 06`], [24, beneficiario], [40, '14000000000012345'], [74, '05112026'], [82, num(150000, 15)]]),
     linha([[1, `${banco}00013${num(2, 5)}U 06`], [78, num(150000, 15)], [93, num(150000, 15)], [138, '04112026'], [146, '04112026']]),
@@ -81,9 +81,12 @@ test('cobrança: casa pelo beneficiário (sem zeros à esquerda) e avisa benefic
   const casou = cnab.casarCobrancas([{ ...contaOn, codigo_beneficiario: '0124718' }], cobrancas);
   assert.strictEqual(casou.porConta.size, 1);
   assert.strictEqual([...casou.porConta.values()][0][0].titulos.length, 1);
+  // cadastro com o DV junto (124718-4 digitado como 1247184) também casa; DV errado não
+  assert.strictEqual(cnab.casarCobrancas([{ ...contaOn, codigo_beneficiario: '1247184' }], cobrancas).porConta.size, 1);
+  assert.strictEqual(cnab.casarCobrancas([{ ...contaOn, codigo_beneficiario: '1247185' }], cobrancas).porConta.size, 0);
   const semConta = cnab.casarCobrancas([{ ...contaOn, codigo_beneficiario: '999999' }], cobrancas);
   assert.strictEqual(semConta.porConta.size, 0);
-  assert.match(semConta.avisos[0], /beneficiário 124718 não está em nenhuma conta/);
+  assert.match(semConta.avisos[0], /beneficiário 124718-4 não está em nenhuma conta/);
   assert.strictEqual(cnab.chaveCobranca('0124718'), 'CNAB:124718');
 });
 

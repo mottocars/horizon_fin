@@ -41,6 +41,6 @@ export async function lerArquivoCnab(file) {
   const titulos = linhas.filter((l) => l[7] === '3' && l[13] === 'T').length;
   return {
     tipo,
-    descricao: `Cobrança · beneficiário ${header.slice(58, 64)} · ${titulos} título(s)${geradoEm ? ` · gerado em ${geradoEm}` : ''}`,
+    descricao: `Cobrança · beneficiário ${header.slice(58, 64)}-${header[64]} · ${titulos} título(s)${geradoEm ? ` · gerado em ${geradoEm}` : ''}`,
   };
 }
