@@ -11,13 +11,6 @@ import { formatarSaldo, interpretarSaldo, ROTULO_CONVENIO } from '../Operacoes/S
 // Tipo de convênio = de onde vem o saldo automático na abertura do período (Operações > Saldo
 // Contas Bancárias). Vazio = sem convênio (saldo informado à mão ou herdado, pela classificação).
 const OPCOES_CONVENIO = Object.entries(ROTULO_CONVENIO).map(([value, label]) => ({ value, label }));
-const AJUDA_CONVENIO = {
-  VANPIX:
-    'O saldo é buscado na VanPix ao abrir o período, pelos apelidos abaixo (cadastrados nas conexões de Integrações › Contas Bancárias).',
-  ITAU: 'O saldo em tempo real vem da conexão API Itaú com a mesma agência, conta e dígito desta conta.',
-  CNAB_MANUAL:
-    'Ao abrir o período, você anexa os arquivos de retorno. O extrato encontra a conta pelo banco, conta e dígito; a cobrança, pelo código do beneficiário.',
-};
 
 // O Sienge guarda o código do banco em banco_numero ("104", "001", "341"...).
 // Só vira sugestão se esse código existir na lista de bancos brasileiros — códigos
@@ -317,9 +310,6 @@ export default function ContaBancariaItemDetalhe() {
                 placeholder="Sem convênio (saldo informado à mão)"
                 corClasses={corSelect(form.tipo_convenio)}
               />
-              {AJUDA_CONVENIO[form.tipo_convenio] && (
-                <p className="mt-1 text-xs text-gray-400">{AJUDA_CONVENIO[form.tipo_convenio]}</p>
-              )}
             </Field>
 
             {/* Códigos cedente = apelidos dos convênios na VanPix. Na abertura do período, a VanPix
