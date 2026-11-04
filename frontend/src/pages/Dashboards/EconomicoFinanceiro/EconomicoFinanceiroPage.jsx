@@ -9,6 +9,7 @@ import { nomeExibicaoEmpresa } from '../../../utils/empresa';
 import { useEmpresaTravada } from '../../../hooks/useEmpresaTravada';
 import FluxoCaixaPainel from './fluxo/FluxoCaixaPainel';
 import AgingPainel from './aging/AgingPainel';
+import DetalhamentoPainel from './detalhamento/DetalhamentoPainel';
 import DrePainel from './dre/DrePainel';
 import CapaDashboard from '../capa/CapaDashboard';
 import executivo from '../../../assets/dashboards/executivo-financeiro.webp';
@@ -20,8 +21,8 @@ import executivo from '../../../assets/dashboards/executivo-financeiro.webp';
 // sem favorita, a primeira da lista (pedido do usuário) — a Home, que abre com o menu de telas aberto.
 // Enquanto a favorita não chega, nada é desenhado (para o menu não abrir na Home e a tela trocar em seguida).
 // Fluxo de Caixa: painel no layout do painel do CFO (fluxo/FluxoCaixaPainel.jsx), com os filtros na
-// barra de controles dele. Aging List e Demonstração do Resultado: no mesmo layout (aging/AgingPainel.jsx,
-// dre/DrePainel.jsx). A empresa fica na URL
+// barra de controles dele. Aging List, Detalhamento Financeiro (o realizado) e Demonstração do Resultado: no
+// mesmo layout (aging/AgingPainel.jsx, detalhamento/DetalhamentoPainel.jsx, dre/DrePainel.jsx). A empresa fica na URL
 // (?empresa_id=), como nas outras telas. As demais telas ainda serão construídas.
 const DASHBOARD = 'economico-financeiro'; // chave no servidor (favoritas, filtros salvos) — não muda com o nome
 const NOME = 'Econômico/Financeiro'; // nome no menu e nos cabeçalhos (pedido do usuário)
@@ -120,6 +121,17 @@ export default function EconomicoFinanceiroPage() {
         />
       ) : telaAtiva === 'aging' ? (
         <AgingPainel
+          dashboard={NOME}
+          tituloTela={tela.label}
+          empresaId={empresaId}
+          onEmpresa={(v) => atualizarParams({ empresa_id: v })}
+          opcoesEmpresas={opcoesEmpresas}
+          empresaTravada={empresaTravada}
+          carregandoEmpresas={carregandoEmpresas}
+          marcaEmpresa={marcaEmpresa}
+        />
+      ) : telaAtiva === 'detalhamento' ? (
+        <DetalhamentoPainel
           dashboard={NOME}
           tituloTela={tela.label}
           empresaId={empresaId}

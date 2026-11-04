@@ -7,6 +7,7 @@ const authMiddleware = require('../../middlewares/auth.middleware');
 const fluxoCaixaPainel = require('./fluxoCaixaPainel.service');
 const agingPainel = require('./agingPainel.service');
 const drePainel = require('./drePainel.service');
+const detalhamentoPainel = require('./detalhamentoPainel.service');
 
 // Dashboards: tela favorita (estrela) de cada usuário em cada dashboard — a que abre ao entrar pelo
 // menu. Cada usuário só lê e grava a própria. Montado em server.js com exigirTela dos dashboards.
@@ -18,6 +19,9 @@ const drePainel = require('./drePainel.service');
 //       anterior), máscaras e rastreio da POC, pro painel da Demonstração do Resultado (drePainel.service.js).
 //   GET /economico-financeiro/aging?empresa_id -> parcelas em aberto a receber e a pagar (com rateio) e o
 //       saldo bancário de hoje, para o Aging List (agingPainel.service.js).
+//   GET /economico-financeiro/detalhamento?empresa_id&de&ate -> o realizado do período (extrato das contas com
+//       "Projeta DFC", com rateio e título) e o em aberto (parcelas do Aging List que vencem no período), para
+//       o Detalhamento Financeiro (detalhamentoPainel.service.js).
 //   Filtros salvos do usuário numa tela, por empresa (botão "Gravar filtro" / lista "Filtros salvos"):
 //   GET    /:dashboard/:tela/filtros?empresa_id            -> [{ id, nome, filtros }]
 //   POST   /:dashboard/:tela/filtros { empresa_id, nome, filtros } -> { id, nome, filtros } (mesmo nome substitui)
@@ -94,6 +98,29 @@ router.get('/economico-financeiro/aging', async (req, res, next) => {
     res.set({ 'Content-Type': 'application/json; charset=utf-8', 'Content-Encoding': 'gzip', Vary: 'Accept-Encoding' }).send(corpo);
   } catch (err) {
     if (err.issues) return res.status(400).json({ message: 'Escolha a empresa.' });
+    next(err);
+  }
+});
+
+const detalhamentoSchema = z
+  .object({
+    empresa_id: z.coerce.number().int().positive(),
+    de: z.string().regex(/^\d{4}-\d{2}-\d{2}$/),
+    ate: z.string().regex(/^\d{4}-\d{2}-\d{2}$/),
+  })
+  .refine((f) => f.de <= f.ate, { message: 'A data início não pode ser depois da data fim.' })
+  .refine((f) => Number(f.ate.slice(0, 4)) - Number(f.de.slice(0, 4)) <= 10, { message: 'O período pode ter até 10 anos.' });
+
+router.get('/economico-financeiro/detalhamento', async (req, res, next) => {
+  try {
+    const f = detalhamentoSchema.parse(req.query);
+    const dados = await detalhamentoPainel.painel(f.empresa_id, { de: f.de, ate: f.ate });
+    // Cada lançamento do extrato vai junto (dezenas de milhares por ano): gzip aqui, como no Aging.
+    if (!/\bgzip\b/.test(req.headers['accept-encoding'] || '')) return res.json(dados);
+    const corpo = await promisify(zlib.gzip)(JSON.stringify(dados));
+    res.set({ 'Content-Type': 'application/json; charset=utf-8', 'Content-Encoding': 'gzip', Vary: 'Accept-Encoding' }).send(corpo);
+  } catch (err) {
+    if (err.issues) return res.status(400).json({ message: err.issues[0].message || 'Filtros inválidos.' });
     next(err);
   }
 });

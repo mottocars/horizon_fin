@@ -15,6 +15,13 @@ export function getAgingPainel(params) {
   return http.get('/dashboards/economico-financeiro/aging', { params }).then((res) => res.data);
 }
 
+// Detalhamento Financeiro (Econômico Financeiro): tudo o que foi realizado no período e no mesmo período do ano
+// anterior — o extrato das contas com "Projeta DFC" com rateio, títulos e baixas, e o saldo das contas.
+// params: { empresa_id, de, ate ('AAAA-MM-DD') }.
+export function getDetalhamentoPainel(params) {
+  return http.get('/dashboards/economico-financeiro/detalhamento', { params }).then((res) => res.data);
+}
+
 // Filtros salvos do usuário numa tela de dashboard, por empresa: [{ id, nome, filtros }].
 export function listarFiltrosSalvos(dashboard, tela, empresaId) {
   return http.get(`/dashboards/${dashboard}/${tela}/filtros`, { params: { empresa_id: empresaId } }).then((res) => res.data);

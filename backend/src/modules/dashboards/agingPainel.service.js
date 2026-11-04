@@ -228,4 +228,6 @@ async function painel(empresaId) {
   };
 }
 
-module.exports = { painel };
+// `LADOS` e `titulosDoLado` também são usados pelo Detalhamento Financeiro (detalhamentoPainel.service.js):
+// o "em aberto" de lá é o mesmo do Aging List.
+module.exports = { painel, LADOS, titulosDoLado };

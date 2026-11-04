@@ -1,0 +1,261 @@
+/* Detalhamento Financeiro (dashboard Econômico Financeiro) — complementa o painel.css do Fluxo de Caixa e o
+   aging.css do Aging List (mesmos tokens e peças: barra, panel, árvore do detalhamento), só dentro de
+   .painel-cfo.detfin. */
+
+/* Barra: período (Início e Fim) em data, no visual do Aging List */
+.painel-cfo.detfin .ctl input[type='date'] {
+  height: var(--altura-filtro);
+  box-sizing: border-box;
+  padding: 0 8px;
+  border: 1px solid var(--line);
+  border-radius: 4px;
+  background: var(--surface-2);
+  color: var(--ink);
+  font-size: 14px;
+  font-family: inherit;
+  min-width: 140px;
+}
+.painel-cfo.detfin .controls .ctl select {
+  min-width: 210px;
+}
+.painel-cfo.detfin .aviso {
+  background: color-mix(in srgb, var(--warn) 16%, var(--surface));
+  border: 1px solid color-mix(in srgb, var(--warn) 50%, var(--line));
+  color: var(--warn-ink);
+  border-radius: var(--r);
+  padding: 10px 14px;
+  font-size: 14px;
+}
+
+/* Resumo: entradas, saídas e resultado × realizado, em aberto e total */
+.painel-cfo.detfin .resumo {
+  background: var(--surface);
+  border: 1px solid var(--line);
+  border-radius: var(--r);
+  padding: 6px 18px 12px;
+}
+.painel-cfo.detfin .rs-cab,
+.painel-cfo.detfin .rs-l {
+  display: grid;
+  grid-template-columns: minmax(180px, 1.1fr) repeat(3, minmax(0, 1fr));
+  column-gap: 18px;
+  align-items: center;
+}
+.painel-cfo.detfin .rs-cab {
+  padding: 8px 0 6px;
+  border-bottom: 1.5px solid var(--ink);
+  font-family: var(--f-display);
+  font-stretch: 110%;
+  font-weight: 700;
+  font-size: 11px;
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
+  color: var(--muted);
+}
+.painel-cfo.detfin .rs-cab > :first-child {
+  display: flex;
+  align-items: center;
+  gap: 4px;
+  color: var(--ink);
+}
+.painel-cfo.detfin .rs-l {
+  padding: 10px 0;
+  border-bottom: 1px solid var(--grid);
+}
+.painel-cfo.detfin .rs-rot {
+  display: flex;
+  flex-direction: column;
+  min-width: 0;
+}
+.painel-cfo.detfin .rs-rot b {
+  font-family: var(--f-display);
+  font-size: 16px;
+}
+.painel-cfo.detfin .rs-rot small,
+.painel-cfo.detfin .rs-v small {
+  font-size: 12px;
+  color: var(--muted);
+}
+.painel-cfo.detfin .rs-v {
+  display: flex;
+  flex-direction: column;
+  min-width: 0;
+  border-left: 3px solid var(--line);
+  padding-left: 12px;
+}
+.painel-cfo.detfin .rs-v strong {
+  font-family: var(--f-display);
+  font-weight: 700;
+  font-size: clamp(19px, 2vw, 24px);
+  line-height: 1.15;
+  font-variant-numeric: tabular-nums;
+  white-space: nowrap;
+}
+.painel-cfo.detfin .rs-v.e {
+  border-left-color: var(--s-in);
+}
+.painel-cfo.detfin .rs-v.s {
+  border-left-color: var(--s-out);
+}
+.painel-cfo.detfin .rs-v.res {
+  border-left-color: var(--ink);
+}
+.painel-cfo.detfin .rs-A .rs-v.e {
+  border-left-color: #9cc3ef;
+}
+.painel-cfo.detfin .rs-A .rs-v.s {
+  border-left-color: #f2a3a2;
+}
+.painel-cfo.detfin .rs-v.pos strong {
+  color: var(--good-ink);
+}
+.painel-cfo.detfin .rs-v.neg strong {
+  color: var(--crit-ink);
+}
+.painel-cfo.detfin .rs-l.rs-T {
+  border-bottom: 0;
+  border-top: 1.5px solid var(--ink);
+  margin-top: -1px;
+}
+.painel-cfo.detfin .rs-l.rs-T .rs-v strong {
+  font-size: clamp(22px, 2.5vw, 30px);
+}
+.painel-cfo.detfin .rs-nota {
+  margin: 6px 0 0;
+  font-size: 12.5px;
+  color: var(--muted);
+}
+
+/* Sankey e "De cada R$ 100" (mesmo desenho da Demonstração do Resultado) */
+.painel-cfo.detfin .sankey path {
+  transition: fill-opacity 0.15s;
+}
+.painel-cfo.detfin .sankey .sk-lbl {
+  font-family: var(--f-body);
+  pointer-events: none;
+}
+.painel-cfo.detfin .sankey .sk-nome {
+  font-size: 12.5px;
+  font-weight: 600;
+  fill: var(--ink-2);
+}
+.painel-cfo.detfin .sankey .sk-nome.forte {
+  fill: var(--ink);
+  font-weight: 700;
+}
+.painel-cfo.detfin .sankey .sk-val {
+  font-family: var(--f-mono);
+  font-size: 11px;
+  fill: var(--muted);
+}
+.painel-cfo.detfin .cem {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+  border-top: 1px solid var(--grid);
+  padding-top: 12px;
+}
+.painel-cfo.detfin .cem-rot {
+  font-family: var(--f-display);
+  font-weight: 700;
+  font-size: 13px;
+  color: var(--ink);
+}
+.painel-cfo.detfin .cem-barra {
+  display: flex;
+  height: 14px;
+  border-radius: 3px;
+  overflow: hidden;
+  gap: 2px;
+}
+.painel-cfo.detfin .cem-itens {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 6px 18px;
+  font-size: 13px;
+  color: var(--ink-2);
+}
+.painel-cfo.detfin .cem-itens i {
+  display: inline-block;
+  width: 10px;
+  height: 10px;
+  border-radius: 2px;
+  margin-right: 6px;
+  vertical-align: -1px;
+}
+.painel-cfo.detfin .cem-itens b {
+  font-family: var(--f-mono);
+  font-weight: 600;
+  color: var(--ink);
+}
+.painel-cfo.detfin .cem-itens .lucro b {
+  color: var(--good-ink);
+}
+.painel-cfo.detfin .cem-itens .prejuizo b {
+  color: var(--crit-ink);
+}
+
+/* Tabela do mês a mês */
+.painel-cfo.detfin .tab tfoot td {
+  border-top: 1.5px solid var(--ink);
+  padding: 7px 8px;
+  font-weight: 600;
+}
+
+/* Detalhamento: coluna Em aberto e o item (data, título, pessoa) numa linha */
+.painel-cfo.detfin .ag.realizado th {
+  text-align: right;
+}
+.painel-cfo.detfin .ag.realizado th.nmh {
+  text-align: left;
+}
+.painel-cfo.detfin .ag.realizado td.c.ab:not(.z) {
+  color: var(--ink-2);
+  font-style: italic;
+}
+.painel-cfo.detfin .ag.realizado tr.parc td.nm b {
+  display: flex;
+  align-items: baseline;
+  gap: 8px;
+  min-width: 0;
+}
+.painel-cfo.detfin .ag.realizado tr.parc .data {
+  font: 500 12px var(--f-mono);
+  color: var(--ink-2);
+  flex-shrink: 0;
+}
+.painel-cfo.detfin .ag.realizado tr.parc .titulo {
+  font: 600 12px var(--f-mono);
+  color: var(--accent);
+  flex-shrink: 0;
+}
+.painel-cfo.detfin .ag.realizado tr.parc .desc {
+  font-family: var(--f-body);
+  font-weight: 600;
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+.painel-cfo.detfin .ag.realizado tr.parc.aberto-item .data {
+  color: var(--muted);
+}
+
+@media (max-width: 760px) {
+  .painel-cfo.detfin .rs-cab,
+  .painel-cfo.detfin .rs-l {
+    grid-template-columns: repeat(3, minmax(0, 1fr));
+    row-gap: 6px;
+  }
+  .painel-cfo.detfin .rs-cab > :first-child,
+  .painel-cfo.detfin .rs-rot {
+    grid-column: 1 / -1;
+  }
+  .painel-cfo.detfin .rs-v {
+    padding-left: 7px;
+  }
+  .painel-cfo.detfin .rs-v strong,
+  .painel-cfo.detfin .rs-l.rs-T .rs-v strong {
+    font-size: 14px;
+  }
+}
