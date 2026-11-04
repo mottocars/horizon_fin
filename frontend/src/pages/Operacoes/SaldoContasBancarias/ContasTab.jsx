@@ -2,6 +2,7 @@ import { Fragment, useCallback, useEffect, useMemo, useState } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { Landmark, Minus, Plus, TriangleAlert, Zap } from 'lucide-react';
 import LogoBanco from './LogoBanco';
+import { ROTULO_CONVENIO } from './constantes';
 import { listBancos, listContas } from '../../../api/contasBancariasSienge.api';
 
 const LIMIT = 2000; // mesma estratégia de sempre carregar tudo e agrupar no navegador (ver SaldosContasTab.jsx)
@@ -223,14 +224,12 @@ export default function ContasTab({
                           </td>
                           <td className="border-b border-l border-gray-100 px-3 py-2 group-hover:bg-gray-50">
                             {/* Mesma paleta/ícone de ORIGEM_INFO.API em SaldosContasTab.jsx — mesmo
-                                vocabulário visual de "isto é automático" nas duas telas. A
-                                integração do saldo automático mais recente da conta (ver automacao
-                                em contas.service.js) — não é uma configuração, é um fato observado:
-                                vira "API Itaú" na primeira vez que o Itaú alimenta a conta. */}
-                            {conta.automacao ? (
+                                vocabulário visual de "isto é automático" nas duas telas. É o tipo
+                                de convênio escolhido na edição da conta (tipo_convenio). */}
+                            {ROTULO_CONVENIO[conta.tipo_convenio] ? (
                               <span className="inline-flex items-center gap-1 rounded-full bg-emerald-50 px-2 py-0.5 text-[11px] font-medium text-emerald-600">
                                 <Zap size={11} />
-                                {conta.automacao === 'ITAU' ? 'API Itaú' : 'VanPix'}
+                                {ROTULO_CONVENIO[conta.tipo_convenio]}
                               </span>
                             ) : (
                               <span className="inline-flex items-center rounded-full bg-gray-100 px-2 py-0.5 text-[11px] font-medium text-gray-600">

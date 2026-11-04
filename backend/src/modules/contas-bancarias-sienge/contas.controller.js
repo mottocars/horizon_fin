@@ -37,6 +37,17 @@ const enriquecimentoSchema = z.object({
   codigo_cedente_cobranca: codigoCedenteSchema,
   // Apelido VanPix do convênio de extrato (conexão com finalidade Extrato Bancário).
   codigo_cedente_extrato: codigoCedenteSchema,
+  // De onde vem o saldo automático: VANPIX, ITAU, CNAB_MANUAL ou vazio (sem convênio). As
+  // regras de cada tipo (campos obrigatórios, duplicidade) ficam no service.
+  tipo_convenio: z.preprocess(
+    emptyToNull,
+    z.enum(['VANPIX', 'ITAU', 'CNAB_MANUAL'], { errorMap: () => ({ message: 'Tipo de convênio inválido.' }) }).nullable().optional()
+  ),
+  // Código do beneficiário da cobrança SIGCB (contas CNAB 240 manual): só dígitos.
+  codigo_beneficiario: z.preprocess(
+    (v) => (typeof v === 'string' ? v.replace(/\D/g, '') || null : emptyToNull(v)),
+    z.string().max(20, 'Código do beneficiário muito longo.').nullable().optional()
+  ),
   // Limite do cheque especial (R$). Chega como número (a tela já interpreta "1.234,56");
   // vazio = não informado.
   valor_cheque_especial: z.preprocess(

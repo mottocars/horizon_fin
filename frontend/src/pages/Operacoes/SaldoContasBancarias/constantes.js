@@ -5,6 +5,14 @@ import { formatarDataISO } from '../../../utils/datas';
 // ContasTab.jsx) monta os grupos a partir dos nomes que realmente aparecem nas contas
 // carregadas, não de uma constante.
 
+// Tipo de convênio da conta (contas_bancarias_sienge.tipo_convenio): de onde vem o saldo
+// automático na abertura do período. Sem tipo = saldo informado à mão (ou herdado).
+export const ROTULO_CONVENIO = {
+  VANPIX: 'VanPix',
+  ITAU: 'API Itaú',
+  CNAB_MANUAL: 'CNAB 240 manual',
+};
+
 // ---------------------------------------------------------------------------
 // Datas — sempre 'YYYY-MM-DD' em horário LOCAL (toISOString() devolve UTC e, à noite,
 // já cairia no dia seguinte).

@@ -45,17 +45,9 @@ async function listContas(empresaId, { page = 1, limit = 15, search = '', status
             -- Nome da classificação pelo id (renomear no cadastro vale na hora).
             (SELECT cb.nome FROM classificacoes_bancarias cb WHERE cb.id = contas_bancarias_sienge.classificacao_id) AS classificacao,
             ${BANCO_EFETIVO_SQL} AS banco_codigo, criado_em, atualizado_em,
-            -- Automação = integração do saldo automático (origem API) mais recente da conta:
-            -- VANPIX ou ITAU (linhas API antigas, sem fonte, eram todas VanPix); NULL = manual.
-            -- Muda sozinha na primeira vez que o Itaú alimentar a conta.
-            (
-              SELECT COALESCE(s.fonte, 'VANPIX') FROM saldos_contas_bancarias s
-              WHERE s.empresa_id = contas_bancarias_sienge.empresa_id
-                AND s.company_id = contas_bancarias_sienge.company_id
-                AND s.numero_conta = contas_bancarias_sienge.numero_conta
-                AND s.origem = 'API'
-              ORDER BY s.data DESC LIMIT 1
-            ) AS automacao
+            -- Automação = tipo de convênio escolhido na edição da conta (VANPIX, ITAU,
+            -- CNAB_MANUAL); NULL = sem convênio (saldo manual).
+            tipo_convenio
      FROM contas_bancarias_sienge
      WHERE ${where}
      ORDER BY numero_conta ASC
@@ -108,6 +100,64 @@ function erro(status, message) {
   return e;
 }
 
+const semZeros = (v) => String(v ?? '').trim().replace(/^0+/, '');
+
+// Regras do tipo de convênio (o que cada um precisa pra casar a conta na abertura do período —
+// ver saldo-contas-bancarias/vanpix-sync.service.js e cnab-manual.service.js). Campos de outro
+// tipo são limpos: o que não aparece na tela não pode continuar valendo.
+async function validarConvenio(empresaId, companyId, numeroConta, data) {
+  const tipo = data.tipo_convenio || null;
+  const banco = semZeros(data.banco_enriquecido);
+  const temContaCompleta = Boolean(banco && data.conta_enriquecida && data.digito);
+
+  if (tipo !== 'VANPIX') {
+    data.codigo_cedente_extrato = null;
+    data.codigo_cedente_cobranca = null;
+  }
+  if (tipo !== 'CNAB_MANUAL') data.codigo_beneficiario = null;
+
+  if (tipo === 'VANPIX') {
+    if (!data.codigo_cedente_extrato && !data.codigo_cedente_cobranca) {
+      throw erro(400, 'Convênio VanPix: informe o código cedente de extrato bancário e/ou o de cobrança.');
+    }
+    if (data.codigo_cedente_extrato && !temContaCompleta) {
+      throw erro(400, 'Convênio VanPix com extrato: preencha Banco, Conta e Dígito — é por eles que o saldo do extrato encontra a conta.');
+    }
+  }
+
+  if (tipo === 'ITAU') {
+    if (banco !== '341') throw erro(400, 'Convênio API Itaú: o banco da conta precisa ser 341 - Itaú.');
+    if (!data.agencia_enriquecida || !data.conta_enriquecida || !data.digito) {
+      throw erro(400, 'Convênio API Itaú: preencha Agência, Conta e Dígito — iguais aos da conexão API Itaú.');
+    }
+  }
+
+  if (tipo === 'CNAB_MANUAL') {
+    if (!temContaCompleta) {
+      throw erro(400, 'CNAB 240 manual: preencha Banco, Conta e Dígito — é por eles que o arquivo de extrato encontra a conta.');
+    }
+    // Duas contas com o mesmo banco/conta/dígito receberiam o mesmo saldo do extrato (contado
+    // duas vezes); o mesmo vale pro beneficiário na cobrança.
+    const { rows: outras } = await pool.query(
+      `SELECT nome, numero_conta, codigo_beneficiario,
+              (COALESCE(NULLIF(LTRIM(banco_enriquecido, '0'), ''), LTRIM(REGEXP_REPLACE(banco_numero, '[^0-9]', '', 'g'), '0')) = $4
+                AND LTRIM(conta_enriquecida, '0') = $5 AND digito = $6) AS mesma_conta
+         FROM contas_bancarias_sienge
+        WHERE empresa_id = $1 AND tipo_convenio = 'CNAB_MANUAL' AND NOT (company_id = $2 AND numero_conta = $3)`,
+      [empresaId, companyId, numeroConta, banco, semZeros(data.conta_enriquecida), data.digito]
+    );
+    const mesmaConta = outras.find((o) => o.mesma_conta);
+    if (mesmaConta) {
+      throw erro(400, `Já existe outra conta CNAB 240 manual com este banco, conta e dígito: ${mesmaConta.nome || mesmaConta.numero_conta}. O saldo do extrato seria lançado nas duas.`);
+    }
+    const beneficiario = semZeros(data.codigo_beneficiario);
+    const mesmoBeneficiario = beneficiario && outras.find((o) => semZeros(o.codigo_beneficiario) === beneficiario);
+    if (mesmoBeneficiario) {
+      throw erro(400, `O código do beneficiário ${data.codigo_beneficiario} já está na conta ${mesmoBeneficiario.nome || mesmoBeneficiario.numero_conta}. A cobrança seria somada nas duas.`);
+    }
+  }
+}
+
 async function updateEnriquecimento(empresaId, companyId, numeroConta, data) {
   if (data.classificacao_id) {
     const { rows: validas } = await pool.query(
@@ -116,6 +166,7 @@ async function updateEnriquecimento(empresaId, companyId, numeroConta, data) {
     );
     if (!validas[0]) throw erro(400, 'Classificação inválida — cadastre-a primeiro na aba Classificação.');
   }
+  await validarConvenio(empresaId, companyId, numeroConta, data);
 
   const { rows } = await pool.query(
     `UPDATE contas_bancarias_sienge SET
@@ -127,7 +178,9 @@ async function updateEnriquecimento(empresaId, companyId, numeroConta, data) {
        classificacao_id = $6,
        codigo_cedente_cobranca = $10,
        codigo_cedente_extrato = $11,
-       valor_cheque_especial = $12
+       valor_cheque_especial = $12,
+       tipo_convenio = $13,
+       codigo_beneficiario = $14
      WHERE empresa_id = $7 AND company_id = $8 AND numero_conta = $9
      RETURNING *, (SELECT cb.nome FROM classificacoes_bancarias cb WHERE cb.id = contas_bancarias_sienge.classificacao_id) AS classificacao`,
     [
@@ -143,6 +196,8 @@ async function updateEnriquecimento(empresaId, companyId, numeroConta, data) {
       data.codigo_cedente_cobranca || null,
       data.codigo_cedente_extrato || null,
       data.valor_cheque_especial ?? null,
+      data.tipo_convenio || null,
+      data.codigo_beneficiario || null,
     ]
   );
   return rows[0] || null;

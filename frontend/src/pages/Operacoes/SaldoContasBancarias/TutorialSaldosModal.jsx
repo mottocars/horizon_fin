@@ -1,10 +1,10 @@
 import { useState } from 'react';
-import { BadgeCheck, BookOpen, Landmark, Lightbulb, Lock, ReceiptText, Zap } from 'lucide-react';
+import { BadgeCheck, BookOpen, FileText, Landmark, Lightbulb, Lock, ReceiptText, Zap } from 'lucide-react';
 import Modal from '../../../components/Modal';
 
 // Botão "Dúvidas" da aba Saldos: tutorial passo a passo, em linguagem direta, de como configurar
-// os saldos automáticos — VanPix Extrato, VanPix Cobrança e API Itaú. As regras descritas aqui
-// são as de vanpix-sync.service.js.
+// os saldos automáticos — VanPix Extrato, VanPix Cobrança, API Itaú e CNAB 240 manual. As regras
+// descritas aqui são as de vanpix-sync.service.js e cnab-manual.service.js.
 
 function Passo({ numero, titulo, children }) {
   return (
@@ -38,6 +38,7 @@ const ABAS = [
   { id: 'extrato', rotulo: 'VanPix Extrato', Icone: Landmark },
   { id: 'cobranca', rotulo: 'VanPix Cobrança', Icone: ReceiptText },
   { id: 'itau', rotulo: 'API Itaú', Icone: Zap },
+  { id: 'cnab', rotulo: 'CNAB 240 manual', Icone: FileText },
   { id: 'abrir', rotulo: 'Abertura do período', Icone: Lock },
 ];
 
@@ -70,7 +71,18 @@ function Inicio() {
             <Campo>API Itaú</Campo> — saldo em conta consultado em <Campo>tempo real</Campo>.
           </span>
         </li>
+        <li className="flex gap-2">
+          <FileText size={16} className="mt-0.5 shrink-0 text-primary-600" />
+          <span>
+            <Campo>CNAB 240 manual</Campo> — você anexa, na abertura do período, os arquivos de retorno de{' '}
+            <Campo>extrato</Campo> e de <Campo>cobrança</Campo> baixados do banco.
+          </span>
+        </li>
       </ul>
+      <Dica>
+        Cada conta usa uma integração só, escolhida em <Campo>Tipo de convênio</Campo> no cadastro da conta (aba{' '}
+        <Caminho>Contas Bancárias</Caminho>). Sem tipo de convênio, o saldo é informado à mão.
+      </Dica>
       <Dica>
         Requisito para qualquer conta aparecer na tabela: no cadastro (aba <Caminho>Contas Bancárias</Caminho>), ter uma{' '}
         <Campo>Classificação</Campo> definida e <Campo>Projeta Saldo = Sim</Campo>.
@@ -91,8 +103,8 @@ function Extrato() {
       </Passo>
       <Passo numero={2} titulo="Código cedente na conta">
         <p>
-          No cadastro da conta (aba <Caminho>Contas Bancárias</Caminho>), informe o convênio em{' '}
-          <Campo>Código cedente extrato bancário</Campo> — por exemplo, <Campo>ABPFJC</Campo>.
+          No cadastro da conta (aba <Caminho>Contas Bancárias</Caminho>), escolha <Campo>Tipo de convênio = VanPix</Campo> e
+          informe o convênio em <Campo>Código cedente extrato bancário</Campo> — por exemplo, <Campo>ABPFJC</Campo>.
         </p>
       </Passo>
       <Passo numero={3} titulo="Banco, conta e dígito">
@@ -126,7 +138,8 @@ function Cobranca() {
       </Passo>
       <Passo numero={2} titulo="Código cedente na conta">
         <p>
-          Na conta que recebe o crédito dos boletos, informe o convênio em <Campo>Código cedente cobrança</Campo>.
+          Na conta que recebe o crédito dos boletos (com <Campo>Tipo de convênio = VanPix</Campo>), informe o convênio em{' '}
+          <Campo>Código cedente cobrança</Campo>.
         </p>
       </Passo>
       <Passo numero={3} titulo="Composição do saldo">
@@ -173,14 +186,51 @@ function Itau() {
       </Passo>
       <Passo numero={4} titulo="Cadastro da conta">
         <p>
-          No cadastro da conta (aba <Caminho>Contas Bancárias</Caminho>), o <Campo>Banco</Campo> deve ser{' '}
-          <Campo>341</Campo>, com <Campo>Agência</Campo>, <Campo>Conta</Campo> e <Campo>Dígito</Campo> idênticos aos da
-          conexão.
+          No cadastro da conta (aba <Caminho>Contas Bancárias</Caminho>), escolha <Campo>Tipo de convênio = API Itaú</Campo>.
+          O <Campo>Banco</Campo> deve ser <Campo>341</Campo>, com <Campo>Agência</Campo>, <Campo>Conta</Campo> e{' '}
+          <Campo>Dígito</Campo> idênticos aos da conexão.
         </p>
       </Passo>
       <Passo numero={5} titulo="Abertura do período">
         <p>Na abertura, o sistema consulta o saldo em conta no Itaú naquele momento.</p>
       </Passo>
+    </ol>
+  );
+}
+
+function Cnab() {
+  return (
+    <ol className="space-y-4">
+      <Passo numero={1} titulo="Tipo de convênio na conta">
+        <p>
+          No cadastro da conta (aba <Caminho>Contas Bancárias</Caminho>), escolha{' '}
+          <Campo>Tipo de convênio = CNAB 240 manual</Campo>. <Campo>Banco</Campo>, <Campo>Conta</Campo> e{' '}
+          <Campo>Dígito</Campo> devem ser idênticos aos do banco — é por eles que o arquivo de extrato encontra a conta.
+        </p>
+      </Passo>
+      <Passo numero={2} titulo="Código do beneficiário (cobrança)">
+        <p>
+          Se a conta recebe boletos, informe o <Campo>Código do beneficiário</Campo> do convênio de cobrança — por exemplo,{' '}
+          <Campo>124718</Campo>. É por ele que o arquivo de retorno de cobrança encontra a conta.
+        </p>
+      </Passo>
+      <Passo numero={3} titulo="Anexar os arquivos na abertura">
+        <p>
+          Ao abrir o período, aparecem os campos <Campo>Retorno Extratos Bancários</Campo> (extrato eletrônico CNAB 240) e{' '}
+          <Campo>Retorno Cobrança</Campo> (CNAB 240 SIGCB da Caixa). Dá para escolher vários arquivos de uma vez, ou
+          arrastá-los. Cada arquivo mostra a conta ou o beneficiário que contém antes de abrir.
+        </p>
+      </Passo>
+      <Passo numero={4} titulo="Composição do saldo">
+        <p>
+          Vale o <Campo>saldo final mais recente de um dia anterior</Campo> ao período (numa segunda, o de sexta). Os
+          boletos liquidados com crédito depois desse fechamento são somados, como na VanPix Cobrança.
+        </p>
+      </Passo>
+      <Dica>
+        Reabrir o mesmo dia sem anexar o extrato de novo mantém o saldo já importado. Anexar o mesmo retorno de cobrança duas
+        vezes não duplica os boletos.
+      </Dica>
     </ol>
   );
 }
@@ -195,8 +245,8 @@ function Abrir() {
       </Passo>
       <Passo numero={2} titulo="Busca automática">
         <p>
-          O sistema consulta VanPix Extrato, VanPix Cobrança e API Itaú. Ao final, é exibido um resumo com as contas
-          atualizadas e eventuais avisos.
+          O sistema consulta as integrações que as contas da empresa usam (VanPix, API Itaú) e lê os arquivos CNAB 240
+          anexados. Ao final, é exibido um resumo com as contas atualizadas e eventuais avisos.
         </p>
       </Passo>
       <Passo numero={3} titulo="Identificação na tabela">
@@ -222,7 +272,7 @@ function Abrir() {
   );
 }
 
-const CONTEUDO = { inicio: Inicio, extrato: Extrato, cobranca: Cobranca, itau: Itau, abrir: Abrir };
+const CONTEUDO = { inicio: Inicio, extrato: Extrato, cobranca: Cobranca, itau: Itau, cnab: Cnab, abrir: Abrir };
 
 export default function TutorialSaldosModal({ open, onClose }) {
   const [aba, setAba] = useState('inicio');

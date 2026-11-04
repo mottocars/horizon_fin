@@ -1,8 +1,17 @@
 const { Router } = require('express');
+const multer = require('multer');
 const authMiddleware = require('../../middlewares/auth.middleware');
 const { paramEmpresa, exigirAdministradorDaTela } = require('../../middlewares/acesso.middleware');
 const T = require('../../config/telas');
 const controller = require('./saldos.controller');
+
+// Arquivos de retorno CNAB 240 anexados na abertura do período (contas CNAB 240 manual): ficam
+// só na memória — são lidos na hora e não gravados (o que importa vai pro saldo e pros títulos).
+// Sem filtro de extensão (o banco usa .RET, .TXT, sem extensão...): o conteúdo é validado na leitura.
+const uploadCnab = multer({
+  storage: multer.memoryStorage(),
+  limits: { fileSize: 10 * 1024 * 1024, files: 100 },
+});
 
 const router = Router();
 
@@ -13,7 +22,15 @@ router.get('/:empresaId/exportar-excel', controller.exportarExcel);
 router.get('/:empresaId/periodo-aberto', controller.getPeriodoAberto);
 router.put('/:empresaId/periodo-aberto', controller.abrirPeriodo);
 router.delete('/:empresaId/periodo-aberto', controller.encerrarPeriodo);
-router.post('/:empresaId/buscar-vanpix', controller.buscarVanpix);
+router.get('/:empresaId/integracoes-abertura', controller.getIntegracoesAbertura);
+router.post(
+  '/:empresaId/buscar-vanpix',
+  uploadCnab.fields([
+    { name: 'extrato', maxCount: 50 },
+    { name: 'cobranca', maxCount: 50 },
+  ]),
+  controller.buscarVanpix
+);
 router.put('/:empresaId/bloqueios', controller.registrarBloqueio);
 // Aba Configurações: só o Administrador da tela (ou Master). A leitura de
 // comunicar-saldos fica livre — o Encerrar Período mostra quem é avisado.

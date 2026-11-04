@@ -6,7 +6,18 @@ import Button from '../../components/Button';
 import SearchableSelect from '../../components/SearchableSelect';
 import { getItem, listBancos, updateEnriquecimento } from '../../api/contasBancariasSienge.api';
 import { listClassificacoes } from '../../api/classificacoesBancarias.api';
-import { formatarSaldo, interpretarSaldo } from '../Operacoes/SaldoContasBancarias/constantes';
+import { formatarSaldo, interpretarSaldo, ROTULO_CONVENIO } from '../Operacoes/SaldoContasBancarias/constantes';
+
+// Tipo de convênio = de onde vem o saldo automático na abertura do período (Operações > Saldo
+// Contas Bancárias). Vazio = sem convênio (saldo informado à mão ou herdado, pela classificação).
+const OPCOES_CONVENIO = Object.entries(ROTULO_CONVENIO).map(([value, label]) => ({ value, label }));
+const AJUDA_CONVENIO = {
+  VANPIX:
+    'O saldo é buscado na VanPix ao abrir o período, pelos apelidos abaixo (cadastrados nas conexões de Integrações › Contas Bancárias).',
+  ITAU: 'O saldo em tempo real vem da conexão API Itaú com a mesma agência, conta e dígito desta conta.',
+  CNAB_MANUAL:
+    'Ao abrir o período, você anexa os arquivos de retorno. O extrato encontra a conta pelo banco, conta e dígito; a cobrança, pelo código do beneficiário.',
+};
 
 // O Sienge guarda o código do banco em banco_numero ("104", "001", "341"...).
 // Só vira sugestão se esse código existir na lista de bancos brasileiros — códigos
@@ -50,8 +61,10 @@ const emptyForm = {
   digito: '',
   classificacao_id: '',
   projeta_saldo: '',
+  tipo_convenio: '',
   codigo_cedente_extrato: '',
   codigo_cedente_cobranca: '',
+  codigo_beneficiario: '',
   valor_cheque_especial: '',
 };
 
@@ -105,8 +118,10 @@ export default function ContaBancariaItemDetalhe() {
         classificacao_id: data.classificacao_id || '',
         projeta_saldo:
           data.projeta_saldo === true ? 'true' : data.projeta_saldo === false ? 'false' : '',
+        tipo_convenio: data.tipo_convenio || '',
         codigo_cedente_extrato: data.codigo_cedente_extrato || '',
         codigo_cedente_cobranca: data.codigo_cedente_cobranca || '',
+        codigo_beneficiario: data.codigo_beneficiario || '',
         valor_cheque_especial: chequeEspecialParaTexto(data.valor_cheque_especial),
       });
     } finally {
@@ -149,10 +164,13 @@ export default function ContaBancariaItemDetalhe() {
         valor_cheque_especial: chequeEspecial,
       });
       setItem(updated);
+      // Códigos de outro tipo de convênio são limpos no servidor — a tela mostra o que ficou.
       setForm((prev) => ({
         ...prev,
+        tipo_convenio: updated.tipo_convenio || '',
         codigo_cedente_extrato: updated.codigo_cedente_extrato || '',
         codigo_cedente_cobranca: updated.codigo_cedente_cobranca || '',
+        codigo_beneficiario: updated.codigo_beneficiario || '',
         valor_cheque_especial: chequeEspecialParaTexto(updated.valor_cheque_especial),
       }));
       setSuccess(true);
@@ -291,30 +309,65 @@ export default function ContaBancariaItemDetalhe() {
               />
             </Field>
 
+            <Field label="Tipo de convênio">
+              <SearchableSelect
+                value={form.tipo_convenio}
+                onChange={(value) => handleChange('tipo_convenio', value || '')}
+                options={OPCOES_CONVENIO}
+                placeholder="Sem convênio (saldo informado à mão)"
+                corClasses={corSelect(form.tipo_convenio)}
+              />
+              {AJUDA_CONVENIO[form.tipo_convenio] && (
+                <p className="mt-1 text-xs text-gray-400">{AJUDA_CONVENIO[form.tipo_convenio]}</p>
+              )}
+            </Field>
+
             {/* Códigos cedente = apelidos dos convênios na VanPix. Na abertura do período, a VanPix
                 Extrato só é consultada pra quem tem o código de extrato; o de cobrança soma no saldo
                 os boletos com Dt Crédito no dia. */}
-            <Field label="Código cedente extrato bancário">
-              <input
-                type="text"
-                value={form.codigo_cedente_extrato}
-                onChange={(e) => handleChange('codigo_cedente_extrato', e.target.value.toUpperCase().replace(/\s+/g, ''))}
-                maxLength={50}
-                placeholder="ex.: ABPFJA"
-                className={`w-full rounded-lg border px-3 py-2 text-sm focus:outline-none focus:ring-2 ${corCampo(form.codigo_cedente_extrato)}`}
-              />
-            </Field>
+            {form.tipo_convenio === 'VANPIX' && (
+              <>
+                <Field label="Código cedente extrato bancário">
+                  <input
+                    type="text"
+                    value={form.codigo_cedente_extrato}
+                    onChange={(e) => handleChange('codigo_cedente_extrato', e.target.value.toUpperCase().replace(/\s+/g, ''))}
+                    maxLength={50}
+                    placeholder="ex.: ABPFJA"
+                    className={`w-full rounded-lg border px-3 py-2 text-sm focus:outline-none focus:ring-2 ${corCampo(form.codigo_cedente_extrato)}`}
+                  />
+                </Field>
 
-            <Field label="Código cedente cobrança">
-              <input
-                type="text"
-                value={form.codigo_cedente_cobranca}
-                onChange={(e) => handleChange('codigo_cedente_cobranca', e.target.value.toUpperCase().replace(/\s+/g, ''))}
-                maxLength={50}
-                placeholder="ex.: C3U1Y8"
-                className={`w-full rounded-lg border px-3 py-2 text-sm focus:outline-none focus:ring-2 ${corCampo(form.codigo_cedente_cobranca)}`}
-              />
-            </Field>
+                <Field label="Código cedente cobrança">
+                  <input
+                    type="text"
+                    value={form.codigo_cedente_cobranca}
+                    onChange={(e) => handleChange('codigo_cedente_cobranca', e.target.value.toUpperCase().replace(/\s+/g, ''))}
+                    maxLength={50}
+                    placeholder="ex.: C3U1Y8"
+                    className={`w-full rounded-lg border px-3 py-2 text-sm focus:outline-none focus:ring-2 ${corCampo(form.codigo_cedente_cobranca)}`}
+                  />
+                </Field>
+              </>
+            )}
+
+            {/* Código do beneficiário (convênio de cobrança SIGCB, 6 dígitos no arquivo): casa os
+                títulos do retorno de cobrança anexado na abertura do período com esta conta. Conta
+                sem cobrança deixa em branco — só o extrato vale. */}
+            {form.tipo_convenio === 'CNAB_MANUAL' && (
+              <Field label="Código do beneficiário">
+                <input
+                  type="text"
+                  inputMode="numeric"
+                  value={form.codigo_beneficiario}
+                  onChange={(e) => handleChange('codigo_beneficiario', e.target.value.replace(/\D/g, ''))}
+                  maxLength={20}
+                  placeholder="ex.: 124718"
+                  className={`w-full rounded-lg border px-3 py-2 text-sm focus:outline-none focus:ring-2 ${corCampo(form.codigo_beneficiario)}`}
+                />
+                <p className="mt-1 text-xs text-gray-400">Só se a conta recebe boletos (retorno de cobrança).</p>
+              </Field>
+            )}
 
             {/* Limite do cheque especial da conta. Aceita "50.000,00", "50000", "R$ 50.000" — ao
                 sair do campo o texto é reformatado; texto inválido fica como está e o Salvar avisa. */}

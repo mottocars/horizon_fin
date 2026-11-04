@@ -134,4 +134,35 @@ function parseRetornoCobrancaCaixa(linhas) {
   return { arquivo, titulos };
 }
 
-module.exports = { parseRetornoCaixa, parseRetornoCobrancaCaixa };
+// ---------------------------------------------------------------------------------------
+// Tipo de um arquivo de retorno CNAB 240 (arquivos anexados à mão na abertura do período):
+// pelo Header de Lote (posição 9 = tipo de operação: E = extrato, T = retorno de cobrança) ou,
+// na falta dele, pelo segmento dos detalhes (E = extrato; T/U = cobrança). null = não é CNAB 240.
+// ---------------------------------------------------------------------------------------
+function detectarTipoCnab(linhas) {
+  if (!linhas.length || linhas[0][7] !== '0' || linhas[0].length < 170) return null;
+  for (const l of linhas) {
+    if (l[7] !== '1') continue;
+    if (l[8] === 'E') return 'EXTRATO';
+    if (l[8] === 'T') return 'COBRANCA';
+  }
+  for (const l of linhas) {
+    if (l[7] !== '3') continue;
+    if (l[13] === 'E') return 'EXTRATO';
+    if (l[13] === 'T' || l[13] === 'U') return 'COBRANCA';
+  }
+  return null;
+}
+
+// Uma conta do extrato (lote de parseRetornoCaixa) é a conta cadastrada quando banco, conta e
+// dígito batem (sem zeros à esquerda). A agência não entra. Vale pra VanPix e CNAB manual.
+const semZerosComparar = (v) => String(v ?? '').trim().replace(/^0+/, '');
+function loteDaConta(lote, conta) {
+  return (
+    semZerosComparar(lote.conta) === semZerosComparar(conta.conta_enriquecida) &&
+    lote.digitoConta === conta.digito &&
+    semZerosComparar(lote.banco) === semZerosComparar(conta.banco)
+  );
+}
+
+module.exports = { parseRetornoCaixa, parseRetornoCobrancaCaixa, detectarTipoCnab, loteDaConta };

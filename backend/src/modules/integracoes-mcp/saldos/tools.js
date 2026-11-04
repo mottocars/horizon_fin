@@ -16,7 +16,7 @@ const horaBR = (d) => (d ? new Date(d).toLocaleString('pt-BR', { timeZone: 'Amer
 const reais = (centavos) => r2(centavos / 100);
 
 const ORIGEM = {
-  API: 'Automático: buscado por integração (VanPix Extrato/Cobrança ou API Itaú) ao abrir o período',
+  API: 'Automático: buscado por integração (VanPix Extrato/Cobrança, API Itaú ou arquivo CNAB 240 anexado) ao abrir o período',
   HERDADO: 'Automático: repetido do saldo anterior — nenhuma integração trouxe saldo e a classificação da conta está como "Buscar saldo anterior"',
   MANUAL: 'Manual: digitado ou colado na grade por alguém (inclusive quando sobrescreve um valor automático)',
 };
@@ -158,10 +158,11 @@ Cadastro por empresa. Cada classificação tem:
 Só se lança saldo no dia com período ABERTO (um por vez). Abrir o período dispara a busca automática do saldo de todas as contas; encerrar trava o dia e dispara o "Comunicar Saldos" (WhatsApp com o resumo e a planilha). Reabrir um dia encerrado é possível.
 
 ## De onde vem cada saldo (origem)
-- API (automático, ícone de raio): buscado ao abrir o período.
-  · VanPix Extrato Bancário: para as contas com "Código cedente extrato" — usa o fechamento mais recente ANTES do dia (numa segunda, o de sexta). Na primeira abertura de cada conta olha até 1 ano para trás (carga inicial); depois só 10 dias, e conta que não aparece nesses 10 dias repete o último saldo (sem movimento = saldo igual; a composição mostra "repetidoDe").
+- API (automático, ícone de raio): buscado ao abrir o período. Cada conta usa UMA integração, escolhida em "Tipo de convênio" no cadastro da conta (VanPix, API Itaú ou CNAB 240 manual; sem tipo = saldo manual). Integração que nenhuma conta usa nem é consultada.
+  · VanPix Extrato Bancário: para as contas VanPix com "Código cedente extrato" — usa o fechamento mais recente ANTES do dia (numa segunda, o de sexta). Na primeira abertura de cada conta olha até 1 ano para trás (carga inicial); depois só 10 dias, e conta que não aparece nesses 10 dias repete o último saldo (sem movimento = saldo igual; a composição mostra "repetidoDe").
   · VanPix Cobrança: para as contas com "Código cedente cobrança" — soma ao saldo o Vl Pago dos boletos liquidados com Dt Crédito depois do fechamento usado até o dia (composição "cobranca", com os títulos).
-  · API Itaú: saldo em conta em tempo real, para contas Itaú casadas com uma conexão Itaú (agência/conta/dígito).
+  · API Itaú: saldo em conta em tempo real, para contas com convênio API Itaú casadas com uma conexão Itaú (agência/conta/dígito).
+  · CNAB 240 manual (fonte CNAB): o usuário anexa na abertura os arquivos de retorno — "Retorno Extratos Bancários" (extrato eletrônico CNAB 240; a conta é encontrada por banco + conta + dígito e vale o saldo final mais recente ANTES do dia, como na VanPix) e "Retorno Cobrança" (SIGCB da Caixa; casado pelo "Código do beneficiário" da conta, boletos somados como na VanPix Cobrança). A composição traz o nome do arquivo. Reabrir o dia sem anexar mantém o saldo de extrato já importado no dia.
 - HERDADO (automático): nenhuma integração trouxe saldo e a classificação está como "Buscar saldo anterior" — repete o último saldo lançado (composição "herdado" diz de qual dia).
 - MANUAL: digitado ou colado na grade. Digitar por cima de um valor automático vira MANUAL.
 - Sábado e domingo: a busca automática não roda.
@@ -194,7 +195,7 @@ Limite cadastrado na conta (Cadastros > Contas Bancárias). Nos dias com abertur
 - saldos_contas: cada conta no dia — saldo, origem/automação, composição, quem gravou, bloqueio, cheque especial.
 - saldos_historico_conta: uma conta dia a dia (até 92 dias).
 - saldos_classificacoes: classificações com descrição, tipo e contas.
-- saldos_automacoes: configuração de automação de cada conta (VanPix, Itaú, herdar) e conexões da empresa.
+- saldos_automacoes: configuração de automação de cada conta (tipo de convênio: VanPix, Itaú, CNAB 240 manual; herdar) e conexões da empresa.
 - saldos_periodos: aberturas/encerramentos (quem e quando) e situação das rotinas.
 Valores em R$ com sinal; datas AAAA-MM-DD.
 `.trim();
@@ -513,7 +514,7 @@ const classificacoesTool = {
 const automacoes = {
   name: 'saldos_automacoes',
   description:
-    'Como o saldo de cada conta é buscado automaticamente: VanPix Extrato (código cedente extrato e se a carga inicial de 1 ano já foi feita), VanPix Cobrança (código cedente cobrança), API Itaú (conexão casada), o que acontece sem saldo (herdar o anterior ou deixar em branco, pela classificação) e quantos dias recentes vieram de cada origem. Traz também as conexões VanPix/Itaú ativas da empresa.',
+    'Como o saldo de cada conta é buscado automaticamente: tipo de convênio da conta (VANPIX, ITAU, CNAB_MANUAL ou nenhum), VanPix Extrato (código cedente extrato e se a carga inicial de 1 ano já foi feita), VanPix Cobrança (código cedente cobrança), API Itaú (conexão casada), CNAB 240 manual (arquivos anexados na abertura; código do beneficiário da cobrança), o que acontece sem saldo (herdar o anterior ou deixar em branco, pela classificação) e quantos dias recentes vieram de cada origem. Traz também as conexões VanPix/Itaú ativas da empresa.',
   inputSchema: {
     busca: z.string().optional().describe('Parte do nome ou número da conta (sem ela: todas as contas da grade).'),
     dias: z.number().int().min(1).max(120).optional().describe('Janela para contar as origens (padrão 30 dias até o último saldo).'),
@@ -525,7 +526,7 @@ const automacoes = {
       pool.query(
         `SELECT c.company_id, c.numero_conta, c.nome, c.company_name, cb.nome AS classificacao, c.status, c.codigo_cedente_extrato,
                 c.codigo_cedente_cobranca, c.extrato_carga_inicial_apelido, c.extrato_carga_inicial_em, c.valor_cheque_especial,
-                c.agencia_enriquecida, c.conta_enriquecida, c.digito
+                c.agencia_enriquecida, c.conta_enriquecida, c.digito, c.tipo_convenio, c.codigo_beneficiario
            FROM contas_bancarias_sienge c JOIN classificacoes_bancarias cb ON cb.id = c.classificacao_id
           WHERE c.empresa_id = $1 AND c.projeta_saldo = TRUE ORDER BY c.nome`,
         [empresaId]
@@ -572,6 +573,11 @@ const automacoes = {
           empresa: c.company_name,
           classificacao: c.classificacao,
           status: c.status === 'ENABLED' ? 'ativa' : 'inativa',
+          tipo_convenio: c.tipo_convenio || 'nenhum (saldo manual)',
+          cnab_manual:
+            c.tipo_convenio === 'CNAB_MANUAL'
+              ? { conta: `${c.conta_enriquecida || '?'}-${c.digito || '?'}`, codigo_beneficiario: c.codigo_beneficiario || null }
+              : null,
           vanpix_extrato: c.codigo_cedente_extrato
             ? {
                 apelido: c.codigo_cedente_extrato,
@@ -579,9 +585,9 @@ const automacoes = {
               }
             : null,
           vanpix_cobranca: c.codigo_cedente_cobranca || null,
-          itau: it ? { conexao: it.nome, ativa: it.ativo, certificado_valido_ate: it.certificado_valido_ate } : null,
+          itau: it && c.tipo_convenio === 'ITAU' ? { conexao: it.nome, ativa: it.ativo, certificado_valido_ate: it.certificado_valido_ate } : null,
           sem_saldo_da_integracao: PRIORIDADE[prioridade.get(c.classificacao)],
-          automatica: Boolean(c.codigo_cedente_extrato || c.codigo_cedente_cobranca || it),
+          automatica: Boolean(c.tipo_convenio),
           origens_na_janela: minhas.map((o) => ({ origem: o.origem, ...(o.fonte ? { fonte: o.fonte } : {}), dias: o.dias, ultimo_dia: o.ultimo })),
         };
       });

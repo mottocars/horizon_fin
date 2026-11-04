@@ -1,6 +1,7 @@
 const { z } = require('zod');
 const service = require('./saldos.service');
 const vanpixSyncService = require('./vanpix-sync.service');
+const cnabManualService = require('./cnab-manual.service');
 const saldosExcelService = require('./saldosExcel.service');
 const comunicarSaldosService = require('./comunicarSaldos.service');
 const rotinasService = require('./rotinas.service');
@@ -259,17 +260,36 @@ async function salvarComunicarSaldos(req, res, next) {
 
 const buscarVanpixSchema = z.object({ data: z.string().refine(dataValida, 'Data inválida.') });
 
+// Nome do arquivo: o multer entrega em latin1 — volta pra UTF-8 (acentos no relatório).
+const nomeArquivo = (f) => Buffer.from(f.originalname, 'latin1').toString('utf8');
+
 // Só roda pro dia que está de fato aberto agora — evita gravar saldo "automático" num dia que
 // não é mais o período corrente (ex.: usuário demorou pra confirmar e outra aba já encerrou).
+// Aceita JSON ({ data }) ou multipart com os arquivos CNAB 240 (campos `extrato` e `cobranca`).
 async function buscarVanpix(req, res, next) {
   try {
     const empresaId = await acessoEmpresa(req);
     const { data } = buscarVanpixSchema.parse(req.body);
     const { data: dataAberta } = await service.getPeriodoAberto(empresaId);
     if (dataAberta !== data) throw badRequest('Esse dia não é o período aberto no momento.');
-    res.json(await vanpixSyncService.buscarSaldosVanpix(empresaId, req.user.id, data));
+    const arquivos = [...(req.files?.extrato || []), ...(req.files?.cobranca || [])].map((f) => ({
+      nome: nomeArquivo(f),
+      buffer: f.buffer,
+    }));
+    res.json(await vanpixSyncService.buscarSaldosVanpix(empresaId, req.user.id, data, arquivos));
   } catch (err) {
     tratarErroDeValidacao(err, next);
+  }
+}
+
+// Quantas contas usam cada integração (VanPix, API Itaú, CNAB 240 manual) — o modal de abertura
+// do período só mostra as que existem e só pede os arquivos CNAB se houver conta CNAB manual.
+async function getIntegracoesAbertura(req, res, next) {
+  try {
+    const empresaId = await acessoEmpresa(req);
+    res.json(await cnabManualService.contarIntegracoes(empresaId));
+  } catch (err) {
+    next(err);
   }
 }
 
@@ -372,6 +392,7 @@ module.exports = {
   abrirPeriodo,
   encerrarPeriodo,
   buscarVanpix,
+  getIntegracoesAbertura,
   getComunicarSaldos,
   salvarComunicarSaldos,
 };

@@ -78,8 +78,24 @@ export function registrarBloqueioSaldo(empresaId, { companyId, numeroConta, data
 // Roda todos os convênios VanPix ativos da empresa pra `data`, casa com as contas já
 // cadastradas (banco+conta+dígito) e grava o saldo automaticamente. Devolve um relatório:
 // { convenios: [{apelido, status, mensagem}], atualizados: [{...,saldo}], semCorrespondencia: [...] }.
-export function buscarSaldosVanpix(empresaId, data) {
-  return http.post(`/saldo-contas-bancarias/${empresaId}/buscar-vanpix`, { data }).then((res) => res.data);
+// `arquivos` ({ extrato: File[], cobranca: File[] }): retornos CNAB 240 das contas com convênio
+// CNAB 240 manual — com arquivo, vai em multipart; sem, o JSON de sempre.
+export function buscarSaldosVanpix(empresaId, data, arquivos = {}) {
+  const url = `/saldo-contas-bancarias/${empresaId}/buscar-vanpix`;
+  const extrato = arquivos.extrato || [];
+  const cobranca = arquivos.cobranca || [];
+  if (!extrato.length && !cobranca.length) return http.post(url, { data }).then((res) => res.data);
+  const formData = new FormData();
+  formData.append('data', data);
+  extrato.forEach((f) => formData.append('extrato', f));
+  cobranca.forEach((f) => formData.append('cobranca', f));
+  return http.post(url, formData, { headers: { 'Content-Type': 'multipart/form-data' } }).then((res) => res.data);
+}
+
+// Quantas contas da empresa usam cada integração na abertura do período:
+// { vanpix_extrato, vanpix_cobranca, itau, cnab_manual, cnab_manual_cobranca }.
+export function getIntegracoesAbertura(empresaId) {
+  return http.get(`/saldo-contas-bancarias/${empresaId}/integracoes-abertura`).then((res) => res.data);
 }
 
 // Parâmetro "Comunicar Saldos" (aba Configurações) — quem pode ser escolhido pra receber aviso

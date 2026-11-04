@@ -7,14 +7,20 @@
 //   - VanPix Cobrança: últimos 5 dias — soma ao saldo o Vl Pago dos boletos com Dt Crédito
 //     depois do fechamento usado até D (conta com código cedente cobrança).
 //   - API Itaú: tempo real (SALDO EM CONTA).
+//   - CNAB 240 manual: arquivos de retorno (extrato e cobrança) anexados na abertura — ver
+//     cnab-manual.service.js. Mesmas regras de fechamento e de cobrança da VanPix.
 //   - Sem saldo por nenhuma delas: só herda o último saldo se a classificação da conta estiver
 //     como "Buscar saldo anterior" (SALDO_ANTERIOR, origem HERDADO); senão fica em branco pra
 //     ser informado à mão.
+// Cada integração só vale para as contas com aquele tipo de convênio (contas_bancarias_sienge.
+// tipo_convenio) — e a que nenhuma conta usa nem é consultada.
 // Sábado e domingo: não consulta nem grava nada.
 const pool = require('../../config/db');
 const vanpixService = require('../integracoes-vanpix/vanpix.service');
 const itauService = require('../integracoes-itau/itau.service');
 const saldosService = require('./saldos.service');
+const cnabManual = require('./cnab-manual.service');
+const { loteDaConta } = require('../../utils/cnab240');
 const { MOVIMENTOS_LIQUIDACAO, somaCreditos } = require('./cobranca.calculo');
 
 // 0 = domingo, 6 = sábado (getUTCDay, meio-dia UTC evita virar o dia errado por fuso).
@@ -68,14 +74,16 @@ async function listarSaldosAutomaticosDoDia(empresaId, data) {
   return new Set(rows.map((r) => `${r.company_id}:${r.numero_conta}`));
 }
 
-// Contas Itaú com agência + conta + dígito no cadastro casadas com a conexão API Itaú da mesma
-// conta (agência/conta/DAC iguais). Só conexões ativas com certificado válido.
+// Contas Itaú (tipo de convênio API Itaú) com agência + conta + dígito no cadastro casadas com
+// a conexão API Itaú da mesma conta (agência/conta/DAC iguais). Só conexões ativas com
+// certificado válido.
 async function listarContasItau(empresaId) {
   const { rows } = await pool.query(
     `SELECT c.id AS conexao_id, c.nome AS conexao, c.agencia, c.conta, c.dac, s.company_id, s.numero_conta
      FROM conexoes_itau c
      LEFT JOIN contas_bancarias_sienge s
        ON s.empresa_id = c.empresa_id
+      AND s.tipo_convenio = 'ITAU'
       AND LTRIM(s.agencia_enriquecida, '0') = LTRIM(c.agencia, '0')
       AND LTRIM(s.conta_enriquecida, '0') = LTRIM(c.conta, '0')
       AND s.digito = c.dac
@@ -157,7 +165,7 @@ async function listarContasComCedenteExtrato(empresaId) {
             COALESCE(NULLIF(banco_enriquecido, ''), REGEXP_REPLACE(banco_numero, '[^0-9]', '', 'g')) AS banco,
             extrato_carga_inicial_apelido IS NOT DISTINCT FROM codigo_cedente_extrato AS carga_inicial_feita
      FROM contas_bancarias_sienge
-     WHERE empresa_id = $1 AND NULLIF(codigo_cedente_extrato, '') IS NOT NULL`,
+     WHERE empresa_id = $1 AND tipo_convenio = 'VANPIX' AND NULLIF(codigo_cedente_extrato, '') IS NOT NULL`,
     [empresaId]
   );
   return rows.map((c) => ({ ...c, diasRetroativos: c.carga_inicial_feita ? EXTRATO_DIAS_ROTINA : EXTRATO_DIAS_CARGA_INICIAL }));
@@ -180,12 +188,6 @@ function diaUtilAnterior(iso) {
   while (ehFimDeSemana(dia)) dia = menosDiasISO(dia, 1);
   return dia;
 }
-
-const semZeros = (v) => String(v ?? '').replace(/^0+/, '');
-const loteDaConta = (lote, conta) =>
-  semZeros(lote.conta) === semZeros(conta.conta_enriquecida) &&
-  lote.digitoConta === conta.digito &&
-  semZeros(lote.banco) === semZeros(conta.banco);
 
 // Varre os retornos de um apelido de `data` para trás, cada conta até os seus `diasRetroativos`
 // (até EXTRATO_CONSULTAS_SIMULTANEAS dias consultados ao mesmo tempo, mas lidos do mais recente
@@ -241,7 +243,7 @@ async function listarContasComCedente(empresaId) {
   const { rows } = await pool.query(
     `SELECT company_id, numero_conta, nome, codigo_cedente_cobranca AS apelido
      FROM contas_bancarias_sienge
-     WHERE empresa_id = $1 AND NULLIF(codigo_cedente_cobranca, '') IS NOT NULL`,
+     WHERE empresa_id = $1 AND tipo_convenio = 'VANPIX' AND NULLIF(codigo_cedente_cobranca, '') IS NOT NULL`,
     [empresaId]
   );
   return rows;
@@ -306,18 +308,78 @@ function itemDaConta(itensParaGravar, conta) {
   return item && item.saldo !== null ? item : null;
 }
 
+// Soma no saldo já montado da conta nesta rodada (extrato VanPix/CNAB/Itaú ou herdado) os
+// títulos do convênio `apelido` (cobranca_titulos) com Dt Crédito DEPOIS do fechamento do
+// extrato usado até `data`. Num dia normal o fechamento é D-1 → só os de D; numa segunda
+// (fechamento de sexta) → sábado a segunda. Sem fechamento (saldo herdado/Itaú) → só os de D.
+// `extra` vai junto na composição e no relatório (ex.: { beneficiario } no CNAB manual).
+async function somarTitulosNaConta(empresaId, data, conta, apelido, itensParaGravar, relatorio, extra = {}) {
+  const item = itemDaConta(itensParaGravar, conta);
+  const depoisDe = item?.dataFechamento || menosDiasISO(data, 1);
+  const { rows: titulos } = await pool.query(
+    `SELECT cod_movimento, valor_pago, TO_CHAR(data_credito, 'YYYY-MM-DD') AS data_credito,
+            nosso_numero, numero_documento, pagador_nome, valor_titulo, juros_multa,
+            TO_CHAR(data_ocorrencia, 'YYYY-MM-DD') AS data_ocorrencia, banco_cobrador, canal
+     FROM cobranca_titulos WHERE empresa_id = $1 AND apelido = $2 AND data_credito > $3 AND data_credito <= $4
+     ORDER BY data_credito, valor_pago DESC`,
+    [empresaId, apelido, depoisDe, data]
+  );
+  const soma = somaCreditos(titulos, depoisDe, data);
+  const base = {
+    apelido,
+    ...extra,
+    company_id: conta.company_id,
+    numero_conta: conta.numero_conta,
+    nome: conta.nome,
+    creditosDe: menosDiasISO(depoisDe, -1),
+    creditosAte: data,
+    ...soma,
+  };
+  if (soma.titulos === 0) {
+    relatorio.contas.push(base);
+    return;
+  }
+  if (!item) {
+    relatorio.falhas.push({
+      apelido: extra.beneficiario ? `beneficiário ${extra.beneficiario}` : apelido,
+      conta: conta.nome || conta.numero_conta,
+      mensagem: `Sem saldo do extrato no dia para somar R$ ${soma.valor.toFixed(2)} de cobrança.`,
+    });
+    return;
+  }
+  item.saldo = Math.round((item.saldo + soma.valor) * 100) / 100;
+  item.saldoCobranca = soma.valor;
+  // composição: cada boleto somado (só liquidação — mesma regra de somaCreditos)
+  const somados = titulos.filter((t) => MOVIMENTOS_LIQUIDACAO.includes(t.cod_movimento));
+  item.composicao = {
+    ...(item.composicao || {}),
+    cobranca: {
+      apelido,
+      ...extra,
+      de: base.creditosDe,
+      ate: data,
+      valor: soma.valor,
+      titulos: somados.map((t) => ({
+        nossoNumero: t.nosso_numero,
+        documento: t.numero_documento,
+        pagador: t.pagador_nome,
+        valorTitulo: Number(t.valor_titulo),
+        juros: Number(t.juros_multa),
+        valorPago: Number(t.valor_pago),
+        dataOcorrencia: t.data_ocorrencia,
+        dataCredito: t.data_credito,
+        banco: t.banco_cobrador,
+        canal: t.canal,
+      })),
+    },
+  };
+  relatorio.contas.push(base);
+}
+
 async function somarCobranca(empresaId, data, itensParaGravar, relatorio) {
   const contas = await listarContasComCedente(empresaId);
   if (contas.length === 0) return;
   const conexoes = await vanpixService.conexoesPorApelido(empresaId, 'COBRANCA');
-
-  // Créditos que entram: DEPOIS do fechamento do extrato usado até `data`. Num dia normal o
-  // fechamento é D-1 → só os de D; numa segunda (fechamento de sexta) → sábado a segunda.
-  // Sem fechamento (saldo herdado/Itaú) → só os de D.
-  for (const conta of contas) {
-    const item = itemDaConta(itensParaGravar, conta);
-    conta.depoisDe = item?.dataFechamento || menosDiasISO(data, 1);
-  }
 
   const apelidosVarridos = new Set();
   for (const apelido of new Set(contas.map((c) => c.apelido))) {
@@ -333,76 +395,98 @@ async function somarCobranca(empresaId, data, itensParaGravar, relatorio) {
   }
 
   for (const conta of contas) {
-    if (!apelidosVarridos.has(conta.apelido)) continue;
-    const { rows: titulos } = await pool.query(
-      `SELECT cod_movimento, valor_pago, TO_CHAR(data_credito, 'YYYY-MM-DD') AS data_credito,
-              nosso_numero, numero_documento, pagador_nome, valor_titulo, juros_multa,
-              TO_CHAR(data_ocorrencia, 'YYYY-MM-DD') AS data_ocorrencia, banco_cobrador, canal
-       FROM cobranca_titulos WHERE empresa_id = $1 AND apelido = $2 AND data_credito > $3 AND data_credito <= $4
-       ORDER BY data_credito, valor_pago DESC`,
-      [empresaId, conta.apelido, conta.depoisDe, data]
-    );
-    const soma = somaCreditos(titulos, conta.depoisDe, data);
-    const base = {
-      apelido: conta.apelido,
+    if (apelidosVarridos.has(conta.apelido)) {
+      await somarTitulosNaConta(empresaId, data, conta, conta.apelido, itensParaGravar, relatorio);
+    }
+  }
+}
+
+// ---------------------------------------------------------------------------------------
+// CNAB 240 manual (contas com tipo de convênio CNAB_MANUAL) — ver cnab-manual.service.js.
+// ---------------------------------------------------------------------------------------
+
+// Extrato: o saldo final mais recente antes de `data` entre os arquivos anexados. Conta que não
+// veio em nenhum arquivo mas já tem saldo CNAB gravado neste mesmo dia (abertura anterior)
+// mantém esse saldo; as demais seguem a regra geral (herdar ou ficar em branco).
+async function aplicarExtratosCnab(empresaId, data, contas, extratos, relatorio, itensParaGravar, casadasNaApi) {
+  const { encontrados, avisos } = cnabManual.casarExtratos(contas, extratos, data);
+  relatorio.avisos.push(...avisos);
+  const resolvidas = new Set();
+
+  for (const { conta, lote } of encontrados) {
+    const valor = Math.round(lote.saldoFinal.valorCentavos * (lote.saldoFinal.situacao === 'D' ? -1 : 1)) / 100;
+    const chave = `${conta.company_id}:${conta.numero_conta}`;
+    resolvidas.add(chave);
+    casadasNaApi.add(chave);
+    itensParaGravar.push({
       company_id: conta.company_id,
       numero_conta: conta.numero_conta,
-      nome: conta.nome,
-      creditosDe: menosDiasISO(conta.depoisDe, -1),
-      creditosAte: data,
-      ...soma,
-    };
-    if (soma.titulos === 0) {
-      relatorio.contas.push(base);
-      continue;
-    }
-    // soma no saldo automático que a conta já recebeu neste dia (extrato VanPix/Itaú ou herdado)
-    const item = itemDaConta(itensParaGravar, conta);
-    if (!item) {
-      relatorio.falhas.push({
-        apelido: conta.apelido,
-        conta: conta.nome || conta.numero_conta,
-        mensagem: `Sem saldo do extrato no dia para somar R$ ${soma.valor.toFixed(2)} de cobrança.`,
-      });
-      continue;
-    }
-    item.saldo = Math.round((item.saldo + soma.valor) * 100) / 100;
-    item.saldoCobranca = soma.valor;
-    // composição: cada boleto somado (só liquidação — mesma regra de somaCreditos)
-    const somados = titulos.filter((t) => MOVIMENTOS_LIQUIDACAO.includes(t.cod_movimento));
-    item.composicao = {
-      ...(item.composicao || {}),
-      cobranca: {
-        apelido: conta.apelido,
-        de: base.creditosDe,
-        ate: data,
-        valor: soma.valor,
-        titulos: somados.map((t) => ({
-          nossoNumero: t.nosso_numero,
-          documento: t.numero_documento,
-          pagador: t.pagador_nome,
-          valorTitulo: Number(t.valor_titulo),
-          juros: Number(t.juros_multa),
-          valorPago: Number(t.valor_pago),
-          dataOcorrencia: t.data_ocorrencia,
-          dataCredito: t.data_credito,
-          banco: t.banco_cobrador,
-          canal: t.canal,
-        })),
+      data,
+      saldo: valor,
+      origem: 'API',
+      fonte: 'CNAB',
+      dataFechamento: lote.saldoFinal.data,
+      composicao: {
+        extrato: { fonte: 'CNAB', arquivo: lote.arquivo, conta: `${lote.conta}-${lote.digitoConta}`, dataFechamento: lote.saldoFinal.data, valor },
       },
-    };
-    relatorio.contas.push(base);
+    });
+    relatorio.atualizados.push({ nome: conta.nome, company_id: conta.company_id, numero_conta: conta.numero_conta, saldo: valor, dataFechamento: lote.saldoFinal.data, arquivo: lote.arquivo });
+  }
+
+  const doDia = await cnabManual.extratosCnabDoDia(empresaId, data);
+  for (const conta of contas) {
+    const chave = `${conta.company_id}:${conta.numero_conta}`;
+    if (resolvidas.has(chave)) continue;
+    const extrato = doDia.get(chave);
+    if (!extrato) {
+      if (extratos.length) relatorio.avisos.push(`${conta.nome || conta.numero_conta}: não veio em nenhum arquivo de extrato anexado.`);
+      continue;
+    }
+    casadasNaApi.add(chave);
+    itensParaGravar.push({
+      company_id: conta.company_id,
+      numero_conta: conta.numero_conta,
+      data,
+      saldo: Number(extrato.valor),
+      origem: 'API',
+      fonte: 'CNAB',
+      dataFechamento: extrato.dataFechamento,
+      composicao: { extrato },
+    });
+    relatorio.mantidos.push({ nome: conta.nome, company_id: conta.company_id, numero_conta: conta.numero_conta, saldo: Number(extrato.valor) });
+  }
+}
+
+// Cobrança: grava os títulos dos arquivos (upsert — anexar de novo não duplica) e soma no saldo
+// de cada conta com código do beneficiário, como a VanPix Cobrança.
+async function somarCobrancaCnab(empresaId, data, contas, cobrancas, itensParaGravar, relatorio) {
+  const { porConta, avisos } = cnabManual.casarCobrancas(contas, cobrancas);
+  relatorio.falhas.push(...avisos.map((mensagem) => ({ apelido: 'CNAB 240', mensagem })));
+  for (const [conta, arquivos] of porConta) {
+    for (const { arquivo, titulos } of arquivos) {
+      await gravarTitulos(empresaId, null, cnabManual.chaveCobranca(conta.codigo_beneficiario), { arquivo, titulos });
+    }
+  }
+  for (const conta of contas) {
+    if (!conta.codigo_beneficiario) continue;
+    await somarTitulosNaConta(empresaId, data, conta, cnabManual.chaveCobranca(conta.codigo_beneficiario), itensParaGravar, relatorio, {
+      beneficiario: conta.codigo_beneficiario,
+    });
   }
 }
 
 // Roda todos os convênios VanPix ativos da empresa pra `data` (sábado/domingo: nem tenta, ver
 // ehFimDeSemana), casa cada conta encontrada no retorno com o cadastro (banco+conta+dígito) e
-// grava o saldo automaticamente (origem API). Conta-alvo que ficou de fora disso só herda o
-// último saldo se a classificação pedir (origem HERDADO); senão fica em branco. Não lança exceção
-// por causa de UM convênio com problema — cada um é reportado individualmente; só propaga erro
-// se a própria gravação em lote falhar (ex.: período fechado por outra aba).
-async function buscarSaldosVanpix(empresaId, usuarioId, data) {
+// grava o saldo automaticamente (origem API). Idem API Itaú e os arquivos CNAB 240 anexados
+// (`arquivos`: [{ nome, buffer }], extrato e cobrança juntos — o tipo vem do conteúdo).
+// Conta-alvo que ficou de fora disso só herda o último saldo se a classificação pedir (origem
+// HERDADO); senão fica em branco. Não lança exceção por causa de UM convênio com problema —
+// cada um é reportado individualmente; só propaga erro se a própria gravação em lote falhar
+// (ex.: período fechado por outra aba).
+async function buscarSaldosVanpix(empresaId, usuarioId, data, arquivos = []) {
   const relatorio = {
+    // contas de cada integração na empresa — a tela só mostra as que existem
+    integracoes: await cnabManual.contarIntegracoes(empresaId),
     convenios: [],
     atualizados: [],
     herdados: [],
@@ -410,11 +494,22 @@ async function buscarSaldosVanpix(empresaId, usuarioId, data) {
     semCorrespondencia: [],
     itau: { conexoes: 0, atualizados: [], falhas: [], semCorrespondencia: [] },
     cobranca: { contas: [], falhas: [] },
+    cnab: { arquivos: [], atualizados: [], mantidos: [], avisos: [], cobranca: { contas: [], falhas: [] } },
   };
   if (ehFimDeSemana(data)) return relatorio; // sábado/domingo: nem consulta, nem grava nada
 
   const itensParaGravar = [];
   const casadasNaApi = new Set(); // "company_id:numero_conta" já resolvidas via API nesta rodada
+
+  // CNAB 240 manual: os arquivos são lidos antes de tudo (o relatório lista o que foi lido
+  // mesmo que nenhuma conta case).
+  const contasCnab = relatorio.integracoes.cnab_manual > 0 ? await cnabManual.listarContasCnab(empresaId) : [];
+  const lidos = arquivos.length ? cnabManual.lerArquivos(arquivos) : { extratos: [], cobrancas: [], lidos: [], avisos: [] };
+  relatorio.cnab.arquivos = lidos.lidos;
+  relatorio.cnab.avisos.push(...lidos.avisos);
+  if (arquivos.length && !contasCnab.length) {
+    relatorio.cnab.avisos.push('Nenhuma conta com convênio CNAB 240 manual nesta empresa — arquivos ignorados.');
+  }
 
   // VanPix Extrato: só os apelidos informados nas contas (Código cedente extrato bancário).
   const contasExtrato = await listarContasComCedenteExtrato(empresaId);
@@ -533,9 +628,17 @@ async function buscarSaldosVanpix(empresaId, usuarioId, data) {
     });
   }
 
+  // CNAB 240 manual · extrato
+  if (contasCnab.length) {
+    await aplicarExtratosCnab(empresaId, data, contasCnab, lidos.extratos, relatorio.cnab, itensParaGravar, casadasNaApi);
+  }
+
   // API Itaú: o saldo do momento (SALDO EM CONTA) de cada conta Itaú que tem agência, conta e
-  // dígito no cadastro e uma conexão ativa com essa mesma conta (ver buscarSaldosItau).
-  await buscarSaldosItau(empresaId, data, relatorio.itau, itensParaGravar, casadasNaApi);
+  // dígito no cadastro e uma conexão ativa com essa mesma conta (ver buscarSaldosItau). Sem
+  // nenhuma conta API Itaú na empresa, as conexões nem são consultadas.
+  if (relatorio.integracoes.itau > 0) {
+    await buscarSaldosItau(empresaId, data, relatorio.itau, itensParaGravar, casadasNaApi);
+  }
 
   // Segunda passada (regra do usuário): conta que nenhuma integração resolveu — VanPix
   // Extrato (encontrado ou repetido) ou API Itaú (tempo real) — SÓ herda o último saldo se a
@@ -583,6 +686,14 @@ async function buscarSaldosVanpix(empresaId, usuarioId, data) {
   } catch (err) {
     console.error('[saldos] cobrança:', err.message);
     relatorio.cobranca.falhas.push({ apelido: 'Cobrança', mensagem: `Erro ao processar a cobrança: ${err.message}` });
+  }
+  if (contasCnab.length) {
+    try {
+      await somarCobrancaCnab(empresaId, data, contasCnab, lidos.cobrancas, itensParaGravar, relatorio.cnab.cobranca);
+    } catch (err) {
+      console.error('[saldos] cobrança CNAB:', err.message);
+      relatorio.cnab.cobranca.falhas.push({ apelido: 'CNAB 240', mensagem: `Erro ao processar a cobrança: ${err.message}` });
+    }
   }
 
   if (itensParaGravar.length > 0) {

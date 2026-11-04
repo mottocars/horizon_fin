@@ -1090,6 +1090,12 @@ CREATE TABLE contas_bancarias_sienge (
     -- daí a abertura do período olha só 10 dias e repete o último saldo de quem não aparecer.
     extrato_carga_inicial_apelido VARCHAR(50),
     extrato_carga_inicial_em      TIMESTAMP,
+    -- De onde vem o saldo automático (migration 2026-11-04-contas-tipo-convenio-cnab-manual.sql):
+    -- VANPIX (códigos cedente), ITAU (conexão API Itaú), CNAB_MANUAL (arquivos de retorno
+    -- anexados na abertura do período) ou NULL (sem convênio).
+    tipo_convenio        VARCHAR(12) CHECK (tipo_convenio IN ('VANPIX', 'ITAU', 'CNAB_MANUAL')),
+    -- Código do beneficiário (cobrança SIGCB) das contas CNAB_MANUAL.
+    codigo_beneficiario  VARCHAR(20),
     -- Limite do cheque especial da conta (NULL = não informado) — migration 2026-10-15-contas-bancarias-cheque-especial.sql.
     valor_cheque_especial NUMERIC(15,2),
     PRIMARY KEY (numero_conta, empresa_id, company_id)
@@ -1141,7 +1147,7 @@ CREATE TABLE saldos_contas_bancarias (
     -- Qual integração trouxe o saldo automático (origem API): VANPIX ou ITAU. NULL nos
     -- manuais/herdados por classificação e nas linhas API anteriores a esta coluna (que eram
     -- todas da VanPix). Alimenta a coluna Automação da aba Contas bancárias.
-    fonte          VARCHAR(10) CHECK (fonte IN ('VANPIX', 'ITAU')),
+    fonte          VARCHAR(10) CHECK (fonte IN ('VANPIX', 'ITAU', 'CNAB')),
     -- Parte do saldo que veio da cobrança (títulos com Dt Crédito = data); `saldo` é o total.
     saldo_cobranca NUMERIC(15,2),
     -- Composição do saldo automático (extrato/Itaú/herdado + cobrança com os boletos) — dica da

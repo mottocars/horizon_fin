@@ -1,13 +1,15 @@
 import { createPortal } from 'react-dom';
-import { History, Landmark, ReceiptText, Zap } from 'lucide-react';
+import { FileText, History, Landmark, ReceiptText, Zap } from 'lucide-react';
 import { formatarSaldo } from './constantes';
 
 // Dica (tooltip) da célula de saldo automático: de onde veio o valor. A composição é gravada
 // pela abertura do período (vanpix-sync.service.js) na coluna saldos_contas_bancarias.composicao:
-//   extrato  { fonte: VANPIX|ITAU, apelido|conexao, conta, dataFechamento|posicao, valor, repetidoDe? }
-//            (repetidoDe: conta sem movimento na VanPix — repetiu o saldo desse dia)
+//   extrato  { fonte: VANPIX|ITAU|CNAB, apelido|conexao|arquivo, conta, dataFechamento|posicao, valor, repetidoDe? }
+//            (repetidoDe: conta sem movimento na VanPix — repetiu o saldo desse dia;
+//             arquivo: retorno CNAB 240 anexado na abertura do período)
 //   herdado  { de, origem, classificacao, valor }
-//   cobranca { apelido, de, ate, valor, titulos: [{ pagador, documento, valorPago, dataCredito, ... }] }
+//   cobranca { apelido, beneficiario?, de, ate, valor, titulos: [{ pagador, documento, valorPago, dataCredito, ... }] }
+//            (beneficiario: cobrança de arquivo CNAB 240 anexado, casada pelo código do beneficiário)
 // Saldos gravados antes desta coluna trazem só { fonte }.
 
 const LARGURA = 380;
@@ -78,6 +80,15 @@ function Conteudo({ composicao, valor, data, rotulo }) {
             valor={extrato.valor}
           />
         )}
+        {extrato?.fonte === 'CNAB' && (
+          <Parcela
+            Icone={FileText}
+            cor="bg-emerald-50 text-emerald-600"
+            titulo="CNAB 240 · extrato anexado"
+            detalhe={`Saldo final de ${dataBR(extrato.dataFechamento)} · conta ${conta(extrato.conta)} · ${extrato.arquivo}`}
+            valor={extrato.valor}
+          />
+        )}
         {extrato?.fonte === 'ITAU' && (
           <Parcela
             Icone={Zap}
@@ -102,7 +113,7 @@ function Conteudo({ composicao, valor, data, rotulo }) {
             <Parcela
               Icone={ReceiptText}
               cor="bg-primary-50 text-primary-600"
-              titulo={`Cobrança · convênio ${cobranca.apelido}`}
+              titulo={cobranca.beneficiario ? `Cobrança CNAB 240 · beneficiário ${cobranca.beneficiario}` : `Cobrança · convênio ${cobranca.apelido}`}
               detalhe={`${cobranca.titulos.length} boleto${cobranca.titulos.length === 1 ? '' : 's'} com crédito ${
                 cobranca.de === cobranca.ate ? `em ${dataBR(cobranca.de)}` : `de ${dataBR(cobranca.de, false)} a ${dataBR(cobranca.ate)}`
               }`}
