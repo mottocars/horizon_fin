@@ -3,7 +3,6 @@ import { useSearchParams } from 'react-router-dom';
 import {
   Banknote,
   Building2,
-  Calculator,
   Download,
   Globe,
   HandCoins,
@@ -22,6 +21,7 @@ import {
   Maximize2,
   SlidersHorizontal,
   Tags,
+  TrendingUp,
   Wallet,
 } from 'lucide-react';
 import Card from '../../../components/Card';
@@ -68,7 +68,7 @@ const TABS = [
   { id: 'avancos-obras', label: 'Avanços', icon: HardHat },
   { id: 'repasses', label: 'Repasses', icon: Banknote },
   { id: 'contas-correntes', label: 'Contas', icon: Landmark },
-  { id: 'orcamentos', label: 'Projeções', icon: Calculator },
+  { id: 'orcamentos', label: 'Projeções', icon: TrendingUp },
 ];
 
 function formatarDataHora(data) {
