@@ -29,7 +29,7 @@ function Divisor() {
 
 export default function Tabs({ tabs, activeId, onChange, className = '' }) {
   return (
-    <div role="tablist" className={`flex items-end gap-2 border-b border-gray-200 pr-1 ${className}`}>
+    <div role="tablist" className={`flex items-end gap-0.5 border-b border-gray-200 pr-1 ${className}`}>
       {tabs.map((tab, i) => {
         if (tab.divider) return <Divisor key={`divisor-${i}`} />;
         const Icon = tab.icon;
@@ -46,7 +46,7 @@ export default function Tabs({ tabs, activeId, onChange, className = '' }) {
             disabled={tab.disabled}
             title={tab.title}
             onClick={() => onChange(tab.id)}
-            className={`relative -mb-px flex items-center gap-2 rounded-t-xl border border-b-0 px-4 py-2.5 text-sm font-medium transition-colors ${
+            className={`relative -mb-px flex items-center gap-1.5 whitespace-nowrap rounded-t-xl border border-b-0 px-3 py-2.5 text-[13px] leading-5 font-medium transition-colors ${
               active
                 ? 'border-gray-200 bg-white text-gray-900'
                 : tab.disabled
@@ -73,7 +73,7 @@ export default function Tabs({ tabs, activeId, onChange, className = '' }) {
                 cor fica só no ícone, o resto da aba continua neutro. */}
             {Icon && (
               <Icon
-                size={15}
+                size={14}
                 className={tab.iconColorClass ?? (active ? 'text-primary-600' : tab.disabled ? 'text-gray-300' : 'text-gray-400')}
               />
             )}
