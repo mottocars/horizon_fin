@@ -3,6 +3,7 @@ const { decrypt } = require('../../utils/crypto');
 const siengeUnitsApi = require('./sienge-units-api.client');
 const progresso = require('../repasses-cef/progressoSincronizacao');
 const repassesCefService = require('../repasses-cef/repassesCef.service');
+const { bloquearSeEmpresaModelo, ehEmpresaModelo } = require('../../utils/empresaModelo');
 
 // Operações > DRE Gerencial > Unidades: unidades dos empreendimentos (/units do Sienge) em
 // sie_units — mesma lógica da sincronização de contratos do Repasses CEF
@@ -38,6 +39,7 @@ function json(valor) {
 }
 
 async function getCredenciaisSiengeAtivas(empresaId) {
+  await bloquearSeEmpresaModelo(empresaId); // empresa modelo: integração simulada, nunca chama o Sienge
   const { rows } = await pool.query(
     'SELECT tenant, username, password_enc FROM integracoes_sienge WHERE empresa_id = $1 AND ativo = TRUE',
     [empresaId]
@@ -114,6 +116,7 @@ async function inserirUnidade(client, empresaId, unidade) {
 // que já estava salvo — mesmo critério dos contratos: apaga tudo e reinsere, pra nunca duplicar.
 // `onProgress` (opcional): chamado a cada página com { paginaAtual, totalPaginas }.
 async function sincronizar(empresaId, onProgress) {
+  if (await ehEmpresaModelo(empresaId)) return { total_importado: (await pool.query('SELECT COUNT(*)::int n FROM sie_units WHERE empresa_id = $1', [empresaId])).rows[0].n, simulado: true };
   const credenciais = await getCredenciaisSiengeAtivas(empresaId);
   if (!credenciais) throw erro(400, 'Esta empresa não possui uma integração Sienge ativa configurada.');
 

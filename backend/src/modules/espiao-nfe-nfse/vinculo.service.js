@@ -1,6 +1,27 @@
 const pool = require('../../config/db');
 const { decrypt } = require('../../utils/crypto');
 const { siengeFetch } = require('../../utils/siengeFetch');
+const { bloquearSeEmpresaModelo, ehEmpresaModelo } = require('../../utils/empresaModelo');
+
+// Empresa modelo (HZN CONSTRUTORA): o "Sienge" dela é o próprio banco — títulos do contas a
+// pagar (sie_outcome) e credores do cache local. Nenhuma chamada sai do sistema.
+const TENANT_MODELO = 'hznconstrutora';
+async function credenciaisDaEmpresa(empresaId) {
+  if (await ehEmpresaModelo(empresaId)) return { tenant: TENANT_MODELO, empresaModelo: Number(empresaId) };
+  return getCredenciais(empresaId);
+}
+async function titulosLocaisDaModelo(empresaId, { codigo, dataInicio, dataFim, id = null }) {
+  const { rows } = await pool.query(
+    `SELECT bill_id AS id, MAX(document_identification_id) AS "documentIdentificationId", MAX(document_number) AS "documentNumber",
+            MIN(issue_date)::text AS "issueDate", SUM(original_amount)::float AS "totalInvoiceAmount", COUNT(*)::int AS "installmentsNumber",
+            MAX(creditor_id) AS "creditorId", MAX(registered_by) AS "registeredBy", NULL AS notes
+     FROM sie_outcome
+     WHERE empresa_id = $1 AND (${id === null ? `TRIM(document_identification_id) = $2 AND issue_date BETWEEN $3 AND $4` : 'bill_id = $2'})
+     GROUP BY bill_id`,
+    id === null ? [empresaId, codigo, dataInicio, dataFim] : [empresaId, id]
+  );
+  return rows.map((r) => ({ ...r, creditorId: r.creditorId === null ? null : Number(r.creditorId) }));
+}
 
 // Vinculação nota recebida (Espião) ↔ título do contas a pagar no Sienge.
 // Fluxo: a tela abre a janela de vínculo de uma nota → listTitulosParaNota
@@ -62,6 +83,7 @@ async function getNota(notaId) {
 }
 
 async function getCredenciais(empresaId) {
+  await bloquearSeEmpresaModelo(empresaId); // empresa modelo: integração simulada, nunca chama o Sienge
   const { rows } = await pool.query(
     'SELECT tenant, username, password_enc FROM integracoes_sienge WHERE empresa_id = $1 AND ativo = TRUE LIMIT 1',
     [empresaId]
@@ -107,6 +129,7 @@ async function siengeGet(credenciais, caminho, descricao) {
 // `onPagina({ paginaAtual, totalPaginas })` — progresso pra log da varredura
 // automática (ver vinculacaoAutomatica.js).
 async function buscarTodosTitulos(credenciais, { codigo, dataInicio, dataFim, atualizar, onPagina }) {
+  if (credenciais.empresaModelo) return titulosLocaisDaModelo(credenciais.empresaModelo, { codigo, dataInicio, dataFim });
   const chaveCache = `${credenciais.tenant}|${codigo}|${dataInicio}|${dataFim}`;
   const emCache = cacheTitulos.get(chaveCache);
   if (!atualizar && emCache && Date.now() - emCache.em < TTL_TITULOS_MS) return emCache.titulos;
@@ -168,10 +191,11 @@ async function buscarCredores(credenciais, ids, onProgresso) {
   const { rows } = await pool.query(
     `SELECT credor_id, nome, documento FROM sienge_credores_cache
      WHERE tenant = $1 AND credor_id = ANY($2::int[])
-       AND atualizado_em > NOW() - ($3 || ' days')::interval`,
-    [credenciais.tenant, unicos, String(DIAS_VALIDADE_CREDOR)]
+       AND ($4 OR atualizado_em > NOW() - ($3 || ' days')::interval)`,
+    [credenciais.tenant, unicos, String(DIAS_VALIDADE_CREDOR), Boolean(credenciais.empresaModelo)]
   );
   rows.forEach((row) => porId.set(row.credor_id, { id: row.credor_id, nome: row.nome, documento: row.documento }));
+  if (credenciais.empresaModelo) return porId; // empresa modelo: só o cadastro local
 
   const faltando = unicos.filter((id) => !porId.has(id));
   for (let i = 0; i < faltando.length; i += CONCORRENCIA_CREDORES) {
@@ -254,7 +278,7 @@ async function listTitulosParaNota(notaId, { dataInicio, dataFim, atualizar = fa
     return { configurado: false, nota: notaResumo, vinculoAtual, parametros: { dataInicio, dataFim }, titulos: [] };
   }
 
-  const credenciais = await getCredenciais(nota.empresa_id);
+  const credenciais = await credenciaisDaEmpresa(nota.empresa_id);
   const titulosSienge = await buscarTodosTitulos(credenciais, { codigo, dataInicio, dataFim, atualizar });
   const credores = await buscarCredores(credenciais, titulosSienge.map((t) => t.creditorId));
 
@@ -313,13 +337,19 @@ async function listTitulosParaNota(notaId, { dataInicio, dataFim, atualizar = fa
 // aqui — o retrato gravado vem da fonte, nunca do que o navegador mandou.
 async function vincular(notaId, tituloId, usuarioId) {
   const nota = await getNota(notaId);
-  const credenciais = await getCredenciais(nota.empresa_id);
+  const credenciais = await credenciaisDaEmpresa(nota.empresa_id);
 
-  const titulo = await siengeGet(credenciais, `/bills/${tituloId}`, 'o título');
+  const titulo = credenciais.empresaModelo
+    ? (await titulosLocaisDaModelo(credenciais.empresaModelo, { id: Number(tituloId) }))[0]
+    : await siengeGet(credenciais, `/bills/${tituloId}`, 'o título');
   if (!titulo) throw erro(404, `O título ${tituloId} não foi encontrado no Sienge.`);
-  // Na hora de gravar, o credor vem sempre fresco do Sienge (não do cache).
+  // Na hora de gravar, o credor vem sempre fresco do Sienge (não do cache) — na empresa modelo, do cadastro local.
   const credor =
-    titulo.creditorId != null ? await buscarCredorNoSienge(credenciais, titulo.creditorId) : resumirCredor(null, null);
+    titulo.creditorId == null
+      ? resumirCredor(null, null)
+      : credenciais.empresaModelo
+        ? (await buscarCredores(credenciais, [titulo.creditorId])).get(Number(titulo.creditorId)) || resumirCredor(null, titulo.creditorId)
+        : await buscarCredorNoSienge(credenciais, titulo.creditorId);
 
   const { rows: conflito } = await pool.query(
     `SELECT n.numero_nota, n.emissor

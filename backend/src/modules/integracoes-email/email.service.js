@@ -3,6 +3,8 @@ const path = require('path');
 const nodemailer = require('nodemailer');
 const pool = require('../../config/db');
 const { encrypt, decrypt } = require('../../utils/crypto');
+const { bloquearSeEmpresaModelo } = require('../../utils/empresaModelo');
+const simulacao = require('../empresa-modelo/simulacao');
 
 // Log em arquivo (não só console) pra sobreviver ao terminal fechar — um
 // "mandei mas não chegou" só dá pra investigar de verdade com a resposta
@@ -139,11 +141,12 @@ async function setAtivo(id, ativo) {
 // senha). Mesmo padrão de zapi.service.js::getCredenciais.
 async function getCredenciais(id) {
   const { rows } = await pool.query(
-    'SELECT host, porta, encriptacao, email, senha_enc, ativo FROM integracoes_email WHERE id = $1',
+    'SELECT host, porta, encriptacao, email, senha_enc, ativo, empresa_id FROM integracoes_email WHERE id = $1',
     [id]
   );
   const row = rows[0];
   if (!row) return null;
+  await bloquearSeEmpresaModelo(row.empresa_id); // empresa modelo: e-mail simulado
   return {
     host: row.host,
     porta: row.porta,
@@ -182,6 +185,8 @@ function criarTransportador(credenciais) {
 // `anexoBase64`/`anexoNomeArquivo` são opcionais: o boleto, quando o
 // template da etapa pede (`template_enviar_boleto`), vai por aqui.
 async function enviarEmail(integracaoId, { destinatario, assunto, corpo, anexoBase64, anexoNomeArquivo }) {
+  // Empresa modelo: envio simulado, ninguém recebe nada.
+  if (await simulacao.integracaoDaEmpresaModelo('integracoes_email', integracaoId)) return simulacao.envioSimulado('email');
   const credenciais = await getCredenciais(integracaoId);
   if (!credenciais) throw badRequest('Conexão de e-mail não encontrada.');
   if (!credenciais.ativo) throw badRequest('A conexão de e-mail configurada para este cluster está inativa.');
@@ -253,6 +258,8 @@ function traduzirErroSmtp(err) {
 // pelo `id` informado, mesmo espírito de "editar sem repreencher mantém a
 // senha atual" já usado no `update`.
 async function testarConexao({ id, host, porta, encriptacao, email, senha }) {
+  // Empresa modelo: teste simulado da conexão já salva (nada sai do sistema).
+  if (id && !senha && (await simulacao.integracaoDaEmpresaModelo('integracoes_email', id))) return { ok: true, simulado: true };
   let senhaFinal = senha;
   if (!senhaFinal) {
     if (!id) throw badRequest('Informe a senha para testar a conexão.');

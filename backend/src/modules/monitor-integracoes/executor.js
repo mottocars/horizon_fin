@@ -1,6 +1,7 @@
 const pool = require('../../config/db');
 const { ROTINA_POR_CHAVE } = require('./rotinas');
 const { rodarCancelavel, erroCancelada } = require('../../utils/execucaoCancelavel');
+const simulacao = require('../empresa-modelo/simulacao');
 
 // Executor do Monitor de Integrações: roda uma rotina (ver rotinas.js) em
 // segundo plano — as sincronizações levam de segundos a vários minutos, tempo
@@ -74,8 +75,12 @@ async function rodar(job, rotina) {
   const rotulo = `${job.rotina} (empresa ${job.empresaId}, ${job.origem})`;
   try {
     const parametros = rotina.parametros ? await parametrosDe(job.empresaId, job.rotina) : {};
+    // Empresa modelo: rotinas que chamam sistemas externos são simuladas (nada sai do sistema).
+    const executar = (await simulacao.deveSimularRotina(job.empresaId, job.rotina))
+      ? (args) => simulacao.executarRotinaSimulada(job.rotina, args)
+      : (args) => rotina.executar(args);
     const resumo = await rodarCancelavel(job.controle.signal, () =>
-      rotina.executar({
+      executar({
         empresaId: job.empresaId,
         usuarioId: job.usuarioId,
         parametros,

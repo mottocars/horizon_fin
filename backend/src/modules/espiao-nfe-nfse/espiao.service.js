@@ -5,6 +5,7 @@ const zlib = require('zlib');
 const crypto = require('crypto');
 const forge = require('node-forge');
 const pool = require('../../config/db');
+const { ehEmpresaModelo } = require('../../utils/empresaModelo');
 const { decrypt } = require('../../utils/crypto');
 const { httpsRequest } = require('../../utils/httpsRequest');
 const { codigoUf } = require('./uf');
@@ -616,6 +617,23 @@ async function salvarEstado(certificadoId, { cnpj, ultimoNsuNfe, ultimoNsuNfse }
 }
 
 async function consultarPorCertificado(empresaId, certificado, cUFAutor) {
+  // Empresa modelo: consulta à SEFAZ/ADN simulada (nenhuma nota nova, nada sai do sistema).
+  if (await ehEmpresaModelo(empresaId)) {
+    await pool.query(
+      `INSERT INTO espiao_certificado_estado (certificado_id, cnpj, ultima_consulta_em) VALUES ($1, $2, NOW())
+       ON CONFLICT (certificado_id) DO UPDATE SET ultima_consulta_em = NOW()`,
+      [certificado.id, extrairCnpjDoNome(certificado.nome)]
+    );
+    return {
+      certificadoId: certificado.id,
+      ok: true,
+      notasEncontradas: 0,
+      notasSalvas: 0,
+      notasServicosEncontradas: 0,
+      notasServicosSalvas: 0,
+      mensagem: 'Consulta concluída: nenhuma nota nova desde a última consulta.',
+    };
+  }
   const cnpj = extrairCnpjDoNome(certificado.nome);
   if (!cnpj) {
     return { certificadoId: certificado.id, ok: false, mensagem: 'Não foi possível identificar o CNPJ pelo nome do certificado.' };

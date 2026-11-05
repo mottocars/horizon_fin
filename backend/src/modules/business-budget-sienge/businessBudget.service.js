@@ -1,10 +1,12 @@
 const pool = require('../../config/db');
 const { decrypt } = require('../../utils/crypto');
 const { fetchAllBusinessBudget } = require('./businessBudget-api.client');
+const { bloquearSeEmpresaModelo } = require('../../utils/empresaModelo');
 // (Sincroniza o Orçamento Empresarial do Sienge — mesmo padrão do income/outcome: uma chamada HTTP
 // só, apaga e reinsere tudo da empresa numa transação, em lotes multi-linha.)
 
 async function getIntegracaoAtiva(empresaId) {
+  await bloquearSeEmpresaModelo(empresaId); // empresa modelo: integração simulada, nunca chama o Sienge
   const { rows } = await pool.query(
     'SELECT tenant, username, password_enc FROM integracoes_sienge WHERE empresa_id = $1 AND ativo = TRUE LIMIT 1',
     [empresaId]

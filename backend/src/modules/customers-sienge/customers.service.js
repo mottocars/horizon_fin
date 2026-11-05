@@ -1,6 +1,7 @@
 const pool = require('../../config/db');
 const { decrypt } = require('../../utils/crypto');
 const { fetchAllCustomers } = require('./customers-api.client');
+const { bloquearSeEmpresaModelo } = require('../../utils/empresaModelo');
 // Sincroniza os clientes (customers) do Sienge — mesmo padrão do
 // income-sienge (ver income.service.js): apaga tudo da empresa e reinsere
 // inteiro a cada sincronização, dentro de uma única transação, gravando o
@@ -9,6 +10,7 @@ const { fetchAllCustomers } = require('./customers-api.client');
 // bulk-data (uma chamada só).
 
 async function getIntegracaoAtiva(empresaId) {
+  await bloquearSeEmpresaModelo(empresaId); // empresa modelo: integração simulada, nunca chama o Sienge
   const { rows } = await pool.query(
     'SELECT tenant, username, password_enc FROM integracoes_sienge WHERE empresa_id = $1 AND ativo = TRUE LIMIT 1',
     [empresaId]

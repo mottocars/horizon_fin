@@ -37,7 +37,8 @@ async function listarConexoes(empresaId, conexaoIds) {
          AND sc.digito = c.dac
        LIMIT 1
      ) s ON TRUE
-     WHERE c.empresa_id = $1 AND c.ativo = TRUE AND c.certificado_pem IS NOT NULL
+     LEFT JOIN conexoes_itau o ON o.id = c.conexao_origem_id -- espelho da empresa modelo
+     WHERE c.empresa_id = $1 AND c.ativo = TRUE AND COALESCE(o.certificado_pem, c.certificado_pem) IS NOT NULL
        AND c.agencia IS NOT NULL AND c.conta IS NOT NULL AND c.dac IS NOT NULL
        ${filtro}
      ORDER BY c.nome`,

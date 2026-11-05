@@ -3,6 +3,8 @@ const { agoraSP } = require('../monitor-integracoes/tempo');
 const { criptografar, descriptografar, garantirChave } = require('./itau.crypto');
 const v = require('./itau.validacao');
 const sts = require('./itau.sts');
+const { ehEmpresaModelo } = require('../../utils/empresaModelo');
+const { mascararExtrato } = require('./itau.mascara');
 
 // ---------------------------------------------------------------------------------------
 // Conexões API Itaú (tabela conexoes_itau). O fluxo de emissão segue os passos 1 a 9 da
@@ -49,10 +51,15 @@ function mensagemStatus(status, codigo) {
   }
 }
 
+// Conexão espelho (empresa modelo): validade, status e certificado são os da origem (alias o).
 const CAMPOS_PUBLICOS = `
   c.id, c.nome, c.client_id, c.cnpj, c.agencia, c.conta, c.dac, c.razao_social, c.cidade, c.uf,
-  c.data_validade_certificado, c.status, c.ultimo_erro_codigo, c.ativo, c.criado_em, c.atualizado_em,
-  (c.certificado_pem IS NOT NULL) AS tem_certificado,
+  COALESCE(o.data_validade_certificado, c.data_validade_certificado) AS data_validade_certificado,
+  COALESCE(o.status, c.status) AS status,
+  CASE WHEN o.id IS NOT NULL THEN o.ultimo_erro_codigo ELSE c.ultimo_erro_codigo END AS ultimo_erro_codigo,
+  c.ativo, c.criado_em, c.atualizado_em,
+  (COALESCE(o.certificado_pem, c.certificado_pem) IS NOT NULL) AS tem_certificado,
+  (c.conexao_origem_id IS NOT NULL) AS espelho,
   e.id AS empresa_id, COALESCE(NULLIF(e.nome_fantasia, ''), e.razao_social) AS empresa_razao_social,
   e.cnpj AS empresa_cnpj`;
 
@@ -86,7 +93,8 @@ async function list({ page = 1, limit = 10, search = '', ativo, empresaIds }) {
   }
   const where = `WHERE ${conditions.join(' AND ')}`;
   const { rows } = await pool.query(
-    `SELECT ${CAMPOS_PUBLICOS} FROM conexoes_itau c JOIN empresas e ON e.id = c.empresa_id ${where}
+    `SELECT ${CAMPOS_PUBLICOS} FROM conexoes_itau c JOIN empresas e ON e.id = c.empresa_id
+     LEFT JOIN conexoes_itau o ON o.id = c.conexao_origem_id ${where}
      ORDER BY c.criado_em DESC LIMIT $${params.length + 1} OFFSET $${params.length + 2}`,
     [...params, limit, offset]
   );
@@ -102,7 +110,8 @@ async function list({ page = 1, limit = 10, search = '', ativo, empresaIds }) {
 
 async function getById(id) {
   const { rows } = await pool.query(
-    `SELECT ${CAMPOS_PUBLICOS} FROM conexoes_itau c JOIN empresas e ON e.id = c.empresa_id WHERE c.id = $1`,
+    `SELECT ${CAMPOS_PUBLICOS} FROM conexoes_itau c JOIN empresas e ON e.id = c.empresa_id
+     LEFT JOIN conexoes_itau o ON o.id = c.conexao_origem_id WHERE c.id = $1`,
     [id]
   );
   return rows[0] ? paraResposta(rows[0]) : null;
@@ -226,6 +235,10 @@ async function gerarCertificado(dados, usuarioId, conexaoId = null) {
   const subject = v.montarSubject({ clientId: dados.client_id, razaoSocial: dados.razao_social, cidade: dados.cidade, uf: dados.uf });
   erros.push(...v.validarSubject(subject));
   if (erros.length) throw erro(erros[0]);
+  if (conexaoId) await garantirNaoEspelho(conexaoId);
+  else if (await ehEmpresaModelo(dados.empresa_id)) {
+    throw erro('Empresa modelo: as conexões Itaú dela são espelhos de conexões reais e não emitem certificado.');
+  }
   garantirChave(); // sem ITAU_ENCRYPTION_KEY não dá pra guardar a chave → não chama o Itaú
 
   if (conexaoId) {
@@ -318,23 +331,41 @@ async function resultado(id, sucesso) {
 // renovar/reemitir invalida sozinho.
 const cacheTokens = new Map();
 
+// Conexão ESPELHO (empresa modelo, conexao_origem_id preenchido): credenciais, certificado e
+// a conta consultada vêm da conexão de origem — que nunca é alterada daqui. `row` é sempre a
+// linha usada na chamada ao Itaú; `exibicao` é a linha cujo nome/conta aparecem na tela.
 async function contexto(conexaoId) {
-  const row = await carregarLinha(conexaoId);
-  if (!row) throw erro('Conexão não encontrada.', 404);
+  const exibicao = await carregarLinha(conexaoId);
+  if (!exibicao) throw erro('Conexão não encontrada.', 404);
+  let row = exibicao;
+  if (exibicao.conexao_origem_id) {
+    row = await carregarLinha(exibicao.conexao_origem_id);
+    if (!row) throw erro('A conexão de origem desta conexão de demonstração não existe mais.');
+  }
   if (!row.certificado_pem || !row.chave_privada_enc || !row.client_secret_enc) {
     throw erro('Esta conexão ainda não tem certificado.');
   }
   return {
     row,
+    exibicao,
+    espelho: row !== exibicao,
     agente: sts.criarAgente(descriptografar(row.chave_privada_enc), row.certificado_pem),
     clientSecret: descriptografar(row.client_secret_enc),
   };
 }
 
+// Conexão espelho não emite nem renova certificado: isso é feito na conexão de origem.
+async function garantirNaoEspelho(id) {
+  const row = await carregarLinha(id);
+  if (row?.conexao_origem_id) {
+    throw erro('Conexão de demonstração (empresa modelo): o certificado é gerenciado na conexão de origem e não pode ser emitido nem renovado aqui.');
+  }
+}
+
 // Resultado cru ({ ok, accessToken } | { ok:false, codigo }), usado pelo teste de token.
 async function obterToken(conexaoId, { ignorarCache = false } = {}) {
   const ctx = await contexto(conexaoId);
-  const chaveCache = `${conexaoId}:${ctx.row.certificado_pem.length}:${ctx.row.certificado_pem.slice(-80)}`;
+  const chaveCache = `${ctx.row.id}:${ctx.row.certificado_pem.length}:${ctx.row.certificado_pem.slice(-80)}`;
   const emCache = cacheTokens.get(chaveCache);
   if (!ignorarCache && emCache && emCache.expiraEm > Date.now()) return { ok: true, accessToken: emCache.token, ctx };
 
@@ -385,8 +416,8 @@ async function testarExtrato(id) {
   const r = await sts.consultarExtrato({
     agente: t.ctx.agente,
     accessToken: t.accessToken,
-    clientId: row.client_id,
-    conta: row,
+    clientId: t.ctx.row.client_id,
+    conta: t.ctx.row,
     dataInicio: hoje,
     dataFim: hoje,
   });
@@ -477,6 +508,12 @@ async function buscarExtratoPeriodo(conexaoId, dataInicio, dataFim) {
       const totalPaginas = Number(r.json.pagination?.total_pages) || 1;
       if (pagina >= totalPaginas) break;
     }
+    const exib = t.ctx.exibicao;
+    if (t.ctx.espelho) {
+      // Empresa modelo: nada que identifique a origem chega à tela (valores ficam reais).
+      const m = await mascararExtrato({ eventos, saldos }, row, exib);
+      return { ok: true, eventos: m.eventos, saldos: m.saldos, conta: { agencia: exib.agencia, conta: exib.conta, dac: exib.dac } };
+    }
     return { ok: true, eventos, saldos, conta: { agencia: row.agencia, conta: row.conta, dac: row.dac } };
   } catch (err) {
     return { ok: false, mensagem: err.expose ? err.message : 'Erro interno ao consultar o extrato.' };
@@ -488,6 +525,7 @@ async function buscarExtratoPeriodo(conexaoId, dataInicio, dataFim) {
 async function renovarCertificado(id, { apenasSeNaJanela = false } = {}) {
   const atual = await getById(id);
   if (!atual) return null;
+  await garantirNaoEspelho(id);
   if (!atual.tem_certificado) throw erro('Esta conexão ainda não tem certificado.');
   if (atual.certificado_vencido) {
     throw erro('O certificado já venceu e não pode mais ser renovado. Peça um novo token ao Itaú e gere o certificado de novo.');
@@ -533,7 +571,7 @@ async function renovarCertificado(id, { apenasSeNaJanela = false } = {}) {
 async function renovarCertificadosDaEmpresa(empresaId) {
   const { rows } = await pool.query(
     `SELECT id, nome FROM conexoes_itau
-     WHERE empresa_id = $1 AND ativo = TRUE AND certificado_pem IS NOT NULL ORDER BY id`,
+     WHERE empresa_id = $1 AND ativo = TRUE AND certificado_pem IS NOT NULL AND conexao_origem_id IS NULL ORDER BY id`,
     [empresaId]
   );
   const linhas = [];

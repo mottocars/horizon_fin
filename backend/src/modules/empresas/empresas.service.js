@@ -53,6 +53,18 @@ async function consultarCnpj(cnpj) {
   };
 }
 
+// A empresa modelo (HZN CONSTRUTORA) não pode ser desativada nem excluída — também travado
+// no banco (trigger trg_empresas_protege_modelo).
+async function garantirNaoModelo(id, mensagem) {
+  const { rows } = await pool.query('SELECT empresa_modelo FROM empresas WHERE id = $1', [id]);
+  if (rows[0]?.empresa_modelo) {
+    const err = new Error(mensagem);
+    err.status = 400;
+    err.expose = true;
+    throw err;
+  }
+}
+
 async function list({ page = 1, limit = 10, search = '', ativo, empresaIds }) {
   const offset = (page - 1) * limit;
   const searchTerm = `%${search}%`;
@@ -72,10 +84,10 @@ async function list({ page = 1, limit = 10, search = '', ativo, empresaIds }) {
   const whereClause = `WHERE ${conditions.join(' AND ')}`;
 
   const { rows } = await pool.query(
-    `SELECT id, cnpj, razao_social, nome_fantasia, cidade, estado, situacao_cadastral, ativo, criado_em, logo
+    `SELECT id, cnpj, razao_social, nome_fantasia, cidade, estado, situacao_cadastral, ativo, criado_em, logo, empresa_modelo
      FROM empresas
      ${whereClause}
-     ORDER BY razao_social ASC
+     ORDER BY empresa_modelo DESC, razao_social ASC
      LIMIT $${params.length + 1} OFFSET $${params.length + 2}`,
     [...params, limit, offset]
   );
@@ -161,6 +173,7 @@ async function update(id, data) {
 }
 
 async function setAtivo(id, ativo) {
+  await garantirNaoModelo(id, 'A empresa modelo não pode ser desativada.');
   const { rows } = await pool.query(
     `UPDATE empresas SET ativo = $1 WHERE id = $2 RETURNING *`,
     [ativo, id]
@@ -178,6 +191,7 @@ async function setLogo(id, logo) {
 }
 
 async function remove(id) {
+  await garantirNaoModelo(id, 'A empresa modelo não pode ser excluída.');
   const { rowCount } = await pool.query('DELETE FROM empresas WHERE id = $1', [id]);
   return rowCount > 0;
 }

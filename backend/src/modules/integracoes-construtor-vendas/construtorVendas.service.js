@@ -1,5 +1,6 @@
 const pool = require('../../config/db');
 const { encrypt } = require('../../utils/crypto');
+const { bloquearSeEmpresaModelo } = require('../../utils/empresaModelo');
 
 async function list({ page = 1, limit = 10, search = '', ativo, empresaIds }) {
   const offset = (page - 1) * limit;
@@ -105,6 +106,7 @@ async function setAtivo(id, ativo) {
 // Credenciais pra chamar a API do CVCRM (ver cvcrm-api.client.js) — só a
 // integração ATIVA da empresa serve pra sincronizar.
 async function getCredenciaisAtivas(empresaId) {
+  await bloquearSeEmpresaModelo(empresaId); // empresa modelo: Construtor de Vendas simulado
   const { rows } = await pool.query(
     `SELECT tenant, email, senha_enc
      FROM integracoes_construtor_vendas

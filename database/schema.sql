@@ -75,10 +75,33 @@ CREATE TABLE empresas (
     logo                   TEXT,  -- data URI PNG da logomarca (opcional)
     ativo                  BOOLEAN DEFAULT TRUE,
     criado_em              TIMESTAMP DEFAULT NOW(),
-    atualizado_em          TIMESTAMP DEFAULT NOW()
+    atualizado_em          TIMESTAMP DEFAULT NOW(),
+    -- Empresa modelo (HZN CONSTRUTORA): fictícia, de demonstração, no máximo uma, não pode ser
+    -- excluída nem desativada; integrações simuladas. Migration 2026-11-05-empresa-modelo.sql.
+    empresa_modelo         BOOLEAN NOT NULL DEFAULT FALSE
 );
 
 CREATE INDEX idx_empresas_razao_social ON empresas (razao_social);
+CREATE UNIQUE INDEX empresas_uma_modelo ON empresas ((TRUE)) WHERE empresa_modelo;
+
+CREATE OR REPLACE FUNCTION empresas_protege_modelo() RETURNS trigger AS $$
+BEGIN
+  IF TG_OP = 'DELETE' THEN
+    IF OLD.empresa_modelo THEN
+      RAISE EXCEPTION 'A empresa modelo não pode ser excluída.' USING ERRCODE = 'check_violation';
+    END IF;
+    RETURN OLD;
+  END IF;
+  IF OLD.empresa_modelo AND (NEW.empresa_modelo IS DISTINCT FROM TRUE OR NEW.ativo IS DISTINCT FROM TRUE) THEN
+    RAISE EXCEPTION 'A empresa modelo não pode ser desativada nem deixar de ser modelo.' USING ERRCODE = 'check_violation';
+  END IF;
+  RETURN NEW;
+END;
+$$ LANGUAGE plpgsql;
+
+CREATE TRIGGER trg_empresas_protege_modelo
+  BEFORE UPDATE OR DELETE ON empresas
+  FOR EACH ROW EXECUTE FUNCTION empresas_protege_modelo();
 
 -- Vínculo N:N entre usuários e empresas — um usuário (Administrador ou
 -- Básico) pode pertencer a mais de uma empresa. MASTER não tem linhas aqui
@@ -207,7 +230,11 @@ CREATE TABLE conexoes_itau (
     ativo                     BOOLEAN NOT NULL DEFAULT TRUE,
     criado_por                INTEGER REFERENCES usuarios(id) ON DELETE SET NULL,
     criado_em                 TIMESTAMP DEFAULT NOW(),
-    atualizado_em             TIMESTAMP DEFAULT NOW()
+    atualizado_em             TIMESTAMP DEFAULT NOW(),
+    -- Conexão ESPELHO da empresa modelo: credenciais/certificado/conta consultada vêm desta
+    -- conexão de origem (nunca alterada); a linha da empresa modelo só guarda o que aparece
+    -- na tela, e o extrato passa por itau.mascara.js. Migration 2026-11-05-empresa-modelo.sql.
+    conexao_origem_id         INTEGER REFERENCES conexoes_itau(id) ON DELETE SET NULL
 );
 
 CREATE INDEX idx_conexoes_itau_empresa ON conexoes_itau (empresa_id);

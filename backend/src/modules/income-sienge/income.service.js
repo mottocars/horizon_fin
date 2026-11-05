@@ -1,10 +1,12 @@
 const pool = require('../../config/db');
 const { decrypt } = require('../../utils/crypto');
 const { fetchAllIncome } = require('./income-api.client');
+const { bloquearSeEmpresaModelo } = require('../../utils/empresaModelo');
 // (Sincroniza contas a receber do Sienge — ver income-api.client.js para o
 // motivo de a busca ser sempre uma chamada HTTP só, sem paginação.)
 
 async function getIntegracaoAtiva(empresaId) {
+  await bloquearSeEmpresaModelo(empresaId); // empresa modelo: integração simulada, nunca chama o Sienge
   const { rows } = await pool.query(
     'SELECT tenant, username, password_enc FROM integracoes_sienge WHERE empresa_id = $1 AND ativo = TRUE LIMIT 1',
     [empresaId]

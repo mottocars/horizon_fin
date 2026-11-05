@@ -2,6 +2,7 @@ const pool = require('../../config/db');
 const { decrypt } = require('../../utils/crypto');
 const siengeApi = require('./sienge-api.client');
 const bancosApi = require('./bancos-api.client');
+const { bloquearSeEmpresaModelo, ehEmpresaModelo } = require('../../utils/empresaModelo');
 
 function listBancos() {
   return bancosApi.getBancos();
@@ -204,6 +205,7 @@ async function updateEnriquecimento(empresaId, companyId, numeroConta, data) {
 }
 
 async function getEmpresaComIntegracao(empresaId) {
+  await bloquearSeEmpresaModelo(empresaId); // empresa modelo: integração simulada, nunca chama o Sienge
   const { rows } = await pool.query(
     `SELECT e.id AS empresa_id, e.razao_social,
             s.tenant, s.username, s.password_enc
@@ -259,6 +261,7 @@ async function upsertContas(empresaId, contas) {
 }
 
 async function gerar(empresaId) {
+  if (await ehEmpresaModelo(empresaId)) return { empresa_id: empresaId, total_importado: (await pool.query('SELECT COUNT(*)::int n FROM contas_bancarias_sienge WHERE empresa_id = $1', [empresaId])).rows[0].n, simulado: true };
   const empresa = await getEmpresaComIntegracao(empresaId);
   if (!empresa) {
     const err = new Error('Esta empresa não possui uma integração Sienge ativa configurada.');

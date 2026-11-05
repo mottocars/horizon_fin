@@ -253,25 +253,36 @@ export default function EmpresaDetalhe() {
             >
               {empresa.ativo ? 'Ativa' : 'Inativa'}
             </span>
-            <Button
-              type="button"
-              variant={empresa.ativo ? 'danger' : 'secondary'}
-              loading={togglingStatus}
-              onClick={handleToggleStatus}
-            >
-              {empresa.ativo ? <Ban size={16} /> : <CheckCircle2 size={16} />}
-              {empresa.ativo ? 'Desativar' : 'Reativar'}
-            </Button>
-            <Button
-              type="button"
-              variant="secondary"
-              loading={deleting}
-              onClick={handleDelete}
-              className="border-red-200 text-red-600 hover:bg-red-50"
-            >
-              <Trash2 size={16} />
-              Excluir
-            </Button>
+            {empresa.empresa_modelo ? (
+              <span
+                className="inline-flex items-center rounded-full bg-amber-100 px-2.5 py-1 text-xs font-semibold text-amber-700"
+                title="Empresa fictícia de demonstração: não pode ser desativada nem excluída."
+              >
+                Empresa modelo
+              </span>
+            ) : (
+              <>
+                <Button
+                  type="button"
+                  variant={empresa.ativo ? 'danger' : 'secondary'}
+                  loading={togglingStatus}
+                  onClick={handleToggleStatus}
+                >
+                  {empresa.ativo ? <Ban size={16} /> : <CheckCircle2 size={16} />}
+                  {empresa.ativo ? 'Desativar' : 'Reativar'}
+                </Button>
+                <Button
+                  type="button"
+                  variant="secondary"
+                  loading={deleting}
+                  onClick={handleDelete}
+                  className="border-red-200 text-red-600 hover:bg-red-50"
+                >
+                  <Trash2 size={16} />
+                  Excluir
+                </Button>
+              </>
+            )}
           </div>
         </div>
 

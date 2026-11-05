@@ -1,6 +1,7 @@
 const pool = require('../../config/db');
 const { encrypt, decrypt } = require('../../utils/crypto');
 const { parseRetornoCaixa, parseRetornoCobrancaCaixa } = require('../../utils/cnab240');
+const { bloquearSeEmpresaModelo } = require('../../utils/empresaModelo');
 
 async function list({ page = 1, limit = 10, search = '', ativo, empresaIds }) {
   const offset = (page - 1) * limit;
@@ -164,11 +165,12 @@ async function setAtivo(id, ativo) {
 // verdade na API da VanPix for construída.
 async function getCredenciais(id) {
   const { rows } = await pool.query(
-    'SELECT service_key_enc, client_secret_enc, ativo FROM integracoes_vanpix WHERE id = $1',
+    'SELECT service_key_enc, client_secret_enc, ativo, empresa_id FROM integracoes_vanpix WHERE id = $1',
     [id]
   );
   const row = rows[0];
   if (!row) return null;
+  await bloquearSeEmpresaModelo(row.empresa_id); // empresa modelo: VanPix simulada
   const { rows: convenios } = await pool.query(
     'SELECT apelido FROM integracoes_vanpix_convenios WHERE integracao_id = $1 ORDER BY apelido',
     [id]
@@ -295,6 +297,7 @@ async function buscarRetornoCobranca(serviceKey, clientSecret, apelido, dataPesq
 // Conexões VanPix ativas da empresa de uma finalidade (EXTRATO/COBRANCA), por apelido:
 // apelido -> id da conexão.
 async function conexoesPorApelido(empresaId, finalidade) {
+  await bloquearSeEmpresaModelo(empresaId);
   const { rows } = await pool.query(
     `SELECT c.apelido, v.id FROM integracoes_vanpix v
      JOIN integracoes_vanpix_convenios c ON c.integracao_id = v.id

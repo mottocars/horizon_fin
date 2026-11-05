@@ -1,6 +1,8 @@
 const { z } = require('zod');
 const service = require('./vanpix.service');
 const usuariosService = require('../usuarios/usuarios.service');
+const pool = require('../../config/db');
+const simulacao = require('../empresa-modelo/simulacao');
 
 const apelidoSchema = z.string().trim().min(1, 'Apelido do convênio não pode ser vazio.').max(50, 'Apelido do convênio muito longo.');
 
@@ -150,6 +152,14 @@ async function testar(req, res, next) {
 async function testarSalva(req, res, next) {
   try {
     const overrides = testarSalvaSchema.parse(req.body || {});
+    // Empresa modelo: teste simulado (nada sai do sistema).
+    if (await simulacao.integracaoDaEmpresaModelo('integracoes_vanpix', req.params.id)) {
+      const { rows } = await pool.query('SELECT apelido FROM integracoes_vanpix_convenios WHERE integracao_id = $1 ORDER BY apelido', [req.params.id]);
+      return res.json({
+        sucesso: true,
+        detalhes: rows.map((r) => ({ apelido: r.apelido, status: 'ok_sem_retorno', mensagem: 'Credenciais aceitas — sem retorno para hoje.' })),
+      });
+    }
     const credenciais = await service.getCredenciais(req.params.id);
     if (!credenciais) return res.status(404).json({ message: 'Conexão não encontrada.' });
 

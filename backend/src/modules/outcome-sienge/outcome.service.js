@@ -2,6 +2,7 @@ const pool = require('../../config/db');
 const { decrypt } = require('../../utils/crypto');
 const { abrirOutcome } = require('./outcome-api.client');
 const { hojeEmBrasilia } = require('../extrato-contas-sienge/extratoContas-api.client');
+const { bloquearSeEmpresaModelo } = require('../../utils/empresaModelo');
 
 // 'AAAA-MM-DD' de N dias antes de `data`.
 function diasAntes(data, n) {
@@ -14,6 +15,7 @@ function diasAntes(data, n) {
 // partes e gravada enquanto chega: a da GENESIS não cabe num texto só.)
 
 async function getIntegracaoAtiva(empresaId) {
+  await bloquearSeEmpresaModelo(empresaId); // empresa modelo: integração simulada, nunca chama o Sienge
   const { rows } = await pool.query(
     'SELECT tenant, username, password_enc FROM integracoes_sienge WHERE empresa_id = $1 AND ativo = TRUE LIMIT 1',
     [empresaId]

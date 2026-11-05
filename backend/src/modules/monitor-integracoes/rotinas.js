@@ -197,7 +197,7 @@ const CATALOGO = [
     integracao: 'itau',
     async disponibilidade(empresaId) {
       const { rowCount } = await pool.query(
-        'SELECT 1 FROM conexoes_itau WHERE empresa_id = $1 AND ativo = TRUE AND certificado_pem IS NOT NULL',
+        'SELECT 1 FROM conexoes_itau WHERE empresa_id = $1 AND ativo = TRUE AND (certificado_pem IS NOT NULL OR conexao_origem_id IS NOT NULL)',
         [empresaId]
       );
       return rowCount ? null : 'Esta empresa não tem uma conexão API Itaú ativa com certificado gerado (Integrações > Contas Bancárias).';

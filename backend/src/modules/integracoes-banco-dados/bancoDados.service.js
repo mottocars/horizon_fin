@@ -1,6 +1,7 @@
 const pool = require('../../config/db');
 const { encrypt, decrypt } = require('../../utils/crypto');
 const { Client } = require('pg');
+const { bloquearSeEmpresaModelo } = require('../../utils/empresaModelo');
 
 function badRequest(message) {
   const err = new Error(message);
@@ -117,11 +118,12 @@ async function setAtivo(id, ativo) {
 // senha). Mesmo padrão de email.service.js::getCredenciais.
 async function getCredenciais(id) {
   const { rows } = await pool.query(
-    'SELECT sgbd, host, porta, banco, usuario, senha_enc, ssl FROM integracoes_banco_dados WHERE id = $1',
+    'SELECT sgbd, host, porta, banco, usuario, senha_enc, ssl, empresa_id FROM integracoes_banco_dados WHERE id = $1',
     [id]
   );
   const row = rows[0];
   if (!row) return null;
+  await bloquearSeEmpresaModelo(row.empresa_id);
   return { ...row, senha: decrypt(row.senha_enc) };
 }
 
@@ -188,6 +190,7 @@ async function testarConexao({ id, sgbd, host, porta, banco, usuario, senha, ssl
 // consultam um banco de terceiro conhecido por nome (ex.: relatorioMasa.service.js buscando o
 // "Time Tracker" da Masa), o mesmo espírito de actioonService.getCredenciaisAtivas.
 async function getCredenciaisPorConexao(empresaId, nomeConexao) {
+  await bloquearSeEmpresaModelo(empresaId);
   const { rows } = await pool.query(
     `SELECT sgbd, host, porta, banco, usuario, senha_enc, ssl FROM integracoes_banco_dados
      WHERE empresa_id = $1 AND nome_conexao = $2 AND ativo = true LIMIT 1`,

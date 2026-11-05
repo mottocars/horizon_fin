@@ -1,6 +1,7 @@
 const pool = require('../../config/db');
 const { decrypt } = require('../../utils/crypto');
 const { fetchAllStatements, hojeEmBrasilia } = require('./extratoContas-api.client');
+const { bloquearSeEmpresaModelo } = require('../../utils/empresaModelo');
 
 // Sincroniza o extrato (v1/accounts-statements) de TODAS as contas da empresa (aba Contas Correntes do
 // DFC Construtoras), conta a conta: busca a base completa da conta (01/01/2000 até hoje — o realizado do mês atual vem até o dia da atualização
@@ -9,6 +10,7 @@ const { fetchAllStatements, hojeEmBrasilia } = require('./extratoContas-api.clie
 // herança da natureza — no mútuo, a perna com a natureza fica na conta de mútuo (pedido do usuário).
 
 async function getIntegracaoAtiva(empresaId) {
+  await bloquearSeEmpresaModelo(empresaId); // empresa modelo: integração simulada, nunca chama o Sienge
   const { rows } = await pool.query(
     'SELECT tenant, username, password_enc FROM integracoes_sienge WHERE empresa_id = $1 AND ativo = TRUE LIMIT 1',
     [empresaId]

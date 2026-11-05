@@ -1,5 +1,6 @@
 const pool = require('../../config/db');
 const { encrypt, decrypt } = require('../../utils/crypto');
+const { bloquearSeEmpresaModelo } = require('../../utils/empresaModelo');
 
 const ACTIOON_LOGIN_URL = 'https://api.actioon.com.br/api/login';
 
@@ -115,9 +116,10 @@ async function setAtivo(id, ativo) {
 // pro frontend (que só vê os campos de listagem/edição via getById, sem a
 // senha). Mesmo padrão de email.service.js::getCredenciais.
 async function getCredenciais(id) {
-  const { rows } = await pool.query('SELECT email, senha_enc FROM integracoes_actioon WHERE id = $1', [id]);
+  const { rows } = await pool.query('SELECT email, senha_enc, empresa_id FROM integracoes_actioon WHERE id = $1', [id]);
   const row = rows[0];
   if (!row) return null;
+  await bloquearSeEmpresaModelo(row.empresa_id);
   return { email: row.email, senha: decrypt(row.senha_enc) };
 }
 
@@ -125,6 +127,7 @@ async function getCredenciais(id) {
 // API da Actioon (ver relatorio-empreendimentos-masa), mesmo espírito de
 // construtorVendas.service.js::getCredenciaisAtivas.
 async function getCredenciaisAtivas(empresaId) {
+  await bloquearSeEmpresaModelo(empresaId);
   const { rows } = await pool.query(
     'SELECT email, senha_enc FROM integracoes_actioon WHERE empresa_id = $1 AND ativo = TRUE LIMIT 1',
     [empresaId]

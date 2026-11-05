@@ -17,6 +17,8 @@
 const pool = require('../../config/db');
 const { decrypt } = require('../../utils/crypto');
 const { siengeFetch } = require('../../utils/siengeFetch');
+const { bloquearSeEmpresaModelo, ehEmpresaModelo } = require('../../utils/empresaModelo');
+const { boletoDemonstracao } = require('../empresa-modelo/boletoDemo');
 
 function badRequest(message) {
   const err = new Error(message);
@@ -26,6 +28,7 @@ function badRequest(message) {
 }
 
 async function getIntegracaoAtiva(empresaId) {
+  await bloquearSeEmpresaModelo(empresaId); // empresa modelo: integração simulada, nunca chama o Sienge
   const { rows } = await pool.query(
     'SELECT tenant, username, password_enc FROM integracoes_sienge WHERE empresa_id = $1 AND ativo = TRUE LIMIT 1',
     [empresaId]
@@ -83,6 +86,8 @@ async function baixarArquivo(url) {
 // desta parcela, baixa e devolve já em base64 — pronto pro campo
 // `document` do envio de WhatsApp (ver zapi.service.js::enviarDocumento).
 async function buscarBoletoParaEnvio(empresaId, { billId, installmentId }) {
+  // Empresa modelo: boleto fictício gerado aqui (nada é pedido ao Sienge).
+  if (await ehEmpresaModelo(empresaId)) return boletoDemonstracao(empresaId, { billId, installmentId });
   const integracao = await getIntegracaoAtiva(empresaId);
   if (!integracao) {
     throw badRequest('Esta empresa não possui uma integração com o Sienge ativa configurada.');

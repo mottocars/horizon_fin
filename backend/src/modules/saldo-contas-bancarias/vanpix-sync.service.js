@@ -22,6 +22,7 @@ const saldosService = require('./saldos.service');
 const cnabManual = require('./cnab-manual.service');
 const { loteDaConta } = require('../../utils/cnab240');
 const { MOVIMENTOS_LIQUIDACAO, somaCreditos } = require('./cobranca.calculo');
+const { ehEmpresaModelo } = require('../../utils/empresaModelo');
 
 // 0 = domingo, 6 = sábado (getUTCDay, meio-dia UTC evita virar o dia errado por fuso).
 function ehFimDeSemana(iso) {
@@ -81,6 +82,7 @@ async function listarContasItau(empresaId) {
   const { rows } = await pool.query(
     `SELECT c.id AS conexao_id, c.nome AS conexao, c.agencia, c.conta, c.dac, s.company_id, s.numero_conta
      FROM conexoes_itau c
+     LEFT JOIN conexoes_itau o ON o.id = c.conexao_origem_id -- espelho da empresa modelo
      LEFT JOIN contas_bancarias_sienge s
        ON s.empresa_id = c.empresa_id
       AND s.tipo_convenio = 'ITAU'
@@ -90,7 +92,8 @@ async function listarContasItau(empresaId) {
       AND COALESCE(NULLIF(s.banco_enriquecido, ''), REGEXP_REPLACE(s.banco_numero, '[^0-9]', '', 'g')) IN ('341', '0341')
      WHERE c.empresa_id = $1 AND c.ativo = TRUE
        AND c.agencia IS NOT NULL AND c.conta IS NOT NULL AND c.dac IS NOT NULL
-       AND c.certificado_pem IS NOT NULL AND c.data_validade_certificado > $2
+       AND COALESCE(o.certificado_pem, c.certificado_pem) IS NOT NULL
+       AND COALESCE(o.data_validade_certificado, c.data_validade_certificado) > $2
      ORDER BY c.id`,
     [empresaId, new Date()]
   );
@@ -376,10 +379,83 @@ async function somarTitulosNaConta(empresaId, data, conta, apelido, itensParaGra
   relatorio.contas.push(base);
 }
 
+// ---------------------------------------------------------------------------------------
+// Empresa modelo (HZN CONSTRUTORA): VanPix simulada. O extrato vem do último saldo da conta com
+// uma pequena variação; a cobrança grava 0–3 boletos liquidados de clientes da própria empresa
+// modelo em cobranca_titulos — daí em diante o caminho é o normal (somarTitulosNaConta).
+// ---------------------------------------------------------------------------------------
+async function conexoesVanpixDaModelo(empresaId, finalidade) {
+  const { rows } = await pool.query(
+    `SELECT c.apelido, v.id FROM integracoes_vanpix v JOIN integracoes_vanpix_convenios c ON c.integracao_id = v.id
+     WHERE v.empresa_id = $1 AND v.ativo AND v.finalidade = $2 ORDER BY v.id`,
+    [empresaId, finalidade]
+  );
+  return new Map(rows.map((r) => [r.apelido, r.id]));
+}
+
+function variacao(semente) {
+  let h = 0;
+  for (const ch of semente) h = (h * 31 + ch.charCodeAt(0)) >>> 0;
+  return (h % 1000) / 1000;
+}
+
+async function simularExtratoVanpix(empresaId, apelido, contas, data, itensParaGravar, relatorio, casadasNaApi) {
+  const dataFechamento = diaUtilAnterior(data);
+  for (const conta of contas) {
+    const anterior = await ultimoSaldoAnterior(empresaId, conta.company_id, conta.numero_conta, data);
+    const base = anterior ? anterior.valor : 50000 + variacao(`${conta.numero_conta}`) * 250000;
+    const valor = Math.round(base * (0.97 + variacao(`${conta.numero_conta}:${data}`) * 0.06) * 100) / 100;
+    casadasNaApi.add(`${conta.company_id}:${conta.numero_conta}`);
+    itensParaGravar.push({
+      company_id: conta.company_id,
+      numero_conta: conta.numero_conta,
+      data,
+      saldo: valor,
+      origem: 'API',
+      fonte: 'VANPIX',
+      dataFechamento,
+      composicao: { extrato: { fonte: 'VANPIX', apelido, conta: `${conta.conta_enriquecida || ''}-${conta.digito || ''}`, dataFechamento, valor } },
+    });
+    relatorio.atualizados.push({
+      apelido,
+      banco: conta.banco,
+      conta: conta.conta_enriquecida,
+      digito: conta.digito,
+      company_id: conta.company_id,
+      numero_conta: conta.numero_conta,
+      saldo: valor,
+      dataFechamento,
+    });
+  }
+  relatorio.convenios.push({ apelido, status: 'ok_com_retorno', aviso: false, mensagem: `Saldo final de ${brData(dataFechamento)}.` });
+}
+
+async function simularCobrancaVanpix(empresaId, integracaoId, apelido, data) {
+  const { rows: pagadores } = await pool.query(
+    `SELECT client_name, original_amount::float AS valor, bill_id, installment_id FROM sie_income
+     WHERE empresa_id = $1 AND original_amount BETWEEN 300 AND 12000 ORDER BY md5(bill_id::text || $2) LIMIT 3`,
+    [empresaId, `${apelido}:${data}`]
+  );
+  const quantos = Math.floor(variacao(`${apelido}:${data}`) * 4);
+  for (const [i, p] of pagadores.slice(0, quantos).entries()) {
+    const nosso = `1400000000${String(Math.floor(variacao(`${apelido}:${data}:${i}`) * 9999999)).padStart(7, '0')}`;
+    await pool.query(
+      `INSERT INTO cobranca_titulos (empresa_id, integracao_id, apelido, cod_movimento, nosso_numero, numero_documento,
+         vencimento, valor_titulo, banco_cobrador, pagador_nome, valor_pago, valor_creditado, data_ocorrencia, data_credito,
+         canal, linha_t, linha_u, buscado_em)
+       VALUES ($1, $2, $3, '06', $4, $5, $6, $7, '104', $8, $7, $7, $9, $6, '04', 'SIMULADO', 'SIMULADO', NOW())
+       ON CONFLICT DO NOTHING`,
+      [empresaId, integracaoId, apelido, nosso, String(p.bill_id), data, p.valor, p.client_name, diaUtilAnterior(data)]
+    );
+  }
+  return null;
+}
+
 async function somarCobranca(empresaId, data, itensParaGravar, relatorio) {
   const contas = await listarContasComCedente(empresaId);
   if (contas.length === 0) return;
-  const conexoes = await vanpixService.conexoesPorApelido(empresaId, 'COBRANCA');
+  const modelo = await ehEmpresaModelo(empresaId);
+  const conexoes = modelo ? await conexoesVanpixDaModelo(empresaId, 'COBRANCA') : await vanpixService.conexoesPorApelido(empresaId, 'COBRANCA');
 
   const apelidosVarridos = new Set();
   for (const apelido of new Set(contas.map((c) => c.apelido))) {
@@ -389,7 +465,9 @@ async function somarCobranca(empresaId, data, itensParaGravar, relatorio) {
       continue;
     }
     // VanPix Cobrança: sempre os últimos 5 dias
-    const falha = await varrerCobranca(empresaId, integracaoId, apelido, menosDiasISO(data, COBRANCA_DIAS_VARREDURA), data);
+    const falha = modelo
+      ? await simularCobrancaVanpix(empresaId, integracaoId, apelido, data)
+      : await varrerCobranca(empresaId, integracaoId, apelido, menosDiasISO(data, COBRANCA_DIAS_VARREDURA), data);
     if (falha) relatorio.falhas.push({ apelido, mensagem: falha });
     apelidosVarridos.add(apelido); // mesmo com falha num dia, soma o que já está gravado
   }
@@ -513,10 +591,16 @@ async function buscarSaldosVanpix(empresaId, usuarioId, data, arquivos = []) {
 
   // VanPix Extrato: só os apelidos informados nas contas (Código cedente extrato bancário).
   const contasExtrato = await listarContasComCedenteExtrato(empresaId);
-  const conexoesExtrato = await vanpixService.conexoesPorApelido(empresaId, 'EXTRATO');
+  const modelo = await ehEmpresaModelo(empresaId);
+  const conexoesExtrato = modelo ? await conexoesVanpixDaModelo(empresaId, 'EXTRATO') : await vanpixService.conexoesPorApelido(empresaId, 'EXTRATO');
   const cargaInicialFeita = []; // contas que fizeram a varredura de 1 ano agora (marcadas no fim)
   for (const apelido of new Set(contasExtrato.map((c) => c.apelido))) {
     const contas = contasExtrato.filter((c) => c.apelido === apelido);
+    if (modelo) {
+      // Empresa modelo: extrato VanPix simulado (nada sai do sistema).
+      await simularExtratoVanpix(empresaId, apelido, contas, data, itensParaGravar, relatorio, casadasNaApi);
+      continue;
+    }
     const integracaoId = conexoesExtrato.get(apelido);
     const cred = integracaoId ? await vanpixService.getCredenciais(integracaoId) : null;
     if (!cred) {

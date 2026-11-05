@@ -2,6 +2,7 @@ const pool = require('../../config/db');
 const { decrypt } = require('../../utils/crypto');
 const previsionApi = require('./prevision-api.client');
 const { verificarCancelamento } = require('../../utils/execucaoCancelavel');
+const { bloquearSeEmpresaModelo, ehEmpresaModelo } = require('../../utils/empresaModelo');
 
 const PRIMARY_VALUES = [true, false];
 
@@ -18,6 +19,7 @@ function toNumeroOuNull(valor) {
 }
 
 async function getIntegracaoAtiva(empresaId) {
+  await bloquearSeEmpresaModelo(empresaId); // empresa modelo: Prevision simulado
   const { rows } = await pool.query(
     'SELECT id, api_key_enc, company_id FROM integracoes_prevision WHERE empresa_id = $1 AND ativo = TRUE',
     [empresaId]
@@ -36,6 +38,15 @@ async function getOrFetchCompanyId(integracao, apiKey) {
 }
 
 async function listarProjetos(empresaId) {
+  if (await ehEmpresaModelo(empresaId)) {
+    // empresa modelo: os projetos "do Prevision" são as obras que já têm curva S
+    const { rows } = await pool.query(
+      `SELECT DISTINCT g.project_id AS codigo, c.name AS nome FROM prevision_dashboard_general_info g
+       JOIN centros_custo_sienge c ON c.empresa_id = g.empresa_id AND c.sienge_id = g.sienge_id WHERE g.empresa_id = $1 ORDER BY 2`,
+      [empresaId]
+    );
+    return rows;
+  }
   const integracao = await getIntegracaoAtiva(empresaId);
   if (!integracao) {
     const err = new Error('Esta empresa não possui uma integração Prevision ativa configurada.');
@@ -241,6 +252,10 @@ async function persistDashboard(client, { empresaId, siengeId, projectId, compan
 // base dos atrasos (Cronogramas Obras). Cada obra × visão grava na própria transação: a que falhar mantém
 // os dados anteriores. `onProgress({ texto, paginaAtual, totalPaginas })`: andamento (Monitor de Integrações).
 async function sincronizar(empresaId, onProgress) {
+  if (await ehEmpresaModelo(empresaId)) {
+    const { rows } = await pool.query('SELECT COUNT(DISTINCT sienge_id)::int n FROM prevision_dashboard_general_info WHERE empresa_id = $1', [empresaId]);
+    return { total_centros: rows[0].n, sucesso: rows[0].n, falha: 0, detalhes: [], simulado: true };
+  }
   const integracao = await getIntegracaoAtiva(empresaId);
   if (!integracao) {
     const err = new Error('Esta empresa não possui uma integração Prevision ativa configurada.');

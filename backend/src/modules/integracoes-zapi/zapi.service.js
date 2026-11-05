@@ -1,5 +1,7 @@
 const pool = require('../../config/db');
 const { encrypt, decrypt } = require('../../utils/crypto');
+const { bloquearSeEmpresaModelo } = require('../../utils/empresaModelo');
+const simulacao = require('../empresa-modelo/simulacao');
 
 const ZAPI_BASE_URL = 'https://api.z-api.io';
 
@@ -128,11 +130,12 @@ async function setAtivo(id, ativo) {
 // desta chamada.
 async function getCredenciais(id) {
   const { rows } = await pool.query(
-    'SELECT instance_id, instance_token_enc, client_token_enc, ativo FROM integracoes_zapi WHERE id = $1',
+    'SELECT instance_id, instance_token_enc, client_token_enc, ativo, empresa_id FROM integracoes_zapi WHERE id = $1',
     [id]
   );
   const row = rows[0];
   if (!row) return null;
+  await bloquearSeEmpresaModelo(row.empresa_id); // empresa modelo: WhatsApp simulado
   return {
     instanceId: row.instance_id,
     instanceToken: decrypt(row.instance_token_enc),
@@ -241,6 +244,8 @@ async function postZapi(credenciais, endpoint, payload, mensagemErroPadrao) {
 // etapa em Configurações Globais (ver reguaCobranca.service.js — quem
 // chama já resolveu qual conexão usar antes de chegar aqui).
 async function enviarMensagemTexto(integracaoId, { telefone, mensagem }) {
+  // Empresa modelo: envio simulado, ninguém recebe nada.
+  if (await simulacao.integracaoDaEmpresaModelo('integracoes_zapi', integracaoId)) return simulacao.envioSimulado('whatsapp');
   const { credenciais, phone } = await prepararEnvio(integracaoId, telefone);
   return postZapi(credenciais, 'send-text', { phone, message: mensagem }, 'A Z-API recusou o envio do WhatsApp.');
 }
@@ -256,6 +261,7 @@ async function enviarDocumento(
   integracaoId,
   { telefone, documentoBase64, legenda, extensao = 'pdf', mimeType = 'application/pdf', nomeArquivo = 'boleto.pdf' }
 ) {
+  if (await simulacao.integracaoDaEmpresaModelo('integracoes_zapi', integracaoId)) return simulacao.envioSimulado('whatsapp');
   const { credenciais, phone } = await prepararEnvio(integracaoId, telefone);
   return postZapi(
     credenciais,

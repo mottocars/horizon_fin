@@ -6,6 +6,7 @@ const construtorVendasService = require('../integracoes-construtor-vendas/constr
 const cvcrmApi = require('../integracoes-construtor-vendas/cvcrm-api.client');
 const siengeContractsApi = require('./sienge-contracts-api.client');
 const progresso = require('./progressoSincronizacao');
+const { bloquearSeEmpresaModelo, ehEmpresaModelo } = require('../../utils/empresaModelo');
 
 // Centros de custo da empresa que já têm a etapa "Lançamento" (Histórico de
 // Etapas, máscara ETAPAS_CENTRO_CUSTO) com data de início informada E já
@@ -119,6 +120,7 @@ async function inserirReserva(client, empresaId, campos) {
 // `onProgress` (opcional) recebe o mesmo { paginaAtual, totalPaginas } — usado
 // pelo Monitor de Integrações (monitor-integracoes/rotinas.js).
 async function sincronizarReservas(empresaId, onProgress) {
+  if (await ehEmpresaModelo(empresaId)) return { total_importado: (await pool.query('SELECT COUNT(*)::int n FROM construtor_vendas_reservas WHERE empresa_id = $1', [empresaId])).rows[0].n, simulado: true };
   const credenciais = await construtorVendasService.getCredenciaisAtivas(empresaId);
   if (!credenciais) {
     throw badRequest('Esta empresa não possui uma integração Construtor de Vendas ativa configurada.');
@@ -162,6 +164,7 @@ async function sincronizarReservas(empresaId, onProgress) {
 }
 
 async function getCredenciaisSiengeAtivas(empresaId) {
+  await bloquearSeEmpresaModelo(empresaId); // empresa modelo: integração simulada, nunca chama o Sienge
   const { rows } = await pool.query(
     'SELECT tenant, username, password_enc FROM integracoes_sienge WHERE empresa_id = $1 AND ativo = TRUE',
     [empresaId]
@@ -255,6 +258,7 @@ async function inserirContrato(client, empresaId, reg) {
 // reinsere, pra nunca duplicar.
 // `onProgress` (opcional) — ver sincronizarReservas.
 async function sincronizarContratos(empresaId, onProgress) {
+  if (await ehEmpresaModelo(empresaId)) return { total_importado: (await pool.query('SELECT COUNT(*)::int n FROM sie_sales_contracts WHERE empresa_id = $1', [empresaId])).rows[0].n, simulado: true };
   const credenciais = await getCredenciaisSiengeAtivas(empresaId);
   if (!credenciais) {
     throw badRequest('Esta empresa não possui uma integração Sienge ativa configurada.');
@@ -302,6 +306,15 @@ async function sincronizarContratos(empresaId, onProgress) {
 // Depois de confirmado na API, replica o valor na cópia local (sem esperar
 // a próxima sincronização completa), pra já refletir na tela.
 async function atualizarNumeroInstituicaoFinanceira(empresaId, siengeContractId, numeroInstituicaoFinanceira) {
+  // Empresa modelo: só a cópia local é atualizada (o "Sienge" dela é simulado).
+  if (await ehEmpresaModelo(empresaId)) {
+    const { rowCount } = await pool.query(
+      'UPDATE sie_sales_contracts SET financial_institution_number = $1 WHERE empresa_id = $2 AND sienge_contract_id = $3',
+      [numeroInstituicaoFinanceira, empresaId, siengeContractId]
+    );
+    if (!rowCount) throw badRequest('Contrato não encontrado para essa empresa.');
+    return { numero_instituicao_financeira: numeroInstituicaoFinanceira };
+  }
   const credenciais = await getCredenciaisSiengeAtivas(empresaId);
   if (!credenciais) {
     throw badRequest('Esta empresa não possui uma integração Sienge ativa configurada.');
@@ -854,6 +867,10 @@ async function getUltimasAtualizacoes(empresaId, centroCustoIds = []) {
 // fica só com Contrato, Assinatura e Registro. Mesmo critério de "ativa" do
 // sincronizarReservas (getCredenciaisAtivas).
 async function getIntegracoes(empresaId) {
+  if (await ehEmpresaModelo(empresaId)) {
+    const { rowCount } = await pool.query('SELECT 1 FROM integracoes_construtor_vendas WHERE empresa_id = $1 AND ativo', [empresaId]);
+    return { construtor_vendas: rowCount > 0 };
+  }
   const credenciais = await construtorVendasService.getCredenciaisAtivas(empresaId);
   return { construtor_vendas: Boolean(credenciais) };
 }

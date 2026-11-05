@@ -1,6 +1,6 @@
 import { useCallback, useEffect, useState } from 'react';
 import { useNavigate } from 'react-router-dom';
-import { Plus, Search, Building, Building2 } from 'lucide-react';
+import { Plus, Search, Building, Building2, Sparkles } from 'lucide-react';
 import Card from '../../components/Card';
 import Button from '../../components/Button';
 import Pagination from '../../components/Pagination';
@@ -104,13 +104,21 @@ export default function EmpresasList() {
                   <tr
                     key={empresa.id}
                     onClick={() => navigate(`/cadastros/empresas/${empresa.id}`)}
-                    className="cursor-pointer border-b border-gray-50 last:border-0 hover:bg-gray-50"
+                    className={`cursor-pointer border-b last:border-0 ${
+                      empresa.empresa_modelo
+                        ? 'border-amber-100 bg-gradient-to-r from-amber-50 via-orange-50/60 to-white hover:from-amber-100/80'
+                        : 'border-gray-50 hover:bg-gray-50'
+                    }`}
                   >
-                    <td className="py-3">
+                    <td className={`py-3 ${empresa.empresa_modelo ? 'border-l-4 border-amber-400 pl-3' : ''}`}>
                       <div className="flex items-center gap-3">
                         {empresa.logo ? (
                           <span className="flex h-9 w-9 shrink-0 items-center justify-center overflow-hidden rounded-lg border border-gray-200 bg-white">
                             <img src={empresa.logo} alt="" className="h-full w-full object-contain p-0.5" />
+                          </span>
+                        ) : empresa.empresa_modelo ? (
+                          <span className="flex h-9 w-9 shrink-0 items-center justify-center rounded-lg bg-gradient-to-br from-amber-400 to-orange-500 text-white">
+                            <Sparkles size={17} />
                           </span>
                         ) : (
                           <span className="flex h-9 w-9 shrink-0 items-center justify-center rounded-lg bg-primary-50 text-primary-600">
@@ -118,7 +126,14 @@ export default function EmpresasList() {
                           </span>
                         )}
                         <div className="min-w-0">
-                          <div className="text-gray-900">{empresa.razao_social}</div>
+                          <div className="flex items-center gap-2 text-gray-900">
+                            {empresa.razao_social}
+                            {empresa.empresa_modelo && (
+                              <span className="inline-flex items-center rounded-full bg-amber-100 px-2 py-0.5 text-[11px] font-semibold text-amber-700">
+                                Empresa modelo
+                              </span>
+                            )}
+                          </div>
                           {empresa.nome_fantasia && (
                             <div className="text-xs text-gray-400">{empresa.nome_fantasia}</div>
                           )}
