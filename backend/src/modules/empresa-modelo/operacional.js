@@ -327,8 +327,9 @@ async function copiarCronogramaEMonitor(ctx) {
     await inserir(ctx, 'cronograma_comunicar_usuarios', { empresa_id: ctx.modelo, usuario_id: u }, null);
   }
 
-  // Monitor: rotinas agendadas (simuladas para a empresa modelo) + histórico da origem.
-  await K.copiar(ctx, 'monitor_integracoes_agendamentos');
+  // Monitor: rotinas com horário configurado, mas TODAS desligadas (pedido do usuário, 05/11/2026:
+  // a empresa modelo não roda nada sozinha). "Atualizar agora" continua funcionando, simulado.
+  await K.copiar(ctx, 'monitor_integracoes_agendamentos', { transformar: (l) => ({ ...l, ativo: false }) });
   const { rows: ja } = await ctx.client.query('SELECT rotina FROM monitor_integracoes_agendamentos WHERE empresa_id = $1', [ctx.modelo]);
   const tem = new Set(ja.map((r) => r.rotina));
   const extras = [
@@ -344,7 +345,7 @@ async function copiarCronogramaEMonitor(ctx) {
   ];
   for (const [rotina, horario] of extras) {
     if (tem.has(rotina)) continue;
-    await inserir(ctx, 'monitor_integracoes_agendamentos', { empresa_id: ctx.modelo, rotina, ativo: true, frequencia: 'diaria', horario, atualizado_por: ctx.equipe[1] }, null);
+    await inserir(ctx, 'monitor_integracoes_agendamentos', { empresa_id: ctx.modelo, rotina, ativo: false, frequencia: 'diaria', horario, atualizado_por: ctx.equipe[1] }, null);
   }
   await K.copiar(ctx, 'monitor_integracoes_parametros');
   await K.copiar(ctx, 'monitor_integracoes_execucoes', {
