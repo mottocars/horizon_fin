@@ -325,7 +325,9 @@ export function Simulador({ E }) {
               <i style={{ borderColor: COR.ink }} />
               Saldo no fim do dia
             </span>
-            <span style={{ color: 'var(--muted)' }}>Faixa cinza = fim de semana. Clique num dia para ver as parcelas.</span>
+            <span style={{ color: 'var(--muted)' }}>
+              Saldo na escala da esquerda; entradas e saídas na da direita. Faixa cinza = fim de semana. Clique num dia para ver as parcelas.
+            </span>
           </div>
           <CaixaDiario sim={sim} diaSel={diaAberto} onDia={abrirDia} />
         </div>

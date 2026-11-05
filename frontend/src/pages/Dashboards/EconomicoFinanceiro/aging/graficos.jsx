@@ -7,6 +7,9 @@ import { brl, dm, semana } from './modelo';
 // de cada dia, a linha do saldo no fim do dia e — quando o saldo desce até ele — o valor do cheque especial
 // que está dentro do saldo (abaixo da linha, o caixa está usando o cheque).
 // Fim de semana em faixa cinza (o que vence nele cai na segunda). Clicar num dia abre as parcelas dele.
+// Duas escalas: o saldo na da esquerda e as entradas/saídas do dia na da direita, numa faixa embaixo —
+// com o caixa muito maior que o movimento do dia (ex.: R$ 9 mi de saldo e R$ 20 mil de entrada), as
+// barras na mesma escala do saldo ficavam com 1 px e pareciam não existir.
 export function CaixaDiario({ sim, diaSel, onDia }) {
   const [ref, W] = useLargura();
   const { mostrar, esconder } = useDica();
@@ -14,14 +17,25 @@ export function CaixaDiario({ sim, diaSel, onDia }) {
   const { dias, ini, cheque } = sim;
   const n = dias.length;
   const H = W < 560 ? 250 : 300;
-  const m = { l: 58, r: 14, t: 18, b: 32 };
+  const m = { l: 58, r: 58, t: 18, b: 32 };
   const piso = cheque > 0 && sim.min < cheque ? cheque : null;
-  const valores = [ini, 0, ...dias.flatMap((d) => [d.fim, d.ent, -d.sai]), ...(piso !== null ? [piso] : [])];
+  // Saldo (eixo da esquerda)
+  const valores = [ini, 0, ...dias.map((d) => d.fim), ...(piso !== null ? [piso] : [])];
   const ymin = Math.min(...valores) * 1.08;
   const ymax = Math.max(...valores) * 1.08 || 1;
   const bw = (W - m.l - m.r) / Math.max(1, n);
   const cx = (i) => m.l + bw * i + bw / 2;
   const y = (v) => m.t + (H - m.t - m.b) * (1 - (v - ymin) / (ymax - ymin || 1));
+  // Entradas/saídas do dia (eixo da direita): faixa nos 40% de baixo, entradas para cima e saídas
+  // para baixo da linha de base delas, cada lado proporcional ao maior valor do período.
+  const maxEnt = Math.max(0, ...dias.map((d) => d.ent));
+  const maxSai = Math.max(0, ...dias.map((d) => d.sai));
+  const temBarras = maxEnt + maxSai > 0;
+  const faixaAlt = (H - m.t - m.b) * 0.4;
+  const faixaTopo = H - m.b - faixaAlt;
+  const base = faixaTopo + (temBarras ? faixaAlt * (maxEnt / (maxEnt + maxSai)) : faixaAlt / 2);
+  const escalaB = temBarras ? faixaAlt / (maxEnt + maxSai) : 0;
+  const yb = (v) => base - v * escalaB;
   const w = Math.max(2, Math.min(26, bw * 0.34));
   const passo = Math.max(1, Math.ceil(n / (W < 560 ? 6 : 16)));
   const linha = [`M${m.l},${y(ini)}`, ...dias.map((d, i) => `L${cx(i).toFixed(1)},${y(d.fim).toFixed(1)}`)].join('');
@@ -43,10 +57,28 @@ export function CaixaDiario({ sim, diaSel, onDia }) {
             </text>
           </g>
         ))}
+        {temBarras && (
+          <g>
+            <line x1={m.l} x2={W - m.r} y1={base} y2={base} stroke={COR.grid} strokeWidth={1} strokeDasharray="3 3" />
+            {maxEnt > 0 && (
+              <text x={W - m.r + 6} y={yb(maxEnt) + 4} textAnchor="start" style={{ fill: COR.entrada }}>
+                +{eixo(maxEnt)}
+              </text>
+            )}
+            <text x={W - m.r + 6} y={base + 4} textAnchor="start">
+              0
+            </text>
+            {maxSai > 0 && (
+              <text x={W - m.r + 6} y={yb(-maxSai) + 4} textAnchor="start" style={{ fill: COR.saida }}>
+                −{eixo(maxSai)}
+              </text>
+            )}
+          </g>
+        )}
         {dias.map((d, i) => (
           <g key={d.data}>
-            {d.ent > 0 && <rect x={cx(i) - w - 1} y={y(d.ent)} width={w} height={Math.max(1, y(0) - y(d.ent))} rx={2} fill={COR.entrada} fillOpacity={0.85} />}
-            {d.sai > 0 && <rect x={cx(i) + 1} y={y(0)} width={w} height={Math.max(1, y(-d.sai) - y(0))} rx={2} fill={COR.saida} fillOpacity={0.85} />}
+            {d.ent > 0 && <rect x={cx(i) - w - 1} y={yb(d.ent)} width={w} height={Math.max(1, base - yb(d.ent))} rx={2} fill={COR.entrada} fillOpacity={0.85} />}
+            {d.sai > 0 && <rect x={cx(i) + 1} y={base} width={w} height={Math.max(1, yb(-d.sai) - base)} rx={2} fill={COR.saida} fillOpacity={0.85} />}
             {(i % passo === 0 || i === n - 1) && (
               <text x={cx(i)} y={H - 12} textAnchor="middle" style={d.util ? undefined : { opacity: 0.6 }}>
                 {i === 0 ? 'hoje' : dm(d.data)}

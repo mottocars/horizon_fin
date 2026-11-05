@@ -103,7 +103,7 @@ const ABAS_SUMARIO = [
           '**Saldo de partida**: o caixa livre (o Liberado + cheque da tela Saldo Contas Bancárias) ou o caixa livre + o bloqueado, do último dia com saldo lançado.',
           'Cada dia do horizonte recebe as parcelas a receber e paga as parcelas a pagar que vencem nele. **Vencimento no sábado ou domingo cai na segunda-feira.** Feriados não são tratados.',
           'O que já está vencido **não entra**: o vencido a pagar fica de fora e o vencido a receber só entra pelo ajuste de recuperar.',
-          'O gráfico mostra as entradas e as saídas de cada dia, a linha do saldo no fim do dia e — quando o saldo desce até ele — o valor do cheque especial que está dentro do saldo: abaixo dessa linha o caixa está usando o cheque; abaixo de zero, falta caixa. Clique num dia (no gráfico ou no dia a dia) para ver as parcelas dele.',
+          'O gráfico mostra as entradas e as saídas de cada dia, a linha do saldo no fim do dia e — quando o saldo desce até ele — o valor do cheque especial que está dentro do saldo: abaixo dessa linha o caixa está usando o cheque; abaixo de zero, falta caixa. O saldo usa a escala da esquerda e as entradas/saídas a da direita (faixa de baixo), para o movimento do dia aparecer mesmo quando o caixa é muito maior que ele. Clique num dia (no gráfico ou no dia a dia) para ver as parcelas dele.',
           '**Necessidade de caixa** = quanto falta para o menor saldo do período não ficar negativo, já usando todo o cheque especial.',
         ],
       },
