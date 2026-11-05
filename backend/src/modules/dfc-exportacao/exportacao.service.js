@@ -145,7 +145,7 @@ async function baseProjetado(empresaId, fluxo, centros) {
       const c = celulas.get(chave(r.centro_id, r.sienge_id, r.mes));
       if (!c || c.origem !== 'HORIZON_ORCAMENTO_INFORMADO') return;
       c.itens.push({
-        fonte: 'Informado (aba Orçamentos)',
+        fonte: 'Informado (aba Projeções)',
         descricao: `Digitado por ${r.usuario || 'carga direta (sem usuário)'}`,
         emissao: r.atualizado_em,
         valor_base: Number(r.valor),

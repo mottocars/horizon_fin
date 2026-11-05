@@ -15,12 +15,12 @@ const dfcEmpresarial = require('../dfc-empresarial/dfcEmpresarial.service');
 const ORIGEM_INFORMADO = 'HORIZON_ORCAMENTO_INFORMADO';
 // De onde veio o valor informado (dfc_orcamento_informado.via) -> como aparece no log da versão.
 const FONTE_INFORMADO = {
-  TELA: 'Digitado na aba Orçamentos',
+  TELA: 'Digitado na aba Projeções',
   MCP: 'Informado pelo Claude (conector MCP)',
   PLANILHA: 'Importado da Planilha Orçamentária',
 };
 const LIMPO_INFORMADO = {
-  TELA: 'Valor limpo na aba Orçamentos',
+  TELA: 'Valor limpo na aba Projeções',
   MCP: 'Valor limpo pelo Claude (conector MCP)',
   PLANILHA: 'Valor limpo pela Planilha Orçamentária',
 };

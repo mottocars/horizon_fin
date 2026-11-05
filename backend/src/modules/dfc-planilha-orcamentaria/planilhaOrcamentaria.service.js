@@ -169,7 +169,7 @@ async function layout(empresaId, usuarioId) {
     ['2. Saídas (despesas) com sinal NEGATIVO; entradas com sinal positivo. Ex.: um gasto de 1.500 = -1500.'],
     ['3. Para limpar o valor de um mês, apague a célula (deixe vazia).'],
     ['4. Use o filtro do cabeçalho para achar centro, natureza ou mês. Não inclua nem apague linhas.'],
-    ['5. No Horizon Fin: DFC Construtoras › Orçamentos › Nova versão › Planilha Orçamentária › Importar.'],
+    ['5. No Horizon Fin: DFC Construtoras › Projeções › Nova versão › Planilha Orçamentária › Importar.'],
     ['   O sistema mostra uma prévia (o que muda e eventuais erros) antes de gravar.'],
     ['6. Os valores importados entram como HORIZON - INFORMADO e só valem no Orçamento depois de "Salvar versão".'],
     ['Só aparecem naturezas com Origem Projeção "HORIZON - INFORMADO" nos centros com "Projeta DFC". Para incluir outra, ajuste a aba Plano Contas e baixe o layout de novo.'],

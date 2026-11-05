@@ -68,7 +68,7 @@ const TABS = [
   { id: 'avancos-obras', label: 'Avanços', icon: HardHat },
   { id: 'repasses', label: 'Repasses', icon: Banknote },
   { id: 'contas-correntes', label: 'Contas', icon: Landmark },
-  { id: 'orcamentos', label: 'Orçamentos', icon: Calculator },
+  { id: 'orcamentos', label: 'Projeções', icon: Calculator },
 ];
 
 function formatarDataHora(data) {

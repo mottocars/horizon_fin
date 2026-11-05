@@ -25,9 +25,9 @@ Extrato bancário do Sienge (v1/accounts-statements) de todas as contas, rateado
 - Lançamento sem rateio herda centro/natureza de outro lançamento do MESMO título na MESMA data (ex.: pagamento por mútuo: a natureza está na perna da conta de mútuo).
 - Valor no DFC = valor do lançamento × % do rateio; saída (Expense) negativa.
 
-## Projetado = última versão salva do Orçamento (aba Orçamentos)
+## Projetado = última versão salva do Orçamento (aba Projeções)
 Cada valor (centro × natureza × mês) tem uma Origem Projeção, definida na natureza (aba Plano Contas):
-- HORIZON - INFORMADO: digitado à mão na aba Orçamentos.
+- HORIZON - INFORMADO: digitado à mão na aba Projeções.
 - SIENGE - AGING: parcelas do contas a receber (original − desconto + taxas) e a pagar (original + desconto − taxas, negativo), no mês do vencimento, pelo % de rateio natureza × centro. Previsões financeiras (documento PREVISÃO) não entram.
 - SIENGE - EMPRESARIAL DESEMBOLSO: Orçamento Empresarial do Sienge (última versão de cada orçamento), deslocado pelo prazo médio de desembolso da natureza (ficha de desembolso; meses = prazo médio ÷ 30, arredondado). Saída, negativo.
 - CEF - NOVO REGISTRO / MEDIÇÃO / CRÉDITO PJ / JUROS / AMORTIZAÇÃO: Projeção CEF da obra (motor da planilha), ver abaixo.

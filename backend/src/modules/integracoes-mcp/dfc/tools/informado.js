@@ -5,7 +5,7 @@ const { z, mesSchema, falha, r2, ferramenta, resolverCentros, resolverNatureza }
 
 // Ferramentas de ESCRITA do conector "DFC CONSTRUTORAS (ALTERA ORÇAMENTO)" (pedido do usuário): o
 // Claude insere/atualiza valores do Orçamento só nas contas com Origem Projeção "HORIZON - INFORMADO"
-// (a mesma regra da aba Orçamentos — orcamentoInformado.service.exigirContaInformada) e salva uma
+// (a mesma regra da aba Projeções — orcamentoInformado.service.exigirContaInformada) e salva uma
 // versão só com essas mudanças. Tudo gravado em nome do usuário que fez login no conector.
 
 const MAX_ITENS = 500;
@@ -72,7 +72,7 @@ const gravar = {
     'Insere ou atualiza valores do Orçamento (centro × natureza × mês) nas contas "HORIZON - INFORMADO" — e só nelas: ' +
     'qualquer outra conta é recusada. Valor em R$ com sinal (entrada positiva, saída NEGATIVA); 0 ou null limpa o mês. ' +
     'Tudo ou nada: se um item não puder, nada é gravado. Os valores ficam PENDENTES até dfc_informado_salvar_versao (ou ' +
-    '"Salvar Versão" na aba Orçamentos) — só então entram no projetado do DFC. Confirme com o usuário antes de gravar.',
+    '"Salvar Versão" na aba Projeções) — só então entram no projetado do DFC. Confirme com o usuário antes de gravar.',
   inputSchema: {
     lancamentos: z
       .array(
@@ -127,7 +127,7 @@ const replicar = {
   name: 'dfc_informado_replicar',
   description:
     'Grava o MESMO valor em todos os meses de "de" até "ate" (inclusive) para um centro × natureza "HORIZON - INFORMADO", por ' +
-    'cima do que houver (como o "Replicar valor até" da aba Orçamentos). Valor com sinal (saída negativa). Fica pendente até ' +
+    'cima do que houver (como o "Replicar valor até" da aba Projeções). Valor com sinal (saída negativa). Fica pendente até ' +
     'dfc_informado_salvar_versao. Confirme com o usuário antes.',
   inputSchema: {
     centro: z.union([z.string(), z.number()]).describe('Centro de custo (id ou nome).'),

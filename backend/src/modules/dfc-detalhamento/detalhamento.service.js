@@ -150,7 +150,7 @@ async function realizado(empresaId, { mes, natureza, lado, centros, semCentro },
 
 // ─── Projetado: uma fonte por origem ──────────────────────────────────────────────────────────
 
-// HORIZON - INFORMADO: o valor digitado na aba Orçamentos e o histórico dele nas versões.
+// HORIZON - INFORMADO: o valor digitado na aba Projeções e o histórico dele nas versões.
 async function informado(empresaId, centroId, conta, mes) {
   const { rows: atual } = await pool.query(
     `SELECT i.valor, i.atualizado_em, u.nome AS usuario
@@ -173,7 +173,7 @@ async function informado(empresaId, centroId, conta, mes) {
   const TIPOS = { INCLUSAO: 'Inclusão', ALTERACAO: 'Alteração', EXCLUSAO: 'Exclusão' };
   return {
     valor,
-    resumo: 'Valor digitado à mão na aba Orçamentos.',
+    resumo: 'Valor digitado à mão na aba Projeções.',
     blocos: [
       {
         tipo: 'campos',
