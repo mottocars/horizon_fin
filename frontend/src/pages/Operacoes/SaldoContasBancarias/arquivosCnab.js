@@ -1,6 +1,6 @@
 // Leitura rápida, no navegador, de um arquivo de retorno CNAB 240 anexado na abertura do
-// período (contas com convênio CNAB 240 manual) — só pra mostrar o que é antes de enviar e
-// barrar arquivo no campo errado. A leitura de verdade é no servidor (backend/src/utils/cnab240.js,
+// período (contas com convênio CNAB 240 manual) — identifica se é extrato ou cobrança (o campo de
+// anexo é um só) e mostra o que é antes de enviar. A leitura de verdade é no servidor (backend/src/utils/cnab240.js,
 // mesmas posições): Header de Lote posição 9 = E (extrato) ou T (cobrança).
 export const TAMANHO_MAXIMO_CNAB = 10 * 1024 * 1024;
 

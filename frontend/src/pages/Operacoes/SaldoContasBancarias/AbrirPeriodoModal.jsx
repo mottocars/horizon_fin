@@ -16,11 +16,9 @@ import { lerArquivoCnab } from './arquivosCnab';
 
 const ehFimDeSemana = (iso) => [0, 6].includes(deISO(iso).getDay());
 
-// Campos de arquivo da abertura: retorno de extrato e de cobrança, vários arquivos em cada.
-const CAMPOS_CNAB = {
-  extrato: { tipo: 'EXTRATO', titulo: 'Retorno Extratos Bancários', outro: 'Retorno Cobrança' },
-  cobranca: { tipo: 'COBRANCA', titulo: 'Retorno Cobrança', outro: 'Retorno Extratos Bancários' },
-};
+// Um campo só de arquivos na abertura: cada retorno é lido no navegador (arquivosCnab.js), que
+// identifica pelo conteúdo se é extrato ou cobrança — o servidor confere de novo do mesmo jeito.
+const NOMES_TIPO_CNAB = { EXTRATO: 'extrato', COBRANCA: 'cobrança' };
 
 let proximoId = 1;
 
@@ -33,7 +31,7 @@ export default function AbrirPeriodoModal({ open, onClose, empresaId, onAberto }
   const [relatorioVanpix, setRelatorioVanpix] = useState(null);
   const [erroVanpix, setErroVanpix] = useState('');
   const [integracoes, setIntegracoes] = useState(null);
-  const [arquivos, setArquivos] = useState({ extrato: [], cobranca: [] });
+  const [arquivos, setArquivos] = useState([]);
 
   useEffect(() => {
     if (open) {
@@ -42,7 +40,7 @@ export default function AbrirPeriodoModal({ open, onClose, empresaId, onAberto }
       setEtapa('form');
       setRelatorioVanpix(null);
       setErroVanpix('');
-      setArquivos({ extrato: [], cobranca: [] });
+      setArquivos([]);
       setIntegracoes(null);
       getIntegracoesAbertura(empresaId)
         .then(setIntegracoes)
@@ -53,35 +51,28 @@ export default function AbrirPeriodoModal({ open, onClose, empresaId, onAberto }
   const temCnab = integracoes?.cnab_manual > 0;
   const pedirArquivos = temCnab && !ehFimDeSemana(data);
 
-  async function adicionarArquivos(campo, files) {
+  async function adicionarArquivos(files) {
     const novos = files
-      .filter((f) => !arquivos[campo].some((a) => a.file.name === f.name && a.file.size === f.size))
+      .filter((f) => !arquivos.some((a) => a.file.name === f.name && a.file.size === f.size))
       .map((file) => ({ id: proximoId++, file, lendo: true }));
     if (!novos.length) return;
     setErro('');
-    setArquivos((prev) => ({ ...prev, [campo]: [...prev[campo], ...novos] }));
+    setArquivos((prev) => [...prev, ...novos]);
     const lidos = await Promise.all(
       novos.map(async (a) => {
         const r = await lerArquivoCnab(a.file).catch(() => ({ erro: 'Não foi possível ler o arquivo.' }));
-        const campoErrado = r.tipo && r.tipo !== CAMPOS_CNAB[campo].tipo;
-        return {
-          ...a,
-          lendo: false,
-          descricao: r.descricao,
-          erro: campoErrado ? `${r.descricao} — anexe em "${CAMPOS_CNAB[campo].outro}".` : r.erro,
-        };
+        return { ...a, lendo: false, tipo: r.tipo, descricao: r.descricao, erro: r.erro };
       })
     );
-    setArquivos((prev) => ({
-      ...prev,
-      [campo]: prev[campo].map((a) => lidos.find((l) => l.id === a.id) || a),
-    }));
+    setArquivos((prev) => prev.map((a) => lidos.find((l) => l.id === a.id) || a));
   }
 
-  function removerArquivo(campo, id) {
+  function removerArquivo(id) {
     setErro('');
-    setArquivos((prev) => ({ ...prev, [campo]: prev[campo].filter((a) => a.id !== id) }));
+    setArquivos((prev) => prev.filter((a) => a.id !== id));
   }
+
+  const arquivosDoTipo = (tipo) => arquivos.filter((a) => a.tipo === tipo && !a.erro);
 
   async function tentarAbrir(alvo, reabrirEncerrado) {
     await abrirPeriodoSaldos(empresaId, alvo, reabrirEncerrado);
@@ -89,7 +80,10 @@ export default function AbrirPeriodoModal({ open, onClose, empresaId, onAberto }
     setEtapa('vanpix');
     try {
       const anexos = pedirArquivos
-        ? { extrato: arquivos.extrato.map((a) => a.file), cobranca: arquivos.cobranca.map((a) => a.file) }
+        ? {
+            extrato: arquivosDoTipo('EXTRATO').map((a) => a.file),
+            cobranca: arquivosDoTipo('COBRANCA').map((a) => a.file),
+          }
         : {};
       setRelatorioVanpix(await buscarSaldosVanpix(empresaId, alvo, anexos));
     } catch (err) {
@@ -102,23 +96,22 @@ export default function AbrirPeriodoModal({ open, onClose, empresaId, onAberto }
   // Contas CNAB 240 manual: os arquivos são o que dá saldo a elas — sem algum deles, confirma.
   async function arquivosConferidos() {
     if (!pedirArquivos) return true;
-    const todos = [...arquivos.extrato, ...arquivos.cobranca];
-    if (todos.some((a) => a.lendo)) {
+    if (arquivos.some((a) => a.lendo)) {
       setErro('Aguarde a leitura dos arquivos.');
       return false;
     }
-    if (todos.some((a) => a.erro)) {
+    if (arquivos.some((a) => a.erro)) {
       setErro('Remova os arquivos com problema (em amarelo) antes de abrir o período.');
       return false;
     }
     // Cobrança só faz falta se alguma conta CNAB tem código do beneficiário.
-    const faltando = Object.entries(CAMPOS_CNAB)
-      .filter(([campo]) => !arquivos[campo].length && (campo === 'extrato' || integracoes.cnab_manual_cobranca > 0))
-      .map(([, c]) => `"${c.titulo}"`);
+    const faltando = ['EXTRATO', 'COBRANCA']
+      .filter((tipo) => !arquivosDoTipo(tipo).length && (tipo === 'EXTRATO' || integracoes.cnab_manual_cobranca > 0))
+      .map((tipo) => NOMES_TIPO_CNAB[tipo]);
     if (!faltando.length) return true;
     return confirm({
       title: 'Abrir sem os arquivos?',
-      description: `Nenhum arquivo em ${faltando.join(' e ')}. As contas CNAB 240 manual ficam sem esse saldo (só herdam o anterior se a classificação pedir). Abrir assim mesmo?`,
+      description: `Nenhum retorno de ${faltando.join(' nem de ')} anexado. As contas CNAB 240 manual ficam sem esse saldo (só herdam o anterior se a classificação pedir). Abrir assim mesmo?`,
       confirmLabel: 'Abrir sem arquivo',
       variant: 'warning',
     });
@@ -161,10 +154,12 @@ export default function AbrirPeriodoModal({ open, onClose, empresaId, onAberto }
   const integ = relatorioVanpix?.integracoes || integracoes;
   const visivelNoResultado = (chave) => !integ || integ[chave] > 0;
   const log = etapa === 'resultado' ? montarLog(data, relatorioVanpix, erroVanpix) : null;
+  // Ordem dos conectores (pedido do usuário): VanPix Extrato, VanPix Cobrança, API Itaú, CNAB 240
+  // Extrato, CNAB 240 Cobrança — a mesma no carregando, no resultado e no log.
   const linhasCarregando = [
     visivel('vanpix_extrato') && 'Conexão VanPix · Extrato Bancário',
-    visivel('itau') && 'Conexão API Itaú',
     visivel('vanpix_cobranca') && 'Conexão VanPix · Cobrança',
+    visivel('itau') && 'Conexão API Itaú',
     visivel('cnab_manual') && 'CNAB 240 · Extrato',
     visivel('cnab_manual') && 'CNAB 240 · Cobrança',
   ].filter(Boolean);
@@ -201,20 +196,12 @@ export default function AbrirPeriodoModal({ open, onClose, empresaId, onAberto }
               <div>
                 <p className="text-sm font-semibold text-gray-800">Arquivos CNAB 240</p>
                 <p className="text-xs text-gray-500">
-                  {integracoes.cnab_manual} conta(s) com convênio CNAB 240 manual. Anexe os retornos do banco
-                  — pode escolher vários arquivos de uma vez.
+                  {integracoes.cnab_manual} conta(s) com convênio CNAB 240 manual. Anexe os retornos do banco —
+                  extrato e cobrança juntos, vários de uma vez; o sistema identifica cada um.
                 </p>
               </div>
               {pedirArquivos ? (
-                Object.entries(CAMPOS_CNAB).map(([campo, c]) => (
-                  <CampoArquivos
-                    key={campo}
-                    titulo={c.titulo}
-                    arquivos={arquivos[campo]}
-                    onAdicionar={(files) => adicionarArquivos(campo, files)}
-                    onRemover={(id) => removerArquivo(campo, id)}
-                  />
-                ))
+                <CampoArquivos arquivos={arquivos} onAdicionar={adicionarArquivos} onRemover={removerArquivo} />
               ) : (
                 <p className="text-xs text-gray-500">Sábado e domingo não buscam saldo automático — sem arquivos.</p>
               )}
@@ -250,8 +237,8 @@ export default function AbrirPeriodoModal({ open, onClose, empresaId, onAberto }
       {etapa === 'resultado' && (
         <div className="space-y-4">
           {visivelNoResultado('vanpix_extrato') && <LinhaExtrato relatorio={relatorioVanpix} erro={erroVanpix} />}
-          {visivelNoResultado('itau') && <LinhaItau relatorio={relatorioVanpix?.itau} erro={erroVanpix} />}
           {visivelNoResultado('vanpix_cobranca') && <LinhaCobranca relatorio={relatorioVanpix?.cobranca} erro={erroVanpix} />}
+          {visivelNoResultado('itau') && <LinhaItau relatorio={relatorioVanpix?.itau} erro={erroVanpix} />}
           {visivelNoResultado('cnab_manual') && (
             <LinhaCnabExtrato relatorio={relatorioVanpix?.cnab} total={integ?.cnab_manual} erro={erroVanpix} />
           )}
@@ -287,16 +274,26 @@ export default function AbrirPeriodoModal({ open, onClose, empresaId, onAberto }
   );
 }
 
-// Um campo de arquivos (clique ou arraste; vários de uma vez) com a lista do que foi escolhido —
-// cada arquivo mostra o que é (lido no navegador, ver arquivosCnab.js) ou o problema, em âmbar.
-function CampoArquivos({ titulo, arquivos, onAdicionar, onRemover }) {
+// O campo de arquivos (clique ou arraste; vários de uma vez) com a lista do que foi escolhido —
+// cada arquivo mostra o que é, extrato ou cobrança (lido no navegador, ver arquivosCnab.js), ou o
+// problema, em âmbar.
+function CampoArquivos({ arquivos, onAdicionar, onRemover }) {
   const inputRef = useRef(null);
   const [arrastando, setArrastando] = useState(false);
+  const contar = (tipo) => arquivos.filter((a) => a.tipo === tipo && !a.erro).length;
+  const resumo = [
+    contar('EXTRATO') && `${contar('EXTRATO')} extrato(s)`,
+    contar('COBRANCA') && `${contar('COBRANCA')} cobrança(s)`,
+  ].filter(Boolean);
   return (
     <div>
       <div className="mb-1 flex items-center justify-between gap-2">
-        <span className="text-sm font-medium text-gray-700">{titulo}</span>
-        {arquivos.length > 0 && <span className="text-xs text-gray-400">{arquivos.length} arquivo(s)</span>}
+        <span className="text-sm font-medium text-gray-700">Retornos CNAB 240</span>
+        {arquivos.length > 0 && (
+          <span className="text-xs text-gray-400">
+            {arquivos.length} arquivo(s){resumo.length ? ` · ${resumo.join(' · ')}` : ''}
+          </span>
+        )}
       </div>
       <button
         type="button"
@@ -486,8 +483,8 @@ function montarLog(data, relatorio, erro) {
     ? [['Busca automática', [erro]]]
     : [
         ['Conexão VanPix · Extrato Bancário', avisosExtrato(relatorio)],
-        ['Conexão API Itaú', avisosItau(relatorio?.itau)],
         ['Conexão VanPix · Cobrança', avisosCobranca(relatorio?.cobranca)],
+        ['Conexão API Itaú', avisosItau(relatorio?.itau)],
         ['CNAB 240 · Extrato', avisosCnabExtrato(relatorio?.cnab)],
         ['CNAB 240 · Cobrança', avisosCobranca(relatorio?.cnab?.cobranca)],
         [

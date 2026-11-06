@@ -216,9 +216,10 @@ function Cnab() {
       </Passo>
       <Passo numero={3} titulo="Anexar os arquivos na abertura">
         <p>
-          Ao abrir o período, aparecem os campos <Campo>Retorno Extratos Bancários</Campo> (extrato eletrônico CNAB 240) e{' '}
-          <Campo>Retorno Cobrança</Campo> (CNAB 240 SIGCB da Caixa). Dá para escolher vários arquivos de uma vez, ou
-          arrastá-los. Cada arquivo mostra a conta ou o beneficiário que contém antes de abrir.
+          Ao abrir o período, aparece o campo <Campo>Retornos CNAB 240</Campo>: anexe ali o extrato eletrônico e o retorno
+          de cobrança (SIGCB da Caixa) juntos — dá para escolher vários arquivos de uma vez, ou arrastá-los. O sistema
+          identifica sozinho se cada arquivo é extrato ou cobrança e mostra a conta ou o beneficiário que ele contém
+          antes de abrir.
         </p>
       </Passo>
       <Passo numero={4} titulo="Composição do saldo">
