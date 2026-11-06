@@ -416,14 +416,11 @@ async function calcular(empresaId, orc, opcoes = {}) {
   const porMes = new Map(r.meses.map((x) => [x.mes, x.valores]));
   const ids2 = arvore.flatMap((g) => g.filhos.map((f) => f.id));
 
-  const mesesRealizados = j.cicloInicio <= j.trava ? mesesEntre(j.cicloInicio, j.trava) : [];
-  const mesesProjetadosCiclo = j.meses.filter((m) => m >= j.cicloInicio);
-  const realizado = somaDosMeses(mesesRealizados.map((m) => porMes.get(m)), ids2);
-  const projetado = somaDosMeses(mesesProjetadosCiclo.map((m) => porMes.get(m)), ids2);
+  // Fechamento do orçamento: do primeiro lançamento do centro (realizado até a trava) ao fim do ciclo
+  // (projetado) — o mesmo que a coluna Projetado da aba DRE no período inteiro (pedido do usuário).
+  const realizado = somaDosMeses(r.meses.filter((x) => x.mes <= j.trava).map((x) => x.valores), ids2);
+  const projetado = somaDosMeses(r.meses.filter((x) => x.mes > j.trava).map((x) => x.valores), ids2);
   const total = Object.fromEntries(ids2.map((x) => [x, num(realizado[x]) + num(projetado[x])]));
-  const n1Real = totaisNivel1(arvore, realizado);
-  const n1Proj = totaisNivel1(arvore, projetado);
-  const n1Tot = totaisNivel1(arvore, total);
 
   const pocEm = (mes) => {
     const fim = fimMes(mes);
@@ -448,18 +445,23 @@ async function calcular(empresaId, orc, opcoes = {}) {
     total: total[m.id],
   }));
 
+  const mensal = {
+    meses: r.meses.map((x) => x.mes),
+    trava: j.trava,
+    valores: Object.fromEntries(ids2.map((m) => [m, r.meses.map((x) => (x.valores[m] === null || x.valores[m] === undefined ? null : Math.round(x.valores[m] * 100) / 100))])),
+  };
+
   return {
-    janela: { ciclo_inicio: j.cicloInicio, ciclo_fim: j.cicloFim, trava: j.trava, inicio_projecao: j.inicioProjecao },
+    janela: {
+      ciclo_inicio: j.cicloInicio,
+      ciclo_fim: j.cicloFim,
+      trava: j.trava,
+      inicio_projecao: j.inicioProjecao,
+      realizado_de: mensal.meses[0] || null,
+    },
     meses: j.meses,
     centro: { id, nome: centro.apelido || centro.nome, natureza: centro.natureza },
-    niveis1: arvore.map((g, i) => ({
-      id: g.id,
-      descricao: g.descricao,
-      totalizadora: g.totalizadora,
-      realizado: n1Real[i].valor,
-      projetado: n1Proj[i].valor,
-      total: n1Tot[i].valor,
-    })),
+    niveis1: niveis1DaFoto(arvore, mensal),
     nivel2,
     poc: obra ? { trava: pocEm(j.trava), meses: j.meses.map(pocEm) } : null,
     // O que entrou de cada origem (fica na versão salva).
@@ -469,12 +471,36 @@ async function calcular(empresaId, orc, opcoes = {}) {
     // A DRE do orçamento mês a mês, nível 2, do primeiro lançamento do centro ao fim do ciclo: até a trava
     // é o realizado na data do cálculo; depois, o projetado. `valores[mascara]` alinhado com `meses`. É o
     // que a aba DRE compara com o realizado (coluna Projetado / Desvio).
-    mensal: {
-      meses: r.meses.map((x) => x.mes),
-      trava: j.trava,
-      valores: Object.fromEntries(ids2.map((m) => [m, r.meses.map((x) => (x.valores[m] === null || x.valores[m] === undefined ? null : Math.round(x.valores[m] * 100) / 100))])),
-    },
+    mensal,
   };
+}
+
+// O fechamento no nível 1 pela foto mês a mês (`mensal`, valores já em centavos): realizado = meses até a
+// trava, projetado = depois dela, total = tudo (do primeiro lançamento do centro ao fim do ciclo). Soma
+// os mesmos números da coluna Projetado da aba DRE no período inteiro. Também refaz o fechamento das
+// fotos gravadas antes (que somavam só a partir do início do ciclo).
+function niveis1DaFoto(arvore, mensal) {
+  const ids2 = arvore.flatMap((g) => g.filhos.map((f) => f.id));
+  const soma = (filtro) =>
+    Object.fromEntries(
+      ids2.map((id) => {
+        const arr = mensal.valores?.[id] || [];
+        return [id, mensal.meses.reduce((t, m, i) => (filtro(m) ? t + num(arr[i]) : t), 0)];
+      })
+    );
+  const realizado = soma((m) => m <= mensal.trava);
+  const projetado = soma((m) => m > mensal.trava);
+  const total = soma(() => true);
+  const [n1Real, n1Proj, n1Tot] = [realizado, projetado, total].map((v) => totaisNivel1(arvore, v));
+  const r2 = (v) => Math.round(v * 100) / 100;
+  return arvore.map((g, i) => ({
+    id: g.id,
+    descricao: g.descricao,
+    totalizadora: g.totalizadora,
+    realizado: r2(n1Real[i].valor),
+    projetado: r2(n1Proj[i].valor),
+    total: r2(n1Tot[i].valor),
+  }));
 }
 
 // ---------------------------------------------------------------- histórico
@@ -560,6 +586,7 @@ module.exports = {
   unidades,
   contas,
   calcular,
+  niveis1DaFoto,
   prepararMotor,
   historico,
   somarMeses,

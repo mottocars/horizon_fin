@@ -733,9 +733,10 @@ function escreverResumo(workbook, sheet, J, d, meta, fonte) {
   });
   n += 1;
 
-  // Totais do ciclo (a lista da aba Projeções): por centro, cada grupo de nível 1.
-  secao('TOTAIS DO CICLO DE CADA ORÇAMENTO (como a lista da aba Projeções)');
-  cabecalhoTabela(sheet, n, ['Centro de custo', 'Grupo (nível 1)', '', '', '', '', 'Realizado no ciclo (até a trava)', 'Projetado no ciclo', '', 'Total do ciclo']);
+  // Fechamento (a lista da aba Projeções e a Conclusão): por centro, cada grupo de nível 1, do primeiro
+  // lançamento do centro ao fim do ciclo.
+  secao('FECHAMENTO DE CADA ORÇAMENTO — do primeiro lançamento ao fim do ciclo (como a lista da aba Projeções e a Conclusão)');
+  cabecalhoTabela(sheet, n, ['Centro de custo', 'Grupo (nível 1)', '', '', '', '', 'Realizado (até a trava)', 'Projetado (até o fim do ciclo)', '', 'Total']);
   n += 1;
   P.orcamentos.forEach(({ orc, foto }) => {
     (foto.niveis1 || []).forEach((g) => {

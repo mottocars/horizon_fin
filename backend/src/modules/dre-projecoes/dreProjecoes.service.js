@@ -28,6 +28,18 @@ const JUNCOES = `FROM dre_projecao_orcamentos o
   JOIN centros_custo_sienge c ON c.empresa_id = o.empresa_id AND c.sienge_id = o.centro_id
   LEFT JOIN usuarios u ON u.id = o.usuario_id`;
 
+// O fechamento do nível 1 (`niveis1`) refeito pela foto mês a mês: do primeiro lançamento do centro ao
+// fim do ciclo, como a coluna Projetado da aba DRE. As fotos gravadas antes de 06/11/2026 somavam só a
+// partir do início do ciclo; assim elas mostram o fechamento completo sem precisar concluir de novo.
+function comFechamento(resultado, arvore) {
+  if (!resultado?.mensal?.meses) return resultado;
+  return {
+    ...resultado,
+    janela: resultado.janela ? { ...resultado.janela, realizado_de: resultado.mensal.meses[0] || null } : resultado.janela,
+    niveis1: calculo.niveis1DaFoto(arvore, resultado.mensal),
+  };
+}
+
 async function ultimaVersao(db, empresaId) {
   const { rows } = await db.query(
     `SELECT v.id, v.numero, v.criado_em, v.orcamentos, u.nome AS usuario
@@ -39,21 +51,20 @@ async function ultimaVersao(db, empresaId) {
 }
 
 // A aba: colunas (o nível 1 da Máscara DRE), a última versão salva com os orçamentos dela e os
-// rascunhos — cada um com os totais do nível 1 no ciclo (da foto do cálculo).
+// rascunhos — cada um com o fechamento do nível 1 (do primeiro lançamento ao fim do ciclo, da foto).
 async function listar(empresaId) {
   const [versao, arvore] = await Promise.all([ultimaVersao(pool, empresaId), dreMascaras.list(empresaId)]);
   const { rows } = await pool.query(
-    `SELECT ${COLUNAS}, o.resultado -> 'niveis1' AS niveis1
+    `SELECT ${COLUNAS}, o.resultado -> 'niveis1' AS niveis1, o.resultado -> 'mensal' AS mensal
        ${JUNCOES}
       WHERE o.empresa_id = $1 AND (o.versao_id IS NULL OR o.versao_id = $2)
       ORDER BY c.dre_ordem ASC NULLS LAST, c.sienge_id ASC`,
     [empresaId, versao?.id ?? -1]
   );
-  const linha = (r) => ({
-    ...r,
-    totais: r.niveis1 ? Object.fromEntries(r.niveis1.map((n) => [n.id, n.total])) : null,
-    niveis1: undefined,
-  });
+  const linha = ({ niveis1, mensal, ...r }) => {
+    const n1 = mensal?.meses ? calculo.niveis1DaFoto(arvore, mensal) : niveis1;
+    return { ...r, totais: n1 ? Object.fromEntries(n1.map((n) => [n.id, n.total])) : null };
+  };
   return {
     versao,
     colunas: arvore.map((g) => ({ id: g.id, descricao: g.descricao, totalizadora: g.totalizadora })),
@@ -68,6 +79,7 @@ async function obter(empresaId, id, db = pool) {
     id,
   ]);
   if (!rows[0]) throw erro(404, 'Orçamento não encontrado.');
+  if (rows[0].resultado?.mensal) rows[0].resultado = comFechamento(rows[0].resultado, await dreMascaras.list(empresaId));
   return rows[0];
 }
 
@@ -265,6 +277,7 @@ async function orcamentosDaFonte(empresaId, { fonte = 'atual', numero = null, ce
   );
   const avisos = [];
   const orcamentos = [];
+  const arvore = completo && rows.length ? await dreMascaras.list(empresaId) : null;
   const ids = [...new Set(rows.map((r) => r.centro_id))];
   for (const id of ids) {
     const rascunho = fonte === 'atual' ? rows.find((r) => r.centro_id === id && r.versao_id === null) : null;
@@ -293,6 +306,7 @@ async function orcamentosDaFonte(empresaId, { fonte = 'atual', numero = null, ce
         continue;
       }
     }
+    if (completo) resultado = comFechamento(resultado, arvore);
     orcamentos.push({ ...orc, origem, mensal, resultado, calculado_agora: calculadoAgora });
   }
   return {

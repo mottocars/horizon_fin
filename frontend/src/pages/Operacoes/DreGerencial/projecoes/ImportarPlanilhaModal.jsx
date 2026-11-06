@@ -234,7 +234,7 @@ export default function ImportarPlanilhaModal({ open, onClose, empresaId, recort
                     onChange={(e) => setConcluir(e.target.checked)}
                     className="h-3.5 w-3.5 rounded border-gray-300 text-primary-600"
                   />
-                  Concluir os orçamentos importados (calcula a POC e o fechamento do ciclo)
+                  Concluir os orçamentos importados (calcula a POC e o fechamento)
                 </label>
               )}
               <Button type="button" variant="secondary" onClick={onClose} disabled={aplicando}>

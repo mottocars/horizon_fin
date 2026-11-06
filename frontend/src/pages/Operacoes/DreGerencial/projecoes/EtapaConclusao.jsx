@@ -1,11 +1,14 @@
 import { Check } from 'lucide-react';
 import { corValor, moeda, rotuloMesLongo } from './util';
 
-// Etapa final: o orçamento concluído — o fechamento do ciclo no nível 1 da DRE (realizado até a trava,
-// projetado e total). Fica aguardando "Salvar versão".
+// Etapa final: o orçamento concluído — o fechamento no nível 1 da DRE do realizado ao fim do projetado:
+// realizado desde o primeiro lançamento do centro (inclusive antes do início do ciclo) até a trava,
+// projetado até o fim do ciclo e total — o mesmo da coluna Projetado da aba DRE no período inteiro.
+// Fica aguardando "Salvar versão".
 export default function EtapaConclusao({ resultado, centroNome }) {
   const { janela, niveis1 } = resultado;
-  const temRealizado = janela.ciclo_inicio <= janela.trava;
+  const realizadoDe = janela.realizado_de || janela.ciclo_inicio;
+  const temRealizado = realizadoDe <= janela.trava;
   return (
     <div className="p-6">
       <div className="flex flex-col items-center text-center">
@@ -20,19 +23,25 @@ export default function EtapaConclusao({ resultado, centroNome }) {
           {centroNome} · ciclo de {rotuloMesLongo(janela.ciclo_inicio)} a {rotuloMesLongo(janela.ciclo_fim)}
         </p>
         <p className="mt-0.5 text-xs text-gray-400">Aguardando Salvar versão.</p>
+        <p className="mt-2 max-w-xl text-xs text-gray-500">
+          Fechamento do realizado ao fim do projetado: de {rotuloMesLongo(temRealizado ? realizadoDe : janela.inicio_projecao)} a{' '}
+          {rotuloMesLongo(janela.ciclo_fim)} — o mesmo total da coluna Projetado da aba DRE com o período completo.
+        </p>
       </div>
 
       <div className="mt-6 rounded-lg border border-gray-200">
         <table className="w-full border-separate border-spacing-0 text-left text-xs">
           <thead>
             <tr className="text-[11px] uppercase tracking-wide text-blue-700">
-              <th className="rounded-tl-lg border-b-2 border-blue-500 bg-blue-50 px-3 py-2.5 font-medium">Fechamento do ciclo</th>
+              <th className="rounded-tl-lg border-b-2 border-blue-500 bg-blue-50 px-3 py-2.5 font-medium">Fechamento</th>
               {temRealizado && (
                 <th className="w-36 border-b-2 border-blue-500 bg-blue-50 px-3 py-2.5 text-right font-medium">
-                  Realizado até {rotuloMesLongo(janela.trava)}
+                  Realizado {rotuloMesLongo(realizadoDe)} a {rotuloMesLongo(janela.trava)}
                 </th>
               )}
-              <th className="w-36 border-b-2 border-blue-500 bg-blue-50 px-3 py-2.5 text-right font-medium">Projetado</th>
+              <th className="w-36 border-b-2 border-blue-500 bg-blue-50 px-3 py-2.5 text-right font-medium">
+                Projetado {rotuloMesLongo(janela.inicio_projecao)} a {rotuloMesLongo(janela.ciclo_fim)}
+              </th>
               <th className="w-40 rounded-tr-lg border-b-2 border-blue-500 bg-blue-100 px-3 py-2.5 text-right font-semibold">Total</th>
             </tr>
           </thead>

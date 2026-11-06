@@ -47,7 +47,7 @@ function Situacao({ linha, versao }) {
 }
 
 // Operações > DRE Construtoras > Projeções: os orçamentos da DRE por centro de custo — uma linha por
-// centro com o fechamento do ciclo em cada totalizador da Máscara DRE, o ciclo e a trava. Mostra
+// centro com o fechamento (do primeiro lançamento ao fim do ciclo) em cada totalizador da Máscara DRE, o ciclo e a trava. Mostra
 // a última versão salva e, acima de cada centro, o rascunho dele (em andamento ou concluído). Os
 // botões do topo (DreGerencialPage.jsx) chamam `novo()` e `salvarVersao()` pela ref; `onResumo`
 // informa quantos rascunhos concluídos há (o "Salvar versão" só acende com algum).

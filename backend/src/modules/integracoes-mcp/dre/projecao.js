@@ -201,7 +201,7 @@ const guia = {
       `- Linhas de nível 1 da DRE (colunas da lista): ${arvore.map((g) => g.descricao).join(', ')}.`,
       '',
       '## A aba Projeções',
-      '- **Lista**: um orçamento por centro, com as colunas dos totalizadores da Máscara DRE (realizado + projetado no ciclo). A linha de cima diz a versão em vigor. Situação: **Em andamento** (rascunho sendo montado), **Concluído** (calculado, aguardando Salvar versão), **Na versão** (orçamento da última versão salva). Ações: continuar (abre o assistente na etapa em que parou), descartar o rascunho.',
+      '- **Lista**: um orçamento por centro, com as colunas dos totalizadores da Máscara DRE (o fechamento: realizado desde o primeiro lançamento do centro até a trava + projetado até o fim do ciclo — igual à coluna Projetado da aba DRE no período inteiro). A linha de cima diz a versão em vigor. Situação: **Em andamento** (rascunho sendo montado), **Concluído** (calculado, aguardando Salvar versão), **Na versão** (orçamento da última versão salva). Ações: continuar (abre o assistente na etapa em que parou), descartar o rascunho.',
       '- **Layout**: baixa a planilha preenchida da empresa inteira (abas Ciclos, Vendas, Custos da POC, Demais contas e uma oculta _horizon de controle; protegida com senha nas células que não se digitam). **Importar**: sobe a planilha, mostra a prévia (o que muda por centro, erros por aba e linha, avisos) e grava só os centros que mudaram — opcionalmente já concluindo. Ciclo em branco com valores preenchidos é ignorado.',
       '- **Novo orçamento**: abre o assistente. **Salvar versão**: cria uma versão da EMPRESA com todos os rascunhos CONCLUÍDOS e, nos centros sem rascunho concluído, o orçamento da versão anterior. **Tela cheia**.',
       '',
@@ -212,7 +212,7 @@ const guia = {
       '4. **Custos da POC** (só obra): as linhas do Financeiro com % POC e a máscara do custo da POC de Receita, aberta por natureza (drilldown, fechado por padrão; Abrir/Fechar todas). Só **HORIZON - INFORMADO** é digitável; SIENGE - EMPRESARIAL e SIENGE - AGING vêm prontas. Menu da célula: replicar, distribuir, limpar. Resumo da obra: orçamento vigente, custo realizado, POC na trava e aviso de obra sem orçamento (POC 0 = receita não reconhecida). A **Correção Monetária** entra aqui se a linha tiver % POC (digitada mês a mês). Planilha só desta etapa e deste centro no rodapé.',
       '5. **POC**: a POC de Receita e de Despesa projetadas mês a mês (e a POC de Despesa líquida dos distratos), com os indicadores.',
       '6. **Demais contas**: as linhas do Financeiro sem % POC (despesas e receitas administrativas, financeiras…), na mesma grade; planilha da etapa no rodapé.',
-      '7. **Conclusão**: o fechamento do nível 1 (realizado no ciclo, projetado e total). **Concluir** calcula e grava a FOTO; o rascunho fica Concluído até alguém clicar em Salvar versão.',
+      '7. **Conclusão**: o fechamento do nível 1 do realizado ao fim do projetado — realizado desde o primeiro lançamento do centro até a trava (inclui o que é anterior ao início do ciclo), projetado depois da trava até o fim do ciclo e total. O total é o mesmo da coluna Projetado da aba DRE com o período completo. **Concluir** calcula e grava a FOTO; o rascunho fica Concluído até alguém clicar em Salvar versão.',
       'Centro **administrativo** pula Vendas, Custos da POC e POC. O rascunho grava sozinho a cada mudança.',
       '',
       '## Regras de cálculo',
@@ -269,7 +269,7 @@ const orcamentosTool = {
   name: 'dre_projecao_orcamentos',
   description:
     'Os orçamentos da projeção da DRE de uma versão salva (padrão: a última) ou os rascunhos: por centro, a situação, o ciclo, a trava (último mês realizado), o primeiro mês projetado, ' +
-    'quem concluiu e quando, os totais do nível 1 no ciclo (realizado até a trava, projetado e total — a lista da aba Projeções), as premissas resumidas (vendas, naturezas por Origem Projeção, ' +
+    'quem concluiu e quando, os totais do nível 1 do fechamento (realizado desde o primeiro lançamento do centro até a trava, projetado até o fim do ciclo e total — a lista da aba Projeções e a Conclusão), as premissas resumidas (vendas, naturezas por Origem Projeção, ' +
     'correção) e as POCs na trava e no fim do ciclo. Também lista as versões salvas.',
   inputSchema: { ...FONTE, ...CENTROS },
   handler: ferramenta(async (empresaId, a, ctx) => {
@@ -298,7 +298,12 @@ const orcamentosTool = {
           projeta_a_partir_de: rotMes(primeiroProjetado(o)),
           concluido_em: quando(o.concluido_em),
           por: o.usuario,
-          totais_do_ciclo: (r.niveis1 || []).map((g) => ({ linha: g.descricao, realizado_ate_trava: r2(g.realizado), projetado: r2(g.projetado), total: r2(g.total) })),
+          fechamento: {
+            de: r.mensal?.meses?.[0] ? rotMes(r.mensal.meses[0]) : null,
+            ate: rotMes(o.ciclo_fim),
+            regra: 'Do primeiro lançamento do centro (realizado até a trava, inclusive antes do início do ciclo) ao fim do ciclo (projetado) — igual à coluna Projetado da aba DRE no período inteiro.',
+            totais: (r.niveis1 || []).map((g) => ({ linha: g.descricao, realizado_ate_trava: r2(g.realizado), projetado: r2(g.projetado), total: r2(g.total) })),
+          },
           premissas: {
             vendas: { unidades: vendas.length, valor: r2(vendas.reduce((t, v) => t + num(v.valor), 0)), meses: [...new Set(vendas.map((v) => v.mes))].sort().map(rotMes) },
             naturezas_por_origem: porOrigem,
