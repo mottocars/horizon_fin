@@ -7,6 +7,7 @@ const { registrarToolsDfc } = require('./tools');
 const { TOOLS_SALDOS } = require('../saldos/tools');
 const { TOOLS_AGING } = require('../aging/tools');
 const { TOOLS_DRE } = require('../dre');
+const T = require('../../../config/telas');
 
 // MCP do conector Horizon (/api/mcp/dfc/:token — o caminho "dfc" ficou dos conectores já criados). O
 // token do link só diz QUAL conector (empresa, módulos e duração do login); quem libera é o login do
@@ -38,6 +39,9 @@ const INSTRUCOES = {
     'A DRE: dre_demonstrativo (por centro, mês a mês, comparação). "Como chegou nesse número?": dre_explicar_numero (base × fator, avanço × vendas novas, POC e de onde veio, composição da base, exemplo). ' +
     'POC por obra: dre_poc. Bases: dre_lancamentos (Financeiro), dre_unidades (contratos, distratos, permutas). Completude: dre_fora_da_dre. Conferências e alertas: dre_auditoria. ' +
     'Dashboard: dre_painel (indicadores com etiquetas, para onde foi a receita, origem, centros, carteira); cenários: dre_simular. ' +
+    'Projeção da DRE (aba Projeções: orçamento por centro; colunas Projetado / Desvio % da aba DRE e do dashboard): comece por dre_projecao_guia (FAQ da tela, regras, versões). ' +
+    'Orçamentos de uma versão ou rascunhos: dre_projecao_orcamentos; premissas de um centro (vendas, naturezas por Origem Projeção, correção): dre_projecao_premissas; ' +
+    '"como esse projetado foi criado?": dre_projecao_explicar; Realizado × Projetado com o Desvio % da tela: dre_projecao_desvio; conferências e alertas da projeção: dre_projecao_auditoria. ' +
     'Período padrão: 1º de janeiro do ano até hoje; datas AAAA-MM-DD; valores em R$ com sinal (despesa negativa). Responda como um CFO: mostre a conta e dê exemplos.',
 };
 
@@ -91,7 +95,9 @@ router.post('/:token', async (req, res) => {
           modulos.map((m) => INSTRUCOES[m]).join(' '),
       }
     );
-    registrarTools(server, conector.empresa_id, modulos, { usuarioId: acesso.usuario.id });
+    // Rascunhos da projeção da DRE só pra quem tem a tela DRE Construtoras (o dashboard vê só versão salva).
+    const podeRascunho = acesso.usuario.permissao === 'MASTER' || (acesso.usuario.telas_permitidas || []).includes(T.DRE);
+    registrarTools(server, conector.empresa_id, modulos, { usuarioId: acesso.usuario.id, podeRascunho });
     transport = new StreamableHTTPServerTransport({ sessionIdGenerator: undefined });
     res.on('close', () => {
       transport.close();

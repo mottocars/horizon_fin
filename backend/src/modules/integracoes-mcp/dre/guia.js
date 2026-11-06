@@ -128,6 +128,7 @@ const guia = {
       '- Lançamentos do Financeiro que formam a DRE (por linha, centro, natureza, fornecedor, mês; ajustados e criados à mão): **dre_lancamentos**. Contratos, distratos, permutas e estoque: **dre_unidades**.',
       '- O que ficou fora da DRE e por quê (teste de completude): **dre_fora_da_dre**. Conferências, alertas e fontes: **dre_auditoria**.',
       '- O dashboard Demonstração do Resultado (8 indicadores com etiquetas, para onde foi a receita, de onde veio, quem gera resultado, mês a mês, carteira POC): **dre_painel**. Cenários (vendas, avanço de obra, orçamento, estoque, despesas): **dre_simular**.',
+      '- A **Projeção da DRE** (aba Projeções: o orçamento da DRE por centro; colunas Projetado e Desvio % da aba DRE e do dashboard): comece por **dre_projecao_guia** (FAQ da tela e regras); depois dre_projecao_orcamentos, dre_projecao_premissas, dre_projecao_explicar, dre_projecao_desvio e dre_projecao_auditoria.',
       '',
       '## Como responder',
       '- Diga sempre o período e o escopo (consolidado ou centros). O padrão é 1º de janeiro do ano até hoje, como a tela.',

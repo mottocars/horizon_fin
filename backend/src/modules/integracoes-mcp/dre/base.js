@@ -155,6 +155,7 @@ module.exports = {
   resolverCentros,
   resolverLinha,
   dados,
+  memo,
   painel,
   rotulo,
   cabecalho,
