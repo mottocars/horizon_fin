@@ -1,6 +1,6 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { useSearchParams } from 'react-router-dom';
-import { CircleHelp, CreditCard, Download, FilterX, Landmark, Layers, ListChecks, Loader2, Lock, LockOpen, Plus, RefreshCw, Search, Settings, Wallet } from 'lucide-react';
+import { CircleHelp, CreditCard, Download, FilterX, Landmark, Layers, ListChecks, Loader2, Lock, LockOpen, Maximize2, Plus, RefreshCw, Search, Settings, Wallet } from 'lucide-react';
 import Card from '../../../components/Card';
 import Tabs from '../../../components/Tabs';
 import Button from '../../../components/Button';
@@ -166,6 +166,8 @@ export default function SaldoContasBancariasPage() {
   // da grade); a página só chama o endpoint e baixa o blob (ver saldos.controller.js::
   // exportarExcel).
   const [exportandoRelatorio, setExportandoRelatorio] = useState(false);
+  // Tela cheia da grade de saldos (botão à esquerda do Exportar) — quem desenha é o SaldosContasTab.
+  const [saldosTelaCheia, setSaldosTelaCheia] = useState(false);
   const [erroExportarRelatorio, setErroExportarRelatorio] = useState('');
 
   // Botão "Nova classificação" fica aqui no topo (padrão do resto do sistema), mas o modal de
@@ -525,6 +527,17 @@ export default function SaldoContasBancariasPage() {
           {abaAtiva === 'saldos' && (
             <div className="flex shrink-0 flex-col items-end gap-1.5">
               <div className="flex shrink-0 items-center gap-2">
+                <button
+                  type="button"
+                  onClick={() => setSaldosTelaCheia(true)}
+                  disabled={semEmpresa}
+                  title="Tela cheia"
+                  aria-label="Tela cheia"
+                  className="flex shrink-0 items-center justify-center rounded-lg border border-gray-200 p-2 text-gray-600 transition-colors hover:bg-gray-50 disabled:cursor-not-allowed disabled:opacity-60"
+                >
+                  <Maximize2 size={18} />
+                </button>
+
                 {/* Só o ícone (pedido do usuário) — baixa um .xlsx gerado no backend com todas
                     as contas com saldo na semana, ver saldosExcel.service.js. */}
                 <button
@@ -647,6 +660,8 @@ export default function SaldoContasBancariasPage() {
             dataAberta={dataAberta}
             onPeriodoDessincronizado={() => setPeriodoToken((n) => n + 1)}
             permitirBloqueio
+            telaCheia={saldosTelaCheia}
+            onSairTelaCheia={() => setSaldosTelaCheia(false)}
           />
         )}
 

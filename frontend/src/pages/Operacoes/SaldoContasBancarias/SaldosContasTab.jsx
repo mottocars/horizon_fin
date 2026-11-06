@@ -1,5 +1,5 @@
 import { Fragment, memo, useCallback, useEffect, useMemo, useRef, useState } from 'react';
-import { Check, CornerDownRight, CreditCard, History, Landmark, Loader2, Lock, LockOpen, Minus, Pencil, Plus, TriangleAlert, Zap } from 'lucide-react';
+import { Check, CornerDownRight, CreditCard, History, Landmark, Loader2, Lock, LockOpen, Minimize2, Minus, Pencil, Plus, TriangleAlert, Wallet, Zap } from 'lucide-react';
 import { getSaldosContas, salvarSaldosContas } from '../../../api/saldoContasBancarias.api';
 import LogoBanco from './LogoBanco';
 import ComposicaoSaldo from './ComposicaoSaldo';
@@ -338,6 +338,10 @@ function SaldosContasTab({
   // Canto superior esquerdo reto pra encaixar direto embaixo da aba (padrão); a Rotinas põe um
   // painel de status entre a aba e a grade, então desliga.
   encaixadoNaAba = true,
+  // Tela cheia (botão ao lado do Exportar, na página): a grade ocupa a tela inteira, por cima do
+  // menu e do topo, e a do navegador também — mesmo padrão da DRE e do DFC.
+  telaCheia = false,
+  onSairTelaCheia,
 }) {
   const [contas, setContas] = useState(null);
   // Dias do período carregado que tiveram abertura de período (aberto ou encerrado).
@@ -355,6 +359,9 @@ function SaldosContasTab({
   const [alvoBloqueio, setAlvoBloqueio] = useState(null);
 
   const tabelaRef = useRef(null);
+  // Menu do botão direito / janela de bloqueio abertos: o Esc é deles, não sai da tela cheia.
+  const sobrepostoRef = useRef(false);
+  sobrepostoRef.current = Boolean(menu || alvoBloqueio);
   const inputsRef = useRef(new Map());
   const linhasVisiveisRef = useRef([]);
   const filaRef = useRef(Promise.resolve());
@@ -496,6 +503,42 @@ function SaldosContasTab({
     const desloc = colunaHoje.getBoundingClientRect().left - scroller.getBoundingClientRect().left;
     scroller.scrollLeft += desloc - LARGURA_PRIMEIRA - LARGURA_DIA * 2;
   }, [carregando, contas]);
+
+  // Tela cheia: pede também a do navegador; sair dela (Esc do navegador) fecha a nossa junto. O Esc
+  // dentro de uma célula cancela a edição (não sai da tela cheia) — por isso, onde dá (Chrome/Edge),
+  // o Esc fica com a página (Keyboard Lock: segurar o Esc ainda sai da do navegador) e só sai da
+  // tela cheia quando não é numa célula, nem com o menu do botão direito ou o bloqueio abertos.
+  useEffect(() => {
+    if (!telaCheia) return undefined;
+    const doc = document.documentElement;
+    if (!document.fullscreenElement && doc.requestFullscreen) {
+      doc
+        .requestFullscreen()
+        .then(() => navigator.keyboard?.lock?.(['Escape']))
+        .catch(() => {});
+    }
+    const aoTrocar = () => {
+      if (!document.fullscreenElement) onSairTelaCheia?.();
+    };
+    const aoTeclar = (e) => {
+      if (e.key !== 'Escape' || sobrepostoRef.current) return;
+      if (/^(INPUT|TEXTAREA|SELECT)$/.test(e.target?.tagName || '')) return;
+      onSairTelaCheia?.();
+    };
+    document.addEventListener('fullscreenchange', aoTrocar);
+    window.addEventListener('keydown', aoTeclar);
+    return () => {
+      document.removeEventListener('fullscreenchange', aoTrocar);
+      window.removeEventListener('keydown', aoTeclar);
+      navigator.keyboard?.unlock?.();
+      if (document.fullscreenElement) document.exitFullscreen?.().catch(() => {});
+    };
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [telaCheia]);
+
+  // Cabeçalho e rodapé grudam nas bordas de quem rola: fora da tela cheia é o <main> do AppShell
+  // (o -24 cancela o p-6 dele); na tela cheia, a própria área da grade (sem padding).
+  const ajusteBorda = telaCheia ? 0 : -24;
 
   // ---------------------------------------------------------------------------- gravação
   // Aplica na hora (otimista) e grava por uma fila: cada lote só sai depois que o anterior
@@ -692,7 +735,34 @@ function SaldosContasTab({
   const statusSalvamento = pendentes > 0 ? 'salvando' : erroSalvar ? 'erro' : salvoAlgumaVez ? 'salvo' : null;
 
   return (
-    <div className={`rounded-card bg-white shadow-card ${encaixadoNaAba ? 'rounded-tl-none' : ''}`}>
+    <div
+      className={
+        telaCheia
+          ? 'fixed inset-0 z-40 flex flex-col bg-white'
+          : `rounded-card bg-white shadow-card ${encaixadoNaAba ? 'rounded-tl-none' : ''}`
+      }
+    >
+      {telaCheia && (
+        <div className="flex shrink-0 items-center gap-3 border-b border-gray-100 px-5 py-3">
+          <Wallet size={18} className="shrink-0 text-primary-600" />
+          <div className="min-w-0">
+            <h2 className="text-sm font-semibold text-gray-900">Saldo das contas bancárias</h2>
+            <p className="text-xs text-gray-500">
+              {formatarDataBR(dataInicio)} a {formatarDataBR(dataFim)}
+              {dataAberta && ` · período aberto em ${formatarDataBR(dataAberta)}`}
+            </p>
+          </div>
+          <span className="ml-auto hidden text-xs text-gray-400 sm:inline">Esc para sair</span>
+          <button
+            type="button"
+            onClick={onSairTelaCheia}
+            className="flex items-center gap-1.5 rounded-lg border border-gray-200 px-3 py-1.5 text-sm font-medium text-gray-700 transition-colors hover:bg-gray-50"
+          >
+            <Minimize2 size={15} />
+            Sair da tela cheia
+          </button>
+        </div>
+      )}
       {statusSalvamento && (
         <div className="flex items-center justify-end border-b border-gray-100 px-5 py-2 text-xs" aria-live="polite">
           {statusSalvamento === 'salvando' ? (
@@ -772,7 +842,7 @@ function SaldosContasTab({
         // <main> do AppShell, que já tem overflow-y-auto (o CSS força overflow-x a virar
         // "auto" também nesse caso, então uma janela bem estreita ainda rola, só que na
         // barra da página mesmo — caso raro o bastante pra não valer a complexidade).
-        <div ref={tabelaRef} className="rounded-b-card">
+        <div ref={tabelaRef} className={telaCheia ? 'min-h-0 flex-1 overflow-auto' : 'rounded-b-card'}>
           {/* Só a coluna de nomes tem largura fixa; as de dia dividem o que sobrar — com
               exatamente 7 dias (a grade está travada numa semana, ver comentário acima) elas
               esticam pra preencher o card em vez de deixar uma faixa em branco à direita. */}
@@ -788,14 +858,15 @@ function SaldosContasTab({
             </colgroup>
 
             {/* Cabeçalho e Liberado + cheque em azul (mesmo tom do cabeçalho da aba Recebidas do
-                Espião NFe/NFSe) e grudados nas bordas do <main> ao rolar: -top-6/-bottom-6 (e
-                ALTURA_MES - 24 na 2ª linha) cancelam o p-6 do <main>, senão sobrava uma faixa de
+                Espião NFe/NFSe) e grudados nas bordas do <main> ao rolar: ajusteBorda (-24, e
+                ALTURA_MES - 24 na 2ª linha) cancela o p-6 do <main>, senão sobrava uma faixa de
                 24px entre eles e a borda da tela. O dia liberado pro lançamento continua âmbar. */}
             <thead>
               <tr style={{ height: ALTURA_MES }}>
                 <th
                   rowSpan={2}
-                  className="sticky -top-6 left-0 z-30 border-b-2 border-r border-b-blue-500 border-r-blue-100 bg-blue-50 pl-4 text-xs font-medium uppercase tracking-wide text-blue-700"
+                  style={{ top: ajusteBorda }}
+                  className="sticky left-0 z-30 border-b-2 border-r border-b-blue-500 border-r-blue-100 bg-blue-50 pl-4 text-xs font-medium uppercase tracking-wide text-blue-700"
                 >
                   Classificação / Conta bancária
                 </th>
@@ -803,8 +874,8 @@ function SaldosContasTab({
                   <th
                     key={`${m.ano}-${m.mes}`}
                     colSpan={m.dias}
-                    className="sticky -top-6 z-20 border-b border-l border-blue-100 bg-blue-50 px-3 text-left text-xs font-semibold text-blue-700"
-                    style={{ height: ALTURA_MES }}
+                    className="sticky z-20 border-b border-l border-blue-100 bg-blue-50 px-3 text-left text-xs font-semibold text-blue-700"
+                    style={{ height: ALTURA_MES, top: ajusteBorda }}
                   >
                     <span className="sticky inline-block" style={{ left: LARGURA_PRIMEIRA + 12 }}>
                       {nomeMes(m.ano, m.mes)}
@@ -822,7 +893,7 @@ function SaldosContasTab({
                       className={`sticky z-20 border-b-2 border-l border-b-blue-500 border-l-blue-100 px-2 py-1 font-medium ${
                         aberto ? 'bg-amber-100' : 'bg-blue-50'
                       }`}
-                      style={{ top: ALTURA_MES - 24 }}
+                      style={{ top: ALTURA_MES + ajusteBorda }}
                       title={`${d.semana}, ${String(d.dia).padStart(2, '0')}/${String(d.mes + 1).padStart(2, '0')}/${d.ano}${d.hoje ? ' (hoje)' : ''}${aberto ? ' — período aberto pra lançamento' : ''}`}
                     >
                       {/* Uma linha só (dia da semana à esquerda, número à direita) — pedido do
@@ -968,13 +1039,13 @@ function SaldosContasTab({
             </tbody>
 
             {/* Rodapé grudado embaixo: Liberado + cheque e, abaixo dele, o resumo dos saldos. Cada linha
-                tem altura fixa (ALTURA_RODAPE) e um `bottom` que empilha as de baixo — o -24 cancela
-                o p-6 do <main>, como no -bottom-6 de antes. */}
+                tem altura fixa (ALTURA_RODAPE) e um `bottom` que empilha as de baixo — o ajusteBorda
+                (-24) cancela o p-6 do <main>, como no -bottom-6 de antes (0 na tela cheia). */}
             <tfoot>
               <tr style={{ height: ALTURA_RODAPE }}>
                 <td
                   className="sticky left-0 z-30 border-r border-t-2 border-r-blue-100 border-t-blue-500 bg-blue-50 pl-4 text-xs font-semibold uppercase tracking-wide text-blue-700"
-                  style={{ bottom: -24 + RESUMO_SALDOS.length * ALTURA_RODAPE }}
+                  style={{ bottom: ajusteBorda + RESUMO_SALDOS.length * ALTURA_RODAPE }}
                 >
                   Liberado + cheque
                 </td>
@@ -984,7 +1055,7 @@ function SaldosContasTab({
                     className={`sticky z-20 border-l border-t-2 border-l-blue-100 border-t-blue-500 px-3 text-right text-xs font-bold tabular-nums text-blue-700 ${
                       d.iso === dataAberta ? 'bg-amber-50' : 'bg-blue-50'
                     }`}
-                    style={{ bottom: -24 + RESUMO_SALDOS.length * ALTURA_RODAPE }}
+                    style={{ bottom: ajusteBorda + RESUMO_SALDOS.length * ALTURA_RODAPE }}
                   >
                     <ValorTotal valor={resumo.liberadoCheque[d.iso]} />
                   </td>
@@ -992,7 +1063,7 @@ function SaldosContasTab({
               </tr>
               {RESUMO_SALDOS.map(({ chave, rotulo }, i) => {
                 const { Icone, cor } = VISUAL_RESUMO[chave];
-                const bottom = -24 + (RESUMO_SALDOS.length - 1 - i) * ALTURA_RODAPE;
+                const bottom = ajusteBorda + (RESUMO_SALDOS.length - 1 - i) * ALTURA_RODAPE;
                 return (
                   <tr key={chave} style={{ height: ALTURA_RODAPE }}>
                     <td
