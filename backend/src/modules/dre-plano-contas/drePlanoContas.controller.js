@@ -6,10 +6,14 @@ const empresaIdSchema = z.coerce.number().int().positive('Empresa inválida.');
 const siengeIdSchema = z.coerce.number().int().positive('Conta inválida.');
 const emptyToNull = (v) => (v === '' || v === undefined ? null : v);
 
-// `nao_entra: true` = "NÃO ENTRA NA DRE" (a máscara é ignorada); sem ele, mascara_id null limpa.
+// Corpo parcial: só o que vier muda. Máscara DRE — `nao_entra: true` = "NÃO ENTRA NA DRE" (a máscara é
+// ignorada); sem ele, mascara_id null limpa. Origem Projeção — `origem_projecao` (null limpa).
 const updateSchema = z.object({
-  mascara_id: z.preprocess(emptyToNull, z.coerce.number().int().positive().nullable()),
-  nao_entra: z.boolean().optional().default(false),
+  mascara_id: z.preprocess(emptyToNull, z.coerce.number().int().positive().nullable()).optional(),
+  nao_entra: z.boolean().optional(),
+  origem_projecao: z
+    .preprocess(emptyToNull, z.enum(service.ORIGENS_PROJECAO, { errorMap: () => ({ message: 'Origem Projeção inválida.' }) }).nullable())
+    .optional(),
 });
 
 function erro(status, message) {
@@ -43,9 +47,18 @@ async function update(req, res, next) {
   try {
     const empresaId = empresaIdSchema.parse(req.params.empresaId);
     const siengeId = siengeIdSchema.parse(req.params.siengeId);
-    const { mascara_id: mascaraId, nao_entra: naoEntra } = updateSchema.parse(req.body);
-    const centroId = centroSchema.parse(req.body?.centro);
-    res.json(await service.update(empresaId, siengeId, mascaraId, { centroId, naoEntra }));
+    const corpo = req.body || {};
+    const dados = updateSchema.parse(corpo);
+    const patch = {};
+    // Máscara DRE: muda se vier mascara_id ou nao_entra (os dois andam juntos).
+    if ('mascara_id' in corpo || 'nao_entra' in corpo) {
+      patch.mascaraId = dados.mascara_id ?? null;
+      patch.naoEntra = dados.nao_entra ?? false;
+    }
+    if ('origem_projecao' in corpo) patch.origem = dados.origem_projecao ?? null;
+    if (!Object.keys(patch).length) throw erro(400, 'Nada para alterar.');
+    const centroId = centroSchema.parse(corpo.centro);
+    res.json(await service.update(empresaId, siengeId, patch, { centroId }));
   } catch (err) {
     tratar(err, next);
   }

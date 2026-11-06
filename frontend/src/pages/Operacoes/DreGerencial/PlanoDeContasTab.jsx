@@ -4,15 +4,27 @@ import SearchableSelect from '../../../components/SearchableSelect';
 import FiltroColuna, { passaNoFiltro } from '../../../components/FiltroColuna';
 import { listContas } from '../../../api/planosFinanceirosSienge.api';
 import { listDreMascaras } from '../../../api/dreMascaras.api';
-import { listClassificacoesPlanoDre, updateClassificacaoPlanoDre } from '../../../api/drePlanoContas.api';
+import { listClassificacoesPlanoDre, updateClassificacaoPlanoDre, updateOrigemPlanoDre } from '../../../api/drePlanoContas.api';
 
 const LIMIT = 2000;
 
 // Máscara DRE com 288px — a mesma largura que a combobox tinha na primeira versão desta aba
-// (pedido do usuário).
-const GRADE = 'grid grid-cols-[minmax(0,1fr)_288px_72px] items-center gap-3';
+// (pedido do usuário); Origem Projeção com 240px, como no Plano Contas da DFC.
+const GRADE = 'grid grid-cols-[minmax(0,1fr)_288px_240px_72px] items-center gap-3';
 
-// Primeira opção do filtro Máscara DRE: acha as contas com ela em branco. O filtro Conta não tem.
+// Origem Projeção (pedido do usuário): de onde a aba Projeções tira os valores futuros de cada
+// natureza. Só estas 4 — mesmos códigos da DFC onde a opção é a mesma (backend:
+// drePlanoContas.service.js::ORIGENS_PROJECAO). "NÃO POSSUI ORIGEM" é escolha (a natureza não é
+// projetada); em branco = não informado.
+const ORIGENS_PROJECAO = [
+  { value: 'NAO_POSSUI', label: 'NÃO POSSUI ORIGEM' },
+  { value: 'HORIZON_ORCAMENTO_INFORMADO', label: 'HORIZON - INFORMADO' },
+  { value: 'SIENGE_ORCAMENTO_EMPRESARIAL', label: 'SIENGE - EMPRESARIAL' },
+  { value: 'SIENGE_AGING', label: 'SIENGE - AGING' },
+];
+
+// Primeira opção dos filtros Máscara DRE e Origem Projeção: acha as contas com o campo em branco. O
+// filtro Conta não tem.
 const NAO_INFORMADO = '__nao_informado__';
 const OPCAO_NAO_INFORMADO = { value: NAO_INFORMADO, label: 'NÃO INFORMADO' };
 
@@ -81,12 +93,13 @@ function montarArvore(contas) {
 }
 
 // Operações > DRE Gerencial > Plano de Contas (um plano aberto): mesma tela do Plano Contas da DFC
-// Construtoras (DfcPlanoContasTab.jsx — pedido do usuário), só com a coluna Máscara DRE no lugar de
-// Projeta DFC / Máscara DFC / Origem Projeção / Prazo Desemb. Drilldown pelas contas totalizadoras
+// Construtoras (DfcPlanoContasTab.jsx — pedido do usuário), com as colunas Máscara DRE e Origem
+// Projeção (só 4 opções) no lugar de Projeta DFC / Máscara DFC / Origem Projeção / Prazo Desemb.
+// Drilldown pelas contas totalizadoras
 // (linhas cinza com +/- e contador), tudo começa aberto; com busca e/ou filtro de coluna, mostra as
 // contas que batem junto com as totalizadoras acima delas. No último nível (contas analíticas,
 // tp_conta diferente de 'T') a combobox Máscara DRE (só as de nível 2 da aba Máscaras, agrupadas
-// pelo nível 1) — cada mudança salva na hora. A atualização a partir do Sienge mora no topo da
+// pelo nível 1) e a Origem Projeção — cada mudança salva na hora, uma sem mexer na outra. A atualização a partir do Sienge mora no topo da
 // página (DreGerencialPage.jsx).
 // `centroVersao`: id do centro cuja versão própria do plano está sendo editada (null = plano Global,
 // que vale pra todos os centros sem versão própria) — escolhido nos cards (PlanosContasLista.jsx).
@@ -107,12 +120,16 @@ export default function PlanoDeContasTab({
   const [fechados, setFechados] = useState([]);
   // sienge_id -> mascara_id ou NAO_ENTRA (conta ausente = sem máscara)
   const [classificacoes, setClassificacoes] = useState({});
+  // sienge_id -> Origem Projeção (conta ausente = não informada)
+  const [origens, setOrigens] = useState({});
   const [mascaras, setMascaras] = useState([]);
   // Filtros de coluna (FiltroColuna): null = sem filtro (tudo marcado).
   const [filtroConta, setFiltroConta] = useState(null);
   const [filtroMascara, setFiltroMascara] = useState(null);
+  const [filtroOrigem, setFiltroOrigem] = useState(null);
   const colunaContaRef = useRef(null);
   const colunaMascaraRef = useRef(null);
+  const colunaOrigemRef = useRef(null);
   const [pendentes, setPendentes] = useState(0);
   const [erroSalvar, setErroSalvar] = useState('');
   const [salvoAlgumaVez, setSalvoAlgumaVez] = useState(false);
@@ -132,7 +149,13 @@ export default function PlanoDeContasTab({
     ])
       .then(([result, lista, arvoreMascaras]) => {
         setContas(result.data);
-        setClassificacoes(Object.fromEntries(lista.map((c) => [c.sienge_id, c.nao_entra ? NAO_ENTRA : c.mascara_id])));
+        // A linha pode vir só com a origem (sem máscara): aí a máscara fica em branco.
+        setClassificacoes(
+          Object.fromEntries(
+            lista.filter((c) => c.nao_entra || c.mascara_id).map((c) => [c.sienge_id, c.nao_entra ? NAO_ENTRA : c.mascara_id])
+          )
+        );
+        setOrigens(Object.fromEntries(lista.filter((c) => c.origem_projecao).map((c) => [c.sienge_id, c.origem_projecao])));
         setMascaras(arvoreMascaras);
         onTotal?.(result.pagination.total);
       })
@@ -145,6 +168,7 @@ export default function PlanoDeContasTab({
     setFechados([]);
     setFiltroConta(null);
     setFiltroMascara(null);
+    setFiltroOrigem(null);
     setErroSalvar('');
     setSalvoAlgumaVez(false);
   }, [empresaId, centroVersao]);
@@ -181,6 +205,23 @@ export default function PlanoDeContasTab({
     }
   }
 
+  // Mesmo esquema da máscara: atualiza na hora e grava só a origem; se falhar, volta. `valor`: código ou null.
+  async function escolherOrigem(siengeId, valor) {
+    const anterior = origens[siengeId] ?? null;
+    setOrigens((atual) => ({ ...atual, [siengeId]: valor }));
+    setErroSalvar('');
+    setPendentes((n) => n + 1);
+    try {
+      await updateOrigemPlanoDre(empresaId, siengeId, valor, { centroId: centroVersao });
+      setSalvoAlgumaVez(true);
+    } catch (err) {
+      setOrigens((atual) => ({ ...atual, [siengeId]: anterior }));
+      setErroSalvar(err.response?.data?.message || 'Não foi possível salvar.');
+    } finally {
+      setPendentes((n) => n - 1);
+    }
+  }
+
   const arvore = useMemo(() => montarArvore(contas), [contas]);
 
   // Opções dos filtros de coluna — Máscara DRE com "NÃO INFORMADO" em primeiro.
@@ -193,6 +234,7 @@ export default function PlanoDeContasTab({
     [contas]
   );
   const opcoesFiltroMascara = useMemo(() => [OPCAO_NAO_INFORMADO, ...opcoesMascara], [opcoesMascara]);
+  const opcoesFiltroOrigem = useMemo(() => [OPCAO_NAO_INFORMADO, ...ORIGENS_PROJECAO], []);
 
   // Com busca e/ou filtros de coluna: só os ramos com alguma conta que passa, e tudo aberto. A
   // busca (código com ou sem pontos, ou descrição) vale pra qualquer conta; os filtros de coluna
@@ -202,7 +244,8 @@ export default function PlanoDeContasTab({
   const efetivo = (f) => (f && f.length === 0 ? null : f);
   const fConta = efetivo(filtroConta);
   const fMascara = efetivo(filtroMascara);
-  const filtrosAtivos = fConta != null || fMascara != null;
+  const fOrigem = efetivo(filtroOrigem);
+  const filtrosAtivos = fConta != null || fMascara != null || fOrigem != null;
   const visivel = useMemo(() => {
     if (!termo && !filtrosAtivos) return null;
     const ids = new Set();
@@ -212,7 +255,9 @@ export default function PlanoDeContasTab({
       codigoFormatado(c).includes(termo) ||
       (c.name || '').toLowerCase().includes(termo);
     const passaFiltros = (c) =>
-      passaNoFiltro(fConta, c.sienge_id) && passaNoFiltro(fMascara, classificacoes[c.sienge_id] ?? NAO_INFORMADO);
+      passaNoFiltro(fConta, c.sienge_id) &&
+      passaNoFiltro(fMascara, classificacoes[c.sienge_id] ?? NAO_INFORMADO) &&
+      passaNoFiltro(fOrigem, origens[c.sienge_id] ?? NAO_INFORMADO);
     const marcar = (no) => {
       const algumFilho = no.filhos.map(marcar).some(Boolean);
       const proprio =
@@ -226,7 +271,7 @@ export default function PlanoDeContasTab({
     arvore.forEach(marcar);
     return ids;
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [arvore, termo, filtrosAtivos, filtroConta, filtroMascara, classificacoes]);
+  }, [arvore, termo, filtrosAtivos, filtroConta, filtroMascara, filtroOrigem, classificacoes, origens]);
 
   function alternar(id) {
     setFechados((atual) => (atual.includes(id) ? atual.filter((v) => v !== id) : [...atual, id]));
@@ -344,6 +389,16 @@ export default function PlanoDeContasTab({
                 larguraPainel={460}
               />
             </span>
+            <span ref={colunaOrigemRef} className="flex items-center gap-1.5">
+              Origem Projeção
+              <FiltroColuna
+                filtro={filtroOrigem}
+                onChange={setFiltroOrigem}
+                opcoes={opcoesFiltroOrigem}
+                label="Origem Projeção"
+                colunaRef={colunaOrigemRef}
+              />
+            </span>
             <span>Status</span>
           </div>
 
@@ -366,6 +421,7 @@ export default function PlanoDeContasTab({
                     onClick={() => {
                       setFiltroConta(null);
                       setFiltroMascara(null);
+                      setFiltroOrigem(null);
                     }}
                     className="ml-2 font-medium text-primary-600 hover:text-primary-700"
                   >
@@ -407,8 +463,12 @@ export default function PlanoDeContasTab({
                     )}
                   </span>
                   {totalizadora ? (
-                    <span />
+                    <>
+                      <span />
+                      <span />
+                    </>
                   ) : (
+                    <>
                     <SearchableSelect
                       value={mascaraId ?? ''}
                       onChange={(v) => classificar(conta.sienge_id, v === NAO_ENTRA ? NAO_ENTRA : v ? Number(v) : null)}
@@ -420,6 +480,16 @@ export default function PlanoDeContasTab({
                       alturaLista="max-h-64"
                       compacto
                     />
+                    <SearchableSelect
+                      value={origens[conta.sienge_id] ?? ''}
+                      onChange={(v) => escolherOrigem(conta.sienge_id, v || null)}
+                      options={ORIGENS_PROJECAO}
+                      placeholder="Selecione a origem"
+                      corClasses={corCampo(origens[conta.sienge_id])}
+                      larguraPainel={300}
+                      compacto
+                    />
+                    </>
                   )}
                   <span>
                     <span

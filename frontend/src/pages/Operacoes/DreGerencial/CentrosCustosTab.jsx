@@ -1,14 +1,28 @@
 import { useCallback, useEffect, useMemo, useState } from 'react';
 import { Building2, Check, GripVertical, Loader2, TriangleAlert } from 'lucide-react';
 import { Indicador } from '../../../components/MascarasArvoreEditor';
+import SearchableSelect from '../../../components/SearchableSelect';
 import { listCentrosCustoDre, reordenarCentrosCustoDre, updateCentroCustoDre } from '../../../api/dreCentros.api';
 
-// Mesma grade no cabeçalho e nas linhas, pra a caixa ficar em coluna.
-const GRADE = 'grid grid-cols-[minmax(0,1fr)_100px] items-center gap-3';
+// Mesmas opções do Tipo da aba Centros Custos da DFC (DfcCentrosTab.jsx).
+const NATUREZAS = [
+  { value: 'OBRA', label: 'Obra' },
+  { value: 'ADMINISTRATIVO', label: 'Administrativo' },
+];
+
+// Mesmo par de cores da DFC: em branco fica âmbar, preenchido fica azul claro.
+function corCampo(valor) {
+  return valor ? 'border-primary-100 bg-primary-50' : 'border-amber-300 bg-amber-50';
+}
+
+// Mesma grade no cabeçalho e nas linhas, pra a combobox e a caixa ficarem em coluna (Tipo com os
+// mesmos 190px da DFC).
+const GRADE = 'grid grid-cols-[minmax(0,1fr)_190px_100px] items-center gap-3';
 
 // Operações > DRE Gerencial > Centros Custos: mesma aba de DFC Construtoras > Centros Custos
-// (DfcCentrosTab.jsx — pedido do usuário), só com a flag "Realiza DRE" (sem Tipo, Contrato Caixa e
-// Código Prevision, que a DRE não usa). Todos os centros de custo da empresa, lista única, sem
+// (DfcCentrosTab.jsx — pedido do usuário), com o Tipo e a flag "Realiza DRE" (sem Contrato Caixa e
+// Código Prevision, que a DRE não usa). O Tipo é o MESMO campo do Tipo da DFC (centros_custo_sienge.
+// natureza): alterou numa aba, muda na outra. Todos os centros de custo da empresa, lista única, sem
 // drilldown; só os marcados aparecem nas abas seguintes (plano de contas próprio e Orçamento). Cada
 // mudança salva na hora, com o mesmo indicador de salvamento da aba Máscaras.
 // Ordem: arrastando a linha pela alça, como na aba Máscaras (drag-and-drop nativo, mesma linha azul de
@@ -53,14 +67,15 @@ export default function CentrosCustosTab({ empresaId, search }) {
     );
   }, [centros, search]);
 
-  // Atualiza a linha na hora e grava; se falhar, volta a linha pro que estava.
-  async function alterar(centro, realizaDre) {
-    const novo = { ...centro, realiza_dre: realizaDre };
+  // Atualiza a linha na hora e grava só o campo mudado (`patch`: { realiza_dre } ou { natureza }); se
+  // falhar, volta a linha pro que estava.
+  async function alterar(centro, patch) {
+    const novo = { ...centro, ...patch };
     setCentros((atual) => atual.map((c) => (c.sienge_id === centro.sienge_id ? novo : c)));
     setErroSalvar('');
     setPendentes((n) => n + 1);
     try {
-      const salvo = await updateCentroCustoDre(empresaId, centro.sienge_id, realizaDre);
+      const salvo = await updateCentroCustoDre(empresaId, centro.sienge_id, patch);
       setCentros((atual) => atual.map((c) => (c.sienge_id === centro.sienge_id ? salvo : c)));
       setSalvoAlgumaVez(true);
     } catch (err) {
@@ -192,6 +207,7 @@ export default function CentrosCustosTab({ empresaId, search }) {
             <span className="pl-5" title="Arraste pela alça para mudar a ordem — é a ordem das colunas na aba DRE">
               Centro de custo
             </span>
+            <span title="Mesmo Tipo da aba Centros Custos da DFC Construtoras — alterar aqui altera lá">Tipo</span>
             <span className="text-center">Realiza DRE</span>
           </div>
 
@@ -232,12 +248,21 @@ export default function CentrosCustosTab({ empresaId, search }) {
                     </span>
                   )}
                 </div>
+                <SearchableSelect
+                  value={centro.natureza || ''}
+                  onChange={(v) => alterar(centro, { natureza: v || null })}
+                  options={NATUREZAS}
+                  placeholder="Selecione"
+                  corClasses={corCampo(centro.natureza)}
+                  compacto
+                />
+
                 {/* Só os marcados aparecem nas abas seguintes (plano de contas próprio e Orçamento). */}
                 <span className="flex justify-center">
                   <input
                     type="checkbox"
                     checked={Boolean(centro.realiza_dre)}
-                    onChange={(e) => alterar(centro, e.target.checked)}
+                    onChange={(e) => alterar(centro, { realiza_dre: e.target.checked })}
                     title="Realiza DRE"
                     className="h-4 w-4 cursor-pointer rounded border-gray-300 text-primary-600 focus:ring-primary-100"
                   />

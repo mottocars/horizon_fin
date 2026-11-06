@@ -3,8 +3,8 @@ import http from './http';
 // Mesmo esquema de dfcPlanoContas.api.js. `centroId` (opcional) em todas: a versão própria do plano
 // daquele centro de custo; sem ele, o plano Global (vale pra todos os centros sem versão própria).
 
-// Máscara DRE das contas classificadas: [{ sienge_id, mascara_id, nao_entra }] (nao_entra = "NÃO
-// ENTRA NA DRE", com mascara_id null). Conta ausente = sem máscara.
+// Máscara DRE e Origem Projeção das contas: [{ sienge_id, mascara_id, nao_entra, origem_projecao }]
+// (nao_entra = "NÃO ENTRA NA DRE", com mascara_id null). Conta ausente = sem máscara e sem origem.
 export function listClassificacoesPlanoDre(empresaId, centroId = null) {
   return http
     .get(`/dre-plano-contas/${empresaId}`, { params: centroId ? { centro: centroId } : {} })
@@ -15,6 +15,13 @@ export function listClassificacoesPlanoDre(empresaId, centroId = null) {
 export function updateClassificacaoPlanoDre(empresaId, siengeId, mascaraId, { centroId = null, naoEntra = false } = {}) {
   return http
     .put(`/dre-plano-contas/${empresaId}/${siengeId}`, { mascara_id: mascaraId, nao_entra: naoEntra, centro: centroId })
+    .then((res) => res.data);
+}
+
+// Origem Projeção da conta (`origem` null limpa) — não mexe na Máscara DRE.
+export function updateOrigemPlanoDre(empresaId, siengeId, origem, { centroId = null } = {}) {
+  return http
+    .put(`/dre-plano-contas/${empresaId}/${siengeId}`, { origem_projecao: origem, centro: centroId })
     .then((res) => res.data);
 }
 
@@ -48,9 +55,9 @@ export function exportarPlanoDreExcel(empresaId, centroId = null) {
     });
 }
 
-// Resumo pros cards da aba Plano de Contas: { analiticas, global: { com_mascara, centros_seguindo,
-// atualizado_em }, versoes: [{ centro_id, name, natureza, criado_em, criado_por, com_mascara,
-// atualizado_em }] }.
+// Resumo pros cards da aba Plano de Contas: { analiticas, global: { com_mascara, com_origem,
+// centros_seguindo, atualizado_em }, versoes: [{ centro_id, name, natureza, criado_em, criado_por,
+// com_mascara, com_origem, atualizado_em }] }.
 export function resumoPlanosDre(empresaId) {
   return http.get(`/dre-plano-contas/${empresaId}/resumo`).then((res) => res.data);
 }

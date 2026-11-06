@@ -11,6 +11,8 @@ export function reordenarCentrosCustoDre(empresaId, ordem) {
   return http.put(`/dre-centros/${empresaId}/ordem`, { ordem }).then((res) => res.data);
 }
 
-export function updateCentroCustoDre(empresaId, siengeId, realizaDre) {
-  return http.put(`/dre-centros/${empresaId}/${siengeId}`, { realiza_dre: realizaDre }).then((res) => res.data);
+// `patch`: { realiza_dre?, natureza? } — só o que vier muda. `natureza` (Tipo: 'OBRA' / 'ADMINISTRATIVO'
+// / null) é o mesmo campo da aba Centros Custos da DFC.
+export function updateCentroCustoDre(empresaId, siengeId, patch) {
+  return http.put(`/dre-centros/${empresaId}/${siengeId}`, patch).then((res) => res.data);
 }

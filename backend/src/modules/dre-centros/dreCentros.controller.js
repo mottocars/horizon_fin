@@ -4,8 +4,18 @@ const service = require('./dreCentros.service');
 const empresaIdSchema = z.coerce.number().int().positive('Empresa inválida.');
 const siengeIdSchema = z.coerce.number().int().positive('Centro de custo inválido.');
 
+const emptyToNull = (v) => (v === '' || v === undefined ? null : v);
+
+// Corpo parcial: só o que vier muda. `natureza` = o Tipo (Obra / Administrativo) — a MESMA coluna do
+// cadastro que a aba Centros Custos da DFC grava (centros_custo_sienge.natureza): mudar aqui muda lá.
 const updateSchema = z.object({
-  realiza_dre: z.boolean({ required_error: 'Informe o Realiza DRE.', invalid_type_error: 'Realiza DRE inválido.' }),
+  realiza_dre: z.boolean({ invalid_type_error: 'Realiza DRE inválido.' }).optional(),
+  natureza: z
+    .preprocess(
+      emptyToNull,
+      z.enum(['OBRA', 'ADMINISTRATIVO'], { errorMap: () => ({ message: 'Escolha Obra ou Administrativo.' }) }).nullable()
+    )
+    .optional(),
 });
 
 const ordemSchema = z.object({
@@ -37,8 +47,13 @@ async function update(req, res, next) {
   try {
     const empresaId = empresaIdSchema.parse(req.params.empresaId);
     const siengeId = siengeIdSchema.parse(req.params.siengeId);
-    const { realiza_dre: realizaDre } = updateSchema.parse(req.body);
-    const item = await service.update(empresaId, siengeId, realizaDre);
+    const corpo = req.body || {};
+    const dados = updateSchema.parse(corpo);
+    const patch = {};
+    if (dados.realiza_dre !== undefined) patch.realiza_dre = dados.realiza_dre;
+    if ('natureza' in corpo) patch.natureza = dados.natureza ?? null;
+    if (!Object.keys(patch).length) throw erro(400, 'Nada para alterar.');
+    const item = await service.update(empresaId, siengeId, patch);
     if (!item) throw erro(404, 'Centro de custo não encontrado.');
     res.json(item);
   } catch (err) {

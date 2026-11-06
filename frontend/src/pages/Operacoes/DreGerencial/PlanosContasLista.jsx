@@ -1,5 +1,5 @@
 import { useCallback, useEffect, useState } from 'react';
-import { Building2, CalendarClock, Globe2, ListTree, Plus, Tags, TriangleAlert } from 'lucide-react';
+import { Building2, CalendarClock, Globe2, ListTree, Plus, Tags, TriangleAlert, Waypoints } from 'lucide-react';
 import { resumoPlanosDre } from '../../../api/drePlanoContas.api';
 
 function dataHora(v) {
@@ -16,7 +16,7 @@ function Barra({ valor, total, cor }) {
   );
 }
 
-function CardPlano({ icone: Icone, titulo, subtitulo, destaque = false, comMascara, analiticas, rodape, onAbrir }) {
+function CardPlano({ icone: Icone, titulo, subtitulo, destaque = false, comMascara, comOrigem, analiticas, rodape, onAbrir }) {
   return (
     <button
       type="button"
@@ -35,16 +35,29 @@ function CardPlano({ icone: Icone, titulo, subtitulo, destaque = false, comMasca
         </div>
       </div>
 
-      <div className="mt-4">
-        <div className="mb-1 flex items-center justify-between text-[11px] text-gray-500">
-          <span className="flex items-center gap-1">
-            <Tags size={12} className="text-gray-400" /> Máscara DRE
-          </span>
-          <span className="tabular-nums">
-            {comMascara} de {analiticas}
-          </span>
+      <div className="mt-4 space-y-2.5">
+        <div>
+          <div className="mb-1 flex items-center justify-between text-[11px] text-gray-500">
+            <span className="flex items-center gap-1">
+              <Tags size={12} className="text-gray-400" /> Máscara DRE
+            </span>
+            <span className="tabular-nums">
+              {comMascara} de {analiticas}
+            </span>
+          </div>
+          <Barra valor={comMascara} total={analiticas} cor="bg-primary-500" />
         </div>
-        <Barra valor={comMascara} total={analiticas} cor="bg-primary-500" />
+        <div>
+          <div className="mb-1 flex items-center justify-between text-[11px] text-gray-500">
+            <span className="flex items-center gap-1">
+              <Waypoints size={12} className="text-gray-400" /> Origem Projeção
+            </span>
+            <span className="tabular-nums">
+              {comOrigem} de {analiticas}
+            </span>
+          </div>
+          <Barra valor={comOrigem} total={analiticas} cor="bg-emerald-500" />
+        </div>
       </div>
 
       <div className="mt-4 flex items-center gap-1 border-t border-gray-100 pt-3 text-[11px] text-gray-500">{rodape}</div>
@@ -53,7 +66,7 @@ function CardPlano({ icone: Icone, titulo, subtitulo, destaque = false, comMasca
 }
 
 // Aba Plano de Contas, tela inicial: mesma tela do Plano Contas da DFC (PlanosContasLista.jsx de
-// DfcConstrutoras — pedido do usuário), só com a barra da Máscara DRE. Um card por plano de contas —
+// DfcConstrutoras — pedido do usuário), com as barras da Máscara DRE e da Origem Projeção. Um card por plano de contas —
 // o Global primeiro (vale pra todos os centros sem plano próprio), depois um por centro de custo com
 // versão própria e, no fim, o card de criar. Clicar abre o plano pra edição.
 export default function PlanosContasLista({ empresaId, onAbrir, onNovo, refreshToken = 0 }) {
@@ -100,6 +113,7 @@ export default function PlanosContasLista({ empresaId, onAbrir, onNovo, refreshT
             subtitulo="Plano de contas de todos os centros"
             destaque
             comMascara={resumo.global.com_mascara}
+            comOrigem={resumo.global.com_origem}
             analiticas={resumo.analiticas}
             rodape={
               <>
@@ -116,6 +130,7 @@ export default function PlanosContasLista({ empresaId, onAbrir, onNovo, refreshT
               titulo={v.name}
               subtitulo={`Plano próprio${v.natureza === 'ADMINISTRATIVO' ? ' · Administrativo' : v.natureza === 'OBRA' ? ' · Obra' : ''}`}
               comMascara={v.com_mascara}
+              comOrigem={v.com_origem}
               analiticas={resumo.analiticas}
               rodape={
                 <>

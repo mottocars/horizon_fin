@@ -1,8 +1,9 @@
 const pool = require('../../config/db');
 
 // Operações > DRE Gerencial > Centros Custos: mesma lista da aba Centros Custos da DFC
-// (dfc-centros/dfcCentros.service.js), só com a flag "Realiza DRE" (realiza_dre). O update só toca
-// nela — Tipo, Contrato Caixa, Código Prevision e Projeta DFC são da DFC / do cadastro. A ordem é a
+// (dfc-centros/dfcCentros.service.js), com a flag "Realiza DRE" (realiza_dre) e o Tipo (natureza, a
+// mesma coluna da DFC — pedido do usuário: alterou numa aba, muda na outra). Contrato Caixa, Código
+// Prevision e Projeta DFC ficam só na DFC / no cadastro. A ordem é a
 // do usuário (reordenar, arrastando na aba — database/migrations/2026-10-30-dre-centros-ordem.sql) e
 // vale também pras colunas dos centros na aba DRE e pros filtros de centro da DRE Gerencial.
 
@@ -55,12 +56,25 @@ async function reordenar(empresaId, ordem) {
   return list(empresaId);
 }
 
-async function update(empresaId, siengeId, realizaDre) {
+// `patch`: { realiza_dre?, natureza? } — só o que vier muda. A natureza (Tipo: OBRA / ADMINISTRATIVO
+// ou null) é a mesma coluna que a aba Centros Custos da DFC grava (dfcCentros.service.js): as duas
+// abas mostram sempre o mesmo Tipo.
+async function update(empresaId, siengeId, patch) {
+  const sets = [];
+  const valores = [empresaId, siengeId];
+  if (patch.realiza_dre !== undefined) {
+    valores.push(patch.realiza_dre);
+    sets.push(`realiza_dre = $${valores.length}`);
+  }
+  if (patch.natureza !== undefined) {
+    valores.push(patch.natureza);
+    sets.push(`natureza = $${valores.length}`);
+  }
   const { rows } = await pool.query(
-    `UPDATE centros_custo_sienge SET realiza_dre = $3
+    `UPDATE centros_custo_sienge SET ${sets.join(', ')}
       WHERE empresa_id = $1 AND sienge_id = $2
       RETURNING ${COLUNAS}`,
-    [empresaId, siengeId, realizaDre]
+    valores
   );
   return rows[0] || null;
 }

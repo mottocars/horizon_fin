@@ -5,10 +5,17 @@ const { planilhaPlanoContas } = require('../../utils/excelPlanoContas');
 const service = require('./drePlanoContas.service');
 
 // Exportar Excel da aba Plano de Contas da DRE (um plano aberto): espelho da tabela da tela
-// (PlanoDeContasTab.jsx) — a árvore inteira com Código, Conta, Máscara DRE e Status (desenho em
+// (PlanoDeContasTab.jsx) — a árvore inteira com Código, Conta, Máscara DRE, Origem Projeção e Status (desenho em
 // utils/excelPlanoContas.js). Busca e filtros de coluna da tela não entram: sai o plano todo.
 
 const NAO_ENTRA = 'NÃO ENTRA NA DRE';
+// Rótulos da Origem Projeção (os mesmos da combobox da tela).
+const ROTULO_ORIGEM = {
+  NAO_POSSUI: 'NÃO POSSUI ORIGEM',
+  HORIZON_ORCAMENTO_INFORMADO: 'HORIZON - INFORMADO',
+  SIENGE_ORCAMENTO_EMPRESARIAL: 'SIENGE - EMPRESARIAL',
+  SIENGE_AGING: 'SIENGE - AGING',
+};
 
 const dataHora = (v) =>
   new Intl.DateTimeFormat('pt-BR', { dateStyle: 'short', timeStyle: 'short', timeZone: 'America/Sao_Paulo' }).format(new Date(v));
@@ -36,6 +43,7 @@ async function gerar(empresaId, centroId, usuarioId) {
   const mascaraDe = new Map(
     classificacoes.map((c) => [String(c.sienge_id), c.nao_entra ? NAO_ENTRA : nomeMascara.get(c.mascara_id) || ''])
   );
+  const origemDe = new Map(classificacoes.map((c) => [String(c.sienge_id), ROTULO_ORIGEM[c.origem_projecao] || '']));
   const analiticas = contas.filter((c) => c.tp_conta !== 'T');
   const classificadas = analiticas.filter((c) => mascaraDe.get(String(c.sienge_id))).length;
 
@@ -53,7 +61,10 @@ async function gerar(empresaId, centroId, usuarioId) {
     ],
     gerado: `Gerado por ${usuarios[0]?.nome || 'usuário'} em ${dataHora(new Date())}`,
     contas,
-    colunas: [{ titulo: 'Máscara DRE', largura: 40, campo: true, valor: (c) => mascaraDe.get(String(c.sienge_id)) }],
+    colunas: [
+      { titulo: 'Máscara DRE', largura: 40, campo: true, valor: (c) => mascaraDe.get(String(c.sienge_id)) },
+      { titulo: 'Origem Projeção', largura: 26, campo: true, valor: (c) => origemDe.get(String(c.sienge_id)) },
+    ],
   });
 
   const buffer = await corrigirArquivo(await workbook.xlsx.writeBuffer());
