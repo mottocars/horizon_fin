@@ -6,6 +6,7 @@ import {
   Calculator,
   Download,
   FilePlus2,
+  FileSpreadsheet,
   FilePenLine,
   House,
   ListTree,
@@ -14,16 +15,20 @@ import {
   Percent,
   Plus,
   RefreshCw,
+  Save,
   Search,
   Settings,
   Tags,
   Trash2,
+  TrendingUp,
+  Upload,
   Wallet,
 } from 'lucide-react';
 import Card from '../../../components/Card';
 import Tabs from '../../../components/Tabs';
 import Button from '../../../components/Button';
 import SearchableSelect from '../../../components/SearchableSelect';
+import SeletorMes from '../../../components/SeletorMes';
 import { listEmpresas } from '../../../api/empresas.api';
 import { gerarPlano } from '../../../api/planosFinanceirosSienge.api';
 import { excluirVersaoPlanoDre, exportarPlanoDreExcel, listVersoesPlanoDre } from '../../../api/drePlanoContas.api';
@@ -42,6 +47,7 @@ import UnidadesTab from './UnidadesTab';
 import CorrecoesTab from './CorrecoesTab';
 import FinanceiroTab from './FinanceiroTab';
 import ConfiguracoesDreTab from './ConfiguracoesDreTab';
+import ProjecoesDreTab from './ProjecoesDreTab';
 import DreTab from './DreTab';
 import PocTab from './PocTab';
 
@@ -67,30 +73,25 @@ const TABS = [
   { id: 'correcoes', label: 'Correções', icon: FilePenLine },
   { id: 'financeiro', label: 'Financeiro', icon: Wallet },
   { id: 'configuracoes', label: 'Configurações', icon: Settings },
+  { id: 'projecoes', label: 'Projeções', icon: TrendingUp },
 ];
 
-// Campo de data que só aplica a data (onConfirmar) quando ela está completa, com ano de 4 dígitos
-// a partir de 1900: enquanto o ano é digitado o navegador manda 0002, 0020, 0202… e, se cada um
-// fosse pra URL, o campo seria redesenhado no meio da digitação e só ficariam os 2 últimos dígitos.
-// O texto digitado fica no estado local; data incompleta volta à da URL ao sair do campo.
-function CampoData({ valor, onConfirmar, disabled }) {
-  const [texto, setTexto] = useState(valor);
-  useEffect(() => setTexto(valor), [valor]);
-  const completa = (v) => /^\d{4}-\d{2}-\d{2}$/.test(v) && Number(v.slice(0, 4)) >= 1900;
-  return (
-    <input
-      type="date"
-      value={texto}
-      onChange={(e) => {
-        setTexto(e.target.value);
-        if (completa(e.target.value) && e.target.value !== valor) onConfirmar(e.target.value);
-      }}
-      onBlur={() => !completa(texto) && setTexto(valor)}
-      disabled={disabled}
-      className="w-full rounded-lg border border-gray-200 px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-primary-100 disabled:bg-gray-50 disabled:text-gray-400"
-    />
-  );
+// Colunas da aba DRE (filtro "Colunas"): cada centro / mês mostra as marcadas.
+const COLUNAS_DRE = [
+  { value: 'valor', label: 'Valor' },
+  { value: 'pct', label: 'AV % / AH %' },
+  { value: 'proj', label: 'Projetado' },
+  { value: 'desvio', label: 'Desvio %' },
+];
+
+// Último dia do mês 'AAAA-MM' -> 'AAAA-MM-DD'.
+function ultimoDiaDoMes(anoMes) {
+  const [a, m] = anoMes.split('-').map(Number);
+  return `${anoMes}-${String(new Date(a, m, 0).getDate()).padStart(2, '0')}`;
 }
+
+// O período da DRE é por mês, sem dia (pedido do usuário — o realizado já para em hoje e o projetado
+// vale o mês inteiro), no SeletorMes (mês abreviado, "nov/2026").
 
 // Empresa e aba vivem na URL (não em useState local) — mesmo motivo de todas as outras telas
 // com esse padrão (Saldo Contas Bancárias, Gestão de Cobranças): o "Voltar" do navegador
@@ -184,16 +185,44 @@ export default function DreGerencialPage() {
   const exercicioTravado = Boolean(exercicioAberto) && exercicioAberto >= new Date().getFullYear();
   useEffect(() => setBuscaFinanceiro(''), [empresaId, exercicioAberto]);
 
-  // Aba DRE: período (de/até) e centros de custo na URL, como o resto dos filtros da tela. Sem
-  // período = do primeiro dia do ano até hoje; sem centro = todos com "Realiza DRE", somados.
+  // Aba DRE: período (de/até) e centros de custo na URL, como o resto dos filtros da tela. O período é
+  // por mês: de = dia 1 do mês de início, até = último dia do mês de fim (uma data quebrada na URL, de
+  // um link antigo, vale pelo mês dela). Sem período = de janeiro ao mês atual; sem centro = todos com
+  // "Realiza DRE", somados.
   const hojeIso = (() => {
     const d = new Date();
     return `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}-${String(d.getDate()).padStart(2, '0')}`;
   })();
-  const dreDe = searchParams.get('de') || `${hojeIso.slice(0, 4)}-01-01`;
-  const dreAte = searchParams.get('ate') || hojeIso;
+  const dreMesDe = (searchParams.get('de') || `${hojeIso.slice(0, 4)}-01`).slice(0, 7);
+  const dreMesAte = (searchParams.get('ate') || hojeIso).slice(0, 7);
+  const dreDe = `${dreMesDe}-01`;
+  const dreAte = ultimoDiaDoMes(dreMesAte);
   const dreCentros = (searchParams.get('centros') || '').split(',').filter(Boolean);
+  // Aba DRE: colunas de cada centro / mês (Valor, AV % / AH %, Projetado, Desvio %) — na URL, como os
+  // outros filtros.
+  const dreColunas = (searchParams.get('colunas') || 'valor,pct,proj,desvio').split(',').filter((k) => COLUNAS_DRE.some((c) => c.value === k));
+  // Filtro "Versão" do projetado — como o filtro Versão da aba Projeções da DFC (pedido do usuário): ao
+  // entrar começa SEMPRE na última versão salva (null; não fica na URL); 'atual' = os rascunhos (não
+  // salvos — centro sem rascunho usa a última versão), só oferecido quando há rascunho; número = a versão.
+  // Sem nenhuma versão salva, cai nos rascunhos (se houver).
+  const [versaoDre, setVersaoDre] = useState(null);
+  const [temRascunhosDre, setTemRascunhosDre] = useState(false);
   const [dreTelaCheia, setDreTelaCheia] = useState(false);
+  // "Tela cheia" da aba Projeções (ícone no topo); sai pelo botão da própria tela cheia ou com Esc.
+  const [projecoesTelaCheia, setProjecoesTelaCheia] = useState(false);
+  // Botões Novo orçamento / Salvar versão da aba Projeções (ProjecoesDreTab, pela ref) e quantos
+  // orçamentos concluídos aguardam a versão (o Salvar só acende com algum).
+  const projecoesTabRef = useRef(null);
+  const [resumoProjecoes, setResumoProjecoes] = useState({ concluidos: 0 });
+  // Versões salvas da Projeção (o filtro "Versão" da aba DRE), vindas da própria DRE.
+  const [versoesProjecao, setVersoesProjecao] = useState([]);
+  // Outra empresa: volta pra última versão.
+  useEffect(() => {
+    setVersaoDre(null);
+    setVersoesProjecao([]);
+    setTemRascunhosDre(false);
+  }, [empresaId]);
+  const [baixandoLayoutProjecoes, setBaixandoLayoutProjecoes] = useState(false);
   const [centrosDre, setCentrosDre] = useState([]);
   useEffect(() => {
     if ((abaAtiva !== 'dre' && abaAtiva !== 'poc') || !empresaId) return;
@@ -362,19 +391,21 @@ export default function DreGerencialPage() {
 
             {(abaAtiva === 'dre' || abaAtiva === 'poc') && (
               <>
-                <div className="sm:w-40">
-                  <label className="mb-1 block text-sm font-medium text-gray-700">Data início</label>
-                  <CampoData valor={dreDe} onConfirmar={(v) => atualizarParams({ de: v })} disabled={semEmpresa} />
+                <div className="sm:w-32">
+                  <label className="mb-1 block text-sm font-medium text-gray-700">Início</label>
+                  <SeletorMes valor={dreMesDe} onChange={(v) => atualizarParams({ de: `${v}-01` })} disabled={semEmpresa} />
                 </div>
-                <div className="sm:w-40">
-                  <label className="mb-1 block text-sm font-medium text-gray-700">Data fim</label>
-                  <CampoData valor={dreAte} onConfirmar={(v) => atualizarParams({ ate: v })} disabled={semEmpresa} />
+                <div className="sm:w-32">
+                  <label className="mb-1 block text-sm font-medium text-gray-700">Fim</label>
+                  <SeletorMes valor={dreMesAte} onChange={(v) => atualizarParams({ ate: ultimoDiaDoMes(v) })} disabled={semEmpresa} />
                 </div>
                 <div className="sm:min-w-56 sm:max-w-sm sm:flex-1">
                   <label className="mb-1 block text-sm font-medium text-gray-700">Centro de custo</label>
                   <SearchableSelect
                     multiple
                     todosELimpar
+                    rotuloTodos="Todos"
+                    rotuloLimpar="Limpar"
                     value={dreCentros}
                     onChange={(lista) => atualizarParams({ centros: lista.join(',') })}
                     disabled={semEmpresa}
@@ -386,6 +417,51 @@ export default function DreGerencialPage() {
                     emptyMessage="Nenhum centro com Realiza DRE."
                   />
                 </div>
+                {abaAtiva === 'dre' && (
+                  <>
+                    <div className="sm:w-44">
+                      <label className="mb-1 block text-sm font-medium text-gray-700">Colunas</label>
+                      <SearchableSelect
+                        multiple
+                        value={dreColunas}
+                        onChange={(lista) => atualizarParams({ colunas: (lista.length ? lista : ['valor']).join(',') })}
+                        disabled={semEmpresa}
+                        options={COLUNAS_DRE}
+                        placeholder="Valor"
+                        emptyMessage="—"
+                      />
+                    </div>
+                    <div className="sm:min-w-48 sm:max-w-60 sm:flex-1">
+                      <label className="mb-1 block text-sm font-medium text-gray-700">Versão</label>
+                      <SearchableSelect
+                        value={versaoDre === 'atual' ? 'atual' : (versaoDre ?? versoesProjecao[0]?.numero ?? '')}
+                        onChange={(v) => {
+                          if (!v) return;
+                          setVersaoDre(v === 'atual' ? 'atual' : Number(v));
+                        }}
+                        disabled={
+                          semEmpresa ||
+                          !(dreColunas.includes('proj') || dreColunas.includes('desvio')) ||
+                          (!versoesProjecao.length && !temRascunhosDre)
+                        }
+                        clearable={false}
+                        options={[
+                          ...(temRascunhosDre ? [{ value: 'atual', label: 'Rascunhos (não salvos)' }] : []),
+                          ...versoesProjecao.map((v, i) => ({
+                            value: v.numero,
+                            label: `Versão ${v.numero}${i === 0 ? ' (última)' : ''} · ${new Date(v.criado_em).toLocaleDateString('pt-BR', {
+                              day: '2-digit',
+                              month: '2-digit',
+                              year: '2-digit',
+                            })}`,
+                          })),
+                        ]}
+                        placeholder="Nenhuma versão salva"
+                        larguraPainel={280}
+                      />
+                    </div>
+                  </>
+                )}
               </>
             )}
 
@@ -523,6 +599,76 @@ export default function DreGerencialPage() {
             </div>
           )}
 
+          {abaAtiva === 'projecoes' && (
+            // Botões só com ícone (dica no title): layout (a planilha da empresa, todos os centros,
+            // preenchida com os orçamentos atuais), importar planilha, novo orçamento (abre o
+            // assistente), salvar versão (acende com algum orçamento concluído) e tela cheia —
+            // ProjecoesDreTab.jsx. A planilha de um centro só fica nas etapas do assistente.
+            <div className="flex shrink-0 items-center gap-2">
+              <Button
+                type="button"
+                variant="secondary"
+                className="!px-2.5"
+                onClick={async () => {
+                  setBaixandoLayoutProjecoes(true);
+                  try {
+                    await projecoesTabRef.current?.baixarLayout();
+                  } finally {
+                    setBaixandoLayoutProjecoes(false);
+                  }
+                }}
+                disabled={semEmpresa || baixandoLayoutProjecoes}
+                title="Layout da projeção (planilha de todos os centros, preenchida com os orçamentos atuais)"
+                aria-label="Layout da projeção"
+              >
+                {baixandoLayoutProjecoes ? <Loader2 size={18} className="animate-spin" /> : <FileSpreadsheet size={18} />}
+              </Button>
+              <Button
+                type="button"
+                variant="secondary"
+                className="!px-2.5"
+                onClick={() => projecoesTabRef.current?.importar()}
+                disabled={semEmpresa}
+                title="Importar planilha da projeção"
+                aria-label="Importar planilha da projeção"
+              >
+                <Upload size={18} />
+              </Button>
+              <Button
+                type="button"
+                variant="secondary"
+                className="!px-2.5"
+                onClick={() => projecoesTabRef.current?.novo()}
+                disabled={semEmpresa}
+                title="Novo orçamento"
+                aria-label="Novo orçamento"
+              >
+                <FilePlus2 size={18} />
+              </Button>
+              <Button
+                type="button"
+                className="!px-2.5"
+                onClick={() => projecoesTabRef.current?.salvarVersao()}
+                disabled={semEmpresa || !resumoProjecoes.concluidos}
+                title={resumoProjecoes.concluidos ? 'Salvar versão' : 'Conclua um orçamento pra poder salvar a versão'}
+                aria-label="Salvar versão"
+              >
+                <Save size={18} />
+              </Button>
+              <Button
+                type="button"
+                variant="secondary"
+                className="!px-2.5"
+                onClick={() => setProjecoesTelaCheia(true)}
+                disabled={semEmpresa}
+                title="Tela cheia"
+                aria-label="Tela cheia"
+              >
+                <Maximize2 size={18} />
+              </Button>
+            </div>
+          )}
+
           {abaAtiva === 'unidades' && (
             <div className="flex shrink-0 items-center gap-2">
               {/* Mesmo ícone de atualizar do Repasses CEF: busca unidades e contratos no Sienge. */}
@@ -630,6 +776,14 @@ export default function DreGerencialPage() {
             centros={dreCentros}
             telaCheia={dreTelaCheia}
             onSairTelaCheia={() => setDreTelaCheia(false)}
+            colunasVisiveis={dreColunas}
+            projecao={versaoDre === 'atual' ? { fonte: 'atual', versao: null } : { fonte: 'versao', versao: versaoDre }}
+            onProjecaoInfo={(r) => {
+              setVersoesProjecao(r.versoes || []);
+              setTemRascunhosDre(Boolean(r.tem_rascunhos));
+              // Sem nenhuma versão salva: mostra os rascunhos (se houver).
+              if (versaoDre === null && !(r.versoes || []).length && r.tem_rascunhos) setVersaoDre('atual');
+            }}
           />
         )}
         {abaAtiva === 'poc' && (
@@ -669,6 +823,15 @@ export default function DreGerencialPage() {
           />
         )}
         {abaAtiva === 'configuracoes' && <ConfiguracoesDreTab empresaId={empresaId} />}
+        {abaAtiva === 'projecoes' && (
+          <ProjecoesDreTab
+            ref={projecoesTabRef}
+            onResumo={setResumoProjecoes}
+            empresaId={empresaId}
+            telaCheia={projecoesTelaCheia}
+            onSairTelaCheia={() => setProjecoesTelaCheia(false)}
+          />
+        )}
 
         {abaAtiva === 'plano-de-contas' &&
           (planoAberto ? (

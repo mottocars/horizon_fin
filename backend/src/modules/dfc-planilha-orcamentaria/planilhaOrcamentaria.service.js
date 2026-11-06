@@ -349,4 +349,5 @@ async function situacao(empresaId) {
   return { ultima: rows[0] || null };
 }
 
-module.exports = { layout, importar, situacao, SENHA_PROTECAO };
+// Os leitores de célula também servem à Planilha da Projeção da DRE (dre-projecoes/planilha.js).
+module.exports = { layout, importar, situacao, SENHA_PROTECAO, mesDaCelula, valorDaCelula, inteiro };

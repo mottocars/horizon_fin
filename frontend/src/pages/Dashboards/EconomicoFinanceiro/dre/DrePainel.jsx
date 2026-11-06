@@ -26,6 +26,64 @@ import { ABAS_SUMARIO } from './sumarioTexto';
 // sozinho a cada 30 minutos com a aba visível.
 
 const MIN_RECARGA = 30;
+
+// Colunas da grade da DRE (filtro "Análise", ao lado do botão de tela cheia) — as mesmas do filtro Colunas
+// do DRE Gerencial. Projetado e Desvio % vêm da última versão salva da Projeção (sem versão, não aparecem).
+const COLUNAS_ANALISE = [
+  { value: 'valor', label: 'Valor' },
+  { value: 'pct', label: 'AV % / AH %' },
+  { value: 'proj', label: 'Projetado' },
+  { value: 'desvio', label: 'Desvio %' },
+];
+
+// Filtro de análise: lista de marcar no visual dos filtros do painel (multi-btn / multi-pop), sem rótulo
+// em cima pra alinhar com o botão de tela cheia. Nenhuma marcada = só o Valor.
+function FiltroAnalise({ valor, onChange }) {
+  const [aberto, setAberto] = useState(false);
+  const ref = useRef(null);
+  useEffect(() => {
+    if (!aberto) return undefined;
+    const fora = (e) => !ref.current?.contains(e.target) && setAberto(false);
+    const esc = (e) => e.key === 'Escape' && setAberto(false);
+    document.addEventListener('mousedown', fora);
+    document.addEventListener('keydown', esc);
+    return () => {
+      document.removeEventListener('mousedown', fora);
+      document.removeEventListener('keydown', esc);
+    };
+  }, [aberto]);
+  const marcadas = COLUNAS_ANALISE.filter((c) => valor.includes(c.value));
+  const resumo = marcadas.length === COLUNAS_ANALISE.length ? 'Todas as colunas' : marcadas.map((c) => c.label).join(', ') || 'Valor';
+  const alternar = (v) => {
+    const novo = valor.includes(v) ? valor.filter((x) => x !== v) : COLUNAS_ANALISE.map((c) => c.value).filter((x) => x === v || valor.includes(x));
+    onChange(novo.length ? novo : ['valor']);
+  };
+  return (
+    <div className="multi" ref={ref} style={{ '--altura-filtro': '33px' }}>
+      <button type="button" className="multi-btn" aria-expanded={aberto} onClick={() => setAberto((a) => !a)} title="Análise: colunas da DRE" style={{ minWidth: 200 }}>
+        <span>
+          <span style={{ color: 'var(--muted)' }}>Análise: </span>
+          {resumo}
+        </span>
+        <svg width="10" height="10" viewBox="0 0 10 10" aria-hidden="true">
+          <path d="M1 3l4 4 4-4" fill="none" stroke="currentColor" strokeWidth="1.6" />
+        </svg>
+      </button>
+      {aberto && (
+        <div className="multi-pop" role="listbox" aria-multiselectable="true" style={{ left: 'auto', right: 0, width: 240 }}>
+          <div className="multi-lista">
+            {COLUNAS_ANALISE.map((c) => (
+              <label key={c.value} className="multi-item">
+                <input type="checkbox" checked={valor.includes(c.value)} onChange={() => alternar(c.value)} />
+                <span>{c.label}</span>
+              </label>
+            ))}
+          </div>
+        </div>
+      )}
+    </div>
+  );
+}
 const ICONES_SUMARIO = { filtros: Filter, indicadores: LayoutGrid, dre: Table2, sankey: Workflow, simulador: Calculator, mensal: LineChart, origem: Route, centros: Building2, carteira: BarChart3 };
 
 function mesHoje() {
@@ -47,6 +105,8 @@ export default function DrePainel({ dashboard, tituloTela, empresaId, onEmpresa,
   const [estado, setEstado] = useState('ocioso'); // ocioso | carregando | erro
   const [erro, setErro] = useState('');
   const [telaCheia, setTelaCheia] = useState(false);
+  // Colunas da grade da DRE (filtro "Análise").
+  const [colunasAnalise, setColunasAnalise] = useState(['valor', 'pct', 'proj', 'desvio']);
   const [rastreio, setRastreio] = useState(null); // { obra } = aba POC em tela cheia
   const [sumario, setSumario] = useState({ aberta: false, aba: 'filtros' });
   const abrirSumario = useCallback((aba = 'filtros') => setSumario({ aberta: true, aba }), []);
@@ -230,9 +290,12 @@ export default function DrePainel({ dashboard, tituloTela, empresaId, onEmpresa,
                       {rotuloPeriodo(D.meta.de, D.meta.ate)} (até {D.meta.ate.split('-').reverse().join('/')}) · {escopo}. Clique no nome de um centro para vê-lo mês a mês.
                     </p>
                   </div>
-                  <button type="button" className="btn ghost icone" onClick={() => setTelaCheia(true)} title="Tela cheia" aria-label="Tela cheia">
-                    <Maximize2 size={16} />
-                  </button>
+                  <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
+                    <FiltroAnalise valor={colunasAnalise} onChange={setColunasAnalise} />
+                    <button type="button" className="btn ghost icone" onClick={() => setTelaCheia(true)} title="Tela cheia" aria-label="Tela cheia">
+                      <Maximize2 size={16} />
+                    </button>
+                  </div>
                 </div>
                 <DreTab
                   variante="dashboard"
@@ -243,6 +306,11 @@ export default function DrePainel({ dashboard, tituloTela, empresaId, onEmpresa,
                   dadosProntos={dadosDre}
                   telaCheia={telaCheia}
                   onSairTelaCheia={() => setTelaCheia(false)}
+                  // Projetado e Desvio % só da VERSÃO salva da Projeção (rascunho fica no Operações);
+                  // sem versão salva, as colunas não aparecem.
+                  colunasVisiveis={colunasAnalise}
+                  projecao={{ fonte: 'versao', versao: null }}
+                  ocultarSemProjecao
                 />
               </section>
 

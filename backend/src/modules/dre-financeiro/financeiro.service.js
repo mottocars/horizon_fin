@@ -389,6 +389,20 @@ async function somaPorCentroData(empresaId, mascaraIds, ate) {
   return rows.map((r) => ({ ...r, valor: num(r.valor) }));
 }
 
+// Projeção da DRE (dre-projecoes), Origem Projeção "SIENGE - AGING": os títulos a receber e a pagar
+// (não os movimentos do extrato nem os criados à mão) de UM centro com EMISSÃO de `de` até `ate`
+// ('AAAA-MM-DD', inclusive), com as mesmas regras da DRE realizada (rateio, ajustes, plano do centro,
+// documentos fora da DRE), somados por natureza e mês. Valor com sinal (a pagar negativo).
+async function titulosPorNaturezaMes(empresaId, centroId, de, ate) {
+  const { rows } = await pool.query(
+    `WITH ${CTE_LINHAS}
+     SELECT natureza_id, to_char(data, 'YYYY-MM') AS mes, SUM(valor) AS valor
+       FROM lc WHERE centro_id = $4 AND origem IN ('R', 'P') GROUP BY 1, 2`,
+    [empresaId, de, diaSeguinte(ate), centroId]
+  );
+  return rows.map((r) => ({ ...r, valor: num(r.valor) }));
+}
+
 // Exportação de auditoria da DRE (dre-exportacao): as linhas que somaPorCentroData soma, uma a uma —
 // as máscaras pedidas, nos centros pedidos, com data até `ate`, desde o começo — com o lançamento
 // inteiro (origem, título, documento, contraparte, vencimento), o valor de antes do ajuste e quem
@@ -475,4 +489,13 @@ async function foraDaDre(empresaId, { de, ate, centros = null, mascarasUsadas })
   return rows.map((r) => ({ ...r, valor: num(r.valor), percentual: r.percentual === null ? null : num(r.percentual) }));
 }
 
-module.exports = { exercicios, lancamentos, opcoesFiltros, somaPorCentro, somaPorCentroData, linhasAuditoria, foraDaDre };
+module.exports = {
+  exercicios,
+  lancamentos,
+  opcoesFiltros,
+  somaPorCentro,
+  somaPorCentroData,
+  titulosPorNaturezaMes,
+  linhasAuditoria,
+  foraDaDre,
+};

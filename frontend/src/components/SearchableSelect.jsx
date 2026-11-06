@@ -43,6 +43,9 @@ export default function SearchableSelect({
   // Obras e Localidade de Cronogramas Obras). Com texto na busca, "Selecionar todos" marca só as
   // opções que aparecem, somando às já marcadas.
   todosELimpar = false,
+  // Textos dos dois links do `todosELimpar` (ex.: "Todos" / "Limpar" no filtro de centro de custo da DRE).
+  rotuloTodos = 'Selecionar todos',
+  rotuloLimpar = 'Limpar seleção',
   // Largura mínima do painel de opções, em px — o gatilho (campo) continua do tamanho dele, só o
   // painel que abre fica mais largo (ex.: Máscara DFC no Plano Contas da DFC Construtoras).
   larguraPainel = 0,
@@ -246,7 +249,7 @@ export default function SearchableSelect({
                     }
                     className="font-medium text-primary-600 hover:text-primary-700 disabled:cursor-default disabled:opacity-40"
                   >
-                    Selecionar todos
+                    {rotuloTodos}
                   </button>
                   <button
                     type="button"
@@ -254,7 +257,7 @@ export default function SearchableSelect({
                     onClick={() => onChange([])}
                     className="text-gray-400 hover:text-gray-600 disabled:cursor-default disabled:opacity-50"
                   >
-                    Limpar seleção
+                    {rotuloLimpar}
                   </button>
                 </div>
               )}

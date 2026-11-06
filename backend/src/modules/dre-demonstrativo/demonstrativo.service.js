@@ -118,24 +118,16 @@ function serie(linhas) {
 
 // Lançamentos-base { centro_id, data 'AAAA-MM-DD', valor } de cada cálculo, dos centros pedidos, e as
 // frações ideais da POC de Despesa (FRACAO_VENDAS + FRACAO_PERMUTA = vendida; FRACAO_DISTRATADA), já
-// como séries acumuladas (`serie`). `centros`: a análise da aba Unidades (clusters), pro rastreio da POC.
-async function bases(empresaId, centroOk) {
-  const [{ centros }, { rows: corr }] = await Promise.all([
-    unidades.listar(empresaId),
-    pool.query(
-      `SELECT centro_id::int AS centro_id, to_char(due_date, 'YYYY-MM-DD') AS data,
-              SUM(paga + reparcelada + em_aberto) AS valor
-         FROM (${correcoes.sqlParcelas()}) t
-        GROUP BY 1, 2`,
-      [empresaId]
-    ),
-  ]);
+// como séries acumuladas (`serie`). `unidadesCentros`: a análise da aba Unidades (clusters de
+// unidades.listar); `corr`: a correção monetária por centro e vencimento. Devolve também os centros
+// pedidos da análise (`centros`), pro rastreio da POC.
+function montarBases(unidadesCentros, corr, centroOk) {
   const b = Object.fromEntries([...CALCULOS_RECEITA, 'FRACAO_VENDAS', 'FRACAO_PERMUTA', 'FRACAO_DISTRATADA'].map((c) => [c, []]));
   const add = (calculo, centroId, data, valor) => {
     if (!data || !centroOk(centroId) || !valor) return;
     b[calculo].push({ centro_id: centroId, data, valor });
   };
-  centros.forEach((c) => {
+  unidadesCentros.forEach((c) => {
     c.clusters.vendidas.forEach((v) => {
       add('VALOR_VENDAS', c.id, v.data, num(v.valor));
       add('FRACAO_VENDAS', c.id, v.data, num(v.fracao_ideal) * v.participacao);
@@ -153,21 +145,14 @@ async function bases(empresaId, centroOk) {
   corr.forEach((r) => add('CORRECAO_MONETARIA', r.centro_id, r.data, num(r.valor)));
   return {
     serie: Object.fromEntries(Object.entries(b).map(([calculo, linhas]) => [calculo, serie(linhas)])),
-    centros: centros.filter((c) => centroOk(c.id)),
+    centros: unidadesCentros.filter((c) => centroOk(c.id)),
   };
 }
 
-// POC de Receita de uma obra em qualquer data até `ate`: custo acumulado da máscara (`custoAte`,
-// série do Financeiro) ÷ orçamento vigente. Devolve `pocEm(centro, D)` → { poc, custo, orcamento }
-// (com cache).
-async function pocReceita(empresaId, custoAte, ate) {
-  const { rows: orcamentos } = await pool.query(
-    `SELECT sienge_id::int AS centro_id, to_char(data_inicio, 'YYYY-MM-DD') AS inicio, SUM(valor) AS total
-       FROM dre_orcamento_valores
-      WHERE empresa_id = $1 AND data_inicio <= $2
-      GROUP BY 1, 2 ORDER BY 1, 2`,
-    [empresaId, ate]
-  );
+// POC de Receita de uma obra em qualquer data: custo acumulado da máscara (`custoAte`, série do
+// Financeiro) ÷ orçamento vigente (`orcamentos`: { centro_id, inicio, total } das versões da aba
+// Orçamento). Devolve `pocEm(centro, D)` → { poc, custo, orcamento } (com cache).
+function montarPocReceita(orcamentos, custoAte) {
   const versoes = new Map();
   orcamentos.forEach((o) => {
     if (!versoes.has(o.centro_id)) versoes.set(o.centro_id, []);
@@ -186,11 +171,29 @@ async function pocReceita(empresaId, custoAte, ate) {
   };
 }
 
-// Tudo o que a DRE (calcular) e o rastreio da POC (poc.service.js) usam, num lugar só — assim os dois
-// dão sempre o mesmo número: os centros pedidos (com "Realiza DRE"; `soObras`: só os de natureza OBRA),
-// as máscaras na ordem da DRE, a configuração, as séries de cada base e as POCs em qualquer data até
-// `ate`, e `reconhecidoNoCentro(m, centro, D)` (o reconhecido acumulado de uma máscara até D).
-async function motor(empresaId, { ate, filtro = [], soObras = false }) {
+// Quais máscaras calculam como (a partir da aba Máscaras e da aba Configurações) — usado pra saber o
+// que carregar (`idsFinanceiro`) e, no motor, como reconhecer cada linha.
+function regras(mascaras, cfg) {
+  const mascaraPoc = cfg[0]?.id ? { id: cfg[0].id, descricao: cfg[0].descricao } : null;
+  const comPocReceita = (m) => CALCULOS_RECEITA.has(m.calculo) && m.realiza_poc && m.tipo_poc === 'RECEITA';
+  const usaPoc = Boolean(mascaraPoc) && mascaras.some(comPocReceita);
+  // Linhas do Financeiro; CIV = as com POC de Despesa do grupo que tem o Estorno de Custo.
+  const gruposCiv = new Set(mascaras.filter((m) => m.calculo === 'ESTORNO_CUSTO').map((m) => m.parent_id));
+  const doFinanceiro = (m) => m.origem === 'FINANCEIRO' && m.calculo === 'ENTRADAS_SAIDAS';
+  const comPocDespesa = (m) => doFinanceiro(m) && m.realiza_poc && m.tipo_poc === 'DESPESA';
+  const custoCiv = (m) => comPocDespesa(m) && gruposCiv.has(m.parent_id);
+  const semPoc = (m) => doFinanceiro(m) && !m.realiza_poc;
+  const idsFinanceiro = [
+    ...new Set([...(usaPoc ? [mascaraPoc.id] : []), ...mascaras.filter((m) => comPocDespesa(m) || semPoc(m)).map((m) => m.id)]),
+  ];
+  return { mascaraPoc, comPocReceita, usaPoc, doFinanceiro, comPocDespesa, custoCiv, semPoc, idsFinanceiro };
+}
+
+// Lê do banco tudo o que o motor usa (os dados "crus"), sem calcular nada — a Projeção da DRE
+// (dre-projecoes) troca o que vem depois da trava pelo projetado e monta o motor com `construir`, com
+// as mesmas regras da DRE realizada. `ate`: até quando vêm os lançamentos do Financeiro;
+// `ateOrcamento`: até quando valem as versões do orçamento da obra (padrão: `ate`).
+async function carregar(empresaId, { ate, ateOrcamento = ate, filtro = [], soObras = false }) {
   const [{ rows: centrosDre }, { rows: mascaras }, { rows: cfg }, { rows: aliquotas }] = await Promise.all([
     pool.query(
       `SELECT sienge_id::int AS id, name AS nome, COALESCE(NULLIF(TRIM(apelido), ''), name) AS rotulo
@@ -223,29 +226,65 @@ async function motor(empresaId, { ate, filtro = [], soObras = false }) {
       [empresaId]
     ),
   ]);
+  const { usaPoc, idsFinanceiro } = regras(mascaras, cfg);
+  // Realizado nunca tem futuro (pedido do usuário): nada com data depois de hoje entra — títulos com
+  // emissão futura, correção de parcelas que vencem depois de hoje, contratos / distratos / permutas
+  // datados no futuro. O orçamento da obra (dre_orcamento_valores) não é realizado: segue `ateOrcamento`.
+  const hoje = hojeIso();
+  const corte = ate < hoje ? ate : hoje;
+  const [{ centros: todosCentros }, { rows: corr }, custos, { rows: orcamentos }] = await Promise.all([
+    unidades.listar(empresaId),
+    pool.query(
+      `SELECT centro_id::int AS centro_id, to_char(due_date, 'YYYY-MM-DD') AS data,
+              SUM(paga + reparcelada + em_aberto) AS valor
+         FROM (${correcoes.sqlParcelas()}) t
+        WHERE due_date <= $2::date
+        GROUP BY 1, 2`,
+      [empresaId, hoje]
+    ),
+    idsFinanceiro.length ? financeiro.somaPorCentroData(empresaId, idsFinanceiro, corte) : Promise.resolve([]),
+    usaPoc
+      ? pool.query(
+          `SELECT sienge_id::int AS centro_id, to_char(data_inicio, 'YYYY-MM-DD') AS inicio, SUM(valor) AS total
+             FROM dre_orcamento_valores
+            WHERE empresa_id = $1 AND data_inicio <= $2
+            GROUP BY 1, 2 ORDER BY 1, 2`,
+          [empresaId, ateOrcamento]
+        )
+      : Promise.resolve({ rows: [] }),
+  ]);
+  const ateHoje = (x) => !x.data || x.data <= hoje;
+  const unidadesCentros = todosCentros.map((c) => ({
+    ...c,
+    clusters: {
+      ...c.clusters,
+      vendidas: c.clusters.vendidas.filter(ateHoje),
+      distratadas: c.clusters.distratadas.filter(ateHoje),
+      permuta: c.clusters.permuta.filter(ateHoje),
+    },
+  }));
+  return { centrosDre, mascaras, cfg, aliquotas, filtro, unidadesCentros, corr, custos, orcamentos };
+}
+
+// Hoje ('AAAA-MM-DD') no horário de Brasília — o limite do realizado (o relógio do Postgres da VPS é
+// deslocado; usa o da aplicação).
+function hojeIso() {
+  return new Date().toLocaleDateString('en-CA', { timeZone: 'America/Sao_Paulo' });
+}
+
+// Monta o motor a partir dos dados de `carregar` (sem ir ao banco): os centros pedidos (com "Realiza
+// DRE"; `soObras`: só os de natureza OBRA), as máscaras na ordem da DRE, a configuração, as séries de
+// cada base e as POCs em qualquer data, e `reconhecidoNoCentro(m, centro, D)` (o reconhecido acumulado
+// de uma máscara até D).
+function construir({ centrosDre, mascaras, cfg, aliquotas, filtro = [], unidadesCentros, corr, custos, orcamentos }) {
   const pedidos = new Set(filtro.map(Number));
   const obras = centrosDre.filter((c) => !pedidos.size || pedidos.has(c.id));
   const ids = obras.map((c) => c.id);
   const idsOk = new Set(ids);
-  const mascaraPoc = cfg[0]?.id ? { id: cfg[0].id, descricao: cfg[0].descricao } : null;
-
-  const comPocReceita = (m) => CALCULOS_RECEITA.has(m.calculo) && m.realiza_poc && m.tipo_poc === 'RECEITA';
-  const usaPoc = mascaraPoc && mascaras.some(comPocReceita);
-  // Linhas do Financeiro; CIV = as com POC de Despesa do grupo que tem o Estorno de Custo.
-  const gruposCiv = new Set(mascaras.filter((m) => m.calculo === 'ESTORNO_CUSTO').map((m) => m.parent_id));
-  const doFinanceiro = (m) => m.origem === 'FINANCEIRO' && m.calculo === 'ENTRADAS_SAIDAS';
-  const comPocDespesa = (m) => doFinanceiro(m) && m.realiza_poc && m.tipo_poc === 'DESPESA';
-  const custoCiv = (m) => comPocDespesa(m) && gruposCiv.has(m.parent_id);
-  const semPoc = (m) => doFinanceiro(m) && !m.realiza_poc;
-  const idsFinanceiro = [
-    ...new Set([...(usaPoc ? [mascaraPoc.id] : []), ...mascaras.filter((m) => comPocDespesa(m) || semPoc(m)).map((m) => m.id)]),
-  ];
-  const [{ serie: base, centros: unidadesPorCentro }, custos] = await Promise.all([
-    bases(empresaId, (id) => idsOk.has(Number(id))),
-    idsFinanceiro.length ? financeiro.somaPorCentroData(empresaId, idsFinanceiro, ate) : Promise.resolve([]),
-  ]);
+  const { mascaraPoc, comPocReceita, usaPoc, comPocDespesa, custoCiv, semPoc, idsFinanceiro } = regras(mascaras, cfg);
+  const { serie: base, centros: unidadesPorCentro } = montarBases(unidadesCentros, corr, (id) => idsOk.has(Number(id)));
   const custoAte = new Map(idsFinanceiro.map((id) => [id, serie(custos.filter((c) => c.mascara_id === id))]));
-  const pocEm = usaPoc ? await pocReceita(empresaId, custoAte.get(mascaraPoc.id), ate) : null;
+  const pocEm = usaPoc ? montarPocReceita(orcamentos, custoAte.get(mascaraPoc.id)) : null;
   const pocDespesa = (id, data) => arredondarPoc(base.FRACAO_VENDAS(id, data) + base.FRACAO_PERMUTA(id, data));
   const fracaoDistratada = (id, data) => arredondarPoc(Math.min(base.FRACAO_DISTRATADA(id, data), 1));
   // Custos do CIV que o Estorno de Custo devolve: os do mesmo grupo de nível 1.
@@ -286,6 +325,12 @@ async function motor(empresaId, { ate, filtro = [], soObras = false }) {
     calculavel,
     reconhecidoNoCentro,
   };
+}
+
+// Tudo o que a DRE (calcular) e o rastreio da POC (poc.service.js) usam, num lugar só — assim os dois
+// dão sempre o mesmo número (ver `carregar` e `construir`).
+async function motor(empresaId, { ate, filtro = [], soObras = false }) {
+  return construir(await carregar(empresaId, { ate, filtro, soObras }));
 }
 
 // `motorPronto`: o motor já montado com os mesmos `ate` e centros (a exportação de auditoria usa o
@@ -390,4 +435,4 @@ async function calcular(empresaId, { de, ate, centros: filtro = [] }, motorPront
   };
 }
 
-module.exports = { calcular, motor, meses, vespera, fimDoMes, CALCULOS_RECEITA };
+module.exports = { calcular, motor, carregar, construir, regras, meses, vespera, fimDoMes, hojeIso, CALCULOS_RECEITA };

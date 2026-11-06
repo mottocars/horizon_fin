@@ -9,5 +9,6 @@ router.use(authMiddleware);
 router.param('empresaId', paramEmpresa);
 router.get('/:empresaId', controller.calcular);
 router.get('/:empresaId/poc', controller.rastrearPoc);
+router.get('/:empresaId/projetado', controller.projetadoVersao);
 
 module.exports = router;

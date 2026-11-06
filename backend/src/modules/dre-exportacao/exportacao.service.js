@@ -139,13 +139,17 @@ async function dados(empresaId, { de, ate, centros = [] }) {
     ]),
   ];
   const filtrado = centros.length > 0;
+  // As bases param em hoje, como o realizado da DRE (demonstrativo.carregar) — senão o Excel somaria o
+  // que o sistema não soma (títulos com emissão futura, correção de parcelas que vencem depois de hoje).
+  const hoje = demonstrativo.hojeIso();
+  const ateBase = ate < hoje ? ate : hoje;
 
   const [resultado, arvore, financeiroLinhas, fora, corr, orcamento, plano, centrosInfo, extras] = await Promise.all([
     demonstrativo.calcular(empresaId, { de, ate, centros }, m),
     mascarasService.list(empresaId),
-    m.ids.length && mascarasFin.length ? financeiro.linhasAuditoria(empresaId, { mascaraIds: mascarasFin, centros: m.ids, ate }) : [],
-    financeiro.foraDaDre(empresaId, { de, ate, centros: filtrado ? m.ids : null, mascarasUsadas: mascarasFin }),
-    m.ids.length ? correcoes.parcelasDaDre(empresaId, m.ids, ate) : [],
+    m.ids.length && mascarasFin.length ? financeiro.linhasAuditoria(empresaId, { mascaraIds: mascarasFin, centros: m.ids, ate: ateBase }) : [],
+    de <= ateBase ? financeiro.foraDaDre(empresaId, { de, ate: ateBase, centros: filtrado ? m.ids : null, mascarasUsadas: mascarasFin }) : [],
+    m.ids.length ? correcoes.parcelasDaDre(empresaId, m.ids, ateBase) : [],
     pool.query(
       `SELECT v.sienge_id::int AS centro_id, to_char(v.data_inicio, 'YYYY-MM-DD') AS inicio, c.nome AS categoria, v.valor,
               v.atualizado_em
