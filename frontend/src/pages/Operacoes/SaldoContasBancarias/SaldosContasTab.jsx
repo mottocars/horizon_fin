@@ -27,10 +27,15 @@ const ALTURA_DIA = 28;
 // Rodapé: Liberado + cheque + as 4 linhas do resumo dos saldos, todas grudadas embaixo ao rolar — cada
 // linha com altura fixa pra calcular o `bottom` de cada uma (ver tfoot).
 const ALTURA_RODAPE = 34;
+// Linha da classificação (nível 1): gruda logo abaixo do cabeçalho ao rolar (pedido do usuário —
+// numa classificação aberta e comprida, o nome dela sumia). Todas grudam no mesmo lugar; a seguinte,
+// vindo depois no DOM, cobre a anterior ao chegar no topo — fica sempre a classificação das contas à vista.
+const ALTURA_GRUPO = 40;
 // A coluna de nomes é sticky: o que foca/rola por baixo dela precisa de margem, senão a
 // célula focada por teclado fica escondida atrás da coluna/cabeçalho fixos. scroll-mt =
-// ALTURA_MES + ALTURA_DIA + uma folga pequena; scroll-mb = as 5 linhas do rodapé + folga.
-const MARGEM_ROLAGEM = 'scroll-mt-[60px] scroll-mb-[186px] scroll-ml-[356px] scroll-mr-4';
+// ALTURA_MES + ALTURA_DIA + ALTURA_GRUPO (a classificação grudada) + uma folga pequena;
+// scroll-mb = as 5 linhas do rodapé + folga.
+const MARGEM_ROLAGEM = 'scroll-mt-[100px] scroll-mb-[186px] scroll-ml-[356px] scroll-mr-4';
 
 // Linhas do resumo dos saldos abaixo do Liberado + cheque (cálculo em constantes.js::calcularResumoSaldos).
 const VISUAL_RESUMO = {
@@ -924,8 +929,11 @@ function SaldosContasTab({
                 const totais = totaisPorGrupo[grupo.value] || {};
                 return (
                   <Fragment key={grupo.value}>
-                    <tr onClick={() => alternarGrupo(grupo.value)} className="group/grupo cursor-pointer">
-                      <td className="sticky left-0 z-10 border-b border-r border-gray-200 bg-gray-50 py-2.5 pl-3 pr-2 group-hover/grupo:bg-gray-100">
+                    <tr onClick={() => alternarGrupo(grupo.value)} className="group/grupo cursor-pointer" style={{ height: ALTURA_GRUPO }}>
+                      <td
+                        className="sticky left-0 z-[16] border-b border-r border-gray-200 bg-gray-50 pl-3 pr-2 group-hover/grupo:bg-gray-100"
+                        style={{ top: ALTURA_MES + ALTURA_DIA + ajusteBorda }}
+                      >
                         <span className="flex items-center gap-2">
                           <span className="flex h-4 w-4 shrink-0 items-center justify-center rounded bg-primary-100 text-primary-600">
                             {aberto ? <Minus size={10} /> : <Plus size={10} />}
@@ -949,9 +957,10 @@ function SaldosContasTab({
                       {dias.map((d) => (
                         <td
                           key={d.iso}
-                          className={`border-b border-l border-gray-200 px-3 text-right text-xs font-semibold tabular-nums text-gray-900 group-hover/grupo:bg-gray-100 ${
+                          className={`sticky z-[15] border-b border-l border-gray-200 px-3 text-right text-xs font-semibold tabular-nums text-gray-900 group-hover/grupo:bg-gray-100 ${
                             d.iso === dataAberta ? 'bg-amber-50' : 'bg-gray-50'
                           }`}
+                          style={{ top: ALTURA_MES + ALTURA_DIA + ajusteBorda }}
                         >
                           <ValorTotal valor={totais[d.iso]} />
                         </td>
