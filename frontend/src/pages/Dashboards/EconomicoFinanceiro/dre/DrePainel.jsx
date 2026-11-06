@@ -175,7 +175,13 @@ export default function DrePainel({ dashboard, tituloTela, empresaId, onEmpresa,
     setErroExportacao('');
     setExportando(true);
     try {
-      const { blob, nome } = await exportarExcelDre(empresaId, { de: dados?.meta.de || de, ate: dados?.meta.ate || ate, centros });
+      // Dashboard: só a última versão salva da projeção (como a coluna Projetado do painel).
+      const { blob, nome } = await exportarExcelDre(empresaId, {
+        de: dados?.meta.de || de,
+        ate: dados?.meta.ate || ate,
+        centros,
+        projecao: { fonte: 'versao', versao: null },
+      });
       const url = window.URL.createObjectURL(blob);
       const link = document.createElement('a');
       link.href = url;

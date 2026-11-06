@@ -24,7 +24,7 @@ export const ABAS_SUMARIO = [
           '**Início** e **Fim** — os meses do período (começa no ano atual, de janeiro até o mês de hoje). O período sempre já desconta o que foi reconhecido antes dele: uma venda antiga só entra pelo avanço da obra no período.',
           '**Centro de custo** — só os centros marcados (vazio = todos com "Realiza DRE"). Vale para a tela toda, inclusive a comparação com o ano anterior. **Marcar todos** marca a lista inteira (com todos marcados é o consolidado, o mesmo que nenhum) — depois é só desmarcar o que não quer ver.',
           'A comparação é sempre com o **mesmo período do ano anterior** (ex.: jan a out/26 contra jan a out/25), com os mesmos filtros.',
-          'O botão de **download** baixa o **Excel de auditoria** do período e dos centros da barra (o mesmo do DRE Gerencial): a DRE refeita em fórmulas a partir dos lançamentos e conferida com o sistema, a memória de cálculo linha × centro × mês, as POCs de cada obra, as bases linha a linha, o que ficou fora da DRE com o motivo e os alertas dos dados.',
+          'O botão de **download** baixa o **Excel de auditoria** do período e dos centros da barra (o mesmo do DRE Gerencial): a DRE refeita em fórmulas a partir dos lançamentos e conferida com o sistema, a memória de cálculo linha × centro × mês, as POCs de cada obra, as bases linha a linha, o que ficou fora da DRE com o motivo e os alertas dos dados — e, com versão salva da projeção, as colunas Projetado e Desvio % e as abas da projeção (o gravado, a memória refeita em fórmulas, a POC e as premissas).',
         ],
       },
     ],

@@ -234,9 +234,17 @@ async function salvarVersao(empresaId, usuarioId) {
 //                    e, sem rascunho, o orçamento da última versão;
 //   fonte 'versao' — só uma versão salva (`numero`; sem ele, a última) — os dashboards.
 // `centros`: ids (vazio = todos). Devolve também as versões salvas (pro seletor).
-async function projetado(empresaId, { fonte = 'atual', numero = null, de, ate, centros = [] }) {
+// Os orçamentos de uma fonte, um por centro (a mesma escolha da coluna Projetado da aba DRE):
+//   fonte 'atual'  — o rascunho do centro e, sem rascunho, o orçamento da última versão;
+//   fonte 'versao' — os da versão `numero` (sem ele, a última).
+// `completo`: a foto inteira (`resultado`: premissas, POCs, níveis); senão só o `mensal`. Orçamento sem a
+// foto mês a mês (rascunho em andamento, ou concluído antes de ela existir) é calculado na hora — com as
+// premissas da foto quando há foto (`calculado_agora` marca); no da versão, o `mensal` que faltava é
+// gravado nele (uma vez). Orçamento que não dá pra calcular (ex.: centro sem "Realiza DRE") fica de fora,
+// com o motivo em `avisos`.
+async function orcamentosDaFonte(empresaId, { fonte = 'atual', numero = null, centros = [], completo = false }) {
   const { rows: versoes } = await pool.query(
-    `SELECT v.id, v.numero, v.criado_em, u.nome AS usuario FROM dre_projecao_versoes v
+    `SELECT v.id, v.numero, v.criado_em, v.orcamentos, u.nome AS usuario FROM dre_projecao_versoes v
        LEFT JOIN usuarios u ON u.id = v.usuario_id WHERE v.empresa_id = $1 ORDER BY v.numero DESC`,
     [empresaId]
   );
@@ -247,30 +255,32 @@ async function projetado(empresaId, { fonte = 'atual', numero = null, de, ate, c
     empresaId,
   ]);
   const { rows } = await pool.query(
-    `SELECT o.id, o.centro_id, o.versao_id, o.status, to_char(o.ciclo_inicio, 'YYYY-MM') AS ciclo_inicio,
-            to_char(o.ciclo_fim, 'YYYY-MM') AS ciclo_fim, to_char(o.trava, 'YYYY-MM') AS trava, o.dados,
-            o.resultado -> 'mensal' AS mensal
-       FROM dre_projecao_orcamentos o
+    `SELECT ${COLUNAS}, o.dados, ${completo ? 'o.resultado' : "o.resultado -> 'mensal' AS mensal"}
+       ${JUNCOES}
       WHERE o.empresa_id = $1
         AND (($2::int IS NOT NULL AND o.versao_id = $2) OR ($3 AND o.versao_id IS NULL))
-        AND (cardinality($4::int[]) = 0 OR o.centro_id = ANY($4::int[]))`,
+        AND (cardinality($4::int[]) = 0 OR o.centro_id = ANY($4::int[]))
+      ORDER BY c.dre_ordem ASC NULLS LAST, c.sienge_id ASC`,
     [empresaId, versao?.id ?? null, fonte === 'atual', centros.map(Number)]
   );
-  const mesDe = de.slice(0, 7);
-  const mesAte = ate.slice(0, 7);
   const avisos = [];
-  const saida = {};
+  const orcamentos = [];
   const ids = [...new Set(rows.map((r) => r.centro_id))];
   for (const id of ids) {
     const rascunho = fonte === 'atual' ? rows.find((r) => r.centro_id === id && r.versao_id === null) : null;
     const orc = rascunho || rows.find((r) => r.centro_id === id && r.versao_id !== null);
     if (!orc) continue;
-    let mensal = orc.mensal;
+    const origem = orc.versao_id === null ? 'RASCUNHO' : 'VERSAO';
+    let resultado = completo ? orc.resultado : null;
+    let mensal = completo ? orc.resultado?.mensal : orc.mensal;
+    let calculadoAgora = false;
     if (!mensal) {
-      // Sem a foto mês a mês (concluído antes dela existir): calcula com o que foi informado no
-      // orçamento. No da versão, guarda o resultado nele (só acrescenta o `mensal` que faltava — uma vez).
       try {
-        mensal = (await calculo.calcular(empresaId, orc)).mensal;
+        const foto = completo ? orc.resultado : null;
+        const r = await calculo.calcular(empresaId, orc, { foto });
+        mensal = r.mensal;
+        if (completo) resultado = { ...(orc.resultado || r), mensal: r.mensal };
+        calculadoAgora = true;
         if (orc.versao_id !== null) {
           await pool.query(
             `UPDATE dre_projecao_orcamentos SET resultado = jsonb_set(COALESCE(resultado, '{}'::jsonb), '{mensal}', $3::jsonb)
@@ -278,32 +288,55 @@ async function projetado(empresaId, { fonte = 'atual', numero = null, de, ate, c
             [empresaId, orc.id, JSON.stringify(mensal)]
           );
         }
-      } catch {
+      } catch (e) {
+        avisos.push(`${orc.centro_apelido || orc.centro_nome}: ${e.expose ? e.message : 'não foi possível calcular o orçamento.'}`);
         continue;
       }
     }
+    orcamentos.push({ ...orc, origem, mensal, resultado, calculado_agora: calculadoAgora });
+  }
+  return {
+    fonte,
+    versao: versao ? { numero: versao.numero, criado_em: versao.criado_em, usuario: versao.usuario, orcamentos: versao.orcamentos } : null,
+    versoes: versoes.map(({ numero: n, criado_em: c, usuario: u }) => ({ numero: n, criado_em: c, usuario: u })),
+    tem_rascunhos: rasc[0].tem,
+    orcamentos,
+    avisos,
+  };
+}
+
+async function projetado(empresaId, { fonte = 'atual', numero = null, de, ate, centros = [] }) {
+  const f = await orcamentosDaFonte(empresaId, { fonte, numero, centros });
+  const mesDe = de.slice(0, 7);
+  const mesAte = ate.slice(0, 7);
+  const saida = {};
+  f.orcamentos.forEach((orc) => {
+    const { mensal } = orc;
     const idx = mensal.meses.map((m, i) => [m, i]).filter(([m]) => m >= mesDe && m <= mesAte);
-    saida[id] = {
-      origem: orc.versao_id === null ? 'RASCUNHO' : 'VERSAO',
+    saida[orc.centro_id] = {
+      origem: orc.origem,
       status: orc.status,
       trava: mensal.trava,
       meses: idx.map(([m]) => m),
       valores: Object.fromEntries(Object.entries(mensal.valores).map(([mid, vs]) => [mid, idx.map(([, i]) => vs[i])])),
     };
-  }
+  });
   return {
     fonte,
-    versao: versao ? { numero: versao.numero, criado_em: versao.criado_em, usuario: versao.usuario } : null,
-    versoes: versoes.map(({ numero: n, criado_em: c, usuario: u }) => ({ numero: n, criado_em: c, usuario: u })),
-    tem_rascunhos: rasc[0].tem,
+    versao: f.versao ? { numero: f.versao.numero, criado_em: f.versao.criado_em, usuario: f.versao.usuario } : null,
+    versoes: f.versoes,
+    tem_rascunhos: f.tem_rascunhos,
     centros: saida,
-    avisos,
+    // Sem aviso na tela (pedido do usuário): o que não deu pra calcular só fica sem projeção.
+    avisos: [],
   };
 }
 
 module.exports = {
   ETAPAS,
   projetado,
+  orcamentosDaFonte,
+  ultimaVersao: (empresaId) => ultimaVersao(pool, empresaId),
   listar,
   obter,
   criar,

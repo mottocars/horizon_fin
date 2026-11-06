@@ -346,7 +346,13 @@ export default function DreGerencialPage() {
     setErroExportacaoDre('');
     setExportandoDre(true);
     try {
-      const { blob, nome } = await exportarExcelDre(empresaId, { de: dreDe, ate: dreAte, centros: dreCentros });
+      // A projeção do Excel é a do filtro Versão da aba DRE (o que a coluna Projetado mostra).
+      const { blob, nome } = await exportarExcelDre(empresaId, {
+        de: dreDe,
+        ate: dreAte,
+        centros: dreCentros,
+        projecao: versaoDre === 'atual' ? { fonte: 'atual' } : { fonte: 'versao', versao: versaoDre },
+      });
       const url = window.URL.createObjectURL(blob);
       const link = document.createElement('a');
       link.href = url;
@@ -594,7 +600,6 @@ export default function DreGerencialPage() {
                   <Maximize2 size={18} />
                 </Button>
               </div>
-              {exportandoDre && <span className="text-xs text-gray-500">Montando o Excel de auditoria…</span>}
               {erroExportacaoDre && <span className="text-xs text-red-600">{erroExportacaoDre}</span>}
             </div>
           )}

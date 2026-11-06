@@ -41,7 +41,7 @@ const ESTILO_NIVEL = {
 };
 
 // Alertas dos dados, calculados aqui (o que pode distorcer a DRE ou pede um olhar do auditor).
-function alertas(d, L) {
+function alertas(d, L, J = null) {
   const lista = [];
   const add = (nivel, texto, qtd, valor, onde) => lista.push({ nivel, texto, qtd, valor, onde });
   const { m } = d;
@@ -147,6 +147,29 @@ function alertas(d, L) {
 
   const hoje = new Date().toISOString().slice(0, 10);
   if (d.ate > hoje) add('Info', `O período vai até ${dataBr(d.ate)}, depois de hoje: os meses futuros só têm o que já foi lançado.`, null, null, '—');
+
+  // Projeção (colunas Projetado / Desvio %).
+  if (d.projecao) {
+    const P = d.projecao;
+    if (!P.orcamentos.length)
+      add('Info', `Nenhum orçamento da projeção (${P.fonte === 'versao' ? (P.versao ? `Versão ${P.versao.numero}` : 'nenhuma versão salva') : 'rascunhos + última versão'}) nos centros desta DRE: sem colunas Projetado / Desvio %.`, null, null, 'aba Projeções da DRE Construtoras');
+    const sem = m.obras.filter((c) => !P.orcamentos.some((o) => o.orc.centro_id === c.id));
+    if (P.orcamentos.length && sem.length)
+      add('Info', `Centros sem orçamento na projeção (Projetado com traço; o Desvio do consolidado compara só os com projeção): ${sem.map((c) => c.rotulo).join(', ')}.`, sem.length, null, 'Projeção');
+    const andamento = P.orcamentos.filter((o) => o.orc.status !== 'CONCLUIDO');
+    if (andamento.length)
+      add('Verificar', `Rascunhos em andamento calculados na hora (ainda não concluídos, mudam a cada edição): ${andamento.map((o) => J?.centros.get(o.orc.centro_id)?.rotulo || o.orc.centro_id).join(', ')}.`, andamento.length, null, 'Projeção (Situação)');
+    if (P.avisos.length) add('Atenção', `Orçamentos que não deu pra calcular (ficaram fora da projeção): ${P.avisos.join(' · ')}.`, P.avisos.length, null, 'Projeção');
+    if (J) {
+      const mudou = [...new Set(J.memoria.filter((x) => Math.abs(Number(x.dif) || 0) >= 0.01).map((x) => x.centro))];
+      if (mudou.length)
+        add('Verificar', `O realizado até a trava mudou depois que o orçamento foi concluído (lançamento com data antiga, ajuste, contrato): a Memória Projeção, refeita com o realizado de hoje, não bate com o gravado em ${mudou.join(', ')}. O Projetado da tela continua o gravado — conclua de novo e salve outra versão se quiser atualizar.`, mudou.length, null, 'Memória Projeção (coluna Diferença)');
+      const fin = new Set(d.mascarasFin);
+      const semOrigem = d.plano.filter((p) => J.centros.has(p.centro_id) && !p.nao_entra && p.mascara_id && fin.has(p.mascara_id) && !p.origem_projecao);
+      if (semOrigem.length)
+        add('Verificar', 'Naturezas das linhas do Financeiro SEM Origem Projeção no plano de contas de centros com projeção: não entram na projeção (nem digitadas, nem do Sienge).', semOrigem.length, null, 'Plano de Contas (Origem Projeção vazia)');
+    }
+  }
   return lista;
 }
 
@@ -195,15 +218,15 @@ function escreverRoteiro(workbook, sheet, d, ctx, meta) {
   const MU = C.lyMem.faixa('u');
   const POCdif = C.lyPoc.faixa('diferenca');
   const BF = LY.financeiro;
-  const dreG = `${aba('DRE')}!$G$${dre.primeira}:$G$${dre.ultima}`;
+  const J = ctx.J;
   const inicioConf = n;
   const conf = [
     [
-      'DRE consolidada: Excel × sistema (soma das diferenças absolutas)',
+      'DRE: consolidado = soma dos centros, linha a linha (soma das diferenças absolutas)',
       { formula: `${aba('DRE')}!${dre.conferencia}`, result: 0 },
       'zero',
-      `IF(AND(ABS(C{n})<0.01,COUNTIF(${dreG},"≠")=0),"OK","DIVERGENTE")`,
-      'DRE, coluna Diferença',
+      `IF(ABS(C{n})<0.01,"OK","DIVERGENTE")`,
+      'DRE, linha de conferência no rodapé',
     ],
     [
       'Memória de cálculo: cada linha × centro × mês, Excel × sistema',
@@ -219,10 +242,29 @@ function escreverRoteiro(workbook, sheet, d, ctx, meta) {
       `IF(C{n}<=0.000001,"OK","DIVERGENTE")`,
       'POC, coluna Maior diferença',
     ],
+    // Projeção: a conta refeita hoje (realizado de hoje + premissas gravadas) × o que foi gravado.
+    ...(J && J.memoria.length
+      ? [
+          [
+            'Projeção: Memória Projeção refeita hoje × gravado no orçamento (soma das diferenças absolutas)',
+            { formula: `SUMIF(${J.lyMem.faixa('dif')},">0")-SUMIF(${J.lyMem.faixa('dif')},"<0")`, result: J.somaDiferencas },
+            'zero',
+            `IF(AND(ABS(C{n})<0.01,COUNTIF(${J.lyMem.faixa('dif')},"≠")=0),"OK","MUDOU")`,
+            'Memória Projeção, coluna Diferença (MUDOU = o realizado até a trava mudou depois que o orçamento foi concluído)',
+          ],
+          [
+            'Projeção: POC refeita × POC gravada no orçamento (maior diferença)',
+            { formula: `MAX(${J.lyPoc.faixa('diferenca')})`, result: J.maiorDiferencaPoc },
+            'zero',
+            `IF(C{n}<=0.000001,"OK","MUDOU")`,
+            'POC Projeção, coluna Maior diferença',
+          ],
+        ]
+      : []),
   ];
   conf.forEach(([t, res, esp, status, onde], i) => {
     const row = linhaTabela([i + 1, t, res, esp, { formula: status.replace(/\{n\}/g, n), result: 'OK' }, onde], { altura: 26 });
-    row.getCell(3).numFmt = i === 2 ? '0.00000000' : FMT.moeda;
+    row.getCell(3).numFmt = i === 2 || i === 4 ? '0.00000000' : FMT.moeda;
     row.getCell(5).font = { bold: true, size: 10 };
     row.getCell(5).alignment = { horizontal: 'center', vertical: 'middle' };
   });
@@ -230,7 +272,8 @@ function escreverRoteiro(workbook, sheet, d, ctx, meta) {
     ref: `E${inicioConf}:E${n - 1}`,
     rules: [
       { type: 'expression', formulae: [`E${inicioConf}="OK"`], style: { fill: { type: 'pattern', pattern: 'solid', bgColor: { argb: 'FFD1FAE5' } }, font: { color: { argb: 'FF047857' } } } },
-      { type: 'expression', formulae: [`E${inicioConf}<>"OK"`], style: { fill: { type: 'pattern', pattern: 'solid', bgColor: { argb: CORES.VERMELHO_CLARO } }, font: { color: { argb: 'FFB91C1C' } } } },
+      { type: 'expression', formulae: [`E${inicioConf}="MUDOU"`], style: { fill: { type: 'pattern', pattern: 'solid', bgColor: { argb: CORES.AMARELO_CLARO } }, font: { color: { argb: 'FF92400E' } } } },
+      { type: 'expression', formulae: [`AND(E${inicioConf}<>"OK",E${inicioConf}<>"MUDOU")`], style: { fill: { type: 'pattern', pattern: 'solid', bgColor: { argb: CORES.VERMELHO_CLARO } }, font: { color: { argb: 'FFB91C1C' } } } },
     ],
   });
   // Números de contexto (também fórmulas).
@@ -258,7 +301,7 @@ function escreverRoteiro(workbook, sheet, d, ctx, meta) {
   n = tituloSecao(sheet, n, '2. ALERTAS DOS DADOS — o que pode distorcer a DRE ou merece um olhar antes de entregar', ULT);
   cabecalhoTabela(sheet, n, ['', 'Alerta', 'Quantidade', 'Valor', 'Nível', 'Onde conferir']);
   n += 1;
-  const lista = alertas(d, L);
+  const lista = alertas(d, L, J);
   if (!lista.length) linhaTabela(['', 'Nenhum alerta: os dados não mostram nada fora do padrão.', '', '', 'OK', '']);
   lista.forEach((a) => {
     const row = linhaTabela(['', a.texto, a.qtd, a.valor, a.nivel, a.onde], { formatos: [null, null, 'int', 'moeda'], altura: altura([a.texto, 52], [a.onde, 70]) });
@@ -303,6 +346,12 @@ function escreverRoteiro(workbook, sheet, d, ctx, meta) {
     ['RET (imposto fixo)', '−alíquota vigente no mês × soma de todas as linhas acima dele na DRE, centro a centro, mês a mês.'],
     ['Grupos e totais', 'Grupo de nível 1 = soma das linhas dele; totalizadora (=) = soma de todas as linhas acima. Consolidado = soma dos centros.'],
     ['Base Financeiro', 'Títulos a receber (valor líquido de impostos retidos) e a pagar pela EMISSÃO, movimentos do extrato sem título pela data, lançamentos criados à mão — rateados por centro × natureza, com os ajustes do Horizon, só centros com "Realiza DRE", naturezas com Máscara DRE e documentos que não estão fora da DRE.'],
+    ...(J
+      ? [
+          ['Projetado', 'A DRE do orçamento do centro mês a mês, gravada ao concluir (Projeção Mensal): até o mês da trava, o realizado daquela data; depois, o projetado — o mesmo motor, com as premissas (vendas das unidades em estoque, naturezas pela Origem Projeção, correção digitada) somadas ao realizado até a trava. Abra em Memória Projeção.'],
+          ['Desvio %', '(Valor − Projetado) ÷ |Projetado|: realizado até hoje contra o projetado só dos meses até o atual (o mês inteiro); no consolidado, o realizado só dos centros com projeção. Positivo = melhor que o projetado (receita maior ou custo menor).'],
+        ]
+      : []),
   ];
   regras.forEach(([t, x]) => {
     const row = sheet.getRow(n);
@@ -317,7 +366,7 @@ function escreverRoteiro(workbook, sheet, d, ctx, meta) {
   // 5. Roteiro sugerido
   n = tituloSecao(sheet, n, '5. ROTEIRO SUGERIDO DE AUDITORIA', ULT);
   const passos = [
-    'Confira as conferências da seção 1: as três precisam estar OK. Se alguma divergir, filtre a coluna Diferença da aba indicada.',
+    'Confira as conferências da seção 1: as da DRE realizada precisam estar OK (as da projeção podem dar MUDOU: o realizado até a trava mudou depois do orçamento). Se alguma divergir, filtre a coluna Diferença da aba indicada.',
     'Leia os alertas da seção 2 e resolva os de nível Atenção antes de entregar (obra sem orçamento, unidade sem fração ideal, natureza sem máscara).',
     'Na aba DRE, escolha as linhas mais relevantes e abra cada uma na Memória de Cálculo (filtre Linha DRE e Centro): o TOTAL DO FILTRO dá o número da DRE.',
     'Na Memória, confira base × fator. Para a base, filtre a aba Base indicada pela linha (Base Financeiro: Id linha + Centro; Base Unidades/Correções: Centro) e veja os lançamentos que a compõem.',
@@ -325,6 +374,11 @@ function escreverRoteiro(workbook, sheet, d, ctx, meta) {
     'Valide a classificação: aba Plano de Contas (natureza → linha em cada centro) e os lançamentos Ajustados / Criados à mão da Base Financeiro (quem fez, quando e por quê).',
     'Faça o teste de completude na aba Fora da DRE: tudo o que ficou de fora no período tem um motivo — confira os maiores valores de cada motivo (seção 3).',
     'Use a DRE Mensal pra olhar a tendência de cada centro e achar meses fora da curva.',
+    ...(J
+      ? [
+          'Projeção: na aba Projeção veja a versão e cada orçamento (trava, ciclo, quem concluiu); um Projetado se abre na Memória Projeção (base realizada até a trava + premissas × fator) e os insumos estão na POC Projeção e na Premissas Projeção. Desvio grande: compare a premissa (venda, custo digitado, orçamento empresarial) com o realizado do mês.',
+        ]
+      : []),
   ];
   passos.forEach((p, i) => {
     const row = sheet.getRow(n);
@@ -340,7 +394,7 @@ function escreverRoteiro(workbook, sheet, d, ctx, meta) {
   // 6. Abas
   n = tituloSecao(sheet, n, '6. ABAS DESTE ARQUIVO', ULT);
   const abas = [
-    ['DRE', 'A DRE como na tela (consolidado e centros, AV %), recalculada em fórmulas e conferida com o sistema.'],
+    ['DRE', 'A DRE como na tela (consolidado e centros: Valor, AV % e, com projeção, Projetado e Desvio %), recalculada em fórmulas.'],
     ['DRE Mensal', 'A DRE mês a mês do consolidado ou de um centro (escolha na célula C6).'],
     ['Memória de Cálculo', 'Cada linha × centro × mês: base acumulada, fator, reconhecido e o valor do mês, com o valor do sistema ao lado.'],
     ['POC', 'Cada obra em cada ponto: orçamento, custo, POC de Receita, frações e POC de Despesa — em fórmulas, conferidas com o sistema.'],
@@ -351,6 +405,15 @@ function escreverRoteiro(workbook, sheet, d, ctx, meta) {
     ['Plano de Contas', 'A classificação de cada natureza em cada centro (Global ou próprio) e quanto dela está na base.'],
     ['Fora da DRE', 'Os lançamentos do período que não entraram, com o motivo.'],
     ['Parâmetros', 'Configuração da DRE, máscaras e regras, alíquotas, centros, documentos fora da DRE e atualização das fontes.'],
+    ...(J
+      ? [
+          ['Projeção', 'O dossiê da projeção: versão, orçamentos (ciclo, trava, quem concluiu), totais do ciclo, premissas por origem e as regras.'],
+          ['Projeção Mensal', 'A DRE de cada orçamento mês a mês como foi gravada — o que as colunas Projetado / Desvio % somam.'],
+          ['Memória Projeção', 'Os meses projetados refeitos em fórmulas: realizado até a trava + premissas, × fator; com o gravado ao lado.'],
+          ['POC Projeção', 'POC de Receita / Despesa de cada centro em cada mês projetado, em fórmulas, com as gravadas ao lado.'],
+          ['Premissas Projeção', 'Vendas projetadas, naturezas por Origem Projeção e correção monetária, linha a linha.'],
+        ]
+      : []),
   ];
   abas.forEach(([nome, desc]) => {
     const row = sheet.getRow(n);

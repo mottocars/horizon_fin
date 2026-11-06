@@ -313,15 +313,20 @@ function somaDosMeses(listaValores, ids) {
   return out;
 }
 
-// O orçamento inteiro: realizado até a trava + projetado depois dela, no motor da DRE.
-async function calcular(empresaId, orc) {
+// O motor da DRE do orçamento: o realizado até a trava (o de HOJE, lido do banco) + as premissas
+// projetadas depois dela. Sem `foto`, as premissas saem do que foi informado e das origens agora (vendas
+// das unidades, naturezas pela Origem Projeção — o empresarial e os títulos do Sienge de hoje —, correção
+// digitada); com `foto` (o `resultado` gravado ao concluir), as premissas são as da foto: é assim que a
+// auditoria (Excel, MCP) refaz a conta de uma versão salva — qualquer diferença com a foto vem do
+// realizado até a trava, que mudou depois (lançamento novo com data antiga, ajuste, contrato).
+async function prepararMotor(empresaId, orc, { foto = null } = {}) {
   const j = janela(orc);
   if (!j.meses.length) throw erro(400, 'O fim do ciclo precisa ser depois do mês da trava.');
-  const [centro, d, plano, arvore] = await Promise.all([
+  const usarFoto = Boolean(foto && Array.isArray(foto.vendas) && Array.isArray(foto.naturezas));
+  const [centro, d, plano] = await Promise.all([
     centroDe(empresaId, orc.centro_id),
     demonstrativo.carregar(empresaId, { ate: j.travaFim, ateOrcamento: fimMes(j.cicloFim), filtro: [orc.centro_id] }),
-    planoContas.planoDoCentro(empresaId, orc.centro_id),
-    dreMascaras.list(empresaId),
+    usarFoto ? null : planoContas.planoDoCentro(empresaId, orc.centro_id),
   ]);
   if (!centro.realiza_dre) throw erro(400, `${centro.nome} não está com "Realiza DRE" marcado.`);
   const id = orc.centro_id;
@@ -331,11 +336,12 @@ async function calcular(empresaId, orc) {
 
   // Vendas projetadas (só obra).
   const c = d.unidadesCentros.find((x) => x.id === id);
-  const listaUnidades = obra && c ? unidadesNaTrava(c, j.travaFim) : [];
-  const vendas = listaUnidades
-    .map((u) => ({ u, ...vendaDaUnidade(u, orc.dados) }))
-    .filter((x) => x.mes && meses.has(x.mes))
-    .map(({ u, mes, valor }) => ({ chave: u.chave, unidade: u.unidade, tipo: u.tipo, fracao_ideal: num(u.fracao_ideal), mes, valor }));
+  const vendas = usarFoto
+    ? foto.vendas.filter((v) => v.mes && meses.has(v.mes)).map((v) => ({ ...v, fracao_ideal: num(v.fracao_ideal), valor: num(v.valor) }))
+    : (obra && c ? unidadesNaTrava(c, j.travaFim) : [])
+        .map((u) => ({ u, ...vendaDaUnidade(u, orc.dados) }))
+        .filter((x) => x.mes && meses.has(x.mes))
+        .map(({ u, mes, valor }) => ({ chave: u.chave, unidade: u.unidade, tipo: u.tipo, fracao_ideal: num(u.fracao_ideal), mes, valor }));
   const cortado = c
     ? {
         ...c,
@@ -366,14 +372,21 @@ async function calcular(empresaId, orc) {
       .filter((m) => m.calculo !== 'CORRECAO_MONETARIA' && p.etapaDe(m) && (obra || p.etapaDe(m) === 'demais'))
       .map((m) => m.id)
   );
-  const { naturezas } = await naturezasProjetadas(empresaId, orc, { mascarasAlvo: alvo, plano, j });
+  const naturezas = usarFoto
+    ? foto.naturezas
+        .filter((n) => alvo.has(n.mascara_id))
+        .map((n) => ({
+          ...n,
+          valores: Object.fromEntries(Object.entries(n.valores || {}).filter(([mes, v]) => meses.has(mes) && num(v) !== 0).map(([mes, v]) => [mes, num(v)])),
+        }))
+    : (await naturezasProjetadas(empresaId, orc, { mascarasAlvo: alvo, plano, j })).naturezas;
   const custosProjetados = naturezas.flatMap((n) =>
     Object.entries(n.valores).map(([mes, valor]) => ({ mascara_id: n.mascara_id, centro_id: id, data: `${mes}-01`, valor }))
   );
   // Correção monetária digitada (só se a linha estiver numa etapa do centro).
   const temCorrecao = d.mascaras.some((m) => m.calculo === 'CORRECAO_MONETARIA' && (obra || p.etapaDe(m) === 'demais'));
   const correcao = temCorrecao
-    ? Object.entries(orc.dados?.correcao || {})
+    ? Object.entries((usarFoto ? foto.correcao : orc.dados?.correcao) || {})
         .filter(([mes, v]) => meses.has(mes) && num(v) !== 0)
         .map(([mes, v]) => ({ centro_id: id, data: `${mes}-01`, valor: num(v) }))
     : [];
@@ -384,6 +397,16 @@ async function calcular(empresaId, orc) {
     corr: [...d.corr.filter((r) => r.data <= j.travaFim), ...correcao],
     custos: [...d.custos, ...custosProjetados],
   });
+  return { j, centro, d, obra, p, motor, vendas, naturezas, correcao, usouFoto: usarFoto };
+}
+
+// O orçamento inteiro: realizado até a trava + projetado depois dela, no motor da DRE.
+async function calcular(empresaId, orc, opcoes = {}) {
+  const [{ j, centro, d, obra, motor, vendas, naturezas, correcao }, arvore] = await Promise.all([
+    prepararMotor(empresaId, orc, opcoes),
+    dreMascaras.list(empresaId),
+  ]);
+  const id = orc.centro_id;
   // Calcula desde o primeiro lançamento do centro (não só do ciclo): a foto mês a mês do orçamento traz
   // todo o realizado antes do corte — é o "projetado" desses meses na comparação da aba DRE (pedido do
   // usuário: não respeitar o ciclo).
@@ -537,6 +560,7 @@ module.exports = {
   unidades,
   contas,
   calcular,
+  prepararMotor,
   historico,
   somarMeses,
   mesesEntre,

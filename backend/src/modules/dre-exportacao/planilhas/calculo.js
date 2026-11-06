@@ -60,6 +60,10 @@ const COL_MEMORIA = [
   { chave: 's', rotulo: 'Base nova × fator', largura: 15, formato: 'moeda', total: true },
   { chave: 't', rotulo: 'Valor no sistema', largura: 16, formato: 'moeda', total: true },
   { chave: 'u', rotulo: 'Diferença (Excel − sistema)', largura: 12, formato: 'diferenca' },
+  // Pras fórmulas da DRE Mensal (grupos e o Desvio % do consolidado, que só soma os centros com projeção).
+  { chave: 'grupo_id', rotulo: 'Id grupo', largura: 7 },
+  { chave: 'ordem_grupo', rotulo: 'Ordem do grupo', largura: 7 },
+  { chave: 'com_projecao', rotulo: 'Centro com projeção?', largura: 10 },
 ];
 
 const COL_FATOR = { POC_RECEITA: 'poc_receita', POC_DESPESA: 'poc_despesa', POC_DESPESA_LIQ: 'liquida', DISTRATADA: 'distratada' };
@@ -69,6 +73,8 @@ const COL_FATOR = { POC_RECEITA: 'poc_receita', POC_DESPESA: 'poc_despesa', POC_
 function montar(d, LY) {
   const { m, regras, intervalos, pontos, resultado } = d;
   const grupos = new Map(d.arvore.map((g) => [g.id, g.descricao]));
+  const ordemGrupo = new Map(d.arvore.map((g, i) => [g.id, i + 1]));
+  const comProjecao = new Set((d.projecao?.orcamentos || []).map((o) => o.orc.centro_id));
   const usaPoc = Boolean(m.pocEm);
   const nPontos = pontos.length;
   const nMeses = intervalos.length;
@@ -152,6 +158,9 @@ function montar(d, LY) {
           grupo: grupos.get(x.parent_id) || null,
           linha: x.descricao,
           mascara_id: x.id,
+          grupo_id: x.parent_id,
+          ordem_grupo: ordemGrupo.get(x.parent_id) ?? null,
+          com_projecao: comProjecao.has(c.id) ? 'Sim' : 'Não',
           t: sistemaMes[x.id] ?? null,
           ci,
           i,

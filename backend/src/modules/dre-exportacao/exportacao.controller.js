@@ -1,5 +1,7 @@
 const { z } = require('zod');
 const excel = require('./exportacao.excel');
+const { ehAdministradorDaTela } = require('../../middlewares/acesso.middleware');
+const T = require('../../config/telas');
 
 const empresaIdSchema = z.coerce.number().int().positive('Empresa inválida.');
 const data = (rotulo) => z.string({ required_error: `Informe a ${rotulo}.` }).regex(/^\d{4}-\d{2}-\d{2}$/, `${rotulo} inválida.`);
@@ -12,6 +14,10 @@ const filtroSchema = z
       .regex(/^(\d+(,\d+)*)?$/, 'Centros inválidos.')
       .optional()
       .default(''),
+    // A projeção das colunas Projetado / Desvio % e das abas da projeção: 'versao' (uma versão salva —
+    // `versao` = número; sem ele, a última) ou 'atual' (rascunhos + última versão, o Operações).
+    projecao: z.enum(['versao', 'atual']).optional().default('versao'),
+    versao: z.coerce.number().int().positive('Versão inválida.').optional(),
   })
   .refine((q) => q.de <= q.ate, { message: 'A data início não pode ser depois da data fim.' });
 
@@ -29,7 +35,13 @@ async function excelDre(req, res, next) {
     const empresaId = empresaIdSchema.parse(req.params.empresaId);
     const f = filtroSchema.parse(req.query);
     const centros = f.centros ? f.centros.split(',').map(Number) : [];
-    const { buffer, nome } = await excel.gerar(empresaId, { de: f.de, ate: f.ate, centros }, req.user.id);
+    // Rascunho da projeção só pra quem tem a tela DRE Construtoras (o dashboard só vê versão salva).
+    const fonte = f.projecao === 'atual' && ehAdministradorDaTela(req.user, T.DRE) ? 'atual' : 'versao';
+    const { buffer, nome } = await excel.gerar(
+      empresaId,
+      { de: f.de, ate: f.ate, centros, projecao: { fonte, numero: fonte === 'versao' ? f.versao ?? null : null } },
+      req.user.id
+    );
     res.setHeader('Content-Type', 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet');
     res.setHeader('Content-Disposition', `attachment; filename="dre-auditoria.xlsx"; filename*=UTF-8''${encodeURIComponent(nome)}`);
     res.setHeader('Access-Control-Expose-Headers', 'Content-Disposition');

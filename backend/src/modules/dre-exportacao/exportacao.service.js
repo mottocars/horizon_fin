@@ -4,7 +4,10 @@ const mascarasService = require('../dre-mascaras/dreMascaras.service');
 const financeiro = require('../dre-financeiro/financeiro.service');
 const correcoes = require('../dre-correcoes/correcoes.service');
 
-const { motor, meses, vespera, CALCULOS_RECEITA } = demonstrativo;
+const projecoes = require('../dre-projecoes/dreProjecoes.service');
+const calculoProjecao = require('../dre-projecoes/calculo');
+
+const { motor, meses, vespera, hojeIso, CALCULOS_RECEITA } = demonstrativo;
 
 // Exportação de auditoria da DRE (Operações › DRE Gerencial): tudo o que fez a DRE de um período chegar
 // em cada valor, pra conferir antes de entregar ao CFO. Usa o MESMO motor da aba DRE
@@ -128,7 +131,31 @@ function eventosUnidades(m) {
   return linhas;
 }
 
-async function dados(empresaId, { de, ate, centros = [] }) {
+// A projeção que entra no Excel (a mesma da coluna Projetado da aba DRE): os orçamentos da fonte (versão
+// salva ou rascunhos + última versão), só dos centros da DRE, cada um com a foto (`resultado`) e — se
+// tiver mês projetado dentro do período — o motor refeito com as premissas da foto (prepararMotor), de
+// onde saem a Memória e a POC da projeção. Sem nenhum orçamento: null (o Excel fica sem as abas).
+async function dadosProjecao(empresaId, { de, ate, m, projecao }) {
+  if (!projecao || !m.ids.length) return null;
+  const f = await projecoes.orcamentosDaFonte(empresaId, { fonte: projecao.fonte, numero: projecao.numero, centros: m.ids, completo: true });
+  const mesDe = de.slice(0, 7);
+  const mesAte = ate.slice(0, 7);
+  const orcamentos = [];
+  for (const orc of f.orcamentos) {
+    const j = calculoProjecao.janela(orc);
+    const mesesMem = j.meses.filter((x) => x >= mesDe && x <= mesAte);
+    // Um motor por centro (carrega o realizado dele até a trava) — em sequência, pra não afogar o pool.
+    // eslint-disable-next-line no-await-in-loop
+    const prep = mesesMem.length ? await calculoProjecao.prepararMotor(empresaId, orc, { foto: orc.resultado }) : null;
+    // As unidades disponíveis na trava (de onde veio o valor de cada venda projetada).
+    const c = prep?.d.unidadesCentros.find((x) => x.id === orc.centro_id);
+    const naTrava = c ? new Map(calculoProjecao.unidadesNaTrava(c, j.travaFim).map((u) => [u.chave, u])) : new Map();
+    orcamentos.push({ orc, foto: orc.resultado || {}, j, mesesMem, prep, naTrava });
+  }
+  return { fonte: f.fonte, versao: f.versao, avisos: f.avisos, orcamentos, mesAtual: hojeIso().slice(0, 7) };
+}
+
+async function dados(empresaId, { de, ate, centros = [], projecao = null }) {
   const m = await motor(empresaId, { ate, filtro: centros });
   const regras = new Map(m.mascaras.map((x) => [x.id, regraDa(x, m)]));
   // Máscaras do Financeiro que a DRE usa (as linhas com base no Financeiro e a da POC de Receita).
@@ -144,7 +171,7 @@ async function dados(empresaId, { de, ate, centros = [] }) {
   const hoje = demonstrativo.hojeIso();
   const ateBase = ate < hoje ? ate : hoje;
 
-  const [resultado, arvore, financeiroLinhas, fora, corr, orcamento, plano, centrosInfo, extras] = await Promise.all([
+  const [resultado, arvore, financeiroLinhas, fora, corr, orcamento, plano, centrosInfo, extras, proj] = await Promise.all([
     demonstrativo.calcular(empresaId, { de, ate, centros }, m),
     mascarasService.list(empresaId),
     m.ids.length && mascarasFin.length ? financeiro.linhasAuditoria(empresaId, { mascaraIds: mascarasFin, centros: m.ids, ate: ateBase }) : [],
@@ -164,7 +191,8 @@ async function dados(empresaId, { de, ate, centros = [] }) {
       `SELECT c.sienge_id::int AS centro_id, CASE WHEN v.centro_id IS NULL THEN 'Global' ELSE 'Próprio do centro' END AS plano,
               pf.sienge_id::text AS natureza_id, pf.name AS natureza_nome,
               CASE WHEN v.centro_id IS NULL THEN pg.mascara_id ELSE pc.mascara_id END AS mascara_id,
-              CASE WHEN v.centro_id IS NULL THEN pg.nao_entra ELSE pc.nao_entra END AS nao_entra
+              CASE WHEN v.centro_id IS NULL THEN pg.nao_entra ELSE pc.nao_entra END AS nao_entra,
+              CASE WHEN v.centro_id IS NULL THEN pg.origem_projecao ELSE pc.origem_projecao END AS origem_projecao
          FROM centros_custo_sienge c
          LEFT JOIN dre_plano_contas_versoes v ON v.empresa_id = c.empresa_id AND v.centro_id = c.sienge_id
          JOIN planos_financeiros_sienge pf ON pf.empresa_id = c.empresa_id AND pf.tp_conta <> 'T'
@@ -197,6 +225,7 @@ async function dados(empresaId, { de, ate, centros = [] }) {
                    FROM sie_outcome WHERE empresa_id = $1 GROUP BY 1) d) AS nomes_documentos`,
       [empresaId]
     ),
+    dadosProjecao(empresaId, { de, ate, m, projecao }),
   ]);
 
   // Pontos em que a POC é tirada: a véspera do período e o fim de cada mês (o último pode ser parcial).
@@ -224,7 +253,8 @@ async function dados(empresaId, { de, ate, centros = [] }) {
     centros: new Map(centrosInfo.rows.map((c) => [c.id, c])),
     unidades: eventosUnidades(m),
     extras: extras.rows[0],
+    projecao: proj,
   };
 }
 
-module.exports = { dados, BASE_RECEITA };
+module.exports = { dados, regraDa, aliquotas, BASE_RECEITA };

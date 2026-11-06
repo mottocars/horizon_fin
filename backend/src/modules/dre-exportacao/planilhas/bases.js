@@ -167,9 +167,17 @@ const COL_PLANO = [
   { chave: 'classificacao', rotulo: 'Classificação (Máscara DRE)', largura: 34 },
   { chave: 'grupo', rotulo: 'Grupo DRE (nível 1)', largura: 28 },
   { chave: 'uso', rotulo: 'Como entra na DRE', largura: 40 },
+  { chave: 'origem_projecao', rotulo: 'Origem Projeção (projeção da DRE)', largura: 22 },
   { chave: 'lancamentos', rotulo: 'Linhas na Base Financeiro', largura: 11, formato: 'int', total: (l) => l.n },
   { chave: 'valor', rotulo: 'Valor na Base Financeiro (até o fim)', largura: 16, formato: 'moeda', total: (l) => l.v },
 ];
+
+const ORIGEM_PROJECAO = {
+  NAO_POSSUI: 'NÃO POSSUI ORIGEM',
+  HORIZON_ORCAMENTO_INFORMADO: 'HORIZON - INFORMADO',
+  SIENGE_ORCAMENTO_EMPRESARIAL: 'SIENGE - EMPRESARIAL',
+  SIENGE_AGING: 'SIENGE - AGING',
+};
 
 // Linhas de cada base, já no formato das colunas.
 function linhas(d) {
@@ -249,6 +257,7 @@ function linhas(d) {
           : usadas.has(x.id)
             ? 'Pelo Financeiro (lançamentos desta natureza)'
             : `Não pelo Financeiro: a linha calcula por ${ORIGEM_MASCARA[x.origem] || 'outra origem'}`,
+      origem_projecao: ORIGEM_PROJECAO[p.origem_projecao] || (p.nao_entra ? null : 'não informada'),
       n: b.n,
       v: b.v,
     };
