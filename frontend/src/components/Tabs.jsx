@@ -29,7 +29,12 @@ function Divisor() {
 
 export default function Tabs({ tabs, activeId, onChange, className = '' }) {
   return (
-    <div role="tablist" className={`flex items-end gap-0.5 border-b border-gray-200 pr-1 ${className}`}>
+    // A barra nunca passa da largura do painel de baixo (ex.: com o menu lateral aberto). Cada aba
+    // pode encolher até a palavra mais longa dela: as de duas palavras ("Centros Custos", "Plano
+    // Contas") quebram em duas linhas primeiro e as de uma palavra ficam inteiras. `items-stretch`
+    // deixa todas na mesma altura quando alguma quebra. Se nem assim couber, a barra (que é um
+    // container — `@container`) aperta o espaçamento e, mais estreita ainda, esconde os ícones.
+    <div role="tablist" className={`@container flex items-stretch gap-0.5 border-b border-gray-200 pr-1 ${className}`}>
       {tabs.map((tab, i) => {
         if (tab.divider) return <Divisor key={`divisor-${i}`} />;
         const Icon = tab.icon;
@@ -46,7 +51,7 @@ export default function Tabs({ tabs, activeId, onChange, className = '' }) {
             disabled={tab.disabled}
             title={tab.title}
             onClick={() => onChange(tab.id)}
-            className={`relative -mb-px flex items-center gap-1.5 whitespace-nowrap rounded-t-xl border border-b-0 px-3 py-2.5 text-[13px] leading-5 font-medium transition-colors ${
+            className={`relative -mb-px flex min-h-10 items-center gap-1.5 rounded-t-xl border border-b-0 px-3 py-2 text-[13px] leading-4 font-medium transition-colors @max-[68rem]:gap-1 @max-[68rem]:px-2 @max-[56rem]:px-1.5 ${
               active
                 ? 'border-gray-200 bg-white text-gray-900'
                 : tab.disabled
@@ -74,10 +79,10 @@ export default function Tabs({ tabs, activeId, onChange, className = '' }) {
             {Icon && (
               <Icon
                 size={14}
-                className={tab.iconColorClass ?? (active ? 'text-primary-600' : tab.disabled ? 'text-gray-300' : 'text-gray-400')}
+                className={`shrink-0 @max-[56rem]:hidden ${tab.iconColorClass ?? (active ? 'text-primary-600' : tab.disabled ? 'text-gray-300' : 'text-gray-400')}`}
               />
             )}
-            {tab.label}
+            <span className="text-left">{tab.label}</span>
           </button>
         );
       })}
