@@ -220,7 +220,7 @@ const guia = {
       '- **Vendas**: cada unidade com mês de venda vira um contrato novo naquele mês: valor informado → senão o do contrato registrado no Sienge depois da trava → senão o ticket médio do tipo; fração ideal inteira (participação 100%). Entra na Receita de Vendas (× POC de Receita) e na POC de Despesa (fração vendida).',
       `- **Naturezas** (linhas que calculam pelo Financeiro), pela Origem Projeção da natureza no plano de contas DO CENTRO (o próprio, se tiver; senão o Global): ${Object.entries(COMO_ORIGEM).map(([k, v]) => `**${ROTULO_ORIGEM[k]}** = ${v}`).join('; ')}; **NÃO POSSUI ORIGEM** = nada; natureza sem origem informada também fica de fora.`,
       '- **Correção monetária**: digitada mês a mês (não sai dos títulos).',
-      '- **Calculado pelo motor**: receita de vendas e custo dos imóveis (pela POC), estorno de receita e de custo, receita com permuta e com distrato, RET (alíquota vigente × linhas acima). **Distratos futuros não são projetados.**',
+      '- **Calculado pelo motor**: receita de vendas e custo dos imóveis (pela POC), estorno de receita e de custo, receita com permuta e com distrato, RET (−alíquota vigente × a BASE do imposto: as linhas de nível 2 acima dele escolhidas em Máscaras › Informar histórico; sem escolha, todas as de cima). **Distratos futuros não são projetados.**',
       '- **POC de Receita** = |custo realizado até a trava + custo projetado| ÷ orçamento vigente da obra, até 100%. **POC de Despesa** = fração vendida (realizada + projetada) + permutas, sem trava (pode passar de 100% se as frações ideais somarem mais que 1).',
       '- **A foto (mensal)**: ao concluir, grava a DRE do orçamento mês a mês do PRIMEIRO lançamento do centro até o fim do ciclo (não só o ciclo): até a trava é o realizado daquele dia; depois, o projetado. É isso que as colunas Projetado mostram — e não muda quando o realizado muda.',
       '',
@@ -245,6 +245,7 @@ const guia = {
       '- **Uma natureza não aparece no assistente.** Ela não tem Máscara DRE, é NÃO ENTRA NA DRE, está com NÃO POSSUI ORIGEM ou sem Origem Projeção no plano do centro.',
       '- **A unidade vendida depois da trava aparece?** Sim, como disponível na trava, com o mês e o valor do contrato sugeridos.',
       '- **Distratos futuros?** Não são projetados (estorno e receita de distrato só do realizado).',
+      '- **Mudei a base do RET (Máscaras › Informar histórico) e o Projetado continua com o RET antigo.** Correto: o Projetado é a foto do dia em que o orçamento foi concluído, com a base que valia naquele dia; o realizado (coluna Valor) já usa a base nova. Para o Projetado usar a base nova, conclua cada centro de novo e salve outra versão (dre_projecao_auditoria mostra "MUDOU" enquanto isso).',
       '- **Por que o Desvio do consolidado não usa todos os centros?** Para não comparar o realizado de um centro sem orçamento com projetado nenhum.',
       '- **Por que mês futuro só tem Projetado?** Não há realizado no futuro (a DRE para em hoje).',
       '- **O que a planilha importa?** Ciclos (início, fim, trava), vendas (mês e valor por unidade), Custos da POC e Demais contas (só HORIZON - INFORMADO) e correção. Dentro do assistente, só o centro e a etapa abertos (recorte).',
@@ -532,8 +533,22 @@ const explicarTool = {
           const idx = o.mensal.meses.indexOf(mes);
           const baseMes = base.reduce((t, y) => t + num(o.mensal.valores[y.id]?.[idx]), 0);
           const h = M.aliquotaEm(x.id, `${mes}-01`);
-          return { mes: rotMes(mes), base_linhas_acima: r2(baseMes), aliquota_pct: h ? h.aliquota : 0, valor: r2(o.mensal.valores[x.id]?.[idx]) };
+          const aliq = h ? h.aliquota : 0;
+          const gravadoMes = num(o.mensal.valores[x.id]?.[idx]);
+          return {
+            mes: rotMes(mes),
+            base_do_imposto: r2(baseMes),
+            aliquota_pct: aliq,
+            valor_gravado: r2(gravadoMes),
+            pela_base_de_hoje: r2((-baseMes * aliq) / 100),
+          };
         });
+        // O orçamento foi gravado com outra base (ex.: concluído antes de a base do imposto ser escolhida
+        // em Máscaras › Informar histórico): o gravado não bate com −alíquota × base de hoje.
+        const diverge = item.meses_detalhe.filter((mm) => Math.abs(mm.valor_gravado - mm.pela_base_de_hoje) >= 0.01);
+        item.base_do_imposto = mx.imposto_base ? 'escolhida em Máscaras › Informar histórico (só as linhas listadas)' : 'todas as linhas de nível 2 acima';
+        if (diverge.length)
+          item.atencao = `Em ${diverge.length} mês(es) o RET gravado no orçamento não é −alíquota × a base de hoje: o orçamento foi concluído com outra base do imposto (a regra que valia no dia). O Projetado mostra o gravado; para usar a base atual, conclua o centro de novo e salve outra versão.`;
       } else if (c.conta) {
         const k = c.conta;
         item.formula = regra.fator

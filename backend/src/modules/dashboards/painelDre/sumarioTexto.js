@@ -106,7 +106,7 @@ const ABAS_SUMARIO = [
           '**Revisão do orçamento** — orçamento de obra maior derruba a POC (custo ÷ orçamento) e a receita reconhecida recua na mesma proporção; menor, sobe.',
           '**Vender estoque agora** — parte do estoque vendida pelo valor estimado: receita × POC de hoje e o custo dessa fração no CIV. Obra sem orçamento fica de fora (a POC dela é 0: a venda só traria custo).',
           '**Despesas operacionais** — as despesas sem POC entre o Lucro Bruto e o EBITDA (administrativas, marketing…).',
-          'O imposto fixo (RET) acompanha pela **alíquota efetiva** do período sobre o que está acima dele.',
+          'O imposto fixo (RET) acompanha pela **alíquota efetiva** do período sobre a base dele (as linhas escolhidas em Máscaras › Informar histórico; sem escolha, tudo o que está acima dele).',
         ],
       },
       {
