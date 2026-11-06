@@ -56,3 +56,10 @@ test('dia sem saldo lançado fica fora; centavos sem erro de ponto flutuante', (
   assert.deepStrictEqual(calcularResumoSaldos([conta(true, undefined)], [DIA], periodos).liberadoCheque, {});
   assert.strictEqual(resumo([conta(true, 0.1), conta(true, 0.2)]).liberado, 0.3);
 });
+
+test('cheque especial com saldo em branco: saldo tratado como zero — só o limite inteiro, e só em dia com período', () => {
+  assert.deepStrictEqual(resumo([conta(true, undefined, { valor_cheque_especial: 1000, bloqueios: { [DIA]: 50 } }), conta(true, 200)]), {
+    liberadoCheque: 1200, liberado: 200, bloqueado: 0, limiteCheque: 1000, aCobrir: 0,
+  });
+  assert.deepStrictEqual(calcularResumoSaldos([conta(true, undefined, { valor_cheque_especial: 1000 })], [DIA], new Set()).limiteCheque, {});
+});

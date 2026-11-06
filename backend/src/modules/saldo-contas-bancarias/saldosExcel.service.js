@@ -273,8 +273,9 @@ function detalhesConta(conta, diasIso, periodos) {
     for (const iso of diasIso) {
       if (!periodos.has(iso)) continue;
       total[iso] = limite;
+      // Saldo em branco conta como zero: o limite inteiro (como na grade).
       const saldo = conta.saldos[iso];
-      if (saldo !== undefined) restante[iso] = saldo < 0 ? somarCentavos([limite, saldo]) : limite;
+      restante[iso] = saldo < 0 ? somarCentavos([limite, saldo]) : limite;
     }
     linhas.push({ rotulo: 'Limite total cheque especial', valores: total }, { rotulo: 'Limite restante', valores: restante });
   }

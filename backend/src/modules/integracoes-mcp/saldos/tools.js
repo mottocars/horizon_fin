@@ -172,7 +172,7 @@ Só se lança saldo no dia com período ABERTO (um por vez). Abrir o período di
 Registrado na célula (botão direito > Registrar bloqueio), por conta e dia: parte do saldo que está retida. A grade mostra "Saldo bloqueado" e "Saldo disponível" (= saldo − bloqueado) abaixo da conta.
 
 ## Cheque especial
-Limite cadastrado na conta (Cadastros > Contas Bancárias). Nos dias com abertura de período a grade mostra "Limite total" e "Limite restante": saldo negativo → limite + saldo (limite 100.000 e saldo −500 → 99.500); saldo zero ou positivo → o limite inteiro.
+Limite cadastrado na conta (Cadastros > Contas Bancárias). Nos dias com abertura de período a grade mostra "Limite total" e "Limite restante": saldo negativo → limite + saldo (limite 100.000 e saldo −500 → 99.500); saldo zero ou positivo → o limite inteiro; saldo em branco (não informado) → tratado como zero, o limite inteiro (entra no Limite cheque e no Liberado + cheque).
 
 ## Totais (rodapé da grade), por dia, só contas com saldo lançado
 - Total da classificação (linha de cada classificação): soma dos saldos (com sinal) das contas dela no dia.
@@ -267,7 +267,7 @@ const resumo = {
       const partes = contas.map((c) => ({ c, p: contribuicaoConta(c, iso, comPeriodo) })).filter((x) => x.p);
       if (!partes.length) return { data: iso, sem_saldo_lancado: true };
       const porClasse = {};
-      for (const { c, p } of partes) {
+      for (const { c, p } of partes.filter((x) => !x.p.saldoEmBranco)) {
         const g = (porClasse[c.classificacao] ||= { classificacao: c.classificacao, tipo_saldo: tipoSaldo(tipos.get(c.classificacao)), total: 0, contas: 0 });
         g.total += p.saldo;
         g.contas += 1;
@@ -288,7 +288,7 @@ const resumo = {
           total_bloqueado: soma('bloqueado'),
           saldo_a_cobrir: soma('aCobrir'),
         },
-        contas_com_saldo: partes.length,
+        contas_com_saldo: partes.filter((x) => !x.p.saldoEmBranco).length,
         _partes: partes,
       };
     });
@@ -313,7 +313,13 @@ const resumo = {
         ),
         limite_cheque: linhas(
           ({ p }) => p.limiteCheque !== 0 || p.restante !== 0,
-          ({ c, p }) => ({ conta: nome(c), limite_total: c.valor_cheque_especial, saldo: reais(p.saldo), limite_restante: reais(p.restante) })
+          ({ c, p }) => ({
+            conta: nome(c),
+            limite_total: c.valor_cheque_especial,
+            saldo: p.saldoEmBranco ? null : reais(p.saldo),
+            ...(p.saldoEmBranco ? { observacao: 'saldo em branco no dia — tratado como zero: entra o limite inteiro' } : {}),
+            limite_restante: reais(p.restante),
+          })
         ),
         total_bloqueado: linhas(
           ({ p }) => p.bloqueado !== 0,
@@ -374,7 +380,7 @@ const contasDia = {
           classificacao: c.classificacao,
           tipo_saldo: tipoSaldo(tipos.get(c.classificacao)),
           status: c.status === 'ENABLED' ? 'ativa' : 'inativa',
-          saldo: p ? reais(p.saldo) : null,
+          saldo: p && !p.saldoEmBranco ? reais(p.saldo) : null,
           origem,
           origem_explicacao: origem ? ORIGEM[origem] : 'Sem saldo lançado neste dia',
           ...(s?.fonte ? { fonte: s.fonte } : {}),
@@ -437,7 +443,7 @@ const historico = {
         const s = aut.saldos.get(k);
         return {
           data: iso,
-          saldo: p ? reais(p.saldo) : null,
+          saldo: p && !p.saldoEmBranco ? reais(p.saldo) : null,
           origem: c.origens[iso] || null,
           ...(s?.fonte ? { fonte: s.fonte } : {}),
           ...(c.composicoes[iso]?.herdado ? { herdado_de: c.composicoes[iso].herdado.de } : {}),

@@ -16,7 +16,9 @@
 // Ex.: −500 com limite 100 mil → Liberado 0, Limite cheque 99.500, Liberado + cheque 99.500; 500 com limite
 // 100 mil → Liberado 500, Limite cheque 100.000, Liberado + cheque 100.500.
 // Limite restante segue a regra da linha de detalhe da grade: só nos dias com abertura de
-// período (`periodos`); saldo negativo -> limite + saldo; senão o limite inteiro.
+// período (`periodos`); saldo negativo -> limite + saldo; senão o limite inteiro. Conta com cheque
+// especial e saldo em branco no dia entra como saldo zero (pedido do usuário): só o limite inteiro
+// no Limite cheque, nada nos outros totais.
 // Classificação com liberado/bloqueado não informado (null) não entra em nenhum dos dois totais
 // pelo saldo — só o bloqueio registrado dela conta como bloqueado.
 
@@ -39,9 +41,14 @@ function limiteRestanteCentavos(conta, iso, periodos) {
 }
 
 // Quanto UMA conta entra em cada total no dia `iso` (em centavos) — base de calcularResumoSaldos
-// e do detalhamento do MCP (quem compõe cada total). null = conta sem saldo lançado no dia.
+// e do detalhamento do MCP (quem compõe cada total). null = conta sem saldo lançado no dia (e sem
+// cheque especial nele); `saldoEmBranco` = sem saldo, mas com o limite do cheque (saldo tratado como zero).
 function contribuicaoConta(conta, iso, periodos) {
-  if (conta.saldos[iso] === undefined || conta.saldos[iso] === null) return null;
+  if (conta.saldos[iso] === undefined || conta.saldos[iso] === null) {
+    const restante = limiteRestanteCentavos(conta, iso, periodos);
+    if (!restante) return null;
+    return { saldo: 0, saldoEmBranco: true, bloqueio: 0, restante, liberado: 0, bloqueado: 0, limiteCheque: restante, aCobrir: 0, liberadoCheque: restante };
+  }
   const saldo = centavos(conta.saldos[iso]);
   const bloqueio = centavos(conta.bloqueios?.[iso] || 0);
   const restante = limiteRestanteCentavos(conta, iso, periodos);

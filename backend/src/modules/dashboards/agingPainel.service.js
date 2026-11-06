@@ -121,8 +121,10 @@ async function saldoBancario(empresaId, hoje) {
   const comPeriodo = periodos.includes(data);
   return {
     data,
+    // Conta com cheque especial e saldo em branco entra com saldo zero (só o limite), como no
+    // Liberado + cheque da tela Saldo (resumoSaldos.calculo.js).
     contas: contas
-      .filter((c) => c.saldos[data] !== undefined && c.saldos[data] !== null)
+      .filter((c) => (c.saldos[data] !== undefined && c.saldos[data] !== null) || (comPeriodo && c.valor_cheque_especial > 0))
       .map((c) => ({
         company_id: c.company_id,
         empresa: c.company_name,
@@ -130,7 +132,7 @@ async function saldoBancario(empresaId, hoje) {
         nome: c.nome || c.numero_conta,
         classificacao: c.classificacao,
         libera: c.classificacao_libera_saldo,
-        saldo: Number(c.saldos[data]),
+        saldo: Number(c.saldos[data] ?? 0),
         bloqueio: Number(c.bloqueios?.[data] || 0),
         limite: comPeriodo && c.valor_cheque_especial > 0 ? Number(c.valor_cheque_especial) : 0,
       })),

@@ -242,9 +242,8 @@ function ValorTotal({ valor, className = '' }) {
 
 // Cheque especial: com o saldo negativo, o restante é o limite menos o que já foi usado
 // (limite 100.000 e saldo -99.622,18 -> 377,82); com saldo zero ou positivo, o limite inteiro.
-// Dia sem saldo lançado fica sem restante (undefined -> "—").
+// Dia sem saldo lançado conta como saldo zero: o limite inteiro (pedido do usuário).
 function limiteRestante(limite, saldo) {
-  if (saldo === undefined || saldo === null) return undefined;
   return saldo < 0 ? somarSaldos([limite, saldo]) : limite;
 }
 

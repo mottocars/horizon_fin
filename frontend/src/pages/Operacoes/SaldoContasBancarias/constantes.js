@@ -133,7 +133,8 @@ export function somarSaldos(valores) {
 // - Liberado: classificação liberada — saldo menos bloqueio, só a parte positiva, sem o cheque especial.
 // - Total bloqueado: saldo das contas de classificação bloqueada + bloqueios das demais.
 // - Limite cheque: soma dos limites restantes. Saldo a cobrir: soma dos saldos negativos.
-// Limite restante só nos dias com abertura de período, como a linha de detalhe da grade.
+// Limite restante só nos dias com abertura de período, como a linha de detalhe da grade. Conta com
+// cheque especial e saldo em branco entra como saldo zero — só o limite inteiro (pedido do usuário).
 // Ordem das linhas pedida pelo usuário: Liberado + cheque (fora desta lista, é a 1ª), Liberado, Limite
 // cheque, Total bloqueado, Saldo a cobrir.
 export const RESUMO_SALDOS = [
@@ -149,14 +150,20 @@ export function calcularResumoSaldos(contas, diasIso, periodos) {
   const chaves = ['liberadoCheque', ...RESUMO_SALDOS.map((r) => r.chave)];
   const resumo = Object.fromEntries(chaves.map((k) => [k, {}]));
   for (const iso of diasIso) {
-    const comSaldo = contas.filter((c) => c.saldos[iso] !== undefined && c.saldos[iso] !== null);
-    if (comSaldo.length === 0) continue;
+    const emBranco = (c) => c.saldos[iso] === undefined || c.saldos[iso] === null;
+    const comCheque = (c) => c.valor_cheque_especial > 0 && periodos.has(iso);
+    const entram = contas.filter((c) => !emBranco(c) || comCheque(c));
+    if (entram.length === 0) continue;
     const soma = { liberadoCheque: 0, liberado: 0, bloqueado: 0, limiteCheque: 0, aCobrir: 0 };
-    for (const conta of comSaldo) {
+    for (const conta of entram) {
+      if (emBranco(conta)) {
+        soma.limiteCheque += centavos(conta.valor_cheque_especial);
+        continue;
+      }
       const saldo = centavos(conta.saldos[iso]);
       const bloqueio = centavos(conta.bloqueios?.[iso] || 0);
       const limite = conta.valor_cheque_especial;
-      const restante = limite > 0 && periodos.has(iso) ? (saldo < 0 ? centavos(limite) + saldo : centavos(limite)) : 0;
+      const restante = comCheque(conta) ? (saldo < 0 ? centavos(limite) + saldo : centavos(limite)) : 0;
       if (conta.classificacao_libera_saldo === true) soma.liberado += Math.max(saldo - bloqueio, 0);
       if (conta.classificacao_libera_saldo === false) soma.bloqueado += saldo;
       else soma.bloqueado += bloqueio;
