@@ -153,7 +153,7 @@ function SeletorIcone({ item, definir }) {
 // Fixo não tem cálculo: no lugar da combobox vem o botão "Informar histórico" (alíquotas por mês —
 // HistoricoImpostoModal) e, à frente dele, a alíquota do histórico mais recente — por isso as flags
 // são montadas no componente (`abrirHistorico`, `aliquotaDe`).
-const montarFlags = (abrirHistorico, aliquotaDe) => [
+const montarFlags = (abrirHistorico, aliquotaDe, baseDe) => [
   {
     campo: 'icone',
     label: 'Ícone',
@@ -216,6 +216,14 @@ const montarFlags = (abrirHistorico, aliquotaDe) => [
           ) : (
             <span className="text-xs font-semibold tabular-nums text-gray-900">{formatarAliquota(aliquota)}</span>
           )}
+          {(() => {
+            const base = baseDe(item);
+            return (
+              <span className="truncate text-[11px] text-gray-500" title={base ? 'Base: só as linhas marcadas em Informar histórico' : 'Base: todas as linhas acima'}>
+                · {base ? `${base.length} ${base.length === 1 ? 'linha' : 'linhas'} na base` : 'todas acima'}
+              </span>
+            );
+          })()}
         </span>
       );
     },
@@ -231,12 +239,16 @@ const MascarasTab = forwardRef(function MascarasTab({ empresaId }, ref) {
   // Alíquota mais recente por máscara depois de mexer no histórico nesta tela — a da carga
   // (aliquota_vigente) vale até lá, sem precisar recarregar a árvore.
   const [aliquotasAlteradas, setAliquotasAlteradas] = useState({});
+  // Base do imposto salva nesta tela (ids ou null = todas acima) — a da carga vale até lá.
+  const [basesAlteradas, setBasesAlteradas] = useState({});
   const flags = useMemo(
     () =>
-      montarFlags(setHistoricoDe, (item) =>
-        item.id in aliquotasAlteradas ? aliquotasAlteradas[item.id] : (item.aliquota_vigente ?? null)
+      montarFlags(
+        setHistoricoDe,
+        (item) => (item.id in aliquotasAlteradas ? aliquotasAlteradas[item.id] : (item.aliquota_vigente ?? null)),
+        (item) => (item.id in basesAlteradas ? basesAlteradas[item.id] : (item.imposto_base ?? null))
       ),
-    [aliquotasAlteradas]
+    [aliquotasAlteradas, basesAlteradas]
   );
 
   return (
@@ -257,6 +269,7 @@ const MascarasTab = forwardRef(function MascarasTab({ empresaId }, ref) {
         onAlterado={(historico) =>
           setAliquotasAlteradas((atual) => ({ ...atual, [historicoDe.id]: historico[0]?.aliquota ?? null }))
         }
+        onBaseAlterada={(ids) => setBasesAlteradas((atual) => ({ ...atual, [historicoDe.id]: ids }))}
       />
     </>
   );

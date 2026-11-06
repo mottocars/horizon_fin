@@ -1,5 +1,5 @@
 const { CORES, borda, preencher, cabecalho, faixa, cabecalhoTabela, impressao, dataExcel, dataHoraExcel } = require('../../../utils/excelMarca');
-const { fimDoMes, vespera } = require('../../dre-demonstrativo/demonstrativo.service');
+const { fimDoMes, vespera, baseDoImposto } = require('../../dre-demonstrativo/demonstrativo.service');
 const { FMT, PRIMEIRA, aba, layout, tabela, rotuloCentro, rotuloMes, dataBr, dataHoraBr, moedaBr } = require('./comum');
 
 // Abas da PROJEÇÃO na exportação de auditoria da DRE (a projeção da coluna Projetado da aba DRE: a
@@ -271,6 +271,10 @@ function montar(d, LY) {
   const linhaPoc = new Map(); // `${ci}|${p}` -> linha
   const memoria = [];
   const nMasc = m.mascaras.length;
+  // Base do imposto fixo (a máscara de índice k): as linhas acima marcadas (sem marcação, todas acima).
+  const baseIds = (k) => baseDoImposto(m.mascaras, k).map((y) => y.id);
+  const textoBase = (x, k) =>
+    x.imposto_base ? `das linhas da base (${baseDoImposto(m.mascaras, k).map((y) => y.descricao).join(', ') || 'nenhuma acima'})` : 'das linhas acima';
   comMemoria.forEach((o, ci) => {
     const M = o.prep.motor;
     const id = o.orc.centro_id;
@@ -342,7 +346,7 @@ function montar(d, LY) {
     };
     const ms = o.orc.mensal;
     intervalos.forEach(([a, b], i) => {
-      let acima = 0;
+      const qMes = {};
       const idxFoto = ms.meses.indexOf(a.slice(0, 7));
       m.mascaras.forEach((x, k) => {
         const regra = regras.get(x.id);
@@ -365,23 +369,25 @@ function montar(d, LY) {
           x,
         };
         if (regra.tipo === 'SEM_CALCULO' || (regra.tipo === 'RET' && gravado === null)) {
-          memoria.push({ ...linha, regra: regra.tipo === 'RET' ? 'Sem cálculo: alguma linha acima não tem cálculo' : regra.texto, dif: 0 });
+          memoria.push({ ...linha, regra: regra.tipo === 'RET' ? 'Sem cálculo: alguma linha da base do imposto não tem cálculo' : regra.texto, dif: 0 });
           return;
         }
         if (regra.tipo === 'RET') {
           const h = d.aliquotaEm(x.id, a);
           const aliq = h ? h.aliquota : 0;
+          const acima = baseIds(k).reduce((t, id) => t + (qMes[id] || 0), 0);
           const q = (-acima * aliq) / 100;
           memoria.push({
             ...linha,
-            regra: `RET: −${String(aliq).replace('.', ',')}% × soma das linhas acima no mês${h ? ` (alíquota desde ${rotuloMes(h.inicio)})` : ' (sem alíquota vigente)'}`,
+            regra: `RET: −${String(aliq).replace('.', ',')}% × soma ${textoBase(x, k)} no mês${h ? ` (alíquota desde ${rotuloMes(h.inicio)})` : ' (sem alíquota vigente)'}`,
             l: acima,
+            baseIds: x.imposto_base ? baseIds(k) : null,
             nf: -aliq / 100,
             p: q,
             q,
             dif: arred2(q - num(gravado)),
           });
-          acima += q;
+          qMes[x.id] = q;
           return;
         }
         const antes = i === 0 ? pontos[0] : intervalos[i - 1][1];
@@ -407,7 +413,7 @@ function montar(d, LY) {
           s: (L - K) * Nf,
           dif: arred2(q - num(gravado)),
         });
-        acima += q;
+        qMes[x.id] = q;
       });
     });
   });
@@ -469,8 +475,11 @@ function montar(d, LY) {
         return g((n, l) => (ehConta(l) ? f(projetadoAte(l.regraObj, l.x, `$${cm('ate')}${n}`, centro(n)), l.v) : null));
       case 'l':
         return g((n, l) => {
-          if (l.regraObj.tipo === 'RET' && l.l !== undefined)
-            return f(`SUMIFS(${memFaixa('q')},${memFaixa('centro_id')},${cm('centro_id')}${n},${memFaixa('mes')},${cm('mes')}${n},${memFaixa('ordem')},"<"&${cm('ordem')}${n})`, l.l);
+          if (l.regraObj.tipo === 'RET' && l.l !== undefined) {
+            const crit = `${memFaixa('q')},${memFaixa('centro_id')},${cm('centro_id')}${n},${memFaixa('mes')},${cm('mes')}${n}`;
+            if (l.baseIds) return f(l.baseIds.length ? l.baseIds.map((id) => `SUMIFS(${crit},${memFaixa('mascara_id')},${id})`).join('+') : '0', l.l);
+            return f(`SUMIFS(${crit},${memFaixa('ordem')},"<"&${cm('ordem')}${n})`, l.l);
+          }
           if (!ehConta(l)) return null;
           return f(`${cm('u')}${n}+${cm('v')}${n}`, l.l);
         });

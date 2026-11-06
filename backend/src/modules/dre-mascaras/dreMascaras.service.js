@@ -7,7 +7,7 @@ const pool = require('../../config/db');
 // 2026-10-22-dre-mascaras-origem-calculo.sql). Totalizadora nunca tem nível 2 dentro: create,
 // update e reordenar recusam o que quebraria isso.
 
-const COLUNAS = 'id, parent_id, ordem, descricao, totalizadora, realiza_poc, tipo_poc, icone, origem, calculo';
+const COLUNAS = 'id, parent_id, ordem, descricao, totalizadora, realiza_poc, tipo_poc, icone, origem, calculo, imposto_base';
 
 // Cálculos que cada origem oferece — mesma lista da constraint dre_mascaras_calculo_valido e das
 // opções da tela (DreGerencial/MascarasTab.jsx). Imposto Fixo não tem cálculo: usa o histórico de
@@ -148,7 +148,9 @@ async function update(
               origem = CASE WHEN $9 THEN $8::varchar ELSE origem END,
               calculo = CASE WHEN $11 THEN $10::varchar
                              WHEN $9 AND $8::varchar IS DISTINCT FROM origem THEN NULL
-                             ELSE calculo END
+                             ELSE calculo END,
+              -- A base do imposto só existe na origem Imposto Fixo.
+              imposto_base = CASE WHEN $9 AND $8::varchar IS DISTINCT FROM 'IMPOSTO_FIXO' THEN NULL ELSE imposto_base END
         WHERE id = $1 AND empresa_id = $2
        RETURNING ${COLUNAS}`,
       [
@@ -224,7 +226,8 @@ async function reordenar(empresaId, estrutura) {
               realiza_poc = m.realiza_poc AND v.parent_id IS NOT NULL,
               tipo_poc = CASE WHEN v.parent_id IS NOT NULL THEN m.tipo_poc END,
               origem = CASE WHEN v.parent_id IS NOT NULL THEN m.origem END,
-              calculo = CASE WHEN v.parent_id IS NOT NULL THEN m.calculo END
+              calculo = CASE WHEN v.parent_id IS NOT NULL THEN m.calculo END,
+              imposto_base = CASE WHEN v.parent_id IS NOT NULL THEN m.imposto_base END
          FROM UNNEST($2::int[], $3::int[], $4::int[]) AS v(id, parent_id, ordem)
         WHERE m.id = v.id AND m.empresa_id = $1`,
       [empresaId, ids, linhas.map((l) => l.parentId), linhas.map((l) => l.ordem)]
@@ -287,6 +290,56 @@ async function createHistorico(empresaId, mascaraId, { inicio, aliquota }) {
   return listHistorico(empresaId, mascaraId);
 }
 
+// ------------------------------------------------------------- base do Imposto Fixo
+// Quais linhas de nível 2 acima do imposto formam a base dele (dre_mascaras.imposto_base — ver
+// 2026-11-06-dre-mascaras-imposto-base.sql). `opcoes`: as linhas de nível 2 acima dele na ordem da
+// DRE (grupo de nível 1, depois a ordem dentro dele), sem os outros impostos fixos — com `na_base`.
+// `todas`: base NULL (todas acima, inclusive as que forem criadas depois). null = máscara não é da empresa.
+async function getImpostoBase(empresaId, mascaraId, db = pool) {
+  const { rows } = await db.query(
+    `SELECT m.id, m.parent_id, m.descricao, m.origem, m.calculo, m.imposto_base, p.descricao AS grupo,
+            p.ordem AS ordem_grupo, m.ordem
+       FROM dre_mascaras m JOIN dre_mascaras p ON p.id = m.parent_id
+      WHERE m.empresa_id = $1
+      ORDER BY p.ordem, m.ordem, m.id`,
+    [empresaId]
+  );
+  const i = rows.findIndex((r) => r.id === Number(mascaraId));
+  if (i < 0) {
+    const { rows: existe } = await db.query('SELECT origem FROM dre_mascaras WHERE id = $1 AND empresa_id = $2', [mascaraId, empresaId]);
+    if (!existe[0]) return null;
+    throw erro(400, 'A base do imposto é só de máscara de nível 2 com origem Imposto Fixo.');
+  }
+  const imposto = rows[i];
+  const base = imposto.imposto_base ? new Set(imposto.imposto_base) : null;
+  const opcoes = rows
+    .slice(0, i)
+    .filter((r) => r.origem !== 'IMPOSTO_FIXO')
+    .map((r) => ({ id: r.id, descricao: r.descricao, grupo: r.grupo, origem: r.origem, calculo: r.calculo, na_base: base ? base.has(r.id) : true }));
+  // Marcadas que não estão mais acima (moveram pra baixo ou foram apagadas): não contam.
+  const foraDeOrdem = base ? [...base].filter((id) => !opcoes.some((o) => o.id === id)) : [];
+  return { mascara_id: imposto.id, origem: imposto.origem, todas: !base, opcoes, ignoradas: foraDeOrdem };
+}
+
+// Grava a base: `mascaraIds` = as linhas marcadas (todas as de cima marcadas = NULL, "todas acima").
+async function setImpostoBase(empresaId, mascaraId, mascaraIds) {
+  const atual = await getImpostoBase(empresaId, mascaraId);
+  if (!atual) return null;
+  if (atual.origem !== 'IMPOSTO_FIXO') throw erro(400, 'A base é só da origem Imposto Fixo.');
+  const validas = new Set(atual.opcoes.map((o) => o.id));
+  const ids = [...new Set(mascaraIds.map(Number))];
+  const invalida = ids.find((id) => !validas.has(id));
+  if (invalida) throw erro(400, 'Só entram na base linhas de nível 2 acima do imposto na DRE (e que não sejam outro imposto fixo).');
+  if (!ids.length) throw erro(400, 'Marque ao menos uma linha para a base do imposto.');
+  const todas = ids.length === validas.size;
+  await pool.query('UPDATE dre_mascaras SET imposto_base = $3 WHERE id = $1 AND empresa_id = $2', [
+    mascaraId,
+    empresaId,
+    todas ? null : atual.opcoes.filter((o) => ids.includes(o.id)).map((o) => o.id),
+  ]);
+  return getImpostoBase(empresaId, mascaraId);
+}
+
 // Apagar um histórico faz o anterior voltar a valer até o início do próximo (ou ficar vigente).
 async function removeHistorico(empresaId, mascaraId, historicoId) {
   const { rows } = await pool.query(
@@ -309,5 +362,7 @@ module.exports = {
   listHistorico,
   createHistorico,
   removeHistorico,
+  getImpostoBase,
+  setImpostoBase,
   CALCULOS_POR_ORIGEM,
 };

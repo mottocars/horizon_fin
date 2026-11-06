@@ -17,5 +17,7 @@ router.delete('/:empresaId/:id', controller.remove);
 router.get('/:empresaId/:id/historico', controller.listHistorico);
 router.post('/:empresaId/:id/historico', controller.createHistorico);
 router.delete('/:empresaId/:id/historico/:historicoId', controller.removeHistorico);
+router.get('/:empresaId/:id/imposto-base', controller.getImpostoBase);
+router.put('/:empresaId/:id/imposto-base', controller.setImpostoBase);
 
 module.exports = router;

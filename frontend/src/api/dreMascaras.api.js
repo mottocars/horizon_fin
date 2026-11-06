@@ -33,6 +33,16 @@ export function createHistoricoImposto(empresaId, mascaraId, { inicio, aliquota 
   return http.post(`/dre-mascaras/${empresaId}/${mascaraId}/historico`, { inicio, aliquota }).then((res) => res.data);
 }
 
+// Base do Imposto Fixo: { todas, opcoes: [{ id, descricao, grupo, na_base }], ignoradas } — as linhas de
+// nível 2 acima do imposto e quais entram. Gravar: os ids marcados (todos marcados = "todas acima").
+export function getBaseImposto(empresaId, mascaraId) {
+  return http.get(`/dre-mascaras/${empresaId}/${mascaraId}/imposto-base`).then((res) => res.data);
+}
+
+export function salvarBaseImposto(empresaId, mascaraId, mascaraIds) {
+  return http.put(`/dre-mascaras/${empresaId}/${mascaraId}/imposto-base`, { mascaraIds }).then((res) => res.data);
+}
+
 export function removeHistoricoImposto(empresaId, mascaraId, historicoId) {
   return http.delete(`/dre-mascaras/${empresaId}/${mascaraId}/historico/${historicoId}`).then((res) => res.data);
 }

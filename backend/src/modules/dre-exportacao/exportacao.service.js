@@ -33,7 +33,17 @@ const BASE_RECEITA = {
 //           distratada, fração distratada, ou nenhum (1);
 //   base  — de onde vem a base: Financeiro (máscaras `mascaras`, com `sinal`), Unidades ou Correções.
 function regraDa(x, m) {
-  if (x.origem === 'IMPOSTO_FIXO') return { tipo: 'RET', curto: 'Imposto fixo', texto: '−alíquota × soma das linhas acima dela na DRE, no mês' };
+  if (x.origem === 'IMPOSTO_FIXO') {
+    // Base: as linhas marcadas em "Informar histórico" (sem marcação, todas as de cima).
+    const base = x.imposto_base ? demonstrativo.baseDoImposto(m.mascaras, m.mascaras.indexOf(x)) : null;
+    return {
+      tipo: 'RET',
+      curto: x.imposto_base ? 'Imposto fixo (base escolhida)' : 'Imposto fixo',
+      texto: base
+        ? `−alíquota × soma das linhas da base, no mês: ${base.map((y) => y.descricao).join(', ') || 'nenhuma linha acima'}`
+        : '−alíquota × soma das linhas acima dela na DRE, no mês',
+    };
+  }
   if (!m.calculavel(x)) {
     const motivo =
       CALCULOS_RECEITA.has(x.calculo) && x.realiza_poc && x.tipo_poc === 'RECEITA'

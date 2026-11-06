@@ -3455,9 +3455,12 @@ CREATE TABLE dre_mascaras (
     -- Origem (nível 2) e Cálculo (um dos da origem) — ver 2026-10-22-dre-mascaras-origem-calculo.sql.
     origem        VARCHAR(30),
     calculo       VARCHAR(30),
+    -- Imposto Fixo: linhas de nível 2 da base (NULL = todas acima) — ver 2026-11-06-dre-mascaras-imposto-base.sql.
+    imposto_base  INTEGER[],
     criado_em     TIMESTAMP DEFAULT NOW(),
     atualizado_em TIMESTAMP DEFAULT NOW(),
     CHECK (parent_id IS NULL OR parent_id <> id),
+    CONSTRAINT dre_mascaras_imposto_base_so_imposto CHECK (imposto_base IS NULL OR (origem = 'IMPOSTO_FIXO' AND cardinality(imposto_base) > 0)),
     CONSTRAINT dre_mascaras_totalizadora_so_nivel_1 CHECK (parent_id IS NULL OR NOT totalizadora),
     CONSTRAINT dre_mascaras_realiza_poc_so_nivel_2 CHECK (parent_id IS NOT NULL OR NOT realiza_poc),
     CONSTRAINT dre_mascaras_tipo_poc_valido CHECK (tipo_poc IS NULL OR (realiza_poc AND tipo_poc IN ('RECEITA', 'DESPESA'))),

@@ -55,11 +55,23 @@ const { ORDEM: ORDEM_CENTROS } = require('../dre-centros/dreCentros.service');
 // deles é o consolidado — e os meses dele, mais o mês anterior ao período pra AH % do primeiro) e
 // `meses` (o consolidado de cada mês).
 //
-// Imposto Fixo (RET): −alíquota × tudo o que está acima dele na DRE (as linhas de nível 2 antes dele,
-// na ordem da aba Máscaras), mês a mês, cada mês com a alíquota do histórico vigente nele (a de
+// Imposto Fixo (RET): −alíquota × a BASE dele — as linhas de nível 2 acima dele na DRE (na ordem da aba
+// Máscaras) marcadas em "Informar histórico" (dre_mascaras.imposto_base; sem marcação, todas as de
+// cima — ver baseDoImposto), mês a mês, cada mês com a alíquota do histórico vigente nele (a de
 // início mais recente até o mês; antes da primeira, 0). O período é quebrado nos meses (o primeiro e
 // o último podem ser parciais) e os valores de cada mês são os reconhecidos naquele mês. Se alguma
 // linha acima ainda não tem cálculo, o imposto também fica null.
+
+// As linhas da base de um Imposto Fixo (a máscara `mascaras[i]`): as de nível 2 acima dele na ordem da
+// DRE; com `imposto_base` gravada, só as marcadas (uma marcada que foi movida pra baixo não conta).
+// Mesma regra na exportação de auditoria, no MCP e no simulador do dashboard (painelDre/modelo).
+function baseDoImposto(mascaras, i) {
+  const acima = mascaras.slice(0, i);
+  const base = mascaras[i]?.imposto_base;
+  if (!base) return acima;
+  const ids = new Set(base.map(Number));
+  return acima.filter((x) => ids.has(x.id));
+}
 
 const CALCULOS_RECEITA = new Set(['VALOR_VENDAS', 'RECEITA_PERMUTA', 'CORRECAO_MONETARIA', 'ESTORNO_VENDAS', 'RECEITA_DISTRATO']);
 
@@ -204,7 +216,7 @@ async function carregar(empresaId, { ate, ateOrcamento = ate, filtro = [], soObr
     ),
     // Nível 2 na ordem da DRE (grupo de nível 1, depois a ordem dentro dele) — "acima" do imposto.
     pool.query(
-      `SELECT m.id, m.parent_id, m.descricao, m.realiza_poc, m.tipo_poc, m.origem, m.calculo
+      `SELECT m.id, m.parent_id, m.descricao, m.realiza_poc, m.tipo_poc, m.origem, m.calculo, m.imposto_base
          FROM dre_mascaras m JOIN dre_mascaras p ON p.id = m.parent_id
         WHERE m.empresa_id = $1
         ORDER BY p.ordem, m.ordem`,
@@ -356,7 +368,7 @@ async function calcular(empresaId, { de, ate, centros: filtro = [] }, motorPront
     const valores = {};
     mascaras.forEach((m, i) => {
       if (m.origem === 'IMPOSTO_FIXO') {
-        const acima = mascaras.slice(0, i);
+        const acima = baseDoImposto(mascaras, i);
         if (!acima.length || !acima.every(calculavel)) {
           valores[m.id] = null;
           return;
@@ -435,4 +447,4 @@ async function calcular(empresaId, { de, ate, centros: filtro = [] }, motorPront
   };
 }
 
-module.exports = { calcular, motor, carregar, construir, regras, meses, vespera, fimDoMes, hojeIso, CALCULOS_RECEITA };
+module.exports = { calcular, motor, carregar, construir, regras, meses, vespera, fimDoMes, hojeIso, CALCULOS_RECEITA, baseDoImposto };

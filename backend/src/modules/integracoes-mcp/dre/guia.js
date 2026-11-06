@@ -82,7 +82,7 @@ const guia = {
       '- **Estorno de custo**: −(custos do grupo do CIV acumulados) × fração distratada (até 100%): devolve o custo das unidades distratadas.',
       '- **Outras linhas com POC de Despesa** (comissão, legalização…): lançado acumulado × (POC de Despesa − fração distratada) — o mesmo que o CIV líquido do estorno.',
       '- **Linhas sem POC**: o valor lançado no período (emissão; no extrato, a data do movimento). Receita com distrato = recebido do cliente − devolvido, na data do distrato.',
-      '- **RET / imposto fixo**: −alíquota vigente no mês × soma de todas as linhas acima dele na DRE, centro a centro, mês a mês.',
+      '- **RET / imposto fixo**: −alíquota vigente no mês × soma da BASE do imposto, centro a centro, mês a mês. A base são as linhas de nível 2 acima dele marcadas em Máscaras › Informar histórico; sem marcação, todas as linhas acima. A regra de cada imposto desta empresa (com a base) está na lista de linhas abaixo.',
       '- **Grupo** = soma das linhas dele; **totalizadora** = soma de todas as linhas acima. Com alguma linha sem cálculo, aparece traço.',
       `- **AV %** (avaliação vertical): valor ÷ |${d.resultado.avaliacao_vertical?.descricao || 'linha base não configurada'}| (aba Configurações), da linha base para baixo. **AH %** (horizontal, na visão mês a mês): (mês − mês anterior) ÷ |mês anterior|; positivo = melhor para o resultado.`,
       '- **Sinal**: receitas positivas, custos e despesas negativos.',

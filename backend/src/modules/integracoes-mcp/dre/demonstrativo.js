@@ -255,7 +255,8 @@ const explicar = {
     if (regra.tipo === 'RET') {
       const ordem = m.mascaras;
       const i = ordem.findIndex((y) => y.id === x.id);
-      const acima = ordem.slice(0, i);
+      // A base do imposto: as linhas marcadas em "Informar histórico" (sem marcação, todas as de cima).
+      const acima = demonstrativo.baseDoImposto(ordem, i);
       const mesesRet = R.meses.map((mm) => {
         const baseMes = acima.reduce((t, y) => t + (mm.valores[y.id] ?? 0), 0);
         const h = d.aliquotaEm(x.id, `${mm.mes}-01`);
@@ -263,7 +264,8 @@ const explicar = {
       });
       return {
         ...out,
-        formula: `${x.descricao} = −alíquota × soma das linhas acima (${acima.map((y) => y.descricao).join(', ')}), mês a mês e centro a centro.`,
+        formula: `${x.descricao} = −alíquota × soma das linhas ${x.imposto_base ? 'da base escolhida' : 'acima'} (${acima.map((y) => y.descricao).join(', ')}), mês a mês e centro a centro.`,
+        base_do_imposto: x.imposto_base ? 'escolhida em Máscaras › Informar histórico (só as linhas listadas)' : 'todas as linhas de nível 2 acima (nenhuma escolhida em Máscaras › Informar histórico)',
         meses: mesesRet,
         por_centro: R.por_centro.map((c) => ({ centro: rotulo(c), valor: r2(c.valores[x.id]) })).filter((c) => c.valor),
         observacao: 'Como a alíquota é aplicada centro a centro e mês a mês, a soma bate com o total; meses de prejuízo nas linhas acima geram imposto positivo (devolução) naquele centro.',

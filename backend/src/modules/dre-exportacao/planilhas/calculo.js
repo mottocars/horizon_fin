@@ -1,5 +1,5 @@
 const { CORES } = require('../../../utils/excelMarca');
-const { fimDoMes } = require('../../dre-demonstrativo/demonstrativo.service');
+const { fimDoMes, baseDoImposto } = require('../../dre-demonstrativo/demonstrativo.service');
 const { aba, layout, tabela, rotuloCentro, rotuloMes, dataBr } = require('./comum');
 
 // Abas "Memória de Cálculo" e "POC" da exportação de auditoria da DRE — a conta da DRE refeita em
@@ -142,9 +142,13 @@ function montar(d, LY) {
     if (regra.fator === 'DISTRATADA') return m.fracaoDistratada(id, D);
     return 1;
   };
+  // Base do imposto fixo (a máscara de índice k): as linhas acima marcadas (sem marcação, todas acima).
+  const baseIds = (k) => baseDoImposto(m.mascaras, k).map((y) => y.id);
+  const textoBase = (x, k) =>
+    x.imposto_base ? `das linhas da base (${baseDoImposto(m.mascaras, k).map((y) => y.descricao).join(', ') || 'nenhuma acima'})` : 'das linhas acima';
   m.obras.forEach((c, ci) => {
     intervalos.forEach(([a, b], i) => {
-      let acima = 0; // soma das linhas acima no mês (base do RET)
+      const qMes = {}; // valor de cada linha no mês (a base do RET soma as da base dele)
       const sistemaMes = porCentro.get(c.id)?.meses[i]?.valores || {};
       m.mascaras.forEach((x, k) => {
         const regra = regras.get(x.id);
@@ -168,23 +172,25 @@ function montar(d, LY) {
           x,
         };
         if (regra.tipo === 'SEM_CALCULO' || (regra.tipo === 'RET' && sistemaMes[x.id] == null)) {
-          memoria.push({ ...base, regra: regra.tipo === 'RET' ? 'Sem cálculo: alguma linha acima não tem cálculo' : regra.texto, u: 0 });
+          memoria.push({ ...base, regra: regra.tipo === 'RET' ? 'Sem cálculo: alguma linha da base do imposto não tem cálculo' : regra.texto, u: 0 });
           return;
         }
         if (regra.tipo === 'RET') {
           const h = d.aliquotaEm(x.id, `${a.slice(0, 7)}-01`);
           const aliq = h ? h.aliquota : 0;
+          const acima = baseIds(k).reduce((t, id) => t + (qMes[id] || 0), 0);
           const q = (-acima * aliq) / 100;
           memoria.push({
             ...base,
-            regra: `RET: −${String(aliq).replace('.', ',')}% × soma das linhas acima no mês${h ? ` (alíquota desde ${rotuloMes(h.inicio)})` : ' (sem alíquota vigente)'}`,
+            regra: `RET: −${String(aliq).replace('.', ',')}% × soma ${textoBase(x, k)} no mês${h ? ` (alíquota desde ${rotuloMes(h.inicio)})` : ' (sem alíquota vigente)'}`,
             l: acima,
+            baseIds: x.imposto_base ? baseIds(k) : null,
             nf: -aliq / 100,
             p: q,
             q,
             u: Math.round((q - (base.t ?? 0)) * 100) / 100,
           });
-          acima += q;
+          qMes[x.id] = q;
           return;
         }
         const antes = i === 0 ? pontos[0] : intervalos[i - 1][1];
@@ -207,7 +213,7 @@ function montar(d, LY) {
           s: (L - K) * N,
           u: Math.round((q - (base.t ?? 0)) * 100) / 100,
         });
-        acima += q;
+        qMes[x.id] = q;
       });
     });
   });
@@ -247,8 +253,15 @@ function montar(d, LY) {
         });
       case 'l':
         return g((n, l) => {
-          if (l.regraObj.tipo === 'RET' && l.l !== undefined)
+          if (l.regraObj.tipo === 'RET' && l.l !== undefined) {
+            // Base marcada: soma só as linhas dela no mês; sem marcação, todas as de cima (ordem menor).
+            if (l.baseIds)
+              return f(
+                l.baseIds.length ? l.baseIds.map((id) => `SUMIFS(${memFaixa('q')},${memFaixa('centro_id')},A${n},${memFaixa('mes')},C${n},${memFaixa('mascara_id')},${id})`).join('+') : '0',
+                l.l
+              );
             return f(`SUMIFS(${memFaixa('q')},${memFaixa('centro_id')},A${n},${memFaixa('mes')},C${n},${memFaixa('ordem')},"<"&F${n})`, l.l);
+          }
           if (!ehConta(l)) return null;
           return f(somaBase(l.regraObj, l.x, `$E${n}`).replace(/\{n\}/g, n), l.l);
         });

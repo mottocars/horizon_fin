@@ -4,7 +4,7 @@ const calculo = require('../../dre-projecoes/calculo');
 const exportacao = require('../../dre-exportacao/exportacao.service');
 const dreMascaras = require('../../dre-mascaras/dreMascaras.service');
 const planoContas = require('../../dre-plano-contas/drePlanoContas.service');
-const { fimDoMes, vespera, hojeIso } = require('../../dre-demonstrativo/demonstrativo.service');
+const { fimDoMes, vespera, hojeIso, baseDoImposto } = require('../../dre-demonstrativo/demonstrativo.service');
 const { ferramenta } = require('../dfc/tools/comum');
 const { contaDaLinha, acumulado, NOME_FATOR } = require('./conta');
 const { completar, ordemLinhas } = require('./demonstrativo');
@@ -526,10 +526,11 @@ const explicarTool = {
       if (regra?.tipo === 'RET') {
         const ordem = M.motor.mascaras;
         const iR = ordem.findIndex((y) => y.id === x.id);
-        item.formula = `−alíquota vigente × soma das linhas acima (${ordem.slice(0, iR).map((y) => y.descricao).join(', ')}), mês a mês`;
+        const base = baseDoImposto(ordem, iR);
+        item.formula = `−alíquota vigente × soma das linhas ${mx.imposto_base ? 'da base escolhida' : 'acima'} (${base.map((y) => y.descricao).join(', ')}), mês a mês`;
         item.meses_detalhe = mesesProj.map((mes) => {
           const idx = o.mensal.meses.indexOf(mes);
-          const baseMes = ordem.slice(0, iR).reduce((t, y) => t + num(o.mensal.valores[y.id]?.[idx]), 0);
+          const baseMes = base.reduce((t, y) => t + num(o.mensal.valores[y.id]?.[idx]), 0);
           const h = M.aliquotaEm(x.id, `${mes}-01`);
           return { mes: rotMes(mes), base_linhas_acima: r2(baseMes), aliquota_pct: h ? h.aliquota : 0, valor: r2(o.mensal.valores[x.id]?.[idx]) };
         });

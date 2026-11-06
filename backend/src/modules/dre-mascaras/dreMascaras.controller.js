@@ -166,4 +166,36 @@ async function removeHistorico(req, res, next) {
   }
 }
 
-module.exports = { list, create, update, remove, reordenar, listHistorico, createHistorico, removeHistorico };
+// Base do Imposto Fixo: quais linhas de nível 2 acima dele entram (GET mostra as opções; PUT grava).
+const baseSchema = z.object({
+  mascaraIds: z.array(z.coerce.number().int().positive()).min(1, 'Marque ao menos uma linha para a base do imposto.'),
+});
+
+async function getImpostoBase(req, res, next) {
+  try {
+    const empresaId = empresaIdSchema.parse(req.params.empresaId);
+    const id = idSchema.parse(req.params.id);
+    const base = await service.getImpostoBase(empresaId, id);
+    if (!base) throw erro(404, 'Máscara não encontrada.');
+    res.json(base);
+  } catch (err) {
+    if (err.issues) return next(erro(400, err.issues[0].message));
+    return next(err);
+  }
+}
+
+async function setImpostoBase(req, res, next) {
+  try {
+    const empresaId = empresaIdSchema.parse(req.params.empresaId);
+    const id = idSchema.parse(req.params.id);
+    const { mascaraIds } = baseSchema.parse(req.body);
+    const base = await service.setImpostoBase(empresaId, id, mascaraIds);
+    if (!base) throw erro(404, 'Máscara não encontrada.');
+    res.json(base);
+  } catch (err) {
+    if (err.issues) return next(erro(400, err.issues[0].message));
+    return next(err);
+  }
+}
+
+module.exports = { list, create, update, remove, reordenar, listHistorico, createHistorico, removeHistorico, getImpostoBase, setImpostoBase };

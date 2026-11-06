@@ -459,7 +459,7 @@ export function deCada100(F) {
 //   estoque %   — vender agora parte do estoque (valor estimado): receita × POC de hoje e o custo dessa
 //                 fração no CIV;
 //   despesas %  — despesas sem POC entre o Lucro Bruto e o EBITDA (administrativas, comerciais…).
-// O imposto fixo (RET) acompanha pela alíquota efetiva do período sobre o que está acima dele.
+// O imposto fixo (RET) acompanha pela alíquota efetiva do período sobre a base dele (as linhas escolhidas).
 export const PRESETS = {
   base: { label: 'Realizado', vendas: 0, avanco: 0, orcamento: 0, estoque: 0, despesas: 0 },
   cons: { label: 'Conservador', vendas: -10, avanco: 0, orcamento: 2, estoque: 0, despesas: 5 },
@@ -468,24 +468,36 @@ export const PRESETS = {
 };
 export const presetDe = (p) => Object.keys(PRESETS).find((k) => ['vendas', 'avanco', 'orcamento', 'estoque', 'despesas'].every((c) => PRESETS[k][c] === p[c])) || null;
 
-// Alíquota efetiva de cada imposto fixo no período: imposto ÷ tudo o que está acima dele.
+// As linhas da base de um imposto fixo (ordem[i]): as de nível 2 acima dele; com a base escolhida em
+// Máscaras › Informar histórico (`imposto_base`), só as marcadas — a regra do motor
+// (demonstrativo.service.js::baseDoImposto).
+function baseDoImposto(ordem, i) {
+  const acima = ordem.slice(0, i);
+  const base = ordem[i]?.imposto_base;
+  if (!base) return acima;
+  const ids = new Set(base.map(Number));
+  return acima.filter((x) => ids.has(x.id));
+}
+
+// Alíquota efetiva de cada imposto fixo no período: imposto ÷ a base dele.
 function aliquotasEfetivas(D) {
   const ordem = D.arvore.filter((g) => !g.totalizadora).flatMap((g) => g.filhos);
   const out = [];
   ordem.forEach((f, i) => {
     if (f.origem !== 'IMPOSTO_FIXO') return;
-    const acima = ordem.slice(0, i).reduce((s, x) => s + (D.atual.valores[x.id] ?? 0), 0);
-    out.push({ id: f.id, indice: i, taxa: acima ? (D.atual.valores[f.id] ?? 0) / acima : 0 });
+    const base = baseDoImposto(ordem, i);
+    const acima = base.reduce((s, x) => s + (D.atual.valores[x.id] ?? 0), 0);
+    out.push({ id: f.id, indice: i, base: base.map((x) => x.id), taxa: acima ? (D.atual.valores[f.id] ?? 0) / acima : 0 });
   });
   return { ordem, impostos: out };
 }
 
 // Δ por máscara de uma alavanca (sem o imposto) → completa com o imposto fixo.
 function comImposto(D, delta) {
-  const { ordem, impostos } = D.rates;
+  const { impostos } = D.rates;
   const out = { ...delta };
   impostos.forEach((imp) => {
-    const acima = ordem.slice(0, imp.indice).reduce((s, f) => s + (out[f.id] ?? 0), 0);
+    const acima = imp.base.reduce((s, id) => s + (out[id] ?? 0), 0);
     out[imp.id] = (out[imp.id] ?? 0) + imp.taxa * acima;
   });
   return out;
