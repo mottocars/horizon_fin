@@ -1,5 +1,5 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
-import { BookOpen, CalendarRange, Download, Filter, LayoutGrid, Loader2, Table2, Workflow } from 'lucide-react';
+import { BookOpen, CalendarRange, Download, Filter, LayoutGrid, Loader2, Table2 } from 'lucide-react';
 import { getDetalhamentoPainel } from '../../../../api/dashboards.api';
 import CabecalhoDashboard from '../../CabecalhoDashboard';
 import CampoPeriodo from '../fluxo/CampoPeriodo';
@@ -12,19 +12,19 @@ import '../aging/aging.css';
 import './detalhamento.css';
 import { escopo, periodoPadrao, preparar, titulo } from './modelo';
 import { exportarDetalhamento } from './exportar';
-import { Detalhamento, FluxoDinheiro, Grafico, Resumo } from './secoes';
+import { Detalhamento, Grafico, Resumo } from './secoes';
 import { ABAS_SUMARIO } from './sumarioTexto';
 
 // Dashboard Econômico Financeiro › Detalhamento Financeiro, no layout do Aging List: barra (Empresa, Início e
 // Fim — padrão o ano atual inteiro — e Centro de custo), o resumo (entradas, saídas e resultado: realizado,
-// em aberto e total), o gráfico mês a mês, o Sankey de onde veio e para onde foi cada real e o detalhamento
+// em aberto e total), o gráfico mês a mês do realizado, o do em aberto e o detalhamento
 // por centro de custo, plano de contas e cliente/fornecedor até o lançamento, com as entradas e as saídas
 // lado a lado. Dados de /dashboards/economico-financeiro/detalhamento — o realizado do extrato das contas com
 // "Projeta DFC" (mesma base do DFC) e o em aberto do Aging List —, recalculados no navegador por
 // detalhamento/modelo.js; recarrega sozinho a cada 30 minutos com a aba visível.
 
 const MIN_RECARGA = 30;
-const ICONES_SUMARIO = { base: Filter, resumo: LayoutGrid, grafico: CalendarRange, sankey: Workflow, detalhamento: Table2 };
+const ICONES_SUMARIO = { base: Filter, resumo: LayoutGrid, grafico: CalendarRange, detalhamento: Table2 };
 const hojeLocal = () => {
   const d = new Date();
   return `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}-${String(d.getDate()).padStart(2, '0')}`;
@@ -170,8 +170,8 @@ export default function DetalhamentoPainel({ dashboard, tituloTela, empresaId, o
               )}
               <Resumo E={E} />
               <div className="grid">
-                <Grafico E={E} />
-                <FluxoDinheiro E={E} />
+                <Grafico E={E} tipo="R" />
+                <Grafico E={E} tipo="A" />
                 <Detalhamento E={E} />
               </div>
             </>

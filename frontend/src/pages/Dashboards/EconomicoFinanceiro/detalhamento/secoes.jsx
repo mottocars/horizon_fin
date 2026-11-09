@@ -2,7 +2,6 @@ import { Fragment, useEffect, useMemo, useState } from 'react';
 import { ArrowDown, ChevronDown, ChevronRight, Maximize2, Minimize2, Search } from 'lucide-react';
 import { AjudaSecao } from '../fluxo/secoes';
 import { COR } from '../fluxo/ganchos';
-import { Sankey, coresDestinos } from '../dre/graficos';
 import { COR_ABERTO, MensalGrafico } from './graficos';
 import {
   DIMENSOES,
@@ -10,12 +9,10 @@ import {
   arvore,
   brl,
   codigoPlano,
-  deCada100,
   dm,
   dma,
   eixo,
   filtrarBusca,
-  fluxoDoDinheiro,
   itensDe,
   lbl,
   mensal,
@@ -119,143 +116,84 @@ export function Resumo({ E }) {
   );
 }
 
-// ─── Mês a mês ───────────────────────────────────────────────────────────────────────────────────
-export function Grafico({ E }) {
+// ─── Mês a mês: um gráfico do realizado e outro do em aberto ─────────────────────────────────────
+// `tipo`: 'R' (realizado — data do lançamento) ou 'A' (em aberto — mês do vencimento).
+const GRAFICOS = {
+  R: { titulo: 'Realizado mês a mês', cores: [COR.entrada, COR.saida], sufixo: 'realizadas', vazio: 'Nada realizado no período.' },
+  A: { titulo: 'Em aberto mês a mês', cores: [COR_ABERTO.entrada, COR_ABERTO.saida], sufixo: 'em aberto', vazio: 'Nada em aberto no período.' },
+};
+export function Grafico({ E, tipo }) {
   const [verTabela, setVerTabela] = useState(false);
   const meses = useMemo(() => mensal(E), [E]);
+  const G = GRAFICOS[tipo];
+  const [ke, ks, kr, ka] = [`e${tipo}`, `s${tipo}`, `res${tipo}`, `acum${tipo}`];
   const tot = (k) => soma(meses.map((m) => m[k]));
+  const vazio = !meses.some((m) => tem(m[ke]) || tem(m[ks]));
   return (
-    <section className="panel c12" aria-labelledby="h-mes">
+    <section className="panel c12" aria-labelledby={`h-mes-${tipo}`}>
       <div className="ph">
-        <h2 id="h-mes">
-          Entradas, saídas e resultado mês a mês
+        <h2 id={`h-mes-${tipo}`}>
+          {G.titulo}
           <AjudaSecao aba="grafico" rotulo="Mês a mês" />
         </h2>
       </div>
-      <div className="legend">
-        <span>
-          <i className="box" style={{ background: COR.entrada }} />
-          Entradas realizadas
-        </span>
-        <span>
-          <i className="box" style={{ background: COR_ABERTO.entrada }} />
-          Entradas em aberto
-        </span>
-        <span>
-          <i className="box" style={{ background: COR.saida }} />
-          Saídas realizadas
-        </span>
-        <span>
-          <i className="box" style={{ background: COR_ABERTO.saida }} />
-          Saídas em aberto
-        </span>
-        <span>
-          <i style={{ borderColor: COR.ink }} />
-          Resultado do mês
-        </span>
-      </div>
-      <MensalGrafico meses={meses} />
-      <div>
-        <button type="button" className="btn ghost" onClick={() => setVerTabela((v) => !v)} aria-expanded={verTabela}>
-          {verTabela ? 'Esconder a tabela' : 'Ver a tabela'}
-        </button>
-      </div>
-      {verTabela && (
-        <div className="tbl">
-          <table className="tab">
-            <thead>
-              <tr>
-                <th>Mês</th>
-                <th className="n">Entradas realizadas</th>
-                <th className="n">Entradas em aberto</th>
-                <th className="n">Saídas realizadas</th>
-                <th className="n">Saídas em aberto</th>
-                <th className="n">Resultado</th>
-                <th className="n">Acumulado</th>
-              </tr>
-            </thead>
-            <tbody>
-              {meses.map((m) => (
-                <tr key={m.mes} className={m.atual ? 'sel' : ''}>
-                  <td>{lbl(m.mes)}</td>
-                  <td className="n">{tem(m.eR) ? brl(m.eR) : '–'}</td>
-                  <td className="n">{tem(m.eA) ? brl(m.eA) : '–'}</td>
-                  <td className="n">{tem(m.sR) ? brl(m.sR) : '–'}</td>
-                  <td className="n">{tem(m.sA) ? brl(m.sA) : '–'}</td>
-                  <td className={`n ${m.res >= 0 ? 'pos' : 'neg'}`}>{brl(m.res, true)}</td>
-                  <td className={`n ${m.acum >= 0 ? '' : 'neg'}`}>{brl(m.acum, true)}</td>
-                </tr>
-              ))}
-            </tbody>
-            <tfoot>
-              <tr>
-                <td>Total</td>
-                <td className="n">{brl(tot('eR'))}</td>
-                <td className="n">{brl(tot('eA'))}</td>
-                <td className="n">{brl(tot('sR'))}</td>
-                <td className="n">{brl(tot('sA'))}</td>
-                <td className={`n ${tot('res') >= 0 ? 'pos' : 'neg'}`}>{brl(tot('res'), true)}</td>
-                <td />
-              </tr>
-            </tfoot>
-          </table>
-        </div>
-      )}
-    </section>
-  );
-}
-
-// ─── De onde veio e para onde foi cada real (Sankey) ─────────────────────────────────────────────
-const VISOES = [
-  ['R', 'Realizado'],
-  ['A', 'Em aberto'],
-  ['T', 'Total'],
-];
-export function FluxoDinheiro({ E }) {
-  const [tipo, setTipo] = useState('R');
-  const F = useMemo(() => fluxoDoDinheiro(E, tipo), [E, tipo]);
-  const cores = useMemo(() => coresDestinos(F), [F]);
-  const cem = deCada100(F);
-  return (
-    <section className="panel c12" aria-labelledby="h-sankey">
-      <div className="ph">
-        <h2 id="h-sankey">
-          De onde veio e para onde foi cada real
-          <AjudaSecao aba="sankey" rotulo="De onde veio e para onde foi cada real" />
-        </h2>
-        <Seg rotulo="Mostrar" oculto opcoes={VISOES} valor={tipo} onChange={setTipo} />
-      </div>
-      {!F ? (
-        <div className="empty">{tipo === 'R' && !E.B.contas.length ? 'Nenhuma conta com "Projeta DFC" nesta empresa: não há realizado.' : 'Nada neste período.'}</div>
+      {vazio ? (
+        <div className="empty">{tipo === 'R' && !E.B.contas.length ? 'Nenhuma conta com "Projeta DFC" nesta empresa: não há realizado.' : G.vazio}</div>
       ) : (
         <>
-          <Sankey F={F} />
-          <p className="note">
-            À esquerda, as máscaras do DFC que trouxeram dinheiro; à direita, as que consumiram (com as contas do plano de contas que mais pesaram) e o que sobrou. Pelo
-            líquido de cada máscara, sem a movimentação entre contas.
-          </p>
-          {cem.length > 0 && (
-            <div className="cem" aria-label="De cada R$ 100 que entraram">
-              <span className="cem-rot">De cada R$ 100 que entraram</span>
-              <div className="cem-barra">
-                {cem.map((c) => (
-                  <div key={c.id} style={{ flex: Math.max(0.0001, c.valor), background: cores.get(c.id) }} title={`${c.rotulo}: R$ ${c.valor.toFixed(2).replace('.', ',')}`} />
-                ))}
-              </div>
-              <div className="cem-itens">
-                {cem.map((c) => (
-                  <span key={c.id} className={c.tipo === 'lucro' ? 'lucro' : ''}>
-                    <i style={{ background: cores.get(c.id) }} />
-                    {c.rotulo} <b>R$ {c.valor.toFixed(2).replace('.', ',')}</b>
-                  </span>
-                ))}
-                {F.resultado < -0.5 && F.totalEntradas > 0 && (
-                  <span className="prejuizo">
-                    <i style={{ background: COR.crit }} />
-                    faltaram <b>R$ {((-F.resultado / F.totalEntradas) * 100).toFixed(2).replace('.', ',')}</b> — saíram do caixa que já existia
-                  </span>
-                )}
-              </div>
+          <div className="legend">
+            <span>
+              <i className="box" style={{ background: G.cores[0] }} />
+              Entradas {G.sufixo}
+            </span>
+            <span>
+              <i className="box" style={{ background: G.cores[1] }} />
+              Saídas {G.sufixo}
+            </span>
+            <span>
+              <i style={{ borderColor: COR.ink }} />
+              Resultado do mês
+            </span>
+          </div>
+          <MensalGrafico meses={meses} tipo={tipo} cores={G.cores} />
+          <div>
+            <button type="button" className="btn ghost" onClick={() => setVerTabela((v) => !v)} aria-expanded={verTabela}>
+              {verTabela ? 'Esconder a tabela' : 'Ver a tabela'}
+            </button>
+          </div>
+          {verTabela && (
+            <div className="tbl">
+              <table className="tab">
+                <thead>
+                  <tr>
+                    <th>Mês</th>
+                    <th className="n">Entradas</th>
+                    <th className="n">Saídas</th>
+                    <th className="n">Resultado</th>
+                    <th className="n">Acumulado</th>
+                  </tr>
+                </thead>
+                <tbody>
+                  {meses.map((m) => (
+                    <tr key={m.mes} className={m.atual ? 'sel' : ''}>
+                      <td>{lbl(m.mes)}</td>
+                      <td className="n">{tem(m[ke]) ? brl(m[ke]) : '–'}</td>
+                      <td className="n">{tem(m[ks]) ? brl(m[ks]) : '–'}</td>
+                      <td className={`n ${m[kr] >= 0 ? 'pos' : 'neg'}`}>{tem(m[kr]) ? brl(m[kr], true) : '–'}</td>
+                      <td className={`n ${m[ka] >= 0 ? '' : 'neg'}`}>{brl(m[ka], true)}</td>
+                    </tr>
+                  ))}
+                </tbody>
+                <tfoot>
+                  <tr>
+                    <td>Total</td>
+                    <td className="n">{brl(tot(ke))}</td>
+                    <td className="n">{brl(tot(ks))}</td>
+                    <td className={`n ${tot(kr) >= 0 ? 'pos' : 'neg'}`}>{brl(tot(kr), true)}</td>
+                    <td />
+                  </tr>
+                </tfoot>
+              </table>
             </div>
           )}
         </>

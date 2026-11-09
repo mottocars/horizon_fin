@@ -57,29 +57,14 @@ export const ABAS_SUMARIO = [
   {
     id: 'grafico',
     titulo: 'Mês a mês',
-    resumo: 'Entradas, saídas e resultado de cada mês, realizado e em aberto.',
+    resumo: 'Entradas, saídas e resultado de cada mês: um gráfico do realizado e outro do em aberto.',
     blocos: [
       {
         titulo: 'Como ler',
         itens: [
-          'Para cima, as **entradas**: realizadas (azul) e, em cima delas, as em aberto (azul claro). Para baixo, as **saídas**: realizadas (vermelho) e em aberto (vermelho claro). A linha escura é o **resultado do mês** (realizado + em aberto).',
-          'O em aberto fica no mês do vencimento — nos meses que já passaram, ele é o que venceu e ainda não foi pago nem recebido. A faixa cinza marca o mês atual.',
+          'Dois gráficos: em cima o **realizado** (azul e vermelho), pela data do lançamento; embaixo o **em aberto** (azul e vermelho claros), pelo mês do vencimento. Em cada um, as **entradas** para cima, as **saídas** para baixo e a linha escura com o **resultado do mês** daquele gráfico.',
+          'No gráfico do em aberto, os meses que já passaram mostram o que venceu e ainda não foi pago nem recebido. A faixa cinza marca o mês atual.',
           'Passe o mouse num mês para ver os valores e o resultado acumulado; **Ver a tabela** mostra os números.',
-        ],
-      },
-    ],
-  },
-  {
-    id: 'sankey',
-    titulo: 'De onde veio e para onde foi',
-    resumo: 'O Sankey do dinheiro: de onde veio cada real e para onde foi.',
-    blocos: [
-      {
-        titulo: 'Como ler',
-        itens: [
-          'Pelo **líquido de cada máscara do DFC** (Máscara DFC nível 2): com líquido positivo é **fonte** (esquerda); negativo, **destino** (direita), com as contas do plano de contas que mais pesaram ao lado. Fatia sem máscara entra pela conta do plano de contas.',
-          '**Sobrou** = o que ficou das entradas. Quando as saídas passam das entradas, aparece à esquerda **Saiu do caixa que já existia**.',
-          '**Realizado**, **Em aberto** ou **Total** (os dois juntos). **De cada R$ 100 que entraram**: quanto foi para cada destino e quanto sobrou.',
         ],
       },
     ],

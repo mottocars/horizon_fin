@@ -120,7 +120,8 @@ export function resumo(E) {
 
 // ─── Mês a mês ───────────────────────────────────────────────────────────────────────────────────
 // Por mês do período: entradas e saídas realizadas e em aberto (o em aberto no mês do vencimento — o vencido
-// aparece no mês em que venceu), o resultado do mês e o acumulado.
+// aparece no mês em que venceu), o resultado do mês e o acumulado — no total e separado (resR/acumR do
+// realizado, resA/acumA do em aberto: um gráfico para cada).
 export function mensal(E) {
   const ms = [];
   for (let m = E.P.de.slice(0, 7); m <= E.P.ate.slice(0, 7) && ms.length < 240; ) {
@@ -135,82 +136,20 @@ export function mensal(E) {
     r[`${x.lado}${x.tipo}`] += x.valor;
   });
   let acum = 0;
+  let acumR = 0;
+  let acumA = 0;
   const mesHoje = isoMes(E.B.hoje);
   return ms.map((m) => {
     const r = por.get(m);
-    const res = r.eR + r.sR + r.eA + r.sA;
-    acum += res;
-    return { ...r, res, acum, atual: m === mesHoje, futuro: m > mesHoje };
+    const resR = r.eR + r.sR;
+    const resA = r.eA + r.sA;
+    acum += resR + resA;
+    acumR += resR;
+    acumA += resA;
+    return { ...r, resR, resA, acumR, acumA, res: resR + resA, acum, atual: m === mesHoje, futuro: m > mesHoje };
   });
 }
 const isoMes = (iso) => iso.slice(0, 7);
-
-// ─── De onde veio e para onde foi cada real (Sankey) ─────────────────────────────────────────────
-// Pelo LÍQUIDO de cada Máscara DFC 2 nas fatias do `tipo` ('R', 'A' ou 'T' = os dois): máscara com
-// líquido positivo é fonte; negativo, destino (com as contas do plano de contas que mais pesam ao lado).
-// Fatia sem máscara entra pela conta do plano de contas (empresa que ainda não classificou o plano no DFC).
-// Sobra = o que ficou; falta = o que saiu do caixa que já existia.
-const MIN_FONTE = 0.012;
-const MIN_DETALHE = 0.006;
-export function fluxoDoDinheiro(E, tipo = 'R') {
-  const B = E.B;
-  const porM2 = new Map();
-  E.pecas.forEach((x) => {
-    if (tipo !== 'T' && x.tipo !== tipo) return;
-    const k = x.m2 ? x.m2.id : `p${x.nat}`;
-    const r = porM2.get(k) || { m2: x.m2, nat0: x.nat, liq: 0, nat: new Map() };
-    r.liq += x.valor;
-    r.nat.set(x.nat, (r.nat.get(x.nat) || 0) + x.valor);
-    porM2.set(k, r);
-  });
-  const nome = (r) => (r.m2 ? r.m2.nome : nomePlano(B, r.nat0));
-  const fontes = [];
-  const usos = [];
-  porM2.forEach((r, k) => {
-    if (r.liq > 0.5) fontes.push({ id: `f${k}`, rotulo: nome(r), valor: r.liq, receita: /OPERACIONAL/i.test(r.m2?.grupo || ''), grupo: r.m2?.grupo || '' });
-    else if (r.liq < -0.5) {
-      const filhos = [...r.nat.entries()].filter(([, v]) => v < -0.5).map(([nat, v]) => ({ id: `n${nat}`, rotulo: nomePlano(B, nat), valor: -v }));
-      usos.push({ id: `u${k}`, rotulo: nome(r), grupo: r.m2?.grupo || '', valor: -r.liq, filhos: filhos.length > 1 ? filhos : [] });
-    }
-  });
-  const entradas = soma(fontes.map((f) => f.valor));
-  const saidas = soma(usos.map((u) => u.valor));
-  if (entradas <= 0 && saidas <= 0) return null;
-  const resultado = entradas - saidas;
-  const base = Math.max(entradas, saidas);
-  fontes.sort((p, q) => q.valor - p.valor);
-  const pequenas = fontes.filter((f) => f.valor < base * MIN_FONTE);
-  const col0 =
-    pequenas.length >= 2
-      ? [...fontes.filter((f) => f.valor >= base * MIN_FONTE), { id: 'outras', rotulo: 'Outras entradas', valor: soma(pequenas.map((f) => f.valor)), itens: pequenas }]
-      : fontes;
-  if (resultado < -0.5) col0.push({ id: 'prejuizo', rotulo: 'Saiu do caixa que já existia', valor: -resultado, tipo: 'prejuizo' });
-  usos.sort((p, q) => q.valor - p.valor);
-  const col2 = usos.map((u) => ({ ...u }));
-  if (resultado > 0.5) col2.push({ id: 'resultado', rotulo: 'Sobrou', valor: resultado, tipo: 'lucro', filhos: [] });
-  const col3 = [];
-  col2.forEach((u) => {
-    if (!u.filhos?.length) return;
-    const ord = [...u.filhos].sort((p, q) => q.valor - p.valor);
-    const peq = ord.filter((f) => f.valor < base * MIN_DETALHE);
-    const lista = peq.length >= 2 ? [...ord.filter((f) => f.valor >= base * MIN_DETALHE), { id: `d${u.id}`, rotulo: 'Demais', valor: soma(peq.map((f) => f.valor)), itens: peq }] : ord;
-    lista.forEach((f) => col3.push({ ...f, id: `${u.id}-${f.id}`, pai: u.id }));
-  });
-  return {
-    entradas: base, // o Sankey mede tudo pelo bloco do meio
-    totalEntradas: entradas,
-    saidas,
-    resultado,
-    centro: { id: 'centro', rotulo: resultado < -0.5 ? 'Entradas + caixa usado' : 'Total das entradas', valor: base },
-    col0,
-    col2,
-    col3,
-  };
-}
-export function deCada100(F) {
-  if (!F || !F.totalEntradas) return [];
-  return F.col2.map((u) => ({ id: u.id, rotulo: u.rotulo, valor: (u.valor / F.totalEntradas) * 100, tipo: u.tipo || null }));
-}
 
 // ─── Detalhamento (árvore, como no Aging List) ───────────────────────────────────────────────────
 const chavePessoa = (x) => {
