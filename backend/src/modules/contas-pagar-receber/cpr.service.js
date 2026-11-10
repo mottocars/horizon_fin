@@ -70,15 +70,26 @@ async function opcoes(empresaId) {
   };
 }
 
-// Parcelas com vencimento no período (uma linha por parcela), com o título e o resumo do rateio.
+// Títulos com emissão no período — uma linha por título (pedido do usuário: sem a quantidade de parcelas, a data
+// é a de emissão), com o resumo das parcelas (baixadas, próxima em aberto, última baixada) e do rateio.
 async function listar(empresaId, inicio, fim) {
   const { rows } = await pool.query(
-    `SELECT p.id AS parcela_id, p.numero, p.vencimento, p.valor, p.data_baixa, p.valor_baixa,
-            t.id AS titulo_id, t.tipo, t.tipo_documento, t.pessoa_nome, t.documento, t.historico,
-            (SELECT count(*)::int FROM cpr_parcelas x WHERE x.titulo_id = t.id) AS total_parcelas,
+    `SELECT t.id AS titulo_id, t.tipo, t.tipo_documento, t.pessoa_nome, t.documento, t.historico, t.data_emissao, t.valor,
+            pp.total_parcelas, pp.baixadas, pp.ultima_baixa, pa.aberta, pb.baixada,
             r.centros, r.naturezas
-       FROM cpr_parcelas p
-       JOIN cpr_titulos t ON t.id = p.titulo_id
+       FROM cpr_titulos t
+       LEFT JOIN LATERAL (
+         SELECT count(*)::int AS total_parcelas, count(data_baixa)::int AS baixadas, max(data_baixa) AS ultima_baixa
+           FROM cpr_parcelas WHERE titulo_id = t.id
+       ) pp ON TRUE
+       LEFT JOIN LATERAL (
+         SELECT json_build_object('id', id, 'numero', numero, 'vencimento', vencimento, 'valor', valor) AS aberta
+           FROM cpr_parcelas WHERE titulo_id = t.id AND data_baixa IS NULL ORDER BY vencimento, numero LIMIT 1
+       ) pa ON TRUE
+       LEFT JOIN LATERAL (
+         SELECT json_build_object('id', id, 'numero', numero, 'data_baixa', data_baixa, 'valor_baixa', valor_baixa) AS baixada
+           FROM cpr_parcelas WHERE titulo_id = t.id AND data_baixa IS NOT NULL ORDER BY data_baixa DESC, numero DESC LIMIT 1
+       ) pb ON TRUE
        LEFT JOIN LATERAL (
          SELECT array_agg(DISTINCT COALESCE(NULLIF(c.apelido, ''), c.name, ra.centro_id::text)) AS centros,
                 array_agg(DISTINCT ra.natureza_id || COALESCE(' ' || pf.name, '')) AS naturezas
@@ -87,14 +98,15 @@ async function listar(empresaId, inicio, fim) {
            LEFT JOIN planos_financeiros_sienge pf ON pf.empresa_id = t.empresa_id AND pf.sienge_id::text = ra.natureza_id
           WHERE ra.titulo_id = t.id
        ) r ON TRUE
-      WHERE t.empresa_id = $1 AND p.vencimento BETWEEN $2 AND $3
-      ORDER BY p.vencimento, t.id, p.numero`,
+      WHERE t.empresa_id = $1 AND t.data_emissao BETWEEN $2 AND $3
+      ORDER BY t.data_emissao, t.id`,
     [empresaId, inicio, fim]
   );
   return rows.map((r) => ({
     ...r,
     valor: Number(r.valor),
-    valor_baixa: r.valor_baixa === null ? null : Number(r.valor_baixa),
+    aberta: r.aberta ? { ...r.aberta, valor: Number(r.aberta.valor) } : null,
+    baixada: r.baixada ? { ...r.baixada, valor_baixa: r.baixada.valor_baixa === null ? null : Number(r.baixada.valor_baixa) } : null,
     centros: r.centros || [],
     naturezas: r.naturezas || [],
   }));

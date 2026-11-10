@@ -12,8 +12,9 @@ const CABECALHO = 'border-b-2 border-blue-500 bg-blue-50 text-xs uppercase track
 const INPUT =
   'w-full rounded-lg border border-gray-200 px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-primary-100 disabled:bg-gray-50 disabled:text-gray-500';
 
-// Aba Títulos: as parcelas com vencimento no período do filtro (uma linha por parcela). Clicar abre o
-// título; o ícone da direita baixa a parcela (ou estorna a baixa).
+// Aba Títulos: uma linha por título com emissão no período do filtro (pedido do usuário: a data é a de emissão,
+// sem a quantidade de parcelas). Clicar abre o título; o ícone da direita baixa a próxima parcela em aberto (ou
+// estorna a última baixa).
 export default function TitulosTab({ empresaId, inicio, fim, versao, onAbrir }) {
   const confirm = useConfirm();
   const [linhas, setLinhas] = useState(null);
@@ -57,12 +58,12 @@ export default function TitulosTab({ empresaId, inicio, fim, versao, onAbrir }) 
   async function estornar(l) {
     const ok = await confirm({
       title: 'Estornar baixa',
-      description: `Estornar a baixa da parcela ${l.numero}/${l.total_parcelas} de ${l.pessoa_nome}? Ela volta a ficar em aberto.`,
+      description: `Estornar a baixa${l.total_parcelas > 1 ? ` da parcela ${l.baixada.numero}/${l.total_parcelas}` : ''} do título ${String(l.titulo_id).padStart(5, '0')} (${l.pessoa_nome})? Ela volta a ficar em aberto.`,
       confirmLabel: 'Estornar',
     });
     if (!ok) return;
     try {
-      await estornarBaixa(empresaId, l.parcela_id);
+      await estornarBaixa(empresaId, l.baixada.id);
       setRecarga((n) => n + 1);
     } catch (e) {
       setErro(mensagemErro(e, 'Não foi possível estornar a baixa.'));
@@ -77,7 +78,7 @@ export default function TitulosTab({ empresaId, inicio, fim, versao, onAbrir }) 
           <p className="mt-0.5 text-xs text-gray-500">
             {linhas === null
               ? 'Carregando...'
-              : `${linhas.length} parcela(s) com vencimento de ${data(inicio)} a ${data(fim)} · A pagar ${moeda(totais.PAGAR)} · A receber ${moeda(totais.RECEBER)}`}
+              : `${linhas.length} título(s) com emissão de ${data(inicio)} a ${data(fim)} · A pagar ${moeda(totais.PAGAR)} · A receber ${moeda(totais.RECEBER)}`}
           </p>
         </div>
 
@@ -90,7 +91,7 @@ export default function TitulosTab({ empresaId, inicio, fim, versao, onAbrir }) 
             <span className="mb-3 flex h-12 w-12 items-center justify-center rounded-xl bg-primary-50 text-primary-600">
               <ReceiptText size={22} />
             </span>
-            <p className="text-sm font-medium text-gray-800">Nenhum título com vencimento no período.</p>
+            <p className="text-sm font-medium text-gray-800">Nenhum título com emissão no período.</p>
             <p className="mt-1 max-w-md text-xs text-gray-500">Use o + no alto da tela para lançar um contas a pagar ou a receber.</p>
           </div>
         ) : (
@@ -99,8 +100,7 @@ export default function TitulosTab({ empresaId, inicio, fim, versao, onAbrir }) 
               <thead>
                 <tr className={CABECALHO}>
                   <th className="py-2.5 pl-4 pr-3 font-medium">Título</th>
-                  <th className="py-2.5 pr-3 font-medium">Parcela</th>
-                  <th className="py-2.5 pr-3 font-medium">Vencimento</th>
+                  <th className="py-2.5 pr-3 font-medium">Emissão</th>
                   <th className="py-2.5 pr-3 font-medium">Tipo</th>
                   <th className="py-2.5 pr-3 font-medium">Fornecedor / Cliente</th>
                   <th className="py-2.5 pr-3 font-medium">Centro de custo</th>
@@ -113,23 +113,24 @@ export default function TitulosTab({ empresaId, inicio, fim, versao, onAbrir }) 
               <tbody>
                 {linhas.map((l) => {
                   const tipo = TIPOS[l.tipo];
-                  const vencido = !l.data_baixa && l.vencimento < hoje;
+                  const total = l.total_parcelas || 0;
+                  const todasBaixadas = total > 0 && l.baixadas === total;
+                  const vencido = l.aberta && l.aberta.vencimento < hoje;
                   return (
-                    <tr key={l.parcela_id} onClick={() => onAbrir(l.titulo_id)} className="cursor-pointer border-b border-gray-100 hover:bg-gray-50">
+                    <tr key={l.titulo_id} onClick={() => onAbrir(l.titulo_id)} className="cursor-pointer border-b border-gray-100 hover:bg-gray-50">
                       <td className="py-1.5 pl-4 pr-3 tabular-nums text-gray-900">{String(l.titulo_id).padStart(5, '0')}</td>
-                      <td className="py-1.5 pr-3 tabular-nums text-gray-700">
-                        {l.numero}/{l.total_parcelas}
-                      </td>
-                      <td className="py-1.5 pr-3 tabular-nums text-gray-700">{data(l.vencimento)}</td>
+                      <td className="py-1.5 pr-3 tabular-nums text-gray-700">{data(l.data_emissao)}</td>
                       <td className="py-1.5 pr-3">
                         <span className={`inline-flex whitespace-nowrap rounded-full px-2 py-0.5 text-[11px] ${tipo.cor}`}>{tipo.rotulo}</span>
                       </td>
                       <td className="max-w-[320px] py-1.5 pr-3">
                         <span className="block truncate text-gray-900">{l.pessoa_nome || '—'}</span>
                       </td>
-                      <td className="max-w-[240px] truncate py-1.5 pr-3 text-gray-700" title={l.centros.join(', ')}>
-                        {l.centros[0] || '—'}
-                        {l.centros.length > 1 && <span className="ml-1 text-gray-400">+{l.centros.length - 1}</span>}
+                      <td className="max-w-[240px] py-1.5 pr-3 text-gray-700" title={l.centros.join(', ')}>
+                        <span className="flex min-w-0 items-center">
+                          <span className="truncate">{l.centros[0] || '—'}</span>
+                          {l.centros.length > 1 && <span className="ml-1 shrink-0 text-gray-400">+{l.centros.length - 1}</span>}
+                        </span>
                       </td>
                       <td className="max-w-[260px] py-1.5 pr-3 text-gray-700" title={l.naturezas.join('\n')}>
                         <span className="flex min-w-0 items-center">
@@ -139,35 +140,49 @@ export default function TitulosTab({ empresaId, inicio, fim, versao, onAbrir }) 
                       </td>
                       <td className="py-1.5 pr-3 text-right tabular-nums text-gray-900">{moeda(l.valor)}</td>
                       <td className="py-1.5 pl-6 pr-3">
-                        {l.data_baixa ? (
-                          <span className="text-emerald-700" title={`Valor baixado: ${moeda(l.valor_baixa)}`}>
-                            Baixado em {data(l.data_baixa)}
+                        {todasBaixadas ? (
+                          <span className="text-emerald-700" title={l.baixada ? `Último valor baixado: ${moeda(l.baixada.valor_baixa)}` : undefined}>
+                            Baixado em {data(l.ultima_baixa)}
                           </span>
                         ) : vencido ? (
                           <span className="text-red-600">Vencido</span>
+                        ) : l.baixadas > 0 ? (
+                          <span className="text-amber-600">Baixado em parte</span>
                         ) : (
                           <span className="text-gray-500">Em aberto</span>
                         )}
                       </td>
                       <td className="py-1.5 pr-4 text-right" onClick={(e) => e.stopPropagation()}>
-                        {l.data_baixa ? (
+                        {l.aberta ? (
                           <button
                             type="button"
-                            onClick={() => estornar(l)}
-                            title="Estornar baixa"
-                            className="rounded-lg p-1 text-gray-400 hover:bg-amber-50 hover:text-amber-600"
-                          >
-                            <Undo2 size={16} />
-                          </button>
-                        ) : (
-                          <button
-                            type="button"
-                            onClick={() => setBaixando(l)}
+                            onClick={() =>
+                              setBaixando({
+                                parcela_id: l.aberta.id,
+                                numero: l.aberta.numero,
+                                total_parcelas: total,
+                                vencimento: l.aberta.vencimento,
+                                valor: l.aberta.valor,
+                                pessoa_nome: l.pessoa_nome,
+                                tipo: l.tipo,
+                              })
+                            }
                             title={l.tipo === 'PAGAR' ? 'Baixar pagamento' : 'Baixar recebimento'}
                             className="rounded-lg p-1 text-gray-400 hover:bg-emerald-50 hover:text-emerald-600"
                           >
                             <CircleCheck size={16} />
                           </button>
+                        ) : (
+                          l.baixada && (
+                            <button
+                              type="button"
+                              onClick={() => estornar(l)}
+                              title="Estornar baixa"
+                              className="rounded-lg p-1 text-gray-400 hover:bg-amber-50 hover:text-amber-600"
+                            >
+                              <Undo2 size={16} />
+                            </button>
+                          )
                         )}
                       </td>
                     </tr>
@@ -219,7 +234,7 @@ function BaixaModal({ empresaId, linha, onClose, onBaixado }) {
     <Modal open title={linha.tipo === 'PAGAR' ? 'Baixar pagamento' : 'Baixar recebimento'} onClose={onClose}>
       <p className="text-sm font-semibold text-gray-900">{linha.pessoa_nome}</p>
       <p className="mb-4 text-xs text-gray-500">
-        Parcela {linha.numero}/{linha.total_parcelas} · vence {data(linha.vencimento)} · {moeda(linha.valor)}
+        {linha.total_parcelas > 1 ? `Parcela ${linha.numero}/${linha.total_parcelas} · ` : ""}vence {data(linha.vencimento)} · {moeda(linha.valor)}
       </p>
       <div className="grid grid-cols-2 gap-3">
         <label className="block">
