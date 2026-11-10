@@ -36,8 +36,14 @@ import {
 import GraficoAvanco, { indiceNaData } from './GraficoAvanco';
 import { TIPOS_DOCUMENTO, centavos, data, dataHora, lerValor, mensagemErro, moeda, numeroBr, somarMeses } from './util';
 
-const INPUT =
-  'w-full rounded-lg border border-gray-200 px-2.5 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-primary-100 disabled:bg-gray-50 disabled:text-gray-500';
+const INPUT_SEM_COR =
+  'w-full rounded-lg border px-2.5 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-primary-100 disabled:bg-gray-50 disabled:text-gray-500';
+const INPUT = `${INPUT_SEM_COR} border-gray-200`;
+// Campos abertos para ajuste: azul quando preenchidos, âmbar quando pendentes (mesmo par das Configurações
+// das telas de Operações).
+const inputCor = (preenchido) => `${INPUT_SEM_COR} ${preenchido ? 'border-primary-100 bg-primary-50' : 'border-amber-300 bg-amber-50'}`;
+const corSelect = (preenchido) =>
+  preenchido ? 'border-primary-100 bg-primary-50 hover:border-primary-500' : 'border-amber-300 bg-amber-50 hover:border-amber-400';
 const CABECALHO = 'border-b-2 border-blue-500 bg-blue-50 text-xs uppercase tracking-wide text-blue-700';
 
 // Abas da janela, conforme o tipo de documento. Na Projeção PLS CEF, Avanços e Documentos ainda estão
@@ -385,6 +391,7 @@ export default function TituloModal({ empresaId, id = null, onClose, onSalvo }) 
                       options={TIPOS_DOCUMENTO}
                       clearable={false}
                       disabled={travado || Boolean(id)}
+                      corClasses={financeiro ? undefined : corSelect(true)}
                     />
                   </Campo>
                   {!financeiro && (
@@ -397,17 +404,32 @@ export default function TituloModal({ empresaId, id = null, onClose, onSalvo }) 
                           placeholder="Escolha o centro de custo"
                           emptyMessage="Nenhum centro de custo cadastrado."
                           larguraPainel={360}
+                          corClasses={corSelect(Boolean(pls.centro_id))}
                         />
                       </Campo>
                       {/* Medição → recebimento PF → recebimento PJ. O % do Prevision é o da Data Previsão Medição. */}
                       <Campo rotulo="Data Previsão Medição">
-                        <CampoData value={pls.data_medicao} onChange={(v) => setPls((p) => ({ ...p, data_medicao: v, avanco: null }))} className={INPUT} />
+                        <CampoData
+                          value={pls.data_medicao}
+                          onChange={(v) => setPls((p) => ({ ...p, data_medicao: v, avanco: null }))}
+                          className={inputCor(Boolean(pls.data_medicao))}
+                        />
                       </Campo>
                       <Campo rotulo="Data Previsão Recebimento PF">
-                        <CampoData value={pls.data_pf} min={pls.data_medicao || undefined} onChange={(v) => setPls((p) => ({ ...p, data_pf: v }))} className={INPUT} />
+                        <CampoData
+                          value={pls.data_pf}
+                          min={pls.data_medicao || undefined}
+                          onChange={(v) => setPls((p) => ({ ...p, data_pf: v }))}
+                          className={inputCor(Boolean(pls.data_pf))}
+                        />
                       </Campo>
                       <Campo rotulo="Data Previsão Recebimento PJ">
-                        <CampoData value={pls.data_pj} min={pls.data_pf || pls.data_medicao || undefined} onChange={(v) => setPls((p) => ({ ...p, data_pj: v }))} className={INPUT} />
+                        <CampoData
+                          value={pls.data_pj}
+                          min={pls.data_pf || pls.data_medicao || undefined}
+                          onChange={(v) => setPls((p) => ({ ...p, data_pj: v }))}
+                          className={inputCor(Boolean(pls.data_pj))}
+                        />
                       </Campo>
                       <Campo rotulo="Avanço previsto na medição (Prevision)">
                         <div className="relative">
@@ -419,7 +441,7 @@ export default function TituloModal({ empresaId, id = null, onClose, onSalvo }) 
                             inputMode="decimal"
                             placeholder={!pls.centro_id || !pls.data_medicao ? 'Escolha o centro e a data da medição' : '0,00'}
                             aria-label="Avanço previsto na medição"
-                            className={`${INPUT} !pr-7 text-right tabular-nums ${avancoTexto && !avancoValido ? 'border-red-300 bg-red-50' : ''}`}
+                            className={`${avancoTexto && !avancoValido ? `${INPUT_SEM_COR} border-red-300 bg-red-50` : inputCor(Boolean(avancoTexto))} !pr-7 text-right tabular-nums`}
                           />
                           <span className="pointer-events-none absolute right-2.5 top-1/2 -translate-y-1/2 text-sm text-gray-400">%</span>
                         </div>
