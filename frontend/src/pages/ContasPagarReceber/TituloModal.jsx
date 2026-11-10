@@ -1323,7 +1323,6 @@ function AbaRepassesPf({ centroEscolhido, repasses, avancoMedicao, dataMedicao }
                   <span className="block truncate font-medium text-gray-900" title={l.cliente}>
                     {l.cliente || '—'}
                   </span>
-                  <span className="block text-[11px] tabular-nums text-gray-400">{l.contrato_unidade}</span>
                 </td>
                 <td className="whitespace-nowrap px-2 py-1.5 tabular-nums text-gray-700">{data(l.data_registro)}</td>
                 <td className="whitespace-nowrap px-2 py-1.5 tabular-nums">
