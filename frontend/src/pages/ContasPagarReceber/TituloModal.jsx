@@ -12,6 +12,7 @@ import {
   Sheet,
   Trash2,
   TrendingUp,
+  Users,
   TriangleAlert,
   X,
 } from 'lucide-react';
@@ -32,6 +33,7 @@ import {
   excluirTitulo,
   obterTitulo,
   opcoesContasPagarReceber,
+  repassesPf,
 } from '../../api/contasPagarReceber.api';
 import GraficoAvanco, { indiceNaData } from './GraficoAvanco';
 import { TIPOS_DOCUMENTO, centavos, data, dataHora, lerValor, mensagemErro, moeda, numeroBr, somarMeses } from './util';
@@ -59,6 +61,7 @@ const ABAS_POR_TIPO = {
     { id: 'rateios-pls', label: 'Rateios', icon: PieChart },
     { id: 'avancos', label: 'Avanços', icon: TrendingUp },
     { id: 'documentos', label: 'Documentos', icon: FolderOpen },
+    { id: 'repasses-pf', label: 'Repasses PF', icon: Users },
   ],
 };
 
@@ -132,6 +135,7 @@ export default function TituloModal({ empresaId, id = null, onClose, onSalvo }) 
   const [avanco, setAvanco] = useState({ carregando: false, dados: null, erro: '' });
   const [documentos, setDocumentos] = useState({ carregando: false, dados: null, erro: '' });
   const [cabPls, setCabPls] = useState({ carregando: false, dados: null, erro: '' });
+  const [repasses, setRepasses] = useState({ carregando: false, dados: null, erro: '' });
 
   useEffect(() => {
     setErro('');
@@ -213,6 +217,22 @@ export default function TituloModal({ empresaId, id = null, onClose, onSalvo }) 
     cabecalhoPls(empresaId, pls.centro_id, pls.data_medicao)
       .then((d) => vivo && setCabPls({ carregando: false, dados: d, erro: '' }))
       .catch((e) => vivo && setCabPls({ carregando: false, dados: null, erro: mensagemErro(e, 'Não foi possível carregar os dados do centro de custo.') }));
+    return () => {
+      vivo = false;
+    };
+  }, [empresaId, form.tipo_documento, pls.centro_id, pls.data_medicao]);
+
+  // Repasses PF (rastreio por cliente registrado), com as liberações anteriores à Data Previsão Medição.
+  useEffect(() => {
+    if (form.tipo_documento !== 'PROJECAO_PLS_CEF' || !pls.centro_id) {
+      setRepasses({ carregando: false, dados: null, erro: '' });
+      return undefined;
+    }
+    let vivo = true;
+    setRepasses((r) => ({ ...r, carregando: true, erro: '' }));
+    repassesPf(empresaId, pls.centro_id, pls.data_medicao)
+      .then((d) => vivo && setRepasses({ carregando: false, dados: d, erro: '' }))
+      .catch((e) => vivo && setRepasses({ carregando: false, dados: null, erro: mensagemErro(e, 'Não foi possível carregar os repasses PF.') }));
     return () => {
       vivo = false;
     };
@@ -562,6 +582,15 @@ export default function TituloModal({ empresaId, id = null, onClose, onSalvo }) 
                   opNaturezas={opNaturezas}
                   rateio={rateioPls}
                   setRateio={setRateioPls}
+                />
+              )}
+
+              {abaVisivel === 'repasses-pf' && (
+                <AbaRepassesPf
+                  centroEscolhido={Boolean(pls.centro_id)}
+                  repasses={repasses}
+                  avancoMedicao={avancoValido ? avancoInformado : null}
+                  dataMedicao={pls.data_medicao}
                 />
               )}
 
@@ -1228,6 +1257,110 @@ function AbaRateiosPls({ centroEscolhido, projecao, carregando, contasSugeridas,
           </button>
         </p>
       )}
+    </div>
+  );
+}
+
+// Projeção PLS CEF › Repasses PF: rastreio, por cliente registrado, do Novo Registro (liberação, % de obra e
+// valor repassado), do que já foi repassado em medição e do que falta repassar em medição. Cliente registrado
+// depois da última liberação entra no Novo Registro desta PLS, com o avanço previsto na medição.
+function AbaRepassesPf({ centroEscolhido, repasses, avancoMedicao, dataMedicao }) {
+  if (!centroEscolhido) return <AvisoAba>Escolha o centro de custo no Cabeçalho para ver os repasses PF.</AvisoAba>;
+  if (repasses.carregando && !repasses.dados) return <AvisoAba>Carregando os repasses PF...</AvisoAba>;
+  if (repasses.erro) return <AvisoAba>{repasses.erro}</AvisoAba>;
+  const d = repasses.dados;
+  if (!d) return null;
+  if (!d.contrato) return <AvisoAba>Este centro de custo não tem Contrato Caixa cadastrado (DFC Construtoras › Centros Custos).</AvisoAba>;
+  if (!d.clientes.length) return <AvisoAba>Nenhum cliente registrado no Geral deste contrato.</AvisoAba>;
+
+  const D = avancoMedicao;
+  const linhas = d.clientes.map((c) => {
+    if (c.novo_registro) {
+      return { ...c, nr_valor: c.novo_registro.valor, nr_pct: c.novo_registro.pct, nesta: false };
+    }
+    // Ainda sem Novo Registro: vai nesta PLS, com o avanço previsto na medição.
+    if (D === null) return { ...c, nr_valor: null, nr_pct: null, repassado_medicao: null, falta_medicao: null, nesta: true };
+    return {
+      ...c,
+      nesta: true,
+      nr_pct: D,
+      nr_valor: r2(c.terreno_fgts + (c.vgf_medicao * D) / 100),
+      repassado_medicao: 0,
+      falta_medicao: r2((c.vgf_medicao * Math.max(100 - D, 0)) / 100),
+    };
+  });
+  const soma = (k) => linhas.reduce((s, l) => s + (l[k] || 0), 0);
+  const ul = d.ultima_liberacao;
+
+  return (
+    <div className="space-y-3">
+      <div>
+        <h3 className="text-sm font-semibold text-gray-900">Repasses PF</h3>
+        <p className="text-xs text-gray-500">
+          {linhas.length} cliente(s) registrado(s){d.sem_registro ? ` · ${d.sem_registro} sem registro` : ''}
+          {ul ? ` · última liberação ${data(ul.data)} (parcela ${ul.parcela}, ${pct2(ul.pct)}%)` : ' · sem liberação no DCD'}
+        </p>
+      </div>
+      <div className="max-h-[420px] overflow-auto rounded-lg ring-1 ring-gray-200">
+        <table className="w-full min-w-[860px] table-fixed text-sm">
+          <colgroup>
+            <col />
+            <col className="w-24" />
+            <col className="w-36" />
+            <col className="w-20" />
+            <col className="w-32" />
+            <col className="w-32" />
+            <col className="w-32" />
+          </colgroup>
+          <thead className={`sticky top-0 z-10 ${CABECALHO}`}>
+            <tr>
+              <th className="px-2 py-2 text-left font-medium">Cliente</th>
+              <th className="whitespace-nowrap px-2 py-2 text-left font-medium">Registro</th>
+              <th className="whitespace-nowrap px-2 py-2 text-left font-medium">Novo Registro</th>
+              <th className="whitespace-nowrap px-2 py-2 text-right font-medium">% obra</th>
+              <th className="whitespace-nowrap px-2 py-2 text-right font-medium">Repassado NR</th>
+              <th className="whitespace-nowrap px-2 py-2 text-right font-medium">Rep. medição</th>
+              <th className="whitespace-nowrap px-2 py-2 text-right font-medium">Falta medição</th>
+            </tr>
+          </thead>
+          <tbody>
+            {linhas.map((l) => (
+              <tr key={l.contrato_unidade || `${l.cliente}-${l.data_registro}`} className={`border-b border-gray-100 ${l.nesta ? 'bg-amber-50/50' : ''}`}>
+                <td className="px-2 py-1.5">
+                  <span className="block truncate font-medium text-gray-900" title={l.cliente}>
+                    {l.cliente || '—'}
+                  </span>
+                  <span className="block text-[11px] tabular-nums text-gray-400">{l.contrato_unidade}</span>
+                </td>
+                <td className="whitespace-nowrap px-2 py-1.5 tabular-nums text-gray-700">{data(l.data_registro)}</td>
+                <td className="whitespace-nowrap px-2 py-1.5 tabular-nums">
+                  {l.nesta ? (
+                    <span className="font-medium text-amber-700">Nesta PLS{dataMedicao ? ` · ${data(dataMedicao)}` : ''}</span>
+                  ) : (
+                    <span className="text-gray-700">
+                      {data(l.novo_registro.data)} <span className="text-gray-400">· {l.novo_registro.parcela}</span>
+                    </span>
+                  )}
+                </td>
+                <td className="whitespace-nowrap px-2 py-1.5 text-right tabular-nums text-gray-700">{l.nr_pct === null ? '—' : `${pct2(l.nr_pct)}%`}</td>
+                <td className="whitespace-nowrap px-2 py-1.5 text-right tabular-nums text-gray-900">{l.nr_valor === null ? '—' : moeda(l.nr_valor)}</td>
+                <td className="whitespace-nowrap px-2 py-1.5 text-right tabular-nums text-gray-700">{l.repassado_medicao === null || l.repassado_medicao === undefined ? '—' : moeda(l.repassado_medicao)}</td>
+                <td className="whitespace-nowrap px-2 py-1.5 text-right font-semibold tabular-nums text-gray-900">{l.falta_medicao === null || l.falta_medicao === undefined ? '—' : moeda(l.falta_medicao)}</td>
+              </tr>
+            ))}
+          </tbody>
+          <tfoot className="sticky bottom-0 bg-gray-50">
+            <tr>
+              <td colSpan={4} className="px-2 py-2 text-xs font-semibold text-gray-600">
+                Total
+              </td>
+              <td className="whitespace-nowrap px-2 py-2 text-right text-sm font-semibold tabular-nums text-gray-900">{moeda(soma('nr_valor'))}</td>
+              <td className="whitespace-nowrap px-2 py-2 text-right text-sm font-semibold tabular-nums text-gray-900">{moeda(soma('repassado_medicao'))}</td>
+              <td className="whitespace-nowrap px-2 py-2 text-right text-sm font-semibold tabular-nums text-gray-900">{moeda(soma('falta_medicao'))}</td>
+            </tr>
+          </tfoot>
+        </table>
+      </div>
     </div>
   );
 }
