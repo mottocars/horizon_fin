@@ -328,8 +328,8 @@ export default function TituloModal({ empresaId, id = null, onClose, onSalvo }) 
     if (tipo !== form.tipo) setForm((f) => ({ ...f, tipo, pessoa_id: '' }));
   }
 
-  // Projeção PLS CEF → título a receber da Caixa, em uma parcela só (total, vencimento na Data Previsão
-  // Recebimento PF); rateio uma linha por classificação com valor, no centro da obra e no plano de contas padrão;
+  // Projeção PLS CEF → título a receber da Caixa, em uma parcela só (total, vencimento na emissão =
+  // Data Previsão Medição); rateio uma linha por classificação com valor, no centro da obra e no plano de contas padrão;
   // em `dados`, o que foi informado (inclusive a data PJ) e os cálculos.
   async function salvarPls() {
     const falha = (mensagem, abaDoCampo) => {
@@ -354,9 +354,9 @@ export default function TituloModal({ empresaId, id = null, onClose, onSalvo }) 
     const c2 = (x) => centavos(x) / 100;
     const pf = c2((v.novo_registro.valor || 0) + (v.medicao.valor || 0));
     const pj = c2(v.credito_pj.valor || 0);
-    // Uma parcela só (a projeção não se divide em parcelas — pedido do usuário): o total, com vencimento na Data
-    // Previsão Recebimento PF; a data PJ fica em `dados`.
-    const parcelasPls = [{ vencimento: pls.data_pf, valor: c2(pf + pj) }];
+    // Uma parcela só (a projeção não se divide em parcelas — pedido do usuário): o total, com vencimento na data de
+    // emissão do título (a Data Previsão Medição), que é a data da linha na listagem; as datas PF e PJ ficam em `dados`.
+    const parcelasPls = [{ vencimento: pls.data_medicao, valor: c2(pf + pj) }];
     const centroNome = opCentrosObra.find((o) => String(o.value) === String(pls.centro_id))?.label || pls.centro_id;
     const payload = {
       tipo_documento: 'PROJECAO_PLS_CEF',

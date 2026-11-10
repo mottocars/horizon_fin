@@ -95,7 +95,7 @@ export default function TitulosTab({ empresaId, inicio, fim, versao, onAbrir }) 
           </div>
         ) : (
           <div className="overflow-x-auto">
-            <table className="w-full min-w-[900px] text-left text-sm">
+            <table className="w-full min-w-[900px] text-left text-xs">
               <thead>
                 <tr className={CABECALHO}>
                   <th className="py-2.5 pl-4 pr-3 font-medium">Título</th>
@@ -116,35 +116,35 @@ export default function TitulosTab({ empresaId, inicio, fim, versao, onAbrir }) 
                   const vencido = !l.data_baixa && l.vencimento < hoje;
                   return (
                     <tr key={l.parcela_id} onClick={() => onAbrir(l.titulo_id)} className="cursor-pointer border-b border-gray-100 hover:bg-gray-50">
-                      <td className="py-1.5 pl-4 pr-3 font-medium tabular-nums text-gray-900">{String(l.titulo_id).padStart(5, '0')}</td>
+                      <td className="py-1.5 pl-4 pr-3 tabular-nums text-gray-900">{String(l.titulo_id).padStart(5, '0')}</td>
                       <td className="py-1.5 pr-3 tabular-nums text-gray-700">
                         {l.numero}/{l.total_parcelas}
                       </td>
                       <td className="py-1.5 pr-3 tabular-nums text-gray-700">{data(l.vencimento)}</td>
                       <td className="py-1.5 pr-3">
-                        <span className={`inline-flex whitespace-nowrap rounded-full px-2 py-0.5 text-[11px] font-medium ${tipo.cor}`}>{tipo.rotulo}</span>
+                        <span className={`inline-flex whitespace-nowrap rounded-full px-2 py-0.5 text-[11px] ${tipo.cor}`}>{tipo.rotulo}</span>
                       </td>
                       <td className="max-w-[320px] py-1.5 pr-3">
-                        <span className="block truncate font-semibold text-gray-900">{l.pessoa_nome || '—'}</span>
+                        <span className="block truncate text-gray-900">{l.pessoa_nome || '—'}</span>
                       </td>
-                      <td className="max-w-[240px] truncate py-1.5 pr-3 text-xs text-gray-700" title={l.centros.join(', ')}>
+                      <td className="max-w-[240px] truncate py-1.5 pr-3 text-gray-700" title={l.centros.join(', ')}>
                         {l.centros[0] || '—'}
                         {l.centros.length > 1 && <span className="ml-1 text-gray-400">+{l.centros.length - 1}</span>}
                       </td>
-                      <td className="max-w-[260px] py-1.5 pr-3 text-xs text-gray-700" title={l.naturezas.join('\n')}>
+                      <td className="max-w-[260px] py-1.5 pr-3 text-gray-700" title={l.naturezas.join('\n')}>
                         <span className="flex min-w-0 items-center">
                           <span className="truncate">{l.naturezas[0] || '—'}</span>
                           {l.naturezas.length > 1 && <span className="ml-1 shrink-0 text-gray-400">+{l.naturezas.length - 1}</span>}
                         </span>
                       </td>
-                      <td className="py-1.5 pr-3 text-right font-semibold tabular-nums text-gray-900">{moeda(l.valor)}</td>
-                      <td className="py-1.5 pl-6 pr-3 text-xs">
+                      <td className="py-1.5 pr-3 text-right tabular-nums text-gray-900">{moeda(l.valor)}</td>
+                      <td className="py-1.5 pl-6 pr-3">
                         {l.data_baixa ? (
-                          <span className="font-medium text-emerald-700" title={`Valor baixado: ${moeda(l.valor_baixa)}`}>
+                          <span className="text-emerald-700" title={`Valor baixado: ${moeda(l.valor_baixa)}`}>
                             Baixado em {data(l.data_baixa)}
                           </span>
                         ) : vencido ? (
-                          <span className="font-medium text-red-600">Vencido</span>
+                          <span className="text-red-600">Vencido</span>
                         ) : (
                           <span className="text-gray-500">Em aberto</span>
                         )}
