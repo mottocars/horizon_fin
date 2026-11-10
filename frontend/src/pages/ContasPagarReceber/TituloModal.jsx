@@ -7,7 +7,8 @@ import SearchableSelect from '../../components/SearchableSelect';
 import CampoData from '../../components/CampoData';
 import { useConfirm } from '../../confirm/ConfirmContext';
 import { hojeISO } from '../../utils/datas';
-import { alterarTitulo, criarTitulo, excluirTitulo, obterTitulo, opcoesContasPagarReceber } from '../../api/contasPagarReceber.api';
+import { alterarTitulo, avancoPrevisto, criarTitulo, excluirTitulo, obterTitulo, opcoesContasPagarReceber } from '../../api/contasPagarReceber.api';
+import GraficoAvanco, { indiceNaData } from './GraficoAvanco';
 import { TIPOS_DOCUMENTO, centavos, data, dataHora, lerValor, mensagemErro, moeda, numeroBr, somarMeses } from './util';
 
 const INPUT =
@@ -91,6 +92,9 @@ export default function TituloModal({ empresaId, id = null, onClose, onSalvo }) 
   const [salvando, setSalvando] = useState(false);
   const [erroSalvar, setErroSalvar] = useState('');
   const [aba, setAba] = useState('cabecalho');
+  // Projeção PLS CEF: centro de custo (obra), data prevista do recebimento e a curva do Prevision dele.
+  const [pls, setPls] = useState({ centro_id: '', data_previsao: '' });
+  const [avanco, setAvanco] = useState({ carregando: false, dados: null, erro: '' });
 
   useEffect(() => {
     setErro('');
@@ -125,6 +129,26 @@ export default function TituloModal({ empresaId, id = null, onClose, onSalvo }) 
   const somaPct = rateios.reduce((s, r) => s + (valido(lerValor(r.pct)) ? lerValor(r.pct) : 0), 0);
 
   const opCentros = useMemo(() => (opcoes?.centros || []).map((c) => ({ value: c.id, label: `${c.id} - ${c.nome}` })), [opcoes]);
+  // PLS CEF é de obra: só os centros com Tipo = Obra (todos, se a empresa não tiver nenhum marcado).
+  const opCentrosObra = useMemo(() => {
+    const obras = (opcoes?.centros || []).filter((c) => c.natureza === 'OBRA');
+    return (obras.length ? obras : opcoes?.centros || []).map((c) => ({ value: c.id, label: `${c.id} - ${c.nome}` }));
+  }, [opcoes]);
+
+  useEffect(() => {
+    if (form.tipo_documento !== 'PROJECAO_PLS_CEF' || !pls.centro_id) {
+      setAvanco({ carregando: false, dados: null, erro: '' });
+      return undefined;
+    }
+    let vivo = true;
+    setAvanco({ carregando: true, dados: null, erro: '' });
+    avancoPrevisto(empresaId, pls.centro_id)
+      .then((d) => vivo && setAvanco({ carregando: false, dados: d, erro: '' }))
+      .catch((e) => vivo && setAvanco({ carregando: false, dados: null, erro: mensagemErro(e, 'Não foi possível carregar o avanço do Prevision.') }));
+    return () => {
+      vivo = false;
+    };
+  }, [empresaId, form.tipo_documento, pls.centro_id]);
   const opNaturezas = useMemo(
     () => (opcoes?.naturezas || []).map((n) => ({ value: n.id, label: `${n.id} ${n.nome}${n.inativa ? ' (inativa)' : ''}` })),
     [opcoes]
@@ -292,6 +316,23 @@ export default function TituloModal({ empresaId, id = null, onClose, onSalvo }) 
                       disabled={travado || Boolean(id)}
                     />
                   </Campo>
+                  {!financeiro && (
+                    <>
+                      <Campo rotulo="Centro de custo" className="md:col-span-2">
+                        <SearchableSelect
+                          value={pls.centro_id}
+                          onChange={(v) => setPls((p) => ({ ...p, centro_id: v || '' }))}
+                          options={opCentrosObra}
+                          placeholder="Escolha o centro de custo"
+                          emptyMessage="Nenhum centro de custo cadastrado."
+                          larguraPainel={360}
+                        />
+                      </Campo>
+                      <Campo rotulo="Data Previsão Recebimento">
+                        <CampoData value={pls.data_previsao} onChange={(v) => setPls((p) => ({ ...p, data_previsao: v }))} className={INPUT} />
+                      </Campo>
+                    </>
+                  )}
                   {financeiro && (
                     <>
                       <Campo rotulo="Tipo">
@@ -350,6 +391,8 @@ export default function TituloModal({ empresaId, id = null, onClose, onSalvo }) 
                   )}
                 </div>
               )}
+
+              {abaVisivel === 'avancos' && <AbaAvancos centroEscolhido={Boolean(pls.centro_id)} avanco={avanco} dataPrevisao={pls.data_previsao} />}
 
               {abaVisivel === 'rateios' && (
                 <div className="space-y-2">
@@ -565,5 +608,52 @@ export default function TituloModal({ empresaId, id = null, onClose, onSalvo }) 
         </div>
       )}
     </Modal>
+  );
+}
+
+function AvisoAba({ children }) {
+  return <div className="flex h-full min-h-[320px] items-center justify-center px-6 text-center text-sm text-gray-500">{children}</div>;
+}
+
+// Projeção PLS CEF › Avanços: a curva diária do Prevision do centro escolhido no Cabeçalho, com a bandeira
+// na Data Previsão Recebimento.
+function AbaAvancos({ centroEscolhido, avanco, dataPrevisao }) {
+  if (!centroEscolhido) return <AvisoAba>Escolha o centro de custo no Cabeçalho para ver o avanço previsto.</AvisoAba>;
+  if (avanco.carregando) return <AvisoAba>Carregando o avanço do Prevision...</AvisoAba>;
+  if (avanco.erro) return <AvisoAba>{avanco.erro}</AvisoAba>;
+  const d = avanco.dados;
+  if (!d) return null;
+  if (!d.tem_prevision) return <AvisoAba>Este centro de custo não tem Código Prevision (DFC Construtoras › Centros Custos).</AvisoAba>;
+  if (d.pontos.length < 2) return <AvisoAba>Ainda não há curva do Prevision importada para este centro de custo.</AvisoAba>;
+
+  const inicio = d.pontos[0].data;
+  const fim = d.pontos[d.pontos.length - 1].data;
+  const k = indiceNaData(d.pontos, dataPrevisao);
+  const naData = !dataPrevisao ? null : k < 0 ? 0 : d.pontos[k].previsto;
+  const fora = dataPrevisao && (dataPrevisao < inicio || dataPrevisao > fim);
+
+  return (
+    <div className="space-y-3">
+      <div className="flex flex-col gap-1 sm:flex-row sm:items-end sm:justify-between">
+        <div>
+          <h3 className="text-sm font-semibold text-gray-900">Avanço previsto · Prevision</h3>
+          <p className="text-xs text-gray-500">
+            {d.centro_nome} · curva diária de {data(inicio)} a {data(fim)}
+          </p>
+        </div>
+        {dataPrevisao ? (
+          <p className="text-sm text-gray-600">
+            Previsto acumulado em {data(dataPrevisao)}:{' '}
+            <span className="font-semibold tabular-nums text-gray-900">
+              {naData.toLocaleString('pt-BR', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}%
+            </span>
+            {fora && <span className="ml-1 text-xs text-amber-600">(fora da curva)</span>}
+          </p>
+        ) : (
+          <p className="text-xs text-amber-600">Informe a Data Previsão Recebimento no Cabeçalho para marcar no gráfico.</p>
+        )}
+      </div>
+      <GraficoAvanco pontos={d.pontos} dataPrevisao={dataPrevisao} altura={300} />
+    </div>
   );
 }

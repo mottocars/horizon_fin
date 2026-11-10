@@ -94,5 +94,8 @@ module.exports = {
       await service.baixar(empresaIdSchema.parse(req.params.empresaId), idSchema.parse(req.params.parcelaId), baixaSchema.parse(req.body || {}), req.user.id)
     )
   ),
+  avancoPrevisto: rota(async (req, res) =>
+    res.json(await service.avancoPrevisto(empresaIdSchema.parse(req.params.empresaId), idSchema.parse(req.params.centroId)))
+  ),
   estornar: rota(async (req, res) => res.json(await service.estornar(empresaIdSchema.parse(req.params.empresaId), idSchema.parse(req.params.parcelaId)))),
 };

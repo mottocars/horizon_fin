@@ -35,6 +35,12 @@ export function baixarParcela(empresaId, parcelaId, dados) {
   return http.post(`/contas-pagar-receber/${empresaId}/parcelas/${parcelaId}/baixa`, dados).then((res) => res.data);
 }
 
+// Projeção PLS CEF › Avanços: curva diária do Prevision do centro de custo
+// { centro_id, centro_nome, tem_prevision, pontos: [{ data 'AAAA-MM-DD', previsto % acumulado }] }.
+export function avancoPrevisto(empresaId, centroId) {
+  return http.get(`/contas-pagar-receber/${empresaId}/avanco-previsto/${centroId}`).then((res) => res.data);
+}
+
 export function estornarBaixa(empresaId, parcelaId) {
   return http.delete(`/contas-pagar-receber/${empresaId}/parcelas/${parcelaId}/baixa`).then((res) => res.data);
 }

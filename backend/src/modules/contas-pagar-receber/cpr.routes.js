@@ -16,5 +16,6 @@ router.put('/:empresaId/titulos/:id', controller.alterar);
 router.delete('/:empresaId/titulos/:id', controller.excluir);
 router.post('/:empresaId/parcelas/:parcelaId/baixa', controller.baixar);
 router.delete('/:empresaId/parcelas/:parcelaId/baixa', controller.estornar);
+router.get('/:empresaId/avanco-previsto/:centroId', controller.avancoPrevisto);
 
 module.exports = router;

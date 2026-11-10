@@ -49,7 +49,7 @@ function pessoas(rows) {
 async function opcoes(empresaId) {
   const [centros, naturezas, fornecedores, clientes] = await Promise.all([
     pool.query(
-      `SELECT sienge_id AS id, COALESCE(NULLIF(apelido, ''), name) AS nome
+      `SELECT sienge_id AS id, COALESCE(NULLIF(apelido, ''), name) AS nome, natureza
          FROM centros_custo_sienge WHERE empresa_id = $1 ORDER BY sienge_id`,
       [empresaId]
     ),
@@ -299,4 +299,31 @@ async function estornar(empresaId, parcelaId) {
   return { ok: true };
 }
 
-module.exports = { opcoes, listar, obter, criar, alterar, excluir, baixar, estornar, MSG_PLS_CEF };
+// Projeção PLS CEF › Avanços: a curva S diária do Prevision do centro (prevision_dashboard_scurve.expected,
+// acumulado de 0 a 1 → %), na visão primária/secundária escolhida no cadastro do centro — a mesma fonte do
+// avanço Prevision da DFC Construtoras › Avanços (lá somado por mês; os acumulados batem). Como na DFC, só
+// vale com o "Código Prevision" preenchido.
+async function avancoPrevisto(empresaId, centroId) {
+  const { rows: c } = await pool.query(
+    `SELECT sienge_id, COALESCE(NULLIF(apelido, ''), name) AS nome, codigo_prevision, prevision_primary_view
+       FROM centros_custo_sienge WHERE empresa_id = $1 AND sienge_id = $2`,
+    [empresaId, centroId]
+  );
+  if (!c[0]) throw erro(404, 'Centro de custo não encontrado nesta empresa.');
+  const temPrevision = Boolean(c[0].codigo_prevision && String(c[0].codigo_prevision).trim());
+  const { rows } = temPrevision
+    ? await pool.query(
+        `SELECT data, expected FROM prevision_dashboard_scurve
+          WHERE empresa_id = $1 AND sienge_id = $2 AND primary_view = $3 ORDER BY data`,
+        [empresaId, centroId, c[0].prevision_primary_view]
+      )
+    : { rows: [] };
+  return {
+    centro_id: c[0].sienge_id,
+    centro_nome: c[0].nome,
+    tem_prevision: temPrevision,
+    pontos: rows.map((r) => ({ data: r.data, previsto: Math.round(Number(r.expected) * 10000) / 100 })),
+  };
+}
+
+module.exports = { opcoes, listar, obter, criar, alterar, excluir, baixar, estornar, avancoPrevisto, MSG_PLS_CEF };
