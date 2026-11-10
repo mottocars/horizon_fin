@@ -479,15 +479,12 @@ async function cabecalhoPls(empresaId, centroId, dataMedicao = null) {
   };
 }
 
-// Projeção PLS CEF › Repasses PF: rastreio, por cliente registrado no Geral (sem o 1º contrato, o da
-// construtora), do que a Caixa repassou e do que falta repassar da parte PF. Liberações = parcelas LP
-// numeradas do DCD (fora 285, EX e TEX) anteriores à Data Previsão Medição (sem ela, todas):
-// - Novo Registro: a 1ª liberação na data do registro ou depois dela; repassado = terreno + FGTS + VGF de
-//   medição × % de obra acumulado daquela parcela (físico-financeiro).
-// - Repassado em medição: VGF de medição × (% da última liberação − % do Novo Registro).
-// - Falta repassar em medição: VGF de medição × (100% − % da última liberação).
-// Cliente registrado depois da última liberação ainda não teve Novo Registro: entra nesta PLS (a tela calcula
-// com o avanço previsto na medição). VGF de medição = financiamento − terreno + subsídio.
+// Projeção PLS CEF › Repasses PF: rastreio do repasse no Novo Registro, por cliente registrado no Geral (sem o
+// 1º contrato, o da construtora). Liberações = parcelas LP numeradas do DCD (fora 285, EX e TEX) anteriores à
+// Data Previsão Medição (sem ela, todas). Novo Registro = a 1ª liberação na data do registro ou depois dela,
+// com o % de obra acumulado da Caixa naquela parcela (físico-financeiro); repassado = à vista (terreno + FGTS)
+// + VGF de medição × % (VGF de medição = financiamento − terreno + subsídio). Cliente registrado depois da
+// última liberação ainda não teve Novo Registro: entra nesta PLS (a tela calcula com o avanço da medição).
 async function repassesPf(empresaId, centroId, dataMedicao = null) {
   const projecaoCef = require('../dfc-projecao-cef/projecaoCef.service');
   const c = await centroComContrato(empresaId, centroId);
@@ -511,7 +508,6 @@ async function repassesPf(empresaId, centroId, dataMedicao = null) {
   ]);
   const liberacoes = libs.map((l) => ({ parcela: l.parcela, data: String(l.data_parcela).slice(0, 10), pct: l.percentual_acumulado === null ? null : Number(l.percentual_acumulado) }));
   const ultima = liberacoes[liberacoes.length - 1] || null;
-  const pctAtual = ultima?.pct ?? null;
   const n = (v) => Number(v || 0);
   const r2 = (v) => Math.round((v + Number.EPSILON) * 100) / 100;
 
@@ -530,13 +526,9 @@ async function repassesPf(empresaId, centroId, dataMedicao = null) {
         vgf_medicao: vgfMedicao,
         terreno_fgts: terrenoFgts,
       };
-      if (!nr || nr.pct === null || pctAtual === null) return { ...base, novo_registro: null };
-      return {
-        ...base,
-        novo_registro: { data: nr.data, parcela: nr.parcela, pct: nr.pct, valor: r2(terrenoFgts + (vgfMedicao * nr.pct) / 100) },
-        repassado_medicao: r2((vgfMedicao * Math.max(pctAtual - nr.pct, 0)) / 100),
-        falta_medicao: r2((vgfMedicao * Math.max(100 - pctAtual, 0)) / 100),
-      };
+      if (!nr || nr.pct === null) return { ...base, novo_registro: null };
+      const financiado = r2((vgfMedicao * nr.pct) / 100);
+      return { ...base, novo_registro: { data: nr.data, parcela: nr.parcela, pct: nr.pct, financiado, valor: r2(terrenoFgts + financiado) } };
     })
     .sort((a, b) => (a.data_registro < b.data_registro ? -1 : a.data_registro > b.data_registro ? 1 : String(a.cliente).localeCompare(String(b.cliente))));
 

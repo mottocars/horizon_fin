@@ -384,7 +384,7 @@ export default function TituloModal({ empresaId, id = null, onClose, onSalvo }) 
   const abaVisivel = abas.some((a) => a.id === aba) ? aba : 'cabecalho';
 
   return (
-    <Modal open onClose={onClose} title={id ? `Título ${String(id).padStart(5, '0')}` : 'Novo título'} maxWidthClass="max-w-5xl">
+    <Modal open onClose={onClose} title={id ? `Título ${String(id).padStart(5, '0')}` : 'Novo título'} maxWidthClass={financeiro ? "max-w-5xl" : "max-w-6xl"}>
       {erro ? (
         <div className="flex items-center gap-2 rounded-lg bg-red-50 px-3 py-2 text-sm text-red-600">
           <TriangleAlert size={15} className="shrink-0" />
@@ -1261,9 +1261,10 @@ function AbaRateiosPls({ centroEscolhido, projecao, carregando, contasSugeridas,
   );
 }
 
-// Projeção PLS CEF › Repasses PF: rastreio, por cliente registrado, do Novo Registro (liberação, % de obra e
-// valor repassado), do que já foi repassado em medição e do que falta repassar em medição. Cliente registrado
-// depois da última liberação entra no Novo Registro desta PLS, com o avanço previsto na medição.
+// Projeção PLS CEF › Repasses PF: rastreio do repasse no Novo Registro, por cliente registrado — a liberação
+// da Caixa (data, parcela e % de obra), o VGF de medição, a parte à vista (terreno + FGTS), a parte financiada
+// (VGF × % da Caixa) e o total repassado. Cliente registrado depois da última liberação entra no Novo Registro
+// desta PLS, com o avanço previsto na medição.
 function AbaRepassesPf({ centroEscolhido, repasses, avancoMedicao, dataMedicao }) {
   if (!centroEscolhido) return <AvisoAba>Escolha o centro de custo no Cabeçalho para ver os repasses PF.</AvisoAba>;
   if (repasses.carregando && !repasses.dados) return <AvisoAba>Carregando os repasses PF...</AvisoAba>;
@@ -1275,30 +1276,20 @@ function AbaRepassesPf({ centroEscolhido, repasses, avancoMedicao, dataMedicao }
 
   const D = avancoMedicao;
   const linhas = d.clientes.map((c) => {
-    if (c.novo_registro) {
-      return { ...c, nr_valor: c.novo_registro.valor, nr_pct: c.novo_registro.pct, nesta: false };
-    }
+    if (c.novo_registro) return { ...c, nesta: false, pct: c.novo_registro.pct, financiado: c.novo_registro.financiado, total: c.novo_registro.valor };
     // Ainda sem Novo Registro: vai nesta PLS, com o avanço previsto na medição.
-    if (D === null) return { ...c, nr_valor: null, nr_pct: null, repassado_medicao: null, falta_medicao: null, nesta: true };
-    return {
-      ...c,
-      nesta: true,
-      nr_pct: D,
-      nr_valor: r2(c.terreno_fgts + (c.vgf_medicao * D) / 100),
-      repassado_medicao: 0,
-      falta_medicao: r2((c.vgf_medicao * Math.max(100 - D, 0)) / 100),
-    };
+    const financiado = D === null ? null : r2((c.vgf_medicao * D) / 100);
+    return { ...c, nesta: true, pct: D, financiado, total: financiado === null ? null : r2(c.terreno_fgts + financiado) };
   });
   const soma = (k) => linhas.reduce((s, l) => s + (l[k] || 0), 0);
-  const ul = d.ultima_liberacao;
+  const val = (v) => (v === null || v === undefined ? '—' : moeda(v));
 
   return (
     <div className="space-y-3">
       <div>
-        <h3 className="text-sm font-semibold text-gray-900">Repasses PF</h3>
+        <h3 className="text-sm font-semibold text-gray-900">Repasses PF · Novo Registro</h3>
         <p className="text-xs text-gray-500">
           {linhas.length} cliente(s) registrado(s){d.sem_registro ? ` · ${d.sem_registro} sem registro` : ''}
-          {ul ? ` · última liberação ${data(ul.data)} (parcela ${ul.parcela}, ${pct2(ul.pct)}%)` : ' · sem liberação no DCD'}
         </p>
       </div>
       <div className="max-h-[420px] overflow-auto rounded-lg ring-1 ring-gray-200">
@@ -1306,9 +1297,10 @@ function AbaRepassesPf({ centroEscolhido, repasses, avancoMedicao, dataMedicao }
           <colgroup>
             <col />
             <col className="w-24" />
-            <col className="w-36" />
+            <col className="w-32" />
             <col className="w-20" />
             <col className="w-32" />
+            <col className="w-28" />
             <col className="w-32" />
             <col className="w-32" />
           </colgroup>
@@ -1316,11 +1308,12 @@ function AbaRepassesPf({ centroEscolhido, repasses, avancoMedicao, dataMedicao }
             <tr>
               <th className="px-2 py-2 text-left font-medium">Cliente</th>
               <th className="whitespace-nowrap px-2 py-2 text-left font-medium">Registro</th>
-              <th className="whitespace-nowrap px-2 py-2 text-left font-medium">Novo Registro</th>
-              <th className="whitespace-nowrap px-2 py-2 text-right font-medium">% obra</th>
-              <th className="whitespace-nowrap px-2 py-2 text-right font-medium">Repassado NR</th>
-              <th className="whitespace-nowrap px-2 py-2 text-right font-medium">Rep. medição</th>
-              <th className="whitespace-nowrap px-2 py-2 text-right font-medium">Falta medição</th>
+              <th className="whitespace-nowrap px-2 py-2 text-left font-medium">Liberação</th>
+              <th className="whitespace-nowrap px-2 py-2 text-right font-medium">% Caixa</th>
+              <th className="whitespace-nowrap px-2 py-2 text-right font-medium">VGF medição</th>
+              <th className="whitespace-nowrap px-2 py-2 text-right font-medium">À vista</th>
+              <th className="whitespace-nowrap px-2 py-2 text-right font-medium">VGF × %</th>
+              <th className="whitespace-nowrap px-2 py-2 text-right font-medium">Repassado</th>
             </tr>
           </thead>
           <tbody>
@@ -1335,17 +1328,18 @@ function AbaRepassesPf({ centroEscolhido, repasses, avancoMedicao, dataMedicao }
                 <td className="whitespace-nowrap px-2 py-1.5 tabular-nums text-gray-700">{data(l.data_registro)}</td>
                 <td className="whitespace-nowrap px-2 py-1.5 tabular-nums">
                   {l.nesta ? (
-                    <span className="font-medium text-amber-700">Nesta PLS{dataMedicao ? ` · ${data(dataMedicao)}` : ''}</span>
+                    <span className="font-medium text-amber-700">{dataMedicao ? `${data(dataMedicao)} · PLS` : 'Nesta PLS'}</span>
                   ) : (
                     <span className="text-gray-700">
                       {data(l.novo_registro.data)} <span className="text-gray-400">· {l.novo_registro.parcela}</span>
                     </span>
                   )}
                 </td>
-                <td className="whitespace-nowrap px-2 py-1.5 text-right tabular-nums text-gray-700">{l.nr_pct === null ? '—' : `${pct2(l.nr_pct)}%`}</td>
-                <td className="whitespace-nowrap px-2 py-1.5 text-right tabular-nums text-gray-900">{l.nr_valor === null ? '—' : moeda(l.nr_valor)}</td>
-                <td className="whitespace-nowrap px-2 py-1.5 text-right tabular-nums text-gray-700">{l.repassado_medicao === null || l.repassado_medicao === undefined ? '—' : moeda(l.repassado_medicao)}</td>
-                <td className="whitespace-nowrap px-2 py-1.5 text-right font-semibold tabular-nums text-gray-900">{l.falta_medicao === null || l.falta_medicao === undefined ? '—' : moeda(l.falta_medicao)}</td>
+                <td className="whitespace-nowrap px-2 py-1.5 text-right tabular-nums text-gray-700">{l.pct === null ? '—' : `${pct2(l.pct)}%`}</td>
+                <td className="whitespace-nowrap px-2 py-1.5 text-right tabular-nums text-gray-700">{val(l.vgf_medicao)}</td>
+                <td className="whitespace-nowrap px-2 py-1.5 text-right tabular-nums text-gray-700">{val(l.terreno_fgts)}</td>
+                <td className="whitespace-nowrap px-2 py-1.5 text-right tabular-nums text-gray-700">{val(l.financiado)}</td>
+                <td className="whitespace-nowrap px-2 py-1.5 text-right font-semibold tabular-nums text-gray-900">{val(l.total)}</td>
               </tr>
             ))}
           </tbody>
@@ -1354,9 +1348,10 @@ function AbaRepassesPf({ centroEscolhido, repasses, avancoMedicao, dataMedicao }
               <td colSpan={4} className="px-2 py-2 text-xs font-semibold text-gray-600">
                 Total
               </td>
-              <td className="whitespace-nowrap px-2 py-2 text-right text-sm font-semibold tabular-nums text-gray-900">{moeda(soma('nr_valor'))}</td>
-              <td className="whitespace-nowrap px-2 py-2 text-right text-sm font-semibold tabular-nums text-gray-900">{moeda(soma('repassado_medicao'))}</td>
-              <td className="whitespace-nowrap px-2 py-2 text-right text-sm font-semibold tabular-nums text-gray-900">{moeda(soma('falta_medicao'))}</td>
+              <td className="whitespace-nowrap px-2 py-2 text-right text-sm font-semibold tabular-nums text-gray-900">{moeda(soma('vgf_medicao'))}</td>
+              <td className="whitespace-nowrap px-2 py-2 text-right text-sm font-semibold tabular-nums text-gray-900">{moeda(soma('terreno_fgts'))}</td>
+              <td className="whitespace-nowrap px-2 py-2 text-right text-sm font-semibold tabular-nums text-gray-900">{moeda(soma('financiado'))}</td>
+              <td className="whitespace-nowrap px-2 py-2 text-right text-sm font-semibold tabular-nums text-gray-900">{moeda(soma('total'))}</td>
             </tr>
           </tfoot>
         </table>
