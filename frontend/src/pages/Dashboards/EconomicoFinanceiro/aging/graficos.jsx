@@ -7,12 +7,15 @@ import { brl, dm, semana } from './modelo';
 // de cada dia, a linha do saldo no fim do dia e — quando o saldo desce até ele — o valor do cheque especial
 // que está dentro do saldo (abaixo da linha, o caixa está usando o cheque).
 // Fim de semana em faixa cinza (o que vence nele cai na segunda; os títulos manuais do Horizon ficam no dia exato, em
-// roxo — a parte manual de cada barra). Clicar num dia abre as parcelas dele.
+// barras próprias: a receber verde-azulado e a pagar roxo). Clicar num dia abre as parcelas dele.
 // Duas escalas: o saldo na da esquerda e as entradas/saídas do dia na da direita, numa faixa embaixo —
 // com o caixa muito maior que o movimento do dia (ex.: R$ 9 mi de saldo e R$ 20 mil de entrada), as
 // barras na mesma escala do saldo ficavam com 1 px e pareciam não existir.
 // Cor dos títulos manuais do Horizon (Contas Pagar / Receber) no simulador: a parte manual da barra do dia.
-export const COR_MANUAL = '#7c3aed';
+// Títulos manuais do Horizon: barras próprias, ao lado das do Sienge, com cor própria para receber e para pagar.
+export const COR_MANUAL_RECEBER = '#0d9488';
+export const COR_MANUAL_PAGAR = '#7c3aed';
+export const corManual = (lado) => (lado === 'p' ? COR_MANUAL_PAGAR : COR_MANUAL_RECEBER);
 
 export function CaixaDiario({ sim, diaSel, onDia }) {
   const [ref, W] = useLargura();
@@ -32,15 +35,21 @@ export function CaixaDiario({ sim, diaSel, onDia }) {
   const y = (v) => m.t + (H - m.t - m.b) * (1 - (v - ymin) / (ymax - ymin || 1));
   // Entradas/saídas do dia (eixo da direita): faixa nos 40% de baixo, entradas para cima e saídas
   // para baixo da linha de base delas, cada lado proporcional ao maior valor do período.
-  const maxEnt = Math.max(0, ...dias.map((d) => d.ent));
-  const maxSai = Math.max(0, ...dias.map((d) => d.sai));
+  // Com títulos manuais, cada dia tem até quatro barras: entrada (Sienge) e entrada manual para cima, saída (Sienge)
+  // e saída manual para baixo — a escala vai pela maior barra de cada lado.
+  const temManual = dias.some((d) => d.entM > 0 || d.saiM > 0);
+  const maxEnt = Math.max(0, ...dias.map((d) => Math.max(d.ent - d.entM, d.entM)));
+  const maxSai = Math.max(0, ...dias.map((d) => Math.max(d.sai - d.saiM, d.saiM)));
   const temBarras = maxEnt + maxSai > 0;
   const faixaAlt = (H - m.t - m.b) * 0.4;
   const faixaTopo = H - m.b - faixaAlt;
   const base = faixaTopo + (temBarras ? faixaAlt * (maxEnt / (maxEnt + maxSai)) : faixaAlt / 2);
   const escalaB = temBarras ? faixaAlt / (maxEnt + maxSai) : 0;
   const yb = (v) => base - v * escalaB;
-  const w = Math.max(2, Math.min(26, bw * 0.34));
+  const w = temManual ? Math.max(2, Math.min(14, bw * 0.19)) : Math.max(2, Math.min(26, bw * 0.34));
+  // Posição de cada barra no dia (da esquerda para a direita): entrada, entrada manual | saída, saída manual.
+  const xBarra = (i, k) => (temManual ? cx(i) - 2 * w - 1.5 + k * (w + 1) : k === 0 ? cx(i) - w - 1 : cx(i) + 1);
+  const kSai = temManual ? 2 : 1;
   const passo = Math.max(1, Math.ceil(n / (W < 560 ? 6 : 16)));
   const linha = [`M${m.l},${y(ini)}`, ...dias.map((d, i) => `L${cx(i).toFixed(1)},${y(d.fim).toFixed(1)}`)].join('');
   const iMin = dias.findIndex((d) => d.data === sim.minData);
@@ -81,19 +90,15 @@ export function CaixaDiario({ sim, diaSel, onDia }) {
         )}
         {dias.map((d, i) => (
           <g key={d.data}>
-            {/* Barra do dia: o que vem do Sienge na cor normal e, empilhada por fora, a parte dos títulos manuais em roxo. */}
+            {/* Barras do dia: Sienge nas cores normais e os títulos manuais do Horizon em barras próprias, ao lado. */}
             {d.ent - d.entM > 0.005 && (
-              <rect x={cx(i) - w - 1} y={yb(d.ent - d.entM)} width={w} height={Math.max(1, base - yb(d.ent - d.entM))} rx={2} fill={COR.entrada} fillOpacity={0.85} />
+              <rect x={xBarra(i, 0)} y={yb(d.ent - d.entM)} width={w} height={Math.max(1, base - yb(d.ent - d.entM))} rx={2} fill={COR.entrada} fillOpacity={0.85} />
             )}
-            {d.entM > 0 && (
-              <rect x={cx(i) - w - 1} y={yb(d.ent)} width={w} height={Math.max(2, yb(d.ent - d.entM) - yb(d.ent))} rx={2} fill={COR_MANUAL} />
-            )}
+            {d.entM > 0 && <rect x={xBarra(i, 1)} y={yb(d.entM)} width={w} height={Math.max(2, base - yb(d.entM))} rx={2} fill={COR_MANUAL_RECEBER} />}
             {d.sai - d.saiM > 0.005 && (
-              <rect x={cx(i) + 1} y={base} width={w} height={Math.max(1, yb(-(d.sai - d.saiM)) - base)} rx={2} fill={COR.saida} fillOpacity={0.85} />
+              <rect x={xBarra(i, kSai)} y={base} width={w} height={Math.max(1, yb(-(d.sai - d.saiM)) - base)} rx={2} fill={COR.saida} fillOpacity={0.85} />
             )}
-            {d.saiM > 0 && (
-              <rect x={cx(i) + 1} y={yb(-(d.sai - d.saiM))} width={w} height={Math.max(2, yb(-d.sai) - yb(-(d.sai - d.saiM)))} rx={2} fill={COR_MANUAL} />
-            )}
+            {d.saiM > 0 && <rect x={xBarra(i, 3)} y={base} width={w} height={Math.max(2, yb(-d.saiM) - base)} rx={2} fill={COR_MANUAL_PAGAR} />}
             {(i % passo === 0 || i === n - 1) && (
               <text x={cx(i)} y={H - 12} textAnchor="middle" style={d.util ? undefined : { opacity: 0.6 }}>
                 {i === 0 ? 'hoje' : dm(d.data)}
