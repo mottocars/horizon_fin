@@ -381,7 +381,7 @@ async function cabecalhoPls(empresaId, centroId) {
   const c = await centroComContrato(empresaId, centroId);
   const contrato = c.contrato;
 
-  const [{ rows: lib }, { rows: cred }, { rows: envios }, { fixos }] = await Promise.all([
+  const [{ rows: lib }, { rows: cred }, { rows: envios }, { fixos }, { rows: contasCef }] = await Promise.all([
     contrato
       ? pool.query(
           `SELECT parcela, data_parcela FROM dcd_cronograma_liberacao
@@ -405,6 +405,18 @@ async function cabecalhoPls(empresaId, centroId) {
         )
       : { rows: [{ dcd: null, geral: null }] },
     parametrosService.fonteFixos(empresaId, centroId),
+    // Contas do plano da DFC com as Origens Projeção CEF — do plano próprio do centro, se ele tiver versão,
+    // senão do Global (mesma escolha de dfc-projecao-cef/orcamento): sugestão de plano de contas da aba Rateios.
+    pool.query(
+      `SELECT origem_projecao, sienge_id::text AS conta FROM dfc_plano_contas_centro
+        WHERE empresa_id = $1 AND centro_id = $2 AND origem_projecao IN ('CEF_NOVO_REGISTRO', 'CEF_MEDICAO', 'CEF_CREDITO_PJ')
+          AND EXISTS (SELECT 1 FROM dfc_plano_contas_versoes v WHERE v.empresa_id = $1 AND v.centro_id = $2)
+       UNION ALL
+       SELECT origem_projecao, sienge_id::text FROM dfc_plano_contas
+        WHERE empresa_id = $1 AND origem_projecao IN ('CEF_NOVO_REGISTRO', 'CEF_MEDICAO', 'CEF_CREDITO_PJ')
+          AND NOT EXISTS (SELECT 1 FROM dfc_plano_contas_versoes v WHERE v.empresa_id = $1 AND v.centro_id = $2)`,
+      [empresaId, centroId]
+    ),
   ]);
 
   const ultima = lib[0] || null;
@@ -456,6 +468,11 @@ async function cabecalhoPls(empresaId, centroId) {
       data_demanda_minima: fixos.data_demanda_minima ?? null,
     },
     unidades,
+    contas_sugeridas: {
+      novo_registro: contasCef.find((r) => r.origem_projecao === 'CEF_NOVO_REGISTRO')?.conta || null,
+      medicao: contasCef.find((r) => r.origem_projecao === 'CEF_MEDICAO')?.conta || null,
+      credito_pj: contasCef.find((r) => r.origem_projecao === 'CEF_CREDITO_PJ')?.conta || null,
+    },
   };
 }
 

@@ -56,6 +56,7 @@ const ABAS_POR_TIPO = {
   ],
   PROJECAO_PLS_CEF: [
     { id: 'cabecalho', label: 'Cabeçalho', icon: FileText },
+    { id: 'rateios-pls', label: 'Rateios', icon: PieChart },
     { id: 'avancos', label: 'Avanços', icon: TrendingUp },
     { id: 'documentos', label: 'Documentos', icon: FolderOpen },
   ],
@@ -226,6 +227,16 @@ export default function TituloModal({ empresaId, id = null, onClose, onSalvo }) 
   const avancoInformado = lerValor(avancoTexto);
   const avancoValido = Number.isFinite(avancoInformado) && avancoInformado >= 0 && avancoInformado <= 100;
   const avancoAlterado = pls.avanco !== null && avancoValido && avancoPrevision !== null && Math.abs(avancoInformado - avancoPrevision) > 0.0001;
+
+  // Aba Rateios da PLS CEF: as três classificações calculadas (projetarPls) com o plano de contas de cada uma
+  // (null = a conta sugerida pelo plano da DFC) e, no Crédito PJ, o % de redução e o valor projetado
+  // (`pj_valor` null = calculado × (1 − redução)).
+  const [rateioPls, setRateioPls] = useState({ contas: { novo_registro: null, medicao: null, credito_pj: null }, pj_reducao: '0', pj_valor: null });
+  useEffect(() => setRateioPls((r) => ({ ...r, contas: { novo_registro: null, medicao: null, credito_pj: null } })), [pls.centro_id]);
+  const projPls = useMemo(
+    () => projetarPls(cab, avancoValido ? avancoInformado : null, pls.data_medicao),
+    [cab, avancoValido, avancoInformado, pls.data_medicao]
+  );
   const opNaturezas = useMemo(
     () => (opcoes?.naturezas || []).map((n) => ({ value: n.id, label: `${n.id} ${n.nome}${n.inativa ? ' (inativa)' : ''}` })),
     [opcoes]
@@ -539,6 +550,18 @@ export default function TituloModal({ empresaId, id = null, onClose, onSalvo }) 
                   carregando={cabPls.carregando}
                   erro={cabPls.erro}
                   avancoInformado={avancoValido ? avancoInformado : null}
+                />
+              )}
+
+              {abaVisivel === 'rateios-pls' && (
+                <AbaRateiosPls
+                  centroEscolhido={Boolean(pls.centro_id)}
+                  projecao={projPls}
+                  carregando={cabPls.carregando || avanco.carregando}
+                  contasSugeridas={cab?.contas_sugeridas}
+                  opNaturezas={opNaturezas}
+                  rateio={rateioPls}
+                  setRateio={setRateioPls}
                 />
               )}
 
@@ -1013,6 +1036,198 @@ function AbaAvancos({ centroEscolhido, avanco, dataMedicao, avancoInformado }) {
         )}
       </div>
       <GraficoAvanco pontos={d.pontos} dataPrevisao={dataMedicao} altura={300} />
+    </div>
+  );
+}
+
+
+const r2 = (v) => Math.round((v + Number.EPSILON) * 100) / 100;
+
+// Projeção curta da PLS CEF (da última liberação até a Data Previsão Medição), com as regras do motor da
+// Projeção CEF da DFC (dfc-projecao-cef/projecaoCef.motor.js) aplicadas a uma medição só:
+//   avanço a medir (F) = avanço previsto na medição − avanço liberado (nunca negativo); D = % de obra na medição
+//   Medição       = VGF de medição das registradas até a última liberação × F            (motor: Q = cumO × F)
+//   Novo Registro = registradas após a última liberação: terreno + FGTS + VGF de medição × D
+//   Crédito PJ    = até o mês da Demanda Mínima: 0; no mês seguinte a ela: teto × F; depois: CTO × F − Medição;
+//                   nunca negativo e limitado ao saldo do teto (teto − crédito PJ já liberado)
+// Devolve null enquanto faltar o necessário (com o motivo).
+function projetarPls(cab, avanco, dataMedicao) {
+  if (!cab) return null;
+  if (!cab.contrato) return { motivo: 'Este centro de custo não tem Contrato Caixa cadastrado (DFC Construtoras › Centros Custos).' };
+  if (!cab.ultima_liberacao || cab.avanco_liberado === null || cab.avanco_liberado === undefined) {
+    return { motivo: 'Sem liberação no DCD deste contrato: não há de onde medir.' };
+  }
+  if (!dataMedicao) return { motivo: 'Informe a Data Previsão Medição no Cabeçalho.' };
+  if (avanco === null) return { motivo: 'Informe o avanço previsto na medição no Cabeçalho.' };
+
+  const D = avanco / 100;
+  const F = Math.max(avanco - cab.avanco_liberado, 0) / 100;
+  const reg = cab.unidades?.registradas || { vgf_medicao: 0 };
+  const apos = cab.unidades?.apos_liberacao || { vgf_medicao: 0, terreno_fgts: 0 };
+  const medicao = r2(reg.vgf_medicao * F);
+  const novoRegistro = r2(apos.terreno_fgts + apos.vgf_medicao * D);
+
+  const p = cab.parametros || {};
+  let creditoPj = null;
+  let motivoPj = null;
+  if (p.cto === null || p.cto === undefined || p.valor_financiamento_pj === null || p.valor_financiamento_pj === undefined || !p.data_demanda_minima) {
+    motivoPj = 'Sem CTO, teto PJ ou Demanda Mínima no DCD.';
+  } else {
+    const mMed = dataMedicao.slice(0, 7);
+    const dm = String(p.data_demanda_minima).slice(0, 7);
+    const dmMais1 = somarMeses(`${dm}-01`, 1).slice(0, 7);
+    let v = mMed <= dm ? 0 : mMed === dmMais1 ? p.valor_financiamento_pj * F : p.cto * F - medicao;
+    v = Math.max(v, 0);
+    const saldo = Math.max(p.valor_financiamento_pj - (cab.credito_pj_liberado || 0), 0);
+    creditoPj = r2(Math.min(v, saldo));
+    if (mMed <= dm) motivoPj = 'Demanda Mínima não atingida na medição.';
+  }
+  return { novo_registro: novoRegistro, medicao, credito_pj: creditoPj, motivo_pj: motivoPj };
+}
+
+const CLASSIFICACOES_PLS = [
+  { chave: 'novo_registro', rotulo: 'Novo Registro' },
+  { chave: 'medicao', rotulo: 'Medição' },
+  { chave: 'credito_pj', rotulo: 'Crédito PJ' },
+];
+
+// Projeção PLS CEF › Rateios: sempre as três classificações (Novo Registro, Medição e Crédito PJ), cada uma com
+// o plano de contas (sugerido pelo plano da DFC) e o valor projetado. No Crédito PJ dá para reduzir um % do
+// valor calculado e alterar o valor projetado.
+function AbaRateiosPls({ centroEscolhido, projecao, carregando, contasSugeridas, opNaturezas, rateio, setRateio }) {
+  if (!centroEscolhido) return <AvisoAba>Escolha o centro de custo no Cabeçalho para ver os rateios.</AvisoAba>;
+  if (carregando && !projecao) return <AvisoAba>Carregando...</AvisoAba>;
+  if (!projecao) return null;
+  if (projecao.motivo) return <AvisoAba>{projecao.motivo}</AvisoAba>;
+
+  const conta = (k) => rateio.contas[k] ?? contasSugeridas?.[k] ?? '';
+  const calcPj = projecao.credito_pj;
+  const reducao = lerValor(rateio.pj_reducao);
+  const reducaoValida = rateio.pj_reducao === '' || (Number.isFinite(reducao) && reducao >= 0 && reducao <= 100);
+  const pjProjetado =
+    calcPj === null ? null : rateio.pj_valor !== null ? lerValor(rateio.pj_valor) : r2(calcPj * (1 - (reducaoValida && Number.isFinite(reducao) ? reducao : 0) / 100));
+  const pjTexto = rateio.pj_valor ?? (pjProjetado === null ? '' : numeroBr(pjProjetado));
+  const pjValido = pjProjetado === null || (Number.isFinite(pjProjetado) && pjProjetado >= 0);
+  const projetado = { novo_registro: projecao.novo_registro, medicao: projecao.medicao, credito_pj: pjValido ? pjProjetado : null };
+  const total = CLASSIFICACOES_PLS.reduce((s, c) => s + (projetado[c.chave] || 0), 0);
+
+  function mudarReducao(t) {
+    setRateio((r) => ({ ...r, pj_reducao: t, pj_valor: null }));
+  }
+  function mudarValorPj(t) {
+    const v = lerValor(t);
+    setRateio((r) => ({
+      ...r,
+      pj_valor: t,
+      pj_reducao: calcPj > 0 && Number.isFinite(v) ? pct2(Math.max(0, (1 - v / calcPj) * 100)) : r.pj_reducao,
+    }));
+  }
+
+  return (
+    <div className="space-y-3">
+      <h3 className="text-sm font-semibold text-gray-900">Rateio da projeção</h3>
+      <div className="overflow-x-auto rounded-lg ring-1 ring-gray-200">
+        <table className="w-full min-w-[820px] table-fixed text-sm">
+          <colgroup>
+            <col className="w-36" />
+            <col />
+            <col className="w-40" />
+            <col className="w-32" />
+            <col className="w-44" />
+          </colgroup>
+          <thead className={CABECALHO}>
+            <tr>
+              <th className="px-3 py-2 text-left font-medium">Classificação</th>
+              <th className="px-3 py-2 text-left font-medium">Plano de contas</th>
+              <th className="px-3 py-2 text-right font-medium">Calculado</th>
+              <th className="whitespace-nowrap px-3 py-2 text-right font-medium">% redução</th>
+              <th className="whitespace-nowrap px-3 py-2 text-right font-medium">Valor projetado</th>
+            </tr>
+          </thead>
+          <tbody>
+            {CLASSIFICACOES_PLS.map((c) => {
+              const ehPj = c.chave === 'credito_pj';
+              const calc = projecao[c.chave];
+              return (
+                <tr key={c.chave} className="border-b border-gray-100 align-middle">
+                  <td className="px-3 py-2 font-semibold text-gray-900">{c.rotulo}</td>
+                  <td className="px-3 py-2">
+                    <SearchableSelect
+                      value={conta(c.chave)}
+                      onChange={(v) => setRateio((r) => ({ ...r, contas: { ...r.contas, [c.chave]: v || '' } }))}
+                      options={opNaturezas}
+                      placeholder="Plano de contas"
+                      emptyMessage="Nenhuma conta cadastrada."
+                      larguraPainel={460}
+                      corClasses={corSelect(Boolean(conta(c.chave)))}
+                    />
+                  </td>
+                  <td className="whitespace-nowrap px-3 py-2 text-right tabular-nums text-gray-700" title={ehPj && projecao.motivo_pj ? projecao.motivo_pj : undefined}>
+                    {calc === null ? '—' : moeda(calc)}
+                  </td>
+                  <td className="px-3 py-2">
+                    {ehPj ? (
+                      <div className="relative">
+                        <input
+                          value={rateio.pj_reducao}
+                          onChange={(e) => mudarReducao(e.target.value)}
+                          disabled={calcPj === null}
+                          inputMode="decimal"
+                          placeholder="0"
+                          aria-label="Percentual de redução do Crédito PJ"
+                          className={`${reducaoValida ? inputCor(rateio.pj_reducao !== '') : `${INPUT_SEM_COR} border-red-300 bg-red-50`} !pr-7 text-right tabular-nums`}
+                        />
+                        <span className="pointer-events-none absolute right-2.5 top-1/2 -translate-y-1/2 text-sm text-gray-400">%</span>
+                      </div>
+                    ) : (
+                      <span className="block text-center text-gray-300">—</span>
+                    )}
+                  </td>
+                  <td className="px-3 py-2">
+                    {ehPj ? (
+                      <input
+                        value={pjTexto}
+                        onChange={(e) => mudarValorPj(e.target.value)}
+                        onBlur={() => rateio.pj_valor !== null && pjValido && setRateio((r) => ({ ...r, pj_valor: numeroBr(pjProjetado) }))}
+                        disabled={calcPj === null}
+                        inputMode="decimal"
+                        placeholder="0,00"
+                        aria-label="Valor projetado do Crédito PJ"
+                        className={`${pjValido ? inputCor(pjTexto !== '') : `${INPUT_SEM_COR} border-red-300 bg-red-50`} text-right tabular-nums`}
+                      />
+                    ) : (
+                      <div className="whitespace-nowrap rounded-lg border border-gray-200 bg-gray-50 px-2.5 py-2 text-right tabular-nums text-gray-700">
+                        {calc === null ? '—' : moeda(calc)}
+                      </div>
+                    )}
+                  </td>
+                </tr>
+              );
+            })}
+          </tbody>
+          <tfoot className="bg-gray-50">
+            <tr>
+              <td colSpan={2} className="px-3 py-2 text-xs font-semibold text-gray-600">
+                Total projetado
+              </td>
+              <td className="whitespace-nowrap px-3 py-2 text-right text-sm font-semibold tabular-nums text-gray-500">
+                {moeda(CLASSIFICACOES_PLS.reduce((s, c) => s + (projecao[c.chave] || 0), 0))}
+              </td>
+              <td />
+              <td className="whitespace-nowrap px-3 py-2 text-right text-sm font-semibold tabular-nums text-gray-900">{moeda(total)}</td>
+            </tr>
+          </tfoot>
+        </table>
+      </div>
+      {projecao.motivo_pj && <p className="text-xs text-amber-600">Crédito PJ: {projecao.motivo_pj}</p>}
+      {rateio.pj_valor !== null && calcPj !== null && (
+        <p className="text-xs text-gray-500">
+          Valor do Crédito PJ alterado à mão ·{' '}
+          <button type="button" onClick={() => setRateio((r) => ({ ...r, pj_valor: null, pj_reducao: '0' }))} className="font-medium text-primary-600 hover:underline">
+            usar o calculado
+          </button>
+        </p>
+      )}
     </div>
   );
 }
