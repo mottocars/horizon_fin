@@ -1,5 +1,5 @@
 import { useEffect, useMemo, useState } from 'react';
-import { ArrowDownLeft, ArrowUpRight, CalendarDays, FileText, Lock, PieChart, Plus, Trash2, TriangleAlert, X } from 'lucide-react';
+import { ArrowDownLeft, ArrowUpRight, CalendarDays, FileText, FolderOpen, Lock, PieChart, Plus, Trash2, TrendingUp, TriangleAlert, X } from 'lucide-react';
 import Modal from '../../components/Modal';
 import Button from '../../components/Button';
 import Tabs from '../../components/Tabs';
@@ -14,12 +14,20 @@ const INPUT =
   'w-full rounded-lg border border-gray-200 px-2.5 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-primary-100 disabled:bg-gray-50 disabled:text-gray-500';
 const CABECALHO = 'border-b-2 border-blue-500 bg-blue-50 text-xs uppercase tracking-wide text-blue-700';
 
-// Abas da janela. A Projeção PLS CEF só tem o Cabeçalho (com o tipo de documento) por enquanto.
-const ABAS = [
-  { id: 'cabecalho', label: 'Cabeçalho', icon: FileText },
-  { id: 'rateios', label: 'Rateios', icon: PieChart },
-  { id: 'parcelas', label: 'Parcelas', icon: CalendarDays },
-];
+// Abas da janela, conforme o tipo de documento. Na Projeção PLS CEF, Avanços e Documentos ainda estão
+// vazias (o conteúdo vem depois) e o Cabeçalho só tem o tipo de documento.
+const ABAS_POR_TIPO = {
+  FINANCEIRO: [
+    { id: 'cabecalho', label: 'Cabeçalho', icon: FileText },
+    { id: 'rateios', label: 'Rateios', icon: PieChart },
+    { id: 'parcelas', label: 'Parcelas', icon: CalendarDays },
+  ],
+  PROJECAO_PLS_CEF: [
+    { id: 'cabecalho', label: 'Cabeçalho', icon: FileText },
+    { id: 'avancos', label: 'Avanços', icon: TrendingUp },
+    { id: 'documentos', label: 'Documentos', icon: FolderOpen },
+  ],
+};
 
 function Campo({ rotulo, children, className = '' }) {
   return (
@@ -67,8 +75,8 @@ const LINHA_RATEIO = { centro_id: '', natureza_id: '', pct: '100', valor: '' };
 
 // Janela do "+" (novo título) e do título clicado na listagem (alterar / excluir), em três abas:
 // Cabeçalho, Rateios (centro de custo × plano de contas) e Parcelas (mensais, editáveis). Os botões ficam
-// fora das abas; erro de preenchimento leva para a aba do campo. "Projeção PLS CEF": por ora só o
-// Cabeçalho com o tipo de documento (o formulário dele vem depois).
+// fora das abas; erro de preenchimento leva para a aba do campo. "Projeção PLS CEF": abas Cabeçalho (só o
+// tipo de documento), Avanços e Documentos — ainda sem conteúdo nem gravação.
 export default function TituloModal({ empresaId, id = null, onClose, onSalvo }) {
   const confirm = useConfirm();
   const hoje = hojeISO();
@@ -240,8 +248,8 @@ export default function TituloModal({ empresaId, id = null, onClose, onSalvo }) 
   const diferenca = (soma) =>
     soma === totalC ? null : <span className="ml-2 font-normal text-red-600">{soma > totalC ? 'passa' : 'falta'} {moeda(Math.abs(totalC - soma) / 100)}</span>;
   const temBaixa = parcelas.some((p) => p.data_baixa);
-  const abas = financeiro ? ABAS : ABAS.slice(0, 1);
-  const abaVisivel = financeiro ? aba : 'cabecalho';
+  const abas = ABAS_POR_TIPO[form.tipo_documento] || ABAS_POR_TIPO.FINANCEIRO;
+  const abaVisivel = abas.some((a) => a.id === aba) ? aba : 'cabecalho';
 
   return (
     <Modal open onClose={onClose} title={id ? `Título ${String(id).padStart(5, '0')}` : 'Novo título'} maxWidthClass="max-w-5xl">
@@ -272,7 +280,7 @@ export default function TituloModal({ empresaId, id = null, onClose, onSalvo }) 
             />
             {/* Painel encaixado na aba ativa (a borda de cima é a da barra de abas). Altura mínima fixa: a
                 janela não muda de tamanho ao trocar de aba. */}
-            <div className={`rounded-b-xl border border-t-0 border-gray-200 p-4 ${financeiro ? 'min-h-[360px]' : ''}`}>
+            <div className={`rounded-b-xl border border-t-0 border-gray-200 p-4 min-h-[360px]`}>
               {abaVisivel === 'cabecalho' && (
                 <div className="grid grid-cols-1 gap-x-4 gap-y-3 md:grid-cols-3">
                   <Campo rotulo="Tipo de documento">
