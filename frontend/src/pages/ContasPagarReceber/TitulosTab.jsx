@@ -99,10 +99,10 @@ export default function TitulosTab({ empresaId, inicio, fim, versao, onAbrir }) 
               <thead>
                 <tr className={CABECALHO}>
                   <th className="py-2.5 pl-4 pr-3 font-medium">Título</th>
+                  <th className="py-2.5 pr-3 font-medium">Parcela</th>
                   <th className="py-2.5 pr-3 font-medium">Vencimento</th>
                   <th className="py-2.5 pr-3 font-medium">Tipo</th>
                   <th className="py-2.5 pr-3 font-medium">Fornecedor / Cliente</th>
-                  <th className="py-2.5 pr-3 font-medium">Parcela</th>
                   <th className="py-2.5 pr-3 font-medium">Centro de custo</th>
                   <th className="py-2.5 pr-3 text-right font-medium">Valor</th>
                   <th className="py-2.5 pl-6 pr-3 font-medium">Situação</th>
@@ -116,15 +116,15 @@ export default function TitulosTab({ empresaId, inicio, fim, versao, onAbrir }) 
                   return (
                     <tr key={l.parcela_id} onClick={() => onAbrir(l.titulo_id)} className="cursor-pointer border-b border-gray-100 hover:bg-gray-50">
                       <td className="py-1.5 pl-4 pr-3 font-medium tabular-nums text-gray-900">{String(l.titulo_id).padStart(5, '0')}</td>
+                      <td className="py-1.5 pr-3 tabular-nums text-gray-700">
+                        {l.numero}/{l.total_parcelas}
+                      </td>
                       <td className="py-1.5 pr-3 tabular-nums text-gray-700">{data(l.vencimento)}</td>
                       <td className="py-1.5 pr-3">
                         <span className={`inline-flex whitespace-nowrap rounded-full px-2 py-0.5 text-[11px] font-medium ${tipo.cor}`}>{tipo.rotulo}</span>
                       </td>
                       <td className="max-w-[320px] py-1.5 pr-3">
                         <span className="block truncate font-semibold text-gray-900">{l.pessoa_nome || '—'}</span>
-                      </td>
-                      <td className="py-1.5 pr-3 tabular-nums text-gray-700">
-                        {l.numero}/{l.total_parcelas}
                       </td>
                       <td className="max-w-[240px] truncate py-1.5 pr-3 text-xs text-gray-700" title={l.centros.join(', ')}>
                         {l.centros[0] || '—'}
