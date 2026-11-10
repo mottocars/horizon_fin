@@ -382,7 +382,7 @@ async function cabecalhoPls(empresaId, centroId, dataMedicao = null) {
   const c = await centroComContrato(empresaId, centroId);
   const contrato = c.contrato;
 
-  const [{ rows: lib }, { rows: cred }, { rows: envios }, { fixos }, { rows: contasCef }] = await Promise.all([
+  const [{ rows: lib }, { rows: cred }, { rows: envios }, { fixos }, { rows: contasCef }, config] = await Promise.all([
     contrato
       ? pool.query(
           `SELECT parcela, data_parcela FROM dcd_cronograma_liberacao
@@ -420,6 +420,7 @@ async function cabecalhoPls(empresaId, centroId, dataMedicao = null) {
           AND NOT EXISTS (SELECT 1 FROM dfc_plano_contas_versoes v WHERE v.empresa_id = $1 AND v.centro_id = $2)`,
       [empresaId, centroId]
     ),
+    obterConfiguracoes(empresaId),
   ]);
 
   const ultima = lib[0] || null;
@@ -471,15 +472,55 @@ async function cabecalhoPls(empresaId, centroId, dataMedicao = null) {
       data_demanda_minima: fixos.data_demanda_minima ?? null,
     },
     unidades,
+    // Padrão da aba Configurações da tela; sem ele, a conta da Origem Projeção CEF do plano da DFC.
     contas_sugeridas: {
-      novo_registro: contasCef.find((r) => r.origem_projecao === 'CEF_NOVO_REGISTRO')?.conta || null,
-      medicao: contasCef.find((r) => r.origem_projecao === 'CEF_MEDICAO')?.conta || null,
-      credito_pj: contasCef.find((r) => r.origem_projecao === 'CEF_CREDITO_PJ')?.conta || null,
+      novo_registro: config.contas.novo_registro || contasCef.find((r) => r.origem_projecao === 'CEF_NOVO_REGISTRO')?.conta || null,
+      medicao: config.contas.medicao || contasCef.find((r) => r.origem_projecao === 'CEF_MEDICAO')?.conta || null,
+      credito_pj: config.contas.credito_pj || contasCef.find((r) => r.origem_projecao === 'CEF_CREDITO_PJ')?.conta || null,
     },
   };
 }
 
+// Aba Configurações: plano de contas padrão de cada classificação da Projeção PLS CEF, por empresa
+// (cpr_configuracoes — database/migrations/2026-11-10-contas-pagar-receber-configuracoes.sql).
+const CLASSIFICACOES = { novo_registro: 'conta_novo_registro', medicao: 'conta_medicao', credito_pj: 'conta_credito_pj' };
+
+async function obterConfiguracoes(empresaId) {
+  const { rows } = await pool.query(
+    `SELECT c.*, u.nome AS atualizado_por_nome FROM cpr_configuracoes c LEFT JOIN usuarios u ON u.id = c.atualizado_por WHERE c.empresa_id = $1`,
+    [empresaId]
+  );
+  const r = rows[0] || {};
+  return {
+    contas: Object.fromEntries(Object.entries(CLASSIFICACOES).map(([k, col]) => [k, r[col] || null])),
+    atualizado_em: r.atualizado_em || null,
+    atualizado_por: r.atualizado_por_nome || null,
+  };
+}
+
+// `contas`: { novo_registro, medicao, credito_pj } (sienge_id da conta analítica ou null).
+async function salvarConfiguracoes(empresaId, contas, usuarioId) {
+  const ids = [...new Set(Object.values(contas).filter(Boolean).map(String))];
+  if (ids.length) {
+    const { rows } = await pool.query(
+      "SELECT sienge_id::text AS id FROM planos_financeiros_sienge WHERE empresa_id = $1 AND tp_conta IS DISTINCT FROM 'T' AND sienge_id::text = ANY($2::text[])",
+      [empresaId, ids]
+    );
+    if (rows.length !== ids.length) throw erro(400, 'Plano de contas não encontrado no cadastro da empresa (só contas analíticas).');
+  }
+  await pool.query(
+    `INSERT INTO cpr_configuracoes (empresa_id, conta_novo_registro, conta_medicao, conta_credito_pj, atualizado_por, atualizado_em)
+     VALUES ($1, $2, $3, $4, $5, $6)
+     ON CONFLICT (empresa_id) DO UPDATE SET conta_novo_registro = EXCLUDED.conta_novo_registro, conta_medicao = EXCLUDED.conta_medicao,
+       conta_credito_pj = EXCLUDED.conta_credito_pj, atualizado_por = EXCLUDED.atualizado_por, atualizado_em = EXCLUDED.atualizado_em`,
+    [empresaId, contas.novo_registro || null, contas.medicao || null, contas.credito_pj || null, usuarioId, agora()]
+  );
+  return obterConfiguracoes(empresaId);
+}
+
 module.exports = {
+  obterConfiguracoes,
+  salvarConfiguracoes,
   opcoes,
   listar,
   obter,

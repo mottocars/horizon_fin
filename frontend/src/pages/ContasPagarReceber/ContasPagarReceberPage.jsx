@@ -1,6 +1,6 @@
 import { useEffect, useState } from 'react';
 import { useSearchParams } from 'react-router-dom';
-import { Plus, ReceiptText } from 'lucide-react';
+import { Plus, ReceiptText, Settings } from 'lucide-react';
 import Card from '../../components/Card';
 import Tabs from '../../components/Tabs';
 import SearchableSelect from '../../components/SearchableSelect';
@@ -10,11 +10,16 @@ import { nomeExibicaoEmpresa } from '../../utils/empresa';
 import { useEmpresaTravada } from '../../hooks/useEmpresaTravada';
 import TitulosTab from './TitulosTab';
 import TituloModal from './TituloModal';
+import ConfiguracoesTab from './ConfiguracoesTab';
 import { mesAtual } from './util';
 
-const TABS = [{ id: 'titulos', label: 'Títulos', icon: ReceiptText }];
+const TABS = [
+  { id: 'titulos', label: 'Títulos', icon: ReceiptText },
+  { id: 'configuracoes', label: 'Configurações', icon: Settings },
+];
 
-const INPUT_DATA = 'w-full rounded-lg border border-gray-200 px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-primary-100 disabled:bg-gray-50 disabled:text-gray-400';
+const INPUT_DATA =
+  'w-full rounded-lg border border-gray-200 px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-primary-100 disabled:bg-gray-50 disabled:text-gray-400';
 
 // Cadastros › Contas Pagar / Receber. Empresa, aba e período (vencimento) na URL, como na DRE Gerencial —
 // o "Voltar" do navegador volta pro mesmo lugar. Sem período na URL = o mês atual.
@@ -71,45 +76,54 @@ export default function ContasPagarReceberPage() {
                 value={empresaId}
                 onChange={(v) => atualizarParams({ empresa_id: v || null })}
                 disabled={loadingEmpresas || empresaTravada}
-                options={empresas.map((empresa) => ({ value: empresa.id, label: nomeExibicaoEmpresa(empresa) }))}
+                options={empresas.map((empresa) => ({
+                  value: empresa.id,
+                  label: nomeExibicaoEmpresa(empresa),
+                }))}
                 placeholder={loadingEmpresas ? 'Carregando empresas...' : 'Selecione uma empresa'}
                 emptyMessage="Nenhuma empresa encontrada."
               />
             </div>
-            <div className="sm:w-40">
-              <label className="mb-1 block text-sm font-medium text-gray-700">Data início</label>
-              <CampoData
-                value={inicio}
-                max={fim || undefined}
-                onChange={(v) => atualizarParams({ de: v })}
-                disabled={semEmpresa}
-                className={INPUT_DATA}
-              />
-            </div>
-            <div className="sm:w-40">
-              <label className="mb-1 block text-sm font-medium text-gray-700">Data fim</label>
-              <CampoData
-                value={fim}
-                min={inicio || undefined}
-                onChange={(v) => atualizarParams({ ate: v })}
-                disabled={semEmpresa}
-                className={INPUT_DATA}
-              />
-            </div>
+            {abaAtiva === 'titulos' && (
+              <>
+                <div className="sm:w-40">
+                  <label className="mb-1 block text-sm font-medium text-gray-700">Data início</label>
+                  <CampoData
+                    value={inicio}
+                    max={fim || undefined}
+                    onChange={(v) => atualizarParams({ de: v })}
+                    disabled={semEmpresa}
+                    className={INPUT_DATA}
+                  />
+                </div>
+                <div className="sm:w-40">
+                  <label className="mb-1 block text-sm font-medium text-gray-700">Data fim</label>
+                  <CampoData
+                    value={fim}
+                    min={inicio || undefined}
+                    onChange={(v) => atualizarParams({ ate: v })}
+                    disabled={semEmpresa}
+                    className={INPUT_DATA}
+                  />
+                </div>
+              </>
+            )}
           </div>
 
-          <div className="flex shrink-0 items-center gap-2">
-            <button
-              type="button"
-              onClick={() => setTituloAberto('novo')}
-              disabled={semEmpresa}
-              title="Novo contas a pagar / a receber"
-              aria-label="Novo título"
-              className="flex shrink-0 items-center justify-center rounded-lg bg-primary-600 p-2 text-white transition-colors hover:bg-primary-700 disabled:cursor-not-allowed disabled:opacity-60"
-            >
-              <Plus size={18} />
-            </button>
-          </div>
+          {abaAtiva === 'titulos' && (
+            <div className="flex shrink-0 items-center gap-2">
+              <button
+                type="button"
+                onClick={() => setTituloAberto('novo')}
+                disabled={semEmpresa}
+                title="Novo contas a pagar / a receber"
+                aria-label="Novo título"
+                className="flex shrink-0 items-center justify-center rounded-lg bg-primary-600 p-2 text-white transition-colors hover:bg-primary-700 disabled:cursor-not-allowed disabled:opacity-60"
+              >
+                <Plus size={18} />
+              </button>
+            </div>
+          )}
         </div>
       </Card>
 
@@ -123,9 +137,12 @@ export default function ContasPagarReceberPage() {
             <p className="text-sm font-medium text-gray-800">Selecione uma empresa para ver os títulos.</p>
           </div>
         ) : (
-          abaAtiva === 'titulos' && (
-            <TitulosTab empresaId={empresaId} inicio={inicio} fim={fim} versao={versao} onAbrir={(id) => setTituloAberto(id)} />
-          )
+          <>
+            {abaAtiva === 'titulos' && (
+              <TitulosTab empresaId={empresaId} inicio={inicio} fim={fim} versao={versao} onAbrir={(id) => setTituloAberto(id)} />
+            )}
+            {abaAtiva === 'configuracoes' && <ConfiguracoesTab empresaId={empresaId} />}
+          </>
         )}
       </div>
 

@@ -9,6 +9,8 @@ const router = Router();
 router.use(authMiddleware);
 router.param('empresaId', paramEmpresa);
 router.get('/:empresaId/opcoes', controller.opcoes);
+router.get('/:empresaId/configuracoes', controller.obterConfiguracoes);
+router.put('/:empresaId/configuracoes', controller.salvarConfiguracoes);
 router.get('/:empresaId/titulos', controller.listar);
 router.post('/:empresaId/titulos', controller.criar);
 router.get('/:empresaId/titulos/:id', controller.obter);

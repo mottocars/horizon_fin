@@ -67,6 +67,16 @@ export function cabecalhoPls(empresaId, centroId, dataMedicao) {
     .then((res) => res.data);
 }
 
+// Aba Configurações: plano de contas padrão de cada classificação da PLS CEF
+// { contas: { novo_registro, medicao, credito_pj }, atualizado_em, atualizado_por }.
+export function obterConfiguracoesCpr(empresaId) {
+  return http.get(`/contas-pagar-receber/${empresaId}/configuracoes`).then((res) => res.data);
+}
+
+export function salvarConfiguracoesCpr(empresaId, contas) {
+  return http.put(`/contas-pagar-receber/${empresaId}/configuracoes`, { contas }).then((res) => res.data);
+}
+
 export function estornarBaixa(empresaId, parcelaId) {
   return http.delete(`/contas-pagar-receber/${empresaId}/parcelas/${parcelaId}/baixa`).then((res) => res.data);
 }

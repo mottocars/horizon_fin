@@ -104,6 +104,16 @@ module.exports = {
       await service.baixar(empresaIdSchema.parse(req.params.empresaId), idSchema.parse(req.params.parcelaId), baixaSchema.parse(req.body || {}), req.user.id)
     )
   ),
+  obterConfiguracoes: rota(async (req, res) => res.json(await service.obterConfiguracoes(empresaIdSchema.parse(req.params.empresaId)))),
+  salvarConfiguracoes: rota(async (req, res) => {
+    // Vazio/null = sem conta (z.coerce.string transformaria null em "null").
+    const conta = z.preprocess(
+      (v) => (v === null || v === undefined || String(v).trim() === '' ? null : String(v).trim()),
+      z.string().max(20).nullable()
+    );
+    const { contas } = z.object({ contas: z.object({ novo_registro: conta, medicao: conta, credito_pj: conta }) }).parse(req.body || {});
+    res.json(await service.salvarConfiguracoes(empresaIdSchema.parse(req.params.empresaId), contas, req.user.id));
+  }),
   cabecalhoPls: rota(async (req, res) => {
     const dataMedicao = req.query.data_medicao ? dataIso('Data Previsão Medição inválida.').parse(req.query.data_medicao) : null;
     res.json(await service.cabecalhoPls(empresaIdSchema.parse(req.params.empresaId), idSchema.parse(req.params.centroId), dataMedicao));
