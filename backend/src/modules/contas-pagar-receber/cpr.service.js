@@ -363,27 +363,25 @@ async function documentosPls(empresaId, centroId) {
   return { centro_id: c.sienge_id, centro_nome: c.nome, contrato: c.contrato, dcd: dcd[0] || null, geral: geral[0] || null };
 }
 
-const mesIso = (d) => (d ? String(d).slice(0, 7) : null);
-
-// Projeção PLS CEF › Cabeçalho: o que o centro (obra) traz pronto para projetar o recebimento da Caixa na
-// Data Previsão Recebimento (`data`, 'AAAA-MM-DD' ou vazio). Mesmas fontes e regras da Projeção CEF da DFC
-// (dfc-projecao-cef): os campos dos Parâmetros que vêm do DCD (fonteFixos), unidades do Geral (sem o 1º
-// contrato, o da construtora, com o mês de registro manual da aba Repasses) e o DCD. `prazo`: tempo entre
-// assinatura e registro (meses) informado na tela, ou null.
+// Projeção PLS CEF › Cabeçalho: o que o centro (obra) traz pronto para projetar o recebimento da Caixa — uma
+// projeção curta, da última liberação até a Data Previsão Recebimento. Fontes da Projeção CEF da DFC
+// (dfc-projecao-cef): o DCD e o Geral do contrato Caixa da obra.
 // - Última liberação: a parcela mais recente do cronograma de liberação do DCD com status LP (paga — não LR),
 //   fora as parcelas 285, EX e TEX (só as numeradas); o avanço liberado é o % acumulado do físico-financeiro
 //   nessa parcela.
+// - CTO, teto PJ e Demanda Mínima: do mesmo lugar que preenche os Parâmetros da DFC (fonteFixos — DCD), sem
+//   depender de haver versão de Parâmetros.
 // - Crédito PJ já liberado: soma de "Financiamento Construtora" das parcelas LP (o saldo do teto PJ).
-// - Unidades: registradas até o mês da última liberação (a base da Medição) e as que registram depois dela até
-//   o mês da data (o Novo Registro) — o mês do registro como no motor da DFC (data do Geral, a manual da aba
-//   Repasses ou assinatura + "Tempo entre assinatura e registro").
-async function cabecalhoPls(empresaId, centroId, data, prazo = null) {
+// - Unidades do Geral (sem o 1º contrato, o da construtora): só as já registradas (data de registro do Geral).
+//   Registradas até a data da última liberação = base da Medição; registradas depois dela = Novo Registro
+//   (pedido do usuário: projeção curta, sem projetar registro por assinatura + prazo).
+async function cabecalhoPls(empresaId, centroId) {
   const projecaoCef = require('../dfc-projecao-cef/projecaoCef.service');
-  const { calcularUnidades } = require('../dfc-projecao-cef/projecaoCef.motor');
+  const parametrosService = require('../dfc-parametros/dfcParametros.service');
   const c = await centroComContrato(empresaId, centroId);
   const contrato = c.contrato;
 
-  const [{ rows: lib }, { rows: cred }, { rows: envios }, { rows: vers }] = await Promise.all([
+  const [{ rows: lib }, { rows: cred }, { rows: envios }, { fixos }] = await Promise.all([
     contrato
       ? pool.query(
           `SELECT parcela, data_parcela FROM dcd_cronograma_liberacao
@@ -406,7 +404,7 @@ async function cabecalhoPls(empresaId, centroId, data, prazo = null) {
           [empresaId, contrato]
         )
       : { rows: [{ dcd: null, geral: null }] },
-    pool.query('SELECT MAX(versao) AS v FROM dfc_parametros_versoes WHERE empresa_id = $1 AND sienge_id = $2', [empresaId, centroId]),
+    parametrosService.fonteFixos(empresaId, centroId),
   ]);
 
   const ultima = lib[0] || null;
@@ -420,42 +418,28 @@ async function cabecalhoPls(empresaId, centroId, data, prazo = null) {
     avancoLiberado = ff[0] ? Number(ff[0].percentual_acumulado) : null;
   }
 
-  // CTO, teto PJ e Demanda Mínima: do mesmo lugar que preenche os Parâmetros da DFC (fonteFixos — DCD do
-  // contrato Caixa), sem depender de haver versão de Parâmetros. O tempo entre assinatura e registro não tem
-  // fonte automática (na DFC é digitado): vale o informado nesta tela (`prazo`); sem ele, o da versão vigente
-  // dos Parâmetros da obra serve de sugestão.
-  const parametrosService = require('../dfc-parametros/dfcParametros.service');
-  const { fixos } = await parametrosService.fonteFixos(empresaId, centroId);
-  const versao = vers[0].v ? await parametrosService.getVersao(empresaId, centroId, vers[0].v) : null;
-  const prazoSugerido = versao?.tempo_assinatura_registro_meses ?? null;
-  const prazoUsado = prazo !== null && prazo !== undefined ? prazo : prazoSugerido;
-  const parametros = {
-    cto: fixos.cto ?? null,
-    valor_financiamento_pj: fixos.valor_financiamento_pj ?? null,
-    data_demanda_minima: fixos.data_demanda_minima ?? null,
-    tempo_assinatura_registro_sugerido: prazoSugerido,
-    tempo_assinatura_registro_meses: prazoUsado,
-  };
-
   let unidades = null;
   if (contrato) {
     const lista = await projecaoCef.unidadesGeral(empresaId, contrato);
-    const calc = calcularUnidades(lista, new Map(), parametros.data_demanda_minima, Number(prazoUsado || 0));
-    const mLib = mesIso(ultima?.data_parcela);
-    const mData = mesIso(data);
-    const resumo = { qtd: 0, vgf_medicao: 0, terreno_fgts: 0 };
-    const registradas = { ...resumo };
-    const aRegistrar = { ...resumo };
-    calc.forEach((u, i) => {
-      if (!u.regMes) return;
-      const alvo = mLib && u.regMes <= mLib ? registradas : mLib && mData && u.regMes > mLib && u.regMes <= mData ? aRegistrar : null;
-      if (!alvo) return;
+    const dLib = ultima ? String(ultima.data_parcela).slice(0, 10) : null;
+    const novo = () => ({ qtd: 0, vgf_medicao: 0, terreno_fgts: 0 });
+    const registradas = novo();
+    const aposLiberacao = novo();
+    let semRegistro = 0;
+    lista.forEach((u) => {
+      if (!u.data_registro) {
+        semRegistro += 1;
+        return;
+      }
+      const alvo = dLib && String(u.data_registro).slice(0, 10) <= dLib ? registradas : aposLiberacao;
+      const n = (v) => Number(v || 0);
       alvo.qtd += 1;
-      alvo.vgf_medicao += u.vgfMedicao;
-      alvo.terreno_fgts += Number(lista[i].valor_terreno || 0) + Number(lista[i].valor_fgts || 0);
+      alvo.vgf_medicao += n(u.valor_financiamento) - n(u.valor_terreno) + n(u.valor_subsidio);
+      alvo.terreno_fgts += n(u.valor_terreno) + n(u.valor_fgts);
     });
     const r2 = (o) => ({ qtd: o.qtd, vgf_medicao: Math.round(o.vgf_medicao * 100) / 100, terreno_fgts: Math.round(o.terreno_fgts * 100) / 100 });
-    unidades = { total: lista.length, registradas: r2(registradas), a_registrar: mData ? r2(aRegistrar) : null };
+    // Sem liberação no DCD não há corte: só o total e quantas ainda não têm registro.
+    unidades = { total: lista.length, sem_registro: semRegistro, registradas: dLib ? r2(registradas) : null, apos_liberacao: dLib ? r2(aposLiberacao) : null };
   }
 
   return {
@@ -466,7 +450,11 @@ async function cabecalhoPls(empresaId, centroId, data, prazo = null) {
     credito_pj_liberado: Math.round(Number(cred[0].total) * 100) / 100,
     envio_dcd: envios[0].dcd,
     envio_geral: envios[0].geral,
-    parametros,
+    parametros: {
+      cto: fixos.cto ?? null,
+      valor_financiamento_pj: fixos.valor_financiamento_pj ?? null,
+      data_demanda_minima: fixos.data_demanda_minima ?? null,
+    },
     unidades,
   };
 }

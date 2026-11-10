@@ -120,9 +120,7 @@ export default function TituloModal({ empresaId, id = null, onClose, onSalvo }) 
   // Projeção PLS CEF: centro de custo (obra), data prevista do recebimento e a curva do Prevision dele.
   // `avanco`: o % acumulado na data digitado à mão (texto); null = o do Prevision. Volta para null ao
   // trocar o centro ou a data.
-  // `prazo`: tempo entre assinatura e registro digitado (texto); null = a sugestão (Parâmetros da DFC).
-  const [pls, setPls] = useState({ centro_id: '', data_previsao: '', avanco: null, prazo: null });
-  const prazoEnviado = pls.prazo !== null && /^\d+$/.test(pls.prazo.trim()) && Number(pls.prazo) <= 120 ? Number(pls.prazo) : null;
+  const [pls, setPls] = useState({ centro_id: '', data_previsao: '', avanco: null });
   const [avanco, setAvanco] = useState({ carregando: false, dados: null, erro: '' });
   const [documentos, setDocumentos] = useState({ carregando: false, dados: null, erro: '' });
   const [cabPls, setCabPls] = useState({ carregando: false, dados: null, erro: '' });
@@ -204,13 +202,13 @@ export default function TituloModal({ empresaId, id = null, onClose, onSalvo }) 
     }
     let vivo = true;
     setCabPls((c) => ({ ...c, carregando: true, erro: '' }));
-    cabecalhoPls(empresaId, pls.centro_id, pls.data_previsao, prazoEnviado)
+    cabecalhoPls(empresaId, pls.centro_id)
       .then((d) => vivo && setCabPls({ carregando: false, dados: d, erro: '' }))
       .catch((e) => vivo && setCabPls({ carregando: false, dados: null, erro: mensagemErro(e, 'Não foi possível carregar os dados do centro de custo.') }));
     return () => {
       vivo = false;
     };
-  }, [empresaId, form.tipo_documento, pls.centro_id, pls.data_previsao, prazoEnviado]);
+  }, [empresaId, form.tipo_documento, pls.centro_id]);
 
   const cab = cabPls.dados;
   // Avanço previsto na data: o do Prevision (curva diária) ou o digitado (`pls.avanco`, texto; null = Prevision).
@@ -393,7 +391,7 @@ export default function TituloModal({ empresaId, id = null, onClose, onSalvo }) 
                       <Campo rotulo="Centro de custo" className="md:col-span-2">
                         <SearchableSelect
                           value={pls.centro_id}
-                          onChange={(v) => setPls((p) => ({ ...p, centro_id: v || '', avanco: null, prazo: null }))}
+                          onChange={(v) => setPls((p) => ({ ...p, centro_id: v || '', avanco: null }))}
                           options={opCentrosObra}
                           placeholder="Escolha o centro de custo"
                           emptyMessage="Nenhum centro de custo cadastrado."
@@ -512,8 +510,6 @@ export default function TituloModal({ empresaId, id = null, onClose, onSalvo }) 
                   erro={cabPls.erro}
                   avancoInformado={avancoValido ? avancoInformado : null}
                   dataPrevisao={pls.data_previsao}
-                  prazoTexto={pls.prazo ?? (cab?.parametros?.tempo_assinatura_registro_sugerido ?? '').toString()}
-                  onPrazo={(t) => setPls((p) => ({ ...p, prazo: t }))}
                 />
               )}
 
@@ -901,7 +897,7 @@ function CampoLeitura({ rotulo, valor, alerta = false, carregando = false, dica,
 //   Medição       = VGF de medição das unidades registradas × avanço a medir
 //   Novo Registro = unidades que registram até a data: (terreno + FGTS) + VGF de medição × % de obra
 //   Crédito PJ    = CTO × avanço a medir − Medição, depois da Demanda Mínima, até o saldo do teto PJ
-function BasesProjecaoPls({ cab, carregando, erro, avancoInformado, dataPrevisao, prazoTexto, onPrazo }) {
+function BasesProjecaoPls({ cab, carregando, erro, avancoInformado, dataPrevisao }) {
   if (erro) return <p className="mt-4 rounded-lg bg-red-50 px-3 py-2 text-xs text-red-600">{erro}</p>;
   if (cab && !cab.contrato) {
     return (
@@ -918,7 +914,8 @@ function BasesProjecaoPls({ cab, carregando, erro, avancoInformado, dataPrevisao
   // CTO, teto PJ e Demanda Mínima vêm do DCD, como na tela de Parâmetros da DFC.
   const doDcd = (v, fmt) => (!cab ? null : v === null || v === undefined ? 'Sem valor no DCD' : fmt(v));
   const L = (props) => <CampoLeitura carregando={carregando} {...props} />;
-  const prazoValido = prazoTexto === '' || (/^\d+$/.test(String(prazoTexto).trim()) && Number(prazoTexto) <= 120);
+  // Unidades registradas antes/depois da última liberação: sem liberação no DCD não há corte.
+  const doLib = (grupo, fmt) => (!u ? null : grupo ? fmt(grupo) : 'Sem liberação no DCD');
 
   return (
     <div className="mt-5 border-t border-gray-100 pt-4">
@@ -940,39 +937,16 @@ function BasesProjecaoPls({ cab, carregando, erro, avancoInformado, dataPrevisao
           valor={doDcd(p?.data_demanda_minima, data)}
           dica={dmAtingida === null ? 'DCD · Dt Término Suspensiva' : dmAtingida ? 'DCD · atingida na data: PJ libera' : 'DCD · não atingida na data: sem Crédito PJ'}
         />
-        <Campo rotulo="Tempo entre assinatura e registro">
-          <div className="flex items-center gap-2">
-            <input
-              value={prazoTexto}
-              onChange={(e) => onPrazo(e.target.value)}
-              inputMode="numeric"
-              placeholder="0"
-              aria-label="Tempo entre assinatura e registro"
-              className={`${INPUT} text-right tabular-nums ${prazoValido ? '' : 'border-red-300 bg-red-50'}`}
-            />
-            <span className="shrink-0 text-sm text-gray-500">meses</span>
-          </div>
-          <p className={`mt-1 text-[11px] ${prazoValido ? 'text-gray-400' : 'text-red-600'}`}>
-            {!prazoValido
-              ? 'Informe um número inteiro de meses.'
-              : p?.tempo_assinatura_registro_sugerido !== null && p?.tempo_assinatura_registro_sugerido !== undefined
-                ? `Sugestão: ${p.tempo_assinatura_registro_sugerido} (DFC › Parâmetros)`
-                : 'Informe aqui (na DFC é digitado)'}
-          </p>
-        </Campo>
-        <L rotulo="Unidades no Geral" valor={u ? String(u.total) : null} dica="Sem o contrato da construtora" />
-        <L rotulo="Registradas até a última liberação" valor={u ? `${u.registradas.qtd} unidade(s)` : null} dica="Base da Medição" />
-        <L rotulo="VGF de medição registrado" valor={u ? moeda(u.registradas.vgf_medicao) : null} dica="Financiamento − terreno + subsídio" />
         <L
-          rotulo="A registrar até a data"
-          valor={u ? (u.a_registrar ? `${u.a_registrar.qtd} unidade(s)` : 'Informe a data') : null}
-          dica="Base do Novo Registro"
+          rotulo="Unidades no Geral"
+          valor={u ? String(u.total) : null}
+          dica={u ? `Sem a da construtora · ${u.sem_registro} sem registro` : 'Sem o contrato da construtora'}
         />
-        <L
-          rotulo="Valores a registrar"
-          dica="VGF de medição / terreno + FGTS"
-          valor={u?.a_registrar ? `${moeda(u.a_registrar.vgf_medicao)} / ${moeda(u.a_registrar.terreno_fgts)}` : null}
-        />
+        <L rotulo="Registradas até a última liberação" valor={doLib(u?.registradas, (x) => `${x.qtd} unidade(s)`)} dica="Base da Medição" />
+        <L rotulo="VGF de medição registrado" valor={doLib(u?.registradas, (x) => moeda(x.vgf_medicao))} dica="Financiamento − terreno + subsídio" />
+        <L rotulo="Registradas após a última liberação" valor={doLib(u?.apos_liberacao, (x) => `${x.qtd} unidade(s)`)} dica="Base do Novo Registro" />
+        <L rotulo="Novo Registro · VGF de medição" valor={doLib(u?.apos_liberacao, (x) => moeda(x.vgf_medicao))} dica="× % de obra na data" />
+        <L rotulo="Novo Registro · terreno + FGTS" valor={doLib(u?.apos_liberacao, (x) => moeda(x.terreno_fgts))} dica="Entra à vista" />
       </div>
     </div>
   );
