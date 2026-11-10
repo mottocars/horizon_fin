@@ -60,8 +60,11 @@ export function baixarDocumentoPls(empresaId, centroId, tipo, formato) {
 
 // Projeção PLS CEF › Cabeçalho: última liberação, avanço liberado, crédito PJ liberado, envios do DCD/Geral,
 // CTO / teto PJ / Demanda Mínima (do DCD) e unidades do Geral registradas até / depois da última liberação.
-export function cabecalhoPls(empresaId, centroId) {
-  return http.get(`/contas-pagar-receber/${empresaId}/cabecalho-pls/${centroId}`).then((res) => res.data);
+// `dataMedicao`: a última liberação considerada é a anterior a ela (sem ela, a mais recente).
+export function cabecalhoPls(empresaId, centroId, dataMedicao) {
+  return http
+    .get(`/contas-pagar-receber/${empresaId}/cabecalho-pls/${centroId}`, { params: dataMedicao ? { data_medicao: dataMedicao } : {} })
+    .then((res) => res.data);
 }
 
 export function estornarBaixa(empresaId, parcelaId) {

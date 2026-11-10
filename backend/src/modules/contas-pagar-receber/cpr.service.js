@@ -364,18 +364,19 @@ async function documentosPls(empresaId, centroId) {
 }
 
 // Projeção PLS CEF › Cabeçalho: o que o centro (obra) traz pronto para projetar o recebimento da Caixa — uma
-// projeção curta, da última liberação até a Data Previsão Recebimento. Fontes da Projeção CEF da DFC
+// projeção curta, da última liberação anterior à Data Previsão Medição até ela. Fontes da Projeção CEF da DFC
 // (dfc-projecao-cef): o DCD e o Geral do contrato Caixa da obra.
 // - Última liberação: a parcela mais recente do cronograma de liberação do DCD com status LP (paga — não LR),
-//   fora as parcelas 285, EX e TEX (só as numeradas); o avanço liberado é o % acumulado do físico-financeiro
-//   nessa parcela.
+//   fora as parcelas 285, EX e TEX (só as numeradas), ANTERIOR à Data Previsão Medição (`dataMedicao`; sem ela,
+//   a mais recente de todas); o avanço liberado é o % acumulado do físico-financeiro nessa parcela.
 // - CTO, teto PJ e Demanda Mínima: do mesmo lugar que preenche os Parâmetros da DFC (fonteFixos — DCD), sem
 //   depender de haver versão de Parâmetros.
-// - Crédito PJ já liberado: soma de "Financiamento Construtora" das parcelas LP (o saldo do teto PJ).
+// - Crédito PJ já liberado: soma de "Financiamento Construtora" das parcelas LP anteriores à medição (o saldo do
+//   teto PJ).
 // - Unidades do Geral (sem o 1º contrato, o da construtora): só as já registradas (data de registro do Geral).
 //   Registradas até a data da última liberação = base da Medição; registradas depois dela = Novo Registro
 //   (pedido do usuário: projeção curta, sem projetar registro por assinatura + prazo).
-async function cabecalhoPls(empresaId, centroId) {
+async function cabecalhoPls(empresaId, centroId, dataMedicao = null) {
   const projecaoCef = require('../dfc-projecao-cef/projecaoCef.service');
   const parametrosService = require('../dfc-parametros/dfcParametros.service');
   const c = await centroComContrato(empresaId, centroId);
@@ -386,15 +387,17 @@ async function cabecalhoPls(empresaId, centroId) {
       ? pool.query(
           `SELECT parcela, data_parcela FROM dcd_cronograma_liberacao
             WHERE empresa_id = $1 AND numero_contrato = $2 AND status = 'LP' AND parcela ~ '^[0-9]+$' AND parcela NOT IN ('285', 'EX', 'TEX')
+              AND ($3::date IS NULL OR data_parcela < $3::date)
             ORDER BY data_parcela DESC, parcela DESC LIMIT 1`,
-          [empresaId, contrato]
+          [empresaId, contrato, dataMedicao]
         )
       : { rows: [] },
     contrato
       ? pool.query(
           `SELECT COALESCE(SUM(financiamento_construtora), 0) AS total FROM dcd_cronograma_liberacao
-            WHERE empresa_id = $1 AND numero_contrato = $2 AND status = 'LP'`,
-          [empresaId, contrato]
+            WHERE empresa_id = $1 AND numero_contrato = $2 AND status = 'LP'
+              AND ($3::date IS NULL OR data_parcela < $3::date)`,
+          [empresaId, contrato, dataMedicao]
         )
       : { rows: [{ total: 0 }] },
     contrato

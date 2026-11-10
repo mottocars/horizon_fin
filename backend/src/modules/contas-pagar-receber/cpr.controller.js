@@ -104,9 +104,10 @@ module.exports = {
       await service.baixar(empresaIdSchema.parse(req.params.empresaId), idSchema.parse(req.params.parcelaId), baixaSchema.parse(req.body || {}), req.user.id)
     )
   ),
-  cabecalhoPls: rota(async (req, res) =>
-    res.json(await service.cabecalhoPls(empresaIdSchema.parse(req.params.empresaId), idSchema.parse(req.params.centroId)))
-  ),
+  cabecalhoPls: rota(async (req, res) => {
+    const dataMedicao = req.query.data_medicao ? dataIso('Data Previsão Medição inválida.').parse(req.query.data_medicao) : null;
+    res.json(await service.cabecalhoPls(empresaIdSchema.parse(req.params.empresaId), idSchema.parse(req.params.centroId), dataMedicao));
+  }),
   documentosPls: rota(async (req, res) =>
     res.json(await service.documentosPls(empresaIdSchema.parse(req.params.empresaId), idSchema.parse(req.params.centroId)))
   ),

@@ -210,13 +210,13 @@ export default function TituloModal({ empresaId, id = null, onClose, onSalvo }) 
     }
     let vivo = true;
     setCabPls((c) => ({ ...c, carregando: true, erro: '' }));
-    cabecalhoPls(empresaId, pls.centro_id)
+    cabecalhoPls(empresaId, pls.centro_id, pls.data_medicao)
       .then((d) => vivo && setCabPls({ carregando: false, dados: d, erro: '' }))
       .catch((e) => vivo && setCabPls({ carregando: false, dados: null, erro: mensagemErro(e, 'Não foi possível carregar os dados do centro de custo.') }));
     return () => {
       vivo = false;
     };
-  }, [empresaId, form.tipo_documento, pls.centro_id]);
+  }, [empresaId, form.tipo_documento, pls.centro_id, pls.data_medicao]);
 
   const cab = cabPls.dados;
   // Avanço previsto na data: o do Prevision (curva diária) ou o digitado (`pls.avanco`, texto; null = Prevision).
