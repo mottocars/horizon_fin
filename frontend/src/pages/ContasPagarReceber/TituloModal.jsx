@@ -1,0 +1,548 @@
+import { useEffect, useMemo, useState } from 'react';
+import { ArrowDownLeft, ArrowUpRight, Lock, Plus, Trash2, TriangleAlert, X } from 'lucide-react';
+import Modal from '../../components/Modal';
+import Button from '../../components/Button';
+import SearchableSelect from '../../components/SearchableSelect';
+import { useConfirm } from '../../confirm/ConfirmContext';
+import { hojeISO } from '../../utils/datas';
+import { alterarTitulo, criarTitulo, excluirTitulo, obterTitulo, opcoesContasPagarReceber } from '../../api/contasPagarReceber.api';
+import { TIPOS_DOCUMENTO, centavos, data, dataHora, lerValor, mensagemErro, moeda, numeroBr, somarMeses } from './util';
+
+const INPUT =
+  'w-full rounded-lg border border-gray-200 px-2.5 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-primary-100 disabled:bg-gray-50 disabled:text-gray-500';
+const CABECALHO = 'border-b-2 border-blue-500 bg-blue-50 text-xs uppercase tracking-wide text-blue-700';
+
+function Faixa({ titulo, acao, children }) {
+  return (
+    <div className="rounded-xl border border-gray-200 bg-white px-4 py-3">
+      <div className="mb-2 flex min-h-6 items-center justify-between gap-2">
+        <p className="text-[11px] font-semibold uppercase tracking-wide text-gray-500">{titulo}</p>
+        {acao}
+      </div>
+      {children}
+    </div>
+  );
+}
+
+function Campo({ rotulo, children, className = '' }) {
+  return (
+    <div className={`min-w-0 ${className}`}>
+      <p className="mb-1 text-[11px] text-gray-400">{rotulo}</p>
+      {children}
+    </div>
+  );
+}
+
+const fmtPct = (p) => (Number.isFinite(p) ? p.toLocaleString('pt-BR', { maximumFractionDigits: 4 }) : '');
+const valido = (v) => Number.isFinite(v) && v > 0;
+
+// Divide o total em `qtd` parcelas mensais a partir do 1º vencimento (a sobra dos centavos vai na última).
+function gerarParcelas(total, qtd, primeiro) {
+  const n = Math.min(360, Math.max(1, parseInt(qtd, 10) || 1));
+  const totalC = valido(total) ? centavos(total) : 0;
+  const base = Math.floor(totalC / n);
+  return Array.from({ length: n }, (_, i) => ({
+    vencimento: somarMeses(primeiro, i),
+    valor: totalC ? numeroBr((base + (i === n - 1 ? totalC - base * n : 0)) / 100) : '',
+  }));
+}
+
+// Recalcula o valor de cada linha do rateio pelo percentual dela (com 100% somado, a sobra dos centavos
+// vai na última linha).
+function ratear(linhas, total) {
+  if (!valido(total)) return linhas.map((l) => ({ ...l, valor: '' }));
+  const totalC = centavos(total);
+  const pcts = linhas.map((l) => lerValor(l.pct));
+  const somaPct = pcts.reduce((s, p) => s + (valido(p) ? p : 0), 0);
+  const ultima = pcts.reduce((u, p, i) => (valido(p) ? i : u), -1);
+  let usados = 0;
+  return linhas.map((l, i) => {
+    if (!valido(pcts[i])) return { ...l, valor: '' };
+    let c = Math.round((totalC * pcts[i]) / 100);
+    if (i === ultima && Math.abs(somaPct - 100) < 1e-6) c = totalC - usados;
+    usados += c;
+    return { ...l, valor: numeroBr(c / 100) };
+  });
+}
+
+const somaC = (lista) => lista.reduce((s, x) => s + (valido(lerValor(x.valor)) ? centavos(lerValor(x.valor)) : 0), 0);
+const LINHA_RATEIO = { centro_id: '', natureza_id: '', pct: '100', valor: '' };
+
+// Janela do "+" (novo título) e do título clicado na listagem (alterar / excluir). Tipo de documento
+// "Financeiro": título, parcelas mensais (editáveis) e rateio por centro de custo e plano de contas.
+// "Projeção PLS CEF": por ora não mostra nada (o formulário dele vem depois).
+export default function TituloModal({ empresaId, id = null, onClose, onSalvo }) {
+  const confirm = useConfirm();
+  const hoje = hojeISO();
+  const [opcoes, setOpcoes] = useState(null);
+  const [dados, setDados] = useState(null);
+  const [erro, setErro] = useState('');
+  const [form, setForm] = useState({ tipo_documento: 'FINANCEIRO', tipo: 'PAGAR', pessoa_id: '', documento: '', data_emissao: hoje, historico: '', valor: '' });
+  const [qtd, setQtd] = useState('1');
+  const [primeiroVenc, setPrimeiroVenc] = useState(hoje);
+  const [parcelas, setParcelas] = useState([{ vencimento: hoje, valor: '' }]);
+  const [rateios, setRateios] = useState([LINHA_RATEIO]);
+  const [salvando, setSalvando] = useState(false);
+  const [erroSalvar, setErroSalvar] = useState('');
+
+  useEffect(() => {
+    setErro('');
+    Promise.all([opcoesContasPagarReceber(empresaId), id ? obterTitulo(empresaId, id) : null])
+      .then(([op, t]) => {
+        setOpcoes(op);
+        if (!t) return;
+        setDados(t);
+        setForm({
+          tipo_documento: t.tipo_documento,
+          tipo: t.tipo,
+          pessoa_id: t.pessoa_id ?? '',
+          documento: t.documento,
+          data_emissao: t.data_emissao || '',
+          historico: t.historico,
+          valor: numeroBr(t.valor),
+        });
+        setQtd(String(t.parcelas.length));
+        setPrimeiroVenc(t.parcelas[0]?.vencimento || '');
+        setParcelas(t.parcelas.map((p) => ({ vencimento: p.vencimento, valor: numeroBr(p.valor), data_baixa: p.data_baixa, valor_baixa: p.valor_baixa })));
+        setRateios(t.rateios.map((r) => ({ centro_id: r.centro_id, natureza_id: r.natureza_id, pct: fmtPct(r.percentual), valor: numeroBr(r.valor) })));
+      })
+      .catch((e) => setErro(mensagemErro(e, 'Não foi possível carregar o título.')));
+  }, [empresaId, id]);
+
+  const travado = Boolean(dados?.baixado);
+  const financeiro = form.tipo_documento === 'FINANCEIRO';
+  const total = lerValor(form.valor);
+  const totalC = valido(total) ? centavos(total) : 0;
+  const somaParcelasC = somaC(parcelas);
+  const somaRateioC = somaC(rateios);
+  const somaPct = rateios.reduce((s, r) => s + (valido(lerValor(r.pct)) ? lerValor(r.pct) : 0), 0);
+
+  const opCentros = useMemo(() => (opcoes?.centros || []).map((c) => ({ value: c.id, label: `${c.id} - ${c.nome}` })), [opcoes]);
+  const opNaturezas = useMemo(
+    () => (opcoes?.naturezas || []).map((n) => ({ value: n.id, label: `${n.id} ${n.nome}${n.inativa ? ' (inativa)' : ''}` })),
+    [opcoes]
+  );
+  const opPessoas = useMemo(() => {
+    const lista = ((form.tipo === 'PAGAR' ? opcoes?.fornecedores : opcoes?.clientes) || []).map((p) => ({ value: p.id, label: p.nome }));
+    // O nome gravado no título, se a pessoa não estiver mais na lista.
+    if (dados?.pessoa_id && dados.tipo === form.tipo && !lista.some((p) => String(p.value) === String(dados.pessoa_id))) {
+      lista.unshift({ value: dados.pessoa_id, label: dados.pessoa_nome });
+    }
+    return lista;
+  }, [opcoes, form.tipo, dados]);
+
+  const mudar = (campo) => (v) => setForm((f) => ({ ...f, [campo]: v }));
+
+  function mudarValor(texto) {
+    const t = lerValor(texto);
+    setForm((f) => ({ ...f, valor: texto }));
+    setParcelas(gerarParcelas(t, qtd, primeiroVenc));
+    setRateios((r) => ratear(r, t));
+  }
+
+  function mudarQtd(v) {
+    setQtd(v);
+    setParcelas(gerarParcelas(total, v, primeiroVenc));
+  }
+
+  function mudarPrimeiroVenc(v) {
+    setPrimeiroVenc(v);
+    setParcelas(gerarParcelas(total, qtd, v));
+  }
+
+  const mudarParcela = (i, campo, v) => setParcelas((l) => l.map((p, j) => (j === i ? { ...p, [campo]: v } : p)));
+
+  function mudarRateio(i, campo, v) {
+    setRateios((l) =>
+      l.map((r, j) => {
+        if (j !== i) return r;
+        if (campo === 'pct') {
+          const p = lerValor(v);
+          return { ...r, pct: v, valor: valido(total) && valido(p) ? numeroBr(Math.round((totalC * p) / 100) / 100) : '' };
+        }
+        if (campo === 'valor') {
+          const x = lerValor(v);
+          return { ...r, valor: v, pct: valido(total) && valido(x) ? fmtPct((x / total) * 100) : '' };
+        }
+        return { ...r, [campo]: v };
+      })
+    );
+  }
+
+  function adicionarRateio() {
+    const restoPct = Math.max(0, Math.round((100 - somaPct) * 1e4) / 1e4);
+    const restoC = Math.max(0, totalC - somaRateioC);
+    setRateios((l) => [...l, { centro_id: '', natureza_id: '', pct: restoPct ? fmtPct(restoPct) : '', valor: restoC ? numeroBr(restoC / 100) : '' }]);
+  }
+
+  function trocarTipo(tipo) {
+    if (tipo !== form.tipo) setForm((f) => ({ ...f, tipo, pessoa_id: '' }));
+  }
+
+  async function salvar() {
+    setErroSalvar('');
+    if (!form.pessoa_id) return setErroSalvar(form.tipo === 'PAGAR' ? 'Escolha o fornecedor.' : 'Escolha o cliente.');
+    if (!form.data_emissao) return setErroSalvar('Informe a data de emissão.');
+    if (!totalC) return setErroSalvar('Informe o valor do título.');
+    if (parcelas.some((p) => !p.vencimento || !valido(lerValor(p.valor)))) return setErroSalvar('Informe o vencimento e o valor de cada parcela.');
+    if (somaParcelasC !== totalC) return setErroSalvar('A soma das parcelas precisa fechar com o valor do título.');
+    if (rateios.some((r) => !r.centro_id || !r.natureza_id || !valido(lerValor(r.valor)))) {
+      return setErroSalvar('Preencha centro de custo, plano de contas e valor em cada linha do rateio.');
+    }
+    if (somaRateioC !== totalC) return setErroSalvar('A soma do rateio precisa fechar com o valor do título.');
+    const payload = {
+      tipo: form.tipo,
+      tipo_documento: form.tipo_documento,
+      pessoa_id: Number(form.pessoa_id),
+      documento: form.documento.trim(),
+      data_emissao: form.data_emissao,
+      historico: form.historico.trim(),
+      valor: totalC / 100,
+      parcelas: parcelas.map((p) => ({ vencimento: p.vencimento, valor: centavos(lerValor(p.valor)) / 100 })),
+      rateios: rateios.map((r) => ({ centro_id: Number(r.centro_id), natureza_id: String(r.natureza_id), valor: centavos(lerValor(r.valor)) / 100 })),
+    };
+    setSalvando(true);
+    try {
+      if (id) await alterarTitulo(empresaId, id, payload);
+      else await criarTitulo(empresaId, payload);
+      onSalvo?.();
+      onClose();
+    } catch (e) {
+      setErroSalvar(mensagemErro(e, 'Não foi possível salvar o título.'));
+    } finally {
+      setSalvando(false);
+    }
+  }
+
+  async function excluir() {
+    const ok = await confirm({
+      title: 'Excluir título',
+      description: `Excluir o título de ${dados?.pessoa_nome || 'este fornecedor/cliente'} (${moeda(dados?.valor)}) com todas as parcelas?`,
+      confirmLabel: 'Excluir',
+      variant: 'danger',
+    });
+    if (!ok) return;
+    setSalvando(true);
+    try {
+      await excluirTitulo(empresaId, id);
+      onSalvo?.();
+      onClose();
+    } catch (e) {
+      setErroSalvar(mensagemErro(e, 'Não foi possível excluir o título.'));
+      setSalvando(false);
+    }
+  }
+
+  const diferenca = (soma) =>
+    soma === totalC ? null : <span className="ml-2 font-normal text-red-600">{soma > totalC ? 'passa' : 'falta'} {moeda(Math.abs(totalC - soma) / 100)}</span>;
+  const temBaixa = parcelas.some((p) => p.data_baixa);
+
+  return (
+    <Modal open onClose={onClose} title={id ? 'Título' : 'Novo título'} maxWidthClass="max-w-5xl">
+      {erro ? (
+        <div className="flex items-center gap-2 rounded-lg bg-red-50 px-3 py-2 text-sm text-red-600">
+          <TriangleAlert size={15} className="shrink-0" />
+          {erro}
+        </div>
+      ) : !opcoes ? (
+        <div className="py-12 text-center text-sm text-gray-400">Carregando...</div>
+      ) : (
+        <div className="space-y-3">
+          {travado && (
+            <div className="flex items-center gap-2 rounded-lg bg-amber-50 px-3 py-2 text-xs text-amber-700">
+              <Lock size={14} className="shrink-0" />
+              Título com parcela baixada: para alterar ou excluir, estorne a baixa na listagem.
+            </div>
+          )}
+
+          <Faixa titulo="Título">
+            <div className="grid grid-cols-1 gap-x-4 gap-y-2 md:grid-cols-[220px_220px_minmax(0,1fr)]">
+              <Campo rotulo="Tipo de documento">
+                <SearchableSelect
+                  value={form.tipo_documento}
+                  onChange={(v) => v && mudar('tipo_documento')(v)}
+                  options={TIPOS_DOCUMENTO}
+                  clearable={false}
+                  disabled={travado || Boolean(id)}
+                />
+              </Campo>
+              {financeiro && (
+                <>
+                  <Campo rotulo="Tipo">
+                    <div className="grid grid-cols-2 rounded-lg border border-gray-200 p-0.5">
+                      {[
+                        ['PAGAR', 'A pagar', ArrowUpRight, 'bg-red-50 text-red-600'],
+                        ['RECEBER', 'A receber', ArrowDownLeft, 'bg-emerald-50 text-emerald-700'],
+                      ].map(([valor, rotulo, Icone, ativo]) => (
+                        <button
+                          key={valor}
+                          type="button"
+                          onClick={() => trocarTipo(valor)}
+                          disabled={travado}
+                          aria-pressed={form.tipo === valor}
+                          className={`flex items-center justify-center gap-1 rounded-md py-1.5 text-sm font-medium transition ${
+                            form.tipo === valor ? ativo : 'text-gray-500 hover:bg-gray-50'
+                          }`}
+                        >
+                          <Icone size={14} /> {rotulo}
+                        </button>
+                      ))}
+                    </div>
+                  </Campo>
+                  <Campo rotulo={form.tipo === 'PAGAR' ? 'Fornecedor' : 'Cliente'}>
+                    <SearchableSelect
+                      value={form.pessoa_id}
+                      onChange={mudar('pessoa_id')}
+                      options={opPessoas}
+                      placeholder={form.tipo === 'PAGAR' ? 'Escolha o fornecedor' : 'Escolha o cliente'}
+                      emptyMessage={form.tipo === 'PAGAR' ? 'Nenhum fornecedor encontrado.' : 'Nenhum cliente encontrado.'}
+                      disabled={travado}
+                      larguraPainel={420}
+                    />
+                  </Campo>
+                </>
+              )}
+            </div>
+            {financeiro && (
+              <div className="mt-2 grid grid-cols-2 gap-x-4 gap-y-2 md:grid-cols-[180px_150px_170px_minmax(0,1fr)]">
+                <Campo rotulo="Documento (opcional)">
+                  <input value={form.documento} onChange={(e) => mudar('documento')(e.target.value)} disabled={travado} maxLength={50} className={INPUT} />
+                </Campo>
+                <Campo rotulo="Emissão">
+                  <input type="date" value={form.data_emissao} onChange={(e) => mudar('data_emissao')(e.target.value)} disabled={travado} className={INPUT} />
+                </Campo>
+                <Campo rotulo="Valor do título">
+                  <input
+                    value={form.valor}
+                    onChange={(e) => mudarValor(e.target.value)}
+                    onBlur={() => valido(total) && setForm((f) => ({ ...f, valor: numeroBr(total) }))}
+                    disabled={travado}
+                    inputMode="decimal"
+                    placeholder="0,00"
+                    className={`${INPUT} text-right tabular-nums`}
+                  />
+                </Campo>
+                <Campo rotulo="Histórico (opcional)" className="col-span-2 md:col-span-1">
+                  <input value={form.historico} onChange={(e) => mudar('historico')(e.target.value)} disabled={travado} maxLength={255} className={INPUT} />
+                </Campo>
+              </div>
+            )}
+          </Faixa>
+
+          {financeiro && (
+            <>
+              <Faixa titulo="Parcelas">
+                <div className="mb-3 grid grid-cols-2 gap-x-4 sm:grid-cols-[150px_170px]">
+                  <Campo rotulo="Quantidade (mensais)">
+                    <input
+                      type="number"
+                      min={1}
+                      max={360}
+                      value={qtd}
+                      onChange={(e) => mudarQtd(e.target.value)}
+                      disabled={travado}
+                      className={`${INPUT} tabular-nums`}
+                    />
+                  </Campo>
+                  <Campo rotulo="1º vencimento">
+                    <input type="date" value={primeiroVenc} onChange={(e) => mudarPrimeiroVenc(e.target.value)} disabled={travado} className={INPUT} />
+                  </Campo>
+                </div>
+                <div className="max-h-64 overflow-y-auto rounded-lg ring-1 ring-gray-200">
+                  <table className="w-full text-sm">
+                    <thead className={`sticky top-0 z-10 ${CABECALHO}`}>
+                      <tr>
+                        <th className="w-16 px-3 py-2 text-left font-medium">Nº</th>
+                        <th className="px-3 py-2 text-left font-medium">Vencimento</th>
+                        <th className="px-3 py-2 text-right font-medium">Valor</th>
+                        {temBaixa && <th className="px-3 py-2 text-left font-medium">Baixa</th>}
+                      </tr>
+                    </thead>
+                    <tbody>
+                      {parcelas.map((p, i) => (
+                        <tr key={i} className="border-b border-gray-100">
+                          <td className="px-3 py-1.5 tabular-nums text-gray-500">
+                            {i + 1}/{parcelas.length}
+                          </td>
+                          <td className="px-3 py-1.5">
+                            <input
+                              type="date"
+                              value={p.vencimento}
+                              onChange={(e) => mudarParcela(i, 'vencimento', e.target.value)}
+                              disabled={travado}
+                              aria-label={`Vencimento da parcela ${i + 1}`}
+                              className={`${INPUT} max-w-44 !py-1.5`}
+                            />
+                          </td>
+                          <td className="px-3 py-1.5 text-right">
+                            <input
+                              value={p.valor}
+                              onChange={(e) => mudarParcela(i, 'valor', e.target.value)}
+                              onBlur={() => valido(lerValor(p.valor)) && mudarParcela(i, 'valor', numeroBr(lerValor(p.valor)))}
+                              disabled={travado}
+                              inputMode="decimal"
+                              placeholder="0,00"
+                              aria-label={`Valor da parcela ${i + 1}`}
+                              className={`${INPUT} ml-auto max-w-40 !py-1.5 text-right tabular-nums`}
+                            />
+                          </td>
+                          {temBaixa && (
+                            <td className="px-3 py-1.5 text-xs text-emerald-700">
+                              {p.data_baixa ? `${data(p.data_baixa)} · ${moeda(p.valor_baixa)}` : <span className="text-gray-400">Em aberto</span>}
+                            </td>
+                          )}
+                        </tr>
+                      ))}
+                    </tbody>
+                    <tfoot className="sticky bottom-0 bg-gray-50">
+                      <tr>
+                        <td colSpan={2} className="px-3 py-2 text-xs font-semibold text-gray-600">
+                          Total das parcelas
+                          {totalC > 0 && diferenca(somaParcelasC)}
+                        </td>
+                        <td className="px-3 py-2 text-right text-sm font-semibold tabular-nums text-gray-900">{moeda(somaParcelasC / 100)}</td>
+                        {temBaixa && <td />}
+                      </tr>
+                    </tfoot>
+                  </table>
+                </div>
+              </Faixa>
+
+              <Faixa
+                titulo="Rateio por centro de custo e plano de contas"
+                acao={
+                  !travado && (
+                    <button
+                      type="button"
+                      onClick={adicionarRateio}
+                      className="flex items-center gap-1 rounded-lg px-2 py-1 text-xs font-medium text-primary-600 hover:bg-primary-50"
+                    >
+                      <Plus size={14} /> Adicionar linha
+                    </button>
+                  )
+                }
+              >
+                <div className="rounded-lg ring-1 ring-gray-200">
+                  <table className="w-full text-sm">
+                    <thead className={CABECALHO}>
+                      <tr>
+                        <th className="px-3 py-2 text-left font-medium">Centro de custo</th>
+                        <th className="px-3 py-2 text-left font-medium">Plano de contas</th>
+                        <th className="w-28 px-3 py-2 text-right font-medium">%</th>
+                        <th className="w-40 px-3 py-2 text-right font-medium">Valor</th>
+                        <th className="w-10" />
+                      </tr>
+                    </thead>
+                    <tbody>
+                      {rateios.map((r, i) => (
+                        <tr key={i} className="border-b border-gray-100 align-middle">
+                          <td className="px-3 py-1.5">
+                            <SearchableSelect
+                              value={r.centro_id}
+                              onChange={(v) => mudarRateio(i, 'centro_id', v)}
+                              options={opCentros}
+                              placeholder="Centro de custo"
+                              emptyMessage="Nenhum centro de custo cadastrado."
+                              disabled={travado}
+                              larguraPainel={360}
+                            />
+                          </td>
+                          <td className="px-3 py-1.5">
+                            <SearchableSelect
+                              value={r.natureza_id}
+                              onChange={(v) => mudarRateio(i, 'natureza_id', v)}
+                              options={opNaturezas}
+                              placeholder="Plano de contas"
+                              emptyMessage="Nenhuma conta cadastrada."
+                              disabled={travado}
+                              larguraPainel={460}
+                            />
+                          </td>
+                          <td className="px-3 py-1.5">
+                            <input
+                              value={r.pct}
+                              onChange={(e) => mudarRateio(i, 'pct', e.target.value)}
+                              disabled={travado}
+                              inputMode="decimal"
+                              placeholder="0"
+                              aria-label={`Percentual da linha ${i + 1} do rateio`}
+                              className={`${INPUT} text-right tabular-nums`}
+                            />
+                          </td>
+                          <td className="px-3 py-1.5">
+                            <input
+                              value={r.valor}
+                              onChange={(e) => mudarRateio(i, 'valor', e.target.value)}
+                              onBlur={() => valido(lerValor(r.valor)) && setRateios((l) => l.map((x, j) => (j === i ? { ...x, valor: numeroBr(lerValor(r.valor)) } : x)))}
+                              disabled={travado}
+                              inputMode="decimal"
+                              placeholder="0,00"
+                              aria-label={`Valor da linha ${i + 1} do rateio`}
+                              className={`${INPUT} text-right tabular-nums`}
+                            />
+                          </td>
+                          <td className="pr-2 text-center">
+                            {!travado && rateios.length > 1 && (
+                              <button
+                                type="button"
+                                onClick={() => setRateios((l) => l.filter((_, j) => j !== i))}
+                                title="Remover linha"
+                                className="rounded-lg p-1.5 text-gray-400 hover:bg-red-50 hover:text-red-600"
+                              >
+                                <X size={15} />
+                              </button>
+                            )}
+                          </td>
+                        </tr>
+                      ))}
+                    </tbody>
+                    <tfoot className="bg-gray-50">
+                      <tr>
+                        <td colSpan={2} className="px-3 py-2 text-xs font-semibold text-gray-600">
+                          Total rateado
+                          {totalC > 0 && diferenca(somaRateioC)}
+                        </td>
+                        <td className="px-3 py-2 text-right text-sm font-semibold tabular-nums text-gray-900">{fmtPct(Math.round(somaPct * 1e4) / 1e4)}%</td>
+                        <td className="px-3 py-2 text-right text-sm font-semibold tabular-nums text-gray-900">{moeda(somaRateioC / 100)}</td>
+                        <td />
+                      </tr>
+                    </tfoot>
+                  </table>
+                </div>
+              </Faixa>
+            </>
+          )}
+
+          {erroSalvar && <p className="rounded-lg bg-red-50 px-3 py-2 text-xs text-red-600">{erroSalvar}</p>}
+
+          {financeiro && (
+            <div className="flex flex-col-reverse gap-3 sm:flex-row sm:items-center sm:justify-between">
+              <p className="text-[11px] text-gray-400">
+                {dados &&
+                  `Criado por ${dados.criado_por || 'usuário'} em ${dataHora(dados.criado_em)}${
+                    dados.atualizado_em && dados.atualizado_em !== dados.criado_em ? ` · alterado por ${dados.alterado_por || 'usuário'} em ${dataHora(dados.atualizado_em)}` : ''
+                  }`}
+              </p>
+              <div className="flex justify-end gap-2">
+                {id && !travado && (
+                  <Button type="button" variant="secondary" onClick={excluir} disabled={salvando}>
+                    <Trash2 size={15} />
+                    Excluir
+                  </Button>
+                )}
+                <Button type="button" variant="secondary" onClick={onClose} disabled={salvando}>
+                  {travado ? 'Fechar' : 'Cancelar'}
+                </Button>
+                {!travado && (
+                  <Button type="button" onClick={salvar} disabled={salvando}>
+                    {salvando ? 'Salvando...' : id ? 'Salvar alterações' : 'Criar título'}
+                  </Button>
+                )}
+              </div>
+            </div>
+          )}
+        </div>
+      )}
+    </Modal>
+  );
+}

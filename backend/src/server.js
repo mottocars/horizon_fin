@@ -41,6 +41,7 @@ const dreConfiguracoesRoutes = require('./modules/dre-configuracoes/dreConfigura
 const dreDemonstrativoRoutes = require('./modules/dre-demonstrativo/demonstrativo.routes');
 const dreExportacaoRoutes = require('./modules/dre-exportacao/exportacao.routes');
 const dreProjecoesRoutes = require('./modules/dre-projecoes/dreProjecoes.routes');
+const contasPagarReceberRoutes = require('./modules/contas-pagar-receber/cpr.routes');
 const lancamentosAjustesRoutes = require('./modules/lancamentos-ajustes/lancamentosAjustes.routes');
 const lancamentosManuaisRoutes = require('./modules/lancamentos-manuais/lancamentosManuais.routes');
 const dfcParametrosRoutes = require('./modules/dfc-parametros/dfcParametros.routes');
@@ -204,6 +205,7 @@ app.use('/api/dre-financeiro', exigirTela([T.DRE]), dreFinanceiroRoutes);
 app.use('/api/dre-configuracoes', exigirTela([T.DRE]), dreConfiguracoesRoutes);
 // Projeções da DRE (orçamento por centro de custo, assistente em etapas e versões).
 app.use('/api/dre-projecoes', exigirTela([T.DRE]), dreProjecoesRoutes);
+app.use('/api/contas-pagar-receber', exigirTela([T.CONTAS_PAGAR_RECEBER]), contasPagarReceberRoutes);
 app.use('/api/dre-demonstrativo', exigirTela([T.DRE], LEITURA_DASHBOARD), dreDemonstrativoRoutes);
 // Exportação de auditoria da DRE (Excel com a memória de cálculo e as bases): tela DRE e, só leitura
 // (é um GET), o dashboard Econômico Financeiro › Demonstração do Resultado.
