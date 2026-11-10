@@ -26,6 +26,7 @@ import {
   alterarTitulo,
   avancoPrevisto,
   baixarDocumentoPls,
+  cabecalhoPls,
   criarTitulo,
   documentosPls,
   excluirTitulo,
@@ -122,6 +123,7 @@ export default function TituloModal({ empresaId, id = null, onClose, onSalvo }) 
   const [pls, setPls] = useState({ centro_id: '', data_previsao: '', avanco: null });
   const [avanco, setAvanco] = useState({ carregando: false, dados: null, erro: '' });
   const [documentos, setDocumentos] = useState({ carregando: false, dados: null, erro: '' });
+  const [cabPls, setCabPls] = useState({ carregando: false, dados: null, erro: '' });
 
   useEffect(() => {
     setErro('');
@@ -191,6 +193,32 @@ export default function TituloModal({ empresaId, id = null, onClose, onSalvo }) 
       vivo = false;
     };
   }, [empresaId, form.tipo_documento, pls.centro_id]);
+
+  // Cabeçalho da PLS CEF: última liberação, envios do DCD/Geral, Parâmetros da obra e unidades do Geral.
+  useEffect(() => {
+    if (form.tipo_documento !== 'PROJECAO_PLS_CEF' || !pls.centro_id) {
+      setCabPls({ carregando: false, dados: null, erro: '' });
+      return undefined;
+    }
+    let vivo = true;
+    setCabPls((c) => ({ ...c, carregando: true, erro: '' }));
+    cabecalhoPls(empresaId, pls.centro_id, pls.data_previsao)
+      .then((d) => vivo && setCabPls({ carregando: false, dados: d, erro: '' }))
+      .catch((e) => vivo && setCabPls({ carregando: false, dados: null, erro: mensagemErro(e, 'Não foi possível carregar os dados do centro de custo.') }));
+    return () => {
+      vivo = false;
+    };
+  }, [empresaId, form.tipo_documento, pls.centro_id, pls.data_previsao]);
+
+  const cab = cabPls.dados;
+  // Avanço previsto na data: o do Prevision (curva diária) ou o digitado (`pls.avanco`, texto; null = Prevision).
+  const pontosPrev = avanco.dados?.tem_prevision ? avanco.dados.pontos : [];
+  const kPrev = indiceNaData(pontosPrev, pls.data_previsao);
+  const avancoPrevision = !pls.data_previsao || pontosPrev.length < 2 ? null : kPrev < 0 ? 0 : pontosPrev[kPrev].previsto;
+  const avancoTexto = pls.avanco ?? (avancoPrevision === null ? '' : pct2(avancoPrevision));
+  const avancoInformado = lerValor(avancoTexto);
+  const avancoValido = Number.isFinite(avancoInformado) && avancoInformado >= 0 && avancoInformado <= 100;
+  const avancoAlterado = pls.avanco !== null && avancoValido && avancoPrevision !== null && Math.abs(avancoInformado - avancoPrevision) > 0.0001;
   const opNaturezas = useMemo(
     () => (opcoes?.naturezas || []).map((n) => ({ value: n.id, label: `${n.id} ${n.nome}${n.inativa ? ' (inativa)' : ''}` })),
     [opcoes]
@@ -373,6 +401,47 @@ export default function TituloModal({ empresaId, id = null, onClose, onSalvo }) 
                       <Campo rotulo="Data Previsão Recebimento">
                         <CampoData value={pls.data_previsao} onChange={(v) => setPls((p) => ({ ...p, data_previsao: v, avanco: null }))} className={INPUT} />
                       </Campo>
+                      <Campo rotulo="Avanço previsto na data (Prevision)">
+                        <div className="relative">
+                          <input
+                            value={avancoTexto}
+                            onChange={(e) => setPls((p) => ({ ...p, avanco: e.target.value }))}
+                            onBlur={() => avancoValido && pls.avanco !== null && setPls((p) => ({ ...p, avanco: pct2(avancoInformado) }))}
+                            disabled={!pls.centro_id || !pls.data_previsao}
+                            inputMode="decimal"
+                            placeholder={!pls.centro_id || !pls.data_previsao ? 'Escolha o centro e a data' : '0,00'}
+                            aria-label="Avanço previsto na data"
+                            className={`${INPUT} pr-7 text-right tabular-nums ${avancoTexto && !avancoValido ? 'border-red-300 bg-red-50' : ''}`}
+                          />
+                          <span className="pointer-events-none absolute right-2.5 top-1/2 -translate-y-1/2 text-sm text-gray-400">%</span>
+                        </div>
+                        {avancoTexto && !avancoValido ? (
+                          <p className="mt-1 text-[11px] text-red-600">Informe um percentual entre 0 e 100.</p>
+                        ) : avancoAlterado ? (
+                          <p className="mt-1 text-[11px] text-gray-500">
+                            Prevision: {pct2(avancoPrevision)}% ·{' '}
+                            <button type="button" onClick={() => setPls((p) => ({ ...p, avanco: null }))} className="font-medium text-primary-600 hover:underline">
+                              usar o do Prevision
+                            </button>
+                          </p>
+                        ) : (
+                          pls.centro_id && pls.data_previsao && avanco.dados && !avanco.dados.tem_prevision && (
+                            <p className="mt-1 text-[11px] text-amber-600">Centro sem Código Prevision: informe o avanço.</p>
+                          )
+                        )}
+                      </Campo>
+                      <CampoLeitura
+                        rotulo="Última Liberação (DCD)"
+                        valor={cab?.ultima_liberacao ? `${data(cab.ultima_liberacao.data)} · parcela ${cab.ultima_liberacao.parcela}` : null}
+                        carregando={cabPls.carregando}
+                      />
+                      <CampoLeitura rotulo="Último envio do DCD" valor={cab?.envio_dcd ? dataHora(cab.envio_dcd).replace(', ', ' às ') : null} alerta={cab?.envio_dcd && !ehHoje(cab.envio_dcd)} carregando={cabPls.carregando} />
+                      <CampoLeitura rotulo="Último envio do Geral" valor={cab?.envio_geral ? dataHora(cab.envio_geral).replace(', ', ' às ') : null} alerta={cab?.envio_geral && !ehHoje(cab.envio_geral)} carregando={cabPls.carregando} />
+                      <CampoLeitura
+                        rotulo="Avanço liberado na última liberação"
+                        valor={cab?.avanco_liberado === null || cab?.avanco_liberado === undefined ? null : `${pct2(cab.avanco_liberado)}%`}
+                        carregando={cabPls.carregando}
+                      />
                     </>
                   )}
                   {financeiro && (
@@ -434,6 +503,10 @@ export default function TituloModal({ empresaId, id = null, onClose, onSalvo }) 
                 </div>
               )}
 
+              {abaVisivel === 'cabecalho' && !financeiro && pls.centro_id && (
+                <BasesProjecaoPls cab={cab} carregando={cabPls.carregando} erro={cabPls.erro} avancoInformado={avancoValido ? avancoInformado : null} dataPrevisao={pls.data_previsao} />
+              )}
+
               {abaVisivel === 'documentos' && (
                 <AbaDocumentos empresaId={empresaId} centroId={pls.centro_id} documentos={documentos} />
               )}
@@ -443,8 +516,7 @@ export default function TituloModal({ empresaId, id = null, onClose, onSalvo }) 
                   centroEscolhido={Boolean(pls.centro_id)}
                   avanco={avanco}
                   dataPrevisao={pls.data_previsao}
-                  avancoTexto={pls.avanco}
-                  onAvanco={(t) => setPls((p) => ({ ...p, avanco: t }))}
+                  avancoInformado={avancoAlterado ? avancoInformado : null}
                 />
               )}
 
@@ -788,10 +860,101 @@ function AvisoAba({ children }) {
   return <div className="flex h-full min-h-[320px] items-center justify-center px-6 text-center text-sm text-gray-500">{children}</div>;
 }
 
+const pct2 = (v) => Number(v).toLocaleString('pt-BR', { minimumFractionDigits: 2, maximumFractionDigits: 2 });
+
+// Data/hora (timestamp) é de hoje, no fuso do navegador.
+function ehHoje(v) {
+  const d = new Date(v);
+  const pad = (x) => String(x).padStart(2, '0');
+  return `${d.getFullYear()}-${pad(d.getMonth() + 1)}-${pad(d.getDate())}` === hojeISO();
+}
+
+// Campo só de leitura (vem do sistema). `alerta`: em vermelho (ex.: envio que não é de hoje).
+function CampoLeitura({ rotulo, valor, alerta = false, carregando = false, dica, className = '' }) {
+  return (
+    <Campo rotulo={rotulo} className={className}>
+      <div
+        className={`flex min-h-[38px] items-center truncate rounded-lg border px-2.5 py-2 text-sm tabular-nums ${
+          alerta ? 'border-red-200 bg-red-50 font-semibold text-red-600' : 'border-gray-200 bg-gray-50 text-gray-700'
+        }`}
+        title={typeof valor === 'string' ? valor : undefined}
+      >
+        {carregando ? <span className="text-gray-400">...</span> : valor ?? <span className="text-gray-400">—</span>}
+      </div>
+      {dica && <p className="mt-1 text-[11px] text-gray-400">{dica}</p>}
+    </Campo>
+  );
+}
+
+// Projeção PLS CEF › Cabeçalho: as bases que a Projeção CEF da DFC usa para Crédito PJ, Novo Registro e
+// Medição (motor em dfc-projecao-cef), já trazidas para o recebimento na data. Só leitura.
+//   Medição       = VGF de medição das unidades registradas × avanço a medir
+//   Novo Registro = unidades que registram até a data: (terreno + FGTS) + VGF de medição × % de obra
+//   Crédito PJ    = CTO × avanço a medir − Medição, depois da Demanda Mínima, até o saldo do teto PJ
+function BasesProjecaoPls({ cab, carregando, erro, avancoInformado, dataPrevisao }) {
+  if (erro) return <p className="mt-4 rounded-lg bg-red-50 px-3 py-2 text-xs text-red-600">{erro}</p>;
+  if (cab && !cab.contrato) {
+    return (
+      <p className="mt-4 rounded-lg bg-amber-50 px-3 py-2 text-xs text-amber-700">
+        Este centro de custo não tem Contrato Caixa cadastrado (DFC Construtoras › Centros Custos): sem DCD nem Geral para projetar.
+      </p>
+    );
+  }
+  const p = cab?.parametros;
+  const u = cab?.unidades;
+  const aMedir = avancoInformado !== null && cab?.avanco_liberado !== null && cab?.avanco_liberado !== undefined ? avancoInformado - cab.avanco_liberado : null;
+  const saldoTeto = p?.valor_financiamento_pj !== null && p?.valor_financiamento_pj !== undefined && cab ? p.valor_financiamento_pj - cab.credito_pj_liberado : null;
+  const dmAtingida = p?.data_demanda_minima && dataPrevisao ? dataPrevisao >= p.data_demanda_minima : null;
+  const semParam = 'Sem Parâmetros na DFC';
+  const dicaParam = p ? `DFC › Parâmetros, versão ${p.versao}` : 'Cadastre em DFC Construtoras › Parâmetros';
+  const L = (props) => <CampoLeitura carregando={carregando} {...props} />;
+
+  return (
+    <div className="mt-5 border-t border-gray-100 pt-4">
+      <h3 className="text-sm font-semibold text-gray-900">Bases da projeção · Crédito PJ, Novo Registro e Medição</h3>
+      <p className="mb-3 text-xs text-gray-500">Mesmas fontes e regras da Projeção CEF da DFC Construtoras (Parâmetros, DCD e Geral).</p>
+      <div className="grid grid-cols-1 gap-x-4 gap-y-3 sm:grid-cols-2 md:grid-cols-4">
+        <L
+          rotulo="Avanço a medir"
+          valor={aMedir === null ? null : `${pct2(aMedir)}%`}
+          alerta={aMedir !== null && aMedir < 0}
+          dica="Previsto na data − liberado"
+        />
+        <L rotulo="CTO" valor={p ? (p.cto === null ? semParam : moeda(p.cto)) : null} dica={dicaParam} />
+        <L rotulo="Valor do Financiamento PJ (teto)" valor={p ? (p.valor_financiamento_pj === null ? semParam : moeda(p.valor_financiamento_pj)) : null} dica={dicaParam} />
+        <L rotulo="Crédito PJ já liberado" valor={cab ? moeda(cab.credito_pj_liberado) : null} dica="DCD · Financiamento Construtora (LP)" />
+        <L rotulo="Saldo do teto PJ" valor={saldoTeto === null ? null : moeda(saldoTeto)} alerta={saldoTeto !== null && saldoTeto <= 0} dica="Teto − crédito já liberado" />
+        <L
+          rotulo="Data da Demanda Mínima"
+          valor={p?.data_demanda_minima ? data(p.data_demanda_minima) : p ? semParam : null}
+          dica={dmAtingida === null ? dicaParam : dmAtingida ? 'Atingida na data: PJ libera' : 'Não atingida na data: sem Crédito PJ'}
+        />
+        <L
+          rotulo="Tempo entre assinatura e registro"
+          valor={p ? (p.tempo_assinatura_registro_meses === null ? semParam : `${p.tempo_assinatura_registro_meses} mes(es)`) : null}
+          dica={dicaParam}
+        />
+        <L rotulo="Unidades no Geral" valor={u ? String(u.total) : null} dica="Sem o contrato da construtora" />
+        <L rotulo="Registradas até a última liberação" valor={u ? `${u.registradas.qtd} unidade(s)` : null} dica="Base da Medição" />
+        <L rotulo="VGF de medição registrado" valor={u ? moeda(u.registradas.vgf_medicao) : null} dica="Financiamento − terreno + subsídio" />
+        <L
+          rotulo="A registrar até a data"
+          valor={u ? (u.a_registrar ? `${u.a_registrar.qtd} unidade(s)` : 'Informe a data') : null}
+          dica="Base do Novo Registro"
+        />
+        <L
+          rotulo="Valores a registrar"
+          dica="VGF de medição / terreno + FGTS"
+          valor={u?.a_registrar ? `${moeda(u.a_registrar.vgf_medicao)} / ${moeda(u.a_registrar.terreno_fgts)}` : null}
+        />
+      </div>
+    </div>
+  );
+}
+
 // Projeção PLS CEF › Avanços: a curva diária do Prevision do centro escolhido no Cabeçalho, com a bandeira
-// na Data Previsão Recebimento. O acumulado na data começa com o do Prevision e pode ser alterado à mão
-// (`avancoTexto`; null = o do Prevision).
-function AbaAvancos({ centroEscolhido, avanco, dataPrevisao, avancoTexto, onAvanco }) {
+// na Data Previsão Recebimento (o avanço da data se altera no Cabeçalho).
+function AbaAvancos({ centroEscolhido, avanco, dataPrevisao, avancoInformado }) {
   if (!centroEscolhido) return <AvisoAba>Escolha o centro de custo no Cabeçalho para ver o avanço previsto.</AvisoAba>;
   if (avanco.carregando) return <AvisoAba>Carregando o avanço do Prevision...</AvisoAba>;
   if (avanco.erro) return <AvisoAba>{avanco.erro}</AvisoAba>;
@@ -805,11 +968,6 @@ function AbaAvancos({ centroEscolhido, avanco, dataPrevisao, avancoTexto, onAvan
   const k = indiceNaData(d.pontos, dataPrevisao);
   const naData = !dataPrevisao ? null : k < 0 ? 0 : d.pontos[k].previsto;
   const fora = dataPrevisao && (dataPrevisao < inicio || dataPrevisao > fim);
-  const fmt = (v) => v.toLocaleString('pt-BR', { minimumFractionDigits: 2, maximumFractionDigits: 2 });
-  const texto = avancoTexto ?? (naData === null ? '' : fmt(naData));
-  const digitado = lerValor(texto);
-  const invalido = !Number.isFinite(digitado) || digitado < 0 || digitado > 100;
-  const alterado = avancoTexto !== null && !invalido && Math.abs(digitado - naData) > 0.0001;
 
   return (
     <div className="space-y-3">
@@ -821,36 +979,11 @@ function AbaAvancos({ centroEscolhido, avanco, dataPrevisao, avancoTexto, onAvan
           </p>
         </div>
         {dataPrevisao ? (
-          <div className="flex flex-col items-start gap-0.5 sm:items-end">
-            <label className="flex items-center gap-2 text-sm text-gray-600">
-              Previsto acumulado em {data(dataPrevisao)}:
-              <span className="relative">
-                <input
-                  value={texto}
-                  onChange={(e) => onAvanco(e.target.value)}
-                  onBlur={() => !invalido && avancoTexto !== null && onAvanco(fmt(digitado))}
-                  inputMode="decimal"
-                  aria-label="Previsto acumulado na data"
-                  className={`w-28 rounded-lg border py-1.5 pl-2.5 pr-7 text-right text-sm font-semibold tabular-nums text-gray-900 focus:outline-none focus:ring-2 focus:ring-primary-100 ${
-                    invalido ? 'border-red-300 bg-red-50' : 'border-gray-200'
-                  }`}
-                />
-                <span className="pointer-events-none absolute right-2.5 top-1/2 -translate-y-1/2 text-sm text-gray-400">%</span>
-              </span>
-            </label>
-            {invalido ? (
-              <span className="text-xs text-red-600">Informe um percentual entre 0 e 100.</span>
-            ) : alterado ? (
-              <span className="text-xs text-gray-500">
-                Prevision: {fmt(naData)}% ·{' '}
-                <button type="button" onClick={() => onAvanco(null)} className="font-medium text-primary-600 hover:underline">
-                  usar o do Prevision
-                </button>
-              </span>
-            ) : (
-              fora && <span className="text-xs text-amber-600">Data fora da curva do Prevision.</span>
-            )}
-          </div>
+          <p className="text-sm text-gray-600 sm:text-right">
+            Previsto acumulado em {data(dataPrevisao)}: <span className="font-semibold tabular-nums text-gray-900">{pct2(naData)}%</span>
+            {fora && <span className="ml-1 text-xs text-amber-600">(fora da curva)</span>}
+            {avancoInformado !== null && <span className="block text-xs text-gray-500">No Cabeçalho foi informado {pct2(avancoInformado)}%.</span>}
+          </p>
         ) : (
           <p className="text-xs text-amber-600">Informe a Data Previsão Recebimento no Cabeçalho para marcar no gráfico.</p>
         )}

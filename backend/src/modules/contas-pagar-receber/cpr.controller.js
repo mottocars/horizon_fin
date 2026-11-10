@@ -104,6 +104,10 @@ module.exports = {
       await service.baixar(empresaIdSchema.parse(req.params.empresaId), idSchema.parse(req.params.parcelaId), baixaSchema.parse(req.body || {}), req.user.id)
     )
   ),
+  cabecalhoPls: rota(async (req, res) => {
+    const data = req.query.data ? dataIso('Data inválida.').parse(req.query.data) : null;
+    res.json(await service.cabecalhoPls(empresaIdSchema.parse(req.params.empresaId), idSchema.parse(req.params.centroId), data));
+  }),
   documentosPls: rota(async (req, res) =>
     res.json(await service.documentosPls(empresaIdSchema.parse(req.params.empresaId), idSchema.parse(req.params.centroId)))
   ),

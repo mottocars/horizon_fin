@@ -58,6 +58,14 @@ export function baixarDocumentoPls(empresaId, centroId, tipo, formato) {
     });
 }
 
+// Projeção PLS CEF › Cabeçalho: última liberação, avanço liberado, crédito PJ liberado, envios do DCD/Geral,
+// Parâmetros da obra e unidades do Geral (registradas / a registrar até a data).
+export function cabecalhoPls(empresaId, centroId, data) {
+  return http
+    .get(`/contas-pagar-receber/${empresaId}/cabecalho-pls/${centroId}`, { params: data ? { data } : {} })
+    .then((res) => res.data);
+}
+
 export function estornarBaixa(empresaId, parcelaId) {
   return http.delete(`/contas-pagar-receber/${empresaId}/parcelas/${parcelaId}/baixa`).then((res) => res.data);
 }
