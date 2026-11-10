@@ -227,7 +227,36 @@ async function painel(empresaId) {
     titulos: [...receber.titulos, ...pagar.titulos],
     bancos,
     catalogos: listas,
+    manuais: await titulosManuais(empresaId),
   };
+}
+
+// Títulos manuais do Horizon (Cadastros › Contas Pagar / Receber): as parcelas NÃO quitadas (sem baixa), para o
+// simulador de caixa do Aging (opção "Considera Títulos Manuais do Horizon"). Cada uma com o lado (r/p), o
+// vencimento, o valor e o rateio [centro, natureza, fração] — os filtros de centro e plano de contas da tela valem.
+async function titulosManuais(empresaId) {
+  const { rows } = await pool.query(
+    `SELECT p.id, p.numero, p.vencimento, p.valor, t.id AS titulo_id, t.tipo, t.tipo_documento, t.pessoa_nome,
+            (SELECT count(*)::int FROM cpr_parcelas x WHERE x.titulo_id = t.id) AS total_parcelas,
+            (SELECT COALESCE(json_agg(json_build_array(r.centro_id, r.natureza_id, r.percentual / 100.0) ORDER BY r.id), '[]'::json)
+               FROM cpr_rateios r WHERE r.titulo_id = t.id) AS rateio
+       FROM cpr_parcelas p JOIN cpr_titulos t ON t.id = p.titulo_id
+      WHERE t.empresa_id = $1 AND p.data_baixa IS NULL
+      ORDER BY p.vencimento, t.id, p.numero`,
+    [empresaId]
+  );
+  return rows.map((r) => ({
+    id: r.id,
+    titulo: r.titulo_id,
+    numero: r.numero,
+    total: r.total_parcelas,
+    l: r.tipo === 'PAGAR' ? 'p' : 'r',
+    doc: r.tipo_documento,
+    nome: r.pessoa_nome,
+    v: r.vencimento,
+    s: Number(r.valor),
+    f: (r.rateio.length ? r.rateio : [[null, null, 1]]).map(([c, n, fr]) => [c === null ? null : Number(c), n === null ? null : String(n), Number(fr)]),
+  }));
 }
 
 // `LADOS` e `titulosDoLado` também são usados pelo Detalhamento Financeiro (detalhamentoPainel.service.js):

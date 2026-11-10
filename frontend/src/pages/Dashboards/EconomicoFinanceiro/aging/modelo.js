@@ -63,6 +63,10 @@ export function preparar(d) {
     t.atraso = h - t.vn;
     t.fx = faixaDe(t.atraso);
   });
+  // Títulos manuais do Horizon (Contas Pagar / Receber, parcelas não quitadas) — só o simulador usa.
+  (d.manuais || []).forEach((m) => {
+    m.vn = diaNum(m.v);
+  });
   // Nome de cada conta do plano de contas: o do cadastro (Plano de Contas), se vier; senão o do rateio.
   (d.catalogos?.planos || []).forEach((p) => {
     if (p.nome) d.naturezas[p.id] = p.nome;
@@ -181,12 +185,22 @@ export function escopo(B, { inicio = null, fim = null, ...filtros } = {}) {
       linhas.push({ t, centro, nat, frac, valor: t.s * frac });
     });
   });
+  // Títulos manuais do Horizon: mesmo período e mesmos filtros de centro e plano de contas (cada fatia do rateio).
+  const manuais = [];
+  (B.manuais || []).forEach((m) => {
+    if ((inicio && m.v < inicio) || (fim && m.v > fim)) return;
+    m.f.forEach(([centro, nat, frac]) => {
+      if (sel && !sel.has(centro)) return;
+      if (planos && planos(nat)) return;
+      manuais.push({ m, centro, nat, frac, valor: m.s * frac });
+    });
+  });
   let contas = B.bancos.contas;
   if (sel) {
     const cos = new Set([...sel].map((id) => B.centroPorId.get(id)?.company_id).filter((x) => x !== null && x !== undefined));
     contas = contas.filter((c) => cos.has(c.company_id));
   }
-  return { B, linhas, banco: { data: B.bancos.data, ...caixa(contas), lista: contas }, filtrado: !!sel };
+  return { B, linhas, manuais, banco: { data: B.bancos.data, ...caixa(contas), lista: contas }, filtrado: !!sel };
 }
 
 // Soma por faixa de um conjunto de fatias: { fx: [15], total, vencido, n (parcelas), pessoas }.
@@ -477,7 +491,9 @@ export function maiores(E, lado, quais, n = 10) {
 // - naoReceber: % das entradas previstas que não entra;
 // - atrasoReceb: dias de atraso nos recebimentos;
 // - recuperar: % do vencido a receber de até 90 dias que entra, dividido pelos dias úteis do período;
-// - semCaixa: permutas e "Não cobrar" não entram no banco;
+// - semCaixa: permutas e "Não cobrar" não entram no banco (sempre ligado na tela);
+// - manuais: considera os títulos manuais do Horizon (Contas Pagar / Receber não quitados), cada parcela no
+//   vencimento — a receber como entrada (com os ajustes do cenário), a pagar como saída;
 // - partida: 'livre' (o Liberado + cheque da tela Saldo) ou 'total' (caixa livre + bloqueado).
 // Como o cheque especial já está no saldo de partida, saldo negativo = falta caixa; abaixo do valor do
 // cheque (`cheque`) = o caixa próprio acabou e o cheque especial está sendo usado.
@@ -486,7 +502,7 @@ export const CENARIOS = {
   conservador: { rotulo: 'Conservador', naoReceber: 10, atrasoReceb: 5, recuperar: 0 },
   estresse: { rotulo: 'Estresse', naoReceber: 30, atrasoReceb: 10, recuperar: 0 },
 };
-export const PADRAO_SIM = { ...CENARIOS.previsto, horizonte: 15, partida: 'livre', semCaixa: true };
+export const PADRAO_SIM = { ...CENARIOS.previsto, horizonte: 15, partida: 'livre', semCaixa: true, manuais: false };
 const CHAVES_CENARIO = ['naoReceber', 'atrasoReceb', 'recuperar'];
 export const cenarioDe = (p) => Object.keys(CENARIOS).find((k) => CHAVES_CENARIO.every((c) => CENARIOS[k][c] === p[c])) || null;
 
@@ -525,6 +541,23 @@ export function simular(E, params) {
       lancar(diaUtil(t.vn), 'sai', x.valor, { t, frac: x.frac, nominal: x.valor });
     }
   });
+  // Títulos manuais do Horizon (só com a opção ligada): o que vence no período, no dia do vencimento.
+  const manuais = { r: 0, p: 0 };
+  if (p.manuais) {
+    (E.manuais || []).forEach((x) => {
+      const { m } = x;
+      if (m.vn < h) return; // vencido: fica fora, como o vencido a pagar
+      if (m.l === 'r') {
+        const n = diaUtil(diaUtil(m.vn) + p.atrasoReceb);
+        if (n <= fim) manuais.r += x.valor * fatorR;
+        lancar(n, 'ent', x.valor * fatorR, { manual: m, frac: x.frac, nominal: x.valor });
+      } else {
+        const n = diaUtil(m.vn);
+        if (n <= fim) manuais.p += x.valor;
+        lancar(n, 'sai', x.valor, { manual: m, frac: x.frac, nominal: x.valor });
+      }
+    });
+  }
   // Recuperação do vencido a receber, dividida pelos dias úteis.
   const rec = recuperavel * (p.recuperar / 100);
   if (rec && uteis.length) uteis.forEach((d) => lancar(d.n, 'ent', rec / uteis.length, { extra: 'recuperacao', nominal: rec / uteis.length }));
@@ -563,5 +596,6 @@ export function simular(E, params) {
     diasNoCheque: banco.cheque > 0 ? dia.filter((d) => d.fim < banco.cheque).length : 0,
     recuperavel,
     semCaixa,
+    manuais,
   };
 }

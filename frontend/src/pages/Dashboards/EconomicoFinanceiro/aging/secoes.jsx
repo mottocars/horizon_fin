@@ -30,6 +30,7 @@ import {
   semana,
   simular,
   soma,
+  titulo,
 } from './modelo';
 
 // Seções do Aging List (dashboard Econômico Financeiro). Os números vêm de modelo.js; aqui é o desenho.
@@ -227,6 +228,23 @@ function situacao(sim, temBanco) {
 }
 
 function ItemDia({ it, B }) {
+  if (it.manual) {
+    const m = it.manual;
+    const num = String(m.titulo).padStart(5, '0');
+    return (
+      <div className="it" title={`Título manual do Horizon ${num}${m.total > 1 ? ` · parcela ${m.numero}/${m.total}` : ''}`}>
+        <span>
+          {titulo(m.nome || 'Título manual')}
+          <small>
+            Horizon · título {num}
+            {m.v !== it.data ? ` · venc. ${dm(m.v)}` : ''}
+            {it.frac < 1 ? ` · rateio ${pct(it.frac * 100)}` : ''}
+          </small>
+        </span>
+        <b>{brl(it.valor)}</b>
+      </div>
+    );
+  }
   if (it.extra) {
     return (
       <div className="it">
@@ -374,10 +392,16 @@ export function Simulador({ E }) {
             dica={`${brl(sim.recuperavel)} vencidos há até 90 dias, divididos pelos dias úteis`}
           />
           <label className="opt">
-            <input type="checkbox" checked={p.semCaixa} onChange={(e) => mudar({ semCaixa: e.target.checked })} />
+            <input type="checkbox" checked={p.manuais} onChange={(e) => mudar({ manuais: e.target.checked })} />
             <span>
-              <b>Permutas e "Não cobrar" não entram</b>
-              <span>{sim.semCaixa ? `${brl(sim.semCaixa)} no período não vira dinheiro no banco.` : 'Condições que não viram dinheiro no banco.'}</span>
+              <b>Considera Títulos Manuais do Horizon</b>
+              <span>
+                {p.manuais
+                  ? sim.manuais.r || sim.manuais.p
+                    ? `${brl(sim.manuais.r)} a receber e ${brl(sim.manuais.p)} a pagar no período, no vencimento.`
+                    : 'Nenhum título manual em aberto vence no período.'
+                  : 'Contas Pagar / Receber lançados no Horizon e não quitados.'}
+              </span>
             </span>
           </label>
         </aside>
