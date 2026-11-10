@@ -228,11 +228,11 @@ export default function TituloModal({ empresaId, id = null, onClose, onSalvo }) 
   const avancoValido = Number.isFinite(avancoInformado) && avancoInformado >= 0 && avancoInformado <= 100;
   const avancoAlterado = pls.avanco !== null && avancoValido && avancoPrevision !== null && Math.abs(avancoInformado - avancoPrevision) > 0.0001;
 
-  // Aba Rateios da PLS CEF: as três classificações calculadas (projetarPls) com o plano de contas de cada uma
-  // (null = a conta sugerida pelo plano da DFC) e, no Crédito PJ, o % de redução e o valor projetado
-  // (`pj_valor` null = calculado × (1 − redução)).
-  const [rateioPls, setRateioPls] = useState({ contas: { novo_registro: null, medicao: null, credito_pj: null }, pj_reducao: '0', pj_valor: null });
-  useEffect(() => setRateioPls((r) => ({ ...r, contas: { novo_registro: null, medicao: null, credito_pj: null } })), [pls.centro_id]);
+  // Aba Rateios da PLS CEF: as três classificações calculadas (projetarPls), com o plano de contas fixo no padrão
+  // (aba Configurações; sem ele, o do plano da DFC) e o valor projetado ajustável à mão (`valores[k]` texto; null =
+  // o calculado — no Crédito PJ, calculado × (1 − redução)).
+  const [rateioPls, setRateioPls] = useState({ valores: { novo_registro: null, medicao: null, credito_pj: null }, pj_reducao: '0' });
+  useEffect(() => setRateioPls({ valores: { novo_registro: null, medicao: null, credito_pj: null }, pj_reducao: '0' }), [pls.centro_id]);
   const projPls = useMemo(
     () => projetarPls(cab, avancoValido ? avancoInformado : null, pls.data_medicao),
     [cab, avancoValido, avancoInformado, pls.data_medicao]
@@ -1091,37 +1091,49 @@ const CLASSIFICACOES_PLS = [
   { chave: 'credito_pj', rotulo: 'Crédito PJ' },
 ];
 
-// Projeção PLS CEF › Rateios: sempre as três classificações (Novo Registro, Medição e Crédito PJ), cada uma com
-// o plano de contas (sugerido pelo plano da DFC) e o valor projetado. No Crédito PJ dá para reduzir um % do
-// valor calculado e alterar o valor projetado.
+// Projeção PLS CEF › Rateios: sempre as três classificações (Novo Registro, Medição e Crédito PJ). O plano de
+// contas é o padrão (aba Configurações da tela; sem ele, o do plano da DFC) e não se troca aqui. O valor
+// projetado de cada uma parte do calculado e pode ser ajustado à mão; no Crédito PJ também dá para reduzir um %
+// do calculado (% e valor andam juntos).
 function AbaRateiosPls({ centroEscolhido, projecao, carregando, contasSugeridas, opNaturezas, rateio, setRateio }) {
   if (!centroEscolhido) return <AvisoAba>Escolha o centro de custo no Cabeçalho para ver os rateios.</AvisoAba>;
   if (carregando && !projecao) return <AvisoAba>Carregando...</AvisoAba>;
   if (!projecao) return null;
   if (projecao.motivo) return <AvisoAba>{projecao.motivo}</AvisoAba>;
 
-  const conta = (k) => rateio.contas[k] ?? contasSugeridas?.[k] ?? '';
-  const calcPj = projecao.credito_pj;
+  const nomeConta = (k) => {
+    const id = contasSugeridas?.[k];
+    if (!id) return null;
+    return opNaturezas.find((o) => String(o.value) === String(id))?.label || id;
+  };
   const reducao = lerValor(rateio.pj_reducao);
   const reducaoValida = rateio.pj_reducao === '' || (Number.isFinite(reducao) && reducao >= 0 && reducao <= 100);
-  const pjProjetado =
-    calcPj === null ? null : rateio.pj_valor !== null ? lerValor(rateio.pj_valor) : r2(calcPj * (1 - (reducaoValida && Number.isFinite(reducao) ? reducao : 0) / 100));
-  const pjTexto = rateio.pj_valor ?? (pjProjetado === null ? '' : numeroBr(pjProjetado));
-  const pjValido = pjProjetado === null || (Number.isFinite(pjProjetado) && pjProjetado >= 0);
-  const projetado = { novo_registro: projecao.novo_registro, medicao: projecao.medicao, credito_pj: pjValido ? pjProjetado : null };
-  const total = CLASSIFICACOES_PLS.reduce((s, c) => s + (projetado[c.chave] || 0), 0);
+  // Valor sugerido de cada linha (o que vale sem ajuste à mão).
+  const sugerido = (k) => {
+    const calc = projecao[k];
+    if (calc === null || calc === undefined) return null;
+    if (k !== 'credito_pj') return calc;
+    return r2(calc * (1 - (reducaoValida && Number.isFinite(reducao) ? reducao : 0) / 100));
+  };
+  const linhas = CLASSIFICACOES_PLS.map((c) => {
+    const texto = rateio.valores[c.chave];
+    const valor = texto !== null && texto !== undefined ? lerValor(texto) : sugerido(c.chave);
+    const valido = valor === null || (Number.isFinite(valor) && valor >= 0);
+    return { ...c, calc: projecao[c.chave], texto: texto ?? (valor === null ? '' : numeroBr(valor)), valor, valido, ajustado: texto !== null && texto !== undefined };
+  });
+  const total = linhas.reduce((s, l) => s + (l.valido && l.valor ? l.valor : 0), 0);
 
-  function mudarReducao(t) {
-    setRateio((r) => ({ ...r, pj_reducao: t, pj_valor: null }));
-  }
-  function mudarValorPj(t) {
-    const v = lerValor(t);
-    setRateio((r) => ({
-      ...r,
-      pj_valor: t,
-      pj_reducao: calcPj > 0 && Number.isFinite(v) ? pct2(Math.max(0, (1 - v / calcPj) * 100)) : r.pj_reducao,
-    }));
-  }
+  const mudarValor = (k, t) =>
+    setRateio((r) => {
+      const prox = { ...r, valores: { ...r.valores, [k]: t } };
+      // No Crédito PJ o % de redução acompanha o valor digitado.
+      const calc = projecao.credito_pj;
+      const v = lerValor(t);
+      if (k === 'credito_pj' && calc > 0 && Number.isFinite(v)) prox.pj_reducao = pct2(Math.max(0, (1 - v / calc) * 100));
+      return prox;
+    });
+  const usarCalculado = (k) =>
+    setRateio((r) => ({ ...r, valores: { ...r.valores, [k]: null }, ...(k === 'credito_pj' ? { pj_reducao: '0' } : {}) }));
 
   return (
     <div className="space-y-3">
@@ -1145,33 +1157,30 @@ function AbaRateiosPls({ centroEscolhido, projecao, carregando, contasSugeridas,
             </tr>
           </thead>
           <tbody>
-            {CLASSIFICACOES_PLS.map((c) => {
-              const ehPj = c.chave === 'credito_pj';
-              const calc = projecao[c.chave];
+            {linhas.map((l) => {
+              const ehPj = l.chave === 'credito_pj';
+              const conta = nomeConta(l.chave);
               return (
-                <tr key={c.chave} className="border-b border-gray-100 align-middle">
-                  <td className="px-3 py-2 font-semibold text-gray-900">{c.rotulo}</td>
+                <tr key={l.chave} className="border-b border-gray-100 align-middle">
+                  <td className="px-3 py-2 font-semibold text-gray-900">{l.rotulo}</td>
                   <td className="px-3 py-2">
-                    <SearchableSelect
-                      value={conta(c.chave)}
-                      onChange={(v) => setRateio((r) => ({ ...r, contas: { ...r.contas, [c.chave]: v || '' } }))}
-                      options={opNaturezas}
-                      placeholder="Plano de contas"
-                      emptyMessage="Nenhuma conta cadastrada."
-                      larguraPainel={460}
-                      corClasses={corSelect(Boolean(conta(c.chave)))}
-                    />
+                    <div
+                      className={`truncate rounded-lg border px-2.5 py-2 ${conta ? 'border-gray-200 bg-gray-50 text-gray-700' : 'border-amber-300 bg-amber-50 text-amber-700'}`}
+                      title={conta || undefined}
+                    >
+                      {conta || 'Defina na aba Configurações'}
+                    </div>
                   </td>
                   <td className="whitespace-nowrap px-3 py-2 text-right tabular-nums text-gray-700" title={ehPj && projecao.motivo_pj ? projecao.motivo_pj : undefined}>
-                    {calc === null ? '—' : moeda(calc)}
+                    {l.calc === null || l.calc === undefined ? '—' : moeda(l.calc)}
                   </td>
                   <td className="px-3 py-2">
                     {ehPj ? (
                       <div className="relative">
                         <input
                           value={rateio.pj_reducao}
-                          onChange={(e) => mudarReducao(e.target.value)}
-                          disabled={calcPj === null}
+                          onChange={(e) => setRateio((r) => ({ ...r, pj_reducao: e.target.value, valores: { ...r.valores, credito_pj: null } }))}
+                          disabled={l.calc === null}
                           inputMode="decimal"
                           placeholder="0"
                           aria-label="Percentual de redução do Crédito PJ"
@@ -1184,22 +1193,16 @@ function AbaRateiosPls({ centroEscolhido, projecao, carregando, contasSugeridas,
                     )}
                   </td>
                   <td className="px-3 py-2">
-                    {ehPj ? (
-                      <input
-                        value={pjTexto}
-                        onChange={(e) => mudarValorPj(e.target.value)}
-                        onBlur={() => rateio.pj_valor !== null && pjValido && setRateio((r) => ({ ...r, pj_valor: numeroBr(pjProjetado) }))}
-                        disabled={calcPj === null}
-                        inputMode="decimal"
-                        placeholder="0,00"
-                        aria-label="Valor projetado do Crédito PJ"
-                        className={`${pjValido ? inputCor(pjTexto !== '') : `${INPUT_SEM_COR} border-red-300 bg-red-50`} text-right tabular-nums`}
-                      />
-                    ) : (
-                      <div className="whitespace-nowrap rounded-lg border border-gray-200 bg-gray-50 px-2.5 py-2 text-right tabular-nums text-gray-700">
-                        {calc === null ? '—' : moeda(calc)}
-                      </div>
-                    )}
+                    <input
+                      value={l.texto}
+                      onChange={(e) => mudarValor(l.chave, e.target.value)}
+                      onBlur={() => l.ajustado && l.valido && l.valor !== null && mudarValor(l.chave, numeroBr(l.valor))}
+                      disabled={l.calc === null}
+                      inputMode="decimal"
+                      placeholder="0,00"
+                      aria-label={`Valor projetado ${l.rotulo}`}
+                      className={`${l.valido ? inputCor(l.texto !== '') : `${INPUT_SEM_COR} border-red-300 bg-red-50`} text-right tabular-nums`}
+                    />
                   </td>
                 </tr>
               );
@@ -1220,12 +1223,18 @@ function AbaRateiosPls({ centroEscolhido, projecao, carregando, contasSugeridas,
         </table>
       </div>
       {projecao.motivo_pj && <p className="text-xs text-amber-600">Crédito PJ: {projecao.motivo_pj}</p>}
-      {rateio.pj_valor !== null && calcPj !== null && (
+      {linhas.some((l) => l.ajustado) && (
         <p className="text-xs text-gray-500">
-          Valor do Crédito PJ alterado à mão ·{' '}
-          <button type="button" onClick={() => setRateio((r) => ({ ...r, pj_valor: null, pj_reducao: '0' }))} className="font-medium text-primary-600 hover:underline">
-            usar o calculado
-          </button>
+          Ajustado à mão: {linhas.filter((l) => l.ajustado).map((l, i) => (
+            <span key={l.chave}>
+              {i > 0 && ' · '}
+              {l.rotulo} (
+              <button type="button" onClick={() => usarCalculado(l.chave)} className="font-medium text-primary-600 hover:underline">
+                usar o calculado
+              </button>
+              )
+            </span>
+          ))}
         </p>
       )}
     </div>
