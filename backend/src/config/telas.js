@@ -12,6 +12,7 @@ module.exports = {
   MASCARAS: '/cadastros/mascaras',
   CENTROS_CUSTO: '/cadastros/centros-de-custo',
   PLANOS_FINANCEIROS: '/cadastros/planos-financeiros',
+  CONTAS_PAGAR_RECEBER: '/cadastros/contas-pagar-receber',
 
   DRE: '/operacoes/dre-gerencial',
   DFC: '/operacoes/dfc-construtoras',

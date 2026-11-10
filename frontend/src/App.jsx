@@ -63,6 +63,7 @@ import ClusterClientesList from './pages/Operacoes/GestaoCobrancas/ClustersCobra
 import ClienteClusterDetalhe from './pages/Operacoes/GestaoCobrancas/ClustersCobranca/ClienteClusterDetalhe';
 import DistribuicaoExplicacaoPage from './pages/Operacoes/GestaoCobrancas/ReguaCobranca/DistribuicaoExplicacaoPage';
 import CronogramasObrasPage from './pages/Operacoes/CronogramasObras/CronogramasObrasPage';
+import ComingSoon from './pages/ComingSoon/ComingSoon';
 
 export default function App() {
   return (
@@ -136,6 +137,10 @@ export default function App() {
             <Route
               path="/cadastros/planos-financeiros/:empresaId/:siengeId"
               element={<PlanoFinanceiroItemDetalhe />}
+            />
+            <Route
+              path="/cadastros/contas-pagar-receber"
+              element={<ComingSoon title="Contas Pagar / Receber" />}
             />
             {/* A lista/cadastro (antes /cadastros/contas-bancarias e /:empresaId) virou a aba
                 "Contas Bancárias" de Operações > Saldo Contas Bancárias — ver ContasTab.jsx.

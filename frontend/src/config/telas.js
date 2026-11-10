@@ -23,6 +23,7 @@ export const TELAS_SISTEMA = {
   '/cadastros/mascaras': { title: 'Máscaras', subtitle: 'Cadastros — Máscaras' },
   '/cadastros/centros-de-custo': { title: 'Centros de Custos', subtitle: 'Cadastros — Centros de Custos' },
   '/cadastros/planos-financeiros': { title: 'Planos Financeiros', subtitle: 'Cadastros — Planos Financeiros' },
+  '/cadastros/contas-pagar-receber': { title: 'Contas Pagar / Receber', subtitle: 'Cadastros — Contas Pagar / Receber' },
   '/cadastros/contas-bancarias': { title: 'Contas Bancárias', subtitle: 'Cadastros — Contas Bancárias' },
   '/integracoes/portal-das-construtoras': { title: 'Portal das Construtoras', subtitle: 'Integrações — Portal das Construtoras' },
   '/integracoes/monitor': { title: 'Monitor de Integrações', subtitle: 'Integrações — Monitor de Integrações' },

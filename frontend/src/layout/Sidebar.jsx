@@ -33,6 +33,7 @@ import {
   ChartGantt,
   Handshake,
   KeyRound,
+  ArrowDownUp,
 } from 'lucide-react';
 import iconPortalConstrutoras from '../assets/integracoes/portal-construtoras.svg';
 import iconPrevision from '../assets/integracoes/prevision.svg';
@@ -68,6 +69,7 @@ const menuItems = [
       { label: 'Máscaras', to: '/cadastros/mascaras', icon: SlidersHorizontal },
       { label: 'Centros de Custos', to: '/cadastros/centros-de-custo', icon: Building2 },
       { label: 'Planos Financeiros', to: '/cadastros/planos-financeiros', icon: PieChart },
+      { label: 'Contas Pagar / Receber', to: '/cadastros/contas-pagar-receber', icon: ArrowDownUp },
     ],
   },
   {
