@@ -113,7 +113,7 @@ const ABAS_SUMARIO = [
           '**Não receber** — % das entradas previstas que não entra (inadimplência esperada).',
           '**Atrasar os recebimentos** — dias de atraso em todas as entradas; o que passa do horizonte sai da conta.',
           '**Recuperar do vencido** — % do vencido a receber de até 90 dias que entra, dividido igualmente pelos dias úteis do período.',
-          '**Considera Títulos Manuais do Horizon** — soma os títulos de Cadastros › Contas Pagar / Receber ainda não quitados: cada parcela no dia do vencimento (a receber como entrada, com os ajustes do cenário; a pagar como saída). Desligado por padrão. Permutas e "Não cobrar" nunca entram (não viram dinheiro no banco).',
+          '**Considera Títulos Manuais do Horizon** — soma os títulos de Cadastros › Contas Pagar / Receber ainda não quitados: cada parcela no dia exato do vencimento, mesmo no fim de semana (a receber como entrada, com os ajustes do cenário; a pagar como saída), em roxo no gráfico e marcada "Horizon" no dia a dia. A Projeção PLS CEF entra em duas datas: Novo Registro + Medição na Data Previsão Recebimento PF e Crédito PJ na Data Previsão Recebimento PJ. Desligado por padrão. Permutas e "Não cobrar" nunca entram (não viram dinheiro no banco).',
           'Os pagamentos entram sempre como estão: tudo o que vence no período, no dia do vencimento.',
           'Cenários prontos: **Previsto** (tudo no vencimento), **Conservador** (10% de perda e 5 dias de atraso nos recebimentos) e **Estresse** (30% de perda e 10 dias de atraso).',
         ],

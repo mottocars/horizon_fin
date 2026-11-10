@@ -6,10 +6,14 @@ import { brl, dm, semana } from './modelo';
 // Gráfico do simulador do Aging List: o caixa dia a dia — entradas (para cima) e saídas (para baixo)
 // de cada dia, a linha do saldo no fim do dia e — quando o saldo desce até ele — o valor do cheque especial
 // que está dentro do saldo (abaixo da linha, o caixa está usando o cheque).
-// Fim de semana em faixa cinza (o que vence nele cai na segunda). Clicar num dia abre as parcelas dele.
+// Fim de semana em faixa cinza (o que vence nele cai na segunda; os títulos manuais do Horizon ficam no dia exato, em
+// roxo — a parte manual de cada barra). Clicar num dia abre as parcelas dele.
 // Duas escalas: o saldo na da esquerda e as entradas/saídas do dia na da direita, numa faixa embaixo —
 // com o caixa muito maior que o movimento do dia (ex.: R$ 9 mi de saldo e R$ 20 mil de entrada), as
 // barras na mesma escala do saldo ficavam com 1 px e pareciam não existir.
+// Cor dos títulos manuais do Horizon (Contas Pagar / Receber) no simulador: a parte manual da barra do dia.
+export const COR_MANUAL = '#7c3aed';
+
 export function CaixaDiario({ sim, diaSel, onDia }) {
   const [ref, W] = useLargura();
   const { mostrar, esconder } = useDica();
@@ -77,8 +81,19 @@ export function CaixaDiario({ sim, diaSel, onDia }) {
         )}
         {dias.map((d, i) => (
           <g key={d.data}>
-            {d.ent > 0 && <rect x={cx(i) - w - 1} y={yb(d.ent)} width={w} height={Math.max(1, base - yb(d.ent))} rx={2} fill={COR.entrada} fillOpacity={0.85} />}
-            {d.sai > 0 && <rect x={cx(i) + 1} y={base} width={w} height={Math.max(1, yb(-d.sai) - base)} rx={2} fill={COR.saida} fillOpacity={0.85} />}
+            {/* Barra do dia: o que vem do Sienge na cor normal e, empilhada por fora, a parte dos títulos manuais em roxo. */}
+            {d.ent - d.entM > 0.005 && (
+              <rect x={cx(i) - w - 1} y={yb(d.ent - d.entM)} width={w} height={Math.max(1, base - yb(d.ent - d.entM))} rx={2} fill={COR.entrada} fillOpacity={0.85} />
+            )}
+            {d.entM > 0 && (
+              <rect x={cx(i) - w - 1} y={yb(d.ent)} width={w} height={Math.max(2, yb(d.ent - d.entM) - yb(d.ent))} rx={2} fill={COR_MANUAL} />
+            )}
+            {d.sai - d.saiM > 0.005 && (
+              <rect x={cx(i) + 1} y={base} width={w} height={Math.max(1, yb(-(d.sai - d.saiM)) - base)} rx={2} fill={COR.saida} fillOpacity={0.85} />
+            )}
+            {d.saiM > 0 && (
+              <rect x={cx(i) + 1} y={yb(-(d.sai - d.saiM))} width={w} height={Math.max(2, yb(-d.sai) - yb(-(d.sai - d.saiM)))} rx={2} fill={COR_MANUAL} />
+            )}
             {(i % passo === 0 || i === n - 1) && (
               <text x={cx(i)} y={H - 12} textAnchor="middle" style={d.util ? undefined : { opacity: 0.6 }}>
                 {i === 0 ? 'hoje' : dm(d.data)}
@@ -132,7 +147,9 @@ export function CaixaDiario({ sim, diaSel, onDia }) {
               mostrar(ev, `${semana(d.n)}, ${dm(d.data)}${d.util ? '' : ' · fim de semana'}`, [
                 ['Saldo no início', brl(d.ini)],
                 ['Entradas', brl(d.ent)],
+                ...(d.entM > 0 ? [['· manuais do Horizon', brl(d.entM)]] : []),
                 ['Saídas', brl(-d.sai)],
+                ...(d.saiM > 0 ? [['· manuais do Horizon', brl(-d.saiM)]] : []),
                 ['Saldo no fim', brl(d.fim)],
               ]);
             }}

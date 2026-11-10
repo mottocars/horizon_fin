@@ -492,8 +492,8 @@ export function maiores(E, lado, quais, n = 10) {
 // - atrasoReceb: dias de atraso nos recebimentos;
 // - recuperar: % do vencido a receber de até 90 dias que entra, dividido pelos dias úteis do período;
 // - semCaixa: permutas e "Não cobrar" não entram no banco (sempre ligado na tela);
-// - manuais: considera os títulos manuais do Horizon (Contas Pagar / Receber não quitados), cada parcela no
-//   vencimento — a receber como entrada (com os ajustes do cenário), a pagar como saída;
+// - manuais: considera os títulos manuais do Horizon (Contas Pagar / Receber não quitados), cada parcela no dia
+//   exato do vencimento, mesmo no fim de semana — a receber como entrada (com os ajustes do cenário), a pagar como saída;
 // - partida: 'livre' (o Liberado + cheque da tela Saldo) ou 'total' (caixa livre + bloqueado).
 // Como o cheque especial já está no saldo de partida, saldo negativo = falta caixa; abaixo do valor do
 // cheque (`cheque`) = o caixa próprio acabou e o cheque especial está sendo usado.
@@ -513,11 +513,13 @@ export function simular(E, params) {
   const N = p.horizonte;
   const fim = h + N - 1;
   const ini = banco.data ? (p.partida === 'total' ? banco.total : banco.livre) : 0;
-  const dia = Array.from({ length: N }, (_, i) => ({ n: h + i, data: isoDe(h + i), util: !fimDeSemana(h + i), ent: 0, sai: 0, itens: [] }));
+  // entM / saiM: quanto da entrada / saída do dia é de título manual do Horizon (para destacar no gráfico).
+  const dia = Array.from({ length: N }, (_, i) => ({ n: h + i, data: isoDe(h + i), util: !fimDeSemana(h + i), ent: 0, sai: 0, entM: 0, saiM: 0, itens: [] }));
   const lancar = (n, campo, valor, item) => {
     if (n < h || n > fim || !valor) return;
     const d = dia[n - h];
     d[campo] += valor;
+    if (item?.manual) d[campo === 'ent' ? 'entM' : 'saiM'] += valor;
     if (item) d.itens.push({ ...item, campo, valor });
   };
   const uteis = dia.filter((d) => d.util);
@@ -541,18 +543,19 @@ export function simular(E, params) {
       lancar(diaUtil(t.vn), 'sai', x.valor, { t, frac: x.frac, nominal: x.valor });
     }
   });
-  // Títulos manuais do Horizon (só com a opção ligada): o que vence no período, no dia do vencimento.
+  // Títulos manuais do Horizon (só com a opção ligada): o que vence no período, no dia exato do vencimento — mesmo
+  // no fim de semana (pedido do usuário: a projeção manual mostra o dia em que foi prevista, sem passar para segunda).
   const manuais = { r: 0, p: 0 };
   if (p.manuais) {
     (E.manuais || []).forEach((x) => {
       const { m } = x;
       if (m.vn < h) return; // vencido: fica fora, como o vencido a pagar
       if (m.l === 'r') {
-        const n = diaUtil(diaUtil(m.vn) + p.atrasoReceb);
+        const n = m.vn + p.atrasoReceb;
         if (n <= fim) manuais.r += x.valor * fatorR;
         lancar(n, 'ent', x.valor * fatorR, { manual: m, frac: x.frac, nominal: x.valor });
       } else {
-        const n = diaUtil(m.vn);
+        const n = m.vn;
         if (n <= fim) manuais.p += x.valor;
         lancar(n, 'sai', x.valor, { manual: m, frac: x.frac, nominal: x.valor });
       }

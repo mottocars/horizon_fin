@@ -4,7 +4,7 @@ import { AjudaSecao } from '../fluxo/secoes';
 import { BarrasH } from '../fluxo/graficos';
 import { COR, useDica } from '../fluxo/ganchos';
 import { eixo } from '../fluxo/modelo';
-import { CaixaDiario } from './graficos';
+import { COR_MANUAL, CaixaDiario } from './graficos';
 import {
   CENARIOS,
   DIMENSOES,
@@ -232,11 +232,16 @@ function ItemDia({ it, B }) {
     const m = it.manual;
     const num = String(m.titulo).padStart(5, '0');
     return (
-      <div className="it" title={`Título manual do Horizon ${num}${m.total > 1 ? ` · parcela ${m.numero}/${m.total}` : ''}`}>
+      <div
+        className="it"
+        style={{ borderLeft: `3px solid ${COR_MANUAL}`, paddingLeft: 8, background: '#f5f3ff' }}
+        title={`Título manual do Horizon ${num}${m.total > 1 ? ` · parcela ${m.numero}/${m.total}` : ''}`}
+      >
         <span>
+          <span style={{ color: COR_MANUAL, fontWeight: 600, marginRight: 6 }}>Horizon</span>
           {titulo(m.nome || 'Título manual')}
           <small>
-            Horizon · título {num}
+            título {num}
             {m.parte ? ` · ${m.parte === 'PF' ? 'PF (Novo Registro + Medição)' : 'PJ (Crédito PJ)'}` : ''}
             {m.v !== it.data ? ` · venc. ${dm(m.v)}` : ''}
             {it.frac < 1 ? ` · rateio ${pct(it.frac * 100)}` : ''}
@@ -340,6 +345,12 @@ export function Simulador({ E }) {
               <i className="box" style={{ background: COR.saida }} />
               Saídas do dia
             </span>
+            {p.manuais && (
+              <span>
+                <i className="box" style={{ background: COR_MANUAL }} />
+                Títulos manuais do Horizon
+              </span>
+            )}
             <span>
               <i style={{ borderColor: COR.ink }} />
               Saldo no fim do dia
@@ -448,8 +459,14 @@ export function Simulador({ E }) {
                         <small>{semana(d.n)}</small>
                       </td>
                       <td className="n">{brl(d.ini)}</td>
-                      <td className="n pos">{d.ent ? brl(d.ent) : '–'}</td>
-                      <td className="n neg">{d.sai ? brl(-d.sai) : '–'}</td>
+                      <td className="n pos">
+                        {d.ent ? brl(d.ent) : '–'}
+                        {d.entM > 0 && <small style={{ display: 'block', color: COR_MANUAL }}>{brl(d.entM)} manual</small>}
+                      </td>
+                      <td className="n neg">
+                        {d.sai ? brl(-d.sai) : '–'}
+                        {d.saiM > 0 && <small style={{ display: 'block', color: COR_MANUAL }}>{brl(-d.saiM)} manual</small>}
+                      </td>
                       <td className={`n ${d.fim < 0 ? 'neg' : ''}`}>
                         <b>{brl(d.fim)}</b>
                       </td>
