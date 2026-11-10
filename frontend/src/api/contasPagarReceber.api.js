@@ -67,14 +67,6 @@ export function cabecalhoPls(empresaId, centroId, dataMedicao) {
     .then((res) => res.data);
 }
 
-// Projeção PLS CEF › Repasses PF: por cliente registrado, o Novo Registro (liberação, %, valor), o repassado e o
-// que falta repassar em medição, com as liberações anteriores à Data Previsão Medição.
-export function repassesPf(empresaId, centroId, dataMedicao) {
-  return http
-    .get(`/contas-pagar-receber/${empresaId}/repasses-pf/${centroId}`, { params: dataMedicao ? { data_medicao: dataMedicao } : {} })
-    .then((res) => res.data);
-}
-
 export function estornarBaixa(empresaId, parcelaId) {
   return http.delete(`/contas-pagar-receber/${empresaId}/parcelas/${parcelaId}/baixa`).then((res) => res.data);
 }

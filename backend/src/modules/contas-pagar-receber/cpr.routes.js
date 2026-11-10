@@ -19,7 +19,6 @@ router.delete('/:empresaId/parcelas/:parcelaId/baixa', controller.estornar);
 router.get('/:empresaId/avanco-previsto/:centroId', controller.avancoPrevisto);
 router.get('/:empresaId/documentos-pls/:centroId', controller.documentosPls);
 router.get('/:empresaId/cabecalho-pls/:centroId', controller.cabecalhoPls);
-router.get('/:empresaId/repasses-pf/:centroId', controller.repassesPf);
 router.get('/:empresaId/documentos-pls/:centroId/:tipo/:formato', controller.documentoPlsArquivo);
 
 module.exports = router;
