@@ -382,6 +382,7 @@ async function documentosPls(empresaId, centroId) {
 // - Crédito PJ já liberado: soma de "Financiamento Construtora" das parcelas LP anteriores à medição (o saldo do
 //   teto PJ).
 // - Unidades do Geral (sem o 1º contrato, o da construtora): só as já registradas (data de registro do Geral).
+//   Novo Registro só até a Data Previsão Medição (registro > última liberação e <= medição).
 //   Registradas até a data da última liberação = base da Medição; registradas depois dela = Novo Registro
 //   (pedido do usuário: projeção curta, sem projetar registro por assinatura + prazo).
 async function cabecalhoPls(empresaId, centroId, dataMedicao = null) {
@@ -465,7 +466,11 @@ async function cabecalhoPls(empresaId, centroId, dataMedicao = null) {
         semRegistro += 1;
         return;
       }
-      const apos = !(dLib && String(u.data_registro).slice(0, 10) <= dLib);
+      const dReg = String(u.data_registro).slice(0, 10);
+      const apos = !(dLib && dReg <= dLib);
+      // Novo Registro = registradas entre a última liberação e a Data Previsão Medição (pedido do usuário): quem
+      // registrou depois da medição fica fora — senão uma data retroativa projetaria unidades demais.
+      if (apos && dataMedicao && dReg > String(dataMedicao).slice(0, 10)) return;
       const n = (v) => Number(v || 0);
       const somar = (alvo) => {
         alvo.qtd += 1;
