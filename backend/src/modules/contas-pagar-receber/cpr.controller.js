@@ -72,8 +72,47 @@ function tratar(err, next) {
 }
 
 // A Projeção PLS CEF ainda não tem formulário: recusa antes de cobrar os campos do Financeiro.
+// Projeção PLS CEF: a receber da Caixa. Uma parcela por recebimento (PF na Data Previsão Recebimento PF —
+// Novo Registro + Medição — e PJ na Data Previsão Recebimento PJ — Crédito PJ; parcela zerada não vai), o rateio
+// por classificação no centro da obra e, em `dados`, o retrato da projeção para reabrir o título.
+const plsSchema = z.object({
+  tipo_documento: z.literal('PROJECAO_PLS_CEF'),
+  centro_id: z.coerce.number({ invalid_type_error: 'Escolha o centro de custo.' }).int().positive('Escolha o centro de custo.'),
+  data_medicao: dataIso('Informe a Data Previsão Medição.'),
+  historico: z.string().trim().max(255).optional().default(''),
+  valor: valor('O valor projetado precisa ser maior que zero.'),
+  parcelas: z
+    .array(z.object({ vencimento: dataIso('Informe as datas de recebimento PF e PJ.'), valor: valor('Cada parcela precisa de um valor maior que zero.') }))
+    .min(1, 'Nenhum valor a receber.')
+    .max(2),
+  rateios: z
+    .array(
+      z.object({
+        natureza_id: z.coerce.string().trim().min(1, 'Defina o plano de contas na aba Configurações.').max(20),
+        valor: valor('Cada linha do rateio precisa de um valor maior que zero.'),
+      })
+    )
+    .min(1, 'Nenhum valor no rateio.')
+    .max(3),
+  dados: z.record(z.any()).optional().default({}),
+});
+
 function lerTitulo(body = {}) {
-  if (body.tipo_documento === 'PROJECAO_PLS_CEF') throw erro(400, service.MSG_PLS_CEF);
+  if (body.tipo_documento === 'PROJECAO_PLS_CEF') {
+    const p = plsSchema.parse(body);
+    return {
+      tipo: 'RECEBER',
+      tipo_documento: p.tipo_documento,
+      pessoa_id: null,
+      documento: '',
+      data_emissao: p.data_medicao,
+      historico: p.historico,
+      valor: p.valor,
+      parcelas: p.parcelas,
+      rateios: p.rateios.map((r) => ({ centro_id: p.centro_id, natureza_id: r.natureza_id, valor: r.valor })),
+      dados: p.dados,
+    };
+  }
   return tituloSchema.parse(body);
 }
 

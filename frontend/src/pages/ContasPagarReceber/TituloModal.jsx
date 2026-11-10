@@ -1,4 +1,4 @@
-import { useEffect, useMemo, useState } from 'react';
+import { useEffect, useMemo, useRef, useState } from 'react';
 import {
   ArrowDownLeft,
   ArrowUpRight,
@@ -129,6 +129,7 @@ export default function TituloModal({ empresaId, id = null, onClose, onSalvo }) 
   // trocar o centro ou a data.
   // Datas: medição (busca o % no Prevision), recebimento PF e recebimento PJ.
   const [pls, setPls] = useState({ centro_id: '', data_medicao: '', data_pf: '', data_pj: '', avanco: null });
+  const pularResetRateio = useRef(false);
   const [avanco, setAvanco] = useState({ carregando: false, dados: null, erro: '' });
   const [documentos, setDocumentos] = useState({ carregando: false, dados: null, erro: '' });
   const [cabPls, setCabPls] = useState({ carregando: false, dados: null, erro: '' });
@@ -153,6 +154,22 @@ export default function TituloModal({ empresaId, id = null, onClose, onSalvo }) 
         setPrimeiroVenc(t.parcelas[0]?.vencimento || '');
         setParcelas(t.parcelas.map((p) => ({ vencimento: p.vencimento, valor: numeroBr(p.valor), data_baixa: p.data_baixa, valor_baixa: p.valor_baixa })));
         setRateios(t.rateios.map((r) => ({ centro_id: r.centro_id, natureza_id: r.natureza_id, pct: fmtPct(r.percentual), valor: numeroBr(r.valor) })));
+        // Projeção PLS CEF: volta o que foi informado (o resto é recalculado com os dados de hoje).
+        if (t.tipo_documento === 'PROJECAO_PLS_CEF' && t.dados) {
+          const dd = t.dados;
+          pularResetRateio.current = true;
+          setPls({
+            centro_id: dd.centro_id ?? '',
+            data_medicao: dd.data_medicao || '',
+            data_pf: dd.data_pf || '',
+            data_pj: dd.data_pj || '',
+            avanco: dd.avanco_informado ?? null,
+          });
+          setRateioPls({
+            valores: { novo_registro: null, medicao: null, credito_pj: null, ...(dd.valores_ajustados || {}) },
+            pj_reducao: dd.pj_reducao ?? '0',
+          });
+        }
       })
       .catch((e) => setErro(mensagemErro(e, 'Não foi possível carregar o título.')));
   }, [empresaId, id]);
@@ -232,7 +249,14 @@ export default function TituloModal({ empresaId, id = null, onClose, onSalvo }) 
   // (aba Configurações; sem ele, o do plano da DFC) e o valor projetado ajustável à mão (`valores[k]` texto; null =
   // o calculado — no Crédito PJ, calculado × (1 − redução)).
   const [rateioPls, setRateioPls] = useState({ valores: { novo_registro: null, medicao: null, credito_pj: null }, pj_reducao: '0' });
-  useEffect(() => setRateioPls({ valores: { novo_registro: null, medicao: null, credito_pj: null }, pj_reducao: '0' }), [pls.centro_id]);
+  useEffect(() => {
+    // Ao reabrir um título PLS, o centro chega junto com os ajustes salvos: não zera.
+    if (pularResetRateio.current) {
+      pularResetRateio.current = false;
+      return;
+    }
+    setRateioPls({ valores: { novo_registro: null, medicao: null, credito_pj: null }, pj_reducao: '0' });
+  }, [pls.centro_id]);
   const projPls = useMemo(
     () => projetarPls(cab, avancoValido ? avancoInformado : null, pls.data_medicao),
     [cab, avancoValido, avancoInformado, pls.data_medicao]
@@ -298,7 +322,77 @@ export default function TituloModal({ empresaId, id = null, onClose, onSalvo }) 
     if (tipo !== form.tipo) setForm((f) => ({ ...f, tipo, pessoa_id: '' }));
   }
 
+  // Projeção PLS CEF → título a receber da Caixa: parcela PF (Novo Registro + Medição) na Data Previsão
+  // Recebimento PF e parcela PJ (Crédito PJ) na Data Previsão Recebimento PJ; rateio uma linha por classificação
+  // com valor, no centro da obra e no plano de contas padrão; em `dados`, o que foi informado e os cálculos.
+  async function salvarPls() {
+    const falha = (mensagem, abaDoCampo) => {
+      setErroSalvar(mensagem);
+      setAba(abaDoCampo);
+    };
+    if (!pls.centro_id) return falha('Escolha o centro de custo.', 'cabecalho');
+    if (!pls.data_medicao) return falha('Informe a Data Previsão Medição.', 'cabecalho');
+    if (!pls.data_pf) return falha('Informe a Data Previsão Recebimento PF.', 'cabecalho');
+    if (!pls.data_pj) return falha('Informe a Data Previsão Recebimento PJ.', 'cabecalho');
+    if (!avancoValido) return falha('Informe o avanço previsto na medição (de 0 a 100%).', 'cabecalho');
+    if (!projPls || projPls.motivo) return falha(projPls?.motivo || 'Aguarde o cálculo da projeção.', 'rateios-pls');
+    const v = valoresPls(projPls, rateioPls);
+    const chaves = ['novo_registro', 'medicao', 'credito_pj'];
+    if (chaves.some((k) => !v[k].valido)) return falha('Corrija os valores projetados da aba Rateios.', 'rateios-pls');
+    const contas = cab?.contas_sugeridas || {};
+    const comValor = chaves.filter((k) => v[k].valor > 0);
+    if (!comValor.length) return falha('A projeção não tem valor a receber.', 'rateios-pls');
+    const semConta = comValor.find((k) => !contas[k]);
+    if (semConta) return falha('Defina o plano de contas das classificações na aba Configurações da tela.', 'rateios-pls');
+
+    const c2 = (x) => centavos(x) / 100;
+    const pf = c2((v.novo_registro.valor || 0) + (v.medicao.valor || 0));
+    const pj = c2(v.credito_pj.valor || 0);
+    const parcelasPls = [
+      ...(pf > 0 ? [{ vencimento: pls.data_pf, valor: pf }] : []),
+      ...(pj > 0 ? [{ vencimento: pls.data_pj, valor: pj }] : []),
+    ];
+    const centroNome = opCentrosObra.find((o) => String(o.value) === String(pls.centro_id))?.label || pls.centro_id;
+    const payload = {
+      tipo_documento: 'PROJECAO_PLS_CEF',
+      centro_id: Number(pls.centro_id),
+      data_medicao: pls.data_medicao,
+      historico: `Projeção PLS CEF · ${centroNome} · medição ${data(pls.data_medicao)}`.slice(0, 255),
+      valor: c2(pf + pj),
+      parcelas: parcelasPls,
+      rateios: comValor.map((k) => ({ natureza_id: String(contas[k]), valor: c2(v[k].valor) })),
+      dados: {
+        centro_id: Number(pls.centro_id),
+        data_medicao: pls.data_medicao,
+        data_pf: pls.data_pf,
+        data_pj: pls.data_pj,
+        avanco_informado: pls.avanco,
+        avanco_previsto: avancoInformado,
+        avanco_prevision: avancoPrevision,
+        avanco_liberado: cab?.avanco_liberado ?? null,
+        ultima_liberacao: cab?.ultima_liberacao ?? null,
+        calculado: { novo_registro: projPls.novo_registro, medicao: projPls.medicao, credito_pj: projPls.credito_pj },
+        projetado: Object.fromEntries(chaves.map((k) => [k, v[k].valor])),
+        contas: Object.fromEntries(chaves.map((k) => [k, contas[k] || null])),
+        valores_ajustados: rateioPls.valores,
+        pj_reducao: rateioPls.pj_reducao,
+      },
+    };
+    setSalvando(true);
+    try {
+      if (id) await alterarTitulo(empresaId, id, payload);
+      else await criarTitulo(empresaId, payload);
+      onSalvo?.();
+      onClose();
+    } catch (e) {
+      setErroSalvar(mensagemErro(e, 'Não foi possível salvar o título.'));
+    } finally {
+      setSalvando(false);
+    }
+  }
+
   async function salvar() {
+    if (!financeiro) return salvarPls();
     setErroSalvar('');
     // Erro de preenchimento: mostra a mensagem e leva para a aba do campo.
     const falha = (mensagem, abaDoCampo) => {
@@ -763,7 +857,7 @@ export default function TituloModal({ empresaId, id = null, onClose, onSalvo }) 
 
           {erroSalvar && <p className="rounded-lg bg-red-50 px-3 py-2 text-xs text-red-600">{erroSalvar}</p>}
 
-          {financeiro && (
+          {(
             <div className="flex flex-col-reverse gap-3 sm:flex-row sm:items-center sm:justify-between">
               <p className="text-[11px] text-gray-400">
                 {dados &&
@@ -1083,6 +1177,25 @@ function projetarPls(cab, avanco, dataMedicao) {
     if (mMed <= dm) motivoPj = 'Demanda Mínima não atingida na medição.';
   }
   return { novo_registro: novoRegistro, medicao, credito_pj: creditoPj, motivo_pj: motivoPj };
+}
+
+// Valor projetado de cada classificação da aba Rateios: o digitado à mão (`rateio.valores[k]`) ou o calculado
+// (no Crédito PJ, calculado × (1 − % de redução)). { k: { valor, valido } } — a mesma conta que a aba mostra.
+function valoresPls(projecao, rateio) {
+  const reducao = lerValor(rateio.pj_reducao);
+  const reducaoValida = rateio.pj_reducao === '' || (Number.isFinite(reducao) && reducao >= 0 && reducao <= 100);
+  return Object.fromEntries(
+    ['novo_registro', 'medicao', 'credito_pj'].map((k) => {
+      const calc = projecao?.[k];
+      const texto = rateio.valores[k];
+      let valor;
+      if (texto !== null && texto !== undefined) valor = lerValor(texto);
+      else if (calc === null || calc === undefined) valor = null;
+      else valor = k === 'credito_pj' ? r2(calc * (1 - (reducaoValida && Number.isFinite(reducao) ? reducao : 0) / 100)) : calc;
+      const valido = (valor === null || (Number.isFinite(valor) && valor >= 0)) && (k !== 'credito_pj' || reducaoValida);
+      return [k, { valor, valido }];
+    })
+  );
 }
 
 const CLASSIFICACOES_PLS = [

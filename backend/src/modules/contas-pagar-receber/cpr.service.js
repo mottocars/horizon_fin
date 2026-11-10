@@ -19,6 +19,7 @@ const centavos = (v) => Math.round(Number(v) * 100);
 const moeda = (v) => Number(v).toLocaleString('pt-BR', { minimumFractionDigits: 2, maximumFractionDigits: 2 });
 
 const MSG_PLS_CEF = 'A Projeção PLS CEF ainda não está disponível.';
+const PESSOA_PLS = 'CAIXA ECONÔMICA FEDERAL';
 const MSG_BAIXADO = 'Título com parcela baixada: estorne a baixa para alterar ou excluir.';
 
 // Fornecedores (credores) e clientes da empresa: o cadastro da origem e, para quem não está nele, o nome
@@ -131,6 +132,7 @@ async function obter(empresaId, id) {
     data_emissao: t.data_emissao,
     historico: t.historico || '',
     valor: Number(t.valor),
+    dados: t.dados || null,
     parcelas: parcelas.map((p) => ({ ...p, valor: Number(p.valor), valor_baixa: p.valor_baixa === null ? null : Number(p.valor_baixa) })),
     rateios: rateios.map((r) => ({ ...r, percentual: Number(r.percentual), valor: Number(r.valor) })),
     baixado: parcelas.some((p) => p.data_baixa),
@@ -143,16 +145,22 @@ async function obter(empresaId, id) {
 
 // Confere o título contra os cadastros da empresa e devolve o que vai ser gravado: o nome do
 // fornecedor/cliente, as parcelas numeradas por vencimento e o rateio com o percentual.
+// Projeção PLS CEF: a receber da Caixa (sem fornecedor/cliente do cadastro); o rateio é uma linha por
+// classificação (Novo Registro, Medição, Crédito PJ) e duas delas podem usar a mesma conta.
 async function validar(empresaId, d) {
-  if (d.tipo_documento === 'PROJECAO_PLS_CEF') throw erro(400, MSG_PLS_CEF);
+  const pls = d.tipo_documento === 'PROJECAO_PLS_CEF';
   const total = centavos(d.valor);
 
-  const sqlPessoa = d.tipo === 'PAGAR' ? SQL_FORNECEDORES : SQL_CLIENTES;
-  const { rows: pessoa } = await pool.query(
-    `SELECT nome FROM (${sqlPessoa}) p WHERE id = $2 AND NULLIF(trim(nome), '') IS NOT NULL ORDER BY ordem LIMIT 1`,
-    [empresaId, d.pessoa_id]
-  );
-  if (!pessoa[0]) throw erro(400, d.tipo === 'PAGAR' ? 'Fornecedor não encontrado nesta empresa.' : 'Cliente não encontrado nesta empresa.');
+  let pessoaNome = PESSOA_PLS;
+  if (!pls) {
+    const sqlPessoa = d.tipo === 'PAGAR' ? SQL_FORNECEDORES : SQL_CLIENTES;
+    const { rows: pessoa } = await pool.query(
+      `SELECT nome FROM (${sqlPessoa}) p WHERE id = $2 AND NULLIF(trim(nome), '') IS NOT NULL ORDER BY ordem LIMIT 1`,
+      [empresaId, d.pessoa_id]
+    );
+    if (!pessoa[0]) throw erro(400, d.tipo === 'PAGAR' ? 'Fornecedor não encontrado nesta empresa.' : 'Cliente não encontrado nesta empresa.');
+    pessoaNome = pessoa[0].nome.trim();
+  }
 
   const somaParcelas = d.parcelas.reduce((s, p) => s + centavos(p.valor), 0);
   if (somaParcelas !== total) {
@@ -168,7 +176,7 @@ async function validar(empresaId, d) {
     throw erro(400, `A soma do rateio (R$ ${moeda(somaRateio / 100)}) não fecha com o valor do título (R$ ${moeda(total / 100)}).`);
   }
   const pares = new Set();
-  for (const r of d.rateios) {
+  for (const r of pls ? [] : d.rateios) {
     const chave = `${r.centro_id}|${r.natureza_id}`;
     if (pares.has(chave)) throw erro(400, 'O rateio tem o mesmo centro de custo e plano de contas em duas linhas — junte-as numa só.');
     pares.add(chave);
@@ -191,7 +199,7 @@ async function validar(empresaId, d) {
     percentual: Math.round((centavos(r.valor) / total) * 100 * 1e6) / 1e6,
   }));
 
-  return { pessoa_nome: pessoa[0].nome.trim(), parcelas, rateios };
+  return { pessoa_nome: pessoaNome, parcelas, rateios };
 }
 
 async function transacao(fn) {
@@ -233,10 +241,10 @@ async function criar(empresaId, d, usuarioId) {
   const id = await transacao(async (db) => {
     const quando = agora();
     const { rows } = await db.query(
-      `INSERT INTO cpr_titulos (empresa_id, tipo, tipo_documento, pessoa_id, pessoa_nome, documento, data_emissao, historico, valor,
+      `INSERT INTO cpr_titulos (empresa_id, tipo, tipo_documento, pessoa_id, pessoa_nome, documento, data_emissao, historico, valor, dados,
                                 criado_por, alterado_por, criado_em, atualizado_em)
-       VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $10, $11, $11) RETURNING id`,
-      [empresaId, d.tipo, d.tipo_documento, d.pessoa_id, v.pessoa_nome, d.documento || null, d.data_emissao, d.historico || null, d.valor, usuarioId, quando]
+       VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $11, $12, $12) RETURNING id`,
+      [empresaId, d.tipo, d.tipo_documento, d.pessoa_id, v.pessoa_nome, d.documento || null, d.data_emissao, d.historico || null, d.valor, d.dados || null, usuarioId, quando]
     );
     await gravarFilhos(db, rows[0].id, v.parcelas, v.rateios);
     return rows[0].id;
@@ -252,9 +260,9 @@ async function alterar(empresaId, id, d, usuarioId) {
   await transacao(async (db) => {
     await db.query(
       `UPDATE cpr_titulos SET tipo = $3, tipo_documento = $4, pessoa_id = $5, pessoa_nome = $6, documento = $7, data_emissao = $8,
-              historico = $9, valor = $10, alterado_por = $11, atualizado_em = $12
+              historico = $9, valor = $10, dados = $11, alterado_por = $12, atualizado_em = $13
         WHERE empresa_id = $1 AND id = $2`,
-      [empresaId, id, d.tipo, d.tipo_documento, d.pessoa_id, v.pessoa_nome, d.documento || null, d.data_emissao, d.historico || null, d.valor, usuarioId, agora()]
+      [empresaId, id, d.tipo, d.tipo_documento, d.pessoa_id, v.pessoa_nome, d.documento || null, d.data_emissao, d.historico || null, d.valor, d.dados || null, usuarioId, agora()]
     );
     await gravarFilhos(db, id, v.parcelas, v.rateios);
   });
