@@ -517,7 +517,6 @@ export default function TituloModal({ empresaId, id = null, onClose, onSalvo }) 
                   carregando={cabPls.carregando}
                   erro={cabPls.erro}
                   avancoInformado={avancoValido ? avancoInformado : null}
-                  dataMedicao={pls.data_medicao}
                 />
               )}
 
@@ -905,7 +904,7 @@ function CampoLeitura({ rotulo, valor, alerta = false, carregando = false, dica,
 //   Medição       = VGF de medição das unidades registradas × avanço a medir
 //   Novo Registro = unidades que registram até a data: (terreno + FGTS) + VGF de medição × % de obra
 //   Crédito PJ    = CTO × avanço a medir − Medição, depois da Demanda Mínima, até o saldo do teto PJ
-function BasesProjecaoPls({ cab, carregando, erro, avancoInformado, dataMedicao }) {
+function BasesProjecaoPls({ cab, carregando, erro, avancoInformado }) {
   if (erro) return <p className="mt-4 rounded-lg bg-red-50 px-3 py-2 text-xs text-red-600">{erro}</p>;
   if (cab && !cab.contrato) {
     return (
@@ -918,7 +917,6 @@ function BasesProjecaoPls({ cab, carregando, erro, avancoInformado, dataMedicao 
   const u = cab?.unidades;
   const aMedir = avancoInformado !== null && cab?.avanco_liberado !== null && cab?.avanco_liberado !== undefined ? avancoInformado - cab.avanco_liberado : null;
   const saldoTeto = p?.valor_financiamento_pj !== null && p?.valor_financiamento_pj !== undefined && cab ? p.valor_financiamento_pj - cab.credito_pj_liberado : null;
-  const dmAtingida = p?.data_demanda_minima && dataMedicao ? dataMedicao >= p.data_demanda_minima : null;
   // CTO, teto PJ e Demanda Mínima vêm do DCD, como na tela de Parâmetros da DFC.
   const doDcd = (v, fmt) => (!cab ? null : v === null || v === undefined ? 'Sem valor no DCD' : fmt(v));
   const L = (props) => <CampoLeitura carregando={carregando} {...props} />;
@@ -927,34 +925,30 @@ function BasesProjecaoPls({ cab, carregando, erro, avancoInformado, dataMedicao 
 
   return (
     <div className="mt-5 border-t border-gray-100 pt-4">
-      <h3 className="text-sm font-semibold text-gray-900">Bases da projeção · Crédito PJ, Novo Registro e Medição</h3>
-      <p className="mb-3 text-xs text-gray-500">Mesmas fontes e regras da Projeção CEF da DFC Construtoras: DCD e Geral do contrato Caixa da obra, como nos Parâmetros da DFC.</p>
+      <h3 className="mb-3 text-sm font-semibold text-gray-900">Bases da projeção · Crédito PJ, Novo Registro e Medição</h3>
       <div className="grid grid-cols-1 gap-x-4 gap-y-3 sm:grid-cols-2 md:grid-cols-4">
         <L
           rotulo="Avanço a medir"
           valor={aMedir === null ? null : `${pct2(aMedir)}%`}
           alerta={aMedir !== null && aMedir < 0}
-          dica="Previsto na medição − liberado"
         />
-        <L rotulo="CTO" valor={doDcd(p?.cto, moeda)} dica="DCD · Vr Custo Obra" />
-        <L rotulo="Valor do Financiamento PJ (teto)" valor={doDcd(p?.valor_financiamento_pj, moeda)} dica="DCD · Vr Financiamento (PJ)" />
-        <L rotulo="Crédito PJ já liberado" valor={cab ? moeda(cab.credito_pj_liberado) : null} dica="DCD · Financiamento Construtora (LP)" />
-        <L rotulo="Saldo do teto PJ" valor={saldoTeto === null ? null : moeda(saldoTeto)} alerta={saldoTeto !== null && saldoTeto <= 0} dica="Teto − crédito já liberado" />
+        <L rotulo="CTO" valor={doDcd(p?.cto, moeda)} />
+        <L rotulo="Valor do Financiamento PJ (teto)" valor={doDcd(p?.valor_financiamento_pj, moeda)} />
+        <L rotulo="Crédito PJ já liberado" valor={cab ? moeda(cab.credito_pj_liberado) : null} />
+        <L rotulo="Saldo do teto PJ" valor={saldoTeto === null ? null : moeda(saldoTeto)} alerta={saldoTeto !== null && saldoTeto <= 0} />
         <L
           rotulo="Data da Demanda Mínima"
           valor={doDcd(p?.data_demanda_minima, data)}
-          dica={dmAtingida === null ? 'DCD · Dt Término Suspensiva' : dmAtingida ? 'DCD · atingida na medição: PJ libera' : 'DCD · não atingida na medição: sem Crédito PJ'}
         />
         <L
           rotulo="Unidades no Geral"
           valor={u ? String(u.total) : null}
-          dica={u ? `Sem a da construtora · ${u.sem_registro} sem registro` : 'Sem o contrato da construtora'}
         />
-        <L rotulo="Registradas até a última liberação" valor={doLib(u?.registradas, (x) => `${x.qtd} unidade(s)`)} dica="Base da Medição" />
-        <L rotulo="VGF de medição registrado" valor={doLib(u?.registradas, (x) => moeda(x.vgf_medicao))} dica="Financiamento − terreno + subsídio" />
-        <L rotulo="Registradas após a última liberação" valor={doLib(u?.apos_liberacao, (x) => `${x.qtd} unidade(s)`)} dica="Base do Novo Registro" />
-        <L rotulo="Novo Registro · VGF de medição" valor={doLib(u?.apos_liberacao, (x) => moeda(x.vgf_medicao))} dica="× % de obra na medição" />
-        <L rotulo="Novo Registro · terreno + FGTS" valor={doLib(u?.apos_liberacao, (x) => moeda(x.terreno_fgts))} dica="Entra à vista" />
+        <L rotulo="Registradas até a última liberação" valor={doLib(u?.registradas, (x) => `${x.qtd} unidade(s)`)} />
+        <L rotulo="VGF de medição registrado" valor={doLib(u?.registradas, (x) => moeda(x.vgf_medicao))} />
+        <L rotulo="Registradas após a última liberação" valor={doLib(u?.apos_liberacao, (x) => `${x.qtd} unidade(s)`)} />
+        <L rotulo="Novo Registro · VGF de medição" valor={doLib(u?.apos_liberacao, (x) => moeda(x.vgf_medicao))} />
+        <L rotulo="Novo Registro · terreno + FGTS" valor={doLib(u?.apos_liberacao, (x) => moeda(x.terreno_fgts))} />
       </div>
     </div>
   );
