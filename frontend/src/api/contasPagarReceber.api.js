@@ -41,6 +41,23 @@ export function avancoPrevisto(empresaId, centroId) {
   return http.get(`/contas-pagar-receber/${empresaId}/avanco-previsto/${centroId}`).then((res) => res.data);
 }
 
+// Projeção PLS CEF › Documentos: último DCD e último Geral dos Empreendimentos do contrato Caixa do centro
+// { centro_id, centro_nome, contrato, dcd: {...} | null, geral: {...} | null }.
+export function documentosPls(empresaId, centroId) {
+  return http.get(`/contas-pagar-receber/${empresaId}/documentos-pls/${centroId}`).then((res) => res.data);
+}
+
+// tipo 'dcd' | 'geral', formato 'original' | 'excel' → { blob, nome } (nome do Content-Disposition).
+export function baixarDocumentoPls(empresaId, centroId, tipo, formato) {
+  return http
+    .get(`/contas-pagar-receber/${empresaId}/documentos-pls/${centroId}/${tipo}/${formato}`, { responseType: 'blob' })
+    .then((res) => {
+      const cd = res.headers['content-disposition'] || '';
+      const m = /filename\*=UTF-8''([^;]+)|filename="?([^";]+)"?/i.exec(cd);
+      return { blob: res.data, nome: m ? decodeURIComponent(m[1] || m[2]) : null };
+    });
+}
+
 export function estornarBaixa(empresaId, parcelaId) {
   return http.delete(`/contas-pagar-receber/${empresaId}/parcelas/${parcelaId}/baixa`).then((res) => res.data);
 }

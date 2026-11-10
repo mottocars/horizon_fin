@@ -326,4 +326,41 @@ async function avancoPrevisto(empresaId, centroId) {
   };
 }
 
-module.exports = { opcoes, listar, obter, criar, alterar, excluir, baixar, estornar, avancoPrevisto, MSG_PLS_CEF };
+// Contrato Caixa do centro (centros_custo_sienge.codigo_contrato_caixa) — liga o centro ao DCD
+// (dcd_contratos.numero_contrato) e ao Geral dos Empreendimentos (extrato_empreendimentos.contrato_empreendimento).
+async function centroComContrato(empresaId, centroId) {
+  const { rows } = await pool.query(
+    `SELECT sienge_id, COALESCE(NULLIF(apelido, ''), name) AS nome, NULLIF(trim(codigo_contrato_caixa), '') AS contrato
+       FROM centros_custo_sienge WHERE empresa_id = $1 AND sienge_id = $2`,
+    [empresaId, centroId]
+  );
+  if (!rows[0]) throw erro(404, 'Centro de custo não encontrado nesta empresa.');
+  return rows[0];
+}
+
+// Projeção PLS CEF › Documentos: o último DCD e o último Geral dos Empreendimentos importados no Portal das
+// Construtoras para o contrato Caixa do centro (cada importação substitui a anterior do mesmo contrato), com
+// quando e quem importou.
+async function documentosPls(empresaId, centroId) {
+  const c = await centroComContrato(empresaId, centroId);
+  if (!c.contrato) return { centro_id: c.sienge_id, centro_nome: c.nome, contrato: null, dcd: null, geral: null };
+  const [{ rows: dcd }, { rows: geral }] = await Promise.all([
+    pool.query(
+      `SELECT d.nome_empreendimento, d.arquivo_original, d.arquivo_armazenado IS NOT NULL AS tem_arquivo,
+              d.importado_em, d.atualizado_em, u.nome AS enviado_por
+         FROM dcd_contratos d LEFT JOIN usuarios u ON u.id = d.enviado_por_usuario_id
+        WHERE d.empresa_id = $1 AND d.numero_contrato = $2`,
+      [empresaId, c.contrato]
+    ),
+    pool.query(
+      `SELECT g.nome_empreendimento, g.arquivo_original, g.arquivo_armazenado IS NOT NULL AS tem_arquivo,
+              g.importado_em, g.atualizado_em, u.nome AS enviado_por
+         FROM extrato_empreendimentos g LEFT JOIN usuarios u ON u.id = g.enviado_por_usuario_id
+        WHERE g.empresa_id = $1 AND g.contrato_empreendimento = $2`,
+      [empresaId, c.contrato]
+    ),
+  ]);
+  return { centro_id: c.sienge_id, centro_nome: c.nome, contrato: c.contrato, dcd: dcd[0] || null, geral: geral[0] || null };
+}
+
+module.exports = { opcoes, listar, obter, criar, alterar, excluir, baixar, estornar, avancoPrevisto, centroComContrato, documentosPls, MSG_PLS_CEF };

@@ -1,5 +1,20 @@
 import { useEffect, useMemo, useState } from 'react';
-import { ArrowDownLeft, ArrowUpRight, CalendarDays, FileText, FolderOpen, Lock, PieChart, Plus, Trash2, TrendingUp, TriangleAlert, X } from 'lucide-react';
+import {
+  ArrowDownLeft,
+  ArrowUpRight,
+  CalendarDays,
+  Download,
+  FileText,
+  FolderOpen,
+  Lock,
+  PieChart,
+  Plus,
+  Sheet,
+  Trash2,
+  TrendingUp,
+  TriangleAlert,
+  X,
+} from 'lucide-react';
 import Modal from '../../components/Modal';
 import Button from '../../components/Button';
 import Tabs from '../../components/Tabs';
@@ -7,7 +22,16 @@ import SearchableSelect from '../../components/SearchableSelect';
 import CampoData from '../../components/CampoData';
 import { useConfirm } from '../../confirm/ConfirmContext';
 import { hojeISO } from '../../utils/datas';
-import { alterarTitulo, avancoPrevisto, criarTitulo, excluirTitulo, obterTitulo, opcoesContasPagarReceber } from '../../api/contasPagarReceber.api';
+import {
+  alterarTitulo,
+  avancoPrevisto,
+  baixarDocumentoPls,
+  criarTitulo,
+  documentosPls,
+  excluirTitulo,
+  obterTitulo,
+  opcoesContasPagarReceber,
+} from '../../api/contasPagarReceber.api';
 import GraficoAvanco, { indiceNaData } from './GraficoAvanco';
 import { TIPOS_DOCUMENTO, centavos, data, dataHora, lerValor, mensagemErro, moeda, numeroBr, somarMeses } from './util';
 
@@ -97,6 +121,7 @@ export default function TituloModal({ empresaId, id = null, onClose, onSalvo }) 
   // trocar o centro ou a data.
   const [pls, setPls] = useState({ centro_id: '', data_previsao: '', avanco: null });
   const [avanco, setAvanco] = useState({ carregando: false, dados: null, erro: '' });
+  const [documentos, setDocumentos] = useState({ carregando: false, dados: null, erro: '' });
 
   useEffect(() => {
     setErro('');
@@ -147,6 +172,21 @@ export default function TituloModal({ empresaId, id = null, onClose, onSalvo }) 
     avancoPrevisto(empresaId, pls.centro_id)
       .then((d) => vivo && setAvanco({ carregando: false, dados: d, erro: '' }))
       .catch((e) => vivo && setAvanco({ carregando: false, dados: null, erro: mensagemErro(e, 'Não foi possível carregar o avanço do Prevision.') }));
+    return () => {
+      vivo = false;
+    };
+  }, [empresaId, form.tipo_documento, pls.centro_id]);
+
+  useEffect(() => {
+    if (form.tipo_documento !== 'PROJECAO_PLS_CEF' || !pls.centro_id) {
+      setDocumentos({ carregando: false, dados: null, erro: '' });
+      return undefined;
+    }
+    let vivo = true;
+    setDocumentos({ carregando: true, dados: null, erro: '' });
+    documentosPls(empresaId, pls.centro_id)
+      .then((d) => vivo && setDocumentos({ carregando: false, dados: d, erro: '' }))
+      .catch((e) => vivo && setDocumentos({ carregando: false, dados: null, erro: mensagemErro(e, 'Não foi possível carregar os documentos.') }));
     return () => {
       vivo = false;
     };
@@ -394,6 +434,10 @@ export default function TituloModal({ empresaId, id = null, onClose, onSalvo }) 
                 </div>
               )}
 
+              {abaVisivel === 'documentos' && (
+                <AbaDocumentos empresaId={empresaId} centroId={pls.centro_id} documentos={documentos} />
+              )}
+
               {abaVisivel === 'avancos' && (
                 <AbaAvancos
                   centroEscolhido={Boolean(pls.centro_id)}
@@ -618,6 +662,125 @@ export default function TituloModal({ empresaId, id = null, onClose, onSalvo }) 
         </div>
       )}
     </Modal>
+  );
+}
+
+// Projeção PLS CEF › Documentos: o último DCD e o último Geral dos Empreendimentos importados no Portal das
+// Construtoras para o contrato Caixa do centro, com quando/quem importou, o original e o Excel (os mesmos do
+// Portal; nomes dos arquivos também).
+const DOCS_PLS = [
+  { tipo: 'dcd', rotulo: 'DCD', descricao: 'Demonstrativo de Cronograma de Desembolso', prefixo: 'DCD', prefixoExcel: 'DCD' },
+  { tipo: 'geral', rotulo: 'Geral dos Empreendimentos', descricao: 'Geral completo do empreendimento', prefixo: 'GERAL', prefixoExcel: 'Geral' },
+];
+
+function AbaDocumentos({ empresaId, centroId, documentos }) {
+  const [baixando, setBaixando] = useState('');
+  const [erro, setErro] = useState('');
+  if (!centroId) return <AvisoAba>Escolha o centro de custo no Cabeçalho para ver os documentos.</AvisoAba>;
+  if (documentos.carregando) return <AvisoAba>Carregando os documentos...</AvisoAba>;
+  if (documentos.erro) return <AvisoAba>{documentos.erro}</AvisoAba>;
+  const d = documentos.dados;
+  if (!d) return null;
+  if (!d.contrato) return <AvisoAba>Este centro de custo não tem Contrato Caixa cadastrado (DFC Construtoras › Centros Custos).</AvisoAba>;
+
+  async function baixar(doc, formato) {
+    const info = d[doc.tipo];
+    const chave = `${doc.tipo}-${formato}`;
+    setErro('');
+    setBaixando(chave);
+    try {
+      const { blob } = await baixarDocumentoPls(empresaId, centroId, doc.tipo, formato);
+      const nome =
+        formato === 'excel' ? `${doc.prefixoExcel}-${d.contrato}.xlsx` : info.arquivo_original || `${doc.prefixo}-${d.contrato}.${doc.tipo === 'dcd' ? 'pdf' : 'xls'}`;
+      const url = window.URL.createObjectURL(blob);
+      const link = document.createElement('a');
+      link.href = url;
+      link.download = nome;
+      document.body.appendChild(link);
+      link.click();
+      link.remove();
+      window.URL.revokeObjectURL(url);
+    } catch {
+      setErro(formato === 'excel' ? 'Não foi possível exportar o Excel.' : 'Não foi possível baixar o arquivo original (ele pode não estar neste servidor).');
+    } finally {
+      setBaixando('');
+    }
+  }
+
+  const botao = 'inline-flex h-8 w-8 items-center justify-center rounded-lg text-gray-400 transition-colors disabled:opacity-40';
+
+  return (
+    <div className="space-y-3">
+      <div>
+        <h3 className="text-sm font-semibold text-gray-900">Documentos do Portal das Construtoras</h3>
+        <p className="text-xs text-gray-500">
+          {d.centro_nome} · contrato Caixa {d.contrato} · última importação de cada documento
+        </p>
+      </div>
+      <div className="overflow-x-auto rounded-lg ring-1 ring-gray-200">
+        <table className="w-full min-w-[720px] text-left text-sm">
+          <thead className={CABECALHO}>
+            <tr>
+              <th className="px-3 py-2 font-medium">Documento</th>
+              <th className="px-3 py-2 font-medium">Arquivo</th>
+              <th className="whitespace-nowrap px-3 py-2 font-medium">Importado em</th>
+              <th className="whitespace-nowrap px-3 py-2 font-medium">Importado por</th>
+              <th className="px-3 py-2 text-center font-medium">Original</th>
+              <th className="px-3 py-2 text-center font-medium">Excel</th>
+            </tr>
+          </thead>
+          <tbody>
+            {DOCS_PLS.map((doc) => {
+              const info = d[doc.tipo];
+              return (
+                <tr key={doc.tipo} className="border-b border-gray-100 last:border-0">
+                  <td className="px-3 py-2.5">
+                    <span className="block font-semibold text-gray-900">{doc.rotulo}</span>
+                    <span className="block text-xs text-gray-500">{doc.descricao}</span>
+                  </td>
+                  {info ? (
+                    <>
+                      <td className="max-w-[260px] truncate px-3 py-2.5 text-xs text-gray-700" title={info.arquivo_original || ''}>
+                        {info.arquivo_original || '—'}
+                      </td>
+                      <td className="whitespace-nowrap px-3 py-2.5 tabular-nums text-gray-700">{dataHora(info.importado_em).replace(', ', ' às ')}</td>
+                      <td className="px-3 py-2.5 text-gray-700">{info.enviado_por || '—'}</td>
+                      <td className="px-3 py-2.5 text-center">
+                        <button
+                          type="button"
+                          onClick={() => baixar(doc, 'original')}
+                          disabled={!info.tem_arquivo || baixando === `${doc.tipo}-original`}
+                          title={info.tem_arquivo ? 'Baixar o arquivo original' : 'Arquivo original não guardado'}
+                          className={`${botao} hover:bg-primary-50 hover:text-primary-600`}
+                        >
+                          <Download size={16} className={baixando === `${doc.tipo}-original` ? 'animate-bounce' : ''} />
+                        </button>
+                      </td>
+                      <td className="px-3 py-2.5 text-center">
+                        <button
+                          type="button"
+                          onClick={() => baixar(doc, 'excel')}
+                          disabled={baixando === `${doc.tipo}-excel`}
+                          title="Exportar para Excel"
+                          className={`${botao} hover:bg-emerald-50 hover:text-emerald-600`}
+                        >
+                          <Sheet size={16} />
+                        </button>
+                      </td>
+                    </>
+                  ) : (
+                    <td colSpan={5} className="px-3 py-2.5 text-xs text-amber-600">
+                      Nenhum {doc.rotulo} importado para este contrato no Portal das Construtoras.
+                    </td>
+                  )}
+                </tr>
+              );
+            })}
+          </tbody>
+        </table>
+      </div>
+      {erro && <p className="rounded-lg bg-red-50 px-3 py-2 text-xs text-red-600">{erro}</p>}
+    </div>
   );
 }
 

@@ -1,5 +1,15 @@
 const { z } = require('zod');
 const service = require('./cpr.service');
+const dcdController = require('../dcd/dcd.controller');
+const extratoController = require('../extrato/extrato.controller');
+
+// Baixar o original / exportar o Excel do DCD ou do Geral do contrato Caixa do centro: os mesmos
+// controladores do Portal das Construtoras (o mesmo arquivo e o mesmo Excel), chamados daqui para valer o
+// acesso desta tela. Eles só leem req.params.
+const DOCUMENTOS_PLS = {
+  dcd: { controller: dcdController, chave: 'numeroContrato' },
+  geral: { controller: extratoController, chave: 'contratoEmpreendimento' },
+};
 
 const empresaIdSchema = z.coerce.number().int().positive('Empresa inválida.');
 const idSchema = z.coerce.number().int().positive('Registro inválido.');
@@ -94,6 +104,23 @@ module.exports = {
       await service.baixar(empresaIdSchema.parse(req.params.empresaId), idSchema.parse(req.params.parcelaId), baixaSchema.parse(req.body || {}), req.user.id)
     )
   ),
+  documentosPls: rota(async (req, res) =>
+    res.json(await service.documentosPls(empresaIdSchema.parse(req.params.empresaId), idSchema.parse(req.params.centroId)))
+  ),
+  documentoPlsArquivo: async (req, res, next) => {
+    try {
+      const doc = DOCUMENTOS_PLS[req.params.tipo];
+      const formato = req.params.formato;
+      if (!doc || !['original', 'excel'].includes(formato)) throw erro(404, 'Documento não encontrado.');
+      const empresaId = empresaIdSchema.parse(req.params.empresaId);
+      const c = await service.centroComContrato(empresaId, idSchema.parse(req.params.centroId));
+      if (!c.contrato) throw erro(404, 'Este centro de custo não tem contrato Caixa cadastrado.');
+      const reqDoc = { params: { empresaId: String(empresaId), [doc.chave]: c.contrato }, user: req.user };
+      return (formato === 'original' ? doc.controller.download : doc.controller.exportExcel)(reqDoc, res, next);
+    } catch (err) {
+      return tratar(err, next);
+    }
+  },
   avancoPrevisto: rota(async (req, res) =>
     res.json(await service.avancoPrevisto(empresaIdSchema.parse(req.params.empresaId), idSchema.parse(req.params.centroId)))
   ),

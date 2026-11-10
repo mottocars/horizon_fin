@@ -17,5 +17,7 @@ router.delete('/:empresaId/titulos/:id', controller.excluir);
 router.post('/:empresaId/parcelas/:parcelaId/baixa', controller.baixar);
 router.delete('/:empresaId/parcelas/:parcelaId/baixa', controller.estornar);
 router.get('/:empresaId/avanco-previsto/:centroId', controller.avancoPrevisto);
+router.get('/:empresaId/documentos-pls/:centroId', controller.documentosPls);
+router.get('/:empresaId/documentos-pls/:centroId/:tipo/:formato', controller.documentoPlsArquivo);
 
 module.exports = router;
