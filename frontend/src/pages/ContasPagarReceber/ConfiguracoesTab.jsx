@@ -4,11 +4,12 @@ import Card from '../../components/Card';
 import Button from '../../components/Button';
 import SearchableSelect from '../../components/SearchableSelect';
 import { obterConfiguracoesCpr, opcoesContasPagarReceber, salvarConfiguracoesCpr } from '../../api/contasPagarReceber.api';
-import { dataHora, mensagemErro } from './util';
+import { dataHora, lerValor, mensagemErro, numeroBr } from './util';
 
 // Aba Configurações da tela Contas Pagar / Receber, no padrão das Configurações das outras telas (um Card por
 // parâmetro, Salvar no fim, campo âmbar quando pendente e azul quando preenchido). Por ora: o plano de contas
-// padrão de cada classificação da Projeção PLS CEF — é o que a aba Rateios do título traz preenchido.
+// padrão de cada classificação da Projeção PLS CEF (a aba Rateios do título traz preenchido) e o % Amortização PJ
+// padrão do lançamento (abate o Novo Registro; sem ele, o dos Parâmetros da DFC).
 
 const CLASSIFICACOES = [
   { chave: 'novo_registro', rotulo: 'Novo Registro' },
@@ -23,6 +24,7 @@ export default function ConfiguracoesTab({ empresaId }) {
   const [naturezas, setNaturezas] = useState(null);
   const [cfg, setCfg] = useState(null);
   const [contas, setContas] = useState({ novo_registro: '', medicao: '', credito_pj: '' });
+  const [amortizacao, setAmortizacao] = useState('');
   const [erroCarga, setErroCarga] = useState('');
   const [salvando, setSalvando] = useState(false);
   const [salvo, setSalvo] = useState(false);
@@ -38,6 +40,7 @@ export default function ConfiguracoesTab({ empresaId }) {
         setNaturezas(op.naturezas);
         setCfg(c);
         setContas({ novo_registro: c.contas.novo_registro || '', medicao: c.contas.medicao || '', credito_pj: c.contas.credito_pj || '' });
+        setAmortizacao(c.pct_amortizacao_pj === null || c.pct_amortizacao_pj === undefined ? '' : numeroBr(c.pct_amortizacao_pj));
       })
       .catch((e) => vivo && setErroCarga(mensagemErro(e, 'Não foi possível carregar as configurações.')));
     return () => {
@@ -50,16 +53,24 @@ export default function ConfiguracoesTab({ empresaId }) {
     [naturezas]
   );
 
+  const pctAmortizacao = amortizacao.trim() === '' ? null : lerValor(amortizacao);
+  const amortizacaoValida = pctAmortizacao === null || (Number.isFinite(pctAmortizacao) && pctAmortizacao >= 0 && pctAmortizacao <= 100);
+
   async function salvar() {
-    setSalvando(true);
     setErro('');
     setSalvo(false);
+    if (!amortizacaoValida) return setErro('Informe o % Amortização PJ de 0 a 100.');
+    setSalvando(true);
     try {
-      const c = await salvarConfiguracoesCpr(empresaId, {
-        novo_registro: contas.novo_registro || null,
-        medicao: contas.medicao || null,
-        credito_pj: contas.credito_pj || null,
-      });
+      const c = await salvarConfiguracoesCpr(
+        empresaId,
+        {
+          novo_registro: contas.novo_registro || null,
+          medicao: contas.medicao || null,
+          credito_pj: contas.credito_pj || null,
+        },
+        pctAmortizacao
+      );
       setCfg(c);
       setSalvo(true);
     } catch (e) {
@@ -108,6 +119,32 @@ export default function ConfiguracoesTab({ empresaId }) {
               />
             </div>
           ))}
+        </div>
+      </Card>
+
+      <Card>
+        <div className="border-b border-gray-100 pb-3">
+          <h3 className="text-sm font-semibold text-gray-900">Amortização PJ · Projeção PLS CEF</h3>
+        </div>
+        <div className="mt-4 w-full max-w-xs">
+          <label className="mb-1 block text-sm font-medium text-gray-700">% Amortização PJ</label>
+          <div className="relative">
+            <input
+              value={amortizacao}
+              onChange={(e) => {
+                setAmortizacao(e.target.value);
+                setSalvo(false);
+              }}
+              onBlur={() => amortizacaoValida && pctAmortizacao !== null && setAmortizacao(numeroBr(pctAmortizacao))}
+              inputMode="decimal"
+              placeholder="0,00"
+              aria-label="Percentual de amortização PJ padrão"
+              className={`w-full rounded-lg border py-2 pl-3 pr-8 text-right text-sm tabular-nums text-gray-900 focus:outline-none focus:ring-2 focus:ring-primary-100 ${
+                !amortizacaoValida ? 'border-red-300 bg-red-50' : amortizacao.trim() ? 'border-primary-100 bg-primary-50' : 'border-amber-300 bg-amber-50'
+              }`}
+            />
+            <span className="pointer-events-none absolute right-3 top-1/2 -translate-y-1/2 text-sm text-gray-400">%</span>
+          </div>
         </div>
       </Card>
 

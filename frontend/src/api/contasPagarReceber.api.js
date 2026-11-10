@@ -73,8 +73,9 @@ export function obterConfiguracoesCpr(empresaId) {
   return http.get(`/contas-pagar-receber/${empresaId}/configuracoes`).then((res) => res.data);
 }
 
-export function salvarConfiguracoesCpr(empresaId, contas) {
-  return http.put(`/contas-pagar-receber/${empresaId}/configuracoes`, { contas }).then((res) => res.data);
+// `pctAmortizacao`: % Amortização PJ padrão do lançamento (número) ou null.
+export function salvarConfiguracoesCpr(empresaId, contas, pctAmortizacao = null) {
+  return http.put(`/contas-pagar-receber/${empresaId}/configuracoes`, { contas, pct_amortizacao_pj: pctAmortizacao }).then((res) => res.data);
 }
 
 export function estornarBaixa(empresaId, parcelaId) {

@@ -503,8 +503,8 @@ async function cabecalhoPls(empresaId, centroId, dataMedicao = null) {
       cto: fixos.cto ?? null,
       valor_financiamento_pj: fixos.valor_financiamento_pj ?? null,
       data_demanda_minima: fixos.data_demanda_minima ?? null,
-      // % Amortização PJ: não vem do DCD (na DFC é digitado nos Parâmetros) — o da versão vigente é sugestão.
-      pct_amortizacao_pj_sugerido: pctAmortizacao,
+      // % Amortização PJ: não vem do DCD — o padrão da aba Configurações; sem ele, o dos Parâmetros da DFC (vigente).
+      pct_amortizacao_pj_sugerido: config.pct_amortizacao_pj ?? pctAmortizacao,
     },
     unidades,
     // Padrão da aba Configurações da tela; sem ele, a conta da Origem Projeção CEF do plano da DFC.
@@ -528,13 +528,15 @@ async function obterConfiguracoes(empresaId) {
   const r = rows[0] || {};
   return {
     contas: Object.fromEntries(Object.entries(CLASSIFICACOES).map(([k, col]) => [k, r[col] || null])),
+    pct_amortizacao_pj: r.pct_amortizacao_pj === null || r.pct_amortizacao_pj === undefined ? null : Number(r.pct_amortizacao_pj),
     atualizado_em: r.atualizado_em || null,
     atualizado_por: r.atualizado_por_nome || null,
   };
 }
 
-// `contas`: { novo_registro, medicao, credito_pj } (sienge_id da conta analítica ou null).
-async function salvarConfiguracoes(empresaId, contas, usuarioId) {
+// `contas`: { novo_registro, medicao, credito_pj } (sienge_id da conta analítica ou null); `pctAmortizacao`: % (0 a
+// 100) ou null.
+async function salvarConfiguracoes(empresaId, contas, usuarioId, pctAmortizacao = null) {
   const ids = [...new Set(Object.values(contas).filter(Boolean).map(String))];
   if (ids.length) {
     const { rows } = await pool.query(
@@ -544,11 +546,12 @@ async function salvarConfiguracoes(empresaId, contas, usuarioId) {
     if (rows.length !== ids.length) throw erro(400, 'Plano de contas não encontrado no cadastro da empresa (só contas analíticas).');
   }
   await pool.query(
-    `INSERT INTO cpr_configuracoes (empresa_id, conta_novo_registro, conta_medicao, conta_credito_pj, atualizado_por, atualizado_em)
-     VALUES ($1, $2, $3, $4, $5, $6)
+    `INSERT INTO cpr_configuracoes (empresa_id, conta_novo_registro, conta_medicao, conta_credito_pj, pct_amortizacao_pj, atualizado_por, atualizado_em)
+     VALUES ($1, $2, $3, $4, $5, $6, $7)
      ON CONFLICT (empresa_id) DO UPDATE SET conta_novo_registro = EXCLUDED.conta_novo_registro, conta_medicao = EXCLUDED.conta_medicao,
-       conta_credito_pj = EXCLUDED.conta_credito_pj, atualizado_por = EXCLUDED.atualizado_por, atualizado_em = EXCLUDED.atualizado_em`,
-    [empresaId, contas.novo_registro || null, contas.medicao || null, contas.credito_pj || null, usuarioId, agora()]
+       conta_credito_pj = EXCLUDED.conta_credito_pj, pct_amortizacao_pj = EXCLUDED.pct_amortizacao_pj,
+       atualizado_por = EXCLUDED.atualizado_por, atualizado_em = EXCLUDED.atualizado_em`,
+    [empresaId, contas.novo_registro || null, contas.medicao || null, contas.credito_pj || null, pctAmortizacao, usuarioId, agora()]
   );
   return obterConfiguracoes(empresaId);
 }

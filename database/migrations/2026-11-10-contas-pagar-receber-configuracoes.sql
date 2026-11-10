@@ -17,3 +17,7 @@ CREATE TABLE IF NOT EXISTS cpr_configuracoes (
 );
 
 COMMIT;
+
+-- % Amortização PJ padrão do lançamento da Projeção PLS CEF (abate o Novo Registro); sem ele, o dos Parâmetros
+-- da DFC da obra.
+ALTER TABLE cpr_configuracoes ADD COLUMN IF NOT EXISTS pct_amortizacao_pj NUMERIC(7, 4) CHECK (pct_amortizacao_pj BETWEEN 0 AND 100);

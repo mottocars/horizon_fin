@@ -150,8 +150,14 @@ module.exports = {
       (v) => (v === null || v === undefined || String(v).trim() === '' ? null : String(v).trim()),
       z.string().max(20).nullable()
     );
-    const { contas } = z.object({ contas: z.object({ novo_registro: conta, medicao: conta, credito_pj: conta }) }).parse(req.body || {});
-    res.json(await service.salvarConfiguracoes(empresaIdSchema.parse(req.params.empresaId), contas, req.user.id));
+    const pct = z.preprocess(
+      (v) => (v === null || v === undefined || String(v).trim() === '' ? null : Number(v)),
+      z.number({ invalid_type_error: '% Amortização PJ inválido.' }).min(0, 'O % Amortização PJ vai de 0 a 100.').max(100, 'O % Amortização PJ vai de 0 a 100.').nullable()
+    );
+    const { contas, pct_amortizacao_pj: pctAmortizacao } = z
+      .object({ contas: z.object({ novo_registro: conta, medicao: conta, credito_pj: conta }), pct_amortizacao_pj: pct.optional().default(null) })
+      .parse(req.body || {});
+    res.json(await service.salvarConfiguracoes(empresaIdSchema.parse(req.params.empresaId), contas, req.user.id, pctAmortizacao ?? null));
   }),
   cabecalhoPls: rota(async (req, res) => {
     const dataMedicao = req.query.data_medicao ? dataIso('Data Previsão Medição inválida.').parse(req.query.data_medicao) : null;
