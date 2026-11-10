@@ -442,6 +442,12 @@ async function cabecalhoPls(empresaId, centroId, dataMedicao = null) {
     avancoLiberado = ff[0] ? Number(ff[0].percentual_acumulado) : null;
   }
 
+  const { rows: versaoPar } = await pool.query(
+    `SELECT pct_amortizacao_pj FROM dfc_parametros_versoes WHERE empresa_id = $1 AND sienge_id = $2 ORDER BY versao DESC LIMIT 1`,
+    [empresaId, centroId]
+  );
+  const pctAmortizacao = versaoPar[0]?.pct_amortizacao_pj === null || versaoPar[0]?.pct_amortizacao_pj === undefined ? null : Number(versaoPar[0].pct_amortizacao_pj);
+
   let unidades = null;
   if (contrato) {
     const lista = await projecaoCef.unidadesGeral(empresaId, contrato);
@@ -449,21 +455,35 @@ async function cabecalhoPls(empresaId, centroId, dataMedicao = null) {
     const novo = () => ({ qtd: 0, vgf_medicao: 0, terreno_fgts: 0 });
     const registradas = novo();
     const aposLiberacao = novo();
+    // Das registradas após a liberação, as assinadas até a Demanda Mínima: o Novo Registro delas não amortiza o
+    // PJ (mesma regra do motor da DFC — statusDm).
+    const aposNaoAmortiza = novo();
+    const dm = fixos.data_demanda_minima ? String(fixos.data_demanda_minima).slice(0, 10) : null;
     let semRegistro = 0;
     lista.forEach((u) => {
       if (!u.data_registro) {
         semRegistro += 1;
         return;
       }
-      const alvo = dLib && String(u.data_registro).slice(0, 10) <= dLib ? registradas : aposLiberacao;
+      const apos = !(dLib && String(u.data_registro).slice(0, 10) <= dLib);
       const n = (v) => Number(v || 0);
-      alvo.qtd += 1;
-      alvo.vgf_medicao += n(u.valor_financiamento) - n(u.valor_terreno) + n(u.valor_subsidio);
-      alvo.terreno_fgts += n(u.valor_terreno) + n(u.valor_fgts);
+      const somar = (alvo) => {
+        alvo.qtd += 1;
+        alvo.vgf_medicao += n(u.valor_financiamento) - n(u.valor_terreno) + n(u.valor_subsidio);
+        alvo.terreno_fgts += n(u.valor_terreno) + n(u.valor_fgts);
+      };
+      somar(apos ? aposLiberacao : registradas);
+      if (apos && dm && u.data_assinatura && String(u.data_assinatura).slice(0, 10) <= dm) somar(aposNaoAmortiza);
     });
     const r2 = (o) => ({ qtd: o.qtd, vgf_medicao: Math.round(o.vgf_medicao * 100) / 100, terreno_fgts: Math.round(o.terreno_fgts * 100) / 100 });
     // Sem liberação no DCD não há corte: só o total e quantas ainda não têm registro.
-    unidades = { total: lista.length, sem_registro: semRegistro, registradas: dLib ? r2(registradas) : null, apos_liberacao: dLib ? r2(aposLiberacao) : null };
+    unidades = {
+      total: lista.length,
+      sem_registro: semRegistro,
+      registradas: dLib ? r2(registradas) : null,
+      apos_liberacao: dLib ? r2(aposLiberacao) : null,
+      apos_liberacao_nao_amortiza: dLib ? r2(aposNaoAmortiza) : null,
+    };
   }
 
   return {
@@ -478,6 +498,8 @@ async function cabecalhoPls(empresaId, centroId, dataMedicao = null) {
       cto: fixos.cto ?? null,
       valor_financiamento_pj: fixos.valor_financiamento_pj ?? null,
       data_demanda_minima: fixos.data_demanda_minima ?? null,
+      // % Amortização PJ: não vem do DCD (na DFC é digitado nos Parâmetros) — o da versão vigente é sugestão.
+      pct_amortizacao_pj_sugerido: pctAmortizacao,
     },
     unidades,
     // Padrão da aba Configurações da tela; sem ele, a conta da Origem Projeção CEF do plano da DFC.

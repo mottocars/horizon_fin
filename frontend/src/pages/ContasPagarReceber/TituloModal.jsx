@@ -128,7 +128,8 @@ export default function TituloModal({ empresaId, id = null, onClose, onSalvo }) 
   // `avanco`: o % acumulado na data digitado à mão (texto); null = o do Prevision. Volta para null ao
   // trocar o centro ou a data.
   // Datas: medição (busca o % no Prevision), recebimento PF e recebimento PJ.
-  const [pls, setPls] = useState({ centro_id: '', data_medicao: '', data_pf: '', data_pj: '', avanco: null });
+  // `amortizacao`: % Amortização PJ digitado (texto); null = o sugerido (Parâmetros da DFC).
+  const [pls, setPls] = useState({ centro_id: '', data_medicao: '', data_pf: '', data_pj: '', avanco: null, amortizacao: null });
   const pularResetRateio = useRef(false);
   const [avanco, setAvanco] = useState({ carregando: false, dados: null, erro: '' });
   const [documentos, setDocumentos] = useState({ carregando: false, dados: null, erro: '' });
@@ -164,6 +165,7 @@ export default function TituloModal({ empresaId, id = null, onClose, onSalvo }) 
             data_pf: dd.data_pf || '',
             data_pj: dd.data_pj || '',
             avanco: dd.avanco_informado ?? null,
+            amortizacao: dd.amortizacao_informada ?? null,
           });
           setRateioPls({
             valores: { novo_registro: null, medicao: null, credito_pj: null, ...(dd.valores_ajustados || {}) },
@@ -257,9 +259,13 @@ export default function TituloModal({ empresaId, id = null, onClose, onSalvo }) 
     }
     setRateioPls({ valores: { novo_registro: null, medicao: null, credito_pj: null }, pj_reducao: '0' });
   }, [pls.centro_id]);
+  // % Amortização PJ: o digitado ou o sugerido (Parâmetros da DFC); vazio = sem amortização.
+  const amortizacaoTexto = pls.amortizacao ?? (cab?.parametros?.pct_amortizacao_pj_sugerido == null ? '' : pct2(cab.parametros.pct_amortizacao_pj_sugerido));
+  const amortizacaoPct = amortizacaoTexto === '' ? 0 : lerValor(amortizacaoTexto);
+  const amortizacaoValida = amortizacaoTexto === '' || (Number.isFinite(amortizacaoPct) && amortizacaoPct >= 0 && amortizacaoPct <= 100);
   const projPls = useMemo(
-    () => projetarPls(cab, avancoValido ? avancoInformado : null, pls.data_medicao),
-    [cab, avancoValido, avancoInformado, pls.data_medicao]
+    () => projetarPls(cab, avancoValido ? avancoInformado : null, pls.data_medicao, amortizacaoValida ? amortizacaoPct : 0),
+    [cab, avancoValido, avancoInformado, pls.data_medicao, amortizacaoValida, amortizacaoPct]
   );
   const opNaturezas = useMemo(
     () => (opcoes?.naturezas || []).map((n) => ({ value: n.id, label: `${n.id} ${n.nome}${n.inativa ? ' (inativa)' : ''}` })),
@@ -376,6 +382,10 @@ export default function TituloModal({ empresaId, id = null, onClose, onSalvo }) 
         contas: Object.fromEntries(chaves.map((k) => [k, contas[k] || null])),
         valores_ajustados: rateioPls.valores,
         pj_reducao: rateioPls.pj_reducao,
+        amortizacao_informada: pls.amortizacao,
+        pct_amortizacao_pj: amortizacaoValida ? amortizacaoPct : null,
+        novo_registro_bruto: projPls.novo_registro_bruto,
+        amortizacao_pj: projPls.amortizacao,
       },
     };
     setSalvando(true);
@@ -644,6 +654,9 @@ export default function TituloModal({ empresaId, id = null, onClose, onSalvo }) 
                   carregando={cabPls.carregando}
                   erro={cabPls.erro}
                   avancoInformado={avancoValido ? avancoInformado : null}
+                  amortizacaoTexto={amortizacaoTexto}
+                  amortizacaoValida={amortizacaoValida}
+                  onAmortizacao={(t) => setPls((p) => ({ ...p, amortizacao: t }))}
                 />
               )}
 
@@ -1043,7 +1056,7 @@ function CampoLeitura({ rotulo, valor, alerta = false, carregando = false, dica,
 //   Medição       = VGF de medição das unidades registradas × avanço a medir
 //   Novo Registro = unidades que registram até a data: (terreno + FGTS) + VGF de medição × % de obra
 //   Crédito PJ    = CTO × avanço a medir − Medição, depois da Demanda Mínima, até o saldo do teto PJ
-function BasesProjecaoPls({ cab, carregando, erro, avancoInformado }) {
+function BasesProjecaoPls({ cab, carregando, erro, avancoInformado, amortizacaoTexto, amortizacaoValida, onAmortizacao }) {
   if (erro) return <p className="mt-4 rounded-lg bg-red-50 px-3 py-2 text-xs text-red-600">{erro}</p>;
   if (cab && !cab.contrato) {
     return (
@@ -1079,10 +1092,20 @@ function BasesProjecaoPls({ cab, carregando, erro, avancoInformado }) {
           rotulo="Data da Demanda Mínima"
           valor={doDcd(p?.data_demanda_minima, data)}
         />
-        <L
-          rotulo="Unidades no Geral"
-          valor={u ? String(u.total) : null}
-        />
+        {/* Não vem do DCD (na DFC é digitado nos Parâmetros): abate o Novo Registro. */}
+        <Campo rotulo="% Amortização PJ">
+          <div className="relative">
+            <input
+              value={amortizacaoTexto}
+              onChange={(e) => onAmortizacao(e.target.value)}
+              inputMode="decimal"
+              placeholder="0"
+              aria-label="Percentual de amortização PJ"
+              className={`${amortizacaoValida ? inputCor(amortizacaoTexto !== '') : `${INPUT_SEM_COR} border-red-300 bg-red-50`} !pr-7 text-right tabular-nums`}
+            />
+            <span className="pointer-events-none absolute right-2.5 top-1/2 -translate-y-1/2 text-sm text-gray-400">%</span>
+          </div>
+        </Campo>
         <L rotulo="Registradas até a última liberação" valor={doLib(u?.registradas, (x) => `${x.qtd} unidade(s)`)} />
         <L rotulo="VGF de medição registrado" valor={doLib(u?.registradas, (x) => moeda(x.vgf_medicao))} />
         <L rotulo="Registradas após a última liberação" valor={doLib(u?.apos_liberacao, (x) => `${x.qtd} unidade(s)`)} />
@@ -1145,7 +1168,7 @@ const r2 = (v) => Math.round((v + Number.EPSILON) * 100) / 100;
 //   Crédito PJ    = até o mês da Demanda Mínima: 0; no mês seguinte a ela: teto × F; depois: CTO × F − Medição;
 //                   nunca negativo e limitado ao saldo do teto (teto − crédito PJ já liberado)
 // Devolve null enquanto faltar o necessário (com o motivo).
-function projetarPls(cab, avanco, dataMedicao) {
+function projetarPls(cab, avanco, dataMedicao, pctAmortizacao = 0) {
   if (!cab) return null;
   if (!cab.contrato) return { motivo: 'Este centro de custo não tem Contrato Caixa cadastrado (DFC Construtoras › Centros Custos).' };
   if (!cab.ultima_liberacao || cab.avanco_liberado === null || cab.avanco_liberado === undefined) {
@@ -1159,7 +1182,13 @@ function projetarPls(cab, avanco, dataMedicao) {
   const reg = cab.unidades?.registradas || { vgf_medicao: 0 };
   const apos = cab.unidades?.apos_liberacao || { vgf_medicao: 0, terreno_fgts: 0 };
   const medicao = r2(reg.vgf_medicao * F);
-  const novoRegistro = r2(apos.terreno_fgts + apos.vgf_medicao * D);
+  // Novo Registro líquido da amortização PJ (motor da DFC: W = (P − V) × % amortização, V = Novo Registro das
+  // unidades assinadas até a Demanda Mínima, que não amortiza): a Caixa retém essa parte para abater o PJ.
+  const novoRegistroBruto = r2(apos.terreno_fgts + apos.vgf_medicao * D);
+  const naoAmortiza = cab.unidades?.apos_liberacao_nao_amortiza || { vgf_medicao: 0, terreno_fgts: 0 };
+  const novoRegistroNaoAmortiza = r2(naoAmortiza.terreno_fgts + naoAmortiza.vgf_medicao * D);
+  const amortizacao = r2(Math.max(novoRegistroBruto - novoRegistroNaoAmortiza, 0) * ((pctAmortizacao || 0) / 100));
+  const novoRegistro = r2(novoRegistroBruto - amortizacao);
 
   const p = cab.parametros || {};
   let creditoPj = null;
@@ -1176,7 +1205,15 @@ function projetarPls(cab, avanco, dataMedicao) {
     creditoPj = r2(Math.min(v, saldo));
     if (mMed <= dm) motivoPj = 'Demanda Mínima não atingida na medição.';
   }
-  return { novo_registro: novoRegistro, medicao, credito_pj: creditoPj, motivo_pj: motivoPj };
+  return {
+    novo_registro: novoRegistro,
+    novo_registro_bruto: novoRegistroBruto,
+    amortizacao,
+    pct_amortizacao: pctAmortizacao || 0,
+    medicao,
+    credito_pj: creditoPj,
+    motivo_pj: motivoPj,
+  };
 }
 
 // Valor projetado de cada classificação da aba Rateios: o digitado à mão (`rateio.valores[k]`) ou o calculado
@@ -1335,6 +1372,12 @@ function AbaRateiosPls({ centroEscolhido, projecao, carregando, contasSugeridas,
           </tfoot>
         </table>
       </div>
+      {projecao.novo_registro_bruto > 0 && (
+        <p className="text-xs text-gray-500">
+          Novo Registro já líquido da amortização PJ: {moeda(projecao.novo_registro_bruto)} − {moeda(projecao.amortizacao)} ({pct2(projecao.pct_amortizacao)}%) ={' '}
+          {moeda(projecao.novo_registro)}
+        </p>
+      )}
       {projecao.motivo_pj && <p className="text-xs text-amber-600">Crédito PJ: {projecao.motivo_pj}</p>}
       {linhas.some((l) => l.ajustado) && (
         <p className="text-xs text-gray-500">
