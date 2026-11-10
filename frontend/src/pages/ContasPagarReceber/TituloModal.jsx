@@ -37,7 +37,7 @@ import GraficoAvanco, { indiceNaData } from './GraficoAvanco';
 import { TIPOS_DOCUMENTO, centavos, data, dataHora, lerValor, mensagemErro, moeda, numeroBr, somarMeses } from './util';
 
 const INPUT_SEM_COR =
-  'w-full rounded-lg border px-2.5 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-primary-100 disabled:bg-gray-50 disabled:text-gray-500';
+  'w-full rounded-lg border px-2.5 py-1.5 text-sm focus:outline-none focus:ring-2 focus:ring-primary-100 disabled:bg-gray-50 disabled:text-gray-500';
 const INPUT = `${INPUT_SEM_COR} border-gray-200`;
 // Campos abertos para ajuste: azul quando preenchidos, âmbar quando pendentes (mesmo par das Configurações
 // das telas de Operações).
@@ -458,7 +458,7 @@ export default function TituloModal({ empresaId, id = null, onClose, onSalvo }) 
   const abaVisivel = abas.some((a) => a.id === aba) ? aba : 'cabecalho';
 
   return (
-    <Modal open onClose={onClose} title={id ? `Título ${String(id).padStart(5, '0')}` : 'Novo título'} maxWidthClass={financeiro ? "max-w-5xl" : "max-w-6xl"}>
+    <Modal open onClose={onClose} title={id ? `Título ${String(id).padStart(5, '0')}` : 'Novo título'} maxWidthClass={financeiro ? "max-w-5xl" : "max-w-6xl"} maxHeightClass="max-h-[96vh]">
       {erro ? (
         <div className="flex items-center gap-2 rounded-lg bg-red-50 px-3 py-2 text-sm text-red-600">
           <TriangleAlert size={15} className="shrink-0" />
@@ -486,9 +486,9 @@ export default function TituloModal({ empresaId, id = null, onClose, onSalvo }) 
             />
             {/* Painel encaixado na aba ativa (a borda de cima é a da barra de abas). Altura mínima fixa: a
                 janela não muda de tamanho ao trocar de aba. */}
-            <div className={`rounded-b-xl border border-t-0 border-gray-200 p-4 min-h-[360px]`}>
+            <div className={`rounded-b-xl border border-t-0 border-gray-200 p-3 min-h-[360px]`}>
               {abaVisivel === 'cabecalho' && (
-                <div className={`grid grid-cols-1 gap-x-4 gap-y-3 ${financeiro ? "md:grid-cols-3" : "sm:grid-cols-2 md:grid-cols-4"}`}>
+                <div className={`grid grid-cols-1 gap-x-4 ${financeiro ? "gap-y-3 md:grid-cols-3" : "gap-y-2 sm:grid-cols-2 md:grid-cols-4"}`}>
                   <Campo rotulo="Tipo de documento">
                     <SearchableSelect
                       value={form.tipo_documento}
@@ -1026,7 +1026,7 @@ function CampoLeitura({ rotulo, valor, alerta = false, carregando = false, dica,
   return (
     <Campo rotulo={rotulo} className={className}>
       <div
-        className={`flex min-h-[38px] items-center truncate rounded-lg border px-2.5 py-2 text-sm tabular-nums ${
+        className={`flex min-h-[34px] items-center truncate rounded-lg border px-2.5 py-1.5 text-sm tabular-nums ${
           alerta ? 'border-red-200 bg-red-50 font-semibold text-red-600' : 'border-gray-200 bg-gray-50 text-gray-700'
         }`}
         title={typeof valor === 'string' ? valor : undefined}
@@ -1063,9 +1063,9 @@ function BasesProjecaoPls({ cab, carregando, erro, avancoInformado }) {
   const doLib = (grupo, fmt) => (!u ? null : grupo ? fmt(grupo) : 'Sem liberação no DCD');
 
   return (
-    <div className="mt-5 border-t border-gray-100 pt-4">
-      <h3 className="mb-3 text-sm font-semibold text-gray-900">Bases da projeção · Crédito PJ, Novo Registro e Medição</h3>
-      <div className="grid grid-cols-1 gap-x-4 gap-y-3 sm:grid-cols-2 md:grid-cols-4">
+    <div className="mt-2 border-t border-gray-100 pt-2">
+      <h3 className="mb-2 text-sm font-semibold text-gray-900">Bases da projeção · Crédito PJ, Novo Registro e Medição</h3>
+      <div className="grid grid-cols-1 gap-x-4 gap-y-2 sm:grid-cols-2 md:grid-cols-4">
         <L
           rotulo="Avanço a medir"
           valor={aMedir === null ? null : `${pct2(aMedir)}%`}
