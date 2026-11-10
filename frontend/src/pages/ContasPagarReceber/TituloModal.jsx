@@ -377,7 +377,7 @@ export default function TituloModal({ empresaId, id = null, onClose, onSalvo }) 
                 janela não muda de tamanho ao trocar de aba. */}
             <div className={`rounded-b-xl border border-t-0 border-gray-200 p-4 min-h-[360px]`}>
               {abaVisivel === 'cabecalho' && (
-                <div className="grid grid-cols-1 gap-x-4 gap-y-3 md:grid-cols-3">
+                <div className={`grid grid-cols-1 gap-x-4 gap-y-3 ${financeiro ? "md:grid-cols-3" : "sm:grid-cols-2 md:grid-cols-4"}`}>
                   <Campo rotulo="Tipo de documento">
                     <SearchableSelect
                       value={form.tipo_documento}
@@ -389,7 +389,7 @@ export default function TituloModal({ empresaId, id = null, onClose, onSalvo }) 
                   </Campo>
                   {!financeiro && (
                     <>
-                      <Campo rotulo="Centro de custo" className="md:col-span-2">
+                      <Campo rotulo="Centro de custo" className="sm:col-span-2 md:col-span-3">
                         <SearchableSelect
                           value={pls.centro_id}
                           onChange={(v) => setPls((p) => ({ ...p, centro_id: v || '', avanco: null }))}
