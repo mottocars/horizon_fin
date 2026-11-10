@@ -93,7 +93,9 @@ export default function TituloModal({ empresaId, id = null, onClose, onSalvo }) 
   const [erroSalvar, setErroSalvar] = useState('');
   const [aba, setAba] = useState('cabecalho');
   // Projeção PLS CEF: centro de custo (obra), data prevista do recebimento e a curva do Prevision dele.
-  const [pls, setPls] = useState({ centro_id: '', data_previsao: '' });
+  // `avanco`: o % acumulado na data digitado à mão (texto); null = o do Prevision. Volta para null ao
+  // trocar o centro ou a data.
+  const [pls, setPls] = useState({ centro_id: '', data_previsao: '', avanco: null });
   const [avanco, setAvanco] = useState({ carregando: false, dados: null, erro: '' });
 
   useEffect(() => {
@@ -321,7 +323,7 @@ export default function TituloModal({ empresaId, id = null, onClose, onSalvo }) 
                       <Campo rotulo="Centro de custo" className="md:col-span-2">
                         <SearchableSelect
                           value={pls.centro_id}
-                          onChange={(v) => setPls((p) => ({ ...p, centro_id: v || '' }))}
+                          onChange={(v) => setPls((p) => ({ ...p, centro_id: v || '', avanco: null }))}
                           options={opCentrosObra}
                           placeholder="Escolha o centro de custo"
                           emptyMessage="Nenhum centro de custo cadastrado."
@@ -329,7 +331,7 @@ export default function TituloModal({ empresaId, id = null, onClose, onSalvo }) 
                         />
                       </Campo>
                       <Campo rotulo="Data Previsão Recebimento">
-                        <CampoData value={pls.data_previsao} onChange={(v) => setPls((p) => ({ ...p, data_previsao: v }))} className={INPUT} />
+                        <CampoData value={pls.data_previsao} onChange={(v) => setPls((p) => ({ ...p, data_previsao: v, avanco: null }))} className={INPUT} />
                       </Campo>
                     </>
                   )}
@@ -392,7 +394,15 @@ export default function TituloModal({ empresaId, id = null, onClose, onSalvo }) 
                 </div>
               )}
 
-              {abaVisivel === 'avancos' && <AbaAvancos centroEscolhido={Boolean(pls.centro_id)} avanco={avanco} dataPrevisao={pls.data_previsao} />}
+              {abaVisivel === 'avancos' && (
+                <AbaAvancos
+                  centroEscolhido={Boolean(pls.centro_id)}
+                  avanco={avanco}
+                  dataPrevisao={pls.data_previsao}
+                  avancoTexto={pls.avanco}
+                  onAvanco={(t) => setPls((p) => ({ ...p, avanco: t }))}
+                />
+              )}
 
               {abaVisivel === 'rateios' && (
                 <div className="space-y-2">
@@ -616,8 +626,9 @@ function AvisoAba({ children }) {
 }
 
 // Projeção PLS CEF › Avanços: a curva diária do Prevision do centro escolhido no Cabeçalho, com a bandeira
-// na Data Previsão Recebimento.
-function AbaAvancos({ centroEscolhido, avanco, dataPrevisao }) {
+// na Data Previsão Recebimento. O acumulado na data começa com o do Prevision e pode ser alterado à mão
+// (`avancoTexto`; null = o do Prevision).
+function AbaAvancos({ centroEscolhido, avanco, dataPrevisao, avancoTexto, onAvanco }) {
   if (!centroEscolhido) return <AvisoAba>Escolha o centro de custo no Cabeçalho para ver o avanço previsto.</AvisoAba>;
   if (avanco.carregando) return <AvisoAba>Carregando o avanço do Prevision...</AvisoAba>;
   if (avanco.erro) return <AvisoAba>{avanco.erro}</AvisoAba>;
@@ -631,6 +642,11 @@ function AbaAvancos({ centroEscolhido, avanco, dataPrevisao }) {
   const k = indiceNaData(d.pontos, dataPrevisao);
   const naData = !dataPrevisao ? null : k < 0 ? 0 : d.pontos[k].previsto;
   const fora = dataPrevisao && (dataPrevisao < inicio || dataPrevisao > fim);
+  const fmt = (v) => v.toLocaleString('pt-BR', { minimumFractionDigits: 2, maximumFractionDigits: 2 });
+  const texto = avancoTexto ?? (naData === null ? '' : fmt(naData));
+  const digitado = lerValor(texto);
+  const invalido = !Number.isFinite(digitado) || digitado < 0 || digitado > 100;
+  const alterado = avancoTexto !== null && !invalido && Math.abs(digitado - naData) > 0.0001;
 
   return (
     <div className="space-y-3">
@@ -642,13 +658,36 @@ function AbaAvancos({ centroEscolhido, avanco, dataPrevisao }) {
           </p>
         </div>
         {dataPrevisao ? (
-          <p className="text-sm text-gray-600">
-            Previsto acumulado em {data(dataPrevisao)}:{' '}
-            <span className="font-semibold tabular-nums text-gray-900">
-              {naData.toLocaleString('pt-BR', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}%
-            </span>
-            {fora && <span className="ml-1 text-xs text-amber-600">(fora da curva)</span>}
-          </p>
+          <div className="flex flex-col items-start gap-0.5 sm:items-end">
+            <label className="flex items-center gap-2 text-sm text-gray-600">
+              Previsto acumulado em {data(dataPrevisao)}:
+              <span className="relative">
+                <input
+                  value={texto}
+                  onChange={(e) => onAvanco(e.target.value)}
+                  onBlur={() => !invalido && avancoTexto !== null && onAvanco(fmt(digitado))}
+                  inputMode="decimal"
+                  aria-label="Previsto acumulado na data"
+                  className={`w-28 rounded-lg border py-1.5 pl-2.5 pr-7 text-right text-sm font-semibold tabular-nums text-gray-900 focus:outline-none focus:ring-2 focus:ring-primary-100 ${
+                    invalido ? 'border-red-300 bg-red-50' : 'border-gray-200'
+                  }`}
+                />
+                <span className="pointer-events-none absolute right-2.5 top-1/2 -translate-y-1/2 text-sm text-gray-400">%</span>
+              </span>
+            </label>
+            {invalido ? (
+              <span className="text-xs text-red-600">Informe um percentual entre 0 e 100.</span>
+            ) : alterado ? (
+              <span className="text-xs text-gray-500">
+                Prevision: {fmt(naData)}% ·{' '}
+                <button type="button" onClick={() => onAvanco(null)} className="font-medium text-primary-600 hover:underline">
+                  usar o do Prevision
+                </button>
+              </span>
+            ) : (
+              fora && <span className="text-xs text-amber-600">Data fora da curva do Prevision.</span>
+            )}
+          </div>
         ) : (
           <p className="text-xs text-amber-600">Informe a Data Previsão Recebimento no Cabeçalho para marcar no gráfico.</p>
         )}
