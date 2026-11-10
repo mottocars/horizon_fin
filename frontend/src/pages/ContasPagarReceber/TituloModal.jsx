@@ -1,7 +1,8 @@
 import { useEffect, useMemo, useState } from 'react';
-import { ArrowDownLeft, ArrowUpRight, Lock, Plus, Trash2, TriangleAlert, X } from 'lucide-react';
+import { ArrowDownLeft, ArrowUpRight, CalendarDays, FileText, Lock, PieChart, Plus, Trash2, TriangleAlert, X } from 'lucide-react';
 import Modal from '../../components/Modal';
 import Button from '../../components/Button';
+import Tabs from '../../components/Tabs';
 import SearchableSelect from '../../components/SearchableSelect';
 import { useConfirm } from '../../confirm/ConfirmContext';
 import { hojeISO } from '../../utils/datas';
@@ -12,17 +13,12 @@ const INPUT =
   'w-full rounded-lg border border-gray-200 px-2.5 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-primary-100 disabled:bg-gray-50 disabled:text-gray-500';
 const CABECALHO = 'border-b-2 border-blue-500 bg-blue-50 text-xs uppercase tracking-wide text-blue-700';
 
-function Faixa({ titulo, acao, children }) {
-  return (
-    <div className="rounded-xl border border-gray-200 bg-white px-4 py-3">
-      <div className="mb-2 flex min-h-6 items-center justify-between gap-2">
-        <p className="text-[11px] font-semibold uppercase tracking-wide text-gray-500">{titulo}</p>
-        {acao}
-      </div>
-      {children}
-    </div>
-  );
-}
+// Abas da janela. A Projeção PLS CEF só tem o Cabeçalho (com o tipo de documento) por enquanto.
+const ABAS = [
+  { id: 'cabecalho', label: 'Cabeçalho', icon: FileText },
+  { id: 'rateios', label: 'Rateios', icon: PieChart },
+  { id: 'parcelas', label: 'Parcelas', icon: CalendarDays },
+];
 
 function Campo({ rotulo, children, className = '' }) {
   return (
@@ -68,9 +64,10 @@ function ratear(linhas, total) {
 const somaC = (lista) => lista.reduce((s, x) => s + (valido(lerValor(x.valor)) ? centavos(lerValor(x.valor)) : 0), 0);
 const LINHA_RATEIO = { centro_id: '', natureza_id: '', pct: '100', valor: '' };
 
-// Janela do "+" (novo título) e do título clicado na listagem (alterar / excluir). Tipo de documento
-// "Financeiro": título, parcelas mensais (editáveis) e rateio por centro de custo e plano de contas.
-// "Projeção PLS CEF": por ora não mostra nada (o formulário dele vem depois).
+// Janela do "+" (novo título) e do título clicado na listagem (alterar / excluir), em três abas:
+// Cabeçalho, Rateios (centro de custo × plano de contas) e Parcelas (mensais, editáveis). Os botões ficam
+// fora das abas; erro de preenchimento leva para a aba do campo. "Projeção PLS CEF": por ora só o
+// Cabeçalho com o tipo de documento (o formulário dele vem depois).
 export default function TituloModal({ empresaId, id = null, onClose, onSalvo }) {
   const confirm = useConfirm();
   const hoje = hojeISO();
@@ -84,6 +81,7 @@ export default function TituloModal({ empresaId, id = null, onClose, onSalvo }) 
   const [rateios, setRateios] = useState([LINHA_RATEIO]);
   const [salvando, setSalvando] = useState(false);
   const [erroSalvar, setErroSalvar] = useState('');
+  const [aba, setAba] = useState('cabecalho');
 
   useEffect(() => {
     setErro('');
@@ -181,15 +179,20 @@ export default function TituloModal({ empresaId, id = null, onClose, onSalvo }) 
 
   async function salvar() {
     setErroSalvar('');
-    if (!form.pessoa_id) return setErroSalvar(form.tipo === 'PAGAR' ? 'Escolha o fornecedor.' : 'Escolha o cliente.');
-    if (!form.data_emissao) return setErroSalvar('Informe a data de emissão.');
-    if (!totalC) return setErroSalvar('Informe o valor do título.');
-    if (parcelas.some((p) => !p.vencimento || !valido(lerValor(p.valor)))) return setErroSalvar('Informe o vencimento e o valor de cada parcela.');
-    if (somaParcelasC !== totalC) return setErroSalvar('A soma das parcelas precisa fechar com o valor do título.');
+    // Erro de preenchimento: mostra a mensagem e leva para a aba do campo.
+    const falha = (mensagem, abaDoCampo) => {
+      setErroSalvar(mensagem);
+      setAba(abaDoCampo);
+    };
+    if (!form.pessoa_id) return falha(form.tipo === 'PAGAR' ? 'Escolha o fornecedor.' : 'Escolha o cliente.', 'cabecalho');
+    if (!form.data_emissao) return falha('Informe a data de emissão.', 'cabecalho');
+    if (!totalC) return falha('Informe o valor do título.', 'cabecalho');
     if (rateios.some((r) => !r.centro_id || !r.natureza_id || !valido(lerValor(r.valor)))) {
-      return setErroSalvar('Preencha centro de custo, plano de contas e valor em cada linha do rateio.');
+      return falha('Preencha centro de custo, plano de contas e valor em cada linha do rateio.', 'rateios');
     }
-    if (somaRateioC !== totalC) return setErroSalvar('A soma do rateio precisa fechar com o valor do título.');
+    if (somaRateioC !== totalC) return falha('A soma do rateio precisa fechar com o valor do título.', 'rateios');
+    if (parcelas.some((p) => !p.vencimento || !valido(lerValor(p.valor)))) return falha('Informe o vencimento e o valor de cada parcela.', 'parcelas');
+    if (somaParcelasC !== totalC) return falha('A soma das parcelas precisa fechar com o valor do título.', 'parcelas');
     const payload = {
       tipo: form.tipo,
       tipo_documento: form.tipo_documento,
@@ -236,6 +239,8 @@ export default function TituloModal({ empresaId, id = null, onClose, onSalvo }) 
   const diferenca = (soma) =>
     soma === totalC ? null : <span className="ml-2 font-normal text-red-600">{soma > totalC ? 'passa' : 'falta'} {moeda(Math.abs(totalC - soma) / 100)}</span>;
   const temBaixa = parcelas.some((p) => p.data_baixa);
+  const abas = financeiro ? ABAS : ABAS.slice(0, 1);
+  const abaVisivel = financeiro ? aba : 'cabecalho';
 
   return (
     <Modal open onClose={onClose} title={id ? 'Título' : 'Novo título'} maxWidthClass="max-w-5xl">
@@ -255,263 +260,271 @@ export default function TituloModal({ empresaId, id = null, onClose, onSalvo }) 
             </div>
           )}
 
-          <Faixa titulo="Título">
-            <div className="grid grid-cols-1 gap-x-4 gap-y-2 md:grid-cols-[220px_220px_minmax(0,1fr)]">
-              <Campo rotulo="Tipo de documento">
-                <SearchableSelect
-                  value={form.tipo_documento}
-                  onChange={(v) => v && mudar('tipo_documento')(v)}
-                  options={TIPOS_DOCUMENTO}
-                  clearable={false}
-                  disabled={travado || Boolean(id)}
-                />
-              </Campo>
-              {financeiro && (
-                <>
-                  <Campo rotulo="Tipo">
-                    <div className="grid grid-cols-2 rounded-lg border border-gray-200 p-0.5">
-                      {[
-                        ['PAGAR', 'A pagar', ArrowUpRight, 'bg-red-50 text-red-600'],
-                        ['RECEBER', 'A receber', ArrowDownLeft, 'bg-emerald-50 text-emerald-700'],
-                      ].map(([valor, rotulo, Icone, ativo]) => (
-                        <button
-                          key={valor}
-                          type="button"
-                          onClick={() => trocarTipo(valor)}
-                          disabled={travado}
-                          aria-pressed={form.tipo === valor}
-                          className={`flex items-center justify-center gap-1 rounded-md py-1.5 text-sm font-medium transition ${
-                            form.tipo === valor ? ativo : 'text-gray-500 hover:bg-gray-50'
-                          }`}
-                        >
-                          <Icone size={14} /> {rotulo}
-                        </button>
-                      ))}
-                    </div>
-                  </Campo>
-                  <Campo rotulo={form.tipo === 'PAGAR' ? 'Fornecedor' : 'Cliente'}>
+          <div>
+            <Tabs
+              tabs={abas}
+              activeId={abaVisivel}
+              onChange={(a) => {
+                setAba(a);
+                setErroSalvar('');
+              }}
+            />
+            {/* Painel encaixado na aba ativa (a borda de cima é a da barra de abas). Altura mínima fixa: a
+                janela não muda de tamanho ao trocar de aba. */}
+            <div className={`rounded-b-xl border border-t-0 border-gray-200 p-4 ${financeiro ? 'min-h-[360px]' : ''}`}>
+              {abaVisivel === 'cabecalho' && (
+                <div className="grid grid-cols-1 gap-x-4 gap-y-3 md:grid-cols-3">
+                  <Campo rotulo="Tipo de documento">
                     <SearchableSelect
-                      value={form.pessoa_id}
-                      onChange={mudar('pessoa_id')}
-                      options={opPessoas}
-                      placeholder={form.tipo === 'PAGAR' ? 'Escolha o fornecedor' : 'Escolha o cliente'}
-                      emptyMessage={form.tipo === 'PAGAR' ? 'Nenhum fornecedor encontrado.' : 'Nenhum cliente encontrado.'}
-                      disabled={travado}
-                      larguraPainel={420}
+                      value={form.tipo_documento}
+                      onChange={(v) => v && mudar('tipo_documento')(v)}
+                      options={TIPOS_DOCUMENTO}
+                      clearable={false}
+                      disabled={travado || Boolean(id)}
                     />
                   </Campo>
-                </>
+                  {financeiro && (
+                    <>
+                      <Campo rotulo="Tipo">
+                        <div className="grid grid-cols-2 rounded-lg border border-gray-200 p-0.5">
+                          {[
+                            ['PAGAR', 'A pagar', ArrowUpRight, 'bg-red-50 text-red-600'],
+                            ['RECEBER', 'A receber', ArrowDownLeft, 'bg-emerald-50 text-emerald-700'],
+                          ].map(([valor, rotulo, Icone, ativo]) => (
+                            <button
+                              key={valor}
+                              type="button"
+                              onClick={() => trocarTipo(valor)}
+                              disabled={travado}
+                              aria-pressed={form.tipo === valor}
+                              className={`flex items-center justify-center gap-1 rounded-md py-1.5 text-sm font-medium transition ${
+                                form.tipo === valor ? ativo : 'text-gray-500 hover:bg-gray-50'
+                              }`}
+                            >
+                              <Icone size={14} /> {rotulo}
+                            </button>
+                          ))}
+                        </div>
+                      </Campo>
+                      <Campo rotulo="Emissão">
+                        <input type="date" value={form.data_emissao} onChange={(e) => mudar('data_emissao')(e.target.value)} disabled={travado} className={INPUT} />
+                      </Campo>
+                      <Campo rotulo={form.tipo === 'PAGAR' ? 'Fornecedor' : 'Cliente'} className="md:col-span-2">
+                        <SearchableSelect
+                          value={form.pessoa_id}
+                          onChange={mudar('pessoa_id')}
+                          options={opPessoas}
+                          placeholder={form.tipo === 'PAGAR' ? 'Escolha o fornecedor' : 'Escolha o cliente'}
+                          emptyMessage={form.tipo === 'PAGAR' ? 'Nenhum fornecedor encontrado.' : 'Nenhum cliente encontrado.'}
+                          disabled={travado}
+                          larguraPainel={420}
+                        />
+                      </Campo>
+                      <Campo rotulo="Valor do título">
+                        <input
+                          value={form.valor}
+                          onChange={(e) => mudarValor(e.target.value)}
+                          onBlur={() => valido(total) && setForm((f) => ({ ...f, valor: numeroBr(total) }))}
+                          disabled={travado}
+                          inputMode="decimal"
+                          placeholder="0,00"
+                          className={`${INPUT} text-right tabular-nums`}
+                        />
+                      </Campo>
+                      <Campo rotulo="Documento (opcional)">
+                        <input value={form.documento} onChange={(e) => mudar('documento')(e.target.value)} disabled={travado} maxLength={50} className={INPUT} />
+                      </Campo>
+                      <Campo rotulo="Histórico (opcional)" className="md:col-span-2">
+                        <input value={form.historico} onChange={(e) => mudar('historico')(e.target.value)} disabled={travado} maxLength={255} className={INPUT} />
+                      </Campo>
+                    </>
+                  )}
+                </div>
+              )}
+
+              {abaVisivel === 'rateios' && (
+                <div className="space-y-2">
+                  {!travado && (
+                    <div className="flex justify-end">
+                      <button
+                        type="button"
+                        onClick={adicionarRateio}
+                        className="flex items-center gap-1 rounded-lg px-2 py-1 text-xs font-medium text-primary-600 hover:bg-primary-50"
+                      >
+                        <Plus size={14} /> Adicionar linha
+                      </button>
+                    </div>
+                  )}
+                  <div className="rounded-lg ring-1 ring-gray-200">
+                    <table className="w-full text-sm">
+                      <thead className={CABECALHO}>
+                        <tr>
+                          <th className="px-3 py-2 text-left font-medium">Centro de custo</th>
+                          <th className="px-3 py-2 text-left font-medium">Plano de contas</th>
+                          <th className="w-28 px-3 py-2 text-right font-medium">%</th>
+                          <th className="w-40 px-3 py-2 text-right font-medium">Valor</th>
+                          <th className="w-10" />
+                        </tr>
+                      </thead>
+                      <tbody>
+                        {rateios.map((r, i) => (
+                          <tr key={i} className="border-b border-gray-100 align-middle">
+                            <td className="px-3 py-1.5">
+                              <SearchableSelect
+                                value={r.centro_id}
+                                onChange={(v) => mudarRateio(i, 'centro_id', v)}
+                                options={opCentros}
+                                placeholder="Centro de custo"
+                                emptyMessage="Nenhum centro de custo cadastrado."
+                                disabled={travado}
+                                larguraPainel={360}
+                              />
+                            </td>
+                            <td className="px-3 py-1.5">
+                              <SearchableSelect
+                                value={r.natureza_id}
+                                onChange={(v) => mudarRateio(i, 'natureza_id', v)}
+                                options={opNaturezas}
+                                placeholder="Plano de contas"
+                                emptyMessage="Nenhuma conta cadastrada."
+                                disabled={travado}
+                                larguraPainel={460}
+                              />
+                            </td>
+                            <td className="px-3 py-1.5">
+                              <input
+                                value={r.pct}
+                                onChange={(e) => mudarRateio(i, 'pct', e.target.value)}
+                                disabled={travado}
+                                inputMode="decimal"
+                                placeholder="0"
+                                aria-label={`Percentual da linha ${i + 1} do rateio`}
+                                className={`${INPUT} text-right tabular-nums`}
+                              />
+                            </td>
+                            <td className="px-3 py-1.5">
+                              <input
+                                value={r.valor}
+                                onChange={(e) => mudarRateio(i, 'valor', e.target.value)}
+                                onBlur={() => valido(lerValor(r.valor)) && setRateios((l) => l.map((x, j) => (j === i ? { ...x, valor: numeroBr(lerValor(r.valor)) } : x)))}
+                                disabled={travado}
+                                inputMode="decimal"
+                                placeholder="0,00"
+                                aria-label={`Valor da linha ${i + 1} do rateio`}
+                                className={`${INPUT} text-right tabular-nums`}
+                              />
+                            </td>
+                            <td className="pr-2 text-center">
+                              {!travado && rateios.length > 1 && (
+                                <button
+                                  type="button"
+                                  onClick={() => setRateios((l) => l.filter((_, j) => j !== i))}
+                                  title="Remover linha"
+                                  className="rounded-lg p-1.5 text-gray-400 hover:bg-red-50 hover:text-red-600"
+                                >
+                                  <X size={15} />
+                                </button>
+                              )}
+                            </td>
+                          </tr>
+                        ))}
+                      </tbody>
+                      <tfoot className="bg-gray-50">
+                        <tr>
+                          <td colSpan={2} className="px-3 py-2 text-xs font-semibold text-gray-600">
+                            Total rateado
+                            {totalC > 0 && diferenca(somaRateioC)}
+                          </td>
+                          <td className="px-3 py-2 text-right text-sm font-semibold tabular-nums text-gray-900">{fmtPct(Math.round(somaPct * 1e4) / 1e4)}%</td>
+                          <td className="px-3 py-2 text-right text-sm font-semibold tabular-nums text-gray-900">{moeda(somaRateioC / 100)}</td>
+                          <td />
+                        </tr>
+                      </tfoot>
+                    </table>
+                  </div>
+                </div>
+              )}
+
+              {abaVisivel === 'parcelas' && (
+                <div>
+                  <div className="mb-3 grid grid-cols-2 gap-x-4 sm:grid-cols-[150px_170px]">
+                    <Campo rotulo="Quantidade (mensais)">
+                      <input
+                        type="number"
+                        min={1}
+                        max={360}
+                        value={qtd}
+                        onChange={(e) => mudarQtd(e.target.value)}
+                        disabled={travado}
+                        className={`${INPUT} tabular-nums`}
+                      />
+                    </Campo>
+                    <Campo rotulo="1º vencimento">
+                      <input type="date" value={primeiroVenc} onChange={(e) => mudarPrimeiroVenc(e.target.value)} disabled={travado} className={INPUT} />
+                    </Campo>
+                  </div>
+                  <div className="max-h-64 overflow-y-auto rounded-lg ring-1 ring-gray-200">
+                    <table className="w-full text-sm">
+                      <thead className={`sticky top-0 z-10 ${CABECALHO}`}>
+                        <tr>
+                          <th className="w-16 px-3 py-2 text-left font-medium">Nº</th>
+                          <th className="px-3 py-2 text-left font-medium">Vencimento</th>
+                          <th className="px-3 py-2 text-right font-medium">Valor</th>
+                          {temBaixa && <th className="px-3 py-2 text-left font-medium">Baixa</th>}
+                        </tr>
+                      </thead>
+                      <tbody>
+                        {parcelas.map((p, i) => (
+                          <tr key={i} className="border-b border-gray-100">
+                            <td className="px-3 py-1.5 tabular-nums text-gray-500">
+                              {i + 1}/{parcelas.length}
+                            </td>
+                            <td className="px-3 py-1.5">
+                              <input
+                                type="date"
+                                value={p.vencimento}
+                                onChange={(e) => mudarParcela(i, 'vencimento', e.target.value)}
+                                disabled={travado}
+                                aria-label={`Vencimento da parcela ${i + 1}`}
+                                className={`${INPUT} max-w-44 !py-1.5`}
+                              />
+                            </td>
+                            <td className="px-3 py-1.5 text-right">
+                              <input
+                                value={p.valor}
+                                onChange={(e) => mudarParcela(i, 'valor', e.target.value)}
+                                onBlur={() => valido(lerValor(p.valor)) && mudarParcela(i, 'valor', numeroBr(lerValor(p.valor)))}
+                                disabled={travado}
+                                inputMode="decimal"
+                                placeholder="0,00"
+                                aria-label={`Valor da parcela ${i + 1}`}
+                                className={`${INPUT} ml-auto max-w-40 !py-1.5 text-right tabular-nums`}
+                              />
+                            </td>
+                            {temBaixa && (
+                              <td className="px-3 py-1.5 text-xs text-emerald-700">
+                                {p.data_baixa ? `${data(p.data_baixa)} · ${moeda(p.valor_baixa)}` : <span className="text-gray-400">Em aberto</span>}
+                              </td>
+                            )}
+                          </tr>
+                        ))}
+                      </tbody>
+                      <tfoot className="sticky bottom-0 bg-gray-50">
+                        <tr>
+                          <td colSpan={2} className="px-3 py-2 text-xs font-semibold text-gray-600">
+                            Total das parcelas
+                            {totalC > 0 && diferenca(somaParcelasC)}
+                          </td>
+                          <td className="px-3 py-2 text-right text-sm font-semibold tabular-nums text-gray-900">{moeda(somaParcelasC / 100)}</td>
+                          {temBaixa && <td />}
+                        </tr>
+                      </tfoot>
+                    </table>
+                  </div>
+                </div>
               )}
             </div>
-            {financeiro && (
-              <div className="mt-2 grid grid-cols-2 gap-x-4 gap-y-2 md:grid-cols-[180px_150px_170px_minmax(0,1fr)]">
-                <Campo rotulo="Documento (opcional)">
-                  <input value={form.documento} onChange={(e) => mudar('documento')(e.target.value)} disabled={travado} maxLength={50} className={INPUT} />
-                </Campo>
-                <Campo rotulo="Emissão">
-                  <input type="date" value={form.data_emissao} onChange={(e) => mudar('data_emissao')(e.target.value)} disabled={travado} className={INPUT} />
-                </Campo>
-                <Campo rotulo="Valor do título">
-                  <input
-                    value={form.valor}
-                    onChange={(e) => mudarValor(e.target.value)}
-                    onBlur={() => valido(total) && setForm((f) => ({ ...f, valor: numeroBr(total) }))}
-                    disabled={travado}
-                    inputMode="decimal"
-                    placeholder="0,00"
-                    className={`${INPUT} text-right tabular-nums`}
-                  />
-                </Campo>
-                <Campo rotulo="Histórico (opcional)" className="col-span-2 md:col-span-1">
-                  <input value={form.historico} onChange={(e) => mudar('historico')(e.target.value)} disabled={travado} maxLength={255} className={INPUT} />
-                </Campo>
-              </div>
-            )}
-          </Faixa>
-
-          {financeiro && (
-            <>
-              <Faixa titulo="Parcelas">
-                <div className="mb-3 grid grid-cols-2 gap-x-4 sm:grid-cols-[150px_170px]">
-                  <Campo rotulo="Quantidade (mensais)">
-                    <input
-                      type="number"
-                      min={1}
-                      max={360}
-                      value={qtd}
-                      onChange={(e) => mudarQtd(e.target.value)}
-                      disabled={travado}
-                      className={`${INPUT} tabular-nums`}
-                    />
-                  </Campo>
-                  <Campo rotulo="1º vencimento">
-                    <input type="date" value={primeiroVenc} onChange={(e) => mudarPrimeiroVenc(e.target.value)} disabled={travado} className={INPUT} />
-                  </Campo>
-                </div>
-                <div className="max-h-64 overflow-y-auto rounded-lg ring-1 ring-gray-200">
-                  <table className="w-full text-sm">
-                    <thead className={`sticky top-0 z-10 ${CABECALHO}`}>
-                      <tr>
-                        <th className="w-16 px-3 py-2 text-left font-medium">Nº</th>
-                        <th className="px-3 py-2 text-left font-medium">Vencimento</th>
-                        <th className="px-3 py-2 text-right font-medium">Valor</th>
-                        {temBaixa && <th className="px-3 py-2 text-left font-medium">Baixa</th>}
-                      </tr>
-                    </thead>
-                    <tbody>
-                      {parcelas.map((p, i) => (
-                        <tr key={i} className="border-b border-gray-100">
-                          <td className="px-3 py-1.5 tabular-nums text-gray-500">
-                            {i + 1}/{parcelas.length}
-                          </td>
-                          <td className="px-3 py-1.5">
-                            <input
-                              type="date"
-                              value={p.vencimento}
-                              onChange={(e) => mudarParcela(i, 'vencimento', e.target.value)}
-                              disabled={travado}
-                              aria-label={`Vencimento da parcela ${i + 1}`}
-                              className={`${INPUT} max-w-44 !py-1.5`}
-                            />
-                          </td>
-                          <td className="px-3 py-1.5 text-right">
-                            <input
-                              value={p.valor}
-                              onChange={(e) => mudarParcela(i, 'valor', e.target.value)}
-                              onBlur={() => valido(lerValor(p.valor)) && mudarParcela(i, 'valor', numeroBr(lerValor(p.valor)))}
-                              disabled={travado}
-                              inputMode="decimal"
-                              placeholder="0,00"
-                              aria-label={`Valor da parcela ${i + 1}`}
-                              className={`${INPUT} ml-auto max-w-40 !py-1.5 text-right tabular-nums`}
-                            />
-                          </td>
-                          {temBaixa && (
-                            <td className="px-3 py-1.5 text-xs text-emerald-700">
-                              {p.data_baixa ? `${data(p.data_baixa)} · ${moeda(p.valor_baixa)}` : <span className="text-gray-400">Em aberto</span>}
-                            </td>
-                          )}
-                        </tr>
-                      ))}
-                    </tbody>
-                    <tfoot className="sticky bottom-0 bg-gray-50">
-                      <tr>
-                        <td colSpan={2} className="px-3 py-2 text-xs font-semibold text-gray-600">
-                          Total das parcelas
-                          {totalC > 0 && diferenca(somaParcelasC)}
-                        </td>
-                        <td className="px-3 py-2 text-right text-sm font-semibold tabular-nums text-gray-900">{moeda(somaParcelasC / 100)}</td>
-                        {temBaixa && <td />}
-                      </tr>
-                    </tfoot>
-                  </table>
-                </div>
-              </Faixa>
-
-              <Faixa
-                titulo="Rateio por centro de custo e plano de contas"
-                acao={
-                  !travado && (
-                    <button
-                      type="button"
-                      onClick={adicionarRateio}
-                      className="flex items-center gap-1 rounded-lg px-2 py-1 text-xs font-medium text-primary-600 hover:bg-primary-50"
-                    >
-                      <Plus size={14} /> Adicionar linha
-                    </button>
-                  )
-                }
-              >
-                <div className="rounded-lg ring-1 ring-gray-200">
-                  <table className="w-full text-sm">
-                    <thead className={CABECALHO}>
-                      <tr>
-                        <th className="px-3 py-2 text-left font-medium">Centro de custo</th>
-                        <th className="px-3 py-2 text-left font-medium">Plano de contas</th>
-                        <th className="w-28 px-3 py-2 text-right font-medium">%</th>
-                        <th className="w-40 px-3 py-2 text-right font-medium">Valor</th>
-                        <th className="w-10" />
-                      </tr>
-                    </thead>
-                    <tbody>
-                      {rateios.map((r, i) => (
-                        <tr key={i} className="border-b border-gray-100 align-middle">
-                          <td className="px-3 py-1.5">
-                            <SearchableSelect
-                              value={r.centro_id}
-                              onChange={(v) => mudarRateio(i, 'centro_id', v)}
-                              options={opCentros}
-                              placeholder="Centro de custo"
-                              emptyMessage="Nenhum centro de custo cadastrado."
-                              disabled={travado}
-                              larguraPainel={360}
-                            />
-                          </td>
-                          <td className="px-3 py-1.5">
-                            <SearchableSelect
-                              value={r.natureza_id}
-                              onChange={(v) => mudarRateio(i, 'natureza_id', v)}
-                              options={opNaturezas}
-                              placeholder="Plano de contas"
-                              emptyMessage="Nenhuma conta cadastrada."
-                              disabled={travado}
-                              larguraPainel={460}
-                            />
-                          </td>
-                          <td className="px-3 py-1.5">
-                            <input
-                              value={r.pct}
-                              onChange={(e) => mudarRateio(i, 'pct', e.target.value)}
-                              disabled={travado}
-                              inputMode="decimal"
-                              placeholder="0"
-                              aria-label={`Percentual da linha ${i + 1} do rateio`}
-                              className={`${INPUT} text-right tabular-nums`}
-                            />
-                          </td>
-                          <td className="px-3 py-1.5">
-                            <input
-                              value={r.valor}
-                              onChange={(e) => mudarRateio(i, 'valor', e.target.value)}
-                              onBlur={() => valido(lerValor(r.valor)) && setRateios((l) => l.map((x, j) => (j === i ? { ...x, valor: numeroBr(lerValor(r.valor)) } : x)))}
-                              disabled={travado}
-                              inputMode="decimal"
-                              placeholder="0,00"
-                              aria-label={`Valor da linha ${i + 1} do rateio`}
-                              className={`${INPUT} text-right tabular-nums`}
-                            />
-                          </td>
-                          <td className="pr-2 text-center">
-                            {!travado && rateios.length > 1 && (
-                              <button
-                                type="button"
-                                onClick={() => setRateios((l) => l.filter((_, j) => j !== i))}
-                                title="Remover linha"
-                                className="rounded-lg p-1.5 text-gray-400 hover:bg-red-50 hover:text-red-600"
-                              >
-                                <X size={15} />
-                              </button>
-                            )}
-                          </td>
-                        </tr>
-                      ))}
-                    </tbody>
-                    <tfoot className="bg-gray-50">
-                      <tr>
-                        <td colSpan={2} className="px-3 py-2 text-xs font-semibold text-gray-600">
-                          Total rateado
-                          {totalC > 0 && diferenca(somaRateioC)}
-                        </td>
-                        <td className="px-3 py-2 text-right text-sm font-semibold tabular-nums text-gray-900">{fmtPct(Math.round(somaPct * 1e4) / 1e4)}%</td>
-                        <td className="px-3 py-2 text-right text-sm font-semibold tabular-nums text-gray-900">{moeda(somaRateioC / 100)}</td>
-                        <td />
-                      </tr>
-                    </tfoot>
-                  </table>
-                </div>
-              </Faixa>
-            </>
-          )}
+          </div>
 
           {erroSalvar && <p className="rounded-lg bg-red-50 px-3 py-2 text-xs text-red-600">{erroSalvar}</p>}
 
