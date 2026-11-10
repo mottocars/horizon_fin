@@ -237,6 +237,7 @@ function ItemDia({ it, B }) {
           {titulo(m.nome || 'Título manual')}
           <small>
             Horizon · título {num}
+            {m.parte ? ` · ${m.parte === 'PF' ? 'PF (Novo Registro + Medição)' : 'PJ (Crédito PJ)'}` : ''}
             {m.v !== it.data ? ` · venc. ${dm(m.v)}` : ''}
             {it.frac < 1 ? ` · rateio ${pct(it.frac * 100)}` : ''}
           </small>

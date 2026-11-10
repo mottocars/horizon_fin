@@ -231,21 +231,42 @@ async function painel(empresaId) {
   };
 }
 
-// Títulos manuais do Horizon (Cadastros › Contas Pagar / Receber): as parcelas NÃO quitadas (sem baixa), para o
-// simulador de caixa do Aging (opção "Considera Títulos Manuais do Horizon"). Cada uma com o lado (r/p), o
-// vencimento, o valor e o rateio [centro, natureza, fração] — os filtros de centro e plano de contas da tela valem.
+// Títulos manuais do Horizon (Cadastros › Contas Pagar / Receber) que ainda não foram quitados, para o simulador
+// de caixa do Aging (opção "Considera Títulos Manuais do Horizon"). Cada item: lado (r/p), data, valor e rateio
+// [centro, natureza, fração] — os filtros de centro e plano de contas da tela valem.
+// - Financeiro: cada parcela sem baixa, na data de vencimento informada.
+// - Projeção PLS CEF (pedido do usuário): não cai na emissão — Novo Registro + Medição entram na Data Previsão
+//   Recebimento PF e o Crédito PJ na Data Previsão Recebimento PJ, com os valores e contas guardados no título
+//   (`dados`); some quando o título é quitado (todas as parcelas baixadas).
 async function titulosManuais(empresaId) {
-  const { rows } = await pool.query(
-    `SELECT p.id, p.numero, p.vencimento, p.valor, t.id AS titulo_id, t.tipo, t.tipo_documento, t.pessoa_nome,
-            (SELECT count(*)::int FROM cpr_parcelas x WHERE x.titulo_id = t.id) AS total_parcelas,
-            (SELECT COALESCE(json_agg(json_build_array(r.centro_id, r.natureza_id, r.percentual / 100.0) ORDER BY r.id), '[]'::json)
-               FROM cpr_rateios r WHERE r.titulo_id = t.id) AS rateio
-       FROM cpr_parcelas p JOIN cpr_titulos t ON t.id = p.titulo_id
-      WHERE t.empresa_id = $1 AND p.data_baixa IS NULL
-      ORDER BY p.vencimento, t.id, p.numero`,
-    [empresaId]
-  );
-  return rows.map((r) => ({
+  const conv = (rateio) =>
+    (rateio && rateio.length ? rateio : [[null, null, 1]]).map(([c, n, fr]) => [c === null ? null : Number(c), n === null ? null : String(n), Number(fr)]);
+  const [{ rows: financeiro }, { rows: pls }] = await Promise.all([
+    pool.query(
+      `SELECT p.id, p.numero, p.vencimento, p.valor, t.id AS titulo_id, t.tipo, t.tipo_documento, t.pessoa_nome,
+              (SELECT count(*)::int FROM cpr_parcelas x WHERE x.titulo_id = t.id) AS total_parcelas,
+              (SELECT COALESCE(json_agg(json_build_array(r.centro_id, r.natureza_id, r.percentual / 100.0) ORDER BY r.id), '[]'::json)
+                 FROM cpr_rateios r WHERE r.titulo_id = t.id) AS rateio
+         FROM cpr_parcelas p JOIN cpr_titulos t ON t.id = p.titulo_id
+        WHERE t.empresa_id = $1 AND p.data_baixa IS NULL AND t.tipo_documento <> 'PROJECAO_PLS_CEF'
+        ORDER BY p.vencimento, t.id, p.numero`,
+      [empresaId]
+    ),
+    pool.query(
+      `SELECT t.id AS titulo_id, t.tipo, t.pessoa_nome, t.dados,
+              (SELECT COALESCE(json_agg(json_build_array(r.centro_id, r.natureza_id, r.percentual / 100.0) ORDER BY r.id), '[]'::json)
+                 FROM cpr_rateios r WHERE r.titulo_id = t.id) AS rateio,
+              (SELECT json_agg(json_build_object('id', p.id, 'numero', p.numero, 'vencimento', p.vencimento, 'valor', p.valor) ORDER BY p.numero)
+                 FROM cpr_parcelas p WHERE p.titulo_id = t.id AND p.data_baixa IS NULL) AS abertas,
+              (SELECT count(*)::int FROM cpr_parcelas p WHERE p.titulo_id = t.id) AS total_parcelas
+         FROM cpr_titulos t
+        WHERE t.empresa_id = $1 AND t.tipo_documento = 'PROJECAO_PLS_CEF'
+          AND EXISTS (SELECT 1 FROM cpr_parcelas p WHERE p.titulo_id = t.id AND p.data_baixa IS NULL)`,
+      [empresaId]
+    ),
+  ]);
+
+  const itens = financeiro.map((r) => ({
     id: r.id,
     titulo: r.titulo_id,
     numero: r.numero,
@@ -255,8 +276,43 @@ async function titulosManuais(empresaId) {
     nome: r.pessoa_nome,
     v: r.vencimento,
     s: Number(r.valor),
-    f: (r.rateio.length ? r.rateio : [[null, null, 1]]).map(([c, n, fr]) => [c === null ? null : Number(c), n === null ? null : String(n), Number(fr)]),
+    f: conv(r.rateio),
   }));
+
+  pls.forEach((t) => {
+    const d = t.dados || {};
+    const pj = d.projetado || {};
+    const contas = d.contas || {};
+    const valorDe = (k) => Math.round(Number(pj[k] || 0) * 100) / 100;
+    const base = { titulo: t.titulo_id, total: 1, l: t.tipo === 'PAGAR' ? 'p' : 'r', doc: 'PROJECAO_PLS_CEF', nome: t.pessoa_nome };
+    // Sem as datas ou os valores guardados (título antigo), fica com as parcelas em aberto como estão.
+    if (!d.data_pf || !d.data_pj || !d.projetado) {
+      (t.abertas || []).forEach((p) =>
+        itens.push({ ...base, id: p.id, numero: p.numero, total: t.total_parcelas, v: p.vencimento, s: Number(p.valor), f: conv(t.rateio) })
+      );
+      return;
+    }
+    const partes = [
+      { parte: 'PF', v: d.data_pf, chaves: ['novo_registro', 'medicao'] },
+      { parte: 'PJ', v: d.data_pj, chaves: ['credito_pj'] },
+    ];
+    partes.forEach(({ parte, v, chaves }) => {
+      const comValor = chaves.filter((k) => valorDe(k) > 0);
+      const s = Math.round(comValor.reduce((acc, k) => acc + valorDe(k), 0) * 100) / 100;
+      if (!(s > 0)) return;
+      itens.push({
+        ...base,
+        id: `${t.titulo_id}-${parte}`,
+        numero: 1,
+        parte,
+        v,
+        s,
+        f: comValor.map((k) => [d.centro_id === undefined || d.centro_id === null ? null : Number(d.centro_id), contas[k] ? String(contas[k]) : null, valorDe(k) / s]),
+      });
+    });
+  });
+
+  return itens.sort((a, b) => (a.v < b.v ? -1 : a.v > b.v ? 1 : a.titulo - b.titulo));
 }
 
 // `LADOS` e `titulosDoLado` também são usados pelo Detalhamento Financeiro (detalhamentoPainel.service.js):
