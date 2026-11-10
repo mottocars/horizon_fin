@@ -367,8 +367,9 @@ const mesIso = (d) => (d ? String(d).slice(0, 7) : null);
 
 // Projeção PLS CEF › Cabeçalho: o que o centro (obra) traz pronto para projetar o recebimento da Caixa na
 // Data Previsão Recebimento (`data`, 'AAAA-MM-DD' ou vazio). Mesmas fontes e regras da Projeção CEF da DFC
-// (dfc-projecao-cef): Parâmetros vigentes da obra, unidades do Geral (sem o 1º contrato, o da construtora,
-// com o mês de registro manual da aba Repasses) e o DCD.
+// (dfc-projecao-cef): os campos dos Parâmetros que vêm do DCD (fonteFixos), unidades do Geral (sem o 1º
+// contrato, o da construtora, com o mês de registro manual da aba Repasses) e o DCD. `prazo`: tempo entre
+// assinatura e registro (meses) informado na tela, ou null.
 // - Última liberação: a parcela mais recente do cronograma de liberação do DCD com status LP (paga — não LR),
 //   fora as parcelas 285, EX e TEX (só as numeradas); o avanço liberado é o % acumulado do físico-financeiro
 //   nessa parcela.
@@ -376,7 +377,7 @@ const mesIso = (d) => (d ? String(d).slice(0, 7) : null);
 // - Unidades: registradas até o mês da última liberação (a base da Medição) e as que registram depois dela até
 //   o mês da data (o Novo Registro) — o mês do registro como no motor da DFC (data do Geral, a manual da aba
 //   Repasses ou assinatura + "Tempo entre assinatura e registro").
-async function cabecalhoPls(empresaId, centroId, data) {
+async function cabecalhoPls(empresaId, centroId, data, prazo = null) {
   const projecaoCef = require('../dfc-projecao-cef/projecaoCef.service');
   const { calcularUnidades } = require('../dfc-projecao-cef/projecaoCef.motor');
   const c = await centroComContrato(empresaId, centroId);
@@ -419,19 +420,27 @@ async function cabecalhoPls(empresaId, centroId, data) {
     avancoLiberado = ff[0] ? Number(ff[0].percentual_acumulado) : null;
   }
 
-  const versao = vers[0].v ? await require('../dfc-parametros/dfcParametros.service').getVersao(empresaId, centroId, vers[0].v) : null;
-  const parametros = versao && {
-    versao: versao.versao,
-    cto: versao.cto === null ? null : Number(versao.cto),
-    valor_financiamento_pj: versao.valor_financiamento_pj === null ? null : Number(versao.valor_financiamento_pj),
-    data_demanda_minima: versao.data_demanda_minima,
-    tempo_assinatura_registro_meses: versao.tempo_assinatura_registro_meses,
+  // CTO, teto PJ e Demanda Mínima: do mesmo lugar que preenche os Parâmetros da DFC (fonteFixos — DCD do
+  // contrato Caixa), sem depender de haver versão de Parâmetros. O tempo entre assinatura e registro não tem
+  // fonte automática (na DFC é digitado): vale o informado nesta tela (`prazo`); sem ele, o da versão vigente
+  // dos Parâmetros da obra serve de sugestão.
+  const parametrosService = require('../dfc-parametros/dfcParametros.service');
+  const { fixos } = await parametrosService.fonteFixos(empresaId, centroId);
+  const versao = vers[0].v ? await parametrosService.getVersao(empresaId, centroId, vers[0].v) : null;
+  const prazoSugerido = versao?.tempo_assinatura_registro_meses ?? null;
+  const prazoUsado = prazo !== null && prazo !== undefined ? prazo : prazoSugerido;
+  const parametros = {
+    cto: fixos.cto ?? null,
+    valor_financiamento_pj: fixos.valor_financiamento_pj ?? null,
+    data_demanda_minima: fixos.data_demanda_minima ?? null,
+    tempo_assinatura_registro_sugerido: prazoSugerido,
+    tempo_assinatura_registro_meses: prazoUsado,
   };
 
   let unidades = null;
   if (contrato) {
     const lista = await projecaoCef.unidadesGeral(empresaId, contrato);
-    const calc = calcularUnidades(lista, new Map(), parametros?.data_demanda_minima || null, Number(parametros?.tempo_assinatura_registro_meses || 0));
+    const calc = calcularUnidades(lista, new Map(), parametros.data_demanda_minima, Number(prazoUsado || 0));
     const mLib = mesIso(ultima?.data_parcela);
     const mData = mesIso(data);
     const resumo = { qtd: 0, vgf_medicao: 0, terreno_fgts: 0 };

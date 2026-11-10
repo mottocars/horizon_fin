@@ -106,7 +106,11 @@ module.exports = {
   ),
   cabecalhoPls: rota(async (req, res) => {
     const data = req.query.data ? dataIso('Data inválida.').parse(req.query.data) : null;
-    res.json(await service.cabecalhoPls(empresaIdSchema.parse(req.params.empresaId), idSchema.parse(req.params.centroId), data));
+    const prazo =
+      req.query.prazo === undefined || req.query.prazo === ''
+        ? null
+        : z.coerce.number({ invalid_type_error: 'Tempo entre assinatura e registro inválido.' }).int().min(0).max(120).parse(req.query.prazo);
+    res.json(await service.cabecalhoPls(empresaIdSchema.parse(req.params.empresaId), idSchema.parse(req.params.centroId), data, prazo));
   }),
   documentosPls: rota(async (req, res) =>
     res.json(await service.documentosPls(empresaIdSchema.parse(req.params.empresaId), idSchema.parse(req.params.centroId)))

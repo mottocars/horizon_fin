@@ -60,9 +60,13 @@ export function baixarDocumentoPls(empresaId, centroId, tipo, formato) {
 
 // Projeção PLS CEF › Cabeçalho: última liberação, avanço liberado, crédito PJ liberado, envios do DCD/Geral,
 // Parâmetros da obra e unidades do Geral (registradas / a registrar até a data).
-export function cabecalhoPls(empresaId, centroId, data) {
+// `prazo`: tempo entre assinatura e registro (meses) informado na tela; null = o sugerido.
+export function cabecalhoPls(empresaId, centroId, data, prazo = null) {
+  const params = {};
+  if (data) params.data = data;
+  if (prazo !== null && prazo !== undefined) params.prazo = prazo;
   return http
-    .get(`/contas-pagar-receber/${empresaId}/cabecalho-pls/${centroId}`, { params: data ? { data } : {} })
+    .get(`/contas-pagar-receber/${empresaId}/cabecalho-pls/${centroId}`, { params })
     .then((res) => res.data);
 }
 

@@ -120,7 +120,9 @@ export default function TituloModal({ empresaId, id = null, onClose, onSalvo }) 
   // Projeção PLS CEF: centro de custo (obra), data prevista do recebimento e a curva do Prevision dele.
   // `avanco`: o % acumulado na data digitado à mão (texto); null = o do Prevision. Volta para null ao
   // trocar o centro ou a data.
-  const [pls, setPls] = useState({ centro_id: '', data_previsao: '', avanco: null });
+  // `prazo`: tempo entre assinatura e registro digitado (texto); null = a sugestão (Parâmetros da DFC).
+  const [pls, setPls] = useState({ centro_id: '', data_previsao: '', avanco: null, prazo: null });
+  const prazoEnviado = pls.prazo !== null && /^\d+$/.test(pls.prazo.trim()) && Number(pls.prazo) <= 120 ? Number(pls.prazo) : null;
   const [avanco, setAvanco] = useState({ carregando: false, dados: null, erro: '' });
   const [documentos, setDocumentos] = useState({ carregando: false, dados: null, erro: '' });
   const [cabPls, setCabPls] = useState({ carregando: false, dados: null, erro: '' });
@@ -202,13 +204,13 @@ export default function TituloModal({ empresaId, id = null, onClose, onSalvo }) 
     }
     let vivo = true;
     setCabPls((c) => ({ ...c, carregando: true, erro: '' }));
-    cabecalhoPls(empresaId, pls.centro_id, pls.data_previsao)
+    cabecalhoPls(empresaId, pls.centro_id, pls.data_previsao, prazoEnviado)
       .then((d) => vivo && setCabPls({ carregando: false, dados: d, erro: '' }))
       .catch((e) => vivo && setCabPls({ carregando: false, dados: null, erro: mensagemErro(e, 'Não foi possível carregar os dados do centro de custo.') }));
     return () => {
       vivo = false;
     };
-  }, [empresaId, form.tipo_documento, pls.centro_id, pls.data_previsao]);
+  }, [empresaId, form.tipo_documento, pls.centro_id, pls.data_previsao, prazoEnviado]);
 
   const cab = cabPls.dados;
   // Avanço previsto na data: o do Prevision (curva diária) ou o digitado (`pls.avanco`, texto; null = Prevision).
@@ -391,7 +393,7 @@ export default function TituloModal({ empresaId, id = null, onClose, onSalvo }) 
                       <Campo rotulo="Centro de custo" className="md:col-span-2">
                         <SearchableSelect
                           value={pls.centro_id}
-                          onChange={(v) => setPls((p) => ({ ...p, centro_id: v || '', avanco: null }))}
+                          onChange={(v) => setPls((p) => ({ ...p, centro_id: v || '', avanco: null, prazo: null }))}
                           options={opCentrosObra}
                           placeholder="Escolha o centro de custo"
                           emptyMessage="Nenhum centro de custo cadastrado."
@@ -411,7 +413,7 @@ export default function TituloModal({ empresaId, id = null, onClose, onSalvo }) 
                             inputMode="decimal"
                             placeholder={!pls.centro_id || !pls.data_previsao ? 'Escolha o centro e a data' : '0,00'}
                             aria-label="Avanço previsto na data"
-                            className={`${INPUT} pr-7 text-right tabular-nums ${avancoTexto && !avancoValido ? 'border-red-300 bg-red-50' : ''}`}
+                            className={`${INPUT} !pr-7 text-right tabular-nums ${avancoTexto && !avancoValido ? 'border-red-300 bg-red-50' : ''}`}
                           />
                           <span className="pointer-events-none absolute right-2.5 top-1/2 -translate-y-1/2 text-sm text-gray-400">%</span>
                         </div>
@@ -504,7 +506,15 @@ export default function TituloModal({ empresaId, id = null, onClose, onSalvo }) 
               )}
 
               {abaVisivel === 'cabecalho' && !financeiro && pls.centro_id && (
-                <BasesProjecaoPls cab={cab} carregando={cabPls.carregando} erro={cabPls.erro} avancoInformado={avancoValido ? avancoInformado : null} dataPrevisao={pls.data_previsao} />
+                <BasesProjecaoPls
+                  cab={cab}
+                  carregando={cabPls.carregando}
+                  erro={cabPls.erro}
+                  avancoInformado={avancoValido ? avancoInformado : null}
+                  dataPrevisao={pls.data_previsao}
+                  prazoTexto={pls.prazo ?? (cab?.parametros?.tempo_assinatura_registro_sugerido ?? '').toString()}
+                  onPrazo={(t) => setPls((p) => ({ ...p, prazo: t }))}
+                />
               )}
 
               {abaVisivel === 'documentos' && (
@@ -891,7 +901,7 @@ function CampoLeitura({ rotulo, valor, alerta = false, carregando = false, dica,
 //   Medição       = VGF de medição das unidades registradas × avanço a medir
 //   Novo Registro = unidades que registram até a data: (terreno + FGTS) + VGF de medição × % de obra
 //   Crédito PJ    = CTO × avanço a medir − Medição, depois da Demanda Mínima, até o saldo do teto PJ
-function BasesProjecaoPls({ cab, carregando, erro, avancoInformado, dataPrevisao }) {
+function BasesProjecaoPls({ cab, carregando, erro, avancoInformado, dataPrevisao, prazoTexto, onPrazo }) {
   if (erro) return <p className="mt-4 rounded-lg bg-red-50 px-3 py-2 text-xs text-red-600">{erro}</p>;
   if (cab && !cab.contrato) {
     return (
@@ -905,14 +915,15 @@ function BasesProjecaoPls({ cab, carregando, erro, avancoInformado, dataPrevisao
   const aMedir = avancoInformado !== null && cab?.avanco_liberado !== null && cab?.avanco_liberado !== undefined ? avancoInformado - cab.avanco_liberado : null;
   const saldoTeto = p?.valor_financiamento_pj !== null && p?.valor_financiamento_pj !== undefined && cab ? p.valor_financiamento_pj - cab.credito_pj_liberado : null;
   const dmAtingida = p?.data_demanda_minima && dataPrevisao ? dataPrevisao >= p.data_demanda_minima : null;
-  const semParam = 'Sem Parâmetros na DFC';
-  const dicaParam = p ? `DFC › Parâmetros, versão ${p.versao}` : 'Cadastre em DFC Construtoras › Parâmetros';
+  // CTO, teto PJ e Demanda Mínima vêm do DCD, como na tela de Parâmetros da DFC.
+  const doDcd = (v, fmt) => (!cab ? null : v === null || v === undefined ? 'Sem valor no DCD' : fmt(v));
   const L = (props) => <CampoLeitura carregando={carregando} {...props} />;
+  const prazoValido = prazoTexto === '' || (/^\d+$/.test(String(prazoTexto).trim()) && Number(prazoTexto) <= 120);
 
   return (
     <div className="mt-5 border-t border-gray-100 pt-4">
       <h3 className="text-sm font-semibold text-gray-900">Bases da projeção · Crédito PJ, Novo Registro e Medição</h3>
-      <p className="mb-3 text-xs text-gray-500">Mesmas fontes e regras da Projeção CEF da DFC Construtoras (Parâmetros, DCD e Geral).</p>
+      <p className="mb-3 text-xs text-gray-500">Mesmas fontes e regras da Projeção CEF da DFC Construtoras: DCD e Geral do contrato Caixa da obra, como nos Parâmetros da DFC.</p>
       <div className="grid grid-cols-1 gap-x-4 gap-y-3 sm:grid-cols-2 md:grid-cols-4">
         <L
           rotulo="Avanço a medir"
@@ -920,20 +931,35 @@ function BasesProjecaoPls({ cab, carregando, erro, avancoInformado, dataPrevisao
           alerta={aMedir !== null && aMedir < 0}
           dica="Previsto na data − liberado"
         />
-        <L rotulo="CTO" valor={p ? (p.cto === null ? semParam : moeda(p.cto)) : null} dica={dicaParam} />
-        <L rotulo="Valor do Financiamento PJ (teto)" valor={p ? (p.valor_financiamento_pj === null ? semParam : moeda(p.valor_financiamento_pj)) : null} dica={dicaParam} />
+        <L rotulo="CTO" valor={doDcd(p?.cto, moeda)} dica="DCD · Vr Custo Obra" />
+        <L rotulo="Valor do Financiamento PJ (teto)" valor={doDcd(p?.valor_financiamento_pj, moeda)} dica="DCD · Vr Financiamento (PJ)" />
         <L rotulo="Crédito PJ já liberado" valor={cab ? moeda(cab.credito_pj_liberado) : null} dica="DCD · Financiamento Construtora (LP)" />
         <L rotulo="Saldo do teto PJ" valor={saldoTeto === null ? null : moeda(saldoTeto)} alerta={saldoTeto !== null && saldoTeto <= 0} dica="Teto − crédito já liberado" />
         <L
           rotulo="Data da Demanda Mínima"
-          valor={p?.data_demanda_minima ? data(p.data_demanda_minima) : p ? semParam : null}
-          dica={dmAtingida === null ? dicaParam : dmAtingida ? 'Atingida na data: PJ libera' : 'Não atingida na data: sem Crédito PJ'}
+          valor={doDcd(p?.data_demanda_minima, data)}
+          dica={dmAtingida === null ? 'DCD · Dt Término Suspensiva' : dmAtingida ? 'DCD · atingida na data: PJ libera' : 'DCD · não atingida na data: sem Crédito PJ'}
         />
-        <L
-          rotulo="Tempo entre assinatura e registro"
-          valor={p ? (p.tempo_assinatura_registro_meses === null ? semParam : `${p.tempo_assinatura_registro_meses} mes(es)`) : null}
-          dica={dicaParam}
-        />
+        <Campo rotulo="Tempo entre assinatura e registro">
+          <div className="flex items-center gap-2">
+            <input
+              value={prazoTexto}
+              onChange={(e) => onPrazo(e.target.value)}
+              inputMode="numeric"
+              placeholder="0"
+              aria-label="Tempo entre assinatura e registro"
+              className={`${INPUT} text-right tabular-nums ${prazoValido ? '' : 'border-red-300 bg-red-50'}`}
+            />
+            <span className="shrink-0 text-sm text-gray-500">meses</span>
+          </div>
+          <p className={`mt-1 text-[11px] ${prazoValido ? 'text-gray-400' : 'text-red-600'}`}>
+            {!prazoValido
+              ? 'Informe um número inteiro de meses.'
+              : p?.tempo_assinatura_registro_sugerido !== null && p?.tempo_assinatura_registro_sugerido !== undefined
+                ? `Sugestão: ${p.tempo_assinatura_registro_sugerido} (DFC › Parâmetros)`
+                : 'Informe aqui (na DFC é digitado)'}
+          </p>
+        </Campo>
         <L rotulo="Unidades no Geral" valor={u ? String(u.total) : null} dica="Sem o contrato da construtora" />
         <L rotulo="Registradas até a última liberação" valor={u ? `${u.registradas.qtd} unidade(s)` : null} dica="Base da Medição" />
         <L rotulo="VGF de medição registrado" valor={u ? moeda(u.registradas.vgf_medicao) : null} dica="Financiamento − terreno + subsídio" />
