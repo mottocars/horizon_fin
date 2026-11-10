@@ -4,6 +4,7 @@ import { Plus, ReceiptText } from 'lucide-react';
 import Card from '../../components/Card';
 import Tabs from '../../components/Tabs';
 import SearchableSelect from '../../components/SearchableSelect';
+import CampoData from '../../components/CampoData';
 import { listEmpresas } from '../../api/empresas.api';
 import { nomeExibicaoEmpresa } from '../../utils/empresa';
 import { useEmpresaTravada } from '../../hooks/useEmpresaTravada';
@@ -77,22 +78,20 @@ export default function ContasPagarReceberPage() {
             </div>
             <div className="sm:w-40">
               <label className="mb-1 block text-sm font-medium text-gray-700">Data início</label>
-              <input
-                type="date"
+              <CampoData
                 value={inicio}
                 max={fim || undefined}
-                onChange={(e) => e.target.value && atualizarParams({ de: e.target.value })}
+                onChange={(v) => atualizarParams({ de: v })}
                 disabled={semEmpresa}
                 className={INPUT_DATA}
               />
             </div>
             <div className="sm:w-40">
               <label className="mb-1 block text-sm font-medium text-gray-700">Data fim</label>
-              <input
-                type="date"
+              <CampoData
                 value={fim}
                 min={inicio || undefined}
-                onChange={(e) => e.target.value && atualizarParams({ ate: e.target.value })}
+                onChange={(v) => atualizarParams({ ate: v })}
                 disabled={semEmpresa}
                 className={INPUT_DATA}
               />

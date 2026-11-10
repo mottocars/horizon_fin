@@ -2,6 +2,7 @@ import { useEffect, useMemo, useState } from 'react';
 import { CircleCheck, ReceiptText, Undo2 } from 'lucide-react';
 import Modal from '../../components/Modal';
 import Button from '../../components/Button';
+import CampoData from '../../components/CampoData';
 import { useConfirm } from '../../confirm/ConfirmContext';
 import { hojeISO } from '../../utils/datas';
 import { baixarParcela, estornarBaixa, listarTitulos } from '../../api/contasPagarReceber.api';
@@ -217,7 +218,7 @@ function BaixaModal({ empresaId, linha, onClose, onBaixado }) {
       <div className="grid grid-cols-2 gap-3">
         <label className="block">
           <span className="mb-1 block text-sm font-medium text-gray-700">Data da baixa</span>
-          <input type="date" value={dataBaixa} onChange={(e) => setDataBaixa(e.target.value)} className={INPUT} />
+          <CampoData value={dataBaixa} onChange={setDataBaixa} className={INPUT} />
         </label>
         <label className="block">
           <span className="mb-1 block text-sm font-medium text-gray-700">Valor</span>

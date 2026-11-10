@@ -4,6 +4,7 @@ import Modal from '../../components/Modal';
 import Button from '../../components/Button';
 import Tabs from '../../components/Tabs';
 import SearchableSelect from '../../components/SearchableSelect';
+import CampoData from '../../components/CampoData';
 import { useConfirm } from '../../confirm/ConfirmContext';
 import { hojeISO } from '../../utils/datas';
 import { alterarTitulo, criarTitulo, excluirTitulo, obterTitulo, opcoesContasPagarReceber } from '../../api/contasPagarReceber.api';
@@ -307,7 +308,7 @@ export default function TituloModal({ empresaId, id = null, onClose, onSalvo }) 
                         </div>
                       </Campo>
                       <Campo rotulo="Emissão">
-                        <input type="date" value={form.data_emissao} onChange={(e) => mudar('data_emissao')(e.target.value)} disabled={travado} className={INPUT} />
+                        <CampoData value={form.data_emissao} onChange={mudar('data_emissao')} disabled={travado} className={INPUT} />
                       </Campo>
                       <Campo rotulo={form.tipo === 'PAGAR' ? 'Fornecedor' : 'Cliente'} className="md:col-span-2">
                         <SearchableSelect
@@ -460,7 +461,7 @@ export default function TituloModal({ empresaId, id = null, onClose, onSalvo }) 
                       />
                     </Campo>
                     <Campo rotulo="1º vencimento">
-                      <input type="date" value={primeiroVenc} onChange={(e) => mudarPrimeiroVenc(e.target.value)} disabled={travado} className={INPUT} />
+                      <CampoData value={primeiroVenc} onChange={mudarPrimeiroVenc} disabled={travado} className={INPUT} />
                     </Campo>
                   </div>
                   <div className="max-h-64 overflow-y-auto rounded-lg ring-1 ring-gray-200">
@@ -480,10 +481,9 @@ export default function TituloModal({ empresaId, id = null, onClose, onSalvo }) 
                               {i + 1}/{parcelas.length}
                             </td>
                             <td className="px-3 py-1.5">
-                              <input
-                                type="date"
+                              <CampoData
                                 value={p.vencimento}
-                                onChange={(e) => mudarParcela(i, 'vencimento', e.target.value)}
+                                onChange={(v) => mudarParcela(i, 'vencimento', v)}
                                 disabled={travado}
                                 aria-label={`Vencimento da parcela ${i + 1}`}
                                 className={`${INPUT} max-w-44 !py-1.5`}
