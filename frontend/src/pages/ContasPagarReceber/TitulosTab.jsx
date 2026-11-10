@@ -104,6 +104,7 @@ export default function TitulosTab({ empresaId, inicio, fim, versao, onAbrir }) 
                   <th className="py-2.5 pr-3 font-medium">Tipo</th>
                   <th className="py-2.5 pr-3 font-medium">Fornecedor / Cliente</th>
                   <th className="py-2.5 pr-3 font-medium">Centro de custo</th>
+                  <th className="py-2.5 pr-3 font-medium">Plano de contas</th>
                   <th className="py-2.5 pr-3 text-right font-medium">Valor</th>
                   <th className="py-2.5 pl-6 pr-3 font-medium">Situação</th>
                   <th className="w-12 py-2.5 pr-4" />
@@ -129,6 +130,12 @@ export default function TitulosTab({ empresaId, inicio, fim, versao, onAbrir }) 
                       <td className="max-w-[240px] truncate py-1.5 pr-3 text-xs text-gray-700" title={l.centros.join(', ')}>
                         {l.centros[0] || '—'}
                         {l.centros.length > 1 && <span className="ml-1 text-gray-400">+{l.centros.length - 1}</span>}
+                      </td>
+                      <td className="max-w-[260px] py-1.5 pr-3 text-xs text-gray-700" title={l.naturezas.join('\n')}>
+                        <span className="flex min-w-0 items-center">
+                          <span className="truncate">{l.naturezas[0] || '—'}</span>
+                          {l.naturezas.length > 1 && <span className="ml-1 shrink-0 text-gray-400">+{l.naturezas.length - 1}</span>}
+                        </span>
                       </td>
                       <td className="py-1.5 pr-3 text-right font-semibold tabular-nums text-gray-900">{moeda(l.valor)}</td>
                       <td className="py-1.5 pl-6 pr-3 text-xs">

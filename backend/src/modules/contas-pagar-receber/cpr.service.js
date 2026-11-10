@@ -76,13 +76,15 @@ async function listar(empresaId, inicio, fim) {
     `SELECT p.id AS parcela_id, p.numero, p.vencimento, p.valor, p.data_baixa, p.valor_baixa,
             t.id AS titulo_id, t.tipo, t.tipo_documento, t.pessoa_nome, t.documento, t.historico,
             (SELECT count(*)::int FROM cpr_parcelas x WHERE x.titulo_id = t.id) AS total_parcelas,
-            r.centros
+            r.centros, r.naturezas
        FROM cpr_parcelas p
        JOIN cpr_titulos t ON t.id = p.titulo_id
        LEFT JOIN LATERAL (
-         SELECT array_agg(DISTINCT COALESCE(NULLIF(c.apelido, ''), c.name, ra.centro_id::text)) AS centros
+         SELECT array_agg(DISTINCT COALESCE(NULLIF(c.apelido, ''), c.name, ra.centro_id::text)) AS centros,
+                array_agg(DISTINCT ra.natureza_id || COALESCE(' ' || pf.name, '')) AS naturezas
            FROM cpr_rateios ra
            LEFT JOIN centros_custo_sienge c ON c.empresa_id = t.empresa_id AND c.sienge_id = ra.centro_id
+           LEFT JOIN planos_financeiros_sienge pf ON pf.empresa_id = t.empresa_id AND pf.sienge_id::text = ra.natureza_id
           WHERE ra.titulo_id = t.id
        ) r ON TRUE
       WHERE t.empresa_id = $1 AND p.vencimento BETWEEN $2 AND $3
@@ -94,6 +96,7 @@ async function listar(empresaId, inicio, fim) {
     valor: Number(r.valor),
     valor_baixa: r.valor_baixa === null ? null : Number(r.valor_baixa),
     centros: r.centros || [],
+    naturezas: r.naturezas || [],
   }));
 }
 
