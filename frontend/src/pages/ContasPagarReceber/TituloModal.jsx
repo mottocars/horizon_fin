@@ -244,7 +244,7 @@ export default function TituloModal({ empresaId, id = null, onClose, onSalvo }) 
   const abaVisivel = financeiro ? aba : 'cabecalho';
 
   return (
-    <Modal open onClose={onClose} title={id ? 'Título' : 'Novo título'} maxWidthClass="max-w-5xl">
+    <Modal open onClose={onClose} title={id ? `Título ${String(id).padStart(5, '0')}` : 'Novo título'} maxWidthClass="max-w-5xl">
       {erro ? (
         <div className="flex items-center gap-2 rounded-lg bg-red-50 px-3 py-2 text-sm text-red-600">
           <TriangleAlert size={15} className="shrink-0" />

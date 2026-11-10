@@ -98,7 +98,8 @@ export default function TitulosTab({ empresaId, inicio, fim, versao, onAbrir }) 
             <table className="w-full min-w-[900px] text-left text-sm">
               <thead>
                 <tr className={CABECALHO}>
-                  <th className="py-2.5 pl-4 pr-3 font-medium">Vencimento</th>
+                  <th className="py-2.5 pl-4 pr-3 font-medium">Título</th>
+                  <th className="py-2.5 pr-3 font-medium">Vencimento</th>
                   <th className="py-2.5 pr-3 font-medium">Tipo</th>
                   <th className="py-2.5 pr-3 font-medium">Fornecedor / Cliente</th>
                   <th className="py-2.5 pr-3 font-medium">Parcela</th>
@@ -114,15 +115,13 @@ export default function TitulosTab({ empresaId, inicio, fim, versao, onAbrir }) 
                   const vencido = !l.data_baixa && l.vencimento < hoje;
                   return (
                     <tr key={l.parcela_id} onClick={() => onAbrir(l.titulo_id)} className="cursor-pointer border-b border-gray-100 hover:bg-gray-50">
-                      <td className="py-3 pl-4 pr-3 tabular-nums text-gray-700">{data(l.vencimento)}</td>
+                      <td className="py-3 pl-4 pr-3 font-medium tabular-nums text-gray-900">{String(l.titulo_id).padStart(5, '0')}</td>
+                      <td className="py-3 pr-3 tabular-nums text-gray-700">{data(l.vencimento)}</td>
                       <td className="py-3 pr-3">
                         <span className={`inline-flex whitespace-nowrap rounded-full px-2 py-0.5 text-[11px] font-medium ${tipo.cor}`}>{tipo.rotulo}</span>
                       </td>
                       <td className="max-w-[320px] py-3 pr-3">
                         <span className="block truncate font-semibold text-gray-900">{l.pessoa_nome || '—'}</span>
-                        <span className="block truncate text-xs text-gray-500" title={l.historico || undefined}>
-                          {[l.documento, l.historico].filter(Boolean).join(' · ') || 'Financeiro'}
-                        </span>
                       </td>
                       <td className="py-3 pr-3 tabular-nums text-gray-700">
                         {l.numero}/{l.total_parcelas}
