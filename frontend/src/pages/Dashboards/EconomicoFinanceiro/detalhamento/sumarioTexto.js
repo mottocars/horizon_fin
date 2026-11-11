@@ -26,7 +26,7 @@ export const ABAS_SUMARIO = [
       {
         titulo: 'Entradas, saídas e o que fica de fora',
         itens: [
-          '**Entradas** = contas a receber (recebido e a receber) + créditos do banco sem título. **Saídas** = contas a pagar (pago e a pagar) + débitos do banco sem título, como as tarifas. Descontos e tarifas lançados num recebimento ficam nele; retenções lançadas num pagamento, no pagamento.',
+          '**Realizado**: o **tipo** do lançamento no extrato do Sienge decide: *Expense* é **saída**, qualquer outro é **entrada** — inclusive o que o Sienge lança como "Recebimento" dentro de um pagamento (ISS retido, caução, desconto). **Em aberto**: contas a receber são entradas e contas a pagar, saídas.',
           '**Tudo o que foi realizado entra**: transferências entre contas, aplicações/resgates, recibos do caixa e os demais lançamentos do extrato, com ou sem título (bill_id). Só a inicialização de saldo do Sienge fica de fora — não é entrada nem saída.',
         ],
       },

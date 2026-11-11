@@ -63,7 +63,7 @@ async function painel(empresaId, { de, ate }) {
       [empresaId]
     ),
     pool.query(
-      `SELECT e.registro_id AS i, e.date AS d, e.company_id, e.numero_conta, e.statement_origin AS o, e.statement_type AS st,
+      `SELECT e.registro_id AS i, e.date AS d, e.company_id, e.numero_conta, e.statement_origin AS o, e.statement_type AS st, e.type AS ty,
               e.bill_id AS b, e.installment_number AS p, NULLIF(trim(e.document_id), '') AS doc,
               NULLIF(trim(e.document_number), '') AS n, e.description AS ds
          FROM sie_extrato_contas e ${CONTAS_DFC('e')}
@@ -131,6 +131,7 @@ async function painel(empresaId, { de, ate }) {
       if (t?.q !== null && t?.q !== undefined) L.q = t.q;
       if (t?.vc) L.vc = t.vc;
     }
+    if (r.ty) L.ty = r.ty; // Income / Expense: define se é entrada ou saída
     if (r.doc) L.doc = r.doc;
     if (r.n) L.n = r.n;
     // Descrição só quando diz algo além do nome da pessoa (nos títulos costuma ser o próprio nome).

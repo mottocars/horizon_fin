@@ -4,8 +4,8 @@
 // - REALIZADO: cada lançamento do extrato das contas com "Projeta DFC", no rateio do realizado do DFC;
 // - EM ABERTO: as parcelas do Aging List que vencem no período (saldo corrigido, sem previsões);
 // - TOTAL = realizado + em aberto — o resultado do período se tudo o que está em aberto acontecer.
-// Entradas = contas a receber (recebido e a receber) + créditos do banco sem título; saídas = contas a pagar
-// (pago e a pagar) + débitos do banco sem título (tarifas…). TUDO o que foi realizado na conta entra —
+// Realizado: type do extrato = Expense é saída, o resto é entrada (inclusive o "Recebimento" lançado dentro de um
+// pagamento — ISS retido, caução, desconto). Em aberto: a receber = entrada, a pagar = saída. TUDO o que foi realizado na conta entra —
 // inclusive transferências entre contas, aplicações/resgates, recibos do caixa e demais lançamentos sem título
 // (pedido do usuário, 11/11/2026). Só a inicialização de saldo do Sienge fica de fora (não é fluxo).
 import { brl, eixo, lbl, nf0, pct, soma, titulo } from '../fluxo/modelo';
@@ -48,8 +48,9 @@ export function preparar(d) {
     if (L.ini) return;
     L.f.forEach(([centro, nat, valor, m2]) => {
       const M = m2 === null || m2 === undefined ? null : n2.get(m2) || null;
-      // Lado pela origem (como no Aging: receber × pagar); sem título, pelo sinal.
-      const lado = L.o === 'CR' ? 'e' : L.o === 'CP' ? 's' : valor >= 0 ? 'e' : 's';
+      // Realizado: quem define é o type do extrato do Sienge — Expense = saída; qualquer outro (Income…) = entrada —,
+      // inclusive o "Recebimento" lançado dentro de um pagamento (ISS retido, caução, desconto).
+      const lado = L.ty === 'Expense' ? 's' : 'e';
       pecas.push({ tipo: 'R', L, lado, valor, centro, nat, m2: M, mes: L.mes, data: L.d, interno: !!M?.interno });
     });
   });
