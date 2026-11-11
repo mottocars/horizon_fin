@@ -78,24 +78,37 @@ function montarObra(obra, meses, mesAtual) {
   const a = Math.max(0, Math.min(ini - 1, iAtual >= 0 ? iAtual : Infinity));
   const b = Math.min(meses.length - 1, Math.max(fim, iAtual));
 
+  const rows = meses.slice(a, b + 1).map((m) => ({
+    mes: m,
+    // Caixa só até o último mês liberado (depois disso ela não informou nada novo).
+    caixa: caixa && m <= ultimoLib && m <= mesAtual ? ate100(caixa[m]) : null,
+    primaria: series.primaria ? ate100(series.primaria[m]) : null,
+    secundaria: series.secundaria ? ate100(series.secundaria[m]) : null,
+  }));
+  // Curva que chega a 100% para ali (pedido do usuário): o mês em que chega vira 100% exatos e os
+  // seguintes ficam sem valor; `cem` guarda esse mês (índice em rows) para a bandeirinha do gráfico.
+  const cem = {};
+  ['caixa', 'primaria', 'secundaria'].forEach((chave) => {
+    const i = rows.findIndex((r) => r[chave] >= 99.95);
+    if (i < 0) return;
+    cem[chave] = i;
+    rows[i][chave] = 100;
+    for (let k = i + 1; k < rows.length; k++) rows[k][chave] = null;
+  });
+
   return {
     id: obra.sienge_id,
     nome: obra.name,
     mesAtual,
     ultimoLib,
+    cem,
     tem: { caixa: Boolean(caixa), primaria: Boolean(series.primaria), secundaria: Boolean(series.secundaria) },
     hoje: {
       caixa: caixa ? ate100(caixa[mesAtual]) : null,
       primaria: series.primaria ? ate100(series.primaria[mesAtual]) : null,
       secundaria: series.secundaria ? ate100(series.secundaria[mesAtual]) : null,
     },
-    rows: meses.slice(a, b + 1).map((m) => ({
-      mes: m,
-      // Caixa só até o último mês liberado (depois disso ela não informou nada novo).
-      caixa: caixa && m <= ultimoLib && m <= mesAtual ? ate100(caixa[m]) : null,
-      primaria: series.primaria ? ate100(series.primaria[m]) : null,
-      secundaria: series.secundaria ? ate100(series.secundaria[m]) : null,
-    })),
+    rows,
   };
 }
 
@@ -145,7 +158,7 @@ function GraficoObra({ c }) {
   const [ref, W] = useLargura(480);
   const { mostrar, esconder } = useDica();
   const H = 260;
-  const m = { l: 44, r: 16, t: 14, b: 30 };
+  const m = { l: 44, r: 16, t: 24, b: 30 }; // em cima, espaço para a bandeirinha dos 100%
   const { rows } = c;
   const n = rows.length;
   const x = (i) => m.l + ((W - m.l - m.r) * i) / Math.max(1, n - 1);
@@ -154,7 +167,7 @@ function GraficoObra({ c }) {
   const iNow = rows.findIndex((r) => r.mes === c.mesAtual);
   // Meses no eixo: um a cada `passo` (uns 60 px entre rótulos), sempre o primeiro e o último.
   const passo = Math.max(1, Math.ceil(60 / Math.max(1, w)));
-  const marcas = rows.map((_, i) => i).filter((i) => i % passo === 0 && x(n - 1) - x(i) > 44);
+  const marcas = rows.map((_, i) => i).filter((i) => i % passo === 0 && x(n - 1) - x(i) > 58);
   marcas.push(n - 1);
   const linha = (chave) =>
     rows
@@ -189,6 +202,20 @@ function GraficoObra({ c }) {
         {SERIES.filter((s) => c.tem[s.chave]).map((s) => (
           <path key={s.chave} d={linha(s.chave)} fill="none" stroke={s.cor} strokeWidth={2.2} strokeLinejoin="round" />
         ))}
+        {/* Bandeirinha onde a curva chega a 100% (e para); duas no mesmo mês ficam lado a lado, a
+            segunda à esquerda (não sai do gráfico quando é o último mês). */}
+        {SERIES.filter((s) => c.cem[s.chave] !== undefined).map((s, k, lista) => {
+          const i = c.cem[s.chave];
+          const lado = lista.slice(0, k).filter((o) => c.cem[o.chave] === i).length;
+          return (
+            <g key={`cem-${s.chave}`} transform={`translate(${x(i) - lado * 12},${y(100)})`}>
+              <title>{`${s.curto}: 100% em ${lbl(rows[i].mes)}`}</title>
+              <line x1={0} y1={0} x2={0} y2={-15} stroke={s.cor} strokeWidth={1.5} />
+              <path d="M0,-15 L9,-11.5 L0,-8 Z" fill={s.cor} />
+              <circle r={3} fill={s.cor} stroke={COR.surface} strokeWidth={1.5} />
+            </g>
+          );
+        })}
         {iNow >= 0 &&
           SERIES.filter((s) => !vazio(rows[iNow][s.chave])).map((s) => (
             <circle key={s.chave} cx={x(iNow)} cy={y(rows[iNow][s.chave])} r={4} fill={s.cor} stroke={COR.surface} strokeWidth={2} />
