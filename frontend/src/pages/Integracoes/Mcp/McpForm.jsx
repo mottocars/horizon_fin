@@ -1,6 +1,6 @@
 import { useEffect, useState } from 'react';
 import { useNavigate, useParams } from 'react-router-dom';
-import { ArrowLeft, Copy, Check, RefreshCw, LogOut, ShieldCheck, Users, Search } from 'lucide-react';
+import { ArrowLeft, Copy, Check, RefreshCw, LogOut, ShieldCheck, Users, Search, Info } from 'lucide-react';
 import Card from '../../../components/Card';
 import Button from '../../../components/Button';
 import IconButton from '../../../components/IconButton';
@@ -38,6 +38,32 @@ import { MODULOS, alternarModulo } from '../../../config/mcpModulos';
 // Z-API) — este formulário só coleta Empresa + Nome do conector. Depois de
 // salvo, mostra a URL de conexão pronta pra colar no "Add custom connector"
 // do Claude — nunca o token separado da URL (ver plano).
+// Descrição do módulo num balão: abre ao passar o mouse ou ao clicar no "i" (clicar fora fecha).
+function InfoModulo({ texto }) {
+  const [aberto, setAberto] = useState(false);
+  return (
+    <span className="group relative inline-flex" onMouseLeave={() => setAberto(false)}>
+      <button
+        type="button"
+        aria-label="Sobre este módulo"
+        onClick={() => setAberto((v) => !v)}
+        onBlur={() => setAberto(false)}
+        className="rounded-full p-0.5 text-gray-400 hover:text-primary-600 focus:outline-none focus-visible:ring-2 focus-visible:ring-primary-100"
+      >
+        <Info size={14} />
+      </button>
+      <span
+        role="tooltip"
+        className={`absolute left-0 top-full z-20 mt-1 w-80 max-w-[80vw] rounded-lg border border-gray-200 bg-white px-3 py-2 text-xs font-normal leading-relaxed text-gray-600 shadow-lg ${
+          aberto ? 'block' : 'hidden group-hover:block'
+        }`}
+      >
+        {texto}
+      </span>
+    </span>
+  );
+}
+
 // Usuários liberados no conector: colaboradores ativos da empresa (MASTER pode sempre e não aparece).
 // No conector Horizon, cada um recebe só os módulos das telas que tem (`u.modulos`, vindo do backend):
 // sem nenhum dos módulos marcados não consegue entrar — fica desabilitado.
@@ -415,24 +441,21 @@ export default function McpForm() {
 
             <div className="rounded-lg border border-gray-200 p-4">
               <p className="mb-3 text-xs font-medium uppercase tracking-wide text-gray-400">Módulos do conector</p>
-              <div className="space-y-3">
+              <div className="space-y-2.5">
                 {MODULOS.map((op) => (
-                  <label key={op.codigo} className={`flex items-start gap-3 ${travaEscopo ? 'cursor-not-allowed opacity-80' : 'cursor-pointer'}`}>
-                    <input
-                      type="checkbox"
-                      checked={form.modulos.includes(op.codigo)}
-                      disabled={travaEscopo}
-                      onChange={() => handleChange('modulos', alternarModulo(form.modulos, op.codigo))}
-                      className="mt-0.5 h-4 w-4 rounded border-gray-300 text-primary-600 focus:ring-primary-500"
-                    />
-                    <span>
-                      <span className="block text-sm font-semibold text-gray-900">{op.titulo}</span>
-                      <span className="block text-xs text-gray-500">
-                        {op.descricao}
-                        {travaEscopo ? ' Definido na criação do conector.' : ''}
-                      </span>
-                    </span>
-                  </label>
+                  <div key={op.codigo} className="flex items-center gap-1.5">
+                    <label className={`flex items-center gap-3 ${travaEscopo ? 'cursor-not-allowed opacity-80' : 'cursor-pointer'}`}>
+                      <input
+                        type="checkbox"
+                        checked={form.modulos.includes(op.codigo)}
+                        disabled={travaEscopo}
+                        onChange={() => handleChange('modulos', alternarModulo(form.modulos, op.codigo))}
+                        className="h-4 w-4 shrink-0 rounded border-gray-300 text-primary-600 focus:ring-primary-500"
+                      />
+                      <span className="text-sm font-semibold text-gray-900">{op.titulo}</span>
+                    </label>
+                    <InfoModulo texto={`${op.descricao}${travaEscopo ? ' Definido na criação do conector.' : ''}`} />
+                  </div>
                 ))}
               </div>
               {fieldErrors.modulos && <p className="mt-2 text-xs text-red-600">{fieldErrors.modulos}</p>}
