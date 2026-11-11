@@ -1,10 +1,11 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { useSearchParams } from 'react-router-dom';
-import { ChartGantt, Download, House, Loader2, LocateFixed, Maximize2, Minimize2, X } from 'lucide-react';
+import { ChartGantt, Download, House, Loader2, LocateFixed, Maximize2, Minimize2, TrendingUp, X } from 'lucide-react';
 import CabecalhoDashboard from '../CabecalhoDashboard';
 import ControlesDashboard from '../ControlesDashboard';
 import CapaDashboard from '../capa/CapaDashboard';
 import engenheiro from '../../../assets/dashboards/engenheiro-obras.webp';
+import AvancoObras from './AvancoObras';
 import { listEmpresas } from '../../../api/empresas.api';
 import { exportarCronogramaExcel, listCronogramaCentros } from '../../../api/cronogramaCentros.api';
 import { nomeExibicaoEmpresa } from '../../../utils/empresa';
@@ -36,9 +37,9 @@ import '../EconomicoFinanceiro/fluxo/painel.css';
 import './cronogramas.css';
 
 // Dashboards > Obra 360º (ex-Cronogramas de Obras; pedido do usuário): abre na capa laranja com o
-// engenheiro (CapaDashboard, como a do Econômico/Financeiro) e o menu de telas aberto; a outra tela é
-// a Carteira de obras (?tela=carteira). Sem tela favorita: a rota de favoritas do servidor só atende o
-// Econômico/Financeiro.
+// engenheiro (CapaDashboard, como a do Econômico/Financeiro) e o menu de telas aberto; as outras telas
+// são a Carteira de obras (?tela=carteira) e o Avanço das Obras (?tela=avancos, AvancoObras.jsx). Sem
+// tela favorita: a rota de favoritas do servidor só atende o Econômico/Financeiro.
 //
 // Carteira de obras: no layout do Econômico Financeiro — tela
 // inteira, cabeçalho dos dashboards, barra de controles e os cards (CardsCarteira, no estilo .tile
@@ -463,6 +464,7 @@ const NOME = 'Obra 360º';
 const TELAS = [
   { id: 'home', label: 'Home', icon: House },
   { id: 'carteira', label: 'Carteira de obras', icon: ChartGantt },
+  { id: 'avancos', label: 'Avanço das Obras', icon: TrendingUp },
 ];
 
 export default function CronogramasObrasDashboard() {
@@ -488,6 +490,8 @@ export default function CronogramasObrasDashboard() {
         <div className="h-full w-full">
           <CapaDashboard imagem={engenheiro} nome={NOME} tema="laranja" />
         </div>
+      ) : telaAtiva === 'avancos' ? (
+        <AvancoObras nome={NOME} />
       ) : (
         <CarteiraObras />
       )}

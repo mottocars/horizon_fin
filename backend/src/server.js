@@ -219,7 +219,8 @@ app.use('/api/dfc-mascaras', exigirTela([T.DFC], LEITURA_DASHBOARD), dfcMascaras
 app.use('/api/dfc-parametros', exigirTela([T.DFC]), dfcParametrosRoutes);
 app.use('/api/dfc-centros', exigirTela([T.DFC]), dfcCentrosRoutes);
 app.use('/api/dfc-plano-contas', exigirTela([T.DFC], LEITURA_DASHBOARD), dfcPlanoContasRoutes);
-app.use('/api/dfc-avancos', exigirTela([T.DFC]), dfcAvancosRoutes);
+// Leitura também pro dashboard Obra 360º › Avanço das Obras (o espelho da aba Avanços Obras).
+app.use('/api/dfc-avancos', exigirTela([T.DFC], [T.DASH_CRONOGRAMAS]), dfcAvancosRoutes);
 app.use('/api/dfc-repasses', exigirTela([T.DFC]), dfcRepassesRoutes);
 app.use('/api/dfc-projecao-cef', exigirTela([T.DFC]), dfcProjecaoCefRoutes);
 app.use('/api/dfc-orcamento-informado', exigirTela([T.DFC]), dfcOrcamentoInformadoRoutes);
