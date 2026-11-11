@@ -36,6 +36,14 @@ const MODULOS = {
     tela: T.DRE,
     telas: [T.DRE, T.ECONOMICO_FINANCEIRO],
   },
+  // Quem tem a Gestão de Cobranças OU o relatório Desempenho da Cobrança.
+  COBRANCA: {
+    titulo: 'GESTÃO DE COBRANÇAS',
+    descricao:
+      'Leitura da Gestão de Cobranças e do relatório Desempenho da Cobrança: todas as regras (Motor de Risco, clusters, régua, Rotina, comunicação, distribuição), cada cliente e parcela, a Rotina, a distribuição, os atendentes e o que aconteceu.',
+    tela: T.COBRANCAS,
+    telas: [T.COBRANCAS, T.REL_DESEMPENHO_COBRANCA],
+  },
 };
 
 const CODIGOS = Object.keys(MODULOS);

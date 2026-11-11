@@ -42,6 +42,14 @@ export const MODULOS = [
     descricao:
       'Leitura da DRE como um CFO: a demonstração por período, centro e mês; como cada número foi calculado (POC de Receita e de Despesa, base × fator, avanço de obra × vendas novas, os lançamentos, contratos e parcelas que formam a base); a POC de cada obra e o resultado a apropriar; a auditoria (conferências, alertas, o que ficou fora da DRE); o dashboard Demonstração do Resultado e o simulador de cenários. Para quem tem o DRE Gerencial ou o dashboard Econômico Financeiro.',
   },
+  {
+    codigo: 'COBRANCA',
+    titulo: 'GESTÃO DE COBRANÇAS',
+    curto: 'Cobranças',
+    cor: 'bg-rose-50 text-rose-700',
+    descricao:
+      'Leitura da Gestão de Cobranças e do relatório Desempenho da Cobrança: todas as regras (quais parcelas entram, Motor de Risco e score, clusters e Inadimplência, régua por cluster, Rotina do dia, tipos de comunicação e envio, distribuição entre atendentes); por que cada cliente está no cluster; a vida de cada parcela (etapas, dono em cada uma, o que foi feito e o que faltou); a Rotina de qualquer dia; a distribuição e as carteiras; a Gestão das Parcelas; o relatório por atendente; e o que aconteceu num período (contatos, falhas de envio, distribuições, recálculos, alterações, Monitor). Para quem tem a Gestão de Cobranças ou o relatório.',
+  },
 ];
 
 // Marca/desmarca um módulo mantendo as dependências (Altera Orçamento liga o DFC; desligar o DFC

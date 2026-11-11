@@ -754,4 +754,6 @@ module.exports = {
   getEtapasPorCluster,
   listParcelas,
   listParcelasCliente,
+  // base dos Níveis 1/2 — reaproveitada pelo módulo GESTÃO DE COBRANÇAS do MCP (integracoes-mcp/cobranca)
+  buscarParcelasComCluster,
 };

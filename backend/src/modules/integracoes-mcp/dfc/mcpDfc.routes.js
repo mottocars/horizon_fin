@@ -7,6 +7,7 @@ const { registrarToolsDfc } = require('./tools');
 const { TOOLS_SALDOS } = require('../saldos/tools');
 const { TOOLS_AGING } = require('../aging/tools');
 const { TOOLS_DRE } = require('../dre');
+const { TOOLS_COBRANCA } = require('../cobranca');
 const T = require('../../../config/telas');
 
 // MCP do conector Horizon (/api/mcp/dfc/:token — o caminho "dfc" ficou dos conectores já criados). O
@@ -43,6 +44,14 @@ const INSTRUCOES = {
     'Orçamentos de uma versão ou rascunhos: dre_projecao_orcamentos; premissas de um centro (vendas, naturezas por Origem Projeção, correção): dre_projecao_premissas; ' +
     '"como esse projetado foi criado?": dre_projecao_explicar; Realizado × Projetado com o Desvio % da tela: dre_projecao_desvio; conferências e alertas da projeção: dre_projecao_auditoria. ' +
     'Período padrão: 1º de janeiro do ano até hoje; datas AAAA-MM-DD; valores em R$ com sinal (despesa negativa). Responda como um CFO: mostre a conta e dê exemplos.',
+  COBRANCA:
+    'Gestão de Cobranças (Operações › Gestão de Cobranças) e relatório Desempenho da Cobrança (Relatórios), só leitura: comece por cobranca_guia — TODAS as regras ' +
+    '(quais parcelas entram, Motor de Risco e score, clusters e Inadimplência, régua por cluster, Rotina do dia, tipos de comunicação e envio real, distribuição entre atendentes, ' +
+    'Gestão das Parcelas, relatório) com a configuração desta empresa ao vivo e os pontos de atenção. Configuração completa: cobranca_configuracao. Clusters: cobranca_clusters; ' +
+    'um cliente (por que está no cluster, parcelas, contatos, distribuição): cobranca_cliente; uma parcela (etapas, dono em cada uma, o que foi feito e o que faltou): cobranca_parcela; ' +
+    'Rotina de um dia: cobranca_rotina; distribuição e atendentes: cobranca_distribuicao; Gestão das Parcelas: cobranca_carteira; relatório Desempenho da Cobrança: cobranca_desempenho; ' +
+    '"o que aconteceu" num período (contatos, falhas de envio, distribuições, recálculos, alterações, Monitor): cobranca_o_que_aconteceu; o resto: cobranca_descrever_tabelas + cobranca_consultar_sql. ' +
+    'Datas AAAA-MM-DD; sem período = do dia 1º do mês até hoje. Responda como um gestor de cobrança: cite a regra, mostre a conta e dê exemplos com os dados.',
 };
 
 // Ferramentas de só leitura no formato { name, description, inputSchema, handler(empresaId, ctx) }.
@@ -57,6 +66,7 @@ function registrarTools(server, empresaId, modulos, ctx) {
   if (modulos.includes('SALDOS_CONTAS')) registrarLeitura(server, empresaId, TOOLS_SALDOS, ctx);
   if (modulos.includes('AGING')) registrarLeitura(server, empresaId, TOOLS_AGING, ctx);
   if (modulos.includes('DRE')) registrarLeitura(server, empresaId, TOOLS_DRE, ctx);
+  if (modulos.includes('COBRANCA')) registrarLeitura(server, empresaId, TOOLS_COBRANCA, ctx);
 }
 
 const router = Router();
