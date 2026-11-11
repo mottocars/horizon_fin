@@ -9,8 +9,7 @@ const {
 } = require('../regua-cobranca/reguaCobranca.service');
 const usuariosService = require('../usuarios/usuarios.service');
 const distribuicao = require('../regua-cobranca/distribuicao.service');
-const T = require('../../config/telas');
-const { ehAdministradorDaTela } = require('../../middlewares/acesso.middleware');
+const { ehAdministradorCobranca } = require('../cobranca-acesso/cobrancaAcesso.service');
 
 const CLUSTERS_VALIDOS = ['novo', 'bom', 'duvidoso', 'mau', 'inad'];
 const ORIGIN_ID_PADRAO = 'CO';
@@ -50,11 +49,10 @@ function paraIso(data) {
   return data.toISOString().slice(0, 10);
 }
 
-// Master e Administrador da Gestão de Cobranças (nível da tela, no cadastro
-// do usuário) enxergam a rotina de qualquer usuário desta empresa — pra
-// acompanhar o time ou ver a rotina de quem ele supervisiona — e também a
-// de TODOS de uma vez (`'todos'`, agrupada por responsável, pra ver a carteira
-// e os títulos de cada atendente lado a lado). Nível Comum só vê a própria:
+// Master e o Usuário Administrador da Gestão de Cobranças desta empresa (aba
+// Configurações — ver cobranca-acesso) enxergam a rotina de qualquer usuário
+// desta empresa — pra acompanhar o time — e também a de TODOS de uma vez
+// (`'todos'`, agrupada por responsável). O Comum só vê a própria:
 // `usuarioIdFiltro` é ignorado pra ele, nunca um jeito de espiar a rotina de
 // outra pessoa. O alvo escolhido precisa realmente ter esta empresa
 // vinculada e não ser Master (mesma regra de
@@ -63,14 +61,7 @@ function paraIso(data) {
 // própria de verdade).
 async function resolverUsuarioAlvo(empresaId, solicitanteId, usuarioIdFiltro) {
   const solicitante = await usuariosService.getById(solicitanteId);
-  const podeFiltrar = ehAdministradorDaTela(
-    solicitante && {
-      permissao: solicitante.permissao,
-      telas: solicitante.telas_permitidas,
-      telasAdministrador: solicitante.telas_administrador,
-    },
-    T.COBRANCAS
-  );
+  const podeFiltrar = await ehAdministradorCobranca(solicitante && { id: solicitante.id, permissao: solicitante.permissao }, empresaId);
   if (!podeFiltrar || !usuarioIdFiltro) return solicitanteId;
   if (usuarioIdFiltro === 'todos') return 'todos';
 

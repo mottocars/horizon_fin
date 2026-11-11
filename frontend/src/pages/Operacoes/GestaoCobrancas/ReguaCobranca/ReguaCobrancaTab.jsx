@@ -1,6 +1,6 @@
 import { useCallback, useEffect, useState } from 'react';
 import { useSearchParams } from 'react-router-dom';
-import { AlertTriangle, Settings } from 'lucide-react';
+import { AlertTriangle } from 'lucide-react';
 import Card from '../../../../components/Card';
 import {
   atualizarEtapaReguaCobranca,
@@ -15,13 +15,6 @@ import { listTemplatesComunicacao } from '../../../../api/comunicacao.api';
 import { CLUSTERS, CLUSTER_ICON, CLUSTER_ICON_COR, CLUSTER_TAB_ATIVA, compararDias } from './constantes';
 import ReguaVisual from './ReguaVisual';
 import EtapasTabela from './EtapasTabela';
-import ConfiguracoesGlobaisPainel from './ConfiguracoesGlobaisPainel';
-
-// Id especial de `regua_cluster` pra "Configurações Globais" — não é um
-// cluster (não está em CLUSTERS), mas usa a mesma barra de abas e o mesmo
-// parâmetro de URL, trocando o conteúdo abaixo dela igual à troca entre
-// clusters (ver render mais abaixo).
-const CONFIG_GLOBAIS_ID = 'config-globais';
 
 // Réplica da tela de configuração de régua de cobrança (protótipo:
 // regua-cobranca-configuracao.html) — uma régua por cluster: os 4 do score
@@ -33,7 +26,6 @@ const CONFIG_GLOBAIS_ID = 'config-globais';
 export default function ReguaCobrancaTab({ empresaId }) {
   const [searchParams, setSearchParams] = useSearchParams();
   const clusterId = searchParams.get('regua_cluster') || 'novo';
-  const mostrandoConfigGlobais = clusterId === CONFIG_GLOBAIS_ID;
   const cluster = CLUSTERS.find((c) => c.id === clusterId) || CLUSTERS[0];
 
   function selecionarCluster(id) {
@@ -74,31 +66,31 @@ export default function ReguaCobrancaTab({ empresaId }) {
   }, [carregarResumo]);
 
   const carregarEtapas = useCallback(() => {
-    if (!empresaId || mostrandoConfigGlobais) return Promise.resolve();
+    if (!empresaId) return Promise.resolve();
     setCarregandoEtapas(true);
     return listEtapasReguaCobranca(empresaId, cluster.id)
       .then(setEtapas)
       .finally(() => setCarregandoEtapas(false));
-  }, [empresaId, cluster.id, mostrandoConfigGlobais]);
+  }, [empresaId, cluster.id]);
 
   useEffect(() => {
     setEtapas([]);
     carregarEtapas();
   }, [carregarEtapas]);
 
-  // "Distribuição da Rotina" (Configurações Globais): na Distribuição
+  // "Distribuição da Rotina" (aba Configurações): na Distribuição
   // automática não existe responsável por etapa — a coluna some da tabela
   // (os valores ficam guardados no banco caso a empresa volte pro modo por
-  // etapa). Recarrega ao voltar das Configurações Globais, onde o modo muda.
+  // etapa). Recarrega ao voltar da aba Configurações, onde o modo muda.
   const [distribuicaoAutomatica, setDistribuicaoAutomatica] = useState(false);
 
   useEffect(() => {
-    if (!empresaId || mostrandoConfigGlobais) return;
+    if (!empresaId) return;
     getConfigDistribuicaoReguaCobranca(empresaId).then((cfg) => setDistribuicaoAutomatica(cfg.modo === 'automatica'));
-  }, [empresaId, mostrandoConfigGlobais]);
+  }, [empresaId]);
 
   useEffect(() => {
-    if (!empresaId || mostrandoConfigGlobais) {
+    if (!empresaId) {
       setUsuarios([]);
       return;
     }
@@ -106,10 +98,10 @@ export default function ReguaCobrancaTab({ empresaId }) {
     // governança: ver reguaCobranca.service.js::listResponsaveis (aplicada
     // de novo no backend em toda criação/edição, não só aqui no combobox).
     listResponsaveisReguaCobranca(empresaId).then(setUsuarios);
-  }, [empresaId, mostrandoConfigGlobais]);
+  }, [empresaId]);
 
   useEffect(() => {
-    if (!empresaId || mostrandoConfigGlobais) {
+    if (!empresaId) {
       setTemplates([]);
       return;
     }
@@ -119,7 +111,7 @@ export default function ReguaCobrancaTab({ empresaId }) {
     // governa a autorização, validada de novo no backend em toda
     // criação/edição — ver reguaCobranca.service.js::garantirTemplateElegivel).
     listTemplatesComunicacao(empresaId).then(setTemplates);
-  }, [empresaId, mostrandoConfigGlobais]);
+  }, [empresaId]);
 
   async function handleAtualizar(id, patch) {
     const etapaAtualizada = await atualizarEtapaReguaCobranca(id, patch);
@@ -167,11 +159,7 @@ export default function ReguaCobrancaTab({ empresaId }) {
       <Card className="rounded-tl-none">
         <div className="flex flex-wrap items-center gap-2">
           {CLUSTERS.map((c, i) => {
-            // Compara com `clusterId` (o parâmetro cru da URL), não com
-            // `cluster.id` — este último cai pro fallback CLUSTERS[0] quando
-            // clusterId é CONFIG_GLOBAIS_ID, o que marcaria "Novo cliente"
-            // como ativo ao mesmo tempo que Configurações Globais.
-            const ativa = c.id === clusterId;
+            const ativa = c.id === cluster.id;
             const contagem = resumo?.contagem_por_cluster?.[c.id] ?? 0;
             const Icone = CLUSTER_ICON[c.id];
             return (
@@ -199,31 +187,10 @@ export default function ReguaCobrancaTab({ empresaId }) {
             );
           })}
 
-          {/* Mesmo divisor visual usado antes de Inadimplência (i === 4
-              acima) — aqui separando "Configurações Globais" de
-              Inadimplência do mesmo jeito, porque não é um cluster: é um
-              parâmetro da régua inteira, não desta ou daquela régua. Mesmo
-              comportamento de aba dos clusters acima: troca o conteúdo
-              abaixo, não abre janela nenhuma. */}
-          <span className="mx-1 h-5 w-px bg-gray-200" aria-hidden="true" />
-          <button
-            type="button"
-            onClick={() => selecionarCluster(CONFIG_GLOBAIS_ID)}
-            aria-pressed={mostrandoConfigGlobais}
-            className={`flex items-center gap-1.5 rounded-full border px-3 py-1.5 text-xs font-medium transition-colors ${
-              mostrandoConfigGlobais ? 'border-gray-300 bg-gray-100 text-gray-700' : 'border-gray-200 text-gray-500 hover:bg-gray-50'
-            }`}
-          >
-            <Settings size={13} />
-            Configurações Globais
-          </button>
         </div>
       </Card>
 
-      {mostrandoConfigGlobais ? (
-        <ConfiguracoesGlobaisPainel empresaId={empresaId} />
-      ) : (
-        <>
+      <>
           <Card>
             <div className="mb-4 flex flex-wrap items-start justify-between gap-3 border-b border-gray-100 pb-4">
               <h3 className="text-sm font-semibold text-gray-900">Cluster {cluster.nome}</h3>
@@ -260,8 +227,7 @@ export default function ReguaCobrancaTab({ empresaId }) {
               />
             )}
           </Card>
-        </>
-      )}
+      </>
     </div>
   );
 }

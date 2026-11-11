@@ -349,7 +349,7 @@ export default function DistribuicaoRotinaSecao({ empresaId }) {
   if (!painel) {
     return (
       <Card>
-        <SectionHeader selo="Sessão 1" titulo="Rotina e atendentes" />
+        <SectionHeader selo="Sessão 2" titulo="Rotina e atendentes" />
         <div className="py-6 text-center text-sm text-gray-400">{erro || 'Carregando...'}</div>
       </Card>
     );
@@ -412,7 +412,7 @@ export default function DistribuicaoRotinaSecao({ empresaId }) {
   return (
     <Card>
       <SectionHeader
-        selo="Sessão 1"
+        selo="Sessão 2"
         titulo="Rotina e atendentes"
         texto="Quem recebe, na aba Rotinas, os clientes que entram na régua a cada dia: o responsável de cada etapa ou uma distribuição automática entre atendentes."
         acao={

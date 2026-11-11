@@ -2949,6 +2949,17 @@ CREATE TABLE regua_cobranca_comunicacao_automatica (
     atualizado_em   TIMESTAMP DEFAULT NOW()
 );
 
+-- Gestão de Cobranças › Configurações › "Usuário Administrador" (por empresa): quem está aqui é
+-- Administrador da Gestão de Cobranças (todas as abas); quem não está é Comum (Rotinas, Gestão das
+-- Parcelas e Clusters de Clientes). Master é sempre Administrador. Ver modules/cobranca-acesso.
+CREATE TABLE cobranca_administradores (
+    empresa_id  INTEGER NOT NULL REFERENCES empresas(id) ON DELETE CASCADE,
+    usuario_id  INTEGER NOT NULL REFERENCES usuarios(id) ON DELETE CASCADE,
+    criado_por  INTEGER REFERENCES usuarios(id) ON DELETE SET NULL,
+    criado_em   TIMESTAMPTZ NOT NULL DEFAULT NOW(),
+    PRIMARY KEY (empresa_id, usuario_id)
+);
+
 -- "Tipos de Pagamentos para Cobrança" (Configurações Globais da Régua): os
 -- tipos de pagamento (sie_income.payment_term_description, com TRIM) cujas
 -- parcelas entram na Gestão das Parcelas, na Rotina e no relatório

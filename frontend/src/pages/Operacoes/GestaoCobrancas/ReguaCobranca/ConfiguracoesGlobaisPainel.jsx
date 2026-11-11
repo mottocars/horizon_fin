@@ -12,6 +12,7 @@ import { listZapiIntegracoes } from '../../../../api/zapi.api';
 import { listEmailIntegracoes } from '../../../../api/emailIntegracao.api';
 import DistribuicaoRotinaSecao from './DistribuicaoRotinaSecao';
 import TiposPagamentoSecao from './TiposPagamentoSecao';
+import UsuarioAdministradorSecao from './UsuarioAdministradorSecao';
 import { ParametroLinha, SectionHeader } from './ParametrosLayout';
 
 // Opções do "Tipo de Comunicação" (ver reguaCobranca.service.js::
@@ -53,10 +54,10 @@ function CampoHorario({ valor, onCommit }) {
   );
 }
 
-// Parâmetros da régua como um todo, fora dos 5 clusters — aparece no mesmo
-// lugar do conteúdo de um cluster (troca de conteúdo pela seleção na barra
-// de abas, ver ReguaCobrancaTab.jsx), não numa janela separada. Sessões
-// separadas no desenho do Motor de Risco: a Distribuição da Rotina (responsável por etapa ou
+// Aba Configurações da Gestão de Cobranças (antes "Configurações Globais",
+// dentro da Régua de Cobrança). Sessões no desenho do Motor de Risco: o
+// Usuário Administrador (quem vê as abas de configuração —
+// UsuarioAdministradorSecao.jsx), a Distribuição da Rotina (responsável por etapa ou
 // distribuição automática — DistribuicaoRotinaSecao.jsx), o Tipo de
 // Comunicação e, só quando ele é a Comunicação Automática, quem/quando
 // dispara cada cluster (conexões Z-API/Email + horário).
@@ -105,11 +106,13 @@ export default function ConfiguracoesGlobaisPainel({ empresaId }) {
   // exemplo (ver ParametrosLayout.jsx).
   return (
     <div className="space-y-4">
+      <UsuarioAdministradorSecao empresaId={empresaId} className="rounded-tl-none" />
+
       <DistribuicaoRotinaSecao empresaId={empresaId} />
 
       <Card>
         <SectionHeader
-          selo="Sessão 2"
+          selo="Sessão 3"
           titulo="Comunicação"
           texto="Como o WhatsApp e o e-mail de cada etapa da régua chegam ao cliente."
         />

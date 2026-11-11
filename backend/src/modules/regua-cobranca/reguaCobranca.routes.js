@@ -1,16 +1,17 @@
 const { Router } = require('express');
 const authMiddleware = require('../../middlewares/auth.middleware');
-const { paramRecurso, exigirAdministradorDaTela } = require('../../middlewares/acesso.middleware');
-const T = require('../../config/telas');
+const { paramRecurso } = require('../../middlewares/acesso.middleware');
+const { exigirAdministradorCobranca } = require('../cobranca-acesso/cobrancaAcesso.service');
 const controller = require('./reguaCobranca.controller');
 
 const router = Router();
 
-// Aba Régua de Cobrança: só o Administrador da Gestão de Cobranças (ou
-// Master). Ficam livres pra quem tem a tela só as leituras que as abas
-// Rotinas/Gestão das Parcelas também usam: responsaveis, data-sistema e
-// GET comunicacao-automatica.
-const soAdministrador = exigirAdministradorDaTela(T.COBRANCAS);
+// Abas Régua de Cobrança e Configurações: só o Usuário Administrador da
+// Gestão de Cobranças desta empresa (ou Master — ver cobranca-acesso). Ficam
+// livres pra quem tem a tela só as leituras que as abas Rotinas/Gestão das
+// Parcelas também usam: responsaveis, data-sistema, GET comunicacao-automatica
+// e GET distribuicao/config.
+const soAdministrador = exigirAdministradorCobranca('SELECT empresa_id FROM regua_cobranca_etapas WHERE id = $1');
 
 router.use(authMiddleware);
 router.param('id', paramRecurso('SELECT empresa_id FROM regua_cobranca_etapas WHERE id = $1'));
@@ -28,7 +29,7 @@ router.put('/comunicacao-automatica', soAdministrador, controller.salvarComunica
 router.get('/tipos-pagamento', soAdministrador, controller.getTiposPagamento);
 router.put('/tipos-pagamento', soAdministrador, controller.salvarTiposPagamento);
 router.get('/distribuicao', soAdministrador, controller.getDistribuicao);
-router.get('/distribuicao/config', soAdministrador, controller.getConfigDistribuicao);
+router.get('/distribuicao/config', controller.getConfigDistribuicao);
 router.put('/distribuicao/config', soAdministrador, controller.salvarConfigDistribuicao);
 router.post('/distribuicao/participantes', soAdministrador, controller.adicionarParticipante);
 router.delete('/distribuicao/participantes/:usuarioId', soAdministrador, controller.removerParticipante);

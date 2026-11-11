@@ -88,6 +88,7 @@ const customersSiengeRoutes = require('./modules/customers-sienge/customers.rout
 const cobrancaClustersRoutes = require('./modules/cobranca-clusters/cobrancaClusters.routes');
 const gestaoParcelasRoutes = require('./modules/gestao-parcelas/gestaoParcelas.routes');
 const reguaCobrancaRoutes = require('./modules/regua-cobranca/reguaCobranca.routes');
+const cobrancaAcessoRoutes = require('./modules/cobranca-acesso/cobrancaAcesso.routes');
 const historicoClienteRoutes = require('./modules/regua-cobranca-historico/historicoCliente.routes');
 const comunicacaoRoutes = require('./modules/comunicacao/comunicacao.routes');
 const rotinasRoutes = require('./modules/rotinas/rotinas.routes');
@@ -261,6 +262,7 @@ app.use('/api/customers-sienge', exigirTela([T.COBRANCAS]), customersSiengeRoute
 app.use('/api/cobranca-clusters', exigirTela([T.COBRANCAS]), cobrancaClustersRoutes);
 app.use('/api/gestao-parcelas', exigirTela([T.COBRANCAS]), gestaoParcelasRoutes);
 app.use('/api/regua-cobranca', exigirTela([T.COBRANCAS]), reguaCobrancaRoutes);
+app.use('/api/cobranca-acesso', exigirTela([T.COBRANCAS]), cobrancaAcessoRoutes);
 // Leitura liberada também pro relatório Desempenho da Cobrança (o clique em
 // Interações abre o Histórico da Parcela); registrar continua só na Cobrança.
 app.use('/api/regua-cobranca-historico', exigirTela([T.COBRANCAS], [T.REL_DESEMPENHO_COBRANCA]), historicoClienteRoutes);

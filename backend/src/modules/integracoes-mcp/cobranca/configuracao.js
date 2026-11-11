@@ -203,7 +203,11 @@ async function lerConfiguracao(empresaId, secoes = ['motor_risco', 'regua', 'com
     quer.has('monitor') ? situacaoRotinas(empresaId) : null,
     reguaService.getLimiteVigente(empresaId).catch(() => null),
   ]);
-  const r = { empresa, limite_inadimplencia_dias: limite };
+  const { rows: adm } = await pool.query(
+    'SELECT u.nome FROM cobranca_administradores a JOIN usuarios u ON u.id = a.usuario_id WHERE a.empresa_id = $1 ORDER BY u.nome',
+    [empresaId]
+  ).catch(() => ({ rows: [] }));
+  const r = { empresa, limite_inadimplencia_dias: limite, administradores: adm.map((x) => x.nome) };
   if (quer.has('motor_risco')) r.motor_risco = mr || 'Nenhuma versão do Motor de Risco publicada — sem ela a régua, a Rotina e os clusters não funcionam.';
   if (rg) r.regua = rg;
   if (com) r.comunicacao = com;

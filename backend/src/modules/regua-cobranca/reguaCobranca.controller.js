@@ -1,8 +1,7 @@
 const { z } = require('zod');
 const service = require('./reguaCobranca.service');
 const distribuicao = require('./distribuicao.service');
-const { ehAdministradorDaTela } = require('../../middlewares/acesso.middleware');
-const T = require('../../config/telas');
+const { ehAdministradorCobranca } = require('../cobranca-acesso/cobrancaAcesso.service');
 
 const empresaIdSchema = z.coerce.number().int().positive('Selecione uma empresa.');
 const clusterSchema = z.enum(service.CLUSTERS_VALIDOS, {
@@ -206,12 +205,13 @@ async function salvarTiposPagamento(req, res, next) {
 }
 
 // ─── Distribuição da Rotina (Configurações Globais) ────────────────────────
-// Ler é livre pra quem tem a tela; mexer na equipe, no modo ou redistribuir
-// muda o trabalho de todo mundo — só Master e Administrador da tela Gestão
-// de Cobranças (nível marcado no cadastro do usuário).
-function exigirGestor(req) {
-  if (!ehAdministradorDaTela(req.user, T.COBRANCAS)) {
-    const err = new Error('Só Master e Administrador da Gestão de Cobranças podem alterar a distribuição da Rotina.');
+// Mexer na equipe, no modo ou redistribuir muda o trabalho de todo mundo —
+// só o Usuário Administrador da Gestão de Cobranças desta empresa (ou Master).
+// As rotas já passam por exigirAdministradorCobranca; esta é a 2ª garantia,
+// com a empresa já validada.
+async function exigirGestor(req, empresaId) {
+  if (!(await ehAdministradorCobranca(req.user, empresaId))) {
+    const err = new Error('Só o Usuário Administrador da Gestão de Cobranças pode alterar a distribuição da Rotina.');
     err.status = 403;
     err.expose = true;
     throw err;
@@ -237,7 +237,7 @@ function rotaDistribuicao(fn, { escrita = true } = {}) {
   return async (req, res, next) => {
     try {
       const empresaId = empresaIdSchema.parse(req.query.empresa_id);
-      if (escrita) exigirGestor(req);
+      if (escrita) await exigirGestor(req, empresaId);
       const extra = await fn(req, empresaId);
       res.json({ ...(await distribuicao.getPainel(empresaId)), ...(extra || {}) });
     } catch (err) {

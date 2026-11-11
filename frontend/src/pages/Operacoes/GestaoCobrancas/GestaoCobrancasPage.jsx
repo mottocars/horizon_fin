@@ -10,6 +10,7 @@ import {
   Save,
   Search,
   ShieldAlert,
+  Settings,
   SlidersHorizontal,
   Users,
 } from 'lucide-react';
@@ -27,6 +28,7 @@ import {
   listResponsaveisReguaCobranca,
   getComunicacaoAutomaticaReguaCobranca,
 } from '../../../api/reguaCobranca.api';
+import { getMeuAcessoCobranca } from '../../../api/cobrancaAcesso.api';
 import { useAuth } from '../../../auth/AuthContext';
 import { nomeExibicaoEmpresa } from '../../../utils/empresa';
 import { useEmpresaTravada } from '../../../hooks/useEmpresaTravada';
@@ -36,9 +38,10 @@ import SincronizarModal from './ClustersCobranca/SincronizarModal';
 import GestaoParcelasTab from './GestaoParcelas/GestaoParcelasTab';
 import ComunicacaoTab from './Comunicacao/ComunicacaoTab';
 import ReguaCobrancaTab from './ReguaCobranca/ReguaCobrancaTab';
+import ConfiguracoesGlobaisPainel from './ReguaCobranca/ConfiguracoesGlobaisPainel';
 import ClientesTab from './ClientesTab';
 import RotinasTab from './RotinasTab';
-import { ehAdministradorDaTela, filtrarAbas, podeVerAba } from '../../../utils/permissoes';
+import { filtrarAbas } from '../../../utils/permissoes';
 
 // Lista de abas da tela. Pra adicionar uma aba nova no futuro basta incluir
 // um item aqui `{ id, label, icon }` e o caso correspondente no switch de
@@ -49,19 +52,22 @@ import { ehAdministradorDaTela, filtrarAbas, podeVerAba } from '../../../utils/p
 // Gestão das Parcelas, Clusters de Clientes) e as de parâmetro/configuração
 // (Motor de Risco, Comunicação, Régua de Cobrança, Clientes). A aba padrão
 // ao abrir a tela é 'rotinas' (ver abaAtiva abaixo) — é a landing tab,
-// primeira coisa que o responsável pela cobrança vê. `nivel: 'ADMINISTRADOR'`
-// = só o Administrador da tela (nível no cadastro do usuário) ou Master vê
-// (ver utils/permissoes.js::filtrarAbas).
+// primeira coisa que o responsável pela cobrança vê. `admin: true` = só o
+// Usuário Administrador da Gestão de Cobranças DESTA empresa (aba
+// Configurações › Usuário Administrador) ou Master vê; o Comum fica com
+// Rotinas, Gestão das Parcelas e Clusters de Clientes. O backend barra as
+// mesmas operações (backend/src/modules/cobranca-acesso).
 const TELA = '/operacoes/gestao-de-cobrancas';
 const TABS = [
   { id: 'rotinas', label: 'Rotinas', icon: Repeat },
   { id: 'inadimplencia', label: 'Gestão das Parcelas', icon: AlertOctagon },
   { id: 'clusters', label: 'Clusters de Clientes', icon: Users },
   { divider: true },
-  { id: 'motor-risco', label: 'Motor de Risco', icon: ShieldAlert, nivel: 'ADMINISTRADOR' },
-  { id: 'comunicacao', label: 'Comunicação', icon: MessageCircle, nivel: 'ADMINISTRADOR' },
-  { id: 'mascaras', label: 'Régua de Cobrança', icon: SlidersHorizontal, nivel: 'ADMINISTRADOR' },
-  { id: 'clientes', label: 'Clientes', icon: Contact },
+  { id: 'motor-risco', label: 'Motor de Risco', icon: ShieldAlert, admin: true },
+  { id: 'comunicacao', label: 'Comunicação', icon: MessageCircle, admin: true },
+  { id: 'mascaras', label: 'Régua de Cobrança', icon: SlidersHorizontal, admin: true },
+  { id: 'clientes', label: 'Clientes', icon: Contact, admin: true },
+  { id: 'configuracoes', label: 'Configurações', icon: Settings, admin: true },
 ];
 
 // Mesmo vocabulário de GestaoParcelasTab.jsx::STATUS_PARCELA (duplicado aqui
@@ -98,23 +104,51 @@ function formatarDataHora(data) {
 export default function GestaoCobrancasPage() {
   const { travada: empresaTravada, empresaIdTravada } = useEmpresaTravada();
   const { user } = useAuth();
-  // Só Master e Administrador desta tela (nível marcado no cadastro do
-  // usuário) enxergam a rotina de outra pessoa — o nível Comum só tem a
-  // própria (ver rotinas.service.js::resolverUsuarioAlvo, que ignora o
-  // filtro de qualquer jeito pra quem não é um dos dois, então isto aqui é
-  // só pra não nem mostrar o combobox nesse caso).
-  const podeFiltrarResponsavel = ehAdministradorDaTela(user, TELA);
+  const [searchParams, setSearchParams] = useSearchParams();
+  const empresaId = searchParams.get('empresa_id') || '';
+
+  // Usuário Administrador da Gestão de Cobranças nesta empresa (aba
+  // Configurações) — Master sempre; os demais, pela lista da empresa. `null`
+  // enquanto carrega. Só ele vê as abas de configuração e a Rotina de outra
+  // pessoa (o backend ignora o filtro de qualquer jeito pro Comum — ver
+  // rotinas.service.js::resolverUsuarioAlvo — então isto aqui é só pra nem
+  // mostrar o combobox nesse caso).
+  const ehMaster = user?.permissao === 'MASTER';
+  const [adminEmpresa, setAdminEmpresa] = useState(ehMaster ? true : null);
+  useEffect(() => {
+    if (ehMaster) {
+      setAdminEmpresa(true);
+      return undefined;
+    }
+    if (!empresaId) {
+      setAdminEmpresa(false);
+      return undefined;
+    }
+    setAdminEmpresa(null);
+    let vivo = true;
+    getMeuAcessoCobranca(empresaId)
+      .then((r) => vivo && setAdminEmpresa(Boolean(r.administrador)))
+      .catch(() => vivo && setAdminEmpresa(false));
+    return () => {
+      vivo = false;
+    };
+  }, [empresaId, ehMaster]);
+  const admin = adminEmpresa === true;
+  const podeFiltrarResponsavel = admin;
   // Quem pode filtrar já abre vendo TODOS os responsáveis, agrupados (ver
   // RotinasTab.jsx — o nível de Responsável mostra o valor e os títulos da
   // carteira de cada um); limpar o filtro volta pra "Minha rotina".
   const USUARIO_ROTINA_PADRAO = podeFiltrarResponsavel ? 'todos' : '';
-  const [searchParams, setSearchParams] = useSearchParams();
 
-  const empresaId = searchParams.get('empresa_id') || '';
-  // Aba restrita na URL (link antigo/compartilhado) pra quem não pode vê-la cai em Rotinas.
-  const abaParam = searchParams.get('aba') || 'rotinas';
-  const abaAtiva = TABS.some((t) => t.id === abaParam && !podeVerAba(user, TELA, t.nivel)) ? 'rotinas' : abaParam;
-  const abas = useMemo(() => filtrarAbas(user, TELA, TABS), [user]);
+  // Link antigo das Configurações Globais (dentro da Régua de Cobrança) abre a aba Configurações.
+  const abaUrl = searchParams.get('aba') || 'rotinas';
+  const abaParam = abaUrl === 'mascaras' && searchParams.get('regua_cluster') === 'config-globais' ? 'configuracoes' : abaUrl;
+  // Aba restrita na URL (link antigo/compartilhado) pra quem não pode vê-la cai em Rotinas; enquanto o
+  // acesso carrega, a aba restrita fica em espera (não chama a API à toa).
+  const abaRestrita = TABS.some((t) => t.id === abaParam && t.admin);
+  const abaAtiva = abaRestrita && adminEmpresa === false ? 'rotinas' : abaParam;
+  const aguardandoAcesso = abaRestrita && adminEmpresa === null;
+  const abas = useMemo(() => filtrarAbas(user, TELA, TABS.filter((t) => t.divider || !t.admin || admin)), [user, admin]);
   // `useMemo` (não só derivar direto) de propósito: CentrosCustoResumo.jsx e
   // ClientesTab.jsx recebem este array como prop e o usam como dependência
   // de `useCallback`/`useEffect` próprios — sem o useMemo, cada render desta
@@ -216,7 +250,7 @@ export default function GestaoCobrancasPage() {
   const [versaoId, setVersaoId] = useState('');
 
   function carregarVersoes(empresa) {
-    if (!empresa || !ehAdministradorDaTela(user, TELA)) {
+    if (!empresa || !admin) {
       setVersoes([]);
       setVersaoId('');
       return;
@@ -235,7 +269,7 @@ export default function GestaoCobrancasPage() {
   useEffect(() => {
     carregarVersoes(empresaId);
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [empresaId]);
+  }, [empresaId, admin]);
 
   // Chamado pelo MotorRiscoTab depois de gravar uma versão nova — recarrega
   // a lista (a recém-criada some no topo) e já deixa ela selecionada.
@@ -351,6 +385,10 @@ export default function GestaoCobrancasPage() {
   // agrupada por responsável.
   const [responsaveisRotinas, setResponsaveisRotinas] = useState([]);
   const [usuarioIdRotinas, setUsuarioIdRotinas] = useState(USUARIO_ROTINA_PADRAO);
+  // O acesso chega depois do 1º render: ao saber que é Administrador, abre em "Todos".
+  useEffect(() => {
+    if (adminEmpresa !== null) setUsuarioIdRotinas(adminEmpresa ? 'todos' : '');
+  }, [adminEmpresa]);
   const opcoesResponsavelRotinas = useMemo(
     () => [
       { value: 'todos', label: 'Todos os responsáveis' },
@@ -638,7 +676,11 @@ export default function GestaoCobrancasPage() {
       <div>
         <Tabs tabs={abas} activeId={abaAtiva} onChange={(aba) => atualizarParams({ aba })} />
 
-        {abaAtiva === 'motor-risco' && (
+        {aguardandoAcesso && (
+          <Card className="flex min-h-[280px] rounded-tl-none items-center justify-center text-sm text-gray-400">Carregando...</Card>
+        )}
+
+        {!aguardandoAcesso && abaAtiva === 'motor-risco' && (
           <MotorRiscoTab
             ref={motorRiscoRef}
             empresaId={empresaId}
@@ -677,11 +719,22 @@ export default function GestaoCobrancasPage() {
           />
         )}
 
-        {abaAtiva === 'mascaras' && <ReguaCobrancaTab empresaId={empresaId} />}
+        {!aguardandoAcesso && abaAtiva === 'mascaras' && <ReguaCobrancaTab empresaId={empresaId} />}
 
-        {abaAtiva === 'comunicacao' && <ComunicacaoTab empresaId={empresaId} />}
+        {!aguardandoAcesso && abaAtiva === 'comunicacao' && <ComunicacaoTab empresaId={empresaId} />}
 
-        {abaAtiva === 'clientes' && (
+        {!aguardandoAcesso &&
+          abaAtiva === 'configuracoes' &&
+          (empresaId ? (
+            <ConfiguracoesGlobaisPainel empresaId={empresaId} />
+          ) : (
+            <Card className="flex min-h-[280px] rounded-tl-none flex-col items-center justify-center text-center">
+              <h2 className="text-sm font-semibold text-gray-900">Selecione uma empresa</h2>
+              <p className="mt-1 max-w-sm text-xs text-gray-500">Escolha a empresa no filtro acima para ver as configurações.</p>
+            </Card>
+          ))}
+
+        {!aguardandoAcesso && abaAtiva === 'clientes' && (
           <ClientesTab
             empresaId={empresaId}
             centroCustoIds={centroCustoIds}

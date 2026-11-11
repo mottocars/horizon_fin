@@ -48,7 +48,7 @@ export default function TiposPagamentoSecao({ empresaId }) {
   return (
     <Card>
       <SectionHeader
-        selo="Sessão 3"
+        selo="Sessão 4"
         titulo="Parcelas na cobrança"
         texto="Quais parcelas do contas a receber do Sienge entram na cobrança."
       />
