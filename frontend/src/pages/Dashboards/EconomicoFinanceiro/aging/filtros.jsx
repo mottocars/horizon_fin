@@ -197,7 +197,7 @@ export function PainelFiltros({ B, filtros, onFiltros, meses, periodo, onMeses, 
         <ListaBusca id="f-nat" rotulo="Plano de contas" opcoes={opcoes.naturezas} {...lista('naturezas')} />
         <ListaBusca id="f-cli" rotulo="Cliente" opcoes={opcoes.clientes} {...lista('clientes')} nota="Escolhido, só entra quem é dele." />
         <ListaBusca id="f-for" rotulo="Fornecedor" opcoes={opcoes.fornecedores} {...lista('fornecedores')} nota="Escolhido, só entra quem é dele." />
-        {opcoes.contas.length > 0 && <ListaBusca id="f-conta" rotulo="Conta bancária" opcoes={opcoes.contas} {...lista('contas')} nota="Filtra o realizado; o em aberto não tem conta." />}
+        {opcoes.contas.length > 0 && <ListaBusca id="f-conta" rotulo="Conta bancária" opcoes={opcoes.contas} {...lista('contas')} nota="Escolhida, mostra só o realizado (o em aberto não tem conta)." />}
       </div>
       <div className="fp-rodape">
         <CampoMeses

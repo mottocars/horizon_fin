@@ -109,7 +109,8 @@ export function escopo(B, { centros = [], ...filtros } = {}) {
       if (f.previsao === 'nao' ? item.pv : f.previsao === 'sim' ? !item.pv : false) return;
     } else if (f.previsao === 'sim') return;
     if (titulos && !titulos.has(item.b)) return;
-    if (contas && x.tipo === 'R' && contas(x.L.conta?.id ?? null)) return;
+    // Conta bancária escolhida: só o realizado (o em aberto não tem conta) — o em aberto sai.
+    if (contas && (x.tipo === 'A' || contas(x.L.conta?.id ?? null))) return;
     if (docs && docs(item.doc ?? null)) return;
     if (planos && planos(x.nat)) return;
     const lado = ladoPessoa(x);
