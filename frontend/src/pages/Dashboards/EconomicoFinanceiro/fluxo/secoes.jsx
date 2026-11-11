@@ -614,6 +614,7 @@ export function DividaPj({ D }) {
       <div className="ph">
         <h2 id="h-cef">Dívida PJ da Caixa por obra
           <AjudaSecao aba="divida" rotulo="Dívida PJ da Caixa" />
+          <span className="selo-homologacao" title="Esta sessão ainda está em desenvolvimento">⚠ Em Homologação</span>
         </h2>
         <p>Saldo devedor do crédito PJ na Projeção CEF de cada obra com Parâmetros.</p>
       </div>
