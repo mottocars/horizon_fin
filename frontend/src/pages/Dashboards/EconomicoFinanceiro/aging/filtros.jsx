@@ -1,6 +1,7 @@
 import { useEffect, useMemo, useState } from 'react';
 import { Loader2, Save, Trash2, X } from 'lucide-react';
 import { useConfirm } from '../../../../confirm/ConfirmContext';
+import Modal from '../../../../components/Modal';
 import { MAX_MESES, dma, filtrosVazios, titulo } from './modelo';
 
 // Filtros do Aging List além da barra: o painel retrátil (botão "Filtros" ao lado do Exportar) com o
@@ -42,6 +43,7 @@ function opcoesFiltro(B) {
     naturezas,
     clientes: pessoas(cat.clientes, B.pessoas.r),
     fornecedores: pessoas(cat.fornecedores, B.pessoas.p),
+    contas: [...(B.contasOpcoes || [])].sort(ord), // só no Detalhamento Financeiro (realizado)
   };
 }
 
@@ -193,8 +195,9 @@ export function PainelFiltros({ B, filtros, onFiltros, meses, periodo, onMeses, 
       <div className="fp-grade">
         <ListaBusca id="f-doc" rotulo="Tipo de documento" opcoes={opcoes.documentos} {...lista('documentos')} />
         <ListaBusca id="f-nat" rotulo="Plano de contas" opcoes={opcoes.naturezas} {...lista('naturezas')} />
-        <ListaBusca id="f-cli" rotulo="Cliente" opcoes={opcoes.clientes} {...lista('clientes')} nota="Filtra o a receber." />
-        <ListaBusca id="f-for" rotulo="Fornecedor" opcoes={opcoes.fornecedores} {...lista('fornecedores')} nota="Filtra o a pagar." />
+        <ListaBusca id="f-cli" rotulo="Cliente" opcoes={opcoes.clientes} {...lista('clientes')} nota="Escolhido, só entra quem é dele." />
+        <ListaBusca id="f-for" rotulo="Fornecedor" opcoes={opcoes.fornecedores} {...lista('fornecedores')} nota="Escolhido, só entra quem é dele." />
+        {opcoes.contas.length > 0 && <ListaBusca id="f-conta" rotulo="Conta bancária" opcoes={opcoes.contas} {...lista('contas')} nota="Filtra o realizado; o em aberto não tem conta." />}
       </div>
       <div className="fp-rodape">
         <CampoMeses
@@ -308,11 +311,13 @@ export function ResumoFiltros({ B, filtros, onFiltros }) {
     const n = lista.map((v) => mapa.get(v) || `Código ${v}`);
     return n.length > 2 ? `${n.slice(0, 2).join(', ')} e mais ${n.length - 2}` : n.join(', ');
   };
+  const [aberto, setAberto] = useState(null); // grupo cujo detalhe está aberto (clicar na etiqueta)
   const grupos = [
     ['documentos', 'Tipo de documento'],
     ['naturezas', 'Plano de contas'],
     ['clientes', 'Cliente'],
     ['fornecedores', 'Fornecedor'],
+    ['contas', 'Conta bancária'],
   ].filter(([k]) => filtros[k].length);
   const titulo = (filtros.titulo || '').trim();
   if (!grupos.length && filtros.previsao === 'nao' && !titulo) return null;
@@ -320,8 +325,10 @@ export function ResumoFiltros({ B, filtros, onFiltros }) {
     <div className="filtros-ativos" aria-label="Filtros valendo">
       {grupos.map(([k, rotulo]) => (
         <span key={k} className="chip">
-          {rotulo}: {filtros.exceto.includes(k) ? 'todos, menos ' : ''}
-          {nomes(k, filtros[k])}
+          <button type="button" className="chip-abrir" onClick={() => setAberto(k)} title="Ver tudo o que está selecionado" aria-haspopup="dialog">
+            {rotulo}: {filtros.exceto.includes(k) ? 'todos, menos ' : ''}
+            {nomes(k, filtros[k])}
+          </button>
           <button
             type="button"
             onClick={() => onFiltros({ ...filtros, [k]: [], exceto: filtros.exceto.filter((x) => x !== k) })}
@@ -347,6 +354,27 @@ export function ResumoFiltros({ B, filtros, onFiltros }) {
           </button>
         </span>
       )}
+      {(() => {
+        const g = grupos.find(([k]) => k === aberto);
+        if (!g) return null;
+        const [k, rotulo] = g;
+        const mapa = new Map(opcoes[k].map((o) => [o.value, o]));
+        const itens = filtros[k].map((v) => mapa.get(v) || { value: v, label: `Código ${v}`, extra: 'fora do cadastro' }).sort((a, b) => a.label.localeCompare(b.label, 'pt-BR'));
+        const menos = filtros.exceto.includes(k);
+        return (
+          <Modal open title={rotulo} onClose={() => setAberto(null)} maxWidthClass="max-w-lg">
+            <p className="mb-3 text-sm text-gray-600">{menos ? `Todos, menos estes ${itens.length}:` : `${itens.length} selecionado${itens.length > 1 ? 's' : ''}:`}</p>
+            <ul className="divide-y divide-gray-100 text-sm text-gray-800">
+              {itens.map((o) => (
+                <li key={o.value} className="flex items-baseline justify-between gap-3 py-1.5">
+                  <span>{o.label}</span>
+                  {o.extra && <small className="shrink-0 text-gray-400">{o.extra}</small>}
+                </li>
+              ))}
+            </ul>
+          </Modal>
+        );
+      })()}
     </div>
   );
 }

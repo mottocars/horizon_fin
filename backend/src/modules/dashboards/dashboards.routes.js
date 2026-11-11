@@ -127,8 +127,8 @@ router.get('/economico-financeiro/detalhamento', async (req, res, next) => {
 
 // Tela que aceita filtros salvos e o formato do que ela grava.
 const lista = (item) => z.array(item).max(5000).default([]);
-const FILTROS_SALVOS = {
-  'economico-financeiro/aging': z.object({
+const filtrosAging = () =>
+  z.object({
     // Período em meses a partir do mês atual (para trás / para frente); ao aplicar o filtro, refaz o
     // Início/Fim da tela. null = o filtro não mexe naquele lado do período.
     historico: z.number().int().min(0).max(360).nullable().optional(),
@@ -138,11 +138,15 @@ const FILTROS_SALVOS = {
     naturezas: lista(z.string().max(50)),
     clientes: lista(z.number().int()),
     fornecedores: lista(z.number().int()),
+    contas: lista(z.string().max(80)), // contas bancárias (Detalhamento Financeiro): "empresa|conta"
     // Listas no "Marcar todos": nelas a lista guarda os desmarcados (todos, menos esses).
-    exceto: z.array(z.enum(['documentos', 'naturezas', 'clientes', 'fornecedores'])).max(4).default([]),
+    exceto: z.array(z.enum(['documentos', 'naturezas', 'clientes', 'fornecedores', 'contas'])).max(5).default([]),
     previsao: z.enum(['nao', 'sim', 'todos']).default('nao'),
     titulo: z.string().max(500).default(''),
-  }),
+  });
+const FILTROS_SALVOS = {
+  'economico-financeiro/aging': filtrosAging(),
+  'economico-financeiro/detalhamento': filtrosAging(), // mesmos filtros do Aging List
 };
 
 function telaComFiltros(req, res) {

@@ -21,11 +21,13 @@
 }
 
 /* Painel de filtros: o período em meses (Histórico e Horizonte), com a data que dá no rótulo */
-.painel-cfo.aging .ctl.meses label span {
+.painel-cfo.aging .ctl.meses label span,
+.painel-cfo.detfin .ctl.meses label span {
   font-weight: 500;
   margin-left: 2px;
 }
-.painel-cfo.aging .meses-campo {
+.painel-cfo.aging .meses-campo,
+.painel-cfo.detfin .meses-campo {
   display: flex;
   align-items: center;
   gap: 6px;
@@ -36,7 +38,8 @@
   border-radius: 4px;
   background: var(--surface-2);
 }
-.painel-cfo.aging .meses-campo input {
+.painel-cfo.aging .meses-campo input,
+.painel-cfo.detfin .meses-campo input {
   width: 64px;
   height: 100%;
   box-sizing: border-box;
@@ -47,21 +50,25 @@
   font: 500 14px var(--f-mono);
   text-align: right;
 }
-.painel-cfo.aging .meses-campo input[type='text'] {
+.painel-cfo.aging .meses-campo input[type='text'],
+.painel-cfo.detfin .meses-campo input[type='text'] {
   width: 170px;
   text-align: left;
   padding-right: 10px;
 }
 /* Previsão financeira: mesma altura dos campos Histórico / Horizonte / Título */
-.painel-cfo.aging .fp-rodape .seg {
+.painel-cfo.aging .fp-rodape .seg,
+.painel-cfo.detfin .fp-rodape .seg {
   height: var(--altura-filtro);
   box-sizing: border-box;
 }
-.painel-cfo.aging .fp-rodape .seg button {
+.painel-cfo.aging .fp-rodape .seg button,
+.painel-cfo.detfin .fp-rodape .seg button {
   padding-top: 0;
   padding-bottom: 0;
 }
-.painel-cfo.aging .meses-campo span {
+.painel-cfo.aging .meses-campo span,
+.painel-cfo.detfin .meses-campo span {
   font-size: 13px;
   color: var(--muted);
 }
@@ -71,7 +78,8 @@
 .painel-cfo.aging .controls .ctl select {
   min-width: 210px;
 }
-.painel-cfo.aging .controls .ctl.salvos select {
+.painel-cfo.aging .controls .ctl.salvos select,
+.painel-cfo.detfin .controls .ctl.salvos select {
   min-width: 180px;
   max-width: 220px;
 }
@@ -433,6 +441,16 @@
   background: var(--accent-soft);
   color: var(--accent);
   border: 1px solid color-mix(in srgb, var(--accent) 30%, var(--surface));
+}
+.painel-cfo .chip .chip-abrir {
+  padding: 0;
+  font-weight: inherit;
+  font-size: inherit;
+  text-align: left;
+  cursor: pointer;
+}
+.painel-cfo .chip .chip-abrir:hover {
+  text-decoration: underline;
 }
 .painel-cfo .chip button {
   display: inline-flex;

@@ -10,7 +10,7 @@ const { hojeEmBrasilia } = require('../extrato-contas-sienge/extratoContas-api.c
 //   e demais lançamentos sem título. Com título (bill_id — origem CR = contas a receber, CP = contas a
 //   pagar), ele vem com o cliente/fornecedor e o vencimento da parcela.
 // - EM ABERTO: as parcelas do Aging List (agingPainel::titulosDoLado — saldo corrigido, mesmo rateio) que
-//   vencem no período, sem as previsões financeiras (como o Aging e o DFC fazem por padrão).
+//   vencem no período, com as previsões financeiras marcadas (pv) — a tela as deixa de fora por padrão (como o Aging e o DFC fazem por padrão).
 // Cada fatia leva a Máscara DFC nível 2 (fluxo.service::classificador, a mesma da aba DFC; null = sem
 // máscara) — o navegador (EconomicoFinanceiro/detalhamento/modelo.js) tira a movimentação entre contas e
 // monta o resumo, o gráfico, o Sankey e o detalhamento.
@@ -94,7 +94,7 @@ async function painel(empresaId, { de, ate }) {
     return cls.classificar(c, nat)?.n2 ?? null;
   };
 
-  const contas = contasRows.map((c) => ({ empresa: c.company_name, numero: c.numero_conta, nome: limpo(c.nome) || c.numero_conta, banco: c.banco_nome }));
+  const contas = contasRows.map((c) => ({ id: `${c.company_id}|${c.numero_conta}`, empresa: c.company_name, numero: c.numero_conta, nome: limpo(c.nome) || c.numero_conta, banco: c.banco_nome }));
   const idxConta = new Map(contasRows.map((c, i) => [`${c.company_id}|${c.numero_conta}`, i]));
 
   // Pessoas: o nome como vem no título (do realizado e do em aberto).
@@ -141,14 +141,15 @@ async function painel(empresaId, { de, ate }) {
     lancamentos.push(L);
   });
 
-  // Em aberto: parcelas do Aging que vencem no período, sem as previsões financeiras.
+  // Em aberto: parcelas do Aging que vencem no período, com as previsões financeiras marcadas (pv) — a tela as deixa de fora por padrão.
   const abertos = [];
   [abR, abP].forEach(({ titulos }) =>
     titulos.forEach((t) => {
-      if (t.v < de || t.v > ate || t.pv) return;
+      if (t.v < de || t.v > ate) return;
       const natNum = (nat) => (nat === null || nat === undefined || !Number.isFinite(Number(nat)) ? null : Number(nat));
       const T = { l: t.l, b: t.b, p: t.p, v: t.v, s: t.s, f: t.f.map(([c, nat, frac]) => [c, natNum(nat), frac, classe(c, natNum(nat))]) };
       if (t.q !== null) T.q = t.q;
+      if (t.pv) T.pv = 1; // previsão financeira — o filtro da tela decide se entra (padrão: fora)
       if (t.d) T.doc = t.d;
       if (t.n) T.n = t.n;
       if (t.u) T.u = t.u;

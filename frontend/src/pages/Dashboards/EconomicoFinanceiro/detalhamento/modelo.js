@@ -9,7 +9,7 @@
 // aplicações/resgates — Máscara DFC 2 de CFG.interno) fica de fora de tudo: é dinheiro trocando de conta, não
 // entrando nem saindo da empresa. A inicialização de saldo do Sienge também (não é fluxo).
 import { brl, eixo, lbl, nf0, pct, soma, titulo } from '../fluxo/modelo';
-import { diaNum, dm, dma } from '../aging/modelo';
+import { diaNum, dm, dma, filtrosVazios } from '../aging/modelo';
 
 export { brl, dm, dma, eixo, lbl, nf0, pct, soma, titulo };
 
@@ -79,14 +79,49 @@ export function nomePessoa(B, x) {
 export const nomeDocumento = (B, id) => (id ? titulo(B.documentos?.[id] || id) : '');
 export const nomeMascara = (x) => (x.m2 ? x.m2.nome : 'Sem máscara no DFC');
 
-// ─── Escopo (centro de custo) ────────────────────────────────────────────────────────────────────
-// Só as fatias dos centros marcados (vazio = todos), sem a movimentação entre contas — que vem à parte.
-export function escopo(B, { centros = [] } = {}) {
+// ─── Escopo (filtros) ────────────────────────────────────────────────────────────────────────────
+// Os mesmos filtros do Aging List (aging/modelo.js::filtrosVazios): centros, tipo de documento, plano de
+// contas, cliente, fornecedor, previsão financeira (do em aberto; 'sim' = só as previsões, e o realizado
+// fica de fora) e título (bill_id). Cliente filtra o a receber e fornecedor o a pagar — escolhido um deles,
+// só entra quem é dele (o outro lado e o lançamento do banco sem título saem). Fica de fora a movimentação entre contas — que vem à parte.
+export function escopo(B, { centros = [], ...filtros } = {}) {
+  const f = { ...filtrosVazios(), ...filtros };
   const sel = centros.length ? new Set(centros) : null;
+  // Lista do painel: fica de fora o que não está marcado — no modo "todos" (`exceto`), o que foi desmarcado.
+  const fora = (k, conv = (v) => v) => {
+    if (!f[k].length) return null;
+    const s = new Set(f[k].map(conv));
+    return f.exceto?.includes(k) ? (v) => s.has(v) : (v) => !s.has(v);
+  };
+  const docs = fora('documentos');
+  const planos = fora('naturezas', String);
+  const clientes = fora('clientes');
+  const fornecedores = fora('fornecedores');
+  const contas = fora('contas'); // só o realizado tem conta bancária
+  const ids = String(f.titulo || '').match(/\d+/g);
+  const titulos = ids ? new Set(ids.map(Number)) : null;
   const pecas = [];
   const internas = { R: 0, A: 0, bruto: 0 };
   B.pecas.forEach((x) => {
     if (sel && !sel.has(x.centro)) return;
+    const item = x.L || x.T;
+    if (x.tipo === 'A') {
+      if (f.previsao === 'nao' ? item.pv : f.previsao === 'sim' ? !item.pv : false) return;
+    } else if (f.previsao === 'sim') return;
+    if (titulos && !titulos.has(item.b)) return;
+    if (contas && x.tipo === 'R' && contas(x.L.conta?.id ?? null)) return;
+    if (docs && docs(item.doc ?? null)) return;
+    if (planos && planos(x.nat)) return;
+    const lado = ladoPessoa(x);
+    // Com cliente e/ou fornecedor escolhido, só entra quem é dele: o outro lado (se não foi filtrado) e o
+    // lançamento do banco sem título ficam de fora.
+    if (clientes || fornecedores) {
+      if (lado === 'r') {
+        if (clientes ? clientes(qDe(x)) : !!fornecedores) return;
+      } else if (lado === 'p') {
+        if (fornecedores ? fornecedores(qDe(x)) : !!clientes) return;
+      } else return;
+    }
     if (x.interno) {
       internas[x.tipo] += x.valor;
       internas.bruto += Math.abs(x.valor);

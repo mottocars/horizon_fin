@@ -120,8 +120,8 @@ function caixa(contas) {
 // `exceto`: as listas do painel no modo "Marcar todos" — nelas a lista guarda os DESMARCADOS (todos,
 // menos esses; o que aparecer depois no Sienge entra). Modo "todos" sem nenhum desmarcado = sem filtro.
 const MAX_MESES = 360;
-const LISTAS_PAINEL = ['documentos', 'naturezas', 'clientes', 'fornecedores'];
-const filtrosVazios = () => ({ centros: [], documentos: [], naturezas: [], clientes: [], fornecedores: [], exceto: [], previsao: 'nao', titulo: '' });
+const LISTAS_PAINEL = ['documentos', 'naturezas', 'clientes', 'fornecedores', 'contas']; // `contas`: só o Detalhamento Financeiro
+const filtrosVazios = () => ({ centros: [], documentos: [], naturezas: [], clientes: [], fornecedores: [], contas: [], exceto: [], previsao: 'nao', titulo: '' });
 
 // Período padrão: o ano atual inteiro.
 const periodoPadrao = (hojeIso) => ({ inicio: `${hojeIso.slice(0, 4)}-01-01`, fim: `${hojeIso.slice(0, 4)}-12-31` });
@@ -175,7 +175,7 @@ function escopo(B, { inicio = null, fim = null, ...filtros } = {}) {
   const planos = fora('naturezas', String); // contas do plano de contas (só as de resultado)
   const clientes = fora('clientes');
   const fornecedores = fora('fornecedores');
-  // Título (bill_id): um ou mais números; só esses títulos entram (os manuais do Horizon não têm bill_id).
+  // Título (bill_id): um ou mais números; só esses títulos entram.
   const idsTitulo = String(f.titulo || '').match(/\d+/g);
   const titulos = idsTitulo ? new Set(idsTitulo.map(Number)) : null;
   const linhas = [];
@@ -184,7 +184,10 @@ function escopo(B, { inicio = null, fim = null, ...filtros } = {}) {
     if (f.previsao === 'nao' ? t.pv : f.previsao === 'sim' ? !t.pv : false) return;
     if ((inicio && t.v < inicio) || (fim && t.v > fim)) return;
     if (docs && docs(t.d)) return;
-    if (t.l === 'r' ? clientes && clientes(t.q) : fornecedores && fornecedores(t.q)) return;
+    // Escolhido cliente e/ou fornecedor, só entra quem é dele: o outro lado (se não foi filtrado) sai.
+    if (clientes || fornecedores) {
+      if (t.l === 'r' ? (clientes ? clientes(t.q) : !!fornecedores) : fornecedores ? fornecedores(t.q) : !!clientes) return;
+    }
     t.f.forEach(([centro, nat, frac]) => {
       if (sel && !sel.has(centro)) return;
       if (planos && planos(nat)) return;
@@ -194,7 +197,7 @@ function escopo(B, { inicio = null, fim = null, ...filtros } = {}) {
   // Títulos manuais do Horizon: mesmo período e mesmos filtros de centro e plano de contas (cada fatia do rateio).
   const manuais = [];
   (B.manuais || []).forEach((m) => {
-    if (titulos) return;
+    if (titulos || clientes || fornecedores) return; // os manuais não têm bill_id nem cadastro de cliente/fornecedor do Sienge
     if ((inicio && m.v < inicio) || (fim && m.v > fim)) return;
     m.f.forEach(([centro, nat, frac]) => {
       if (sel && !sel.has(centro)) return;
