@@ -229,6 +229,19 @@ export function PainelFiltros({ B, filtros, onFiltros, meses, periodo, onMeses, 
             ))}
           </div>
         </div>
+        <div className="ctl">
+          <label className="rot" htmlFor="f-titulo">Título (bill_id)</label>
+          <input
+            id="f-titulo"
+            type="text"
+            inputMode="numeric"
+            placeholder="Ex.: 1234 ou 1234, 5678"
+            maxLength={500}
+            value={filtros.titulo || ''}
+            onChange={(e) => mudar({ titulo: e.target.value.replace(/[^\d,;\s]/g, '') })}
+            title="Número do título no Sienge (bill_id). Vários: separe por vírgula ou espaço."
+          />
+        </div>
         <div className="fp-acoes">
           {erro && <span className="erro">{erro}</span>}
           {gravando ? (
@@ -300,7 +313,8 @@ export function ResumoFiltros({ B, filtros, onFiltros }) {
     ['clientes', 'Cliente'],
     ['fornecedores', 'Fornecedor'],
   ].filter(([k]) => filtros[k].length);
-  if (!grupos.length && filtros.previsao === 'nao') return null;
+  const titulo = (filtros.titulo || '').trim();
+  if (!grupos.length && filtros.previsao === 'nao' && !titulo) return null;
   return (
     <div className="filtros-ativos" aria-label="Filtros valendo">
       {grupos.map(([k, rotulo]) => (
@@ -316,6 +330,14 @@ export function ResumoFiltros({ B, filtros, onFiltros }) {
           </button>
         </span>
       ))}
+      {titulo && (
+        <span className="chip">
+          Título: {titulo}
+          <button type="button" onClick={() => onFiltros({ ...filtros, titulo: '' })} aria-label="Tirar o filtro de título">
+            <X size={14} />
+          </button>
+        </span>
+      )}
       {filtros.previsao !== 'nao' && (
         <span className="chip">
           Previsão financeira: {filtros.previsao === 'sim' ? 'só as previsões' : 'todas'}

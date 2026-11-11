@@ -18,6 +18,9 @@ const LADOS = [
     parcelas: 'sie_income',
     categorias: 'sie_income_categorias',
     pessoa: 'client',
+    // A receber: sempre o saldo corrigido (correção monetária e juros do contrato).
+    saldo: 'COALESCE(i.corrected_balance_amount, i.balance_amount)',
+    semCorrecao: 'i.balance_amount',
     extras: `i.installment_number AS pc, i.main_unit AS u, i.payment_term_id AS cp, i.payment_term_description AS cp_nome,
              i.document_forecast = 'S' AS pv, i.defaulter_situation ILIKE 'inadimpl%' AS ina, i.sub_judicie = 'S' AS sj`,
   },
@@ -26,6 +29,9 @@ const LADOS = [
     parcelas: 'sie_outcome',
     categorias: 'sie_outcome_categorias',
     pessoa: 'creditor',
+    // A pagar: valor LÍQUIDO — saldo menos desconto e menos imposto retido.
+    saldo: '(i.balance_amount - COALESCE(i.discount_amount, 0) - COALESCE(i.tax_amount, 0))',
+    semCorrecao: '(i.balance_amount - COALESCE(i.discount_amount, 0) - COALESCE(i.tax_amount, 0))',
     // Previsão financeira (de contrato de medição / pedido de compra): o documento real que a substitui
     // também fica no contas a pagar — a tela deixa escolher se entra (por padrão não entra, como no DFC).
     extras: `NULL AS pc, NULL AS u, NULL AS cp, NULL AS cp_nome,
@@ -39,7 +45,7 @@ async function titulosDoLado(empresaId, t, dic) {
   const [{ rows }, { rows: cats }, { rows: base }] = await Promise.all([
     pool.query(
       `SELECT i.bill_id AS b, i.installment_id AS p, to_char(i.due_date, 'YYYY-MM-DD') AS v, to_char(i.issue_date, 'YYYY-MM-DD') AS e,
-              COALESCE(i.corrected_balance_amount, i.balance_amount) AS s, i.balance_amount AS o, i.original_amount AS vo,
+              ${t.saldo} AS s, ${t.semCorrecao} AS o, i.original_amount AS vo,
               i.company_id AS c, i.company_name AS c_nome, i.${t.pessoa}_id AS q, i.${t.pessoa}_name AS q_nome,
               i.document_identification_id AS d, i.document_identification_name AS d_nome, i.document_number AS n, ${t.extras}
          FROM ${t.parcelas} i

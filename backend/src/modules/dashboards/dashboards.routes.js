@@ -141,6 +141,7 @@ const FILTROS_SALVOS = {
     // Listas no "Marcar todos": nelas a lista guarda os desmarcados (todos, menos esses).
     exceto: z.array(z.enum(['documentos', 'naturezas', 'clientes', 'fornecedores'])).max(4).default([]),
     previsao: z.enum(['nao', 'sim', 'todos']).default('nao'),
+    titulo: z.string().max(500).default(''),
   }),
 };
 

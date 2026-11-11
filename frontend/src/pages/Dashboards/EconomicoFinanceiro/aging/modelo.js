@@ -120,7 +120,7 @@ export function caixa(contas) {
 // menos esses; o que aparecer depois no Sienge entra). Modo "todos" sem nenhum desmarcado = sem filtro.
 export const MAX_MESES = 360;
 export const LISTAS_PAINEL = ['documentos', 'naturezas', 'clientes', 'fornecedores'];
-export const filtrosVazios = () => ({ centros: [], documentos: [], naturezas: [], clientes: [], fornecedores: [], exceto: [], previsao: 'nao' });
+export const filtrosVazios = () => ({ centros: [], documentos: [], naturezas: [], clientes: [], fornecedores: [], exceto: [], previsao: 'nao', titulo: '' });
 
 // Período padrão: o ano atual inteiro.
 export const periodoPadrao = (hojeIso) => ({ inicio: `${hojeIso.slice(0, 4)}-01-01`, fim: `${hojeIso.slice(0, 4)}-12-31` });
@@ -149,10 +149,11 @@ export const normalizarFiltros = (f = {}) => ({
   ...Object.fromEntries(LISTAS_FILTRO.map((k) => [k, [...(f[k] || [])].sort()])),
   exceto: LISTAS_PAINEL.filter((k) => f.exceto?.includes(k) && f[k]?.length),
   previsao: ['nao', 'sim', 'todos'].includes(f.previsao) ? f.previsao : 'nao',
+  titulo: String(f.titulo || '').replace(/[^\d,;\s]/g, '').trim().slice(0, 500), // bill_id(s), separados por vírgula ou espaço
 });
 export const mesmosFiltros = (a, b) => JSON.stringify(normalizarFiltros(a)) === JSON.stringify(normalizarFiltros(b));
 // Quantos filtros do painel estão valendo (o centro de custo fica na barra).
-export const filtrosNoPainel = (f) => LISTAS_PAINEL.filter((k) => f[k]?.length).length + (f.previsao !== 'nao' ? 1 : 0);
+export const filtrosNoPainel = (f) => LISTAS_PAINEL.filter((k) => f[k]?.length).length + (f.previsao !== 'nao' ? 1 : 0) + (String(f.titulo || '').trim() ? 1 : 0);
 
 // ─── Escopo dos filtros ──────────────────────────────────────────────────────────────────────────
 // `inicio` / `fim` ('AAAA-MM-DD'): período do VENCIMENTO das parcelas; o resto, os filtros acima.
@@ -173,8 +174,12 @@ export function escopo(B, { inicio = null, fim = null, ...filtros } = {}) {
   const planos = fora('naturezas', String); // contas do plano de contas (só as de resultado)
   const clientes = fora('clientes');
   const fornecedores = fora('fornecedores');
+  // Título (bill_id): um ou mais números; só esses títulos entram (os manuais do Horizon não têm bill_id).
+  const idsTitulo = String(f.titulo || '').match(/\d+/g);
+  const titulos = idsTitulo ? new Set(idsTitulo.map(Number)) : null;
   const linhas = [];
   B.titulos.forEach((t) => {
+    if (titulos && !titulos.has(t.b)) return;
     if (f.previsao === 'nao' ? t.pv : f.previsao === 'sim' ? !t.pv : false) return;
     if ((inicio && t.v < inicio) || (fim && t.v > fim)) return;
     if (docs && docs(t.d)) return;
@@ -188,6 +193,7 @@ export function escopo(B, { inicio = null, fim = null, ...filtros } = {}) {
   // Títulos manuais do Horizon: mesmo período e mesmos filtros de centro e plano de contas (cada fatia do rateio).
   const manuais = [];
   (B.manuais || []).forEach((m) => {
+    if (titulos) return;
     if ((inicio && m.v < inicio) || (fim && m.v > fim)) return;
     m.f.forEach(([centro, nat, frac]) => {
       if (sel && !sel.has(centro)) return;
