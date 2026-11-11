@@ -182,15 +182,15 @@
 }
 
 /* Obra 360º › Avanço das Obras › "Avanço por obra" (CurvasAvanco.jsx): uma linha-cartão por obra —
-   retângulo baixo na largura toda (não linha de tabela), com o nome e as três colunas de avanço
-   (Caixa, Prevision primário e secundário); aberta, o gráfico da obra aparece embaixo, no mesmo
+   retângulo baixo na largura toda (não linha de tabela), com o nome, a etapa da carteira e as três
+   colunas de avanço (Caixa, Prevision primário e secundário — mais estreitas, barra mais fina); aberta, o gráfico da obra aparece embaixo, no mesmo
    cartão. O cabeçalho (.av-cab) usa as mesmas colunas da linha. */
 .painel-cfo .av-cab,
 .painel-cfo .av-linha {
   display: grid;
-  grid-template-columns: minmax(200px, 1.3fr) repeat(3, minmax(150px, 1fr)) 20px;
+  grid-template-columns: minmax(170px, 1.15fr) minmax(220px, 1.35fr) repeat(3, minmax(110px, 0.75fr)) 20px;
   align-items: center;
-  gap: 0 28px;
+  gap: 0 24px;
 }
 .painel-cfo .av-cab {
   padding: 4px 20px 8px;
@@ -275,7 +275,8 @@
 }
 .painel-cfo .av-barra {
   display: block;
-  height: 5px;
+  max-width: 150px;
+  height: 4px;
   border-radius: 3px;
   background: var(--grid);
   overflow: hidden;
@@ -309,16 +310,70 @@
     transform: translateY(-4px);
   }
 }
-/* Tela estreita: o nome numa linha e as três colunas embaixo. */
-@media (max-width: 900px) {
+/* Etapa da carteira: bolinha na cor da etapa (a mesma do Gantt), nome, "mês X de Y" e, embaixo, o mês
+   em que a etapa começa e termina. */
+.painel-cfo .av-etapa {
+  display: flex;
+  flex-direction: column;
+  gap: 3px;
+  min-width: 0;
+}
+.painel-cfo .av-etapa-nome {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  min-width: 0;
+  font-size: 14px;
+  font-weight: 700;
+  color: var(--ink);
+  white-space: nowrap;
+}
+.painel-cfo .av-etapa-nome > span {
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+.painel-cfo .av-etapa-nome i {
+  flex: none;
+  width: 10px;
+  height: 10px;
+  border-radius: 50%;
+  background: var(--s-neutral);
+}
+.painel-cfo .av-etapa-nome em {
+  flex: none;
+  padding: 1px 7px;
+  border-radius: 999px;
+  background: var(--surface-2);
+  font-family: var(--f-mono);
+  font-size: 11px;
+  font-style: normal;
+  font-weight: 500;
+  color: var(--ink-2);
+}
+.painel-cfo .av-etapa-nome.nulo,
+.painel-cfo .av-etapa.nulo {
+  font-weight: 600;
+  color: var(--muted);
+}
+.painel-cfo .av-etapa small {
+  padding-left: 18px;
+  font-size: 12px;
+  color: var(--muted);
+  font-variant-numeric: tabular-nums;
+}
+/* Tela estreita: nome e etapa em cima, as três colunas embaixo. */
+@media (max-width: 1100px) {
   .painel-cfo .av-cab {
     display: none;
   }
   .painel-cfo .av-linha {
-    grid-template-columns: repeat(3, minmax(0, 1fr)) 20px;
-    gap: 8px 16px;
+    grid-template-columns: minmax(0, 1fr) minmax(0, 1fr) minmax(0, 1fr) 20px;
+    gap: 10px 16px;
   }
   .painel-cfo .av-nome {
-    grid-column: 1 / -1;
+    grid-column: 1 / 2;
+  }
+  .painel-cfo .av-etapa {
+    grid-column: 2 / 5;
   }
 }

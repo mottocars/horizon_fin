@@ -1,8 +1,6 @@
 import { useEffect, useState } from 'react';
 import { useSearchParams } from 'react-router-dom';
 import CabecalhoDashboard from '../CabecalhoDashboard';
-import DfcAvancosTab from '../../Operacoes/DfcConstrutoras/DfcAvancosTab';
-import CampoDataPeriodo from '../../Operacoes/CronogramasObras/CampoDataPeriodo';
 import { listEmpresas } from '../../../api/empresas.api';
 import { nomeExibicaoEmpresa } from '../../../utils/empresa';
 import { useEmpresaTravada } from '../../../hooks/useEmpresaTravada';
@@ -11,22 +9,17 @@ import CurvasAvanco from './CurvasAvanco';
 import '../EconomicoFinanceiro/fluxo/painel.css';
 import './cronogramas.css';
 
-// Dashboards > Obra 360º > Avanço das Obras (pedido do usuário): o espelho, só de leitura, da aba
-// Operações › DFC Construtoras › Avanços Obras — a mesma tabela (DfcAvancosTab, variante dashboard) e
-// os mesmos dados (/dfc-avancos, liberado em GET para quem tem o Obra 360º). Barra de controles no
-// layout da Carteira de obras: Empresa (na URL, ?empresa_id=, a mesma das outras telas do dashboard)
-// e Início/Fim (padrão: o ano atual inteiro, como na aba). Acima da tabela, a "Curva de avanço por obra"
-// (CurvasAvanco.jsx — um cartão por obra com Prevision, no molde da Dívida PJ do Fluxo de Caixa; a
-// curva pega a obra inteira, não o Início/Fim).
+// Dashboards > Obra 360º > Avanço das Obras (pedido do usuário): barra de controles no layout da
+// Carteira de obras — só a Empresa (na URL, ?empresa_id=, a mesma das outras telas do dashboard) — e o
+// "Avanço por obra" (CurvasAvanco.jsx): uma linha-cartão por obra com a etapa da carteira, o avanço da
+// Caixa e dos dois orçamentos do Prevision, e o gráfico mês a mês ao clicar. (A tabela espelho da aba
+// DFC › Avanços saiu a pedido do usuário.)
 export default function AvancoObras({ nome }) {
   const [params, setParams] = useSearchParams();
   const { travada: empresaTravada, empresaIdTravada } = useEmpresaTravada();
   const empresaId = params.get('empresa_id') || '';
   const [empresas, setEmpresas] = useState([]);
   const [carregandoEmpresas, setCarregandoEmpresas] = useState(true);
-  const anoAtual = new Date().getFullYear();
-  const [inicio, setInicio] = useState(`${anoAtual}-01-01`);
-  const [fim, setFim] = useState(`${anoAtual}-12-31`);
 
   function trocarEmpresa(id) {
     setParams(
@@ -73,20 +66,17 @@ export default function AvancoObras({ nome }) {
               ))}
             </select>
           </div>
-          <div className="ctl">
-            <label htmlFor="f-inicio">Início</label>
-            <CampoDataPeriodo id="f-inicio" value={inicio} onChange={setInicio} disabled={!empresaId} />
-          </div>
-          <div className="ctl">
-            <label htmlFor="f-fim">Fim</label>
-            <CampoDataPeriodo id="f-fim" value={fim} onChange={setFim} disabled={!empresaId} />
-          </div>
         </section>
 
-        <DicaProvider>
-          <CurvasAvanco empresaId={empresaId} />
-        </DicaProvider>
-        <DfcAvancosTab empresaId={empresaId} inicio={inicio} fim={fim} variante="dashboard" />
+        {empresaId ? (
+          <DicaProvider>
+            <CurvasAvanco empresaId={empresaId} />
+          </DicaProvider>
+        ) : (
+          <section className="panel c12">
+            <div className="empty">Selecione a empresa para ver o avanço das obras.</div>
+          </section>
+        )}
       </div>
     </div>
   );

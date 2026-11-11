@@ -137,13 +137,7 @@ function CelulaManual({ valor, onCommit }) {
 // Desvio. PLS e Prevision: mesma conta da antiga Curva de Obras — ver backend
 // dfc-avancos/dfcAvancos.service.js. As obras começam sempre fechadas (pedido do usuário); o manual
 // salva na hora.
-// `variante="dashboard"`: o espelho só de leitura do dashboard Obra 360º › Avanço das Obras (pedido do
-// usuário) — o manual aparece sem edição, o quadro não encosta numa aba e o cabeçalho da tabela gruda
-// no topo da área (o dashboard não tem o p-6 do <main>).
-export default function DfcAvancosTab({ empresaId, inicio, fim, variante = 'aba' }) {
-  const dashboard = variante === 'dashboard';
-  const canto = dashboard ? '' : 'rounded-tl-none';
-  const topo = dashboard ? 'top-0' : '-top-6';
+export default function DfcAvancosTab({ empresaId, inicio, fim }) {
   const [dados, setDados] = useState(null);
   const [carregando, setCarregando] = useState(false);
   const [erroCarga, setErroCarga] = useState('');
@@ -211,7 +205,7 @@ export default function DfcAvancosTab({ empresaId, inicio, fim, variante = 'aba'
 
   if (!empresaId) {
     return (
-      <div className={`flex min-h-70 flex-col items-center justify-center rounded-card ${canto} bg-white text-center shadow-card`}>
+      <div className="flex min-h-70 flex-col items-center justify-center rounded-card rounded-tl-none bg-white text-center shadow-card">
         <HardHat size={28} className="mb-3 text-gray-300" />
         <h2 className="text-sm font-semibold text-gray-900">Selecione uma empresa</h2>
         <p className="mt-1 max-w-sm text-xs text-gray-500">Escolha a empresa no filtro acima para ver o avanço das obras.</p>
@@ -227,7 +221,7 @@ export default function DfcAvancosTab({ empresaId, inicio, fim, variante = 'aba'
   return (
     // min-w-fit: com tabela mais larga que a tela, o quadro branco cresce junto (e a página rola na
     // horizontal) em vez de a tabela vazar pra fora dele.
-    <div className={`min-w-fit rounded-card ${canto} bg-white p-5 shadow-card`}>
+    <div className="min-w-fit rounded-card rounded-tl-none bg-white p-5 shadow-card">
       {statusSalvamento && (
         <div className="-mt-1 mb-3 flex items-center justify-end text-xs" aria-live="polite">
           {statusSalvamento === 'salvando' ? (
@@ -287,13 +281,13 @@ export default function DfcAvancosTab({ empresaId, inicio, fim, variante = 'aba'
             </colgroup>
             <thead>
               <tr className="[&>th:first-child]:rounded-tl-lg [&>th:last-child]:rounded-tr-lg">
-                <th className={`sticky ${topo} left-0 z-30 border-b-2 border-r border-b-blue-500 border-r-blue-100 bg-blue-50 py-2.5 pl-4 pr-3 text-xs font-medium uppercase tracking-wide text-blue-700`}>
+                <th className="sticky -top-6 left-0 z-30 border-b-2 border-r border-b-blue-500 border-r-blue-100 bg-blue-50 py-2.5 pl-4 pr-3 text-xs font-medium uppercase tracking-wide text-blue-700">
                   Centro de custo / Avanço acumulado
                 </th>
                 {meses.map((m) => (
                   <th
                     key={m}
-                    className={`sticky ${topo} z-20 border-b-2 border-l border-b-blue-500 border-l-blue-100 px-2 py-2.5 text-right text-xs font-medium uppercase tracking-wide text-blue-700 ${
+                    className={`sticky -top-6 z-20 border-b-2 border-l border-b-blue-500 border-l-blue-100 px-2 py-2.5 text-right text-xs font-medium uppercase tracking-wide text-blue-700 ${
                       m === mesAtual ? 'bg-blue-100' : 'bg-blue-50'
                     }`}
                     title={m === mesAtual ? 'Mês atual' : undefined}
@@ -407,14 +401,6 @@ export default function DfcAvancosTab({ empresaId, inicio, fim, variante = 'aba'
                             </span>
                           </td>
                           {meses.map((m) => {
-                            if (l.manual && dashboard) {
-                              const v = obra.manual?.[m];
-                              return (
-                                <td key={m} className={`border-b border-l border-gray-100 bg-white px-2 py-1.5 text-right tabular-nums ${vazio(v) ? 'text-gray-300' : 'text-gray-800'}`}>
-                                  {pct(v)}
-                                </td>
-                              );
-                            }
                             if (l.manual) {
                               return (
                                 <td key={m} className="border-b border-l border-gray-100 bg-white p-1">

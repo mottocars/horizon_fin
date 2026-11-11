@@ -1,13 +1,18 @@
 import { useEffect, useMemo, useState } from 'react';
 import { ChevronDown } from 'lucide-react';
 import { listAvancosDfc } from '../../../api/dfcAvancos.api';
+import { listCronogramaCentros } from '../../../api/cronogramaCentros.api';
+import { isoHoje, montarObras } from '../../Operacoes/CronogramasObras/cronogramaObras';
+import { somarDias } from '../../CentrosCusto/cronogramaDatas';
 import { lbl, pct } from '../EconomicoFinanceiro/fluxo/modelo';
 import { COR, useDica, useLargura } from '../EconomicoFinanceiro/fluxo/ganchos';
 
 // Obra 360º › Avanço das Obras: "Avanço por obra" (pedido do usuário) — uma linha-cartão por obra com
-// Prevision (retângulo baixo na largura toda, não linha de tabela) com o avanço acumulado até o mês
-// atual em três colunas: Caixa (PLS, realizado até o último mês liberado no DCD), Prevision do
-// orçamento primário e do secundário. Clicar abre embaixo o gráfico da obra inteira, na largura toda,
+// Prevision (retângulo baixo na largura toda, não linha de tabela): a etapa da carteira de obras em
+// que ela está hoje (a mesma conta da Carteira — montarObras/situacaoHoje —, com o mês da etapa na
+// numeração do Gantt: "mês 18 de 32", e o mês em que a etapa começa e termina) e o avanço acumulado
+// até o mês atual em três colunas: Caixa (PLS, realizado até o último mês liberado no DCD), Prevision
+// do orçamento primário e do secundário. Clicar abre embaixo o gráfico da obra inteira, na largura toda,
 // com as três linhas mês a mês. Dados do /dfc-avancos (?obras=todas: toda obra com Prevision, marcada
 // ou não com "Projeta DFC"), numa janela de 10 anos (5 para trás, 4 para a frente — o servidor aceita
 // até 10; o acumulado já soma tudo o que veio antes, então qualquer janela dá o mesmo valor por mês).
@@ -20,6 +25,24 @@ const SERIES = [
   { chave: 'secundaria', rotulo: 'Prevision · orçamento secundário', curto: 'Secundário', cor: COR.cenario },
 ];
 const vazio = (v) => v === null || v === undefined;
+const mesIso = (iso) => (iso ? lbl(iso.slice(0, 7)) : '–');
+
+// Mês da etapa como no Gantt (GanttObras › BarraObra): o mês de início é o 1; o total vai até o dia
+// seguinte ao fim, arredondado (5 anos de Pós Obra dão 60, não 61). Sem fim: total desconhecido.
+const idxMes = (iso) => Number(iso.slice(0, 4)) * 12 + Number(iso.slice(5, 7)) - 1;
+const posMes = (iso) => {
+  const [a, m, d] = iso.split('-').map(Number);
+  return idxMes(iso) + (d - 1) / new Date(Date.UTC(a, m, 0)).getUTCDate();
+};
+function etapaHoje(obra, hoje) {
+  if (!obra) return { tipo: 'sem' };
+  const { situacao } = obra;
+  if (situacao.tipo !== 'etapa') return situacao;
+  const seg = situacao.segmento;
+  const total = seg.fim ? Math.max(1, Math.round(posMes(somarDias(seg.fim, 1)) - posMes(seg.inicio))) : null;
+  const atual = idxMes(hoje) - idxMes(seg.inicio) + 1;
+  return { tipo: 'etapa', segmento: seg, atual: total ? Math.min(atual, total) : atual, total };
+}
 // O Prevision às vezes soma 100,03% por arredondamento: na tela, no máximo 100%.
 const ate100 = (v) => (vazio(v) ? null : Math.min(v, 100));
 
@@ -70,6 +93,34 @@ function montarObra(obra, meses, mesAtual) {
       secundaria: series.secundaria ? ate100(series.secundaria[m]) : null,
     })),
   };
+}
+
+function Etapa({ e }) {
+  if (e.tipo === 'etapa') {
+    const seg = e.segmento;
+    return (
+      <span className="av-etapa">
+        <span className="av-etapa-nome">
+          <i style={{ background: seg.cor }} />
+          <span>{seg.etapa.descricao}</span>
+          <em>{e.total ? `mês ${e.atual} de ${e.total}` : `mês ${e.atual}`}</em>
+        </span>
+        <small>
+          {mesIso(seg.inicio)} → {seg.fim ? mesIso(seg.fim) : 'sem fim definido'}
+        </small>
+      </span>
+    );
+  }
+  const texto = { aIniciar: 'A iniciar', concluida: 'Concluída', sem: 'Sem cronograma' }[e.tipo];
+  return (
+    <span className="av-etapa">
+      <span className="av-etapa-nome nulo">
+        <i />
+        <span>{texto}</span>
+      </span>
+      {e.tipo === 'aIniciar' && <small>começa em {mesIso(e.segmento.inicio)}</small>}
+    </span>
+  );
 }
 
 function Metrica({ valor, cor, nota }) {
@@ -163,6 +214,7 @@ function GraficoObra({ c }) {
 
 export default function CurvasAvanco({ empresaId }) {
   const [dados, setDados] = useState(null);
+  const [cronograma, setCronograma] = useState(null);
   const [erro, setErro] = useState('');
   const [abertas, setAbertas] = useState([]);
 
@@ -170,11 +222,16 @@ export default function CurvasAvanco({ empresaId }) {
     if (!empresaId) return undefined;
     let vivo = true;
     setDados(null);
+    setCronograma(null);
     setErro('');
     setAbertas([]);
     listAvancosDfc(empresaId, JANELA)
       .then((d) => vivo && setDados(d))
       .catch((e) => vivo && setErro(e.response?.data?.message || 'Não foi possível carregar o avanço das obras.'));
+    // A etapa vem do cronograma da Carteira de obras; sem ele, a coluna fica "Sem cronograma".
+    listCronogramaCentros(empresaId)
+      .then((c) => vivo && setCronograma(c))
+      .catch(() => vivo && setCronograma({ etapas: [], centros: [], atraso: null }));
     return () => {
       vivo = false;
     };
@@ -184,6 +241,13 @@ export default function CurvasAvanco({ empresaId }) {
     () => (dados ? dados.obras.map((o) => montarObra(o, dados.meses, dados.mes_atual)).filter(Boolean) : []),
     [dados]
   );
+  // Etapa de hoje de cada obra (por sienge_id), como na Carteira de obras.
+  const etapas = useMemo(() => {
+    if (!cronograma) return null;
+    const hoje = isoHoje();
+    const porObra = new Map(montarObras(cronograma.centros, cronograma.etapas, hoje, cronograma.atraso).map((o) => [o.centro.sienge_id, o]));
+    return (id) => etapaHoje(porObra.get(id), hoje);
+  }, [cronograma]);
   const alternar = (id) => setAbertas((a) => (a.includes(id) ? a.filter((v) => v !== id) : [...a, id]));
 
   if (!empresaId) return null;
@@ -204,6 +268,7 @@ export default function CurvasAvanco({ empresaId }) {
         <>
           <div className="av-cab" aria-hidden="true">
             <span>Empreendimento</span>
+            <span>Etapa da carteira</span>
             {SERIES.map((s) => (
               <span key={s.chave}>
                 <i style={{ background: s.cor }} />
@@ -219,6 +284,7 @@ export default function CurvasAvanco({ empresaId }) {
                 <div key={c.id} className={`av-item${aberta ? ' aberto' : ''}`}>
                   <button type="button" className="av-linha" aria-expanded={aberta} onClick={() => alternar(c.id)}>
                     <span className="av-nome">{c.nome}</span>
+                    {etapas ? <Etapa e={etapas(c.id)} /> : <span className="av-etapa nulo">…</span>}
                     <Metrica
                       valor={c.hoje.caixa}
                       cor={COR.ink}
