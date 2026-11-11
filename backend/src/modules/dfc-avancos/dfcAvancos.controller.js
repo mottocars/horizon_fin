@@ -30,7 +30,8 @@ async function list(req, res, next) {
   try {
     const empresaId = empresaIdSchema.parse(req.params.empresaId);
     const { inicio, fim } = querySchema.parse(req.query);
-    res.json(await service.avancos(empresaId, inicio, fim));
+    // ?obras=todas: também as obras sem "Projeta DFC" (Curva de avanço por obra do Obra 360º).
+    res.json(await service.avancos(empresaId, inicio, fim, { todasObras: req.query.obras === 'todas' }));
   } catch (err) {
     if (err.issues) return next(erro(400, err.issues[0].message));
     next(err);

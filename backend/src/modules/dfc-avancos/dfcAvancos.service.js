@@ -50,8 +50,10 @@ function acumulado(porMes, meses) {
 //   Prevision), pra conta bater com a do dossiê Excel. É o que a linha da obra e a Projeção CEF usam.
 //   Com o Prevision à frente da Caixa, a obra termina abaixo de 100% (a diferença não é compensada em
 //   mês nenhum) — decisão do usuário; com a Caixa à frente, chega a 100% antes e para.
-// Obras = centros com Tipo = Obra e "Projeta DFC" marcado (aba Centros Custos).
-async function avancos(empresaId, inicio, fim) {
+// Obras = centros com Tipo = Obra e "Projeta DFC" marcado (aba Centros Custos). `todasObras`: todas as
+// de Tipo = Obra, marcadas ou não — a "Curva de avanço por obra" do dashboard Obra 360º (pedido do
+// usuário: toda obra com Prevision tem curva; o "Projeta DFC" só decide quem entra na projeção do caixa).
+async function avancos(empresaId, inicio, fim, { todasObras = false } = {}) {
   const meses = mesesEntre(inicio, fim);
   const { rows: hoje } = await pool.query("SELECT to_char(CURRENT_DATE, 'YYYY-MM') AS mes");
   const mesAtual = hoje[0].mes;
@@ -59,9 +61,9 @@ async function avancos(empresaId, inicio, fim) {
   const { rows: obras } = await pool.query(
     `SELECT sienge_id, name, codigo_contrato_caixa, codigo_prevision, prevision_primary_view
        FROM centros_custo_sienge
-      WHERE empresa_id = $1 AND natureza = 'OBRA' AND projeta_dfc
+      WHERE empresa_id = $1 AND natureza = 'OBRA' AND (projeta_dfc OR $2::boolean)
       ORDER BY name ASC`,
-    [empresaId]
+    [empresaId, todasObras]
   );
 
   const { rows: pls } = await pool.query(

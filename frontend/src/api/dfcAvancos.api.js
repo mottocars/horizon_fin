@@ -3,9 +3,10 @@ import http from './http';
 // Avanço acumulado mês a mês de cada obra entre `inicio` e `fim` ('AAAA-MM-DD'):
 // { meses: ['AAAA-MM'...], mes_atual: 'AAAA-MM', obras: [{ sienge_id, name, contrato,
 // codigo_prevision, ultimo_mes_liberado, pls: { 'AAAA-MM': % | null } | null, prevision: {...} | null,
-// manual: { 'AAAA-MM': % } }] }.
-export function listAvancosDfc(empresaId, { inicio, fim }) {
-  return http.get(`/dfc-avancos/${empresaId}`, { params: { inicio, fim } }).then((res) => res.data);
+// manual: { 'AAAA-MM': % } }] }. `todasObras`: também as obras sem "Projeta DFC" (Curva de avanço do Obra 360º).
+export function listAvancosDfc(empresaId, { inicio, fim, todasObras = false }) {
+  const params = todasObras ? { inicio, fim, obras: 'todas' } : { inicio, fim };
+  return http.get(`/dfc-avancos/${empresaId}`, { params }).then((res) => res.data);
 }
 
 // Grava (percentual número) ou apaga (null) o avanço acumulado manual da obra no mês 'AAAA-MM'.

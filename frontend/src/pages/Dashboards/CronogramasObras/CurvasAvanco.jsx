@@ -11,7 +11,8 @@ import { COR, useDica, useLargura } from '../EconomicoFinanceiro/fluxo/ganchos';
 // para a frente (o servidor aceita até 10 anos; o acumulado já soma tudo o que veio antes, então
 // qualquer janela dá o mesmo valor em cada mês).
 const ANO = new Date().getFullYear();
-const JANELA = { inicio: `${ANO - 5}-01-01`, fim: `${ANO + 4}-12-31` };
+// Todas as obras (Tipo = Obra), não só as com "Projeta DFC": toda obra com Prevision tem curva.
+const JANELA = { inicio: `${ANO - 5}-01-01`, fim: `${ANO + 4}-12-31`, todasObras: true };
 const vazio = (v) => v === null || v === undefined;
 const pp = (v) => (vazio(v) ? '–' : `${v > 0 ? '+' : ''}${v.toLocaleString('pt-BR', { minimumFractionDigits: 1, maximumFractionDigits: 1 })} pp`);
 
@@ -79,6 +80,8 @@ function CurvaObra({ c }) {
   if (iNow > 0 && iNow < n - 1 && x(iNow) - x(0) > 56 && x(n - 1) - x(iNow) > 56) marcas.splice(1, 0, iNow);
   // Valor do realizado: à esquerda do ponto; perto do eixo, à direita.
   const realEsq = ultReal && x(ultReal[1]) - m.l > 50;
+  // Valor do previsto de hoje: à direita do ponto; perto da borda direita (obra já no fim), à esquerda.
+  const prevDir = iNow >= 0 && W - m.r - x(iNow) > 50;
   return (
     <div className="chart" ref={ref}>
       <svg viewBox={`0 0 ${W} ${H}`} role="img" aria-label={`Curva de avanço de ${c.nome}`}>
@@ -102,7 +105,7 @@ function CurvaObra({ c }) {
         {iNow >= 0 && (
           <g>
             <circle cx={x(iNow)} cy={y(rows[iNow].previsto)} r={4} fill={COR.entrada} stroke={COR.surface} strokeWidth={2} />
-            <text x={x(iNow) + 6} y={y(rows[iNow].previsto) - 8} className="val">
+            <text x={x(iNow) + (prevDir ? 6 : -6)} y={y(rows[iNow].previsto) - 8} textAnchor={prevDir ? 'start' : 'end'} className="val">
               {pct(rows[iNow].previsto)}
             </text>
           </g>
