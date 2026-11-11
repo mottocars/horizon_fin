@@ -36,5 +36,6 @@ router.delete('/distribuicao/participantes/:usuarioId', soAdministrador, control
 router.put('/distribuicao/participantes/:usuarioId/pausa', soAdministrador, controller.pausarParticipante);
 router.post('/distribuicao/participantes/:usuarioId/substituir', soAdministrador, controller.substituirParticipante);
 router.post('/distribuicao/distribuir', soAdministrador, controller.distribuirHoje);
+router.post('/distribuicao/distribuir-passado', soAdministrador, controller.distribuirPassado);
 
 module.exports = router;

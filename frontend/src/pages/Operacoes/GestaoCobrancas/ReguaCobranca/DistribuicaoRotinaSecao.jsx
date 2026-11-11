@@ -24,6 +24,7 @@ import { ehAdministradorDaTela } from '../../../../utils/permissoes';
 import {
   adicionarAtendenteDistribuicao,
   distribuirHojeReguaCobranca,
+  distribuirPassadoReguaCobranca,
   getDistribuicaoReguaCobranca,
   pausarAtendenteDistribuicao,
   removerAtendenteDistribuicao,
@@ -175,6 +176,108 @@ function ModalSubstituir({ atendente, elegiveis, onClose, onConfirmar }) {
   );
 }
 
+// Primeiro dia do mês de uma data AAAA-MM-DD e o dia anterior a ela.
+const inicioDoMes = (iso) => `${iso.slice(0, 8)}01`;
+function diaAnterior(iso) {
+  const d = new Date(`${iso}T00:00:00Z`);
+  d.setUTCDate(d.getUTCDate() - 1);
+  return d.toISOString().slice(0, 10);
+}
+
+// "Distribuir Tarefas Passadas": os clientes que ficaram "A distribuir" em
+// dias anteriores a hoje ganham dono pela mesma regra, dia a dia (ver
+// distribuicao.service.js::distribuirPassado). Período padrão: do dia 1º do
+// mês até ontem (no dia 1º, o mês anterior inteiro).
+function ModalDistribuirPassado({ open, painel, onClose, onConfirmar }) {
+  const ontem = painel?.data ? diaAnterior(painel.data) : '';
+  const [de, setDe] = useState('');
+  const [ate, setAte] = useState('');
+  const [salvando, setSalvando] = useState(false);
+  const [erro, setErro] = useState('');
+  useEffect(() => {
+    if (open && ontem) {
+      setDe(inicioDoMes(ontem));
+      setAte(ontem);
+      setErro('');
+    }
+  }, [open, ontem]);
+
+  async function confirmar() {
+    if (!de || !ate) return setErro('Informe o período.');
+    if (de > ate) return setErro('A data inicial não pode ser depois da final.');
+    setSalvando(true);
+    try {
+      await onConfirmar(de, ate);
+    } catch (err) {
+      setErro(err.response?.data?.message || 'Não foi possível distribuir as tarefas passadas.');
+    } finally {
+      setSalvando(false);
+    }
+  }
+
+  return (
+    <Modal open={open} onClose={onClose} title="Distribuir tarefas passadas" maxWidthClass="max-w-lg">
+      <div className="space-y-4 text-sm text-gray-600">
+        <p>
+          Os clientes que ficaram <b className="font-medium text-gray-800">A distribuir</b> em dias anteriores a hoje ganham dono,
+          dia a dia, pela mesma regra da distribuição diária:
+        </p>
+        <ul className="space-y-2">
+          <li className="flex gap-2">
+            <CheckCircle2 size={16} className="mt-0.5 shrink-0 text-emerald-500" />
+            <span>
+              <b className="font-medium text-gray-800">Quem já tinha dono no dia continua com ele.</b> Só os clientes sem dono são
+              distribuídos.
+            </span>
+          </li>
+          <li className="flex gap-2">
+            <CheckCircle2 size={16} className="mt-0.5 shrink-0 text-emerald-500" />
+            <span>Cliente que já está na carteira de alguém vai para essa pessoa; os demais entram na carteira de quem receber.</span>
+          </li>
+          <li className="flex gap-2">
+            <AlertTriangle size={16} className="mt-0.5 shrink-0 text-amber-500" />
+            <span>
+              No relatório Desempenho da Cobrança, essas tarefas passam a contar para quem recebeu — se ninguém fez o contato
+              naquele dia, entram como não feitas.
+            </span>
+          </li>
+        </ul>
+        <div className="grid grid-cols-2 gap-3">
+          <div>
+            <label className="mb-1 block text-xs font-medium text-gray-700">De</label>
+            <input
+              type="date"
+              value={de}
+              max={ontem}
+              onChange={(e) => setDe(e.target.value)}
+              className="w-full rounded-lg border border-gray-200 px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-primary-100"
+            />
+          </div>
+          <div>
+            <label className="mb-1 block text-xs font-medium text-gray-700">Até</label>
+            <input
+              type="date"
+              value={ate}
+              max={ontem}
+              onChange={(e) => setAte(e.target.value)}
+              className="w-full rounded-lg border border-gray-200 px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-primary-100"
+            />
+          </div>
+        </div>
+        <p className="text-xs text-gray-500">Até ontem; no máximo 92 dias por vez. A mudança fica registrada em "Últimas mudanças".</p>
+        {erro && <p className="rounded-lg bg-red-50 px-3 py-2 text-xs text-red-600">{erro}</p>}
+        <div className="flex justify-end gap-2">
+          <Button variant="secondary" onClick={onClose}>Cancelar</Button>
+          <Button onClick={confirmar} loading={salvando}>
+            <History size={15} />
+            Distribuir Tarefas Passadas
+          </Button>
+        </div>
+      </div>
+    </Modal>
+  );
+}
+
 function ModalRedistribuir({ open, painel, onClose, onConfirmar }) {
   const [equilibrar, setEquilibrar] = useState(false);
   const [salvando, setSalvando] = useState(false);
@@ -299,6 +402,7 @@ export default function DistribuicaoRotinaSecao({ empresaId }) {
   const [pausando, setPausando] = useState(null);
   const [substituindo, setSubstituindo] = useState(null);
   const [redistribuindo, setRedistribuindo] = useState(false);
+  const [distribuindoPassado, setDistribuindoPassado] = useState(false);
   const [logAberto, setLogAberto] = useState(false);
 
   const carregar = useCallback(() => {
@@ -556,6 +660,15 @@ export default function DistribuicaoRotinaSecao({ empresaId }) {
                   <Shuffle size={15} />
                   Redistribuir hoje
                 </Button>
+                <Button
+                  variant="secondary"
+                  disabled={ativos === 0 || Boolean(ocupado)}
+                  onClick={() => setDistribuindoPassado(true)}
+                  title={'Dá dono aos clientes que ficaram "A distribuir" em dias anteriores a hoje'}
+                >
+                  <History size={15} />
+                  Distribuir Tarefas Passadas
+                </Button>
               </div>
             )}
           </div>
@@ -775,6 +888,15 @@ export default function DistribuicaoRotinaSecao({ empresaId }) {
         onConfirmar={async (para) => {
           await executar(`substituir-${substituindo.usuario_id}`, () => substituirAtendenteDistribuicao(empresaId, substituindo.usuario_id, para), 'Substituição feita.', { erroNoModal: true });
           setSubstituindo(null);
+        }}
+      />
+      <ModalDistribuirPassado
+        open={distribuindoPassado}
+        painel={painel}
+        onClose={() => setDistribuindoPassado(false)}
+        onConfirmar={async (de, ate) => {
+          await executar('distribuir-passado', () => distribuirPassadoReguaCobranca(empresaId, { de, ate }), null, { erroNoModal: true });
+          setDistribuindoPassado(false);
         }}
       />
       <ModalRedistribuir

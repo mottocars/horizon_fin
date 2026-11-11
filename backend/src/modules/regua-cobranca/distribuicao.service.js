@@ -277,12 +277,18 @@ function compararGravidade(a, b) {
 // cliente: valor/títulos somam as parcelas distintas do cliente no dia (uma
 // parcela rateada em 2 centros de custo conta 1 vez só) e a faixa é a etapa
 // da parcela mais grave.
-async function clientesDoDia(empresaId, data) {
+async function itensDaRotina(empresaId, dataInicio, dataFim) {
   // require tardio: rotinas.service.js também usa este módulo.
   const rotinas = require('../rotinas/rotinas.service');
   const etapas = await rotinas.carregarEtapasRotina(empresaId, null);
-  const itens = await rotinas.calcularItens(empresaId, etapas, { dataInicio: data, dataFim: data });
+  return rotinas.calcularItens(empresaId, etapas, { dataInicio, dataFim });
+}
 
+async function clientesDoDia(empresaId, data) {
+  return agruparClientes(await itensDaRotina(empresaId, data, data));
+}
+
+function agruparClientes(itens) {
   const porCliente = new Map();
   for (const item of itens) {
     const chave = String(item.client_id);
@@ -424,12 +430,21 @@ async function equilibrarCarteiras(db, empresaId, data, ativos, carteira) {
 //     fica com quem trabalhou.
 //   equilibrarCarteiras = true: antes de redistribuir, repassa parte das
 //     carteiras maiores pras menores (ver equilibrarCarteiras).
-async function distribuirDia(empresaId, { redistribuir = false, equilibrar = false, usuarioId = null } = {}) {
+//   passado = true ("Distribuir Tarefas Passadas", via distribuirPassado):
+//     distribui um dia ANTERIOR a hoje (`data`) com a mesma regra, só pros
+//     clientes daquele dia ainda sem dono — o que já estava gravado nesse
+//     dia nunca muda nem sai; não libera carteira (isso é coisa do dia de
+//     hoje); a última aparição na carteira nunca volta pra trás; e não grava
+//     log por dia (distribuirPassado grava um só, com o resumo).
+async function distribuirDia(
+  empresaId,
+  { redistribuir = false, equilibrar = false, usuarioId = null, passado = false, data: dataAlvo = null, clientes: clientesProntos = null } = {}
+) {
   const cfg = await getConfig(empresaId);
   if (cfg.modo !== 'automatica') {
-    throw badRequest('A distribuição automática não está ligada nesta empresa (Régua de Cobrança > Configurações Globais).');
+    throw badRequest('A distribuição automática não está ligada nesta empresa (Gestão de Cobranças > Configurações).');
   }
-  const data = await hoje(empresaId);
+  const data = passado ? dataAlvo : await hoje(empresaId);
   const participantes = await carregarParticipantes(empresaId);
   const ativos = participantes.filter((p) => !pausadoNoDia(p, data)).map((p) => String(p.usuario_id));
   if (ativos.length === 0) throw badRequest('Nenhum atendente ativo para receber a distribuição.');
@@ -437,7 +452,7 @@ async function distribuirDia(empresaId, { redistribuir = false, equilibrar = fal
   const participa = new Set(participantes.map((p) => String(p.usuario_id)));
   const nomePor = new Map(participantes.map((p) => [String(p.usuario_id), p.nome]));
 
-  const clientes = await clientesDoDia(empresaId, data);
+  const clientes = clientesProntos || (await clientesDoDia(empresaId, data));
 
   const db = await pool.connect();
   try {
@@ -447,10 +462,13 @@ async function distribuirDia(empresaId, { redistribuir = false, equilibrar = fal
 
     // Liberação: cliente sem aparecer na Rotina há mais de `dias_liberacao`
     // dias sai da carteira — na próxima vez que aparecer, é cliente novo.
-    const { rowCount: liberados } = await db.query(
-      `DELETE FROM regua_cobranca_carteira WHERE empresa_id = $1 AND ultima_aparicao < ($2::date - $3::int)`,
-      [empresaId, data, cfg.dias_liberacao]
-    );
+    const { rowCount: liberados } = passado
+      ? { rowCount: 0 }
+      : await db.query(`DELETE FROM regua_cobranca_carteira WHERE empresa_id = $1 AND ultima_aparicao < ($2::date - $3::int)`, [
+          empresaId,
+          data,
+          cfg.dias_liberacao,
+        ]);
 
     const { rows: cart } = await db.query(
       'SELECT client_id::text, usuario_id::text FROM regua_cobranca_carteira WHERE empresa_id = $1',
@@ -486,7 +504,7 @@ async function distribuirDia(empresaId, { redistribuir = false, equilibrar = fal
     const livres = [];
     for (const c of clientes) {
       const ex = existentes.get(c.client_id);
-      const manter = ex && (trabalhados.has(c.client_id) || (!redistribuir && participa.has(ex.usuario_id)));
+      const manter = ex && (passado || trabalhados.has(c.client_id) || (!redistribuir && participa.has(ex.usuario_id)));
       if (manter) {
         somar(ex.usuario_id, c);
         decisoes.push({ cliente: c, usuario: ex.usuario_id, motivo: ex.motivo, mantido: true });
@@ -536,12 +554,15 @@ async function distribuirDia(empresaId, { redistribuir = false, equilibrar = fal
     const idsHoje = clientes.map((c) => c.client_id);
     // Cliente que saiu da Rotina de hoje (pagou, base atualizada) e não foi
     // trabalhado: sai da distribuição do dia.
-    await db.query(
-      `DELETE FROM regua_cobranca_distribuicao_itens
-       WHERE empresa_id = $1 AND data = $2 AND NOT (client_id = ANY($3::bigint[])) AND NOT (client_id = ANY($4::bigint[]))`,
-      [empresaId, data, idsHoje, [...trabalhados]]
-    );
-    if (decisoes.length) {
+    if (!passado) {
+      await db.query(
+        `DELETE FROM regua_cobranca_distribuicao_itens
+         WHERE empresa_id = $1 AND data = $2 AND NOT (client_id = ANY($3::bigint[])) AND NOT (client_id = ANY($4::bigint[]))`,
+        [empresaId, data, idsHoje, [...trabalhados]]
+      );
+    }
+    const novas = passado ? decisoes.filter((d) => !d.mantido) : decisoes;
+    if (novas.length) {
       await db.query(
         `INSERT INTO regua_cobranca_distribuicao_itens (empresa_id, data, client_id, usuario_id, motivo, faixa, valor, titulos, gerado_em)
          SELECT $1, $2, x.client_id, x.usuario_id, x.motivo, x.faixa, x.valor, x.titulos, $3
@@ -556,19 +577,19 @@ async function distribuirDia(empresaId, { redistribuir = false, equilibrar = fal
           empresaId,
           data,
           agora,
-          decisoes.map((d) => d.cliente.client_id),
-          decisoes.map((d) => Number(d.usuario)),
-          decisoes.map((d) => d.motivo),
-          decisoes.map((d) => d.cliente.faixa.rotulo),
-          decisoes.map((d) => d.cliente.valor),
-          decisoes.map((d) => d.cliente.titulos),
+          novas.map((d) => d.cliente.client_id),
+          novas.map((d) => Number(d.usuario)),
+          novas.map((d) => d.motivo),
+          novas.map((d) => d.cliente.faixa.rotulo),
+          novas.map((d) => d.cliente.valor),
+          novas.map((d) => d.cliente.titulos),
         ]
       );
     }
 
     // Carteira: quem recebeu (fora cobertura) vira/continua dono; cobertura
     // só renova a última aparição na carteira do dono pausado.
-    const paraCarteira = decisoes.filter((d) => d.motivo !== 'cobertura' && participa.has(d.usuario));
+    const paraCarteira = novas.filter((d) => d.motivo !== 'cobertura' && participa.has(d.usuario));
     if (paraCarteira.length) {
       await db.query(
         `INSERT INTO regua_cobranca_carteira (empresa_id, client_id, usuario_id, desde, ultima_aparicao)
@@ -576,24 +597,33 @@ async function distribuirDia(empresaId, { redistribuir = false, equilibrar = fal
          ON CONFLICT (empresa_id, client_id) DO UPDATE SET
            desde = CASE WHEN regua_cobranca_carteira.usuario_id = EXCLUDED.usuario_id
                         THEN regua_cobranca_carteira.desde ELSE EXCLUDED.desde END,
-           usuario_id = EXCLUDED.usuario_id, ultima_aparicao = EXCLUDED.ultima_aparicao`,
+           usuario_id = EXCLUDED.usuario_id,
+           ultima_aparicao = GREATEST(regua_cobranca_carteira.ultima_aparicao, EXCLUDED.ultima_aparicao)`,
         [empresaId, data, paraCarteira.map((d) => d.cliente.client_id), paraCarteira.map((d) => Number(d.usuario))]
       );
     }
-    const coberturas = decisoes.filter((d) => d.motivo === 'cobertura').map((d) => d.cliente.client_id);
+    const coberturas = novas.filter((d) => d.motivo === 'cobertura').map((d) => d.cliente.client_id);
     if (coberturas.length) {
       await db.query(
-        'UPDATE regua_cobranca_carteira SET ultima_aparicao = $2 WHERE empresa_id = $1 AND client_id = ANY($3::bigint[])',
+        'UPDATE regua_cobranca_carteira SET ultima_aparicao = GREATEST(ultima_aparicao, $2) WHERE empresa_id = $1 AND client_id = ANY($3::bigint[])',
         [empresaId, data, coberturas]
       );
     }
 
-    await db.query('DELETE FROM regua_cobranca_distribuicao_presencas WHERE empresa_id = $1 AND data = $2', [empresaId, data]);
-    await db.query(
-      `INSERT INTO regua_cobranca_distribuicao_presencas (empresa_id, data, usuario_id)
-       SELECT $1, $2, x FROM unnest($3::int[]) AS x`,
-      [empresaId, data, ativos.map(Number)]
-    );
+    // Dia passado que já tinha distribuição: quem estava naquele dia continua
+    // sendo quem estava (as presenças são o placar do mês). Dia passado sem
+    // nenhuma: a equipe ativa naquele dia passa a contar como presente.
+    const { rowCount: jaTinhaPresenca } = passado
+      ? await db.query('SELECT 1 FROM regua_cobranca_distribuicao_presencas WHERE empresa_id = $1 AND data = $2 LIMIT 1', [empresaId, data])
+      : { rowCount: 0 };
+    if (!passado) await db.query('DELETE FROM regua_cobranca_distribuicao_presencas WHERE empresa_id = $1 AND data = $2', [empresaId, data]);
+    if (!jaTinhaPresenca && (!passado || novas.length)) {
+      await db.query(
+        `INSERT INTO regua_cobranca_distribuicao_presencas (empresa_id, data, usuario_id)
+         SELECT $1, $2, x FROM unnest($3::int[]) AS x`,
+        [empresaId, data, ativos.map(Number)]
+      );
+    }
 
     // Resumo (vai pro log e pro histórico do Monitor).
     const porAtendente = new Map();
@@ -626,6 +656,10 @@ async function distribuirDia(empresaId, { redistribuir = false, equilibrar = fal
     // Execução incremental sem nada novo (ex.: o Monitor rodou de novo no
     // mesmo dia) não polui o registro de mudanças.
     const alterados = decisoes.filter((d) => !d.mantido).length;
+    if (passado) {
+      await db.query('COMMIT');
+      return { data, novas: novas.map((d) => ({ usuario: d.usuario, valor: d.cliente.valor, motivo: d.motivo })), nomePor };
+    }
     if (!redistribuir && alterados === 0 && decisoes.length > 0) {
       resumo = `Nada novo para distribuir: os ${decisoes.length} cliente(s) de hoje já estavam distribuídos.`;
     } else {
@@ -639,6 +673,69 @@ async function distribuirDia(empresaId, { redistribuir = false, equilibrar = fal
   } finally {
     db.release();
   }
+}
+
+// "Distribuir Tarefas Passadas" (Configurações › Distribuição da Rotina): os
+// clientes que ficaram "A distribuir" em dias anteriores a hoje (dia sem
+// distribuição gravada — antes da distribuição existir, ou dia em que ela não
+// rodou) ganham dono pela mesma regra, dia a dia, do mais antigo pro mais
+// novo (o placar do mês e a carteira vão se formando na ordem certa). A
+// carteira de hoje vale como continuidade: o cliente vai pra quem já é dono
+// dele. Os clientes de cada dia são os mesmos que a Rotina mostra naquele dia
+// (parcelas em aberto hoje, com a régua de hoje). Um log só, com o resumo.
+const MAX_DIAS_PASSADOS = 92;
+
+async function distribuirPassado(empresaId, { de, ate, usuarioId = null } = {}) {
+  const cfg = await getConfig(empresaId);
+  if (cfg.modo !== 'automatica') {
+    throw badRequest('A distribuição automática não está ligada nesta empresa (Gestão de Cobranças > Configurações).');
+  }
+  const h = await hoje(empresaId);
+  const ontem = somarDiasIso(h, -1);
+  if (!de || !ate) throw badRequest('Informe o período.');
+  if (de > ate) throw badRequest('A data inicial não pode ser depois da final.');
+  if (ate > ontem) throw badRequest('Só dá para distribuir dias anteriores a hoje — para hoje, use "Distribuir agora" ou "Redistribuir hoje".');
+  const dias = [];
+  for (let d = de; d <= ate; d = somarDiasIso(d, 1)) dias.push(d);
+  if (dias.length > MAX_DIAS_PASSADOS) throw badRequest(`No máximo ${MAX_DIAS_PASSADOS} dias por vez.`);
+
+  // Os itens do período inteiro de uma vez (a mesma conta da Rotina), separados por dia.
+  const itens = await itensDaRotina(empresaId, de, ate);
+  const porDia = new Map();
+  for (const item of itens) {
+    if (!porDia.has(item.data)) porDia.set(item.data, []);
+    porDia.get(item.data).push(item);
+  }
+
+  const porAtendente = new Map();
+  let total = 0;
+  let diasComNovos = 0;
+  let nomePor = new Map();
+  for (const data of dias) {
+    const clientes = agruparClientes(porDia.get(data) || []);
+    if (!clientes.length) continue;
+    const r = await distribuirDia(empresaId, { passado: true, data, clientes, usuarioId });
+    nomePor = r.nomePor;
+    if (!r.novas.length) continue;
+    diasComNovos++;
+    for (const n of r.novas) {
+      const a = porAtendente.get(n.usuario) || { clientes: 0, valor: 0 };
+      a.clientes++;
+      a.valor += n.valor;
+      porAtendente.set(n.usuario, a);
+      total++;
+    }
+  }
+
+  const br = (iso) => iso.split('-').reverse().join('/');
+  const partes = [...porAtendente.entries()]
+    .map(([u, a]) => `${nomePor.get(u) || 'Usuário removido'} ${a.clientes} (${moeda(a.valor)})`)
+    .sort((a, b) => a.localeCompare(b, 'pt-BR'));
+  const resumo = total
+    ? `Tarefas passadas de ${br(de)} a ${br(ate)}: ${total} cliente(s)-dia distribuído(s) em ${diasComNovos} dia(s) — ${partes.join(' · ')}.`
+    : `Tarefas passadas de ${br(de)} a ${br(ate)}: nada a distribuir (todos os clientes desses dias já tinham dono).`;
+  if (total) await registrarLog(pool, empresaId, 'distribuicao_passada', resumo, usuarioId);
+  return { resumo, total, dias: diasComNovos };
 }
 
 // ─── leitura (Rotina, Gestão das Parcelas, painel) ─────────────────────────
@@ -832,6 +929,8 @@ module.exports = {
   pausarParticipante,
   substituirParticipante,
   distribuirDia,
+  distribuirPassado,
+  MAX_DIAS_PASSADOS,
   donosNoPeriodo,
   mapaDonosCarteira,
   getPainel,

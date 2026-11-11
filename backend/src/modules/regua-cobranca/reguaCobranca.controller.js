@@ -298,6 +298,15 @@ const distribuirHoje = rotaDistribuicao(async (req, empresaId) => {
   return { resultado: resumo };
 });
 
+// "Distribuir Tarefas Passadas": os dias anteriores a hoje sem dono, pela mesma regra (ver
+// distribuicao.service.js::distribuirPassado).
+const periodoPassadoSchema = z.object({ de: dataSchema, ate: dataSchema });
+const distribuirPassado = rotaDistribuicao(async (req, empresaId) => {
+  const { de, ate } = periodoPassadoSchema.parse(req.body || {});
+  const { resumo } = await distribuicao.distribuirPassado(empresaId, { de, ate, usuarioId: req.user.id });
+  return { resultado: resumo };
+});
+
 module.exports = {
   getResumo,
   listResponsaveis,
@@ -320,4 +329,5 @@ module.exports = {
   pausarParticipante,
   substituirParticipante,
   distribuirHoje,
+  distribuirPassado,
 };

@@ -128,6 +128,13 @@ export function substituirAtendenteDistribuicao(empresaId, usuarioId, paraUsuari
 // redistribuir=false: "Distribuir agora" (só quem ainda não tem dono hoje);
 // redistribuir=true: "Redistribuir hoje" (refaz o dia; `equilibrar` repassa
 // parte das carteiras maiores pras menores). A resposta traz `resultado`.
+// "Distribuir Tarefas Passadas": dias anteriores a hoje (de/ate AAAA-MM-DD) com clientes ainda "A distribuir".
+export function distribuirPassadoReguaCobranca(empresaId, { de, ate }) {
+  return http
+    .post('/regua-cobranca/distribuicao/distribuir-passado', { de, ate }, { params: { empresa_id: empresaId } })
+    .then((res) => res.data);
+}
+
 export function distribuirHojeReguaCobranca(empresaId, { redistribuir = false, equilibrar = false } = {}) {
   return http
     .post('/regua-cobranca/distribuicao/distribuir', { redistribuir, equilibrar }, { params: { empresa_id: empresaId } })
