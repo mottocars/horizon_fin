@@ -200,13 +200,23 @@
   text-transform: uppercase;
   color: var(--muted);
 }
+.painel-cfo .av-cab > span {
+  display: flex;
+  align-items: center;
+  gap: 7px;
+  min-width: 0;
+}
 .painel-cfo .av-cab i {
-  display: inline-block;
+  flex: none;
   width: 12px;
   height: 3px;
-  margin-right: 7px;
   border-radius: 2px;
-  vertical-align: middle;
+}
+/* Logomarca do sistema (Caixa, Prevision) no lugar do nome da coluna. */
+.painel-cfo .av-cab img {
+  flex: none;
+  width: auto;
+  height: 20px;
 }
 .painel-cfo .av-lista {
   display: flex;

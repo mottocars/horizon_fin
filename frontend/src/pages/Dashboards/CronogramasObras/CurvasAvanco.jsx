@@ -4,6 +4,8 @@ import { listAvancosDfc } from '../../../api/dfcAvancos.api';
 import { listCronogramaCentros } from '../../../api/cronogramaCentros.api';
 import { isoHoje, montarObras } from '../../Operacoes/CronogramasObras/cronogramaObras';
 import { somarDias } from '../../CentrosCusto/cronogramaDatas';
+import iconCaixa from '../../../assets/integracoes/portal-construtoras.svg';
+import iconPrevision from '../../../assets/integracoes/prevision.svg';
 import { lbl, pct } from '../EconomicoFinanceiro/fluxo/modelo';
 import { COR, useDica, useLargura } from '../EconomicoFinanceiro/fluxo/ganchos';
 
@@ -19,10 +21,12 @@ import { COR, useDica, useLargura } from '../EconomicoFinanceiro/fluxo/ganchos';
 const ANO = new Date().getFullYear();
 const JANELA = { inicio: `${ANO - 5}-01-01`, fim: `${ANO + 4}-12-31`, todasObras: true };
 
+// No cabeçalho das colunas, a logomarca do sistema no lugar do nome (pedido do usuário) — os mesmos
+// ícones da aba DFC › Avanços; nas do Prevision, ao lado, qual orçamento.
 const SERIES = [
-  { chave: 'caixa', rotulo: 'Caixa (PLS)', curto: 'Caixa', cor: COR.ink },
-  { chave: 'primaria', rotulo: 'Prevision · orçamento primário', curto: 'Primário', cor: COR.entrada },
-  { chave: 'secundaria', rotulo: 'Prevision · orçamento secundário', curto: 'Secundário', cor: COR.cenario },
+  { chave: 'caixa', rotulo: 'Caixa (PLS)', curto: 'Caixa', cor: COR.ink, logo: iconCaixa },
+  { chave: 'primaria', rotulo: 'Prevision · orçamento primário', curto: 'Primário', cor: COR.entrada, logo: iconPrevision, sub: 'Orçamento primário' },
+  { chave: 'secundaria', rotulo: 'Prevision · orçamento secundário', curto: 'Secundário', cor: COR.cenario, logo: iconPrevision, sub: 'Orçamento secundário' },
 ];
 const vazio = (v) => v === null || v === undefined;
 const mesIso = (iso) => (iso ? lbl(iso.slice(0, 7)) : '–');
@@ -265,13 +269,14 @@ export default function CurvasAvanco({ empresaId }) {
         <div className="empty">Nenhuma obra com Prevision nesta empresa.</div>
       ) : (
         <>
-          <div className="av-cab" aria-hidden="true">
+          <div className="av-cab">
             <span>Empreendimento</span>
             <span>Etapa da carteira</span>
             {SERIES.map((s) => (
               <span key={s.chave}>
                 <i style={{ background: s.cor }} />
-                {s.rotulo}
+                <img src={s.logo} alt={s.sub ? 'Prevision' : 'Caixa'} title={s.rotulo} />
+                {s.sub}
               </span>
             ))}
             <span />
