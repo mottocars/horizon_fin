@@ -120,8 +120,9 @@ export default function AppShell() {
           </main>
           {/* Camada fixa sobre a área de conteúdo dos Dashboards (não rola com a página e não passa por
               cima do menu lateral): botões flutuantes e barras de Menu/Filtros entram aqui por portal
-              — ver pages/Dashboards/ControlesDashboard.jsx. */}
-          {telaCheia && <div id="camada-dashboard" className="pointer-events-none absolute inset-0 z-30" />}
+              — ver pages/Dashboards/ControlesDashboard.jsx. z-45: acima das barras de filtros (z 35) e dos
+              painéis em tela cheia (z 40) dos dashboards, abaixo da janela de Sumário (50) e das dicas (60). */}
+          {telaCheia && <div id="camada-dashboard" className="pointer-events-none absolute inset-0 z-[45]" />}
         </div>
       </div>
     </SidebarProvider>
