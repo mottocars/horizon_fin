@@ -130,6 +130,18 @@ async function avancos(empresaId, inicio, fim, { todasObras = false } = {}) {
           porMesPrev[r.mes] = Number(r.avanco || 0) * 100;
         });
       const previsionAcumulado = Object.keys(porMesPrev).length ? acumulado(porMesPrev, meses) : null;
+      // Os dois orçamentos do Prevision, cada um no seu acumulado (Avanço das Obras do Obra 360º —
+      // pedido do usuário: Caixa × orçamento primário × orçamento secundário). Orçamento sem avanço
+      // nenhum (tudo zero) = a obra não tem esse orçamento: null.
+      const previsionDaVisao = (primaria) => {
+        const porMes = {};
+        prevision
+          .filter((r) => temPrevision && r.sienge_id === o.sienge_id && r.primary_view === primaria)
+          .forEach((r) => {
+            porMes[r.mes] = Number(r.avanco || 0) * 100;
+          });
+        return Object.values(porMes).some((v) => v > 0) ? acumulado(porMes, meses) : null;
+      };
 
       let encadeado = null;
       if (plsAcumulado && previsionAcumulado && meses[meses.length - 1] >= mesAtual) {
@@ -155,6 +167,8 @@ async function avancos(empresaId, inicio, fim, { todasObras = false } = {}) {
         ultimo_mes_liberado: ultimoMes,
         pls: plsAcumulado,
         prevision: previsionAcumulado,
+        prevision_primaria: previsionDaVisao(true),
+        prevision_secundaria: previsionDaVisao(false),
         encadeado,
         manual: Object.fromEntries(
           manual.filter((r) => r.sienge_id === o.sienge_id).map((r) => [r.mes, Number(r.percentual)])

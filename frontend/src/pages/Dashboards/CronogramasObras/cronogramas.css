@@ -180,3 +180,145 @@
   color: var(--ink-2);
   cursor: pointer;
 }
+
+/* Obra 360º › Avanço das Obras › "Avanço por obra" (CurvasAvanco.jsx): uma linha-cartão por obra —
+   retângulo baixo na largura toda (não linha de tabela), com o nome e as três colunas de avanço
+   (Caixa, Prevision primário e secundário); aberta, o gráfico da obra aparece embaixo, no mesmo
+   cartão. O cabeçalho (.av-cab) usa as mesmas colunas da linha. */
+.painel-cfo .av-cab,
+.painel-cfo .av-linha {
+  display: grid;
+  grid-template-columns: minmax(200px, 1.3fr) repeat(3, minmax(150px, 1fr)) 20px;
+  align-items: center;
+  gap: 0 28px;
+}
+.painel-cfo .av-cab {
+  padding: 4px 20px 8px;
+  font-size: 11.5px;
+  font-weight: 600;
+  letter-spacing: 0.05em;
+  text-transform: uppercase;
+  color: var(--muted);
+}
+.painel-cfo .av-cab i {
+  display: inline-block;
+  width: 12px;
+  height: 3px;
+  margin-right: 7px;
+  border-radius: 2px;
+  vertical-align: middle;
+}
+.painel-cfo .av-lista {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+}
+.painel-cfo .av-item {
+  border: 1px solid var(--line);
+  border-radius: 10px;
+  background: #fff;
+  overflow: hidden;
+  transition:
+    border-color 0.15s,
+    box-shadow 0.15s;
+}
+.painel-cfo .av-item:hover {
+  border-color: #b8c3ca;
+  box-shadow: 0 2px 10px rgb(19 32 42 / 0.06);
+}
+.painel-cfo .av-item.aberto {
+  border-color: var(--accent);
+  box-shadow: 0 6px 18px rgb(19 32 42 / 0.09);
+}
+.painel-cfo .av-linha {
+  width: 100%;
+  min-height: 60px;
+  padding: 10px 20px;
+  border: 0;
+  background: transparent;
+  text-align: left;
+  cursor: pointer;
+}
+.painel-cfo .av-nome {
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  font-family: var(--f-display);
+  font-size: 15px;
+  font-weight: 700;
+  color: var(--ink);
+}
+.painel-cfo .av-met {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+  min-width: 0;
+}
+.painel-cfo .av-met b {
+  font-family: var(--f-display);
+  font-size: 17px;
+  font-weight: 700;
+  font-variant-numeric: tabular-nums;
+  color: var(--ink);
+  white-space: nowrap;
+}
+.painel-cfo .av-met b.nulo {
+  color: var(--muted);
+}
+.painel-cfo .av-met b small {
+  margin-left: 8px;
+  font-family: var(--f-body);
+  font-size: 12px;
+  font-weight: 500;
+  color: var(--muted);
+}
+.painel-cfo .av-barra {
+  display: block;
+  height: 5px;
+  border-radius: 3px;
+  background: var(--grid);
+  overflow: hidden;
+}
+.painel-cfo .av-barra i {
+  display: block;
+  height: 100%;
+  border-radius: 3px;
+}
+.painel-cfo .av-seta {
+  color: var(--muted);
+  transition: transform 0.2s;
+}
+.painel-cfo .av-item.aberto .av-seta {
+  transform: rotate(180deg);
+  color: var(--accent);
+}
+.painel-cfo .av-grafico {
+  padding: 8px 20px 14px;
+  border-top: 1px solid var(--grid);
+  background: var(--surface);
+}
+@media (prefers-reduced-motion: no-preference) {
+  .painel-cfo .av-grafico {
+    animation: av-abre 220ms ease-out both;
+  }
+}
+@keyframes av-abre {
+  from {
+    opacity: 0;
+    transform: translateY(-4px);
+  }
+}
+/* Tela estreita: o nome numa linha e as três colunas embaixo. */
+@media (max-width: 900px) {
+  .painel-cfo .av-cab {
+    display: none;
+  }
+  .painel-cfo .av-linha {
+    grid-template-columns: repeat(3, minmax(0, 1fr)) 20px;
+    gap: 8px 16px;
+  }
+  .painel-cfo .av-nome {
+    grid-column: 1 / -1;
+  }
+}
