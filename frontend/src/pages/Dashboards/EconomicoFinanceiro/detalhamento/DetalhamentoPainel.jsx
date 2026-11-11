@@ -101,6 +101,7 @@ export default function DetalhamentoPainel({ dashboard, tituloTela, empresaId, o
     () =>
       dados && {
         documentos: dados.documentos || {},
+        catalogos: dados.catalogos || {},
         naturezas: Object.fromEntries(Object.entries(dados.planos || {}).map(([id, [cod, nome]]) => [id, nome || cod])),
         pessoas: dados.pessoas,
         contasOpcoes: (dados.contas || []).map((c) => ({ value: c.id, label: c.nome || c.numero })),

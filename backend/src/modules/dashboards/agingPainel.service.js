@@ -157,11 +157,15 @@ async function catalogos(empresaId) {
          FROM planos_financeiros_sienge WHERE empresa_id = $1 AND tp_conta IS DISTINCT FROM 'T' ORDER BY sienge_id::text`,
       [empresaId]
     ),
+    // Todos os tipos de documento que existem: os da empresa primeiro (o nome dela vale), depois os
+    // das demais empresas do Horizon e, por fim, os que só aparecem no extrato bancário (transferência,
+    // tarifa, movimentação entre contas...), que podem não ter nome — aí o código serve de nome.
     pool.query(
       `SELECT DISTINCT ON (id) id, nome FROM (
-         SELECT trim(document_identification_id) AS id, document_identification_name AS nome FROM sie_income WHERE empresa_id = $1
-         UNION SELECT trim(document_identification_id), document_identification_name FROM sie_outcome WHERE empresa_id = $1
-       ) d WHERE id IS NOT NULL AND id <> '' ORDER BY id, nome`,
+         SELECT trim(document_identification_id) AS id, document_identification_name AS nome, CASE WHEN empresa_id = $1 THEN 1 ELSE 2 END AS ordem FROM sie_income
+         UNION ALL SELECT trim(document_identification_id), document_identification_name, CASE WHEN empresa_id = $1 THEN 1 ELSE 2 END FROM sie_outcome
+         UNION ALL SELECT trim(document_id), NULL, 3 FROM sie_extrato_contas WHERE empresa_id = $1
+       ) d WHERE id IS NOT NULL AND id <> '' ORDER BY id, (nome IS NULL), ordem, nome`,
       [empresaId]
     ),
     pool.query(
@@ -192,7 +196,7 @@ async function catalogos(empresaId) {
   };
   return {
     planos: planos.rows,
-    documentos: porId(documentos.rows),
+    documentos: porId(documentos.rows.map((r) => ({ id: r.id, nome: r.nome || r.id }))), // sem nome no cadastro, o código faz as vezes dele
     clientes: porId(clientes.rows),
     fornecedores: porId(fornecedores.rows),
   };
@@ -323,4 +327,4 @@ async function titulosManuais(empresaId) {
 
 // `LADOS` e `titulosDoLado` também são usados pelo Detalhamento Financeiro (detalhamentoPainel.service.js):
 // o "em aberto" de lá é o mesmo do Aging List.
-module.exports = { painel, LADOS, titulosDoLado };
+module.exports = { painel, LADOS, titulosDoLado, catalogos };

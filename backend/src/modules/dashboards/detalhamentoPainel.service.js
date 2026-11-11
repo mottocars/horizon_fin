@@ -1,6 +1,6 @@
 const pool = require('../../config/db');
 const fluxo = require('../dfc-fluxo/fluxo.service');
-const { LADOS, titulosDoLado } = require('./agingPainel.service');
+const { LADOS, titulosDoLado, catalogos } = require('./agingPainel.service');
 const { hojeEmBrasilia } = require('../extrato-contas-sienge/extratoContas-api.client');
 
 // Dados do Detalhamento Financeiro do dashboard Econômico Financeiro, no período Início–Fim:
@@ -182,6 +182,7 @@ async function painel(empresaId, { de, ate }) {
     centros,
     pessoas,
     documentos: dic.documentos,
+    catalogos: { documentos: (await catalogos(empresaId)).documentos }, // todos os tipos de documento, para o filtro
     lancamentos,
     abertos,
   };
