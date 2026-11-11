@@ -21,7 +21,8 @@
     linear-gradient(180deg, var(--fundo-topo) 0%, var(--fundo) 45%, var(--fundo-base) 100%);
   color: #fff;
 }
-/* Temas: azul royal (Econômico/Financeiro) e verde (Comercial). --sombra e --luz2 são triplas RGB. */
+/* Temas: azul royal (Econômico/Financeiro), verde (Comercial) e laranja (Obra em Foco — queimado,
+   para o colete laranja do engenheiro não sumir no fundo). --sombra e --luz2 são triplas RGB. */
 .capa--azul {
   --fundo-topo: #2a62b2;
   --fundo: #2459a5;
@@ -37,6 +38,14 @@
   --sombra: 3 38 22;
   --luz2: 170 240 200;
   --marca-fim: #d4f5e2;
+}
+.capa--laranja {
+  --fundo-topo: #dd7428;
+  --fundo: #cc621c;
+  --fundo-base: #a94d12;
+  --sombra: 72 28 4;
+  --luz2: 255 214 160;
+  --marca-fim: #ffe3c9;
 }
 
 .capa__facetas {

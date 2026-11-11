@@ -1,7 +1,10 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { useSearchParams } from 'react-router-dom';
-import { Download, Loader2, LocateFixed, Maximize2, Minimize2, X } from 'lucide-react';
+import { ChartGantt, Download, House, Loader2, LocateFixed, Maximize2, Minimize2, X } from 'lucide-react';
 import CabecalhoDashboard from '../CabecalhoDashboard';
+import ControlesDashboard from '../ControlesDashboard';
+import CapaDashboard from '../capa/CapaDashboard';
+import engenheiro from '../../../assets/dashboards/engenheiro-obras.webp';
 import { listEmpresas } from '../../../api/empresas.api';
 import { exportarCronogramaExcel, listCronogramaCentros } from '../../../api/cronogramaCentros.api';
 import { nomeExibicaoEmpresa } from '../../../utils/empresa';
@@ -32,7 +35,12 @@ import { FiltroCentros } from '../EconomicoFinanceiro/fluxo/FluxoCaixaPainel';
 import '../EconomicoFinanceiro/fluxo/painel.css';
 import './cronogramas.css';
 
-// Dashboards > Cronogramas de Obras (pedido do usuário): no layout do Econômico Financeiro — tela
+// Dashboards > Obra em Foco (ex-Cronogramas de Obras; pedido do usuário): abre na capa laranja com o
+// engenheiro (CapaDashboard, como a do Econômico/Financeiro) e o menu de telas aberto; a outra tela é
+// a Carteira de obras (?tela=carteira). Sem tela favorita: a rota de favoritas do servidor só atende o
+// Econômico/Financeiro.
+//
+// Carteira de obras: no layout do Econômico Financeiro — tela
 // inteira, cabeçalho dos dashboards, barra de controles e os cards (CardsCarteira, no estilo .tile
 // do painel do CFO — os mesmos da aba Cronogramas de Operações > Cronogramas Obras: VGV, unidades e
 // quantas obras estão em cada etapa hoje) e, embaixo, o mesmo Gantt (GanttObras), aqui
@@ -46,7 +54,7 @@ import './cronogramas.css';
 // De/Até (padrão: 3 meses antes a 20 à frente; fica no estado da tela — só volta ao padrão ao
 // recarregar): obras fora dele não aparecem e os cards somam só as do período.
 
-export default function CronogramasObrasDashboard() {
+function CarteiraObras() {
   const [params, setParams] = useSearchParams();
   const { travada: empresaTravada, empresaIdTravada } = useEmpresaTravada();
 
@@ -253,7 +261,7 @@ export default function CronogramasObrasDashboard() {
     <div className="flex min-h-full w-full flex-col gap-3 p-5">
       <div className="painel-cfo">
         <CabecalhoDashboard
-          dashboard="Cronograma Obras"
+          dashboard={NOME}
           titulo="Carteira de obras"
           etiquetas={empresaId && estado === 'ok' ? [{ rotulo: 'Obras', valor: r.totalObras }, { rotulo: 'Referência', valor: mesAno(hoje) }] : []}
           marca={marcaEmpresa}
@@ -448,5 +456,42 @@ export default function CronogramasObrasDashboard() {
         )}
       </div>
     </div>
+  );
+}
+
+const NOME = 'Obra em Foco';
+const TELAS = [
+  { id: 'home', label: 'Home', icon: House },
+  { id: 'carteira', label: 'Carteira de obras', icon: ChartGantt },
+];
+
+export default function CronogramasObrasDashboard() {
+  const [params, setParams] = useSearchParams();
+  const daUrl = params.get('tela');
+  // Link que já traz a empresa (o do comunicado de nova versão por WhatsApp — cronogramaVersoes.service.js)
+  // vai direto à Carteira; pelo menu (sem parâmetros) abre a capa.
+  const telaAtiva = TELAS.some((t) => t.id === daUrl) ? daUrl : params.get('empresa_id') ? 'carteira' : 'home';
+  const home = telaAtiva === 'home';
+  const irPara = (id) =>
+    setParams(
+      (atual) => {
+        const novo = new URLSearchParams(atual);
+        novo.set('tela', id);
+        return novo;
+      },
+      { replace: true }
+    );
+
+  return (
+    <>
+      {home ? (
+        <div className="h-full w-full">
+          <CapaDashboard imagem={engenheiro} nome={NOME} tema="laranja" />
+        </div>
+      ) : (
+        <CarteiraObras />
+      )}
+      <ControlesDashboard telas={TELAS} telaAtiva={telaAtiva} onTela={irPara} abertoInicial={home} />
+    </>
   );
 }

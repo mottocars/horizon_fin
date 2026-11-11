@@ -7,10 +7,11 @@ import './capa.css';
 // estilo low-poly; o fundo se mexe (luz passando, triângulos acendendo, aura pulsando — ver capa.css).
 // - `imagem`: o personagem (quadrado, transparente, cortado embaixo).
 // - `nome`: a linha de baixo do letreiro.
-// - `tema`: 'azul' (Econômico/Financeiro) ou 'verde' (Comercial) — as cores ficam em capa.css.
+// - `tema`: 'azul' (Econômico/Financeiro), 'verde' (Comercial) ou 'laranja' (Obra em Foco) — as cores
+//   ficam em capa.css.
 
 // Tom escuro dos triângulos de cada tema (o claro é sempre branco).
-const ESCURO = { azul: '#0a1f4d', verde: '#04301c' };
+const ESCURO = { azul: '#0a1f4d', verde: '#04301c', laranja: '#5c2306' };
 
 // Malha de triângulos do fundo: pontos numa grade com deslocamento fixo (gerador com semente), cada
 // triângulo com um tom levemente mais claro ou mais escuro que o fundo.

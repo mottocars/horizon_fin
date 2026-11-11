@@ -54,8 +54,8 @@ const menuItems = [
     basePath: '/dashboards',
     children: [
       { label: 'Comercial', to: '/dashboards/comercial', icon: Handshake },
-      { label: 'Cronograma Obras', to: '/dashboards/cronogramas-obras', icon: ChartGantt },
       { label: 'Econômico/Financeiro', to: '/dashboards/economico-financeiro', icon: TrendingUp },
+      { label: 'Obra em Foco', to: '/dashboards/cronogramas-obras', icon: ChartGantt },
     ],
   },
   {
