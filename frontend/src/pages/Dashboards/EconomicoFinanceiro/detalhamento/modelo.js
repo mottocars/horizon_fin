@@ -5,9 +5,9 @@
 // - EM ABERTO: as parcelas do Aging List que vencem no período (saldo corrigido, sem previsões);
 // - TOTAL = realizado + em aberto — o resultado do período se tudo o que está em aberto acontecer.
 // Entradas = contas a receber (recebido e a receber) + créditos do banco sem título; saídas = contas a pagar
-// (pago e a pagar) + débitos do banco sem título (tarifas…). A movimentação entre contas (transferências e
-// aplicações/resgates — Máscara DFC 2 de CFG.interno) fica de fora de tudo: é dinheiro trocando de conta, não
-// entrando nem saindo da empresa. A inicialização de saldo do Sienge também (não é fluxo).
+// (pago e a pagar) + débitos do banco sem título (tarifas…). TUDO o que foi realizado na conta entra —
+// inclusive transferências entre contas, aplicações/resgates, recibos do caixa e demais lançamentos sem título
+// (pedido do usuário, 11/11/2026). Só a inicialização de saldo do Sienge fica de fora (não é fluxo).
 import { brl, eixo, lbl, nf0, pct, soma, titulo } from '../fluxo/modelo';
 import { diaNum, dm, dma, filtrosVazios } from '../aging/modelo';
 
@@ -83,7 +83,7 @@ export const nomeMascara = (x) => (x.m2 ? x.m2.nome : 'Sem máscara no DFC');
 // Os mesmos filtros do Aging List (aging/modelo.js::filtrosVazios): centros, tipo de documento, plano de
 // contas, cliente, fornecedor, previsão financeira (do em aberto; 'sim' = só as previsões, e o realizado
 // fica de fora) e título (bill_id). Cliente filtra o a receber e fornecedor o a pagar — escolhido um deles,
-// só entra quem é dele (o outro lado e o lançamento do banco sem título saem). Fica de fora a movimentação entre contas — que vem à parte.
+// só entra quem é dele (o outro lado e o lançamento do banco sem título saem). Transferências entre contas e demais lançamentos entram normalmente.
 export function escopo(B, { centros = [], ...filtros } = {}) {
   const f = { ...filtrosVazios(), ...filtros };
   const sel = centros.length ? new Set(centros) : null;
@@ -122,10 +122,7 @@ export function escopo(B, { centros = [], ...filtros } = {}) {
         if (fornecedores ? fornecedores(qDe(x)) : !!clientes) return;
       } else return;
     }
-    if (x.interno) {
-      internas[x.tipo] += x.valor;
-      internas.bruto += Math.abs(x.valor);
-    } else pecas.push(x);
+    pecas.push(x);
   });
   return { B, P: B.periodo, pecas, internas, filtrado: !!sel };
 }

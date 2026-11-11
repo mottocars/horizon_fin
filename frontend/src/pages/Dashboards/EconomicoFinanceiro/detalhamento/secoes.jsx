@@ -110,7 +110,6 @@ export function Resumo({ E }) {
       <p className="rs-nota">
         Realizado: lançamentos de {dma(E.P.de)} a {dma(E.P.ate > hoje ? hoje : E.P.ate)}. Em aberto: parcelas do Aging List que vencem de {dma(E.P.de)} a {dma(E.P.ate)}, pelo
         saldo corrigido, sem as previsões financeiras.
-        {tem(E.internas.bruto) ? ` Fora da conta: ${brl(E.internas.R + E.internas.A, true)} de movimentação entre contas (transferências e aplicações).` : ''}
       </p>
     </section>
   );

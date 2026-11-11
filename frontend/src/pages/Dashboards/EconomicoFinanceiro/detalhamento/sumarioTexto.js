@@ -27,7 +27,7 @@ export const ABAS_SUMARIO = [
         titulo: 'Entradas, saídas e o que fica de fora',
         itens: [
           '**Entradas** = contas a receber (recebido e a receber) + créditos do banco sem título. **Saídas** = contas a pagar (pago e a pagar) + débitos do banco sem título, como as tarifas. Descontos e tarifas lançados num recebimento ficam nele; retenções lançadas num pagamento, no pagamento.',
-          'A **movimentação entre contas** — transferências e aplicações/resgates (as máscaras do DFC de transferências e de aplicações e resgates) — fica de fora de tudo: é dinheiro trocando de conta, não entrando nem saindo da empresa. O valor dela aparece embaixo do resumo. A inicialização de saldo do Sienge também fica de fora.',
+          '**Tudo o que foi realizado entra**: transferências entre contas, aplicações/resgates, recibos do caixa e os demais lançamentos do extrato, com ou sem título (bill_id). Só a inicialização de saldo do Sienge fica de fora — não é entrada nem saída.',
         ],
       },
       {
