@@ -6,6 +6,8 @@ import CampoDataPeriodo from '../../Operacoes/CronogramasObras/CampoDataPeriodo'
 import { listEmpresas } from '../../../api/empresas.api';
 import { nomeExibicaoEmpresa } from '../../../utils/empresa';
 import { useEmpresaTravada } from '../../../hooks/useEmpresaTravada';
+import { DicaProvider } from '../EconomicoFinanceiro/fluxo/graficos';
+import CurvasAvanco from './CurvasAvanco';
 import '../EconomicoFinanceiro/fluxo/painel.css';
 import './cronogramas.css';
 
@@ -13,7 +15,9 @@ import './cronogramas.css';
 // Operações › DFC Construtoras › Avanços Obras — a mesma tabela (DfcAvancosTab, variante dashboard) e
 // os mesmos dados (/dfc-avancos, liberado em GET para quem tem o Obra 360º). Barra de controles no
 // layout da Carteira de obras: Empresa (na URL, ?empresa_id=, a mesma das outras telas do dashboard)
-// e Início/Fim (padrão: o ano atual inteiro, como na aba).
+// e Início/Fim (padrão: o ano atual inteiro, como na aba). Acima da tabela, a "Curva de avanço por obra"
+// (CurvasAvanco.jsx — um cartão por obra com Prevision, no molde da Dívida PJ do Fluxo de Caixa; a
+// curva pega a obra inteira, não o Início/Fim).
 export default function AvancoObras({ nome }) {
   const [params, setParams] = useSearchParams();
   const { travada: empresaTravada, empresaIdTravada } = useEmpresaTravada();
@@ -79,6 +83,9 @@ export default function AvancoObras({ nome }) {
           </div>
         </section>
 
+        <DicaProvider>
+          <CurvasAvanco empresaId={empresaId} />
+        </DicaProvider>
         <DfcAvancosTab empresaId={empresaId} inicio={inicio} fim={fim} variante="dashboard" />
       </div>
     </div>
