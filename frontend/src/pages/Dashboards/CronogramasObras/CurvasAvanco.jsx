@@ -256,7 +256,6 @@ export default function CurvasAvanco({ empresaId }) {
     <section className="panel c12" aria-labelledby="h-avanco-obra">
       <div className="ph">
         <h2 id="h-avanco-obra">Avanço por obra</h2>
-        <p>Avanço acumulado até {mesAtual ? lbl(mesAtual) : 'hoje'} de cada obra com Prevision. Clique na obra para ver mês a mês.</p>
       </div>
       {erro ? (
         <div className="empty">{erro}</div>
