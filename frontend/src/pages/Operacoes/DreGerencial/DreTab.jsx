@@ -680,7 +680,7 @@ const formatoPct = (p, comSinal) => {
 // congeladas, então o fundo é sempre sólido.
 function estilo(tipo, fixa) {
   if (tipo === 'totalizadora')
-    return { fundo: fixa ? 'bg-[#174a70]' : 'bg-[#1d5c8a]', borda: 'border-b-[#1d5c8a]', divisa: 'border-l-white/10' };
+    return { fundo: 'bg-[#cfe0ee]', borda: 'border-b-[#a9c4dc]', divisa: 'border-l-[#a9c4dc]' }; // azul claro: o vermelho do negativo aparece
   if (tipo === 'n1')
     return fixa
       ? { fundo: 'bg-blue-100', borda: 'border-b-blue-200', divisa: '' }
@@ -691,9 +691,9 @@ function estilo(tipo, fixa) {
 }
 
 // Fundo da célula Projetada: amarelo pastel; nos meses até o corte (o "projetado" é o realizado da data
-// do orçamento), cinza. Nas totalizadoras (fundo escuro) só um tom do próprio azul.
+// do orçamento), cinza. Nas totalizadoras, o mesmo azul claro das demais colunas.
 function fundoProjetado(tipo, cinza) {
-  if (tipo === 'totalizadora') return cinza ? 'bg-[#2b5f82]' : 'bg-[#26658f]';
+  if (tipo === 'totalizadora') return 'bg-[#cfe0ee]'; // totalizadora: o mesmo azul em todas as colunas
   if (cinza) return tipo === 'n1' ? 'bg-gray-100' : 'bg-gray-50';
   return tipo === 'n1' ? 'bg-[#fdf6d3]' : 'bg-[#fefbe8]';
 }
@@ -702,11 +702,11 @@ function fundoProjetado(tipo, cinza) {
 // totalizadoras. O Desvio % dentro da tolerância fica neutro.
 function corPct(tipo, segunda, p) {
   const total = tipo === 'totalizadora';
-  if (p === null || p === undefined || Math.abs(p) < 0.005) return total ? 'text-white/80' : 'text-gray-500';
-  if (segunda === 'desvio' && Math.abs(p) < TOLERANCIA_DESVIO) return total ? 'text-white/80' : 'text-gray-500';
+  if (p === null || p === undefined || Math.abs(p) < 0.005) return total ? 'text-[#174a70]' : 'text-gray-500';
+  if (segunda === 'desvio' && Math.abs(p) < TOLERANCIA_DESVIO) return total ? 'text-[#174a70]' : 'text-gray-500';
   if (segunda === 'ah' || segunda === 'desvio')
-    return p > 0 ? (total ? 'text-emerald-300' : 'text-emerald-600') : total ? 'text-red-300' : 'text-red-500';
-  return p < 0 ? (total ? 'text-red-300' : 'text-red-500') : total ? 'text-white/80' : 'text-gray-500';
+    return p > 0 ? 'text-emerald-700' : 'text-red-700';
+  return p < 0 ? 'text-red-700' : total ? 'text-[#174a70]' : 'text-gray-500';
 }
 
 // As células de uma coluna numa linha, nas subcolunas `subs` (valor, pct = AV % / AH %, proj, desvio):
@@ -721,7 +721,7 @@ function Celulas({ tipo, fixa, subs, segunda, valor, pct, proj, desvio, cinza, r
         onClick={onAbrir}
         title="Mostrar a coluna"
         className={`${COL_FAIXA} z-10 cursor-pointer border-b ${e.borda} ${
-          tipo === 'totalizadora' ? 'bg-[#174a70]' : tipo === 'n1' ? 'bg-blue-100 hover:bg-blue-200' : 'bg-blue-50 hover:bg-blue-100'
+          tipo === 'totalizadora' ? 'bg-[#cfe0ee]' : tipo === 'n1' ? 'bg-blue-100 hover:bg-blue-200' : 'bg-blue-50 hover:bg-blue-100'
         }`}
       />
     );
@@ -733,14 +733,14 @@ function Celulas({ tipo, fixa, subs, segunda, valor, pct, proj, desvio, cinza, r
   const largura = (k) => (fixa ? estiloLargura(LARGURA_SUB[k], posFixa[k]) : estiloLargura(LARGURA_SUB_MOVEL[k]));
   const base = (k) =>
     `${fixa ? `sticky z-10 ${k === ultima ? 'border-r border-r-blue-200' : ''}` : k === subs[0] ? `border-l ${e.divisa}` : ''} border-b ${e.borda} ${py}`;
-  const traco = <span className={total ? 'text-white/40' : 'text-gray-300'}>—</span>;
+  const traco = <span className={total ? 'text-[#174a70]/40' : 'text-gray-300'}>—</span>;
   const moedaCelula = (v, corNormal) =>
     v === null || v === undefined ? (
-      <span className={total ? 'text-white/50' : 'text-gray-300'}>—</span>
+      <span className={total ? 'text-[#174a70]/50' : 'text-gray-300'}>—</span>
     ) : total ? (
-      <span className={v < 0 ? 'text-red-300' : 'text-white'}>{moeda(v)}</span>
+      <span className={v < 0 ? 'text-red-700' : 'text-[#174a70]'}>{moeda(v)}</span>
     ) : (
-      <span className={v < 0 ? 'text-red-600' : corNormal}>{moeda(v)}</span>
+      <span className={v < 0 ? 'text-red-700' : corNormal}>{moeda(v)}</span>
     );
   const pctCelula = (p, tipoPct) =>
     p === undefined ? '' : p === null ? traco : formatoPct(p, tipoPct === 'ah' || tipoPct === 'desvio');
@@ -879,10 +879,10 @@ function LinhaGrupo({ grupo, colunas, acumulados, bases, recolhido, onAbrir, sub
   if (grupo.totalizadora) {
     return (
       <tr>
-        <td className={`${COL_DESCRICAO} border-b border-[#1d5c8a] bg-[#1d5c8a] py-0.5 pl-4`}>
+        <td className={`${COL_DESCRICAO} border-b border-[#a9c4dc] bg-[#cfe0ee] py-0.5 pl-4`}>
           <span className="flex items-center">
-            <IconeLinha icone={grupo.icone} className="text-white" />
-            <span className="truncate text-xs font-bold uppercase tracking-wide text-white">{grupo.descricao}</span>
+            <IconeLinha icone={grupo.icone} className="text-[#174a70]" />
+            <span className="truncate text-xs font-bold uppercase tracking-wide text-[#174a70]">{grupo.descricao}</span>
           </span>
         </td>
         <CelulasDaLinha tipo="totalizadora" vals={vals({ acumulados })} {...faixa} />

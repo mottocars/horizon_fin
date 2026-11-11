@@ -7,6 +7,7 @@ import { useAuth } from '../auth/AuthContext';
 import { temAcessoATela } from '../utils/permissoes';
 import { TELAS_SISTEMA } from '../config/telas';
 import { useLogAcesso } from '../hooks/useLogAcesso';
+import { useNegativosVermelhos } from '../hooks/useNegativosVermelhos';
 
 function resolveMeta(pathname) {
   if (TELAS_SISTEMA[pathname]) return TELAS_SISTEMA[pathname];
@@ -100,6 +101,7 @@ export default function AppShell() {
   // Dashboards ocupam a tela inteira (pedido do usuário): só o menu lateral, sem o cabeçalho do topo
   // nem as margens da área de conteúdo.
   const telaCheia = location.pathname.startsWith('/dashboards/');
+  useNegativosVermelhos(telaCheia); // número negativo em vermelho em todos os dashboards
 
   return (
     <SidebarProvider>

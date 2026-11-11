@@ -286,7 +286,7 @@ export function BarrasH({ itens, aria, rotuloGrande = false }) {
               </text>
               <rect x={x0} y={yy + 7} width={w} height={rh - 14} rx={2} fill={it.c || (it.v < 0 ? COR.saida : COR.entrada)} />
               <text x={tx} y={yy + rh / 2 + 4} textAnchor={ta} className="val">
-                {eixo(it.v)}
+                {it.rot ?? eixo(it.v)}
               </text>
               <rect x={0} y={yy} width={W} height={rh} fill="transparent" onMouseMove={(ev) => mostrar(ev, it.titulo, it.linhas)} onMouseLeave={esconder} />
             </g>

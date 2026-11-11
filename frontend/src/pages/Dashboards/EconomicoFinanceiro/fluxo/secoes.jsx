@@ -34,7 +34,8 @@ export function Tiles({ D }) {
       {tiles.map((t) => (
         <div key={t.chave} className="tile">
           <span className="k">{t.titulo}</span>
-          <span className="v">{t.valor_fmt}</span>
+          {/* Dívida PJ da Caixa: é dívida, sempre em vermelho (pedido do usuário). */}
+          <span className={`v${t.chave === 'divida_pj' && t.valor ? ' neg' : ''}`}>{t.valor_fmt}</span>
           <span className="d">
             <Partes partes={t.detalhe} />
           </span>

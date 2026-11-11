@@ -302,15 +302,15 @@ export function indicadores(E) {
     {
       chave: 'pagar',
       titulo: 'A pagar em aberto',
-      valor_fmt: brl(p.total),
+      valor_fmt: brl(-p.total),
       detalhe: [{ b: nf0.format(p.n) }, ' parcelas · ', { b: nf0.format(p.pessoas) }, ' fornecedores'],
       etiqueta: p.total ? etiqueta(tomVenc(pctV(p)), `${pct(pctV(p))} vencido`) : etiqueta('info', 'Sem parcelas'),
     },
     {
       chave: 'pagar_vencido',
       titulo: 'Vencido a pagar',
-      valor_fmt: brl(p.vencido),
-      detalhe: p.vencido ? [{ b: brl(p.mais90) }, ' há mais de 90 dias · atraso médio ', { b: dias(Math.round(p.atrasoMedio)) }] : ['nenhuma parcela vencida'],
+      valor_fmt: brl(-p.vencido),
+      detalhe: p.vencido ? [{ b: brl(-p.mais90) }, ' há mais de 90 dias · atraso médio ', { b: dias(Math.round(p.atrasoMedio)) }] : ['nenhuma parcela vencida'],
       etiqueta: !p.vencido
         ? etiqueta('good', 'Em dia')
         : p.mais90 / p.vencido > 0.7
@@ -320,8 +320,8 @@ export function indicadores(E) {
     {
       chave: 'pagar_prox',
       titulo: `Sai nos próximos ${HORIZONTE_CARDS} dias`,
-      valor_fmt: brl(p.d15),
-      detalhe: [{ b: brl(p.hoje) }, ' hoje · ', { b: brl(p.d7) }, ' em 7 dias'],
+      valor_fmt: brl(-p.d15),
+      detalhe: [{ b: brl(-p.hoje) }, ' hoje · ', { b: brl(-p.d7) }, ' em 7 dias'],
       etiqueta: etiqueta('info', `${nf0.format(p.n15)} parcelas`),
     },
     {

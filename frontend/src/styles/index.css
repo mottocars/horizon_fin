@@ -170,3 +170,11 @@ input[type="color"]::-webkit-color-swatch {
 input[type="color"]::-moz-color-swatch {
   border: none;
 }
+
+/* Dashboards: número negativo sempre em vermelho (marcado por hooks/useNegativosVermelhos.js). */
+.neg-auto {
+  color: #b42d2d !important;
+}
+svg text.neg-auto {
+  fill: #b42d2d !important;
+}

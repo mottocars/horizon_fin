@@ -151,7 +151,7 @@ export function Escada({ E, faixaSel, onFaixa }) {
                 onMouseLeave={esconder}
               >
                 <span className="lado p">
-                  <b>{l.p ? eixo(l.p) : ''}</b>
+                  <b>{l.p ? eixo(-l.p) : ''}</b>
                   {l.p > 0 && <i className={cortada(l.p) ? 'corte' : ''} style={{ width: larg(l.p) }} />}
                 </span>
                 <span className="fx">{l.curto}</span>
@@ -165,7 +165,7 @@ export function Escada({ E, faixaSel, onFaixa }) {
             </Fragment>
           ))}
           <div className="esc-rodape">
-            <span className="n">{brl(es.p.total)}</span>
+            <span className="n">{brl(-es.p.total)}</span>
             <span>Total</span>
             <span className="n">{brl(es.r.total)}</span>
             <span className={`n ${es.posicao >= 0 ? 'pos' : 'neg'}`} style={{ textAlign: 'right' }}>
@@ -247,7 +247,7 @@ function ItemDia({ it, B }) {
             {it.frac < 1 ? ` · rateio ${pct(it.frac * 100)}` : ''}
           </small>
         </span>
-        <b>{brl(it.valor)}</b>
+        <b>{brl(m.l === 'p' ? -it.valor : it.valor)}</b>
       </div>
     );
   }
@@ -270,7 +270,7 @@ function ItemDia({ it, B }) {
           {it.frac < 1 ? ` · rateio ${pct(it.frac * 100)}` : ''}
         </small>
       </span>
-      <b>{brl(it.valor)}</b>
+      <b>{brl(t.l === 'p' ? -it.valor : it.valor)}</b>
     </div>
   );
 }
@@ -414,7 +414,7 @@ export function Simulador({ E }) {
               <span>
                 {p.manuais
                   ? sim.manuais.r || sim.manuais.p
-                    ? `${brl(sim.manuais.r)} a receber e ${brl(sim.manuais.p)} a pagar no período, no vencimento.`
+                    ? `${brl(sim.manuais.r)} a receber e ${brl(-sim.manuais.p)} a pagar no período, no vencimento.`
                     : 'Nenhum título manual em aberto vence no período.'
                   : 'Contas Pagar / Receber lançados no Horizon e não quitados.'}
               </span>
@@ -522,17 +522,17 @@ function corCelula(grupo, v, total) {
 }
 
 // Vencido (até ontem), a vencer (de hoje em diante) e total de um grupo ou de uma parcela.
-function Valores({ vencido, total }) {
+function Valores({ vencido, total, sinal = 1 }) {
   const aVencer = total - vencido;
   return (
     <>
       <td className={`c${tem(vencido) ? '' : ' z'}`} style={corCelula('v', vencido, total)}>
-        {tem(vencido) ? eixo(vencido) : '·'}
+        {tem(vencido) ? eixo(vencido * sinal) : '·'}
       </td>
       <td className={`c${tem(aVencer) ? '' : ' z'}`} style={corCelula('a', aVencer, total)}>
-        {tem(aVencer) ? eixo(aVencer) : '·'}
+        {tem(aVencer) ? eixo(aVencer * sinal) : '·'}
       </td>
-      <td className="n tot">{brl(total)}</td>
+      <td className="n tot">{brl(total * sinal)}</td>
     </>
   );
 }
@@ -569,7 +569,7 @@ function ArvoreLado({ E, lado, linhas, niveis, filtrado, ordem, onOrdem }) {
           `${nomeDocumento(B, t.d)}${t.n ? ` ${t.n}` : ''}`,
           t.u ? `unid. ${t.u}` : null,
           t.cp ? nomeCondicao(B, t.cp) : null,
-          frac < 0.999 ? `rateio ${pct(frac * 100)} de ${brl(t.s)}` : null,
+          frac < 0.999 ? `rateio ${pct(frac * 100)} de ${brl(t.l === 'p' ? -t.s : t.s)}` : null,
         ].filter(Boolean);
         return (
           <tr key={`${no.id}#${t.b}/${t.p}`} className="parc">
@@ -587,7 +587,7 @@ function ArvoreLado({ E, lado, linhas, niveis, filtrado, ordem, onOrdem }) {
                 </div>
               </div>
             </td>
-            <Valores vencido={t.atraso > 0 ? valor : 0} total={valor} />
+            <Valores vencido={t.atraso > 0 ? valor : 0} total={valor} sinal={lado === 'p' ? -1 : 1} />
           </tr>
         );
       }),
@@ -636,7 +636,7 @@ function ArvoreLado({ E, lado, linhas, niveis, filtrado, ordem, onOrdem }) {
                   </div>
                 </div>
               </td>
-              <Valores vencido={no.vencido} total={no.total} />
+              <Valores vencido={no.vencido} total={no.total} sinal={lado === 'p' ? -1 : 1} />
             </tr>
             {aberto && (no.filhos ? linhasNos(no.filhos(), nivel + 1, no.id) : linhasParcelas(no, nivel + 1))}
           </Fragment>
@@ -659,7 +659,7 @@ function ArvoreLado({ E, lado, linhas, niveis, filtrado, ordem, onOrdem }) {
       <div className="det-cab">
         <h3>{lado === 'r' ? 'A receber' : 'A pagar'}</h3>
         <span>
-          {brl(total.total)}
+          {brl(lado === 'p' ? -total.total : total.total)}
           {total.total > 0 ? ` · ${pct((total.vencido / total.total) * 100)} vencido` : ''}
         </span>
       </div>
@@ -700,7 +700,7 @@ function ArvoreLado({ E, lado, linhas, niveis, filtrado, ordem, onOrdem }) {
                     {nf0.format(total.n)} parcelas · {nf0.format(raiz.length)} {raiz.length === 1 ? 'grupo' : 'grupos'}
                   </small>
                 </td>
-                <Valores vencido={total.vencido} total={total.total} />
+                <Valores vencido={total.vencido} total={total.total} sinal={lado === 'p' ? -1 : 1} />
               </tr>
             </tfoot>
           </table>
@@ -861,7 +861,7 @@ export function Maiores({ E, lado }) {
       <div className="kv">
         <div>
           <span>{quais === 'vencido' ? 'Vencido' : 'Vence em 30 dias'}</span>
-          <strong>{brl(r.total)}</strong>
+          <strong>{brl(receber ? r.total : -r.total)}</strong>
         </div>
         <div>
           <span>{receber ? 'Clientes' : 'Fornecedores'}</span>
@@ -878,10 +878,11 @@ export function Maiores({ E, lado }) {
         itens={r.itens.map((x) => ({
           l: x.nome,
           v: x.valor,
+          rot: eixo(receber ? x.valor : -x.valor),
           c: quais === 'vencido' ? (receber ? COR.cenario : COR.saida) : receber ? COR.entrada : COR.neutro,
           titulo: x.nome,
           linhas: [
-            [quais === 'vencido' ? 'Vencido' : 'Vence em 30 dias', brl(x.valor)],
+            [quais === 'vencido' ? 'Vencido' : 'Vence em 30 dias', brl(receber ? x.valor : -x.valor)],
             ['Parcelas', nf0.format(x.parcelas)],
             ...(quais === 'vencido' ? [['Maior atraso', dias(x.maiorAtraso)]] : [['Próximo vencimento', dm(x.proximo)]]),
             ['Do total', pct((x.valor / r.total) * 100)],
