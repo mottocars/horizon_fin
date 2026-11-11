@@ -1,4 +1,4 @@
-import { Fragment, useCallback, useEffect, useRef, useState } from 'react';
+import { Fragment, memo, useCallback, useEffect, useRef, useState } from 'react';
 import { Minus, Plus, Receipt } from 'lucide-react';
 import Card from '../../../../components/Card';
 import HistoricoParcelaModal from './HistoricoParcelaModal';
@@ -81,7 +81,7 @@ const STATUS_PARCELA = {
 // por Centro de Custo/título não representaria nada de verdade) — calculada
 // no backend a partir do vencimento (ver gestaoParcelas.service.js::
 // acharEtapaAtiva); só existe pra parcela em aberto, paga fica em branco.
-export default function GestaoParcelasTab({
+function GestaoParcelasTab({
   empresaId,
   centroCustoIds = [],
   busca = '',
@@ -519,3 +519,7 @@ export default function GestaoParcelasTab({
     </div>
   );
 }
+
+// memo: a busca é digitada na página (GestaoCobrancasPage.jsx) e cada tecla redesenhava esta tabela
+// inteira; com as props estáveis (a busca só muda 400 ms depois da última tecla), ela não redesenha mais.
+export default memo(GestaoParcelasTab);

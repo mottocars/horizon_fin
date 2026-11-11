@@ -7,7 +7,7 @@ const { ferramenta } = require('../dfc/tools/comum');
 
 const VIEWS = {
   mcp_sie_income:
-    'Contas a receber do Sienge (1 linha por parcela): bill_id (título), installment_id (parcela), installment_number ("3/12"), client_id, client_name, due_date, original_amount, corrected_balance_amount (saldo corrigido; 0 = quitada), origin_id (só "CO" é cobrança), payment_term_description (tipo de pagamento — compare com TRIM), document_identification_name, document_number.',
+    'Contas a receber do Sienge (1 linha por parcela): bill_id (título), installment_id (parcela), installment_number ("3/12"), client_id, client_name, due_date, original_amount, corrected_balance_amount (saldo corrigido; 0 = quitada), origin_id (CO, CR, ME, CA... — todas entram; a trava é o tipo de pagamento), payment_term_description (tipo de pagamento — compare com TRIM), document_identification_name, document_number.',
   mcp_sie_income_categorias: 'Rateio de cada parcela por centro de custo: bill_id, installment_id, cost_center_id, cost_center_name, financial_category_id/name, rate.',
   mcp_sie_income_recebimentos:
     'Baixas de cada parcela: bill_id, installment_id, payment_date, operation_type_name ("Recebimento" = dinheiro; Reparcelamento, Distrato etc. zeram sem dinheiro), net_amount, gross_amount.',
@@ -51,7 +51,7 @@ const descrever = {
     return {
       regras: [
         'Não filtre empresa: as views já trazem só a empresa deste conector.',
-        "Cobrança é só origin_id = 'CO'. Parcela = (bill_id, installment_id). Cliente = client_id.",
+        "Cobrança: todas as origens (origin_id CO, CR, ME, CA...), travadas só pelo tipo de pagamento em mcp_regua_cobranca_tipos_pagamento. Parcela = (bill_id, installment_id). Cliente = client_id.",
         'Universo da Rotina/relatório: parcela CO, de centro com etapa "Lançamento" no Histórico de Etapas, cliente com Comunicar, tipo de pagamento em mcp_regua_cobranca_tipos_pagamento (as ferramentas prontas já aplicam isso; o SQL não tem a tabela do Histórico de Etapas).',
         'D da parcela = data − due_date; Inadimplência = D > dias_vencidos_regua_cobranca da última versão do Motor de Risco.',
         "Evite EXTRACT(x FROM y); use date_part('x', y). Uma instrução só, no máximo 500 linhas.",

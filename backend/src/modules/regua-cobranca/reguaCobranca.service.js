@@ -391,10 +391,17 @@ async function salvarComunicacaoAutomatica(empresaId, tipo) {
 // parcela entra (pedido do usuário: começa tudo à esquerda, e tipo novo que
 // aparecer no Sienge fica de fora até alguém incluir). TRIM dos dois lados
 // da comparação: o Sienge manda alguns tipos com espaço sobrando ('ATO  ').
-const CONDICAO_TIPO_PAGAMENTO = `EXISTS (
+// Desde 11/11/2026 é a ÚNICA trava do universo da cobrança: todas as origens
+// do contas a receber (CO, CR, ME, CA...) entram, desde que o tipo de
+// pagamento esteja na lista. `condicaoTipoPagamento(alias)` serve pra
+// subconsultas com outro apelido da sie_income.
+function condicaoTipoPagamento(alias = 'si') {
+  return `EXISTS (
        SELECT 1 FROM regua_cobranca_tipos_pagamento tp
-       WHERE tp.empresa_id = si.empresa_id AND tp.descricao = TRIM(si.payment_term_description)
+       WHERE tp.empresa_id = ${alias}.empresa_id AND tp.descricao = TRIM(${alias}.payment_term_description)
      )`;
+}
+const CONDICAO_TIPO_PAGAMENTO = condicaoTipoPagamento('si');
 
 // Todos os tipos que existem na base da empresa (mais os já escolhidos que
 // sumiram da base, pra continuarem visíveis e poderem ser tirados), com a
@@ -407,7 +414,7 @@ async function getTiposPagamento(empresaId) {
               COUNT(*)::int AS parcelas,
               COUNT(*) FILTER (WHERE corrected_balance_amount <> 0)::int AS abertas
        FROM sie_income
-       WHERE empresa_id = $1 AND origin_id = 'CO' AND NULLIF(TRIM(payment_term_description), '') IS NOT NULL
+       WHERE empresa_id = $1 AND NULLIF(TRIM(payment_term_description), '') IS NOT NULL
        GROUP BY 1`,
       [empresaId]
     ),
@@ -517,6 +524,7 @@ module.exports = {
   getComunicacaoAutomatica,
   salvarComunicacaoAutomatica,
   CONDICAO_TIPO_PAGAMENTO,
+  condicaoTipoPagamento,
   getTiposPagamento,
   salvarTiposPagamento,
   getZapiIntegracaoDoCluster,

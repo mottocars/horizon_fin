@@ -48,7 +48,6 @@ const {
 // entra em pagas nem abertas (mas entra em distribuidas, se foi distribuída
 // antes de encerrar).
 
-const ORIGIN_ID_PADRAO = 'CO';
 const CANAIS = ['whatsapp', 'email', 'ligacao'];
 const UM_DIA_MS = 24 * 60 * 60 * 1000;
 
@@ -118,18 +117,18 @@ async function getDesempenho(empresaId, { dataInicio, dataFim }) {
      JOIN mascara_itens m
        ON m.id = h.mascara_item_id AND m.tipo = 'ETAPAS_CENTRO_CUSTO' AND m.descricao = 'Lançamento'
      LEFT JOIN sie_customers_comunicar com ON com.empresa_id = si.empresa_id AND com.client_id = si.client_id
-     WHERE si.empresa_id = $1 AND si.origin_id = $2 AND COALESCE(com.comunicar, TRUE) = TRUE
+     WHERE si.empresa_id = $1 AND COALESCE(com.comunicar, TRUE) = TRUE
        AND ${CONDICAO_TIPO_PAGAMENTO}
        AND (
-         si.due_date BETWEEN ($3::date - $6::int) AND ($4::date - $5::int)
+         si.due_date BETWEEN ($2::date - $5::int) AND ($3::date - $4::int)
          OR EXISTS (
            SELECT 1 FROM sie_income_recebimentos r
            WHERE r.empresa_id = si.empresa_id AND r.bill_id = si.bill_id AND r.installment_id = si.installment_id
-             AND r.operation_type_name = 'Recebimento' AND r.payment_date BETWEEN $3 AND $4
+             AND r.operation_type_name = 'Recebimento' AND r.payment_date BETWEEN $2 AND $3
          )
        )
      ORDER BY si.bill_id, si.installment_id, cat.cost_center_name`,
-    [empresaId, ORIGIN_ID_PADRAO, dataInicio, corte, menorDia, maiorDia]
+    [empresaId, dataInicio, corte, menorDia, maiorDia]
   );
   if (parcelasSie.length === 0) return { hoje, parcelas: [] };
 

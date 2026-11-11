@@ -236,7 +236,7 @@ const clienteTool = {
         : [],
       saldos: temCluster ? Object.fromEntries(Object.entries(detalhe.saldos).map(([k, v]) => [k, r2(v)])) : null,
       parcelas_na_cobranca: {
-        observacao: 'Só as do universo da cobrança (origem CO, centro com Lançamento, tipo de pagamento escolhido); parcela rateada aparece 1 vez por centro.',
+        observacao: 'Só as do universo da cobrança (qualquer origem, centro com Lançamento, tipo de pagamento escolhido); parcela rateada aparece 1 vez por centro.',
         resumo_por_status: porStatus,
         em_aberto: minhas
           .filter((l) => l.saldo_aberto !== 0)

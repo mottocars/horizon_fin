@@ -150,10 +150,10 @@ const parcelaTool = {
     if (!parcela) {
       const { rows } = await pool.query(
         `SELECT installment_id, installment_number, due_date::text, corrected_balance_amount::float AS saldo, client_name, TRIM(payment_term_description) AS tipo
-           FROM sie_income WHERE empresa_id = $1 AND bill_id = $2 AND origin_id = 'CO' ORDER BY due_date`,
+           FROM sie_income WHERE empresa_id = $1 AND bill_id = $2 ORDER BY due_date`,
         [empresaId, titulo]
       );
-      if (!rows.length) throw falha(`Título ${titulo} não encontrado no contas a receber (origem CO) desta empresa.`);
+      if (!rows.length) throw falha(`Título ${titulo} não encontrado no contas a receber desta empresa.`);
       return { titulo, cliente: rows[0].client_name, parcelas: rows.map((r) => ({ parcela: r.installment_id, numero: r.installment_number, vencimento: r.due_date, saldo: r2(r.saldo), tipo_pagamento: r.tipo })) };
     }
     const h = await historico.getHistoricoParcela(empresaId, titulo, parcela).catch((e) => {

@@ -1,4 +1,4 @@
-import { Fragment, useCallback, useEffect, useRef, useState } from 'react';
+import { Fragment, memo, useCallback, useEffect, useRef, useState } from 'react';
 import { Contact, Minus, Plus } from 'lucide-react';
 import Card from '../../../components/Card';
 import Pagination from '../../../components/Pagination';
@@ -27,7 +27,7 @@ const LIMITE_PAGINA = 50;
 // batendo com a busca some do nível 1 (ver carregar abaixo), e a contagem
 // "Clientes ativos" mostrada já é a filtrada (ver
 // customers.service.js::getResumoPorCentroCusto).
-export default function ClientesTab({ empresaId, centroCustoIds = [], busca = '', refreshToken = 0 }) {
+function ClientesTab({ empresaId, centroCustoIds = [], busca = '', refreshToken = 0 }) {
   const [centros, setCentros] = useState([]);
   const [carregando, setCarregando] = useState(false);
 
@@ -315,3 +315,7 @@ export default function ClientesTab({ empresaId, centroCustoIds = [], busca = ''
     </Card>
   );
 }
+
+// memo: a busca é digitada na página (GestaoCobrancasPage.jsx) e cada tecla redesenhava esta tabela
+// inteira; com as props estáveis (a busca só muda 400 ms depois da última tecla), ela não redesenha mais.
+export default memo(ClientesTab);

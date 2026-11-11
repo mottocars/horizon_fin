@@ -274,27 +274,24 @@ async function getResumo(empresaId) {
   return rows[0];
 }
 
-// Só parcelas com origin_id = 'CO' são contas a receber de verdade (mesmo
-// critério de cobrancaClusters.service.js::ORIGIN_ID_PADRAO) — replicado
-// aqui em vez de importado porque os dois módulos não têm nenhuma outra
-// dependência um do outro, e um `require` cruzado só pra isso criaria um
-// acoplamento estranho entre "sincronizar clientes" e "clusterizar
-// clientes" (duas features vizinhas, mas independentes).
-const ORIGIN_ID_PADRAO = 'CO';
+// Universo da cobrança: todas as origens do contas a receber, travadas só
+// pelos Tipos de Pagamento escolhidos (Gestão de Cobranças > Configurações)
+// — mesma condição da Rotina e da Gestão das Parcelas.
+const { condicaoTipoPagamento } = require('../regua-cobranca/reguaCobranca.service');
 
-// Condição "cliente ativo": tem pelo menos 1 parcela (contas a receber, ver
-// ORIGIN_ID_PADRAO) com saldo diferente de zero — a conta em aberto que o
+// Condição "cliente ativo": tem pelo menos 1 parcela (contas a receber com
+// tipo de pagamento na cobrança) com saldo diferente de zero — a conta em aberto que o
 // cliente ainda deve pagar. `params` é mutado (bind params da query em
 // montagem, mesmo padrão de cobrancaClusters.service.js::condicaoCentroCusto);
 // devolve o SQL da subquery de client_ids ativos daquele centro de custo.
 function subqueryClientesAtivos(params, costCenterId) {
-  params.push(costCenterId, ORIGIN_ID_PADRAO);
+  params.push(costCenterId);
   return `(
     SELECT DISTINCT si.client_id
     FROM sie_income_categorias cat
     JOIN sie_income si
       ON si.bill_id = cat.bill_id AND si.installment_id = cat.installment_id AND si.empresa_id = cat.empresa_id
-    WHERE cat.empresa_id = $1 AND cat.cost_center_id = $${params.length - 1} AND si.origin_id = $${params.length}
+    WHERE cat.empresa_id = $1 AND cat.cost_center_id = $${params.length} AND ${condicaoTipoPagamento('si')}
       AND si.corrected_balance_amount <> 0
   )`;
 }
@@ -353,11 +350,11 @@ async function getResumoPorCentroCusto(empresaId, { costCenterIds, search = '' }
        ON si.bill_id = cat.bill_id AND si.installment_id = cat.installment_id AND si.empresa_id = cat.empresa_id
      JOIN sie_customers sc ON sc.id = si.client_id AND sc.empresa_id = si.empresa_id
      LEFT JOIN sie_customers_comunicar com ON com.empresa_id = si.empresa_id AND com.client_id = si.client_id
-     WHERE cat.empresa_id = $1 AND si.origin_id = $2 AND si.corrected_balance_amount <> 0
-       AND cat.cost_center_id = ANY($3::bigint[])
-       AND ($4::text IS NULL OR sc.name ILIKE $4 OR sc.cpf ILIKE $4 OR sc.cnpj ILIKE $4)
+     WHERE cat.empresa_id = $1 AND ${condicaoTipoPagamento('si')} AND si.corrected_balance_amount <> 0
+       AND cat.cost_center_id = ANY($2::bigint[])
+       AND ($3::text IS NULL OR sc.name ILIKE $3 OR sc.cpf ILIKE $3 OR sc.cnpj ILIKE $3)
      GROUP BY cat.cost_center_id`,
-    [empresaId, ORIGIN_ID_PADRAO, idsPermitidos, termo]
+    [empresaId, idsPermitidos, termo]
   );
 
   // `cost_center_id` volta do driver `pg` como string (coluna bigint) —

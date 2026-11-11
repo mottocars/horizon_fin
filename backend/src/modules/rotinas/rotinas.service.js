@@ -12,7 +12,6 @@ const distribuicao = require('../regua-cobranca/distribuicao.service');
 const { ehAdministradorCobranca } = require('../cobranca-acesso/cobrancaAcesso.service');
 
 const CLUSTERS_VALIDOS = ['novo', 'bom', 'duvidoso', 'mau', 'inad'];
-const ORIGIN_ID_PADRAO = 'CO';
 const UM_DIA_MS = 24 * 60 * 60 * 1000;
 
 // Mesmo diretório físico de regua-cobranca-historico/historicoCliente.service.js
@@ -128,7 +127,7 @@ async function calcularItens(empresaId, etapasRows, { dataInicio, dataFim, costC
   );
   const clusterPorCliente = new Map(clusterRows.map((r) => [String(r.client_id), r.cluster]));
 
-  const params = [empresaId, ORIGIN_ID_PADRAO];
+  const params = [empresaId];
   let filtroCentro = '';
   if (Array.isArray(costCenterIds) && costCenterIds.length > 0) {
     params.push(costCenterIds);
@@ -161,7 +160,7 @@ async function calcularItens(empresaId, etapasRows, { dataInicio, dataFim, costC
        ON m.id = h.mascara_item_id AND m.tipo = 'ETAPAS_CENTRO_CUSTO' AND m.descricao = 'Lançamento'
      LEFT JOIN sie_customers_comunicar com
        ON com.empresa_id = si.empresa_id AND com.client_id = si.client_id
-     WHERE si.empresa_id = $1 AND si.origin_id = $2 AND si.corrected_balance_amount <> 0
+     WHERE si.empresa_id = $1 AND si.corrected_balance_amount <> 0
        AND COALESCE(com.comunicar, TRUE) = TRUE
        AND ${CONDICAO_TIPO_PAGAMENTO}${filtroCentro}
      ORDER BY cat.cost_center_name, si.client_name, si.bill_id, si.installment_id`,

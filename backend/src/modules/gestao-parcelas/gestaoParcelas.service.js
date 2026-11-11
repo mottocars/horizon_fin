@@ -29,7 +29,6 @@ const STATUS_LABEL_EXPORT = {
 // Só parcelas com origin_id = 'CO' são contas a receber de verdade — mesma
 // constante duplicada por módulo (de propósito, sem dependência cruzada)
 // que cobrancaClusters.service.js e customers.service.js já usam.
-const ORIGIN_ID_PADRAO = 'CO';
 
 const UM_DIA_MS = 24 * 60 * 60 * 1000;
 
@@ -136,7 +135,7 @@ async function buscarLinhasClassificadas(empresaId, { costCenterIds, search } = 
   );
   const clusterPorCliente = new Map(clusterRows.map((r) => [String(r.client_id), r.cluster]));
 
-  const params = [empresaId, ORIGIN_ID_PADRAO];
+  const params = [empresaId];
   let filtroCentro = '';
   if (Array.isArray(costCenterIds) && costCenterIds.length > 0) {
     params.push(costCenterIds);
@@ -168,7 +167,7 @@ async function buscarLinhasClassificadas(empresaId, { costCenterIds, search } = 
        ON m.id = h.mascara_item_id AND m.tipo = 'ETAPAS_CENTRO_CUSTO' AND m.descricao = 'Lançamento'
      LEFT JOIN sie_customers_comunicar com
        ON com.empresa_id = si.empresa_id AND com.client_id = si.client_id
-     WHERE si.empresa_id = $1 AND si.origin_id = $2 AND si.corrected_balance_amount <> 0
+     WHERE si.empresa_id = $1 AND si.corrected_balance_amount <> 0
        AND COALESCE(com.comunicar, TRUE) = TRUE
        AND ${CONDICAO_TIPO_PAGAMENTO}${filtroCentro}`,
     params
@@ -247,7 +246,7 @@ async function buscarParcelasComCluster(empresaId, { costCenterIds, search, stat
   const etapasPorCluster = await carregarEtapasPorCluster(empresaId);
   const donos = await mapaDonosCarteira(empresaId);
 
-  const params = [empresaId, ORIGIN_ID_PADRAO];
+  const params = [empresaId];
   let filtroCentro = '';
   if (Array.isArray(costCenterIds) && costCenterIds.length > 0) {
     params.push(costCenterIds);
@@ -276,13 +275,15 @@ async function buscarParcelasComCluster(empresaId, { costCenterIds, search, stat
        ON ccc.empresa_id = si.empresa_id AND ccc.client_id = si.client_id
      LEFT JOIN sie_customers_comunicar com
        ON com.empresa_id = si.empresa_id AND com.client_id = si.client_id
-     LEFT JOIN (
-       SELECT bill_id, installment_id, MAX(payment_date) AS ultimo_pagamento
-       FROM sie_income_recebimentos
-       WHERE empresa_id = $1
-       GROUP BY bill_id, installment_id
-     ) pg ON pg.bill_id = si.bill_id AND pg.installment_id = si.installment_id
-     WHERE si.empresa_id = $1 AND si.origin_id = $2
+     LEFT JOIN LATERAL (
+       -- Último recebimento só desta parcela, pelo índice (bill_id, installment_id, empresa_id). Antes era
+       -- um GROUP BY de todos os recebimentos da empresa: com a busca por nome o planejador repetia esse
+       -- agrupamento por linha (7–9 s na GENESIS).
+       SELECT MAX(r.payment_date) AS ultimo_pagamento
+       FROM sie_income_recebimentos r
+       WHERE r.bill_id = si.bill_id AND r.installment_id = si.installment_id AND r.empresa_id = si.empresa_id
+     ) pg ON TRUE
+     WHERE si.empresa_id = $1
        AND COALESCE(com.comunicar, TRUE) = TRUE
        AND ${CONDICAO_TIPO_PAGAMENTO}${filtroCentro}${filtroBusca}`,
     params
@@ -500,7 +501,7 @@ async function listParcelasPorTitulo(empresaId, costCenterId, billId, filtros = 
   const etapasPorCluster = await carregarEtapasPorCluster(empresaId);
   const donos = await mapaDonosCarteira(empresaId);
 
-  const params = [empresaId, ORIGIN_ID_PADRAO, billId];
+  const params = [empresaId, billId];
   let filtroCentro = '';
   if (costCenterId) {
     params.push(costCenterId);
@@ -516,13 +517,15 @@ async function listParcelasPorTitulo(empresaId, costCenterId, billId, filtros = 
        ON cat.bill_id = si.bill_id AND cat.installment_id = si.installment_id AND cat.empresa_id = si.empresa_id
      LEFT JOIN cobranca_clientes_clusters ccc
        ON ccc.empresa_id = si.empresa_id AND ccc.client_id = si.client_id
-     LEFT JOIN (
-       SELECT bill_id, installment_id, MAX(payment_date) AS ultimo_pagamento
-       FROM sie_income_recebimentos
-       WHERE empresa_id = $1
-       GROUP BY bill_id, installment_id
-     ) pg ON pg.bill_id = si.bill_id AND pg.installment_id = si.installment_id
-     WHERE si.empresa_id = $1 AND si.origin_id = $2 AND si.bill_id = $3
+     LEFT JOIN LATERAL (
+       -- Último recebimento só desta parcela, pelo índice (bill_id, installment_id, empresa_id). Antes era
+       -- um GROUP BY de todos os recebimentos da empresa: com a busca por nome o planejador repetia esse
+       -- agrupamento por linha (7–9 s na GENESIS).
+       SELECT MAX(r.payment_date) AS ultimo_pagamento
+       FROM sie_income_recebimentos r
+       WHERE r.bill_id = si.bill_id AND r.installment_id = si.installment_id AND r.empresa_id = si.empresa_id
+     ) pg ON TRUE
+     WHERE si.empresa_id = $1 AND si.bill_id = $2
        AND ${CONDICAO_TIPO_PAGAMENTO}${filtroCentro}
      ORDER BY si.installment_id ASC`,
     params

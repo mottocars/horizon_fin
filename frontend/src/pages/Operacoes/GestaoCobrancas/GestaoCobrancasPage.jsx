@@ -32,6 +32,7 @@ import { getMeuAcessoCobranca } from '../../../api/cobrancaAcesso.api';
 import { useAuth } from '../../../auth/AuthContext';
 import { nomeExibicaoEmpresa } from '../../../utils/empresa';
 import { useEmpresaTravada } from '../../../hooks/useEmpresaTravada';
+import useValorAtrasado from '../../../hooks/useValorAtrasado';
 import MotorRiscoTab from './MotorRisco/MotorRiscoTab';
 import CentrosCustoResumo from './ClustersCobranca/CentrosCustoResumo';
 import SincronizarModal from './ClustersCobranca/SincronizarModal';
@@ -80,6 +81,30 @@ const OPCOES_STATUS_PARCELA = [
   { value: 'atraso', label: 'Paga com Atraso' },
   { value: 'em_dia', label: 'Paga em Dia' },
 ];
+
+// Campo "Buscar cliente": guarda o texto digitado só aqui dentro (cada tecla redesenha só o campo, não a
+// página) e entrega o valor à página 400 ms depois da última tecla (limpar entrega na hora).
+function CampoBusca({ valorAplicado, onAplicar, disabled, placeholder }) {
+  const [texto, setTexto] = useState(valorAplicado);
+  const atrasado = useValorAtrasado(texto, 400);
+  useEffect(() => {
+    if (atrasado !== valorAplicado) onAplicar(atrasado);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [atrasado]);
+  return (
+    <div className="relative">
+      <Search size={15} className="pointer-events-none absolute left-3 top-1/2 -translate-y-1/2 text-gray-400" />
+      <input
+        type="search"
+        value={texto}
+        onChange={(e) => setTexto(e.target.value)}
+        disabled={disabled}
+        placeholder={placeholder}
+        className="w-full rounded-lg border border-gray-200 py-2 pl-9 pr-3 text-sm focus:outline-none focus:ring-1 focus:ring-primary-100 disabled:bg-gray-50 disabled:text-gray-400"
+      />
+    </div>
+  );
+}
 
 function formatarDataHora(data) {
   return new Date(data).toLocaleString('pt-BR', {
@@ -307,7 +332,10 @@ export default function GestaoCobrancasPage() {
   // na URL como empresa/aba/Centro de Custo): é só um refinamento de texto
   // sobre o centro de custo expandido no momento, não um estado que faça
   // sentido restaurar sozinho num "Voltar" do navegador.
-  const [buscaClientes, setBuscaClientes] = useState('');
+  // Busca de cliente já "aplicada": o campo (CampoBusca, abaixo) guarda o que está sendo digitado e só
+  // avisa aqui 400 ms depois da última tecla — antes, cada letra redesenhava a página e refazia a Gestão
+  // das Parcelas inteira.
+  const [buscaAplicada, setBuscaAplicada] = useState('');
   const [exportandoClientes, setExportandoClientes] = useState(false);
 
   // Baixa em Excel exatamente a matriz Centro de Custo → Cliente que está
@@ -319,7 +347,7 @@ export default function GestaoCobrancasPage() {
   async function handleExportarClientes() {
     setExportandoClientes(true);
     try {
-      const blob = await exportarClientesCustomersSienge(empresaId, { costCenterIds: centroCustoIds, search: buscaClientes });
+      const blob = await exportarClientesCustomersSienge(empresaId, { costCenterIds: centroCustoIds, search: buscaAplicada });
       const url = window.URL.createObjectURL(blob);
       const link = document.createElement('a');
       link.href = url;
@@ -342,7 +370,7 @@ export default function GestaoCobrancasPage() {
     try {
       const blob = await exportarGestaoParcelas(empresaId, {
         costCenterIds: centroCustoIds,
-        search: buscaClientes,
+        search: buscaAplicada,
         statusParcela: statusParcelaFiltro,
         responsavelIds: responsavelParcelasFiltro,
       });
@@ -588,19 +616,14 @@ export default function GestaoCobrancasPage() {
             {(abaAtiva === 'clientes' || abaAtiva === 'inadimplencia') && (
               <div className="sm:min-w-[160px] sm:max-w-xs sm:flex-1">
                 <label className="mb-1 block text-sm font-medium text-gray-700">Buscar cliente</label>
-                <div className="relative">
-                  <Search size={15} className="pointer-events-none absolute left-3 top-1/2 -translate-y-1/2 text-gray-400" />
-                  <input
-                    type="search"
-                    value={buscaClientes}
-                    onChange={(e) => setBuscaClientes(e.target.value)}
-                    disabled={!empresaId}
-                    placeholder={
-                      !empresaId ? 'Selecione a empresa primeiro' : abaAtiva === 'clientes' ? 'Nome, CPF ou CNPJ' : 'Nome do cliente'
-                    }
-                    className="w-full rounded-lg border border-gray-200 py-2 pl-9 pr-3 text-sm focus:outline-none focus:ring-1 focus:ring-primary-100 disabled:bg-gray-50 disabled:text-gray-400"
-                  />
-                </div>
+                <CampoBusca
+                  valorAplicado={buscaAplicada}
+                  onAplicar={setBuscaAplicada}
+                  disabled={!empresaId}
+                  placeholder={
+                    !empresaId ? 'Selecione a empresa primeiro' : abaAtiva === 'clientes' ? 'Nome, CPF ou CNPJ' : 'Nome do cliente'
+                  }
+                />
               </div>
             )}
           </div>
@@ -712,7 +735,7 @@ export default function GestaoCobrancasPage() {
           <GestaoParcelasTab
             empresaId={empresaId}
             centroCustoIds={centroCustoIds}
-            busca={buscaClientes}
+            busca={buscaAplicada}
             statusParcela={statusParcelaFiltro}
             responsavelIds={responsavelParcelasFiltro}
             refreshToken={refreshParcelas}
@@ -738,7 +761,7 @@ export default function GestaoCobrancasPage() {
           <ClientesTab
             empresaId={empresaId}
             centroCustoIds={centroCustoIds}
-            busca={buscaClientes}
+            busca={buscaAplicada}
             refreshToken={refreshClientes}
           />
         )}

@@ -4,11 +4,12 @@ const { proximaExecucao } = require('../monitor-integracoes/tempo');
 
 const UM_DIA_MS = 24 * 60 * 60 * 1000;
 
-// Só parcelas com origin_id = 'CO' entram na conta em qualquer leitura de
-// sie_income deste módulo (cálculo do score, saldo, filtros, lista de
-// parcelas) — os demais origin_id não são contas a receber de verdade pra
-// fins de cobrança/clusterização.
-const ORIGIN_ID_PADRAO = 'CO';
+// Universo do módulo (score, saldos, filtros, lista de parcelas): todas as
+// origens do contas a receber, travadas só pelos Tipos de Pagamento
+// escolhidos em Gestão de Cobranças > Configurações (desde 11/11/2026 —
+// antes era só a origem 'CO').
+const { condicaoTipoPagamento } = require('../regua-cobranca/reguaCobranca.service');
+const TIPO_SI = condicaoTipoPagamento('si');
 
 function badRequest(message) {
   const err = new Error(message);
@@ -98,9 +99,9 @@ async function buscarParcelasEmpresa(empresaId) {
        FROM sie_income_recebimentos sr
        WHERE sr.bill_id = si.bill_id AND sr.installment_id = si.installment_id AND sr.empresa_id = si.empresa_id
      ) rec ON TRUE
-     WHERE si.empresa_id = $1 AND si.client_id IS NOT NULL AND si.origin_id = $2
+     WHERE si.empresa_id = $1 AND si.client_id IS NOT NULL AND ${TIPO_SI}
      ORDER BY si.client_id, si.due_date`,
-    [empresaId, ORIGIN_ID_PADRAO]
+    [empresaId]
   );
   return rows;
 }
@@ -405,8 +406,8 @@ const SUBQUERY_SALDO_ABERTO = `(
     COALESCE(SUM(corrected_balance_amount) FILTER (
       WHERE due_date > (date_trunc('month', CURRENT_DATE) + INTERVAL '1 month - 1 day')
     ), 0) AS saldo_a_vencer
-  FROM sie_income
-  WHERE empresa_id = $1 AND corrected_balance_amount <> 0 AND origin_id = '${ORIGIN_ID_PADRAO}'
+  FROM sie_income si
+  WHERE si.empresa_id = $1 AND si.corrected_balance_amount <> 0 AND ${TIPO_SI}
   GROUP BY client_id
 )`;
 
@@ -432,7 +433,7 @@ function condicaoCentroCusto(params, costCenterIds) {
       ON h_cc.sienge_id = cat_cc.cost_center_id AND h_cc.empresa_id = cat_cc.empresa_id AND h_cc.data_inicio IS NOT NULL
     JOIN mascara_itens m_cc
       ON m_cc.id = h_cc.mascara_item_id AND m_cc.tipo = 'ETAPAS_CENTRO_CUSTO' AND m_cc.descricao = 'Lançamento'
-    WHERE si_cc.empresa_id = cc.empresa_id AND si_cc.client_id = cc.client_id AND si_cc.origin_id = '${ORIGIN_ID_PADRAO}'
+    WHERE si_cc.empresa_id = cc.empresa_id AND si_cc.client_id = cc.client_id AND ${condicaoTipoPagamento('si_cc')}
     ${temSelecao ? `AND cat_cc.cost_center_id = ANY($${params.length}::bigint[])` : ''}
   )`;
 }
@@ -552,9 +553,9 @@ async function getResumoPorCentroCusto(empresaId, { costCenterIds } = {}) {
        ON si.bill_id = cat.bill_id AND si.installment_id = cat.installment_id AND si.empresa_id = cat.empresa_id
      JOIN cobranca_clientes_clusters ccc
        ON ccc.client_id = si.client_id AND ccc.empresa_id = si.empresa_id
-     WHERE cat.empresa_id = $1 AND si.origin_id = $2 AND cat.cost_center_id = ANY($3::bigint[])
+     WHERE cat.empresa_id = $1 AND ${TIPO_SI} AND cat.cost_center_id = ANY($2::bigint[])
      GROUP BY cat.cost_center_id, ccc.cluster`,
-    [empresaId, ORIGIN_ID_PADRAO, idsPermitidos]
+    [empresaId, idsPermitidos]
   );
 
   // Saldo vencido/no mês por centro de custo — mesma filosofia "inclusão
@@ -571,7 +572,7 @@ async function getResumoPorCentroCusto(empresaId, { costCenterIds } = {}) {
        FROM sie_income_categorias cat
        JOIN sie_income si
          ON si.bill_id = cat.bill_id AND si.installment_id = cat.installment_id AND si.empresa_id = cat.empresa_id
-       WHERE cat.empresa_id = $1 AND si.origin_id = $2 AND cat.cost_center_id = ANY($3::bigint[])
+       WHERE cat.empresa_id = $1 AND ${TIPO_SI} AND cat.cost_center_id = ANY($2::bigint[])
      )
      SELECT cc.cost_center_id,
        COALESCE(SUM(sa.saldo_vencido), 0) AS saldo_vencido,
@@ -579,7 +580,7 @@ async function getResumoPorCentroCusto(empresaId, { costCenterIds } = {}) {
      FROM centro_cliente cc
      JOIN ${SUBQUERY_SALDO_ABERTO} sa ON sa.client_id = cc.client_id
      GROUP BY cc.cost_center_id`,
-    [empresaId, ORIGIN_ID_PADRAO, idsPermitidos]
+    [empresaId, idsPermitidos]
   );
 
   // `cost_center_id` volta do driver `pg` como string (coluna bigint) —
@@ -713,10 +714,10 @@ async function getClienteDetalhe(empresaId, clientId) {
        FROM sie_income_recebimentos sr
        WHERE sr.bill_id = si.bill_id AND sr.installment_id = si.installment_id AND sr.empresa_id = si.empresa_id
      ) rec ON TRUE
-     WHERE si.empresa_id = $1 AND si.client_id = $2 AND si.origin_id = $3
+     WHERE si.empresa_id = $1 AND si.client_id = $2 AND ${TIPO_SI}
        AND si.due_date <= CURRENT_DATE + INTERVAL '2 months'
      ORDER BY si.due_date DESC`,
-    [empresaId, clientId, ORIGIN_ID_PADRAO]
+    [empresaId, clientId]
   );
 
   // Dias entre vencimento e pagamento (ou até hoje, se ainda em aberto) —
@@ -740,10 +741,10 @@ async function getClienteDetalhe(empresaId, clientId) {
 
   const { rows: futurasRows } = await pool.query(
     `SELECT COUNT(*)::int AS total
-     FROM sie_income
-     WHERE empresa_id = $1 AND client_id = $2 AND origin_id = $3
-       AND due_date > CURRENT_DATE + INTERVAL '2 months'`,
-    [empresaId, clientId, ORIGIN_ID_PADRAO]
+     FROM sie_income si
+     WHERE si.empresa_id = $1 AND si.client_id = $2 AND ${TIPO_SI}
+       AND si.due_date > CURRENT_DATE + INTERVAL '2 months'`,
+    [empresaId, clientId]
   );
   const parcelasFuturasOcultas = futurasRows[0].total;
 
@@ -760,9 +761,9 @@ async function getClienteDetalhe(empresaId, clientId) {
        COALESCE(SUM(corrected_balance_amount) FILTER (
          WHERE due_date > (date_trunc('month', CURRENT_DATE) + INTERVAL '1 month - 1 day')
        ), 0) AS saldo_a_vencer
-     FROM sie_income
-     WHERE empresa_id = $1 AND client_id = $2 AND corrected_balance_amount <> 0 AND origin_id = $3`,
-    [empresaId, clientId, ORIGIN_ID_PADRAO]
+     FROM sie_income si
+     WHERE si.empresa_id = $1 AND si.client_id = $2 AND si.corrected_balance_amount <> 0 AND ${TIPO_SI}`,
+    [empresaId, clientId]
   );
   const saldos = {
     saldo_aberto: Number(saldoRows[0].saldo_aberto),

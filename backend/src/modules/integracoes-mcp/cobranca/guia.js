@@ -85,12 +85,12 @@ const guia = {
       '',
       '## 1. Quais parcelas entram na cobrança (o "universo")',
       'Uma parcela do contas a receber do Sienge entra na Rotina, na Gestão das Parcelas e no relatório só se TODAS forem verdade:',
-      '1. **Origem "CO"** (`origin_id = CO`, contas a receber de clientes; as outras origens não são cobrança).',
+      '1. **Qualquer origem** do contas a receber (CO, CR, ME, CA...) — desde 11/11/2026 a origem não trava mais; quem trava é o Tipo de Pagamento (item 4).',
       '2. **Centro de custo com a etapa "Lançamento"** registrada no Histórico de Etapas (Cronograma de Obras) — empreendimento ainda não lançado não é cobrado. Parcela rateada em 2 centros aparece nos 2 (na Gestão das Parcelas), mas conta 1 vez por cliente na distribuição.',
       '3. **Cliente com "Comunicar" ligado** (aba Clientes; sem marcação = ligado). Desligado, o cliente some da Rotina, da Gestão das Parcelas e do relatório.',
       `4. **Tipo de pagamento** (\`payment_term_description\`) escolhido em Configurações › Tipos de Pagamentos para Cobrança. Sem nenhum escolhido, NADA entra; tipo novo que aparecer no Sienge fica fora até alguém incluir. Nesta empresa: ${cfg.tipos_pagamento.entram_na_cobranca.length} tipo(s) entram (${cfg.tipos_pagamento.entram_na_cobranca.map((t) => t.tipo).join(', ') || 'nenhum'}); ${cfg.tipos_pagamento.ficam_fora.length} ficam fora.`,
       '5. Para a Rotina e a Gestão das Parcelas "em aberto": **saldo corrigido ≠ 0 hoje**. Parcela paga, renegociada ou com desconto que zerou o saldo sai da Rotina — inclusive dos dias passados, porque a Rotina é recalculada com a base de hoje.',
-      'Atenção: o **cluster** (score) do cliente usa TODAS as parcelas CO dele (sem os filtros 2–4) — é o comportamento de pagamento dele como cliente.',
+      'Atenção: o **cluster** (score) do cliente usa as parcelas dele de qualquer origem com tipo de pagamento na cobrança (filtro 4), de qualquer centro e com ou sem Comunicar (sem os filtros 2 e 3) — é o comportamento de pagamento dele como cliente.',
       '',
       '## 2. Motor de Risco (score) — versão vigente',
       mr
@@ -164,7 +164,7 @@ const guia = {
       '- **Pagamento** = só "Recebimento" do Sienge com valor líquido > 0. Reparcelamento, distrato, desconto concedido etc. zeram o saldo sem dinheiro: a parcela não conta como paga e sai de Pagas e Em aberto.',
       '- **Dono** da parcela (abas Pagas/Em aberto) = o responsável da ÚLTIMA tarefa com dono; as interações são as dela.',
       '- Abas: **Parcelas Pagas** = paga com data de pagamento dentro do período (valor = soma dos Recebimentos; dias de atraso no pagamento). **Parcelas em Aberto** = em aberto no fim do período com vencimento dentro do período (valor = o que faltava no fim do período). **Parcelas Distribuídas** = só Distribuição automática, pela data da distribuição: 1 linha por parcela × dia distribuído (a mesma parcela pode aparecer em vários dias), atendente = quem recebeu no dia, interações da etapa daquele dia feitas por ela, valor = saldo no dia, pagamento só se veio depois da distribuição.',
-      '- O universo do relatório é o mesmo da Rotina (origem CO, Lançamento, Comunicar, Tipos de Pagamento) e as tarefas do passado são reconstruídas com o **cluster e a régua de hoje**.',
+      '- O universo do relatório é o mesmo da Rotina (qualquer origem, Lançamento, Comunicar, Tipos de Pagamento) e as tarefas do passado são reconstruídas com o **cluster e a régua de hoje**.',
       '',
       '## 12. Fontes de dados e Monitor de Integrações (ordem ideal: clientes → base → clusters → distribuição)',
       ...cfg.monitor.map(

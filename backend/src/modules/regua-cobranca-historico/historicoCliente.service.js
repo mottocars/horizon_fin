@@ -14,7 +14,6 @@ const emailService = require('../integracoes-email/email.service');
 const { buscarBoletoParaEnvio } = require('./boletoSienge');
 
 const CLUSTERS_VALIDOS = ['novo', 'bom', 'duvidoso', 'mau', 'inad'];
-const ORIGIN_ID_PADRAO = 'CO';
 const UM_DIA_MS = 24 * 60 * 60 * 1000;
 
 function badRequest(message) {
@@ -112,14 +111,16 @@ async function getParcelaClassificada(empresaId, billId, installmentId) {
             si.document_identification_name, si.document_number, si.installment_number,
             pg.ultimo_pagamento
      FROM sie_income si
-     LEFT JOIN (
-       SELECT bill_id, installment_id, MAX(payment_date) AS ultimo_pagamento
-       FROM sie_income_recebimentos
-       WHERE empresa_id = $1
-       GROUP BY bill_id, installment_id
-     ) pg ON pg.bill_id = si.bill_id AND pg.installment_id = si.installment_id
-     WHERE si.empresa_id = $1 AND si.bill_id = $2 AND si.installment_id = $3 AND si.origin_id = $4`,
-    [empresaId, billId, installmentId, ORIGIN_ID_PADRAO]
+     LEFT JOIN LATERAL (
+       -- Último recebimento só desta parcela, pelo índice (bill_id, installment_id, empresa_id). Antes era
+       -- um GROUP BY de todos os recebimentos da empresa: com a busca por nome o planejador repetia esse
+       -- agrupamento por linha (7–9 s na GENESIS).
+       SELECT MAX(r.payment_date) AS ultimo_pagamento
+       FROM sie_income_recebimentos r
+       WHERE r.bill_id = si.bill_id AND r.installment_id = si.installment_id AND r.empresa_id = si.empresa_id
+     ) pg ON TRUE
+     WHERE si.empresa_id = $1 AND si.bill_id = $2 AND si.installment_id = $3`,
+    [empresaId, billId, installmentId]
   );
   const parcela = rows[0];
   if (!parcela) throw badRequest('Parcela não encontrada.');

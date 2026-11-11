@@ -6,7 +6,6 @@ const { getDataSistema } = require('../../regua-cobranca/reguaCobranca.service')
 // mesma "data de hoje" da Rotina), moeda, rótulos e a resolução de cliente/atendente/centro por id ou nome.
 
 const dataSchema = z.string().regex(/^\d{4}-\d{2}-\d{2}$/, 'Data no formato AAAA-MM-DD.');
-const ORIGIN_ID = 'CO';
 
 const CLUSTER_NOME = {
   novo: 'Novo cliente',
@@ -89,8 +88,8 @@ async function resolverCliente(empresaId, valor) {
   if (/^\d+$/.test(t)) {
     const { rows } = await pool.query(
       `SELECT client_id::text AS client_id, MAX(client_name) AS nome FROM sie_income
-        WHERE empresa_id = $1 AND client_id = $2 AND origin_id = $3 GROUP BY client_id`,
-      [empresaId, t, ORIGIN_ID]
+        WHERE empresa_id = $1 AND client_id = $2 GROUP BY client_id`,
+      [empresaId, t]
     );
     if (rows[0]) return rows[0];
     const { rows: cad } = await pool.query('SELECT id::text AS client_id, name AS nome FROM sie_customers WHERE empresa_id = $1 AND id = $2', [
@@ -102,9 +101,9 @@ async function resolverCliente(empresaId, valor) {
   }
   const { rows } = await pool.query(
     `SELECT client_id::text AS client_id, MAX(client_name) AS nome
-       FROM sie_income WHERE empresa_id = $1 AND origin_id = $2 AND client_name ILIKE $3
+       FROM sie_income WHERE empresa_id = $1 AND client_name ILIKE $2
       GROUP BY client_id ORDER BY MAX(client_name) LIMIT 20`,
-    [empresaId, ORIGIN_ID, `%${t}%`]
+    [empresaId, `%${t}%`]
   );
   const exato = rows.filter((r) => (r.nome || '').toLowerCase() === t.toLowerCase());
   if (exato.length === 1) return exato[0];
@@ -222,7 +221,6 @@ module.exports = {
   falha,
   r2,
   dataSchema,
-  ORIGIN_ID,
   CLUSTER_NOME,
   CANAL_NOME,
   MOTIVO_DISTRIBUICAO,
