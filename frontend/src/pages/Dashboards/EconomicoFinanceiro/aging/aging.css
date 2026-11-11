@@ -47,6 +47,20 @@
   font: 500 14px var(--f-mono);
   text-align: right;
 }
+.painel-cfo.aging .meses-campo input[type='text'] {
+  width: 170px;
+  text-align: left;
+  padding-right: 10px;
+}
+/* Previsão financeira: mesma altura dos campos Histórico / Horizonte / Título */
+.painel-cfo.aging .fp-rodape .seg {
+  height: var(--altura-filtro);
+  box-sizing: border-box;
+}
+.painel-cfo.aging .fp-rodape .seg button {
+  padding-top: 0;
+  padding-bottom: 0;
+}
 .painel-cfo.aging .meses-campo span {
   font-size: 13px;
   color: var(--muted);

@@ -229,18 +229,19 @@ export function PainelFiltros({ B, filtros, onFiltros, meses, periodo, onMeses, 
             ))}
           </div>
         </div>
-        <div className="ctl">
-          <label className="rot" htmlFor="f-titulo">Título (bill_id)</label>
-          <input
-            id="f-titulo"
-            type="text"
-            inputMode="numeric"
-            placeholder="Ex.: 1234 ou 1234, 5678"
-            maxLength={500}
-            value={filtros.titulo || ''}
-            onChange={(e) => mudar({ titulo: e.target.value.replace(/[^\d,;\s]/g, '') })}
-            title="Número do título no Sienge (bill_id). Vários: separe por vírgula ou espaço."
-          />
+        <div className="ctl meses">
+          <label htmlFor="f-titulo">Título</label>
+          <div className="meses-campo" title="Número do título no Sienge. Vários: separe por vírgula ou espaço.">
+            <input
+              id="f-titulo"
+              type="text"
+              inputMode="numeric"
+              placeholder="Ex.: 1234, 5678"
+              maxLength={500}
+              value={filtros.titulo || ''}
+              onChange={(e) => mudar({ titulo: e.target.value.replace(/[^\d,;\s]/g, '') })}
+            />
+          </div>
         </div>
         <div className="fp-acoes">
           {erro && <span className="erro">{erro}</span>}
