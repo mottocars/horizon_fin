@@ -13,7 +13,7 @@ export const TELAS_SISTEMA = [
     telas: [
       { codigo: '/dashboards/comercial', label: 'Comercial' },
       { codigo: '/dashboards/economico-financeiro', label: 'Econômico/Financeiro' },
-      { codigo: '/dashboards/cronogramas-obras', label: 'Obra em Foco' },
+      { codigo: '/dashboards/cronogramas-obras', label: 'Obra 360º' },
     ],
   },
   {

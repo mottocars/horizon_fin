@@ -35,7 +35,7 @@ import { FiltroCentros } from '../EconomicoFinanceiro/fluxo/FluxoCaixaPainel';
 import '../EconomicoFinanceiro/fluxo/painel.css';
 import './cronogramas.css';
 
-// Dashboards > Obra em Foco (ex-Cronogramas de Obras; pedido do usuário): abre na capa laranja com o
+// Dashboards > Obra 360º (ex-Cronogramas de Obras; pedido do usuário): abre na capa laranja com o
 // engenheiro (CapaDashboard, como a do Econômico/Financeiro) e o menu de telas aberto; a outra tela é
 // a Carteira de obras (?tela=carteira). Sem tela favorita: a rota de favoritas do servidor só atende o
 // Econômico/Financeiro.
@@ -459,7 +459,7 @@ function CarteiraObras() {
   );
 }
 
-const NOME = 'Obra em Foco';
+const NOME = 'Obra 360º';
 const TELAS = [
   { id: 'home', label: 'Home', icon: House },
   { id: 'carteira', label: 'Carteira de obras', icon: ChartGantt },

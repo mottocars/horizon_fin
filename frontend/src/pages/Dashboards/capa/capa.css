@@ -21,7 +21,7 @@
     linear-gradient(180deg, var(--fundo-topo) 0%, var(--fundo) 45%, var(--fundo-base) 100%);
   color: #fff;
 }
-/* Temas: azul royal (Econômico/Financeiro), verde (Comercial) e laranja (Obra em Foco — queimado,
+/* Temas: azul royal (Econômico/Financeiro), verde (Comercial) e laranja (Obra 360º — queimado,
    para o colete laranja do engenheiro não sumir no fundo). --sombra e --luz2 são triplas RGB. */
 .capa--azul {
   --fundo-topo: #2a62b2;

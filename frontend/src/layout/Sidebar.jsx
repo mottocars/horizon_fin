@@ -55,7 +55,7 @@ const menuItems = [
     children: [
       { label: 'Comercial', to: '/dashboards/comercial', icon: Handshake },
       { label: 'Econômico/Financeiro', to: '/dashboards/economico-financeiro', icon: TrendingUp },
-      { label: 'Obra em Foco', to: '/dashboards/cronogramas-obras', icon: ChartGantt },
+      { label: 'Obra 360º', to: '/dashboards/cronogramas-obras', icon: ChartGantt },
     ],
   },
   {
