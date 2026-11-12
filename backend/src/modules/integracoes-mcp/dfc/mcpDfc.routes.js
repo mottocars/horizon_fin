@@ -2,6 +2,7 @@ const { Router } = require('express');
 const cors = require('cors');
 const { McpServer } = require('@modelcontextprotocol/sdk/server/mcp.js');
 const { StreamableHTTPServerTransport } = require('@modelcontextprotocol/sdk/server/streamableHttp.js');
+const { normalizarVersaoProtocolo } = require('../versaoProtocolo');
 const oauth = require('./oauth.service');
 const { registrarToolsDfc } = require('./tools');
 const { TOOLS_SALDOS } = require('../saldos/tools');
@@ -124,6 +125,7 @@ router.post('/:token', async (req, res) => {
       server.close();
     });
     await server.connect(transport);
+    normalizarVersaoProtocolo(req); // versão do protocolo mais nova que a do SDK: atende em vez de recusar (versaoProtocolo.js)
     await transport.handleRequest(req, res, req.body);
   } catch (err) {
     console.error('Erro no servidor MCP do DFC:', err);

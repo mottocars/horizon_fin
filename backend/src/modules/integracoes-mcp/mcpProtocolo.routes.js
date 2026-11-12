@@ -12,6 +12,7 @@
 const { Router } = require('express');
 const { McpServer } = require('@modelcontextprotocol/sdk/server/mcp.js');
 const { StreamableHTTPServerTransport } = require('@modelcontextprotocol/sdk/server/streamableHttp.js');
+const { normalizarVersaoProtocolo } = require('./versaoProtocolo');
 const mcpService = require('./mcp.service');
 const { registrarTools } = require('./tools');
 
@@ -44,6 +45,7 @@ router.post('/:token', async (req, res) => {
     });
 
     await server.connect(transport);
+    normalizarVersaoProtocolo(req); // versão do protocolo mais nova que a do SDK: atende em vez de recusar (versaoProtocolo.js)
     await transport.handleRequest(req, res, req.body);
   } catch (err) {
     console.error('Erro no servidor MCP:', err);
