@@ -319,7 +319,23 @@
   flex: 1 1 0px;
   min-width: 0;
   overflow: hidden;
+  border-radius: 8px;
+  cursor: pointer;
   transition: flex-basis 0.28s ease, flex-grow 0.28s ease;
+}
+.painel-cfo .av-curva:focus-visible {
+  outline: 2px solid var(--accent);
+  outline-offset: 2px;
+}
+/* Legenda do realizado (barras): quadradinho, não traço. */
+.painel-cfo .av-leg i.barra {
+  width: 9px;
+  height: 9px;
+}
+/* À frente do realizado, menor, o previsto do mesmo mês. */
+.painel-cfo .av-met b small.av-prev {
+  margin-left: 6px;
+  font-variant-numeric: tabular-nums;
 }
 /* Recolhido (outro gráfico com o mouse em cima): faixa estreita na mesma linha, só o nome na
    vertical — o conteúdo some (visibility, não display: a altura da linha não muda). */
