@@ -232,4 +232,4 @@ async function gerar({ empresa, versao, link }) {
   return workbook.xlsx.writeBuffer();
 }
 
-module.exports = { gerar, segmentos };
+module.exports = { gerar, segmentos, janelaAtraso };

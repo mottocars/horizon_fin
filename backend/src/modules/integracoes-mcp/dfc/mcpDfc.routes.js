@@ -8,6 +8,7 @@ const { TOOLS_SALDOS } = require('../saldos/tools');
 const { TOOLS_AGING } = require('../aging/tools');
 const { TOOLS_DRE } = require('../dre');
 const { TOOLS_COBRANCA } = require('../cobranca');
+const { TOOLS_OBRAS } = require('../obras');
 const T = require('../../../config/telas');
 
 // MCP do conector Horizon (/api/mcp/dfc/:token — o caminho "dfc" ficou dos conectores já criados). O
@@ -52,6 +53,14 @@ const INSTRUCOES = {
     'Rotina de um dia: cobranca_rotina; distribuição e atendentes: cobranca_distribuicao; Gestão das Parcelas: cobranca_carteira; relatório Desempenho da Cobrança: cobranca_desempenho; ' +
     '"o que aconteceu" num período (contatos, falhas de envio, distribuições, recálculos, alterações, Monitor): cobranca_o_que_aconteceu; o resto: cobranca_descrever_tabelas + cobranca_consultar_sql. ' +
     'Datas AAAA-MM-DD; sem período = do dia 1º do mês até hoje. Responda como um gestor de cobrança: cite a regra, mostre a conta e dê exemplos com os dados.',
+  OBRAS:
+    'Obra 360º (Dashboards › Obra 360º: Carteira de obras e Avanço das Obras; só leitura): comece por obras_guia — o que é uma obra no Horizon, o cronograma (etapas, fim/duração, ' +
+    'etapa de hoje, Regra de Atraso da Construção, versões), os cards da Carteira, as três curvas do avanço e de onde vem cada dado. As curvas: PLS (Caixa) = avanço registrado pela ' +
+    'Caixa Econômica Federal na Planilha de Levantamento de Serviços (só realizado, até a última parcela liberada); Curva S PLS = a curva da PLS que a empresa registrou no Prevision ' +
+    '(orçamento secundário); Curva S de Obras = a curva real de avanço da obra (orçamento primário). Carteira (VGV, unidades, obras por etapa, a iniciar, em atraso): obras_carteira; ' +
+    'tudo de uma obra (cronograma, atraso, curvas hoje/semana/mês, ritmo e estimativa de término, Prevision, contrato Caixa): obras_obra; avanço de todas as obras como na tela: ' +
+    'obras_avanco; série por período (mensal/semanal/diária): obras_curvas; mudanças do cronograma e pendências: obras_versoes; o que precisa de atenção: obras_alertas. ' +
+    'Percentuais com duas casas, datas DD/MM/AAAA, VGV em R$. Responda como o dono da empresa: conclusão primeiro, depois os números e a fonte.',
 };
 
 // Ferramentas de só leitura no formato { name, description, inputSchema, handler(empresaId, ctx) }.
@@ -67,6 +76,7 @@ function registrarTools(server, empresaId, modulos, ctx) {
   if (modulos.includes('AGING')) registrarLeitura(server, empresaId, TOOLS_AGING, ctx);
   if (modulos.includes('DRE')) registrarLeitura(server, empresaId, TOOLS_DRE, ctx);
   if (modulos.includes('COBRANCA')) registrarLeitura(server, empresaId, TOOLS_COBRANCA, ctx);
+  if (modulos.includes('OBRAS')) registrarLeitura(server, empresaId, TOOLS_OBRAS, ctx);
 }
 
 const router = Router();

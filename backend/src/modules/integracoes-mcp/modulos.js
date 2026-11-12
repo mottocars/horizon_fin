@@ -44,6 +44,14 @@ const MODULOS = {
     tela: T.COBRANCAS,
     telas: [T.COBRANCAS, T.REL_DESEMPENHO_COBRANCA],
   },
+  // Quem tem o dashboard Obra 360º OU a tela Operações › Cronogramas Obras.
+  OBRAS: {
+    titulo: 'OBRA 360º (CARTEIRA E AVANÇO DAS OBRAS)',
+    descricao:
+      'Leitura do dashboard Obra 360º: a carteira de obras (cronograma por etapa, VGV, unidades, a iniciar, atraso da construção, versões do cronograma) e o avanço físico de cada obra (PLS medida pela Caixa, Curva S PLS e Curva S de Obras do Prevision), o contrato da Caixa (DCD) e os alertas.',
+    tela: T.DASH_CRONOGRAMAS,
+    telas: [T.DASH_CRONOGRAMAS, T.CRONOGRAMAS_OBRAS],
+  },
 };
 
 const CODIGOS = Object.keys(MODULOS);

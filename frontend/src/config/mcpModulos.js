@@ -50,6 +50,14 @@ export const MODULOS = [
     descricao:
       'Leitura da Gestão de Cobranças e do relatório Desempenho da Cobrança: todas as regras (quais parcelas entram, Motor de Risco e score, clusters e Inadimplência, régua por cluster, Rotina do dia, tipos de comunicação e envio, distribuição entre atendentes); por que cada cliente está no cluster; a vida de cada parcela (etapas, dono em cada uma, o que foi feito e o que faltou); a Rotina de qualquer dia; a distribuição e as carteiras; a Gestão das Parcelas; o relatório por atendente; e o que aconteceu num período (contatos, falhas de envio, distribuições, recálculos, alterações, Monitor). Para quem tem a Gestão de Cobranças ou o relatório.',
   },
+  {
+    codigo: 'OBRAS',
+    titulo: 'OBRA 360º (CARTEIRA E AVANÇO DAS OBRAS)',
+    curto: 'Obra 360º',
+    cor: 'bg-orange-50 text-orange-700',
+    descricao:
+      'Leitura do dashboard Obra 360º como o dono da empresa: a carteira de obras (VGV, unidades, quantas obras em cada etapa — Landbank, Lançamento, Construção, Entrega, Pós Obra —, as a iniciar e as em atraso pela Regra de Atraso da Construção); o cronograma de cada obra e onde ela está hoje; as versões do cronograma (o que mudou, quem gravou, pendências); o avanço físico nas três curvas — PLS medida pela Caixa, Curva S PLS registrada no Prevision e Curva S de Obras (o avanço real) — por mês, semana ou dia, com desvios e o ritmo; o contrato da Caixa (DCD: prazos, rotina de atraso, unidades financiadas, financiamento); e os alertas de prazo, avanço e dados. Para quem tem o dashboard Obra 360º ou Operações › Cronogramas Obras.',
+  },
 ];
 
 // Marca/desmarca um módulo mantendo as dependências (Altera Orçamento liga o DFC; desligar o DFC

@@ -2,9 +2,9 @@ const ExcelJS = require('exceljs');
 const env = require('../../config/env');
 const empresasService = require('../empresas/empresas.service');
 const cronograma = require('../cronograma-centros/cronogramaCentros.service');
-const { segmentos } = require('../cronograma-centros/cronogramaExcel.service');
 const { curvasPorData } = require('./dfcAvancos.service');
-const { VISOES, periodoDe, periodosEntre, periodoAnterior, rotulo, valorEm, somar, dataBr } = require('./periodosAvanco');
+const { VISOES, periodoDe, dataBr } = require('./periodosAvanco');
+const { TOLERANCIA, CURVAS, etapaHoje, cardsDaObra, periodosDaObra, linhasDaCurva } = require('./avancoObras');
 
 // Obra 360º › Avanço das Obras: o Excel do botão de download (pedido do usuário), com os filtros da
 // tela — Obras (?obra=), Visão (mensal | semanal | diaria) e De/Até. Três abas:
@@ -24,77 +24,10 @@ const VERMELHO = 'FFB42D2D';
 const VERDE = 'FF0A7A0A';
 const PCT = '0.00%';
 const PP = '+0.00;-0.00;0.00';
-const TOLERANCIA = 0.05; // ponto percentual: abaixo disso é arredondamento do Prevision (como na tela)
 const vazio = (v) => v === null || v === undefined;
-const ate100 = (v) => (vazio(v) ? null : Math.min(v, 100));
 const fracao = (v) => (vazio(v) ? null : Math.round(v * 100) / 10000); // % → fração do Excel (0,5133)
 const pp = (v) => (vazio(v) ? null : Math.round(v * 100) / 100);
 const dataExcel = (iso) => (iso ? new Date(`${iso}T00:00:00Z`) : null);
-const nomeObra = (o) => String(o.apelido || '').trim() || String(o.name || '').trim();
-
-const CURVAS = [
-  { chave: 'pls', rotulo: 'PLS (Caixa)' },
-  // Nomes dos orçamentos do Prevision (pedido do usuário): primário = Curva S de Obras, secundário = Curva S PLS.
-  { chave: 'primaria', rotulo: 'Curva S de Obras (Prevision)' },
-  { chave: 'secundaria', rotulo: 'Curva S PLS (Prevision)' },
-];
-// As séries de uma curva: { previsto, realizado } em [[data, %]...] (o PLS só tem o realizado).
-const seriesDa = (obra, chave) =>
-  chave === 'pls' ? (obra.pls ? { previsto: null, realizado: obra.pls.pontos } : null) : obra[chave] || null;
-
-// Etapa da carteira hoje, com o mês dela como no Gantt ("17 de 30").
-const idxMes = (iso) => Number(iso.slice(0, 4)) * 12 + Number(iso.slice(5, 7)) - 1;
-const posMes = (iso) => {
-  const [a, m, d] = iso.split('-').map(Number);
-  return idxMes(iso) + (d - 1) / new Date(Date.UTC(a, m, 0)).getUTCDate();
-};
-function etapaHoje(centro, etapas, hoje) {
-  if (!centro) return { nome: 'Sem cronograma', mes: '' };
-  const segs = segmentos(centro, etapas);
-  if (!segs.length) return { nome: 'Sem cronograma', mes: '' };
-  const seg = segs.filter((s) => s.inicio <= hoje && (!s.fim || hoje <= s.fim)).at(-1);
-  if (!seg) return { nome: hoje < segs[0].inicio ? 'A iniciar' : 'Concluída', mes: '' };
-  const total = seg.fim ? Math.max(1, Math.round(posMes(somar(seg.fim, 1)) - posMes(seg.inicio))) : null;
-  const atual = idxMes(hoje) - idxMes(seg.inicio) + 1;
-  return { nome: seg.etapa.descricao, mes: total ? `${Math.min(atual, total)} de ${total}` : String(atual) };
-}
-
-// Recorte da obra (o mesmo dos gráficos): início = primeiro avanço de qualquer curva; fim = o dia em que
-// a última curva chega a 100% ou, se alguma não chega, o último ponto e hoje.
-function recorteDaObra(obra, hoje) {
-  let ini = null;
-  let fim = hoje;
-  CURVAS.forEach(({ chave }) => {
-    const s = seriesDa(obra, chave);
-    if (!s) return;
-    const lista = [s.previsto, s.realizado].filter(Boolean);
-    let fimCurva = null;
-    let todasCem = lista.length > 0;
-    lista.forEach((pontos) => {
-      const primeiro = pontos.find((p) => p[1] > 0);
-      if (primeiro && (!ini || primeiro[0] < ini)) ini = primeiro[0];
-      const cem = pontos.find((p) => p[1] >= 99.95);
-      if (!cem) todasCem = false;
-      const f = cem ? cem[0] : pontos[pontos.length - 1][0];
-      if (!fimCurva || f > fimCurva) fimCurva = f;
-    });
-    if (fimCurva && !todasCem && fimCurva < hoje) fimCurva = hoje;
-    if (fimCurva && fimCurva > fim) fim = fimCurva;
-  });
-  return { ini: ini || hoje, fim };
-}
-
-function periodosDaObra(obra, { visao, de, ate, hoje }) {
-  const { ini, fim } = recorteDaObra(obra, hoje);
-  if (de || ate) {
-    const a = de || ini;
-    const b = ate && ate < fim ? ate : fim;
-    return periodosEntre(visao, a, b < a ? a : b);
-  }
-  const lista = periodosEntre(visao, ini, fim < ini ? ini : fim);
-  lista.unshift(periodoAnterior(visao, lista[0]));
-  return lista;
-}
 
 function cabecalho(row) {
   row.font = { bold: true, color: { argb: 'FFFFFFFF' } };
@@ -121,20 +54,7 @@ async function gerar(empresaId, { visao = 'mensal', de = '', ate = '', obras: ma
   // As obras do filtro, como na tela: em ordem do nome exibido, as finalizadas no fim.
   const cards = dados.obras
     .filter((o) => !marcadas.length || marcadas.includes(String(o.sienge_id)))
-    .map((o) => {
-      const col = (chave) => {
-        const s = seriesDa(o, chave);
-        if (!s) return null;
-        return {
-          realizado: ate100(valorEm(s.realizado, hoje)),
-          previsto: s.previsto ? ate100(valorEm(s.previsto, fimPeriodo)) : null,
-        };
-      };
-      const c = { obra: o, nome: nomeObra(o), pls: col('pls'), primaria: col('primaria'), secundaria: col('secundaria') };
-      const realizados = CURVAS.map((k) => c[k.chave]).filter(Boolean).map((x) => x.realizado);
-      c.finalizada = realizados.length > 0 && realizados.every((v) => !vazio(v) && v >= 99.95);
-      return c;
-    })
+    .map((o) => cardsDaObra(o, hoje, fimPeriodo))
     .sort((a, b) => a.finalizada - b.finalizada || a.nome.localeCompare(b.nome, 'pt-BR'));
 
   const workbook = new ExcelJS.Workbook();
@@ -211,34 +131,24 @@ async function gerar(empresaId, { visao = 'mensal', de = '', ate = '', obras: ma
   cards.forEach((c, k) => {
     const periodos = periodosDaObra(c.obra, { visao, de, ate, hoje });
     CURVAS.forEach(({ chave, rotulo: nomeCurva }) => {
-      const s = seriesDa(c.obra, chave);
-      if (!s) return;
       // Realizado: só até hoje (no período de hoje, o acumulado de hoje); depois, em branco.
-      const real = (dia) => (dia > hoje ? null : ate100(valorEm(s.realizado, dia)));
-      const prev = (dia) => (s.previsto ? ate100(valorEm(s.previsto, dia)) : null);
-      periodos.forEach((p) => {
-        const antes = somar(p.ini, -1);
-        const realAcc = p.ini > hoje ? null : real(p.fim < hoje ? p.fim : hoje);
-        const prevAcc = prev(p.fim);
-        const realPer = vazio(realAcc) ? null : realAcc - (real(antes) || 0);
-        const prevPer = vazio(prevAcc) ? null : prevAcc - (prev(antes) || 0);
-        const d = !vazio(realAcc) && !vazio(prevAcc) ? realAcc - prevAcc : null;
+      (linhasDaCurva(c.obra, chave, periodos, { visao, hoje }) || []).forEach((l) => {
         const row = sheet.addRow({
           nome: c.nome,
           sienge: c.obra.sienge_id,
           curva: nomeCurva,
-          periodo: rotulo(visao, p),
-          ini: dataExcel(p.ini),
-          fim: dataExcel(p.fim),
-          prevAcc: fracao(prevAcc),
-          realAcc: fracao(realAcc),
-          desvio: pp(d),
-          prevPer: fracao(prevPer),
-          realPer: fracao(realPer),
-          situacao: vazio(d) ? '' : -d >= TOLERANCIA ? 'Abaixo do previsto' : 'Em dia',
+          periodo: l.periodo,
+          ini: dataExcel(l.ini),
+          fim: dataExcel(l.fim),
+          prevAcc: fracao(l.previstoAcumulado),
+          realAcc: fracao(l.realizadoAcumulado),
+          desvio: pp(l.desvio),
+          prevPer: fracao(l.previstoNoPeriodo),
+          realPer: fracao(l.realizadoNoPeriodo),
+          situacao: l.situacao,
         });
         row.getCell('bloco').value = k % 2; // obra sim, obra não (faixa, pela formatação condicional)
-        row.getCell('hoje').value = p.ini <= hoje && hoje <= p.fim ? 'Sim' : '';
+        row.getCell('hoje').value = l.hoje ? 'Sim' : '';
       });
     });
   });
