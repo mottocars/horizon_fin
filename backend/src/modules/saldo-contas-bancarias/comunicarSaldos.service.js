@@ -2,6 +2,7 @@ const pool = require('../../config/db');
 const service = require('./saldos.service');
 const saldosExcelService = require('./saldosExcel.service');
 const zapiService = require('../integracoes-zapi/zapi.service');
+const empresasService = require('../empresas/empresas.service');
 const { calcularResumoSaldos } = require('./resumoSaldos.calculo');
 
 const MIME_XLSX = 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet';
@@ -27,12 +28,13 @@ function semanaDe(iso) {
 // administrador escreveu ao encerrar o período (EncerrarPeriodoModal.jsx), quando houver — no
 // lugar do antigo resumo por classificação (pedido do usuário; o detalhe segue na planilha).
 // `enviadoPor`: quem encerrou o período (responsável pelo envio) — vai ao lado da data (pedido do usuário).
-function montarMensagem({ nomeDestinatario, dataBR, enviadoPor, resumo, mensagemAdministrador }) {
+// `empresa`: nome de exibição (fantasia, senão razão social) ao lado do título, como nos outros comunicados.
+function montarMensagem({ nomeDestinatario, empresa, dataBR, enviadoPor, resumo, mensagemAdministrador }) {
   const primeiroNome = String(nomeDestinatario || '').trim().split(/\s+/)[0];
   // Sem centavos no WhatsApp (pedido do usuário) — o valor exato está na planilha anexa.
   const valor = (v) => `R$ ${Math.round(Number(v || 0)).toLocaleString('pt-BR')}`;
   return [
-    '*[ SALDO DAS CONTAS ]*',
+    `*[ SALDO DAS CONTAS ]*${empresa ? ` · *${empresa}*` : ''}`,
     `_Posição de ${dataBR}${enviadoPor ? ` · enviado por ${enviadoPor}` : ''}_`,
     '',
     `Olá${primeiroNome ? `, ${primeiroNome}` : ''}! Segue o resumo dos saldos das contas bancárias.`,
@@ -93,6 +95,8 @@ async function notificarComunicarSaldos(empresaId, dataFechada, { mensagem = nul
   const dataBR = brData(dataFechada);
   const { rows: remetente } = usuarioId ? await pool.query('SELECT nome FROM usuarios WHERE id = $1', [usuarioId]) : { rows: [] };
   const enviadoPor = remetente[0]?.nome || null;
+  const dadosEmpresa = await empresasService.getById(empresaId);
+  const empresa = dadosEmpresa?.nome_fantasia?.trim() || dadosEmpresa?.razao_social || '';
 
   // Anexo: o mesmo relatório do botão "Exportar", pra semana (domingo-sábado) inteira que
   // contém o dia encerrado — sem filtro nenhum (não existe filtro de tela ativo num disparo
@@ -124,7 +128,7 @@ async function notificarComunicarSaldos(empresaId, dataFechada, { mensagem = nul
         throw new Error(`usuário "${dest.nome}" (id ${dest.id}) sem telefone cadastrado`);
       }
       const telefone = `${dest.telefone_ddd}${dest.telefone_numero}`;
-      const texto = montarMensagem({ nomeDestinatario: dest.nome, dataBR, enviadoPor, resumo, mensagemAdministrador: mensagem });
+      const texto = montarMensagem({ nomeDestinatario: dest.nome, empresa, dataBR, enviadoPor, resumo, mensagemAdministrador: mensagem });
       if (anexoBase64) {
         await zapiService.enviarDocumento(zapiIntegracaoId, {
           telefone,
