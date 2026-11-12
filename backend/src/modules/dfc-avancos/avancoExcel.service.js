@@ -9,9 +9,9 @@ const { VISOES, periodoDe, periodosEntre, periodoAnterior, rotulo, valorEm, soma
 // Obra 360º › Avanço das Obras: o Excel do botão de download (pedido do usuário), com os filtros da
 // tela — Obras (?obra=), Visão (mensal | semanal | diaria) e De/Até. Três abas:
 // - Resumo: uma linha por obra, como os cards — etapa da carteira hoje, PLS (realizado e a data da
-//   última parcela liberada), Principal e Secundário (realizado até hoje × previsto no fim do período
+//   última parcela liberada), Curva S de Obras e Curva S PLS (orçamentos primário e secundário do Prevision: realizado até hoje × previsto no fim do período
 //   da visão) e se a obra está finalizada (todas as curvas que ela tem em 100%, no fim da lista);
-// - Avanços: o relatório empilhado — uma linha por obra × curva (PLS, Principal, Secundário) ×
+// - Avanços: o relatório empilhado — uma linha por obra × curva (PLS, Curva S de Obras, Curva S PLS) ×
 //   período da visão, com o acumulado previsto e realizado, o desvio, o avanço do próprio período e a
 //   situação; o recorte de cada obra é o dos gráficos da tela (sem De/Até, a obra inteira: do período
 //   antes do primeiro avanço até o dia em que o previsto chega a 100%; com De/Até, sem passar disso);
@@ -34,8 +34,9 @@ const nomeObra = (o) => String(o.apelido || '').trim() || String(o.name || '').t
 
 const CURVAS = [
   { chave: 'pls', rotulo: 'PLS (Caixa)' },
-  { chave: 'primaria', rotulo: 'Principal (Prevision)' },
-  { chave: 'secundaria', rotulo: 'Secundário (Prevision)' },
+  // Nomes dos orçamentos do Prevision (pedido do usuário): primário = Curva S de Obras, secundário = Curva S PLS.
+  { chave: 'primaria', rotulo: 'Curva S de Obras (Prevision)' },
+  { chave: 'secundaria', rotulo: 'Curva S PLS (Prevision)' },
 ];
 // As séries de uma curva: { previsto, realizado } em [[data, %]...] (o PLS só tem o realizado).
 const seriesDa = (obra, chave) =>
@@ -150,12 +151,12 @@ async function gerar(empresaId, { visao = 'mensal', de = '', ate = '', obras: ma
     { header: 'Mês da etapa', key: 'mesEtapa', width: 10 },
     { header: 'PLS realizado', key: 'plsReal', width: 11 },
     { header: 'PLS até (última parcela liberada)', key: 'plsAte', width: 15 },
-    { header: 'Principal realizado', key: 'priReal', width: 11 },
-    { header: `Principal previsto (${refPrevisto})`, key: 'priPrev', width: 13 },
-    { header: 'Principal desvio (p.p.)', key: 'priDesv', width: 11 },
-    { header: 'Secundário realizado', key: 'secReal', width: 11 },
-    { header: `Secundário previsto (${refPrevisto})`, key: 'secPrev', width: 13 },
-    { header: 'Secundário desvio (p.p.)', key: 'secDesv', width: 11 },
+    { header: 'Curva S de Obras realizado', key: 'priReal', width: 12 },
+    { header: `Curva S de Obras previsto (${refPrevisto})`, key: 'priPrev', width: 14 },
+    { header: 'Curva S de Obras desvio (p.p.)', key: 'priDesv', width: 12 },
+    { header: 'Curva S PLS realizado', key: 'secReal', width: 12 },
+    { header: `Curva S PLS previsto (${refPrevisto})`, key: 'secPrev', width: 14 },
+    { header: 'Curva S PLS desvio (p.p.)', key: 'secDesv', width: 12 },
     { header: 'Situação', key: 'situacao', width: 14 },
   ];
   const desvio = (col) => (col && !vazio(col.realizado) && !vazio(col.previsto) ? col.realizado - col.previsto : null);
@@ -294,7 +295,7 @@ async function gerar(empresaId, { visao = 'mensal', de = '', ate = '', obras: ma
         ? `Realizado e previsto acumulados até hoje (${dataBr(hoje)})`
         : `Realizado acumulado até hoje (${dataBr(hoje)}) · previsto acumulado até o ${refPrevisto} (${dataBr(fimPeriodo)})`,
     ],
-    ['Fontes', 'PLS: cronograma físico-financeiro do DCD (Caixa), só as parcelas liberadas · Principal e Secundário: curva S do Prevision'],
+    ['Fontes', 'PLS: cronograma físico-financeiro do DCD (Caixa), só as parcelas liberadas · Curva S de Obras e Curva S PLS: orçamentos primário e secundário do Prevision (curva S)'],
     ['Situação', `"Abaixo do previsto" quando o realizado fica ${String(TOLERANCIA).replace('.', ',')} ponto ou mais abaixo do previsto`],
     ['Gerado em', new Intl.DateTimeFormat('pt-BR', { dateStyle: 'short', timeStyle: 'short', timeZone: 'America/Sao_Paulo' }).format(new Date())],
     ['Dashboard', { text: link, hyperlink: link }],

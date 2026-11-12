@@ -23,8 +23,9 @@ import { dataBr, periodoAnterior, periodoDe, periodosEntre, rotuloCurto, rotuloL
 // No cabeçalho das colunas, a logomarca do sistema e, ao lado, o nome da coluna.
 const SERIES = [
   { chave: 'caixa', rotulo: 'Caixa (PLS)', cor: COR.entrada, logo: iconCaixa, sub: 'PLS' },
-  { chave: 'primaria', rotulo: 'Prevision · orçamento primário', cor: COR.entrada, logo: iconPrevision, sub: 'Primário' },
-  { chave: 'secundaria', rotulo: 'Prevision · orçamento secundário', cor: COR.cenario, logo: iconPrevision, sub: 'Secundário' },
+  // Nomes dos orçamentos do Prevision (pedido do usuário): primário = "Curva S de Obras", secundário = "Curva S PLS".
+  { chave: 'primaria', rotulo: 'Prevision · Curva S de Obras (orçamento primário)', cor: COR.entrada, logo: iconPrevision, sub: 'Curva S de Obras' },
+  { chave: 'secundaria', rotulo: 'Prevision · Curva S PLS (orçamento secundário)', cor: COR.cenario, logo: iconPrevision, sub: 'Curva S PLS' },
 ];
 const vazio = (v) => v === null || v === undefined;
 // Percentuais com duas casas decimais (pedido do usuário): 51,33%.
@@ -104,7 +105,7 @@ function graficosDe(c, { visao, de, ate, hoje }) {
     },
     ...['primaria', 'secundaria'].map((tipo, k) => ({
       chave: tipo,
-      titulo: k === 0 ? 'Principal' : 'Secundário',
+      titulo: SERIES[k + 1].sub, // Curva S de Obras / Curva S PLS
       logo: SERIES[k + 1].logo,
       series: obra[tipo] ? TRES.filter((s) => obra[tipo][s.chave]).map((s) => ({ ...s, pontos: obra[tipo][s.chave] })) : [],
     })),
