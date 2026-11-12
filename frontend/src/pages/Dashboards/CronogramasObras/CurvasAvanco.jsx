@@ -220,6 +220,25 @@ function Metrica({ col, cor, nota }) {
   );
 }
 
+// Escala do eixo Y pelos dados do gráfico (pedido do usuário): a obra inteira continua de 0 a 100%; um
+// recorte curto (ex.: as semanas de um mês, com o avanço entre 50% e 56%) mostra só a faixa dos valores,
+// com uma folga de 10% (no mínimo meio ponto) e marcas "redondas" — no máximo 5 intervalos.
+const PASSOS_Y = [0.25, 0.5, 1, 2, 2.5, 5, 10, 25];
+const nfEixo = (casas) => new Intl.NumberFormat('pt-BR', { minimumFractionDigits: casas, maximumFractionDigits: casas });
+function escalaY(series) {
+  const valores = series.flatMap((s) => s.v).filter((v) => !vazio(v));
+  if (!valores.length) return { min: 0, max: 100, marcas: [0, 25, 50, 75, 100], casas: 0 };
+  const folga = Math.max((Math.max(...valores) - Math.min(...valores)) * 0.1, 0.5);
+  const lo = Math.max(0, Math.min(...valores) - folga);
+  const hi = Math.min(100, Math.max(...valores) + folga);
+  const passo = PASSOS_Y.find((p) => (hi - lo) / p <= 5) || 25;
+  const min = Math.max(0, Math.floor(lo / passo + 1e-9) * passo);
+  const max = Math.min(100, Math.max(min + passo, Math.ceil(hi / passo - 1e-9) * passo));
+  const marcas = [];
+  for (let v = min; v <= max + 1e-9; v += passo) marcas.push(Math.round(v * 100) / 100);
+  return { min, max, marcas, casas: passo < 0.5 ? 2 : passo < 1 || passo === 2.5 ? 1 : 0 };
+}
+
 // Um dos três gráficos: o tipo de avanço por período da visão, de 0 a 100%, com as curvas dele (PLS:
 // uma; Prevision: Previsto e Realizado, com a legenda). Com o mouse em cima, uma linha vertical
 // acompanha o período, com o ponto de cada curva nele. Clicar expande / volta (Graficos).
@@ -228,11 +247,13 @@ function Grafico({ g, colapsado, onClick }) {
   const { mostrar, esconder } = useDica();
   const [mira, setMira] = useState(null);
   const H = 230;
-  const m = { l: 44, r: 16, t: 24, b: 30 }; // em cima, espaço para a bandeirinha dos 100%
+  const m = { l: 52, r: 16, t: 24, b: 30 }; // em cima, espaço para a bandeirinha dos 100%; à esquerda, para "52,50%"
   const { curtos, longos, series } = g;
   const n = curtos.length;
   const x = (i) => m.l + ((W - m.l - m.r) * i) / Math.max(1, n - 1);
-  const y = (v) => m.t + (H - m.t - m.b) * (1 - v / 100);
+  const escala = escalaY(series);
+  const y = (v) => m.t + (H - m.t - m.b) * (1 - (v - escala.min) / (escala.max - escala.min));
+  const fmtEixo = nfEixo(escala.casas);
   const w = (W - m.l - m.r) / Math.max(1, n - 1);
   const iNow = g.iHoje;
   // Rótulos no eixo: sempre o primeiro e o último; no meio, um a cada `passo`, sem encostar nos vizinhos
@@ -316,11 +337,11 @@ function Grafico({ g, colapsado, onClick }) {
       ) : (
         <div className="chart" ref={ref}>
           <svg viewBox={`0 0 ${W} ${H}`} role="img" aria-label={`${g.titulo} de ${g.nome}`}>
-            {[0, 25, 50, 75, 100].map((v) => (
+            {escala.marcas.map((v) => (
               <g key={v}>
                 <line x1={m.l} x2={W - m.r} y1={y(v)} y2={y(v)} stroke={COR.grid} />
                 <text x={m.l - 8} y={y(v) + 4} textAnchor="end">
-                  {v}%
+                  {fmtEixo.format(v)}%
                 </text>
               </g>
             ))}
@@ -350,7 +371,7 @@ function Grafico({ g, colapsado, onClick }) {
                       x={x(i) - larguraBarra / 2}
                       y={y(v)}
                       width={larguraBarra}
-                      height={y(0) - y(v)}
+                      height={y(escala.min) - y(v)}
                       rx={Math.min(2, larguraBarra / 4)}
                       fill={abaixo(v, i) ? COR.crit : s.cor}
                       fillOpacity={mira === null || mira === i ? 0.85 : 0.55}
