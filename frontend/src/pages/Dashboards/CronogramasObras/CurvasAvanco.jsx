@@ -252,6 +252,19 @@ function Grafico({ g, colapsado, onClick }) {
       .filter(([v]) => !vazio(v))
       .map(([v, i], k) => `${k ? 'L' : 'M'}${x(i).toFixed(1)},${y(v).toFixed(1)}`)
       .join('');
+  // Barra do realizado (pedido do usuário): vermelha no período em que está abaixo do previsto, azul
+  // quando está igual ou acima (com a mesma folga de 0,05 ponto dos cards). Depois que o previsto chega
+  // a 100% e para, a comparação continua contra os 100%. O PLS não tem previsto: sempre azul.
+  const previsto = series.find((s) => s.chave === 'previsto');
+  const previstoEm = (i) => {
+    if (!previsto) return null;
+    if (!vazio(previsto.v[i])) return previsto.v[i];
+    return previsto.cem !== undefined && i > previsto.cem ? 100 : null;
+  };
+  const abaixo = (v, i) => {
+    const p = previstoEm(i);
+    return !vazio(p) && p - v >= 0.05;
+  };
   // O período sob o mouse: pela posição na largura do gráfico (uma camada só, não um retângulo por período).
   const aoMover = (ev) => {
     const caixa = ev.currentTarget.ownerSVGElement.getBoundingClientRect();
@@ -289,6 +302,12 @@ function Grafico({ g, colapsado, onClick }) {
                 {s.rotulo}
               </em>
             ))}
+          {previsto && series.some((s) => s.chave === 'realizado') && (
+            <em>
+              <i className="barra" style={{ background: COR.crit }} />
+              Abaixo do previsto
+            </em>
+          )}
         </span>
       </h4>
       {!series.length ? (
@@ -332,7 +351,7 @@ function Grafico({ g, colapsado, onClick }) {
                       width={larguraBarra}
                       height={y(0) - y(v)}
                       rx={Math.min(2, larguraBarra / 4)}
-                      fill={s.cor}
+                      fill={abaixo(v, i) ? COR.crit : s.cor}
                       fillOpacity={mira === null || mira === i ? 0.85 : 0.55}
                     />
                   )
