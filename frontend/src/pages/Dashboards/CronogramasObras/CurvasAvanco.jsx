@@ -25,8 +25,8 @@ const JANELA = { inicio: `${ANO - 5}-01-01`, fim: `${ANO + 4}-12-31`, todasObras
 // ícones da aba DFC › Avanços; nas do Prevision, ao lado, qual orçamento.
 const SERIES = [
   { chave: 'caixa', rotulo: 'Caixa (PLS)', curto: 'Caixa', cor: COR.ink, logo: iconCaixa },
-  { chave: 'primaria', rotulo: 'Prevision · orçamento primário', curto: 'Primário', cor: COR.entrada, logo: iconPrevision, sub: 'Orçamento primário' },
-  { chave: 'secundaria', rotulo: 'Prevision · orçamento secundário', curto: 'Secundário', cor: COR.cenario, logo: iconPrevision, sub: 'Orçamento secundário' },
+  { chave: 'primaria', rotulo: 'Prevision · orçamento primário', curto: 'Primário', cor: COR.entrada, logo: iconPrevision, sub: 'Primário' },
+  { chave: 'secundaria', rotulo: 'Prevision · orçamento secundário', curto: 'Secundário', cor: COR.cenario, logo: iconPrevision, sub: 'Secundário' },
 ];
 const vazio = (v) => v === null || v === undefined;
 const mesIso = (iso) => (iso ? lbl(iso.slice(0, 7)) : '–');
@@ -185,7 +185,7 @@ function Metrica({ valor, cor, nota }) {
 
 // Um dos três gráficos: o tipo de avanço, mês a mês, de 0 a 100%, com as curvas dele (PLS: uma; Prevision:
 // Base, Previsto e Realizado, com a legenda).
-function Grafico({ g }) {
+function Grafico({ g, colapsado, onEnter }) {
   const [ref, W] = useLargura(300);
   const { mostrar, esconder } = useDica();
   const H = 230;
@@ -207,7 +207,7 @@ function Grafico({ g }) {
       .map(([v, i], k) => `${k ? 'L' : 'M'}${x(i).toFixed(1)},${y(v).toFixed(1)}`)
       .join('');
   return (
-    <div className="av-curva">
+    <div className={`av-curva${colapsado ? ' colapsado' : ''}`} onMouseEnter={onEnter}>
       <h4>
         <img src={g.logo} alt="" />
         {g.titulo}
@@ -291,6 +291,20 @@ function Grafico({ g }) {
           </svg>
         </div>
       )}
+    </div>
+  );
+}
+
+// Os três gráficos da linha aberta: passar o mouse num deles o expande na largura toda e recolhe os
+// outros em faixas estreitas, com o nome na vertical (o do meio recolhe um para cada lado); ao sair,
+// voltam os três.
+function Graficos({ lista }) {
+  const [foco, setFoco] = useState(null);
+  return (
+    <div className="av-curvas" onMouseLeave={() => setFoco(null)}>
+      {lista.map((g, i) => (
+        <Grafico key={g.chave} g={g} colapsado={foco !== null && foco !== i} onEnter={() => setFoco(i)} />
+      ))}
     </div>
   );
 }
@@ -380,11 +394,7 @@ export default function CurvasAvanco({ empresaId }) {
                   </button>
                   {aberta && (
                     <div className="av-grafico">
-                      <div className="av-curvas">
-                        {graficosDe(c).map((g) => (
-                          <Grafico key={g.chave} g={g} />
-                        ))}
-                      </div>
+                      <Graficos lista={graficosDe(c)} />
                     </div>
                   )}
                 </div>

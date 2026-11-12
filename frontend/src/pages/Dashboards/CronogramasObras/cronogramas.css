@@ -311,9 +311,35 @@
 }
 /* Os três gráficos da linha aberta, lado a lado: PLS, Principal e Secundário. */
 .painel-cfo .av-curvas {
-  display: grid;
-  grid-template-columns: repeat(3, minmax(0, 1fr));
+  display: flex;
   gap: 16px;
+}
+.painel-cfo .av-curva {
+  flex: 1 1 0px;
+  min-width: 0;
+  overflow: hidden;
+  transition: flex-basis 0.28s ease;
+}
+/* Recolhido (outro gráfico com o mouse em cima): faixa estreita, só o nome na vertical. */
+.painel-cfo .av-curva.colapsado {
+  flex: 0 0 56px;
+}
+.painel-cfo .av-curva.colapsado .chart,
+.painel-cfo .av-curva.colapsado .empty,
+.painel-cfo .av-curva.colapsado .av-leg {
+  display: none;
+}
+.painel-cfo .av-curva.colapsado h4 {
+  flex-direction: column-reverse;
+  justify-content: flex-end;
+  height: 100%;
+  min-height: 150px;
+  writing-mode: vertical-rl;
+  transform: rotate(180deg);
+  white-space: nowrap;
+}
+.painel-cfo .av-curva.colapsado h4 img {
+  transform: rotate(90deg);
 }
 .painel-cfo .av-curva h4 {
   display: flex;
@@ -354,7 +380,25 @@
 }
 @media (max-width: 1100px) {
   .painel-cfo .av-curvas {
-    grid-template-columns: minmax(0, 1fr);
+    flex-direction: column;
+  }
+  .painel-cfo .av-curva.colapsado {
+    flex: 1 1 auto;
+  }
+  .painel-cfo .av-curva.colapsado .chart,
+  .painel-cfo .av-curva.colapsado .empty,
+  .painel-cfo .av-curva.colapsado .av-leg {
+    display: revert;
+  }
+  .painel-cfo .av-curva.colapsado h4 {
+    flex-direction: row;
+    writing-mode: horizontal-tb;
+    transform: none;
+    min-height: 0;
+    height: auto;
+  }
+  .painel-cfo .av-curva.colapsado h4 img {
+    transform: none;
   }
 }
 @media (prefers-reduced-motion: no-preference) {
