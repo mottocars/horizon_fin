@@ -119,7 +119,7 @@ async function exercicios(empresaId) {
 // Lançamentos financeiros de um período (dentro do exercício). Primeiro uma linha por parcela ×
 // centro de custo × natureza (`o`):
 //   R  a receber (sie_income): valor líquido (original − impostos retidos), positivo, pela emissão;
-//   P  a pagar (sie_outcome): valor original, negativo, pela emissão;
+//   P  a pagar (sie_outcome): valor líquido (original − impostos retidos), negativo, pela emissão;
 //   M  lançamento criado à mão (lancamentos_manuais, módulo lancamentos-manuais), pela data: entra como
 //      movimento na tela, com o status CRIADO — entrada positiva, saída negativa;
 //   E  movimento — extrato das contas sem título de contas a pagar/receber (bill_id nulo): o valor com
@@ -162,7 +162,7 @@ const SQL_LINHAS = `
   SELECT 'P', t.bill_id, t.issue_date, t.due_date, t.installment_id::text, NULLIF(TRIM(t.document_identification_id), ''),
          t.document_identification_name, t.document_number, t.creditor_name,
          c.centro_id, c.centro_nome, c.natureza_id, c.natureza_nome,
-         -t.original_amount * COALESCE(c.peso, 1)
+         -(t.original_amount - COALESCE(t.tax_amount, 0)) * COALESCE(c.peso, 1)
     FROM sie_outcome t
     ${sqlCategorias('sie_outcome_categorias')}
    WHERE t.empresa_id = $1 AND t.issue_date >= $2 AND t.issue_date < $3

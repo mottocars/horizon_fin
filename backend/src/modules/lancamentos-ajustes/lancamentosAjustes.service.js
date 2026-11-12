@@ -18,7 +18,7 @@ const { sqlMapaDre } = require('../dre-plano-contas/drePlanoContas.service');
 
 const TITULOS = {
   R: { tabela: 'sie_income', categorias: 'sie_income_categorias', contraparte: 'client_name', valor: 't.original_amount - COALESCE(t.tax_amount, 0)', sinal: 1 },
-  P: { tabela: 'sie_outcome', categorias: 'sie_outcome_categorias', contraparte: 'creditor_name', valor: 't.original_amount', sinal: -1 },
+  P: { tabela: 'sie_outcome', categorias: 'sie_outcome_categorias', contraparte: 'creditor_name', valor: 't.original_amount - COALESCE(t.tax_amount, 0)', sinal: -1 },
 };
 
 function erro(status, message) {

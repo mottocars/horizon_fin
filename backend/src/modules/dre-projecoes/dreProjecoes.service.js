@@ -1,6 +1,7 @@
 const pool = require('../../config/db');
 const dreMascaras = require('../dre-mascaras/dreMascaras.service');
 const calculo = require('./calculo');
+const demonstrativo = require('../dre-demonstrativo/demonstrativo.service');
 
 // Operações > DRE Construtoras > aba Projeções: os orçamentos (projeção da DRE) por centro de custo —
 // rascunhos do assistente e versões (database/migrations/2026-11-05-dre-projecoes.sql). O cálculo
@@ -246,6 +247,39 @@ async function salvarVersao(empresaId, usuarioId) {
 //                    e, sem rascunho, o orçamento da última versão;
 //   fonte 'versao' — só uma versão salva (`numero`; sem ele, a última) — os dashboards.
 // `centros`: ids (vazio = todos). Devolve também as versões salvas (pro seletor).
+// Os meses até a trava do Projetado são o REALIZADO: a foto (`mensal`) guarda o realizado do dia em que o
+// orçamento foi concluído e fica velha (título novo, ajuste, regra de imposto, orçamento da obra com
+// outra data de corte), então esses meses são relidos agora, pela mesma conta da aba DRE (motor padrão,
+// orçamento da obra vigente na trava) — uma chamada só pra todos os centros. Do mês seguinte à trava em
+// diante a foto vale como está. Muda `mensal` no lugar (nunca grava no banco).
+async function realizadoAoVivo(empresaId, orcamentos) {
+  const alvo = orcamentos.filter((o) => o.mensal?.meses?.length && o.mensal.trava);
+  if (!alvo.length) return;
+  const primeiro = alvo.map((o) => o.mensal.meses[0]).sort()[0];
+  const ultima = alvo.map((o) => o.mensal.trava).sort().pop();
+  if (primeiro > ultima) return;
+  const r = await demonstrativo.calcular(empresaId, {
+    de: `${primeiro}-01`,
+    ate: calculo.fimMes(ultima),
+    centros: [...new Set(alvo.map((o) => o.centro_id))],
+  });
+  const porCentro = new Map(r.por_centro.map((c) => [Number(c.id), new Map(c.meses.map((m) => [m.mes, m.valores]))]));
+  alvo.forEach((orc) => {
+    const vivo = porCentro.get(Number(orc.centro_id));
+    if (!vivo) return;
+    const { mensal } = orc;
+    mensal.meses.forEach((mes, i) => {
+      if (mes > mensal.trava) return;
+      const v = vivo.get(mes);
+      if (!v) return;
+      Object.keys(mensal.valores).forEach((mid) => {
+        const x = v[mid];
+        mensal.valores[mid][i] = x === null || x === undefined ? null : Math.round(x * 100) / 100;
+      });
+    });
+  });
+}
+
 // Os orçamentos de uma fonte, um por centro (a mesma escolha da coluna Projetado da aba DRE):
 //   fonte 'atual'  — o rascunho do centro e, sem rascunho, o orçamento da última versão;
 //   fonte 'versao' — os da versão `numero` (sem ele, a última).
@@ -306,9 +340,10 @@ async function orcamentosDaFonte(empresaId, { fonte = 'atual', numero = null, ce
         continue;
       }
     }
-    if (completo) resultado = comFechamento(resultado, arvore);
     orcamentos.push({ ...orc, origem, mensal, resultado, calculado_agora: calculadoAgora });
   }
+  await realizadoAoVivo(empresaId, orcamentos);
+  if (completo) orcamentos.forEach((o) => { o.resultado = comFechamento(o.resultado, arvore); });
   return {
     fonte,
     versao: versao ? { numero: versao.numero, criado_em: versao.criado_em, usuario: versao.usuario, orcamentos: versao.orcamentos } : null,

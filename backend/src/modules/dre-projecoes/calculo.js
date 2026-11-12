@@ -590,6 +590,7 @@ module.exports = {
   prepararMotor,
   historico,
   somarMeses,
+  fimMes,
   mesesEntre,
   mesAtual,
   primeiroMes,
