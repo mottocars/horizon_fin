@@ -81,7 +81,8 @@ async function avancos(empresaId, inicio, fim, { todasObras = false } = {}) {
     [empresaId]
   );
   const { rows: prevision } = await pool.query(
-    `SELECT sienge_id, primary_view, to_char(data, 'YYYY-MM') AS mes, SUM(expected) AS avanco
+    `SELECT sienge_id, primary_view, to_char(data, 'YYYY-MM') AS mes, SUM(expected) AS avanco,
+            SUM(base) AS base, SUM(realized) AS realizado
        FROM prevision_dashboard_monthly_progress
       WHERE empresa_id = $1
       GROUP BY 1, 2, 3`,
@@ -143,6 +144,25 @@ async function avancos(empresaId, inicio, fim, { todasObras = false } = {}) {
         return Object.values(porMes).some((v) => v > 0) ? acumulado(porMes, meses) : null;
       };
 
+      // As três curvas de cada orçamento do Prevision (Base, Previsto e Realizado), cada uma no seu
+      // acumulado — o drilldown do Avanço das Obras (Obra 360º). O realizado para no último mês com
+      // avanço, sem passar do mês atual (depois dele o Prevision grava zero, não "sem medição").
+      const detalheDaVisao = (primaria) => {
+        const linhas = prevision.filter((r) => temPrevision && r.sienge_id === o.sienge_id && r.primary_view === primaria);
+        const curva = (campo, corte) => {
+          const porMes = {};
+          linhas.forEach((r) => {
+            porMes[r.mes] = Number(r[campo] || 0) * 100;
+          });
+          if (!Object.values(porMes).some((v) => v > 0)) return null;
+          const acc = acumulado(porMes, meses);
+          if (!corte) return acc;
+          const ultimo = Object.keys(porMes).filter((k) => porMes[k] > 0 && k <= mesAtual).sort().pop() || null;
+          return Object.fromEntries(meses.map((m) => [m, ultimo && m <= ultimo ? acc[m] : null]));
+        };
+        return { base: curva('base', false), previsto: curva('avanco', false), realizado: curva('realizado', true) };
+      };
+
       let encadeado = null;
       if (plsAcumulado && previsionAcumulado && meses[meses.length - 1] >= mesAtual) {
         const antes = mesAnterior(mesAtual);
@@ -169,6 +189,7 @@ async function avancos(empresaId, inicio, fim, { todasObras = false } = {}) {
         prevision: previsionAcumulado,
         prevision_primaria: previsionDaVisao(true),
         prevision_secundaria: previsionDaVisao(false),
+        prevision_detalhe: { primaria: detalheDaVisao(true), secundaria: detalheDaVisao(false) },
         encadeado,
         manual: Object.fromEntries(
           manual.filter((r) => r.sienge_id === o.sienge_id).map((r) => [r.mes, Number(r.percentual)])
