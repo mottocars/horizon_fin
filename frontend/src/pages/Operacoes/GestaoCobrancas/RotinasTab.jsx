@@ -288,16 +288,35 @@ function BotaoFiltroCanal({ canal, ativo, onClick, Icone, label }) {
 // sendo o agrupador abaixo do Responsável. O drilldown nasce recolhido
 // (pedido do usuário), igual ao accordion de Gestão das Parcelas: primeiro
 // se vê o resumo de cada responsável, e abre-se só o que interessa.
+// Data só vale com ano de 4 dígitos "razoável" — o <input type="date"> dispara
+// onChange a cada dígito do ano (0002, 0020, 0202...), e esses períodos
+// intermediários varrem a carteira inteira à toa.
+function dataValida(valor) {
+  return /^\d{4}-\d{2}-\d{2}$/.test(valor || '') && Number(valor.slice(0, 4)) >= 2000;
+}
+
+// Espera o usuário parar de mexer na data antes de pedir os dados.
+function useDataEstavel(valor, espera = 600) {
+  const [estavel, setEstavel] = useState(valor);
+  useEffect(() => {
+    const t = setTimeout(() => setEstavel(valor), espera);
+    return () => clearTimeout(t);
+  }, [valor, espera]);
+  return dataValida(estavel) ? estavel : '';
+}
+
 export default function RotinasTab({
   empresaId,
   centroCustoIds = [],
-  dataInicio,
-  dataFim,
+  dataInicio: dataInicioBruta,
+  dataFim: dataFimBruta,
   usuarioId = '',
   refreshToken = 0,
   comunicacaoAutomaticaAtiva = true,
   tipoComunicacao = 'automatica',
 }) {
+  const dataInicio = useDataEstavel(dataInicioBruta);
+  const dataFim = useDataEstavel(dataFimBruta);
   const [responsaveis, setResponsaveis] = useState([]);
   const [modo, setModo] = useState('etapa');
   const [carregando, setCarregando] = useState(false);
