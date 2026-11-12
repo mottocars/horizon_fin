@@ -90,7 +90,8 @@ function montarObra(obra, hoje, fimPeriodo) {
 // e o Realizado (barras), um ponto por período da visão (o acumulado no último dia dele; o realizado
 // para em hoje). Sem De/Até, cada gráfico no seu recorte: do período antes do primeiro avanço até o dia
 // em que a última curva dele chega a 100% ou, se nenhuma chega, até o último ponto e hoje. Com De/Até,
-// o recorte é o pedido (só um dos dois: o outro lado fica automático). A curva que chega a 100% para
+// começa no De e vai até o Até, sem passar do fim automático (só um dos dois: o outro lado fica
+// automático). A curva que chega a 100% para
 // ali: o período vira 100% exatos, os seguintes ficam sem valor, e `cem` guarda o índice da bandeirinha.
 function graficosDe(c, { visao, de, ate, hoje }) {
   const obra = c.bruta;
@@ -108,7 +109,8 @@ function graficosDe(c, { visao, de, ate, hoje }) {
       series: obra[tipo] ? TRES.filter((s) => obra[tipo][s.chave]).map((s) => ({ ...s, pontos: obra[tipo][s.chave] })) : [],
     })),
   ];
-  return graficos.map((g) => {
+  // Primeiro o recorte automático de cada gráfico; o fim da obra (o mais tarde dos três) limita o Até.
+  const recortes = graficos.map((g) => {
     const series = g.series.map((s) => ({ ...s, cor: COR_CURVA[s.chave] }));
     let ini = null;
     let fim = null;
@@ -123,10 +125,17 @@ function graficosDe(c, { visao, de, ate, hoje }) {
     });
     if (!ini) ini = hoje;
     if (!fim || (!todasCem && fim < hoje)) fim = hoje;
+    return { g, series, ini, fim };
+  });
+  const fimObra = recortes.reduce((f, r) => (r.fim > f ? r.fim : f), hoje);
+  return recortes.map(({ g, series, ini, fim }) => {
     let periodos;
     if (de || ate) {
+      // O Até só corta: os gráficos nunca passam do fim da obra (o dia em que o previsto chega a
+      // 100% — pedido do usuário: 01/11/2026 a 30/11/2030 para onde a obra termina); os três no
+      // mesmo recorte (o PLS, sem previsto, vai até onde vão os do Prevision).
       const a = de || ini;
-      const b = ate || fim;
+      const b = ate && ate < fimObra ? ate : fimObra;
       periodos = periodosEntre(visao, a, b < a ? a : b);
     } else {
       periodos = periodosEntre(visao, ini, fim < ini ? ini : fim);
