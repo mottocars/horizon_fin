@@ -548,3 +548,8 @@
     grid-column: 2 / 5;
   }
 }
+
+/* Data de referência dos cards, no topo do painel (no lugar do título): numa linha só. */
+.painel-cfo .ph p.av-referencia {
+  max-width: none;
+}

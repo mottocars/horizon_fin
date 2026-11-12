@@ -6,7 +6,7 @@ import { montarObras, nomeObra, opcoesFiltroObras } from '../../Operacoes/Cronog
 import { somarDias } from '../../CentrosCusto/cronogramaDatas';
 import iconCaixa from '../../../assets/integracoes/portal-construtoras.svg';
 import iconPrevision from '../../../assets/integracoes/prevision.svg';
-import { lbl, pct } from '../EconomicoFinanceiro/fluxo/modelo';
+import { lbl } from '../EconomicoFinanceiro/fluxo/modelo';
 import { COR, useDica, useLargura } from '../EconomicoFinanceiro/fluxo/ganchos';
 import { dataBr, periodoAnterior, periodoDe, periodosEntre, rotuloCurto, rotuloLongo, valorEm } from './periodosAvanco';
 
@@ -27,6 +27,9 @@ const SERIES = [
   { chave: 'secundaria', rotulo: 'Prevision · orçamento secundário', cor: COR.cenario, logo: iconPrevision, sub: 'Secundário' },
 ];
 const vazio = (v) => v === null || v === undefined;
+// Percentuais com duas casas decimais (pedido do usuário): 51,33%.
+const nf2 = new Intl.NumberFormat('pt-BR', { minimumFractionDigits: 2, maximumFractionDigits: 2 });
+const pct = (v) => (vazio(v) || !Number.isFinite(v) ? '–' : `${nf2.format(v)}%`);
 const mesIso = (iso) => (iso ? lbl(iso.slice(0, 7)) : '–');
 
 // Mês da etapa como no Gantt (GanttObras › BarraObra): o mês de início é o 1; o total vai até o dia
@@ -190,9 +193,9 @@ function Metrica({ col, cor, nota }) {
   const real = col?.realizado ?? null;
   const prev = col?.previsto ?? null;
   const comparavel = !vazio(real) && !vazio(prev);
-  // Compara como aparece na tela (uma casa): 99,97 × 100,02 é "100,0% prev. 100,0%", não atraso.
-  const umaCasa = (v) => Math.round(v * 10) / 10;
-  const corBarra = comparavel ? (umaCasa(prev) > umaCasa(real) ? 'var(--crit)' : 'var(--good)') : cor;
+  // Atrasado só com o previsto 0,05 ponto ou mais acima do realizado: abaixo disso é arredondamento do
+  // Prevision (obra terminada em 99,98% com previsto de 100,00% não está atrasada).
+  const corBarra = comparavel ? (prev - real >= 0.05 ? 'var(--crit)' : 'var(--good)') : cor;
   return (
     <span className="av-met">
       <b className={vazio(real) ? 'nulo' : ''}>
@@ -479,11 +482,13 @@ export default function CurvasAvanco({ empresaId, obrasMarcadas = [], onOpcoesOb
     );
   };
   return (
-    <section className="panel c12" aria-labelledby="h-avanco-obra">
-      <div className="ph">
-        <h2 id="h-avanco-obra">Avanço por obra</h2>
-        {hoje && <p>{referencia(visao, hoje, fimPeriodo)}</p>}
-      </div>
+    <section className="panel c12" aria-label="Avanço por obra">
+      {/* Sem o título "Avanço por obra" (pedido do usuário): só a data de referência dos cards. */}
+      {hoje && (
+        <div className="ph">
+          <p className="av-referencia">{referencia(visao, hoje, fimPeriodo)}</p>
+        </div>
+      )}
       {erro ? (
         <div className="empty">{erro}</div>
       ) : !dados ? (
