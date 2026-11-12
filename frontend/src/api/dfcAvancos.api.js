@@ -13,3 +13,12 @@ export function listAvancosDfc(empresaId, { inicio, fim, todasObras = false }) {
 export function salvarAvancoManualDfc(empresaId, siengeId, { mes, percentual }) {
   return http.put(`/dfc-avancos/${empresaId}/${siengeId}/manual`, { mes, percentual }).then((res) => res.data);
 }
+
+// Curvas por data de cada obra (Obra 360º › Avanço das Obras — visões Mensal, Semanal e Diária):
+// { hoje: 'AAAA-MM-DD', obras: [{ sienge_id, name, apelido, contrato,
+//   pls: { ultima_liberacao, pontos: [['AAAA-MM-DD', %]...] } | null,
+//   primaria | secundaria: { previsto: [[data, %]...], realizado: [[data, %]...] | null } | null }] }.
+// Cada curva só traz os dias em que o valor muda (vale até o próximo ponto).
+export function listCurvasAvanco(empresaId) {
+  return http.get(`/dfc-avancos/${empresaId}/curvas`).then((res) => res.data);
+}

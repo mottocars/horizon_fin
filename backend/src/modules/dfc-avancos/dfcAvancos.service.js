@@ -200,6 +200,143 @@ async function avancos(empresaId, inicio, fim, { todasObras = false } = {}) {
   };
 }
 
+// Obra 360º › Avanço das Obras (visões Mensal, Semanal e Diária — pedido do usuário): as curvas de
+// cada obra por DATA, para a tela agrupar no mês, na semana (terminando no sábado) ou no dia. Cada
+// curva é uma lista [['AAAA-MM-DD', % acumulado], ...] só com os dias em que o valor muda (vale até o
+// próximo ponto). Toda obra de Tipo = Obra com Prevision (como o ?obras=todas de `avancos`).
+// - PLS (Caixa): o % acumulado do cronograma físico-financeiro do DCD, só as parcelas já liberadas
+//   (a mesma parcela com status 'LP' no cronograma de liberação — a "285" e outras que não estão no
+//   físico-financeiro não contam) e sem passar de hoje. `ultima_liberacao` é a data de liberação da
+//   última delas ("até 21/10/2026" na tela).
+// - Prevision (orçamento primário e secundário): Previsto e Realizado da curva S diária
+//   (prevision_dashboard_scurve, fração 0–1 → %); sem a curva S, cai no mensal acumulado
+//   (prevision_dashboard_monthly_progress). O realizado para em hoje (a curva S repete o último valor
+//   nos dias futuros). Orçamento com o previsto todo zero = a obra não tem esse orçamento: null.
+async function curvasPorData(empresaId) {
+  const { rows: hojeRows } = await pool.query("SELECT to_char(CURRENT_DATE, 'YYYY-MM-DD') AS hoje");
+  const hoje = hojeRows[0].hoje;
+
+  const { rows: obras } = await pool.query(
+    `SELECT sienge_id, name, apelido, codigo_contrato_caixa, codigo_prevision
+       FROM centros_custo_sienge
+      WHERE empresa_id = $1 AND natureza = 'OBRA'
+      ORDER BY name ASC`,
+    [empresaId]
+  );
+  const { rows: fisico } = await pool.query(
+    `SELECT numero_contrato, parcela, to_char(data_parcela, 'YYYY-MM-DD') AS data, percentual_etapa AS avanco
+       FROM dcd_cronograma_fisico_financeiro
+      WHERE empresa_id = $1 AND parcela ~ '^[0-9]+$'
+      ORDER BY numero_contrato, data_parcela, parcela`,
+    [empresaId]
+  );
+  const { rows: liberado } = await pool.query(
+    `SELECT numero_contrato, parcela, to_char(MAX(data_parcela), 'YYYY-MM-DD') AS data
+       FROM dcd_cronograma_liberacao
+      WHERE empresa_id = $1 AND parcela ~ '^[0-9]+$' AND status = 'LP'
+      GROUP BY 1, 2`,
+    [empresaId]
+  );
+  const { rows: scurve } = await pool.query(
+    `SELECT sienge_id, primary_view, to_char(data, 'YYYY-MM-DD') AS data, expected, realized
+       FROM prevision_dashboard_scurve
+      WHERE empresa_id = $1
+      ORDER BY sienge_id, primary_view, data`,
+    [empresaId]
+  );
+  const { rows: mensal } = await pool.query(
+    `SELECT sienge_id, primary_view, to_char(data, 'YYYY-MM-DD') AS data, SUM(expected) AS expected, SUM(realized) AS realized
+       FROM prevision_dashboard_monthly_progress
+      WHERE empresa_id = $1
+      GROUP BY 1, 2, 3
+      ORDER BY 1, 2, 3`,
+    [empresaId]
+  );
+
+  const agrupar = (linhas, chave) => {
+    const mapa = new Map();
+    linhas.forEach((r) => {
+      const k = chave(r);
+      if (!mapa.has(k)) mapa.set(k, []);
+      mapa.get(k).push(r);
+    });
+    return mapa;
+  };
+  const fisicoPorContrato = agrupar(fisico, (r) => r.numero_contrato);
+  const liberadaEm = new Map(liberado.map((r) => [`${r.numero_contrato}|${r.parcela}`, r.data]));
+  const scurvePorObra = agrupar(scurve, (r) => `${r.sienge_id}|${r.primary_view}`);
+  const mensalPorObra = agrupar(mensal, (r) => `${r.sienge_id}|${r.primary_view}`);
+
+  // Só os pontos em que o valor muda.
+  const enxugar = (pontos) => pontos.filter((p, i) => i === 0 || p[1] !== pontos[i - 1][1]);
+
+  const curvaPrevision = (siengeId, primaria) => {
+    const k = `${siengeId}|${primaria}`;
+    let previsto;
+    let realizado;
+    if (scurvePorObra.has(k)) {
+      const linhas = scurvePorObra.get(k);
+      previsto = linhas.map((r) => [r.data, round2(Number(r.expected || 0) * 100)]);
+      realizado = linhas.filter((r) => r.data <= hoje).map((r) => [r.data, round2(Number(r.realized || 0) * 100)]);
+    } else if (mensalPorObra.has(k)) {
+      // Mensal: o acumulado no último dia de cada mês; o realizado do mês corrente vale até hoje.
+      let p = 0;
+      let rz = 0;
+      previsto = [];
+      realizado = [];
+      mensalPorObra.get(k).forEach((r) => {
+        p += Number(r.expected || 0) * 100;
+        rz += Number(r.realized || 0) * 100;
+        previsto.push([r.data, round2(p)]);
+        if (`${r.data.slice(0, 7)}-01` <= hoje) realizado.push([r.data < hoje ? r.data : hoje, round2(rz)]);
+      });
+    } else return null;
+    if (!previsto.some((p) => p[1] > 0)) return null;
+    return {
+      previsto: enxugar(previsto),
+      realizado: realizado.some((p) => p[1] > 0) ? enxugar(realizado) : null,
+    };
+  };
+
+  return {
+    hoje,
+    obras: obras
+      .map((o) => {
+        const temPrevision = Boolean(o.codigo_prevision && String(o.codigo_prevision).trim());
+        const primaria = temPrevision ? curvaPrevision(o.sienge_id, true) : null;
+        const secundaria = temPrevision ? curvaPrevision(o.sienge_id, false) : null;
+        if (!primaria && !secundaria) return null;
+
+        const contrato = o.codigo_contrato_caixa || null;
+        let pls = null;
+        if (contrato && fisicoPorContrato.has(contrato)) {
+          let acc = 0;
+          let ultima = null;
+          const pontos = [];
+          fisicoPorContrato.get(contrato).forEach((r) => {
+            const lib = liberadaEm.get(`${contrato}|${r.parcela}`);
+            if (!lib || r.data > hoje) return;
+            acc += Number(r.avanco || 0);
+            pontos.push([r.data, round2(Math.min(acc, 100))]);
+            if (!ultima || lib > ultima) ultima = lib;
+          });
+          if (pontos.length) pls = { ultima_liberacao: ultima, pontos: enxugar(pontos) };
+        }
+
+        return {
+          sienge_id: o.sienge_id,
+          name: o.name,
+          apelido: o.apelido || null,
+          contrato,
+          pls,
+          primaria,
+          secundaria,
+        };
+      })
+      .filter(Boolean),
+  };
+}
+
 function erro(status, message) {
   const e = new Error(message);
   e.status = status;
@@ -236,4 +373,4 @@ async function salvarManual(empresaId, siengeId, mes, percentual, usuarioId) {
   return { mes, percentual };
 }
 
-module.exports = { avancos, salvarManual };
+module.exports = { avancos, curvasPorData, salvarManual };

@@ -8,6 +8,7 @@ const router = Router();
 router.use(authMiddleware);
 router.param('empresaId', paramEmpresa);
 router.get('/:empresaId', controller.list);
+router.get('/:empresaId/curvas', controller.curvas);
 router.put('/:empresaId/:siengeId/manual', controller.salvarManual);
 
 module.exports = router;

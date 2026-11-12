@@ -38,6 +38,17 @@ async function list(req, res, next) {
   }
 }
 
+// Curvas por data de cada obra (Obra 360º › Avanço das Obras: visões Mensal, Semanal e Diária).
+async function curvas(req, res, next) {
+  try {
+    const empresaId = empresaIdSchema.parse(req.params.empresaId);
+    res.json(await service.curvasPorData(empresaId));
+  } catch (err) {
+    if (err.issues) return next(erro(400, err.issues[0].message));
+    next(err);
+  }
+}
+
 async function salvarManual(req, res, next) {
   try {
     const empresaId = empresaIdSchema.parse(req.params.empresaId);
@@ -50,4 +61,4 @@ async function salvarManual(req, res, next) {
   }
 }
 
-module.exports = { list, salvarManual };
+module.exports = { list, curvas, salvarManual };

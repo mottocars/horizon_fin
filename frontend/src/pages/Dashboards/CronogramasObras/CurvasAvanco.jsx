@@ -1,32 +1,30 @@
 import { useEffect, useMemo, useState } from 'react';
 import { ChevronDown } from 'lucide-react';
-import { listAvancosDfc } from '../../../api/dfcAvancos.api';
+import { listCurvasAvanco } from '../../../api/dfcAvancos.api';
 import { listCronogramaCentros } from '../../../api/cronogramaCentros.api';
-import { isoHoje, montarObras, nomeObra, opcoesFiltroObras } from '../../Operacoes/CronogramasObras/cronogramaObras';
+import { montarObras, nomeObra, opcoesFiltroObras } from '../../Operacoes/CronogramasObras/cronogramaObras';
 import { somarDias } from '../../CentrosCusto/cronogramaDatas';
 import iconCaixa from '../../../assets/integracoes/portal-construtoras.svg';
 import iconPrevision from '../../../assets/integracoes/prevision.svg';
 import { lbl, pct } from '../EconomicoFinanceiro/fluxo/modelo';
 import { COR, useDica, useLargura } from '../EconomicoFinanceiro/fluxo/ganchos';
+import { dataBr, periodoAnterior, periodoDe, periodosEntre, rotuloCurto, rotuloLongo, valorEm } from './periodosAvanco';
 
 // Obra 360º › Avanço das Obras: "Avanço por obra" (pedido do usuário) — uma linha-cartão por obra com
 // Prevision (retângulo baixo na largura toda, não linha de tabela): a etapa da carteira de obras em
 // que ela está hoje (a mesma conta da Carteira — montarObras/situacaoHoje —, com o mês da etapa na
-// numeração do Gantt: "mês 18 de 32", e o mês em que a etapa começa e termina) e o avanço acumulado
-// até o mês atual em três colunas: Caixa (PLS, realizado até o último mês liberado no DCD), Prevision
-// do orçamento primário e do secundário. Clicar abre embaixo o gráfico da obra inteira, na largura toda,
-// com as três linhas mês a mês. Dados do /dfc-avancos (?obras=todas: toda obra com Prevision, marcada
-// ou não com "Projeta DFC"), numa janela de 10 anos (5 para trás, 4 para a frente — o servidor aceita
-// até 10; o acumulado já soma tudo o que veio antes, então qualquer janela dá o mesmo valor por mês).
-const ANO = new Date().getFullYear();
-const JANELA = { inicio: `${ANO - 5}-01-01`, fim: `${ANO + 4}-12-31`, todasObras: true };
+// numeração do Gantt: "mês 18 de 32", e o mês em que a etapa começa e termina) e o avanço acumulado em
+// três colunas: Caixa (PLS — só o realizado, até a última parcela liberada, com a data dela), Prevision
+// do orçamento primário e do secundário (realizado até hoje × previsto no fim do período da visão: o
+// último dia do mês, o sábado da semana ou hoje — pedido do usuário). Clicar abre embaixo os três
+// gráficos da obra na visão escolhida (Mensal, Semanal ou Diária) e no De/Até (vazio = a obra inteira).
+// Dados do /dfc-avancos/:empresa/curvas: as curvas por data, agrupadas aqui (periodosAvanco.js).
 
-// No cabeçalho das colunas, a logomarca do sistema no lugar do nome (pedido do usuário) — os mesmos
-// ícones da aba DFC › Avanços; nas do Prevision, ao lado, qual orçamento.
+// No cabeçalho das colunas, a logomarca do sistema e, ao lado, o nome da coluna.
 const SERIES = [
-  { chave: 'caixa', rotulo: 'Caixa (PLS)', curto: 'Caixa', cor: COR.ink, logo: iconCaixa, sub: 'PLS' },
-  { chave: 'primaria', rotulo: 'Prevision · orçamento primário', curto: 'Primário', cor: COR.entrada, logo: iconPrevision, sub: 'Primário' },
-  { chave: 'secundaria', rotulo: 'Prevision · orçamento secundário', curto: 'Secundário', cor: COR.cenario, logo: iconPrevision, sub: 'Secundário' },
+  { chave: 'caixa', rotulo: 'Caixa (PLS)', cor: COR.entrada, logo: iconCaixa, sub: 'PLS' },
+  { chave: 'primaria', rotulo: 'Prevision · orçamento primário', cor: COR.entrada, logo: iconPrevision, sub: 'Primário' },
+  { chave: 'secundaria', rotulo: 'Prevision · orçamento secundário', cor: COR.cenario, logo: iconPrevision, sub: 'Secundário' },
 ];
 const vazio = (v) => v === null || v === undefined;
 const mesIso = (iso) => (iso ? lbl(iso.slice(0, 7)) : '–');
@@ -52,7 +50,7 @@ const ate100 = (v) => (vazio(v) ? null : Math.min(v, 100));
 // Obra finalizada (pedido do usuário): o realizado de todas as curvas que ela tem (PLS, Principal e
 // Secundário) já em 100% — essas vão para o fim da lista, separadas.
 const finalizada = (c) => {
-  const cols = SERIES.filter((s) => c.tem[s.chave]).map((s) => c.hoje[s.chave]?.realizado);
+  const cols = SERIES.filter((s) => c.tem[s.chave]).map((s) => c.cards[s.chave]?.realizado);
   return cols.length > 0 && cols.every((v) => !vazio(v) && v >= 99.95);
 };
 
@@ -64,103 +62,89 @@ const TRES = [
   { chave: 'realizado', rotulo: 'Realizado' },
 ];
 
-// Último mês com valor até `ate` (inclusive) numa série { mês: % | null }.
-const ultimoAte = (serie, meses, ate) => (serie ? meses.filter((m) => m <= ate && !vazio(serie[m])).pop() || null : null);
-
-// Uma obra: em cada coluna da linha, o realizado e o previsto no mesmo mês (o da última medição, sem
-// passar do mês atual) — PLS: o realizado da Caixa (até o último mês liberado) × o previsto do orçamento
-// principal; Principal e Secundário: o realizado × o previsto daquele orçamento do Prevision. E a obra
-// bruta, de onde saem os três gráficos que abrem embaixo da linha (`graficosDe`).
-function montarObra(obra, meses, mesAtual) {
-  if (!obra.prevision_primaria && !obra.prevision_secundaria) return null;
-  const ultimoLib = obra.ultimo_mes_liberado || null;
-  const caixa = obra.pls && ultimoLib ? obra.pls : null;
-  const det = obra.prevision_detalhe || {};
-  const previstoDe = (tipo) => det[tipo]?.previsto || (tipo === 'primaria' ? obra.prevision_primaria : obra.prevision_secundaria);
-  const coluna = (realizado, previsto) => {
-    const ref = ultimoAte(realizado, meses, mesAtual) || (previsto ? mesAtual : null);
-    return {
-      ref,
-      realizado: ref && realizado ? ate100(realizado[ref]) : null,
-      previsto: ref && previsto ? ate100(previsto[ref]) : null,
-    };
-  };
-  const caixaAte = caixa ? Object.fromEntries(meses.map((m) => [m, m <= ultimoLib && m <= mesAtual ? caixa[m] : null])) : null;
+// Uma obra nos cards: realizado acumulado até hoje e, no Prevision, o previsto acumulado no fim do
+// período da visão (`fimPeriodo`). O PLS não tem previsto (pedido do usuário) — só a data da última
+// parcela liberada.
+function montarObra(obra, hoje, fimPeriodo) {
+  const prevision = (curva) =>
+    curva ? { realizado: ate100(valorEm(curva.realizado, hoje)), previsto: ate100(valorEm(curva.previsto, fimPeriodo)) } : null;
   return {
     id: obra.sienge_id,
     nome: nomeObra(obra), // o apelido do centro de custo, quando preenchido (pedido do usuário)
     bruta: obra,
-    meses,
-    mesAtual,
-    ultimoLib,
-    tem: { caixa: Boolean(caixa), primaria: Boolean(obra.prevision_primaria), secundaria: Boolean(obra.prevision_secundaria) },
-    hoje: {
-      caixa: caixa ? coluna(caixaAte, previstoDe('primaria')) : null,
-      primaria: obra.prevision_primaria ? coluna(det.primaria?.realizado, previstoDe('primaria')) : null,
-      secundaria: obra.prevision_secundaria ? coluna(det.secundaria?.realizado, previstoDe('secundaria')) : null,
+    ultimaLib: obra.pls?.ultima_liberacao || null,
+    tem: { caixa: Boolean(obra.pls), primaria: Boolean(obra.primaria), secundaria: Boolean(obra.secundaria) },
+    cards: {
+      caixa: obra.pls ? { realizado: ate100(valorEm(obra.pls.pontos, hoje)), previsto: null } : null,
+      primaria: prevision(obra.primaria),
+      secundaria: prevision(obra.secundaria),
     },
   };
 }
 
-// Os três gráficos que abrem embaixo da linha (pedido do usuário): PLS (só a curva realizada, da Caixa),
+// Os três gráficos que abrem embaixo da linha (pedido do usuário): PLS (só o realizado, da Caixa),
 // Principal (orçamento primário do Prevision) e Secundário — cada um do Prevision com o Previsto (linha)
-// e o Realizado (barras). Cada gráfico no seu recorte: do mês antes do primeiro avanço até o mês em que a
-// última curva dele chega a 100% (depois disso não há mais datas — pedido do usuário) ou, se nenhuma
-// chega, até a última medição e o mês atual. A curva que chega a 100% para ali: o mês vira 100% exatos,
-// os seguintes ficam sem valor, e `cem` guarda o índice para a bandeirinha.
-function graficosDe(c) {
-  const { bruta: obra, meses, mesAtual, ultimoLib } = c;
-  const doMes = (acc, ok = () => true) =>
-    acc ? Object.fromEntries(meses.map((m) => [m, ok(m) && !vazio(acc[m]) ? ate100(acc[m]) : null])) : null;
+// e o Realizado (barras), um ponto por período da visão (o acumulado no último dia dele; o realizado
+// para em hoje). Sem De/Até, cada gráfico no seu recorte: do período antes do primeiro avanço até o dia
+// em que a última curva dele chega a 100% ou, se nenhuma chega, até o último ponto e hoje. Com De/Até,
+// o recorte é o pedido (só um dos dois: o outro lado fica automático). A curva que chega a 100% para
+// ali: o período vira 100% exatos, os seguintes ficam sem valor, e `cem` guarda o índice da bandeirinha.
+function graficosDe(c, { visao, de, ate, hoje }) {
+  const obra = c.bruta;
   const graficos = [
     {
       chave: 'caixa',
       titulo: 'PLS',
       logo: SERIES[0].logo,
-      series: [
-        { chave: 'realizado', rotulo: 'Realizado', valores: doMes(obra.pls, (m) => ultimoLib && m <= ultimoLib && m <= mesAtual) },
-      ],
+      series: obra.pls ? [{ chave: 'realizado', rotulo: 'Realizado', pontos: obra.pls.pontos }] : [],
     },
-    ...['primaria', 'secundaria'].map((tipo, k) => {
-      const det = obra.prevision_detalhe?.[tipo] || {};
-      return {
-        chave: tipo,
-        titulo: k === 0 ? 'Principal' : 'Secundário',
-        logo: SERIES[k + 1].logo,
-        series: TRES.map((s) => ({ ...s, valores: doMes(det[s.chave]) })),
-      };
-    }),
+    ...['primaria', 'secundaria'].map((tipo, k) => ({
+      chave: tipo,
+      titulo: k === 0 ? 'Principal' : 'Secundário',
+      logo: SERIES[k + 1].logo,
+      series: obra[tipo] ? TRES.filter((s) => obra[tipo][s.chave]).map((s) => ({ ...s, pontos: obra[tipo][s.chave] })) : [],
+    })),
   ];
-  const iAtual = meses.indexOf(mesAtual);
   return graficos.map((g) => {
-    const series = g.series.filter((s) => s.valores).map((s) => ({ ...s, cor: COR_CURVA[s.chave] }));
-    let ini = meses.length;
-    let fim = -1;
+    const series = g.series.map((s) => ({ ...s, cor: COR_CURVA[s.chave] }));
+    let ini = null;
+    let fim = null;
     let todasCem = series.length > 0;
     series.forEach((s) => {
-      const i = meses.findIndex((m) => (s.valores[m] || 0) > 0);
-      if (i >= 0) ini = Math.min(ini, i);
-      let f = meses.findIndex((m) => s.valores[m] >= 99.95);
-      if (f < 0) {
-        todasCem = false;
-        f = meses.reduce((u, m, k) => (vazio(s.valores[m]) ? u : k), -1);
-      }
-      fim = Math.max(fim, f);
+      const primeiro = s.pontos.find((p) => p[1] > 0);
+      if (primeiro && (!ini || primeiro[0] < ini)) ini = primeiro[0];
+      const cem = s.pontos.find((p) => p[1] >= 99.95);
+      if (!cem) todasCem = false;
+      const f = cem ? cem[0] : s.pontos[s.pontos.length - 1][0];
+      if (!fim || f > fim) fim = f;
     });
-    if (ini === meses.length) ini = Math.max(0, iAtual);
-    const a = Math.max(0, Math.min(ini - 1, iAtual >= 0 ? iAtual : Infinity));
-    // Todas chegaram a 100%: para no mês da última; senão, vai pelo menos até o mês atual.
-    const b = Math.min(meses.length - 1, todasCem ? fim : Math.max(fim, iAtual));
-    const mesesGrafico = meses.slice(a, Math.max(a, b) + 1);
+    if (!ini) ini = hoje;
+    if (!fim || (!todasCem && fim < hoje)) fim = hoje;
+    let periodos;
+    if (de || ate) {
+      const a = de || ini;
+      const b = ate || fim;
+      periodos = periodosEntre(visao, a, b < a ? a : b);
+    } else {
+      periodos = periodosEntre(visao, ini, fim < ini ? ini : fim);
+      periodos.unshift(periodoAnterior(visao, periodos[0])); // o ponto de partida, antes do 1º avanço
+    }
     return {
       chave: g.chave,
       titulo: g.titulo,
       logo: g.logo,
-      mesAtual,
-      nome: nomeObra(obra),
-      meses: mesesGrafico,
+      nome: c.nome,
+      curtos: periodos.map((p) => rotuloCurto(visao, p)),
+      longos: periodos.map((p) => rotuloLongo(visao, p)),
+      iHoje: periodos.findIndex((p) => p.ini <= hoje && hoje <= p.fim),
       series: series.map((s) => {
-        const v = mesesGrafico.map((m) => s.valores[m]);
+        const v = periodos.map((p) =>
+          s.chave === 'realizado'
+            ? p.ini > hoje
+              ? null
+              : ate100(valorEm(s.pontos, p.fim < hoje ? p.fim : hoje))
+            : ate100(valorEm(s.pontos, p.fim))
+        );
         const i = v.findIndex((x) => x >= 99.95);
         if (i >= 0) {
           v[i] = 100;
@@ -200,8 +184,8 @@ function Etapa({ e }) {
   );
 }
 
-// Uma coluna da linha: o realizado grande e, à frente, menor, o previsto do mesmo mês. A barra fica
-// vermelha com o previsto acima do realizado (atrasado) e verde com ele igual ou abaixo.
+// Uma coluna da linha: o realizado grande e, à frente, menor, o previsto. A barra fica vermelha com o
+// previsto acima do realizado (atrasado) e verde com ele igual ou abaixo; sem previsto (PLS), azul.
 function Metrica({ col, cor, nota }) {
   const real = col?.realizado ?? null;
   const prev = col?.previsto ?? null;
@@ -223,32 +207,51 @@ function Metrica({ col, cor, nota }) {
   );
 }
 
-// Um dos três gráficos: o tipo de avanço, mês a mês, de 0 a 100%, com as curvas dele (PLS: uma; Prevision:
-// Previsto e Realizado, com a legenda). Com o mouse em cima, uma linha vertical acompanha o mês,
-// com o ponto de cada curva nele. Clicar expande / volta (Graficos).
+// Um dos três gráficos: o tipo de avanço por período da visão, de 0 a 100%, com as curvas dele (PLS:
+// uma; Prevision: Previsto e Realizado, com a legenda). Com o mouse em cima, uma linha vertical
+// acompanha o período, com o ponto de cada curva nele. Clicar expande / volta (Graficos).
 function Grafico({ g, colapsado, onClick }) {
   const [ref, W] = useLargura(300);
   const { mostrar, esconder } = useDica();
   const [mira, setMira] = useState(null);
   const H = 230;
   const m = { l: 44, r: 16, t: 24, b: 30 }; // em cima, espaço para a bandeirinha dos 100%
-  const { meses, series } = g;
-  const n = meses.length;
+  const { curtos, longos, series } = g;
+  const n = curtos.length;
   const x = (i) => m.l + ((W - m.l - m.r) * i) / Math.max(1, n - 1);
   const y = (v) => m.t + (H - m.t - m.b) * (1 - v / 100);
   const w = (W - m.l - m.r) / Math.max(1, n - 1);
-  const iNow = meses.indexOf(g.mesAtual);
-  // Meses no eixo: um a cada `passo` (uns 60 px entre rótulos), sempre o último.
-  const passo = Math.max(1, Math.ceil(60 / Math.max(1, w)));
-  const marcas = meses.map((_, i) => i).filter((i) => i % passo === 0 && x(n - 1) - x(i) > 58);
-  marcas.push(n - 1);
-  const larguraBarra = Math.max(2, Math.min(18, w * 0.62));
+  const iNow = g.iHoje;
+  // Rótulos no eixo: sempre o primeiro e o último; no meio, um a cada `passo`, sem encostar nos vizinhos
+  // (o primeiro sai alinhado à esquerda e o último à direita, então ocupam mais para dentro).
+  const ESPACO = curtos[0]?.length > 6 ? 76 : 60;
+  const passo = Math.max(1, Math.ceil(ESPACO / Math.max(0.01, w)));
+  const marcas = [0];
+  for (let i = passo; i < n - 1; i += passo) {
+    const folgaAntes = x(i) - x(marcas[marcas.length - 1]) - (marcas.length === 1 ? ESPACO / 2 : 0);
+    if (folgaAntes >= ESPACO && x(n - 1) - x(i) >= ESPACO * 1.5) marcas.push(i);
+  }
+  if (n > 1) marcas.push(n - 1);
+  // Muitos períodos (visão diária): as barras encostam umas nas outras e viram uma área.
+  const larguraBarra = Math.max(Math.min(2, w), Math.min(18, w * 0.62));
   const caminho = (s) =>
     s.v
       .map((v, i) => [v, i])
       .filter(([v]) => !vazio(v))
       .map(([v, i], k) => `${k ? 'L' : 'M'}${x(i).toFixed(1)},${y(v).toFixed(1)}`)
       .join('');
+  // O período sob o mouse: pela posição na largura do gráfico (uma camada só, não um retângulo por período).
+  const aoMover = (ev) => {
+    const caixa = ev.currentTarget.ownerSVGElement.getBoundingClientRect();
+    const px = ((ev.clientX - caixa.left) * W) / caixa.width;
+    const i = Math.max(0, Math.min(n - 1, Math.round((px - m.l) / Math.max(0.01, w))));
+    setMira(i);
+    mostrar(
+      ev,
+      longos[i],
+      series.filter((s) => !vazio(s.v[i])).map((s) => [s.rotulo, pct(s.v[i])])
+    );
+  };
   return (
     <div
       className={`av-curva${colapsado ? ' colapsado' : ''}`}
@@ -280,7 +283,7 @@ function Grafico({ g, colapsado, onClick }) {
         <div className="empty">Sem dados.</div>
       ) : (
         <div className="chart" ref={ref}>
-          <svg viewBox={`0 0 ${W} ${H}`} role="img" aria-label={`${g.titulo} de ${g.nome} mês a mês`}>
+          <svg viewBox={`0 0 ${W} ${H}`} role="img" aria-label={`${g.titulo} de ${g.nome}`}>
             {[0, 25, 50, 75, 100].map((v) => (
               <g key={v}>
                 <line x1={m.l} x2={W - m.r} y1={y(v)} y2={y(v)} stroke={COR.grid} />
@@ -291,7 +294,7 @@ function Grafico({ g, colapsado, onClick }) {
             ))}
             {marcas.map((i) => (
               <text key={i} x={x(i)} y={H - 10} textAnchor={i === 0 ? 'start' : i === n - 1 ? 'end' : 'middle'}>
-                {lbl(meses[i])}
+                {curtos[i]}
               </text>
             ))}
             {iNow >= 0 && (
@@ -302,7 +305,7 @@ function Grafico({ g, colapsado, onClick }) {
                 </text>
               </g>
             )}
-            {/* Linha que acompanha o mês sob o mouse. */}
+            {/* Linha que acompanha o período sob o mouse. */}
             {mira !== null && <line className="av-mira" x1={x(mira)} x2={x(mira)} y1={m.t} y2={H - m.b} stroke={COR.ink2} strokeWidth={1} />}
             {/* Realizado em barras (pedido do usuário), por baixo; previsto em linha, por cima. */}
             {series
@@ -328,8 +331,8 @@ function Grafico({ g, colapsado, onClick }) {
               .map((s) => (
                 <path key={s.chave} d={caminho(s)} fill="none" stroke={s.cor} strokeWidth={3.2} strokeLinejoin="round" strokeLinecap="round" />
               ))}
-            {/* Bandeirinha onde a curva chega a 100% (e para); duas no mesmo mês ficam lado a lado, a
-                segunda à esquerda (não sai do gráfico quando é o último mês). */}
+            {/* Bandeirinha onde a curva chega a 100% (e para); duas no mesmo período ficam lado a lado, a
+                segunda à esquerda (não sai do gráfico quando é o último). */}
             {series
               .filter((s) => s.cem !== undefined)
               .map((s, k, lista) => {
@@ -337,7 +340,7 @@ function Grafico({ g, colapsado, onClick }) {
                 const lado = lista.slice(0, k).filter((o) => o.cem === i).length;
                 return (
                   <g key={`cem-${s.chave}`} transform={`translate(${x(i) - lado * 12},${y(100)})`}>
-                    <title>{`${s.rotulo}: 100% em ${lbl(meses[i])}`}</title>
+                    <title>{`${s.rotulo}: 100% em ${longos[i]}`}</title>
                     <line x1={0} y1={0} x2={0} y2={-15} stroke={s.cor} strokeWidth={1.5} />
                     <path d="M0,-15 L9,-11.5 L0,-8 Z" fill={s.cor} />
                     <circle r={3} fill={s.cor} stroke={COR.surface} strokeWidth={1.5} />
@@ -351,28 +354,18 @@ function Grafico({ g, colapsado, onClick }) {
                 .filter((s) => s.chave !== 'realizado' && !vazio(s.v[i]))
                 .map((s) => <circle key={s.chave} cx={x(i)} cy={y(s.v[i])} r={4.5} fill={s.cor} stroke={COR.surface} strokeWidth={2} />);
             })()}
-            {meses.map((mes, i) => (
-              <rect
-                key={mes}
-                x={x(i) - w / 2}
-                y={m.t}
-                width={w}
-                height={H - m.t - m.b}
-                fill="transparent"
-                onMouseMove={(ev) => {
-                  setMira(i);
-                  mostrar(
-                    ev,
-                    lbl(mes),
-                    series.filter((s) => !vazio(s.v[i])).map((s) => [s.rotulo, pct(s.v[i])])
-                  );
-                }}
-                onMouseLeave={() => {
-                  setMira(null);
-                  esconder();
-                }}
-              />
-            ))}
+            <rect
+              x={m.l - Math.max(6, w / 2)}
+              y={m.t}
+              width={W - m.l - m.r + 2 * Math.max(6, w / 2)}
+              height={H - m.t - m.b}
+              fill="transparent"
+              onMouseMove={aoMover}
+              onMouseLeave={() => {
+                setMira(null);
+                esconder();
+              }}
+            />
           </svg>
         </div>
       )}
@@ -394,7 +387,14 @@ function Graficos({ lista }) {
   );
 }
 
-export default function CurvasAvanco({ empresaId, obrasMarcadas = [], onOpcoesObras }) {
+// Texto do topo do painel: a que dia os números dos cards se referem em cada visão.
+function referencia(visao, hoje, fimPeriodo) {
+  if (visao === 'diaria') return `Realizado e previsto acumulados até hoje (${dataBr(hoje)})`;
+  const ate = visao === 'semanal' ? `o fim da semana (sábado, ${dataBr(fimPeriodo)})` : `o fim do mês (${dataBr(fimPeriodo)})`;
+  return `Realizado acumulado até hoje (${dataBr(hoje)}) · previsto acumulado até ${ate}`;
+}
+
+export default function CurvasAvanco({ empresaId, obrasMarcadas = [], onOpcoesObras, visao = 'mensal', de = '', ate = '' }) {
   const [dados, setDados] = useState(null);
   const [cronograma, setCronograma] = useState(null);
   const [erro, setErro] = useState('');
@@ -408,7 +408,7 @@ export default function CurvasAvanco({ empresaId, obrasMarcadas = [], onOpcoesOb
     setErro('');
     setAbertas([]);
     onOpcoesObras?.([]);
-    listAvancosDfc(empresaId, JANELA)
+    listCurvasAvanco(empresaId)
       .then((d) => vivo && setDados(d))
       .catch((e) => vivo && setErro(e.response?.data?.message || 'Não foi possível carregar o avanço das obras.'));
     // A etapa vem do cronograma da Carteira de obras; sem ele, a coluna fica "Sem cronograma".
@@ -418,23 +418,25 @@ export default function CurvasAvanco({ empresaId, obrasMarcadas = [], onOpcoesOb
     return () => {
       vivo = false;
     };
+    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [empresaId]);
 
+  const hoje = dados?.hoje || null;
+  const fimPeriodo = hoje ? periodoDe(visao, hoje).fim : null;
   const obras = useMemo(
     () =>
       dados
         ? dados.obras
-            .map((o) => montarObra(o, dados.meses, dados.mes_atual))
-            .filter(Boolean)
+            .map((o) => montarObra(o, dados.hoje, fimPeriodo))
             .sort((a, b) => a.nome.localeCompare(b.nome, 'pt-BR')) // em ordem do nome exibido (apelido)
         : [],
-    [dados]
+    [dados, fimPeriodo]
   );
   // Opções do filtro "Obras" (na barra de controles, AvancoObras): as obras desta lista, como na Carteira.
   useEffect(() => {
-    onOpcoesObras?.(opcoesFiltroObras(obras.map((c) => c.bruta)));
+    if (dados) onOpcoesObras?.(opcoesFiltroObras(dados.obras));
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [obras]);
+  }, [dados]);
   // Filtro "Obras" e, no fim, as finalizadas (as três curvas em 100%).
   const [emAndamento, finalizadas] = useMemo(() => {
     const vistas = obrasMarcadas.length ? obras.filter((c) => obrasMarcadas.includes(String(c.id))) : obras;
@@ -442,19 +444,17 @@ export default function CurvasAvanco({ empresaId, obrasMarcadas = [], onOpcoesOb
   }, [obras, obrasMarcadas]);
   // Etapa de hoje de cada obra (por sienge_id), como na Carteira de obras.
   const etapas = useMemo(() => {
-    if (!cronograma) return null;
-    const hoje = isoHoje();
+    if (!cronograma || !hoje) return null;
     const porObra = new Map(montarObras(cronograma.centros, cronograma.etapas, hoje, cronograma.atraso).map((o) => [o.centro.sienge_id, o]));
     return (id) => etapaHoje(porObra.get(id), hoje);
-  }, [cronograma]);
+  }, [cronograma, hoje]);
   const alternar = (id) => setAbertas((a) => (a.includes(id) ? a.filter((v) => v !== id) : [...a, id]));
 
   if (!empresaId) return null;
-  const mesAtual = dados?.mes_atual;
   const linha = (c) => {
     const aberta = abertas.includes(c.id);
     const notas = {
-      caixa: !c.tem.caixa ? 'sem Caixa' : c.ultimoLib < mesAtual ? `até ${lbl(c.ultimoLib)}` : null,
+      caixa: c.tem.caixa ? `até ${dataBr(c.ultimaLib)}` : 'sem Caixa',
       primaria: c.tem.primaria ? null : 'sem orçamento',
       secundaria: c.tem.secundaria ? null : 'sem orçamento',
     };
@@ -466,13 +466,13 @@ export default function CurvasAvanco({ empresaId, obrasMarcadas = [], onOpcoesOb
           </span>
           {etapas ? <Etapa e={etapas(c.id)} /> : <span className="av-etapa nulo">…</span>}
           {SERIES.map((s) => (
-            <Metrica key={s.chave} col={c.hoje[s.chave]} cor={s.cor} nota={notas[s.chave]} />
+            <Metrica key={s.chave} col={c.cards[s.chave]} cor={s.cor} nota={notas[s.chave]} />
           ))}
           <ChevronDown size={18} className="av-seta" />
         </button>
         {aberta && (
           <div className="av-grafico">
-            <Graficos lista={graficosDe(c)} />
+            <Graficos lista={graficosDe(c, { visao, de, ate, hoje })} />
           </div>
         )}
       </div>
@@ -482,6 +482,7 @@ export default function CurvasAvanco({ empresaId, obrasMarcadas = [], onOpcoesOb
     <section className="panel c12" aria-labelledby="h-avanco-obra">
       <div className="ph">
         <h2 id="h-avanco-obra">Avanço por obra</h2>
+        {hoje && <p>{referencia(visao, hoje, fimPeriodo)}</p>}
       </div>
       {erro ? (
         <div className="empty">{erro}</div>
