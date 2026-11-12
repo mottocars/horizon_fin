@@ -2,7 +2,7 @@ import { useEffect, useMemo, useState } from 'react';
 import { ChevronDown } from 'lucide-react';
 import { listAvancosDfc } from '../../../api/dfcAvancos.api';
 import { listCronogramaCentros } from '../../../api/cronogramaCentros.api';
-import { isoHoje, montarObras } from '../../Operacoes/CronogramasObras/cronogramaObras';
+import { isoHoje, montarObras, nomeObra, opcoesFiltroObras } from '../../Operacoes/CronogramasObras/cronogramaObras';
 import { somarDias } from '../../CentrosCusto/cronogramaDatas';
 import iconCaixa from '../../../assets/integracoes/portal-construtoras.svg';
 import iconPrevision from '../../../assets/integracoes/prevision.svg';
@@ -24,7 +24,7 @@ const JANELA = { inicio: `${ANO - 5}-01-01`, fim: `${ANO + 4}-12-31`, todasObras
 // No cabeçalho das colunas, a logomarca do sistema no lugar do nome (pedido do usuário) — os mesmos
 // ícones da aba DFC › Avanços; nas do Prevision, ao lado, qual orçamento.
 const SERIES = [
-  { chave: 'caixa', rotulo: 'Caixa (PLS)', curto: 'Caixa', cor: COR.ink, logo: iconCaixa },
+  { chave: 'caixa', rotulo: 'Caixa (PLS)', curto: 'Caixa', cor: COR.ink, logo: iconCaixa, sub: 'PLS' },
   { chave: 'primaria', rotulo: 'Prevision · orçamento primário', curto: 'Primário', cor: COR.entrada, logo: iconPrevision, sub: 'Primário' },
   { chave: 'secundaria', rotulo: 'Prevision · orçamento secundário', curto: 'Secundário', cor: COR.cenario, logo: iconPrevision, sub: 'Secundário' },
 ];
@@ -49,6 +49,12 @@ function etapaHoje(obra, hoje) {
 }
 // O Prevision às vezes soma 100,03% por arredondamento: na tela, no máximo 100%.
 const ate100 = (v) => (vazio(v) ? null : Math.min(v, 100));
+// Obra finalizada (pedido do usuário): o realizado de todas as curvas que ela tem (PLS, Principal e
+// Secundário) já em 100% — essas vão para o fim da lista, separadas.
+const finalizada = (c) => {
+  const cols = SERIES.filter((s) => c.tem[s.chave]).map((s) => c.hoje[s.chave]?.realizado);
+  return cols.length > 0 && cols.every((v) => !vazio(v) && v >= 99.95);
+};
 
 // Cores das curvas (pedido do usuário): realizado azul (barras), previsto preto (linha) — as mesmas nos
 // três gráficos (o PLS só tem o realizado). A base do Prevision não entra (pedido do usuário).
@@ -82,7 +88,7 @@ function montarObra(obra, meses, mesAtual) {
   const caixaAte = caixa ? Object.fromEntries(meses.map((m) => [m, m <= ultimoLib && m <= mesAtual ? caixa[m] : null])) : null;
   return {
     id: obra.sienge_id,
-    nome: obra.name,
+    nome: nomeObra(obra), // o apelido do centro de custo, quando preenchido (pedido do usuário)
     bruta: obra,
     meses,
     mesAtual,
@@ -151,7 +157,7 @@ function graficosDe(c) {
       titulo: g.titulo,
       logo: g.logo,
       mesAtual,
-      nome: obra.name,
+      nome: nomeObra(obra),
       meses: mesesGrafico,
       series: series.map((s) => {
         const v = mesesGrafico.map((m) => s.valores[m]);
@@ -200,7 +206,9 @@ function Metrica({ col, cor, nota }) {
   const real = col?.realizado ?? null;
   const prev = col?.previsto ?? null;
   const comparavel = !vazio(real) && !vazio(prev);
-  const corBarra = comparavel ? (prev > real + 0.005 ? 'var(--crit)' : 'var(--good)') : cor;
+  // Compara como aparece na tela (uma casa): 99,97 × 100,02 é "100,0% prev. 100,0%", não atraso.
+  const umaCasa = (v) => Math.round(v * 10) / 10;
+  const corBarra = comparavel ? (umaCasa(prev) > umaCasa(real) ? 'var(--crit)' : 'var(--good)') : cor;
   return (
     <span className="av-met">
       <b className={vazio(real) ? 'nulo' : ''}>
@@ -386,7 +394,7 @@ function Graficos({ lista }) {
   );
 }
 
-export default function CurvasAvanco({ empresaId }) {
+export default function CurvasAvanco({ empresaId, obrasMarcadas = [], onOpcoesObras }) {
   const [dados, setDados] = useState(null);
   const [cronograma, setCronograma] = useState(null);
   const [erro, setErro] = useState('');
@@ -399,6 +407,7 @@ export default function CurvasAvanco({ empresaId }) {
     setCronograma(null);
     setErro('');
     setAbertas([]);
+    onOpcoesObras?.([]);
     listAvancosDfc(empresaId, JANELA)
       .then((d) => vivo && setDados(d))
       .catch((e) => vivo && setErro(e.response?.data?.message || 'Não foi possível carregar o avanço das obras.'));
@@ -412,9 +421,25 @@ export default function CurvasAvanco({ empresaId }) {
   }, [empresaId]);
 
   const obras = useMemo(
-    () => (dados ? dados.obras.map((o) => montarObra(o, dados.meses, dados.mes_atual)).filter(Boolean) : []),
+    () =>
+      dados
+        ? dados.obras
+            .map((o) => montarObra(o, dados.meses, dados.mes_atual))
+            .filter(Boolean)
+            .sort((a, b) => a.nome.localeCompare(b.nome, 'pt-BR')) // em ordem do nome exibido (apelido)
+        : [],
     [dados]
   );
+  // Opções do filtro "Obras" (na barra de controles, AvancoObras): as obras desta lista, como na Carteira.
+  useEffect(() => {
+    onOpcoesObras?.(opcoesFiltroObras(obras.map((c) => c.bruta)));
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [obras]);
+  // Filtro "Obras" e, no fim, as finalizadas (as três curvas em 100%).
+  const [emAndamento, finalizadas] = useMemo(() => {
+    const vistas = obrasMarcadas.length ? obras.filter((c) => obrasMarcadas.includes(String(c.id))) : obras;
+    return [vistas.filter((c) => !finalizada(c)), vistas.filter(finalizada)];
+  }, [obras, obrasMarcadas]);
   // Etapa de hoje de cada obra (por sienge_id), como na Carteira de obras.
   const etapas = useMemo(() => {
     if (!cronograma) return null;
@@ -426,6 +451,33 @@ export default function CurvasAvanco({ empresaId }) {
 
   if (!empresaId) return null;
   const mesAtual = dados?.mes_atual;
+  const linha = (c) => {
+    const aberta = abertas.includes(c.id);
+    const notas = {
+      caixa: !c.tem.caixa ? 'sem Caixa' : c.ultimoLib < mesAtual ? `até ${lbl(c.ultimoLib)}` : null,
+      primaria: c.tem.primaria ? null : 'sem orçamento',
+      secundaria: c.tem.secundaria ? null : 'sem orçamento',
+    };
+    return (
+      <div key={c.id} className={`av-item${aberta ? ' aberto' : ''}`}>
+        <button type="button" className="av-linha" aria-expanded={aberta} onClick={() => alternar(c.id)}>
+          <span className="av-nome" title={c.bruta.name}>
+            {c.nome}
+          </span>
+          {etapas ? <Etapa e={etapas(c.id)} /> : <span className="av-etapa nulo">…</span>}
+          {SERIES.map((s) => (
+            <Metrica key={s.chave} col={c.hoje[s.chave]} cor={s.cor} nota={notas[s.chave]} />
+          ))}
+          <ChevronDown size={18} className="av-seta" />
+        </button>
+        {aberta && (
+          <div className="av-grafico">
+            <Graficos lista={graficosDe(c)} />
+          </div>
+        )}
+      </div>
+    );
+  };
   return (
     <section className="panel c12" aria-labelledby="h-avanco-obra">
       <div className="ph">
@@ -443,40 +495,29 @@ export default function CurvasAvanco({ empresaId }) {
             <span>Empreendimento</span>
             <span>Etapa da carteira</span>
             {SERIES.map((s) => (
-              <span key={s.chave}>
-                <img src={s.logo} alt={s.sub ? 'Prevision' : 'Caixa'} title={s.rotulo} />
+              <span key={s.chave} title={s.rotulo}>
+                <img src={s.logo} alt={s.sub === 'PLS' ? 'Caixa' : 'Prevision'} />
                 {s.sub}
               </span>
             ))}
             <span />
           </div>
-          <div className="av-lista">
-            {obras.map((c) => {
-              const aberta = abertas.includes(c.id);
-              const notas = {
-                caixa: !c.tem.caixa ? 'sem Caixa' : c.ultimoLib < mesAtual ? `até ${lbl(c.ultimoLib)}` : null,
-                primaria: c.tem.primaria ? null : 'sem orçamento',
-                secundaria: c.tem.secundaria ? null : 'sem orçamento',
-              };
-              return (
-                <div key={c.id} className={`av-item${aberta ? ' aberto' : ''}`}>
-                  <button type="button" className="av-linha" aria-expanded={aberta} onClick={() => alternar(c.id)}>
-                    <span className="av-nome">{c.nome}</span>
-                    {etapas ? <Etapa e={etapas(c.id)} /> : <span className="av-etapa nulo">…</span>}
-                    {SERIES.map((s) => (
-                      <Metrica key={s.chave} col={c.hoje[s.chave]} cor={s.cor} nota={notas[s.chave]} />
-                    ))}
-                    <ChevronDown size={18} className="av-seta" />
-                  </button>
-                  {aberta && (
-                    <div className="av-grafico">
-                      <Graficos lista={graficosDe(c)} />
-                    </div>
-                  )}
-                </div>
-              );
-            })}
-          </div>
+          {!emAndamento.length && !finalizadas.length ? (
+            <div className="empty">Nenhuma obra no filtro.</div>
+          ) : (
+            <>
+              {emAndamento.length > 0 && <div className="av-lista">{emAndamento.map(linha)}</div>}
+              {finalizadas.length > 0 && (
+                <>
+                  <div className="av-separador">
+                    <span>Obras finalizadas</span>
+                    <small>{finalizadas.length === 1 ? '1 obra' : `${finalizadas.length} obras`} com todas as curvas em 100%</small>
+                  </div>
+                  <div className="av-lista finalizadas">{finalizadas.map(linha)}</div>
+                </>
+              )}
+            </>
+          )}
         </>
       )}
     </section>

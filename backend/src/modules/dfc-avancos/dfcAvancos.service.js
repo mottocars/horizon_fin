@@ -59,7 +59,7 @@ async function avancos(empresaId, inicio, fim, { todasObras = false } = {}) {
   const mesAtual = hoje[0].mes;
 
   const { rows: obras } = await pool.query(
-    `SELECT sienge_id, name, codigo_contrato_caixa, codigo_prevision, prevision_primary_view
+    `SELECT sienge_id, name, apelido, codigo_contrato_caixa, codigo_prevision, prevision_primary_view
        FROM centros_custo_sienge
       WHERE empresa_id = $1 AND natureza = 'OBRA' AND (projeta_dfc OR $2::boolean)
       ORDER BY name ASC`,
@@ -182,6 +182,7 @@ async function avancos(empresaId, inicio, fim, { todasObras = false } = {}) {
       return {
         sienge_id: o.sienge_id,
         name: o.name,
+        apelido: o.apelido || null,
         contrato,
         codigo_prevision: o.codigo_prevision || null,
         ultimo_mes_liberado: ultimoMes,

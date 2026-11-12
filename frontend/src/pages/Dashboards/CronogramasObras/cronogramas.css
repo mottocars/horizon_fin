@@ -192,13 +192,23 @@
   align-items: center;
   gap: 0 24px;
 }
+/* Cabeçalho fixo (pedido do usuário): acompanha a rolagem da página e fica no topo enquanto a lista
+   passa por baixo; a mesma borda e o mesmo recuo do cartão, para as colunas baterem com as linhas. */
 .painel-cfo .av-cab {
-  padding: 4px 20px 8px;
+  position: sticky;
+  top: 0;
+  z-index: 5;
+  min-height: 44px;
+  padding: 8px 20px;
+  border: 1px solid var(--line);
+  border-radius: 10px;
+  background: var(--surface-2);
+  box-shadow: 0 6px 12px -10px rgb(19 32 42 / 0.35);
   font-size: 11.5px;
-  font-weight: 600;
+  font-weight: 700;
   letter-spacing: 0.05em;
   text-transform: uppercase;
-  color: var(--muted);
+  color: var(--ink-2);
 }
 .painel-cfo .av-cab > span {
   display: flex;
@@ -222,6 +232,33 @@
   display: flex;
   flex-direction: column;
   gap: 8px;
+}
+/* Obras finalizadas (as três curvas em 100%): no fim, depois de um separador, em tom apagado. */
+.painel-cfo .av-separador {
+  display: flex;
+  align-items: baseline;
+  gap: 10px;
+  margin-top: 10px;
+  padding: 0 4px 2px;
+  border-bottom: 1px solid var(--line);
+}
+.painel-cfo .av-separador span {
+  font-family: var(--f-display);
+  font-size: 13px;
+  font-weight: 700;
+  letter-spacing: 0.04em;
+  text-transform: uppercase;
+  color: var(--ink-2);
+}
+.painel-cfo .av-separador small {
+  font-size: 12.5px;
+  color: var(--muted);
+}
+.painel-cfo .av-lista.finalizadas .av-item:not(.aberto) {
+  background: var(--surface-2);
+}
+.painel-cfo .av-lista.finalizadas .av-item:not(.aberto) .av-nome {
+  color: var(--ink-2);
 }
 .painel-cfo .av-item {
   border: 1px solid var(--line);
