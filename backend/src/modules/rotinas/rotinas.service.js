@@ -181,9 +181,16 @@ async function calcularItens(empresaId, etapasRows, { dataInicio, dataFim, costC
     const etapas = etapasPorCluster[cluster];
     if (!etapas) continue; // nenhuma etapa deste cluster entra nesta Rotina
 
+    // Uma parcela aparece UMA vez por centro de custo: na última etapa (maior
+    // `dias`) que ela alcançou dentro do período — as anteriores já ficaram
+    // pra trás e não fazem sentido repetidas na lista.
+    let ultima = null;
     for (const etapa of etapas) {
       const data = paraIso(somarDias(row.due_date, etapa.dias));
       if (data < dataInicio || data > dataFim) continue;
+      if (!ultima || etapa.dias >= ultima.etapa.dias) ultima = { etapa, data };
+    }
+    for (const { etapa, data } of ultima ? [ultima] : []) {
 
       // Prévia de verdade do que seria enviado — mesma substituição usada
       // no envio real (ver historicoCliente.service.js::registrarObservacao,
