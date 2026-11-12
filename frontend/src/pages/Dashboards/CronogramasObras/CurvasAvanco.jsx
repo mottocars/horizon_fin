@@ -208,6 +208,11 @@ function Grafico({ g, colapsado, onEnter }) {
       .join('');
   return (
     <div className={`av-curva${colapsado ? ' colapsado' : ''}`} onMouseEnter={onEnter}>
+      {/* Recolhido: só o nome na vertical, por cima (fora do fluxo, não muda a altura da linha). */}
+      <span className="av-vertical" aria-hidden={!colapsado}>
+        <img src={g.logo} alt="" />
+        {g.titulo}
+      </span>
       <h4>
         <img src={g.logo} alt="" />
         {g.titulo}

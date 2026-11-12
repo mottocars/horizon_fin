@@ -315,30 +315,52 @@
   gap: 16px;
 }
 .painel-cfo .av-curva {
+  position: relative;
   flex: 1 1 0px;
   min-width: 0;
   overflow: hidden;
-  transition: flex-basis 0.28s ease;
+  transition: flex-basis 0.28s ease, flex-grow 0.28s ease;
 }
-/* Recolhido (outro gráfico com o mouse em cima): faixa estreita, só o nome na vertical. */
+/* Recolhido (outro gráfico com o mouse em cima): faixa estreita na mesma linha, só o nome na
+   vertical — o conteúdo some (visibility, não display: a altura da linha não muda). */
 .painel-cfo .av-curva.colapsado {
   flex: 0 0 56px;
+  border-radius: 8px;
+  background: var(--surface-2);
+  cursor: pointer;
 }
-.painel-cfo .av-curva.colapsado .chart,
-.painel-cfo .av-curva.colapsado .empty,
-.painel-cfo .av-curva.colapsado .av-leg {
+.painel-cfo .av-curva.colapsado > h4,
+.painel-cfo .av-curva.colapsado > .chart,
+.painel-cfo .av-curva.colapsado > .empty {
+  visibility: hidden;
+}
+/* Na faixa estreita o título quebraria em várias linhas e esticaria a linha: fica sem altura. */
+.painel-cfo .av-curva.colapsado > h4 {
+  height: 0;
+  margin: 0;
+  overflow: hidden;
+}
+.painel-cfo .av-vertical {
   display: none;
 }
-.painel-cfo .av-curva.colapsado h4 {
-  flex-direction: column-reverse;
-  justify-content: flex-end;
-  height: 100%;
-  min-height: 150px;
+.painel-cfo .av-curva.colapsado .av-vertical {
+  position: absolute;
+  inset: 0;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 8px;
   writing-mode: vertical-rl;
   transform: rotate(180deg);
   white-space: nowrap;
+  font-family: var(--f-display);
+  font-size: 13.5px;
+  font-weight: 700;
+  color: var(--ink);
 }
-.painel-cfo .av-curva.colapsado h4 img {
+.painel-cfo .av-vertical img {
+  width: auto;
+  height: 18px;
   transform: rotate(90deg);
 }
 .painel-cfo .av-curva h4 {
@@ -384,21 +406,15 @@
   }
   .painel-cfo .av-curva.colapsado {
     flex: 1 1 auto;
+    background: transparent;
   }
-  .painel-cfo .av-curva.colapsado .chart,
-  .painel-cfo .av-curva.colapsado .empty,
-  .painel-cfo .av-curva.colapsado .av-leg {
-    display: revert;
+  .painel-cfo .av-curva.colapsado > h4,
+  .painel-cfo .av-curva.colapsado > .chart,
+  .painel-cfo .av-curva.colapsado > .empty {
+    visibility: visible;
   }
-  .painel-cfo .av-curva.colapsado h4 {
-    flex-direction: row;
-    writing-mode: horizontal-tb;
-    transform: none;
-    min-height: 0;
-    height: auto;
-  }
-  .painel-cfo .av-curva.colapsado h4 img {
-    transform: none;
+  .painel-cfo .av-curva.colapsado .av-vertical {
+    display: none;
   }
 }
 @media (prefers-reduced-motion: no-preference) {
