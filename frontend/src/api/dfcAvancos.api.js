@@ -22,3 +22,18 @@ export function salvarAvancoManualDfc(empresaId, siengeId, { mes, percentual }) 
 export function listCurvasAvanco(empresaId) {
   return http.get(`/dfc-avancos/${empresaId}/curvas`).then((res) => res.data);
 }
+
+// Excel do Avanço das Obras com os filtros da tela ({ visao, de, ate, obras: [sienge_id...] }):
+// { blob, nome } — Resumo (os cards), Avanços (empilhado: obra × curva × período) e Filtros.
+export function exportarAvancoExcel(empresaId, { visao, de, ate, obras = [] }) {
+  const params = new URLSearchParams();
+  if (visao) params.set('visao', visao);
+  if (de) params.set('de', de);
+  if (ate) params.set('ate', ate);
+  obras.forEach((o) => params.append('obra', o));
+  return http.get(`/dfc-avancos/${empresaId}/curvas/excel`, { params, responseType: 'blob' }).then((res) => {
+    const cabecalho = res.headers['content-disposition'] || '';
+    const utf8 = /filename\*=UTF-8''([^;]+)/i.exec(cabecalho);
+    return { blob: res.data, nome: utf8 ? decodeURIComponent(utf8[1]) : 'Avanço das Obras.xlsx' };
+  });
+}

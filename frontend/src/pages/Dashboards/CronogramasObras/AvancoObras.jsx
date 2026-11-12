@@ -1,5 +1,7 @@
 import { useEffect, useMemo, useState } from 'react';
 import { useSearchParams } from 'react-router-dom';
+import { Download, Loader2 } from 'lucide-react';
+import { exportarAvancoExcel } from '../../../api/dfcAvancos.api';
 import CabecalhoDashboard from '../CabecalhoDashboard';
 import { listEmpresas } from '../../../api/empresas.api';
 import { nomeExibicaoEmpresa } from '../../../utils/empresa';
@@ -90,6 +92,38 @@ export default function AvancoObras({ nome }) {
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [empresaTravada, empresaIdTravada, carregandoEmpresas, empresas, empresaId]);
 
+  // Exportar Excel (como na Carteira de obras), com os filtros da tela: Resumo, Avanços (empilhado:
+  // obra × curva × período da visão) e Filtros — gerado no servidor (dfc-avancos/avancoExcel.service.js).
+  const [exportando, setExportando] = useState(false);
+  const [erroExportacao, setErroExportacao] = useState('');
+  async function exportarExcel() {
+    setErroExportacao('');
+    setExportando(true);
+    try {
+      const { blob, nome: arquivo } = await exportarAvancoExcel(empresaId, { visao, de, ate, obras: obrasMarcadas });
+      const url = window.URL.createObjectURL(blob);
+      const link = document.createElement('a');
+      link.href = url;
+      link.download = arquivo;
+      document.body.appendChild(link);
+      link.click();
+      link.remove();
+      window.URL.revokeObjectURL(url);
+    } catch (err) {
+      // Com responseType 'blob' a mensagem de erro do backend chega dentro de um Blob.
+      let mensagem = 'Não foi possível gerar o Excel.';
+      const dados = err.response?.data;
+      try {
+        mensagem = (dados instanceof Blob ? JSON.parse(await dados.text()) : dados)?.message || mensagem;
+      } catch {
+        // fica a mensagem padrão
+      }
+      setErroExportacao(mensagem);
+    } finally {
+      setExportando(false);
+    }
+  }
+
   const empresaAtual = empresas.find((e) => String(e.id) === String(empresaId));
   const marcaEmpresa = empresaAtual ? { logo: empresaAtual.logo || null, nome: nomeExibicaoEmpresa(empresaAtual) } : null;
 
@@ -141,13 +175,24 @@ export default function AvancoObras({ nome }) {
             <label htmlFor="f-ate">Até</label>
             <CampoDataPeriodo id="f-ate" value={ate} onChange={(v) => trocarData('ate', v)} disabled={!empresaId} title="Vazio = até o fim da obra" />
           </div>
-          {(de || ate) && (
-            <div className="acoes">
+          <div className="acoes">
+            {erroExportacao && <span className="erro">{erroExportacao}</span>}
+            {(de || ate) && (
               <button type="button" className="btn ghost com-texto" onClick={() => trocarParams({ de: '', ate: '' })} title="Limpar o De/Até: cada gráfico mostra a obra inteira">
                 Obra inteira
               </button>
-            </div>
-          )}
+            )}
+            <button
+              type="button"
+              className="btn ghost icone"
+              onClick={exportarExcel}
+              disabled={!empresaId || exportando}
+              title="Exportar Excel do avanço das obras (com os filtros da tela)"
+              aria-label="Exportar Excel"
+            >
+              {exportando ? <Loader2 size={16} className="animate-spin" /> : <Download size={16} />}
+            </button>
+          </div>
         </section>
 
         {empresaId ? (

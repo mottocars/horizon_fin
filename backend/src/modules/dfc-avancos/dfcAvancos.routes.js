@@ -9,6 +9,7 @@ router.use(authMiddleware);
 router.param('empresaId', paramEmpresa);
 router.get('/:empresaId', controller.list);
 router.get('/:empresaId/curvas', controller.curvas);
+router.get('/:empresaId/curvas/excel', controller.excel);
 router.put('/:empresaId/:siengeId/manual', controller.salvarManual);
 
 module.exports = router;

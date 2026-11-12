@@ -1,5 +1,6 @@
 const { z } = require('zod');
 const service = require('./dfcAvancos.service');
+const avancoExcel = require('./avancoExcel.service');
 
 const empresaIdSchema = z.coerce.number().int().positive('Empresa inválida.');
 const dataSchema = (rotulo) => z.string({ required_error: `Informe a ${rotulo}.` }).regex(/^\d{4}-\d{2}-\d{2}$/, `${rotulo} inválida.`);
@@ -49,6 +50,38 @@ async function curvas(req, res, next) {
   }
 }
 
+// Excel do Avanço das Obras (Obra 360º), com os filtros da tela: ?visao=, ?de=, ?ate= e ?obra= (repetido).
+const dataOpcional = z
+  .string()
+  .regex(/^\d{4}-\d{2}-\d{2}$/, 'Data inválida.')
+  .optional()
+  .or(z.literal(''));
+const excelSchema = z.object({
+  visao: z.enum(['mensal', 'semanal', 'diaria']).default('mensal'),
+  de: dataOpcional,
+  ate: dataOpcional,
+  obra: z
+    .union([z.string(), z.array(z.string())])
+    .optional()
+    .transform((v) => (v === undefined ? [] : [].concat(v)).filter(Boolean)),
+});
+
+async function excel(req, res, next) {
+  try {
+    const empresaId = empresaIdSchema.parse(req.params.empresaId);
+    const q = excelSchema.parse(req.query);
+    let [de, ate] = [q.de || '', q.ate || ''];
+    if (de && ate && de > ate) [de, ate] = [ate, de];
+    const { buffer, nomeArquivo } = await avancoExcel.gerar(empresaId, { visao: q.visao, de, ate, obras: q.obra });
+    res.setHeader('Content-Type', 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet');
+    res.setHeader('Content-Disposition', `attachment; filename*=UTF-8''${encodeURIComponent(nomeArquivo)}`);
+    res.send(Buffer.from(buffer));
+  } catch (err) {
+    if (err.issues) return next(erro(400, err.issues[0].message));
+    next(err);
+  }
+}
+
 async function salvarManual(req, res, next) {
   try {
     const empresaId = empresaIdSchema.parse(req.params.empresaId);
@@ -61,4 +94,4 @@ async function salvarManual(req, res, next) {
   }
 }
 
-module.exports = { list, curvas, salvarManual };
+module.exports = { list, curvas, excel, salvarManual };
