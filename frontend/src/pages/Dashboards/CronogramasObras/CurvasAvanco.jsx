@@ -50,11 +50,10 @@ function etapaHoje(obra, hoje) {
 // O Prevision às vezes soma 100,03% por arredondamento: na tela, no máximo 100%.
 const ate100 = (v) => (vazio(v) ? null : Math.min(v, 100));
 
-// Cores das curvas (pedido do usuário): realizado azul, previsto preto, base laranja — as mesmas nos três
-// gráficos (o PLS só tem o realizado).
-const COR_CURVA = { base: COR.cenario, previsto: COR.ink, realizado: COR.entrada };
+// Cores das curvas (pedido do usuário): realizado azul (barras), previsto preto (linha) — as mesmas nos
+// três gráficos (o PLS só tem o realizado). A base do Prevision não entra (pedido do usuário).
+const COR_CURVA = { previsto: COR.ink, realizado: COR.entrada };
 const TRES = [
-  { chave: 'base', rotulo: 'Base' },
   { chave: 'previsto', rotulo: 'Previsto' },
   { chave: 'realizado', rotulo: 'Realizado' },
 ];
@@ -98,8 +97,8 @@ function montarObra(obra, meses, mesAtual) {
 }
 
 // Os três gráficos que abrem embaixo da linha (pedido do usuário): PLS (só a curva realizada, da Caixa),
-// Principal (orçamento primário do Prevision) e Secundário — cada um do Prevision com as curvas Base,
-// Previsto e Realizado. Cada gráfico no seu recorte: do mês antes do primeiro avanço até o mês em que a
+// Principal (orçamento primário do Prevision) e Secundário — cada um do Prevision com o Previsto (linha)
+// e o Realizado (barras). Cada gráfico no seu recorte: do mês antes do primeiro avanço até o mês em que a
 // última curva dele chega a 100% (depois disso não há mais datas — pedido do usuário) ou, se nenhuma
 // chega, até a última medição e o mês atual. A curva que chega a 100% para ali: o mês vira 100% exatos,
 // os seguintes ficam sem valor, e `cem` guarda o índice para a bandeirinha.
@@ -217,7 +216,7 @@ function Metrica({ col, cor, nota }) {
 }
 
 // Um dos três gráficos: o tipo de avanço, mês a mês, de 0 a 100%, com as curvas dele (PLS: uma; Prevision:
-// Base, Previsto e Realizado, com a legenda). Com o mouse em cima, uma linha vertical acompanha o mês,
+// Previsto e Realizado, com a legenda). Com o mouse em cima, uma linha vertical acompanha o mês,
 // com o ponto de cada curva nele. Clicar expande / volta (Graficos).
 function Grafico({ g, colapsado, onClick }) {
   const [ref, W] = useLargura(300);
@@ -297,7 +296,7 @@ function Grafico({ g, colapsado, onClick }) {
             )}
             {/* Linha que acompanha o mês sob o mouse. */}
             {mira !== null && <line className="av-mira" x1={x(mira)} x2={x(mira)} y1={m.t} y2={H - m.b} stroke={COR.ink2} strokeWidth={1} />}
-            {/* Realizado em barras (pedido do usuário), por baixo; previsto e base em linhas, por cima. */}
+            {/* Realizado em barras (pedido do usuário), por baixo; previsto em linha, por cima. */}
             {series
               .filter((s) => s.chave === 'realizado')
               .map((s) =>
