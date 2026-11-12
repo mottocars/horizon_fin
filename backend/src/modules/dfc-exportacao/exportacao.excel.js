@@ -16,8 +16,8 @@ const dataHora = (v) =>
   new Intl.DateTimeFormat('pt-BR', { dateStyle: 'short', timeStyle: 'short', timeZone: 'America/Sao_Paulo' }).format(new Date(v));
 const dataBr = (v) => (v ? String(v instanceof Date ? v.toISOString() : v).slice(0, 10).split('-').reverse().join('/') : '—');
 
-async function gerar(empresaId, { inicio, fim, centros = [] }, usuarioId) {
-  const d = await exportacao.dados(empresaId, { inicio, fim, centros });
+async function gerar(empresaId, { inicio, fim, centros = [], versao: numeroVersao = null }, usuarioId) {
+  const d = await exportacao.dados(empresaId, { inicio, fim, centros, versao: numeroVersao });
   const [{ rows: empresas }, { rows: usuarios }] = await Promise.all([
     pool.query('SELECT nome_fantasia, razao_social FROM empresas WHERE id = $1', [empresaId]),
     pool.query('SELECT nome FROM usuarios WHERE id = $1', [usuarioId]),

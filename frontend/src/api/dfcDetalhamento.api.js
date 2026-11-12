@@ -4,8 +4,11 @@ import http from './http';
 // `natureza`: conta do plano ou 'sem'; `centros`: lista de centros que somam na célula ('sem' = sem
 // centro de custo). Devolve { tipo, mes, lado, conta, total, versao?, grupos: [{ titulo, subtitulo,
 // valor, avisos, blocos }] } — ver backend dfc-detalhamento.
-export function getDetalhamentoDfc(empresaId, { tipo, mes, lado, natureza, centros }) {
+// `versao`: versão do Orçamento (filtro "Versão" da aba DFC); sem ela, a última.
+export function getDetalhamentoDfc(empresaId, { tipo, mes, lado, natureza, centros, versao = null }) {
+  const params = { tipo, mes, lado, natureza, centros: centros.join(',') };
+  if (versao) params.versao = versao;
   return http
-    .get(`/dfc-detalhamento/${empresaId}`, { params: { tipo, mes, lado, natureza, centros: centros.join(',') } })
+    .get(`/dfc-detalhamento/${empresaId}`, { params })
     .then((res) => res.data);
 }

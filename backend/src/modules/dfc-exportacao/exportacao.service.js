@@ -110,13 +110,9 @@ async function baseRealizado(empresaId, fluxo, centros) {
 async function baseProjetado(empresaId, fluxo, centros) {
   const { meses } = fluxo;
   if (!meses.length || !fluxo.versao) return { linhas: [], celulas: [] };
-  const filtroCentros = fluxo.filtro ? [...fluxo.filtro] : null;
-  const { rows: valores } = await pool.query(
-    `SELECT centro_id, sienge_id, to_char(mes, 'YYYY-MM') AS mes, valor, origem
-       FROM dfc_orcamento_valores
-      WHERE empresa_id = $1 AND mes BETWEEN $2::date AND $3::date
-        AND ($4::int[] IS NULL OR centro_id = ANY($4::int[]))`,
-    [empresaId, `${meses[0]}-01`, `${meses[meses.length - 1]}-01`, filtroCentros]
+  // Valores da versão do fluxo (a escolhida no filtro "Versão" da aba DFC; sem filtro, a última).
+  const valores = fluxo.orcamento.filter(
+    (v) => v.mes >= meses[0] && v.mes <= meses[meses.length - 1] && (!fluxo.filtro || fluxo.filtro.has(v.centro_id))
   );
   // Células que entram no fluxo (mesmo classificador da tela).
   const celulas = new Map();
@@ -364,8 +360,8 @@ async function planosContas(empresaId, fluxo, centros, bases) {
   });
 }
 
-async function dados(empresaId, { inicio, fim, centros = [] }) {
-  const [fluxo, infoCentros] = await Promise.all([fluxoService.montar(empresaId, { inicio, fim, centros }), centrosInfo(empresaId)]);
+async function dados(empresaId, { inicio, fim, centros = [], versao = null }) {
+  const [fluxo, infoCentros] = await Promise.all([fluxoService.montar(empresaId, { inicio, fim, centros, versao }), centrosInfo(empresaId)]);
   fluxo.somarMeses = fluxoService.somarMeses;
   const mesesSaldos = fluxo.meses.filter((m) => m <= fluxo.mesAtual);
   const [realizado, projetado, saldos] = await Promise.all([
@@ -382,8 +378,8 @@ async function dados(empresaId, { inicio, fim, centros = [] }) {
 }
 
 // Só o fluxo e as bases (MCP do DFC — ferramenta de lançamentos), sem saldos nem dossiês da CEF.
-async function bases(empresaId, { inicio, fim, centros = [] }) {
-  const [fluxo, infoCentros] = await Promise.all([fluxoService.montar(empresaId, { inicio, fim, centros }), centrosInfo(empresaId)]);
+async function bases(empresaId, { inicio, fim, centros = [], versao = null }) {
+  const [fluxo, infoCentros] = await Promise.all([fluxoService.montar(empresaId, { inicio, fim, centros, versao }), centrosInfo(empresaId)]);
   fluxo.somarMeses = fluxoService.somarMeses;
   const [realizado, projetado] = await Promise.all([baseRealizado(empresaId, fluxo, infoCentros), baseProjetado(empresaId, fluxo, infoCentros)]);
   return { fluxo, realizado, projetado: projetado.linhas };

@@ -102,7 +102,7 @@ async function classificador(empresaId) {
 }
 
 // `inicio` / `fim`: 'AAAA-MM'. `centros`: ids do filtro (vazio = todos).
-async function montar(empresaId, { inicio, fim, centros = [] }) {
+async function montar(empresaId, { inicio, fim, centros = [], versao = null }) {
   const mesAtual = mesDeHoje();
   const meses = mesesEntre(inicio, fim);
   const ultimo = meses[meses.length - 1];
@@ -110,7 +110,7 @@ async function montar(empresaId, { inicio, fim, centros = [] }) {
   const deRealizado = inicio < mesAtual ? inicio : mesAtual;
   const [cls, orcamento, realizado] = await Promise.all([
     classificador(empresaId),
-    dfcOrcamento.orcamento(empresaId),
+    dfcOrcamento.orcamento(empresaId, versao),
     dfcSaldos.realizado(empresaId, deRealizado, mesAtual),
   ]);
   const filtro = centros.length ? new Set(centros.map(Number)) : null;

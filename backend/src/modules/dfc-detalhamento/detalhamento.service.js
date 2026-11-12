@@ -3,6 +3,7 @@ const dfcAging = require('../dfc-aging/dfcAging.service');
 const dfcEmpresarial = require('../dfc-empresarial/dfcEmpresarial.service');
 const projecaoCef = require('../dfc-projecao-cef/projecaoCef.service');
 const motor = require('../dfc-projecao-cef/projecaoCef.motor');
+const dfcOrcamento = require('../dfc-orcamento/dfcOrcamento.service');
 
 // DFC Construtoras > DFC: "Detalhamento" de um valor da grade (pedido do usuário) — clique no valor
 // de uma conta (último nível), num mês, no Realizado ou no Projetado. Mostra tudo que compõe o valor:
@@ -646,8 +647,20 @@ async function cef(empresaId, centroId, origem, mes, centrosInfo) {
   };
 }
 
-async function projetado(empresaId, { mes, natureza, lado, centros, semCentro }, centrosInfo) {
+async function projetado(empresaId, { mes, natureza, lado, centros, semCentro, versao: numeroVersao = null }, centrosInfo) {
   if (natureza === null) return { total: 0, versao: null, grupos: [] };
+  // Versão escolhida no filtro "Versão" da aba DFC (sem ela, a última — o consolidado abaixo).
+  if (numeroVersao) {
+    const orc = await dfcOrcamento.orcamento(empresaId, numeroVersao);
+    const ultima = orc.versoes[0]?.numero === numeroVersao;
+    if (!ultima) {
+      const doCentro = new Set(centros);
+      const rows = orc.valores
+        .filter((v) => v.sienge_id === natureza && v.mes === mes && (lado === 'E' ? v.valor > 0 : v.valor < 0) && doCentro.has(v.centro_id))
+        .sort((a, b) => Math.abs(b.valor) - Math.abs(a.valor));
+      return gruposProjetado(empresaId, natureza, mes, rows, orc.versao, centrosInfo, true);
+    }
+  }
   const { rows } = await pool.query(
     `SELECT o.centro_id, o.valor, o.origem
        FROM dfc_orcamento_valores o
@@ -662,8 +675,11 @@ async function projetado(empresaId, { mes, natureza, lado, centros, semCentro },
       WHERE v.empresa_id = $1 ORDER BY v.numero DESC LIMIT 1`,
     [empresaId]
   );
-  const versao = versoes[0] || null;
+  return gruposProjetado(empresaId, natureza, mes, rows, versoes[0] || null, centrosInfo);
+}
 
+// Um grupo por centro × origem do valor projetado, com o detalhamento da fonte hoje.
+async function gruposProjetado(empresaId, natureza, mes, rows, versao, centrosInfo, antiga = false) {
   const grupos = [];
   for (const r of rows) {
     const valorVersao = r2(r.valor);
@@ -675,8 +691,11 @@ async function projetado(empresaId, { mes, natureza, lado, centros, semCentro },
     else fonte = { valor: valorVersao, blocos: [{ tipo: 'nota', texto: 'Origem sem detalhamento.' }] };
     const avisos = [...(fonte.avisos || [])];
     if (Math.abs(fonte.valor - valorVersao) >= 0.01) {
+      const diferenca = `Hoje a fonte dá ${fonte.valor.toLocaleString('pt-BR', { minimumFractionDigits: 2 })} (diferença de ${r2(fonte.valor - valorVersao).toLocaleString('pt-BR', { minimumFractionDigits: 2 })}).`;
       avisos.unshift(
-        `Hoje a fonte dá ${fonte.valor.toLocaleString('pt-BR', { minimumFractionDigits: 2 })} (diferença de ${r2(fonte.valor - valorVersao).toLocaleString('pt-BR', { minimumFractionDigits: 2 })}). O DFC mostra a versão ${versao?.numero ?? '—'} do Orçamento — salve uma nova versão para trazer o valor de hoje. O detalhamento abaixo é o da fonte hoje.`
+        antiga
+          ? `${diferenca} O DFC mostra a versão ${versao?.numero ?? '—'} do Orçamento, escolhida no filtro Versão. O detalhamento abaixo é o da fonte hoje.`
+          : `${diferenca} O DFC mostra a versão ${versao?.numero ?? '—'} do Orçamento — salve uma nova versão para trazer o valor de hoje. O detalhamento abaixo é o da fonte hoje.`
       );
     }
     grupos.push({

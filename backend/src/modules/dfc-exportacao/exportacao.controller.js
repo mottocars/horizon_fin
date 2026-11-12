@@ -11,6 +11,8 @@ const filtroSchema = z.object({
     .regex(/^(\d+(,\d+)*)?$/, 'Centros inválidos.')
     .optional()
     .default(''),
+  // Versão do Orçamento (filtro "Versão" da aba DFC); sem ela, a última.
+  versao: z.preprocess((v) => (v === '' || v === undefined ? null : v), z.coerce.number().int().positive('Versão inválida.').nullable()),
 });
 
 function erro(status, message) {
@@ -20,14 +22,14 @@ function erro(status, message) {
   return e;
 }
 
-// GET /:empresaId/excel?inicio=AAAA-MM&fim=AAAA-MM&centros=1,2 — o .xlsx do que está filtrado na aba DFC.
+// GET /:empresaId/excel?inicio=AAAA-MM&fim=AAAA-MM&centros=1,2&versao=N — o .xlsx do que está filtrado na aba DFC.
 async function excelDfc(req, res, next) {
   try {
     const empresaId = empresaIdSchema.parse(req.params.empresaId);
     const f = filtroSchema.parse(req.query);
     if (f.fim < f.inicio) throw erro(400, 'O mês final precisa ser igual ou depois do inicial.');
     const centros = f.centros ? f.centros.split(',').map(Number) : [];
-    const { buffer, nome } = await excel.gerar(empresaId, { inicio: f.inicio, fim: f.fim, centros }, req.user.id);
+    const { buffer, nome } = await excel.gerar(empresaId, { inicio: f.inicio, fim: f.fim, centros, versao: f.versao }, req.user.id);
     res.setHeader('Content-Type', 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet');
     res.setHeader('Content-Disposition', `attachment; filename="fluxo-de-caixa.xlsx"; filename*=UTF-8''${encodeURIComponent(nome)}`);
     res.setHeader('Access-Control-Expose-Headers', 'Content-Disposition');

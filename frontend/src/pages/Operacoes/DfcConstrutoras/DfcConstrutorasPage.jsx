@@ -430,6 +430,10 @@ export default function DfcConstrutorasPage() {
   // Aba DFC: "Exportar Excel" — o .xlsx do que está filtrado (empresa, período, centros), montado no
   // backend (dfc-exportacao): Fluxo de Caixa, Saldos das Contas, Base Realizado, Base Projetado, Plano
   // de Contas (por tipo de plano) e o dossiê da Projeção CEF de cada obra.
+  // Filtro "Versão" da aba DFC: qual versão salva do Orçamento entra no Projetado (null = a última),
+  // pra ver o projetado mudar ao longo das versões. A lista vem da própria aba (DfcFluxoTab).
+  const [versaoFluxo, setVersaoFluxo] = useState(null);
+  const [versoesFluxo, setVersoesFluxo] = useState([]);
   const [exportandoFluxo, setExportandoFluxo] = useState(false);
   const [erroExportacao, setErroExportacao] = useState('');
   useEffect(() => setErroExportacao(''), [empresaId, abaAtiva]);
@@ -441,6 +445,7 @@ export default function DfcConstrutorasPage() {
         inicio: inicioOrcamento.slice(0, 7),
         fim: fimOrcamento.slice(0, 7),
         centros: centrosFluxo,
+        versao: versaoFluxo,
       });
       const url = window.URL.createObjectURL(blob);
       const link = document.createElement('a');
@@ -483,6 +488,8 @@ export default function DfcConstrutorasPage() {
                 onChange={(novoId) => {
                   setVersaoOrcamento(null);
                   setVersoesOrcamento({ lista: [], temNova: false });
+                  setVersaoFluxo(null);
+                  setVersoesFluxo([]);
                   atualizarParams({ empresa_id: novoId || null, centro_id: null, plano: null });
                 }}
                 disabled={loadingEmpresas || empresaTravada}
@@ -558,6 +565,31 @@ export default function DfcConstrutorasPage() {
                       options={centrosFluxoOpcoes}
                       placeholder="Todos os centros"
                       larguraPainel={320}
+                    />
+                  </div>
+                )}
+                {abaAtiva === 'dfc' && (
+                  <div className="sm:min-w-48 sm:max-w-60 sm:flex-1">
+                    <label className="mb-1 block text-sm font-medium text-gray-700">Versão</label>
+                    <SearchableSelect
+                      value={versaoFluxo ?? versoesFluxo[0]?.numero ?? ''}
+                      onChange={(v) => {
+                        if (!v) return;
+                        // A última volta a ser "null": acompanha uma versão nova salva depois.
+                        setVersaoFluxo(Number(v) === versoesFluxo[0]?.numero ? null : Number(v));
+                      }}
+                      disabled={!empresaId || !versoesFluxo.length}
+                      options={versoesFluxo.map((v, i) => ({
+                        value: v.numero,
+                        label: `Versão ${v.numero}${i === 0 ? ' (última)' : ''} · ${new Date(v.criado_em).toLocaleDateString('pt-BR', {
+                          day: '2-digit',
+                          month: '2-digit',
+                          year: '2-digit',
+                        })}`,
+                      }))}
+                      placeholder="Nenhuma versão salva"
+                      clearable={false}
+                      larguraPainel={280}
                     />
                   </div>
                 )}
@@ -996,6 +1028,8 @@ export default function DfcConstrutorasPage() {
             inicio={inicioOrcamento}
             fim={fimOrcamento}
             centros={centrosFluxo}
+            versao={versaoFluxo}
+            onVersoes={setVersoesFluxo}
             telaCheia={fluxoTelaCheia}
             onSairTelaCheia={() => setFluxoTelaCheia(false)}
           />

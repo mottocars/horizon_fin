@@ -359,7 +359,7 @@ async function valoresDaVersao(empresaId, numero) {
   const { rows } = await pool.query(
     `SELECT * FROM (
        SELECT DISTINCT ON (l.centro_id, l.sienge_id, l.mes)
-              l.centro_id, l.sienge_id, to_char(l.mes, 'YYYY-MM') AS mes, l.tipo, l.valor_novo AS valor
+              l.centro_id, l.sienge_id, to_char(l.mes, 'YYYY-MM') AS mes, l.tipo, l.valor_novo AS valor, l.origem
          FROM dfc_orcamento_log l
          JOIN dfc_orcamento_versoes v ON v.id = l.versao_id
         WHERE l.empresa_id = $1 AND v.numero <= $2
@@ -367,7 +367,7 @@ async function valoresDaVersao(empresaId, numero) {
      ) x WHERE tipo <> 'EXCLUSAO'`,
     [empresaId, numero]
   );
-  return rows.map((r) => ({ centro_id: r.centro_id, sienge_id: r.sienge_id, mes: r.mes, valor: Number(r.valor) }));
+  return rows.map((r) => ({ centro_id: r.centro_id, sienge_id: r.sienge_id, mes: r.mes, valor: Number(r.valor), origem: r.origem }));
 }
 
 // Uma versão salva (filtro "Versão" da aba): `numero` ou, sem ele, a última. Devolve também a lista
@@ -380,7 +380,7 @@ async function orcamento(empresaId, numero = null) {
   if (versao) {
     valores =
       versao.numero === versoes[0].numero
-        ? [...(await consolidado(pool, empresaId)).values()].map(semChave)
+        ? [...(await consolidado(pool, empresaId)).values()].map((v) => ({ ...semChave(v), origem: v.origem }))
         : await valoresDaVersao(empresaId, versao.numero);
   }
   return { versoes, versao: versao || null, valores };

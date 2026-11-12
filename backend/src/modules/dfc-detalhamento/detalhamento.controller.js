@@ -10,6 +10,8 @@ const filtroSchema = z.object({
   lado: z.enum(['E', 'S'], { message: 'Lado inválido.' }),
   natureza: z.union([z.literal('sem'), z.coerce.number().int().positive()], { message: 'Conta inválida.' }),
   centros: z.string().regex(/^(\d+|sem)(,(\d+|sem))*$/, 'Centros inválidos.'),
+  // Versão do Orçamento (filtro "Versão" da aba DFC; só no Projetado); sem ela, a última.
+  versao: z.preprocess((v) => (v === '' || v === undefined ? null : v), z.coerce.number().int().positive('Versão inválida.').nullable()),
 });
 
 function erro(status, message) {
@@ -19,7 +21,7 @@ function erro(status, message) {
   return e;
 }
 
-// GET /:empresaId?tipo=R|P&mes=AAAA-MM&lado=E|S&natureza=<conta|sem>&centros=1,2,sem
+// GET /:empresaId?tipo=R|P&mes=AAAA-MM&lado=E|S&natureza=<conta|sem>&centros=1,2,sem&versao=N
 async function detalhar(req, res, next) {
   try {
     const empresaId = empresaIdSchema.parse(req.params.empresaId);
@@ -33,6 +35,7 @@ async function detalhar(req, res, next) {
         natureza: f.natureza === 'sem' ? null : f.natureza,
         centros: lista.filter((c) => c !== 'sem').map(Number),
         semCentro: lista.includes('sem'),
+        versao: f.versao,
       })
     );
   } catch (err) {

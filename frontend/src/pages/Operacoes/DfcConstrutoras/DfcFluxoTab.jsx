@@ -102,7 +102,8 @@ function mesDeHoje() {
 // primeira coluna congelada. `telaCheia` / `onSairTelaCheia`: tela cheia. `refreshToken`: recarrega.
 // Também é o Fluxo de Caixa do dashboard Econômico Financeiro (`variante="dashboard"`: quadro solto,
 // sem o encaixe de aba, ocupando a altura da tela; `alturaFixa`: altura da grade em px quando há
-// conteúdo acima dela).
+// conteúdo acima dela). `versao`: número da versão do Orçamento no Projetado (filtro "Versão" da aba;
+// null = a última); `onVersoes(lista)`: devolve as versões salvas pro filtro.
 export default function DfcFluxoTab({
   empresaId,
   inicio,
@@ -113,6 +114,8 @@ export default function DfcFluxoTab({
   refreshToken = 0,
   variante = 'aba',
   alturaFixa = null,
+  versao: versaoEscolhida = null,
+  onVersoes,
 }) {
   const dashboard = variante === 'dashboard';
   const [dados, setDados] = useState(null);
@@ -150,12 +153,16 @@ export default function DfcFluxoTab({
       listDfcMascaras(empresaId),
       listContas(empresaId, { page: 1, limit: 2000, search: '' }),
       listTodasClassificacoesPlanoDfc(empresaId),
-      getOrcamentoDfc(empresaId),
+      getOrcamentoDfc(empresaId, versaoEscolhida),
     ])
-      .then(([mascaras, contas, classificacoes, orcamento]) => setDados({ mascaras, contas: contas.data, classificacoes, orcamento }))
+      .then(([mascaras, contas, classificacoes, orcamento]) => {
+        setDados({ mascaras, contas: contas.data, classificacoes, orcamento });
+        onVersoes?.(orcamento.versoes || []);
+      })
       .catch((e) => setErro(e.response?.data?.message || 'Não foi possível carregar o fluxo de caixa.'))
       .finally(() => setCarregando(false));
-  }, [empresaId]);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [empresaId, versaoEscolhida]);
 
   useEffect(() => {
     setDados(null);
@@ -423,6 +430,7 @@ export default function DfcFluxoTab({
       centros,
       codigo,
       contaNome: c.conta.name,
+      versao: versaoEscolhida,
     });
   }
 

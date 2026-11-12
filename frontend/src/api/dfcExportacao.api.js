@@ -3,10 +3,10 @@ import http from './http';
 // Exportação Excel da aba DFC (backend dfc-exportacao): o .xlsx do que está filtrado — `inicio` /
 // `fim` 'AAAA-MM', `centros` ids (vazio = todos). Devolve { blob, nome } (nome do arquivo vindo do
 // Content-Disposition).
-export function exportarExcelDfc(empresaId, { inicio, fim, centros = [] }) {
+export function exportarExcelDfc(empresaId, { inicio, fim, centros = [], versao = null }) {
   return http
     .get(`/dfc-exportacao/${empresaId}/excel`, {
-      params: { inicio, fim, centros: centros.join(',') },
+      params: { inicio, fim, centros: centros.join(','), ...(versao ? { versao } : {}) },
       responseType: 'blob',
     })
     .then((res) => {
