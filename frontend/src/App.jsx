@@ -13,6 +13,7 @@ import ComercialDashboard from './pages/Dashboards/Comercial/ComercialDashboard'
 import EmpresasList from './pages/Empresas/EmpresasList';
 import EmpresaNova from './pages/Empresas/EmpresaNova';
 import EmpresaDetalhe from './pages/Empresas/EmpresaDetalhe';
+import IntegracoesHub from './pages/Integracoes/IntegracoesHub';
 import SiengeList from './pages/Integracoes/Sienge/SiengeList';
 import MonitorIntegracoesPage from './pages/Integracoes/MonitorIntegracoes/MonitorIntegracoesPage';
 import SiengeForm from './pages/Integracoes/Sienge/SiengeForm';
@@ -154,6 +155,7 @@ export default function App() {
               element={<ContaBancariaItemDetalhe />}
             />
 
+            <Route path="/integracoes" element={<IntegracoesHub />} />
             <Route
               path="/integracoes/portal-das-construtoras"
               element={<PortalConstrutorasPage />}

@@ -23,13 +23,17 @@ export function temAcessoATela(user, pathname) {
   if (pathname === '/' || pathname === '/meu-perfil') return true;
   if (user.permissao === 'MASTER') return true;
 
+  const telasLiberadas = user.telas_permitidas || [];
+  // Hub de Integrações (/integracoes): aparece para quem acessa ao menos uma integração;
+  // dentro dele, só os cards das liberadas.
+  if (pathname === '/integracoes') return telasLiberadas.some((codigo) => codigo.startsWith('/integracoes/'));
+
   const paginaDeAba = PAGINAS_DE_ABA.find((p) => pathname.startsWith(p.prefixo));
   if (paginaDeAba) {
     return temAcessoATela(user, paginaDeAba.tela) && podeVerAba(user, paginaDeAba.tela, paginaDeAba.nivel);
   }
 
-  const telas = user.telas_permitidas || [];
-  return telas.some((codigo) => pathname === codigo || pathname.startsWith(`${codigo}/`));
+  return telasLiberadas.some((codigo) => pathname === codigo || pathname.startsWith(`${codigo}/`));
 }
 
 // Usada nas telas onde o botão de criar usuário aparece — segue a mesma
