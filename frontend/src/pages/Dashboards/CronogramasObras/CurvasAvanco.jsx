@@ -20,13 +20,15 @@ import { dataBr, periodoAnterior, periodoDe, periodosEntre, rotuloCurto, rotuloL
 // gráficos da obra na visão escolhida (Mensal, Semanal ou Diária) e no De/Até (vazio = a obra inteira).
 // Dados do /dfc-avancos/:empresa/curvas: as curvas por data, agrupadas aqui (periodosAvanco.js).
 
-// No cabeçalho das colunas, a logomarca do sistema e, ao lado, o nome da coluna.
+// No cabeçalho das colunas, a logomarca do sistema e, ao lado, o nome da coluna. Ordem das colunas e dos
+// gráficos (pedido do usuário): PLS, Curva S PLS, Curva S de Obras.
 const SERIES = [
   { chave: 'caixa', rotulo: 'Caixa (PLS)', cor: COR.entrada, logo: iconCaixa, sub: 'PLS' },
   // Nomes dos orçamentos do Prevision (pedido do usuário): primário = "Curva S de Obras", secundário = "Curva S PLS".
-  { chave: 'primaria', rotulo: 'Prevision · Curva S de Obras (orçamento primário)', cor: COR.entrada, logo: iconPrevision, sub: 'Curva S de Obras' },
   { chave: 'secundaria', rotulo: 'Prevision · Curva S PLS (orçamento secundário)', cor: COR.cenario, logo: iconPrevision, sub: 'Curva S PLS' },
+  { chave: 'primaria', rotulo: 'Prevision · Curva S de Obras (orçamento primário)', cor: COR.entrada, logo: iconPrevision, sub: 'Curva S de Obras' },
 ];
+const serieDe = (chave) => SERIES.find((s) => s.chave === chave);
 const vazio = (v) => v === null || v === undefined;
 // Percentuais com duas casas decimais (pedido do usuário): 51,33%.
 const nf2 = new Intl.NumberFormat('pt-BR', { minimumFractionDigits: 2, maximumFractionDigits: 2 });
@@ -51,8 +53,8 @@ function etapaHoje(obra, hoje) {
 }
 // O Prevision às vezes soma 100,03% por arredondamento: na tela, no máximo 100%.
 const ate100 = (v) => (vazio(v) ? null : Math.min(v, 100));
-// Obra finalizada (pedido do usuário): o realizado de todas as curvas que ela tem (PLS, Principal e
-// Secundário) já em 100% — essas vão para o fim da lista, separadas.
+// Obra finalizada (pedido do usuário): o realizado de todas as curvas que ela tem (PLS, Curva S PLS e
+// Curva S de Obras) já em 100% — essas vão para o fim da lista, separadas.
 const finalizada = (c) => {
   const cols = SERIES.filter((s) => c.tem[s.chave]).map((s) => c.cards[s.chave]?.realizado);
   return cols.length > 0 && cols.every((v) => !vazio(v) && v >= 99.95);
@@ -87,7 +89,7 @@ function montarObra(obra, hoje, fimPeriodo) {
 }
 
 // Os três gráficos que abrem embaixo da linha (pedido do usuário): PLS (só o realizado, da Caixa),
-// Principal (orçamento primário do Prevision) e Secundário — cada um do Prevision com o Previsto (linha)
+// Curva S PLS (orçamento secundário do Prevision) e Curva S de Obras (primário) — cada um com o Previsto (linha)
 // e o Realizado (barras), um ponto por período da visão (o acumulado no último dia dele; o realizado
 // para em hoje). Sem De/Até, cada gráfico no seu recorte: do período antes do primeiro avanço até o dia
 // em que a última curva dele chega a 100% ou, se nenhuma chega, até o último ponto e hoje. Com De/Até,
@@ -100,13 +102,13 @@ function graficosDe(c, { visao, de, ate, hoje }) {
     {
       chave: 'caixa',
       titulo: 'PLS',
-      logo: SERIES[0].logo,
+      logo: serieDe('caixa').logo,
       series: obra.pls ? [{ chave: 'realizado', rotulo: 'Realizado', pontos: obra.pls.pontos }] : [],
     },
-    ...['primaria', 'secundaria'].map((tipo, k) => ({
+    ...['secundaria', 'primaria'].map((tipo) => ({
       chave: tipo,
-      titulo: SERIES[k + 1].sub, // Curva S de Obras / Curva S PLS
-      logo: SERIES[k + 1].logo,
+      titulo: serieDe(tipo).sub, // Curva S PLS / Curva S de Obras
+      logo: serieDe(tipo).logo,
       series: obra[tipo] ? TRES.filter((s) => obra[tipo][s.chave]).map((s) => ({ ...s, pontos: obra[tipo][s.chave] })) : [],
     })),
   ];
@@ -504,6 +506,10 @@ export default function CurvasAvanco({ empresaId, obrasMarcadas = [], onOpcoesOb
   const alternar = (id) => setAbertas((a) => (a.includes(id) ? a.filter((v) => v !== id) : [...a, id]));
 
   if (!empresaId) return null;
+  const atualiz = dados?.atualizacoes || {};
+  // Data de atualização diferente de hoje fica em vermelho (pedido do usuário). Vem como 'DD/MM/AA HH:MM'.
+  const hojeCurto = hoje ? `${hoje.slice(8, 10)}/${hoje.slice(5, 7)}/${hoje.slice(2, 4)}` : '';
+  const desatualizada = (quando) => (quando && !quando.startsWith(hojeCurto) ? 'desatualizada' : undefined);
   const linha = (c) => {
     const aberta = abertas.includes(c.id);
     const notas = {
@@ -547,15 +553,25 @@ export default function CurvasAvanco({ empresaId, obrasMarcadas = [], onOpcoesOb
         <div className="empty">Nenhuma obra com Prevision nesta empresa.</div>
       ) : (
         <>
+          {/* Embaixo do título de cada coluna de avanço, bem pequena, a data de atualização (pedido do usuário):
+              PLS = o último envio do DCD; Curvas S = a última sincronização do Prevision. Em vermelho se não é de hoje. */}
           <div className="av-cab">
             <span>Empreendimento</span>
             <span>Etapa da carteira</span>
-            {SERIES.map((s) => (
-              <span key={s.chave} title={s.rotulo}>
-                <img src={s.logo} alt={s.sub === 'PLS' ? 'Caixa' : 'Prevision'} />
-                {s.sub}
-              </span>
-            ))}
+            {SERIES.map((s) => {
+              const quando = atualiz[s.chave === 'caixa' ? 'pls' : s.chave];
+              return (
+                <span key={s.chave} title={s.rotulo}>
+                  <img src={s.logo} alt={s.sub === 'PLS' ? 'Caixa' : 'Prevision'} />
+                  <span className="av-cab-txt">
+                    {s.sub}
+                    {quando && (
+                      <small className={desatualizada(quando)}>{s.chave === 'caixa' ? `último envio ${quando}` : `atualizada ${quando}`}</small>
+                    )}
+                  </span>
+                </span>
+              );
+            })}
             <span />
           </div>
           {!emAndamento.length && !finalizadas.length ? (

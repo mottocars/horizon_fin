@@ -216,6 +216,19 @@ async function curvasPorData(empresaId) {
   const { rows: hojeRows } = await pool.query("SELECT to_char(CURRENT_DATE, 'YYYY-MM-DD') AS hoje");
   const hoje = hojeRows[0].hoje;
 
+  // Quando cada coluna da tela foi atualizada (pedido do usuário — embaixo do título de cada coluna):
+  // PLS = o último envio do DCD (importação do PDF); as curvas do Prevision = a última sincronização de
+  // cada orçamento. As colunas são TIMESTAMP sem fuso gravadas no fuso do banco (Brasília no local, UTC na
+  // VPS): convertidas para Brasília aqui.
+  const brasilia = (expr) =>
+    `to_char((${expr}) AT TIME ZONE current_setting('TimeZone') AT TIME ZONE 'America/Sao_Paulo', 'DD/MM/YY HH24:MI')`;
+  const { rows: atualiz } = await pool.query(
+    `SELECT ${brasilia('SELECT MAX(GREATEST(importado_em, atualizado_em)) FROM dcd_contratos WHERE empresa_id = $1')} AS pls,
+            ${brasilia('SELECT MAX(importado_em) FROM prevision_dashboard_scurve WHERE empresa_id = $1 AND primary_view')} AS primaria,
+            ${brasilia('SELECT MAX(importado_em) FROM prevision_dashboard_scurve WHERE empresa_id = $1 AND NOT primary_view')} AS secundaria`,
+    [empresaId]
+  );
+
   const { rows: obras } = await pool.query(
     `SELECT sienge_id, name, apelido, codigo_contrato_caixa, codigo_prevision
        FROM centros_custo_sienge
@@ -300,6 +313,7 @@ async function curvasPorData(empresaId) {
 
   return {
     hoje,
+    atualizacoes: atualiz[0],
     obras: obras
       .map((o) => {
         const temPrevision = Boolean(o.codigo_prevision && String(o.codigo_prevision).trim());
