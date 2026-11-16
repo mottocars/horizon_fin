@@ -50,7 +50,7 @@ export const ABAS_SUMARIO = [
           '**Mínimo projetado** — o menor saldo de fim de mês dentro do horizonte, partindo do caixa de hoje e somando só o que ainda vai acontecer; o mês em que ele acontece e quanto é menor que hoje.',
           '**Resultado médio · próximos 6 meses** — média do resultado de cada mês (todas as entradas menos todas as saídas): no mês atual, o realizado até hoje mais o que falta; nos seguintes, o orçado. E o mês em que o saldo fica abaixo do colchão, se ficar.',
           '**Fluxo operacional · até hoje** — soma do realizado (entradas + saídas) do Fluxo de Caixa Operacional nos meses do período antes do mês atual e no mês atual até hoje.',
-          '**Dívida PJ Caixa** — saldo devedor do crédito PJ no último mês fechado (ou no mês atual, se ele já tem valor informado), somando as obras, e até onde ele vai no fim da projeção. Mês com valor informado na aba Dívida PJ do DFC Construtoras usa o informado; os demais, a Projeção CEF.',
+          '**Dívida PJ Caixa** — saldo devedor do crédito PJ no último mês fechado (ou no mês atual, se ele já tem valor informado), somando as obras, e até onde ele vai no fim da projeção. Mês com valor informado na aba Dívida PJ do DFC Construtoras usa o informado; os demais, a Projeção CEF. Obra com valor informado para no último mês informado (não projeta o futuro).',
           '**A receber em 90 dias** — saldo **corrigido** (com a correção monetária e os juros do contrato, como o Sienge calcula) das parcelas a receber em aberto que vencem de hoje até daqui a 90 dias; embaixo, toda a carteira a vencer (de hoje em diante), também corrigida.',
           '**Inadimplência** — saldo corrigido vencido até ontem ÷ (vencido + a vencer) das parcelas a receber em aberto.',
           '**Maior concentração de caixa** — quanto do caixa de hoje está na empresa (SPE) com o maior saldo.',
@@ -71,7 +71,7 @@ export const ABAS_SUMARIO = [
           'Fluxo operacional: atenção ("Consome caixa") quando o realizado do histórico é negativo.',
           'Inadimplência: atenção acima de 3%; crítico acima de 8%.',
           'Maior concentração: atenção quando uma empresa tem mais de 40% do caixa.',
-          'Dívida PJ: "Crescente" quando o saldo no fim da projeção passa de 1,5 vez o de hoje.',
+          'Dívida PJ: "Crescente" quando o saldo no fim da projeção passa de 1,5 vez o de hoje; "Informado" quando todas as obras param no último saldo informado na aba Dívida PJ (sem projeção).',
         ],
       },
     ],
@@ -264,6 +264,7 @@ export const ABAS_SUMARIO = [
         titulo: 'De onde vem o saldo devedor',
         itens: [
           'Mês com valor informado na aba Dívida PJ do DFC Construtoras usa o informado; mês sem ele segue a Projeção CEF. Obra só com valor informado também aparece.',
+          'Obra com valor informado para no último mês informado: o gráfico não projeta o futuro. Obra sem nenhum valor informado segue a Projeção CEF inteira.',
           'Ao passar o mouse no gráfico, a linha Origem diz se o mês é informado ou da Projeção CEF.',
         ],
       },
@@ -271,7 +272,7 @@ export const ABAS_SUMARIO = [
         titulo: 'Os números de cada obra',
         itens: [
           'Saldo devedor no último mês fechado (ou no mês atual, se ele já tem valor informado), teto do PJ, % da obra executada, juros ao mês, % de amortização e os juros no último mês da projeção.',
-          'O gráfico mostra o saldo devedor ao longo de toda a projeção; a linha tracejada horizontal é o teto e a vertical, o mês de referência.',
+          'O gráfico mostra o saldo devedor mês a mês; a linha tracejada horizontal é o teto e a vertical, o mês de referência.',
         ],
       },
       {

@@ -905,11 +905,21 @@
   color: var(--warn-ink);
 }
 
-/* Dívida PJ */
+/* Dívida PJ: no máximo 3 obras por linha (pedido do usuário) — a 4ª desce; em tela estreita, 2 e 1. */
 .painel-cfo .cefs {
   display: grid;
-  grid-template-columns: repeat(auto-fit, minmax(280px, 1fr));
+  grid-template-columns: repeat(3, minmax(0, 1fr));
   gap: 16px;
+}
+@media (max-width: 1000px) {
+  .painel-cfo .cefs {
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+  }
+}
+@media (max-width: 620px) {
+  .painel-cfo .cefs {
+    grid-template-columns: minmax(0, 1fr);
+  }
 }
 .painel-cfo .cef {
   display: flex;

@@ -255,7 +255,10 @@ function modelo(d, ids) {
       obra[r.mes] = { ...(obra[r.mes] || { id: r.id, mes: r.mes }), saldo: r.saldo, informado: true };
     });
   D.cef = Object.entries(porObra).map(([id, mapa]) => {
-    const rows = Object.values(mapa).sort((a, b) => (a.mes < b.mes ? -1 : a.mes > b.mes ? 1 : 0));
+    const todas = Object.values(mapa).sort((a, b) => (a.mes < b.mes ? -1 : a.mes > b.mes ? 1 : 0));
+    // Obra com dívida informada para no último mês informado: sem projetar o futuro (pedido do usuário).
+    const ultimoInformado = todas.filter((r) => r.informado).at(-1)?.mes;
+    const rows = ultimoInformado ? todas.filter((r) => r.mes <= ultimoInformado) : todas;
     // Mês de referência: o último mês fechado — ou o mês atual, quando ele já tem valor informado.
     const now = rows.filter((r) => r.mes < m0 || (r.informado && r.mes === m0)).at(-1) || rows[0];
     return { id: +id, nome: titulo(cmap[id]?.nome || `Obra ${id}`), rows, now, end: rows.at(-1), p: params[id] || {} };

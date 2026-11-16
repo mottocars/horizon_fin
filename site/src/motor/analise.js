@@ -29,6 +29,7 @@ export function indicadores(D) {
   const fura = D.saldoFut.findIndex((v) => v < D.colchao);
   const dividaHoje = soma(D.cef.map((c) => c.now?.saldo || 0));
   const dividaFim = soma(D.cef.map((c) => c.end?.saldo || 0));
+  const soInformado = D.cef.length > 0 && D.cef.every((c) => c.end?.informado);
   const rec = D.cart.receber || {};
   const inad = ((rec.vencido || 0) / ((rec.vencido || 0) + (rec.a_vencer || 0))) * 100;
   const maior = D.spes.slice().sort((a, b) => b.caixa - a.caixa)[0];
@@ -73,14 +74,19 @@ export function indicadores(D) {
       titulo: 'Dívida PJ Caixa',
       valor: D.cef.length ? dividaHoje : null,
       valor_fmt: D.cef.length ? brl(dividaHoje) : '–',
-      detalhe: D.cef.length
-        ? ['vai a ', { b: brl(dividaFim) }, ` no fim da projeção · ${D.cef.length} obra${D.cef.length > 1 ? 's' : ''}`]
-        : ['nenhuma obra com dívida PJ (informada ou Projeção CEF) no escopo'],
-      etiqueta: D.cef.length
-        ? dividaFim > dividaHoje * 1.5
-          ? etiqueta('warn', 'Crescente')
-          : etiqueta('info', 'Sob controle')
-        : etiqueta('info', 'Sem dados'),
+      // Só obras com dívida informada (que param no último mês informado): não há "fim da projeção".
+      detalhe: !D.cef.length
+        ? ['nenhuma obra com dívida PJ (informada ou Projeção CEF) no escopo']
+        : soInformado
+          ? ['último saldo informado na aba Dívida PJ', ` · ${D.cef.length} obra${D.cef.length > 1 ? 's' : ''}`]
+          : ['vai a ', { b: brl(dividaFim) }, ` no fim da projeção · ${D.cef.length} obra${D.cef.length > 1 ? 's' : ''}`],
+      etiqueta: !D.cef.length
+        ? etiqueta('info', 'Sem dados')
+        : soInformado
+          ? etiqueta('info', 'Informado')
+          : dividaFim > dividaHoje * 1.5
+            ? etiqueta('warn', 'Crescente')
+            : etiqueta('info', 'Sob controle'),
     },
     {
       chave: 'receber_90_dias',
