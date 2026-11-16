@@ -17,7 +17,7 @@ const AZUL_TOTAL = 'FF174A70';
 const AMARELO_PROJ = 'FFFDF6D3';
 const TRACO = '—';
 const TOLERANCIA = 0.1; // ±10%: neutro na tela
-const ROTULO_SUB = { valor: 'Valor', pct: 'AV %', proj: 'Projetado', desvio: 'Desvio %' };
+const ROTULO_SUB = { valor: 'Valor', pct: 'AV.R %', proj: 'Projetado', desvio: 'Desvio %' };
 const num = (v) => (v === null || v === undefined ? 0 : Number(v));
 
 // Linhas da grade na ordem da tela, com a linha do Excel de cada uma (a partir de `primeira`).
@@ -325,7 +325,7 @@ function escreverDre(workbook, sheet, d, C, meta, J = null) {
   conf.font = { bold: true, size: 10 };
   const notas = [
     'Como ler: grupos de nível 1 = soma das linhas deles; totalizadoras (=) = soma de todas as linhas acima, como na tela. Traço = linha sem cálculo.',
-    `AV % = valor ÷ |${resultado.avaliacao_vertical?.descricao || 'linha base não configurada'}| (aba Configurações), da linha base para baixo.`,
+    `AV.R % = valor ÷ |${resultado.avaliacao_vertical?.descricao || 'linha base não configurada'}| (aba Configurações), da linha base para baixo.`,
     ...(J
       ? [
           `Projetado / Desvio %: ${J.P.fonte === 'versao' ? `Versão ${J.P.versao?.numero ?? '—'}` : 'rascunhos + última versão'} (abas Projeção…). Desvio verde acima de +10%, vermelho abaixo de −10%, neutro no meio. Centro sem orçamento: traço no Projetado.`,

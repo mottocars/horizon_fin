@@ -286,7 +286,7 @@ export default function ConfiguracoesDreTab({ empresaId }) {
       <Card>
         <SectionHeader
           titulo="Avaliação Vertical"
-          texto="A linha de nível 1 que vale 100% na coluna AV % da aba DRE: dela para baixo, cada linha aparece como percentual dela, no consolidado e em cada centro de custo. Ex.: na Receita Líquida, a AV % começa com 100% nela e vai até o Lucro Líquido. Pode ser qualquer linha de nível 1 — a Receita Bruta, por exemplo."
+          texto="A linha de nível 1 que vale 100% nas colunas AV.R % (realizado) e AV.P % (projetado) da aba DRE: dela para baixo, cada linha aparece como percentual dela, no consolidado e em cada centro de custo. Ex.: na Receita Líquida, a AV % começa com 100% nela e vai até o Lucro Líquido. Pode ser qualquer linha de nível 1 — a Receita Bruta, por exemplo."
         />
         <div className="mt-4 grid grid-cols-1 gap-4 lg:grid-cols-2">
           <div>
@@ -307,7 +307,7 @@ export default function ConfiguracoesDreTab({ empresaId }) {
             <div className="mt-1.5 flex items-center gap-3">
               {!dados.av_mascara_id ? (
                 <p className="flex items-center gap-1.5 text-xs text-amber-700">
-                  <AlertTriangle size={13} className="shrink-0" /> Sem a linha, a coluna AV % fica com traço.
+                  <AlertTriangle size={13} className="shrink-0" /> Sem a linha, as colunas AV.R % e AV.P % ficam com traço.
                 </p>
               ) : (
                 <p className="text-[11px] text-gray-400">Configurada: {dados.mascaras.find((g) => g.id === dados.av_mascara_id)?.descricao}</p>

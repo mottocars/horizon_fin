@@ -31,8 +31,9 @@ const MIN_RECARGA = 30;
 // do DRE Gerencial. Projetado e Desvio % vêm da última versão salva da Projeção (sem versão, não aparecem).
 const COLUNAS_ANALISE = [
   { value: 'valor', label: 'Valor' },
-  { value: 'pct', label: 'AV % / AH %' },
+  { value: 'pct', label: 'AV.R % / AH %' },
   { value: 'proj', label: 'Projetado' },
+  { value: 'pctp', label: 'AV.P %' },
   { value: 'desvio', label: 'Desvio %' },
 ];
 
@@ -106,7 +107,7 @@ export default function DrePainel({ dashboard, tituloTela, empresaId, onEmpresa,
   const [erro, setErro] = useState('');
   const [telaCheia, setTelaCheia] = useState(false);
   // Colunas da grade da DRE (filtro "Análise").
-  const [colunasAnalise, setColunasAnalise] = useState(['valor', 'pct', 'proj', 'desvio']);
+  const [colunasAnalise, setColunasAnalise] = useState(['valor', 'pct', 'proj', 'pctp', 'desvio']);
   const [rastreio, setRastreio] = useState(null); // { obra } = aba POC em tela cheia
   const [sumario, setSumario] = useState({ aberta: false, aba: 'filtros' });
   const abrirSumario = useCallback((aba = 'filtros') => setSumario({ aberta: true, aba }), []);

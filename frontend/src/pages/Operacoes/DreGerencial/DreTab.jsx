@@ -40,7 +40,8 @@ function mesDeHoje() {
 // `colunasSao`: 'centros' (padrão) ou 'anos' — o histórico da aba Projeções usa esta mesma tabela com um
 // ano por coluna (dadosProntos com por_centro = os anos); muda só os textos do botão de voltar e da dica.
 // Projetado (pedido do usuário): `colunasVisiveis` — as subcolunas de cada coluna, entre 'valor', 'pct'
-// (AV % nos centros, AH % no mês a mês), 'proj' (Projetado) e 'desvio' (Desvio %); `projecao` — de onde
+// (AV.R % nos centros, AH % no mês a mês), 'proj' (Projetado), 'pctp' (AV.P %, a avaliação vertical do
+// projetado, só nos centros) e 'desvio' (Desvio %); `projecao` — de onde
 // vem o projetado ({ fonte: 'atual' | 'versao', versao }, null = sem projetado; ver projetadoDre);
 // `onProjecaoInfo(r)`: devolve as versões disponíveis (pro seletor da página). Projetado de cada centro =
 // a DRE do orçamento mês a mês no período (até o mês de corte é o realizado da data do orçamento — em
@@ -124,7 +125,8 @@ export default function DreTab({
 
   // Projetado: só quando alguma coluna de projeção está visível.
   const [projDados, setProjDados] = useState(null);
-  const querProj = Boolean(projecao) && (colunasVisiveis.includes('proj') || colunasVisiveis.includes('desvio'));
+  const querProj =
+    Boolean(projecao) && ['proj', 'pctp', 'desvio'].some((k) => colunasVisiveis.includes(k));
   const chaveProj = querProj ? `${projecao.fonte}|${projecao.versao || ''}` : '';
   useEffect(() => {
     if (!chaveProj || !empresaId || de > ate) {
@@ -294,32 +296,38 @@ export default function DreTab({
   const centrosComProj = !centroMensal ? colunas.slice(1).filter((c) => c.projetado).length : 0;
   const centrosTotal = !centroMensal ? colunas.length - 1 : 0;
 
-  // Subcolunas visíveis (na ordem Valor, AV/AH %, Projetado, Desvio %): o % só nas colunas que têm (o
-  // Total do mês a mês não tem AH %). Nenhuma marcada = só o Valor.
+  // Subcolunas visíveis (na ordem Valor, AV.R/AH %, Projetado, AV.P %, Desvio %): o % só nas colunas que
+  // têm (o Total do mês a mês não tem AH %; a AV.P % só nas colunas com AV — os centros, não os meses).
+  // Nenhuma marcada = só o Valor.
   // `ocultarSemProjecao` (dashboard): sem nenhum orçamento salvo, as colunas de projeção somem.
   const semProjecaoAgora = querProj && projDados && !Object.keys(projDados.centros || {}).length;
   const mostraProj = querProj && !(ocultarSemProjecao && (semProjecaoAgora || !projDados));
   const subsVisiveis = (() => {
-    const s = ['valor', 'pct', 'proj', 'desvio'].filter((k) => colunasVisiveis.includes(k) && ((k !== 'proj' && k !== 'desvio') || mostraProj));
+    const s = ORDEM_SUBS.filter((k) => colunasVisiveis.includes(k) && (!SUBS_PROJECAO.includes(k) || mostraProj));
     return s.length ? s : ['valor'];
   })();
   const subsDe = (c) => {
     // Mês futuro (mês a mês): sem realizado, AH % e desvio — só o Projetado (pedido do usuário).
     if (c.futuro && subsVisiveis.includes('proj')) return ['proj'];
-    const s = subsVisiveis.filter((k) => k !== 'pct' || c.segunda);
+    const s = subsVisiveis.filter((k) => (k !== 'pct' || c.segunda) && (k !== 'pctp' || c.segunda === 'av'));
     return s.length ? s : ['valor'];
   };
   const posFixa = posicoesFixa(subsDe(colunas[0]));
-  const rotuloSub = (c, k) => (k === 'pct' ? (c.segunda === 'ah' ? 'AH %' : 'AV %') : ROTULO_SUB[k]);
-  // AV % (visão dos centros): a linha de nível 1 da aba Configurações vale 100% em cada coluna; ela e as
-  // de baixo mostram o percentual dela (as de cima ficam vazias). Sem a linha configurada, traço.
+  const rotuloSub = (c, k) => (k === 'pct' ? (c.segunda === 'ah' ? 'AH %' : 'AV.R %') : ROTULO_SUB[k]);
+  // AV.R % (visão dos centros): a linha de nível 1 da aba Configurações vale 100% em cada coluna; ela e
+  // as de baixo mostram o percentual dela (as de cima ficam vazias). Sem a linha configurada, traço.
+  // AV.P % (pedido do usuário): a mesma conta sobre o Projetado — a mesma linha base, com o valor dela
+  // no projetado da coluna.
   const av = resultado?.avaliacao_vertical || null;
   const indiceBase = av ? arvore.findIndex((g) => g.id === av.mascara_id) : -1;
-  const bases = colunasCalc.map((c, i) => {
-    if (indiceBase < 0) return null;
-    const g = arvore[indiceBase];
-    return g.totalizadora ? linhas[indiceBase].acumulados[i] : totalDoGrupo(g, c.valores);
-  });
+  const basesDe = (linhasCampo, campo) =>
+    colunasCalc.map((c, i) => {
+      if (indiceBase < 0) return null;
+      const g = arvore[indiceBase];
+      return g.totalizadora ? linhasCampo[indiceBase].acumulados[i] : c[campo] ? totalDoGrupo(g, c[campo]) : null;
+    });
+  const bases = basesDe(linhas, 'valores');
+  const basesProj = basesDe(linhasProj, 'projetado');
   const semAv = resultado && !centroMensal && indiceBase < 0;
   const tituloSegunda = (c) =>
     c.segunda === 'ah'
@@ -329,6 +337,8 @@ export default function DreTab({
         : 'Avaliação Vertical não configurada';
   const tituloSub = (c, k) => {
     if (k === 'pct') return tituloSegunda(c);
+    if (k === 'pctp')
+      return av ? `Avaliação Vertical do Projetado: percentual do projetado de ${av.descricao}` : 'Avaliação Vertical não configurada';
     if (k === 'proj')
       return c.cinza
         ? 'Realizado na data do orçamento (mês até o corte)'
@@ -535,7 +545,7 @@ export default function DreTab({
                       title={tituloSub(fixa, k)}
                       className={`sticky z-10 border-b border-b-blue-200 py-1 text-center font-medium ${
                         idx === lista.length - 1 ? 'border-r border-r-blue-200' : ''
-                      } ${k === 'proj' ? 'bg-[#fdf6d3] text-amber-800' : 'bg-blue-100 text-blue-700'}`}
+                      } ${k === 'proj' || k === 'pctp' ? 'bg-[#fdf6d3] text-amber-800' : 'bg-blue-100 text-blue-700'}`}
                     >
                       {rotuloSub(fixa, k)}
                     </th>
@@ -548,7 +558,7 @@ export default function DreTab({
                         style={estiloLargura(LARGURA_SUB_MOVEL[k])}
                         title={tituloSub(c, k)}
                         className={`border-b border-gray-200 py-1 text-center font-semibold ${idx === 0 ? 'border-l' : ''} ${
-                          k === 'proj' ? (c.cinza ? 'bg-gray-100 text-gray-500' : 'bg-[#fdf6d3] text-amber-800') : c.mes === mesAtual ? 'bg-[#f5f9ff]' : 'bg-white'
+                          k === 'proj' || k === 'pctp' ? (c.cinza ? 'bg-gray-100 text-gray-500' : 'bg-[#fdf6d3] text-amber-800') : c.mes === mesAtual ? 'bg-[#f5f9ff]' : 'bg-white'
                         }`}
                       >
                         {rotuloSub(c, k)}
@@ -575,6 +585,7 @@ export default function DreTab({
                       : null
                   }
                   bases={indiceBase >= 0 && i >= indiceBase ? bases : null}
+                  basesProj={indiceBase >= 0 && i >= indiceBase ? basesProj : null}
                   recolhido={!fixaAberta}
                   onAbrir={() => setFixaAberta(true)}
                   subsDe={subsDe}
@@ -640,9 +651,12 @@ function totalDoGrupo(grupo, valores) {
 // uma congelada no `left` = 380 + a soma das larguras das que vêm antes (`posicoesFixa`).
 const COL_DESCRICAO = 'sticky left-0 z-10 w-[380px] min-w-[380px] max-w-[380px]';
 const LARGURA_DESCRICAO = 380;
-const LARGURA_SUB = { valor: 144, pct: 80, proj: 144, desvio: 80 };
-const LARGURA_SUB_MOVEL = { valor: 128, pct: 80, proj: 128, desvio: 80 };
-const ROTULO_SUB = { valor: 'Valor', proj: 'Projetado', desvio: 'Desvio %' };
+const LARGURA_SUB = { valor: 144, pct: 80, proj: 144, pctp: 80, desvio: 80 };
+const LARGURA_SUB_MOVEL = { valor: 128, pct: 80, proj: 128, pctp: 80, desvio: 80 };
+const ROTULO_SUB = { valor: 'Valor', proj: 'Projetado', pctp: 'AV.P %', desvio: 'Desvio %' };
+// Ordem das subcolunas e as que dependem do projetado.
+const ORDEM_SUBS = ['valor', 'pct', 'proj', 'pctp', 'desvio'];
+const SUBS_PROJECAO = ['proj', 'pctp', 'desvio'];
 // Coluna fixa recolhida: só a faixa (como o Total recolhido do fluxo do DFC). Sem z-index aqui: o
 // cabeçalho fica acima (z-20) pra palavra vertical passar por cima das células.
 const COL_FAIXA = 'sticky left-[380px] w-7 min-w-7 max-w-7 border-r border-r-blue-200';
@@ -713,7 +727,7 @@ function corPct(tipo, segunda, p) {
 // `valor`, `pct` (número; null = traço; undefined = vazio), `proj` (projetado; undefined = sem projeção),
 // `desvio` e `cinza` (projetado que é o realizado da data do orçamento). Coluna fixa recolhida
 // (`recolhido`): uma faixa só, que abre ao clicar (`onAbrir`). `posFixa`: o left de cada subcoluna fixa.
-function Celulas({ tipo, fixa, subs, segunda, valor, pct, proj, desvio, cinza, recolhido, onAbrir, posFixa }) {
+function Celulas({ tipo, fixa, subs, segunda, valor, pct, proj, pctp, desvio, cinza, recolhido, onAbrir, posFixa }) {
   const e = estilo(tipo, fixa);
   if (fixa && recolhido) {
     return (
@@ -769,6 +783,17 @@ function Celulas({ tipo, fixa, subs, segunda, valor, pct, proj, desvio, cinza, r
           {proj === undefined ? traco : moedaCelula(proj, cinza ? 'text-gray-500' : 'text-gray-800')}
         </td>
       );
+    // AV.P %: no fundo do Projetado (é a avaliação vertical dele), com a cor do AV.R %.
+    if (k === 'pctp')
+      return (
+        <td
+          key={k}
+          style={largura(k)}
+          className={`${base(k)} ${fixa && !total ? 'bg-[#fdf6d3]' : fundoProjetado(tipo, false)} px-2 text-right text-[11px] tabular-nums ${tipo === 'n2' ? '' : 'font-semibold'} ${corPct(tipo, 'av', pctp)}`}
+        >
+          {pctCelula(pctp, 'av')}
+        </td>
+      );
     return (
       <td key={k} style={largura(k)} className={`${base(k)} ${e.fundo} px-2 text-right text-[11px] tabular-nums ${tipo === 'n2' ? '' : 'font-semibold'} ${corPct(tipo, 'desvio', desvio)}`}>
         {pctCelula(desvio, 'desvio')}
@@ -818,7 +843,7 @@ function IconeLinha({ icone, className }) {
 // AV % = valor ÷ base da coluna (`bases`, null quando a linha está acima da linha configurada → vazio);
 // AH % = sobre a coluna anterior, se ela também for um mês; o primeiro mês compara com a coluna
 // `oculta` (o mês antes do período), que não é desenhada.
-function CelulasDaLinha({ tipo, colunas, vals, bases, recolhido, onAbrir, subsDe, posFixa }) {
+function CelulasDaLinha({ tipo, colunas, vals, bases, basesProj, recolhido, onAbrir, subsDe, posFixa }) {
   const iAnterior = colunas.findIndex((c) => c.oculta);
   return colunas.map((c, i) => {
     if (c.oculta) return null;
@@ -832,6 +857,9 @@ function CelulasDaLinha({ tipo, colunas, vals, bases, recolhido, onAbrir, subsDe
     // meses até o atual (`comparavel`) — a regra do Total do fluxo do DFC. Coluna sem projeção: vazio.
     const temProj = Boolean(c.projetado);
     const proj = temProj ? vals.projetado[i] : undefined;
+    // AV.P % = projetado ÷ |projetado da linha base| (mesma regra da AV.R %; sem projeção, traço).
+    let pctp;
+    if (c.segunda === 'av') pctp = !basesProj ? undefined : temProj ? pctAv(proj, basesProj[i]) : null;
     const realDesvio = c.valoresDesvio ? vals.valoresDesvio[i] : vals.valores[i];
     const desvio = temProj && c.comparavel ? pctDesvio(realDesvio, vals.comparavel[i]) : undefined;
     return (
@@ -844,6 +872,7 @@ function CelulasDaLinha({ tipo, colunas, vals, bases, recolhido, onAbrir, subsDe
         valor={vals.valores[i]}
         pct={pct}
         proj={proj}
+        pctp={pctp}
         desvio={desvio}
         cinza={c.cinza}
         recolhido={recolhido}
@@ -873,8 +902,8 @@ function valoresDaLinha(colunas, campo, { grupo, item, acumulados }) {
 // configurada. `recolhido` / `onAbrir`: a coluna fixa recolhida numa faixa. `subsDe(coluna)`: as
 // subcolunas visíveis da coluna; `posFixa`: o left das subcolunas da coluna fixa.
 const CAMPOS = ['valores', 'projetado', 'comparavel', 'valoresDesvio'];
-function LinhaGrupo({ grupo, colunas, acumulados, bases, recolhido, onAbrir, subsDe, posFixa }) {
-  const faixa = { colunas, bases, recolhido, onAbrir, subsDe, posFixa };
+function LinhaGrupo({ grupo, colunas, acumulados, bases, basesProj, recolhido, onAbrir, subsDe, posFixa }) {
+  const faixa = { colunas, bases, basesProj, recolhido, onAbrir, subsDe, posFixa };
   const vals = (alvo) => Object.fromEntries(CAMPOS.map((campo) => [campo, valoresDaLinha(colunas, campo, alvo)]));
   if (grupo.totalizadora) {
     return (

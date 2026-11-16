@@ -79,8 +79,9 @@ const TABS = [
 // Colunas da aba DRE (filtro "Colunas"): cada centro / mês mostra as marcadas.
 const COLUNAS_DRE = [
   { value: 'valor', label: 'Valor' },
-  { value: 'pct', label: 'AV % / AH %' },
+  { value: 'pct', label: 'AV.R % / AH %' },
   { value: 'proj', label: 'Projetado' },
+  { value: 'pctp', label: 'AV.P %' },
   { value: 'desvio', label: 'Desvio %' },
 ];
 
@@ -198,9 +199,9 @@ export default function DreGerencialPage() {
   const dreDe = `${dreMesDe}-01`;
   const dreAte = ultimoDiaDoMes(dreMesAte);
   const dreCentros = (searchParams.get('centros') || '').split(',').filter(Boolean);
-  // Aba DRE: colunas de cada centro / mês (Valor, AV % / AH %, Projetado, Desvio %) — na URL, como os
-  // outros filtros.
-  const dreColunas = (searchParams.get('colunas') || 'valor,pct,proj,desvio').split(',').filter((k) => COLUNAS_DRE.some((c) => c.value === k));
+  // Aba DRE: colunas de cada centro / mês (Valor, AV.R % / AH %, Projetado, AV.P %, Desvio %) — na URL,
+  // como os outros filtros.
+  const dreColunas = (searchParams.get('colunas') || 'valor,pct,proj,pctp,desvio').split(',').filter((k) => COLUNAS_DRE.some((c) => c.value === k));
   // Filtro "Versão" do projetado — como o filtro Versão da aba Projeções da DFC (pedido do usuário): ao
   // entrar começa SEMPRE na última versão salva (null; não fica na URL); 'atual' = os rascunhos (não
   // salvos — centro sem rascunho usa a última versão), só oferecido quando há rascunho; número = a versão.
