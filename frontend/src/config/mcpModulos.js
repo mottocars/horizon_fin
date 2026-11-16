@@ -58,6 +58,14 @@ export const MODULOS = [
     descricao:
       'Leitura do dashboard Obra 360º como o dono da empresa: a carteira de obras (VGV, unidades, quantas obras em cada etapa — Landbank, Lançamento, Construção, Entrega, Pós Obra —, as a iniciar e as em atraso pela Regra de Atraso da Construção); o cronograma de cada obra e onde ela está hoje; as versões do cronograma (o que mudou, quem gravou, pendências); o avanço físico nas três curvas — PLS medida pela Caixa, Curva S PLS registrada no Prevision e Curva S de Obras (o avanço real) — por mês, semana ou dia, com desvios e o ritmo; o contrato da Caixa (DCD: prazos, rotina de atraso, unidades financiadas, financiamento); e os alertas de prazo, avanço e dados. Para quem tem o dashboard Obra 360º ou Operações › Cronogramas Obras.',
   },
+  {
+    codigo: 'FORMULARIOS',
+    titulo: 'FORMULÁRIOS (PESQUISAS E RESPOSTAS)',
+    curto: 'Formulários',
+    cor: 'bg-teal-50 text-teal-700',
+    descricao:
+      'Leitura dos formulários de pesquisa (Cadastros › Formulários): os formulários da empresa, as perguntas, TODAS as respostas recebidas (públicas pelo link e privadas de dentro do sistema, respeitando o anonimato), o resumo por pergunta (contagem por opção, médias, NPS) e quem do público-alvo já respondeu e quem falta. Para quem tem a tela Formulários.',
+  },
 ];
 
 // Marca/desmarca um módulo mantendo as dependências (Altera Orçamento liga o DFC; desligar o DFC

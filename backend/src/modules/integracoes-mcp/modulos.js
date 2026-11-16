@@ -52,6 +52,12 @@ const MODULOS = {
     tela: T.DASH_CRONOGRAMAS,
     telas: [T.DASH_CRONOGRAMAS, T.CRONOGRAMAS_OBRAS],
   },
+  FORMULARIOS: {
+    titulo: 'FORMULÁRIOS (PESQUISAS E RESPOSTAS)',
+    descricao:
+      'Leitura de Cadastros › Formulários: os formulários de pesquisa da empresa, as perguntas, todas as respostas (respeitando o anonimato), o resumo por pergunta e quem do público-alvo respondeu.',
+    tela: T.FORMULARIOS,
+  },
 };
 
 const CODIGOS = Object.keys(MODULOS);

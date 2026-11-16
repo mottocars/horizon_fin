@@ -10,6 +10,7 @@ const { TOOLS_AGING } = require('../aging/tools');
 const { TOOLS_DRE } = require('../dre');
 const { TOOLS_COBRANCA } = require('../cobranca');
 const { TOOLS_OBRAS } = require('../obras');
+const { TOOLS_FORMULARIOS } = require('../formularios');
 const T = require('../../../config/telas');
 
 // MCP do conector Horizon (/api/mcp/dfc/:token — o caminho "dfc" ficou dos conectores já criados). O
@@ -62,6 +63,11 @@ const INSTRUCOES = {
     'tudo de uma obra (cronograma, atraso, curvas hoje/semana/mês, ritmo e estimativa de término, Prevision, contrato Caixa): obras_obra; avanço de todas as obras como na tela: ' +
     'obras_avanco; série por período (mensal/semanal/diária): obras_curvas; mudanças do cronograma e pendências: obras_versoes; o que precisa de atenção: obras_alertas. ' +
     'Percentuais com duas casas, datas DD/MM/AAAA, VGV em R$. Responda como o dono da empresa: conclusão primeiro, depois os números e a fonte.',
+  FORMULARIOS:
+    'Formulários de pesquisa (Cadastros › Formulários; só leitura): comece por formularios_guia — modalidades (Pública por link, Privada, Privada obrigatória), situação, ' +
+    'público-alvo e adesão, anonimato e a lista dos formulários da empresa. Lista: formularios_lista; perguntas e configuração: formularios_formulario; TODAS as respostas ' +
+    '(de um formulário ou de todos, com filtros de período e texto, paginadas): formularios_respostas; estatística por pergunta (opções, %, média, NPS, textos): formularios_resumo; ' +
+    'quem respondeu e quem falta (privadas): formularios_publico_alvo. Pesquisa anônima não traz nome nem horário — não tente identificar quem respondeu. Datas DD/MM/AAAA.',
 };
 
 // Ferramentas de só leitura no formato { name, description, inputSchema, handler(empresaId, ctx) }.
@@ -78,6 +84,7 @@ function registrarTools(server, empresaId, modulos, ctx) {
   if (modulos.includes('DRE')) registrarLeitura(server, empresaId, TOOLS_DRE, ctx);
   if (modulos.includes('COBRANCA')) registrarLeitura(server, empresaId, TOOLS_COBRANCA, ctx);
   if (modulos.includes('OBRAS')) registrarLeitura(server, empresaId, TOOLS_OBRAS, ctx);
+  if (modulos.includes('FORMULARIOS')) registrarLeitura(server, empresaId, TOOLS_FORMULARIOS, ctx);
 }
 
 const router = Router();
