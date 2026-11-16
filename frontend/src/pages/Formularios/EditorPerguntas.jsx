@@ -17,6 +17,7 @@ import {
   X,
 } from 'lucide-react';
 import SearchableSelect from '../../components/SearchableSelect';
+import { TimbreEmpresa } from './FormularioResponder';
 import { TIPO, TIPOS_COM_OPCOES, TIPOS_PERGUNTA, corAlpha, novaPergunta, novoId, trocarTipo } from './tipos';
 
 // Aba Perguntas do construtor: o formulário montado como no Google Forms — cabeçalho (título/descrição) e um
@@ -118,6 +119,9 @@ export default function EditorPerguntas({ form, alterar }) {
               <div className="h-2.5" style={{ backgroundColor: cor }} />
               {ativo === 'cabecalho' && <span className="absolute bottom-0 left-0 top-2.5 w-1.5" style={{ backgroundColor: cor }} />}
               <div className="space-y-2 px-6 pb-5 pt-4">
+                <div title="Logomarca do cadastro da empresa (Cadastros › Empresas)">
+                  <TimbreEmpresa nome={form.empresa_nome} logo={form.empresa_logo} />
+                </div>
                 <TextoAuto
                   value={form.titulo}
                   onChange={(v) => alterar({ titulo: v.replace(/\n/g, ' ') })}

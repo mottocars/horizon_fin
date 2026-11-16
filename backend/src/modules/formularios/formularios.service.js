@@ -218,7 +218,8 @@ const CAMPOS = `f.id, f.empresa_id, f.titulo, f.descricao, f.modalidade, f.statu
   f.publico_alvo, f.usuario_ids, f.anonimo, f.uma_resposta_por_pessoa,
   f.inicio_em::text AS inicio_em, f.fim_em::text AS fim_em, f.token_publico, f.publicado_em,
   f.criado_em, f.atualizado_em,
-  (SELECT COALESCE(NULLIF(e.nome_fantasia, ''), e.razao_social) FROM empresas e WHERE e.id = f.empresa_id) AS empresa_nome`;
+  (SELECT COALESCE(NULLIF(e.nome_fantasia, ''), e.razao_social) FROM empresas e WHERE e.id = f.empresa_id) AS empresa_nome,
+  (SELECT e.logo FROM empresas e WHERE e.id = f.empresa_id) AS empresa_logo`;
 
 // Usuário "da empresa": vinculado a ela (usuarios_empresas). `f` = alias da tabela formularios.
 const SQL_DA_EMPRESA = `EXISTS (SELECT 1 FROM usuarios_empresas ue WHERE ue.usuario_id = u.id AND ue.empresa_id = f.empresa_id)`;
@@ -492,7 +493,7 @@ async function usuariosParaPublicoAlvo(empresaId) {
 // ---------------------------------------------------------------------------------------------
 
 const CAMPOS_RESPONDER = `f.id, f.titulo, f.descricao, f.modalidade, f.perguntas, f.cor_tema, f.mensagem_final, f.anonimo,
-  COALESCE(NULLIF(e.nome_fantasia, ''), e.razao_social) AS empresa_nome`;
+  COALESCE(NULLIF(e.nome_fantasia, ''), e.razao_social) AS empresa_nome, e.logo AS empresa_logo`;
 
 async function pendentesDoUsuario(usuarioId) {
   const { rows } = await pool.query(

@@ -1,5 +1,5 @@
 import { useMemo, useRef, useState } from 'react';
-import { Check, CheckCircle2, RotateCcw, Star } from 'lucide-react';
+import { Building2, Check, CheckCircle2, RotateCcw, Star } from 'lucide-react';
 import SearchableSelect from '../../components/SearchableSelect';
 import CampoData from '../../components/CampoData';
 import { corAlpha } from './tipos';
@@ -8,7 +8,8 @@ import './formularios.css';
 // O formulário do jeito que quem responde vê — o mesmo componente na página pública (/f/:token), na janela
 // que abre ao entrar no sistema (privados) e na prévia do construtor.
 //
-// formulario: { titulo, descricao, perguntas, cor_tema, mensagem_final }
+// formulario: { titulo, descricao, perguntas, cor_tema, mensagem_final, empresa_nome, empresa_logo }
+//   — a logomarca da empresa (Cadastros › Empresas) vai no topo do cabeçalho, como um papel timbrado.
 // onEnviar(respostas) → Promise; se rejeitar com `response.data.campos` ({ idPergunta: mensagem }), os erros
 //   aparecem em cada pergunta.
 // valores: respostas já gravadas — mostra o formulário preenchido e travado (aba Respostas › Individual).
@@ -83,6 +84,7 @@ export default function FormularioResponder({ formulario, onEnviar, valores, rod
         <div className="overflow-hidden rounded-2xl border border-gray-200 bg-white shadow-sm">
           <div className="h-2.5" style={{ backgroundColor: cor }} />
           <div className="flex flex-col items-center px-8 py-12 text-center">
+            {formulario.empresa_logo && <img src={formulario.empresa_logo} alt={formulario.empresa_nome || ''} className="mb-6 h-12 w-auto max-w-48 object-contain" />}
             <span className="form-sucesso mb-5 flex h-16 w-16 items-center justify-center rounded-full" style={{ backgroundColor: corAlpha(cor, 0.12), color: cor }}>
               <CheckCircle2 size={34} strokeWidth={2} />
             </span>
@@ -103,6 +105,7 @@ export default function FormularioResponder({ formulario, onEnviar, valores, rod
       <div className="overflow-hidden rounded-2xl border border-gray-200 bg-white shadow-sm">
         <div className="h-2.5" style={{ backgroundColor: cor }} />
         <div className="px-6 pb-5 pt-5 sm:px-7">
+          <TimbreEmpresa nome={formulario.empresa_nome} logo={formulario.empresa_logo} />
           <h1 className="text-2xl font-semibold leading-tight tracking-tight text-gray-900">{formulario.titulo || 'Formulário sem título'}</h1>
           {formulario.descricao?.trim() && <p className="mt-2 whitespace-pre-line text-sm leading-relaxed text-gray-600">{formulario.descricao}</p>}
           {!somenteLeitura && respondiveis.length > 0 && (
@@ -186,6 +189,23 @@ export default function FormularioResponder({ formulario, onEnviar, valores, rod
         </>
       )}
     </form>
+  );
+}
+
+// Logomarca + nome da empresa no alto do cabeçalho. Sem logomarca cadastrada, fica só o nome.
+export function TimbreEmpresa({ nome, logo }) {
+  if (!nome && !logo) return null;
+  return (
+    <div className="mb-5 flex items-center gap-3 border-b border-gray-100 pb-4">
+      {logo ? (
+        <img src={logo} alt={nome || 'Logomarca'} className="h-12 w-auto max-w-48 shrink-0 object-contain" />
+      ) : (
+        <span className="flex h-10 w-10 shrink-0 items-center justify-center rounded-xl bg-gray-100 text-gray-400">
+          <Building2 size={20} />
+        </span>
+      )}
+      {nome && <span className="min-w-0 truncate text-sm font-semibold tracking-tight text-gray-700">{nome}</span>}
+    </div>
   );
 }
 
