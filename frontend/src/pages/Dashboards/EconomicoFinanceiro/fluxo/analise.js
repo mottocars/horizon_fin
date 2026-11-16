@@ -73,7 +73,7 @@ export function indicadores(D) {
       valor_fmt: D.cef.length ? brl(dividaHoje) : '–',
       detalhe: D.cef.length
         ? ['vai a ', { b: brl(dividaFim) }, ` no fim da projeção · ${D.cef.length} obra${D.cef.length > 1 ? 's' : ''}`]
-        : ['nenhuma obra com Projeção CEF no escopo'],
+        : ['nenhuma obra com dívida PJ (informada ou Projeção CEF) no escopo'],
       etiqueta: D.cef.length
         ? dividaFim > dividaHoje * 1.5
           ? etiqueta('warn', 'Crescente')

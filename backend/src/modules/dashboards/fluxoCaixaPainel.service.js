@@ -109,7 +109,7 @@ async function painel(empresaId, { hist, hor, centros = [] }) {
   const filtroCentros = centros.length ? centros : null;
   const cls = await fluxoService.classificador(empresaId);
 
-  const [fluxo, contas, centrosRows, real, proj, cef, param, carteira, forn, versao, empresa, restante] = await Promise.all([
+  const [fluxo, contas, centrosRows, real, proj, cef, param, carteira, forn, versao, empresa, restante, dividaInformada] = await Promise.all([
     fluxoService.montar(empresaId, { inicio: ini, fim, centros }),
     // Abertura do mês atual e saldo de hoje (= abertura do mês seguinte: o extrato vai até hoje).
     dfcSaldos.saldosPorConta(empresaId, [m0, fluxoService.somarMeses(m0, 1)]),
@@ -178,6 +178,13 @@ async function painel(empresaId, { hist, hor, centros = [] }) {
     ),
     pool.query(`SELECT COALESCE(NULLIF(nome_fantasia, ''), razao_social) AS nome FROM empresas WHERE id = $1`, [empresaId]),
     restanteDoMes(empresaId, m0, cls),
+    // Dívida PJ informada à mão (DFC Construtoras › aba Dívida PJ): no painel, vale por cima da
+    // Projeção CEF no mês em que existe (ver modelo.js).
+    pool.query(
+      `SELECT sienge_id AS id, to_char(mes, 'YYYY-MM') AS mes, round(valor, 2) AS saldo
+         FROM dfc_divida_pj WHERE empresa_id = $1 ORDER BY 1, 2`,
+      [empresaId]
+    ),
   ]);
 
   // Numérico vem como texto do pg: converte, menos as colunas de texto (nomes, meses, contas).
@@ -212,6 +219,7 @@ async function painel(empresaId, { hist, hor, centros = [] }) {
     real: numeros(real.rows, ['mes']),
     proj: numeros(proj.rows, ['mes']),
     cef: numeros(cef.rows, ['mes']),
+    dividaInformada: numeros(dividaInformada.rows, ['mes']),
     param: numeros(param.rows),
     carteira: Object.fromEntries(numeros(carteira.rows, ['lado']).map((r) => [r.lado, r])),
     forn: numeros(forn.rows, ['nome', 'mascara']),

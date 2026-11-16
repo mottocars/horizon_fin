@@ -242,12 +242,22 @@ function modelo(d, ids) {
   D.invest = soma(D.contas.filter((c) => CFG.investimento.test(c.tipo)).map((c) => c.saldo));
   D.totalContas = soma(D.contas.map((c) => c.saldo));
 
-  // Dívida PJ (Projeção CEF).
+  // Dívida PJ: a Projeção CEF de cada obra com o saldo informado na aba Dívida PJ do DFC Construtoras
+  // por cima (pedido do usuário) — mês com valor informado usa o informado (`informado: true`; a obra
+  // entra mesmo sem Projeção CEF); mês sem informado segue a projeção.
   const params = Object.fromEntries((d.param || []).map((p) => [p.id, p]));
   const porObra = {};
-  (d.cef || []).filter((r) => noFiltro(r.id)).forEach((r) => (porObra[r.id] = porObra[r.id] || []).push(r));
-  D.cef = Object.entries(porObra).map(([id, rows]) => {
-    const now = rows.filter((r) => r.mes < m0).at(-1) || rows[0];
+  (d.cef || []).filter((r) => noFiltro(r.id)).forEach((r) => ((porObra[r.id] = porObra[r.id] || {})[r.mes] = { ...r, informado: false }));
+  (d.dividaInformada || [])
+    .filter((r) => noFiltro(r.id))
+    .forEach((r) => {
+      const obra = (porObra[r.id] = porObra[r.id] || {});
+      obra[r.mes] = { ...(obra[r.mes] || { id: r.id, mes: r.mes }), saldo: r.saldo, informado: true };
+    });
+  D.cef = Object.entries(porObra).map(([id, mapa]) => {
+    const rows = Object.values(mapa).sort((a, b) => (a.mes < b.mes ? -1 : a.mes > b.mes ? 1 : 0));
+    // Mês de referência: o último mês fechado — ou o mês atual, quando ele já tem valor informado.
+    const now = rows.filter((r) => r.mes < m0 || (r.informado && r.mes === m0)).at(-1) || rows[0];
     return { id: +id, nome: titulo(cmap[id]?.nome || `Obra ${id}`), rows, now, end: rows.at(-1), p: params[id] || {} };
   });
   D.cart = d.carteira || {};

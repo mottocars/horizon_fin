@@ -351,9 +351,10 @@ export function DividaObra({ c }) {
             onMouseMove={(ev) =>
               mostrar(ev, `${lbl(r.mes)} · obra ${pct(r.obra)}`, [
                 ['Saldo devedor', brl(r.saldo)],
+                ['Origem', r.informado ? 'Informado (aba Dívida PJ)' : 'Projeção CEF'],
                 ['Crédito PJ', brl(r.credito)],
-                ['Juros', brl(-r.juros)],
-                ['Amortização', brl(-r.amort)],
+                ['Juros', brl(r.juros == null ? null : -r.juros)],
+                ['Amortização', brl(r.amort == null ? null : -r.amort)],
                 ['Novo registro', brl(r.novo_registro)],
               ])
             }

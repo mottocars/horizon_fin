@@ -335,6 +335,8 @@ module.exports = {
         no_fim_da_projecao: { mes: M.lbl(c.end.mes), saldo_devedor: M.brl(c.end.saldo), juros: M.brl(c.end.juros) },
         unidades: c.unidades,
         saldo_devedor_por_mes: Object.fromEntries(c.rows.map((r) => [M.lbl(r.mes), r2(r.saldo)])),
+        // Meses com o saldo informado à mão (aba Dívida PJ do DFC Construtoras); os demais são da Projeção CEF.
+        meses_informados: c.rows.filter((r) => r.informado).map((r) => M.lbl(r.mes)),
       }));
     }
 

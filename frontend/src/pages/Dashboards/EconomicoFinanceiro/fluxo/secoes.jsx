@@ -616,10 +616,10 @@ export function DividaPj({ D }) {
           <AjudaSecao aba="divida" rotulo="Dívida PJ da Caixa" />
           <span className="selo-homologacao" title="Esta sessão ainda está em desenvolvimento">⚠ Em Homologação</span>
         </h2>
-        <p>Saldo devedor do crédito PJ na Projeção CEF de cada obra com Parâmetros.</p>
+        <p>Saldo devedor do crédito PJ de cada obra: o informado na aba Dívida PJ do DFC Construtoras e, nos meses sem ele, a Projeção CEF.</p>
       </div>
       {!dividaPj(D).length ? (
-        <div className="empty">Nenhuma obra com Projeção CEF gravada neste escopo.</div>
+        <div className="empty">Nenhuma obra com dívida PJ informada ou Projeção CEF gravada neste escopo.</div>
       ) : (
         <div className="cefs">
           {dividaPj(D).map((c) => {
