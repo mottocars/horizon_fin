@@ -165,7 +165,10 @@ export default function DrePainel({ dashboard, tituloTela, empresaId, onEmpresa,
   }, [dados]);
 
   // A grade da DRE recebe os dados já carregados (não calcula de novo).
-  const dadosDre = useMemo(() => (dados ? { arvore: dados.arvore, resultado: dados.atual } : null), [dados]);
+  // Tabela da DRE: com o Fim depois de hoje, a DRE até o Fim (`tabela`: o realizado para em hoje, os meses
+  // seguintes só com o Projetado); senão, a do período.
+  const dadosDre = useMemo(() => (dados ? { arvore: dados.arvore, resultado: dados.tabela || dados.atual } : null), [dados]);
+  const ateTabela = dados?.meta.ate_tabela || dados?.meta.ate;
 
   // Exportar Excel de auditoria: o mesmo .xlsx do DRE Gerencial (DRE recalculada em fórmulas, memória de
   // cálculo, POCs e bases), com o período e os centros do painel.
@@ -179,7 +182,7 @@ export default function DrePainel({ dashboard, tituloTela, empresaId, onEmpresa,
       // Dashboard: só a última versão salva da projeção (como a coluna Projetado do painel).
       const { blob, nome } = await exportarExcelDre(empresaId, {
         de: dados?.meta.de || de,
-        ate: dados?.meta.ate || ate,
+        ate: ateTabela || ate,
         centros,
         projecao: { fonte: 'versao', versao: null },
       });
@@ -229,7 +232,14 @@ export default function DrePainel({ dashboard, tituloTela, empresaId, onEmpresa,
               </select>
             </div>
             <CampoPeriodo id="d-inicio" rotulo="Início" valor={inicioMes} min="2015-01" max={fimMes} onChange={setInicioMes} dica="Primeiro mês do período" />
-            <CampoPeriodo id="d-fim" rotulo="Fim" valor={fimMes} min={inicioMes} max={mesAtual} onChange={setFimMes} dica="Último mês do período (até o mês atual: a DRE é do realizado)" />
+            <CampoPeriodo
+              id="d-fim"
+              rotulo="Fim"
+              valor={fimMes}
+              min={inicioMes}
+              onChange={setFimMes}
+              dica="Último mês do período. Depois do mês atual, a tabela da DRE mostra a projeção (o realizado vai até hoje); os demais quadros ficam no realizado."
+            />
             <FiltroCentros opcoes={opcoesCentros} valor={marcados} onChange={setMarcados} disabled={!empresaId || !dados} selecionarTodos />
             <div className="acoes">
               {estado === 'carregando' && dados && <Loader2 size={16} className="animate-spin" style={{ color: 'var(--muted)' }} aria-label="Atualizando" />}
@@ -294,7 +304,7 @@ export default function DrePainel({ dashboard, tituloTela, empresaId, onEmpresa,
                       <AjudaSecao aba="dre" rotulo="Demonstração do resultado" />
                     </h2>
                     <p>
-                      {rotuloPeriodo(D.meta.de, D.meta.ate)} (até {D.meta.ate.split('-').reverse().join('/')}) · {escopo}. Clique no nome de um centro para vê-lo mês a mês.
+                      {rotuloPeriodo(D.meta.de, ateTabela)} (realizado até {D.meta.ate.split('-').reverse().join('/')}) · {escopo}. Clique no nome de um centro para vê-lo mês a mês.
                     </p>
                   </div>
                   <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
@@ -308,7 +318,7 @@ export default function DrePainel({ dashboard, tituloTela, empresaId, onEmpresa,
                   variante="dashboard"
                   empresaId={empresaId}
                   de={D.meta.de}
-                  ate={D.meta.ate}
+                  ate={ateTabela}
                   centros={centros.map(String)}
                   dadosProntos={dadosDre}
                   telaCheia={telaCheia}

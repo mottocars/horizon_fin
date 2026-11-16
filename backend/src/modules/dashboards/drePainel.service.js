@@ -7,7 +7,8 @@ const { hojeEmBrasilia } = require('../extrato-contas-sienge/extratoContas-api.c
 
 // Dashboard Econômico Financeiro › Demonstração do Resultado: tudo o que o painel do CFO usa, num pedido
 // só, do MESMO motor da aba DRE do DRE Gerencial (demonstrativo.service.js / poc.service.js) — os
-// números batem com ela. O período nunca passa de hoje (a DRE é do realizado).
+// números batem com ela. O realizado nunca passa de hoje; com o Fim depois de hoje, só a tabela da DRE
+// (`tabela`) vai até ele, para mostrar a projeção.
 //   arvore    — as máscaras (nível 1 com os filhos), na ordem da DRE;
 //   atual     — a DRE do período (consolidado, por centro, mês a mês);
 //   anterior  — a DRE do mesmo período do ano anterior (consolidado e mês a mês), pra comparação;
@@ -29,8 +30,12 @@ async function painel(empresaId, { de, ate, centros = [] }) {
   const inicio = de > fim ? fim : de;
   const anterior = { de: umAnoAntes(inicio), ate: umAnoAntes(fim) };
   const filtro = { centros };
+  // Fim depois de hoje (pedido do usuário: ver a projeção até onde ela vai): só a tabela da DRE vai até ele
+  // (`tabela`, com os meses futuros vazios no realizado — o motor nunca passa de hoje — e o Projetado da
+  // versão salva). O resto do painel (indicadores, comparação com o ano anterior, POC) fica no realizado até hoje.
+  const ateTabela = ate > fim ? ate : fim;
 
-  const [arvore, atual, ant, rastreio, empresa, listaCentros] = await Promise.all([
+  const [arvore, atual, ant, rastreio, empresa, listaCentros, tabela] = await Promise.all([
     mascaras.list(empresaId),
     demonstrativo.calcular(empresaId, { de: inicio, ate: fim, ...filtro }),
     demonstrativo.calcular(empresaId, { de: anterior.de, ate: anterior.ate, ...filtro }),
@@ -41,12 +46,15 @@ async function painel(empresaId, { de, ate, centros = [] }) {
          FROM centros_custo_sienge WHERE empresa_id = $1 AND realiza_dre ORDER BY ${ORDEM_CENTROS}`,
       [empresaId]
     ),
+    ateTabela > fim ? demonstrativo.calcular(empresaId, { de: inicio, ate: ateTabela, ...filtro }) : null,
   ]);
 
   return {
-    meta: { empresa: empresa.rows[0]?.nome || null, hoje, de: inicio, ate: fim, anterior },
+    meta: { empresa: empresa.rows[0]?.nome || null, hoje, de: inicio, ate: fim, ate_tabela: ateTabela, anterior },
     arvore,
     atual,
+    // Só quando o Fim passa de hoje (senão a tabela é a própria `atual`).
+    ...(tabela ? { tabela } : {}),
     anterior: { valores: ant.valores, meses: ant.meses },
     poc: rastreio,
     centros: listaCentros.rows,
