@@ -3403,6 +3403,20 @@ CREATE TABLE dre_orcamento_valores (
 
 CREATE INDEX idx_dre_orcamento_valores_centro ON dre_orcamento_valores (empresa_id, sienge_id);
 
+-- ─── DFC Construtoras › Dívida PJ — ver database/migrations/2026-11-16-dfc-divida-pj.sql ───
+-- O valor da dívida PJ de cada centro de custo (os com "Projeta DFC"), mês a mês; `mes` = dia 1.
+CREATE TABLE dfc_divida_pj (
+    id            SERIAL PRIMARY KEY,
+    empresa_id    INTEGER NOT NULL REFERENCES empresas(id) ON DELETE CASCADE,
+    sienge_id     INTEGER NOT NULL,
+    mes           DATE NOT NULL CHECK (EXTRACT(DAY FROM mes) = 1),
+    valor         NUMERIC(15,2) NOT NULL DEFAULT 0,
+    criado_em     TIMESTAMP DEFAULT NOW(),
+    atualizado_em TIMESTAMP DEFAULT NOW(),
+    FOREIGN KEY (sienge_id, empresa_id) REFERENCES centros_custo_sienge(sienge_id, empresa_id) ON DELETE CASCADE,
+    UNIQUE (empresa_id, sienge_id, mes)
+);
+
 -- ─── Home > Plano de Voo (Kanban de atividades) — ver database/migrations/2026-10-05-projetos-kanban.sql ───
 -- Planos de voo (aba "Plano de voo", Gantt) e macro tarefas — ver 2026-10-06-planos-de-voo.sql.
 CREATE TABLE projetos_planos (

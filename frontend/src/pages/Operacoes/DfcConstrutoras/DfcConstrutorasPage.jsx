@@ -50,6 +50,7 @@ import DfcOrcamentosTab from './DfcOrcamentosTab';
 import NovaVersaoOrcamentoModal from './NovaVersaoOrcamentoModal';
 import DfcFluxoTab from './DfcFluxoTab';
 import DfcContasCorrentesTab from './DfcContasCorrentesTab';
+import DfcDividaPjTab from './DfcDividaPjTab';
 import NovaVersaoPlanoModal from './NovaVersaoPlanoModal';
 import { ORIGENS_PROJECAO, ORIGEM_NAO_INFORMADA } from './orcamentoValores';
 import PlanosContasLista from './PlanosContasLista';
@@ -68,6 +69,7 @@ const TABS = [
   { id: 'avancos-obras', label: 'Avanços', icon: HardHat },
   { id: 'repasses', label: 'Repasses', icon: Banknote },
   { id: 'contas-correntes', label: 'Contas', icon: Landmark },
+  { id: 'divida-pj', label: 'Dívida PJ', icon: HandCoins },
   { id: 'orcamentos', label: 'Projeções', icon: TrendingUp },
 ];
 
@@ -217,6 +219,7 @@ export default function DfcConstrutorasPage() {
   // Aba Contas Correntes: busca (conveniência de navegador) e o ícone de buscar as contas no Sienge
   // (a aba faz a busca — `contasTabRef.current.sincronizar()`).
   const [buscaContas, setBuscaContas] = useState('');
+  const [buscaDividaPj, setBuscaDividaPj] = useState('');
   const [sincronizandoContas, setSincronizandoContas] = useState(false);
   const contasTabRef = useRef(null);
 
@@ -730,6 +733,23 @@ export default function DfcConstrutorasPage() {
               </div>
             )}
 
+            {abaAtiva === 'divida-pj' && (
+              <div className="sm:min-w-56 sm:max-w-sm sm:flex-1">
+                <label className="mb-1 block text-sm font-medium text-gray-700">Buscar</label>
+                <div className="relative">
+                  <Search size={15} className="pointer-events-none absolute left-3 top-1/2 -translate-y-1/2 text-gray-400" />
+                  <input
+                    type="text"
+                    value={buscaDividaPj}
+                    onChange={(e) => setBuscaDividaPj(e.target.value)}
+                    disabled={!empresaId}
+                    placeholder={!empresaId ? 'Selecione a empresa primeiro' : 'Buscar por código ou descrição...'}
+                    className="w-full rounded-lg border border-gray-200 py-2 pl-9 pr-3 text-sm focus:outline-none focus:ring-2 focus:ring-primary-100 disabled:bg-gray-50 disabled:text-gray-400"
+                  />
+                </div>
+              </div>
+            )}
+
             {abaAtiva === 'parametros' && (
               <>
                 <div className="sm:min-w-56 sm:max-w-sm sm:flex-1">
@@ -1022,6 +1042,8 @@ export default function DfcConstrutorasPage() {
             search={buscaContas}
             onSincronizando={setSincronizandoContas}
           />
+        ) : tabAtiva.id === 'divida-pj' ? (
+          <DfcDividaPjTab empresaId={empresaId} search={buscaDividaPj} />
         ) : tabAtiva.id === 'dfc' ? (
           <DfcFluxoTab
             empresaId={empresaId}

@@ -57,6 +57,7 @@ const dfcOrcamentoRoutes = require('./modules/dfc-orcamento/dfcOrcamento.routes'
 const dfcDesembolsoRoutes = require('./modules/dfc-desembolso/desembolso.routes');
 const dfcEmpresarialRoutes = require('./modules/dfc-empresarial/dfcEmpresarial.routes');
 const dfcContasRoutes = require('./modules/dfc-contas/dfcContas.routes');
+const dfcDividaPjRoutes = require('./modules/dfc-divida-pj/dividaPj.routes');
 const dfcSaldosRoutes = require('./modules/dfc-saldos/dfcSaldos.routes');
 const dfcDetalhamentoRoutes = require('./modules/dfc-detalhamento/detalhamento.routes');
 const dfcExportacaoRoutes = require('./modules/dfc-exportacao/exportacao.routes');
@@ -230,6 +231,7 @@ app.use('/api/dfc-orcamento', exigirTela([T.DFC], LEITURA_DASHBOARD), dfcOrcamen
 app.use('/api/dfc-desembolso', exigirTela([T.DFC]), dfcDesembolsoRoutes);
 app.use('/api/dfc-empresarial', exigirTela([T.DFC]), dfcEmpresarialRoutes);
 app.use('/api/dfc-contas', exigirTela([T.DFC]), dfcContasRoutes);
+app.use('/api/dfc-divida-pj', exigirTela([T.DFC]), dfcDividaPjRoutes);
 app.use('/api/dfc-saldos', exigirTela([T.DFC], LEITURA_DASHBOARD), dfcSaldosRoutes);
 app.use('/api/dfc-detalhamento', exigirTela([T.DFC], LEITURA_DASHBOARD), dfcDetalhamentoRoutes);
 app.use('/api/dfc-exportacao', exigirTela([T.DFC], LEITURA_DASHBOARD), dfcExportacaoRoutes);
