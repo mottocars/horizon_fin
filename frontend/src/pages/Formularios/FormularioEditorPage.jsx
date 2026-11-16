@@ -7,6 +7,7 @@ import {
   CloudOff,
   Copy,
   ExternalLink,
+  Building2,
   Eye,
   Inbox,
   Link2,
@@ -48,7 +49,6 @@ const CAMPOS_EDITAVEIS = [
   'cor_tema',
   'mensagem_final',
   'publico_alvo',
-  'empresa_ids',
   'usuario_ids',
   'anonimo',
   'uma_resposta_por_pessoa',
@@ -58,7 +58,8 @@ const CAMPOS_EDITAVEIS = [
 ];
 const ESPERA_SALVAR_MS = 900;
 
-// Cadastros › Formulários › construtor. Abas Perguntas / Respostas / Configurações, como no Google Forms.
+// Cadastros › Formulários › construtor (/cadastros/formularios/:id?empresa_id=N — o formulário é sempre da
+// empresa da URL). Abas Perguntas / Respostas / Configurações, como no Google Forms.
 // Tudo o que é editado salva sozinho (~1 s depois da última alteração); o indicador do cabeçalho mostra o estado.
 export default function FormularioEditorPage() {
   const { id } = useParams();
@@ -67,6 +68,8 @@ export default function FormularioEditorPage() {
   const aviso = useAviso();
   const [params, setParams] = useSearchParams();
   const aba = ['perguntas', 'respostas', 'configuracoes'].includes(params.get('aba')) ? params.get('aba') : 'perguntas';
+  const empresaId = params.get('empresa_id') || '';
+  const lista = `/cadastros/formularios${empresaId ? `?empresa_id=${empresaId}` : ''}`;
 
   const [form, setForm] = useState(null);
   const [erroCarregar, setErroCarregar] = useState('');
@@ -86,8 +89,12 @@ export default function FormularioEditorPage() {
   const timer = useRef(null);
 
   useEffect(() => {
+    if (!empresaId) {
+      navigate('/cadastros/formularios', { replace: true });
+      return undefined;
+    }
     let vivo = true;
-    obterFormulario(id)
+    obterFormulario(empresaId, id)
       .then((f) => {
         if (!vivo) return;
         formRef.current = f;
@@ -97,7 +104,8 @@ export default function FormularioEditorPage() {
     return () => {
       vivo = false;
     };
-  }, [id]);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [id, empresaId]);
 
   // Grava o estado atual. Se algo mudar durante a gravação, grava de novo no fim.
   const salvarAgora = useCallback(async () => {
@@ -111,7 +119,7 @@ export default function FormularioEditorPage() {
     const atual = formRef.current;
     const payload = Object.fromEntries(CAMPOS_EDITAVEIS.map((c) => [c, atual[c]]));
     setEstado('salvando');
-    const promessa = salvarFormulario(atual.id, payload)
+    const promessa = salvarFormulario(atual.empresa_id, atual.id, payload)
       .then((r) => {
         versaoSalva.current = Math.max(versaoSalva.current, enviada);
         setForm((f) => {
@@ -201,7 +209,7 @@ export default function FormularioEditorPage() {
         });
         if (!ok) return;
       }
-      const r = await alterarStatusFormulario(form.id, status);
+      const r = await alterarStatusFormulario(form.empresa_id, form.id, status);
       atualizadoNoServidor({ status: r.status, publicado_em: r.publicado_em });
       if (status === 'PUBLICADO') {
         if (form.modalidade === 'PUBLICO') setCompartilhar(true);
@@ -219,9 +227,9 @@ export default function FormularioEditorPage() {
   async function duplicar() {
     await salvarAgora();
     try {
-      const novo = await duplicarFormulario(form.id);
+      const novo = await duplicarFormulario(form.empresa_id, form.id);
       aviso('Cópia criada.');
-      navigate(`/cadastros/formularios/${novo.id}`);
+      navigate(`/cadastros/formularios/${novo.id}?empresa_id=${novo.empresa_id}`);
     } catch (e) {
       aviso(mensagemErro(e, 'Não foi possível duplicar.'));
     }
@@ -238,9 +246,9 @@ export default function FormularioEditorPage() {
     try {
       clearTimeout(timer.current);
       versaoSalva.current = versaoLocal.current;
-      await excluirFormulario(form.id);
+      await excluirFormulario(form.empresa_id, form.id);
       aviso('Formulário excluído.');
-      navigate('/cadastros/formularios');
+      navigate(lista);
     } catch (e) {
       aviso(mensagemErro(e, 'Não foi possível excluir.'));
     }
@@ -250,7 +258,7 @@ export default function FormularioEditorPage() {
     return (
       <Card className="py-14 text-center">
         <p className="text-sm font-medium text-gray-800">{erroCarregar}</p>
-        <button type="button" onClick={() => navigate('/cadastros/formularios')} className="mt-3 text-sm font-medium text-primary-600 hover:underline">
+        <button type="button" onClick={() => navigate(lista)} className="mt-3 text-sm font-medium text-primary-600 hover:underline">
           Voltar para a lista
         </button>
       </Card>
@@ -276,7 +284,7 @@ export default function FormularioEditorPage() {
               type="button"
               onClick={async () => {
                 await salvarAgora();
-                navigate('/cadastros/formularios');
+                navigate(lista);
               }}
               title="Voltar para a lista"
               className="flex shrink-0 items-center justify-center rounded-lg border border-gray-200 p-2 text-gray-500 hover:bg-gray-50"
@@ -289,6 +297,12 @@ export default function FormularioEditorPage() {
             <div className="min-w-0">
               <p className="truncate text-base font-semibold text-gray-900">{form.titulo || 'Formulário sem título'}</p>
               <div className="mt-0.5 flex flex-wrap items-center gap-2 text-xs">
+                {form.empresa_nome && (
+                  <span className="inline-flex items-center gap-1 rounded-full bg-gray-100 px-2 py-0.5 font-medium text-gray-700" title="Empresa do formulário">
+                    <Building2 size={12} />
+                    {form.empresa_nome}
+                  </span>
+                )}
                 <span className={`inline-flex items-center gap-1 rounded-full px-2 py-0.5 font-medium ${mod.cor}`}>
                   <ModIcone size={12} />
                   {mod.rotulo}

@@ -3,17 +3,20 @@ import http from './http';
 
 // Cadastros › Formulários (ver backend/src/modules/formularios).
 
-export const listarFormularios = (filtros = {}) => http.get('/formularios', { params: filtros }).then((r) => r.data);
-export const obterFormulario = (id) => http.get(`/formularios/${id}`).then((r) => r.data);
-export const criarFormulario = (dados = {}) => http.post('/formularios', dados).then((r) => r.data);
-export const salvarFormulario = (id, dados) => http.put(`/formularios/${id}`, dados).then((r) => r.data);
-export const alterarStatusFormulario = (id, status) => http.patch(`/formularios/${id}/status`, { status }).then((r) => r.data);
-export const duplicarFormulario = (id) => http.post(`/formularios/${id}/duplicar`).then((r) => r.data);
-export const gerarNovoLinkFormulario = (id) => http.post(`/formularios/${id}/novo-link`).then((r) => r.data);
-export const excluirFormulario = (id) => http.delete(`/formularios/${id}`).then((r) => r.data);
-export const resultadosFormulario = (id) => http.get(`/formularios/${id}/respostas`).then((r) => r.data);
-export const excluirRespostaFormulario = (id, respostaId) => http.delete(`/formularios/${id}/respostas/${respostaId}`).then((r) => r.data);
-export const usuariosPublicoAlvo = () => http.get('/formularios/opcoes/usuarios').then((r) => r.data);
+// Tudo dentro de uma empresa (rotas /formularios/:empresaId/...).
+const base = (empresaId) => `/formularios/${empresaId}`;
+export const listarFormularios = (empresaId, filtros = {}) => http.get(base(empresaId), { params: filtros }).then((r) => r.data);
+export const obterFormulario = (empresaId, id) => http.get(`${base(empresaId)}/${id}`).then((r) => r.data);
+export const criarFormulario = (empresaId, dados = {}) => http.post(base(empresaId), dados).then((r) => r.data);
+export const salvarFormulario = (empresaId, id, dados) => http.put(`${base(empresaId)}/${id}`, dados).then((r) => r.data);
+export const alterarStatusFormulario = (empresaId, id, status) => http.patch(`${base(empresaId)}/${id}/status`, { status }).then((r) => r.data);
+export const duplicarFormulario = (empresaId, id) => http.post(`${base(empresaId)}/${id}/duplicar`).then((r) => r.data);
+export const gerarNovoLinkFormulario = (empresaId, id) => http.post(`${base(empresaId)}/${id}/novo-link`).then((r) => r.data);
+export const excluirFormulario = (empresaId, id) => http.delete(`${base(empresaId)}/${id}`).then((r) => r.data);
+export const resultadosFormulario = (empresaId, id) => http.get(`${base(empresaId)}/${id}/respostas`).then((r) => r.data);
+export const excluirRespostaFormulario = (empresaId, id, respostaId) =>
+  http.delete(`${base(empresaId)}/${id}/respostas/${respostaId}`).then((r) => r.data);
+export const usuariosPublicoAlvo = (empresaId) => http.get(`${base(empresaId)}/opcoes/usuarios`).then((r) => r.data);
 
 // Usuário logado: formulários privados que ele ainda precisa responder.
 export const formulariosPendentes = () => http.get('/meus-formularios/pendentes').then((r) => r.data);

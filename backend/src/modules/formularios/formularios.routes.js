@@ -1,27 +1,30 @@
 const { Router } = require('express');
 const { rateLimit, ipKeyGenerator } = require('express-rate-limit');
 const authMiddleware = require('../../middlewares/auth.middleware');
+const { paramEmpresa } = require('../../middlewares/acesso.middleware');
 const controller = require('./formularios.controller');
 
 // Três routers, montados em server.js:
-//   /api/formularios          → Cadastros › Formulários (exige a tela);
+//   /api/formularios          → Cadastros › Formulários (exige a tela), sempre dentro de uma empresa
+//                               (/:empresaId/..., conferida contra as empresas do usuário);
 //   /api/meus-formularios     → qualquer usuário logado: formulários privados pendentes e envio da resposta;
 //   /api/publico/formularios  → link público, sem login.
 
 const cadastro = Router();
 cadastro.use(authMiddleware);
+cadastro.param('empresaId', paramEmpresa);
 // /opcoes/usuarios antes de /:id (senão a rota curinga pega a palavra como id).
-cadastro.get('/opcoes/usuarios', controller.usuarios);
-cadastro.get('/', controller.listar);
-cadastro.post('/', controller.criar);
-cadastro.get('/:id', controller.obter);
-cadastro.put('/:id', controller.salvar);
-cadastro.patch('/:id/status', controller.alterarStatus);
-cadastro.post('/:id/duplicar', controller.duplicar);
-cadastro.post('/:id/novo-link', controller.novoLink);
-cadastro.delete('/:id', controller.excluir);
-cadastro.get('/:id/respostas', controller.resultados);
-cadastro.delete('/:id/respostas/:respostaId', controller.excluirResposta);
+cadastro.get('/:empresaId/opcoes/usuarios', controller.usuarios);
+cadastro.get('/:empresaId', controller.listar);
+cadastro.post('/:empresaId', controller.criar);
+cadastro.get('/:empresaId/:id', controller.obter);
+cadastro.put('/:empresaId/:id', controller.salvar);
+cadastro.patch('/:empresaId/:id/status', controller.alterarStatus);
+cadastro.post('/:empresaId/:id/duplicar', controller.duplicar);
+cadastro.post('/:empresaId/:id/novo-link', controller.novoLink);
+cadastro.delete('/:empresaId/:id', controller.excluir);
+cadastro.get('/:empresaId/:id/respostas', controller.resultados);
+cadastro.delete('/:empresaId/:id/respostas/:respostaId', controller.excluirResposta);
 
 const meus = Router();
 meus.use(authMiddleware);

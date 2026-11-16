@@ -102,7 +102,10 @@ function JanelaPesquisa({ formulario: f, restantes, onDispensar, onConcluir }) {
               {obrigatorio ? <ShieldAlert size={17} /> : <ClipboardList size={17} />}
             </span>
             <div className="min-w-0">
-              <p className="text-sm font-semibold text-gray-900">{obrigatorio ? 'Pesquisa obrigatória' : 'Pesquisa para você'}</p>
+              <p className="text-sm font-semibold text-gray-900">
+                {obrigatorio ? 'Pesquisa obrigatória' : 'Pesquisa para você'}
+                {f.empresa_nome && <span className="font-normal text-gray-400"> · {f.empresa_nome}</span>}
+              </p>
               <p className="truncate text-xs text-gray-500">
                 {obrigatorio ? 'Responda para continuar usando o Horizon.' : 'Leva poucos minutos — você também pode responder depois.'}
                 {f.anonimo && ' Suas respostas são anônimas.'}

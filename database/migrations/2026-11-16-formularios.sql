@@ -3,12 +3,15 @@
 --   PRIVADO              → aparece numa janela ao entrar no sistema para os usuários do público-alvo;
 --                          dá para fechar, e a janela volta a cada entrada até a pessoa responder;
 --   PRIVADO_OBRIGATORIO  → mesma janela, sem fechar: o usuário só navega depois de responder.
+-- Cada formulário é de UMA empresa (como tudo no sistema): o público-alvo dos privados são os usuários
+-- vinculados a ela, e o link público mostra o nome/logo dela.
 -- As perguntas ficam em JSON (cada uma com um `id` estável gerado na tela), assim a montagem é salva de
 -- uma vez e as respostas guardam { <id da pergunta>: valor }. Ver backend/src/modules/formularios.
 -- Aplicar: psql -U postgres -d horizon_fin -v ON_ERROR_STOP=1 -f database/migrations/2026-11-16-formularios.sql
 
 CREATE TABLE IF NOT EXISTS formularios (
     id                       SERIAL PRIMARY KEY,
+    empresa_id               INTEGER NOT NULL REFERENCES empresas(id) ON DELETE CASCADE,
     titulo                   VARCHAR(200) NOT NULL DEFAULT 'Formulário sem título',
     descricao                TEXT NOT NULL DEFAULT '',
     modalidade               VARCHAR(30) NOT NULL DEFAULT 'PUBLICO'
@@ -18,10 +21,10 @@ CREATE TABLE IF NOT EXISTS formularios (
     perguntas                JSONB NOT NULL DEFAULT '[]'::jsonb,
     cor_tema                 VARCHAR(7) NOT NULL DEFAULT '#2563eb',
     mensagem_final           TEXT NOT NULL DEFAULT '',
-    -- Só PRIVADO / PRIVADO_OBRIGATORIO: quem precisa responder.
+    -- Só PRIVADO / PRIVADO_OBRIGATORIO: quem precisa responder — TODOS = os usuários vinculados à empresa;
+    -- USUARIOS = só os escolhidos (vinculados à empresa ou Master).
     publico_alvo             VARCHAR(20) NOT NULL DEFAULT 'TODOS'
-                             CHECK (publico_alvo IN ('TODOS', 'EMPRESAS', 'USUARIOS')),
-    empresa_ids              INTEGER[] NOT NULL DEFAULT '{}',
+                             CHECK (publico_alvo IN ('TODOS', 'USUARIOS')),
     usuario_ids              INTEGER[] NOT NULL DEFAULT '{}',
     -- Só PRIVADO / PRIVADO_OBRIGATORIO: o nome de quem respondeu não aparece nos resultados.
     anonimo                  BOOLEAN NOT NULL DEFAULT FALSE,
@@ -51,6 +54,7 @@ CREATE TABLE IF NOT EXISTS formularios_respostas (
     enviado_em     TIMESTAMP NOT NULL DEFAULT NOW()
 );
 
+CREATE INDEX IF NOT EXISTS formularios_empresa_idx ON formularios (empresa_id);
 CREATE INDEX IF NOT EXISTS formularios_respostas_formulario_idx ON formularios_respostas (formulario_id, enviado_em DESC);
 -- Uma resposta por usuário em cada formulário privado.
 CREATE UNIQUE INDEX IF NOT EXISTS formularios_respostas_usuario_uniq

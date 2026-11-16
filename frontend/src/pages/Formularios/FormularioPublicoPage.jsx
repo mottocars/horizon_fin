@@ -89,6 +89,12 @@ export default function FormularioPublicoPage() {
     <div className="min-h-screen px-4 py-8 sm:py-12" style={{ backgroundColor: '#fff', backgroundImage: `linear-gradient(${form ? corAlpha(cor, 0.08) : 'rgba(0,0,0,0.03)'}, ${form ? corAlpha(cor, 0.08) : 'rgba(0,0,0,0.03)'})` }}>
       {/* Campo-isca: invisível para pessoas; robô que preenche tudo é descartado no servidor. */}
       <input ref={isca} name="website" tabIndex={-1} autoComplete="off" aria-hidden="true" className="absolute -left-[9999px] h-0 w-0 opacity-0" />
+      {form?.empresa_nome && (
+        <div className="mx-auto mb-5 flex w-full max-w-2xl items-center justify-center gap-3">
+          {form.empresa_logo && <img src={form.empresa_logo} alt="" className="h-10 w-auto max-w-40 object-contain" />}
+          <span className="text-sm font-semibold tracking-tight text-gray-700">{form.empresa_nome}</span>
+        </div>
+      )}
       {conteudo}
       <p className="mt-10 text-center text-xs text-gray-400">
         Formulário criado com <img src="/logomarca.svg" alt="Horizon Fin" className="ml-1 inline h-3.5 w-auto align-[-2px] opacity-70" />

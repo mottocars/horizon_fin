@@ -6,6 +6,8 @@ const pool = require('../../config/db');
 //   PUBLICO             → link /f/<token_publico>, sem login (rotas em publico.routes.js);
 //   PRIVADO             → janela ao entrar no sistema, pode fechar (volta a cada entrada);
 //   PRIVADO_OBRIGATORIO → janela ao entrar no sistema, sem fechar até responder.
+// Cada formulário é de uma empresa (formularios.empresa_id): o cadastro trabalha sempre dentro da empresa
+// escolhida na tela (rotas /:empresaId/...), e o público-alvo dos privados são os usuários dela.
 // As duas privadas são servidas ao usuário logado por meus.routes.js.
 //
 // Perguntas (JSON em formularios.perguntas), cada uma com `id` estável gerado na tela:
@@ -113,7 +115,6 @@ function problemasParaPublicar(f) {
     }
   });
   if (MODALIDADES_PRIVADAS.includes(f.modalidade)) {
-    if (f.publico_alvo === 'EMPRESAS' && (f.empresa_ids || []).length === 0) problemas.push('Escolha as empresas do público-alvo.');
     if (f.publico_alvo === 'USUARIOS' && (f.usuario_ids || []).length === 0) problemas.push('Escolha os usuários do público-alvo.');
   }
   return problemas;
@@ -213,23 +214,26 @@ function converterResposta(p, v) {
 // Cadastro
 // ---------------------------------------------------------------------------------------------
 
-const CAMPOS = `f.id, f.titulo, f.descricao, f.modalidade, f.status, f.perguntas, f.cor_tema, f.mensagem_final,
-  f.publico_alvo, f.empresa_ids, f.usuario_ids, f.anonimo, f.uma_resposta_por_pessoa,
+const CAMPOS = `f.id, f.empresa_id, f.titulo, f.descricao, f.modalidade, f.status, f.perguntas, f.cor_tema, f.mensagem_final,
+  f.publico_alvo, f.usuario_ids, f.anonimo, f.uma_resposta_por_pessoa,
   f.inicio_em::text AS inicio_em, f.fim_em::text AS fim_em, f.token_publico, f.publicado_em,
-  f.criado_em, f.atualizado_em`;
+  f.criado_em, f.atualizado_em,
+  (SELECT COALESCE(NULLIF(e.nome_fantasia, ''), e.razao_social) FROM empresas e WHERE e.id = f.empresa_id) AS empresa_nome`;
 
-// Quem é público-alvo de um formulário privado (usuários ativos). `f` = alias da tabela formularios.
+// Usuário "da empresa": vinculado a ela (usuarios_empresas). `f` = alias da tabela formularios.
+const SQL_DA_EMPRESA = `EXISTS (SELECT 1 FROM usuarios_empresas ue WHERE ue.usuario_id = u.id AND ue.empresa_id = f.empresa_id)`;
+// Quem é público-alvo de um formulário privado (usuários ativos):
+//   TODOS    → os usuários vinculados à empresa do formulário (Master sem vínculo fica de fora);
+//   USUARIOS → os escolhidos, desde que ainda sejam da empresa (ou Master, que pode ser escolhido).
 const SQL_PUBLICO_ALVO = `
   u.ativo AND (
-    f.publico_alvo = 'TODOS'
-    OR (f.publico_alvo = 'USUARIOS' AND u.id = ANY(f.usuario_ids))
-    OR (f.publico_alvo = 'EMPRESAS' AND EXISTS (
-          SELECT 1 FROM usuarios_empresas ue WHERE ue.usuario_id = u.id AND ue.empresa_id = ANY(f.empresa_ids)))
+    (f.publico_alvo = 'TODOS' AND ${SQL_DA_EMPRESA})
+    OR (f.publico_alvo = 'USUARIOS' AND u.id = ANY(f.usuario_ids) AND (u.permissao = 'MASTER' OR ${SQL_DA_EMPRESA}))
   )`;
 
-async function listar({ busca, status, modalidade }) {
-  const cond = [];
-  const params = [];
+async function listar(empresaId, { busca, status, modalidade }) {
+  const params = [empresaId];
+  const cond = ['f.empresa_id = $1'];
   if (busca) {
     params.push(`%${busca}%`);
     cond.push(`(f.titulo ILIKE $${params.length} OR f.descricao ILIKE $${params.length})`);
@@ -254,26 +258,27 @@ async function listar({ busca, status, modalidade }) {
             cu.nome AS criado_por_nome
      FROM formularios f
      LEFT JOIN usuarios cu ON cu.id = f.criado_por
-     ${cond.length ? `WHERE ${cond.join(' AND ')}` : ''}
+     WHERE ${cond.join(' AND ')}
      ORDER BY CASE f.status WHEN 'PUBLICADO' THEN 0 WHEN 'RASCUNHO' THEN 1 ELSE 2 END, f.atualizado_em DESC`,
     params
   );
   return rows;
 }
 
-async function obter(id) {
+// Um formulário da empresa (de outra empresa = "não encontrado").
+async function obter(empresaId, id) {
   const { rows } = await pool.query(
     `SELECT ${CAMPOS},
             (SELECT COUNT(*) FROM formularios_respostas r WHERE r.formulario_id = f.id)::int AS qtd_respostas
-     FROM formularios f WHERE f.id = $1`,
-    [id]
+     FROM formularios f WHERE f.id = $1 AND f.empresa_id = $2`,
+    [id, empresaId]
   );
   if (!rows[0]) throw erro(404, 'Formulário não encontrado.');
   return rows[0];
 }
 
 // Formulário novo já nasce com uma pergunta de múltipla escolha — como no Google Forms.
-async function criar(usuarioId, dados = {}) {
+async function criar(empresaId, usuarioId, dados = {}) {
   const perguntas = normalizarPerguntas(
     dados.perguntas || [
       {
@@ -285,8 +290,8 @@ async function criar(usuarioId, dados = {}) {
     ]
   );
   const { rows } = await pool.query(
-    `INSERT INTO formularios (titulo, descricao, modalidade, perguntas, token_publico, criado_por, atualizado_por, cor_tema)
-     VALUES ($1, $2, $3, $4::jsonb, $5, $6, $6, $7) RETURNING id`,
+    `INSERT INTO formularios (titulo, descricao, modalidade, perguntas, token_publico, criado_por, atualizado_por, cor_tema, empresa_id)
+     VALUES ($1, $2, $3, $4::jsonb, $5, $6, $6, $7, $8) RETURNING id`,
     [
       texto(dados.titulo || 'Formulário sem título', 200),
       texto(dados.descricao, 5000),
@@ -295,13 +300,14 @@ async function criar(usuarioId, dados = {}) {
       novoToken(),
       usuarioId,
       dados.cor_tema || '#2563eb',
+      empresaId,
     ]
   );
-  return obter(rows[0].id);
+  return obter(empresaId, rows[0].id);
 }
 
-async function salvar(id, usuarioId, d) {
-  const atual = await obter(id);
+async function salvar(empresaId, id, usuarioId, d) {
+  const atual = await obter(empresaId, id);
   const perguntas = d.perguntas !== undefined ? normalizarPerguntas(d.perguntas) : atual.perguntas;
   const novo = {
     titulo: d.titulo !== undefined ? texto(d.titulo, 200) : atual.titulo,
@@ -310,7 +316,6 @@ async function salvar(id, usuarioId, d) {
     cor_tema: d.cor_tema ?? atual.cor_tema,
     mensagem_final: d.mensagem_final !== undefined ? texto(d.mensagem_final, 2000) : atual.mensagem_final,
     publico_alvo: d.publico_alvo ?? atual.publico_alvo,
-    empresa_ids: d.empresa_ids ?? atual.empresa_ids,
     usuario_ids: d.usuario_ids ?? atual.usuario_ids,
     anonimo: d.anonimo ?? atual.anonimo,
     uma_resposta_por_pessoa: d.uma_resposta_por_pessoa ?? atual.uma_resposta_por_pessoa,
@@ -326,9 +331,9 @@ async function salvar(id, usuarioId, d) {
   }
   await pool.query(
     `UPDATE formularios SET titulo = $2, descricao = $3, modalidade = $4, cor_tema = $5, mensagem_final = $6,
-            publico_alvo = $7, empresa_ids = $8::int[], usuario_ids = $9::int[], anonimo = $10,
-            uma_resposta_por_pessoa = $11, inicio_em = $12::date, fim_em = $13::date, perguntas = $14::jsonb,
-            atualizado_por = $15, atualizado_em = NOW()
+            publico_alvo = $7, usuario_ids = $8::int[], anonimo = $9,
+            uma_resposta_por_pessoa = $10, inicio_em = $11::date, fim_em = $12::date, perguntas = $13::jsonb,
+            atualizado_por = $14, atualizado_em = NOW()
      WHERE id = $1`,
     [
       id,
@@ -338,7 +343,6 @@ async function salvar(id, usuarioId, d) {
       novo.cor_tema,
       novo.mensagem_final,
       novo.publico_alvo,
-      novo.empresa_ids,
       novo.usuario_ids,
       novo.anonimo,
       novo.uma_resposta_por_pessoa,
@@ -348,11 +352,11 @@ async function salvar(id, usuarioId, d) {
       usuarioId,
     ]
   );
-  return obter(id);
+  return obter(empresaId, id);
 }
 
-async function alterarStatus(id, usuarioId, status) {
-  const atual = await obter(id);
+async function alterarStatus(empresaId, id, usuarioId, status) {
+  const atual = await obter(empresaId, id);
   if (status === 'PUBLICADO') {
     const problemas = problemasParaPublicar(atual);
     if (problemas.length) {
@@ -367,16 +371,16 @@ async function alterarStatus(id, usuarioId, status) {
      WHERE id = $1`,
     [id, status, usuarioId]
   );
-  return obter(id);
+  return obter(empresaId, id);
 }
 
-async function duplicar(id, usuarioId) {
-  const f = await obter(id);
+async function duplicar(empresaId, id, usuarioId) {
+  const f = await obter(empresaId, id);
   const { rows } = await pool.query(
     `INSERT INTO formularios (titulo, descricao, modalidade, perguntas, cor_tema, mensagem_final, publico_alvo,
-                              empresa_ids, usuario_ids, anonimo, uma_resposta_por_pessoa, token_publico,
+                              empresa_id, usuario_ids, anonimo, uma_resposta_por_pessoa, token_publico,
                               criado_por, atualizado_por)
-     VALUES ($1, $2, $3, $4::jsonb, $5, $6, $7, $8::int[], $9::int[], $10, $11, $12, $13, $13) RETURNING id`,
+     VALUES ($1, $2, $3, $4::jsonb, $5, $6, $7, $8, $9::int[], $10, $11, $12, $13, $13) RETURNING id`,
     [
       texto(`${f.titulo} (cópia)`, 200),
       f.descricao,
@@ -385,7 +389,7 @@ async function duplicar(id, usuarioId) {
       f.cor_tema,
       f.mensagem_final,
       f.publico_alvo,
-      f.empresa_ids,
+      empresaId,
       f.usuario_ids,
       f.anonimo,
       f.uma_resposta_por_pessoa,
@@ -393,27 +397,27 @@ async function duplicar(id, usuarioId) {
       usuarioId,
     ]
   );
-  return obter(rows[0].id);
+  return obter(empresaId, rows[0].id);
 }
 
-async function excluir(id) {
-  const { rowCount } = await pool.query('DELETE FROM formularios WHERE id = $1', [id]);
+async function excluir(empresaId, id) {
+  const { rowCount } = await pool.query('DELETE FROM formularios WHERE id = $1 AND empresa_id = $2', [id, empresaId]);
   if (!rowCount) throw erro(404, 'Formulário não encontrado.');
 }
 
 // Gera um link público novo (o antigo deixa de funcionar).
-async function novoLink(id, usuarioId) {
-  await obter(id);
+async function novoLink(empresaId, id, usuarioId) {
+  await obter(empresaId, id);
   await pool.query(
     'UPDATE formularios SET token_publico = $2, atualizado_por = $3, atualizado_em = NOW() WHERE id = $1',
     [id, novoToken(), usuarioId]
   );
-  return obter(id);
+  return obter(empresaId, id);
 }
 
 // Resultados: respostas + (formulário privado) a lista do público-alvo com quem já respondeu.
-async function resultados(id) {
-  const f = await obter(id);
+async function resultados(empresaId, id) {
+  const f = await obter(empresaId, id);
   const { rows: respostas } = await pool.query(
     `SELECT r.id, r.respostas, r.origem, r.enviado_em, r.usuario_id, u.nome AS usuario_nome
      FROM formularios_respostas r
@@ -460,7 +464,8 @@ async function resultados(id) {
   };
 }
 
-async function excluirResposta(formularioId, respostaId) {
+async function excluirResposta(empresaId, formularioId, respostaId) {
+  await obter(empresaId, formularioId);
   const { rowCount } = await pool.query('DELETE FROM formularios_respostas WHERE id = $1 AND formulario_id = $2', [
     respostaId,
     formularioId,
@@ -468,23 +473,16 @@ async function excluirResposta(formularioId, respostaId) {
   if (!rowCount) throw erro(404, 'Resposta não encontrada.');
 }
 
-// Usuários que podem entrar no público-alvo. Básico enxerga só quem divide alguma empresa com ele.
-async function usuariosParaPublicoAlvo(user) {
-  const params = [];
-  let filtro = '';
-  if (user.empresaIds !== null) {
-    params.push([...user.empresaIds]);
-    filtro = `AND EXISTS (SELECT 1 FROM usuarios_empresas ue WHERE ue.usuario_id = u.id AND ue.empresa_id = ANY($1::int[]))`;
-  }
+// Usuários que podem ser escolhidos no público-alvo: os ativos vinculados à empresa e os Master.
+async function usuariosParaPublicoAlvo(empresaId) {
   const { rows } = await pool.query(
-    `SELECT u.id, u.nome, u.username,
-            COALESCE(array_agg(ue.empresa_id) FILTER (WHERE ue.empresa_id IS NOT NULL), '{}') AS empresa_ids
+    `SELECT u.id, u.nome, u.username, u.permissao
      FROM usuarios u
-     LEFT JOIN usuarios_empresas ue ON ue.usuario_id = u.id
-     WHERE u.ativo ${filtro}
-     GROUP BY u.id
+     WHERE u.ativo
+       AND (u.permissao = 'MASTER'
+            OR EXISTS (SELECT 1 FROM usuarios_empresas ue WHERE ue.usuario_id = u.id AND ue.empresa_id = $1))
      ORDER BY u.nome`,
-    params
+    [empresaId]
   );
   return rows;
 }
@@ -493,12 +491,14 @@ async function usuariosParaPublicoAlvo(user) {
 // Usuário logado: formulários privados que ele ainda precisa responder.
 // ---------------------------------------------------------------------------------------------
 
-const CAMPOS_RESPONDER = `f.id, f.titulo, f.descricao, f.modalidade, f.perguntas, f.cor_tema, f.mensagem_final, f.anonimo`;
+const CAMPOS_RESPONDER = `f.id, f.titulo, f.descricao, f.modalidade, f.perguntas, f.cor_tema, f.mensagem_final, f.anonimo,
+  COALESCE(NULLIF(e.nome_fantasia, ''), e.razao_social) AS empresa_nome`;
 
 async function pendentesDoUsuario(usuarioId) {
   const { rows } = await pool.query(
     `SELECT ${CAMPOS_RESPONDER}
      FROM formularios f
+     JOIN empresas e ON e.id = f.empresa_id
      JOIN usuarios u ON u.id = $1
      WHERE f.status = 'PUBLICADO'
        AND f.modalidade IN ('PRIVADO', 'PRIVADO_OBRIGATORIO')
@@ -537,8 +537,10 @@ async function situacaoPublica(token) {
   const { rows } = await pool.query(
     `SELECT f.id, f.titulo, f.descricao, f.modalidade, f.status, f.perguntas, f.cor_tema, f.mensagem_final,
             f.uma_resposta_por_pessoa, f.inicio_em::text AS inicio_em, f.fim_em::text AS fim_em,
-            ${HOJE_SQL}::text AS hoje
-     FROM formularios f WHERE f.token_publico = $1`,
+            ${HOJE_SQL}::text AS hoje,
+            COALESCE(NULLIF(e.nome_fantasia, ''), e.razao_social) AS empresa_nome, e.logo AS empresa_logo
+     FROM formularios f JOIN empresas e ON e.id = f.empresa_id
+     WHERE f.token_publico = $1`,
     [token]
   );
   const f = rows[0];
@@ -552,7 +554,15 @@ async function situacaoPublica(token) {
 
 async function obterPublico(token) {
   const { f, indisponivel } = await situacaoPublica(token);
-  const base = { titulo: f.titulo, descricao: f.descricao, cor_tema: f.cor_tema, inicio_em: f.inicio_em, fim_em: f.fim_em };
+  const base = {
+    titulo: f.titulo,
+    descricao: f.descricao,
+    cor_tema: f.cor_tema,
+    inicio_em: f.inicio_em,
+    fim_em: f.fim_em,
+    empresa_nome: f.empresa_nome,
+    empresa_logo: f.empresa_logo,
+  };
   if (indisponivel) return { ...base, indisponivel };
   return {
     ...base,

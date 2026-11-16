@@ -5,6 +5,9 @@ import Card from '../../components/Card';
 import Tabs from '../../components/Tabs';
 import SearchableSelect from '../../components/SearchableSelect';
 import { useConfirm } from '../../confirm/ConfirmContext';
+import { listEmpresas } from '../../api/empresas.api';
+import { nomeExibicaoEmpresa } from '../../utils/empresa';
+import { useEmpresaTravada } from '../../hooks/useEmpresaTravada';
 import { criarFormulario, duplicarFormulario, excluirFormulario, linkPublico, listarFormularios } from '../../api/formularios.api';
 import { MODALIDADES, STATUS, corAlpha, dataBr, dataHoraBr, mensagemErro } from './tipos';
 import { MODELOS } from './modelos';
@@ -15,12 +18,16 @@ const CABECALHO = 'border-b-2 border-blue-500 bg-blue-50 text-xs uppercase track
 const ABAS = [{ id: 'formularios', label: 'Formulários', icon: ClipboardList }];
 
 // Cadastros › Formulários: a lista + a faixa "Começar um formulário" (em branco ou a partir de um modelo).
-// Clicar numa linha abre o construtor (FormularioEditorPage). Filtros na URL, como nas outras telas.
+// Tudo é da empresa escolhida no filtro (como em Contas Pagar / Receber): a lista mostra só os formulários
+// dela e o formulário criado fica sendo dela. Clicar numa linha abre o construtor (FormularioEditorPage).
+// Empresa e filtros na URL — o "Voltar" do navegador volta pro mesmo lugar.
 export default function FormulariosPage() {
   const navigate = useNavigate();
   const confirm = useConfirm();
   const aviso = useAviso();
+  const { travada: empresaTravada, empresaIdTravada } = useEmpresaTravada();
   const [params, setParams] = useSearchParams();
+  const empresaId = params.get('empresa_id') || '';
   const busca = params.get('busca') || '';
   const status = params.get('status') || '';
   const modalidade = params.get('modalidade') || '';
@@ -37,15 +44,39 @@ export default function FormulariosPage() {
   }
 
   useEffect(() => {
+    if (empresaTravada && empresaIdTravada && empresaId !== String(empresaIdTravada)) atualizarParams({ empresa_id: empresaIdTravada });
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [empresaTravada, empresaIdTravada]);
+
+  const [empresas, setEmpresas] = useState([]);
+  const [carregandoEmpresas, setCarregandoEmpresas] = useState(true);
+  useEffect(() => {
+    listEmpresas({ ativo: true, limit: 100 })
+      .then((r) => setEmpresas(r.data))
+      .finally(() => setCarregandoEmpresas(false));
+  }, []);
+  useEffect(() => {
+    if (!carregandoEmpresas && !empresaId && empresas.length === 1) atualizarParams({ empresa_id: empresas[0].id });
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [carregandoEmpresas, empresas, empresaId]);
+
+  const editor = (id) => `/cadastros/formularios/${id}?empresa_id=${empresaId}`;
+
+  useEffect(() => {
     const t = setTimeout(() => textoBusca !== busca && atualizarParams({ busca: textoBusca.trim() }), 300);
     return () => clearTimeout(t);
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [textoBusca]);
 
   const carregar = useCallback(() => {
+    if (!empresaId) {
+      setLista(null);
+      return undefined;
+    }
     let vivo = true;
     setErro('');
-    listarFormularios({ busca, status, modalidade })
+    setLista(null);
+    listarFormularios(empresaId, { busca, status, modalidade })
       .then((l) => vivo && setLista(l))
       .catch((e) => {
         if (!vivo) return;
@@ -55,15 +86,15 @@ export default function FormulariosPage() {
     return () => {
       vivo = false;
     };
-  }, [busca, status, modalidade]);
+  }, [empresaId, busca, status, modalidade]);
 
   useEffect(() => carregar(), [carregar, recarga]);
 
   async function comecar(modelo) {
     setCriando(modelo.id);
     try {
-      const f = await criarFormulario(modelo.gerar());
-      navigate(`/cadastros/formularios/${f.id}`);
+      const f = await criarFormulario(empresaId, modelo.gerar());
+      navigate(editor(f.id));
     } catch (e) {
       setErro(mensagemErro(e, 'Não foi possível criar o formulário.'));
       setCriando(null);
@@ -72,9 +103,9 @@ export default function FormulariosPage() {
 
   async function duplicar(f) {
     try {
-      const novo = await duplicarFormulario(f.id);
+      const novo = await duplicarFormulario(empresaId, f.id);
       aviso('Formulário duplicado.');
-      navigate(`/cadastros/formularios/${novo.id}`);
+      navigate(editor(novo.id));
     } catch (e) {
       setErro(mensagemErro(e, 'Não foi possível duplicar.'));
     }
@@ -89,7 +120,7 @@ export default function FormulariosPage() {
     });
     if (!ok) return;
     try {
-      await excluirFormulario(f.id);
+      await excluirFormulario(empresaId, f.id);
       aviso('Formulário excluído.');
       setRecarga((n) => n + 1);
     } catch (e) {
@@ -112,6 +143,17 @@ export default function FormulariosPage() {
         <div className="flex flex-col gap-4 lg:flex-row lg:items-end lg:justify-between">
           <div className="flex min-w-0 flex-col gap-3 sm:flex-1 sm:flex-row sm:flex-wrap">
             <div className="sm:min-w-44 sm:max-w-xs sm:flex-1">
+              <label className="mb-1 block text-sm font-medium text-gray-700">Empresa</label>
+              <SearchableSelect
+                value={empresaId}
+                onChange={(v) => atualizarParams({ empresa_id: v || null })}
+                disabled={carregandoEmpresas || empresaTravada}
+                options={empresas.map((e) => ({ value: e.id, label: nomeExibicaoEmpresa(e) }))}
+                placeholder={carregandoEmpresas ? 'Carregando empresas...' : 'Selecione uma empresa'}
+                emptyMessage="Nenhuma empresa encontrada."
+              />
+            </div>
+            <div className="sm:min-w-44 sm:max-w-xs sm:flex-1">
               <label className="mb-1 block text-sm font-medium text-gray-700">Buscar</label>
               <div className="relative">
                 <Search size={16} className="pointer-events-none absolute left-3 top-1/2 -translate-y-1/2 text-gray-400" />
@@ -119,6 +161,7 @@ export default function FormulariosPage() {
                   value={textoBusca}
                   onChange={(e) => setTextoBusca(e.target.value)}
                   placeholder="Título ou descrição"
+                  disabled={!empresaId}
                   className="w-full rounded-lg border border-gray-200 py-2 pl-9 pr-3 text-sm focus:outline-none focus:ring-2 focus:ring-primary-100"
                 />
               </div>
@@ -128,6 +171,7 @@ export default function FormulariosPage() {
               <SearchableSelect
                 value={status}
                 onChange={(v) => atualizarParams({ status: v })}
+                disabled={!empresaId}
                 options={Object.entries(STATUS).map(([value, s]) => ({ value, label: s.rotulo }))}
                 placeholder="Todas"
               />
@@ -137,6 +181,7 @@ export default function FormulariosPage() {
               <SearchableSelect
                 value={modalidade}
                 onChange={(v) => atualizarParams({ modalidade: v })}
+                disabled={!empresaId}
                 options={Object.entries(MODALIDADES).map(([value, m]) => ({ value, label: m.rotulo }))}
                 placeholder="Todas"
               />
@@ -146,15 +191,16 @@ export default function FormulariosPage() {
             <button
               type="button"
               onClick={() => setRecarga((n) => n + 1)}
+              disabled={!empresaId}
               title="Atualizar"
-              className="flex items-center justify-center rounded-lg border border-gray-200 p-2 text-gray-500 hover:bg-gray-50"
+              className="disabled:opacity-60 flex items-center justify-center rounded-lg border border-gray-200 p-2 text-gray-500 hover:bg-gray-50"
             >
               <RefreshCw size={18} />
             </button>
             <button
               type="button"
               onClick={() => comecar(MODELOS[0])}
-              disabled={!!criando}
+              disabled={!!criando || !empresaId}
               title="Novo formulário"
               aria-label="Novo formulário"
               className="flex items-center justify-center rounded-lg bg-primary-600 p-2 text-white hover:bg-primary-700 disabled:opacity-60"
@@ -167,12 +213,24 @@ export default function FormulariosPage() {
 
       <div>
         <Tabs tabs={ABAS} activeId="formularios" onChange={() => {}} />
+        {!empresaId ? (
+          <div className="flex min-h-62 flex-col items-center justify-center rounded-card rounded-tl-none bg-white px-6 py-16 text-center shadow-card">
+            <span className="mb-4 flex h-12 w-12 items-center justify-center rounded-xl bg-primary-50 text-primary-600">
+              <ClipboardList size={22} />
+            </span>
+            <p className="text-sm font-medium text-gray-800">Selecione uma empresa para ver e criar os formulários dela.</p>
+          </div>
+        ) : (
         <div className="space-y-5 rounded-card rounded-tl-none bg-white p-5 shadow-card">
           {/* Começar um formulário */}
           <div className="rounded-xl border border-gray-200">
             <div className="border-b border-gray-100 px-4 py-3">
               <h3 className="text-sm font-semibold text-gray-900">Começar um formulário</h3>
-              <p className="mt-0.5 text-xs text-gray-500">Em branco ou a partir de um modelo — tudo pode ser editado depois.</p>
+              <p className="mt-0.5 text-xs text-gray-500">
+                Em branco ou a partir de um modelo — o formulário fica sendo de{' '}
+                <span className="font-medium text-gray-700">{nomeExibicaoEmpresa(empresas.find((e) => String(e.id) === String(empresaId))) || 'a empresa escolhida'}</span>. Tudo pode
+                ser editado depois.
+              </p>
             </div>
             <div className="grid grid-cols-2 gap-3 p-4 sm:grid-cols-3 lg:grid-cols-5">
               {MODELOS.map((m) => {
@@ -245,7 +303,7 @@ export default function FormulariosPage() {
                       const privado = f.modalidade !== 'PUBLICO';
                       const adesao = privado && f.qtd_destinatarios ? Math.min(1, f.qtd_respostas / f.qtd_destinatarios) : null;
                       return (
-                        <tr key={f.id} onClick={() => navigate(`/cadastros/formularios/${f.id}`)} className="group cursor-pointer border-b border-gray-100 hover:bg-gray-50">
+                        <tr key={f.id} onClick={() => navigate(editor(f.id))} className="group cursor-pointer border-b border-gray-100 hover:bg-gray-50">
                           <td className="max-w-[360px] py-3 pl-4 pr-3">
                             <div className="flex items-center gap-3">
                               <span className="h-8 w-1.5 shrink-0 rounded-full" style={{ backgroundColor: f.cor_tema }} />
@@ -313,6 +371,7 @@ export default function FormulariosPage() {
             )}
           </div>
         </div>
+        )}
       </div>
     </div>
   );

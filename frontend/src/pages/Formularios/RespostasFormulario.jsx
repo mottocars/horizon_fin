@@ -53,13 +53,13 @@ export default function RespostasFormulario({ form, versao }) {
   useEffect(() => {
     let vivo = true;
     setErro('');
-    resultadosFormulario(form.id)
+    resultadosFormulario(form.empresa_id, form.id)
       .then((d) => vivo && setDados(d))
       .catch((e) => vivo && setErro(mensagemErro(e, 'Não foi possível carregar as respostas.')));
     return () => {
       vivo = false;
     };
-  }, [form.id, versao, recarga]);
+  }, [form.empresa_id, form.id, versao, recarga]);
 
   // As perguntas da tela (com as edições ainda não recarregadas) valem para mostrar os textos atuais.
   const perguntas = form.perguntas || [];
@@ -107,7 +107,7 @@ export default function RespostasFormulario({ form, versao }) {
     });
     if (!ok) return;
     try {
-      await excluirRespostaFormulario(form.id, r.id);
+      await excluirRespostaFormulario(form.empresa_id, form.id, r.id);
       aviso('Resposta excluída.');
       setRecarga((n) => n + 1);
     } catch (e) {

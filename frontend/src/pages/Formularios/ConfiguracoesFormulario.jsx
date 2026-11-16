@@ -4,9 +4,7 @@ import Card from '../../components/Card';
 import TransferList from '../../components/TransferList';
 import CampoData from '../../components/CampoData';
 import { useConfirm } from '../../confirm/ConfirmContext';
-import { listEmpresas } from '../../api/empresas.api';
 import { gerarNovoLinkFormulario, linkPublico, usuariosPublicoAlvo } from '../../api/formularios.api';
-import { nomeExibicaoEmpresa } from '../../utils/empresa';
 import { CORES_TEMA, MODALIDADES, mensagemErro } from './tipos';
 import { useAviso } from './Aviso';
 
@@ -54,19 +52,15 @@ export default function ConfiguracoesFormulario({ form, alterar, onAtualizado })
   const confirm = useConfirm();
   const aviso = useAviso();
   const privado = form.modalidade !== 'PUBLICO';
-  const [empresas, setEmpresas] = useState([]);
   const [usuarios, setUsuarios] = useState([]);
   const [erro, setErro] = useState('');
 
   useEffect(() => {
     if (!privado) return;
-    listEmpresas({ ativo: true, limit: 100 })
-      .then((r) => setEmpresas(r.data))
-      .catch(() => {});
-    usuariosPublicoAlvo()
+    usuariosPublicoAlvo(form.empresa_id)
       .then(setUsuarios)
       .catch(() => {});
-  }, [privado]);
+  }, [privado, form.empresa_id]);
 
   const link = linkPublico(form.token_publico);
 
@@ -88,7 +82,7 @@ export default function ConfiguracoesFormulario({ form, alterar, onAtualizado })
     });
     if (!ok) return;
     try {
-      const f = await gerarNovoLinkFormulario(form.id);
+      const f = await gerarNovoLinkFormulario(form.empresa_id, form.id);
       onAtualizado({ token_publico: f.token_publico });
       aviso('Link novo gerado.');
     } catch (e) {
@@ -154,39 +148,26 @@ export default function ConfiguracoesFormulario({ form, alterar, onAtualizado })
           <Card>
             <SectionHeader
               titulo="Público-alvo"
-              texto="Quem vê a janela ao entrar no sistema. Só usuários ativos; cada um responde uma vez. Quem entrar no público depois de publicado também passa a ver."
+              texto={`Quem vê a janela ao entrar no sistema — sempre usuários de ${form.empresa_nome || 'a empresa do formulário'}. Só usuários ativos; cada um responde uma vez. Quem entrar no público depois de publicado também passa a ver.`}
             />
             <OpcoesRadio
               nome="publico"
               valor={form.publico_alvo}
               onChange={(v) => alterar({ publico_alvo: v })}
               opcoes={[
-                { value: 'TODOS', titulo: 'Todos os usuários', texto: 'Qualquer usuário ativo do sistema.' },
-                { value: 'EMPRESAS', titulo: 'Usuários de empresas', texto: 'Quem está vinculado a uma das empresas escolhidas.' },
-                { value: 'USUARIOS', titulo: 'Usuários escolhidos', texto: 'Só as pessoas escolhidas, uma a uma.' },
+                { value: 'TODOS', titulo: 'Todos os usuários da empresa', texto: `Todos os usuários ativos vinculados a ${form.empresa_nome || 'esta empresa'} (inclusive quem for vinculado depois).` },
+                { value: 'USUARIOS', titulo: 'Usuários escolhidos', texto: 'Só as pessoas escolhidas, uma a uma, entre os usuários da empresa.' },
               ]}
+              colunas="sm:grid-cols-2 max-w-3xl"
             />
-            {form.publico_alvo === 'EMPRESAS' && (
-              <div className="mt-4 max-w-4xl">
-                <TransferList
-                  itens={empresas}
-                  getLabel={(e) => nomeExibicaoEmpresa(e)}
-                  selecionados={(form.empresa_ids || []).map(String)}
-                  onChange={(ids) => alterar({ empresa_ids: ids.map(Number) })}
-                  tituloDisponiveis="Empresas"
-                  tituloSelecionados="Empresas do público"
-                  corSelecionados={(form.empresa_ids || []).length ? 'border-primary-300 bg-primary-50/40' : 'border-amber-300 bg-amber-50/40'}
-                />
-              </div>
-            )}
             {form.publico_alvo === 'USUARIOS' && (
               <div className="mt-4 max-w-4xl">
                 <TransferList
                   itens={usuarios}
-                  getLabel={(u) => u.nome}
+                  getLabel={(u) => (u.permissao === 'MASTER' ? `${u.nome} (Master)` : u.nome)}
                   selecionados={(form.usuario_ids || []).map(String)}
                   onChange={(ids) => alterar({ usuario_ids: ids.map(Number) })}
-                  tituloDisponiveis="Usuários"
+                  tituloDisponiveis="Usuários da empresa"
                   tituloSelecionados="Usuários do público"
                   corSelecionados={(form.usuario_ids || []).length ? 'border-primary-300 bg-primary-50/40' : 'border-amber-300 bg-amber-50/40'}
                 />

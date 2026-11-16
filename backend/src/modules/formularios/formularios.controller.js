@@ -2,6 +2,8 @@ const { z } = require('zod');
 const service = require('./formularios.service');
 
 const idSchema = z.coerce.number().int().positive('Formulário inválido.');
+const empresaIdSchema = z.coerce.number().int().positive('Empresa inválida.');
+const empresaDe = (req) => empresaIdSchema.parse(req.params.empresaId);
 const dataSchema = z
   .string()
   .regex(/^\d{4}-\d{2}-\d{2}$/, 'Data inválida.')
@@ -19,8 +21,7 @@ const salvarSchema = z.object({
     .regex(/^#[0-9a-fA-F]{6}$/, 'Cor inválida.')
     .optional(),
   mensagem_final: z.string().max(2000).optional(),
-  publico_alvo: z.enum(['TODOS', 'EMPRESAS', 'USUARIOS']).optional(),
-  empresa_ids: idsSchema.optional(),
+  publico_alvo: z.enum(['TODOS', 'USUARIOS']).optional(),
   usuario_ids: idsSchema.optional(),
   anonimo: z.boolean().optional(),
   uma_resposta_por_pessoa: z.boolean().optional(),
@@ -54,7 +55,7 @@ function metaRequisicao(req) {
 async function listar(req, res, next) {
   try {
     const filtros = listarSchema.parse(req.query);
-    res.json(await service.listar(filtros));
+    res.json(await service.listar(empresaDe(req), filtros));
   } catch (err) {
     tratar(err, res, next);
   }
@@ -62,7 +63,7 @@ async function listar(req, res, next) {
 
 async function obter(req, res, next) {
   try {
-    res.json(await service.obter(idSchema.parse(req.params.id)));
+    res.json(await service.obter(empresaDe(req), idSchema.parse(req.params.id)));
   } catch (err) {
     tratar(err, res, next);
   }
@@ -71,7 +72,7 @@ async function obter(req, res, next) {
 async function criar(req, res, next) {
   try {
     const dados = salvarSchema.parse(req.body || {});
-    res.status(201).json(await service.criar(req.user.id, dados));
+    res.status(201).json(await service.criar(empresaDe(req), req.user.id, dados));
   } catch (err) {
     tratar(err, res, next);
   }
@@ -81,7 +82,7 @@ async function salvar(req, res, next) {
   try {
     const id = idSchema.parse(req.params.id);
     const dados = salvarSchema.parse(req.body || {});
-    res.json(await service.salvar(id, req.user.id, dados));
+    res.json(await service.salvar(empresaDe(req), id, req.user.id, dados));
   } catch (err) {
     tratar(err, res, next);
   }
@@ -91,7 +92,7 @@ async function alterarStatus(req, res, next) {
   try {
     const id = idSchema.parse(req.params.id);
     const { status } = statusSchema.parse(req.body || {});
-    res.json(await service.alterarStatus(id, req.user.id, status));
+    res.json(await service.alterarStatus(empresaDe(req), id, req.user.id, status));
   } catch (err) {
     tratar(err, res, next);
   }
@@ -99,7 +100,7 @@ async function alterarStatus(req, res, next) {
 
 async function duplicar(req, res, next) {
   try {
-    res.status(201).json(await service.duplicar(idSchema.parse(req.params.id), req.user.id));
+    res.status(201).json(await service.duplicar(empresaDe(req), idSchema.parse(req.params.id), req.user.id));
   } catch (err) {
     tratar(err, res, next);
   }
@@ -107,7 +108,7 @@ async function duplicar(req, res, next) {
 
 async function excluir(req, res, next) {
   try {
-    await service.excluir(idSchema.parse(req.params.id));
+    await service.excluir(empresaDe(req), idSchema.parse(req.params.id));
     res.json({ ok: true });
   } catch (err) {
     tratar(err, res, next);
@@ -116,7 +117,7 @@ async function excluir(req, res, next) {
 
 async function novoLink(req, res, next) {
   try {
-    res.json(await service.novoLink(idSchema.parse(req.params.id), req.user.id));
+    res.json(await service.novoLink(empresaDe(req), idSchema.parse(req.params.id), req.user.id));
   } catch (err) {
     tratar(err, res, next);
   }
@@ -124,7 +125,7 @@ async function novoLink(req, res, next) {
 
 async function resultados(req, res, next) {
   try {
-    res.json(await service.resultados(idSchema.parse(req.params.id)));
+    res.json(await service.resultados(empresaDe(req), idSchema.parse(req.params.id)));
   } catch (err) {
     tratar(err, res, next);
   }
@@ -134,7 +135,7 @@ async function excluirResposta(req, res, next) {
   try {
     const id = idSchema.parse(req.params.id);
     const respostaId = z.coerce.number().int().positive('Resposta inválida.').parse(req.params.respostaId);
-    await service.excluirResposta(id, respostaId);
+    await service.excluirResposta(empresaDe(req), id, respostaId);
     res.json({ ok: true });
   } catch (err) {
     tratar(err, res, next);
@@ -143,7 +144,7 @@ async function excluirResposta(req, res, next) {
 
 async function usuarios(req, res, next) {
   try {
-    res.json(await service.usuariosParaPublicoAlvo(req.user));
+    res.json(await service.usuariosParaPublicoAlvo(empresaDe(req)));
   } catch (err) {
     tratar(err, res, next);
   }
