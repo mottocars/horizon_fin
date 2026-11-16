@@ -206,18 +206,21 @@ export default function FormularioResponder({ formulario, onEnviar, valores, rod
 }
 
 // Logomarca + nome da empresa no alto do cabeçalho. Sem logomarca cadastrada, fica só o nome.
+// À esquerda a empresa; à direita a logomarca do Horizon.
 export function TimbreEmpresa({ nome, logo }) {
-  if (!nome && !logo) return null;
   return (
-    <div className="mb-5 flex items-center gap-3 border-b border-gray-100 pb-4">
-      {logo ? (
-        <img src={logo} alt={nome || 'Logomarca'} className="h-12 w-auto max-w-48 shrink-0 object-contain" />
-      ) : (
-        <span className="flex h-10 w-10 shrink-0 items-center justify-center rounded-xl bg-gray-100 text-gray-400">
-          <Building2 size={20} />
-        </span>
-      )}
-      {nome && <span className="min-w-0 truncate text-sm font-semibold tracking-tight text-gray-700">{nome}</span>}
+    <div className="mb-5 flex items-center justify-between gap-4 border-b border-gray-100 pb-4">
+      <div className="flex min-w-0 items-center gap-3">
+        {logo ? (
+          <img src={logo} alt={nome || 'Logomarca'} className="h-12 w-auto max-w-48 shrink-0 object-contain" />
+        ) : (
+          <span className="flex h-10 w-10 shrink-0 items-center justify-center rounded-xl bg-gray-100 text-gray-400">
+            <Building2 size={20} />
+          </span>
+        )}
+        {nome && <span className="min-w-0 truncate text-sm font-semibold tracking-tight text-gray-700">{nome}</span>}
+      </div>
+      <img src="/logomarca.svg" alt="Horizon" className="h-10 w-auto shrink-0" />
     </div>
   );
 }
