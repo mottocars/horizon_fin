@@ -1,4 +1,5 @@
 import { useEffect, useLayoutEffect, useRef, useState } from 'react';
+import { createPortal } from 'react-dom';
 import {
   AlignLeft,
   ArrowDown,
@@ -457,21 +458,47 @@ function BotaoAcao({ icone: Icone, titulo, onClick, disabled, perigo, ativo }) {
   );
 }
 
-// Escolha do tipo, com ícone (lista própria — o SearchableSelect não mostra ícones).
+// Escolha do tipo, com ícone (lista própria — o SearchableSelect não mostra ícones). O menu abre num portal,
+// por cima de tudo (o cartão da pergunta corta o que passa da borda dele): para baixo quando cabe, senão para
+// cima, e acompanha o botão se a página rolar.
+const ALTURA_MENU = 440;
+
 function SeletorTipo({ valor, onChange, cor }) {
   const [aberto, setAberto] = useState(false);
+  const [pos, setPos] = useState(null);
   const ref = useRef(null);
-  useEffect(() => {
+  const menuRef = useRef(null);
+
+  useLayoutEffect(() => {
     if (!aberto) return undefined;
-    const fechar = (e) => !ref.current?.contains(e.target) && setAberto(false);
+    function posicionar() {
+      const r = ref.current?.getBoundingClientRect();
+      if (!r) return;
+      const abaixo = window.innerHeight - r.bottom - 12;
+      const acima = r.top - 12;
+      const paraCima = abaixo < ALTURA_MENU && acima > abaixo;
+      const largura = Math.max(r.width, 240);
+      setPos({
+        left: Math.min(r.right - largura, window.innerWidth - largura - 8),
+        largura,
+        ...(paraCima ? { bottom: window.innerHeight - r.top + 6, maxHeight: acima } : { top: r.bottom + 6, maxHeight: abaixo }),
+      });
+    }
+    posicionar();
+    const fechar = (e) => !ref.current?.contains(e.target) && !menuRef.current?.contains(e.target) && setAberto(false);
     const esc = (e) => e.key === 'Escape' && setAberto(false);
     document.addEventListener('mousedown', fechar);
     document.addEventListener('keydown', esc);
+    window.addEventListener('resize', posicionar);
+    window.addEventListener('scroll', posicionar, true);
     return () => {
       document.removeEventListener('mousedown', fechar);
       document.removeEventListener('keydown', esc);
+      window.removeEventListener('resize', posicionar);
+      window.removeEventListener('scroll', posicionar, true);
     };
   }, [aberto]);
+
   const atual = TIPO[valor] || TIPOS_PERGUNTA[0];
   const Icone = atual.icone;
   const grupos = [...new Set(TIPOS_PERGUNTA.map((t) => t.grupo))];
@@ -486,33 +513,43 @@ function SeletorTipo({ valor, onChange, cor }) {
         <span className="flex-1 truncate text-left">{atual.rotulo}</span>
         <ChevronDown size={16} className={`text-gray-400 transition ${aberto ? 'rotate-180' : ''}`} />
       </button>
-      {aberto && (
-        <div className="form-cartao-novo absolute right-0 z-30 mt-1.5 max-h-96 w-full min-w-60 overflow-y-auto rounded-xl border border-gray-200 bg-white py-1.5 shadow-xl">
-          {grupos.map((g, gi) => (
-            <div key={g} className={gi > 0 ? 'mt-1 border-t border-gray-100 pt-1' : ''}>
-              {TIPOS_PERGUNTA.filter((t) => t.grupo === g).map((t) => {
-                const I = t.icone;
-                const sel = t.id === valor;
-                return (
-                  <button
-                    key={t.id}
-                    type="button"
-                    onClick={() => {
-                      if (!sel) onChange(t.id);
-                      setAberto(false);
-                    }}
-                    className={`flex w-full items-center gap-3 px-3.5 py-2 text-left text-sm transition ${sel ? 'bg-gray-50 font-medium text-gray-900' : 'text-gray-700 hover:bg-gray-50'}`}
-                  >
-                    <I size={17} style={{ color: sel ? cor : '#6b7280' }} />
-                    <span className="flex-1">{t.rotulo}</span>
-                    {sel && <Check size={15} style={{ color: cor }} />}
-                  </button>
-                );
-              })}
-            </div>
-          ))}
-        </div>
-      )}
+      {aberto &&
+        pos &&
+        createPortal(
+          <div
+            ref={menuRef}
+            role="listbox"
+            className="form-cartao-novo fixed z-[100] overflow-y-auto rounded-xl border border-gray-200 bg-white py-1.5 shadow-xl"
+            style={{ left: pos.left, top: pos.top, bottom: pos.bottom, width: pos.largura, maxHeight: Math.min(pos.maxHeight, ALTURA_MENU) }}
+          >
+            {grupos.map((g, gi) => (
+              <div key={g} className={gi > 0 ? 'mt-1 border-t border-gray-100 pt-1' : ''}>
+                {TIPOS_PERGUNTA.filter((t) => t.grupo === g).map((t) => {
+                  const I = t.icone;
+                  const sel = t.id === valor;
+                  return (
+                    <button
+                      key={t.id}
+                      type="button"
+                      role="option"
+                      aria-selected={sel}
+                      onClick={() => {
+                        if (!sel) onChange(t.id);
+                        setAberto(false);
+                      }}
+                      className={`flex w-full items-center gap-3 px-3.5 py-2 text-left text-sm transition ${sel ? 'bg-gray-50 font-medium text-gray-900' : 'text-gray-700 hover:bg-gray-50'}`}
+                    >
+                      <I size={17} style={{ color: sel ? cor : '#6b7280' }} />
+                      <span className="flex-1">{t.rotulo}</span>
+                      {sel && <Check size={15} style={{ color: cor }} />}
+                    </button>
+                  );
+                })}
+              </div>
+            ))}
+          </div>,
+          document.body
+        )}
     </div>
   );
 }
