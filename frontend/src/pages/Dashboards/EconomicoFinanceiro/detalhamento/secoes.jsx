@@ -206,7 +206,7 @@ const PADRAO_NIVEIS = ['centro', 'natureza', 'pessoa'];
 const LIMITE = { 0: 60, outros: 40, itens: 25 };
 
 function Valores({ r, a, folha = false }) {
-  const f = folha ? exato : (v) => eixo(v);
+  const f = exato; // por extenso, com centavos, em todos os níveis (pedido do usuário)
   const ha = folha ? (v) => Math.abs(v) >= 0.005 : tem;
   return (
     <>

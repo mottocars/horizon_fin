@@ -4,9 +4,22 @@
 // próximos dias. Tudo no navegador — os filtros e o simulador recalculam a cada clique.
 // Valor de cada parcela = saldo CORRIGIDO em aberto; com rateio, cada fatia (centro × natureza) leva a
 // fração dela. "Atraso" = dias de hoje até o vencimento (positivo = vencido; 0 = vence hoje).
-import { brl, nf0, pct, soma, titulo, curto } from '../fluxo/modelo';
+import { nf0, pct, soma, titulo, curto } from '../fluxo/modelo';
 
-export { brl, nf0, pct, soma, titulo, curto };
+export { nf0, pct, soma, titulo, curto };
+
+// Números por extenso, sem abreviar em mil/mi (pedido do usuário, 16/11/2026) — no Aging List e no
+// Detalhamento Financeiro (que importa daqui); o Fluxo de Caixa continua com os de fluxo/modelo.js.
+// brl: valores (cards, tabelas, dicas) — R$ 1.234.567,89. eixo: escalas e rótulos dos gráficos — 1.234.568.
+// valorCheio: como o brl, sem o "R$" (células das tabelas).
+const nf2 = new Intl.NumberFormat('pt-BR', { minimumFractionDigits: 2, maximumFractionDigits: 2 });
+const vazio = (v) => v === null || v === undefined || Number.isNaN(v);
+export function brl(v, sinal) {
+  if (vazio(v)) return '–';
+  return `${v < 0 ? '−' : sinal && v > 0 ? '+' : ''}R$ ${nf2.format(Math.abs(v))}`;
+}
+export const valorCheio = (v) => (vazio(v) ? '–' : `${v < 0 ? '−' : ''}${nf2.format(Math.abs(v))}`);
+export const eixo = (v) => (vazio(v) ? '–' : `${v < 0 ? '−' : ''}${nf0.format(Math.round(Math.abs(v)))}`);
 
 // ─── Datas (dias corridos em UTC) ────────────────────────────────────────────────────────────────
 const DIA = 864e5;

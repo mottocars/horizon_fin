@@ -3,7 +3,6 @@ import { ArrowDown, ChevronDown, ChevronRight, Maximize2, Minimize2, Search, X }
 import { AjudaSecao } from '../fluxo/secoes';
 import { BarrasH } from '../fluxo/graficos';
 import { COR, useDica } from '../fluxo/ganchos';
-import { eixo } from '../fluxo/modelo';
 import { COR_MANUAL_PAGAR, COR_MANUAL_RECEBER, CaixaDiario, corManual } from './graficos';
 import {
   CENARIOS,
@@ -16,6 +15,8 @@ import {
   dimensoesDoLado,
   dm,
   dma,
+  eixo,
+  valorCheio,
   escada,
   filtrarBusca,
   indicadores,
@@ -527,10 +528,10 @@ function Valores({ vencido, total, sinal = 1 }) {
   return (
     <>
       <td className={`c${tem(vencido) ? '' : ' z'}`} style={corCelula('v', vencido, total)}>
-        {tem(vencido) ? eixo(vencido * sinal) : '·'}
+        {tem(vencido) ? valorCheio(vencido * sinal) : '·'}
       </td>
       <td className={`c${tem(aVencer) ? '' : ' z'}`} style={corCelula('a', aVencer, total)}>
-        {tem(aVencer) ? eixo(aVencer * sinal) : '·'}
+        {tem(aVencer) ? valorCheio(aVencer * sinal) : '·'}
       </td>
       <td className="n tot">{brl(total * sinal)}</td>
     </>

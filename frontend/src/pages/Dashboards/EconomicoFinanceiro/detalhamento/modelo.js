@@ -8,8 +8,9 @@
 // pagamento — ISS retido, caução, desconto). Em aberto: a receber = entrada, a pagar = saída. TUDO o que foi realizado na conta entra —
 // inclusive transferências entre contas, aplicações/resgates, recibos do caixa e demais lançamentos sem título
 // (pedido do usuário, 11/11/2026). Só a inicialização de saldo do Sienge fica de fora (não é fluxo).
-import { brl, eixo, lbl, nf0, pct, soma, titulo } from '../fluxo/modelo';
-import { diaNum, dm, dma, filtrosVazios } from '../aging/modelo';
+import { lbl, nf0, pct, soma, titulo } from '../fluxo/modelo';
+// Números por extenso (sem mil/mi): os mesmos formatadores do Aging List.
+import { brl, diaNum, dm, dma, eixo, filtrosVazios } from '../aging/modelo';
 
 export { brl, dm, dma, eixo, lbl, nf0, pct, soma, titulo };
 

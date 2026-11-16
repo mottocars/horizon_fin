@@ -22,7 +22,7 @@ export function MensalGrafico({ meses, tipo, cores }) {
   const ka = `acum${tipo}`;
   const n = meses.length;
   const H = W < 560 ? 250 : 300;
-  const m = { l: 58, r: 14, t: 16, b: 30 };
+  const m = { l: 84, r: 14, t: 16, b: 30 }; // escala por extenso (12.345.678)
   const vals = meses.flatMap((x) => [x[ke], x[ks], x[kr]]);
   const ymax = Math.max(1, ...vals) * 1.08;
   const ymin = Math.min(-1, ...vals) * 1.08;

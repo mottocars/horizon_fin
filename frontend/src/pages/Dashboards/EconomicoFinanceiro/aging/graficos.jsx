@@ -1,7 +1,7 @@
 import { useState } from 'react';
 import { COR, useDica, useLargura } from '../fluxo/ganchos';
-import { eixo, niceTicks } from '../fluxo/modelo';
-import { brl, dm, semana } from './modelo';
+import { niceTicks } from '../fluxo/modelo';
+import { brl, dm, eixo, semana } from './modelo';
 
 // Gráfico do simulador do Aging List: o caixa dia a dia — entradas (para cima) e saídas (para baixo)
 // de cada dia, a linha do saldo no fim do dia e — quando o saldo desce até ele — o valor do cheque especial
@@ -24,7 +24,7 @@ export function CaixaDiario({ sim, diaSel, onDia }) {
   const { dias, ini, cheque } = sim;
   const n = dias.length;
   const H = W < 560 ? 250 : 300;
-  const m = { l: 58, r: 58, t: 18, b: 32 };
+  const m = { l: 84, r: 84, t: 18, b: 32 }; // escalas por extenso (12.345.678)
   const piso = cheque > 0 && sim.min < cheque ? cheque : null;
   // Saldo (eixo da esquerda)
   const valores = [ini, 0, ...dias.map((d) => d.fim), ...(piso !== null ? [piso] : [])];

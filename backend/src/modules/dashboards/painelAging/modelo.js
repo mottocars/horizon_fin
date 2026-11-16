@@ -6,8 +6,21 @@
 // próximos dias. Tudo no navegador — os filtros e o simulador recalculam a cada clique.
 // Valor de cada parcela = saldo CORRIGIDO em aberto; com rateio, cada fatia (centro × natureza) leva a
 // fração dela. "Atraso" = dias de hoje até o vencimento (positivo = vencido; 0 = vence hoje).
-const { brl, nf0, pct, soma, titulo, curto } = require('../painelFluxo/modelo');
+const { nf0, pct, soma, titulo, curto } = require('../painelFluxo/modelo');
 
+
+// Números por extenso, sem abreviar em mil/mi (pedido do usuário, 16/11/2026) — no Aging List e no
+// Detalhamento Financeiro (que importa daqui); o Fluxo de Caixa continua com os de fluxo/modelo.js.
+// brl: valores (cards, tabelas, dicas) — R$ 1.234.567,89. eixo: escalas e rótulos dos gráficos — 1.234.568.
+// valorCheio: como o brl, sem o "R$" (células das tabelas).
+const nf2 = new Intl.NumberFormat('pt-BR', { minimumFractionDigits: 2, maximumFractionDigits: 2 });
+const vazio = (v) => v === null || v === undefined || Number.isNaN(v);
+function brl(v, sinal) {
+  if (vazio(v)) return '–';
+  return `${v < 0 ? '−' : sinal && v > 0 ? '+' : ''}R$ ${nf2.format(Math.abs(v))}`;
+}
+const valorCheio = (v) => (vazio(v) ? '–' : `${v < 0 ? '−' : ''}${nf2.format(Math.abs(v))}`);
+const eixo = (v) => (vazio(v) ? '–' : `${v < 0 ? '−' : ''}${nf0.format(Math.round(Math.abs(v)))}`);
 
 // ─── Datas (dias corridos em UTC) ────────────────────────────────────────────────────────────────
 const DIA = 864e5;
@@ -613,4 +626,4 @@ function simular(E, params) {
   };
 }
 
-module.exports = { brl, nf0, pct, soma, titulo, curto, diaNum, isoDe, fimDeSemana, diaUtil, semana, dm, dma, FAIXAS, NF, IDX_HOJE, faixaDe, SEM_CAIXA, preparar, nomeCentro, nomeNatureza, nomePessoa, nomeEmpresa, nomeCondicao, nomeDocumento, rotuloPessoa, caixa, MAX_MESES, LISTAS_PAINEL, filtrosVazios, periodoPadrao, inicioDe, fimDe, mesesDoPeriodo, normalizarFiltros, mesmosFiltros, filtrosNoPainel, escopo, porFaixa, HORIZONTE_CARDS, indicadores, escada, DIMENSOES, dimensoesDoLado, ORDENS, arvore, parcelas, filtrarBusca, maiores, CENARIOS, PADRAO_SIM, cenarioDe, simular };
+module.exports = { nf0, pct, soma, titulo, curto, brl, valorCheio, eixo, diaNum, isoDe, fimDeSemana, diaUtil, semana, dm, dma, FAIXAS, NF, IDX_HOJE, faixaDe, SEM_CAIXA, preparar, nomeCentro, nomeNatureza, nomePessoa, nomeEmpresa, nomeCondicao, nomeDocumento, rotuloPessoa, caixa, MAX_MESES, LISTAS_PAINEL, filtrosVazios, periodoPadrao, inicioDe, fimDe, mesesDoPeriodo, normalizarFiltros, mesmosFiltros, filtrosNoPainel, escopo, porFaixa, HORIZONTE_CARDS, indicadores, escada, DIMENSOES, dimensoesDoLado, ORDENS, arvore, parcelas, filtrarBusca, maiores, CENARIOS, PADRAO_SIM, cenarioDe, simular };
