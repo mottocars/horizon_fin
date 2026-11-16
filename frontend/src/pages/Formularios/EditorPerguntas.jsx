@@ -10,6 +10,9 @@ import {
   GripHorizontal,
   GripVertical,
   Heading,
+  ImagePlus,
+  Loader2,
+  RefreshCw,
   Mail,
   Phone,
   Plus,
@@ -20,6 +23,9 @@ import {
 } from 'lucide-react';
 import SearchableSelect from '../../components/SearchableSelect';
 import { TimbreEmpresa } from './FormularioResponder';
+import { mostrarAviso } from './Aviso';
+import { removerLogoCentralFormulario, salvarLogoCentralFormulario } from '../../api/formularios.api';
+import { redimensionarLogoBanco } from '../../utils/imagemLogoBanco';
 import { TIPO, TIPOS_COM_OPCOES, TIPOS_PERGUNTA, corAlpha, novaPergunta, novoId, trocarTipo } from './tipos';
 
 // Aba Perguntas do construtor: o formulário montado como no Google Forms — cabeçalho (título/descrição) e um
@@ -40,7 +46,7 @@ function TextoAuto({ value, onChange, className = '', autoFocus, ...props }) {
   return <textarea ref={ref} rows={1} value={value} onChange={(e) => onChange(e.target.value)} className={`block w-full resize-none overflow-hidden ${className}`} {...props} />;
 }
 
-export default function EditorPerguntas({ form, alterar }) {
+export default function EditorPerguntas({ form, alterar, atualizadoNoServidor }) {
   const cor = form.cor_tema || '#2563eb';
   const perguntas = form.perguntas || [];
   const [ativo, setAtivo] = useState(perguntas[0]?.id || 'cabecalho');
@@ -121,9 +127,11 @@ export default function EditorPerguntas({ form, alterar }) {
               <div className="h-2.5" style={{ backgroundColor: cor }} />
               {ativo === 'cabecalho' && <span className="absolute bottom-0 left-0 top-2.5 w-1.5" style={{ backgroundColor: cor }} />}
               <div className="space-y-2 px-6 pb-5 pt-4">
-                <div title="Logomarca do cadastro da empresa (Cadastros › Empresas)">
-                  <TimbreEmpresa nome={form.empresa_nome} logo={form.empresa_logo} />
-                </div>
+                <TimbreEmpresa
+                  nome={form.empresa_nome}
+                  logo={form.empresa_logo}
+                  centro={<LogoCentralEditavel form={form} atualizadoNoServidor={atualizadoNoServidor} />}
+                />
                 <TextoAuto
                   value={form.titulo}
                   onChange={(v) => alterar({ titulo: v.replace(/\n/g, ' ') })}
@@ -773,5 +781,87 @@ function EditorEstrelas({ p, onAlterar }) {
         ))}
       </div>
     </div>
+  );
+}
+
+// Logomarca opcional no centro do cabeçalho (entre a da empresa e a do Horizon). Grava na hora, sem
+// depender do salvamento automático — igual à logomarca da empresa em Cadastros › Empresas.
+function LogoCentralEditavel({ form, atualizadoNoServidor }) {
+  const input = useRef(null);
+  const [enviando, setEnviando] = useState(false);
+  const logo = form.logo_central;
+
+  async function escolher(e) {
+    const arquivo = e.target.files?.[0];
+    e.target.value = '';
+    if (!arquivo) return;
+    if (!/^image\/(png|jpeg|webp|svg\+xml)$/.test(arquivo.type)) {
+      mostrarAviso('Envie uma imagem PNG, JPG, WEBP ou SVG.');
+      return;
+    }
+    setEnviando(true);
+    try {
+      const imagem = await redimensionarLogoBanco(arquivo, { ladoMaximo: 480 });
+      const r = await salvarLogoCentralFormulario(form.empresa_id, form.id, imagem);
+      atualizadoNoServidor({ logo_central: r.logo_central });
+      mostrarAviso(logo ? 'Logomarca trocada.' : 'Logomarca adicionada.');
+    } catch (err) {
+      mostrarAviso(err.response?.data?.message || err.message || 'Não foi possível enviar a logomarca.');
+    } finally {
+      setEnviando(false);
+    }
+  }
+
+  async function remover(e) {
+    e.stopPropagation();
+    setEnviando(true);
+    try {
+      await removerLogoCentralFormulario(form.empresa_id, form.id);
+      atualizadoNoServidor({ logo_central: null });
+      mostrarAviso('Logomarca removida.');
+    } catch (err) {
+      mostrarAviso(err.response?.data?.message || 'Não foi possível remover a logomarca.');
+    } finally {
+      setEnviando(false);
+    }
+  }
+
+  const abrir = (e) => {
+    e.stopPropagation();
+    if (!enviando) input.current?.click();
+  };
+
+  return (
+    <>
+      <input ref={input} type="file" accept="image/png,image/jpeg,image/webp,image/svg+xml" className="hidden" onChange={escolher} />
+      {logo ? (
+        <div className="group relative flex h-12 items-center">
+          <img src={logo} alt="Logomarca central" className={`h-12 w-auto max-w-40 object-contain transition sm:max-w-56 ${enviando ? 'opacity-40' : 'group-hover:opacity-30'}`} />
+          {enviando ? (
+            <Loader2 size={18} className="absolute left-1/2 top-1/2 -translate-x-1/2 -translate-y-1/2 animate-spin text-gray-500" />
+          ) : (
+            <div className="absolute inset-0 flex items-center justify-center gap-1.5 opacity-0 transition group-hover:opacity-100">
+              <button type="button" onClick={abrir} title="Trocar logomarca" className="flex h-8 w-8 items-center justify-center rounded-full bg-white text-gray-700 shadow-md ring-1 ring-gray-200 hover:text-primary-600">
+                <RefreshCw size={15} />
+              </button>
+              <button type="button" onClick={remover} title="Remover logomarca" className="flex h-8 w-8 items-center justify-center rounded-full bg-white text-gray-700 shadow-md ring-1 ring-gray-200 hover:text-rose-600">
+                <Trash2 size={15} />
+              </button>
+            </div>
+          )}
+        </div>
+      ) : (
+        <button
+          type="button"
+          onClick={abrir}
+          disabled={enviando}
+          title="Logomarca opcional no centro do cabeçalho (PNG, JPG, WEBP ou SVG)"
+          className="flex h-12 items-center gap-2 rounded-xl border border-dashed border-gray-300 px-3.5 text-xs font-medium text-gray-400 transition hover:border-gray-400 hover:bg-gray-50 hover:text-gray-600 disabled:opacity-60"
+        >
+          {enviando ? <Loader2 size={16} className="animate-spin" /> : <ImagePlus size={16} />}
+          <span className="hidden sm:inline">Logomarca (opcional)</span>
+        </button>
+      )}
+    </>
   );
 }

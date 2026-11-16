@@ -351,7 +351,7 @@ export default function FormularioEditorPage() {
 
       <div>
         <Tabs tabs={abas} activeId={aba} onChange={trocarAba} />
-        {aba === 'perguntas' && <EditorPerguntas form={form} alterar={alterar} />}
+        {aba === 'perguntas' && <EditorPerguntas form={form} alterar={alterar} atualizadoNoServidor={atualizadoNoServidor} />}
         {aba === 'respostas' && <RespostasFormulario form={form} versao={versaoRespostas} />}
         {aba === 'configuracoes' && <ConfiguracoesFormulario form={form} alterar={alterar} onAtualizado={atualizadoNoServidor} />}
       </div>

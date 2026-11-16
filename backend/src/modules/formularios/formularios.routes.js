@@ -22,6 +22,8 @@ cadastro.put('/:empresaId/:id', controller.salvar);
 cadastro.patch('/:empresaId/:id/status', controller.alterarStatus);
 cadastro.post('/:empresaId/:id/duplicar', controller.duplicar);
 cadastro.post('/:empresaId/:id/novo-link', controller.novoLink);
+cadastro.put('/:empresaId/:id/logo-central', controller.salvarLogoCentral);
+cadastro.delete('/:empresaId/:id/logo-central', controller.removerLogoCentral);
 cadastro.delete('/:empresaId/:id', controller.excluir);
 cadastro.get('/:empresaId/:id/respostas', controller.resultados);
 cadastro.delete('/:empresaId/:id/respostas/:respostaId', controller.excluirResposta);

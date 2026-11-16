@@ -247,7 +247,7 @@ function converterResposta(p, v) {
 // ---------------------------------------------------------------------------------------------
 
 const CAMPOS = `f.id, f.empresa_id, f.titulo, f.descricao, f.modalidade, f.status, f.perguntas, f.cor_tema, f.mensagem_final,
-  f.publico_alvo, f.usuario_ids, f.anonimo, f.uma_resposta_por_pessoa,
+  f.logo_central, f.publico_alvo, f.usuario_ids, f.anonimo, f.uma_resposta_por_pessoa,
   f.inicio_em::text AS inicio_em, f.fim_em::text AS fim_em, f.token_publico, f.publicado_em,
   f.criado_em, f.atualizado_em,
   (SELECT COALESCE(NULLIF(e.nome_fantasia, ''), e.razao_social) FROM empresas e WHERE e.id = f.empresa_id) AS empresa_nome,
@@ -412,8 +412,8 @@ async function duplicar(empresaId, id, usuarioId) {
   const { rows } = await pool.query(
     `INSERT INTO formularios (titulo, descricao, modalidade, perguntas, cor_tema, mensagem_final, publico_alvo,
                               empresa_id, usuario_ids, anonimo, uma_resposta_por_pessoa, token_publico,
-                              criado_por, atualizado_por)
-     VALUES ($1, $2, $3, $4::jsonb, $5, $6, $7, $8, $9::int[], $10, $11, $12, $13, $13) RETURNING id`,
+                              criado_por, atualizado_por, logo_central)
+     VALUES ($1, $2, $3, $4::jsonb, $5, $6, $7, $8, $9::int[], $10, $11, $12, $13, $13, $14) RETURNING id`,
     [
       texto(`${f.titulo} (cópia)`, 200),
       f.descricao,
@@ -428,6 +428,7 @@ async function duplicar(empresaId, id, usuarioId) {
       f.uma_resposta_por_pessoa,
       novoToken(),
       usuarioId,
+      f.logo_central,
     ]
   );
   return obter(empresaId, rows[0].id);
@@ -436,6 +437,16 @@ async function duplicar(empresaId, id, usuarioId) {
 async function excluir(empresaId, id) {
   const { rowCount } = await pool.query('DELETE FROM formularios WHERE id = $1 AND empresa_id = $2', [id, empresaId]);
   if (!rowCount) throw erro(404, 'Formulário não encontrado.');
+}
+
+// Logomarca central do cabeçalho (opcional): data URI PNG já redimensionada no navegador, ou null para tirar.
+async function definirLogoCentral(empresaId, id, usuarioId, logo) {
+  await obter(empresaId, id);
+  await pool.query(
+    'UPDATE formularios SET logo_central = $2, atualizado_por = $3, atualizado_em = NOW() WHERE id = $1',
+    [id, logo, usuarioId]
+  );
+  return obter(empresaId, id);
 }
 
 // Gera um link público novo (o antigo deixa de funcionar).
@@ -524,7 +535,7 @@ async function usuariosParaPublicoAlvo(empresaId) {
 // Usuário logado: formulários privados que ele ainda precisa responder.
 // ---------------------------------------------------------------------------------------------
 
-const CAMPOS_RESPONDER = `f.id, f.titulo, f.descricao, f.modalidade, f.perguntas, f.cor_tema, f.mensagem_final, f.anonimo,
+const CAMPOS_RESPONDER = `f.id, f.titulo, f.descricao, f.modalidade, f.perguntas, f.cor_tema, f.mensagem_final, f.anonimo, f.logo_central,
   COALESCE(NULLIF(e.nome_fantasia, ''), e.razao_social) AS empresa_nome, e.logo AS empresa_logo`;
 
 async function pendentesDoUsuario(usuarioId) {
@@ -569,7 +580,7 @@ async function responderComoUsuario(formularioId, usuarioId, respostas, meta) {
 async function situacaoPublica(token) {
   const { rows } = await pool.query(
     `SELECT f.id, f.titulo, f.descricao, f.modalidade, f.status, f.perguntas, f.cor_tema, f.mensagem_final,
-            f.uma_resposta_por_pessoa, f.inicio_em::text AS inicio_em, f.fim_em::text AS fim_em,
+            f.logo_central, f.uma_resposta_por_pessoa, f.inicio_em::text AS inicio_em, f.fim_em::text AS fim_em,
             ${HOJE_SQL}::text AS hoje,
             COALESCE(NULLIF(e.nome_fantasia, ''), e.razao_social) AS empresa_nome, e.logo AS empresa_logo
      FROM formularios f JOIN empresas e ON e.id = f.empresa_id
@@ -595,6 +606,7 @@ async function obterPublico(token) {
     fim_em: f.fim_em,
     empresa_nome: f.empresa_nome,
     empresa_logo: f.empresa_logo,
+    logo_central: f.logo_central,
   };
   if (indisponivel) return { ...base, indisponivel };
   return {
@@ -628,6 +640,7 @@ module.exports = {
   duplicar,
   excluir,
   novoLink,
+  definirLogoCentral,
   resultados,
   excluirResposta,
   usuariosParaPublicoAlvo,

@@ -118,7 +118,7 @@ export default function FormularioResponder({ formulario, onEnviar, valores, rod
       <div className="overflow-hidden rounded-2xl border border-gray-200 bg-white shadow-sm">
         <div className="h-2.5" style={{ backgroundColor: cor }} />
         <div className="px-6 pb-5 pt-5 sm:px-7">
-          <TimbreEmpresa nome={formulario.empresa_nome} logo={formulario.empresa_logo} />
+          <TimbreEmpresa nome={formulario.empresa_nome} logo={formulario.empresa_logo} logoCentral={formulario.logo_central} />
           <h1 className="text-2xl font-semibold leading-tight tracking-tight text-gray-900">{formulario.titulo || 'Formulário sem título'}</h1>
           {formulario.descricao?.trim() && <p className="mt-2 whitespace-pre-line text-sm leading-relaxed text-gray-600">{formulario.descricao}</p>}
           {!somenteLeitura && respondiveis.length > 0 && (
@@ -205,11 +205,13 @@ export default function FormularioResponder({ formulario, onEnviar, valores, rod
   );
 }
 
-// Logomarca + nome da empresa no alto do cabeçalho. Sem logomarca cadastrada, fica só o nome.
-// À esquerda a empresa; à direita a logomarca do Horizon.
-export function TimbreEmpresa({ nome, logo }) {
+// Timbre no alto do cabeçalho: à esquerda a logomarca + nome da empresa (sem logomarca cadastrada, só o
+// nome); no centro a logomarca opcional do formulário (logoCentral); à direita a logomarca do Horizon.
+// `centro` substitui o miolo (no editor, o botão de enviar/trocar a logomarca central).
+export function TimbreEmpresa({ nome, logo, logoCentral, centro }) {
+  const meio = centro ?? (logoCentral ? <img src={logoCentral} alt="Logomarca" className="h-12 w-auto max-w-40 object-contain sm:max-w-56" /> : null);
   return (
-    <div className="mb-5 flex items-center justify-between gap-4 border-b border-gray-100 pb-4">
+    <div className="mb-5 grid grid-cols-[minmax(0,1fr)_auto_minmax(0,1fr)] items-center gap-4 border-b border-gray-100 pb-4">
       <div className="flex min-w-0 items-center gap-3">
         {logo ? (
           <img src={logo} alt={nome || 'Logomarca'} className="h-12 w-auto max-w-48 shrink-0 object-contain" />
@@ -218,9 +220,10 @@ export function TimbreEmpresa({ nome, logo }) {
             <Building2 size={20} />
           </span>
         )}
-        {nome && <span className="min-w-0 truncate text-sm font-semibold tracking-tight text-gray-700">{nome}</span>}
+        {nome && <span className={`min-w-0 truncate text-sm font-semibold tracking-tight text-gray-700 ${meio ? 'hidden sm:inline' : ''}`}>{nome}</span>}
       </div>
-      <img src="/logomarca.svg" alt="Horizon" className="h-10 w-auto shrink-0" />
+      <div className="flex justify-center">{meio}</div>
+      <img src="/logomarca.svg" alt="Horizon" className="h-10 w-auto shrink-0 justify-self-end" />
     </div>
   );
 }

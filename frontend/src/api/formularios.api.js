@@ -12,6 +12,8 @@ export const salvarFormulario = (empresaId, id, dados) => http.put(`${base(empre
 export const alterarStatusFormulario = (empresaId, id, status) => http.patch(`${base(empresaId)}/${id}/status`, { status }).then((r) => r.data);
 export const duplicarFormulario = (empresaId, id) => http.post(`${base(empresaId)}/${id}/duplicar`).then((r) => r.data);
 export const gerarNovoLinkFormulario = (empresaId, id) => http.post(`${base(empresaId)}/${id}/novo-link`).then((r) => r.data);
+export const salvarLogoCentralFormulario = (empresaId, id, logo) => http.put(`${base(empresaId)}/${id}/logo-central`, { logo }).then((r) => r.data);
+export const removerLogoCentralFormulario = (empresaId, id) => http.delete(`${base(empresaId)}/${id}/logo-central`).then((r) => r.data);
 export const excluirFormulario = (empresaId, id) => http.delete(`${base(empresaId)}/${id}`).then((r) => r.data);
 export const resultadosFormulario = (empresaId, id) => http.get(`${base(empresaId)}/${id}/respostas`).then((r) => r.data);
 export const excluirRespostaFormulario = (empresaId, id, respostaId) =>

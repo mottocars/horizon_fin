@@ -30,6 +30,14 @@ const salvarSchema = z.object({
   perguntas: z.array(z.any()).max(200).optional(),
 });
 
+// Logomarca central: data URI já redimensionada no navegador (igual à logomarca da empresa).
+const logoSchema = z.object({
+  logo: z
+    .string()
+    .regex(/^data:image\/(png|jpeg|webp);base64,/, 'Envie uma imagem PNG, JPG ou WEBP.')
+    .max(1_000_000, 'A imagem é grande demais.'),
+});
+
 const statusSchema = z.object({ status: z.enum(['RASCUNHO', 'PUBLICADO', 'ENCERRADO']) });
 const listarSchema = z.object({
   busca: z.string().max(200).optional(),
@@ -123,6 +131,23 @@ async function novoLink(req, res, next) {
   }
 }
 
+async function salvarLogoCentral(req, res, next) {
+  try {
+    const { logo } = logoSchema.parse(req.body || {});
+    res.json(await service.definirLogoCentral(empresaDe(req), idSchema.parse(req.params.id), req.user.id, logo));
+  } catch (err) {
+    tratar(err, res, next);
+  }
+}
+
+async function removerLogoCentral(req, res, next) {
+  try {
+    res.json(await service.definirLogoCentral(empresaDe(req), idSchema.parse(req.params.id), req.user.id, null));
+  } catch (err) {
+    tratar(err, res, next);
+  }
+}
+
 async function resultados(req, res, next) {
   try {
     res.json(await service.resultados(empresaDe(req), idSchema.parse(req.params.id)));
@@ -206,6 +231,8 @@ module.exports = {
   duplicar,
   excluir,
   novoLink,
+  salvarLogoCentral,
+  removerLogoCentral,
   resultados,
   excluirResposta,
   usuarios,
