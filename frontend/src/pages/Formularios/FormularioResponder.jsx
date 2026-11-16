@@ -1,8 +1,8 @@
 import { useMemo, useRef, useState } from 'react';
-import { Building2, Check, CheckCircle2, RotateCcw, Star } from 'lucide-react';
+import { Building2, Check, CheckCircle2, Mail, Phone, RotateCcw, Star } from 'lucide-react';
 import SearchableSelect from '../../components/SearchableSelect';
 import CampoData from '../../components/CampoData';
-import { corAlpha } from './tipos';
+import { corAlpha, erroFormato, mascaraTelefone } from './tipos';
 import './formularios.css';
 
 // O formulário do jeito que quem responde vê — o mesmo componente na página pública (/f/:token), na janela
@@ -44,6 +44,12 @@ export default function FormularioResponder({ formulario, onEnviar, valores, rod
     if (erros[id]) setErros(({ [id]: _, ...resto }) => resto);
   }
 
+  // E-mail / telefone: confere o formato ao sair do campo (e de novo no Enviar).
+  function validarFormato(p) {
+    const msg = erroFormato(p, respostas[p.id]);
+    if (msg) setErros((e) => ({ ...e, [p.id]: msg }));
+  }
+
   function rolarPara(id) {
     refs.current[id]?.scrollIntoView({ behavior: 'smooth', block: 'center' });
   }
@@ -52,12 +58,19 @@ export default function FormularioResponder({ formulario, onEnviar, valores, rod
     e.preventDefault();
     if (somenteLeitura) return;
     const faltando = {};
+    let soFormato = true;
     respondiveis.forEach((p) => {
-      if (p.obrigatoria && vazio(respostas[p.id])) faltando[p.id] = 'Esta pergunta é obrigatória.';
+      if (p.obrigatoria && vazio(respostas[p.id])) {
+        faltando[p.id] = 'Esta pergunta é obrigatória.';
+        soFormato = false;
+      } else {
+        const msg = erroFormato(p, respostas[p.id]);
+        if (msg) faltando[p.id] = msg;
+      }
     });
     if (Object.keys(faltando).length) {
       setErros(faltando);
-      setErroGeral('Responda as perguntas obrigatórias destacadas.');
+      setErroGeral(soFormato ? 'Confira as respostas destacadas.' : 'Responda as perguntas obrigatórias destacadas.');
       rolarPara(Object.keys(faltando)[0]);
       return;
     }
@@ -148,7 +161,7 @@ export default function FormularioResponder({ formulario, onEnviar, valores, rod
             </p>
             {p.descricao?.trim() && <p className="mt-1 whitespace-pre-line text-xs leading-relaxed text-gray-500">{p.descricao}</p>}
             <div className="mt-4">
-              <CampoResposta pergunta={p} valor={respostasAtuais[p.id]} onChange={(v) => definir(p.id, v)} cor={cor} travado={somenteLeitura} />
+              <CampoResposta pergunta={p} valor={respostasAtuais[p.id]} onChange={(v) => definir(p.id, v)} onBlur={() => validarFormato(p)} cor={cor} travado={somenteLeitura} />
             </div>
             {erro && <p className="mt-3 text-xs font-medium text-rose-600">{erro}</p>}
           </div>
@@ -212,8 +225,58 @@ export function TimbreEmpresa({ nome, logo }) {
 const INPUT =
   'w-full rounded-xl border border-gray-200 bg-white px-3.5 py-2.5 text-sm text-gray-900 transition placeholder:text-gray-400 focus:border-[var(--tema)] focus:outline-none focus:ring-4 focus:ring-[var(--tema-suave)] disabled:bg-gray-50 disabled:text-gray-700';
 
-export function CampoResposta({ pergunta: p, valor, onChange, cor, travado }) {
+// Campo com ícone à esquerda e um "ok" verde à direita quando o formato confere (e-mail / telefone).
+function CampoContato({ icone: Icone, valido, children, largura = 'sm:max-w-md' }) {
+  return (
+    <div className={`relative ${largura}`}>
+      <Icone size={16} className="pointer-events-none absolute left-3.5 top-1/2 -translate-y-1/2 text-gray-400" />
+      {children}
+      {valido && (
+        <span className="pointer-events-none absolute right-3 top-1/2 flex h-5 w-5 -translate-y-1/2 items-center justify-center rounded-full bg-emerald-500 text-white">
+          <Check size={12} strokeWidth={3.5} />
+        </span>
+      )}
+    </div>
+  );
+}
+
+export function CampoResposta({ pergunta: p, valor, onChange, onBlur, cor, travado }) {
   switch (p.tipo) {
+    case 'EMAIL':
+      return (
+        <CampoContato icone={Mail} valido={!!valor && !erroFormato(p, valor)}>
+          <input
+            type="email"
+            inputMode="email"
+            autoComplete="email"
+            autoCapitalize="none"
+            spellCheck={false}
+            value={valor || ''}
+            onChange={(e) => onChange(e.target.value.replace(/\s/g, ''))}
+            onBlur={onBlur}
+            disabled={travado}
+            maxLength={254}
+            placeholder="nome@empresa.com.br"
+            className={`${INPUT} pl-10 pr-10`}
+          />
+        </CampoContato>
+      );
+    case 'TELEFONE':
+      return (
+        <CampoContato icone={Phone} valido={!!valor && !erroFormato(p, valor)} largura="sm:max-w-64">
+          <input
+            type="tel"
+            inputMode="numeric"
+            autoComplete="tel-national"
+            value={mascaraTelefone(valor)}
+            onChange={(e) => onChange(mascaraTelefone(e.target.value))}
+            onBlur={onBlur}
+            disabled={travado}
+            placeholder="(00) 00000-0000"
+            className={`${INPUT} pl-10 pr-10 tabular-nums`}
+          />
+        </CampoContato>
+      );
     case 'TEXTO_CURTO':
       return (
         <input

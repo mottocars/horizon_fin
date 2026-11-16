@@ -98,6 +98,8 @@ export const MODELOS = [
       cor_tema: '#0891b2',
       perguntas: [
         p('TEXTO_CURTO', 'Nome', { obrigatoria: true }),
+        p('EMAIL', 'E-mail', { obrigatoria: true }),
+        p('TELEFONE', 'Telefone / WhatsApp'),
         p('DATA', 'Data do treinamento'),
         p('AVALIACAO', 'Nota geral do treinamento', { obrigatoria: true, escala: { min: 1, max: 5 } }),
         p('LISTA', 'O conteúdo foi', { opcoes: opcoes('Muito básico', 'Adequado', 'Muito avançado'), outro: false }),

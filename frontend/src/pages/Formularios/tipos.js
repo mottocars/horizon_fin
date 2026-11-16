@@ -4,6 +4,8 @@ import {
   CircleDot,
   Hash,
   Heading,
+  Mail,
+  Phone,
   ListChecks,
   Minus,
   SlidersHorizontal,
@@ -18,6 +20,8 @@ import {
 export const TIPOS_PERGUNTA = [
   { id: 'TEXTO_CURTO', rotulo: 'Resposta curta', icone: Minus, grupo: 'Texto' },
   { id: 'TEXTO_LONGO', rotulo: 'Parágrafo', icone: AlignLeft, grupo: 'Texto' },
+  { id: 'EMAIL', rotulo: 'E-mail', icone: Mail, grupo: 'Contato' },
+  { id: 'TELEFONE', rotulo: 'Telefone (com DDD)', icone: Phone, grupo: 'Contato' },
   { id: 'MULTIPLA_ESCOLHA', rotulo: 'Múltipla escolha', icone: CircleDot, grupo: 'Escolha' },
   { id: 'CAIXAS_SELECAO', rotulo: 'Caixas de seleção', icone: ListChecks, grupo: 'Escolha' },
   { id: 'LISTA', rotulo: 'Lista suspensa', icone: SquareChevronDown, grupo: 'Escolha' },
@@ -86,6 +90,43 @@ export function trocarTipo(p, tipo) {
   }
   if ((tipo === 'ESCALA_LINEAR' || tipo === 'AVALIACAO') && p.escala && p.tipo === tipo) proxima.escala = p.escala;
   return proxima;
+}
+
+// ---- E-mail e telefone (mesmas regras do backend, formularios.service.js) ----
+const RE_EMAIL = /^[A-Za-z0-9._%+-]+@[A-Za-z0-9-]+(\.[A-Za-z0-9-]+)*\.[A-Za-z]{2,}$/;
+export const emailValido = (v) => {
+  const e = String(v || '').trim();
+  return e.length <= 254 && RE_EMAIL.test(e) && !e.includes('..');
+};
+
+// Máscara enquanto digita: (11) 9876-5432 → ao chegar no 11º dígito vira (11) 98765-4321.
+export function mascaraTelefone(v) {
+  const d = String(v || '').replace(/\D/g, '').slice(0, 11);
+  if (!d) return '';
+  if (d.length <= 2) return `(${d}`;
+  if (d.length <= 6) return `(${d.slice(0, 2)}) ${d.slice(2)}`;
+  if (d.length <= 10) return `(${d.slice(0, 2)}) ${d.slice(2, 6)}-${d.slice(6)}`;
+  return `(${d.slice(0, 2)}) ${d.slice(2, 7)}-${d.slice(7)}`;
+}
+
+// DDD válido (11–99) + 8 dígitos (fixo) ou 9 dígitos começando com 9 (celular).
+export function telefoneValido(v) {
+  const d = String(v || '').replace(/\D/g, '');
+  if (!/^[1-9][1-9]/.test(d)) return false;
+  return d.length === 10 || (d.length === 11 && d[2] === '9');
+}
+
+// Mensagem de formato inválido de uma resposta preenchida (null = ok ou vazia).
+export function erroFormato(p, v) {
+  if (v === null || v === undefined || String(v).trim() === '') return null;
+  if (p.tipo === 'EMAIL' && !emailValido(v)) return 'Informe um e-mail válido (ex.: nome@empresa.com.br).';
+  if (p.tipo === 'TELEFONE' && !telefoneValido(v)) {
+    const d = String(v).replace(/\D/g, '');
+    if (d.length < 10) return 'Informe o telefone completo, com DDD (ex.: (11) 98765-4321).';
+    if (d.length === 11 && d[2] !== '9') return 'Celular com 9 dígitos começa com 9 (ex.: (11) 98765-4321).';
+    return 'DDD inválido.';
+  }
+  return null;
 }
 
 export function mensagemErro(e, padrao) {

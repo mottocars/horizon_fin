@@ -14,6 +14,8 @@ const pool = require('../../config/db');
 //   { id, tipo, titulo, descricao, obrigatoria, opcoes: [{ id, texto }], outro, escala: { min, max, rotulo_min, rotulo_max } }
 // Respostas (JSON em formularios_respostas.respostas), por id da pergunta:
 //   TEXTO_CURTO / TEXTO_LONGO        → 'texto'
+//   EMAIL                            → 'nome@dominio.com.br' (validado, minúsculo)
+//   TELEFONE                         → '(11) 98765-4321' (DDD + 8 ou 9 dígitos; celular começa com 9)
 //   MULTIPLA_ESCOLHA / LISTA         → { opcao: '<id>' } ou { outro: 'texto' }
 //   CAIXAS_SELECAO                   → { opcoes: ['<id>', ...], outro: 'texto' | null }
 //   ESCALA_LINEAR / AVALIACAO / NUMERO → número
@@ -23,6 +25,8 @@ const pool = require('../../config/db');
 const TIPOS = [
   'TEXTO_CURTO',
   'TEXTO_LONGO',
+  'EMAIL',
+  'TELEFONE',
   'MULTIPLA_ESCOLHA',
   'CAIXAS_SELECAO',
   'LISTA',
@@ -36,6 +40,22 @@ const TIPOS_COM_OPCOES = ['MULTIPLA_ESCOLHA', 'CAIXAS_SELECAO', 'LISTA'];
 const MODALIDADES_PRIVADAS = ['PRIVADO', 'PRIVADO_OBRIGATORIO'];
 const LIMITE_TEXTO_CURTO = 500;
 const LIMITE_TEXTO_LONGO = 5000;
+
+// E-mail: usuário@domínio.extensão, sem espaço nem pontos seguidos. Telefone: DDD (11–99) + 8 dígitos (fixo)
+// ou 9 dígitos começando com 9 (celular). Mesmas regras da tela (frontend/src/pages/Formularios/tipos.js).
+const RE_EMAIL = /^[A-Za-z0-9._%+-]+@[A-Za-z0-9-]+(\.[A-Za-z0-9-]+)*\.[A-Za-z]{2,}$/;
+
+function emailValido(v) {
+  return v.length <= 254 && RE_EMAIL.test(v) && !v.includes('..');
+}
+
+function formatarTelefone(v) {
+  const d = String(v).replace(/\D/g, '');
+  if (!/^[1-9][1-9]/.test(d)) return null;
+  if (d.length === 10) return `(${d.slice(0, 2)}) ${d.slice(2, 6)}-${d.slice(6)}`;
+  if (d.length === 11 && d[2] === '9') return `(${d.slice(0, 2)}) ${d.slice(2, 7)}-${d.slice(7)}`;
+  return null;
+}
 
 // "Hoje" no Brasil — a produção roda em UTC.
 const HOJE_SQL = `(NOW() AT TIME ZONE 'America/Sao_Paulo')::date`;
@@ -170,6 +190,18 @@ function converterResposta(p, v) {
       return texto(v, LIMITE_TEXTO_CURTO).trim();
     case 'TEXTO_LONGO':
       return texto(v, LIMITE_TEXTO_LONGO).trim();
+    case 'EMAIL': {
+      const email = String(v).trim().toLowerCase();
+      if (!email) return null;
+      if (!emailValido(email)) throw new Error('Informe um e-mail válido (ex.: nome@empresa.com.br).');
+      return email;
+    }
+    case 'TELEFONE': {
+      if (!String(v).replace(/\D/g, '')) return null;
+      const tel = formatarTelefone(v);
+      if (!tel) throw new Error('Informe o telefone com DDD (ex.: (11) 98765-4321).');
+      return tel;
+    }
     case 'MULTIPLA_ESCOLHA':
     case 'LISTA': {
       if (typeof v !== 'object') throw new Error('Resposta inválida.');

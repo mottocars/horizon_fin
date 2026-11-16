@@ -10,6 +10,8 @@ import {
   GripHorizontal,
   GripVertical,
   Heading,
+  Mail,
+  Phone,
   Plus,
   PlusCircle,
   Star,
@@ -311,6 +313,20 @@ function PreviaCampo({ p }) {
       return <div className="w-4/5 border-b border-dotted border-gray-300 pb-1.5 text-sm text-gray-400">Texto de resposta longa</div>;
     case 'NUMERO':
       return <div className="w-40 border-b border-dotted border-gray-300 pb-1.5 text-sm text-gray-400">Número</div>;
+    case 'EMAIL':
+      return (
+        <div className="flex w-64 items-center gap-2 border-b border-dotted border-gray-300 pb-1.5 text-sm text-gray-400">
+          <Mail size={15} />
+          nome@empresa.com.br
+        </div>
+      );
+    case 'TELEFONE':
+      return (
+        <div className="flex w-52 items-center gap-2 border-b border-dotted border-gray-300 pb-1.5 text-sm tabular-nums text-gray-400">
+          <Phone size={15} />
+          (00) 00000-0000
+        </div>
+      );
     case 'DATA':
       return <div className="w-40 border-b border-dotted border-gray-300 pb-1.5 text-sm text-gray-400">dd/mm/aaaa</div>;
     case 'MULTIPLA_ESCOLHA':
@@ -406,7 +422,11 @@ function CartaoEdicao({ p, indice, total, cor, focar, onAlterar, onTrocarTipo, o
           {TIPOS_COM_OPCOES.includes(p.tipo) && <EditorOpcoes p={p} onAlterar={onAlterar} />}
           {p.tipo === 'ESCALA_LINEAR' && <EditorEscala p={p} onAlterar={onAlterar} />}
           {p.tipo === 'AVALIACAO' && <EditorEstrelas p={p} onAlterar={onAlterar} />}
-          {['TEXTO_CURTO', 'TEXTO_LONGO', 'NUMERO', 'DATA'].includes(p.tipo) && <PreviaCampo p={p} />}
+          {['TEXTO_CURTO', 'TEXTO_LONGO', 'NUMERO', 'DATA', 'EMAIL', 'TELEFONE'].includes(p.tipo) && <PreviaCampo p={p} />}
+          {p.tipo === 'EMAIL' && <p className="mt-3 text-[11px] text-gray-400">Só aceita e-mail em formato válido (ex.: nome@empresa.com.br).</p>}
+          {p.tipo === 'TELEFONE' && (
+            <p className="mt-3 text-[11px] text-gray-400">Máscara com DDD — aceita fixo (00) 0000-0000 e celular (00) 90000-0000; DDD e quantidade de dígitos são conferidos.</p>
+          )}
         </div>
 
         <div className="mt-6 flex flex-wrap items-center justify-end gap-1 border-t border-gray-100 pt-3">
