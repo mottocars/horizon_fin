@@ -64,6 +64,9 @@ import ClienteClusterDetalhe from './pages/Operacoes/GestaoCobrancas/ClustersCob
 import DistribuicaoExplicacaoPage from './pages/Operacoes/GestaoCobrancas/ReguaCobranca/DistribuicaoExplicacaoPage';
 import CronogramasObrasPage from './pages/Operacoes/CronogramasObras/CronogramasObrasPage';
 import ContasPagarReceberPage from './pages/ContasPagarReceber/ContasPagarReceberPage';
+import FormulariosPage from './pages/Formularios/FormulariosPage';
+import FormularioEditorPage from './pages/Formularios/FormularioEditorPage';
+import FormularioPublicoPage from './pages/Formularios/FormularioPublicoPage';
 
 export default function App() {
   return (
@@ -72,6 +75,8 @@ export default function App() {
         <ConfirmProvider>
         <Routes>
           <Route path="/login" element={<Login />} />
+          {/* Link público de formulário (Cadastros › Formulários, modalidade Pública) — sem login. */}
+          <Route path="/f/:token" element={<FormularioPublicoPage />} />
 
           <Route
             path="/primeiro-acesso"
@@ -139,6 +144,8 @@ export default function App() {
               element={<PlanoFinanceiroItemDetalhe />}
             />
             <Route path="/cadastros/contas-pagar-receber" element={<ContasPagarReceberPage />} />
+            <Route path="/cadastros/formularios" element={<FormulariosPage />} />
+            <Route path="/cadastros/formularios/:id" element={<FormularioEditorPage />} />
             {/* A lista/cadastro (antes /cadastros/contas-bancarias e /:empresaId) virou a aba
                 "Contas Bancárias" de Operações > Saldo Contas Bancárias — ver ContasTab.jsx.
                 Só a edição de uma conta continua como rota própria, aberta a partir de lá. */}

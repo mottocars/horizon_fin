@@ -15,6 +15,8 @@ export function AuthProvider({ children }) {
     localStorage.setItem('horizon_token', result.token);
     localStorage.setItem('horizon_refresh_token', result.refreshToken);
     localStorage.setItem('horizon_user', JSON.stringify(result.user));
+    // Pesquisas privadas adiadas ("Responder depois") voltam a aparecer a cada entrada no sistema.
+    sessionStorage.removeItem('horizon_formularios_dispensados');
     setToken(result.token);
     setUser(result.user);
     return result;
@@ -24,6 +26,7 @@ export function AuthProvider({ children }) {
     localStorage.removeItem('horizon_token');
     localStorage.removeItem('horizon_refresh_token');
     localStorage.removeItem('horizon_user');
+    sessionStorage.removeItem('horizon_formularios_dispensados');
     setToken(null);
     setUser(null);
   }, []);

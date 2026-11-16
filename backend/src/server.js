@@ -58,6 +58,7 @@ const dfcDesembolsoRoutes = require('./modules/dfc-desembolso/desembolso.routes'
 const dfcEmpresarialRoutes = require('./modules/dfc-empresarial/dfcEmpresarial.routes');
 const dfcContasRoutes = require('./modules/dfc-contas/dfcContas.routes');
 const dfcDividaPjRoutes = require('./modules/dfc-divida-pj/dividaPj.routes');
+const formulariosRoutes = require('./modules/formularios/formularios.routes');
 const dfcSaldosRoutes = require('./modules/dfc-saldos/dfcSaldos.routes');
 const dfcDetalhamentoRoutes = require('./modules/dfc-detalhamento/detalhamento.routes');
 const dfcExportacaoRoutes = require('./modules/dfc-exportacao/exportacao.routes');
@@ -208,6 +209,11 @@ app.use('/api/dre-configuracoes', exigirTela([T.DRE]), dreConfiguracoesRoutes);
 // Projeções da DRE (orçamento por centro de custo, assistente em etapas e versões).
 app.use('/api/dre-projecoes', exigirTela([T.DRE]), dreProjecoesRoutes);
 app.use('/api/contas-pagar-receber', exigirTela([T.CONTAS_PAGAR_RECEBER]), contasPagarReceberRoutes);
+// Cadastros › Formulários; /api/meus-formularios = a janela de pesquisa ao entrar (todo usuário logado);
+// /api/publico/formularios = o link público, sem login (ver modules/formularios).
+app.use('/api/formularios', exigirTela([T.FORMULARIOS]), formulariosRoutes.cadastro);
+app.use('/api/meus-formularios', exigirTela([QUALQUER_TELA]), formulariosRoutes.meus);
+app.use('/api/publico/formularios', formulariosRoutes.publico);
 app.use('/api/dre-demonstrativo', exigirTela([T.DRE], LEITURA_DASHBOARD), dreDemonstrativoRoutes);
 // Exportação de auditoria da DRE (Excel com a memória de cálculo e as bases): tela DRE e, só leitura
 // (é um GET), o dashboard Econômico Financeiro › Demonstração do Resultado.

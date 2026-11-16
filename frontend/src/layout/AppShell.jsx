@@ -8,6 +8,7 @@ import { temAcessoATela } from '../utils/permissoes';
 import { TELAS_SISTEMA } from '../config/telas';
 import { useLogAcesso } from '../hooks/useLogAcesso';
 import { useNegativosVermelhos } from '../hooks/useNegativosVermelhos';
+import { PesquisasPendentesProvider, usePesquisasPendentes } from './PesquisasPendentes';
 
 function resolveMeta(pathname) {
   if (TELAS_SISTEMA[pathname]) return TELAS_SISTEMA[pathname];
@@ -66,6 +67,9 @@ function resolveMeta(pathname) {
   if (pathname === '/cadastros/usuarios/novo') {
     return { title: 'Novo Usuário', subtitle: 'Cadastros — Usuários — Novo' };
   }
+  if (/^\/cadastros\/formularios\/[^/]+$/.test(pathname)) {
+    return { title: 'Formulário', subtitle: 'Cadastros — Formulários' };
+  }
   if (/^\/cadastros\/usuarios\/[^/]+$/.test(pathname)) {
     return { title: 'Editar Usuário', subtitle: 'Cadastros — Usuários' };
   }
@@ -89,7 +93,23 @@ function AcessoRestrito() {
   );
 }
 
+// Formulários privados pendentes (janela ao entrar) envolvem o sistema inteiro — ver PesquisasPendentes.jsx.
 export default function AppShell() {
+  return (
+    <PesquisasPendentesProvider>
+      <Shell />
+    </PesquisasPendentesProvider>
+  );
+}
+
+// Conteúdo da tela: com pesquisa obrigatória pendente, nem é montado (só o menu e o topo atrás da janela).
+function Conteudo({ acessoPermitido }) {
+  const { bloqueado } = usePesquisasPendentes();
+  if (bloqueado) return null;
+  return acessoPermitido ? <Outlet /> : <AcessoRestrito />;
+}
+
+function Shell() {
   const location = useLocation();
   const { user } = useAuth();
   const meta = resolveMeta(location.pathname);
@@ -116,7 +136,7 @@ export default function AppShell() {
               só numa delas), fazendo cards do mesmo CSS parecerem tamanhos
               diferentes entre telas. */}
           <main className={`flex-1 overflow-y-auto ${telaCheia ? '' : 'p-6'}`} style={telaCheia ? undefined : { scrollbarGutter: 'stable' }}>
-            {acessoPermitido ? <Outlet /> : <AcessoRestrito />}
+            <Conteudo acessoPermitido={acessoPermitido} />
           </main>
           {/* Camada fixa sobre a área de conteúdo dos Dashboards (não rola com a página e não passa por
               cima do menu lateral): botões flutuantes e barras de Menu/Filtros entram aqui por portal

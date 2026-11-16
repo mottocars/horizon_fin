@@ -13,6 +13,7 @@ module.exports = {
   CENTROS_CUSTO: '/cadastros/centros-de-custo',
   PLANOS_FINANCEIROS: '/cadastros/planos-financeiros',
   CONTAS_PAGAR_RECEBER: '/cadastros/contas-pagar-receber',
+  FORMULARIOS: '/cadastros/formularios',
 
   DRE: '/operacoes/dre-gerencial',
   DFC: '/operacoes/dfc-construtoras',
