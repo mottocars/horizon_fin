@@ -14,6 +14,7 @@ import {
   CLUSTER_ICON,
   CLUSTER_ICON_COR,
   formatarMoeda,
+  CABECALHO_TABELA as CAB,
 } from './constantes';
 
 // Monta a query string pro nível 2. `filtroCentroCustoIds` é o centro
@@ -196,18 +197,23 @@ export default function CentrosCustoResumo({ empresaId, centroCustoIds = [], ref
             </p>
           </div>
         ) : (
-          <div className="overflow-x-auto">
-            <table className="w-full text-left text-sm">
-              <thead>
-                <tr className="border-b border-gray-100 text-xs uppercase tracking-wide text-gray-400">
-                  <th className="py-3 pl-3 font-medium">Centro de Custo</th>
-                  <th className="py-3 text-center font-medium">Saldo vencido</th>
-                  <th className="py-3 text-center font-medium">Saldo no mês</th>
-                  <th className="py-3 text-center font-medium">Clientes</th>
+          // Sem wrapper com overflow (antes era overflow-x-auto): ele virava o
+          // "teto" do cabeçalho sticky, que então nunca grudava no topo da
+          // página. border-separate pelo mesmo motivo (com border-collapse a
+          // borda do cabeçalho não acompanha a rolagem) — as linhas levam a
+          // borda nas próprias células ([&>td]:border-b).
+          <div>
+            <table className="w-full border-separate border-spacing-0 text-left text-sm">
+              <thead className={CAB.thead}>
+                <tr className={CAB.tr}>
+                  <th className={`${CAB.th} py-2.5 pl-3 font-medium`}>Centro de Custo</th>
+                  <th className={`${CAB.th} ${CAB.divisor} py-2.5 text-center font-medium`}>Saldo vencido</th>
+                  <th className={`${CAB.th} ${CAB.divisor} py-2.5 text-center font-medium`}>Saldo no mês</th>
+                  <th className={`${CAB.th} ${CAB.divisor} py-2.5 text-center font-medium`}>Clientes</th>
                   {CLUSTER_ORDEM.map((cluster) => {
                     const Icone = CLUSTER_ICON[cluster];
                     return (
-                      <th key={cluster} className="py-3 text-center font-medium" title={CLUSTER_LABEL[cluster]}>
+                      <th key={cluster} className={`${CAB.th} ${CAB.divisor} py-2.5 text-center font-medium`} title={CLUSTER_LABEL[cluster]}>
                         {Icone && <Icone size={15} className={`inline ${CLUSTER_ICON_COR[cluster]}`} />}
                       </th>
                     );
@@ -221,7 +227,7 @@ export default function CentrosCustoResumo({ empresaId, centroCustoIds = [], ref
                     <Fragment key={centro.cost_center_id}>
                       <tr
                         onClick={() => toggleExpandido(centro.cost_center_id)}
-                        className={`cursor-pointer border-b border-gray-50 hover:bg-gray-100 ${expandido ? 'bg-gray-100 font-semibold' : ''}`}
+                        className={`cursor-pointer hover:bg-gray-100 [&>td]:border-b [&>td]:border-gray-100 ${expandido ? 'bg-gray-100 font-semibold' : ''}`}
                       >
                         <td className="py-3 pl-3 text-gray-900">
                           <span className="flex items-center gap-2">
@@ -269,7 +275,7 @@ export default function CentrosCustoResumo({ empresaId, centroCustoIds = [], ref
                                   `/operacoes/gestao-de-cobrancas/clusters/${cluster}?${queryContexto(empresaId, [centro.cost_center_id], centroCustoIds)}`
                                 )
                               }
-                              className="cursor-pointer border-b border-gray-50 bg-gray-100 hover:bg-gray-200"
+                              className="cursor-pointer bg-gray-100 hover:bg-gray-200 [&>td]:border-b [&>td]:border-gray-200"
                             >
                               <td className="py-2.5 pl-9">
                                 <span className={`inline-flex items-center gap-1.5 rounded-md px-2.5 py-1 text-xs font-medium ${CLUSTER_TAG_ESTILO[cluster]}`}>

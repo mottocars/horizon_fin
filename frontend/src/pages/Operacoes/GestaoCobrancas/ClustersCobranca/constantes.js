@@ -69,3 +69,18 @@ export function formatarDataHora(data) {
 export function formatarData(data) {
   return formatarDataISO(data);
 }
+
+// Cabeçalho das tabelas da Gestão de Cobranças (Rotinas, Gestão das Parcelas,
+// Clusters de Clientes) — mesma identidade do cabeçalho do Espião NF-e/NFS-e
+// (EspiaoNfeNfsePage.jsx::TEMA_CABECALHO, aba Recebidas): fundo azul claro,
+// texto azul, borda de baixo azul forte, divisores azul bem claro e cantos de
+// cima arredondados. Gruda no topo do <main> ao rolar — `-top-6` cancela o
+// p-6 dele (com `top-0` sobrava uma faixa de 24px por onde as linhas
+// apareciam por cima do cabeçalho). Só funciona sem nenhum wrapper com
+// overflow entre a tabela e o <main>, e com `border-separate` na tabela.
+export const CABECALHO_TABELA = {
+  thead: 'sticky -top-6 z-10',
+  tr: 'text-xs uppercase tracking-wide text-blue-700 [&>th:first-child]:rounded-tl-lg [&>th:last-child]:rounded-tr-lg',
+  th: 'border-b-2 border-b-blue-500 bg-blue-50',
+  divisor: 'border-l border-l-blue-100',
+};

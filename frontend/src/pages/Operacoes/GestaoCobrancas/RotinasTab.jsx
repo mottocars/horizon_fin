@@ -8,13 +8,13 @@ import HistoricoParcelaModal from './GestaoParcelas/HistoricoParcelaModal';
 import { listRotinas, desmarcarCanalRotina } from '../../../api/rotinas.api';
 import { listSiengeIntegracoes } from '../../../api/sienge.api';
 import { CLUSTER_ICON, CLUSTER_ICON_COR, CLUSTER_TAG_ESTILO, formatarData } from './GestaoParcelas/constantes';
+import { CABECALHO_TABELA as CAB } from './ClustersCobranca/constantes';
 
 // Mesma grade da tabela da Gestão das Parcelas (GestaoParcelasTab.jsx):
 // divisores de linha e de coluna no mesmo tom, e a borda de baixo do
 // cabeçalho fixo mais grossa pra marcar o limite durante a rolagem.
 const DIV_H = 'border-b border-gray-200';
 const DIV_V = 'border-l border-gray-200';
-const DIV_H_CABECALHO = 'border-b-2 border-gray-300';
 const TOTAL_COLUNAS = 9;
 
 // Valores sem centavos — mesmo formato da Gestão das Parcelas.
@@ -79,7 +79,7 @@ function FiltroColuna({ valor, onChange, opcoes, label, colunaRef }) {
           title={`Filtrar por ${label}`}
           aria-pressed={temSelecao}
           className={`inline-flex h-5 w-5 shrink-0 items-center justify-center rounded transition ${
-            temSelecao ? 'bg-primary-50 text-primary-600' : 'text-gray-400 hover:bg-gray-100 hover:text-gray-600'
+            temSelecao ? 'bg-white text-primary-600 ring-1 ring-primary-200' : 'text-blue-400 hover:bg-blue-100 hover:text-blue-700'
           }`}
         >
           <ListFilter size={13} />
@@ -720,9 +720,9 @@ export default function RotinasTab({
                 <col className="w-[7%]" />
                 <col className="w-[7%]" />
               </colgroup>
-              <thead className="sticky top-0 z-10 bg-white shadow-sm">
-                <tr className="text-xs uppercase tracking-wide text-gray-400">
-                  <th ref={thClienteRef} className={`${DIV_H_CABECALHO} py-2.5 pl-3 font-medium`}>
+              <thead className={CAB.thead}>
+                <tr className={CAB.tr}>
+                  <th ref={thClienteRef} className={`${CAB.th} py-2.5 pl-3 font-medium`}>
                     <span className="inline-flex items-center gap-1.5">
                       <FiltroColuna
                         valor={filtroCliente}
@@ -734,7 +734,7 @@ export default function RotinasTab({
                       {tituloColuna}
                     </span>
                   </th>
-                  <th ref={thEtapaRef} className={`${DIV_H_CABECALHO} ${DIV_V} px-2 py-2.5 font-medium`}>
+                  <th ref={thEtapaRef} className={`${CAB.th} ${CAB.divisor} px-2 py-2.5 font-medium`}>
                     <span className="inline-flex items-center gap-1.5">
                       <FiltroColuna
                         valor={filtroEtapa}
@@ -746,11 +746,11 @@ export default function RotinasTab({
                       Etapa
                     </span>
                   </th>
-                  <th className={`${DIV_H_CABECALHO} ${DIV_V} px-2 py-2.5 text-center font-medium`}>Valor</th>
-                  <th className={`${DIV_H_CABECALHO} ${DIV_V} px-2 py-2.5 text-center font-medium`}>Título</th>
-                  <th className={`${DIV_H_CABECALHO} ${DIV_V} px-2 py-2.5 text-center font-medium`}>Vencimento</th>
-                  <th className={`${DIV_H_CABECALHO} ${DIV_V} px-2 py-2.5 text-center font-medium`}>Data</th>
-                  <th className={`${DIV_H_CABECALHO} ${DIV_V} py-2 text-center font-medium`}>
+                  <th className={`${CAB.th} ${CAB.divisor} px-2 py-2.5 text-center font-medium`}>Valor</th>
+                  <th className={`${CAB.th} ${CAB.divisor} px-2 py-2.5 text-center font-medium`}>Título</th>
+                  <th className={`${CAB.th} ${CAB.divisor} px-2 py-2.5 text-center font-medium`}>Vencimento</th>
+                  <th className={`${CAB.th} ${CAB.divisor} px-2 py-2.5 text-center font-medium`}>Data</th>
+                  <th className={`${CAB.th} ${CAB.divisor} py-2 text-center font-medium`}>
                     <BotaoFiltroCanal
                       canal="whatsapp"
                       ativo={canaisFiltro.whatsapp}
@@ -759,7 +759,7 @@ export default function RotinasTab({
                       label="WhatsApp"
                     />
                   </th>
-                  <th className={`${DIV_H_CABECALHO} ${DIV_V} py-2 text-center font-medium`}>
+                  <th className={`${CAB.th} ${CAB.divisor} py-2 text-center font-medium`}>
                     <BotaoFiltroCanal
                       canal="email"
                       ativo={canaisFiltro.email}
@@ -768,7 +768,7 @@ export default function RotinasTab({
                       label="E-mail"
                     />
                   </th>
-                  <th className={`${DIV_H_CABECALHO} ${DIV_V} py-2 text-center font-medium`}>
+                  <th className={`${CAB.th} ${CAB.divisor} py-2 text-center font-medium`}>
                     <BotaoFiltroCanal
                       canal="ligacao"
                       ativo={canaisFiltro.ligacao}

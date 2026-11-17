@@ -15,6 +15,7 @@ import {
   CLUSTER_ICON_COR,
   CLUSTER_TAG_ESTILO,
   formatarData,
+  CABECALHO_TABELA as CAB,
 } from '../ClustersCobranca/constantes';
 
 // Nome(1) + Título(1) + Vencimento(1) + clusters/status(4) + Etapa(1) +
@@ -27,12 +28,6 @@ const TOTAL_COLUNAS = 3 + CLUSTER_ORDEM.length + 2 + 3;
 // senão sobraria uma borda solta colada na lateral esquerda da tabela.
 const DIV_H = 'border-b border-gray-200';
 const DIV_V = 'border-l border-gray-200';
-
-// Borda de baixo do cabeçalho — mais grossa/escura que DIV_H de propósito
-// (pedido do usuário: "borda evidente... quando ele estiver flutuando"),
-// pra marcar bem o limite entre o cabeçalho fixo (sticky) e as linhas
-// deslizando por baixo dele durante a rolagem.
-const DIV_H_CABECALHO = 'border-b-2 border-gray-300';
 
 // Mesmo formatarMoeda de ClustersCobranca/constantes.js, sem os centavos —
 // só nesta tabela (pedido do usuário: "pode retirar os números após a
@@ -311,24 +306,24 @@ function GestaoParcelasTab({
                 <col className="w-[8.5%]" />
                 <col className="w-[8.5%]" />
               </colgroup>
-              <thead className="sticky top-0 z-10 bg-white shadow-sm">
-                <tr className="text-xs uppercase tracking-wide text-gray-400">
-                  <th className={`${DIV_H_CABECALHO} py-2.5 pl-3 font-medium`}>{tituloColuna}</th>
+              <thead className={CAB.thead}>
+                <tr className={CAB.tr}>
+                  <th className={`${CAB.th} py-2.5 pl-3 font-medium`}>{tituloColuna}</th>
                   {CLUSTER_ORDEM.map((cluster) => {
                     const Icone = CLUSTER_ICON[cluster];
                     return (
-                      <th key={cluster} className={`${DIV_H_CABECALHO} ${DIV_V} py-2.5 text-center font-medium`} title={CLUSTER_LABEL[cluster]}>
+                      <th key={cluster} className={`${CAB.th} ${CAB.divisor} py-2.5 text-center font-medium`} title={CLUSTER_LABEL[cluster]}>
                         {Icone && <Icone size={15} className={`inline ${CLUSTER_ICON_COR[cluster]}`} />}
                       </th>
                     );
                   })}
-                  <th className={`${DIV_H_CABECALHO} ${DIV_V} px-2 py-2.5 text-center font-medium`}>Título</th>
-                  <th className={`${DIV_H_CABECALHO} ${DIV_V} px-2 py-2.5 text-center font-medium`}>Vencimento</th>
-                  <th className={`${DIV_H_CABECALHO} ${DIV_V} px-2 py-2.5 text-center font-medium`}>Etapa</th>
-                  <th className={`${DIV_H_CABECALHO} ${DIV_V} px-2 py-2.5 text-center font-medium`}>Responsável</th>
-                  <th className={`${DIV_H_CABECALHO} ${DIV_V} px-2 py-2.5 text-center font-medium`}>Pagas</th>
-                  <th className={`${DIV_H_CABECALHO} ${DIV_V} px-2 py-2.5 text-center font-medium`}>Vencidas</th>
-                  <th className={`${DIV_H_CABECALHO} ${DIV_V} px-2 py-2.5 text-center font-medium`}>A vencer</th>
+                  <th className={`${CAB.th} ${CAB.divisor} px-2 py-2.5 text-center font-medium`}>Título</th>
+                  <th className={`${CAB.th} ${CAB.divisor} px-2 py-2.5 text-center font-medium`}>Vencimento</th>
+                  <th className={`${CAB.th} ${CAB.divisor} px-2 py-2.5 text-center font-medium`}>Etapa</th>
+                  <th className={`${CAB.th} ${CAB.divisor} px-2 py-2.5 text-center font-medium`}>Responsável</th>
+                  <th className={`${CAB.th} ${CAB.divisor} px-2 py-2.5 text-center font-medium`}>Pagas</th>
+                  <th className={`${CAB.th} ${CAB.divisor} px-2 py-2.5 text-center font-medium`}>Vencidas</th>
+                  <th className={`${CAB.th} ${CAB.divisor} px-2 py-2.5 text-center font-medium`}>A vencer</th>
                 </tr>
               </thead>
               <tbody>
