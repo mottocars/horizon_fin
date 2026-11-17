@@ -249,7 +249,8 @@ export default function Sidebar() {
                 end={item.to === '/'}
                 title={collapsed ? item.label : undefined}
                 // Recolhido, o clique navega e abre o menu junto (como nos grupos); fecha quando o
-                // mouse sai.
+                // mouse sai. Fecha o grupo que estiver aberto (acordeão vale para os links também).
+                onClick={() => setOpenGroups({})}
                 className={({ isActive }) =>
                   `flex items-center gap-2.5 rounded-[10px] text-[13px] font-medium transition-colors ${
                     collapsed ? 'mx-auto h-8 w-8 justify-center' : 'w-full px-2.5 py-1.5'
@@ -277,7 +278,10 @@ export default function Sidebar() {
                   key={app.id}
                   to={`/aplicativos/${app.id}`}
                   title={collapsed ? app.nome : undefined}
-                  onClick={(e) => collapsed && e.stopPropagation()}
+                  onClick={(e) => {
+                    setOpenGroups({});
+                    if (collapsed) e.stopPropagation();
+                  }}
                   className={({ isActive }) =>
                     `flex items-center gap-2.5 rounded-[10px] text-[13px] font-medium transition-colors ${
                       collapsed ? 'mx-auto h-8 w-8 justify-center' : 'w-full px-2.5 py-1'
