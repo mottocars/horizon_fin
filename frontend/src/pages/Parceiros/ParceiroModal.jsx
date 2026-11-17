@@ -2,11 +2,13 @@ import { useCallback, useEffect, useState } from 'react';
 import { AlertTriangle, Ban, Check, CheckCircle2, Copy, KeyRound, Loader2, Play, RefreshCw, ShieldCheck, X } from 'lucide-react';
 import Modal from '../../components/Modal';
 import Button from '../../components/Button';
+import Interruptor from '../../components/Interruptor';
 import { useConfirm } from '../../confirm/ConfirmContext';
 import { LogoParceiro } from '../../layout/LojaAplicativos';
 import { StatusParceiro, dataHora } from './comum';
 import {
   aprovarParceiro,
+  definirPermissoesParceiro,
   novoSecretParceiro,
   obterParceiro,
   reativarParceiro,
@@ -27,6 +29,7 @@ const EVENTOS = {
   SECRET_TEMPORARIO: 'client_secret temporário gerado',
   SECRET_OFICIAL: 'client_secret oficial gerado',
   WHATSAPP_FALHOU: 'WhatsApp não enviado',
+  PERMISSOES: 'Permissões alteradas',
 };
 
 function BotaoCopiar({ texto }) {
@@ -342,6 +345,15 @@ export default function ParceiroModal({ parceiroId, onFechar, onAlterado }) {
     else if (acao === 'novoSecret') executar(() => novoSecretParceiro(p.id, revogar), 'Novo client_secret temporário gerado.');
   }
 
+  async function alternarPermissao(chave, ligado) {
+    setErro('');
+    try {
+      setP(await definirPermissoesParceiro(p.id, { [chave]: ligado }));
+    } catch (e) {
+      setErro(e.response?.data?.message || 'Não foi possível alterar a permissão.');
+    }
+  }
+
   const titulo = p ? `Solicitação #${p.id}` : 'Parceiro';
 
   return (
@@ -424,6 +436,17 @@ export default function ParceiroModal({ parceiroId, onFechar, onAlterado }) {
                     </span>
                   </Campo>
                 </div>
+              </Bloco>
+              <Bloco
+                titulo="Permissões dentro do Horizon"
+                subtitulo="O que o aplicativo pode pedir ao navegador quando abre dentro do Horizon. O navegador ainda pergunta ao usuário."
+              >
+                <Interruptor
+                  ligado={(p.permissoes || []).includes('localizacao')}
+                  onChange={(ligado) => alternarPermissao('localizacao', ligado)}
+                  rotulo="Localização"
+                  descricao="Libere só para quem precisa: o navegador guarda o “permitir” em nome do Horizon, não do aplicativo."
+                />
               </Bloco>
               <Bloco titulo="Responsável técnico">
                 <div className="grid grid-cols-1 gap-3 sm:grid-cols-2">

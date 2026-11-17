@@ -13,6 +13,10 @@ import { LogoParceiro } from '../../layout/LojaAplicativos';
 // sandbox: o parceiro roda normalmente (scripts, formulários, janelas, downloads), mas não consegue
 // trocar a página do Horizon (sem allow-top-navigation).
 const SANDBOX = 'allow-scripts allow-same-origin allow-forms allow-popups allow-popups-to-escape-sandbox allow-downloads allow-modals';
+// Permissões do navegador liberadas para o aplicativo em Cadastros › Parceiros (o navegador ainda
+// pergunta ao usuário). Sem estar aqui, o iframe não consegue nem pedir.
+const RECURSOS = { localizacao: 'geolocation' };
+const permitir = (permissoes = []) => ['clipboard-write', ...permissoes.map((p) => RECURSOS[p]).filter(Boolean)].join('; ');
 
 export default function AplicativoPage() {
   const { id } = useParams();
@@ -74,7 +78,7 @@ export default function AplicativoPage() {
       title={app.nome}
       src={app.url_conectar}
       sandbox={SANDBOX}
-      allow="clipboard-write"
+      allow={permitir(app.permissoes)}
       className="block h-screen w-full border-0 bg-white"
     />
   );

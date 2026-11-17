@@ -38,6 +38,10 @@ export function reativarParceiro(id) {
   return http.post(`/parceiros/${id}/reativar`).then((res) => res.data);
 }
 
+// Permissões do navegador dentro do Horizon: { localizacao: true|false }.
+export function definirPermissoesParceiro(id, permissoes) {
+  return http.patch(`/parceiros/${id}/permissoes`, permissoes).then((res) => res.data);
+}
 export function novoSecretParceiro(id, revogarOficial) {
   return http.post(`/parceiros/${id}/novo-secret`, { revogar_oficial: revogarOficial }).then((res) => res.data);
 }

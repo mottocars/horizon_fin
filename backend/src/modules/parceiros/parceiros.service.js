@@ -32,7 +32,7 @@ const COLUNAS = `
   p.app_nome, p.app_descricao, p.logo_largura, p.logo_altura, p.logo_tamanho, p.url_abertura, p.url_callback,
   p.verificacoes, p.verificado_em, p.client_id,
   p.secret_temporario_gerado_em, p.secret_temporario_expira_em, p.secret_temporario_usado_em,
-  p.secret_oficial_gerado_em, p.motivo, p.criado_em, p.atualizado_em`;
+  p.secret_oficial_gerado_em, p.permissoes, p.motivo, p.criado_em, p.atualizado_em`;
 
 function formatar(p) {
   return {
@@ -215,6 +215,29 @@ async function reativar(id, usuarioId) {
   return {};
 }
 
+// Permissões do navegador que o aplicativo pode pedir dentro do Horizon (iframe). Uma a uma, pelo
+// administrador: o navegador guarda o "permitir" em nome do Horizon, então liberar para todos faria a
+// permissão dada a um parceiro valer para os outros.
+const PERMISSOES = { localizacao: 'Localização' };
+
+async function definirPermissoes(id, usuarioId, pedido) {
+  await emTransacao(async (cliente) => {
+    const p = await travar(cliente, id);
+    const atuais = new Set(p.permissoes || []);
+    const mudancas = [];
+    Object.entries(PERMISSOES).forEach(([chave, nome]) => {
+      if (typeof pedido[chave] !== 'boolean' || pedido[chave] === atuais.has(chave)) return;
+      if (pedido[chave]) atuais.add(chave);
+      else atuais.delete(chave);
+      mudancas.push(`${nome} ${pedido[chave] ? 'liberada' : 'bloqueada'}`);
+    });
+    if (!mudancas.length) return;
+    await cliente.query('UPDATE parceiros SET permissoes = $2, atualizado_em = NOW() WHERE id = $1', [id, [...atuais].sort()]);
+    await registrarEvento(cliente, id, 'PERMISSOES', `${mudancas.join(', ')} dentro do Horizon.`, usuarioId);
+  });
+  return obter(id);
+}
+
 // ─── Loja de aplicativos (topo) e aplicativos instalados (menu lateral) ─────
 // Por usuário: instalado (ícone no menu lateral) e conectado (o parceiro já recebeu a identidade dele
 // pelo Login com Horizon — ver oidc.js; até lá o aplicativo abre na página com o botão Conectar).
@@ -265,7 +288,7 @@ async function desinstalar(usuarioId, id) {
 // Página /aplicativos/:id (o aplicativo aberto dentro do Horizon).
 async function aplicativo(usuarioId, id) {
   const { rows } = await pool.query(
-    `SELECT p.id, p.app_nome AS nome, p.url_abertura, i.conectado_em
+    `SELECT p.id, p.app_nome AS nome, p.url_abertura, p.permissoes, i.conectado_em
      FROM parceiros_instalacoes i JOIN parceiros p ON p.id = i.parceiro_id AND p.status = 'APROVADO'
      WHERE i.usuario_id = $1 AND i.parceiro_id = $2`,
     [usuarioId, id]
@@ -292,6 +315,7 @@ module.exports = {
   recusar,
   suspender,
   reativar,
+  definirPermissoes,
   loja,
   instalados,
   instalar,

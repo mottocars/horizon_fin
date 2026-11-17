@@ -71,6 +71,8 @@ cadastro.post(
   rota((req) => service.suspender(idSchema.parse(req.params.id), req.user.id, motivoSchema.parse(req.body || {}).motivo))
 );
 cadastro.post('/:id/reativar', rota((req) => service.reativar(idSchema.parse(req.params.id), req.user.id)));
+// Permissões do navegador dentro do Horizon (hoje: { localizacao: true|false }).
+cadastro.patch('/:id/permissoes', rota((req) => service.definirPermissoes(idSchema.parse(req.params.id), req.user.id, req.body || {})));
 cadastro.post(
   '/:id/novo-secret',
   rota((req) =>

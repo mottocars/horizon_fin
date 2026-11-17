@@ -242,6 +242,7 @@
           <ul class="prosa mt-2 max-w-4xl">
             <li><strong>Permitir ser exibido no Horizon:</strong> envie <code class="ic">Content-Security-Policy: frame-ancestors 'self' <span data-app-origem></span></code> e não envie <code class="ic">X-Frame-Options: DENY</code> nem <code class="ic">SAMEORIGIN</code>. O Horizon confere isso na aprovação (verificação "Permite abrir dentro do Horizon").</li>
             <li><strong>Cookies de sessão</strong> (inclusive o que guarda <code class="ic">state</code>, <code class="ic">nonce</code> e o PKCE): <code class="ic">SameSite=None; Secure; Partitioned</code>. Dentro de um iframe de outro site, cookies <code class="ic">Lax</code> ou <code class="ic">Strict</code> não são enviados e o login não completa.</li>
+            <li><strong>Localização do usuário:</strong> dentro do Horizon, o navegador só deixa o seu sistema pedir a localização se o Horizon liberar essa permissão para o seu aplicativo. Precisa dela? Peça ao Horizon. Sem a liberação, o pedido falha na hora, com o erro <code class="ic">disabled by permissions policy</code>.</li>
           </ul>
 
           <h3 class="mt-6 text-[15px] font-semibold text-gray-900">Passo a passo</h3>
