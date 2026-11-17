@@ -41,8 +41,18 @@ export function useLogoParceiro(id, { loja = false } = {}) {
 }
 
 // `xadrez`: fundo quadriculado (mostra se a logo é mesmo transparente — usado no cadastro).
-export function LogoParceiro({ id, nome, loja = false, xadrez = false, className = 'h-10 w-10' }) {
+// `puro`: só a imagem PNG, sem moldura nem fundo (ícone do menu lateral).
+export function LogoParceiro({ id, nome, loja = false, xadrez = false, puro = false, className = 'h-10 w-10' }) {
   const url = useLogoParceiro(id, { loja });
+  if (puro) {
+    return url ? (
+      <img src={url} alt={nome || ''} className={`block shrink-0 object-contain ${className}`} />
+    ) : (
+      <span className={`flex shrink-0 items-center justify-center text-[10px] font-semibold text-gray-400 ${className}`}>
+        {(nome || '?').slice(0, 2).toUpperCase()}
+      </span>
+    );
+  }
   return (
     <span
       className={`flex shrink-0 items-center justify-center overflow-hidden rounded-xl border border-gray-100 ${

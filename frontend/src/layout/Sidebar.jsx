@@ -281,7 +281,7 @@ export default function Sidebar() {
                   className={({ isActive }) =>
                     `flex items-center gap-2.5 rounded-[10px] text-[13px] font-medium transition-colors ${
                       collapsed ? 'mx-auto h-8 w-8 justify-center' : 'w-full px-2.5 py-1'
-                    } ${isActive ? 'bg-primary-50 text-primary-700 ring-2 ring-primary-500' : 'text-gray-600 hover:bg-[#f2f6fd] hover:text-[#233047]'}`
+                    } ${isActive ? 'bg-primary-50 text-primary-700' : 'text-gray-600 hover:bg-[#f2f6fd] hover:text-[#233047]'}`
                   }
                 >
                   <span
@@ -289,7 +289,7 @@ export default function Sidebar() {
                     className="block shrink-0"
                     style={chegando === app.id ? { visibility: 'hidden' } : undefined}
                   >
-                    <LogoParceiro id={app.id} nome={app.nome} loja className="h-8 w-8" />
+                    <LogoParceiro id={app.id} nome={app.nome} loja puro className="h-6 w-6" />
                   </span>
                   {!collapsed && <span className="truncate">{app.nome}</span>}
                 </NavLink>

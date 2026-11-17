@@ -10,13 +10,22 @@ const Contexto = createContext(null);
 const movimentoReduzido = () => window.matchMedia?.('(prefers-reduced-motion: reduce)').matches;
 const proximoQuadro = () => new Promise((r) => requestAnimationFrame(() => requestAnimationFrame(r)));
 
-// Voo do ícone: cópia do elemento de origem, fixa sobre a tela, que sobe um pouco (se solta), faz um
-// arco flutuando e encolhe até o tamanho do ícone do menu. `aoSoltar` roda quando ele se solta (a
-// janela da loja fecha nessa hora).
+// Voo do ícone: só a imagem PNG (sem a moldura da janela), fixa sobre a tela, que sobe um pouco (se
+// solta), faz um arco flutuando e encolhe até o tamanho do ícone do menu. `aoSoltar` roda quando ele
+// se solta (a janela da loja fecha nessa hora).
+function caixaDaImagem(el) {
+  const r = el.getBoundingClientRect();
+  const cs = getComputedStyle(el);
+  const [t, d, b, e] = ['Top', 'Right', 'Bottom', 'Left'].map((lado) => parseFloat(cs[`padding${lado}`]) || 0);
+  return { left: r.left + e, top: r.top + t, width: r.width - e - d, height: r.height - t - b };
+}
+
 async function voar(origem, destino, aoSoltar) {
-  const de = origem.getBoundingClientRect();
-  const para = destino.getBoundingClientRect();
-  const copia = origem.cloneNode(true);
+  const fonte = origem.querySelector('img') || origem;
+  const de = caixaDaImagem(fonte);
+  const para = caixaDaImagem(destino.querySelector('img') || destino);
+  const copia = fonte.cloneNode(true);
+  copia.removeAttribute('class');
   Object.assign(copia.style, {
     position: 'fixed',
     left: `${de.left}px`,
@@ -24,13 +33,15 @@ async function voar(origem, destino, aoSoltar) {
     width: `${de.width}px`,
     height: `${de.height}px`,
     margin: '0',
+    padding: '0',
+    objectFit: 'contain',
     zIndex: '9999',
     pointerEvents: 'none',
     transformOrigin: 'top left',
-    boxShadow: '0 18px 40px -12px rgba(15, 23, 42, 0.45)',
+    filter: 'drop-shadow(0 12px 14px rgba(15, 23, 42, 0.3))',
   });
   document.body.appendChild(copia);
-  origem.style.visibility = 'hidden';
+  fonte.style.visibility = 'hidden';
   aoSoltar?.();
 
   const dx = para.left - de.left;
