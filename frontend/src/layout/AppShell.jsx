@@ -2,7 +2,7 @@ import { Outlet, useLocation, useNavigate } from 'react-router-dom';
 import { ArrowLeft, ShieldAlert } from 'lucide-react';
 import { INTEGRACOES } from '../config/integracoes';
 import Sidebar from './Sidebar';
-import { AplicativosInstaladosProvider } from './AplicativosInstalados';
+import { AplicativosInstaladosProvider, CamadaAplicativos } from './AplicativosInstalados';
 import Topbar from './Topbar';
 import { SidebarProvider } from './SidebarContext';
 import { useAuth } from '../auth/AuthContext';
@@ -174,6 +174,8 @@ function Shell() {
               — ver pages/Dashboards/ControlesDashboard.jsx. z-45: acima das barras de filtros (z 35) e dos
               painéis em tela cheia (z 40) dos dashboards, abaixo da janela de Sumário (50) e das dicas (60). */}
             {dashboard && <div id="camada-dashboard" className="pointer-events-none absolute inset-0 z-[45]" />}
+            {/* Aplicativos dos parceiros abertos: vivos em segundo plano, visível só o da rota atual. */}
+            <CamadaAplicativos />
           </div>
         </div>
       </AplicativosInstaladosProvider>

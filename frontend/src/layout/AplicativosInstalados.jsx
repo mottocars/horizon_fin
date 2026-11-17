@@ -1,9 +1,22 @@
 import { createContext, useCallback, useContext, useEffect, useMemo, useState } from 'react';
+import { useLocation } from 'react-router-dom';
 import { desinstalarAplicativo, instalarAplicativo, listarInstalados } from '../api/parceiros.api';
 
 // Aplicativos dos parceiros instalados pelo usuário (Loja de aplicativos → Instalar): os ícones do fim
 // do menu lateral, na ordem de instalação. Instalar faz o ícone se soltar da janela da loja e voar até
 // o lugar dele no menu (o ícone do menu fica invisível até o voo pousar).
+//
+// Segundo plano: um aplicativo aberto (iframe) fica vivo na CamadaAplicativos do AppShell, fora das
+// rotas — sair para outra tela só o esconde; voltar mostra onde estava, sem recarregar nem refazer o
+// login. Some ao desinstalar, ao sair do Horizon ou ao recarregar a página.
+
+// sandbox: o parceiro roda normalmente (scripts, formulários, janelas, downloads), mas não consegue
+// trocar a página do Horizon (sem allow-top-navigation).
+const SANDBOX = 'allow-scripts allow-same-origin allow-forms allow-popups allow-popups-to-escape-sandbox allow-downloads allow-modals';
+// Permissões do navegador liberadas para o aplicativo em Cadastros › Parceiros (o navegador ainda
+// pergunta ao usuário). Sem estar aqui, o iframe não consegue nem pedir.
+const RECURSOS = { localizacao: 'geolocation' };
+const permitir = (permissoes = []) => ['clipboard-write', ...permissoes.map((p) => RECURSOS[p]).filter(Boolean)].join('; ');
 
 const Contexto = createContext(null);
 
@@ -63,6 +76,7 @@ async function voar(origem, destino, aoSoltar) {
 export function AplicativosInstaladosProvider({ children }) {
   const [instalados, setInstalados] = useState([]);
   const [chegando, setChegando] = useState(null);
+  const [abertos, setAbertos] = useState([]); // { id, nome, url_conectar, permissoes } — iframes vivos
 
   const recarregar = useCallback(() => {
     listarInstalados()
@@ -102,13 +116,38 @@ export function AplicativosInstaladosProvider({ children }) {
 
   const desinstalar = useCallback(async (id) => {
     setInstalados(await desinstalarAplicativo(id));
+    setAbertos((lista) => lista.filter((a) => a.id !== id));
+  }, []);
+
+  // Carrega o aplicativo na camada (uma vez; depois só aparece e some).
+  const abrir = useCallback((app) => {
+    setAbertos((lista) => (lista.some((a) => a.id === app.id) ? lista : [...lista, app]));
   }, []);
 
   const valor = useMemo(
-    () => ({ instalados, chegando, instalar, desinstalar, recarregar }),
-    [instalados, chegando, instalar, desinstalar, recarregar],
+    () => ({ instalados, chegando, abertos, instalar, desinstalar, abrir, recarregar }),
+    [instalados, chegando, abertos, instalar, desinstalar, abrir, recarregar],
   );
   return <Contexto.Provider value={valor}>{children}</Contexto.Provider>;
+}
+
+// Camada dos aplicativos abertos, sobre a área de conteúdo (ao lado do menu lateral). Visível só o da
+// rota /aplicativos/:id atual; os outros ficam escondidos e continuam carregados. Cada iframe nunca muda
+// de lugar no DOM (mover um iframe o recarrega).
+export function CamadaAplicativos() {
+  const { abertos } = useAplicativosInstalados();
+  const { pathname } = useLocation();
+  return abertos.map((app) => (
+    <div key={app.id} className={pathname === `/aplicativos/${app.id}` ? 'absolute inset-0 z-20 bg-white' : 'hidden'}>
+      <iframe
+        title={app.nome}
+        src={app.url_conectar}
+        sandbox={SANDBOX}
+        allow={permitir(app.permissoes)}
+        className="block h-full w-full border-0 bg-white"
+      />
+    </div>
+  ));
 }
 
 export function useAplicativosInstalados() {

@@ -3,38 +3,39 @@ import { Link, useParams } from 'react-router-dom';
 import { Loader2, Plug } from 'lucide-react';
 import { obterAplicativo } from '../../api/parceiros.api';
 import { LogoParceiro } from '../../layout/LojaAplicativos';
+import { useAplicativosInstalados } from '../../layout/AplicativosInstalados';
 
 // /aplicativos/:id — o aplicativo instalado (ícone do menu lateral) aberto dentro do Horizon, só com o
 // menu lateral (tela cheia, ver AppShell). Até a primeira conexão: página em branco com o ícone e o
-// botão Conectar. Conectar (e as próximas aberturas) carrega o sistema do parceiro num iframe pela URL
-// de abertura + iss: o Login com Horizon (OIDC) identifica o usuário ali dentro — na primeira vez o
-// parceiro pede o login dele e vincula a conta; depois, entra direto.
+// botão Conectar. Conectar (e as próximas aberturas) carrega o sistema do parceiro pela URL de abertura
+// + iss: o Login com Horizon (OIDC) identifica o usuário ali dentro — na primeira vez o parceiro pede o
+// login dele e vincula a conta; depois, entra direto.
 //
-// sandbox: o parceiro roda normalmente (scripts, formulários, janelas, downloads), mas não consegue
-// trocar a página do Horizon (sem allow-top-navigation).
-const SANDBOX = 'allow-scripts allow-same-origin allow-forms allow-popups allow-popups-to-escape-sandbox allow-downloads allow-modals';
-// Permissões do navegador liberadas para o aplicativo em Cadastros › Parceiros (o navegador ainda
-// pergunta ao usuário). Sem estar aqui, o iframe não consegue nem pedir.
-const RECURSOS = { localizacao: 'geolocation' };
-const permitir = (permissoes = []) => ['clipboard-write', ...permissoes.map((p) => RECURSOS[p]).filter(Boolean)].join('; ');
-
+// O iframe não fica aqui: fica na CamadaAplicativos (layout/AplicativosInstalados.jsx), que o mantém
+// vivo em segundo plano quando o usuário vai para outra tela. Esta página só decide entre o botão
+// Conectar e abrir o aplicativo na camada.
 export default function AplicativoPage() {
   const { id } = useParams();
+  const { abertos, abrir } = useAplicativosInstalados();
+  const jaAberto = abertos.some((a) => a.id === Number(id));
   const [app, setApp] = useState(null);
   const [erro, setErro] = useState('');
-  const [aberto, setAberto] = useState(false);
 
   useEffect(() => {
+    if (jaAberto) return;
     setApp(null);
     setErro('');
-    setAberto(false);
     obterAplicativo(id)
       .then((a) => {
         setApp(a);
-        setAberto(a.conectado);
+        if (a.conectado) abrir(a);
       })
       .catch((e) => setErro(e.response?.data?.message || 'Não foi possível abrir o aplicativo.'));
+    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [id]);
+
+  // Aberto: a camada cobre esta área com o aplicativo.
+  if (jaAberto) return <div className="h-screen bg-white" />;
 
   if (erro) {
     return (
@@ -47,7 +48,7 @@ export default function AplicativoPage() {
     );
   }
 
-  if (!app) {
+  if (!app || app.conectado) {
     return (
       <div className="flex h-screen items-center justify-center bg-white">
         <Loader2 size={22} className="animate-spin text-gray-300" />
@@ -55,31 +56,18 @@ export default function AplicativoPage() {
     );
   }
 
-  if (!aberto) {
-    return (
-      <div className="flex h-screen flex-col items-center justify-center bg-white p-6 text-center">
-        <LogoParceiro id={app.id} nome={app.nome} loja className="h-20 w-20" />
-        <p className="mt-4 text-base font-semibold text-gray-900">{app.nome}</p>
-        <button
-          type="button"
-          onClick={() => setAberto(true)}
-          className="mt-5 inline-flex items-center gap-2 rounded-lg bg-primary-600 px-5 py-2 text-sm font-medium text-white transition hover:bg-primary-700"
-        >
-          <Plug size={16} />
-          Conectar
-        </button>
-      </div>
-    );
-  }
-
   return (
-    <iframe
-      key={app.id}
-      title={app.nome}
-      src={app.url_conectar}
-      sandbox={SANDBOX}
-      allow={permitir(app.permissoes)}
-      className="block h-screen w-full border-0 bg-white"
-    />
+    <div className="flex h-screen flex-col items-center justify-center bg-white p-6 text-center">
+      <LogoParceiro id={app.id} nome={app.nome} loja className="h-20 w-20" />
+      <p className="mt-4 text-base font-semibold text-gray-900">{app.nome}</p>
+      <button
+        type="button"
+        onClick={() => abrir(app)}
+        className="mt-5 inline-flex items-center gap-2 rounded-lg bg-primary-600 px-5 py-2 text-sm font-medium text-white transition hover:bg-primary-700"
+      >
+        <Plug size={16} />
+        Conectar
+      </button>
+    </div>
   );
 }
