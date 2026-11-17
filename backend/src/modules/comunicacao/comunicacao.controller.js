@@ -72,6 +72,7 @@ async function removerTemplate(req, res, next) {
     if (!removido) return res.status(404).json({ message: 'Template não encontrado.' });
     res.status(204).send();
   } catch (err) {
+    if (err.issues) return next(badRequest(err.issues[0].message));
     next(err);
   }
 }

@@ -522,4 +522,9 @@ module.exports = {
   getHistoricoParcela,
   registrarObservacao,
   getAnexo,
+  // Reaproveitados pela cobrança em massa (cobrancaEmMassa.service.js).
+  getParcelaClassificada,
+  getInfoCliente,
+  getCentroCustoDaParcela,
+  registrarFalhaEnvio,
 };

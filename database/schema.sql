@@ -2791,11 +2791,15 @@ CREATE TABLE comunicacao_templates (
     corpo          TEXT NOT NULL DEFAULT '',
     enviar_boleto  BOOLEAN NOT NULL DEFAULT FALSE,
     clusters       VARCHAR(20)[] NOT NULL DEFAULT '{}',
+    -- Template fixo de "Comunicação em massa" (1 por empresa, criado pelo
+    -- backend, só editável) — ver comunicacao.service.js::garantirTemplateEmMassa.
+    em_massa       BOOLEAN NOT NULL DEFAULT FALSE,
     criado_em      TIMESTAMP DEFAULT NOW(),
     atualizado_em  TIMESTAMP DEFAULT NOW()
 );
 
 CREATE INDEX idx_comunicacao_templates_empresa ON comunicacao_templates (empresa_id);
+CREATE UNIQUE INDEX uq_comunicacao_templates_em_massa ON comunicacao_templates (empresa_id) WHERE em_massa;
 
 -- Régua de Cobrança: etapas de contato configuradas por empresa + cluster.
 -- "inad" (Inadimplência) é um 5º cluster que existe só aqui, dentro da

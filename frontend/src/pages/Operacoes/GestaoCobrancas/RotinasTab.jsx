@@ -3,6 +3,7 @@ import { Check, CheckCircle2, Clock, ListFilter, Mail, MessageCircle, Minus, Pho
 import Card from '../../../components/Card';
 import SearchableSelect from '../../../components/SearchableSelect';
 import RegistrarComunicacaoModal from './RegistrarComunicacaoModal';
+import CobrancaEmMassaModal from './CobrancaEmMassaModal';
 import HistoricoParcelaModal from './GestaoParcelas/HistoricoParcelaModal';
 import { listRotinas, desmarcarCanalRotina } from '../../../api/rotinas.api';
 import { listSiengeIntegracoes } from '../../../api/sienge.api';
@@ -175,6 +176,19 @@ function realizadoDoCanal(item, canal) {
   return item.ligacao_realizada;
 }
 
+function ativoNoCanal(item, canal) {
+  if (canal === 'whatsapp') return item.canal_whatsapp;
+  if (canal === 'email') return item.canal_email;
+  return item.canal_ligacao;
+}
+
+// Identifica a linha (mesma chave do <tr>) — a seleção por arraste guarda
+// linhas, não parcelas: a mesma parcela pode aparecer em 2 linhas (2 etapas
+// no período), e cada linha ganha o seu registro.
+function chaveLinha(item) {
+  return `${item.bill_id}-${item.installment_id}-${item.etapa_id}-${item.data}`;
+}
+
 // Flag de status de WhatsApp/E-mail: só leitura, usada quando a empresa
 // está com "Ativar Comunicação Automática" LIGADA (ver
 // ConfiguracoesGlobaisPainel.jsx) — o disparo é responsabilidade do
@@ -214,13 +228,30 @@ function FlagCanal({ ativo, realizado }) {
 // "pendente" (quadradinho vazio, nunca tentou ainda). Clicar em cima
 // funciona igual ao pendente: abre o modal de novo pra tentar mandar outra
 // vez (`realizado` continua false nos dois casos).
-function CheckboxCanal({ ativo, realizado, erro, mensagemErro, carregando, titulo, onClick }) {
+// `onMouseDown`/`selecionado`: seleção por arraste da cobrança em massa (ver
+// iniciarArraste em RotinasTab) — enquanto arrasta, as caixinhas já
+// selecionadas ficam destacadas em azul.
+function CheckboxCanal({ ativo, realizado, erro, mensagemErro, carregando, titulo, onClick, onMouseDown, selecionado = false }) {
   if (!ativo) return <span className="text-gray-300">—</span>;
+  if (selecionado && !realizado) {
+    return (
+      <button
+        type="button"
+        onClick={onClick}
+        onMouseDown={onMouseDown}
+        title={titulo}
+        className="inline-flex h-[18px] w-[18px] items-center justify-center rounded border-2 border-primary-500 bg-primary-100 text-primary-600"
+      >
+        <Check size={11} strokeWidth={3} />
+      </button>
+    );
+  }
   if (erro && !realizado) {
     return (
       <button
         type="button"
         onClick={onClick}
+        onMouseDown={onMouseDown}
         disabled={carregando}
         title={mensagemErro ? `Falhou: ${mensagemErro} — clique para tentar de novo` : 'Falhou ao enviar — clique para tentar de novo'}
         className="inline-flex h-[18px] w-[18px] items-center justify-center rounded border-2 border-red-500 bg-red-50 text-red-600 transition disabled:cursor-wait disabled:opacity-50"
@@ -233,6 +264,7 @@ function CheckboxCanal({ ativo, realizado, erro, mensagemErro, carregando, titul
     <button
       type="button"
       onClick={onClick}
+      onMouseDown={onMouseDown}
       disabled={carregando}
       title={titulo}
       className={`inline-flex h-[18px] w-[18px] items-center justify-center rounded border-2 transition disabled:cursor-wait disabled:opacity-50 ${
@@ -412,6 +444,86 @@ export default function RotinasTab({
   // carrega o objeto cliente inteiro).
   const [comunicacaoParaRegistrar, setComunicacaoParaRegistrar] = useState(null);
 
+  // Cobrança em massa (pedido do usuário, 17/11 — mesmo gesto da seleção de
+  // notas do Espião NF-e/NFS-e): apertar o botão na caixinha de um canal
+  // ainda pendente e arrastar para baixo seleciona os títulos seguintes do
+  // MESMO cliente (dentro do mesmo Responsável → Centro de Custo, que é o
+  // grupo em que as linhas dele ficam juntas, ver rotinas.service.js); linha
+  // de outro cliente, já realizada ou sem aquele canal é ignorada. Ao soltar:
+  // 1 título só = o modal normal de sempre; 2 ou mais = CobrancaEmMassaModal
+  // (1 mensagem com todos, sem boleto, e 1 registro por linha).
+  // Ref (não state) pro que muda a cada linha percorrida; o state só pinta
+  // as caixinhas selecionadas.
+  const arrasteRef = useRef(null); // { canal, grupo, itens: Map<chaveLinha, item> } | null
+  const [selecaoArraste, setSelecaoArraste] = useState(null); // { canal, chaves: Set } | null
+  const [cobrancaEmMassa, setCobrancaEmMassa] = useState(null); // { canal, itens, clientName } | null
+
+  function iniciarArraste(e, item, canal, grupo) {
+    if (e.button !== 0 || realizadoDoCanal(item, canal)) return;
+    // Sem isso o navegador começa a selecionar texto ao arrastar.
+    e.preventDefault();
+    const itens = new Map([[chaveLinha(item), item]]);
+    arrasteRef.current = { canal, grupo, itens };
+    setSelecaoArraste({ canal, chaves: new Set(itens.keys()) });
+  }
+
+  function continuarArraste(item, grupo) {
+    const arraste = arrasteRef.current;
+    if (!arraste || arraste.grupo !== grupo) return;
+    if (!ativoNoCanal(item, arraste.canal) || realizadoDoCanal(item, arraste.canal)) return;
+    const chave = chaveLinha(item);
+    if (arraste.itens.has(chave)) return;
+    arraste.itens.set(chave, item);
+    setSelecaoArraste({ canal: arraste.canal, chaves: new Set(arraste.itens.keys()) });
+  }
+
+  // Soltar o botão em qualquer lugar encerra o arraste. Enquanto arrasta,
+  // chegar perto da borda de cima/baixo do <main> (quem rola a página) rola
+  // a tela sozinho — mesmo comportamento do Espião NF-e/NFS-e.
+  useEffect(() => {
+    let posicaoY = null;
+    const main = document.querySelector('main');
+    function aoMover(e) {
+      posicaoY = arrasteRef.current ? e.clientY : null;
+    }
+    function aoSoltar() {
+      const arraste = arrasteRef.current;
+      posicaoY = null;
+      if (!arraste) return;
+      arrasteRef.current = null;
+      const itens = [...arraste.itens.values()];
+      if (itens.length === 1) {
+        setSelecaoArraste(null);
+        setComunicacaoParaRegistrar({ item: itens[0], canal: arraste.canal, clientName: itens[0].client_name });
+      } else {
+        // A seleção continua pintada enquanto o modal está aberto.
+        setCobrancaEmMassa({ canal: arraste.canal, itens, clientName: itens[0].client_name });
+      }
+    }
+    const intervalo = setInterval(() => {
+      if (posicaoY == null || !main) return;
+      const { top, bottom } = main.getBoundingClientRect();
+      if (posicaoY > bottom - 48) main.scrollBy(0, 14);
+      else if (posicaoY < top + 48) main.scrollBy(0, -14);
+    }, 16);
+    window.addEventListener('mousemove', aoMover);
+    window.addEventListener('mouseup', aoSoltar);
+    return () => {
+      clearInterval(intervalo);
+      window.removeEventListener('mousemove', aoMover);
+      window.removeEventListener('mouseup', aoSoltar);
+    };
+  }, []);
+
+  function fecharCobrancaEmMassa() {
+    setCobrancaEmMassa(null);
+    setSelecaoArraste(null);
+  }
+
+  function selecionadoNoArraste(item, canal) {
+    return Boolean(selecaoArraste && selecaoArraste.canal === canal && selecaoArraste.chaves.has(chaveLinha(item)));
+  }
+
   // Clique no nome do cliente: abre o Histórico de Etapas — mesmo modal de
   // Gestão das Parcelas (HistoricoParcelaModal.jsx), sempre da parcela
   // daquela linha específica (bill_id/installment_id do próprio item
@@ -476,8 +588,12 @@ export default function RotinasTab({
   // RegistrarComunicacaoModal.jsx) — só depois de registrar de verdade lá
   // é que o check acende. Já realizada, desmarcar é direto, sem modal
   // (mesmo espírito de "desfazer" simples).
-  async function handleCliqueCanal(item, canal, clientName) {
+  // Pendente + clique de mouse: quem abre o modal é o fim do arraste (ver
+  // aoSoltar acima — um clique simples é um "arraste" de 1 título só); aqui
+  // só sobra o teclado (Enter/Espaço, `e.detail === 0`).
+  async function handleCliqueCanal(item, canal, clientName, e) {
     if (!realizadoDoCanal(item, canal)) {
+      if (e?.detail > 0) return;
       setComunicacaoParaRegistrar({ item, canal, clientName });
       return;
     }
@@ -758,11 +874,17 @@ export default function RotinasTab({
                                 centro.itens.map((item) => {
                                   const Icone = CLUSTER_ICON[item.cluster];
                                   const chave = `${item.bill_id}-${item.installment_id}-${item.data}`;
+                                  // Grupo do arraste da cobrança em massa: só o mesmo cliente
+                                  // dentro deste Responsável → Centro de Custo.
+                                  const grupo = `${resp.usuario_id ?? 'sem'}|${centro.cost_center_id}|${item.client_id}`;
+                                  const linhaSelecionada = Boolean(selecaoArraste?.chaves.has(chaveLinha(item)));
                                   return (
-                                    // Nível 3 — parcela: fundo branco.
+                                    // Nível 3 — parcela: fundo branco (azul claro quando
+                                    // selecionada no arraste da cobrança em massa).
                                     <tr
-                                      key={`${item.bill_id}-${item.installment_id}-${item.etapa_id}-${item.data}`}
-                                      className="bg-white hover:bg-gray-50"
+                                      key={chaveLinha(item)}
+                                      onMouseEnter={() => continuarArraste(item, grupo)}
+                                      className={linhaSelecionada ? 'bg-primary-50' : 'bg-white hover:bg-gray-50'}
                                     >
                                       <td
                                         onClick={() => handleCliqueCliente(item, item.client_name)}
@@ -818,8 +940,10 @@ export default function RotinasTab({
                                             erro={item.whatsapp_erro}
                                             mensagemErro={item.whatsapp_erro_mensagem}
                                             carregando={alternando === `${chave}-whatsapp`}
-                                            titulo={item.whatsapp_enviado ? 'WhatsApp registrado — clique para desmarcar' : 'Marcar WhatsApp como enviado'}
-                                            onClick={() => handleCliqueCanal(item, 'whatsapp', item.client_name)}
+                                            titulo={item.whatsapp_enviado ? 'WhatsApp registrado — clique para desmarcar' : 'Enviar WhatsApp — segure e arraste para baixo para cobrar vários títulos deste cliente de uma vez'}
+                                            onClick={(e) => handleCliqueCanal(item, 'whatsapp', item.client_name, e)}
+                                            onMouseDown={(e) => iniciarArraste(e, item, 'whatsapp', grupo)}
+                                            selecionado={selecionadoNoArraste(item, 'whatsapp')}
                                           />
                                         )}
                                       </td>
@@ -833,8 +957,10 @@ export default function RotinasTab({
                                             erro={item.email_erro}
                                             mensagemErro={item.email_erro_mensagem}
                                             carregando={alternando === `${chave}-email`}
-                                            titulo={item.email_enviado ? 'E-mail registrado — clique para desmarcar' : 'Marcar e-mail como enviado'}
-                                            onClick={() => handleCliqueCanal(item, 'email', item.client_name)}
+                                            titulo={item.email_enviado ? 'E-mail registrado — clique para desmarcar' : 'Enviar e-mail — segure e arraste para baixo para cobrar vários títulos deste cliente de uma vez'}
+                                            onClick={(e) => handleCliqueCanal(item, 'email', item.client_name, e)}
+                                            onMouseDown={(e) => iniciarArraste(e, item, 'email', grupo)}
+                                            selecionado={selecionadoNoArraste(item, 'email')}
                                           />
                                         )}
                                       </td>
@@ -843,8 +969,10 @@ export default function RotinasTab({
                                           ativo={item.canal_ligacao}
                                           realizado={item.ligacao_realizada}
                                           carregando={alternando === `${chave}-ligacao`}
-                                          titulo={item.ligacao_realizada ? 'Ligação registrada — clique para desmarcar' : 'Marcar ligação como realizada'}
-                                          onClick={() => handleCliqueCanal(item, 'ligacao', item.client_name)}
+                                          titulo={item.ligacao_realizada ? 'Ligação registrada — clique para desmarcar' : 'Registrar ligação — segure e arraste para baixo para cobrar vários títulos deste cliente de uma vez'}
+                                          onClick={(e) => handleCliqueCanal(item, 'ligacao', item.client_name, e)}
+                                          onMouseDown={(e) => iniciarArraste(e, item, 'ligacao', grupo)}
+                                          selecionado={selecionadoNoArraste(item, 'ligacao')}
                                         />
                                       </td>
                                     </tr>
@@ -870,6 +998,16 @@ export default function RotinasTab({
         canal={comunicacaoParaRegistrar?.canal}
         clientName={comunicacaoParaRegistrar?.clientName}
         modoCopiar={tipoComunicacao === 'copiar'}
+        onRegistrado={carregar}
+      />
+
+      <CobrancaEmMassaModal
+        open={Boolean(cobrancaEmMassa)}
+        onClose={fecharCobrancaEmMassa}
+        empresaId={empresaId}
+        canal={cobrancaEmMassa?.canal}
+        itens={cobrancaEmMassa?.itens}
+        clientName={cobrancaEmMassa?.clientName}
         onRegistrado={carregar}
       />
 

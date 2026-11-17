@@ -157,7 +157,7 @@ async function garantirTemplateElegivel(empresaId, cluster, templateId) {
   if (!templateId) return;
   const { rows } = await pool.query(
     `SELECT 1 FROM comunicacao_templates
-     WHERE id = $1 AND empresa_id = $2 AND $3 = ANY(clusters)`,
+     WHERE id = $1 AND empresa_id = $2 AND $3 = ANY(clusters) AND NOT em_massa`,
     [templateId, empresaId, cluster]
   );
   if (rows.length === 0) {
@@ -530,4 +530,6 @@ module.exports = {
   getZapiIntegracaoDoCluster,
   getEmailIntegracaoDoCluster,
   substituirVariaveisTemplate,
+  formatarDataBR,
+  formatarMoedaBR,
 };

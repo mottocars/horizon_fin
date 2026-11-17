@@ -16,6 +16,8 @@ const router = Router();
 router.use(authMiddleware);
 router.get('/parcelas/:billId/:installmentId', controller.getHistorico);
 router.post('/registros', uploadAnexo.array('arquivos'), controller.registrarObservacao);
+router.post('/em-massa/previa', controller.previaEmMassa);
+router.post('/em-massa', controller.registrarEmMassa);
 router.get('/anexos/:anexoId/download', controller.downloadAnexo);
 router.get('/boletos/:billId/:installmentId', controller.downloadBoleto);
 

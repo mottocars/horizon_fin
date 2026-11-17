@@ -37,7 +37,9 @@ const PROPRIEDADES_ESPELHADAS = [
 // chegam necessariamente na mesma ordem que foram enviadas, uma resposta
 // atrasada podia sobrescrever o texto já mais recente na tela, embaralhando
 // o que a pessoa tinha acabado de digitar.
-const MentionTextarea = forwardRef(function MentionTextarea({ value, onChange, placeholder, className, wrapperClassName }, ref) {
+// `vars`: lista de variáveis oferecidas (o template de Comunicação em massa
+// tem a sua própria, ver constantes.js::VARS_EM_MASSA).
+const MentionTextarea = forwardRef(function MentionTextarea({ value, onChange, placeholder, className, wrapperClassName, vars = VARS }, ref) {
   const taRef = useRef(null);
   const mirrorRef = useRef(null);
   const [local, setLocal] = useState(value || '');
@@ -76,7 +78,7 @@ const MentionTextarea = forwardRef(function MentionTextarea({ value, onChange, p
       return;
     }
     const q = normalizar(m[1]);
-    const lista = VARS.filter((v) => normalizar(v.rotulo).includes(q) || v.chave.includes(q));
+    const lista = vars.filter((v) => normalizar(v.rotulo).includes(q) || v.chave.includes(q));
     const { top, left } = coordsCursor(pos);
     setMention({ lista, indice: 0, inicio: pos - m[0].length, top, left });
   }

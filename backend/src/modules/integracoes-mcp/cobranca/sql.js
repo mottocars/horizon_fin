@@ -23,7 +23,7 @@ const VIEWS = {
   mcp_motor_risco_indicadores: 'Indicadores de cada versão: versao_id (-> mcp_motor_risco_versoes.id), indicador, nota_0, nota_100, peso.',
   mcp_regua_cobranca_etapas:
     'Etapas da régua: id, cluster (novo/bom/duvidoso/mau/inad), nome, dias (D±N do vencimento), canal_whatsapp, canal_email, canal_ligacao, template_id, responsavel_usuario_id, ativa, rotina_habilitada, criado_em, atualizado_em.',
-  mcp_comunicacao_templates: 'Templates de mensagem: id, nome, assunto, corpo (com @nome_cliente, @centro_custo, @vencimento, @valor), enviar_boleto, clusters (array).',
+  mcp_comunicacao_templates: 'Templates de mensagem: id, nome, assunto, corpo (com @nome_cliente, @centro_custo, @vencimento, @valor), enviar_boleto, clusters (array), em_massa (true = o template fixo de Comunicação em massa, 1 por empresa, usado na cobrança de vários títulos do mesmo cliente de uma vez).',
   mcp_regua_cobranca_tipos_pagamento: 'Tipos de pagamento que ENTRAM na cobrança: descricao (compare com TRIM(payment_term_description)), criado_em, criado_por.',
   mcp_regua_cobranca_historico_registros:
     'Registros de contato de cada parcela: bill_id, installment_id, data_registro (data da tarefa/contato), canal (whatsapp/email/ligacao; NULL = observação), tipo (manual/automatico), usuario_id (quem fez), descricao (texto enviado/observação), criado_em.',

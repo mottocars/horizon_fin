@@ -37,7 +37,7 @@ const TITULO_COPIAR = { whatsapp: 'Copiar WhatsApp', email: 'Copiar E-mail' };
 
 // navigator.clipboard só existe em https/localhost; fora disso cai no
 // execCommand antigo, que ainda funciona dentro de um clique.
-async function copiarTexto(texto) {
+export async function copiarTexto(texto) {
   if (navigator.clipboard?.writeText) {
     await navigator.clipboard.writeText(texto);
     return;

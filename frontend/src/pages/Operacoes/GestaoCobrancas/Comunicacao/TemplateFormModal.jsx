@@ -3,7 +3,7 @@ import { Eye, Save, Trash2 } from 'lucide-react';
 import Modal from '../../../../components/Modal';
 import TemplatePreviewModal from '../../../../components/TemplatePreviewModal';
 import MentionTextarea from './MentionTextarea';
-import { CLUSTERS, CLUSTER_ICON, CLUSTER_ICON_COR, CLUSTER_TAB_ATIVA, VARS, substituirVariaveis } from './constantes';
+import { CLUSTERS, CLUSTER_ICON, CLUSTER_ICON_COR, CLUSTER_TAB_ATIVA, VARS, VARS_EM_MASSA, substituirVariaveis } from './constantes';
 
 const VAZIO = { nome: '', descricao: '', assunto: '', corpo: '', enviar_boleto: false, clusters: [] };
 
@@ -47,7 +47,16 @@ export default function TemplateFormModal({ open, onClose, template, onSalvar, o
     setDraft((d) => ({ ...d, [chave]: valor }));
   }
 
-  const valido = draft.nome.trim() && draft.assunto.trim() && draft.corpo.trim() && draft.clusters.length > 0;
+  // Template fixo de Comunicação em massa (ver backend
+  // comunicacao.service.js::TEMPLATE_EM_MASSA_PADRAO): só assunto e corpo
+  // mudam — nome travado, sem boleto, sem clusters (não é escolhido em
+  // etapa da Régua) e sem Excluir. Variáveis próprias (lista de títulos e
+  // total, ver constantes.js::VARS_EM_MASSA).
+  const emMassa = Boolean(template?.em_massa);
+  const vars = emMassa ? VARS_EM_MASSA : VARS;
+  const valido = emMassa
+    ? draft.assunto.trim() && draft.corpo.trim()
+    : draft.nome.trim() && draft.assunto.trim() && draft.corpo.trim() && draft.clusters.length > 0;
 
   return (
     <Modal open={open} onClose={onClose} title={draft.nome || 'Novo template'} maxWidthClass="max-w-3xl">
@@ -60,21 +69,33 @@ export default function TemplateFormModal({ open, onClose, template, onSalvar, o
               type="text"
               value={draft.nome}
               onChange={(e) => campo('nome', e.target.value)}
+              readOnly={emMassa}
               placeholder="Ex.: Lembrete cordial com boleto"
-              className="w-full rounded-lg border border-gray-200 px-3 py-2 text-sm focus:outline-none focus:ring-1 focus:ring-primary-100"
+              className={`w-full rounded-lg border border-gray-200 px-3 py-2 text-sm focus:outline-none focus:ring-1 focus:ring-primary-100 ${
+                emMassa ? 'cursor-default bg-gray-50 text-gray-600' : ''
+              }`}
             />
           </div>
 
-          <div>
-            <label className="mb-1 block text-[10px] font-medium uppercase tracking-wide text-gray-400">Descrição</label>
-            <input
-              type="text"
-              value={draft.descricao}
-              onChange={(e) => campo('descricao', e.target.value)}
-              placeholder="Quando usar este template e qual o tom"
-              className="w-full rounded-lg border border-gray-200 px-3 py-2 text-sm focus:outline-none focus:ring-1 focus:ring-primary-100"
-            />
-          </div>
+          {emMassa ? (
+            <p className="rounded-lg border border-primary-100 bg-primary-50 px-3 py-2 text-xs leading-relaxed text-primary-800">
+              Usado quando vários títulos do mesmo cliente são cobrados juntos na Rotina: segure o clique na caixinha do
+              WhatsApp ou do E-mail e arraste para baixo pelos títulos do cliente. Sai uma única mensagem, sem boleto, e
+              cada título ganha o seu registro no Histórico de Etapas. Este template é único: dá para editar o assunto e o
+              texto, mas não excluir.
+            </p>
+          ) : (
+            <div>
+              <label className="mb-1 block text-[10px] font-medium uppercase tracking-wide text-gray-400">Descrição</label>
+              <input
+                type="text"
+                value={draft.descricao}
+                onChange={(e) => campo('descricao', e.target.value)}
+                placeholder="Quando usar este template e qual o tom"
+                className="w-full rounded-lg border border-gray-200 px-3 py-2 text-sm focus:outline-none focus:ring-1 focus:ring-primary-100"
+              />
+            </div>
+          )}
 
           <div>
             <label className="mb-1 block text-[10px] font-medium uppercase tracking-wide text-gray-400">Assunto</label>
@@ -88,6 +109,8 @@ export default function TemplateFormModal({ open, onClose, template, onSalvar, o
             <p className="mt-1 text-xs text-gray-400">Usado apenas no envio por e-mail. WhatsApp e ligação ignoram este campo.</p>
           </div>
 
+          {!emMassa && (
+            <>
           <div>
             <label className="mb-1 block text-[10px] font-medium uppercase tracking-wide text-gray-400">Anexo</label>
             <div className="flex items-center gap-3 rounded-lg border border-gray-200 p-2.5">
@@ -126,6 +149,8 @@ export default function TemplateFormModal({ open, onClose, template, onSalvar, o
               })}
             </div>
           </div>
+            </>
+          )}
         </div>
 
         {/* Coluna 2: corpo da mensagem — cresce até a altura da coluna 1,
@@ -136,11 +161,11 @@ export default function TemplateFormModal({ open, onClose, template, onSalvar, o
           {/* Variáveis em chip, compactas de propósito (a versão em cartão
               não cabia sem rolar) — clicar insere no cursor, igual ao "@". */}
           <div className="mb-1.5 flex flex-wrap gap-1">
-            {VARS.map((v) => (
+            {vars.map((v) => (
               <button
                 key={v.chave}
                 type="button"
-                title={`${v.rotulo} — ex.: ${v.exemplo}`}
+                title={`${v.rotulo} — ex.: ${v.exemplo.split('\n')[0]}`}
                 onMouseDown={(e) => {
                   e.preventDefault();
                   mentionRef.current?.inserirVariavel(v.chave);
@@ -156,6 +181,7 @@ export default function TemplateFormModal({ open, onClose, template, onSalvar, o
             ref={mentionRef}
             value={draft.corpo}
             onChange={(v) => campo('corpo', v)}
+            vars={vars}
             wrapperClassName="flex min-h-[220px] flex-1 flex-col"
             className="h-full w-full flex-1 resize-none rounded-lg border border-gray-200 px-3 py-2 text-sm leading-relaxed focus:outline-none focus:ring-1 focus:ring-primary-100"
           />
@@ -175,7 +201,7 @@ export default function TemplateFormModal({ open, onClose, template, onSalvar, o
             <Eye size={14} />
             Pré-visualizar
           </button>
-          {template && (
+          {template && !emMassa && (
             <button
               type="button"
               onClick={() => onExcluir(template.id)}
@@ -189,7 +215,9 @@ export default function TemplateFormModal({ open, onClose, template, onSalvar, o
         <button
           type="button"
           disabled={!valido}
-          title={valido ? '' : 'Preencha nome, assunto, corpo da mensagem e pelo menos 1 cluster'}
+          title={
+            valido ? '' : emMassa ? 'Preencha o assunto e o corpo da mensagem' : 'Preencha nome, assunto, corpo da mensagem e pelo menos 1 cluster'
+          }
           onClick={() => onSalvar(template?.id ?? null, draft)}
           className="flex items-center gap-1.5 rounded-full bg-primary-600 px-4 py-1.5 text-xs font-medium text-white hover:bg-primary-700 disabled:cursor-not-allowed disabled:bg-gray-200 disabled:text-gray-400"
         >
@@ -201,10 +229,10 @@ export default function TemplateFormModal({ open, onClose, template, onSalvar, o
       <TemplatePreviewModal
         open={previewAberto}
         onClose={() => setPreviewAberto(false)}
-        mensagemWhatsApp={substituirVariaveis(draft.corpo)}
-        mensagemEmail={substituirVariaveis(draft.corpo)}
-        assuntoEmail={substituirVariaveis(draft.assunto)}
-        anexo={draft.enviar_boleto}
+        mensagemWhatsApp={substituirVariaveis(draft.corpo, emMassa)}
+        mensagemEmail={substituirVariaveis(draft.corpo, emMassa)}
+        assuntoEmail={substituirVariaveis(draft.assunto, emMassa)}
+        anexo={!emMassa && draft.enviar_boleto}
       />
     </Modal>
   );

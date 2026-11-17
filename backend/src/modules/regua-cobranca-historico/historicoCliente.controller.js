@@ -1,5 +1,6 @@
 const { z } = require('zod');
 const service = require('./historicoCliente.service');
+const emMassa = require('./cobrancaEmMassa.service');
 const { buscarBoletoParaEnvio } = require('./boletoSienge');
 
 const empresaIdSchema = z.coerce.number().int().positive('Selecione uma empresa.');
@@ -93,4 +94,53 @@ async function downloadBoleto(req, res, next) {
   }
 }
 
-module.exports = { getHistorico, registrarObservacao, downloadAnexo, downloadBoleto };
+// Cobrança em massa da Rotina (ver cobrancaEmMassa.service.js): as linhas
+// selecionadas (cada uma com a data da própria linha) + o canal. A prévia
+// monta a mensagem e mostra o que vai sair; o POST envia e registra.
+const emMassaSchema = z.object({
+  canal: z.enum(['whatsapp', 'email', 'ligacao']),
+  itens: z
+    .array(
+      z.object({
+        bill_id: z.coerce.number().int().positive('Parcela inválida.'),
+        installment_id: z.coerce.number().int().positive('Parcela inválida.'),
+        data_registro: z.string().regex(/^\d{4}-\d{2}-\d{2}$/, 'Data inválida.'),
+      })
+    )
+    .min(2, 'Selecione pelo menos 2 títulos para uma cobrança em massa.'),
+  observacao: z.string().trim().max(2000).optional(),
+});
+
+function itensEmMassa(data) {
+  return data.itens.map((i) => ({ billId: i.bill_id, installmentId: i.installment_id, dataRegistro: i.data_registro }));
+}
+
+async function previaEmMassa(req, res, next) {
+  try {
+    const empresaId = empresaIdSchema.parse(req.query.empresa_id);
+    const data = emMassaSchema.parse(req.body);
+    res.json(await emMassa.previaCobrancaEmMassa(empresaId, { canal: data.canal, itens: itensEmMassa(data) }));
+  } catch (err) {
+    if (err.issues) return next(badRequest(err.issues[0].message));
+    next(err);
+  }
+}
+
+async function registrarEmMassa(req, res, next) {
+  try {
+    const empresaId = empresaIdSchema.parse(req.query.empresa_id);
+    const data = emMassaSchema.parse(req.body);
+    const result = await emMassa.registrarCobrancaEmMassa(empresaId, {
+      canal: data.canal,
+      itens: itensEmMassa(data),
+      observacao: data.observacao,
+      usuarioId: req.user?.id,
+    });
+    res.status(201).json(result);
+  } catch (err) {
+    if (err.issues) return next(badRequest(err.issues[0].message));
+    next(err);
+  }
+}
+
+module.exports = { getHistorico, registrarObservacao, downloadAnexo, downloadBoleto, previaEmMassa, registrarEmMassa };

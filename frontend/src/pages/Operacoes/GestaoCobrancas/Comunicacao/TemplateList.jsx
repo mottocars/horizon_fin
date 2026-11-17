@@ -1,4 +1,4 @@
-import { Search } from 'lucide-react';
+import { Layers, Search } from 'lucide-react';
 import Card from '../../../../components/Card';
 import { CLUSTERS, CLUSTER_ICON, CLUSTER_ICON_COR } from './constantes';
 
@@ -20,7 +20,9 @@ const norm = (s) =>
 // de onSelecionar/onNovo) — aqui só se escolhe qual.
 export default function TemplateList({ templates, onSelecionar, onNovo, busca, onBusca, filtroCluster, onFiltroCluster }) {
   const filtrados = templates.filter((t) => {
-    const okCluster = filtroCluster === 'todos' || t.clusters.includes(filtroCluster);
+    // O template fixo de Comunicação em massa não tem cluster (não é usado
+    // em etapa) — aparece sempre, em primeiro (o backend já manda ordenado).
+    const okCluster = filtroCluster === 'todos' || t.em_massa || t.clusters.includes(filtroCluster);
     const okBusca = !busca || norm(`${t.nome} ${t.descricao} ${t.assunto} ${t.corpo}`).includes(norm(busca));
     return okCluster && okBusca;
   });
@@ -92,14 +94,21 @@ export default function TemplateList({ templates, onSelecionar, onNovo, busca, o
               key={t.id}
               type="button"
               onClick={() => onSelecionar(t.id)}
-              className="rounded-lg border border-gray-200 p-3 text-left transition-colors hover:border-primary-200 hover:bg-primary-50/30"
+              className={`rounded-lg border p-3 text-left transition-colors hover:border-primary-200 hover:bg-primary-50/30 ${
+                t.em_massa ? 'border-primary-200 bg-primary-50/40' : 'border-gray-200'
+              }`}
             >
               <p className="truncate text-[13px] font-medium leading-snug text-gray-900">{t.nome}</p>
               <p className="mt-0.5 h-8 overflow-hidden text-xs leading-snug text-gray-400">{t.descricao || '—'}</p>
               <div className="mt-2 flex items-center gap-1.5">
-                {CLUSTERS.map((c) => (
-                  <IconeCluster key={c.id} cluster={c} aceso={t.clusters.includes(c.id)} />
-                ))}
+                {t.em_massa ? (
+                  <span className="flex items-center gap-1 text-[11px] font-medium text-primary-700">
+                    <Layers size={13} />
+                    Vários títulos do mesmo cliente
+                  </span>
+                ) : (
+                  CLUSTERS.map((c) => <IconeCluster key={c.id} cluster={c} aceso={t.clusters.includes(c.id)} />)
+                )}
                 {t.enviar_boleto && <span className="ml-auto font-mono text-[10px] text-primary-600">boleto</span>}
               </div>
             </button>

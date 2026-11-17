@@ -50,3 +50,20 @@ export function baixarBoletoParcela(empresaId, billId, installmentId) {
     })
     .then((res) => res.data);
 }
+
+// Cobrança em massa da Rotina (arrastar na coluna do canal): `itens` são as
+// linhas selecionadas ({ bill_id, installment_id, data_registro }), todas do
+// mesmo cliente. A prévia devolve a mensagem montada pelo template fixo de
+// "Comunicação em massa" (sem boleto) e o que impede o envio; o POST envia
+// 1 mensagem só e registra 1 interação por linha.
+export function previaCobrancaEmMassa(empresaId, { canal, itens }) {
+  return http
+    .post('/regua-cobranca-historico/em-massa/previa', { canal, itens }, { params: { empresa_id: empresaId } })
+    .then((res) => res.data);
+}
+
+export function registrarCobrancaEmMassa(empresaId, { canal, itens, observacao }) {
+  return http
+    .post('/regua-cobranca-historico/em-massa', { canal, itens, observacao }, { params: { empresa_id: empresaId } })
+    .then((res) => res.data);
+}
