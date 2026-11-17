@@ -3,6 +3,10 @@
 Página pública da API Horizon (`https://api.horizonhub.com.br`): referência de todos os endpoints e
 "Testar" ao vivo (cada execução gera um token novo com a chave digitada e chama a API).
 
+Também tem o formulário **Quero ser um Parceiro** (`/parceiros/` — `parceiros/index.html` e
+`src/parceiros.js`): o parceiro cadastra o aplicativo, confirma o celular com o código enviado por
+WhatsApp e a solicitação cai em Cadastros › Parceiros. Backend: `backend/src/modules/parceiros/`.
+
 - Conteúdo dos endpoints, campos e erros: `src/endpoints.js` (fonte única dos exemplos, tabelas e
   formulários). Mudou algo em `backend/src/modules/api-horizon/v1/`? Mude lá também.
 - Textos fixos (introdução, autenticação, convenções, limites, segurança): `index.html`.
@@ -43,6 +47,15 @@ Contêiner `api-docs` do `docker-compose.yml` (`127.0.0.1:3013`). A API em si é
            proxy_set_header X-Forwarded-For $proxy_add_x_forwarded_for;
            proxy_set_header X-Forwarded-Proto $scheme;
            client_max_body_size 64k;
+       }
+
+       # Formulário "Quero ser um Parceiro": a logomarca (PNG até 500 KB) vai em base64 no JSON.
+       location /v1/parceiros/solicitacoes {
+           proxy_pass http://127.0.0.1:3011/api/v1/parceiros/solicitacoes;
+           proxy_set_header Host $host;
+           proxy_set_header X-Forwarded-For $proxy_add_x_forwarded_for;
+           proxy_set_header X-Forwarded-Proto $scheme;
+           client_max_body_size 1m;
        }
 
        # Documentação

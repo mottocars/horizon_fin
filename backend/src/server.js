@@ -101,6 +101,7 @@ const mcpDfcRoutes = require('./modules/integracoes-mcp/dfc/mcpDfc.routes');
 const mcpOauthRoutes = require('./modules/integracoes-mcp/dfc/oauth.routes');
 const logsAcessoRoutes = require('./modules/logs-acesso/logsAcesso.routes');
 const apiHorizonChavesRoutes = require('./modules/api-horizon/chaves.routes');
+const parceirosRoutes = require('./modules/parceiros/parceiros.routes');
 const apiHorizonV1Routes = require('./modules/api-horizon/v1/v1.routes');
 const { tratarErros: tratarErrosApiHorizon } = require('./modules/api-horizon/v1/erros');
 const { observarRespostas } = require('./modules/alertas-seguranca/vigilancia');
@@ -218,6 +219,10 @@ app.use('/api/publico/formularios', formulariosRoutes.publico);
 // Cadastros › Novidades; /api/minhas-novidades = a janela de novidades ao entrar e o botão do topo (todo usuário logado).
 app.use('/api/novidades', exigirTela([T.NOVIDADES]), novidadesRoutes.cadastro);
 app.use('/api/minhas-novidades', exigirTela([QUALQUER_TELA]), novidadesRoutes.minhas);
+// Cadastros › Parceiros (aprovação dos aplicativos parceiros); /api/loja-aplicativos = a Loja de aplicativos do
+// topo (todo usuário logado). O formulário público e a troca do client_secret ficam na API Horizon (/api/v1/parceiros).
+app.use('/api/parceiros', exigirTela([T.PARCEIROS]), parceirosRoutes.cadastro);
+app.use('/api/loja-aplicativos', exigirTela([QUALQUER_TELA]), parceirosRoutes.loja);
 app.use('/api/dre-demonstrativo', exigirTela([T.DRE], LEITURA_DASHBOARD), dreDemonstrativoRoutes);
 // Exportação de auditoria da DRE (Excel com a memória de cálculo e as bases): tela DRE e, só leitura
 // (é um GET), o dashboard Econômico Financeiro › Demonstração do Resultado.

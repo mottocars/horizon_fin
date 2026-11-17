@@ -47,7 +47,9 @@ export const GRUPOS = [
   {
     id: 'autenticacao',
     titulo: 'Autenticação',
-    descricao: ['Troca da chave de API pelo token usado em todos os outros endpoints.'],
+    descricao: [
+      'Troca da chave de API pelo token usado em todos os outros endpoints e, para aplicativos parceiros da loja do Horizon, a geração do client_secret oficial.',
+    ],
   },
   {
     id: 'notas-fiscais',
@@ -97,6 +99,53 @@ export const ENDPOINTS = [
     ],
     erros: ['CHAVE_AUSENTE', 'CHAVE_INVALIDA', 'CHAVE_EXPIRADA', 'CHAVE_REVOGADA', 'SEM_PERMISSAO', 'LIMITE_EXCEDIDO'],
     teste: { campos: [] },
+  },
+  {
+    id: 'parceiros-client-secret',
+    grupo: 'autenticacao',
+    metodo: 'POST',
+    caminho: '/parceiros/client-secret',
+    titulo: 'Gerar client_secret oficial',
+    resumo: 'Aplicativos parceiros: troca o client_secret temporário pelo oficial.',
+    descricao: [
+      'Para <strong>aplicativos parceiros</strong> da loja do Horizon. Ao aprovar o parceiro, o Horizon manda por WhatsApp ao responsável técnico o <code class="ic">client_id</code> e um <strong>client_secret temporário</strong> (<code class="ic">hzpt_…</code>), que vale 6 dias e pode ser usado uma vez só.',
+      'Envie os dois aqui para gerar o <strong>client_secret oficial</strong> (<code class="ic">hzps_…</code>). Ele aparece <strong>uma vez só</strong>, nesta resposta: guarde-o num cofre de senhas ou variável de ambiente do servidor. Perdeu? Peça ao Horizon um novo client_secret temporário e repita este passo.',
+      'Não usa chave de API nem token. Dá para gerar direto pelo <strong>Executar</strong> abaixo.',
+    ],
+    autenticacao: 'parceiro',
+    corpo: [
+      { nome: 'clientId', tipo: 'texto', obrigatorio: true, descricao: '<code class="ic">client_id</code> recebido por WhatsApp (<code class="ic">hzp_…</code>).' },
+      { nome: 'clientSecretTemporario', tipo: 'texto', obrigatorio: true, descricao: 'client_secret temporário recebido por WhatsApp (<code class="ic">hzpt_…</code>).' },
+    ],
+    exemploCorpo: { clientId: 'hzp_q3VtZ8xN1bKe7RmA0sLw', clientSecretTemporario: 'hzpt_…' },
+    resposta: {
+      clientId: 'hzp_q3VtZ8xN1bKe7RmA0sLw',
+      clientSecret: 'hzps_Jx0uE5rQ2mV8kT1nY7cW4bZ9aH3sL6dF_pG0iR2oUe',
+      geradoEm: '2026-11-17T15:42:10-03:00',
+      aviso: 'Guarde o clientSecret em local seguro agora: ele não é mostrado de novo.',
+    },
+    camposResposta: [
+      ['clientId', 'texto', 'O mesmo <code class="ic">client_id</code> enviado.'],
+      ['clientSecret', 'texto', 'client_secret oficial. <strong>Mostrado só agora.</strong> O Horizon guarda apenas o hash dele.'],
+      ['geradoEm', 'data e hora', 'Quando foi gerado.'],
+      ['aviso', 'texto', 'Lembrete de guardar o segredo.'],
+    ],
+    erros: [
+      'DADOS_INVALIDOS',
+      'CREDENCIAIS_INVALIDAS',
+      'SECRET_TEMPORARIO_USADO',
+      'SECRET_TEMPORARIO_EXPIRADO',
+      'PARCEIRO_SUSPENSO',
+      'PARCEIRO_NAO_APROVADO',
+      'LIMITE_EXCEDIDO',
+    ],
+    teste: {
+      campos: [
+        { nome: 'clientId', tipo: 'text', obrigatorio: true, corpo: true, placeholder: 'hzp_…', exemplo: 'hzp_…' },
+        { nome: 'clientSecretTemporario', tipo: 'password', obrigatorio: true, corpo: true, placeholder: 'hzpt_…', exemplo: 'hzpt_…' },
+      ],
+      confirmacao: 'Entendo que o client_secret oficial aparece uma vez só e vou guardá-lo agora.',
+    },
   },
   {
     id: 'certificados',
@@ -247,6 +296,12 @@ export const ERROS = [
   [400, 'PARAMETRO_DESCONHECIDO', 'Parâmetro que a rota não aceita (geralmente nome digitado errado).'],
   [400, 'CERTIFICADO_INVALIDO', 'Algum id de <code class="ic">certificadoIds</code> não é da empresa da chave.', 'notas-fiscais'],
   [400, 'JSON_INVALIDO', 'Corpo da requisição não é um JSON válido.'],
+  [400, 'DADOS_INVALIDOS', 'Campo do corpo ausente ou com formato errado. A mensagem diz qual.', 'autenticacao'],
+  [401, 'CREDENCIAIS_INVALIDAS', '<code class="ic">clientId</code> ou <code class="ic">clientSecretTemporario</code> inválido.', 'autenticacao'],
+  [401, 'SECRET_TEMPORARIO_USADO', 'O client_secret temporário já gerou um oficial. Peça ao Horizon um novo temporário.', 'autenticacao'],
+  [401, 'SECRET_TEMPORARIO_EXPIRADO', 'O client_secret temporário passou dos 6 dias. Peça ao Horizon um novo.', 'autenticacao'],
+  [403, 'PARCEIRO_SUSPENSO', 'O parceiro está suspenso.', 'autenticacao'],
+  [403, 'PARCEIRO_NAO_APROVADO', 'O parceiro não está aprovado.', 'autenticacao'],
   [401, 'CHAVE_AUSENTE', 'Faltou o cabeçalho <code class="ic">X-Api-Key</code>.'],
   [401, 'CHAVE_INVALIDA', 'Chave inexistente.'],
   [401, 'CHAVE_EXPIRADA', 'A chave passou da validade. Gere outra.'],

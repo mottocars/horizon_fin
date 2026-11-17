@@ -6,6 +6,7 @@ const env = require('../../../config/env');
 const { responderErro } = require('./erros');
 const { emitirToken, exigirToken, exigirGrupo, exigirEscopo } = require('./autenticacao');
 const controller = require('./v1.controller');
+const parceiros = require('../../parceiros/parceiros.publico');
 
 // API pública Horizon, versão 1 — montada em /api/v1 (em produção: https://api.horizonhub.com.br/v1).
 // Documentação: api-docs/. Fora do CORS e dos limites do sistema (ver server.js): tem os próprios.
@@ -57,9 +58,9 @@ router.use((req, res, next) => {
   next();
 });
 
-function limite({ limit, chave, mensagem }) {
+function limite({ limit, chave, mensagem, windowMs = 60 * 1000 }) {
   return rateLimit({
-    windowMs: 60 * 1000,
+    windowMs,
     limit,
     standardHeaders: 'draft-8',
     legacyHeaders: false,
@@ -93,6 +94,31 @@ const limitePorChave = limite({
 router.use(limitePorIp);
 
 router.post('/auth/token', limiteToken, emitirToken);
+
+// Parceiros (loja de aplicativos): formulário "Quero ser um Parceiro" da documentação e a troca do
+// client_secret temporário pelo oficial (grupo Autenticação). Sem chave nem token — ver
+// modules/parceiros/parceiros.publico.js.
+const limiteSolicitacao = limite({
+  limit: 5,
+  windowMs: 60 * 60 * 1000,
+  chave: (req) => `parceiro-solicitacao:${ipKeyGenerator(req.ip)}`,
+  mensagem: 'Muitas solicitações de parceria deste endereço. Aguarde uma hora e tente de novo.',
+});
+const limiteCodigo = limite({
+  limit: 20,
+  windowMs: 10 * 60 * 1000,
+  chave: (req) => `parceiro-codigo:${ipKeyGenerator(req.ip)}`,
+  mensagem: 'Muitas tentativas em pouco tempo. Aguarde alguns minutos.',
+});
+const limiteClientSecret = limite({
+  limit: 10,
+  chave: (req) => `parceiro-secret:${ipKeyGenerator(req.ip)}`,
+  mensagem: 'Muitas tentativas em pouco tempo. Aguarde um minuto.',
+});
+router.post('/parceiros/solicitacoes', limiteSolicitacao, parceiros.solicitar);
+router.post('/parceiros/solicitacoes/reenviar-codigo', limiteCodigo, parceiros.reenviarCodigo);
+router.post('/parceiros/solicitacoes/confirmar', limiteCodigo, parceiros.confirmar);
+router.post('/parceiros/client-secret', limiteClientSecret, parceiros.trocarSecret);
 
 // Grupo Notas fiscais (Espião NF-e / NFS-e). Grupo novo: mesmo padrão — token, limite e
 // exigirGrupo('<id>') (cadastrado em ../grupos.js e documentado em api-docs/src/endpoints.js).

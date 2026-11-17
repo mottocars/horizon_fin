@@ -1,0 +1,176 @@
+<!doctype html>
+<html lang="pt-BR">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <meta name="robots" content="noindex" />
+    <meta name="description" content="Cadastre seu aplicativo para funcionar dentro do Horizon Finanças." />
+    <title>Quero ser um Parceiro — Horizon</title>
+    <link rel="icon" type="image/svg+xml" href="/favicon.svg" />
+    <link rel="stylesheet" href="/src/styles.css" />
+  </head>
+  <body>
+    <header class="fixed inset-x-0 top-0 z-40 flex h-14 items-center justify-between gap-3 border-b border-gray-100 bg-white/95 px-4 backdrop-blur sm:px-6">
+      <a href="/" class="flex items-center gap-3">
+        <img src="/logomarca.svg" alt="Horizon" class="h-8 w-auto" />
+        <span class="hidden h-5 w-px bg-gray-200 sm:block"></span>
+        <span class="hidden text-sm font-semibold text-gray-900 sm:block">Parceiros</span>
+      </a>
+      <a href="/" class="inline-flex items-center gap-1.5 rounded-lg border border-gray-200 px-3 py-1.5 text-[13px] text-gray-600 hover:bg-gray-50">
+        <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="m15 18-6-6 6-6" /></svg>
+        Documentação da API
+      </a>
+    </header>
+
+    <main class="mx-auto w-full max-w-3xl space-y-6 px-4 pb-12 pt-20 sm:px-6">
+      <section class="rounded-card bg-white p-5 shadow-card sm:p-8">
+        <p class="text-[12px] font-semibold uppercase tracking-wide text-primary-600">Loja de aplicativos do Horizon</p>
+        <h1 class="mt-1 text-2xl font-semibold tracking-tight text-gray-900 sm:text-3xl">Quero ser um Parceiro</h1>
+        <div class="prosa mt-3">
+          <p>Cadastre seu aplicativo para funcionar dentro do Horizon Finanças. Confirmado o celular do responsável técnico pelo WhatsApp, a solicitação vai para aprovação.</p>
+        </div>
+        <ol class="mt-5 grid grid-cols-1 gap-3 sm:grid-cols-3">
+          <li class="rounded-lg bg-gray-50 px-4 py-3">
+            <p class="text-[11px] font-semibold uppercase tracking-wide text-gray-400">1 · Formulário</p>
+            <p class="mt-1 text-[13px] text-gray-700">Dados do responsável e do aplicativo.</p>
+          </li>
+          <li class="rounded-lg bg-gray-50 px-4 py-3">
+            <p class="text-[11px] font-semibold uppercase tracking-wide text-gray-400">2 · Código no WhatsApp</p>
+            <p class="mt-1 text-[13px] text-gray-700">Confirma o celular e envia para aprovação.</p>
+          </li>
+          <li class="rounded-lg bg-gray-50 px-4 py-3">
+            <p class="text-[11px] font-semibold uppercase tracking-wide text-gray-400">3 · Aprovação</p>
+            <p class="mt-1 text-[13px] text-gray-700">Você recebe o client_id e o client_secret temporário.</p>
+          </li>
+        </ol>
+      </section>
+
+      <!-- Passo 1: formulário -->
+      <form id="form-parceiro" class="space-y-6" novalidate autocomplete="on">
+        <p id="erro-geral" class="hidden rounded-lg border border-red-200 bg-red-50 px-4 py-3 text-[13px] text-red-700" role="alert"></p>
+
+        <section class="rounded-card bg-white p-5 shadow-card sm:p-8">
+          <h2 class="text-lg font-semibold text-gray-900">Responsável técnico</h2>
+          <p class="mt-1 text-[13px] text-gray-500">Quem cuida da integração. É para este celular que vão o código de confirmação e, depois da aprovação, as credenciais.</p>
+          <div class="mt-5 grid grid-cols-1 gap-4 sm:grid-cols-2">
+            <div class="sm:col-span-2">
+              <label for="nome" class="mb-1 block text-sm font-medium text-gray-700">Nome <span class="text-red-500">*</span></label>
+              <input id="nome" name="nome" class="campo" maxlength="120" autocomplete="name" />
+              <p data-erro="nome" class="mt-1 hidden text-xs text-red-600"></p>
+            </div>
+            <div>
+              <label for="email" class="mb-1 block text-sm font-medium text-gray-700">E-mail <span class="text-red-500">*</span></label>
+              <input id="email" name="email" type="email" class="campo" maxlength="160" autocomplete="email" placeholder="voce@suaempresa.com.br" />
+              <p class="mt-1 text-xs text-gray-400">De preferência no mesmo domínio do aplicativo.</p>
+              <p data-erro="email" class="mt-1 hidden text-xs text-red-600"></p>
+            </div>
+            <div>
+              <label for="telefone" class="mb-1 block text-sm font-medium text-gray-700">Celular com DDD (WhatsApp) <span class="text-red-500">*</span></label>
+              <input id="telefone" name="telefone" type="tel" class="campo" inputmode="numeric" autocomplete="tel-national" placeholder="(31) 99999-9999" maxlength="16" />
+              <p data-erro="telefone" class="mt-1 hidden text-xs text-red-600"></p>
+            </div>
+          </div>
+        </section>
+
+        <section class="rounded-card bg-white p-5 shadow-card sm:p-8">
+          <h2 class="text-lg font-semibold text-gray-900">Aplicativo</h2>
+          <p class="mt-1 text-[13px] text-gray-500">Como ele vai aparecer na Loja de aplicativos do Horizon.</p>
+          <div class="mt-5 grid grid-cols-1 gap-4">
+            <div>
+              <div class="mb-1 flex items-baseline justify-between">
+                <label for="appNome" class="block text-sm font-medium text-gray-700">Nome do aplicativo <span class="text-red-500">*</span></label>
+                <span id="contador-nome" class="text-xs tabular-nums text-gray-400">0/22</span>
+              </div>
+              <input id="appNome" name="appNome" class="campo" maxlength="22" autocomplete="off" />
+              <p data-erro="appNome" class="mt-1 hidden text-xs text-red-600"></p>
+            </div>
+            <div>
+              <div class="mb-1 flex items-baseline justify-between">
+                <label for="descricao" class="block text-sm font-medium text-gray-700">Descrição breve <span class="text-red-500">*</span></label>
+                <span id="contador-descricao" class="text-xs tabular-nums text-gray-400">0/140</span>
+              </div>
+              <textarea id="descricao" name="descricao" rows="3" maxlength="140" class="campo resize-none" placeholder="O problema que ele resolve e o que ele faz."></textarea>
+              <p data-erro="descricao" class="mt-1 hidden text-xs text-red-600"></p>
+            </div>
+
+            <div>
+              <span class="mb-1 block text-sm font-medium text-gray-700">Logomarca <span class="text-red-500">*</span></span>
+              <div class="flex flex-col gap-4 sm:flex-row sm:items-center">
+                <label for="logo" id="area-logo" class="flex h-28 w-28 shrink-0 cursor-pointer items-center justify-center overflow-hidden rounded-xl border-2 border-dashed border-gray-200 bg-white text-gray-400 transition-colors hover:border-primary-300 hover:text-primary-600">
+                  <img id="previa-logo" alt="Prévia da logomarca" class="hidden h-full w-full object-contain p-2" />
+                  <svg id="icone-logo" width="28" height="28" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.75" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><rect x="3" y="3" width="18" height="18" rx="2" /><circle cx="9" cy="9" r="2" /><path d="m21 15-3.086-3.086a2 2 0 0 0-2.828 0L6 21" /></svg>
+                </label>
+                <div class="min-w-0">
+                  <input id="logo" name="logo" type="file" accept="image/png" class="sr-only" />
+                  <label for="logo" class="inline-flex cursor-pointer items-center gap-2 rounded-lg border border-gray-200 bg-white px-3 py-1.5 text-[13px] font-medium text-gray-700 hover:bg-gray-50">Escolher arquivo PNG</label>
+                  <p class="mt-2 text-xs leading-5 text-gray-500">PNG com <strong class="font-semibold text-gray-700">fundo transparente</strong>, de 128 a 1024 pixels de lado, até 500 KB. Recomendado: quadrada, 512×512.</p>
+                  <p id="info-logo" class="mt-1 hidden text-xs text-gray-500"></p>
+                  <p id="aviso-logo" class="mt-1 hidden text-xs text-amber-700"></p>
+                  <p data-erro="logo" class="mt-1 hidden text-xs text-red-600"></p>
+                </div>
+              </div>
+            </div>
+
+            <div>
+              <label for="urlAbertura" class="mb-1 block text-sm font-medium text-gray-700">URL de abertura <span class="text-red-500">*</span></label>
+              <input id="urlAbertura" name="urlAbertura" type="url" class="campo font-mono text-[13px]" maxlength="500" placeholder="https://app.suaempresa.com.br/horizon" spellcheck="false" />
+              <p class="mt-1 text-xs text-gray-400">Endereço que o Horizon abre quando o usuário escolhe o aplicativo na loja.</p>
+              <p data-erro="urlAbertura" class="mt-1 hidden text-xs text-red-600"></p>
+            </div>
+            <div>
+              <label for="urlCallback" class="mb-1 block text-sm font-medium text-gray-700">URL de retorno / callback <span class="text-red-500">*</span></label>
+              <input id="urlCallback" name="urlCallback" type="url" class="campo font-mono text-[13px]" maxlength="500" placeholder="https://app.suaempresa.com.br/horizon/callback" spellcheck="false" />
+              <p class="mt-1 text-xs text-gray-400">Para onde o Horizon devolve o usuário depois da autorização. Use https, de preferência no mesmo domínio da URL de abertura.</p>
+              <p data-erro="urlCallback" class="mt-1 hidden text-xs text-red-600"></p>
+            </div>
+            <!-- Campo-isca para robôs: fica fora da tela e ninguém preenche. -->
+            <div class="absolute -left-[9999px]" aria-hidden="true">
+              <label for="website">Site</label>
+              <input id="website" name="website" tabindex="-1" autocomplete="off" />
+            </div>
+          </div>
+        </section>
+
+        <div class="flex flex-col-reverse items-stretch gap-3 sm:flex-row sm:items-center sm:justify-between">
+          <p class="text-xs text-gray-400">Ao enviar, você recebe um código de 6 números no WhatsApp informado.</p>
+          <button id="enviar" type="submit" class="inline-flex items-center justify-center gap-2 rounded-lg bg-primary-600 px-5 py-2.5 text-sm font-medium text-white transition-colors hover:bg-primary-700 disabled:cursor-not-allowed disabled:opacity-60">
+            Enviar e receber o código
+          </button>
+        </div>
+      </form>
+
+      <!-- Passo 2: código do WhatsApp -->
+      <form id="form-codigo" class="hidden rounded-card bg-white p-5 shadow-card sm:p-8" novalidate autocomplete="off">
+        <h2 class="text-lg font-semibold text-gray-900">Confirme o celular</h2>
+        <p class="mt-1 text-[14px] text-gray-600">Enviamos um código de 6 números pelo WhatsApp da Comunicação Oficial do Horizon para <strong id="telefone-mascarado" class="font-semibold text-gray-900"></strong>. Ele vale por <span id="validade-codigo">10</span> minutos.</p>
+        <div class="mt-5 max-w-xs">
+          <label for="codigo" class="mb-1 block text-sm font-medium text-gray-700">Código</label>
+          <input id="codigo" name="codigo" class="campo text-center font-mono text-xl tracking-[0.5em]" inputmode="numeric" autocomplete="one-time-code" maxlength="6" placeholder="••••••" />
+          <p data-erro="codigo" class="mt-1 hidden text-xs text-red-600"></p>
+        </div>
+        <p id="erro-codigo-geral" class="mt-3 hidden rounded-lg border border-red-200 bg-red-50 px-3 py-2 text-[13px] text-red-700" role="alert"></p>
+        <p id="aviso-reenvio" class="mt-3 hidden rounded-lg border border-emerald-200 bg-emerald-50 px-3 py-2 text-[13px] text-emerald-700"></p>
+        <div class="mt-5 flex flex-wrap items-center gap-3">
+          <button id="confirmar" type="submit" class="inline-flex items-center justify-center rounded-lg bg-primary-600 px-5 py-2.5 text-sm font-medium text-white transition-colors hover:bg-primary-700 disabled:cursor-not-allowed disabled:opacity-60">Confirmar e enviar para aprovação</button>
+          <button id="reenviar" type="button" class="rounded-lg border border-gray-200 px-4 py-2.5 text-sm text-gray-700 hover:bg-gray-50 disabled:cursor-not-allowed disabled:opacity-60">Reenviar código</button>
+          <button id="corrigir" type="button" class="text-sm font-medium text-primary-600 hover:text-primary-700">Voltar e corrigir os dados</button>
+        </div>
+      </form>
+
+      <!-- Passo 3: enviado -->
+      <section id="enviado" class="hidden rounded-card bg-white p-5 shadow-card sm:p-8">
+        <span class="flex h-12 w-12 items-center justify-center rounded-full bg-emerald-50 text-emerald-600">
+          <svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M20 6 9 17l-5-5" /></svg>
+        </span>
+        <h2 class="mt-4 text-lg font-semibold text-gray-900">Solicitação <span id="protocolo"></span> enviada para aprovação</h2>
+        <ul class="prosa mt-3">
+          <li>O Horizon confere os dados e as URLs do aplicativo.</li>
+          <li>Aprovado, o responsável técnico recebe no WhatsApp o <strong>client_id</strong> e um <strong>client_secret temporário</strong>, que vale 6 dias.</li>
+          <li>Com eles, gere o <strong>client_secret oficial</strong> na <a href="/#ep-parceiros-client-secret">documentação da API</a>, no grupo Autenticação. Ele aparece uma vez só: guarde em local seguro.</li>
+        </ul>
+      </section>
+    </main>
+
+    <script type="module" src="/src/parceiros.js"></script>
+  </body>
+</html>

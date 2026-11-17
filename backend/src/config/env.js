@@ -27,6 +27,12 @@ module.exports = {
     // API_HORIZON_PUBLIC_URL=https://api.horizonhub.com.br (o Nginx do host entrega /v1/ para
     // /api/v1/ deste backend).
     publicUrl: (process.env.API_HORIZON_PUBLIC_URL || `http://localhost:${process.env.PORT || 3001}/api`).replace(/\/$/, ''),
+    // Página da documentação (link mandado aos parceiros por WhatsApp para gerar o client_secret
+    // oficial). Produção: o mesmo domínio da API; dev: o Vite de api-docs/ (porta 5182).
+    docsUrl: (
+      process.env.API_HORIZON_DOCS_URL ||
+      (process.env.API_HORIZON_PUBLIC_URL ? process.env.API_HORIZON_PUBLIC_URL : 'http://localhost:5182')
+    ).replace(/\/$/, ''),
     // Origens que podem chamar a API pelo navegador (o "Testar" da documentação). Em produção a
     // documentação fica no mesmo domínio da API; em dev, o Vite de api-docs/ (porta 5182).
     origensDocs: (process.env.API_HORIZON_DOCS_ORIGINS || 'http://localhost:5182,https://api.horizonhub.com.br')

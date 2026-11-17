@@ -1,0 +1,48 @@
+import http from './http';
+
+// Cadastros › Parceiros (aprovação dos aplicativos parceiros) e a Loja de aplicativos do topo.
+// Ver backend/src/modules/parceiros. O pedido do parceiro chega pelo formulário público de
+// api.horizonhub.com.br (api-docs/parceiros/).
+
+// ─── cadastro ──
+export function listarParceiros(status) {
+  return http.get('/parceiros', { params: status ? { status } : {} }).then((res) => res.data);
+}
+
+export function obterParceiro(id) {
+  return http.get(`/parceiros/${id}`).then((res) => res.data);
+}
+
+// A logo vem do banco por uma rota autenticada: baixa como blob (a <img> não manda o token sozinha).
+export function baixarLogoParceiro(id, { loja = false } = {}) {
+  return http.get(loja ? `/loja-aplicativos/${id}/logo` : `/parceiros/${id}/logo`, { responseType: 'blob' }).then((res) => res.data);
+}
+
+export function verificarParceiro(id) {
+  return http.post(`/parceiros/${id}/verificar`).then((res) => res.data);
+}
+
+export function aprovarParceiro(id) {
+  return http.post(`/parceiros/${id}/aprovar`).then((res) => res.data);
+}
+
+export function recusarParceiro(id, motivo) {
+  return http.post(`/parceiros/${id}/recusar`, { motivo }).then((res) => res.data);
+}
+
+export function suspenderParceiro(id, motivo) {
+  return http.post(`/parceiros/${id}/suspender`, { motivo }).then((res) => res.data);
+}
+
+export function reativarParceiro(id) {
+  return http.post(`/parceiros/${id}/reativar`).then((res) => res.data);
+}
+
+export function novoSecretParceiro(id, revogarOficial) {
+  return http.post(`/parceiros/${id}/novo-secret`, { revogar_oficial: revogarOficial }).then((res) => res.data);
+}
+
+// ─── loja (todo usuário logado) ──
+export function listarLojaAplicativos() {
+  return http.get('/loja-aplicativos').then((res) => res.data);
+}

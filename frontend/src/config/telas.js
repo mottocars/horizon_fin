@@ -26,6 +26,7 @@ export const TELAS_SISTEMA = {
   '/cadastros/contas-pagar-receber': { title: 'Contas Pagar / Receber', subtitle: 'Cadastros — Contas Pagar / Receber' },
   '/cadastros/formularios': { title: 'Formulários', subtitle: 'Cadastros — Formulários de pesquisa' },
   '/cadastros/novidades': { title: 'Novidades', subtitle: 'Cadastros — Novidades do sistema' },
+  '/cadastros/parceiros': { title: 'Parceiros', subtitle: 'Cadastros — Aplicativos parceiros da loja' },
   '/cadastros/contas-bancarias': { title: 'Contas Bancárias', subtitle: 'Cadastros — Contas Bancárias' },
   '/integracoes': { title: 'Integrações', subtitle: 'Todas as integrações do Horizon' },
   '/integracoes/portal-das-construtoras': { title: 'Portal das Construtoras', subtitle: 'Integrações — Portal das Construtoras' },

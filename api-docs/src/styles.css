@@ -135,3 +135,10 @@ code.ic {
 .nav-link.ativo {
   @apply bg-linear-to-b from-primary-500/10 to-primary-500/3 font-medium text-primary-700;
 }
+
+/* Fundo quadriculado atrás da prévia da logomarca (mostra se o fundo é transparente). */
+.bg-xadrez {
+  background-color: #fff;
+  background-image: conic-gradient(#f1f5f9 25%, #fff 0 50%, #f1f5f9 0 75%, #fff 0);
+  background-size: 14px 14px;
+}

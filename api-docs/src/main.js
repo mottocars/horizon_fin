@@ -92,6 +92,36 @@ function exemplos(ep, pedido) {
       python: `import os, requests\n\nresposta = requests.post(\n    "${URL_PUBLICA}${ep.caminho}",\n    headers={"X-Api-Key": os.environ["HORIZON_API_KEY"]},\n)\ntoken = resposta.json()["token"]`,
     };
   }
+  // Parceiros: client_id + client_secret temporário no corpo (sem chave nem token). Os exemplos
+  // usam variáveis de ambiente — o segredo digitado no "Testar" não aparece no código.
+  if (ep.autenticacao === 'parceiro') {
+    return {
+      curl: `curl -X POST ${URL_PUBLICA}${ep.caminho} \\
+  -H "Content-Type: application/json" \\
+  -d "{\\"clientId\\": \\"$HORIZON_CLIENT_ID\\", \\"clientSecretTemporario\\": \\"$HORIZON_CLIENT_SECRET_TEMPORARIO\\"}"`,
+      js: `const resposta = await fetch('${URL_PUBLICA}${ep.caminho}', {
+  method: 'POST',
+  headers: { 'Content-Type': 'application/json' },
+  body: JSON.stringify({
+    clientId: process.env.HORIZON_CLIENT_ID,
+    clientSecretTemporario: process.env.HORIZON_CLIENT_SECRET_TEMPORARIO,
+  }),
+});
+const { clientSecret } = await resposta.json();
+// Guarde clientSecret num cofre de senhas: ele não é mostrado de novo.`,
+      python: `import os, requests
+
+resposta = requests.post(
+    "${URL_PUBLICA}${ep.caminho}",
+    json={
+        "clientId": os.environ["HORIZON_CLIENT_ID"],
+        "clientSecretTemporario": os.environ["HORIZON_CLIENT_SECRET_TEMPORARIO"],
+    },
+)
+client_secret = resposta.json()["clientSecret"]
+# Guarde client_secret num cofre de senhas: ele não é mostrado de novo.`,
+    };
+  }
   if (ep.metodo === 'PATCH') {
     const corpo = pedido?.corpo ?? ep.exemploCorpo;
     // Texto digitado pode ter aspas: JSON.stringify serve de literal em JS e em Python; no cURL
@@ -209,7 +239,7 @@ function campoTeste(ep, c) {
   if (c.tipo === 'textarea') {
     return `<div class="sm:col-span-2">${rotulo}<textarea id="${id}" name="${c.nome}" rows="2" maxlength="500" class="campo" placeholder="${esc(c.placeholder || '')}"></textarea></div>`;
   }
-  return `<div>${rotulo}<input id="${id}" name="${c.nome}" type="${c.tipo}" value="${esc(valor)}" class="campo ${c.tipo === 'text' ? 'font-mono text-[13px]' : ''}" placeholder="${esc(c.placeholder || '')}" ${c.tipo === 'number' ? 'min="1"' : ''} /></div>`;
+  return `<div>${rotulo}<input id="${id}" name="${c.nome}" type="${c.tipo}" value="${esc(valor)}" class="campo ${c.tipo === 'text' || c.tipo === 'password' ? 'font-mono text-[13px]' : ''}" autocomplete="off" spellcheck="false" placeholder="${esc(c.placeholder || '')}" ${c.tipo === 'number' ? 'min="1"' : ''} /></div>`;
 }
 
 function painelTeste(ep) {
@@ -217,7 +247,7 @@ function painelTeste(ep) {
   return `<form class="mt-6 rounded-lg border border-gray-200 bg-gray-50/70 p-4" data-teste="${ep.id}" novalidate>
     <div class="flex flex-wrap items-center justify-between gap-2">
       <p class="text-[13px] font-semibold text-gray-900">Testar</p>
-      <p class="text-[12px] text-gray-400">Gera um token novo e chama <span class="font-mono">${ep.metodo} ${ep.caminho}</span></p>
+      <p class="text-[12px] text-gray-400">${ep.autenticacao === 'parceiro' ? 'Chama' : 'Gera um token novo e chama'} <span class="font-mono">${ep.metodo} ${ep.caminho}</span></p>
     </div>
     ${campos.length ? `<div class="mt-3 grid grid-cols-1 gap-3 sm:grid-cols-2">${campos.map((c) => campoTeste(ep, c)).join('')}</div>` : ''}
     ${
@@ -240,10 +270,8 @@ function secaoEndpoint(ep) {
   const escopo = ep.escopo
     ? `<span class="rounded-full bg-amber-50 px-2 py-0.5 font-mono text-[11px] font-semibold text-amber-700">escopo ${ep.escopo}</span>`
     : '';
-  const autenticacao =
-    ep.autenticacao === 'chave'
-      ? '<span class="rounded-full bg-gray-100 px-2 py-0.5 text-[11px] font-medium text-gray-600">X-Api-Key</span>'
-      : '<span class="rounded-full bg-gray-100 px-2 py-0.5 text-[11px] font-medium text-gray-600">Bearer token</span>';
+  const rotuloAutenticacao = { chave: 'X-Api-Key', parceiro: 'client_id + client_secret temporário' }[ep.autenticacao] || 'Bearer token';
+  const autenticacao = `<span class="rounded-full bg-gray-100 px-2 py-0.5 text-[11px] font-medium text-gray-600">${rotuloAutenticacao}</span>`;
   return `<section id="ep-${ep.id}" class="rounded-card bg-white p-6 shadow-card sm:p-8">
     <div class="grid grid-cols-1 gap-6 xl:grid-cols-[minmax(0,1fr)_minmax(0,1.2fr)]">
       <div class="min-w-0">
@@ -343,7 +371,16 @@ function mostrarResultado(form, passos) {
     typeof ultimo.corpo === 'string' && ultimo.status === 200
       ? `<button type="button" class="baixar-xml text-[13px] font-medium text-primary-600 hover:text-primary-700">Baixar XML</button>`
       : '';
-  caixa.innerHTML = `<div class="space-y-2 rounded-lg border border-gray-200 bg-white p-3">${linhas}</div>${corpo}${baixar}`;
+  // client_secret oficial: aparece uma vez só — destaque com botão de copiar.
+  const segredo =
+    ultimo.status === 200 && typeof ultimo.corpo?.clientSecret === 'string'
+      ? `<div class="rounded-lg border border-amber-200 bg-amber-50 p-3 text-[13px] text-amber-900">
+          <p class="font-semibold">Copie o client_secret oficial agora. Ele não aparece de novo.</p>
+          <div class="mt-2 flex items-center gap-2"><code class="min-w-0 flex-1 break-all rounded bg-white px-2 py-1 font-mono text-[12.5px] text-gray-900">${esc(ultimo.corpo.clientSecret)}</code>
+          <button type="button" class="copiar-token shrink-0 text-[12px] font-medium text-primary-600 hover:text-primary-700" data-token="${esc(ultimo.corpo.clientSecret)}">copiar</button></div>
+        </div>`
+      : '';
+  caixa.innerHTML = `<div class="space-y-2 rounded-lg border border-gray-200 bg-white p-3">${linhas}</div>${segredo}${corpo}${baixar}`;
   caixa.classList.remove('hidden');
   if (baixar) {
     $('.baixar-xml', caixa).addEventListener('click', () => {
@@ -392,6 +429,24 @@ function exigirChave(form) {
 async function executar(ep, form) {
   const aviso = $('[data-aviso]', form);
   aviso.textContent = '';
+  if (ep.autenticacao === 'parceiro') {
+    const pedido = lerFormulario(ep, form);
+    if (pedido.erro) {
+      aviso.textContent = pedido.erro;
+      return;
+    }
+    const botao = $('button[type="submit"]', form);
+    botao.disabled = true;
+    try {
+      const resposta = await chamar(ep.metodo, pedido.caminho, { corpo: pedido.corpo });
+      mostrarResultado(form, [resposta]);
+      // O temporário é de uso único: deu certo, some do campo.
+      if (resposta.status === 200) $('input[name="clientSecretTemporario"]', form).value = '';
+    } finally {
+      botao.disabled = false;
+    }
+    return;
+  }
   if (!exigirChave(form)) return;
   const pedido = ep.id === 'auth-token' ? { caminho: '/auth/token' } : lerFormulario(ep, form);
   if (pedido.erro) {
@@ -584,7 +639,7 @@ function ligarEventos() {
     const ep = ENDPOINTS.find((x) => x.id === form.dataset.teste);
     // Exemplos de código acompanham o que está no formulário.
     const atualizarExemplo = () => {
-      if (ep.autenticacao === 'chave') return;
+      if (ep.autenticacao === 'chave' || ep.autenticacao === 'parceiro') return;
       const caixa = $(`[data-exemplo-ep="${ep.id}"]`);
       caixa.innerHTML = painelCodigo({ abas: exemplos(ep, lerFormulario(ep, form, { paraExemplo: true })) });
       atualizarAbasLinguagem();

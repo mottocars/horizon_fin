@@ -33,6 +33,7 @@ import {
   ArrowDownUp,
   ClipboardList,
   Megaphone,
+  Puzzle,
 } from 'lucide-react';
 
 const menuItems = [
@@ -62,6 +63,7 @@ const menuItems = [
       { label: 'Contas Pagar / Receber', to: '/cadastros/contas-pagar-receber', icon: ArrowDownUp },
       { label: 'Formulários', to: '/cadastros/formularios', icon: ClipboardList },
       { label: 'Novidades', to: '/cadastros/novidades', icon: Megaphone },
+      { label: 'Parceiros', to: '/cadastros/parceiros', icon: Puzzle },
     ],
   },
   {
