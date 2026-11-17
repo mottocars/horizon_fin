@@ -59,6 +59,7 @@ const dfcEmpresarialRoutes = require('./modules/dfc-empresarial/dfcEmpresarial.r
 const dfcContasRoutes = require('./modules/dfc-contas/dfcContas.routes');
 const dfcDividaPjRoutes = require('./modules/dfc-divida-pj/dividaPj.routes');
 const formulariosRoutes = require('./modules/formularios/formularios.routes');
+const novidadesRoutes = require('./modules/novidades/novidades.routes');
 const dfcSaldosRoutes = require('./modules/dfc-saldos/dfcSaldos.routes');
 const dfcDetalhamentoRoutes = require('./modules/dfc-detalhamento/detalhamento.routes');
 const dfcExportacaoRoutes = require('./modules/dfc-exportacao/exportacao.routes');
@@ -214,6 +215,9 @@ app.use('/api/contas-pagar-receber', exigirTela([T.CONTAS_PAGAR_RECEBER]), conta
 app.use('/api/formularios', exigirTela([T.FORMULARIOS]), formulariosRoutes.cadastro);
 app.use('/api/meus-formularios', exigirTela([QUALQUER_TELA]), formulariosRoutes.meus);
 app.use('/api/publico/formularios', formulariosRoutes.publico);
+// Cadastros › Novidades; /api/minhas-novidades = a janela de novidades ao entrar e o botão do topo (todo usuário logado).
+app.use('/api/novidades', exigirTela([T.NOVIDADES]), novidadesRoutes.cadastro);
+app.use('/api/minhas-novidades', exigirTela([QUALQUER_TELA]), novidadesRoutes.minhas);
 app.use('/api/dre-demonstrativo', exigirTela([T.DRE], LEITURA_DASHBOARD), dreDemonstrativoRoutes);
 // Exportação de auditoria da DRE (Excel com a memória de cálculo e as bases): tela DRE e, só leitura
 // (é um GET), o dashboard Econômico Financeiro › Demonstração do Resultado.

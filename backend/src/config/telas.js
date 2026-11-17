@@ -14,6 +14,7 @@ module.exports = {
   PLANOS_FINANCEIROS: '/cadastros/planos-financeiros',
   CONTAS_PAGAR_RECEBER: '/cadastros/contas-pagar-receber',
   FORMULARIOS: '/cadastros/formularios',
+  NOVIDADES: '/cadastros/novidades',
 
   DRE: '/operacoes/dre-gerencial',
   DFC: '/operacoes/dfc-construtoras',

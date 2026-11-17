@@ -4,6 +4,7 @@ import { ChevronDown, UserCircle, LogOut } from 'lucide-react';
 import { useAuth } from '../auth/AuthContext';
 import ConexoesIa from './ConexoesIa';
 import { BotaoPesquisasAdiadas } from './PesquisasPendentes';
+import { BotaoNovidades } from './Novidades';
 
 export default function Topbar({ title, subtitle }) {
   const { user, logout } = useAuth();
@@ -39,6 +40,8 @@ export default function Topbar({ title, subtitle }) {
         {/* Pesquisa (Cadastros › Formulários) que o usuário deixou para responder depois. */}
         <BotaoPesquisasAdiadas />
         {/* Conexões com IA (conectores MCP liberados para o usuário). */}
+        {/* Novidades do sistema: as 5 últimas e "Ver mais" (Cadastros › Novidades). */}
+        <BotaoNovidades />
         <ConexoesIa />
         <div className="relative" ref={menuRef}>
           <button

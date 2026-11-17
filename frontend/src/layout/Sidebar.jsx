@@ -32,6 +32,7 @@ import {
   Handshake,
   ArrowDownUp,
   ClipboardList,
+  Megaphone,
 } from 'lucide-react';
 
 const menuItems = [
@@ -60,6 +61,7 @@ const menuItems = [
       { label: 'Planos Financeiros', to: '/cadastros/planos-financeiros', icon: PieChart },
       { label: 'Contas Pagar / Receber', to: '/cadastros/contas-pagar-receber', icon: ArrowDownUp },
       { label: 'Formulários', to: '/cadastros/formularios', icon: ClipboardList },
+      { label: 'Novidades', to: '/cadastros/novidades', icon: Megaphone },
     ],
   },
   {

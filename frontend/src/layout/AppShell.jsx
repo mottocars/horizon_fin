@@ -10,6 +10,7 @@ import { TELAS_SISTEMA } from '../config/telas';
 import { useLogAcesso } from '../hooks/useLogAcesso';
 import { useNegativosVermelhos } from '../hooks/useNegativosVermelhos';
 import { PesquisasPendentesProvider, usePesquisasPendentes } from './PesquisasPendentes';
+import { NovidadesProvider } from './Novidades';
 
 function resolveMeta(pathname) {
   if (TELAS_SISTEMA[pathname]) return TELAS_SISTEMA[pathname];
@@ -98,7 +99,10 @@ function AcessoRestrito() {
 export default function AppShell() {
   return (
     <PesquisasPendentesProvider>
-      <Shell />
+      {/* Novidades do sistema (Cadastros › Novidades): janela ao entrar + botão do topo — ver Novidades.jsx. */}
+      <NovidadesProvider>
+        <Shell />
+      </NovidadesProvider>
     </PesquisasPendentesProvider>
   );
 }
