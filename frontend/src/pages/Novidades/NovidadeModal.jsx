@@ -4,7 +4,7 @@ import Modal from '../../components/Modal';
 import Button from '../../components/Button';
 import CampoData from '../../components/CampoData';
 import SearchableSelect from '../../components/SearchableSelect';
-import { Interruptor } from '../Operacoes/GestaoAprovacoes/ui';
+import Interruptor from '../../components/Interruptor';
 import { useAuth } from '../../auth/AuthContext';
 import { TELAS_SISTEMA } from '../../config/telasSistema';
 import { useConfirm } from '../../confirm/ConfirmContext';
