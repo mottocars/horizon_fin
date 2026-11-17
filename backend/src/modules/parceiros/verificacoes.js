@@ -3,6 +3,7 @@ const net = require('net');
 const tls = require('tls');
 const https = require('https');
 const zlib = require('zlib');
+const env = require('../../config/env');
 
 // Verificações automáticas de um parceiro (Cadastros › Parceiros): cada item sai "ok" ou
 // "atenção", com o detalhe do que foi visto. Nenhum bloqueia a aprovação — servem para o
@@ -141,7 +142,12 @@ async function requisitar(url) {
       (res) => {
         // Só o status interessa: não lê o corpo.
         res.destroy();
-        resolve({ status: res.statusCode, location: res.headers.location });
+        resolve({
+          status: res.statusCode,
+          location: res.headers.location,
+          xfo: res.headers['x-frame-options'],
+          csp: res.headers['content-security-policy'],
+        });
       }
     );
     req.once('timeout', () => req.destroy(new Error('sem resposta em 8 s')));
@@ -160,7 +166,7 @@ async function checarResposta(url) {
       atual = proxima.toString();
       continue;
     }
-    return { ok: r.status < 400, status: r.status, final: atual };
+    return { ok: r.status < 400, status: r.status, final: atual, xfo: r.xfo, csp: r.csp };
   }
   return { ok: false, detalhe: 'redirecionamentos demais' };
 }
@@ -285,6 +291,27 @@ function kb(bytes) {
   return `${Math.max(1, Math.round(bytes / 1024))} KB`;
 }
 
+// Pode ser exibida dentro do Horizon? Vale o frame-ancestors do CSP (quando existe, o navegador ignora
+// o X-Frame-Options); sem ele, X-Frame-Options DENY/SAMEORIGIN bloqueia.
+function permiteQuadro({ xfo, csp }) {
+  const horizon = new URL(env.frontendUrl);
+  const ancestrais = /(?:^|;)\s*frame-ancestors\s+([^;]*)/i.exec(csp || '')?.[1]?.trim().split(/\s+/);
+  if (ancestrais) {
+    const aceita = ancestrais.some((fonte) => {
+      const f = fonte.toLowerCase().replace(/\/$/, '');
+      if (f === '*' || f === `${horizon.protocol}`) return true;
+      if (f === horizon.origin || f === horizon.host) return true;
+      const curinga = /^(?:(https?):\/\/)?\*\.([^/:]+)$/.exec(f);
+      return Boolean(curinga && (!curinga[1] || `${curinga[1]}:` === horizon.protocol) && horizon.hostname.endsWith(`.${curinga[2]}`));
+    });
+    return aceita
+      ? { ok: true, detalhe: `frame-ancestors aceita ${horizon.origin}` }
+      : { ok: false, detalhe: `frame-ancestors (${ancestrais.join(' ')}) não inclui ${horizon.origin}` };
+  }
+  if (xfo && /deny|sameorigin/i.test(xfo)) return { ok: false, detalhe: `X-Frame-Options: ${xfo} — inclua frame-ancestors ${horizon.origin} no CSP` };
+  return { ok: true, detalhe: 'sem bloqueio de exibição em outro site' };
+}
+
 async function verificarParceiro(p) {
   const itens = [];
   const urls = [
@@ -346,13 +373,22 @@ async function verificarParceiro(p) {
   let resposta;
   try {
     const r = await checarResposta(p.url_abertura);
-    resposta = { ok: r.ok, detalhe: r.detalhe || `HTTP ${r.status}${r.final && r.final !== p.url_abertura ? ` (depois de redirecionar para ${r.final})` : ''}` };
+    resposta = {
+      ok: r.ok,
+      detalhe: r.detalhe || `HTTP ${r.status}${r.final && r.final !== p.url_abertura ? ` (depois de redirecionar para ${r.final})` : ''}`,
+      quadro: r.status ? permiteQuadro(r) : null,
+    };
   } catch (err) {
     resposta = { ok: false, detalhe: err.message };
   }
-  itens.push({ id: 'abertura_responde', titulo: 'URL de abertura responde', ...resposta });
+  const { quadro, ...respondeu } = resposta;
+  itens.push({ id: 'abertura_responde', titulo: 'URL de abertura responde', ...respondeu });
 
-  // 6. Logo: transparente e dentro dos limites.
+  // 6. O aplicativo abre dentro do Horizon (iframe em /aplicativos/:id): a URL de abertura não pode
+  // proibir ser exibida em outro site (X-Frame-Options / CSP frame-ancestors sem o Horizon).
+  itens.push({ id: 'abre_no_horizon', titulo: 'Permite abrir dentro do Horizon', ...(quadro || { ok: false, detalhe: 'URL de abertura não respondeu.' }) });
+
+  // 7. Logo: transparente e dentro dos limites.
   const info = analisarPng(p.logo);
   const tamanho = p.logo?.length || 0;
   const dentro =
@@ -380,4 +416,4 @@ async function verificarParceiro(p) {
   return itens;
 }
 
-module.exports = { LOGO, analisarPng, validarLogo, verificarParceiro, dominioRegistravel, ipInterno };
+module.exports = { LOGO, analisarPng, validarLogo, verificarParceiro, permiteQuadro, dominioRegistravel, ipInterno };

@@ -20,8 +20,9 @@ const PAGINAS_DE_ABA = [
 
 export function temAcessoATela(user, pathname) {
   if (!user) return false;
-  // Loja de aplicativos (botão do topo): todo usuário logado.
+  // Loja de aplicativos (botão do topo) e os aplicativos instalados (menu lateral): todo usuário logado.
   if (pathname === '/' || pathname === '/meu-perfil' || pathname === '/loja-aplicativos') return true;
+  if (pathname.startsWith('/aplicativos/')) return true;
   if (user.permissao === 'MASTER') return true;
 
   const telasLiberadas = user.telas_permitidas || [];

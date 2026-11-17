@@ -215,7 +215,8 @@
           <p class="text-[11px] font-semibold uppercase tracking-wide text-primary-600">Login com Horizon</p>
           <h2 class="mt-1 text-lg font-semibold text-gray-900">Como funciona</h2>
           <div class="prosa mt-2 max-w-4xl">
-            <p>Para <strong>aplicativos parceiros</strong> aprovados na loja do Horizon. Quando o usuário clica em <strong>Conectar</strong> na Loja de aplicativos, ele chega ao seu sistema já identificado, sem digitar senha do Horizon. É <strong>OpenID Connect</strong> (fluxo Authorization Code): use a biblioteca OIDC da sua linguagem apontando para a descoberta abaixo.</p>
+            <p>Para <strong>aplicativos parceiros</strong> aprovados na loja do Horizon. O usuário <strong>instala</strong> o seu aplicativo na Loja de aplicativos e ele ganha um ícone no menu lateral do Horizon. Ao clicar, o seu sistema abre <strong>dentro do Horizon</strong> (só o menu lateral do Horizon fica visível) e o usuário chega já identificado, sem digitar senha do Horizon. Na primeira vez ele vê o botão <strong>Conectar</strong>; depois, abre direto.</p>
+            <p>É <strong>OpenID Connect</strong> (fluxo Authorization Code): use a biblioteca OIDC da sua linguagem apontando para a descoberta abaixo.</p>
             <p>O Horizon só diz <strong>quem é o usuário</strong>. O login no seu sistema, o que ele pode fazer lá e o vínculo entre as contas ficam com você.</p>
           </div>
 
@@ -236,9 +237,16 @@
             </table>
           </div>
 
+          <h3 class="mt-6 text-[15px] font-semibold text-gray-900">Para abrir dentro do Horizon</h3>
+          <p class="prosa mt-1 max-w-4xl"><span class="text-[14px] text-gray-600">O seu sistema roda num <code class="ic">iframe</code> do Horizon. Duas exigências, em todas as páginas (abertura, callback, login e o sistema):</span></p>
+          <ul class="prosa mt-2 max-w-4xl">
+            <li><strong>Permitir ser exibido no Horizon:</strong> envie <code class="ic">Content-Security-Policy: frame-ancestors 'self' <span data-app-origem></span></code> e não envie <code class="ic">X-Frame-Options: DENY</code> nem <code class="ic">SAMEORIGIN</code>. O Horizon confere isso na aprovação (verificação "Permite abrir dentro do Horizon").</li>
+            <li><strong>Cookies de sessão</strong> (inclusive o que guarda <code class="ic">state</code>, <code class="ic">nonce</code> e o PKCE): <code class="ic">SameSite=None; Secure; Partitioned</code>. Dentro de um iframe de outro site, cookies <code class="ic">Lax</code> ou <code class="ic">Strict</code> não são enviados e o login não completa.</li>
+          </ul>
+
           <h3 class="mt-6 text-[15px] font-semibold text-gray-900">Passo a passo</h3>
           <ol class="prosa mt-2 max-w-4xl list-decimal space-y-1.5 pl-5 text-[14px] text-gray-600">
-            <li>O usuário clica em <strong>Conectar</strong>. O Horizon abre a sua <strong>URL de abertura</strong> numa aba nova com <code class="ic">?iss=<span data-url-base></span></code>. Confira o <code class="ic">iss</code> e comece o login.</li>
+            <li>O usuário abre o seu aplicativo pelo menu lateral (na primeira vez, clica em <strong>Conectar</strong>). O Horizon carrega a sua <strong>URL de abertura</strong> no iframe com <code class="ic">?iss=<span data-url-base></span></code>. Confira o <code class="ic">iss</code> e comece o login.</li>
             <li>Mande o navegador ao <code class="ic">authorization_endpoint</code> com <code class="ic">response_type=code</code>, <code class="ic">client_id</code>, <code class="ic">redirect_uri</code>, <code class="ic">scope</code>, <code class="ic">state</code>, <code class="ic">nonce</code> e <code class="ic">code_challenge</code>. Como o usuário já está logado no Horizon, ele volta na hora, sem tela de permissão.</li>
             <li>A URL de callback recebe <code class="ic">code</code>, <code class="ic">state</code> e <code class="ic">iss</code>. Confira o <code class="ic">state</code> e troque o <code class="ic">code</code> no <code class="ic">token_endpoint</code>: ele vale <strong>60 segundos</strong> e uma vez só.</li>
             <li>Valide o <code class="ic">id_token</code>: assinatura (pelo <code class="ic">jwks_uri</code>), <code class="ic">iss</code>, <code class="ic">aud</code> igual ao seu client_id, <code class="ic">exp</code> e <code class="ic">nonce</code>. O <code class="ic">sub</code> identifica o usuário.</li>
@@ -259,7 +267,7 @@
           </div>
           <ul class="prosa mt-3 max-w-4xl">
             <li>O <code class="ic">id_token</code> vale 5 minutos; o <code class="ic">access_token</code>, 10 minutos e só serve para o <code class="ic">userinfo_endpoint</code>. Não há <code class="ic">refresh_token</code>: depois que o usuário entra, a sessão é do seu sistema.</li>
-            <li>Parceiro suspenso: some da loja, e o Horizon para de emitir e de aceitar tokens dele na hora.</li>
+            <li>Parceiro suspenso: some da loja e do menu lateral dos usuários, e o Horizon para de emitir e de aceitar tokens dele na hora.</li>
           </ul>
 
           <h3 class="mt-6 text-[15px] font-semibold text-gray-900">Erros</h3>

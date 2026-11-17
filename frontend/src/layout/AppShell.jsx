@@ -2,6 +2,7 @@ import { Outlet, useLocation, useNavigate } from 'react-router-dom';
 import { ArrowLeft, ShieldAlert } from 'lucide-react';
 import { INTEGRACOES } from '../config/integracoes';
 import Sidebar from './Sidebar';
+import { AplicativosInstaladosProvider } from './AplicativosInstalados';
 import Topbar from './Topbar';
 import { SidebarProvider } from './SidebarContext';
 import { useAuth } from '../auth/AuthContext';
@@ -143,33 +144,39 @@ function Shell() {
   // Só conta como "acesso" quando a tela realmente é exibida (não quando
   // esbarra no Acesso restrito) — ver useLogAcesso.
   useLogAcesso(location.pathname, acessoPermitido);
-  // Dashboards ocupam a tela inteira (pedido do usuário): só o menu lateral, sem o cabeçalho do topo
-  // nem as margens da área de conteúdo.
-  const telaCheia = location.pathname.startsWith('/dashboards/');
-  useNegativosVermelhos(telaCheia); // número negativo em vermelho em todos os dashboards
+  // Dashboards e os aplicativos instalados dos parceiros ocupam a tela inteira (pedido do usuário): só
+  // o menu lateral, sem o cabeçalho do topo nem as margens da área de conteúdo.
+  const dashboard = location.pathname.startsWith('/dashboards/');
+  const telaCheia = dashboard || location.pathname.startsWith('/aplicativos/');
+  useNegativosVermelhos(dashboard); // número negativo em vermelho em todos os dashboards
 
   return (
     <SidebarProvider>
-      <div className="flex h-screen bg-app-bg">
-        <Sidebar />
-        <div className="relative flex flex-1 flex-col overflow-hidden">
-          {!telaCheia && <Topbar title={meta.title} subtitle={meta.subtitle} />}
-          {/* scrollbar-gutter: stable reserva o espaço da barra de rolagem
+      <AplicativosInstaladosProvider>
+        <div className="flex h-screen bg-app-bg">
+          <Sidebar />
+          <div className="relative flex flex-1 flex-col overflow-hidden">
+            {!telaCheia && <Topbar title={meta.title} subtitle={meta.subtitle} />}
+            {/* scrollbar-gutter: stable reserva o espaço da barra de rolagem
               sempre, mesmo quando o conteúdo não enche a tela — sem isso,
               uma página mais alta que rola fica alguns pixels mais estreita
               que uma página mais curta que não rola (a barra "come" espaço
               só numa delas), fazendo cards do mesmo CSS parecerem tamanhos
               diferentes entre telas. */}
-          <main className={`flex-1 overflow-y-auto ${telaCheia ? '' : 'p-6'}`} style={telaCheia ? undefined : { scrollbarGutter: 'stable' }}>
-            <Conteudo acessoPermitido={acessoPermitido} />
-          </main>
-          {/* Camada fixa sobre a área de conteúdo dos Dashboards (não rola com a página e não passa por
+            <main
+              className={`flex-1 overflow-y-auto ${telaCheia ? '' : 'p-6'}`}
+              style={telaCheia ? undefined : { scrollbarGutter: 'stable' }}
+            >
+              <Conteudo acessoPermitido={acessoPermitido} />
+            </main>
+            {/* Camada fixa sobre a área de conteúdo dos Dashboards (não rola com a página e não passa por
               cima do menu lateral): botões flutuantes e barras de Menu/Filtros entram aqui por portal
               — ver pages/Dashboards/ControlesDashboard.jsx. z-45: acima das barras de filtros (z 35) e dos
               painéis em tela cheia (z 40) dos dashboards, abaixo da janela de Sumário (50) e das dicas (60). */}
-          {telaCheia && <div id="camada-dashboard" className="pointer-events-none absolute inset-0 z-[45]" />}
+            {dashboard && <div id="camada-dashboard" className="pointer-events-none absolute inset-0 z-[45]" />}
+          </div>
         </div>
-      </div>
+      </AplicativosInstaladosProvider>
     </SidebarProvider>
   );
 }

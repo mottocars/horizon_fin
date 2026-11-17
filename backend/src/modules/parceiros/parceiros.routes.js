@@ -80,7 +80,12 @@ cadastro.post(
 
 const loja = Router();
 loja.use(authMiddleware);
-loja.get('/', rota(() => service.loja()));
+loja.get('/', rota((req) => service.loja(req.user.id)));
+// Instalados (menu lateral) e a página do aplicativo aberto dentro do Horizon.
+loja.get('/instalados', rota((req) => service.instalados(req.user.id)));
+loja.post('/:id/instalar', rota((req) => service.instalar(req.user.id, idSchema.parse(req.params.id))));
+loja.delete('/:id/instalar', rota((req) => service.desinstalar(req.user.id, idSchema.parse(req.params.id))));
+loja.get('/:id', rota((req) => service.aplicativo(req.user.id, idSchema.parse(req.params.id))));
 loja.get(
   '/:id/logo',
   rota(async (req, res) => {

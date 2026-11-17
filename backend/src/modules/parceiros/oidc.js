@@ -9,8 +9,9 @@ const { PREFIXO_CLIENT_ID, PREFIXO_SECRET_OFICIAL, hashSegredo } = require('./co
 //
 // O Horizon só confirma QUEM é o usuário; o login, as permissões e o vínculo com a conta do
 // usuário no sistema do parceiro ficam todos com o parceiro. Fluxo (Authorization Code):
-//   1. Conectar (Loja de aplicativos) abre a URL de abertura do parceiro com ?iss=<issuer>
-//      ("login iniciado por terceiro", OIDC Core §4).
+//   1. O aplicativo instalado (ícone no menu lateral) abre dentro do Horizon (iframe em
+//      /aplicativos/:id) a URL de abertura do parceiro com ?iss=<issuer> ("login iniciado por
+//      terceiro", OIDC Core §4) — na primeira vez, depois do botão Conectar.
 //   2. O parceiro manda o navegador para o authorization_endpoint — a página /oauth/authorize do
 //      frontend (o login do Horizon fica no navegador, não em cookie). Ela chama
 //      POST /api/oidc/autorizar (autorizar abaixo) e devolve o usuário à URL de callback
@@ -192,6 +193,12 @@ async function token(req, res, next) {
       [p.id, c.usuario_id]
     );
     if (!u) return erroOAuth(res, 400, 'invalid_grant', 'Usuário do Horizon inativo.');
+    // Primeira conexão do aplicativo instalado: daqui em diante o ícone do menu lateral abre o sistema
+    // do parceiro direto (sem a página do botão Conectar).
+    await pool.query(
+      'UPDATE parceiros_instalacoes SET conectado_em = NOW() WHERE parceiro_id = $1 AND usuario_id = $2 AND conectado_em IS NULL',
+      [p.id, c.usuario_id]
+    );
 
     const escopos = c.scope.split(' ');
     const dados = {

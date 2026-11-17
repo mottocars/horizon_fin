@@ -3,6 +3,8 @@ import { NavLink, useLocation } from 'react-router-dom';
 import { useSidebar } from './SidebarContext';
 import { useAuth } from '../auth/AuthContext';
 import { temAcessoATela } from '../utils/permissoes';
+import { useAplicativosInstalados } from './AplicativosInstalados';
+import { LogoParceiro } from './LojaAplicativos';
 import {
   LayoutDashboard,
   Gauge,
@@ -104,6 +106,7 @@ export default function Sidebar() {
   const location = useLocation();
   const { user } = useAuth();
   const { forceCollapsed } = useSidebar();
+  const { instalados, chegando } = useAplicativosInstalados();
   // Abre só com clique (passar o mouse por cima não abre mais — incomodava, pedido do usuário) e
   // fecha sozinho assim que o mouse sai. Nenhum estado "fixado".
   const [expandido, setExpandido] = useState(false);
@@ -262,6 +265,37 @@ export default function Sidebar() {
               </NavLink>
             );
           })}
+
+          {/* Aplicativos dos parceiros instalados pela Loja de aplicativos: depois de um traço, na ordem
+              de instalação. O que acabou de ser instalado fica invisível até o ícone pousar (voo em
+              AplicativosInstalados.jsx). Abrem dentro do Horizon (/aplicativos/:id). */}
+          {instalados.length > 0 && (
+            <>
+              <div className={`my-2.5 h-px bg-gray-200 ${collapsed ? 'mx-auto w-6' : 'mx-2.5'}`} aria-hidden="true" />
+              {instalados.map((app) => (
+                <NavLink
+                  key={app.id}
+                  to={`/aplicativos/${app.id}`}
+                  title={collapsed ? app.nome : undefined}
+                  onClick={(e) => collapsed && e.stopPropagation()}
+                  className={({ isActive }) =>
+                    `flex items-center gap-2.5 rounded-[10px] text-[13px] font-medium transition-colors ${
+                      collapsed ? 'mx-auto h-8 w-8 justify-center' : 'w-full px-2.5 py-1'
+                    } ${isActive ? 'bg-primary-50 text-primary-700 ring-2 ring-primary-500' : 'text-gray-600 hover:bg-[#f2f6fd] hover:text-[#233047]'}`
+                  }
+                >
+                  <span
+                    data-aplicativo-instalado={app.id}
+                    className="block shrink-0"
+                    style={chegando === app.id ? { visibility: 'hidden' } : undefined}
+                  >
+                    <LogoParceiro id={app.id} nome={app.nome} loja className="h-8 w-8" />
+                  </span>
+                  {!collapsed && <span className="truncate">{app.nome}</span>}
+                </NavLink>
+              ))}
+            </>
+          )}
       </nav>
     </aside>
   );

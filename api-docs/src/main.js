@@ -511,6 +511,7 @@ async function carregarCertificados(form) {
 function montar() {
   $$('[data-url-base]').forEach((el) => (el.textContent = URL_PUBLICA));
   $$('[data-app-link]').forEach((a) => (a.href = `${APP_URL}${a.dataset.appLink}`));
+  $$('[data-app-origem]').forEach((el) => (el.textContent = new URL(APP_URL).origin));
 
   const doGrupo = (g) => ENDPOINTS.filter((ep) => ep.grupo === g.id);
   const linkEndpoint = (ep) =>

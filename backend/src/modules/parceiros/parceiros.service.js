@@ -215,20 +215,71 @@ async function reativar(id, usuarioId) {
   return {};
 }
 
-// ─── Loja de aplicativos (topo) ─────────────────────────────────────────────
-async function loja() {
+// ─── Loja de aplicativos (topo) e aplicativos instalados (menu lateral) ─────
+// Por usuário: instalado (ícone no menu lateral) e conectado (o parceiro já recebeu a identidade dele
+// pelo Login com Horizon — ver oidc.js; até lá o aplicativo abre na página com o botão Conectar).
+// url_conectar = URL de abertura + iss (início do Login com Horizon).
+async function loja(usuarioId) {
   const { rows } = await pool.query(
-    `SELECT id, app_nome AS nome, app_descricao AS descricao, url_abertura,
-            responsavel_nome, responsavel_email, responsavel_telefone
-     FROM parceiros WHERE status = 'APROVADO' ORDER BY app_nome`
+    `SELECT p.id, p.app_nome AS nome, p.app_descricao AS descricao,
+            p.responsavel_nome, p.responsavel_email, p.responsavel_telefone,
+            (i.usuario_id IS NOT NULL) AS instalado
+     FROM parceiros p
+     LEFT JOIN parceiros_instalacoes i ON i.parceiro_id = p.id AND i.usuario_id = $1
+     WHERE p.status = 'APROVADO' ORDER BY p.app_nome`,
+    [usuarioId]
   );
-  // Dados do desenvolvedor (responsável técnico) aparecem na janela do aplicativo na loja. O botão
-  // Conectar abre url_conectar (URL de abertura + iss — início do Login com Horizon, ver oidc.js).
-  return rows.map(({ responsavel_telefone: tel, url_abertura: abertura, ...r }) => ({
-    ...r,
-    responsavel_telefone: telefoneFormatado(tel),
-    url_conectar: urlConectar(abertura),
-  }));
+  return rows.map(({ responsavel_telefone: tel, ...r }) => ({ ...r, responsavel_telefone: telefoneFormatado(tel) }));
+}
+
+// Menu lateral: na ordem de instalação (o último instalado fica embaixo).
+async function instalados(usuarioId) {
+  const { rows } = await pool.query(
+    `SELECT p.id, p.app_nome AS nome
+     FROM parceiros_instalacoes i JOIN parceiros p ON p.id = i.parceiro_id AND p.status = 'APROVADO'
+     WHERE i.usuario_id = $1 ORDER BY i.instalado_em, p.id`,
+    [usuarioId]
+  );
+  return rows;
+}
+
+async function instalar(usuarioId, id) {
+  const { rowCount } = await pool.query(
+    `INSERT INTO parceiros_instalacoes (usuario_id, parceiro_id)
+     SELECT $1, id FROM parceiros WHERE id = $2 AND status = 'APROVADO'
+     ON CONFLICT (usuario_id, parceiro_id) DO NOTHING`,
+    [usuarioId, id]
+  );
+  if (!rowCount) {
+    const { rows } = await pool.query(`SELECT 1 FROM parceiros WHERE id = $1 AND status = 'APROVADO'`, [id]);
+    if (!rows.length) throw naoEncontrado('Aplicativo não disponível na loja.');
+  }
+  return instalados(usuarioId);
+}
+
+async function desinstalar(usuarioId, id) {
+  await pool.query('DELETE FROM parceiros_instalacoes WHERE usuario_id = $1 AND parceiro_id = $2', [usuarioId, id]);
+  return instalados(usuarioId);
+}
+
+// Página /aplicativos/:id (o aplicativo aberto dentro do Horizon).
+async function aplicativo(usuarioId, id) {
+  const { rows } = await pool.query(
+    `SELECT p.id, p.app_nome AS nome, p.url_abertura, i.conectado_em
+     FROM parceiros_instalacoes i JOIN parceiros p ON p.id = i.parceiro_id AND p.status = 'APROVADO'
+     WHERE i.usuario_id = $1 AND i.parceiro_id = $2`,
+    [usuarioId, id]
+  );
+  if (!rows.length) throw naoEncontrado('Aplicativo não instalado ou indisponível.');
+  const { url_abertura: abertura, conectado_em: conectadoEm, ...r } = rows[0];
+  return { ...r, conectado: Boolean(conectadoEm), url_conectar: urlConectar(abertura) };
+}
+
+function naoEncontrado(message) {
+  const err = new Error(message);
+  err.status = 404;
+  err.expose = true;
+  return err;
 }
 
 module.exports = {
@@ -242,4 +293,8 @@ module.exports = {
   suspender,
   reativar,
   loja,
+  instalados,
+  instalar,
+  desinstalar,
+  aplicativo,
 };

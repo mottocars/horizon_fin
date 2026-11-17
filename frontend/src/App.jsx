@@ -70,6 +70,7 @@ import FormularioEditorPage from './pages/Formularios/FormularioEditorPage';
 import NovidadesPage from './pages/Novidades/NovidadesPage';
 import ParceirosPage from './pages/Parceiros/ParceirosPage';
 import LojaAplicativosPage from './pages/LojaAplicativos/LojaAplicativosPage';
+import AplicativoPage from './pages/LojaAplicativos/AplicativoPage';
 import OAuthAutorizarPage from './pages/OAuth/OAuthAutorizarPage';
 import FormularioPublicoPage from './pages/Formularios/FormularioPublicoPage';
 
@@ -104,6 +105,7 @@ export default function App() {
             <Route path="/" element={<Home />} />
             <Route path="/meu-perfil" element={<MeuPerfil />} />
             <Route path="/loja-aplicativos" element={<LojaAplicativosPage />} />
+            <Route path="/aplicativos/:id" element={<AplicativoPage />} />
 
             <Route path="/dashboards/economico-financeiro" element={<EconomicoFinanceiroPage />} />
             <Route path="/dashboards/cronogramas-obras" element={<CronogramasObrasDashboard />} />

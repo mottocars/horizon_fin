@@ -47,6 +47,20 @@ export function autorizarOidc(parametros) {
   return http.post('/oidc/autorizar', parametros).then((res) => res.data);
 }
 
+// ─── aplicativos instalados (menu lateral) e o aplicativo aberto dentro do Horizon ──
+export function listarInstalados() {
+  return http.get('/loja-aplicativos/instalados').then((res) => res.data);
+}
+export function instalarAplicativo(id) {
+  return http.post(`/loja-aplicativos/${id}/instalar`).then((res) => res.data);
+}
+export function desinstalarAplicativo(id) {
+  return http.delete(`/loja-aplicativos/${id}/instalar`).then((res) => res.data);
+}
+export function obterAplicativo(id) {
+  return http.get(`/loja-aplicativos/${id}`).then((res) => res.data);
+}
+
 // ─── loja (todo usuário logado) ──
 export function listarLojaAplicativos() {
   return http.get('/loja-aplicativos').then((res) => res.data);
