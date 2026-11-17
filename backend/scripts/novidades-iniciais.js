@@ -20,6 +20,7 @@ const TELA_COBRANCAS = '/operacoes/gestao-de-cobrancas';
 const NOVIDADES = [
   {
     nome: 'Seleção em massa de clientes na gestão de cobrança',
+    modulo: 'Gestão de Cobranças',
     arquivo: 'selecao-em-massa.gif',
     descricao: [
       'Cobre todos os títulos de um cliente com um só gesto. Na Rotina, segure o clique na caixinha do WhatsApp, do e-mail ou da ligação e arraste pelos títulos do cliente: o Horizon reúne tudo em uma única mensagem, com cada título, parcela, vencimento e o total em aberto.',
@@ -45,6 +46,7 @@ const NOVIDADES = [
   },
   {
     nome: 'Redistribuir clientes por atendente para administradores',
+    modulo: 'Gestão de Cobranças',
     arquivo: 'redistribuir.gif',
     descricao: [
       'Mude o atendente de um cliente em dois cliques. Quando um cliente precisa de outra pessoa, por uma negociação especial, uma troca de carteira ou uma atendente sobrecarregada, clique em ⇄ na linha dele na Rotina e escolha quem assume.',
@@ -80,10 +82,10 @@ const NOVIDADES = [
       const buffer = fs.readFileSync(path.join(__dirname, 'novidades-iniciais', n.arquivo));
       // A 1ª um segundo antes da 2ª: a janela ao entrar mostra na ordem em que foram lançadas.
       const { rows } = await client.query(
-        `INSERT INTO novidades (nome, descricao, publico, midia, midia_tipo, midia_nome, midia_tamanho, criado_em, atualizado_em)
-         VALUES ($1, $2, 'EMPRESAS', $3, 'image/gif', $4, $5, NOW() - make_interval(secs => $6), NOW() - make_interval(secs => $6))
+        `INSERT INTO novidades (nome, modulo, descricao, publico, midia, midia_tipo, midia_nome, midia_tamanho, criado_em, atualizado_em)
+         VALUES ($1, $7, $2, 'EMPRESAS', $3, 'image/gif', $4, $5, NOW() - make_interval(secs => $6), NOW() - make_interval(secs => $6))
          RETURNING id`,
-        [n.nome, n.descricao, buffer, n.arquivo, buffer.length, NOVIDADES.length - i]
+        [n.nome, n.descricao, buffer, n.arquivo, buffer.length, NOVIDADES.length - i, n.modulo]
       );
       const id = rows[0].id;
       const publico = await n.publico();

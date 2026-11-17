@@ -4169,6 +4169,8 @@ CREATE TRIGGER trg_espiao_notas_vinculos_atualizacao
 CREATE TABLE novidades (
     id             SERIAL PRIMARY KEY,
     nome           VARCHAR(150) NOT NULL,
+    -- Módulo do Horizon de que trata (nome da tela, ex.: "Gestão de Cobranças"); opcional.
+    modulo         VARCHAR(100),
     descricao      TEXT NOT NULL DEFAULT '',
     publico        VARCHAR(10) NOT NULL DEFAULT 'EMPRESAS' CHECK (publico IN ('TODOS', 'EMPRESAS')),
     midia          BYTEA,

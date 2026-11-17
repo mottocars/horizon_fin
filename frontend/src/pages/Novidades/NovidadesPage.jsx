@@ -91,6 +91,7 @@ export default function NovidadesPage() {
                       className="cursor-pointer border-b border-gray-100 transition hover:bg-gray-50"
                     >
                       <td className="max-w-md py-3 pl-5 pr-3">
+                        {n.modulo && <p className="text-[10.5px] font-semibold uppercase tracking-wide text-primary-600">{n.modulo}</p>}
                         <p className="text-sm font-semibold text-gray-900">{n.nome}</p>
                         <p className="mt-0.5 line-clamp-1 text-gray-500">{resumoDescricao(n.descricao)}</p>
                       </td>

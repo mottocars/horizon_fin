@@ -6,6 +6,7 @@ import CampoData from '../../components/CampoData';
 import SearchableSelect from '../../components/SearchableSelect';
 import { Interruptor } from '../Operacoes/GestaoAprovacoes/ui';
 import { useAuth } from '../../auth/AuthContext';
+import { TELAS_SISTEMA } from '../../config/telasSistema';
 import { useConfirm } from '../../confirm/ConfirmContext';
 import { JanelaNovidades, formatarDataNovidade, useMidiaNovidade } from '../../layout/Novidades';
 import {
@@ -51,7 +52,13 @@ function iniciais(nome) {
     .toUpperCase();
 }
 
-const vazia = () => ({ nome: '', descricao: '', publico: 'EMPRESAS', exibir_a_partir: hojeIso(), novos_usuarios: true, empresas: [] });
+// Módulos do Horizon para o campo "Módulo": os nomes das telas do sistema (os mesmos do Mapa de
+// Acessos), sem repetir nome (ex.: Repasses CEF existe em Operações e em Relatórios).
+const MODULOS = [...new Set(TELAS_SISTEMA.flatMap((g) => g.telas.map((t) => t.label)))]
+  .sort((a, b) => a.localeCompare(b, 'pt-BR'))
+  .map((label) => ({ value: label, label }));
+
+const vazia = () => ({ nome: '', modulo: '', descricao: '', publico: 'EMPRESAS', exibir_a_partir: hojeIso(), novos_usuarios: true, empresas: [] });
 
 // Criar/editar uma novidade (Cadastros › Novidades). `novidadeId` nulo = nova.
 // Esquerda: todo o formulário (nome, descrição, quando aparece, quem vê).
@@ -91,6 +98,7 @@ export default function NovidadeModal({ open, novidadeId, onFechar, onSalvo }) {
         setOriginal(n);
         setForm({
           nome: n.nome,
+          modulo: n.modulo || '',
           descricao: n.descricao,
           publico: n.publico,
           exibir_a_partir: n.exibir_a_partir,
@@ -172,6 +180,7 @@ export default function NovidadeModal({ open, novidadeId, onFechar, onSalvo }) {
     try {
       const dados = {
         nome: form.nome.trim(),
+        modulo: form.modulo || null,
         descricao: form.descricao.trim(),
         publico: form.publico,
         exibir_a_partir: form.exibir_a_partir,
@@ -208,6 +217,7 @@ export default function NovidadeModal({ open, novidadeId, onFechar, onSalvo }) {
   const rascunhoPrevia = {
     id: original?.id,
     nome: form.nome || 'Nome da novidade',
+    modulo: form.modulo,
     descricao: form.descricao || 'A descrição aparece aqui.',
     exibir_a_partir: form.exibir_a_partir,
     tem_midia: Boolean(original?.tem_midia),
@@ -238,6 +248,17 @@ export default function NovidadeModal({ open, novidadeId, onFechar, onSalvo }) {
                     placeholder="Ex.: Seleção em massa de clientes na gestão de cobrança"
                     className={CAMPO}
                   />
+                </div>
+                <div>
+                  <span className={ROTULO}>Módulo</span>
+                  <SearchableSelect
+                    value={form.modulo}
+                    onChange={(v) => campo('modulo', v || '')}
+                    options={MODULOS}
+                    placeholder="De qual parte do Horizon é a novidade (opcional)"
+                    emptyMessage="Nenhum módulo encontrado."
+                  />
+                  <p className="mt-1 text-xs text-gray-400">Aparece ao lado de “Novidade” na janela, por exemplo: Novidade · Gestão de Cobranças.</p>
                 </div>
                 <div>
                   <label htmlFor="novidade-descricao" className={ROTULO}>

@@ -15,6 +15,8 @@ const dadosSchema = z.object({
   nome: z.string().trim().min(1, 'Informe o nome.').max(150, 'Nome com no máximo 150 caracteres.'),
   descricao: z.string().trim().min(1, 'Informe a descrição.').max(5000, 'Descrição com no máximo 5.000 caracteres.'),
   publico: z.enum(['TODOS', 'EMPRESAS']),
+  // Módulo do Horizon (nome da tela, ex.: "Gestão de Cobranças") — aparece ao lado de "Novidade".
+  modulo: z.string().trim().max(100, 'Módulo com no máximo 100 caracteres.').nullish(),
   // A partir de quando aparece (AAAA-MM-DD) e se quem for cadastrado depois também vê.
   exibir_a_partir: z.string().regex(/^\d{4}-\d{2}-\d{2}$/, 'Informe a data de exibição.'),
   novos_usuarios: z.boolean().default(true),

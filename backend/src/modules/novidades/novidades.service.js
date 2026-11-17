@@ -50,7 +50,7 @@ const NAO_BARRADO_COMO_NOVO_U = `(n.novos_usuarios OR u.criado_em::date <= n.exi
 // conta (vê todas). Usado no "Já viram" e no percentual.
 const NO_PUBLICO_U = `(u.ativo AND ${NAO_BARRADO_COMO_NOVO_U} AND (u.permissao = 'MASTER' OR ${VISIVEL_PARA_U}))`;
 
-const CAMPOS_LISTA = `n.id, n.nome, n.descricao, n.publico, n.criado_em, n.atualizado_em,
+const CAMPOS_LISTA = `n.id, n.nome, n.modulo, n.descricao, n.publico, n.criado_em, n.atualizado_em,
   n.exibir_a_partir::text AS exibir_a_partir, n.novos_usuarios, (n.exibir_a_partir > ${HOJE_BR}) AS agendada,
   n.midia IS NOT NULL AS tem_midia, n.midia_tipo, n.midia_nome, n.midia_tamanho`;
 const ORDEM = 'ORDER BY n.exibir_a_partir DESC, n.criado_em DESC, n.id DESC';
@@ -225,14 +225,14 @@ async function salvar(user, novidadeId, dados, arquivo) {
     if (id) {
       await db.query(
         `UPDATE novidades SET nome = $2, descricao = $3, publico = $4, exibir_a_partir = $5, novos_usuarios = $6,
-           atualizado_em = NOW() WHERE id = $1`,
-        [id, dados.nome, dados.descricao, dados.publico, dados.exibir_a_partir, dados.novos_usuarios]
+           modulo = $7, atualizado_em = NOW() WHERE id = $1`,
+        [id, dados.nome, dados.descricao, dados.publico, dados.exibir_a_partir, dados.novos_usuarios, dados.modulo || null]
       );
     } else {
       const { rows } = await db.query(
-        `INSERT INTO novidades (nome, descricao, publico, exibir_a_partir, novos_usuarios, criado_por)
-         VALUES ($1, $2, $3, $4, $5, $6) RETURNING id`,
-        [dados.nome, dados.descricao, dados.publico, dados.exibir_a_partir, dados.novos_usuarios, user.id]
+        `INSERT INTO novidades (nome, descricao, publico, exibir_a_partir, novos_usuarios, modulo, criado_por)
+         VALUES ($1, $2, $3, $4, $5, $6, $7) RETURNING id`,
+        [dados.nome, dados.descricao, dados.publico, dados.exibir_a_partir, dados.novos_usuarios, dados.modulo || null, user.id]
       );
       id = rows[0].id;
     }

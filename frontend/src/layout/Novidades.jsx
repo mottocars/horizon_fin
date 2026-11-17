@@ -147,9 +147,16 @@ export function JanelaNovidades({ novidades, inicio = 0, onFechar, onVer, cadast
       <div className="grid max-h-full w-full max-w-6xl overflow-hidden rounded-2xl bg-white shadow-2xl md:grid-cols-[minmax(0,0.82fr)_minmax(0,1.5fr)]">
         <div key={atual.id ?? passo} className="novidade-entra flex min-h-0 flex-col gap-4 overflow-y-auto p-6 sm:p-8">
           <div className="flex items-center justify-between gap-3">
-            <span className="inline-flex items-center gap-1.5 rounded-full bg-primary-50 px-2.5 py-1 text-[11px] font-semibold uppercase tracking-wide text-primary-700">
-              <span className="h-1.5 w-1.5 rounded-full bg-primary-500" />
+            {/* "Novidade · Gestão de Cobranças" — o módulo (opcional) logo depois de Novidade. */}
+            <span className="inline-flex min-w-0 items-center gap-1.5 rounded-full bg-primary-50 px-2.5 py-1 text-[11px] font-semibold uppercase tracking-wide text-primary-700">
+              <span className="h-1.5 w-1.5 shrink-0 rounded-full bg-primary-500" />
               Novidade
+              {atual.modulo && (
+                <>
+                  <span className="text-primary-300">·</span>
+                  <span className="truncate">{atual.modulo}</span>
+                </>
+              )}
             </span>
             <div className="flex items-center gap-3">
               {novidades.length > 1 && (
@@ -367,6 +374,9 @@ export function BotaoNovidades() {
                   >
                     <span className={`mt-1.5 h-2 w-2 shrink-0 rounded-full ${n.vista ? 'bg-transparent' : 'bg-primary-500'}`} />
                     <span className="min-w-0">
+                      {n.modulo && (
+                        <span className="mb-0.5 block text-[10.5px] font-semibold uppercase tracking-wide text-primary-600">{n.modulo}</span>
+                      )}
                       <span className="block text-sm font-semibold leading-snug text-gray-900">{n.nome}</span>
                       <span className="mt-0.5 line-clamp-2 text-xs leading-relaxed text-gray-500">{resumoDescricao(n.descricao)}</span>
                       <span className="mt-1 block text-[11px] text-gray-400">{formatarDataNovidade(n.exibir_a_partir || n.criado_em)}</span>
@@ -436,6 +446,9 @@ function ListaNovidades({ novidades, onAbrir, onFechar }) {
                   <Megaphone size={17} />
                 </span>
                 <span className="min-w-0 flex-1">
+                  {n.modulo && (
+                    <span className="mb-0.5 block text-[10.5px] font-semibold uppercase tracking-wide text-primary-600">{n.modulo}</span>
+                  )}
                   <span className="flex flex-wrap items-baseline justify-between gap-x-3">
                     <span className="text-sm font-semibold text-gray-900">{n.nome}</span>
                     <span className="text-xs text-gray-400">{formatarDataNovidade(n.exibir_a_partir || n.criado_em)}</span>
