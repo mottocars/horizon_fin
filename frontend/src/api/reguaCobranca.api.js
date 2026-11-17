@@ -140,3 +140,23 @@ export function distribuirHojeReguaCobranca(empresaId, { redistribuir = false, e
     .post('/regua-cobranca/distribuicao/distribuir', { redistribuir, equilibrar }, { params: { empresa_id: empresaId } })
     .then((res) => res.data);
 }
+
+// "Redistribuir" 1 cliente pela Rotina (só Administrador da Gestão de
+// Cobranças/Master, Distribuição automática): GET traz o cliente, o dono
+// atual na carteira e os atendentes; POST manda o cliente pro atendente
+// escolhido a partir de hoje (carteira + distribuição de hoje em diante).
+export function getRedistribuicaoCliente(empresaId, clientId) {
+  return http
+    .get(`/regua-cobranca/distribuicao/clientes/${clientId}`, { params: { empresa_id: empresaId } })
+    .then((res) => res.data);
+}
+
+export function redistribuirCliente(empresaId, clientId, paraUsuarioId) {
+  return http
+    .post(
+      `/regua-cobranca/distribuicao/clientes/${clientId}/redistribuir`,
+      { para_usuario_id: paraUsuarioId },
+      { params: { empresa_id: empresaId } }
+    )
+    .then((res) => res.data);
+}

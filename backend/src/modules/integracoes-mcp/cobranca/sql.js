@@ -33,7 +33,7 @@ const VIEWS = {
   mcp_regua_cobranca_distribuicao_presencas: 'Quem participou da distribuição de cada dia (dias trabalhados): data, usuario_id.',
   mcp_regua_cobranca_distribuicao_participantes: 'Atendentes atuais da distribuição: usuario_id, entrou_em, pausado_ate, placar_herdado_de, herdado_em.',
   mcp_regua_cobranca_carteira: 'Carteira (dono de cada cliente): client_id, usuario_id, desde, ultima_aparicao (última vez na Rotina).',
-  mcp_regua_cobranca_distribuicao_log: 'Log da distribuição: acao (modo, entrada, saida, pausa, retomada, substituicao, distribuicao, redistribuicao, liberacao), descricao, usuario_id (NULL = Monitor), criado_em.',
+  mcp_regua_cobranca_distribuicao_log: 'Log da distribuição: acao (modo, entrada, saida, pausa, retomada, substituicao, distribuicao, redistribuicao, redistribuicao_cliente, distribuicao_passada, liberacao), descricao, usuario_id (NULL = Monitor), criado_em.',
   mcp_cobranca_usuarios: 'Nomes dos usuários (id, nome) — use para trocar usuario_id/responsavel_usuario_id/criado_por por nome.',
 };
 

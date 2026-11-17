@@ -286,6 +286,39 @@ const substituirParticipante = rotaDistribuicao(async (req, empresaId) => {
   await distribuicao.substituirParticipante(empresaId, usuarioIdParamSchema.parse(req.params.usuarioId), para, req.user.id);
 });
 
+// "Redistribuir" 1 cliente pela Rotina (só Administrador/Master, ver
+// distribuicao.service.js::redistribuirCliente). Respostas leves — a Rotina
+// não precisa do painel inteiro da distribuição.
+const clientIdSchema = z.coerce.number().int().positive('Cliente inválido.');
+
+async function getRedistribuicaoCliente(req, res, next) {
+  try {
+    const empresaId = empresaIdSchema.parse(req.query.empresa_id);
+    await exigirGestor(req, empresaId);
+    res.json(await distribuicao.getRedistribuicaoCliente(empresaId, clientIdSchema.parse(req.params.clientId)));
+  } catch (err) {
+    if (err.issues) return next(badRequest(err.issues[0].message));
+    next(err);
+  }
+}
+
+async function redistribuirCliente(req, res, next) {
+  try {
+    const empresaId = empresaIdSchema.parse(req.query.empresa_id);
+    await exigirGestor(req, empresaId);
+    const resultado = await distribuicao.redistribuirCliente(
+      empresaId,
+      clientIdSchema.parse(req.params.clientId),
+      usuarioIdParamSchema.parse(req.body?.para_usuario_id),
+      req.user.id
+    );
+    res.json(resultado);
+  } catch (err) {
+    if (err.issues) return next(badRequest(err.issues[0].message));
+    next(err);
+  }
+}
+
 // "Distribuir agora" (incremental, igual à execução do Monitor) ou
 // "Redistribuir hoje" (refaz o dia; `equilibrar` repassa parte das carteiras).
 const distribuirHoje = rotaDistribuicao(async (req, empresaId) => {
@@ -328,6 +361,8 @@ module.exports = {
   removerParticipante,
   pausarParticipante,
   substituirParticipante,
+  getRedistribuicaoCliente,
+  redistribuirCliente,
   distribuirHoje,
   distribuirPassado,
 };

@@ -724,6 +724,7 @@ export default function GestaoCobrancasPage() {
             refreshToken={refreshRotinas}
             comunicacaoAutomaticaAtiva={tipoComunicacao === 'automatica'}
             tipoComunicacao={tipoComunicacao}
+            podeRedistribuir={admin}
           />
         )}
 

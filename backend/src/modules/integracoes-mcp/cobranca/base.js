@@ -20,7 +20,7 @@ const MOTIVO_DISTRIBUICAO = {
   novo: 'Novo (sem dono na carteira)',
   liberado: 'Liberado da carteira (o dono saiu da distribuição)',
   cobertura: 'Cobertura (o dono estava pausado/férias)',
-  transferido: 'Transferido (substituição de atendente ou repasse para equilibrar carteiras)',
+  transferido: 'Transferido (substituição de atendente, repasse para equilibrar carteiras ou redistribuição manual do cliente pela Rotina)',
 };
 const STATUS_PARCELA = {
   em_dia: 'Paga em dia',

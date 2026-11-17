@@ -1,9 +1,10 @@
 import { Fragment, useCallback, useEffect, useMemo, useRef, useState } from 'react';
-import { Check, CheckCircle2, Clock, ListFilter, Mail, MessageCircle, Minus, Phone, Plus, Repeat, X } from 'lucide-react';
+import { ArrowLeftRight, Check, CheckCircle2, Clock, ListFilter, Mail, MessageCircle, Minus, Phone, Plus, Repeat, X } from 'lucide-react';
 import Card from '../../../components/Card';
 import SearchableSelect from '../../../components/SearchableSelect';
 import RegistrarComunicacaoModal from './RegistrarComunicacaoModal';
 import CobrancaEmMassaModal from './CobrancaEmMassaModal';
+import RedistribuirClienteModal from './RedistribuirClienteModal';
 import HistoricoParcelaModal from './GestaoParcelas/HistoricoParcelaModal';
 import { listRotinas, desmarcarCanalRotina } from '../../../api/rotinas.api';
 import { listSiengeIntegracoes } from '../../../api/sienge.api';
@@ -346,6 +347,9 @@ export default function RotinasTab({
   refreshToken = 0,
   comunicacaoAutomaticaAtiva = true,
   tipoComunicacao = 'automatica',
+  // Usuário Administrador da Gestão de Cobranças desta empresa ou Master —
+  // só ele vê a coluna "Redistribuir" (e só na Distribuição automática).
+  podeRedistribuir = false,
 }) {
   const dataInicio = useDataEstavel(dataInicioBruta);
   const dataFim = useDataEstavel(dataFimBruta);
@@ -532,6 +536,10 @@ export default function RotinasTab({
   // Título já mostra qual parcela é cada linha, sem ambiguidade nenhuma.
   const [parcelaHistorico, setParcelaHistorico] = useState(null);
 
+  // Cliente cujo "Redistribuir" foi clicado (última coluna, ver
+  // RedistribuirClienteModal.jsx): { clientId, clientName, responsavelAtualId }.
+  const [clienteRedistribuir, setClienteRedistribuir] = useState(null);
+
   const requisicaoRef = useRef(0);
 
   // Referências dos <th> de Cliente/Etapa — passadas pra FiltroColuna
@@ -671,6 +679,11 @@ export default function RotinasTab({
   const semDados = !carregando && !erro && responsaveis.length === 0;
   const semResultadoFiltro = !carregando && !erro && !semDados && responsaveisFiltrados.length === 0;
   const nomeSemResponsavel = modo === 'automatica' ? 'A distribuir' : 'Sem responsável';
+  // Coluna "Redistribuir": só Administrador/Master e só na Distribuição
+  // automática (no modo "Responsável por etapa" quem atende é o da etapa —
+  // não existe dono por cliente pra trocar).
+  const mostrarRedistribuir = podeRedistribuir && modo === 'automatica';
+  const totalColunas = TOTAL_COLUNAS + (mostrarRedistribuir ? 1 : 0);
 
   // Cabeçalho da 1ª coluna reage a quantos níveis estão abertos agora —
   // mesmo comportamento da Gestão das Parcelas.
@@ -710,7 +723,7 @@ export default function RotinasTab({
                 borda de baixo mais grossa, fonte xs e valores sem centavos. */}
             <table className="w-full border-separate border-spacing-0 text-left text-xs" style={{ tableLayout: 'fixed' }}>
               <colgroup>
-                <col className="w-[30%]" />
+                <col className={mostrarRedistribuir ? 'w-[26%]' : 'w-[30%]'} />
                 <col className="w-[14%]" />
                 <col className="w-[9%]" />
                 <col className="w-[9%]" />
@@ -719,6 +732,7 @@ export default function RotinasTab({
                 <col className="w-[7%]" />
                 <col className="w-[7%]" />
                 <col className="w-[7%]" />
+                {mostrarRedistribuir && <col className="w-[4%]" />}
               </colgroup>
               <thead className={CAB.thead}>
                 <tr className={CAB.tr}>
@@ -777,12 +791,17 @@ export default function RotinasTab({
                       label="Ligação"
                     />
                   </th>
+                  {mostrarRedistribuir && (
+                    <th className={`${CAB.th} ${CAB.divisor} py-2.5 text-center font-medium`} title="Redistribuir o cliente para outra atendente">
+                      <ArrowLeftRight size={14} className="inline" />
+                    </th>
+                  )}
                 </tr>
               </thead>
               <tbody>
                 {semResultadoFiltro && (
                   <tr>
-                    <td colSpan={TOTAL_COLUNAS} className={`${DIV_H} py-12 text-center text-sm text-gray-500`}>
+                    <td colSpan={totalColunas} className={`${DIV_H} py-12 text-center text-sm text-gray-500`}>
                       <p className="font-medium text-gray-700">Nenhuma linha corresponde aos filtros selecionados.</p>
                       <p className="mx-auto mt-1 max-w-sm text-xs text-gray-400">
                         Ajuste os filtros de Cliente/Etapa ou ligue de novo o WhatsApp, o e-mail ou a ligação nos
@@ -829,6 +848,7 @@ export default function RotinasTab({
                         <td className={`${DIV_H} ${DIV_V} py-3 text-center`}>
                           <ProgressoCanal progresso={progressoDoCanal(resp.itens, 'ligacao')} label="Ligação" />
                         </td>
+                        {mostrarRedistribuir && <td className={`${DIV_H} ${DIV_V} py-3`}></td>}
                       </tr>
 
                       {respAberto &&
@@ -868,6 +888,7 @@ export default function RotinasTab({
                                 <td className={`${DIV_H} ${DIV_V} py-2.5 text-center`}>
                                   <ProgressoCanal progresso={progressoDoCanal(centro.itens, 'ligacao')} label="Ligação" />
                                 </td>
+                                {mostrarRedistribuir && <td className={`${DIV_H} ${DIV_V} py-2.5`}></td>}
                               </tr>
 
                               {centroAberto &&
@@ -975,6 +996,24 @@ export default function RotinasTab({
                                           selecionado={selecionadoNoArraste(item, 'ligacao')}
                                         />
                                       </td>
+                                      {mostrarRedistribuir && (
+                                        <td className={`${DIV_H} ${DIV_V} py-2 text-center`}>
+                                          <button
+                                            type="button"
+                                            onClick={() =>
+                                              setClienteRedistribuir({
+                                                clientId: item.client_id,
+                                                clientName: item.client_name,
+                                                responsavelAtualId: resp.usuario_id,
+                                              })
+                                            }
+                                            title={`Redistribuir ${item.client_name || 'este cliente'} para outra atendente`}
+                                            className="inline-flex h-6 w-6 items-center justify-center rounded border border-gray-200 text-gray-400 transition hover:border-primary-200 hover:bg-primary-50 hover:text-primary-600"
+                                          >
+                                            <ArrowLeftRight size={13} />
+                                          </button>
+                                        </td>
+                                      )}
                                     </tr>
                                   );
                                 })}
@@ -1009,6 +1048,16 @@ export default function RotinasTab({
         itens={cobrancaEmMassa?.itens}
         clientName={cobrancaEmMassa?.clientName}
         onRegistrado={carregar}
+      />
+
+      <RedistribuirClienteModal
+        open={Boolean(clienteRedistribuir)}
+        onClose={() => setClienteRedistribuir(null)}
+        empresaId={empresaId}
+        clientId={clienteRedistribuir?.clientId}
+        clientName={clienteRedistribuir?.clientName}
+        responsavelAtualId={clienteRedistribuir?.responsavelAtualId}
+        onRedistribuido={carregar}
       />
 
       <HistoricoParcelaModal

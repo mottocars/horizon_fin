@@ -259,6 +259,108 @@ async function substituirParticipante(empresaId, deId, paraId, autorId) {
   }
 }
 
+// ─── redistribuir 1 cliente (Rotina) ───────────────────────────────────────
+
+// "Redistribuir" da Rotina (pedido do usuário, 17/11 — só o Usuário
+// Administrador da Gestão de Cobranças e Master): manda UM cliente pra outro
+// atendente a partir de agora. O cliente passa pra carteira do novo atendente
+// (é a carteira que manda nos próximos dias: continuidade) e o que já estava
+// distribuído pra ele de hoje em diante também muda de dono (motivo
+// 'transferido'). Dias anteriores a hoje não mudam — o histórico continua
+// mostrando quem atendeu. Só pra atendente da lista e não pausado hoje.
+async function getRedistribuicaoCliente(empresaId, clientId) {
+  const cfg = await getConfig(empresaId);
+  const data = await hoje(empresaId);
+  const [{ rows: clientes }, { rows: dono }, participantes] = await Promise.all([
+    pool.query('SELECT id::text AS client_id, name FROM sie_customers WHERE empresa_id = $1 AND id = $2', [empresaId, clientId]),
+    pool.query(
+      `SELECT c.usuario_id, u.nome, c.desde::text AS desde FROM regua_cobranca_carteira c
+       JOIN usuarios u ON u.id = c.usuario_id WHERE c.empresa_id = $1 AND c.client_id = $2`,
+      [empresaId, clientId]
+    ),
+    carregarParticipantes(empresaId),
+  ]);
+  return {
+    modo: cfg.modo,
+    data,
+    cliente: { client_id: String(clientId), nome: clientes[0]?.name || `Cliente ${clientId}` },
+    dono_atual: dono[0] ? { usuario_id: dono[0].usuario_id, nome: dono[0].nome, desde: dono[0].desde } : null,
+    atendentes: participantes.map((p) => ({
+      usuario_id: p.usuario_id,
+      nome: p.nome,
+      pausado_ate: pausadoNoDia(p, data) ? p.pausado_ate : null,
+    })),
+  };
+}
+
+async function redistribuirCliente(empresaId, clientId, paraId, autorId) {
+  const cfg = await getConfig(empresaId);
+  if (cfg.modo !== 'automatica') {
+    throw badRequest('Redistribuir cliente só existe na Distribuição automática (Gestão de Cobranças > Configurações).');
+  }
+  const data = await hoje(empresaId);
+  const participantes = await carregarParticipantes(empresaId);
+  const para = participantes.find((p) => String(p.usuario_id) === String(paraId));
+  if (!para) throw badRequest('Este usuário não está na lista de atendentes da distribuição.');
+  if (pausadoNoDia(para, data)) {
+    const [ano, mes, dia] = para.pausado_ate.split('-');
+    throw badRequest(`${para.nome} está pausado(a) até ${dia}/${mes}/${ano} — escolha outro atendente.`);
+  }
+  const { rows: clientes } = await pool.query('SELECT name FROM sie_customers WHERE empresa_id = $1 AND id = $2', [
+    empresaId,
+    clientId,
+  ]);
+  if (!clientes[0]) throw badRequest('Cliente não encontrado.');
+  const nomeCliente = clientes[0].name;
+
+  const db = await pool.connect();
+  try {
+    await db.query('BEGIN');
+    // Mesma trava da distribuição do dia: não cruza com uma execução do Monitor.
+    await db.query('SELECT pg_advisory_xact_lock(7301, $1)', [empresaId]);
+
+    const { rows: atual } = await db.query(
+      `SELECT c.usuario_id, u.nome FROM regua_cobranca_carteira c LEFT JOIN usuarios u ON u.id = c.usuario_id
+       WHERE c.empresa_id = $1 AND c.client_id = $2`,
+      [empresaId, clientId]
+    );
+    const { rows: doDia } = await db.query(
+      `SELECT d.usuario_id, u.nome FROM regua_cobranca_distribuicao_itens d LEFT JOIN usuarios u ON u.id = d.usuario_id
+       WHERE d.empresa_id = $1 AND d.client_id = $2 AND d.data = $3`,
+      [empresaId, clientId, data]
+    );
+    const de = doDia[0] || atual[0] || null;
+    const jaEra = String(atual[0]?.usuario_id ?? '') === String(paraId);
+    const { rowCount: movidosAgenda } = await db.query(
+      `UPDATE regua_cobranca_distribuicao_itens SET usuario_id = $4, motivo = 'transferido', gerado_em = $5
+       WHERE empresa_id = $1 AND client_id = $2 AND data >= $3 AND usuario_id <> $4`,
+      [empresaId, clientId, data, paraId, new Date().toISOString()]
+    );
+    if (jaEra && movidosAgenda === 0) throw badRequest(`${nomeCliente} já é atendido(a) por ${para.nome}.`);
+
+    await db.query(
+      `INSERT INTO regua_cobranca_carteira (empresa_id, client_id, usuario_id, desde, ultima_aparicao)
+       VALUES ($1, $2, $3, $4, $4)
+       ON CONFLICT (empresa_id, client_id) DO UPDATE SET
+         desde = CASE WHEN regua_cobranca_carteira.usuario_id = EXCLUDED.usuario_id
+                      THEN regua_cobranca_carteira.desde ELSE EXCLUDED.desde END,
+         usuario_id = EXCLUDED.usuario_id,
+         ultima_aparicao = GREATEST(regua_cobranca_carteira.ultima_aparicao, EXCLUDED.ultima_aparicao)`,
+      [empresaId, clientId, paraId, data]
+    );
+
+    const descricao = `${nomeCliente} redistribuído(a) manualmente${de?.nome ? ` de ${de.nome}` : ''} para ${para.nome}.`;
+    await registrarLog(db, empresaId, 'redistribuicao_cliente', descricao, autorId);
+    await db.query('COMMIT');
+    return { cliente: nomeCliente, de: de?.nome || null, para: para.nome, resultado: descricao };
+  } catch (err) {
+    await db.query('ROLLBACK');
+    throw err;
+  } finally {
+    db.release();
+  }
+}
+
 // ─── clientes do dia ───────────────────────────────────────────────────────
 
 // Gravidade de um item da Rotina: Inadimplência antes de tudo, depois a
@@ -928,6 +1030,8 @@ module.exports = {
   removerParticipante,
   pausarParticipante,
   substituirParticipante,
+  getRedistribuicaoCliente,
+  redistribuirCliente,
   distribuirDia,
   distribuirPassado,
   MAX_DIAS_PASSADOS,

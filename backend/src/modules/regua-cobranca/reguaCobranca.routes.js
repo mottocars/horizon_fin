@@ -35,6 +35,8 @@ router.post('/distribuicao/participantes', soAdministrador, controller.adicionar
 router.delete('/distribuicao/participantes/:usuarioId', soAdministrador, controller.removerParticipante);
 router.put('/distribuicao/participantes/:usuarioId/pausa', soAdministrador, controller.pausarParticipante);
 router.post('/distribuicao/participantes/:usuarioId/substituir', soAdministrador, controller.substituirParticipante);
+router.get('/distribuicao/clientes/:clientId', soAdministrador, controller.getRedistribuicaoCliente);
+router.post('/distribuicao/clientes/:clientId/redistribuir', soAdministrador, controller.redistribuirCliente);
 router.post('/distribuicao/distribuir', soAdministrador, controller.distribuirHoje);
 router.post('/distribuicao/distribuir-passado', soAdministrador, controller.distribuirPassado);
 
