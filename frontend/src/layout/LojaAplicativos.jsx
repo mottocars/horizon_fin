@@ -1,10 +1,11 @@
-import { useEffect, useRef, useState } from 'react';
-import { ExternalLink, Store } from 'lucide-react';
-import { baixarLogoParceiro, listarLojaAplicativos } from '../api/parceiros.api';
+import { useEffect, useState } from 'react';
+import { useLocation, useNavigate } from 'react-router-dom';
+import { Store } from 'lucide-react';
+import { baixarLogoParceiro } from '../api/parceiros.api';
 
 // Loja de aplicativos (botão do topo, à esquerda de Novidades): os aplicativos dos parceiros
-// aprovados em Cadastros › Parceiros. Por enquanto, clicar abre a URL de abertura do aplicativo
-// numa aba nova — o fluxo de autorização com o client_id/client_secret vem na próxima etapa.
+// aprovados em Cadastros › Parceiros. A tela fica em pages/LojaAplicativos.
+export const ROTA_LOJA = '/loja-aplicativos';
 
 // Logo do parceiro (vem do banco por rota autenticada → blob). Cache por id durante a sessão.
 const cacheLogos = new Map();
@@ -57,85 +58,29 @@ export function LogoParceiro({ id, nome, loja = false, xadrez = false, className
   );
 }
 
+// Botão do topo: abre a tela da Loja de aplicativos (/loja-aplicativos), com um card por aplicativo.
 export function BotaoLojaAplicativos() {
-  const [aberto, setAberto] = useState(false);
-  const [apps, setApps] = useState(null);
-  const caixaRef = useRef(null);
-
-  useEffect(() => {
-    if (!aberto) return undefined;
-    // Busca a cada abertura: um parceiro aprovado/suspenso aparece/some sem recarregar a página.
-    listarLojaAplicativos()
-      .then(setApps)
-      .catch(() => setApps([]));
-    const fora = (e) => caixaRef.current && !caixaRef.current.contains(e.target) && setAberto(false);
-    const esc = (e) => e.key === 'Escape' && setAberto(false);
-    document.addEventListener('mousedown', fora);
-    document.addEventListener('keydown', esc);
-    return () => {
-      document.removeEventListener('mousedown', fora);
-      document.removeEventListener('keydown', esc);
-    };
-  }, [aberto]);
-
+  const navigate = useNavigate();
+  const { pathname } = useLocation();
+  const ativo = pathname === ROTA_LOJA;
   return (
-    <div className="group relative" ref={caixaRef}>
+    <div className="group relative">
       <button
         type="button"
-        onClick={() => setAberto((a) => !a)}
+        onClick={() => navigate(ROTA_LOJA)}
         aria-label="Loja de aplicativos"
-        aria-expanded={aberto}
         className={`relative flex h-9 w-9 items-center justify-center rounded-full border transition ${
-          aberto ? 'border-primary-200 bg-primary-50 text-primary-700' : 'border-gray-200 bg-white text-gray-500 hover:border-primary-200 hover:bg-primary-50 hover:text-primary-700'
+          ativo ? 'border-primary-200 bg-primary-50 text-primary-700' : 'border-gray-200 bg-white text-gray-500 hover:border-primary-200 hover:bg-primary-50 hover:text-primary-700'
         }`}
       >
         <Store size={17} />
       </button>
-      {!aberto && (
-        <span
-          role="tooltip"
-          className="pointer-events-none absolute right-0 top-11 z-50 w-max rounded-lg bg-gray-900 px-3 py-2 text-xs text-white opacity-0 shadow-lg transition-opacity group-hover:opacity-100"
-        >
-          Loja de aplicativos
-        </span>
-      )}
-
-      {aberto && (
-        <div className="absolute right-0 top-11 z-50 w-[400px] max-w-[calc(100vw-2rem)] overflow-hidden rounded-xl border border-gray-100 bg-white shadow-xl">
-          <div className="border-b border-gray-100 px-4 py-3">
-            <p className="text-sm font-semibold text-gray-900">Loja de aplicativos</p>
-            <p className="text-xs text-gray-400">Aplicativos dos parceiros do Horizon</p>
-          </div>
-          {apps === null ? (
-            <p className="px-4 py-8 text-center text-sm text-gray-400">Carregando...</p>
-          ) : apps.length === 0 ? (
-            <p className="px-4 py-8 text-center text-sm text-gray-400">Nenhum aplicativo disponível por enquanto.</p>
-          ) : (
-            <ul className="max-h-[420px] divide-y divide-gray-100 overflow-y-auto">
-              {apps.map((a) => (
-                <li key={a.id}>
-                  <a
-                    href={a.url_abertura}
-                    target="_blank"
-                    rel="noopener noreferrer"
-                    onClick={() => setAberto(false)}
-                    className="group/app flex gap-3 px-4 py-3 transition hover:bg-gray-50"
-                  >
-                    <LogoParceiro id={a.id} nome={a.nome} loja className="h-11 w-11" />
-                    <span className="min-w-0 flex-1">
-                      <span className="flex items-center gap-1.5 text-sm font-semibold text-gray-900">
-                        {a.nome}
-                        <ExternalLink size={12} className="text-gray-300 group-hover/app:text-primary-600" />
-                      </span>
-                      <span className="mt-0.5 line-clamp-2 text-xs leading-relaxed text-gray-500">{a.descricao}</span>
-                    </span>
-                  </a>
-                </li>
-              ))}
-            </ul>
-          )}
-        </div>
-      )}
+      <span
+        role="tooltip"
+        className="pointer-events-none absolute right-0 top-11 z-50 w-max rounded-lg bg-gray-900 px-3 py-2 text-xs text-white opacity-0 shadow-lg transition-opacity group-hover:opacity-100"
+      >
+        Loja de aplicativos
+      </span>
     </div>
   );
 }

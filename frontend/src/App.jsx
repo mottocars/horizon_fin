@@ -69,6 +69,7 @@ import FormulariosPage from './pages/Formularios/FormulariosPage';
 import FormularioEditorPage from './pages/Formularios/FormularioEditorPage';
 import NovidadesPage from './pages/Novidades/NovidadesPage';
 import ParceirosPage from './pages/Parceiros/ParceirosPage';
+import LojaAplicativosPage from './pages/LojaAplicativos/LojaAplicativosPage';
 import FormularioPublicoPage from './pages/Formularios/FormularioPublicoPage';
 
 export default function App() {
@@ -99,6 +100,7 @@ export default function App() {
           >
             <Route path="/" element={<Home />} />
             <Route path="/meu-perfil" element={<MeuPerfil />} />
+            <Route path="/loja-aplicativos" element={<LojaAplicativosPage />} />
 
             <Route path="/dashboards/economico-financeiro" element={<EconomicoFinanceiroPage />} />
             <Route path="/dashboards/cronogramas-obras" element={<CronogramasObrasDashboard />} />

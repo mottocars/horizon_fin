@@ -8,6 +8,7 @@
 export const TELAS_SISTEMA = {
   '/': { title: 'Home', subtitle: 'Visão geral das suas atividades' },
   '/meu-perfil': { title: 'Meu Perfil', subtitle: 'Altere seus dados de acesso' },
+  '/loja-aplicativos': { title: 'Loja de aplicativos', subtitle: 'Aplicativos dos parceiros do Horizon' },
   '/dashboards/economico-financeiro': { title: 'Econômico/Financeiro', subtitle: 'Dashboards — Econômico/Financeiro' },
   '/dashboards/cronogramas-obras': { title: 'Obra 360º', subtitle: 'Dashboards — Obra 360º' },
   '/dashboards/comercial': { title: 'Comercial', subtitle: 'Dashboards — Comercial' },

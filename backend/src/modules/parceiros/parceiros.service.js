@@ -217,10 +217,12 @@ async function reativar(id, usuarioId) {
 // ─── Loja de aplicativos (topo) ─────────────────────────────────────────────
 async function loja() {
   const { rows } = await pool.query(
-    `SELECT id, app_nome AS nome, app_descricao AS descricao, url_abertura
+    `SELECT id, app_nome AS nome, app_descricao AS descricao, url_abertura,
+            responsavel_nome, responsavel_email, responsavel_telefone
      FROM parceiros WHERE status = 'APROVADO' ORDER BY app_nome`
   );
-  return rows;
+  // Dados do desenvolvedor (responsável técnico) aparecem na janela do aplicativo na loja.
+  return rows.map(({ responsavel_telefone: tel, ...r }) => ({ ...r, responsavel_telefone: telefoneFormatado(tel) }));
 }
 
 module.exports = {
