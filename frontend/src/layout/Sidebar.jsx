@@ -106,7 +106,7 @@ export default function Sidebar() {
   const location = useLocation();
   const { user } = useAuth();
   const { forceCollapsed } = useSidebar();
-  const { instalados, chegando, abertos } = useAplicativosInstalados();
+  const { instalados, chegando } = useAplicativosInstalados();
   // Abre só com clique (passar o mouse por cima não abre mais — incomodava, pedido do usuário) e
   // fecha sozinho assim que o mouse sai. Nenhum estado "fixado".
   const [expandido, setExpandido] = useState(false);
@@ -286,14 +286,10 @@ export default function Sidebar() {
                 >
                   <span
                     data-aplicativo-instalado={app.id}
-                    className="relative block shrink-0"
+                    className="block shrink-0"
                     style={chegando === app.id ? { visibility: 'hidden' } : undefined}
                   >
                     <LogoParceiro id={app.id} nome={app.nome} loja puro className="h-6 w-6" />
-                    {/* Aberto em segundo plano */}
-                    {abertos.some((a) => a.id === app.id) && (
-                      <span className="absolute -bottom-1 left-1/2 h-1 w-1 -translate-x-1/2 rounded-full bg-primary-500" aria-hidden="true" />
-                    )}
                   </span>
                   {!collapsed && <span className="truncate">{app.nome}</span>}
                 </NavLink>
