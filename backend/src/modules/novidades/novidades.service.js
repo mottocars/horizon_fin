@@ -7,7 +7,9 @@ const pool = require('../../config/db');
 //   TODOS    → todos os usuários do sistema (só Master pode escolher — senão
 //              alguém com a tela publicaria para clientes de outras empresas);
 //   EMPRESAS → por empresa: todos os usuários dela ou só os escolhidos.
-// Master vê todas.
+// Master vê todas. Para todos (Master inclusive) valem ainda:
+//   exibir_a_partir → só aparece a partir deste dia (fuso de Brasília);
+//   novos_usuarios  → false = quem foi cadastrado depois de exibir_a_partir não vê.
 
 function erro(status, message) {
   const err = new Error(message);
@@ -36,8 +38,22 @@ const VISIVEL_PARA_USUARIO = `(
 // Mesma regra, pra contar o público (u = usuário candidato).
 const VISIVEL_PARA_U = VISIVEL_PARA_USUARIO.replace(/\$1/g, 'u.id');
 
+const HOJE_BR = `(NOW() AT TIME ZONE 'America/Sao_Paulo')::date`;
+// Já chegou o dia de exibir.
+const EM_EXIBICAO = `n.exibir_a_partir <= ${HOJE_BR}`;
+// O usuário $1 (ou u) não é um "novo usuário" barrado por esta novidade.
+const NAO_BARRADO_COMO_NOVO = `(n.novos_usuarios OR NOT EXISTS (
+  SELECT 1 FROM usuarios ux WHERE ux.id = $1 AND ux.criado_em::date > n.exibir_a_partir))`;
+const NAO_BARRADO_COMO_NOVO_U = `(n.novos_usuarios OR u.criado_em::date <= n.exibir_a_partir)`;
+
+// Quem deveria ver a novidade n (usuário u ativo): público + regra de novos usuários. Master sempre
+// conta (vê todas). Usado no "Já viram" e no percentual.
+const NO_PUBLICO_U = `(u.ativo AND ${NAO_BARRADO_COMO_NOVO_U} AND (u.permissao = 'MASTER' OR ${VISIVEL_PARA_U}))`;
+
 const CAMPOS_LISTA = `n.id, n.nome, n.descricao, n.publico, n.criado_em, n.atualizado_em,
+  n.exibir_a_partir::text AS exibir_a_partir, n.novos_usuarios, (n.exibir_a_partir > ${HOJE_BR}) AS agendada,
   n.midia IS NOT NULL AS tem_midia, n.midia_tipo, n.midia_nome, n.midia_tamanho`;
+const ORDEM = 'ORDER BY n.exibir_a_partir DESC, n.criado_em DESC, n.id DESC';
 
 // ─── para quem vê (qualquer usuário logado) ────────────────────────────────
 
@@ -47,19 +63,20 @@ async function minhasNovidades(user) {
     `SELECT ${CAMPOS_LISTA}, (v.usuario_id IS NOT NULL) AS vista
      FROM novidades n
      LEFT JOIN novidades_vistas v ON v.novidade_id = n.id AND v.usuario_id = $1
-     WHERE ${master ? 'TRUE' : VISIVEL_PARA_USUARIO}
-     ORDER BY n.criado_em DESC, n.id DESC`,
+     WHERE ${EM_EXIBICAO} AND ${NAO_BARRADO_COMO_NOVO} AND ${master ? 'TRUE' : VISIVEL_PARA_USUARIO}
+     ${ORDEM}`,
     [user.id]
   );
   return rows;
 }
 
 async function podeVer(user, novidadeId) {
-  if (ehMaster(user)) return true;
-  const { rowCount } = await pool.query(`SELECT 1 FROM novidades n WHERE n.id = $2 AND ${VISIVEL_PARA_USUARIO}`, [
-    user.id,
-    novidadeId,
-  ]);
+  const master = ehMaster(user);
+  const { rowCount } = await pool.query(
+    `SELECT 1 FROM novidades n
+     WHERE n.id = $2 AND ${EM_EXIBICAO} AND ${NAO_BARRADO_COMO_NOVO} AND ${master ? 'TRUE' : VISIVEL_PARA_USUARIO}`,
+    [user.id, novidadeId]
+  );
   return rowCount > 0;
 }
 
@@ -92,8 +109,9 @@ async function listar(user) {
   const permitidas = empresasPermitidas(user);
   const { rows } = await pool.query(
     `SELECT ${CAMPOS_LISTA},
-       (SELECT COUNT(*)::int FROM novidades_vistas v WHERE v.novidade_id = n.id) AS vistas,
-       (SELECT COUNT(*)::int FROM usuarios u WHERE u.ativo AND (u.permissao = 'MASTER' OR ${VISIVEL_PARA_U})) AS publico_total,
+       (SELECT COUNT(*)::int FROM usuarios u JOIN novidades_vistas v ON v.usuario_id = u.id AND v.novidade_id = n.id
+        WHERE ${NO_PUBLICO_U}) AS vistas,
+       (SELECT COUNT(*)::int FROM usuarios u WHERE ${NO_PUBLICO_U}) AS publico_total,
        COALESCE((
          SELECT json_agg(json_build_object(
                   'empresa_id', ne.empresa_id,
@@ -112,7 +130,7 @@ async function listar(user) {
               AND NOT EXISTS (SELECT 1 FROM novidades_empresas ne WHERE ne.novidade_id = n.id AND NOT (ne.empresa_id = ANY($1::int[])))`
          : ''
      }
-     ORDER BY n.criado_em DESC, n.id DESC`,
+     ${ORDEM}`,
     permitidas ? [[...permitidas]] : []
   );
   return rows;
@@ -206,13 +224,15 @@ async function salvar(user, novidadeId, dados, arquivo) {
     let id = novidadeId;
     if (id) {
       await db.query(
-        `UPDATE novidades SET nome = $2, descricao = $3, publico = $4, atualizado_em = NOW() WHERE id = $1`,
-        [id, dados.nome, dados.descricao, dados.publico]
+        `UPDATE novidades SET nome = $2, descricao = $3, publico = $4, exibir_a_partir = $5, novos_usuarios = $6,
+           atualizado_em = NOW() WHERE id = $1`,
+        [id, dados.nome, dados.descricao, dados.publico, dados.exibir_a_partir, dados.novos_usuarios]
       );
     } else {
       const { rows } = await db.query(
-        `INSERT INTO novidades (nome, descricao, publico, criado_por) VALUES ($1, $2, $3, $4) RETURNING id`,
-        [dados.nome, dados.descricao, dados.publico, user.id]
+        `INSERT INTO novidades (nome, descricao, publico, exibir_a_partir, novos_usuarios, criado_por)
+         VALUES ($1, $2, $3, $4, $5, $6) RETURNING id`,
+        [dados.nome, dados.descricao, dados.publico, dados.exibir_a_partir, dados.novos_usuarios, user.id]
       );
       id = rows[0].id;
     }
@@ -231,6 +251,34 @@ async function salvar(user, novidadeId, dados, arquivo) {
   } finally {
     db.release();
   }
+}
+
+// Quem já viu a novidade (mais recente primeiro) e o percentual sobre quem
+// deveria ver (o público atual, com a regra de novos usuários). Quem viu mas
+// saiu do público depois (público alterado, usuário inativado) aparece na
+// lista marcado `no_publico: false` e não entra no percentual.
+async function vistas(user, novidadeId) {
+  await garantirAcessoCadastro(user, novidadeId);
+  const [{ rows: total }, { rows: usuarios }] = await Promise.all([
+    pool.query(`SELECT COUNT(*)::int AS n FROM novidades n JOIN usuarios u ON ${NO_PUBLICO_U} WHERE n.id = $1`, [novidadeId]),
+    pool.query(
+      `SELECT u.id, u.nome, u.permissao, v.vista_em, ${NO_PUBLICO_U} AS no_publico
+       FROM novidades_vistas v
+       JOIN novidades n ON n.id = v.novidade_id
+       JOIN usuarios u ON u.id = v.usuario_id
+       WHERE v.novidade_id = $1
+       ORDER BY v.vista_em DESC`,
+      [novidadeId]
+    ),
+  ]);
+  const publicoTotal = total[0].n;
+  const vistasPublico = usuarios.filter((u) => u.no_publico).length;
+  return {
+    publico_total: publicoTotal,
+    vistas_publico: vistasPublico,
+    percentual: publicoTotal ? Math.round((vistasPublico / publicoTotal) * 1000) / 10 : 0,
+    usuarios,
+  };
 }
 
 async function excluir(user, novidadeId) {
@@ -273,6 +321,7 @@ module.exports = {
   midiaParaUsuario,
   listar,
   obter,
+  vistas,
   salvar,
   excluir,
   midiaCadastro,

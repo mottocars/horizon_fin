@@ -15,6 +15,9 @@ const dadosSchema = z.object({
   nome: z.string().trim().min(1, 'Informe o nome.').max(150, 'Nome com no máximo 150 caracteres.'),
   descricao: z.string().trim().min(1, 'Informe a descrição.').max(5000, 'Descrição com no máximo 5.000 caracteres.'),
   publico: z.enum(['TODOS', 'EMPRESAS']),
+  // A partir de quando aparece (AAAA-MM-DD) e se quem for cadastrado depois também vê.
+  exibir_a_partir: z.string().regex(/^\d{4}-\d{2}-\d{2}$/, 'Informe a data de exibição.'),
+  novos_usuarios: z.boolean().default(true),
   empresas: z
     .array(
       z.object({
@@ -83,10 +86,11 @@ const excluir = rota(async (req, res) => {
   await service.excluir(req.user, idSchema.parse(req.params.id));
   res.status(204).send();
 });
+const vistas = rota(async (req, res) => res.json(await service.vistas(req.user, idSchema.parse(req.params.id))));
 const midiaCadastro = rota(async (req, res) => enviarMidia(res, await service.midiaCadastro(req.user, idSchema.parse(req.params.id))));
 const opcoesEmpresas = rota(async (req, res) => res.json(await service.opcoesEmpresas(req.user)));
 const opcoesUsuarios = rota(async (req, res) =>
   res.json(await service.opcoesUsuarios(req.user, z.coerce.number().int().positive('Empresa inválida.').parse(req.params.empresaId)))
 );
 
-module.exports = { minhas, marcarVista, minhaMidia, listar, obter, criar, atualizar, excluir, midiaCadastro, opcoesEmpresas, opcoesUsuarios };
+module.exports = { minhas, marcarVista, minhaMidia, listar, obter, vistas, criar, atualizar, excluir, midiaCadastro, opcoesEmpresas, opcoesUsuarios };

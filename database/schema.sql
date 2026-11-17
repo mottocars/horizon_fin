@@ -4175,6 +4175,10 @@ CREATE TABLE novidades (
     midia_tipo     VARCHAR(60),
     midia_nome     VARCHAR(255),
     midia_tamanho  INTEGER,
+    -- Só aparece a partir deste dia (fuso de Brasília); é também a data "Lançada em".
+    exibir_a_partir DATE NOT NULL DEFAULT ((NOW() AT TIME ZONE 'America/Sao_Paulo')::date),
+    -- Usuários cadastrados depois de exibir_a_partir também veem (false = só quem já existia).
+    novos_usuarios BOOLEAN NOT NULL DEFAULT TRUE,
     criado_por     INTEGER REFERENCES usuarios(id) ON DELETE SET NULL,
     criado_em      TIMESTAMPTZ NOT NULL DEFAULT NOW(),
     atualizado_em  TIMESTAMPTZ NOT NULL DEFAULT NOW()

@@ -77,7 +77,7 @@ export default function NovidadesPage() {
                   <tr className={CABECALHO}>
                     <th className="py-2.5 pl-5 pr-3 font-medium">Novidade</th>
                     <th className="py-2.5 pr-3 font-medium">Quem vê</th>
-                    <th className="py-2.5 pr-3 text-center font-medium">Lançada em</th>
+                    <th className="py-2.5 pr-3 text-center font-medium">Exibir a partir de</th>
                     <th className="py-2.5 pr-5 text-right font-medium">Já viram</th>
                   </tr>
                 </thead>
@@ -99,9 +99,17 @@ export default function NovidadesPage() {
                           {textoPublico(n)}
                         </span>
                       </td>
-                      <td className="py-3 pr-3 text-center tabular-nums text-gray-600">{formatarDataNovidade(n.criado_em)}</td>
+                      <td className="py-3 pr-3 text-center tabular-nums text-gray-600">
+                        {formatarDataNovidade(n.exibir_a_partir)}
+                        {n.agendada && (
+                          <span className="ml-2 rounded-full bg-amber-50 px-2 py-0.5 text-[11px] font-medium text-amber-700">Agendada</span>
+                        )}
+                      </td>
                       <td className="py-3 pr-5 text-right tabular-nums text-gray-700">
                         {n.vistas} de {n.publico_total}
+                        <span className="ml-1.5 text-gray-400">
+                          · {n.publico_total ? Math.round((n.vistas / n.publico_total) * 100) : 0}%
+                        </span>
                       </td>
                     </tr>
                   ))}

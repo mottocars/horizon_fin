@@ -51,8 +51,12 @@ export function useMidiaNovidade(novidade, cadastro) {
   return url;
 }
 
+// Aceita data pura 'AAAA-MM-DD' (exibir_a_partir — sem passar por Date, que leria meia-noite UTC e
+// mostraria o dia anterior no Brasil) ou data/hora ISO.
 export function formatarDataNovidade(iso) {
   if (!iso) return '';
+  const pura = String(iso).match(/^(\d{4})-(\d{2})-(\d{2})$/);
+  if (pura) return `${pura[3]}/${pura[2]}/${pura[1]}`;
   return new Date(iso).toLocaleDateString('pt-BR', { day: '2-digit', month: '2-digit', year: 'numeric' });
 }
 
@@ -164,7 +168,9 @@ export function JanelaNovidades({ novidades, inicio = 0, onFechar, onVer, cadast
             </div>
           </div>
 
-          {atual.criado_em && <p className="-mb-1 text-xs text-gray-400">Lançada em {formatarDataNovidade(atual.criado_em)}</p>}
+          {(atual.exibir_a_partir || atual.criado_em) && (
+            <p className="-mb-1 text-xs text-gray-400">Lançada em {formatarDataNovidade(atual.exibir_a_partir || atual.criado_em)}</p>
+          )}
           <h2 id="novidade-titulo" className="text-balance text-2xl font-semibold leading-tight tracking-tight text-gray-900">
             {atual.nome}
           </h2>
@@ -363,7 +369,7 @@ export function BotaoNovidades() {
                     <span className="min-w-0">
                       <span className="block text-sm font-semibold leading-snug text-gray-900">{n.nome}</span>
                       <span className="mt-0.5 line-clamp-2 text-xs leading-relaxed text-gray-500">{resumoDescricao(n.descricao)}</span>
-                      <span className="mt-1 block text-[11px] text-gray-400">{formatarDataNovidade(n.criado_em)}</span>
+                      <span className="mt-1 block text-[11px] text-gray-400">{formatarDataNovidade(n.exibir_a_partir || n.criado_em)}</span>
                     </span>
                   </button>
                 </li>
@@ -432,7 +438,7 @@ function ListaNovidades({ novidades, onAbrir, onFechar }) {
                 <span className="min-w-0 flex-1">
                   <span className="flex flex-wrap items-baseline justify-between gap-x-3">
                     <span className="text-sm font-semibold text-gray-900">{n.nome}</span>
-                    <span className="text-xs text-gray-400">{formatarDataNovidade(n.criado_em)}</span>
+                    <span className="text-xs text-gray-400">{formatarDataNovidade(n.exibir_a_partir || n.criado_em)}</span>
                   </span>
                   <span className="mt-1 line-clamp-3 text-[13px] leading-relaxed text-gray-500">{resumoDescricao(n.descricao)}</span>
                 </span>

@@ -1,18 +1,20 @@
 import { useEffect, useMemo, useRef, useState } from 'react';
-import { Eye, ImagePlus, Trash2, X } from 'lucide-react';
+import { CalendarClock, Eye, ImagePlus, Trash2, Users, X } from 'lucide-react';
 import Modal from '../../components/Modal';
 import Button from '../../components/Button';
+import CampoData from '../../components/CampoData';
 import SearchableSelect from '../../components/SearchableSelect';
 import { Interruptor } from '../Operacoes/GestaoAprovacoes/ui';
 import { useAuth } from '../../auth/AuthContext';
 import { useConfirm } from '../../confirm/ConfirmContext';
-import { JanelaNovidades, useMidiaNovidade } from '../../layout/Novidades';
+import { JanelaNovidades, formatarDataNovidade, useMidiaNovidade } from '../../layout/Novidades';
 import {
   excluirNovidade,
   obterNovidade,
   opcoesEmpresasNovidade,
   opcoesUsuariosNovidade,
   salvarNovidade,
+  vistasNovidade,
 } from '../../api/novidades.api';
 
 const TAMANHO_MAXIMO = 10 * 1024 * 1024;
@@ -25,17 +27,42 @@ function formatarTamanho(bytes) {
   return bytes < 1024 * 1024 ? `${Math.round(bytes / 1024)} KB` : `${(bytes / (1024 * 1024)).toFixed(1)} MB`;
 }
 
-const VAZIA = { nome: '', descricao: '', publico: 'EMPRESAS', empresas: [] };
+// Hoje no fuso do navegador (o usuário está no Brasil), como 'AAAA-MM-DD'.
+function hojeIso() {
+  const d = new Date();
+  return `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}-${String(d.getDate()).padStart(2, '0')}`;
+}
+
+function dataHora(iso) {
+  const d = new Date(iso);
+  return `${d.toLocaleDateString('pt-BR', { day: '2-digit', month: '2-digit', year: 'numeric' })} às ${d.toLocaleTimeString('pt-BR', {
+    hour: '2-digit',
+    minute: '2-digit',
+  })}`;
+}
+
+function iniciais(nome) {
+  return (nome || '?')
+    .split(' ')
+    .filter(Boolean)
+    .slice(0, 2)
+    .map((p) => p[0])
+    .join('')
+    .toUpperCase();
+}
+
+const vazia = () => ({ nome: '', descricao: '', publico: 'EMPRESAS', exibir_a_partir: hojeIso(), novos_usuarios: true, empresas: [] });
 
 // Criar/editar uma novidade (Cadastros › Novidades). `novidadeId` nulo = nova.
-// Público: "Todos os usuários" (só Master) ou por empresa — várias empresas,
-// cada uma com todos os usuários dela ou só os escolhidos.
+// Esquerda: todo o formulário (nome, descrição, quando aparece, quem vê).
+// Direita: o GIF e, embaixo, quem já viu e o percentual sobre quem deveria ver.
 export default function NovidadeModal({ open, novidadeId, onFechar, onSalvo }) {
   const { user } = useAuth();
   const master = user?.permissao === 'MASTER';
   const confirm = useConfirm();
-  const [form, setForm] = useState(VAZIA);
+  const [form, setForm] = useState(vazia);
   const [original, setOriginal] = useState(null); // a novidade como está no banco (edição)
+  const [vistas, setVistas] = useState(null);
   const [arquivo, setArquivo] = useState(null);
   const [arquivoUrl, setArquivoUrl] = useState(null);
   const [empresasOpcoes, setEmpresasOpcoes] = useState([]);
@@ -51,9 +78,10 @@ export default function NovidadeModal({ open, novidadeId, onFechar, onSalvo }) {
     setErro('');
     setArquivo(null);
     setPrevia(false);
+    setVistas(null);
     opcoesEmpresasNovidade().then(setEmpresasOpcoes).catch(() => setEmpresasOpcoes([]));
     if (!novidadeId) {
-      setForm(VAZIA);
+      setForm(vazia());
       setOriginal(null);
       return;
     }
@@ -65,11 +93,16 @@ export default function NovidadeModal({ open, novidadeId, onFechar, onSalvo }) {
           nome: n.nome,
           descricao: n.descricao,
           publico: n.publico,
+          exibir_a_partir: n.exibir_a_partir,
+          novos_usuarios: n.novos_usuarios,
           empresas: n.empresas.map((e) => ({ empresa_id: e.empresa_id, todos_usuarios: e.todos_usuarios, usuario_ids: e.usuario_ids || [] })),
         });
       })
       .catch((e) => setErro(e.response?.data?.message || 'Não foi possível abrir a novidade.'))
       .finally(() => setCarregando(false));
+    vistasNovidade(novidadeId)
+      .then(setVistas)
+      .catch(() => setVistas({ publico_total: 0, vistas_publico: 0, percentual: 0, usuarios: [] }));
   }, [open, novidadeId]);
 
   // Prévia local do arquivo escolhido agora.
@@ -99,6 +132,7 @@ export default function NovidadeModal({ open, novidadeId, onFechar, onSalvo }) {
   const midiaNome = arquivo ? `${arquivo.name} · ${formatarTamanho(arquivo.size)}` : original?.midia_nome ? `${original.midia_nome} · ${formatarTamanho(original.midia_tamanho)}` : '';
 
   const nomeEmpresa = useMemo(() => Object.fromEntries(empresasOpcoes.map((e) => [e.id, e.nome])), [empresasOpcoes]);
+  const agendada = form.exibir_a_partir > hojeIso();
 
   function campo(chave, valor) {
     setForm((f) => ({ ...f, [chave]: valor }));
@@ -128,6 +162,7 @@ export default function NovidadeModal({ open, novidadeId, onFechar, onSalvo }) {
   const valido =
     form.nome.trim() &&
     form.descricao.trim() &&
+    form.exibir_a_partir &&
     (arquivo || original?.tem_midia) &&
     (form.publico === 'TODOS' || (form.empresas.length > 0 && form.empresas.every((e) => e.todos_usuarios || e.usuario_ids.length > 0)));
 
@@ -139,6 +174,8 @@ export default function NovidadeModal({ open, novidadeId, onFechar, onSalvo }) {
         nome: form.nome.trim(),
         descricao: form.descricao.trim(),
         publico: form.publico,
+        exibir_a_partir: form.exibir_a_partir,
+        novos_usuarios: form.novos_usuarios,
         empresas: form.publico === 'EMPRESAS' ? form.empresas : [],
       };
       await salvarNovidade(novidadeId, dados, arquivo);
@@ -172,7 +209,7 @@ export default function NovidadeModal({ open, novidadeId, onFechar, onSalvo }) {
     id: original?.id,
     nome: form.nome || 'Nome da novidade',
     descricao: form.descricao || 'A descrição aparece aqui.',
-    criado_em: original?.criado_em || new Date().toISOString(),
+    exibir_a_partir: form.exibir_a_partir,
     tem_midia: Boolean(original?.tem_midia),
     atualizado_em: original?.atualizado_em,
     midia_url: arquivoUrl || undefined,
@@ -180,13 +217,13 @@ export default function NovidadeModal({ open, novidadeId, onFechar, onSalvo }) {
 
   return (
     <>
-      <Modal open={open} onClose={onFechar} title={novidadeId ? 'Editar novidade' : 'Nova novidade'} maxWidthClass="max-w-5xl">
+      <Modal open={open} onClose={onFechar} title={novidadeId ? 'Editar novidade' : 'Nova novidade'} maxWidthClass="max-w-6xl">
         {carregando ? (
           <div className="py-12 text-center text-sm text-gray-400">Carregando...</div>
         ) : (
           <div className="space-y-5">
-            <div className="grid gap-6 md:grid-cols-[minmax(0,1.1fr)_minmax(0,1fr)]">
-              {/* Coluna 1: o conteúdo da janela */}
+            <div className="grid gap-6 lg:grid-cols-[minmax(0,1fr)_minmax(0,1fr)]">
+              {/* ── Esquerda: todo o formulário ── */}
               <div className="space-y-4">
                 <div>
                   <label htmlFor="novidade-nome" className={ROTULO}>
@@ -209,7 +246,7 @@ export default function NovidadeModal({ open, novidadeId, onFechar, onSalvo }) {
                   <textarea
                     id="novidade-descricao"
                     value={form.descricao}
-                    rows={9}
+                    rows={8}
                     maxLength={5000}
                     onChange={(e) => campo('descricao', e.target.value)}
                     placeholder="O que mudou e o ganho para quem usa."
@@ -220,36 +257,39 @@ export default function NovidadeModal({ open, novidadeId, onFechar, onSalvo }) {
                     lista de benefícios com ✓.
                   </p>
                 </div>
-                <div>
-                  <span className={ROTULO}>GIF explicativo</span>
-                  <div className="overflow-hidden rounded-xl border border-dashed border-gray-300 bg-gray-50">
-                    {midiaUrl ? (
-                      <img src={midiaUrl} alt="Prévia do GIF da novidade" className="block h-auto w-full bg-white" />
-                    ) : (
-                      <button
-                        type="button"
-                        onClick={() => inputRef.current?.click()}
-                        className="flex w-full flex-col items-center justify-center gap-2 px-4 py-10 text-sm text-gray-500 transition hover:bg-primary-50 hover:text-primary-700"
-                      >
-                        <ImagePlus size={22} />
-                        Escolher o GIF (até 10 MB)
-                      </button>
-                    )}
-                    {midiaUrl && (
-                      <div className="flex items-center justify-between gap-2 border-t border-gray-200 bg-white px-3 py-2 text-xs text-gray-500">
-                        <span className="truncate">{midiaNome}</span>
-                        <button type="button" onClick={() => inputRef.current?.click()} className="shrink-0 font-semibold text-primary-700 hover:underline">
-                          Trocar GIF
-                        </button>
-                      </div>
+
+                <div className="grid gap-4 rounded-xl border border-gray-200 p-4 sm:grid-cols-[minmax(0,11rem)_minmax(0,1fr)]">
+                  <div>
+                    <label htmlFor="novidade-data" className={ROTULO}>
+                      Exibir a partir de
+                    </label>
+                    <CampoData
+                      id="novidade-data"
+                      value={form.exibir_a_partir}
+                      onChange={(v) => campo('exibir_a_partir', v)}
+                      className={CAMPO}
+                    />
+                    {agendada && (
+                      <p className="mt-1 flex items-center gap-1 text-xs font-medium text-amber-700">
+                        <CalendarClock size={12} />
+                        Agendada
+                      </p>
                     )}
                   </div>
-                  <input ref={inputRef} type="file" accept={TIPOS.join(',')} onChange={escolherArquivo} className="hidden" />
+                  <div className="sm:pt-5">
+                    <Interruptor
+                      ligado={form.novos_usuarios}
+                      onChange={(v) => campo('novos_usuarios', v)}
+                      rotulo="Novos usuários também veem"
+                      descricao={
+                        form.novos_usuarios
+                          ? 'Quem for cadastrado depois desta data recebe a novidade no primeiro acesso.'
+                          : 'Só vê quem já existia nesta data. Usuários cadastrados depois não recebem.'
+                      }
+                    />
+                  </div>
                 </div>
-              </div>
 
-              {/* Coluna 2: quem vai ver */}
-              <div className="space-y-4 rounded-xl bg-gray-50 p-4">
                 <div>
                   <span className={ROTULO}>Quem vai ver</span>
                   <div className="inline-flex overflow-hidden rounded-lg border border-gray-200 bg-white" role="group" aria-label="Quem vai ver">
@@ -283,58 +323,85 @@ export default function NovidadeModal({ open, novidadeId, onFechar, onSalvo }) {
                 </div>
 
                 {form.publico === 'EMPRESAS' && (
-                  <>
-                    <div>
-                      <span className={ROTULO}>Empresas</span>
-                      <SearchableSelect
-                        multiple
-                        value={form.empresas.map((e) => e.empresa_id)}
-                        onChange={escolherEmpresas}
-                        options={empresasOpcoes.map((e) => ({ value: e.id, label: e.nome }))}
-                        placeholder="Escolha as empresas"
-                        emptyMessage="Nenhuma empresa encontrada."
-                      />
-                    </div>
-                    <div className="space-y-2.5">
-                      {form.empresas.map((e) => {
-                        const usuarios = usuariosPorEmpresa[e.empresa_id];
-                        return (
-                          <div key={e.empresa_id} className="space-y-3 rounded-lg border border-gray-200 bg-white p-3">
-                            <div className="flex items-start justify-between gap-2">
-                              <p className="text-sm font-semibold text-gray-900">{nomeEmpresa[e.empresa_id] || `Empresa ${e.empresa_id}`}</p>
-                              <button
-                                type="button"
-                                onClick={() => escolherEmpresas(form.empresas.filter((x) => x.empresa_id !== e.empresa_id).map((x) => x.empresa_id))}
-                                aria-label="Tirar empresa"
-                                className="text-gray-300 hover:text-red-500"
-                              >
-                                <X size={15} />
-                              </button>
-                            </div>
-                            <Interruptor
-                              ligado={e.todos_usuarios}
-                              onChange={(v) => alterarEmpresa(e.empresa_id, { todos_usuarios: v })}
-                              rotulo="Todos os usuários desta empresa"
-                            />
-                            {!e.todos_usuarios && (
-                              <SearchableSelect
-                                multiple
-                                value={e.usuario_ids}
-                                onChange={(ids) => alterarEmpresa(e.empresa_id, { usuario_ids: ids })}
-                                options={(Array.isArray(usuarios) ? usuarios : []).map((u) => ({
-                                  value: u.id,
-                                  label: u.permissao === 'MASTER' ? `${u.nome} (Master)` : u.nome,
-                                }))}
-                                placeholder={usuarios === 'carregando' ? 'Carregando usuários...' : 'Escolha os usuários'}
-                                emptyMessage="Nenhum usuário nesta empresa."
-                              />
-                            )}
+                  <div className="space-y-2.5">
+                    <SearchableSelect
+                      multiple
+                      value={form.empresas.map((e) => e.empresa_id)}
+                      onChange={escolherEmpresas}
+                      options={empresasOpcoes.map((e) => ({ value: e.id, label: e.nome }))}
+                      placeholder="Escolha as empresas"
+                      emptyMessage="Nenhuma empresa encontrada."
+                    />
+                    {form.empresas.map((e) => {
+                      const usuarios = usuariosPorEmpresa[e.empresa_id];
+                      return (
+                        <div key={e.empresa_id} className="space-y-3 rounded-lg border border-gray-200 bg-gray-50 p-3">
+                          <div className="flex items-start justify-between gap-2">
+                            <p className="text-sm font-semibold text-gray-900">{nomeEmpresa[e.empresa_id] || `Empresa ${e.empresa_id}`}</p>
+                            <button
+                              type="button"
+                              onClick={() => escolherEmpresas(form.empresas.filter((x) => x.empresa_id !== e.empresa_id).map((x) => x.empresa_id))}
+                              aria-label="Tirar empresa"
+                              className="text-gray-300 hover:text-red-500"
+                            >
+                              <X size={15} />
+                            </button>
                           </div>
-                        );
-                      })}
-                    </div>
-                  </>
+                          <Interruptor
+                            ligado={e.todos_usuarios}
+                            onChange={(v) => alterarEmpresa(e.empresa_id, { todos_usuarios: v })}
+                            rotulo="Todos os usuários desta empresa"
+                          />
+                          {!e.todos_usuarios && (
+                            <SearchableSelect
+                              multiple
+                              value={e.usuario_ids}
+                              onChange={(ids) => alterarEmpresa(e.empresa_id, { usuario_ids: ids })}
+                              options={(Array.isArray(usuarios) ? usuarios : []).map((u) => ({
+                                value: u.id,
+                                label: u.permissao === 'MASTER' ? `${u.nome} (Master)` : u.nome,
+                              }))}
+                              placeholder={usuarios === 'carregando' ? 'Carregando usuários...' : 'Escolha os usuários'}
+                              emptyMessage="Nenhum usuário nesta empresa."
+                            />
+                          )}
+                        </div>
+                      );
+                    })}
+                  </div>
                 )}
+              </div>
+
+              {/* ── Direita: o GIF e quem já viu ── */}
+              <div className="space-y-4">
+                <div>
+                  <span className={ROTULO}>GIF explicativo</span>
+                  <div className="overflow-hidden rounded-xl border border-dashed border-gray-300 bg-gray-50">
+                    {midiaUrl ? (
+                      <img src={midiaUrl} alt="Prévia do GIF da novidade" className="block h-auto w-full bg-white" />
+                    ) : (
+                      <button
+                        type="button"
+                        onClick={() => inputRef.current?.click()}
+                        className="flex w-full flex-col items-center justify-center gap-2 px-4 py-14 text-sm text-gray-500 transition hover:bg-primary-50 hover:text-primary-700"
+                      >
+                        <ImagePlus size={22} />
+                        Escolher o GIF (até 10 MB)
+                      </button>
+                    )}
+                    {midiaUrl && (
+                      <div className="flex items-center justify-between gap-2 border-t border-gray-200 bg-white px-3 py-2 text-xs text-gray-500">
+                        <span className="truncate">{midiaNome}</span>
+                        <button type="button" onClick={() => inputRef.current?.click()} className="shrink-0 font-semibold text-primary-700 hover:underline">
+                          Trocar GIF
+                        </button>
+                      </div>
+                    )}
+                  </div>
+                  <input ref={inputRef} type="file" accept={TIPOS.join(',')} onChange={escolherArquivo} className="hidden" />
+                </div>
+
+                <QuemJaViu novidadeId={novidadeId} vistas={vistas} agendada={original?.agendada} exibirAPartir={original?.exibir_a_partir} />
               </div>
             </div>
 
@@ -372,5 +439,70 @@ export default function NovidadeModal({ open, novidadeId, onFechar, onSalvo }) {
 
       {previa && <JanelaNovidades novidades={[rascunhoPrevia]} cadastro onFechar={() => setPrevia(false)} />}
     </>
+  );
+}
+
+// Embaixo do GIF: percentual de quem já viu sobre quem deveria ver (o
+// público atual, com a regra de novos usuários) e a lista de quem viu.
+function QuemJaViu({ novidadeId, vistas, agendada, exibirAPartir }) {
+  if (!novidadeId) {
+    return (
+      <div className="rounded-xl border border-gray-200 px-4 py-5 text-center text-xs text-gray-500">
+        Depois de salvar, aqui aparece quem já viu esta novidade.
+      </div>
+    );
+  }
+  if (!vistas) {
+    return <div className="rounded-xl border border-gray-200 px-4 py-5 text-center text-xs text-gray-400">Carregando...</div>;
+  }
+  const pct = Math.min(100, vistas.percentual);
+  return (
+    <div className="rounded-xl border border-gray-200">
+      <div className="space-y-2.5 border-b border-gray-100 px-4 py-3.5">
+        <div className="flex items-end justify-between gap-3">
+          <div>
+            <span className={ROTULO}>Quem já viu</span>
+            <p className="text-sm text-gray-600">
+              <b className="font-semibold text-gray-900">{vistas.vistas_publico}</b> de {vistas.publico_total}{' '}
+              {vistas.publico_total === 1 ? 'usuário que deveria ver' : 'usuários que deveriam ver'}
+            </p>
+          </div>
+          <span className="text-2xl font-semibold tabular-nums text-gray-900">{pct.toLocaleString('pt-BR')}%</span>
+        </div>
+        <div className="h-2 overflow-hidden rounded-full bg-gray-100" role="progressbar" aria-valuenow={pct} aria-valuemin={0} aria-valuemax={100}>
+          <div className="h-full rounded-full bg-primary-600 transition-all" style={{ width: `${pct}%` }} />
+        </div>
+        {agendada && (
+          <p className="flex items-center gap-1 text-xs text-amber-700">
+            <CalendarClock size={12} />
+            Começa a aparecer em {formatarDataNovidade(exibirAPartir)}.
+          </p>
+        )}
+      </div>
+      {vistas.usuarios.length === 0 ? (
+        <p className="flex items-center justify-center gap-1.5 px-4 py-6 text-xs text-gray-400">
+          <Users size={14} />
+          Ninguém viu ainda.
+        </p>
+      ) : (
+        <ul className="max-h-64 divide-y divide-gray-100 overflow-y-auto">
+          {vistas.usuarios.map((u) => (
+            <li key={u.id} className={`flex items-center gap-3 px-4 py-2.5 ${u.no_publico ? '' : 'opacity-60'}`}>
+              <span className="flex h-7 w-7 shrink-0 items-center justify-center rounded-full bg-primary-50 text-[11px] font-semibold text-primary-700">
+                {iniciais(u.nome)}
+              </span>
+              <span className="min-w-0 flex-1">
+                <span className="block truncate text-sm text-gray-800">
+                  {u.nome}
+                  {u.permissao === 'MASTER' && <span className="ml-1.5 text-[11px] text-gray-400">Master</span>}
+                </span>
+                {!u.no_publico && <span className="block text-[11px] text-gray-400">Fora do público atual</span>}
+              </span>
+              <span className="shrink-0 text-xs tabular-nums text-gray-500">{dataHora(u.vista_em)}</span>
+            </li>
+          ))}
+        </ul>
+      )}
+    </div>
   );
 }

@@ -21,6 +21,7 @@ cadastro.get('/:id', controller.obter);
 cadastro.put('/:id', upload.single('arquivo'), controller.atualizar);
 cadastro.delete('/:id', controller.excluir);
 cadastro.get('/:id/midia', controller.midiaCadastro);
+cadastro.get('/:id/vistas', controller.vistas);
 
 const minhas = Router();
 minhas.use(authMiddleware);

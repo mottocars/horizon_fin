@@ -50,3 +50,8 @@ export function opcoesEmpresasNovidade() {
 export function opcoesUsuariosNovidade(empresaId) {
   return http.get(`/novidades/opcoes/empresas/${empresaId}/usuarios`).then((res) => res.data);
 }
+
+// Quem já viu a novidade e o percentual sobre o público (editor do cadastro).
+export function vistasNovidade(id) {
+  return http.get(`/novidades/${id}/vistas`).then((res) => res.data);
+}
