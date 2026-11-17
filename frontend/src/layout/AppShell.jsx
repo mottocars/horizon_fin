@@ -1,5 +1,6 @@
-import { Outlet, useLocation } from 'react-router-dom';
-import { ShieldAlert } from 'lucide-react';
+import { Outlet, useLocation, useNavigate } from 'react-router-dom';
+import { ArrowLeft, ShieldAlert } from 'lucide-react';
+import { INTEGRACOES } from '../config/integracoes';
 import Sidebar from './Sidebar';
 import Topbar from './Topbar';
 import { SidebarProvider } from './SidebarContext';
@@ -105,8 +106,28 @@ export default function AppShell() {
 // Conteúdo da tela: com pesquisa obrigatória pendente, nem é montado (só o menu e o topo atrás da janela).
 function Conteudo({ acessoPermitido }) {
   const { bloqueado } = usePesquisasPendentes();
+  const location = useLocation();
+  const navigate = useNavigate();
   if (bloqueado) return null;
-  return acessoPermitido ? <Outlet /> : <AcessoRestrito />;
+  if (!acessoPermitido) return <AcessoRestrito />;
+  // Telas de primeiro nível das integrações: voltar para o hub Integrações (os formulários
+  // de cada uma já têm o próprio "Voltar para <integração>").
+  const ehTelaDeIntegracao = INTEGRACOES.some((i) => i.to === location.pathname);
+  return (
+    <>
+      {ehTelaDeIntegracao && (
+        <button
+          type="button"
+          onClick={() => navigate('/integracoes')}
+          className="mb-4 flex items-center gap-1.5 text-sm text-gray-500 hover:text-gray-700"
+        >
+          <ArrowLeft size={16} />
+          Voltar para Integrações
+        </button>
+      )}
+      <Outlet />
+    </>
+  );
 }
 
 function Shell() {
