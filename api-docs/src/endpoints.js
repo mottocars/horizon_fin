@@ -73,7 +73,7 @@ export const GRUPOS = [
     titulo: 'Login com Horizon',
     descricao: ['Aplicativos parceiros: o usuário do Horizon entra no sistema do parceiro sem digitar senha (OpenID Connect).'],
     referencias: [
-      ['login-horizon', 'Como funciona'],
+      ['login-horizon', 'Passo a passo'],
       ['login-horizon-exemplo', 'Exemplo'],
     ],
   },
