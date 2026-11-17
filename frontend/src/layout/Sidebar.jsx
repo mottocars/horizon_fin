@@ -248,8 +248,8 @@ export default function Sidebar() {
                 to={item.to}
                 end={item.to === '/'}
                 title={collapsed ? item.label : undefined}
-                // Recolhido, o link só navega — não abre o menu junto.
-                onClick={(e) => collapsed && e.stopPropagation()}
+                // Recolhido, o clique navega e abre o menu junto (como nos grupos); fecha quando o
+                // mouse sai.
                 className={({ isActive }) =>
                   `flex items-center gap-2.5 rounded-[10px] text-[13px] font-medium transition-colors ${
                     collapsed ? 'mx-auto h-8 w-8 justify-center' : 'w-full px-2.5 py-1.5'
