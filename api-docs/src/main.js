@@ -516,10 +516,14 @@ function montar() {
   const linkEndpoint = (ep) =>
     `<a class="nav-link" href="#ep-${ep.id}"><span class="${classeMetodo(ep.metodo)} min-w-11!">${ep.metodo}</span><span class="truncate">${ep.titulo}</span></a>`;
   $('#menu-grupos').innerHTML = GRUPOS.map(
-    (g) => `<p class="mt-4 px-2.5 pb-1 text-[11px] font-semibold uppercase tracking-wide text-gray-400">${g.titulo}</p>
-      ${g.tela ? `<a class="nav-link" href="#grupo-${g.id}">Visão geral</a>` : ''}
-      ${doGrupo(g).map(linkEndpoint).join('')}
-      ${(g.referencias || []).map(([id, titulo]) => `<a class="nav-link" href="#${id}">${titulo}</a>`).join('')}`
+    (g) => `<div class="menu-bloco">
+      <button type="button" class="menu-titulo" aria-expanded="false">${g.titulo}</button>
+      <div class="menu-itens" hidden>
+        ${g.tela ? `<a class="nav-link" href="#grupo-${g.id}">Visão geral</a>` : ''}
+        ${doGrupo(g).map(linkEndpoint).join('')}
+        ${(g.referencias || []).map(([id, titulo]) => `<a class="nav-link" href="#${id}">${titulo}</a>`).join('')}
+      </div>
+    </div>`
   ).join('');
 
   // Grupos com tela própria aparecem na introdução (Autenticação vale para todos).
@@ -687,6 +691,27 @@ function ligarEventos() {
   fundo.addEventListener('click', () => alternarMenu(false));
   $$('a', menu).forEach((a) => a.addEventListener('click', () => window.innerWidth < 1024 && alternarMenu(false)));
 
+  // Blocos do menu abrem e fecham pelo título. O bloco da seção visível abre sozinho e fecha
+  // quando a leitura sai dele — a não ser que tenha sido aberto à mão (aí só fecha no clique).
+  const abrirBloco = (bloco, abrir) => {
+    bloco.querySelector('.menu-titulo').setAttribute('aria-expanded', String(abrir));
+    bloco.querySelector('.menu-itens').hidden = !abrir;
+  };
+  $$('.menu-bloco', menu).forEach((bloco) =>
+    bloco.querySelector('.menu-titulo').addEventListener('click', () => {
+      const abrir = bloco.querySelector('.menu-itens').hidden;
+      bloco.dataset.manual = abrir ? '1' : '';
+      abrirBloco(bloco, abrir);
+    })
+  );
+  const seguirLeitura = (link) => {
+    const atual = link.closest('.menu-bloco');
+    $$('.menu-bloco', menu).forEach((bloco) => {
+      if (bloco === atual) abrirBloco(bloco, true);
+      else if (!bloco.dataset.manual) abrirBloco(bloco, false);
+    });
+  };
+
   // Item do menu da seção visível.
   const links = new Map($$('a.nav-link', menu).map((a) => [a.getAttribute('href').slice(1), a]));
   const observador = new IntersectionObserver(
@@ -695,7 +720,10 @@ function ligarEventos() {
         .filter((x) => x.isIntersecting)
         .forEach((x) => {
           links.forEach((a) => a.classList.remove('ativo'));
-          links.get(x.target.id)?.classList.add('ativo');
+          const link = links.get(x.target.id);
+          if (!link) return;
+          link.classList.add('ativo');
+          seguirLeitura(link);
         });
     },
     { rootMargin: '-72px 0px -65% 0px' }
