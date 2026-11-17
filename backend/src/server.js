@@ -223,6 +223,9 @@ app.use('/api/minhas-novidades', exigirTela([QUALQUER_TELA]), novidadesRoutes.mi
 // topo (todo usuário logado). O formulário público e a troca do client_secret ficam na API Horizon (/api/v1/parceiros).
 app.use('/api/parceiros', exigirTela([T.PARCEIROS]), parceirosRoutes.cadastro);
 app.use('/api/loja-aplicativos', exigirTela([QUALQUER_TELA]), parceirosRoutes.loja);
+// Login com Horizon (OIDC) dos parceiros: a página /oauth/authorize do frontend chama /api/oidc/autorizar; o
+// resto (descoberta, token, userinfo, jwks) fica na API Horizon (/api/v1/.well-known e /api/v1/oauth).
+app.use('/api/oidc', exigirTela([QUALQUER_TELA]), parceirosRoutes.oidc);
 app.use('/api/dre-demonstrativo', exigirTela([T.DRE], LEITURA_DASHBOARD), dreDemonstrativoRoutes);
 // Exportação de auditoria da DRE (Excel com a memória de cálculo e as bases): tela DRE e, só leitura
 // (é um GET), o dashboard Econômico Financeiro › Demonstração do Resultado.

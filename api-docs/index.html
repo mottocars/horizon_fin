@@ -210,6 +210,80 @@
           </div>
         </section>
 
+        <!-- Login com Horizon (OIDC): como funciona -->
+        <section id="login-horizon" data-grupo="login-horizon" class="rounded-card bg-white p-5 shadow-card sm:p-8">
+          <p class="text-[11px] font-semibold uppercase tracking-wide text-primary-600">Login com Horizon</p>
+          <h2 class="mt-1 text-lg font-semibold text-gray-900">Como funciona</h2>
+          <div class="prosa mt-2 max-w-4xl">
+            <p>Para <strong>aplicativos parceiros</strong> aprovados na loja do Horizon. Quando o usuário clica em <strong>Conectar</strong> na Loja de aplicativos, ele chega ao seu sistema já identificado, sem digitar senha do Horizon. É <strong>OpenID Connect</strong> (fluxo Authorization Code): use a biblioteca OIDC da sua linguagem apontando para a descoberta abaixo.</p>
+            <p>O Horizon só diz <strong>quem é o usuário</strong>. O login no seu sistema, o que ele pode fazer lá e o vínculo entre as contas ficam com você.</p>
+          </div>
+
+          <h3 class="mt-6 text-[15px] font-semibold text-gray-900">Configuração</h3>
+          <div class="mt-2 overflow-x-auto">
+            <table class="tabela">
+              <tbody>
+                <tr><td class="whitespace-nowrap font-medium text-gray-900">Issuer</td><td><code class="ic" data-url-base></code></td></tr>
+                <tr><td class="whitespace-nowrap font-medium text-gray-900">Descoberta</td><td><code class="ic"><span data-url-base></span>/.well-known/openid-configuration</code> — traz o <code class="ic">authorization_endpoint</code>, o <code class="ic">token_endpoint</code>, o <code class="ic">userinfo_endpoint</code> e o <code class="ic">jwks_uri</code>.</td></tr>
+                <tr><td class="whitespace-nowrap font-medium text-gray-900">client_id</td><td>O recebido por WhatsApp na aprovação (<code class="ic">hzp_…</code>).</td></tr>
+                <tr><td class="whitespace-nowrap font-medium text-gray-900">client_secret</td><td>O <strong>oficial</strong> (<code class="ic">hzps_…</code>), gerado em <a href="#ep-parceiros-client-secret">Gerar client_secret oficial</a>. O temporário não serve aqui.</td></tr>
+                <tr><td class="whitespace-nowrap font-medium text-gray-900">redirect_uri</td><td>Exatamente a <strong>URL de callback</strong> cadastrada.</td></tr>
+                <tr><td class="whitespace-nowrap font-medium text-gray-900">scope</td><td><code class="ic">openid</code> (obrigatório), <code class="ic">profile</code> (nome) e <code class="ic">email</code>.</td></tr>
+                <tr><td class="whitespace-nowrap font-medium text-gray-900">Autenticação no token</td><td><code class="ic">client_secret_basic</code> ou <code class="ic">client_secret_post</code>.</td></tr>
+                <tr><td class="whitespace-nowrap font-medium text-gray-900">PKCE</td><td><code class="ic">S256</code> — recomendado; se mandar o <code class="ic">code_challenge</code>, o <code class="ic">code_verifier</code> passa a ser exigido.</td></tr>
+                <tr><td class="whitespace-nowrap font-medium text-gray-900">Assinatura</td><td><code class="ic">RS256</code>, chaves no <code class="ic">jwks_uri</code>.</td></tr>
+              </tbody>
+            </table>
+          </div>
+
+          <h3 class="mt-6 text-[15px] font-semibold text-gray-900">Passo a passo</h3>
+          <ol class="prosa mt-2 max-w-4xl list-decimal space-y-1.5 pl-5 text-[14px] text-gray-600">
+            <li>O usuário clica em <strong>Conectar</strong>. O Horizon abre a sua <strong>URL de abertura</strong> numa aba nova com <code class="ic">?iss=<span data-url-base></span></code>. Confira o <code class="ic">iss</code> e comece o login.</li>
+            <li>Mande o navegador ao <code class="ic">authorization_endpoint</code> com <code class="ic">response_type=code</code>, <code class="ic">client_id</code>, <code class="ic">redirect_uri</code>, <code class="ic">scope</code>, <code class="ic">state</code>, <code class="ic">nonce</code> e <code class="ic">code_challenge</code>. Como o usuário já está logado no Horizon, ele volta na hora, sem tela de permissão.</li>
+            <li>A URL de callback recebe <code class="ic">code</code>, <code class="ic">state</code> e <code class="ic">iss</code>. Confira o <code class="ic">state</code> e troque o <code class="ic">code</code> no <code class="ic">token_endpoint</code>: ele vale <strong>60 segundos</strong> e uma vez só.</li>
+            <li>Valide o <code class="ic">id_token</code>: assinatura (pelo <code class="ic">jwks_uri</code>), <code class="ic">iss</code>, <code class="ic">aud</code> igual ao seu client_id, <code class="ic">exp</code> e <code class="ic">nonce</code>. O <code class="ic">sub</code> identifica o usuário.</li>
+            <li><strong>sub já vinculado</strong> a uma conta sua? Entre direto. <strong>Não vinculado</strong>: mostre o seu login; se der certo, grave o vínculo <code class="ic">sub</code> → conta do seu sistema. Da próxima vez ele entra direto.</li>
+          </ol>
+          <p class="prosa mt-3 max-w-4xl"><span class="text-[14px] text-gray-600">O mesmo fluxo serve para um botão <strong>Entrar com Horizon</strong> na sua tela de login: comece no passo 2. Se o usuário não estiver logado no Horizon, ele faz o login lá e volta.</span></p>
+
+          <h3 class="mt-6 text-[15px] font-semibold text-gray-900">Dados do usuário</h3>
+          <div class="mt-2 overflow-x-auto">
+            <table class="tabela">
+              <thead><tr><th>Campo</th><th>scope</th><th>Descrição</th></tr></thead>
+              <tbody>
+                <tr><td><code class="font-mono text-[12.5px] font-medium text-gray-900">sub</code></td><td class="text-gray-400">openid</td><td>Identificador do usuário no seu aplicativo (<code class="ic">hzu_…</code>). <strong>Nunca muda</strong> e é diferente em cada parceiro. Use-o para o vínculo — não o e-mail, que pode mudar.</td></tr>
+                <tr><td><code class="font-mono text-[12.5px] font-medium text-gray-900">name</code></td><td class="text-gray-400">profile</td><td>Nome do usuário no Horizon.</td></tr>
+                <tr><td><code class="font-mono text-[12.5px] font-medium text-gray-900">email</code></td><td class="text-gray-400">email</td><td>E-mail do usuário no Horizon.</td></tr>
+              </tbody>
+            </table>
+          </div>
+          <ul class="prosa mt-3 max-w-4xl">
+            <li>O <code class="ic">id_token</code> vale 5 minutos; o <code class="ic">access_token</code>, 10 minutos e só serve para o <code class="ic">userinfo_endpoint</code>. Não há <code class="ic">refresh_token</code>: depois que o usuário entra, a sessão é do seu sistema.</li>
+            <li>Parceiro suspenso: some da loja, e o Horizon para de emitir e de aceitar tokens dele na hora.</li>
+          </ul>
+
+          <h3 class="mt-6 text-[15px] font-semibold text-gray-900">Erros</h3>
+          <ul class="prosa mt-2 max-w-4xl">
+            <li><code class="ic">client_id</code> desconhecido ou <code class="ic">redirect_uri</code> diferente da cadastrada: o Horizon mostra o erro na tela dele e <strong>não</strong> volta ao seu sistema.</li>
+            <li>Outros problemas no pedido voltam à URL de callback com <code class="ic">error</code> e <code class="ic">error_description</code> (<code class="ic">invalid_scope</code>, <code class="ic">unsupported_response_type</code>, <code class="ic">invalid_request</code>).</li>
+            <li><code class="ic">token_endpoint</code>: <code class="ic">invalid_client</code> (401 — client_id ou client_secret inválido, ou aplicativo suspenso), <code class="ic">invalid_grant</code> (código inválido, expirado ou já usado, <code class="ic">redirect_uri</code> ou <code class="ic">code_verifier</code> diferente) e <code class="ic">unsupported_grant_type</code>. Formato padrão OAuth: <code class="ic">{ "error", "error_description" }</code>.</li>
+          </ul>
+        </section>
+
+        <!-- Login com Horizon (OIDC): exemplo -->
+        <section id="login-horizon-exemplo" data-grupo="login-horizon" class="rounded-card bg-white p-5 shadow-card sm:p-8">
+          <p class="text-[11px] font-semibold uppercase tracking-wide text-primary-600">Login com Horizon</p>
+          <h2 class="mt-1 text-lg font-semibold text-gray-900">Exemplo</h2>
+          <div class="mt-4 grid grid-cols-1 gap-5 xl:grid-cols-[minmax(0,1fr)_minmax(0,1.2fr)]">
+            <div class="prosa">
+              <p>Duas rotas no seu sistema: a <strong>URL de abertura</strong> (começa o login) e a <strong>URL de callback</strong> (recebe o code e decide entre entrar direto ou pedir o seu login).</p>
+              <p>No JavaScript, com a biblioteca <code class="ic">openid-client</code>. Em outras linguagens, qualquer cliente OpenID Connect certificado faz o mesmo a partir da descoberta.</p>
+              <p>O cURL mostra só a troca do code, que acontece no seu servidor.</p>
+            </div>
+            <div data-exemplo="login-horizon" class="min-w-0"></div>
+          </div>
+        </section>
+
         <!-- Convenções -->
         <section id="convencoes" class="rounded-card bg-white p-5 shadow-card sm:p-8">
           <h2 class="text-lg font-semibold text-gray-900">Convenções</h2>

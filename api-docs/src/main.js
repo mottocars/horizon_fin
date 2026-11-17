@@ -587,6 +587,93 @@ function montar() {
       python: `# Guarde o início da rodada ANTES de consultar\ninicio_rodada = datetime.now(timezone.utc).isoformat()\nparams = {\n    "certificadoIds": "1,2,7",\n    "dataEmissaoInicio": "2026-01-01",\n    "dataEmissaoFim": "2026-12-31",\n    "pageSize": 200,\n}\nif ultima_rodada:\n    params["atualizadoDesde"] = ultima_rodada\n\npage = 1\nwhile True:\n    params["page"] = page\n    r = requests.get("${URL_PUBLICA}/notas-fiscais", params=params,\n                     headers={"Authorization": f"Bearer {token}"})\n    dados = r.json()\n    processar(dados["items"])\n    if page >= dados["pagination"]["totalPages"]:\n        break\n    page += 1\nultima_rodada = inicio_rodada`,
     },
   });
+  // Login com Horizon (OIDC): URL de abertura + URL de callback no sistema do parceiro.
+  $('[data-exemplo="login-horizon"]').innerHTML = painelCodigo({
+    abas: {
+      curl: `# Troca do code (no seu servidor), com o client_secret oficial
+curl -X POST ${URL_PUBLICA}/oauth/token \\
+  -u "$HORIZON_CLIENT_ID:$HORIZON_CLIENT_SECRET" \\
+  -d grant_type=authorization_code \\
+  -d code="$CODE" \\
+  -d redirect_uri="https://seuapp.com.br/horizon/callback" \\
+  -d code_verifier="$CODE_VERIFIER"
+
+# Resposta: { "access_token", "token_type": "Bearer", "expires_in": 600,
+#             "id_token", "scope" }  →  valide o id_token e leia o sub`,
+      js: `import * as client from 'openid-client';
+
+const config = await client.discovery(
+  new URL('${URL_PUBLICA}'),
+  process.env.HORIZON_CLIENT_ID,
+  process.env.HORIZON_CLIENT_SECRET, // client_secret oficial (hzps_…)
+);
+const CALLBACK = 'https://seuapp.com.br/horizon/callback'; // a cadastrada
+
+// URL de abertura: o Horizon chama com ?iss=…
+app.get('/horizon/abrir', async (req, res) => {
+  if (req.query.iss !== config.serverMetadata().issuer) return res.sendStatus(400);
+  const oidc = (req.session.oidc = {
+    verifier: client.randomPKCECodeVerifier(),
+    state: client.randomState(),
+    nonce: client.randomNonce(),
+  });
+  const destino = client.buildAuthorizationUrl(config, {
+    redirect_uri: CALLBACK,
+    scope: 'openid profile email',
+    code_challenge: await client.calculatePKCECodeChallenge(oidc.verifier),
+    code_challenge_method: 'S256',
+    state: oidc.state,
+    nonce: oidc.nonce,
+  });
+  res.redirect(destino.href);
+});
+
+// URL de callback
+app.get('/horizon/callback', async (req, res) => {
+  const { verifier, state, nonce } = req.session.oidc;
+  const tokens = await client.authorizationCodeGrant(
+    config,
+    new URL(req.originalUrl, CALLBACK),
+    { pkceCodeVerifier: verifier, expectedState: state, expectedNonce: nonce },
+  );
+  const { sub, name, email } = tokens.claims(); // id_token já validado
+
+  const usuario = await buscarVinculo(sub);      // sua tabela: sub → usuário
+  if (usuario) return entrar(req, res, usuario); // já vinculado: entra direto
+  req.session.vincularSub = sub;                 // 1ª vez: seu login, depois
+  res.redirect('/login?vincular=horizon');       // grave o vínculo
+});`,
+      python: `import os
+from authlib.integrations.flask_client import OAuth
+from flask import abort, redirect, request, session
+
+oauth = OAuth(app)
+oauth.register(
+    "horizon",
+    server_metadata_url="${URL_PUBLICA}/.well-known/openid-configuration",
+    client_id=os.environ["HORIZON_CLIENT_ID"],
+    client_secret=os.environ["HORIZON_CLIENT_SECRET"],  # oficial (hzps_…)
+    client_kwargs={"scope": "openid profile email", "code_challenge_method": "S256"},
+)
+
+@app.get("/horizon/abrir")  # URL de abertura: o Horizon chama com ?iss=…
+def abrir():
+    if request.args.get("iss") != "${URL_PUBLICA}":
+        abort(400)
+    return oauth.horizon.authorize_redirect("https://seuapp.com.br/horizon/callback")
+
+@app.get("/horizon/callback")  # URL de callback
+def callback():
+    token = oauth.horizon.authorize_access_token()  # confere state, nonce e id_token
+    sub = token["userinfo"]["sub"]
+
+    usuario = buscar_vinculo(sub)      # sua tabela: sub → usuário
+    if usuario:
+        return entrar(usuario)         # já vinculado: entra direto
+    session["vincular_sub"] = sub      # 1ª vez: seu login, depois grave o vínculo
+    return redirect("/login?vincular=horizon")`,
+    },
+  });
   $('[data-exemplo="erro"]').innerHTML = painelCodigo({
     titulo: 'HTTP 400',
     html: realcarJson({ error: { codigo: 'PARAMETRO_INVALIDO', mensagem: 'O período de emissão pode ter no máximo 366 dias.' } }),

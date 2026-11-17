@@ -70,6 +70,7 @@ import FormularioEditorPage from './pages/Formularios/FormularioEditorPage';
 import NovidadesPage from './pages/Novidades/NovidadesPage';
 import ParceirosPage from './pages/Parceiros/ParceirosPage';
 import LojaAplicativosPage from './pages/LojaAplicativos/LojaAplicativosPage';
+import OAuthAutorizarPage from './pages/OAuth/OAuthAutorizarPage';
 import FormularioPublicoPage from './pages/Formularios/FormularioPublicoPage';
 
 export default function App() {
@@ -81,6 +82,8 @@ export default function App() {
           <Route path="/login" element={<Login />} />
           {/* Link público de formulário (Cadastros › Formulários, modalidade Pública) — sem login. */}
           <Route path="/f/:token" element={<FormularioPublicoPage />} />
+          {/* Login com Horizon (OIDC) dos parceiros: fora do layout; a página cuida do login. */}
+          <Route path="/oauth/authorize" element={<OAuthAutorizarPage />} />
 
           <Route
             path="/primeiro-acesso"

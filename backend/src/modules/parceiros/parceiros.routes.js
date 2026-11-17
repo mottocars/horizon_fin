@@ -2,10 +2,12 @@ const { Router } = require('express');
 const { z } = require('zod');
 const authMiddleware = require('../../middlewares/auth.middleware');
 const service = require('./parceiros.service');
+const oidc = require('./oidc');
 
 // Dois routers, montados em server.js:
 //   /api/parceiros         → Cadastros › Parceiros (exige a tela);
-//   /api/loja-aplicativos  → qualquer usuário logado: a Loja de aplicativos do topo (aprovados).
+//   /api/loja-aplicativos  → qualquer usuário logado: a Loja de aplicativos do topo (aprovados);
+//   /api/oidc              → qualquer usuário logado: a página /oauth/authorize (Login com Horizon).
 // As rotas públicas (formulário "Quero ser um Parceiro" e troca do client_secret) ficam na API
 // Horizon — ver parceiros.publico.js e api-horizon/v1/v1.routes.js.
 
@@ -86,4 +88,12 @@ loja.get(
   })
 );
 
-module.exports = { cadastro, loja };
+// Página /oauth/authorize do frontend (Login com Horizon): o usuário logado autoriza e volta ao
+// callback do parceiro com o code — ver oidc.js.
+const oidcSistema = Router();
+oidcSistema.post(
+  '/autorizar',
+  rota((req) => oidc.autorizar(req.user.id, req.body || {}))
+);
+
+module.exports = { cadastro, loja, oidc: oidcSistema };

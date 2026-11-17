@@ -1,4 +1,4 @@
-const { Router } = require('express');
+const { Router, urlencoded } = require('express');
 const cors = require('cors');
 const { rateLimit, ipKeyGenerator } = require('express-rate-limit');
 const pool = require('../../../config/db');
@@ -7,6 +7,7 @@ const { responderErro } = require('./erros');
 const { emitirToken, exigirToken, exigirGrupo, exigirEscopo } = require('./autenticacao');
 const controller = require('./v1.controller');
 const parceiros = require('../../parceiros/parceiros.publico');
+const oidc = require('../../parceiros/oidc');
 
 // API pública Horizon, versão 1 — montada em /api/v1 (em produção: https://api.horizonhub.com.br/v1).
 // Documentação: api-docs/. Fora do CORS e dos limites do sistema (ver server.js): tem os próprios.
@@ -119,6 +120,21 @@ router.post('/parceiros/solicitacoes', limiteSolicitacao, parceiros.solicitar);
 router.post('/parceiros/solicitacoes/reenviar-codigo', limiteCodigo, parceiros.reenviarCodigo);
 router.post('/parceiros/solicitacoes/confirmar', limiteCodigo, parceiros.confirmar);
 router.post('/parceiros/client-secret', limiteClientSecret, parceiros.trocarSecret);
+
+// Login com Horizon (OIDC) dos parceiros — ver modules/parceiros/oidc.js. Issuer = esta base (/v1);
+// o authorization_endpoint é a página /oauth/authorize do frontend. Token e userinfo seguem o
+// padrão OAuth (corpo application/x-www-form-urlencoded, erros { error, error_description }).
+const limiteOidcToken = limite({
+  limit: 60,
+  chave: (req) => `oidc-token:${ipKeyGenerator(req.ip)}`,
+  mensagem: 'Muitas trocas de código em pouco tempo. Aguarde um minuto.',
+});
+const formulario = urlencoded({ extended: false, limit: '10kb' });
+router.get('/.well-known/openid-configuration', oidc.descoberta);
+router.get('/oauth/jwks', oidc.jwks);
+router.post('/oauth/token', limiteOidcToken, formulario, oidc.token);
+router.get('/oauth/userinfo', oidc.userinfo);
+router.post('/oauth/userinfo', formulario, oidc.userinfo);
 
 // Grupo Notas fiscais (Espião NF-e / NFS-e). Grupo novo: mesmo padrão — token, limite e
 // exigirGrupo('<id>') (cadastrado em ../grupos.js e documentado em api-docs/src/endpoints.js).

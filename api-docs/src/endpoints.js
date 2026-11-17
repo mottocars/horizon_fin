@@ -65,6 +65,18 @@ export const GRUPOS = [
       ['consulta-incremental', 'Consulta incremental'],
     ],
   },
+  // Login com Horizon (OIDC) dos aplicativos parceiros: endereços padrão do OpenID Connect, sem
+  // endpoints próprios aqui — só as seções fixas de index.html (data-grupo="login-horizon").
+  // Backend: backend/src/modules/parceiros/oidc.js.
+  {
+    id: 'login-horizon',
+    titulo: 'Login com Horizon',
+    descricao: ['Aplicativos parceiros: o usuário do Horizon entra no sistema do parceiro sem digitar senha (OpenID Connect).'],
+    referencias: [
+      ['login-horizon', 'Como funciona'],
+      ['login-horizon-exemplo', 'Exemplo'],
+    ],
+  },
 ];
 
 export const ENDPOINTS = [

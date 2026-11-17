@@ -7,8 +7,9 @@ import { LogoParceiro } from '../../layout/LojaAplicativos';
 
 const ABAS = [{ id: 'aplicativos', label: 'Aplicativos', icon: Store }];
 
-// Janela do aplicativo: logomarca, nome, descrição, dados do desenvolvedor e o botão Conectar
-// (ainda sem ação — o fluxo de autorização com o parceiro vem na próxima etapa).
+// Janela do aplicativo: logomarca, nome, descrição, dados do desenvolvedor e o botão Conectar, que
+// abre o sistema do parceiro numa aba nova já com o Login com Horizon (OIDC): na primeira vez o
+// parceiro pede o login dele e vincula a conta; depois, entra direto.
 function JanelaAplicativo({ app, onFechar }) {
   const dados = app
     ? [
@@ -50,7 +51,7 @@ function JanelaAplicativo({ app, onFechar }) {
           <div className="flex justify-end">
             <button
               type="button"
-              onClick={() => {}}
+              onClick={() => window.open(app.url_conectar, '_blank', 'noopener,noreferrer')}
               className="inline-flex items-center gap-2 rounded-lg bg-primary-600 px-4 py-2 text-sm font-medium text-white transition hover:bg-primary-700"
             >
               <Plug size={16} />

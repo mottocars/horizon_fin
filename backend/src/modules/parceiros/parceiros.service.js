@@ -12,6 +12,7 @@ const {
   registrarEvento,
   mensagemCredenciais,
 } = require('./comum');
+const { urlConectar } = require('./oidc');
 
 // Cadastros › Parceiros (aprovar, recusar, suspender, reativar, novo client_secret temporário,
 // verificações automáticas) e a Loja de aplicativos do topo (parceiros aprovados).
@@ -221,8 +222,13 @@ async function loja() {
             responsavel_nome, responsavel_email, responsavel_telefone
      FROM parceiros WHERE status = 'APROVADO' ORDER BY app_nome`
   );
-  // Dados do desenvolvedor (responsável técnico) aparecem na janela do aplicativo na loja.
-  return rows.map(({ responsavel_telefone: tel, ...r }) => ({ ...r, responsavel_telefone: telefoneFormatado(tel) }));
+  // Dados do desenvolvedor (responsável técnico) aparecem na janela do aplicativo na loja. O botão
+  // Conectar abre url_conectar (URL de abertura + iss — início do Login com Horizon, ver oidc.js).
+  return rows.map(({ responsavel_telefone: tel, url_abertura: abertura, ...r }) => ({
+    ...r,
+    responsavel_telefone: telefoneFormatado(tel),
+    url_conectar: urlConectar(abertura),
+  }));
 }
 
 module.exports = {

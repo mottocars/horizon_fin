@@ -3,6 +3,7 @@ import { useNavigate } from 'react-router-dom';
 import { Eye, EyeOff } from 'lucide-react';
 import { useAuth } from '../../auth/AuthContext';
 import Button from '../../components/Button';
+import { CHAVE_VOLTAR_LOGIN } from '../OAuth/OAuthAutorizarPage';
 import './login.css';
 
 // À direita, em telas largas, a vitrine com os títulos do site (carregada à parte, não pesa no login).
@@ -55,7 +56,15 @@ export default function Login() {
     setLoading(true);
     try {
       await login(username.trim(), senha);
-      navigate('/', { replace: true });
+      // Veio do Login com Horizon de um parceiro (/oauth/authorize)? Volta para lá.
+      let voltar = null;
+      try {
+        voltar = sessionStorage.getItem(CHAVE_VOLTAR_LOGIN);
+        sessionStorage.removeItem(CHAVE_VOLTAR_LOGIN);
+      } catch {
+        /* sem sessionStorage */
+      }
+      navigate(voltar?.startsWith('/oauth/authorize?') ? voltar : '/', { replace: true });
     } catch (err) {
       if (err.response) {
         setError(err.response.data?.message || 'Usuário ou senha inválidos.');

@@ -42,6 +42,11 @@ export function novoSecretParceiro(id, revogarOficial) {
   return http.post(`/parceiros/${id}/novo-secret`, { revogar_oficial: revogarOficial }).then((res) => res.data);
 }
 
+// ─── Login com Horizon (página /oauth/authorize) ──
+export function autorizarOidc(parametros) {
+  return http.post('/oidc/autorizar', parametros).then((res) => res.data);
+}
+
 // ─── loja (todo usuário logado) ──
 export function listarLojaAplicativos() {
   return http.get('/loja-aplicativos').then((res) => res.data);
