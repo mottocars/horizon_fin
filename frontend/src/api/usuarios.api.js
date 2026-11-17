@@ -23,6 +23,15 @@ export function setUsuarioStatus(id, ativo) {
   return http.patch(`/usuarios/${id}/status`, { ativo }).then((res) => res.data);
 }
 
+// Bloqueios temporários (senha errada, excesso de chamadas, código do primeiro acesso).
+export function getBloqueiosUsuario(id) {
+  return http.get(`/usuarios/${id}/bloqueios`).then((res) => res.data.bloqueios);
+}
+
+export function desbloquearUsuario(id) {
+  return http.post(`/usuarios/${id}/desbloquear`).then((res) => res.data.bloqueios);
+}
+
 // Mapa de Acessos: todos os usuários visíveis com as telas de cada um.
 export function getMapaAcessos() {
   return http.get('/usuarios/acessos').then((res) => res.data);

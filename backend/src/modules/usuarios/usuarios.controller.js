@@ -1,6 +1,8 @@
 const { z } = require('zod');
 const service = require('./usuarios.service');
 const { limparCacheUsuario } = require('../../middlewares/auth.middleware');
+const { bloqueiosDoUsuario, liberarUsuario } = require('../../middlewares/rateLimit.middleware');
+const primeiroAcessoCodigo = require('../users/primeiroAcessoCodigo.service');
 const TELAS = require('../../config/telas');
 
 const CODIGOS_TELAS = new Set(Object.values(TELAS));
@@ -349,6 +351,41 @@ async function setStatus(req, res, next) {
   }
 }
 
+// Bloqueios temporários (senha errada 10 vezes = 15 min; excesso de
+// chamadas/downloads = 1 min; código do primeiro acesso errado 5 vezes).
+// "Inativo" não entra aqui — tem o botão Reativar próprio.
+async function listarBloqueios(usuario) {
+  const lista = await bloqueiosDoUsuario({ id: usuario.id, username: usuario.username });
+  const codigo = await primeiroAcessoCodigo.bloqueioCodigo(usuario.id);
+  if (codigo) lista.push(codigo);
+  return lista;
+}
+
+async function getBloqueios(req, res, next) {
+  try {
+    await garantirAlvoNaoEhMasterOculto(req, req.params.id);
+    const usuario = await service.getById(req.params.id);
+    if (!usuario) return res.status(404).json({ message: 'Usuário não encontrado.' });
+    res.json({ bloqueios: await listarBloqueios(usuario) });
+  } catch (err) {
+    next(err);
+  }
+}
+
+async function desbloquear(req, res, next) {
+  try {
+    await garantirAlvoNaoEhMasterOculto(req, req.params.id);
+    const usuario = await service.getById(req.params.id);
+    if (!usuario) return res.status(404).json({ message: 'Usuário não encontrado.' });
+    await liberarUsuario({ id: usuario.id, username: usuario.username });
+    await primeiroAcessoCodigo.liberarCodigo(usuario.id);
+    console.log(`[usuarios] Usuário ${usuario.id} (${usuario.username}) desbloqueado pelo usuário ${req.user.id}.`);
+    res.json({ bloqueios: await listarBloqueios(usuario) });
+  } catch (err) {
+    next(err);
+  }
+}
+
 module.exports = {
   list,
   listAcessos,
@@ -357,5 +394,7 @@ module.exports = {
   update,
   atualizarAcessos,
   setStatus,
+  getBloqueios,
+  desbloquear,
   paramUsuarioAcessivel,
 };

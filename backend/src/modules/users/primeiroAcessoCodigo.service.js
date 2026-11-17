@@ -153,4 +153,37 @@ async function descartarCodigo(usuarioId) {
   await pool.query('DELETE FROM usuarios_codigos_verificacao WHERE usuario_id = $1', [usuarioId]);
 }
 
-module.exports = { enviarCodigo, validarCodigo, exigirCelularValidado, descartarCodigo };
+// Cadastros › Usuários › Desbloquear: o código do primeiro acesso travado por
+// erros (MAX_TENTATIVAS). Liberar apaga o código pendente — o usuário pede
+// outro na hora, sem esperar o intervalo de reenvio. Código já validado não
+// conta (o usuário está no meio do "Concluir").
+async function bloqueioCodigo(usuarioId) {
+  const { rows } = await pool.query(
+    `SELECT 1 FROM usuarios_codigos_verificacao
+     WHERE usuario_id = $1 AND validado_em IS NULL AND tentativas >= $2`,
+    [usuarioId, MAX_TENTATIVAS]
+  );
+  if (!rows[0]) return null;
+  return {
+    tipo: 'CODIGO_PRIMEIRO_ACESSO',
+    descricao: 'Errou o código do primeiro acesso muitas vezes',
+    ip: null,
+    ate: null,
+  };
+}
+
+async function liberarCodigo(usuarioId) {
+  await pool.query(
+    'DELETE FROM usuarios_codigos_verificacao WHERE usuario_id = $1 AND validado_em IS NULL',
+    [usuarioId]
+  );
+}
+
+module.exports = {
+  enviarCodigo,
+  validarCodigo,
+  exigirCelularValidado,
+  descartarCodigo,
+  bloqueioCodigo,
+  liberarCodigo,
+};

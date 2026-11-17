@@ -14,5 +14,7 @@ router.get('/:id', controller.getById);
 router.post('/', controller.create);
 router.put('/:id', controller.update);
 router.patch('/:id/status', controller.setStatus);
+router.get('/:id/bloqueios', controller.getBloqueios);
+router.post('/:id/desbloquear', controller.desbloquear);
 
 module.exports = router;

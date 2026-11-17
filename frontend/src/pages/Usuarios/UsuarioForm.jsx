@@ -20,12 +20,21 @@ import {
   ChevronsLeft,
   Building2,
   Search,
+  Lock,
+  LockOpen,
 } from 'lucide-react';
 import Card from '../../components/Card';
 import Button from '../../components/Button';
 import { listEmpresas } from '../../api/empresas.api';
 import { nomeExibicaoEmpresa } from '../../utils/empresa';
-import { getUsuario, createUsuario, updateUsuario, setUsuarioStatus } from '../../api/usuarios.api';
+import {
+  getUsuario,
+  createUsuario,
+  updateUsuario,
+  setUsuarioStatus,
+  getBloqueiosUsuario,
+  desbloquearUsuario,
+} from '../../api/usuarios.api';
 import { useConfirm } from '../../confirm/ConfirmContext';
 import { TELAS_SISTEMA } from '../../config/telasSistema';
 import { formatDdd, formatCelular } from './format';
@@ -113,6 +122,23 @@ export default function UsuarioForm() {
   const [avatarError, setAvatarError] = useState('');
   const [processandoFoto, setProcessandoFoto] = useState(false);
   const fileInputRef = useRef(null);
+  // Bloqueios temporários do usuário (senha errada etc.) — ver handleDesbloquear.
+  const [bloqueios, setBloqueios] = useState([]);
+  const [desbloqueando, setDesbloqueando] = useState(false);
+
+  useEffect(() => {
+    if (!isEdit) {
+      setBloqueios([]);
+      return undefined;
+    }
+    let active = true;
+    getBloqueiosUsuario(id)
+      .then((lista) => active && setBloqueios(lista))
+      .catch(() => active && setBloqueios([]));
+    return () => {
+      active = false;
+    };
+  }, [id, isEdit]);
 
   useEffect(() => {
     listEmpresas({ ativo: true, limit: 100 })
@@ -364,6 +390,24 @@ export default function UsuarioForm() {
     }
   }
 
+  async function handleDesbloquear() {
+    const confirmado = await confirm({
+      title: 'Desbloquear usuário',
+      description: `Liberar agora o acesso de "${usuario.nome}"? As tentativas de senha voltam a zero.`,
+      confirmLabel: 'Desbloquear',
+    });
+    if (!confirmado) return;
+
+    setDesbloqueando(true);
+    try {
+      setBloqueios(await desbloquearUsuario(id));
+    } catch (err) {
+      setError(err.response?.data?.message || 'Não foi possível desbloquear o usuário.');
+    } finally {
+      setDesbloqueando(false);
+    }
+  }
+
   const empresasSelecionadas = useMemo(
     () => empresas.filter((e) => form.empresa_ids.includes(String(e.id))),
     [empresas, form.empresa_ids]
@@ -471,6 +515,32 @@ export default function UsuarioForm() {
             </div>
           )}
         </div>
+
+        {isEdit && usuario && bloqueios.length > 0 && (
+          <div className="mb-4 flex flex-col gap-3 rounded-lg border border-amber-200 bg-amber-50 px-3 py-2.5 sm:flex-row sm:items-center sm:justify-between">
+            <div className="flex items-start gap-2 text-sm text-amber-800">
+              <Lock size={16} className="mt-0.5 shrink-0" />
+              <div>
+                <p className="font-medium">Acesso bloqueado temporariamente</p>
+                <ul className="mt-0.5 space-y-0.5 text-xs">
+                  {bloqueios.map((b, i) => (
+                    <li key={`${b.tipo}-${b.ip || i}`}>
+                      {b.descricao}
+                      {b.ip ? ` (IP ${b.ip})` : ''}
+                      {b.ate
+                        ? ` — até ${new Date(b.ate).toLocaleTimeString('pt-BR', { hour: '2-digit', minute: '2-digit' })}`
+                        : ' — precisa pedir um novo código'}
+                    </li>
+                  ))}
+                </ul>
+              </div>
+            </div>
+            <Button type="button" variant="secondary" loading={desbloqueando} onClick={handleDesbloquear}>
+              <LockOpen size={16} />
+              Desbloquear
+            </Button>
+          </div>
+        )}
 
         {error && <div className="mb-4 rounded-lg bg-red-50 px-3 py-2 text-sm text-red-600">{error}</div>}
 
