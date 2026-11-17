@@ -9,6 +9,7 @@ const pool = require('../../config/db');
 //   EMPRESAS → por empresa: todos os usuários dela ou só os escolhidos.
 // Master vê todas. Para todos (Master inclusive) valem ainda:
 //   exibir_a_partir → só aparece a partir deste dia (fuso de Brasília);
+//   exibir_ate      → e só até este dia (NULL = sem fim); depois fica Encerrada no cadastro;
 //   novos_usuarios  → false = quem foi cadastrado depois de exibir_a_partir não vê.
 
 function erro(status, message) {
@@ -39,8 +40,8 @@ const VISIVEL_PARA_USUARIO = `(
 const VISIVEL_PARA_U = VISIVEL_PARA_USUARIO.replace(/\$1/g, 'u.id');
 
 const HOJE_BR = `(NOW() AT TIME ZONE 'America/Sao_Paulo')::date`;
-// Já chegou o dia de exibir.
-const EM_EXIBICAO = `n.exibir_a_partir <= ${HOJE_BR}`;
+// Hoje está dentro do período de exibição.
+const EM_EXIBICAO = `(n.exibir_a_partir <= ${HOJE_BR} AND (n.exibir_ate IS NULL OR n.exibir_ate >= ${HOJE_BR}))`;
 // O usuário $1 (ou u) não é um "novo usuário" barrado por esta novidade.
 const NAO_BARRADO_COMO_NOVO = `(n.novos_usuarios OR NOT EXISTS (
   SELECT 1 FROM usuarios ux WHERE ux.id = $1 AND ux.criado_em::date > n.exibir_a_partir))`;
@@ -51,7 +52,8 @@ const NAO_BARRADO_COMO_NOVO_U = `(n.novos_usuarios OR u.criado_em::date <= n.exi
 const NO_PUBLICO_U = `(u.ativo AND ${NAO_BARRADO_COMO_NOVO_U} AND (u.permissao = 'MASTER' OR ${VISIVEL_PARA_U}))`;
 
 const CAMPOS_LISTA = `n.id, n.nome, n.modulo, n.descricao, n.publico, n.criado_em, n.atualizado_em,
-  n.exibir_a_partir::text AS exibir_a_partir, n.novos_usuarios, (n.exibir_a_partir > ${HOJE_BR}) AS agendada,
+  n.exibir_a_partir::text AS exibir_a_partir, n.exibir_ate::text AS exibir_ate, n.novos_usuarios,
+  (n.exibir_a_partir > ${HOJE_BR}) AS agendada, (n.exibir_ate < ${HOJE_BR}) IS TRUE AS encerrada,
   n.midia IS NOT NULL AS tem_midia, n.midia_tipo, n.midia_nome, n.midia_tamanho`;
 const ORDEM = 'ORDER BY n.exibir_a_partir DESC, n.criado_em DESC, n.id DESC';
 
@@ -225,14 +227,14 @@ async function salvar(user, novidadeId, dados, arquivo) {
     if (id) {
       await db.query(
         `UPDATE novidades SET nome = $2, descricao = $3, publico = $4, exibir_a_partir = $5, novos_usuarios = $6,
-           modulo = $7, atualizado_em = NOW() WHERE id = $1`,
-        [id, dados.nome, dados.descricao, dados.publico, dados.exibir_a_partir, dados.novos_usuarios, dados.modulo || null]
+           modulo = $7, exibir_ate = $8, atualizado_em = NOW() WHERE id = $1`,
+        [id, dados.nome, dados.descricao, dados.publico, dados.exibir_a_partir, dados.novos_usuarios, dados.modulo || null, dados.exibir_ate || null]
       );
     } else {
       const { rows } = await db.query(
-        `INSERT INTO novidades (nome, descricao, publico, exibir_a_partir, novos_usuarios, modulo, criado_por)
-         VALUES ($1, $2, $3, $4, $5, $6, $7) RETURNING id`,
-        [dados.nome, dados.descricao, dados.publico, dados.exibir_a_partir, dados.novos_usuarios, dados.modulo || null, user.id]
+        `INSERT INTO novidades (nome, descricao, publico, exibir_a_partir, novos_usuarios, modulo, exibir_ate, criado_por)
+         VALUES ($1, $2, $3, $4, $5, $6, $7, $8) RETURNING id`,
+        [dados.nome, dados.descricao, dados.publico, dados.exibir_a_partir, dados.novos_usuarios, dados.modulo || null, dados.exibir_ate || null, user.id]
       );
       id = rows[0].id;
     }

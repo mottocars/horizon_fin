@@ -4179,6 +4179,8 @@ CREATE TABLE novidades (
     midia_tamanho  INTEGER,
     -- Só aparece a partir deste dia (fuso de Brasília); é também a data "Lançada em".
     exibir_a_partir DATE NOT NULL DEFAULT ((NOW() AT TIME ZONE 'America/Sao_Paulo')::date),
+    -- Último dia em que aparece (NULL = sem fim); depois fica no cadastro como Encerrada.
+    exibir_ate     DATE CHECK (exibir_ate IS NULL OR exibir_ate >= exibir_a_partir),
     -- Usuários cadastrados depois de exibir_a_partir também veem (false = só quem já existia).
     novos_usuarios BOOLEAN NOT NULL DEFAULT TRUE,
     criado_por     INTEGER REFERENCES usuarios(id) ON DELETE SET NULL,

@@ -77,7 +77,7 @@ export default function NovidadesPage() {
                   <tr className={CABECALHO}>
                     <th className="py-2.5 pl-5 pr-3 font-medium">Novidade</th>
                     <th className="py-2.5 pr-3 font-medium">Quem vê</th>
-                    <th className="py-2.5 pr-3 text-center font-medium">Exibir a partir de</th>
+                    <th className="py-2.5 pr-3 text-center font-medium">Período</th>
                     <th className="py-2.5 pr-5 text-right font-medium">Já viram</th>
                   </tr>
                 </thead>
@@ -101,9 +101,12 @@ export default function NovidadesPage() {
                         </span>
                       </td>
                       <td className="py-3 pr-3 text-center tabular-nums text-gray-600">
-                        {formatarDataNovidade(n.exibir_a_partir)}
+                        {formatarDataNovidade(n.exibir_a_partir)} → {n.exibir_ate ? formatarDataNovidade(n.exibir_ate) : 'sem fim'}
                         {n.agendada && (
                           <span className="ml-2 rounded-full bg-amber-50 px-2 py-0.5 text-[11px] font-medium text-amber-700">Agendada</span>
+                        )}
+                        {n.encerrada && (
+                          <span className="ml-2 rounded-full bg-gray-100 px-2 py-0.5 text-[11px] font-medium text-gray-500">Encerrada</span>
                         )}
                       </td>
                       <td className="py-3 pr-5 text-right tabular-nums text-gray-700">

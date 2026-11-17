@@ -19,6 +19,12 @@ const dadosSchema = z.object({
   modulo: z.string().trim().max(100, 'Módulo com no máximo 100 caracteres.').nullish(),
   // A partir de quando aparece (AAAA-MM-DD) e se quem for cadastrado depois também vê.
   exibir_a_partir: z.string().regex(/^\d{4}-\d{2}-\d{2}$/, 'Informe a data de exibição.'),
+  // Último dia em que aparece; vazio = sem fim.
+  exibir_ate: z
+    .string()
+    .regex(/^\d{4}-\d{2}-\d{2}$/, 'Data final inválida.')
+    .nullish()
+    .or(z.literal('').transform(() => null)),
   novos_usuarios: z.boolean().default(true),
   empresas: z
     .array(
@@ -40,7 +46,11 @@ function lerDados(req) {
   } catch {
     throw badRequest('Dados inválidos.');
   }
-  return dadosSchema.parse(bruto);
+  const dados = dadosSchema.parse(bruto);
+  if (dados.exibir_ate && dados.exibir_ate < dados.exibir_a_partir) {
+    throw badRequest('"Exibir até" não pode ser antes de "Exibir a partir de".');
+  }
+  return dados;
 }
 
 function lerArquivo(req) {

@@ -1,5 +1,5 @@
 import { useEffect, useMemo, useRef, useState } from 'react';
-import { CalendarClock, Eye, ImagePlus, Trash2, Users, X } from 'lucide-react';
+import { CalendarCheck, CalendarClock, Eye, ImagePlus, Trash2, Users, X } from 'lucide-react';
 import Modal from '../../components/Modal';
 import Button from '../../components/Button';
 import CampoData from '../../components/CampoData';
@@ -58,7 +58,7 @@ const MODULOS = [...new Set(TELAS_SISTEMA.flatMap((g) => g.telas.map((t) => t.la
   .sort((a, b) => a.localeCompare(b, 'pt-BR'))
   .map((label) => ({ value: label, label }));
 
-const vazia = () => ({ nome: '', modulo: '', descricao: '', publico: 'EMPRESAS', exibir_a_partir: hojeIso(), novos_usuarios: true, empresas: [] });
+const vazia = () => ({ nome: '', modulo: '', descricao: '', publico: 'EMPRESAS', exibir_a_partir: hojeIso(), exibir_ate: '', novos_usuarios: true, empresas: [] });
 
 // Criar/editar uma novidade (Cadastros › Novidades). `novidadeId` nulo = nova.
 // Esquerda: todo o formulário (nome, descrição, quando aparece, quem vê).
@@ -102,6 +102,7 @@ export default function NovidadeModal({ open, novidadeId, onFechar, onSalvo }) {
           descricao: n.descricao,
           publico: n.publico,
           exibir_a_partir: n.exibir_a_partir,
+          exibir_ate: n.exibir_ate || '',
           novos_usuarios: n.novos_usuarios,
           empresas: n.empresas.map((e) => ({ empresa_id: e.empresa_id, todos_usuarios: e.todos_usuarios, usuario_ids: e.usuario_ids || [] })),
         });
@@ -141,6 +142,8 @@ export default function NovidadeModal({ open, novidadeId, onFechar, onSalvo }) {
 
   const nomeEmpresa = useMemo(() => Object.fromEntries(empresasOpcoes.map((e) => [e.id, e.nome])), [empresasOpcoes]);
   const agendada = form.exibir_a_partir > hojeIso();
+  const encerrada = Boolean(form.exibir_ate) && form.exibir_ate < hojeIso();
+  const periodoInvalido = Boolean(form.exibir_ate) && form.exibir_ate < form.exibir_a_partir;
 
   function campo(chave, valor) {
     setForm((f) => ({ ...f, [chave]: valor }));
@@ -171,6 +174,7 @@ export default function NovidadeModal({ open, novidadeId, onFechar, onSalvo }) {
     form.nome.trim() &&
     form.descricao.trim() &&
     form.exibir_a_partir &&
+    !periodoInvalido &&
     (arquivo || original?.tem_midia) &&
     (form.publico === 'TODOS' || (form.empresas.length > 0 && form.empresas.every((e) => e.todos_usuarios || e.usuario_ids.length > 0)));
 
@@ -184,6 +188,7 @@ export default function NovidadeModal({ open, novidadeId, onFechar, onSalvo }) {
         descricao: form.descricao.trim(),
         publico: form.publico,
         exibir_a_partir: form.exibir_a_partir,
+        exibir_ate: form.exibir_ate || null,
         novos_usuarios: form.novos_usuarios,
         empresas: form.publico === 'EMPRESAS' ? form.empresas : [],
       };
@@ -279,25 +284,71 @@ export default function NovidadeModal({ open, novidadeId, onFechar, onSalvo }) {
                   </p>
                 </div>
 
-                <div className="grid gap-4 rounded-xl border border-gray-200 p-4 sm:grid-cols-[minmax(0,11rem)_minmax(0,1fr)]">
-                  <div>
-                    <label htmlFor="novidade-data" className={ROTULO}>
-                      Exibir a partir de
-                    </label>
-                    <CampoData
-                      id="novidade-data"
-                      value={form.exibir_a_partir}
-                      onChange={(v) => campo('exibir_a_partir', v)}
-                      className={CAMPO}
-                    />
-                    {agendada && (
-                      <p className="mt-1 flex items-center gap-1 text-xs font-medium text-amber-700">
-                        <CalendarClock size={12} />
-                        Agendada
-                      </p>
-                    )}
+                {/* Período de veiculação: de "Exibir a partir de" até "Exibir até" (vazio = sem fim). */}
+                <div className="space-y-4 rounded-xl border border-gray-200 p-4">
+                  <div className="grid gap-4 sm:grid-cols-2">
+                    <div>
+                      <label htmlFor="novidade-data" className={ROTULO}>
+                        Exibir a partir de
+                      </label>
+                      <CampoData
+                        id="novidade-data"
+                        value={form.exibir_a_partir}
+                        onChange={(v) => campo('exibir_a_partir', v)}
+                        className={CAMPO}
+                      />
+                    </div>
+                    <div>
+                      <div className="flex items-center justify-between">
+                        <label htmlFor="novidade-data-fim" className={ROTULO}>
+                          Exibir até
+                        </label>
+                        {form.exibir_ate && (
+                          <button
+                            type="button"
+                            onClick={() => campo('exibir_ate', '')}
+                            className="mb-1 text-[11px] font-semibold text-primary-700 hover:underline"
+                          >
+                            Sem data final
+                          </button>
+                        )}
+                      </div>
+                      <CampoData
+                        key={form.exibir_ate ? 'com-fim' : 'sem-fim'}
+                        id="novidade-data-fim"
+                        value={form.exibir_ate}
+                        min={form.exibir_a_partir}
+                        onChange={(v) => campo('exibir_ate', v)}
+                        className={CAMPO}
+                      />
+                    </div>
                   </div>
-                  <div className="sm:pt-5">
+                  <p
+                    className={`flex items-center gap-1.5 text-xs ${
+                      periodoInvalido ? 'text-red-600' : encerrada ? 'text-gray-500' : agendada ? 'text-amber-700' : 'text-emerald-700'
+                    }`}
+                  >
+                    {periodoInvalido ? (
+                      '"Exibir até" não pode ser antes de "Exibir a partir de".'
+                    ) : encerrada ? (
+                      <>
+                        <CalendarCheck size={13} />
+                        Encerrada: parou de aparecer depois de {formatarDataNovidade(form.exibir_ate)}.
+                      </>
+                    ) : agendada ? (
+                      <>
+                        <CalendarClock size={13} />
+                        Agendada: começa a aparecer em {formatarDataNovidade(form.exibir_a_partir)}
+                        {form.exibir_ate ? ` e para depois de ${formatarDataNovidade(form.exibir_ate)}.` : ', sem data para acabar.'}
+                      </>
+                    ) : (
+                      <>
+                        <CalendarCheck size={13} />
+                        No ar{form.exibir_ate ? ` até ${formatarDataNovidade(form.exibir_ate)}.` : ', sem data para acabar.'}
+                      </>
+                    )}
+                  </p>
+                  <div>
                     <Interruptor
                       ligado={form.novos_usuarios}
                       onChange={(v) => campo('novos_usuarios', v)}
@@ -422,7 +473,14 @@ export default function NovidadeModal({ open, novidadeId, onFechar, onSalvo }) {
                   <input ref={inputRef} type="file" accept={TIPOS.join(',')} onChange={escolherArquivo} className="hidden" />
                 </div>
 
-                <QuemJaViu novidadeId={novidadeId} vistas={vistas} agendada={original?.agendada} exibirAPartir={original?.exibir_a_partir} />
+                <QuemJaViu
+                  novidadeId={novidadeId}
+                  vistas={vistas}
+                  agendada={original?.agendada}
+                  encerrada={original?.encerrada}
+                  exibirAPartir={original?.exibir_a_partir}
+                  exibirAte={original?.exibir_ate}
+                />
               </div>
             </div>
 
@@ -465,7 +523,7 @@ export default function NovidadeModal({ open, novidadeId, onFechar, onSalvo }) {
 
 // Embaixo do GIF: percentual de quem já viu sobre quem deveria ver (o
 // público atual, com a regra de novos usuários) e a lista de quem viu.
-function QuemJaViu({ novidadeId, vistas, agendada, exibirAPartir }) {
+function QuemJaViu({ novidadeId, vistas, agendada, encerrada, exibirAPartir, exibirAte }) {
   if (!novidadeId) {
     return (
       <div className="rounded-xl border border-gray-200 px-4 py-5 text-center text-xs text-gray-500">
@@ -497,6 +555,12 @@ function QuemJaViu({ novidadeId, vistas, agendada, exibirAPartir }) {
           <p className="flex items-center gap-1 text-xs text-amber-700">
             <CalendarClock size={12} />
             Começa a aparecer em {formatarDataNovidade(exibirAPartir)}.
+          </p>
+        )}
+        {encerrada && (
+          <p className="flex items-center gap-1 text-xs text-gray-500">
+            <CalendarCheck size={12} />
+            Encerrada em {formatarDataNovidade(exibirAte)}: não aparece mais para ninguém.
           </p>
         )}
       </div>
