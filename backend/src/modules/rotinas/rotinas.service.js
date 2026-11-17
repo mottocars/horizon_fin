@@ -292,21 +292,40 @@ async function listRotinas(empresaId, usuarioId, { dataInicio, dataFim, costCent
   const visiveis = todos ? itens : itens.filter((item) => String(item.responsavel_id) === String(usuarioId));
   if (visiveis.length === 0) return { modo, responsaveis: [] };
 
-  // Ordem pedida pro usuário: dentro de um mesmo centro de custo, etapa mais
-  // crítica primeiro (etapa.dias mais alto = mais dias de atraso desde o
-  // vencimento = mais perto de virar Mau pagador/execução — mesma leitura
-  // de "D+N" já usada em compararEtapas no frontend); empatado na etapa,
-  // pior cluster primeiro (CLUSTERS_VALIDOS já é a escala de "novo" ao mais
-  // grave, "inad" — índice mais alto = pior); empatado também no cluster, o
-  // maior valor em aberto primeiro. Sem cliente como critério de
-  // ordenação — a tela não tem cabeçalho por cliente (é só uma coluna),
-  // então itens de clientes diferentes podem ficar intercalados livremente.
-  visiveis.sort(
-    (a, b) =>
-      b.etapa_dias - a.etapa_dias ||
-      CLUSTERS_VALIDOS.indexOf(b.cluster) - CLUSTERS_VALIDOS.indexOf(a.cluster) ||
-      b.valor - a.valor
-  );
+  // Ordem pedida pelo usuário (17/11) dentro de um mesmo centro de custo:
+  // (1) cliente com mais títulos primeiro; (2) maior D+N (etapa.dias mais
+  // alto = mais dias desde o vencimento); (3) maior valor em aberto. As
+  // parcelas de um mesmo cliente ficam juntas: a contagem é por cliente
+  // dentro de Responsável → Centro de Custo (o mesmo agrupamento da tela),
+  // e clientes empatados em quantidade de títulos são desempatados pela
+  // sua parcela "líder" (maior D+N, depois maior valor) e, por fim, pelo
+  // client_id — só pra não intercalar parcelas de clientes diferentes.
+  // Dentro do cliente, maior D+N e depois maior valor.
+  const chaveCliente = (item) => `${item.responsavel_id ?? 'sem'}|${item.cost_center_id}|${item.client_id}`;
+  const porCliente = new Map();
+  for (const item of visiveis) {
+    const dias = Number(item.etapa_dias) || 0;
+    const valor = Number(item.valor) || 0;
+    const g = porCliente.get(chaveCliente(item)) || { titulos: 0, dias: -Infinity, valor: -Infinity };
+    g.titulos += 1;
+    if (dias > g.dias || (dias === g.dias && valor > g.valor)) {
+      g.dias = dias;
+      g.valor = valor;
+    }
+    porCliente.set(chaveCliente(item), g);
+  }
+  visiveis.sort((a, b) => {
+    const ga = porCliente.get(chaveCliente(a));
+    const gb = porCliente.get(chaveCliente(b));
+    return (
+      gb.titulos - ga.titulos ||
+      gb.dias - ga.dias ||
+      gb.valor - ga.valor ||
+      String(a.client_id).localeCompare(String(b.client_id)) ||
+      (Number(b.etapa_dias) || 0) - (Number(a.etapa_dias) || 0) ||
+      (Number(b.valor) || 0) - (Number(a.valor) || 0)
+    );
+  });
 
   // Status de cada canal nesta data: existe algum registro (manual — a
   // ligação marcada aqui mesmo — ou automático, quando existir um disparo
@@ -343,8 +362,8 @@ async function listRotinas(empresaId, usuarioId, { dataInicio, dataFim, costCent
   const nomePorUsuario = new Map(usuarios.map((u) => [String(u.id), u.nome]));
 
   // Agrupa em Responsável → Centro de Custo — a lista de itens de cada
-  // centro já sai na ordem definida acima (etapa mais crítica, depois maior
-  // valor), com o cliente de cada linha embutido no próprio item (a tela
+  // centro já sai na ordem definida acima (cliente com mais títulos, depois
+  // maior D+N, depois maior valor), com o cliente de cada linha embutido no próprio item (a tela
   // nunca teve um cabeçalho por cliente, só uma coluna).
   const responsaveis = new Map();
   for (const item of visiveis) {

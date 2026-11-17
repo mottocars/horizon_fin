@@ -119,7 +119,7 @@ const guia = {
       '## 5. Rotina do dia (aba Rotinas)',
       '- Cada etapa ativa + na Rotina gera **uma tarefa no dia exato vencimento + N** para cada parcela do universo (1 linha por parcela × centro × etapa). Uma parcela só aparece no dia em que ENTRA na etapa, não todos os dias.',
       `- A régua usada é a do cluster que a parcela tem **hoje** (D > ${L ?? 'N'} hoje → Inadimplência; senão o cluster atual do cliente) — ao olhar dias passados ou futuros, a Rotina usa a classificação de hoje.`,
-      '- Ordem: etapa mais avançada primeiro, depois pior cluster, depois maior valor; centros com mais títulos primeiro; agrupado Responsável → Centro de Custo → parcela.',
+      '- Ordem: agrupado Responsável (alfabética, "A distribuir"/"Sem responsável" no fim) → Centro de Custo (mais títulos primeiro) → parcela; dentro do centro, cliente com mais títulos primeiro (parcelas do mesmo cliente juntas), depois maior D+N (etapa mais avançada), depois maior valor em aberto.',
       '- **Status de cada canal**: "feito" se existe um registro daquele canal, naquela parcela, **na data exata da tarefa** (feito por qualquer pessoa, em qualquer tela). "Erro" se a última tentativa de envio naquela data falhou (telefone sem WhatsApp, conexão fora etc.). Senão, pendente. Desmarcar apaga TODOS os registros daquele canal, parcela e data (e os anexos).',
       '- Responsável de cada tarefa: no modo **Responsável por etapa**, o da etapa; na **Distribuição automática**, quem recebeu o cliente na distribuição gravada daquele dia; dia ainda não distribuído (futuro, ou hoje antes da rotina rodar) = previsão pelo dono da carteira (se ele continua atendente e não está pausado); sem dono = "A distribuir".',
       '',

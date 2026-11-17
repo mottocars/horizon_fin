@@ -506,8 +506,8 @@ export default function RotinasTab({
   // item sobrando, e recalcula o badge do centro e os totais do responsável
   // pelo que sobrou (senão os números ficariam maiores que as linhas
   // visíveis). A ordem dos itens que sobram é a mesma que veio do backend
-  // (filter preserva ordem) — já vem certa (etapa mais crítica, depois maior
-  // valor).
+  // (filter preserva ordem) — já vem certa (cliente com mais títulos, depois
+  // maior D+N, depois maior valor; ver rotinas.service.js::listRotinas).
   const responsaveisFiltrados = useMemo(() => {
     return responsaveis
       .map((resp) => {
