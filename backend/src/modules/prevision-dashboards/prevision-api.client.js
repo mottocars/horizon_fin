@@ -1,19 +1,13 @@
-// API REST nova do Prevision (nov/2026): token JWT da empresa (Bearer), sem validade. A lista de obras
-// já usa ela; o código da conta e o dashboard ainda estão na API antiga (GraphQL / dashboards-api) e
-// migram nos próximos passos.
+// API REST do Prevision (desde nov/2026 — a GraphQL e o dashboards-api antigos recusam o token de
+// empresa): token JWT da empresa (Bearer), sem validade; o código da conta vem no próprio token (`oid`).
+// - construction: a lista de obras;
+// - construction-schedule: o avanço DIÁRIO de cada obra (curva S) e o IDP, por visão (primária/secundária).
 const REST_URL = 'https://api.prevision.com.br/construction/api/v1';
-const GRAPHQL_URL = 'https://api.prevision.com.br/graphql';
-const DASHBOARDS_URL =
-  'https://southamerica-east1-prevision-306716.cloudfunctions.net/dashboards-api';
+const SCHEDULE_URL = 'https://api.prevision.com.br/construction-schedule/api/v1';
 
-const ME_QUERY = `
-  query Me {
-    me {
-      id
-      name
-    }
-  }
-`;
+// Sempre o dashboard ECONÔMICO em percentual — o que o sistema sempre usou (bate com as curvas gravadas
+// antes da troca). O `physical` é outra curva e devolve a mesma coisa nas duas visões.
+const DASHBOARD_QUERY = 'view_type=percentage&dashboard_type=economic';
 
 // Sem tempo limite, uma chamada que o Prevision não responde prenderia a rotina do Monitor pra sempre.
 const TIMEOUT_MS = 60_000;
@@ -44,33 +38,6 @@ async function chamar(url, opcoes) {
   }
 }
 
-async function fetchCompanyId(apiKey) {
-  const response = await chamar(GRAPHQL_URL, {
-    method: 'POST',
-    headers: {
-      'Content-Type': 'application/json',
-      Accept: 'application/json',
-      UserAuthorization: `token ${apiKey}`,
-    },
-    body: JSON.stringify({ query: ME_QUERY }),
-  });
-
-  if (!response.ok) {
-    throw apiError(`A API do Prevision retornou erro (status ${response.status}) ao identificar a conta.`);
-  }
-
-  const body = await response.json();
-  if (body.errors) {
-    throw apiError(`A API do Prevision retornou erro: ${body.errors[0]?.message || 'erro desconhecido'}.`);
-  }
-
-  const companyId = body?.data?.me?.id;
-  if (!companyId) {
-    throw apiError('Não foi possível identificar a conta (company_id) no Prevision.');
-  }
-  return companyId;
-}
-
 // Token da API REST: JWT (três partes base64url separadas por ponto, começa com "eyJ"). Aceita o
 // "Bearer " colado junto (vem assim do curl da documentação) e espaços nas pontas.
 function normalizarToken(valor) {
@@ -94,65 +61,78 @@ function tokenRest(apiKey) {
   return token;
 }
 
-// Erro da API REST: 401/403 = token recusado (status 502 aqui — um 401 nosso derrubaria a sessão no front).
-function erroRest(response, acao) {
-  if (response.status === 401 || response.status === 403) {
-    return apiError(`O Prevision recusou o token desta empresa (status ${response.status}). Confira o token em Integrações › Prevision.`);
+// Código da conta (company_id) no Prevision: a claim `oid` do token (só leitura do JWT, sem validar a
+// assinatura — quem valida é o Prevision a cada chamada).
+function companyIdDoToken(apiKey) {
+  try {
+    const payload = JSON.parse(Buffer.from(tokenRest(apiKey).split('.')[1], 'base64url').toString('utf8'));
+    return payload?.oid != null ? String(payload.oid) : null;
+  } catch {
+    return null;
   }
-  return apiError(`A API do Prevision retornou erro (status ${response.status}) ao ${acao}.`);
 }
+
+// Erro da API REST (status 502 aqui — um 401 nosso derrubaria a sessão no front). 401/403 = recusado: o
+// token, ou — nas rotas de uma obra — o projeto, que o Prevision também recusa com 401 quando o código não
+// existe ou é de outra conta.
+function erroRest(response, acao, recusado) {
+  if (response.status === 401 || response.status === 403) {
+    return apiError(
+      recusado
+        ? `${recusado} (status ${response.status})`
+        : `O Prevision recusou o token desta empresa (status ${response.status}). Confira o token em Integrações › Prevision.`
+    );
+  }
+  return apiError(`A API do Prevision retornou erro (status ${response.status}) ${acao}.`);
+}
+
+async function getJson(url, apiKey, acao, recusado) {
+  const response = await chamar(url, {
+    headers: { Accept: 'application/json', Authorization: `Bearer ${tokenRest(apiKey)}` },
+  });
+  if (!response.ok) throw erroRest(response, acao, recusado);
+  return response.json().catch(() => null);
+}
+
+const recusouProjeto = (projectId) =>
+  `O Prevision recusou o projeto ${projectId}: confira o Código Prevision do centro de custo e o token em Integrações › Prevision`;
 
 // GET /projects → { projects: [{ id, name }] }, todas as obras da conta de uma vez (sem paginação).
 async function fetchProjects(apiKey) {
-  const response = await chamar(`${REST_URL}/projects`, {
-    headers: { Accept: 'application/json', Authorization: `Bearer ${tokenRest(apiKey)}` },
-  });
-  if (!response.ok) throw erroRest(response, 'listar as obras');
-
-  const body = await response.json().catch(() => null);
+  const body = await getJson(`${REST_URL}/projects`, apiKey, 'ao listar as obras');
   if (!Array.isArray(body?.projects)) {
     throw apiError('A API do Prevision devolveu a lista de obras num formato inesperado.');
   }
   return body.projects.map((p) => ({ id: String(p.id), name: p.name }));
 }
 
-async function fetchDashboard({ apiKey, companyId, projectId, primary }) {
-  const body = {
-    dashboard: 'default',
-    resource: 'detailed',
-    view_type: 'percentage',
-    dashboard_type: 'economic',
-    primary,
-    filtered_floor_ids: [],
-    filtered_service_ids: [],
-    filtered_total_cost: true,
-    month_closure_type: 'last_day',
-    month_closure_fixed_day: null,
-    company_id: companyId,
-    project_id: String(projectId),
-  };
-
-  const response = await chamar(DASHBOARDS_URL, {
-    method: 'PATCH',
-    headers: {
-      'Content-Type': 'application/json',
-      Accept: 'application/json',
-      Authorization: `Token token=${apiKey}`,
-      'User-Authorization': apiKey,
-      'X-Api-Key': apiKey,
-      Locale: 'pt-BR',
-    },
-    body: JSON.stringify(body),
-  });
-
-  if (!response.ok) {
-    throw apiError(
-      `A API do Prevision retornou erro (status ${response.status}) para o projeto ${projectId}.`
-    );
+// GET /project/:id/dashboards/daily-progress → { lastMeasuredIn, progress: [{ date, base, expected,
+// goal, realized }] }: o avanço de CADA DIA (não acumulado), do início ao fim da obra. Obra sem curva no
+// Prevision (ainda sem planejamento) vem com `progress: []` → null.
+async function fetchDailyProgress({ apiKey, projectId, primary }) {
+  const url = `${SCHEDULE_URL}/project/${encodeURIComponent(projectId)}/dashboards/daily-progress?${DASHBOARD_QUERY}&primary=${primary}`;
+  const body = await getJson(url, apiKey, `para o projeto ${projectId}`, recusouProjeto(projectId));
+  if (!body || !Array.isArray(body.progress)) {
+    throw apiError(`A API do Prevision devolveu o avanço do projeto ${projectId} num formato inesperado.`);
   }
-
-  const data = await response.json();
-  return data && Object.keys(data).length > 0 ? data : null;
+  return body.progress.length ? body : null;
 }
 
-module.exports = { fetchCompanyId, fetchProjects, fetchDashboard, normalizarToken, ehTokenRest };
+// GET /project/:id/dashboards/general-info → { idp }. A rota ignora o `primary`: devolve sempre o IDP da
+// visão PRIMÁRIA (conferido em 18/11/2026) — por isso só a primária é buscada.
+async function fetchIdp({ apiKey, projectId }) {
+  const url = `${SCHEDULE_URL}/project/${encodeURIComponent(projectId)}/dashboards/general-info?${DASHBOARD_QUERY}&primary=true`;
+  const body = await getJson(url, apiKey, `ao buscar o IDP do projeto ${projectId}`, recusouProjeto(projectId));
+  const idp = Number(body?.idp);
+  return body?.idp != null && Number.isFinite(idp) ? idp : null;
+}
+
+module.exports = {
+  fetchProjects,
+  fetchDailyProgress,
+  fetchIdp,
+  companyIdDoToken,
+  tokenRest,
+  normalizarToken,
+  ehTokenRest,
+};

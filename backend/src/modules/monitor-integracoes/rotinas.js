@@ -325,7 +325,7 @@ const CATALOGO = [
     alimenta: ['DFC Construtoras', 'Cronogramas de Obras'],
     nome: 'Avanço e curva S das obras (Prevision)',
     descricao:
-      'Busca no Prevision o dashboard de cada obra com Código Prevision (aba Centros Custos) e atualiza o avanço previsto mês a mês (DFC Construtoras › Avanços, base da Projeção CEF) e a curva S de base que define os atrasos (Cronogramas Obras). A mesma sincronização de Integrações › Prevision.',
+      'Busca no Prevision o avanço diário de cada obra com Código Prevision (aba Centros Custos), na visão primária e na secundária, e grava a curva S acumulada dia a dia (Avanço das Obras e a curva S de base que define os atrasos em Cronogramas Obras) e o avanço de cada mês (DFC Construtoras › Avanços, base da Projeção CEF). A mesma sincronização de Integrações › Prevision.',
     integracao: 'prevision',
     async disponibilidade(empresaId) {
       const { rowCount } = await pool.query('SELECT 1 FROM integracoes_prevision WHERE empresa_id = $1 AND ativo = TRUE', [empresaId]);
@@ -351,7 +351,13 @@ const CATALOGO = [
         e.expose = true;
         throw e;
       }
-      return `${n(obras)} obra(s) atualizada(s) no Prevision (visão primária e secundária): avanço previsto e curva S de base.`;
+      // Obra sem curva em nenhuma das visões (ainda sem planejamento no Prevision): nada a atualizar, não é erro.
+      const porObra = new Map();
+      r.detalhes.forEach((d) => porObra.set(d.sienge_id, [...(porObra.get(d.sienge_id) || []), d]));
+      const semCurva = [...porObra.values()].filter((ds) => ds.every((d) => d.sem_curva)).map((ds) => ds[0].nome);
+      return `${n(obras - semCurva.length)} obra(s) atualizada(s) no Prevision (visão primária e secundária): avanço previsto e curva S de base.${
+        semCurva.length ? ` Sem curva no Prevision, nada a atualizar: ${semCurva.join(', ')}.` : ''
+      }`;
     },
   },
 ];

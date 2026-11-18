@@ -77,11 +77,16 @@ export default function PrevisionList() {
       const linhas = result.detalhes
         .filter((d) => !d.sucesso)
         .map((d) => `• ${d.nome} (${d.primary ? 'primário' : 'alternativo'}): ${d.erro}`);
+      // Obra ainda sem planejamento no Prevision: não é erro, só não tem o que atualizar.
+      const semCurva = [...new Set(result.detalhes.filter((d) => d.sem_curva).map((d) => d.nome))];
       await alert({
         title: `Sincronização concluída: ${result.sucesso} de ${result.sucesso + result.falha}`,
-        description:
-          linhas.join('\n') ||
-          `${result.total_centros} centro(s) de custo sincronizado(s) com sucesso.`,
+        description: [
+          linhas.join('\n') || `${result.total_centros} centro(s) de custo sincronizado(s) com sucesso.`,
+          semCurva.length ? `Sem curva no Prevision (nada a atualizar): ${semCurva.join(', ')}.` : '',
+        ]
+          .filter(Boolean)
+          .join('\n'),
         variant: result.falha > 0 ? 'warning' : 'default',
       });
     } catch (err) {

@@ -5,18 +5,18 @@ const { verificarCancelamento } = require('../../utils/execucaoCancelavel');
 const { bloquearSeEmpresaModelo, ehEmpresaModelo } = require('../../utils/empresaModelo');
 
 const PRIMARY_VALUES = [true, false];
+const DIA = 86400000;
 
-function parseDate(valor) {
-  if (!valor) return null;
-  const data = new Date(valor);
-  return Number.isNaN(data.getTime()) ? null : data.toISOString().slice(0, 10);
-}
-
-function toNumeroOuNull(valor) {
-  if (valor === null || valor === undefined || typeof valor === 'boolean') return null;
-  const numero = Number(valor);
-  return Number.isFinite(numero) ? numero : null;
-}
+// Avanço de um dia vindo da API: número ou 0 (dia sem valor não soma nada).
+const numero = (valor) => {
+  const n = Number(valor);
+  return valor != null && Number.isFinite(n) ? n : 0;
+};
+// 4 casas, como as colunas numeric(12,4) — a soma dos dias que dá 0,99999999 grava 1,0000.
+const arred = (v) => Math.round(v * 10000) / 10000;
+const hojeBrasilia = () => new Intl.DateTimeFormat('en-CA', { timeZone: 'America/Sao_Paulo' }).format(new Date());
+const ultimoDiaDoMes = (mes) => new Date(Date.UTC(+mes.slice(0, 4), +mes.slice(5, 7), 0)).toISOString().slice(0, 10);
+const diasEntre = (de, ate) => Math.round((Date.parse(ate) - Date.parse(de)) / DIA);
 
 async function getIntegracaoAtiva(empresaId) {
   await bloquearSeEmpresaModelo(empresaId); // empresa modelo: Prevision simulado
@@ -25,16 +25,6 @@ async function getIntegracaoAtiva(empresaId) {
     [empresaId]
   );
   return rows[0] || null;
-}
-
-async function getOrFetchCompanyId(integracao, apiKey) {
-  if (integracao.company_id) return integracao.company_id;
-  const companyId = await previsionApi.fetchCompanyId(apiKey);
-  await pool.query('UPDATE integracoes_prevision SET company_id = $1 WHERE id = $2', [
-    companyId,
-    integracao.id,
-  ]);
-  return companyId;
 }
 
 async function listarProjetos(empresaId) {
@@ -57,7 +47,6 @@ async function listarProjetos(empresaId) {
 
   const apiKey = decrypt(integracao.api_key_enc);
   const projetos = await previsionApi.fetchProjects(apiKey);
-
   return projetos
     .map((p) => ({ codigo: p.id, nome: p.name }))
     .sort((a, b) => a.nome.localeCompare(b.nome, 'pt-BR'));
@@ -73,184 +62,104 @@ async function listCentrosComPrevision(empresaId) {
   return rows;
 }
 
-function extrairSecoes(apiData) {
-  const dashboard = apiData.detailedDashboard || apiData.detailed_dashboard || apiData;
+// O avanço diário do Prevision (o de CADA dia, não acumulado) vira as três tabelas de sempre:
+// - curva S (prevision_dashboard_scurve): o acumulado dia a dia de base, previsto e realizado — dela o
+//   Avanço das Obras tira as visões Diária, Semanal e Mensal, e o Cronograma a data em que a base chega a
+//   100%. O realizado dos dias depois da última medição é 0, então o acumulado repete o último valor;
+// - mensal (prevision_dashboard_monthly_progress): a soma dos dias de cada mês, datada no último dia do
+//   mês — o avanço do mês da DFC › Avanços (Projeção CEF) e da Curva de Obras;
+// - resumo (prevision_dashboard_general_info): início e fim = 1º e último dia da curva, realizado
+//   acumulado, previsto acumulado na data da última medição (como o Prevision informava), IDP (só na
+//   primária: a API nova só tem o dela). Atraso e custo não vêm na API nova e ficam vazios.
+function montarAvanco(daily, { hoje, idp }) {
+  const dias = daily.progress
+    .filter((p) => typeof p?.date === 'string' && /^\d{4}-\d{2}-\d{2}/.test(p.date))
+    .map((p) => ({ data: p.date.slice(0, 10), base: numero(p.base), expected: numero(p.expected), realized: numero(p.realized) }))
+    .sort((a, b) => (a.data < b.data ? -1 : a.data > b.data ? 1 : 0));
+  if (!dias.length) return null;
+
+  const medicao = daily.lastMeasuredIn ? String(daily.lastMeasuredIn).slice(0, 10) : null;
+  const scurve = [];
+  const meses = new Map();
+  let base = 0;
+  let expected = 0;
+  let realized = 0;
+  let previstoNaMedicao = 0;
+  let previstoHoje = 0;
+  for (const d of dias) {
+    base += d.base;
+    expected += d.expected;
+    realized += d.realized;
+    if (scurve.length && scurve[scurve.length - 1].data === d.data) scurve.pop(); // dia repetido: fica o acumulado com os dois
+    scurve.push({ data: d.data, base: arred(base), expected: arred(expected), realized: arred(realized) });
+    if (medicao && d.data <= medicao) previstoNaMedicao = expected;
+    if (d.data <= hoje) previstoHoje = expected;
+
+    const mes = d.data.slice(0, 7);
+    if (!meses.has(mes)) meses.set(mes, { data: ultimoDiaDoMes(mes), base: 0, expected: 0, realized: 0 });
+    const m = meses.get(mes);
+    m.base += d.base;
+    m.expected += d.expected;
+    m.realized += d.realized;
+  }
+
+  const inicio = dias[0].data;
+  const fim = dias[dias.length - 1].data;
   return {
-    scurve: dashboard.sCurve || dashboard.s_curve || {},
-    monthly: dashboard.monthlyProgress || dashboard.monthly_progress || {},
-    generalInfo: dashboard.generalInfo || dashboard.general_info || {},
-    packages: apiData.workPackageEvolution || apiData.work_package_evolution || [],
-    floors: apiData.floorEvolution || apiData.floor_evolution || [],
+    scurve,
+    monthly: [...meses.values()].map((m) => ({ data: m.data, base: arred(m.base), expected: arred(m.expected), realized: arred(m.realized) })),
+    generalInfo: {
+      start_at: inicio,
+      end_at: fim,
+      days_since_start: Math.max(0, diasEntre(inicio, hoje)),
+      days_to_end: Math.max(0, diasEntre(hoje, fim)),
+      idp,
+      realized: arred(realized),
+      expected: arred(medicao ? previstoNaMedicao : previstoHoje),
+      last_measurement: medicao,
+    },
   };
 }
 
-async function persistDashboard(client, { empresaId, siengeId, projectId, companyId, primary, apiData }) {
-  const { scurve, monthly, generalInfo, packages, floors } = extrairSecoes(apiData);
+// Regrava a obra × visão (o que já tinha dela sai). As tabelas de pacotes e pavimentos
+// (prevision_dashboard_work_packages / floor_evolution) não vêm na API nova e nenhuma tela usa: ficam como estão.
+async function persistAvanco(client, { empresaId, siengeId, projectId, companyId, primary, avanco }) {
+  const chave = [empresaId, siengeId, primary];
+  const onde = 'WHERE empresa_id = $1 AND sienge_id = $2 AND primary_view = $3';
+  await client.query(`DELETE FROM prevision_dashboard_monthly_progress ${onde}`, chave);
+  await client.query(`DELETE FROM prevision_dashboard_scurve ${onde}`, chave);
+  await client.query(`DELETE FROM prevision_dashboard_general_info ${onde}`, chave);
 
+  const g = avanco.generalInfo;
   await client.query(
-    'DELETE FROM prevision_dashboard_floor_evolution WHERE empresa_id = $1 AND sienge_id = $2 AND primary_view = $3',
-    [empresaId, siengeId, primary]
-  );
-  await client.query(
-    'DELETE FROM prevision_dashboard_work_packages WHERE empresa_id = $1 AND sienge_id = $2 AND primary_view = $3',
-    [empresaId, siengeId, primary]
-  );
-  await client.query(
-    'DELETE FROM prevision_dashboard_monthly_progress WHERE empresa_id = $1 AND sienge_id = $2 AND primary_view = $3',
-    [empresaId, siengeId, primary]
-  );
-  await client.query(
-    'DELETE FROM prevision_dashboard_scurve WHERE empresa_id = $1 AND sienge_id = $2 AND primary_view = $3',
-    [empresaId, siengeId, primary]
-  );
-  await client.query(
-    'DELETE FROM prevision_dashboard_general_info WHERE empresa_id = $1 AND sienge_id = $2 AND primary_view = $3',
-    [empresaId, siengeId, primary]
+    `INSERT INTO prevision_dashboard_general_info
+       (empresa_id, sienge_id, project_id, company_id, primary_view, start_at, end_at,
+        days_since_start, days_to_end, delay, idp, cost, realized, expected, realized_cost, last_measurement)
+     VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9,NULL,$10,NULL,$11,$12,NULL,$13)`,
+    [empresaId, siengeId, String(projectId), companyId, primary, g.start_at, g.end_at, g.days_since_start, g.days_to_end,
+      g.idp, g.realized, g.expected, g.last_measurement]
   );
 
-  let totais = { generalInfo: 0, scurve: 0, monthly: 0, packages: 0, floors: 0 };
+  const colunas = (linhas) => [linhas.map((l) => l.data), linhas.map((l) => l.base), linhas.map((l) => l.expected), linhas.map((l) => l.realized)];
+  await client.query(
+    `INSERT INTO prevision_dashboard_scurve (empresa_id, sienge_id, primary_view, data, base, expected, realized)
+     SELECT $1, $2, $3, d, b, e, r FROM unnest($4::date[], $5::numeric[], $6::numeric[], $7::numeric[]) AS t(d, b, e, r)`,
+    [...chave, ...colunas(avanco.scurve)]
+  );
+  await client.query(
+    `INSERT INTO prevision_dashboard_monthly_progress (empresa_id, sienge_id, primary_view, data, base, expected, realized)
+     SELECT $1, $2, $3, d, b, e, r FROM unnest($4::date[], $5::numeric[], $6::numeric[], $7::numeric[]) AS t(d, b, e, r)`,
+    [...chave, ...colunas(avanco.monthly)]
+  );
 
-  if (generalInfo && Object.keys(generalInfo).length > 0) {
-    await client.query(
-      `INSERT INTO prevision_dashboard_general_info
-         (empresa_id, sienge_id, project_id, company_id, primary_view, start_at, end_at,
-          days_since_start, days_to_end, delay, idp, cost, realized, expected,
-          realized_cost, last_measurement)
-       VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11,$12,$13,$14,$15,$16)`,
-      [
-        empresaId,
-        siengeId,
-        projectId,
-        companyId,
-        primary,
-        parseDate(generalInfo.start_at),
-        parseDate(generalInfo.end_at),
-        toNumeroOuNull(generalInfo.days_since_start),
-        toNumeroOuNull(generalInfo.days_to_end),
-        toNumeroOuNull(generalInfo.delay),
-        toNumeroOuNull(generalInfo.idp),
-        toNumeroOuNull(generalInfo.cost),
-        toNumeroOuNull(generalInfo.realized),
-        toNumeroOuNull(generalInfo.expected),
-        toNumeroOuNull(generalInfo.realized_cost),
-        generalInfo.last_measurement ?? null,
-      ]
-    );
-    totais.generalInfo = 1;
-  }
-
-  const datasScurve = scurve.dates || [];
-  for (let i = 0; i < datasScurve.length; i++) {
-    await client.query(
-      `INSERT INTO prevision_dashboard_scurve (empresa_id, sienge_id, primary_view, data, base, expected, realized, measured)
-       VALUES ($1,$2,$3,$4,$5,$6,$7,$8)`,
-      [
-        empresaId,
-        siengeId,
-        primary,
-        parseDate(datasScurve[i]),
-        toNumeroOuNull(scurve.base?.[i]),
-        toNumeroOuNull(scurve.expected?.[i]),
-        toNumeroOuNull(scurve.realized?.[i]),
-        toNumeroOuNull(scurve.measured?.[i]),
-      ]
-    );
-    totais.scurve++;
-  }
-
-  const datasMonthly = monthly.dates || [];
-  for (let i = 0; i < datasMonthly.length; i++) {
-    await client.query(
-      `INSERT INTO prevision_dashboard_monthly_progress (empresa_id, sienge_id, primary_view, data, base, expected, realized)
-       VALUES ($1,$2,$3,$4,$5,$6,$7)`,
-      [
-        empresaId,
-        siengeId,
-        primary,
-        parseDate(datasMonthly[i]),
-        toNumeroOuNull(monthly.base?.[i]),
-        toNumeroOuNull(monthly.expected?.[i]),
-        toNumeroOuNull(monthly.realized?.[i]),
-      ]
-    );
-    totais.monthly++;
-  }
-
-  for (const p of packages) {
-    await client.query(
-      `INSERT INTO prevision_dashboard_work_packages
-         (empresa_id, sienge_id, primary_view, service_id, nome, posicao, cor, custo_total, custo_base,
-          data_inicio_base, data_fim_base, data_inicio_prevista, data_fim_prevista,
-          base, previsto, realizado, idp, duracao_base, duracao_prevista, atraso, delta)
-       VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11,$12,$13,$14,$15,$16,$17,$18,$19,$20,$21)`,
-      [
-        empresaId,
-        siengeId,
-        primary,
-        p.service_id ?? null,
-        p.name ?? null,
-        toNumeroOuNull(p.position),
-        p.color ?? null,
-        toNumeroOuNull(p.total_cost),
-        toNumeroOuNull(p.base_cost),
-        parseDate(p.base_start_at),
-        parseDate(p.base_end_at),
-        parseDate(p.expected_start_at),
-        parseDate(p.expected_end_at),
-        toNumeroOuNull(p.base),
-        toNumeroOuNull(p.expected),
-        toNumeroOuNull(p.realized),
-        toNumeroOuNull(p.idp),
-        toNumeroOuNull(p.base_duration),
-        toNumeroOuNull(p.expected_duration),
-        toNumeroOuNull(p.delay),
-        toNumeroOuNull(p.delta),
-      ]
-    );
-    totais.packages++;
-  }
-
-  for (const f of floors) {
-    await client.query(
-      `INSERT INTO prevision_dashboard_floor_evolution
-         (empresa_id, sienge_id, primary_view, floor_id, nome, posicao, grupo_replicacao, custo_total, custo_base,
-          data_inicio_base, data_fim_base, data_inicio_prevista, data_fim_prevista,
-          base, previsto, realizado, idp, duracao_base, duracao_prevista, atraso, delta)
-       VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11,$12,$13,$14,$15,$16,$17,$18,$19,$20,$21)`,
-      [
-        empresaId,
-        siengeId,
-        primary,
-        f.floor_id ?? null,
-        f.name ?? null,
-        toNumeroOuNull(f.position),
-        f.replication_group ?? null,
-        toNumeroOuNull(f.total_cost),
-        toNumeroOuNull(f.base_cost),
-        parseDate(f.base_start_at),
-        parseDate(f.base_end_at),
-        parseDate(f.expected_start_at),
-        parseDate(f.expected_end_at),
-        toNumeroOuNull(f.base),
-        toNumeroOuNull(f.expected),
-        toNumeroOuNull(f.realized),
-        toNumeroOuNull(f.idp),
-        toNumeroOuNull(f.base_duration),
-        toNumeroOuNull(f.expected_duration),
-        toNumeroOuNull(f.delay),
-        toNumeroOuNull(f.delta),
-      ]
-    );
-    totais.floors++;
-  }
-
-  return totais;
+  return { generalInfo: 1, scurve: avanco.scurve.length, monthly: avanco.monthly.length };
 }
 
-// Busca o dashboard de cada obra com Código Prevision (visão primária e secundária) e regrava as
-// tabelas prevision_dashboard_* — a base do avanço previsto (DFC Construtoras › Avanços) e da curva S de
-// base dos atrasos (Cronogramas Obras). Cada obra × visão grava na própria transação: a que falhar mantém
-// os dados anteriores. `onProgress({ texto, paginaAtual, totalPaginas })`: andamento (Monitor de Integrações).
+// Busca o avanço diário de cada obra com Código Prevision (visão primária e secundária) e regrava as
+// tabelas prevision_dashboard_* — a base do avanço previsto (DFC Construtoras › Avanços), das curvas do
+// Avanço das Obras e da curva S de base dos atrasos (Cronogramas Obras). Cada obra × visão grava na
+// própria transação: a que falhar mantém os dados anteriores. `onProgress({ texto, paginaAtual,
+// totalPaginas })`: andamento (Monitor de Integrações).
 async function sincronizar(empresaId, onProgress) {
   if (await ehEmpresaModelo(empresaId)) {
     const { rows } = await pool.query('SELECT COUNT(DISTINCT sienge_id)::int n FROM prevision_dashboard_general_info WHERE empresa_id = $1', [empresaId]);
@@ -265,7 +174,11 @@ async function sincronizar(empresaId, onProgress) {
   }
 
   const apiKey = decrypt(integracao.api_key_enc);
-  const companyId = await getOrFetchCompanyId(integracao, apiKey);
+  previsionApi.tokenRest(apiKey); // token antigo: para aqui, com a mensagem de cadastrar o novo
+  const companyId = previsionApi.companyIdDoToken(apiKey) || integracao.company_id || null;
+  if (companyId && companyId !== integracao.company_id) {
+    await pool.query('UPDATE integracoes_prevision SET company_id = $1 WHERE id = $2', [companyId, integracao.id]);
+  }
 
   const centros = await listCentrosComPrevision(empresaId);
   if (centros.length === 0) {
@@ -277,6 +190,7 @@ async function sincronizar(empresaId, onProgress) {
     throw err;
   }
 
+  const hoje = hojeBrasilia();
   const resultado = [];
   const total = centros.length * PRIMARY_VALUES.length;
   let feitos = 0;
@@ -284,60 +198,52 @@ async function sincronizar(empresaId, onProgress) {
     for (const primary of PRIMARY_VALUES) {
       verificarCancelamento();
       onProgress?.({ texto: `Buscando ${centro.name} no Prevision`, paginaAtual: ++feitos, totalPaginas: total });
-      let apiData;
+      const falha = (erro) => resultado.push({ sienge_id: centro.sienge_id, nome: centro.name, primary, sucesso: false, erro });
+      const params = { apiKey, projectId: centro.codigo_prevision, primary };
+
+      let avanco;
       try {
-        apiData = await previsionApi.fetchDashboard({
-          apiKey,
-          companyId,
-          projectId: centro.codigo_prevision,
-          primary,
-        });
+        const daily = await previsionApi.fetchDailyProgress(params);
+        // O IDP é complemento (só o MCP Obra 360º usa) e só existe o da primária: se falhar, a curva
+        // grava sem ele.
+        let idp = null;
+        if (daily && primary) {
+          try {
+            idp = await previsionApi.fetchIdp(params);
+          } catch (err) {
+            if (err.cancelada) throw err;
+          }
+        }
+        avanco = daily && montarAvanco(daily, { hoje, idp });
       } catch (err) {
         if (err.cancelada) throw err;
-        resultado.push({
-          sienge_id: centro.sienge_id,
-          nome: centro.name,
-          primary,
-          sucesso: false,
-          erro: err.message,
-        });
+        falha(err.message);
         continue;
       }
 
       verificarCancelamento();
-      if (!apiData) {
-        resultado.push({
-          sienge_id: centro.sienge_id,
-          nome: centro.name,
-          primary,
-          sucesso: false,
-          erro: 'A API do Prevision não retornou dados para este projeto.',
-        });
+      if (!avanco) {
+        // Obra sem curva no Prevision (ainda sem planejamento): não é erro e não apaga o que houver.
+        resultado.push({ sienge_id: centro.sienge_id, nome: centro.name, primary, sucesso: true, sem_curva: true });
         continue;
       }
 
       const client = await pool.connect();
       try {
         await client.query('BEGIN');
-        const totais = await persistDashboard(client, {
+        const totais = await persistAvanco(client, {
           empresaId,
           siengeId: centro.sienge_id,
           projectId: centro.codigo_prevision,
           companyId,
           primary,
-          apiData,
+          avanco,
         });
         await client.query('COMMIT');
         resultado.push({ sienge_id: centro.sienge_id, nome: centro.name, primary, sucesso: true, ...totais });
       } catch (err) {
         await client.query('ROLLBACK');
-        resultado.push({
-          sienge_id: centro.sienge_id,
-          nome: centro.name,
-          primary,
-          sucesso: false,
-          erro: err.message,
-        });
+        falha(err.message);
       } finally {
         client.release();
       }
@@ -352,4 +258,4 @@ async function sincronizar(empresaId, onProgress) {
   };
 }
 
-module.exports = { sincronizar, listarProjetos };
+module.exports = { sincronizar, listarProjetos, montarAvanco };
