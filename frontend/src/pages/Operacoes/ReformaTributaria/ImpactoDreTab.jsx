@@ -2,12 +2,8 @@ import { useEffect, useState } from 'react';
 import { Info, Scale, Settings2, TriangleAlert } from 'lucide-react';
 import { getImpactoReforma } from '../../../api/reformaTributaria.api';
 import { mesAno } from '../CronogramasObras/formatos';
-import { moeda, pct, valor } from './formatos';
-import { Bloco, CABECALHO, comSinal, comSinalCompacto, corDiferenca, SeloRegime, TabelaComparativa } from './componentes';
-import '../../Dashboards/EconomicoFinanceiro/fluxo/painel.css';
-import '../../Dashboards/CronogramasObras/cronogramas.css';
-
-const margem = (lucro, rl) => (rl ? lucro / rl : null);
+import { pct } from './formatos';
+import { Bloco, Cabecalho, celula, Diferenca, Numero, SeloRegime, TabelaComparativa } from './componentes';
 
 // Aba Impacto DRE: a DRE projetada (rascunho do centro ou a última versão salva da Projeção da DRE) com a
 // reforma aplicada de 2027 em diante, pelo regime de cada obra (aba Centros de Custos) e pelas alíquotas
@@ -70,7 +66,6 @@ export default function ImpactoDreTab({ empresaId, centros, ano, recarregar, onO
 
   const r = dados.resumo;
   const semProjecaoNenhuma = !dados.por_centro.length;
-  const diferenca = r.lucro_reforma - r.lucro_hoje;
   const periodo = dados.periodo?.ate ? `De ${mesAno(`${dados.periodo.de}-01`)} a ${mesAno(`${dados.periodo.ate}-01`)}` : 'Sem meses projetados a partir de 2027';
 
   return (
@@ -95,139 +90,121 @@ export default function ImpactoDreTab({ empresaId, centros, ano, recarregar, onO
         </div>
       ) : (
         <>
-          <div className="painel-cfo embutido">
-            <section className="tiles cronograma" style={{ '--colunas': 4 }} aria-label="Indicadores do impacto">
-              <div className="tile">
-                <span className="k">Imposto sobre a receita hoje</span>
-                <span className="v" title={moeda(Math.abs(r.imposto_hoje), { centavos: true })}>
-                  {moeda(Math.abs(r.imposto_hoje), { compacta: true })}
-                </span>
-                <span className="d">
-                  {pct(r.receita ? Math.abs(r.imposto_hoje) / r.receita : null)} da receita de <b>{moeda(r.receita, { compacta: true })}</b>
-                </span>
-              </div>
-              <div className="tile">
-                <span className="k">Imposto com a reforma</span>
-                <span className="v" title={moeda(Math.abs(r.imposto_reforma), { centavos: true })}>
-                  {moeda(Math.abs(r.imposto_reforma), { compacta: true })}
-                </span>
-                <span className="d">
-                  {pct(r.receita ? Math.abs(r.imposto_reforma) / r.receita : null)} da receita · IBS/CBS <b>{moeda(Math.abs(r.ibs_cbs), { compacta: true })}</b>
-                </span>
-              </div>
-              <div className="tile">
-                <span className="k">Crédito sobre o custo</span>
-                <span className="v" title={moeda(r.credito, { centavos: true })}>
-                  {moeda(r.credito, { compacta: true })}
-                </span>
-                <span className="d">Abate o custo das obras do regime regular</span>
-              </div>
-              <div className="tile">
-                <span className="k">Efeito no lucro líquido</span>
-                <span className={`v ${corDiferenca(diferenca)}`} title={comSinal(diferenca)}>
-                  {comSinalCompacto(diferenca)}
-                </span>
-                <span className="d">
-                  Margem líquida <b>{pct(margem(r.lucro_hoje, r.rl_hoje))}</b> → <b>{pct(margem(r.lucro_reforma, r.rl_reforma))}</b>
-                </span>
-              </div>
-            </section>
-          </div>
-
           <Bloco
             titulo="Demonstração do resultado"
             subtitulo={`${periodo} · projeção da DRE de hoje × com a reforma · ${r.configurados} de ${r.obras} ${r.obras === 1 ? 'obra configurada' : 'obras configuradas'}`}
           >
-            <TabelaComparativa linhas={dados.dre} valor={valor} />
+            <TabelaComparativa linhas={dados.dre} />
           </Bloco>
 
-          <Bloco titulo="Por centro de custo" subtitulo="Clique num centro para ver só ele. Diferença = lucro com a reforma − lucro da projeção de hoje.">
-            <table className="w-full min-w-[980px] text-sm">
-              <thead>
-                <tr className={CABECALHO}>
-                  <th className="py-2.5 pl-4 pr-3 text-left">Centro de custo</th>
-                  <th className="px-3 py-2.5 text-left">Regime</th>
-                  <th className="px-3 py-2.5 text-right">Receita</th>
-                  <th className="px-3 py-2.5 text-right">Imposto hoje</th>
-                  <th className="px-3 py-2.5 text-right">Imposto com a reforma</th>
-                  <th className="px-3 py-2.5 text-right">Crédito</th>
-                  <th className="px-3 py-2.5 text-right">Lucro hoje</th>
-                  <th className="px-3 py-2.5 text-right">Lucro com a reforma</th>
-                  <th className="py-2.5 pl-3 pr-4 text-right">Diferença</th>
-                </tr>
-              </thead>
-              <tbody>
-                {dados.por_centro.map((c) => {
-                  const d = c.lucro_reforma - c.lucro_hoje;
-                  const so = centros.length === 1 && centros[0] === String(c.id);
-                  return (
-                    <tr
-                      key={c.id}
-                      onClick={() => onFiltrarCentro(so ? null : c.id)}
-                      title={so ? 'Voltar para todos os centros' : 'Ver só este centro'}
-                      className="cursor-pointer border-b border-gray-100 text-gray-700 hover:bg-gray-50"
-                    >
-                      <td className="py-2.5 pl-4 pr-3">
-                        <span className="mr-2 tabular-nums text-gray-400">{c.id}</span>
-                        <span className="font-medium text-gray-800">{c.nome}</span>
-                        {c.regime === 'REGULAR' && c.rho > 0 && (
-                          <span className="ml-2 text-[11px] text-gray-400" title="Redutores (terreno + redutor social) ÷ receita da obra na projeção">
-                            redutores {pct(c.rho)}
-                          </span>
-                        )}
-                      </td>
-                      <td className="px-3 py-2.5">
-                        <SeloRegime centro={c} />
-                      </td>
-                      <td className="px-3 py-2.5 whitespace-nowrap text-right tabular-nums">{valor(c.receita)}</td>
-                      <td className="px-3 py-2.5 whitespace-nowrap text-right tabular-nums">{valor(c.imposto_hoje)}</td>
-                      <td className="px-3 py-2.5 whitespace-nowrap text-right tabular-nums">{valor(c.imposto_reforma)}</td>
-                      <td className="px-3 py-2.5 whitespace-nowrap text-right tabular-nums">{valor(c.credito)}</td>
-                      <td className="px-3 py-2.5 whitespace-nowrap text-right tabular-nums">{valor(c.lucro_hoje)}</td>
-                      <td className="px-3 py-2.5 whitespace-nowrap text-right tabular-nums">{valor(c.lucro_reforma)}</td>
-                      <td className={`py-2.5 pl-3 pr-4 whitespace-nowrap text-right font-medium tabular-nums ${corDiferenca(d)}`}>{comSinal(d)}</td>
-                    </tr>
-                  );
-                })}
-              </tbody>
-            </table>
-            {dados.sem_projecao.length > 0 && (
-              <p className="border-t border-gray-100 px-4 py-2.5 text-xs text-gray-500">
-                Sem Projeção da DRE (ficam fora do impacto): {dados.sem_projecao.map((c) => c.nome).join(', ')}. Monte o orçamento delas em
-                DRE Construtoras › Projeções.
-              </p>
-            )}
+          <Bloco
+            titulo="Por centro de custo"
+            subtitulo="Clique num centro para ver só ele. Diferença = lucro com a reforma − lucro da projeção de hoje."
+            larguraMinima="min-w-[1080px]"
+            rodape={
+              dados.sem_projecao.length > 0 &&
+              `Sem Projeção da DRE (ficam fora do impacto): ${dados.sem_projecao.map((c) => c.nome).join(', ')}. Monte o orçamento delas em DRE Construtoras › Projeções.`
+            }
+          >
+            <Cabecalho
+              colunas={[
+                { rotulo: 'Centro de custo' },
+                { rotulo: 'Regime', esquerda: true },
+                { rotulo: 'Receita' },
+                { rotulo: 'Imposto hoje' },
+                { rotulo: 'Imposto com a reforma' },
+                { rotulo: 'Crédito' },
+                { rotulo: 'Lucro hoje' },
+                { rotulo: 'Lucro com a reforma' },
+                { rotulo: 'Diferença' },
+              ]}
+            />
+            <tbody>
+              {dados.por_centro.map((c) => {
+                const so = centros.length === 1 && centros[0] === String(c.id);
+                return (
+                  <tr
+                    key={c.id}
+                    onClick={() => onFiltrarCentro(so ? null : c.id)}
+                    title={so ? 'Voltar para todos os centros' : 'Ver só este centro'}
+                    className="group cursor-pointer"
+                  >
+                    <td className={celula('item', { primeira: true })}>
+                      <span className="mr-2 tabular-nums text-gray-400">{c.id}</span>
+                      <span className="font-medium text-gray-800">{c.nome}</span>
+                      {c.regime === 'REGULAR' && c.rho > 0 && (
+                        <span className="ml-2 text-[11px] text-gray-400" title="Redutores (terreno + redutor social) ÷ receita da obra na projeção">
+                          redutores {pct(c.rho)}
+                        </span>
+                      )}
+                    </td>
+                    <td className={celula('item', { alinhar: 'text-left' })}>
+                      <SeloRegime centro={c} />
+                    </td>
+                    <td className={celula()}>
+                      <Numero v={c.receita} />
+                    </td>
+                    <td className={celula()}>
+                      <Numero v={c.imposto_hoje} />
+                    </td>
+                    <td className={celula()}>
+                      <Numero v={c.imposto_reforma} />
+                    </td>
+                    <td className={celula()}>
+                      <Numero v={c.credito} />
+                    </td>
+                    <td className={celula()}>
+                      <Numero v={c.lucro_hoje} />
+                    </td>
+                    <td className={celula()}>
+                      <Numero v={c.lucro_reforma} />
+                    </td>
+                    <td className={`${celula()} font-semibold`}>
+                      <Diferenca d={c.lucro_reforma - c.lucro_hoje} />
+                    </td>
+                  </tr>
+                );
+              })}
+            </tbody>
           </Bloco>
 
           {dados.por_ano.length > 0 && (
             <Bloco titulo="Ano a ano" subtitulo="A transição: a CBS entra cheia em 2027 e o IBS sobe de 2029 a 2033. Sempre toda a projeção, nos centros do filtro.">
-              <table className="w-full min-w-[760px] text-sm">
-                <thead>
-                  <tr className={CABECALHO}>
-                    <th className="py-2.5 pl-4 pr-3 text-left">Ano</th>
-                    <th className="px-3 py-2.5 text-right">Receita</th>
-                    <th className="px-3 py-2.5 text-right">Imposto hoje</th>
-                    <th className="px-3 py-2.5 text-right">Imposto com a reforma</th>
-                    <th className="px-3 py-2.5 text-right">Crédito</th>
-                    <th className="py-2.5 pl-3 pr-4 text-right">Diferença no lucro</th>
-                  </tr>
-                </thead>
-                <tbody>
-                  {dados.por_ano.map((a) => {
-                    const d = a.lucro_reforma - a.lucro_hoje;
-                    return (
-                      <tr key={a.ano} className={`border-b border-gray-100 text-gray-700 ${String(a.ano) === String(ano) ? 'bg-primary-50/50' : ''}`}>
-                        <td className="py-2.5 pl-4 pr-3 font-medium text-gray-800">{a.ano}</td>
-                        <td className="px-3 py-2.5 whitespace-nowrap text-right tabular-nums">{valor(a.receita)}</td>
-                        <td className="px-3 py-2.5 whitespace-nowrap text-right tabular-nums">{valor(a.imposto_hoje)}</td>
-                        <td className="px-3 py-2.5 whitespace-nowrap text-right tabular-nums">{valor(a.imposto_reforma)}</td>
-                        <td className="px-3 py-2.5 whitespace-nowrap text-right tabular-nums">{valor(a.credito)}</td>
-                        <td className={`py-2.5 pl-3 pr-4 whitespace-nowrap text-right font-medium tabular-nums ${corDiferenca(d)}`}>{comSinal(d)}</td>
-                      </tr>
-                    );
-                  })}
-                </tbody>
-              </table>
+              <Cabecalho
+                colunas={[
+                  { rotulo: 'Ano' },
+                  { rotulo: 'Receita' },
+                  { rotulo: 'Imposto hoje' },
+                  { rotulo: 'Imposto com a reforma' },
+                  { rotulo: 'Crédito' },
+                  { rotulo: 'Diferença no lucro' },
+                ]}
+              />
+              <tbody>
+                {dados.por_ano.map((a) => {
+                  const tipo = String(a.ano) === String(ano) ? 'destaque' : 'item';
+                  return (
+                    <tr key={a.ano} className="group">
+                      <td className={`${celula(tipo, { primeira: true })} font-medium`}>{a.ano}</td>
+                      <td className={celula(tipo)}>
+                        <Numero v={a.receita} />
+                      </td>
+                      <td className={celula(tipo)}>
+                        <Numero v={a.imposto_hoje} />
+                      </td>
+                      <td className={celula(tipo)}>
+                        <Numero v={a.imposto_reforma} />
+                      </td>
+                      <td className={celula(tipo)}>
+                        <Numero v={a.credito} />
+                      </td>
+                      <td className={`${celula(tipo)} font-semibold`}>
+                        <Diferenca d={a.lucro_reforma - a.lucro_hoje} />
+                      </td>
+                    </tr>
+                  );
+                })}
+              </tbody>
             </Bloco>
           )}
         </>

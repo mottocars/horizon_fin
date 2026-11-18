@@ -2,10 +2,8 @@ import { useEffect, useState } from 'react';
 import { Info, Scale, Settings2, TriangleAlert } from 'lucide-react';
 import { getImpactoDfcReforma } from '../../../api/reformaTributaria.api';
 import { mesAno } from '../CronogramasObras/formatos';
-import { aliquota, moeda, valor } from './formatos';
-import { Bloco, CABECALHO, comSinal, comSinalCompacto, corDiferenca, SeloRegime, TabelaComparativa } from './componentes';
-import '../../Dashboards/EconomicoFinanceiro/fluxo/painel.css';
-import '../../Dashboards/CronogramasObras/cronogramas.css';
+import { moeda } from './formatos';
+import { Bloco, Cabecalho, celula, Diferenca, Numero, SeloRegime, TabelaComparativa } from './componentes';
 
 const rotuloPeriodo = (p) => (p.length === 7 ? mesAno(`${p}-01`) : p);
 const imposto = (x) => x.ret + x.ibs_cbs + x.irpj_csll;
@@ -71,15 +69,12 @@ export default function ImpactoDfcTab({ empresaId, centros, ano, recarregar, onO
 
   const r = dados.resumo;
   const p = dados.parametros;
-  const saldoCredorFim = dados.por_centro.reduce((t, c) => t + c.saldo_credor_final, 0);
   const periodo = dados.periodo?.ate ? `De ${mesAno(`${dados.periodo.de}-01`)} a ${mesAno(`${dados.periodo.ate}-01`)}` : 'Sem meses a partir de 2027';
   const comoPaga = [
     p.prazo_recolhimento === 0 ? 'imposto pago no mês' : `imposto pago ${p.prazo_recolhimento} ${p.prazo_recolhimento === 1 ? 'mês' : 'meses'} depois`,
     p.split_inicio ? `split payment desde ${mesAno(`${p.split_inicio}-01`)}` : 'sem split payment',
     p.split_inicio || p.saldo_credor === 'RESSARCIR' ? `crédito ressarcido em ${p.prazo_ressarcimento} ${p.prazo_ressarcimento === 1 ? 'mês' : 'meses'}` : 'crédito compensado',
   ].join(' · ');
-  const menorH = r.menor_saldo_hoje;
-  const menorR = r.menor_saldo_reforma;
 
   return (
     <div className={`space-y-5 rounded-card rounded-tl-none bg-white p-5 shadow-card ${carregando ? 'opacity-60' : ''}`}>
@@ -102,71 +97,6 @@ export default function ImpactoDfcTab({ empresaId, centros, ano, recarregar, onO
         </div>
       )}
 
-      <div className="painel-cfo embutido">
-        <section className="tiles cronograma" style={{ '--colunas': 5 }} aria-label="Indicadores do impacto no caixa">
-          <div className="tile">
-            <span className="k">Imposto pago hoje</span>
-            <span className="v" title={moeda(Math.abs(r.imposto_hoje), { centavos: true })}>
-              {moeda(Math.abs(r.imposto_hoje), { compacta: true })}
-            </span>
-            <span className="d">
-              RET de {aliquota(p.ret_hoje)} sobre <b>{moeda(r.recebimentos, { compacta: true })}</b> recebidos
-            </span>
-          </div>
-          <div className="tile">
-            <span className="k">Imposto pago com a reforma</span>
-            <span className="v" title={moeda(Math.abs(imposto(r)), { centavos: true })}>
-              {moeda(Math.abs(imposto(r)), { compacta: true })}
-            </span>
-            <span className="d">
-              IBS/CBS <b>{moeda(Math.abs(r.ibs_cbs), { compacta: true })}</b> · IRPJ/CSLL <b>{moeda(Math.abs(r.irpj_csll), { compacta: true })}</b>
-            </span>
-          </div>
-          <div className="tile">
-            <span className="k">Crédito sobre os pagamentos</span>
-            <span className="v" title={moeda(r.credito, { centavos: true })}>
-              {moeda(r.credito, { compacta: true })}
-            </span>
-            <span className="d">
-              {r.ressarcimento > 0.5 && (
-                <>
-                  Ressarcido <b>{moeda(r.ressarcimento, { compacta: true })}</b>
-                  {saldoCredorFim > 0.5 ? ' · ' : ''}
-                </>
-              )}
-              {saldoCredorFim > 0.5 ? (
-                <>
-                  Saldo credor no fim <b>{moeda(saldoCredorFim, { compacta: true })}</b>
-                </>
-              ) : r.ressarcimento > 0.5 ? null : (
-                'Abate o IBS/CBS a pagar'
-              )}
-            </span>
-          </div>
-          <div className="tile">
-            <span className="k">Efeito no caixa</span>
-            <span className={`v ${corDiferenca(r.efeito)}`} title={comSinal(r.efeito)}>
-              {comSinalCompacto(r.efeito)}
-            </span>
-            <span className="d">Imposto e crédito, com a reforma − hoje</span>
-          </div>
-          <div className="tile">
-            <span className="k">Menor saldo de caixa</span>
-            <span className={`v ${menorR && menorR.valor < 0 ? 'text-red-600' : ''}`} title={menorR ? moeda(menorR.valor, { centavos: true }) : ''}>
-              {menorR ? moeda(menorR.valor, { compacta: true }) : '—'}
-            </span>
-            <span className="d">
-              {menorR && <>com a reforma, em {mesAno(`${menorR.mes}-01`)} · </>}
-              {menorH && (
-                <>
-                  hoje <b>{moeda(menorH.valor, { compacta: true })}</b>
-                </>
-              )}
-            </span>
-          </div>
-        </section>
-      </div>
-
       <Bloco
         titulo="Fluxo de caixa"
         subtitulo={`${periodo} · DFC versão ${dados.versao.numero} × com a reforma · ${comoPaga} · ${r.configurados} de ${r.obras} ${
@@ -181,99 +111,130 @@ export default function ImpactoDfcTab({ empresaId, centros, ano, recarregar, onO
           </>
         }
       >
-        <TabelaComparativa linhas={dados.dfc} valor={valor} />
+        <TabelaComparativa linhas={dados.dfc} />
       </Bloco>
 
       {dados.linhas.length > 0 && (
         <Bloco
           titulo={ano ? `Mês a mês de ${ano}` : 'Ano a ano'}
           subtitulo={ano ? 'O imposto entra no mês em que é pago; o crédito, no mês do pagamento ao fornecedor.' : 'Escolha um ano no Período para ver mês a mês. Saldos no fim de cada ano.'}
+          larguraMinima="min-w-[1080px]"
         >
-          <table className="w-full min-w-[1040px] text-sm">
-            <thead>
-              <tr className={CABECALHO}>
-                <th className="py-2.5 pl-4 pr-3 text-left">{ano ? 'Mês' : 'Ano'}</th>
-                <th className="px-3 py-2.5 text-right">Recebimentos</th>
-                <th className="px-3 py-2.5 text-right">Imposto hoje</th>
-                <th className="px-3 py-2.5 text-right">Imposto com a reforma</th>
-                <th className="px-3 py-2.5 text-right">Crédito</th>
-                <th className="px-3 py-2.5 text-right">Ressarcimento</th>
-                <th className="px-3 py-2.5 text-right">Efeito no caixa</th>
-                <th className="px-3 py-2.5 text-right">Saldo hoje</th>
-                <th className="py-2.5 pl-3 pr-4 text-right">Saldo com a reforma</th>
+          <Cabecalho
+            colunas={[
+              { rotulo: ano ? 'Mês' : 'Ano' },
+              { rotulo: 'Recebimentos' },
+              { rotulo: 'Imposto hoje' },
+              { rotulo: 'Imposto com a reforma' },
+              { rotulo: 'Crédito' },
+              { rotulo: 'Ressarcimento' },
+              { rotulo: 'Efeito no caixa' },
+              { rotulo: 'Saldo hoje' },
+              { rotulo: 'Saldo com a reforma' },
+            ]}
+          />
+          <tbody>
+            {dados.linhas.map((l) => (
+              <tr key={l.periodo} className="group">
+                <td className={`${celula('item', { primeira: true })} font-medium`}>{rotuloPeriodo(l.periodo)}</td>
+                <td className={celula()}>
+                  <Numero v={l.recebimentos} />
+                </td>
+                <td className={celula()}>
+                  <Numero v={l.imposto_hoje} />
+                </td>
+                <td className={celula()}>
+                  <Numero v={imposto(l)} />
+                </td>
+                <td className={celula()}>
+                  <Numero v={l.credito} />
+                </td>
+                <td className={celula()}>
+                  <Numero v={l.ressarcimento} />
+                </td>
+                <td className={`${celula()} font-semibold`}>
+                  <Diferenca d={l.efeito} />
+                </td>
+                <td className={celula()}>
+                  <Numero v={l.saldo_hoje} />
+                </td>
+                <td className={celula()}>
+                  <Numero v={l.saldo_reforma} />
+                </td>
               </tr>
-            </thead>
-            <tbody>
-              {dados.linhas.map((l) => (
-                <tr key={l.periodo} className="border-b border-gray-100 text-gray-700">
-                  <td className="py-2.5 pl-4 pr-3 font-medium text-gray-800">{rotuloPeriodo(l.periodo)}</td>
-                  <td className="whitespace-nowrap px-3 py-2.5 text-right tabular-nums">{valor(l.recebimentos)}</td>
-                  <td className="whitespace-nowrap px-3 py-2.5 text-right tabular-nums">{valor(l.imposto_hoje)}</td>
-                  <td className="whitespace-nowrap px-3 py-2.5 text-right tabular-nums">{valor(imposto(l))}</td>
-                  <td className="whitespace-nowrap px-3 py-2.5 text-right tabular-nums">{valor(l.credito)}</td>
-                  <td className="whitespace-nowrap px-3 py-2.5 text-right tabular-nums">{valor(l.ressarcimento)}</td>
-                  <td className={`whitespace-nowrap px-3 py-2.5 text-right font-medium tabular-nums ${corDiferenca(l.efeito)}`}>{comSinal(l.efeito)}</td>
-                  <td className={`whitespace-nowrap px-3 py-2.5 text-right tabular-nums ${l.saldo_hoje < 0 ? 'text-red-600' : ''}`}>{valor(l.saldo_hoje)}</td>
-                  <td className={`whitespace-nowrap py-2.5 pl-3 pr-4 text-right tabular-nums ${l.saldo_reforma < 0 ? 'text-red-600' : ''}`}>{valor(l.saldo_reforma)}</td>
-                </tr>
-              ))}
-            </tbody>
-          </table>
+            ))}
+          </tbody>
         </Bloco>
       )}
 
-      <Bloco titulo="Por centro de custo" subtitulo="Clique num centro para ver só ele. Efeito no caixa = imposto e crédito com a reforma − o imposto de hoje.">
-        <table className="w-full min-w-[1040px] text-sm">
-          <thead>
-            <tr className={CABECALHO}>
-              <th className="py-2.5 pl-4 pr-3 text-left">Centro de custo</th>
-              <th className="px-3 py-2.5 text-left">Regime</th>
-              <th className="px-3 py-2.5 text-right">Recebimentos</th>
-              <th className="px-3 py-2.5 text-right">Pagamentos com crédito</th>
-              <th className="px-3 py-2.5 text-right">Imposto hoje</th>
-              <th className="px-3 py-2.5 text-right">Imposto com a reforma</th>
-              <th className="px-3 py-2.5 text-right">Ressarcimento</th>
-              <th className="px-3 py-2.5 text-right">Saldo credor no fim</th>
-              <th className="py-2.5 pl-3 pr-4 text-right">Efeito no caixa</th>
+      <Bloco
+        titulo="Por centro de custo"
+        subtitulo="Clique num centro para ver só ele. Efeito no caixa = imposto e crédito com a reforma − o imposto de hoje."
+        larguraMinima="min-w-[1080px]"
+      >
+        <Cabecalho
+          colunas={[
+            { rotulo: 'Centro de custo' },
+            { rotulo: 'Regime', esquerda: true },
+            { rotulo: 'Recebimentos' },
+            { rotulo: 'Pagamentos com crédito' },
+            { rotulo: 'Imposto hoje' },
+            { rotulo: 'Imposto com a reforma' },
+            { rotulo: 'Ressarcimento' },
+            { rotulo: 'Saldo credor no fim' },
+            { rotulo: 'Efeito no caixa' },
+          ]}
+        />
+        <tbody>
+          {dados.por_centro.length === 0 ? (
+            <tr>
+              <td colSpan={9} className="border-b border-gray-100 py-8 text-center text-xs text-gray-400">
+                Nenhum recebimento de venda nem pagamento com crédito no DFC do período.
+              </td>
             </tr>
-          </thead>
-          <tbody>
-            {dados.por_centro.length === 0 ? (
-              <tr>
-                <td colSpan={9} className="border-b border-gray-100 py-10 text-center text-sm text-gray-400">
-                  Nenhum recebimento de venda nem pagamento com crédito no DFC do período.
-                </td>
-              </tr>
-            ) : (
-              dados.por_centro.map((c) => {
-                const so = centros.length === 1 && centros[0] === String(c.id);
-                return (
-                  <tr
-                    key={c.id}
-                    onClick={() => onFiltrarCentro(so ? null : c.id)}
-                    title={so ? 'Voltar para todos os centros' : 'Ver só este centro'}
-                    className="cursor-pointer border-b border-gray-100 text-gray-700 hover:bg-gray-50"
-                  >
-                    <td className="py-2.5 pl-4 pr-3">
-                      <span className="mr-2 tabular-nums text-gray-400">{c.id}</span>
-                      <span className="font-medium text-gray-800">{c.nome}</span>
-                    </td>
-                    <td className="px-3 py-2.5">
-                      <SeloRegime centro={c} />
-                    </td>
-                    <td className="whitespace-nowrap px-3 py-2.5 text-right tabular-nums">{valor(c.recebimentos)}</td>
-                    <td className="whitespace-nowrap px-3 py-2.5 text-right tabular-nums">{valor(c.pagamentos)}</td>
-                    <td className="whitespace-nowrap px-3 py-2.5 text-right tabular-nums">{valor(c.imposto_hoje)}</td>
-                    <td className="whitespace-nowrap px-3 py-2.5 text-right tabular-nums">{valor(imposto(c))}</td>
-                    <td className="whitespace-nowrap px-3 py-2.5 text-right tabular-nums">{valor(c.ressarcimento)}</td>
-                    <td className="whitespace-nowrap px-3 py-2.5 text-right tabular-nums">{valor(c.saldo_credor_final)}</td>
-                    <td className={`whitespace-nowrap py-2.5 pl-3 pr-4 text-right font-medium tabular-nums ${corDiferenca(c.efeito)}`}>{comSinal(c.efeito)}</td>
-                  </tr>
-                );
-              })
-            )}
-          </tbody>
-        </table>
+          ) : (
+            dados.por_centro.map((c) => {
+              const so = centros.length === 1 && centros[0] === String(c.id);
+              return (
+                <tr
+                  key={c.id}
+                  onClick={() => onFiltrarCentro(so ? null : c.id)}
+                  title={so ? 'Voltar para todos os centros' : 'Ver só este centro'}
+                  className="group cursor-pointer"
+                >
+                  <td className={celula('item', { primeira: true })}>
+                    <span className="mr-2 tabular-nums text-gray-400">{c.id}</span>
+                    <span className="font-medium text-gray-800">{c.nome}</span>
+                  </td>
+                  <td className={celula('item', { alinhar: 'text-left' })}>
+                    <SeloRegime centro={c} />
+                  </td>
+                  <td className={celula()}>
+                    <Numero v={c.recebimentos} />
+                  </td>
+                  <td className={celula()}>
+                    <Numero v={c.pagamentos} />
+                  </td>
+                  <td className={celula()}>
+                    <Numero v={c.imposto_hoje} />
+                  </td>
+                  <td className={celula()}>
+                    <Numero v={imposto(c)} />
+                  </td>
+                  <td className={celula()}>
+                    <Numero v={c.ressarcimento} />
+                  </td>
+                  <td className={celula()}>
+                    <Numero v={c.saldo_credor_final} />
+                  </td>
+                  <td className={`${celula()} font-semibold`}>
+                    <Diferenca d={c.efeito} />
+                  </td>
+                </tr>
+              );
+            })
+          )}
+        </tbody>
       </Bloco>
     </div>
   );

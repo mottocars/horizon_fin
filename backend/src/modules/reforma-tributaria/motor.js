@@ -146,6 +146,8 @@ function calcularCentro({ mensal, poc, impostoIds, baseIds, parametros: p, confi
     if (regime === 'RET') {
       linha.ibs_cbs = (-R * p.ret_ibs_cbs) / 100;
       linha.irpj_csll = (-R * p.ret_irpj_csll) / 100;
+      // Mesma carga de hoje (4% = 2,08% + 1,92%): o centavo do arredondamento da DRE fica no IRPJ/CSLL.
+      if (Math.abs(linha.ibs_cbs + linha.irpj_csll - impostoHoje) < 0.05) linha.irpj_csll = impostoHoje - linha.ibs_cbs;
       return linha;
     }
     const total = a ? a.total : 0;
