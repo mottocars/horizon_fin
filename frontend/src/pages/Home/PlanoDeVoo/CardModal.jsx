@@ -1,5 +1,6 @@
 import { useEffect, useRef, useState } from 'react';
 import {
+  ArrowRightLeft,
   BadgeCheck,
   CalendarCheck,
   CalendarClock,
@@ -35,10 +36,11 @@ import {
   opcoesPlanos,
   devolverCard,
   finalizarCard,
+  moverCard,
   obterCard,
 } from '../../../api/projetos.api';
 import Avatar from './Avatar';
-import { BUCKET_POR_ID, dataBR, dataHora, prazo, tamanhoArquivo } from './kanban';
+import { BUCKET_POR_ID, dataBR, dataHora, destinosPermitidos, prazo, tamanhoArquivo } from './kanban';
 
 const INPUT =
   'w-full rounded-lg border border-gray-200 px-3 py-2 text-sm text-gray-800 focus:border-primary-500 focus:outline-none focus:ring-2 focus:ring-primary-100';
@@ -242,6 +244,7 @@ export default function CardModal({ aberto, cardId, onFechar, onAlterado, empres
   const [arrastandoArquivo, setArrastandoArquivo] = useState(false);
   const [finalizando, setFinalizando] = useState(false);
   const [devolvendo, setDevolvendo] = useState(false);
+  const [movendoPara, setMovendoPara] = useState('');
   const inputArquivoRef = useRef(null);
 
   const novo = !cardId;
@@ -364,6 +367,13 @@ export default function CardModal({ aberto, cardId, onFechar, onAlterado, empres
     setDevolvendo(false);
   }
 
+  // Transferir para outro bucket (só o responsável; mesmas regras do arrastar no quadro).
+  async function transferir(destino) {
+    setMovendoPara(destino);
+    await executar(() => moverCard(cardId, destino), 'Não foi possível mover a atividade.');
+    setMovendoPara('');
+  }
+
   async function finalizar() {
     setFinalizando(true);
     await executar(() => finalizarCard(cardId), 'Não foi possível finalizar a atividade.');
@@ -430,7 +440,8 @@ export default function CardModal({ aberto, cardId, onFechar, onAlterado, empres
   const perm = dados?.permissoes || {};
   const bucket = card ? BUCKET_POR_ID[card.bucket] : null;
   const hoje = hojeSP();
-  const ocupado = finalizando || devolvendo;
+  const ocupado = finalizando || devolvendo || !!movendoPara;
+  const destinos = card && perm.mover ? destinosPermitidos(card, hoje) : [];
 
   // Ações na linha do título "Atividade": Devolver / Finalizar (Concluído, só quem criou), Editar e Excluir.
   const acoes = card && (perm.devolver || perm.finalizar || perm.editar || perm.excluir) && (
@@ -694,6 +705,30 @@ export default function CardModal({ aberto, cardId, onFechar, onAlterado, empres
 
               </div>
 
+              {destinos.length > 0 && (
+                <div className="rounded-2xl border border-gray-100 bg-gray-50/70 p-4">
+                  <p className="mb-2 flex items-center gap-1.5 text-[11px] uppercase tracking-wide text-gray-400">
+                    <ArrowRightLeft size={13} /> Transferir para
+                  </p>
+                  <div className="flex flex-col gap-1.5">
+                    {destinos.map((id) => {
+                      const b = BUCKET_POR_ID[id];
+                      return (
+                        <button
+                          key={id}
+                          type="button"
+                          onClick={() => transferir(id)}
+                          disabled={ocupado}
+                          className="flex items-center gap-2 rounded-lg border border-gray-200 bg-white px-3 py-2 text-left text-sm font-medium text-gray-700 transition hover:border-gray-300 hover:bg-gray-50 disabled:opacity-60"
+                        >
+                          {movendoPara === id ? <Loader2 size={15} className="animate-spin text-gray-400" /> : <b.Icone size={15} className={b.iconeCor} />}
+                          {b.titulo}
+                        </button>
+                      );
+                    })}
+                  </div>
+                </div>
+              )}
             </aside>
           </div>
         </div>
