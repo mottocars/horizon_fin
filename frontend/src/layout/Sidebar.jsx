@@ -281,10 +281,8 @@ export default function Sidebar() {
                   key={app.id}
                   to={`/aplicativos/${app.id}`}
                   title={collapsed ? app.nome : undefined}
-                  onClick={(e) => {
-                    setOpenGroups({});
-                    if (collapsed) e.stopPropagation();
-                  }}
+                  // Como os itens nativos: recolhido, o clique abre o aplicativo e o menu junto.
+                  onClick={() => setOpenGroups({})}
                   className={({ isActive }) =>
                     `flex items-center gap-2.5 rounded-[10px] text-[13px] font-medium transition-colors ${
                       collapsed ? 'mx-auto h-8 w-8 justify-center' : 'w-full px-2.5 py-1'
