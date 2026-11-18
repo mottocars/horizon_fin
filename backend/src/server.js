@@ -41,6 +41,7 @@ const dreConfiguracoesRoutes = require('./modules/dre-configuracoes/dreConfigura
 const dreDemonstrativoRoutes = require('./modules/dre-demonstrativo/demonstrativo.routes');
 const dreExportacaoRoutes = require('./modules/dre-exportacao/exportacao.routes');
 const dreProjecoesRoutes = require('./modules/dre-projecoes/dreProjecoes.routes');
+const reformaTributariaRoutes = require('./modules/reforma-tributaria/reformaTributaria.routes');
 const contasPagarReceberRoutes = require('./modules/contas-pagar-receber/cpr.routes');
 const lancamentosAjustesRoutes = require('./modules/lancamentos-ajustes/lancamentosAjustes.routes');
 const lancamentosManuaisRoutes = require('./modules/lancamentos-manuais/lancamentosManuais.routes');
@@ -210,6 +211,8 @@ app.use('/api/dre-financeiro', exigirTela([T.DRE]), dreFinanceiroRoutes);
 app.use('/api/dre-configuracoes', exigirTela([T.DRE]), dreConfiguracoesRoutes);
 // Projeções da DRE (orçamento por centro de custo, assistente em etapas e versões).
 app.use('/api/dre-projecoes', exigirTela([T.DRE]), dreProjecoesRoutes);
+// Operações › Reforma Tributária (o impacto da CBS/IBS na DRE projetada, centro a centro).
+app.use('/api/reforma-tributaria', exigirTela([T.REFORMA_TRIBUTARIA]), reformaTributariaRoutes);
 app.use('/api/contas-pagar-receber', exigirTela([T.CONTAS_PAGAR_RECEBER]), contasPagarReceberRoutes);
 // Cadastros › Formulários; /api/meus-formularios = a janela de pesquisa ao entrar (todo usuário logado);
 // /api/publico/formularios = o link público, sem login (ver modules/formularios).

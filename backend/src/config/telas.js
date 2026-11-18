@@ -24,6 +24,7 @@ module.exports = {
   REPASSES: '/operacoes/repasses-cef',
   COBRANCAS: '/operacoes/gestao-de-cobrancas',
   CRONOGRAMAS_OBRAS: '/operacoes/cronogramas-obras',
+  REFORMA_TRIBUTARIA: '/operacoes/reforma-tributaria',
 
   MONITOR: '/integracoes/monitor',
   PORTAL: '/integracoes/portal-das-construtoras',

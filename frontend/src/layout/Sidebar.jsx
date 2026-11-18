@@ -32,6 +32,7 @@ import {
   Wallet,
   ChartGantt,
   Handshake,
+  Scale,
   ArrowDownUp,
   ClipboardList,
   Megaphone,
@@ -76,6 +77,7 @@ const menuItems = [
     children: [
       { label: 'DRE Construtoras', to: '/operacoes/dre-gerencial', icon: BarChart3 },
       { label: 'DFC Construtoras', to: '/operacoes/dfc-construtoras', icon: Wallet },
+      { label: 'Reforma Tributária', to: '/operacoes/reforma-tributaria', icon: Scale },
       { label: 'Espião NFe / NFSe', to: '/operacoes/espiao-nfe-nfse', icon: FileSearch },
       { label: 'Saldo Contas Bancárias', to: '/operacoes/saldo-contas-bancarias', icon: Landmark },
       { label: 'Repasses CEF', to: '/operacoes/repasses-cef', icon: Banknote },

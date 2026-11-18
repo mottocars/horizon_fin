@@ -64,6 +64,7 @@ import ClusterClientesList from './pages/Operacoes/GestaoCobrancas/ClustersCobra
 import ClienteClusterDetalhe from './pages/Operacoes/GestaoCobrancas/ClustersCobranca/ClienteClusterDetalhe';
 import DistribuicaoExplicacaoPage from './pages/Operacoes/GestaoCobrancas/ReguaCobranca/DistribuicaoExplicacaoPage';
 import CronogramasObrasPage from './pages/Operacoes/CronogramasObras/CronogramasObrasPage';
+import ReformaTributariaPage from './pages/Operacoes/ReformaTributaria/ReformaTributariaPage';
 import ContasPagarReceberPage from './pages/ContasPagarReceber/ContasPagarReceberPage';
 import FormulariosPage from './pages/Formularios/FormulariosPage';
 import FormularioEditorPage from './pages/Formularios/FormularioEditorPage';
@@ -127,6 +128,7 @@ export default function App() {
               element={<ClienteClusterDetalhe />}
             />
             <Route path="/operacoes/cronogramas-obras" element={<CronogramasObrasPage />} />
+            <Route path="/operacoes/reforma-tributaria" element={<ReformaTributariaPage />} />
 
             <Route path="/cadastros/empresas" element={<EmpresasList />} />
             <Route path="/cadastros/empresas/nova" element={<EmpresaNova />} />

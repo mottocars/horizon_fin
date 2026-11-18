@@ -37,6 +37,7 @@ export const TELAS_SISTEMA = [
     telas: [
       { codigo: '/operacoes/dre-gerencial', label: 'DRE Construtoras' },
       { codigo: '/operacoes/dfc-construtoras', label: 'DFC Construtoras' },
+      { codigo: '/operacoes/reforma-tributaria', label: 'Reforma Tributária' },
       { codigo: '/operacoes/espiao-nfe-nfse', label: 'Espião NFe / NFSe' },
       { codigo: '/operacoes/saldo-contas-bancarias', label: 'Saldo Contas Bancárias' },
       { codigo: '/operacoes/repasses-cef', label: 'Repasses CEF' },
