@@ -2,38 +2,17 @@ import { useEffect, useState } from 'react';
 import { Info, Scale, Settings2, TriangleAlert } from 'lucide-react';
 import { getImpactoReforma } from '../../../api/reformaTributaria.api';
 import { mesAno } from '../CronogramasObras/formatos';
-import { moeda, pct, REGIMES, valor } from './formatos';
+import { moeda, pct, valor } from './formatos';
+import { Bloco, CABECALHO, comSinal, comSinalCompacto, corDiferenca, SeloRegime, TabelaComparativa } from './componentes';
 import '../../Dashboards/EconomicoFinanceiro/fluxo/painel.css';
 import '../../Dashboards/CronogramasObras/cronogramas.css';
 
-const CABECALHO = 'border-b-2 border-blue-500 bg-blue-50 text-xs font-medium uppercase tracking-wide text-blue-700';
-const corDiferenca = (d) => (Math.abs(d) < 0.5 ? 'text-gray-400' : d > 0 ? 'text-emerald-600' : 'text-red-600');
-const comSinal = (d) => (Math.abs(d) < 0.5 ? '—' : `${d > 0 ? '+' : '−'}${moeda(Math.abs(d))}`);
 const margem = (lucro, rl) => (rl ? lucro / rl : null);
 
-function Bloco({ titulo, subtitulo, children }) {
-  return (
-    <div className="overflow-hidden rounded-xl border border-gray-200">
-      <div className="border-b border-gray-100 px-4 py-3">
-        <h3 className="text-sm font-semibold text-gray-900">{titulo}</h3>
-        {subtitulo && <p className="mt-0.5 text-xs text-gray-500">{subtitulo}</p>}
-      </div>
-      <div className="overflow-x-auto">{children}</div>
-    </div>
-  );
-}
-
-function Regime({ centro }) {
-  if (centro.natureza !== 'OBRA') return <span className="text-xs text-gray-400">Administrativo</span>;
-  const r = REGIMES[centro.regime];
-  if (!r) return <span className="whitespace-nowrap rounded-full bg-amber-50 px-2 py-0.5 text-[11px] font-semibold text-amber-700">Não configurado</span>;
-  return <span className={`whitespace-nowrap rounded-full px-2 py-0.5 text-[11px] font-semibold ${r.classe}`}>{r.curto}</span>;
-}
-
-// Aba Impacto: a DRE projetada (rascunho do centro ou a última versão salva da Projeção da DRE) com a
+// Aba Impacto DRE: a DRE projetada (rascunho do centro ou a última versão salva da Projeção da DRE) com a
 // reforma aplicada de 2027 em diante, pelo regime de cada obra (aba Centros de Custos) e pelas alíquotas
 // da empresa (aba Alíquotas). Obra não configurada fica como está.
-export default function ImpactoTab({ empresaId, centros, ano, recarregar, onOpcoes, onCarregando, onFiltrarCentro, onIrPara }) {
+export default function ImpactoDreTab({ empresaId, centros, ano, recarregar, onOpcoes, onCarregando, onFiltrarCentro, onIrPara }) {
   const [dados, setDados] = useState(null);
   const [carregando, setCarregando] = useState(false);
   const [erro, setErro] = useState('');
@@ -146,7 +125,7 @@ export default function ImpactoTab({ empresaId, centros, ano, recarregar, onOpco
               <div className="tile">
                 <span className="k">Efeito no lucro líquido</span>
                 <span className={`v ${corDiferenca(diferenca)}`} title={comSinal(diferenca)}>
-                  {Math.abs(diferenca) < 0.5 ? 'R$ 0' : `${diferenca > 0 ? '+' : '−'}${moeda(Math.abs(diferenca), { compacta: true })}`}
+                  {comSinalCompacto(diferenca)}
                 </span>
                 <span className="d">
                   Margem líquida <b>{pct(margem(r.lucro_hoje, r.rl_hoje))}</b> → <b>{pct(margem(r.lucro_reforma, r.rl_reforma))}</b>
@@ -159,34 +138,7 @@ export default function ImpactoTab({ empresaId, centros, ano, recarregar, onOpco
             titulo="Demonstração do resultado"
             subtitulo={`${periodo} · projeção da DRE de hoje × com a reforma · ${r.configurados} de ${r.obras} ${r.obras === 1 ? 'obra configurada' : 'obras configuradas'}`}
           >
-            <table className="w-full min-w-[640px] text-sm">
-              <thead>
-                <tr className={CABECALHO}>
-                  <th className="py-2.5 pl-4 pr-3 text-left">Linha</th>
-                  <th className="px-3 py-2.5 text-right">Projeção hoje</th>
-                  <th className="px-3 py-2.5 text-right">Com a reforma</th>
-                  <th className="py-2.5 pl-3 pr-4 text-right">Diferença</th>
-                </tr>
-              </thead>
-              <tbody>
-                {dados.dre.map((l) => {
-                  const d = l.reforma - l.hoje;
-                  const total = l.tipo === 'total';
-                  const linha = l.tipo === 'linha';
-                  return (
-                    <tr key={`${l.tipo}-${l.id}`} className={`border-b border-gray-100 ${total ? 'bg-gray-50 font-semibold text-gray-900' : linha ? 'text-gray-600' : 'font-medium text-gray-800'}`}>
-                      <td className={`py-2.5 pr-3 ${linha ? 'pl-9 text-xs' : 'pl-4'}`}>
-                        {l.descricao}
-                        {l.nova && <span className="ml-2 rounded bg-primary-50 px-1.5 py-0.5 text-[10px] font-semibold text-primary-700">reforma</span>}
-                      </td>
-                      <td className={`px-3 py-2.5 whitespace-nowrap text-right tabular-nums ${linha ? 'text-xs' : ''}`}>{valor(l.hoje)}</td>
-                      <td className={`px-3 py-2.5 whitespace-nowrap text-right tabular-nums ${linha ? 'text-xs' : ''}`}>{valor(l.reforma)}</td>
-                      <td className={`py-2.5 pl-3 pr-4 whitespace-nowrap text-right tabular-nums ${linha ? 'text-xs' : ''} ${corDiferenca(d)}`}>{comSinal(d)}</td>
-                    </tr>
-                  );
-                })}
-              </tbody>
-            </table>
+            <TabelaComparativa linhas={dados.dre} valor={valor} />
           </Bloco>
 
           <Bloco titulo="Por centro de custo" subtitulo="Clique num centro para ver só ele. Diferença = lucro com a reforma − lucro da projeção de hoje.">
@@ -225,7 +177,7 @@ export default function ImpactoTab({ empresaId, centros, ano, recarregar, onOpco
                         )}
                       </td>
                       <td className="px-3 py-2.5">
-                        <Regime centro={c} />
+                        <SeloRegime centro={c} />
                       </td>
                       <td className="px-3 py-2.5 whitespace-nowrap text-right tabular-nums">{valor(c.receita)}</td>
                       <td className="px-3 py-2.5 whitespace-nowrap text-right tabular-nums">{valor(c.imposto_hoje)}</td>

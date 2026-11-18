@@ -1,6 +1,6 @@
 import { useEffect, useMemo, useState } from 'react';
 import { useSearchParams } from 'react-router-dom';
-import { Building2, Percent, RefreshCw, Scale } from 'lucide-react';
+import { Building2, Landmark, Percent, RefreshCw, Scale, Settings } from 'lucide-react';
 import Card from '../../../components/Card';
 import Tabs from '../../../components/Tabs';
 import SearchableSelect from '../../../components/SearchableSelect';
@@ -9,20 +9,27 @@ import { nomeExibicaoEmpresa } from '../../../utils/empresa';
 import { useEmpresaTravada } from '../../../hooks/useEmpresaTravada';
 import { useAuth } from '../../../auth/AuthContext';
 import { filtrarAbas } from '../../../utils/permissoes';
-import ImpactoTab from './ImpactoTab';
+import ImpactoDreTab from './ImpactoDreTab';
+import ImpactoDfcTab from './ImpactoDfcTab';
 import CentrosReformaTab from './CentrosReformaTab';
 import AliquotasReformaTab from './AliquotasReformaTab';
+import ConfiguracoesDfcTab from './ConfiguracoesDfcTab';
 
 // Operações › Reforma Tributária (pedido do usuário, 18/11/2026): o impacto da CBS/IBS (LC 214/2025) na
-// DRE projetada. Impacto é a tela; Centros de Custos (o regime de cada obra) e Alíquotas (os parâmetros
-// da empresa) são o que alimenta o impacto — o mesmo `{ divider: true }` de Cronogramas Obras separa os
-// dois grupos. Empresa, aba e filtros vivem na URL (o "Voltar" do navegador volta pro mesmo lugar).
+// DRE projetada e no DFC. Impacto DRE e Impacto DFC são a tela; Centros de Custos (o regime de cada obra,
+// vale para os dois), Alíquotas (os parâmetros da empresa) e Configurações DFC (as contas do DFC e o
+// pagamento do imposto) alimentam o impacto — o mesmo `{ divider: true }` de Cronogramas Obras separa os
+// dois grupos. Empresa, aba e filtros vivem na URL (o "Voltar" do navegador volta pro mesmo lugar); os
+// filtros de centro e período valem para os dois impactos.
 const TABS = [
-  { id: 'impacto', label: 'Impacto', icon: Scale },
+  { id: 'impacto', label: 'Impacto DRE', icon: Scale },
+  { id: 'impacto-dfc', label: 'Impacto DFC', icon: Landmark },
   { divider: true },
   { id: 'centros-custos', label: 'Centros de Custos', icon: Building2 },
   { id: 'aliquotas', label: 'Alíquotas', icon: Percent },
+  { id: 'configuracoes-dfc', label: 'Configurações DFC', icon: Settings },
 ];
+const ABAS_IMPACTO = new Set(['impacto', 'impacto-dfc']);
 
 export default function ReformaTributariaPage() {
   const { travada: empresaTravada, empresaIdTravada } = useEmpresaTravada();
@@ -97,7 +104,7 @@ export default function ReformaTributariaPage() {
               />
             </div>
 
-            {tabAtiva.id === 'impacto' && (
+            {ABAS_IMPACTO.has(tabAtiva.id) && (
               <>
                 <div className="sm:min-w-52 sm:max-w-xs sm:flex-1">
                   <label className="mb-1 block text-sm font-medium text-gray-700">Centro de custo</label>
@@ -127,7 +134,7 @@ export default function ReformaTributariaPage() {
             )}
           </div>
 
-          {tabAtiva.id === 'impacto' && (
+          {ABAS_IMPACTO.has(tabAtiva.id) && (
             <div className="flex shrink-0 gap-2">
               <button
                 type="button"
@@ -150,8 +157,21 @@ export default function ReformaTributariaPage() {
           <CentrosReformaTab empresaId={empresaId} />
         ) : tabAtiva.id === 'aliquotas' ? (
           <AliquotasReformaTab empresaId={empresaId} />
+        ) : tabAtiva.id === 'configuracoes-dfc' ? (
+          <ConfiguracoesDfcTab empresaId={empresaId} />
+        ) : tabAtiva.id === 'impacto-dfc' ? (
+          <ImpactoDfcTab
+            empresaId={empresaId}
+            centros={centrosMarcados}
+            ano={ano}
+            recarregar={recarregar}
+            onOpcoes={setOpcoes}
+            onCarregando={setCarregando}
+            onFiltrarCentro={(id) => atualizarParams({ centro: id ? [String(id)] : [] })}
+            onIrPara={(aba) => atualizarParams({ aba })}
+          />
         ) : (
-          <ImpactoTab
+          <ImpactoDreTab
             empresaId={empresaId}
             centros={centrosMarcados}
             ano={ano}

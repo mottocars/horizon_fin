@@ -29,6 +29,17 @@ const centroSchema = z.object({
   irpj_csll: opcional(percentual('IRPJ/CSLL')),
 });
 
+const contas = z.array(z.coerce.number().int().positive()).max(5000);
+const dfcSchema = z.object({
+  contas_receita: contas,
+  contas_custo: contas,
+  contas_ret: contas,
+  prazo_recolhimento: z.coerce.number().int().min(0, 'Prazo de recolhimento: de 0 a 12 meses.').max(12, 'Prazo de recolhimento: de 0 a 12 meses.'),
+  split_inicio: z.union([z.string().regex(/^\d{4}-\d{2}$/, 'Início do split payment inválido.'), z.null()]),
+  saldo_credor: z.enum(['COMPENSAR', 'RESSARCIR'], { errorMap: () => ({ message: 'Escolha o que fazer com o saldo credor.' }) }),
+  prazo_ressarcimento: z.coerce.number().int().min(0, 'Prazo do ressarcimento: de 0 a 24 meses.').max(24, 'Prazo do ressarcimento: de 0 a 24 meses.'),
+});
+
 function tratar(err, next) {
   if (err.issues) {
     const e = new Error(err.issues[0].message);
@@ -56,6 +67,17 @@ module.exports = {
     const ano = /^\d{4}$/.test(String(req.query.ano || '')) ? Number(req.query.ano) : null;
     return service.impacto(empresaId, { centros, ano });
   }),
+  impactoDfc: rota((req, empresaId) => {
+    const centros = String(req.query.centros || '')
+      .split(',')
+      .filter(Boolean)
+      .map((x) => centroIdSchema.parse(x));
+    const ano = /^\d{4}$/.test(String(req.query.ano || '')) ? Number(req.query.ano) : null;
+    return service.impactoDfc(empresaId, { centros, ano });
+  }),
+  obterConfigDfc: rota((req, empresaId) => service.obterConfigDfc(empresaId)),
+  salvarConfigDfc: rota((req, empresaId) => service.salvarConfigDfc(empresaId, dfcSchema.parse(req.body || {}), req.user.id)),
+  restaurarConfigDfc: rota((req, empresaId) => service.restaurarConfigDfc(empresaId)),
   listarCentros: rota((req, empresaId) => service.listarCentros(empresaId)),
   salvarCentro: rota((req, empresaId) =>
     service.salvarCentro(empresaId, centroIdSchema.parse(req.params.centroId), centroSchema.parse(req.body || {}), req.user.id)

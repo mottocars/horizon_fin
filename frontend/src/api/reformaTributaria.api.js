@@ -35,3 +35,24 @@ export function salvarConfigReforma(empresaId, dados) {
 export function restaurarConfigReforma(empresaId) {
   return http.delete(`/reforma-tributaria/${empresaId}/configuracoes`).then((res) => res.data);
 }
+
+// Aba Impacto DFC: { inicio, ano, anos, periodo, versao, resumo, dfc, linhas, por_centro, parametros, centros_opcoes, contas }.
+export function getImpactoDfcReforma(empresaId, { centros = [], ano = '' } = {}) {
+  return http
+    .get(`/reforma-tributaria/${empresaId}/impacto-dfc`, { params: { centros: centros.join(',') || undefined, ano: ano || undefined } })
+    .then((res) => res.data);
+}
+
+// Aba Configurações DFC: { contas_receita, contas_custo, contas_ret, prazo_recolhimento, split_inicio, saldo_credor,
+// prazo_ressarcimento, padrao, atualizado_em, usuario, contas: [{ id, nome, mascara }], sugestao, padroes }.
+export function getConfigDfcReforma(empresaId) {
+  return http.get(`/reforma-tributaria/${empresaId}/configuracoes-dfc`).then((res) => res.data);
+}
+
+export function salvarConfigDfcReforma(empresaId, dados) {
+  return http.put(`/reforma-tributaria/${empresaId}/configuracoes-dfc`, dados).then((res) => res.data);
+}
+
+export function restaurarConfigDfcReforma(empresaId) {
+  return http.delete(`/reforma-tributaria/${empresaId}/configuracoes-dfc`).then((res) => res.data);
+}

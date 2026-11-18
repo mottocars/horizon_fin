@@ -26,7 +26,8 @@ const OPCOES_REGIME = [
 
 const Vazio = () => <span className="text-gray-300">—</span>;
 
-function Projecao({ p }) {
+function Projecao({ p, naDre }) {
+  if (!naDre) return <span className="whitespace-nowrap text-xs text-gray-400">Fora da DRE</span>;
   if (!p) return <span className="whitespace-nowrap text-xs text-amber-600">Sem projeção da DRE</span>;
   const origem = p.origem === 'VERSAO' ? `Versão ${p.numero}` : p.status === 'CONCLUIDO' ? 'Rascunho concluído' : 'Rascunho em andamento';
   return (
@@ -214,8 +215,9 @@ function JanelaRegime({ empresaId, centro, irpjPadrao, onFechar, onSalvo }) {
   );
 }
 
-// Aba Centros de Custos: as obras (com "Realiza DRE"), a projeção que o Impacto usa e o regime de cada uma
-// na reforma. Clicar numa linha abre a janela do regime.
+// Aba Centros de Custos: as obras (com "Realiza DRE" ou "Projeta DFC"), a projeção da DRE que o Impacto DRE
+// usa, se estão no DFC e o regime de cada uma na reforma (vale para os dois impactos). Clicar numa linha
+// abre a janela do regime.
 export default function CentrosReformaTab({ empresaId }) {
   const [dados, setDados] = useState(null);
   const [carregando, setCarregando] = useState(true);
@@ -264,7 +266,7 @@ export default function CentrosReformaTab({ empresaId }) {
         <>
           <p className="mb-3 text-xs text-gray-500">
             {configurados} de {centros.length} {centros.length === 1 ? 'obra configurada' : 'obras configuradas'}. Clique numa obra para escolher o regime.
-            Obra sem regime fica como está na projeção.
+            Obra sem regime fica como está na projeção. O regime vale para o Impacto DRE e para o Impacto DFC.
           </p>
           <div className="overflow-x-auto">
             <table className="w-full min-w-[960px] text-sm">
@@ -272,6 +274,7 @@ export default function CentrosReformaTab({ empresaId }) {
                 <tr className={CABECALHO}>
                   <th className="py-2.5 pl-4 pr-3 text-left">Centro de custo</th>
                   <th className="px-3 py-2.5 text-left">Projeção da DRE</th>
+                  <th className="px-3 py-2.5 text-left">No DFC</th>
                   <th className="px-3 py-2.5 text-left">Regime</th>
                   <th className="px-3 py-2.5 text-right">Terreno</th>
                   <th className="px-3 py-2.5 text-right">Unid. residenciais</th>
@@ -283,8 +286,8 @@ export default function CentrosReformaTab({ empresaId }) {
               <tbody>
                 {centros.length === 0 ? (
                   <tr>
-                    <td colSpan={8} className="border-b border-gray-100 py-10 text-center text-sm text-gray-400">
-                      Nenhuma obra com "Realiza DRE" nesta empresa.
+                    <td colSpan={9} className="border-b border-gray-100 py-10 text-center text-sm text-gray-400">
+                      Nenhuma obra com "Realiza DRE" ou "Projeta DFC" nesta empresa.
                     </td>
                   </tr>
                 ) : (
@@ -305,8 +308,9 @@ export default function CentrosReformaTab({ empresaId }) {
                           {c.apelido && <span className="text-gray-400"> · {c.apelido}</span>}
                         </td>
                         <td className="px-3 py-3">
-                          <Projecao p={c.projecao} />
+                          <Projecao p={c.projecao} naDre={c.realiza_dre} />
                         </td>
+                        <td className="px-3 py-3 text-xs text-gray-600">{c.projeta_dfc ? 'Sim' : <Vazio />}</td>
                         <td className="px-3 py-3">
                           {r ? (
                             <span className={`whitespace-nowrap rounded-full px-2 py-0.5 text-[11px] font-semibold ${r.classe}`}>{r.rotulo}</span>

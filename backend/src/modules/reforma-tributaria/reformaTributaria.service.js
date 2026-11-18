@@ -2,14 +2,20 @@ const pool = require('../../config/db');
 const projecoes = require('../dre-projecoes/dreProjecoes.service');
 const dreMascaras = require('../dre-mascaras/dreMascaras.service');
 const { baseDoImposto } = require('../dre-demonstrativo/demonstrativo.service');
+const dfcOrcamento = require('../dfc-orcamento/dfcOrcamento.service');
+const fluxoDfc = require('../dfc-fluxo/fluxo.service');
 const motor = require('./motor');
 
-// Operações > Reforma Tributária. Três abas:
-//   Impacto          — a DRE projetada (Projeção da DRE: o rascunho do centro e, sem rascunho, a última
+// Operações > Reforma Tributária. Abas:
+//   Impacto DRE      — a DRE projetada (Projeção da DRE: o rascunho do centro e, sem rascunho, a última
 //                      versão salva — a mesma escolha da coluna Projetado da aba DRE de Operações) com a
 //                      reforma aplicada a partir de 2027 (motor.js), centro a centro;
 //   Centros de Custos — o regime de cada obra (RET de transição ou regime regular) e os dados dele;
-//   Alíquotas         — CBS e IBS por ano, redução e redutores dos imóveis, RET de transição.
+//   Impacto DFC      — o fluxo de caixa projetado (última versão do Orçamento do DFC) com o imposto
+//                      sobre a receita recalculado pelo caixa nos dois cenários (ver motor.js, DFC);
+//   Alíquotas         — CBS e IBS por ano, redução e redutores dos imóveis, RET de transição;
+//   Configurações DFC — as contas do DFC (recebimentos de venda, custos com crédito, RET) e o pagamento
+//                      do imposto (prazo, split payment, saldo credor).
 // Obra sem configuração fica como está (sem impacto): o impacto cresce conforme os centros são configurados.
 
 const num = (v) => (v === null || v === undefined || v === '' ? 0 : Number(v) || 0);
@@ -87,9 +93,9 @@ async function listarCentros(empresaId) {
   const [{ rows: centros }, { rows: config }, { rows: proj }] = await Promise.all([
     pool.query(
       `SELECT sienge_id::int AS id, name AS nome, NULLIF(TRIM(apelido), '') AS apelido, numero_unidades,
-              valor_geral_vendas::float AS vgv, status
+              valor_geral_vendas::float AS vgv, status, realiza_dre, projeta_dfc
          FROM centros_custo_sienge
-        WHERE empresa_id = $1 AND realiza_dre AND natureza = 'OBRA'
+        WHERE empresa_id = $1 AND (realiza_dre OR projeta_dfc) AND natureza = 'OBRA'
         ORDER BY dre_ordem ASC NULLS LAST, sienge_id ASC`,
       [empresaId]
     ),
@@ -141,10 +147,11 @@ async function listarCentros(empresaId) {
 
 async function salvarCentro(empresaId, centroId, dados, usuarioId) {
   const { rows } = await pool.query(
-    `SELECT 1 FROM centros_custo_sienge WHERE empresa_id = $1 AND sienge_id = $2 AND realiza_dre AND natureza = 'OBRA'`,
+    `SELECT 1 FROM centros_custo_sienge
+      WHERE empresa_id = $1 AND sienge_id = $2 AND (realiza_dre OR projeta_dfc) AND natureza = 'OBRA'`,
     [empresaId, centroId]
   );
-  if (!rows[0]) throw erro(404, 'Obra não encontrada (precisa de "Realiza DRE" e natureza Obra).');
+  if (!rows[0]) throw erro(404, 'Obra não encontrada (precisa de "Realiza DRE" ou "Projeta DFC" e natureza Obra).');
   const regular = dados.regime === 'REGULAR';
   if (regular && (dados.valor_terreno === null || dados.perc_custo_credito === null || dados.irpj_csll === null)) {
     throw erro(400, 'No regime regular, informe o valor do terreno, a parte do custo que gera crédito e o IRPJ/CSLL.');
@@ -362,7 +369,397 @@ async function impacto(empresaId, { centros: filtro = [], ano = null }) {
   };
 }
 
+// ---------------------------------------------------------------- Configurações DFC
+
+// As naturezas do DFC (as que têm Máscara DFC no plano Global ou no de algum centro), com a máscara de
+// nível 2, e a sugestão de cada papel pelo nome: recebimentos = máscara de receita de vendas; custos com
+// crédito = máscara de custo de construção / obra; RET = natureza com "RET" no nome.
+async function contasDfc(empresaId) {
+  const { rows } = await pool.query(
+    `WITH contas AS (
+       SELECT sienge_id, mascara_id, 0 AS prioridade FROM dfc_plano_contas WHERE empresa_id = $1 AND mascara_id IS NOT NULL
+       UNION ALL
+       SELECT sienge_id, mascara_id, 1 FROM dfc_plano_contas_centro WHERE empresa_id = $1 AND mascara_id IS NOT NULL
+     )
+     SELECT DISTINCT ON (c.sienge_id) c.sienge_id::int AS id, COALESCE(p.name, 'Natureza ' || c.sienge_id) AS nome,
+            m.descricao AS mascara, m.ordem AS m_ordem, g.ordem AS g_ordem
+       FROM contas c
+       JOIN dfc_mascaras m ON m.id = c.mascara_id
+       LEFT JOIN dfc_mascaras g ON g.id = m.parent_id
+       LEFT JOIN planos_financeiros_sienge p ON p.empresa_id = $1 AND p.sienge_id = c.sienge_id
+      ORDER BY c.sienge_id, c.prioridade`,
+    [empresaId]
+  );
+  const contas = rows.sort((a, b) => (a.g_ordem ?? 0) - (b.g_ordem ?? 0) || (a.m_ordem ?? 0) - (b.m_ordem ?? 0) || a.id - b.id);
+  const sem = (t) => String(t || '').normalize('NFD').replace(/[̀-ͯ]/g, '').toUpperCase();
+  const sugestao = {
+    contas_receita: contas.filter((c) => /RECEITA.*VENDA|VENDAS?$/.test(sem(c.mascara))).map((c) => c.id),
+    contas_custo: contas.filter((c) => /CUSTO.*(CONSTRU|OBRA)/.test(sem(c.mascara))).map((c) => c.id),
+    contas_ret: contas.filter((c) => /\bRET\b/.test(sem(c.nome))).map((c) => c.id),
+  };
+  return { contas: contas.map(({ id, nome, mascara }) => ({ id, nome, mascara })), sugestao };
+}
+
+async function lerConfigDfc(empresaId) {
+  const { rows } = await pool.query(
+    `SELECT contas_receita, contas_custo, contas_ret, prazo_recolhimento, split_inicio, saldo_credor, prazo_ressarcimento,
+            c.atualizado_em, u.nome AS usuario
+       FROM reforma_tributaria_dfc c LEFT JOIN usuarios u ON u.id = c.usuario_id
+      WHERE c.empresa_id = $1`,
+    [empresaId]
+  );
+  return rows[0] || null;
+}
+
+// A configuração em vigor: a salva ou, sem nada salvo, o padrão com as contas sugeridas.
+async function configDfcEmVigor(empresaId) {
+  const [cfg, { contas, sugestao }] = await Promise.all([lerConfigDfc(empresaId), contasDfc(empresaId)]);
+  const base = cfg
+    ? {
+        contas_receita: cfg.contas_receita.map(Number),
+        contas_custo: cfg.contas_custo.map(Number),
+        contas_ret: cfg.contas_ret.map(Number),
+        prazo_recolhimento: cfg.prazo_recolhimento,
+        split_inicio: cfg.split_inicio,
+        saldo_credor: cfg.saldo_credor,
+        prazo_ressarcimento: cfg.prazo_ressarcimento,
+      }
+    : { ...motor.DFC_PADRAO, ...sugestao };
+  return { ...base, padrao: !cfg, atualizado_em: cfg?.atualizado_em || null, usuario: cfg?.usuario || null, contas, sugestao, padroes: motor.DFC_PADRAO };
+}
+
+const obterConfigDfc = (empresaId) => configDfcEmVigor(empresaId);
+
+async function salvarConfigDfc(empresaId, dados, usuarioId) {
+  if (!dados.contas_receita.length) throw erro(400, 'Escolha pelo menos uma conta de recebimento de venda: é a base do imposto.');
+  await pool.query(
+    `INSERT INTO reforma_tributaria_dfc
+       (empresa_id, contas_receita, contas_custo, contas_ret, prazo_recolhimento, split_inicio, saldo_credor, prazo_ressarcimento, usuario_id, atualizado_em)
+     VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10)
+     ON CONFLICT (empresa_id) DO UPDATE SET
+       contas_receita = EXCLUDED.contas_receita, contas_custo = EXCLUDED.contas_custo, contas_ret = EXCLUDED.contas_ret,
+       prazo_recolhimento = EXCLUDED.prazo_recolhimento, split_inicio = EXCLUDED.split_inicio,
+       saldo_credor = EXCLUDED.saldo_credor, prazo_ressarcimento = EXCLUDED.prazo_ressarcimento,
+       usuario_id = EXCLUDED.usuario_id, atualizado_em = EXCLUDED.atualizado_em`,
+    [
+      empresaId,
+      dados.contas_receita,
+      dados.contas_custo,
+      dados.contas_ret,
+      dados.prazo_recolhimento,
+      dados.split_inicio,
+      dados.saldo_credor,
+      dados.prazo_ressarcimento,
+      usuarioId,
+      new Date(),
+    ]
+  );
+  return configDfcEmVigor(empresaId);
+}
+
+async function restaurarConfigDfc(empresaId) {
+  await pool.query('DELETE FROM reforma_tributaria_dfc WHERE empresa_id = $1', [empresaId]);
+  return configDfcEmVigor(empresaId);
+}
+
+// ---------------------------------------------------------------- Impacto DFC
+
+// A receita da obra inteira na Projeção da DRE (a mesma base do ρ do Impacto DRE), por centro.
+async function receitaTotalDre(empresaId) {
+  const [fonte, arvore] = await Promise.all([projecoes.orcamentosDaFonte(empresaId, { fonte: 'atual' }), dreMascaras.list(empresaId)]);
+  const mascaras = arvore.flatMap((g) => g.filhos);
+  const i = mascaras.findIndex((m) => m.origem === 'IMPOSTO_FIXO');
+  const baseIds = i >= 0 ? baseDoImposto(mascaras, i).map((m) => m.id) : [];
+  const total = new Map();
+  fonte.orcamentos.forEach((o) => {
+    const v = o.mensal?.valores || {};
+    total.set(
+      Number(o.centro_id),
+      baseIds.reduce((t, id) => t + (v[id] || []).reduce((s, x) => s + num(x), 0), 0)
+    );
+  });
+  return total;
+}
+
+// A alíquota (%) do RET de hoje num mês: o histórico da linha de imposto fixo da DRE (a vigente no mês);
+// sem histórico, a do RET de transição da aba Alíquotas.
+async function retDeHoje(empresaId, p) {
+  const { rows } = await pool.query(
+    `SELECT to_char(h.inicio, 'YYYY-MM') AS inicio, h.aliquota::float AS aliquota
+       FROM dre_mascaras_imposto_historico h
+      WHERE h.mascara_id = (SELECT m.id FROM dre_mascaras m JOIN dre_mascaras g ON g.id = m.parent_id
+                             WHERE m.empresa_id = $1 AND m.origem = 'IMPOSTO_FIXO' ORDER BY g.ordem, m.ordem LIMIT 1)
+      ORDER BY h.inicio`,
+    [empresaId]
+  );
+  if (!rows.length) return () => p.ret_ibs_cbs + p.ret_irpj_csll;
+  return (mes) => rows.filter((h) => h.inicio <= mes).pop()?.aliquota ?? 0;
+}
+
+const CAMPOS_DFC = [...motor.CAMPOS_DFC, 'efeito'];
+const zeradoDfc = () => Object.fromEntries(CAMPOS_DFC.map((c) => [c, 0]));
+const efeitoDe = (x) => x.ret + x.ibs_cbs + x.irpj_csll + x.ressarcimento - x.imposto_hoje;
+
+// `centros`: ids (vazio = todos com valores no DFC de 2027 em diante); `ano`: um ano (vazio = toda a projeção).
+async function impactoDfc(empresaId, { centros: filtro = [], ano = null }) {
+  const [orc, cls, cfgEmpresa, cfgDfc, { rows: cfgCentros }, { rows: nomesCentros }, receitaDre] = await Promise.all([
+    dfcOrcamento.orcamento(empresaId),
+    fluxoDfc.classificador(empresaId),
+    lerConfig(empresaId),
+    configDfcEmVigor(empresaId),
+    pool.query(
+      `SELECT centro_id, regime, valor_terreno::float, unidades_residenciais, lotes, perc_custo_credito::float, irpj_csll::float
+         FROM reforma_tributaria_centros WHERE empresa_id = $1`,
+      [empresaId]
+    ),
+    pool.query(
+      `SELECT sienge_id::int AS id, COALESCE(NULLIF(TRIM(apelido), ''), name) AS nome, natureza
+         FROM centros_custo_sienge WHERE empresa_id = $1
+        ORDER BY dre_ordem ASC NULLS LAST, sienge_id ASC`,
+      [empresaId]
+    ),
+    receitaTotalDre(empresaId),
+  ]);
+  const p = motor.parametros(cfgEmpresa);
+  const retHoje = await retDeHoje(empresaId, p);
+  const config = new Map(cfgCentros.map((c) => [c.centro_id, c]));
+  const nomes = new Map(nomesCentros.map((c) => [c.id, c]));
+  const dfc = {
+    prazo_recolhimento: cfgDfc.prazo_recolhimento,
+    split_inicio: cfgDfc.split_inicio,
+    saldo_credor: cfgDfc.saldo_credor,
+    prazo_ressarcimento: cfgDfc.prazo_ressarcimento,
+  };
+  if (!orc.versao) {
+    return { inicio: motor.INICIO, anos: [], erro: 'O DFC desta empresa não tem versão salva do Orçamento. O impacto é calculado sobre ela: salve uma versão em DFC Construtoras › Orçamentos.' };
+  }
+  const receita = new Set(cfgDfc.contas_receita);
+  const custo = new Set(cfgDfc.contas_custo);
+  const ret = new Set(cfgDfc.contas_ret);
+  // O RET que o DFC já projeta sai a partir do pagamento do primeiro mês da reforma (o de dez/2026, pago
+  // em jan/2027 com prazo 1, continua igual nos dois cenários).
+  const retSaiDe = motor.somarMeses(motor.INICIO, dfc.prazo_recolhimento);
+
+  // Por centro: recebimentos e pagamentos com crédito por mês (de INICIO em diante), o RET do DFC que
+  // sai e a receita total no DFC (ρ de quem não tem Projeção da DRE). Só o que está no fluxo (natureza
+  // com Máscara DFC no plano do centro).
+  const porCentro = new Map();
+  const doCentro = (id) => {
+    if (!porCentro.has(id)) porCentro.set(id, { R: new Map(), P: new Map(), retDfc: new Map(), receitaTotal: 0 });
+    return porCentro.get(id);
+  };
+  let ultimoDfc = null;
+  orc.valores.forEach((v) => {
+    const c = cls.classificar(v.centro_id, v.sienge_id);
+    if (!c) return;
+    const valor = num(v.valor);
+    const x = doCentro(Number(v.centro_id));
+    if (receita.has(Number(v.sienge_id))) x.receitaTotal += valor;
+    if (v.mes < motor.INICIO) return;
+    if (!ultimoDfc || v.mes > ultimoDfc) ultimoDfc = v.mes;
+    if (receita.has(Number(v.sienge_id))) x.R.set(v.mes, (x.R.get(v.mes) || 0) + valor);
+    if (custo.has(Number(v.sienge_id))) x.P.set(v.mes, (x.P.get(v.mes) || 0) - valor);
+    if (ret.has(Number(v.sienge_id)) && v.mes >= retSaiDe) x.retDfc.set(v.mes, (x.retDfc.get(v.mes) || 0) + valor);
+  });
+  if (!ultimoDfc) {
+    return { inicio: motor.INICIO, anos: [], erro: 'O Orçamento do DFC não tem valores de 2027 em diante: não há o que comparar.' };
+  }
+  const mesesFato = [];
+  for (let m = motor.INICIO; m <= ultimoDfc; m = motor.somarMeses(m, 1)) mesesFato.push(m);
+  const positivo = (mapa) => new Map([...mapa].map(([m, v]) => [m, Math.max(0, v)]));
+
+  const pedidos = new Set(filtro.map(Number));
+  const opcoes = [...porCentro.keys()]
+    .filter((id) => porCentro.get(id).R.size || porCentro.get(id).P.size || porCentro.get(id).retDfc.size)
+    .map((id) => ({ id, nome: nomes.get(id)?.nome || `Centro ${id}` }));
+  const escolhidos = [...porCentro.keys()].filter((id) => !pedidos.size || pedidos.has(id));
+
+  const centrosCalc = escolhidos.map((id) => {
+    const x = porCentro.get(id);
+    const obra = nomes.get(id);
+    const cfg = obra?.natureza === 'OBRA' ? config.get(id) || null : null;
+    const receitaObra = receitaDre.get(id) || x.receitaTotal;
+    const rho = cfg?.regime === 'REGULAR' && receitaObra > 0 ? Math.min(1, Math.max(0, motor.redutores(p, cfg) / receitaObra)) : 0;
+    const r = motor.calcularCentroDfc({ meses: mesesFato, recebimentos: positivo(x.R), pagamentos: positivo(x.P), retHoje, parametros: p, config: cfg, rho, dfc });
+    return { id, nome: obra?.nome || `Centro ${id}`, natureza: obra?.natureza || null, regime: cfg?.regime || null, rho, r, retDfc: x.retDfc };
+  });
+
+  // Meses de caixa: de INICIO até o último mês com recebimento, pagamento com crédito ou imposto (um título
+  // perdido com vencimento em 2050 não estica o período).
+  const ativo = (m) => motor.CAMPOS_DFC.some((k) => Math.abs(m[k]) > 0.005);
+  const ultimoCaixa = centrosCalc.reduce(
+    (u, c) => c.r.meses.reduce((v, m) => (ativo(m) && m.mes > v ? m.mes : v), u),
+    centrosCalc.reduce((u, c) => [...c.retDfc.keys()].reduce((v, m) => (m > v ? m : v), u), motor.INICIO)
+  );
+  const mesesCaixa = [];
+  for (let m = motor.INICIO; m <= ultimoCaixa; m = motor.somarMeses(m, 1)) mesesCaixa.push(m);
+  const noPeriodo = (mes) => !ano || mes.slice(0, 4) === String(ano);
+
+  // O DFC de hoje (mesmo fluxo da aba DFC, com os centros do filtro): saldos e o nível 1 por mês.
+  const mesAtual = fluxoDfc.mesDeHoje();
+  const fluxo = await fluxoDfc.montar(empresaId, {
+    inicio: mesAtual < motor.INICIO ? mesAtual : motor.INICIO,
+    fim: ultimoCaixa,
+    centros: pedidos.size ? (escolhidos.length ? escolhidos : [-1]) : [],
+  });
+  // Saldo final do DFC de hoje no mês (o fluxo monta no máximo 240 meses: depois, repete o último).
+  let ultimoSaldo = 0;
+  const saldoDfc = (mes) => {
+    const v = fluxo.porColuna.saldoFinal[`${mes}|P`] ?? fluxo.porColuna.saldoFinal[`${mes}|R`];
+    if (v !== undefined && v !== null) ultimoSaldo = v;
+    return ultimoSaldo;
+  };
+
+  // Série mensal consolidada (centros do filtro).
+  const serie = new Map(mesesCaixa.map((m) => [m, { ...zeradoDfc(), ret_dfc: 0 }]));
+  centrosCalc.forEach((c) => {
+    c.r.meses.forEach((m) => {
+      const s = serie.get(m.mes);
+      if (!s) return;
+      motor.CAMPOS_DFC.forEach((k) => { s[k] += m[k]; });
+    });
+    c.retDfc.forEach((v, mes) => {
+      if (serie.has(mes)) serie.get(mes).ret_dfc += v;
+    });
+  });
+  let acumImposto = 0;
+  let acumEfeito = 0;
+  let acumRetDfc = 0;
+  const mensal = mesesCaixa.map((mes) => {
+    const s = serie.get(mes);
+    s.efeito = efeitoDe(s);
+    acumImposto += s.imposto_hoje;
+    acumEfeito += s.efeito;
+    acumRetDfc += s.ret_dfc;
+    const saldoHoje = saldoDfc(mes) - acumRetDfc + acumImposto;
+    return { mes, ...s, saldo_hoje: saldoHoje, saldo_reforma: saldoHoje + acumEfeito };
+  });
+  const doPeriodo = mensal.filter((m) => noPeriodo(m.mes));
+  const total = zeradoDfc();
+  let retDfcPeriodo = 0;
+  doPeriodo.forEach((m) => {
+    CAMPOS_DFC.forEach((k) => { total[k] += m[k]; });
+    retDfcPeriodo += m.ret_dfc;
+  });
+  const menor = (campo) => doPeriodo.reduce((a, m) => (!a || m[campo] < a.valor ? { valor: m[campo], mes: m.mes } : a), null);
+
+  // Linhas da tabela: os meses do ano escolhido ou, sem ano, um por ano (saldo no fim do ano).
+  let linhas;
+  if (ano) linhas = doPeriodo.map((m) => ({ periodo: m.mes, ...arredondar(m) }));
+  else {
+    const anos = new Map();
+    doPeriodo.forEach((m) => {
+      const a = m.mes.slice(0, 4);
+      if (!anos.has(a)) anos.set(a, { ...zeradoDfc() });
+      const t = anos.get(a);
+      CAMPOS_DFC.forEach((k) => { t[k] += m[k]; });
+      t.saldo_hoje = m.saldo_hoje;
+      t.saldo_reforma = m.saldo_reforma;
+    });
+    linhas = [...anos.entries()].map(([a, t]) => ({ periodo: a, ...arredondar(t) }));
+  }
+
+  // O DFC do período no nível 1: hoje (com o RET recalculado no lugar do projetado) × com a reforma.
+  const n1DoRet = (() => {
+    for (const c of centrosCalc) for (const [mes] of c.retDfc) {
+      const v = orc.valores.find((x) => Number(x.centro_id) === c.id && x.mes === mes && ret.has(Number(x.sienge_id)));
+      const k = v && cls.classificar(v.centro_id, v.sienge_id);
+      if (k) return k.n1;
+    }
+    const g = cfgDfc.contas_ret.map((id) => cls.classificar(null, id) || cls.classificar(escolhidos[0], id)).find(Boolean);
+    return g?.n1 ?? cls.mascaras[0]?.id ?? null;
+  })();
+  const retDfcPorN1 = new Map();
+  centrosCalc.forEach((c) =>
+    c.retDfc.forEach((v, mes) => {
+      if (!noPeriodo(mes)) return;
+      const val = orc.valores.find((x) => Number(x.centro_id) === c.id && x.mes === mes && ret.has(Number(x.sienge_id)));
+      const k = val && cls.classificar(val.centro_id, val.sienge_id);
+      const n1 = k?.n1 ?? n1DoRet;
+      retDfcPorN1.set(n1, (retDfcPorN1.get(n1) || 0) + v);
+    })
+  );
+  const somaPeriodo = (porColuna) => doPeriodo.reduce((t, m) => t + num(porColuna?.[`${m.mes}|P`]), 0);
+  const estrutura = new Map(fluxo.estrutura.map((g) => [g.id, g]));
+  const dfcLinhas = [];
+  let resultadoHoje = 0;
+  let resultadoReforma = 0;
+  cls.mascaras.forEach((g) => {
+    const doDfc = somaPeriodo(estrutura.get(g.id)?.porColuna);
+    const temRet = g.id === n1DoRet;
+    if (!estrutura.has(g.id) && !temRet) return;
+    const hoje = doDfc - (retDfcPorN1.get(g.id) || 0) + (temRet ? total.imposto_hoje : 0);
+    const reforma = hoje + (temRet ? total.efeito : 0);
+    resultadoHoje += hoje;
+    resultadoReforma += reforma;
+    dfcLinhas.push({ tipo: 'grupo', id: g.id, descricao: g.descricao, hoje: r2(hoje), reforma: r2(reforma) });
+    if (temRet) {
+      dfcLinhas.push({ tipo: 'linha', id: 'ret', descricao: 'Imposto sobre a receita hoje (RET)', hoje: r2(total.imposto_hoje), reforma: r2(total.ret) });
+      dfcLinhas.push({ tipo: 'linha', id: 'ibs_cbs', descricao: 'IBS / CBS', nova: true, hoje: 0, reforma: r2(total.ibs_cbs) });
+      dfcLinhas.push({ tipo: 'linha', id: 'irpj_csll', descricao: 'IRPJ / CSLL', nova: true, hoje: 0, reforma: r2(total.irpj_csll) });
+      dfcLinhas.push({ tipo: 'linha', id: 'ressarcimento', descricao: 'Ressarcimento de crédito', nova: true, hoje: 0, reforma: r2(total.ressarcimento) });
+    }
+  });
+  const ultimoDoPeriodo = doPeriodo[doPeriodo.length - 1];
+  dfcLinhas.push({ tipo: 'total', id: 'resultado', descricao: 'Resultado do período', hoje: r2(resultadoHoje), reforma: r2(resultadoReforma) });
+  if (ultimoDoPeriodo) {
+    dfcLinhas.push({
+      tipo: 'total',
+      id: 'saldo',
+      descricao: 'Saldo final',
+      hoje: r2(ultimoDoPeriodo.saldo_hoje),
+      reforma: r2(ultimoDoPeriodo.saldo_reforma),
+    });
+  }
+
+  const anosDisp = [...new Set(mesesCaixa.map((m) => Number(m.slice(0, 4))))];
+  const menorHoje = menor('saldo_hoje');
+  const menorReforma = menor('saldo_reforma');
+  return {
+    inicio: motor.INICIO,
+    ano: ano || null,
+    anos: anosDisp,
+    periodo: { de: doPeriodo[0]?.mes || null, ate: ultimoDoPeriodo?.mes || null },
+    versao: { numero: orc.versao.numero, criado_em: orc.versao.criado_em },
+    resumo: {
+      ...arredondar(total),
+      ret_dfc: r2(retDfcPeriodo),
+      menor_saldo_hoje: menorHoje && { valor: r2(menorHoje.valor), mes: menorHoje.mes },
+      menor_saldo_reforma: menorReforma && { valor: r2(menorReforma.valor), mes: menorReforma.mes },
+      configurados: centrosCalc.filter((c) => c.regime).length,
+      obras: centrosCalc.filter((c) => c.natureza === 'OBRA').length,
+    },
+    dfc: dfcLinhas,
+    linhas,
+    por_centro: centrosCalc
+      .map((c) => {
+        const t = zeradoDfc();
+        c.r.meses.filter((m) => noPeriodo(m.mes)).forEach((m) => {
+          motor.CAMPOS_DFC.forEach((k) => { t[k] += m[k]; });
+        });
+        t.efeito = efeitoDe(t);
+        return {
+          id: c.id,
+          nome: c.nome,
+          natureza: c.natureza,
+          regime: c.regime,
+          rho: c.rho,
+          saldo_credor_final: r2(c.r.saldo_credor_final),
+          ...arredondar(t),
+        };
+      })
+      .filter((c) => Math.abs(c.recebimentos) + Math.abs(c.pagamentos) + Math.abs(c.imposto_hoje) > 0.005),
+    parametros: { ...dfc, ret_hoje: retHoje(motor.INICIO) },
+    centros_opcoes: opcoes,
+    contas: { receita: cfgDfc.contas_receita.length, custo: cfgDfc.contas_custo.length, ret: cfgDfc.contas_ret.length, padrao: cfgDfc.padrao },
+  };
+}
+
 module.exports = {
+  obterConfigDfc,
+  salvarConfigDfc,
+  restaurarConfigDfc,
+  impactoDfc,
   obterConfiguracoes,
   salvarConfiguracoes,
   restaurarConfiguracoes,

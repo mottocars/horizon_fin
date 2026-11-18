@@ -163,4 +163,105 @@ function calcularCentro({ mensal, poc, impostoIds, baseIds, parametros: p, confi
   return { rho, receita_total: receitaTotal, redutores: regime === 'REGULAR' ? redutores(p, config) : 0, meses: linhas };
 }
 
-module.exports = { INICIO, PADRAO, IRPJ_CSLL_PADRAO, parametros, aliquotaDoAno, calcularCentro, mesAnterior };
+// ---------------------------------------------------------------- DFC (caixa)
+//
+// Impacto DFC: o imposto sobre a receita pelo CAIXA, mês a mês, de INICIO em diante, nos dois cenários
+// e na mesma base — os recebimentos de venda do DFC projetado (contas da aba Configurações DFC):
+//   hoje      RET = −recebido × alíquota do RET da DRE, pago `prazo_recolhimento` meses depois;
+//   RET (transição)  IBS/CBS e IRPJ/CSLL = −recebido × as alíquotas do RET de transição, no mesmo prazo;
+//   REGULAR   débito  = recebido × (1 − ρ) × (CBS + IBS do mês) × (1 − redução dos imóveis)
+//             crédito = pago nas contas de custo de obra × % do custo com crédito × (CBS + IBS do mês)
+//                       (o crédito nasce no pagamento — é condicionado à extinção do imposto do fornecedor)
+//             IRPJ/CSLL = −recebido × % do centro, no prazo de recolhimento
+//             sem split payment: a recolher = débito − crédito − saldo credor, no prazo; o que sobrar
+//               de crédito vira saldo credor (compensa nos meses seguintes ou, em RESSARCIR, volta ao
+//               caixa `prazo_ressarcimento` meses depois);
+//             com split payment (a partir de `split_inicio`): o débito é retido no próprio recebimento
+//               (sai no mesmo mês) e o crédito vira saldo credor, que só volta por ressarcimento.
+//   Sem regime: o imposto fica o de hoje.
+
+const DFC_PADRAO = { prazo_recolhimento: 1, split_inicio: null, saldo_credor: 'COMPENSAR', prazo_ressarcimento: 2 };
+
+function somarMeses(mes, k) {
+  const [a, m] = mes.split('-').map(Number);
+  const t = a * 12 + (m - 1) + k;
+  return `${Math.floor(t / 12)}-${String((t % 12) + 1).padStart(2, '0')}`;
+}
+
+const CAMPOS_DFC = ['recebimentos', 'pagamentos', 'imposto_hoje', 'ret', 'ibs_cbs', 'irpj_csll', 'ressarcimento', 'credito'];
+
+// Um centro. `meses`: os meses-fato (contíguos, de INICIO ao último do DFC); `recebimentos` / `pagamentos`:
+// Map mês -> valor positivo; `retHoje(mes)`: alíquota (%) do RET de hoje; `rho`: redutores ÷ receita.
+// Devolve os meses de CAIXA (os fatos + os pagamentos que caem depois) com, em cada um, o recebido e o pago
+// no mês (os fatos), os impostos pagos nele (negativos), o ressarcimento recebido (positivo), o crédito
+// gerado no mês e o saldo credor no fim do mês; e o saldo credor que sobra no fim.
+function calcularCentroDfc({ meses, recebimentos, pagamentos, retHoje, parametros: p, config, rho = 0, dfc }) {
+  const fluxo = new Map();
+  const em = (mes) => {
+    if (!fluxo.has(mes)) fluxo.set(mes, { ...Object.fromEntries(CAMPOS_DFC.map((c) => [c, 0])), saldo_credor: null });
+    return fluxo.get(mes);
+  };
+  const regime = config?.regime || null;
+  const prazo = Number(dfc.prazo_recolhimento) || 0;
+  let saldoCredor = 0;
+  meses.forEach((mes) => {
+    const R = recebimentos.get(mes) || 0;
+    const P = pagamentos.get(mes) || 0;
+    const x = em(mes);
+    x.recebimentos += R;
+    x.pagamentos += P;
+    const pago = em(somarMeses(mes, prazo));
+    const hoje = (-R * retHoje(mes)) / 100;
+    pago.imposto_hoje += hoje;
+    if (!regime) {
+      pago.ret += hoje;
+      return;
+    }
+    if (regime === 'RET') {
+      pago.ibs_cbs += (-R * p.ret_ibs_cbs) / 100;
+      pago.irpj_csll += (-R * p.ret_irpj_csll) / 100;
+      return;
+    }
+    const a = aliquotaDoAno(p, Number(mes.slice(0, 4)));
+    const total = a ? a.total : 0;
+    const debito = R * (1 - rho) * (total / 100) * (1 - p.reducao_imoveis / 100);
+    const credito = P * (num(config.perc_custo_credito) / 100) * (total / 100);
+    x.credito += credito;
+    pago.irpj_csll += -R * (num(config.irpj_csll) / 100);
+    const split = Boolean(dfc.split_inicio) && mes >= dfc.split_inicio;
+    if (split) {
+      x.ibs_cbs += -debito;
+      saldoCredor += credito;
+    } else {
+      const liquido = debito - credito - saldoCredor;
+      if (liquido >= 0) {
+        pago.ibs_cbs += -liquido;
+        saldoCredor = 0;
+      } else saldoCredor = -liquido;
+    }
+    if ((split || dfc.saldo_credor === 'RESSARCIR') && saldoCredor > 0.005) {
+      em(somarMeses(mes, Number(dfc.prazo_ressarcimento) || 0)).ressarcimento += saldoCredor;
+      saldoCredor = 0;
+    }
+    x.saldo_credor = saldoCredor;
+  });
+  return {
+    saldo_credor_final: saldoCredor,
+    meses: [...fluxo.entries()].sort(([a], [b]) => (a < b ? -1 : 1)).map(([mes, v]) => ({ mes, ...v })),
+  };
+}
+
+module.exports = {
+  INICIO,
+  PADRAO,
+  DFC_PADRAO,
+  CAMPOS_DFC,
+  IRPJ_CSLL_PADRAO,
+  parametros,
+  aliquotaDoAno,
+  calcularCentro,
+  calcularCentroDfc,
+  mesAnterior,
+  somarMeses,
+  redutores,
+};
