@@ -1,15 +1,28 @@
 const { z } = require('zod');
 const service = require('./prevision.service');
 const usuariosService = require('../usuarios/usuarios.service');
+const { normalizarToken, ehTokenRest } = require('../prevision-dashboards/prevision-api.client');
+
+// Token da API nova do Prevision (JWT). Barra o que vem com texto junto (ex.: copiado de uma conversa)
+// ou o token antigo — gravado assim, toda chamada ao Prevision voltaria 401.
+const token = z
+  .string()
+  .transform(normalizarToken)
+  .refine((v) => v.length > 0, 'Token da API é obrigatório.')
+  .refine(
+    ehTokenRest,
+    'Token inválido: cole só o token da API do Prevision (um texto longo, sem espaços, que começa com "eyJ"), sem nada antes ou depois.'
+  );
 
 const createSchema = z.object({
   empresa_id: z.coerce.number().int().positive('Selecione uma empresa.'),
-  api_key: z.string().min(1, 'Chave da API é obrigatória.'),
+  api_key: token,
 });
 
 const updateSchema = z.object({
   empresa_id: z.coerce.number().int().positive('Selecione uma empresa.'),
-  api_key: z.string().optional(),
+  // Em branco = mantém o token atual.
+  api_key: z.preprocess((v) => (typeof v === 'string' && !v.trim() ? undefined : v), token.optional()),
 });
 
 function badRequest(message) {

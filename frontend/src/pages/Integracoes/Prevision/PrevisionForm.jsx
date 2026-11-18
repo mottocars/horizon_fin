@@ -70,7 +70,7 @@ export default function PrevisionForm() {
 
     const errors = {};
     if (!form.empresa_id) errors.empresa_id = 'Selecione uma empresa.';
-    if (!isEdit && !form.api_key.trim()) errors.api_key = 'Chave da API é obrigatória.';
+    if (!isEdit && !form.api_key.trim()) errors.api_key = 'Token da API é obrigatório.';
     setFieldErrors(errors);
     if (Object.keys(errors).length > 0) return;
 
@@ -110,7 +110,7 @@ export default function PrevisionForm() {
           {isEdit ? 'Editar integração Prevision' : 'Nova integração Prevision'}
         </h2>
         <p className="mb-4 text-sm text-gray-500">
-          Informe aqui os dados de autenticação da API Prevision.
+          Informe aqui o token da API do Prevision (gerado no Prevision; um texto longo que começa com "eyJ").
         </p>
 
         {error && (
@@ -138,12 +138,12 @@ export default function PrevisionForm() {
               </div>
 
               <div className="sm:col-span-2">
-                <label className="mb-1 block text-sm font-medium text-gray-700">Chave da API</label>
+                <label className="mb-1 block text-sm font-medium text-gray-700">Token da API</label>
                 <input
                   type="text"
                   value={form.api_key}
                   onChange={(e) => handleChange('api_key', e.target.value)}
-                  placeholder={isEdit ? 'Deixe em branco para manter a chave atual' : ''}
+                  placeholder={isEdit ? 'Deixe em branco para manter o token atual' : 'eyJ...'}
                   className="w-full rounded-lg border border-gray-200 px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-primary-100"
                 />
                 {fieldErrors.api_key && (

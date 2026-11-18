@@ -1,3 +1,7 @@
+// API REST nova do Prevision (nov/2026): token JWT da empresa (Bearer), sem validade. A lista de obras
+// já usa ela; o código da conta e o dashboard ainda estão na API antiga (GraphQL / dashboards-api) e
+// migram nos próximos passos.
+const REST_URL = 'https://api.prevision.com.br/construction/api/v1';
 const GRAPHQL_URL = 'https://api.prevision.com.br/graphql';
 const DASHBOARDS_URL =
   'https://southamerica-east1-prevision-306716.cloudfunctions.net/dashboards-api';
@@ -11,29 +15,6 @@ const ME_QUERY = `
   }
 `;
 
-const PROJECTS_QUERY = `
-  query Projects($first: Int, $after: String) {
-    me {
-      id
-      name
-      projectsPage(first: $first, after: $after) {
-        totalCount
-        pageInfo {
-          hasNextPage
-          endCursor
-        }
-        nodes {
-          id
-          name
-          area
-          phase
-        }
-      }
-    }
-  }
-`;
-
-const PROJECTS_PAGE_SIZE = 50;
 // Sem tempo limite, uma chamada que o Prevision não responde prenderia a rotina do Monitor pra sempre.
 const TIMEOUT_MS = 60_000;
 
@@ -90,45 +71,49 @@ async function fetchCompanyId(apiKey) {
   return companyId;
 }
 
-async function fetchProjects(apiKey) {
-  const allProjects = [];
-  let afterCursor = null;
+// Token da API REST: JWT (três partes base64url separadas por ponto, começa com "eyJ"). Aceita o
+// "Bearer " colado junto (vem assim do curl da documentação) e espaços nas pontas.
+function normalizarToken(valor) {
+  return String(valor || '').trim().replace(/^bearer\s+/i, '').trim();
+}
 
-  for (;;) {
-    const response = await chamar(GRAPHQL_URL, {
-      method: 'POST',
-      headers: {
-        'Content-Type': 'application/json',
-        Accept: 'application/json',
-        UserAuthorization: `token ${apiKey}`,
-      },
-      body: JSON.stringify({
-        query: PROJECTS_QUERY,
-        variables: { first: PROJECTS_PAGE_SIZE, after: afterCursor },
-      }),
-    });
+function ehTokenRest(token) {
+  return /^eyJ[\w-]*\.[\w-]+\.[\w-]+$/.test(token);
+}
 
-    if (!response.ok) {
-      throw apiError(`A API do Prevision retornou erro (status ${response.status}) ao listar projetos.`);
-    }
-
-    const body = await response.json();
-    if (body.errors) {
-      throw apiError(`A API do Prevision retornou erro: ${body.errors[0]?.message || 'erro desconhecido'}.`);
-    }
-
-    const projectsPage = body?.data?.me?.projectsPage;
-    if (!projectsPage) {
-      throw apiError('Não foi possível obter a lista de projetos no Prevision.');
-    }
-
-    allProjects.push(...projectsPage.nodes);
-
-    if (!projectsPage.pageInfo?.hasNextPage) break;
-    afterCursor = projectsPage.pageInfo.endCursor;
+function tokenRest(apiKey) {
+  const token = normalizarToken(apiKey);
+  if (!ehTokenRest(token)) {
+    const e = new Error(
+      'O token do Prevision cadastrado nesta empresa não é o da API nova. Gere o token da API no Prevision e cadastre em Integrações › Prevision.'
+    );
+    e.status = 400;
+    e.expose = true;
+    throw e;
   }
+  return token;
+}
 
-  return allProjects;
+// Erro da API REST: 401/403 = token recusado (status 502 aqui — um 401 nosso derrubaria a sessão no front).
+function erroRest(response, acao) {
+  if (response.status === 401 || response.status === 403) {
+    return apiError(`O Prevision recusou o token desta empresa (status ${response.status}). Confira o token em Integrações › Prevision.`);
+  }
+  return apiError(`A API do Prevision retornou erro (status ${response.status}) ao ${acao}.`);
+}
+
+// GET /projects → { projects: [{ id, name }] }, todas as obras da conta de uma vez (sem paginação).
+async function fetchProjects(apiKey) {
+  const response = await chamar(`${REST_URL}/projects`, {
+    headers: { Accept: 'application/json', Authorization: `Bearer ${tokenRest(apiKey)}` },
+  });
+  if (!response.ok) throw erroRest(response, 'listar as obras');
+
+  const body = await response.json().catch(() => null);
+  if (!Array.isArray(body?.projects)) {
+    throw apiError('A API do Prevision devolveu a lista de obras num formato inesperado.');
+  }
+  return body.projects.map((p) => ({ id: String(p.id), name: p.name }));
 }
 
 async function fetchDashboard({ apiKey, companyId, projectId, primary }) {
@@ -170,4 +155,4 @@ async function fetchDashboard({ apiKey, companyId, projectId, primary }) {
   return data && Object.keys(data).length > 0 ? data : null;
 }
 
-module.exports = { fetchCompanyId, fetchProjects, fetchDashboard };
+module.exports = { fetchCompanyId, fetchProjects, fetchDashboard, normalizarToken, ehTokenRest };
