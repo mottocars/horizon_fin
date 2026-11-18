@@ -273,6 +273,9 @@ export default function Sidebar() {
           {instalados.length > 0 && (
             <>
               <div className={`my-2.5 h-px bg-gray-200 ${collapsed ? 'mx-auto w-6' : 'mx-2.5'}`} aria-hidden="true" />
+              {/* A logo (24 px) é maior que os ícones nativos (17 px) na mesma linha de 32 px: o espaço extra
+                  entre os aplicativos deixa o vão entre uma logo e outra igual ao dos ícones nativos (17 px). */}
+              <div className="space-y-2.25">
               {instalados.map((app) => (
                 <NavLink
                   key={app.id}
@@ -298,6 +301,7 @@ export default function Sidebar() {
                   {!collapsed && <span className="truncate">{app.nome}</span>}
                 </NavLink>
               ))}
+              </div>
             </>
           )}
       </nav>
