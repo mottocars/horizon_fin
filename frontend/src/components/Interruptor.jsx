@@ -1,6 +1,6 @@
 // Chave liga/desliga (role="switch") com rótulo e descrição opcionais — mesmo
-// desenho do Interruptor de Gestão Aprovações (pages/Operacoes/GestaoAprovacoes/ui.jsx),
-// aqui como componente compartilhado (usado em Cadastros › Novidades).
+// desenho que nasceu na antiga Gestão Aprovações, aqui como componente compartilhado (usado em
+// Cadastros › Novidades).
 export default function Interruptor({ ligado, onChange, disabled, rotulo, descricao }) {
   return (
     <label className={`flex items-start gap-3 ${disabled ? 'opacity-60' : 'cursor-pointer'}`}>
