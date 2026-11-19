@@ -392,11 +392,11 @@ async function cabecalhoPublicada(empresaId) {
   );
   const ids = [...new Set([v.aberta_por, v.fechada_por, ...colab.map((c) => c.usuario_id)].filter(Boolean))];
   const { rows: us } = ids.length
-    ? await db.query('SELECT id, nome, avatar_url FROM usuarios WHERE id = ANY($1::int[])', [ids])
+    ? await db.query('SELECT id, nome, avatar_url, email, telefone_ddd, telefone_numero FROM usuarios WHERE id = ANY($1::int[])', [ids])
     : { rows: [] };
   const porId = new Map(us.map((u) => [u.id, u]));
   // Usuário apagado ou o "Sistema" (versão inicial): só o nome gravado na versão.
-  const pessoa = (id, nome) => (id && porId.get(id) ? { ...porId.get(id) } : { id: null, nome: nome || 'Sistema', avatar_url: null });
+  const pessoa = (id, nome) => (id && porId.get(id) ? { ...porId.get(id) } : { id: null, nome: nome || 'Sistema', avatar_url: null, email: null, telefone_ddd: null, telefone_numero: null });
   const abriu = pessoa(v.aberta_por, v.aberta_por_nome);
   const fechou = pessoa(v.fechada_por, v.fechada_por_nome);
   return {
@@ -408,7 +408,11 @@ async function cabecalhoPublicada(empresaId) {
     abriu,
     fechou,
     aprovador: { ...fechou, provisorio: true },
-    colaboradores: colab.map((c) => ({ ...pessoa(c.usuario_id), alteracoes: c.alteracoes, primeira: c.primeira, ultima: c.ultima })),
+    // Contato (e-mail e telefone) só do Responsável e do Aprovador — a lista de colaboradores mostra nome e foto.
+    colaboradores: colab.map((c) => {
+      const { email, telefone_ddd: _d, telefone_numero: _n, ...p } = pessoa(c.usuario_id); // eslint-disable-line no-unused-vars
+      return { ...p, alteracoes: c.alteracoes, primeira: c.primeira, ultima: c.ultima };
+    }),
   };
 }
 

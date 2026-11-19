@@ -1,5 +1,5 @@
 import { useEffect, useState } from 'react';
-import { CircleCheck, TriangleAlert } from 'lucide-react';
+import { CircleCheck, Mail, Phone, TriangleAlert } from 'lucide-react';
 import Modal from '../../../../components/Modal';
 import Avatar from '../../../Home/PlanoDeVoo/Avatar';
 import { versaoPublicadaDre } from '../../../../api/dreVersoes.api';
@@ -28,13 +28,38 @@ function Etiqueta({ rotulo, valor, onClick, titulo }) {
   );
 }
 
-// Janela de uma pessoa: a foto, o nome e o que ela fez (data e hora).
+// Telefone do cadastro do usuário: (DDD) 99999-9999.
+function telefone(p) {
+  const n = String(p?.telefone_numero || '').replace(/\D/g, '');
+  if (!n) return null;
+  const meio = n.length > 8 ? n.length - 4 : 4;
+  return `${p.telefone_ddd ? `(${p.telefone_ddd}) ` : ''}${n.slice(0, meio)}-${n.slice(meio)}`;
+}
+
+// Janela de uma pessoa: a foto, o nome, o que ela fez (data e hora) e o contato (e-mail e telefone).
 function Pessoa({ pessoa, texto }) {
+  const tel = telefone(pessoa);
   return (
     <div className="flex flex-col items-center text-center">
       <Avatar usuario={pessoa} tamanho="xxl" anel={false} />
       <h3 className="mt-4 text-lg font-semibold text-gray-900">{pessoa.nome}</h3>
       <p className="mt-1 text-sm text-gray-500">{texto}</p>
+      {(pessoa.email || tel) && (
+        <div className="mt-4 w-full space-y-1.5 border-t border-gray-100 pt-4 text-left text-sm">
+          {pessoa.email && (
+            <a href={`mailto:${pessoa.email}`} className="flex items-center gap-2 text-gray-700 hover:text-primary-600">
+              <Mail size={15} className="shrink-0 text-gray-400" />
+              <span className="truncate">{pessoa.email}</span>
+            </a>
+          )}
+          {tel && (
+            <a href={`tel:+55${pessoa.telefone_ddd || ''}${String(pessoa.telefone_numero).replace(/\D/g, '')}`} className="flex items-center gap-2 text-gray-700 hover:text-primary-600">
+              <Phone size={15} className="shrink-0 text-gray-400" />
+              {tel}
+            </a>
+          )}
+        </div>
+      )}
     </div>
   );
 }
