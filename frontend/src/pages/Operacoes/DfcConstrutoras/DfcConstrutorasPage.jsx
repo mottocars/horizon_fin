@@ -36,6 +36,7 @@ import { excluirVersaoPlanoDfc, exportarPlanoDfcExcel, listVersoesPlanoDfc } fro
 import { exportarExcelDfc } from '../../../api/dfcExportacao.api';
 import { baixarLayoutOrcamento } from '../../../api/dfcPlanilhaOrcamentaria.api';
 import { useConfirm } from '../../../confirm/ConfirmContext';
+import { useSidebar } from '../../../layout/SidebarContext';
 import { nomeExibicaoEmpresa } from '../../../utils/empresa';
 import { useEmpresaTravada } from '../../../hooks/useEmpresaTravada';
 import AbaEmConstrucao from './AbaEmConstrucao';
@@ -88,6 +89,8 @@ function formatarDataHora(data) {
 export default function DfcConstrutorasPage() {
   const { travada: empresaTravada, empresaIdTravada } = useEmpresaTravada();
   const [searchParams, setSearchParams] = useSearchParams();
+  // Com o menu lateral aberto as abas ficam sem ícone (pedido do usuário, igual à DRE Construtoras).
+  const { menuAberto } = useSidebar();
 
   const empresaId = searchParams.get('empresa_id') || '';
   const centroId = searchParams.get('centro_id') || '';
@@ -969,7 +972,7 @@ export default function DfcConstrutorasPage() {
       </Card>
 
       <div>
-        <Tabs tabs={TABS} activeId={tabAtiva.id} onChange={(aba) => atualizarParams({ aba })} />
+        <Tabs tabs={TABS} activeId={tabAtiva.id} onChange={(aba) => atualizarParams({ aba })} semIcones={menuAberto} />
 
         {tabAtiva.id === 'orcamentos' ? (
           <DfcOrcamentosTab
