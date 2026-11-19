@@ -1,8 +1,9 @@
-import { useCallback, useEffect, useMemo, useState } from 'react';
+import { useCallback, useEffect, useState } from 'react';
 import { AlertTriangle, CheckCircle2, Settings } from 'lucide-react';
 import Card from '../../../components/Card';
 import Button from '../../../components/Button';
 import SearchableSelect from '../../../components/SearchableSelect';
+import TransferList from '../../../components/TransferList';
 import { getConfigDfcReforma, restaurarConfigDfcReforma, salvarConfigDfcReforma } from '../../../api/reformaTributaria.api';
 
 const corCampo = (preenchido) => (preenchido ? 'border-primary-100 bg-primary-50 hover:border-primary-500' : 'border-amber-300 bg-amber-50 hover:border-amber-400');
@@ -62,25 +63,15 @@ function CampoMeses({ rotulo, valor, onChange }) {
   );
 }
 
-// Uma lista de contas do DFC: seleção múltipla com busca e, embaixo, as contas marcadas.
-function CampoContas({ rotulo, ajuda, valor, onChange, opcoes, nomes, sugestao }) {
-  const marcadas = valor.map((id) => nomes.get(String(id))).filter(Boolean);
+// Uma lista de contas do DFC: a lista dupla (TransferList) dos tipos de documento financeiro da aba
+// Configurações do DRE Gerencial — à esquerda as contas do plano do DFC, à direita as escolhidas para o
+// papel; clique para destacar e use as setas. Embaixo, a ajuda e o atalho para a sugestão pelo nome.
+function CampoContas({ rotulo, ajuda, valor, onChange, contas, sugestao }) {
   const igualSugestao = sugestao.length === valor.length && sugestao.every((id) => valor.includes(String(id)));
   return (
     <div>
-      <label className="mb-1 block text-sm font-medium text-gray-700">{rotulo}</label>
-      <SearchableSelect
-        multiple
-        todosELimpar
-        value={valor}
-        onChange={onChange}
-        options={opcoes}
-        placeholder="Nenhuma conta"
-        larguraPainel={520}
-        alturaLista="max-h-80"
-        corClasses={corCampo(valor.length > 0)}
-      />
-      <p className="mt-1 text-xs leading-relaxed text-gray-500">
+      <h4 className="text-sm font-medium text-gray-700">{rotulo}</h4>
+      <p className="mb-2 mt-0.5 text-xs leading-relaxed text-gray-500">
         {ajuda}
         {!igualSugestao && sugestao.length > 0 && (
           <>
@@ -91,7 +82,18 @@ function CampoContas({ rotulo, ajuda, valor, onChange, opcoes, nomes, sugestao }
           </>
         )}
       </p>
-      {marcadas.length > 0 && <p className="mt-1.5 text-xs leading-relaxed text-gray-600">{marcadas.join(' · ')}</p>}
+      <TransferList
+        itens={contas}
+        selecionados={valor}
+        onChange={onChange}
+        getId={(c) => c.id}
+        getLabel={(c) => `${c.id} · ${c.nome} — ${c.mascara}`}
+        tituloDisponiveis="Contas do DFC"
+        tituloSelecionados={rotulo}
+        vazioDisponiveisTexto="Nenhuma conta."
+        vazioSelecionadosTexto="Nenhuma conta escolhida."
+        corSelecionados={corCampo(valor.length > 0)}
+      />
     </div>
   );
 }
@@ -148,8 +150,6 @@ export default function ConfiguracoesDfcTab({ empresaId }) {
     carregar();
   }, [carregar]);
 
-  const opcoes = useMemo(() => contas.map((c) => ({ value: String(c.id), label: `${c.id} · ${c.nome} — ${c.mascara}` })), [contas]);
-  const nomes = useMemo(() => new Map(contas.map((c) => [String(c.id), c.nome])), [contas]);
   const alterado = (setter) => (v) => {
     setter(v);
     setSalvo(false);
@@ -213,19 +213,18 @@ export default function ConfiguracoesDfcTab({ empresaId }) {
       <Card className="rounded-tl-none">
         <SectionHeader
           titulo="Contas do DFC"
-          texto="Quais contas do plano do DFC entram no cálculo. Os recebimentos de venda são a base do imposto sobre a receita (o RET de hoje e o IBS/CBS); os pagamentos de custo de obra geram crédito, no percentual de cada obra (aba Centros de Custos); as contas do RET saem da projeção, porque o imposto de hoje é recalculado sobre os recebimentos."
+          texto="Quais contas do plano do DFC entram no cálculo. Os recebimentos de venda são a base do imposto sobre a receita (o RET de hoje e o IBS/CBS); os pagamentos de custo de obra geram crédito, no percentual de cada obra (aba Centros de Custos); as contas do RET saem da projeção, porque o imposto de hoje é recalculado sobre os recebimentos. Clique para destacar e use as setas."
         />
         {carregando ? (
           <div className="mt-4 text-sm text-gray-400">Carregando...</div>
         ) : (
-          <div className="mt-4 grid gap-5 lg:grid-cols-3">
+          <div className="mt-4 space-y-6">
             <CampoContas
               rotulo="Recebimentos de venda"
               ajuda="Parcelas dos clientes, repasses e medições da Caixa. Não marque financiamento PJ nem aportes."
               valor={receita}
               onChange={alterado(setReceita)}
-              opcoes={opcoes}
-              nomes={nomes}
+              contas={contas}
               sugestao={sugestao.contas_receita}
             />
             <CampoContas
@@ -233,8 +232,7 @@ export default function ConfiguracoesDfcTab({ empresaId }) {
               ajuda="Materiais, empreiteiros, equipamentos. A folha própria pode ficar: o % de cada obra já desconta o que não gera crédito."
               valor={custo}
               onChange={alterado(setCusto)}
-              opcoes={opcoes}
-              nomes={nomes}
+              contas={contas}
               sugestao={sugestao.contas_custo}
             />
             <CampoContas
@@ -242,8 +240,7 @@ export default function ConfiguracoesDfcTab({ empresaId }) {
               ajuda="Onde o DFC projeta o RET de hoje, se projetar."
               valor={ret}
               onChange={alterado(setRet)}
-              opcoes={opcoes}
-              nomes={nomes}
+              contas={contas}
               sugestao={sugestao.contas_ret}
             />
           </div>
