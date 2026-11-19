@@ -8,6 +8,7 @@ import {
   FilePlus2,
   FileSpreadsheet,
   FilePenLine,
+  History,
   House,
   ListTree,
   Loader2,
@@ -75,6 +76,8 @@ const TABS = [
   { id: 'financeiro', label: 'Financeiro', icon: Wallet },
   { id: 'configuracoes', label: 'Configurações', icon: Settings },
   { id: 'projecoes', label: 'Projeções', icon: TrendingUp },
+  // Versões: como a aba Versões de Cronogramas Obras (pedido do usuário) — por enquanto só a aba, sem conteúdo.
+  { id: 'versoes', label: 'Versões', icon: History },
 ];
 
 // Colunas da aba DRE (filtro "Colunas"): cada centro / mês mostra as marcadas.
@@ -101,7 +104,7 @@ function ultimoDiaDoMes(anoMes) {
 export default function DreGerencialPage() {
   const { travada: empresaTravada, empresaIdTravada } = useEmpresaTravada();
   const [searchParams, setSearchParams] = useSearchParams();
-  // Com o menu lateral aberto as abas ficam sem ícone (pedido do usuário — falta espaço pras 11 abas).
+  // Com o menu lateral aberto as abas ficam sem ícone (pedido do usuário — falta espaço pras 12 abas).
   const { menuAberto } = useSidebar();
 
   const empresaId = searchParams.get('empresa_id') || '';
@@ -841,6 +844,7 @@ export default function DreGerencialPage() {
             onSairTelaCheia={() => setProjecoesTelaCheia(false)}
           />
         )}
+        {abaAtiva === 'versoes' && <Card className="min-h-70 rounded-tl-none" />}
 
         {abaAtiva === 'plano-de-contas' &&
           (planoAberto ? (
