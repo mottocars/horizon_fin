@@ -59,7 +59,9 @@ const mensagem = (e, padrao) => e?.response?.data?.message || padrao;
 // realizado, pula o histórico (o realizado acaba no mês antes do início do ciclo). Tudo é gravado no
 // rascunho a cada mudança (fechar e voltar depois continua de onde parou); concluir não salva a versão
 // — isso é o "Salvar versão" da aba.
-export default function AssistenteOrcamento({ empresaId, orcamentoId = null, centros, onFechar }) {
+// `somenteLeitura` (versões da DRE: sem versão aberta, ou visualizando uma versão salva): só navega entre as
+// etapas — nada é gravado, os campos ficam desativados e não há Concluir nem Importar.
+export default function AssistenteOrcamento({ empresaId, orcamentoId = null, centros, onFechar, somenteLeitura = false }) {
   const [orc, setOrc] = useState(null);
   const [form, setForm] = useState({ centroId: null, cicloInicio: mesDeHoje(), cicloFim: somarMeses(mesDeHoje(), 23) });
   const [etapa, setEtapa] = useState(orcamentoId ? null : 'centro');
@@ -109,6 +111,7 @@ export default function AssistenteOrcamento({ empresaId, orcamentoId = null, cen
 
   const agendar = useCallback(
     (patch, imediato = false) => {
+      if (somenteLeitura) return Promise.resolve();
       pendente.current = { ...(pendente.current || {}), ...patch };
       setGravacao('pendente');
       clearTimeout(timer.current);
@@ -116,7 +119,7 @@ export default function AssistenteOrcamento({ empresaId, orcamentoId = null, cen
       timer.current = setTimeout(() => flush().catch(() => {}), 700);
       return Promise.resolve();
     },
-    [flush]
+    [flush, somenteLeitura]
   );
 
   useEffect(() => () => clearTimeout(timer.current), []);
@@ -133,8 +136,9 @@ export default function AssistenteOrcamento({ empresaId, orcamentoId = null, cen
         setDados(o.dados || {});
         setTrava(o.trava);
         setEtapa(o.status === 'CONCLUIDO' && o.resultado ? 'conclusao' : o.etapa || 'centro');
+        // A trava é o corte da versão da DRE (o histórico devolve até onde vai o realizado).
         historicoOrcamentoDre(empresaId, o.id)
-          .then((h) => ativo && (setTemHistorico(h.tem_historico), setCache((c) => ({ ...c, historico: h }))))
+          .then((h) => ativo && (setTemHistorico(h.tem_historico), setTrava(h.tem_historico ? h.ate : o.trava), setCache((c) => ({ ...c, historico: h }))))
           .catch(() => {});
       })
       .catch((e) => ativo && setErro(mensagem(e, 'Não foi possível abrir o orçamento.')))
@@ -229,10 +233,6 @@ export default function AssistenteOrcamento({ empresaId, orcamentoId = null, cen
     setDados(novo);
     agendar({ dados: novo });
   };
-  const onTrava = (t) => {
-    setTrava(t);
-    if (t && /^\d{4}-\d{2}$/.test(t)) agendar({ trava: t });
-  };
 
   async function irPara(nova) {
     setErro('');
@@ -278,11 +278,8 @@ export default function AssistenteOrcamento({ empresaId, orcamentoId = null, cen
       await agendar({ trava: t }, true);
       return irPara(obra ? 'vendas' : 'demais');
     }
-    if (!o.trava) {
-      const t = h.trava_sugerida < fim ? h.trava_sugerida : somarMeses(fim, -1);
-      setTrava(t);
-      await agendar({ trava: t }, true);
-    }
+    // A trava é o corte da versão da DRE (o backend grava sempre ele).
+    setTrava(h.ate || (h.trava_sugerida < fim ? h.trava_sugerida : somarMeses(fim, -1)));
     return irPara('historico');
   }
 
@@ -290,6 +287,12 @@ export default function AssistenteOrcamento({ empresaId, orcamentoId = null, cen
     setErro('');
     setOcupado(true);
     try {
+      if (somenteLeitura) {
+        // Só leitura: só navega (sem criar, gravar nem concluir).
+        const proxima = etapa === 'demais' ? (orc?.resultado ? 'conclusao' : null) : etapas[indice + 1]?.id;
+        if (proxima) await irPara(proxima);
+        return;
+      }
       if (etapa === 'centro') await avancarDoCentro();
       else if (etapa === 'historico') {
         const h = cache.historico;
@@ -344,14 +347,7 @@ export default function AssistenteOrcamento({ empresaId, orcamentoId = null, cen
     // Tabela da aba DRE: descrição (380) + Consolidado (valor + AV %, 224) + cada ano (valor + AV %, 208).
     largura = h ? Math.max(880, 380 + 224 + 208 * h.anos.length + 60) : 880;
     conteudo = h ? (
-      <EtapaHistorico
-        historico={h}
-        recalculando={recalculandoHistorico}
-        trava={trava}
-        onTrava={onTrava}
-        cicloFim={form.cicloFim}
-        empresaId={empresaId}
-      />
+      <EtapaHistorico historico={h} recalculando={recalculandoHistorico} trava={trava} empresaId={empresaId} />
     ) : (
       carregandoEtapa()
     );
@@ -465,6 +461,8 @@ export default function AssistenteOrcamento({ empresaId, orcamentoId = null, cen
             </>
           ) : gravacao === 'erro' ? (
             <span className="text-red-500">Rascunho não salvo</span>
+          ) : somenteLeitura ? (
+            <span>Só leitura</span>
           ) : orc ? (
             <>
               <CloudCheck size={14} className="text-emerald-500" /> Rascunho salvo
@@ -478,10 +476,12 @@ export default function AssistenteOrcamento({ empresaId, orcamentoId = null, cen
               {baixandoEtapa ? <Loader2 size={14} className="animate-spin" /> : <FileSpreadsheet size={14} />}
               Baixar planilha
             </Button>
-            <Button variant="secondary" className="!px-3 !py-1.5 text-xs" onClick={abrirImportacaoEtapa} disabled={ocupado}>
-              <Upload size={14} />
-              Importar planilha
-            </Button>
+            {!somenteLeitura && (
+              <Button variant="secondary" className="!px-3 !py-1.5 text-xs" onClick={abrirImportacaoEtapa} disabled={ocupado}>
+                <Upload size={14} />
+                Importar planilha
+              </Button>
+            )}
           </span>
         )}
         <span className="ml-auto text-xs tabular-nums text-gray-400">
@@ -501,8 +501,8 @@ export default function AssistenteOrcamento({ empresaId, orcamentoId = null, cen
                 <ArrowLeft size={15} /> Voltar
               </Button>
             )}
-            <Button onClick={avancar} loading={ocupado} disabled={carregando || !etapa}>
-              {ultimaDigitacao ? (
+            <Button onClick={avancar} loading={ocupado} disabled={carregando || !etapa || (somenteLeitura && ultimaDigitacao && !orc?.resultado)}>
+              {ultimaDigitacao && !somenteLeitura ? (
                 <>
                   <Flag size={15} /> Concluir orçamento
                 </>
@@ -521,7 +521,9 @@ export default function AssistenteOrcamento({ empresaId, orcamentoId = null, cen
   return (
     <>
       <JanelaAssistente largura={largura} cabecalho={cabecalho} rodape={rodape} chave={`${etapa}-${carregando}`}>
-        {conteudo}
+        <fieldset disabled={somenteLeitura} className="min-w-0">
+          {conteudo}
+        </fieldset>
       </JanelaAssistente>
       <ImportarPlanilhaModal
         open={importandoEtapa}

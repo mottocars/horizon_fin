@@ -15,6 +15,16 @@ http.interceptors.request.use((config) => {
   // backend/src/utils/clienteHttp.js).
   config.headers['X-Horizon-App'] = '1';
   if (navigator.webdriver) config.headers['X-Horizon-Webdriver'] = '1';
+  // Versões da DRE (backend/src/modules/dre-versoes/contexto.js): os dashboards leem a DRE publicada (a última
+  // versão salva); na DRE Construtoras, `?versao=N` na URL é o "visualizar" da aba Versões — a tela inteira
+  // como era naquela versão. Sem o cabeçalho, o backend usa a versão aberta (ou a última salva).
+  const caminho = window.location.pathname;
+  if (caminho.startsWith('/dashboards')) {
+    config.headers['X-Dre-Versao'] = 'publicada';
+  } else if (caminho === '/operacoes/dre-gerencial') {
+    const versao = new URLSearchParams(window.location.search).get('versao');
+    if (versao && /^\d+$/.test(versao)) config.headers['X-Dre-Versao'] = versao;
+  }
   return config;
 });
 

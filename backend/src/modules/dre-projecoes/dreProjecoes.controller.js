@@ -1,6 +1,13 @@
 const { z } = require('zod');
 const service = require('./dreProjecoes.service');
 const planilha = require('./planilha');
+const c = require('../dre-versoes/carimbo');
+
+// Carimbo (aba Versões) dos orçamentos da Projeção. O assistente grava a cada mudança: as edições seguidas
+// do mesmo orçamento pelo mesmo usuário viram uma linha só (chave).
+const ETAPA = { centro: 'centro e ciclo', historico: 'histórico', vendas: 'vendas', custos: 'custos da POC', poc: 'POC', demais: 'demais contas', conclusao: 'conclusão' };
+const nomeOrc = (o) => `${o.centro_id} - ${o.centro_apelido || o.centro_nome}`;
+const ciclo = (o) => `${c.mesBR(o.ciclo_inicio)} a ${c.mesBR(o.ciclo_fim)}`;
 
 const empresaIdSchema = z.coerce.number().int().positive('Empresa inválida.');
 const idSchema = z.coerce.number().int().positive('Orçamento inválido.');
@@ -79,11 +86,22 @@ async function importar(req, res, next) {
     if (!req.file) throw erro(400, 'Envie o arquivo .xlsx da Projeção da DRE.');
     const sim = (v) => v === '1' || v === 'true';
     res.json(
-      await planilha.importar(empresaId, { buffer: req.file.buffer, arquivo: req.file.originalname }, req.user.id, {
-        aplicar: sim(req.query.aplicar),
-        concluir: sim(req.query.concluir),
-        ...recorte(req),
-      })
+      await (async () => {
+        const r = await planilha.importar(empresaId, { buffer: req.file.buffer, arquivo: req.file.originalname }, req.user.id, {
+          aplicar: sim(req.query.aplicar),
+          concluir: sim(req.query.concluir),
+          ...recorte(req),
+        });
+        if (sim(req.query.aplicar)) {
+          await c.carimbar(req, {
+            descricao: `Importou a planilha da Projeção "${req.file.originalname}": ${r.resumo?.centros ?? 0} orçamento(s) gravado(s)${
+              r.concluidos ? `, ${r.concluidos} concluído(s)` : ''
+            }.`,
+            detalhes: { arquivo: req.file.originalname, resumo: r.resumo || null },
+          });
+        }
+        return r;
+      })()
     );
   } catch (err) {
     tratar(err, next);
@@ -106,24 +124,38 @@ module.exports = {
   projetado: rota((req, empresaId) => {
     const q = projetadoSchema.parse(req.query);
     const centros = (q.centros || '').split(',').map(Number).filter((n) => Number.isInteger(n) && n > 0);
-    return service.projetado(empresaId, { fonte: q.fonte, numero: q.versao, de: q.de, ate: q.ate, centros });
+    return service.projetado(empresaId, { de: q.de, ate: q.ate, centros });
   }),
   listar: rota((req, empresaId) => service.listar(empresaId)),
-  criar: rota((req, empresaId) => {
+  criar: rota(async (req, empresaId) => {
     const b = criarSchema.parse(req.body || {});
-    return service.criar(empresaId, { centroId: b.centro_id, cicloInicio: b.ciclo_inicio, cicloFim: b.ciclo_fim }, req.user.id);
+    const o = await service.criar(empresaId, { centroId: b.centro_id, cicloInicio: b.ciclo_inicio, cicloFim: b.ciclo_fim }, req.user.id);
+    if (!o.existente) await c.carimbar(req, { descricao: `Novo orçamento de ${nomeOrc(o)}, ciclo ${ciclo(o)}.`, detalhes: { id: o.id } });
+    return o;
   }),
   obter: rota((req, empresaId) => service.obter(empresaId, idSchema.parse(req.params.id))),
-  atualizar: rota((req, empresaId) => {
+  atualizar: rota(async (req, empresaId) => {
     const b = atualizarSchema.parse(req.body || {});
-    return service.atualizar(
-      empresaId,
-      idSchema.parse(req.params.id),
-      { etapa: b.etapa, cicloInicio: b.ciclo_inicio, cicloFim: b.ciclo_fim, trava: b.trava, dados: b.dados },
-      req.user.id
-    );
+    const id = idSchema.parse(req.params.id);
+    const antes = await service.obter(empresaId, id);
+    const o = await service.atualizar(empresaId, id, { etapa: b.etapa, cicloInicio: b.ciclo_inicio, cicloFim: b.ciclo_fim, trava: b.trava, dados: b.dados }, req.user.id);
+    const mudou = b.dados !== undefined || antes.ciclo_inicio !== o.ciclo_inicio || antes.ciclo_fim !== o.ciclo_fim;
+    if (mudou) {
+      await c.carimbar(req, {
+        descricao: `Editou o orçamento de ${nomeOrc(o)} (ciclo ${ciclo(o)}; última etapa: ${ETAPA[o.etapa] || o.etapa}).`,
+        detalhes: { id },
+        chave: `projecao:${id}`,
+      });
+    }
+    return o;
   }),
-  descartar: rota((req, empresaId) => service.descartar(empresaId, idSchema.parse(req.params.id))),
+  descartar: rota(async (req, empresaId) => {
+    const id = idSchema.parse(req.params.id);
+    const antes = await service.obter(empresaId, id);
+    const r = await service.descartar(empresaId, id);
+    await c.carimbar(req, { descricao: `Descartou o orçamento de ${nomeOrc(antes)} (ciclo ${ciclo(antes)}).`, detalhes: { id } });
+    return r;
+  }),
   // `ate` (AAAA-MM): até quando mostrar o realizado (a trava escolhida na tela).
   historico: rota((req, empresaId) =>
     service.historico(empresaId, idSchema.parse(req.params.id), req.query.ate ? mes.parse(req.query.ate) : null)
@@ -133,6 +165,12 @@ module.exports = {
     service.contas(empresaId, idSchema.parse(req.params.id), z.enum(['poc', 'demais']).parse(req.query.etapa))
   ),
   calcular: rota((req, empresaId) => service.calcular(empresaId, idSchema.parse(req.params.id))),
-  concluir: rota((req, empresaId) => service.concluir(empresaId, idSchema.parse(req.params.id), req.user.id)),
-  salvarVersao: rota((req, empresaId) => service.salvarVersao(empresaId, req.user.id)),
+  concluir: rota(async (req, empresaId) => {
+    const o = await service.concluir(empresaId, idSchema.parse(req.params.id), req.user.id);
+    await c.carimbar(req, {
+      descricao: `Concluiu o orçamento de ${nomeOrc(o)} (ciclo ${ciclo(o)}${o.trava ? `, realizado até ${c.mesBR(o.trava)}` : ''}).`,
+      detalhes: { id: o.id },
+    });
+    return o;
+  }),
 };

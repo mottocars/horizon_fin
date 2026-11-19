@@ -41,17 +41,16 @@ async function rastrearPoc(req, res, next) {
   }
 }
 
-// Projetado SALVO (só versão) pra a DRE dos dashboards — esta rota é liberada pra quem lê o dashboard
-// Econômico Financeiro; os rascunhos ficam só na tela DRE (dre-projecoes/projetado, fonte 'atual').
-// ?de&ate&centro=…&versao=N (sem versão: a última salva).
+// Projetado pra a DRE dos dashboards — esta rota é liberada pra quem lê o dashboard Econômico Financeiro. A
+// versão é a do pedido (o dashboard manda X-Dre-Versao: publicada = a última versão salva da DRE).
+// ?de&ate&centro=…
 async function projetadoVersao(req, res, next) {
   try {
     const q = querySchema.parse({ ...req.query, centro: req.query.centro ?? req.query['centro[]'] });
-    const versao = req.query.versao ? z.coerce.number().int().positive().parse(req.query.versao) : null;
     // Lazy: dre-projecoes usa este módulo (o motor) — o require no topo seria circular.
     const projecoes = require('../dre-projecoes/dreProjecoes.service');
     res.json(
-      await projecoes.projetado(empresaIdSchema.parse(req.params.empresaId), { fonte: 'versao', numero: versao, de: q.de, ate: q.ate, centros: q.centro })
+      await projecoes.projetado(empresaIdSchema.parse(req.params.empresaId), { de: q.de, ate: q.ate, centros: q.centro })
     );
   } catch (err) {
     if (err.issues) return next(erro(400, err.issues[0].message));

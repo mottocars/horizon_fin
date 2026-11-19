@@ -5,6 +5,11 @@ const { baseDoImposto } = require('../dre-demonstrativo/demonstrativo.service');
 const dfcOrcamento = require('../dfc-orcamento/dfcOrcamento.service');
 const fluxoDfc = require('../dfc-fluxo/fluxo.service');
 const motor = require('./motor');
+const { comVersaoPublicada } = require('../dre-versoes/contexto');
+
+// A DRE que a Reforma Tributária lê é a PUBLICADA: a última versão salva da DRE (modules/dre-versoes) — o que
+// é da DRE (projeção, máscaras, imposto, centros) roda dentro dela (naPublicada); o que é da DFC, ao vivo.
+const naPublicada = (fn) => (empresaId, ...args) => comVersaoPublicada(empresaId, () => fn(empresaId, ...args));
 
 // Operações > Reforma Tributária. Abas:
 //   Impacto DRE      — a DRE projetada (Projeção da DRE: o rascunho do centro e, sem rascunho, a última
@@ -107,12 +112,11 @@ async function listarCentros(empresaId) {
       [empresaId]
     ),
     pool.query(
-      `SELECT DISTINCT ON (o.centro_id) o.centro_id, o.versao_id, o.status, v.numero,
+      `SELECT DISTINCT ON (o.centro_id) o.centro_id, o.versao_id, o.status, NULL::int AS numero,
               to_char(o.ciclo_inicio, 'YYYY-MM') AS ciclo_inicio, to_char(o.ciclo_fim, 'YYYY-MM') AS ciclo_fim
-         FROM dre_projecao_orcamentos o LEFT JOIN dre_projecao_versoes v ON v.id = o.versao_id
-        WHERE o.empresa_id = $1
-          AND (o.versao_id IS NULL OR o.versao_id = (SELECT id FROM dre_projecao_versoes WHERE empresa_id = $1 ORDER BY numero DESC LIMIT 1))
-        ORDER BY o.centro_id, (o.versao_id IS NULL) DESC`,
+         FROM dre_projecao_orcamentos o
+        WHERE o.empresa_id = $1 AND o.versao_id IS NULL
+        ORDER BY o.centro_id`,
       [empresaId]
     ),
   ]);
@@ -125,7 +129,7 @@ async function listarCentros(empresaId) {
       return {
         ...c,
         projecao: p
-          ? { origem: p.versao_id ? 'VERSAO' : 'RASCUNHO', numero: p.numero, status: p.status, ciclo_inicio: p.ciclo_inicio, ciclo_fim: p.ciclo_fim }
+          ? { origem: 'VERSAO', numero: projecoes.versaoDaDre()?.numero ?? null, status: p.status, ciclo_inicio: p.ciclo_inicio, ciclo_fim: p.ciclo_fim }
           : null,
         config: k
           ? {
@@ -197,7 +201,7 @@ const arredondar = (o) => Object.fromEntries(Object.entries(o).map(([k, v]) => [
 // `centros`: ids (vazio = todos com projeção); `ano`: um ano (vazio = de 2027 ao fim das projeções).
 async function impacto(empresaId, { centros: filtro = [], ano = null }) {
   const [fonte, arvore, cfgEmpresa, { rows: cfgCentros }, { rows: cfgDre }, { rows: obras }] = await Promise.all([
-    projecoes.orcamentosDaFonte(empresaId, { fonte: 'atual', completo: true }),
+    projecoes.orcamentosDaFonte(empresaId, { completo: true }),
     dreMascaras.list(empresaId),
     lerConfig(empresaId),
     pool.query(
@@ -465,8 +469,9 @@ async function restaurarConfigDfc(empresaId) {
 // ---------------------------------------------------------------- Impacto DFC
 
 // A receita da obra inteira na Projeção da DRE (a mesma base do ρ do Impacto DRE), por centro.
-async function receitaTotalDre(empresaId) {
-  const [fonte, arvore] = await Promise.all([projecoes.orcamentosDaFonte(empresaId, { fonte: 'atual' }), dreMascaras.list(empresaId)]);
+const receitaTotalDre = naPublicada(receitaTotalDreDaVersao);
+async function receitaTotalDreDaVersao(empresaId) {
+  const [fonte, arvore] = await Promise.all([projecoes.orcamentosDaFonte(empresaId, {}), dreMascaras.list(empresaId)]);
   const mascaras = arvore.flatMap((g) => g.filhos);
   const i = mascaras.findIndex((m) => m.origem === 'IMPOSTO_FIXO');
   const baseIds = i >= 0 ? baseDoImposto(mascaras, i).map((m) => m.id) : [];
@@ -483,7 +488,8 @@ async function receitaTotalDre(empresaId) {
 
 // A alíquota (%) do RET de hoje num mês: o histórico da linha de imposto fixo da DRE (a vigente no mês);
 // sem histórico, a do RET de transição da aba Alíquotas.
-async function retDeHoje(empresaId, p) {
+const retDeHoje = naPublicada(retDeHojeDaVersao);
+async function retDeHojeDaVersao(empresaId, p) {
   const { rows } = await pool.query(
     `SELECT to_char(h.inicio, 'YYYY-MM') AS inicio, h.aliquota::float AS aliquota
        FROM dre_mascaras_imposto_historico h
@@ -763,8 +769,8 @@ module.exports = {
   obterConfiguracoes,
   salvarConfiguracoes,
   restaurarConfiguracoes,
-  listarCentros,
+  listarCentros: naPublicada(listarCentros),
   salvarCentro,
   limparCentro,
-  impacto,
+  impacto: naPublicada(impacto),
 };

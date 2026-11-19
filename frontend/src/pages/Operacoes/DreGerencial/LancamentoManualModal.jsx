@@ -1,4 +1,5 @@
 import { useEffect, useMemo, useState } from 'react';
+import { useLeituraDre } from './leituraDre';
 import { ArrowDownLeft, ArrowUpRight, History, Lock, Trash2, TriangleAlert } from 'lucide-react';
 import Modal from '../../../components/Modal';
 import Button from '../../../components/Button';
@@ -113,7 +114,9 @@ export default function LancamentoManualModal({ empresaId, ano, id = null, onClo
   };
 
   // Exercício em andamento ou futuro: só visualização (mesma regra do backend).
-  const travado = dados ? dados.travado : ano >= new Date().getFullYear();
+  // Só leitura também sem versão da DRE aberta / visualizando uma versão (leituraDre.js).
+  const { somenteLeitura } = useLeituraDre();
+  const travado = (dados ? dados.travado : ano >= new Date().getFullYear()) || somenteLeitura;
   const mudar = (campo) => (v) => setForm((f) => ({ ...f, [campo]: v }));
   const valorNum = Math.abs(lerValor(form.valor));
 
@@ -195,7 +198,7 @@ export default function LancamentoManualModal({ empresaId, ano, id = null, onClo
             {travado && (
               <div className="flex items-center gap-2 rounded-lg bg-amber-50 px-3 py-2 text-xs text-amber-700">
                 <Lock size={14} className="shrink-0" />
-                Exercício em andamento: só pode ser visualizado, não aceita lançamento criado nem alterado.
+                {somenteLeitura && !dados?.travado ? 'A DRE está só leitura (sem versão aberta ou visualizando uma versão salva): só pode ser visualizado.' : 'Exercício em andamento: só pode ser visualizado, não aceita lançamento criado nem alterado.'}
               </div>
             )}
 

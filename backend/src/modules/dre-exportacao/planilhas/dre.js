@@ -328,7 +328,7 @@ function escreverDre(workbook, sheet, d, C, meta, J = null) {
     `AV.R % = valor ÷ |${resultado.avaliacao_vertical?.descricao || 'linha base não configurada'}| (aba Configurações), da linha base para baixo.`,
     ...(J
       ? [
-          `Projetado / Desvio %: ${J.P.fonte === 'versao' ? `Versão ${J.P.versao?.numero ?? '—'}` : 'rascunhos + última versão'} (abas Projeção…). Desvio verde acima de +10%, vermelho abaixo de −10%, neutro no meio. Centro sem orçamento: traço no Projetado.`,
+          `Projetado / Desvio %: Versão ${J.P.versao?.numero ?? '—'} da DRE${J.P.versao?.status === 'ABERTA' ? ' (em edição)' : ''} (abas Projeção…). Desvio verde acima de +10%, vermelho abaixo de −10%, neutro no meio. Centro sem orçamento: traço no Projetado.`,
         ]
       : []),
     'Os valores do Excel são fórmulas: mexa numa base (ex.: um orçamento na Base Orçamento) e a DRE inteira recalcula — útil pra simular e pra provar a conta.',

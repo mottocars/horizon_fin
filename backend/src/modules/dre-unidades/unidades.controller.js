@@ -1,5 +1,6 @@
 const { z } = require('zod');
 const service = require('./unidades.service');
+const c = require('../dre-versoes/carimbo');
 
 const empresaIdSchema = z.coerce.number().int().positive('Empresa inválida.');
 
@@ -25,7 +26,9 @@ async function listar(req, res, next) {
 
 async function sincronizar(req, res, next) {
   try {
-    res.json(await service.sincronizar(empresaIdSchema.parse(req.params.empresaId)));
+    const r = await service.sincronizar(empresaIdSchema.parse(req.params.empresaId));
+    await c.carimbar(req, { descricao: 'Atualizou as unidades do Sienge (botão Atualizar).' });
+    res.json(r);
   } catch (err) {
     tratar(err, next);
   }
@@ -33,7 +36,9 @@ async function sincronizar(req, res, next) {
 
 async function sincronizarContratos(req, res, next) {
   try {
-    res.json(await service.sincronizarContratos(empresaIdSchema.parse(req.params.empresaId)));
+    const r = await service.sincronizarContratos(empresaIdSchema.parse(req.params.empresaId));
+    await c.carimbar(req, { descricao: 'Atualizou os contratos de venda do Sienge (botão Atualizar).' });
+    res.json(r);
   } catch (err) {
     tratar(err, next);
   }

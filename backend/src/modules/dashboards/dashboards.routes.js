@@ -7,6 +7,7 @@ const authMiddleware = require('../../middlewares/auth.middleware');
 const fluxoCaixaPainel = require('./fluxoCaixaPainel.service');
 const agingPainel = require('./agingPainel.service');
 const drePainel = require('./drePainel.service');
+const { comVersaoPublicada } = require('../dre-versoes/contexto');
 const detalhamentoPainel = require('./detalhamentoPainel.service');
 
 // Dashboards: tela favorita (estrela) de cada usuário em cada dashboard — a que abre ao entrar pelo
@@ -80,7 +81,8 @@ router.get('/economico-financeiro/dre', async (req, res, next) => {
   try {
     const f = drePainelSchema.parse(req.query);
     const centros = f.centros ? f.centros.split(',').map(Number) : [];
-    res.json(await drePainel.painel(f.empresa_id, { de: f.de, ate: f.ate, centros }));
+    // A DRE publicada: a última versão salva (modules/dre-versoes).
+    res.json(await comVersaoPublicada(f.empresa_id, () => drePainel.painel(f.empresa_id, { de: f.de, ate: f.ate, centros })));
   } catch (err) {
     if (err.issues) return res.status(400).json({ message: err.issues[0].message || 'Filtros inválidos.' });
     next(err);

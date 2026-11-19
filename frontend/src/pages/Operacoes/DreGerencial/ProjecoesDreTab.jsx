@@ -8,10 +8,10 @@ import {
   criarOrcamentoDre,
   descartarOrcamentoDre,
   listarProjecoesDre,
-  salvarVersaoProjecoesDre,
 } from '../../../api/dreProjecoes.api';
 import AssistenteOrcamento from './projecoes/AssistenteOrcamento';
 import ImportarPlanilhaModal from './projecoes/ImportarPlanilhaModal';
+import { useLeituraDre } from './leituraDre';
 import { baixarArquivo, corValor, mensagemDeErro, moeda, rotuloMesLongo } from './projecoes/util';
 import { baixarLayoutProjecoesDre } from '../../../api/dreProjecoes.api';
 
@@ -28,16 +28,9 @@ const ROTULO_ETAPA = {
 const dataHora = (v) =>
   v ? new Date(v).toLocaleString('pt-BR', { day: '2-digit', month: '2-digit', year: 'numeric', hour: '2-digit', minute: '2-digit' }) : '';
 
-function Situacao({ linha, versao }) {
-  if (linha.versao_id !== null) {
-    return <span className="rounded-full bg-gray-100 px-2 py-0.5 text-[11px] font-medium text-gray-600">Versão {versao?.numero}</span>;
-  }
+function Situacao({ linha }) {
   if (linha.status === 'CONCLUIDO') {
-    return (
-      <span className="rounded-full bg-primary-50 px-2 py-0.5 text-[11px] font-medium text-primary-700" title="Entra na próxima versão ao Salvar versão">
-        Concluído · aguardando versão
-      </span>
-    );
+    return <span className="rounded-full bg-primary-50 px-2 py-0.5 text-[11px] font-medium text-primary-700">Concluído</span>;
   }
   return (
     <span className="rounded-full bg-amber-50 px-2 py-0.5 text-[11px] font-medium text-amber-700">
@@ -47,12 +40,13 @@ function Situacao({ linha, versao }) {
 }
 
 // Operações > DRE Construtoras > Projeções: os orçamentos da DRE por centro de custo — uma linha por
-// centro com o fechamento (do primeiro lançamento ao fim do ciclo) em cada totalizador da Máscara DRE, o ciclo e a trava. Mostra
-// a última versão salva e, acima de cada centro, o rascunho dele (em andamento ou concluído). Os
-// botões do topo (DreGerencialPage.jsx) chamam `novo()` e `salvarVersao()` pela ref; `onResumo`
-// informa quantos rascunhos concluídos há (o "Salvar versão" só acende com algum).
-const ProjecoesDreTab = forwardRef(function ProjecoesDreTab({ empresaId, telaCheia = false, onSairTelaCheia, onResumo }, ref) {
+// centro com o fechamento (do primeiro lançamento ao fim do ciclo) em cada totalizador da Máscara DRE, o ciclo e a trava. Um
+// orçamento por centro, na versão da DRE que a tela mostra (a aberta ou, sem ela, a última salva — aba Versões;
+// "Salvar versão" fica lá e só deixa salvar com todos concluídos). Os botões do topo (DreGerencialPage.jsx)
+// chamam `novo()`, `baixarLayout()` e `importar()` pela ref. Só leitura: abre o assistente sem gravar.
+const ProjecoesDreTab = forwardRef(function ProjecoesDreTab({ empresaId, telaCheia = false, onSairTelaCheia }, ref) {
   const confirm = useConfirm();
+  const { somenteLeitura } = useLeituraDre();
   const [lista, setLista] = useState(null);
   const [centros, setCentros] = useState([]);
   const [erro, setErro] = useState('');
@@ -76,31 +70,6 @@ const ProjecoesDreTab = forwardRef(function ProjecoesDreTab({ empresaId, telaChe
     carregar();
   }, [carregar]);
 
-  const concluidos = lista ? lista.rascunhos.filter((r) => r.status === 'CONCLUIDO').length : 0;
-  useEffect(() => {
-    onResumo?.({ concluidos });
-  }, [concluidos, onResumo]);
-
-  async function salvarVersao() {
-    if (!concluidos) return;
-    const numero = (lista.versao?.numero || 0) + 1;
-    const ok = await confirm({
-      title: `Salvar versão ${numero}`,
-      description: `${concluidos} orçamento(s) concluído(s) entram na versão ${numero}${
-        lista.orcamentos.length ? '; os demais centros seguem com o orçamento da versão anterior' : ''
-      }.`,
-      confirmLabel: 'Salvar versão',
-    });
-    if (!ok) return;
-    try {
-      const r = await salvarVersaoProjecoesDre(empresaId);
-      setAviso(`Versão ${r.numero} salva com ${r.orcamentos} orçamento(s).`);
-      carregar();
-    } catch (e) {
-      setErro(e.response?.data?.message || 'Não foi possível salvar a versão.');
-    }
-  }
-
   // Planilha da empresa (botões do topo): todos os centros, com as abas Ciclos, Vendas, Custos da POC e
   // Demais contas. A de um centro só fica nas etapas do assistente.
   const [importando, setImportando] = useState(false);
@@ -114,7 +83,7 @@ const ProjecoesDreTab = forwardRef(function ProjecoesDreTab({ empresaId, telaChe
     }
   }
 
-  useImperativeHandle(ref, () => ({ novo: () => setAssistente({ id: null }), salvarVersao, baixarLayout, importar: () => setImportando(true) }));
+  useImperativeHandle(ref, () => ({ novo: () => setAssistente({ id: null }), baixarLayout, importar: () => setImportando(true) }));
 
   // Tela cheia: pede também a do navegador; sai pelo botão ou com Esc (fora do assistente) — mesmo
   // esquema de DfcOrcamentosTab.jsx.
@@ -176,6 +145,7 @@ const ProjecoesDreTab = forwardRef(function ProjecoesDreTab({ empresaId, telaChe
     );
   }
 
+  const emAndamento = lista ? lista.rascunhos.filter((r) => r.status !== 'CONCLUIDO').length : 0;
   // Na ordem dos centros (aba Centros Custos): o rascunho do centro e, embaixo, o da versão.
   const ordem = new Map(centros.map((c, i) => [c.sienge_id, i]));
   const linhas = lista
@@ -217,14 +187,20 @@ const ProjecoesDreTab = forwardRef(function ProjecoesDreTab({ empresaId, telaChe
           <span>
             {lista.versao ? (
               <>
-                <span className="font-medium text-gray-800">Versão {lista.versao.numero}</span> · salva em {dataHora(lista.versao.criado_em)}
+                <span className="font-medium text-gray-800">Versão {lista.versao.numero} da DRE</span>
+                {lista.versao.status === 'ABERTA'
+                  ? ` · em edição, aberta em ${dataHora(lista.versao.criado_em)}`
+                  : ` · salva em ${dataHora(lista.versao.criado_em)}`}
                 {lista.versao.usuario ? ` por ${lista.versao.usuario}` : ''}
+                {lista.corte ? ` · realizado até ${rotuloMesLongo(lista.corte)}` : ''}
               </>
             ) : (
-              'Nenhuma versão salva'
+              'Sem versão da DRE'
             )}
           </span>
-          {concluidos > 0 && <span className="text-primary-700">{concluidos} aguardando Salvar versão</span>}
+          {emAndamento > 0 && !somenteLeitura && (
+            <span className="text-amber-700">{emAndamento} em andamento: conclua para poder salvar a versão (aba Versões)</span>
+          )}
         </div>
       )}
       {(erro || aviso) && (
@@ -240,9 +216,11 @@ const ProjecoesDreTab = forwardRef(function ProjecoesDreTab({ empresaId, telaChe
         <div className="flex flex-col items-center gap-2 py-14 text-center">
           <TrendingUp size={26} className="text-gray-300" />
           <p className="text-sm text-gray-600">Nenhum orçamento gerado.</p>
-          <Button className="mt-2" onClick={() => setAssistente({ id: null })}>
-            <FilePlus2 size={16} /> Novo orçamento
-          </Button>
+          {!somenteLeitura && (
+            <Button className="mt-2" onClick={() => setAssistente({ id: null })}>
+              <FilePlus2 size={16} /> Novo orçamento
+            </Button>
+          )}
         </div>
       ) : lista ? (
         <div className="overflow-x-auto rounded-lg border border-gray-200">
@@ -282,7 +260,7 @@ const ProjecoesDreTab = forwardRef(function ProjecoesDreTab({ empresaId, telaChe
                             </span>
                           </span>
                           <span className="mt-1 block">
-                            <Situacao linha={l} versao={lista.versao} />
+                            <Situacao linha={l} />
                           </span>
                         </span>
                         <span className="flex shrink-0 items-center gap-0.5" onClick={(e) => e.stopPropagation()}>
@@ -291,19 +269,21 @@ const ProjecoesDreTab = forwardRef(function ProjecoesDreTab({ empresaId, telaChe
                               <button
                                 type="button"
                                 onClick={() => setAssistente({ id: l.id })}
-                                title={l.status === 'CONCLUIDO' ? 'Abrir' : 'Continuar'}
+                                title={somenteLeitura ? 'Ver (só leitura)' : l.status === 'CONCLUIDO' ? 'Abrir' : 'Continuar'}
                                 className="rounded-md p-1.5 text-primary-600 hover:bg-primary-50"
                               >
                                 <Play size={14} />
                               </button>
-                              <button
-                                type="button"
-                                onClick={() => descartar(l)}
-                                title="Descartar rascunho"
-                                className="rounded-md p-1.5 text-gray-400 hover:bg-red-50 hover:text-red-600"
-                              >
-                                <Trash2 size={14} />
-                              </button>
+                              {!somenteLeitura && (
+                                <button
+                                  type="button"
+                                  onClick={() => descartar(l)}
+                                  title="Descartar orçamento"
+                                  className="rounded-md p-1.5 text-gray-400 hover:bg-red-50 hover:text-red-600"
+                                >
+                                  <Trash2 size={14} />
+                                </button>
+                              )}
                             </>
                           ) : (
                             !lista.rascunhos.some((r) => r.centro_id === l.centro_id) && (
@@ -322,7 +302,7 @@ const ProjecoesDreTab = forwardRef(function ProjecoesDreTab({ empresaId, telaChe
                     </td>
                     <td className="border-b border-gray-100 px-3 py-2 text-gray-600">
                       {rotuloMesLongo(l.ciclo_inicio)} a {rotuloMesLongo(l.ciclo_fim)}
-                      {l.trava && <span className="block text-[11px] text-gray-400">realizado até {rotuloMesLongo(l.trava)}</span>}
+                      {(lista.corte || l.trava) && <span className="block text-[11px] text-gray-400">realizado até {rotuloMesLongo(lista.corte || l.trava)}</span>}
                     </td>
                     {colunas.map((c) => {
                       const v = l.totais?.[c.id];
@@ -358,6 +338,7 @@ const ProjecoesDreTab = forwardRef(function ProjecoesDreTab({ empresaId, telaChe
 
       {assistente && (
         <AssistenteOrcamento
+          somenteLeitura={somenteLeitura}
           empresaId={empresaId}
           orcamentoId={assistente.id}
           centros={centros}

@@ -44,9 +44,10 @@ function mesDeHoje() {
 // projetado, só nos centros) e 'desvio' (Desvio %); `projecao` — de onde
 // vem o projetado ({ fonte: 'atual' | 'versao', versao }, null = sem projetado; ver projetadoDre);
 // `onProjecaoInfo(r)`: devolve as versões disponíveis (pro seletor da página). Projetado de cada centro =
-// a DRE do orçamento mês a mês no período (até o mês de corte é o realizado da data do orçamento — em
-// cinza no mês a mês; depois, o projetado — amarelo pastel). Desvio % = (Valor − Projetado) ÷ |Projetado|
-// com o projetado só dos meses até o atual (o realizado nunca passa de hoje) — a regra do DFC.
+// a DRE do orçamento mês a mês no período — amarelo pastel. Versões da DRE (aba Versões): o realizado vai só
+// até o último mês fechado da versão (`resultado.realizado_ate`); depois dele, só o Projetado. Nos meses que
+// já fecharam, o Projetado é o da última versão salva em que eles ainda eram projeção (`versao_do_mes`).
+// Desvio % = (Valor − Projetado) ÷ |Projetado| com o projetado só dos meses até o último mês realizado.
 export default function DreTab({
   empresaId,
   de,
@@ -183,6 +184,8 @@ export default function DreTab({
   }
 
   const semMascaraPoc = resultado && !resultado.poc_receita.mascara;
+  // Último mês do realizado: o corte da versão da DRE (sem ele, o mês de hoje).
+  const ultimoReal = (resultado?.realizado_ate || `${mesAtual}-01`).slice(0, 7);
   // Centro da visão mês a mês (se o filtro tirou o centro, volta pros centros).
   const centroMensal = mensal !== null ? (resultado?.por_centro || []).find((c) => c.id === mensal) : null;
 
@@ -232,9 +235,16 @@ export default function DreTab({
   })();
 
   // Colunas de valor. `segunda`: a coluna ao lado do valor — 'av' (AV %), 'ah' (AH %) ou nenhuma.
-  // `projetado`: o do período (ou do mês); `comparavel`: só dos meses até o atual — a base do Desvio %;
-  // `cinza`: mês até o corte do orçamento (o projetado é o realizado da data do orçamento).
-  const ateAtual = (m) => m <= mesAtual;
+  // `projetado`: o do período (ou do mês); `comparavel`: só dos meses até o último mês realizado — a base do
+  // Desvio %; `versaoProj`: de qual versão veio o projetado de um mês que já fechou.
+  const ateAtual = (m) => m <= ultimoReal;
+  // O realizado que o Desvio compara: só os meses que têm projetado comparável (até o último mês realizado) —
+  // nos meses fechados, o projetado vem de versões anteriores, que podem não cobrir todos os meses do período.
+  const realComparavel = (mesesReal, pc) => {
+    if (!pc) return null;
+    const comProj = new Set(pc.meses.filter((m) => m >= mesDe && m <= mesAte && ateAtual(m)));
+    return somarMapas((mesesReal || []).filter((m) => comProj.has(m.mes)).map((m) => m.valores)) || Object.fromEntries(idsN2.map((id) => [id, 0]));
+  };
   const colunas = centroMensal
     ? [
         {
@@ -244,6 +254,7 @@ export default function DreTab({
           segunda: null,
           projetado: somaProj(projMensal, () => true),
           comparavel: somaProj(projMensal, ateAtual),
+          valoresDesvio: realComparavel(centroMensal.meses, projMensal),
         },
         ...mensalAparado.meses.map((m) => {
           const p = projDoMes(projMensal, m.mes);
@@ -252,21 +263,29 @@ export default function DreTab({
             mes: m.mes,
             de: m.de,
             ate: m.ate,
-            // Mês depois do atual não tem realizado (a DRE não tem futuro): traço, não zero — e, com o
-            // projetado visível, só a coluna Projetado (`futuro`; ver subsDe).
-            valores: m.mes > mesAtual ? {} : m.valores,
-            futuro: m.mes > mesAtual,
+            // Mês depois do último realizado (o corte da versão) não tem realizado: traço, não zero — e,
+            // com o projetado visível, só a coluna Projetado (`futuro`; ver subsDe).
+            valores: m.mes > ultimoReal ? {} : m.valores,
+            futuro: m.mes > ultimoReal,
             segunda: 'ah',
             projetado: p,
             comparavel: p && ateAtual(m.mes) ? p : null,
-            cinza: Boolean(p && projMensal.trava && m.mes <= projMensal.trava),
+            versaoProj: projMensal?.versao_do_mes?.[m.mes] || null,
           };
         }),
       ]
     : (() => {
         const porCentro = (resultado?.por_centro || []).map((c) => {
           const pc = projCentro(c.id);
-          return { chave: c.id, nome: c.nome, valores: c.valores, segunda: 'av', projetado: somaProj(pc, () => true), comparavel: somaProj(pc, ateAtual) };
+          return {
+            chave: c.id,
+            nome: c.nome,
+            valores: c.valores,
+            segunda: 'av',
+            projetado: somaProj(pc, () => true),
+            comparavel: somaProj(pc, ateAtual),
+            valoresDesvio: realComparavel(c.meses, pc),
+          };
         });
         return [
           {
@@ -276,9 +295,9 @@ export default function DreTab({
             segunda: 'av',
             projetado: somarMapas(porCentro.map((c) => c.projetado)),
             comparavel: somarMapas(porCentro.map((c) => c.comparavel)),
-            // O Desvio do consolidado compara só o realizado dos centros COM projeção (o Valor segue o de
-            // todos): senão um centro sem orçamento entra no realizado e não no projetado.
-            valoresDesvio: somarMapas(porCentro.filter((c) => c.projetado).map((c) => c.valores)),
+            // O Desvio do consolidado compara só o realizado dos centros COM projeção, nos meses com projetado
+            // (o Valor segue o de todos): senão entra realizado sem projetado do outro lado.
+            valoresDesvio: somarMapas(porCentro.filter((c) => c.projetado).map((c) => c.valoresDesvio)),
           },
           ...porCentro,
         ];
@@ -340,19 +359,17 @@ export default function DreTab({
     if (k === 'pctp')
       return av ? `Avaliação Vertical do Projetado: percentual do projetado de ${av.descricao}` : 'Avaliação Vertical não configurada';
     if (k === 'proj')
-      return c.cinza
-        ? 'Realizado na data do orçamento (mês até o corte)'
+      return c.versaoProj
+        ? `Projetado da versão ${c.versaoProj} (quando este mês ainda era projeção)`
         : c.mes
           ? 'Projetado do mês'
           : 'Projetado do período inteiro do filtro';
     if (k === 'desvio')
-      return `(Valor − Projetado) ÷ |Projetado|, com o projetado só dos meses até o atual. Positivo (verde) = melhor que o projetado; dentro de ±${TOLERANCIA_DESVIO}% fica neutro.`;
+      return `(Valor − Projetado) ÷ |Projetado|, com o projetado só dos meses até o último mês realizado. Positivo (verde) = melhor que o projetado; dentro de ±${TOLERANCIA_DESVIO}% fica neutro.`;
     return undefined;
   };
-  const rotuloFonte = projDados
-    ? projDados.fonte === 'versao'
-      ? `versão ${projDados.versao?.numero ?? '—'}`
-      : `rascunhos atuais${projDados.versao ? ` (sem rascunho: versão ${projDados.versao.numero})` : ''}`
+  const rotuloFonte = projDados?.versao
+    ? `versão ${projDados.versao.numero}${projDados.versao.status === 'ABERTA' ? ' (em edição)' : ''}`
     : '';
   const semProjecao = querProj && projDados && !Object.keys(projDados.centros || {}).length;
 
@@ -437,20 +454,17 @@ export default function DreTab({
             <span className="text-gray-400">Buscando o projetado…</span>
           ) : semProjecao ? (
             <span className="text-amber-700">
-              Sem projeção {projDados.fonte === 'versao' ? 'salva em versão' : 'nos rascunhos nem na última versão'} para os centros do filtro.
+              Sem projeção nesta versão para os centros do filtro.
             </span>
           ) : (
             <>
               <span className="flex items-center gap-1.5">
                 <span className="inline-block h-3 w-3 rounded-sm border border-amber-200 bg-[#fdf6d3]" /> Projetado · {rotuloFonte}
               </span>
-              {centroMensal && (
-                <span className="flex items-center gap-1.5">
-                  <span className="inline-block h-3 w-3 rounded-sm border border-gray-200 bg-gray-100" />
-                  Realizado na data do orçamento (até o corte{projMensal?.trava ? ` ${rotuloMesCab(projMensal.trava)}` : ''})
-                </span>
-              )}
-              <span>Desvio % até o mês atual · ±{TOLERANCIA_DESVIO}% neutro</span>
+              <span>
+                Realizado até {rotuloMesCab(ultimoReal)} · nos meses fechados, o Projetado é o da versão em que eles ainda eram projeção
+              </span>
+              <span>Desvio % até {rotuloMesCab(ultimoReal)} · ±{TOLERANCIA_DESVIO}% neutro</span>
               {!centroMensal && centrosComProj > 0 && centrosComProj < centrosTotal && (
                 <span className="text-amber-700">
                   Consolidado: Projetado e Desvio só dos {centrosComProj} de {centrosTotal} centros com projeção

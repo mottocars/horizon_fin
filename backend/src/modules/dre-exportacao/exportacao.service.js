@@ -147,7 +147,7 @@ function eventosUnidades(m) {
 // onde saem a Memória e a POC da projeção. Sem nenhum orçamento: null (o Excel fica sem as abas).
 async function dadosProjecao(empresaId, { de, ate, m, projecao }) {
   if (!projecao || !m.ids.length) return null;
-  const f = await projecoes.orcamentosDaFonte(empresaId, { fonte: projecao.fonte, numero: projecao.numero, centros: m.ids, completo: true });
+  const f = await projecoes.orcamentosDaFonte(empresaId, { centros: m.ids, completo: true });
   const mesDe = de.slice(0, 7);
   const mesAte = ate.slice(0, 7);
   const orcamentos = [];
@@ -176,9 +176,10 @@ async function dados(empresaId, { de, ate, centros = [], projecao = null }) {
     ]),
   ];
   const filtrado = centros.length > 0;
-  // As bases param em hoje, como o realizado da DRE (demonstrativo.carregar) — senão o Excel somaria o
-  // que o sistema não soma (títulos com emissão futura, correção de parcelas que vencem depois de hoje).
-  const hoje = demonstrativo.hojeIso();
+  // As bases param onde para o realizado da DRE (demonstrativo.carregar: hoje ou, dentro de uma versão, o fim
+  // do mês de corte) — senão o Excel somaria o que o sistema não soma (títulos com emissão futura, correção de
+  // parcelas que vencem depois, o mês corrente que ainda não fechou).
+  const hoje = demonstrativo.limiteDoRealizado();
   const ateBase = ate < hoje ? ate : hoje;
 
   const [resultado, arvore, financeiroLinhas, fora, corr, orcamento, plano, centrosInfo, extras, proj] = await Promise.all([

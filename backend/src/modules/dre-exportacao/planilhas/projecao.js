@@ -609,9 +609,9 @@ function somaFoto(J, centro, filtro = () => true) {
 function escrever(workbook, abas, J, d, meta) {
   const { P } = J;
   const fonte =
-    P.fonte === 'versao'
-      ? `Versão ${P.versao?.numero ?? '—'} salva em ${dataHoraBr(P.versao?.criado_em)}${P.versao?.usuario ? ` por ${P.versao.usuario}` : ''}`
-      : `Rascunhos (não salvos) + a última versão${P.versao ? ` (Versão ${P.versao.numero})` : ''} nos centros sem rascunho`;
+    P.versao?.status === 'ABERTA'
+      ? `Versão ${P.versao.numero} da DRE, em edição (aberta em ${dataHoraBr(P.versao.criado_em)}${P.versao.usuario ? ` por ${P.versao.usuario}` : ''})`
+      : `Versão ${P.versao?.numero ?? '—'} da DRE, salva em ${dataHoraBr(P.versao?.criado_em)}${P.versao?.usuario ? ` por ${P.versao.usuario}` : ''}`;
   const metaProj = { ...meta, filtros: [...meta.filtros.filter(([k]) => k !== 'Projeção'), ['Projeção', fonte]] };
 
   tabela(workbook, abas.mensal, J.lyMensal, {

@@ -2,6 +2,7 @@ const { Router } = require('express');
 const multer = require('multer');
 const authMiddleware = require('../../middlewares/auth.middleware');
 const { paramEmpresa } = require('../../middlewares/acesso.middleware');
+const { contextoDre } = require('../dre-versoes/contexto');
 const controller = require('./dreProjecoes.controller');
 
 // Planilha da Projeção (importação): só .xlsx, em memória — mesmo esquema da Planilha Orçamentária da DFC.
@@ -23,11 +24,12 @@ const router = Router();
 
 router.use(authMiddleware);
 router.param('empresaId', paramEmpresa);
+// Versão da DRE do pedido (aberta / última salva / a visualizada) e a trava de gravação (dre-versoes/contexto.js).
+router.param('empresaId', contextoDre('projecoes', { livre: (req) => /\/importar$/.test(req.path) && !['1', 'true'].includes(String(req.query.aplicar)) }));
 router.get('/:empresaId', controller.listar);
 router.get('/:empresaId/layout', controller.layout);
 router.get('/:empresaId/projetado', controller.projetado);
 router.post('/:empresaId/importar', upload.single('arquivo'), controller.importar);
-router.post('/:empresaId/versoes', controller.salvarVersao);
 router.post('/:empresaId/orcamentos', controller.criar);
 router.get('/:empresaId/orcamentos/:id', controller.obter);
 router.put('/:empresaId/orcamentos/:id', controller.atualizar);

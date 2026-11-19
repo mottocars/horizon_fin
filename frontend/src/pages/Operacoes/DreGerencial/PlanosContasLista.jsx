@@ -142,6 +142,7 @@ export default function PlanosContasLista({ empresaId, onAbrir, onNovo, refreshT
               onAbrir={() => onAbrir(String(v.centro_id))}
             />
           ))}
+          {onNovo && (
           <button
             type="button"
             onClick={onNovo}
@@ -155,6 +156,7 @@ export default function PlanosContasLista({ empresaId, onAbrir, onNovo, refreshT
               Copiando o Global, o plano de outro centro, ou em branco — vale só para o centro escolhido.
             </span>
           </button>
+          )}
         </div>
       )}
     </div>

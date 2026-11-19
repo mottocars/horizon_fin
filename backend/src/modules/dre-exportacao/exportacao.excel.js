@@ -28,7 +28,7 @@ async function gerar(empresaId, { de, ate, centros = [], projecao: qualProjecao 
       ['Período', `${dataBr(de)} a ${dataBr(ate)}`],
       ['Centros de custo', d.filtrado ? d.m.obras.map((c) => rotuloCentro(c)).join(', ') : 'Todos com "Realiza DRE"'],
       ...(d.projecao?.orcamentos.length
-        ? [['Projeção', d.projecao.fonte === 'versao' ? `Versão ${d.projecao.versao?.numero ?? '—'}` : 'Rascunhos + última versão']]
+        ? [['Projeção', `Versão ${d.projecao.versao?.numero ?? '—'} da DRE${d.projecao.versao?.status === 'ABERTA' ? ' (em edição)' : ''}`]]
         : []),
     ],
     gerado: `Gerado por ${usuarios[0]?.nome || 'usuário'} em ${dataHoraBr(new Date())}`,

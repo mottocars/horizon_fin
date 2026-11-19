@@ -54,13 +54,9 @@ const rotMes = (m) => {
 const quando = (v) => (v ? new Date(v).toLocaleString('pt-BR', { timeZone: 'America/Sao_Paulo', dateStyle: 'short', timeStyle: 'short' }) : '—');
 
 // ─── Entradas comuns ────────────────────────────────────────────────────────────────────────────
-const FONTE = {
-  fonte: z
-    .enum(['versao', 'rascunhos'])
-    .optional()
-    .describe('"versao" (padrão: uma versão salva — a dos dashboards) ou "rascunhos" (os rascunhos de cada centro e, nos sem rascunho, a última versão — o que a aba DRE do Operações mostra com Versão = Rascunhos).'),
-  versao: z.number().int().positive().optional().describe('Número da versão salva (padrão: a última).'),
-};
+// O MCP lê sempre a DRE PUBLICADA: a última versão salva da DRE (modules/dre-versoes) — a projeção é a dos
+// orçamentos daquela versão. (Sem escolha de fonte: a versão em edição só aparece no Operações.)
+const FONTE = {};
 const PERIODO_PROJ = {
   de: z.string().regex(/^\d{4}-\d{2}-\d{2}$/).optional().describe('Início (AAAA-MM-DD). Padrão: 1º de janeiro do ano atual.'),
   ate: z.string().regex(/^\d{4}-\d{2}-\d{2}$/).optional().describe('Fim (AAAA-MM-DD). Padrão: 31 de dezembro do ano atual (a projeção vai além de hoje).'),
@@ -79,19 +75,16 @@ function periodoProj(a = {}) {
   return { de, ate };
 }
 
-// Rascunho só pra quem tem a tela DRE Construtoras (o dashboard só vê versão salva).
-function fonteDe(a, ctx) {
-  if (a.fonte === 'rascunhos') {
-    if (!ctx.podeRascunho) throw falha('Os rascunhos da projeção só aparecem para quem tem a tela DRE Construtoras (Operações). Use a versão salva (fonte "versao").');
-    return { fonte: 'atual', numero: null };
-  }
-  return { fonte: 'versao', numero: a.versao ?? null };
+// Compatibilidade: a versão é sempre a publicada (o contexto do pedido — ver dre/index.js).
+function fonteDe() {
+  return {};
 }
 
 // Os orçamentos da fonte (com a foto inteira), cache curto.
-function carregar(empresaId, { fonte, numero, centros = [] }) {
-  return memo(`proj|${empresaId}|${fonte}|${numero}|${[...centros].sort().join(',')}`, () =>
-    projecoes.orcamentosDaFonte(empresaId, { fonte, numero, centros, completo: true })
+function carregar(empresaId, { centros = [] } = {}) {
+  const v = projecoes.versaoDaDre();
+  return memo(`proj|${empresaId}|v${v?.numero ?? '-'}|${[...centros].sort().join(',')}`, () =>
+    projecoes.orcamentosDaFonte(empresaId, { centros, completo: true })
   );
 }
 
@@ -108,13 +101,11 @@ function motorDe(empresaId, orc) {
 }
 
 const nomeCentro = (o) => `${o.centro_id} · ${o.centro_apelido || o.centro_nome}`;
-const rotuloOrc = (o) => (o.origem === 'VERSAO' ? 'versão salva' : o.status === 'CONCLUIDO' ? 'rascunho concluído' : 'rascunho em andamento (calculado agora)');
+const rotuloOrc = (o) => (o.status === 'CONCLUIDO' ? 'concluído' : 'em andamento (calculado agora)');
 const descreverFonte = (f) =>
-  f.fonte === 'versao'
-    ? f.versao
-      ? `Versão ${f.versao.numero}, salva em ${quando(f.versao.criado_em)}${f.versao.usuario ? ` por ${f.versao.usuario}` : ''}`
-      : 'nenhuma versão salva'
-    : `Rascunhos (não salvos) + a última versão${f.versao ? ` (Versão ${f.versao.numero})` : ''} nos centros sem rascunho`;
+  f.versao
+    ? `Versão ${f.versao.numero} da DRE (a publicada), salva em ${quando(f.versao.criado_em)}${f.versao.usuario ? ` por ${f.versao.usuario}` : ''} — realizado até ${rotMes(f.versao.corte)}`
+    : 'nenhuma versão da DRE';
 
 function primeiroProjetado(o) {
   return calculo.janela(o).inicioProjecao;
@@ -147,16 +138,16 @@ const guia = {
   name: 'dre_projecao_guia',
   description:
     'Comece por aqui para QUALQUER pergunta sobre a Projeção da DRE (orçamento da DRE por centro de custo). FAQ completo e o estado desta empresa: ' +
-    'como a aba Projeções da DRE Construtoras funciona (lista, botões Layout / Importar / Novo orçamento / Salvar versão, o assistente em 7 etapas — centro e ciclo, histórico e trava, vendas das unidades, ' +
-    'custos da POC, POC, demais contas, conclusão), rascunho × concluído × versão salva, a planilha de importação, as regras de cálculo (trava, vendas, Origem Projeção das naturezas: ' +
-    'HORIZON - INFORMADO, SIENGE - EMPRESARIAL, SIENGE - AGING, NÃO POSSUI; correção monetária; POC), como a aba DRE e o dashboard comparam Realizado × Projetado (colunas, filtro Versão, ' +
+    'como a aba Projeções da DRE Construtoras funciona (lista, botões Layout / Importar / Novo orçamento, o assistente em 7 etapas — centro e ciclo, histórico, vendas das unidades, ' +
+    'custos da POC, POC, demais contas, conclusão), em andamento × concluído, as VERSÕES DA DRE (aba Versões: a projeção é publicada junto com a DRE inteira), a planilha de importação, as regras de cálculo (corte da versão = trava, vendas, Origem Projeção das naturezas: ' +
+    'HORIZON - INFORMADO, SIENGE - EMPRESARIAL, SIENGE - AGING, NÃO POSSUI; correção monetária; POC), como a aba DRE e o dashboard comparam Realizado × Projetado (colunas, de qual versão vem o projetado dos meses fechados, ' +
     'Desvio %, meses em cinza, consolidado), o Excel de auditoria, perguntas frequentes e qual ferramenta usar.',
   inputSchema: {},
   handler: ferramenta(async (empresaId, a, ctx) => {
     const [{ rows: versoes }, { rows: rascunhos }, { rows: origens }, { rows: centros }, arvore] = await Promise.all([
-      pool.query(
-        `SELECT v.numero, v.criado_em, v.orcamentos, u.nome AS usuario FROM dre_projecao_versoes v
-           LEFT JOIN usuarios u ON u.id = v.usuario_id WHERE v.empresa_id = $1 ORDER BY v.numero DESC`,
+      pool.base.query(
+        `SELECT numero, status, origem, to_char(corte, 'YYYY-MM') AS corte, aberta_por_nome, aberta_em, fechada_por_nome, fechada_em
+           FROM dre_versoes WHERE empresa_id = $1 ORDER BY numero DESC`,
         [empresaId]
       ),
       pool.query(
@@ -174,9 +165,8 @@ const guia = {
       ),
       pool.query(
         `SELECT c.sienge_id::int AS id, c.name AS nome, NULLIF(TRIM(c.apelido), '') AS apelido, c.natureza,
-                EXISTS (SELECT 1 FROM dre_projecao_orcamentos o JOIN dre_projecao_versoes v ON v.id = o.versao_id
-                         WHERE o.empresa_id = c.empresa_id AND o.centro_id = c.sienge_id
-                           AND v.numero = (SELECT MAX(numero) FROM dre_projecao_versoes WHERE empresa_id = c.empresa_id)) AS na_versao
+                EXISTS (SELECT 1 FROM dre_projecao_orcamentos o
+                         WHERE o.empresa_id = c.empresa_id AND o.centro_id = c.sienge_id AND o.versao_id IS NULL) AS na_versao
            FROM centros_custo_sienge c WHERE c.empresa_id = $1 AND c.realiza_dre ORDER BY c.dre_ordem NULLS LAST, c.sienge_id`,
         [empresaId]
       ),
@@ -192,28 +182,33 @@ const guia = {
       `Hoje: ${br(hojeIso())}. Onde fica: **Operações › DRE Construtoras › aba Projeções** (montar o orçamento) e as colunas **Projetado / Desvio %** da aba DRE (Operações) e do dashboard **Econômico Financeiro › Demonstração do Resultado**.`,
       '',
       '## Estado desta empresa',
-      `- Versões salvas: ${versoes.length ? versoes.map((v) => `Versão ${v.numero} (${quando(v.criado_em)}${v.usuario ? `, ${v.usuario}` : ''}, ${v.orcamentos} orçamentos)`).join('; ') : 'nenhuma — os dashboards ficam sem projeção'}.`,
-      ctx.podeRascunho
-        ? `- Rascunhos (não salvos): ${rascunhos.length ? rascunhos.map((r) => `${r.centro_id} ${r.apelido || r.nome} — ${r.status === 'CONCLUIDO' ? 'concluído, aguardando Salvar versão' : `em andamento (etapa ${r.etapa})`}, ${quando(r.atualizado_em)}${r.usuario ? ` por ${r.usuario}` : ''}`).join('; ') : 'nenhum'}.`
-        : '- Rascunhos: só visíveis para quem tem a tela DRE Construtoras.',
-      `- Centros com "Realiza DRE" (${centros.length}): ${centros.map((c) => `${c.id} ${c.apelido || c.nome} (${c.natureza === 'OBRA' ? 'obra' : c.natureza === 'ADMINISTRATIVO' ? 'administrativo' : 'SEM TIPO — não dá pra orçar'}${c.na_versao ? ', na última versão' : ''})`).join('; ')}.`,
+      `- Versões da DRE (aba Versões; ficam as 10 últimas salvas): ${versoes
+        .map((v) =>
+          v.status === 'ABERTA'
+            ? `Versão ${v.numero} EM EDIÇÃO (aberta por ${v.aberta_por_nome || '—'} em ${quando(v.aberta_em)}; não publicada)`
+            : `Versão ${v.numero} (salva em ${quando(v.fechada_em)}${v.fechada_por_nome ? ` por ${v.fechada_por_nome}` : ''}; realizado até ${rotMes(v.corte)})`
+        )
+        .join('; ')}. Este MCP lê a última SALVA (a publicada).`,
+      `- Orçamentos na versão publicada: ${rascunhos.length ? rascunhos.map((r) => `${r.centro_id} ${r.apelido || r.nome} — ${r.status === 'CONCLUIDO' ? 'concluído' : `em andamento (etapa ${r.etapa})`}, ${quando(r.atualizado_em)}${r.usuario ? ` por ${r.usuario}` : ''}`).join('; ') : 'nenhum'}.`,
+      `- Centros com "Realiza DRE" (${centros.length}): ${centros.map((c) => `${c.id} ${c.apelido || c.nome} (${c.natureza === 'OBRA' ? 'obra' : c.natureza === 'ADMINISTRATIVO' ? 'administrativo' : 'SEM TIPO — não dá pra orçar'}${c.na_versao ? ', com orçamento' : ''})`).join('; ')}.`,
       `- Origem Projeção no plano de contas da DRE — Global: ${porPlano('Global')}. Planos próprios: ${porPlano('Próprios dos centros')}.`,
       `- Linhas de nível 1 da DRE (colunas da lista): ${arvore.map((g) => g.descricao).join(', ')}.`,
       '',
       '## A aba Projeções',
-      '- **Lista**: um orçamento por centro, com as colunas dos totalizadores da Máscara DRE (o fechamento: realizado desde o primeiro lançamento do centro até a trava + projetado até o fim do ciclo — igual à coluna Projetado da aba DRE no período inteiro). A linha de cima diz a versão em vigor. Situação: **Em andamento** (rascunho sendo montado), **Concluído** (calculado, aguardando Salvar versão), **Na versão** (orçamento da última versão salva). Ações: continuar (abre o assistente na etapa em que parou), descartar o rascunho.',
+      '- **Lista**: um orçamento por centro, com as colunas dos totalizadores da Máscara DRE (o fechamento: realizado desde o primeiro lançamento do centro até a trava + projetado até o fim do ciclo — igual à coluna Projetado da aba DRE no período inteiro). A linha de cima diz a versão da DRE. Situação: **Em andamento** (sendo montado) ou **Concluído** (calculado). Ações: abrir/continuar o assistente, descartar. Só dá para alterar com uma versão da DRE ABERTA (aba Versões).',
       '- **Layout**: baixa a planilha preenchida da empresa inteira (abas Ciclos, Vendas, Custos da POC, Demais contas e uma oculta _horizon de controle; protegida com senha nas células que não se digitam). **Importar**: sobe a planilha, mostra a prévia (o que muda por centro, erros por aba e linha, avisos) e grava só os centros que mudaram — opcionalmente já concluindo. Ciclo em branco com valores preenchidos é ignorado.',
-      '- **Novo orçamento**: abre o assistente. **Salvar versão**: cria uma versão da EMPRESA com todos os rascunhos CONCLUÍDOS e, nos centros sem rascunho concluído, o orçamento da versão anterior. **Tela cheia**.',
+      '- **Novo orçamento**: abre o assistente. **Tela cheia**.',
+      '- **Versões da DRE** (aba Versões, ao lado de Projeções): a projeção é publicada junto com a DRE inteira. Sem versão aberta, nada da DRE pode ser alterado e todos leem a última salva. **Gerar nova versão** = realizado até o último mês fechado (o corte; atualizado pelo Monitor de Integrações enquanto a versão estiver aberta); **Editar última versão** = mesma cópia do realizado da versão editada. **Salvar versão** recusa se houver orçamento não concluído; ao salvar, a versão guarda a cópia de tudo (configuração, cadastros e realizado) e fica travada. Ficam as 10 últimas.',
       '',
       '## O assistente (7 etapas)',
-      '1. **Centro e ciclo**: o centro (precisa de "Realiza DRE" e do Tipo Obra/Administrativo na aba Centros Custos) e o ciclo (mês de início e de fim). Se o centro está na última versão, o rascunho começa com o que foi informado nela. Um rascunho por centro.',
-      '2. **Histórico**: a DRE realizada do centro (a mesma tabela da aba DRE, anos em colunas) até a **trava** — o último mês realizado. A projeção começa no mês seguinte. Sugestão: o mês anterior ao atual; limite: o primeiro lançamento do centro. Trocar a trava recalcula tudo e volta o rascunho para Em andamento.',
+      '1. **Centro e ciclo**: o centro (precisa de "Realiza DRE" e do Tipo Obra/Administrativo na aba Centros Custos) e o ciclo (mês de início e de fim). Um orçamento por centro.',
+      '2. **Histórico**: a DRE realizada do centro (a mesma tabela da aba DRE, anos em colunas) até a **trava** — que é o CORTE da versão da DRE (o último mês fechado), igual para todos os orçamentos. A projeção começa no mês seguinte.',
       '3. **Vendas** (só obra): as unidades **disponíveis na trava** (sem contrato ativo nem permuta no fim do mês da trava — entram também as vendidas depois da trava, com a venda do Sienge sugerida, e as distratadas que voltaram ao estoque), com tipo, fração ideal, ticket médio do tipo (média dos contratos não cancelados do mesmo tipo) e valor editável. Informe o mês de venda de cada uma; atalhos: **ritmo fixo** (N unidades por mês a partir de um mês), **distribuir** (igual pelos meses), **limpar**; filtro por tipo; placar de unidades e valor.',
       '4. **Custos da POC** (só obra): as linhas do Financeiro com % POC e a máscara do custo da POC de Receita, aberta por natureza (drilldown, fechado por padrão; Abrir/Fechar todas). Só **HORIZON - INFORMADO** é digitável; SIENGE - EMPRESARIAL e SIENGE - AGING vêm prontas. Menu da célula: replicar, distribuir, limpar. Resumo da obra: orçamento vigente, custo realizado, POC na trava e aviso de obra sem orçamento (POC 0 = receita não reconhecida). A **Correção Monetária** entra aqui se a linha tiver % POC (digitada mês a mês). Planilha só desta etapa e deste centro no rodapé.',
       '5. **POC**: a POC de Receita e de Despesa projetadas mês a mês (e a POC de Despesa líquida dos distratos), com os indicadores.',
       '6. **Demais contas**: as linhas do Financeiro sem % POC (despesas e receitas administrativas, financeiras…), na mesma grade; planilha da etapa no rodapé.',
-      '7. **Conclusão**: o fechamento do nível 1 do realizado ao fim do projetado — realizado desde o primeiro lançamento do centro até a trava (inclui o que é anterior ao início do ciclo), projetado depois da trava até o fim do ciclo e total. O total é o mesmo da coluna Projetado da aba DRE com o período completo. **Concluir** calcula e grava a FOTO; o rascunho fica Concluído até alguém clicar em Salvar versão.',
-      'Centro **administrativo** pula Vendas, Custos da POC e POC. O rascunho grava sozinho a cada mudança.',
+      '7. **Conclusão**: o fechamento do nível 1 do realizado ao fim do projetado — realizado desde o primeiro lançamento do centro até a trava (inclui o que é anterior ao início do ciclo), projetado depois da trava até o fim do ciclo e total. O total é o mesmo da coluna Projetado da aba DRE com o período completo. **Concluir** calcula e grava a FOTO; para salvar a versão da DRE, todos os orçamentos têm de estar concluídos.',
+      'Centro **administrativo** pula Vendas, Custos da POC e POC. O assistente grava sozinho a cada mudança.',
       '',
       '## Regras de cálculo',
       '- **Mesmo motor da DRE realizada.** Até o fim do mês da trava vale o realizado (contratos, distratos, permutas, correção pelo vencimento, Financeiro pela emissão); depois, as premissas. O motor acumula, aplica as POCs e reconhece mês a mês exatamente como na DRE realizada.',
@@ -225,35 +220,35 @@ const guia = {
       '- **A foto (mensal)**: ao concluir, grava a DRE do orçamento mês a mês do PRIMEIRO lançamento do centro até o fim do ciclo (não só o ciclo): até a trava é o realizado daquele dia; depois, o projetado. É isso que as colunas Projetado mostram — e não muda quando o realizado muda.',
       '',
       '## Realizado × Projetado (aba DRE e dashboard)',
-      '- Colunas: **Valor**, **AV %** (no mês a mês, **AH %**), **Projetado** (amarelo pastel) e **Desvio %**. Filtro **Colunas** liga/desliga cada uma. O realizado nunca passa de hoje.',
-      '- Filtro **Versão** (Operações): por padrão a última versão salva; "Rascunhos (não salvos)" só aparece se houver rascunho (e vira o padrão quando não há versão). O **dashboard** usa só a versão salva (filtro "Análise" ao lado da tela cheia).',
+      '- Colunas: **Valor**, **AV %** (no mês a mês, **AH %**), **Projetado** (amarelo pastel) e **Desvio %**. Filtro **Colunas** liga/desliga cada uma. O realizado vai só até o CORTE da versão (o último mês fechado); do mês seguinte em diante, só o Projetado.',
+      '- **De qual versão vem o Projetado**: nos meses depois do corte, da própria versão; nos meses que já fecharam, da última versão salva em que aquele mês ainda era projeção (é o que se esperava — o Desvio compara com o realizado). Sem versão anterior guardada, o mês fica sem projetado. O Operações mostra a versão em edição (ou, sem ela, a última salva); o **dashboard** e este MCP, a última salva.',
       `- **Desvio %** = (Valor − Projetado) ÷ |Projetado|, com o realizado até hoje contra o projetado SÓ dos meses até o atual (o mês atual inteiro — regra do DFC). Positivo (verde) = melhor que o projetado; dentro de ±${TOLERANCIA}% fica neutro; abaixo, vermelho.`,
       '- **Consolidado**: o Projetado soma os centros com orçamento; o Desvio compara só o realizado dos centros COM projeção (a legenda diz quantos de quantos).',
-      '- **Mês a mês** (clique no centro): meses até a trava em cinza (o projetado é o realizado da data do orçamento — o desvio deles mostra o que mudou no realizado depois); meses futuros só com a coluna Projetado; sem meses vazios nas pontas. Período por mês/ano (o campo aceita digitar "fev/2020").',
+      '- **Mês a mês** (clique no centro): meses até o corte com o realizado e o projetado da versão anterior; meses depois do corte só com a coluna Projetado; sem meses vazios nas pontas. Período por mês/ano (o campo aceita digitar "fev/2020").',
       '',
       '## Excel de auditoria',
       'Com projeção, o Excel (botão de download da aba DRE e do dashboard) ganha as abas **Projeção** (versão, orçamentos, totais do ciclo, premissas por origem, regras), **Projeção Mensal** (a foto gravada — o que a coluna Projetado soma), **Memória Projeção** (os meses projetados refeitos em fórmulas: realizado até a trava + premissas, × fator; com o gravado e a diferença), **POC Projeção** e **Premissas Projeção**. Na aba DRE, Projetado e Desvio % do consolidado e de cada centro, em fórmulas. Conferência "MUDOU" = o realizado até a trava mudou depois que o orçamento foi concluído.',
       '',
       '## Perguntas frequentes',
-      '- **Por que o projetado de meses passados é igual ao realizado?** Até a trava o orçamento usa o realizado (é a base da projeção). O desvio desses meses só aparece se o realizado mudou depois do orçamento.',
-      '- **Lancei algo no Sienge e o Projetado não mudou.** Correto: o Projetado é a foto do dia em que o orçamento foi concluído. Para atualizar, abra o centro, conclua de novo e salve outra versão.',
-      '- **Concluir × Salvar versão?** Concluir calcula e grava a foto do rascunho de UM centro. Salvar versão junta os concluídos numa versão da empresa (o que o dashboard usa).',
-      '- **Como corrijo um orçamento de uma versão salva?** Uma versão não muda. Crie o rascunho do centro (Novo orçamento — ele já vem com o que estava na versão), ajuste, conclua e salve uma nova versão; os outros centros são copiados da versão anterior.',
+      '- **De onde vem o projetado de um mês que já fechou?** Da última versão salva em que ele ainda era projeção. O Desvio desse mês é o realizado contra o que se esperava.',
+      '- **Lancei algo no Sienge e a DRE não mudou.** Correto: a versão publicada está travada (inclusive o realizado). Os dados novos entram quando alguém gera uma nova versão na aba Versões e salva.',
+      '- **Concluir × Salvar versão?** Concluir calcula e grava a foto do orçamento de UM centro. Salvar versão (aba Versões) publica a DRE inteira — configuração, realizado e projeção — e só deixa salvar com todos os orçamentos concluídos.',
+      '- **Como corrijo um orçamento de uma versão salva?** Uma versão salva não muda. Na aba Versões, Editar última versão (mantém o realizado) ou Gerar nova versão (realizado atualizado), ajuste o orçamento, conclua e salve.',
       '- **Por que a receita projetada saiu zero?** Obra sem orçamento (POC de Receita 0), unidades sem mês de venda, ou a máscara da POC de Receita não configurada. Veja dre_projecao_explicar e dre_projecao_auditoria.',
       '- **Por que a POC de Despesa passa de 100%?** Ela não tem trava: frações ideais somando mais que 1 ou permutas + vendas acima do total.',
       '- **Por que não consigo digitar uma natureza?** Só HORIZON - INFORMADO é digitável; SIENGE - EMPRESARIAL e SIENGE - AGING vêm do Sienge. Mude a Origem Projeção no Plano de Contas da DRE se precisar.',
       '- **Uma natureza não aparece no assistente.** Ela não tem Máscara DRE, é NÃO ENTRA NA DRE, está com NÃO POSSUI ORIGEM ou sem Origem Projeção no plano do centro.',
       '- **A unidade vendida depois da trava aparece?** Sim, como disponível na trava, com o mês e o valor do contrato sugeridos.',
       '- **Distratos futuros?** Não são projetados (estorno e receita de distrato só do realizado).',
-      '- **Mudei a base do RET (Máscaras › Informar histórico) e o Projetado continua com o RET antigo.** Correto: o Projetado é a foto do dia em que o orçamento foi concluído, com a base que valia naquele dia; o realizado (coluna Valor) já usa a base nova. Para o Projetado usar a base nova, conclua cada centro de novo e salve outra versão (dre_projecao_auditoria mostra "MUDOU" enquanto isso).',
+      '- **Mudei a base do RET (Máscaras › Informar histórico) e o Projetado continua com o RET antigo.** Correto: o Projetado é a foto do dia em que o orçamento foi concluído, com a base que valia naquele dia; o realizado (coluna Valor) já usa a base nova. Para o Projetado usar a base nova, abra uma versão, conclua cada centro de novo e salve (dre_projecao_auditoria mostra "MUDOU" enquanto isso).',
       '- **Por que o Desvio do consolidado não usa todos os centros?** Para não comparar o realizado de um centro sem orçamento com projetado nenhum.',
-      '- **Por que mês futuro só tem Projetado?** Não há realizado no futuro (a DRE para em hoje).',
-      '- **O que a planilha importa?** Ciclos (início, fim, trava), vendas (mês e valor por unidade), Custos da POC e Demais contas (só HORIZON - INFORMADO) e correção. Dentro do assistente, só o centro e a etapa abertos (recorte).',
-      '- **Quem vê os rascunhos?** Só o Operações (tela DRE Construtoras). Dashboards só veem versão salva.',
+      '- **Por que o mês atual só tem Projetado?** O realizado vai só até o último mês fechado (o corte da versão); do mês atual em diante, só projeção.',
+      '- **O que a planilha importa?** Ciclos (início e fim; a trava é o corte da versão), vendas (mês e valor por unidade), Custos da POC e Demais contas (só HORIZON - INFORMADO) e correção. Dentro do assistente, só o centro e a etapa abertos (recorte).',
+      '- **Quem vê a versão em edição?** Só o Operações (tela DRE Construtoras). Dashboards, este MCP, o Excel do dashboard e a Reforma Tributária veem a última versão salva.',
       '- **Centro administrativo tem POC?** Não: só a etapa Demais contas (e a correção, se não tiver % POC).',
       '',
       '## Qual ferramenta usar',
-      '- Os orçamentos de uma versão ou os rascunhos (ciclo, trava, quem concluiu, totais, POC): **dre_projecao_orcamentos**.',
+      '- Os orçamentos da versão publicada (ciclo, trava, quem concluiu, totais, POC): **dre_projecao_orcamentos**.',
       '- O que foi premissa num centro (vendas por unidade, naturezas por origem mês a mês, correção, estoque que sobra): **dre_projecao_premissas**.',
       '- "Como esse número projetado foi criado?" (linha, grupo ou total, por centro ou consolidado, num mês ou período): **dre_projecao_explicar**.',
       '- Realizado × Projetado com o Desvio % da tela (por linha, centro, mês a mês, maiores desvios): **dre_projecao_desvio**.',
@@ -268,16 +263,15 @@ const guia = {
 const orcamentosTool = {
   name: 'dre_projecao_orcamentos',
   description:
-    'Os orçamentos da projeção da DRE de uma versão salva (padrão: a última) ou os rascunhos: por centro, a situação, o ciclo, a trava (último mês realizado), o primeiro mês projetado, ' +
+    'Os orçamentos da projeção da DRE na versão publicada (a última versão salva da DRE): por centro, a situação, o ciclo, a trava (último mês realizado), o primeiro mês projetado, ' +
     'quem concluiu e quando, os totais do nível 1 do fechamento (realizado desde o primeiro lançamento do centro até a trava, projetado até o fim do ciclo e total — a lista da aba Projeções e a Conclusão), as premissas resumidas (vendas, naturezas por Origem Projeção, ' +
-    'correção) e as POCs na trava e no fim do ciclo. Também lista as versões salvas.',
+    'correção) e as POCs na trava e no fim do ciclo.',
   inputSchema: { ...FONTE, ...CENTROS },
   handler: ferramenta(async (empresaId, a, ctx) => {
     const centros = await resolverCentros(empresaId, a.centros);
     const f = await carregar(empresaId, { ...fonteDe(a, ctx), centros });
     return {
       fonte: descreverFonte(f),
-      versoes_salvas: f.versoes.map((v) => ({ numero: v.numero, salva_em: quando(v.criado_em), por: v.usuario })),
       ...(f.avisos.length ? { fora_da_projecao: f.avisos } : {}),
       orcamentos: f.orcamentos.map((o) => {
         const r = o.resultado || {};
@@ -653,8 +647,8 @@ const explicarTool = {
 const desvioTool = {
   name: 'dre_projecao_desvio',
   description:
-    'Realizado × Projetado como a aba DRE e o dashboard mostram: por linha (grupos, linhas e totais), o Valor realizado, o Projetado do período, o projetado comparável (só meses até o atual) e o Desvio % ' +
-    '= (Valor − Projetado) ÷ |Projetado| (no consolidado, o realizado só dos centros com projeção; ±10% neutro). Opcional: por centro, mês a mês de um centro (meses até a trava marcados — realizado da data do orçamento) ' +
+    'Realizado × Projetado como a aba DRE e o dashboard mostram (versão publicada da DRE): por linha (grupos, linhas e totais), o Valor realizado, o Projetado do período, o projetado comparável (só os meses até o corte que têm projetado — nos meses fechados, o da versão em que eles ainda eram projeção) e o Desvio % ' +
+    '= (Valor − Projetado) ÷ |Projetado| (no consolidado, só os centros com projeção; ±10% neutro). Opcional: por centro, mês a mês de um centro (de qual versão veio o projetado de cada mês fechado) ' +
     'e o ranking dos maiores desvios (centro × linha) com o que olhar.',
   inputSchema: {
     ...PERIODO_PROJ,
@@ -667,33 +661,59 @@ const desvioTool = {
   handler: ferramenta(async (empresaId, a, ctx) => {
     const p = periodoProj(a);
     const centros = await resolverCentros(empresaId, a.centros);
-    const [f, d] = await Promise.all([carregar(empresaId, { ...fonteDe(a, ctx), centros }), dados(empresaId, { ...p, centros })]);
+    // O mesmo projetado da tela (dreProjecoes.projetado): depois do corte, o da versão; nos meses fechados, o
+    // da última versão salva em que eles ainda eram projeção.
+    const [f, d, pj] = await Promise.all([
+      carregar(empresaId, { ...fonteDe(a, ctx), centros }),
+      dados(empresaId, { ...p, centros }),
+      projecoes.projetado(empresaId, { de: p.de, ate: p.ate, centros }),
+    ]);
     const { arvore, resultado: R } = d;
     const mesDe = p.de.slice(0, 7);
     const mesAte = p.ate.slice(0, 7);
-    const atual = hojeIso().slice(0, 7);
+    // Último mês do realizado: o corte da versão publicada.
+    const atual = (R.realizado_ate || hojeIso()).slice(0, 7);
     const noPeriodo = (m) => m >= mesDe && m <= mesAte;
     const orcs = new Map(f.orcamentos.map((o) => [o.centro_id, o]));
     const desvio = (r, c) => (c ? pct((num(r) - c) / Math.abs(c)) : null);
     const leitura = (dv) => (dv === null ? 'sem projetado comparável' : Math.abs(dv) < TOLERANCIA ? 'neutro (dentro de ±10%)' : dv > 0 ? 'melhor que o projetado' : 'pior que o projetado');
 
+    const somaPj = (pc, filtro) => {
+      const out = {};
+      pc.meses.forEach((mes, i) => {
+        if (!filtro(mes)) return;
+        Object.entries(pc.valores).forEach(([mid, vs]) => {
+          out[mid] = (out[mid] || 0) + num(vs[i]);
+        });
+      });
+      return out;
+    };
     const colunas = R.por_centro.map((c) => {
       const o = orcs.get(c.id);
+      const pc = pj.centros[c.id] || null;
+      // O realizado comparado: só os meses que têm projetado comparável.
+      const meses = pc ? new Set(pc.meses.filter((m) => noPeriodo(m) && m <= atual)) : new Set();
+      const realComp = {};
+      (c.meses || [])
+        .filter((m) => meses.has(m.mes))
+        .forEach((m) => Object.entries(m.valores).forEach(([k, v]) => (realComp[k] = (realComp[k] || 0) + num(v))));
       return {
         c,
         o,
+        pc,
         real: completar(arvore, c.valores),
-        proj: o ? completar(arvore, somaGravada(o, noPeriodo)) : null,
-        comp: o ? completar(arvore, somaGravada(o, (m) => noPeriodo(m) && m <= atual)) : null,
+        realComp: completar(arvore, realComp),
+        proj: pc ? completar(arvore, somaPj(pc, noPeriodo)) : null,
+        comp: pc ? completar(arvore, somaPj(pc, (m) => noPeriodo(m) && m <= atual)) : null,
       };
     });
-    const comProj = colunas.filter((x) => x.o);
+    const comProj = colunas.filter((x) => x.pc);
     const somaIds = (lista, k, id) => lista.reduce((t, x) => t + num(x[k]?.[id]), 0);
     const consolidado = completar(arvore, R.valores);
     const linhas = ordemLinhas(arvore).map((l) => {
       const id = l.no.id;
       const comp = somaIds(comProj, 'comp', id);
-      const realD = somaIds(comProj, 'real', id);
+      const realD = somaIds(comProj, 'realComp', id);
       const dv = desvio(realD, comp);
       const o = {
         tipo: l.tipo,
@@ -709,7 +729,7 @@ const desvioTool = {
         o.centros = Object.fromEntries(
           colunas.map((x) => [
             `${x.c.id} · ${x.c.rotulo || x.c.nome}`,
-            x.o ? { valor: r2(x.real[id]), projetado: r2(x.proj[id]), desvio_pct: desvio(x.real[id], x.comp[id]) } : { valor: r2(x.real[id]), projetado: 'sem orçamento' },
+            x.pc ? { valor: r2(x.real[id]), projetado: r2(x.proj[id]), desvio_pct: desvio(x.realComp[id], x.comp[id]) } : { valor: r2(x.real[id]), projetado: 'sem orçamento' },
           ])
         );
       return o;
@@ -720,7 +740,7 @@ const desvioTool = {
     comProj.forEach((x) =>
       arvore.forEach((g) =>
         g.filhos.forEach((fl) => {
-          const r = num(x.real[fl.id]);
+          const r = num(x.realComp[fl.id]);
           const c = num(x.comp[fl.id]);
           if (Math.abs(r - c) < 0.01) return;
           rank.push({ centro: `${x.c.id} · ${x.c.rotulo || x.c.nome}`, linha: fl.descricao, realizado: r2(r), projetado_ate_o_mes_atual: r2(c), diferenca: r2(r - c), desvio_pct: desvio(r, c) });
@@ -731,9 +751,9 @@ const desvioTool = {
 
     const out = {
       fonte: descreverFonte(f),
-      periodo: `${br(p.de)} a ${br(p.ate)} (realizado até ${br(hojeIso())}; projetado comparável até ${rotMes(atual)})`,
+      periodo: `${br(p.de)} a ${br(p.ate)} (realizado e projetado comparável até ${rotMes(atual)} — o corte da versão publicada)`,
       centros_com_projecao: `${comProj.length} de ${colunas.length}`,
-      regra: `Desvio % = (Valor − Projetado) ÷ |Projetado|, com o realizado até hoje e o projetado só dos meses até o atual; no consolidado, o realizado só dos centros com projeção. Positivo = melhor (receita maior ou custo menor); ±${TOLERANCIA}% = neutro.`,
+      regra: `Desvio % = (Valor − Projetado) ÷ |Projetado|, só nos meses até o corte que têm projetado (nos meses fechados, o projetado é o da última versão salva em que eles ainda eram projeção); no consolidado, só os centros com projeção. Positivo = melhor (receita maior ou custo menor); ±${TOLERANCIA}% = neutro.`,
       linhas,
       maiores_desvios: rank.slice(0, a.ranking || 10).map((x) => ({ ...x, o_que_olhar: 'dre_projecao_explicar (linha + centro) para a premissa; dre_explicar_numero para o realizado.' })),
     };
@@ -741,19 +761,24 @@ const desvioTool = {
     if (a.mensal) {
       if (colunas.length !== 1) throw falha('Para o mês a mês, informe um centro só (como na tela: clique no centro).');
       const x = colunas[0];
-      if (!x.o) throw falha(`${x.c.id} não tem orçamento em ${descreverFonte(f)}.`);
-      const trava = x.o.mensal.trava;
+      if (!x.pc) throw falha(`${x.c.id} não tem projeção em ${descreverFonte(f)}.`);
       out.mensal = {
         centro: `${x.c.id} · ${x.c.rotulo || x.c.nome}`,
-        trava: trava ? rotMes(trava) : null,
-        meses: x.o.mensal.meses.filter(noPeriodo).map((mes) => {
-          const idx = x.o.mensal.meses.indexOf(mes);
+        realizado_ate: rotMes(atual),
+        meses: x.pc.meses.filter(noPeriodo).map((mes) => {
+          const idx = x.pc.meses.indexOf(mes);
           const real = (x.c.meses || []).find((mm) => mm.mes === mes);
           const realC = real ? completar(arvore, real.valores) : {};
-          const projC = completar(arvore, Object.fromEntries(Object.entries(x.o.mensal.valores).map(([k, vs]) => [k, vs[idx]])));
+          const projC = completar(arvore, Object.fromEntries(Object.entries(x.pc.valores).map(([k, vs]) => [k, vs[idx]])));
+          const deVersao = x.pc.versao_do_mes?.[mes];
           return {
             mes: rotMes(mes),
-            situacao: mes > atual ? 'futuro (só projetado)' : trava && mes <= trava ? 'até a trava (projetado = realizado da data do orçamento)' : 'projetado',
+            situacao:
+              mes > atual
+                ? 'depois do corte (só projetado)'
+                : deVersao
+                  ? `fechado (projetado da versão ${deVersao}, quando ainda era projeção)`
+                  : 'fechado',
             linhas: ordemLinhas(arvore)
               .map((l) => ({ linha: l.no.descricao, valor: mes > atual ? null : r2(realC[l.no.id]), projetado: r2(projC[l.no.id]), desvio_pct: mes > atual ? null : desvio(realC[l.no.id], projC[l.no.id]) }))
               .filter((l) => l.valor || l.projetado),
@@ -814,7 +839,7 @@ const auditoriaTool = {
 
       // Alertas do orçamento.
       const res = o.resultado || {};
-      if (o.status !== 'CONCLUIDO') alertas.push({ nivel: 'Verificar', centro: nomeCentro(o), alerta: 'Rascunho em andamento: o projetado é calculado na hora e muda a cada edição (não está numa versão).' });
+      if (o.status !== 'CONCLUIDO') alertas.push({ nivel: 'Verificar', centro: nomeCentro(o), alerta: 'Orçamento em andamento nesta versão (só a versão inicial pode ter): o projetado é calculado na hora.' });
       if (o.natureza === 'OBRA' && res.poc && !(num(res.poc.meses?.[res.poc.meses.length - 1]?.orcamento) > 0))
         alertas.push({ nivel: 'Atenção', centro: nomeCentro(o), alerta: 'Obra sem orçamento vigente no ciclo: POC de Receita 0 — a receita projetada não é reconhecida. Cadastre o orçamento da obra (aba Orçamento do DRE Gerencial).' });
       const vendas = res.vendas || [];

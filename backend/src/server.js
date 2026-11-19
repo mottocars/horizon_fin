@@ -41,6 +41,7 @@ const dreConfiguracoesRoutes = require('./modules/dre-configuracoes/dreConfigura
 const dreDemonstrativoRoutes = require('./modules/dre-demonstrativo/demonstrativo.routes');
 const dreExportacaoRoutes = require('./modules/dre-exportacao/exportacao.routes');
 const dreProjecoesRoutes = require('./modules/dre-projecoes/dreProjecoes.routes');
+const dreVersoesRoutes = require('./modules/dre-versoes/dreVersoes.routes');
 const reformaTributariaRoutes = require('./modules/reforma-tributaria/reformaTributaria.routes');
 const contasPagarReceberRoutes = require('./modules/contas-pagar-receber/cpr.routes');
 const lancamentosAjustesRoutes = require('./modules/lancamentos-ajustes/lancamentosAjustes.routes');
@@ -209,8 +210,10 @@ app.use('/api/dre-unidades', exigirTela([T.DRE]), dreUnidadesRoutes);
 app.use('/api/dre-correcoes', exigirTela([T.DRE]), dreCorrecoesRoutes);
 app.use('/api/dre-financeiro', exigirTela([T.DRE]), dreFinanceiroRoutes);
 app.use('/api/dre-configuracoes', exigirTela([T.DRE]), dreConfiguracoesRoutes);
-// Projeções da DRE (orçamento por centro de custo, assistente em etapas e versões).
+// Projeções da DRE (orçamento por centro de custo, assistente em etapas).
 app.use('/api/dre-projecoes', exigirTela([T.DRE]), dreProjecoesRoutes);
+// Versões da DRE (aba Versões: abrir, salvar, excluir o rascunho e o carimbo das alterações).
+app.use('/api/dre-versoes', exigirTela([T.DRE]), dreVersoesRoutes);
 // Operações › Reforma Tributária (o impacto da CBS/IBS na DRE projetada, centro a centro).
 app.use('/api/reforma-tributaria', exigirTela([T.REFORMA_TRIBUTARIA]), reformaTributariaRoutes);
 app.use('/api/contas-pagar-receber', exigirTela([T.CONTAS_PAGAR_RECEBER]), contasPagarReceberRoutes);

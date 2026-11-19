@@ -1,5 +1,22 @@
 const { z } = require('zod');
 const service = require('./lancamentosManuais.service');
+const c = require('../dre-versoes/carimbo');
+
+// Carimbo (aba Versões) dos lançamentos criados à mão na aba Financeiro.
+const dataBR = (d) => (d ? `${d.slice(8, 10)}/${d.slice(5, 7)}/${d.slice(0, 4)}` : '');
+const resumoManual = (l) =>
+  `"${l.historico}" (${l.tipo === 'ENTRADA' ? 'entrada' : 'saída'} de ${c.moeda(l.valor)} em ${dataBR(l.data)}, centro ${l.centro_id}, natureza ${l.natureza_id}${
+    l.documento ? `, documento ${l.documento}` : ''
+  })`;
+const CAMPOS_MANUAL = {
+  tipo: ['Tipo'],
+  data: ['Data', dataBR],
+  documento: ['Documento'],
+  historico: ['Histórico'],
+  centro_id: ['Centro'],
+  natureza_id: ['Natureza'],
+  valor: ['Valor', c.moeda],
+};
 
 const empresaIdSchema = z.coerce.number().int().positive('Empresa inválida.');
 const idSchema = z.coerce.number().int().positive('Lançamento inválido.');
@@ -44,7 +61,9 @@ async function obter(req, res, next) {
 
 async function criar(req, res, next) {
   try {
-    res.status(201).json(await service.criar(empresaIdSchema.parse(req.params.empresaId), lancamentoSchema.parse(req.body || {}), req.user.id));
+    const l = await service.criar(empresaIdSchema.parse(req.params.empresaId), lancamentoSchema.parse(req.body || {}), req.user.id);
+    await c.carimbar(req, { descricao: `Criou o lançamento manual ${l.id}: ${resumoManual(l)}.`, detalhes: { id: l.id } });
+    res.status(201).json(l);
   } catch (err) {
     tratar(err, next);
   }
@@ -52,9 +71,13 @@ async function criar(req, res, next) {
 
 async function alterar(req, res, next) {
   try {
-    res.json(
-      await service.alterar(empresaIdSchema.parse(req.params.empresaId), idSchema.parse(req.params.id), lancamentoSchema.parse(req.body || {}), req.user.id)
-    );
+    const empresaId = empresaIdSchema.parse(req.params.empresaId);
+    const id = idSchema.parse(req.params.id);
+    const antes = await service.obter(empresaId, id);
+    const l = await service.alterar(empresaId, id, lancamentoSchema.parse(req.body || {}), req.user.id);
+    const partes = c.mudancas({ ...antes, valor: Number(antes.valor) }, { ...l, valor: Number(l.valor) }, CAMPOS_MANUAL);
+    if (partes.length) await c.carimbar(req, { descricao: `Alterou o lançamento manual ${id} "${antes.historico}": ${partes.join('; ')}.`, detalhes: { id } });
+    res.json(l);
   } catch (err) {
     tratar(err, next);
   }
@@ -62,7 +85,12 @@ async function alterar(req, res, next) {
 
 async function excluir(req, res, next) {
   try {
-    res.json(await service.excluir(empresaIdSchema.parse(req.params.empresaId), idSchema.parse(req.params.id), req.user.id));
+    const empresaId = empresaIdSchema.parse(req.params.empresaId);
+    const id = idSchema.parse(req.params.id);
+    const antes = await service.obter(empresaId, id);
+    const r = await service.excluir(empresaId, id, req.user.id);
+    await c.carimbar(req, { descricao: `Excluiu o lançamento manual ${id}: ${resumoManual(antes)}.`, detalhes: { id } });
+    res.json(r);
   } catch (err) {
     tratar(err, next);
   }

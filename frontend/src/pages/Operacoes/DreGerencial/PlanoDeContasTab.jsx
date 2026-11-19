@@ -5,6 +5,7 @@ import FiltroColuna, { passaNoFiltro } from '../../../components/FiltroColuna';
 import { listContas } from '../../../api/planosFinanceirosSienge.api';
 import { listDreMascaras } from '../../../api/dreMascaras.api';
 import { listClassificacoesPlanoDre, updateClassificacaoPlanoDre, updateOrigemPlanoDre } from '../../../api/drePlanoContas.api';
+import SoLeitura from './SoLeitura';
 
 const LIMIT = 2000;
 
@@ -349,6 +350,7 @@ export default function PlanoDeContasTab({
         </div>
       )}
 
+      <SoLeitura>
       {carregando && contas.length === 0 ? (
         <div className="py-12 text-center text-sm text-gray-400">Carregando...</div>
       ) : erroCarga ? (
@@ -527,6 +529,7 @@ export default function PlanoDeContasTab({
           )}
         </div>
       )}
+      </SoLeitura>
     </div>
   );
 }

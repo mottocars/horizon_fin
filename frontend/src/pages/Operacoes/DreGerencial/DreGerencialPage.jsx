@@ -1,19 +1,22 @@
-import { useEffect, useRef, useState } from 'react';
+import { useCallback, useEffect, useRef, useState } from 'react';
 import { useSearchParams } from 'react-router-dom';
 import {
   BarChart3,
   Building2,
   Calculator,
+  CopyPlus,
   Download,
   FilePlus2,
   FileSpreadsheet,
   FilePenLine,
   History,
   House,
-  Info,
   ListTree,
   Loader2,
+  Lock,
+  LockOpen,
   Maximize2,
+  PencilLine,
   Percent,
   Plus,
   RefreshCw,
@@ -23,6 +26,7 @@ import {
   Tags,
   Trash2,
   TrendingUp,
+  Undo2,
   Upload,
   Wallet,
 } from 'lucide-react';
@@ -40,6 +44,10 @@ import { nomeExibicaoEmpresa } from '../../../utils/empresa';
 import { useEmpresaTravada } from '../../../hooks/useEmpresaTravada';
 import { useConfirm } from '../../../confirm/ConfirmContext';
 import { useSidebar } from '../../../layout/SidebarContext';
+import { abrirVersaoDre, excluirVersaoDre, listarVersoesDre, salvarVersaoDre } from '../../../api/dreVersoes.api';
+import VersoesDreTab from './VersoesDreTab';
+import { LeituraDreContext } from './leituraDre';
+import SoLeitura from './SoLeitura';
 import OrcamentoTab from './OrcamentoTab';
 import MascarasTab from './MascarasTab';
 import PlanoDeContasTab from './PlanoDeContasTab';
@@ -77,7 +85,7 @@ const TABS = [
   { id: 'financeiro', label: 'Financeiro', icon: Wallet },
   { id: 'configuracoes', label: 'Configurações', icon: Settings },
   { id: 'projecoes', label: 'Projeções', icon: TrendingUp },
-  // Versões: como a aba Versões de Cronogramas Obras (pedido do usuário) — por enquanto só a aba, sem conteúdo.
+  // Versões da DRE (pedido do usuário, como a aba Versões de Cronogramas Obras): VersoesDreTab.jsx.
   { id: 'versoes', label: 'Versões', icon: History },
 ];
 
@@ -102,7 +110,15 @@ function ultimoDiaDoMes(anoMes) {
 // Empresa e aba vivem na URL (não em useState local) — mesmo motivo de todas as outras telas
 // com esse padrão (Saldo Contas Bancárias, Gestão de Cobranças): o "Voltar" do navegador
 // devolve o usuário pro mesmo lugar, com a mesma empresa e a mesma aba.
+// Versões da DRE: `?versao=N` na URL é o "Visualizar" da aba Versões — a tela inteira como era naquela versão
+// (o cabeçalho X-Dre-Versao vai em todo pedido, ver api/http.js). Trocar de versão remonta a tela (key), e
+// todas as abas buscam de novo.
 export default function DreGerencialPage() {
+  const [searchParams] = useSearchParams();
+  return <DreGerencialConteudo key={searchParams.get('versao') || 'atual'} />;
+}
+
+function DreGerencialConteudo() {
   const { travada: empresaTravada, empresaIdTravada } = useEmpresaTravada();
   const [searchParams, setSearchParams] = useSearchParams();
   // Com o menu lateral aberto as abas ficam sem ícone (pedido do usuário — falta espaço pras 12 abas).
@@ -209,27 +225,14 @@ export default function DreGerencialPage() {
   // Aba DRE: colunas de cada centro / mês (Valor, AV.R % / AH %, Projetado, AV.P %, Desvio %) — na URL,
   // como os outros filtros.
   const dreColunas = (searchParams.get('colunas') || 'valor,pct,proj,pctp,desvio').split(',').filter((k) => COLUNAS_DRE.some((c) => c.value === k));
-  // Filtro "Versão" do projetado — como o filtro Versão da aba Projeções da DFC (pedido do usuário): ao
-  // entrar começa SEMPRE na última versão salva (null; não fica na URL); 'atual' = os rascunhos (não
-  // salvos — centro sem rascunho usa a última versão), só oferecido quando há rascunho; número = a versão.
-  // Sem nenhuma versão salva, cai nos rascunhos (se houver).
-  const [versaoDre, setVersaoDre] = useState(null);
-  const [temRascunhosDre, setTemRascunhosDre] = useState(false);
+  // O projetado das colunas Projetado / Desvio é o da versão da DRE que a tela mostra (a aberta, a última
+  // salva ou a visualizada) — o filtro "Versão" da aba DRE saiu (pedido do usuário: a escolha de versão fica
+  // na aba Versões).
   const [dreTelaCheia, setDreTelaCheia] = useState(false);
   // "Tela cheia" da aba Projeções (ícone no topo); sai pelo botão da própria tela cheia ou com Esc.
   const [projecoesTelaCheia, setProjecoesTelaCheia] = useState(false);
-  // Botões Novo orçamento / Salvar versão da aba Projeções (ProjecoesDreTab, pela ref) e quantos
-  // orçamentos concluídos aguardam a versão (o Salvar só acende com algum).
+  // Botões Layout / Importar / Novo orçamento da aba Projeções (ProjecoesDreTab, pela ref).
   const projecoesTabRef = useRef(null);
-  const [resumoProjecoes, setResumoProjecoes] = useState({ concluidos: 0 });
-  // Versões salvas da Projeção (o filtro "Versão" da aba DRE), vindas da própria DRE.
-  const [versoesProjecao, setVersoesProjecao] = useState([]);
-  // Outra empresa: volta pra última versão.
-  useEffect(() => {
-    setVersaoDre(null);
-    setVersoesProjecao([]);
-    setTemRascunhosDre(false);
-  }, [empresaId]);
   const [baixandoLayoutProjecoes, setBaixandoLayoutProjecoes] = useState(false);
   const [centrosDre, setCentrosDre] = useState([]);
   useEffect(() => {
@@ -354,12 +357,12 @@ export default function DreGerencialPage() {
     setErroExportacaoDre('');
     setExportandoDre(true);
     try {
-      // A projeção do Excel é a do filtro Versão da aba DRE (o que a coluna Projetado mostra).
+      // A versão do Excel é a da tela (a aberta, a última salva ou a visualizada — cabeçalho X-Dre-Versao).
       const { blob, nome } = await exportarExcelDre(empresaId, {
         de: dreDe,
         ate: dreAte,
         centros: dreCentros,
-        projecao: versaoDre === 'atual' ? { fonte: 'atual' } : { fonte: 'versao', versao: versaoDre },
+        projecao: { fonte: 'atual' },
       });
       const url = window.URL.createObjectURL(blob);
       const link = document.createElement('a');
@@ -382,6 +385,106 @@ export default function DreGerencialPage() {
     } finally {
       setExportandoDre(false);
     }
+  }
+
+  // ------------------------------------------------------------------------------- versões da DRE
+  // A versão aberta (área de trabalho) ou, sem ela, a última salva; `?versao=N` = visualizando uma salva.
+  // Sem versão aberta ou visualizando, a tela é só leitura (os botões que gravam somem; as abas desativam o
+  // que grava — leituraDre.js; o backend recusa de qualquer jeito).
+  const versaoVisualizada = Number(searchParams.get('versao')) || null;
+  const [estadoVersoes, setEstadoVersoes] = useState(null);
+  const [erroVersoes, setErroVersoes] = useState('');
+  const [processandoVersao, setProcessandoVersao] = useState(false);
+  const carregarVersoes = useCallback(() => {
+    if (!empresaId) {
+      setEstadoVersoes(null);
+      return Promise.resolve();
+    }
+    return listarVersoesDre(empresaId)
+      .then(setEstadoVersoes)
+      .catch((e) => setErroVersoes(e.response?.data?.message || 'Não foi possível carregar as versões da DRE.'));
+  }, [empresaId]);
+  useEffect(() => {
+    setEstadoVersoes(null);
+    setErroVersoes('');
+    carregarVersoes();
+  }, [carregarVersoes]);
+  const versaoAberta = estadoVersoes?.aberta || null;
+  const versaoPublicada = estadoVersoes?.publicada || null;
+  const versaoVista = versaoVisualizada ? (estadoVersoes?.versoes || []).find((v) => v.numero === versaoVisualizada) || null : null;
+  const somenteLeitura = Boolean(empresaId) && (Boolean(versaoVisualizada) || (Boolean(estadoVersoes) && !versaoAberta));
+  const mesBR = (iso) => (iso ? `${iso.slice(5, 7)}/${iso.slice(0, 4)}` : '—');
+  const quandoBR = (ts) => (ts ? new Date(ts).toLocaleString('pt-BR', { dateStyle: 'short', timeStyle: 'short' }) : '');
+  const leitura = {
+    somenteLeitura,
+    motivo: versaoVisualizada
+      ? `Você está visualizando a versão ${versaoVisualizada} (só leitura).`
+      : `A DRE está fechada na versão ${versaoPublicada?.numero ?? '—'}. Para alterar, gere uma nova versão ou edite a última na aba Versões.`,
+  };
+
+  async function acaoVersao(fn) {
+    setErroVersoes('');
+    setProcessandoVersao(true);
+    try {
+      const r = await fn();
+      if (r) setEstadoVersoes(r);
+      // Visualizando uma versão antiga: a ação vale pra versão atual — volta pra ela.
+      if (versaoVisualizada) atualizarParams({ versao: null });
+    } catch (e) {
+      setErroVersoes(e.response?.data?.message || 'Não foi possível concluir a operação.');
+    } finally {
+      setProcessandoVersao(false);
+    }
+  }
+
+  async function gerarNovaVersao() {
+    const numero = (estadoVersoes?.versoes?.[0]?.numero || 0) + 1;
+    const ok = await confirm({
+      title: `Gerar a versão ${numero}`,
+      description: `A versão ${numero} começa com a configuração da versão ${versaoPublicada?.numero} e o realizado até ${mesBR(
+        estadoVersoes?.proximo_corte
+      )} (o último mês fechado). Enquanto ela estiver aberta, o realizado acompanha o Monitor de Integrações. As alterações só aparecem nos dashboards, no MCP e na Reforma Tributária depois de salvar a versão.`,
+      confirmLabel: 'Gerar nova versão',
+    });
+    if (ok) await acaoVersao(() => abrirVersaoDre(empresaId, 'NOVA'));
+  }
+
+  async function editarUltimaVersao() {
+    const numero = (estadoVersoes?.versoes?.[0]?.numero || 0) + 1;
+    const ok = await confirm({
+      title: `Editar a versão ${versaoPublicada?.numero}`,
+      description: `A edição vira a versão ${numero}, com a configuração e o realizado da versão ${versaoPublicada?.numero} (realizado congelado até ${mesBR(
+        versaoPublicada?.corte
+      )}). Você fica registrado como quem abriu a versão. As alterações só aparecem nos dashboards depois de salvar.`,
+      confirmLabel: 'Editar última versão',
+    });
+    if (ok) await acaoVersao(() => abrirVersaoDre(empresaId, 'EDICAO'));
+  }
+
+  async function salvarVersaoAberta() {
+    const salvas = (estadoVersoes?.versoes || []).filter((v) => v.status === 'FECHADA');
+    const limite = estadoVersoes?.limite || 10;
+    const sai = salvas.length >= limite ? salvas[salvas.length - 1] : null;
+    const ok = await confirm({
+      title: `Salvar a versão ${versaoAberta.numero}`,
+      description: `A versão ${versaoAberta.numero} fica travada (configuração, realizado até ${mesBR(versaoAberta.corte)} e projeção) e passa a ser a publicada: dashboards, MCP, Excel do dashboard e Reforma Tributária.${
+        sai ? ` Ficam só as ${limite} últimas: a versão ${sai.numero} será apagada.` : ''
+      }`,
+      confirmLabel: 'Salvar versão',
+    });
+    if (ok) await acaoVersao(() => salvarVersaoDre(empresaId));
+  }
+
+  async function excluirVersaoAberta() {
+    const ok = await confirm({
+      title: `Excluir a versão ${versaoAberta.numero}`,
+      description: `Tudo o que foi alterado na versão ${versaoAberta.numero} (em edição) volta ao que está na versão ${
+        versaoAberta.base_numero ?? versaoPublicada?.numero
+      }. As alterações registradas nela são apagadas junto (fica o registro da exclusão na versão ${versaoAberta.base_numero ?? versaoPublicada?.numero}).`,
+      confirmLabel: 'Excluir versão',
+      variant: 'danger',
+    });
+    if (ok) await acaoVersao(() => excluirVersaoDre(empresaId));
   }
 
   const semEmpresa = !empresaId;
@@ -443,35 +546,6 @@ export default function DreGerencialPage() {
                         options={COLUNAS_DRE}
                         placeholder="Valor"
                         emptyMessage="—"
-                      />
-                    </div>
-                    <div className="sm:min-w-48 sm:max-w-60 sm:flex-1">
-                      <label className="mb-1 block text-sm font-medium text-gray-700">Versão</label>
-                      <SearchableSelect
-                        value={versaoDre === 'atual' ? 'atual' : (versaoDre ?? versoesProjecao[0]?.numero ?? '')}
-                        onChange={(v) => {
-                          if (!v) return;
-                          setVersaoDre(v === 'atual' ? 'atual' : Number(v));
-                        }}
-                        disabled={
-                          semEmpresa ||
-                          !(dreColunas.includes('proj') || dreColunas.includes('desvio')) ||
-                          (!versoesProjecao.length && !temRascunhosDre)
-                        }
-                        clearable={false}
-                        options={[
-                          ...(temRascunhosDre ? [{ value: 'atual', label: 'Rascunhos (não salvos)' }] : []),
-                          ...versoesProjecao.map((v, i) => ({
-                            value: v.numero,
-                            label: `Versão ${v.numero}${i === 0 ? ' (última)' : ''} · ${new Date(v.criado_em).toLocaleDateString('pt-BR', {
-                              day: '2-digit',
-                              month: '2-digit',
-                              year: '2-digit',
-                            })}`,
-                          })),
-                        ]}
-                        placeholder="Nenhuma versão salva"
-                        larguraPainel={280}
                       />
                     </div>
                   </>
@@ -614,9 +688,9 @@ export default function DreGerencialPage() {
 
           {abaAtiva === 'projecoes' && (
             // Botões só com ícone (dica no title): layout (a planilha da empresa, todos os centros,
-            // preenchida com os orçamentos atuais), importar planilha, novo orçamento (abre o
-            // assistente), salvar versão (acende com algum orçamento concluído) e tela cheia —
-            // ProjecoesDreTab.jsx. A planilha de um centro só fica nas etapas do assistente.
+            // preenchida com os orçamentos atuais), importar planilha e novo orçamento (só com versão
+            // aberta) e tela cheia — ProjecoesDreTab.jsx. A planilha de um centro só fica nas etapas do
+            // assistente. Salvar versão fica na aba Versões.
             <div className="flex shrink-0 items-center gap-2">
               <Button
                 type="button"
@@ -636,38 +710,32 @@ export default function DreGerencialPage() {
               >
                 {baixandoLayoutProjecoes ? <Loader2 size={18} className="animate-spin" /> : <FileSpreadsheet size={18} />}
               </Button>
-              <Button
-                type="button"
-                variant="secondary"
-                className="!px-2.5"
-                onClick={() => projecoesTabRef.current?.importar()}
-                disabled={semEmpresa}
-                title="Importar planilha da projeção"
-                aria-label="Importar planilha da projeção"
-              >
-                <Upload size={18} />
-              </Button>
-              <Button
-                type="button"
-                variant="secondary"
-                className="!px-2.5"
-                onClick={() => projecoesTabRef.current?.novo()}
-                disabled={semEmpresa}
-                title="Novo orçamento"
-                aria-label="Novo orçamento"
-              >
-                <FilePlus2 size={18} />
-              </Button>
-              <Button
-                type="button"
-                className="!px-2.5"
-                onClick={() => projecoesTabRef.current?.salvarVersao()}
-                disabled={semEmpresa || !resumoProjecoes.concluidos}
-                title={resumoProjecoes.concluidos ? 'Salvar versão' : 'Conclua um orçamento pra poder salvar a versão'}
-                aria-label="Salvar versão"
-              >
-                <Save size={18} />
-              </Button>
+              {!somenteLeitura && (
+                <>
+                  <Button
+                    type="button"
+                    variant="secondary"
+                    className="!px-2.5"
+                    onClick={() => projecoesTabRef.current?.importar()}
+                    disabled={semEmpresa}
+                    title="Importar planilha da projeção"
+                    aria-label="Importar planilha da projeção"
+                  >
+                    <Upload size={18} />
+                  </Button>
+                  <Button
+                    type="button"
+                    variant="secondary"
+                    className="!px-2.5"
+                    onClick={() => projecoesTabRef.current?.novo()}
+                    disabled={semEmpresa}
+                    title="Novo orçamento"
+                    aria-label="Novo orçamento"
+                  >
+                    <FilePlus2 size={18} />
+                  </Button>
+                </>
+              )}
               <Button
                 type="button"
                 variant="secondary"
@@ -682,7 +750,7 @@ export default function DreGerencialPage() {
             </div>
           )}
 
-          {abaAtiva === 'unidades' && (
+          {abaAtiva === 'unidades' && !versaoVisualizada && (
             <div className="flex shrink-0 items-center gap-2">
               {/* Mesmo ícone de atualizar do Repasses CEF: busca unidades e contratos no Sienge. */}
               <button
@@ -697,7 +765,7 @@ export default function DreGerencialPage() {
             </div>
           )}
 
-          {abaAtiva === 'financeiro' && exercicioAberto && (
+          {abaAtiva === 'financeiro' && exercicioAberto && !somenteLeitura && (
             <div className="flex shrink-0 items-center gap-2">
               <Button
                 type="button"
@@ -713,7 +781,7 @@ export default function DreGerencialPage() {
             </div>
           )}
 
-          {abaAtiva === 'mascaras' && (
+          {abaAtiva === 'mascaras' && !somenteLeitura && (
             <div className="flex shrink-0 items-center gap-2">
               <Button type="button" onClick={() => mascarasTabRef.current?.abrirNova()} disabled={semEmpresa}>
                 <Plus size={16} />
@@ -722,7 +790,7 @@ export default function DreGerencialPage() {
             </div>
           )}
 
-          {abaAtiva === 'orcamento' && (
+          {abaAtiva === 'orcamento' && !somenteLeitura && (
             <div className="flex shrink-0 items-center gap-2">
               <Button type="button" onClick={() => orcamentoTabRef.current?.abrirNova()} disabled={semEmpresa}>
                 <Plus size={16} />
@@ -734,7 +802,7 @@ export default function DreGerencialPage() {
           {abaAtiva === 'plano-de-contas' && planoAberto && (
             <div className="flex shrink-0 flex-col items-end gap-1.5">
               <div className="flex shrink-0 items-center gap-2">
-                {planoCentro && (
+                {planoCentro && !somenteLeitura && (
                   <button
                     type="button"
                     onClick={excluirVersaoPlano}
@@ -758,6 +826,7 @@ export default function DreGerencialPage() {
                     Bancárias): "+" gera o plano de contas pela primeira vez, refresh atualiza
                     (traz novas contas) depois de já gerado — troca sozinho conforme
                     totalPlanoContas, reportado pela própria aba (onTotal). */}
+                {!somenteLeitura && (
                 <button
                   type="button"
                   onClick={handleGerarOuAtualizarPlanoContas}
@@ -771,13 +840,95 @@ export default function DreGerencialPage() {
                     <RefreshCw size={18} className={gerandoPlanoContas ? 'animate-spin' : ''} />
                   )}
                 </button>
+                )}
               </div>
               {erroPlanoContas && <span className="text-xs text-red-600">{erroPlanoContas}</span>}
+            </div>
+          )}
+
+          {abaAtiva === 'versoes' && !semEmpresa && estadoVersoes && (
+            // Gerar nova versão / Editar última versão (sem versão aberta) ou Excluir / Salvar a aberta.
+            <div className="flex shrink-0 flex-col items-end gap-1.5">
+              <div className="flex shrink-0 items-center gap-2">
+                {versaoAberta ? (
+                  <>
+                    <Button type="button" variant="secondary" onClick={excluirVersaoAberta} disabled={processandoVersao}>
+                      <Trash2 size={16} />
+                      Excluir versão {versaoAberta.numero}
+                    </Button>
+                    <Button type="button" onClick={salvarVersaoAberta} disabled={processandoVersao}>
+                      {processandoVersao ? <Loader2 size={16} className="animate-spin" /> : <Save size={16} />}
+                      Salvar versão {versaoAberta.numero}
+                    </Button>
+                  </>
+                ) : (
+                  <>
+                    <Button type="button" variant="secondary" onClick={editarUltimaVersao} disabled={processandoVersao || !versaoPublicada}>
+                      <PencilLine size={16} />
+                      Editar última versão
+                    </Button>
+                    <Button type="button" onClick={gerarNovaVersao} disabled={processandoVersao}>
+                      {processandoVersao ? <Loader2 size={16} className="animate-spin" /> : <CopyPlus size={16} />}
+                      Gerar nova versão
+                    </Button>
+                  </>
+                )}
+              </div>
             </div>
           )}
         </div>
       </Card>
 
+      {/* Em qual versão da DRE a tela está (aba Versões). */}
+      {!semEmpresa && estadoVersoes && (
+        <div
+          className={`flex flex-wrap items-center gap-x-3 gap-y-1 rounded-lg border px-3 py-2 text-xs ${
+            versaoVisualizada
+              ? 'border-amber-200 bg-amber-50 text-amber-800'
+              : versaoAberta
+                ? 'border-primary-100 bg-primary-50/60 text-primary-800'
+                : 'border-gray-200 bg-white text-gray-600'
+          }`}
+        >
+          {versaoVisualizada ? (
+            <>
+              <Lock size={14} className="shrink-0" />
+              <span>
+                Visualizando a <strong>versão {versaoVisualizada}</strong>
+                {versaoVista ? `, salva em ${quandoBR(versaoVista.fechada_em)}${versaoVista.fechada_por_nome ? ` por ${versaoVista.fechada_por_nome}` : ''} (realizado até ${mesBR(versaoVista.corte)})` : ''}
+                . Só leitura: é a DRE como estava nessa versão.
+              </span>
+              <button
+                type="button"
+                onClick={() => atualizarParams({ versao: null })}
+                className="ml-auto inline-flex items-center gap-1 rounded-md border border-amber-300 bg-white px-2 py-0.5 font-medium text-amber-800 hover:bg-amber-100"
+              >
+                <Undo2 size={13} /> Voltar para a versão atual
+              </button>
+            </>
+          ) : versaoAberta ? (
+            <>
+              <LockOpen size={14} className="shrink-0" />
+              <span>
+                <strong>Versão {versaoAberta.numero} em edição</strong> — aberta por {versaoAberta.aberta_por_nome || '—'} em {quandoBR(versaoAberta.aberta_em)}; realizado até{' '}
+                {mesBR(versaoAberta.corte)}
+                {versaoAberta.origem === 'EDICAO' ? ' (congelado)' : ' (atualizado pelo Monitor de Integrações)'}. As alterações só são publicadas ao salvar a versão (aba Versões).
+              </span>
+            </>
+          ) : (
+            <>
+              <Lock size={14} className="shrink-0" />
+              <span>
+                DRE fechada na <strong>versão {versaoPublicada?.numero}</strong>
+                {versaoPublicada?.fechada_em ? `, salva em ${quandoBR(versaoPublicada.fechada_em)}${versaoPublicada.fechada_por_nome ? ` por ${versaoPublicada.fechada_por_nome}` : ''}` : ''} (realizado
+                até {mesBR(versaoPublicada?.corte)}). Para alterar, gere uma nova versão ou edite a última na aba Versões.
+              </span>
+            </>
+          )}
+        </div>
+      )}
+
+      <LeituraDreContext.Provider value={leitura}>
       <div>
         <Tabs tabs={TABS} activeId={abaAtiva} onChange={(aba) => atualizarParams({ aba })} semIcones={menuAberto} />
 
@@ -790,13 +941,7 @@ export default function DreGerencialPage() {
             telaCheia={dreTelaCheia}
             onSairTelaCheia={() => setDreTelaCheia(false)}
             colunasVisiveis={dreColunas}
-            projecao={versaoDre === 'atual' ? { fonte: 'atual', versao: null } : { fonte: 'versao', versao: versaoDre }}
-            onProjecaoInfo={(r) => {
-              setVersoesProjecao(r.versoes || []);
-              setTemRascunhosDre(Boolean(r.tem_rascunhos));
-              // Sem nenhuma versão salva: mostra os rascunhos (se houver).
-              if (versaoDre === null && !(r.versoes || []).length && r.tem_rascunhos) setVersaoDre('atual');
-            }}
+            projecao={{ fonte: 'atual', versao: null }}
           />
         )}
         {abaAtiva === 'poc' && (
@@ -810,11 +955,23 @@ export default function DreGerencialPage() {
           />
         )}
 
-        {abaAtiva === 'mascaras' && <MascarasTab ref={mascarasTabRef} empresaId={empresaId} />}
+        {abaAtiva === 'mascaras' && (
+          <SoLeitura>
+            <MascarasTab ref={mascarasTabRef} empresaId={empresaId} />
+          </SoLeitura>
+        )}
 
-        {abaAtiva === 'centros-custos' && <CentrosCustosTab empresaId={empresaId} search={buscaCentros} />}
+        {abaAtiva === 'centros-custos' && (
+          <SoLeitura>
+            <CentrosCustosTab empresaId={empresaId} search={buscaCentros} />
+          </SoLeitura>
+        )}
 
-        {abaAtiva === 'orcamento' && <OrcamentoTab ref={orcamentoTabRef} empresaId={empresaId} search={buscaOrcamento} />}
+        {abaAtiva === 'orcamento' && (
+          <SoLeitura>
+            <OrcamentoTab ref={orcamentoTabRef} empresaId={empresaId} search={buscaOrcamento} />
+          </SoLeitura>
+        )}
 
         {abaAtiva === 'unidades' && (
           <UnidadesTab
@@ -835,24 +992,27 @@ export default function DreGerencialPage() {
             novoToken={novoLancamentoToken}
           />
         )}
-        {abaAtiva === 'configuracoes' && <ConfiguracoesDreTab empresaId={empresaId} />}
+        {abaAtiva === 'configuracoes' && (
+          <SoLeitura>
+            <ConfiguracoesDreTab empresaId={empresaId} />
+          </SoLeitura>
+        )}
         {abaAtiva === 'projecoes' && (
           <ProjecoesDreTab
             ref={projecoesTabRef}
-            onResumo={setResumoProjecoes}
             empresaId={empresaId}
             telaCheia={projecoesTelaCheia}
             onSairTelaCheia={() => setProjecoesTelaCheia(false)}
           />
         )}
         {abaAtiva === 'versoes' && (
-          <Card className="min-h-70 rounded-tl-none">
-            {/* Regra das versões (pedido do usuário): só as 10 últimas salvas ficam guardadas. */}
-            <p className="flex items-center gap-1.5 text-xs text-gray-500">
-              <Info size={14} className="shrink-0 text-gray-400" />
-              Ficam guardadas só as 10 últimas versões salvas. Ao salvar a 11ª, a mais antiga é apagada.
-            </p>
-          </Card>
+          <VersoesDreTab
+            empresaId={empresaId}
+            estado={estadoVersoes}
+            erro={erroVersoes}
+            versaoVisualizada={versaoVisualizada}
+            onVisualizar={(numero) => atualizarParams(numero ? { versao: numero, aba: 'dre' } : { versao: null })}
+          />
         )}
 
         {abaAtiva === 'plano-de-contas' &&
@@ -873,11 +1033,12 @@ export default function DreGerencialPage() {
             <PlanosContasLista
               empresaId={empresaId}
               onAbrir={abrirPlano}
-              onNovo={() => setNovaVersaoAberta(true)}
+              onNovo={somenteLeitura ? null : () => setNovaVersaoAberta(true)}
               refreshToken={refreshTokenCardsPlano}
             />
           ))}
       </div>
+      </LeituraDreContext.Provider>
 
       <NovaVersaoPlanoModal
         open={novaVersaoAberta}

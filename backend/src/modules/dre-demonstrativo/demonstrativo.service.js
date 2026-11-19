@@ -241,8 +241,10 @@ async function carregar(empresaId, { ate, ateOrcamento = ate, filtro = [], soObr
   const { usaPoc, idsFinanceiro } = regras(mascaras, cfg);
   // Realizado nunca tem futuro (pedido do usuário): nada com data depois de hoje entra — títulos com
   // emissão futura, correção de parcelas que vencem depois de hoje, contratos / distratos / permutas
-  // datados no futuro. O orçamento da obra (dre_orcamento_valores) não é realizado: segue `ateOrcamento`.
-  const hoje = hojeIso();
+  // datados no futuro. Dentro de uma versão da DRE (modules/dre-versoes — todo pedido da DRE, do dashboard
+  // e do MCP), o realizado vai só até o fim do mês de corte dela (o último mês fechado): do mês seguinte em
+  // diante, só projeção. O orçamento da obra (dre_orcamento_valores) não é realizado: segue `ateOrcamento`.
+  const hoje = limiteDoRealizado();
   const corte = ate < hoje ? ate : hoje;
   const [{ centros: todosCentros }, { rows: corr }, custos, { rows: orcamentos }] = await Promise.all([
     unidades.listar(empresaId),
@@ -282,6 +284,15 @@ async function carregar(empresaId, { ate, ateOrcamento = ate, filtro = [], soObr
 // deslocado; usa o da aplicação).
 function hojeIso() {
   return new Date().toLocaleDateString('en-CA', { timeZone: 'America/Sao_Paulo' });
+}
+
+// O último dia do realizado: hoje ou, dentro de uma versão da DRE, o fim do mês de corte dela (o que vier antes).
+function limiteDoRealizado() {
+  const hoje = hojeIso();
+  const corte = pool.contextoAtual()?.corte;
+  if (!corte) return hoje;
+  const fim = fimDoMes(corte);
+  return fim < hoje ? fim : hoje;
 }
 
 // Monta o motor a partir dos dados de `carregar` (sem ir ao banco): os centros pedidos (com "Realiza
@@ -408,9 +419,14 @@ async function calcular(empresaId, { de, ate, centros: filtro = [] }, motorPront
   }));
   const valores = somar(vazio(de, ate), porMes.map((x) => x.valores));
 
+  const ctx = pool.contextoAtual();
   return {
     de,
     ate,
+    // Até onde vai o realizado (o fim do mês de corte da versão, ou hoje) e a versão da DRE do pedido — a tela
+    // mostra só o Projetado depois dele.
+    realizado_ate: limiteDoRealizado(),
+    versao: ctx?.versao ? { numero: ctx.versao.numero, status: ctx.versao.status, corte: ctx.versao.corte.slice(0, 7) } : null,
     centros: ids,
     poc_receita: {
       mascara: mascaraPoc,
@@ -447,4 +463,4 @@ async function calcular(empresaId, { de, ate, centros: filtro = [] }, motorPront
   };
 }
 
-module.exports = { calcular, motor, carregar, construir, regras, meses, vespera, fimDoMes, hojeIso, CALCULOS_RECEITA, baseDoImposto };
+module.exports = { calcular, motor, carregar, construir, regras, meses, vespera, fimDoMes, hojeIso, limiteDoRealizado, CALCULOS_RECEITA, baseDoImposto };

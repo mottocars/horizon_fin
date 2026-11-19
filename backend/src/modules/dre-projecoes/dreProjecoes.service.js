@@ -41,36 +41,48 @@ function comFechamento(resultado, arvore) {
   };
 }
 
-async function ultimaVersao(db, empresaId) {
-  const { rows } = await db.query(
-    `SELECT v.id, v.numero, v.criado_em, v.orcamentos, u.nome AS usuario
-       FROM dre_projecao_versoes v LEFT JOIN usuarios u ON u.id = v.usuario_id
-      WHERE v.empresa_id = $1 ORDER BY v.numero DESC LIMIT 1`,
-    [empresaId]
-  );
-  return rows[0] || null;
+// Versões da DRE (modules/dre-versoes): a Projeção não tem mais versões próprias — cada centro tem UM
+// orçamento (versao_id NULL) e a versão é a da DRE inteira. O pedido roda no contexto de uma versão (a
+// aberta, ou uma salva — config/db.js lê a cópia dela); `versaoDaDre` descreve essa versão pras telas, e o
+// corte dela (último mês do realizado) é a trava de todo orçamento.
+function versaoDaDre() {
+  const ctx = pool.contextoAtual();
+  if (!ctx?.versao) return null;
+  const v = ctx.versao;
+  return {
+    numero: v.numero,
+    status: v.status,
+    criado_em: v.fechada_em || v.aberta_em,
+    usuario: v.fechada_por_nome || v.aberta_por_nome || null,
+    corte: v.corte.slice(0, 7),
+  };
 }
+const corteDaVersao = () => pool.contextoAtual()?.corte?.slice(0, 7) || null;
+const emLeitura = () => pool.contextoAtual()?.modo === 'leitura';
 
-// A aba: colunas (o nível 1 da Máscara DRE), a última versão salva com os orçamentos dela e os
-// rascunhos — cada um com o fechamento do nível 1 (do primeiro lançamento ao fim do ciclo, da foto).
+// A aba: colunas (o nível 1 da Máscara DRE), a versão da DRE e os orçamentos (um por centro) — cada um com o
+// fechamento do nível 1 (do primeiro lançamento ao fim do ciclo, da foto). `orcamentos` fica vazio (era o
+// das versões só da Projeção); tudo vem em `rascunhos`.
 async function listar(empresaId) {
-  const [versao, arvore] = await Promise.all([ultimaVersao(pool, empresaId), dreMascaras.list(empresaId)]);
+  const arvore = await dreMascaras.list(empresaId);
   const { rows } = await pool.query(
     `SELECT ${COLUNAS}, o.resultado -> 'niveis1' AS niveis1, o.resultado -> 'mensal' AS mensal
        ${JUNCOES}
-      WHERE o.empresa_id = $1 AND (o.versao_id IS NULL OR o.versao_id = $2)
+      WHERE o.empresa_id = $1 AND o.versao_id IS NULL
       ORDER BY c.dre_ordem ASC NULLS LAST, c.sienge_id ASC`,
-    [empresaId, versao?.id ?? -1]
+    [empresaId]
   );
   const linha = ({ niveis1, mensal, ...r }) => {
     const n1 = mensal?.meses ? calculo.niveis1DaFoto(arvore, mensal) : niveis1;
     return { ...r, totais: n1 ? Object.fromEntries(n1.map((n) => [n.id, n.total])) : null };
   };
   return {
-    versao,
+    versao: versaoDaDre(),
+    corte: corteDaVersao(),
+    somente_leitura: emLeitura(),
     colunas: arvore.map((g) => ({ id: g.id, descricao: g.descricao, totalizadora: g.totalizadora })),
-    orcamentos: rows.filter((r) => r.versao_id !== null).map(linha),
-    rascunhos: rows.filter((r) => r.versao_id === null).map(linha),
+    orcamentos: [],
+    rascunhos: rows.map(linha),
   };
 }
 
@@ -111,27 +123,21 @@ async function criar(empresaId, { centroId, cicloInicio, cicloFim }, usuarioId) 
   );
   if (existente[0]) return { ...(await obter(empresaId, existente[0].id)), existente: true };
 
-  const versao = await ultimaVersao(pool, empresaId);
-  let dados = {};
-  if (versao) {
-    const { rows } = await pool.query('SELECT dados FROM dre_projecao_orcamentos WHERE versao_id = $1 AND centro_id = $2', [
-      versao.id,
-      centroId,
-    ]);
-    if (rows[0]) dados = rows[0].dados;
-  }
+  // O realizado vai até o corte da versão da DRE (o último mês fechado) — a mesma trava pra todo orçamento.
+  const corte = corteDaVersao();
   const agora = new Date();
   const { rows } = await pool.query(
     `INSERT INTO dre_projecao_orcamentos
-       (empresa_id, centro_id, etapa, ciclo_inicio, ciclo_fim, dados, usuario_id, criado_em, atualizado_em)
-     VALUES ($1, $2, 'historico', $3::date, $4::date, $5, $6, $7, $7) RETURNING id`,
-    [empresaId, centroId, `${cicloInicio}-01`, `${cicloFim}-01`, dados, usuarioId, agora]
+       (empresa_id, centro_id, etapa, ciclo_inicio, ciclo_fim, trava, dados, usuario_id, criado_em, atualizado_em)
+     VALUES ($1, $2, 'historico', $3::date, $4::date, $5::date, $6, $7, $8, $8) RETURNING id`,
+    [empresaId, centroId, `${cicloInicio}-01`, `${cicloFim}-01`, corte ? `${corte}-01` : null, {}, usuarioId, agora]
   );
   return obter(empresaId, rows[0].id);
 }
 
-// Grava o que vier (etapa, ciclo, trava, dados — o assistente manda a cada mudança). Mudou ciclo, trava
-// ou dados: volta pra EM_ANDAMENTO e descarta a foto do cálculo.
+// Grava o que vier (etapa, ciclo, dados — o assistente manda a cada mudança). Mudou ciclo ou dados: volta pra
+// EM_ANDAMENTO e descarta a foto do cálculo. A trava é sempre o corte da versão da DRE (o que vier dela é
+// ignorado); orçamento de antes das versões com outra trava passa a ter a do corte na próxima gravação.
 async function atualizar(empresaId, id, patch, usuarioId) {
   const orc = await rascunho(empresaId, id);
   const ciclo = {
@@ -140,11 +146,13 @@ async function atualizar(empresaId, id, patch, usuarioId) {
   };
   if (!mesValido(ciclo.inicio) || !mesValido(ciclo.fim)) throw erro(400, 'Mês do ciclo inválido.');
   if (ciclo.fim < ciclo.inicio) throw erro(400, 'O fim do ciclo não pode ser antes do início.');
-  const trava = patch.trava !== undefined ? patch.trava : orc.trava;
+  const corte = corteDaVersao();
+  // Só mudar a etapa (navegar no assistente) não mexe na trava nem no status.
+  const mudou = patch.cicloInicio !== undefined || patch.cicloFim !== undefined || patch.dados !== undefined || (!corte && patch.trava !== undefined);
+  const trava = corte ? (mudou ? corte : orc.trava) : patch.trava !== undefined ? patch.trava : orc.trava;
   if (trava !== null && !mesValido(trava)) throw erro(400, 'Mês da trava inválido.');
-  if (trava !== null && trava >= ciclo.fim) throw erro(400, 'A trava precisa ser antes do fim do ciclo.');
+  if (!corte && trava !== null && trava >= ciclo.fim) throw erro(400, 'A trava precisa ser antes do fim do ciclo.');
   if (patch.etapa !== undefined && !ETAPAS.includes(patch.etapa)) throw erro(400, 'Etapa inválida.');
-  const mudou = patch.cicloInicio !== undefined || patch.cicloFim !== undefined || patch.trava !== undefined || patch.dados !== undefined;
   await pool.query(
     `UPDATE dre_projecao_orcamentos
         SET etapa = $3, ciclo_inicio = $4::date, ciclo_fim = $5::date, trava = $6::date, dados = $7,
@@ -178,80 +186,26 @@ async function descartar(empresaId, id) {
   return { ok: true };
 }
 
-// Calcula e guarda a foto: o rascunho fica CONCLUIDO, aguardando "Salvar versão".
+// Calcula e guarda a foto: o orçamento fica CONCLUIDO (pra salvar a versão da DRE, todos têm de estar).
 async function concluir(empresaId, id, usuarioId) {
   const orc = await rascunho(empresaId, id);
+  const corte = corteDaVersao();
   const resultado = await calculo.calcular(empresaId, orc);
   const agora = new Date();
   await pool.query(
     `UPDATE dre_projecao_orcamentos
-        SET status = 'CONCLUIDO', etapa = 'conclusao', resultado = $3, concluido_em = $4, atualizado_em = $4, usuario_id = $5
+        SET status = 'CONCLUIDO', etapa = 'conclusao', resultado = $3, concluido_em = $4, atualizado_em = $4, usuario_id = $5,
+            trava = COALESCE($6::date, trava)
       WHERE empresa_id = $1 AND id = $2 AND versao_id IS NULL`,
-    [empresaId, id, { ...resultado, calculado_em: agora }, agora, usuarioId]
+    [empresaId, id, { ...resultado, calculado_em: agora }, agora, usuarioId, corte ? `${corte}-01` : null]
   );
   return obter(empresaId, id);
 }
 
-// Nova versão: os rascunhos concluídos e, nos centros sem rascunho concluído, os orçamentos da versão
-// anterior (copiados). Os rascunhos em andamento continuam rascunho.
-async function salvarVersao(empresaId, usuarioId) {
-  const client = await pool.connect();
-  try {
-    await client.query('BEGIN');
-    await client.query('SELECT pg_advisory_xact_lock(hashtext($1), $2)', ['dre_projecao_versao', empresaId]);
-    const { rows: concluidos } = await client.query(
-      `SELECT id, centro_id FROM dre_projecao_orcamentos
-        WHERE empresa_id = $1 AND versao_id IS NULL AND status = 'CONCLUIDO'`,
-      [empresaId]
-    );
-    if (!concluidos.length) throw erro(400, 'Conclua ao menos um orçamento antes de salvar a versão.');
-    const anterior = await ultimaVersao(client, empresaId);
-    const { rows: nova } = await client.query(
-      `INSERT INTO dre_projecao_versoes (empresa_id, numero, usuario_id, criado_em, orcamentos)
-       VALUES ($1, $2, $3, $4, 0) RETURNING id, numero`,
-      [empresaId, (anterior?.numero || 0) + 1, usuarioId, new Date()]
-    );
-    const versaoId = nova[0].id;
-    if (anterior) {
-      await client.query(
-        `INSERT INTO dre_projecao_orcamentos
-           (empresa_id, centro_id, versao_id, status, etapa, ciclo_inicio, ciclo_fim, trava, dados, resultado,
-            usuario_id, criado_em, atualizado_em, concluido_em)
-         SELECT empresa_id, centro_id, $2, status, etapa, ciclo_inicio, ciclo_fim, trava, dados, resultado,
-                usuario_id, criado_em, atualizado_em, concluido_em
-           FROM dre_projecao_orcamentos
-          WHERE empresa_id = $1 AND versao_id = $3 AND NOT (centro_id = ANY($4::int[]))`,
-        [empresaId, versaoId, anterior.id, concluidos.map((c) => c.centro_id)]
-      );
-    }
-    await client.query('UPDATE dre_projecao_orcamentos SET versao_id = $2 WHERE empresa_id = $1 AND id = ANY($3::int[])', [
-      empresaId,
-      versaoId,
-      concluidos.map((c) => c.id),
-    ]);
-    const { rows: n } = await client.query('SELECT count(*)::int AS n FROM dre_projecao_orcamentos WHERE versao_id = $1', [versaoId]);
-    await client.query('UPDATE dre_projecao_versoes SET orcamentos = $2 WHERE id = $1', [versaoId, n[0].n]);
-    await client.query('COMMIT');
-    return { numero: nova[0].numero, orcamentos: n[0].n, novos: concluidos.length };
-  } catch (e) {
-    await client.query('ROLLBACK');
-    throw e;
-  } finally {
-    client.release();
-  }
-}
-
-// Projetado da aba DRE (colunas Projetado / Desvio): por centro, a DRE do orçamento mês a mês (a foto
-// `resultado.mensal`: realizado até o corte + projetado depois) nos meses de `de` a `ate`.
-//   fonte 'atual'  — Operações: o rascunho do centro (concluído: a foto; em andamento: calculado agora)
-//                    e, sem rascunho, o orçamento da última versão;
-//   fonte 'versao' — só uma versão salva (`numero`; sem ele, a última) — os dashboards.
-// `centros`: ids (vazio = todos). Devolve também as versões salvas (pro seletor).
-// Os meses até a trava do Projetado são o REALIZADO: a foto (`mensal`) guarda o realizado do dia em que o
-// orçamento foi concluído e fica velha (título novo, ajuste, regra de imposto, orçamento da obra com
-// outra data de corte), então esses meses são relidos agora, pela mesma conta da aba DRE (motor padrão,
-// orçamento da obra vigente na trava) — uma chamada só pra todos os centros. Do mês seguinte à trava em
-// diante a foto vale como está. Muda `mensal` no lugar (nunca grava no banco).
+// Os meses até a trava da foto mês a mês (`mensal`) são o REALIZADO, relido agora pela mesma conta da aba
+// DRE (dentro da versão do pedido: o realizado dela, até o corte) — a foto guarda o realizado do dia em que
+// o orçamento foi concluído. Do mês seguinte à trava em diante a foto vale como está. Muda `mensal` no lugar
+// (nunca grava no banco).
 async function realizadoAoVivo(empresaId, orcamentos) {
   const alvo = orcamentos.filter((o) => o.mensal?.meses?.length && o.mensal.trava);
   if (!alvo.length) return;
@@ -280,44 +234,29 @@ async function realizadoAoVivo(empresaId, orcamentos) {
   });
 }
 
-// Os orçamentos de uma fonte, um por centro (a mesma escolha da coluna Projetado da aba DRE):
-//   fonte 'atual'  — o rascunho do centro e, sem rascunho, o orçamento da última versão;
-//   fonte 'versao' — os da versão `numero` (sem ele, a última).
+// Os orçamentos da versão do pedido, um por centro (a aberta: os de trabalho; uma salva: os da cópia dela).
 // `completo`: a foto inteira (`resultado`: premissas, POCs, níveis); senão só o `mensal`. Orçamento sem a
-// foto mês a mês (rascunho em andamento, ou concluído antes de ela existir) é calculado na hora — com as
-// premissas da foto quando há foto (`calculado_agora` marca); no da versão, o `mensal` que faltava é
-// gravado nele (uma vez). Orçamento que não dá pra calcular (ex.: centro sem "Realiza DRE") fica de fora,
-// com o motivo em `avisos`.
-async function orcamentosDaFonte(empresaId, { fonte = 'atual', numero = null, centros = [], completo = false }) {
-  const { rows: versoes } = await pool.query(
-    `SELECT v.id, v.numero, v.criado_em, v.orcamentos, u.nome AS usuario FROM dre_projecao_versoes v
-       LEFT JOIN usuarios u ON u.id = v.usuario_id WHERE v.empresa_id = $1 ORDER BY v.numero DESC`,
-    [empresaId]
-  );
-  const versao = numero ? versoes.find((v) => v.numero === Number(numero)) : versoes[0];
-  if (numero && !versao) throw erro(404, `Versão ${numero} não encontrada.`);
-  // Se há rascunho na empresa (o filtro Versão da aba DRE só oferece "Rascunhos" quando há).
-  const { rows: rasc } = await pool.query('SELECT EXISTS (SELECT 1 FROM dre_projecao_orcamentos WHERE empresa_id = $1 AND versao_id IS NULL) AS tem', [
-    empresaId,
-  ]);
+// foto mês a mês (em andamento, ou concluído antes de ela existir) é calculado na hora (`calculado_agora`);
+// no concluído da versão aberta, o `mensal` que faltava é gravado nele (uma vez). A trava de todos é o corte
+// da versão: num orçamento concluído antes com trava mais antiga, os meses até o corte viram realizado.
+// Orçamento que não dá pra calcular (ex.: centro sem "Realiza DRE") fica de fora, com o motivo em `avisos`.
+// (`fonte`/`numero`: compatibilidade — a versão é a do contexto.)
+async function orcamentosDaFonte(empresaId, { centros = [], completo = false } = {}) {
+  const corte = corteDaVersao();
+  const leitura = emLeitura();
   const { rows } = await pool.query(
     `SELECT ${COLUNAS}, o.dados, ${completo ? 'o.resultado' : "o.resultado -> 'mensal' AS mensal"}
        ${JUNCOES}
-      WHERE o.empresa_id = $1
-        AND (($2::int IS NOT NULL AND o.versao_id = $2) OR ($3 AND o.versao_id IS NULL))
-        AND (cardinality($4::int[]) = 0 OR o.centro_id = ANY($4::int[]))
+      WHERE o.empresa_id = $1 AND o.versao_id IS NULL
+        AND (cardinality($2::int[]) = 0 OR o.centro_id = ANY($2::int[]))
       ORDER BY c.dre_ordem ASC NULLS LAST, c.sienge_id ASC`,
-    [empresaId, versao?.id ?? null, fonte === 'atual', centros.map(Number)]
+    [empresaId, centros.map(Number)]
   );
   const avisos = [];
   const orcamentos = [];
   const arvore = completo && rows.length ? await dreMascaras.list(empresaId) : null;
-  const ids = [...new Set(rows.map((r) => r.centro_id))];
-  for (const id of ids) {
-    const rascunho = fonte === 'atual' ? rows.find((r) => r.centro_id === id && r.versao_id === null) : null;
-    const orc = rascunho || rows.find((r) => r.centro_id === id && r.versao_id !== null);
-    if (!orc) continue;
-    const origem = orc.versao_id === null ? 'RASCUNHO' : 'VERSAO';
+  for (const orc of rows) {
+    const origem = leitura ? 'VERSAO' : 'RASCUNHO';
     let resultado = completo ? orc.resultado : null;
     let mensal = completo ? orc.resultado?.mensal : orc.mensal;
     let calculadoAgora = false;
@@ -328,7 +267,7 @@ async function orcamentosDaFonte(empresaId, { fonte = 'atual', numero = null, ce
         mensal = r.mensal;
         if (completo) resultado = { ...(orc.resultado || r), mensal: r.mensal };
         calculadoAgora = true;
-        if (orc.versao_id !== null) {
+        if (!leitura && orc.status === 'CONCLUIDO') {
           await pool.query(
             `UPDATE dre_projecao_orcamentos SET resultado = jsonb_set(COALESCE(resultado, '{}'::jsonb), '{mensal}', $3::jsonb)
               WHERE empresa_id = $1 AND id = $2 AND NOT (COALESCE(resultado, '{}'::jsonb) ? 'mensal')`,
@@ -340,41 +279,75 @@ async function orcamentosDaFonte(empresaId, { fonte = 'atual', numero = null, ce
         continue;
       }
     }
+    if (corte && mensal) {
+      mensal = { ...mensal, trava: corte };
+      if (completo) resultado = { ...resultado, mensal };
+    }
     orcamentos.push({ ...orc, origem, mensal, resultado, calculado_agora: calculadoAgora });
   }
   await realizadoAoVivo(empresaId, orcamentos);
   if (completo) orcamentos.forEach((o) => { o.resultado = comFechamento(o.resultado, arvore); });
-  return {
-    fonte,
-    versao: versao ? { numero: versao.numero, criado_em: versao.criado_em, usuario: versao.usuario, orcamentos: versao.orcamentos } : null,
-    versoes: versoes.map(({ numero: n, criado_em: c, usuario: u }) => ({ numero: n, criado_em: c, usuario: u })),
-    tem_rascunhos: rasc[0].tem,
-    orcamentos,
-    avisos,
-  };
+  return { fonte: leitura ? 'versao' : 'atual', versao: versaoDaDre(), versoes: [], tem_rascunhos: false, orcamentos, avisos };
 }
 
-async function projetado(empresaId, { fonte = 'atual', numero = null, de, ate, centros = [] }) {
-  const f = await orcamentosDaFonte(empresaId, { fonte, numero, centros });
+// Projetado da aba DRE e do dashboard (colunas Projetado / Desvio %), por centro e mês, de `de` a `ate`:
+//   - do mês seguinte ao corte da versão em diante: a projeção desta versão (a foto mês a mês do orçamento);
+//   - até o corte (meses que já fecharam e mostram o realizado): o projetado da última versão salva em que
+//     aquele mês ainda era projeção (dre_versao_projetado) — o Desvio compara o realizado com o que se
+//     esperava. Sem versão anterior guardada (ficam só as 10 últimas), o mês fica sem projetado.
+// `versao_do_mes`: de qual versão veio o projetado de cada mês até o corte.
+async function projetado(empresaId, { de, ate, centros = [] }) {
+  const f = await orcamentosDaFonte(empresaId, { centros });
   const mesDe = de.slice(0, 7);
   const mesAte = ate.slice(0, 7);
-  const saida = {};
+  const corte = corteDaVersao();
+  const porCentro = new Map();
+  const doCentro = (id, base = {}) => {
+    if (!porCentro.has(id)) porCentro.set(id, { ...base, meses: new Map(), versao_do_mes: {} });
+    return porCentro.get(id);
+  };
   f.orcamentos.forEach((orc) => {
     const { mensal } = orc;
-    const idx = mensal.meses.map((m, i) => [m, i]).filter(([m]) => m >= mesDe && m <= mesAte);
-    saida[orc.centro_id] = {
-      origem: orc.origem,
-      status: orc.status,
-      trava: mensal.trava,
-      meses: idx.map(([m]) => m),
-      valores: Object.fromEntries(Object.entries(mensal.valores).map(([mid, vs]) => [mid, idx.map(([, i]) => vs[i])])),
+    const c = doCentro(Number(orc.centro_id), { origem: orc.origem, status: orc.status, trava: mensal.trava });
+    mensal.meses.forEach((m, i) => {
+      if (m < mesDe || m > mesAte || (corte && m <= corte)) return;
+      c.meses.set(m, Object.fromEntries(Object.entries(mensal.valores).map(([mid, vs]) => [mid, vs[i]])));
+    });
+  });
+  const ctx = pool.contextoAtual();
+  if (corte && ctx?.versao && mesDe <= corte) {
+    const { rows } = await pool.base.query(
+      `SELECT DISTINCT ON (p.centro_id, p.mes) p.centro_id, p.mes, p.valores, v.numero
+         FROM dre_versao_projetado p JOIN dre_versoes v ON v.id = p.versao_id
+        WHERE v.empresa_id = $1 AND v.status = 'FECHADA' AND v.numero < $2 AND p.mes > to_char(v.corte, 'YYYY-MM')
+          AND p.mes >= $3 AND p.mes <= $4 AND (cardinality($5::int[]) = 0 OR p.centro_id = ANY($5::int[]))
+        ORDER BY p.centro_id, p.mes, v.numero DESC`,
+      [empresaId, ctx.versao.numero, mesDe, mesAte < corte ? mesAte : corte, centros.map(Number)]
+    );
+    rows.forEach((r) => {
+      const c = doCentro(Number(r.centro_id), { origem: 'VERSAO_ANTERIOR', status: 'CONCLUIDO', trava: corte });
+      c.meses.set(r.mes, r.valores);
+      c.versao_do_mes[r.mes] = r.numero;
+    });
+  }
+  const saida = {};
+  porCentro.forEach((c, id) => {
+    const meses = [...c.meses.keys()].sort();
+    const mids = [...new Set(meses.flatMap((m) => Object.keys(c.meses.get(m))))];
+    saida[id] = {
+      origem: c.origem,
+      status: c.status,
+      trava: corte || c.trava,
+      meses,
+      valores: Object.fromEntries(mids.map((mid) => [mid, meses.map((m) => c.meses.get(m)[mid] ?? null)])),
+      versao_do_mes: c.versao_do_mes,
     };
   });
   return {
-    fonte,
-    versao: f.versao ? { numero: f.versao.numero, criado_em: f.versao.criado_em, usuario: f.versao.usuario } : null,
-    versoes: f.versoes,
-    tem_rascunhos: f.tem_rascunhos,
+    fonte: f.fonte,
+    versao: f.versao,
+    versoes: [],
+    tem_rascunhos: false,
     centros: saida,
     // Sem aviso na tela (pedido do usuário): o que não deu pra calcular só fica sem projeção.
     avisos: [],
@@ -385,14 +358,14 @@ module.exports = {
   ETAPAS,
   projetado,
   orcamentosDaFonte,
-  ultimaVersao: (empresaId) => ultimaVersao(pool, empresaId),
+  versaoDaDre,
+  corteDaVersao,
   listar,
   obter,
   criar,
   atualizar,
   descartar,
   concluir,
-  salvarVersao,
   historico: async (empresaId, id, ate) => calculo.historico(empresaId, await obter(empresaId, id), ate),
   unidades: async (empresaId, id) => calculo.unidades(empresaId, await obter(empresaId, id)),
   contas: async (empresaId, id, etapa) => calculo.contas(empresaId, await obter(empresaId, id), etapa),

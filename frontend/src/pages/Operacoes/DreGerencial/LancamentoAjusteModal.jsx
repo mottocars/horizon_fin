@@ -5,6 +5,7 @@ import Button from '../../../components/Button';
 import SearchableSelect from '../../../components/SearchableSelect';
 import { useConfirm } from '../../../confirm/ConfirmContext';
 import { obterAjusteLancamento, restaurarAjusteLancamento, salvarAjusteLancamento } from '../../../api/lancamentosAjustes.api';
+import { useLeituraDre } from './leituraDre';
 
 const ORIGENS = { R: 'A receber', P: 'A pagar', E: 'Movimento' };
 
@@ -106,7 +107,9 @@ export default function LancamentoAjusteModal({ empresaId, origem, chave, linha:
     return (dados?.opcoes.naturezas || []).filter((n) => permitidas.has(n.id)).map((n) => ({ value: n.id, label: `${n.id} ${n.nome}` }));
   }, [dados, centro]);
 
-  const travado = Boolean(dados?.travado);
+  // Só leitura também sem versão da DRE aberta / visualizando uma versão (leituraDre.js).
+  const { somenteLeitura } = useLeituraDre();
+  const travado = Boolean(dados?.travado) || somenteLeitura;
   const sinal = dados && dados.linha.valor < 0 ? -1 : 1;
   // O sinal vem da linha original: o que foi digitado vale pelo módulo.
   const valorNovo = Math.abs(lerValor(valor));
@@ -192,7 +195,7 @@ export default function LancamentoAjusteModal({ empresaId, origem, chave, linha:
             {travado && (
               <div className="flex items-center gap-2 rounded-lg bg-amber-50 px-3 py-2 text-xs text-amber-700">
                 <Lock size={14} className="shrink-0" />
-                Exercício em andamento: este lançamento só pode ser visualizado, não pode ser ajustado.
+                {somenteLeitura && !dados?.travado ? 'A DRE está só leitura (sem versão aberta ou visualizando uma versão salva): este lançamento só pode ser visualizado.' : 'Exercício em andamento: este lançamento só pode ser visualizado, não pode ser ajustado.'}
               </div>
             )}
 

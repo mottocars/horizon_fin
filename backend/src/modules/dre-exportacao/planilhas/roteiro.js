@@ -152,7 +152,7 @@ function alertas(d, L, J = null) {
   if (d.projecao) {
     const P = d.projecao;
     if (!P.orcamentos.length)
-      add('Info', `Nenhum orçamento da projeção (${P.fonte === 'versao' ? (P.versao ? `Versão ${P.versao.numero}` : 'nenhuma versão salva') : 'rascunhos + última versão'}) nos centros desta DRE: sem colunas Projetado / Desvio %.`, null, null, 'aba Projeções da DRE Construtoras');
+      add('Info', `Nenhum orçamento da projeção (Versão ${P.versao?.numero ?? '—'} da DRE) nos centros desta DRE: sem colunas Projetado / Desvio %.`, null, null, 'aba Projeções da DRE Construtoras');
     const sem = m.obras.filter((c) => !P.orcamentos.some((o) => o.orc.centro_id === c.id));
     if (P.orcamentos.length && sem.length)
       add('Info', `Centros sem orçamento na projeção (Projetado com traço; o Desvio do consolidado compara só os com projeção): ${sem.map((c) => c.rotulo).join(', ')}.`, sem.length, null, 'Projeção');

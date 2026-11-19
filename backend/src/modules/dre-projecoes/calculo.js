@@ -58,8 +58,12 @@ const fimMes = (anoMes) => fimDoMes(`${anoMes}-01`);
 
 // Ciclo, trava e meses projetados de um orçamento. Sem trava definida (centro sem histórico), o
 // realizado acaba no mês antes do início do ciclo.
+// Versões da DRE: dentro de uma versão (pedido de Operações, dashboard, MCP…), a trava é o corte dela — o
+// último mês fechado — pra todo orçamento (ciclo que começa depois: o mês antes do início, como sem trava).
 function janela(orc) {
-  const trava = orc.trava || somarMeses(orc.ciclo_inicio, -1);
+  const corte = pool.contextoAtual()?.corte?.slice(0, 7) || null;
+  const antesDoCiclo = somarMeses(orc.ciclo_inicio, -1);
+  const trava = corte ? (antesDoCiclo > corte ? antesDoCiclo : corte) : orc.trava || antesDoCiclo;
   const inicioProjecao = somarMeses(trava, 1);
   return {
     cicloInicio: orc.ciclo_inicio,
@@ -531,9 +535,11 @@ async function primeiroMes(empresaId, centroId) {
 // ao atual; `primeiro_mes`: o primeiro lançamento do centro (limite da trava).
 async function historico(empresaId, orc, ateMes = null) {
   const atual = mesAtual();
-  const sugerida = somarMeses(atual, -1);
+  // Dentro de uma versão da DRE, o realizado vai até o corte dela (a trava de todo orçamento).
+  const corte = pool.contextoAtual()?.corte?.slice(0, 7) || null;
+  const sugerida = corte || somarMeses(atual, -1);
   const [primeiro, arvore] = await Promise.all([primeiroMes(empresaId, orc.centro_id), dreMascaras.list(empresaId)]);
-  const ate = /^\d{4}-\d{2}$/.test(ateMes || '') ? ateMes : orc.trava || sugerida;
+  const ate = corte || (/^\d{4}-\d{2}$/.test(ateMes || '') ? ateMes : orc.trava || sugerida);
   const base = { trava_sugerida: sugerida, mes_atual: atual, primeiro_mes: primeiro, ate, arvore };
   if (!primeiro || primeiro > atual || primeiro > ate) return { ...base, tem_historico: false, anos: [], resultado: null };
   const r = await demonstrativo.calcular(empresaId, {

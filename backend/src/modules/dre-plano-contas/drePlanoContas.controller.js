@@ -1,6 +1,15 @@
 const { z } = require('zod');
 const service = require('./drePlanoContas.service');
 const excel = require('./drePlanoContas.excel');
+const c = require('../dre-versoes/carimbo');
+
+// Carimbo (aba Versões): qual plano (Global ou o próprio do centro) e a classificação da conta.
+const nomePlano = async (empresaId, centroId) => (centroId ? `Plano próprio de ${await c.rotuloCentro(empresaId, centroId)}` : 'Plano Global');
+function classificacao(linha, nomes) {
+  if (!linha) return '(vazio)';
+  if (linha.nao_entra) return 'NÃO ENTRA NA DRE';
+  return linha.mascara_id ? c.txt(nomes.get(Number(linha.mascara_id))) : '(vazio)';
+}
 
 const empresaIdSchema = z.coerce.number().int().positive('Empresa inválida.');
 const siengeIdSchema = z.coerce.number().int().positive('Conta inválida.');
@@ -58,7 +67,22 @@ async function update(req, res, next) {
     if ('origem_projecao' in corpo) patch.origem = dados.origem_projecao ?? null;
     if (!Object.keys(patch).length) throw erro(400, 'Nada para alterar.');
     const centroId = centroSchema.parse(corpo.centro);
-    res.json(await service.update(empresaId, siengeId, patch, { centroId }));
+    const antes = (await service.list(empresaId, centroId)).find((x) => String(x.sienge_id) === String(siengeId)) || null;
+    const depois = await service.update(empresaId, siengeId, patch, { centroId });
+    const nomes = await c.nomesMascaras([antes?.mascara_id, depois?.mascara_id]);
+    const partes = [];
+    if (classificacao(antes, nomes) !== classificacao(depois, nomes)) partes.push(`Máscara DRE ${classificacao(antes, nomes)} → ${classificacao(depois, nomes)}`);
+    if ((antes?.origem_projecao || null) !== (depois?.origem_projecao || null)) {
+      const o = c.rotulo('origemProjecao');
+      partes.push(`Origem Projeção ${o(antes?.origem_projecao)} → ${o(depois?.origem_projecao)}`);
+    }
+    if (partes.length) {
+      await c.carimbar(req, {
+        descricao: `${await nomePlano(empresaId, centroId)} › ${await c.rotuloConta(empresaId, siengeId)}: ${partes.join('; ')}.`,
+        detalhes: { centro_id: centroId, sienge_id: siengeId, antes, depois },
+      });
+    }
+    res.json(depois);
   } catch (err) {
     tratar(err, next);
   }
@@ -83,7 +107,14 @@ async function criarVersao(req, res, next) {
       })
       .parse(req.body?.copiar_de);
     if (copiarDe === centroId) throw erro(400, 'Escolha outro plano pra copiar.');
-    res.status(201).json(await service.criarVersao(empresaId, centroId, req.user.id, copiarDe));
+    const r = await service.criarVersao(empresaId, centroId, req.user.id, copiarDe);
+    const origem =
+      copiarDe === 'global' ? 'copiando o Plano Global' : copiarDe === 'branco' ? 'em branco' : `copiando o plano de ${await c.rotuloCentro(empresaId, copiarDe)}`;
+    await c.carimbar(req, {
+      descricao: `Criou o plano próprio de ${await c.rotuloCentro(empresaId, centroId)}, ${origem} (${r.contas_copiadas} contas).`,
+      detalhes: { centro_id: centroId, copiar_de: copiarDe },
+    });
+    res.status(201).json(r);
   } catch (err) {
     tratar(err, next);
   }
@@ -93,7 +124,12 @@ async function excluirVersao(req, res, next) {
   try {
     const empresaId = empresaIdSchema.parse(req.params.empresaId);
     const centroId = z.coerce.number().int().positive('Centro de custo inválido.').parse(req.params.centroId);
-    res.json(await service.excluirVersao(empresaId, centroId));
+    const r = await service.excluirVersao(empresaId, centroId);
+    await c.carimbar(req, {
+      descricao: `Excluiu o plano próprio de ${await c.rotuloCentro(empresaId, centroId)} (o centro volta a seguir o Plano Global).`,
+      detalhes: { centro_id: centroId },
+    });
+    res.json(r);
   } catch (err) {
     tratar(err, next);
   }

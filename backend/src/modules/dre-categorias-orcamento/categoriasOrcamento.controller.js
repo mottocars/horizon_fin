@@ -1,5 +1,6 @@
 const { z } = require('zod');
 const service = require('./categoriasOrcamento.service');
+const c = require('../dre-versoes/carimbo');
 
 const empresaIdSchema = z.coerce.number().int().positive('Empresa inválida.');
 const idSchema = z.coerce.number().int().positive('Categoria inválida.');
@@ -40,7 +41,9 @@ async function create(req, res, next) {
   try {
     const empresaId = empresaIdSchema.parse(req.params.empresaId);
     const { nome } = corpoSchema.parse(req.body);
-    res.status(201).json(await service.create(empresaId, { nome }));
+    const item = await service.create(empresaId, { nome });
+    await c.carimbar(req, { descricao: `Criou a categoria de orçamento ${c.txt(item.nome)}.`, detalhes: { id: item.id } });
+    res.status(201).json(item);
   } catch (err) {
     tratar(err, next);
   }
@@ -51,8 +54,12 @@ async function update(req, res, next) {
     const empresaId = empresaIdSchema.parse(req.params.empresaId);
     const id = idSchema.parse(req.params.id);
     const { nome } = corpoSchema.parse(req.body);
+    const antes = (await service.list(empresaId)).find((x) => Number(x.id) === id);
     const item = await service.update(id, empresaId, { nome });
     if (!item) throw erro(404, 'Categoria não encontrada.');
+    if (antes && antes.nome !== item.nome) {
+      await c.carimbar(req, { descricao: `Renomeou a categoria de orçamento ${c.txt(antes.nome)} para ${c.txt(item.nome)}.`, detalhes: { id } });
+    }
     res.json(item);
   } catch (err) {
     tratar(err, next);
@@ -63,8 +70,10 @@ async function remove(req, res, next) {
   try {
     const empresaId = empresaIdSchema.parse(req.params.empresaId);
     const id = idSchema.parse(req.params.id);
+    const antes = (await service.list(empresaId)).find((x) => Number(x.id) === id);
     const ok = await service.remove(id, empresaId);
     if (!ok) throw erro(404, 'Categoria não encontrada.');
+    await c.carimbar(req, { descricao: `Excluiu a categoria de orçamento ${c.txt(antes?.nome)}.`, detalhes: { id } });
     res.json({ ok: true });
   } catch (err) {
     tratar(err, next);

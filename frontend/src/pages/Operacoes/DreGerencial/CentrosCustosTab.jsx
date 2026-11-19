@@ -2,6 +2,7 @@ import { useCallback, useEffect, useMemo, useState } from 'react';
 import { Building2, Check, GripVertical, Loader2, TriangleAlert } from 'lucide-react';
 import { Indicador } from '../../../components/MascarasArvoreEditor';
 import SearchableSelect from '../../../components/SearchableSelect';
+import { useLeituraDre } from './leituraDre';
 import { listCentrosCustoDre, reordenarCentrosCustoDre, updateCentroCustoDre } from '../../../api/dreCentros.api';
 
 // Mesmas opções do Tipo da aba Centros Custos da DFC (DfcCentrosTab.jsx).
@@ -86,7 +87,9 @@ export default function CentrosCustosTab({ empresaId, search }) {
     }
   }
 
-  const podeArrastar = !search.trim();
+  // Só leitura (versões da DRE): sem arrastar.
+  const { somenteLeitura } = useLeituraDre();
+  const podeArrastar = !search.trim() && !somenteLeitura;
 
   function iniciarArraste(e, siengeId) {
     e.dataTransfer.effectAllowed = 'move';

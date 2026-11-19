@@ -165,7 +165,7 @@ export default function DrePainel({ dashboard, tituloTela, empresaId, onEmpresa,
   }, [dados]);
 
   // A grade da DRE recebe os dados já carregados (não calcula de novo).
-  // Tabela da DRE: com o Fim depois de hoje, a DRE até o Fim (`tabela`: o realizado para em hoje, os meses
+  // Tabela da DRE: com o Fim depois de hoje, a DRE até o Fim (`tabela`: o realizado para no corte da versão publicada, os meses
   // seguintes só com o Projetado); senão, a do período.
   const dadosDre = useMemo(() => (dados ? { arvore: dados.arvore, resultado: dados.tabela || dados.atual } : null), [dados]);
   const ateTabela = dados?.meta.ate_tabela || dados?.meta.ate;
@@ -239,7 +239,7 @@ export default function DrePainel({ dashboard, tituloTela, empresaId, onEmpresa,
               valor={fimMes}
               min={inicioMes}
               onChange={setFimMes}
-              dica="Último mês do período. Depois do mês atual, a tabela da DRE mostra a projeção (o realizado vai até hoje); os demais quadros ficam no realizado."
+              dica="Último mês do período. A DRE é a da última versão salva (Operações › DRE Construtoras › Versões): o realizado vai até o último mês fechado dela; depois, a tabela da DRE mostra a projeção e os demais quadros ficam no realizado."
             />
             <FiltroCentros opcoes={opcoesCentros} valor={marcados} onChange={setMarcados} disabled={!empresaId || !dados} selecionarTodos />
             <div className="acoes">
