@@ -10,6 +10,7 @@ import {
   FilePenLine,
   History,
   House,
+  Info,
   ListTree,
   Loader2,
   Maximize2,
@@ -844,7 +845,15 @@ export default function DreGerencialPage() {
             onSairTelaCheia={() => setProjecoesTelaCheia(false)}
           />
         )}
-        {abaAtiva === 'versoes' && <Card className="min-h-70 rounded-tl-none" />}
+        {abaAtiva === 'versoes' && (
+          <Card className="min-h-70 rounded-tl-none">
+            {/* Regra das versões (pedido do usuário): só as 10 últimas salvas ficam guardadas. */}
+            <p className="flex items-center gap-1.5 text-xs text-gray-500">
+              <Info size={14} className="shrink-0 text-gray-400" />
+              Ficam guardadas só as 10 últimas versões salvas. Ao salvar a 11ª, a mais antiga é apagada.
+            </p>
+          </Card>
+        )}
 
         {abaAtiva === 'plano-de-contas' &&
           (planoAberto ? (
