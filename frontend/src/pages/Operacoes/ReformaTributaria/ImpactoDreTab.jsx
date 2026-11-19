@@ -1,5 +1,5 @@
 import { useEffect, useState } from 'react';
-import { Info, Scale, Settings2, TriangleAlert } from 'lucide-react';
+import { BarChart3, Building2, CalendarRange, Info, Scale, Settings2, TriangleAlert } from 'lucide-react';
 import { getImpactoReforma } from '../../../api/reformaTributaria.api';
 import { mesAno } from '../CronogramasObras/formatos';
 import { pct } from './formatos';
@@ -69,7 +69,7 @@ export default function ImpactoDreTab({ empresaId, centros, ano, recarregar, onO
   const periodo = dados.periodo?.ate ? `De ${mesAno(`${dados.periodo.de}-01`)} a ${mesAno(`${dados.periodo.ate}-01`)}` : 'Sem meses projetados a partir de 2027';
 
   return (
-    <div className={`space-y-5 rounded-card rounded-tl-none bg-white p-5 shadow-card ${carregando ? 'opacity-60' : ''}`}>
+    <div className={`space-y-6 rounded-card rounded-tl-none bg-white p-5 shadow-card ${carregando ? 'opacity-60' : ''}`}>
       {r.configurados === 0 && !semProjecaoNenhuma && (
         <div className="flex flex-wrap items-center gap-2 rounded-lg bg-amber-50 px-3 py-2 text-xs text-amber-700">
           <Settings2 size={14} className="shrink-0" />
@@ -91,6 +91,7 @@ export default function ImpactoDreTab({ empresaId, centros, ano, recarregar, onO
       ) : (
         <>
           <Bloco
+            icone={BarChart3}
             titulo="Demonstração do resultado"
             subtitulo={`${periodo} · projeção da DRE de hoje × com a reforma · ${r.configurados} de ${r.obras} ${r.obras === 1 ? 'obra configurada' : 'obras configuradas'}`}
           >
@@ -98,6 +99,7 @@ export default function ImpactoDreTab({ empresaId, centros, ano, recarregar, onO
           </Bloco>
 
           <Bloco
+            icone={Building2}
             titulo="Por centro de custo"
             subtitulo="Clique num centro para ver só ele. Diferença = lucro com a reforma − lucro da projeção de hoje."
             larguraMinima="min-w-[1080px]"
@@ -169,7 +171,7 @@ export default function ImpactoDreTab({ empresaId, centros, ano, recarregar, onO
           </Bloco>
 
           {dados.por_ano.length > 0 && (
-            <Bloco titulo="Ano a ano" subtitulo="A transição: a CBS entra cheia em 2027 e o IBS sobe de 2029 a 2033. Sempre toda a projeção, nos centros do filtro.">
+            <Bloco icone={CalendarRange} titulo="Ano a ano" subtitulo="A transição: a CBS entra cheia em 2027 e o IBS sobe de 2029 a 2033. Sempre toda a projeção, nos centros do filtro.">
               <Cabecalho
                 colunas={[
                   { rotulo: 'Ano' },

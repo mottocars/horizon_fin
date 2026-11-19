@@ -1,5 +1,5 @@
 import { useEffect, useState } from 'react';
-import { Info, Scale, Settings2, TriangleAlert } from 'lucide-react';
+import { Building2, CalendarRange, Info, Scale, Settings2, TriangleAlert, Wallet } from 'lucide-react';
 import { getImpactoDfcReforma } from '../../../api/reformaTributaria.api';
 import { mesAno } from '../CronogramasObras/formatos';
 import { moeda } from './formatos';
@@ -77,7 +77,7 @@ export default function ImpactoDfcTab({ empresaId, centros, ano, recarregar, onO
   ].join(' · ');
 
   return (
-    <div className={`space-y-5 rounded-card rounded-tl-none bg-white p-5 shadow-card ${carregando ? 'opacity-60' : ''}`}>
+    <div className={`space-y-6 rounded-card rounded-tl-none bg-white p-5 shadow-card ${carregando ? 'opacity-60' : ''}`}>
       {r.configurados === 0 && (
         <div className="flex flex-wrap items-center gap-2 rounded-lg bg-amber-50 px-3 py-2 text-xs text-amber-700">
           <Settings2 size={14} className="shrink-0" />
@@ -98,6 +98,7 @@ export default function ImpactoDfcTab({ empresaId, centros, ano, recarregar, onO
       )}
 
       <Bloco
+        icone={Wallet}
         titulo="Fluxo de caixa"
         subtitulo={`${periodo} · DFC versão ${dados.versao.numero} × com a reforma · ${comoPaga} · ${r.configurados} de ${r.obras} ${
           r.obras === 1 ? 'obra configurada' : 'obras configuradas'
@@ -116,6 +117,7 @@ export default function ImpactoDfcTab({ empresaId, centros, ano, recarregar, onO
 
       {dados.linhas.length > 0 && (
         <Bloco
+          icone={CalendarRange}
           titulo={ano ? `Mês a mês de ${ano}` : 'Ano a ano'}
           subtitulo={ano ? 'O imposto entra no mês em que é pago; o crédito, no mês do pagamento ao fornecedor.' : 'Escolha um ano no Período para ver mês a mês. Saldos no fim de cada ano.'}
           larguraMinima="min-w-[1080px]"
@@ -168,6 +170,7 @@ export default function ImpactoDfcTab({ empresaId, centros, ano, recarregar, onO
       )}
 
       <Bloco
+        icone={Building2}
         titulo="Por centro de custo"
         subtitulo="Clique num centro para ver só ele. Efeito no caixa = imposto e crédito com a reforma − o imposto de hoje."
         larguraMinima="min-w-[1080px]"

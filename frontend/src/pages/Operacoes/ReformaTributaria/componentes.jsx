@@ -1,3 +1,4 @@
+import { Info } from 'lucide-react';
 import { REGIMES } from './formatos';
 
 // Peças comuns das abas Impacto DRE e Impacto DFC, com a identidade visual das tabelas da aba POC do DRE
@@ -40,7 +41,8 @@ export function Diferenca({ d, tipo }) {
   return <span className={cor}>{`${d > 0 ? '+' : '−'}${fmt(Math.abs(d))}`}</span>;
 }
 
-// Cabeçalho no estilo da POC: `colunas` = [{ rotulo, esquerda }] (a primeira fica congelada).
+// Cabeçalho no estilo da POC, numa faixa cinza clara que separa o título do quadro das linhas: `colunas` =
+// [{ rotulo, esquerda }] (a primeira fica congelada).
 export function Cabecalho({ colunas }) {
   return (
     <thead>
@@ -50,8 +52,8 @@ export function Cabecalho({ colunas }) {
             key={c.rotulo}
             className={
               i === 0
-                ? 'sticky left-0 z-10 border-b border-gray-200 bg-white py-1.5 pl-4 pr-3 text-left align-bottom font-semibold'
-                : `border-b border-l border-gray-200 bg-white px-3 py-1.5 align-bottom font-semibold ${c.esquerda ? 'text-left' : 'text-right'}`
+                ? 'sticky left-0 z-10 border-b border-gray-200 bg-gray-50 py-1.5 pl-4 pr-3 text-left align-bottom font-semibold'
+                : `border-b border-l border-gray-200 bg-gray-50 px-3 py-1.5 align-bottom font-semibold ${c.esquerda ? 'text-left' : 'text-right'}`
             }
           >
             {c.rotulo}
@@ -62,20 +64,36 @@ export function Cabecalho({ colunas }) {
   );
 }
 
-// Um quadro: o título e o subtítulo em cima (como a linha de texto da POC) e a tabela com a borda da POC.
+// Um quadro por tabela (mesmo bloco `rounded-xl border` das telas de Operações, ver Cronogramas Obras): o
+// cabeçalho com ícone, título e subtítulo separado por uma linha, a tabela encaixada (sem borda própria —
+// a última linha não repete a borda do quadro) e, opcional, o rodapé numa faixa cinza com a nota.
 // `children` = o <thead> e o <tbody>.
-export function Bloco({ titulo, subtitulo, children, rodape, larguraMinima = 'min-w-[640px]' }) {
+export function Bloco({ titulo, subtitulo, icone: Icone, children, rodape, larguraMinima = 'min-w-[640px]' }) {
   return (
-    <div>
-      <div className="mb-2 flex flex-wrap items-baseline gap-x-2 gap-y-0.5">
-        <h3 className="text-sm font-semibold text-gray-900">{titulo}</h3>
-        {subtitulo && <span className="text-xs text-gray-500">{subtitulo}</span>}
+    <section className="overflow-hidden rounded-xl border border-gray-200 bg-white">
+      <header className="flex items-start gap-3 border-b border-gray-200 px-4 py-3">
+        {Icone && (
+          <span className="flex h-8 w-8 shrink-0 items-center justify-center rounded-lg bg-primary-50 text-primary-600">
+            <Icone size={16} />
+          </span>
+        )}
+        <div className="min-w-0">
+          <h3 className="text-sm font-semibold text-gray-900">{titulo}</h3>
+          {subtitulo && <p className="mt-0.5 text-xs leading-relaxed text-gray-500">{subtitulo}</p>}
+        </div>
+      </header>
+      <div className="overflow-x-auto">
+        <table className={`w-full ${larguraMinima} border-separate border-spacing-0 text-left text-xs [&_tbody_tr:last-child_td]:border-b-0`}>
+          {children}
+        </table>
       </div>
-      <div className="overflow-x-auto rounded-lg border border-gray-200">
-        <table className={`w-full ${larguraMinima} border-separate border-spacing-0 text-left text-xs`}>{children}</table>
-      </div>
-      {rodape && <p className="mt-2 text-xs text-gray-500">{rodape}</p>}
-    </div>
+      {rodape && (
+        <footer className="flex items-start gap-2 border-t border-gray-200 bg-gray-50 px-4 py-2.5 text-xs leading-relaxed text-gray-500">
+          <Info size={13} className="mt-0.5 shrink-0 text-gray-400" />
+          <span>{rodape}</span>
+        </footer>
+      )}
+    </section>
   );
 }
 
