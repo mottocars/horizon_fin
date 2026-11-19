@@ -355,8 +355,8 @@ export default function WorkflowsPage() {
       </div>
 
       {opcoes && (
-        <Modal open={escolhendoModelo} onClose={() => setEscolhendoModelo(false)} title="Novo workflow — escolha um modelo" maxWidthClass="max-w-2xl">
-          <div className="grid gap-3 sm:grid-cols-2">
+        <Modal open={escolhendoModelo} onClose={() => setEscolhendoModelo(false)} title="Novo workflow — escolha um modelo" maxWidthClass="max-w-4xl">
+          <div className="grid gap-3 sm:grid-cols-3">
             {opcoes.modelos.map((m) => {
               const rotulos = m.passos.map((p) => opcoes.gatilhos.find((x) => x.id === p.gatilho)?.rotulo);
               return (

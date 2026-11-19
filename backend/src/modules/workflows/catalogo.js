@@ -57,33 +57,19 @@ const whatsapp = (modo, mensagem, anexar = false) => ({
   mensagem,
 });
 
-// Os modelos que a tela oferece ao criar (pedido do usuário).
+// Os modelos que a tela oferece ao criar (pedido do usuário): um por gatilho, cada um com um tópico só (mais
+// tópicos, se quiser, pelo "Adicionar tópico" do editor).
 const MODELOS = [
   {
     id: 'aprovar-versao-dre',
     nome: 'Pedir aprovação da versão da DRE',
-    descricao:
-      'Versão salva: avisa o Aprovador da Matriz de Alçadas. Reprovada: devolve ao responsável com o motivo. Aprovada: confirma ao responsável.',
+    descricao: 'Quando uma versão da DRE é salva, avisa o Aprovador da Matriz de Alçadas pelo WhatsApp.',
     passos: [
       {
         gatilho: 'DRE_VERSAO_SALVA',
         acao: whatsapp(
           'APROVADOR',
           'Olá, {destinatario}! A versão {versao} da DRE da {empresa} foi salva por {responsavel} (realizado até {realizado_ate}) e está aguardando a sua aprovação.\n\nAprove ou reprove em: {link}'
-        ),
-      },
-      {
-        gatilho: 'DRE_VERSAO_REPROVADA',
-        acao: whatsapp(
-          'RESPONSAVEL',
-          'Olá, {destinatario}. A versão {versao} da DRE da {empresa} foi reprovada por {reprovador}.\n\nMotivo: {motivo}\n\nPara corrigir, edite a última versão e salve de novo: {link}'
-        ),
-      },
-      {
-        gatilho: 'DRE_VERSAO_APROVADA',
-        acao: whatsapp(
-          'RESPONSAVEL',
-          'Olá, {destinatario}! A versão {versao} da DRE da {empresa} foi aprovada por {aprovador} e já está publicada nos dashboards.\n\n{link}'
         ),
       },
     ],
@@ -95,13 +81,25 @@ const MODELOS = [
     passos: [
       {
         gatilho: 'DRE_VERSAO_APROVADA',
-        acao: {
-          ...whatsapp(
-            'USUARIOS',
-            'Olá, {destinatario}! Está disponível a versão {versao} da DRE da {empresa}, aprovada por {aprovador} (realizado até {realizado_ate}).\n\nVeja no dashboard: {link}',
-            true
-          ),
-        },
+        acao: whatsapp(
+          'USUARIOS',
+          'Olá, {destinatario}! Está disponível a versão {versao} da DRE da {empresa}, aprovada por {aprovador} (realizado até {realizado_ate}).\n\nVeja no dashboard: {link}',
+          true
+        ),
+      },
+    ],
+  },
+  {
+    id: 'reprovacao-versao-dre',
+    nome: 'Avisar reprovação da versão da DRE',
+    descricao: 'Quando o Aprovador reprova a versão da DRE, devolve ao responsável (quem salvou) pelo WhatsApp, com o motivo.',
+    passos: [
+      {
+        gatilho: 'DRE_VERSAO_REPROVADA',
+        acao: whatsapp(
+          'RESPONSAVEL',
+          'Olá, {destinatario}. A versão {versao} da DRE da {empresa} foi reprovada por {reprovador}.\n\nMotivo: {motivo}\n\nPara corrigir, edite a última versão e salve de novo: {link}'
+        ),
       },
     ],
   },
