@@ -351,6 +351,10 @@ async function salvar(empresaId, usuarioId) {
     return { numero: v.numero, removidas: removidas.map((x) => x.numero), aguardando: aprovador ? aprovador.nome : null };
   });
   removidas.forEach((x) => pool.descartarCaminhos(x.foto_config));
+  // Workflows (Operações › Workflows): versão salva; sem Aprovador, ela já foi publicada — versão aprovada também.
+  const workflows = require('../workflows/workflows.service');
+  workflows.disparar(empresaId, 'DRE_VERSAO_SALVA', { versao: r.numero, usuario_id: usuarioId });
+  if (!r.aguardando) workflows.disparar(empresaId, 'DRE_VERSAO_APROVADA', { versao: r.numero, usuario_id: usuarioId });
   return { ...r, ...(await listar(empresaId, usuarioId)) };
 }
 
@@ -371,6 +375,8 @@ async function aprovar(empresaId, usuarioId) {
     });
     return { numero: v.numero };
   });
+  // Workflows (Operações › Workflows): versão aprovada (a nova publicada).
+  require('../workflows/workflows.service').disparar(empresaId, 'DRE_VERSAO_APROVADA', { versao: r.numero, usuario_id: usuarioId });
   return { ...r, ...(await listar(empresaId, usuarioId)) };
 }
 

@@ -44,6 +44,7 @@ export const TELAS_SISTEMA = [
       { codigo: '/operacoes/repasses-cef', label: 'Repasses CEF' },
       { codigo: '/operacoes/gestao-de-cobrancas', label: 'Gestão de Cobranças' },
       { codigo: '/operacoes/cronogramas-obras', label: 'Cronogramas Obras' },
+      { codigo: '/operacoes/workflows', label: 'Workflows' },
     ],
   },
   {

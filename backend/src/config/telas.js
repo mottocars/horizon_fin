@@ -19,6 +19,7 @@ module.exports = {
   MATRIZ_ALCADAS: '/cadastros/matriz-alcadas',
 
   DRE: '/operacoes/dre-gerencial',
+  WORKFLOWS: '/operacoes/workflows',
   DFC: '/operacoes/dfc-construtoras',
   ESPIAO: '/operacoes/espiao-nfe-nfse',
   SALDOS: '/operacoes/saldo-contas-bancarias',

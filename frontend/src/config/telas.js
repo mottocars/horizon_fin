@@ -20,6 +20,7 @@ export const TELAS_SISTEMA = {
   '/operacoes/repasses-cef': { title: 'Repasses CEF', subtitle: 'Operações — Repasses CEF' },
   '/operacoes/gestao-de-cobrancas': { title: 'Gestão de Cobranças', subtitle: 'Operações — Gestão de Cobranças' },
   '/operacoes/cronogramas-obras': { title: 'Cronogramas Obras', subtitle: 'Operações — Cronogramas Obras' },
+  '/operacoes/workflows': { title: 'Workflows', subtitle: 'Operações — Automações: quando acontecer algo, o sistema faz' },
   '/operacoes/reforma-tributaria': { title: 'Reforma Tributária', subtitle: 'Operações — Reforma Tributária' },
   '/cadastros/empresas': { title: 'Empresas', subtitle: 'Cadastros — Empresas' },
   '/cadastros/usuarios': { title: 'Usuários', subtitle: 'Cadastros — Usuários' },

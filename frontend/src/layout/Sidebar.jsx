@@ -33,6 +33,7 @@ import {
   ChartGantt,
   Handshake,
   Scale,
+  Workflow,
   ArrowDownUp,
   ClipboardList,
   Megaphone,
@@ -85,6 +86,7 @@ const menuItems = [
       { label: 'Repasses CEF', to: '/operacoes/repasses-cef', icon: Banknote },
       { label: 'Gestão de Cobranças', to: '/operacoes/gestao-de-cobrancas', icon: ReceiptText },
       { label: 'Cronogramas Obras', to: '/operacoes/cronogramas-obras', icon: ChartGantt },
+      { label: 'Workflows', to: '/operacoes/workflows', icon: Workflow },
     ],
   },
   // Sem submenu: abre o hub com um card por integração (pages/Integracoes/IntegracoesHub.jsx).
