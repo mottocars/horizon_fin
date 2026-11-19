@@ -37,6 +37,7 @@ import { listCentrosCustoDre } from '../../../api/dreCentros.api';
 import { nomeExibicaoEmpresa } from '../../../utils/empresa';
 import { useEmpresaTravada } from '../../../hooks/useEmpresaTravada';
 import { useConfirm } from '../../../confirm/ConfirmContext';
+import { useSidebar } from '../../../layout/SidebarContext';
 import OrcamentoTab from './OrcamentoTab';
 import MascarasTab from './MascarasTab';
 import PlanoDeContasTab from './PlanoDeContasTab';
@@ -100,6 +101,8 @@ function ultimoDiaDoMes(anoMes) {
 export default function DreGerencialPage() {
   const { travada: empresaTravada, empresaIdTravada } = useEmpresaTravada();
   const [searchParams, setSearchParams] = useSearchParams();
+  // Com o menu lateral aberto as abas ficam sem ícone (pedido do usuário — falta espaço pras 11 abas).
+  const { menuAberto } = useSidebar();
 
   const empresaId = searchParams.get('empresa_id') || '';
   // Links antigos: a aba Categorias Orçamento (que saiu) abre a Orçamento, onde elas agora ficam; a
@@ -772,7 +775,7 @@ export default function DreGerencialPage() {
       </Card>
 
       <div>
-        <Tabs tabs={TABS} activeId={abaAtiva} onChange={(aba) => atualizarParams({ aba })} />
+        <Tabs tabs={TABS} activeId={abaAtiva} onChange={(aba) => atualizarParams({ aba })} semIcones={menuAberto} />
 
         {abaAtiva === 'dre' && (
           <DreTab

@@ -107,11 +107,11 @@ const menuItems = [
 export default function Sidebar() {
   const location = useLocation();
   const { user } = useAuth();
-  const { forceCollapsed } = useSidebar();
-  const { instalados, chegando } = useAplicativosInstalados();
   // Abre só com clique (passar o mouse por cima não abre mais — incomodava, pedido do usuário) e
-  // fecha sozinho assim que o mouse sai. Nenhum estado "fixado".
-  const [expandido, setExpandido] = useState(false);
+  // fecha sozinho assim que o mouse sai. Nenhum estado "fixado". O estado fica no SidebarContext pra
+  // as telas saberem quando o menu está aberto.
+  const { forceCollapsed, expandido, setExpandido } = useSidebar();
+  const { instalados, chegando } = useAplicativosInstalados();
   const collapsed = forceCollapsed || !expandido;
 
   const [openGroups, setOpenGroups] = useState(() => {

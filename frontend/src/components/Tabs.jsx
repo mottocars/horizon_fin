@@ -27,7 +27,8 @@ function Divisor() {
   return <span aria-hidden="true" className="mx-1 h-5 w-px shrink-0 self-center bg-gray-400" />;
 }
 
-export default function Tabs({ tabs, activeId, onChange, className = '' }) {
+// `semIcones`: esconde os ícones de todas as abas (ex.: DRE Construtoras com o menu lateral aberto).
+export default function Tabs({ tabs, activeId, onChange, className = '', semIcones = false }) {
   return (
     // A barra nunca passa da largura do painel de baixo (ex.: com o menu lateral aberto). Cada aba
     // pode encolher até a palavra mais longa dela: as de duas palavras ("Centros Custos", "Plano
@@ -76,7 +77,7 @@ export default function Tabs({ tabs, activeId, onChange, className = '' }) {
                 (ex.: cada estado de nota no Espião NFe/NFSe com sua cor),
                 em vez do padrão "azul quando ativa, cinza quando não" — a
                 cor fica só no ícone, o resto da aba continua neutro. */}
-            {Icon && (
+            {Icon && !semIcones && (
               <Icon
                 size={14}
                 className={`shrink-0 @max-[56rem]:hidden ${tab.iconColorClass ?? (active ? 'text-primary-600' : tab.disabled ? 'text-gray-300' : 'text-gray-400')}`}

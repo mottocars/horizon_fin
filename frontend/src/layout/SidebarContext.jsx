@@ -8,15 +8,20 @@ const SidebarContext = createContext(null);
 // forçado e temporário usado por telas que precisam de mais espaço
 // horizontal (ex.: painel de filtro do Espião NFe/NFSe), que impede a
 // expansão enquanto ativo.
+// `expandido` (aberto pelo clique) mora aqui, e não dentro do Sidebar, pra as telas saberem quando o
+// menu está aberto (`menuAberto`) — ex.: a DRE Construtoras tira os ícones das abas nesse momento.
 export function SidebarProvider({ children }) {
   const [forceCollapsed, setForceCollapsed] = useState(false);
+  const [expandido, setExpandido] = useState(false);
 
   const collapseTemporarily = useCallback(() => setForceCollapsed(true), []);
   const restoreCollapse = useCallback(() => setForceCollapsed(false), []);
 
+  const menuAberto = expandido && !forceCollapsed;
+
   const value = useMemo(
-    () => ({ forceCollapsed, collapseTemporarily, restoreCollapse }),
-    [forceCollapsed, collapseTemporarily, restoreCollapse]
+    () => ({ forceCollapsed, collapseTemporarily, restoreCollapse, expandido, setExpandido, menuAberto }),
+    [forceCollapsed, collapseTemporarily, restoreCollapse, expandido, menuAberto]
   );
 
   return <SidebarContext.Provider value={value}>{children}</SidebarContext.Provider>;
