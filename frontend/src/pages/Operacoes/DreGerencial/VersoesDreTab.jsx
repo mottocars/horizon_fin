@@ -30,6 +30,7 @@ function Situacao({ v, publicada, pendente }) {
   const pilula = (cor, texto) => <span className={`rounded-full px-2 py-0.5 text-[11px] font-medium ${cor}`}>{texto}</span>;
   if (v.status === 'ABERTA') return pilula('bg-amber-50 text-amber-700', 'Em edição');
   if (pendente) return pilula('bg-sky-50 text-sky-700', 'Aguardando aprovação');
+  if (v.reprovada_em) return pilula('bg-red-50 text-red-700', 'Reprovada');
   if (publicada) return pilula('bg-emerald-50 text-emerald-700', 'Publicada');
   if (v.aprovada_em) return pilula('bg-gray-100 text-gray-600', 'Aprovada');
   return pilula('bg-gray-100 text-gray-400', 'Não aprovada');
@@ -200,7 +201,7 @@ export default function VersoesDreTab({ empresaId, estado, erro, versaoVisualiza
                 <th className="py-2.5 pr-3 font-medium">Realizado até</th>
                 <th className="py-2.5 pr-3 font-medium">Aberta</th>
                 <th className="py-2.5 pr-3 font-medium">Salva</th>
-                <th className="py-2.5 pr-3 font-medium">Aprovada</th>
+                <th className="py-2.5 pr-3 font-medium">Aprovação</th>
                 <th className="py-2.5 pr-3 font-medium">Alterações</th>
                 <th className="py-2.5 pr-3 text-right font-medium">Visualizar</th>
               </tr>
@@ -253,6 +254,12 @@ export default function VersoesDreTab({ empresaId, estado, erro, versaoVisualiza
                           <>
                             <span className="block tabular-nums text-gray-800">{quando(v.aprovada_em)}</span>
                             {v.aprovada_por_nome && <span className="text-gray-400">por {v.aprovada_por_nome}</span>}
+                          </>
+                        ) : v.reprovada_em ? (
+                          <>
+                            <span className="block font-medium text-red-700">reprovada em {quando(v.reprovada_em)}</span>
+                            {v.reprovada_por_nome && <span className="text-gray-400">por {v.reprovada_por_nome}</span>}
+                            {v.reprovacao_motivo && <span className="mt-0.5 block max-w-xs italic text-gray-500">“{v.reprovacao_motivo}”</span>}
                           </>
                         ) : v.id === pendenteId ? (
                           <span className="text-sky-700">aguardando {estado?.aprovador?.nome || 'o aprovador'}</span>

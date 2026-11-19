@@ -6,10 +6,10 @@ const saldosService = require('../saldo-contas-bancarias/saldos.service');
 const matriz = require('../matriz-alcadas/matrizAlcadas.service');
 const { GATILHOS, DESTINATARIOS, MODELOS } = require('./catalogo');
 
-// Operações > Workflows (database/migrations/2026-11-19-workflows.sql): por empresa, automações GATILHO → AÇÃO.
-// Quem gera o evento chama `disparar(empresaId, gatilho, contexto)` DEPOIS de concluir (não espera: roda em
-// segundo plano); cada workflow ativo daquele gatilho roda e grava uma execução (workflow_execucoes) com o
-// resultado por destinatário. A ação de hoje: WhatsApp pela conexão Z-API escolhida, com a mensagem digitada
+// Operações > Workflows (database/migrations/2026-11-19-workflows.sql e -dre-reprovacao-workflow-topicos.sql): por
+// empresa, automações com TÓPICOS (passos) GATILHO → AÇÃO. Quem gera o evento chama `disparar(empresaId, gatilho,
+// contexto)` DEPOIS de concluir (não espera: roda em segundo plano); cada tópico daquele gatilho, dos workflows
+// ativos, roda e grava uma execução (workflow_execucoes, com o índice do tópico) com o resultado por destinatário. A ação de hoje: WhatsApp pela conexão Z-API escolhida, com a mensagem digitada
 // (variáveis {chave} trocadas por destinatário) e, se pedido, o Excel de auditoria da DRE da versão anexo.
 
 const db = pool.base;
@@ -52,48 +52,53 @@ async function opcoes(empresaId) {
 
 async function listar(empresaId) {
   const { rows } = await db.query(
-    `SELECT w.id, w.nome, w.gatilho, w.ativo, w.acao, w.criado_em, w.atualizado_em, c.nome AS criado_por, a.nome AS atualizado_por,
-            z.nome_conexao AS conexao,
-            (SELECT row_to_json(e) FROM (SELECT x.status, x.iniciado_em, x.resultado FROM workflow_execucoes x
+    `SELECT w.id, w.nome, w.passos, w.ativo, w.criado_em, w.atualizado_em, c.nome AS criado_por, a.nome AS atualizado_por,
+            (SELECT row_to_json(e) FROM (SELECT x.status, x.iniciado_em, x.resultado, x.passo, x.gatilho FROM workflow_execucoes x
                                           WHERE x.workflow_id = w.id ORDER BY x.iniciado_em DESC LIMIT 1) e) AS ultima_execucao
        FROM workflows w
        LEFT JOIN usuarios c ON c.id = w.criado_por
        LEFT JOIN usuarios a ON a.id = w.atualizado_por
-       LEFT JOIN integracoes_zapi z ON z.id = (w.acao->>'conexao_id')::int
       WHERE w.empresa_id = $1
       ORDER BY w.nome`,
     [empresaId]
   );
-  const ids = [...new Set(rows.flatMap((w) => w.acao?.destinatarios?.usuarios || []))];
-  const { rows: us } = ids.length ? await db.query('SELECT id, nome FROM usuarios WHERE id = ANY($1::int[])', [ids]) : { rows: [] };
+  const ids = [...new Set(rows.flatMap((w) => w.passos.flatMap((p) => p.acao?.destinatarios?.usuarios || [])))];
+  const [{ rows: us }, conexoes] = await Promise.all([
+    ids.length ? db.query('SELECT id, nome FROM usuarios WHERE id = ANY($1::int[])', [ids]) : { rows: [] },
+    db.query('SELECT id, nome_conexao AS nome FROM integracoes_zapi WHERE empresa_id = $1', [empresaId]).then((r) => r.rows),
+  ]);
   const nome = new Map(us.map((u) => [u.id, u.nome]));
+  const conexao = new Map(conexoes.map((c) => [c.id, c.nome]));
   return rows.map((w) => ({
     ...w,
-    gatilho_rotulo: GATILHOS[w.gatilho]?.rotulo || w.gatilho,
-    destinatarios_nomes: (w.acao?.destinatarios?.usuarios || []).map((id) => nome.get(id)).filter(Boolean),
+    passos: w.passos.map((p) => ({
+      ...p,
+      gatilho_rotulo: GATILHOS[p.gatilho]?.rotulo || p.gatilho,
+      conexao: conexao.get(Number(p.acao?.conexao_id)) || null,
+      destinatarios_nomes: (p.acao?.destinatarios?.usuarios || []).map((id) => nome.get(id)).filter(Boolean),
+    })),
   }));
 }
 
-// Confere e normaliza o que vem da tela.
-async function validar(empresaId, { nome, gatilho, acao }) {
-  if (!String(nome || '').trim()) throw erro(400, 'Dê um nome ao workflow.');
-  if (!GATILHOS[gatilho]) throw erro(400, 'Escolha o gatilho.');
-  if (!acao || acao.tipo !== 'WHATSAPP') throw erro(400, 'Ação inválida.');
+// Confere e normaliza um tópico (gatilho + ação) que vem da tela; `n` = o número dele (pras mensagens).
+async function validarPasso(empresaId, passo, n, cache) {
+  const onde = `Tópico ${n}: `;
+  const { gatilho, acao } = passo || {};
+  if (!GATILHOS[gatilho]) throw erro(400, `${onde}escolha o gatilho.`);
+  if (!acao || acao.tipo !== 'WHATSAPP') throw erro(400, `${onde}ação inválida.`);
   const conexaoId = Number(acao.conexao_id) || null;
-  if (!conexaoId) throw erro(400, 'Escolha a conexão de WhatsApp (Z-API) que vai enviar.');
-  if (!(await conexoesZapi(empresaId)).some((c) => c.id === conexaoId)) throw erro(400, 'A conexão escolhida não é desta empresa ou está inativa.');
+  if (!conexaoId) throw erro(400, `${onde}escolha a conexão de WhatsApp (Z-API) que vai enviar.`);
+  if (!cache.conexoes.some((c) => c.id === conexaoId)) throw erro(400, `${onde}a conexão escolhida não é desta empresa ou está inativa.`);
   const modo = acao.destinatarios?.modo;
-  if (!DESTINATARIOS[modo]) throw erro(400, 'Escolha quem recebe.');
+  if (!DESTINATARIOS[modo]) throw erro(400, `${onde}escolha quem recebe.`);
   let usuarios = [];
   if (modo === 'USUARIOS') {
     usuarios = [...new Set((acao.destinatarios.usuarios || []).map(Number).filter(Boolean))];
-    if (!usuarios.length) throw erro(400, 'Escolha ao menos um usuário para receber.');
-    const validos = new Set((await saldosService.listUsuariosElegiveisComunicar(empresaId)).map((u) => u.id));
-    if (usuarios.some((id) => !validos.has(id))) throw erro(400, 'Há usuário escolhido sem acesso a esta empresa.');
+    if (!usuarios.length) throw erro(400, `${onde}escolha ao menos um usuário para receber.`);
+    if (usuarios.some((id) => !cache.usuarios.has(id))) throw erro(400, `${onde}há usuário escolhido sem acesso a esta empresa.`);
   }
-  if (!String(acao.mensagem || '').trim()) throw erro(400, 'Escreva a mensagem.');
+  if (!String(acao.mensagem || '').trim()) throw erro(400, `${onde}escreva a mensagem.`);
   return {
-    nome: String(nome).trim().slice(0, 120),
     gatilho,
     acao: {
       tipo: 'WHATSAPP',
@@ -105,13 +110,26 @@ async function validar(empresaId, { nome, gatilho, acao }) {
   };
 }
 
+async function validar(empresaId, { nome, passos }) {
+  if (!String(nome || '').trim()) throw erro(400, 'Dê um nome ao workflow.');
+  if (!Array.isArray(passos) || !passos.length) throw erro(400, 'Inclua ao menos um tópico.');
+  if (passos.length > 20) throw erro(400, 'No máximo 20 tópicos por workflow.');
+  const cache = {
+    conexoes: await conexoesZapi(empresaId),
+    usuarios: new Set((await saldosService.listUsuariosElegiveisComunicar(empresaId)).map((u) => u.id)),
+  };
+  const normalizados = [];
+  for (let i = 0; i < passos.length; i += 1) normalizados.push(await validarPasso(empresaId, passos[i], i + 1, cache));
+  return { nome: String(nome).trim().slice(0, 120), passos: normalizados };
+}
+
 async function criar(empresaId, dados, usuarioId) {
   const w = await validar(empresaId, dados);
   const agora = new Date();
   const { rows } = await db.query(
-    `INSERT INTO workflows (empresa_id, nome, gatilho, ativo, acao, criado_por, criado_em, atualizado_por, atualizado_em)
-     VALUES ($1, $2, $3, TRUE, $4, $5, $6, $5, $6) RETURNING id`,
-    [empresaId, w.nome, w.gatilho, w.acao, usuarioId, agora]
+    `INSERT INTO workflows (empresa_id, nome, passos, ativo, criado_por, criado_em, atualizado_por, atualizado_em)
+     VALUES ($1, $2, $3, TRUE, $4, $5, $4, $5) RETURNING id`,
+    [empresaId, w.nome, JSON.stringify(w.passos), usuarioId, agora]
   );
   return { id: rows[0].id, workflows: await listar(empresaId) };
 }
@@ -119,8 +137,8 @@ async function criar(empresaId, dados, usuarioId) {
 async function atualizar(empresaId, id, dados, usuarioId) {
   const w = await validar(empresaId, dados);
   const { rowCount } = await db.query(
-    `UPDATE workflows SET nome = $3, gatilho = $4, acao = $5, atualizado_por = $6, atualizado_em = $7 WHERE empresa_id = $1 AND id = $2`,
-    [empresaId, id, w.nome, w.gatilho, w.acao, usuarioId, new Date()]
+    `UPDATE workflows SET nome = $3, passos = $4, atualizado_por = $5, atualizado_em = $6 WHERE empresa_id = $1 AND id = $2`,
+    [empresaId, id, w.nome, JSON.stringify(w.passos), usuarioId, new Date()]
   );
   if (!rowCount) throw erro(404, 'Workflow não encontrado.');
   return { workflows: await listar(empresaId) };
@@ -146,7 +164,7 @@ async function excluir(empresaId, id) {
 
 async function execucoes(empresaId, { limite = 100 } = {}) {
   const { rows } = await db.query(
-    `SELECT x.id, x.workflow_id, w.nome AS workflow, x.gatilho, x.contexto, x.status, x.resultado, x.iniciado_em, x.concluido_em
+    `SELECT x.id, x.workflow_id, w.nome AS workflow, x.passo, x.gatilho, x.contexto, x.status, x.resultado, x.iniciado_em, x.concluido_em
        FROM workflow_execucoes x JOIN workflows w ON w.id = x.workflow_id
       WHERE x.empresa_id = $1 ORDER BY x.iniciado_em DESC LIMIT $2`,
     [empresaId, limite]
@@ -159,7 +177,8 @@ async function execucoes(empresaId, { limite = 100 } = {}) {
 // O evento da DRE: a versão (`contexto.versao` = número) e os valores das variáveis.
 async function dadosDaDre(empresaId, gatilho, contexto) {
   const { rows } = await db.query(
-    `SELECT numero, to_char(corte, 'YYYY-MM-DD') AS corte, fechada_por, fechada_por_nome, aprovada_por_nome
+    `SELECT numero, to_char(corte, 'YYYY-MM-DD') AS corte, fechada_por, fechada_por_nome, aprovada_por_nome, reprovada_por_nome,
+            reprovacao_motivo
        FROM dre_versoes WHERE empresa_id = $1 AND numero = $2`,
     [empresaId, contexto.versao]
   );
@@ -176,6 +195,8 @@ async function dadosDaDre(empresaId, gatilho, contexto) {
       responsavel: v.fechada_por_nome || '',
       aprovador: v.aprovada_por_nome || aprovador?.nome || '',
       data: dataHora(contexto.em || new Date()),
+      motivo: v.reprovacao_motivo || '',
+      reprovador: v.reprovada_por_nome || '',
       link: GATILHOS[gatilho].link(env.frontendUrl.replace(/\/+$/, ''), empresaId),
     },
   };
@@ -192,23 +213,27 @@ async function excelDaDre(empresaId, numero, corte, usuarioId) {
   );
 }
 
-async function executar(w, gatilho, contexto) {
+async function executar(w, indice, gatilho, contexto) {
   const iniciado = new Date();
   const { rows } = await db.query(
-    `INSERT INTO workflow_execucoes (workflow_id, empresa_id, gatilho, contexto, status, iniciado_em) VALUES ($1, $2, $3, $4, 'EXECUTANDO', $5) RETURNING id`,
-    [w.id, w.empresa_id, gatilho, contexto, iniciado]
+    `INSERT INTO workflow_execucoes (workflow_id, empresa_id, passo, gatilho, contexto, status, iniciado_em)
+     VALUES ($1, $2, $3, $4, $5, 'EXECUTANDO', $6) RETURNING id`,
+    [w.id, w.empresa_id, indice, gatilho, contexto, iniciado]
   );
   const execId = rows[0].id;
   const terminar = (status, resultado) =>
     db.query('UPDATE workflow_execucoes SET status = $2, resultado = $3, concluido_em = $4 WHERE id = $1', [execId, status, resultado, new Date()]);
   try {
-    const { acao } = w;
+    const { acao } = w.passos[indice];
     const d = await dadosDaDre(w.empresa_id, gatilho, contexto);
     // Quem recebe.
     let ids = [];
     if (acao.destinatarios.modo === 'APROVADOR') {
       if (!d.aprovador) return terminar('IGNORADO', { motivo: 'A empresa não tem Aprovador da DRE na Matriz de Alçadas.', enviados: [], falhas: [] });
       ids = [d.aprovador.id];
+    } else if (acao.destinatarios.modo === 'RESPONSAVEL') {
+      if (!d.versao.fechada_por) return terminar('IGNORADO', { motivo: 'A versão não tem um usuário responsável (foi salva pelo sistema).', enviados: [], falhas: [] });
+      ids = [d.versao.fechada_por];
     } else ids = acao.destinatarios.usuarios || [];
     const { rows: us } = ids.length
       ? await db.query('SELECT id, nome, telefone_ddd, telefone_numero FROM usuarios WHERE id = ANY($1::int[]) AND ativo', [ids])
@@ -258,8 +283,12 @@ function disparar(empresaId, gatilho, contexto = {}) {
   const ctx = { ...contexto, em: contexto.em || new Date().toISOString() };
   setImmediate(async () => {
     try {
-      const { rows } = await db.query('SELECT * FROM workflows WHERE empresa_id = $1 AND gatilho = $2 AND ativo', [empresaId, gatilho]);
-      for (const w of rows) await executar(w, gatilho, ctx);
+      const { rows } = await db.query('SELECT * FROM workflows WHERE empresa_id = $1 AND ativo ORDER BY id', [empresaId]);
+      for (const w of rows) {
+        for (let i = 0; i < w.passos.length; i += 1) {
+          if (w.passos[i].gatilho === gatilho) await executar(w, i, gatilho, ctx);
+        }
+      }
     } catch (e) {
       console.error(`[workflows] disparar ${gatilho} (empresa ${empresaId}):`, e.message);
     }

@@ -16,7 +16,8 @@ const matriz = require('../matriz-alcadas/matrizAlcadas.service');
 //   - A primeira versão (INICIAL) é criada já salva, com o estado do dia, no primeiro acesso à DRE.
 //   - Aprovação (Cadastros › Matriz de Alçadas › DRE › Aprovador): a versão salva fica aguardando o Aprovador;
 //     só a última salva pode ser aprovada, e a PUBLICADA (dashboard, MCP, Excel do dashboard, Reforma
-//     Tributária) é a última aprovada. Sem Aprovador na matriz, a versão é publicada ao salvar.
+//     Tributária) é a última aprovada. Sem Aprovador na matriz, a versão é publicada ao salvar. O Aprovador também
+//     pode REPROVAR a última salva (com o motivo): ela não é publicada e, pra corrigir, edita-se a última versão.
 // Tudo aqui roda no pool base (public), fora de qualquer contexto de versão.
 
 const db = pool.base;
@@ -42,7 +43,7 @@ const dataBR = (d) => new Date(d).toLocaleString('pt-BR', { timeZone: 'America/S
 
 const COLS = `id, empresa_id, numero, status, origem, to_char(corte, 'YYYY-MM-DD') AS corte, base_id, foto_realizado,
   foto_config, aberta_por, aberta_por_nome, aberta_em, fechada_por, fechada_por_nome, fechada_em, aprovada_por,
-  aprovada_por_nome, aprovada_em`;
+  aprovada_por_nome, aprovada_em, reprovada_por, reprovada_por_nome, reprovada_em, reprovacao_motivo`;
 
 // A publicada: a última salva E aprovada (sem nenhuma aprovada, a última salva).
 const publicadaDe = (vs) => vs.find((v) => v.status === 'FECHADA' && v.aprovada_em) || vs.find((v) => v.status === 'FECHADA');
@@ -366,7 +367,7 @@ async function aprovar(empresaId, usuarioId) {
   const nome = await nomeDe(usuarioId);
   const r = await transacao(empresaId, async (c) => {
     const v = (await versoesDa(empresaId, c)).find((x) => x.status === 'FECHADA');
-    if (!v || v.aprovada_em) throw erro(409, 'Não há versão aguardando aprovação (só a última versão salva pode ser aprovada).');
+    if (!v || v.aprovada_em || v.reprovada_em) throw erro(409, 'Não há versão aguardando aprovação (só a última versão salva pode ser aprovada).');
     await c.query('UPDATE dre_versoes SET aprovada_por = $2, aprovada_por_nome = $3, aprovada_em = $4 WHERE id = $1', [v.id, usuarioId, nome, new Date()]);
     await registrarEvento(c, v.id, {
       usuarioId,
@@ -377,6 +378,30 @@ async function aprovar(empresaId, usuarioId) {
   });
   // Workflows (Operações › Workflows): versão aprovada (a nova publicada).
   require('../workflows/workflows.service').disparar(empresaId, 'DRE_VERSAO_APROVADA', { versao: r.numero, usuario_id: usuarioId });
+  return { ...r, ...(await listar(empresaId, usuarioId)) };
+}
+
+// Reprova a última versão salva (só o Aprovador da DRE na Matriz de Alçadas), com o motivo: ela não é publicada
+// (os dashboards seguem na publicada) e, pra corrigir, o responsável edita a última versão e salva de novo.
+async function reprovar(empresaId, usuarioId, motivo) {
+  const texto = String(motivo || '').trim();
+  if (!texto) throw erro(400, 'Escreva o motivo da reprovação.');
+  const aprovador = await matriz.usuarioDo(empresaId, 'DRE', 'APROVADOR');
+  if (!aprovador) throw erro(400, 'A empresa não tem Aprovador da DRE na Matriz de Alçadas (Cadastros).');
+  if (aprovador.id !== usuarioId) throw erro(403, `Só ${aprovador.nome} (Aprovador da DRE na Matriz de Alçadas) pode reprovar a versão.`);
+  const nome = await nomeDe(usuarioId);
+  const r = await transacao(empresaId, async (c) => {
+    const v = (await versoesDa(empresaId, c)).find((x) => x.status === 'FECHADA');
+    if (!v || v.aprovada_em || v.reprovada_em) throw erro(409, 'Não há versão aguardando aprovação (só a última versão salva pode ser reprovada).');
+    await c.query(
+      'UPDATE dre_versoes SET reprovada_por = $2, reprovada_por_nome = $3, reprovada_em = $4, reprovacao_motivo = $5 WHERE id = $1',
+      [v.id, usuarioId, nome, new Date(), texto.slice(0, 2000)]
+    );
+    await registrarEvento(c, v.id, { usuarioId, usuarioNome: nome, descricao: `Reprovou a versão ${v.numero}: ${texto.slice(0, 2000)}` });
+    return { numero: v.numero };
+  });
+  // Workflows (Operações › Workflows): versão reprovada (ex.: avisar o responsável com o motivo).
+  require('../workflows/workflows.service').disparar(empresaId, 'DRE_VERSAO_REPROVADA', { versao: r.numero, usuario_id: usuarioId });
   return { ...r, ...(await listar(empresaId, usuarioId)) };
 }
 
@@ -410,7 +435,7 @@ async function listar(empresaId, usuarioId = null) {
   const { rows } = await db.query(
     `SELECT v.id, v.numero, v.status, v.origem, to_char(v.corte, 'YYYY-MM-DD') AS corte, v.base_id, b.numero AS base_numero,
             v.foto_realizado, v.foto_config, v.aberta_por, v.aberta_por_nome, v.aberta_em, v.fechada_por, v.fechada_por_nome,
-            v.fechada_em, v.aprovada_por, v.aprovada_por_nome, v.aprovada_em,
+            v.fechada_em, v.aprovada_por, v.aprovada_por_nome, v.aprovada_em, v.reprovada_por_nome, v.reprovada_em, v.reprovacao_motivo,
             (SELECT count(*)::int FROM dre_versao_alteracoes a WHERE a.versao_id = v.id) AS alteracoes
        FROM dre_versoes v LEFT JOIN dre_versoes b ON b.id = v.base_id
       WHERE v.empresa_id = $1 ORDER BY v.numero DESC`,
@@ -423,7 +448,9 @@ async function listar(empresaId, usuarioId = null) {
     }))
   );
   const ultimaSalva = versoes.find((v) => v.status === 'FECHADA') || null;
-  const pendente = ultimaSalva && !ultimaSalva.aprovada_em ? ultimaSalva : null;
+  const pendente = ultimaSalva && !ultimaSalva.aprovada_em && !ultimaSalva.reprovada_em ? ultimaSalva : null;
+  // A última salva foi reprovada (e ainda não há outra): o aviso do topo e o "corrigir" do responsável.
+  const reprovada = ultimaSalva && ultimaSalva.reprovada_em && !versoes.some((v) => v.status === 'ABERTA') ? ultimaSalva : null;
   const aprovador = await matriz.usuarioDo(empresaId, 'DRE', 'APROVADOR');
   return {
     limite: LIMITE,
@@ -431,6 +458,7 @@ async function listar(empresaId, usuarioId = null) {
     aberta: versoes.find((v) => v.status === 'ABERTA') || null,
     publicada: publicadaDe(versoes) || null,
     pendente,
+    reprovada,
     aprovador,
     pode_aprovar: Boolean(pendente && aprovador && aprovador.id === usuarioId),
     versoes,
@@ -497,6 +525,7 @@ module.exports = {
   abrir,
   salvar,
   aprovar,
+  reprovar,
   excluir,
   listar,
   alteracoes,

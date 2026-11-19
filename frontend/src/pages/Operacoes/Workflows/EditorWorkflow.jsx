@@ -1,5 +1,5 @@
 import { useMemo, useRef, useState } from 'react';
-import { ArrowDown, FileSpreadsheet, MessageCircle, TriangleAlert, Zap } from 'lucide-react';
+import { ArrowDown, FileSpreadsheet, MessageCircle, Plus, Trash2, TriangleAlert, Zap } from 'lucide-react';
 import Modal from '../../../components/Modal';
 import Button from '../../../components/Button';
 import SearchableSelect from '../../../components/SearchableSelect';
@@ -34,83 +34,49 @@ function Campo({ rotulo, dica, children }) {
   );
 }
 
-// Operações > Workflows: criar / alterar um workflow — o gatilho ("Quando") e a ação ("Então: enviar WhatsApp"):
-// a conexão Z-API da empresa, quem recebe (o Aprovador da DRE na Matriz de Alçadas ou usuários escolhidos), a
-// mensagem (com as variáveis do gatilho — clique pra inserir) e o Excel de auditoria da DRE anexo.
-export default function EditorWorkflow({ aberto, inicial, opcoes, salvando, erro, onSalvar, onFechar }) {
-  const [nome, setNome] = useState(inicial?.nome || '');
-  const [gatilho, setGatilho] = useState(inicial?.gatilho || '');
-  const [conexao, setConexao] = useState(inicial?.acao?.conexao_id ? String(inicial.acao.conexao_id) : opcoes.conexoes.length === 1 ? String(opcoes.conexoes[0].id) : '');
-  const [modo, setModo] = useState(inicial?.acao?.destinatarios?.modo || 'APROVADOR');
-  // ids em texto (o formato da TransferList).
-  const [usuarios, setUsuarios] = useState(() => (inicial?.acao?.destinatarios?.usuarios || []).map(String));
-  const [mensagem, setMensagem] = useState(inicial?.acao?.mensagem || '');
-  const [excel, setExcel] = useState(Boolean(inicial?.acao?.anexar_excel_dre));
-  const textoRef = useRef(null);
+const DESCRICAO_DESTINO = {
+  APROVADOR: 'O usuário de Cadastros › Matriz de Alçadas › DRE › Aprovador (na hora do envio).',
+  RESPONSAVEL: 'Quem salvou a versão da DRE.',
+  USUARIOS: 'Usuários desta empresa (o telefone vem do cadastro de cada um).',
+};
 
-  const g = opcoes.gatilhos.find((x) => x.id === gatilho);
+// Um tópico: "Quando" (gatilho) → "Então: enviar WhatsApp" (conexão, quem recebe, mensagem com variáveis e o
+// Excel de auditoria da DRE anexo). `passo` no formato da tela (ver paraTela/paraApi).
+function Topico({ numero, passo, opcoes, onChange, onRemover }) {
+  const textoRef = useRef(null);
+  const g = opcoes.gatilhos.find((x) => x.id === passo.gatilho);
   const exemplos = useMemo(() => Object.fromEntries((g?.variaveis || []).map((v) => [v.chave, v.exemplo])), [g]);
+  const muda = (patch) => onChange({ ...passo, ...patch });
 
   function inserir(chave) {
     const el = textoRef.current;
     const marca = `{${chave}}`;
-    if (!el) return setMensagem((m) => m + marca);
-    const ini = el.selectionStart ?? mensagem.length;
-    const fim = el.selectionEnd ?? mensagem.length;
-    const novo = mensagem.slice(0, ini) + marca + mensagem.slice(fim);
-    setMensagem(novo);
+    if (!el) return muda({ mensagem: passo.mensagem + marca });
+    const ini = el.selectionStart ?? passo.mensagem.length;
+    const fim = el.selectionEnd ?? passo.mensagem.length;
+    muda({ mensagem: passo.mensagem.slice(0, ini) + marca + passo.mensagem.slice(fim) });
     requestAnimationFrame(() => {
       el.focus();
       el.setSelectionRange(ini + marca.length, ini + marca.length);
     });
   }
 
-  function salvar() {
-    onSalvar({
-      nome,
-      gatilho,
-      acao: {
-        tipo: 'WHATSAPP',
-        conexao_id: conexao ? Number(conexao) : null,
-        destinatarios: { modo, usuarios: modo === 'USUARIOS' ? usuarios.map(Number) : [] },
-        mensagem,
-        anexar_excel_dre: excel,
-      },
-    });
-  }
-
-  const radio = (valor, rotulo, descricao) => (
-    <label
-      className={`flex flex-1 cursor-pointer items-start gap-2.5 rounded-lg border px-3 py-2.5 text-sm ${
-        modo === valor ? 'border-primary-300 bg-primary-50/60' : 'border-gray-200 hover:bg-gray-50'
-      }`}
-    >
-      <input type="radio" className="mt-0.5" checked={modo === valor} onChange={() => setModo(valor)} />
-      <span>
-        <span className="block font-medium text-gray-800">{rotulo}</span>
-        <span className="text-xs text-gray-500">{descricao}</span>
-      </span>
-    </label>
-  );
-
   return (
-    <Modal open={aberto} onClose={onFechar} title={inicial?.id ? 'Alterar workflow' : 'Novo workflow'} maxWidthClass="max-w-3xl">
-      <div className="space-y-4">
-        <Campo rotulo="Nome do workflow">
-          <input
-            value={nome}
-            onChange={(e) => setNome(e.target.value)}
-            maxLength={120}
-            placeholder="Ex.: Pedir aprovação da versão da DRE"
-            className="w-full rounded-lg border border-gray-200 px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-primary-100"
-          />
-        </Campo>
-
+    <div className="rounded-2xl border border-dashed border-gray-300 bg-gray-50/60 p-3">
+      <div className="mb-2 flex items-center justify-between px-1">
+        <span className="text-xs font-semibold uppercase tracking-wide text-gray-500">Tópico {numero}</span>
+        {onRemover && (
+          <button type="button" onClick={onRemover} title="Remover o tópico" className="rounded-md p-1 text-gray-400 hover:bg-red-50 hover:text-red-600">
+            <Trash2 size={15} />
+          </button>
+        )}
+      </div>
+      <div className="space-y-2">
         <Passo icone={Zap} cor="bg-violet-50 text-violet-800" rotulo="Quando" titulo={g?.rotulo || 'escolha o gatilho'}>
           <Campo rotulo="Gatilho" dica={g?.descricao}>
             <SearchableSelect
-              value={gatilho}
-              onChange={(v) => setGatilho(v || '')}
+              value={passo.gatilho}
+              onChange={(v) => muda({ gatilho: v || '' })}
               options={opcoes.gatilhos.map((x) => ({ value: x.id, label: x.rotulo }))}
               placeholder="Escolha o evento"
               clearable={false}
@@ -119,14 +85,14 @@ export default function EditorWorkflow({ aberto, inicial, opcoes, salvando, erro
         </Passo>
 
         <div className="flex justify-center text-gray-300">
-          <ArrowDown size={22} />
+          <ArrowDown size={20} />
         </div>
 
         <Passo icone={MessageCircle} cor="bg-emerald-50 text-emerald-800" rotulo="Então" titulo="Enviar WhatsApp">
           <Campo rotulo="Conexão de WhatsApp (Z-API)" dica="As conexões ativas desta empresa (Integrações › Z-API).">
             <SearchableSelect
-              value={conexao}
-              onChange={(v) => setConexao(v || '')}
+              value={passo.conexao}
+              onChange={(v) => muda({ conexao: v || '' })}
               options={opcoes.conexoes.map((c) => ({ value: String(c.id), label: c.nome }))}
               placeholder={opcoes.conexoes.length ? 'Escolha a conexão' : 'Nenhuma conexão Z-API ativa nesta empresa'}
               emptyMessage="Nenhuma conexão Z-API ativa nesta empresa."
@@ -135,15 +101,27 @@ export default function EditorWorkflow({ aberto, inicial, opcoes, salvando, erro
 
           <Campo rotulo="Para quem">
             <div className="flex flex-col gap-2 sm:flex-row">
-              {radio('APROVADOR', 'Aprovador da DRE', 'O usuário de Cadastros › Matriz de Alçadas › DRE › Aprovador (na hora do envio).')}
-              {radio('USUARIOS', 'Usuários escolhidos', 'Usuários desta empresa (o telefone vem do cadastro de cada um).')}
+              {opcoes.destinatarios.map((d) => (
+                <label
+                  key={d.id}
+                  className={`flex flex-1 cursor-pointer items-start gap-2.5 rounded-lg border px-3 py-2.5 text-sm ${
+                    passo.modo === d.id ? 'border-primary-300 bg-primary-50/60' : 'border-gray-200 bg-white hover:bg-gray-50'
+                  }`}
+                >
+                  <input type="radio" className="mt-0.5" checked={passo.modo === d.id} onChange={() => muda({ modo: d.id })} />
+                  <span>
+                    <span className="block font-medium text-gray-800">{d.rotulo.replace(/ \(.*\)$/, '')}</span>
+                    <span className="text-xs text-gray-500">{DESCRICAO_DESTINO[d.id]}</span>
+                  </span>
+                </label>
+              ))}
             </div>
           </Campo>
-          {modo === 'USUARIOS' && (
+          {passo.modo === 'USUARIOS' && (
             <TransferList
               itens={opcoes.usuarios}
-              selecionados={usuarios}
-              onChange={setUsuarios}
+              selecionados={passo.usuarios}
+              onChange={(usuarios) => muda({ usuarios })}
               getId={(u) => u.id}
               getLabel={(u) => u.nome}
               tituloDisponiveis="Usuários da empresa"
@@ -156,9 +134,9 @@ export default function EditorWorkflow({ aberto, inicial, opcoes, salvando, erro
           <Campo rotulo="Mensagem">
             <textarea
               ref={textoRef}
-              value={mensagem}
-              onChange={(e) => setMensagem(e.target.value)}
-              rows={6}
+              value={passo.mensagem}
+              onChange={(e) => muda({ mensagem: e.target.value })}
+              rows={5}
               maxLength={4000}
               className="w-full rounded-lg border border-gray-200 px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-primary-100"
             />
@@ -180,24 +158,24 @@ export default function EditorWorkflow({ aberto, inicial, opcoes, salvando, erro
             )}
           </Campo>
 
-          {mensagem.trim() && g && (
+          {passo.mensagem.trim() && g && (
             <div>
               <p className="mb-1 text-xs font-medium text-gray-500">Prévia (com exemplos)</p>
               <div className="rounded-xl bg-[#e7f7e9] p-3">
                 <div className="max-w-md whitespace-pre-wrap rounded-lg bg-white px-3 py-2 text-sm text-gray-800 shadow-sm">
-                  {excel && (
+                  {passo.excel && (
                     <span className="mb-2 flex items-center gap-2 rounded-md bg-gray-50 px-2 py-1.5 text-xs text-gray-600">
                       <FileSpreadsheet size={15} className="text-emerald-600" /> DRE - auditoria (Excel)
                     </span>
                   )}
-                  {preencher(mensagem, exemplos)}
+                  {preencher(passo.mensagem, exemplos)}
                 </div>
               </div>
             </div>
           )}
 
           <label className="flex cursor-pointer items-start gap-2.5 text-sm">
-            <input type="checkbox" className="mt-0.5" checked={excel} onChange={(e) => setExcel(e.target.checked)} />
+            <input type="checkbox" className="mt-0.5" checked={passo.excel} onChange={(e) => muda({ excel: e.target.checked })} />
             <span>
               <span className="font-medium text-gray-800">Anexar o Excel de auditoria da DRE</span>
               <span className="block text-xs text-gray-500">
@@ -206,6 +184,75 @@ export default function EditorWorkflow({ aberto, inicial, opcoes, salvando, erro
             </span>
           </label>
         </Passo>
+      </div>
+    </div>
+  );
+}
+
+// API ↔ tela (na tela: conexão e usuários como texto — o formato dos seletores).
+const paraTela = (p, conexaoPadrao) => ({
+  gatilho: p?.gatilho || '',
+  conexao: p?.acao?.conexao_id ? String(p.acao.conexao_id) : conexaoPadrao,
+  modo: p?.acao?.destinatarios?.modo || 'APROVADOR',
+  usuarios: (p?.acao?.destinatarios?.usuarios || []).map(String),
+  mensagem: p?.acao?.mensagem || '',
+  excel: Boolean(p?.acao?.anexar_excel_dre),
+});
+const paraApi = (p) => ({
+  gatilho: p.gatilho,
+  acao: {
+    tipo: 'WHATSAPP',
+    conexao_id: p.conexao ? Number(p.conexao) : null,
+    destinatarios: { modo: p.modo, usuarios: p.modo === 'USUARIOS' ? p.usuarios.map(Number) : [] },
+    mensagem: p.mensagem,
+    anexar_excel_dre: p.excel,
+  },
+});
+
+// Operações > Workflows: criar / alterar um workflow — o nome e os TÓPICOS (cada um: "Quando" um evento →
+// "Então" enviar WhatsApp). Ex.: o modelo "Pedir aprovação da versão da DRE" vem com 3 tópicos (salva → Aprovador;
+// reprovada → Responsável com o motivo; aprovada → Responsável).
+export default function EditorWorkflow({ aberto, inicial, opcoes, salvando, erro, onSalvar, onFechar }) {
+  const conexaoPadrao = opcoes.conexoes.length === 1 ? String(opcoes.conexoes[0].id) : '';
+  const [nome, setNome] = useState(inicial?.nome || '');
+  const [passos, setPassos] = useState(() => (inicial?.passos?.length ? inicial.passos : [{}]).map((p) => paraTela(p, conexaoPadrao)));
+
+  const mudar = (i, novo) => setPassos((ps) => ps.map((p, j) => (j === i ? novo : p)));
+  // Tópico novo: a mesma conexão do último (o caso comum).
+  const adicionar = () => setPassos((ps) => [...ps, { ...paraTela(null, conexaoPadrao), conexao: ps[ps.length - 1]?.conexao || conexaoPadrao }]);
+
+  return (
+    <Modal open={aberto} onClose={onFechar} title={inicial?.id ? 'Alterar workflow' : 'Novo workflow'} maxWidthClass="max-w-3xl">
+      <div className="space-y-4">
+        <Campo rotulo="Nome do workflow">
+          <input
+            value={nome}
+            onChange={(e) => setNome(e.target.value)}
+            maxLength={120}
+            placeholder="Ex.: Pedir aprovação da versão da DRE"
+            className="w-full rounded-lg border border-gray-200 px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-primary-100"
+          />
+        </Campo>
+
+        {passos.map((p, i) => (
+          <Topico
+            // eslint-disable-next-line react/no-array-index-key
+            key={i}
+            numero={i + 1}
+            passo={p}
+            opcoes={opcoes}
+            onChange={(novo) => mudar(i, novo)}
+            onRemover={passos.length > 1 ? () => setPassos((ps) => ps.filter((_, j) => j !== i)) : null}
+          />
+        ))}
+
+        <button
+          type="button"
+          onClick={adicionar}
+          className="flex w-full items-center justify-center gap-2 rounded-xl border border-dashed border-gray-300 py-3 text-sm font-medium text-gray-500 transition hover:border-primary-400 hover:bg-primary-50/40 hover:text-primary-700"
+        >
+          <Plus size={16} /> Adicionar tópico
+        </button>
 
         {erro && (
           <p className="flex items-center gap-1.5 text-sm text-red-600">
@@ -216,7 +263,7 @@ export default function EditorWorkflow({ aberto, inicial, opcoes, salvando, erro
           <Button type="button" variant="secondary" onClick={onFechar}>
             Cancelar
           </Button>
-          <Button type="button" onClick={salvar} disabled={salvando}>
+          <Button type="button" onClick={() => onSalvar({ nome, passos: passos.map(paraApi) })} disabled={salvando}>
             {salvando ? 'Salvando…' : 'Salvar workflow'}
           </Button>
         </div>

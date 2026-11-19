@@ -32,6 +32,15 @@ function Situacao({ status }) {
   const [cor, rotulo] = SITUACAO[status] || ['bg-gray-100 text-gray-600', status];
   return <span className={`rounded-full px-2 py-0.5 text-[11px] font-medium ${cor}`}>{rotulo}</span>;
 }
+// Para quem vai a mensagem de um tópico.
+function paraQuem(p) {
+  const modo = p.acao?.destinatarios?.modo;
+  if (modo === 'APROVADOR') return 'o Aprovador da DRE';
+  if (modo === 'RESPONSAVEL') return 'o Responsável (quem salvou)';
+  const nomes = p.destinatarios_nomes || [];
+  return nomes.length > 3 ? `${nomes.slice(0, 3).join(', ')} + ${nomes.length - 3}` : nomes.join(', ');
+}
+
 const resumo = (r) => {
   if (!r) return '';
   if (r.motivo) return r.motivo;
@@ -200,12 +209,11 @@ export default function WorkflowsPage() {
               </div>
             ) : (
               <div className="overflow-x-auto">
-                <table className="w-full min-w-[1000px] text-left text-sm">
+                <table className="w-full min-w-[1100px] text-left text-sm">
                   <thead>
                     <tr className="border-b-2 border-blue-500 bg-blue-50 text-xs uppercase tracking-wide text-blue-700">
                       <th className="py-2.5 pl-3 pr-3 font-medium">Workflow</th>
-                      <th className="py-2.5 pr-3 font-medium">Quando</th>
-                      <th className="py-2.5 pr-3 font-medium">Então</th>
+                      <th className="py-2.5 pr-3 font-medium">Tópicos (quando → então)</th>
                       <th className="py-2.5 pr-3 font-medium">Última execução</th>
                       <th className="py-2.5 pr-3 font-medium">Ativo</th>
                       <th className="py-2.5 pr-3" />
@@ -223,26 +231,28 @@ export default function WorkflowsPage() {
                           </span>
                         </td>
                         <td className="py-3 pr-3">
-                          <span className="inline-flex items-center gap-1.5 rounded-full bg-violet-50 px-2 py-0.5 text-xs font-medium text-violet-800">
-                            <Zap size={12} /> {w.gatilho_rotulo}
-                          </span>
-                        </td>
-                        <td className="py-3 pr-3 text-xs text-gray-700">
-                          <span className="inline-flex items-center gap-1.5 font-medium text-emerald-800">
-                            <MessageCircle size={13} /> WhatsApp
-                          </span>{' '}
-                          para{' '}
-                          {w.acao.destinatarios.modo === 'APROVADOR'
-                            ? 'o Aprovador da DRE'
-                            : w.destinatarios_nomes.length > 3
-                              ? `${w.destinatarios_nomes.slice(0, 3).join(', ')} + ${w.destinatarios_nomes.length - 3}`
-                              : w.destinatarios_nomes.join(', ')}
-                          {w.acao.anexar_excel_dre && (
-                            <span className="ml-1 inline-flex items-center gap-1 text-gray-500">
-                              · <FileSpreadsheet size={12} className="text-emerald-600" /> Excel da DRE
-                            </span>
-                          )}
-                          <span className="block text-gray-400">pela conexão {w.conexao || '(inativa ou removida)'}</span>
+                          <ol className="space-y-1.5">
+                            {w.passos.map((p, i) => (
+                              // eslint-disable-next-line react/no-array-index-key
+                              <li key={i} className="flex flex-wrap items-center gap-x-1.5 gap-y-0.5 text-xs text-gray-700">
+                                <span className="w-4 shrink-0 text-right tabular-nums text-gray-400">{i + 1}.</span>
+                                <span className="inline-flex items-center gap-1 rounded-full bg-violet-50 px-2 py-0.5 font-medium text-violet-800">
+                                  <Zap size={11} /> {p.gatilho_rotulo}
+                                </span>
+                                <span className="text-gray-300">→</span>
+                                <span className="inline-flex items-center gap-1 font-medium text-emerald-800">
+                                  <MessageCircle size={12} /> WhatsApp
+                                </span>
+                                para {paraQuem(p)}
+                                {p.acao?.anexar_excel_dre && (
+                                  <span className="inline-flex items-center gap-1 text-gray-500">
+                                    · <FileSpreadsheet size={12} className="text-emerald-600" /> Excel da DRE
+                                  </span>
+                                )}
+                                <span className="text-gray-400">· {p.conexao || 'conexão inativa'}</span>
+                              </li>
+                            ))}
+                          </ol>
                         </td>
                         <td className="py-3 pr-3 text-xs">
                           {w.ultima_execucao ? (
@@ -308,6 +318,7 @@ export default function WorkflowsPage() {
                           <td className="py-3 pr-3 text-xs text-gray-600">
                             {x.gatilho_rotulo}
                             {x.contexto?.versao ? ` · versão ${x.contexto.versao}` : ''}
+                            {x.passo !== null && x.passo !== undefined && <span className="block text-gray-400">tópico {x.passo + 1}</span>}
                           </td>
                           <td className="py-3 pr-3">
                             <Situacao status={x.status} />
@@ -347,19 +358,24 @@ export default function WorkflowsPage() {
         <Modal open={escolhendoModelo} onClose={() => setEscolhendoModelo(false)} title="Novo workflow — escolha um modelo" maxWidthClass="max-w-2xl">
           <div className="grid gap-3 sm:grid-cols-2">
             {opcoes.modelos.map((m) => {
-              const g = opcoes.gatilhos.find((x) => x.id === m.gatilho);
+              const rotulos = m.passos.map((p) => opcoes.gatilhos.find((x) => x.id === p.gatilho)?.rotulo);
               return (
                 <button
                   key={m.id}
                   type="button"
                   onClick={() => {
                     setEscolhendoModelo(false);
-                    abrirEditor({ nome: m.nome, gatilho: m.gatilho, acao: m.acao });
+                    abrirEditor({ nome: m.nome, passos: m.passos });
                   }}
                   className="flex flex-col items-start gap-2 rounded-xl border border-gray-200 p-4 text-left transition hover:border-primary-300 hover:bg-primary-50/40"
                 >
-                  <span className="inline-flex items-center gap-1.5 rounded-full bg-violet-50 px-2 py-0.5 text-[11px] font-medium text-violet-800">
-                    <Zap size={11} /> {g?.rotulo}
+                  <span className="flex flex-wrap gap-1">
+                    {rotulos.map((r, i) => (
+                      // eslint-disable-next-line react/no-array-index-key
+                      <span key={i} className="inline-flex items-center gap-1 rounded-full bg-violet-50 px-2 py-0.5 text-[11px] font-medium text-violet-800">
+                        <Zap size={11} /> {r}
+                      </span>
+                    ))}
                   </span>
                   <span className="text-sm font-semibold text-gray-900">{m.nome}</span>
                   <span className="text-xs text-gray-500">{m.descricao}</span>

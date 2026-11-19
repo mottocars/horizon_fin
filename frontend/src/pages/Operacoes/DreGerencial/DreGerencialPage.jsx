@@ -3,6 +3,7 @@ import { useSearchParams } from 'react-router-dom';
 import {
   BadgeCheck,
   BarChart3,
+  CircleX,
   Building2,
   Calculator,
   CopyPlus,
@@ -45,7 +46,8 @@ import { nomeExibicaoEmpresa } from '../../../utils/empresa';
 import { useEmpresaTravada } from '../../../hooks/useEmpresaTravada';
 import { useConfirm } from '../../../confirm/ConfirmContext';
 import { useSidebar } from '../../../layout/SidebarContext';
-import { abrirVersaoDre, aprovarVersaoDre, excluirVersaoDre, listarVersoesDre, salvarVersaoDre } from '../../../api/dreVersoes.api';
+import { abrirVersaoDre, aprovarVersaoDre, excluirVersaoDre, listarVersoesDre, reprovarVersaoDre, salvarVersaoDre } from '../../../api/dreVersoes.api';
+import Modal from '../../../components/Modal';
 import VersoesDreTab from './VersoesDreTab';
 import { LeituraDreContext } from './leituraDre';
 import SoLeitura from './SoLeitura';
@@ -415,6 +417,7 @@ function DreGerencialConteudo() {
   // Aprovação (Cadastros › Matriz de Alçadas › DRE › Aprovador): a última salva pode estar aguardando o Aprovador
   // — o Operações mostra ela; os dashboards, a publicada (a última aprovada).
   const versaoPendente = estadoVersoes?.pendente || null;
+  const versaoReprovada = estadoVersoes?.reprovada || null;
   const aprovadorDre = estadoVersoes?.aprovador || null;
   const ultimaSalva = versaoPendente || versaoPublicada;
   const versaoVista = versaoVisualizada ? (estadoVersoes?.versoes || []).find((v) => v.numero === versaoVisualizada) || null : null;
@@ -494,6 +497,16 @@ function DreGerencialConteudo() {
       confirmLabel: 'Aprovar versão',
     });
     if (ok) await acaoVersao(() => aprovarVersaoDre(empresaId));
+  }
+
+  // Reprovar (só o Aprovador): o motivo é obrigatório e vai para o responsável (Workflows).
+  const [reprovando, setReprovando] = useState(false);
+  const [motivoReprovacao, setMotivoReprovacao] = useState('');
+  async function confirmarReprovacao() {
+    if (!motivoReprovacao.trim()) return;
+    setReprovando(false);
+    await acaoVersao(() => reprovarVersaoDre(empresaId, motivoReprovacao.trim()));
+    setMotivoReprovacao('');
   }
 
   async function excluirVersaoAberta() {
@@ -872,6 +885,12 @@ function DreGerencialConteudo() {
             <div className="flex shrink-0 flex-col items-end gap-1.5">
               <div className="flex shrink-0 items-center gap-2">
                 {estadoVersoes.pode_aprovar && (
+                  <Button type="button" variant="secondary" onClick={() => setReprovando(true)} disabled={processandoVersao} className="!text-red-600">
+                    <CircleX size={16} />
+                    Reprovar versão {versaoPendente.numero}
+                  </Button>
+                )}
+                {estadoVersoes.pode_aprovar && (
                   <Button type="button" onClick={aprovarVersaoPendente} disabled={processandoVersao} className="!bg-emerald-600 hover:!bg-emerald-700">
                     <BadgeCheck size={16} />
                     Aprovar versão {versaoPendente.numero}
@@ -942,6 +961,16 @@ function DreGerencialConteudo() {
                 {versaoAberta.origem === 'EDICAO' ? ' (congelado)' : ' (atualizado pelo Monitor de Integrações)'}. As alterações só são publicadas ao salvar a versão (aba Versões).
               </span>
             </>
+          ) : versaoReprovada ? (
+            <>
+              <CircleX size={14} className="shrink-0 text-red-600" />
+              <span>
+                <strong className="text-red-700">Versão {versaoReprovada.numero} reprovada</strong>
+                {versaoReprovada.reprovada_por_nome ? ` por ${versaoReprovada.reprovada_por_nome}` : ''} em {quandoBR(versaoReprovada.reprovada_em)}: “
+                {versaoReprovada.reprovacao_motivo}” — para corrigir, use Editar última versão na aba Versões e salve de novo. Os dashboards seguem na versão{' '}
+                {versaoPublicada?.numero}.
+              </span>
+            </>
           ) : versaoPendente ? (
             <>
               <Lock size={14} className="shrink-0" />
@@ -964,6 +993,32 @@ function DreGerencialConteudo() {
           )}
         </div>
       )}
+
+      <Modal open={reprovando} onClose={() => setReprovando(false)} title={`Reprovar a versão ${versaoPendente?.numero ?? ''}`} maxWidthClass="max-w-lg">
+        <div className="space-y-3">
+          <p className="text-sm text-gray-600">
+            A versão não é publicada (os dashboards seguem na versão {versaoPublicada?.numero}). O motivo fica registrado na versão e vai para o responsável
+            (Workflows).
+          </p>
+          <textarea
+            value={motivoReprovacao}
+            onChange={(e) => setMotivoReprovacao(e.target.value)}
+            rows={4}
+            maxLength={2000}
+            autoFocus
+            placeholder="Motivo da reprovação (obrigatório)"
+            className="w-full rounded-lg border border-gray-200 px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-red-100"
+          />
+          <div className="flex justify-end gap-2">
+            <Button type="button" variant="secondary" onClick={() => setReprovando(false)}>
+              Cancelar
+            </Button>
+            <Button type="button" onClick={confirmarReprovacao} disabled={!motivoReprovacao.trim()} className="!bg-red-600 hover:!bg-red-700">
+              <CircleX size={16} /> Reprovar versão
+            </Button>
+          </div>
+        </div>
+      </Modal>
 
       <LeituraDreContext.Provider value={leitura}>
       <div>

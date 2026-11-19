@@ -18,6 +18,9 @@ export const salvarVersaoDre = (empresaId) => http.post(`${base(empresaId)}/salv
 // Só o Aprovador da DRE (Matriz de Alçadas): a última versão salva vira a publicada.
 export const aprovarVersaoDre = (empresaId) => http.post(`${base(empresaId)}/aprovar`).then(dados);
 
+// Só o Aprovador: reprova a última versão salva, com o motivo (não é publicada).
+export const reprovarVersaoDre = (empresaId, motivo) => http.post(`${base(empresaId)}/reprovar`, { motivo }).then(dados);
+
 export const excluirVersaoDre = (empresaId) => http.delete(`${base(empresaId)}/aberta`).then(dados);
 
 // Cabeçalho do dashboard Demonstração do Resultado: { numero, corte, aberta_em, fechada_em, abriu, fechou,

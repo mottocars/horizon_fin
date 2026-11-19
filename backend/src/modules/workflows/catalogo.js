@@ -1,5 +1,6 @@
-// Operações > Workflows: o que existe para montar uma automação. Gatilho novo = acrescentar aqui e chamar
-// `workflows.service.disparar(empresaId, GATILHO, contexto)` de onde o evento acontece.
+// Operações > Workflows: o que existe para montar uma automação. Um workflow tem TÓPICOS (passos): cada um com o
+// seu gatilho e a sua ação. Gatilho novo = acrescentar aqui e chamar `workflows.service.disparar(empresaId,
+// GATILHO, contexto)` de onde o evento acontece.
 
 const VARIAVEIS_DRE = [
   { chave: 'empresa', rotulo: 'Empresa', exemplo: 'TOSTE E DINIZ' },
@@ -12,13 +13,15 @@ const VARIAVEIS_DRE = [
   { chave: 'link', rotulo: 'Link para abrir no Horizon', exemplo: 'https://app.horizonhub.com.br/…' },
 ];
 
+const linkVersoes = (front, empresaId) => `${front}/operacoes/dre-gerencial?empresa_id=${empresaId}&aba=versoes`;
+
 const GATILHOS = {
   DRE_VERSAO_SALVA: {
     rotulo: 'DRE: versão salva',
     descricao: 'Quando alguém salva uma versão da DRE (Operações › DRE Construtoras › Versões).',
     variaveis: VARIAVEIS_DRE,
-    // O {link} leva para onde a pessoa age (a aba Versões, pra aprovar).
-    link: (front, empresaId) => `${front}/operacoes/dre-gerencial?empresa_id=${empresaId}&aba=versoes`,
+    // O {link} leva para onde a pessoa age (a aba Versões, pra aprovar ou reprovar).
+    link: linkVersoes,
   },
   DRE_VERSAO_APROVADA: {
     rotulo: 'DRE: versão aprovada',
@@ -26,43 +29,81 @@ const GATILHOS = {
     variaveis: VARIAVEIS_DRE,
     link: (front, empresaId) => `${front}/dashboards/economico-financeiro?tela=dre&empresa_id=${empresaId}`,
   },
+  DRE_VERSAO_REPROVADA: {
+    rotulo: 'DRE: versão reprovada',
+    descricao: 'Quando o Aprovador reprova a versão da DRE (com o motivo). Ela não é publicada; para corrigir, edita-se a última versão.',
+    variaveis: [
+      ...VARIAVEIS_DRE,
+      { chave: 'motivo', rotulo: 'Motivo da reprovação', exemplo: 'O orçamento da obra 5 está desatualizado.' },
+      { chave: 'reprovador', rotulo: 'Quem reprovou', exemplo: 'Gizele Dias' },
+    ],
+    link: linkVersoes,
+  },
 };
 
-// Quem recebe: o Aprovador da DRE (Cadastros › Matriz de Alçadas) ou os usuários escolhidos.
+// Quem recebe: o Aprovador da DRE (Cadastros › Matriz de Alçadas), o Responsável (quem salvou a versão) ou os
+// usuários escolhidos.
 const DESTINATARIOS = {
   APROVADOR: { rotulo: 'Aprovador da DRE (Matriz de Alçadas)' },
+  RESPONSAVEL: { rotulo: 'Responsável (quem salvou a versão)' },
   USUARIOS: { rotulo: 'Usuários escolhidos' },
 };
+
+const whatsapp = (modo, mensagem, anexar = false) => ({
+  tipo: 'WHATSAPP',
+  conexao_id: null,
+  destinatarios: { modo, usuarios: [] },
+  anexar_excel_dre: anexar,
+  mensagem,
+});
 
 // Os modelos que a tela oferece ao criar (pedido do usuário).
 const MODELOS = [
   {
     id: 'aprovar-versao-dre',
     nome: 'Pedir aprovação da versão da DRE',
-    descricao: 'Quando uma versão da DRE é salva, avisa o Aprovador da Matriz de Alçadas pelo WhatsApp.',
-    gatilho: 'DRE_VERSAO_SALVA',
-    acao: {
-      tipo: 'WHATSAPP',
-      conexao_id: null,
-      destinatarios: { modo: 'APROVADOR', usuarios: [] },
-      anexar_excel_dre: false,
-      mensagem:
-        'Olá, {destinatario}! A versão {versao} da DRE da {empresa} foi salva por {responsavel} (realizado até {realizado_ate}) e está aguardando a sua aprovação.\n\nAprove em: {link}',
-    },
+    descricao:
+      'Versão salva: avisa o Aprovador da Matriz de Alçadas. Reprovada: devolve ao responsável com o motivo. Aprovada: confirma ao responsável.',
+    passos: [
+      {
+        gatilho: 'DRE_VERSAO_SALVA',
+        acao: whatsapp(
+          'APROVADOR',
+          'Olá, {destinatario}! A versão {versao} da DRE da {empresa} foi salva por {responsavel} (realizado até {realizado_ate}) e está aguardando a sua aprovação.\n\nAprove ou reprove em: {link}'
+        ),
+      },
+      {
+        gatilho: 'DRE_VERSAO_REPROVADA',
+        acao: whatsapp(
+          'RESPONSAVEL',
+          'Olá, {destinatario}. A versão {versao} da DRE da {empresa} foi reprovada por {reprovador}.\n\nMotivo: {motivo}\n\nPara corrigir, edite a última versão e salve de novo: {link}'
+        ),
+      },
+      {
+        gatilho: 'DRE_VERSAO_APROVADA',
+        acao: whatsapp(
+          'RESPONSAVEL',
+          'Olá, {destinatario}! A versão {versao} da DRE da {empresa} foi aprovada por {aprovador} e já está publicada nos dashboards.\n\n{link}'
+        ),
+      },
+    ],
   },
   {
     id: 'nova-versao-dre',
     nome: 'Avisar nova versão da DRE',
     descricao: 'Quando a versão da DRE é aprovada, avisa os usuários escolhidos pelo WhatsApp — com o Excel de auditoria da DRE anexo, se quiser.',
-    gatilho: 'DRE_VERSAO_APROVADA',
-    acao: {
-      tipo: 'WHATSAPP',
-      conexao_id: null,
-      destinatarios: { modo: 'USUARIOS', usuarios: [] },
-      anexar_excel_dre: true,
-      mensagem:
-        'Olá, {destinatario}! Está disponível a versão {versao} da DRE da {empresa}, aprovada por {aprovador} (realizado até {realizado_ate}).\n\nVeja no dashboard: {link}',
-    },
+    passos: [
+      {
+        gatilho: 'DRE_VERSAO_APROVADA',
+        acao: {
+          ...whatsapp(
+            'USUARIOS',
+            'Olá, {destinatario}! Está disponível a versão {versao} da DRE da {empresa}, aprovada por {aprovador} (realizado até {realizado_ate}).\n\nVeja no dashboard: {link}',
+            true
+          ),
+        },
+      },
+    ],
   },
 ];
 

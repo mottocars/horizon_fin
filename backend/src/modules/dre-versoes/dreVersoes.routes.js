@@ -11,6 +11,7 @@ const service = require('./dreVersoes.service');
 //   POST   /:empresaId/abrir { origem }        -> NOVA (Gerar nova versão) ou EDICAO (Editar última versão)
 //   POST   /:empresaId/salvar                  -> salva a versão aberta (fica aguardando o Aprovador)
 //   POST   /:empresaId/aprovar                 -> o Aprovador (Matriz de Alçadas) aprova a última salva: vira a publicada
+//   POST   /:empresaId/reprovar { motivo }     -> o Aprovador reprova a última salva (não é publicada)
 //   DELETE /:empresaId/aberta                  -> exclui a versão aberta (tudo volta ao da última salva)
 
 const empresaIdSchema = z.coerce.number().int().positive('Empresa inválida.');
@@ -42,6 +43,7 @@ router.post('/:empresaId/abrir', rota((req, empresaId) => service.abrir(empresaI
 router.post('/:empresaId/salvar', rota((req, empresaId) => service.salvar(empresaId, req.user.id)));
 // Só o Aprovador da DRE na Matriz de Alçadas (o service confere).
 router.post('/:empresaId/aprovar', rota((req, empresaId) => service.aprovar(empresaId, req.user.id)));
+router.post('/:empresaId/reprovar', rota((req, empresaId) => service.reprovar(empresaId, req.user.id, req.body?.motivo)));
 router.delete('/:empresaId/aberta', rota((req, empresaId) => service.excluir(empresaId, req.user.id)));
 
 module.exports = router;
