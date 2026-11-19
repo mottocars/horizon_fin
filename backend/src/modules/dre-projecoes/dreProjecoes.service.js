@@ -292,7 +292,7 @@ async function orcamentosDaFonte(empresaId, { centros = [], completo = false } =
 
 // Projetado da aba DRE e do dashboard (colunas Projetado / Desvio %), por centro e mês, de `de` a `ate`:
 //   - do mês seguinte ao corte da versão em diante: a projeção desta versão (a foto mês a mês do orçamento);
-//   - até o corte (meses que já fecharam e mostram o realizado): o projetado da última versão salva em que
+//   - até o corte (meses que já fecharam e mostram o realizado): o projetado da última versão aprovada em que
 //     aquele mês ainda era projeção (dre_versao_projetado) — o Desvio compara o realizado com o que se
 //     esperava. Sem versão anterior guardada (ficam só as 10 últimas), o mês fica sem projetado.
 // `versao_do_mes`: de qual versão veio o projetado de cada mês até o corte.
@@ -319,7 +319,7 @@ async function projetado(empresaId, { de, ate, centros = [] }) {
     const { rows } = await pool.base.query(
       `SELECT DISTINCT ON (p.centro_id, p.mes) p.centro_id, p.mes, p.valores, v.numero
          FROM dre_versao_projetado p JOIN dre_versoes v ON v.id = p.versao_id
-        WHERE v.empresa_id = $1 AND v.status = 'FECHADA' AND v.numero < $2 AND p.mes > to_char(v.corte, 'YYYY-MM')
+        WHERE v.empresa_id = $1 AND v.status = 'FECHADA' AND v.aprovada_em IS NOT NULL AND v.numero < $2 AND p.mes > to_char(v.corte, 'YYYY-MM')
           AND p.mes >= $3 AND p.mes <= $4 AND (cardinality($5::int[]) = 0 OR p.centro_id = ANY($5::int[]))
         ORDER BY p.centro_id, p.mes, v.numero DESC`,
       [empresaId, ctx.versao.numero, mesDe, mesAte < corte ? mesAte : corte, centros.map(Number)]

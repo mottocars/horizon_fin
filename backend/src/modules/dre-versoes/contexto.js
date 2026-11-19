@@ -2,8 +2,8 @@ const pool = require('../../config/db');
 const service = require('./dreVersoes.service');
 
 // Em qual versão da DRE cada pedido roda (config/db.js lê o contexto e escolhe as tabelas):
-//   - telas de Operações (sem cabeçalho): a versão aberta (área de trabalho) ou, sem ela, a última salva;
-//   - cabeçalho X-Dre-Versao: "publicada" (dashboards — a última salva) ou o número de uma versão salva
+//   - telas de Operações (sem cabeçalho): a versão aberta (área de trabalho) ou, sem ela, a última salva (aprovada ou aguardando aprovação);
+//   - cabeçalho X-Dre-Versao: "publicada" (dashboards — a última aprovada) ou o número de uma versão salva
 //     (o "visualizar" da aba Versões: a DRE inteira como era naquela versão);
 //   - dashboard, MCP, Excel do dashboard e Reforma Tributária: comVersaoPublicada.
 // Gravar só com a versão aberta (modo 'trabalho'); fora dela o pedido é recusado (409) — a regra fica
@@ -46,7 +46,7 @@ function contextoDre(modulo, { livre = () => false } = {}) {
   };
 }
 
-// Roda `fn` na última versão salva da empresa (o que está publicado).
+// Roda `fn` na versão publicada da empresa: a última aprovada (Matriz de Alçadas › DRE › Aprovador).
 async function comVersaoPublicada(empresaId, fn) {
   const ctx = await service.resolver(Number(empresaId), 'publicada');
   return pool.comContexto(ctx, fn);

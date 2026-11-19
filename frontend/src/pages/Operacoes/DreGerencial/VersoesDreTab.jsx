@@ -24,10 +24,15 @@ const MODULOS = {
 const ORDEM_MODULOS = Object.keys(MODULOS);
 const FORA = 'Fora da DRE (outras telas ou o Sienge)';
 
-function Situacao({ v, publicada }) {
-  if (v.status === 'ABERTA') return <span className="rounded-full bg-amber-50 px-2 py-0.5 text-[11px] font-medium text-amber-700">Em edição</span>;
-  if (publicada) return <span className="rounded-full bg-emerald-50 px-2 py-0.5 text-[11px] font-medium text-emerald-700">Publicada</span>;
-  return <span className="rounded-full bg-gray-100 px-2 py-0.5 text-[11px] font-medium text-gray-600">Salva</span>;
+// Em edição · Aguardando aprovação (a última salva, sem aprovação) · Publicada (a última aprovada) · Aprovada
+// (aprovada, mas já substituída) · Não aprovada (salva, mas outra foi salva depois sem ela ser aprovada).
+function Situacao({ v, publicada, pendente }) {
+  const pilula = (cor, texto) => <span className={`rounded-full px-2 py-0.5 text-[11px] font-medium ${cor}`}>{texto}</span>;
+  if (v.status === 'ABERTA') return pilula('bg-amber-50 text-amber-700', 'Em edição');
+  if (pendente) return pilula('bg-sky-50 text-sky-700', 'Aguardando aprovação');
+  if (publicada) return pilula('bg-emerald-50 text-emerald-700', 'Publicada');
+  if (v.aprovada_em) return pilula('bg-gray-100 text-gray-600', 'Aprovada');
+  return pilula('bg-gray-100 text-gray-400', 'Não aprovada');
 }
 
 function origemTexto(v) {
@@ -169,6 +174,7 @@ export default function VersoesDreTab({ empresaId, estado, erro, versaoVisualiza
 
   const versoes = estado?.versoes || [];
   const publicadaId = estado?.publicada?.id;
+  const pendenteId = estado?.pendente?.id;
 
   return (
     <div className="min-h-70 rounded-card rounded-tl-none bg-white p-5 shadow-card">
@@ -186,7 +192,7 @@ export default function VersoesDreTab({ empresaId, estado, erro, versaoVisualiza
         <div className="py-12 text-center text-sm text-gray-400">Carregando...</div>
       ) : (
         <div className="overflow-x-auto">
-          <table className="w-full min-w-[920px] text-left text-sm">
+          <table className="w-full min-w-[1040px] text-left text-sm">
             <thead>
               <tr className="border-b-2 border-blue-500 bg-blue-50 text-xs uppercase tracking-wide text-blue-700">
                 <th className="w-8 py-2.5 pl-3" />
@@ -194,6 +200,7 @@ export default function VersoesDreTab({ empresaId, estado, erro, versaoVisualiza
                 <th className="py-2.5 pr-3 font-medium">Realizado até</th>
                 <th className="py-2.5 pr-3 font-medium">Aberta</th>
                 <th className="py-2.5 pr-3 font-medium">Salva</th>
+                <th className="py-2.5 pr-3 font-medium">Aprovada</th>
                 <th className="py-2.5 pr-3 font-medium">Alterações</th>
                 <th className="py-2.5 pr-3 text-right font-medium">Visualizar</th>
               </tr>
@@ -213,7 +220,7 @@ export default function VersoesDreTab({ empresaId, estado, erro, versaoVisualiza
                       <td className="py-3 pr-3">
                         <span className="flex items-center gap-2">
                           <span className="font-semibold text-gray-900">{v.numero}</span>
-                          <Situacao v={v} publicada={v.id === publicadaId} />
+                          <Situacao v={v} publicada={v.id === publicadaId} pendente={v.id === pendenteId} />
                         </span>
                         <span className="mt-0.5 block text-xs text-gray-400">{origemTexto(v)}</span>
                       </td>
@@ -237,6 +244,18 @@ export default function VersoesDreTab({ empresaId, estado, erro, versaoVisualiza
                             <span className="block tabular-nums text-gray-800">{quando(v.fechada_em)}</span>
                             {v.fechada_por_nome && <span className="text-gray-400">por {v.fechada_por_nome}</span>}
                           </>
+                        ) : (
+                          <span className="text-gray-400">—</span>
+                        )}
+                      </td>
+                      <td className="py-3 pr-3 text-xs text-gray-600">
+                        {v.aprovada_em ? (
+                          <>
+                            <span className="block tabular-nums text-gray-800">{quando(v.aprovada_em)}</span>
+                            {v.aprovada_por_nome && <span className="text-gray-400">por {v.aprovada_por_nome}</span>}
+                          </>
+                        ) : v.id === pendenteId ? (
+                          <span className="text-sky-700">aguardando {estado?.aprovador?.nome || 'o aprovador'}</span>
                         ) : (
                           <span className="text-gray-400">—</span>
                         )}
@@ -270,7 +289,7 @@ export default function VersoesDreTab({ empresaId, estado, erro, versaoVisualiza
                     {expandida && (
                       <tr className="border-b border-gray-100 bg-gray-50/60">
                         <td />
-                        <td colSpan={6} className="py-3 pr-3">
+                        <td colSpan={7} className="py-3 pr-3">
                           <Alteracoes empresaId={empresaId} numero={v.numero} />
                         </td>
                       </tr>

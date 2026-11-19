@@ -70,6 +70,7 @@ import FormulariosPage from './pages/Formularios/FormulariosPage';
 import FormularioEditorPage from './pages/Formularios/FormularioEditorPage';
 import NovidadesPage from './pages/Novidades/NovidadesPage';
 import ParceirosPage from './pages/Parceiros/ParceirosPage';
+import MatrizAlcadasPage from './pages/MatrizAlcadas/MatrizAlcadasPage';
 import LojaAplicativosPage from './pages/LojaAplicativos/LojaAplicativosPage';
 import AplicativoPage from './pages/LojaAplicativos/AplicativoPage';
 import OAuthAutorizarPage from './pages/OAuth/OAuthAutorizarPage';
@@ -160,6 +161,7 @@ export default function App() {
             <Route path="/cadastros/formularios/:id" element={<FormularioEditorPage />} />
             <Route path="/cadastros/novidades" element={<NovidadesPage />} />
             <Route path="/cadastros/parceiros" element={<ParceirosPage />} />
+            <Route path="/cadastros/matriz-alcadas" element={<MatrizAlcadasPage />} />
             {/* A lista/cadastro (antes /cadastros/contas-bancarias e /:empresaId) virou a aba
                 "Contas Bancárias" de Operações > Saldo Contas Bancárias — ver ContasTab.jsx.
                 Só a edição de uma conta continua como rota própria, aberta a partir de lá. */}

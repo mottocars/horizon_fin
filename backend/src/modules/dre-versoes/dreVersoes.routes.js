@@ -9,7 +9,8 @@ const service = require('./dreVersoes.service');
 //   GET    /:empresaId/publicada               -> cabeçalho do dashboard (versão, responsável, aprovador, colaboradores)
 //   GET    /:empresaId/:numero/alteracoes      -> o carimbo de cada alteração da versão
 //   POST   /:empresaId/abrir { origem }        -> NOVA (Gerar nova versão) ou EDICAO (Editar última versão)
-//   POST   /:empresaId/salvar                  -> salva a versão aberta
+//   POST   /:empresaId/salvar                  -> salva a versão aberta (fica aguardando o Aprovador)
+//   POST   /:empresaId/aprovar                 -> o Aprovador (Matriz de Alçadas) aprova a última salva: vira a publicada
 //   DELETE /:empresaId/aberta                  -> exclui a versão aberta (tudo volta ao da última salva)
 
 const empresaIdSchema = z.coerce.number().int().positive('Empresa inválida.');
@@ -33,12 +34,14 @@ const rota = (fn) => async (req, res, next) => {
 const router = Router();
 router.use(authMiddleware);
 router.param('empresaId', paramEmpresa);
-router.get('/:empresaId', rota((req, empresaId) => service.listar(empresaId)));
+router.get('/:empresaId', rota((req, empresaId) => service.listar(empresaId, req.user.id)));
 // Antes de '/:numero' (senão "publicada" seria lido como número). Também pro dashboard (só leitura).
 router.get('/:empresaId/publicada', rota((req, empresaId) => service.cabecalhoPublicada(empresaId)));
 router.get('/:empresaId/:numero/alteracoes', rota((req, empresaId) => service.alteracoes(empresaId, numeroSchema.parse(req.params.numero))));
 router.post('/:empresaId/abrir', rota((req, empresaId) => service.abrir(empresaId, origemSchema.parse(req.body?.origem), req.user.id)));
 router.post('/:empresaId/salvar', rota((req, empresaId) => service.salvar(empresaId, req.user.id)));
+// Só o Aprovador da DRE na Matriz de Alçadas (o service confere).
+router.post('/:empresaId/aprovar', rota((req, empresaId) => service.aprovar(empresaId, req.user.id)));
 router.delete('/:empresaId/aberta', rota((req, empresaId) => service.excluir(empresaId, req.user.id)));
 
 module.exports = router;

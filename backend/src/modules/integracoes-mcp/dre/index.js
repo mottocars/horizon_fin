@@ -9,7 +9,7 @@ const { comVersaoPublicada } = require('../../dre-versoes/contexto');
 // conector: a DRE (motor de dre-demonstrativo), a memória de cálculo e as bases (as do Excel de auditoria,
 // dre-exportacao), o dashboard Demonstração do Resultado (painelDre/modelo, cópia gerada da tela) e a
 // Projeção da DRE (aba Projeções e as colunas Projetado / Desvio %, dre-projecoes).
-// Todas leem a DRE PUBLICADA: a última versão salva (modules/dre-versoes) — o realizado até o corte dela e a
+// Todas leem a DRE PUBLICADA: a última versão salva e aprovada (modules/dre-versoes) — o realizado até o corte dela e a
 // configuração e o realizado como estavam ao salvar.
 function naVersaoPublicada(tool) {
   return {

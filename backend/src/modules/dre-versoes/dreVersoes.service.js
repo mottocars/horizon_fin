@@ -1,5 +1,6 @@
 const pool = require('../../config/db');
 const fotos = require('./fotos');
+const matriz = require('../matriz-alcadas/matrizAlcadas.service');
 
 // Operações > DRE Construtoras > aba Versões (database/migrations/2026-11-19-dre-versoes.sql). A DRE é
 // publicada por versão:
@@ -13,6 +14,9 @@ const fotos = require('./fotos');
 //     onde saiu; tira as cópias (configuração e, na NOVA, o realizado) e guarda o projetado; mantém só as
 //     10 últimas salvas.
 //   - A primeira versão (INICIAL) é criada já salva, com o estado do dia, no primeiro acesso à DRE.
+//   - Aprovação (Cadastros › Matriz de Alçadas › DRE › Aprovador): a versão salva fica aguardando o Aprovador;
+//     só a última salva pode ser aprovada, e a PUBLICADA (dashboard, MCP, Excel do dashboard, Reforma
+//     Tributária) é a última aprovada. Sem Aprovador na matriz, a versão é publicada ao salvar.
 // Tudo aqui roda no pool base (public), fora de qualquer contexto de versão.
 
 const db = pool.base;
@@ -37,7 +41,11 @@ const mesBR = (iso) => `${iso.slice(5, 7)}/${iso.slice(0, 4)}`;
 const dataBR = (d) => new Date(d).toLocaleString('pt-BR', { timeZone: 'America/Sao_Paulo', dateStyle: 'short', timeStyle: 'short' });
 
 const COLS = `id, empresa_id, numero, status, origem, to_char(corte, 'YYYY-MM-DD') AS corte, base_id, foto_realizado,
-  foto_config, aberta_por, aberta_por_nome, aberta_em, fechada_por, fechada_por_nome, fechada_em`;
+  foto_config, aberta_por, aberta_por_nome, aberta_em, fechada_por, fechada_por_nome, fechada_em, aprovada_por,
+  aprovada_por_nome, aprovada_em`;
+
+// A publicada: a última salva E aprovada (sem nenhuma aprovada, a última salva).
+const publicadaDe = (vs) => vs.find((v) => v.status === 'FECHADA' && v.aprovada_em) || vs.find((v) => v.status === 'FECHADA');
 
 async function versoesDa(empresaId, cliente = db) {
   const { rows } = await cliente.query(`SELECT ${COLS} FROM dre_versoes WHERE empresa_id = $1 ORDER BY numero DESC`, [empresaId]);
@@ -100,8 +108,9 @@ async function garantirInicial(empresaId) {
     const agora = new Date();
     const corte = mesAnterior();
     const { rows: v } = await c.query(
-      `INSERT INTO dre_versoes (empresa_id, numero, status, origem, corte, aberta_por_nome, aberta_em, fechada_por_nome, fechada_em)
-       VALUES ($1, 1, 'FECHADA', 'INICIAL', $2, 'Sistema', $3, 'Sistema', $3) RETURNING id`,
+      `INSERT INTO dre_versoes (empresa_id, numero, status, origem, corte, aberta_por_nome, aberta_em, fechada_por_nome, fechada_em,
+                                aprovada_por_nome, aprovada_em)
+       VALUES ($1, 1, 'FECHADA', 'INICIAL', $2, 'Sistema', $3, 'Sistema', $3, 'Sistema', $3) RETURNING id`,
       [empresaId, corte, agora]
     );
     const id = v[0].id;
@@ -130,7 +139,7 @@ async function resolver(empresaId, pedido = 'atual') {
   await garantirInicial(empresaId);
   const vs = await versoesDa(empresaId);
   const aberta = vs.find((v) => v.status === 'ABERTA');
-  const publicada = vs.find((v) => v.status === 'FECHADA');
+  const publicada = publicadaDe(vs);
   let v;
   if (typeof pedido === 'number') {
     v = vs.find((x) => x.numero === pedido);
@@ -204,7 +213,7 @@ async function abrir(empresaId, origem, usuarioId) {
     });
     return { numero };
   });
-  return { ...r, ...(await listar(empresaId)) };
+  return { ...r, ...(await listar(empresaId, usuarioId)) };
 }
 
 // O que mudou fora da DRE (cadastro de centros e plano de contas do Sienge, pela DFC, pelo Cadastro ou pela
@@ -309,12 +318,28 @@ async function salvar(empresaId, usuarioId) {
         WHERE id = $1`,
       [v.id, fc, fr, usuarioId, nome, agora]
     );
-    await registrarEvento(c, v.id, { usuarioId, usuarioNome: nome, descricao: `Salvou a versão ${v.numero}.` });
-    // Só as 10 últimas salvas.
+    // Aprovação (Matriz de Alçadas): com Aprovador, a versão espera por ele; sem, é publicada ao salvar.
+    const aprovador = await matriz.usuarioDo(empresaId, 'DRE', 'APROVADOR');
+    if (aprovador) {
+      await registrarEvento(c, v.id, {
+        usuarioId,
+        usuarioNome: nome,
+        descricao: `Salvou a versão ${v.numero}: aguardando a aprovação de ${aprovador.nome} (Matriz de Alçadas) para ser publicada.`,
+      });
+    } else {
+      await c.query('UPDATE dre_versoes SET aprovada_por = $2, aprovada_por_nome = $3, aprovada_em = $4 WHERE id = $1', [v.id, usuarioId, nome, agora]);
+      await registrarEvento(c, v.id, {
+        usuarioId,
+        usuarioNome: nome,
+        descricao: `Salvou a versão ${v.numero} e ela foi publicada: a empresa não tem Aprovador da DRE na Matriz de Alçadas.`,
+      });
+    }
+    // Só as 10 últimas salvas — e nunca a publicada (a última aprovada), mesmo que seja mais antiga.
+    const publicada = publicadaDe(await versoesDa(empresaId, c));
     const { rows: velhas } = await c.query(
-      `SELECT id, numero, foto_config, foto_realizado FROM dre_versoes WHERE empresa_id = $1 AND status = 'FECHADA'
+      `SELECT id, numero, foto_config, foto_realizado FROM dre_versoes WHERE empresa_id = $1 AND status = 'FECHADA' AND id <> $2
         ORDER BY numero DESC OFFSET ${LIMITE}`,
-      [empresaId]
+      [empresaId, publicada.id]
     );
     for (const x of velhas) {
       await c.query('DELETE FROM dre_versoes WHERE id = $1', [x.id]);
@@ -323,10 +348,30 @@ async function salvar(empresaId, usuarioId) {
       if (!usa[0]) await fotos.apagar(c, x.foto_realizado);
       removidas.push(x);
     }
-    return { numero: v.numero, removidas: removidas.map((x) => x.numero) };
+    return { numero: v.numero, removidas: removidas.map((x) => x.numero), aguardando: aprovador ? aprovador.nome : null };
   });
   removidas.forEach((x) => pool.descartarCaminhos(x.foto_config));
-  return { ...r, ...(await listar(empresaId)) };
+  return { ...r, ...(await listar(empresaId, usuarioId)) };
+}
+
+// Aprova a última versão salva (só o Aprovador da DRE na Matriz de Alçadas): ela passa a ser a publicada.
+async function aprovar(empresaId, usuarioId) {
+  const aprovador = await matriz.usuarioDo(empresaId, 'DRE', 'APROVADOR');
+  if (!aprovador) throw erro(400, 'A empresa não tem Aprovador da DRE na Matriz de Alçadas (Cadastros).');
+  if (aprovador.id !== usuarioId) throw erro(403, `Só ${aprovador.nome} (Aprovador da DRE na Matriz de Alçadas) pode aprovar a versão.`);
+  const nome = await nomeDe(usuarioId);
+  const r = await transacao(empresaId, async (c) => {
+    const v = (await versoesDa(empresaId, c)).find((x) => x.status === 'FECHADA');
+    if (!v || v.aprovada_em) throw erro(409, 'Não há versão aguardando aprovação (só a última versão salva pode ser aprovada).');
+    await c.query('UPDATE dre_versoes SET aprovada_por = $2, aprovada_por_nome = $3, aprovada_em = $4 WHERE id = $1', [v.id, usuarioId, nome, new Date()]);
+    await registrarEvento(c, v.id, {
+      usuarioId,
+      usuarioNome: nome,
+      descricao: `Aprovou a versão ${v.numero}: ela passa a ser a publicada (dashboards, MCP, Excel do dashboard e Reforma Tributária).`,
+    });
+    return { numero: v.numero };
+  });
+  return { ...r, ...(await listar(empresaId, usuarioId)) };
 }
 
 async function excluir(empresaId, usuarioId) {
@@ -347,17 +392,20 @@ async function excluir(empresaId, usuarioId) {
     });
     return { numero: v.numero };
   });
-  return { ...r, ...(await listar(empresaId)) };
+  return { ...r, ...(await listar(empresaId, usuarioId)) };
 }
 
 // ------------------------------------------------------------------------------------------ leitura
 
-async function listar(empresaId) {
+// `usuarioId`: quem pede (pra saber se pode aprovar). `publicada` = a última aprovada; `pendente` = a última
+// salva quando ainda não foi aprovada; `aprovador` = o da Matriz de Alçadas.
+async function listar(empresaId, usuarioId = null) {
   await garantirInicial(empresaId);
   const { rows } = await db.query(
     `SELECT v.id, v.numero, v.status, v.origem, to_char(v.corte, 'YYYY-MM-DD') AS corte, v.base_id, b.numero AS base_numero,
             v.foto_realizado, v.foto_config, v.aberta_por, v.aberta_por_nome, v.aberta_em, v.fechada_por, v.fechada_por_nome,
-            v.fechada_em, (SELECT count(*)::int FROM dre_versao_alteracoes a WHERE a.versao_id = v.id) AS alteracoes
+            v.fechada_em, v.aprovada_por, v.aprovada_por_nome, v.aprovada_em,
+            (SELECT count(*)::int FROM dre_versao_alteracoes a WHERE a.versao_id = v.id) AS alteracoes
        FROM dre_versoes v LEFT JOIN dre_versoes b ON b.id = v.base_id
       WHERE v.empresa_id = $1 ORDER BY v.numero DESC`,
     [empresaId]
@@ -368,21 +416,27 @@ async function listar(empresaId) {
       tamanho_bytes: (await fotos.tamanho(db, v.foto_config)) + (v.origem === 'EDICAO' ? 0 : await fotos.tamanho(db, v.foto_realizado)),
     }))
   );
+  const ultimaSalva = versoes.find((v) => v.status === 'FECHADA') || null;
+  const pendente = ultimaSalva && !ultimaSalva.aprovada_em ? ultimaSalva : null;
+  const aprovador = await matriz.usuarioDo(empresaId, 'DRE', 'APROVADOR');
   return {
     limite: LIMITE,
     proximo_corte: mesAnterior(),
     aberta: versoes.find((v) => v.status === 'ABERTA') || null,
-    publicada: versoes.find((v) => v.status === 'FECHADA') || null,
+    publicada: publicadaDe(versoes) || null,
+    pendente,
+    aprovador,
+    pode_aprovar: Boolean(pendente && aprovador && aprovador.id === usuarioId),
     versoes,
   };
 }
 
-// Cabeçalho do dashboard Demonstração do Resultado: a versão publicada (a última salva), quem a abriu e quem a
-// fechou (o Responsável), o Aprovador (por enquanto o mesmo de quem fechou — a aprovação ainda vai existir) e
+// Cabeçalho do dashboard Demonstração do Resultado: a versão publicada (a última aprovada), quem a abriu e quem a
+// fechou (o Responsável), quem a aprovou (o Aprovador, com a data e hora) e
 // os Colaboradores (todo usuário com alguma alteração carimbada nela), com a foto (avatar_url) de cada um.
 async function cabecalhoPublicada(empresaId) {
   await garantirInicial(empresaId);
-  const v = (await versoesDa(empresaId)).find((x) => x.status === 'FECHADA');
+  const v = publicadaDe(await versoesDa(empresaId));
   if (!v) return null;
   const { rows: colab } = await db.query(
     `SELECT usuario_id, COUNT(*)::int AS alteracoes, MIN(criado_em) AS primeira, MAX(criado_em) AS ultima
@@ -390,7 +444,7 @@ async function cabecalhoPublicada(empresaId) {
       GROUP BY usuario_id ORDER BY COUNT(*) DESC, MIN(criado_em)`,
     [v.id]
   );
-  const ids = [...new Set([v.aberta_por, v.fechada_por, ...colab.map((c) => c.usuario_id)].filter(Boolean))];
+  const ids = [...new Set([v.aberta_por, v.fechada_por, v.aprovada_por, ...colab.map((c) => c.usuario_id)].filter(Boolean))];
   const { rows: us } = ids.length
     ? await db.query('SELECT id, nome, avatar_url, email, telefone_ddd, telefone_numero FROM usuarios WHERE id = ANY($1::int[])', [ids])
     : { rows: [] };
@@ -407,7 +461,8 @@ async function cabecalhoPublicada(empresaId) {
     fechada_em: v.fechada_em,
     abriu,
     fechou,
-    aprovador: { ...fechou, provisorio: true },
+    aprovador: pessoa(v.aprovada_por, v.aprovada_por_nome || v.fechada_por_nome),
+    aprovado_em: v.aprovada_em || v.fechada_em,
     // Contato (e-mail e telefone) só do Responsável e do Aprovador — a lista de colaboradores mostra nome e foto.
     colaboradores: colab.map((c) => {
       const { email, telefone_ddd: _d, telefone_numero: _n, ...p } = pessoa(c.usuario_id); // eslint-disable-line no-unused-vars
@@ -435,6 +490,7 @@ module.exports = {
   contextoDa,
   abrir,
   salvar,
+  aprovar,
   excluir,
   listar,
   alteracoes,

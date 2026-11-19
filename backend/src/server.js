@@ -42,6 +42,7 @@ const dreDemonstrativoRoutes = require('./modules/dre-demonstrativo/demonstrativ
 const dreExportacaoRoutes = require('./modules/dre-exportacao/exportacao.routes');
 const dreProjecoesRoutes = require('./modules/dre-projecoes/dreProjecoes.routes');
 const dreVersoesRoutes = require('./modules/dre-versoes/dreVersoes.routes');
+const matrizAlcadasRoutes = require('./modules/matriz-alcadas/matrizAlcadas.routes');
 const reformaTributariaRoutes = require('./modules/reforma-tributaria/reformaTributaria.routes');
 const contasPagarReceberRoutes = require('./modules/contas-pagar-receber/cpr.routes');
 const lancamentosAjustesRoutes = require('./modules/lancamentos-ajustes/lancamentosAjustes.routes');
@@ -216,6 +217,8 @@ app.use('/api/dre-projecoes', exigirTela([T.DRE]), dreProjecoesRoutes);
 app.use('/api/dre-versoes', exigirTela([T.DRE]), dreVersoesRoutes);
 // Leitura (GET) também pro dashboard Econômico Financeiro (o cabeçalho da Demonstração do Resultado).
 app.use('/api/dre-versoes', exigirTela([T.DRE], LEITURA_DASHBOARD), dreVersoesRoutes);
+// Cadastros › Matriz de Alçadas (por empresa e classificação: ex.: DRE › Aprovador).
+app.use('/api/matriz-alcadas', exigirTela([T.MATRIZ_ALCADAS]), matrizAlcadasRoutes);
 // Operações › Reforma Tributária (o impacto da CBS/IBS na DRE projetada, centro a centro).
 app.use('/api/reforma-tributaria', exigirTela([T.REFORMA_TRIBUTARIA]), reformaTributariaRoutes);
 app.use('/api/contas-pagar-receber', exigirTela([T.CONTAS_PAGAR_RECEBER]), contasPagarReceberRoutes);

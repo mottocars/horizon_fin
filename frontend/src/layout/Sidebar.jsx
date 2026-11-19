@@ -37,6 +37,7 @@ import {
   ClipboardList,
   Megaphone,
   Puzzle,
+  UserCheck,
 } from 'lucide-react';
 
 const menuItems = [
@@ -67,6 +68,7 @@ const menuItems = [
       { label: 'Formulários', to: '/cadastros/formularios', icon: ClipboardList },
       { label: 'Novidades', to: '/cadastros/novidades', icon: Megaphone },
       { label: 'Parceiros', to: '/cadastros/parceiros', icon: Puzzle },
+      { label: 'Matriz de Alçadas', to: '/cadastros/matriz-alcadas', icon: UserCheck },
     ],
   },
   {

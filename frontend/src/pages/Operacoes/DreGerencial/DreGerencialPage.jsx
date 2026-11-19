@@ -1,6 +1,7 @@
 import { useCallback, useEffect, useRef, useState } from 'react';
 import { useSearchParams } from 'react-router-dom';
 import {
+  BadgeCheck,
   BarChart3,
   Building2,
   Calculator,
@@ -44,7 +45,7 @@ import { nomeExibicaoEmpresa } from '../../../utils/empresa';
 import { useEmpresaTravada } from '../../../hooks/useEmpresaTravada';
 import { useConfirm } from '../../../confirm/ConfirmContext';
 import { useSidebar } from '../../../layout/SidebarContext';
-import { abrirVersaoDre, excluirVersaoDre, listarVersoesDre, salvarVersaoDre } from '../../../api/dreVersoes.api';
+import { abrirVersaoDre, aprovarVersaoDre, excluirVersaoDre, listarVersoesDre, salvarVersaoDre } from '../../../api/dreVersoes.api';
 import VersoesDreTab from './VersoesDreTab';
 import { LeituraDreContext } from './leituraDre';
 import SoLeitura from './SoLeitura';
@@ -411,6 +412,11 @@ function DreGerencialConteudo() {
   }, [carregarVersoes]);
   const versaoAberta = estadoVersoes?.aberta || null;
   const versaoPublicada = estadoVersoes?.publicada || null;
+  // Aprovação (Cadastros › Matriz de Alçadas › DRE › Aprovador): a última salva pode estar aguardando o Aprovador
+  // — o Operações mostra ela; os dashboards, a publicada (a última aprovada).
+  const versaoPendente = estadoVersoes?.pendente || null;
+  const aprovadorDre = estadoVersoes?.aprovador || null;
+  const ultimaSalva = versaoPendente || versaoPublicada;
   const versaoVista = versaoVisualizada ? (estadoVersoes?.versoes || []).find((v) => v.numero === versaoVisualizada) || null : null;
   const somenteLeitura = Boolean(empresaId) && (Boolean(versaoVisualizada) || (Boolean(estadoVersoes) && !versaoAberta));
   const mesBR = (iso) => (iso ? `${iso.slice(5, 7)}/${iso.slice(0, 4)}` : '—');
@@ -419,7 +425,7 @@ function DreGerencialConteudo() {
     somenteLeitura,
     motivo: versaoVisualizada
       ? `Você está visualizando a versão ${versaoVisualizada} (só leitura).`
-      : `A DRE está fechada na versão ${versaoPublicada?.numero ?? '—'}. Para alterar, gere uma nova versão ou edite a última na aba Versões.`,
+      : `A DRE está fechada na versão ${ultimaSalva?.numero ?? '—'}. Para alterar, gere uma nova versão ou edite a última na aba Versões.`,
   };
 
   async function acaoVersao(fn) {
@@ -441,7 +447,7 @@ function DreGerencialConteudo() {
     const numero = (estadoVersoes?.versoes?.[0]?.numero || 0) + 1;
     const ok = await confirm({
       title: `Gerar a versão ${numero}`,
-      description: `A versão ${numero} começa com a configuração da versão ${versaoPublicada?.numero} e o realizado até ${mesBR(
+      description: `A versão ${numero} começa com a configuração da versão ${ultimaSalva?.numero} e o realizado até ${mesBR(
         estadoVersoes?.proximo_corte
       )} (o último mês fechado). Enquanto ela estiver aberta, o realizado acompanha o Monitor de Integrações. As alterações só aparecem nos dashboards, no MCP e na Reforma Tributária depois de salvar a versão.`,
       confirmLabel: 'Gerar nova versão',
@@ -452,10 +458,10 @@ function DreGerencialConteudo() {
   async function editarUltimaVersao() {
     const numero = (estadoVersoes?.versoes?.[0]?.numero || 0) + 1;
     const ok = await confirm({
-      title: `Editar a versão ${versaoPublicada?.numero}`,
-      description: `A edição vira a versão ${numero}, com a configuração e o realizado da versão ${versaoPublicada?.numero} (realizado congelado até ${mesBR(
-        versaoPublicada?.corte
-      )}). Você fica registrado como quem abriu a versão. As alterações só aparecem nos dashboards depois de salvar.`,
+      title: `Editar a versão ${ultimaSalva?.numero}`,
+      description: `A edição vira a versão ${numero}, com a configuração e o realizado da versão ${ultimaSalva?.numero} (realizado congelado até ${mesBR(
+        ultimaSalva?.corte
+      )}).${versaoPendente ? ` A versão ${versaoPendente.numero} não foi aprovada e deixa de poder ser aprovada (só a última salva pode).` : ''} Você fica registrado como quem abriu a versão. As alterações só aparecem nos dashboards depois de salvar.`,
       confirmLabel: 'Editar última versão',
     });
     if (ok) await acaoVersao(() => abrirVersaoDre(empresaId, 'EDICAO'));
@@ -467,12 +473,27 @@ function DreGerencialConteudo() {
     const sai = salvas.length >= limite ? salvas[salvas.length - 1] : null;
     const ok = await confirm({
       title: `Salvar a versão ${versaoAberta.numero}`,
-      description: `A versão ${versaoAberta.numero} fica travada (configuração, realizado até ${mesBR(versaoAberta.corte)} e projeção) e passa a ser a publicada: dashboards, MCP, Excel do dashboard e Reforma Tributária.${
+      description: `A versão ${versaoAberta.numero} fica travada (configuração, realizado até ${mesBR(versaoAberta.corte)} e projeção) e ${
+        aprovadorDre
+          ? `fica aguardando a aprovação de ${aprovadorDre.nome} (Matriz de Alçadas). Só depois de aprovada ela passa a ser a publicada`
+          : 'passa a ser a publicada (a empresa não tem Aprovador da DRE na Matriz de Alçadas)'
+      }: dashboards, MCP, Excel do dashboard e Reforma Tributária.${
         sai ? ` Ficam só as ${limite} últimas: a versão ${sai.numero} será apagada.` : ''
       }`,
       confirmLabel: 'Salvar versão',
     });
     if (ok) await acaoVersao(() => salvarVersaoDre(empresaId));
+  }
+
+  async function aprovarVersaoPendente() {
+    const ok = await confirm({
+      title: `Aprovar a versão ${versaoPendente.numero}`,
+      description: `A versão ${versaoPendente.numero} (salva em ${quandoBR(versaoPendente.fechada_em)}${
+        versaoPendente.fechada_por_nome ? ` por ${versaoPendente.fechada_por_nome}` : ''
+      }, realizado até ${mesBR(versaoPendente.corte)}) passa a ser a publicada: dashboards, MCP, Excel do dashboard e Reforma Tributária.`,
+      confirmLabel: 'Aprovar versão',
+    });
+    if (ok) await acaoVersao(() => aprovarVersaoDre(empresaId));
   }
 
   async function excluirVersaoAberta() {
@@ -850,6 +871,12 @@ function DreGerencialConteudo() {
             // Gerar nova versão / Editar última versão (sem versão aberta) ou Excluir / Salvar a aberta.
             <div className="flex shrink-0 flex-col items-end gap-1.5">
               <div className="flex shrink-0 items-center gap-2">
+                {estadoVersoes.pode_aprovar && (
+                  <Button type="button" onClick={aprovarVersaoPendente} disabled={processandoVersao} className="!bg-emerald-600 hover:!bg-emerald-700">
+                    <BadgeCheck size={16} />
+                    Aprovar versão {versaoPendente.numero}
+                  </Button>
+                )}
                 {versaoAberta ? (
                   <>
                     <Button type="button" variant="secondary" onClick={excluirVersaoAberta} disabled={processandoVersao}>
@@ -913,6 +940,16 @@ function DreGerencialConteudo() {
                 <strong>Versão {versaoAberta.numero} em edição</strong> — aberta por {versaoAberta.aberta_por_nome || '—'} em {quandoBR(versaoAberta.aberta_em)}; realizado até{' '}
                 {mesBR(versaoAberta.corte)}
                 {versaoAberta.origem === 'EDICAO' ? ' (congelado)' : ' (atualizado pelo Monitor de Integrações)'}. As alterações só são publicadas ao salvar a versão (aba Versões).
+              </span>
+            </>
+          ) : versaoPendente ? (
+            <>
+              <Lock size={14} className="shrink-0" />
+              <span>
+                <strong>Versão {versaoPendente.numero} aguardando aprovação</strong>
+                {aprovadorDre ? ` de ${aprovadorDre.nome}` : ''} — salva em {quandoBR(versaoPendente.fechada_em)}
+                {versaoPendente.fechada_por_nome ? ` por ${versaoPendente.fechada_por_nome}` : ''} (realizado até {mesBR(versaoPendente.corte)}). Os dashboards
+                seguem na versão {versaoPublicada?.numero} até a aprovação.
               </span>
             </>
           ) : (

@@ -28,6 +28,7 @@ export const TELAS_SISTEMA = [
       { codigo: '/cadastros/formularios', label: 'Formulários' },
       { codigo: '/cadastros/novidades', label: 'Novidades' },
       { codigo: '/cadastros/parceiros', label: 'Parceiros' },
+      { codigo: '/cadastros/matriz-alcadas', label: 'Matriz de Alçadas' },
       // Contas Bancárias virou uma aba de "Saldo Contas Bancárias" (grupo Operações) — quem
       // precisa cadastrar/editar contas agora usa aquela permissão.
     ],

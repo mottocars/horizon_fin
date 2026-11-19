@@ -30,6 +30,7 @@ export const TELAS_SISTEMA = {
   '/cadastros/formularios': { title: 'Formulários', subtitle: 'Cadastros — Formulários de pesquisa' },
   '/cadastros/novidades': { title: 'Novidades', subtitle: 'Cadastros — Novidades do sistema' },
   '/cadastros/parceiros': { title: 'Parceiros', subtitle: 'Cadastros — Aplicativos parceiros da loja' },
+  '/cadastros/matriz-alcadas': { title: 'Matriz de Alçadas', subtitle: 'Cadastros — Quem aprova o quê, por empresa' },
   '/cadastros/contas-bancarias': { title: 'Contas Bancárias', subtitle: 'Cadastros — Contas Bancárias' },
   '/integracoes': { title: 'Integrações', subtitle: 'Todas as integrações do Horizon' },
   '/integracoes/portal-das-construtoras': { title: 'Portal das Construtoras', subtitle: 'Integrações — Portal das Construtoras' },

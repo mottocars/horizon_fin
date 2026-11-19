@@ -66,12 +66,12 @@ const guia = {
       (() => {
         const v = pool.contextoAtual()?.versao;
         return v
-          ? `- Este MCP lê a **versão ${v.numero}**, a publicada (a última salva), salva em ${quando(v.fechada_em)}${v.fechada_por_nome ? ` por ${v.fechada_por_nome}` : ''}. O **realizado vai até ${br(`${v.corte.slice(0, 7)}-01`).slice(3)}** (o último mês fechado quando ela foi aberta); do mês seguinte em diante, só a projeção.`
+          ? `- Este MCP lê a **versão ${v.numero}**, a publicada (a última salva e aprovada), salva em ${quando(v.fechada_em)}${v.fechada_por_nome ? ` por ${v.fechada_por_nome}` : ''}${v.aprovada_em ? `, aprovada em ${quando(v.aprovada_em)}${v.aprovada_por_nome ? ` por ${v.aprovada_por_nome}` : ''}` : ''}. O **realizado vai até ${br(`${v.corte.slice(0, 7)}-01`).slice(3)}** (o último mês fechado quando ela foi aberta); do mês seguinte em diante, só a projeção.`
           : '- Sem versão da DRE.';
       })(),
-      '- Uma versão salva fica **travada**: configuração das abas, cadastros de fora (ex.: o Tipo Obra/Administrativo do centro) e o realizado do Sienge são uma cópia do dia em que foi salva — o que mudou depois no Sienge ou nas telas não aparece até alguém gerar e salvar uma nova versão. Dashboard, Excel do dashboard, Reforma Tributária e este MCP leem a última salva; a versão em edição só aparece no Operações.',
+      '- Uma versão salva fica **travada**: configuração das abas, cadastros de fora (ex.: o Tipo Obra/Administrativo do centro) e o realizado do Sienge são uma cópia do dia em que foi salva — o que mudou depois no Sienge ou nas telas não aparece até alguém gerar e salvar uma nova versão. Depois de salva, a versão espera o **Aprovador** (Cadastros › Matriz de Alçadas › DRE): só a aprovada é publicada. Dashboard, Excel do dashboard, Reforma Tributária e este MCP leem a última aprovada; a versão em edição ou aguardando aprovação só aparece no Operações.',
       '- **Gerar nova versão**: realizado até o último mês fechado (atualizado pelo Monitor de Integrações enquanto aberta). **Editar última versão**: o mesmo realizado da versão editada. Toda alteração feita com a versão aberta tem o carimbo (quem, quando, o quê) — drilldown Versão › Módulo › Usuário › Alteração na aba Versões. Ficam as 10 últimas versões salvas.',
-      '- **Projetado de um mês que já fechou**: o da última versão salva em que ele ainda era projeção (o Desvio compara o realizado com o que se esperava).',
+      '- **Projetado de um mês que já fechou**: o da última versão aprovada em que ele ainda era projeção (o Desvio compara o realizado com o que se esperava).',
       '',
       '## Como a DRE é gerada, do Sienge até a linha',
       '1. **Centros de custo**: entram só os marcados com "Realiza DRE" (aba Centros Custos), na ordem dessa aba. O **consolidado é a soma dos centros**. Cada centro é calculado sozinho, mês a mês.',

@@ -54,7 +54,7 @@ const rotMes = (m) => {
 const quando = (v) => (v ? new Date(v).toLocaleString('pt-BR', { timeZone: 'America/Sao_Paulo', dateStyle: 'short', timeStyle: 'short' }) : '—');
 
 // ─── Entradas comuns ────────────────────────────────────────────────────────────────────────────
-// O MCP lê sempre a DRE PUBLICADA: a última versão salva da DRE (modules/dre-versoes) — a projeção é a dos
+// O MCP lê sempre a DRE PUBLICADA: a última versão salva e aprovada da DRE (modules/dre-versoes) — a projeção é a dos
 // orçamentos daquela versão. (Sem escolha de fonte: a versão em edição só aparece no Operações.)
 const FONTE = {};
 const PERIODO_PROJ = {
@@ -198,7 +198,7 @@ const guia = {
       '- **Lista**: um orçamento por centro, com as colunas dos totalizadores da Máscara DRE (o fechamento: realizado desde o primeiro lançamento do centro até a trava + projetado até o fim do ciclo — igual à coluna Projetado da aba DRE no período inteiro). A linha de cima diz a versão da DRE. Situação: **Em andamento** (sendo montado) ou **Concluído** (calculado). Ações: abrir/continuar o assistente, descartar. Só dá para alterar com uma versão da DRE ABERTA (aba Versões).',
       '- **Layout**: baixa a planilha preenchida da empresa inteira (abas Ciclos, Vendas, Custos da POC, Demais contas e uma oculta _horizon de controle; protegida com senha nas células que não se digitam). **Importar**: sobe a planilha, mostra a prévia (o que muda por centro, erros por aba e linha, avisos) e grava só os centros que mudaram — opcionalmente já concluindo. Ciclo em branco com valores preenchidos é ignorado.',
       '- **Novo orçamento**: abre o assistente. **Tela cheia**.',
-      '- **Versões da DRE** (aba Versões, ao lado de Projeções): a projeção é publicada junto com a DRE inteira. Sem versão aberta, nada da DRE pode ser alterado e todos leem a última salva. **Gerar nova versão** = realizado até o último mês fechado (o corte; atualizado pelo Monitor de Integrações enquanto a versão estiver aberta); **Editar última versão** = mesma cópia do realizado da versão editada. **Salvar versão** recusa se houver orçamento não concluído; ao salvar, a versão guarda a cópia de tudo (configuração, cadastros e realizado) e fica travada. Ficam as 10 últimas.',
+      '- **Versões da DRE** (aba Versões, ao lado de Projeções): a projeção é publicada junto com a DRE inteira. Sem versão aberta, nada da DRE pode ser alterado e todos leem a última salva. **Gerar nova versão** = realizado até o último mês fechado (o corte; atualizado pelo Monitor de Integrações enquanto a versão estiver aberta); **Editar última versão** = mesma cópia do realizado da versão editada. **Salvar versão** recusa se houver orçamento não concluído; ao salvar, a versão guarda a cópia de tudo (configuração, cadastros e realizado), fica travada e espera o **Aprovador** (Cadastros › Matriz de Alçadas › DRE) — só a aprovada é publicada. Ficam as 10 últimas.',
       '',
       '## O assistente (7 etapas)',
       '1. **Centro e ciclo**: o centro (precisa de "Realiza DRE" e do Tipo Obra/Administrativo na aba Centros Custos) e o ciclo (mês de início e de fim). Um orçamento por centro.',
@@ -221,7 +221,7 @@ const guia = {
       '',
       '## Realizado × Projetado (aba DRE e dashboard)',
       '- Colunas: **Valor**, **AV %** (no mês a mês, **AH %**), **Projetado** (amarelo pastel) e **Desvio %**. Filtro **Colunas** liga/desliga cada uma. O realizado vai só até o CORTE da versão (o último mês fechado); do mês seguinte em diante, só o Projetado.',
-      '- **De qual versão vem o Projetado**: nos meses depois do corte, da própria versão; nos meses que já fecharam, da última versão salva em que aquele mês ainda era projeção (é o que se esperava — o Desvio compara com o realizado). Sem versão anterior guardada, o mês fica sem projetado. O Operações mostra a versão em edição (ou, sem ela, a última salva); o **dashboard** e este MCP, a última salva.',
+      '- **De qual versão vem o Projetado**: nos meses depois do corte, da própria versão; nos meses que já fecharam, da última versão aprovada em que aquele mês ainda era projeção (é o que se esperava — o Desvio compara com o realizado). Sem versão anterior guardada, o mês fica sem projetado. O Operações mostra a versão em edição (ou, sem ela, a última salva); o **dashboard** e este MCP, a última aprovada.',
       `- **Desvio %** = (Valor − Projetado) ÷ |Projetado|, com o realizado até hoje contra o projetado SÓ dos meses até o atual (o mês atual inteiro — regra do DFC). Positivo (verde) = melhor que o projetado; dentro de ±${TOLERANCIA}% fica neutro; abaixo, vermelho.`,
       '- **Consolidado**: o Projetado soma os centros com orçamento; o Desvio compara só o realizado dos centros COM projeção (a legenda diz quantos de quantos).',
       '- **Mês a mês** (clique no centro): meses até o corte com o realizado e o projetado da versão anterior; meses depois do corte só com a coluna Projetado; sem meses vazios nas pontas. Período por mês/ano (o campo aceita digitar "fev/2020").',

@@ -16,6 +16,7 @@ module.exports = {
   FORMULARIOS: '/cadastros/formularios',
   NOVIDADES: '/cadastros/novidades',
   PARCEIROS: '/cadastros/parceiros',
+  MATRIZ_ALCADAS: '/cadastros/matriz-alcadas',
 
   DRE: '/operacoes/dre-gerencial',
   DFC: '/operacoes/dfc-construtoras',
