@@ -214,6 +214,8 @@ app.use('/api/dre-configuracoes', exigirTela([T.DRE]), dreConfiguracoesRoutes);
 app.use('/api/dre-projecoes', exigirTela([T.DRE]), dreProjecoesRoutes);
 // Versões da DRE (aba Versões: abrir, salvar, excluir o rascunho e o carimbo das alterações).
 app.use('/api/dre-versoes', exigirTela([T.DRE]), dreVersoesRoutes);
+// Leitura (GET) também pro dashboard Econômico Financeiro (o cabeçalho da Demonstração do Resultado).
+app.use('/api/dre-versoes', exigirTela([T.DRE], LEITURA_DASHBOARD), dreVersoesRoutes);
 // Operações › Reforma Tributária (o impacto da CBS/IBS na DRE projetada, centro a centro).
 app.use('/api/reforma-tributaria', exigirTela([T.REFORMA_TRIBUTARIA]), reformaTributariaRoutes);
 app.use('/api/contas-pagar-receber', exigirTela([T.CONTAS_PAGAR_RECEBER]), contasPagarReceberRoutes);

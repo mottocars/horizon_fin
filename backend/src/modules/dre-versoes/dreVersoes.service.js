@@ -377,6 +377,41 @@ async function listar(empresaId) {
   };
 }
 
+// Cabeçalho do dashboard Demonstração do Resultado: a versão publicada (a última salva), quem a abriu e quem a
+// fechou (o Responsável), o Aprovador (por enquanto o mesmo de quem fechou — a aprovação ainda vai existir) e
+// os Colaboradores (todo usuário com alguma alteração carimbada nela), com a foto (avatar_url) de cada um.
+async function cabecalhoPublicada(empresaId) {
+  await garantirInicial(empresaId);
+  const v = (await versoesDa(empresaId)).find((x) => x.status === 'FECHADA');
+  if (!v) return null;
+  const { rows: colab } = await db.query(
+    `SELECT usuario_id, COUNT(*)::int AS alteracoes, MIN(criado_em) AS primeira, MAX(criado_em) AS ultima
+       FROM dre_versao_alteracoes WHERE versao_id = $1 AND usuario_id IS NOT NULL
+      GROUP BY usuario_id ORDER BY COUNT(*) DESC, MIN(criado_em)`,
+    [v.id]
+  );
+  const ids = [...new Set([v.aberta_por, v.fechada_por, ...colab.map((c) => c.usuario_id)].filter(Boolean))];
+  const { rows: us } = ids.length
+    ? await db.query('SELECT id, nome, avatar_url FROM usuarios WHERE id = ANY($1::int[])', [ids])
+    : { rows: [] };
+  const porId = new Map(us.map((u) => [u.id, u]));
+  // Usuário apagado ou o "Sistema" (versão inicial): só o nome gravado na versão.
+  const pessoa = (id, nome) => (id && porId.get(id) ? { ...porId.get(id) } : { id: null, nome: nome || 'Sistema', avatar_url: null });
+  const abriu = pessoa(v.aberta_por, v.aberta_por_nome);
+  const fechou = pessoa(v.fechada_por, v.fechada_por_nome);
+  return {
+    numero: v.numero,
+    origem: v.origem,
+    corte: v.corte.slice(0, 7),
+    aberta_em: v.aberta_em,
+    fechada_em: v.fechada_em,
+    abriu,
+    fechou,
+    aprovador: { ...fechou, provisorio: true },
+    colaboradores: colab.map((c) => ({ ...pessoa(c.usuario_id), alteracoes: c.alteracoes, primeira: c.primeira, ultima: c.ultima })),
+  };
+}
+
 async function alteracoes(empresaId, numero) {
   const { rows: v } = await db.query('SELECT id FROM dre_versoes WHERE empresa_id = $1 AND numero = $2', [empresaId, numero]);
   if (!v[0]) throw erro(404, `Versão ${numero} não encontrada.`);
@@ -399,5 +434,6 @@ module.exports = {
   excluir,
   listar,
   alteracoes,
+  cabecalhoPublicada,
   nomeDe,
 };

@@ -5,6 +5,7 @@ import { exportarExcelDre } from '../../../../api/dreExportacao.api';
 import DreTab from '../../../Operacoes/DreGerencial/DreTab';
 import PocTab from '../../../Operacoes/DreGerencial/PocTab';
 import CabecalhoDashboard from '../../CabecalhoDashboard';
+import VersaoPublicada from './VersaoPublicada';
 import CampoPeriodo from '../fluxo/CampoPeriodo';
 import { FiltroCentros, centrosDoFiltro } from '../fluxo/FluxoCaixaPainel';
 import { DicaProvider } from '../fluxo/graficos';
@@ -218,7 +219,8 @@ export default function DrePainel({ dashboard, tituloTela, empresaId, onEmpresa,
     <DicaProvider>
       <SumarioCtx.Provider value={abrirSumario}>
         <div className="painel-cfo dre">
-          <CabecalhoDashboard dashboard={dashboard} titulo={tituloTela} marca={marcaEmpresa} />
+          {/* Antes da logomarca: a versão publicada da DRE e quem fez ela (VersaoPublicada.jsx). */}
+          <CabecalhoDashboard dashboard={dashboard} titulo={tituloTela} marca={marcaEmpresa} extra={<VersaoPublicada empresaId={empresaId} />} />
 
           <section className="controls" aria-label="Controles da DRE">
             <div className="ctl">

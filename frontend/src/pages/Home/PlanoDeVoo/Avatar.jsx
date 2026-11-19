@@ -14,6 +14,8 @@ const TAMANHOS = {
   sm: 'h-7 w-7 text-[11px]',
   md: 'h-9 w-9 text-xs',
   lg: 'h-11 w-11 text-sm',
+  // A janela da foto do cabeçalho da Demonstração do Resultado (dashboards).
+  xxl: 'h-40 w-40 text-5xl',
 };
 
 function iniciais(nome = '') {
