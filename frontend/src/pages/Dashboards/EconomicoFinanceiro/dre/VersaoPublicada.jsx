@@ -1,4 +1,5 @@
 import { useEffect, useState } from 'react';
+import { CircleCheck, TriangleAlert } from 'lucide-react';
 import Modal from '../../../../components/Modal';
 import Avatar from '../../../Home/PlanoDeVoo/Avatar';
 import { versaoPublicadaDre } from '../../../../api/dreVersoes.api';
@@ -63,11 +64,30 @@ export default function VersaoPublicada({ empresaId }) {
   if (!v) return null;
 
   const colab = v.colaboradores;
+  // O último mês fechado (o anterior ao de hoje): a versão do mês tem o realizado até ele.
+  const hoje = new Date();
+  const ultimoFechado = new Date(hoje.getFullYear(), hoje.getMonth() - 1, 1);
+  const ultimoFechadoMes = `${ultimoFechado.getFullYear()}-${String(ultimoFechado.getMonth() + 1).padStart(2, '0')}`;
+  const emDia = v.corte >= ultimoFechadoMes;
   const fechar = () => setJanela(null);
 
   return (
     <div className="flex flex-wrap items-center justify-end gap-1.5">
-      <Etiqueta rotulo="Versão" valor={`${v.numero} · ${data(v.fechada_em)}`} titulo={`Realizado até ${mesCurto(v.corte)}`} />
+      {/* Em dia (verde): a versão publicada já tem o realizado do último mês fechado — foi gerada neste mês.
+          Atrasada (amarelo): ainda não foi gerada a versão do mês atual. */}
+      <span
+        title={
+          emDia
+            ? `Versão do mês: realizado até ${mesCurto(v.corte)}, o último mês fechado.`
+            : `Versão atrasada: o realizado vai só até ${mesCurto(v.corte)} — ainda não foi gerada a versão deste mês (realizado até ${mesCurto(ultimoFechadoMes)}).`
+        }
+        className={`inline-flex items-center gap-1 whitespace-nowrap rounded-full border px-2 py-0.5 font-mono text-[11px] ${
+          emDia ? 'border-emerald-300 bg-emerald-50 text-emerald-800' : 'border-amber-300 bg-amber-50 text-amber-800'
+        }`}
+      >
+        {emDia ? <CircleCheck size={13} className="shrink-0" /> : <TriangleAlert size={13} className="shrink-0" />}
+        Versão <b className="font-medium">{`${v.numero} · ${data(v.fechada_em)}`}</b>
+      </span>
       <Etiqueta rotulo="Responsável" valor={v.fechou.nome} onClick={() => setJanela('responsavel')} titulo="Quem fechou a versão" />
       <Etiqueta rotulo="Aprovador" valor={v.aprovador.nome} onClick={() => setJanela('aprovador')} titulo="Quem aprovou a versão" />
       {colab.length ? (
