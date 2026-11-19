@@ -53,7 +53,14 @@ function Pessoa({ pessoa, texto }) {
             </a>
           )}
           {tel && (
-            <a href={`tel:+55${pessoa.telefone_ddd || ''}${String(pessoa.telefone_numero).replace(/\D/g, '')}`} className="flex items-center gap-2 text-gray-700 hover:text-primary-600">
+            // Abre a conversa no WhatsApp Web (número com o 55 do Brasil + DDD).
+            <a
+              href={`https://web.whatsapp.com/send?phone=55${pessoa.telefone_ddd || ''}${String(pessoa.telefone_numero).replace(/\D/g, '')}`}
+              target="_blank"
+              rel="noopener noreferrer"
+              title="Abrir no WhatsApp Web"
+              className="flex items-center gap-2 text-gray-700 hover:text-emerald-600"
+            >
               <Phone size={15} className="shrink-0 text-gray-400" />
               {tel}
             </a>
