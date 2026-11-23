@@ -215,7 +215,6 @@ app.use('/api/dre-configuracoes', exigirTela([T.DRE]), dreConfiguracoesRoutes);
 // Projeções da DRE (orçamento por centro de custo, assistente em etapas).
 app.use('/api/dre-projecoes', exigirTela([T.DRE]), dreProjecoesRoutes);
 // Versões da DRE (aba Versões: abrir, salvar, excluir o rascunho e o carimbo das alterações).
-app.use('/api/dre-versoes', exigirTela([T.DRE]), dreVersoesRoutes);
 // Leitura (GET) também pro dashboard Econômico Financeiro (o cabeçalho da Demonstração do Resultado).
 app.use('/api/dre-versoes', exigirTela([T.DRE], LEITURA_DASHBOARD), dreVersoesRoutes);
 // Cadastros › Matriz de Alçadas (por empresa e classificação: ex.: DRE › Aprovador).
