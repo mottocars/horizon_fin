@@ -60,6 +60,7 @@ const COL_MENSAL = [
 const COL_PREMISSAS = [
   { chave: 'centro_id', rotulo: 'Centro (id)', largura: 8 },
   { chave: 'centro', rotulo: 'Centro de custo', largura: 24 },
+  { chave: 'agrupador', rotulo: 'Agrupador', largura: 20 },
   { chave: 'orcamento', rotulo: 'Orçamento', largura: 14 },
   { chave: 'tipo', rotulo: 'Premissa', largura: 18 },
   { chave: 'mes', rotulo: 'Mês', largura: 9, formato: 'mes' },
@@ -204,7 +205,7 @@ function montar(d, LY) {
   const premissas = [];
   P.orcamentos.forEach(({ orc, foto, prep, naTrava }) => {
     const fonte = prep || foto;
-    const base = { centro_id: orc.centro_id, centro: rot(orc.centro_id), orcamento: rotuloOrcamento(orc) };
+    const base = { centro_id: orc.centro_id, centro: rot(orc.centro_id), agrupador: d.agrupadorDe(orc.centro_id), orcamento: rotuloOrcamento(orc) };
     const noPeriodo = (mes) => (mes >= mesDe && mes <= mesAte ? 'Sim' : 'Não');
     (fonte.vendas || []).forEach((v) =>
       premissas.push({
@@ -300,7 +301,7 @@ function montar(d, LY) {
       const vendidaPrem = premissas
         .filter((x) => x.centro_id === id && x.tipo === 'Venda de unidade' && x.mes <= D)
         .reduce((t, x) => t + num(x.fracao_vendida), 0);
-      // Versão do orçamento da obra vigente em D (a de início mais recente até D) — o resultado do MÁXIMOSES.
+      // Versão do orçamento da obra vigente em D (a de início mais recente até D) — o resultado da fórmula da coluna.
       const versao = d.orcamento.filter((x) => x.centro_id === id && x.inicio <= D).reduce((v, x) => (x.inicio > v ? x.inicio : v), '');
       const vendidaTotal = M.base.FRACAO_VENDAS(id, D);
       const f = daFoto(D);
@@ -523,7 +524,8 @@ function montar(d, LY) {
     const BUt = (col, n) => `SUMIFS(${BU.faixa(col)},${BU.faixa('centro_id')},${A(n)},${BU.faixa('data')},${MIN(D(n), T(n))})`;
     switch (c.chave) {
       case 'versao':
-        return g((n, l) => ({ formula: `_xlfn.MAXIFS(${BO.faixa('inicio')},${BO.faixa('centro_id')},${A(n)},${BO.faixa('inicio')},"<="&${D(n)})`, result: l.versao }));
+        // Sem MÁXIMOSES (MAXIFS), que não existe no Excel 2016 e anteriores — ver calculo.js.
+        return g((n, l) => ({ formula: `SUMPRODUCT(MAX((${BO.faixa('centro_id')}=${A(n)})*(${BO.faixa('inicio')}<=${D(n)})*${BO.faixa('inicio')}))`, result: l.versao }));
       case 'orcamento':
         return g((n, l) => f(`IF(${cp('versao')}${n}=0,0,SUMIFS(${BO.faixa('valor')},${BO.faixa('centro_id')},${A(n)},${BO.faixa('inicio')},${cp('versao')}${n}))`, l.orcamento));
       case 'custo_real':

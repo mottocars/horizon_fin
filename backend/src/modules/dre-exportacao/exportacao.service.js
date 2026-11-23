@@ -210,6 +210,16 @@ async function dados(empresaId, { de, ate, centros = [], projecao = null }) {
   const mapa = agrupadores.mapaDe(lista);
   // Estoque da Base Unidades na posição do limite do realizado (a da aba Unidades), por unidade da DRE.
   const noCorte = await unidades.listarNoCorte(empresaId);
+  // Agrupador de cada centro (coluna "Agrupador" ao lado do centro nas bases — pedido do usuário, 23/11/2026): todos
+  // os agrupadores da empresa, também os sem "Realiza DRE" (um centro fora da DRE aparece na Fora da DRE).
+  const { rows: membrosAgrupador } = await pool.query(
+    `SELECT ac.centro_id::int AS centro_id, a.nome
+       FROM dre_agrupadores_centros ac JOIN dre_agrupadores a ON a.id = ac.agrupador_id
+      WHERE a.empresa_id = $1`,
+    [empresaId]
+  );
+  const nomeAgrupador = new Map(membrosAgrupador.map((r) => [r.centro_id, r.nome]));
+  const agrupadorDe = (id) => (id === null || id === undefined ? null : nomeAgrupador.get(Number(id)) || null);
   const estoque = new Map(
     agrupadores
       .fundir({ unidadesCentros: noCorte.centros, corr: [], custos: [], orcamentos: [] }, lista)
@@ -303,6 +313,7 @@ async function dados(empresaId, { de, ate, centros = [], projecao = null }) {
     de,
     ate,
     filtrado,
+    agrupadorDe,
     m,
     regras,
     mascarasFin,

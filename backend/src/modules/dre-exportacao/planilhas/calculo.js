@@ -298,7 +298,9 @@ function montar(d, LY) {
     switch (c.chave) {
       case 'versao':
         return g((n, l) => ({
-          formula: `_xlfn.MAXIFS(${BO.faixa('inicio')},${BO.faixa('centro_id')},A${n},${BO.faixa('inicio')},"<="&D${n})`,
+          // Sem MÁXIMOSES (MAXIFS): não existe no Excel 2016 e anteriores (#NOME? em cascata até a DRE). SOMARPRODUTO(MÁXIMO())
+          // dá o mesmo em qualquer Excel desde o 2007, no LibreOffice e no Google Planilhas (0 = sem orçamento).
+          formula: `SUMPRODUCT(MAX((${BO.faixa('centro_id')}=A${n})*(${BO.faixa('inicio')}<=D${n})*${BO.faixa('inicio')}))`,
           result: l.versao ? dataSerial(l.versao) : 0,
         }));
       case 'orcamento':
@@ -333,7 +335,7 @@ function montar(d, LY) {
   return { poc, memoria, lyPoc: { ...lyPoc, colunas: colPoc }, lyMem: { ...lyMem, colunas: colMemoria }, linhaPoc, usaPoc };
 }
 
-// 'AAAA-MM-DD' -> número de série do Excel (o resultado gravado do MÁXIMOSES).
+// 'AAAA-MM-DD' -> número de série do Excel (o resultado gravado da versão do orçamento).
 function dataSerial(iso) {
   const [a, mm, dd] = iso.split('-').map(Number);
   return (Date.UTC(a, mm - 1, dd) - Date.UTC(1899, 11, 30)) / 86400000;
@@ -351,7 +353,7 @@ function escrever(workbook, abas, C, d, meta) {
     meta,
     estiloLinha: (l) => (l.referencia === 'Véspera do período' ? CORES.CINZA_CLARO : null),
   });
-  // Versão do orçamento: data, ou "sem orçamento" quando o MÁXIMOSES dá zero.
+  // Versão do orçamento: data, ou "sem orçamento" quando a fórmula dá zero.
   const colVersao = C.lyPoc.col.versao;
   for (let r = C.lyPoc.primeira; r <= C.lyPoc.ultima; r += 1) abas.poc.getCell(`${colVersao}${r}`).numFmt = 'dd/mm/yyyy;;"sem orçamento"';
 

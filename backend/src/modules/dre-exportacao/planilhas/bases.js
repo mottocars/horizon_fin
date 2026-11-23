@@ -1,5 +1,5 @@
 const { CORES } = require('../../../utils/excelMarca');
-const { layout, tabela, codigo, rotuloCentro } = require('./comum');
+const { layout, tabela, codigo, rotuloCentro, letra } = require('./comum');
 
 // Abas de base da exportação de auditoria da DRE: uma linha por registro de cada fonte — é delas que a
 // Memória de Cálculo e a POC tiram cada número (SOMASES). Fora da DRE e Plano de Contas mostram o
@@ -52,6 +52,7 @@ const COL_FINANCEIRO = [
   { chave: 'periodo', rotulo: 'No período?', largura: 8 },
   { chave: 'centro_id', rotulo: 'Centro (id)', largura: 8 },
   { chave: 'centro', rotulo: 'Centro de custo', largura: 26 },
+  { chave: 'agrupador', rotulo: 'Agrupador', largura: 22 },
   // O centro do lançamento (≠ Centro (id) quando o centro está num agrupador: a coluna da DRE é a do agrupador).
   { chave: 'centro_origem', rotulo: 'Centro de origem (id)', largura: 9 },
   { chave: 'grupo', rotulo: 'Grupo DRE (nível 1)', largura: 26 },
@@ -82,6 +83,7 @@ const COL_UNIDADES = [
   { chave: 'data', rotulo: 'Data (contrato / distrato / avaliação)', largura: 13, formato: 'data' },
   { chave: 'centro_id', rotulo: 'Centro (id)', largura: 8 },
   { chave: 'centro', rotulo: 'Centro de custo', largura: 24 },
+  { chave: 'agrupador', rotulo: 'Agrupador', largura: 20 },
   { chave: 'unidade', rotulo: 'Unidade', largura: 14 },
   { chave: 'tipo', rotulo: 'Tipo', largura: 14 },
   { chave: 'situacao', rotulo: 'Situação hoje (Sienge)', largura: 16 },
@@ -105,6 +107,7 @@ const COL_UNIDADES = [
 const COL_CORRECOES = [
   { chave: 'centro_id', rotulo: 'Centro (id)', largura: 8 },
   { chave: 'centro', rotulo: 'Centro de custo', largura: 24 },
+  { chave: 'agrupador', rotulo: 'Agrupador', largura: 20 },
   { chave: 'cliente', rotulo: 'Cliente', largura: 34 },
   { chave: 'unidade', rotulo: 'Unidade', largura: 14 },
   { chave: 'titulo', rotulo: 'Título', largura: 9, codigo: true },
@@ -124,13 +127,17 @@ const COL_CORRECOES = [
     formato: 'moeda',
     total: (l) => l.paga + l.reparcelada + l.em_aberto,
     destaque: true,
-    formula: (n, l) => ({ formula: `L${n}+M${n}+N${n}`, result: l.paga + l.reparcelada + l.em_aberto }),
+    formula: (n, l) => {
+      const c = (chave) => letra(COL_CORRECOES.findIndex((x) => x.chave === chave) + 1);
+      return { formula: `${c('paga')}${n}+${c('reparcelada')}${n}+${c('em_aberto')}${n}`, result: l.paga + l.reparcelada + l.em_aberto };
+    },
   },
 ];
 
 const COL_ORCAMENTO = [
   { chave: 'centro_id', rotulo: 'Centro (id)', largura: 8 },
   { chave: 'centro', rotulo: 'Centro de custo', largura: 28 },
+  { chave: 'agrupador', rotulo: 'Agrupador', largura: 20 },
   { chave: 'inicio', rotulo: 'Início da versão', largura: 12, formato: 'data' },
   { chave: 'categoria', rotulo: 'Categoria', largura: 30 },
   { chave: 'valor', rotulo: 'Valor', largura: 16, formato: 'moeda', total: true, destaque: true },
@@ -149,6 +156,7 @@ const COL_FORA = [
   { chave: 'contraparte', rotulo: 'Cliente / Fornecedor / Histórico', largura: 38 },
   { chave: 'centro_id', rotulo: 'Centro (id)', largura: 8, codigo: true },
   { chave: 'centro', rotulo: 'Centro de custo', largura: 26 },
+  { chave: 'agrupador', rotulo: 'Agrupador', largura: 20 },
   { chave: 'plano', rotulo: 'Plano de contas', largura: 14 },
   { chave: 'natureza_id', rotulo: 'Cód. natureza', largura: 11, codigo: true },
   { chave: 'natureza', rotulo: 'Natureza', largura: 32 },
@@ -163,6 +171,7 @@ const COL_FORA = [
 const COL_PLANO = [
   { chave: 'centro_id', rotulo: 'Centro (id)', largura: 8 },
   { chave: 'centro', rotulo: 'Centro de custo', largura: 26 },
+  { chave: 'agrupador', rotulo: 'Agrupador', largura: 20 },
   { chave: 'plano', rotulo: 'Plano que vale', largura: 14 },
   { chave: 'natureza_id', rotulo: 'Cód. natureza', largura: 11, codigo: true },
   { chave: 'natureza', rotulo: 'Natureza', largura: 36 },
@@ -207,6 +216,7 @@ function linhas(d) {
     periodo: noPeriodo(f.data),
     centro_id: f.centro_id,
     centro: comMembro(f),
+    agrupador: d.agrupadorDe(f.centro_membro ?? f.centro_id),
     centro_origem: f.centro_membro ?? f.centro_id,
     grupo: grupoDe(f.mascara_id),
     mascara: mascaras.get(f.mascara_id)?.descricao || null,
@@ -231,16 +241,16 @@ function linhas(d) {
     em: f.ajuste_em || f.criado_em,
   }));
 
-  const unidades = d.unidades.map((u) => ({ ...u, centro: centro(u.centro_id), situacao: SITUACAO[u.situacao] || u.situacao }));
+  const unidades = d.unidades.map((u) => ({ ...u, centro: centro(u.centro_id), agrupador: d.agrupadorDe(u.centro_id), situacao: SITUACAO[u.situacao] || u.situacao }));
 
-  const correcoes = d.correcoes.map((c) => ({ ...c, centro: comMembro(c) }));
+  const correcoes = d.correcoes.map((c) => ({ ...c, centro: comMembro(c), agrupador: d.agrupadorDe(c.centro_membro ?? c.centro_id) }));
 
   // Versão vigente no fim do período: a de início mais recente até o fim, por centro.
   const vigente = new Map();
   d.orcamento.forEach((o) => {
     if (!vigente.has(o.centro_id) || o.inicio > vigente.get(o.centro_id)) vigente.set(o.centro_id, o.inicio);
   });
-  const orcamento = d.orcamento.map((o) => ({ ...o, centro: comMembro(o), vigente: vigente.get(o.centro_id) === o.inicio ? 'Sim' : 'Não' }));
+  const orcamento = d.orcamento.map((o) => ({ ...o, centro: comMembro(o), agrupador: d.agrupadorDe(o.centro_membro ?? o.centro_id), vigente: vigente.get(o.centro_id) === o.inicio ? 'Sim' : 'Não' }));
 
   // Contagem/valor da Base Financeiro por centro × natureza (resultado das fórmulas do Plano de Contas).
   const naBase = new Map();
@@ -255,6 +265,7 @@ function linhas(d) {
     return {
       centro_id: p.centro_id,
       centro: doCadastro(p.centro_id),
+      agrupador: d.agrupadorDe(p.centro_id),
       plano: p.plano,
       natureza_id: p.natureza_id,
       natureza: p.natureza_nome,
@@ -284,6 +295,7 @@ function linhas(d) {
     contraparte: f.contraparte,
     centro_id: f.centro_id,
     centro: f.centro_id === null ? null : `${f.centro_id} · ${f.centro_nome || '(sem cadastro)'}`,
+    agrupador: d.agrupadorDe(f.centro_id),
     plano: f.centro_id === null ? null : f.plano,
     natureza_id: f.natureza_id,
     natureza: f.natureza_nome,
@@ -343,11 +355,12 @@ function escrever(workbook, abas, LY, L, d, meta) {
 
   // Plano de Contas: contagem e valor por fórmula sobre a Base Financeiro.
   const BF = LY.financeiro;
+  const PC = LY.plano.col;
   const colPlano = LY.plano.colunas.map((c) => {
     if (c.chave === 'lancamentos')
-      return { ...c, formula: (n, l) => ({ formula: `COUNTIFS(${BF.faixa('centro_origem')},A${n},${BF.faixa('natureza_id')},D${n})`, result: l.n }) };
+      return { ...c, formula: (n, l) => ({ formula: `COUNTIFS(${BF.faixa('centro_origem')},${PC.centro_id}${n},${BF.faixa('natureza_id')},${PC.natureza_id}${n})`, result: l.n }) };
     if (c.chave === 'valor')
-      return { ...c, formula: (n, l) => ({ formula: `SUMIFS(${BF.faixa('valor')},${BF.faixa('centro_origem')},A${n},${BF.faixa('natureza_id')},D${n})`, result: l.v }) };
+      return { ...c, formula: (n, l) => ({ formula: `SUMIFS(${BF.faixa('valor')},${BF.faixa('centro_origem')},${PC.centro_id}${n},${BF.faixa('natureza_id')},${PC.natureza_id}${n})`, result: l.v }) };
     return c;
   });
   tabela(workbook, abas.plano, { ...LY.plano, colunas: colPlano }, {
