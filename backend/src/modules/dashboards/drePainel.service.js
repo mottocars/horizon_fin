@@ -2,7 +2,7 @@ const pool = require('../../config/db');
 const demonstrativo = require('../dre-demonstrativo/demonstrativo.service');
 const pocService = require('../dre-demonstrativo/poc.service');
 const mascaras = require('../dre-mascaras/dreMascaras.service');
-const { ORDEM: ORDEM_CENTROS } = require('../dre-centros/dreCentros.service');
+const agrupadores = require('../dre-agrupadores/agrupadores.service');
 const { hojeEmBrasilia } = require('../extrato-contas-sienge/extratoContas-api.client');
 
 // Dashboard Econômico Financeiro › Demonstração do Resultado: tudo o que o painel do CFO usa, num pedido
@@ -13,7 +13,8 @@ const { hojeEmBrasilia } = require('../extrato-contas-sienge/extratoContas-api.c
 //   atual     — a DRE do período (consolidado, por centro, mês a mês);
 //   anterior  — a DRE do mesmo período do ano anterior (consolidado e mês a mês), pra comparação;
 //   poc       — o rastreio da POC por obra (unidades, POC de Receita e de Despesa, cada linha com POC);
-//   centros   — os centros com "Realiza DRE" (pro filtro), na ordem da aba Centros Custos.
+//   centros   — as unidades da DRE com "Realiza DRE" (pro filtro): agrupadores e centros fora de agrupador,
+//               na ordem da aba Centros Custos.
 
 const doisDigitos = (n) => String(n).padStart(2, '0');
 
@@ -45,11 +46,8 @@ async function painel(empresaId, { de, ate, centros = [] }) {
     demonstrativo.calcular(empresaId, { de: anterior.de, ate: anterior.ate, ...filtro }),
     pocService.rastrear(empresaId, { de: inicio, ate: fim, ...filtro }),
     pool.query(`SELECT COALESCE(NULLIF(nome_fantasia, ''), razao_social) AS nome FROM empresas WHERE id = $1`, [empresaId]),
-    pool.query(
-      `SELECT sienge_id::int AS id, name AS nome, COALESCE(NULLIF(TRIM(apelido), ''), name) AS rotulo, natureza
-         FROM centros_custo_sienge WHERE empresa_id = $1 AND realiza_dre ORDER BY ${ORDEM_CENTROS}`,
-      [empresaId]
-    ),
+    // As unidades da DRE: cada agrupador (uma obra só) e cada centro fora de agrupador.
+    agrupadores.unidades(empresaId),
     tabelaPropria ? demonstrativo.calcular(empresaId, { de: deTabela, ate: ateTabela, ...filtro }) : null,
   ]);
 
@@ -61,7 +59,14 @@ async function painel(empresaId, { de, ate, centros = [] }) {
     ...(tabela ? { tabela } : {}),
     anterior: { valores: ant.valores, meses: ant.meses },
     poc: rastreio,
-    centros: listaCentros.rows,
+    centros: listaCentros.map((u) => ({
+      id: u.id,
+      nome: u.nome,
+      rotulo: u.rotulo,
+      natureza: u.natureza,
+      agrupador: u.agrupador,
+      centros: u.membros.map((m) => ({ id: m.id, nome: m.rotulo })),
+    })),
   };
 }
 

@@ -3,6 +3,13 @@ const pool = require('../../config/db');
 const dreMascaras = require('../dre-mascaras/dreMascaras.service');
 const planoContas = require('../dre-plano-contas/drePlanoContas.service');
 const unidadesService = require('../dre-unidades/unidades.service');
+const agrupadores = require('../dre-agrupadores/agrupadores.service');
+
+// A análise das unidades por unidade da DRE: as de um agrupador numa obra só (dre-agrupadores.fundir).
+async function unidadesPorUnidadeDre(empresaId) {
+  const [r, lista] = await Promise.all([unidadesService.listar(empresaId), agrupadores.unidades(empresaId)]);
+  return { ...r, centros: agrupadores.fundir({ unidadesCentros: r.centros, corr: [], custos: [], orcamentos: [] }, lista).unidadesCentros };
+}
 const { mesDaCelula, valorDaCelula, inteiro } = require('../dfc-planilha-orcamentaria/planilhaOrcamentaria.service');
 const { CORES, FORMATOS, borda, preencher, dataExcel, dataHoraExcel, cabecalho, cabecalhoTabela, corrigirArquivo } = require('../../utils/excelMarca');
 const calculo = require('./calculo');
@@ -95,16 +102,11 @@ async function estrutura(empresaId) {
 }
 
 // Centros que entram na planilha (Realiza DRE e com Tipo), na ordem da DRE, com o orçamento atual de
-// cada um: o rascunho, senão o da última versão.
+// cada um: o rascunho, senão o da última versão. Agrupador (dre-agrupadores): uma linha só, com o id do
+// centro principal e o nome do agrupador.
 async function centrosComOrcamento(empresaId) {
-  const [{ rows: centros }, { rows: orcs }] = await Promise.all([
-    pool.query(
-      `SELECT sienge_id::int AS id, COALESCE(NULLIF(TRIM(apelido), ''), name) AS nome, natureza
-         FROM centros_custo_sienge
-        WHERE empresa_id = $1 AND realiza_dre AND natureza IS NOT NULL
-        ORDER BY dre_ordem ASC NULLS LAST, sienge_id ASC`,
-      [empresaId]
-    ),
+  const [unidadesDre, { rows: orcs }] = await Promise.all([
+    agrupadores.unidades(empresaId),
     pool.query(
       `SELECT o.id, o.centro_id, o.versao_id, o.status, v.numero, to_char(o.ciclo_inicio, 'YYYY-MM') AS ciclo_inicio,
               to_char(o.ciclo_fim, 'YYYY-MM') AS ciclo_fim, to_char(o.trava, 'YYYY-MM') AS trava, o.dados
@@ -116,6 +118,7 @@ async function centrosComOrcamento(empresaId) {
       [empresaId]
     ),
   ]);
+  const centros = unidadesDre.filter((u) => u.natureza).map((u) => ({ id: u.id, nome: u.rotulo, natureza: u.natureza }));
   return centros.map((c) => {
     const rascunho = orcs.find((o) => o.centro_id === c.id && o.versao_id === null);
     const versao = orcs.find((o) => o.centro_id === c.id && o.versao_id !== null);
@@ -222,7 +225,7 @@ async function layout(empresaId, usuarioId, opcoes = {}) {
   const [todos, est, { centros: unidadesCentros }, { rows: emp }, { rows: usu }] = await Promise.all([
     centrosComOrcamento(empresaId),
     estrutura(empresaId),
-    unidadesService.listar(empresaId),
+    unidadesPorUnidadeDre(empresaId),
     pool.query(`SELECT COALESCE(NULLIF(nome_fantasia, ''), razao_social) AS nome FROM empresas WHERE id = $1`, [empresaId]),
     pool.query('SELECT nome FROM usuarios WHERE id = $1', [usuarioId]),
   ]);
@@ -427,7 +430,7 @@ async function importar(empresaId, { buffer, arquivo }, usuarioId, { aplicar = f
   const [centros, est, { centros: unidadesCentros }] = await Promise.all([
     centrosComOrcamento(empresaId),
     estrutura(empresaId),
-    unidadesService.listar(empresaId),
+    unidadesPorUnidadeDre(empresaId),
   ]);
   if (rec) {
     const c = centros.find((x) => x.id === rec.orc.centro_id);

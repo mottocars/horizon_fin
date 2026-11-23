@@ -393,12 +393,13 @@ async function somaPorCentroData(empresaId, mascaraIds, ate) {
 // (não os movimentos do extrato nem os criados à mão) de UM centro com EMISSÃO de `de` até `ate`
 // ('AAAA-MM-DD', inclusive), com as mesmas regras da DRE realizada (rateio, ajustes, plano do centro,
 // documentos fora da DRE), somados por natureza e mês. Valor com sinal (a pagar negativo).
+// `centroId`: um centro ou a lista dos centros de um agrupador (dre-agrupadores) — somados.
 async function titulosPorNaturezaMes(empresaId, centroId, de, ate) {
   const { rows } = await pool.query(
     `WITH ${CTE_LINHAS}
      SELECT natureza_id, to_char(data, 'YYYY-MM') AS mes, SUM(valor) AS valor
-       FROM lc WHERE centro_id = $4 AND origem IN ('R', 'P') GROUP BY 1, 2`,
-    [empresaId, de, diaSeguinte(ate), centroId]
+       FROM lc WHERE centro_id = ANY($4::bigint[]) AND origem IN ('R', 'P') GROUP BY 1, 2`,
+    [empresaId, de, diaSeguinte(ate), [].concat(centroId).map(Number)]
   );
   return rows.map((r) => ({ ...r, valor: num(r.valor) }));
 }

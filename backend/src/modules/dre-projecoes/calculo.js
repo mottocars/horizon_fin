@@ -4,6 +4,7 @@ const financeiro = require('../dre-financeiro/financeiro.service');
 const planoContas = require('../dre-plano-contas/drePlanoContas.service');
 const dreMascaras = require('../dre-mascaras/dreMascaras.service');
 const unidadesService = require('../dre-unidades/unidades.service');
+const agrupadores = require('../dre-agrupadores/agrupadores.service');
 
 // Projeção da DRE (aba Projeções da DRE Construtoras) — o cálculo. Usa o MESMO motor da DRE realizada
 // (demonstrativo.service.js: carregar + construir + calcular), só trocando o que vem depois da trava:
@@ -75,14 +76,21 @@ function janela(orc) {
   };
 }
 
+// O centro do orçamento — ou, se ele é o principal de um agrupador (dre-agrupadores), o agrupador: nome e Tipo
+// do agrupador e `centros` = os centros dele (a Projeção do agrupador é a da obra inteira).
 async function centroDe(empresaId, centroId) {
-  const { rows } = await pool.query(
-    `SELECT sienge_id::int AS id, name AS nome, NULLIF(TRIM(apelido), '') AS apelido, natureza, realiza_dre
-       FROM centros_custo_sienge WHERE empresa_id = $1 AND sienge_id = $2`,
-    [empresaId, centroId]
-  );
+  const [{ rows }, lista] = await Promise.all([
+    pool.query(
+      `SELECT sienge_id::int AS id, name AS nome, NULLIF(TRIM(apelido), '') AS apelido, natureza, realiza_dre
+         FROM centros_custo_sienge WHERE empresa_id = $1 AND sienge_id = $2`,
+      [empresaId, centroId]
+    ),
+    agrupadores.unidades(empresaId),
+  ]);
   if (!rows[0]) throw erro(404, 'Centro de custo não encontrado.');
-  return rows[0];
+  const u = lista.find((x) => x.id === Number(centroId));
+  if (!u || !u.agrupador_id) return { ...rows[0], centros: [rows[0].id], agrupador: null };
+  return { ...rows[0], nome: u.nome, apelido: u.nome, natureza: u.natureza, centros: u.centros, agrupador: u.nome };
 }
 
 // ---------------------------------------------------------------- unidades
@@ -153,8 +161,10 @@ async function unidades(empresaId, orc) {
   const j = janela(orc);
   const centro = await centroDe(empresaId, orc.centro_id);
   if (centro.natureza !== 'OBRA') return { meses: j.meses, unidades: [] };
-  const { centros } = await unidadesService.listar(empresaId);
-  const c = centros.find((x) => x.id === orc.centro_id);
+  const [{ centros }, lista] = await Promise.all([unidadesService.listar(empresaId), agrupadores.unidades(empresaId)]);
+  // Agrupador: as unidades de todos os centros dele, numa obra só (fração ideal com o peso de cada centro).
+  const { unidadesCentros } = agrupadores.fundir({ unidadesCentros: centros, corr: [], custos: [], orcamentos: [] }, lista);
+  const c = unidadesCentros.find((x) => x.id === orc.centro_id);
   return { meses: j.meses, unidades: c ? unidadesNaTrava(c, j.travaFim) : [] };
 }
 
@@ -179,13 +189,14 @@ function papeis(mascaras, cfg) {
 }
 
 // Orçamento empresarial do Sienge do centro (última versão de cada orçamento, linhas analíticas), por
-// natureza e mês orçado, de `de` a `ate` ('AAAA-MM'), negativo (é custo).
-async function empresarialDoCentro(empresaId, centroId, de, ate) {
+// natureza e mês orçado, de `de` a `ate` ('AAAA-MM'), negativo (é custo). `centros`: os centros do orçamento
+// (do agrupador, todos os dele).
+async function empresarialDoCentro(empresaId, centros, de, ate) {
   const { rows } = await pool.query(
     `WITH ultima AS (
        SELECT DISTINCT ON (b.id) b.registro_id
          FROM sie_business_budget b
-        WHERE b.empresa_id = $1 AND b.cost_center_id = $2
+        WHERE b.empresa_id = $1 AND b.cost_center_id = ANY($2::bigint[])
         ORDER BY b.id, b.version_number DESC NULLS LAST, b.registro_id DESC
      )
      SELECT c.id::text AS natureza_id, to_char(v.mes, 'YYYY-MM') AS mes, SUM(v.total_price) AS valor
@@ -194,7 +205,7 @@ async function empresarialDoCentro(empresaId, centroId, de, ate) {
        JOIN sie_business_budget_valores v ON v.categoria_id = c.categoria_id
       WHERE v.mes >= $3::date AND v.mes <= $4::date AND COALESCE(c.type, '') <> 'T' AND COALESCE(v.total_price, 0) <> 0
       GROUP BY 1, 2`,
-    [empresaId, centroId, `${de}-01`, `${ate}-01`]
+    [empresaId, [].concat(centros).map(Number), `${de}-01`, `${ate}-01`]
   );
   return rows.map((r) => ({ natureza_id: r.natureza_id, mes: r.mes, valor: -num(r.valor) }));
 }
@@ -202,7 +213,9 @@ async function empresarialDoCentro(empresaId, centroId, de, ate) {
 // Valores das naturezas projetadas de um centro, de cada origem, nos meses projetados:
 // [{ natureza_id, nome, mascara_id, origem, editavel, valores: { mes: valor } }] (as INFORMADO com o
 // digitado no rascunho) e quantas naturezas das máscaras projetadas estão sem Origem Projeção.
-async function naturezasProjetadas(empresaId, orc, { mascarasAlvo, plano, j }) {
+// Agrupador: o empresarial e os títulos de todos os centros dele; as naturezas e a Origem Projeção vêm do plano
+// de contas do centro principal (`plano`).
+async function naturezasProjetadas(empresaId, orc, { mascarasAlvo, plano, j, centros = [orc.centro_id] }) {
   const contas = plano.contas.filter((c) => !c.nao_entra && c.mascara_id && mascarasAlvo.has(c.mascara_id));
   const semOrigem = contas.filter((c) => !c.origem_projecao).length;
   const ativas = contas.filter((c) => c.origem_projecao && c.origem_projecao !== ORIGEM.NAO_POSSUI);
@@ -210,10 +223,8 @@ async function naturezasProjetadas(empresaId, orc, { mascarasAlvo, plano, j }) {
   const temAging = ativas.some((c) => c.origem_projecao === ORIGEM.AGING);
   const vazio = !j.meses.length;
   const [empresarial, aging] = await Promise.all([
-    temEmpresarial && !vazio ? empresarialDoCentro(empresaId, orc.centro_id, j.inicioProjecao, j.cicloFim) : [],
-    temAging && !vazio
-      ? financeiro.titulosPorNaturezaMes(empresaId, orc.centro_id, `${j.inicioProjecao}-01`, fimMes(j.cicloFim))
-      : [],
+    temEmpresarial && !vazio ? empresarialDoCentro(empresaId, centros, j.inicioProjecao, j.cicloFim) : [],
+    temAging && !vazio ? financeiro.titulosPorNaturezaMes(empresaId, centros, `${j.inicioProjecao}-01`, fimMes(j.cicloFim)) : [],
   ]);
   const porNatureza = (lista) => {
     const m = new Map();
@@ -266,7 +277,7 @@ async function contas(empresaId, orc, etapa) {
   // Centro administrativo não tem POC: só as máscaras sem POC.
   const daEtapa = d.mascaras.filter((m) => p.etapaDe(m) === etapa && (obra || etapa === 'demais'));
   const alvo = new Set(daEtapa.filter((m) => m.calculo !== 'CORRECAO_MONETARIA').map((m) => m.id));
-  const { naturezas, semOrigem } = await naturezasProjetadas(empresaId, orc, { mascarasAlvo: alvo, plano, j });
+  const { naturezas, semOrigem } = await naturezasProjetadas(empresaId, orc, { mascarasAlvo: alvo, plano, j, centros: centro.centros });
   const grupos = daEtapa.map((m) => ({
     mascara_id: m.id,
     descricao: m.descricao,
@@ -383,7 +394,7 @@ async function prepararMotor(empresaId, orc, { foto = null } = {}) {
           ...n,
           valores: Object.fromEntries(Object.entries(n.valores || {}).filter(([mes, v]) => meses.has(mes) && num(v) !== 0).map(([mes, v]) => [mes, num(v)])),
         }))
-    : (await naturezasProjetadas(empresaId, orc, { mascarasAlvo: alvo, plano, j })).naturezas;
+    : (await naturezasProjetadas(empresaId, orc, { mascarasAlvo: alvo, plano, j, centros: centro.centros })).naturezas;
   const custosProjetados = naturezas.flatMap((n) =>
     Object.entries(n.valores).map(([mes, valor]) => ({ mascara_id: n.mascara_id, centro_id: id, data: `${mes}-01`, valor }))
   );
@@ -509,21 +520,24 @@ function niveis1DaFoto(arvore, mensal) {
 
 // ---------------------------------------------------------------- histórico
 
-// Primeiro mês com algum lançamento do centro (títulos, extrato, contratos, lançamentos criados).
+// Primeiro mês com algum lançamento do centro (títulos, extrato, contratos, lançamentos criados). Principal de um
+// agrupador: o primeiro de todos os centros dele.
 async function primeiroMes(empresaId, centroId) {
+  const u = agrupadores.unidadeDe(await agrupadores.unidades(empresaId), centroId);
+  const centros = u && u.id === Number(centroId) ? u.centros : [Number(centroId)];
   const { rows } = await pool.query(
     `SELECT to_char(LEAST(
        (SELECT MIN(t.issue_date) FROM sie_outcome_categorias c
           JOIN sie_outcome t ON t.bill_id = c.bill_id AND t.installment_id = c.installment_id AND t.empresa_id = c.empresa_id
-         WHERE c.empresa_id = $1 AND c.cost_center_id = $2 AND t.issue_date >= DATE '2000-01-01'),
+         WHERE c.empresa_id = $1 AND c.cost_center_id = ANY($2::bigint[]) AND t.issue_date >= DATE '2000-01-01'),
        (SELECT MIN(t.issue_date) FROM sie_income_categorias c
           JOIN sie_income t ON t.bill_id = c.bill_id AND t.installment_id = c.installment_id AND t.empresa_id = c.empresa_id
-         WHERE c.empresa_id = $1 AND c.cost_center_id = $2 AND t.issue_date >= DATE '2000-01-01'),
-       (SELECT MIN(data) FROM sie_extrato_contas_rateio WHERE empresa_id = $1 AND centro_id = $2 AND data >= DATE '2000-01-01'),
-       (SELECT MIN(contract_date) FROM sie_sales_contracts WHERE empresa_id = $1 AND enterprise_id = $2 AND contract_date >= DATE '2000-01-01'),
-       (SELECT MIN(data) FROM lancamentos_manuais WHERE empresa_id = $1 AND centro_id = $2)
+         WHERE c.empresa_id = $1 AND c.cost_center_id = ANY($2::bigint[]) AND t.issue_date >= DATE '2000-01-01'),
+       (SELECT MIN(data) FROM sie_extrato_contas_rateio WHERE empresa_id = $1 AND centro_id = ANY($2::bigint[]) AND data >= DATE '2000-01-01'),
+       (SELECT MIN(contract_date) FROM sie_sales_contracts WHERE empresa_id = $1 AND enterprise_id = ANY($2::bigint[]) AND contract_date >= DATE '2000-01-01'),
+       (SELECT MIN(data) FROM lancamentos_manuais WHERE empresa_id = $1 AND centro_id = ANY($2::bigint[]))
      ), 'YYYY-MM') AS mes`,
-    [empresaId, centroId]
+    [empresaId, centros]
   );
   return rows[0]?.mes || null;
 }

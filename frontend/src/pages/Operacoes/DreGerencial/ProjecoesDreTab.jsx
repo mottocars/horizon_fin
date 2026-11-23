@@ -3,7 +3,7 @@ import { FilePlus2, Minimize2, Play, RefreshCcw, Trash2, TrendingUp, TriangleAle
 import Card from '../../../components/Card';
 import Button from '../../../components/Button';
 import { useConfirm } from '../../../confirm/ConfirmContext';
-import { listCentrosCustoDre } from '../../../api/dreCentros.api';
+import { listUnidadesDre } from '../../../api/dreCentros.api';
 import {
   criarOrcamentoDre,
   descartarOrcamentoDre,
@@ -56,10 +56,11 @@ const ProjecoesDreTab = forwardRef(function ProjecoesDreTab({ empresaId, telaChe
   const carregar = useCallback(() => {
     if (!empresaId) return;
     setErro('');
-    Promise.all([listarProjecoesDre(empresaId), listCentrosCustoDre(empresaId)])
+    // A projeção é por agrupador / centro fora de agrupador (a de um agrupador fica no centro principal dele).
+    Promise.all([listarProjecoesDre(empresaId), listUnidadesDre(empresaId)])
       .then(([l, c]) => {
         setLista(l);
-        setCentros(c.filter((x) => x.realiza_dre));
+        setCentros(c);
       })
       .catch((e) => setErro(e.response?.data?.message || 'Não foi possível carregar as projeções.'));
   }, [empresaId]);
@@ -253,7 +254,12 @@ const ProjecoesDreTab = forwardRef(function ProjecoesDreTab({ empresaId, telaChe
                       <span className="flex items-center gap-2">
                         <span className="min-w-0 flex-1">
                           <span className="flex items-center gap-1.5">
-                            <span className="tabular-nums text-gray-400">{l.centro_id}</span>
+                            {/* Agrupador (o orçamento fica no centro principal dele): sem o código do centro. */}
+                            {l.agrupador ? (
+                              <span className="shrink-0 rounded bg-primary-50 px-1.5 py-0.5 text-[10px] font-medium text-primary-700">Agrupador</span>
+                            ) : (
+                              <span className="tabular-nums text-gray-400">{l.centro_id}</span>
+                            )}
                             <span className="truncate font-medium text-gray-900">{l.centro_apelido || l.centro_nome}</span>
                             <span className="shrink-0 rounded bg-gray-100 px-1.5 py-0.5 text-[10px] font-medium text-gray-500">
                               {l.natureza === 'OBRA' ? 'Obra' : 'Adm.'}

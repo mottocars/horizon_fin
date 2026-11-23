@@ -41,7 +41,7 @@ import { listEmpresas } from '../../../api/empresas.api';
 import { gerarPlano } from '../../../api/planosFinanceirosSienge.api';
 import { excluirVersaoPlanoDre, exportarPlanoDreExcel, listVersoesPlanoDre } from '../../../api/drePlanoContas.api';
 import { exportarExcelDre } from '../../../api/dreExportacao.api';
-import { listCentrosCustoDre } from '../../../api/dreCentros.api';
+import { listUnidadesDre } from '../../../api/dreCentros.api';
 import { nomeExibicaoEmpresa } from '../../../utils/empresa';
 import { useEmpresaTravada } from '../../../hooks/useEmpresaTravada';
 import { useConfirm } from '../../../confirm/ConfirmContext';
@@ -179,6 +179,8 @@ function DreGerencialConteudo() {
 
   // Mesmo esquema pro botão "Nova máscara" da aba Máscaras (igual à DFC Construtoras).
   const mascarasTabRef = useRef(null);
+  // Botão Novo agrupador da aba Centros Custos (CentrosCustosTab, pela ref).
+  const centrosTabRef = useRef(null);
 
   // Busca (nome ou código do centro de custo) da aba Orçamento — só conveniência de navegador,
   // não fica na URL (mesma convenção de bancosSearch/contasSearch em SaldoContasBancariasPage.jsx).
@@ -240,8 +242,9 @@ function DreGerencialConteudo() {
   const [centrosDre, setCentrosDre] = useState([]);
   useEffect(() => {
     if ((abaAtiva !== 'dre' && abaAtiva !== 'poc') || !empresaId) return;
-    listCentrosCustoDre(empresaId)
-      .then((lista) => setCentrosDre(lista.filter((c) => c.realiza_dre)))
+    // Agrupadores e centros fora de agrupador (a DRE é montada por eles).
+    listUnidadesDre(empresaId)
+      .then(setCentrosDre)
       .catch(() => setCentrosDre([]));
   }, [abaAtiva, empresaId]);
 
@@ -563,7 +566,7 @@ function DreGerencialConteudo() {
                     options={centrosDre
                       // Na aba POC, só as obras (natureza OBRA), que são as colunas dela.
                       .filter((c) => abaAtiva !== 'poc' || c.natureza === 'OBRA')
-                      .map((c) => ({ value: String(c.sienge_id), label: `${c.sienge_id} - ${c.apelido || c.name}` }))}
+                      .map((c) => ({ value: String(c.sienge_id), label: c.agrupador ? c.agrupador : `${c.sienge_id} - ${c.apelido || c.name}` }))}
                     placeholder="Todos os centros"
                     emptyMessage="Nenhum centro com Realiza DRE."
                   />
@@ -815,6 +818,20 @@ function DreGerencialConteudo() {
             </div>
           )}
 
+          {abaAtiva === 'centros-custos' && !somenteLeitura && (
+            <div className="flex shrink-0 items-center gap-2">
+              <Button
+                type="button"
+                onClick={() => centrosTabRef.current?.abrirNovoAgrupador()}
+                disabled={semEmpresa}
+                title="Agrupador: junta centros de custo numa obra só na DRE (arraste os centros para dentro dele)"
+              >
+                <Plus size={16} />
+                Novo agrupador
+              </Button>
+            </div>
+          )}
+
           {abaAtiva === 'mascaras' && !somenteLeitura && (
             <div className="flex shrink-0 items-center gap-2">
               <Button type="button" onClick={() => mascarasTabRef.current?.abrirNova()} disabled={semEmpresa}>
@@ -1055,7 +1072,7 @@ function DreGerencialConteudo() {
 
         {abaAtiva === 'centros-custos' && (
           <SoLeitura>
-            <CentrosCustosTab empresaId={empresaId} search={buscaCentros} />
+            <CentrosCustosTab ref={centrosTabRef} empresaId={empresaId} search={buscaCentros} />
           </SoLeitura>
         )}
 

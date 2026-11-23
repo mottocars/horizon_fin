@@ -3,6 +3,7 @@ const demonstrativo = require('../dre-demonstrativo/demonstrativo.service');
 const mascarasService = require('../dre-mascaras/dreMascaras.service');
 const financeiro = require('../dre-financeiro/financeiro.service');
 const correcoes = require('../dre-correcoes/correcoes.service');
+const agrupadores = require('../dre-agrupadores/agrupadores.service');
 
 const projecoes = require('../dre-projecoes/dreProjecoes.service');
 const calculoProjecao = require('../dre-projecoes/calculo');
@@ -165,8 +166,51 @@ async function dadosProjecao(empresaId, { de, ate, m, projecao }) {
   return { fonte: f.fonte, versao: f.versao, avisos: f.avisos, orcamentos, mesAtual: hojeIso().slice(0, 7) };
 }
 
+// Agrupadores (dre-agrupadores): as colunas do motor (`m.ids`) são as unidades da DRE. As bases vêm dos centros
+// de cada unidade e levam o id da unidade em `centro_id` (as fórmulas somam por ele) e, nas de um agrupador, o
+// centro de onde vieram em `centro_membro`. O orçamento da obra de um agrupador vira uma "versão" por data em que
+// algum centro muda de versão, com as categorias vigentes de cada centro nela (a soma = orçamento do conjunto,
+// como no motor — agrupadores.fundirOrcamentos).
+function orcamentoPorUnidade(rows, mapa, doGrupo) {
+  const out = [];
+  const grupos = new Map();
+  rows.forEach((r) => {
+    const u = mapa.get(r.centro_id) ?? r.centro_id;
+    if (!doGrupo.has(u)) {
+      out.push(r);
+      return;
+    }
+    if (!grupos.has(u)) grupos.set(u, new Map());
+    const membros = grupos.get(u);
+    if (!membros.has(r.centro_id)) membros.set(r.centro_id, new Map());
+    const versoes = membros.get(r.centro_id);
+    if (!versoes.has(r.inicio)) versoes.set(r.inicio, []);
+    versoes.get(r.inicio).push(r);
+  });
+  grupos.forEach((membros, u) => {
+    const datas = [...new Set([...membros.values()].flatMap((v) => [...v.keys()]))].sort();
+    datas.forEach((data) => {
+      membros.forEach((versoes, membro) => {
+        const vigente = [...versoes.keys()].filter((x) => x <= data).sort().pop();
+        if (!vigente) return;
+        versoes.get(vigente).forEach((r) => out.push({ ...r, centro_id: u, centro_membro: membro, inicio: data, inicio_original: vigente }));
+      });
+    });
+  });
+  return out.sort((a, b) => a.centro_id - b.centro_id || a.inicio.localeCompare(b.inicio));
+}
+
 async function dados(empresaId, { de, ate, centros = [], projecao = null }) {
   const m = await motor(empresaId, { ate, filtro: centros });
+  const lista = await agrupadores.unidades(empresaId);
+  const mapa = agrupadores.mapaDe(lista);
+  const doGrupo = new Set(lista.filter((u) => u.agrupador_id).map((u) => u.id));
+  // Os centros das unidades pedidas (de um agrupador, todos os dele).
+  const membros = m.ids.length ? agrupadores.centrosDe(lista, m.ids) : [];
+  const paraUnidade = (r) => {
+    const u = mapa.get(Number(r.centro_id));
+    return u !== undefined && doGrupo.has(u) ? { ...r, centro_membro: Number(r.centro_id), centro_id: u } : r;
+  };
   const regras = new Map(m.mascaras.map((x) => [x.id, regraDa(x, m)]));
   // Máscaras do Financeiro que a DRE usa (as linhas com base no Financeiro e a da POC de Receita).
   const mascarasFin = [
@@ -185,16 +229,16 @@ async function dados(empresaId, { de, ate, centros = [], projecao = null }) {
   const [resultado, arvore, financeiroLinhas, fora, corr, orcamento, plano, centrosInfo, extras, proj] = await Promise.all([
     demonstrativo.calcular(empresaId, { de, ate, centros }, m),
     mascarasService.list(empresaId),
-    m.ids.length && mascarasFin.length ? financeiro.linhasAuditoria(empresaId, { mascaraIds: mascarasFin, centros: m.ids, ate: ateBase }) : [],
-    de <= ateBase ? financeiro.foraDaDre(empresaId, { de, ate: ateBase, centros: filtrado ? m.ids : null, mascarasUsadas: mascarasFin }) : [],
-    m.ids.length ? correcoes.parcelasDaDre(empresaId, m.ids, ateBase) : [],
+    m.ids.length && mascarasFin.length ? financeiro.linhasAuditoria(empresaId, { mascaraIds: mascarasFin, centros: membros, ate: ateBase }) : [],
+    de <= ateBase ? financeiro.foraDaDre(empresaId, { de, ate: ateBase, centros: filtrado ? membros : null, mascarasUsadas: mascarasFin }) : [],
+    m.ids.length ? correcoes.parcelasDaDre(empresaId, membros, ateBase) : [],
     pool.query(
       `SELECT v.sienge_id::int AS centro_id, to_char(v.data_inicio, 'YYYY-MM-DD') AS inicio, c.nome AS categoria, v.valor,
               v.atualizado_em
          FROM dre_orcamento_valores v LEFT JOIN dre_categorias_orcamento c ON c.id = v.categoria_id
         WHERE v.empresa_id = $1 AND v.data_inicio <= $2 AND v.sienge_id = ANY($3::int[])
         ORDER BY v.sienge_id, v.data_inicio, c.nome`,
-      [empresaId, ate, m.ids]
+      [empresaId, ate, membros]
     ),
     // Plano de contas que vale pra cada centro: toda conta analítica, com a Máscara DRE, "NÃO ENTRA NA
     // DRE" ou sem classificação.
@@ -211,13 +255,13 @@ async function dados(empresaId, { de, ate, centros = [], projecao = null }) {
          LEFT JOIN dre_plano_contas pg ON pg.empresa_id = c.empresa_id AND pg.sienge_id = pf.sienge_id
         WHERE c.empresa_id = $1 AND c.sienge_id = ANY($2::int[])
         ORDER BY c.dre_ordem ASC NULLS LAST, c.sienge_id ASC, pf.sienge_id`,
-      [empresaId, m.ids]
+      [empresaId, membros]
     ),
     pool.query(
       `SELECT sienge_id::int AS id, name AS nome, NULLIF(TRIM(apelido), '') AS apelido, natureza, realiza_dre,
               EXISTS (SELECT 1 FROM dre_plano_contas_versoes v WHERE v.empresa_id = c.empresa_id AND v.centro_id = c.sienge_id) AS plano_proprio
          FROM centros_custo_sienge c WHERE empresa_id = $1 AND sienge_id = ANY($2::int[])`,
-      [empresaId, m.ids]
+      [empresaId, membros]
     ),
     pool.query(
       `SELECT (SELECT COALESCE(NULLIF(TRIM(nome_fantasia), ''), razao_social) FROM empresas WHERE id = $1) AS empresa,
@@ -256,12 +300,26 @@ async function dados(empresaId, { de, ate, centros = [], projecao = null }) {
     aliquotaEm,
     resultado,
     arvore,
-    financeiro: financeiroLinhas,
+    financeiro: financeiroLinhas.map(paraUnidade),
     fora,
-    correcoes: corr,
-    orcamento: orcamento.rows.map((r) => ({ ...r, valor: num(r.valor) })),
+    correcoes: corr.map(paraUnidade),
+    orcamento: orcamentoPorUnidade(
+      orcamento.rows.map((r) => ({ ...r, valor: num(r.valor) })),
+      mapa,
+      doGrupo
+    ),
     plano: plano.rows,
-    centros: new Map(centrosInfo.rows.map((c) => [c.id, c])),
+    // Cada unidade da DRE (um agrupador com o nome dele, no id do principal) e, em `cadastro`, cada centro.
+    centros: new Map([
+      ...centrosInfo.rows.map((c) => [c.id, c]),
+      ...lista
+        .filter((u) => u.agrupador_id && m.ids.includes(u.id))
+        .map((u) => [
+          u.id,
+          { id: u.id, nome: `${u.nome} (agrupador: ${u.centros.join(', ')})`, apelido: u.nome, natureza: u.natureza, realiza_dre: true, plano_proprio: false, agrupador: true },
+        ]),
+    ]),
+    cadastro: new Map(centrosInfo.rows.map((c) => [c.id, c])),
     unidades: eventosUnidades(m),
     extras: extras.rows[0],
     projecao: proj,

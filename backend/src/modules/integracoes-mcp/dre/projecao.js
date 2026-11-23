@@ -4,6 +4,7 @@ const calculo = require('../../dre-projecoes/calculo');
 const exportacao = require('../../dre-exportacao/exportacao.service');
 const dreMascaras = require('../../dre-mascaras/dreMascaras.service');
 const planoContas = require('../../dre-plano-contas/drePlanoContas.service');
+const agrupadores = require('../../dre-agrupadores/agrupadores.service');
 const { fimDoMes, vespera, hojeIso, baseDoImposto } = require('../../dre-demonstrativo/demonstrativo.service');
 const { ferramenta } = require('../dfc/tools/comum');
 const { contaDaLinha, acumulado, NOME_FATOR } = require('./conta');
@@ -151,8 +152,10 @@ const guia = {
         [empresaId]
       ),
       pool.query(
-        `SELECT o.centro_id, c.name AS nome, NULLIF(TRIM(c.apelido), '') AS apelido, o.status, o.etapa, o.atualizado_em, u.nome AS usuario
+        `SELECT o.centro_id, c.name AS nome, COALESCE(ag.nome, NULLIF(TRIM(c.apelido), '')) AS apelido, o.status, o.etapa, o.atualizado_em, u.nome AS usuario
            FROM dre_projecao_orcamentos o JOIN centros_custo_sienge c ON c.empresa_id = o.empresa_id AND c.sienge_id = o.centro_id
+           LEFT JOIN dre_agrupadores_centros ac ON ac.empresa_id = o.empresa_id AND ac.centro_id = o.centro_id
+           LEFT JOIN dre_agrupadores ag ON ag.id = ac.agrupador_id
            LEFT JOIN usuarios u ON u.id = o.usuario_id
           WHERE o.empresa_id = $1 AND o.versao_id IS NULL ORDER BY c.dre_ordem NULLS LAST, c.sienge_id`,
         [empresaId]
@@ -163,13 +166,19 @@ const guia = {
          SELECT 'Próprios dos centros', origem_projecao, COUNT(*)::int FROM dre_plano_contas_centro WHERE empresa_id = $1 GROUP BY 2`,
         [empresaId]
       ),
-      pool.query(
-        `SELECT c.sienge_id::int AS id, c.name AS nome, NULLIF(TRIM(c.apelido), '') AS apelido, c.natureza,
-                EXISTS (SELECT 1 FROM dre_projecao_orcamentos o
-                         WHERE o.empresa_id = c.empresa_id AND o.centro_id = c.sienge_id AND o.versao_id IS NULL) AS na_versao
-           FROM centros_custo_sienge c WHERE c.empresa_id = $1 AND c.realiza_dre ORDER BY c.dre_ordem NULLS LAST, c.sienge_id`,
-        [empresaId]
-      ),
+      // As unidades da DRE (agrupadores e centros fora de agrupador): a projeção é uma por unidade.
+      Promise.all([
+        agrupadores.unidades(empresaId),
+        pool.query('SELECT centro_id FROM dre_projecao_orcamentos WHERE empresa_id = $1 AND versao_id IS NULL', [empresaId]),
+      ]).then(([us, { rows: orcs }]) => ({
+        rows: us.map((u) => ({
+          id: u.id,
+          nome: u.agrupador ? `agrupador ${u.nome} (centros ${u.centros.join(', ')})` : u.nome,
+          apelido: u.agrupador ? null : u.rotulo !== u.nome ? u.rotulo : null,
+          natureza: u.natureza,
+          na_versao: orcs.some((o) => o.centro_id === u.id),
+        })),
+      })),
       dreMascaras.list(empresaId),
     ]);
     const porPlano = (p) =>
@@ -190,7 +199,7 @@ const guia = {
         )
         .join('; ')}. Este MCP lê a última SALVA (a publicada).`,
       `- Orçamentos na versão publicada: ${rascunhos.length ? rascunhos.map((r) => `${r.centro_id} ${r.apelido || r.nome} — ${r.status === 'CONCLUIDO' ? 'concluído' : `em andamento (etapa ${r.etapa})`}, ${quando(r.atualizado_em)}${r.usuario ? ` por ${r.usuario}` : ''}`).join('; ') : 'nenhum'}.`,
-      `- Centros com "Realiza DRE" (${centros.length}): ${centros.map((c) => `${c.id} ${c.apelido || c.nome} (${c.natureza === 'OBRA' ? 'obra' : c.natureza === 'ADMINISTRATIVO' ? 'administrativo' : 'SEM TIPO — não dá pra orçar'}${c.na_versao ? ', com orçamento' : ''})`).join('; ')}.`,
+      `- Centros com "Realiza DRE" (${centros.length}; um agrupador conta como um só — a DRE e a projeção tratam os centros dele como uma obra única, e o orçamento dele fica no centro principal, o id mostrado): ${centros.map((c) => `${c.id} ${c.apelido || c.nome} (${c.natureza === 'OBRA' ? 'obra' : c.natureza === 'ADMINISTRATIVO' ? 'administrativo' : 'SEM TIPO — não dá pra orçar'}${c.na_versao ? ', com orçamento' : ''})`).join('; ')}.`,
       `- Origem Projeção no plano de contas da DRE — Global: ${porPlano('Global')}. Planos próprios: ${porPlano('Próprios dos centros')}.`,
       `- Linhas de nível 1 da DRE (colunas da lista): ${arvore.map((g) => g.descricao).join(', ')}.`,
       '',
@@ -852,11 +861,11 @@ const auditoriaTool = {
       if (desvioPoc) alertas.push({ nivel: 'Verificar', centro: nomeCentro(o), alerta: `POC de Despesa projetada acima de 100% a partir de ${rotMes(desvioPoc.mes)} (frações vendidas + permutas > 1).` });
     }
     // Centros da DRE sem orçamento e naturezas sem Origem Projeção.
-    const { rows: semOrc } = await pool.query(
-      `SELECT sienge_id::int AS id, name AS nome, NULLIF(TRIM(apelido), '') AS apelido FROM centros_custo_sienge
-        WHERE empresa_id = $1 AND realiza_dre AND NOT (sienge_id = ANY($2::int[])) AND (cardinality($3::int[]) = 0 OR sienge_id = ANY($3::int[]))`,
-      [empresaId, f.orcamentos.map((o) => o.centro_id), centros]
-    );
+    // Por unidade da DRE (um agrupador é uma só, no id do centro principal).
+    const comOrc = new Set(f.orcamentos.map((o) => Number(o.centro_id)));
+    const semOrc = (await agrupadores.unidades(empresaId))
+      .filter((u) => !comOrc.has(u.id) && (!centros.length || centros.includes(u.id)))
+      .map((u) => ({ id: u.id, nome: u.nome, apelido: u.rotulo !== u.nome ? u.rotulo : null }));
     if (semOrc.length) alertas.push({ nivel: 'Info', alerta: `Centros da DRE sem orçamento nesta fonte (Projetado com traço; fora do Desvio do consolidado): ${semOrc.map((c) => `${c.id} ${c.apelido || c.nome}`).join(', ')}.` });
     for (const o of f.orcamentos) {
       // eslint-disable-next-line no-await-in-loop

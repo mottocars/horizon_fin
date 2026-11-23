@@ -2,6 +2,7 @@ const pool = require('../../config/db');
 const dreMascaras = require('../dre-mascaras/dreMascaras.service');
 const calculo = require('./calculo');
 const demonstrativo = require('../dre-demonstrativo/demonstrativo.service');
+const agrupadores = require('../dre-agrupadores/agrupadores.service');
 
 // Operações > DRE Construtoras > aba Projeções: os orçamentos (projeção da DRE) por centro de custo —
 // rascunhos do assistente e versões (database/migrations/2026-11-05-dre-projecoes.sql). O cálculo
@@ -24,9 +25,13 @@ function erro(status, message) {
 const COLUNAS = `o.id, o.centro_id, o.versao_id, o.status, o.etapa,
   to_char(o.ciclo_inicio, 'YYYY-MM') AS ciclo_inicio, to_char(o.ciclo_fim, 'YYYY-MM') AS ciclo_fim,
   to_char(o.trava, 'YYYY-MM') AS trava, o.criado_em, o.atualizado_em, o.concluido_em,
-  u.nome AS usuario, c.name AS centro_nome, NULLIF(TRIM(c.apelido), '') AS centro_apelido, c.natureza`;
+  u.nome AS usuario, c.name AS centro_nome, COALESCE(ag.nome, NULLIF(TRIM(c.apelido), '')) AS centro_apelido, c.natureza,
+  ag.id AS agrupador_id, ag.nome AS agrupador`;
+// O orçamento de um agrupador fica no centro principal dele (dre-agrupadores): o nome mostrado é o do agrupador.
 const JUNCOES = `FROM dre_projecao_orcamentos o
   JOIN centros_custo_sienge c ON c.empresa_id = o.empresa_id AND c.sienge_id = o.centro_id
+  LEFT JOIN dre_agrupadores_centros ac ON ac.empresa_id = o.empresa_id AND ac.centro_id = o.centro_id
+  LEFT JOIN dre_agrupadores ag ON ag.id = ac.agrupador_id
   LEFT JOIN usuarios u ON u.id = o.usuario_id`;
 
 // O fechamento do nível 1 (`niveis1`) refeito pela foto mês a mês: do primeiro lançamento do centro ao
@@ -109,6 +114,9 @@ const mesValido = (m) => /^\d{4}-(0[1-9]|1[0-2])$/.test(m);
 async function criar(empresaId, { centroId, cicloInicio, cicloFim }, usuarioId) {
   if (!mesValido(cicloInicio) || !mesValido(cicloFim)) throw erro(400, 'Informe o mês de início e de fim do ciclo.');
   if (cicloFim < cicloInicio) throw erro(400, 'O fim do ciclo não pode ser antes do início.');
+  // Centro de um agrupador: o orçamento é do agrupador (fica no centro principal dele).
+  const unidade = agrupadores.unidadeDe(await agrupadores.unidades(empresaId), centroId);
+  if (unidade) centroId = unidade.id;
   const { rows: centro } = await pool.query(
     'SELECT name, natureza, realiza_dre FROM centros_custo_sienge WHERE empresa_id = $1 AND sienge_id = $2',
     [empresaId, centroId]
@@ -242,6 +250,7 @@ async function realizadoAoVivo(empresaId, orcamentos) {
 // Orçamento que não dá pra calcular (ex.: centro sem "Realiza DRE") fica de fora, com o motivo em `avisos`.
 // (`fonte`/`numero`: compatibilidade — a versão é a do contexto.)
 async function orcamentosDaFonte(empresaId, { centros = [], completo = false } = {}) {
+  if (centros.length) centros = agrupadores.resolver(await agrupadores.unidades(empresaId), centros);
   const corte = corteDaVersao();
   const leitura = emLeitura();
   const { rows } = await pool.query(
@@ -297,6 +306,7 @@ async function orcamentosDaFonte(empresaId, { centros = [], completo = false } =
 //     esperava. Sem versão anterior guardada (ficam só as 10 últimas), o mês fica sem projetado.
 // `versao_do_mes`: de qual versão veio o projetado de cada mês até o corte.
 async function projetado(empresaId, { de, ate, centros = [] }) {
+  if (centros.length) centros = agrupadores.resolver(await agrupadores.unidades(empresaId), centros);
   const f = await orcamentosDaFonte(empresaId, { centros });
   const mesDe = de.slice(0, 7);
   const mesAte = ate.slice(0, 7);

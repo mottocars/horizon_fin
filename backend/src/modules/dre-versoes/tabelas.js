@@ -60,6 +60,15 @@ const CONFIG = [
   { tabela: 'lancamentos_ajustes', filtro: daEmpresa, restaura: true, pk: ['id'] },
   { tabela: 'lancamentos_ajustes_historico', filtro: daEmpresa, restaura: true, pk: ['id'] },
   { tabela: 'lancamentos_manuais', filtro: daEmpresa, restaura: true, pk: ['id'] },
+  // Agrupadores da aba Centros Custos (dre-agrupadores): o agrupador antes dos centros dele.
+  { tabela: 'dre_agrupadores', filtro: daEmpresa, restaura: true, pk: ['id'] },
+  {
+    tabela: 'dre_agrupadores_centros',
+    filtro: daEmpresa,
+    restaura: true,
+    pk: ['empresa_id', 'centro_id'],
+    existe: 'EXISTS (SELECT 1 FROM public.centros_custo_sienge c WHERE c.empresa_id = s.empresa_id AND c.sienge_id = s.centro_id)',
+  },
   // De fora da DRE (não voltam ao excluir: a versão nova usa o valor de hoje, e o salvar registra o que
   // mudou como "alterado fora da DRE"). As colunas da DRE no cadastro do centro (realiza_dre, dre_ordem)
   // voltam à parte (fotos.restaurar).

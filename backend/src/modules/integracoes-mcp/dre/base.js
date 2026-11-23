@@ -4,6 +4,7 @@ const drePainel = require('../../dashboards/drePainel.service');
 const PD = require('../../dashboards/painelDre/modelo');
 const { meses, vespera, fimDoMes } = require('../../dre-demonstrativo/demonstrativo.service');
 const { hojeEmBrasilia } = require('../../extrato-contas-sienge/extratoContas-api.client');
+const agrupadores = require('../../dre-agrupadores/agrupadores.service');
 const { z, falha, r2 } = require('../dfc/tools/comum');
 
 // Base das ferramentas do módulo DRE do conector Horizon: período (o padrão da tela: 1º de janeiro do ano
@@ -30,7 +31,9 @@ const CENTROS = {
   centros: z
     .array(z.union([z.string(), z.number()]))
     .optional()
-    .describe('Centros de custo (id, nome ou apelido). Vazio = todos com "Realiza DRE" (o consolidado).'),
+    .describe(
+      'Centros de custo (id, nome ou apelido) ou agrupadores (nome). Vazio = todos com "Realiza DRE" (o consolidado). Um centro que está num agrupador vira o agrupador: a DRE trata os centros de um agrupador como uma obra só.'
+    ),
 };
 
 const semAcento = (s) =>
@@ -59,16 +62,26 @@ function periodo(a = {}) {
   return { de, ate };
 }
 
-// Centros com "Realiza DRE" por id, nome ou apelido (sem acento, parte do nome vale se for único).
+// Centros com "Realiza DRE" por id, nome ou apelido (sem acento, parte do nome vale se for único), ou agrupadores
+// pelo nome. Devolve os ids das unidades da DRE (dre-agrupadores): um centro que está num agrupador vira o
+// agrupador (o id do centro principal dele), sem repetir.
 async function resolverCentros(empresaId, lista) {
   if (!lista || !lista.length) return [];
-  const { rows } = await pool.query(
-    `SELECT sienge_id::int AS id, name AS nome, NULLIF(TRIM(apelido), '') AS apelido, realiza_dre
-       FROM centros_custo_sienge WHERE empresa_id = $1`,
-    [empresaId]
-  );
-  return lista.map((item) => {
+  const [{ rows: centros }, unidadesDre] = await Promise.all([
+    pool.query(
+      `SELECT sienge_id::int AS id, name AS nome, NULLIF(TRIM(apelido), '') AS apelido, realiza_dre
+         FROM centros_custo_sienge WHERE empresa_id = $1`,
+      [empresaId]
+    ),
+    agrupadores.unidades(empresaId),
+  ]);
+  const grupos = unidadesDre.filter((u) => u.agrupador).map((u) => ({ id: u.id, nome: u.nome, apelido: null, realiza_dre: true, agrupador: true }));
+  // Por nome, o agrupador vem antes dos centros (o nome dele costuma estar dentro do nome dos centros: EASY × TOSTES EASY 1).
+  const rows = [...grupos, ...centros];
+  const ids = lista.map((item) => {
     const t = semAcento(item);
+    const grupo = grupos.find((g) => semAcento(g.nome) === t);
+    if (grupo) return grupo.id;
     if (/^\d+$/.test(t)) {
       const c = rows.find((r) => r.id === Number(t));
       if (!c) throw falha(`Centro de custo ${t} não encontrado.`);
@@ -90,6 +103,7 @@ async function resolverCentros(empresaId, lista) {
     if (achados.length > 1) throw falha(`"${item}" corresponde a vários centros: ${achados.map((r) => `${r.id} ${r.apelido || r.nome}`).join('; ')}. Use o id.`);
     return achados[0].id;
   });
+  return agrupadores.resolver(unidadesDre, ids);
 }
 
 // Linha da DRE (nível 2, grupo de nível 1 ou totalizadora) por id ou descrição.

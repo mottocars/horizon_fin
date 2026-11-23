@@ -7,7 +7,8 @@ const pool = require('../../config/db');
 // do usuário (reordenar, arrastando na aba — database/migrations/2026-10-30-dre-centros-ordem.sql) e
 // vale também pras colunas dos centros na aba DRE e pros filtros de centro da DRE Gerencial.
 
-const COLUNAS = `sienge_id, name, apelido, status, natureza, realiza_dre`;
+// Os campos da aba, com o agrupador de cada centro (dre-agrupadores) — null = fora de agrupador.
+const COLUNAS = `c.sienge_id, c.name, c.apelido, c.status, c.natureza, c.realiza_dre, ac.agrupador_id, COALESCE(ac.principal, FALSE) AS principal`;
 
 // Ordem da DRE: a do usuário (dre_ordem); os nunca ordenados depois, pelo ID em ordem numérica (1, 2,
 // 3… 10 — pedido do usuário; a aba da DFC ordena como texto: 1, 10, 11… 2).
@@ -15,9 +16,13 @@ const ORDEM = 'dre_ordem ASC NULLS LAST, sienge_id ASC';
 
 // Todos os centros de custo da empresa (ativos e inativos), na ordem da DRE.
 async function list(empresaId) {
-  const { rows } = await pool.query(`SELECT ${COLUNAS} FROM centros_custo_sienge WHERE empresa_id = $1 ORDER BY ${ORDEM}`, [
-    empresaId,
-  ]);
+  const { rows } = await pool.query(
+    `SELECT ${COLUNAS}
+       FROM centros_custo_sienge c
+       LEFT JOIN dre_agrupadores_centros ac ON ac.empresa_id = c.empresa_id AND ac.centro_id = c.sienge_id
+      WHERE c.empresa_id = $1 ORDER BY c.dre_ordem ASC NULLS LAST, c.sienge_id ASC`,
+    [empresaId]
+  );
   return rows;
 }
 
@@ -70,13 +75,13 @@ async function update(empresaId, siengeId, patch) {
     valores.push(patch.natureza);
     sets.push(`natureza = $${valores.length}`);
   }
-  const { rows } = await pool.query(
+  const { rowCount } = await pool.query(
     `UPDATE centros_custo_sienge SET ${sets.join(', ')}
-      WHERE empresa_id = $1 AND sienge_id = $2
-      RETURNING ${COLUNAS}`,
+      WHERE empresa_id = $1 AND sienge_id = $2`,
     valores
   );
-  return rows[0] || null;
+  if (!rowCount) return null;
+  return (await list(empresaId)).find((x) => Number(x.sienge_id) === Number(siengeId)) || null;
 }
 
 module.exports = { list, update, reordenar, ORDEM };

@@ -3,7 +3,7 @@ const unidades = require('../dre-unidades/unidades.service');
 const correcoes = require('../dre-correcoes/correcoes.service');
 const financeiro = require('../dre-financeiro/financeiro.service');
 const { arredondarPoc } = require('../../utils/poc');
-const { ORDEM: ORDEM_CENTROS } = require('../dre-centros/dreCentros.service');
+const agrupadores = require('../dre-agrupadores/agrupadores.service');
 
 // Operações > DRE Gerencial > DRE: a coluna Valor de cada Máscara DRE de nível 2 num período
 // (de/até, inclusive), somando os centros de custo com "Realiza DRE" (ou os do filtro). Inspirado no
@@ -205,15 +205,13 @@ function regras(mascaras, cfg) {
 // (dre-projecoes) troca o que vem depois da trava pelo projetado e monta o motor com `construir`, com
 // as mesmas regras da DRE realizada. `ate`: até quando vêm os lançamentos do Financeiro;
 // `ateOrcamento`: até quando valem as versões do orçamento da obra (padrão: `ate`).
+//
+// Agrupadores (dre-agrupadores): os "centros" do motor são as unidades da DRE — cada agrupador (uma obra só,
+// com o id do centro principal) e cada centro fora de agrupador. Os dados dos centros de um agrupador são
+// fundidos aqui (agrupadores.fundir), antes de qualquer cálculo; `filtro` aceita centros ou unidades.
 async function carregar(empresaId, { ate, ateOrcamento = ate, filtro = [], soObras = false }) {
-  const [{ rows: centrosDre }, { rows: mascaras }, { rows: cfg }, { rows: aliquotas }] = await Promise.all([
-    pool.query(
-      `SELECT sienge_id::int AS id, name AS nome, COALESCE(NULLIF(TRIM(apelido), ''), name) AS rotulo
-         FROM centros_custo_sienge
-        WHERE empresa_id = $1 AND realiza_dre AND ($2::boolean IS FALSE OR natureza = 'OBRA')
-        ORDER BY ${ORDEM_CENTROS}`,
-      [empresaId, soObras]
-    ),
+  const [unidadesDre, { rows: mascaras }, { rows: cfg }, { rows: aliquotas }] = await Promise.all([
+    agrupadores.unidades(empresaId, { soObras }),
     // Nível 2 na ordem da DRE (grupo de nível 1, depois a ordem dentro dele) — "acima" do imposto.
     pool.query(
       `SELECT m.id, m.parent_id, m.descricao, m.realiza_poc, m.tipo_poc, m.origem, m.calculo, m.imposto_base
@@ -277,7 +275,9 @@ async function carregar(empresaId, { ate, ateOrcamento = ate, filtro = [], soObr
       permuta: c.clusters.permuta.filter(ateHoje),
     },
   }));
-  return { centrosDre, mascaras, cfg, aliquotas, filtro, unidadesCentros, corr, custos, orcamentos };
+  const centrosDre = unidadesDre.map((u) => ({ id: u.id, nome: u.nome, rotulo: u.rotulo, centros: u.centros, agrupador: u.agrupador }));
+  const fundido = agrupadores.fundir({ unidadesCentros, corr, custos, orcamentos }, unidadesDre);
+  return { centrosDre, mascaras, cfg, aliquotas, filtro: agrupadores.resolver(unidadesDre, filtro), ...fundido };
 }
 
 // Hoje ('AAAA-MM-DD') no horário de Brasília — o limite do realizado (o relógio do Postgres da VPS é

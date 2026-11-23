@@ -52,6 +52,8 @@ const COL_FINANCEIRO = [
   { chave: 'periodo', rotulo: 'No período?', largura: 8 },
   { chave: 'centro_id', rotulo: 'Centro (id)', largura: 8 },
   { chave: 'centro', rotulo: 'Centro de custo', largura: 26 },
+  // O centro do lançamento (≠ Centro (id) quando o centro está num agrupador: a coluna da DRE é a do agrupador).
+  { chave: 'centro_origem', rotulo: 'Centro de origem (id)', largura: 9 },
   { chave: 'grupo', rotulo: 'Grupo DRE (nível 1)', largura: 26 },
   { chave: 'mascara', rotulo: 'Linha DRE (nível 2)', largura: 32 },
   { chave: 'mascara_id', rotulo: 'Id linha', largura: 7 },
@@ -185,6 +187,13 @@ function linhas(d) {
     const c = d.centros.get(Number(id));
     return c ? rotuloCentro({ id: c.id, rotulo: c.apelido || c.nome }) : id === null || id === undefined ? null : `${id} · (sem cadastro)`;
   };
+  // O centro do cadastro (não o agrupador) — no plano de contas, que é de cada centro.
+  const doCadastro = (id) => {
+    const c = (d.cadastro || d.centros).get(Number(id));
+    return c ? rotuloCentro({ id: c.id, rotulo: c.apelido || c.nome }) : centro(id);
+  };
+  // Linha de um agrupador: o agrupador e, depois, o centro de onde ela veio.
+  const comMembro = (x) => (x.centro_membro !== undefined ? `${centro(x.centro_id)} ← ${doCadastro(x.centro_membro)}` : centro(x.centro_id));
   const mascaras = new Map(d.m.mascaras.map((x) => [x.id, x]));
   const grupos = new Map(d.arvore.map((g) => [g.id, g.descricao]));
   const grupoDe = (id) => grupos.get(mascaras.get(id)?.parent_id) || null;
@@ -197,7 +206,8 @@ function linhas(d) {
     mes: mesDe(f.data),
     periodo: noPeriodo(f.data),
     centro_id: f.centro_id,
-    centro: centro(f.centro_id),
+    centro: comMembro(f),
+    centro_origem: f.centro_membro ?? f.centro_id,
     grupo: grupoDe(f.mascara_id),
     mascara: mascaras.get(f.mascara_id)?.descricao || null,
     mascara_id: f.mascara_id,
@@ -223,19 +233,19 @@ function linhas(d) {
 
   const unidades = d.unidades.map((u) => ({ ...u, centro: centro(u.centro_id), situacao: SITUACAO[u.situacao] || u.situacao }));
 
-  const correcoes = d.correcoes.map((c) => ({ ...c, centro: centro(c.centro_id) }));
+  const correcoes = d.correcoes.map((c) => ({ ...c, centro: comMembro(c) }));
 
   // Versão vigente no fim do período: a de início mais recente até o fim, por centro.
   const vigente = new Map();
   d.orcamento.forEach((o) => {
     if (!vigente.has(o.centro_id) || o.inicio > vigente.get(o.centro_id)) vigente.set(o.centro_id, o.inicio);
   });
-  const orcamento = d.orcamento.map((o) => ({ ...o, centro: centro(o.centro_id), vigente: vigente.get(o.centro_id) === o.inicio ? 'Sim' : 'Não' }));
+  const orcamento = d.orcamento.map((o) => ({ ...o, centro: comMembro(o), vigente: vigente.get(o.centro_id) === o.inicio ? 'Sim' : 'Não' }));
 
   // Contagem/valor da Base Financeiro por centro × natureza (resultado das fórmulas do Plano de Contas).
   const naBase = new Map();
   d.financeiro.forEach((f) => {
-    const k = `${f.centro_id}|${f.natureza_id}`;
+    const k = `${f.centro_membro ?? f.centro_id}|${f.natureza_id}`;
     const x = naBase.get(k) || { n: 0, v: 0 };
     naBase.set(k, { n: x.n + 1, v: x.v + f.valor });
   });
@@ -244,7 +254,7 @@ function linhas(d) {
     const b = naBase.get(`${p.centro_id}|${p.natureza_id}`) || { n: 0, v: 0 };
     return {
       centro_id: p.centro_id,
-      centro: centro(p.centro_id),
+      centro: doCadastro(p.centro_id),
       plano: p.plano,
       natureza_id: p.natureza_id,
       natureza: p.natureza_nome,
@@ -335,9 +345,9 @@ function escrever(workbook, abas, LY, L, d, meta) {
   const BF = LY.financeiro;
   const colPlano = LY.plano.colunas.map((c) => {
     if (c.chave === 'lancamentos')
-      return { ...c, formula: (n, l) => ({ formula: `COUNTIFS(${BF.faixa('centro_id')},A${n},${BF.faixa('natureza_id')},D${n})`, result: l.n }) };
+      return { ...c, formula: (n, l) => ({ formula: `COUNTIFS(${BF.faixa('centro_origem')},A${n},${BF.faixa('natureza_id')},D${n})`, result: l.n }) };
     if (c.chave === 'valor')
-      return { ...c, formula: (n, l) => ({ formula: `SUMIFS(${BF.faixa('valor')},${BF.faixa('centro_id')},A${n},${BF.faixa('natureza_id')},D${n})`, result: l.v }) };
+      return { ...c, formula: (n, l) => ({ formula: `SUMIFS(${BF.faixa('valor')},${BF.faixa('centro_origem')},A${n},${BF.faixa('natureza_id')},D${n})`, result: l.v }) };
     return c;
   });
   tabela(workbook, abas.plano, { ...LY.plano, colunas: colPlano }, {

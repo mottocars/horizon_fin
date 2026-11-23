@@ -24,12 +24,18 @@ export default function EtapaCentro({ centros, valor, onChange, centroTravado, e
             .sort((a, b) => ORDEM_TIPO(a) - ORDEM_TIPO(b))
             .map((c) => ({
               value: String(c.sienge_id),
-              label: `${c.sienge_id} - ${c.apelido || c.name}`,
+              // Agrupador: a obra inteira (todos os centros dele).
+              label: c.agrupador ? `${c.agrupador} (agrupador)` : `${c.sienge_id} - ${c.apelido || c.name}`,
               grupo: c.natureza === 'OBRA' ? 'Obras' : c.natureza === 'ADMINISTRATIVO' ? 'Administrativos' : 'Sem tipo',
             }))}
           placeholder="Selecione o centro de custo"
           emptyMessage="Nenhum centro com Realiza DRE."
         />
+        {centro?.agrupador && (
+          <p className="mt-2 text-xs text-gray-500">
+            Agrupador com {centro.centros.length} centro(s) de custo ({centro.centros.join(', ')}): a projeção é da obra inteira.
+          </p>
+        )}
         {centro && (
           <p className="mt-2 flex items-center gap-1.5 text-xs text-gray-500">
             {centro.natureza === 'OBRA' ? (

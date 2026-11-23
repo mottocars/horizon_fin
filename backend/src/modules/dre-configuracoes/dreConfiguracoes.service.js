@@ -1,4 +1,5 @@
 const pool = require('../../config/db');
+const agrupadores = require('../dre-agrupadores/agrupadores.service');
 const financeiro = require('../dre-financeiro/financeiro.service');
 const { arredondarPoc } = require('../../utils/poc');
 
@@ -185,34 +186,40 @@ async function previaPoc(empresaId) {
     ),
     mascara ? financeiro.somaPorCentro(empresaId, mascara.id, ate) : Promise.resolve([]),
   ]);
-  const { rows: centros } = await pool.query(
-    'SELECT sienge_id::int AS id, name AS nome FROM centros_custo_sienge WHERE empresa_id = $1 AND realiza_dre ORDER BY sienge_id',
-    [empresaId]
-  );
+  // Por unidade da DRE (dre-agrupadores): um agrupador soma o orçamento vigente e o custo dos centros dele, e a
+  // fração vendida de cada centro entra com o peso dele (unidades do centro ÷ unidades do agrupador) — a regra
+  // do motor da DRE.
+  const unidadesDre = await agrupadores.unidades(empresaId);
   const orc = new Map(orcamentos.map((o) => [Number(o.centro_id), o]));
   const fi = new Map(fracoes.map((f) => [f.centro_id, f]));
   const custo = new Map(custos.map((c) => [c.centro_id, c]));
-  const obras = centros
-    .filter((c) => orc.has(c.id) || fi.has(c.id))
-    .map((c) => {
-      const o = orc.get(c.id);
-      const f = fi.get(c.id);
-      const k = custo.get(c.id);
-      const orcamento = o ? num(o.total) : null;
-      const custoAcumulado = k ? Math.abs(k.valor) : 0;
-      const fracao = f ? arredondarPoc(Math.min(Number(f.vendida) + Number(f.permuta), 1)) : null;
+  const obras = unidadesDre
+    .filter((u) => u.centros.some((id) => orc.has(id) || fi.has(id)))
+    .map((u) => {
+      const os = u.centros.map((id) => orc.get(id)).filter(Boolean);
+      const fs = u.centros.map((id) => fi.get(id)).filter(Boolean);
+      const ks = u.centros.map((id) => custo.get(id)).filter(Boolean);
+      const orcamento = os.length ? os.reduce((t, o) => t + num(o.total), 0) : null;
+      const custoAcumulado = ks.reduce((t, k) => t + Math.abs(k.valor), 0);
+      const unidades = fs.reduce((t, f) => t + f.unidades, 0);
+      const comUnidades = fs.filter((f) => f.unidades > 0).length;
+      const peso = (f) => (comUnidades > 1 && unidades > 0 ? f.unidades / unidades : 1);
+      const vendida = fs.reduce((t, f) => t + Number(f.vendida) * peso(f), 0);
+      const permuta = fs.reduce((t, f) => t + Number(f.permuta) * peso(f), 0);
+      const fracao = fs.length ? arredondarPoc(Math.min(vendida + permuta, 1)) : null;
+      const maisRecente = (lista, campo) => lista.map((x) => x[campo]).filter(Boolean).sort().pop() || null;
       return {
-        centro_id: c.id,
-        nome: c.nome,
+        centro_id: u.id,
+        nome: u.agrupador ? `${u.nome} (agrupador: ${u.centros.join(', ')})` : u.nome,
         orcamento,
-        orcamento_desde: o?.desde || null,
+        orcamento_desde: maisRecente(os, 'desde'),
         custo_acumulado: mascara ? custoAcumulado : null,
-        custo_desde: k?.desde || null,
+        custo_desde: ks.map((k) => k.desde).filter(Boolean).sort()[0] || null,
         poc_receita: mascara && orcamento > 0 ? arredondarPoc(Math.min(custoAcumulado / orcamento, 1)) : null,
         poc_despesa: fracao,
-        unidades: f?.unidades ?? 0,
-        fracao_vendida: f ? Number(f.vendida) : null,
-        fracao_permuta: f ? Number(f.permuta) : null,
+        unidades,
+        fracao_vendida: fs.length ? vendida : null,
+        fracao_permuta: fs.length ? permuta : null,
       };
     });
   return { ate, mascara, obras };

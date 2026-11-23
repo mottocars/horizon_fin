@@ -75,6 +75,9 @@ const guia = {
       '',
       '## Como a DRE é gerada, do Sienge até a linha',
       '1. **Centros de custo**: entram só os marcados com "Realiza DRE" (aba Centros Custos), na ordem dessa aba. O **consolidado é a soma dos centros**. Cada centro é calculado sozinho, mês a mês.',
+      `   - **Agrupadores** (aba Centros Custos): um agrupador junta centros numa **obra única** — a DRE é montada por ele, não pelos centros: POC de Receita = custo somado ÷ orçamento da obra somado; POC de Despesa = fração vendida do conjunto (com mais de um centro com unidades, a fração ideal de cada unidade × unidades do centro ÷ unidades do agrupador); CIV, estornos e RET sobre o conjunto. O "Realiza DRE" é o do agrupador; o id dele nas ferramentas é o do centro principal (o dono da projeção). Nesta versão: ${
+        m.obras.filter((c) => c.agrupador).map((c) => `${c.rotulo} (centros ${c.centros.join(', ')})`).join('; ') || 'nenhum agrupador'
+      }.`,
       '2. **Máscaras** (aba Máscaras): grupos de **nível 1** (com sinal +, −, +/−) e linhas de **nível 2**. Cada linha tem uma **Origem** e um **Cálculo** (de onde vem e como se calcula) e pode ter **% POC** (de Receita ou de Despesa). As **totalizadoras** (=) somam tudo o que está acima delas (Receita Líquida, Lucro Bruto, EBITDA, Lucro Líquido).',
       '3. **Plano de contas da DRE** (aba Plano Contas): cada natureza do Sienge aponta para uma linha de nível 2, ou "NÃO ENTRA NA DRE". Vale o plano próprio do centro, se ele tiver; senão, o Global.',
       '4. **Bases** (todas com o rateio por centro × natureza do Sienge):',

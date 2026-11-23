@@ -1,15 +1,27 @@
-import { useCallback, useEffect, useMemo, useState } from 'react';
-import { Building2, Check, GripVertical, Loader2, TriangleAlert } from 'lucide-react';
+import { forwardRef, useCallback, useEffect, useImperativeHandle, useMemo, useRef, useState } from 'react';
+import { Building2, Check, GripVertical, Layers, Loader2, Pencil, Trash2, TriangleAlert, X } from 'lucide-react';
 import { Indicador } from '../../../components/MascarasArvoreEditor';
 import SearchableSelect from '../../../components/SearchableSelect';
+import Modal from '../../../components/Modal';
+import Button from '../../../components/Button';
 import { useLeituraDre } from './leituraDre';
-import { listCentrosCustoDre, reordenarCentrosCustoDre, updateCentroCustoDre } from '../../../api/dreCentros.api';
+import {
+  atualizarAgrupadorDre,
+  criarAgrupadorDre,
+  excluirAgrupadorDre,
+  listAgrupadoresDre,
+  listCentrosCustoDre,
+  moverCentroDre,
+  reordenarCentrosCustoDre,
+  updateCentroCustoDre,
+} from '../../../api/dreCentros.api';
 
 // Mesmas opções do Tipo da aba Centros Custos da DFC (DfcCentrosTab.jsx).
 const NATUREZAS = [
   { value: 'OBRA', label: 'Obra' },
   { value: 'ADMINISTRATIVO', label: 'Administrativo' },
 ];
+const ROTULO_NATUREZA = { OBRA: 'Obra', ADMINISTRATIVO: 'Administrativo' };
 
 // Mesmo par de cores da DFC: em branco fica âmbar, preenchido fica azul claro.
 function corCampo(valor) {
@@ -20,82 +32,201 @@ function corCampo(valor) {
 // mesmos 190px da DFC).
 const GRADE = 'grid grid-cols-[minmax(0,1fr)_190px_100px] items-center gap-3';
 
+const erroDe = (err, padrao) => err.response?.data?.message || padrao;
+
 // Operações > DRE Gerencial > Centros Custos: mesma aba de DFC Construtoras > Centros Custos
 // (DfcCentrosTab.jsx — pedido do usuário), com o Tipo e a flag "Realiza DRE" (sem Contrato Caixa e
 // Código Prevision, que a DRE não usa). O Tipo é o MESMO campo do Tipo da DFC (centros_custo_sienge.
-// natureza): alterou numa aba, muda na outra. Todos os centros de custo da empresa, lista única, sem
-// drilldown; só os marcados aparecem nas abas seguintes (plano de contas próprio e Orçamento). Cada
-// mudança salva na hora, com o mesmo indicador de salvamento da aba Máscaras.
+// natureza): alterou numa aba, muda na outra. Só os marcados aparecem nas abas seguintes (plano de contas
+// próprio e Orçamento). Cada mudança salva na hora, com o mesmo indicador de salvamento da aba Máscaras.
 // Ordem: arrastando a linha pela alça, como na aba Máscaras (drag-and-drop nativo, mesma linha azul de
-// destino); grava a lista inteira na nova ordem. É a ordem das colunas dos centros na aba DRE. Com
-// busca digitada o arraste fica desligado (a lista estaria incompleta).
-export default function CentrosCustosTab({ empresaId, search }) {
+// destino); grava a lista inteira na nova ordem. É a ordem das colunas na aba DRE. Com busca digitada o
+// arraste fica desligado (a lista estaria incompleta).
+//
+// AGRUPADORES (pedido de 23/11/2026 — backend/src/modules/dre-agrupadores): um agrupador junta centros numa
+// obra só (ex.: EASY = EASY 1 + EASY 2) e a DRE passa a ser montada por ele. Botão "Novo agrupador" no topo
+// da página; arrastar um centro e soltar SOBRE o agrupador põe o centro nele; soltar entre dois centros do
+// agrupador também; soltar fora tira. O agrupador se arrasta inteiro pela alça dele. O "Realiza DRE" é o do
+// agrupador (vale pros centros dele). Quando o centro e o agrupador têm projeção, a tela pergunta qual fica.
+const CentrosCustosTab = forwardRef(function CentrosCustosTab({ empresaId, search }, ref) {
   const [centros, setCentros] = useState([]);
+  const [agrupadores, setAgrupadores] = useState([]);
   const [carregando, setCarregando] = useState(true);
   const [erroCarga, setErroCarga] = useState('');
 
   const [pendentes, setPendentes] = useState(0);
   const [erroSalvar, setErroSalvar] = useState('');
   const [salvoAlgumaVez, setSalvoAlgumaVez] = useState(false);
-  const [arrastado, setArrastado] = useState(null); // sienge_id da linha sendo arrastada
-  const [alvo, setAlvo] = useState(null); // posição (0…n) onde ela vai entrar
+  // Arraste: { tipo: 'centro' | 'grupo', id } e o destino — { posicao } (entre linhas) ou { grupo } (sobre o agrupador).
+  const [arrastado, setArrastado] = useState(null);
+  const [alvo, setAlvo] = useState(null);
+
+  const [novoNome, setNovoNome] = useState(null); // null = fechado
+  const [editando, setEditando] = useState(null); // { id, nome }
+  const [excluindo, setExcluindo] = useState(null); // agrupador
+  const [escolha, setEscolha] = useState(null); // { opcoes, repetir(projecaoFica) }
+  const novoRef = useRef(null);
 
   const carregar = useCallback(() => {
     if (!empresaId) return;
     setCarregando(true);
     setErroCarga('');
-    listCentrosCustoDre(empresaId)
-      .then(setCentros)
-      .catch((err) => setErroCarga(err.response?.data?.message || 'Não foi possível carregar os centros de custo.'))
+    Promise.all([listCentrosCustoDre(empresaId), listAgrupadoresDre(empresaId)])
+      .then(([c, a]) => {
+        setCentros(c);
+        setAgrupadores(a);
+      })
+      .catch((err) => setErroCarga(erroDe(err, 'Não foi possível carregar os centros de custo.')))
       .finally(() => setCarregando(false));
   }, [empresaId]);
 
   useEffect(() => {
     setCentros([]);
+    setAgrupadores([]);
     setErroSalvar('');
     setSalvoAlgumaVez(false);
+    setNovoNome(null);
     carregar();
   }, [carregar]);
 
-  const filtrados = useMemo(() => {
-    const termo = search.trim().toLowerCase();
-    if (!termo) return centros;
-    return centros.filter(
-      (c) =>
-        String(c.sienge_id).includes(termo) ||
-        c.name.toLowerCase().includes(termo) ||
-        (c.apelido || '').toLowerCase().includes(termo)
+  useImperativeHandle(ref, () => ({
+    abrirNovoAgrupador: () => {
+      setNovoNome('');
+      requestAnimationFrame(() => novoRef.current?.focus());
+    },
+  }));
+
+  // Roda uma gravação com o indicador "Salvando / Alterações salvas"; erro vai pra faixa vermelha.
+  async function gravar(fn, padrao) {
+    setErroSalvar('');
+    setPendentes((n) => n + 1);
+    try {
+      const r = await fn();
+      setSalvoAlgumaVez(true);
+      return r;
+    } catch (err) {
+      setErroSalvar(erroDe(err, padrao));
+      throw err;
+    } finally {
+      setPendentes((n) => n - 1);
+    }
+  }
+
+  // ------------------------------------------------------------------ linhas (agrupadores + centros)
+
+  // Na ordem da DRE: cada agrupador na posição do primeiro centro dele, com os centros logo abaixo; os
+  // agrupadores ainda vazios ficam no topo (onde a gente acabou de criar).
+  const linhas = useMemo(() => {
+    const porId = new Map(agrupadores.map((g) => [g.id, g]));
+    const out = [];
+    agrupadores
+      .filter((g) => !centros.some((c) => c.agrupador_id === g.id))
+      .forEach((g) => out.push({ tipo: 'grupo', g, membros: [] }));
+    const vistos = new Set();
+    centros.forEach((c) => {
+      const g = c.agrupador_id ? porId.get(c.agrupador_id) : null;
+      if (!g) {
+        out.push({ tipo: 'centro', c, g: null });
+        return;
+      }
+      if (vistos.has(g.id)) return;
+      vistos.add(g.id);
+      const membros = centros.filter((x) => x.agrupador_id === g.id);
+      out.push({ tipo: 'grupo', g, membros });
+      membros.forEach((m) => out.push({ tipo: 'centro', c: m, g }));
+    });
+    return out;
+  }, [centros, agrupadores]);
+
+  const termo = search.trim().toLowerCase();
+  const casa = (c) =>
+    String(c.sienge_id).includes(termo) || c.name.toLowerCase().includes(termo) || (c.apelido || '').toLowerCase().includes(termo);
+  // Busca: o agrupador aparece se o nome dele ou algum centro dele bater (com os centros que batem).
+  const visiveis = useMemo(() => {
+    if (!termo) return linhas;
+    return linhas.filter((l) =>
+      l.tipo === 'grupo'
+        ? l.g.nome.toLowerCase().includes(termo) || l.membros.some(casa)
+        : casa(l.c) || (l.g && l.g.nome.toLowerCase().includes(termo))
     );
-  }, [centros, search]);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [linhas, termo]);
+
+  // ------------------------------------------------------------------ campos
 
   // Atualiza a linha na hora e grava só o campo mudado (`patch`: { realiza_dre } ou { natureza }); se
   // falhar, volta a linha pro que estava.
   async function alterar(centro, patch) {
     const novo = { ...centro, ...patch };
     setCentros((atual) => atual.map((c) => (c.sienge_id === centro.sienge_id ? novo : c)));
-    setErroSalvar('');
-    setPendentes((n) => n + 1);
     try {
-      const salvo = await updateCentroCustoDre(empresaId, centro.sienge_id, patch);
+      const salvo = await gravar(() => updateCentroCustoDre(empresaId, centro.sienge_id, patch), 'Não foi possível salvar.');
       setCentros((atual) => atual.map((c) => (c.sienge_id === centro.sienge_id ? salvo : c)));
-      setSalvoAlgumaVez(true);
-    } catch (err) {
+    } catch {
       setCentros((atual) => atual.map((c) => (c.sienge_id === centro.sienge_id ? centro : c)));
-      setErroSalvar(err.response?.data?.message || 'Não foi possível salvar.');
-    } finally {
-      setPendentes((n) => n - 1);
     }
   }
 
-  // Só leitura (versões da DRE): sem arrastar.
-  const { somenteLeitura } = useLeituraDre();
-  const podeArrastar = !search.trim() && !somenteLeitura;
+  async function criarAgrupador() {
+    const nome = (novoNome || '').trim();
+    if (!nome) return;
+    try {
+      const g = await gravar(() => criarAgrupadorDre(empresaId, nome), 'Não foi possível criar o agrupador.');
+      setAgrupadores((atual) => [...atual, g]);
+      setNovoNome(null);
+    } catch {
+      /* a faixa vermelha mostra o erro */
+    }
+  }
 
-  function iniciarArraste(e, siengeId) {
+  async function renomear() {
+    const { id, nome } = editando;
+    const atual = agrupadores.find((g) => g.id === id);
+    setEditando(null);
+    if (!nome.trim() || nome.trim() === atual?.nome) return;
+    try {
+      const g = await gravar(() => atualizarAgrupadorDre(empresaId, id, { nome: nome.trim() }), 'Não foi possível renomear o agrupador.');
+      setAgrupadores((lista) => lista.map((x) => (x.id === id ? g : x)));
+    } catch {
+      /* idem */
+    }
+  }
+
+  // O Realiza DRE do agrupador vale pros centros dele.
+  async function alterarRealizaGrupo(g, valor) {
+    try {
+      const salvo = await gravar(() => atualizarAgrupadorDre(empresaId, g.id, { realiza_dre: valor }), 'Não foi possível salvar.');
+      setAgrupadores((lista) => lista.map((x) => (x.id === g.id ? salvo : x)));
+      setCentros((lista) => lista.map((c) => (c.agrupador_id === g.id ? { ...c, realiza_dre: valor } : c)));
+    } catch {
+      /* idem */
+    }
+  }
+
+  async function confirmarExclusao() {
+    const g = excluindo;
+    setExcluindo(null);
+    try {
+      await gravar(() => excluirAgrupadorDre(empresaId, g.id), 'Não foi possível excluir o agrupador.');
+      setAgrupadores((lista) => lista.filter((x) => x.id !== g.id));
+      setCentros((lista) => lista.map((c) => (c.agrupador_id === g.id ? { ...c, agrupador_id: null, principal: false } : c)));
+    } catch {
+      /* idem */
+    }
+  }
+
+  // ------------------------------------------------------------------ arrastar
+
+  // Só leitura (versões da DRE): sem arrastar nem editar.
+  const { somenteLeitura } = useLeituraDre();
+  const podeArrastar = !termo && !somenteLeitura;
+
+  function iniciarArraste(e, item) {
+    e.stopPropagation();
     e.dataTransfer.effectAllowed = 'move';
-    e.dataTransfer.setData('text/plain', String(siengeId));
+    e.dataTransfer.setData('text/plain', `${item.tipo}:${item.id}`);
     // adia pra o navegador capturar a "foto" da linha antes de esmaecer a original
-    requestAnimationFrame(() => setArrastado(siengeId));
+    requestAnimationFrame(() => setArrastado(item));
   }
 
   function encerrarArraste() {
@@ -103,41 +234,95 @@ export default function CentrosCustosTab({ empresaId, search }) {
     setAlvo(null);
   }
 
-  // Metade de cima da linha = antes dela; metade de baixo = depois.
+  // Sobre uma linha: metade de cima = antes dela; metade de baixo = depois. Arrastando um centro por cima do
+  // cabeçalho de outro agrupador, o alvo é o agrupador inteiro (entrar nele).
   function mirar(e, i) {
-    if (arrastado === null) return;
+    if (!arrastado) return;
     e.preventDefault();
+    e.stopPropagation();
     e.dataTransfer.dropEffect = 'move';
+    const l = visiveis[i];
+    if (arrastado.tipo === 'centro' && l.tipo === 'grupo') {
+      if (!alvo || alvo.grupo !== l.g.id) setAlvo({ grupo: l.g.id });
+      return;
+    }
     const r = e.currentTarget.getBoundingClientRect();
     const posicao = e.clientY < r.top + r.height / 2 ? i : i + 1;
-    if (posicao !== alvo) setAlvo(posicao);
+    if (!alvo || alvo.posicao !== posicao) setAlvo({ posicao });
   }
 
-  // Move na tela na hora e grava a lista inteira; se falhar, volta pro que estava.
+  // A ordem inteira dos centros (os de cada agrupador juntos), a partir das linhas.
+  const ordemDe = (ls) => ls.filter((l) => l.tipo === 'centro').map((l) => l.c.sienge_id);
+
   async function soltar(e) {
     e.preventDefault();
-    const id = arrastado;
-    const posicao = alvo;
+    const item = arrastado;
+    const destino = alvo;
     encerrarArraste();
-    if (id === null || posicao === null) return;
-    const de = centros.findIndex((c) => c.sienge_id === id);
-    const para = posicao > de ? posicao - 1 : posicao;
-    if (de < 0 || para === de) return;
-    const anterior = centros;
-    const nova = [...centros];
-    const [item] = nova.splice(de, 1);
-    nova.splice(para, 0, item);
-    setCentros(nova);
-    setErroSalvar('');
-    setPendentes((n) => n + 1);
+    if (!item || !destino) return;
+
+    let novas = [...linhas];
+    let grupoNovo; // undefined = não muda de agrupador
+    if (item.tipo === 'grupo') {
+      // Bloco inteiro (cabeçalho + centros) pra posição; dentro de outro bloco, vai pro fim dele.
+      const ini = novas.findIndex((l) => l.tipo === 'grupo' && l.g.id === item.id);
+      const bloco = [novas[ini], ...novas.filter((l) => l.tipo === 'centro' && l.g?.id === item.id)];
+      let pos = destino.posicao;
+      while (pos < novas.length && pos > 0 && novas[pos].tipo === 'centro' && novas[pos].g && novas[pos - 1].g?.id === novas[pos].g.id) pos += 1;
+      const antes = novas.slice(0, pos).filter((l) => !bloco.includes(l));
+      const depois = novas.slice(pos).filter((l) => !bloco.includes(l));
+      novas = [...antes, ...bloco, ...depois];
+    } else {
+      const de = novas.findIndex((l) => l.tipo === 'centro' && l.c.sienge_id === item.id);
+      const linha = novas[de];
+      if (destino.grupo !== undefined) {
+        // Sobre o agrupador: entra no fim do bloco dele.
+        grupoNovo = destino.grupo;
+        novas.splice(de, 1);
+        let fim = novas.findIndex((l) => l.tipo === 'grupo' && l.g.id === grupoNovo) + 1;
+        while (fim < novas.length && novas[fim].tipo === 'centro' && novas[fim].g?.id === grupoNovo) fim += 1;
+        novas.splice(fim, 0, { ...linha, g: agrupadores.find((g) => g.id === grupoNovo) });
+      } else {
+        // Entre linhas: o agrupador é o de cima, se a linha de cima for o cabeçalho dele ou se as duas
+        // linhas em volta forem dele; senão fica fora de agrupador.
+        const pos = destino.posicao;
+        const cima = visiveis[pos - 1];
+        const baixo = visiveis[pos];
+        const g =
+          cima?.tipo === 'grupo' ? cima.g : cima?.tipo === 'centro' && cima.g && baixo?.tipo === 'centro' && baixo.g?.id === cima.g.id ? cima.g : null;
+        grupoNovo = (g?.id ?? null) === (linha.g?.id ?? null) ? undefined : g?.id ?? null;
+        const para = pos > de ? pos - 1 : pos;
+        novas.splice(de, 1);
+        novas.splice(para, 0, { ...linha, g });
+      }
+    }
+
+    const ordem = ordemDe(novas);
+    const mudouOrdem = ordem.join(',') !== centros.map((c) => c.sienge_id).join(',');
+    if (grupoNovo === undefined && !mudouOrdem) return;
+    await aplicar(item.tipo === 'centro' ? item.id : null, grupoNovo, ordem);
+  }
+
+  // Grava a mudança de agrupador (se houver) e a ordem. 409 com `escolher_projecao`: pergunta qual projeção fica.
+  async function aplicar(centroId, grupoNovo, ordem, projecaoFica = null) {
     try {
-      setCentros(await reordenarCentrosCustoDre(empresaId, nova.map((c) => c.sienge_id)));
-      setSalvoAlgumaVez(true);
+      await gravar(async () => {
+        if (grupoNovo !== undefined) {
+          const r = await moverCentroDre(empresaId, centroId, grupoNovo, projecaoFica);
+          setAgrupadores(r.agrupadores);
+          setCentros(r.centros);
+        }
+        setCentros(await reordenarCentrosCustoDre(empresaId, ordem));
+      }, 'Não foi possível salvar.');
     } catch (err) {
-      setCentros(anterior);
-      setErroSalvar(err.response?.data?.message || 'Não foi possível salvar a ordem.');
-    } finally {
-      setPendentes((n) => n - 1);
+      if (err.response?.status === 409 && err.response.data?.escolher_projecao) {
+        setErroSalvar('');
+        setEscolha({
+          mensagem: err.response.data.message,
+          opcoes: err.response.data.escolher_projecao,
+          repetir: (fica) => aplicar(centroId, grupoNovo, ordem, fica),
+        });
+      }
     }
   }
 
@@ -152,6 +337,8 @@ export default function CentrosCustosTab({ empresaId, search }) {
   }
 
   const statusSalvamento = pendentes > 0 ? 'salvando' : erroSalvar ? 'erro' : salvoAlgumaVez ? 'salvo' : null;
+  const naturezaDoGrupo = (membros) =>
+    membros.some((m) => m.natureza === 'OBRA') ? 'OBRA' : membros.some((m) => m.natureza === 'ADMINISTRATIVO') ? 'ADMINISTRATIVO' : null;
 
   return (
     // Tabela dentro do quadro branco, com margem em volta (p-5) e cabeçalho de cantos de cima
@@ -197,7 +384,7 @@ export default function CentrosCustosTab({ empresaId, search }) {
         </div>
       ) : (
         <div
-          onDragOver={(e) => arrastado !== null && e.preventDefault()}
+          onDragOver={(e) => arrastado && e.preventDefault()}
           onDrop={soltar}
           onDragLeave={(e) => {
             if (!e.currentTarget.contains(e.relatedTarget)) setAlvo(null);
@@ -207,75 +394,269 @@ export default function CentrosCustosTab({ empresaId, search }) {
           <div
             className={`${GRADE} sticky -top-6 z-20 rounded-t-lg border-b-2 border-blue-500 bg-blue-50 py-2.5 pl-4 pr-4 text-xs font-medium uppercase tracking-wide text-blue-700`}
           >
-            <span className="pl-5" title="Arraste pela alça para mudar a ordem — é a ordem das colunas na aba DRE">
+            <span className="pl-5" title="Arraste pela alça para mudar a ordem — é a ordem das colunas na aba DRE. Solte um centro sobre um agrupador para colocá-lo nele.">
               Centro de custo
             </span>
             <span title="Mesmo Tipo da aba Centros Custos da DFC Construtoras — alterar aqui altera lá">Tipo</span>
             <span className="text-center">Realiza DRE</span>
           </div>
 
+          {/* Novo agrupador (botão no topo da página). */}
+          {novoNome !== null && (
+            <div className={`${GRADE} border-b border-gray-100 bg-primary-50/40 py-1.5 pl-1.5 pr-4`}>
+              <div className="flex min-w-0 items-center gap-2">
+                <Layers size={14} className="ml-[1px] shrink-0 text-primary-600" />
+                <input
+                  ref={novoRef}
+                  type="text"
+                  value={novoNome}
+                  maxLength={120}
+                  onChange={(e) => setNovoNome(e.target.value)}
+                  onKeyDown={(e) => {
+                    if (e.key === 'Enter') criarAgrupador();
+                    if (e.key === 'Escape') setNovoNome(null);
+                  }}
+                  placeholder="Nome do agrupador (ex.: EASY)"
+                  className="min-w-0 flex-1 rounded-lg border border-gray-200 px-2.5 py-1 text-xs focus:outline-none focus:ring-2 focus:ring-primary-100"
+                />
+                <button
+                  type="button"
+                  onClick={criarAgrupador}
+                  disabled={!novoNome.trim()}
+                  className="rounded-lg bg-primary-600 px-2.5 py-1 text-xs font-medium text-white hover:bg-primary-700 disabled:opacity-50"
+                >
+                  Criar
+                </button>
+                <button type="button" onClick={() => setNovoNome(null)} className="text-gray-400 hover:text-gray-600" aria-label="Cancelar">
+                  <X size={15} />
+                </button>
+              </div>
+              <span className="col-span-2 text-[11px] text-gray-500">Depois, arraste os centros de custo para dentro dele.</span>
+            </div>
+          )}
+
           {/* Cabeçalho sempre visível, mesmo sem nenhum registro (pedido do usuário). */}
-          {filtrados.length === 0 ? (
+          {visiveis.length === 0 ? (
             <div className="border-b border-gray-100 py-10 text-center text-sm text-gray-400">
               {centros.length === 0 ? 'Nenhum centro de custo nesta empresa.' : 'Nenhum centro de custo encontrado para essa busca.'}
             </div>
           ) : (
-            filtrados.map((centro, i) => {
-            return (
-              <div
-                key={centro.sienge_id}
-                draggable={podeArrastar}
-                onDragStart={(e) => iniciarArraste(e, centro.sienge_id)}
-                onDragEnd={encerrarArraste}
-                onDragOver={(e) => mirar(e, i)}
-                className={`${GRADE} group/linha relative border-b border-gray-100 bg-white py-1.5 pl-1.5 pr-4 hover:bg-gray-50 ${
-                  arrastado === centro.sienge_id ? 'opacity-40' : ''
-                }`}
-              >
-                {alvo === i && <Indicador />}
-                {alvo === filtrados.length && i === filtrados.length - 1 && <Indicador embaixo />}
-                <div className="flex min-w-0 items-center gap-2">
-                  <GripVertical
-                    size={14}
-                    className={`shrink-0 ${podeArrastar ? 'cursor-grab text-gray-300 group-hover/linha:text-gray-500' : 'text-gray-200'}`}
-                    title={podeArrastar ? 'Arraste para mudar a ordem' : 'Limpe a busca para mudar a ordem'}
-                  />
-                  <span className="shrink-0 text-xs tabular-nums text-gray-400">{centro.sienge_id}</span>
-                  <span className="min-w-0 truncate text-xs font-medium text-gray-800" title={centro.name}>
-                    {centro.name}
-                    {centro.apelido && <span className="font-normal text-gray-400"> · {centro.apelido}</span>}
-                  </span>
-                  {centro.status !== 'ATIVO' && (
-                    <span className="shrink-0 rounded bg-gray-100 px-1.5 py-0.5 text-[10px] font-medium text-gray-500">
-                      Inativo
-                    </span>
-                  )}
-                </div>
-                <SearchableSelect
-                  value={centro.natureza || ''}
-                  onChange={(v) => alterar(centro, { natureza: v || null })}
-                  options={NATUREZAS}
-                  placeholder="Selecione"
-                  corClasses={corCampo(centro.natureza)}
-                  compacto
-                />
+            visiveis.map((l, i) => {
+              const indicadores = (
+                <>
+                  {alvo?.posicao === i && <Indicador />}
+                  {alvo?.posicao === visiveis.length && i === visiveis.length - 1 && <Indicador embaixo />}
+                </>
+              );
 
-                {/* Só os marcados aparecem nas abas seguintes (plano de contas próprio e Orçamento). */}
-                <span className="flex justify-center">
-                  <input
-                    type="checkbox"
-                    checked={Boolean(centro.realiza_dre)}
-                    onChange={(e) => alterar(centro, { realiza_dre: e.target.checked })}
-                    title="Realiza DRE"
-                    className="h-4 w-4 cursor-pointer rounded border-gray-300 text-primary-600 focus:ring-primary-100"
+              if (l.tipo === 'grupo') {
+                const { g, membros } = l;
+                const natureza = naturezaDoGrupo(membros);
+                const sobre = alvo?.grupo === g.id;
+                return (
+                  <div
+                    key={`g${g.id}`}
+                    draggable={podeArrastar && editando?.id !== g.id}
+                    onDragStart={(e) => iniciarArraste(e, { tipo: 'grupo', id: g.id })}
+                    onDragEnd={encerrarArraste}
+                    onDragOver={(e) => mirar(e, i)}
+                    className={`${GRADE} group/linha relative border-b border-gray-100 py-1.5 pl-1.5 pr-4 ${
+                      sobre ? 'bg-primary-100 ring-2 ring-inset ring-primary-400' : 'bg-primary-50/60 hover:bg-primary-50'
+                    } ${arrastado?.tipo === 'grupo' && arrastado.id === g.id ? 'opacity-40' : ''}`}
+                  >
+                    {indicadores}
+                    <div className="flex min-w-0 items-center gap-2">
+                      <GripVertical
+                        size={14}
+                        className={`shrink-0 ${podeArrastar ? 'cursor-grab text-gray-300 group-hover/linha:text-gray-500' : 'text-gray-200'}`}
+                        title={podeArrastar ? 'Arraste para mudar a ordem do agrupador' : 'Limpe a busca para mudar a ordem'}
+                      />
+                      <Layers size={14} className="shrink-0 text-primary-600" />
+                      {editando?.id === g.id ? (
+                        <input
+                          autoFocus
+                          type="text"
+                          value={editando.nome}
+                          maxLength={120}
+                          onChange={(e) => setEditando({ id: g.id, nome: e.target.value })}
+                          onBlur={renomear}
+                          onKeyDown={(e) => {
+                            if (e.key === 'Enter') e.currentTarget.blur();
+                            if (e.key === 'Escape') setEditando(null);
+                          }}
+                          className="min-w-0 flex-1 rounded-lg border border-gray-200 px-2 py-0.5 text-xs focus:outline-none focus:ring-2 focus:ring-primary-100"
+                        />
+                      ) : (
+                        <span className="min-w-0 truncate text-xs font-semibold text-gray-900" title="Agrupador: a DRE trata os centros dele como uma obra só">
+                          {g.nome}
+                        </span>
+                      )}
+                      <span className="shrink-0 rounded-full bg-white px-2 py-0.5 text-[10px] font-medium tabular-nums text-gray-500 ring-1 ring-gray-200">
+                        {membros.length === 0 ? 'vazio' : `${membros.length} ${membros.length === 1 ? 'centro' : 'centros'}`}
+                      </span>
+                      {!somenteLeitura && editando?.id !== g.id && (
+                        <span className="ml-auto flex shrink-0 items-center gap-1 opacity-0 transition-opacity group-hover/linha:opacity-100">
+                          <button
+                            type="button"
+                            onClick={() => setEditando({ id: g.id, nome: g.nome })}
+                            className="rounded p-1 text-gray-400 hover:bg-white hover:text-gray-700"
+                            title="Renomear agrupador"
+                            aria-label="Renomear agrupador"
+                          >
+                            <Pencil size={13} />
+                          </button>
+                          <button
+                            type="button"
+                            onClick={() => setExcluindo(g)}
+                            className="rounded p-1 text-gray-400 hover:bg-white hover:text-red-600"
+                            title="Excluir agrupador"
+                            aria-label="Excluir agrupador"
+                          >
+                            <Trash2 size={13} />
+                          </button>
+                        </span>
+                      )}
+                    </div>
+                    <span className="pl-3 text-xs text-gray-500" title="O Tipo do agrupador vem dos centros dele">
+                      {membros.length === 0 ? (
+                        <span className="text-gray-400">Solte os centros aqui</span>
+                      ) : (
+                        ROTULO_NATUREZA[natureza] || <span className="text-amber-700">Sem tipo</span>
+                      )}
+                    </span>
+                    <span className="flex justify-center">
+                      <input
+                        type="checkbox"
+                        checked={Boolean(g.realiza_dre)}
+                        onChange={(e) => alterarRealizaGrupo(g, e.target.checked)}
+                        title="Realiza DRE do agrupador (vale para todos os centros dele)"
+                        className="h-4 w-4 cursor-pointer rounded border-gray-300 text-primary-600 focus:ring-primary-100"
+                      />
+                    </span>
+                  </div>
+                );
+              }
+
+              const { c: centro, g } = l;
+              return (
+                <div
+                  key={centro.sienge_id}
+                  draggable={podeArrastar}
+                  onDragStart={(e) => iniciarArraste(e, { tipo: 'centro', id: centro.sienge_id })}
+                  onDragEnd={encerrarArraste}
+                  onDragOver={(e) => mirar(e, i)}
+                  className={`${GRADE} group/linha relative border-b border-gray-100 bg-white py-1.5 pr-4 hover:bg-gray-50 ${g ? 'pl-7' : 'pl-1.5'} ${
+                    arrastado?.tipo === 'centro' && arrastado.id === centro.sienge_id ? 'opacity-40' : ''
+                  }`}
+                >
+                  {indicadores}
+                  {g && <span className="absolute bottom-0 left-3.5 top-0 w-px bg-primary-200" aria-hidden />}
+                  <div className="flex min-w-0 items-center gap-2">
+                    <GripVertical
+                      size={14}
+                      className={`shrink-0 ${podeArrastar ? 'cursor-grab text-gray-300 group-hover/linha:text-gray-500' : 'text-gray-200'}`}
+                      title={podeArrastar ? 'Arraste para mudar a ordem ou soltar num agrupador' : 'Limpe a busca para mudar a ordem'}
+                    />
+                    <span className="shrink-0 text-xs tabular-nums text-gray-400">{centro.sienge_id}</span>
+                    <span className="min-w-0 truncate text-xs font-medium text-gray-800" title={centro.name}>
+                      {centro.name}
+                      {centro.apelido && <span className="font-normal text-gray-400"> · {centro.apelido}</span>}
+                    </span>
+                    {centro.status !== 'ATIVO' && (
+                      <span className="shrink-0 rounded bg-gray-100 px-1.5 py-0.5 text-[10px] font-medium text-gray-500">Inativo</span>
+                    )}
+                  </div>
+                  <SearchableSelect
+                    value={centro.natureza || ''}
+                    onChange={(v) => alterar(centro, { natureza: v || null })}
+                    options={NATUREZAS}
+                    placeholder="Selecione"
+                    corClasses={corCampo(centro.natureza)}
+                    compacto
                   />
-                </span>
-              </div>
-            );
-          })
+
+                  {/* Só os marcados aparecem nas abas seguintes (plano de contas próprio e Orçamento). Dentro de
+                      agrupador, o Realiza DRE é o dele. */}
+                  <span className="flex justify-center">
+                    <input
+                      type="checkbox"
+                      checked={Boolean(centro.realiza_dre)}
+                      onChange={(e) => alterar(centro, { realiza_dre: e.target.checked })}
+                      disabled={Boolean(g)}
+                      title={g ? `Definido pelo agrupador ${g.nome}` : 'Realiza DRE'}
+                      className="h-4 w-4 cursor-pointer rounded border-gray-300 text-primary-600 focus:ring-primary-100 disabled:cursor-not-allowed disabled:opacity-50"
+                    />
+                  </span>
+                </div>
+              );
+            })
           )}
         </div>
       )}
+
+      <Modal open={Boolean(excluindo)} title="Excluir agrupador" onClose={() => setExcluindo(null)}>
+        {excluindo && (
+          <div className="space-y-4 text-sm text-gray-700">
+            <p>
+              Excluir o agrupador <strong>{excluindo.nome}</strong>?{' '}
+              {excluindo.centros.length > 0
+                ? 'Os centros dele voltam a ser calculados separados na DRE, cada um com a própria POC.'
+                : 'Ele está vazio.'}
+            </p>
+            <div className="flex justify-end gap-2">
+              <Button variant="secondary" onClick={() => setExcluindo(null)}>
+                Cancelar
+              </Button>
+              <Button variant="danger" onClick={confirmarExclusao}>
+                Excluir
+              </Button>
+            </div>
+          </div>
+        )}
+      </Modal>
+
+      <Modal open={Boolean(escolha)} title="Qual projeção fica?" onClose={() => setEscolha(null)} maxWidthClass="max-w-lg">
+        {escolha && (
+          <div className="space-y-4 text-sm text-gray-700">
+            <p>
+              {escolha.mensagem} A projeção da DRE é uma só por agrupador: a outra é descartada. A que ficar volta para Em andamento, para
+              ser revisada com os dois centros juntos.
+            </p>
+            <div className="space-y-2">
+              {escolha.opcoes.map((o) => (
+                <button
+                  key={o.centro_id}
+                  type="button"
+                  onClick={() => {
+                    const r = escolha.repetir;
+                    setEscolha(null);
+                    r(o.centro_id);
+                  }}
+                  className="flex w-full items-center justify-between gap-3 rounded-lg border border-gray-200 px-3 py-2.5 text-left hover:border-primary-300 hover:bg-primary-50"
+                >
+                  <span className="min-w-0">
+                    <span className="block truncate font-medium text-gray-900">
+                      {o.agrupador ? `Do agrupador ${o.agrupador}` : `De ${o.centro_id} - ${o.centro}`}
+                    </span>
+                    <span className="block text-xs text-gray-500">
+                      Ciclo {o.ciclo_inicio.slice(5)}/{o.ciclo_inicio.slice(0, 4)} a {o.ciclo_fim.slice(5)}/{o.ciclo_fim.slice(0, 4)} ·{' '}
+                      {o.status === 'CONCLUIDO' ? 'Concluída' : 'Em andamento'}
+                    </span>
+                  </span>
+                  <span className="shrink-0 text-xs font-medium text-primary-600">Manter esta</span>
+                </button>
+              ))}
+            </div>
+            <div className="flex justify-end">
+              <Button variant="secondary" onClick={() => setEscolha(null)}>
+                Cancelar
+              </Button>
+            </div>
+          </div>
+        )}
+      </Modal>
     </div>
   );
-}
+});
+
+export default CentrosCustosTab;

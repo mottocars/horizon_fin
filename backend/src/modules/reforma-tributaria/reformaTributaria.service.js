@@ -1,5 +1,6 @@
 const pool = require('../../config/db');
 const projecoes = require('../dre-projecoes/dreProjecoes.service');
+const agrupadores = require('../dre-agrupadores/agrupadores.service');
 const dreMascaras = require('../dre-mascaras/dreMascaras.service');
 const { baseDoImposto } = require('../dre-demonstrativo/demonstrativo.service');
 const dfcOrcamento = require('../dfc-orcamento/dfcOrcamento.service');
@@ -210,12 +211,9 @@ async function impacto(empresaId, { centros: filtro = [], ano = null }) {
       [empresaId]
     ),
     pool.query('SELECT poc_receita_mascara_id FROM dre_configuracoes WHERE empresa_id = $1', [empresaId]),
-    pool.query(
-      `SELECT sienge_id::int AS id, COALESCE(NULLIF(TRIM(apelido), ''), name) AS nome, natureza
-         FROM centros_custo_sienge WHERE empresa_id = $1 AND realiza_dre
-        ORDER BY dre_ordem ASC NULLS LAST, sienge_id ASC`,
-      [empresaId]
-    ),
+    // As obras da DRE: um agrupador (dre-agrupadores) é uma obra só, no id do centro principal (o dono da
+    // projeção dele) — a configuração da reforma que vale para ele é a do principal.
+    agrupadores.unidades(empresaId).then((us) => ({ rows: us.map((u) => ({ id: u.id, nome: u.rotulo, natureza: u.natureza })) })),
   ]);
   const p = motor.parametros(cfgEmpresa);
   const config = new Map(cfgCentros.map((c) => [c.centro_id, c]));
