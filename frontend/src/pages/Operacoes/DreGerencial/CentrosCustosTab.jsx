@@ -558,9 +558,27 @@ const CentrosCustosTab = forwardRef(function CentrosCustosTab({ empresaId, searc
                           {g.nome}
                         </span>
                       )}
-                      <span className="shrink-0 rounded-full bg-white px-2 py-0.5 text-[10px] font-medium tabular-nums text-gray-500 ring-1 ring-gray-200">
-                        {membros.length === 0 ? 'vazio' : `${membros.length} ${membros.length === 1 ? 'centro' : 'centros'}`}
-                      </span>
+                      {/* Conta os centros que o filtro Situação mostra e avisa os ocultos por ele (ex.: VIBRANT ALTO com
+                          um centro inativo: "1 centro · 1 inativo oculto" em Ativos). */}
+                      {(() => {
+                        const mostrados = membros.filter(situacaoOk).length;
+                        const ocultos = membros.length - mostrados;
+                        const tipo = situacao === 'INATIVOS' ? 'ativo' : 'inativo';
+                        const texto =
+                          membros.length === 0
+                            ? 'vazio'
+                            : `${mostrados} ${mostrados === 1 ? 'centro' : 'centros'}${
+                                ocultos ? ` · ${ocultos} ${ocultos === 1 ? `${tipo} oculto` : `${tipo}s ocultos`}` : ''
+                              }`;
+                        return (
+                          <span
+                            className="shrink-0 rounded-full bg-white px-2 py-0.5 text-[10px] font-medium tabular-nums text-gray-500 ring-1 ring-gray-200"
+                            title={ocultos ? `Oculto pelo filtro Situação — escolha "Todos" para ver os ${membros.length} centros do agrupador` : undefined}
+                          >
+                            {texto}
+                          </span>
+                        );
+                      })()}
                       {!somenteLeitura && editando?.id !== g.id && (
                         <span className="ml-auto flex shrink-0 items-center gap-1 opacity-0 transition-opacity group-hover/linha:opacity-100">
                           <button
