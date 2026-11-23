@@ -150,17 +150,7 @@ function sqlCategorias(tabela) {
     ) c ON TRUE`;
 }
 
-// `soDre`: só os títulos que podem ter linha na DRE — algum rateio (de qualquer parcela) num centro do
-// mapa da DRE (`centros_dre`, centro com "Realiza DRE"), ou algum ajuste (que pode levar a linha pra um
-// desses centros). O título entra inteiro (todas as parcelas e centros), então o % do rateio, a data e as
-// parcelas do lançamento não mudam; só deixa de montar os títulos que o `lc` descartaria de qualquer jeito
-// (na GENESIS, ~3/4 dos títulos são de centros sem DRE). Movimentos do extrato e criados à mão: todos.
-// A lista dos títulos sai uma vez só (`titulos_dre`, ver cteLinhas) e entra num IN simples (vira semi-join
-// por hash) — um OR entre dois IN fazia o Postgres refazer a subconsulta a cada parcela (minutos na GENESIS).
-function sqlLinhas(soDre) {
-  const soTitulosDre = (origem) =>
-    soDre ? `AND t.bill_id IN (SELECT x.bill_id FROM titulos_dre x WHERE x.origem = '${origem}')` : '';
-  return `
+const SQL_LINHAS = `
   SELECT 'R' AS origem, t.bill_id AS chave, t.issue_date AS data, t.due_date AS vencimento,
          t.installment_number::text AS parcela, NULLIF(TRIM(t.document_identification_id), '') AS documento,
          t.document_identification_name AS documento_nome, t.document_number AS numero, t.client_name AS contraparte,
@@ -169,7 +159,6 @@ function sqlLinhas(soDre) {
     FROM sie_income t
     ${sqlCategorias('sie_income_categorias')}
    WHERE t.empresa_id = $1 AND t.issue_date >= $2 AND t.issue_date < $3
-     ${soTitulosDre('R')}
   UNION ALL
   SELECT 'P', t.bill_id, t.issue_date, t.due_date, t.installment_id::text, NULLIF(TRIM(t.document_identification_id), ''),
          t.document_identification_name, t.document_number, t.creditor_name,
@@ -178,7 +167,6 @@ function sqlLinhas(soDre) {
     FROM sie_outcome t
     ${sqlCategorias('sie_outcome_categorias')}
    WHERE t.empresa_id = $1 AND t.issue_date >= $2 AND t.issue_date < $3
-     ${soTitulosDre('P')}
   UNION ALL
   SELECT 'E', e.id, r.data, NULL, NULL, NULLIF(TRIM(e.document_id), ''), e.statement_type_notes, e.document_number,
          NULLIF(BTRIM(e.description, E' \\t\\r\\n'), ''), r.centro_id, NULL, r.natureza_id::text, NULL, r.valor
@@ -191,7 +179,6 @@ function sqlLinhas(soDre) {
          m.centro_id, NULL, m.natureza_id, NULL, CASE WHEN m.tipo = 'SAIDA' THEN -m.valor ELSE m.valor END
     FROM lancamentos_manuais m
    WHERE m.empresa_id = $1 AND m.data >= $2 AND m.data < $3`;
-}
 
 // Uma linha por lançamento × centro × natureza (parcelas do título somadas — `g0`), com o ajuste da
 // linha (lancamentos_ajustes, módulo lancamentos-ajustes) aplicado: centro, natureza e valor trocados,
@@ -203,24 +190,8 @@ function sqlLinhas(soDre) {
 // fora (`mapa` — drePlanoContas.service.js::sqlMapaDre). O % do rateio continua sobre o lançamento
 // inteiro (a fatia do título que cai naquela linha). Nomes de centro e natureza pelos cadastros (o extrato e
 // o ajuste só trazem o id); o nome da categoria do título fica de reserva. Resultado: `lc`.
-// `soDre` (ver sqlLinhas): o `o` já nasce só com os títulos que podem entrar na DRE — o `lc` sai idêntico,
-// mas o `gw` deixa de ter as linhas de fora (foraDaDre, que lê o `gw`, usa a versão completa).
-const SQL_TITULOS_DRE = `
-  centros_dre AS MATERIALIZED (SELECT DISTINCT centro_id::bigint AS centro_id FROM mapa),
-  titulos_dre AS MATERIALIZED (
-    SELECT DISTINCT 'R' AS origem, k.bill_id
-      FROM sie_income_categorias k JOIN centros_dre d ON d.centro_id = k.cost_center_id
-     WHERE k.empresa_id = $1
-    UNION
-    SELECT DISTINCT 'P', k.bill_id
-      FROM sie_outcome_categorias k JOIN centros_dre d ON d.centro_id = k.cost_center_id
-     WHERE k.empresa_id = $1
-    UNION
-    SELECT a.origem, a.chave FROM lancamentos_ajustes a WHERE a.empresa_id = $1 AND a.origem IN ('R', 'P')
-  ),`;
-const cteLinhas = (soDre) => `
-  mapa AS (${sqlMapaDre('$1')}),${soDre ? SQL_TITULOS_DRE : ''}
-  o AS MATERIALIZED (${sqlLinhas(soDre)}),
+const CTE_LINHAS = `
+  o AS MATERIALIZED (${SQL_LINHAS}),
   g0 AS (
     SELECT origem, chave, centro_id::bigint AS centro_id, natureza_id, MIN(data) AS data, MIN(vencimento) AS venc_min,
            MAX(vencimento) AS venc_max, COUNT(DISTINCT parcela)::int AS parcelas, MAX(documento) AS documento,
@@ -250,6 +221,7 @@ const cteLinhas = (soDre) => `
       FROM g
     WINDOW w AS (PARTITION BY g.origem, g.chave)
   ),
+  mapa AS (${sqlMapaDre('$1')}),
   lc AS (
     -- titulo: o número do título ou, no movimento do extrato, o id do lançamento no Sienge (é o
     -- cod_movimento das planilhas do usuário) — a busca e o filtro da coluna acham pelos dois.
@@ -268,10 +240,6 @@ const cteLinhas = (soDre) => `
      WHERE g.origem = 'M' OR g.documento IS NULL
         OR NOT EXISTS (SELECT 1 FROM dre_documentos_excluidos x WHERE x.empresa_id = $1 AND x.documento = g.documento)
   )`;
-// Só o que entra na DRE (o `lc`) — listagem, filtros, somas e auditoria.
-const CTE_LINHAS = cteLinhas(true);
-// Com as linhas de fora da DRE no `gw` (foraDaDre).
-const CTE_LINHAS_COMPLETO = cteLinhas(false);
 
 // 'AAAA-MM-DD' + 1 dia (fim exclusivo do período).
 function diaSeguinte(iso) {
@@ -413,6 +381,8 @@ async function somaPorCentro(empresaId, mascaraId, ate) {
 // só: a DRE usa o custo acumulado em várias datas (POC de Receita, CIV, mês a mês pro RET) sem
 // refazer a listagem a cada uma. Guardada no cache da DRE (dre-versoes/cache.js) — é a leitura mais
 // pesada da DRE (segundos na GENESIS) e a mesma pra aba DRE, POC, dashboard, MCP e Excel.
+// (Filtrar antes só os títulos dos centros com DRE foi testado em 23/11 e saiu mais lento quando a maioria
+// dos centros tem DRE — GENESIS com 107 de 179: 6,4 s × 5,1 s.)
 async function somaPorCentroData(empresaId, mascaraIds, ate) {
   const ids = [...new Set(mascaraIds.map(Number))].sort((a, b) => a - b);
   return cache.lembrar(empresaId, 'financeiro.somaPorCentroData', [ids, ate], async () => {
@@ -479,7 +449,7 @@ async function linhasAuditoria(empresaId, { mascaraIds, centros, ate }) {
 // centros (null = todos os da empresa, inclusive os sem centro).
 async function foraDaDre(empresaId, { de, ate, centros = null, mascarasUsadas }) {
   const { rows } = await pool.query(
-    `WITH ${CTE_LINHAS_COMPLETO},
+    `WITH ${CTE_LINHAS},
      proprio AS (SELECT centro_id FROM dre_plano_contas_versoes WHERE empresa_id = $1),
      classif AS (
        SELECT pc.centro_id, pc.sienge_id::text AS natureza_id, pc.mascara_id, pc.nao_entra
