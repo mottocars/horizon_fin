@@ -18,7 +18,8 @@ function tratar(err, next) {
 
 async function listar(req, res, next) {
   try {
-    res.json(await service.listar(empresaIdSchema.parse(req.params.empresaId)));
+    // A posição no limite do realizado da versão da DRE (o mesmo da DRE e da POC).
+    res.json(await service.listarNoCorte(empresaIdSchema.parse(req.params.empresaId)));
   } catch (err) {
     tratar(err, next);
   }

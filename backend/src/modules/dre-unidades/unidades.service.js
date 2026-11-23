@@ -203,12 +203,28 @@ function ordenar(linhas) {
 //                 empreendimento (sem venda desse tipo, fica sem valor).
 // "Valor do contrato" = `value` (soma das condições de pagamento), não `total_selling_value`.
 // Contrato com mais de uma unidade: o valor de cada uma é o do contrato × participação da unidade.
-// Guardada no cache da DRE (dre-versoes/cache.js): a DRE, a Projeção e a aba Unidades leem o mesmo.
+// Guardada no cache da DRE (dre-versoes/cache.js): a DRE e a Projeção leem o mesmo (e cortam pelas datas).
 function listar(empresaId) {
   return cache.lembrar(empresaId, 'unidades.listar', [], () => montarLista(empresaId));
 }
 
-async function montarLista(empresaId) {
+// Aba Unidades (pedido do usuário, 23/11/2026: "as unidades não podem mostrar dados diferentes da DRE"): a
+// posição no limite do realizado da versão da DRE do pedido (o fim do mês de corte, ou hoje se vier antes —
+// demonstrativo.limiteDoRealizado, a mesma data da DRE e da POC). Ver `limite` em montarLista.
+async function listarNoCorte(empresaId) {
+  const { limiteDoRealizado } = require('../dre-demonstrativo/demonstrativo.service'); // aqui: ele importa este módulo
+  const limite = limiteDoRealizado();
+  const lista = await cache.lembrar(empresaId, 'unidades.listarNoCorte', [limite], () => montarLista(empresaId, limite));
+  return { ...lista, posicao_em: limite, versao: pool.contextoAtual()?.versao?.numero ?? null };
+}
+
+// `limite` ('AAAA-MM-DD', aba Unidades): a posição naquela data, como a DRE enxerga — vendidas só os contratos
+// assinados até ela; distrato só o cancelado até ela (o cancelado depois continua venda ativa, sem o selo);
+// permuta só a avaliada até ela (sem data = desde sempre, como na POC); disponíveis = as unidades sem venda ativa
+// nem permuta nela — o estoque da POC: entra a vendida/permutada depois (hoje vendida, no limite em estoque) e a
+// marcada como vendida no Sienge sem contrato (a DRE não a conta como venda); sai a que estava vendida no limite e
+// foi distratada depois. Ticket médio e receita/despesa com distrato pelos mesmos contratos.
+async function montarLista(empresaId, limite = null) {
   const { rows: unidades } = await pool.query(
     `SELECT u.sienge_unit_id::int AS id, u.enterprise_id::int AS centro_id, c.name AS centro, u.name,
             u.property_type, u.commercial_stock, u.ideal_fraction,
@@ -268,12 +284,17 @@ async function montarLista(empresaId) {
 
   // Contratos → Vendidas (todos) e Distratadas (cancelados); ticket médio das vendas ativas.
   const ticket = new Map(); // `${centro}|${tipo}` -> { soma, n }
+  const ocupadaNoLimite = new Set(); // unidades com venda ativa no limite
   contratos.forEach((k) => {
+    if (limite && !(k.contract_date && k.contract_date <= limite)) return;
     const u = unidadePorId.get(k.unit_id);
     const c = centro(k.centro_id, k.centro);
     const participacao = k.participation_percentage === null ? 1 : Number(k.participation_percentage) / 100;
     const valor = k.value === null ? null : Number(k.value) * participacao;
-    const cancelado = k.situation === 'Cancelado' || Boolean(k.cancellation_date);
+    const cancelado = limite
+      ? Boolean(k.cancellation_date && k.cancellation_date <= limite)
+      : k.situation === 'Cancelado' || Boolean(k.cancellation_date);
+    if (!cancelado) ocupadaNoLimite.add(k.unit_id);
     const contrato = { id: k.contrato_id, numero: k.number, cancelado, motivo: k.cancellation_reason || null };
     c.clusters.vendidas.push({ ...base(u, k.unit_name), chave: `v${k.contrato_id}-${k.unit_id}`, data: k.contract_date, valor, participacao, contrato });
     if (cancelado) {
@@ -298,19 +319,22 @@ async function montarLista(empresaId) {
     }
   });
 
-  // Unidades → Permuta e Unidades disponíveis (pela situação de hoje).
+  // Unidades → Permuta e Unidades disponíveis (pela situação de hoje; com `limite`, pela posição nele).
+  const permutaNoLimite = (u) =>
+    u.commercial_stock === ESTOQUE_PERMUTA && (!limite || !u.sale_value_date || u.sale_value_date <= limite);
+  const disponivel = (u) => (limite ? !ocupadaNoLimite.has(u.id) : !ESTOQUE_VENDIDO.has(u.commercial_stock));
   unidades.forEach((u) => {
     const c = centro(u.centro_id, u.centro);
     c.total_unidades += 1;
     c.fracao_ideal += num(u.ideal_fraction) || 0;
-    if (u.commercial_stock === ESTOQUE_PERMUTA) {
+    if (permutaNoLimite(u)) {
       c.clusters.permuta.push({
         ...base(u),
         chave: `p${u.id}`,
         data: u.sale_value_date,
         valor: num(u.sale_value_price),
       });
-    } else if (!ESTOQUE_VENDIDO.has(u.commercial_stock)) {
+    } else if (disponivel(u)) {
       const t = ticket.get(`${u.centro_id}|${u.property_type}`);
       c.clusters.disponiveis.push({
         ...base(u),
@@ -331,4 +355,4 @@ async function montarLista(empresaId) {
   return { centros: lista, ultima_atualizacao: ultimas[0] };
 }
 
-module.exports = { sincronizar, sincronizarContratos, getStatusSincronizacao, listar };
+module.exports = { sincronizar, sincronizarContratos, getStatusSincronizacao, listar, listarNoCorte };

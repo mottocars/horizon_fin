@@ -64,7 +64,7 @@ const CLUSTERS = [
     icone: HandCoins,
     cor: 'text-red-500',
     tag: 'bg-red-50 text-red-600',
-    dica: 'Todo contrato de venda, inclusive os depois cancelados',
+    dica: 'Todo contrato de venda assinado até a data da posição, inclusive os depois cancelados',
   },
   {
     chave: 'distratadas',
@@ -72,7 +72,7 @@ const CLUSTERS = [
     icone: FileX,
     cor: 'text-amber-500',
     tag: 'bg-amber-50 text-amber-600',
-    dica: 'Contratos de venda cancelados',
+    dica: 'Contratos de venda cancelados até a data da posição',
   },
   {
     chave: 'permuta',
@@ -80,7 +80,7 @@ const CLUSTERS = [
     icone: ArrowLeftRight,
     cor: 'text-purple-500',
     tag: 'bg-purple-50 text-purple-600',
-    dica: 'Unidades com estoque Permuta',
+    dica: 'Unidades com estoque Permuta avaliadas até a data da posição (sem data: desde sempre)',
   },
   {
     chave: 'disponiveis',
@@ -88,7 +88,7 @@ const CLUSTERS = [
     icone: DoorOpen,
     cor: 'text-emerald-500',
     tag: 'bg-emerald-50 text-emerald-600',
-    dica: 'Unidades que hoje não estão vendidas nem em permuta',
+    dica: 'Unidades que na data da posição não estavam vendidas nem em permuta (a vendida depois aparece aqui)',
   },
 ];
 
@@ -306,10 +306,19 @@ const UnidadesTab = forwardRef(function UnidadesTab({ empresaId, search = '', on
     <div className="min-w-fit rounded-card rounded-tl-none bg-white p-5 shadow-card">
       <AtualizacaoLogModal open={logAberto} onClose={() => setLogAberto(false)} logs={logs} />
 
-      {(ultima?.unidades || ultima?.contratos) && (
+      {(dados?.posicao_em || ultima?.unidades || ultima?.contratos) && (
         <div className="-mt-1 mb-3 flex justify-end gap-3 text-xs text-gray-400">
-          {ultima.unidades && <span>Unidades atualizadas do Sienge em {dataHora(ultima.unidades)}</span>}
-          {ultima.contratos && <span>· Contratos em {dataHora(ultima.contratos)}</span>}
+          {dados?.posicao_em && (
+            <span
+              className="mr-auto font-medium text-gray-500"
+              title="Mesma data da DRE e da POC: vendas, distratos e permutas até ela; o que veio depois só entra na próxima versão da DRE"
+            >
+              Posição em {dataBr(dados.posicao_em)}
+              {dados.versao ? ` · corte da versão ${dados.versao} da DRE` : ''}
+            </span>
+          )}
+          {ultima?.unidades && <span>Unidades atualizadas do Sienge em {dataHora(ultima.unidades)}</span>}
+          {ultima?.contratos && <span>· Contratos em {dataHora(ultima.contratos)}</span>}
         </div>
       )}
 
