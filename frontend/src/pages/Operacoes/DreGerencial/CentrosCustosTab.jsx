@@ -48,7 +48,7 @@ const erroDe = (err, padrao) => err.response?.data?.message || padrao;
 // da página; arrastar um centro e soltar SOBRE o agrupador põe o centro nele; soltar entre dois centros do
 // agrupador também; soltar fora tira. O agrupador se arrasta inteiro pela alça dele. O "Realiza DRE" é o do
 // agrupador (vale pros centros dele). Quando o centro e o agrupador têm projeção, a tela pergunta qual fica.
-const CentrosCustosTab = forwardRef(function CentrosCustosTab({ empresaId, search }, ref) {
+const CentrosCustosTab = forwardRef(function CentrosCustosTab({ empresaId, search, situacao = 'ATIVOS' }, ref) {
   const [centros, setCentros] = useState([]);
   const [agrupadores, setAgrupadores] = useState([]);
   const [carregando, setCarregando] = useState(true);
@@ -141,16 +141,22 @@ const CentrosCustosTab = forwardRef(function CentrosCustosTab({ empresaId, searc
   const termo = search.trim().toLowerCase();
   const casa = (c) =>
     String(c.sienge_id).includes(termo) || c.name.toLowerCase().includes(termo) || (c.apelido || '').toLowerCase().includes(termo);
-  // Busca: o agrupador aparece se o nome dele ou algum centro dele bater (com os centros que batem).
+  // Situação (filtro ao lado do Buscar): 'ATIVOS' (padrão), 'INATIVOS' ou 'TODOS'.
+  const situacaoOk = (c) => situacao === 'TODOS' || (situacao === 'INATIVOS') === (c.status !== 'ATIVO');
+  // Busca: o agrupador aparece se o nome dele ou algum centro dele bater (com os centros que batem). Filtrando
+  // a situação, o agrupador some se nenhum centro dele for daquela situação; o vazio só aparece em Ativos e Todos.
   const visiveis = useMemo(() => {
-    if (!termo) return linhas;
-    return linhas.filter((l) =>
-      l.tipo === 'grupo'
-        ? l.g.nome.toLowerCase().includes(termo) || l.membros.some(casa)
-        : casa(l.c) || (l.g && l.g.nome.toLowerCase().includes(termo))
-    );
+    if (!termo && situacao === 'TODOS') return linhas;
+    return linhas.filter((l) => {
+      if (l.tipo === 'grupo') {
+        const membros = l.membros.filter(situacaoOk);
+        if (l.membros.length ? !membros.length : situacao === 'INATIVOS') return false;
+        return !termo || l.g.nome.toLowerCase().includes(termo) || membros.some(casa);
+      }
+      return situacaoOk(l.c) && (!termo || casa(l.c) || (l.g && l.g.nome.toLowerCase().includes(termo)));
+    });
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [linhas, termo]);
+  }, [linhas, termo, situacao]);
 
   // ------------------------------------------------------------------ campos
 
@@ -261,13 +267,17 @@ const CentrosCustosTab = forwardRef(function CentrosCustosTab({ empresaId, searc
     encerrarArraste();
     if (!item || !destino) return;
 
+    // As posições do arraste são da lista VISÍVEL (com os inativos escondidos, ela não é a lista inteira): cada
+    // posição vira "antes desta linha" (ou "depois da última visível") na lista inteira.
     let novas = [...linhas];
+    const naLista = (pos) =>
+      pos < visiveis.length ? linhas.indexOf(visiveis[pos]) : visiveis.length ? linhas.indexOf(visiveis[visiveis.length - 1]) + 1 : linhas.length;
     let grupoNovo; // undefined = não muda de agrupador
     if (item.tipo === 'grupo') {
       // Bloco inteiro (cabeçalho + centros) pra posição; dentro de outro bloco, vai pro fim dele.
       const ini = novas.findIndex((l) => l.tipo === 'grupo' && l.g.id === item.id);
       const bloco = [novas[ini], ...novas.filter((l) => l.tipo === 'centro' && l.g?.id === item.id)];
-      let pos = destino.posicao;
+      let pos = naLista(destino.posicao);
       while (pos < novas.length && pos > 0 && novas[pos].tipo === 'centro' && novas[pos].g && novas[pos - 1].g?.id === novas[pos].g.id) pos += 1;
       const antes = novas.slice(0, pos).filter((l) => !bloco.includes(l));
       const depois = novas.slice(pos).filter((l) => !bloco.includes(l));
@@ -291,8 +301,13 @@ const CentrosCustosTab = forwardRef(function CentrosCustosTab({ empresaId, searc
         const g =
           cima?.tipo === 'grupo' ? cima.g : cima?.tipo === 'centro' && cima.g && baixo?.tipo === 'centro' && baixo.g?.id === cima.g.id ? cima.g : null;
         grupoNovo = (g?.id ?? null) === (linha.g?.id ?? null) ? undefined : g?.id ?? null;
-        const para = pos > de ? pos - 1 : pos;
         novas.splice(de, 1);
+        let para;
+        if (baixo === linha || (!baixo && cima === linha)) para = de;
+        else if (baixo) para = novas.indexOf(baixo);
+        else para = novas.indexOf(cima) + 1;
+        // Fora de agrupador logo abaixo de um: depois dos centros (inclusive os escondidos) dele.
+        if (!g && cima?.g) while (para < novas.length && novas[para].tipo === 'centro' && novas[para].g?.id === cima.g.id) para += 1;
         novas.splice(para, 0, { ...linha, g });
       }
     }
@@ -405,7 +420,7 @@ const CentrosCustosTab = forwardRef(function CentrosCustosTab({ empresaId, searc
           {novoNome !== null && (
             <div className={`${GRADE} border-b border-gray-100 bg-primary-50/40 py-1.5 pl-1.5 pr-4`}>
               <div className="flex min-w-0 items-center gap-2">
-                <Layers size={14} className="ml-[1px] shrink-0 text-primary-600" />
+                <Layers size={14} className="ml-px shrink-0 text-primary-600" />
                 <input
                   ref={novoRef}
                   type="text"

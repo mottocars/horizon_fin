@@ -191,6 +191,7 @@ function DreGerencialConteudo() {
 
   // Busca (código ou descrição) da aba Centros Custos — mesma convenção acima.
   const [buscaCentros, setBuscaCentros] = useState('');
+  const [situacaoCentros, setSituacaoCentros] = useState('ATIVOS'); // aba Centros Custos: 'ATIVOS' | 'INATIVOS' | 'TODOS'
 
   // Aba Unidades: busca (unidade ou centro) e o ícone de atualizar do Sienge — a sincronização e
   // o Log de Atualização vivem em UnidadesTab.jsx, disparados por ref (mesmo esquema do "Nova
@@ -691,6 +692,24 @@ function DreGerencialConteudo() {
                 </div>
               </div>
             )}
+
+            {/* Situação do centro no Sienge: por padrão só os ativos (pedido do usuário); também só os inativos ou todos. */}
+            {abaAtiva === 'centros-custos' && (
+              <div className="sm:w-40">
+                <label className="mb-1 block text-sm font-medium text-gray-700">Situação</label>
+                <SearchableSelect
+                  value={situacaoCentros}
+                  onChange={(v) => setSituacaoCentros(v || 'ATIVOS')}
+                  options={[
+                    { value: 'ATIVOS', label: 'Ativos' },
+                    { value: 'INATIVOS', label: 'Inativos' },
+                    { value: 'TODOS', label: 'Todos' },
+                  ]}
+                  clearable={false}
+                  disabled={semEmpresa}
+                />
+              </div>
+            )}
           </div>
 
           {(abaAtiva === 'dre' || abaAtiva === 'poc') && (
@@ -1072,7 +1091,7 @@ function DreGerencialConteudo() {
 
         {abaAtiva === 'centros-custos' && (
           <SoLeitura>
-            <CentrosCustosTab ref={centrosTabRef} empresaId={empresaId} search={buscaCentros} />
+            <CentrosCustosTab ref={centrosTabRef} empresaId={empresaId} search={buscaCentros} situacao={situacaoCentros} />
           </SoLeitura>
         )}
 

@@ -29,11 +29,12 @@ CREATE TABLE IF NOT EXISTS dre_agrupadores_centros (
 );
 CREATE INDEX IF NOT EXISTS idx_dre_agrupadores_centros_agrupador ON dre_agrupadores_centros (agrupador_id);
 
--- Versões já salvas: tabelas vazias e só leitura na cópia da configuração (dre_vc_<id>).
+-- Versões já salvas: tabelas vazias e só leitura na cópia da configuração (dre_vc_<id>), com o mesmo dono do
+-- schema (na VPS, o usuário da aplicação, que cria e apaga as cópias).
 DO $$
-DECLARE s TEXT;
+DECLARE s TEXT; dono TEXT;
 BEGIN
-  FOR s IN SELECT nspname FROM pg_namespace WHERE nspname ~ '^dre_vc_[0-9]+$' LOOP
+  FOR s, dono IN SELECT nspname, nspowner::regrole::text FROM pg_namespace WHERE nspname ~ '^dre_vc_[0-9]+$' LOOP
     IF to_regclass(format('%I.dre_agrupadores', s)) IS NULL THEN
       EXECUTE format('CREATE TABLE %I.dre_agrupadores (LIKE public.dre_agrupadores INCLUDING ALL)', s);
       EXECUTE format('CREATE TRIGGER somente_leitura BEFORE INSERT OR UPDATE OR DELETE OR TRUNCATE ON %I.dre_agrupadores
@@ -44,5 +45,7 @@ BEGIN
       EXECUTE format('CREATE TRIGGER somente_leitura BEFORE INSERT OR UPDATE OR DELETE OR TRUNCATE ON %I.dre_agrupadores_centros
                       FOR EACH STATEMENT EXECUTE FUNCTION public.dre_versao_somente_leitura()', s);
     END IF;
+    EXECUTE format('ALTER TABLE %I.dre_agrupadores OWNER TO %I', s, dono);
+    EXECUTE format('ALTER TABLE %I.dre_agrupadores_centros OWNER TO %I', s, dono);
   END LOOP;
 END $$;
