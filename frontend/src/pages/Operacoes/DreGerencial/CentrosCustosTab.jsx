@@ -40,8 +40,8 @@ const erroDe = (err, padrao) => err.response?.data?.message || padrao;
 // natureza): alterou numa aba, muda na outra. Só os marcados aparecem nas abas seguintes (plano de contas
 // próprio e Orçamento). Cada mudança salva na hora, com o mesmo indicador de salvamento da aba Máscaras.
 // Ordem: arrastando a linha pela alça, como na aba Máscaras (drag-and-drop nativo, mesma linha azul de
-// destino); grava a lista inteira na nova ordem. É a ordem das colunas na aba DRE. Com busca digitada o
-// arraste fica desligado (a lista estaria incompleta).
+// destino); grava a lista inteira na nova ordem. É a ordem das colunas na aba DRE. Arrasta também com a busca e o
+// filtro de situação preenchidos (a posição na lista visível vira a posição na lista inteira).
 //
 // AGRUPADORES (pedido de 23/11/2026 — backend/src/modules/dre-agrupadores): um agrupador junta centros numa
 // obra só (ex.: EASY = EASY 1 + EASY 2) e a DRE passa a ser montada por ele. Botão "Novo agrupador" no topo
@@ -143,15 +143,17 @@ const CentrosCustosTab = forwardRef(function CentrosCustosTab({ empresaId, searc
     String(c.sienge_id).includes(termo) || c.name.toLowerCase().includes(termo) || (c.apelido || '').toLowerCase().includes(termo);
   // Situação (filtro ao lado do Buscar): 'ATIVOS' (padrão), 'INATIVOS' ou 'TODOS'.
   const situacaoOk = (c) => situacao === 'TODOS' || (situacao === 'INATIVOS') === (c.status !== 'ATIVO');
-  // Busca: o agrupador aparece se o nome dele ou algum centro dele bater (com os centros que batem). Filtrando
-  // a situação, o agrupador some se nenhum centro dele for daquela situação; o vazio só aparece em Ativos e Todos.
+  // Busca: TODO agrupador aparece (o cabeçalho), pra receber o centro achado na busca — arrastar com a busca
+  // preenchida vale (pedido do usuário); os centros dele, só os que batem (ou todos, se o nome do agrupador bater).
+  // Sem busca, filtrando a situação, o agrupador some se nenhum centro dele for daquela situação; o vazio só
+  // aparece em Ativos e Todos.
   const visiveis = useMemo(() => {
     if (!termo && situacao === 'TODOS') return linhas;
     return linhas.filter((l) => {
       if (l.tipo === 'grupo') {
+        if (termo) return true;
         const membros = l.membros.filter(situacaoOk);
-        if (l.membros.length ? !membros.length : situacao === 'INATIVOS') return false;
-        return !termo || l.g.nome.toLowerCase().includes(termo) || membros.some(casa);
+        return l.membros.length ? membros.length > 0 : situacao !== 'INATIVOS';
       }
       return situacaoOk(l.c) && (!termo || casa(l.c) || (l.g && l.g.nome.toLowerCase().includes(termo)));
     });
@@ -225,7 +227,9 @@ const CentrosCustosTab = forwardRef(function CentrosCustosTab({ empresaId, searc
 
   // Só leitura (versões da DRE): sem arrastar nem editar.
   const { somenteLeitura } = useLeituraDre();
-  const podeArrastar = !termo && !somenteLeitura;
+  // Arrasta também com a busca e o filtro de situação: as posições da lista visível viram posições da lista
+  // inteira em `soltar` (naLista / vizinhos visíveis).
+  const podeArrastar = !somenteLeitura;
 
   function iniciarArraste(e, item) {
     e.stopPropagation();
@@ -484,7 +488,7 @@ const CentrosCustosTab = forwardRef(function CentrosCustosTab({ empresaId, searc
                       <GripVertical
                         size={14}
                         className={`shrink-0 ${podeArrastar ? 'cursor-grab text-gray-300 group-hover/linha:text-gray-500' : 'text-gray-200'}`}
-                        title={podeArrastar ? 'Arraste para mudar a ordem do agrupador' : 'Limpe a busca para mudar a ordem'}
+                        title={podeArrastar ? 'Arraste para mudar a ordem do agrupador' : 'Só leitura'}
                       />
                       <Layers size={14} className="shrink-0 text-primary-600" />
                       {editando?.id === g.id ? (
@@ -570,7 +574,7 @@ const CentrosCustosTab = forwardRef(function CentrosCustosTab({ empresaId, searc
                     <GripVertical
                       size={14}
                       className={`shrink-0 ${podeArrastar ? 'cursor-grab text-gray-300 group-hover/linha:text-gray-500' : 'text-gray-200'}`}
-                      title={podeArrastar ? 'Arraste para mudar a ordem ou soltar num agrupador' : 'Limpe a busca para mudar a ordem'}
+                      title={podeArrastar ? 'Arraste para mudar a ordem ou soltar num agrupador' : 'Só leitura'}
                     />
                     <span className="shrink-0 text-xs tabular-nums text-gray-400">{centro.sienge_id}</span>
                     <span className="min-w-0 truncate text-xs font-medium text-gray-800" title={centro.name}>
