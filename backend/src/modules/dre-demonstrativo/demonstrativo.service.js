@@ -4,6 +4,7 @@ const correcoes = require('../dre-correcoes/correcoes.service');
 const financeiro = require('../dre-financeiro/financeiro.service');
 const { arredondarPoc } = require('../../utils/poc');
 const agrupadores = require('../dre-agrupadores/agrupadores.service');
+const cache = require('../dre-versoes/cache');
 
 // Operações > DRE Gerencial > DRE: a coluna Valor de cada Máscara DRE de nível 2 num período
 // (de/até, inclusive), somando os centros de custo com "Realiza DRE" (ou os do filtro). Inspirado no
@@ -246,13 +247,16 @@ async function carregar(empresaId, { ate, ateOrcamento = ate, filtro = [], soObr
   const corte = ate < hoje ? ate : hoje;
   const [{ centros: todosCentros }, { rows: corr }, custos, { rows: orcamentos }] = await Promise.all([
     unidades.listar(empresaId),
-    pool.query(
-      `SELECT centro_id::int AS centro_id, to_char(due_date, 'YYYY-MM-DD') AS data,
-              SUM(paga + reparcelada + em_aberto) AS valor
-         FROM (${correcoes.sqlParcelas()}) t
-        WHERE due_date <= $2::date
-        GROUP BY 1, 2`,
-      [empresaId, hoje]
+    // Guardada no cache da DRE (dre-versoes/cache.js): ~1 s na GENESIS, igual em todo pedido do dia.
+    cache.lembrar(empresaId, 'demonstrativo.correcoes', [hoje], () =>
+      pool.query(
+        `SELECT centro_id::int AS centro_id, to_char(due_date, 'YYYY-MM-DD') AS data,
+                SUM(paga + reparcelada + em_aberto) AS valor
+           FROM (${correcoes.sqlParcelas()}) t
+          WHERE due_date <= $2::date
+          GROUP BY 1, 2`,
+        [empresaId, hoje]
+      ).then(({ rows }) => ({ rows }))
     ),
     idsFinanceiro.length ? financeiro.somaPorCentroData(empresaId, idsFinanceiro, corte) : Promise.resolve([]),
     usaPoc

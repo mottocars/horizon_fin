@@ -4,6 +4,7 @@ const siengeUnitsApi = require('./sienge-units-api.client');
 const progresso = require('../repasses-cef/progressoSincronizacao');
 const repassesCefService = require('../repasses-cef/repassesCef.service');
 const { bloquearSeEmpresaModelo, ehEmpresaModelo } = require('../../utils/empresaModelo');
+const cache = require('../dre-versoes/cache');
 
 // Operações > DRE Gerencial > Unidades: unidades dos empreendimentos (/units do Sienge) em
 // sie_units — mesma lógica da sincronização de contratos do Repasses CEF
@@ -202,7 +203,12 @@ function ordenar(linhas) {
 //                 empreendimento (sem venda desse tipo, fica sem valor).
 // "Valor do contrato" = `value` (soma das condições de pagamento), não `total_selling_value`.
 // Contrato com mais de uma unidade: o valor de cada uma é o do contrato × participação da unidade.
-async function listar(empresaId) {
+// Guardada no cache da DRE (dre-versoes/cache.js): a DRE, a Projeção e a aba Unidades leem o mesmo.
+function listar(empresaId) {
+  return cache.lembrar(empresaId, 'unidades.listar', [], () => montarLista(empresaId));
+}
+
+async function montarLista(empresaId) {
   const { rows: unidades } = await pool.query(
     `SELECT u.sienge_unit_id::int AS id, u.enterprise_id::int AS centro_id, c.name AS centro, u.name,
             u.property_type, u.commercial_stock, u.ideal_fraction,

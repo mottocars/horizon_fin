@@ -3,6 +3,7 @@ const { z } = require('zod');
 const authMiddleware = require('../../middlewares/auth.middleware');
 const { paramEmpresa } = require('../../middlewares/acesso.middleware');
 const service = require('./dreVersoes.service');
+const cache = require('./cache');
 
 // Operações > DRE Construtoras > aba Versões (qualquer usuário com acesso à tela abre, edita e salva):
 //   GET    /:empresaId                         -> { limite, proximo_corte, aberta, publicada, versoes }
@@ -35,6 +36,15 @@ const rota = (fn) => async (req, res, next) => {
 const router = Router();
 router.use(authMiddleware);
 router.param('empresaId', paramEmpresa);
+// Abrir / salvar / aprovar / reprovar / excluir mudam o que a DRE lê (excluir devolve as tabelas à última
+// salva): o cache das leituras (cache.js) da empresa deixa de valer, ao chegar e ao responder.
+router.param('empresaId', (req, res, next, valor) => {
+  if (req.method !== 'GET') {
+    cache.invalidar(Number(valor));
+    res.on('finish', () => cache.invalidar(Number(valor)));
+  }
+  next();
+});
 router.get('/:empresaId', rota((req, empresaId) => service.listar(empresaId, req.user.id)));
 // Antes de '/:numero' (senão "publicada" seria lido como número). Também pro dashboard (só leitura).
 router.get('/:empresaId/publicada', rota((req, empresaId) => service.cabecalhoPublicada(empresaId)));

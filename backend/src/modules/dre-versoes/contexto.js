@@ -1,5 +1,6 @@
 const pool = require('../../config/db');
 const service = require('./dreVersoes.service');
+const cache = require('./cache');
 
 // Em qual versão da DRE cada pedido roda (config/db.js lê o contexto e escolhe as tabelas):
 //   - telas de Operações (sem cabeçalho): a versão aberta (área de trabalho) ou, sem ela, a última salva (aprovada ou aguardando aprovação);
@@ -35,6 +36,13 @@ function contextoDre(modulo, { livre = () => false } = {}) {
       const ctx = await service.resolver(empresaId, pedido);
       req.dre = { ...ctx, modulo };
       const escrita = !LEITURA.has(req.method);
+      // Gravação: o cache das leituras da DRE da empresa (cache.js) deixa de valer — já ao chegar e de novo
+      // ao responder (o que foi calculado durante a gravação também não serve). O 'finish' vem antes de a
+      // tela receber a resposta, então a próxima leitura dela já recalcula.
+      if (escrita) {
+        cache.invalidar(empresaId);
+        res.on('finish', () => cache.invalidar(empresaId));
+      }
       if (escrita && livre(req)) return next();
       if (escrita && ctx.modo !== 'trabalho') {
         return res.status(409).json({ message: mensagemTravada(ctx, pedido), dre_travada: true });
