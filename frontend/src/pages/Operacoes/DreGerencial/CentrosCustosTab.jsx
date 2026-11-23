@@ -1,5 +1,5 @@
 import { forwardRef, useCallback, useEffect, useImperativeHandle, useMemo, useRef, useState } from 'react';
-import { Building2, Check, GripVertical, Layers, Loader2, Pencil, Trash2, TriangleAlert, X } from 'lucide-react';
+import { Building2, Check, ChevronRight, GripVertical, Layers, Loader2, Pencil, Trash2, TriangleAlert, X } from 'lucide-react';
 import { Indicador } from '../../../components/MascarasArvoreEditor';
 import SearchableSelect from '../../../components/SearchableSelect';
 import Modal from '../../../components/Modal';
@@ -114,51 +114,69 @@ const CentrosCustosTab = forwardRef(function CentrosCustosTab({ empresaId, searc
 
   // ------------------------------------------------------------------ linhas (agrupadores + centros)
 
-  // Na ordem da DRE: cada agrupador na posição do primeiro centro dele, com os centros logo abaixo; os
-  // agrupadores ainda vazios ficam no topo (onde a gente acabou de criar).
+  // Pedido do usuário (23/11): SEMPRE os agrupadores primeiro (os vazios no topo, onde a gente acabou de criar;
+  // os outros na ordem do primeiro centro de cada um), cada um com os centros logo abaixo; depois os centros
+  // fora de agrupador, na ordem da DRE. É a mesma ordem das colunas da DRE (agrupadores.service.unidades).
   const linhas = useMemo(() => {
     const porId = new Map(agrupadores.map((g) => [g.id, g]));
-    const out = [];
+    const grupos = [];
+    const soltos = [];
     agrupadores
       .filter((g) => !centros.some((c) => c.agrupador_id === g.id))
-      .forEach((g) => out.push({ tipo: 'grupo', g, membros: [] }));
+      .forEach((g) => grupos.push({ tipo: 'grupo', g, membros: [] }));
     const vistos = new Set();
     centros.forEach((c) => {
       const g = c.agrupador_id ? porId.get(c.agrupador_id) : null;
       if (!g) {
-        out.push({ tipo: 'centro', c, g: null });
+        soltos.push({ tipo: 'centro', c, g: null });
         return;
       }
       if (vistos.has(g.id)) return;
       vistos.add(g.id);
       const membros = centros.filter((x) => x.agrupador_id === g.id);
-      out.push({ tipo: 'grupo', g, membros });
-      membros.forEach((m) => out.push({ tipo: 'centro', c: m, g }));
+      grupos.push({ tipo: 'grupo', g, membros });
+      membros.forEach((m) => grupos.push({ tipo: 'centro', c: m, g }));
     });
-    return out;
+    return [...grupos, ...soltos];
   }, [centros, agrupadores]);
+
+  // Drilldown dos agrupadores: fechados por padrão (pedido do usuário); com a busca, abrem sozinhos os que têm
+  // centro achado.
+  const [abertos, setAbertos] = useState(() => new Set());
+  const alternar = (id) =>
+    setAbertos((atual) => {
+      const novo = new Set(atual);
+      if (novo.has(id)) novo.delete(id);
+      else novo.add(id);
+      return novo;
+    });
 
   const termo = search.trim().toLowerCase();
   const casa = (c) =>
     String(c.sienge_id).includes(termo) || c.name.toLowerCase().includes(termo) || (c.apelido || '').toLowerCase().includes(termo);
+  const casaGrupo = (g) => g.nome.toLowerCase().includes(termo);
   // Situação (filtro ao lado do Buscar): 'ATIVOS' (padrão), 'INATIVOS' ou 'TODOS'.
   const situacaoOk = (c) => situacao === 'TODOS' || (situacao === 'INATIVOS') === (c.status !== 'ATIVO');
-  // Busca: TODO agrupador aparece (o cabeçalho), pra receber o centro achado na busca — arrastar com a busca
-  // preenchida vale (pedido do usuário); os centros dele, só os que batem (ou todos, se o nome do agrupador bater).
-  // Sem busca, filtrando a situação, o agrupador some se nenhum centro dele for daquela situação; o vazio só
-  // aparece em Ativos e Todos.
+  // O centro passa nos filtros (situação e busca); dentro de agrupador cujo nome bate na busca, vale a situação.
+  const centroOk = (c, g) => situacaoOk(c) && (!termo || casa(c) || (g && casaGrupo(g)));
+  // Aberto = o usuário abriu, ou a busca achou um centro dentro dele.
+  const aberto = (l) => abertos.has(l.g.id) || Boolean(termo && l.membros.some((m) => casa(m) && situacaoOk(m)));
+  // Busca filtra TUDO (pedido do usuário): o agrupador só aparece se o nome dele ou algum centro dele bater. Na
+  // situação, o agrupador some se nenhum centro dele for daquela situação (o vazio só aparece em Ativos e Todos,
+  // e na busca só se o nome bater). Centros de agrupador fechado não aparecem.
   const visiveis = useMemo(() => {
-    if (!termo && situacao === 'TODOS') return linhas;
+    const grupoDe = new Map(linhas.filter((l) => l.tipo === 'grupo').map((l) => [l.g.id, l]));
     return linhas.filter((l) => {
       if (l.tipo === 'grupo') {
-        if (termo) return true;
-        const membros = l.membros.filter(situacaoOk);
+        const membros = l.membros.filter((m) => centroOk(m, l.g));
+        if (termo) return casaGrupo(l.g) ? l.membros.length === 0 || l.membros.some(situacaoOk) : membros.length > 0;
         return l.membros.length ? membros.length > 0 : situacao !== 'INATIVOS';
       }
-      return situacaoOk(l.c) && (!termo || casa(l.c) || (l.g && l.g.nome.toLowerCase().includes(termo)));
+      if (l.g && !aberto(grupoDe.get(l.g.id))) return false;
+      return centroOk(l.c, l.g);
     });
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [linhas, termo, situacao]);
+  }, [linhas, termo, situacao, abertos]);
 
   // ------------------------------------------------------------------ campos
 
@@ -262,7 +280,11 @@ const CentrosCustosTab = forwardRef(function CentrosCustosTab({ empresaId, searc
   }
 
   // A ordem inteira dos centros (os de cada agrupador juntos), a partir das linhas.
-  const ordemDe = (ls) => ls.filter((l) => l.tipo === 'centro').map((l) => l.c.sienge_id);
+  // Sempre os centros dos agrupadores primeiro, depois os soltos (a mesma ordem da tela).
+  const ordemDe = (ls) => {
+    const cs = ls.filter((l) => l.tipo === 'centro');
+    return [...cs.filter((l) => l.g), ...cs.filter((l) => !l.g)].map((l) => l.c.sienge_id);
+  };
 
   async function soltar(e) {
     e.preventDefault();
@@ -302,8 +324,13 @@ const CentrosCustosTab = forwardRef(function CentrosCustosTab({ empresaId, searc
         const pos = destino.posicao;
         const cima = visiveis[pos - 1];
         const baixo = visiveis[pos];
+        // (Agrupador fechado: soltar logo abaixo dele não entra nele — pra entrar, solte em cima do cabeçalho.)
         const g =
-          cima?.tipo === 'grupo' ? cima.g : cima?.tipo === 'centro' && cima.g && baixo?.tipo === 'centro' && baixo.g?.id === cima.g.id ? cima.g : null;
+          cima?.tipo === 'grupo' && aberto(cima)
+            ? cima.g
+            : cima?.tipo === 'centro' && cima.g && baixo?.tipo === 'centro' && baixo.g?.id === cima.g.id
+              ? cima.g
+              : null;
         grupoNovo = (g?.id ?? null) === (linha.g?.id ?? null) ? undefined : g?.id ?? null;
         novas.splice(de, 1);
         let para;
@@ -330,6 +357,8 @@ const CentrosCustosTab = forwardRef(function CentrosCustosTab({ empresaId, searc
           const r = await moverCentroDre(empresaId, centroId, grupoNovo, projecaoFica);
           setAgrupadores(r.agrupadores);
           setCentros(r.centros);
+          // Abre o agrupador que recebeu o centro (pra mostrar que ele entrou).
+          if (grupoNovo !== null) setAbertos((atual) => new Set(atual).add(grupoNovo));
         }
         setCentros(await reordenarCentrosCustoDre(empresaId, ordem));
       }, 'Não foi possível salvar.');
@@ -490,6 +519,21 @@ const CentrosCustosTab = forwardRef(function CentrosCustosTab({ empresaId, searc
                         className={`shrink-0 ${podeArrastar ? 'cursor-grab text-gray-300 group-hover/linha:text-gray-500' : 'text-gray-200'}`}
                         title={podeArrastar ? 'Arraste para mudar a ordem do agrupador' : 'Só leitura'}
                       />
+                      {/* Drilldown (span, não button: a aba fica num fieldset desativado na versão só leitura e abrir
+                          continua valendo). */}
+                      <span
+                        role="button"
+                        tabIndex={0}
+                        onClick={() => membros.length && alternar(g.id)}
+                        onKeyDown={(e) => (e.key === 'Enter' || e.key === ' ') && membros.length && alternar(g.id)}
+                        aria-expanded={aberto(l)}
+                        title={membros.length ? (aberto(l) ? 'Fechar' : 'Abrir os centros') : 'Agrupador vazio'}
+                        className={`flex h-5 w-5 shrink-0 items-center justify-center rounded ${
+                          membros.length ? 'cursor-pointer text-primary-600 hover:bg-white' : 'text-gray-300'
+                        }`}
+                      >
+                        <ChevronRight size={14} className={`transition-transform ${aberto(l) ? 'rotate-90' : ''}`} />
+                      </span>
                       <Layers size={14} className="shrink-0 text-primary-600" />
                       {editando?.id === g.id ? (
                         <input
@@ -506,7 +550,11 @@ const CentrosCustosTab = forwardRef(function CentrosCustosTab({ empresaId, searc
                           className="min-w-0 flex-1 rounded-lg border border-gray-200 px-2 py-0.5 text-xs focus:outline-none focus:ring-2 focus:ring-primary-100"
                         />
                       ) : (
-                        <span className="min-w-0 truncate text-xs font-semibold text-gray-900" title="Agrupador: a DRE trata os centros dele como uma obra só">
+                        <span
+                          onClick={() => membros.length && alternar(g.id)}
+                          className={`min-w-0 truncate text-xs font-semibold text-gray-900 ${membros.length ? 'cursor-pointer' : ''}`}
+                          title="Agrupador: a DRE trata os centros dele como uma obra só"
+                        >
                           {g.nome}
                         </span>
                       )}

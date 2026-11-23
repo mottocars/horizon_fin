@@ -41,7 +41,7 @@ import { listEmpresas } from '../../../api/empresas.api';
 import { gerarPlano } from '../../../api/planosFinanceirosSienge.api';
 import { excluirVersaoPlanoDre, exportarPlanoDreExcel, listVersoesPlanoDre } from '../../../api/drePlanoContas.api';
 import { exportarExcelDre } from '../../../api/dreExportacao.api';
-import { listUnidadesDre } from '../../../api/dreCentros.api';
+import { exportarCentrosDreExcel, listUnidadesDre } from '../../../api/dreCentros.api';
 import { nomeExibicaoEmpresa } from '../../../utils/empresa';
 import { useEmpresaTravada } from '../../../hooks/useEmpresaTravada';
 import { useConfirm } from '../../../confirm/ConfirmContext';
@@ -321,6 +321,37 @@ function DreGerencialConteudo() {
       setRefreshTokenCardsPlano((n) => n + 1);
     } catch (e) {
       setErroPlanoContas(e.response?.data?.message || 'Não foi possível excluir a versão.');
+    }
+  }
+
+  // Exportar Excel da aba Centros Custos: a base inteira dos centros, na ordem da aba (dreCentros.excel.js).
+  const [exportandoCentros, setExportandoCentros] = useState(false);
+  const [erroExportarCentros, setErroExportarCentros] = useState('');
+  async function exportarCentrosExcel() {
+    setErroExportarCentros('');
+    setExportandoCentros(true);
+    try {
+      const { blob, nome } = await exportarCentrosDreExcel(empresaId);
+      const url = window.URL.createObjectURL(blob);
+      const link = document.createElement('a');
+      link.href = url;
+      link.download = nome;
+      document.body.appendChild(link);
+      link.click();
+      link.remove();
+      window.URL.revokeObjectURL(url);
+    } catch (err) {
+      // Com responseType 'blob' a mensagem de erro do backend chega dentro de um Blob.
+      let mensagem = 'Não foi possível gerar o Excel.';
+      const dados = err.response?.data;
+      try {
+        mensagem = (dados instanceof Blob ? JSON.parse(await dados.text()) : dados)?.message || mensagem;
+      } catch {
+        // mantém a mensagem padrão
+      }
+      setErroExportarCentros(mensagem);
+    } finally {
+      setExportandoCentros(false);
     }
   }
 
@@ -837,17 +868,33 @@ function DreGerencialConteudo() {
             </div>
           )}
 
-          {abaAtiva === 'centros-custos' && !somenteLeitura && (
-            <div className="flex shrink-0 items-center gap-2">
-              <Button
-                type="button"
-                onClick={() => centrosTabRef.current?.abrirNovoAgrupador()}
-                disabled={semEmpresa}
-                title="Agrupador: junta centros de custo numa obra só na DRE (arraste os centros para dentro dele)"
-              >
-                <Plus size={16} />
-                Novo agrupador
-              </Button>
+          {abaAtiva === 'centros-custos' && (
+            <div className="flex shrink-0 flex-col items-end gap-1.5">
+              <div className="flex shrink-0 items-center gap-2">
+                {/* Exportar Excel: só o ícone, como o do Plano Contas (também na versão só leitura). */}
+                <button
+                  type="button"
+                  onClick={exportarCentrosExcel}
+                  disabled={semEmpresa || exportandoCentros}
+                  title="Exportar Excel"
+                  aria-label="Exportar Excel"
+                  className="flex shrink-0 items-center justify-center rounded-lg border border-gray-200 p-2 text-gray-500 transition-colors hover:bg-gray-50 hover:text-gray-800 disabled:cursor-not-allowed disabled:opacity-60"
+                >
+                  {exportandoCentros ? <Loader2 size={18} className="animate-spin" /> : <Download size={18} />}
+                </button>
+                {!somenteLeitura && (
+                  <Button
+                    type="button"
+                    onClick={() => centrosTabRef.current?.abrirNovoAgrupador()}
+                    disabled={semEmpresa}
+                    title="Agrupador: junta centros de custo numa obra só na DRE (arraste os centros para dentro dele)"
+                  >
+                    <Plus size={16} />
+                    Novo agrupador
+                  </Button>
+                )}
+              </div>
+              {erroExportarCentros && <span className="text-xs text-red-600">{erroExportarCentros}</span>}
             </div>
           )}
 

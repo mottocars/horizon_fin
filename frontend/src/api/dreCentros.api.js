@@ -35,6 +35,15 @@ export function listUnidadesDre(empresaId) {
   );
 }
 
+// Exportar Excel: a base inteira dos centros (todas as situações), na ordem da aba. Devolve { blob, nome }.
+export function exportarCentrosDreExcel(empresaId) {
+  return http.get(`/dre-centros/${empresaId}/excel`, { responseType: 'blob' }).then((res) => {
+    const cabecalho = res.headers['content-disposition'] || '';
+    const utf8 = /filename\*=UTF-8''([^;]+)/i.exec(cabecalho);
+    return { blob: res.data, nome: utf8 ? decodeURIComponent(utf8[1]) : 'Centros de Custo DRE.xlsx' };
+  });
+}
+
 // Agrupadores (um agrupador junta centros numa obra só na DRE).
 export function listAgrupadoresDre(empresaId) {
   return http.get(`/dre-centros/${empresaId}/agrupadores`).then((res) => res.data);

@@ -1,6 +1,7 @@
 const { z } = require('zod');
 const service = require('./dreCentros.service');
 const agrupadores = require('../dre-agrupadores/agrupadores.service');
+const excel = require('./dreCentros.excel');
 const c = require('../dre-versoes/carimbo');
 
 const empresaIdSchema = z.coerce.number().int().positive('Empresa inválida.');
@@ -241,7 +242,21 @@ async function moverCentro(req, res, next) {
   }
 }
 
+async function exportarExcel(req, res, next) {
+  try {
+    const empresaId = empresaIdSchema.parse(req.params.empresaId);
+    const { buffer, nome } = await excel.gerar(empresaId, req.user.id);
+    res.setHeader('Content-Type', 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet');
+    res.setHeader('Content-Disposition', `attachment; filename="centros-de-custo-dre.xlsx"; filename*=UTF-8''${encodeURIComponent(nome)}`);
+    res.setHeader('Access-Control-Expose-Headers', 'Content-Disposition');
+    res.end(buffer);
+  } catch (err) {
+    tratar(err, next);
+  }
+}
+
 module.exports = {
+  exportarExcel,
   list,
   update,
   reordenar,

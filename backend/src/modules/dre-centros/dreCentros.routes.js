@@ -13,6 +13,8 @@ router.param('empresaId', contextoDre('centros-custos'));
 router.get('/:empresaId', controller.list);
 // As unidades da DRE (agrupadores + centros fora de agrupador) — filtros de centro da DRE e da Projeção.
 router.get('/:empresaId/unidades', controller.unidades);
+// Exportar Excel: a base inteira dos centros, na ordem da aba (dreCentros.excel.js).
+router.get('/:empresaId/excel', controller.exportarExcel);
 // Agrupadores (dre-agrupadores). Antes de /:siengeId, senão "agrupadores" / "ordem" viram um id de centro.
 router.get('/:empresaId/agrupadores', controller.listAgrupadores);
 router.post('/:empresaId/agrupadores', controller.criarAgrupador);
