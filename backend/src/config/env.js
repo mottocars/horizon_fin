@@ -10,6 +10,9 @@ module.exports = {
   // false no ambiente de desenvolvimento local: não sobe os agendadores (Espião NF-e e Monitor
   // de Integrações). Sem a variável (produção), continuam ligados.
   agendadoresAtivos: process.env.AGENDADORES_ATIVOS !== 'false',
+  // Aquecimento do cache da DRE (dre-versoes/aquecimento.js): recalcula sozinho depois das gravações e das
+  // sincronizações. Só lê o banco. Padrão: ligado junto com os agendadores (produção); DRE_AQUECIMENTO=true/false força.
+  dreAquecimento: process.env.DRE_AQUECIMENTO ? process.env.DRE_AQUECIMENTO === 'true' : process.env.AGENDADORES_ATIVOS !== 'false',
   // false no ambiente de desenvolvimento local: os alertas de segurança continuam sendo gravados
   // (Métricas de Uso), mas não mandam WhatsApp — os testes locais com navegador automatizado e
   // scripts gerariam alerta de verdade no celular. Sem a variável (produção), manda.

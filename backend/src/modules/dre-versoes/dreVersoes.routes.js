@@ -4,6 +4,7 @@ const authMiddleware = require('../../middlewares/auth.middleware');
 const { paramEmpresa } = require('../../middlewares/acesso.middleware');
 const service = require('./dreVersoes.service');
 const cache = require('./cache');
+const aquecimento = require('./aquecimento');
 
 // Operações > DRE Construtoras > aba Versões (qualquer usuário com acesso à tela abre, edita e salva):
 //   GET    /:empresaId                         -> { limite, proximo_corte, aberta, publicada, versoes }
@@ -41,7 +42,10 @@ router.param('empresaId', paramEmpresa);
 router.param('empresaId', (req, res, next, valor) => {
   if (req.method !== 'GET') {
     cache.invalidar(Number(valor));
-    res.on('finish', () => cache.invalidar(Number(valor)));
+    res.on('finish', () => {
+      cache.invalidar(Number(valor));
+      if (res.statusCode < 400) aquecimento.agendar(Number(valor)); // recalcula sozinho (aquecimento.js)
+    });
   }
   next();
 });

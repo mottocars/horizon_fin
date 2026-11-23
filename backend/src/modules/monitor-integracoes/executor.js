@@ -52,6 +52,8 @@ async function finalizar(job, status, { resumo = null, erro = null } = {}) {
     'UPDATE monitor_integracoes_execucoes SET status = $2, finalizado_em = $3, resumo = $4, erro = $5 WHERE id = $1',
     [job.id, status, job.finalizadoEm, resumo, erro]
   );
+  // Os dados do Sienge podem ter mudado: a DRE da empresa é recalculada sozinha (dre-versoes/aquecimento.js).
+  require('../dre-versoes/aquecimento').depoisDaSincronizacao(job.empresaId);
   return true;
 }
 

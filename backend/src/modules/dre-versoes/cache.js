@@ -1,3 +1,4 @@
+const { AsyncLocalStorage } = require('async_hooks');
 const pool = require('../../config/db');
 
 // Cache em memória das leituras pesadas da DRE (a soma do Financeiro, a correção monetária e as unidades —
@@ -31,7 +32,8 @@ const TABELAS = [
 
 const geracoes = new Map(); // empresa -> número
 let geracaoGeral = 0;
-const entradas = new Map(); // chave -> { geracao, assinatura, criado, valor (Promise) }
+const entradas = new Map(); // chave -> { geracao, assinatura, criado, valor (Promise), pronto }
+let diaAtual = null;
 
 const geracaoDe = (empresaId) => `${geracaoGeral}.${geracoes.get(Number(empresaId)) || 0}`;
 
@@ -51,6 +53,18 @@ async function assinatura() {
   return `${rows[0].tabelas}:${rows[0].escritas}`;
 }
 
+// Renovação (aquecimento.js): dentro de comRenovacao(ms, fn), uma entrada válida com mais de `ms` de idade é
+// recalculada — e a antiga continua servindo quem pedir até a nova ficar pronta. Assim o aquecimento periódico
+// mantém tudo abaixo de MAX_IDADE sem ninguém esperar.
+const renovacao = new AsyncLocalStorage();
+const comRenovacao = (ms, fn) => (ms ? renovacao.run({ apos: ms }, fn) : fn());
+
+function guardar(chave, entrada) {
+  entradas.delete(chave);
+  entradas.set(chave, entrada);
+  while (entradas.size > MAX_ENTRADAS) entradas.delete(entradas.keys().next().value);
+}
+
 // Devolve `fn()` (uma Promise) guardado por empresa + nome + parâmetros na versão do pedido. Pedidos iguais ao
 // mesmo tempo esperam a mesma consulta.
 async function lembrar(empresaId, nome, parametros, fn) {
@@ -58,21 +72,34 @@ async function lembrar(empresaId, nome, parametros, fn) {
   // O dia (Brasília) entra na chave: correção e unidades usam a data de hoje — tudo vence à meia-noite.
   const dia = new Date().toLocaleDateString('en-CA', { timeZone: 'America/Sao_Paulo' });
   const chave = JSON.stringify([Number(empresaId), nome, caminho, dia, parametros]);
+  if (dia !== diaAtual) {
+    // Virou o dia: o que é de ontem não vale mais (a chave mudou) — libera a memória.
+    diaAtual = dia;
+    [...entradas.keys()].filter((k) => JSON.parse(k)[3] !== dia).forEach((k) => entradas.delete(k));
+  }
   const geracao = geracaoDe(empresaId);
   const assin = await assinatura();
   const e = entradas.get(chave);
-  if (e && e.geracao === geracao && e.assinatura === assin && Date.now() - e.criado < MAX_IDADE) {
-    entradas.delete(chave); // reinsere no fim: a ordem do Map vira "usada por último"
-    entradas.set(chave, e);
+  const idade = e ? Date.now() - e.criado : 0;
+  if (e && e.geracao === geracao && e.assinatura === assin && idade < MAX_IDADE) {
+    const renovar = renovacao.getStore();
+    if (renovar && idade > renovar.apos && e.pronto) {
+      const nova = { geracao, assinatura: assin, criado: Date.now(), valor: Promise.resolve().then(fn) };
+      const r = await nova.valor; // se falhar, a antiga continua valendo
+      nova.pronto = true;
+      if (entradas.get(chave) === e) guardar(chave, nova);
+      return structuredClone(r);
+    }
+    guardar(chave, e); // reinsere no fim: a ordem do Map vira "usada por último"
     return structuredClone(await e.valor);
   }
   const valor = Promise.resolve().then(fn);
-  const nova = { geracao, assinatura: assin, criado: Date.now(), valor };
-  entradas.delete(chave);
-  entradas.set(chave, nova);
-  while (entradas.size > MAX_ENTRADAS) entradas.delete(entradas.keys().next().value);
+  const nova = { geracao, assinatura: assin, criado: Date.now(), valor, pronto: false };
+  guardar(chave, nova);
   try {
-    return structuredClone(await valor);
+    const r = await valor;
+    nova.pronto = true;
+    return structuredClone(r);
   } catch (err) {
     if (entradas.get(chave) === nova) entradas.delete(chave);
     throw err;
@@ -85,4 +112,4 @@ function limpar() {
   entradas.clear();
 }
 
-module.exports = { lembrar, invalidar, tamanho, limpar };
+module.exports = { lembrar, invalidar, comRenovacao, tamanho, limpar };
