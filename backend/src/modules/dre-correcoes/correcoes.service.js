@@ -21,8 +21,10 @@ const BAIXA_DISTRATO = 7;
 //   em_aberto   — saldo corrigido − saldo (corrected_balance_amount − balance_amount) das parcelas
 //                 com saldo: a correção já acumulada e ainda não recebida. Mantém o sinal (índice
 //                 negativo, ex. IGP-M, dá correção negativa; a query antiga só pegava > 0).
-// Sempre pela data de vencimento da parcela (pedido do usuário), só até o mês atual — nada de
-// correção futura: paga, reparcelada e em aberto só das parcelas que vencem até o fim do mês atual.
+// Sempre pela data de vencimento da parcela (pedido do usuário), nada de correção futura: na aba (listar,
+// parcelas) e na DRE, só as parcelas que vencem até o limite do realizado (demonstrativo.limiteDoRealizado: o fim
+// do mês de corte da versão da DRE, no máximo o fim do mês anterior ao atual — pedido do usuário, 23/11/2026);
+// sqlParcelas sozinha vai até o fim do mês atual.
 // Uma parcela de 2027 paga adiantado ou reparcelada em 2025 só entra quando vencer (como na planilha
 // do usuário; até 29/10/2026 era pela data da baixa e o centro 5 da TOSTE E DINIZ dava 568 mil em
 // vez de 247 mil — 290 mil de reparcelamentos de 2025 de parcelas de 2027, 31 mil de antecipações).
@@ -78,10 +80,14 @@ function num(v) {
   return v === null || v === undefined ? 0 : Number(v);
 }
 
+// O limite do realizado da DRE (buscado aqui, e não no topo: o demonstrativo importa este módulo).
+const limiteDoRealizado = () => require('../dre-demonstrativo/demonstrativo.service').limiteDoRealizado();
+
 // Os centros com "Realiza DRE" que têm correção monetária (pedido do usuário, 23/11: centro sem nenhuma
 // parcela com correção não aparece), cada um com os clientes que têm correção e os totais — as parcelas vêm
 // sob demanda (parcelas()).
 async function listar(empresaId) {
+  const limite = limiteDoRealizado();
   const { rows: centros } = await pool.query(
     `SELECT sienge_id::int AS id, name AS nome
        FROM centros_custo_sienge
@@ -94,14 +100,14 @@ async function listar(empresaId) {
             STRING_AGG(DISTINCT main_unit, ', ' ORDER BY main_unit) AS unidades,
             COUNT(*)::int AS parcelas,
             ROUND(SUM(paga), 2) AS paga, ROUND(SUM(reparcelada), 2) AS reparcelada, ROUND(SUM(em_aberto), 2) AS em_aberto
-       FROM (${sqlParcelas()}) t
+       FROM (${sqlParcelas(['i.due_date <= $2'])}) t
       WHERE ${COM_CORRECAO}
       GROUP BY 1, 2
       ORDER BY 3`,
-    [empresaId]
+    [empresaId, limite]
   );
   const { rows: ultima } = await pool.query(
-    `SELECT MAX(atualizado_em) AS em, to_char(CURRENT_DATE, 'YYYY-MM') AS ate_mes
+    `SELECT MAX(atualizado_em) AS em
        FROM sie_income WHERE empresa_id = $1`,
     [empresaId]
   );
@@ -129,7 +135,9 @@ async function listar(empresaId) {
   return {
     centros: [...porCentro.values()].filter((c) => c.clientes.length > 0),
     ultima_atualizacao: ultima[0].em,
-    ate_mes: ultima[0].ate_mes,
+    ate_mes: limite.slice(0, 7),
+    posicao_em: limite,
+    versao: pool.contextoAtual()?.versao?.numero ?? null,
   };
 }
 
@@ -141,10 +149,10 @@ async function parcelas(empresaId, centroId, clienteId) {
             main_unit AS unidade, indexer_name AS indexador,
             to_char(due_date, 'YYYY-MM-DD') AS vencimento, to_char(data_baixa, 'YYYY-MM-DD') AS data_baixa,
             ROUND(paga, 2) AS paga, ROUND(reparcelada, 2) AS reparcelada, ROUND(em_aberto, 2) AS em_aberto
-       FROM (${sqlParcelas(['p.cost_center_id = $2', 'i.client_id = $3'])}) t
+       FROM (${sqlParcelas(['p.cost_center_id = $2', 'i.client_id = $3', 'i.due_date <= $4'])}) t
       WHERE ${COM_CORRECAO}
       ORDER BY due_date, bill_id, installment_id`,
-    [empresaId, centroId, clienteId]
+    [empresaId, centroId, clienteId, limiteDoRealizado()]
   );
   return rows.map((r) => ({ ...r, paga: num(r.paga), reparcelada: num(r.reparcelada), em_aberto: num(r.em_aberto) }));
 }

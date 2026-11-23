@@ -153,8 +153,17 @@ export default function FinanceiroTab({ empresaId, exercicio = null, onAbrir, se
         </div>
       ) : (
         <>
-          <div className="-mt-1 mb-3 flex justify-end text-xs text-gray-400">
-            Primeiro lançamento financeiro: vencimento em {dataBr(dados.primeiro_vencimento)}
+          <div className="-mt-1 mb-3 flex justify-end gap-3 text-xs text-gray-400">
+            {dados.posicao_em && (
+              <span
+                className="mr-auto font-medium text-gray-500"
+                title="Lançamentos até o fim do realizado da DRE — do mês atual em diante, só a projeção; o que veio depois entra na próxima versão"
+              >
+                Realizado até {dataBr(dados.posicao_em)}
+                {dados.versao ? ` · corte da versão ${dados.versao} da DRE` : ''}
+              </span>
+            )}
+            <span>Primeiro lançamento financeiro: vencimento em {dataBr(dados.primeiro_vencimento)}</span>
           </div>
           <div className="grid grid-cols-1 gap-3 md:grid-cols-2 xl:grid-cols-3 2xl:grid-cols-4">
             {dados.exercicios.map((e) => (

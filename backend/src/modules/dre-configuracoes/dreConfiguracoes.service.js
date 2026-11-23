@@ -25,12 +25,6 @@ function erro(status, message) {
 
 const num = (v) => (v === null || v === undefined ? null : Number(v));
 
-// Data de hoje pelo relógio da aplicação (o do Postgres da VPS é deslocado).
-function hoje() {
-  const d = new Date();
-  return `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}-${String(d.getDate()).padStart(2, '0')}`;
-}
-
 // Tudo o que a aba mostra (menos a prévia, que vem à parte por ser mais pesada).
 async function obter(empresaId) {
   const [{ rows: cfg }, { rows: mascaras }, { rows: documentos }, { rows: excluidos }] = await Promise.all([
@@ -150,9 +144,11 @@ async function salvarDocumentos(empresaId, excluidos, usuarioId) {
 
 // Prévia por obra (centros com "Realiza DRE" que têm orçamento ou unidades): orçamento vigente,
 // custo acumulado na máscara da POC de Receita, a POC de Receita e a POC de Despesa (fração ideal),
-// tudo até hoje.
+// tudo na posição do limite do realizado da DRE (o fim do mês de corte da versão; no máximo o fim do mês
+// anterior ao atual — pedido do usuário, 23/11/2026), pra bater com a aba POC: contratos assinados até ele e não
+// distratados até ele, permutas avaliadas até ele (sem data: desde sempre), custo e orçamento até ele.
 async function previaPoc(empresaId) {
-  const ate = hoje();
+  const ate = require('../dre-demonstrativo/demonstrativo.service').limiteDoRealizado();
   const { rows: cfg } = await pool.query(
     `SELECT c.poc_receita_mascara_id AS id, m.descricao
        FROM dre_configuracoes c LEFT JOIN dre_mascaras m ON m.id = c.poc_receita_mascara_id
@@ -161,7 +157,7 @@ async function previaPoc(empresaId) {
   );
   const mascara = cfg[0]?.id ? { id: cfg[0].id, descricao: cfg[0].descricao } : null;
   const [{ rows: orcamentos }, { rows: fracoes }, custos] = await Promise.all([
-    // Orçamento vigente: o de início mais recente até hoje (mesma regra da aba Orçamento).
+    // Orçamento vigente: o de início mais recente até o limite (mesma regra da aba Orçamento e da POC).
     pool.query(
       `SELECT DISTINCT ON (sienge_id) sienge_id AS centro_id, to_char(data_inicio, 'YYYY-MM-DD') AS desde, total
          FROM (SELECT sienge_id, data_inicio, SUM(valor) AS total FROM dre_orcamento_valores
@@ -172,13 +168,14 @@ async function previaPoc(empresaId) {
     // Fração ideal vendida = unidades de contratos ativos (pela participação no contrato) + permutas.
     pool.query(
       `SELECT u.enterprise_id::int AS centro_id, COUNT(*)::int AS unidades,
-              COALESCE(SUM(u.ideal_fraction) FILTER (WHERE u.commercial_stock = 'E'), 0) AS permuta,
+              COALESCE(SUM(u.ideal_fraction) FILTER (WHERE u.commercial_stock = 'E' AND (u.sale_value_date IS NULL OR u.sale_value_date <= $2)), 0) AS permuta,
               COALESCE((SELECT SUM(uu.ideal_fraction * COALESCE(cu.participation_percentage, 100) / 100)
                           FROM sie_sales_contracts k
                           JOIN sie_sales_contracts_units cu ON cu.sienge_contract_id = k.sienge_contract_id AND cu.empresa_id = k.empresa_id
                           JOIN sie_units uu ON uu.sienge_unit_id = cu.unit_id AND uu.empresa_id = k.empresa_id
                          WHERE k.empresa_id = $1 AND k.enterprise_id = u.enterprise_id
-                           AND k.situation <> 'Cancelado' AND k.cancellation_date IS NULL AND k.contract_date <= $2), 0) AS vendida
+                           AND k.contract_date <= $2 AND (k.cancellation_date IS NULL OR k.cancellation_date > $2)
+                           AND (k.situation <> 'Cancelado' OR k.cancellation_date IS NOT NULL)), 0) AS vendida
          FROM sie_units u
         WHERE u.empresa_id = $1
         GROUP BY u.enterprise_id`,

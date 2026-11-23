@@ -183,8 +183,12 @@ export default function CorrecoesTab({ empresaId, search = '' }) {
     <div className="min-w-fit rounded-card rounded-tl-none bg-white p-5 shadow-card">
       {dados && (
         <div className="-mt-1 mb-3 flex justify-end gap-3 text-xs text-gray-400">
-          <span title="Pela data de vencimento: só as parcelas que vencem até o fim deste mês (paga, reparcelada e em aberto)">
-            Correções até {mesAno(dados.ate_mes)}
+          <span
+            className="mr-auto font-medium text-gray-500"
+            title="Pela data de vencimento: só as parcelas que vencem até o fim do realizado da DRE (paga, reparcelada e em aberto) — do mês atual em diante, só a projeção"
+          >
+            Correções até {dados.posicao_em ? dataBr(dados.posicao_em) : mesAno(dados.ate_mes)}
+            {dados.versao ? ` · corte da versão ${dados.versao} da DRE` : ''}
           </span>
           {dados.ultima_atualizacao && <span>· Contas a receber atualizadas do Sienge em {dataHora(dados.ultima_atualizacao)}</span>}
         </div>

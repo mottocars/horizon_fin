@@ -290,13 +290,15 @@ function hojeIso() {
   return new Date().toLocaleDateString('en-CA', { timeZone: 'America/Sao_Paulo' });
 }
 
-// O último dia do realizado: hoje ou, dentro de uma versão da DRE, o fim do mês de corte dela (o que vier antes).
+// O último dia do realizado: o fim do mês anterior ao atual (pedido do usuário, 23/11/2026: do mês atual em
+// diante, só a projeção) ou, dentro de uma versão da DRE, o fim do mês de corte dela (o que vier antes). Vale
+// pra toda a DRE Gerencial: DRE, POC, Unidades, Correções, Financeiro, prévia da POC, Excel, dashboard e MCP.
 function limiteDoRealizado() {
-  const hoje = hojeIso();
+  const fimMesAnterior = vespera(`${hojeIso().slice(0, 7)}-01`);
   const corte = pool.contextoAtual()?.corte;
-  if (!corte) return hoje;
+  if (!corte) return fimMesAnterior;
   const fim = fimDoMes(corte);
-  return fim < hoje ? fim : hoje;
+  return fim < fimMesAnterior ? fim : fimMesAnterior;
 }
 
 // Monta o motor a partir dos dados de `carregar` (sem ir ao banco): os centros pedidos (com "Realiza

@@ -127,7 +127,7 @@ const unidadesTool = {
     if (a.unidade) lista = lista.filter((u) => contem(u.unidade, a.unidade));
     const porEvento = agrupar(lista, (u) => u.evento, (u) => u.valor, 10);
     const out = {
-      cabecalho: { ...cabecalho(d), eventos: a.no_periodo === false ? 'todos' : 'com data no período (estoque: a posição de hoje)' },
+      cabecalho: { ...cabecalho(d), eventos: a.no_periodo === false ? 'todos' : 'com data no período (estoque: a posição no fim do realizado da versão)' },
       por_evento: porEvento,
       fracoes_no_periodo: {
         vendida: Math.round(lista.reduce((t, u) => t + (u.fracao_vendida || 0), 0) * 1e8) / 1e8,

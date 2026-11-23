@@ -19,6 +19,8 @@ const cache = require('../dre-versoes/cache');
 // O exercício do ano atual vem travado (`travado`, pedido do usuário): só visualização — nenhuma
 // ação que altere dados pode valer pra ele (o backend deve recusar, não só a tela esconder).
 async function exercicios(empresaId) {
+  // Contagens só até o limite do realizado (ver periodo).
+  const limite = limiteDoRealizado();
   const { rows: inicio } = await pool.query(
     `SELECT LEAST((SELECT MIN(due_date) FROM sie_income WHERE empresa_id = $1),
                   (SELECT MIN(due_date) FROM sie_outcome WHERE empresa_id = $1)) AS primeiro`,
@@ -63,7 +65,7 @@ async function exercicios(empresaId) {
                      OR EXISTS (SELECT 1 FROM lancamentos_ajustes j JOIN mapa m ON m.centro_id = j.centro_id AND m.natureza_id = j.natureza_id
                                  WHERE j.empresa_id = $1 AND j.origem = 'E' AND j.chave = e.id))) t
       GROUP BY 1`,
-    [empresaId, `${primeiroAno}-01-01`, `${anoAtual + 1}-01-01`]
+    [empresaId, `${primeiroAno}-01-01`, diaSeguinte(limite)]
   );
   const { rows: ajustados } = await pool.query(
     `WITH ajustes AS (
@@ -89,16 +91,17 @@ async function exercicios(empresaId) {
                JOIN sie_extrato_contas e ON e.id = a.chave AND e.empresa_id = $1
               WHERE NOT EXISTS (SELECT 1 FROM dre_documentos_excluidos x WHERE x.empresa_id = $1 AND x.documento = TRIM(e.document_id))
               GROUP BY 1, 2) x
+      WHERE data <= $2
       GROUP BY 1`,
-    [empresaId]
+    [empresaId, limite]
   );
   const porAno = new Map(rows.map((r) => [r.ano, r]));
   const ajustadosPorAno = new Map(ajustados.map((r) => [r.ano, r.n]));
   const { rows: criados } = await pool.query(
     `SELECT EXTRACT(YEAR FROM l.data)::int AS ano, COUNT(*)::int AS n
        FROM lancamentos_manuais l JOIN (${sqlMapaDre('$1')}) m ON m.centro_id = l.centro_id AND m.natureza_id = l.natureza_id
-      WHERE l.empresa_id = $1 GROUP BY 1`,
-    [empresaId]
+      WHERE l.empresa_id = $1 AND l.data <= $2 GROUP BY 1`,
+    [empresaId, limite]
   );
   const criadosPorAno = new Map(criados.map((r) => [r.ano, r.n]));
   const lista = [];
@@ -114,7 +117,7 @@ async function exercicios(empresaId) {
       travado: ano === anoAtual,
     });
   }
-  return { primeiro_vencimento: primeiro, ano_atual: anoAtual, exercicios: lista };
+  return { primeiro_vencimento: primeiro, ano_atual: anoAtual, exercicios: lista, ...posicao(limite) };
 }
 
 // Lançamentos financeiros de um período (dentro do exercício). Primeiro uma linha por parcela ×
@@ -248,10 +251,20 @@ function diaSeguinte(iso) {
   return d.toISOString().slice(0, 10);
 }
 
-// Período dentro do exercício: de/até (inclusive) presos ao ano; sem eles, o ano inteiro.
+// O limite do realizado da DRE (buscado aqui, e não no topo: o demonstrativo importa este módulo).
+const limiteDoRealizado = () => require('../dre-demonstrativo/demonstrativo.service').limiteDoRealizado();
+// Pra tela mostrar "Realizado até dd/mm/aaaa · corte da versão N".
+const posicao = (limite) => ({ posicao_em: limite, versao: pool.contextoAtual()?.versao?.numero ?? null });
+
+// Período dentro do exercício: de/até (inclusive) presos ao ano; sem eles, o ano inteiro. Nunca passa do
+// limite do realizado da DRE (o fim do mês de corte da versão; no máximo o fim do mês anterior ao atual —
+// pedido do usuário, 23/11/2026: a aba mostra só o que a DRE soma); exercício todo depois dele = vazio.
 function periodo(ano, de, ate) {
+  const limite = limiteDoRealizado();
   const ini = de && de.slice(0, 4) === String(ano) ? de : `${ano}-01-01`;
-  const fim = ate && ate.slice(0, 4) === String(ano) ? ate : `${ano}-12-31`;
+  const pedido = ate && ate.slice(0, 4) === String(ano) ? ate : `${ano}-12-31`;
+  if (limite < ini) return [ini, ini];
+  const fim = pedido < limite ? pedido : limite;
   return [ini, diaSeguinte(fim < ini ? ini : fim)];
 }
 
@@ -314,6 +327,7 @@ async function lancamentos(empresaId, ano, filtros = {}, { pagina = 1, porPagina
   return {
     ano,
     travado: ano === new Date().getFullYear(),
+    ...posicao(limiteDoRealizado()),
     pagina,
     por_pagina: porPagina,
     total: num(rows[0].total),

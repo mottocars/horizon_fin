@@ -1,4 +1,6 @@
 const { motor, meses, vespera } = require('./demonstrativo.service');
+const unidades = require('../dre-unidades/unidades.service');
+const agrupadores = require('../dre-agrupadores/agrupadores.service');
 const { arredondarPoc } = require('../../utils/poc');
 
 // Operações > DRE Gerencial > POC: o rastreio de como a POC de cada obra chegou no valor da DRE, centro
@@ -83,10 +85,23 @@ function posicaoUnidades(centro, a, b) {
 }
 
 async function rastrear(empresaId, { de, ate, centros: filtro = [] }) {
-  const m = await motor(empresaId, { ate, filtro, soObras: true });
+  const [m, noCorte, lista] = await Promise.all([
+    motor(empresaId, { ate, filtro, soObras: true }),
+    unidades.listarNoCorte(empresaId),
+    agrupadores.unidades(empresaId),
+  ]);
   const { obras, mascaras, base, unidadesPorCentro, custoAte, pocEm, pocDespesa, fracaoDistratada, custosDoGrupo } = m;
   const { comPocReceita, comPocDespesa, custoCiv, calculavel, reconhecidoNoCentro } = m;
-  const porId = new Map(unidadesPorCentro.map((c) => [c.id, c]));
+  // O estoque (ticket médio e unidades a avaliar) na posição do limite do realizado, como a aba Unidades — as
+  // disponíveis do motor são as de hoje (a vendida depois do limite sumiria do valor do estoque).
+  const estoque = new Map(
+    agrupadores
+      .fundir({ unidadesCentros: noCorte.centros, corr: [], custos: [], orcamentos: [] }, lista)
+      .unidadesCentros.map((c) => [c.id, c.clusters.disponiveis])
+  );
+  const porId = new Map(
+    unidadesPorCentro.map((c) => [c.id, { ...c, clusters: { ...c.clusters, disponiveis: estoque.get(c.id) || [] } }])
+  );
 
   // As linhas da DRE que passam pela POC, na ordem da DRE.
   const linhas = mascaras.filter((x) => calculavel(x) && (comPocReceita(x) || comPocDespesa(x) || x.calculo === 'ESTORNO_CUSTO'));

@@ -3,6 +3,7 @@ const demonstrativo = require('../dre-demonstrativo/demonstrativo.service');
 const mascarasService = require('../dre-mascaras/dreMascaras.service');
 const financeiro = require('../dre-financeiro/financeiro.service');
 const correcoes = require('../dre-correcoes/correcoes.service');
+const unidades = require('../dre-unidades/unidades.service');
 const agrupadores = require('../dre-agrupadores/agrupadores.service');
 
 const projecoes = require('../dre-projecoes/dreProjecoes.service');
@@ -95,18 +96,21 @@ function aliquotas(m) {
 }
 
 // Unidades do motor (aba Unidades, só os centros pedidos) como eventos da Base Unidades — cada um com a
-// coluna que alimenta cada cálculo preenchida (as outras vazias).
-function eventosUnidades(m) {
+// coluna que alimenta cada cálculo preenchida (as outras vazias). Tudo na posição do limite do realizado, como a
+// aba Unidades: o "Cancelado" da venda só se o distrato foi até ele (o motor já corta vendas, distratos e
+// permutas) e o Estoque = as disponíveis nele (`estoque`: unidade da DRE → linhas de unidades.listarNoCorte).
+function eventosUnidades(m, estoque) {
   const linhas = [];
   m.unidadesPorCentro.forEach((c) => {
     const comum = (u) => ({ centro_id: c.id, unidade: u.unidade, tipo: u.tipo, situacao: u.situacao_atual, fracao: u.fracao_ideal });
+    const distratados = new Set(c.clusters.distratadas.map((d) => d.chave.slice(1)));
     c.clusters.vendidas.forEach((v) =>
       linhas.push({
         ...comum(v),
         evento: 'Venda',
         data: v.data,
         contrato: v.contrato?.numero ?? v.contrato?.id ?? null,
-        cancelado: v.contrato?.cancelado ? 'Sim' : 'Não',
+        cancelado: distratados.has(v.chave.slice(1)) ? 'Sim' : 'Não',
         participacao: v.participacao,
         venda: v.valor === null ? null : num(v.valor),
         fracao_vendida: v.fracao_ideal === null ? null : num(v.fracao_ideal) * v.participacao,
@@ -137,7 +141,7 @@ function eventosUnidades(m) {
         fracao_permuta: p.fracao_ideal === null ? null : num(p.fracao_ideal),
       })
     );
-    c.clusters.disponiveis.forEach((d) => linhas.push({ ...comum(d), evento: 'Estoque', data: null, estimado: d.valor }));
+    (estoque.get(c.id) || []).forEach((d) => linhas.push({ ...comum(d), evento: 'Estoque', data: null, estimado: d.valor }));
   });
   return linhas;
 }
@@ -204,6 +208,13 @@ async function dados(empresaId, { de, ate, centros = [], projecao = null }) {
   const m = await motor(empresaId, { ate, filtro: centros });
   const lista = await agrupadores.unidades(empresaId);
   const mapa = agrupadores.mapaDe(lista);
+  // Estoque da Base Unidades na posição do limite do realizado (a da aba Unidades), por unidade da DRE.
+  const noCorte = await unidades.listarNoCorte(empresaId);
+  const estoque = new Map(
+    agrupadores
+      .fundir({ unidadesCentros: noCorte.centros, corr: [], custos: [], orcamentos: [] }, lista)
+      .unidadesCentros.map((c) => [c.id, c.clusters.disponiveis])
+  );
   const doGrupo = new Set(lista.filter((u) => u.agrupador_id).map((u) => u.id));
   // Os centros das unidades pedidas (de um agrupador, todos os dele).
   const membros = m.ids.length ? agrupadores.centrosDe(lista, m.ids) : [];
@@ -320,7 +331,7 @@ async function dados(empresaId, { de, ate, centros = [], projecao = null }) {
         ]),
     ]),
     cadastro: new Map(centrosInfo.rows.map((c) => [c.id, c])),
-    unidades: eventosUnidades(m),
+    unidades: eventosUnidades(m, estoque),
     extras: extras.rows[0],
     projecao: proj,
   };

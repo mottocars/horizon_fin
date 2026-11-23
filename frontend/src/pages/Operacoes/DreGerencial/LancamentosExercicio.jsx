@@ -318,7 +318,18 @@ export default function LancamentosExercicio({ empresaId, ano, search = '', novo
             <Lock size={11} /> Somente visualização
           </span>
         )}
-        <span className="ml-auto text-xs text-gray-400">Títulos pela data de emissão · movimento pela data do extrato</span>
+        <span className="ml-auto text-xs text-gray-400">
+          {dados?.posicao_em && (
+            <span
+              className="font-medium text-gray-500"
+              title="Lançamentos até o fim do realizado da DRE — do mês atual em diante, só a projeção"
+            >
+              Realizado até {dataBr(dados.posicao_em)}
+              {dados.versao ? ` (versão ${dados.versao})` : ''} ·{' '}
+            </span>
+          )}
+          Títulos pela data de emissão · movimento pela data do extrato
+        </span>
         {filtrosAtivos && (
           <button
             type="button"
