@@ -78,8 +78,9 @@ function num(v) {
   return v === null || v === undefined ? 0 : Number(v);
 }
 
-// Todos os centros com "Realiza DRE" (mesmo os sem correção, como na aba Orçamento), cada um com os
-// clientes que têm correção e os totais — as parcelas vêm sob demanda (parcelas()).
+// Os centros com "Realiza DRE" que têm correção monetária (pedido do usuário, 23/11: centro sem nenhuma
+// parcela com correção não aparece), cada um com os clientes que têm correção e os totais — as parcelas vêm
+// sob demanda (parcelas()).
 async function listar(empresaId) {
   const { rows: centros } = await pool.query(
     `SELECT sienge_id::int AS id, name AS nome
@@ -125,7 +126,11 @@ async function listar(empresaId) {
     c.parcelas += cliente.parcelas;
   });
 
-  return { centros: [...porCentro.values()], ultima_atualizacao: ultima[0].em, ate_mes: ultima[0].ate_mes };
+  return {
+    centros: [...porCentro.values()].filter((c) => c.clientes.length > 0),
+    ultima_atualizacao: ultima[0].em,
+    ate_mes: ultima[0].ate_mes,
+  };
 }
 
 // Parcelas com correção de um cliente num centro, por vencimento.

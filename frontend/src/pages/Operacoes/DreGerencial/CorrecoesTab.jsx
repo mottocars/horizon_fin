@@ -78,8 +78,8 @@ function plural(n, um, varios) {
 // Operações > DRE Gerencial > Correções: a correção monetária das parcelas a receber do Sienge, paga,
 // reparcelada e em aberto, pelo vencimento da parcela e só até o mês atual (premissas em
 // dre-correcoes/correcoes.service.js).
-// Drilldown em 3 níveis: centro de custo (só os com "Realiza DRE", todos, como no Orçamento) →
-// cliente → parcela. As parcelas de um cliente só são buscadas ao abri-lo (a GENESIS tem dezenas de
+// Drilldown em 3 níveis: centro de custo (os com "Realiza DRE" que têm correção — o backend não manda
+// os sem) → cliente → parcela. As parcelas de um cliente só são buscadas ao abri-lo (a GENESIS tem dezenas de
 // milhares de parcelas com correção). Vários abertos ao mesmo tempo; com busca (cliente, unidade ou
 // centro), abre os centros e mostra só os clientes que batem.
 export default function CorrecoesTab({ empresaId, search = '' }) {
@@ -246,7 +246,7 @@ export default function CorrecoesTab({ empresaId, search = '' }) {
                   <td colSpan={totalColunas} className="border-b border-gray-100 py-10 text-center text-sm text-gray-400">
                     {termo
                       ? 'Nenhum cliente encontrado para essa busca.'
-                      : 'Nenhum centro de custo com "Realiza DRE" marcado. Marque na aba Centros Custos.'}
+                      : `Nenhuma correção monetária${dados?.ate_mes ? ` até ${mesAno(dados.ate_mes)}` : ''} nos centros de custo com "Realiza DRE".`}
                   </td>
                 </tr>
               )}
