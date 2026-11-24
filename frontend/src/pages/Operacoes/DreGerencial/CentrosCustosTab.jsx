@@ -45,8 +45,10 @@ const erroDe = (err, padrao) => err.response?.data?.message || padrao;
 //
 // AGRUPADORES (pedido de 23/11/2026 — backend/src/modules/dre-agrupadores): um agrupador junta centros numa
 // obra só (ex.: EASY = EASY 1 + EASY 2) e a DRE passa a ser montada por ele. Botão "Novo agrupador" no topo
-// da página; arrastar um centro e soltar SOBRE o agrupador põe o centro nele; soltar entre dois centros do
-// agrupador também; soltar fora tira. O agrupador se arrasta inteiro pela alça dele. O "Realiza DRE" é o do
+// da página; arrastar um centro e soltar SOBRE o agrupador (no meio da linha) põe o centro nele; soltar entre dois
+// centros do agrupador também; soltar fora tira; na borda de cima/de baixo da linha do agrupador, o centro fica
+// antes/depois dele, fora (é como se põe um centro entre dois agrupadores fechados). O agrupador se arrasta inteiro
+// pela alça dele. O "Realiza DRE" é o do
 // agrupador (vale pros centros dele). Quando o centro e o agrupador têm projeção, a tela pergunta qual fica.
 const CentrosCustosTab = forwardRef(function CentrosCustosTab({ empresaId, search, situacao = 'ATIVOS' }, ref) {
   const [centros, setCentros] = useState([]);
@@ -262,18 +264,27 @@ const CentrosCustosTab = forwardRef(function CentrosCustosTab({ empresaId, searc
   }
 
   // Sobre uma linha: metade de cima = antes dela; metade de baixo = depois. Arrastando um centro por cima do
-  // cabeçalho de outro agrupador, o alvo é o agrupador inteiro (entrar nele).
+  // cabeçalho de um agrupador: no meio, o alvo é o agrupador inteiro (entrar nele); nas bordas, antes/depois dele.
   function mirar(e, i) {
     if (!arrastado) return;
     e.preventDefault();
     e.stopPropagation();
     e.dataTransfer.dropEffect = 'move';
     const l = visiveis[i];
+    const r = e.currentTarget.getBoundingClientRect();
     if (arrastado.tipo === 'centro' && l.tipo === 'grupo') {
+      // Faixas do cabeçalho do agrupador (pedido do usuário, 24/11/2026: pôr um centro ENTRE dois agrupadores sem
+      // entrar em nenhum): borda de cima = antes do agrupador; borda de baixo = depois dele (fechado: depois do bloco
+      // inteiro, fora dele; aberto: o primeiro de dentro); o meio = entrar no agrupador.
+      const faixa = r.height * 0.3;
+      if (e.clientY < r.top + faixa || e.clientY > r.bottom - faixa) {
+        const posicao = e.clientY < r.top + faixa ? i : i + 1;
+        if (!alvo || alvo.posicao !== posicao) setAlvo({ posicao });
+        return;
+      }
       if (!alvo || alvo.grupo !== l.g.id) setAlvo({ grupo: l.g.id });
       return;
     }
-    const r = e.currentTarget.getBoundingClientRect();
     const posicao = e.clientY < r.top + r.height / 2 ? i : i + 1;
     if (!alvo || alvo.posicao !== posicao) setAlvo({ posicao });
   }
@@ -437,7 +448,7 @@ const CentrosCustosTab = forwardRef(function CentrosCustosTab({ empresaId, searc
           <div
             className={`${GRADE} sticky -top-6 z-20 rounded-t-lg border-b-2 border-blue-500 bg-blue-50 py-2.5 pl-4 pr-4 text-xs font-medium uppercase tracking-wide text-blue-700`}
           >
-            <span className="pl-5" title="Arraste pela alça para mudar a ordem — é a ordem das colunas na aba DRE. Solte um centro sobre um agrupador para colocá-lo nele.">
+            <span className="pl-5" title="Arraste pela alça para mudar a ordem — é a ordem das colunas na aba DRE. Solte um centro no meio da linha de um agrupador para colocá-lo nele; na borda de cima ou de baixo da linha, ele fica antes ou depois do agrupador, fora dele.">
               Centro de custo
             </span>
             <span title="Mesmo Tipo da aba Centros Custos da DFC Construtoras — alterar aqui altera lá">Tipo</span>
