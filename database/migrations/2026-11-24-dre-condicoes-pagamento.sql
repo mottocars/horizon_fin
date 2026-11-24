@@ -60,4 +60,21 @@ CREATE TABLE IF NOT EXISTS dre_condicoes_excluidas (
     PRIMARY KEY (empresa_id, condicao)
 );
 
+-- Versões já salvas: dre_condicoes_excluidas vazia e só leitura na cópia da configuração (dre_vc_<id>), com o
+-- mesmo dono do schema — a versão fechada continua sem condição fora da DRE (sem a tabela ela leria a do public,
+-- a da versão aberta). sie_sales_contracts_payment_conditions NÃO ganha cópia nos dre_vr_ antigos: a versão
+-- aberta (que lê o dre_vr_ da versão de base) tem de ver as condições atuais do public.
+DO $$
+DECLARE s TEXT; dono TEXT;
+BEGIN
+  FOR s, dono IN SELECT nspname, nspowner::regrole::text FROM pg_namespace WHERE nspname ~ '^dre_vc_[0-9]+$' LOOP
+    IF to_regclass(format('%I.dre_condicoes_excluidas', s)) IS NULL THEN
+      EXECUTE format('CREATE TABLE %I.dre_condicoes_excluidas (LIKE public.dre_condicoes_excluidas INCLUDING ALL)', s);
+      EXECUTE format('CREATE TRIGGER somente_leitura BEFORE INSERT OR UPDATE OR DELETE OR TRUNCATE ON %I.dre_condicoes_excluidas
+                      FOR EACH STATEMENT EXECUTE FUNCTION public.dre_versao_somente_leitura()', s);
+    END IF;
+    EXECUTE format('ALTER TABLE %I.dre_condicoes_excluidas OWNER TO %I', s, dono);
+  END LOOP;
+END $$;
+
 COMMIT;
