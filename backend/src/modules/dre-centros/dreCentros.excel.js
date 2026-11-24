@@ -4,9 +4,9 @@ const { CORES, FORMATOS, borda, preencher, cabecalho, impressao, corrigirArquivo
 const agrupadores = require('../dre-agrupadores/agrupadores.service');
 
 // Exportar Excel da aba Centros Custos da DRE (pedido do usuário, 23/11/2026): a base inteira dos centros de
-// custo da empresa — todas as situações, sem a busca/filtro da tela —, na ordem da aba: os agrupadores primeiro
-// (uma linha do agrupador, em cinza e negrito, e os centros dele embaixo, com drilldown pelo contorno do Excel) e
-// depois os centros fora de agrupador. Com as colunas da aba (Tipo, Realiza DRE) e o cadastro do centro. Lê pelo
+// custo da empresa — todas as situações, sem a busca/filtro da tela —, na ordem da aba: cada agrupador (uma
+// linha do agrupador, em cinza e negrito, e os centros dele embaixo, com drilldown pelo contorno do Excel) no meio
+// dos centros fora de agrupador. Com as colunas da aba (Tipo, Realiza DRE) e o cadastro do centro. Lê pelo
 // contexto da versão da DRE do pedido (a aberta, ou a visualizada).
 
 const LINHA_CABECALHO = 6;
@@ -68,25 +68,28 @@ async function gerar(empresaId, usuarioId) {
     c.agrupador = c.agrupador_id ? porId.get(c.agrupador_id)?.nome || '' : '';
   });
 
-  // Ordem da aba: agrupadores (vazios primeiro, os outros na ordem do primeiro centro), depois os soltos.
+  // Ordem da aba (livre — pedido do usuário, 24/11/2026: agrupadores não ficam presos no topo): os agrupadores
+  // vazios primeiro; depois a ordem dos centros, com cada agrupador na posição do primeiro centro dele (os centros
+  // dele embaixo) e os centros fora de agrupador no lugar deles.
   const linhas = [];
-  const vazios = grupos.filter((g) => !g.centros.length);
-  const vistos = new Set();
-  const comCentros = [];
-  centros.forEach((c) => {
-    if (c.agrupador_id && !vistos.has(c.agrupador_id)) {
-      vistos.add(c.agrupador_id);
-      comCentros.push(porId.get(c.agrupador_id));
-    }
-  });
-  [...vazios, ...comCentros].filter(Boolean).forEach((g) => {
+  const comGrupo = (g) => {
     const membros = centros.filter((c) => c.agrupador_id === g.id);
     const natureza = membros.some((m) => m.natureza === 'OBRA') ? 'OBRA' : membros.some((m) => m.natureza === 'ADMINISTRATIVO') ? 'ADMINISTRATIVO' : null;
     linhas.push({ grupo: { ...g, natureza } });
     membros.forEach((c) => linhas.push({ centro: c, nivel: 1 }));
+  };
+  grupos.filter((g) => !g.centros.length).forEach(comGrupo);
+  const vistos = new Set();
+  centros.forEach((c) => {
+    const g = c.agrupador_id ? porId.get(c.agrupador_id) : null;
+    if (!g) {
+      linhas.push({ centro: c, nivel: 0 });
+      return;
+    }
+    if (vistos.has(g.id)) return;
+    vistos.add(g.id);
+    comGrupo(g);
   });
-  const soltos = centros.filter((c) => !c.agrupador_id);
-  soltos.forEach((c) => linhas.push({ centro: c, nivel: 0 }));
 
   const workbook = new ExcelJS.Workbook();
   workbook.creator = 'Horizon Finanças';
@@ -99,7 +102,7 @@ async function gerar(empresaId, usuarioId) {
   const versao = pool.contextoAtual()?.versao;
   cabecalho(workbook, sheet, {
     titulo: 'Centros de Custo — DRE',
-    subtitulo: 'Agrupadores e centros de custo, na ordem da aba Centros Custos (agrupadores primeiro)',
+    subtitulo: 'Agrupadores e centros de custo, na ordem da aba Centros Custos',
     filtros: [
       ['Empresa', empresa],
       ...(versao ? [['Versão da DRE', `${versao.numero}${versao.status === 'ABERTA' ? ' (em edição)' : ''}`]] : []),

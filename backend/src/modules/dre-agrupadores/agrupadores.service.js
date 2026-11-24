@@ -36,8 +36,8 @@ function naturezaDoGrupo(membros) {
   return null;
 }
 
-// As unidades da DRE na ordem da aba Centros Custos (os agrupadores primeiro, cada um na posição do primeiro
-// centro dele; depois os centros fora de agrupador):
+// As unidades da DRE na ordem da aba Centros Custos (cada agrupador na posição do primeiro centro dele, no meio
+// dos centros fora de agrupador):
 // [{ id, nome, rotulo, natureza, agrupador_id, agrupador, centros: [ids], membros: [{ id, nome, rotulo, natureza }] }].
 // Só as com "Realiza DRE" (`soObras`: só as de natureza Obra). `id` = o sienge_id do centro (ou do principal do agrupador).
 async function unidades(empresaId, { soObras = false } = {}) {
@@ -79,10 +79,9 @@ async function unidades(empresaId, { soObras = false } = {}) {
   doGrupo.forEach((u) => {
     u.natureza = naturezaDoGrupo(u.membros);
   });
-  // Sempre os agrupadores primeiro, depois os centros fora de agrupador (pedido do usuário, 23/11 — a mesma
-  // ordem da aba Centros Custos).
-  const ordenada = [...lista.filter((u) => u.agrupador_id), ...lista.filter((u) => !u.agrupador_id)];
-  return soObras ? ordenada.filter((u) => u.natureza === 'OBRA') : ordenada;
+  // A ordem livre da aba Centros Custos (pedido do usuário, 24/11/2026 — antes os agrupadores vinham sempre primeiro):
+  // cada agrupador na posição do primeiro centro dele, no meio dos centros fora de agrupador.
+  return soObras ? lista.filter((u) => u.natureza === 'OBRA') : lista;
 }
 
 // Centro (ou unidade) → id da unidade da DRE.

@@ -114,30 +114,29 @@ const CentrosCustosTab = forwardRef(function CentrosCustosTab({ empresaId, searc
 
   // ------------------------------------------------------------------ linhas (agrupadores + centros)
 
-  // Pedido do usuário (23/11): SEMPRE os agrupadores primeiro (os vazios no topo, onde a gente acabou de criar;
-  // os outros na ordem do primeiro centro de cada um), cada um com os centros logo abaixo; depois os centros
-  // fora de agrupador, na ordem da DRE. É a mesma ordem das colunas da DRE (agrupadores.service.unidades).
+  // Ordem livre (pedido do usuário, 24/11/2026 — antes os agrupadores ficavam presos no topo): os agrupadores
+  // vazios no topo (onde a gente acabou de criar); depois a ordem da DRE, com cada agrupador na posição do primeiro
+  // centro dele (os centros logo abaixo) e os centros fora de agrupador no lugar deles. É a mesma ordem das colunas
+  // da DRE (agrupadores.service.unidades).
   const linhas = useMemo(() => {
     const porId = new Map(agrupadores.map((g) => [g.id, g]));
-    const grupos = [];
-    const soltos = [];
-    agrupadores
+    const lista = agrupadores
       .filter((g) => !centros.some((c) => c.agrupador_id === g.id))
-      .forEach((g) => grupos.push({ tipo: 'grupo', g, membros: [] }));
+      .map((g) => ({ tipo: 'grupo', g, membros: [] }));
     const vistos = new Set();
     centros.forEach((c) => {
       const g = c.agrupador_id ? porId.get(c.agrupador_id) : null;
       if (!g) {
-        soltos.push({ tipo: 'centro', c, g: null });
+        lista.push({ tipo: 'centro', c, g: null });
         return;
       }
       if (vistos.has(g.id)) return;
       vistos.add(g.id);
       const membros = centros.filter((x) => x.agrupador_id === g.id);
-      grupos.push({ tipo: 'grupo', g, membros });
-      membros.forEach((m) => grupos.push({ tipo: 'centro', c: m, g }));
+      lista.push({ tipo: 'grupo', g, membros });
+      membros.forEach((m) => lista.push({ tipo: 'centro', c: m, g }));
     });
-    return [...grupos, ...soltos];
+    return lista;
   }, [centros, agrupadores]);
 
   // Drilldown dos agrupadores: fechados por padrão (pedido do usuário); com a busca, abrem sozinhos os que têm
@@ -279,12 +278,8 @@ const CentrosCustosTab = forwardRef(function CentrosCustosTab({ empresaId, searc
     if (!alvo || alvo.posicao !== posicao) setAlvo({ posicao });
   }
 
-  // A ordem inteira dos centros (os de cada agrupador juntos), a partir das linhas.
-  // Sempre os centros dos agrupadores primeiro, depois os soltos (a mesma ordem da tela).
-  const ordemDe = (ls) => {
-    const cs = ls.filter((l) => l.tipo === 'centro');
-    return [...cs.filter((l) => l.g), ...cs.filter((l) => !l.g)].map((l) => l.c.sienge_id);
-  };
+  // A ordem inteira dos centros (os de cada agrupador juntos), a partir das linhas — exatamente a ordem da tela.
+  const ordemDe = (ls) => ls.filter((l) => l.tipo === 'centro').map((l) => l.c.sienge_id);
 
   async function soltar(e) {
     e.preventDefault();
