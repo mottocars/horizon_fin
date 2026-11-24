@@ -15,5 +15,6 @@ router.get('/:empresaId/previa-poc', controller.previaPoc);
 router.put('/:empresaId/poc-receita', controller.salvarPocReceita);
 router.put('/:empresaId/avaliacao-vertical', controller.salvarAvaliacaoVertical);
 router.put('/:empresaId/documentos', controller.salvarDocumentos);
+router.put('/:empresaId/condicoes-pagamento', controller.salvarCondicoes);
 
 module.exports = router;

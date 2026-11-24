@@ -195,6 +195,27 @@ const CAMPOS_CONTRATO = [
 
 const COLUNAS_CONTRATO = ['sienge_contract_id', 'empresa_id', ...CAMPOS_CONTRATO.map(([col]) => col)];
 
+// Condições de pagamento do contrato (paymentConditions), achatadas como o contrato. Siglas e nomes vêm do
+// Sienge com espaço sobrando ("ATO  ", "PARCELA MENSAL ") — gravados sem ele.
+const texto = (v) => (v === null || v === undefined || String(v).trim() === '' ? null : String(v).trim());
+const valor = (v) => vazioParaNulo(v) ?? null;
+const CAMPOS_CONDICAO = [
+  ['condition_type_id', 'conditionTypeId', texto], ['condition_type_name', 'conditionTypeName', texto],
+  ['bearer_id', 'bearerId', valor], ['bearer_name', 'bearerName', texto],
+  ['indexer_id', 'indexerId', valor], ['indexer_name', 'indexerName', texto],
+  ['interest_type', 'interestType', texto], ['match_maturities', 'matchMaturities', texto],
+  ['installments_number', 'installmentsNumber', valor], ['open_installments_number', 'openInstallmentsNumber', valor],
+  ['months_grace_period', 'monthsGracePeriod', valor], ['grace_period_type', 'gracePeriodType', texto],
+  ['first_payment', 'firstPayment', valor], ['base_date', 'baseDate', valor], ['base_date_interest', 'baseDateInterest', valor],
+  ['total_value', 'totalValue', valor], ['outstanding_balance', 'outstandingBalance', valor],
+  ['interest_percentage', 'interestPercentage', valor], ['total_value_interest', 'totalValueInterest', valor],
+  ['amount_paid', 'amountPaid', valor], ['sequence_id', 'sequenceId', valor], ['order_number', 'orderNumber', valor],
+  ['order_number_remade_installments', 'orderNumberRemadeInstallments', valor], ['status', 'status', texto],
+  ['paid_before_contract_additive', 'paidBeforeContractAdditive', valor],
+  ['title_condition_type_divergent', 'titleConditionTypeDivergent', valor], ['status_situacao', 'statusSituacao', texto],
+];
+const COLUNAS_CONDICAO = ['sienge_contract_id', 'empresa_id', 'linha', ...CAMPOS_CONDICAO.map(([col]) => col)];
+
 async function inserirContrato(client, empresaId, reg) {
   const valores = [
     vazioParaNulo(reg.id),
@@ -250,11 +271,29 @@ async function inserirContrato(client, empresaId, reg) {
       ]
     );
   }
+
+  // Condições de pagamento do contrato (paymentConditions: ATO, CHAVES, PARCELA MENSAL, DESCONTO…) — a aba
+  // Configurações da DRE Gerencial lista as condições e tira do valor do contrato as marcadas como fora da DRE
+  // (database/migrations/2026-11-24-dre-condicoes-pagamento.sql).
+  let condicoes = reg.paymentConditions;
+  if (condicoes && !Array.isArray(condicoes)) condicoes = [condicoes];
+  let linha = 0;
+  for (const p of Array.isArray(condicoes) ? condicoes : []) {
+    if (!p) continue;
+    linha += 1;
+    const valores = [vazioParaNulo(reg.id), empresaId, linha, ...CAMPOS_CONDICAO.map(([, campoApi, tratar]) => tratar(p[campoApi]))];
+    await client.query(
+      `INSERT INTO sie_sales_contracts_payment_conditions (${COLUNAS_CONDICAO.join(', ')})
+       VALUES (${valores.map((_, i) => `$${i + 1}`).join(', ')})
+       ON CONFLICT DO NOTHING`,
+      valores
+    );
+  }
 }
 
 // Puxa TODOS os contratos da API do Sienge (/sales-contracts) pra essa
 // empresa e substitui completamente o que já estava salvo — mesmo critério
-// de sincronizarReservas: apaga tudo (o CASCADE já limpa os compradores e as unidades) e
+// de sincronizarReservas: apaga tudo (o CASCADE já limpa os compradores, as unidades e as condições de pagamento) e
 // reinsere, pra nunca duplicar.
 // `onProgress` (opcional) — ver sincronizarReservas.
 async function sincronizarContratos(empresaId, onProgress) {

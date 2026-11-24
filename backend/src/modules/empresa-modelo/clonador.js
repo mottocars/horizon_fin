@@ -619,6 +619,7 @@ async function copiarVendas(ctx) {
     }),
   });
   await copiar(ctx, 'sie_sales_contracts_units');
+  if (ctx.meta.existe('sie_sales_contracts_payment_conditions')) await copiar(ctx, 'sie_sales_contracts_payment_conditions');
 }
 
 async function copiarPlanejamento(ctx) {
@@ -664,7 +665,7 @@ async function copiarPlanejamento(ctx) {
   for (const t of ['extrato_cronograma', 'extrato_proximos_eventos']) await copiar(ctx, t, { transformar: comPadrao(ctx, t) });
 
   log(ctx, 'DRE');
-  for (const t of ['dre_plano_contas', 'dre_plano_contas_versoes', 'dre_plano_contas_centro', 'dre_orcamento_valores', 'dre_configuracoes', 'dre_documentos_excluidos']) {
+  for (const t of ['dre_plano_contas', 'dre_plano_contas_versoes', 'dre_plano_contas_centro', 'dre_orcamento_valores', 'dre_configuracoes', 'dre_documentos_excluidos', 'dre_condicoes_excluidas']) {
     if (ctx.meta.existe(t)) await copiar(ctx, t, { transformar: comPadrao(ctx, t) });
   }
   const livre = (t, cols) =>

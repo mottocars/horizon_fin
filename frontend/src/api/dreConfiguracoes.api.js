@@ -4,7 +4,8 @@ import http from './http';
 
 // { poc_receita_mascara_id, atualizado_em, atualizado_por, mascaras: [{ id, descricao, totalizadora,
 // filhos: [{ id, descricao, realiza_poc, tipo_poc }] }], documentos: [{ documento, nome, lancamentos,
-// origens ('P' a pagar, 'R' a receber, 'E' extrato) }], excluidos: ['PCT', …] }.
+// origens ('P' a pagar, 'R' a receber, 'E' extrato) }], excluidos: ['PCT', …], condicoes: [{ condicao, nome,
+// contratos, valor }] (condições de pagamento dos contratos de venda), condicoes_excluidas: ['DE', …] }.
 export function obterConfiguracoesDre(empresaId) {
   return http.get(`/dre-configuracoes/${empresaId}`).then((res) => res.data);
 }
@@ -29,4 +30,9 @@ export function salvarAvaliacaoVerticalDre(empresaId, mascaraId) {
 
 export function salvarDocumentosExcluidosDre(empresaId, excluidos) {
   return http.put(`/dre-configuracoes/${empresaId}/documentos`, { excluidos }).then((res) => res.data);
+}
+
+// Lista completa das condições de pagamento (contratos) fora da DRE (a caixa da direita).
+export function salvarCondicoesExcluidasDre(empresaId, excluidas) {
+  return http.put(`/dre-configuracoes/${empresaId}/condicoes-pagamento`, { excluidas }).then((res) => res.data);
 }

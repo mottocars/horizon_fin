@@ -8,6 +8,7 @@ import {
   obterConfiguracoesDre,
   previaPocDre,
   salvarAvaliacaoVerticalDre,
+  salvarCondicoesExcluidasDre,
   salvarDocumentosExcluidosDre,
   salvarPocReceitaDre,
 } from '../../../api/dreConfiguracoes.api';
@@ -98,6 +99,8 @@ function Barra({ valor, cor }) {
 // - Prévia por obra das duas POCs, até hoje (recalcula depois de salvar).
 // - Tipos de documento financeiro: à direita = fora da DRE (somem da aba Financeiro); tipo novo que
 //   chegar do Sienge entra sempre à esquerda (só os excluídos ficam gravados).
+// - Condições de pagamento (contratos): o mesmo molde; à direita = fora da DRE (o valor delas sai do valor do
+//   contrato na aba Unidades e, com ele, da receita).
 // Um "Salvar configurações" só, no fim da página.
 export default function ConfiguracoesDreTab({ empresaId }) {
   const [dados, setDados] = useState(null);
@@ -105,6 +108,7 @@ export default function ConfiguracoesDreTab({ empresaId }) {
   const [mascaraId, setMascaraId] = useState('');
   const [avId, setAvId] = useState('');
   const [excluidos, setExcluidos] = useState([]);
+  const [condicoesFora, setCondicoesFora] = useState([]);
   const [previa, setPrevia] = useState(null);
   const [carregandoPrevia, setCarregandoPrevia] = useState(false);
   const [salvando, setSalvando] = useState(false);
@@ -116,6 +120,7 @@ export default function ConfiguracoesDreTab({ empresaId }) {
     setMascaraId(d.poc_receita_mascara_id ?? '');
     setAvId(d.av_mascara_id ?? '');
     setExcluidos(d.excluidos);
+    setCondicoesFora(d.condicoes_excluidas);
   };
 
   const carregarPrevia = useCallback(() => {
@@ -160,7 +165,8 @@ export default function ConfiguracoesDreTab({ empresaId }) {
   const mudouPoc = dados && String(mascaraId || '') !== String(dados.poc_receita_mascara_id ?? '');
   const mudouAv = dados && String(avId || '') !== String(dados.av_mascara_id ?? '');
   const mudouDocs = dados && [...excluidos].sort().join('|') !== [...dados.excluidos].sort().join('|');
-  const mudou = mudouPoc || mudouAv || mudouDocs;
+  const mudouCondicoes = dados && [...condicoesFora].sort().join('|') !== [...dados.condicoes_excluidas].sort().join('|');
+  const mudou = mudouPoc || mudouAv || mudouDocs || mudouCondicoes;
 
   async function salvar() {
     setErro('');
@@ -176,6 +182,7 @@ export default function ConfiguracoesDreTab({ empresaId }) {
       if (mudouPoc) d = await salvarPocReceitaDre(empresaId, Number(mascaraId));
       if (mudouAv) d = await salvarAvaliacaoVerticalDre(empresaId, avId ? Number(avId) : null);
       if (mudouDocs) d = await salvarDocumentosExcluidosDre(empresaId, excluidos);
+      if (mudouCondicoes) d = await salvarCondicoesExcluidasDre(empresaId, condicoesFora);
       aplicar(d);
       setSalvo(true);
       carregarPrevia();
@@ -438,6 +445,41 @@ export default function ConfiguracoesDreTab({ empresaId }) {
             vazioSelecionadosTexto="Nenhum tipo fora da DRE."
             corSelecionados={excluidos.length ? 'border-red-200' : 'border-gray-200'}
           />
+        </div>
+      </Card>
+
+      <Card>
+        <SectionHeader
+          titulo="Condições de pagamento (contratos)"
+          texto="Todas as condições de pagamento que aparecem nos contratos de venda (ATO, CHAVES, PARCELA MENSAL, DESCONTO…). O valor do contrato é a soma das condições dele: as condições à direita não entram na DRE e saem do valor do contrato (aba Unidades e receita). Toda condição nova que chegar do Sienge entra sempre à esquerda (considerada). Clique para destacar e use as setas."
+        />
+        <div className="mt-4">
+          {!dados.condicoes.length ? (
+            <p className="flex items-center gap-1.5 text-xs text-amber-700">
+              <AlertTriangle size={13} className="shrink-0" /> Nenhuma condição de pagamento gravada: atualize os contratos (aba
+              Unidades) para trazê-las do Sienge.
+            </p>
+          ) : (
+            <TransferList
+              itens={dados.condicoes}
+              selecionados={condicoesFora}
+              onChange={(lista) => {
+                setCondicoesFora(lista);
+                setSalvo(false);
+              }}
+              getId={(c) => c.condicao}
+              getLabel={(c) =>
+                `${c.condicao}${c.nome ? ` — ${c.nome}` : ''} · ${
+                  c.contratos ? `${c.contratos.toLocaleString('pt-BR')} contrato${c.contratos === 1 ? '' : 's'} · R$ ${moeda(c.valor)}` : 'sem contratos'
+                }`
+              }
+              tituloDisponiveis="Consideradas na DRE"
+              tituloSelecionados="Fora da DRE"
+              vazioDisponiveisTexto="Nenhuma condição considerada."
+              vazioSelecionadosTexto="Nenhuma condição fora da DRE."
+              corSelecionados={condicoesFora.length ? 'border-red-200' : 'border-gray-200'}
+            />
+          )}
         </div>
       </Card>
 

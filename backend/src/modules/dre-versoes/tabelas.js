@@ -27,6 +27,7 @@ const CONFIG = [
   },
   { tabela: 'dre_configuracoes', filtro: daEmpresa, restaura: true, pk: ['empresa_id'] },
   { tabela: 'dre_documentos_excluidos', filtro: daEmpresa, restaura: true, pk: ['empresa_id', 'documento'] },
+  { tabela: 'dre_condicoes_excluidas', filtro: daEmpresa, restaura: true, pk: ['empresa_id', 'condicao'] },
   {
     tabela: 'dre_plano_contas',
     filtro: daEmpresa,
@@ -92,6 +93,7 @@ const REALIZADO = [
   { tabela: 'sie_units', filtro: daEmpresa },
   { tabela: 'sie_sales_contracts', filtro: daEmpresa },
   { tabela: 'sie_sales_contracts_units', filtro: daEmpresa },
+  { tabela: 'sie_sales_contracts_payment_conditions', filtro: daEmpresa },
   { tabela: 'sie_business_budget', filtro: daEmpresa },
   {
     tabela: 'sie_business_budget_categorias',

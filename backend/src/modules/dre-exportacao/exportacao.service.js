@@ -293,6 +293,10 @@ async function dados(empresaId, { de, ate, centros = [], projecao = null }) {
               (SELECT MAX(criado_em) FROM sie_units WHERE empresa_id = $1) AS unidades,
               (SELECT json_agg(json_build_object('documento', d.documento, 'em', d.criado_em, 'por', u.nome) ORDER BY d.documento)
                  FROM dre_documentos_excluidos d LEFT JOIN usuarios u ON u.id = d.usuario_id WHERE d.empresa_id = $1) AS documentos_fora,
+              (SELECT json_agg(json_build_object('condicao', d.condicao, 'em', d.criado_em, 'por', u.nome,
+                        'nome', (SELECT MAX(p.condition_type_name) FROM sie_sales_contracts_payment_conditions p
+                                  WHERE p.empresa_id = d.empresa_id AND p.condition_type_id = d.condicao)) ORDER BY d.condicao)
+                 FROM dre_condicoes_excluidas d LEFT JOIN usuarios u ON u.id = d.usuario_id WHERE d.empresa_id = $1) AS condicoes_fora,
               (SELECT json_agg(json_build_object('documento', documento, 'nome', nome)) FROM (
                  SELECT TRIM(document_identification_id) AS documento, MAX(document_identification_name) AS nome
                    FROM sie_income WHERE empresa_id = $1 GROUP BY 1

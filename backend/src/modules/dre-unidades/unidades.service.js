@@ -201,7 +201,8 @@ function ordenar(linhas) {
 //   disponiveis — unidades que hoje não estão vendidas nem em permuta; sem data, valor estimado
 //                 pelo ticket médio das vendas ativas (não canceladas) do mesmo tipo no mesmo
 //                 empreendimento (sem venda desse tipo, fica sem valor).
-// "Valor do contrato" = `value` (soma das condições de pagamento), não `total_selling_value`.
+// "Valor do contrato" = `value` (soma das condições de pagamento), não `total_selling_value`, menos as condições
+// de pagamento marcadas como fora da DRE na aba Configurações (dre_condicoes_excluidas — ex.: DESCONTO).
 // Contrato com mais de uma unidade: o valor de cada uma é o do contrato × participação da unidade.
 // Guardada no cache da DRE (dre-versoes/cache.js): a DRE e a Projeção leem o mesmo (e cortam pelas datas).
 function listar(empresaId) {
@@ -239,7 +240,7 @@ async function montarLista(empresaId, limite = null) {
             cc.name AS centro, to_char(k.contract_date, 'YYYY-MM-DD') AS contract_date,
             to_char(k.cancellation_date, 'YYYY-MM-DD') AS cancellation_date, k.cancellation_reason, k.value,
             cu.unit_id::int AS unit_id, cu.name AS unit_name, cu.participation_percentage,
-            r.recebido, k.total_cancellation_amount
+            r.recebido, k.total_cancellation_amount, cf.fora AS condicoes_fora
        FROM sie_sales_contracts k
        JOIN sie_sales_contracts_units cu ON cu.sienge_contract_id = k.sienge_contract_id AND cu.empresa_id = k.empresa_id
        JOIN centros_custo_sienge cc ON cc.empresa_id = k.empresa_id AND cc.sienge_id = k.enterprise_id
@@ -249,6 +250,13 @@ async function montarLista(empresaId, limite = null) {
           WHERE empresa_id = $1 AND statement_type_notes = 'Recebimento' AND bill_id IS NOT NULL
           GROUP BY bill_id
        ) r ON r.bill_id = k.receivable_bill_id
+       LEFT JOIN (
+         SELECT p.sienge_contract_id, SUM(p.total_value) AS fora
+           FROM sie_sales_contracts_payment_conditions p
+          WHERE p.empresa_id = $1
+            AND EXISTS (SELECT 1 FROM dre_condicoes_excluidas x WHERE x.empresa_id = $1 AND x.condicao = p.condition_type_id)
+          GROUP BY p.sienge_contract_id
+       ) cf ON cf.sienge_contract_id = k.sienge_contract_id
       WHERE k.empresa_id = $1 AND cc.realiza_dre`,
     [empresaId]
   );
@@ -290,7 +298,7 @@ async function montarLista(empresaId, limite = null) {
     const u = unidadePorId.get(k.unit_id);
     const c = centro(k.centro_id, k.centro);
     const participacao = k.participation_percentage === null ? 1 : Number(k.participation_percentage) / 100;
-    const valor = k.value === null ? null : Number(k.value) * participacao;
+    const valor = k.value === null ? null : (Number(k.value) - Number(k.condicoes_fora || 0)) * participacao;
     const cancelado = limite
       ? Boolean(k.cancellation_date && k.cancellation_date <= limite)
       : k.situation === 'Cancelado' || Boolean(k.cancellation_date);

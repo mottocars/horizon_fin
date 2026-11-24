@@ -553,6 +553,23 @@ function escreverParametros(workbook, sheet, d, ctx, meta) {
   });
   n += 1;
 
+  n = tituloSecao(sheet, n, 'CONDIÇÕES DE PAGAMENTO (CONTRATOS) FORA DA DRE (aba Configurações)', ULT);
+  cabecalhoTabela(sheet, n, ['', 'Condição', 'Sigla', 'Marcado por', 'Em']);
+  n += 1;
+  const condicoesFora = extras.condicoes_fora || [];
+  if (!condicoesFora.length) {
+    cel(n, 2, 'Nenhuma: o valor do contrato é a soma de todas as condições.');
+    n += 1;
+  }
+  condicoesFora.forEach((x) => {
+    cel(n, 2, x.nome || x.condicao);
+    cel(n, 3, x.condicao);
+    cel(n, 4, x.por || '—');
+    cel(n, 5, dataHoraBr(`${x.em}`.endsWith('Z') ? x.em : `${x.em}-03:00`));
+    n += 1;
+  });
+  n += 1;
+
   n = tituloSecao(sheet, n, 'ATUALIZAÇÃO DAS FONTES (última sincronização com o Sienge)', ULT);
   [
     ['Contas a receber', extras.receber],

@@ -28,6 +28,7 @@ const TABELAS = [
   'dre_plano_contas_centro',
   'dre_plano_contas_versoes',
   'dre_documentos_excluidos',
+  'dre_condicoes_excluidas',
 ];
 
 const geracoes = new Map(); // empresa -> número

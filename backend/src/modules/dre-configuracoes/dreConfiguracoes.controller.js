@@ -25,6 +25,9 @@ const avSchema = z.object({
 const documentosSchema = z.object({
   excluidos: z.array(z.string().trim().min(1).max(20)).max(500),
 });
+const condicoesSchema = z.object({
+  excluidas: z.array(z.string().trim().min(1).max(20)).max(500),
+});
 
 function erro(status, message) {
   const e = new Error(message);
@@ -94,6 +97,28 @@ async function salvarDocumentos(req, res, next) {
   }
 }
 
+async function salvarCondicoes(req, res, next) {
+  try {
+    const { excluidas } = condicoesSchema.parse(req.body || {});
+    const empresaId = empresaIdSchema.parse(req.params.empresaId);
+    const antes = new Set((await service.obter(empresaId)).condicoes_excluidas);
+    const r = await service.salvarCondicoes(empresaId, excluidas, req.user.id);
+    const depois = new Set(r.condicoes_excluidas);
+    const saiu = [...depois].filter((d) => !antes.has(d));
+    const voltou = [...antes].filter((d) => !depois.has(d));
+    if (saiu.length || voltou.length) {
+      const partes = [
+        saiu.length ? `ficam fora da DRE: ${saiu.join(', ')}` : '',
+        voltou.length ? `voltam para a DRE: ${voltou.join(', ')}` : '',
+      ].filter(Boolean);
+      await c.carimbar(req, { descricao: `Condições de pagamento (contratos) — ${partes.join('; ')}.`, detalhes: { saiu, voltou } });
+    }
+    res.json(r);
+  } catch (err) {
+    tratar(err, next);
+  }
+}
+
 async function previaPoc(req, res, next) {
   try {
     res.json(await service.previaPoc(empresaIdSchema.parse(req.params.empresaId)));
@@ -102,4 +127,4 @@ async function previaPoc(req, res, next) {
   }
 }
 
-module.exports = { obter, salvarPocReceita, salvarAvaliacaoVertical, salvarDocumentos, previaPoc };
+module.exports = { obter, salvarPocReceita, salvarAvaliacaoVertical, salvarDocumentos, salvarCondicoes, previaPoc };

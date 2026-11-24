@@ -13,6 +13,9 @@ const { arredondarPoc } = require('../../utils/poc');
 //     aparece na prévia ao lado da de receita.
 //   Tipos de documento financeiro fora da DRE — somem da aba Financeiro. Só os excluídos ficam
 //     gravados: tipo novo que chegar do Sienge entra sempre considerado.
+//   Condições de pagamento (contratos) fora da DRE — o valor delas sai do valor do contrato (aba Unidades:
+//     vendidas, distratadas e ticket médio das disponíveis → receita da DRE e Projeção). Mesmo molde dos tipos
+//     de documento: só as excluídas ficam gravadas (database/migrations/2026-11-24-dre-condicoes-pagamento.sql).
 //   Avaliação Vertical — a linha de nível 1 (grupo ou totalizadora) que vale 100% na coluna AV % da aba
 //     DRE (database/migrations/2026-10-30-dre-configuracoes-av.sql). Pelo id; pode ficar sem.
 
@@ -27,7 +30,7 @@ const num = (v) => (v === null || v === undefined ? null : Number(v));
 
 // Tudo o que a aba mostra (menos a prévia, que vem à parte por ser mais pesada).
 async function obter(empresaId) {
-  const [{ rows: cfg }, { rows: mascaras }, { rows: documentos }, { rows: excluidos }] = await Promise.all([
+  const [{ rows: cfg }, { rows: mascaras }, { rows: documentos }, { rows: excluidos }, { rows: condicoes }, { rows: condicoesFora }] = await Promise.all([
     pool.query(
       `SELECT c.poc_receita_mascara_id, c.av_mascara_id, c.atualizado_em, u.nome AS usuario
          FROM dre_configuracoes c LEFT JOIN usuarios u ON u.id = c.usuario_id
@@ -60,6 +63,18 @@ async function obter(empresaId) {
       [empresaId]
     ),
     pool.query('SELECT documento FROM dre_documentos_excluidos WHERE empresa_id = $1 ORDER BY documento', [empresaId]),
+    // Condições de pagamento que existem nos contratos de venda da empresa (todos, de qualquer situação), com
+    // quantos contratos têm cada uma e o valor somado.
+    pool.query(
+      `SELECT condition_type_id AS condicao, MAX(condition_type_name) AS nome,
+              COUNT(DISTINCT sienge_contract_id)::int AS contratos, COALESCE(SUM(total_value), 0) AS valor
+         FROM sie_sales_contracts_payment_conditions
+        WHERE empresa_id = $1 AND condition_type_id IS NOT NULL
+        GROUP BY condition_type_id
+        ORDER BY condition_type_id`,
+      [empresaId]
+    ),
+    pool.query('SELECT condicao FROM dre_condicoes_excluidas WHERE empresa_id = $1 ORDER BY condicao', [empresaId]),
   ]);
 
   const grupos = mascaras
@@ -78,6 +93,12 @@ async function obter(empresaId) {
     ...documentos.map((d) => ({ ...d, lancamentos: Number(d.lancamentos) })),
     ...excluidos.filter((x) => !conhecidos.has(x.documento)).map((x) => ({ documento: x.documento, nome: null, lancamentos: 0, origens: '' })),
   ].sort((a, b) => a.documento.localeCompare(b.documento));
+  // Idem nas condições de pagamento: a excluída que sumiu dos contratos continua à direita.
+  const condicoesConhecidas = new Set(condicoes.map((c) => c.condicao));
+  const listaCondicoes = [
+    ...condicoes.map((c) => ({ ...c, valor: Number(c.valor) })),
+    ...condicoesFora.filter((x) => !condicoesConhecidas.has(x.condicao)).map((x) => ({ condicao: x.condicao, nome: null, contratos: 0, valor: 0 })),
+  ].sort((a, b) => a.condicao.localeCompare(b.condicao));
 
   return {
     poc_receita_mascara_id: cfg[0]?.poc_receita_mascara_id ?? null,
@@ -87,6 +108,8 @@ async function obter(empresaId) {
     mascaras: grupos,
     documentos: lista,
     excluidos: excluidos.map((x) => x.documento),
+    condicoes: listaCondicoes,
+    condicoes_excluidas: condicoesFora.map((x) => x.condicao),
   };
 }
 
@@ -130,6 +153,30 @@ async function salvarDocumentos(empresaId, excluidos, usuarioId) {
         `INSERT INTO dre_documentos_excluidos (empresa_id, documento, usuario_id) VALUES ($1, $2, $3)
          ON CONFLICT (empresa_id, documento) DO NOTHING`,
         [empresaId, documento, usuarioId]
+      );
+    }
+    await client.query('COMMIT');
+  } catch (e) {
+    await client.query('ROLLBACK');
+    throw e;
+  } finally {
+    client.release();
+  }
+  return obter(empresaId);
+}
+
+// `excluidas`: a lista completa das condições de pagamento fora da DRE (a caixa da direita) — substitui a gravada.
+async function salvarCondicoes(empresaId, excluidas, usuarioId) {
+  const lista = [...new Set(excluidas.map((d) => String(d).trim()).filter(Boolean))];
+  const client = await pool.connect();
+  try {
+    await client.query('BEGIN');
+    await client.query('DELETE FROM dre_condicoes_excluidas WHERE empresa_id = $1 AND NOT (condicao = ANY($2::text[]))', [empresaId, lista]);
+    for (const condicao of lista) {
+      await client.query(
+        `INSERT INTO dre_condicoes_excluidas (empresa_id, condicao, usuario_id) VALUES ($1, $2, $3)
+         ON CONFLICT (empresa_id, condicao) DO NOTHING`,
+        [empresaId, condicao, usuarioId]
       );
     }
     await client.query('COMMIT');
@@ -222,4 +269,4 @@ async function previaPoc(empresaId) {
   return { ate, mascara, obras };
 }
 
-module.exports = { obter, salvarPocReceita, salvarAvaliacaoVertical, salvarDocumentos, previaPoc };
+module.exports = { obter, salvarPocReceita, salvarAvaliacaoVertical, salvarDocumentos, salvarCondicoes, previaPoc };
