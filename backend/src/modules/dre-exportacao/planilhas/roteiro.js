@@ -560,6 +560,9 @@ function escreverParametros(workbook, sheet, d, ctx, meta) {
   if (!condicoesFora.length) {
     cel(n, 2, 'Nenhuma: o valor do contrato é a soma de todas as condições.');
     n += 1;
+  } else {
+    cel(n, 2, 'Saem do valor do contrato (Venda de imóveis, Estorno de receita) e do recebido nos distratos (Receita com distrato).');
+    n += 1;
   }
   condicoesFora.forEach((x) => {
     cel(n, 2, x.nome || x.condicao);

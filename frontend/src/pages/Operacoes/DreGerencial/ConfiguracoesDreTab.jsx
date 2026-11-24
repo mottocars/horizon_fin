@@ -100,7 +100,7 @@ function Barra({ valor, cor }) {
 // - Tipos de documento financeiro: à direita = fora da DRE (somem da aba Financeiro); tipo novo que
 //   chegar do Sienge entra sempre à esquerda (só os excluídos ficam gravados).
 // - Condições de pagamento (contratos): o mesmo molde; à direita = fora da DRE (o valor delas sai do valor do
-//   contrato na aba Unidades e, com ele, da receita).
+//   contrato na aba Unidades e do recebido nos distratos: mudam as linhas de origem Contrato de Vendas).
 // Um "Salvar configurações" só, no fim da página.
 export default function ConfiguracoesDreTab({ empresaId }) {
   const [dados, setDados] = useState(null);
@@ -451,7 +451,7 @@ export default function ConfiguracoesDreTab({ empresaId }) {
       <Card>
         <SectionHeader
           titulo="Condições de pagamento (contratos)"
-          texto="Todas as condições de pagamento que aparecem nos contratos de venda (ATO, CHAVES, PARCELA MENSAL, DESCONTO…). O valor do contrato é a soma das condições dele: as condições à direita não entram na DRE e saem do valor do contrato (aba Unidades e receita). Toda condição nova que chegar do Sienge entra sempre à esquerda (considerada). Clique para destacar e use as setas."
+          texto="Todas as condições de pagamento que aparecem nos contratos de venda (ATO, CHAVES, PARCELA MENSAL, DESCONTO…). O valor do contrato é a soma das condições dele: as condições à direita não entram na DRE e mudam todas as linhas de origem Contrato de Vendas — saem do valor do contrato (Receita com venda de imóveis e Estorno de receita) e do recebido nos distratos (Receita com distratos). O Estorno de custo é pela fração ideal e não muda. Toda condição nova que chegar do Sienge entra sempre à esquerda (considerada). Clique para destacar e use as setas."
         />
         <div className="mt-4">
           {!dados.condicoes.length ? (

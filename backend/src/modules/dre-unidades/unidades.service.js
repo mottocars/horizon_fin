@@ -202,7 +202,10 @@ function ordenar(linhas) {
 //                 pelo ticket médio das vendas ativas (não canceladas) do mesmo tipo no mesmo
 //                 empreendimento (sem venda desse tipo, fica sem valor).
 // "Valor do contrato" = `value` (soma das condições de pagamento), não `total_selling_value`, menos as condições
-// de pagamento marcadas como fora da DRE na aba Configurações (dre_condicoes_excluidas — ex.: DESCONTO).
+// de pagamento marcadas como fora da DRE na aba Configurações (dre_condicoes_excluidas — ex.: DESCONTO). Pedido do
+// usuário (24/11/2026): tirar uma condição altera todas as linhas de origem Contrato de Vendas — Venda de imóveis e
+// Estorno de receita pelo valor do contrato; Receita com distrato sem o recebido nas parcelas dessas condições
+// (parcela do extrato → sie_income.payment_term_id). O Estorno de custo é por fração ideal: não muda.
 // Contrato com mais de uma unidade: o valor de cada uma é o do contrato × participação da unidade.
 // Guardada no cache da DRE (dre-versoes/cache.js): a DRE e a Projeção leem o mesmo (e cortam pelas datas).
 function listar(empresaId) {
@@ -245,10 +248,16 @@ async function montarLista(empresaId, limite = null) {
        JOIN sie_sales_contracts_units cu ON cu.sienge_contract_id = k.sienge_contract_id AND cu.empresa_id = k.empresa_id
        JOIN centros_custo_sienge cc ON cc.empresa_id = k.empresa_id AND cc.sienge_id = k.enterprise_id
        LEFT JOIN (
-         SELECT bill_id, SUM(value) AS recebido
-           FROM sie_extrato_contas
-          WHERE empresa_id = $1 AND statement_type_notes = 'Recebimento' AND bill_id IS NOT NULL
-          GROUP BY bill_id
+         SELECT e.bill_id, SUM(e.value) AS recebido
+           FROM sie_extrato_contas e
+          WHERE e.empresa_id = $1 AND e.statement_type_notes = 'Recebimento' AND e.bill_id IS NOT NULL
+            -- recebimento de parcela de condição de pagamento fora da DRE não é receita com distrato
+            AND NOT EXISTS (
+              SELECT 1
+                FROM sie_income i
+                JOIN dre_condicoes_excluidas x ON x.empresa_id = i.empresa_id AND x.condicao = TRIM(i.payment_term_id)
+               WHERE i.empresa_id = $1 AND i.bill_id = e.bill_id AND i.installment_id = e.installment_number)
+          GROUP BY e.bill_id
        ) r ON r.bill_id = k.receivable_bill_id
        LEFT JOIN (
          SELECT p.sienge_contract_id, SUM(p.total_value) AS fora

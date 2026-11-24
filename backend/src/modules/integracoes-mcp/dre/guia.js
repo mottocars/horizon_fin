@@ -117,7 +117,7 @@ const guia = {
       '### Tipos de documento fora da DRE',
       ...((extras.documentos_fora || []).length ? extras.documentos_fora.map((x) => `- ${x.documento} — ${nomes.get(x.documento) || ''}`) : ['- nenhum (todo tipo de documento entra)']),
       '### Condições de pagamento (contratos) fora da DRE',
-      'O valor do contrato (aba Unidades → receita) é a soma das condições de pagamento dele, menos as condições abaixo.',
+      'Valem para as linhas de origem Contrato de Vendas: o valor do contrato (Venda de imóveis, Estorno de receita) é a soma das condições de pagamento dele menos as abaixo, e a Receita com distrato não conta o recebido nas parcelas delas. O Estorno de custo (fração ideal) não muda.',
       ...((extras.condicoes_fora || []).length ? extras.condicoes_fora.map((x) => `- ${x.condicao} — ${x.nome || ''}`) : ['- nenhuma (o valor do contrato é a soma de todas as condições)']),
       '',
       '## De onde vem cada dado e quando foi atualizado',
