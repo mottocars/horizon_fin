@@ -451,6 +451,8 @@ export default function DfcFluxoTab({
     conta: { fundo: 'bg-white', texto: 'text-xs text-gray-500', py: 'py-px', borda: 'border-gray-100' },
   };
   const ehTotal = (tipo) => tipo === 'saldo' || tipo === 'resultado';
+  // Coluna Total: só o Resultado do mês leva a cor da linha (azul claro); Saldo inicial e Saldo final ficam
+  // vazios ali e seguem o azul da coluna Total (pedido do usuário).
   // Cor do número: negativo em vermelho; nas linhas de total, o azul escuro delas.
   const corValor = (v, tipo) =>
     v < 0 ? 'text-red-700' : ehTotal(tipo) ? 'text-[#174a70]' : tipo === 'n1' ? 'text-gray-900' : tipo === 'conta' ? 'text-gray-600' : 'text-gray-700';
@@ -519,7 +521,7 @@ export default function DfcFluxoTab({
             }}
             title="Mostrar o Total (realizado, projetado e desvio)"
             className={`sticky z-10 cursor-pointer border-b border-r border-b-blue-100 border-r-blue-200 transition-colors ${e.py} ${
-              ehTotal(tipo) ? 'bg-[#cfe0ee]' : tipo === 'n1' ? 'bg-blue-100 hover:bg-blue-200' : 'bg-blue-50 hover:bg-blue-100'
+              tipo === 'resultado' ? 'bg-[#cfe0ee]' : tipo === 'n1' ? 'bg-blue-100 hover:bg-blue-200' : 'bg-blue-50 hover:bg-blue-100'
             }`}
             style={{ left: LARGURA_PRIMEIRA }}
           />
@@ -531,9 +533,11 @@ export default function DfcFluxoTab({
               key={`total|${t}`}
               title={tipo === 'saldo' ? undefined : t === R ? 'Total realizado do período (meses até o atual)' : 'Total projetado do período (todos os meses)'}
               className={`sticky z-10 border-b border-b-blue-100 px-3 text-right text-xs tabular-nums transition-colors ${e.py} ${
-                ehTotal(tipo)
+                tipo === 'resultado'
                   ? 'bg-[#cfe0ee]'
-                  : t === P
+                  : tipo === 'saldo'
+                    ? 'bg-blue-50'
+                    : t === P
                     ? 'bg-[#fdf6d3]'
                     : tipo === 'n1'
                       ? 'bg-blue-100'
@@ -562,7 +566,7 @@ export default function DfcFluxoTab({
                     : `Total realizado ÷ projetado dos mesmos meses (até o atual: ${dinheiro(real || 0)} × ${dinheiro(proj)}). Inclui o mês atual, ainda em andamento.`
               }
               className={`sticky z-10 border-b border-r border-b-blue-100 border-r-blue-200 px-2 text-right text-[11px] tabular-nums transition-colors ${e.py} ${
-                ehTotal(tipo) ? 'bg-[#cfe0ee]' : tipo === 'n1' ? 'bg-blue-100' : 'bg-blue-50 group-hover/linha:bg-blue-100'
+                tipo === 'resultado' ? 'bg-[#cfe0ee]' : tipo === 'n1' ? 'bg-blue-100' : tipo === 'saldo' ? 'bg-blue-50' : 'bg-blue-50 group-hover/linha:bg-blue-100'
               } ${ehTotal(tipo) || tipo === 'n1' ? 'font-semibold' : ''} ${corDesvio(d)}`}
               style={{ left: esquerdaTotal[D] }}
             >
