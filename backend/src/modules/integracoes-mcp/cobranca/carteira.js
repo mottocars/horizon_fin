@@ -3,8 +3,9 @@ const gestaoParcelas = require('../../gestao-parcelas/gestaoParcelas.service');
 const { z, r2, CLUSTER_NOME, STATUS_PARCELA, isoDe, resolverCentros, resolverUsuario, resolverCliente } = require('./base');
 
 // cobranca_carteira — a aba Gestão das Parcelas (mesmo service da tela: buscarParcelasComCluster), com
-// os mesmos 3 valores do Nível 1 (Pago = valor original das pagas; Vencido = saldo das inadimplentes;
-// A vencer = saldo do resto em aberto), agrupada como o usuário pedir.
+// os mesmos 3 valores do Nível 1 (desde 25/11/2026 com acréscimos, multa e juros: Pago = líquido recebido das
+// pagas; Vencido = saldo corrigido + acréscimo do Sienge das inadimplentes; A vencer = o mesmo do resto em
+// aberto), agrupada como o usuário pedir.
 
 const AGRUPAR = {
   centro: (l) => `${l.cost_center_id} ${l.cost_center_name}`,
@@ -20,9 +21,10 @@ const AGRUPAR = {
 const carteiraTool = {
   name: 'cobranca_carteira',
   description:
-    'Aba Gestão das Parcelas: a carteira do universo da cobrança (pagas e em aberto), com os mesmos números da tela — Pago (valor original ' +
-    'das parcelas pagas), Vencido (saldo das inadimplentes, D acima do limite) e A vencer (saldo do resto em aberto, inclusive vencidas ' +
-    'dentro do limite) — mais clientes e parcelas, agrupada por centro, cluster, status, etapa atual da régua, responsável (etapa ou dono ' +
+    'Aba Gestão das Parcelas: a carteira do universo da cobrança (pagas e em aberto), com os mesmos números da tela — Pago (líquido recebido ' +
+    'das parcelas pagas: corrigido + acréscimos/multa/juros − desconto), Vencido (saldo corrigido + acréscimo do Sienge das inadimplentes, ' +
+    'D acima do limite) e A vencer (o mesmo do resto em aberto, inclusive vencidas dentro do limite); `acrescimo_em_aberto` = a parte de ' +
+    'acréscimo (multa + juros do dia, do Sienge) dentro de Vencido + A vencer — mais clientes e parcelas, agrupada por centro, cluster, status, etapa atual da régua, responsável (etapa ou dono ' +
     'na carteira), cliente, tipo de pagamento ou mês de vencimento. Filtros: centros, status, responsável, cliente/busca por nome.',
   inputSchema: {
     agrupar: z.enum(Object.keys(AGRUPAR)).default('centro'),
@@ -47,25 +49,28 @@ const carteiraTool = {
     if (cli) linhas = linhas.filter((l) => String(l.client_id) === String(cli.client_id));
     const chave = AGRUPAR[agrupar];
     const grupos = new Map();
-    const tot = { parcelas: 0, clientes: new Set(), pago: 0, vencido: 0, a_vencer: 0 };
+    const tot = { parcelas: 0, clientes: new Set(), pago: 0, vencido: 0, a_vencer: 0, acrescimo: 0 };
     for (const l of linhas) {
       const k = chave(l);
-      const g = grupos.get(k) || { grupo: k, parcelas: 0, clientes: new Set(), pago: 0, vencido: 0, a_vencer: 0 };
+      const g = grupos.get(k) || { grupo: k, parcelas: 0, clientes: new Set(), pago: 0, vencido: 0, a_vencer: 0, acrescimo: 0 };
       for (const alvo of [g, tot]) {
         alvo.parcelas++;
         alvo.clientes.add(String(l.client_id));
-        if (l.status === 'em_dia' || l.status === 'atraso') alvo.pago += l.valor_original;
-        else if (l.status === 'inadimplente') alvo.vencido += l.saldo_aberto;
-        else alvo.a_vencer += l.saldo_aberto;
+        if (l.status === 'em_dia' || l.status === 'atraso') alvo.pago += l.valor_total;
+        else {
+          if (l.status === 'inadimplente') alvo.vencido += l.valor_total;
+          else alvo.a_vencer += l.valor_total;
+          alvo.acrescimo += l.composicao?.acrescimos || 0;
+        }
       }
       grupos.set(k, g);
     }
-    const fmt = (g) => ({ ...(g.grupo ? { grupo: g.grupo } : {}), parcelas: g.parcelas, clientes: g.clientes.size, pago: r2(g.pago), vencido: r2(g.vencido), a_vencer: r2(g.a_vencer) });
+    const fmt = (g) => ({ ...(g.grupo ? { grupo: g.grupo } : {}), parcelas: g.parcelas, clientes: g.clientes.size, pago: r2(g.pago), vencido: r2(g.vencido), a_vencer: r2(g.a_vencer), acrescimo_em_aberto: r2(g.acrescimo) });
     const lista = [...grupos.values()].sort((a, b) => b.vencido - a.vencido || b.a_vencer - a.a_vencer).map(fmt);
     return {
       agrupado_por: agrupar,
       observacao:
-        'Parcela rateada em 2 centros conta nos 2 (como na tela). Pago = valor original da parcela (não o recebido). Responsável: o da etapa atual (modo por etapa) ou o dono do cliente na carteira (Distribuição automática).',
+        'Parcela rateada em 2 centros conta nos 2 (como na tela). Pago = líquido recebido (com multa, juros e acréscimos); Vencido/A vencer = saldo corrigido + acréscimo do Sienge (rotina diária do Monitor; o acréscimo cresce a cada dia de atraso). Responsável: o da etapa atual (modo por etapa) ou o dono do cliente na carteira (Distribuição automática).',
       total: fmt(tot),
       grupos: lista.slice(0, limite),
       grupos_total: lista.length,

@@ -12,6 +12,7 @@ const distribuicao = require('../regua-cobranca/distribuicao.service');
 const prevision = require('../prevision-dashboards/prevision.service');
 const centrosCusto = require('../centros-custo-sienge/centros.service');
 const planosFinanceiros = require('../planos-financeiros-sienge/planos.service');
+const acrescimos = require('../cobranca-acrescimos/acrescimos.service');
 
 // Catálogo das atualizações que o Monitor de Integrações agenda e executa.
 // Cada uma é a MESMA função que o botão da tela de origem já chamava — o
@@ -143,6 +144,27 @@ const CATALOGO = [
       progresso({ texto: 'Buscando o contas a receber no Sienge (pode levar alguns minutos)' });
       const r = await income.sincronizar(empresaId, porPagina(progresso, 'Buscando o contas a receber no Sienge'));
       return `${n(r.total_importado)} parcela(s) importada(s).`;
+    },
+  },
+  {
+    chave: 'cobranca_acrescimos',
+    alimenta: ['Gestão de Cobranças'],
+    nome: 'Acréscimos das parcelas vencidas (Sienge)',
+    descricao:
+      'Consulta no Sienge (Saldo Devedor Presente) o acréscimo do dia — multa e juros por atraso — de cada parcela vencida em aberto, cliente a cliente. É o que soma ao valor das parcelas na Rotina e na Gestão das Parcelas. Agende depois da atualização da base.',
+    integracao: 'sienge',
+    disponibilidade: semSienge,
+    async executar({ empresaId, progresso }) {
+      progresso({ texto: 'Consultando o saldo devedor dos clientes no Sienge' });
+      const r = await acrescimos.sincronizar(empresaId, progresso);
+      const brl = (v) => Number(v || 0).toLocaleString('pt-BR', { style: 'currency', currency: 'BRL' });
+      const avisos = [
+        r.sem_documento ? `${n(r.sem_documento)} cliente(s) sem CPF/CNPJ no cadastro ficaram de fora` : '',
+        r.falhas ? `${n(r.falhas)} consulta(s) falharam e mantiveram o valor anterior (${r.primeira_falha})` : '',
+      ].filter(Boolean);
+      return `${n(r.clientes)} cliente(s) consultado(s): ${n(r.parcelas)} parcela(s) vencida(s), ${n(r.com_acrescimo)} com acréscimo (total ${brl(r.total_acrescimo)}).${
+        avisos.length ? ` ${avisos.join('; ')}.` : ''
+      }`;
     },
   },
   {
@@ -369,6 +391,7 @@ const ORDEM = [
   'sienge_plano_contas',
   'cobranca_clientes',
   'cobranca_base',
+  'cobranca_acrescimos',
   'dfc_contas_pagar_base',
   'dfc_saldos_contas',
   'repasses_contratos',

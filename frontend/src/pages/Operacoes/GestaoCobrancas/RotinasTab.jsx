@@ -6,6 +6,7 @@ import RegistrarComunicacaoModal from './RegistrarComunicacaoModal';
 import CobrancaEmMassaModal from './CobrancaEmMassaModal';
 import RedistribuirClienteModal from './RedistribuirClienteModal';
 import HistoricoParcelaModal from './GestaoParcelas/HistoricoParcelaModal';
+import ComposicaoValor, { somarComposicoes } from './ComposicaoValor';
 import { listRotinas, desmarcarCanalRotina } from '../../../api/rotinas.api';
 import { listSiengeIntegracoes } from '../../../api/sienge.api';
 import { CLUSTER_ICON, CLUSTER_ICON_COR, CLUSTER_TAG_ESTILO, formatarData } from './GestaoParcelas/constantes';
@@ -18,10 +19,7 @@ const DIV_H = 'border-b border-gray-200';
 const DIV_V = 'border-l border-gray-200';
 const TOTAL_COLUNAS = 9;
 
-// Valores sem centavos — mesmo formato da Gestão das Parcelas.
-function formatarMoedaSemCentavos(valor) {
-  return (Number(valor) || 0).toLocaleString('pt-BR', { style: 'currency', currency: 'BRL', maximumFractionDigits: 0 });
-}
+// Valores sem centavos e clicáveis (composição do valor) — ComposicaoValor.jsx, o mesmo da Gestão das Parcelas.
 
 // Nome de exibição do cliente — mesmo fallback usado na célula da tabela
 // (linha 434 aprox.) — centralizado aqui porque o filtro de coluna precisa
@@ -100,10 +98,17 @@ function totaisDoResponsavel(centros) {
   for (const centro of centros) {
     for (const item of centro.itens) {
       itens++;
-      parcelas.set(`${item.bill_id}|${item.installment_id}`, Number(item.valor) || 0);
+      parcelas.set(`${item.bill_id}|${item.installment_id}`, item);
     }
   }
-  return { itens, titulos: parcelas.size, valor: [...parcelas.values()].reduce((s, v) => s + v, 0) };
+  const unicas = [...parcelas.values()];
+  return {
+    itens,
+    titulos: parcelas.size,
+    valor: unicas.reduce((s, i) => s + (Number(i.valor) || 0), 0),
+    // A conta do total (clique no valor): soma das composições de cada parcela.
+    composicao: somarComposicoes(unicas.map((i) => i.composicao)),
+  };
 }
 
 // Selo pequeno ao lado do nome do cliente, só na Distribuição automática:
@@ -832,7 +837,7 @@ export default function RotinasTab({
                         </td>
                         <td className={`${DIV_H} ${DIV_V} px-2 py-3`}></td>
                         <td className={`${DIV_H} ${DIV_V} px-2 py-3 text-center tabular-nums text-gray-700`}>
-                          {formatarMoedaSemCentavos(resp.totais.valor)}
+                          <ComposicaoValor valor={resp.totais.valor} composicao={resp.totais.composicao} />
                         </td>
                         <td className={`${DIV_H} ${DIV_V} px-2 py-3 text-center tabular-nums text-gray-700`}>
                           {resp.totais.titulos} {resp.totais.titulos === 1 ? 'título' : 'títulos'}
@@ -872,7 +877,7 @@ export default function RotinasTab({
                                 </td>
                                 <td className={`${DIV_H} ${DIV_V} px-2 py-2.5`}></td>
                                 <td className={`${DIV_H} ${DIV_V} px-2 py-2.5 text-center tabular-nums text-gray-700`}>
-                                  {formatarMoedaSemCentavos(centro.totais.valor)}
+                                  <ComposicaoValor valor={centro.totais.valor} composicao={centro.totais.composicao} />
                                 </td>
                                 <td className={`${DIV_H} ${DIV_V} px-2 py-2.5 text-center tabular-nums text-gray-700`}>
                                   {centro.totais.titulos} {centro.totais.titulos === 1 ? 'título' : 'títulos'}
@@ -929,7 +934,7 @@ export default function RotinasTab({
                                         </span>
                                       </td>
                                       <td className={`${DIV_H} ${DIV_V} px-2 py-2 text-center tabular-nums text-gray-700`}>
-                                        {formatarMoedaSemCentavos(item.valor)}
+                                        <ComposicaoValor valor={item.valor} composicao={item.composicao} />
                                       </td>
                                       <td className={`${DIV_H} ${DIV_V} whitespace-nowrap px-2 py-2 text-center text-gray-500`}>
                                         {siengeTenant ? (

@@ -5,6 +5,40 @@ const {
   CONDICAO_TIPO_PAGAMENTO,
 } = require('../regua-cobranca/reguaCobranca.service');
 const { mapaDonosCarteira } = require('../regua-cobranca/distribuicao.service');
+const acrescimos = require('../cobranca-acrescimos/acrescimos.service');
+const composicao = require('../cobranca-acrescimos/composicao');
+
+// Valores das colunas Pagas / Vencidas / A vencer (pedido de 25/11/2026): o TOTAL de cada parcela, com
+// acréscimos, multa e juros — paga = líquido dos recebimentos; em aberto = saldo corrigido + acréscimo do
+// Sienge (vencida). Cada valor leva a composição (composicao.js), que a tela mostra ao clicar.
+function composicaoDaLinha(row, { paga, vencida, acrescimoPorParcela }) {
+  const original = Number(row.original_amount) || 0;
+  if (paga) return composicao.paga({ original, rec: row });
+  return composicao.aberta({
+    original,
+    saldo: Number(row.corrected_balance_amount) || 0,
+    acr: acrescimoPorParcela.get(`${row.bill_id}|${row.installment_id}`),
+    vencida,
+  });
+}
+
+// Coluna (pago / vencido / a_vencer) de uma linha pelo status dela.
+const colunaDoStatus = (status) => (status === 'em_dia' || status === 'atraso' ? 'pago' : status === 'inadimplente' ? 'vencido' : 'a_vencer');
+
+// Somas por coluna de um agrupamento (Centro de Custo, Cliente/Título).
+function acumuladorColunas() {
+  const s = { pago: composicao.somador(), vencido: composicao.somador(), a_vencer: composicao.somador() };
+  const v = { pago: 0, vencido: 0, a_vencer: 0 };
+  return {
+    add(linha) {
+      const col = colunaDoStatus(linha.status);
+      v[col] += linha.valor_total;
+      s[col].add(linha.composicao);
+    },
+    valores: () => ({ valor_pago: v.pago, valor_vencido: v.vencido, valor_a_vencer: v.a_vencer }),
+    composicao: () => ({ pago: s.pago.valor(), vencido: s.vencido.valor(), a_vencer: s.a_vencer.valor() }),
+  };
+}
 
 const CLUSTERS_VALIDOS = ['novo', 'bom', 'duvidoso', 'mau', 'inad'];
 const CLUSTERS_SCORE = ['novo', 'bom', 'duvidoso', 'mau'];
@@ -245,6 +279,7 @@ async function buscarParcelasComCluster(empresaId, { costCenterIds, search, stat
   const limite = await getLimiteVigente(empresaId);
   const etapasPorCluster = await carregarEtapasPorCluster(empresaId);
   const donos = await mapaDonosCarteira(empresaId);
+  const acrescimoPorParcela = await acrescimos.mapa(empresaId);
 
   const params = [empresaId];
   let filtroCentro = '';
@@ -263,7 +298,7 @@ async function buscarParcelasComCluster(empresaId, { costCenterIds, search, stat
             si.client_id, si.client_name, si.bill_id, si.installment_id,
             si.due_date, si.corrected_balance_amount, si.original_amount, si.installment_number,
             si.payment_term_description,
-            COALESCE(ccc.cluster, 'novo') AS cluster, pg.ultimo_pagamento
+            COALESCE(ccc.cluster, 'novo') AS cluster, pg.*
      FROM sie_income si
      JOIN sie_income_categorias cat
        ON cat.bill_id = si.bill_id AND cat.installment_id = si.installment_id AND cat.empresa_id = si.empresa_id
@@ -275,14 +310,10 @@ async function buscarParcelasComCluster(empresaId, { costCenterIds, search, stat
        ON ccc.empresa_id = si.empresa_id AND ccc.client_id = si.client_id
      LEFT JOIN sie_customers_comunicar com
        ON com.empresa_id = si.empresa_id AND com.client_id = si.client_id
-     LEFT JOIN LATERAL (
-       -- Último recebimento só desta parcela, pelo índice (bill_id, installment_id, empresa_id). Antes era
-       -- um GROUP BY de todos os recebimentos da empresa: com a busca por nome o planejador repetia esse
-       -- agrupamento por linha (7–9 s na GENESIS).
-       SELECT MAX(r.payment_date) AS ultimo_pagamento
-       FROM sie_income_recebimentos r
-       WHERE r.bill_id = si.bill_id AND r.installment_id = si.installment_id AND r.empresa_id = si.empresa_id
-     ) pg ON TRUE
+     -- Último recebimento e as somas dos recebimentos só desta parcela, pelo índice (bill_id, installment_id,
+     -- empresa_id). Antes era um GROUP BY de todos os recebimentos da empresa: com a busca por nome o
+     -- planejador repetia esse agrupamento por linha (7–9 s na GENESIS).
+     ${composicao.LATERAL_RECEBIMENTOS}
      WHERE si.empresa_id = $1
        AND COALESCE(com.comunicar, TRUE) = TRUE
        AND ${CONDICAO_TIPO_PAGAMENTO}${filtroCentro}${filtroBusca}`,
@@ -327,6 +358,7 @@ async function buscarParcelasComCluster(empresaId, { costCenterIds, search, stat
         etapaResponsavelNome = responsavel.nome;
       }
 
+      const comp = composicaoDaLinha(row, { paga, vencida: diasSigned > 0, acrescimoPorParcela });
       return {
         cost_center_id: row.cost_center_id,
         cost_center_name: row.cost_center_name,
@@ -344,6 +376,8 @@ async function buscarParcelasComCluster(empresaId, { costCenterIds, search, stat
         etapa_responsavel_nome: etapaResponsavelNome,
         valor_original: Number(row.original_amount) || 0,
         saldo_aberto: saldoAberto,
+        valor_total: comp.total,
+        composicao: comp,
       };
     })
     .filter((linha) => !filtroStatus || filtroStatus.has(linha.status))
@@ -368,18 +402,13 @@ async function getResumoPorCentroCusto(empresaId, filtros = {}) {
         cost_center_id: linha.cost_center_id,
         cost_center_name: linha.cost_center_name,
         clientesPorCluster: { novo: new Set(), bom: new Set(), duvidoso: new Set(), mau: new Set() },
-        valor_pago: 0,
-        valor_vencido: 0,
-        valor_a_vencer: 0,
+        colunas: acumuladorColunas(),
       });
     }
     const centro = porCentro.get(chave);
     const cluster = CLUSTERS_SCORE.includes(linha.cluster) ? linha.cluster : 'novo';
     centro.clientesPorCluster[cluster].add(String(linha.client_id));
-
-    if (linha.status === 'em_dia' || linha.status === 'atraso') centro.valor_pago += linha.valor_original;
-    else if (linha.status === 'inadimplente') centro.valor_vencido += linha.saldo_aberto;
-    else centro.valor_a_vencer += linha.saldo_aberto;
+    centro.colunas.add(linha);
   }
 
   return [...porCentro.values()]
@@ -395,9 +424,8 @@ async function getResumoPorCentroCusto(empresaId, filtros = {}) {
         cost_center_name: centro.cost_center_name,
         clusters,
         total_clientes: totalClientes,
-        valor_pago: centro.valor_pago,
-        valor_vencido: centro.valor_vencido,
-        valor_a_vencer: centro.valor_a_vencer,
+        ...centro.colunas.valores(),
+        composicao: centro.colunas.composicao(),
       };
     })
     .filter((centro) => centro.total_clientes > 0)
@@ -434,16 +462,12 @@ async function listClientesPorCentroCusto(empresaId, costCenterId, filtros = {})
         client_name: linha.client_name,
         bill_id: linha.bill_id,
         cluster: CLUSTERS_SCORE.includes(linha.cluster) ? linha.cluster : 'novo',
-        valor_pago: 0,
-        valor_vencido: 0,
-        valor_a_vencer: 0,
+        colunas: acumuladorColunas(),
         parcelas: [],
       });
     }
     const titulo = porTitulo.get(chave);
-    if (linha.status === 'em_dia' || linha.status === 'atraso') titulo.valor_pago += linha.valor_original;
-    else if (linha.status === 'inadimplente') titulo.valor_vencido += linha.saldo_aberto;
-    else titulo.valor_a_vencer += linha.saldo_aberto;
+    titulo.colunas.add(linha);
     titulo.parcelas.push(linha);
   }
 
@@ -458,9 +482,8 @@ async function listClientesPorCentroCusto(empresaId, costCenterId, filtros = {})
         client_name: titulo.client_name,
         bill_id: titulo.bill_id,
         cluster: titulo.cluster,
-        valor_pago: titulo.valor_pago,
-        valor_vencido: titulo.valor_vencido,
-        valor_a_vencer: titulo.valor_a_vencer,
+        ...titulo.colunas.valores(),
+        composicao: titulo.colunas.composicao(),
         parcela_atual: parcelaAtual?.installment_number || null,
         parcela_atual_installment_id: parcelaAtual?.installment_id ?? null,
       };
@@ -493,13 +516,15 @@ async function listClientesPorCentroCusto(empresaId, costCenterId, filtros = {})
 // `valor_pago`/`valor_vencido`/`valor_a_vencer`: mesmo trio de colunas dos
 // Níveis 1/2 (buscarParcelasComCluster), só que aqui é o valor de 1 parcela
 // só — sempre com só um dos três preenchido (os outros dois zerados),
-// espelhando o status desta mesma linha. Pago usa `original_amount` (o
-// valor cheio da parcela, já que o saldo em aberto dela é zero); vencido/a
-// vencer usam `corrected_balance_amount` (o que ainda falta pagar).
+// espelhando o status desta mesma linha. Desde 25/11/2026 é o TOTAL com
+// acréscimos (composicaoDaLinha): pago = líquido dos recebimentos (com multa e
+// juros); vencido/a vencer = saldo corrigido + acréscimo do Sienge. A
+// composição de cada valor vai em `composicao` (a tela mostra ao clicar).
 async function listParcelasPorTitulo(empresaId, costCenterId, billId, filtros = {}) {
   const limite = await getLimiteVigente(empresaId);
   const etapasPorCluster = await carregarEtapasPorCluster(empresaId);
   const donos = await mapaDonosCarteira(empresaId);
+  const acrescimoPorParcela = await acrescimos.mapa(empresaId);
 
   const params = [empresaId, billId];
   let filtroCentro = '';
@@ -511,20 +536,15 @@ async function listParcelasPorTitulo(empresaId, costCenterId, billId, filtros = 
   const { rows } = await pool.query(
     `SELECT si.bill_id, si.installment_id, si.client_id, si.due_date, si.corrected_balance_amount, si.original_amount,
             si.payment_term_description, si.installment_number,
-            pg.ultimo_pagamento, COALESCE(ccc.cluster, 'novo') AS cluster
+            pg.*, COALESCE(ccc.cluster, 'novo') AS cluster
      FROM sie_income si
      JOIN sie_income_categorias cat
        ON cat.bill_id = si.bill_id AND cat.installment_id = si.installment_id AND cat.empresa_id = si.empresa_id
      LEFT JOIN cobranca_clientes_clusters ccc
        ON ccc.empresa_id = si.empresa_id AND ccc.client_id = si.client_id
-     LEFT JOIN LATERAL (
-       -- Último recebimento só desta parcela, pelo índice (bill_id, installment_id, empresa_id). Antes era
-       -- um GROUP BY de todos os recebimentos da empresa: com a busca por nome o planejador repetia esse
-       -- agrupamento por linha (7–9 s na GENESIS).
-       SELECT MAX(r.payment_date) AS ultimo_pagamento
-       FROM sie_income_recebimentos r
-       WHERE r.bill_id = si.bill_id AND r.installment_id = si.installment_id AND r.empresa_id = si.empresa_id
-     ) pg ON TRUE
+     -- Último recebimento e as somas dos recebimentos só desta parcela (mesmo LATERAL de
+     -- buscarParcelasComCluster).
+     ${composicao.LATERAL_RECEBIMENTOS}
      WHERE si.empresa_id = $1 AND si.bill_id = $2
        AND ${CONDICAO_TIPO_PAGAMENTO}${filtroCentro}
      ORDER BY si.installment_id ASC`,
@@ -570,7 +590,8 @@ async function listParcelasPorTitulo(empresaId, costCenterId, billId, filtros = 
         etapaResponsavelNome = responsavel.nome;
       }
 
-      const saldoAberto = Number(row.corrected_balance_amount) || 0;
+      const comp = composicaoDaLinha(row, { paga, vencida: diasSigned > 0, acrescimoPorParcela });
+      const coluna = colunaDoStatus(status);
       return {
         bill_id: row.bill_id,
         installment_id: row.installment_id,
@@ -581,9 +602,10 @@ async function listParcelasPorTitulo(empresaId, costCenterId, billId, filtros = 
         etapa_nome: etapaNome,
         etapa_responsavel_id: etapaResponsavelId,
         responsavel_nome: etapaResponsavelNome,
-        valor_pago: paga ? Number(row.original_amount) || 0 : 0,
-        valor_vencido: status === 'inadimplente' ? saldoAberto : 0,
-        valor_a_vencer: status === 'a_vencer' ? saldoAberto : 0,
+        valor_pago: coluna === 'pago' ? comp.total : 0,
+        valor_vencido: coluna === 'vencido' ? comp.total : 0,
+        valor_a_vencer: coluna === 'a_vencer' ? comp.total : 0,
+        composicao: { pago: null, vencido: null, a_vencer: null, [coluna]: comp },
       };
     })
     .filter((p) => !filtroStatus || filtroStatus.has(p.status))
@@ -613,9 +635,9 @@ async function listParaExportacao(empresaId, filtros = {}) {
       etapa_nome: linha.etapa_nome || '',
       responsavel_nome: linha.etapa_responsavel_nome || '',
       due_date: linha.due_date,
-      valor_pago: linha.status === 'em_dia' || linha.status === 'atraso' ? linha.valor_original : 0,
-      valor_vencido: linha.status === 'inadimplente' ? linha.saldo_aberto : 0,
-      valor_a_vencer: linha.status === 'a_vencer' ? linha.saldo_aberto : 0,
+      valor_pago: colunaDoStatus(linha.status) === 'pago' ? linha.valor_total : 0,
+      valor_vencido: colunaDoStatus(linha.status) === 'vencido' ? linha.valor_total : 0,
+      valor_a_vencer: colunaDoStatus(linha.status) === 'a_vencer' ? linha.valor_total : 0,
       installment_id: linha.installment_id,
     }))
     .sort(

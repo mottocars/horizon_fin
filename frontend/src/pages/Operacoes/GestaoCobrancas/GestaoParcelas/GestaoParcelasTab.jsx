@@ -2,6 +2,7 @@ import { Fragment, memo, useCallback, useEffect, useRef, useState } from 'react'
 import { Minus, Plus, Receipt } from 'lucide-react';
 import Card from '../../../../components/Card';
 import HistoricoParcelaModal from './HistoricoParcelaModal';
+import ComposicaoValor from '../ComposicaoValor';
 import {
   getResumoPorCentroCustoParcelas,
   listClientesPorCentroCusto,
@@ -29,12 +30,8 @@ const TOTAL_COLUNAS = 3 + CLUSTER_ORDEM.length + 2 + 3;
 const DIV_H = 'border-b border-gray-200';
 const DIV_V = 'border-l border-gray-200';
 
-// Mesmo formatarMoeda de ClustersCobranca/constantes.js, sem os centavos —
-// só nesta tabela (pedido do usuário: "pode retirar os números após a
-// vírgula"), pra não mexer no formato usado no resto do módulo.
-function formatarMoedaSemCentavos(valor) {
-  return (Number(valor) || 0).toLocaleString('pt-BR', { style: 'currency', currency: 'BRL', maximumFractionDigits: 0 });
-}
+// Valores sem centavos (pedido do usuário: "pode retirar os números após a vírgula") e clicáveis, com a
+// composição do valor (Original, Corrigido, Acréscimos, Multa, Juros, Desconto, Total) — ComposicaoValor.jsx.
 
 // installment_number (sie_income) vem no formato "3/12" (parcela 3 de 12) —
 // mesmo helper de RotinasTab.jsx::numeroParcela, duplicado aqui de
@@ -352,9 +349,9 @@ function GestaoParcelasTab({
                         <td className={`${DIV_H} ${DIV_V} px-2 py-3 text-center`}></td>
                         <td className={`${DIV_H} ${DIV_V} px-2 py-3 text-center`}></td>
                         <td className={`${DIV_H} ${DIV_V} px-2 py-3 text-center`}></td>
-                        <td className={`${DIV_H} ${DIV_V} px-2 py-3 text-center tabular-nums text-gray-700`}>{formatarMoedaSemCentavos(centro.valor_pago)}</td>
-                        <td className={`${DIV_H} ${DIV_V} px-2 py-3 text-center tabular-nums text-red-600`}>{formatarMoedaSemCentavos(centro.valor_vencido)}</td>
-                        <td className={`${DIV_H} ${DIV_V} px-2 py-3 text-center tabular-nums text-gray-700`}>{formatarMoedaSemCentavos(centro.valor_a_vencer)}</td>
+                        <td className={`${DIV_H} ${DIV_V} px-2 py-3 text-center tabular-nums text-gray-700`}><ComposicaoValor valor={centro.valor_pago} composicao={centro.composicao?.pago} /></td>
+                        <td className={`${DIV_H} ${DIV_V} px-2 py-3 text-center tabular-nums text-red-600`}><ComposicaoValor valor={centro.valor_vencido} composicao={centro.composicao?.vencido} /></td>
+                        <td className={`${DIV_H} ${DIV_V} px-2 py-3 text-center tabular-nums text-gray-700`}><ComposicaoValor valor={centro.valor_a_vencer} composicao={centro.composicao?.a_vencer} /></td>
                       </tr>
 
                       {centroAberto && carregandoClientes && (
@@ -408,9 +405,9 @@ function GestaoParcelasTab({
                                 <td className={`${DIV_H} ${DIV_V} px-2 py-2.5 text-center`}></td>
                                 <td className={`${DIV_H} ${DIV_V} px-2 py-2.5 text-center`}></td>
                                 <td className={`${DIV_H} ${DIV_V} px-2 py-2.5 text-center`}></td>
-                                <td className={`${DIV_H} ${DIV_V} px-2 py-2.5 text-center tabular-nums text-gray-700`}>{formatarMoedaSemCentavos(cliente.valor_pago)}</td>
-                                <td className={`${DIV_H} ${DIV_V} px-2 py-2.5 text-center tabular-nums text-red-600`}>{formatarMoedaSemCentavos(cliente.valor_vencido)}</td>
-                                <td className={`${DIV_H} ${DIV_V} px-2 py-2.5 text-center tabular-nums text-gray-700`}>{formatarMoedaSemCentavos(cliente.valor_a_vencer)}</td>
+                                <td className={`${DIV_H} ${DIV_V} px-2 py-2.5 text-center tabular-nums text-gray-700`}><ComposicaoValor valor={cliente.valor_pago} composicao={cliente.composicao?.pago} /></td>
+                                <td className={`${DIV_H} ${DIV_V} px-2 py-2.5 text-center tabular-nums text-red-600`}><ComposicaoValor valor={cliente.valor_vencido} composicao={cliente.composicao?.vencido} /></td>
+                                <td className={`${DIV_H} ${DIV_V} px-2 py-2.5 text-center tabular-nums text-gray-700`}><ComposicaoValor valor={cliente.valor_a_vencer} composicao={cliente.composicao?.a_vencer} /></td>
                               </tr>
 
                               {clienteAberto && carregandoParcelas && (
@@ -485,9 +482,9 @@ function GestaoParcelasTab({
                                       >
                                         {parcela.responsavel_nome || '—'}
                                       </td>
-                                      <td className={`${DIV_H} ${DIV_V} px-2 py-2 text-center text-xs tabular-nums text-gray-700`}>{formatarMoedaSemCentavos(parcela.valor_pago)}</td>
-                                      <td className={`${DIV_H} ${DIV_V} px-2 py-2 text-center text-xs tabular-nums text-red-600`}>{formatarMoedaSemCentavos(parcela.valor_vencido)}</td>
-                                      <td className={`${DIV_H} ${DIV_V} px-2 py-2 text-center text-xs tabular-nums text-gray-700`}>{formatarMoedaSemCentavos(parcela.valor_a_vencer)}</td>
+                                      <td className={`${DIV_H} ${DIV_V} px-2 py-2 text-center text-xs tabular-nums text-gray-700`}><ComposicaoValor valor={parcela.valor_pago} composicao={parcela.composicao?.pago} /></td>
+                                      <td className={`${DIV_H} ${DIV_V} px-2 py-2 text-center text-xs tabular-nums text-red-600`}><ComposicaoValor valor={parcela.valor_vencido} composicao={parcela.composicao?.vencido} /></td>
+                                      <td className={`${DIV_H} ${DIV_V} px-2 py-2 text-center text-xs tabular-nums text-gray-700`}><ComposicaoValor valor={parcela.valor_a_vencer} composicao={parcela.composicao?.a_vencer} /></td>
                                     </tr>
                                   );
                                 })}

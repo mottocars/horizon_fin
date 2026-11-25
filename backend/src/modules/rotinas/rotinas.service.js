@@ -10,6 +10,8 @@ const {
 const usuariosService = require('../usuarios/usuarios.service');
 const distribuicao = require('../regua-cobranca/distribuicao.service');
 const { ehAdministradorCobranca } = require('../cobranca-acesso/cobrancaAcesso.service');
+const acrescimos = require('../cobranca-acrescimos/acrescimos.service');
+const composicao = require('../cobranca-acrescimos/composicao');
 
 const CLUSTERS_VALIDOS = ['novo', 'bom', 'duvidoso', 'mau', 'inad'];
 const UM_DIA_MS = 24 * 60 * 60 * 1000;
@@ -126,6 +128,8 @@ async function calcularItens(empresaId, etapasRows, { dataInicio, dataFim, costC
     [empresaId]
   );
   const clusterPorCliente = new Map(clusterRows.map((r) => [String(r.client_id), r.cluster]));
+  // Acréscimo (multa + juros) do Sienge das parcelas vencidas — o Valor da Rotina é o total a cobrar.
+  const acrescimoPorParcela = await acrescimos.mapa(empresaId);
 
   const params = [empresaId];
   let filtroCentro = '';
@@ -150,7 +154,7 @@ async function calcularItens(empresaId, etapasRows, { dataInicio, dataFim, costC
   const { rows } = await pool.query(
     `SELECT si.bill_id, si.installment_id, si.client_id, si.client_name, si.due_date,
             si.document_identification_name, si.document_number, si.installment_number,
-            si.corrected_balance_amount, cat.cost_center_id, cat.cost_center_name
+            si.corrected_balance_amount, si.original_amount, cat.cost_center_id, cat.cost_center_name
      FROM sie_income si
      JOIN sie_income_categorias cat
        ON cat.bill_id = si.bill_id AND cat.installment_id = si.installment_id AND cat.empresa_id = si.empresa_id
@@ -190,6 +194,15 @@ async function calcularItens(empresaId, etapasRows, { dataInicio, dataFim, costC
       if (data < dataInicio || data > dataFim) continue;
       if (!ultima || etapa.dias >= ultima.etapa.dias) ultima = { etapa, data };
     }
+    // Valor da parcela = saldo corrigido + acréscimo do Sienge (vencida); o clique no valor mostra a conta.
+    const comp = ultima
+      ? composicao.aberta({
+          original: Number(row.original_amount) || 0,
+          saldo: Number(row.corrected_balance_amount) || 0,
+          acr: acrescimoPorParcela.get(`${row.bill_id}|${row.installment_id}`),
+          vencida: diasSigned > 0,
+        })
+      : null;
     for (const { etapa, data } of ultima ? [ultima] : []) {
 
       // Prévia de verdade do que seria enviado — mesma substituição usada
@@ -239,7 +252,8 @@ async function calcularItens(empresaId, etapasRows, { dataInicio, dataFim, costC
         document_identification_name: row.document_identification_name,
         document_number: row.document_number,
         installment_number: row.installment_number,
-        valor: row.corrected_balance_amount,
+        valor: comp.total,
+        composicao: comp,
         mensagem_whatsapp: mensagemWhatsapp,
         mensagem_email: mensagemEmail,
         assunto_email: assuntoEmail,
@@ -393,6 +407,7 @@ async function listRotinas(empresaId, usuarioId, { dataInicio, dataFim, costCent
       document_number: item.document_number,
       installment_number: item.installment_number,
       valor: item.valor,
+      composicao: item.composicao,
       mensagem_whatsapp: item.mensagem_whatsapp,
       mensagem_email: item.mensagem_email,
       assunto_email: item.assunto_email,
