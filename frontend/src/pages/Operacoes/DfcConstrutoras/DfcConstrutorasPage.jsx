@@ -218,6 +218,7 @@ export default function DfcConstrutorasPage() {
   // Busca (código ou descrição) da aba Centros Custos — só conveniência de navegador, não fica
   // na URL (mesma convenção das buscas da DRE).
   const [buscaCentros, setBuscaCentros] = useState('');
+  const [situacaoCentros, setSituacaoCentros] = useState('ATIVOS'); // aba Centros Custos: 'ATIVOS' | 'INATIVOS' | 'TODOS'
 
   // Aba Contas Correntes: busca (conveniência de navegador) e o ícone de buscar as contas no Sienge
   // (a aba faz a busca — `contasTabRef.current.sincronizar()`).
@@ -719,6 +720,25 @@ export default function DfcConstrutorasPage() {
               </div>
             )}
 
+            {/* Situação do centro no Sienge: por padrão só os ativos; também só os inativos ou todos (igual à
+                aba Centros Custos da DRE Gerencial). */}
+            {abaAtiva === 'centros-custos' && (
+              <div className="sm:w-40">
+                <label className="mb-1 block text-sm font-medium text-gray-700">Situação</label>
+                <SearchableSelect
+                  value={situacaoCentros}
+                  onChange={(v) => setSituacaoCentros(v || 'ATIVOS')}
+                  options={[
+                    { value: 'ATIVOS', label: 'Ativos' },
+                    { value: 'INATIVOS', label: 'Inativos' },
+                    { value: 'TODOS', label: 'Todos' },
+                  ]}
+                  clearable={false}
+                  disabled={!empresaId}
+                />
+              </div>
+            )}
+
             {abaAtiva === 'contas-correntes' && (
               <div className="sm:min-w-56 sm:max-w-sm sm:flex-1">
                 <label className="mb-1 block text-sm font-medium text-gray-700">Buscar</label>
@@ -1018,7 +1038,7 @@ export default function DfcConstrutorasPage() {
         ) : tabAtiva.id === 'ciweb' ? (
           <DfcCiwebTab ref={ciwebTabRef} empresaId={empresaId} search={buscaCiweb} tipo={tipoCiweb} />
         ) : tabAtiva.id === 'centros-custos' ? (
-          <DfcCentrosTab empresaId={empresaId} search={buscaCentros} />
+          <DfcCentrosTab empresaId={empresaId} search={buscaCentros} situacao={situacaoCentros} />
         ) : tabAtiva.id === 'parametros' ? (
           <DfcParametrosTab
             ref={parametrosTabRef}

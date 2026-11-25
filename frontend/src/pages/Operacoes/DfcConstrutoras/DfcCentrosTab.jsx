@@ -37,7 +37,8 @@ function opcoesComValorAtual(opcoes, valor) {
 // Código Prevision só aparecem pra Obra e são as MESMAS colunas do cadastro do centro de custo
 // (Código Contrato Caixa / Código Prevision) — mudar aqui muda lá. Cada mudança salva na hora,
 // com o mesmo indicador de salvamento da aba Máscaras.
-export default function DfcCentrosTab({ empresaId, search }) {
+// `situacao` (filtro ao lado do Buscar): 'ATIVOS' (padrão), 'INATIVOS' ou 'TODOS' — status do centro no Sienge.
+export default function DfcCentrosTab({ empresaId, search, situacao = 'ATIVOS' }) {
   const [centros, setCentros] = useState([]);
   const [contratos, setContratos] = useState([]);
   const [projetos, setProjetos] = useState([]);
@@ -88,14 +89,16 @@ export default function DfcCentrosTab({ empresaId, search }) {
 
   const filtrados = useMemo(() => {
     const termo = search.trim().toLowerCase();
-    if (!termo) return centros;
+    const situacaoOk = (c) => situacao === 'TODOS' || (situacao === 'INATIVOS') === (c.status !== 'ATIVO');
     return centros.filter(
       (c) =>
-        String(c.sienge_id).includes(termo) ||
-        c.name.toLowerCase().includes(termo) ||
-        (c.apelido || '').toLowerCase().includes(termo)
+        situacaoOk(c) &&
+        (!termo ||
+          String(c.sienge_id).includes(termo) ||
+          c.name.toLowerCase().includes(termo) ||
+          (c.apelido || '').toLowerCase().includes(termo))
     );
-  }, [centros, search]);
+  }, [centros, search, situacao]);
 
   // Atualiza a linha na hora e grava; se falhar, volta a linha pro que estava.
   async function alterar(centro, patch) {
