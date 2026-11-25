@@ -179,7 +179,7 @@ const DfcMascarasTab = forwardRef(function DfcMascarasTab({ empresaId }, ref) {
       },
       {
         campo: 'parcela_origens',
-        label: 'Origens',
+        label: 'Tipo Projeção',
         title: 'Origens que compõem a máscara (uma ou mais)',
         nivel: 2,
         largura: 'w-48',
