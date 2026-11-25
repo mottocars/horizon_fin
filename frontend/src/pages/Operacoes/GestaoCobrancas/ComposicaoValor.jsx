@@ -1,9 +1,10 @@
-import { useEffect, useLayoutEffect, useRef, useState } from 'react';
+import { useEffect, useState } from 'react';
+import { X } from 'lucide-react';
 import { createPortal } from 'react-dom';
 import { formatarData, formatarDataHora, formatarMoeda } from './ClustersCobranca/constantes';
 
 // Valor das colunas da Rotina e da Gestão das Parcelas com a conta por trás (pedido de 25/11/2026): clicar
-// no valor abre um quadro com
+// no valor abre uma janela com
 //   Valor Original | Valor Corrigido + Acréscimos (+ Multa + Juros) − Desconto = Total
 // `composicao` vem do backend (cobranca-acrescimos/composicao.js): 'aberta' (acréscimo do Sienge, sem
 // separar multa e juros), 'paga' (somas dos recebimentos) ou 'soma' (linhas de agrupamento).
@@ -69,10 +70,9 @@ function Quadro({ composicao: c }) {
     }
   }
   return (
-    <div className="w-72 text-xs">
-      <p className="mb-2 font-semibold text-gray-900">Composição do valor</p>
+    <div className="text-sm">
       <Linha rotulo="Valor Original" valor={c.original} />
-      <div className="my-1.5 border-t border-gray-200" />
+      <div className="my-2 border-t border-gray-200" />
       <Linha rotulo="Valor Corrigido" valor={c.corrigido} />
       <Linha sinal="+" rotulo="Acréscimos" valor={c.acrescimos} fraco={!c.acrescimos} />
       {comMultaJuros && <Linha sinal="+" rotulo="Multa" valor={c.multa} fraco={!c.multa} />}
@@ -81,10 +81,10 @@ function Quadro({ composicao: c }) {
       {/* Só quando existem (poucas baixas): sem elas o Total não bateria com o líquido recebido. */}
       {Boolean(c.impostos) && <Linha sinal="−" rotulo="Impostos retidos" valor={c.impostos} />}
       {Boolean(c.seguro_taxa) && <Linha sinal="+" rotulo="Seguro / taxa adm." valor={c.seguro_taxa} />}
-      <div className="my-1.5 border-t border-gray-300" />
+      <div className="my-2 border-t border-gray-300" />
       <Linha sinal="=" rotulo="Total" valor={c.total} forte />
       {notas.length > 0 && (
-        <div className="mt-2 space-y-1 border-t border-gray-100 pt-2 text-[11px] leading-snug text-gray-500">
+        <div className="mt-3 space-y-1 border-t border-gray-100 pt-3 text-xs leading-snug text-gray-500">
           {notas.map((n) => (
             <p key={n}>{n}</p>
           ))}
@@ -94,58 +94,32 @@ function Quadro({ composicao: c }) {
   );
 }
 
-// O valor (sem centavos, como nas tabelas) clicável. Sem composição (ou valor zerado sem nada por trás),
-// mostra só o texto. O clique não abre/fecha a linha da tabela (stopPropagation).
+// O valor (sem centavos, como nas tabelas) clicável: abre a composição numa janela no centro da tela, que
+// fecha ao clicar fora (no fundo escurecido), no X ou com Esc. Sem composição, mostra só o texto.
+// Os cliques não chegam à linha da tabela (que abre/fecha ao ser clicada): o portal do React repassa os
+// eventos aos componentes de cima, então o botão e a janela param a propagação.
 export default function ComposicaoValor({ valor, composicao, className = '' }) {
   const [aberto, setAberto] = useState(false);
-  const [pos, setPos] = useState(null);
-  const botaoRef = useRef(null);
-  const quadroRef = useRef(null);
-
-  useLayoutEffect(() => {
-    if (!aberto || !botaoRef.current) return;
-    const b = botaoRef.current.getBoundingClientRect();
-    const largura = 304; // w-72 + padding
-    const altura = quadroRef.current?.offsetHeight || 240;
-    const left = Math.max(8, Math.min(b.left + b.width / 2 - largura / 2, window.innerWidth - largura - 8));
-    const cabeAbaixo = b.bottom + 6 + altura <= window.innerHeight - 8;
-    setPos({ left, top: cabeAbaixo ? b.bottom + 6 : Math.max(8, b.top - 6 - altura) });
-  }, [aberto]);
 
   useEffect(() => {
     if (!aberto) return undefined;
-    const fechar = (e) => {
-      if (quadroRef.current?.contains(e.target) || botaoRef.current?.contains(e.target)) return;
-      setAberto(false);
-    };
     const tecla = (e) => e.key === 'Escape' && setAberto(false);
-    const rolou = (e) => {
-      if (!quadroRef.current?.contains(e.target)) setAberto(false);
-    };
-    document.addEventListener('mousedown', fechar);
     document.addEventListener('keydown', tecla);
-    window.addEventListener('scroll', rolou, true);
-    window.addEventListener('resize', rolou);
-    return () => {
-      document.removeEventListener('mousedown', fechar);
-      document.removeEventListener('keydown', tecla);
-      window.removeEventListener('scroll', rolou, true);
-      window.removeEventListener('resize', rolou);
-    };
+    return () => document.removeEventListener('keydown', tecla);
   }, [aberto]);
 
   if (!composicao) return <span className={className}>{valorSemCentavos(valor)}</span>;
 
+  const parar = (e) => e.stopPropagation();
   return (
     <>
       <button
-        ref={botaoRef}
         type="button"
         onClick={(e) => {
           e.stopPropagation();
-          setAberto((a) => !a);
+          setAberto(true);
         }}
-        onMouseDown={(e) => e.stopPropagation()}
+        onMouseDown={parar}
         title="Ver a composição do valor"
         className={`cursor-pointer tabular-nums underline decoration-dotted decoration-gray-300 underline-offset-4 hover:text-primary-700 hover:decoration-primary-500 ${className}`}
       >
@@ -154,12 +128,25 @@ export default function ComposicaoValor({ valor, composicao, className = '' }) {
       {aberto &&
         createPortal(
           <div
-            ref={quadroRef}
-            onClick={(e) => e.stopPropagation()}
-            style={{ position: 'fixed', top: pos?.top ?? -9999, left: pos?.left ?? -9999 }}
-            className="z-[100] rounded-lg border border-gray-200 bg-white p-3 text-left font-normal shadow-lg"
+            role="presentation"
+            onMouseDown={parar}
+            onClick={(e) => {
+              e.stopPropagation();
+              if (e.target === e.currentTarget) setAberto(false);
+            }}
+            className="fixed inset-0 z-[100] flex items-center justify-center bg-black/40 p-4 text-left font-normal"
           >
-            <Quadro composicao={composicao} />
+            <div role="dialog" aria-modal="true" aria-label="Composição do valor" className="w-full max-w-sm rounded-card bg-white shadow-card">
+              <div className="flex items-center justify-between border-b border-gray-100 px-5 py-4">
+                <h2 className="text-base font-semibold text-gray-900">Composição do valor</h2>
+                <button type="button" onClick={() => setAberto(false)} className="text-gray-400 hover:text-gray-600" aria-label="Fechar">
+                  <X size={20} />
+                </button>
+              </div>
+              <div className="p-5">
+                <Quadro composicao={composicao} />
+              </div>
+            </div>
           </div>,
           document.body
         )}
