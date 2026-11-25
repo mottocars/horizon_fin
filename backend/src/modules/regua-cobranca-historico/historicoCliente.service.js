@@ -109,7 +109,7 @@ async function getParcelaClassificada(empresaId, billId, installmentId) {
     `SELECT si.bill_id, si.installment_id, si.client_id, si.client_name, si.due_date,
             si.corrected_balance_amount, si.original_amount,
             si.document_identification_name, si.document_number, si.installment_number,
-            pg.ultimo_pagamento
+            pg.ultimo_pagamento, acr.acrescimo
      FROM sie_income si
      LEFT JOIN LATERAL (
        -- Último recebimento só desta parcela, pelo índice (bill_id, installment_id, empresa_id). Antes era
@@ -119,6 +119,9 @@ async function getParcelaClassificada(empresaId, billId, installmentId) {
        FROM sie_income_recebimentos r
        WHERE r.bill_id = si.bill_id AND r.installment_id = si.installment_id AND r.empresa_id = si.empresa_id
      ) pg ON TRUE
+     -- Acréscimo (multa + juros) do Sienge da parcela vencida (rotina "Acréscimos das parcelas vencidas").
+     LEFT JOIN cobranca_parcelas_acrescimos acr
+       ON acr.empresa_id = si.empresa_id AND acr.bill_id = si.bill_id AND acr.installment_id = si.installment_id
      WHERE si.empresa_id = $1 AND si.bill_id = $2 AND si.installment_id = $3`,
     [empresaId, billId, installmentId]
   );
@@ -144,7 +147,12 @@ async function getParcelaClassificada(empresaId, billId, installmentId) {
   } else {
     status = 'a_vencer';
   }
-  const saldoAberto = Number(parcela.corrected_balance_amount) || 0;
+  // Valor a cobrar = o mesmo da Rotina e da Gestão das Parcelas (cobranca-acrescimos/composicao.js::aberta):
+  // saldo corrigido + acréscimo do Sienge quando vencida. É o @valor das mensagens (pedido de 25/11/2026: a
+  // mensagem ia sem o acréscimo) e o @valor_total / a lista da cobrança em massa.
+  const saldoAberto =
+    (Number(parcela.corrected_balance_amount) || 0) + (!paga && diasSigned > 0 ? Number(parcela.acrescimo) || 0 : 0);
+  parcela.valor_cobrar = Math.round(saldoAberto * 100) / 100;
 
   return {
     parcela,
@@ -341,7 +349,7 @@ async function registrarObservacao(empresaId, { billId, installmentId, dataRegis
       nomeCliente: parcela.client_name,
       centroCusto,
       vencimento: parcela.due_date,
-      valor: parcela.corrected_balance_amount,
+      valor: parcela.valor_cobrar,
     });
   } else if (canal === 'whatsapp') {
     const { etapa } = janelaAlcancada;
@@ -365,7 +373,7 @@ async function registrarObservacao(empresaId, { billId, installmentId, dataRegis
       nomeCliente: parcela.client_name,
       centroCusto,
       vencimento: parcela.due_date,
-      valor: parcela.corrected_balance_amount,
+      valor: parcela.valor_cobrar,
     });
 
     try {
@@ -409,7 +417,7 @@ async function registrarObservacao(empresaId, { billId, installmentId, dataRegis
       nomeCliente: parcela.client_name,
       centroCusto,
       vencimento: parcela.due_date,
-      valor: parcela.corrected_balance_amount,
+      valor: parcela.valor_cobrar,
     };
     // O assunto só existe pra este canal (o WhatsApp não tem "assunto",
     // por isso a régua o ignora ali) — vira o header de verdade do e-mail,

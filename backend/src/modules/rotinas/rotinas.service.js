@@ -215,7 +215,7 @@ async function calcularItens(empresaId, etapasRows, { dataInicio, dataFim, costC
         nomeCliente: row.client_name,
         centroCusto: row.cost_center_name,
         vencimento: row.due_date,
-        valor: row.corrected_balance_amount,
+        valor: comp.total, // saldo corrigido + acréscimo do Sienge — o mesmo valor que o envio de verdade usa
       };
       const mensagemWhatsapp =
         etapa.canal_whatsapp && etapa.template_corpo

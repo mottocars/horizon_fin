@@ -81,7 +81,8 @@ async function montarCobranca(empresaId, canal, itensBrutos) {
   const cluster = classificadas
     .map((c) => c.cluster)
     .reduce((pior, atual) => (CLUSTERS_ORDEM.indexOf(atual) > CLUSTERS_ORDEM.indexOf(pior) ? atual : pior));
-  const total = parcelas.reduce((soma, p) => soma + (Number(p.corrected_balance_amount) || 0), 0);
+  // Valor a cobrar de cada parcela = saldo corrigido + acréscimo do Sienge (getParcelaClassificada::valor_cobrar).
+  const total = parcelas.reduce((soma, p) => soma + (Number(p.valor_cobrar) || 0), 0);
   const primeira = classificadas[0].parcela;
   const [cliente, centroCusto] = await Promise.all([
     historico.getInfoCliente(empresaId, primeira.client_id),
@@ -99,7 +100,7 @@ async function montarCobranca(empresaId, canal, itensBrutos) {
       lista_titulos: parcelas
         .map(
           (p) =>
-            `• Título ${p.bill_id} – parcela ${numeroParcela(p.installment_number)} – venc. ${formatarDataBR(p.due_date)} – ${formatarMoedaBR(p.corrected_balance_amount)}`
+            `• Título ${p.bill_id} – parcela ${numeroParcela(p.installment_number)} – venc. ${formatarDataBR(p.due_date)} – ${formatarMoedaBR(p.valor_cobrar)}`
         )
         .join('\n'),
       quantidade_titulos: String(parcelas.length),
@@ -152,7 +153,7 @@ async function previaCobrancaEmMassa(empresaId, { canal, itens }) {
       installment_id: p.installment_id,
       titulo: rotuloTitulo(p),
       vencimento: p.due_date,
-      valor: Number(p.corrected_balance_amount) || 0,
+      valor: Number(p.valor_cobrar) || 0,
     })),
     quantidade_titulos: montagem.parcelas.length,
     valor_total: montagem.total,
