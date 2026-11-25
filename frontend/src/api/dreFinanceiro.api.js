@@ -46,7 +46,7 @@ export function listarFiltrosExercicioDre(empresaId, ano) {
   return http.get(`/dre-financeiro/${empresaId}/exercicios/${ano}/filtros`).then((res) => res.data);
 }
 
-// Exportar Excel: todos os exercícios de uma vez, uma aba por ano, com os lançamentos da listagem de cada um
+// Exportar Excel: todos os exercícios de uma vez, empilhados numa aba, com os lançamentos da listagem de cada um
 // (backend dre-financeiro/financeiro.excel.js).
 export function exportarFinanceiroDreExcel(empresaId) {
   return http.get(`/dre-financeiro/${empresaId}/excel`, { responseType: 'blob' }).then((res) => {

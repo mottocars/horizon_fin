@@ -326,7 +326,7 @@ function DreGerencialConteudo() {
   }
 
   // Exportar Excel da aba Centros Custos: a base inteira dos centros, na ordem da aba (dreCentros.excel.js).
-  // Também o da aba Financeiro: todos os exercícios de uma vez, uma aba por ano (financeiro.excel.js).
+  // Também o da aba Financeiro: todos os exercícios de uma vez, empilhados numa aba (financeiro.excel.js).
   const [exportandoCentros, setExportandoCentros] = useState(false);
   const [erroExportarCentros, setErroExportarCentros] = useState('');
   const [exportandoFinanceiro, setExportandoFinanceiro] = useState(false);
@@ -890,12 +890,12 @@ function DreGerencialConteudo() {
           {abaAtiva === 'financeiro' && (
             <div className="flex shrink-0 flex-col items-end gap-1.5">
               <div className="flex shrink-0 items-center gap-2">
-                {/* Exportar Excel: todos os exercícios (cards) de uma vez, uma aba por ano — também na versão só leitura. */}
+                {/* Exportar Excel: todos os exercícios (cards) de uma vez, empilhados numa aba — também na versão só leitura. */}
                 <button
                   type="button"
                   onClick={exportarFinanceiroExcel}
                   disabled={semEmpresa || exportandoFinanceiro}
-                  title="Exportar Excel de todos os exercícios (uma aba por ano)"
+                  title="Exportar Excel de todos os exercícios, empilhados numa aba (do mais antigo para o mais novo)"
                   aria-label="Exportar Excel de todos os exercícios"
                   className="flex shrink-0 items-center justify-center rounded-lg border border-gray-200 p-2 text-gray-500 transition-colors hover:bg-gray-50 hover:text-gray-800 disabled:cursor-not-allowed disabled:opacity-60"
                 >

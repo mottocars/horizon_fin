@@ -11,7 +11,7 @@ router.param('empresaId', paramEmpresa);
 // Versão da DRE do pedido (aberta / última salva / a visualizada) e a trava de gravação (dre-versoes/contexto.js).
 router.param('empresaId', contextoDre('financeiro'));
 router.get('/:empresaId/exercicios', controller.exercicios);
-// Exportar Excel: todos os exercícios de uma vez, uma aba por ano (financeiro.excel.js).
+// Exportar Excel: todos os exercícios de uma vez, empilhados numa aba (financeiro.excel.js).
 router.get('/:empresaId/excel', controller.excel);
 router.get('/:empresaId/exercicios/:ano/lancamentos', controller.lancamentos);
 router.get('/:empresaId/exercicios/:ano/filtros', controller.filtros);

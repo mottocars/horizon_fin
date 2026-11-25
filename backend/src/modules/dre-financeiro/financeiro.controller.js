@@ -91,7 +91,7 @@ async function filtros(req, res, next) {
   }
 }
 
-// GET /:empresaId/excel — Exportar Excel da aba Financeiro: todos os exercícios, uma aba por ano (financeiro.excel.js),
+// GET /:empresaId/excel — Exportar Excel da aba Financeiro: todos os exercícios empilhados numa aba (financeiro.excel.js),
 // montado no worker da exportação da DRE (fila, teto de memória, cancelado se o usuário desistir).
 async function excel(req, res, next) {
   const cancelar = new AbortController();
