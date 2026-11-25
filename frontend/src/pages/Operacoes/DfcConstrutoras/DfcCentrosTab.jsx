@@ -200,7 +200,7 @@ export default function DfcCentrosTab({ empresaId, search }) {
             return (
               <div
                 key={centro.sienge_id}
-                className={`${GRADE} border-b border-gray-100 bg-white py-1.5 pl-4 pr-4 hover:bg-gray-50`}
+                className={`${GRADE} border-b border-gray-100 bg-white py-0.5 pl-4 pr-4 hover:bg-gray-50`}
               >
                 <div className="flex min-w-0 items-center gap-2">
                   <span className="shrink-0 text-xs tabular-nums text-gray-400">{centro.sienge_id}</span>
@@ -209,7 +209,7 @@ export default function DfcCentrosTab({ empresaId, search }) {
                     {centro.apelido && <span className="font-normal text-gray-400"> · {centro.apelido}</span>}
                   </span>
                   {centro.status !== 'ATIVO' && (
-                    <span className="shrink-0 rounded bg-gray-100 px-1.5 py-0.5 text-[10px] font-medium text-gray-500">
+                    <span className="shrink-0 rounded bg-gray-100 px-1.5 py-px text-[10px] font-medium text-gray-500">
                       Inativo
                     </span>
                   )}
@@ -220,6 +220,7 @@ export default function DfcCentrosTab({ empresaId, search }) {
                   options={NATUREZAS}
                   placeholder="Selecione"
                   corClasses={corCampo(centro.natureza)}
+                  compacto
                 />
                 {/* Só os marcados (e do tipo Obra) aparecem na aba Parâmetros. */}
                 <span className="flex justify-center">
@@ -228,7 +229,7 @@ export default function DfcCentrosTab({ empresaId, search }) {
                     checked={Boolean(centro.projeta_dfc)}
                     onChange={(e) => alterar(centro, { projeta_dfc: e.target.checked })}
                     title="Projeta DFC"
-                    className="h-4 w-4 cursor-pointer rounded border-gray-300 text-primary-600 focus:ring-primary-100"
+                    className="h-3.5 w-3.5 cursor-pointer rounded border-gray-300 text-primary-600 focus:ring-primary-100"
                   />
                 </span>
                 {obra ? (
@@ -239,6 +240,7 @@ export default function DfcCentrosTab({ empresaId, search }) {
                     placeholder="Selecione o contrato"
                     emptyMessage="Nenhum contrato no Geral dos Empreendimentos do Portal das Construtoras."
                     corClasses={corCampo(centro.codigo_contrato_caixa)}
+                    compacto
                   />
                 ) : (
                   <span className="text-xs text-gray-300">—</span>
@@ -251,6 +253,7 @@ export default function DfcCentrosTab({ empresaId, search }) {
                     placeholder="Selecione o projeto"
                     emptyMessage="Nenhum projeto encontrado."
                     corClasses={corCampo(centro.codigo_prevision)}
+                    compacto
                   />
                 ) : (
                   <span className="text-xs text-gray-300">—</span>
