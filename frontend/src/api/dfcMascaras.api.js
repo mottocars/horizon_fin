@@ -9,8 +9,10 @@ export function createDfcMascaras(empresaId, { parentId = null, descricoes }) {
   return http.post(`/dfc-mascaras/${empresaId}`, { parent_id: parentId, descricoes }).then((res) => res.data);
 }
 
-export function updateDfcMascara(empresaId, id, { descricao }) {
-  return http.put(`/dfc-mascaras/${empresaId}/${id}`, { descricao }).then((res) => res.data);
+// Campos parciais: descricao e, no nível 2, tipo_detalhamento ('PLANO_CONTAS' | 'TIPO_PARCELA'),
+// parcela_conta_sienge_id e parcela_origens (lista).
+export function updateDfcMascara(empresaId, id, campos) {
+  return http.put(`/dfc-mascaras/${empresaId}/${id}`, campos).then((res) => res.data);
 }
 
 export function removeDfcMascara(empresaId, id) {

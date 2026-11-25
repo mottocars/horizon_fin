@@ -1,5 +1,5 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
-import { ArrowLeft, Check, Globe2, Building2, ListTree, Loader2, Minus, Plus, TriangleAlert } from 'lucide-react';
+import { ArrowLeft, Check, Globe2, Building2, ListTree, Loader2, Lock, Minus, Plus, TriangleAlert } from 'lucide-react';
 import SearchableSelect from '../../../components/SearchableSelect';
 import FiltroColuna, { passaNoFiltro } from '../../../components/FiltroColuna';
 import { listContas } from '../../../api/planosFinanceirosSienge.api';
@@ -168,6 +168,19 @@ export default function DfcPlanoContasTab({
   // (título no painel da combobox, pedido do usuário).
   const opcoesMascara = useMemo(
     () => mascaras.flatMap((g) => g.filhos.map((f) => ({ value: f.id, label: f.descricao, grupo: g.descricao }))),
+    [mascaras]
+  );
+
+  // Contas assumidas por uma máscara detalhada por tipo de parcela (aba Máscaras): sienge_id -> nome da
+  // máscara. Ficam travadas aqui (em todas as versões do plano) — não têm mais papel próprio na DFC.
+  const assumidas = useMemo(
+    () =>
+      Object.fromEntries(
+        mascaras
+          .flatMap((g) => g.filhos)
+          .filter((f) => f.tipo_detalhamento === 'TIPO_PARCELA' && f.parcela_conta_sienge_id)
+          .map((f) => [f.parcela_conta_sienge_id, f.descricao])
+      ),
     [mascaras]
   );
 
@@ -490,7 +503,7 @@ export default function DfcPlanoContasTab({
             const totalizadora = conta.tp_conta === 'T';
             const temFilhos = conta.filhos.length > 0;
             const aberto = visivel ? true : !fechados.includes(conta.sienge_id);
-            const recuo = { paddingLeft: 16 + nivel * 28 };
+            const recuo = { paddingLeft: 16 + nivel * 22 };
             const classificacao = classificacoes[conta.sienge_id] || {};
             const conteudo = (
               <>
@@ -512,7 +525,7 @@ export default function DfcPlanoContasTab({
                     {conta.name}
                   </span>
                   {totalizadora && temFilhos && (
-                    <span className="shrink-0 rounded-full bg-white px-2 py-0.5 text-[10px] font-medium tabular-nums text-gray-500 ring-1 ring-gray-200">
+                    <span className="shrink-0 rounded-full bg-white px-1.5 py-px text-[10px] font-medium tabular-nums text-gray-500 ring-1 ring-gray-200">
                       {conta.filhos.length}
                     </span>
                   )}
@@ -524,6 +537,19 @@ export default function DfcPlanoContasTab({
                     <span />
                     <span />
                   </>
+                ) : assumidas[conta.sienge_id] ? (
+                  <>
+                    {/* Travada: assumida por uma máscara detalhada por tipo de parcela (aba Máscaras). */}
+                    <span />
+                    <span
+                      className="col-span-2 flex min-w-0 items-center gap-1.5 rounded-md border border-gray-200 bg-gray-50 px-1.5 py-1 text-xs text-gray-500"
+                      title={`Detalhada por tipo de parcela na máscara "${assumidas[conta.sienge_id]}" (aba Máscaras) — não tem mais papel próprio na DFC`}
+                    >
+                      <Lock size={12} className="shrink-0 text-gray-400" />
+                      <span className="truncate">Tipo de parcela · {assumidas[conta.sienge_id]}</span>
+                    </span>
+                    <span />
+                  </>
                 ) : (
                   <>
                     {/* Desmarcada, a conta não aparece no Orçamento dos centros que usam este plano. */}
@@ -533,7 +559,7 @@ export default function DfcPlanoContasTab({
                         checked={classificacao.projeta_dfc !== false}
                         onChange={(e) => classificar(conta.sienge_id, { projeta_dfc: e.target.checked })}
                         title="Projeta DFC"
-                        className="h-4 w-4 cursor-pointer rounded border-gray-300 text-primary-600 focus:ring-primary-100"
+                        className="h-3.5 w-3.5 cursor-pointer rounded border-gray-300 text-primary-600 focus:ring-primary-100"
                       />
                     </span>
                     <SearchableSelect
@@ -545,6 +571,7 @@ export default function DfcPlanoContasTab({
                       corClasses={corCampo(classificacao.mascara_id)}
                       larguraPainel={460}
                       alturaLista="max-h-64"
+                      compacto
                     />
                     <SearchableSelect
                       value={classificacao.origem_projecao ?? ''}
@@ -553,6 +580,7 @@ export default function DfcPlanoContasTab({
                       placeholder="Selecione a origem"
                       corClasses={corCampo(classificacao.origem_projecao)}
                       larguraPainel={360}
+                      compacto
                     />
                     {/* Prazo Desemb.: clicável, abre a ficha de desembolso da natureza. */}
                     {classificacao.origem_projecao === ORIGEM_DESEMBOLSO ? (
@@ -562,7 +590,7 @@ export default function DfcPlanoContasTab({
                           onClick={() => setFichaDe({ sienge_id: conta.sienge_id, codigo: codigoFormatado(conta), name: conta.name })}
                           title="Ver a ficha de desembolso"
                           aria-label={`Ficha de desembolso de ${conta.name}`}
-                          className="rounded-md px-2 py-1 text-xs font-medium tabular-nums text-primary-600 underline decoration-primary-100 decoration-2 underline-offset-4 transition-colors hover:bg-primary-50 hover:decoration-primary-500"
+                          className="rounded-md px-2 py-0.5 text-xs font-medium tabular-nums text-primary-600 underline decoration-primary-100 decoration-2 underline-offset-4 transition-colors hover:bg-primary-50 hover:decoration-primary-500"
                         >
                           {!desembolso[conta.sienge_id]
                             ? '...'
@@ -578,7 +606,7 @@ export default function DfcPlanoContasTab({
                 )}
                 <span>
                   <span
-                    className={`inline-flex items-center rounded-full px-2 py-0.5 text-[11px] font-medium ${
+                    className={`inline-flex items-center rounded-full px-2 py-px text-[10px] font-medium ${
                       conta.fl_ativa === 'S' ? 'bg-emerald-50 text-emerald-600' : 'bg-gray-100 text-gray-500'
                     }`}
                   >
@@ -597,14 +625,14 @@ export default function DfcPlanoContasTab({
                 onKeyDown={(e) => {
                   if ((e.key === 'Enter' || e.key === ' ') && temFilhos && !visivel) alternar(conta.sienge_id);
                 }}
-                className={`${GRADE} border-b border-gray-200 bg-gray-50 py-2.5 pr-4 ${
+                className={`${GRADE} border-b border-gray-200 bg-gray-50 py-1 pr-4 ${
                   temFilhos && !visivel ? 'cursor-pointer hover:bg-gray-100' : ''
                 }`}
               >
                 {conteudo}
               </div>
             ) : (
-              <div key={conta.sienge_id} className={`${GRADE} border-b border-gray-100 bg-white py-1.5 pr-4 hover:bg-gray-50`}>
+              <div key={conta.sienge_id} className={`${GRADE} border-b border-gray-100 bg-white py-0.5 pr-4 hover:bg-gray-50`}>
                 {conteudo}
               </div>
             );

@@ -62,6 +62,15 @@ async function update(
   );
   if (!conta[0]) throw erro(404, 'Conta não encontrada no plano de contas desta empresa.');
   if (conta[0].tp_conta === 'T') throw erro(400, 'Conta totalizadora não recebe Máscara DFC nem Origem da Projeção.');
+  // Conta assumida por uma máscara detalhada por tipo de parcela (aba Máscaras): travada aqui, em todas
+  // as versões do plano — não tem mais papel próprio na DFC.
+  const { rows: assumida } = await pool.query(
+    'SELECT descricao FROM dfc_mascaras WHERE empresa_id = $1 AND parcela_conta_sienge_id = $2',
+    [empresaId, siengeId]
+  );
+  if (assumida[0]) {
+    throw erro(409, `Esta conta é detalhada por tipo de parcela na máscara "${assumida[0].descricao}" (aba Máscaras).`);
+  }
 
   if (mascaraId !== null) {
     const { rows: mascara } = await pool.query('SELECT parent_id FROM dfc_mascaras WHERE id = $1 AND empresa_id = $2', [

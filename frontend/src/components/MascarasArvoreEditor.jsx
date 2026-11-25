@@ -236,10 +236,13 @@ export function Indicador({ recuo = false, embaixo = false }) {
 // Totaliza da DRE): não abre,
 // não recebe item arrastado e a marcação fica travada enquanto ele tiver filhos.
 //
+// `aoMudarArvore(arvore)` (opcional, só a DFC usa): avisa a tela de fora a cada mudança da árvore (ex.:
+// a coluna Conta da DFC, que precisa saber quais contas já estão em outras máscaras).
+//
 // `ref` expõe `abrirNova()` pro botão "Nova máscara" do topo da página (mesmo padrão de
 // OrcamentoTab na DRE, botão "Nova categoria").
 const MascarasArvoreEditor = forwardRef(function MascarasArvoreEditor(
-  { empresaId, api, modeloSugerido, demonstrativo, exemploNivel1, flags = [] },
+  { empresaId, api, modeloSugerido, demonstrativo, exemploNivel1, flags = [], aoMudarArvore },
   ref
 ) {
   const confirm = useConfirm();
@@ -283,6 +286,10 @@ const MascarasArvoreEditor = forwardRef(function MascarasArvoreEditor(
   }, [carregar]);
 
   useImperativeHandle(ref, () => ({ abrirNova: () => setCriando({ parentId: null }) }), []);
+
+  useEffect(() => {
+    aoMudarArvore?.(arvore);
+  }, [arvore, aoMudarArvore]);
 
   // Toda escrita passa por aqui: conta pendência, mostra erro e, se falhar, recarrega do banco
   // pra tela nunca ficar mostrando algo que não foi salvo.

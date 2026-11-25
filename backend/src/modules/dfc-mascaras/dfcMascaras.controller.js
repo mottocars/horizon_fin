@@ -17,7 +17,16 @@ const createSchema = z.object({
   descricoes: z.array(descricaoSchema).min(1, 'Informe o nome da máscara.').max(200),
 });
 
-const updateSchema = z.object({ descricao: descricaoSchema });
+// Campos parciais — ao menos um. O tipo de detalhamento (e a conta/origens do TIPO_PARCELA) é validado
+// no service (só nível 2, conta analítica da empresa, conta em uma máscara só).
+const updateSchema = z
+  .object({
+    descricao: descricaoSchema.optional(),
+    tipo_detalhamento: z.enum(['PLANO_CONTAS', 'TIPO_PARCELA']).optional(),
+    parcela_conta_sienge_id: z.union([z.null(), z.coerce.number().int().positive()]).optional(),
+    parcela_origens: z.array(z.enum(service.ORIGENS_PARCELA)).max(3).optional(),
+  })
+  .refine((c) => Object.values(c).some((v) => v !== undefined), 'Nada para alterar.');
 
 // A estrutura inteira, já na ordem final: nível 1 na ordem do array e, em `filhos`, os ids de
 // nível 2 de cada um. Por construção não dá pra mandar 3 níveis.
@@ -65,8 +74,8 @@ async function update(req, res, next) {
   try {
     const empresaId = empresaIdSchema.parse(req.params.empresaId);
     const id = idSchema.parse(req.params.id);
-    const { descricao } = updateSchema.parse(req.body);
-    const item = await service.update(id, empresaId, { descricao });
+    const campos = updateSchema.parse(req.body);
+    const item = await service.update(id, empresaId, campos);
     if (!item) throw erro(404, 'Máscara não encontrada.');
     res.json(item);
   } catch (err) {
