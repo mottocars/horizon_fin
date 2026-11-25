@@ -46,6 +46,8 @@ module.exports = {
     return {
       periodo: { inicio, fim },
       mes_atual: f.mesAtual,
+      // Versões da DFC: realizado só até este mês (o anterior ao atual, ou o corte da versão); depois, só projetado.
+      realizado_ate: f.realizadoAte,
       colunas: chaves.map(rotuloCol),
       legenda: 'R = realizado (extrato bancário), P = projetado (versão salva do Orçamento). Valores em R$; células vazias = 0.',
       versao_orcamento: f.versao ? { numero: f.versao.numero, salva_em: f.versao.criado_em, por: f.versao.usuario } : null,

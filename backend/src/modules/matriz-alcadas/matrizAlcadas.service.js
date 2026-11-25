@@ -14,6 +14,20 @@ const CLASSIFICACOES = [
     tela: T.DRE,
     itens: [{ id: 'APROVADOR', rotulo: 'Aprovador', descricao: 'Aprova a versão salva da DRE; só depois da aprovação ela é publicada nos dashboards, no MCP e na Reforma Tributária.' }],
   },
+  {
+    id: 'DFC',
+    rotulo: 'DFC',
+    descricao: 'Operações › DFC Construtoras e o dashboard Fluxo de Caixa',
+    // O aprovador aprova na aba Versões da DFC (ver dfc-versoes).
+    tela: T.DFC,
+    itens: [
+      {
+        id: 'APROVADOR',
+        rotulo: 'Aprovador',
+        descricao: 'Aprova a versão salva da DFC; só depois da aprovação ela é publicada no dashboard Fluxo de Caixa, no MCP e no Impacto DFC da Reforma Tributária.',
+      },
+    ],
+  },
 ];
 
 const db = pool.base;

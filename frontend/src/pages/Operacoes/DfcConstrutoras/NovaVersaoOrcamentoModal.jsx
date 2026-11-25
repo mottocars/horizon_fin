@@ -71,7 +71,7 @@ const OPCOES_PERIODOS = [
     id: 'atual_em_diante',
     icone: Lock,
     titulo: 'Alterar do mês atual em diante',
-    dica: (mes) => `Meses antes de ${mes} ficam como na versão salva.`,
+    dica: (mes) => `Meses antes de ${mes} (já com realizado) ficam como no orçamento gravado.`,
   },
   {
     id: 'todos',
@@ -193,8 +193,8 @@ export default function NovaVersaoOrcamentoModal({
   onClose,
   empresaId,
   onGerar,
-  titulo = 'Nova versão',
-  rotuloFinal = 'Nova versão',
+  titulo = 'Gerar orçamento',
+  rotuloFinal = 'Gerar orçamento',
 }) {
   const [periodos, setPeriodos] = useState(periodosSalvos);
   const escolherPeriodos = (id) => {

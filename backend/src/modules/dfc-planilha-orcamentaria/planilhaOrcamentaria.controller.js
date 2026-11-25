@@ -29,7 +29,13 @@ async function importar(req, res, next) {
     const empresaId = empresaIdSchema.parse(req.params.empresaId);
     if (!req.file) throw erro(400, 'Envie o arquivo .xlsx da Planilha Orçamentária.');
     const aplicar = req.query.aplicar === '1' || req.query.aplicar === 'true';
-    res.json(await service.importar(empresaId, { buffer: req.file.buffer, arquivo: req.file.originalname }, req.user.id, { aplicar }));
+    const r = await service.importar(empresaId, { buffer: req.file.buffer, arquivo: req.file.originalname }, req.user.id, { aplicar });
+    // Versões da DFC: o carimbo (aba Versões › Projeções) — só quando aplicou (a prévia não grava nada).
+    if (aplicar) {
+      const { carimbar } = require('../dfc-versoes/carimbo');
+      await carimbar(req, { descricao: `Importou a Planilha Orçamentária "${req.file.originalname}" (valores HORIZON - INFORMADO).`, detalhes: { arquivo: req.file.originalname } });
+    }
+    res.json(r);
   } catch (err) {
     if (err.issues) return next(erro(400, err.issues[0].message));
     next(err);

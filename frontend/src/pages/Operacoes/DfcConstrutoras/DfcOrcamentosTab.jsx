@@ -97,7 +97,7 @@ function dinheiro(v) {
 // edição. Botão direito abre o menu (Replicar valor até / Log de alterações) — com o que estiver
 // digitado, se houver. Mesmo par de cores das outras abas: âmbar sem valor, azul claro com valor.
 // `valor` é o digitado (rascunho); `pendente` = difere da versão salva (`valorVersao`) — borda
-// tracejada laranja, só entra no Orçamento ao "Salvar Versão".
+// tracejada laranja, só entra no Orçamento ao gravar o orçamento gerado ("Gerar orçamento").
 function CelulaInformada({ valor, pendente, valorVersao, onCommit, onMenu }) {
   const [texto, setTexto] = useState(null);
   const editando = texto !== null;
@@ -127,7 +127,7 @@ function CelulaInformada({ valor, pendente, valorVersao, onCommit, onMenu }) {
       placeholder="—"
       title={
         pendente
-          ? `Pendente: só entra no Orçamento ao Salvar Versão. Na versão salva: ${
+          ? `Pendente: só entra no Orçamento ao gravar o orçamento gerado. No orçamento gravado: ${
               valorVersao === null || valorVersao === undefined ? 'sem valor' : dinheiro(valorVersao)
             }`
           : 'Botão direito: replicar valor até / log de alterações'
@@ -574,37 +574,39 @@ const DfcOrcamentosTab = forwardRef(function DfcOrcamentosTab(
   const gravacoesRef = useRef(0);
   gravacoesRef.current = pendentes;
 
-  // "Salvar Versão": consolida as fontes de hoje (backend compara com a versão anterior e grava o log
-  // do que mudou). Espera as digitações em andamento terminarem antes.
-  async function salvarVersao() {
+  // "Gravar o orçamento" (antes "Salvar Versão" — versões da DFC, 25/11/2026): consolida as fontes de hoje no
+  // Orçamento da versão aberta da DFC (backend compara com o gravado e registra o log do que mudou); ele só fica
+  // cravado ao salvar a versão da DFC (aba Versões). Espera as digitações em andamento terminarem antes.
+  // `versaoDfc`: o número da versão aberta da DFC (pros textos).
+  async function salvarVersao(versaoDfc = null) {
     if (!empresaId || salvandoVersao || !previa) return;
     for (let i = 0; i < 50 && gravacoesRef.current > 0; i += 1) {
       await new Promise((r) => setTimeout(r, 100));
     }
-    const proxima = (salva?.versoes?.[0]?.numero || 0) + 1;
+    const naVersao = versaoDfc ? `da versão ${versaoDfc} da DFC` : 'da versão aberta da DFC';
     const ok = await confirm({
-      title: 'Salvar versão do orçamento',
-      description: `A nova versão vira a versão ${proxima} — a última, que o Orçamento passa a mostrar. ${
+      title: 'Gravar o orçamento',
+      description: `O orçamento gerado passa a ser o Orçamento ${naVersao}. ${
         travadoAntes
-          ? `Só mudam os meses a partir de ${rotuloMes(travadoAntes)}; os anteriores continuam como na versão ${nova.versao_base}. `
+          ? `Só mudam os meses a partir de ${rotuloMes(travadoAntes)}; os anteriores continuam como estavam. `
           : 'Todos os períodos podem mudar, inclusive os meses passados. '
-      }Cada valor que entrou, mudou ou saiu fica registrado no log de alterações.`,
-      confirmLabel: 'Salvar versão',
+      }Cada valor que entrou, mudou ou saiu fica registrado no log de alterações. Ele só fica cravado (e vai para o dashboard depois de aprovado) ao salvar a versão da DFC na aba Versões.`,
+      confirmLabel: 'Gravar orçamento',
     });
     if (!ok) return;
     setSalvandoVersao(true);
     try {
       const r = await salvarVersaoOrcamentoDfc(empresaId, { periodos: nova.periodos || 'todos' });
       await alert({
-        title: `Versão ${r.numero} salva`,
-        description: `${r.inclusoes} inclusão(ões), ${r.alteracoes} alteração(ões) e ${r.exclusoes} exclusão(ões) — cada uma registrada no log de alterações do valor.`,
+        title: 'Orçamento gravado',
+        description: `${r.inclusoes} inclusão(ões), ${r.alteracoes} alteração(ões) e ${r.exclusoes} exclusão(ões) — cada uma registrada no log de alterações do valor. Salve a versão da DFC na aba Versões para cravar.`,
       });
       setNova(null);
       onVersaoSalva?.(r.numero);
     } catch (err) {
       await alert({
-        title: 'Versão não salva',
-        description: err.response?.data?.message || 'Não foi possível salvar a versão.',
+        title: 'Orçamento não gravado',
+        description: err.response?.data?.message || 'Não foi possível gravar o orçamento.',
       });
     } finally {
       setSalvandoVersao(false);

@@ -152,8 +152,8 @@ export default function MatrizAlcadasPage() {
                                 ) : null}
                               </span>
                             </div>
-                            {!i.usuario && c.id === 'DRE' && i.id === 'APROVADOR' && (
-                              <p className="mt-1 text-xs text-amber-700">Sem Aprovador, a versão da DRE é publicada assim que é salva.</p>
+                            {!i.usuario && (c.id === 'DRE' || c.id === 'DFC') && i.id === 'APROVADOR' && (
+                              <p className="mt-1 text-xs text-amber-700">Sem Aprovador, a versão da {c.rotulo} é publicada assim que é salva.</p>
                             )}
                           </td>
                           <td className="py-3 pr-3 text-xs text-gray-600">

@@ -31,7 +31,15 @@ async function salvarRegistroManual(req, res, next) {
   try {
     const empresaId = empresaIdSchema.parse(req.params.empresaId);
     const dados = registroManualSchema.parse(req.body || {});
-    res.json(await service.salvarRegistroManual(empresaId, dados, req.user.id));
+    const r = await service.salvarRegistroManual(empresaId, dados, req.user.id);
+    // Versões da DFC: o carimbo (aba Versões › Repasses).
+    const { carimbar, mesBR } = require('../dfc-versoes/carimbo');
+    await carimbar(req, {
+      descricao: `Contrato ${dados.contrato}, cliente ${dados.contratoUnidade}: mês do registro ${dados.mes ? `informado = ${mesBR(dados.mes)}` : 'manual apagado'}.`,
+      detalhes: dados,
+      chave: `repasse:${dados.contrato}:${dados.contratoUnidade}`,
+    });
+    res.json(r);
   } catch (err) {
     if (err.issues) {
       const e = new Error(err.issues[0].message);

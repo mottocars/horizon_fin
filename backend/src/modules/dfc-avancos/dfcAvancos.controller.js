@@ -87,7 +87,18 @@ async function salvarManual(req, res, next) {
     const empresaId = empresaIdSchema.parse(req.params.empresaId);
     const siengeId = z.coerce.number().int().positive('Centro de custo inválido.').parse(req.params.siengeId);
     const { mes, percentual } = manualSchema.parse(req.body);
-    res.json(await service.salvarManual(empresaId, siengeId, mes, percentual === null ? null : Math.round(percentual * 100) / 100, req.user.id));
+    const valor = percentual === null ? null : Math.round(percentual * 100) / 100;
+    const r = await service.salvarManual(empresaId, siengeId, mes, valor, req.user.id);
+    // Versões da DFC: o carimbo (aba Versões › Avanços).
+    const { carimbar, rotuloCentro, mesBR } = require('../dfc-versoes/carimbo');
+    await carimbar(req, {
+      descricao: `${await rotuloCentro(empresaId, siengeId)}: avanço manual de ${mesBR(mes)} ${
+        valor === null ? 'apagado' : `= ${valor.toLocaleString('pt-BR', { maximumFractionDigits: 2 })}%`
+      }.`,
+      detalhes: { centro_id: siengeId, mes, percentual: valor },
+      chave: `avanco:${siengeId}:${mes}`,
+    });
+    res.json(r);
   } catch (err) {
     if (err.issues) return next(erro(400, err.issues[0].message));
     next(err);

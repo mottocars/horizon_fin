@@ -29,7 +29,7 @@ const NIVEL = { n1: 0, lado: 1, n2: 2, conta: 3 };
 module.exports = function planilhaFluxo(workbook, d, meta) {
   const f = d.fluxo;
   // Colunas desta aba: as do fluxo + o Desvio % logo depois do Projetado de cada mês com Realizado.
-  const colunas = f.colunas.flatMap((c) => (c.tipo === 'P' && c.mes <= f.mesAtual ? [c, { mes: c.mes, tipo: 'D' }] : [c]));
+  const colunas = f.colunas.flatMap((c) => (c.tipo === 'P' && c.mes <= f.realizadoAte ? [c, { mes: c.mes, tipo: 'D' }] : [c]));
   const sheet = workbook.addWorksheet('Fluxo de Caixa', {
     views: [{ state: 'frozen', xSplit: 1, ySplit: LINHA_TIPOS, showGridLines: false }],
     properties: { outlineProperties: { summaryBelow: false, summaryRight: false } },
@@ -201,7 +201,7 @@ module.exports = function planilhaFluxo(workbook, d, meta) {
   // Saldo final: meses fechados do Realizado = saldo real do banco; os demais = inicial + resultado.
   escrever('saldo', 'Saldo final', (c, k, col) => {
     if (saldoFinal[k] === undefined) return null;
-    if (c.tipo === 'R' && c.mes < f.mesAtual) return saldoFinal[k];
+    if (c.tipo === 'R' && c.mes <= f.realizadoAte) return saldoFinal[k];
     return { formula: `${letra(col)}${linhaSI}+${letra(col)}${linhaRes}`, result: saldoFinal[k] };
   });
 

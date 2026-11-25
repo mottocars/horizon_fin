@@ -1,6 +1,22 @@
 const { z } = require('zod');
 const service = require('./dfcPlanoContas.service');
 const excel = require('./dfcPlanoContas.excel');
+const pool = require('../../config/db');
+const { carimbar, mudancas, sn, rotulo, rotuloConta, rotuloCentro, nomeMascara } = require('../dfc-versoes/carimbo');
+
+// Versões da DFC: a classificação da conta antes da alteração (Global ou do plano próprio do centro), no public.
+async function classificacaoAntes(empresaId, siengeId, centroId) {
+  const { rows } = centroId
+    ? await pool.base.query(
+        'SELECT mascara_id, origem_projecao, projeta_dfc FROM dfc_plano_contas_centro WHERE empresa_id = $1 AND centro_id = $2 AND sienge_id = $3',
+        [empresaId, centroId, siengeId]
+      )
+    : await pool.base.query('SELECT mascara_id, origem_projecao, projeta_dfc FROM dfc_plano_contas WHERE empresa_id = $1 AND sienge_id = $2', [
+        empresaId,
+        siengeId,
+      ]);
+  return rows[0] || { mascara_id: null, origem_projecao: null, projeta_dfc: true };
+}
 
 // Opções fixas da "Origem Projeção" (pedido do usuário) — mesma lista do CHECK da tabela e de
 // frontend/src/pages/Operacoes/DfcConstrutoras/DfcPlanoContasTab.jsx (ORIGENS_PROJECAO).
@@ -65,7 +81,23 @@ async function update(req, res, next) {
     const siengeId = siengeIdSchema.parse(req.params.siengeId);
     const { transferir, ...dados } = updateSchema.parse(req.body);
     const centroId = centroSchema.parse(req.body?.centro);
-    res.json(await service.update(empresaId, siengeId, dados, { transferir, centroId, usuarioId: req.user.id }));
+    const antes = await classificacaoAntes(empresaId, siengeId, centroId);
+    const salvo = await service.update(empresaId, siengeId, dados, { transferir, centroId, usuarioId: req.user.id });
+    const partes = mudancas(antes, salvo, { origem_projecao: ['Origem Projeção', rotulo('origemProjecao')], projeta_dfc: ['Projeta DFC', sn] });
+    if (String(antes.mascara_id ?? '') !== String(salvo.mascara_id ?? '')) {
+      partes.unshift(`Máscara DFC: ${await nomeMascara(antes.mascara_id)} → ${await nomeMascara(salvo.mascara_id)}`);
+    }
+    if (partes.length) {
+      const plano = centroId ? `plano próprio de ${await rotuloCentro(empresaId, centroId)}` : 'plano Global';
+      await carimbar(req, {
+        descricao: `Conta ${await rotuloConta(empresaId, siengeId)} (${plano}): ${partes.join('; ')}${
+          salvo.origem_retirada_de ? `; a origem saiu da conta ${await rotuloConta(empresaId, salvo.origem_retirada_de)}` : ''
+        }.`,
+        detalhes: { sienge_id: siengeId, centro_id: centroId, antes, depois: salvo },
+        chave: `plano:${centroId || 'global'}:${siengeId}`,
+      });
+    }
+    res.json(salvo);
   } catch (err) {
     // Origem CEF em uso em outra conta: devolve qual é, pra tela perguntar se transfere.
     if (err.codigo === 'ORIGEM_CEF_EM_USO') {
@@ -94,7 +126,14 @@ async function criarVersao(req, res, next) {
       })
       .parse(req.body?.copiar_de);
     if (copiarDe === centroId) throw Object.assign(new Error('Escolha outro plano pra copiar.'), { status: 400, expose: true });
-    res.status(201).json(await service.criarVersao(empresaId, centroId, req.user.id, copiarDe));
+    const criado = await service.criarVersao(empresaId, centroId, req.user.id, copiarDe);
+    await carimbar(req, {
+      descricao: `Criou o plano de contas próprio de ${await rotuloCentro(empresaId, centroId)} (${
+        copiarDe === 'global' ? 'copiando o Global' : copiarDe === 'branco' ? 'em branco' : `copiando o plano de ${await rotuloCentro(empresaId, copiarDe)}`
+      }).`,
+      detalhes: { centro_id: centroId, copiar_de: copiarDe },
+    });
+    res.status(201).json(criado);
   } catch (err) {
     tratar(err, next);
   }
@@ -104,7 +143,12 @@ async function excluirVersao(req, res, next) {
   try {
     const empresaId = empresaIdSchema.parse(req.params.empresaId);
     const centroId = z.coerce.number().int().positive('Centro de custo inválido.').parse(req.params.centroId);
-    res.json(await service.excluirVersao(empresaId, centroId));
+    const r = await service.excluirVersao(empresaId, centroId);
+    await carimbar(req, {
+      descricao: `Excluiu o plano de contas próprio de ${await rotuloCentro(empresaId, centroId)} (o centro volta a usar o Global).`,
+      detalhes: { centro_id: centroId },
+    });
+    res.json(r);
   } catch (err) {
     tratar(err, next);
   }

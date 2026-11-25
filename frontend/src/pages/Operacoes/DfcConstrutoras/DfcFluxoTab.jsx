@@ -132,6 +132,11 @@ export default function DfcFluxoTab({
   const fecharDetalhe = useCallback(() => setDetalhe(null), []);
 
   const mesAtual = mesDeHoje();
+  // Versões da DFC (pedido do usuário, 25/11/2026): Realizado só até o fim do mês anterior ao atual (ou o corte da
+  // versão lida — o backend devolve em `realizado_ate`); do mês seguinte em diante, só Projetado, com o saldo
+  // partindo do saldo real de abertura desse mês. Enquanto o realizado não chega, o mês anterior ao atual.
+  const realizadoAte = realizado?.realizado_ate || somarMeses(mesAtual, -1);
+  const primeiroProjetado = somarMeses(realizadoAte, 1);
   const periodoValido = Boolean(inicio && fim && fim >= inicio);
   const meses = useMemo(() => (periodoValido ? mesesEntre(inicio, fim) : []), [inicio, fim, periodoValido]);
   const primeiro = meses[0] || null;
@@ -141,9 +146,9 @@ export default function DfcFluxoTab({
   const colunas = useMemo(
     () =>
       meses.flatMap((m) =>
-        m <= mesAtual ? [{ mes: m, tipo: R }, { mes: m, tipo: P }, { mes: m, tipo: D }] : [{ mes: m, tipo: P }]
+        m <= realizadoAte ? [{ mes: m, tipo: R }, { mes: m, tipo: P }, { mes: m, tipo: D }] : [{ mes: m, tipo: P }]
       ),
-    [meses, mesAtual]
+    [meses, realizadoAte]
   );
 
   const carregar = useCallback(() => {
@@ -179,7 +184,7 @@ export default function DfcFluxoTab({
 
   // Realizado: do 1º mês (ou do atual, se o período começar depois) até o mês atual — sempre traz o
   // saldo real de abertura do mês atual, de onde a projeção parte.
-  const deRealizado = primeiro && primeiro < mesAtual ? primeiro : mesAtual;
+  const deRealizado = primeiro && primeiro < mesAtual ? primeiro : mesAtual; // o backend limita ao realizado_ate
   useEffect(() => {
     if (!empresaId || !primeiro) return;
     getRealizadoDfc(empresaId, deRealizado, mesAtual)
@@ -205,8 +210,8 @@ export default function DfcFluxoTab({
     // Linha de um tipo de parcela: mesma forma da conta (sienge_id = a conta assumida), com `tipo_parcela`.
     const folhas = {};
     // Projeção do mês atual em diante entra no encadeamento do saldo mesmo fora do período na tela.
-    const mesesP = new Set([...meses, ...(ultimo && mesAtual <= ultimo ? mesesEntre(`${mesAtual}-01`, `${ultimo}-01`) : [])]);
-    const mesesR = new Set(meses.filter((m) => m <= mesAtual));
+    const mesesP = new Set([...meses, ...(ultimo && primeiroProjetado <= ultimo ? mesesEntre(`${primeiroProjetado}-01`, `${ultimo}-01`) : [])]);
+    const mesesR = new Set(meses.filter((m) => m <= realizadoAte));
 
     // n1 -> lado (E/S) -> n2 -> conta -> 'mes|tipo' -> valor
     const arvore = new Map();
@@ -305,23 +310,24 @@ export default function DfcFluxoTab({
     // Realizado: meses até o atual — saldo real de abertura; final = abertura do mês seguinte (meses
     // fechados) ou abertura + resultado realizado (mês atual, ainda aberto).
     meses
-      .filter((m) => m <= mesAtual)
+      .filter((m) => m <= realizadoAte)
       .forEach((m) => {
         const ini = saldoReal[m] ?? 0;
         saldoInicial[`${m}|${R}`] = ini;
-        saldoFinal[`${m}|${R}`] = m < mesAtual ? (saldoReal[somarMeses(m, 1)] ?? r2(ini + (resultado[`${m}|${R}`] || 0))) : r2(ini + (resultado[`${m}|${R}`] || 0));
+        // Todo mês com realizado está fechado: saldo final = saldo real de abertura do mês seguinte.
+        saldoFinal[`${m}|${R}`] = saldoReal[somarMeses(m, 1)] ?? r2(ini + (resultado[`${m}|${R}`] || 0));
       });
     // Projetado: do mês atual em diante, partindo do saldo real de abertura do mês atual.
-    if (ultimo && mesAtual <= ultimo) {
-      let saldo = saldoReal[mesAtual] ?? 0;
-      mesesEntre(`${mesAtual}-01`, `${ultimo}-01`).forEach((m) => {
+    if (ultimo && primeiroProjetado <= ultimo) {
+      let saldo = saldoReal[primeiroProjetado] ?? 0;
+      mesesEntre(`${primeiroProjetado}-01`, `${ultimo}-01`).forEach((m) => {
         saldoInicial[`${m}|${P}`] = r2(saldo);
         saldo = r2(saldo + (resultado[`${m}|${P}`] || 0));
         saldoFinal[`${m}|${P}`] = saldo;
       });
     }
     return { estrutura: grupos, porColuna: { resultado, saldoInicial, saldoFinal } };
-  }, [dados, realizado, meses, ultimo, mesAtual, centrosFiltro]);
+  }, [dados, realizado, meses, ultimo, realizadoAte, primeiroProjetado, centrosFiltro]);
 
   // Total do período de uma linha: Realizado = meses até o atual; Projetado = todos os meses na tela.
   // `ateAtual`: só os meses até o atual (o Projetado comparável ao Realizado, pro Desvio % do total).
@@ -330,7 +336,7 @@ export default function DfcFluxoTab({
       let t = 0;
       let tem = false;
       meses.forEach((m) => {
-        if (ateAtual && m > mesAtual) return;
+        if (ateAtual && m > realizadoAte) return;
         const v = pc[`${m}|${tipo}`];
         if (v) {
           t += v;
@@ -339,7 +345,7 @@ export default function DfcFluxoTab({
       });
       return tem ? r2(t) : null;
     },
-    [meses, mesAtual]
+    [meses, realizadoAte]
   );
 
   // Larguras: o bastante pro maior valor de cada coluna.
@@ -434,7 +440,7 @@ export default function DfcFluxoTab({
   const larguraTotais = totalAberto ? larguras.totalR + larguras.totalP + LARGURA_DESVIO : LARGURA_TOTAL_FECHADO;
   const larguraTabela = LARGURA_PRIMEIRA + larguraTotais + larguras.meses.reduce((t, l) => t + l, 0);
   const esquerdaTotal = { [R]: LARGURA_PRIMEIRA, [P]: LARGURA_PRIMEIRA + larguras.totalR, [D]: LARGURA_PRIMEIRA + larguras.totalR + larguras.totalP };
-  const temRealizado = meses.some((m) => m <= mesAtual);
+  const temRealizado = meses.some((m) => m <= realizadoAte);
   // Primeira coluna de cada mês ganha a divisória à esquerda (separa os meses).
   const inicioDeMes = (i) => i === 0 || colunas[i - 1].mes !== colunas[i].mes;
 
@@ -580,7 +586,7 @@ export default function DfcFluxoTab({
             const proj = pc[`${c.mes}|${P}`];
             const d = desvioPct(real, proj);
             const semNada = !real && !proj;
-            const parcial = c.mes === mesAtual;
+            const parcial = false; // só meses fechados têm Realizado (versões da DFC)
             return (
               <td
                 key={`${c.mes}|${D}`}
@@ -757,7 +763,7 @@ export default function DfcFluxoTab({
                   return (
                     <th
                       key={m}
-                      colSpan={m <= mesAtual ? 3 : 1}
+                      colSpan={m <= realizadoAte ? 3 : 1}
                       title={atual ? 'Mês atual' : undefined}
                       className={`sticky top-0 z-20 border-l px-3 pt-2.5 text-center align-bottom ${
                         atual ? 'border-l-gray-200 bg-[#1d5c8a]' : 'border-l-gray-200 bg-white'

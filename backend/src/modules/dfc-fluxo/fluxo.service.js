@@ -122,20 +122,25 @@ async function classificador(empresaId) {
 }
 
 // `inicio` / `fim`: 'AAAA-MM'. `centros`: ids do filtro (vazio = todos).
+// Versões da DFC (pedido do usuário, 25/11/2026): o realizado vai só até `realizadoAte` (o fim do mês anterior ao
+// atual, ou o corte da versão lida — dfc-saldos::realizado); do mês seguinte em diante, só o Projetado, com o saldo
+// partindo do saldo real de abertura desse mês. `mesAtual` continua sendo o mês de hoje (destaque das telas).
 async function montar(empresaId, { inicio, fim, centros = [], versao = null }) {
   const mesAtual = mesDeHoje();
   const meses = mesesEntre(inicio, fim);
   const ultimo = meses[meses.length - 1];
-  const colunas = meses.flatMap((m) => (m <= mesAtual ? [{ mes: m, tipo: R }, { mes: m, tipo: P }] : [{ mes: m, tipo: P }]));
   const deRealizado = inicio < mesAtual ? inicio : mesAtual;
   const [cls, orcamento, realizado] = await Promise.all([
     classificador(empresaId),
     dfcOrcamento.orcamento(empresaId, versao),
     dfcSaldos.realizado(empresaId, deRealizado, mesAtual),
   ]);
+  const realizadoAte = realizado.realizado_ate;
+  const primeiroProjetado = somarMeses(realizadoAte, 1);
+  const colunas = meses.flatMap((m) => (m <= realizadoAte ? [{ mes: m, tipo: R }, { mes: m, tipo: P }] : [{ mes: m, tipo: P }]));
   const filtro = centros.length ? new Set(centros.map(Number)) : null;
-  const mesesP = new Set([...meses, ...(ultimo && mesAtual <= ultimo ? mesesEntre(mesAtual, ultimo) : [])]);
-  const mesesR = new Set(meses.filter((m) => m <= mesAtual));
+  const mesesP = new Set([...meses, ...(ultimo && primeiroProjetado <= ultimo ? mesesEntre(primeiroProjetado, ultimo) : [])]);
+  const mesesR = new Set(meses.filter((m) => m <= realizadoAte));
 
   // n1 -> lado -> n2 -> folha (conta ou tipo de parcela) -> 'mes|tipo' -> valor
   const arvore = new Map();
@@ -204,17 +209,17 @@ async function montar(empresaId, { inicio, fim, centros = [], versao = null }) {
   const saldoReal = realizado.saldos || {};
   const saldoInicial = {};
   const saldoFinal = {};
+  // Realizado: todo mês com realizado está fechado — saldo final = saldo real de abertura do mês seguinte.
   meses
-    .filter((m) => m <= mesAtual)
+    .filter((m) => m <= realizadoAte)
     .forEach((m) => {
       const ini = saldoReal[m] ?? 0;
       saldoInicial[`${m}|${R}`] = ini;
-      saldoFinal[`${m}|${R}`] =
-        m < mesAtual ? (saldoReal[somarMeses(m, 1)] ?? r2(ini + (resultado[`${m}|${R}`] || 0))) : r2(ini + (resultado[`${m}|${R}`] || 0));
+      saldoFinal[`${m}|${R}`] = saldoReal[somarMeses(m, 1)] ?? r2(ini + (resultado[`${m}|${R}`] || 0));
     });
-  if (ultimo && mesAtual <= ultimo) {
-    let saldo = saldoReal[mesAtual] ?? 0;
-    mesesEntre(mesAtual, ultimo).forEach((m) => {
+  if (ultimo && primeiroProjetado <= ultimo) {
+    let saldo = saldoReal[primeiroProjetado] ?? 0;
+    mesesEntre(primeiroProjetado, ultimo).forEach((m) => {
       saldoInicial[`${m}|${P}`] = r2(saldo);
       saldo = r2(saldo + (resultado[`${m}|${P}`] || 0));
       saldoFinal[`${m}|${P}`] = saldo;
@@ -223,6 +228,7 @@ async function montar(empresaId, { inicio, fim, centros = [], versao = null }) {
 
   return {
     mesAtual,
+    realizadoAte,
     meses,
     colunas,
     estrutura,

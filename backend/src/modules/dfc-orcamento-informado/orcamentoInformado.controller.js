@@ -1,5 +1,6 @@
 const { z } = require('zod');
 const service = require('./orcamentoInformado.service');
+const { carimbar, rotuloCentro, rotuloConta, mesBR, moeda } = require('../dfc-versoes/carimbo');
 
 const empresaIdSchema = z.coerce.number().int().positive('Empresa inválida.');
 const mesSchema = z.string().regex(/^\d{4}-(0[1-9]|1[0-2])$/, 'Mês inválido.');
@@ -48,7 +49,17 @@ async function list(req, res, next) {
 async function salvar(req, res, next) {
   try {
     const empresaId = empresaIdSchema.parse(req.params.empresaId);
-    res.json(await service.salvar(empresaId, salvarSchema.parse(req.body), req.user.id));
+    const dados = salvarSchema.parse(req.body);
+    const r = await service.salvar(empresaId, dados, req.user.id);
+    // Versões da DFC: o carimbo (aba Versões › Projeções) — um por centro × conta (os meses digitados em seguida juntam).
+    await carimbar(req, {
+      descricao: `HORIZON - INFORMADO: ${await rotuloCentro(empresaId, dados.centro_id)} · conta ${await rotuloConta(empresaId, dados.sienge_id)} — ${mesBR(
+        dados.mes
+      )} = ${dados.valor === null || dados.valor === 0 ? '(vazio)' : moeda(dados.valor)}.`,
+      detalhes: dados,
+      chave: `informado:${dados.centro_id}:${dados.sienge_id}:${dados.mes}`,
+    });
+    res.json(r);
   } catch (err) {
     tratar(err, next);
   }
@@ -57,7 +68,15 @@ async function salvar(req, res, next) {
 async function replicar(req, res, next) {
   try {
     const empresaId = empresaIdSchema.parse(req.params.empresaId);
-    res.json(await service.replicar(empresaId, replicarSchema.parse(req.body), req.user.id));
+    const dados = replicarSchema.parse(req.body);
+    const r = await service.replicar(empresaId, dados, req.user.id);
+    await carimbar(req, {
+      descricao: `HORIZON - INFORMADO: ${await rotuloCentro(empresaId, dados.centro_id)} · conta ${await rotuloConta(empresaId, dados.sienge_id)} — replicou ${moeda(
+        dados.valor
+      )} de ${mesBR(dados.de)} até ${mesBR(dados.ate)}.`,
+      detalhes: dados,
+    });
+    res.json(r);
   } catch (err) {
     tratar(err, next);
   }

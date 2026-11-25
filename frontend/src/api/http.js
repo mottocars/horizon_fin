@@ -25,6 +25,15 @@ http.interceptors.request.use((config) => {
     const versao = new URLSearchParams(window.location.search).get('versao');
     if (versao && /^\d+$/.test(versao)) config.headers['X-Dre-Versao'] = versao;
   }
+  // Versões da DFC (backend/src/modules/dfc-versoes/contexto.js): o dashboard Econômico Financeiro (Fluxo de Caixa)
+  // lê a DFC publicada (a última versão aprovada); na DFC Construtoras, `?versao=N` é o "visualizar" da aba Versões.
+  // Os outros dashboards (ex.: Obra 360º, que lê os Avanços da DFC) seguem sem o cabeçalho.
+  if (caminho.startsWith('/dashboards/economico-financeiro')) {
+    config.headers['X-Dfc-Versao'] = 'publicada';
+  } else if (caminho === '/operacoes/dfc-construtoras') {
+    const versao = new URLSearchParams(window.location.search).get('versao');
+    if (versao && /^\d+$/.test(versao)) config.headers['X-Dfc-Versao'] = versao;
+  }
   return config;
 });
 

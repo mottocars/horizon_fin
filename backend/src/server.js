@@ -67,6 +67,7 @@ const novidadesRoutes = require('./modules/novidades/novidades.routes');
 const dfcSaldosRoutes = require('./modules/dfc-saldos/dfcSaldos.routes');
 const dfcDetalhamentoRoutes = require('./modules/dfc-detalhamento/detalhamento.routes');
 const dfcExportacaoRoutes = require('./modules/dfc-exportacao/exportacao.routes');
+const dfcVersoesRoutes = require('./modules/dfc-versoes/dfcVersoes.routes');
 const etapasCentroCustoRoutes = require('./modules/etapas-centro-custo/etapasCentroCusto.routes');
 const cronogramaCentrosRoutes = require('./modules/cronograma-centros/cronogramaCentros.routes');
 const cronogramaConfigRoutes = require('./modules/cronograma-config/cronogramaConfig.routes');
@@ -266,6 +267,8 @@ app.use('/api/dfc-divida-pj', exigirTela([T.DFC]), dfcDividaPjRoutes);
 app.use('/api/dfc-saldos', exigirTela([T.DFC], LEITURA_DASHBOARD), dfcSaldosRoutes);
 app.use('/api/dfc-detalhamento', exigirTela([T.DFC], LEITURA_DASHBOARD), dfcDetalhamentoRoutes);
 app.use('/api/dfc-exportacao', exigirTela([T.DFC], LEITURA_DASHBOARD), dfcExportacaoRoutes);
+// Versões da DFC (aba Versões): leitura também pro cabeçalho do dashboard Fluxo de Caixa (versão publicada).
+app.use('/api/dfc-versoes', exigirTela([T.DFC], LEITURA_DASHBOARD), dfcVersoesRoutes);
 // Máscara Etapas do Centro de Custo (editor de Cadastros > Máscaras).
 app.use('/api/etapas-centro-custo', exigirTela([T.MASCARAS]), etapasCentroCustoRoutes);
 // Também lido (só GET) pelo dashboard Cronogramas de Obras.

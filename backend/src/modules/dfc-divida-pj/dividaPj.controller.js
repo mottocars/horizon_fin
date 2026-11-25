@@ -52,6 +52,13 @@ async function salvar(req, res, next) {
     const siengeId = siengeIdSchema.parse(req.params.siengeId);
     const { mes, valor } = salvarSchema.parse(req.body);
     await service.salvar(empresaId, siengeId, mes, valor);
+    // Versões da DFC: o carimbo (aba Versões › Dívida PJ).
+    const { carimbar, rotuloCentro, mesBR, moeda } = require('../dfc-versoes/carimbo');
+    await carimbar(req, {
+      descricao: `${await rotuloCentro(empresaId, siengeId)}: dívida PJ de ${mesBR(mes)} = ${moeda(valor)}.`,
+      detalhes: { centro_id: siengeId, mes, valor },
+      chave: `divida:${siengeId}:${mes}`,
+    });
     res.json(await service.listPorCentroCusto(empresaId, siengeId));
   } catch (err) {
     tratar(err, next);
@@ -65,6 +72,8 @@ async function remover(req, res, next) {
     const mes = mesSchema.parse(req.params.mes);
     const ok = await service.remover(empresaId, siengeId, mes);
     if (!ok) throw erro(404, 'Mês não encontrado.');
+    const { carimbar, rotuloCentro, mesBR } = require('../dfc-versoes/carimbo');
+    await carimbar(req, { descricao: `${await rotuloCentro(empresaId, siengeId)}: apagou a dívida PJ de ${mesBR(mes)}.`, detalhes: { centro_id: siengeId, mes } });
     res.json({ ok: true });
   } catch (err) {
     tratar(err, next);

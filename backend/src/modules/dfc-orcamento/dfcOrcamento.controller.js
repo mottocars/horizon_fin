@@ -50,7 +50,19 @@ async function rascunho(req, res, next) {
 async function salvarVersao(req, res, next) {
   try {
     const periodos = periodosSchema.parse(req.body?.periodos);
-    res.status(201).json(await service.salvarVersao(empresaIdSchema.parse(req.params.empresaId), req.user.id, { periodos }));
+    const r = await service.salvarVersao(empresaIdSchema.parse(req.params.empresaId), req.user.id, { periodos });
+    // Versões da DFC: o carimbo (aba Versões › Projeções). "Gerar orçamento" = antigo "Salvar Versão".
+    const { carimbar } = require('../dfc-versoes/carimbo');
+    const n = (x, um, varios) => `${x} ${x === 1 ? um : varios}`;
+    await carimbar(req, {
+      descricao: `Gerou o orçamento (${periodos === 'atual_em_diante' ? `do mês ${r.a_partir_de?.slice(5, 7)}/${r.a_partir_de?.slice(0, 4)} em diante` : 'todos os meses'}): ${n(
+        r.inclusoes,
+        'valor novo',
+        'valores novos'
+      )}, ${n(r.alteracoes, 'alterado', 'alterados')}, ${n(r.exclusoes, 'excluído', 'excluídos')}.`,
+      detalhes: { periodos, inclusoes: r.inclusoes, alteracoes: r.alteracoes, exclusoes: r.exclusoes, valores: r.valores },
+    });
+    res.status(201).json(r);
   } catch (err) {
     tratar(err, next);
   }

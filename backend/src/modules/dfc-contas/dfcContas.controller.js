@@ -1,5 +1,6 @@
 const { z } = require('zod');
 const service = require('./dfcContas.service');
+const { carimbar } = require('../dfc-versoes/carimbo');
 
 const empresaIdSchema = z.coerce.number().int().positive('Empresa inválida.');
 const companyIdSchema = z.coerce.number().int().positive('Empresa da conta inválida.');
@@ -31,7 +32,16 @@ async function update(req, res, next) {
     const empresaId = empresaIdSchema.parse(req.params.empresaId);
     const companyId = companyIdSchema.parse(req.params.companyId);
     const numeroConta = numeroContaSchema.parse(req.params.numeroConta);
-    res.json(await service.update(empresaId, companyId, numeroConta, updateSchema.parse(req.body)));
+    const salvo = await service.update(empresaId, companyId, numeroConta, updateSchema.parse(req.body));
+    // Versões da DFC: o carimbo (aba Versões › Contas).
+    await carimbar(req, {
+      descricao: `Conta bancária ${numeroConta}${salvo.nome ? ` - ${salvo.nome}` : ''}${salvo.company_name ? ` (${salvo.company_name})` : ''}: Projeta DFC ${
+        salvo.projeta_dfc ? 'marcado' : 'desmarcado'
+      }.`,
+      detalhes: { company_id: companyId, numero_conta: numeroConta, projeta_dfc: salvo.projeta_dfc },
+      chave: `conta:${companyId}:${numeroConta}`,
+    });
+    res.json(salvo);
   } catch (err) {
     tratar(err, next);
   }

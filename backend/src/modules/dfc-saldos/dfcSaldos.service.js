@@ -53,8 +53,14 @@ function somarMeses(anoMes, k) {
 //   sincronização) por centro de custo × natureza × mês, com entradas e saídas em linhas separadas:
 //   [{ centro_id, sienge_id, mes, valor }] (centro/natureza null = lançamento sem rateio);
 // - saldos: saldo real na abertura de cada mês de `de` até o mês seguinte a `ate` ({ 'AAAA-MM': valor });
-// - extrato_ate: até quando o extrato foi buscado (o realizado só vai até ali).
-async function realizado(empresaId, de, ate) {
+// - extrato_ate: até quando o extrato foi buscado (o realizado só vai até ali);
+// - realizado_ate: o último mês com realizado ('AAAA-MM') — versões da DFC (pedido do usuário, 25/11/2026): o
+//   realizado vai só até o fim do mês anterior ao atual (ou o corte da versão lida); do mês seguinte em diante,
+//   só projeção. `ate` é limitado a ele; os saldos vão até a abertura do mês seguinte (de onde a projeção parte).
+async function realizado(empresaId, de, ateFiltro) {
+  const realizadoAte = require('../dfc-versoes/contexto').limiteRealizado();
+  const ate = ateFiltro > realizadoAte ? realizadoAte : ateFiltro;
+  if (de > ate) de = ate; // eslint-disable-line no-param-reassign
   const { rows } = await pool.query(
     // Entradas e saídas somadas em separado (o fluxo de caixa mostra os dois lados — DfcFluxoTab).
     // Conta assumida por máscaras detalhadas por tipo de parcela (aba Máscaras): o valor vem separado
@@ -109,6 +115,7 @@ async function realizado(empresaId, de, ate) {
     valores: rows.map((r) => ({ ...r, valor: Number(r.valor) })),
     saldos,
     extrato_ate: ateRows[0]?.ate || null,
+    realizado_ate: realizadoAte,
   };
 }
 

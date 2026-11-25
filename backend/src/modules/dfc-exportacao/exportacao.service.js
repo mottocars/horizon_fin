@@ -66,7 +66,7 @@ function classificacao(cls, centroId, natureza, lado, tipo = '') {
 
 // ─── Realizado: extrato das contas com "Projeta DFC" × rateio, nos meses realizados ──────────────
 async function baseRealizado(empresaId, fluxo, centros) {
-  const meses = fluxo.meses.filter((m) => m <= fluxo.mesAtual);
+  const meses = fluxo.meses.filter((m) => m <= fluxo.realizadoAte);
   if (!meses.length) return [];
   const { rows } = await pool.query(
     `SELECT r.centro_id, r.natureza_id, r.percentual, r.valor, to_char(r.mes, 'YYYY-MM') AS mes,
@@ -376,7 +376,8 @@ async function planosContas(empresaId, fluxo, centros, bases) {
 async function dados(empresaId, { inicio, fim, centros = [], versao = null }) {
   const [fluxo, infoCentros] = await Promise.all([fluxoService.montar(empresaId, { inicio, fim, centros, versao }), centrosInfo(empresaId)]);
   fluxo.somarMeses = fluxoService.somarMeses;
-  const mesesSaldos = fluxo.meses.filter((m) => m <= fluxo.mesAtual);
+  // Abertura de cada mês do realizado e do primeiro mês projetado (de onde o saldo projetado parte).
+  const mesesSaldos = fluxo.meses.filter((m) => m <= fluxoService.somarMeses(fluxo.realizadoAte, 1));
   const [realizado, projetado, saldos] = await Promise.all([
     baseRealizado(empresaId, fluxo, infoCentros),
     baseProjetado(empresaId, fluxo, infoCentros),

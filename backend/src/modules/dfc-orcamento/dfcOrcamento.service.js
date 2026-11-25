@@ -50,7 +50,15 @@ const chaveDe = (centroId, siengeId, mes, tipo = '') => `${centroId}|${siengeId}
 // travados com os valores da última versão salva.
 const PERIODOS = ['todos', 'atual_em_diante'];
 const mesAtualBrasilia = () => new Date().toLocaleDateString('en-CA', { timeZone: 'America/Sao_Paulo' }).slice(0, 7);
-const aPartirDe = (periodos) => (periodos === 'atual_em_diante' ? mesAtualBrasilia() : null);
+// Versões da DFC (dfc-versoes): o "atual em diante" é do mês seguinte ao corte da versão (o primeiro mês sem
+// realizado); fora de uma versão, o mês atual.
+function primeiroMesProjetado() {
+  const corte = require('../dfc-versoes/contexto').dfcAtual()?.corte;
+  if (!corte) return mesAtualBrasilia();
+  const [a, m] = corte.slice(0, 7).split('-').map(Number);
+  return m === 12 ? `${a + 1}-01` : `${a}-${String(m + 1).padStart(2, '0')}`;
+}
+const aPartirDe = (periodos) => (periodos === 'atual_em_diante' ? primeiroMesProjetado() : null);
 
 // Meses travados: antes de `mes`, vale o consolidado (o que estiver nas fontes é ignorado).
 function travarAntesDe(atual, cons, mes) {
@@ -505,8 +513,9 @@ async function rascunho(empresaId, { periodos = 'todos' } = {}) {
   };
 }
 
-// "Salvar Versão": consolida as fontes de hoje numa versão nova e grava o log do que mudou. Nada
-// mudou = não cria versão (mesmo critério dos Parâmetros).
+// "Gerar orçamento" (antes "Salvar Versão" — versões da DFC, 25/11/2026): consolida as fontes de hoje no Orçamento
+// da versão aberta da DFC e grava o log do que mudou; o registro da geração (dfc_orcamento_versoes) fica ligado à
+// versão da DFC (dfc_versao_id) e o Orçamento só fica cravado ao salvar a versão da DFC. Nada mudou = não grava.
 // `origem` (conector MCP "DFC CONSTRUTORAS (ALTERA ORÇAMENTO)"): grava só as mudanças daquela origem
 // (HORIZON - INFORMADO); as pendências das outras fontes continuam pendentes para a próxima versão.
 // `periodos` (ver PERIODOS): com 'atual_em_diante', os meses anteriores ao atual não mudam.
@@ -531,19 +540,29 @@ async function salvarVersao(empresaId, usuarioId, { origem = null, periodos = 't
         origem
           ? 'Não há valores informados pendentes de salvar.'
           : anterior
-            ? `Nada mudou desde a versão ${anterior.numero}${
-                travadoAntes ? ` do mês atual em diante (os meses anteriores estão travados)` : ''
-              } — não há o que salvar.`
-            : 'Ainda não há nenhum valor no Orçamento pra salvar.'
+            ? `O Orçamento já está igual às bases${
+                travadoAntes ? ` do mês ${travadoAntes.slice(5, 7)}/${travadoAntes.slice(0, 4)} em diante (os meses anteriores estão travados)` : ''
+              } — não há o que gerar.`
+            : 'Ainda não há nenhum valor nas bases para gerar o Orçamento.'
       );
     }
     const resumo = contar(lista);
     const numero = (anterior?.numero || 0) + 1;
     const totalValores = origem ? cons.size + resumo.inclusoes - resumo.exclusoes : atual.size;
     const { rows } = await client.query(
-      `INSERT INTO dfc_orcamento_versoes (empresa_id, numero, usuario_id, criado_em, valores, inclusoes, alteracoes, exclusoes)
-       VALUES ($1, $2, $3, $4, $5, $6, $7, $8) RETURNING id`,
-      [empresaId, numero, usuarioId, agora, totalValores, resumo.inclusoes, resumo.alteracoes, resumo.exclusoes]
+      `INSERT INTO dfc_orcamento_versoes (empresa_id, numero, usuario_id, criado_em, valores, inclusoes, alteracoes, exclusoes, dfc_versao_id)
+       VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9) RETURNING id`,
+      [
+        empresaId,
+        numero,
+        usuarioId,
+        agora,
+        totalValores,
+        resumo.inclusoes,
+        resumo.alteracoes,
+        resumo.exclusoes,
+        require('../dfc-versoes/contexto').dfcAtual()?.versao?.id ?? null,
+      ]
     );
     const versaoId = rows[0].id;
 

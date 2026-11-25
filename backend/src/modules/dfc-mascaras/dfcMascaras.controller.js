@@ -1,5 +1,15 @@
 const { z } = require('zod');
 const service = require('./dfcMascaras.service');
+const pool = require('../../config/db');
+const { carimbar, mudancas, txt, rotulo, rotuloConta } = require('../dfc-versoes/carimbo');
+
+// Versões da DFC: o carimbo de cada alteração (aba Versões › Máscaras). A máscara como estava antes, lida no public.
+async function mascaraAntes(id) {
+  const { rows } = await pool.base.query('SELECT * FROM dfc_mascaras WHERE id = $1', [id]);
+  return rows[0] || null;
+}
+const ORIGENS = (l) => (l && l.length ? l.map((o) => rotulo('origemProjecao')(o)).join(', ') : '(nenhuma)');
+const TIPOS = (l) => (l && l.length ? l.join(', ') : '(nenhum)');
 
 const empresaIdSchema = z.coerce.number().int().positive('Empresa inválida.');
 const idSchema = z.coerce.number().int().positive('Máscara inválida.');
@@ -65,7 +75,15 @@ async function create(req, res, next) {
   try {
     const empresaId = empresaIdSchema.parse(req.params.empresaId);
     const { parent_id: parentId, descricoes } = createSchema.parse(req.body);
-    res.status(201).json(await service.create(empresaId, { parentId, descricoes }));
+    const criadas = await service.create(empresaId, { parentId, descricoes });
+    const pai = parentId ? await mascaraAntes(parentId) : null;
+    await carimbar(req, {
+      descricao: `Criou ${descricoes.length === 1 ? 'a máscara' : `${descricoes.length} máscaras`} ${descricoes.map((d) => `"${d}"`).join(', ')}${
+        pai ? ` (nível 2, dentro de "${pai.descricao}")` : ' (nível 1)'
+      }.`,
+      detalhes: { ids: criadas.map((c) => c.id), parent_id: parentId },
+    });
+    res.status(201).json(criadas);
   } catch (err) {
     tratar(err, next);
   }
@@ -76,8 +94,26 @@ async function update(req, res, next) {
     const empresaId = empresaIdSchema.parse(req.params.empresaId);
     const id = idSchema.parse(req.params.id);
     const campos = updateSchema.parse(req.body);
+    const antes = await mascaraAntes(id);
     const item = await service.update(id, empresaId, campos);
     if (!item) throw erro(404, 'Máscara não encontrada.');
+    const partes = mudancas(antes, item, {
+      descricao: ['Nome'],
+      tipo_detalhamento: ['Detalhamento', rotulo('detalhamento')],
+      parcela_origens: ['Tipo Projeção', ORIGENS],
+      parcela_tipos: ['Tipos de parcela', TIPOS],
+    });
+    if (antes && String(antes.parcela_conta_sienge_id ?? '') !== String(item.parcela_conta_sienge_id ?? '')) {
+      const conta = async (v) => (v ? rotuloConta(empresaId, v) : '(vazio)');
+      partes.push(`Conta: ${await conta(antes.parcela_conta_sienge_id)} → ${await conta(item.parcela_conta_sienge_id)}`);
+    }
+    if (partes.length) {
+      await carimbar(req, {
+        descricao: `Máscara ${txt(antes?.descricao ?? item.descricao)}: ${partes.join('; ')}.`,
+        detalhes: { id, antes, depois: item },
+        chave: `mascara:${id}`,
+      });
+    }
     res.json(item);
   } catch (err) {
     tratar(err, next);
@@ -88,8 +124,13 @@ async function remove(req, res, next) {
   try {
     const empresaId = empresaIdSchema.parse(req.params.empresaId);
     const id = idSchema.parse(req.params.id);
+    const antes = await mascaraAntes(id);
     const ok = await service.remove(id, empresaId);
     if (!ok) throw erro(404, 'Máscara não encontrada.');
+    await carimbar(req, {
+      descricao: `Excluiu a máscara ${txt(antes?.descricao)}${antes?.parent_id ? '' : ' (nível 1, com as de nível 2 dentro dela)'}.`,
+      detalhes: { id, antes },
+    });
     res.json({ ok: true });
   } catch (err) {
     tratar(err, next);
@@ -100,7 +141,9 @@ async function reordenar(req, res, next) {
   try {
     const empresaId = empresaIdSchema.parse(req.params.empresaId);
     const { estrutura } = ordemSchema.parse(req.body);
-    res.json(await service.reordenar(empresaId, estrutura));
+    const arvore = await service.reordenar(empresaId, estrutura);
+    await carimbar(req, { descricao: 'Reordenou as máscaras (arrastar e soltar).', chave: 'mascaras:ordem' });
+    res.json(arvore);
   } catch (err) {
     tratar(err, next);
   }

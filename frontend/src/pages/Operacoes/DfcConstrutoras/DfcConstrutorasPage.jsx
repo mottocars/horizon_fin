@@ -1,8 +1,16 @@
-import { useEffect, useRef, useState } from 'react';
+import { useCallback, useEffect, useRef, useState } from 'react';
 import { useSearchParams } from 'react-router-dom';
 import {
+  BadgeCheck,
   Banknote,
   Building2,
+  CircleX,
+  CopyPlus,
+  History,
+  Lock,
+  LockOpen,
+  PencilLine,
+  Undo2,
   Download,
   Globe,
   HandCoins,
@@ -27,6 +35,7 @@ import {
 import Card from '../../../components/Card';
 import Tabs from '../../../components/Tabs';
 import Button from '../../../components/Button';
+import Modal from '../../../components/Modal';
 import SearchableSelect from '../../../components/SearchableSelect';
 import { listEmpresas } from '../../../api/empresas.api';
 import { listCentrosDfc, listVersoesParametrosDfc } from '../../../api/dfcParametros.api';
@@ -39,6 +48,16 @@ import { useConfirm } from '../../../confirm/ConfirmContext';
 import { useSidebar } from '../../../layout/SidebarContext';
 import { nomeExibicaoEmpresa } from '../../../utils/empresa';
 import { useEmpresaTravada } from '../../../hooks/useEmpresaTravada';
+import {
+  abrirVersaoDfc,
+  aprovarVersaoDfc,
+  excluirVersaoDfc,
+  listarVersoesDfc,
+  reprovarVersaoDfc,
+  salvarVersaoDfc,
+} from '../../../api/dfcVersoes.api';
+import VersoesDfcTab from './VersoesDfcTab';
+import { LeituraDfcContext, SoLeituraDfc } from './leituraDfc';
 import AbaEmConstrucao from './AbaEmConstrucao';
 import DfcMascarasTab from './DfcMascarasTab';
 import DfcParametrosTab from './DfcParametrosTab';
@@ -72,6 +91,8 @@ const TABS = [
   { id: 'contas-correntes', label: 'Contas', icon: Landmark },
   { id: 'divida-pj', label: 'Dívida PJ', icon: HandCoins },
   { id: 'orcamentos', label: 'Projeções', icon: TrendingUp },
+  // Versões da DFC (pedido do usuário, 25/11/2026 — a mesma aba da DRE Construtoras).
+  { id: 'versoes', label: 'Versões', icon: History },
 ];
 
 function formatarDataHora(data) {
@@ -86,7 +107,15 @@ function formatarDataHora(data) {
 
 // Empresa e aba vivem na URL (não em useState local) — mesmo motivo de DreGerencialPage.jsx:
 // o "Voltar" do navegador devolve o usuário pro mesmo lugar, com a mesma empresa e a mesma aba.
+// Versões da DFC: `?versao=N` na URL é o "Visualizar" da aba Versões — a tela inteira como era naquela versão (o
+// cabeçalho X-Dfc-Versao vai em todo pedido, ver api/http.js). Trocar de versão remonta a tela (key), e todas as
+// abas buscam de novo.
 export default function DfcConstrutorasPage() {
+  const [searchParams] = useSearchParams();
+  return <DfcConstrutorasConteudo key={searchParams.get('versao') || 'atual'} />;
+}
+
+function DfcConstrutorasConteudo() {
   const { travada: empresaTravada, empresaIdTravada } = useEmpresaTravada();
   const [searchParams, setSearchParams] = useSearchParams();
   // Com o menu lateral aberto as abas ficam sem ícone (pedido do usuário, igual à DRE Construtoras).
@@ -116,6 +145,139 @@ export default function DfcConstrutorasPage() {
 
   const [empresas, setEmpresas] = useState([]);
   const [loadingEmpresas, setLoadingEmpresas] = useState(true);
+
+  // ------------------------------------------------------------------------------- versões da DFC
+  // A versão aberta (área de trabalho) ou, sem ela, a última salva; `?versao=N` = visualizando uma salva. Sem
+  // versão aberta ou visualizando, a tela é só leitura (os botões que gravam somem; as abas de cadastro desativam
+  // o que grava — leituraDfc.jsx; o backend recusa de qualquer jeito). Mesmo comportamento da DRE Construtoras.
+  const confirmarVersao = useConfirm();
+  const versaoVisualizada = Number(searchParams.get('versao')) || null;
+  const [estadoVersoes, setEstadoVersoes] = useState(null);
+  const [erroVersoes, setErroVersoes] = useState('');
+  const [processandoVersao, setProcessandoVersao] = useState(false);
+  const carregarVersoesDfc = useCallback(() => {
+    if (!empresaId) {
+      setEstadoVersoes(null);
+      return Promise.resolve();
+    }
+    return listarVersoesDfc(empresaId)
+      .then(setEstadoVersoes)
+      .catch((e) => setErroVersoes(e.response?.data?.message || 'Não foi possível carregar as versões da DFC.'));
+  }, [empresaId]);
+  useEffect(() => {
+    setEstadoVersoes(null);
+    setErroVersoes('');
+    carregarVersoesDfc();
+  }, [carregarVersoesDfc]);
+  const versaoAberta = estadoVersoes?.aberta || null;
+  const versaoPublicada = estadoVersoes?.publicada || null;
+  const versaoPendente = estadoVersoes?.pendente || null;
+  const versaoReprovada = estadoVersoes?.reprovada || null;
+  const aprovadorDfc = estadoVersoes?.aprovador || null;
+  const ultimaSalva = versaoPendente || (estadoVersoes?.versoes || []).find((v) => v.status === 'FECHADA') || versaoPublicada;
+  const versaoVista = versaoVisualizada ? (estadoVersoes?.versoes || []).find((v) => v.numero === versaoVisualizada) || null : null;
+  const somenteLeitura = Boolean(empresaId) && (Boolean(versaoVisualizada) || (Boolean(estadoVersoes) && !versaoAberta));
+  const mesVersaoBR = (iso) => (iso ? `${iso.slice(5, 7)}/${iso.slice(0, 4)}` : '—');
+  const quandoBR = (ts) => (ts ? new Date(ts).toLocaleString('pt-BR', { dateStyle: 'short', timeStyle: 'short' }) : '');
+  const leituraDfc = {
+    somenteLeitura,
+    motivo: versaoVisualizada
+      ? `Você está visualizando a versão ${versaoVisualizada} da DFC (só leitura).`
+      : `A DFC está fechada na versão ${ultimaSalva?.numero ?? '—'}. Para alterar, gere uma nova versão ou edite a última na aba Versões.`,
+  };
+
+  async function acaoVersao(fn) {
+    setErroVersoes('');
+    setProcessandoVersao(true);
+    try {
+      const r = await fn();
+      if (r) setEstadoVersoes(r);
+      // Visualizando uma versão antiga: a ação vale pra versão atual — volta pra ela.
+      if (versaoVisualizada) atualizarParams({ versao: null });
+    } catch (e) {
+      setErroVersoes(e.response?.data?.message || 'Não foi possível concluir a operação.');
+    } finally {
+      setProcessandoVersao(false);
+    }
+  }
+
+  async function gerarNovaVersao() {
+    const numero = (estadoVersoes?.versoes?.[0]?.numero || 0) + 1;
+    const ok = await confirmarVersao({
+      title: `Gerar a versão ${numero} da DFC`,
+      description: `A versão ${numero} começa com a configuração e o Orçamento da versão ${ultimaSalva?.numero} e o realizado até ${mesVersaoBR(
+        estadoVersoes?.proximo_corte
+      )} (o último mês fechado). Enquanto ela estiver aberta, o realizado acompanha o Monitor de Integrações. Gere o orçamento na aba Projeções e salve a versão aqui: só depois de salva (e aprovada) ela aparece no dashboard Fluxo de Caixa, no MCP e na Reforma Tributária.`,
+      confirmLabel: 'Gerar nova versão',
+    });
+    if (ok) await acaoVersao(() => abrirVersaoDfc(empresaId, 'NOVA'));
+  }
+
+  async function editarUltimaVersao() {
+    const numero = (estadoVersoes?.versoes?.[0]?.numero || 0) + 1;
+    const ok = await confirmarVersao({
+      title: `Editar a versão ${ultimaSalva?.numero} da DFC`,
+      description: `A edição vira a versão ${numero}, com a configuração, o Orçamento e o realizado da versão ${ultimaSalva?.numero} (realizado congelado até ${mesVersaoBR(
+        ultimaSalva?.corte
+      )}).${versaoPendente ? ` A versão ${versaoPendente.numero} não foi aprovada e deixa de poder ser aprovada (só a última salva pode).` : ''} Você fica registrado como quem abriu a versão. As alterações só aparecem no dashboard depois de salvar (e aprovar).`,
+      confirmLabel: 'Editar última versão',
+    });
+    if (ok) await acaoVersao(() => abrirVersaoDfc(empresaId, 'EDICAO'));
+  }
+
+  async function salvarVersaoAberta() {
+    const salvas = (estadoVersoes?.versoes || []).filter((v) => v.status === 'FECHADA');
+    const limite = estadoVersoes?.limite || 10;
+    const sai = salvas.length >= limite ? salvas[salvas.length - 1] : null;
+    const orc = estadoVersoes?.orcamento;
+    const ok = await confirmarVersao({
+      title: `Salvar a versão ${versaoAberta.numero} da DFC`,
+      description: `${
+        orc
+          ? `O orçamento gerado em ${quandoBR(orc.criado_em)}${orc.usuario ? ` por ${orc.usuario}` : ''} fica cravado. `
+          : `Atenção: o orçamento não foi gerado nesta versão — fica o da versão ${versaoAberta.base_numero ?? '—'} (aba Projeções › Gerar orçamento). `
+      }A versão ${versaoAberta.numero} fica travada (configuração, realizado até ${mesVersaoBR(versaoAberta.corte)} e Orçamento) e ${
+        aprovadorDfc
+          ? `fica aguardando a aprovação de ${aprovadorDfc.nome} (Matriz de Alçadas). Só depois de aprovada ela passa a ser a publicada`
+          : 'passa a ser a publicada (a empresa não tem Aprovador da DFC na Matriz de Alçadas)'
+      }: dashboard Fluxo de Caixa, MCP, Excel do dashboard e Reforma Tributária.${sai ? ` Ficam só as ${limite} últimas: a versão ${sai.numero} será apagada.` : ''}`,
+      confirmLabel: 'Salvar versão',
+    });
+    if (ok) await acaoVersao(() => salvarVersaoDfc(empresaId));
+  }
+
+  async function aprovarVersaoPendente() {
+    const ok = await confirmarVersao({
+      title: `Aprovar a versão ${versaoPendente.numero} da DFC`,
+      description: `A versão ${versaoPendente.numero} (salva em ${quandoBR(versaoPendente.fechada_em)}${
+        versaoPendente.fechada_por_nome ? ` por ${versaoPendente.fechada_por_nome}` : ''
+      }, realizado até ${mesVersaoBR(versaoPendente.corte)}) passa a ser a publicada: dashboard Fluxo de Caixa, MCP, Excel do dashboard e Reforma Tributária.`,
+      confirmLabel: 'Aprovar versão',
+    });
+    if (ok) await acaoVersao(() => aprovarVersaoDfc(empresaId));
+  }
+
+  // Reprovar (só o Aprovador): o motivo é obrigatório e vai para o responsável (Workflows).
+  const [reprovando, setReprovando] = useState(false);
+  const [motivoReprovacao, setMotivoReprovacao] = useState('');
+  async function confirmarReprovacao() {
+    if (!motivoReprovacao.trim()) return;
+    setReprovando(false);
+    await acaoVersao(() => reprovarVersaoDfc(empresaId, motivoReprovacao.trim()));
+    setMotivoReprovacao('');
+  }
+
+  async function excluirVersaoAberta() {
+    const ok = await confirmarVersao({
+      title: `Excluir a versão ${versaoAberta.numero} da DFC`,
+      description: `Tudo o que foi alterado na versão ${versaoAberta.numero} (em edição), inclusive o orçamento gerado nela, volta ao que está na versão ${
+        versaoAberta.base_numero ?? versaoPublicada?.numero
+      }. As alterações registradas nela são apagadas junto (fica o registro da exclusão na versão ${versaoAberta.base_numero ?? versaoPublicada?.numero}).`,
+      confirmLabel: 'Excluir versão',
+      variant: 'danger',
+    });
+    if (ok) await acaoVersao(() => excluirVersaoDfc(empresaId));
+  }
 
   useEffect(() => {
     listEmpresas({ ativo: true, limit: 100 })
@@ -575,31 +737,7 @@ export default function DfcConstrutorasPage() {
                     />
                   </div>
                 )}
-                {abaAtiva === 'dfc' && (
-                  <div className="sm:min-w-48 sm:max-w-60 sm:flex-1">
-                    <label className="mb-1 block text-sm font-medium text-gray-700">Versão</label>
-                    <SearchableSelect
-                      value={versaoFluxo ?? versoesFluxo[0]?.numero ?? ''}
-                      onChange={(v) => {
-                        if (!v) return;
-                        // A última volta a ser "null": acompanha uma versão nova salva depois.
-                        setVersaoFluxo(Number(v) === versoesFluxo[0]?.numero ? null : Number(v));
-                      }}
-                      disabled={!empresaId || !versoesFluxo.length}
-                      options={versoesFluxo.map((v, i) => ({
-                        value: v.numero,
-                        label: `Versão ${v.numero}${i === 0 ? ' (última)' : ''} · ${new Date(v.criado_em).toLocaleDateString('pt-BR', {
-                          day: '2-digit',
-                          month: '2-digit',
-                          year: '2-digit',
-                        })}`,
-                      }))}
-                      placeholder="Nenhuma versão salva"
-                      clearable={false}
-                      larguraPainel={280}
-                    />
-                  </div>
-                )}
+                {/* O filtro Versão saiu: as versões da DFC ficam na aba Versões (Visualizar). */}
                 {abaAtiva === 'orcamentos' && (
                 <>
                 <div className="sm:min-w-56 sm:max-w-xs sm:flex-1">
@@ -614,31 +752,24 @@ export default function DfcConstrutorasPage() {
                     larguraPainel={320}
                   />
                 </div>
-                <div className="sm:min-w-48 sm:max-w-60 sm:flex-1">
-                  <label className="mb-1 block text-sm font-medium text-gray-700">Versão</label>
-                  <SearchableSelect
-                    value={versaoOrcamento === 'nova' ? 'nova' : (versaoOrcamento ?? versoesOrcamento.lista[0]?.numero ?? '')}
-                    onChange={(v) => {
-                      if (!v) return;
-                      setVersaoOrcamento(v === 'nova' ? 'nova' : Number(v));
-                    }}
-                    disabled={!empresaId || (!versoesOrcamento.lista.length && !versoesOrcamento.temNova)}
-                    options={[
-                      ...(versoesOrcamento.temNova ? [{ value: 'nova', label: 'Nova versão (não salva)' }] : []),
-                      ...versoesOrcamento.lista.map((v, i) => ({
-                        value: v.numero,
-                        label: `Versão ${v.numero}${i === 0 ? ' (última)' : ''} · ${new Date(v.criado_em).toLocaleDateString('pt-BR', {
-                          day: '2-digit',
-                          month: '2-digit',
-                          year: '2-digit',
-                        })}`,
-                      })),
-                    ]}
-                    placeholder="Nenhuma versão salva"
-                    clearable={false}
-                    larguraPainel={280}
-                  />
-                </div>
+                {/* Versões da DFC: o Orçamento mostrado é o gravado na versão (aberta ou salva); com um orçamento gerado
+                    e ainda não gravado, dá pra alternar com a prévia. */}
+                {versoesOrcamento.temNova && (
+                  <div className="sm:min-w-48 sm:max-w-60 sm:flex-1">
+                    <label className="mb-1 block text-sm font-medium text-gray-700">Orçamento</label>
+                    <SearchableSelect
+                      value={versaoOrcamento === 'nova' ? 'nova' : 'gravado'}
+                      onChange={(v) => v && setVersaoOrcamento(v === 'nova' ? 'nova' : null)}
+                      disabled={!empresaId}
+                      options={[
+                        { value: 'nova', label: 'Gerado (ainda não gravado)' },
+                        { value: 'gravado', label: `Gravado na versão ${versaoAberta?.numero ?? ultimaSalva?.numero ?? ''}` },
+                      ]}
+                      clearable={false}
+                      larguraPainel={280}
+                    />
+                  </div>
+                )}
                 </>
                 )}
               </>
@@ -876,27 +1007,36 @@ export default function DfcConstrutorasPage() {
               >
                 {baixandoLayout ? <Loader2 size={18} className="animate-spin" /> : <FileSpreadsheet size={18} />}
               </Button>
-              <Button
-                type="button"
-                variant="secondary"
-                className="!px-2.5"
-                onClick={() => setNovaVersaoOrcamentoAberta(true)}
-                disabled={!empresaId}
-                title="Nova versão"
-                aria-label="Nova versão"
-              >
-                <FilePlus2 size={18} />
-              </Button>
-              <Button
-                type="button"
-                className="!px-2.5"
-                onClick={() => orcamentosTabRef.current?.salvarVersao()}
-                disabled={!empresaId || !orcamentoEmNova}
-                title={orcamentoEmNova ? 'Salvar versão' : 'Monte uma nova versão pra poder salvar'}
-                aria-label="Salvar versão"
-              >
-                <Save size={18} />
-              </Button>
+              {/* Versões da DFC: "Gerar orçamento" (antes "Nova versão") e "Gravar orçamento" (antes "Salvar versão")
+                  só com a versão da DFC aberta — o orçamento fica cravado ao salvar a versão na aba Versões. */}
+              {!somenteLeitura && (
+                <>
+                  <Button
+                    type="button"
+                    variant="secondary"
+                    className="!px-2.5"
+                    onClick={() => setNovaVersaoOrcamentoAberta(true)}
+                    disabled={!empresaId}
+                    title="Gerar orçamento"
+                    aria-label="Gerar orçamento"
+                  >
+                    <FilePlus2 size={18} />
+                  </Button>
+                  <Button
+                    type="button"
+                    className="!px-2.5"
+                    onClick={async () => {
+                      await orcamentosTabRef.current?.salvarVersao(versaoAberta?.numero);
+                      carregarVersoesDfc();
+                    }}
+                    disabled={!empresaId || !orcamentoEmNova}
+                    title={orcamentoEmNova ? `Gravar o orçamento na versão ${versaoAberta?.numero ?? ''}` : 'Gere o orçamento pra poder gravar'}
+                    aria-label="Gravar orçamento"
+                  >
+                    <Save size={18} />
+                  </Button>
+                </>
+              )}
               <Button
                 type="button"
                 variant="secondary"
@@ -916,7 +1056,7 @@ export default function DfcConstrutorasPage() {
           {abaAtiva === 'plano-contas' && planoAberto && (
             <div className="flex shrink-0 flex-col items-end gap-1.5">
               <div className="flex items-center gap-2">
-                {planoCentro && (
+                {planoCentro && !somenteLeitura && (
                   <button
                     type="button"
                     onClick={excluirVersaoPlano}
@@ -966,7 +1106,7 @@ export default function DfcConstrutorasPage() {
             </div>
           )}
 
-          {abaAtiva === 'parametros' && (
+          {abaAtiva === 'parametros' && !somenteLeitura && (
             <div className="flex shrink-0 items-center gap-2">
               <Button
                 type="button"
@@ -980,7 +1120,7 @@ export default function DfcConstrutorasPage() {
             </div>
           )}
 
-          {abaAtiva === 'mascaras' && (
+          {abaAtiva === 'mascaras' && !somenteLeitura && (
             <div className="flex shrink-0 items-center gap-2">
               <Button type="button" onClick={() => mascarasTabRef.current?.abrirNova()} disabled={!empresaId}>
                 <Plus size={16} />
@@ -988,9 +1128,158 @@ export default function DfcConstrutorasPage() {
               </Button>
             </div>
           )}
+
+          {abaAtiva === 'versoes' && empresaId && estadoVersoes && (
+            // Gerar nova versão / Editar última versão (sem versão aberta) ou Excluir / Salvar a aberta; Aprovar e
+            // Reprovar só pro Aprovador da DFC (Matriz de Alçadas).
+            <div className="flex shrink-0 flex-col items-end gap-1.5">
+              <div className="flex shrink-0 items-center gap-2">
+                {estadoVersoes.pode_aprovar && (
+                  <Button type="button" variant="secondary" onClick={() => setReprovando(true)} disabled={processandoVersao} className="!text-red-600">
+                    <CircleX size={16} />
+                    Reprovar versão {versaoPendente.numero}
+                  </Button>
+                )}
+                {estadoVersoes.pode_aprovar && (
+                  <Button type="button" onClick={aprovarVersaoPendente} disabled={processandoVersao} className="!bg-emerald-600 hover:!bg-emerald-700">
+                    <BadgeCheck size={16} />
+                    Aprovar versão {versaoPendente.numero}
+                  </Button>
+                )}
+                {versaoAberta ? (
+                  <>
+                    <Button type="button" variant="secondary" onClick={excluirVersaoAberta} disabled={processandoVersao}>
+                      <Trash2 size={16} />
+                      Excluir versão {versaoAberta.numero}
+                    </Button>
+                    <Button type="button" onClick={salvarVersaoAberta} disabled={processandoVersao}>
+                      {processandoVersao ? <Loader2 size={16} className="animate-spin" /> : <Save size={16} />}
+                      Salvar versão {versaoAberta.numero}
+                    </Button>
+                  </>
+                ) : (
+                  <>
+                    <Button type="button" variant="secondary" onClick={editarUltimaVersao} disabled={processandoVersao || !ultimaSalva}>
+                      <PencilLine size={16} />
+                      Editar última versão
+                    </Button>
+                    <Button type="button" onClick={gerarNovaVersao} disabled={processandoVersao}>
+                      {processandoVersao ? <Loader2 size={16} className="animate-spin" /> : <CopyPlus size={16} />}
+                      Gerar nova versão
+                    </Button>
+                  </>
+                )}
+              </div>
+            </div>
+          )}
         </div>
       </Card>
 
+      {/* Em qual versão da DFC a tela está (aba Versões) — o mesmo aviso da DRE Construtoras. */}
+      {empresaId && estadoVersoes && (
+        <div
+          className={`flex flex-wrap items-center gap-x-3 gap-y-1 rounded-lg border px-3 py-2 text-xs ${
+            versaoVisualizada
+              ? 'border-amber-200 bg-amber-50 text-amber-800'
+              : versaoAberta
+                ? 'border-primary-100 bg-primary-50/60 text-primary-800'
+                : 'border-gray-200 bg-white text-gray-600'
+          }`}
+        >
+          {versaoVisualizada ? (
+            <>
+              <Lock size={14} className="shrink-0" />
+              <span>
+                Visualizando a <strong>versão {versaoVisualizada}</strong> da DFC
+                {versaoVista
+                  ? `, salva em ${quandoBR(versaoVista.fechada_em)}${versaoVista.fechada_por_nome ? ` por ${versaoVista.fechada_por_nome}` : ''} (realizado até ${mesVersaoBR(versaoVista.corte)})`
+                  : ''}
+                . Só leitura: é a DFC como estava nessa versão.
+              </span>
+              <button
+                type="button"
+                onClick={() => atualizarParams({ versao: null })}
+                className="ml-auto inline-flex items-center gap-1 rounded-md border border-amber-300 bg-white px-2 py-0.5 font-medium text-amber-800 hover:bg-amber-100"
+              >
+                <Undo2 size={13} /> Voltar para a versão atual
+              </button>
+            </>
+          ) : versaoAberta ? (
+            <>
+              <LockOpen size={14} className="shrink-0" />
+              <span>
+                <strong>Versão {versaoAberta.numero} em edição</strong> — aberta por {versaoAberta.aberta_por_nome || '—'} em {quandoBR(versaoAberta.aberta_em)}; realizado até{' '}
+                {mesVersaoBR(versaoAberta.corte)}
+                {versaoAberta.origem === 'EDICAO' ? ' (congelado)' : ' (atualizado pelo Monitor de Integrações)'};{' '}
+                {estadoVersoes.orcamento
+                  ? `orçamento gerado em ${quandoBR(estadoVersoes.orcamento.criado_em)}${estadoVersoes.orcamento.usuario ? ` por ${estadoVersoes.orcamento.usuario}` : ''}`
+                  : 'orçamento ainda não gerado nesta versão (aba Projeções › Gerar orçamento)'}
+                . As alterações só são publicadas ao salvar a versão (aba Versões).
+              </span>
+            </>
+          ) : versaoReprovada ? (
+            <>
+              <CircleX size={14} className="shrink-0 text-red-600" />
+              <span>
+                <strong className="text-red-700">Versão {versaoReprovada.numero} reprovada</strong>
+                {versaoReprovada.reprovada_por_nome ? ` por ${versaoReprovada.reprovada_por_nome}` : ''} em {quandoBR(versaoReprovada.reprovada_em)}: “
+                {versaoReprovada.reprovacao_motivo}” — para corrigir, use Editar última versão na aba Versões e salve de novo. O dashboard segue na versão{' '}
+                {versaoPublicada?.numero}.
+              </span>
+            </>
+          ) : versaoPendente ? (
+            <>
+              <Lock size={14} className="shrink-0" />
+              <span>
+                <strong>Versão {versaoPendente.numero} aguardando aprovação</strong>
+                {aprovadorDfc ? ` de ${aprovadorDfc.nome}` : ''} — salva em {quandoBR(versaoPendente.fechada_em)}
+                {versaoPendente.fechada_por_nome ? ` por ${versaoPendente.fechada_por_nome}` : ''} (realizado até {mesVersaoBR(versaoPendente.corte)}). O dashboard
+                segue na versão {versaoPublicada?.numero} até a aprovação.
+              </span>
+            </>
+          ) : (
+            <>
+              <Lock size={14} className="shrink-0" />
+              <span>
+                DFC fechada na <strong>versão {versaoPublicada?.numero}</strong>
+                {versaoPublicada?.fechada_em
+                  ? `, salva em ${quandoBR(versaoPublicada.fechada_em)}${versaoPublicada.fechada_por_nome ? ` por ${versaoPublicada.fechada_por_nome}` : ''}`
+                  : ''}{' '}
+                (realizado até {mesVersaoBR(versaoPublicada?.corte)}). Para alterar, gere uma nova versão ou edite a última na aba Versões.
+              </span>
+            </>
+          )}
+          {erroVersoes && <span className="w-full text-red-600">{erroVersoes}</span>}
+        </div>
+      )}
+
+      <Modal open={reprovando} onClose={() => setReprovando(false)} title={`Reprovar a versão ${versaoPendente?.numero ?? ''} da DFC`} maxWidthClass="max-w-lg">
+        <div className="space-y-3">
+          <p className="text-sm text-gray-600">
+            A versão não é publicada (o dashboard segue na versão {versaoPublicada?.numero}). O motivo fica registrado na versão e vai para o responsável
+            (Workflows).
+          </p>
+          <textarea
+            value={motivoReprovacao}
+            onChange={(e) => setMotivoReprovacao(e.target.value)}
+            rows={4}
+            maxLength={2000}
+            autoFocus
+            placeholder="Motivo da reprovação (obrigatório)"
+            className="w-full rounded-lg border border-gray-200 px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-red-100"
+          />
+          <div className="flex justify-end gap-2">
+            <Button type="button" variant="secondary" onClick={() => setReprovando(false)}>
+              Cancelar
+            </Button>
+            <Button type="button" onClick={confirmarReprovacao} disabled={!motivoReprovacao.trim()} className="!bg-red-600 hover:!bg-red-700">
+              <CircleX size={16} /> Reprovar versão
+            </Button>
+          </div>
+        </div>
+      </Modal>
+
+      <LeituraDfcContext.Provider value={leituraDfc}>
       <div>
         <Tabs tabs={TABS} activeId={tabAtiva.id} onChange={(aba) => atualizarParams({ aba })} semIcones={menuAberto} />
 
@@ -1015,6 +1304,7 @@ export default function DfcConstrutorasPage() {
           <DfcAvancosTab empresaId={empresaId} inicio={inicioAvancos} fim={fimAvancos} />
         ) : tabAtiva.id === 'plano-contas' ? (
           planoAberto ? (
+            <SoLeituraDfc>
             <DfcPlanoContasTab
               empresaId={empresaId}
               search={buscaPlano}
@@ -1027,6 +1317,7 @@ export default function DfcConstrutorasPage() {
                 setRefreshTokenCardsPlano((n) => n + 1);
               }}
             />
+            </SoLeituraDfc>
           ) : (
             <PlanosContasLista
               empresaId={empresaId}
@@ -1038,7 +1329,9 @@ export default function DfcConstrutorasPage() {
         ) : tabAtiva.id === 'ciweb' ? (
           <DfcCiwebTab ref={ciwebTabRef} empresaId={empresaId} search={buscaCiweb} tipo={tipoCiweb} />
         ) : tabAtiva.id === 'centros-custos' ? (
-          <DfcCentrosTab empresaId={empresaId} search={buscaCentros} situacao={situacaoCentros} />
+          <SoLeituraDfc>
+            <DfcCentrosTab empresaId={empresaId} search={buscaCentros} situacao={situacaoCentros} />
+          </SoLeituraDfc>
         ) : tabAtiva.id === 'parametros' ? (
           <DfcParametrosTab
             ref={parametrosTabRef}
@@ -1057,14 +1350,18 @@ export default function DfcConstrutorasPage() {
             onStatusChange={setStatusParametros}
           />
         ) : tabAtiva.id === 'mascaras' ? (
-          <DfcMascarasTab ref={mascarasTabRef} empresaId={empresaId} />
+          <SoLeituraDfc>
+            <DfcMascarasTab ref={mascarasTabRef} empresaId={empresaId} />
+          </SoLeituraDfc>
         ) : tabAtiva.id === 'contas-correntes' ? (
-          <DfcContasCorrentesTab
-            ref={contasTabRef}
-            empresaId={empresaId}
-            search={buscaContas}
-            onSincronizando={setSincronizandoContas}
-          />
+          <SoLeituraDfc>
+            <DfcContasCorrentesTab
+              ref={contasTabRef}
+              empresaId={empresaId}
+              search={buscaContas}
+              onSincronizando={setSincronizandoContas}
+            />
+          </SoLeituraDfc>
         ) : tabAtiva.id === 'divida-pj' ? (
           <DfcDividaPjTab empresaId={empresaId} search={buscaDividaPj} />
         ) : tabAtiva.id === 'dfc' ? (
@@ -1073,15 +1370,23 @@ export default function DfcConstrutorasPage() {
             inicio={inicioOrcamento}
             fim={fimOrcamento}
             centros={centrosFluxo}
-            versao={versaoFluxo}
             onVersoes={setVersoesFluxo}
             telaCheia={fluxoTelaCheia}
             onSairTelaCheia={() => setFluxoTelaCheia(false)}
+          />
+        ) : tabAtiva.id === 'versoes' ? (
+          <VersoesDfcTab
+            empresaId={empresaId}
+            estado={estadoVersoes}
+            erro={erroVersoes}
+            versaoVisualizada={versaoVisualizada}
+            onVisualizar={(numero) => atualizarParams(numero ? { versao: numero, aba: 'dfc' } : { versao: null })}
           />
         ) : (
           <AbaEmConstrucao key={tabAtiva.id} empresaId={empresaId} icon={tabAtiva.icon} titulo={tabAtiva.label} />
         )}
       </div>
+      </LeituraDfcContext.Provider>
 
       <NovaVersaoPlanoModal
         open={novaVersaoAberta}

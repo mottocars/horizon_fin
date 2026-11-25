@@ -132,7 +132,14 @@ async function criarVersao(req, res, next) {
     const empresaId = empresaIdSchema.parse(req.params.empresaId);
     const siengeId = siengeIdSchema.parse(req.params.siengeId);
     const dados = versaoBodySchema.parse(req.body);
-    res.status(201).json(await service.criarVersao(empresaId, siengeId, req.user.id, dados));
+    const criada = await service.criarVersao(empresaId, siengeId, req.user.id, dados);
+    // Versões da DFC: o carimbo (aba Versões › Parâmetros).
+    const { carimbar, rotuloCentro } = require('../dfc-versoes/carimbo');
+    await carimbar(req, {
+      descricao: `${await rotuloCentro(empresaId, siengeId)}: salvou a versão ${criada?.versao ?? ''} dos Parâmetros.`.replace('versão  dos', 'versão dos'),
+      detalhes: { centro_id: siengeId, parametros: dados },
+    });
+    res.status(201).json(criada);
   } catch (err) {
     tratar(err, next);
   }
