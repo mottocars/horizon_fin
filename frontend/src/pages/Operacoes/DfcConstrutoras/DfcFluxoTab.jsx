@@ -454,7 +454,7 @@ export default function DfcFluxoTab({
     // Fonte preta em todos os níveis, como na DRE; a linha aberta (o nível acima do que está sendo visto) fica em
     // negrito — `emAberto` em linha() (pedido do usuário).
     n1: { fundo: 'bg-gray-50', texto: 'text-xs uppercase tracking-wide text-gray-900', py: 'py-2', borda: 'border-gray-200' },
-    lado: { fundo: 'bg-white', texto: 'text-[11px] uppercase tracking-wider text-gray-900', py: 'py-2', borda: 'border-gray-100' },
+    lado: { fundo: 'bg-white', texto: 'text-xs uppercase tracking-wide text-gray-900', py: 'py-2', borda: 'border-gray-100' },
     n2: { fundo: 'bg-white', texto: 'text-xs text-gray-900', py: 'py-1.5', borda: 'border-gray-100' },
     conta: { fundo: 'bg-white', texto: 'text-xs text-gray-900', py: 'py-1.5', borda: 'border-gray-100' },
   };
