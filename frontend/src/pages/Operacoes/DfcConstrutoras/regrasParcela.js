@@ -25,5 +25,7 @@ export function regrasParcela(mascaras) {
     if (!lista) return null;
     return (lista.find((m) => tipo && m.tipos.includes(tipo)) || lista[0]).id;
   };
-  return { assumida, mascaraDe };
+  // Todas as máscaras que assumem a conta, na ordem da aba.
+  const mascarasDe = (conta) => (porConta.get(Number(conta)) || []).map((m) => m.id);
+  return { assumida, mascaraDe, mascarasDe };
 }

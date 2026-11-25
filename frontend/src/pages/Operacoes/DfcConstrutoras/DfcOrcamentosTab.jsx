@@ -63,6 +63,10 @@ function mesesEntre(inicio, fim) {
   return meses;
 }
 
+// Chave da linha de conta nos valores: o código da conta ou, na conta assumida por uma máscara por tipo
+// de parcela, 'conta@máscara' (a mesma conta aparece em cada máscara que a assume).
+const idValor = (c) => c.chaveValor ?? c.sienge_id;
+
 // Mesma lógica de PlanoFinanceiroDetalhe.jsx::formatarCodigoMascara (duplicada aqui de
 // propósito — telas não importam umas das outras nesse projeto).
 function codigoFormatado(conta) {
@@ -388,33 +392,41 @@ const DfcOrcamentosTab = forwardRef(function DfcOrcamentosTab(
   // Estrutura (máscara 1 > máscara 2 > contas) de cada plano: o Global e a versão própria de cada
   // centro que tem uma (aba Plano Contas) — o centro com versão própria usa a dele, os demais o Global.
   const filtroOrigens = useMemo(() => (origens.length ? new Set(origens) : null), [origens]);
+  // Máscaras detalhadas por tipo de parcela (aba Máscaras): quem recebe cada valor da conta que assumem.
+  const regras = useMemo(() => regrasParcela(dados?.mascaras), [dados]);
   const { centros, planoGlobal, planosCentro } = useMemo(() => {
     if (!dados) return { centros: [], planoGlobal: { estrutura: [], todasContas: [], origemDaConta: {} }, planosCentro: {} };
     const analiticas = [...dados.contas]
       .filter((c) => c.tp_conta !== 'T')
       .sort((a, b) => String(a.sienge_id).localeCompare(String(b.sienge_id)));
     const idsNivel2 = new Set(dados.mascaras.flatMap((g) => g.filhos.map((f) => f.id)));
-    // Conta assumida por máscaras detalhadas por tipo de parcela (aba Máscaras): fica na primeira dessas
-    // máscaras, com a soma dos tipos de parcela (o detalhe por tipo está na aba DFC), sem origem do plano
-    // (os valores vêm das origens da máscara — nada a digitar aqui).
-    const regras = regrasParcela(dados.mascaras);
+    // Conta assumida por máscaras detalhadas por tipo de parcela (aba Máscaras): aparece em CADA máscara
+    // que a assume, com a soma só dos tipos de parcela daquela máscara (ex.: o FI da Projeção CEF na
+    // máscara CEF, os tipos do Aging na outra) — `chaveValor` = 'conta@máscara'. Sem origem do plano (os
+    // valores vêm das origens da máscara — nada a digitar aqui); o filtro "Origem DFC" olha as origens
+    // (Tipo Projeção) da máscara.
 
     function montar(classificacoes) {
       const mascaraDaConta = Object.fromEntries(classificacoes.map((c) => [c.sienge_id, c.mascara_id]));
       const origemDaConta = Object.fromEntries(classificacoes.map((c) => [c.sienge_id, c.origem_projecao]));
       // "Projeta DFC" desmarcado no plano: a conta fica fora do Orçamento. Sem linha = marcado.
       const foraDoDfc = new Set(classificacoes.filter((c) => c.projeta_dfc === false).map((c) => c.sienge_id));
-      analiticas.forEach((c) => {
-        if (!regras.assumida(c.sienge_id)) return;
-        mascaraDaConta[c.sienge_id] = regras.mascaraDe(c.sienge_id);
+      const assumidas = analiticas.filter((c) => regras.assumida(c.sienge_id));
+      assumidas.forEach((c) => {
         origemDaConta[c.sienge_id] = null;
-        foraDoDfc.delete(c.sienge_id);
       });
       const contasDoPlano = analiticas.filter(
         (c) =>
+          !regras.assumida(c.sienge_id) &&
           !foraDoDfc.has(c.sienge_id) &&
           (!filtroOrigens || filtroOrigens.has(origemDaConta[c.sienge_id] ?? ORIGEM_NAO_INFORMADA))
       );
+      const daMascara = (f) =>
+        !filtroOrigens || (f.parcela_origens || []).some((o) => filtroOrigens.has(o))
+          ? assumidas
+              .filter((c) => regras.mascarasDe(c.sienge_id).includes(f.id))
+              .map((c) => ({ ...c, chaveValor: `${c.sienge_id}@${f.id}` }))
+          : [];
       // Máscara sem nenhuma conta com "Projeta DFC" nesse plano não aparece (pedido do usuário) —
       // tanto a de nível 2 quanto a de nível 1 que ficar sem nenhuma de nível 2.
       const grupos = dados.mascaras
@@ -425,7 +437,7 @@ const DfcOrcamentosTab = forwardRef(function DfcOrcamentosTab(
             .map((f) => ({
               chave: `m${f.id}`,
               descricao: f.descricao,
-              contas: contasDoPlano.filter((c) => mascaraDaConta[c.sienge_id] === f.id),
+              contas: [...contasDoPlano.filter((c) => mascaraDaConta[c.sienge_id] === f.id), ...daMascara(f)],
             }))
             .filter((f) => f.contas.length > 0),
         }))
@@ -457,7 +469,7 @@ const DfcOrcamentosTab = forwardRef(function DfcOrcamentosTab(
       planoGlobal: global,
       planosCentro: porCentro,
     };
-  }, [dados, filtroOrigens]);
+  }, [dados, filtroOrigens, regras]);
 
   // A conta é "HORIZON - INFORMADO" no plano que o centro usa? (o valor vem da digitação)
   const contaInformada = useCallback(
@@ -483,9 +495,11 @@ const DfcOrcamentosTab = forwardRef(function DfcOrcamentosTab(
   const { valorConta, valorVersao, execucaoPorCentro } = useMemo(() => {
     const mapaDe = (lista) => {
       const mapa = new Map();
-      // Soma: a conta de máscara por tipo de parcela tem um valor por tipo no mesmo centro × conta × mês.
+      // Conta de máscara por tipo de parcela: um valor por tipo — cada um soma na máscara que tem o tipo
+      // ('conta@máscara', mesma regra da aba DFC).
       (lista || []).forEach((v) => {
-        const k = `${v.centro_id}|${v.sienge_id}|${v.mes}`;
+        const conta = regras.assumida(v.sienge_id) ? `${v.sienge_id}@${regras.mascaraDe(v.sienge_id, v.tipo_parcela || '')}` : v.sienge_id;
+        const k = `${v.centro_id}|${conta}|${v.mes}`;
         mapa.set(k, (mapa.get(k) ?? 0) + Number(v.valor));
       });
       return (sid, conta, mes) => mapa.get(`${sid}|${conta}|${mes}`) ?? null;
@@ -503,7 +517,7 @@ const DfcOrcamentosTab = forwardRef(function DfcOrcamentosTab(
     }
     const daVersao = mapaDe(salva?.valores);
     return { valorConta: daVersao, valorVersao: daVersao, execucaoPorCentro: execucoes };
-  }, [dados, salva, nova, previa, contaInformada, rascunho, travado]);
+  }, [dados, salva, nova, previa, contaInformada, rascunho, travado, regras]);
   const centavos = (v) => (v === null || v === undefined ? null : Math.round(v * 100));
 
   function trocarInformados(centroId, contaId, valoresPorMes) {
@@ -605,6 +619,8 @@ const DfcOrcamentosTab = forwardRef(function DfcOrcamentosTab(
   // contas digitadas). `valorDigitado`: o que está no campo (contas "HORIZON - INFORMADO").
   function abrirMenu(e, { centro, conta, mes, informada, valorDigitado }) {
     e.preventDefault();
+    // Linha de máscara por tipo de parcela (soma de vários tipos): sem Log de alterações.
+    if (conta.chaveValor) return;
     const alvo = {
       centroId: centro.sienge_id,
       contaId: conta.sienge_id,
@@ -629,7 +645,7 @@ const DfcOrcamentosTab = forwardRef(function DfcOrcamentosTab(
   function somaContas(sid, contas, mes, fonte = valorConta) {
     let total = null;
     contas.forEach((c) => {
-      const v = fonte(sid, c.sienge_id, mes);
+      const v = fonte(sid, idValor(c), mes);
       if (v !== null) total = (total || 0) + v;
     });
     return total === null ? null : Math.round(total * 100) / 100;
@@ -645,7 +661,7 @@ const DfcOrcamentosTab = forwardRef(function DfcOrcamentosTab(
     const soma = (sid, contas, mes) => {
       let total = null;
       contas.forEach((c) => {
-        const v = valorConta(sid, c.sienge_id, mes);
+        const v = valorConta(sid, idValor(c), mes);
         if (v !== null) total = (total || 0) + v;
       });
       return total === null ? null : Math.round(total * 100) / 100;
@@ -663,7 +679,7 @@ const DfcOrcamentosTab = forwardRef(function DfcOrcamentosTab(
           considerar(soma(sid, n1.contas, m));
           n1.filhos.forEach((n2) => {
             considerar(soma(sid, n2.contas, m));
-            n2.contas.forEach((c) => considerar(valorConta(sid, c.sienge_id, m)));
+            n2.contas.forEach((c) => considerar(valorConta(sid, idValor(c), m)));
           });
         });
       });
@@ -676,7 +692,7 @@ const DfcOrcamentosTab = forwardRef(function DfcOrcamentosTab(
     let maior = 0;
     const considerar = (contas, sid) => {
       let t = 0;
-      meses.forEach((m) => contas.forEach((c) => (t += valorConta(sid, c.sienge_id, m) || 0)));
+      meses.forEach((m) => contas.forEach((c) => (t += valorConta(sid, idValor(c), m) || 0)));
       if (t) maior = Math.max(maior, larguraTexto(dinheiro(Math.round(t * 100) / 100)));
     };
     centros.forEach((centro) => {
@@ -1128,7 +1144,7 @@ const DfcOrcamentosTab = forwardRef(function DfcOrcamentosTab(
                                           // Digitável só na nova versão; numa versão salva, só leitura.
                                           const informada = previa && contaInformada(centro.sienge_id, conta.sienge_id);
                                           return (
-                                            <tr key={`${chaveN2}|${conta.sienge_id}`} className="group/linha">
+                                            <tr key={`${chaveN2}|${idValor(conta)}`} className="group/linha">
                                               <td
                                                 className="sticky left-0 z-10 border-b border-r border-gray-100 border-r-gray-200 bg-white py-1.5 pr-3 group-hover/linha:bg-gray-50"
                                                 style={{ paddingLeft: RECUO[3] }}
@@ -1144,8 +1160,8 @@ const DfcOrcamentosTab = forwardRef(function DfcOrcamentosTab(
                                               </td>
                                               {celulaTotal(
                                                 3,
-                                                (m) => valorConta(centro.sienge_id, conta.sienge_id, m),
-                                                (m) => valorVersao(centro.sienge_id, conta.sienge_id, m)
+                                                (m) => valorConta(centro.sienge_id, idValor(conta), m),
+                                                (m) => valorVersao(centro.sienge_id, idValor(conta), m)
                                               )}
                                               {informada
                                                 ? meses.map((m) =>
@@ -1179,9 +1195,9 @@ const DfcOrcamentosTab = forwardRef(function DfcOrcamentosTab(
                                                   )
                                                 : celulas(
                                                     3,
-                                                    (m) => valorConta(centro.sienge_id, conta.sienge_id, m),
+                                                    (m) => valorConta(centro.sienge_id, idValor(conta), m),
                                                     (e, m) => abrirMenu(e, { centro, conta, mes: m, informada: false }),
-                                                    (m) => valorVersao(centro.sienge_id, conta.sienge_id, m)
+                                                    (m) => valorVersao(centro.sienge_id, idValor(conta), m)
                                                   )}
                                             </tr>
                                           );

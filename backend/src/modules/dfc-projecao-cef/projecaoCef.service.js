@@ -288,7 +288,13 @@ async function atualizar(empresaId, siengeId, usuarioId) {
 // Valores da projeção pro Orçamento: cada saída cai na conta analítica com a Origem Projeção
 // correspondente (aba Plano Contas) — do plano do próprio centro, se ele tiver versão própria, senão
 // do Global. Cada origem CEF fica em uma conta só (índice único em cada plano).
+// Origem CEF usada por uma máscara detalhada por tipo de parcela (aba Máscaras — Tipo Projeção): vale a
+// máscara (a conta que ela assume, no tipo de parcela dela), no lugar da conta do plano — mesma regra do
+// Orçamento (dfcOrcamento.service::valoresAtuais).
 async function orcamento(empresaId) {
+  const { regrasParcela } = require('../dfc-mascaras/regrasParcela');
+  const dfcMascaras = require('../dfc-mascaras/dfcMascaras.service');
+  const regras = regrasParcela(await dfcMascaras.list(empresaId));
   const { rows: contas } = await pool.query(
     `SELECT NULL::int AS centro_id, origem_projecao, sienge_id FROM dfc_plano_contas
       WHERE empresa_id = $1 AND origem_projecao = ANY($2::text[])
@@ -323,9 +329,15 @@ async function orcamento(empresaId) {
   rows.forEach((r) => {
     const plano = planoDoCentro(r.sienge_id);
     Object.entries(SAIDAS).forEach(([origem, { coluna, sinal }]) => {
-      const conta = plano[origem];
       const v = Number(r[coluna]);
-      if (conta !== undefined && v !== 0) valores.push({ sienge_id: r.sienge_id, conta, mes: r.mes, valor: round2(v * sinal) });
+      if (v === 0) return;
+      const mascara = regras.cef.find((m) => m.origens.includes(origem));
+      if (mascara) {
+        valores.push({ sienge_id: r.sienge_id, conta: mascara.conta, tipo_parcela: mascara.tipo, mes: r.mes, valor: round2(v * sinal) });
+        return;
+      }
+      const conta = plano[origem];
+      if (conta !== undefined) valores.push({ sienge_id: r.sienge_id, conta, mes: r.mes, valor: round2(v * sinal) });
     });
   });
 
@@ -337,6 +349,7 @@ async function orcamento(empresaId) {
   planosUsados.forEach((chave) => {
     const onde = chave === 'global' ? 'no plano Global' : `na versão do plano de ${nomeVersao[chave]}`;
     Object.keys(SAIDAS).forEach((origem) => {
+      if (regras.cefPorOrigem.has(origem)) return; // vai pela máscara (aba Máscaras)
       if (planos[chave][origem] === undefined) avisos.push(`Nenhuma conta com a Origem Projeção ${origem} ${onde} (aba Plano Contas).`);
     });
   });
