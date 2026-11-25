@@ -449,12 +449,14 @@ export default function DfcFluxoTab({
   // como as linhas de total (azul claro, texto azul escuro), nível 1 cinza em negrito e maiúsculas, linhas
   // baixas; Projetado em amarelo pastel; negativo em vermelho.
   const ESTILO = {
-    saldo: { fundo: 'bg-[#cfe0ee]', texto: 'text-xs font-bold uppercase tracking-wide text-[#174a70]', py: 'py-2', borda: 'border-[#a9c4dc]' },
-    resultado: { fundo: 'bg-[#cfe0ee]', texto: 'text-xs font-bold uppercase tracking-wide text-[#174a70]', py: 'py-2', borda: 'border-[#a9c4dc]' },
-    n1: { fundo: 'bg-gray-50', texto: 'text-xs font-bold uppercase tracking-wide text-gray-900', py: 'py-1.5', borda: 'border-gray-200' },
-    lado: { fundo: 'bg-white', texto: 'text-[11px] font-semibold uppercase tracking-wider text-gray-500', py: 'py-1.5', borda: 'border-gray-100' },
-    n2: { fundo: 'bg-white', texto: 'text-xs text-gray-700', py: 'py-1', borda: 'border-gray-100' },
-    conta: { fundo: 'bg-white', texto: 'text-xs text-gray-500', py: 'py-1', borda: 'border-gray-100' },
+    saldo: { fundo: 'bg-[#cfe0ee]', texto: 'text-xs font-bold uppercase tracking-wide text-[#174a70]', py: 'py-2.5', borda: 'border-[#a9c4dc]' },
+    resultado: { fundo: 'bg-[#cfe0ee]', texto: 'text-xs font-bold uppercase tracking-wide text-[#174a70]', py: 'py-2.5', borda: 'border-[#a9c4dc]' },
+    // Fonte preta em todos os níveis, como na DRE; a linha aberta (o nível acima do que está sendo visto) fica em
+    // negrito — `emAberto` em linha() (pedido do usuário).
+    n1: { fundo: 'bg-gray-50', texto: 'text-xs uppercase tracking-wide text-gray-900', py: 'py-2', borda: 'border-gray-200' },
+    lado: { fundo: 'bg-white', texto: 'text-[11px] uppercase tracking-wider text-gray-900', py: 'py-2', borda: 'border-gray-100' },
+    n2: { fundo: 'bg-white', texto: 'text-xs text-gray-900', py: 'py-1.5', borda: 'border-gray-100' },
+    conta: { fundo: 'bg-white', texto: 'text-xs text-gray-900', py: 'py-1.5', borda: 'border-gray-100' },
   };
   const ehTotal = (tipo) => tipo === 'saldo' || tipo === 'resultado';
   // Coluna Total: as linhas de total (saldos e resultado) levam a cor delas; Saldo inicial e Saldo final não têm
@@ -462,7 +464,7 @@ export default function DfcFluxoTab({
   const tracoTotal = <span className="font-normal text-[#174a70]/40">—</span>;
   // Cor do número: negativo em vermelho; nas linhas de total, o azul escuro delas.
   const corValor = (v, tipo) =>
-    v < 0 ? 'text-red-700' : ehTotal(tipo) ? 'text-[#174a70]' : tipo === 'n1' ? 'text-gray-900' : tipo === 'conta' ? 'text-gray-600' : 'text-gray-700';
+    v < 0 ? 'text-red-700' : ehTotal(tipo) ? 'text-[#174a70]' : 'text-gray-900';
   // Fundo da célula de valor: Projetado em amarelo pastel (nível 1 um tom mais forte); linhas de total
   // com o azul delas em todas as colunas.
   const fundoCelula = (tipo, colTipo, e) =>
@@ -491,7 +493,9 @@ export default function DfcFluxoTab({
   function linha({ chave, tipo, rotulo: texto, sub, pc, nivel = 0, podeAbrir = false, dica, separar = false, onValor }) {
     const aberto = abertos.includes(chave);
     const e = ESTILO[tipo];
-    const numeros = ehTotal(tipo) || tipo === 'n1' ? 'font-bold' : '';
+    // Negrito: as linhas de total e a linha aberta (o nível acima do que está sendo visto).
+    const emAberto = aberto && podeAbrir;
+    const numeros = ehTotal(tipo) || emAberto ? 'font-bold' : '';
     return (
       <tr
         key={chave}
@@ -512,7 +516,7 @@ export default function DfcFluxoTab({
               />
             )}
             {sub && <span className="shrink-0 font-mono text-[11px] text-gray-400">{sub}</span>}
-            <span className={`min-w-0 truncate ${e.texto}`}>{texto}</span>
+            <span className={`min-w-0 truncate ${e.texto} ${!ehTotal(tipo) && emAberto ? 'font-bold' : ''}`}>{texto}</span>
             {dica && (
               <span title={dica} className="shrink-0 text-[#174a70]/50">
                 <Info size={13} />
@@ -572,7 +576,7 @@ export default function DfcFluxoTab({
               }
               className={`sticky z-10 border-b border-r border-b-blue-100 border-r-blue-200 px-2 text-right text-[11px] tabular-nums transition-colors ${e.py} ${
                 ehTotal(tipo) ? 'bg-[#cfe0ee]' : tipo === 'n1' ? 'bg-blue-100' : 'bg-blue-50 group-hover/linha:bg-blue-100'
-              } ${ehTotal(tipo) || tipo === 'n1' ? 'font-semibold' : ''} ${corDesvio(d)}`}
+              } ${ehTotal(tipo) || emAberto ? 'font-semibold' : ''} ${corDesvio(d)}`}
               style={{ left: esquerdaTotal[D] }}
             >
               {tipo === 'saldo' ? tracoTotal : semNada || !temRealizado ? '' : d === null ? '—' : formatoPct(d)}
@@ -598,7 +602,7 @@ export default function DfcFluxoTab({
                 }
                 className={`border-b px-2 text-right text-[11px] tabular-nums transition-colors ${e.borda} ${e.fundo} ${e.py} ${
                   ehTotal(tipo) ? '' : 'group-hover/linha:bg-gray-50'
-                } ${ehTotal(tipo) || tipo === 'n1' ? 'font-semibold' : ''} ${corDesvio(d)} ${parcial ? 'italic' : ''}`}
+                } ${ehTotal(tipo) || emAberto ? 'font-semibold' : ''} ${corDesvio(d)} ${parcial ? 'italic' : ''}`}
               >
                 {semNada ? '' : d === null ? '—' : formatoPct(d)}
               </td>
