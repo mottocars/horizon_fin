@@ -154,6 +154,7 @@ async function calcularItens(empresaId, etapasRows, { dataInicio, dataFim, costC
   const { rows } = await pool.query(
     `SELECT si.bill_id, si.installment_id, si.client_id, si.client_name, si.due_date,
             si.document_identification_name, si.document_number, si.installment_number,
+            TRIM(si.payment_term_id) AS payment_term_id, TRIM(si.payment_term_description) AS payment_term_description,
             si.corrected_balance_amount, si.original_amount, cat.cost_center_id, cat.cost_center_name
      FROM sie_income si
      JOIN sie_income_categorias cat
@@ -252,6 +253,9 @@ async function calcularItens(empresaId, etapasRows, { dataInicio, dataFim, costC
         document_identification_name: row.document_identification_name,
         document_number: row.document_number,
         installment_number: row.installment_number,
+        // Tipo da parcela no Sienge: sigla (coluna Tipo da Rotina) + nome completo (dica ao passar o mouse).
+        payment_term_id: row.payment_term_id,
+        payment_term_description: row.payment_term_description,
         valor: comp.total,
         composicao: comp,
         mensagem_whatsapp: mensagemWhatsapp,
@@ -406,6 +410,8 @@ async function listRotinas(empresaId, usuarioId, { dataInicio, dataFim, costCent
       document_identification_name: item.document_identification_name,
       document_number: item.document_number,
       installment_number: item.installment_number,
+      payment_term_id: item.payment_term_id,
+      payment_term_description: item.payment_term_description,
       valor: item.valor,
       composicao: item.composicao,
       mensagem_whatsapp: item.mensagem_whatsapp,

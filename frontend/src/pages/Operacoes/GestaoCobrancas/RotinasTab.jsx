@@ -17,7 +17,7 @@ import { CABECALHO_TABELA as CAB } from './ClustersCobranca/constantes';
 // cabeçalho fixo mais grossa pra marcar o limite durante a rolagem.
 const DIV_H = 'border-b border-gray-200';
 const DIV_V = 'border-l border-gray-200';
-const TOTAL_COLUNAS = 9;
+const TOTAL_COLUNAS = 10;
 
 // Valores sem centavos e clicáveis (composição do valor) — ComposicaoValor.jsx, o mesmo da Gestão das Parcelas.
 
@@ -728,10 +728,11 @@ export default function RotinasTab({
                 borda de baixo mais grossa, fonte xs e valores sem centavos. */}
             <table className="w-full border-separate border-spacing-0 text-left text-xs" style={{ tableLayout: 'fixed' }}>
               <colgroup>
-                <col className={mostrarRedistribuir ? 'w-[26%]' : 'w-[30%]'} />
-                <col className="w-[14%]" />
+                <col className={mostrarRedistribuir ? 'w-[23%]' : 'w-[27%]'} />
+                <col className="w-[13%]" />
                 <col className="w-[9%]" />
                 <col className="w-[9%]" />
+                <col className="w-[4%]" />
                 <col className="w-[8.5%]" />
                 <col className="w-[8.5%]" />
                 <col className="w-[7%]" />
@@ -767,6 +768,9 @@ export default function RotinasTab({
                   </th>
                   <th className={`${CAB.th} ${CAB.divisor} px-2 py-2.5 text-center font-medium`}>Valor</th>
                   <th className={`${CAB.th} ${CAB.divisor} px-2 py-2.5 text-center font-medium`}>Título</th>
+                  <th className={`${CAB.th} ${CAB.divisor} px-2 py-2.5 text-center font-medium`} title="Tipo da parcela no Sienge (passe o mouse na sigla para ver o nome)">
+                    Tipo
+                  </th>
                   <th className={`${CAB.th} ${CAB.divisor} px-2 py-2.5 text-center font-medium`}>Vencimento</th>
                   <th className={`${CAB.th} ${CAB.divisor} px-2 py-2.5 text-center font-medium`}>Data</th>
                   <th className={`${CAB.th} ${CAB.divisor} py-2 text-center font-medium`}>
@@ -844,6 +848,7 @@ export default function RotinasTab({
                         </td>
                         <td className={`${DIV_H} ${DIV_V} px-2 py-3`}></td>
                         <td className={`${DIV_H} ${DIV_V} px-2 py-3`}></td>
+                        <td className={`${DIV_H} ${DIV_V} px-2 py-3`}></td>
                         <td className={`${DIV_H} ${DIV_V} py-3 text-center`}>
                           <ProgressoCanal progresso={progressoDoCanal(resp.itens, 'whatsapp')} label="WhatsApp" />
                         </td>
@@ -882,6 +887,7 @@ export default function RotinasTab({
                                 <td className={`${DIV_H} ${DIV_V} px-2 py-2.5 text-center tabular-nums text-gray-700`}>
                                   {centro.totais.titulos} {centro.totais.titulos === 1 ? 'título' : 'títulos'}
                                 </td>
+                                <td className={`${DIV_H} ${DIV_V} px-2 py-2.5`}></td>
                                 <td className={`${DIV_H} ${DIV_V} px-2 py-2.5`}></td>
                                 <td className={`${DIV_H} ${DIV_V} px-2 py-2.5`}></td>
                                 <td className={`${DIV_H} ${DIV_V} py-2.5 text-center`}>
@@ -952,6 +958,19 @@ export default function RotinasTab({
                                           <>
                                             {item.bill_id} / {numeroParcela(item.installment_number)}
                                           </>
+                                        )}
+                                      </td>
+                                      {/* Tipo: sigla do tipo de parcela do Sienge (payment_term_id); o nome completo na dica. */}
+                                      <td className={`${DIV_H} ${DIV_V} px-2 py-2 text-center`}>
+                                        {item.payment_term_id ? (
+                                          <span
+                                            className="cursor-help font-mono text-xs font-semibold text-gray-600"
+                                            title={item.payment_term_description || item.payment_term_id}
+                                          >
+                                            {item.payment_term_id}
+                                          </span>
+                                        ) : (
+                                          <span className="text-gray-300">—</span>
                                         )}
                                       </td>
                                       <td className={`${DIV_H} ${DIV_V} px-2 py-2 text-center text-gray-500`}>{formatarData(item.due_date)}</td>
