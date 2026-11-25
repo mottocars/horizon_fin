@@ -91,4 +91,27 @@ async function filtros(req, res, next) {
   }
 }
 
-module.exports = { exercicios, lancamentos, filtros };
+// GET /:empresaId/excel — Exportar Excel da aba Financeiro: todos os exercícios, uma aba por ano (financeiro.excel.js),
+// montado no worker da exportação da DRE (fila, teto de memória, cancelado se o usuário desistir).
+async function excel(req, res, next) {
+  const cancelar = new AbortController();
+  res.on('close', () => {
+    if (!res.writableFinished) cancelar.abort();
+  });
+  try {
+    const { buffer, nome } = await require('../dre-exportacao/exportacao.isolada').gerarFinanceiro(
+      empresaIdSchema.parse(req.params.empresaId),
+      req.user.id,
+      { sinal: cancelar.signal }
+    );
+    res.setHeader('Content-Type', 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet');
+    res.setHeader('Content-Disposition', `attachment; filename="financeiro-dre.xlsx"; filename*=UTF-8''${encodeURIComponent(nome)}`);
+    res.setHeader('Access-Control-Expose-Headers', 'Content-Disposition');
+    res.end(buffer);
+  } catch (err) {
+    if (cancelar.signal.aborted) return undefined;
+    return tratar(err, next);
+  }
+}
+
+module.exports = { exercicios, lancamentos, filtros, excel };

@@ -45,3 +45,13 @@ export function listarLancamentosExercicioDre(
 export function listarFiltrosExercicioDre(empresaId, ano) {
   return http.get(`/dre-financeiro/${empresaId}/exercicios/${ano}/filtros`).then((res) => res.data);
 }
+
+// Exportar Excel: todos os exercícios de uma vez, uma aba por ano, com os lançamentos da listagem de cada um
+// (backend dre-financeiro/financeiro.excel.js).
+export function exportarFinanceiroDreExcel(empresaId) {
+  return http.get(`/dre-financeiro/${empresaId}/excel`, { responseType: 'blob' }).then((res) => {
+    const cabecalho = res.headers['content-disposition'] || '';
+    const utf8 = /filename\*=UTF-8''([^;]+)/i.exec(cabecalho);
+    return { blob: res.data, nome: utf8 ? decodeURIComponent(utf8[1]) : 'Financeiro DRE.xlsx' };
+  });
+}

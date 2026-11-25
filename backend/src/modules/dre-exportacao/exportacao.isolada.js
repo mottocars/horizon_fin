@@ -88,8 +88,16 @@ function executar({ dados, sinal, resolve, reject }) {
     });
     worker.on('error', (e) => {
       const semMemoria = e?.code === 'ERR_WORKER_OUT_OF_MEMORY';
-      if (semMemoria) console.error(`[dre-exportacao] Excel passou de ${MEMORIA_MB} MB e foi encerrado (empresa ${dados.empresaId}, ${dados.filtros.de} a ${dados.filtros.ate}).`);
-      encerrar(semMemoria ? erro(422, 'O Excel deste período é grande demais para gerar. Reduza o período (ex.: um ano) ou filtre os centros.') : e);
+      const financeiro = dados.tipo === 'financeiro';
+      if (semMemoria)
+        console.error(
+          `[dre-exportacao] Excel passou de ${MEMORIA_MB} MB e foi encerrado (empresa ${dados.empresaId}, ${financeiro ? 'Financeiro, todos os exercícios' : `${dados.filtros.de} a ${dados.filtros.ate}`}).`
+        );
+      encerrar(
+        semMemoria
+          ? erro(422, financeiro ? 'O Excel do Financeiro é grande demais para gerar.' : 'O Excel deste período é grande demais para gerar. Reduza o período (ex.: um ano) ou filtre os centros.')
+          : e
+      );
     });
     worker.on('exit', (codigo) => {
       if (!terminou) encerrar(new Error(`A geração do Excel terminou sem resposta (código ${codigo}).`));
@@ -98,8 +106,18 @@ function executar({ dados, sinal, resolve, reject }) {
 }
 
 async function gerar(empresaId, filtros, usuarioId, { sinal } = {}) {
+  return enfileirar({ tipo: 'dre', empresaId, filtros, usuarioId }, sinal);
+}
+
+// Exportar Excel da aba Financeiro (todos os exercícios — dre-financeiro/financeiro.excel.js): mesma fila e
+// mesmo worker do Excel de auditoria (passa de 100 mil linhas na GENESIS).
+async function gerarFinanceiro(empresaId, usuarioId, { sinal } = {}) {
+  return enfileirar({ tipo: 'financeiro', empresaId, filtros: {}, usuarioId }, sinal);
+}
+
+function enfileirar(pedido, sinal) {
   if (fila.length >= FILA_MAX) throw erro(429, 'Há muitas exportações do Excel da DRE na fila. Tente de novo em alguns minutos.');
-  const dados = { empresaId, filtros, usuarioId, contexto: contextoSerializavel() };
+  const dados = { ...pedido, contexto: contextoSerializavel() };
   return new Promise((resolve, reject) => {
     const tarefa = { dados, sinal, resolve, reject };
     if (sinal) {
@@ -121,4 +139,4 @@ async function gerar(empresaId, filtros, usuarioId, { sinal } = {}) {
   });
 }
 
-module.exports = { gerar };
+module.exports = { gerar, gerarFinanceiro };

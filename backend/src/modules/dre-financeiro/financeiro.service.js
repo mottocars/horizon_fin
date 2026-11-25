@@ -336,6 +336,31 @@ async function lancamentos(empresaId, ano, filtros = {}, { pagina = 1, porPagina
   };
 }
 
+// Exportar Excel da aba Financeiro (financeiro.excel.js, pedido do usuário, 25/11/2026): os lançamentos de
+// TODOS os exercícios de uma vez, iguais aos da listagem de cada um sem filtro (mesmas linhas, mesma ordem,
+// mesmo corte do realizado) — uma leitura só, do primeiro exercício até o limite do realizado; o Excel
+// separa por ano. Devolve também os exercícios (os cards), pra ter uma aba por card, até os vazios.
+async function lancamentosTodosExercicios(empresaId) {
+  const ex = await exercicios(empresaId);
+  if (!ex.exercicios.length) return { ...ex, linhas: [] };
+  const primeiroAno = ex.exercicios[ex.exercicios.length - 1].ano;
+  const limite = limiteDoRealizado();
+  const { rows } = await pool.query(
+    `WITH ${CTE_LINHAS}
+     SELECT origem, chave, titulo, to_char(data, 'YYYY-MM-DD') AS data, to_char(venc_min, 'YYYY-MM-DD') AS vencimento,
+            to_char(venc_max, 'YYYY-MM-DD') AS vencimento_ate, parcelas, documento, documento_nome, numero, contraparte,
+            centro_id::int AS centro_id, centro_nome, natureza_id, natureza_nome, mascara_nome,
+            ROUND(valor, 2) AS valor, ROUND(percentual, 2) AS percentual, status -- arredondados como na tela
+       FROM lc
+      ORDER BY data, origem DESC, chave, centro_original NULLS LAST, natureza_original NULLS LAST`,
+    [empresaId, `${primeiroAno}-01-01`, diaSeguinte(limite)]
+  );
+  return {
+    ...ex,
+    linhas: rows.map((l) => ({ ...l, valor: num(l.valor), percentual: l.percentual === null ? null : num(l.percentual) })),
+  };
+}
+
 // Opções dos filtros de coluna do exercício (o que existe nele, o ano inteiro): meses, tipos de
 // documento, clientes/fornecedores (só dos títulos — no movimento a coluna é o histórico do extrato),
 // naturezas e centros, com quantas linhas cada. O nome do documento do movimento (que só traz a sigla) vem dos títulos com a
@@ -515,6 +540,7 @@ async function foraDaDre(empresaId, { de, ate, centros = null, mascarasUsadas })
 module.exports = {
   exercicios,
   lancamentos,
+  lancamentosTodosExercicios,
   opcoesFiltros,
   somaPorCentro,
   somaPorCentroData,

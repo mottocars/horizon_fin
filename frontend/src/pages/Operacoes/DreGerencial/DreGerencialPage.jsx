@@ -42,6 +42,7 @@ import { gerarPlano } from '../../../api/planosFinanceirosSienge.api';
 import { excluirVersaoPlanoDre, exportarPlanoDreExcel, listVersoesPlanoDre } from '../../../api/drePlanoContas.api';
 import { exportarExcelDre } from '../../../api/dreExportacao.api';
 import { exportarCentrosDreExcel, listUnidadesDre } from '../../../api/dreCentros.api';
+import { exportarFinanceiroDreExcel } from '../../../api/dreFinanceiro.api';
 import { nomeExibicaoEmpresa } from '../../../utils/empresa';
 import { useEmpresaTravada } from '../../../hooks/useEmpresaTravada';
 import { useConfirm } from '../../../confirm/ConfirmContext';
@@ -325,8 +326,42 @@ function DreGerencialConteudo() {
   }
 
   // Exportar Excel da aba Centros Custos: a base inteira dos centros, na ordem da aba (dreCentros.excel.js).
+  // Também o da aba Financeiro: todos os exercícios de uma vez, uma aba por ano (financeiro.excel.js).
   const [exportandoCentros, setExportandoCentros] = useState(false);
   const [erroExportarCentros, setErroExportarCentros] = useState('');
+  const [exportandoFinanceiro, setExportandoFinanceiro] = useState(false);
+  const [erroExportarFinanceiro, setErroExportarFinanceiro] = useState('');
+  useEffect(() => setErroExportarFinanceiro(''), [empresaId]);
+  async function exportarFinanceiroExcel() {
+    setErroExportarFinanceiro('');
+    setExportandoFinanceiro(true);
+    try {
+      baixar(await exportarFinanceiroDreExcel(empresaId));
+    } catch (err) {
+      setErroExportarFinanceiro(await mensagemDoBlob(err));
+    } finally {
+      setExportandoFinanceiro(false);
+    }
+  }
+  function baixar({ blob, nome }) {
+    const url = window.URL.createObjectURL(blob);
+    const link = document.createElement('a');
+    link.href = url;
+    link.download = nome;
+    document.body.appendChild(link);
+    link.click();
+    link.remove();
+    window.URL.revokeObjectURL(url);
+  }
+  // Com responseType 'blob' a mensagem de erro do backend chega dentro de um Blob.
+  async function mensagemDoBlob(err) {
+    const dados = err.response?.data;
+    try {
+      return (dados instanceof Blob ? JSON.parse(await dados.text()) : dados)?.message || 'Não foi possível gerar o Excel.';
+    } catch {
+      return 'Não foi possível gerar o Excel.';
+    }
+  }
   async function exportarCentrosExcel() {
     setErroExportarCentros('');
     setExportandoCentros(true);
@@ -852,19 +887,36 @@ function DreGerencialConteudo() {
             </div>
           )}
 
-          {abaAtiva === 'financeiro' && exercicioAberto && !somenteLeitura && (
-            <div className="flex shrink-0 items-center gap-2">
-              <Button
-                type="button"
-                variant="secondary"
-                className="!px-2.5"
-                onClick={() => setNovoLancamentoToken((n) => n + 1)}
-                disabled={semEmpresa || exercicioTravado}
-                title={exercicioTravado ? 'Exercício em andamento: só visualização' : 'Novo lançamento'}
-                aria-label="Novo lançamento"
-              >
-                <FilePlus2 size={18} />
-              </Button>
+          {abaAtiva === 'financeiro' && (
+            <div className="flex shrink-0 flex-col items-end gap-1.5">
+              <div className="flex shrink-0 items-center gap-2">
+                {/* Exportar Excel: todos os exercícios (cards) de uma vez, uma aba por ano — também na versão só leitura. */}
+                <button
+                  type="button"
+                  onClick={exportarFinanceiroExcel}
+                  disabled={semEmpresa || exportandoFinanceiro}
+                  title="Exportar Excel de todos os exercícios (uma aba por ano)"
+                  aria-label="Exportar Excel de todos os exercícios"
+                  className="flex shrink-0 items-center justify-center rounded-lg border border-gray-200 p-2 text-gray-500 transition-colors hover:bg-gray-50 hover:text-gray-800 disabled:cursor-not-allowed disabled:opacity-60"
+                >
+                  {exportandoFinanceiro ? <Loader2 size={18} className="animate-spin" /> : <Download size={18} />}
+                </button>
+                {exercicioAberto && !somenteLeitura && (
+                  <Button
+                    type="button"
+                    variant="secondary"
+                    className="!px-2.5"
+                    onClick={() => setNovoLancamentoToken((n) => n + 1)}
+                    disabled={semEmpresa || exercicioTravado}
+                    title={exercicioTravado ? 'Exercício em andamento: só visualização' : 'Novo lançamento'}
+                    aria-label="Novo lançamento"
+                  >
+                    <FilePlus2 size={18} />
+                  </Button>
+                )}
+              </div>
+              {exportandoFinanceiro && <span className="text-xs text-gray-400">Gerando o Excel de todos os exercícios…</span>}
+              {erroExportarFinanceiro && <span className="text-xs text-red-600">{erroExportarFinanceiro}</span>}
             </div>
           )}
 
