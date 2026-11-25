@@ -205,7 +205,7 @@ async function dadosDaDre(empresaId, gatilho, contexto) {
 // O Excel de auditoria da DRE da versão (a mesma exportação da tela), do ano do realizado: jan a dez.
 async function excelDaDre(empresaId, numero, corte, usuarioId) {
   const versoes = require('../dre-versoes/dreVersoes.service');
-  const excel = require('../dre-exportacao/exportacao.excel');
+  const excel = require('../dre-exportacao/exportacao.isolada'); // worker: não trava o sistema
   const ctx = await versoes.resolver(empresaId, Number(numero));
   const ano = corte.slice(0, 4);
   return pool.comContexto(ctx, () =>

@@ -1,5 +1,6 @@
 const { z } = require('zod');
-const excel = require('./exportacao.excel');
+// Fora da thread do sistema (worker), uma por vez — um período longo não trava mais o sistema pra todos.
+const excel = require('./exportacao.isolada');
 const { ehAdministradorDaTela } = require('../../middlewares/acesso.middleware');
 const T = require('../../config/telas');
 
@@ -31,6 +32,11 @@ function erro(status, message) {
 // GET /:empresaId/excel?de=AAAA-MM-DD&ate=AAAA-MM-DD&centros=1,2 — o .xlsx de auditoria da DRE do que
 // está filtrado na aba DRE (sem centros = todos com "Realiza DRE").
 async function excelDre(req, res, next) {
+  // Fechou a aba / desistiu do download: a geração é cancelada (sai da fila ou o worker é encerrado).
+  const cancelar = new AbortController();
+  res.on('close', () => {
+    if (!res.writableFinished) cancelar.abort();
+  });
   try {
     const empresaId = empresaIdSchema.parse(req.params.empresaId);
     const f = filtroSchema.parse(req.query);
@@ -40,13 +46,15 @@ async function excelDre(req, res, next) {
     const { buffer, nome } = await excel.gerar(
       empresaId,
       { de: f.de, ate: f.ate, centros, projecao: { fonte, numero: fonte === 'versao' ? f.versao ?? null : null } },
-      req.user.id
+      req.user.id,
+      { sinal: cancelar.signal }
     );
     res.setHeader('Content-Type', 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet');
     res.setHeader('Content-Disposition', `attachment; filename="dre-auditoria.xlsx"; filename*=UTF-8''${encodeURIComponent(nome)}`);
     res.setHeader('Access-Control-Expose-Headers', 'Content-Disposition');
     res.end(buffer);
   } catch (err) {
+    if (cancelar.signal.aborted) return undefined; // ninguém mais esperando a resposta
     if (err.issues) return next(erro(400, err.issues[0].message));
     return next(err);
   }
