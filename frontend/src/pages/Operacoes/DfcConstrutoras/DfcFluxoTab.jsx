@@ -449,16 +449,17 @@ export default function DfcFluxoTab({
   // como as linhas de total (azul claro, texto azul escuro), nível 1 cinza em negrito e maiúsculas, linhas
   // baixas; Projetado em amarelo pastel; negativo em vermelho.
   const ESTILO = {
-    saldo: { fundo: 'bg-[#cfe0ee]', texto: 'text-xs font-bold uppercase tracking-wide text-[#174a70]', py: 'py-1', borda: 'border-[#a9c4dc]' },
-    resultado: { fundo: 'bg-[#cfe0ee]', texto: 'text-xs font-bold uppercase tracking-wide text-[#174a70]', py: 'py-1', borda: 'border-[#a9c4dc]' },
-    n1: { fundo: 'bg-gray-50', texto: 'text-xs font-bold uppercase tracking-wide text-gray-900', py: 'py-0.5', borda: 'border-gray-200' },
-    lado: { fundo: 'bg-white', texto: 'text-[11px] font-semibold uppercase tracking-wider text-gray-500', py: 'py-0.5', borda: 'border-gray-100' },
-    n2: { fundo: 'bg-white', texto: 'text-xs text-gray-700', py: 'py-px', borda: 'border-gray-100' },
-    conta: { fundo: 'bg-white', texto: 'text-xs text-gray-500', py: 'py-px', borda: 'border-gray-100' },
+    saldo: { fundo: 'bg-[#cfe0ee]', texto: 'text-xs font-bold uppercase tracking-wide text-[#174a70]', py: 'py-1.5', borda: 'border-[#a9c4dc]' },
+    resultado: { fundo: 'bg-[#cfe0ee]', texto: 'text-xs font-bold uppercase tracking-wide text-[#174a70]', py: 'py-1.5', borda: 'border-[#a9c4dc]' },
+    n1: { fundo: 'bg-gray-50', texto: 'text-xs font-bold uppercase tracking-wide text-gray-900', py: 'py-1', borda: 'border-gray-200' },
+    lado: { fundo: 'bg-white', texto: 'text-[11px] font-semibold uppercase tracking-wider text-gray-500', py: 'py-1', borda: 'border-gray-100' },
+    n2: { fundo: 'bg-white', texto: 'text-xs text-gray-700', py: 'py-0.5', borda: 'border-gray-100' },
+    conta: { fundo: 'bg-white', texto: 'text-xs text-gray-500', py: 'py-0.5', borda: 'border-gray-100' },
   };
   const ehTotal = (tipo) => tipo === 'saldo' || tipo === 'resultado';
-  // Coluna Total: só o Resultado do mês leva a cor da linha (azul claro); Saldo inicial e Saldo final ficam
-  // vazios ali e seguem o azul da coluna Total (pedido do usuário).
+  // Coluna Total: as linhas de total (saldos e resultado) levam a cor delas; Saldo inicial e Saldo final não têm
+  // total no período e mostram um traço (pedido do usuário).
+  const tracoTotal = <span className="font-normal text-[#174a70]/40">—</span>;
   // Cor do número: negativo em vermelho; nas linhas de total, o azul escuro delas.
   const corValor = (v, tipo) =>
     v < 0 ? 'text-red-700' : ehTotal(tipo) ? 'text-[#174a70]' : tipo === 'n1' ? 'text-gray-900' : tipo === 'conta' ? 'text-gray-600' : 'text-gray-700';
@@ -527,7 +528,7 @@ export default function DfcFluxoTab({
             }}
             title="Mostrar o Total (realizado, projetado e desvio)"
             className={`sticky z-10 cursor-pointer border-b border-r border-b-blue-100 border-r-blue-200 transition-colors ${e.py} ${
-              tipo === 'resultado' ? 'bg-[#cfe0ee]' : tipo === 'n1' ? 'bg-blue-100 hover:bg-blue-200' : 'bg-blue-50 hover:bg-blue-100'
+              ehTotal(tipo) ? 'bg-[#cfe0ee]' : tipo === 'n1' ? 'bg-blue-100 hover:bg-blue-200' : 'bg-blue-50 hover:bg-blue-100'
             }`}
             style={{ left: LARGURA_PRIMEIRA }}
           />
@@ -539,11 +540,9 @@ export default function DfcFluxoTab({
               key={`total|${t}`}
               title={tipo === 'saldo' ? undefined : t === R ? 'Total realizado do período (meses até o atual)' : 'Total projetado do período (todos os meses)'}
               className={`sticky z-10 border-b border-b-blue-100 px-3 text-right text-xs tabular-nums transition-colors ${e.py} ${
-                tipo === 'resultado'
+                ehTotal(tipo)
                   ? 'bg-[#cfe0ee]'
-                  : tipo === 'saldo'
-                    ? 'bg-blue-50'
-                    : t === P
+                  : t === P
                     ? 'bg-[#fdf6d3]'
                     : tipo === 'n1'
                       ? 'bg-blue-100'
@@ -551,7 +550,7 @@ export default function DfcFluxoTab({
               } ${numeros} ${v ? corValor(v, tipo) : ''}`}
               style={{ left: esquerdaTotal[t] }}
             >
-              {v ? dinheiro(v) : ''}
+              {tipo === 'saldo' ? tracoTotal : v ? dinheiro(v) : ''}
             </td>
           );
         })}
@@ -572,11 +571,11 @@ export default function DfcFluxoTab({
                     : `Total realizado ÷ projetado dos mesmos meses (até o atual: ${dinheiro(real || 0)} × ${dinheiro(proj)}). Inclui o mês atual, ainda em andamento.`
               }
               className={`sticky z-10 border-b border-r border-b-blue-100 border-r-blue-200 px-2 text-right text-[11px] tabular-nums transition-colors ${e.py} ${
-                tipo === 'resultado' ? 'bg-[#cfe0ee]' : tipo === 'n1' ? 'bg-blue-100' : tipo === 'saldo' ? 'bg-blue-50' : 'bg-blue-50 group-hover/linha:bg-blue-100'
+                ehTotal(tipo) ? 'bg-[#cfe0ee]' : tipo === 'n1' ? 'bg-blue-100' : 'bg-blue-50 group-hover/linha:bg-blue-100'
               } ${ehTotal(tipo) || tipo === 'n1' ? 'font-semibold' : ''} ${corDesvio(d)}`}
               style={{ left: esquerdaTotal[D] }}
             >
-              {semNada || !temRealizado ? '' : d === null ? '—' : formatoPct(d)}
+              {tipo === 'saldo' ? tracoTotal : semNada || !temRealizado ? '' : d === null ? '—' : formatoPct(d)}
             </td>
           );
         })()}
