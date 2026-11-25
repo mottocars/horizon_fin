@@ -9,7 +9,8 @@ const motor = require('./motor');
 const { comVersaoPublicada } = require('../dre-versoes/contexto');
 
 // A DRE que a Reforma Tributária lê é a PUBLICADA: a última versão salva da DRE (modules/dre-versoes) — o que
-// é da DRE (projeção, máscaras, imposto, centros) roda dentro dela (naPublicada); o que é da DFC, ao vivo.
+// é da DRE (projeção, máscaras, imposto, centros) roda dentro dela (naPublicada). O Impacto DFC lê a DFC PUBLICADA
+// (a última versão aprovada da DFC — modules/dfc-versoes, 25/11/2026); o que ele lê da DRE continua em naPublicada.
 const naPublicada = (fn) => (empresaId, ...args) => comVersaoPublicada(empresaId, () => fn(empresaId, ...args));
 
 // Operações > Reforma Tributária. Abas:
@@ -763,7 +764,7 @@ module.exports = {
   obterConfigDfc,
   salvarConfigDfc,
   restaurarConfigDfc,
-  impactoDfc,
+  impactoDfc: (empresaId, ...args) => require('../dfc-versoes/contexto').comVersaoPublicada(empresaId, () => impactoDfc(empresaId, ...args)),
   obterConfiguracoes,
   salvarConfiguracoes,
   restaurarConfiguracoes,

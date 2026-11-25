@@ -35,7 +35,7 @@ function Situacao({ status }) {
 // Para quem vai a mensagem de um tópico.
 function paraQuem(p) {
   const modo = p.acao?.destinatarios?.modo;
-  if (modo === 'APROVADOR') return 'o Aprovador da DRE';
+  if (modo === 'APROVADOR') return `o Aprovador da ${String(p.gatilho || '').startsWith('DFC_') ? 'DFC' : 'DRE'}`;
   if (modo === 'RESPONSAVEL') return 'o Responsável (quem salvou)';
   const nomes = p.destinatarios_nomes || [];
   return nomes.length > 3 ? `${nomes.slice(0, 3).join(', ')} + ${nomes.length - 3}` : nomes.join(', ');
@@ -246,7 +246,7 @@ export default function WorkflowsPage() {
                                 para {paraQuem(p)}
                                 {p.acao?.anexar_excel_dre && (
                                   <span className="inline-flex items-center gap-1 text-gray-500">
-                                    · <FileSpreadsheet size={12} className="text-emerald-600" /> Excel da DRE
+                                    · <FileSpreadsheet size={12} className="text-emerald-600" /> Excel da {String(p.gatilho || '').startsWith('DFC_') ? 'DFC' : 'DRE'}
                                   </span>
                                 )}
                                 <span className="text-gray-400">· {p.conexao || 'conexão inativa'}</span>

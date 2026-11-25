@@ -5,6 +5,8 @@ import { exportarExcelDfc } from '../../../../api/dfcExportacao.api';
 import CampoPeriodo from './CampoPeriodo';
 import DfcFluxoTab from '../../../Operacoes/DfcConstrutoras/DfcFluxoTab';
 import CabecalhoDashboard from '../../CabecalhoDashboard';
+import VersaoPublicada from '../dre/VersaoPublicada';
+import { versaoPublicadaDfc } from '../../../../api/dfcVersoes.api';
 import { DicaProvider } from './graficos';
 import { SumarioCtx } from './ganchos';
 import SumarioModal from './sumario';
@@ -289,7 +291,14 @@ export default function FluxoCaixaPainel({ dashboard, tituloTela, empresaId, onE
     <DicaProvider>
       <SumarioCtx.Provider value={abrirSumario}>
       <div className="painel-cfo">
-        <CabecalhoDashboard dashboard={dashboard} titulo={tituloTela} marca={marcaEmpresa} />
+        {/* Antes da logomarca: a versão publicada da DFC (a última aprovada) e quem fez ela — o mesmo informativo
+            do dashboard Demonstração do Resultado (VersaoPublicada.jsx). */}
+        <CabecalhoDashboard
+          dashboard={dashboard}
+          titulo={tituloTela}
+          marca={marcaEmpresa}
+          extra={<VersaoPublicada empresaId={empresaId} buscar={versaoPublicadaDfc} />}
+        />
 
         <section className="controls" aria-label="Controles do painel">
           <div className="ctl">

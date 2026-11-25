@@ -159,10 +159,11 @@ const replicar = {
 const salvarVersao = {
   name: 'dfc_informado_salvar_versao',
   description:
-    'Salva uma nova versão do Orçamento SÓ com as mudanças pendentes dos valores informados (HORIZON - INFORMADO) — as ' +
-    'pendências das outras fontes (Aging, Projeção CEF, Orçamento Empresarial) não entram e continuam pendentes. ' +
-    'Sem confirmar=true, só mostra a prévia do que vai ser salvo (inclui o que outras pessoas digitaram na tela e ainda não foi ' +
-    'salvo). Mostre a prévia ao usuário e só salve com a confirmação dele.',
+    'Grava no Orçamento da versão ABERTA da DFC SÓ as mudanças pendentes dos valores informados (HORIZON - INFORMADO) — as ' +
+    'pendências das outras fontes (Aging, Projeção CEF, Orçamento Empresarial) não entram e continuam pendentes. Só funciona ' +
+    'com uma versão da DFC aberta (aba Versões); o que for gravado só vai pro dashboard depois de a versão ser salva e aprovada. ' +
+    'Sem confirmar=true, só mostra a prévia do que vai ser gravado (inclui o que outras pessoas digitaram na tela e ainda não foi ' +
+    'gravado). Mostre a prévia ao usuário e só grave com a confirmação dele.',
   inputSchema: {
     confirmar: z.boolean().default(false).describe('true = salva a versão; false = só a prévia.'),
   },
@@ -178,7 +179,7 @@ const salvarVersao = {
       return {
         previa: true,
         mudancas: pend.length,
-        aviso: 'Nada foi salvo. Chame de novo com confirmar=true para criar a versão.',
+        aviso: 'Nada foi gravado. Chame de novo com confirmar=true para gravar no Orçamento da versão aberta da DFC.',
         itens: pend.slice(0, 300).map((p) => ({
           tipo: p.tipo,
           centro: `${p.centro_id} ${n.centro.get(p.centro_id) || ''}`.trim(),
@@ -193,7 +194,15 @@ const salvarVersao = {
     }
     try {
       const v = await dfcOrcamento.salvarVersao(empresaId, ctx.usuarioId, { origem: informado.ORIGEM });
-      return { versao_salva: v.numero, criado_em: v.criado_em, inclusoes: v.inclusoes, alteracoes: v.alteracoes, exclusoes: v.exclusoes };
+      const aberta = require('../../../dfc-versoes/contexto').dfcAtual()?.versao;
+      return {
+        gravado_na_versao_dfc: aberta?.numero ?? null,
+        aviso: 'Gravado no Orçamento da versão aberta da DFC. Só vai pro dashboard depois de a versão ser salva e aprovada (aba Versões).',
+        criado_em: v.criado_em,
+        inclusoes: v.inclusoes,
+        alteracoes: v.alteracoes,
+        exclusoes: v.exclusoes,
+      };
     } catch (err) {
       if (err.expose) throw falha(err.message);
       throw err;

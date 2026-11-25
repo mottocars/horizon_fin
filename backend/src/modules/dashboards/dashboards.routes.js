@@ -8,6 +8,8 @@ const fluxoCaixaPainel = require('./fluxoCaixaPainel.service');
 const agingPainel = require('./agingPainel.service');
 const drePainel = require('./drePainel.service');
 const { comVersaoPublicada } = require('../dre-versoes/contexto');
+// Versões da DFC: o dashboard Fluxo de Caixa lê a versão publicada da DFC (a última aprovada).
+const dfcVersoes = require('../dfc-versoes/contexto');
 const detalhamentoPainel = require('./detalhamentoPainel.service');
 
 // Dashboards: tela favorita (estrela) de cada usuário em cada dashboard — a que abre ao entrar pelo
@@ -57,7 +59,7 @@ router.get('/economico-financeiro/fluxo-caixa', async (req, res, next) => {
   try {
     const f = painelSchema.parse(req.query);
     const centros = f.centros ? f.centros.split(',').map(Number) : [];
-    res.json(await fluxoCaixaPainel.painel(f.empresa_id, { hist: f.hist, hor: f.hor, centros }));
+    res.json(await dfcVersoes.comVersaoPublicada(f.empresa_id, () => fluxoCaixaPainel.painel(f.empresa_id, { hist: f.hist, hor: f.hor, centros })));
   } catch (err) {
     if (err.issues) return res.status(400).json({ message: 'Filtros inválidos (período: até 36 meses antes do mês atual e até 35 depois).' });
     next(err);

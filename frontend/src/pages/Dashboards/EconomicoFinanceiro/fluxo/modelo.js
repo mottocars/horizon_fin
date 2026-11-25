@@ -118,9 +118,19 @@ export function modelo(d, ids) {
   const caixaHoje = contasHoje.length ? soma(contasHoje.map((c) => c.saldo)) : caixaAbertura + resMtd;
   const futuro = (m, porMes, doMesAtual) => (m === m0 ? doMesAtual : porMes(m));
 
+  // Versões da DFC (25/11/2026): o realizado vai só até `realizadoAte` (o mês anterior ao atual, ou o corte da
+  // versão publicada); sem realizado no mês atual, o ponto de partida do caixa (`base`) é o início do primeiro mês
+  // projetado, e o mês atual entra inteiro projetado. `hoje` continua sendo hoje (a carteira é a de hoje).
+  const realizadoAte = d.info?.realizadoAte || null;
+  const semRealizadoNoMes = Boolean(realizadoAte && realizadoAte < m0);
+  const [ra, rm] = (realizadoAte || m0).split('-').map(Number);
+  const primeiroProjetado = rm === 12 ? `${ra + 1}-01` : `${ra}-${String(rm + 1).padStart(2, '0')}`;
   const D = {
     m0,
     hoje: d.hoje || `${m0}-01`,
+    realizadoAte,
+    semRealizadoNoMes,
+    base: semRealizadoNoMes ? `${primeiroProjetado}-01` : d.hoje || `${m0}-01`,
     meses,
     hist,
     fut,
@@ -162,9 +172,9 @@ export function modelo(d, ids) {
   D.colchao = -media(D.saiMes);
   D.overheadRun = -media(D.overheadR.slice(-6));
   // Fração do mês atual que ainda falta (para o simulador não cobrar o mês inteiro de estrutura fixa).
-  const [ah, mh, dh] = D.hoje.split('-').map(Number);
+  const [ah, mh, dh] = D.base.split('-').map(Number);
   const diasMes = new Date(Date.UTC(ah, mh, 0)).getUTCDate();
-  D.fracRestante = D.hoje.slice(0, 7) === m0 ? Math.max(0, (diasMes - dh + 1) / diasMes) : 1;
+  D.fracRestante = D.base.slice(0, 7) === m0 ? Math.max(0, (diasMes - dh + 1) / diasMes) : 1;
   const minV = D.saldoFut.length ? Math.min(...D.saldoFut) : 0;
   D.minBase = minV;
   D.minIdx = Math.max(0, D.saldoFut.indexOf(minV));

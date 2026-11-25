@@ -15,16 +15,16 @@ export const ABAS_SUMARIO = [
         titulo: 'Filtros',
         itens: [
           '**Empresa** — a empresa do DFC Construtoras analisada.',
-          '**Início** e **Fim** — o período do painel, em mês e ano. Como o painel é a foto de hoje, o período sempre contém o mês atual: o Início vai até ele (até 36 meses antes) e o Fim começa nele (até 35 meses depois). Os meses antes do atual entram como realizado; do atual em diante, como projeção. Começa do mês anterior ao atual até 4 meses depois dele (com o mês atual em out/26: set/26 a fev/27).',
+          '**Início** e **Fim** — o período do painel, em mês e ano. O período sempre contém o mês atual: o Início vai até ele (até 36 meses antes) e o Fim começa nele (até 35 meses depois). Os meses fechados (até o mês anterior ao atual) entram como realizado; do mês atual em diante, como projeção. Começa do mês anterior ao atual até 4 meses depois dele (com o mês atual em out/26: set/26 a fev/27).',
           '**Centro de custo** — limita o painel aos centros marcados. Sem nenhum marcado, entram todos os centros com "Projeta DFC". **Marcar todos** marca a lista inteira (com todos marcados é o mesmo que nenhum) — depois é só desmarcar o que não quer ver.',
         ],
       },
       {
-        titulo: 'O painel é a foto de hoje',
+        titulo: 'O painel é a versão publicada da DFC',
         itens: [
-          '**Realizado e saldos vão até hoje**: saldos das contas, carteira, inadimplência e o realizado do mês atual usam o extrato e as parcelas do Sienge até o dia da última atualização (Orçamentos › Nova versão › Saldos das Contas e Aging).',
-          '**A projeção (última versão salva do Orçamento) só entra no que ainda vai acontecer**: nos meses seguintes, o orçado inteiro; no mês atual, só o que **falta** — orçado do mês menos o realizado até hoje, por centro de custo e natureza.',
-          'O que falta nunca inverte o sinal: se uma despesa já passou do orçado, não sobra nada a pagar no mês; se uma receita já entrou acima do previsto, não sobra nada a receber. Lançamento sem orçamento no mês conta só no realizado.',
+          '**Versão publicada**: o painel mostra a última versão **aprovada** da DFC (Operações › DFC Construtoras › Versões; Aprovador em Cadastros › Matriz de Alçadas). Uma versão salva e ainda não aprovada não aparece aqui. A etiqueta do topo mostra a versão, o Responsável, o Aprovador e os Colaboradores.',
+          '**Realizado só de mês fechado**: o realizado vai até o fim do mês anterior ao atual (ou o corte da versão). Do mês atual em diante, só o Orçamento da versão — o mês atual entra **inteiro** projetado, e o caixa de partida é o saldo real das contas com "Projeta DFC" no início do mês.',
+          '**A carteira** (a receber e a pagar em aberto, vencidos e a vencer) é a de **hoje**, das parcelas do Sienge até a última atualização.',
         ],
       },
       {
@@ -41,15 +41,15 @@ export const ABAS_SUMARIO = [
   {
     id: 'indicadores',
     titulo: 'Indicadores',
-    resumo: 'Os 8 cards do topo: a fotografia do caixa hoje e dos próximos meses.',
+    resumo: 'Os 8 cards do topo: o caixa no início do mês atual e o dos próximos meses, pela versão publicada da DFC.',
     blocos: [
       {
         titulo: 'Cada card',
         itens: [
-          '**Caixa hoje** — saldo real de hoje nas contas com "Projeta DFC" (extrato do Sienge até a última atualização). "Aplicado" é a parte em contas do tipo **Investimento**.',
-          '**Mínimo projetado** — o menor saldo de fim de mês dentro do horizonte, partindo do caixa de hoje e somando só o que ainda vai acontecer; o mês em que ele acontece e quanto é menor que hoje.',
-          '**Resultado médio · próximos 6 meses** — média do resultado de cada mês (todas as entradas menos todas as saídas): no mês atual, o realizado até hoje mais o que falta; nos seguintes, o orçado. E o mês em que o saldo fica abaixo do colchão, se ficar.',
-          '**Fluxo operacional · até hoje** — soma do realizado (entradas + saídas) do Fluxo de Caixa Operacional nos meses do período antes do mês atual e no mês atual até hoje.',
+          '**Caixa em 01/mm** — saldo real no início do mês atual nas contas com "Projeta DFC" (o fim do último mês fechado, pelo extrato do Sienge). "Aplicado" é a parte em contas do tipo **Investimento**.',
+          '**Mínimo projetado** — o menor saldo de fim de mês dentro do horizonte, partindo do caixa do início do mês e somando o Orçamento da versão publicada; o mês em que ele acontece e quanto é menor que o caixa de partida.',
+          '**Resultado médio · próximos 6 meses** — média do resultado de cada mês (todas as entradas menos todas as saídas), pelo Orçamento da versão (o mês atual inteiro projetado). E o mês em que o saldo fica abaixo do colchão, se ficar.',
+          '**Fluxo operacional · até o último mês fechado** — soma do realizado (entradas + saídas) do Fluxo de Caixa Operacional nos meses fechados do período.',
           '**Dívida PJ Caixa** — saldo devedor do crédito PJ no último mês fechado (ou no mês atual, se ele já tem valor informado), somando as obras, e até onde ele vai no fim da projeção. Mês com valor informado na aba Dívida PJ do DFC Construtoras usa o informado; os demais, a Projeção CEF. Obra com valor informado para no último mês informado (não projeta o futuro).',
           '**A receber em 90 dias** — saldo **corrigido** (com a correção monetária e os juros do contrato, como o Sienge calcula) das parcelas a receber em aberto que vencem de hoje até daqui a 90 dias; embaixo, toda a carteira a vencer (de hoje em diante), também corrigida.',
           '**Inadimplência** — saldo corrigido vencido até ontem ÷ (vencido + a vencer) das parcelas a receber em aberto.',

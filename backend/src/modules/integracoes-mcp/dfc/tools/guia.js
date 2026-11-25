@@ -90,7 +90,16 @@ module.exports = {
       `## Situação atual`,
       `- Empresa: ${emp[0]?.nome || empresaId}`,
       `- Mês atual: ${mesDeHoje()}`,
-      `- Orçamento (projetado): ${v ? `versão ${v.numero}, salva em ${new Date(v.criado_em).toISOString().slice(0, 16).replace('T', ' ')}${v.usuario ? ` por ${v.usuario}` : ''}` : 'nenhuma versão salva'}`,
+      ...(() => {
+        // Versões da DFC: as ferramentas de leitura respondem pela versão publicada (a última aprovada).
+        const dv = require('../../../dfc-versoes/contexto').dfcAtual();
+        if (!dv) return [`- Orçamento (projetado): ${v ? `gerado em ${new Date(v.criado_em).toISOString().slice(0, 16).replace('T', ' ')}` : '—'}`];
+        const corte = dv.corte.slice(0, 7);
+        return [
+          `- Versão da DFC usada nas respostas: ${dv.versao.numero} (publicada = a última aprovada${dv.versao.aprovada_por_nome ? `, aprovada por ${dv.versao.aprovada_por_nome}` : ''})`,
+          `- Realizado até ${corte} (mês fechado); do mês seguinte em diante, só o Orçamento (projetado) da versão`,
+        ];
+      })(),
       `- Extrato bancário buscado até: ${extrato[0]?.ate || '—'}`,
       `- Centros de custo com Projeta DFC (${centros.length}): ${centros.map((c) => c.name).join(', ')}`,
     ].join('\n');

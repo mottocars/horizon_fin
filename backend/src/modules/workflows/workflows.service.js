@@ -42,7 +42,7 @@ async function conexoesZapi(empresaId) {
 async function opcoes(empresaId) {
   const [conexoes, usuarios] = await Promise.all([conexoesZapi(empresaId), saldosService.listUsuariosElegiveisComunicar(empresaId)]);
   return {
-    gatilhos: Object.entries(GATILHOS).map(([id, g]) => ({ id, rotulo: g.rotulo, descricao: g.descricao, variaveis: g.variaveis })),
+    gatilhos: Object.entries(GATILHOS).map(([id, g]) => ({ id, rotulo: g.rotulo, descricao: g.descricao, variaveis: g.variaveis, sistema: g.sistema, anexo: g.anexo })),
     destinatarios: Object.entries(DESTINATARIOS).map(([id, d]) => ({ id, rotulo: d.rotulo })),
     modelos: MODELOS,
     conexoes,
@@ -174,18 +174,22 @@ async function execucoes(empresaId, { limite = 100 } = {}) {
 
 // ---------------------------------------------------------------------------------------- execução
 
-// O evento da DRE: a versão (`contexto.versao` = número) e os valores das variáveis.
-async function dadosDaDre(empresaId, gatilho, contexto) {
+// O evento de uma versão (DRE ou DFC, pelo `sistema` do gatilho): a versão (`contexto.versao` = número) e os
+// valores das variáveis. As versões da DFC (dfc_versoes) têm as mesmas colunas das da DRE (dre_versoes).
+async function dadosDaVersao(empresaId, gatilho, contexto) {
+  const sistema = GATILHOS[gatilho]?.sistema || 'DRE';
+  const tabela = sistema === 'DFC' ? 'dfc_versoes' : 'dre_versoes';
   const { rows } = await db.query(
     `SELECT numero, to_char(corte, 'YYYY-MM-DD') AS corte, fechada_por, fechada_por_nome, aprovada_por_nome, reprovada_por_nome,
             reprovacao_motivo
-       FROM dre_versoes WHERE empresa_id = $1 AND numero = $2`,
+       FROM ${tabela} WHERE empresa_id = $1 AND numero = $2`,
     [empresaId, contexto.versao]
   );
   const v = rows[0];
-  if (!v) throw new Error(`versão ${contexto.versao} da DRE não encontrada`);
-  const [empresa, aprovador] = await Promise.all([empresasService.getById(empresaId), matriz.usuarioDo(empresaId, 'DRE', 'APROVADOR')]);
+  if (!v) throw new Error(`versão ${contexto.versao} da ${sistema} não encontrada`);
+  const [empresa, aprovador] = await Promise.all([empresasService.getById(empresaId), matriz.usuarioDo(empresaId, sistema, 'APROVADOR')]);
   return {
+    sistema,
     versao: v,
     aprovador,
     valores: {
@@ -213,6 +217,15 @@ async function excelDaDre(empresaId, numero, corte, usuarioId) {
   );
 }
 
+// O Excel do DFC da versão (a mesma exportação da aba DFC, todos os centros), do ano do realizado: jan a dez — num
+// worker (dfc-exportacao/exportacao.isolada.js), pra não travar o sistema.
+async function excelDoDfc(empresaId, numero, corte, usuarioId) {
+  const dfcVersoes = require('../dfc-versoes/contexto');
+  const excel = require('../dfc-exportacao/exportacao.isolada');
+  const ano = corte.slice(0, 4);
+  return dfcVersoes.comVersao(empresaId, Number(numero), () => excel.gerar(empresaId, { inicio: `${ano}-01`, fim: `${ano}-12`, centros: [] }, usuarioId));
+}
+
 async function executar(w, indice, gatilho, contexto) {
   const iniciado = new Date();
   const { rows } = await db.query(
@@ -225,11 +238,11 @@ async function executar(w, indice, gatilho, contexto) {
     db.query('UPDATE workflow_execucoes SET status = $2, resultado = $3, concluido_em = $4 WHERE id = $1', [execId, status, resultado, new Date()]);
   try {
     const { acao } = w.passos[indice];
-    const d = await dadosDaDre(w.empresa_id, gatilho, contexto);
+    const d = await dadosDaVersao(w.empresa_id, gatilho, contexto);
     // Quem recebe.
     let ids = [];
     if (acao.destinatarios.modo === 'APROVADOR') {
-      if (!d.aprovador) return terminar('IGNORADO', { motivo: 'A empresa não tem Aprovador da DRE na Matriz de Alçadas.', enviados: [], falhas: [] });
+      if (!d.aprovador) return terminar('IGNORADO', { motivo: `A empresa não tem Aprovador da ${d.sistema} na Matriz de Alçadas.`, enviados: [], falhas: [] });
       ids = [d.aprovador.id];
     } else if (acao.destinatarios.modo === 'RESPONSAVEL') {
       if (!d.versao.fechada_por) return terminar('IGNORADO', { motivo: 'A versão não tem um usuário responsável (foi salva pelo sistema).', enviados: [], falhas: [] });
@@ -241,8 +254,10 @@ async function executar(w, indice, gatilho, contexto) {
     if (!us.length) return terminar('IGNORADO', { motivo: 'Nenhum destinatário ativo.', enviados: [], falhas: [] });
     // O anexo, montado uma vez só.
     let anexo = null;
+    // `anexar_excel_dre` (nome antigo, mantido): anexar o Excel da versão — o da DRE ou o do DFC, conforme o gatilho.
     if (acao.anexar_excel_dre) {
-      const { buffer, nome } = await excelDaDre(w.empresa_id, d.versao.numero, d.versao.corte, contexto.usuario_id || w.criado_por);
+      const gerarExcel = d.sistema === 'DFC' ? excelDoDfc : excelDaDre;
+      const { buffer, nome } = await gerarExcel(w.empresa_id, d.versao.numero, d.versao.corte, contexto.usuario_id || w.criado_por);
       anexo = { base64: Buffer.from(buffer).toString('base64'), nome: nome.replace(/\.xlsx$/i, ` - Versão ${d.versao.numero}.xlsx`) };
     }
     const enviados = [];

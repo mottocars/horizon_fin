@@ -34,11 +34,13 @@ function Campo({ rotulo, dica, children }) {
   );
 }
 
-const DESCRICAO_DESTINO = {
-  APROVADOR: 'O usuário de Cadastros › Matriz de Alçadas › DRE › Aprovador (na hora do envio).',
-  RESPONSAVEL: 'Quem salvou a versão da DRE.',
-  USUARIOS: 'Usuários desta empresa (o telefone vem do cadastro de cada um).',
-};
+// O texto de cada destinatário, conforme o sistema do gatilho (DRE ou DFC — versões da DFC, 25/11/2026).
+const descricaoDestino = (id, sistema = 'DRE') =>
+  ({
+    APROVADOR: `O usuário de Cadastros › Matriz de Alçadas › ${sistema} › Aprovador (na hora do envio).`,
+    RESPONSAVEL: `Quem salvou a versão da ${sistema}.`,
+    USUARIOS: 'Usuários desta empresa (o telefone vem do cadastro de cada um).',
+  })[id];
 
 // Um tópico: "Quando" (gatilho) → "Então: enviar WhatsApp" (conexão, quem recebe, mensagem com variáveis e o
 // Excel de auditoria da DRE anexo). `passo` no formato da tela (ver paraTela/paraApi).
@@ -111,7 +113,7 @@ function Topico({ numero, passo, opcoes, onChange, onRemover }) {
                   <input type="radio" className="mt-0.5" checked={passo.modo === d.id} onChange={() => muda({ modo: d.id })} />
                   <span>
                     <span className="block font-medium text-gray-800">{d.rotulo.replace(/ \(.*\)$/, '')}</span>
-                    <span className="text-xs text-gray-500">{DESCRICAO_DESTINO[d.id]}</span>
+                    <span className="text-xs text-gray-500">{descricaoDestino(d.id, g?.sistema)}</span>
                   </span>
                 </label>
               ))}
@@ -165,7 +167,7 @@ function Topico({ numero, passo, opcoes, onChange, onRemover }) {
                 <div className="max-w-md whitespace-pre-wrap rounded-lg bg-white px-3 py-2 text-sm text-gray-800 shadow-sm">
                   {passo.excel && (
                     <span className="mb-2 flex items-center gap-2 rounded-md bg-gray-50 px-2 py-1.5 text-xs text-gray-600">
-                      <FileSpreadsheet size={15} className="text-emerald-600" /> DRE - auditoria (Excel)
+                      <FileSpreadsheet size={15} className="text-emerald-600" /> {g?.anexo?.arquivo || 'DRE - auditoria.xlsx'}
                     </span>
                   )}
                   {preencher(passo.mensagem, exemplos)}
@@ -177,9 +179,10 @@ function Topico({ numero, passo, opcoes, onChange, onRemover }) {
           <label className="flex cursor-pointer items-start gap-2.5 text-sm">
             <input type="checkbox" className="mt-0.5" checked={passo.excel} onChange={(e) => muda({ excel: e.target.checked })} />
             <span>
-              <span className="font-medium text-gray-800">Anexar o Excel de auditoria da DRE</span>
+              <span className="font-medium text-gray-800">Anexar o {g?.anexo?.rotulo || 'Excel de auditoria da DRE'}</span>
               <span className="block text-xs text-gray-500">
-                O mesmo da DRE Construtoras, da versão do evento, de janeiro a dezembro do ano do realizado. A mensagem vai como legenda do arquivo.
+                O mesmo da {g?.sistema === 'DFC' ? 'DFC Construtoras' : 'DRE Construtoras'}, da versão do evento, de janeiro a dezembro do ano do realizado. A
+                mensagem vai como legenda do arquivo.
               </span>
             </span>
           </label>

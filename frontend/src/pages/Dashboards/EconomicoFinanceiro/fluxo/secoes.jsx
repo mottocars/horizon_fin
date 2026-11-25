@@ -67,7 +67,11 @@ export function Hero({ D, escopo }) {
           {tituloTrajetoria(D, escopo)}
           <AjudaSecao aba="trajetoria" rotulo="Trajetória do caixa" />
         </h2>
-        <p>Realizado até hoje e, daqui em diante, o saldo no fim de cada mês pelo Orçamento (no mês atual, só o que falta acontecer) e pelo cenário ao lado.</p>
+        <p>
+          {D.semRealizadoNoMes
+            ? `Realizado até ${lbl(D.realizadoAte)} (meses fechados) e, de ${lbl(D.m0)} em diante, o saldo no fim de cada mês pelo Orçamento da versão publicada e pelo cenário ao lado.`
+            : 'Realizado até hoje e, daqui em diante, o saldo no fim de cada mês pelo Orçamento (no mês atual, só o que falta acontecer) e pelo cenário ao lado.'}
+        </p>
       </div>
       <div className="hero-body">
         <div style={{ display: 'flex', flexDirection: 'column', gap: 8, minWidth: 0 }}>
@@ -180,7 +184,11 @@ export function EntradasSaidas({ D }) {
             <i className="box" style={{ background: COR.ink, borderRadius: '50%' }} />
             Líquido
           </span>
-          <span style={{ color: 'var(--muted)' }}>Barras fortes = realizado; claras = orçado. O mês atual aparece duas vezes: realizado até hoje e orçado no mês.</span>
+          <span style={{ color: 'var(--muted)' }}>
+            {D.semRealizadoNoMes
+              ? `Barras fortes = realizado (até ${lbl(D.realizadoAte)}); claras = orçado.`
+              : 'Barras fortes = realizado; claras = orçado. O mês atual aparece duas vezes: realizado até hoje e orçado no mês.'}
+          </span>
         </div>
       </div>
       <FluxoOperacional D={D} />
@@ -314,7 +322,7 @@ export function FolegoSpe({ D, empresaSel, onEmpresa }) {
           rotulo="Ordenar por"
           opcoes={[
             ['risco', 'Risco'],
-            ['caixa', 'Caixa hoje'],
+            ['caixa', D.semRealizadoNoMes ? 'Caixa inicial' : 'Caixa hoje'],
             ['nome', 'Nome'],
           ]}
           valor={pref.sort}
@@ -346,7 +354,7 @@ export function FolegoSpe({ D, empresaSel, onEmpresa }) {
               <tr>
                 <th className="l nmh">Empresa</th>
                 <th className="l">Situação</th>
-                <th className="n">Hoje</th>
+                <th className="n">{D.semRealizadoNoMes ? diaMes(D.base) : 'Hoje'}</th>
                 {D.fut.map((m) => (
                   <th key={m}>{lbl(m)}</th>
                 ))}
@@ -420,8 +428,8 @@ export function QuemGera({ D, centroSel, onCentro }) {
             <thead>
               <tr>
                 <th>Centro</th>
-                <th className="n" title="Realizado: meses fechados do histórico e o mês atual até hoje">
-                  Realizado até {diaMes(D.hoje)}
+                <th className="n" title={D.semRealizadoNoMes ? 'Realizado: meses fechados do histórico' : 'Realizado: meses fechados do histórico e o mês atual até hoje'}>
+                  Realizado até {D.semRealizadoNoMes ? lbl(D.realizadoAte) : diaMes(D.hoje)}
                 </th>
                 <th className="n" title="Orçamento: o que falta do mês atual e os meses seguintes">
                   A acontecer até {lbl(D.fut.at(-1))}
@@ -576,7 +584,7 @@ export function MaioresSaidas({ D, forn }) {
         <h2 id="h-forn">Maiores saídas operacionais
           <AjudaSecao aba="saidas" rotulo="Maiores saídas operacionais" />
         </h2>
-        <p>{`${D.hist.length ? lbl(D.hist[0]) : lbl(D.m0)} até ${diaMes(D.hoje)}, por favorecido (realizado).`}</p>
+        <p>{`${D.hist.length ? lbl(D.hist[0]) : lbl(D.m0)} até ${D.semRealizadoNoMes ? lbl(D.realizadoAte) : diaMes(D.hoje)}, por favorecido (realizado).`}</p>
       </div>
       <div className="legend">
         <span>

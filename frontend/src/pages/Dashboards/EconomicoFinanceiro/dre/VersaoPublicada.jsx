@@ -77,7 +77,9 @@ function Pessoa({ pessoa, texto }) {
 //   Aprovador     — a aprovação ainda vai existir: por enquanto, quem fechou (e a data e hora do fechamento);
 //   Colaboradores — quem fez alguma alteração carimbada na versão: o primeiro nome do que mais colaborou
 //                   (+ quantos outros); clicando, a lista com foto, nome e a quantidade de colaborações.
-export default function VersaoPublicada({ empresaId }) {
+// `buscar` (opcional): de onde vem a versão publicada — por padrão a da DRE; o dashboard Fluxo de Caixa passa a
+// da DFC (versaoPublicadaDfc, mesmo formato de resposta).
+export default function VersaoPublicada({ empresaId, buscar = versaoPublicadaDre }) {
   const [v, setV] = useState(null);
   const [janela, setJanela] = useState(null); // 'responsavel' | 'aprovador' | 'colaboradores'
 
@@ -85,13 +87,13 @@ export default function VersaoPublicada({ empresaId }) {
     setV(null);
     if (!empresaId) return undefined;
     let ativo = true;
-    versaoPublicadaDre(empresaId)
+    buscar(empresaId)
       .then((r) => ativo && setV(r))
       .catch(() => ativo && setV(null));
     return () => {
       ativo = false;
     };
-  }, [empresaId]);
+  }, [empresaId, buscar]);
 
   if (!v) return null;
 

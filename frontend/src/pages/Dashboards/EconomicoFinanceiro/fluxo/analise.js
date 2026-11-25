@@ -35,12 +35,12 @@ export function indicadores(D) {
   return [
     {
       chave: 'caixa_hoje',
-      titulo: 'Caixa hoje',
+      titulo: D.semRealizadoNoMes ? `Caixa em ${diaMes(D.base)}` : 'Caixa hoje',
       valor: D.caixaHoje,
       valor_fmt: brl(D.caixaHoje),
       detalhe: D.totalContas
-        ? [{ b: pct((D.invest / D.totalContas) * 100) }, ` aplicado · ${D.contas.length} contas · em ${diaMes(D.hoje)}`]
-        : [`saldo em ${diaMes(D.hoje)}`],
+        ? [{ b: pct((D.invest / D.totalContas) * 100) }, ` aplicado · ${D.contas.length} contas · em ${diaMes(D.base)}`]
+        : [`saldo em ${diaMes(D.base)}`],
       etiqueta: D.caixaHoje < D.colchao ? etiqueta('crit', 'Abaixo do colchão') : etiqueta('good', 'Líquido'),
     },
     {
@@ -48,7 +48,7 @@ export function indicadores(D) {
       titulo: 'Mínimo projetado',
       valor: D.minBase,
       valor_fmt: brl(D.minBase),
-      detalhe: ['em ', { b: lbl(D.fut[D.minIdx]) }, ` · ${D.caixaHoje ? pct((D.minBase / D.caixaHoje - 1) * 100, true) : '–'} vs. hoje`],
+      detalhe: ['em ', { b: lbl(D.fut[D.minIdx]) }, ` · ${D.caixaHoje ? pct((D.minBase / D.caixaHoje - 1) * 100, true) : '–'} vs. ${D.semRealizadoNoMes ? diaMes(D.base) : 'hoje'}`],
       etiqueta: sev(D.minBase < D.colchao, D.minBase < 2 * D.colchao, 'Confortável'),
     },
     {
@@ -61,7 +61,7 @@ export function indicadores(D) {
     },
     {
       chave: 'fluxo_operacional',
-      titulo: `Fluxo operacional · ${D.hist.length ? lbl(D.hist[0]) : 'mês atual'} até ${diaMes(D.hoje)}`,
+      titulo: `Fluxo operacional · ${D.hist.length ? lbl(D.hist[0]) : 'mês atual'} até ${D.semRealizadoNoMes ? lbl(D.realizadoAte) : diaMes(D.hoje)}`,
       valor: fco,
       valor_fmt: brl(fco, true),
       detalhe: ['realizado · entradas de ', { b: brl(entradasRealizadas) }],
@@ -130,7 +130,8 @@ export function serieEntradasSaidas(D) {
   const item = (mes, rotulo, tipo, ent, sai) => ({ mes, rotulo, tipo, ent, sai, liq: ent + sai });
   return [
     ...D.hist.map((m, i) => item(m, lbl(m), 'realizado', D.entR[i], D.saiR[i])),
-    item(D.m0, `${lbl(D.m0)} até ${diaMes(D.hoje)}`, 'parcial', D.entMtd || 0, D.saiMtd || 0),
+    // Sem realizado no mês atual (versões da DFC), ele entra só orçado.
+    ...(D.semRealizadoNoMes ? [] : [item(D.m0, `${lbl(D.m0)} até ${diaMes(D.hoje)}`, 'parcial', D.entMtd || 0, D.saiMtd || 0)]),
     item(D.m0, `${lbl(D.m0)} orçado`, 'orcado_mes', D.entOrcMes || 0, D.saiOrcMes || 0),
     ...D.fut.slice(1).map((m, i) => item(m, lbl(m), 'projetado', D.entP[i + 1], D.saiP[i + 1])),
   ];

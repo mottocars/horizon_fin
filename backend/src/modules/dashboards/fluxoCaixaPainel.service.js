@@ -11,10 +11,12 @@ const { hojeEmBrasilia } = require('../extrato-contas-sienge/extratoContas-api.c
 // `hist`: meses de histórico antes do mês atual; `hor`: meses de horizonte contando o mês atual.
 // `centros`: filtro de centros de custo — aplicado no fluxo e nas maiores saídas; o resto vem com
 // todos os centros e o navegador filtra (como na especificação).
-// ATUALIDADE (pedido do usuário): o painel é a foto de hoje. Saldos, carteira e realizado vão até HOJE
-// (o extrato é buscado até o dia da última atualização); o Orçamento (última versão salva) só entra no
-// que ainda vai acontecer: os meses seguintes e, no mês atual, o que FALTA — orçado do mês − realizado
-// até hoje, por centro × natureza, sem inverter o sinal (`restante`).
+// VERSÕES DA DFC (pedido do usuário, 25/11/2026): o painel lê a versão PUBLICADA da DFC (a última aprovada —
+// dashboards.routes.js roda o painel no contexto dela, dfc-versoes/contexto.js) e o realizado vai só até o fim
+// do mês anterior ao atual (ou o corte da versão — `realizadoAte`); do mês seguinte em diante, só o Orçamento da
+// versão. Saldos das contas = abertura do primeiro mês projetado; no mês atual, o que falta acontecer é o
+// projetado do mês inteiro (`restante`, sem realizado nele). A carteira (a receber / a pagar em aberto) continua
+// sendo a de hoje, lida ao vivo (é o retrato do Aging, não o fluxo da versão).
 
 // 'AAAA-MM-DD' + n dias.
 function somarDias(data, n) {
@@ -45,10 +47,11 @@ function fluxoSimples(f) {
 // realizado até hoje. Entrada orçada: max(orçado − realizado, 0); saída orçada: min(orçado − realizado, 0)
 // — o que já passou do orçado não volta como sobra. Natureza sem orçamento no mês: nada a acontecer.
 // Devolve [{ centro_id, n1, n2, valor }] (somado por centro × máscara 1 × máscara 2).
-async function restanteDoMes(empresaId, mes, cls) {
+// `comRealizado`: o mês tem realizado (até o corte); sem ele, falta acontecer o projetado inteiro.
+async function restanteDoMes(empresaId, mes, cls, comRealizado = true) {
   const [{ rows: orc }, { rows: real }] = await Promise.all([
     pool.query(
-      `SELECT centro_id, sienge_id, valor FROM dfc_orcamento_valores WHERE empresa_id = $1 AND mes = $2::date`,
+      `SELECT centro_id, sienge_id, tipo_parcela, valor FROM dfc_orcamento_valores WHERE empresa_id = $1 AND mes = $2::date`,
       [empresaId, `${mes}-01`]
     ),
     pool.query(
@@ -60,7 +63,7 @@ async function restanteDoMes(empresaId, mes, cls) {
       [empresaId, `${mes}-01`]
     ),
   ]);
-  const realizado = new Map(real.map((r) => [`${r.centro_id}|${r.sienge_id}`, Number(r.valor)]));
+  const realizado = new Map(comRealizado ? real.map((r) => [`${r.centro_id}|${r.sienge_id}`, Number(r.valor)]) : []);
   const soma = new Map();
   orc.forEach((o) => {
     const p = Number(o.valor);
@@ -108,19 +111,23 @@ async function painel(empresaId, { hist, hor, centros = [] }) {
   const d1 = (m) => `${m}-01`;
   const filtroCentros = centros.length ? centros : null;
   const cls = await fluxoService.classificador(empresaId);
+  // Último mês com realizado (corte da versão publicada, no máximo o mês anterior ao atual) e o primeiro projetado.
+  const realizadoAte = require('../dfc-versoes/contexto').limiteRealizado();
+  const primeiroProjetado = fluxoService.somarMeses(realizadoAte, 1);
+  const dfcVersao = require('../dfc-versoes/contexto').dfcAtual()?.versao || null;
 
   const [fluxo, contas, centrosRows, real, proj, cef, param, carteira, forn, versao, empresa, restante, dividaInformada] = await Promise.all([
     fluxoService.montar(empresaId, { inicio: ini, fim, centros }),
-    // Abertura do mês atual e saldo de hoje (= abertura do mês seguinte: o extrato vai até hoje).
-    dfcSaldos.saldosPorConta(empresaId, [m0, fluxoService.somarMeses(m0, 1)]),
+    // Abertura do primeiro mês projetado (o saldo real no fim do último mês com realizado).
+    dfcSaldos.saldosPorConta(empresaId, [primeiroProjetado]),
     pool.query(
       `SELECT cc.sienge_id AS id, cc.name AS nome, cc.company_id, cc.company_name, cc.codigo_contrato_caixa AS contrato, cc.projeta_dfc,
               (SELECT max(p.versao) FROM dfc_parametros_versoes p WHERE p.empresa_id = cc.empresa_id AND p.sienge_id = cc.sienge_id) AS param_versao
          FROM centros_custo_sienge cc WHERE cc.empresa_id = $1 ORDER BY cc.sienge_id`,
       [empresaId]
     ),
-    pool.query(sqlOperacional('real'), [empresaId, d1(ini), d1(m0)]),
-    pool.query(sqlOperacional('proj'), [empresaId, d1(m0), d1(fim)]),
+    pool.query(sqlOperacional('real'), [empresaId, d1(ini), d1(realizadoAte < ini ? ini : realizadoAte)]),
+    pool.query(sqlOperacional('proj'), [empresaId, d1(primeiroProjetado < m0 ? primeiroProjetado : m0), d1(fim)]),
     pool.query(
       `SELECT p.sienge_id AS id, to_char(p.mes, 'YYYY-MM') AS mes, round(p.pct_obra_executada * 100, 2) AS obra,
               round(p.novo_registro, 2) AS novo_registro, round(p.medicao, 2) AS medicao, round(p.credito_pj, 2) AS credito,
@@ -139,7 +146,8 @@ async function painel(empresaId, { hist, hor, centros = [] }) {
         ORDER BY 1`,
       [empresaId]
     ),
-    pool.query(
+    // Carteira de hoje, ao vivo (pool.base: fora da cópia da versão).
+    pool.base.query(
       `SELECT 'receber' AS lado,
               round(sum(COALESCE(corrected_balance_amount, balance_amount)) FILTER (WHERE due_date < $2::date), 2) AS vencido,
               count(*) FILTER (WHERE due_date < $2::date) AS n_vencido,
@@ -169,7 +177,7 @@ async function painel(empresaId, { hist, hor, centros = [] }) {
             WHERE r.empresa_id = $1 AND r.valor < 0 AND r.mes BETWEEN $2::date AND $3::date AND m1.descricao ILIKE '%OPERACIONAL%'
               AND ($4::int[] IS NULL OR r.centro_id = ANY($4::int[]))
             GROUP BY e.description, m2.descricao ORDER BY sum(r.valor) LIMIT 40`,
-          [empresaId, d1(ini), d1(m0), filtroCentros]
+          [empresaId, d1(ini), d1(realizadoAte < ini ? ini : realizadoAte), filtroCentros]
         ),
     pool.query(
       `SELECT v.numero, v.criado_em, u.nome AS usuario FROM dfc_orcamento_versoes v LEFT JOIN usuarios u ON u.id = v.usuario_id
@@ -177,7 +185,7 @@ async function painel(empresaId, { hist, hor, centros = [] }) {
       [empresaId]
     ),
     pool.query(`SELECT COALESCE(NULLIF(nome_fantasia, ''), razao_social) AS nome FROM empresas WHERE id = $1`, [empresaId]),
-    restanteDoMes(empresaId, m0, cls),
+    restanteDoMes(empresaId, m0, cls, m0 <= realizadoAte),
     // Dívida PJ informada à mão (DFC Construtoras › aba Dívida PJ): no painel, vale por cima da
     // Projeção CEF no mês em que existe (ver modelo.js).
     pool.query(
@@ -201,7 +209,13 @@ async function painel(empresaId, { hist, hor, centros = [] }) {
     info: {
       empresa: empresa.rows[0]?.nome || null,
       extratoAte: fluxo.extratoAte,
-      versao: versao.rows[0] ? { numero: versao.rows[0].numero, criado_em: versao.rows[0].criado_em, usuario: versao.rows[0].usuario } : null,
+      // A versão publicada da DFC (o Orçamento dela é o que entra no projetado).
+      versao: dfcVersao
+        ? { numero: dfcVersao.numero, criado_em: dfcVersao.fechada_em, usuario: dfcVersao.fechada_por_nome, aprovada_em: dfcVersao.aprovada_em }
+        : versao.rows[0]
+          ? { numero: versao.rows[0].numero, criado_em: versao.rows[0].criado_em, usuario: versao.rows[0].usuario }
+          : null,
+      realizadoAte,
     },
     fluxo: fluxoSimples(fluxo),
     contas: contas.map((c) => ({
@@ -210,8 +224,9 @@ async function painel(empresaId, { hist, hor, centros = [] }) {
       conta: c.numero_conta,
       nome: c.nome,
       tipo: c.tipo_descricao || '',
-      saldo_abertura: Number(c.saldos[m0] ?? 0),
-      saldo: Number(c.saldos[fluxoService.somarMeses(m0, 1)] ?? 0), // hoje
+      // Sem realizado no mês atual: o saldo de partida é o real de abertura do primeiro mês projetado.
+      saldo_abertura: Number(c.saldos[primeiroProjetado] ?? 0),
+      saldo: Number(c.saldos[primeiroProjetado] ?? 0),
     })),
     // Mês atual: o que falta acontecer (orçado − realizado até hoje), com a máscara 1 e 2.
     restante: filtroCentros ? restante.filter((r) => filtroCentros.includes(r.centro_id)) : restante,
