@@ -171,18 +171,21 @@ export default function DfcPlanoContasTab({
     [mascaras]
   );
 
-  // Contas assumidas por uma máscara detalhada por tipo de parcela (aba Máscaras): sienge_id -> nome da
-  // máscara. Ficam travadas aqui (em todas as versões do plano) — não têm mais papel próprio na DFC.
-  const assumidas = useMemo(
-    () =>
-      Object.fromEntries(
-        mascaras
-          .flatMap((g) => g.filhos)
-          .filter((f) => f.tipo_detalhamento === 'TIPO_PARCELA' && f.parcela_conta_sienge_id)
-          .map((f) => [f.parcela_conta_sienge_id, f.descricao])
-      ),
-    [mascaras]
-  );
+  // Contas assumidas por máscaras detalhadas por tipo de parcela (aba Máscaras): sienge_id -> nomes das
+  // máscaras (a mesma conta pode estar em várias, diferenciadas pelos tipos de parcela). Ficam travadas
+  // aqui (em todas as versões do plano) — não têm mais papel próprio na DFC.
+  const assumidas = useMemo(() => {
+    const mapa = {};
+    mascaras
+      .flatMap((g) => g.filhos)
+      .filter((f) => f.tipo_detalhamento === 'TIPO_PARCELA' && f.parcela_conta_sienge_id)
+      .forEach((f) => {
+        mapa[f.parcela_conta_sienge_id] = mapa[f.parcela_conta_sienge_id]
+          ? `${mapa[f.parcela_conta_sienge_id]}, ${f.descricao}`
+          : f.descricao;
+      });
+    return mapa;
+  }, [mascaras]);
 
   // Atualiza na hora e grava; se falhar, volta o que estava.
   // Origem "CEF - ..." só pode estar em UMA conta (a Projeção CEF lança nela). Se já estiver em

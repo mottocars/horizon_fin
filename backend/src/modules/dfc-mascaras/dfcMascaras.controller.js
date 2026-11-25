@@ -25,6 +25,7 @@ const updateSchema = z
     tipo_detalhamento: z.enum(['PLANO_CONTAS', 'TIPO_PARCELA']).optional(),
     parcela_conta_sienge_id: z.union([z.null(), z.coerce.number().int().positive()]).optional(),
     parcela_origens: z.array(z.enum(service.ORIGENS_PARCELA)).max(3).optional(),
+    parcela_tipos: z.array(z.string().trim().min(1).max(20)).max(100).optional(),
   })
   .refine((c) => Object.values(c).some((v) => v !== undefined), 'Nada para alterar.');
 
@@ -105,4 +106,13 @@ async function reordenar(req, res, next) {
   }
 }
 
-module.exports = { list, create, update, remove, reordenar };
+async function tiposParcela(req, res, next) {
+  try {
+    const empresaId = empresaIdSchema.parse(req.params.empresaId);
+    res.json(await service.tiposParcela(empresaId));
+  } catch (err) {
+    tratar(err, next);
+  }
+}
+
+module.exports = { list, create, update, remove, reordenar, tiposParcela };

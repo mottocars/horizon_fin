@@ -232,7 +232,8 @@ export function Indicador({ recuo = false, embaixo = false }) {
 // (classe Tailwind, opcional) alarga a coluna; `substituir(item, definir)` (opcional) devolve o que
 // mostrar na célula no lugar do campo (ex.: um botão; `definir(valor)` grava a flag), ou null pra
 // mostrar o campo; `junto(valor)` (opcional) devolve outros campos que mudam junto na tela (o que o
-// backend também muda no mesmo UPDATE). Com `semFilhos` (só nível 1), o grupo marcado não tem drilldown nem nível 2 (a
+// backend também muda no mesmo UPDATE); `esquerda` (opcional) alinha o título da coluna à esquerda, junto
+// da combobox que o `substituir` desenha (sem ela, coluna sem `opcoes` tem o título centralizado). Com `semFilhos` (só nível 1), o grupo marcado não tem drilldown nem nível 2 (a
 // Totaliza da DRE): não abre,
 // não recebe item arrastado e a marcação fica travada enquanto ele tiver filhos.
 //
@@ -533,7 +534,9 @@ const MascarasArvoreEditor = forwardRef(function MascarasArvoreEditor(
                 <span
                   key={flag.campo}
                   title={flag.title}
-                  className={`${larguraFlag(flag)} shrink-0 ${flag.opcoes ? 'pl-2 text-left' : 'text-center'}`}
+                  className={`${larguraFlag(flag)} shrink-0 ${
+                    flag.opcoes ? 'pl-2 text-left' : flag.esquerda ? 'pl-1.5 text-left' : 'text-center'
+                  }`}
                 >
                   {flag.label}
                 </span>

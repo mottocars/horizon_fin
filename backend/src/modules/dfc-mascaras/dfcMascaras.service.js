@@ -7,12 +7,41 @@ function erro(status, message) {
   return e;
 }
 
-// Tipo de detalhamento (só nível 2 — ver database/migrations/2026-11-25-dfc-mascaras-tipo-parcela.sql):
-// PLANO_CONTAS (padrão) ou TIPO_PARCELA, com a conta do plano de contas que a máscara assume e as origens
-// que a compõem.
-const COLUNAS = 'id, parent_id, ordem, descricao, tipo_detalhamento, parcela_conta_sienge_id, parcela_origens';
+// Tipo de detalhamento (só nível 2 — ver database/migrations/2026-11-25-dfc-mascaras-tipo-parcela.sql e
+// 2026-11-25-dfc-mascaras-tipos-parcela.sql): PLANO_CONTAS (padrão) ou TIPO_PARCELA, com a conta do plano
+// de contas que a máscara assume, as origens que a compõem e os tipos de parcela (siglas do Sienge).
+const COLUNAS =
+  'id, parent_id, ordem, descricao, tipo_detalhamento, parcela_conta_sienge_id, parcela_origens, parcela_tipos';
 const TIPOS_DETALHAMENTO = ['PLANO_CONTAS', 'TIPO_PARCELA'];
 const ORIGENS_PARCELA = ['CEF_NOVO_REGISTRO', 'CEF_MEDICAO', 'SIENGE_AGING'];
+
+// Tipos de parcela da empresa (botão "TIPO PARCELAS"): as siglas que aparecem nas parcelas a receber
+// (sie_income.payment_term_id) e nas condições dos contratos de venda — cada empresa tem os seus no
+// Sienge. Nome = o mais frequente nas parcelas (ou no contrato, se só existir lá); `parcelas` = quantas
+// parcelas a receber têm o tipo.
+async function tiposParcela(empresaId) {
+  const { rows } = await pool.query(
+    `WITH p AS (
+       SELECT payment_term_id AS sigla, btrim(payment_term_description) AS nome, count(*)::int AS n
+         FROM sie_income
+        WHERE empresa_id = $1 AND payment_term_id IS NOT NULL AND payment_term_id <> ''
+        GROUP BY 1, 2
+     ), c AS (
+       SELECT condition_type_id AS sigla, btrim(condition_type_name) AS nome, count(*)::int AS n
+         FROM sie_sales_contracts_payment_conditions
+        WHERE empresa_id = $1 AND condition_type_id IS NOT NULL AND condition_type_id <> ''
+        GROUP BY 1, 2
+     )
+     SELECT t.sigla,
+            COALESCE((SELECT nome FROM p p2 WHERE p2.sigla = t.sigla ORDER BY n DESC LIMIT 1),
+                     (SELECT nome FROM c c2 WHERE c2.sigla = t.sigla ORDER BY n DESC LIMIT 1)) AS nome,
+            COALESCE((SELECT SUM(n) FROM p p3 WHERE p3.sigla = t.sigla), 0)::int AS parcelas
+       FROM (SELECT sigla FROM p UNION SELECT sigla FROM c) t
+      ORDER BY parcelas DESC, t.sigla`,
+    [empresaId]
+  );
+  return rows;
+}
 
 // Devolve já em árvore: nível 1 na ordem, cada um com seus `filhos` (nível 2) na ordem.
 async function list(empresaId, db = pool) {
@@ -68,67 +97,93 @@ async function create(empresaId, { parentId, descricoes }) {
   }
 }
 
-// Campos parciais: `descricao` e, só no nível 2, `tipo_detalhamento`, `parcela_conta_sienge_id` e
-// `parcela_origens`. Voltar para PLANO_CONTAS limpa a conta e as origens. A conta tem de ser analítica
-// (tp_conta diferente de 'T') do plano de contas da empresa e não pode estar em outra máscara.
+// Campos parciais: `descricao` e, só no nível 2, `tipo_detalhamento`, `parcela_conta_sienge_id`,
+// `parcela_origens` e `parcela_tipos`. Voltar para PLANO_CONTAS limpa conta, origens e tipos. A conta tem
+// de ser analítica (tp_conta diferente de 'T') do plano de contas da empresa. A mesma conta pode estar em
+// mais de uma máscara, mas um tipo de parcela não pode se repetir entre as máscaras da mesma conta (é o
+// que as diferencia) — checado com a empresa travada (advisory lock), pra duas gravações não passarem juntas.
 async function update(id, empresaId, campos) {
-  const { rows: atual } = await pool.query(`SELECT ${COLUNAS} FROM dfc_mascaras WHERE id = $1 AND empresa_id = $2`, [
-    id,
-    empresaId,
-  ]);
-  if (!atual[0]) return null;
-  const novo = { ...atual[0] };
-  if (campos.descricao !== undefined) novo.descricao = campos.descricao;
-
-  const mexeTipo = ['tipo_detalhamento', 'parcela_conta_sienge_id', 'parcela_origens'].some((c) => campos[c] !== undefined);
-  if (mexeTipo) {
-    if (atual[0].parent_id === null) throw erro(400, 'O tipo de detalhamento é só das máscaras de nível 2.');
-    if (campos.tipo_detalhamento !== undefined) {
-      if (!TIPOS_DETALHAMENTO.includes(campos.tipo_detalhamento)) throw erro(400, 'Tipo de detalhamento inválido.');
-      novo.tipo_detalhamento = campos.tipo_detalhamento;
-    }
-    if (novo.tipo_detalhamento === 'PLANO_CONTAS') {
-      if (campos.parcela_conta_sienge_id || campos.parcela_origens?.length) {
-        throw erro(400, 'Conta e origens só valem no detalhamento por tipo de parcela.');
-      }
-      novo.parcela_conta_sienge_id = null;
-      novo.parcela_origens = [];
-    } else {
-      if (campos.parcela_conta_sienge_id !== undefined) novo.parcela_conta_sienge_id = campos.parcela_conta_sienge_id;
-      if (campos.parcela_origens !== undefined) {
-        if (campos.parcela_origens.some((o) => !ORIGENS_PARCELA.includes(o))) throw erro(400, 'Origem inválida.');
-        // Na ordem da lista (CEF - NOVO REGISTRO, CEF - MEDIÇÃO, SIENGE - AGING), sem repetir.
-        novo.parcela_origens = ORIGENS_PARCELA.filter((o) => campos.parcela_origens.includes(o));
-      }
-    }
-    if (novo.parcela_conta_sienge_id !== null && novo.parcela_conta_sienge_id !== atual[0].parcela_conta_sienge_id) {
-      const { rows: conta } = await pool.query(
-        'SELECT tp_conta FROM planos_financeiros_sienge WHERE empresa_id = $1 AND sienge_id = $2',
-        [empresaId, novo.parcela_conta_sienge_id]
-      );
-      if (!conta[0]) throw erro(400, 'Conta não encontrada no plano de contas desta empresa.');
-      if (conta[0].tp_conta === 'T') throw erro(400, 'Escolha uma conta analítica (último nível) do plano de contas.');
-      const { rows: outra } = await pool.query(
-        'SELECT descricao FROM dfc_mascaras WHERE empresa_id = $1 AND parcela_conta_sienge_id = $2 AND id <> $3',
-        [empresaId, novo.parcela_conta_sienge_id, id]
-      );
-      if (outra[0]) throw erro(409, `Essa conta já está na máscara "${outra[0].descricao}".`);
-    }
-  }
-
+  const client = await pool.connect();
   try {
-    const { rows } = await pool.query(
+    await client.query('BEGIN');
+    await client.query("SELECT pg_advisory_xact_lock(hashtext('dfc_mascaras_parcela'), $1)", [empresaId]);
+    const { rows: atual } = await client.query(
+      `SELECT ${COLUNAS} FROM dfc_mascaras WHERE id = $1 AND empresa_id = $2 FOR UPDATE`,
+      [id, empresaId]
+    );
+    if (!atual[0]) {
+      await client.query('ROLLBACK');
+      return null;
+    }
+    const novo = { ...atual[0] };
+    if (campos.descricao !== undefined) novo.descricao = campos.descricao;
+
+    const camposTipo = ['tipo_detalhamento', 'parcela_conta_sienge_id', 'parcela_origens', 'parcela_tipos'];
+    if (camposTipo.some((c) => campos[c] !== undefined)) {
+      if (atual[0].parent_id === null) throw erro(400, 'O tipo de detalhamento é só das máscaras de nível 2.');
+      if (campos.tipo_detalhamento !== undefined) {
+        if (!TIPOS_DETALHAMENTO.includes(campos.tipo_detalhamento)) throw erro(400, 'Tipo de detalhamento inválido.');
+        novo.tipo_detalhamento = campos.tipo_detalhamento;
+      }
+      if (novo.tipo_detalhamento === 'PLANO_CONTAS') {
+        if (campos.parcela_conta_sienge_id || campos.parcela_origens?.length || campos.parcela_tipos?.length) {
+          throw erro(400, 'Conta, origens e tipos de parcela só valem no detalhamento por tipo de parcela.');
+        }
+        novo.parcela_conta_sienge_id = null;
+        novo.parcela_origens = [];
+        novo.parcela_tipos = [];
+      } else {
+        if (campos.parcela_conta_sienge_id !== undefined) novo.parcela_conta_sienge_id = campos.parcela_conta_sienge_id;
+        if (campos.parcela_origens !== undefined) {
+          if (campos.parcela_origens.some((o) => !ORIGENS_PARCELA.includes(o))) throw erro(400, 'Origem inválida.');
+          // Na ordem da lista (CEF - NOVO REGISTRO, CEF - MEDIÇÃO, SIENGE - AGING), sem repetir.
+          novo.parcela_origens = ORIGENS_PARCELA.filter((o) => campos.parcela_origens.includes(o));
+        }
+        if (campos.parcela_tipos !== undefined) novo.parcela_tipos = [...new Set(campos.parcela_tipos)].sort();
+      }
+
+      if (novo.parcela_conta_sienge_id !== null && novo.parcela_conta_sienge_id !== atual[0].parcela_conta_sienge_id) {
+        const { rows: conta } = await client.query(
+          'SELECT tp_conta FROM planos_financeiros_sienge WHERE empresa_id = $1 AND sienge_id = $2',
+          [empresaId, novo.parcela_conta_sienge_id]
+        );
+        if (!conta[0]) throw erro(400, 'Conta não encontrada no plano de contas desta empresa.');
+        if (conta[0].tp_conta === 'T') throw erro(400, 'Escolha uma conta analítica (último nível) do plano de contas.');
+      }
+
+      // Mesma conta em outra máscara com algum tipo de parcela em comum: recusa, dizendo quais.
+      if (novo.parcela_conta_sienge_id !== null && novo.parcela_tipos.length) {
+        const { rows: choque } = await client.query(
+          `SELECT descricao, ARRAY(SELECT unnest(parcela_tipos) INTERSECT SELECT unnest($4::text[]) ORDER BY 1) AS comuns
+             FROM dfc_mascaras
+            WHERE empresa_id = $1 AND parcela_conta_sienge_id = $2 AND id <> $3 AND parcela_tipos && $4::text[]
+            ORDER BY ordem LIMIT 1`,
+          [empresaId, novo.parcela_conta_sienge_id, id, novo.parcela_tipos]
+        );
+        if (choque[0]) {
+          throw erro(
+            409,
+            `A máscara "${choque[0].descricao}" já usa esta conta com o(s) tipo(s) de parcela ${choque[0].comuns.join(', ')}. ` +
+              'Na mesma conta, cada tipo de parcela fica em uma máscara só.'
+          );
+        }
+      }
+    }
+
+    const { rows } = await client.query(
       `UPDATE dfc_mascaras
-          SET descricao = $3, tipo_detalhamento = $4, parcela_conta_sienge_id = $5, parcela_origens = $6
+          SET descricao = $3, tipo_detalhamento = $4, parcela_conta_sienge_id = $5, parcela_origens = $6, parcela_tipos = $7
         WHERE id = $1 AND empresa_id = $2
        RETURNING ${COLUNAS}`,
-      [id, empresaId, novo.descricao, novo.tipo_detalhamento, novo.parcela_conta_sienge_id, novo.parcela_origens]
+      [id, empresaId, novo.descricao, novo.tipo_detalhamento, novo.parcela_conta_sienge_id, novo.parcela_origens, novo.parcela_tipos]
     );
-    return rows[0] || null;
+    await client.query('COMMIT');
+    return rows[0];
   } catch (e) {
-    // Corrida: outra gravação pôs a mesma conta em outra máscara.
-    if (e.code === '23505') throw erro(409, 'Essa conta já está em outra máscara. Recarregue a tela.');
+    await client.query('ROLLBACK');
     throw e;
+  } finally {
+    client.release();
   }
 }
 
@@ -175,7 +230,7 @@ async function reordenar(empresaId, estrutura) {
     // Item de nível 2 que virou nível 1 perde o tipo de detalhamento (só vale no nível 2).
     await client.query(
       `UPDATE dfc_mascaras
-          SET tipo_detalhamento = 'PLANO_CONTAS', parcela_conta_sienge_id = NULL, parcela_origens = '{}'
+          SET tipo_detalhamento = 'PLANO_CONTAS', parcela_conta_sienge_id = NULL, parcela_origens = '{}', parcela_tipos = '{}'
         WHERE empresa_id = $1 AND parent_id IS NULL AND tipo_detalhamento <> 'PLANO_CONTAS'`,
       [empresaId]
     );
@@ -190,4 +245,4 @@ async function reordenar(empresaId, estrutura) {
   }
 }
 
-module.exports = { list, create, update, remove, reordenar, ORIGENS_PARCELA };
+module.exports = { list, create, update, remove, reordenar, tiposParcela, ORIGENS_PARCELA };

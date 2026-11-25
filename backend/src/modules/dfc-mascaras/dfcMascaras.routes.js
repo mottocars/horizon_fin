@@ -8,6 +8,7 @@ const router = Router();
 router.use(authMiddleware);
 router.param('empresaId', paramEmpresa);
 router.get('/:empresaId', controller.list);
+router.get('/:empresaId/tipos-parcela', controller.tiposParcela);
 router.post('/:empresaId', controller.create);
 // Antes de '/:empresaId/:id' — senão "ordem" seria lido como id.
 router.put('/:empresaId/ordem', controller.reordenar);

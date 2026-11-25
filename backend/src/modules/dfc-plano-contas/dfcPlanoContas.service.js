@@ -65,11 +65,12 @@ async function update(
   // Conta assumida por uma máscara detalhada por tipo de parcela (aba Máscaras): travada aqui, em todas
   // as versões do plano — não tem mais papel próprio na DFC.
   const { rows: assumida } = await pool.query(
-    'SELECT descricao FROM dfc_mascaras WHERE empresa_id = $1 AND parcela_conta_sienge_id = $2',
+    `SELECT string_agg('"' || descricao || '"', ', ' ORDER BY ordem) AS mascaras FROM dfc_mascaras
+      WHERE empresa_id = $1 AND parcela_conta_sienge_id = $2`,
     [empresaId, siengeId]
   );
-  if (assumida[0]) {
-    throw erro(409, `Esta conta é detalhada por tipo de parcela na máscara "${assumida[0].descricao}" (aba Máscaras).`);
+  if (assumida[0].mascaras) {
+    throw erro(409, `Esta conta é detalhada por tipo de parcela na(s) máscara(s) ${assumida[0].mascaras} (aba Máscaras).`);
   }
 
   if (mascaraId !== null) {

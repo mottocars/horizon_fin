@@ -9,8 +9,13 @@ export function createDfcMascaras(empresaId, { parentId = null, descricoes }) {
   return http.post(`/dfc-mascaras/${empresaId}`, { parent_id: parentId, descricoes }).then((res) => res.data);
 }
 
+// Tipos de parcela do Sienge da empresa: [{ sigla, nome, parcelas }] (botão "TIPO PARCELAS" da aba Máscaras).
+export function listTiposParcelaDfc(empresaId) {
+  return http.get(`/dfc-mascaras/${empresaId}/tipos-parcela`).then((res) => res.data);
+}
+
 // Campos parciais: descricao e, no nível 2, tipo_detalhamento ('PLANO_CONTAS' | 'TIPO_PARCELA'),
-// parcela_conta_sienge_id e parcela_origens (lista).
+// parcela_conta_sienge_id, parcela_origens e parcela_tipos (listas).
 export function updateDfcMascara(empresaId, id, campos) {
   return http.put(`/dfc-mascaras/${empresaId}/${id}`, campos).then((res) => res.data);
 }

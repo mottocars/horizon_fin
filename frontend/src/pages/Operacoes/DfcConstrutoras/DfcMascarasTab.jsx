@@ -3,9 +3,11 @@ import MascarasArvoreEditor from '../../../components/MascarasArvoreEditor';
 import SearchableSelect from '../../../components/SearchableSelect';
 import { listContas } from '../../../api/planosFinanceirosSienge.api';
 import { codigoFormatado } from './codigoConta';
+import TiposParcelaModal from './TiposParcelaModal';
 import {
   createDfcMascaras,
   listDfcMascaras,
+  listTiposParcelaDfc,
   removeDfcMascara,
   reordenarDfcMascaras,
   updateDfcMascara,
@@ -100,15 +102,31 @@ const DfcMascarasTab = forwardRef(function DfcMascarasTab({ empresaId }, ref) {
     [contas]
   );
 
+  // Tipos de parcela da empresa (botão "TIPO PARCELAS") e a máscara com a janela aberta
+  // ({ item, definir } — `definir` grava parcela_tipos daquela máscara).
+  const [tiposParcela, setTiposParcela] = useState([]);
+  const [janelaTipos, setJanelaTipos] = useState(null);
+
+  useEffect(() => {
+    setTiposParcela([]);
+    setJanelaTipos(null);
+    if (!empresaId) return;
+    listTiposParcelaDfc(empresaId)
+      .then(setTiposParcela)
+      .catch(() => setTiposParcela([]));
+  }, [empresaId]);
+
+  // Tipos que já estão em outra máscara com a mesma conta: { sigla: nome da máscara } — travados na janela
+  // (na mesma conta, cada tipo de parcela fica em uma máscara só).
+  const ocupadosNaConta = (item) => {
+    if (!item?.parcela_conta_sienge_id) return {};
+    const outras = arvore
+      .flatMap((g) => g.filhos)
+      .filter((f) => f.id !== item.id && f.parcela_conta_sienge_id === item.parcela_conta_sienge_id);
+    return Object.fromEntries(outras.flatMap((f) => (f.parcela_tipos || []).map((s) => [s, f.descricao])));
+  };
+
   const flags = useMemo(() => {
-    // Conta já assumida por outra máscara não aparece na lista (uma conta, uma máscara).
-    const usadas = (item) =>
-      new Set(
-        arvore
-          .flatMap((g) => g.filhos)
-          .filter((f) => f.id !== item.id && f.parcela_conta_sienge_id)
-          .map((f) => f.parcela_conta_sienge_id)
-      );
     return [
       {
         campo: 'tipo_detalhamento',
@@ -116,8 +134,10 @@ const DfcMascarasTab = forwardRef(function DfcMascarasTab({ empresaId }, ref) {
         title: 'Como a máscara é detalhada: pelas contas do plano de contas ou por tipo de parcela',
         nivel: 2,
         largura: 'w-36',
-        // Voltar para "Plano de contas" limpa a conta e as origens (o backend faz o mesmo).
-        junto: (valor) => (valor === 'TIPO_PARCELA' ? {} : { parcela_conta_sienge_id: null, parcela_origens: [] }),
+        esquerda: true,
+        // Voltar para "Plano de contas" limpa conta, origens e tipos (o backend faz o mesmo).
+        junto: (valor) =>
+          valor === 'TIPO_PARCELA' ? {} : { parcela_conta_sienge_id: null, parcela_origens: [], parcela_tipos: [] },
         substituir: (item, definir) => (
           <div className="w-full">
             <SearchableSelect
@@ -134,18 +154,19 @@ const DfcMascarasTab = forwardRef(function DfcMascarasTab({ empresaId }, ref) {
       {
         campo: 'parcela_conta_sienge_id',
         label: 'Conta',
-        title: 'Conta do plano de contas que a máscara assume (fica travada na aba Plano Contas)',
+        title:
+          'Conta do plano de contas que a máscara assume (fica travada na aba Plano Contas). A mesma conta pode estar em várias máscaras, diferenciadas pelos tipos de parcela',
         nivel: 2,
         largura: 'w-64',
+        esquerda: true,
         substituir: (item, definir) => {
           if (!porParcela(item)) return <Traco />;
-          const ocupadas = usadas(item);
           return (
             <div className="w-full">
               <SearchableSelect
                 value={item.parcela_conta_sienge_id ?? ''}
                 onChange={(v) => definir(v ? Number(v) : null)}
-                options={analiticas.filter((o) => !ocupadas.has(o.value))}
+                options={analiticas}
                 placeholder="Selecione a conta"
                 emptyMessage="Nenhuma conta analítica disponível."
                 compacto
@@ -162,6 +183,7 @@ const DfcMascarasTab = forwardRef(function DfcMascarasTab({ empresaId }, ref) {
         title: 'Origens que compõem a máscara (uma ou mais)',
         nivel: 2,
         largura: 'w-48',
+        esquerda: true,
         substituir: (item, definir) => {
           if (!porParcela(item)) return <Traco />;
           const valores = item.parcela_origens || [];
@@ -181,20 +203,64 @@ const DfcMascarasTab = forwardRef(function DfcMascarasTab({ empresaId }, ref) {
           );
         },
       },
+      {
+        // Botão "TIPO PARCELAS": abre a janela dos tipos de parcela da máscara (com a quantidade escolhida).
+        campo: 'parcela_tipos',
+        label: '',
+        title: 'Tipos de parcela do Sienge que compõem a máscara',
+        nivel: 2,
+        largura: 'w-36',
+        substituir: (item, definir) => {
+          if (!porParcela(item)) return <Traco />;
+          const qtd = (item.parcela_tipos || []).length;
+          return (
+            <button
+              type="button"
+              onClick={() => setJanelaTipos({ item, definir })}
+              title={qtd ? `Tipos: ${item.parcela_tipos.join(', ')}` : 'Escolher os tipos de parcela'}
+              className={`flex h-6.75 w-full items-center justify-center gap-1.5 rounded-md border px-1.5 text-[11px] font-semibold uppercase tracking-wide transition-colors ${
+                qtd
+                  ? 'border-primary-100 bg-primary-50 text-primary-700 hover:bg-primary-100'
+                  : 'border-amber-300 bg-amber-50 text-amber-700 hover:bg-amber-100'
+              }`}
+            >
+              Tipo parcelas
+              {qtd > 0 && (
+                <span className="rounded-full bg-white px-1.5 text-[10px] tabular-nums text-primary-700 ring-1 ring-primary-100">
+                  {qtd}
+                </span>
+              )}
+            </button>
+          );
+        },
+      },
     ];
-  }, [arvore, analiticas]);
+  }, [analiticas]);
 
   return (
-    <MascarasArvoreEditor
-      ref={ref}
-      empresaId={empresaId}
-      api={API}
-      modeloSugerido={MODELO_SUGERIDO}
-      demonstrativo="DFC"
-      exemploNivel1="Fluxo de Caixa Operacional"
-      flags={flags}
-      aoMudarArvore={setArvore}
-    />
+    <>
+      <MascarasArvoreEditor
+        ref={ref}
+        empresaId={empresaId}
+        api={API}
+        modeloSugerido={MODELO_SUGERIDO}
+        demonstrativo="DFC"
+        exemploNivel1="Fluxo de Caixa Operacional"
+        flags={flags}
+        aoMudarArvore={setArvore}
+      />
+      <TiposParcelaModal
+        open={Boolean(janelaTipos)}
+        mascara={janelaTipos?.item}
+        tipos={tiposParcela}
+        ocupados={ocupadosNaConta(janelaTipos?.item)}
+        onClose={() => setJanelaTipos(null)}
+        onSalvar={(lista) => {
+          janelaTipos.definir(lista);
+          setJanelaTipos(null);
+        }}
+      />
+    </>
   );
 });
 
