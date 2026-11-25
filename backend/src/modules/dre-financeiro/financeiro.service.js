@@ -3,11 +3,14 @@ const { sqlMapaDre } = require('../dre-plano-contas/drePlanoContas.service');
 const cache = require('../dre-versoes/cache');
 
 // Operações > DRE Gerencial > Financeiro: os exercícios (anos) da empresa, do ano do primeiro
-// lançamento financeiro até o ano atual. O primeiro ano sai da menor EMISSÃO do contas a receber
-// (sie_income) e a pagar (sie_outcome) — pedido do usuário (25/11/2026): a DRE trabalha toda pela
-// emissão, e um título com a emissão digitada errada no Sienge (ex.: 172042 da GENESIS, emitido em
-// "2002" e vencido em 2026) tem de aparecer no card do ano dele, como na Base Financeiro do Excel de
-// auditoria. Antes o início era o menor vencimento e esses títulos não apareciam em nenhum exercício.
+// lançamento QUE ENTRA NA DRE até o ano atual (pedido do usuário, 25/11/2026). A busca começa na menor
+// EMISSÃO do contas a receber/pagar (ou data do movimento do extrato / lançamento criado, se for antes) —
+// a DRE trabalha toda pela emissão, e um título com a emissão digitada errada no Sienge (ex.: 172042 da
+// GENESIS, emitido em "2002" e vencido em 2026) tem de aparecer no card do ano dele, como na Base
+// Financeiro do Excel de auditoria (antes o início era o menor vencimento e esses títulos sumiam). Mas o
+// primeiro card é o do primeiro ano com lançamento na DRE: os títulos mais antigos que ficam fora dela
+// (GENESIS: 2 de 2001, natureza "NÃO ENTRA NA DRE" e documento CMR fora da DRE) criavam um card vazio.
+// Anos vazios no meio continuam (a sequência não tem buraco); sem nenhum lançamento na DRE, só o ano atual.
 // Dentro do exercício os títulos entram pela EMISSÃO — a contagem de cada card e a listagem
 // (lancamentos) são por emissão. O card conta TÍTULOS distintos (um título tem várias parcelas) a
 // receber e a pagar, e as movimentações do extrato sem título (cada lançamento uma vez, mesmo
@@ -24,18 +27,20 @@ async function exercicios(empresaId) {
   const limite = limiteDoRealizado();
   const { rows: inicio } = await pool.query(
     `SELECT to_char(LEAST((SELECT MIN(issue_date) FROM sie_income WHERE empresa_id = $1),
-                          (SELECT MIN(issue_date) FROM sie_outcome WHERE empresa_id = $1)), 'YYYY-MM-DD') AS primeiro`,
+                          (SELECT MIN(issue_date) FROM sie_outcome WHERE empresa_id = $1),
+                          (SELECT MIN(data) FROM sie_extrato_contas_rateio WHERE empresa_id = $1 AND natureza_id IS NOT NULL),
+                          (SELECT MIN(data) FROM lancamentos_manuais WHERE empresa_id = $1)), 'YYYY-MM-DD') AS primeiro`,
     [empresaId]
   );
   // Ano atual pelo relógio da aplicação (o do Postgres da VPS é deslocado).
   const anoAtual = new Date().getFullYear();
-  const primeiro = inicio[0].primeiro;
-  if (!primeiro) return { primeira_emissao: null, ano_atual: anoAtual, exercicios: [] };
-  const primeiroAno = Math.min(Number(String(primeiro).slice(0, 4)), anoAtual);
+  const inicioBusca = inicio[0].primeiro;
+  if (!inicioBusca) return { primeiro_lancamento: null, ano_atual: anoAtual, exercicios: [] };
+  const anoBusca = Math.min(Number(String(inicioBusca).slice(0, 4)), anoAtual);
 
   const { rows } = await pool.query(
     `WITH mapa AS (${sqlMapaDre('$1')})
-     SELECT EXTRACT(YEAR FROM data)::int AS ano,
+     SELECT EXTRACT(YEAR FROM data)::int AS ano, to_char(MIN(data), 'YYYY-MM-DD') AS primeiro,
             COUNT(DISTINCT id) FILTER (WHERE tipo = 'R')::int AS receber,
             COUNT(DISTINCT id) FILTER (WHERE tipo = 'P')::int AS pagar,
             COUNT(DISTINCT id) FILTER (WHERE tipo = 'E')::int AS movimentos
@@ -66,7 +71,7 @@ async function exercicios(empresaId) {
                      OR EXISTS (SELECT 1 FROM lancamentos_ajustes j JOIN mapa m ON m.centro_id = j.centro_id AND m.natureza_id = j.natureza_id
                                  WHERE j.empresa_id = $1 AND j.origem = 'E' AND j.chave = e.id))) t
       GROUP BY 1`,
-    [empresaId, `${primeiroAno}-01-01`, diaSeguinte(limite)]
+    [empresaId, `${anoBusca}-01-01`, diaSeguinte(limite)]
   );
   const { rows: ajustados } = await pool.query(
     `WITH ajustes AS (
@@ -99,12 +104,16 @@ async function exercicios(empresaId) {
   const porAno = new Map(rows.map((r) => [r.ano, r]));
   const ajustadosPorAno = new Map(ajustados.map((r) => [r.ano, r.n]));
   const { rows: criados } = await pool.query(
-    `SELECT EXTRACT(YEAR FROM l.data)::int AS ano, COUNT(*)::int AS n
+    `SELECT EXTRACT(YEAR FROM l.data)::int AS ano, to_char(MIN(l.data), 'YYYY-MM-DD') AS primeiro, COUNT(*)::int AS n
        FROM lancamentos_manuais l JOIN (${sqlMapaDre('$1')}) m ON m.centro_id = l.centro_id AND m.natureza_id = l.natureza_id
       WHERE l.empresa_id = $1 AND l.data <= $2 GROUP BY 1`,
     [empresaId, limite]
   );
   const criadosPorAno = new Map(criados.map((r) => [r.ano, r.n]));
+  // O primeiro lançamento que entra na DRE (título pela emissão; movimento e criado pela data).
+  const datas = [...rows.filter((r) => r.receber + r.pagar + r.movimentos > 0), ...criados].map((r) => r.primeiro).sort();
+  const primeiro = datas[0] || null;
+  const primeiroAno = primeiro ? Math.min(Number(primeiro.slice(0, 4)), anoAtual) : anoAtual;
   const lista = [];
   for (let ano = anoAtual; ano >= primeiroAno; ano -= 1) {
     const r = porAno.get(ano);
@@ -118,7 +127,7 @@ async function exercicios(empresaId) {
       travado: ano === anoAtual,
     });
   }
-  return { primeira_emissao: primeiro, ano_atual: anoAtual, exercicios: lista, ...posicao(limite) };
+  return { primeiro_lancamento: primeiro, ano_atual: anoAtual, exercicios: lista, ...posicao(limite) };
 }
 
 // Lançamentos financeiros de um período (dentro do exercício). Primeiro uma linha por parcela ×

@@ -94,7 +94,7 @@ function CardExercicio({ exercicio, atual, onAbrir }) {
 }
 
 // Operações > DRE Gerencial > Financeiro: um card por exercício (ano), do atual até o ano do primeiro
-// lançamento financeiro da empresa — o menor vencimento do contas a pagar e a receber (regra em
+// lançamento que entra na DRE (título pela emissão; movimento e criado pela data — regra em
 // dre-financeiro/financeiro.service.js) —, do mais novo pro mais antigo. Clicar num card abre os
 // lançamentos dele (LancamentosExercicio); o exercício aberto vem da URL (DreGerencialPage.jsx).
 export default function FinanceiroTab({ empresaId, exercicio = null, onAbrir, search = '', novoToken = 0 }) {
@@ -163,7 +163,7 @@ export default function FinanceiroTab({ empresaId, exercicio = null, onAbrir, se
                 {dados.versao ? ` · corte da versão ${dados.versao} da DRE` : ''}
               </span>
             )}
-            <span>Primeiro lançamento financeiro: emissão em {dataBr(dados.primeira_emissao)}</span>
+            {dados.primeiro_lancamento && <span>Primeiro lançamento na DRE: {dataBr(dados.primeiro_lancamento)}</span>}
           </div>
           <div className="grid grid-cols-1 gap-3 md:grid-cols-2 xl:grid-cols-3 2xl:grid-cols-4">
             {dados.exercicios.map((e) => (
