@@ -449,12 +449,12 @@ export default function DfcFluxoTab({
   // como as linhas de total (azul claro, texto azul escuro), nível 1 cinza em negrito e maiúsculas, linhas
   // baixas; Projetado em amarelo pastel; negativo em vermelho.
   const ESTILO = {
-    saldo: { fundo: 'bg-[#cfe0ee]', texto: 'text-xs font-bold uppercase tracking-wide text-[#174a70]', py: 'py-1.5', borda: 'border-[#a9c4dc]' },
-    resultado: { fundo: 'bg-[#cfe0ee]', texto: 'text-xs font-bold uppercase tracking-wide text-[#174a70]', py: 'py-1.5', borda: 'border-[#a9c4dc]' },
-    n1: { fundo: 'bg-gray-50', texto: 'text-xs font-bold uppercase tracking-wide text-gray-900', py: 'py-1', borda: 'border-gray-200' },
-    lado: { fundo: 'bg-white', texto: 'text-[11px] font-semibold uppercase tracking-wider text-gray-500', py: 'py-1', borda: 'border-gray-100' },
-    n2: { fundo: 'bg-white', texto: 'text-xs text-gray-700', py: 'py-0.5', borda: 'border-gray-100' },
-    conta: { fundo: 'bg-white', texto: 'text-xs text-gray-500', py: 'py-0.5', borda: 'border-gray-100' },
+    saldo: { fundo: 'bg-[#cfe0ee]', texto: 'text-xs font-bold uppercase tracking-wide text-[#174a70]', py: 'py-2', borda: 'border-[#a9c4dc]' },
+    resultado: { fundo: 'bg-[#cfe0ee]', texto: 'text-xs font-bold uppercase tracking-wide text-[#174a70]', py: 'py-2', borda: 'border-[#a9c4dc]' },
+    n1: { fundo: 'bg-gray-50', texto: 'text-xs font-bold uppercase tracking-wide text-gray-900', py: 'py-1.5', borda: 'border-gray-200' },
+    lado: { fundo: 'bg-white', texto: 'text-[11px] font-semibold uppercase tracking-wider text-gray-500', py: 'py-1.5', borda: 'border-gray-100' },
+    n2: { fundo: 'bg-white', texto: 'text-xs text-gray-700', py: 'py-1', borda: 'border-gray-100' },
+    conta: { fundo: 'bg-white', texto: 'text-xs text-gray-500', py: 'py-1', borda: 'border-gray-100' },
   };
   const ehTotal = (tipo) => tipo === 'saldo' || tipo === 'resultado';
   // Coluna Total: as linhas de total (saldos e resultado) levam a cor delas; Saldo inicial e Saldo final não têm
