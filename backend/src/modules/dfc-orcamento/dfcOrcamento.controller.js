@@ -6,6 +6,8 @@ const logSchema = z.object({
   centro: z.coerce.number().int().positive('Centro de custo inválido.'),
   conta: z.coerce.number().int().positive('Conta inválida.'),
   mes: z.string().regex(/^\d{4}-(0[1-9]|1[0-2])$/, 'Mês inválido.'),
+  // Tipo de parcela (máscara detalhada por tipo de parcela); vazio = o valor de sempre da conta.
+  tipo: z.string().trim().max(20).optional().default(''),
 });
 
 function erro(status, message) {
@@ -57,8 +59,8 @@ async function salvarVersao(req, res, next) {
 async function log(req, res, next) {
   try {
     const empresaId = empresaIdSchema.parse(req.params.empresaId);
-    const { centro, conta, mes } = logSchema.parse(req.query);
-    res.json(await service.log(empresaId, centro, conta, mes));
+    const { centro, conta, mes, tipo } = logSchema.parse(req.query);
+    res.json(await service.log(empresaId, centro, conta, mes, tipo));
   } catch (err) {
     tratar(err, next);
   }

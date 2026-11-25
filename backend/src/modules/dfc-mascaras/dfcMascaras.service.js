@@ -14,6 +14,7 @@ const COLUNAS =
   'id, parent_id, ordem, descricao, tipo_detalhamento, parcela_conta_sienge_id, parcela_origens, parcela_tipos';
 const TIPOS_DETALHAMENTO = ['PLANO_CONTAS', 'TIPO_PARCELA'];
 const ORIGENS_PARCELA = ['CEF_NOVO_REGISTRO', 'CEF_MEDICAO', 'SIENGE_AGING'];
+const ORIGENS_CEF = ['CEF_NOVO_REGISTRO', 'CEF_MEDICAO'];
 
 // Tipos de parcela da empresa (botão "TIPO PARCELAS"): as siglas que aparecem nas parcelas a receber
 // (sie_income.payment_term_id) e nas condições dos contratos de venda — cada empresa tem os seus no
@@ -22,14 +23,14 @@ const ORIGENS_PARCELA = ['CEF_NOVO_REGISTRO', 'CEF_MEDICAO', 'SIENGE_AGING'];
 async function tiposParcela(empresaId) {
   const { rows } = await pool.query(
     `WITH p AS (
-       SELECT payment_term_id AS sigla, btrim(payment_term_description) AS nome, count(*)::int AS n
+       SELECT btrim(payment_term_id) AS sigla, btrim(payment_term_description) AS nome, count(*)::int AS n
          FROM sie_income
-        WHERE empresa_id = $1 AND payment_term_id IS NOT NULL AND payment_term_id <> ''
+        WHERE empresa_id = $1 AND payment_term_id IS NOT NULL AND btrim(payment_term_id) <> ''
         GROUP BY 1, 2
      ), c AS (
-       SELECT condition_type_id AS sigla, btrim(condition_type_name) AS nome, count(*)::int AS n
+       SELECT btrim(condition_type_id) AS sigla, btrim(condition_type_name) AS nome, count(*)::int AS n
          FROM sie_sales_contracts_payment_conditions
-        WHERE empresa_id = $1 AND condition_type_id IS NOT NULL AND condition_type_id <> ''
+        WHERE empresa_id = $1 AND condition_type_id IS NOT NULL AND btrim(condition_type_id) <> ''
         GROUP BY 1, 2
      )
      SELECT t.sigla,
@@ -149,6 +150,30 @@ async function update(id, empresaId, campos) {
         );
         if (!conta[0]) throw erro(400, 'Conta não encontrada no plano de contas desta empresa.');
         if (conta[0].tp_conta === 'T') throw erro(400, 'Escolha uma conta analítica (último nível) do plano de contas.');
+      }
+
+      // Origem CEF (NOVO REGISTRO / MEDIÇÃO): a Projeção CEF entra no único tipo da máscara, no lugar do
+      // Aging (o financiamento não é contado duas vezes) — e cada origem CEF em uma máscara só da empresa.
+      const origensCef = novo.parcela_origens.filter((o) => ORIGENS_CEF.includes(o));
+      if (origensCef.length) {
+        if (novo.parcela_tipos.length > 1) {
+          throw erro(400, 'Máscara com origem CEF tem um tipo de parcela só — é nele que a Projeção CEF aparece.');
+        }
+        if (novo.parcela_origens.includes('SIENGE_AGING')) {
+          throw erro(
+            400,
+            'Com origem CEF, o tipo de parcela da máscara recebe só a Projeção CEF (o Aging desse tipo não entra, pra não contar o financiamento duas vezes). Tire o SIENGE - AGING desta máscara.'
+          );
+        }
+        const { rows: outraCef } = await client.query(
+          `SELECT descricao FROM dfc_mascaras
+            WHERE empresa_id = $1 AND id <> $2 AND tipo_detalhamento = 'TIPO_PARCELA' AND parcela_origens && $3::text[]
+            ORDER BY ordem LIMIT 1`,
+          [empresaId, id, origensCef]
+        );
+        if (outraCef[0]) {
+          throw erro(409, `A máscara "${outraCef[0].descricao}" já usa essa origem CEF. Cada origem CEF fica em uma máscara só.`);
+        }
       }
 
       // Mesma conta em outra máscara com algum tipo de parcela em comum: recusa, dizendo quais.

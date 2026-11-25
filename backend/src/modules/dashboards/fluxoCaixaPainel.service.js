@@ -67,7 +67,7 @@ async function restanteDoMes(empresaId, mes, cls) {
     const r = realizado.get(`${o.centro_id}|${o.sienge_id}`) || 0;
     const falta = p > 0 ? Math.max(p - r, 0) : p < 0 ? Math.min(p - r, 0) : 0;
     if (!falta) return;
-    const c = cls.classificar(o.centro_id, o.sienge_id);
+    const c = cls.classificar(o.centro_id, o.sienge_id, o.tipo_parcela);
     if (!c) return; // fora do fluxo (sem máscara) — como no DFC
     const k = `${o.centro_id}|${c.n1}|${c.n2}`;
     soma.set(k, (soma.get(k) || 0) + falta);

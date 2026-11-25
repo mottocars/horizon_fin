@@ -75,6 +75,33 @@ async function aging(empresaId, tipo) {
   return { valores, base: base[0] };
 }
 
+// Aging a receber das máscaras detalhadas por tipo de parcela (origem SIENGE - AGING na aba Máscaras —
+// ver dfc-mascaras/regrasParcela.js): as parcelas da conta assumida (natureza da parcela = a conta), só
+// dos tipos de parcela da máscara (payment_term_id), por centro com "Projeta DFC", tipo e mês do
+// vencimento. Mesmo valor e rateio do `aging` a receber. `regras`: [{ conta, tipos }].
+async function agingPorTipo(empresaId, regras) {
+  const pares = regras.flatMap((r) => r.tipos.map((t) => [r.conta, t]));
+  if (!pares.length) return [];
+  const t = TIPOS.receber;
+  const { rows } = await pool.query(
+    `WITH pares AS (
+       SELECT * FROM UNNEST($2::int[], $3::text[]) AS p(conta, tipo)
+     )
+     SELECT cat.cost_center_id::int AS centro_id, p.conta, p.tipo AS tipo_parcela, to_char(i.due_date, 'YYYY-MM') AS mes,
+            ROUND(SUM(${t.valor} * COALESCE(cat.financial_category_rate, 0) / 100), 2) AS valor
+       FROM pares p
+       JOIN ${t.categorias} cat ON cat.empresa_id = $1 AND cat.financial_category_id = p.conta::text
+       JOIN centros_custo_sienge c ON c.empresa_id = $1 AND c.sienge_id = cat.cost_center_id::int AND c.projeta_dfc
+       JOIN ${t.parcelas} i
+         ON i.empresa_id = cat.empresa_id AND i.bill_id = cat.bill_id AND i.installment_id = cat.installment_id
+        AND btrim(i.payment_term_id) = p.tipo
+      WHERE i.due_date IS NOT NULL AND ${t.filtro}
+      GROUP BY 1, 2, 3, 4`,
+    [empresaId, pares.map((p) => p[0]), pares.map((p) => p[1])]
+  );
+  return rows.map((r) => ({ ...r, valor: Number(r.valor) * t.sinal })).filter((r) => r.valor !== 0);
+}
+
 // "Atualizar" na janela Projeções: dispara a rotina do Monitor de Integrações daquela base (em
 // segundo plano, fica no histórico do Monitor). Devolve a execução, pra acompanhar por `execucao`.
 async function atualizarBase(empresaId, tipo, usuarioId) {
@@ -86,4 +113,4 @@ async function execucao(empresaId, tipo) {
   return executor.getExecucaoAtualOuUltima(empresaId, TIPOS[tipo].rotina);
 }
 
-module.exports = { TIPOS, aging, atualizarBase, execucao };
+module.exports = { TIPOS, aging, agingPorTipo, atualizarBase, execucao };

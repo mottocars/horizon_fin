@@ -254,6 +254,7 @@ const DfcMascarasTab = forwardRef(function DfcMascarasTab({ empresaId }, ref) {
         mascara={janelaTipos?.item}
         tipos={tiposParcela}
         ocupados={ocupadosNaConta(janelaTipos?.item)}
+        unico={(janelaTipos?.item?.parcela_origens || []).some((o) => o.startsWith('CEF_'))}
         onClose={() => setJanelaTipos(null)}
         onSalvar={(lista) => {
           janelaTipos.definir(lista);

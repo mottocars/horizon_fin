@@ -34,7 +34,8 @@ const PLANO_GLOBAL = 'Global';
 const PLANO_PROPRIO = 'Próprio do centro';
 
 const r2 = (v) => Math.round((Number(v) + Number.EPSILON) * 100) / 100;
-const chave = (centro, conta, mes) => `${centro}|${conta}|${mes}`;
+// Com tipo de parcela (máscara detalhada por tipo de parcela), o tipo vai no fim.
+const chave = (centro, conta, mes, tipo = '') => `${centro}|${conta}|${mes}${tipo ? `|${tipo}` : ''}`;
 
 async function centrosInfo(empresaId) {
   const { rows } = await pool.query('SELECT sienge_id, name, codigo_contrato_caixa, projeta_dfc FROM centros_custo_sienge WHERE empresa_id = $1', [
@@ -44,8 +45,9 @@ async function centrosInfo(empresaId) {
 }
 
 // Classificação comum às duas bases: máscaras e conta.
-function classificacao(cls, centroId, natureza, lado) {
-  const c = cls.classificar(centroId, natureza);
+// `tipo`: tipo de parcela do valor (conta assumida por máscaras por tipo de parcela) — vai em `tipo_parcela`.
+function classificacao(cls, centroId, natureza, lado, tipo = '') {
+  const c = cls.classificar(centroId, natureza, tipo);
   if (!c) return null;
   const conta = cls.conta(natureza);
   return {
@@ -58,6 +60,7 @@ function classificacao(cls, centroId, natureza, lado) {
     natureza_codigo: conta.codigo,
     natureza: conta.name,
     natureza_id: natureza,
+    tipo_parcela: c.folha && typeof c.folha === 'string' ? cls.folhaTipo(natureza, c.tipo_parcela).codigo : '',
   };
 }
 
@@ -69,9 +72,11 @@ async function baseRealizado(empresaId, fluxo, centros) {
     `SELECT r.centro_id, r.natureza_id, r.percentual, r.valor, to_char(r.mes, 'YYYY-MM') AS mes,
             to_char(e.date, 'YYYY-MM-DD') AS data, e.id AS id_sienge, e.numero_conta, c.nome AS conta_nome,
             c.company_name, e.statement_origin, e.bill_id, e.installment_number, e.document_id, e.document_number,
-            e.description, e.statement_type, e.value
+            e.description, e.statement_type, e.value, COALESCE(btrim(i.payment_term_id), '') AS tipo_parcela
        FROM sie_extrato_contas_rateio r
        JOIN sie_extrato_contas e ON e.registro_id = r.registro_id
+       LEFT JOIN sie_income i
+         ON e.statement_origin = 'CR' AND i.empresa_id = e.empresa_id AND i.bill_id = e.bill_id AND i.installment_id = e.installment_number
        JOIN contas_bancarias_sienge c
          ON c.empresa_id = r.empresa_id AND c.company_id = r.company_id AND c.numero_conta = r.numero_conta AND c.projeta_dfc
       WHERE r.empresa_id = $1 AND r.mes BETWEEN $2::date AND $3::date
@@ -83,7 +88,7 @@ async function baseRealizado(empresaId, fluxo, centros) {
   rows.forEach((r) => {
     const valor = Number(r.valor);
     if (!valor) return;
-    const cls = classificacao(fluxo.classificador, r.centro_id, r.natureza_id, valor >= 0 ? 'E' : 'S');
+    const cls = classificacao(fluxo.classificador, r.centro_id, r.natureza_id, valor >= 0 ? 'E' : 'S', r.tipo_parcela);
     if (!cls) return; // fora do fluxo (sem natureza / sem Máscara DFC), como na tela
     const sinal = valor < 0 ? -1 : 1;
     linhas.push({
@@ -119,9 +124,9 @@ async function baseProjetado(empresaId, fluxo, centros) {
   valores.forEach((v) => {
     const valor = Number(v.valor);
     if (!valor) return;
-    const cls = classificacao(fluxo.classificador, v.centro_id, v.sienge_id, valor > 0 ? 'E' : 'S');
+    const cls = classificacao(fluxo.classificador, v.centro_id, v.sienge_id, valor > 0 ? 'E' : 'S', v.tipo_parcela);
     if (!cls) return;
-    celulas.set(chave(v.centro_id, v.sienge_id, v.mes), { ...v, valor, cls, itens: [] });
+    celulas.set(chave(v.centro_id, v.sienge_id, v.mes, v.tipo_parcela), { ...v, valor, cls, itens: [] });
   });
   const porOrigem = (origem) => [...celulas.values()].filter((c) => c.origem === origem);
   const centrosDe = (lista) => [...new Set(lista.map((c) => c.centro_id))];
@@ -159,7 +164,8 @@ async function baseProjetado(empresaId, fluxo, centros) {
         `SELECT cat.cost_center_id::int AS centro_id, cat.financial_category_id AS conta, to_char(i.due_date, 'YYYY-MM') AS mes,
                 i.bill_id, i.installment_id, i.document_identification_id AS doc, i.document_number, i.${PESSOA[tipo]} AS pessoa,
                 to_char(i.issue_date, 'YYYY-MM-DD') AS emissao, to_char(i.due_date, 'YYYY-MM-DD') AS vencimento,
-                i.balance_amount, ${t.valor} AS valor_parcela, COALESCE(cat.financial_category_rate, 0) AS rateio
+                i.balance_amount, ${t.valor} AS valor_parcela, COALESCE(cat.financial_category_rate, 0) AS rateio,
+                ${tipo === 'receber' ? 'btrim(i.payment_term_id)' : 'NULL'} AS tipo_parcela
            FROM ${t.categorias} cat
            JOIN ${t.parcelas} i ON i.empresa_id = cat.empresa_id AND i.bill_id = cat.bill_id AND i.installment_id = cat.installment_id
           WHERE cat.empresa_id = $1 AND cat.cost_center_id = ANY($2::bigint[])
@@ -168,7 +174,10 @@ async function baseProjetado(empresaId, fluxo, centros) {
         [empresaId, centrosDe(agings), de, ate]
       );
       rows.forEach((r) => {
-        const c = celulas.get(chave(r.centro_id, Number(r.conta), r.mes));
+        // Conta de máscara por tipo de parcela: a célula do tipo da parcela.
+        const c =
+          (r.tipo_parcela && celulas.get(chave(r.centro_id, Number(r.conta), r.mes, r.tipo_parcela))) ||
+          celulas.get(chave(r.centro_id, Number(r.conta), r.mes));
         if (!c || c.origem !== 'SIENGE_AGING') return;
         const valor = (Number(r.valor_parcela) * Number(r.rateio) * t.sinal) / 100;
         if (!valor) return;
@@ -236,15 +245,19 @@ async function baseProjetado(empresaId, fluxo, centros) {
     );
     const gravada = new Map(rows.map((r) => [`${r.centro_id}|${r.mes}`, r]));
     cefs.forEach((c) => {
-      const { coluna, sinal } = projecaoCef.SAIDAS[c.origem];
       const g = gravada.get(`${c.centro_id}|${c.mes}`);
       if (!g) return;
-      c.itens.push({
-        fonte: `Projeção CEF · ${COMPONENTE_CEF[c.origem]}`,
-        referencia: centros.get(c.centro_id)?.codigo_contrato_caixa ? `Contrato ${centros.get(c.centro_id).codigo_contrato_caixa}` : '',
-        descricao: `Projeção CEF da obra ${centros.get(c.centro_id)?.name || c.centro_id}`,
-        valor: Number(g[coluna]) * sinal,
-        dossie: c.centro_id,
+      // Célula de um tipo de parcela (máscara CEF): soma as origens CEF da máscara (NOVO REGISTRO + MEDIÇÃO).
+      const regra = c.tipo_parcela ? fluxo.classificador.regras.cef.find((m) => m.conta === Number(c.sienge_id)) : null;
+      (regra ? regra.origens : [c.origem]).forEach((origem) => {
+        const { coluna, sinal } = projecaoCef.SAIDAS[origem];
+        c.itens.push({
+          fonte: `Projeção CEF · ${COMPONENTE_CEF[origem]}`,
+          referencia: centros.get(c.centro_id)?.codigo_contrato_caixa ? `Contrato ${centros.get(c.centro_id).codigo_contrato_caixa}` : '',
+          descricao: `Projeção CEF da obra ${centros.get(c.centro_id)?.name || c.centro_id}`,
+          valor: Number(g[coluna]) * sinal,
+          dossie: c.centro_id,
+        });
       });
     });
   }

@@ -1,12 +1,13 @@
 import { Fragment, useCallback, useEffect, useLayoutEffect, useMemo, useRef, useState } from 'react';
 import { ChevronLeft, ChevronRight, Info, Minimize2, TriangleAlert, Wallet } from 'lucide-react';
-import { listDfcMascaras } from '../../../api/dfcMascaras.api';
+import { listDfcMascaras, listTiposParcelaDfc } from '../../../api/dfcMascaras.api';
 import { listContas } from '../../../api/planosFinanceirosSienge.api';
 import { listTodasClassificacoesPlanoDfc } from '../../../api/dfcPlanoContas.api';
 import { getOrcamentoDfc } from '../../../api/dfcOrcamento.api';
 import { getRealizadoDfc } from '../../../api/dfcSaldos.api';
 import { mesesEntre } from './orcamentoValores';
 import { codigoFormatado } from './codigoConta';
+import { regrasParcela, SEM_TIPO } from './regrasParcela';
 import DetalhamentoModal from './DetalhamentoModal';
 
 const LARGURA_PRIMEIRA = 340;
@@ -154,9 +155,11 @@ export default function DfcFluxoTab({
       listContas(empresaId, { page: 1, limit: 2000, search: '' }),
       listTodasClassificacoesPlanoDfc(empresaId),
       getOrcamentoDfc(empresaId, versaoEscolhida),
+      // Nomes dos tipos de parcela (linhas das máscaras detalhadas por tipo de parcela).
+      listTiposParcelaDfc(empresaId).catch(() => []),
     ])
-      .then(([mascaras, contas, classificacoes, orcamento]) => {
-        setDados({ mascaras, contas: contas.data, classificacoes, orcamento });
+      .then(([mascaras, contas, classificacoes, orcamento, tiposParcela]) => {
+        setDados({ mascaras, contas: contas.data, classificacoes, orcamento, tiposParcela });
         onVersoes?.(orcamento.versoes || []);
       })
       .catch((e) => setErro(e.response?.data?.message || 'Não foi possível carregar o fluxo de caixa.'))
@@ -184,7 +187,8 @@ export default function DfcFluxoTab({
       .catch(() => setRealizado(null));
   }, [empresaId, deRealizado, mesAtual, primeiro, refreshToken]);
 
-  // Árvore máscara 1 › máscara 2 › conta; cada nó com valores por 'AAAA-MM|R' / 'AAAA-MM|P'.
+  // Árvore máscara 1 › máscara 2 › conta; cada nó com valores por 'AAAA-MM|R' / 'AAAA-MM|P'. Na máscara 2
+  // detalhada por tipo de parcela (aba Máscaras — regrasParcela.js), os tipos de parcela no lugar das contas.
   const { estrutura, porColuna } = useMemo(() => {
     if (!dados) return { estrutura: [], porColuna: {} };
     const filtro = centrosFiltro.length ? new Set(centrosFiltro.map(Number)) : null;
@@ -194,6 +198,12 @@ export default function DfcFluxoTab({
     const pai = {}; // máscara 2 -> máscara 1
     dados.mascaras.forEach((g) => g.filhos.forEach((f) => (pai[f.id] = g.id)));
     const contaPorId = Object.fromEntries(dados.contas.map((c) => [c.sienge_id, c]));
+    const regras = regrasParcela(dados.mascaras);
+    const nomeTipo = Object.fromEntries((dados.tiposParcela || []).map((t) => [t.sigla, t.nome]));
+    const tiposDaMascara = {};
+    dados.mascaras.forEach((g) => g.filhos.forEach((f) => (tiposDaMascara[f.id] = f.parcela_tipos || [])));
+    // Linha de um tipo de parcela: mesma forma da conta (sienge_id = a conta assumida), com `tipo_parcela`.
+    const folhas = {};
     // Projeção do mês atual em diante entra no encadeamento do saldo mesmo fora do período na tela.
     const mesesP = new Set([...meses, ...(ultimo && mesAtual <= ultimo ? mesesEntre(`${mesAtual}-01`, `${ultimo}-01`) : [])]);
     const mesesR = new Set(meses.filter((m) => m <= mesAtual));
@@ -202,15 +212,24 @@ export default function DfcFluxoTab({
     const arvore = new Map();
     // Centros que somam em cada célula de conta (pro Detalhamento): 'n1|lado|n2|conta' -> 'mes|tipo' -> Set.
     const centrosCelula = new Map();
-    const lancar = (centroId, natureza, mes, tipo, valor) => {
+    const lancar = (centroId, natureza, mes, tipo, valor, tipoParcela = '') => {
       if (filtro && !filtro.has(centroId)) return;
       if (!valor) return;
       const lado = valor > 0 ? 'E' : 'S';
       if (natureza === null || natureza === undefined) return;
-      const n2 = (planosCentro[centroId] || planoGlobal)[natureza];
+      const porTipo = regras.assumida(natureza);
+      const n2 = porTipo ? regras.mascaraDe(natureza, tipoParcela || '') : (planosCentro[centroId] || planoGlobal)[natureza];
       if (!n2 || !pai[n2]) return;
       const n1 = pai[n2];
-      const conta = natureza;
+      const conta = porTipo ? `t:${tipoParcela || ''}` : natureza;
+      if (porTipo && !folhas[conta]) {
+        folhas[conta] = {
+          sienge_id: natureza,
+          tipo_parcela: tipoParcela || '',
+          codigo: tipoParcela || '—',
+          name: tipoParcela ? nomeTipo[tipoParcela] || tipoParcela : SEM_TIPO,
+        };
+      }
       if (!arvore.has(n1)) arvore.set(n1, new Map());
       const lados = arvore.get(n1);
       if (!lados.has(lado)) lados.set(lado, new Map());
@@ -226,8 +245,10 @@ export default function DfcFluxoTab({
       const porCol = centrosCelula.get(chaveCelula);
       (porCol[k] = porCol[k] || new Set()).add(centroId ?? null);
     };
-    (dados.orcamento?.valores || []).forEach((v) => mesesP.has(v.mes) && lancar(v.centro_id, v.sienge_id, v.mes, P, v.valor));
-    (realizado?.valores || []).forEach((v) => mesesR.has(v.mes) && lancar(v.centro_id, v.sienge_id, v.mes, R, v.valor));
+    (dados.orcamento?.valores || []).forEach(
+      (v) => mesesP.has(v.mes) && lancar(v.centro_id, v.sienge_id, v.mes, P, v.valor, v.tipo_parcela)
+    );
+    (realizado?.valores || []).forEach((v) => mesesR.has(v.mes) && lancar(v.centro_id, v.sienge_id, v.mes, R, v.valor, v.tipo_parcela));
 
     const somar = (listas) => {
       const total = {};
@@ -242,14 +263,25 @@ export default function DfcFluxoTab({
         filhosOrdem
         .filter(([fid]) => nivel2.has(fid))
         .map(([fid, fdesc]) => {
+          // Contas pelo código; tipos de parcela na ordem escolhida na máscara, os outros depois e o "sem
+          // tipo" por último.
+          const ordem = (c) => {
+            if (c.tipo_parcela === undefined) return [0, String(c.sienge_id)];
+            const i = (tiposDaMascara[fid] || []).indexOf(c.tipo_parcela);
+            return [c.tipo_parcela ? (i >= 0 ? i : 500) : 999, c.tipo_parcela];
+          };
           const contas = [...nivel2.get(fid).entries()]
             .map(([cid, pc]) => ({
-              conta: contaPorId[cid] || { sienge_id: cid, name: `Natureza ${cid}` },
+              conta: folhas[cid] || contaPorId[cid] || { sienge_id: cid, name: `Natureza ${cid}` },
               porColuna: pc,
               lado,
               centros: centrosCelula.get(`${id}|${lado}|${fid}|${cid}`) || {},
             }))
-            .sort((a, b) => String(a.conta.sienge_id).localeCompare(String(b.conta.sienge_id)));
+            .sort((a, b) => {
+              const [oa, ta] = ordem(a.conta);
+              const [ob, tb] = ordem(b.conta);
+              return oa - ob || String(ta).localeCompare(String(tb));
+            });
           return { chave: `m${fid}`, descricao: fdesc, contas, porColuna: somar(contas.map((c) => c.porColuna)) };
         });
       const ladosMontados = LADOS.filter(([k]) => lados.has(k)).map(([k, rot]) => {
@@ -823,6 +855,18 @@ export default function DfcFluxoTab({
                                     })}
                                     {abertos.includes(chaveN2) &&
                                       n2.contas.map((c) => {
+                                        // Tipo de parcela: sigla no lugar do código e sem o Detalhamento (que é por
+                                        // conta — abriria a conta inteira, todos os tipos juntos).
+                                        if (c.conta.tipo_parcela !== undefined) {
+                                          return linha({
+                                            chave: `${chaveN2}|t:${c.conta.tipo_parcela}`,
+                                            tipo: 'conta',
+                                            nivel: 3,
+                                            sub: c.conta.codigo,
+                                            rotulo: c.conta.name,
+                                            pc: c.porColuna,
+                                          });
+                                        }
                                         const codigo = c.conta.mascara_nivel_1 ? codigoFormatado(c.conta) : String(c.conta.sienge_id);
                                         return linha({
                                           chave: `${chaveN2}|${c.conta.sienge_id}`,

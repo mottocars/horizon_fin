@@ -2,6 +2,8 @@ const pool = require('../../config/db');
 const dfcAging = require('../dfc-aging/dfcAging.service');
 const { SAIDAS } = require('../dfc-projecao-cef/projecaoCef.service');
 const dfcEmpresarial = require('../dfc-empresarial/dfcEmpresarial.service');
+const dfcMascaras = require('../dfc-mascaras/dfcMascaras.service');
+const { regrasParcela } = require('../dfc-mascaras/regrasParcela');
 
 // DFC Construtoras > Orçamentos: versões, consolidado e log (pedido do usuário).
 //
@@ -11,6 +13,11 @@ const dfcEmpresarial = require('../dfc-empresarial/dfcEmpresarial.service');
 // recalcula os valores atuais de todas as fontes (`valoresAtuais`), compara com o consolidado e
 // grava a diferença — cada valor que entrou, mudou ou saiu ganha uma linha em dfc_orcamento_log,
 // com quem fez a mudança na origem e quando.
+//
+// Tipo de parcela (`tipo_parcela`, '' = o de sempre): a conta assumida por máscaras detalhadas por tipo de
+// parcela (aba Máscaras — dfc-mascaras/regrasParcela.js) sai do plano de contas e recebe as origens das
+// máscaras, um valor por tipo de parcela (Projeção CEF no único tipo da máscara CEF; Aging a receber pelo
+// tipo de cada parcela). Cada valor é centro × conta × tipo × mês.
 
 const ORIGEM_INFORMADO = 'HORIZON_ORCAMENTO_INFORMADO';
 // De onde veio o valor informado (dfc_orcamento_informado.via) -> como aparece no log da versão.
@@ -35,7 +42,8 @@ function erro(status, message) {
   return e;
 }
 
-const chaveDe = (centroId, siengeId, mes) => `${centroId}|${siengeId}|${mes}`;
+// Sem tipo de parcela, a chave de sempre (centro|conta|mês); com tipo, ele vai no fim.
+const chaveDe = (centroId, siengeId, mes, tipo = '') => `${centroId}|${siengeId}|${mes}${tipo ? `|${tipo}` : ''}`;
 
 // Períodos que a nova versão altera (escolha da janela "Nova versão"): 'todos' recalcula inclusive os
 // meses passados; 'atual_em_diante' só do mês atual (Brasília) em diante — os meses anteriores ficam
@@ -99,25 +107,34 @@ async function ultimaExecucao(db, empresaId, rotina) {
 // fonte_descricao, responsavel_id, responsavel_em }. Também devolve o contexto pra atribuir as
 // exclusões e os avisos.
 async function valoresAtuais(db, empresaId) {
-  const plano = await planos(db, empresaId);
+  const [plano, mascaras] = await Promise.all([planos(db, empresaId), dfcMascaras.list(empresaId, db)]);
+  const regras = regrasParcela(mascaras);
   const contaDoCentro = (centroId, siengeId) => plano.get(centroId)?.get(siengeId) || null;
   const vale = (centroId, siengeId, origem) => {
     const c = contaDoCentro(centroId, siengeId);
     return Boolean(c) && c.origem === origem && c.projeta !== false;
   };
   const valores = new Map();
-  const somar = (centroId, siengeId, mes, valor, info) => {
+  // `daMascara`: valor das origens de uma máscara por tipo de parcela (com `tipo_parcela`). A conta
+  // assumida por máscaras não recebe mais nada pelo plano de contas.
+  const somar = (centroId, siengeId, mes, valor, { daMascara = false, tipo_parcela: tipo = '', ...info }) => {
     if (!valor) return;
-    const chave = chaveDe(centroId, siengeId, mes);
+    if (!daMascara && regras.assumida(siengeId)) return;
+    const chave = chaveDe(centroId, siengeId, mes, tipo);
     const atual = valores.get(chave);
     if (!atual) {
-      valores.set(chave, { centro_id: centroId, sienge_id: siengeId, mes, valor: arredondar(valor), ...info });
+      valores.set(chave, { centro_id: centroId, sienge_id: siengeId, tipo_parcela: tipo, mes, valor: arredondar(valor), ...info });
       return;
     }
-    // Duas fontes na mesma conta (só acontece com o Aging a receber + a pagar): soma, e o
-    // responsável é a mudança mais recente.
+    // Duas fontes no mesmo valor (Aging a receber + a pagar na mesma conta, ou CEF - NOVO REGISTRO +
+    // CEF - MEDIÇÃO no mesmo tipo de parcela): soma, e o responsável é a mudança mais recente.
     atual.valor = arredondar(atual.valor + valor);
-    atual.fonte_descricao = 'Aging a receber e a pagar (Sienge)';
+    atual.fonte_descricao =
+      atual.origem === ORIGEM_AGING && info.origem === ORIGEM_AGING
+        ? 'Aging a receber e a pagar (Sienge)'
+        : atual.fonte_descricao === info.fonte_descricao
+          ? atual.fonte_descricao
+          : `${atual.fonte_descricao} + ${info.fonte_descricao}`;
     if ((info.responsavel_em || 0) > (atual.responsavel_em || 0)) {
       atual.responsavel_id = info.responsavel_id;
       atual.responsavel_em = info.responsavel_em;
@@ -159,7 +176,8 @@ async function valoresAtuais(db, empresaId) {
   plano.forEach((contas, centroId) => {
     const porOrigem = {};
     contas.forEach((c, siengeId) => {
-      if (c.origem in SAIDAS && c.projeta !== false) porOrigem[c.origem] = siengeId;
+      // Origem CEF usada por uma máscara por tipo de parcela fica com a máscara (não lança no plano).
+      if (c.origem in SAIDAS && c.projeta !== false && !regras.cefPorOrigem.has(c.origem)) porOrigem[c.origem] = siengeId;
     });
     contaCefPorCentro.set(centroId, porOrigem);
   });
@@ -179,6 +197,23 @@ async function valoresAtuais(db, empresaId) {
         responsavel_em: r.atualizado_em,
       });
     });
+    // Máscaras por tipo de parcela com origem CEF: na conta da máscara, no único tipo dela (só centros
+    // com "Projeta DFC").
+    if (!plano.has(r.centro_id)) return;
+    regras.cef.forEach((m) =>
+      m.origens.forEach((origem) => {
+        const { coluna, sinal } = SAIDAS[origem];
+        somar(r.centro_id, m.conta, r.mes, Number(r[coluna]) * sinal, {
+          daMascara: true,
+          tipo_parcela: m.tipo,
+          origem,
+          fonte: 'INTEGRACAO',
+          fonte_descricao: `Projeção CEF${r.versao_parametros ? ` (Parâmetros v${r.versao_parametros})` : ''}`,
+          responsavel_id: r.usuario_id,
+          responsavel_em: r.atualizado_em,
+        });
+      })
+    );
   });
 
   // 3) Aging do Sienge (a receber e a pagar) — já filtrado pelo plano em dfc-aging.
@@ -198,6 +233,22 @@ async function valoresAtuais(db, empresaId) {
         fonte_descricao: `${ROTULO_AGING[tipo]}${exec?.origem === 'agendada' ? ' — atualização agendada' : ''}`,
         responsavel_id: exec?.usuario_id ?? null,
         responsavel_em: exec?.finalizado_em ?? base.atualizado_em ?? null,
+      });
+    });
+  }
+
+  // 3b) Aging a receber das máscaras por tipo de parcela (SIENGE - AGING): por tipo de cada parcela.
+  if (regras.aging.length) {
+    const exec = execucoesAging.receber;
+    (await dfcAging.agingPorTipo(empresaId, regras.aging)).forEach((v) => {
+      somar(v.centro_id, v.conta, v.mes, v.valor, {
+        daMascara: true,
+        tipo_parcela: v.tipo_parcela,
+        origem: ORIGEM_AGING,
+        fonte: 'INTEGRACAO',
+        fonte_descricao: `${ROTULO_AGING.receber} por tipo de parcela${exec?.origem === 'agendada' ? ' — atualização agendada' : ''}`,
+        responsavel_id: exec?.usuario_id ?? null,
+        responsavel_em: exec?.finalizado_em ?? bases.receber?.atualizado_em ?? null,
       });
     });
   }
@@ -225,6 +276,7 @@ async function valoresAtuais(db, empresaId) {
     valores,
     contexto: {
       contaDoCentro,
+      regras,
       informadosLimpos,
       execucoesCef,
       execucoesAging,
@@ -237,17 +289,31 @@ async function valoresAtuais(db, empresaId) {
 // Consolidado (última versão salva): Map chave -> { centro_id, sienge_id, mes, valor, origem }.
 async function consolidado(db, empresaId) {
   const { rows } = await db.query(
-    `SELECT centro_id, sienge_id, to_char(mes, 'YYYY-MM') AS mes, valor, origem
+    `SELECT centro_id, sienge_id, tipo_parcela, to_char(mes, 'YYYY-MM') AS mes, valor, origem
        FROM dfc_orcamento_valores WHERE empresa_id = $1`,
     [empresaId]
   );
-  return new Map(rows.map((r) => [chaveDe(r.centro_id, r.sienge_id, r.mes), { ...r, valor: Number(r.valor) }]));
+  return new Map(rows.map((r) => [chaveDe(r.centro_id, r.sienge_id, r.mes, r.tipo_parcela), { ...r, valor: Number(r.valor) }]));
 }
 
 // Quem tirou um valor do Orçamento (ele está no consolidado e não está mais nas fontes).
 function responsavelExclusao(anterior, contexto, salvoPor, agora) {
-  const { centro_id: centroId, sienge_id: siengeId, mes, origem } = anterior;
-  const conta = contexto.contaDoCentro(centroId, siengeId);
+  const { centro_id: centroId, sienge_id: siengeId, mes, origem, tipo_parcela: tipo = '' } = anterior;
+  // Conta que passou a ser de máscaras por tipo de parcela: o valor de sempre (sem tipo) sai.
+  if (!tipo && contexto.regras.assumida(siengeId)) {
+    return {
+      origem,
+      fonte: 'PLANO',
+      fonte_descricao: 'Conta passou a ser detalhada por tipo de parcela (aba Máscaras)',
+      responsavel_id: salvoPor,
+      responsavel_em: agora,
+    };
+  }
+  // Valor de um tipo de parcela que saiu (tipo, origem ou conta mudou na máscara, ou a base mudou).
+  if (tipo && !(origem in SAIDAS) && origem !== ORIGEM_AGING) {
+    return { origem, fonte: 'PLANO', fonte_descricao: 'Máscara por tipo de parcela alterada', responsavel_id: salvoPor, responsavel_em: agora };
+  }
+  const conta = tipo ? { origem, projeta: true } : contexto.contaDoCentro(centroId, siengeId);
   const contaAindaVale = Boolean(conta) && conta.origem === origem && conta.projeta !== false;
   if (!contaAindaVale) {
     return {
@@ -341,7 +407,7 @@ async function ultimaVersao(db, empresaId) {
   return rows[0] || null;
 }
 
-const semChave = ({ centro_id, sienge_id, mes, valor }) => ({ centro_id, sienge_id, mes, valor });
+const semChave = ({ centro_id, sienge_id, tipo_parcela = '', mes, valor }) => ({ centro_id, sienge_id, tipo_parcela, mes, valor });
 
 async function listarVersoes(empresaId) {
   const { rows } = await pool.query(
@@ -358,16 +424,23 @@ async function listarVersoes(empresaId) {
 async function valoresDaVersao(empresaId, numero) {
   const { rows } = await pool.query(
     `SELECT * FROM (
-       SELECT DISTINCT ON (l.centro_id, l.sienge_id, l.mes)
-              l.centro_id, l.sienge_id, to_char(l.mes, 'YYYY-MM') AS mes, l.tipo, l.valor_novo AS valor, l.origem
+       SELECT DISTINCT ON (l.centro_id, l.sienge_id, l.tipo_parcela, l.mes)
+              l.centro_id, l.sienge_id, l.tipo_parcela, to_char(l.mes, 'YYYY-MM') AS mes, l.tipo, l.valor_novo AS valor, l.origem
          FROM dfc_orcamento_log l
          JOIN dfc_orcamento_versoes v ON v.id = l.versao_id
         WHERE l.empresa_id = $1 AND v.numero <= $2
-        ORDER BY l.centro_id, l.sienge_id, l.mes, v.numero DESC, l.id DESC
+        ORDER BY l.centro_id, l.sienge_id, l.tipo_parcela, l.mes, v.numero DESC, l.id DESC
      ) x WHERE tipo <> 'EXCLUSAO'`,
     [empresaId, numero]
   );
-  return rows.map((r) => ({ centro_id: r.centro_id, sienge_id: r.sienge_id, mes: r.mes, valor: Number(r.valor), origem: r.origem }));
+  return rows.map((r) => ({
+    centro_id: r.centro_id,
+    sienge_id: r.sienge_id,
+    tipo_parcela: r.tipo_parcela,
+    mes: r.mes,
+    valor: Number(r.valor),
+    origem: r.origem,
+  }));
 }
 
 // Uma versão salva (filtro "Versão" da aba): `numero` ou, sem ele, a última. Devolve também a lista
@@ -477,10 +550,10 @@ async function salvarVersao(empresaId, usuarioId, { origem = null, periodos = 't
     const gravar = lista.filter((d) => d.novo).map((d) => d.novo);
     if (gravar.length) {
       await client.query(
-        `INSERT INTO dfc_orcamento_valores (empresa_id, centro_id, sienge_id, mes, valor, origem, versao_id)
-         SELECT $1, x.centro_id, x.sienge_id, (x.mes || '-01')::date, x.valor, x.origem, $2
-           FROM json_to_recordset($3::json) AS x(centro_id int, sienge_id int, mes text, valor numeric, origem text)
-         ON CONFLICT (empresa_id, centro_id, sienge_id, mes)
+        `INSERT INTO dfc_orcamento_valores (empresa_id, centro_id, sienge_id, tipo_parcela, mes, valor, origem, versao_id)
+         SELECT $1, x.centro_id, x.sienge_id, COALESCE(x.tipo_parcela, ''), (x.mes || '-01')::date, x.valor, x.origem, $2
+           FROM json_to_recordset($3::json) AS x(centro_id int, sienge_id int, tipo_parcela text, mes text, valor numeric, origem text)
+         ON CONFLICT (empresa_id, centro_id, sienge_id, tipo_parcela, mes)
          DO UPDATE SET valor = EXCLUDED.valor, origem = EXCLUDED.origem, versao_id = EXCLUDED.versao_id`,
         [empresaId, versaoId, JSON.stringify(gravar)]
       );
@@ -489,8 +562,9 @@ async function salvarVersao(empresaId, usuarioId, { origem = null, periodos = 't
     if (apagar.length) {
       await client.query(
         `DELETE FROM dfc_orcamento_valores v
-          USING json_to_recordset($2::json) AS x(centro_id int, sienge_id int, mes text)
-          WHERE v.empresa_id = $1 AND v.centro_id = x.centro_id AND v.sienge_id = x.sienge_id AND v.mes = (x.mes || '-01')::date`,
+          USING json_to_recordset($2::json) AS x(centro_id int, sienge_id int, tipo_parcela text, mes text)
+          WHERE v.empresa_id = $1 AND v.centro_id = x.centro_id AND v.sienge_id = x.sienge_id
+            AND v.tipo_parcela = COALESCE(x.tipo_parcela, '') AND v.mes = (x.mes || '-01')::date`,
         [empresaId, JSON.stringify(apagar)]
       );
     }
@@ -500,6 +574,7 @@ async function salvarVersao(empresaId, usuarioId, { origem = null, periodos = 't
       return {
         centro_id: base.centro_id,
         sienge_id: base.sienge_id,
+        tipo_parcela: base.tipo_parcela || '',
         mes: base.mes,
         tipo: d.tipo,
         valor_anterior: d.anterior ? d.anterior.valor : null,
@@ -512,11 +587,11 @@ async function salvarVersao(empresaId, usuarioId, { origem = null, periodos = 't
       };
     });
     await client.query(
-      `INSERT INTO dfc_orcamento_log (empresa_id, centro_id, sienge_id, mes, versao_id, tipo, valor_anterior, valor_novo,
+      `INSERT INTO dfc_orcamento_log (empresa_id, centro_id, sienge_id, tipo_parcela, mes, versao_id, tipo, valor_anterior, valor_novo,
                                       origem, fonte, fonte_descricao, responsavel_id, responsavel_em)
-       SELECT $1, x.centro_id, x.sienge_id, (x.mes || '-01')::date, $2, x.tipo, x.valor_anterior, x.valor_novo,
+       SELECT $1, x.centro_id, x.sienge_id, x.tipo_parcela, (x.mes || '-01')::date, $2, x.tipo, x.valor_anterior, x.valor_novo,
               x.origem, x.fonte, x.fonte_descricao, x.responsavel_id, x.responsavel_em
-         FROM json_to_recordset($3::json) AS x(centro_id int, sienge_id int, mes text, tipo text, valor_anterior numeric,
+         FROM json_to_recordset($3::json) AS x(centro_id int, sienge_id int, tipo_parcela text, mes text, tipo text, valor_anterior numeric,
               valor_novo numeric, origem text, fonte text, fonte_descricao text, responsavel_id int, responsavel_em timestamptz)`,
       [empresaId, versaoId, JSON.stringify(log)]
     );
@@ -531,9 +606,9 @@ async function salvarVersao(empresaId, usuarioId, { origem = null, periodos = 't
   }
 }
 
-// Log de alterações de um valor (centro × conta × mês), da versão mais nova pra mais antiga, e o
-// que está pendente nele (mudou na fonte e ainda não foi salvo).
-async function log(empresaId, centroId, siengeId, mes) {
+// Log de alterações de um valor (centro × conta × mês, e o tipo de parcela — '' = o de sempre), da
+// versão mais nova pra mais antiga, e o que está pendente nele (mudou na fonte e ainda não foi salvo).
+async function log(empresaId, centroId, siengeId, mes, tipo = '') {
   const { rows } = await pool.query(
     `SELECT l.id, l.tipo, l.valor_anterior, l.valor_novo, l.origem, l.fonte, l.fonte_descricao, l.responsavel_em,
             ur.nome AS responsavel, v.numero AS versao, v.criado_em AS versao_em, uv.nome AS versao_por
@@ -541,15 +616,15 @@ async function log(empresaId, centroId, siengeId, mes) {
        JOIN dfc_orcamento_versoes v ON v.id = l.versao_id
        LEFT JOIN usuarios ur ON ur.id = l.responsavel_id
        LEFT JOIN usuarios uv ON uv.id = v.usuario_id
-      WHERE l.empresa_id = $1 AND l.centro_id = $2 AND l.sienge_id = $3 AND l.mes = $4
+      WHERE l.empresa_id = $1 AND l.centro_id = $2 AND l.sienge_id = $3 AND l.mes = $4 AND l.tipo_parcela = $5
       ORDER BY v.numero DESC, l.id DESC`,
-    [empresaId, centroId, siengeId, `${mes}-01`]
+    [empresaId, centroId, siengeId, `${mes}-01`, tipo]
   );
   const numero = (v) => (v === null ? null : Number(v));
   const historico = rows.map((r) => ({ ...r, valor_anterior: numero(r.valor_anterior), valor_novo: numero(r.valor_novo) }));
 
   const [{ valores: atual, contexto }, cons] = await Promise.all([valoresAtuais(pool, empresaId), consolidado(pool, empresaId)]);
-  const chave = chaveDe(centroId, siengeId, mes);
+  const chave = chaveDe(centroId, siengeId, mes, tipo);
   const soEste = (mapa) => new Map(mapa.has(chave) ? [[chave, mapa.get(chave)]] : []);
   const [d] = diferencas(soEste(atual), soEste(cons), contexto);
   let pendente = null;
@@ -583,6 +658,7 @@ async function pendenciasDaOrigem(empresaId, origem) {
         tipo: d.tipo,
         centro_id: base.centro_id,
         sienge_id: base.sienge_id,
+        tipo_parcela: base.tipo_parcela || '',
         mes: base.mes,
         valor_anterior: d.anterior ? d.anterior.valor : null,
         valor_novo: d.novo ? d.novo.valor : null,

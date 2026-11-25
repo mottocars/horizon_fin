@@ -29,6 +29,7 @@ import { listContas } from '../../../api/planosFinanceirosSienge.api';
 import { listTodasClassificacoesPlanoDfc } from '../../../api/dfcPlanoContas.api';
 import { getOrcamentoProjecaoCef } from '../../../api/dfcProjecaoCef.api';
 import { getOrcamentoDfc, getRascunhoOrcamentoDfc, salvarVersaoOrcamentoDfc } from '../../../api/dfcOrcamento.api';
+import { regrasParcela } from './regrasParcela';
 import { useAlert, useConfirm } from '../../../confirm/ConfirmContext';
 import {
   listOrcamentoInformadoDfc,
@@ -393,12 +394,22 @@ const DfcOrcamentosTab = forwardRef(function DfcOrcamentosTab(
       .filter((c) => c.tp_conta !== 'T')
       .sort((a, b) => String(a.sienge_id).localeCompare(String(b.sienge_id)));
     const idsNivel2 = new Set(dados.mascaras.flatMap((g) => g.filhos.map((f) => f.id)));
+    // Conta assumida por máscaras detalhadas por tipo de parcela (aba Máscaras): fica na primeira dessas
+    // máscaras, com a soma dos tipos de parcela (o detalhe por tipo está na aba DFC), sem origem do plano
+    // (os valores vêm das origens da máscara — nada a digitar aqui).
+    const regras = regrasParcela(dados.mascaras);
 
     function montar(classificacoes) {
       const mascaraDaConta = Object.fromEntries(classificacoes.map((c) => [c.sienge_id, c.mascara_id]));
       const origemDaConta = Object.fromEntries(classificacoes.map((c) => [c.sienge_id, c.origem_projecao]));
       // "Projeta DFC" desmarcado no plano: a conta fica fora do Orçamento. Sem linha = marcado.
       const foraDoDfc = new Set(classificacoes.filter((c) => c.projeta_dfc === false).map((c) => c.sienge_id));
+      analiticas.forEach((c) => {
+        if (!regras.assumida(c.sienge_id)) return;
+        mascaraDaConta[c.sienge_id] = regras.mascaraDe(c.sienge_id);
+        origemDaConta[c.sienge_id] = null;
+        foraDoDfc.delete(c.sienge_id);
+      });
       const contasDoPlano = analiticas.filter(
         (c) =>
           !foraDoDfc.has(c.sienge_id) &&
@@ -472,7 +483,11 @@ const DfcOrcamentosTab = forwardRef(function DfcOrcamentosTab(
   const { valorConta, valorVersao, execucaoPorCentro } = useMemo(() => {
     const mapaDe = (lista) => {
       const mapa = new Map();
-      (lista || []).forEach((v) => mapa.set(`${v.centro_id}|${v.sienge_id}|${v.mes}`, v.valor));
+      // Soma: a conta de máscara por tipo de parcela tem um valor por tipo no mesmo centro × conta × mês.
+      (lista || []).forEach((v) => {
+        const k = `${v.centro_id}|${v.sienge_id}|${v.mes}`;
+        mapa.set(k, (mapa.get(k) ?? 0) + Number(v.valor));
+      });
       return (sid, conta, mes) => mapa.get(`${sid}|${conta}|${mes}`) ?? null;
     };
     const execucoes = Object.fromEntries((dados?.projecao?.execucoes || []).map((e) => [e.sienge_id, e]));

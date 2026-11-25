@@ -8,7 +8,8 @@ import Button from '../../../components/Button';
 // máscara. A mesma conta pode estar em várias máscaras, que se diferenciam pelos tipos — então o tipo que
 // já está em outra máscara da mesma conta aparece travado, com o nome dela. Só grava ao Salvar.
 // `tipos`: [{ sigla, nome, parcelas }] da empresa; `ocupados`: { sigla: nome da outra máscara }.
-export default function TiposParcelaModal({ open, mascara, tipos, ocupados = {}, onClose, onSalvar }) {
+// `unico`: máscara com origem CEF — um tipo só (é nele que a Projeção CEF aparece).
+export default function TiposParcelaModal({ open, mascara, tipos, ocupados = {}, unico = false, onClose, onSalvar }) {
   const [marcados, setMarcados] = useState([]);
   const [busca, setBusca] = useState('');
 
@@ -32,7 +33,9 @@ export default function TiposParcelaModal({ open, mascara, tipos, ocupados = {},
   }, [tipos, mascara, busca]);
 
   function alternar(sigla) {
-    setMarcados((atual) => (atual.includes(sigla) ? atual.filter((s) => s !== sigla) : [...atual, sigla]));
+    setMarcados((atual) =>
+      atual.includes(sigla) ? atual.filter((s) => s !== sigla) : unico ? [sigla] : [...atual, sigla]
+    );
   }
 
   const iguais =
@@ -43,6 +46,11 @@ export default function TiposParcelaModal({ open, mascara, tipos, ocupados = {},
     <Modal open={open} onClose={onClose} title="Tipo parcelas" maxWidthClass="max-w-lg">
       <p className="mb-3 text-xs text-gray-500">
         Tipos de parcela do Sienge que compõem <span className="font-semibold text-gray-700">{mascara?.descricao}</span>.
+        {unico && (
+          <span className="mt-1 block text-amber-700">
+            Com origem CEF, a máscara tem um tipo só: é nele que a Projeção CEF aparece (no lugar do Aging desse tipo).
+          </span>
+        )}
       </p>
       <div className="relative mb-2">
         <Search size={14} className="absolute left-2.5 top-1/2 -translate-y-1/2 text-gray-400" />

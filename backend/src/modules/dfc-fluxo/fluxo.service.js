@@ -3,6 +3,7 @@ const dfcMascaras = require('../dfc-mascaras/dfcMascaras.service');
 const dfcPlanoContas = require('../dfc-plano-contas/dfcPlanoContas.service');
 const dfcOrcamento = require('../dfc-orcamento/dfcOrcamento.service');
 const dfcSaldos = require('../dfc-saldos/dfcSaldos.service');
+const { regrasParcela, SEM_TIPO } = require('../dfc-mascaras/regrasParcela');
 
 // O fluxo de caixa da aba DFC montado no servidor — mesmas regras de
 // frontend/src/pages/Operacoes/DfcConstrutoras/DfcFluxoTab.jsx (mudou lá, muda aqui). Usado pela
@@ -12,6 +13,8 @@ const dfcSaldos = require('../dfc-saldos/dfcSaldos.service');
 // - a máscara de cada natureza é a do plano que o centro usa (o próprio, se tiver versão, senão o
 //   Global); natureza sem máscara (ou lançamento sem natureza) fica fora do fluxo;
 // - árvore máscara 1 › ENTRADAS/SAÍDAS (pelo sinal) › máscara 2 › conta, valores por 'AAAA-MM|R' / 'AAAA-MM|P';
+// - máscara 2 detalhada por tipo de parcela (aba Máscaras — dfc-mascaras/regrasParcela.js): abaixo dela, os
+//   tipos de parcela no lugar das contas (a conta que ela assume não segue mais o plano de contas);
 // - saldos: Realizado até o mês atual (saldo real); Projetado do mês atual em diante, partindo do saldo
 //   real de abertura do mês atual e encadeando o resultado projetado.
 
@@ -63,10 +66,12 @@ function codigoFormatado(conta) {
   return segmentos.length > 0 ? segmentos.join('.') : digitos;
 }
 
-// Máscaras, contas do plano financeiro e o classificador natureza × centro -> { n1, n2 } (null = fora
-// do fluxo: sem natureza ou conta sem Máscara DFC no plano que o centro usa).
+// Máscaras, contas do plano financeiro e o classificador natureza × centro (× tipo de parcela) ->
+// { n1, n2, folha } (null = fora do fluxo: sem natureza ou conta sem Máscara DFC no plano que o centro
+// usa). `folha`: a linha abaixo da máscara 2 — a natureza (número) ou, na conta assumida por máscaras
+// por tipo de parcela, 't:<tipo>' ('t:' = sem tipo).
 async function classificador(empresaId) {
-  const [mascaras, classificacoes, { rows: contas }] = await Promise.all([
+  const [mascaras, classificacoes, { rows: contas }, tipos] = await Promise.all([
     dfcMascaras.list(empresaId),
     dfcPlanoContas.listTodas(empresaId),
     pool.query(
@@ -75,7 +80,10 @@ async function classificador(empresaId) {
          FROM planos_financeiros_sienge WHERE empresa_id = $1`,
       [empresaId]
     ),
+    dfcMascaras.tiposParcela(empresaId),
   ]);
+  const regras = regrasParcela(mascaras);
+  const nomesTipo = Object.fromEntries(tipos.map((t) => [t.sigla, t.nome]));
   const mapaDe = (lista) => Object.fromEntries(lista.map((c) => [c.sienge_id, c.mascara_id]));
   const planoGlobal = mapaDe(classificacoes.global);
   const planosCentro = Object.fromEntries(Object.entries(classificacoes.centros).map(([id, l]) => [id, mapaDe(l)]));
@@ -89,16 +97,28 @@ async function classificador(empresaId) {
     });
   });
   const contaPorId = new Map(contas.map((c) => [c.sienge_id, { ...c, codigo: codigoFormatado(c) }]));
-  const classificar = (centroId, natureza) => {
+  const classificar = (centroId, natureza, tipo = '') => {
     if (natureza === null || natureza === undefined) return null;
+    if (regras.assumida(natureza)) {
+      const n2 = regras.mascaraDe(natureza, tipo || '');
+      return pai[n2] ? { n1: pai[n2], n2, folha: `t:${tipo || ''}`, tipo_parcela: tipo || '' } : null;
+    }
     const n2 = (planosCentro[centroId] || planoGlobal)[natureza];
     if (!n2 || !pai[n2]) return null;
-    return { n1: pai[n2], n2 };
+    return { n1: pai[n2], n2, folha: natureza, tipo_parcela: '' };
   };
   const conta = (siengeId) => contaPorId.get(siengeId) || { sienge_id: siengeId, name: `Natureza ${siengeId}`, codigo: String(siengeId) };
+  // A linha de um tipo de parcela (folha 't:<tipo>') — mesma forma de uma conta (codigo / name), com a
+  // conta assumida em sienge_id.
+  const folhaTipo = (natureza, tipo) => ({
+    sienge_id: natureza,
+    tipo_parcela: tipo,
+    codigo: tipo || '—',
+    name: tipo ? nomesTipo[tipo] || tipo : SEM_TIPO,
+  });
   // O centro classifica pelo plano próprio (versão, mesmo vazia) ou pelo Global.
   const planoProprio = (centroId) => Boolean(planosCentro[centroId]);
-  return { mascaras, nomeMascara, classificar, conta, planoProprio, classificacoes };
+  return { mascaras, nomeMascara, classificar, conta, folhaTipo, nomesTipo, regras, planoProprio, classificacoes };
 }
 
 // `inicio` / `fim`: 'AAAA-MM'. `centros`: ids do filtro (vazio = todos).
@@ -117,12 +137,13 @@ async function montar(empresaId, { inicio, fim, centros = [], versao = null }) {
   const mesesP = new Set([...meses, ...(ultimo && mesAtual <= ultimo ? mesesEntre(mesAtual, ultimo) : [])]);
   const mesesR = new Set(meses.filter((m) => m <= mesAtual));
 
-  // n1 -> lado -> n2 -> conta -> 'mes|tipo' -> valor
+  // n1 -> lado -> n2 -> folha (conta ou tipo de parcela) -> 'mes|tipo' -> valor
   const arvore = new Map();
-  const lancar = (centroId, natureza, mes, tipo, valor) => {
+  const folhas = new Map(); // folha -> o objeto da linha (conta ou tipo de parcela)
+  const lancar = (centroId, natureza, mes, tipo, valor, tipoParcela = '') => {
     if (filtro && !filtro.has(centroId)) return;
     if (!valor) return;
-    const c = cls.classificar(centroId, natureza);
+    const c = cls.classificar(centroId, natureza, tipoParcela);
     if (!c) return;
     const lado = valor > 0 ? 'E' : 'S';
     if (!arvore.has(c.n1)) arvore.set(c.n1, new Map());
@@ -131,13 +152,18 @@ async function montar(empresaId, { inicio, fim, centros = [], versao = null }) {
     const nivel2 = lados.get(lado);
     if (!nivel2.has(c.n2)) nivel2.set(c.n2, new Map());
     const contas = nivel2.get(c.n2);
-    if (!contas.has(natureza)) contas.set(natureza, {});
-    const pc = contas.get(natureza);
+    if (!contas.has(c.folha)) {
+      contas.set(c.folha, {});
+      if (!folhas.has(c.folha)) {
+        folhas.set(c.folha, typeof c.folha === 'string' ? cls.folhaTipo(natureza, c.tipo_parcela) : cls.conta(natureza));
+      }
+    }
+    const pc = contas.get(c.folha);
     const k = `${mes}|${tipo}`;
     pc[k] = r2((pc[k] || 0) + valor);
   };
-  orcamento.valores.forEach((v) => mesesP.has(v.mes) && lancar(v.centro_id, v.sienge_id, v.mes, P, v.valor));
-  realizado.valores.forEach((v) => mesesR.has(v.mes) && lancar(v.centro_id, v.sienge_id, v.mes, R, v.valor));
+  orcamento.valores.forEach((v) => mesesP.has(v.mes) && lancar(v.centro_id, v.sienge_id, v.mes, P, v.valor, v.tipo_parcela));
+  realizado.valores.forEach((v) => mesesR.has(v.mes) && lancar(v.centro_id, v.sienge_id, v.mes, R, v.valor, v.tipo_parcela));
 
   const somar = (listas) => {
     const total = {};
@@ -153,9 +179,20 @@ async function montar(empresaId, { inicio, fim, centros = [], versao = null }) {
       const filhos = g.filhos
         .filter((f) => nivel2.has(f.id))
         .map((f) => {
+          // Contas pelo código; tipos de parcela na ordem escolhida na máscara, os outros depois e o
+          // "sem tipo" por último.
+          const ordemTipo = (c) => {
+            if (c.tipo_parcela === undefined) return [0, String(c.sienge_id)];
+            const i = (f.parcela_tipos || []).indexOf(c.tipo_parcela);
+            return [c.tipo_parcela ? (i >= 0 ? i : 500) : 999, c.tipo_parcela];
+          };
           const contas = [...nivel2.get(f.id).entries()]
-            .map(([cid, pc]) => ({ conta: cls.conta(cid), porColuna: pc }))
-            .sort((a, b) => String(a.conta.sienge_id).localeCompare(String(b.conta.sienge_id)));
+            .map(([folha, pc]) => ({ conta: folhas.get(folha), porColuna: pc }))
+            .sort((a, b) => {
+              const [oa, ta] = ordemTipo(a.conta);
+              const [ob, tb] = ordemTipo(b.conta);
+              return oa - ob || String(ta).localeCompare(String(tb));
+            });
           return { id: f.id, descricao: f.descricao, contas, porColuna: somar(contas.map((c) => c.porColuna)) };
         });
       return { chave: k, descricao: rotulo, filhos, porColuna: somar(filhos.map((f) => f.porColuna)) };

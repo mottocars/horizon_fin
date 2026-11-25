@@ -57,12 +57,29 @@ function somarMeses(anoMes, k) {
 async function realizado(empresaId, de, ate) {
   const { rows } = await pool.query(
     // Entradas e saídas somadas em separado (o fluxo de caixa mostra os dois lados — DfcFluxoTab).
-    `SELECT r.centro_id, r.natureza_id AS sienge_id, to_char(r.mes, 'YYYY-MM') AS mes, ROUND(SUM(r.valor), 2) AS valor
+    // Conta assumida por máscaras detalhadas por tipo de parcela (aba Máscaras): o valor vem separado
+    // pelo tipo da parcela que gerou o lançamento (recebimento do contas a receber — origem CR do
+    // extrato — achado em sie_income pelo título e parcela). Sem parcela = tipo '' (SEM TIPO DE PARCELA).
+    // Nas demais contas, tipo_parcela = ''.
+    `WITH assumidas AS (
+       SELECT DISTINCT parcela_conta_sienge_id AS conta FROM dfc_mascaras
+        WHERE empresa_id = $1 AND tipo_detalhamento = 'TIPO_PARCELA' AND parcela_conta_sienge_id IS NOT NULL
+     )
+     SELECT r.centro_id, r.natureza_id AS sienge_id, COALESCE(t.tipo, '') AS tipo_parcela,
+            to_char(r.mes, 'YYYY-MM') AS mes, ROUND(SUM(r.valor), 2) AS valor
        FROM sie_extrato_contas_rateio r
        JOIN contas_bancarias_sienge c
          ON c.empresa_id = r.empresa_id AND c.company_id = r.company_id AND c.numero_conta = r.numero_conta AND c.projeta_dfc
+       LEFT JOIN assumidas a ON a.conta = r.natureza_id
+       LEFT JOIN LATERAL (
+         SELECT btrim(i.payment_term_id) AS tipo
+           FROM sie_extrato_contas e
+           JOIN sie_income i ON i.empresa_id = e.empresa_id AND i.bill_id = e.bill_id AND i.installment_id = e.installment_number
+          WHERE a.conta IS NOT NULL AND e.registro_id = r.registro_id AND e.statement_origin = 'CR'
+          LIMIT 1
+       ) t ON TRUE
       WHERE r.empresa_id = $1 AND r.mes BETWEEN $2::date AND $3::date
-      GROUP BY 1, 2, 3, (r.valor >= 0)`,
+      GROUP BY 1, 2, 3, 4, (r.valor >= 0)`,
     [empresaId, `${de}-01`, `${ate}-01`]
   );
   const { rows: porMes } = await pool.query(

@@ -554,7 +554,7 @@ async function impactoDfc(empresaId, { centros: filtro = [], ano = null }) {
   };
   let ultimoDfc = null;
   orc.valores.forEach((v) => {
-    const c = cls.classificar(v.centro_id, v.sienge_id);
+    const c = cls.classificar(v.centro_id, v.sienge_id, v.tipo_parcela);
     if (!c) return;
     const valor = num(v.valor);
     const x = doCentro(Number(v.centro_id));
@@ -667,7 +667,7 @@ async function impactoDfc(empresaId, { centros: filtro = [], ano = null }) {
   const n1DoRet = (() => {
     for (const c of centrosCalc) for (const [mes] of c.retDfc) {
       const v = orc.valores.find((x) => Number(x.centro_id) === c.id && x.mes === mes && ret.has(Number(x.sienge_id)));
-      const k = v && cls.classificar(v.centro_id, v.sienge_id);
+      const k = v && cls.classificar(v.centro_id, v.sienge_id, v.tipo_parcela);
       if (k) return k.n1;
     }
     const g = cfgDfc.contas_ret.map((id) => cls.classificar(null, id) || cls.classificar(escolhidos[0], id)).find(Boolean);
@@ -678,7 +678,7 @@ async function impactoDfc(empresaId, { centros: filtro = [], ano = null }) {
     c.retDfc.forEach((v, mes) => {
       if (!noPeriodo(mes)) return;
       const val = orc.valores.find((x) => Number(x.centro_id) === c.id && x.mes === mes && ret.has(Number(x.sienge_id)));
-      const k = val && cls.classificar(val.centro_id, val.sienge_id);
+      const k = val && cls.classificar(val.centro_id, val.sienge_id, val.tipo_parcela);
       const n1 = k?.n1 ?? n1DoRet;
       retDfcPorN1.set(n1, (retDfcPorN1.get(n1) || 0) + v);
     })
