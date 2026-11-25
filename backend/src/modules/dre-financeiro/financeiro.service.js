@@ -3,12 +3,13 @@ const { sqlMapaDre } = require('../dre-plano-contas/drePlanoContas.service');
 const cache = require('../dre-versoes/cache');
 
 // Operações > DRE Gerencial > Financeiro: os exercícios (anos) da empresa, do ano do primeiro
-// lançamento financeiro até o ano atual. O primeiro ano sai do menor VENCIMENTO do contas a receber
-// (sie_income) e a pagar (sie_outcome): a emissão tem datas digitadas erradas no Sienge (títulos da
-// TOSTE E DINIZ emitidos em "2002" que vencem em 2026) e jogaria o primeiro exercício décadas pra
-// trás. Dentro do exercício, porém, os títulos entram pela EMISSÃO (pedido do usuário) — a contagem
-// de cada card e a listagem (lancamentos) são por emissão; título emitido antes do primeiro
-// exercício não aparece em nenhum. O card conta TÍTULOS distintos (um título tem várias parcelas) a
+// lançamento financeiro até o ano atual. O primeiro ano sai da menor EMISSÃO do contas a receber
+// (sie_income) e a pagar (sie_outcome) — pedido do usuário (25/11/2026): a DRE trabalha toda pela
+// emissão, e um título com a emissão digitada errada no Sienge (ex.: 172042 da GENESIS, emitido em
+// "2002" e vencido em 2026) tem de aparecer no card do ano dele, como na Base Financeiro do Excel de
+// auditoria. Antes o início era o menor vencimento e esses títulos não apareciam em nenhum exercício.
+// Dentro do exercício os títulos entram pela EMISSÃO — a contagem de cada card e a listagem
+// (lancamentos) são por emissão. O card conta TÍTULOS distintos (um título tem várias parcelas) a
 // receber e a pagar, e as movimentações do extrato sem título (cada lançamento uma vez, mesmo
 // rateado em vários centros) — mesmo critério do movimento na listagem (com natureza) — e quantos
 // lançamentos (títulos e movimentos) têm ajuste (lancamentos_ajustes), pela emissão / data, e quantos
@@ -22,14 +23,14 @@ async function exercicios(empresaId) {
   // Contagens só até o limite do realizado (ver periodo).
   const limite = limiteDoRealizado();
   const { rows: inicio } = await pool.query(
-    `SELECT LEAST((SELECT MIN(due_date) FROM sie_income WHERE empresa_id = $1),
-                  (SELECT MIN(due_date) FROM sie_outcome WHERE empresa_id = $1)) AS primeiro`,
+    `SELECT to_char(LEAST((SELECT MIN(issue_date) FROM sie_income WHERE empresa_id = $1),
+                          (SELECT MIN(issue_date) FROM sie_outcome WHERE empresa_id = $1)), 'YYYY-MM-DD') AS primeiro`,
     [empresaId]
   );
   // Ano atual pelo relógio da aplicação (o do Postgres da VPS é deslocado).
   const anoAtual = new Date().getFullYear();
   const primeiro = inicio[0].primeiro;
-  if (!primeiro) return { primeiro_vencimento: null, ano_atual: anoAtual, exercicios: [] };
+  if (!primeiro) return { primeira_emissao: null, ano_atual: anoAtual, exercicios: [] };
   const primeiroAno = Math.min(Number(String(primeiro).slice(0, 4)), anoAtual);
 
   const { rows } = await pool.query(
@@ -117,7 +118,7 @@ async function exercicios(empresaId) {
       travado: ano === anoAtual,
     });
   }
-  return { primeiro_vencimento: primeiro, ano_atual: anoAtual, exercicios: lista, ...posicao(limite) };
+  return { primeira_emissao: primeiro, ano_atual: anoAtual, exercicios: lista, ...posicao(limite) };
 }
 
 // Lançamentos financeiros de um período (dentro do exercício). Primeiro uma linha por parcela ×

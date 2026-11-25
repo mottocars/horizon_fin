@@ -163,7 +163,7 @@ export default function FinanceiroTab({ empresaId, exercicio = null, onAbrir, se
                 {dados.versao ? ` · corte da versão ${dados.versao} da DRE` : ''}
               </span>
             )}
-            <span>Primeiro lançamento financeiro: vencimento em {dataBr(dados.primeiro_vencimento)}</span>
+            <span>Primeiro lançamento financeiro: emissão em {dataBr(dados.primeira_emissao)}</span>
           </div>
           <div className="grid grid-cols-1 gap-3 md:grid-cols-2 xl:grid-cols-3 2xl:grid-cols-4">
             {dados.exercicios.map((e) => (

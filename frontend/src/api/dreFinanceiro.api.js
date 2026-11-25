@@ -2,8 +2,8 @@ import http from './http';
 
 // Aba Financeiro da DRE.
 
-// Exercícios da empresa, do ano do primeiro vencimento (contas a pagar e a receber) até o atual, do
-// mais novo pro mais antigo: { primeiro_vencimento, ano_atual, exercicios: [{ ano, receber, pagar,
+// Exercícios da empresa, do ano da primeira emissão (contas a pagar e a receber) até o atual, do
+// mais novo pro mais antigo: { primeira_emissao, ano_atual, exercicios: [{ ano, receber, pagar,
 // movimentos, ajustados, criados, travado }] } (receber/pagar = títulos distintos emitidos no ano; movimentos =
 // lançamentos do extrato sem título; ajustados = lançamentos com ajuste; criados = lançamentos
 // criados à mão; travado = o ano atual, só
