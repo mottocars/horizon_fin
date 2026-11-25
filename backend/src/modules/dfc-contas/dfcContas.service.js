@@ -5,8 +5,11 @@ const contasSienge = require('../contas-bancarias-sienge/contas.service');
 // v1/checking-accounts — a MESMA tabela e a mesma sincronização da tela Saldo de Contas Bancárias,
 // contas_bancarias_sienge), com a flag "Projeta DFC". Mesmo modelo da aba Centros Custos.
 
+// `classificacao`: nome da classificação da conta no cadastro (Saldo Contas Bancárias › Contas
+// Bancárias) — o nível 1 do drilldown da aba; null = sem classificação.
 const COLUNAS = `numero_conta, company_id, nome, tipo_id, tipo_descricao, agencia, banco_numero, banco_nome,
-  company_name, status, projeta_dfc, atualizado_em`;
+  company_name, status, projeta_dfc, atualizado_em,
+  (SELECT cb.nome FROM classificacoes_bancarias cb WHERE cb.id = contas_bancarias_sienge.classificacao_id) AS classificacao`;
 
 function erro(status, message) {
   const e = new Error(message);
