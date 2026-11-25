@@ -463,6 +463,8 @@ export default function DfcFluxoTab({
       codigo,
       contaNome: c.conta.name,
       versao: versaoEscolhida,
+      // Linha de tipo de parcela: o Detalhamento se restringe ao tipo (undefined = conta inteira).
+      tipoParcela: c.conta.tipo_parcela,
     });
   }
 
@@ -855,8 +857,7 @@ export default function DfcFluxoTab({
                                     })}
                                     {abertos.includes(chaveN2) &&
                                       n2.contas.map((c) => {
-                                        // Tipo de parcela: sigla no lugar do código e sem o Detalhamento (que é por
-                                        // conta — abriria a conta inteira, todos os tipos juntos).
+                                        // Tipo de parcela: sigla no lugar do código; o Detalhamento vai só com aquele tipo.
                                         if (c.conta.tipo_parcela !== undefined) {
                                           return linha({
                                             chave: `${chaveN2}|t:${c.conta.tipo_parcela}`,
@@ -865,6 +866,7 @@ export default function DfcFluxoTab({
                                             sub: c.conta.codigo,
                                             rotulo: c.conta.name,
                                             pc: c.porColuna,
+                                            onValor: (coluna) => abrirDetalhe(c, coluna, c.conta.codigo),
                                           });
                                         }
                                         const codigo = c.conta.mascara_nivel_1 ? codigoFormatado(c.conta) : String(c.conta.sienge_id);

@@ -1,4 +1,6 @@
 const pool = require('../../config/db');
+const dfcMascaras = require('../dfc-mascaras/dfcMascaras.service');
+const { regrasParcela } = require('../dfc-mascaras/regrasParcela');
 const dfcAging = require('../dfc-aging/dfcAging.service');
 const dfcEmpresarial = require('../dfc-empresarial/dfcEmpresarial.service');
 const projecaoCef = require('../dfc-projecao-cef/projecaoCef.service');
@@ -18,6 +20,14 @@ const dfcOrcamento = require('../dfc-orcamento/dfcOrcamento.service');
 // - passos: a conta, linha a linha: [{ op ('+', '−', '×', '=' ou null), rotulo, nota, valor, formato, destaque }];
 // - tabela: colunas [{ chave, rotulo, formato }], linhas, total (opcional);
 // - nota: texto corrido.
+//
+// Linha de tipo de parcela (máscara de nível 2 detalhada por tipo de parcela — aba Máscaras): o filtro
+// traz `tipoParcela` (sigla do Sienge; '' = SEM TIPO DE PARCELA) e tudo se restringe àquele tipo da conta
+// que a máscara assume — Realizado: os lançamentos cuja parcela recebida é do tipo (extrato origem CR →
+// sie_income pelo título/parcela, a mesma ligação de dfc-saldos::realizado); Projetado: os valores do
+// Orçamento daquele tipo, com o Aging só das parcelas do tipo e, no tipo da máscara CEF, um grupo por
+// origem CEF (NOVO REGISTRO e MEDIÇÃO ficam somados no mesmo valor). Sem `tipoParcela` (undefined), tudo
+// como sempre.
 // Formatos: moeda, pct (fração: 0,25 = 25%), data, mes, int, texto.
 
 const ROTULO_ORIGEM = {
@@ -70,7 +80,8 @@ async function nomesCentros(empresaId) {
 // ─── Realizado ────────────────────────────────────────────────────────────────────────────────
 // Os lançamentos do extrato (contas com "Projeta DFC") já achatados por rateio na sincronização
 // (sie_extrato_contas_rateio) — a mesma base que a grade soma (dfc-saldos::realizado).
-async function realizado(empresaId, { mes, natureza, lado, centros, semCentro }, centrosInfo) {
+async function realizado(empresaId, { mes, natureza, lado, centros, semCentro, tipoParcela }, centrosInfo) {
+  const porTipo = tipoParcela !== undefined && tipoParcela !== null;
   const { rows } = await pool.query(
     `SELECT r.id AS rateio_id, r.centro_id, r.percentual, r.valor AS valor_dfc,
             e.registro_id, e.id AS id_sienge, to_char(e.date, 'YYYY-MM-DD') AS data, e.numero_conta,
@@ -84,8 +95,15 @@ async function realizado(empresaId, { mes, natureza, lado, centros, semCentro },
         AND (CASE WHEN $3::int IS NULL THEN r.natureza_id IS NULL ELSE r.natureza_id = $3::int END)
         AND (CASE WHEN $4 = 'E' THEN r.valor >= 0 ELSE r.valor < 0 END)
         AND ${filtroCentros('r', 5)}
+        ${
+          porTipo
+            ? `AND COALESCE((SELECT btrim(i.payment_term_id) FROM sie_income i
+                              WHERE e.statement_origin = 'CR' AND i.empresa_id = e.empresa_id
+                                AND i.bill_id = e.bill_id AND i.installment_id = e.installment_number), '') = $7`
+            : ''
+        }
       ORDER BY e.date, e.id, r.id`,
-    [empresaId, `${mes}-01`, natureza, lado, centros, semCentro]
+    [empresaId, `${mes}-01`, natureza, lado, centros, semCentro, ...(porTipo ? [tipoParcela] : [])]
   );
   // Um grupo por centro de custo (pedido do usuário), do maior valor pro menor.
   const porCentro = new Map();
@@ -211,10 +229,13 @@ async function informado(empresaId, centroId, conta, mes) {
 // SIENGE - AGING: as parcelas do contas a receber / a pagar que vencem no mês, no rateio da
 // natureza × centro — a mesma conta de dfc-aging::aging, parcela a parcela.
 const PESSOA = { receber: 'client_name', pagar: 'creditor_name' };
-async function aging(empresaId, centroId, conta, mes) {
+// `tipoParcela`: só as parcelas a receber daquele tipo (linha de máscara por tipo de parcela —
+// dfc-aging::agingPorTipo); sem ele, a receber e a pagar da conta, como sempre.
+async function aging(empresaId, centroId, conta, mes, tipoParcela) {
+  const porTipo = tipoParcela !== undefined && tipoParcela !== null;
   const linhas = [];
   const bases = [];
-  for (const tipo of ['receber', 'pagar']) {
+  for (const tipo of porTipo ? ['receber'] : ['receber', 'pagar']) {
     const t = dfcAging.TIPOS[tipo];
     const { rows } = await pool.query(
       `SELECT i.bill_id, i.installment_id, i.document_identification_id AS doc, i.document_number, i.${PESSOA[tipo]} AS pessoa,
@@ -225,8 +246,9 @@ async function aging(empresaId, centroId, conta, mes) {
          JOIN ${t.parcelas} i ON i.empresa_id = cat.empresa_id AND i.bill_id = cat.bill_id AND i.installment_id = cat.installment_id
         WHERE cat.empresa_id = $1 AND cat.cost_center_id = $2 AND cat.financial_category_id = $3::text
           AND i.due_date >= $4::date AND i.due_date < ($4::date + INTERVAL '1 month') AND ${t.filtro}
+          ${porTipo ? 'AND btrim(i.payment_term_id) = $5' : ''}
         ORDER BY i.due_date, i.bill_id, i.installment_id`,
-      [empresaId, centroId, String(conta), `${mes}-01`]
+      [empresaId, centroId, String(conta), `${mes}-01`, ...(porTipo ? [tipoParcela] : [])]
     );
     const { rows: base } = await pool.query(`SELECT MAX(atualizado_em) AS em FROM ${t.parcelas} WHERE empresa_id = $1`, [empresaId]);
     if (rows.length) bases.push({ tipo, em: base[0].em });
@@ -256,7 +278,7 @@ async function aging(empresaId, centroId, conta, mes) {
   const tipos = [...new Set(linhas.map((l) => l.lado))];
   return {
     valor,
-    resumo: `${linhas.length} ${linhas.length === 1 ? 'parcela' : 'parcelas'} com vencimento em ${rotuloMes(mes)}.`,
+    resumo: `${linhas.length} ${linhas.length === 1 ? 'parcela' : 'parcelas'}${porTipo ? ` do tipo ${tipoParcela}` : ''} com vencimento em ${rotuloMes(mes)}.`,
     blocos: [
       {
         tipo: 'campos',
@@ -647,8 +669,10 @@ async function cef(empresaId, centroId, origem, mes, centrosInfo) {
   };
 }
 
-async function projetado(empresaId, { mes, natureza, lado, centros, semCentro, versao: numeroVersao = null }, centrosInfo) {
+async function projetado(empresaId, { mes, natureza, lado, centros, semCentro, versao: numeroVersao = null, tipoParcela }, centrosInfo) {
   if (natureza === null) return { total: 0, versao: null, grupos: [] };
+  const porTipo = tipoParcela !== undefined && tipoParcela !== null;
+  const tipo = porTipo ? tipoParcela : '';
   // Versão escolhida no filtro "Versão" da aba DFC (sem ela, a última — o consolidado abaixo).
   if (numeroVersao) {
     const orc = await dfcOrcamento.orcamento(empresaId, numeroVersao);
@@ -656,36 +680,77 @@ async function projetado(empresaId, { mes, natureza, lado, centros, semCentro, v
     if (!ultima) {
       const doCentro = new Set(centros);
       const rows = orc.valores
-        .filter((v) => v.sienge_id === natureza && v.mes === mes && (lado === 'E' ? v.valor > 0 : v.valor < 0) && doCentro.has(v.centro_id))
+        .filter(
+          (v) =>
+            v.sienge_id === natureza &&
+            v.mes === mes &&
+            (v.tipo_parcela || '') === tipo &&
+            (lado === 'E' ? v.valor > 0 : v.valor < 0) &&
+            doCentro.has(v.centro_id)
+        )
         .sort((a, b) => Math.abs(b.valor) - Math.abs(a.valor));
-      return gruposProjetado(empresaId, natureza, mes, rows, orc.versao, centrosInfo, true);
+      return gruposProjetado(empresaId, natureza, mes, rows, orc.versao, centrosInfo, true, porTipo ? tipo : undefined);
     }
   }
   const { rows } = await pool.query(
-    `SELECT o.centro_id, o.valor, o.origem
+    `SELECT o.centro_id, o.valor, o.origem, o.tipo_parcela
        FROM dfc_orcamento_valores o
       WHERE o.empresa_id = $1 AND o.sienge_id = $2 AND o.mes = $3::date
         AND (CASE WHEN $4 = 'E' THEN o.valor > 0 ELSE o.valor < 0 END)
         AND ${filtroCentros('o', 5)}
+        AND o.tipo_parcela = $7
       ORDER BY abs(o.valor) DESC`,
-    [empresaId, natureza, `${mes}-01`, lado, centros, semCentro]
+    [empresaId, natureza, `${mes}-01`, lado, centros, semCentro, tipo]
   );
   const { rows: versoes } = await pool.query(
     `SELECT v.numero, v.criado_em, u.nome AS usuario FROM dfc_orcamento_versoes v LEFT JOIN usuarios u ON u.id = v.usuario_id
       WHERE v.empresa_id = $1 ORDER BY v.numero DESC LIMIT 1`,
     [empresaId]
   );
-  return gruposProjetado(empresaId, natureza, mes, rows, versoes[0] || null, centrosInfo);
+  return gruposProjetado(empresaId, natureza, mes, rows, versoes[0] || null, centrosInfo, false, porTipo ? tipo : undefined);
 }
 
 // Um grupo por centro × origem do valor projetado, com o detalhamento da fonte hoje.
-async function gruposProjetado(empresaId, natureza, mes, rows, versao, centrosInfo, antiga = false) {
+async function gruposProjetado(empresaId, natureza, mes, rows, versao, centrosInfo, antiga = false, tipoParcela = undefined) {
   const grupos = [];
+  // Tipo da máscara CEF: o valor junta as origens CEF da máscara (NOVO REGISTRO + MEDIÇÃO) — um grupo por
+  // origem, cada um com o rastreio do motor; o aviso de diferença compara a soma com o valor da versão.
+  const regraCef =
+    tipoParcela !== undefined
+      ? regrasParcela(await dfcMascaras.list(empresaId)).cef.find((m) => m.conta === Number(natureza) && m.tipo === tipoParcela)
+      : null;
   for (const r of rows) {
+    if (regraCef && r.origem in projecaoCef.SAIDAS) {
+      const fontes = [];
+      for (const origem of regraCef.origens) fontes.push({ origem, fonte: await cef(empresaId, r.centro_id, origem, mes, centrosInfo) });
+      const valorVersao = r2(r.valor);
+      const hoje = r2(fontes.reduce((t, f) => t + f.fonte.valor, 0));
+      fontes.forEach(({ origem, fonte }, i) => {
+        const avisos = [...(fonte.avisos || [])];
+        if (i === 0 && Math.abs(hoje - valorVersao) >= 0.01) {
+          avisos.unshift(
+            `Hoje as origens CEF da máscara dão ${hoje.toLocaleString('pt-BR', { minimumFractionDigits: 2 })} no total (diferença de ${r2(hoje - valorVersao).toLocaleString('pt-BR', { minimumFractionDigits: 2 })}). O DFC mostra a versão ${versao?.numero ?? '—'} do Orçamento${antiga ? ', escolhida no filtro Versão' : ' — salve uma nova versão para trazer o valor de hoje'}. O detalhamento abaixo é o da fonte hoje.`
+          );
+        }
+        grupos.push({
+          chave: `${r.centro_id}|${origem}`,
+          titulo: centrosInfo.get(r.centro_id)?.name || `Centro ${r.centro_id}`,
+          origem,
+          subtitulo: ROTULO_ORIGEM[origem] || origem,
+          resumo: fonte.resumo || null,
+          // Cada origem com o valor dela (a versão guarda só a soma das origens no tipo de parcela).
+          valor: fonte.valor,
+          valor_fonte: fonte.valor,
+          blocos: fonte.blocos,
+          avisos,
+        });
+      });
+      continue;
+    }
     const valorVersao = r2(r.valor);
     let fonte;
     if (r.origem === 'HORIZON_ORCAMENTO_INFORMADO') fonte = await informado(empresaId, r.centro_id, natureza, mes);
-    else if (r.origem === 'SIENGE_AGING') fonte = await aging(empresaId, r.centro_id, natureza, mes);
+    else if (r.origem === 'SIENGE_AGING') fonte = await aging(empresaId, r.centro_id, natureza, mes, tipoParcela);
     else if (r.origem === 'SIENGE_ORCAMENTO_EMPRESARIAL') fonte = await empresarial(empresaId, r.centro_id, natureza, mes);
     else if (r.origem in projecaoCef.SAIDAS) fonte = await cef(empresaId, r.centro_id, r.origem, mes, centrosInfo);
     else fonte = { valor: valorVersao, blocos: [{ tipo: 'nota', texto: 'Origem sem detalhamento.' }] };

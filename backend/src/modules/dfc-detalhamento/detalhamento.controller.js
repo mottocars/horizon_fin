@@ -12,6 +12,9 @@ const filtroSchema = z.object({
   centros: z.string().regex(/^(\d+|sem)(,(\d+|sem))*$/, 'Centros inválidos.'),
   // Versão do Orçamento (filtro "Versão" da aba DFC; só no Projetado); sem ela, a última.
   versao: z.preprocess((v) => (v === '' || v === undefined ? null : v), z.coerce.number().int().positive('Versão inválida.').nullable()),
+  // Linha de tipo de parcela (máscara por tipo de parcela): a sigla do tipo; vazio = SEM TIPO DE PARCELA.
+  // Sem o parâmetro, o detalhamento é o da conta inteira (como sempre).
+  tipo_parcela: z.string().trim().max(20).optional(),
 });
 
 function erro(status, message) {
@@ -36,6 +39,7 @@ async function detalhar(req, res, next) {
         centros: lista.filter((c) => c !== 'sem').map(Number),
         semCentro: lista.includes('sem'),
         versao: f.versao,
+        tipoParcela: f.tipo_parcela,
       })
     );
   } catch (err) {
