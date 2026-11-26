@@ -420,7 +420,8 @@ export function QuemGera({ D, centroSel, onCentro }) {
         </h2>
         <p>Fluxo operacional líquido por centro de custo. Clique numa linha para filtrar o painel.</p>
       </div>
-      <div className="tbl">
+      {/* Altura fixa com rolagem: a lista de centros cresce sem esticar a seção. */}
+      <div className="tbl rola">
         {!rows.length ? (
           <div className="empty">Nenhum centro com fluxo no escopo.</div>
         ) : (
@@ -512,7 +513,7 @@ export function Carteira({ D }) {
         </span>
       </div>
       {/* Classificação aberta com muitas contas (ex.: 94 na Liberada) rola dentro da seção. */}
-      <div className="tbl" style={{ maxHeight: 420, overflowY: 'auto' }}>
+      <div className="tbl rola">
         {!classificacoes.length ? (
           <div className="empty">Sem contas no caixa.</div>
         ) : (
