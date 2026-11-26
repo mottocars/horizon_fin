@@ -25,6 +25,8 @@ const detalhamentoPainel = require('./detalhamentoPainel.service');
 //   GET /economico-financeiro/detalhamento?empresa_id&de&ate -> o realizado do período (extrato das contas com
 //       "Projeta DFC", com rateio e título) e o em aberto (parcelas do Aging List que vencem no período), para
 //       o Detalhamento Financeiro (detalhamentoPainel.service.js).
+//   GET /economico-financeiro/gestao-matricial/centros?empresa_id -> [{ id, nome }] os centros com "Projeta DFC"
+//       (a mesma lista do filtro Centro de custo do Fluxo de Caixa), para a barra da Gestão Matricial.
 //   Filtros salvos do usuário numa tela, por empresa (botão "Gravar filtro" / lista "Filtros salvos"):
 //   GET    /:dashboard/:tela/filtros?empresa_id            -> [{ id, nome, filtros }]
 //   POST   /:dashboard/:tela/filtros { empresa_id, nome, filtros } -> { id, nome, filtros } (mesmo nome substitui)
@@ -87,6 +89,20 @@ router.get('/economico-financeiro/dre', async (req, res, next) => {
     res.json(await comVersaoPublicada(f.empresa_id, () => drePainel.painel(f.empresa_id, { de: f.de, ate: f.ate, centros })));
   } catch (err) {
     if (err.issues) return res.status(400).json({ message: err.issues[0].message || 'Filtros inválidos.' });
+    next(err);
+  }
+});
+
+router.get('/economico-financeiro/gestao-matricial/centros', async (req, res, next) => {
+  try {
+    const { empresa_id: empresaId } = z.object({ empresa_id: z.coerce.number().int().positive() }).parse(req.query);
+    const { rows } = await pool.query(
+      `SELECT sienge_id AS id, name AS nome FROM centros_custo_sienge WHERE empresa_id = $1 AND projeta_dfc ORDER BY sienge_id`,
+      [empresaId]
+    );
+    res.json(rows);
+  } catch (err) {
+    if (err.issues) return res.status(400).json({ message: 'Empresa inválida.' });
     next(err);
   }
 });

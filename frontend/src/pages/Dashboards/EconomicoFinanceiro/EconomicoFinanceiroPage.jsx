@@ -11,6 +11,7 @@ import FluxoCaixaPainel from './fluxo/FluxoCaixaPainel';
 import AgingPainel from './aging/AgingPainel';
 import DetalhamentoPainel from './detalhamento/DetalhamentoPainel';
 import DrePainel from './dre/DrePainel';
+import GestaoMatricialPainel from './matricial/GestaoMatricialPainel';
 import CapaDashboard from '../capa/CapaDashboard';
 import executivo from '../../../assets/dashboards/executivo-financeiro.webp';
 
@@ -30,7 +31,7 @@ const TELAS = [
   { id: 'home', label: 'Home', icon: House },
   { id: 'dre', label: 'Demonstração do Resultado', icon: BarChart3 },
   { id: 'fluxo-caixa', label: 'Fluxo de Caixa', icon: Wallet },
-  // Pedido do usuário (26/11/2026): por enquanto só o cabeçalho, como Saldo das Contas.
+  // Pedido do usuário (26/11/2026): a barra de filtros do Fluxo de Caixa (matricial/GestaoMatricialPainel.jsx).
   { id: 'gestao-matricial', label: 'Gestão Matricial', icon: Grid3x3 },
   { id: 'aging', label: 'Aging List', icon: CalendarClock },
   { id: 'detalhamento', label: 'Detalhamento Financeiro', icon: FileSearch },
@@ -101,6 +102,17 @@ export default function EconomicoFinanceiroPage() {
         <CapaDashboard imagem={executivo} nome="Econômico/Financeiro" tema="azul" />
       ) : telaAtiva === 'fluxo-caixa' ? (
         <FluxoCaixaPainel
+          dashboard={NOME}
+          tituloTela={tela.label}
+          empresaId={empresaId}
+          onEmpresa={(v) => atualizarParams({ empresa_id: v })}
+          opcoesEmpresas={opcoesEmpresas}
+          empresaTravada={empresaTravada}
+          carregandoEmpresas={carregandoEmpresas}
+          marcaEmpresa={marcaEmpresa}
+        />
+      ) : telaAtiva === 'gestao-matricial' ? (
+        <GestaoMatricialPainel
           dashboard={NOME}
           tituloTela={tela.label}
           empresaId={empresaId}

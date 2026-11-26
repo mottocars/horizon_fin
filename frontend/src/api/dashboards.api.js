@@ -22,6 +22,11 @@ export function getDetalhamentoPainel(params) {
   return http.get('/dashboards/economico-financeiro/detalhamento', { params }).then((res) => res.data);
 }
 
+// Gestão Matricial (Econômico Financeiro): centros com "Projeta DFC" da empresa, para o filtro Centro de custo.
+export function getCentrosGestaoMatricial(empresaId) {
+  return http.get('/dashboards/economico-financeiro/gestao-matricial/centros', { params: { empresa_id: empresaId } }).then((res) => res.data);
+}
+
 // Filtros salvos do usuário numa tela de dashboard, por empresa: [{ id, nome, filtros }].
 export function listarFiltrosSalvos(dashboard, tela, empresaId) {
   return http.get(`/dashboards/${dashboard}/${tela}/filtros`, { params: { empresa_id: empresaId } }).then((res) => res.data);
