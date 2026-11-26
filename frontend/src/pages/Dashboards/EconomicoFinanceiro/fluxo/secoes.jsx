@@ -1,4 +1,4 @@
-import { useMemo, useState } from 'react';
+import { Fragment, useMemo, useState } from 'react';
 import { CircleHelp } from 'lucide-react';
 import { BarrasH, DividaObra, FluxoOperacional, Trajetoria } from './graficos';
 import { COR, useDica, useSumario } from './ganchos';
@@ -354,7 +354,7 @@ export function FolegoSpe({ D, empresaSel, onEmpresa }) {
               <tr>
                 <th className="l nmh">Empresa</th>
                 <th className="l">Situação</th>
-                <th className="n">{D.semRealizadoNoMes ? diaMes(D.base) : 'Hoje'}</th>
+                <th className="n">{D.semRealizadoNoMes || D.horizon ? diaMes(D.dataCaixa) : 'Hoje'}</th>
                 {D.fut.map((m) => (
                   <th key={m}>{lbl(m)}</th>
                 ))}
@@ -471,8 +471,21 @@ export function QuemGera({ D, centroSel, onCentro }) {
 }
 
 // ─── Carteira e liquidez ─────────────────────────────────────────────────────────────────────────
+// As contas por classificação (cadastro de Contas Bancárias), com drilldown: clicar na classificação abre as contas
+// dela (pedido do usuário, 26/11/2026). A barra é proporcional ao maior saldo da lista aberta.
 export function Carteira({ D }) {
-  const { numeros, contas } = carteira(D);
+  const { numeros, classificacoes } = carteira(D);
+  const [abertas, setAbertas] = useState([]);
+  const { mostrar, esconder } = useDica();
+  const alternar = (nome) => setAbertas((a) => (a.includes(nome) ? a.filter((x) => x !== nome) : [...a, nome]));
+  const visiveis = classificacoes.flatMap((g) => [g.saldo, ...(abertas.includes(g.nome) ? g.contas.map((c) => c.saldo) : [])]);
+  const mx = Math.max(1, ...visiveis.map((v) => Math.abs(v)));
+  const barra = (v, cor) => (
+    <div className="bar" style={{ minWidth: 90 }}>
+      <div className="z" style={{ left: 0 }} />
+      <div className="b" style={{ left: 0, width: `${(Math.abs(v) / mx) * 100}%`, background: v < 0 ? 'var(--s-out)' : cor }} />
+    </div>
+  );
   return (
     <section className="panel c5" aria-labelledby="h-cart">
       <div className="ph">
@@ -498,21 +511,67 @@ export function Carteira({ D }) {
           Conta corrente
         </span>
       </div>
-      <BarrasH
-        aria="Maiores saldos bancários"
-        itens={contas.map((c) => ({
-          l: titulo(c.nome || c.conta),
-          v: c.saldo,
-          c: c.investimento ? COR.entrada : COR.accent,
-          titulo: titulo(c.nome || c.conta),
-          linhas: [
-            ['Empresa', curto(c.empresa)],
-            ['Conta', c.conta],
-            ['Tipo', titulo(c.tipo) || '–'],
-            ['Saldo', brl(c.saldo)],
-          ],
-        }))}
-      />
+      {/* Classificação aberta com muitas contas (ex.: 94 na Liberada) rola dentro da seção. */}
+      <div className="tbl" style={{ maxHeight: 420, overflowY: 'auto' }}>
+        {!classificacoes.length ? (
+          <div className="empty">Sem contas no caixa.</div>
+        ) : (
+          <table className="tab">
+            <thead>
+              <tr>
+                <th>Classificação</th>
+                <th className="n">Saldo</th>
+                <th style={{ minWidth: 100 }} />
+              </tr>
+            </thead>
+            <tbody>
+              {classificacoes.map((g) => {
+                const aberta = abertas.includes(g.nome);
+                return (
+                  <Fragment key={g.nome}>
+                    <tr
+                      className="clk"
+                      tabIndex={0}
+                      aria-expanded={aberta}
+                      onClick={() => alternar(g.nome)}
+                      onKeyDown={(e) => (e.key === 'Enter' || e.key === ' ') && (e.preventDefault(), alternar(g.nome))}
+                    >
+                      <td>
+                        <span style={{ display: 'inline-block', width: 14, color: 'var(--muted)', fontFamily: 'var(--f-mono)' }}>{aberta ? '−' : '+'}</span>
+                        <b>{titulo(g.nome)}</b>{' '}
+                        <span style={{ color: 'var(--muted)', fontSize: 12 }}>
+                          {g.contas.length} {g.contas.length === 1 ? 'conta' : 'contas'}
+                        </span>
+                      </td>
+                      <td className={`n ${g.saldo < 0 ? 'neg' : ''}`}>{brl(g.saldo)}</td>
+                      <td>{barra(g.saldo, COR.accent)}</td>
+                    </tr>
+                    {aberta &&
+                      g.contas.map((c) => (
+                        <tr
+                          key={`${c.company_id}|${c.conta}`}
+                          onMouseMove={(ev) =>
+                            mostrar(ev, titulo(c.nome || c.conta), [
+                              ['Empresa', curto(c.empresa)],
+                              ['Conta', c.conta],
+                              ['Tipo', titulo(c.tipo) || '–'],
+                              ['Saldo', brl(c.saldo)],
+                            ])
+                          }
+                          onMouseLeave={esconder}
+                        >
+                          <td style={{ paddingLeft: 30, fontSize: 12.5 }}>{titulo(c.nome || c.conta)}</td>
+                          <td className={`n ${c.saldo < 0 ? 'neg' : ''}`}>{brl(c.saldo)}</td>
+                          <td>{barra(c.saldo, c.investimento ? COR.entrada : COR.accent)}</td>
+                        </tr>
+                      ))}
+                  </Fragment>
+                );
+              })}
+            </tbody>
+          </table>
+        )}
+      </div>
     </section>
   );
 }

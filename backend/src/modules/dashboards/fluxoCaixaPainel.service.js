@@ -40,6 +40,8 @@ function fluxoSimples(f) {
     saldoInicial: f.porColuna.saldoInicial,
     saldoFinal: f.porColuna.saldoFinal,
     resultado: f.porColuna.resultado,
+    // Tipo HORIZON: o saldo real de abertura de cada mês pelo extrato (o histórico do gráfico de saldo).
+    ...(f.tipoSaldo === 'HORIZON' ? { saldosErp: f.saldosErp } : {}),
   };
 }
 
@@ -195,6 +197,34 @@ async function painel(empresaId, { hist, hor, centros = [] }) {
     ),
   ]);
 
+  // Tipo de saldo HORIZON (DFC Construtoras › Contas › engrenagem): o caixa de partida é o totalizador do Saldo Contas
+  // Bancárias no 1º dia do mês atual, e as contas do painel (Carteira e liquidez, caixa por SPE) são as de lá, cada uma
+  // com o quanto entra nele (somadas = o Saldo Inicial do mês atual). ERP: o saldo real pelo extrato do Sienge.
+  const horizon = fluxo.tipoSaldo === 'HORIZON';
+  const saldoHorizon = horizon ? await dfcSaldos.saldoHorizon(empresaId, await dfcSaldos.configSaldo(empresaId)) : null;
+  const contasPainel = horizon
+    ? saldoHorizon.contas.map((c) => ({
+        empresa: c.company_name,
+        company_id: c.company_id,
+        conta: c.numero_conta,
+        nome: c.nome,
+        tipo: c.tipo_descricao || '',
+        classificacao: c.classificacao || null,
+        saldo_abertura: c.saldo,
+        saldo: c.saldo,
+      }))
+    : contas.map((c) => ({
+        empresa: c.company_name,
+        company_id: c.company_id,
+        conta: c.numero_conta,
+        nome: c.nome,
+        tipo: c.tipo_descricao || '',
+        classificacao: c.classificacao || null,
+        // Sem realizado no mês atual: o saldo de partida é o real de abertura do primeiro mês projetado.
+        saldo_abertura: Number(c.saldos[primeiroProjetado] ?? 0),
+        saldo: Number(c.saldos[primeiroProjetado] ?? 0),
+      }));
+
   // Numérico vem como texto do pg: converte, menos as colunas de texto (nomes, meses, contas).
   const numeros = (rows, texto = []) =>
     rows.map((r) =>
@@ -216,18 +246,11 @@ async function painel(empresaId, { hist, hor, centros = [] }) {
           ? { numero: versao.rows[0].numero, criado_em: versao.rows[0].criado_em, usuario: versao.rows[0].usuario }
           : null,
       realizadoAte,
+      tipoSaldo: horizon ? 'HORIZON' : 'ERP',
+      saldoHorizon: saldoHorizon ? { ...saldoHorizon, contas: undefined } : null,
     },
     fluxo: fluxoSimples(fluxo),
-    contas: contas.map((c) => ({
-      empresa: c.company_name,
-      company_id: c.company_id,
-      conta: c.numero_conta,
-      nome: c.nome,
-      tipo: c.tipo_descricao || '',
-      // Sem realizado no mês atual: o saldo de partida é o real de abertura do primeiro mês projetado.
-      saldo_abertura: Number(c.saldos[primeiroProjetado] ?? 0),
-      saldo: Number(c.saldos[primeiroProjetado] ?? 0),
-    })),
+    contas: contasPainel,
     // Mês atual: o que falta acontecer (orçado − realizado até hoje), com a máscara 1 e 2.
     restante: filtroCentros ? restante.filter((r) => filtroCentros.includes(r.centro_id)) : restante,
     centros: numeros(centrosRows.rows, ['nome', 'company_name', 'contrato']),

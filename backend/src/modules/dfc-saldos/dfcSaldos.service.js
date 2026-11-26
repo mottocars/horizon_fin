@@ -36,7 +36,7 @@ function hojeIso() {
 // { data: 'AAAA-MM-DD' | null, liberado, limite_cheque, bloqueado, valor }.
 async function saldoHorizon(empresaId, config) {
   const saldosService = require('../saldo-contas-bancarias/saldos.service');
-  const { calcularResumoSaldos } = require('../saldo-contas-bancarias/resumoSaldos.calculo');
+  const { calcularResumoSaldos, contribuicaoConta } = require('../saldo-contas-bancarias/resumoSaldos.calculo');
   const { rows } = await pool.query(
     `SELECT TO_CHAR(MIN(s.data), 'YYYY-MM-DD') AS data
        FROM saldos_contas_bancarias s
@@ -46,14 +46,41 @@ async function saldoHorizon(empresaId, config) {
     [empresaId, `${hojeIso().slice(0, 8)}01`, hojeIso()]
   );
   const data = rows[0]?.data || null;
-  if (!data) return { data: null, liberado: 0, limite_cheque: 0, bloqueado: 0, valor: 0 };
+  if (!data) return { data: null, liberado: 0, limite_cheque: 0, bloqueado: 0, valor: 0, contas: [] };
   const { contas, periodos } = await saldosService.getSaldos(empresaId, { dataInicio: data, dataFim: data });
-  const resumo = calcularResumoSaldos(contas, [data], new Set(periodos));
+  const diasPeriodo = new Set(periodos);
+  const resumo = calcularResumoSaldos(contas, [data], diasPeriodo);
   const liberado = resumo.liberado[data] || 0;
   const limiteCheque = resumo.limiteCheque[data] || 0;
   const bloqueado = resumo.bloqueado[data] || 0;
-  const valor = (config.soma_liberado ? liberado : 0) + (config.soma_cheque ? limiteCheque : 0) + (config.soma_bloqueado ? bloqueado : 0);
-  return { data, liberado, limite_cheque: limiteCheque, bloqueado, valor: Math.round(valor * 100) / 100 };
+  const soma = (l, c, b) => (config.soma_liberado ? l : 0) + (config.soma_cheque ? c : 0) + (config.soma_bloqueado ? b : 0);
+  const valor = soma(liberado, limiteCheque, bloqueado);
+  // Cada conta com o quanto ela entra no totalizador (mesma conta do resumo, em centavos) — a "Carteira e
+  // liquidez" do dashboard Fluxo de Caixa por classificação › conta; somadas, dão o `valor`.
+  const { rows: tipos } = await pool.query(
+    'SELECT company_id, numero_conta, tipo_descricao FROM contas_bancarias_sienge WHERE empresa_id = $1',
+    [empresaId]
+  );
+  const tipoDe = new Map(tipos.map((t) => [`${t.company_id}|${t.numero_conta}`, t.tipo_descricao]));
+  const porConta = contas
+    .map((c) => {
+      const p = contribuicaoConta(c, data, diasPeriodo);
+      if (!p) return null;
+      return {
+        company_id: c.company_id,
+        company_name: c.company_name,
+        numero_conta: c.numero_conta,
+        nome: c.nome,
+        tipo_descricao: tipoDe.get(`${c.company_id}|${c.numero_conta}`) || null,
+        classificacao: c.classificacao,
+        liberado: p.liberado / 100,
+        limite_cheque: p.limiteCheque / 100,
+        bloqueado: p.bloqueado / 100,
+        saldo: soma(p.liberado, p.limiteCheque, p.bloqueado) / 100,
+      };
+    })
+    .filter(Boolean);
+  return { data, liberado, limite_cheque: limiteCheque, bloqueado, valor: Math.round(valor * 100) / 100, contas: porConta };
 }
 
 // Valor com sinal de um lançamento: Income soma, Expense subtrai (o valor vem positivo da API).
@@ -88,6 +115,8 @@ async function saldos(empresaId, data) {
     sem_extrato: contas.filter((c) => !c.sincronizado_em).length,
   };
 }
+
+const semContas = ({ contas, ...resto }) => resto; // eslint-disable-line no-unused-vars
 
 // 'AAAA-MM' + k meses.
 function somarMeses(anoMes, k) {
@@ -168,7 +197,8 @@ async function realizado(empresaId, de, ateFiltro) {
     extrato_ate: ateRows[0]?.ate || null,
     realizado_ate: realizadoAte,
     tipo_saldo: config.tipo_saldo,
-    saldo_horizon: config.tipo_saldo === 'HORIZON' ? await saldoHorizon(empresaId, config) : null,
+    // Sem a lista por conta (só o dashboard Fluxo de Caixa usa — fluxoCaixaPainel chama saldoHorizon).
+    saldo_horizon: config.tipo_saldo === 'HORIZON' ? semContas(await saldoHorizon(empresaId, config)) : null,
   };
 }
 
@@ -178,7 +208,8 @@ async function realizado(empresaId, de, ateFiltro) {
 async function saldosPorConta(empresaId, meses) {
   const { rows: contas } = await pool.query(
     `SELECT c.company_id, c.numero_conta, c.nome, c.company_name, c.tipo_descricao, c.banco_nome,
-            s.sincronizado_em, s.data_ate
+            s.sincronizado_em, s.data_ate,
+            (SELECT cb.nome FROM classificacoes_bancarias cb WHERE cb.id = c.classificacao_id) AS classificacao
        FROM contas_bancarias_sienge c
        LEFT JOIN sie_extrato_contas_sincronizacoes s
          ON s.empresa_id = c.empresa_id AND s.company_id = c.company_id AND s.numero_conta = c.numero_conta

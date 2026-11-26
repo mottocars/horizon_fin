@@ -46,7 +46,7 @@ export const ABAS_SUMARIO = [
       {
         titulo: 'Cada card',
         itens: [
-          '**Caixa em 01/mm** — saldo real no início do mês atual nas contas com "Projeta DFC" (o fim do último mês fechado, pelo extrato do Sienge). "Aplicado" é a parte em contas do tipo **Investimento**.',
+          '**Caixa em 01/mm** — saldo real no início do mês atual nas contas com "Projeta DFC" (o fim do último mês fechado, pelo extrato do Sienge). Se a DFC estiver configurada com o **Saldo das Contas Horizon** (DFC Construtoras › Contas › engrenagem), é o totalizador da tela Saldo Contas Bancárias no 1º dia do mês com saldo lançado, somando as partes marcadas (Liberado, Cheque especial, Bloqueado). "Aplicado" é a parte em contas do tipo **Investimento**.',
           '**Mínimo projetado** — o menor saldo de fim de mês dentro do horizonte, partindo do caixa do início do mês e somando o Orçamento da versão publicada; o mês em que ele acontece e quanto é menor que o caixa de partida.',
           '**Resultado médio · próximos 6 meses** — média do resultado de cada mês (todas as entradas menos todas as saídas), pelo Orçamento da versão (o mês atual inteiro projetado). E o mês em que o saldo fica abaixo do colchão, se ficar.',
           '**Fluxo operacional · até o último mês fechado** — soma do realizado (entradas + saídas) do Fluxo de Caixa Operacional nos meses fechados do período.',
@@ -214,7 +214,7 @@ export const ABAS_SUMARIO = [
       {
         titulo: 'O gráfico',
         texto:
-          'Todas as contas com Projeta DFC e o saldo de hoje, da maior para a menor: azul claro = Investimento, azul escuro = conta corrente. Passe o mouse para ver empresa, número e tipo da conta.',
+          'As classificações das contas (cadastro de Contas Bancárias), da maior para a menor, com o saldo somado. Clique numa classificação para abrir as contas dela: azul claro = Investimento, azul escuro = conta corrente. Passe o mouse para ver empresa, número e tipo da conta. Com o Saldo das Contas Horizon, cada conta entra com o quanto ela compõe o caixa de partida (as partes marcadas na configuração).',
       },
     ],
   },

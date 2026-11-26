@@ -100,7 +100,9 @@ function modelo(d, ids) {
   const op = m2s.filter((x) => x.op);
   const linha = (re, ld) => op.filter((x) => re.test(x.nome) && (!ld || x.lado === ld));
   const serie = (rows, m, t) => soma(rows.map((r) => get(r.pc, m, t)));
-  const fimDe = (m) => get(fluxo.saldoFinal, m, 'R');
+  // Tipo de saldo HORIZON (DFC Construtoras › Contas › engrenagem): a tabela do fluxo não tem saldo nos meses
+  // passados; o histórico do gráfico segue no saldo real pelo extrato (`fluxo.saldosErp`, abertura de cada mês).
+  const fimDe = (m) => (fluxo.saldosErp ? +(fluxo.saldosErp[addM(m, 1)] || 0) : get(fluxo.saldoFinal, m, 'R'));
   const socios = m2s.filter((x) => CFG.socios.test(x.nome) && x.lado === 'sai');
 
   // O que falta acontecer no mês atual (d.restante, por centro × máscara 1 × máscara 2).
@@ -116,7 +118,8 @@ function modelo(d, ids) {
   const caixaAbertura = get(fluxo.saldoInicial, m0, 'R') || get(fluxo.saldoInicial, m0, 'P');
   const contasHoje = d.contas || [];
   // Caixa de hoje = saldo real das contas com Projeta DFC pelo extrato até hoje (sem extrato: abertura +
-  // realizado do mês).
+  // realizado do mês). No tipo HORIZON, as contas são as do Saldo Contas Bancárias com o quanto cada uma entra no
+  // totalizador do 1º dia do mês — somadas, o Saldo Inicial do mês atual.
   const caixaHoje = contasHoje.length ? soma(contasHoje.map((c) => c.saldo)) : caixaAbertura + resMtd;
   const futuro = (m, porMes, doMesAtual) => (m === m0 ? doMesAtual : porMes(m));
 
@@ -133,6 +136,11 @@ function modelo(d, ids) {
     realizadoAte,
     semRealizadoNoMes,
     base: semRealizadoNoMes ? `${primeiroProjetado}-01` : d.hoje || `${m0}-01`,
+    // De onde vem o caixa de partida: 'ERP' (extrato do Sienge) ou 'HORIZON' (Saldo Contas Bancárias); `dataCaixa` =
+    // o dia do saldo (no HORIZON, o 1º dia do mês com saldo lançado).
+    horizon: d.info?.tipoSaldo === 'HORIZON',
+    dataCaixa:
+      (d.info?.tipoSaldo === 'HORIZON' && d.info?.saldoHorizon?.data) || (semRealizadoNoMes ? `${primeiroProjetado}-01` : d.hoje || `${m0}-01`),
     meses,
     hist,
     fut,

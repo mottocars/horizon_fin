@@ -68,7 +68,7 @@ export function Trajetoria({ D, sc }) {
   const [cursor, setCursor] = useState(null);
   const meses = [...D.hist, 'hoje', ...D.fut];
   // Sem realizado no mês atual (versões da DFC), o ponto de partida é o início do mês (`D.base`), não hoje.
-  const rot = (i) => (meses[i] === 'hoje' ? (D.semRealizadoNoMes ? diaMes(D.base) : `hoje ${diaMes(D.hoje)}`) : lbl(meses[i]));
+  const rot = (i) => (meses[i] === 'hoje' ? (D.semRealizadoNoMes || D.horizon ? diaMes(D.dataCaixa) : `hoje ${diaMes(D.hoje)}`) : lbl(meses[i]));
   const base = [...D.saldoHist, D.caixaHoje, ...D.saldoFut];
   const scen = [...D.saldoHist, D.caixaHoje, ...sc];
   const nh = D.hist.length + 1; // pontos realizados (com o de hoje)
@@ -101,7 +101,7 @@ export function Trajetoria({ D, sc }) {
             ...(igual ? [] : [['Cenário', brl(scen[i])]]),
             [i === nh && !D.semRealizadoNoMes ? 'A acontecer até o fim do mês' : 'Resultado do mês', brl(D.resFut[i - nh], true)],
           ];
-    mostrar(ev, meses[i] === 'hoje' ? (D.semRealizadoNoMes ? `Início de ${lbl(D.m0)} (${diaMes(D.base)})` : `Hoje, ${diaMes(D.hoje)}`) : `Fim de ${lbl(meses[i])}`, linhas);
+    mostrar(ev, meses[i] === 'hoje' ? (D.semRealizadoNoMes || D.horizon ? `Início de ${lbl(D.m0)} (${diaMes(D.dataCaixa)})` : `Hoje, ${diaMes(D.hoje)}`) : `Fim de ${lbl(meses[i])}`, linhas);
   }
 
   return (
@@ -135,7 +135,7 @@ export function Trajetoria({ D, sc }) {
           <>
             <circle cx={x(nh - 1)} cy={y(base[nh - 1])} r={4.5} fill={COR.entrada} stroke={COR.surface} strokeWidth={2} />
             <text x={rotX(nh - 1)} y={y(base[nh - 1]) - 12} textAnchor="middle" className="val">
-              {D.semRealizadoNoMes ? diaMes(D.base) : 'hoje'} {eixo(base[nh - 1])}
+              {D.semRealizadoNoMes || D.horizon ? diaMes(D.dataCaixa) : 'hoje'} {eixo(base[nh - 1])}
             </text>
           </>
         )}

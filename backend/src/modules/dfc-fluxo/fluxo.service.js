@@ -243,6 +243,9 @@ async function montar(empresaId, { inicio, fim, centros = [], versao = null }) {
     extratoAte: realizado.extrato_ate,
     tipoSaldo: realizado.tipo_saldo,
     saldoHorizon: realizado.saldo_horizon,
+    // Saldo real (extrato do Sienge) na abertura de cada mês — no tipo HORIZON a tabela não mostra saldo nos meses
+    // passados, mas o histórico do gráfico do dashboard Fluxo de Caixa continua nele.
+    saldosErp: realizado.saldos || {},
     classificador: cls,
     filtro,
   };

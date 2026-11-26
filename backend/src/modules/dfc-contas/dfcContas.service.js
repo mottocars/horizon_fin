@@ -51,7 +51,8 @@ async function sincronizar(empresaId) {
 // mostra o totalizador de agora com as três partes, para o usuário ver o que vai somar.
 async function getConfigSaldo(empresaId) {
   const config = await dfcSaldos.configSaldo(empresaId);
-  return { ...config, totalizador: await dfcSaldos.saldoHorizon(empresaId, config) };
+  const { contas, ...totalizador } = await dfcSaldos.saldoHorizon(empresaId, config); // eslint-disable-line no-unused-vars
+  return { ...config, totalizador };
 }
 
 async function salvarConfigSaldo(empresaId, usuarioId, dados) {
