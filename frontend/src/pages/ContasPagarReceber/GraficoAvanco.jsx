@@ -2,8 +2,8 @@ import { useEffect, useId, useRef, useState } from 'react';
 import { data as dataBr } from './util';
 
 // Curva de avanço previsto (Prevision) dia a dia, de 0 a 100%, com uma bandeira na data de previsão de
-// recebimento mostrando o acumulado previsto naquele dia. Mesmo desenho dos gráficos da Viabilidade
-// (SVG em pixels, grade clara, área azul, leitura do dia ao passar o mouse).
+// recebimento mostrando o acumulado previsto naquele dia.
+// SVG em pixels, grade clara, área azul, leitura do dia ao passar o mouse.
 // pontos: [{ data 'AAAA-MM-DD', previsto % acumulado }] em ordem de data, um por dia.
 
 const AZUL = '#2563eb';
