@@ -8,7 +8,7 @@ import { useLeituraDfc } from './leituraDfc';
 
 // DFC Construtoras › Contas › engrenagem (pedido do usuário, 26/11/2026): de onde vem o Saldo Inicial da aba DFC.
 // - Sistema ERP: como sempre — o saldo real das contas com Projeta DFC pelo extrato do Sienge, mês a mês;
-// - Saldo das Contas Horizon: o totalizador da tela Saldo Contas Bancárias (último dia com saldo lançado até hoje),
+// - Saldo das Contas Horizon: o totalizador da tela Saldo Contas Bancárias (1º dia do mês atual — ou o primeiro dia do mês com saldo lançado),
 //   só no mês atual, somando as partes marcadas aqui. Mesmo visual do rodapé de lá (ícones e cores das linhas).
 // Backend: dfc-contas (config-saldo) e dfc-saldos::saldoHorizon.
 
@@ -87,7 +87,7 @@ export default function ConfigSaldoDfcModal({ empresaId, onClose }) {
           />
           <p className="mt-1.5 text-xs text-gray-500">
             {horizon
-              ? 'O Saldo Inicial da aba DFC aparece só no mês atual: a soma das partes marcadas abaixo, do totalizador da tela Saldo Contas Bancárias. Os meses seguintes partem do saldo final projetado.'
+              ? 'O Saldo Inicial da aba DFC aparece só no mês atual: a soma das partes marcadas abaixo, do totalizador da tela Saldo Contas Bancárias no 1º dia do mês (ou no primeiro dia do mês com saldo lançado). Os meses seguintes partem do saldo final projetado.'
               : 'O Saldo Inicial da aba DFC vem do extrato do Sienge das contas com Projeta DFC, mês a mês.'}
           </p>
 
@@ -95,7 +95,7 @@ export default function ConfigSaldoDfcModal({ empresaId, onClose }) {
             <div className="mt-4">
               <div className="mb-1.5 flex items-baseline justify-between gap-2">
                 <span className="text-sm font-medium text-gray-700">Totalizador do Saldo Contas Bancárias</span>
-                <span className="text-xs text-gray-500">{totalizador?.data ? `em ${dataBR(totalizador.data)}` : 'nenhum saldo lançado até hoje'}</span>
+                <span className="text-xs text-gray-500">{totalizador?.data ? `em ${dataBR(totalizador.data)}` : 'nenhum saldo lançado neste mês'}</span>
               </div>
               <div className="overflow-hidden rounded-lg border border-blue-100">
                 <div className="flex items-center justify-between border-b-2 border-blue-500 bg-blue-50 px-4 py-2.5 text-xs font-semibold uppercase tracking-wide text-blue-700">

@@ -10,7 +10,8 @@ const ROTINA = 'dfc_saldos_contas';
 
 // ----------------------------------------------------------------------------- tipo de saldo (aba Contas › engrenagem)
 // ERP = o saldo real pelo extrato do Sienge (abaixo, mês a mês). HORIZON = o totalizador da tela Saldo Contas
-// Bancárias no último dia com saldo lançado até hoje (mesmo cálculo: resumoSaldos.calculo.js), somando só as partes
+// Bancárias no 1º dia do mês atual (o primeiro dia do mês com saldo lançado, se o dia 1 não tiver — pedido do
+// usuário, 26/11/2026; mesmo cálculo: resumoSaldos.calculo.js), somando só as partes
 // marcadas — vira o Saldo Inicial do mês atual da aba DFC (os meses anteriores ficam sem saldo).
 const CONFIG_PADRAO = { tipo_saldo: 'ERP', soma_liberado: true, soma_cheque: true, soma_bloqueado: false };
 
@@ -30,19 +31,19 @@ function hojeIso() {
   return `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}-${String(d.getDate()).padStart(2, '0')}`;
 }
 
-// O totalizador do Saldo Contas Bancárias no último dia com saldo lançado até hoje (só as contas que entram na
+// O totalizador do Saldo Contas Bancárias no 1º dia do mês atual com saldo lançado (do dia 1 até hoje; só as contas que entram na
 // grade de lá: classificadas e com "Projeta saldo"). `valor` = soma das partes marcadas em `config`.
 // { data: 'AAAA-MM-DD' | null, liberado, limite_cheque, bloqueado, valor }.
 async function saldoHorizon(empresaId, config) {
   const saldosService = require('../saldo-contas-bancarias/saldos.service');
   const { calcularResumoSaldos } = require('../saldo-contas-bancarias/resumoSaldos.calculo');
   const { rows } = await pool.query(
-    `SELECT TO_CHAR(MAX(s.data), 'YYYY-MM-DD') AS data
+    `SELECT TO_CHAR(MIN(s.data), 'YYYY-MM-DD') AS data
        FROM saldos_contas_bancarias s
        JOIN contas_bancarias_sienge c
          ON c.empresa_id = s.empresa_id AND c.company_id = s.company_id AND c.numero_conta = s.numero_conta
-      WHERE s.empresa_id = $1 AND s.data <= $2 AND c.projeta_saldo AND c.classificacao_id IS NOT NULL`,
-    [empresaId, hojeIso()]
+      WHERE s.empresa_id = $1 AND s.data BETWEEN $2 AND $3 AND c.projeta_saldo AND c.classificacao_id IS NOT NULL`,
+    [empresaId, `${hojeIso().slice(0, 8)}01`, hojeIso()]
   );
   const data = rows[0]?.data || null;
   if (!data) return { data: null, liberado: 0, limite_cheque: 0, bloqueado: 0, valor: 0 };

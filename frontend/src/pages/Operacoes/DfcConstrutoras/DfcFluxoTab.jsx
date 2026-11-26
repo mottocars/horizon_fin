@@ -647,7 +647,7 @@ export default function DfcFluxoTab({
   const dicaSaldoInicial =
     realizado?.tipo_saldo === 'HORIZON'
       ? `Saldo das Contas Horizon (aba Contas › engrenagem): só no mês atual, o totalizador da tela Saldo Contas Bancárias${
-          sh?.data ? ` em ${sh.data.split('-').reverse().join('/')}` : ' (nenhum saldo lançado até hoje)'
+          sh?.data ? ` em ${sh.data.split('-').reverse().join('/')} (1º dia do mês com saldo lançado)` : ' (nenhum saldo lançado neste mês)'
         }, somando as partes marcadas na configuração. Os meses seguintes partem do Saldo Final projetado do mês anterior; os anteriores ficam sem saldo.`
       : 'Realizado: saldo real das contas com Projeta DFC (aba Contas) na abertura do mês, pelo extrato do Sienge. Projetado: a partir do mês atual, parte do saldo real de abertura dele e segue o Saldo Final projetado do mês anterior.';
 
