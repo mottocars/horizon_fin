@@ -384,11 +384,18 @@ async function dados(empresaId, { inicio, fim, centros = [], versao = null }) {
     // Abertura de cada mês até o atual (o extrato vai até o dia da última atualização).
     mesesSaldos.length ? dfcSaldos.saldosPorConta(empresaId, mesesSaldos) : [],
   ]);
+  // Tipo de saldo HORIZON (DFC Construtoras › Contas › engrenagem): a aba Saldos das Contas mostra o totalizador do
+  // Saldo Contas Bancárias no 1º dia do mês atual, por conta, com as partes marcadas (TOTAL = Saldo Inicial do mês atual).
+  let saldoHorizon = null;
+  if (fluxo.tipoSaldo === 'HORIZON') {
+    const config = await dfcSaldos.configSaldo(empresaId);
+    saldoHorizon = { ...(await dfcSaldos.saldoHorizon(empresaId, config)), config };
+  }
   const [obras, planos] = await Promise.all([
     obrasCef(empresaId, projetado.celulas),
     planosContas(empresaId, fluxo, infoCentros, [...realizado, ...projetado.linhas]),
   ]);
-  return { fluxo, centros: infoCentros, realizado, projetado: projetado.linhas, planos, saldos, mesesSaldos, obras, ROTULO_ORIGEM, COMPONENTE_CEF };
+  return { fluxo, centros: infoCentros, realizado, projetado: projetado.linhas, planos, saldos, mesesSaldos, saldoHorizon, obras, ROTULO_ORIGEM, COMPONENTE_CEF };
 }
 
 // Só o fluxo e as bases (MCP do DFC — ferramenta de lançamentos), sem saldos nem dossiês da CEF.
