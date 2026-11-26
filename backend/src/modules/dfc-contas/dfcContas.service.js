@@ -1,5 +1,6 @@
 const pool = require('../../config/db');
 const contasSienge = require('../contas-bancarias-sienge/contas.service');
+const dfcSaldos = require('../dfc-saldos/dfcSaldos.service');
 
 // DFC Construtoras > Contas Correntes: as contas bancárias da empresa no Sienge (endpoint
 // v1/checking-accounts — a MESMA tabela e a mesma sincronização da tela Saldo de Contas Bancárias,
@@ -45,4 +46,25 @@ async function sincronizar(empresaId) {
   return contasSienge.gerar(empresaId);
 }
 
-module.exports = { list, update, sincronizar };
+// Configuração do saldo (engrenagem da aba): de onde vem o Saldo Inicial da aba DFC — ERP (extrato do Sienge,
+// como sempre) ou HORIZON (o totalizador do Saldo Contas Bancárias, só no mês atual — dfc-saldos). A janela
+// mostra o totalizador de agora com as três partes, para o usuário ver o que vai somar.
+async function getConfigSaldo(empresaId) {
+  const config = await dfcSaldos.configSaldo(empresaId);
+  return { ...config, totalizador: await dfcSaldos.saldoHorizon(empresaId, config) };
+}
+
+async function salvarConfigSaldo(empresaId, usuarioId, dados) {
+  const antes = await dfcSaldos.configSaldo(empresaId);
+  await pool.query(
+    `INSERT INTO dfc_saldo_config (empresa_id, tipo_saldo, soma_liberado, soma_cheque, soma_bloqueado, atualizado_por, atualizado_em)
+     VALUES ($1, $2, $3, $4, $5, $6, NOW())
+     ON CONFLICT (empresa_id) DO UPDATE SET tipo_saldo = EXCLUDED.tipo_saldo, soma_liberado = EXCLUDED.soma_liberado,
+       soma_cheque = EXCLUDED.soma_cheque, soma_bloqueado = EXCLUDED.soma_bloqueado,
+       atualizado_por = EXCLUDED.atualizado_por, atualizado_em = NOW()`,
+    [empresaId, dados.tipo_saldo, dados.soma_liberado, dados.soma_cheque, dados.soma_bloqueado, usuarioId]
+  );
+  return { antes, depois: await getConfigSaldo(empresaId) };
+}
+
+module.exports = { list, update, sincronizar, getConfigSaldo, salvarConfigSaldo };

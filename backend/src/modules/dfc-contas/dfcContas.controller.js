@@ -55,4 +55,44 @@ async function sincronizar(req, res, next) {
   }
 }
 
-module.exports = { list, update, sincronizar };
+const configSaldoSchema = z.object({
+  tipo_saldo: z.enum(['ERP', 'HORIZON'], { errorMap: () => ({ message: 'Escolha o tipo de saldo das contas.' }) }),
+  soma_liberado: z.boolean(),
+  soma_cheque: z.boolean(),
+  soma_bloqueado: z.boolean(),
+});
+
+async function getConfigSaldo(req, res, next) {
+  try {
+    res.json(await service.getConfigSaldo(empresaIdSchema.parse(req.params.empresaId)));
+  } catch (err) {
+    tratar(err, next);
+  }
+}
+
+const NOME_TIPO = { ERP: 'Sistema ERP', HORIZON: 'Saldo das Contas Horizon' };
+
+async function salvarConfigSaldo(req, res, next) {
+  try {
+    const empresaId = empresaIdSchema.parse(req.params.empresaId);
+    const dados = configSaldoSchema.parse(req.body);
+    if (dados.tipo_saldo === 'HORIZON' && !dados.soma_liberado && !dados.soma_cheque && !dados.soma_bloqueado) {
+      throw erro(400, 'Marque ao menos uma parte do saldo (Liberado, Cheque especial ou Bloqueado).');
+    }
+    const { antes, depois } = await service.salvarConfigSaldo(empresaId, req.user.id, dados);
+    const partes = [depois.soma_liberado && 'Liberado', depois.soma_cheque && 'Cheque especial', depois.soma_bloqueado && 'Bloqueado'].filter(Boolean);
+    // Versões da DFC: o carimbo (aba Versões › Contas).
+    await carimbar(req, {
+      descricao: `Configuração do saldo: ${NOME_TIPO[antes.tipo_saldo]} → ${NOME_TIPO[depois.tipo_saldo]}${
+        depois.tipo_saldo === 'HORIZON' ? ` (soma ${partes.join(' + ')})` : ''
+      }.`,
+      detalhes: { antes, depois: { ...dados } },
+      chave: 'config-saldo',
+    });
+    res.json(depois);
+  } catch (err) {
+    tratar(err, next);
+  }
+}
+
+module.exports = { list, update, sincronizar, getConfigSaldo, salvarConfigSaldo };

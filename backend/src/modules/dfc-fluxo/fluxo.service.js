@@ -16,7 +16,8 @@ const { regrasParcela, SEM_TIPO } = require('../dfc-mascaras/regrasParcela');
 // - máscara 2 detalhada por tipo de parcela (aba Máscaras — dfc-mascaras/regrasParcela.js): abaixo dela, os
 //   tipos de parcela no lugar das contas (a conta que ela assume não segue mais o plano de contas);
 // - saldos: Realizado até o mês atual (saldo real); Projetado do mês atual em diante, partindo do saldo
-//   real de abertura do mês atual e encadeando o resultado projetado.
+//   real de abertura do mês atual e encadeando o resultado projetado. Com o tipo de saldo HORIZON (aba Contas ›
+//   engrenagem), só o mês atual tem Saldo Inicial (o totalizador do Saldo Contas Bancárias) e a projeção segue dele.
 
 const R = 'R';
 const P = 'P';
@@ -209,17 +210,21 @@ async function montar(empresaId, { inicio, fim, centros = [], versao = null }) {
   const saldoReal = realizado.saldos || {};
   const saldoInicial = {};
   const saldoFinal = {};
+  // Tipo de saldo HORIZON (aba Contas › engrenagem): só o mês atual tem Saldo Inicial — o totalizador do Saldo
+  // Contas Bancárias —, e a projeção segue dele; os meses anteriores ficam sem saldo. ERP: como sempre.
+  const horizon = realizado.tipo_saldo === 'HORIZON';
   // Realizado: todo mês com realizado está fechado — saldo final = saldo real de abertura do mês seguinte.
   meses
-    .filter((m) => m <= realizadoAte)
+    .filter((m) => !horizon && m <= realizadoAte)
     .forEach((m) => {
       const ini = saldoReal[m] ?? 0;
       saldoInicial[`${m}|${R}`] = ini;
       saldoFinal[`${m}|${R}`] = saldoReal[somarMeses(m, 1)] ?? r2(ini + (resultado[`${m}|${R}`] || 0));
     });
-  if (ultimo && primeiroProjetado <= ultimo) {
-    let saldo = saldoReal[primeiroProjetado] ?? 0;
-    mesesEntre(primeiroProjetado, ultimo).forEach((m) => {
+  const inicioSaldo = horizon && mesAtual > primeiroProjetado ? mesAtual : primeiroProjetado;
+  if (ultimo && inicioSaldo <= ultimo) {
+    let saldo = horizon ? realizado.saldo_horizon?.valor ?? 0 : saldoReal[primeiroProjetado] ?? 0;
+    mesesEntre(inicioSaldo, ultimo).forEach((m) => {
       saldoInicial[`${m}|${P}`] = r2(saldo);
       saldo = r2(saldo + (resultado[`${m}|${P}`] || 0));
       saldoFinal[`${m}|${P}`] = saldo;
@@ -236,6 +241,8 @@ async function montar(empresaId, { inicio, fim, centros = [], versao = null }) {
     versao: orcamento.versao,
     orcamento: orcamento.valores,
     extratoAte: realizado.extrato_ate,
+    tipoSaldo: realizado.tipo_saldo,
+    saldoHorizon: realizado.saldo_horizon,
     classificador: cls,
     filtro,
   };

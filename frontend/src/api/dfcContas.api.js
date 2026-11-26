@@ -15,3 +15,15 @@ export function updateContaCorrenteDfc(empresaId, companyId, numeroConta, { proj
 export function sincronizarContasCorrentesDfc(empresaId) {
   return http.post(`/dfc-contas/${empresaId}/sincronizar`).then((res) => res.data);
 }
+
+// Configuração do saldo (engrenagem da aba Contas): { tipo_saldo: 'ERP'|'HORIZON', soma_liberado, soma_cheque,
+// soma_bloqueado, totalizador: { data, liberado, limite_cheque, bloqueado, valor } }.
+export function getConfigSaldoDfc(empresaId) {
+  return http.get(`/dfc-contas/${empresaId}/config-saldo`).then((res) => res.data);
+}
+
+export function salvarConfigSaldoDfc(empresaId, { tipo_saldo, soma_liberado, soma_cheque, soma_bloqueado }) {
+  return http
+    .put(`/dfc-contas/${empresaId}/config-saldo`, { tipo_saldo, soma_liberado, soma_cheque, soma_bloqueado })
+    .then((res) => res.data);
+}

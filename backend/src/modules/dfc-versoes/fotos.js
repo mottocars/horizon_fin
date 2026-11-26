@@ -67,7 +67,10 @@ async function apagar(db, schema) {
 // versão (a natureza é a mesma coluna da DRE: a alterada lá continua como está). Na conta bancária, só o Projeta DFC.
 async function restaurar(db, schema, empresaId, { naturezaDe = [] } = {}) {
   if (!nomeValido(schema)) throw new Error(`Schema inválido: ${schema}`);
-  const tabelas = CONFIG.filter((t) => t.restaura);
+  // Tabela nova da DFC que a cópia (de antes dela existir) não tem: fica como está.
+  const { rows: naCopia } = await db.query('SELECT table_name FROM information_schema.tables WHERE table_schema = $1', [schema]);
+  const existentes = new Set(naCopia.map((r) => r.table_name));
+  const tabelas = CONFIG.filter((t) => t.restaura && existentes.has(t.tabela));
   for (const t of [...tabelas].reverse()) {
     const igual = t.pk.map((c) => `s.${q(c)} = x.${q(c)}`).join(' AND ');
     await db.query(`DELETE FROM public.${t.tabela} x WHERE ${t.filtro} AND NOT EXISTS (SELECT 1 FROM ${schema}.${t.tabela} s WHERE ${igual})`, [

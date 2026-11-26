@@ -12,6 +12,8 @@ router.param('empresaId', paramEmpresa);
 // publicada; gravar só com a versão aberta.
 router.param('empresaId', contextoDfc('contas-correntes', { livre: (req) => /\/sincronizar$/.test(req.path) }));
 router.get('/:empresaId', controller.list);
+router.get('/:empresaId/config-saldo', controller.getConfigSaldo);
+router.put('/:empresaId/config-saldo', controller.salvarConfigSaldo);
 router.post('/:empresaId/sincronizar', controller.sincronizar);
 router.put('/:empresaId/:companyId/:numeroConta', controller.update);
 

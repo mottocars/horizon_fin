@@ -23,6 +23,7 @@ import {
   RefreshCw,
   Save,
   Search,
+  Settings,
   Upload,
   Trash2,
   FilePlus2,
@@ -70,6 +71,7 @@ import DfcOrcamentosTab from './DfcOrcamentosTab';
 import NovaVersaoOrcamentoModal from './NovaVersaoOrcamentoModal';
 import DfcFluxoTab from './DfcFluxoTab';
 import DfcContasCorrentesTab from './DfcContasCorrentesTab';
+import ConfigSaldoDfcModal from './ConfigSaldoDfcModal';
 import DfcDividaPjTab from './DfcDividaPjTab';
 import NovaVersaoPlanoModal from './NovaVersaoPlanoModal';
 import { ORIGENS_PROJECAO, ORIGEM_NAO_INFORMADA } from './orcamentoValores';
@@ -387,6 +389,7 @@ function DfcConstrutorasConteudo() {
   const [buscaContas, setBuscaContas] = useState('');
   const [buscaDividaPj, setBuscaDividaPj] = useState('');
   const [sincronizandoContas, setSincronizandoContas] = useState(false);
+  const [configSaldoAberta, setConfigSaldoAberta] = useState(false);
   const contasTabRef = useRef(null);
 
   // Aba CIWEB: busca e filtro de tipo (só conveniência de navegador, fora da URL); o botão de
@@ -959,6 +962,18 @@ function DfcConstrutorasConteudo() {
               >
                 <RefreshCw size={18} className={sincronizandoContas ? 'animate-spin' : ''} />
               </button>
+              {/* Configuração do saldo: de onde vem o Saldo Inicial da aba DFC (ERP ou Saldo das Contas Horizon). */}
+              <Button
+                type="button"
+                variant="secondary"
+                className="!px-2.5"
+                onClick={() => setConfigSaldoAberta(true)}
+                disabled={!empresaId}
+                title="Configurações"
+                aria-label="Configurações"
+              >
+                <Settings size={18} />
+              </Button>
             </div>
           )}
 
@@ -1386,6 +1401,9 @@ function DfcConstrutorasConteudo() {
           <AbaEmConstrucao key={tabAtiva.id} empresaId={empresaId} icon={tabAtiva.icon} titulo={tabAtiva.label} />
         )}
       </div>
+      {configSaldoAberta && empresaId && (
+        <ConfigSaldoDfcModal empresaId={empresaId} onClose={() => setConfigSaldoAberta(false)} />
+      )}
       </LeituraDfcContext.Provider>
 
       <NovaVersaoPlanoModal

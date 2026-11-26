@@ -307,10 +307,14 @@ export default function DfcFluxoTab({
     const saldoReal = realizado?.saldos || {};
     const saldoInicial = {};
     const saldoFinal = {};
+    // Tipo de saldo HORIZON (aba Contas › engrenagem — mesma regra de dfc-fluxo/fluxo.service.js): só o mês atual
+    // tem Saldo Inicial — o totalizador do Saldo Contas Bancárias —, e a projeção segue dele; os meses anteriores
+    // ficam sem saldo. ERP: como sempre.
+    const horizon = realizado?.tipo_saldo === 'HORIZON';
     // Realizado: meses até o atual — saldo real de abertura; final = abertura do mês seguinte (meses
     // fechados) ou abertura + resultado realizado (mês atual, ainda aberto).
     meses
-      .filter((m) => m <= realizadoAte)
+      .filter((m) => !horizon && m <= realizadoAte)
       .forEach((m) => {
         const ini = saldoReal[m] ?? 0;
         saldoInicial[`${m}|${R}`] = ini;
@@ -318,16 +322,17 @@ export default function DfcFluxoTab({
         saldoFinal[`${m}|${R}`] = saldoReal[somarMeses(m, 1)] ?? r2(ini + (resultado[`${m}|${R}`] || 0));
       });
     // Projetado: do mês atual em diante, partindo do saldo real de abertura do mês atual.
-    if (ultimo && primeiroProjetado <= ultimo) {
-      let saldo = saldoReal[primeiroProjetado] ?? 0;
-      mesesEntre(`${primeiroProjetado}-01`, `${ultimo}-01`).forEach((m) => {
+    const inicioSaldo = horizon && mesAtual > primeiroProjetado ? mesAtual : primeiroProjetado;
+    if (ultimo && inicioSaldo <= ultimo) {
+      let saldo = horizon ? realizado?.saldo_horizon?.valor ?? 0 : saldoReal[primeiroProjetado] ?? 0;
+      mesesEntre(`${inicioSaldo}-01`, `${ultimo}-01`).forEach((m) => {
         saldoInicial[`${m}|${P}`] = r2(saldo);
         saldo = r2(saldo + (resultado[`${m}|${P}`] || 0));
         saldoFinal[`${m}|${P}`] = saldo;
       });
     }
     return { estrutura: grupos, porColuna: { resultado, saldoInicial, saldoFinal } };
-  }, [dados, realizado, meses, ultimo, realizadoAte, primeiroProjetado, centrosFiltro]);
+  }, [dados, realizado, meses, ultimo, realizadoAte, primeiroProjetado, mesAtual, centrosFiltro]);
 
   // Total do período de uma linha: Realizado = meses até o atual; Projetado = todos os meses na tela.
   // `ateAtual`: só os meses até o atual (o Projetado comparável ao Realizado, pro Desvio % do total).
@@ -638,8 +643,13 @@ export default function DfcFluxoTab({
     );
   }
 
+  const sh = realizado?.saldo_horizon;
   const dicaSaldoInicial =
-    'Realizado: saldo real das contas com Projeta DFC (aba Contas) na abertura do mês, pelo extrato do Sienge. Projetado: a partir do mês atual, parte do saldo real de abertura dele e segue o Saldo Final projetado do mês anterior.';
+    realizado?.tipo_saldo === 'HORIZON'
+      ? `Saldo das Contas Horizon (aba Contas › engrenagem): só no mês atual, o totalizador da tela Saldo Contas Bancárias${
+          sh?.data ? ` em ${sh.data.split('-').reverse().join('/')}` : ' (nenhum saldo lançado até hoje)'
+        }, somando as partes marcadas na configuração. Os meses seguintes partem do Saldo Final projetado do mês anterior; os anteriores ficam sem saldo.`
+      : 'Realizado: saldo real das contas com Projeta DFC (aba Contas) na abertura do mês, pelo extrato do Sienge. Projetado: a partir do mês atual, parte do saldo real de abertura dele e segue o Saldo Final projetado do mês anterior.';
 
   return (
     <div

@@ -37,6 +37,9 @@ const CONFIG = [
     pk: ['empresa_id', 'contrato_empreendimento', 'numero_contrato_unidade'],
   },
   { tabela: 'dfc_divida_pj', filtro: daEmpresa, restaura: true, pk: ['id'], existe: centroExiste() },
+  // Configuração do saldo (aba Contas › engrenagem): ERP ou Saldo das Contas Horizon. Versões salvas antes dela
+  // não têm a tabela na cópia — fotos.restaurar pula a tabela que falta.
+  { tabela: 'dfc_saldo_config', filtro: daEmpresa, restaura: true, pk: ['empresa_id'] },
   {
     tabela: 'dfc_orcamento_informado',
     filtro: daEmpresa,
@@ -71,6 +74,10 @@ const REALIZADO = [
   { tabela: 'sie_extrato_contas_rateio', filtro: daEmpresa },
   { tabela: 'sie_extrato_contas_sincronizacoes', filtro: daEmpresa },
   { tabela: 'sie_income', filtro: daEmpresa },
+  // Saldo das Contas Horizon (o Saldo Inicial do mês atual quando a configuração do saldo é HORIZON).
+  { tabela: 'saldos_contas_bancarias', filtro: daEmpresa },
+  { tabela: 'saldos_bloqueios', filtro: daEmpresa },
+  { tabela: 'saldos_periodos', filtro: daEmpresa },
 ];
 
 module.exports = { CONFIG, REALIZADO };
