@@ -420,7 +420,7 @@ export function QuemGera({ D, centroSel, onCentro }) {
         </h2>
         <p>Fluxo operacional líquido por centro de custo. Clique numa linha para filtrar o painel.</p>
       </div>
-      {/* Altura fixa (140 px) com rolagem: a lista de centros cresce sem esticar a seção. */}
+      {/* Altura fixa (370 px) com rolagem: a lista de centros cresce sem esticar a seção. */}
       <div className="tbl rola curta">
         {!rows.length ? (
           <div className="empty">Nenhum centro com fluxo no escopo.</div>
