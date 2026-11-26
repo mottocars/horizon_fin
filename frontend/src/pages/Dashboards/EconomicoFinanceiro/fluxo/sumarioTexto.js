@@ -214,7 +214,7 @@ export const ABAS_SUMARIO = [
       {
         titulo: 'O gráfico',
         texto:
-          'As classificações das contas (cadastro de Contas Bancárias), da maior para a menor, com o saldo somado. Clique numa classificação para abrir as contas dela: azul claro = Investimento, azul escuro = conta corrente. Passe o mouse para ver empresa, número e tipo da conta. Com o Saldo das Contas Horizon, cada conta entra com o quanto ela compõe o caixa de partida (as partes marcadas na configuração).',
+          'As classificações das contas (cadastro de Contas Bancárias), da maior para a menor, com o saldo somado. Clique numa classificação para abrir as contas dela: azul claro = Investimento, azul escuro = conta corrente. Passe o mouse para ver empresa, número e tipo da conta. Com o Saldo das Contas Horizon, cada conta mostra o saldo lançado nela no 1º dia do mês, igual à tela Saldo Contas Bancárias (todo o saldo da conta, mesmo as partes que não somam no caixa de partida); os números de liquidez seguem o mesmo saldo.',
       },
     ],
   },

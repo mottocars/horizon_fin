@@ -206,14 +206,18 @@ export function quemGera(D) {
 export function carteira(D) {
   const rec = D.cart.receber || {};
   const pag = D.cart.pagar || {};
-  const contas = D.contas
-    .filter((c) => !D.empresasDoFiltro || D.empresasDoFiltro.has(c.company_id))
-    .sort((a, b) => b.saldo - a.saldo)
-    .map((c) => ({ ...c, investimento: CFG.investimento.test(c.tipo) }));
+  // Saldo das Contas Horizon: a carteira mostra o saldo CHEIO de cada conta no dia (`saldo_conta` — espelho do Saldo
+  // Contas Bancárias, pedido do usuário, 26/11/2026), não só as partes marcadas que formam o caixa de partida. ERP: o
+  // saldo de abertura pelo extrato (o mesmo do caixa).
+  const saldoDe = (c) => (c.saldo_conta ?? c.saldo);
+  const todas = D.contas.map((c) => ({ ...c, saldo: saldoDe(c), investimento: CFG.investimento.test(c.tipo) }));
+  const invest = soma(todas.filter((c) => c.investimento).map((c) => c.saldo));
+  const total = soma(todas.map((c) => c.saldo));
+  const contas = todas.filter((c) => !D.empresasDoFiltro || D.empresasDoFiltro.has(c.company_id)).sort((a, b) => b.saldo - a.saldo);
   return {
     numeros: [
-      { rotulo: 'Liquidez imediata', valor: D.totalContas - D.invest },
-      { rotulo: 'Em aplicações', valor: D.invest },
+      { rotulo: 'Liquidez imediata', valor: total - invest },
+      { rotulo: 'Em aplicações', valor: invest },
       { rotulo: 'A receber a vencer', valor: rec.a_vencer || 0 },
       { rotulo: 'A pagar em aberto', valor: (pag.vencido || 0) + (pag.a_vencer || 0) },
     ],

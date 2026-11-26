@@ -212,6 +212,8 @@ async function painel(empresaId, { hist, hor, centros = [] }) {
         classificacao: c.classificacao || null,
         saldo_abertura: c.saldo,
         saldo: c.saldo,
+        // Saldo cheio da conta no dia (espelho do Saldo Contas Bancárias) — só a Carteira e liquidez usa.
+        saldo_conta: c.saldo_conta,
       }))
     : contas.map((c) => ({
         empresa: c.company_name,

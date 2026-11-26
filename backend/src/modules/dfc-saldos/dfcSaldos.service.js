@@ -77,6 +77,9 @@ async function saldoHorizon(empresaId, config) {
         limite_cheque: p.limiteCheque / 100,
         bloqueado: p.bloqueado / 100,
         saldo: soma(p.liberado, p.limiteCheque, p.bloqueado) / 100,
+        // O saldo lançado na conta no dia (a célula da grade do Saldo Contas Bancárias), sem olhar as partes marcadas
+        // — a Carteira e liquidez do dashboard mostra este (espelho do Saldo Contas Bancárias).
+        saldo_conta: Number(c.saldos[data] ?? 0),
       };
     })
     .filter(Boolean);
