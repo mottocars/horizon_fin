@@ -2,8 +2,8 @@ import { useEffect, useState } from 'react';
 import { Building2 } from 'lucide-react';
 import Card from '../../components/Card';
 import SearchableSelect from '../../components/SearchableSelect';
-import MascaraItensEditor from '../../components/MascaraItensEditor';
 import EtapasCentroCustoEditor from './EtapasCentroCustoEditor';
+import PacotesPilaresEditor from './PacotesPilaresEditor';
 import { listEmpresas } from '../../api/empresas.api';
 import { nomeExibicaoEmpresa } from '../../utils/empresa';
 import { useEmpresaTravada } from '../../hooks/useEmpresaTravada';
@@ -13,15 +13,14 @@ import { useEmpresaTravada } from '../../hooks/useEmpresaTravada';
 // sentido cadastrar aquela máscara junto do Kanban que ela alimenta. O tipo
 // COBRANCAS (nunca chegou a ser usado) saiu de vez: a aba "Régua de
 // Cobrança" de Gestão de Cobranças (ver GestaoCobrancas/ReguaCobranca/) não
-// é uma máscara, é uma tela própria.
+// é uma máscara, é uma tela própria. DRE, DFC, Submáscara DRE e Submáscara DFC
+// saíram em 26/11/2026 (pedido do usuário): a DRE e a DFC têm as máscaras
+// delas nas próprias telas (DRE Gerencial e DFC Construtoras › Máscaras).
+// Pacotes e Pilares têm Responsável (seletor na linha, MascaraItensEditor).
 const TIPOS = [
-  { value: 'DRE', label: 'DRE' },
-  { value: 'DFC', label: 'DFC' },
   { value: 'PACOTES', label: 'Pacotes' },
   { value: 'PILARES', label: 'Pilares' },
   { value: 'ETAPAS_CENTRO_CUSTO', label: 'Etapas do Centro de Custo' },
-  { value: 'SUBMASCARA_DRE', label: 'Submáscara DRE' },
-  { value: 'SUBMASCARA_DFC', label: 'Submáscara DFC' },
 ];
 
 export default function MascarasPage() {
@@ -29,7 +28,7 @@ export default function MascarasPage() {
   const [empresas, setEmpresas] = useState([]);
   const [loadingEmpresas, setLoadingEmpresas] = useState(true);
   const [empresaId, setEmpresaId] = useState('');
-  const [tipo, setTipo] = useState('DRE');
+  const [tipo, setTipo] = useState('PACOTES');
 
   useEffect(() => {
     listEmpresas({ ativo: true, limit: 100 })
@@ -43,7 +42,6 @@ export default function MascarasPage() {
     if (empresaTravada && empresaIdTravada) setEmpresaId(empresaIdTravada);
   }, [empresaTravada, empresaIdTravada]);
 
-  const tipoLabel = TIPOS.find((t) => t.value === tipo)?.label;
 
   return (
     <div className="space-y-4">
@@ -84,7 +82,7 @@ export default function MascarasPage() {
               Selecione uma empresa para ver ou cadastrar a máscara.
             </p>
             <p className="text-xs text-gray-400">
-              Cada empresa tem sua própria estrutura de DRE, DFC, Pacotes e Pilares.
+              Cada empresa tem seus próprios Pacotes, Pilares e Etapas do Centro de Custo.
             </p>
           </div>
         ) : tipo === 'ETAPAS_CENTRO_CUSTO' ? (
@@ -96,7 +94,17 @@ export default function MascarasPage() {
             aviso="Usada no Histórico de Etapas dos centros de custo e no cronograma de Operações › Cronogramas Obras."
           />
         ) : (
-          <MascaraItensEditor tipo={tipo} empresaId={empresaId} grupo="" itemLabel={tipoLabel} />
+          // Pacotes e Pilares: a mesma tabela das Etapas, com o Responsável de cada item (pedido do usuário).
+          <PacotesPilaresEditor
+            key={`${tipo}-${empresaId}`}
+            tipo={tipo}
+            empresaId={empresaId}
+            aviso={
+              tipo === 'PACOTES'
+                ? 'Pacote de cada conta em Cadastros › Planos Financeiros; usado na Gestão Matricial (dashboard Econômico/Financeiro).'
+                : 'Pilar de cada centro de custo em Cadastros › Centros de Custos; usado na Gestão Matricial (dashboard Econômico/Financeiro).'
+            }
+          />
         )}
       </Card>
     </div>

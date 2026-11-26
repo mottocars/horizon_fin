@@ -30,7 +30,12 @@ async function repassesSoAdministrador(req, res, next) {
 router.use(authMiddleware);
 router.param('id', paramRecurso('SELECT empresa_id FROM mascara_itens WHERE id = $1'));
 router.get('/', controller.list);
+// Quem pode ser Responsável de um Pacote/Pilar (a empresa vem na query e o authMiddleware confere).
+router.get('/responsaveis', controller.responsaveis);
 router.post('/', repassesSoAdministrador, controller.create);
+// Pacotes e Pilares (o tipo vem no corpo; Repasses não usa): várias de uma vez e a ordem — antes do '/:id'.
+router.post('/lote', controller.createVarios);
+router.put('/ordem', controller.reordenar);
 router.put('/:id', repassesSoAdministrador, controller.update);
 router.delete('/:id', repassesSoAdministrador, controller.remove);
 

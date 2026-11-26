@@ -73,16 +73,10 @@ async function getItem(empresaId, siengeId) {
   const { rows } = await pool.query(
     `SELECT p.*,
             dre.descricao AS classificacao_dre_descricao,
-            dfc.descricao AS classificacao_dfc_descricao,
-            sub_dre.descricao AS submascara_dre_descricao,
-            sub_dfc.descricao AS submascara_dfc_descricao,
             pac.descricao AS pacote_descricao,
             resp.nome AS responsavel_nome
      FROM planos_financeiros_sienge p
      LEFT JOIN dre_mascaras dre ON dre.id = p.classificacao_dre_id
-     LEFT JOIN mascara_itens dfc ON dfc.id = p.classificacao_dfc_id
-     LEFT JOIN mascara_itens sub_dre ON sub_dre.id = p.submascara_dre_id
-     LEFT JOIN mascara_itens sub_dfc ON sub_dfc.id = p.submascara_dfc_id
      LEFT JOIN mascara_itens pac ON pac.id = p.pacote_id
      LEFT JOIN usuarios resp ON resp.id = p.responsavel_id
      WHERE p.empresa_id = $1 AND p.sienge_id = $2`,
