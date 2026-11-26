@@ -16,11 +16,6 @@ export function exportarPlano(empresaId) {
     .then((res) => res.data);
 }
 
-// Usuários ativos com a empresa no cadastro — opções do campo Responsável da conta.
-export function listResponsaveis(empresaId) {
-  return http.get(`/planos-financeiros/sienge/${empresaId}/responsaveis`).then((res) => res.data);
-}
-
 export function gerarPlano(empresaId, mascaraNiveis) {
   const body = { empresa_id: empresaId };
   if (mascaraNiveis) body.mascara_niveis = mascaraNiveis;

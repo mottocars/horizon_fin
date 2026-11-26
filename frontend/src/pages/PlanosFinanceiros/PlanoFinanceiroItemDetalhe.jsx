@@ -4,7 +4,7 @@ import { ArrowLeft, PieChart } from 'lucide-react';
 import Card from '../../components/Card';
 import Button from '../../components/Button';
 import SearchableSelect from '../../components/SearchableSelect';
-import { getItem, listResponsaveis, updateEnriquecimento } from '../../api/planosFinanceirosSienge.api';
+import { getItem, updateEnriquecimento } from '../../api/planosFinanceirosSienge.api';
 import { listMascaras } from '../../api/mascaras.api';
 
 // Mesmo padrão de ContaBancariaItemDetalhe.jsx/ConveniosBancariosForm.jsx (corSelect):
@@ -22,18 +22,17 @@ function corSelect(valor) {
   return String(valor ?? '').trim() !== '' ? COR_CAMPO_PREENCHIDO : COR_CAMPO_VAZIO;
 }
 
-// O cadastro da conta tem só Pacote e Responsável — os demais campos de enriquecimento
+// O cadastro da conta tem só o Pacote (o Responsável é o do pacote, em Cadastros › Máscaras — pedido do
+// usuário, 26/11/2026) — os demais campos de enriquecimento
 // (classificações, submáscaras, projeção, incrementos) saíram da tela; a Classificação DRE
 // continua na aba Plano de Contas da DRE POC Gerencial.
 const emptyForm = {
   pacote_id: '',
-  responsavel_id: '',
 };
 
 function formDoItem(data) {
   return {
     pacote_id: data.pacote_id ? String(data.pacote_id) : '',
-    responsavel_id: data.responsavel_id ? String(data.responsavel_id) : '',
   };
 }
 
@@ -49,7 +48,6 @@ export default function PlanoFinanceiroItemDetalhe() {
   const [success, setSuccess] = useState(false);
 
   const [pacotes, setPacotes] = useState([]);
-  const [responsaveis, setResponsaveis] = useState([]);
 
   const loadItem = useCallback(async () => {
     setLoading(true);
@@ -65,15 +63,7 @@ export default function PlanoFinanceiroItemDetalhe() {
   useEffect(() => {
     loadItem();
     listMascaras('PACOTES', empresaId).then(setPacotes);
-    listResponsaveis(empresaId).then(setResponsaveis);
   }, [loadItem, empresaId]);
-
-  // O responsável gravado continua aparecendo mesmo que tenha sido inativado ou desvinculado
-  // da empresa depois (aí não vem na lista) — senão o campo ficaria em branco sem ter sido limpo.
-  const opcoesResponsavel = responsaveis.map((u) => ({ value: u.id, label: u.nome }));
-  if (item?.responsavel_id && !responsaveis.some((u) => u.id === item.responsavel_id)) {
-    opcoesResponsavel.push({ value: item.responsavel_id, label: item.responsavel_nome || 'Usuário removido' });
-  }
 
   function handleChange(field, value) {
     setForm((prev) => ({ ...prev, [field]: value }));
@@ -166,21 +156,6 @@ export default function PlanoFinanceiroItemDetalhe() {
               {pacotes.length === 0 && (
                 <p className="mt-1 text-xs text-gray-400">
                   Nenhum pacote cadastrado em Máscaras ainda.
-                </p>
-              )}
-            </Field>
-
-            <Field label="Responsável">
-              <SearchableSelect
-                value={form.responsavel_id}
-                onChange={(value) => handleChange('responsavel_id', value)}
-                options={opcoesResponsavel}
-                emptyMessage="Nenhum usuário encontrado."
-                corClasses={corSelect(form.responsavel_id)}
-              />
-              {responsaveis.length === 0 && (
-                <p className="mt-1 text-xs text-gray-400">
-                  Nenhum usuário ativo vinculado a esta empresa.
                 </p>
               )}
             </Field>

@@ -12,14 +12,9 @@ const gerarSchema = z.object({
 
 const emptyToNull = (val) => (val === '' || val === undefined ? null : val);
 
-// O cadastro da conta edita só Pacote e Responsável (ver service). responsavel_id não passa por
-// emptyToNull de propósito: ausente (undefined) = não mexe; '' ou null = limpar.
+// O cadastro da conta edita só o Pacote (ver service); o Responsável é o do pacote (Cadastros › Máscaras).
 const enriquecimentoSchema = z.object({
   pacote_id: z.preprocess(emptyToNull, z.coerce.number().int().positive().nullable().optional()),
-  responsavel_id: z.preprocess(
-    (val) => (val === '' ? null : val),
-    z.coerce.number().int().positive().nullable().optional()
-  ),
 });
 
 const SIM_NAO = { S: 'Sim', N: 'Não' };
@@ -33,7 +28,7 @@ const EXPORT_COLUMNS = [
   { header: 'Adiantamento', key: 'adiantamento_label', width: 14 },
   { header: 'Imposto', key: 'imposto_label', width: 10 },
   { header: 'Pacote', key: 'pacote_descricao', width: 30 },
-  { header: 'Responsável', key: 'responsavel_nome', width: 28 },
+  { header: 'Responsável do pacote', key: 'responsavel_nome', width: 28 },
   { header: 'Atualizado em', key: 'atualizado_em_formatado', width: 20 },
 ];
 
@@ -132,14 +127,6 @@ async function exportExcel(req, res, next) {
   }
 }
 
-async function listResponsaveis(req, res, next) {
-  try {
-    res.json(await service.listResponsaveis(req.params.empresaId));
-  } catch (err) {
-    next(err);
-  }
-}
-
 async function gerar(req, res, next) {
   try {
     const { empresa_id, mascara_niveis } = gerarSchema.parse(req.body);
@@ -177,7 +164,6 @@ module.exports = {
   listGerados,
   listContas,
   exportExcel,
-  listResponsaveis,
   gerar,
   getItem,
   updateEnriquecimento,

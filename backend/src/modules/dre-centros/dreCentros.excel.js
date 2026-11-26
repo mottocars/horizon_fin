@@ -39,7 +39,7 @@ const COLUNAS = [
   { titulo: 'CEP', largura: 11, valor: (c) => c.cep || '' },
   { titulo: 'Nº de unidades', largura: 12, numero: FORMATOS.int, valor: (c) => (c.numero_unidades === null ? '' : Number(c.numero_unidades)) },
   { titulo: 'VGV', largura: 18, numero: FORMATOS.moeda, valor: (c) => (c.valor_geral_vendas === null ? '' : Number(c.valor_geral_vendas)) },
-  { titulo: 'Responsável', largura: 26, valor: (c) => c.responsavel || '' },
+  { titulo: 'Responsável do pilar', largura: 26, valor: (c) => c.responsavel || '' },
   { titulo: 'Código Prevision', largura: 16, valor: (c) => c.codigo_prevision || '' },
   { titulo: 'Contrato Caixa', largura: 16, valor: (c) => c.codigo_contrato_caixa || '' },
 ];
@@ -53,7 +53,8 @@ async function gerar(empresaId, usuarioId) {
               u.nome AS responsavel, ac.agrupador_id, COALESCE(ac.principal, FALSE) AS principal
          FROM centros_custo_sienge c
          LEFT JOIN dre_agrupadores_centros ac ON ac.empresa_id = c.empresa_id AND ac.centro_id = c.sienge_id
-         LEFT JOIN usuarios u ON u.id = c.responsavel_id
+         LEFT JOIN mascara_itens pil ON pil.id = c.pilar_id
+         LEFT JOIN usuarios u ON u.id = pil.responsavel_id
         WHERE c.empresa_id = $1
         ORDER BY c.dre_ordem ASC NULLS LAST, c.sienge_id ASC`,
       [empresaId]

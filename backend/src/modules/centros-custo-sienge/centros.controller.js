@@ -22,7 +22,8 @@ const EXPORT_COLUMNS = [
   { header: 'Status', key: 'status_label', width: 12 },
   { header: 'Apelido', key: 'apelido', width: 22 },
   { header: 'Pilar', key: 'pilar_descricao', width: 22 },
-  { header: 'Responsável', key: 'responsavel_nome', width: 28 },
+  // Responsável do pilar (Cadastros › Máscaras) — o centro não tem mais responsável próprio (26/11/2026).
+  { header: 'Responsável do pilar', key: 'responsavel_nome', width: 28 },
   { header: 'Número de Unidades', key: 'numero_unidades', width: 18 },
   { header: 'Código Prevision', key: 'codigo_prevision', width: 18 },
   { header: 'Classificação de Orçamento', key: 'classificacao_orcamento_label', width: 22 },
@@ -64,12 +65,6 @@ const enriquecimentoSchema = z.object({
   // Tipo (OBRA | ADMINISTRATIVO) — a mesma coluna da aba Centros Custos da DFC e de Cronogramas
   // Obras. Sem emptyToNull de propósito: ausente (undefined) = não mexe (ver service); '' = limpar.
   natureza: z.union([z.enum(['OBRA', 'ADMINISTRATIVO']), z.literal(''), z.null()]).optional(),
-  // Responsável (usuário ativo da empresa, como no Plano Financeiro). Também sem emptyToNull:
-  // ausente = não mexe; '' ou null = limpar.
-  responsavel_id: z.preprocess(
-    (val) => (val === '' ? null : val),
-    z.coerce.number().int().positive().nullable().optional()
-  ),
 });
 
 const etapaSchema = z.object({
@@ -184,14 +179,6 @@ async function updateEnriquecimento(req, res, next) {
   }
 }
 
-async function listResponsaveis(req, res, next) {
-  try {
-    res.json(await service.listResponsaveis(req.params.empresaId));
-  } catch (err) {
-    next(err);
-  }
-}
-
 async function listEtapas(req, res, next) {
   try {
     const result = await service.listEtapas(req.params.empresaId, req.params.siengeId);
@@ -247,7 +234,6 @@ module.exports = {
   gerar,
   getItem,
   updateEnriquecimento,
-  listResponsaveis,
   listEtapas,
   createEtapa,
   updateEtapa,

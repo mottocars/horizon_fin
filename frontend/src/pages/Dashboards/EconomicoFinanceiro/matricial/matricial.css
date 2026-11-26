@@ -113,9 +113,6 @@
   vertical-align: bottom;
   border-bottom: 2px solid var(--line);
 }
-.painel-cfo .mx thead th.g1 {
-  background: var(--surface-2);
-}
 .painel-cfo .mx th.mx-col {
   min-width: var(--mx-col);
   max-width: var(--mx-col);
@@ -132,10 +129,6 @@
 .painel-cfo .mx th.mx-col.on,
 .painel-cfo .mx th.mx-col:hover {
   background: var(--accent-soft);
-}
-.painel-cfo .mx th.mx-col.ini,
-.painel-cfo .mx td.ini {
-  border-left: 2px solid var(--line);
 }
 .painel-cfo .mx-pilar {
   font-family: var(--f-display);
@@ -235,9 +228,6 @@
   max-width: var(--mx-col);
   text-align: center;
   transition: box-shadow 0.12s;
-}
-.painel-cfo .mx td.mx-cel.g1:not([style]) {
-  background: #f7f9fa;
 }
 .painel-cfo .mx td.mx-cel button,
 .painel-cfo .mx td.mx-tot button {
@@ -367,17 +357,6 @@
   color: var(--muted);
   border: 1px dashed var(--s-neutral);
   box-shadow: none;
-}
-.painel-cfo .mx-foto.mais {
-  background: var(--ink-2);
-  font-size: 11px;
-}
-.painel-cfo .mx-fotos {
-  display: inline-flex;
-  padding-left: 10px;
-}
-.painel-cfo .mx-fotos > * {
-  margin-left: -10px;
 }
 
 .painel-cfo .mx-aviso {

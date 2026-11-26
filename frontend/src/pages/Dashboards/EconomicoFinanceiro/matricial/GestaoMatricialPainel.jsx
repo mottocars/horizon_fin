@@ -15,7 +15,8 @@ import './matricial.css';
 
 // Dashboard Econômico Financeiro › Gestão Matricial (pedido do usuário, 26/11/2026): o desvio da DFC (Realizado ×
 // Projetado, versão publicada) numa matriz Pacote (linhas, cadastro da conta do plano financeiro) × Pilar (colunas,
-// cadastro do centro de custo), cada um com o responsável e a foto, e o mapa de calor (verde = melhor que o
+// cadastro do centro de custo), cada um com o responsável da máscara (Cadastros › Máscaras) e a foto, e o mapa de
+// calor (verde = melhor que o
 // previsto, vermelho = pior — pelo sinal do caixa, como o Desvio % da aba DFC).
 // Barra igual à do Fluxo de Caixa (Empresa, Início, Fim, Centro de custo). Período padrão: janeiro até o mês
 // anterior ao atual — o realizado da versão publicada vai até ele, então o realizado e o projetado se encontram
@@ -66,7 +67,7 @@ function Indicadores({ M }) {
           <>
             <span className="v mx-tile-ruim">{reaisCurto(desvio(pior.x), true)}</span>
             <span className="d">
-              <b>{pior.linha.pacote}</b> × <b>{pior.coluna.pilar}</b>
+              <b>{pior.linha.nome}</b> × <b>{pior.coluna.nome}</b>
             </span>
           </>
         ) : (
@@ -100,7 +101,6 @@ export default function GestaoMatricialPainel({ dashboard, tituloTela, empresaId
   const [estado, setEstado] = useState('ocioso'); // ocioso | carregando | erro
   const [erro, setErro] = useState('');
   const [modo, setModo] = useState('pct'); // pct | valor
-  const [porPilar, setPorPilar] = useState(false);
   const [detalhe, setDetalhe] = useState(null);
   const pedido = useRef(0);
 
@@ -247,14 +247,6 @@ export default function GestaoMatricialPainel({ dashboard, tituloTela, empresaId
                       Desvio R$
                     </button>
                   </div>
-                  <div className="seg" role="group" aria-label="Colunas">
-                    <button type="button" aria-pressed={!porPilar} onClick={() => setPorPilar(false)}>
-                      Por responsável
-                    </button>
-                    <button type="button" aria-pressed={porPilar} onClick={() => setPorPilar(true)}>
-                      Por pilar
-                    </button>
-                  </div>
                 </div>
               </div>
 
@@ -266,11 +258,12 @@ export default function GestaoMatricialPainel({ dashboard, tituloTela, empresaId
               ) : (
                 <>
                   <Legenda modo={modo} />
-                  <Matriz M={M} modo={modo} porPilar={porPilar} onDetalhar={setDetalhe} />
-                  {(M.semCadastro.pilar || M.semCadastro.pacote) && (
+                  <Matriz M={M} modo={modo} onDetalhar={setDetalhe} />
+                  {(M.semCadastro.pilar || M.semCadastro.pacote || M.semCadastro.responsavel) && (
                     <p className="mx-aviso">
                       {M.semCadastro.pilar && <>“Sem pilar”: centros de custo sem Pilar no cadastro (Cadastros › Centros de Custos). </>}
-                      {M.semCadastro.pacote && <>“Sem pacote”: contas sem Pacote no cadastro (Cadastros › Planos Financeiros).</>}
+                      {M.semCadastro.pacote && <>“Sem pacote”: contas sem Pacote no cadastro (Cadastros › Planos Financeiros). </>}
+                      {M.semCadastro.responsavel && <>“Sem responsável”: escolha o responsável do pilar ou do pacote em Cadastros › Máscaras.</>}
                     </p>
                   )}
                 </>

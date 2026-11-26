@@ -1,7 +1,6 @@
 const pool = require('../../config/db');
 const { decrypt } = require('../../utils/crypto');
 const siengeApi = require('./sienge-api.client');
-const { listResponsaveis } = require('../planos-financeiros-sienge/planos.service');
 const { bloquearSeEmpresaModelo, ehEmpresaModelo } = require('../../utils/empresaModelo');
 
 // `empresaIds` null = todas (Master); senão só as empresas do usuário.
@@ -62,7 +61,7 @@ async function listItensParaExportacao(empresaId) {
             c.valor_geral_vendas, c.faixa, c.data_criacao, c.data_modificacao, c.atualizado_em
      FROM centros_custo_sienge c
      LEFT JOIN mascara_itens m ON m.id = c.pilar_id
-     LEFT JOIN usuarios resp ON resp.id = c.responsavel_id
+     LEFT JOIN usuarios resp ON resp.id = m.responsavel_id
      WHERE c.empresa_id = $1
      ORDER BY c.sienge_id::text ASC`,
     [empresaId]
@@ -72,40 +71,18 @@ async function listItensParaExportacao(empresaId) {
 
 async function getItem(empresaId, siengeId) {
   const { rows } = await pool.query(
-    `SELECT c.*, m.descricao AS pilar_descricao, resp.nome AS responsavel_nome
+    `SELECT c.*, m.descricao AS pilar_descricao
      FROM centros_custo_sienge c
      LEFT JOIN mascara_itens m ON m.id = c.pilar_id
-     LEFT JOIN usuarios resp ON resp.id = c.responsavel_id
      WHERE c.empresa_id = $1 AND c.sienge_id = $2`,
     [empresaId, siengeId]
   );
   return rows[0] || null;
 }
 
-function badRequest(message) {
-  const err = new Error(message);
-  err.status = 400;
-  err.expose = true;
-  return err;
-}
-
-// O Tipo (natureza) e o Responsável só mudam quando vêm no corpo — quem não manda (tela antiga
-// aberta) não apaga. Responsável segue a regra do Plano Financeiro: manter o atual sempre vale
-// (mesmo inativado ou desvinculado depois); trocar, só por um usuário ativo da empresa.
+// O Tipo (natureza) só muda quando vem no corpo — quem não manda (tela antiga aberta) não apaga. O centro não tem
+// mais Responsável próprio (pedido do usuário, 26/11/2026): o responsável é o do Pilar, em Cadastros › Máscaras.
 async function updateEnriquecimento(empresaId, siengeId, data) {
-  if (data.responsavel_id) {
-    const { rows: atual } = await pool.query(
-      'SELECT responsavel_id FROM centros_custo_sienge WHERE empresa_id = $1 AND sienge_id = $2',
-      [empresaId, siengeId]
-    );
-    if (atual[0] && data.responsavel_id !== atual[0].responsavel_id) {
-      const responsaveis = await listResponsaveis(empresaId);
-      if (!responsaveis.some((u) => u.id === data.responsavel_id)) {
-        throw badRequest('O responsável precisa ser um usuário ativo desta empresa.');
-      }
-    }
-  }
-
   const { rowCount } = await pool.query(
     `UPDATE centros_custo_sienge SET
        status = $1,
@@ -121,8 +98,7 @@ async function updateEnriquecimento(empresaId, siengeId, data) {
        estado_enriquecido = $11,
        valor_geral_vendas = $12,
        faixa = $13,
-       natureza = CASE WHEN $16::boolean THEN $17 ELSE natureza END,
-       responsavel_id = CASE WHEN $18::boolean THEN $19::int ELSE responsavel_id END
+       natureza = CASE WHEN $16::boolean THEN $17 ELSE natureza END
      WHERE empresa_id = $14 AND sienge_id = $15`,
     [
       data.status,
@@ -142,8 +118,6 @@ async function updateEnriquecimento(empresaId, siengeId, data) {
       siengeId,
       data.natureza !== undefined,
       data.natureza || null,
-      data.responsavel_id !== undefined,
-      data.responsavel_id || null,
     ]
   );
   return rowCount ? getItem(empresaId, siengeId) : null;
@@ -335,7 +309,6 @@ module.exports = {
   gerar,
   getItem,
   updateEnriquecimento,
-  listResponsaveis,
   listEtapas,
   createEtapa,
   updateEtapa,

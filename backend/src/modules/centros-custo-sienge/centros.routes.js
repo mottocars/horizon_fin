@@ -11,7 +11,6 @@ router.param('empresaId', paramEmpresa);
 router.get('/', controller.listGerados);
 router.get('/:empresaId/itens', controller.listItens);
 router.get('/:empresaId/export', controller.exportExcel);
-router.get('/:empresaId/responsaveis', controller.listResponsaveis);
 router.post('/gerar', controller.gerar);
 
 router.get('/:empresaId/itens/:siengeId', controller.getItem);

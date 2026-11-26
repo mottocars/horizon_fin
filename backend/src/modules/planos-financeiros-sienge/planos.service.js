@@ -52,7 +52,7 @@ async function listContas(empresaId, { page = 1, limit = 15, search = '' }) {
   };
 }
 
-// Exportar (botão da lista de contas da empresa): o cadastro inteiro, com Pacote e Responsável.
+// Exportar (botão da lista de contas da empresa): o cadastro inteiro, com o Pacote e o responsável dele.
 async function listContasParaExportacao(empresaId) {
   const { rows } = await pool.query(
     `SELECT p.sienge_id, p.name, p.tp_conta, p.fl_ativa, p.fl_redutora, p.fl_adiantamento, p.fl_imposto,
@@ -61,7 +61,7 @@ async function listContasParaExportacao(empresaId) {
             pac.descricao AS pacote_descricao, resp.nome AS responsavel_nome, p.atualizado_em
      FROM planos_financeiros_sienge p
      LEFT JOIN mascara_itens pac ON pac.id = p.pacote_id
-     LEFT JOIN usuarios resp ON resp.id = p.responsavel_id
+     LEFT JOIN usuarios resp ON resp.id = pac.responsavel_id
      WHERE p.empresa_id = $1
      ORDER BY p.sienge_id::text ASC`,
     [empresaId]
@@ -73,30 +73,14 @@ async function getItem(empresaId, siengeId) {
   const { rows } = await pool.query(
     `SELECT p.*,
             dre.descricao AS classificacao_dre_descricao,
-            pac.descricao AS pacote_descricao,
-            resp.nome AS responsavel_nome
+            pac.descricao AS pacote_descricao
      FROM planos_financeiros_sienge p
      LEFT JOIN dre_mascaras dre ON dre.id = p.classificacao_dre_id
      LEFT JOIN mascara_itens pac ON pac.id = p.pacote_id
-     LEFT JOIN usuarios resp ON resp.id = p.responsavel_id
      WHERE p.empresa_id = $1 AND p.sienge_id = $2`,
     [empresaId, siengeId]
   );
   return rows[0] || null;
-}
-
-// Quem pode ser Responsável por uma conta do plano: usuário ativo com a empresa no cadastro
-// (usuarios_empresas). Master não entra — não tem empresa vinculada no cadastro.
-async function listResponsaveis(empresaId) {
-  const { rows } = await pool.query(
-    `SELECT u.id, u.nome
-     FROM usuarios u
-     JOIN usuarios_empresas ue ON ue.usuario_id = u.id AND ue.empresa_id = $1
-     WHERE u.ativo = TRUE
-     ORDER BY u.nome ASC`,
-    [empresaId]
-  );
-  return rows;
 }
 
 function badRequest(message) {
@@ -106,11 +90,10 @@ function badRequest(message) {
   return err;
 }
 
-// O cadastro da conta edita só Pacote e Responsável. As demais colunas de enriquecimento
-// (classificação DFC, submáscaras, projeção, incrementos...) saíram da tela e ficam como estão; a
-// Máscara DRE de cada conta é editada na aba Plano de Contas da DRE Gerencial (dre-plano-contas).
-// responsavel_id ausente (undefined) = não mexe — uma aba antiga aberta, que não manda o campo, não
-// apaga o responsável; null = limpar.
+// O cadastro da conta edita só o Pacote (o Responsável é o do pacote, em Cadastros › Máscaras — pedido do
+// usuário, 26/11/2026). As demais colunas de enriquecimento (classificação DFC, submáscaras, projeção,
+// incrementos...) saíram da tela e ficam como estão; a Máscara DRE de cada conta é editada na aba Plano de
+// Contas da DRE Gerencial (dre-plano-contas).
 async function updateEnriquecimento(empresaId, siengeId, data) {
   const item = await getItem(empresaId, siengeId);
   if (!item) return null;
@@ -118,23 +101,11 @@ async function updateEnriquecimento(empresaId, siengeId, data) {
     throw badRequest('Contas totalizadoras (tp_conta = T) não podem ser editadas.');
   }
 
-  const mudaResponsavel = data.responsavel_id !== undefined;
-  // Manter o responsável atual sempre vale (mesmo que tenha sido inativado ou desvinculado depois);
-  // trocar, só por um usuário da empresa.
-  if (mudaResponsavel && data.responsavel_id && data.responsavel_id !== item.responsavel_id) {
-    const responsaveis = await listResponsaveis(empresaId);
-    if (!responsaveis.some((u) => u.id === data.responsavel_id)) {
-      throw badRequest('O responsável precisa ser um usuário ativo desta empresa.');
-    }
-  }
-
-  await pool.query(
-    `UPDATE planos_financeiros_sienge SET
-       pacote_id = $1,
-       responsavel_id = CASE WHEN $2 THEN $3::int ELSE responsavel_id END
-     WHERE empresa_id = $4 AND sienge_id = $5`,
-    [data.pacote_id || null, mudaResponsavel, data.responsavel_id || null, empresaId, siengeId]
-  );
+  await pool.query('UPDATE planos_financeiros_sienge SET pacote_id = $1 WHERE empresa_id = $2 AND sienge_id = $3', [
+    data.pacote_id || null,
+    empresaId,
+    siengeId,
+  ]);
   return getItem(empresaId, siengeId);
 }
 
@@ -234,6 +205,5 @@ module.exports = {
   listContasParaExportacao,
   gerar,
   getItem,
-  listResponsaveis,
   updateEnriquecimento,
 };

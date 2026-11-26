@@ -86,7 +86,7 @@ function dcdInfo(r, hoje) {
 const obraTool = {
   name: 'obras_obra',
   description:
-    'Tudo sobre UMA obra (por código do centro de custo, apelido ou nome), como o dono da empresa quer saber: cadastro (nome no Sienge, apelido, cidade, pilar, responsável, ' +
+    'Tudo sobre UMA obra (por código do centro de custo, apelido ou nome), como o dono da empresa quer saber: cadastro (nome no Sienge, apelido, cidade, pilar, responsável do pilar, ' +
     'faixa, VGV, unidades); o cronograma inteiro (cada etapa com início, fim e duração) e onde ela está hoje ("Construção, mês 17 de 30"); o atraso da construção pela Regra ' +
     'de Atraso da empresa; as três curvas de avanço — PLS (Caixa), Curva S de Obras (avanço real) e Curva S PLS (curva da PLS registrada no Prevision) — hoje, no fim do mês e ' +
     'no fim da semana, com os desvios e as diferenças entre elas; o ritmo dos últimos 3 meses e quando chega a 100% nesse ritmo; IDP, atraso em dias e última medição do ' +

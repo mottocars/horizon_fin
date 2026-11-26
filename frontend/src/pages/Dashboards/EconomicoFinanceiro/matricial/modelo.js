@@ -1,8 +1,8 @@
 // Modelo da Gestão Matricial (dashboard Econômico Financeiro): monta a matriz Pacote × Pilar a partir dos valores
 // por centro × natureza da rota /dashboards/economico-financeiro/gestao-matricial (backend
 // dashboards/gestaoMatricial.service.js).
-// - Coluna = Pilar + responsável do CENTRO de custo (um pilar com vários responsáveis vira várias colunas, lado a
-//   lado; o pilar pode ser recolhido numa coluna só). Linha = Pacote + responsável da NATUREZA.
+// - Coluna = Pilar (do cadastro do CENTRO de custo); linha = Pacote (do cadastro da NATUREZA). O responsável de cada
+//   um é o do próprio pilar / pacote, escolhido em Cadastros › Máscaras (pedido do usuário, 26/11/2026).
 // - Desvio = Realizado − Projetado, com o sinal do caixa (como o Desvio % da aba DFC): positivo = melhor que o
 //   previsto (entrou mais / saiu menos), negativo = pior. Desvio % = desvio ÷ |Projetado| (sem projetado: null).
 
@@ -77,7 +77,7 @@ function somar(alvo, item) {
   alvo.p += item[3];
   alvo.itens.push(item);
 }
-const porNome = (a, b) => (a.resp ? a.resp.nome : '￿').localeCompare(b.resp ? b.resp.nome : '￿', 'pt-BR');
+const porOrdem = (a, b) => a.ordem - b.ordem || a.nome.localeCompare(b.nome, 'pt-BR');
 
 export function montarMatriz(d) {
   if (!d) return null;
@@ -87,87 +87,59 @@ export function montarMatriz(d) {
   const centros = new Map((d.centros || []).map((c) => [c.id, c]));
   const naturezas = new Map((d.naturezas || []).map((n) => [n.id, n]));
 
+  // Coluna / linha da máscara (ou "Sem pilar" / "Sem pacote"), com o responsável dela.
+  const eixo = (mapa, id, semNome) => {
+    const m = mapa.get(id);
+    return { key: m ? m.id : SEM, nome: m ? m.descricao : semNome, ordem: m ? m.sequencia : SEM_ORDEM, resp: (m && usuarios.get(m.responsavel_id)) || null, total: novo() };
+  };
   const colunas = new Map();
   const linhas = new Map();
-  const celulas = new Map(); // 'linha|coluna' e 'linha|g:pilar' (pilar recolhido)
-  const grupos = new Map(); // pilar -> { id, descricao, ordem, colunas, total }
+  const celulas = new Map(); // 'linha|coluna'
   const total = novo();
 
   (d.valores || []).forEach((item) => {
     const [centroId, naturezaId] = item;
-    const c = centros.get(centroId) || {};
-    const n = naturezas.get(naturezaId) || {};
-    const pilarId = pilares.has(c.pilar_id) ? c.pilar_id : SEM;
-    const pacoteId = pacotes.has(n.pacote_id) ? n.pacote_id : SEM;
-    const respC = usuarios.get(c.responsavel_id) || null;
-    const respN = usuarios.get(n.responsavel_id) || null;
-    const kc = `${pilarId}:${respC ? respC.id : SEM}`;
-    const kl = `${pacoteId}:${respN ? respN.id : SEM}`;
-
-    if (!grupos.has(pilarId)) {
-      const p = pilares.get(pilarId);
-      grupos.set(pilarId, { id: pilarId, descricao: p ? p.descricao : 'Sem pilar', ordem: p ? p.sequencia : SEM_ORDEM, colunas: [], total: novo() });
-    }
-    const grupo = grupos.get(pilarId);
-    if (!colunas.has(kc)) {
-      const col = { key: kc, pilarId, pilar: grupo.descricao, resp: respC, total: novo() };
-      colunas.set(kc, col);
-      grupo.colunas.push(col);
-    }
-    if (!linhas.has(kl)) {
-      const p = pacotes.get(pacoteId);
-      linhas.set(kl, { key: kl, pacoteId, pacote: p ? p.descricao : 'Sem pacote', ordem: p ? p.sequencia : SEM_ORDEM, resp: respN, total: novo() });
-    }
-    const linha = linhas.get(kl);
-    [`${kl}|${kc}`, `${kl}|g:${pilarId}`].forEach((k) => {
-      if (!celulas.has(k)) celulas.set(k, novo());
-      somar(celulas.get(k), item);
-    });
-    somar(colunas.get(kc).total, item);
-    somar(grupo.total, item);
-    somar(linha.total, item);
+    const pilarId = pilares.has(centros.get(centroId)?.pilar_id) ? centros.get(centroId).pilar_id : SEM;
+    const pacoteId = pacotes.has(naturezas.get(naturezaId)?.pacote_id) ? naturezas.get(naturezaId).pacote_id : SEM;
+    if (!colunas.has(pilarId)) colunas.set(pilarId, eixo(pilares, pilarId, 'Sem pilar'));
+    if (!linhas.has(pacoteId)) linhas.set(pacoteId, eixo(pacotes, pacoteId, 'Sem pacote'));
+    const k = `${pacoteId}|${pilarId}`;
+    if (!celulas.has(k)) celulas.set(k, novo());
+    somar(celulas.get(k), item);
+    somar(colunas.get(pilarId).total, item);
+    somar(linhas.get(pacoteId).total, item);
     somar(total, item);
   });
 
-  const listaGrupos = [...grupos.values()].sort((a, b) => a.ordem - b.ordem || a.descricao.localeCompare(b.descricao, 'pt-BR'));
-  listaGrupos.forEach((g) => g.colunas.sort(porNome));
-  const listaLinhas = [...linhas.values()].sort((a, b) => a.ordem - b.ordem || a.pacote.localeCompare(b.pacote, 'pt-BR') || porNome(a, b));
+  const listaColunas = [...colunas.values()].sort(porOrdem);
+  const listaLinhas = [...linhas.values()].sort(porOrdem);
 
-  // Maior |desvio| entre as células (escala do modo R$; os totais não entram para não apagar o resto).
+  // Maior |desvio| entre as células (escala do modo R$; os totais não entram para não apagar o resto) e a pior
+  // combinação Pacote × Pilar (indicador do topo).
   let maiorAbs = 0;
-  let maiorAbsGrupo = 0;
-  celulas.forEach((x, k) => {
-    const a = Math.abs(desvio(x));
-    if (k.includes('|g:')) maiorAbsGrupo = Math.max(maiorAbsGrupo, a);
-    else maiorAbs = Math.max(maiorAbs, a);
-  });
-
-  // Pior e melhor combinação Pacote × Pilar (colunas abertas).
   let pior = null;
-  let melhor = null;
   celulas.forEach((x, k) => {
-    if (k.includes('|g:')) return;
-    const [kl, kc] = k.split('|');
     const d0 = desvio(x);
-    if (d0 < -0.5 && (!pior || d0 < desvio(pior.x))) pior = { x, linha: linhas.get(kl), coluna: colunas.get(kc) };
-    if (d0 > 0.5 && (!melhor || d0 > desvio(melhor.x))) melhor = { x, linha: linhas.get(kl), coluna: colunas.get(kc) };
+    maiorAbs = Math.max(maiorAbs, Math.abs(d0));
+    if (d0 < -0.5 && (!pior || d0 < desvio(pior.x))) {
+      const [kl, kc] = k.split('|').map(Number);
+      pior = { x, linha: linhas.get(kl), coluna: colunas.get(kc) };
+    }
   });
 
   return {
-    grupos: listaGrupos,
+    colunas: listaColunas,
     linhas: listaLinhas,
     celula: (kl, kc) => celulas.get(`${kl}|${kc}`) || null,
-    celulaGrupo: (kl, pilarId) => celulas.get(`${kl}|g:${pilarId}`) || null,
     total,
     maiorAbs,
-    maiorAbsGrupo,
     pior,
-    melhor,
     centros,
     naturezas,
     semCadastro: {
-      pilar: listaGrupos.some((g) => g.id === SEM),
-      pacote: listaLinhas.some((l) => l.pacoteId === SEM),
+      pilar: colunas.has(SEM),
+      pacote: linhas.has(SEM),
+      responsavel: [...listaColunas, ...listaLinhas].some((x) => x.key !== SEM && !x.resp),
     },
   };
 }

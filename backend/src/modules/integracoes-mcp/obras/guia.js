@@ -46,7 +46,7 @@ Dashboard **Dashboards › Obra 360º** (antigo "Cronograma de Obras"), com duas
 
 ## 2. As obras
 - Obra = centro de custo do Sienge com **Tipo = Obra** no cadastro (Cadastros › Centros de Custos). Nome exibido = o **apelido**, quando preenchido (senão o nome do Sienge).
-- **VGV** e **nº de unidades** são campos MANUAIS do cadastro do centro (não vêm do Sienge nem da Caixa). Cidade/UF vêm do CEP; pilar e responsável, do cadastro.
+- **VGV** e **nº de unidades** são campos MANUAIS do cadastro do centro (não vêm do Sienge nem da Caixa). Cidade/UF vêm do CEP; o pilar, do cadastro do centro; o responsável é o do PILAR (Cadastros › Máscaras › Pilares).
 - Nesta empresa: **${tipoObra}** centros com Tipo = Obra; **${comCrono}** com cronograma (alguma data de etapa — só essas aparecem no dashboard); **${comPrev}** com orçamento no Prevision (aparecem no Avanço das Obras); **${comContrato}** com contrato Caixa no cadastro, das quais **${comDcd}** com o DCD importado (têm PLS da Caixa).
 
 ## 3. Cronograma (Carteira de obras)

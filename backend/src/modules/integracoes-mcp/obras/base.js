@@ -58,7 +58,7 @@ async function carregar(empresaId, { visao = 'mensal' } = {}) {
               c.commercial_name, m.descricao AS pilar, u.nome AS responsavel
          FROM centros_custo_sienge c
          LEFT JOIN mascara_itens m ON m.id = c.pilar_id
-         LEFT JOIN usuarios u ON u.id = c.responsavel_id
+         LEFT JOIN usuarios u ON u.id = m.responsavel_id -- responsável do pilar (Cadastros › Máscaras)
         WHERE c.empresa_id = $1 AND c.natureza = 'OBRA'`,
       [empresaId]
     ),
