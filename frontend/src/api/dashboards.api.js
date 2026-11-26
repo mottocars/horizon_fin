@@ -27,6 +27,12 @@ export function getCentrosGestaoMatricial(empresaId) {
   return http.get('/dashboards/economico-financeiro/gestao-matricial/centros', { params: { empresa_id: empresaId } }).then((res) => res.data);
 }
 
+// Gestão Matricial (Econômico Financeiro): o desvio da DFC por centro × natureza, com pilar/pacote e responsáveis.
+// params: { empresa_id, de, ate ('AAAA-MM'), centros: '1,2' }.
+export function getGestaoMatricialPainel(params) {
+  return http.get('/dashboards/economico-financeiro/gestao-matricial', { params }).then((res) => res.data);
+}
+
 // Filtros salvos do usuário numa tela de dashboard, por empresa: [{ id, nome, filtros }].
 export function listarFiltrosSalvos(dashboard, tela, empresaId) {
   return http.get(`/dashboards/${dashboard}/${tela}/filtros`, { params: { empresa_id: empresaId } }).then((res) => res.data);

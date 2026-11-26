@@ -11,6 +11,7 @@ const { comVersaoPublicada } = require('../dre-versoes/contexto');
 // Versões da DFC: o dashboard Fluxo de Caixa lê a versão publicada da DFC (a última aprovada).
 const dfcVersoes = require('../dfc-versoes/contexto');
 const detalhamentoPainel = require('./detalhamentoPainel.service');
+const gestaoMatricial = require('./gestaoMatricial.service');
 
 // Dashboards: tela favorita (estrela) de cada usuário em cada dashboard — a que abre ao entrar pelo
 // menu. Cada usuário só lê e grava a própria. Montado em server.js com exigirTela dos dashboards.
@@ -27,6 +28,9 @@ const detalhamentoPainel = require('./detalhamentoPainel.service');
 //       o Detalhamento Financeiro (detalhamentoPainel.service.js).
 //   GET /economico-financeiro/gestao-matricial/centros?empresa_id -> [{ id, nome }] os centros com "Projeta DFC"
 //       (a mesma lista do filtro Centro de custo do Fluxo de Caixa), para a barra da Gestão Matricial.
+//   GET /economico-financeiro/gestao-matricial?empresa_id&de&ate&centros=1,2 (de/ate 'AAAA-MM') -> o desvio da DFC
+//       (Realizado × Projetado) por centro × natureza, com pilar/pacote e responsáveis (gestaoMatricial.service.js),
+//       na versão PUBLICADA da DFC.
 //   Filtros salvos do usuário numa tela, por empresa (botão "Gravar filtro" / lista "Filtros salvos"):
 //   GET    /:dashboard/:tela/filtros?empresa_id            -> [{ id, nome, filtros }]
 //   POST   /:dashboard/:tela/filtros { empresa_id, nome, filtros } -> { id, nome, filtros } (mesmo nome substitui)
@@ -87,6 +91,30 @@ router.get('/economico-financeiro/dre', async (req, res, next) => {
     const centros = f.centros ? f.centros.split(',').map(Number) : [];
     // A DRE publicada: a última versão salva (modules/dre-versoes).
     res.json(await comVersaoPublicada(f.empresa_id, () => drePainel.painel(f.empresa_id, { de: f.de, ate: f.ate, centros })));
+  } catch (err) {
+    if (err.issues) return res.status(400).json({ message: err.issues[0].message || 'Filtros inválidos.' });
+    next(err);
+  }
+});
+
+const matricialSchema = z
+  .object({
+    empresa_id: z.coerce.number().int().positive(),
+    de: z.string().regex(/^\d{4}-\d{2}$/),
+    ate: z.string().regex(/^\d{4}-\d{2}$/),
+    centros: z
+      .string()
+      .regex(/^(\d+(,\d+)*)?$/)
+      .optional()
+      .default(''),
+  })
+  .refine((f) => f.de <= f.ate, { message: 'O início não pode ser depois do fim.' });
+
+router.get('/economico-financeiro/gestao-matricial', async (req, res, next) => {
+  try {
+    const f = matricialSchema.parse(req.query);
+    const centros = f.centros ? f.centros.split(',').map(Number) : [];
+    res.json(await dfcVersoes.comVersaoPublicada(f.empresa_id, () => gestaoMatricial.painel(f.empresa_id, { de: f.de, ate: f.ate, centros })));
   } catch (err) {
     if (err.issues) return res.status(400).json({ message: err.issues[0].message || 'Filtros inválidos.' });
     next(err);

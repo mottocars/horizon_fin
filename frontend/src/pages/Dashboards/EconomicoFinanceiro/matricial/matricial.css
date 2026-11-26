@@ -1,0 +1,473 @@
+/* Gestão Matricial (dashboard Econômico Financeiro) — dentro da identidade do painel do CFO (fluxo/painel.css). */
+.painel-cfo {
+  --mx-bom: #11804a;
+  --mx-ruim: #c82e2e;
+  --mx-col: 112px;
+  --mx-lin: 260px;
+}
+
+/* Indicadores */
+.painel-cfo .tile .v.mx-tile-bom {
+  color: var(--mx-bom);
+}
+.painel-cfo .tile .v.mx-tile-ruim {
+  color: var(--mx-ruim);
+}
+
+/* Painel da matriz */
+.painel-cfo .mx-painel {
+  gap: 14px;
+  transition: opacity 0.2s;
+}
+.painel-cfo .mx-painel.carregando {
+  opacity: 0.6;
+}
+.painel-cfo .mx-topo {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: flex-end;
+  justify-content: space-between;
+  gap: 12px 20px;
+}
+.painel-cfo .mx-titulo h2 {
+  font-size: 18px;
+}
+.painel-cfo .mx-sub {
+  margin: 2px 0 0;
+  font-size: 13px;
+  color: var(--muted);
+}
+.painel-cfo .mx-sub b {
+  color: var(--ink-2);
+  font-weight: 600;
+}
+.painel-cfo .mx-opcoes {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 10px;
+}
+
+/* Legenda */
+.painel-cfo .mx-legenda {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 8px 10px;
+  font-size: 12px;
+  font-weight: 600;
+  color: var(--ink-2);
+}
+.painel-cfo .mx-barra {
+  width: 180px;
+  height: 10px;
+  border-radius: 999px;
+  background: linear-gradient(90deg, #c82e2e 0%, #e9a3a3 30%, #fafbfb 50%, #a5d3b9 70%, #11804a 100%);
+  border: 1px solid var(--line);
+}
+.painel-cfo .mx-legenda-nota {
+  font-weight: 400;
+  color: var(--muted);
+  margin-left: 6px;
+}
+
+/* Matriz */
+.painel-cfo .mx-scroll {
+  overflow: auto;
+  width: fit-content;
+  max-width: 100%;
+  max-height: calc(100vh - 140px);
+  min-height: 260px;
+  border: 1px solid var(--line);
+  border-radius: var(--r);
+  background: var(--surface);
+}
+.painel-cfo table.mx {
+  border-collapse: separate;
+  border-spacing: 0;
+  font-variant-numeric: tabular-nums;
+}
+.painel-cfo .mx th,
+.painel-cfo .mx td {
+  padding: 0;
+  border-right: 1px solid var(--grid);
+  border-bottom: 1px solid var(--grid);
+}
+.painel-cfo .mx button {
+  all: unset;
+  box-sizing: border-box;
+  cursor: pointer;
+  display: flex;
+  width: 100%;
+  height: 100%;
+}
+.painel-cfo .mx button:focus-visible {
+  outline: 2px solid var(--accent);
+  outline-offset: -2px;
+}
+
+/* Cabeçalho (pilares): foto acima do nome do pilar e do responsável */
+.painel-cfo .mx thead th {
+  position: sticky;
+  top: 0;
+  z-index: 3;
+  background: var(--surface);
+  vertical-align: bottom;
+  border-bottom: 2px solid var(--line);
+}
+.painel-cfo .mx thead th.g1 {
+  background: var(--surface-2);
+}
+.painel-cfo .mx th.mx-col {
+  min-width: var(--mx-col);
+  max-width: var(--mx-col);
+  width: var(--mx-col);
+}
+.painel-cfo .mx .mx-col-btn {
+  flex-direction: column;
+  align-items: center;
+  justify-content: flex-end;
+  gap: 5px;
+  padding: 12px 6px 9px;
+  text-align: center;
+}
+.painel-cfo .mx th.mx-col.on,
+.painel-cfo .mx th.mx-col:hover {
+  background: var(--accent-soft);
+}
+.painel-cfo .mx th.mx-col.ini,
+.painel-cfo .mx td.ini {
+  border-left: 2px solid var(--line);
+}
+.painel-cfo .mx-pilar {
+  font-family: var(--f-display);
+  font-weight: 700;
+  font-size: 11.5px;
+  letter-spacing: 0.04em;
+  text-transform: uppercase;
+  color: var(--ink);
+  line-height: 1.2;
+}
+.painel-cfo .mx-resp {
+  font-size: 11.5px;
+  color: var(--muted);
+  line-height: 1.2;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  max-width: 100%;
+}
+.painel-cfo .mx-col .mx-resp {
+  white-space: normal;
+  display: -webkit-box;
+  -webkit-line-clamp: 2;
+  -webkit-box-orient: vertical;
+}
+
+/* Canto */
+.painel-cfo .mx th.mx-canto {
+  position: sticky;
+  left: 0;
+  z-index: 5;
+  min-width: var(--mx-lin);
+  width: var(--mx-lin);
+  text-align: left;
+  vertical-align: bottom;
+  padding: 10px 12px;
+  background:
+    linear-gradient(to top right, transparent calc(50% - 0.5px), var(--line) 50%, transparent calc(50% + 0.5px)) no-repeat,
+    var(--surface);
+  border-right: 2px solid var(--line);
+}
+.painel-cfo .mx-canto-c,
+.painel-cfo .mx-canto-l {
+  display: block;
+  font-family: var(--f-display);
+  font-size: 11px;
+  font-weight: 700;
+  letter-spacing: 0.12em;
+  text-transform: uppercase;
+  color: var(--muted);
+}
+.painel-cfo .mx-canto-c {
+  text-align: right;
+  margin-bottom: 28px;
+}
+
+/* Coluna dos pacotes: foto à frente do nome */
+.painel-cfo .mx th.mx-lin {
+  position: sticky;
+  left: 0;
+  z-index: 2;
+  background: var(--surface);
+  text-align: left;
+  min-width: var(--mx-lin);
+  max-width: var(--mx-lin);
+  width: var(--mx-lin);
+  border-right: 2px solid var(--line);
+}
+.painel-cfo .mx th.mx-lin.on,
+.painel-cfo .mx th.mx-lin:hover {
+  background: var(--accent-soft);
+}
+.painel-cfo .mx .mx-lin-btn {
+  align-items: center;
+  gap: 10px;
+  padding: 7px 12px;
+}
+.painel-cfo .mx-lin-txt {
+  display: flex;
+  flex-direction: column;
+  min-width: 0;
+}
+.painel-cfo .mx-pacote {
+  font-weight: 700;
+  font-size: 13px;
+  color: var(--ink);
+  line-height: 1.25;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+/* Células */
+.painel-cfo .mx td.mx-cel {
+  height: 52px;
+  min-width: var(--mx-col);
+  max-width: var(--mx-col);
+  text-align: center;
+  transition: box-shadow 0.12s;
+}
+.painel-cfo .mx td.mx-cel.g1:not([style]) {
+  background: #f7f9fa;
+}
+.painel-cfo .mx td.mx-cel button,
+.painel-cfo .mx td.mx-tot button {
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  padding: 4px 6px;
+  color: inherit;
+}
+.painel-cfo .mx td.mx-cel:hover {
+  box-shadow: inset 0 0 0 2px var(--ink);
+}
+.painel-cfo .mx tbody tr.on td.mx-cel:not([style]),
+.painel-cfo .mx td.mx-cel.on:not([style]) {
+  background: #eef4f8;
+}
+.painel-cfo .mx-v {
+  font-family: var(--f-mono);
+  font-weight: 600;
+  font-size: 13px;
+  line-height: 1.2;
+  white-space: nowrap;
+}
+.painel-cfo .mx-v2 {
+  font-family: var(--f-mono);
+  font-size: 10.5px;
+  line-height: 1.2;
+  opacity: 0.72;
+  white-space: nowrap;
+}
+/* Célula pintada: a cor do mapa de calor já diz o sinal — o texto fica na cor dela, sem o vermelho automático dos
+   negativos dos dashboards (hooks/useNegativosVermelhos.js, .neg-auto com !important). */
+.painel-cfo .mx td.mx-cel[style] .neg-auto {
+  color: inherit !important;
+}
+.painel-cfo .mx-nada {
+  display: inline-block;
+  width: 4px;
+  height: 4px;
+  border-radius: 50%;
+  background: var(--line);
+}
+
+/* Totais */
+.painel-cfo .mx td.mx-tot {
+  height: 52px;
+  min-width: var(--mx-col);
+  text-align: center;
+  background: var(--surface-2);
+}
+.painel-cfo .mx td.mx-tot.bom .mx-v {
+  color: var(--mx-bom);
+}
+.painel-cfo .mx td.mx-tot.ruim .mx-v {
+  color: var(--mx-ruim);
+}
+.painel-cfo .mx td.mx-tot .mx-v {
+  font-weight: 700;
+}
+.painel-cfo .mx td.mx-tot:hover {
+  box-shadow: inset 0 0 0 2px var(--ink);
+}
+.painel-cfo .mx th.mx-tcol {
+  position: sticky;
+  right: 0;
+  z-index: 4;
+  min-width: var(--mx-col);
+  text-align: center;
+  padding: 0 8px 9px;
+  background: var(--surface-2);
+  border-left: 2px solid var(--line);
+}
+.painel-cfo .mx th.mx-tcol .mx-pilar,
+.painel-cfo .mx th.mx-tcol .mx-resp {
+  display: block;
+}
+.painel-cfo .mx tbody td.mx-tot {
+  position: sticky;
+  right: 0;
+  z-index: 1;
+  border-left: 2px solid var(--line);
+}
+.painel-cfo .mx tfoot td,
+.painel-cfo .mx tfoot th {
+  position: sticky;
+  bottom: 0;
+  z-index: 2;
+  background: var(--surface-2);
+  border-top: 2px solid var(--line);
+  border-bottom: 0;
+}
+.painel-cfo .mx tfoot th.mx-tlin {
+  z-index: 4;
+  padding: 8px 12px;
+  vertical-align: middle;
+}
+.painel-cfo .mx tfoot th.mx-tlin .mx-pacote,
+.painel-cfo .mx tfoot th.mx-tlin .mx-resp {
+  display: block;
+}
+.painel-cfo .mx tfoot td.mx-geral {
+  position: sticky;
+  right: 0;
+  z-index: 4;
+  border-left: 2px solid var(--line);
+  background: #e6ecef;
+}
+
+/* Fotos dos responsáveis */
+.painel-cfo .mx-foto {
+  flex-shrink: 0;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  border-radius: 50%;
+  object-fit: cover;
+  color: #fff;
+  font-family: var(--f-display);
+  font-weight: 700;
+  box-shadow:
+    0 0 0 2px var(--surface),
+    0 0 0 3px var(--line);
+  background: var(--s-neutral);
+}
+.painel-cfo .mx-foto.vazia {
+  background: var(--surface-2);
+  color: var(--muted);
+  border: 1px dashed var(--s-neutral);
+  box-shadow: none;
+}
+.painel-cfo .mx-foto.mais {
+  background: var(--ink-2);
+  font-size: 11px;
+}
+.painel-cfo .mx-fotos {
+  display: inline-flex;
+  padding-left: 10px;
+}
+.painel-cfo .mx-fotos > * {
+  margin-left: -10px;
+}
+
+.painel-cfo .mx-aviso {
+  margin: 0;
+  font-size: 12.5px;
+  color: var(--muted);
+}
+
+/* Detalhamento (janela) */
+.painel-cfo.mx-det {
+  gap: 14px;
+  padding-bottom: 0;
+}
+.painel-cfo .mx-det-sub {
+  margin: -6px 0 0;
+  font-size: 13px;
+  color: var(--muted);
+}
+.painel-cfo .mx-det-resumo {
+  display: grid;
+  grid-template-columns: repeat(4, minmax(0, 1fr));
+  gap: 1px;
+  background: var(--line);
+  border: 1px solid var(--line);
+  border-radius: var(--r);
+  overflow: hidden;
+}
+.painel-cfo .mx-det-resumo > div {
+  background: var(--surface);
+  padding: 10px 12px;
+  display: flex;
+  flex-direction: column;
+}
+.painel-cfo .mx-det-resumo span {
+  font-size: 12px;
+  font-weight: 600;
+  color: var(--muted);
+}
+.painel-cfo .mx-det-resumo b {
+  font-family: var(--f-mono);
+  font-size: 15px;
+}
+.painel-cfo .mx-det-resumo .bom b,
+.painel-cfo .mx-det-tabela td.bom {
+  color: var(--mx-bom);
+}
+.painel-cfo .mx-det-resumo .ruim b,
+.painel-cfo .mx-det-tabela td.ruim {
+  color: var(--mx-ruim);
+}
+.painel-cfo .mx-det-tabela {
+  max-height: 52vh;
+  overflow: auto;
+  border: 1px solid var(--line);
+  border-radius: var(--r);
+}
+.painel-cfo .mx-det-tabela table {
+  width: 100%;
+  border-collapse: collapse;
+  font-size: 13px;
+}
+.painel-cfo .mx-det-tabela th {
+  position: sticky;
+  top: 0;
+  background: var(--surface-2);
+  text-align: left;
+  font-size: 12px;
+  font-weight: 700;
+  color: var(--ink-2);
+  padding: 7px 10px;
+  border-bottom: 1px solid var(--line);
+}
+.painel-cfo .mx-det-tabela td {
+  padding: 6px 10px;
+  border-bottom: 1px solid var(--grid);
+}
+.painel-cfo .mx-det-tabela .n {
+  text-align: right;
+  font-family: var(--f-mono);
+  font-size: 12.5px;
+  white-space: nowrap;
+}
+.painel-cfo .mx-det-cod {
+  font-family: var(--f-mono);
+  font-size: 11.5px;
+  color: var(--muted);
+}
+.painel-cfo .mx-det-nota {
+  margin: 0;
+  font-size: 12px;
+  color: var(--muted);
+}
