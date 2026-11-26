@@ -413,15 +413,15 @@ export function QuemGera({ D, centroSel, onCentro }) {
   // Só os centros com "Projeta DFC" (os de fora do DFC não aparecem — pedido do usuário).
   const { linhas: rows, maximo: mx } = quemGera(D);
   return (
-    <section className="panel c7" aria-labelledby="h-obras">
+    <section className="panel c7 fixa" aria-labelledby="h-obras">
       <div className="ph">
         <h2 id="h-obras">Quem gera e quem consome caixa
           <AjudaSecao aba="quemgera" rotulo="Quem gera e quem consome caixa" />
         </h2>
         <p>Fluxo operacional líquido por centro de custo. Clique numa linha para filtrar o painel.</p>
       </div>
-      {/* Altura fixa com rolagem: a lista de centros cresce sem esticar a seção. */}
-      <div className="tbl rola">
+      {/* Altura fixa (140 px) com rolagem: a lista de centros cresce sem esticar a seção. */}
+      <div className="tbl rola curta">
         {!rows.length ? (
           <div className="empty">Nenhum centro com fluxo no escopo.</div>
         ) : (
