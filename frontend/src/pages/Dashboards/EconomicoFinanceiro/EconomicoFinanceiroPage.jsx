@@ -1,6 +1,6 @@
 import { useEffect, useMemo, useState } from 'react';
 import { useSearchParams } from 'react-router-dom';
-import { BarChart3, CalendarClock, FileSearch, House, Landmark, Wallet } from 'lucide-react';
+import { BarChart3, CalendarClock, FileSearch, Grid3x3, House, Landmark, Wallet } from 'lucide-react';
 import ControlesDashboard from '../ControlesDashboard';
 import CabecalhoDashboard from '../CabecalhoDashboard';
 import { getTelaFavorita, salvarTelaFavorita } from '../../../api/dashboards.api';
@@ -30,6 +30,8 @@ const TELAS = [
   { id: 'home', label: 'Home', icon: House },
   { id: 'dre', label: 'Demonstração do Resultado', icon: BarChart3 },
   { id: 'fluxo-caixa', label: 'Fluxo de Caixa', icon: Wallet },
+  // Pedido do usuário (26/11/2026): por enquanto só o cabeçalho, como Saldo das Contas.
+  { id: 'gestao-matricial', label: 'Gestão Matricial', icon: Grid3x3 },
   { id: 'aging', label: 'Aging List', icon: CalendarClock },
   { id: 'detalhamento', label: 'Detalhamento Financeiro', icon: FileSearch },
   { id: 'saldos', label: 'Saldo das Contas', icon: Landmark },

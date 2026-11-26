@@ -31,7 +31,7 @@ const detalhamentoPainel = require('./detalhamentoPainel.service');
 //   DELETE /:dashboard/:tela/filtros/:id                   -> 204 (só os do próprio usuário)
 
 const DASHBOARDS = {
-  'economico-financeiro': ['dre', 'fluxo-caixa', 'aging', 'detalhamento', 'saldos'],
+  'economico-financeiro': ['dre', 'fluxo-caixa', 'gestao-matricial', 'aging', 'detalhamento', 'saldos'],
 };
 
 const router = Router();

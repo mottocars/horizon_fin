@@ -21,7 +21,6 @@ module.exports = {
   DRE: '/operacoes/dre-gerencial',
   WORKFLOWS: '/operacoes/workflows',
   DFC: '/operacoes/dfc-construtoras',
-  GESTAO_MATRICIAL: '/operacoes/gestao-matricial',
   ESPIAO: '/operacoes/espiao-nfe-nfse',
   SALDOS: '/operacoes/saldo-contas-bancarias',
   REPASSES: '/operacoes/repasses-cef',

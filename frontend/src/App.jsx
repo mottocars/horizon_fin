@@ -65,7 +65,6 @@ import ClienteClusterDetalhe from './pages/Operacoes/GestaoCobrancas/ClustersCob
 import DistribuicaoExplicacaoPage from './pages/Operacoes/GestaoCobrancas/ReguaCobranca/DistribuicaoExplicacaoPage';
 import CronogramasObrasPage from './pages/Operacoes/CronogramasObras/CronogramasObrasPage';
 import WorkflowsPage from './pages/Operacoes/Workflows/WorkflowsPage';
-import GestaoMatricialPage from './pages/Operacoes/GestaoMatricial/GestaoMatricialPage';
 import ReformaTributariaPage from './pages/Operacoes/ReformaTributaria/ReformaTributariaPage';
 import ContasPagarReceberPage from './pages/ContasPagarReceber/ContasPagarReceberPage';
 import FormulariosPage from './pages/Formularios/FormulariosPage';
@@ -117,7 +116,6 @@ export default function App() {
 
             <Route path="/operacoes/dre-gerencial" element={<DreGerencialPage />} />
             <Route path="/operacoes/dfc-construtoras" element={<DfcConstrutorasPage />} />
-            <Route path="/operacoes/gestao-matricial" element={<GestaoMatricialPage />} />
             <Route path="/operacoes/espiao-nfe-nfse" element={<EspiaoNfeNfsePage />} />
             <Route path="/operacoes/saldo-contas-bancarias" element={<SaldoContasBancariasPage />} />
             <Route path="/operacoes/repasses-cef" element={<RepassesCefPage />} />

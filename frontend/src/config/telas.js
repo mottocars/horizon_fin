@@ -15,7 +15,6 @@ export const TELAS_SISTEMA = {
   '/dashboards/comercial': { title: 'Comercial', subtitle: 'Dashboards — Comercial' },
   '/operacoes/dre-gerencial': { title: 'DRE Construtoras', subtitle: 'Operações — DRE Construtoras' },
   '/operacoes/dfc-construtoras': { title: 'DFC Construtoras', subtitle: 'Operações — DFC Construtoras' },
-  '/operacoes/gestao-matricial': { title: 'Gestão Matricial', subtitle: 'Operações — Gestão Matricial' },
   '/operacoes/espiao-nfe-nfse': { title: 'Espião NFe / NFSe', subtitle: 'Operações — Espião NFe / NFSe' },
   '/operacoes/saldo-contas-bancarias': { title: 'Saldo Contas Bancárias', subtitle: 'Operações — Saldo Contas Bancárias' },
   '/operacoes/repasses-cef': { title: 'Repasses CEF', subtitle: 'Operações — Repasses CEF' },

@@ -30,7 +30,6 @@ import {
   Activity,
   BarChart3,
   Wallet,
-  Grid3x3,
   ChartGantt,
   Handshake,
   Scale,
@@ -81,7 +80,6 @@ const menuItems = [
     children: [
       { label: 'DRE Construtoras', to: '/operacoes/dre-gerencial', icon: BarChart3 },
       { label: 'DFC Construtoras', to: '/operacoes/dfc-construtoras', icon: Wallet },
-      { label: 'Gestão Matricial', to: '/operacoes/gestao-matricial', icon: Grid3x3 },
       { label: 'Reforma Tributária', to: '/operacoes/reforma-tributaria', icon: Scale },
       { label: 'Espião NFe / NFSe', to: '/operacoes/espiao-nfe-nfse', icon: FileSearch },
       { label: 'Saldo Contas Bancárias', to: '/operacoes/saldo-contas-bancarias', icon: Landmark },
