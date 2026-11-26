@@ -76,7 +76,6 @@
   width: fit-content;
   max-width: 100%;
   max-height: calc(100vh - 140px);
-  min-height: 260px;
   border: 1px solid var(--line);
   border-radius: var(--r);
   background: var(--surface);
