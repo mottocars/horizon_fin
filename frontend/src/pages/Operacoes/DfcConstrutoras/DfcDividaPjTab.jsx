@@ -408,13 +408,13 @@ export default function DfcDividaPjTab({ empresaId, search = '' }) {
           {!semCentros && (
             <tfoot>
               <tr>
-                <td className="sticky bottom-0 z-10 border-t-2 border-r border-t-blue-500 border-r-blue-100 bg-blue-50 py-2.5 pl-4 pr-3">
+                <td className="sticky -bottom-6 z-10 border-t-2 border-r border-t-blue-500 border-r-blue-100 bg-blue-50 py-2.5 pl-4 pr-3">
                   <span className="block text-xs font-semibold uppercase tracking-wide text-blue-800">Total</span>
                   <span className="block text-[10px] text-blue-500">
                     Soma do valor vigente de {comDivida.length} {comDivida.length === 1 ? 'centro' : 'centros'}
                   </span>
                 </td>
-                <td className="sticky bottom-0 z-10 border-t-2 border-t-blue-500 bg-blue-100 px-3 text-right text-xs font-bold tabular-nums text-blue-800">
+                <td className="sticky -bottom-6 z-10 border-t-2 border-t-blue-500 bg-blue-100 px-3 text-right text-xs font-bold tabular-nums text-blue-800">
                   {total.toLocaleString('pt-BR', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}
                 </td>
               </tr>
